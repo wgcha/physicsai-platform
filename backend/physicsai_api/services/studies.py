@@ -54,7 +54,7 @@ def list_studies(ctx: AppContext, principal: Principal, project_id: str | None, 
 
 def _stage_status(conn: Any, study_id: str) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    for stage in (3, 4):
+    for stage in (1, 2, 3, 4, 5):  # phase2 C15: ①·②·⑤ 추가(작업 stage 컬럼 = 단계)
         r = conn.execute(
             select(jobs.c.id, jobs.c.job_type, jobs.c.state, jobs.c.created_at)
             .where(and_(jobs.c.study_id == study_id, jobs.c.stage == stage))

@@ -80,3 +80,16 @@ def test_phase2_job_permissions_and_errors(p2_env):
 def test_doe_types_errors(client):
     r = client.get(f"{API}/train/doe-types", headers=P)
     assert r.status_code == 409 and r.json()["detail"]["code"] == "RESOURCE_NOT_CONFIGURED"
+
+
+def test_stage_status_phase2_keys(p2_env):
+    """C15: stage_status에 "1"·"2"·"5" 키(각 단계 최근 작업)."""
+    c, mk, ai, lc, d = p2_env
+    sid = study(c, "ss1")
+    st = c.get(f"{API}/studies/{sid}", headers=P).json()["stage_status"]
+    assert set(st) == {"1", "2", "3", "4", "5"} and st["1"] == {"latest_job_id": None, "latest_job_type": None, "latest_state": None}
+    cad, _ = make_inputs(ai / "ss1")
+    j = submit(c, sid, "TD_EXTRACT_PARAMS", {"cad_path": str(cad)})
+    st = c.get(f"{API}/studies/{sid}", headers=P).json()["stage_status"]
+    assert st["1"] == {"latest_job_id": j["id"], "latest_job_type": "TD_EXTRACT_PARAMS", "latest_state": "QUEUED"}
+    assert st["2"]["latest_job_id"] is None and st["5"]["latest_job_id"] is None
