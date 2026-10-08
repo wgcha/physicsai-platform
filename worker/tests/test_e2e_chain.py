@@ -252,3 +252,22 @@ def test_display_path_windows_form():
 
     assert display_path("E:/shared/AI_WORK", "cushion", "03_package/abc/") == "E:\\shared\\AI_WORK\\cushion\\03_package\\abc"
     assert display_path("/srv/ai/", "s", None) == "/srv/ai/s"
+
+
+def test_log_error_patterns_apply_to_edspy_steps_only(client, worker_factory, loaded_config, monkeypatch):
+    """platform.md §8.3: commands_log_error_patterns는 edspy step 전용 — hw(컨투어)가 Traceback 줄을 내도 성공,
+    edspy가 같은 줄을 내면 종료코드 0이어도 LOG_ERROR_DETECTED."""
+    sid = create_study(client, "logpat")["id"]
+    sroot = Path(loaded_config.settings.storage.ai_root) / "logpat"
+    w = worker_factory()
+    _register_final_model(client, sid, sroot, w)
+    psf = make_param_set_folder(sroot / "00_inbox")
+    assert client.post(f"{API}/studies/{sid}/param-sets", headers=PW, json={"path": str(psf)}).status_code == 201
+    monkeypatch.setenv("FAKE_TOOL_MODE_HW", "error_log")
+    j = submit(client, sid, "PREDICT", {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"})
+    assert w.run_once_slot() == "SUCCEEDED", job(client, j["id"])
+    monkeypatch.delenv("FAKE_TOOL_MODE_HW")
+    monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", "error_log")
+    j = submit(client, sid, "PREDICT", {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"})
+    assert w.run_once_slot() == "FAILED"
+    assert job(client, j["id"])["failure_code"] == "LOG_ERROR_DETECTED"

@@ -6,7 +6,7 @@
 - ②-1 h3d 미리보기: -b -tcl X -h3d H -result J
 - ②-3 T01 미리보기: -b -c -tcl X -input T -output J
 - ②-4 곡선 추출: -b -c -tcl X -config C (jobs마다 outputFile)
-모드(FAKE_TOOL_MODE_HW > FAKE_TOOL_MODE): ok | fail | skip_one(곡선 첫 job 출력 없음) | no_output
+모드(FAKE_TOOL_MODE_HW > FAKE_TOOL_MODE): ok | fail | skip_one(곡선 첫 job 출력 없음) | no_output | error_log
 """
 import base64, json, os, sys
 
@@ -17,6 +17,10 @@ if p:
         fh.write(json.dumps({"tool": "hw", "argv": sys.argv, "cwd": os.getcwd()}) + "\n")
 if m == "fail":
     sys.exit(1)
+if m == "error_log":  # 종료코드 0 + 오류처럼 보이는 줄(§8.3: edspy step이 아니면 실패로 보지 않아야 함)
+    print("Traceback (most recent call last):", flush=True)
+    print("[ERROR] fake hw noise", flush=True)
+    m = "ok"
 a = sys.argv
 if "--responses" in a:  # response_extract 템플릿 예시 흉내(§18.1 fake_extract와 같은 동작)
     resp = json.load(open(a[a.index("--responses") + 1], encoding="utf-8"))["responses"]

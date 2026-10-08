@@ -356,7 +356,7 @@ class StepContext:
         cwd: str,
         outputs_to_backup: list[str] | None = None,
         env_add: dict[str, str] | None = None,
-        check_log_errors: bool = True,
+        check_log_errors: bool | None = None,
         error_patterns: list[str] | None = None,
         line_hook: Callable[[str], tuple[float | None, str | None] | None] | None = None,
         poll_hook: Callable[[], tuple[float | None, str | None] | None] | None = None,
@@ -366,6 +366,8 @@ class StepContext:
         """외부 프로그램 1회(제한기 안, shell=False argv).
 
         error_patterns: 로그 오류 정규식(None이면 commands_log_error_patterns). check_log_errors=False면 적용 안 함.
+        check_log_errors=None(기본): error_patterns를 주었거나 edspy 템플릿(edspy_*)일 때만 적용(계약 platform.md §8.3 —
+        commands_log_error_patterns는 edspy step 전용).
         line_hook(line) / poll_hook(): (진행률 %, 라벨)을 돌려주면 step 진행률에 반영(phase2 §6.2·§6.4·§6.12).
         record_command=False: 팬아웃(§4.3)이 job_steps.command를 직접 기록한다.
         log_errors_fail=False: 오류 줄 수만 센다(self.last_error_lines, phase2 가정 A-8).
@@ -382,6 +384,8 @@ class StepContext:
             self.ex.db(lambda c: jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, command=command))
         self.log("[CMD] " + " ".join(argv))
         patterns = error_patterns if error_patterns is not None else s.commands_log_error_patterns
+        if check_log_errors is None:
+            check_log_errors = error_patterns is not None or template_key.startswith("edspy_")
         detector = ErrorDetector(patterns) if check_log_errors else None
         proc = self.ex.limiter.launch(argv, cwd, env, self.ex.limits)
         with self.ex._proc_lock:
