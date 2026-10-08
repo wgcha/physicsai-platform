@@ -65,6 +65,8 @@ export interface MockOptions {
   disabledFeatures?: FeatureKey[];
   /** C18: PBS 취소 명령 실패 흉내 */
   hpcCancelFails?: boolean;
+  /** /status.demo(시연 모드) */
+  demo?: boolean;
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -91,6 +93,7 @@ export class MockServer {
   user: MockUserKey;
   hpcConfigured: boolean;
   hpcCancelFails: boolean;
+  demo: boolean;
   ui: Record<string, number>;
   speed: number;
   studies: Study[] = seedStudies();
@@ -111,6 +114,7 @@ export class MockServer {
     this.user = opts.user ?? "admin";
     this.hpcConfigured = opts.hpcConfigured ?? false;
     this.hpcCancelFails = opts.hpcCancelFails ?? false;
+    this.demo = opts.demo ?? false;
     this.speed = opts.speed ?? 9;
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
@@ -491,6 +495,7 @@ export class MockServer {
           limits: { configured: {}, detected: {}, effective: {} },
           ui: this.ui,
           auth: { mode: "dashboard", login_url: "/" },
+          demo: this.demo,
           ...this.p2.status(me.is_global_admin),
         },
       };

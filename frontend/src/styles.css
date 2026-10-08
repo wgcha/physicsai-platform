@@ -2043,3 +2043,16 @@ tr.selected td {
 .qrow-progress.hpc {
   grid-template-columns: auto minmax(0, 1fr);
 }
+
+/* 시연 모드 배지(/status.demo) */
+.demo-badge {
+  flex: none;
+  font-size: 0.74rem;
+  font-weight: 700;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: #fff3c4;
+  color: #8a5a00;
+  border: 1px solid #e8c45a;
+  white-space: nowrap;
+}

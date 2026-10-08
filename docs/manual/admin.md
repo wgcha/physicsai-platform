@@ -891,9 +891,77 @@ cd D:\physicsai
 
 ## 14. 시연 모드
 
-<!-- TODO(ops): 시연 실행 절차 -->
+Altair·PBS 없이 **가짜 도구(fake tools)**로 화면·대기열·알림·취소·①~⑤ 흐름을 실제로 돌려 보는 모드다. 운영 설치와 별개로 동작한다(포트·폴더·DB 분리). **운영 서버 설정에 `demo.enabled: true`를 넣지 않는다.**
 
-(시연 모드 — `deploy/demo`, `config/platform.demo.yaml` — 실행 절차는 별도 작업에서 채운다.)
+### 14.1 시작
+
+```powershell
+deploy\demo\start-demo.bat                       # 관리자 권한 불필요. 또는 start-demo.ps1
+deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -PgBin D:\pgsql\bin -ToolDelay 5
+```
+
+| 인자 | 기본 | 뜻 |
+|---|---|---|
+| `-DemoRoot` | `<시스템 드라이브>\physicsai-demo`(보통 `C:\physicsai-demo`) | 시연 폴더. 공백·특수문자 금지 |
+| `-Port` | `8190` | 백엔드 포트(127.0.0.1 전용, 운영 8100과 겹치지 않게) |
+| `-PythonExe` | PATH의 `python` | 저장소에서 실행할 때 쓸 Python(3.11+) |
+| `-PgBin` | PATH·`PGBIN`에서 찾음 | `initdb.exe`·`pg_ctl.exe`·`psql.exe` 폴더(포터블 zip 압축 해제본 가능) |
+| `-PgPort` | `55432` | 시연 전용 PostgreSQL 포트 |
+| `-UseExistingDb` | – | 시연 클러스터 대신 기존 PostgreSQL의 **빈 DB** 사용. 접속 URL은 환경변수 `PHYSICSAI_DEMO_DATABASE_URL`로만 준다(비밀번호가 든 URL을 인자로 받지 않음) |
+| `-ToolDelay` | `3`(초) | 가짜 도구 1회 실행마다 지연 — 대기열·진행률·취소를 보기 쉽게 |
+| `-NoBrowser` | – | 브라우저를 자동으로 열지 않음 |
+
+하는 일: ① Python 준비(오프라인 묶음에서 실행하면 `<DemoRoot>\venv`를 만들고 wheels에서 설치, 저장소면 지정 Python) ② 시연 폴더·가짜 도구·가짜 자원·설정(`<DemoRoot>\config\platform.yaml`, 원본 `config/platform.demo.yaml`) ③ DB(시연 전용 클러스터 `<DemoRoot>\pgdata`, 127.0.0.1:`PgPort`, 또는 기존 DB) ④ migration → 백엔드(프런트 정적 서빙 포함, Caddy 불필요) → 시연 Study·샘플 데이터 → 워커 ⑤ 브라우저 열기.
+
+### 14.2 사용
+
+- 접속 `http://127.0.0.1:8190/` → 시연 사용자 **admin(전역 관리자) / power / general** 중 선택(권한별 화면 차이 확인용). 시연 로그인은 루프백 접속에서만 된다.
+- 시연 Study **"시연 브래킷 낙하"**가 자동으로 만들어지고 `00_inbox`에 CAD·`radioss_assem`·`params_demo`가 들어 있다.
+- PBS가 없으므로 ①-4 대신 **①-5 결과 가져오기**에 `<DemoRoot>\import\hpc_results`를 지정한다.
+- ③-4 모델 등록 폴더는 `<DemoRoot>\import\trained_model`.
+- 실패·멈춤 흉내: 환경변수 `FAKE_TOOL_MODE_<도구>=fail`(또는 `hang`)를 설정한 뒤 `start-demo`를 실행한다(도구 이름 `EDSPY`·`SIMLAB`·`HW`·`HVTRANS`·`HSTBATCH`·`HSTPY`. 예 같은 창에서 `$env:FAKE_TOOL_MODE_EDSPY='hang'` 후 `start-demo.ps1` → 관리자 취소 시연). 오류 묶음·알림·취소 흐름을 보여 줄 때 쓴다.
+- 로그: `<DemoRoot>\logs`(백엔드·워커), 작업 로그는 일반 운영과 같이 Study `logs\`.
+
+### 14.3 종료
+
+```powershell
+deploy\demo\stop-demo.bat            # 백엔드·워커·시연 DB 클러스터 중지
+deploy\demo\stop-demo.bat -KeepDb    # 시연 전용 PostgreSQL은 계속 실행
+```
+
+파일·DB는 지우지 않는다. 시연을 처음부터 다시 하려면 `<DemoRoot>`를 다른 이름으로 옮기거나 직접 정리한 뒤 다시 시작한다.
+
+### 14.4 오프라인 묶음과 안전장치
+
+- 오프라인 묶음(§2.2)에 `deploy\demo`, 가짜 도구(`fake_tools`), `config\platform.demo.yaml`이 포함된다. 폐쇄망 PC에서도 묶음의 `deploy\demo\start-demo.bat`로 바로 시연할 수 있다.
+- 안전장치: `demo.enabled: true`는 `profile: dev`이고 `server.host: 127.0.0.1`일 때만 허용, `auth.mode: demo`는 `demo.enabled: true`가 필요, 시연 로그인은 루프백 요청만 받는다. 위반하면 설정 오류로 기동하지 않는다.
+
+### 14.5 무인 설치(참고 — CI·자동화용)
+
+운영 설치 스크립트를 대화형 입력 없이 돌릴 수 있다.
+
+```powershell
+$env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = '…'; $env:PHYSICSAI_INSTALL_DB_PASSWORD = '…'
+$env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
+.\install.ps1 -PasswordsFromEnv -NoStart            # -NoStart: 작업 등록만 하고 시작·health 확인은 생략
+```
+
+비밀번호는 프로세스 환경변수로만 받는다(명령 인자·로그에 남지 않음). 끝나면 그 PowerShell 창을 닫는다.
+
+## 14-1. CI(GitHub Actions)
+
+워크플로 `.github/workflows/ci.yml`. 실행 시점: `push`, `pull_request`, 수동 실행(`workflow_dispatch`).
+
+| 잡 | 환경 | 단계 |
+|---|---|---|
+| linux | ubuntu-24.04, Python 3.13, Node 22, PostgreSQL 16 | `scripts/test-all`(백엔드·워커 pytest + 프런트 vitest + 타입 검사) → `deploy/collect-offline.sh --dry-run` |
+| windows | Windows 러너 | ① `windows` 마커 시험(Job Object 등) — **skip은 실패로 처리** ② pytest 전체 ③ PowerShell 스크립트 구문 검사(pwsh 7과 Windows PowerShell 5.1) ④ `collect-offline` 실제 실행(묶음 생성) ⑤ `install.ps1` 실제 설치(무인, §14.5)·작업 스케줄러 등록·해제 ⑥ 시연 모드 원클릭 시작 확인 |
+
+결과 보는 법
+1. GitHub 저장소 → **Actions** 탭 → 왼쪽 워크플로 이름 → 해당 커밋/PR 실행을 연다.
+2. 잡(linux·windows) 옆 녹색 체크 = 통과, 빨간 X = 실패. 잡을 눌러 실패한 단계를 펼치면 로그가 보인다(시험 이름·오류 메시지).
+3. PR 화면 아래 "Checks"에도 같은 결과가 나온다. 수동 실행은 Actions → 워크플로 → **Run workflow**.
+4. windows 잡의 ⑤⑥이 통과하면 배포 스크립트·시연 모드가 실제 Windows에서 한 번 돌았다는 증거다(그래도 운영 PC의 Altair·세션 0·Caddy 동작은 E2E 체크리스트로 따로 확인한다).
 
 ---
 

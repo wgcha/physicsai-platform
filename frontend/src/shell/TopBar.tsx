@@ -23,7 +23,7 @@ export function PathBar({ crumbs }: { crumbs: Crumb[] }) {
 }
 
 export function TopBar({ crumbs, projectId }: { crumbs: Crumb[]; projectId?: string }) {
-  const { me } = useApp();
+  const { me, status } = useApp();
   const role = roleIn(me, projectId);
   return (
     <header className="topbar">
@@ -32,6 +32,11 @@ export function TopBar({ crumbs, projectId }: { crumbs: Crumb[]; projectId?: str
         <span className="brand-name">PhysicsAI</span>
       </Link>
       <PathBar crumbs={[{ label: "AI 예측", to: "/" }, ...crumbs]} />
+      {status?.demo && (
+        <span className="demo-badge" data-testid="demo-badge" title="시연 모드: 가짜 데이터·도구로 동작합니다">
+          시연 모드
+        </span>
+      )}
       <div className="topbar-right">
         {me.is_global_admin && <AdminMenu />}
         <a className="topbar-link" href="/">대시보드로</a>

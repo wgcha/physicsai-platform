@@ -1,5 +1,5 @@
 // npm run dev:mock 전용: window.fetch를 목 서버로 바꾸고 2초마다 작업을 진행시킨다.
-// ?mockUser=admin|power|general|anon 으로 사용자 전환(localStorage에 기억), ?hpc=1 이면 PBS 구성됨.
+// ?mockUser=admin|power|general|anon 으로 사용자 전환(localStorage에 기억), ?hpc=1 이면 PBS 구성됨, ?demo=1 이면 시연 모드.
 import { MockServer, createMockFetch } from "./server";
 import type { MockUserKey } from "./data";
 
@@ -14,7 +14,7 @@ export function installMockFetch() {
   } catch {
     /* 저장소 없음 */
   }
-  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1" });
+  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1", demo: params.get("demo") === "1" });
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

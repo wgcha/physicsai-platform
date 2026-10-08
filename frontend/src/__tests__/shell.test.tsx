@@ -28,4 +28,14 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
     expect(await screen.findByText("대시보드에서 로그인하세요")).toBeTruthy();
     expect(screen.getByRole("link", { name: "대시보드로 이동" }).getAttribute("href")).toBe("/");
   });
+
+  it("demo=true면 상단 바에 '시연 모드' 배지, 기본은 없음", async () => {
+    const r = renderApp(`${STUDY}/3`, { user: "power", demo: true });
+    expect((await screen.findByTestId("demo-badge")).textContent).toBe("시연 모드");
+    r.unmount();
+    renderApp(`${STUDY}/3`, { user: "power" });
+    await screen.findByRole("navigation", { name: "경로" });
+    await screen.findByText("쿠션 두께·리브 예측", { selector: ".crumb a" });
+    expect(screen.queryByTestId("demo-badge")).toBeNull();
+  });
 });

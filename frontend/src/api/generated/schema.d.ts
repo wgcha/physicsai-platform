@@ -2204,6 +2204,12 @@ export interface components {
                 [key: string]: string;
             };
             config: components["schemas"]["StatusConfig"];
+            /**
+             * Demo
+             * @description 시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지
+             * @default false
+             */
+            demo: boolean;
             env_check?: components["schemas"]["StatusEnvCheck"] | null;
             features?: components["schemas"]["StatusFeatures"] | null;
             hpc: components["schemas"]["StatusHpc"];
