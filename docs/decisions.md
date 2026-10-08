@@ -74,3 +74,5 @@
 - 2026-10-08 · (가정) SPDM 복사는 스캔 기록(inode·크기·mtime)과 열린 파일 대조, O_NOFOLLOW. Windows는 reparse 검사+핸들 대조(상위 폴더 경합 한계 기록) · SPDM 링크 교체 TOCTOU · phase2.md C17
 - 2026-10-08 · (가정) PBS 취소 명령 실패 시 작업을 CANCELED로 끝내지 않고 WAITING_HPC+주의 코드·알림 `HPC_CANCEL_FAILED`, 폴러가 재시도(migration 0003) · PBS 쪽 해석이 계속 도는데 취소된 것처럼 보이지 않게 · phase2.md C18
 - 2026-10-08 · XML DOCTYPE·ENTITY 거부는 파서 수준(인코딩 무관) · 보안 §15.3 · phase2.md C19
+- 2026-10-09 · 예측 결과 웹 3D 뷰어(컨투어·3D 모델) 보류 — 진행 안 함 · 모델이 커서 브라우저 부담(사용자 결정). 결과는 원본 TCL 이미지(A안) 유지
+- 2026-10-09 · 운영 준비 범위: CI(Linux+Windows), 시연 모드(fake tools 배포판), 관리자·사용자 매뉴얼만 진행. 대시보드 연동·용량 정리·모델 비교·main 병합은 보류 · 사용자 결정
