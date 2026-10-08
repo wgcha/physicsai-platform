@@ -19,6 +19,7 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.engine import Engine
 
+from physicsai_core.childenv import child_env
 from physicsai_core.commands import EXECUTABLE_PLACEHOLDERS, TEMPLATE_SPECS, parse_placeholders, render_argv
 from physicsai_core.config import Settings
 from physicsai_core.db.repositories import artifacts as artifacts_repo
@@ -29,7 +30,7 @@ from physicsai_core.errors import DomainError, StepFailure
 from physicsai_core.job_types import JOB_TYPES
 from physicsai_core.limits import EffectiveLimits
 from physicsai_core.parsers.log_errors import ErrorDetector, Masker
-from physicsai_core.paths import backup_existing, backup_stamp, resolve_in_study, study_dir, to_rel
+from physicsai_core.paths import backup_existing, backup_stamp, real, resolve_in_study, study_dir, to_rel
 
 from .limiter.base import LimiterError, ProcessLimiter
 
@@ -93,7 +94,7 @@ class Executor:
         with self.engine.connect() as conn:
             self.study = studies_repo.require(conn, job["study_id"])
             self.workspace_id = jobs_repo.root_job_id(conn, job)
-        self.study_root = study_dir(self.settings.storage.ai_root, self.study["folder_name"])
+        self.study_root = real(study_dir(self.settings.storage.ai_root, self.study["folder_name"]))
         self.stamp = backup_stamp()
         self.current_proc: Any = None
         self._proc_lock = threading.Lock()
@@ -355,8 +356,7 @@ class StepContext:
         if outputs_to_backup:
             self.backup(outputs_to_backup)
         os.makedirs(cwd, exist_ok=True)
-        env = dict(os.environ)
-        env.update(env_add or {})
+        env = child_env(s.worker.env_passthrough, env_add, deny_names=[s.database.url_env])
         command = {"argv": argv, "cwd": cwd, "env_added": dict(env_add or {})}
         self.ex.db(lambda c: jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, command=command))
         self.log("[CMD] " + " ".join(argv))

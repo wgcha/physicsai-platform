@@ -9,11 +9,11 @@ from typing import Any
 import psutil
 
 
-def query_gpu(argv: list[str] | None) -> list[dict[str, Any]]:
+def query_gpu(argv: list[str] | None, env: dict[str, str] | None = None) -> list[dict[str, Any]]:
     if not argv:
         return []
     try:
-        cp = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=5)
+        cp = subprocess.run(argv, shell=False, capture_output=True, text=True, timeout=5, env=env)
     except (OSError, subprocess.TimeoutExpired):
         return []
     if cp.returncode != 0:
@@ -31,13 +31,13 @@ def query_gpu(argv: list[str] | None) -> list[dict[str, Any]]:
     return out
 
 
-def sample(gpu_argv: list[str] | None, job: dict[str, Any] | None = None) -> dict[str, Any]:
+def sample(gpu_argv: list[str] | None, job: dict[str, Any] | None = None, env: dict[str, str] | None = None) -> dict[str, Any]:
     vm = psutil.virtual_memory()
     return {
         "sampled_at": datetime.now(timezone.utc).isoformat(),
         "cpu_pct": psutil.cpu_percent(interval=None),
         "ram_used_gb": round((vm.total - vm.available) / 2**30, 3),
         "ram_total_gb": round(vm.total / 2**30, 3),
-        "gpu": query_gpu(gpu_argv),
+        "gpu": query_gpu(gpu_argv, env),
         "job": job,
     }

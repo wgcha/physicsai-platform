@@ -20,7 +20,7 @@ from physicsai_core.db.repositories import queue as queue_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.tables import hpc_jobs, jobs, studies
 from physicsai_core.errors import DomainError
-from physicsai_core.paths import check_user_path, resolve_in_study
+from physicsai_core.paths import check_dataset_input, check_user_path, resolve_in_study
 from physicsai_core.state_machine import TERMINAL
 
 from ..auth import Principal
@@ -144,6 +144,7 @@ def _prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p
     warnings: list[dict[str, str]] = []
     if job_type == "DATASET_CREATE":
         cp = check_user_path(p.input_path, [cfg.storage.ai_root])
+        check_dataset_input(cp.path, cfg.storage.ai_root)
         opts = (p.options or DatasetOptions(**cfg.dataset.options_default.model_dump())).model_dump()
         params = {
             "input_path": cp.path,

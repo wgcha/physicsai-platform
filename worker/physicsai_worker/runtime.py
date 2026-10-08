@@ -18,6 +18,7 @@ from typing import Any
 from sqlalchemy.engine import Engine
 
 from physicsai_core import __version__
+from physicsai_core.childenv import child_env
 from physicsai_core.config import LoadedConfig, Settings, load_config
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
@@ -66,6 +67,9 @@ class Worker:
     @property
     def settings(self) -> Settings:
         return self.config.settings
+
+    def child_env(self) -> dict[str, str]:
+        return child_env(self.settings.worker.env_passthrough, deny_names=[self.settings.database.url_env])
 
     # ---- 설정 변경 감지(§11.1) ----
     def check_config_change(self) -> None:
@@ -240,7 +244,7 @@ class Worker:
                                "peak_memory_gb": round(acc.peak_memory_bytes / 2**30, 3) if acc.peak_memory_bytes else None}
                 except Exception:
                     job_acc = {"job_id": ex.job_id}
-            self._last_resources = resources.sample(self.settings.worker.gpu_query, job_acc)
+            self._last_resources = resources.sample(self.settings.worker.gpu_query, job_acc, self.child_env())
             if not self.config.ok:
                 self._last_resources["worker_config_errors"] = self.config.error_keys()
         eff = {**self.limits.as_dict(), "cpu_cap_enforced": bool(self.limiter.cpu_cap_enforced)}

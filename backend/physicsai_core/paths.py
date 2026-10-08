@@ -17,7 +17,13 @@ from .errors import DomainError, StepFailure
 
 MAX_PATH_LEN = 400
 FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+IO_REPARSE_TAG_SYMLINK = 0xA000000C
+IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003  # junction
+LINK_REPARSE_TAGS = frozenset({IO_REPARSE_TAG_SYMLINK, IO_REPARSE_TAG_MOUNT_POINT})
 BACKUP_DIR = "_backup"
+# Study 폴더 직계의 플랫폼 산출 폴더(계약 §15.1). 데이터셋 입력으로 쓰거나 수집하지 않는다.
+STUDY_OUTPUT_DIRS = frozenset({"03_dataset", "03_package", "03_model", "04_params", "04_predict", "logs", BACKUP_DIR})
+WINDOWS_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
 
 
 class PathError(DomainError):
@@ -39,6 +45,7 @@ def _cmp(p: str) -> str:
 
 
 def is_link_or_reparse(p: str) -> bool:
+    """실제 링크(symlink·junction)만 True. dedup·OneDrive 등 다른 reparse 태그는 링크로 보지 않는다."""
     try:
         st = os.lstat(p)
     except OSError:
@@ -46,7 +53,26 @@ def is_link_or_reparse(p: str) -> bool:
     if stat.S_ISLNK(st.st_mode):
         return True
     attrs = getattr(st, "st_file_attributes", 0)
-    return bool(attrs & FILE_ATTRIBUTE_REPARSE_POINT)
+    if not attrs & FILE_ATTRIBUTE_REPARSE_POINT:
+        return False
+    return getattr(st, "st_reparse_tag", 0) in LINK_REPARSE_TAGS
+
+
+def windows_reserved_name(name: str) -> bool:
+    """CON·PRN·AUX·NUL·COM1-9·LPT1-9(확장자 포함, 대소문자 무시)와 끝 공백·마침표."""
+    if name != name.rstrip(" ."):
+        return True
+    stem = name.split(".", 1)[0].strip().upper()
+    return stem in WINDOWS_RESERVED
+
+
+def real(p: str) -> str:
+    return os.path.normpath(os.path.realpath(p))
+
+
+def _under(child: str, parent: str) -> bool:
+    c, pr = _cmp(child), _cmp(parent).rstrip(os.sep)
+    return c == pr or c.startswith(pr + os.sep)
 
 
 def unsafe_reason(text: str) -> str | None:
@@ -87,15 +113,20 @@ def check_user_path(
     if ".." in parts or "." in parts[1:]:
         raise PathError("PATH_UNSAFE", "경로에 '..' 또는 '.'을 쓸 수 없습니다", path=raw)
     norm = os.path.normpath(raw)
+    # 루트는 설정값(문자 그대로)과 realpath(매핑 드라이브·SUBST가 UNC·실경로로 풀린 형태) 두 형태로 비교한다.
     matched: str | None = None
+    matched_real: str | None = None
     for r in roots:
         if not r:
             continue
-        rn = os.path.normpath(os.path.realpath(r))
-        if _cmp(norm) == _cmp(rn) or _cmp(norm).startswith(_cmp(rn).rstrip(os.sep) + os.sep):
-            matched = rn
+        rr = real(r)
+        for cand in (os.path.normpath(r), rr):
+            if _under(norm, cand):
+                matched, matched_real = cand, rr
+                break
+        if matched:
             break
-    if matched is None:
+    if matched is None or matched_real is None:
         raise PathError("PATH_OUTSIDE_ROOT", "허용된 루트(AI 루트) 밖의 경로입니다", path=raw)
     rel = os.path.relpath(norm, matched)
     rel_parts = [] if rel == "." else rel.split(os.sep)
@@ -107,16 +138,38 @@ def check_user_path(
         if not os.path.lexists(cur):
             break
         if is_link_or_reparse(cur):
-            raise PathError("PATH_UNSAFE", "심볼릭 링크·reparse point가 포함된 경로입니다", path=raw)
-    real = os.path.realpath(norm)
-    if os.path.lexists(norm) and _cmp(os.path.normpath(real)) != _cmp(norm):
-        raise PathError("PATH_UNSAFE", "링크로 해석되는 경로입니다", path=raw)
+            raise PathError("PATH_UNSAFE", "심볼릭 링크·junction이 포함된 경로입니다", path=raw)
+    # 입력도 루트와 같은 방식(realpath)으로 풀어 루트 안인지 다시 확인
+    if os.path.lexists(norm) and not _under(real(norm), matched_real):
+        raise PathError("PATH_UNSAFE", "링크로 루트 밖을 가리키는 경로입니다", path=raw)
     if must_exist:
         if expect == "dir" and not os.path.isdir(norm):
             raise PathError("PATH_NOT_FOUND", "폴더가 없습니다", path=raw)
         if expect == "file" and not os.path.isfile(norm):
             raise PathError("PATH_NOT_FOUND", "파일이 없습니다", path=raw)
     return CheckedPath(norm, matched)
+
+
+def check_dataset_input(path: str, ai_root: str) -> list[str]:
+    """③-1 입력 제한(§15.1·§15.2): AI 루트 자체·Study 산출 폴더(03_*·04_*·logs·_backup) 안은 거부.
+
+    Study 폴더 자체를 입력으로 주면 그 직계 산출 폴더를 수집에서 제외할 목록으로 돌려준다.
+    """
+    p, roots = real(path), (real(ai_root), os.path.normpath(ai_root))
+    for root in roots:
+        if not _under(p, root) and not _under(os.path.normpath(path), root):
+            continue
+        base = p if _under(p, root) else os.path.normpath(path)
+        rel = os.path.relpath(base, root)
+        parts = [] if rel == "." else rel.split(os.sep)
+        if not parts:
+            raise PathError("PATH_UNSAFE", "AI 루트 전체는 데이터셋 입력으로 쓸 수 없습니다. h3d 폴더를 지정하세요", path=path)
+        if len(parts) >= 2 and parts[1] in STUDY_OUTPUT_DIRS:
+            raise PathError("PATH_UNSAFE", f"플랫폼 산출 폴더({parts[1]})는 데이터셋 입력으로 쓸 수 없습니다", path=path)
+        if len(parts) == 1:
+            return [os.path.join(path, d) for d in sorted(STUDY_OUTPUT_DIRS)]
+        return []
+    return []
 
 
 def file_safety_problem(path: str, base: str) -> str | None:
@@ -153,8 +206,14 @@ def resolve_in_study(study_root: str, rel: str) -> str:
     return str(target)
 
 
+def _real_parent(p: str) -> str:
+    """마지막 요소는 풀지 않고(링크 자체를 대상으로) 상위 폴더만 realpath."""
+    return os.path.join(real(os.path.dirname(p)), os.path.basename(p))
+
+
 def to_rel(study_root: str, abs_path: str) -> str:
-    return os.path.relpath(abs_path, study_root).replace(os.sep, "/")
+    """Study 기준 상대경로. 양쪽을 같은 방식(realpath)으로 풀어 비교한다(매핑 드라이브·SUBST 대응)."""
+    return os.path.relpath(_real_parent(abs_path), real(study_root)).replace(os.sep, "/")
 
 
 def backup_stamp(now: datetime | None = None) -> str:
@@ -162,20 +221,31 @@ def backup_stamp(now: datetime | None = None) -> str:
     return now.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
 
 
+def _unique(dest: str) -> str:
+    if not os.path.lexists(dest):
+        return dest
+    stem, ext = os.path.splitext(dest)
+    i = 1
+    while os.path.lexists(f"{stem}~{i}{ext}"):
+        i += 1
+    return f"{stem}~{i}{ext}"
+
+
 def backup_existing(study_root: str, abs_paths: Iterable[str], job_id: str, stamp: str | None = None) -> list[str]:
     """이미 있는 산출물을 `_backup`으로 이동. 이동한 원래 상대경로 목록을 돌려준다.
 
+    Study 밖 경로는 존재 여부와 무관하게 항상 거부. 백업 대상이 이미 있으면 덮어쓰지 않고 `~N` 접미사.
     이동 실패 → StepFailure(OUTPUT_LOCKED). 삭제 호출 없음.
     """
     stamp = stamp or backup_stamp()
     moved: list[str] = []
     for p in abs_paths:
+        rel = to_rel(study_root, p)
+        if rel == "." or rel.startswith("..") or os.path.isabs(rel):
+            raise StepFailure("INTERNAL_ERROR", f"Study 밖 산출물은 백업할 수 없습니다: {p}")
         if not os.path.lexists(p):
             continue
-        rel = to_rel(study_root, p)
-        if rel.startswith(".."):
-            raise StepFailure("INTERNAL_ERROR", f"Study 밖 산출물은 백업할 수 없습니다: {p}")
-        dest = os.path.join(study_root, BACKUP_DIR, f"{stamp}_{job_id}", *rel.split("/"))
+        dest = _unique(os.path.join(real(study_root), BACKUP_DIR, f"{stamp}_{job_id}", *rel.split("/")))
         try:
             os.makedirs(os.path.dirname(dest), exist_ok=True)
             os.replace(p, dest)

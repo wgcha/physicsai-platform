@@ -63,7 +63,11 @@ def get_hpc_gateway(settings: Any) -> HpcJobGateway:
     if mode == "command":
         from .command import CommandHpcGateway
 
-        return CommandHpcGateway(settings.hpc)
+        from ..childenv import child_env
+
+        patterns = [*settings.worker.env_passthrough, "PBS_*"]
+        deny = [settings.database.url_env]
+        return CommandHpcGateway(settings.hpc, lambda: child_env(patterns, deny_names=deny))
     if mode == "adapter":
         from .adapter import AdapterHpcGateway
 

@@ -42,6 +42,7 @@ CREATE_NO_WINDOW = 0x08000000
 TH32CS_SNAPTHREAD = 0x00000004
 THREAD_SUSPEND_RESUME = 0x0002
 INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+RESUME_FAILED = 0xFFFFFFFF  # (DWORD)-1
 
 LIMIT_FLAGS = (
     JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
@@ -127,6 +128,7 @@ def _load_kernel32() -> Any:
     k.OpenThread.restype = wintypes.HANDLE
     k.OpenThread.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
     k.ResumeThread.argtypes = [wintypes.HANDLE]
+    k.ResumeThread.restype = wintypes.DWORD
     k.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
     return k
 
@@ -171,10 +173,15 @@ class WindowsJobLimiter:
             while ok:
                 if te.th32OwnerProcessID == pid:
                     h = self.k.OpenThread(THREAD_SUSPEND_RESUME, False, te.th32ThreadID)
-                    if h:
-                        self.k.ResumeThread(h)
+                    if not h:
+                        raise LimiterError("JOB_OBJECT_ASSIGN_FAILED", "주 스레드를 열지 못했습니다(OpenThread 실패)")
+                    try:
+                        rc = self.k.ResumeThread(h)
+                    finally:
                         self.k.CloseHandle(h)
-                        resumed = True
+                    if rc in (RESUME_FAILED, -1):
+                        raise LimiterError("JOB_OBJECT_ASSIGN_FAILED", "주 스레드를 재개하지 못했습니다(ResumeThread = -1)")
+                    resumed = True
                 ok = self.k.Thread32Next(snap, ctypes.byref(te))
             if not resumed:
                 raise LimiterError("JOB_OBJECT_ASSIGN_FAILED", "주 스레드를 재개하지 못했습니다")
@@ -203,8 +210,16 @@ class WindowsJobLimiter:
         try:
             self._resume_main_thread(p.pid)
         except LimiterError:
-            self.k.TerminateJobObject(job, 1)
-            self.k.CloseHandle(job)
+            # 재개 실패: 일시정지 상태 프로세스를 남기지 않는다 → TerminateProcess + Job 종료, step FAILED(JOB_OBJECT_ASSIGN_FAILED)
+            try:
+                self.k.TerminateProcess(handle, 1)
+                self.k.TerminateJobObject(job, 1)
+            finally:
+                try:
+                    p.wait(timeout=10)
+                except Exception:
+                    pass
+                self.k.CloseHandle(job)
             raise
         return LimitedProcess(p, handle=job, extra={"memory_limit": int(limits.memory_gb * 2**30)})
 

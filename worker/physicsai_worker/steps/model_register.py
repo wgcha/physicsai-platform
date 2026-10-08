@@ -13,7 +13,7 @@ from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
 from physicsai_core.parsers.loss import as_db_values, parse_loss_file
-from physicsai_core.paths import PathError, check_user_path
+from physicsai_core.paths import PathError, check_user_path, is_link_or_reparse, real, unsafe_reason
 
 from .common import path_failure
 
@@ -23,6 +23,10 @@ def _direct(folder: str, patterns: list[str]) -> list[str]:
         n for n in os.listdir(folder)
         if os.path.isfile(os.path.join(folder, n)) and any(fnmatch.fnmatch(n.lower(), p.lower()) for p in patterns)
     )
+
+
+def _under_dir(fp: str, folder: str) -> bool:
+    return os.path.dirname(real(fp)) == real(folder)
 
 
 def mr_validate(ctx: Any) -> None:
@@ -39,7 +43,11 @@ def mr_validate(ctx: Any) -> None:
     logs = _direct(cp.path, s.training_log.log_globs)
     log_file = p.get("log_file")
     if log_file:
-        if log_file not in logs and not os.path.isfile(os.path.join(cp.path, log_file)):
+        # API 검증과 별개로 워커에서도 다시 확인: 파일 이름만, 직계 일반 파일, 링크·위험 문자 금지
+        if (not isinstance(log_file, str) or log_file in (".", "..") or os.path.basename(log_file) != log_file
+                or "/" in log_file or "\\" in log_file or unsafe_reason(log_file)):
+            raise StepFailure("INPUT_INVALID", f"로그 파일 이름이 올바르지 않습니다: {log_file}")
+        if log_file not in os.listdir(cp.path):
             raise StepFailure("INPUT_INVALID", f"지정한 로그 파일이 없습니다: {log_file}")
         chosen = log_file
     elif len(logs) == 0:
@@ -48,6 +56,14 @@ def mr_validate(ctx: Any) -> None:
         chosen = logs[0]
     else:
         raise StepFailure("INPUT_INVALID", "학습 로그 후보가 여러 개입니다. 로그 파일을 지정하세요: " + ", ".join(logs[:20]))
+    for n in (psmdl[0], pscfg[0], chosen):
+        if not n:
+            continue
+        fp = os.path.join(cp.path, n)
+        if is_link_or_reparse(fp) or not os.path.isfile(fp) or unsafe_reason(n):
+            raise StepFailure("INPUT_INVALID", f"모델 폴더 파일이 링크이거나 이름이 안전하지 않습니다: {n}")
+        if not _under_dir(fp, cp.path):
+            raise StepFailure("INPUT_INVALID", f"모델 폴더 밖을 가리키는 파일입니다: {n}")
     ctx.patch_result({"files": {"psmdl": psmdl[0], "pscfg": pscfg[0], "log": chosen}, "source_path": cp.path})
 
 

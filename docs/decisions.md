@@ -34,3 +34,7 @@
 - 2026-10-08 · 단위계 mm-ton-s 고정, 변환 없음 · 해석 모델 단위계와 일치 · platform.md §2
 - 2026-10-08 · 업로드 기능 없음, 모든 입력은 AI 루트(또는 허용 루트) 폴더 경로 지정 · 대용량 파일·pickle 위험 · platform.md §3.3, §17.3
 - 2026-10-08 · 자동 시험은 Altair 없는 Linux에서: fake tools(edspy/SimLab/hw/qsub) + Job Object 비Windows 대체(PosixLimiter). 실제 E2E는 사용자가 Altair PC에서 체크리스트로 수행 · 개발 환경에 Altair 없음 · platform.md §18, e2e-checklist.md
+- 2026-10-08 · 대기열 취소·순서 변경은 전역 관리자만, 본인 작업 취소도 불가(재시도만 본인 power 허용) · 대기열은 프로젝트를 가로지르는 전역 자원, U10 · platform.md §5.3, §19 U10
+- 2026-10-08 · ④ "입력파일 받기" `GET /jobs/{id}/artifacts/input.zip`(INPUT 폴더 zip 스트리밍, 로그인 사용자 전원, .rad 조립 완료 전 409) · 사용자가 HPC·로컬에서 Radioss 입력을 직접 확인·실행 · 변경 메모 B16
+- 2026-10-08 · 응답 "절대경로 금지"의 예외로 표시 전용 `*_display_path`(ai_root 결합, 탐색기 붙여넣기용) 허용, 요청 입력으로는 받지 않음 · 사용자가 산출 폴더를 바로 열 수 있게 · 변경 메모 B17
+- 2026-10-08 · 워커 자식 프로세스 환경변수는 허용목록(SystemRoot·PATH·TEMP/TMP·USERPROFILE·ALTAIR_*·*_LICENSE_*·EDS_* + 설정 `worker.env_passthrough`)만 전달, DB URL·비밀은 항상 제외 · 비밀 유출 차단 · 변경 메모 B19

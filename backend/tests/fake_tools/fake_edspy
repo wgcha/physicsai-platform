@@ -10,7 +10,8 @@ def record():
     if p:
         with open(p, "a", encoding="utf-8") as fh:
             fh.write(json.dumps({"tool": "edspy", "argv": sys.argv, "cwd": os.getcwd(),
-                                 "env": {k: os.environ.get(k) for k in ("EDS_TNS_ACTVN_CHCKPT",)}}) + "\n")
+                                 "env": {k: os.environ.get(k) for k in ("EDS_TNS_ACTVN_CHCKPT",)},
+                                 "env_keys": sorted(os.environ)}) + "\n")
 
 
 def mode():

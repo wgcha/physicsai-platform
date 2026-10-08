@@ -60,6 +60,9 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
 }
 
 CMD_META_CHARS = set('&|<>^%!"')
+# .bat·.cmd는 cmd.exe가 인자를 다시 해석한다(BatBadBut). 이때 구분자로 쓰이는 문자도 거부한다.
+CMD_BAT_EXTRA_CHARS = set(";,=()")
+BAT_EXTENSIONS = (".bat", ".cmd")
 _CONTROL_RE = re.compile(r"[\x00-\x1f\x7f]")
 _WS_RE = re.compile(r"\s")
 
@@ -120,7 +123,7 @@ def validate_template(key: str, template: object) -> list[str]:
     return problems
 
 
-def check_value(name: str, value: str, *, allow_space: bool) -> None:
+def check_value(name: str, value: str, *, allow_space: bool, via_cmd: bool = False) -> None:
     """치환 값 검사(§9.1). 위반 시 StepFailure(INPUT_INVALID)."""
     if not isinstance(value, str):
         raise StepFailure("INPUT_INVALID", f"'{name}' 값이 문자열이 아닙니다")
@@ -131,6 +134,10 @@ def check_value(name: str, value: str, *, allow_space: bool) -> None:
     bad = sorted(CMD_META_CHARS.intersection(value))
     if bad:
         raise StepFailure("INPUT_INVALID", f"'{name}' 값에 허용되지 않는 문자 {' '.join(bad)} 가 있습니다: {value}")
+    if via_cmd:
+        bad2 = sorted(CMD_BAT_EXTRA_CHARS.intersection(value))
+        if bad2:
+            raise StepFailure("INPUT_INVALID", f"'{name}' 값에 .bat 실행 시 허용되지 않는 문자 {' '.join(bad2)} 가 있습니다: {value}")
     if not allow_space and _WS_RE.search(value):
         raise StepFailure("INPUT_INVALID", f"'{name}' 값에 공백이 있습니다: {value}")
 
@@ -168,6 +175,15 @@ def render_argv(
     if problems:
         raise StepFailure("CONFIG_INVALID", "; ".join(problems))
     spec = TEMPLATE_SPECS[key]
+    via_cmd = "@cmd_c" in template
+    for el in template:
+        if el.startswith("@"):
+            continue
+        for n in parse_placeholders(el):
+            if n in EXECUTABLE_PLACEHOLDERS:
+                exe0 = (executables.get(EXECUTABLE_PLACEHOLDERS[n]) or "").lower()
+                via_cmd = via_cmd or exe0.endswith(BAT_EXTENSIONS)
+        break
     argv: list[str] = []
     for el in template:
         if el == "@cmd_c":
@@ -196,7 +212,7 @@ def render_argv(
                 if n not in values:
                     raise StepFailure("INTERNAL_ERROR", f"placeholder '{{{n}}}' 값이 준비되지 않았습니다")
                 v = values[n]
-                check_value(n, v, allow_space=False)
+                check_value(n, v, allow_space=False, via_cmd=via_cmd)
                 mapping[n] = v
         argv.append(el.format_map(mapping) if names or ("{{" in el or "}}" in el) else el)
     return argv

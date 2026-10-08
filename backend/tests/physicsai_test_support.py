@@ -201,6 +201,7 @@ def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> d
             "resource_sample_interval_s": 0.5,
             "state_dir": str(base / "state"),
             "gpu_query": [tools["fake_nvidia_smi"]],
+            "env_passthrough": ["FAKE_*"],
         },
         "dataset": {"holdout_ratio": 0.1, "seed": 20261008, "split_group": "file", "min_h3d_files": 2, "min_psdata_bytes": 1048576},
         "training_log": {

@@ -107,8 +107,9 @@ def _check_value(name: str, v: str, job_id_rx: re.Pattern[str]) -> str:
 
 
 class CommandHpcGateway:
-    def __init__(self, hpc: Any) -> None:
+    def __init__(self, hpc: Any, env_factory: Any = None) -> None:
         self.hpc = hpc
+        self.env_factory = env_factory  # 실행 시점에 자식 환경(허용목록)을 만든다
         self.c = hpc.command
         self.problems = validate_command_config(hpc)
         self._job_id_rx = re.compile(self.c.job_id_regex, re.MULTILINE) if not self.problems else re.compile("$^")
@@ -138,7 +139,8 @@ class CommandHpcGateway:
         import subprocess  # 워커 hpc 스레드에서만 호출됨
 
         try:
-            cp = subprocess.run(argv, shell=False, capture_output=True, timeout=timeout, text=True, encoding="utf-8", errors="replace")
+            cp = subprocess.run(argv, shell=False, capture_output=True, timeout=timeout, text=True, encoding="utf-8",
+                                errors="replace", env=self.env_factory() if self.env_factory else None)
         except subprocess.TimeoutExpired:
             raise HpcGatewayError("TIMEOUT", "PBS 명령 시간 초과") from None
         except OSError as exc:

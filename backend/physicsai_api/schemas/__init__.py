@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class Req(BaseModel):
@@ -222,6 +222,15 @@ class StudyCreate(Req):
     project_id: str = Field(min_length=1, max_length=200)
     folder_name: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$")
     title: str = Field(min_length=1, max_length=120)
+
+    @field_validator("folder_name")
+    @classmethod
+    def _not_reserved(cls, v: str) -> str:
+        from physicsai_core.paths import windows_reserved_name
+
+        if windows_reserved_name(v):
+            raise ValueError("Windows 예약 이름(CON·PRN·AUX·NUL·COM1-9·LPT1-9)은 폴더 이름으로 쓸 수 없습니다")
+        return v
 
 
 class StudyPatch(Req):

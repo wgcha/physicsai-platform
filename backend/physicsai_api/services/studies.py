@@ -21,7 +21,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.tables import jobs
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import write_json
-from physicsai_core.paths import check_user_path, file_safety_problem, resolve_in_study
+from physicsai_core.paths import check_dataset_input, check_user_path, file_safety_problem, resolve_in_study
 
 from ..auth import Principal
 from ..context import AppContext
@@ -158,7 +158,7 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
     problems: list[dict[str, Any]] = []
     summary: dict[str, Any] = {}
     if body.purpose == "DATASET_INPUT":
-        files = collect_h3d(cp.path)
+        files = collect_h3d(cp.path, check_dataset_input(cp.path, s_cfg.storage.ai_root))
         for f in files:
             why = file_safety_problem(f, cp.path)
             if why:

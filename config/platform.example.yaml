@@ -60,6 +60,7 @@ worker:
   claim_interval_s: 2
   cancel_check_interval_s: 2
   resource_sample_interval_s: 10
+  env_passthrough: []             # Altair 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch). DB URL·비밀은 항상 제외
   state_dir: "./state"            # 단일 인스턴스 잠금 파일 위치
   gpu_query: ["C:/Windows/System32/nvidia-smi.exe", "--query-gpu=name,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"]
   # 실행 시간 한도 없음(의도적으로 timeout 키를 두지 않는다)

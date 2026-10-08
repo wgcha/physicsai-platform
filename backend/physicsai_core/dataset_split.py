@@ -7,10 +7,18 @@ import random
 from dataclasses import dataclass
 
 
-def collect_h3d(root: str) -> list[str]:
-    """재귀 수집(대소문자 무시) → 정렬·중복 제거(원본 1_create_dataset.py:17-48). 링크 폴더는 따라가지 않는다."""
+def collect_h3d(root: str, exclude: list[str] | tuple[str, ...] = ()) -> list[str]:
+    """재귀 수집(대소문자 무시) → 정렬·중복 제거(원본 1_create_dataset.py:17-48). 링크 폴더는 따라가지 않는다.
+
+    `_backup` 폴더(어느 깊이든)와 exclude 폴더(Study 산출 폴더)는 수집하지 않는다.
+    """
     found: set[str] = set()
-    for dirpath, _dirnames, filenames in os.walk(root, followlinks=False):
+    skip = {os.path.normcase(os.path.normpath(e)) for e in exclude}
+    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
+        dirnames[:] = [
+            d for d in dirnames
+            if d != "_backup" and os.path.normcase(os.path.normpath(os.path.join(dirpath, d))) not in skip
+        ]
         for f in filenames:
             if f.lower().endswith(".h3d"):
                 found.add(os.path.normpath(os.path.join(dirpath, f)))

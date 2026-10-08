@@ -93,6 +93,7 @@ class WorkerCfg(_M):
     resource_sample_interval_s: float = 10
     state_dir: str = "./state"
     gpu_query: list[str] | None = None
+    env_passthrough: list[str] = Field(default_factory=list)  # 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch)
 
 
 class DatasetOptionsCfg(_M):

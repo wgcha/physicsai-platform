@@ -10,7 +10,7 @@ from physicsai_core.dataset_split import collect_h3d, dataset_yaml, split_files
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json, write_text
-from physicsai_core.paths import PathError, check_user_path, file_safety_problem
+from physicsai_core.paths import PathError, check_dataset_input, check_user_path, file_safety_problem
 
 from .common import path_failure
 
@@ -27,9 +27,10 @@ def ds_scan(ctx: Any) -> None:
     ds_id, D = _ds(ctx)
     try:
         cp = check_user_path(p["input_path"], [s.storage.ai_root])
+        exclude = check_dataset_input(cp.path, s.storage.ai_root)
     except PathError as exc:
         raise path_failure(exc) from None
-    files = collect_h3d(cp.path)
+    files = collect_h3d(cp.path, exclude)
     bad = [(f, why) for f in files if (why := file_safety_problem(f, cp.path))]
     if bad:
         listing = ", ".join(f"{os.path.relpath(f, cp.path)}({w})" for f, w in bad[:10])
