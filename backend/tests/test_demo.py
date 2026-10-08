@@ -167,3 +167,9 @@ def test_demo_deploy_files_static():
         assert "platform.demo.yaml" in t and "fake_tools" in t, f
     inst = (REPO / "deploy" / "install.ps1").read_text(encoding="utf-8-sig")
     assert "[switch]$PasswordsFromEnv" in inst and "[switch]$NoStart" in inst and "Read-Host -AsSecureString" in inst
+
+
+def test_alembic_ini_is_ascii():
+    """alembic은 alembic.ini를 OS 로캘 인코딩(Windows cp949/cp1252)으로 읽는다 — 한글이 있으면 Windows에서 migration 실패."""
+    data = (REPO / "migrations" / "alembic.ini").read_bytes()
+    assert all(b < 0x80 for b in data), "migrations/alembic.ini는 ASCII만 써야 합니다"
