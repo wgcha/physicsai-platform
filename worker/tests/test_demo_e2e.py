@@ -216,6 +216,10 @@ def test_demo_mode_end_to_end(tmp_path, db_url):
     for v in procs.values():
         assert not psutil.pid_exists(v["pid"]) or psutil.Process(v["pid"]).status() == psutil.STATUS_ZOMBIE
     assert not _alive_url(base)
+    # 운영 파일 로그(logging.dir = <시연 폴더>/logs): 회전 핸들러 파일, 비밀(DB URL 자격 증명) 없음
+    be_log = (root / "logs" / "backend.log").read_text(encoding="utf-8")
+    wk_log = (root / "logs" / "worker.log").read_text(encoding="utf-8")
+    assert "백엔드 시작" in be_log and "/physicsai/api/health" in be_log and "워커 파일 로그" in wk_log
 
 
 def _alive_url(base: str) -> bool:

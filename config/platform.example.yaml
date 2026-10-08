@@ -259,7 +259,10 @@ ui:
   poll_status_ms: 30000
 
 logging:
-  level: INFO
+  level: INFO                     # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  dir: ""                         # 운영 파일 로그(backend.log·worker.log). 빈 값 = 작업 폴더 ./logs = <install_root>\logs. ai_root·SPDM 밖
+  max_mb: 20                      # 파일당 최대 MB — 넘으면 회전(backend.log.1 …)
+  backups: 10                     # 회전 보관 개수
   mask_patterns:                  # 외부 프로그램 출력 저장 전 값 마스킹
     - '(?i)(password|passwd|token|secret)\s*[=:]\s*\S+'
 

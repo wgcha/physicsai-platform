@@ -30,6 +30,9 @@ def main(argv: list[str] | None = None) -> int:
     if not config.ok:
         return _fail("설정 검증 실패: " + "; ".join(f"{i.key}: {i.message}" for i in config.issues))
     s = config.settings
+    from physicsai_core.logsetup import setup_file_logging
+
+    log.info("워커 파일 로그: %s", setup_file_logging(s, "worker"))
     for w in config.warnings:
         log.warning("설정 안내: %s — %s", w.key, w.message)
 

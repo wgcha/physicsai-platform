@@ -479,23 +479,23 @@ def cmd_up(args: argparse.Namespace) -> int:
     if r.returncode != 0:
         raise SystemExit(f"DB migration 실패: {r.stderr[-2000:]}")
     procs: dict[str, dict] = {}
-    be = _spawn([sys.executable, "-m", "physicsai_api.serve"], env, logs / "backend.log", root)
+    be = _spawn([sys.executable, "-m", "physicsai_api.serve"], env, logs / "backend.out.log", root)
     procs["backend"] = {"pid": be.pid, "create_time": psutil.Process(be.pid).create_time()}
     state.write_text(json.dumps(procs), encoding="utf-8")
     end = time.time() + float(args.timeout)
     while not _health(port):
         if be.poll() is not None or time.time() > end:
-            raise SystemExit(f"백엔드 기동 실패 — {logs / 'backend.log'} 확인")
+            raise SystemExit(f"백엔드 기동 실패 — {logs / 'backend.out.log'}·{logs / 'backend.log'} 확인")
         time.sleep(0.5)
     _log(f"백엔드 기동: http://127.0.0.1:{port}/")
     seed = argparse.Namespace(root=str(root), url=f"http://127.0.0.1:{port}")
     cmd_seed(seed)
-    wk = _spawn([sys.executable, "-m", "physicsai_worker", "--config", str(cfg)], env, logs / "worker.log", root)
+    wk = _spawn([sys.executable, "-m", "physicsai_worker", "--config", str(cfg)], env, logs / "worker.out.log", root)
     procs["worker"] = {"pid": wk.pid, "create_time": psutil.Process(wk.pid).create_time()}
     state.write_text(json.dumps(procs), encoding="utf-8")
     time.sleep(1.0)
     if wk.poll() is not None:
-        raise SystemExit(f"워커 기동 실패 — {logs / 'worker.log'} 확인")
+        raise SystemExit(f"워커 기동 실패 — {logs / 'worker.out.log'}·{logs / 'worker.log'} 확인")
     _log(f"워커 기동(가짜 도구 지연 {env['FAKE_DEMO_DELAY_S']}초)")
     _log(f"브라우저에서 http://127.0.0.1:{port}/ 을 열고 시연 사용자(관리자·파워·일반)를 고르세요")
     print(json.dumps({"url": f"http://127.0.0.1:{port}/", "already_running": False}))

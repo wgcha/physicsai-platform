@@ -281,6 +281,9 @@ class DemoCfg(_M):
 
 class LoggingCfg(_M):
     level: str = "INFO"
+    dir: str = ""        # 운영 파일 로그 폴더. 빈 값 = 작업 폴더의 ./logs(설치본은 <install_root>\logs). ai_root·SPDM 밖
+    max_mb: float = 20   # 로그 파일 하나의 최대 크기(MB) — 넘으면 회전
+    backups: int = 10    # 회전 보관 개수(backend.log.1 … .N)
     mask_patterns: list[str] = Field(
         default_factory=lambda: [r"(?i)(password|passwd|token|secret)\s*[=:]\s*\S+"]
     )
@@ -710,6 +713,21 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
         _compile(f"score.parsers[{i}]", p.pattern, issues, ("value",))
     for i, p in enumerate(s.commands_log_error_patterns):
         _compile(f"commands_log_error_patterns[{i}]", p, issues)
+    lg = s.logging
+    if lg.max_mb <= 0 or lg.max_mb > 1024:
+        add("logging.max_mb", "0 초과 1024 이하")
+    if not 1 <= lg.backups <= 100:
+        add("logging.backups", "1~100")
+    if lg.level.upper() not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+        add("logging.level", "DEBUG | INFO | WARNING | ERROR | CRITICAL")
+    if lg.dir:
+        if has_unsafe_chars(lg.dir) and not os.path.isdir(lg.dir):
+            add("logging.dir", "공백·메타문자 없는 경로를 권장합니다(폴더도 없음)")
+        if ai_root and paths_overlap(os.path.abspath(lg.dir), ai_root):
+            add("logging.dir", "AI 루트와 겹칠 수 없습니다(운영 로그는 설치 폴더 쪽)")
+        for sp in spdm:
+            if paths_overlap(os.path.abspath(lg.dir), sp):
+                add("logging.dir", f"SPDM 루트와 겹칩니다: {sp}")
     for i, p in enumerate(s.logging.mask_patterns):
         _compile(f"logging.mask_patterns[{i}]", p, issues)
 

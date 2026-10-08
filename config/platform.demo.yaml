@@ -113,3 +113,6 @@ env_check:
 
 logging:
   level: INFO
+  dir: "{{DEMO_ROOT}}/logs"       # backend.log·worker.log(회전·마스킹). 표준 출력은 *.out.log
+  max_mb: 5
+  backups: 3
