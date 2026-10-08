@@ -1,0 +1,175 @@
+# PhysicsAI 플랫폼 설정 예시 (계약: docs/contracts/platform.md §14)
+# 실제 파일은 config/platform.yaml (git 제외) 또는 PHYSICSAI_CONFIG 환경변수 경로.
+# 경로 구분자는 '/'를 권장한다. ai_root·resources·입력 경로에는 공백과 & | < > ^ % ! " 를 쓰지 않는다.
+# "사내 확인 후 교체" 표시는 원본 코드로 확인되지 않은 값이다.
+
+schema_version: 1
+profile: dev                      # dev | prod   (PHYSICSAI_PROFILE 환경변수 우선)
+
+server:
+  host: 127.0.0.1
+  port: 8100
+  base_path: /physicsai           # API = {base_path}/api, 프런트 = {base_path}/
+
+database:
+  url_env: PHYSICSAI_DATABASE_URL # 예: postgresql+psycopg://physicsai_app:<비밀번호>@127.0.0.1:5432/physicsai
+  pool_size: 5
+
+auth:
+  mode: dashboard                 # dashboard | dev_static (dev_static은 profile=dev + 127.0.0.1 바인딩일 때만)
+  dashboard_internal_url: "http://127.0.0.1:8000"
+  dashboard_public_login_url: "/"
+  cookie_name: analysis_canvas_session    # 대시보드 backend/app/security.py:45
+  introspection_path: /api/auth/me
+  projects_path: /api/projects
+  cache_ttl_s: 30
+  timeout_s: 3
+  dev_static_principal:
+    user_id: dev-admin
+    username: dev
+    display_name: 개발자
+    is_global_admin: true
+    memberships: []               # 예: [{project_id: "p-1", role: power}]
+
+storage:
+  ai_root: "E:/shared/AI_WORK"    # 임시 값. SPDM master 밖
+  allowed_import_roots: []        # ③-4 모델 폴더 추가 허용 루트(읽기 전용). 예: ["F:/hpc_results"]
+  spdm_roots: []                  # 겹침 금지 검사용 SPDM master 루트 목록
+
+altair:                           # 하드코딩 금지 — 실행 파일 경로는 여기서만 (원본 common.py:25-37 키)
+  version_label: "2026.1"
+  hyperstudy_path: "C:/Program Files/Altair/2026.1/hwdesktop/hst/bin/win64/hstbatch.exe"
+  simlab_path:     "C:/Program Files/Altair/2026.1/SimLab/bin/win64/SimLab.bat"
+  edspy_path:      "C:/Program Files/Altair/2026.1/common/eds/win64/bin/win64/edspy.bat"
+  hw_exe_path:     "C:/Program Files/Altair/2026.1/hwdesktop/hw/bin/win64/hw.exe"
+  hvtrans_exe_path: "C:/Program Files/Altair/2026.1/hwdesktop/io/result_readers/bin/win64/hvtrans.exe"
+
+resources:
+  preview_pred_h3d_tcl: "D:/physicsai/resources/BATCHRUN_preview_pred_h3d.tcl"   # 원본 CONFIG/BATCHRUN 반입본
+
+worker:
+  limiter: auto                   # auto | windows_job | posix | null (null은 dev만)
+  max_logical_cores: 32
+  max_memory_gb: 64
+  priority: below_normal          # idle | below_normal | normal
+  auto_detect: false              # true면 min(설정값, 감지값 × auto_detect_ratio)
+  auto_detect_ratio: 0.7
+  posix_rlimit_as: false          # PosixLimiter에서 RLIMIT_AS로 메모리 상한 적용 여부
+  heartbeat_interval_s: 10
+  lease_ttl_s: 60
+  claim_interval_s: 2
+  cancel_check_interval_s: 2
+  resource_sample_interval_s: 10
+  state_dir: "./state"            # 단일 인스턴스 잠금 파일 위치
+  gpu_query: ["C:/Windows/System32/nvidia-smi.exe", "--query-gpu=name,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"]
+  # 실행 시간 한도 없음(의도적으로 timeout 키를 두지 않는다)
+
+dataset:
+  holdout_ratio: 0.1
+  seed: 20261008
+  split_group: file               # file | parent_dir
+  min_h3d_files: 2
+  min_psdata_bytes: 1048576       # 원본 검사(1 MiB)
+  options_default:
+    extract_faces: true
+    extract_mdi: false
+    extract_time_history_vectors: false
+
+package:
+  link_mode: hardlink_or_copy     # hardlink_or_copy | copy
+
+training_log:
+  log_globs: ["*.log", "*.txt"]
+  max_curve_points: 2000
+  parsers:                        # 순서대로 시도, 1줄 이상 일치한 첫 파서 채택. 필수 그룹: epoch, loss (선택: total)
+    - name: physicsai_default     # 원본 3_PHYSICS_AI/GUI/3_gui_training.py:16
+      pattern: 'epoch=\s*(?P<epoch>\d+)\s*/\s*(?P<total>\d+)\s+loss=(?P<loss>[0-9.eE+\-]+)'
+
+score:
+  write_files: false              # true면 edspy --write-files
+  parsers: []                     # 점수 형식 미확정(U6). 예:
+  #  - {name: generic, pattern: '^\s*(?P<name>[A-Za-z][A-Za-z0-9_ ]{0,40})\s*[:=]\s*(?P<value>[-+0-9.eE]+)\s*$'}
+
+param_set:
+  max_samples: 20000
+  max_total_bytes: 2147483648     # 2 GiB
+
+predict:
+  rendered_script_name: simlab_parametered_mesh.py   # 사내 확인 후 교체(U2)
+  mesh_output_glob: "eps_mesh*"                      # 사내 확인 후 교체(U3)
+  starter_glob: "*_0000.rad"
+  integer_rounding: half_up       # half_up | truncate (U9)
+  env:
+    EDS_TNS_ACTVN_CHCKPT: "1"     # 원본 4_OPTIMIZATION/FUNC/1_physicsai_opti.py:319
+
+commands:
+  # argv 템플릿. 허용 placeholder는 계약 §9.2. 펼침 토큰: @cmd_c, @write_files, @hooks_arg
+  edspy_create_dataset: ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"]       # 원본 1_create_dataset.py:90
+  edspy_score: ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"]   # 원본 4_testing.py:62-64
+  geom_update: ["{simlab}", "-auto", "{rendered_script}", "-nographics"]    # 사내 확인 후 교체(U2)
+  mesh: null                                                              # 사내 확인 후 교체(U2). null = SKIPPED
+  rad_assemble: null                                                      # 사내 확인 후 교체(U3). null = 복사 규칙만
+  edspy_predict: ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]   # 원본 1_physicsai_opti.py:310-316
+  contour_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"]   # 원본 1_physicsai_opti.py:230-231
+  response_extract: null                                                  # 미확인(U8). 예: ["{hw}", "-b", "-tcl", "<추출 TCL>", "-input", "{pred_h3d_fwd}", "-config", "{responses_json}", "-output", "{out_csv}"]
+
+commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원본 2_run_hst_gen_rad_input.py:65-67)
+  - '^\s*\d+\s+Error\s*:'
+  - 'Traceback \(most recent call last\):'
+  - '^\s*\[ERROR\]'
+
+hpc:
+  gateway: none                   # none | command | adapter  (PHYSICSAI_HPC_GATEWAY 우선). 1차 기본 none
+  poll_interval_s: 60
+  lost_after_polls: 10
+  max_unreachable_minutes: 1440
+  defaults: {queue: "workq", ncpus: 16, walltime: "24:00:00"}
+  command:
+    # ※ PBS Pro 형태의 placeholder 예시. 사내 확인 후 교체(U1)
+    allowed_executables:
+      - "C:/Program Files/PBS/exec/bin/qsub.exe"
+      - "C:/Program Files/PBS/exec/bin/qstat.exe"
+      - "C:/Program Files/PBS/exec/bin/qdel.exe"
+    submit: ["C:/Program Files/PBS/exec/bin/qsub.exe", "-N", "{job_name}", "-q", "{queue}",
+             "-l", "select=1:ncpus={ncpus}", "-l", "walltime={walltime}",
+             "-v", "INPUT_FILE={input_file},RESULT_DIR={result_dir}",
+             "/shared/scripts/radioss_run.pbs"]
+    status: ["C:/Program Files/PBS/exec/bin/qstat.exe", "-x", "-f", "{external_job_id}"]
+    cancel: ["C:/Program Files/PBS/exec/bin/qdel.exe", "{external_job_id}"]
+    job_id_regex: '^\s*(?P<job_id>\d+(?:\.[A-Za-z0-9_.\-]+)?)\s*$'
+    state_regex: 'job_state\s*=\s*(?P<state>[A-Z])'
+    exit_code_regex: 'Exit_status\s*=\s*(?P<exit>-?\d+)'
+    not_found_regex: 'Unknown Job Id'
+    state_map: {Q: QUEUED, H: QUEUED, W: QUEUED, T: QUEUED, S: QUEUED, B: RUNNING, R: RUNNING, E: RUNNING, F: FINISHED, X: FINISHED}
+    submit_timeout_s: 60
+    status_timeout_s: 30
+    cancel_timeout_s: 30
+  adapter:
+    module: null                  # 사내 어댑터 job API 확인 전까지 미구현
+  transfer:
+    stage_in: shared_path
+    path_map:                     # 이 PC 경로 → PBS 노드 경로. 사내 확인 후 교체
+      - {local: "E:/shared/AI_WORK", remote: "/shared/AI_WORK"}
+    collect_mode: in_place        # 1차는 in_place만 (shared_folder | drive 는 2차)
+    collect_patterns: ["*.h3d", "*T01", "*_0000.out", "*_0001.out"]
+    max_collect_bytes: 21474836480
+
+notifications:
+  retention_days: 30
+  purge_interval_h: 6
+
+ui:
+  max_artifact_bytes: 20971520
+  poll_job_running_ms: 2000
+  poll_job_queued_ms: 5000
+  poll_job_waiting_hpc_ms: 15000
+  poll_log_ms: 2000
+  poll_queue_ms: 5000
+  poll_resources_ms: 10000
+  poll_notifications_ms: 10000
+  poll_status_ms: 30000
+
+logging:
+  level: INFO
+  mask_patterns:                  # 외부 프로그램 출력 저장 전 값 마스킹
+    - '(?i)(password|passwd|token|secret)\s*[=:]\s*\S+'
