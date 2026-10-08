@@ -44,6 +44,18 @@ function Read-Secret([string]$Prompt, [string]$EnvName) {
     }
     return (Read-Host -AsSecureString $Prompt)
 }
+function Get-BackendPort([string]$ConfigPath, [string]$Py) {
+    # 포트는 platform.yaml server.port 한 곳에서만 읽는다(deploy.json에 포트 없음)
+    if ($Py -and (Test-Path $Py)) {
+        try {
+            $p = & $Py -c "import sys; from physicsai_core.config import load_config; print(load_config(sys.argv[1], environ={}).settings.server.port)" $ConfigPath 2>$null
+            if ($LASTEXITCODE -eq 0 -and "$p" -match '^\s*(\d+)\s*$') { return [int]$Matches[1] }
+        } catch { Write-Verbose "venv로 포트 읽기 실패 — yaml에서 직접 읽습니다" }
+    }
+    $m = [regex]::Match((Get-Content -Raw -Encoding UTF8 $ConfigPath), '(?m)^server:\s*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+port:\s*(\d+)')
+    if ($m.Success) { return [int]$m.Groups[1].Value }
+    return 8100   # 설정 기본값
+}
 function ConvertTo-Plain([Security.SecureString]$s) {
     $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
     try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
@@ -166,7 +178,8 @@ if ($NoStart) {
     return
 }
 foreach ($t in $tasks) { Start-ScheduledTask -TaskName $t.Name }
-$health = "http://127.0.0.1:$($cfg.backend_port)/physicsai/api/health"
+$port = Get-BackendPort $cfg.config_path $venvPy
+$health = "http://127.0.0.1:$port/physicsai/api/health"
 $ok = $false
 for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
     Start-Sleep -Seconds 2
@@ -177,5 +190,5 @@ Write-Step "health OK: $health"
 
 # ---- ⑩ Caddy 안내 --------------------------------------------------------------------------
 Write-Step "대시보드 Caddyfile의 catch-all handle 앞에 $(Join-Path $PSScriptRoot 'caddy\physicsai.caddy') 내용을 넣고"
-Write-Step "환경변수 PHYSICSAI_PORT=$($cfg.backend_port), PHYSICSAI_FRONTEND_ROOT=$($cfg.caddy_frontend_root) 로 Caddy를 다시 읽으세요"
+Write-Step "환경변수 PHYSICSAI_PORT=$port(platform.yaml server.port), PHYSICSAI_FRONTEND_ROOT=$($cfg.caddy_frontend_root) 로 Caddy를 다시 읽으세요"
 Write-Step '원본 반입 자원(resources.*)은 RESOURCES.txt를 참고해 배치하고 "관리 > 환경 점검"으로 확인하세요'

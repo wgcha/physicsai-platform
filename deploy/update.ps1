@@ -14,6 +14,18 @@ param(
 $ErrorActionPreference = 'Stop'
 function Write-Step([string]$m) { Write-Host "[PhysicsAI 업데이트] $m" }
 function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
+function Get-BackendPort([string]$ConfigPath, [string]$Py) {
+    # 포트는 platform.yaml server.port 한 곳에서만 읽는다(deploy.json에 포트 없음)
+    if ($Py -and (Test-Path $Py)) {
+        try {
+            $p = & $Py -c "import sys; from physicsai_core.config import load_config; print(load_config(sys.argv[1], environ={}).settings.server.port)" $ConfigPath 2>$null
+            if ($LASTEXITCODE -eq 0 -and "$p" -match '^\s*(\d+)\s*$') { return [int]$Matches[1] }
+        } catch { Write-Verbose "venv로 포트 읽기 실패 — yaml에서 직접 읽습니다" }
+    }
+    $m = [regex]::Match((Get-Content -Raw -Encoding UTF8 $ConfigPath), '(?m)^server:\s*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+port:\s*(\d+)')
+    if ($m.Success) { return [int]$m.Groups[1].Value }
+    return 8100   # 설정 기본값
+}
 function ConvertTo-Plain([Security.SecureString]$s) {
     $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
     try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
@@ -26,19 +38,20 @@ $venvPy = Join-Path $root 'venv\Scripts\python.exe'
 $tasks = @('PhysicsAI-Backend', 'PhysicsAI-Worker')
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $backup = Join-Path $root "_backup\$stamp"
+$port = Get-BackendPort $cfg.config_path $venvPy   # 기존 venv로 읽음(없으면 yaml에서 직접)
 
 # ---- ① 실행 중 작업 확인 -------------------------------------------------------------------
 function Get-ActiveJobCount {
     $tokenSecure = Read-Host -AsSecureString '대시보드 세션 토큰(없으면 Enter — DB에서 직접 확인)'
     $token = ConvertTo-Plain $tokenSecure
     if ($token) {
-        $q = Invoke-RestMethod -Uri "http://127.0.0.1:$($cfg.backend_port)/physicsai/api/queue" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
+        $q = Invoke-RestMethod -Uri "http://127.0.0.1:$port/physicsai/api/queue" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
         $n = @($q.waiting_hpc).Count + @($q.collecting).Count + @($q.queued).Count + @($q.light.queued).Count
         if ($q.running) { $n++ }
         if ($q.light.running) { $n++ }
         # 진행 중 환경 점검(PENDING·RUNNING)도 포함 — 관리자 토큰일 때만 조회 가능(아니면 403 무시)
         try {
-            $ec = Invoke-RestMethod -Uri "http://127.0.0.1:$($cfg.backend_port)/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
+            $ec = Invoke-RestMethod -Uri "http://127.0.0.1:$port/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
             if ($ec.state -in @('PENDING', 'RUNNING')) { $n++ }
         } catch { Write-Verbose '환경 점검 조회 생략(권한 없음 또는 이력 없음)' }
         return $n
@@ -89,7 +102,7 @@ try {
 
     # ---- ⑥ 시작·health ---------------------------------------------------------------------
     foreach ($t in $tasks) { Start-ScheduledTask -TaskName $t }
-    $health = "http://127.0.0.1:$($cfg.backend_port)/physicsai/api/health"
+    $health = "http://127.0.0.1:$port/physicsai/api/health"
     $ok = $false
     for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
         Start-Sleep -Seconds 2
