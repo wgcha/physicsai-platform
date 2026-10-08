@@ -3,6 +3,11 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 
 describe("③ 화면 (V-FE-5)", () => {
+  it("패키지 폴더는 package_display_path로 표시", async () => {
+    renderApp(`${STUDY}/3`, { user: "power" });
+    expect(await screen.findByText("E:\\shared\\AI_WORK\\cushion_v1\\03_package\\ds-2")).toBeTruthy();
+  });
+
   it("모델 표 열과 로그 형식 미확인 표시", async () => {
     renderApp(`${STUDY}/3`, { user: "power" });
     const table = await screen.findByRole("table", { name: "모델 표" });
@@ -91,5 +96,12 @@ describe("④ 화면 (V-FE-6)", () => {
     expect(within(chain).getAllByRole("listitem").map((li) => li.querySelector(".chain-label")!.textContent)).toEqual(["형상", "메싱", "입력파일", "예측"]);
     expect(within(chain).getByText("생략")).toBeTruthy();
     expect(await screen.findByAltText("예측 컨투어")).toBeTruthy();
+  });
+
+  it("입력파일 받기: input_display_path가 있으면 활성, 경로 복사 표시", async () => {
+    renderApp(`${STUDY}/4`, { user: "general" });
+    const btn = (await screen.findByRole("button", { name: "입력파일 받기" })) as HTMLButtonElement;
+    await waitFor(() => expect(btn.disabled).toBe(false));
+    expect(screen.getByText(/04_predict\\j-pred\\INPUT$/)).toBeTruthy();
   });
 });

@@ -3,7 +3,7 @@ import { api, errorMessage, type Job, type ParamSet, type PredictCheck, type Pre
 import { useApp } from "../../app/AppContext";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { Advanced, Card, RunAction } from "../../components/ui";
+import { Advanced, Card, CopyButton, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
 import { POLL } from "../../lib/poll";
 import { fmtTime, isIntegerFormat } from "../../lib/format";
@@ -212,15 +212,22 @@ function PredictWorkspace({ ps }: { ps: ParamSet }) {
     </button>
   );
 
-  const inputArtifact = result?.input_artifact_id ?? null;
+  // B16·B17: 입력파일은 RAD_ASSEMBLE 이후 준비(input_display_path가 채워짐) → input.zip
+  const inputReady = !!pjob?.input_display_path;
+  const [inputError, setInputError] = useState<string | null>(null);
   const downloadInput = async () => {
-    if (!inputArtifact) return;
-    const blob = await api.artifactBlob(inputArtifact);
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${ps.starter_name || "input"}`;
-    a.click();
-    URL.revokeObjectURL(a.href);
+    if (!pjob) return;
+    setInputError(null);
+    try {
+      const blob = await api.inputZip(pjob.id);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${study.folder_name}_${pjob.id.slice(0, 8)}_INPUT.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setInputError(errorMessage(e));
+    }
   };
 
   return (
@@ -319,10 +326,13 @@ function PredictWorkspace({ ps }: { ps: ParamSet }) {
         title="결과"
         className="wide result"
         aside={
-          result ? (
-            <button type="button" className="btn small" onClick={downloadInput} disabled={!inputArtifact} title={inputArtifact ? undefined : "입력파일 내려받기 API 미정 — 작업 폴더의 INPUT/에 있습니다"}>
-              입력파일 받기
-            </button>
+          pjob ? (
+            <span className="run-action-row">
+              {inputError && <span className="error-text small">{inputError}</span>}
+              <button type="button" className="btn small" onClick={downloadInput} disabled={!inputReady} title={inputReady ? "INPUT 폴더의 .rad·.inc를 zip으로 받습니다" : "입력파일이 아직 준비되지 않았습니다"}>
+                입력파일 받기
+              </button>
+            </span>
           ) : undefined
         }
       >
@@ -337,8 +347,13 @@ function PredictWorkspace({ ps }: { ps: ParamSet }) {
                 .join(", ")}
               {" · "}
               {result.out_of_range?.length ? `학습 범위 밖${result.nearest ? ` · 최근접 ${result.nearest.run_key}` : ""}` : result.nearest ? `최근접 ${result.nearest.run_key} (거리 ${result.nearest.distance.toFixed(2)})` : ""}
-              {!inputArtifact && <span className="muted"> · 입력파일: &lt;AI 루트&gt;/{study.folder_name}/04_predict/{pjob!.id}/INPUT/</span>}
             </div>
+            {pjob?.input_display_path && (
+              <div className="codeline small" title="입력 폴더(탐색기에 붙여넣기)">
+                <code>{pjob.input_display_path}</code>
+                <CopyButton text={pjob.input_display_path} label="경로 복사" />
+              </div>
+            )}
             <div className="result-grid">
               <ContourPreview result={result} />
               <div className="result-side">

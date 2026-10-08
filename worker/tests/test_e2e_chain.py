@@ -201,3 +201,53 @@ def _register_final_model(c, sid, sroot, w):
     mid = job(c, jb["id"])["result"]["model_id"]
     assert c.put(f"{API}/studies/{sid}/final-model", headers=PW, json={"model_id": mid}).status_code == 200
     return mid
+
+
+def test_input_zip_and_display_paths(client, worker_factory, loaded_config, engine):
+    """B16·B17: ④ 입력 파일 zip 스트리밍(완료 전 409), 표시용 절대경로."""
+    import io
+    import zipfile
+
+    ai = Path(loaded_config.settings.storage.ai_root)
+    st = create_study(client, "zipst")
+    sid = st["id"]
+    assert st["folder_display_path"] == str(ai / "zipst")
+    w = worker_factory()
+    inp = make_h3d_tree(ai / "zipst", n=4)
+    dj = submit(client, sid, "DATASET_CREATE", {"input_path": str(inp)})
+    r = client.get(f"{API}/jobs/{dj['id']}/artifacts/input.zip", headers=P)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "INPUT_NOT_READY"
+    assert w.run_once_slot() == "SUCCEEDED"
+    ds_id = job(client, dj["id"])["result"]["dataset_id"]
+    submit(client, sid, "PACKAGE_EXPORT", {"dataset_id": ds_id})
+    assert w.run_once_light() == "SUCCEEDED"
+    ds = client.get(f"{API}/datasets/{ds_id}", headers=P).json()
+    assert ds["package_display_path"] == str(ai / "zipst" / "03_package" / ds_id)
+    assert ds["dataset_display_path"] == str(ai / "zipst" / "03_dataset" / ds_id)
+    mid = _register_final_model(client, sid, ai / "zipst", w)
+    assert client.get(f"{API}/models/{mid}", headers=P).json()["stored_display_path"] == str(ai / "zipst" / "03_model" / "models" / mid)
+    psf = make_param_set_folder(ai / "zipst" / "00_inbox")
+    assert client.post(f"{API}/studies/{sid}/param-sets", headers=PW, json={"path": str(psf)}).status_code == 201
+    pj = submit(client, sid, "PREDICT", {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "nominal"})
+    r = client.get(f"{API}/jobs/{pj['id']}/artifacts/input.zip", headers=H("tok-general"))
+    assert r.status_code == 409
+    assert job(client, pj["id"])["input_display_path"] is None
+    assert w.run_once_slot() == "SUCCEEDED"
+    # 링크 파일은 zip에 넣지 않는다
+    inp_dir = ai / "zipst" / "04_predict" / pj["id"] / "INPUT"
+    os.symlink("/etc/passwd", inp_dir / "evil.inc")
+    r = client.get(f"{API}/jobs/{pj['id']}/artifacts/input.zip", headers=H("tok-general"))
+    assert r.status_code == 200 and r.headers["content-type"] == "application/zip"
+    assert "attachment" in r.headers["content-disposition"]
+    zf = zipfile.ZipFile(io.BytesIO(r.content))
+    assert sorted(zf.namelist()) == sorted(n for n in os.listdir(inp_dir) if n != "evil.inc")
+    assert "model0_0000.rad" in zf.namelist() and "eps_mesh_1.inc" in zf.namelist()
+    assert zf.read("model0_0000.rad") == (inp_dir / "model0_0000.rad").read_bytes()
+    assert job(client, pj["id"])["input_display_path"] == str(inp_dir)
+
+
+def test_display_path_windows_form():
+    from physicsai_api.services.common import display_path
+
+    assert display_path("E:/shared/AI_WORK", "cushion", "03_package/abc/") == "E:\\shared\\AI_WORK\\cushion\\03_package\\abc"
+    assert display_path("/srv/ai/", "s", None) == "/srv/ai/s"

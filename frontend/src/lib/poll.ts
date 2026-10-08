@@ -10,3 +10,22 @@ export const POLL = {
   status: 30000,
   checkDebounce: 300,
 };
+
+/** B1: /status.ui 값(ms)을 반영 */
+export function applyUiPoll(ui: Partial<Record<string, number>> | null | undefined) {
+  if (!ui) return;
+  const map: Record<string, keyof typeof POLL> = {
+    poll_job_running_ms: "jobActive",
+    poll_job_queued_ms: "jobQueued",
+    poll_job_waiting_hpc_ms: "jobWaitingHpc",
+    poll_log_ms: "log",
+    poll_queue_ms: "queue",
+    poll_resources_ms: "resources",
+    poll_notifications_ms: "notifications",
+    poll_status_ms: "status",
+  };
+  for (const [k, target] of Object.entries(map)) {
+    const v = ui[k];
+    if (typeof v === "number" && Number.isFinite(v) && v >= 200) POLL[target] = v;
+  }
+}

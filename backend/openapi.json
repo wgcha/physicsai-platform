@@ -136,6 +136,17 @@
             "title": "Created By Name",
             "type": "string"
           },
+          "dataset_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Display Path"
+          },
           "eval_count": {
             "anyOf": [
               {
@@ -183,6 +194,17 @@
             },
             "title": "Options",
             "type": "object"
+          },
+          "package_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Package Display Path"
           },
           "package_ready": {
             "title": "Package Ready",
@@ -528,6 +550,17 @@
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "input_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Display Path"
           },
           "job_type": {
             "title": "Job Type",
@@ -1191,6 +1224,17 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "stored_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stored Display Path"
           },
           "study_id": {
             "title": "Study Id",
@@ -2431,6 +2475,17 @@
             ],
             "title": "Final Model Id"
           },
+          "folder_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Display Path"
+          },
           "folder_name": {
             "title": "Folder Name",
             "type": "string"
@@ -2556,6 +2611,17 @@
               }
             ],
             "title": "Final Model Id"
+          },
+          "folder_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Display Path"
           },
           "folder_name": {
             "title": "Folder Name",
@@ -3163,6 +3229,65 @@
           }
         },
         "summary": "List Artifacts",
+        "tags": [
+          "artifacts"
+        ]
+      }
+    },
+    "/physicsai/api/jobs/{job_id}/artifacts/input.zip": {
+      "get": {
+        "description": "④ 예측 입력 파일(INPUT/*.rad·*.inc) zip 스트리밍. RAD_ASSEMBLE 완료 전·PREDICT 외 작업은 409 INPUT_NOT_READY.",
+        "operationId": "input_zip_physicsai_api_jobs__job_id__artifacts_input_zip_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Input Zip",
         "tags": [
           "artifacts"
         ]

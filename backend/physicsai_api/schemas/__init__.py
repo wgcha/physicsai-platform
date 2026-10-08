@@ -142,6 +142,7 @@ class Job(JobSummary):
     version: int
     can_cancel: bool
     can_retry: bool
+    input_display_path: str | None = None
 
 
 class QueueSlot(Resp):
@@ -214,6 +215,7 @@ class Study(Resp):
     updated_at: datetime
     version: int
     can_execute: bool
+    folder_display_path: str | None = None
 
 
 class StudyCreate(Req):
@@ -263,6 +265,8 @@ class Dataset(Resp):
     options: dict[str, bool]
     package_ready: bool
     package_rel: str | None = None
+    dataset_display_path: str | None = None
+    package_display_path: str | None = None
     created_by_name: str
     created_at: datetime
 
@@ -291,6 +295,7 @@ class Model(Resp):
     registered_by_name: str
     registered_at: datetime
     row_version: int
+    stored_display_path: str | None = None
 
 
 class StudyDetail(Study):

@@ -251,7 +251,7 @@ def create_job(ctx: AppContext, principal: Principal, study_id: str, job_type: s
                 "eval_psdata_rel": f"03_dataset/{ds_id}/eval/dataset.psdata",
             })
         audit(conn, principal, "JOB_CREATE", "job", job_id, {"job_type": job_type, "study_id": study_id}, rid, ip)
-        return job_detail(conn, job, principal, include_commands=False)
+        return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
 
 # ---- 조회 -------------------------------------------------------------------
@@ -289,7 +289,7 @@ def get_job(ctx: AppContext, principal: Principal, job_id: str, include_commands
         j = _require_job(conn, job_id)
         if include_commands:
             require_global_admin(principal)
-        detail = job_detail(conn, j, principal, include_commands=include_commands)
+        detail = job_detail(conn, j, principal, include_commands=include_commands, ai_root=ctx.settings.storage.ai_root)
         s = studies_repo.get(conn, j["study_id"])
     log_size = file_size(os.path.join(study_root(ctx, s), "logs", job_id, "job.log")) if s else 0
     etag = f'"{job_id}:{j["version"]}:{log_size}{":c" if include_commands else ""}"'
@@ -352,7 +352,7 @@ def cancel_job(ctx: AppContext, principal: Principal, job_id: str, rid: str, ip:
         require_global_admin(principal)
         j = jobs_repo.request_cancel(conn, job_id, principal.user_id)
         audit(conn, principal, "JOB_CANCEL", "job", job_id, {"state": j["state"]}, rid, ip)
-        return job_detail(conn, j, principal, include_commands=False)
+        return job_detail(conn, j, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
 
 def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int | None, rid: str, ip: str | None) -> dict[str, Any]:
@@ -385,7 +385,7 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         if old["job_type"] == "DATASET_CREATE" and (old["result"] or {}).get("dataset_id"):
             datasets_repo.set_values(conn, old["result"]["dataset_id"], status="BUILDING")
         audit(conn, principal, "JOB_RETRY", "job", new_id, {"retry_of": job_id, "from_step": from_step}, rid, ip)
-        return job_detail(conn, job, principal, include_commands=False)
+        return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
 
 def queue_view(ctx: AppContext) -> dict[str, Any]:
@@ -474,3 +474,83 @@ def list_hpc_jobs(ctx: AppContext, job_id: str) -> list[dict[str, Any]]:
         for r in rows
     ]
 
+
+
+# ---- ④ 입력 파일 zip(스트리밍) ------------------------------------------------------
+
+ZIP_CHUNK = 1024 * 1024
+
+
+class _ZipSink:
+    """zipfile이 쓰는 비탐색(non-seekable) 출력. 쓴 바이트를 모았다가 생성기가 꺼내 간다."""
+
+    def __init__(self) -> None:
+        self.buf = bytearray()
+        self.pos = 0
+
+    def write(self, b: bytes) -> int:
+        self.buf += b
+        self.pos += len(b)
+        return len(b)
+
+    def tell(self) -> int:
+        return self.pos
+
+    def seek(self, *_a: Any) -> int:
+        raise OSError("not seekable")
+
+    def flush(self) -> None:
+        return None
+
+    def take(self) -> bytes:
+        out = bytes(self.buf)
+        self.buf.clear()
+        return out
+
+
+def input_zip(ctx: AppContext, job_id: str) -> tuple[Any, str]:
+    """PREDICT 작업의 `P/INPUT/` 직계 파일(.rad·.inc 등)을 zip으로 스트리밍. (생성기, 파일 이름)."""
+    import zipfile
+
+    from .common import input_zip_ready
+
+    with ctx.engine.connect() as conn:
+        j = _require_job(conn, job_id)
+        if not input_zip_ready(conn, j):
+            raise DomainError("INPUT_NOT_READY", "입력 파일이 아직 준비되지 않았습니다(예측 작업의 .rad 조립 완료 후 가능)", status=409)
+        s = studies_repo.require(conn, j["study_id"])
+        root_id = jobs_repo.root_job_id(conn, j)
+    root = study_root(ctx, s)
+    inp = resolve_in_study(root, f"04_predict/{root_id}/INPUT")
+    if not os.path.isdir(inp):
+        raise DomainError("INPUT_NOT_READY", "입력 파일 폴더가 없습니다", status=409)
+    names = []
+    for n in sorted(os.listdir(inp)):
+        p = os.path.join(inp, n)
+        if os.path.islink(p) or not os.path.isfile(p):
+            continue  # 링크·하위 폴더 제외(경로 탈출 방지)
+        if os.path.dirname(os.path.realpath(p)) != os.path.realpath(inp):
+            continue
+        names.append(n)
+
+    def gen() -> Any:
+        sink = _ZipSink()
+        with zipfile.ZipFile(sink, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
+            for n in names:
+                with open(os.path.join(inp, n), "rb") as src, zf.open(n, "w", force_zip64=True) as dst:
+                    while True:
+                        b = src.read(ZIP_CHUNK)
+                        if not b:
+                            break
+                        dst.write(b)
+                        chunk = sink.take()
+                        if chunk:
+                            yield chunk
+                chunk = sink.take()
+                if chunk:
+                    yield chunk
+        tail = sink.take()
+        if tail:
+            yield tail
+
+    return gen(), f"{s['folder_name']}_{job_id[:8]}_INPUT.zip"

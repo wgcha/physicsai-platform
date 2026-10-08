@@ -32,7 +32,12 @@ export function Card({
   );
 }
 
-export function ProgressBar({ pct, label }: { pct: number | null; label?: string }) {
+export function ProgressBar({ pct: pctIn, label }: { pct: number | null | undefined; label?: string }) {
+  const pct = pctIn ?? null;
+  return <ProgressBarInner pct={pct} label={label} />;
+}
+
+function ProgressBarInner({ pct, label }: { pct: number | null; label?: string }) {
   return (
     <div className="progress" role="progressbar" aria-valuenow={pct ?? undefined} aria-label={label ?? "진행률"}>
       <div className={pct === null ? "progress-fill indeterminate" : "progress-fill"} style={pct === null ? undefined : { width: `${Math.max(0, Math.min(100, pct))}%` }} />

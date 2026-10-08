@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage, type Model } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { Advanced, Card, Field, RunAction } from "../../components/ui";
+import { Advanced, Card, CopyButton, Field, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
 import { Chart, Sparkline } from "../../components/Chart";
 import { fmtNum, fmtTime } from "../../lib/format";
@@ -120,6 +120,12 @@ export function ModelRegisterCard() {
           {registered.log_status === "PARSED" && registered.epochs_total != null && (
             <span className="small"> · {registered.epochs_total} epoch</span>
           )}
+          {registered.stored_display_path && (
+            <div className="codeline small">
+              <code>{registered.stored_display_path}</code>
+              <CopyButton text={registered.stored_display_path} label="경로 복사" />
+            </div>
+          )}
         </div>
       )}
       <p className="muted small">등록 시 파일을 Study 폴더로 복사합니다. 등록 후 원본 폴더는 지워도 됩니다.</p>
@@ -171,7 +177,7 @@ export function EvaluateCard() {
     }
   };
 
-  const dsLabel = (id: string | null) => {
+  const dsLabel = (id: string | null | undefined) => {
     const d = datasets.find((x) => x.id === id);
     return d ? `${fmtTime(d.created_at)} (평가 ${d.eval_count})` : "–";
   };
@@ -224,7 +230,7 @@ export function EvaluateCard() {
                 return (
                   <tr key={m.id} className={m.is_final ? "is-final" : ""}>
                     <td>
-                      <b>{m.name}</b> <span className="muted">v{m.version}</span>
+                      <b title={m.stored_display_path ?? undefined}>{m.name}</b> <span className="muted">v{m.version}</span>
                       {m.label && <div className="muted small">{m.label}</div>}
                       {m.status === "INVALID" && <div className="error-text small">파일 변경 감지(사용 불가)</div>}
                     </td>

@@ -11,7 +11,9 @@
     "preview:mock": "vite preview --mode mock --outDir dist-mock --port 5175 --strictPort",
     "test": "vitest run",
     "lint": "tsc --noEmit -p tsconfig.json",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "gen:api": "openapi-typescript ../backend/openapi.json -o src/api/generated/schema.d.ts",
+    "smoke:backend": "bash scripts/smoke-backend.sh"
   },
   "dependencies": {
     "react": "18.3.1",
@@ -25,6 +27,7 @@
     "@types/react-dom": "18.3.7",
     "@vitejs/plugin-react": "4.7.0",
     "jsdom": "25.0.1",
+    "openapi-typescript": "7.13.0",
     "typescript": "5.9.3",
     "vite": "5.4.21",
     "vitest": "2.1.9"

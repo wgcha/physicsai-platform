@@ -4,7 +4,7 @@ import { api, errorMessage, type Study } from "../api";
 import { useApp, canExecuteIn } from "../app/AppContext";
 import { fmtTime } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
-import { Field, NO_PERMISSION_TIP } from "../components/ui";
+import { CopyButton, Field, NO_PERMISSION_TIP } from "../components/ui";
 
 const FOLDER_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -102,7 +102,10 @@ export function StudyList() {
                   <td>
                     <Link to={`/p/${projectId}/s/${s.id}/stage/3`}>{s.title}</Link>
                   </td>
-                  <td className="mono">{s.folder_name}</td>
+                  <td className="mono" title={s.folder_display_path ?? undefined}>
+                    {s.folder_name}
+                    {s.folder_display_path && <CopyButton text={s.folder_display_path} label="경로 복사" />}
+                  </td>
                   <td>{s.status === "ACTIVE" ? "사용 중" : "보관"}</td>
                   <td>{s.created_by_name}</td>
                   <td className="num">{fmtTime(s.updated_at)}</td>

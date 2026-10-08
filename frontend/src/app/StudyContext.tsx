@@ -1,8 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, type Dataset, type Model, type ParamSet, type Study } from "../api";
+import { api, type Dataset, type Model, type ParamSet, type StudyDetail } from "../api";
 
 export interface StudyData {
-  study: Study;
+  study: StudyDetail;
   datasets: Dataset[];
   models: Model[];
   paramSets: ParamSet[];
@@ -26,7 +26,7 @@ export function useStudyOptional(): StudyData | null {
 }
 
 export function StudyProvider({ studyId, children }: { studyId: string; children: ReactNode }) {
-  const [study, setStudy] = useState<Study | null>(null);
+  const [study, setStudy] = useState<StudyDetail | null>(null);
   const [datasets, setDatasets] = useState<Dataset[]>([]);
   const [models, setModels] = useState<Model[]>([]);
   const [paramSets, setParamSets] = useState<ParamSet[]>([]);

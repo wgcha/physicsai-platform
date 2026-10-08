@@ -12,6 +12,7 @@ import type {
   PredictCheck,
   SampleRow,
   Study,
+  StudyDetail,
 } from "../api/types";
 import {
   COMMANDS_TXT,
@@ -54,7 +55,22 @@ export interface MockOptions {
   hpcConfigured?: boolean;
   /** 실행 중 작업이 tick마다 진행되는 정도(%) */
   speed?: number;
+  /** /status.ui 값(B1). 시험에서 짧은 주기를 주입 */
+  ui?: Record<string, number>;
 }
+
+export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
+export const DEFAULT_UI = {
+  max_artifact_bytes: 20971520,
+  poll_job_running_ms: 2000,
+  poll_job_queued_ms: 5000,
+  poll_job_waiting_hpc_ms: 15000,
+  poll_log_ms: 2000,
+  poll_queue_ms: 5000,
+  poll_resources_ms: 10000,
+  poll_notifications_ms: 10000,
+  poll_status_ms: 30000,
+};
 
 const JOB_LABEL: Record<JobType, string> = {
   DATASET_CREATE: "데이터셋 생성",
@@ -73,6 +89,7 @@ const err = (status: number, code: string, message: string, extra: Record<string
 export class MockServer {
   user: MockUserKey;
   hpcConfigured: boolean;
+  ui: Record<string, number>;
   speed: number;
   studies: Study[] = seedStudies();
   datasets: Dataset[] = seedDatasets();
@@ -91,6 +108,7 @@ export class MockServer {
     this.user = opts.user ?? "admin";
     this.hpcConfigured = opts.hpcConfigured ?? false;
     this.speed = opts.speed ?? 9;
+    this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
     this.seedJobs();
   }
@@ -130,7 +148,7 @@ export class MockServer {
 
   private addArtifact(jobId: string, studyId: string, kind: Artifact["kind"], rel: string, ct: string, body: string): string {
     const id = this.nid("a");
-    this.artifacts.push({ id, study_id: studyId, job_id: jobId, kind, rel_path: rel, size: body.length, sha256: null, content_type: ct, created_at: new Date().toISOString(), body });
+    this.artifacts.push({ id, study_id: studyId, job_id: jobId, kind, file_name: rel.split("/").pop()!, size: body.length, sha256: null, content_type: ct, created_at: new Date().toISOString(), body });
     return id;
   }
 
@@ -153,6 +171,7 @@ export class MockServer {
       preview_json_artifact_id: pj,
       image_artifact_ids: [img],
       curve_artifact_id: cj,
+      response_table_artifact_id: null as string | null,
       response_table: ps.responses.map((r) => {
         const p = pred[r.name] ?? null;
         const m = chk.nearest?.measured?.[r.name] ?? null;
@@ -352,24 +371,52 @@ export class MockServer {
     return me.roles[projectId] ?? null;
   }
 
+  private disp(studyId: string, rel: string): string {
+    const st = this.studies.find((x) => x.id === studyId);
+    return [MOCK_AI_ROOT, st?.folder_name ?? studyId, ...rel.split("/").filter(Boolean)].join("\\");
+  }
+
   private studyOut(s: Study): Study {
     const r = this.role(s.project_id);
-    const last = (stage: number) => this.jobs.filter((j) => j.study_id === s.id && j.stage === stage).sort((a, b) => b.created_at.localeCompare(a.created_at))[0]?.state ?? null;
+    return { ...s, can_execute: r === "power" || r === "admin", folder_display_path: this.disp(s.id, "") };
+  }
+
+  private studyDetail(s: Study): StudyDetail {
+    const latest = (stage: number) => {
+      const j = this.jobs.filter((x) => x.study_id === s.id && x.stage === stage).sort((a, b) => b.created_at.localeCompare(a.created_at))[0];
+      return { latest_job_id: j?.id ?? null, latest_job_type: j?.job_type ?? null, latest_state: j?.state ?? null };
+    };
     const final = this.models.find((m) => m.id === s.final_model_id) ?? null;
     return {
-      ...s,
-      can_execute: r === "power" || r === "admin",
+      ...this.studyOut(s),
       final_model: final ? this.modelOut(final, false) : null,
-      stage_status: { "3": { last_job_state: last(3) }, "4": { last_job_state: last(4) } },
+      stage_status: { "3": latest(3), "4": latest(4) },
       current_param_set_id: this.paramSets.find((p) => p.study_id === s.id && p.is_current)?.id ?? null,
+    };
+  }
+
+  private datasetOut(d: Dataset): Dataset {
+    return {
+      ...d,
+      dataset_display_path: this.disp(d.study_id, `03_dataset/${d.id}`),
+      package_rel: d.package_ready ? `03_package/${d.id}/` : null,
+      package_display_path: d.package_ready ? this.disp(d.study_id, `03_package/${d.id}`) : null,
     };
   }
 
   private modelOut(m: Model, withCurve: boolean): Model {
     const study = this.studies.find((s) => s.id === m.study_id);
-    const out = { ...m, is_final: study?.final_model_id === m.id };
+    const out = { ...m, is_final: study?.final_model_id === m.id, stored_display_path: this.disp(m.study_id, `03_model/models/${m.id}`) };
     if (!withCurve) delete out.loss_curve;
     return out;
+  }
+
+  private inputReady(j: Job): boolean {
+    return j.job_type === "PREDICT" && j.steps.some((x) => x.step_key === "RAD_ASSEMBLE" && (x.state === "SUCCEEDED" || x.state === "SKIPPED"));
+  }
+
+  private jobOut(j: Job): Job {
+    return { ...j, attention_code: null, input_display_path: this.inputReady(j) ? this.disp(j.study_id, `04_predict/${j.id}/INPUT`) : null };
   }
 
   // ---------- 라우팅 ----------
@@ -398,6 +445,8 @@ export class MockServer {
           altair: [{ key: "edspy_path", ok: true }, { key: "simlab_path", ok: true }, { key: "hw_exe_path", ok: true }],
           templates: [{ key: "geom_update", configured: true }, { key: "mesh", configured: false }, { key: "response_extract", configured: false }],
           limits: { configured: {}, detected: {}, effective: {} },
+          ui: this.ui,
+          auth: { mode: "dashboard", login_url: "/" },
         },
       };
     if (method === "GET" && path === "/queue") {
@@ -471,8 +520,8 @@ export class MockServer {
       const s = this.studies.find((x) => x.id === seg[1]);
       if (!s) return err(404, "NOT_FOUND", "Study를 찾을 수 없습니다.");
       const sub = seg[2];
-      if (method === "GET" && !sub) return { status: 200, body: this.studyOut(s) };
-      if (method === "GET" && sub === "datasets") return { status: 200, body: this.datasets.filter((d) => d.study_id === s.id) };
+      if (method === "GET" && !sub) return { status: 200, body: this.studyDetail(s) };
+      if (method === "GET" && sub === "datasets") return { status: 200, body: this.datasets.filter((d) => d.study_id === s.id).map((d) => this.datasetOut(d)) };
       if (method === "GET" && sub === "models") return { status: 200, body: this.models.filter((m) => m.study_id === s.id).map((m) => this.modelOut(m, false)) };
       if (method === "GET" && sub === "param-sets") return { status: 200, body: this.paramSets.filter((p) => p.study_id === s.id) };
       if (method === "POST" && sub === "predict" && seg[3] === "check") {
@@ -547,10 +596,14 @@ export class MockServer {
         return {
           status: 200,
           headers: { ETag: etag },
-          body: { ...j, can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: (own || me.is_global_admin) && (j.state === "FAILED" || j.state === "INTERRUPTED") },
+          body: { ...this.jobOut(j), can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: (own || me.is_global_admin) && (j.state === "FAILED" || j.state === "INTERRUPTED") },
         };
       }
       if (method === "GET" && seg[2] === "log") return { status: 200, body: this.log(j, Number(query.get("cursor") ?? 0)) };
+      if (method === "GET" && seg[2] === "artifacts" && seg[3] === "input.zip") {
+        if (!this.inputReady(j)) return err(409, "INPUT_NOT_READY", "입력파일이 아직 준비되지 않았습니다.");
+        return { status: 200, text: "PK\u0003\u0004 (mock zip)", contentType: "application/zip" };
+      }
       if (method === "GET" && seg[2] === "artifacts") return { status: 200, body: this.artifacts.filter((a) => a.job_id === j.id).map(({ body: _b, ...a }) => a) };
       if (method === "POST" && seg[2] === "cancel") {
         const d = needAdmin();

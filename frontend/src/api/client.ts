@@ -27,6 +27,28 @@ const FALLBACK_MESSAGES: Record<number, string> = {
 /** ETag 캐시(GET /jobs/{id} 등): url → {etag, body} */
 const etagCache = new Map<string, { etag: string; body: unknown }>();
 
+/** 세션 만료 등으로 401을 받으면 앱 전체에 알린다(AuthGate가 로그인 안내로 전환) */
+export const AUTH_LOST_EVENT = "physicsai:auth-lost";
+function signal401(status: number) {
+  if (status === 401 && typeof window !== "undefined") window.dispatchEvent(new Event(AUTH_LOST_EVENT));
+}
+
+/** 응답 헤더 X-Next-Cursor(B2) */
+export async function requestPage<T>(path: string, query?: Query): Promise<{ items: T; nextCursor: string | null }> {
+  const url = buildUrl(path, query);
+  let res: Response;
+  try {
+    res = await fetch(url, { headers: { Accept: "application/json" }, credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, { code: "NETWORK_ERROR", message: "서버에 연결할 수 없습니다." });
+  }
+  if (!res.ok) {
+    signal401(res.status);
+    throw await toError(res);
+  }
+  return { items: (await res.json()) as T, nextCursor: res.headers.get("X-Next-Cursor") };
+}
+
 export function clearApiCache() {
   etagCache.clear();
 }
@@ -85,7 +107,10 @@ export async function request<T>(
     throw new ApiError(0, { code: "NETWORK_ERROR", message: "서버에 연결할 수 없습니다." });
   }
   if (res.status === 304 && cached) return cached.body as T;
-  if (!res.ok) throw await toError(res);
+  if (!res.ok) {
+    signal401(res.status);
+    throw await toError(res);
+  }
   if (res.status === 204) return undefined as T;
   const body = (await res.json()) as T;
   if (method === "GET" && opts.etag) {
@@ -98,8 +123,16 @@ export async function request<T>(
 /** 산출물 본문(blob) — 내려받기는 id로만(§6.8) */
 export async function fetchBlob(path: string): Promise<Blob> {
   const url = buildUrl(path);
-  const res = await fetch(url, { credentials: "same-origin" });
-  if (!res.ok) throw await toError(res);
+  let res: Response;
+  try {
+    res = await fetch(url, { credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, { code: "NETWORK_ERROR", message: "서버에 연결할 수 없습니다." });
+  }
+  if (!res.ok) {
+    signal401(res.status);
+    throw await toError(res);
+  }
   return res.blob();
 }
 

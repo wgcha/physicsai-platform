@@ -22,7 +22,7 @@ def test_all_routes_prefixed():
         "/studies/{study_id}/final-model", "/studies/{study_id}/param-sets", "/param-sets/{ps_id}",
         "/param-sets/{ps_id}/samples", "/studies/{study_id}/predict/check", "/studies/{study_id}/jobs", "/jobs",
         "/jobs/{job_id}", "/jobs/{job_id}/log", "/jobs/{job_id}/steps/{step_no}/log", "/jobs/{job_id}/cancel",
-        "/jobs/{job_id}/retry", "/jobs/{job_id}/artifacts", "/artifacts/{artifact_id}/content", "/jobs/{job_id}/hpc-jobs",
+        "/jobs/{job_id}/retry", "/jobs/{job_id}/artifacts", "/jobs/{job_id}/artifacts/input.zip", "/artifacts/{artifact_id}/content", "/jobs/{job_id}/hpc-jobs",
         "/notifications", "/notifications/unread-count", "/notifications/read", "/admin/config",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

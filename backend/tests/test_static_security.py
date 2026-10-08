@@ -70,7 +70,7 @@ def test_no_user_output_delete_calls():
 
 def test_no_upload_routes():
     src = "\n".join(f.read_text() for f in _py_files([REPO / "backend" / "physicsai_api"]))
-    assert "UploadFile" not in src and "File(" not in src and "multipart" not in src
+    assert "UploadFile" not in src and not re.search(r"(?<![A-Za-z_])File\(", src) and "multipart" not in src
 
 
 def test_no_multipart_in_openapi():

@@ -73,8 +73,20 @@ def encode_cursor(offset: int) -> str:
 # ---- 직렬화 ---------------------------------------------------------------
 
 
-def study_out(s: dict[str, Any], principal: Principal) -> dict[str, Any]:
+def display_path(ai_root: str | None, folder_name: str, rel: str | None = None) -> str | None:
+    """탐색기에 붙여넣을 표시용 절대경로(ai_root + Study 폴더 + 상대경로). ai_root가 Windows 형식이면 '\\' 구분."""
+    if not ai_root:
+        return None
+    parts = [folder_name, *[x for x in (rel or "").replace("\\", "/").split("/") if x]]
+    win = len(ai_root) >= 2 and ai_root[1] == ":"
+    sep = "\\" if win else "/"
+    base = ai_root.replace("/", "\\") if win else ai_root.replace("\\", "/")
+    return base.rstrip("\\/") + sep + sep.join(parts)
+
+
+def study_out(s: dict[str, Any], principal: Principal, ai_root: str | None = None) -> dict[str, Any]:
     return {
+        "folder_display_path": display_path(ai_root or s["ai_root_snapshot"], s["folder_name"]),
         "id": s["id"], "project_id": s["project_id"], "folder_name": s["folder_name"], "title": s["title"],
         "status": s["status"], "final_model_id": s["final_model_id"], "created_by": s["created_by"],
         "created_by_name": s["created_by_name"], "created_at": s["created_at"], "updated_at": s["updated_at"],
@@ -82,8 +94,12 @@ def study_out(s: dict[str, Any], principal: Principal) -> dict[str, Any]:
     }
 
 
-def dataset_out(d: dict[str, Any]) -> dict[str, Any]:
+def dataset_out(d: dict[str, Any], study: dict[str, Any] | None = None, ai_root: str | None = None) -> dict[str, Any]:
+    root = (ai_root or study["ai_root_snapshot"]) if study else None
+    fn = study["folder_name"] if study else ""
     return {
+        "dataset_display_path": display_path(root, fn, f"03_dataset/{d['id']}") if study else None,
+        "package_display_path": display_path(root, fn, d["package_rel"]) if study and d["package_rel"] else None,
         "id": d["id"], "study_id": d["study_id"], "job_id": d["job_id"], "status": d["status"],
         "source_path": d["source_path"], "h3d_count": d["h3d_count"], "train_count": d["train_count"],
         "eval_count": d["eval_count"], "holdout_ratio": float(d["holdout_ratio"]), "seed": d["seed"],
@@ -92,9 +108,11 @@ def dataset_out(d: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def model_out(m: dict[str, Any], final_model_id: str | None, *, with_curve: bool) -> dict[str, Any]:
+def model_out(m: dict[str, Any], final_model_id: str | None, *, with_curve: bool,
+              study: dict[str, Any] | None = None, ai_root: str | None = None) -> dict[str, Any]:
     curve = m.get("loss_curve")
     return {
+        "stored_display_path": display_path(ai_root or study["ai_root_snapshot"], study["folder_name"], m["stored_rel"]) if study else None,
         "id": m["id"], "study_id": m["study_id"], "name": m["name"], "version": m["version"], "label": m["label"],
         "dataset_id": m["dataset_id"], "source_path": m["source_path"], "log_status": m["log_status"],
         "log_parser": m["log_parser"], "epochs_total": m["epochs_total"], "last_epoch": m["last_epoch"],
@@ -136,7 +154,8 @@ def can_retry(j: dict[str, Any], principal: Principal) -> bool:
     return j["created_by"] == principal.user_id and principal.can_execute(j["project_id"])
 
 
-def job_detail(conn: Connection, j: dict[str, Any], principal: Principal, *, include_commands: bool) -> dict[str, Any]:
+def job_detail(conn: Connection, j: dict[str, Any], principal: Principal, *, include_commands: bool,
+               ai_root: str | None = None) -> dict[str, Any]:
     study = studies_repo.get(conn, j["study_id"])
     pos = jobs_repo.queue_positions(conn, j["lane"]).get(j["id"]) if j["state"] == "QUEUED" else None
     steps = []
@@ -153,8 +172,23 @@ def job_detail(conn: Connection, j: dict[str, Any], principal: Principal, *, inc
         "retry_of_job_id": j["retry_of_job_id"], "attention_code": j["attention_code"], "version": j["version"],
         "can_cancel": principal.is_global_admin and j["state"] not in TERMINAL,
         "can_retry": can_retry(j, principal),
+        "input_display_path": None,
     })
+    if study and j["job_type"] == "PREDICT" and input_zip_ready(conn, j):
+        out["input_display_path"] = display_path(ai_root or study["ai_root_snapshot"], study["folder_name"],
+                                                 f"04_predict/{jobs_repo.root_job_id(conn, j)}/INPUT")
     return out
+
+
+def input_zip_ready(conn: Connection, j: dict[str, Any]) -> bool:
+    """④ 입력 파일(INPUT) 준비 완료 = RAD_ASSEMBLE step이 SUCCEEDED(재시도 재사용 SKIPPED 포함)."""
+    if j["job_type"] != "PREDICT":
+        return False
+    for s in jobs_repo.get_steps(conn, j["id"]):
+        if s["step_key"] == "RAD_ASSEMBLE":
+            reused = s["state"] == "SKIPPED" and (j.get("resume_from_step") or 0) > s["step_no"]
+            return s["state"] == "SUCCEEDED" or reused
+    return False
 
 
 def file_size(path: str) -> int:

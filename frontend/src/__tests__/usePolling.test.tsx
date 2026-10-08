@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, renderHook } from "@testing-library/react";
 import { usePolling } from "../hooks/usePolling";
+import { POLL, applyUiPoll } from "../lib/poll";
 
 function setVisibility(v: "visible" | "hidden") {
   Object.defineProperty(document, "visibilityState", { configurable: true, get: () => v });
@@ -35,5 +36,16 @@ describe("usePolling (V-FE-3)", () => {
     renderHook(() => usePolling(fn, null));
     await act(async () => void (await vi.advanceTimersByTimeAsync(5000)));
     expect(fn).not.toHaveBeenCalled();
+  });
+});
+
+describe("/status.ui 폴링 주기 반영 (B1)", () => {
+  it("poll_*_ms를 POLL에 적용하고 이상값은 무시", () => {
+    const before = { ...POLL };
+    applyUiPoll({ poll_queue_ms: 7000, poll_notifications_ms: 12000, poll_log_ms: 0 });
+    expect(POLL.queue).toBe(7000);
+    expect(POLL.notifications).toBe(12000);
+    expect(POLL.log).toBe(before.log);
+    Object.assign(POLL, before);
   });
 });

@@ -109,7 +109,7 @@ export function DatasetCreateCard() {
                 <td className="small">
                   {Math.round(d.holdout_ratio * 100)}% · {d.split_group === "file" ? "파일" : "폴더"} · seed {d.seed}
                 </td>
-                <td className="mono small ellipsis" title={d.source_path}>
+                <td className="mono small ellipsis" title={d.dataset_display_path ? `입력: ${d.source_path}\n데이터셋: ${d.dataset_display_path}` : d.source_path}>
                   {d.source_path}
                 </td>
                 <td className="small wrap-date">
@@ -131,7 +131,7 @@ const DEFAULT_COMMANDS = [
 ];
 
 export function PackageExportCard() {
-  const { study, datasets, reloadDatasets } = useStudy();
+  const { datasets, reloadDatasets } = useStudy();
   const canExec = useCanExecute();
   const ready = datasets.filter((d) => d.status === "READY");
   const [dsId, setDsId] = useState<string>("");
@@ -161,7 +161,7 @@ export function PackageExportCard() {
     };
   }, [job?.id, job?.state]);
 
-  const pkgPath = selected ? `<AI 루트>/${study.folder_name}/03_package/${selected.id}/` : "";
+  const pkgPath = selected?.package_display_path ?? "";
   const cmdLines = commands
     ? commands.split(/\r?\n/).filter((l) => l.trim() && !l.trim().startsWith("#"))
     : DEFAULT_COMMANDS;
@@ -191,7 +191,7 @@ export function PackageExportCard() {
         disabledReason="준비된 데이터셋이 필요합니다"
         error={error}
       />
-      {selected?.package_ready && (
+      {selected?.package_ready && pkgPath && (
         <div className="package">
           <div className="field-label">패키지 폴더</div>
           <div className="codeline">
@@ -210,6 +210,7 @@ export function PackageExportCard() {
 }
 
 export function HpcTrainingNotice() {
+  const { study } = useStudy();
   return (
     <Card step="③-3" title="HPC에서 직접 학습" className="notice-card">
       <ol className="steps-text">
@@ -218,6 +219,12 @@ export function HpcTrainingNotice() {
           학습 후 <code>.psmdl</code>·<code>.pscfg</code>·<code>train.log</code>를 한 폴더에 모아 AI 루트 아래로 옮기고 ③-4에서 등록합니다.
         </li>
       </ol>
+      {study.folder_display_path && (
+        <div className="codeline small" title="Study 폴더">
+          <code>{study.folder_display_path}</code>
+          <CopyButton text={study.folder_display_path} label="경로 복사" />
+        </div>
+      )}
       <p className="muted small">플랫폼은 학습을 실행하지 않으며 실시간 로그도 받지 않습니다.</p>
     </Card>
   );

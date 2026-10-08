@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { api, ApiError, errorMessage, type Me, type Project, type StatusInfo } from "../api";
+import { api, ApiError, AUTH_LOST_EVENT, errorMessage, type Me, type Project, type StatusInfo } from "../api";
 import { AppContext } from "./AppContext";
 import { usePolling } from "../hooks/usePolling";
-import { POLL } from "../lib/poll";
+import { POLL, applyUiPoll } from "../lib/poll";
 
-const DASHBOARD_LOGIN_URL = "/";
+const LOGIN_URL_KEY = "physicsai.loginUrl";
+
+/** 로그인 링크: /status.auth.login_url(B1)을 기억해 두고, 모르면 "/" */
+function loginUrl(): string {
+  try {
+    return localStorage.getItem(LOGIN_URL_KEY) || "/";
+  } catch {
+    return "/";
+  }
+}
 
 type GateState =
   | { kind: "loading" }
@@ -33,13 +42,33 @@ export function AuthGate({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  useEffect(() => {
+    const onLost = () => setState({ kind: "login" });
+    window.addEventListener(AUTH_LOST_EVENT, onLost);
+    return () => window.removeEventListener(AUTH_LOST_EVENT, onLost);
+  }, []);
+
   const loggedIn = state.kind === "ok";
   useEffect(() => {
     if (!loggedIn) return;
     api.projects().then(setProjects).catch(() => setProjects([]));
   }, [loggedIn]);
 
-  const loadStatus = useCallback(() => api.status().then(setStatus), []);
+  const loadStatus = useCallback(
+    () =>
+      api.status().then((st) => {
+        applyUiPoll(st.ui);
+        if (st.auth?.login_url) {
+          try {
+            localStorage.setItem(LOGIN_URL_KEY, st.auth.login_url);
+          } catch {
+            /* 무시 */
+          }
+        }
+        setStatus(st);
+      }),
+    [],
+  );
   usePolling(loadStatus, loggedIn ? POLL.status : null);
 
   if (state.kind === "loading") return <div className="gate">불러오는 중…</div>;
@@ -48,7 +77,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
       <div className="gate">
         <h1>대시보드에서 로그인하세요</h1>
         <p>PhysicsAI는 해석 대시보드의 로그인을 그대로 사용합니다.</p>
-        <a className="btn primary" href={DASHBOARD_LOGIN_URL}>
+        <a className="btn primary" href={loginUrl()}>
           대시보드로 이동
         </a>
       </div>

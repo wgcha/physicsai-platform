@@ -20,6 +20,7 @@ import type {
   SamplePage,
   StatusInfo,
   Study,
+  StudyDetail,
 } from "./types";
 
 export const api = {
@@ -37,7 +38,7 @@ export const api = {
     request<Study[]>("GET", "/studies", { query: { project_id: projectId, status } }),
   createStudy: (body: { project_id: string; folder_name: string; title: string }) =>
     request<Study>("POST", "/studies", { body }),
-  study: (id: string) => request<Study>("GET", `/studies/${id}`),
+  study: (id: string) => request<StudyDetail>("GET", `/studies/${id}`),
   inspectPath: (studyId: string, purpose: PathPurpose, path: string) =>
     request<PathInspectResult>("POST", `/studies/${studyId}/paths/inspect`, { body: { purpose, path } }),
 
@@ -70,6 +71,8 @@ export const api = {
     request<Job>("POST", `/jobs/${id}/retry`, { body: from_step ? { from_step } : {} }),
   artifacts: (jobId: string) => request<Artifact[]>("GET", `/jobs/${jobId}/artifacts`),
   artifactBlob: (id: string) => fetchBlob(`/artifacts/${id}/content`),
+  /** B16: ④ 입력파일 zip (409 INPUT_NOT_READY) */
+  inputZip: (jobId: string) => fetchBlob(`/jobs/${jobId}/artifacts/input.zip`),
 
   // §10.7 알림
   notifications: (afterSeq?: number, limit = 50) =>

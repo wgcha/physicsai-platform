@@ -48,13 +48,20 @@ export function WorkerResourcePanel() {
         <div className="empty small">{none ? "자원 정보 없음" : "불러오는 중…"}</div>
       ) : (
         <>
-          <Meter label="CPU" pct={r.cpu_pct} text={`${Math.round(r.cpu_pct)}%`} />
-          <Meter label="RAM" pct={(r.ram_used_gb / r.ram_total_gb) * 100} text={`${r.ram_used_gb.toFixed(0)} / ${r.ram_total_gb.toFixed(0)} GB`} />
+          {r.cpu_pct != null && <Meter label="CPU" pct={r.cpu_pct} text={`${Math.round(r.cpu_pct)}%`} />}
+          {r.ram_used_gb != null && r.ram_total_gb ? (
+            <Meter label="RAM" pct={(r.ram_used_gb / r.ram_total_gb) * 100} text={`${r.ram_used_gb.toFixed(0)} / ${r.ram_total_gb.toFixed(0)} GB`} />
+          ) : null}
           {r.gpu.map((g, i) => (
-            <Meter key={i} label={r.gpu.length > 1 ? `GPU${i}` : "GPU"} pct={g.util_pct} text={`${Math.round(g.util_pct)}% · ${(g.mem_used_mb / 1024).toFixed(1)}/${(g.mem_total_mb / 1024).toFixed(0)} GB`} />
+            <Meter
+              key={i}
+              label={r.gpu.length > 1 ? `GPU${i}` : "GPU"}
+              pct={g.util_pct ?? 0}
+              text={`${g.util_pct != null ? Math.round(g.util_pct) + "%" : "–"}${g.mem_used_mb != null && g.mem_total_mb ? ` · ${(g.mem_used_mb / 1024).toFixed(1)}/${(g.mem_total_mb / 1024).toFixed(0)} GB` : ""}`}
+            />
           ))}
           <div className="limits small">
-            유효 한도 {r.limits.cores}코어 · {r.limits.memory_gb}GB · {PRIORITY_LABEL[r.limits.priority] ?? r.limits.priority}
+            유효 한도 {r.limits.cores ?? "–"}코어 · {r.limits.memory_gb ?? "–"}GB · {r.limits.priority ? PRIORITY_LABEL[r.limits.priority] ?? r.limits.priority : "–"}
             {!r.limits.cpu_cap_enforced && <span className="muted"> · CPU 상한 미적용(개발 환경)</span>}
           </div>
         </>

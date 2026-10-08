@@ -27,8 +27,8 @@ function StudyShell({ projectId, stage }: { projectId: string; stage: number }) 
   const base = `/p/${projectId}/s/${study.id}`;
   const st = STAGES.find((s) => s.n === stage)!;
   const stageStates: Record<number, JobState | null | undefined> = {
-    3: (study.stage_status?.["3"]?.last_job_state as JobState | undefined) ?? null,
-    4: (study.stage_status?.["4"]?.last_job_state as JobState | undefined) ?? null,
+    3: study.stage_status?.["3"]?.latest_state ?? null,
+    4: study.stage_status?.["4"]?.latest_state ?? null,
   };
   return (
     <div className="page">
