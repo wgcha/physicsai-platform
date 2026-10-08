@@ -27,6 +27,37 @@ FAKE_TOOLS = Path(__file__).resolve().parent / "fake_tools"
 sys.path.insert(0, str(REPO / "backend"))
 sys.path.insert(0, str(REPO / "worker"))
 
+IS_WINDOWS = os.name == "nt"
+# 시험 설정의 제한기: Linux는 posix, Windows는 실제 Job Object
+LIMITER = "windows_job" if IS_WINDOWS else "posix"
+
+
+# ---------------------------------------------------------------------------
+# 마커(windows·posix)와 "Windows 전용 시험 skip = 실패" 강제(CI windows 잡)
+# ---------------------------------------------------------------------------
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "posix: POSIX 전용 시험(Linux 잡에서 실행). Windows에서는 skip")
+
+
+def pytest_collection_modifyitems(config, items):
+    if not IS_WINDOWS:
+        return
+    skip = pytest.mark.skip(reason="POSIX 전용 — Linux 잡에서 실행")
+    for it in items:
+        if it.get_closest_marker("posix") and not any(m.name == "skip" for m in it.iter_markers()):
+            it.add_marker(skip)
+
+
+@pytest.hookimpl(hookwrapper=True)
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    rep = outcome.get_result()
+    if rep.skipped and item.get_closest_marker("windows") and os.environ.get("PHYSICSAI_REQUIRE_WINDOWS_TESTS") == "1":
+        rep.outcome = "failed"
+        rep.longrepr = f"Windows 전용 시험이 skip되었습니다(PHYSICSAI_REQUIRE_WINDOWS_TESTS=1): {rep.longrepr}"
+
 
 # ---------------------------------------------------------------------------
 # PostgreSQL
@@ -35,7 +66,7 @@ sys.path.insert(0, str(REPO / "worker"))
 
 def _find_pg_bin() -> str | None:
     cand = os.environ.get("PG_BIN")
-    if cand and os.path.isfile(os.path.join(cand, "initdb")):
+    if cand and (os.path.isfile(os.path.join(cand, "initdb")) or os.path.isfile(os.path.join(cand, "initdb.exe"))):
         return cand
     base = Path("/usr/lib/postgresql")
     if base.is_dir():
@@ -59,7 +90,7 @@ class _TempCluster:
             pytest.fail("PostgreSQL을 찾을 수 없습니다(PG_BIN 또는 PHYSICSAI_TEST_DATABASE_URL 필요). DB 시험은 skip하지 않습니다")
         self.dir = tempfile.mkdtemp(prefix="physicsai-pg-")
         self.port = _free_port()
-        self.as_root = os.geteuid() == 0
+        self.as_root = hasattr(os, "geteuid") and os.geteuid() == 0
         if self.as_root:
             shutil.chown(self.dir, user="postgres")
             os.chmod(self.dir, 0o700)
@@ -68,7 +99,8 @@ class _TempCluster:
         self._run(
             [
                 f"{self.bin}/pg_ctl", "-D", data, "-l", os.path.join(self.dir, "log"), "-w", "-o",
-                f"-p {self.port} -k {self.dir} -c listen_addresses=127.0.0.1 -c fsync=off -c max_connections=200",
+                f"-p {self.port} " + ("" if IS_WINDOWS else f"-k {self.dir} ")
+                + "-c listen_addresses=127.0.0.1 -c fsync=off -c max_connections=200",
                 "start",
             ]
         )
@@ -153,12 +185,43 @@ def engine(db_url):
 # ---------------------------------------------------------------------------
 
 
+def _windows_tool_exe(src: Path, dest: Path) -> str:
+    """Windows: 가짜 도구를 실행 파일(<이름>.exe)로 만든다 — pip 콘솔 스크립트와 같은 distlib 런처(+#!python + zip).
+    .bat/.cmd 래퍼는 cmd.exe 재해석(B24)과 PBS 실행 파일 규칙(.bat·.cmd 금지)에 걸리므로 쓰지 않는다."""
+    from pip._vendor.distlib.scripts import ScriptMaker
+
+    staging = dest / "_src"
+    staging.mkdir(parents=True, exist_ok=True)
+    body = src.read_text(encoding="utf-8").split("\n", 1)[1]
+    (staging / src.name).write_text("#!python\n" + body, encoding="utf-8")
+    maker = ScriptMaker(str(staging), str(dest))  # source_dir 필수(None이면 경로 결합 실패)
+    maker.executable = sys.executable
+    maker.variants = {""}
+    maker.clobber = True
+    maker.add_launchers = True
+    maker.make(src.name)
+    exe = dest / f"{src.name}.exe"
+    assert exe.is_file(), exe
+    return str(exe)
+
+
+_EXE_CACHE: dict[str, Path] = {}
+
+
 def _install_fake_tools(dest: Path) -> dict[str, str]:
-    """fake_tools를 공백 없는 폴더로 복사하고 실행 권한을 준다."""
+    """fake_tools를 공백 없는 폴더로 복사하고 실행 권한을 준다(Windows는 .exe 런처, 세션당 1번 만들고 복사)."""
     dest.mkdir(parents=True, exist_ok=True)
     out = {}
     for src in FAKE_TOOLS.iterdir():
         if src.is_file() and src.name.startswith("fake_"):
+            if IS_WINDOWS:
+                if src.name not in _EXE_CACHE:
+                    cache = Path(tempfile.mkdtemp(prefix="physicsai-fake-exe-"))
+                    _EXE_CACHE[src.name] = Path(_windows_tool_exe(src, cache))
+                dst = dest / _EXE_CACHE[src.name].name
+                shutil.copyfile(_EXE_CACHE[src.name], dst)
+                out[src.name] = str(dst)
+                continue
             dst = dest / src.name
             shutil.copyfile(src, dst)
             dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
@@ -191,7 +254,7 @@ def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> d
         },
         "resources": {"preview_pred_h3d_tcl": str(tcl)},
         "worker": {
-            "limiter": "posix",
+            "limiter": LIMITER,
             "max_logical_cores": 4,
             "max_memory_gb": 8,
             "heartbeat_interval_s": 0.3,

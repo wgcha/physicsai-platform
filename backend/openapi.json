@@ -3836,6 +3836,12 @@
           "config": {
             "$ref": "#/components/schemas/StatusConfig"
           },
+          "demo": {
+            "default": false,
+            "description": "시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지",
+            "title": "Demo",
+            "type": "boolean"
+          },
           "env_check": {
             "anyOf": [
               {

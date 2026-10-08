@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   PhysicsAI Windows 폐쇄망 설치(phase2 §11). 실제 Windows 실행은 사용자 E2E로 확인한다(미검증).
 .DESCRIPTION
@@ -13,17 +13,34 @@
   작업 실행 계정(기본 deploy.json service_user). NT AUTHORITY\SYSTEM이 아닌, AI 루트·Altair 라이선스 접근 권한이 있는 계정.
 .PARAMETER RunMode
   Background(로그온 여부와 관계없이, 세션 0) | Interactive(로그온 사용자 세션). 기본 deploy.json run_mode.
+.PARAMETER PasswordsFromEnv
+  무인 설치(CI·자동화)용: 비밀번호를 대화형 입력 대신 이 프로세스 환경변수에서 읽는다
+  (PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD, PHYSICSAI_INSTALL_DB_PASSWORD, Background면 PHYSICSAI_INSTALL_SERVICE_PASSWORD).
+  명령 인자로는 받지 않는다. 사용 뒤 호출 쪽에서 환경변수를 지운다.
+.PARAMETER NoStart
+  작업 등록까지만 하고 시작·health 확인(⑨)은 하지 않는다(CI 검증·나중에 시작할 때).
 #>
 [CmdletBinding()]
 param(
     [string]$ConfigFile = (Join-Path $PSScriptRoot 'deploy.json'),
     [string]$ServiceUser,
-    [ValidateSet('Background', 'Interactive')][string]$RunMode
+    [ValidateSet('Background', 'Interactive')][string]$RunMode,
+    [switch]$PasswordsFromEnv,
+    [switch]$NoStart
 )
 $ErrorActionPreference = 'Stop'
 
 function Write-Step([string]$m) { Write-Host "[PhysicsAI 설치] $m" }
 function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
+function Read-Secret([string]$Prompt, [string]$EnvName) {
+    # 기본은 Read-Host -AsSecureString(대화형). -PasswordsFromEnv면 프로세스 환경변수(명령 인자·로그에 남지 않음)
+    if ($PasswordsFromEnv) {
+        $v = [Environment]::GetEnvironmentVariable($EnvName, 'Process')
+        if ($null -eq $v) { throw "-PasswordsFromEnv: 환경변수 $EnvName 이 없습니다" }
+        return (ConvertTo-SecureString -String $v -AsPlainText -Force)
+    }
+    return (Read-Host -AsSecureString $Prompt)
+}
 function ConvertTo-Plain([Security.SecureString]$s) {
     $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
     try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
@@ -68,8 +85,8 @@ if (-not (Test-Path $cfg.config_path)) {
 }
 
 # ---- ⑤ DB(없을 때만) — 비밀번호는 PGPASSWORD 프로세스 환경으로만 --------------------------------
-$adminPw = Read-Host -AsSecureString 'PostgreSQL 관리자(postgres) 비밀번호'
-$appPwSecure = Read-Host -AsSecureString "앱 DB 역할($($cfg.db_role)) 비밀번호"
+$adminPw = Read-Secret 'PostgreSQL 관리자(postgres) 비밀번호' 'PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD'
+$appPwSecure = Read-Secret "앱 DB 역할($($cfg.db_role)) 비밀번호" 'PHYSICSAI_INSTALL_DB_PASSWORD'
 $appPw = ConvertTo-Plain $appPwSecure
 $env:PGPASSWORD = ConvertTo-Plain $adminPw
 try {
@@ -123,7 +140,7 @@ $tasks = @(
 if ($RunMode -eq 'Interactive') {
     $principal = New-ScheduledTaskPrincipal -UserId $ServiceUser -LogonType Interactive -RunLevel Limited
 } else {
-    $svcPw = Read-Host -AsSecureString "작업 실행 계정($ServiceUser) 비밀번호"
+    $svcPw = Read-Secret "작업 실행 계정($ServiceUser) 비밀번호" 'PHYSICSAI_INSTALL_SERVICE_PASSWORD'
 }
 foreach ($t in $tasks) {
     $action = New-ScheduledTaskAction -Execute $venvPy -Argument $t.Args -WorkingDirectory $root
@@ -141,6 +158,10 @@ foreach ($t in $tasks) {
 Remove-Variable -Name appPw, appPwSecure, svcPw -ErrorAction SilentlyContinue
 
 # ---- ⑨ 시작·health ------------------------------------------------------------------------
+if ($NoStart) {
+    Write-Step '-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName PhysicsAI-Backend, PhysicsAI-Worker로 시작)'
+    return
+}
 foreach ($t in $tasks) { Start-ScheduledTask -TaskName $t.Name }
 $health = "http://127.0.0.1:$($cfg.backend_port)/physicsai/api/health"
 $ok = $false

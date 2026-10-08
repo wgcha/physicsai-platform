@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   PhysicsAI 업데이트(phase2 §11.2). 기존 venv·프런트·migrations를 _backup\<UTC>로 이동(삭제 없음)한 뒤 새 묶음 설치.
 .DESCRIPTION

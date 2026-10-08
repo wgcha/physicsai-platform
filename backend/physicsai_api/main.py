@@ -50,6 +50,11 @@ def check_startup(config: LoadedConfig, bind_host: str | None = None) -> None:
     host = bind_host or s.server.host
     if s.auth.mode == "dev_static" and (s.profile != "dev" or host != "127.0.0.1"):
         raise StartupRefused("CONFIG_INVALID: auth.mode=dev_static은 profile=dev이고 127.0.0.1 바인딩일 때만 허용됩니다")
+    from .demo import demo_problem
+
+    problem = demo_problem(s, host)
+    if problem:
+        raise StartupRefused(f"CONFIG_INVALID: {problem}")
 
 
 def _error(status: int, code: str, message: str, **extra) -> JSONResponse:
@@ -95,6 +100,13 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
     for r in (status, queue, studies, datasets, models, param_sets, jobs, artifacts, notifications, admin, env_checks, train,
               curations, spdm, optimize):
         app.include_router(r.router, prefix=API_PREFIX)
+    if ctx.settings.demo.enabled:  # 시연 모드(check_startup이 dev·127.0.0.1을 보장)
+        from . import demo
+
+        if ctx.settings.auth.mode == "demo":
+            app.include_router(demo.build_router(ctx.settings), prefix=API_PREFIX)
+        if ctx.settings.demo.frontend_root:
+            demo.mount_frontend(app, ctx.settings.demo.frontend_root)
     return app
 
 

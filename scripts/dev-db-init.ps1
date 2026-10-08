@@ -1,4 +1,4 @@
-# PHYSICSAI_DATABASE_URL의 DB에 alembic upgrade head (계약 §4.6)
+﻿# PHYSICSAI_DATABASE_URL의 DB에 alembic upgrade head (계약 §4.6)
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_env.ps1"
 Require-DbUrl

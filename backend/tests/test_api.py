@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from physicsai_test_support import API, H, make_h3d_tree, make_model_folder, make_param_set_folder
+from physicsai_test_support import API, IS_WINDOWS, LIMITER, H, make_h3d_tree, make_model_folder, make_param_set_folder
 
 PW, P = H("tok-power", write=True), H("tok-power")
 AW = H("tok-admin", write=True)
@@ -482,9 +482,9 @@ def test_logs_etag_artifacts(client, loaded_config, worker_factory, engine):
     w.heartbeat_once()
     res = client.get(f"{API}/resources", headers=P).json()
     assert res["gpu"] == [{"name": "RTX A6000", "util_pct": 12.0, "mem_used_mb": 2048.0, "mem_total_mb": 49140.0}]
-    assert res["limits"]["cpu_cap_enforced"] is False and res["limits"]["cores"] >= 1
+    assert res["limits"]["cpu_cap_enforced"] is IS_WINDOWS and res["limits"]["cores"] >= 1
     st = client.get(f"{API}/status", headers=P).json()
-    assert st["worker"]["online"] and st["worker"]["limiter"] == "posix" and st["limits"]["effective"]["cpu_cap_enforced"] is False
+    assert st["worker"]["online"] and st["worker"]["limiter"] == LIMITER and st["limits"]["effective"]["cpu_cap_enforced"] is IS_WINDOWS
     assert {t["key"]: t["configured"] for t in st["templates"]}["mesh"] is False
     assert st["ui"]["poll_queue_ms"] == 5000
     time.sleep(0)

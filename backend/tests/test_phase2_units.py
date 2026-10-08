@@ -386,6 +386,7 @@ def test_deploy_files_and_keys():
         assert pkg in lock.lower(), pkg
 
 
+@pytest.mark.posix  # bash 스크립트(Windows는 collect-offline.ps1 — CI windows 잡에서 실제 실행)
 def test_collect_offline_dry_run():
     r = subprocess.run(["bash", str(DEPLOY / "collect-offline.sh"), "--dry-run"], capture_output=True, text=True, cwd=REPO, timeout=60)
     assert r.returncode == 0, r.stderr
@@ -402,7 +403,7 @@ def test_powershell_syntax():
     pwsh = os.environ.get("PHYSICSAI_PWSH") or shutil.which("pwsh")
     if not pwsh:
         pytest.skip("pwsh 없음 — PowerShell 구문 검사 미수행(사용자 E2E)")
-    for f in DEPLOY.rglob("*.ps1"):
+    for f in [*DEPLOY.rglob("*.ps1"), *(REPO / "scripts").glob("*.ps1")]:
         cmd = ("$e=$null; [System.Management.Automation.Language.Parser]::ParseFile('" + str(f) +
                "', [ref]$null, [ref]$e) | Out-Null; if ($e.Count) { $e | ForEach-Object { $_.Message }; exit 1 }")
         r = subprocess.run([pwsh, "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=120)

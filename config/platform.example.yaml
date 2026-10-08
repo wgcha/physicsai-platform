@@ -16,7 +16,7 @@ database:
   pool_size: 5
 
 auth:
-  mode: dashboard                 # dashboard | dev_static (dev_static은 profile=dev + 127.0.0.1 바인딩일 때만)
+  mode: dashboard                 # dashboard | dev_static | demo (dev_static은 profile=dev + 127.0.0.1 바인딩일 때만, demo는 시연 모드에서만)
   dashboard_internal_url: "http://127.0.0.1:8000"
   dashboard_public_login_url: "/"
   cookie_name: analysis_canvas_session    # 대시보드 backend/app/security.py:45
@@ -263,3 +263,7 @@ logging:
   level: INFO
   mask_patterns:                  # 외부 프로그램 출력 저장 전 값 마스킹
     - '(?i)(password|passwd|token|secret)\s*[=:]\s*\S+'
+
+demo:                             # 시연 모드(fake tools 배포판, deploy/demo/). 운영에서는 false 유지 — true는 profile=dev + server.host=127.0.0.1에서만 허용
+  enabled: false
+  frontend_root: ""               # 시연 때 백엔드가 직접 서빙할 프런트 빌드 폴더(Caddy 없이). enabled=false면 빈 값

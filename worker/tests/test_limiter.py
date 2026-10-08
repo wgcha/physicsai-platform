@@ -25,6 +25,7 @@ LIM = compute_limits(4, 2, "below_normal", False, 0.7, 8, 16)
 HANG = [sys.executable, "-c", "import subprocess,sys,time\nc=subprocess.Popen([sys.executable,'-c','import time\\nwhile 1: time.sleep(1)'])\nprint(c.pid, flush=True)\nwhile 1: time.sleep(1)"]
 
 
+@pytest.mark.posix
 def test_posix_nice_tree_kill_and_flags():
     lim = PosixLimiter()
     assert lim.cpu_cap_enforced is False and lim.name == "posix"
@@ -41,6 +42,7 @@ def test_posix_nice_tree_kill_and_flags():
     lim.close(p)
 
 
+@pytest.mark.posix
 def test_posix_accounting_and_rlimit():
     lim = PosixLimiter(rlimit_as=True)
     p = lim.launch([sys.executable, "-c", "import resource; print(resource.getrlimit(resource.RLIMIT_AS)[0])"], os.getcwd(), dict(os.environ), LIM)
@@ -50,6 +52,7 @@ def test_posix_accounting_and_rlimit():
     lim.close(p)
 
 
+@pytest.mark.posix
 def test_posix_missing_executable():
     with pytest.raises(LimiterError) as ei:
         PosixLimiter().launch(["/nonexistent/exe"], os.getcwd(), dict(os.environ), LIM)
@@ -138,17 +141,26 @@ def test_select_limiter_rules():
 def test_windows_job_object_real():  # pragma: no cover - Windows에서만
     """V-JO-1~3: 실제 Job Object 한도·손자 프로세스 포함·TerminateJobObject."""
     import ctypes
+    from ctypes import wintypes
 
     lim = WindowsJobLimiter()
     p = lim.launch(HANG, os.getcwd(), dict(os.environ), LIM)
     child = int(p.stdout.readline())
-    k = ctypes.WinDLL("kernel32")
+    k = ctypes.WinDLL("kernel32", use_last_error=True)
+    k.OpenProcess.restype = wintypes.HANDLE
+    k.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k.IsProcessInJob.argtypes = [wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.BOOL)]
+    k.CloseHandle.argtypes = [wintypes.HANDLE]
     for pid in (p.pid, child):
         h = k.OpenProcess(0x1000, False, pid)
-        res = ctypes.c_int()
+        res = wintypes.BOOL(False)
         k.IsProcessInJob(h, p.handle, ctypes.byref(res))
+        k.CloseHandle(h)
         assert res.value
     lim.terminate(p)
+    end = time.time() + 15
+    while psutil.pid_exists(child) and time.time() < end:
+        time.sleep(0.1)
     assert not psutil.pid_exists(child)
     lim.close(p)
 

@@ -1,4 +1,4 @@
-# 공용 환경(개발). . .\scripts\_env.ps1 로 불러 쓴다.
+﻿# 공용 환경(개발). . .\scripts\_env.ps1 로 불러 쓴다.
 $script:RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..")).Path
 $env:PYTHONPATH = "$RepoRoot\backend;$RepoRoot\worker" + $(if ($env:PYTHONPATH) { ";$env:PYTHONPATH" } else { "" })
 if (-not $env:PHYSICSAI_CONFIG) { $env:PHYSICSAI_CONFIG = "$RepoRoot\config\platform.yaml" }

@@ -13,7 +13,7 @@
 
 | # | 확인 | 결과 | 메모 |
 |---|---|---|---|
-| E2-0-1 | **전역 관리자로 "관리 > 환경 점검" → "점검 실행"**. 결과 표의 실패·경고를 모두 메모하고, 실패가 남아 있으면 아래 항목 전에 설정을 고친다(실행 파일 6개 존재, 자원 파일·pyd 각 1개, AI 루트 쓰기, DB head `0002_phase2`, 대시보드 인증, 워커 heartbeat, limiter `windows_job`, Job Object 적용, GPU 감지, PBS 모드) | | |
+| E2-0-1 | **전역 관리자로 "관리 > 환경 점검" → "점검 실행"**. 결과 표의 실패·경고를 모두 메모하고, 실패가 남아 있으면 아래 항목 전에 설정을 고친다(실행 파일 6개 존재, 자원 파일·pyd 각 1개, AI 루트 쓰기, DB head `0003_hpc_cancel_failed`(phase2 C18), 대시보드 인증, 워커 heartbeat, limiter `windows_job`, Job Object 적용, GPU 감지, PBS 모드) | | |
 | E2-0-2 | 환경 점검 후 `<ai_root>\_platform\env_check_tmp\`에 남은 파일이 없음, `_platform\env_checks\<id>\report.json` 생성 | | |
 | E2-0-3 | (배포) 준비 PC에서 `deploy\collect-offline` 실행 → 묶음 zip. 폐쇄망 PC에서 `deploy\install.bat` 실행: venv·wheel 설치, DB 역할·DB 생성(재실행 시 건너뜀), `alembic upgrade head`, 작업 스케줄러에 `PhysicsAI-Backend`·`PhysicsAI-Worker` 등록(실행 시간 제한 없음 확인), 재부팅 후 자동 기동, `/physicsai/api/health` 응답(U31) | | |
 | E2-0-4 | 작업 스케줄러 백그라운드(세션 0) 실행에서 SimLab·hw·hstbatch 배치가 정상 동작하는지(안 되면 `-RunMode Interactive`로 재등록 후 비교)(U31·U11) | | |

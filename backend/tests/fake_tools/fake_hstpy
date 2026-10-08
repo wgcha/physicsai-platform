@@ -14,7 +14,12 @@ if rec:
 if m == "fail":
     sys.exit(1)
 if m == "hang":
-    subprocess.Popen([sys.executable, "-c", "import time\nwhile True: time.sleep(1)"])
+    child = subprocess.Popen([sys.executable, "-c", "import time\nwhile True: time.sleep(1)"])
+    pf = os.environ.get("FAKE_TOOL_PIDFILE")
+    if pf:
+        with open(pf, "w") as fh:
+            fh.write(f"{os.getpid()} {child.pid}\n")
+    print("hang: waiting for cancel", flush=True)
     while True:
         time.sleep(0.2)
 KEYS = ("ALTAIR_HOME", "DIR_WORK", "STUDY_FOLDER", "CAD_PARAM", "TPL_FILE", "HYPERMESH_TCL", "RADIOSS_ASSEM_DIR",

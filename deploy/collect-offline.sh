@@ -4,6 +4,7 @@
 #   --dry-run : 실행할 명령만 출력하고 아무것도 실행하지 않는다.
 # 산출 구조: dist/wheels/*.whl, dist/frontend/(vite build), dist/migrations/, dist/config/platform.example.yaml, dist/deploy/
 # 원본 반입 자원(resources.*: 런처·pyd·TCL·tpl 템플릿)은 묶지 않는다 — 라이선스·사내 배포물(RESOURCES.txt 참고).
+# 시연 모드(deploy/demo/start-demo.ps1)용으로 config/platform.demo.yaml과 가짜 도구(fake_tools)는 함께 묶는다.
 set -euo pipefail
 DRY=0
 [ "${1:-}" = "--dry-run" ] && DRY=1
@@ -27,6 +28,8 @@ run "(cd frontend && npm ci && npm run build)"
 run "cp -r frontend/dist/. dist/frontend/"
 run "cp -r migrations dist/migrations"
 run "cp config/platform.example.yaml dist/config/platform.example.yaml"
+run "cp config/platform.demo.yaml dist/config/platform.demo.yaml"
 run "cp -r deploy dist/deploy"
+run "cp -r backend/tests/fake_tools dist/deploy/demo/fake_tools"   # 시연 모드(deploy/demo) 가짜 도구 원본
 run "(cd dist && $PY -m zipfile -c ../$OUT wheels frontend migrations config deploy)"
 echo "묶음: $OUT"

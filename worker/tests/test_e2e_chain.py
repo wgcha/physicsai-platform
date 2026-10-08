@@ -8,7 +8,7 @@ from pathlib import Path
 
 from sqlalchemy import text
 
-from physicsai_test_support import API, H, make_h3d_tree, make_model_folder, make_param_set_folder, read_record
+from physicsai_test_support import API, LIMITER, H, make_h3d_tree, make_model_folder, make_param_set_folder, read_record
 
 PW = H("tok-power", write=True)
 P = H("tok-power")
@@ -70,7 +70,7 @@ def test_full_chain(client, worker_factory, loaded_config, fake_record, monkeypa
     # env_snapshot·로그
     with engine.connect() as c:
         env = c.execute(text("select env_snapshot from jobs where id=:i"), {"i": j["id"]}).scalar()
-    assert env["worker"]["limiter"] == "posix" and env["altair"]["version_label"] == "fake"
+    assert env["worker"]["limiter"] == LIMITER and env["altair"]["version_label"] == "fake"
     lg = client.get(f"{API}/jobs/{j['id']}/log", headers=P).json()
     assert "[EDSPY_DATASET_TRAIN]" in lg["text"] and lg["eof"]
 

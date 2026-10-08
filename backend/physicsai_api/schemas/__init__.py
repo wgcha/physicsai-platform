@@ -129,6 +129,7 @@ class StatusResponse(Resp):
     resources: list[ResourceStatus] = Field(default_factory=list)
     features: StatusFeatures | None = None
     env_check: StatusEnvCheck | None = None
+    demo: bool = Field(False, description="시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지")
 
 
 class HpcSummary(Resp):

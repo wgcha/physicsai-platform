@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
   인터넷 되는 준비 PC(Windows)에서 폐쇄망 설치 묶음 physicsai-offline-<version>.zip을 만든다(phase2 §11.2).
 .PARAMETER DryRun
@@ -24,11 +24,13 @@ Invoke-Step 'pip download -r deploy/requirements.lock --only-binary=:all: --plat
 }
 Invoke-Step 'pip wheel . --no-deps -w dist/wheels' { & $py -m pip wheel . --no-deps -w dist/wheels }
 Invoke-Step 'npm ci && npm run build (frontend)' { Push-Location frontend; try { npm ci; npm run build } finally { Pop-Location } }
-Invoke-Step 'copy frontend\dist, migrations, config, deploy' {
+Invoke-Step 'copy frontend\dist, migrations, config(+demo), deploy(+demo fake_tools)' {
     Copy-Item -Recurse -Force 'frontend\dist\*' 'dist\frontend\'
     Copy-Item -Recurse -Force 'migrations' 'dist\migrations'
     Copy-Item -Force 'config\platform.example.yaml' 'dist\config\platform.example.yaml'
+    Copy-Item -Force 'config\platform.demo.yaml' 'dist\config\platform.demo.yaml'
     Copy-Item -Recurse -Force 'deploy' 'dist\deploy'
+    Copy-Item -Recurse -Force 'backend\tests\fake_tools' 'dist\deploy\demo\fake_tools'   # 시연 모드 가짜 도구 원본
 }
 Invoke-Step "Compress-Archive dist\* $out" { Compress-Archive -Path 'dist\*' -DestinationPath $out -Force }
 Write-Host "묶음: $out"

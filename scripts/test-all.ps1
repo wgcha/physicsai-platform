@@ -1,4 +1,4 @@
-# 백엔드·워커 pytest + 프런트 vitest·타입 검사 (계약 §4.6). PostgreSQL은 PHYSICSAI_TEST_DATABASE_URL 필요(Windows).
+﻿# 백엔드·워커 pytest + 프런트 vitest·타입 검사 (계약 §4.6). PostgreSQL은 PHYSICSAI_TEST_DATABASE_URL 필요(Windows).
 $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_env.ps1"
 Push-Location $RepoRoot

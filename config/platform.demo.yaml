@@ -1,0 +1,116 @@
+# PhysicsAI 시연 모드 설정 템플릿(fake tools 배포판). 직접 쓰지 않는다.
+# deploy/demo/demo_setup.py init 이 {{...}} 자리를 채워 <시연 폴더>/config/platform.yaml 로 만든다.
+#   {{DEMO_ROOT}}     시연 폴더(절대경로, '/' 구분, 공백·메타문자 금지)
+#   {{TOOL_EXT}}      가짜 도구 확장자(Windows: .exe, 그 밖: 빈 값)
+#   {{PORT}}          백엔드 포트(127.0.0.1 전용)
+#   {{FRONTEND_ROOT}} 프런트 빌드 폴더(빈 값이면 백엔드가 프런트를 서빙하지 않음)
+# 운영 설정과 다른 점: demo.enabled=true, auth.mode=demo(내장 가짜 대시보드, 고정 사용자 admin/power/general),
+# altair.* = 가짜 도구, resources.* = 가짜 원본 반입 자원, hpc.gateway=none(①-4 대신 ①-5 결과 가져오기로 시연).
+# 시연 모드는 profile=dev + server.host=127.0.0.1에서만 켜진다(설정 검증·기동 검사).
+
+schema_version: 1
+profile: dev
+
+server:
+  host: 127.0.0.1
+  port: {{PORT}}
+  base_path: /physicsai
+
+database:
+  url_env: PHYSICSAI_DATABASE_URL
+  pool_size: 5
+
+auth:
+  mode: demo
+  dashboard_public_login_url: "/physicsai/api/demo/login"
+  cookie_name: analysis_canvas_session
+  cache_ttl_s: 30
+  timeout_s: 3
+
+demo:
+  enabled: true
+  frontend_root: "{{FRONTEND_ROOT}}"
+
+storage:
+  ai_root: "{{DEMO_ROOT}}/ai_root"
+  allowed_import_roots: ["{{DEMO_ROOT}}/import"]
+  spdm_roots: ["{{DEMO_ROOT}}/spdm"]
+
+altair:
+  version_label: "fake-demo"
+  edspy_path: "{{DEMO_ROOT}}/tools/fake_edspy{{TOOL_EXT}}"
+  simlab_path: "{{DEMO_ROOT}}/tools/fake_simlab{{TOOL_EXT}}"
+  hw_exe_path: "{{DEMO_ROOT}}/tools/fake_hw{{TOOL_EXT}}"
+  hyperstudy_path: "{{DEMO_ROOT}}/tools/fake_hstbatch{{TOOL_EXT}}"
+  hvtrans_exe_path: "{{DEMO_ROOT}}/tools/fake_hvtrans{{TOOL_EXT}}"
+  hstpy_path: "{{DEMO_ROOT}}/tools/fake_hstpy{{TOOL_EXT}}"
+  altair_home: "{{DEMO_ROOT}}/tools"
+
+resources:
+  preview_pred_h3d_tcl: "{{DEMO_ROOT}}/resources/BATCHRUN/BATCHRUN_preview_pred_h3d.tcl"
+  batchrun_dir: "{{DEMO_ROOT}}/resources/BATCHRUN"
+  pyd_dir: "{{DEMO_ROOT}}/resources/BUILD_PYD"
+  simlab_tpl_template: "{{DEMO_ROOT}}/resources/TEMPLATE/TEMAPLATE_simlab_parametered_mesh.tpl"
+  doe_design_type_json: "{{DEMO_ROOT}}/resources/DATA/DATA_doe_design_type.json"
+  hypermesh_include_tcl: "{{DEMO_ROOT}}/resources/BATCHRUN/BATCHRUN_create_include_node_elem.tcl"
+  preview_h3d_tcl: "{{DEMO_ROOT}}/resources/BATCHRUN/BATCHRUN_preview_h3d.tcl"
+  preview_hg_tcl: "{{DEMO_ROOT}}/resources/BATCHRUN/BATCHRUN_preview_hg.tcl"
+  curate_hg_tcl: "{{DEMO_ROOT}}/resources/BATCHRUN/BATCHRUN_curate_hg.tcl"
+  extract_minmax_tcl: "{{DEMO_ROOT}}/resources/BATCHRUN/H3D_StaticMinMax_to_CSV_FAST.tcl"
+
+worker:
+  limiter: auto                   # Windows: Job Object(CPU 상한·메모리 상한 실제 적용), 그 밖: posix
+  max_logical_cores: 2            # 시연용으로 작게: 리소스 제한 화면 확인
+  max_memory_gb: 4
+  priority: below_normal
+  heartbeat_interval_s: 2
+  lease_ttl_s: 10
+  claim_interval_s: 1
+  cancel_check_interval_s: 1
+  resource_sample_interval_s: 2
+  state_dir: "{{DEMO_ROOT}}/state"
+  gpu_query: ["{{DEMO_ROOT}}/tools/fake_nvidia_smi{{TOOL_EXT}}"]
+  env_passthrough: ["FAKE_*"]     # FAKE_TOOL_DELAY_S(도구 지연)·FAKE_TOOL_MODE(실패 흉내)를 가짜 도구에 전달
+
+dataset:
+  holdout_ratio: 0.1
+  seed: 20261008
+  min_h3d_files: 2
+
+training_log:
+  parsers:
+    - name: physicsai_default
+      pattern: 'epoch=\s*(?P<epoch>\d+)\s*/\s*(?P<total>\d+)\s+loss=(?P<loss>[0-9.eE+\-]+)'
+
+score:
+  parsers:
+    - {name: generic, pattern: '^\s*(?P<name>[A-Za-z][A-Za-z0-9_ ]{0,40}?)\s*[:=]\s*(?P<value>[-+0-9.eE]+)\s*$'}
+
+commands:
+  edspy_create_dataset: ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"]
+  edspy_score: ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"]
+  geom_update: ["{simlab}", "-auto", "{rendered_script}", "-nographics"]
+  mesh: null
+  rad_assemble: null
+  edspy_predict: ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]
+  contour_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"]
+  response_extract: ["{hw}", "--responses", "{responses_json}", "--input", "{pred_h3d}", "--out", "{out_csv}"]
+  simlab_extract_params: ["{simlab}", "-auto", "{launcher}", "{cad_file}", "{xml_out}", "-nographics"]
+  hst_gen_radioss: ["{hstbatch}", "-multiexec", "{multi_execution}", "-pyfile", "{launcher}"]
+  h3d_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-h3d", "{h3d}", "-result", "{result_json}"]
+  hvtrans_curate: ["{hvtrans}", "-c", "{cfg}", "{h3d}", "{h3d}", "-o", "{out_h3d}", "-z0"]
+  t01_preview: ["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{preview_tcl}", "-input", "{t01}", "-output", "{result_json}"]
+  t01_curve_export: ["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{curate_tcl}", "-config", "{config_json}"]
+  hst_optimization: ["@cmd_c", "{hstpy}", "{launcher}"]
+
+hpc:
+  gateway: none                   # 시연: PBS 없음. ①-4 대신 ①-5 "결과 가져오기"로 import/hpc_results 를 지정
+
+optimize:
+  summary_parsers: [{name: opt_csv, glob: "opt_summary.csv", kind: csv_table}]
+
+env_check:
+  min_free_gb: 1
+
+logging:
+  level: INFO

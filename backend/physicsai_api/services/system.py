@@ -63,6 +63,7 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
         "resources": _resource_status(s),
         "features": feature_status(s, av.configured),
         "env_check": env_status(ctx, principal) if principal is not None else None,
+        "demo": bool(s.demo.enabled),
     }
 
 

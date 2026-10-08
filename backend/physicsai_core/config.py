@@ -272,6 +272,13 @@ class UiCfg(_M):
     poll_status_ms: int = 30000
 
 
+class DemoCfg(_M):
+    """시연 모드(fake tools 배포판). 운영에서는 켤 수 없다(profile=dev + server.host=127.0.0.1일 때만)."""
+
+    enabled: bool = False
+    frontend_root: str = ""  # 시연 때 백엔드가 직접 서빙할 프런트 빌드 폴더(Caddy 없이). 빈 값 = 서빙 안 함
+
+
 class LoggingCfg(_M):
     level: str = "INFO"
     mask_patterns: list[str] = Field(
@@ -396,6 +403,7 @@ class Settings(_M):
     notifications: NotificationsCfg = Field(default_factory=NotificationsCfg)
     ui: UiCfg = Field(default_factory=UiCfg)
     logging: LoggingCfg = Field(default_factory=LoggingCfg)
+    demo: DemoCfg = Field(default_factory=DemoCfg)
 
 
 @dataclass(frozen=True)
@@ -616,10 +624,19 @@ def validate_settings(s: Settings) -> list[ConfigIssue]:  # noqa: C901 - 표 기
 
     # auth
     a = s.auth
-    if a.mode not in ("dashboard", "dev_static"):
-        add("auth.mode", "dashboard | dev_static")
+    if a.mode not in ("dashboard", "dev_static", "demo"):
+        add("auth.mode", "dashboard | dev_static | demo")
     if a.mode == "dev_static" and (s.profile != "dev" or s.server.host != "127.0.0.1"):
         add("auth.mode", "dev_static은 profile=dev이고 127.0.0.1 바인딩일 때만 허용됩니다")
+    if a.mode == "demo" and not s.demo.enabled:
+        add("auth.mode", "demo 인증은 demo.enabled=true(시연 모드)일 때만 허용됩니다")
+    # 시연 모드: 운영 설정에서는 켤 수 없다
+    if s.demo.enabled and (s.profile != "dev" or s.server.host != "127.0.0.1"):
+        add("demo.enabled", "시연 모드는 profile=dev이고 server.host=127.0.0.1일 때만 허용됩니다")
+    if s.demo.frontend_root and not s.demo.enabled:
+        add("demo.frontend_root", "demo.enabled=false이면 비워 두어야 합니다")
+    elif s.demo.frontend_root and not os.path.isfile(os.path.join(s.demo.frontend_root, "index.html")):
+        add("demo.frontend_root", f"프런트 빌드 폴더에 index.html이 없습니다: {s.demo.frontend_root}")
     if not re.match(r"^https?://[^\s/]+(:\d+)?/?$", a.dashboard_internal_url):
         add("auth.dashboard_internal_url", "URL 형식이 아닙니다(예: http://127.0.0.1:8000)")
     if not re.fullmatch(r"[A-Za-z0-9_\-]+", a.cookie_name):
