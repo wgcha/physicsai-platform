@@ -161,6 +161,7 @@ class JobSummary(Resp):
     current_step_key: str | None = None
     current_step_label: str | None = None
     hpc_summary: HpcSummary | None = None
+    attention_code: str | None = None
 
 
 class JobStep(Resp):
@@ -187,7 +188,6 @@ class Job(JobSummary):
     failure_message: str | None = None
     finished_at: datetime | None = None
     retry_of_job_id: str | None = None
-    attention_code: str | None = None
     version: int
     can_cancel: bool
     can_retry: bool

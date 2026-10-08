@@ -63,6 +63,8 @@ export interface MockOptions {
   ui?: Record<string, number>;
   /** 2차: 비활성 기능(/status.features enabled=false). 기본 ["train_resp"](response_extract 템플릿 null) */
   disabledFeatures?: FeatureKey[];
+  /** C18: PBS 취소 명령 실패 흉내 */
+  hpcCancelFails?: boolean;
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -88,6 +90,7 @@ const err = (status: number, code: string, message: string, extra: Record<string
 export class MockServer {
   user: MockUserKey;
   hpcConfigured: boolean;
+  hpcCancelFails: boolean;
   ui: Record<string, number>;
   speed: number;
   studies: Study[] = seedStudies();
@@ -107,6 +110,7 @@ export class MockServer {
   constructor(opts: MockOptions = {}) {
     this.user = opts.user ?? "admin";
     this.hpcConfigured = opts.hpcConfigured ?? false;
+    this.hpcCancelFails = opts.hpcCancelFails ?? false;
     this.speed = opts.speed ?? 9;
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.seq = Math.max(...this.notifs.map((n) => n.seq));

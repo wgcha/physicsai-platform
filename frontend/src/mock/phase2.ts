@@ -301,11 +301,11 @@ export class Phase2Mock {
       J({ id: "j-solve0", job_type: "TD_SOLVE", state: "SUCCEEDED", created_at: iso(60 * 4 + 30), params: { doe_id: doeId, run_keys: runs.slice(0, 24).map((x) => x.run_key), hpc: { queue: null, ncpus: null, walltime: null }, on_run_failure: "collect_partial" }, steps: makeSteps("TD_SOLVE", 5, null), result: { submitted: 24, solved: 24, failed: 0, collected: 24 } });
       runs.slice(0, 24).forEach((rr, i) => {
         collect(rr, i);
-        rr.hpc = { external_job_id: `${12200 + i}.pbs01`, state: "F", attempt_no: 1 };
+        rr.hpc = { external_job_id: `${12200 + i}.pbs01`, state: "SUCCEEDED", attempt_no: 1 };
         rr._job = "j-solve0";
       });
       const solve = J({ id: "j-solve", job_type: "TD_SOLVE", state: "WAITING_HPC", created_at: iso(38), started_at: iso(37), finished_at: null, params: { doe_id: doeId, run_keys: null, hpc: { queue: null, ncpus: null, walltime: null }, on_run_failure: "collect_partial" }, steps: makeSteps("TD_SOLVE", 2, 2), progress_pct: null, progress_label: "PBS 대기" });
-      const states: [TrainRunState, string, number][] = [["SOLVED", "F", 35], ["SOLVED", "F", 31], ["SOLVE_FAILED", "F", 28], ["SUBMITTED", "R", 36], ["SUBMITTED", "R", 36], ["SUBMITTED", "Q", 36]];
+      const states: [TrainRunState, string, number][] = [["SOLVED", "SUCCEEDED", 35], ["SOLVED", "SUCCEEDED", 31], ["SOLVE_FAILED", "FAILED", 28], ["SUBMITTED", "RUNNING", 36], ["SUBMITTED", "RUNNING", 36], ["SUBMITTED", "QUEUED", 36]];
       runs.slice(24).forEach((rr, i) => {
         rr.state = states[i][0];
         rr.hpc = { external_job_id: `${this.hpcSeq++}.pbs01`, state: states[i][1], attempt_no: 1 };
@@ -427,7 +427,7 @@ export class Phase2Mock {
     if (!runs.length) return null;
     const h: HpcSummary = { total: runs.length, queued: 0, running: 0, succeeded: 0, failed: 0, collected: 0 };
     for (const r of runs) {
-      if (r.state === "SUBMITTED") r.hpc?.state === "Q" ? h.queued++ : h.running++;
+      if (r.state === "SUBMITTED") r.hpc?.state === "QUEUED" ? h.queued++ : h.running++; // C11: CANCEL_REQUESTED는 running
       else if (r.state === "SOLVED") h.succeeded++;
       else if (r.state === "COLLECTED") {
         h.succeeded++; // C11: collected는 succeeded와 겹친다
@@ -445,6 +445,7 @@ export class Phase2Mock {
       current_step_key: cur?.step_key ?? null,
       current_step_label: cur ? this.s.stepLabel(cur.step_key) : null,
       hpc_summary: this.hpcSummary(j),
+      attention_code: j.attention_code ?? null,
     };
   }
 
@@ -593,7 +594,7 @@ export class Phase2Mock {
         for (const r of runs) {
           r.state = "SUBMITTED";
           r._job = j.id;
-          r.hpc = { external_job_id: `${this.hpcSeq++}.pbs01`, state: "Q", attempt_no: (r.hpc?.attempt_no ?? 0) + 1 };
+          r.hpc = { external_job_id: `${this.hpcSeq++}.pbs01`, state: "QUEUED", attempt_no: (r.hpc?.attempt_no ?? 0) + 1 };
           r.updated_at = new Date().toISOString();
         }
         j.steps = makeSteps("TD_SOLVE", 2, 2);
@@ -682,6 +683,16 @@ export class Phase2Mock {
   tick() {
     for (const j of this.s.jobs.filter((x) => x.job_type === "TD_SOLVE" && (x.state === "WAITING_HPC" || x.state === "COLLECTING"))) {
       const runs = (this.runs[j.params.doe_id as string] ?? []).filter((r) => r._job === j.id);
+      if (j.cancel_requested && this.s.hpcCancelFails) {
+        // C18: PBS 취소 명령 실패 → CANCEL_REQUESTED 유지, 작업은 WAITING_HPC + attention_code, 알림 1회
+        runs.filter((r) => r.state === "SUBMITTED").forEach((r) => r.hpc && (r.hpc.state = "CANCEL_REQUESTED"));
+        if (j.attention_code !== "HPC_CANCEL_FAILED") {
+          j.attention_code = "HPC_CANCEL_FAILED";
+          this.s.notify(j.created_by, "HPC_CANCEL_FAILED", j, `PBS 취소 실패: PBS 해석 (${j.study_title}) — 자동 재시도 중`);
+          this.s.bump(j);
+        }
+        continue;
+      }
       if (j.cancel_requested) {
         runs.filter((r) => r.state === "SUBMITTED").forEach((r) => (r.state = "SOLVE_FAILED"));
         j.state = "CANCELED";
@@ -693,10 +704,10 @@ export class Phase2Mock {
       if (j.state === "WAITING_HPC") {
         const pending = runs.filter((r) => r.state === "SUBMITTED");
         pending.slice(0, 2).forEach((r, i) => {
-          if (r.hpc?.state === "Q") r.hpc.state = "R";
+          if (r.hpc?.state === "QUEUED") r.hpc.state = "RUNNING";
           else {
             r.state = i === 0 && r.run_key.endsWith("7") ? "SOLVE_FAILED" : "SOLVED";
-            if (r.hpc) r.hpc.state = "F";
+            if (r.hpc) r.hpc.state = r.state === "SOLVED" ? "SUCCEEDED" : "FAILED";
           }
           r.updated_at = new Date().toISOString();
         });

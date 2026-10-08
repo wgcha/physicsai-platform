@@ -254,6 +254,10 @@ def test_cancel_failure_keeps_waiting_and_retries(p2_pbs, monkeypatch, engine):
         n = conn.execute(text("select count(*) from notifications where job_id=:j and event='HPC_CANCEL_FAILED'"), {"j": j["id"]}).scalar()
     assert n == 1  # 한 번만
     assert jd["can_download_error_bundle"] is True  # 주의 코드가 있는 비종료 작업
+    # C20: JobSummary(대기열·목록)에도 attention_code
+    q = c.get(f"{API}/queue", headers=P).json()
+    assert q["waiting_hpc"][0]["attention_code"] == "HPC_CANCEL_FAILED"
+    assert c.get(f"{API}/jobs?study_id={sid}&job_type=TD_SOLVE", headers=P).json()[0]["attention_code"] == "HPC_CANCEL_FAILED"
     monkeypatch.setenv("FAKE_TOOL_MODE_PBS", "ok")
     w.poll_hpc_once()
     assert job(c, j["id"])["state"] == "CANCELED"

@@ -1708,6 +1708,17 @@
       },
       "JobSummary": {
         "properties": {
+          "attention_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attention Code"
+          },
           "cancel_requested": {
             "title": "Cancel Requested",
             "type": "boolean"

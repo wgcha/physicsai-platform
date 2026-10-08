@@ -140,7 +140,7 @@ def job_summary(j: dict[str, Any], study_title: str | None, position: int | None
     key = current_step_key(j)
     return {
         "stage_label": stage_label(j["job_type"]), "current_step_key": key, "current_step_label": step_label(key),
-        "hpc_summary": hpc_summary,
+        "hpc_summary": hpc_summary, "attention_code": j.get("attention_code"),
         "id": j["id"], "study_id": j["study_id"], "project_id": j["project_id"], "study_title": study_title,
         "job_type": j["job_type"], "stage": j["stage"], "lane": j["lane"], "state": j["state"],
         "created_by": j["created_by"], "created_by_name": j["created_by_name"],

@@ -127,3 +127,13 @@ export function hpcSummaryText(h: { total: number; succeeded: number; failed: nu
   if (h.collected) t += ` · 회수 ${h.collected}`;
   return t;
 }
+
+/** 작업 주의 코드 표시(phase2.md 변경 메모 C18 등) */
+export const ATTENTION_TEXT: Record<string, string> = {
+  HPC_CANCEL_FAILED: "취소 실패, 재시도 중",
+  HPC_RUN_FAILED: "PBS 일부 실패",
+};
+export function attentionText(code: string | null | undefined): string | null {
+  if (!code) return null;
+  return ATTENTION_TEXT[code] ?? code;
+}

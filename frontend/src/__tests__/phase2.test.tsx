@@ -128,6 +128,27 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
     await waitFor(() => expect(server.jobs.find((j) => j.id === "j-solve")!.cancel_requested).toBe(true));
   });
 
+  it("C18: PBS 취소 실패 → '취소 실패, 재시도 중'(① 표·작업 상태·대기열) + 알림", async () => {
+    const { server } = renderApp(`${STUDY}/1`, { user: "admin", hpcConfigured: true, hpcCancelFails: true });
+    const card = await screen.findByRole("region", { name: "PBS 해석 제출" });
+    const table = await within(card).findByRole("table", { name: "PBS 제출 표" });
+    const subRow = within(table).getAllByRole("row").find((r) => r.textContent?.includes("run__00028"))!;
+    fireEvent.click(await within(subRow).findByRole("button", { name: "취소" }));
+    fireEvent.click(within(subRow).getByRole("button", { name: "작업 전체 취소" }));
+    await waitFor(() => expect(server.jobs.find((j) => j.id === "j-solve")!.cancel_requested).toBe(true));
+    act(() => server.tick());
+    const j = server.jobs.find((x) => x.id === "j-solve")!;
+    expect(j.state).toBe("WAITING_HPC");
+    expect(j.attention_code).toBe("HPC_CANCEL_FAILED");
+    expect(server.notifs.filter((n) => n.event === "HPC_CANCEL_FAILED")).toHaveLength(1);
+    act(() => server.tick());
+    expect(server.notifs.filter((n) => n.event === "HPC_CANCEL_FAILED")).toHaveLength(1); // 1회만
+    const q = screen.getByRole("region", { name: "실행 대기열" });
+    await waitFor(() => expect(within(q).getByTestId("queue-attention").textContent).toContain("취소 실패, 재시도 중"), { timeout: 3000 });
+    expect((await within(card).findByTestId("attention", {}, { timeout: 3000 })).textContent).toBe("취소 실패, 재시도 중");
+    await waitFor(() => expect(within(card).getAllByTestId("run-cancel-failed")[0].textContent).toContain("취소 실패, 재시도 중"), { timeout: 3000 });
+  });
+
   it("PBS 구성: power에게는 행 조치 버튼 없음", async () => {
     renderApp(`${STUDY}/1`, { user: "power", hpcConfigured: true });
     const table = await screen.findByRole("table", { name: "PBS 제출 표" });

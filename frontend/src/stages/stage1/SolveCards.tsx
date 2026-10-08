@@ -72,7 +72,22 @@ export function RunStateBar({ doe }: { doe: TrainDoe }) {
 }
 
 /** PBS 제출 표: run · PBS job · 상태 · 경과 · (전역 관리자) 취소/재제출 */
-export function RunTable({ runs, onResubmit, onCancel, canCancel }: { runs: TrainRun[]; onResubmit?: (key: string) => void; onCancel?: () => void; canCancel: boolean }) {
+const HPC_STATE_TEXT: Record<string, string> = { SUBMITTING: "제출 중", QUEUED: "대기", UNKNOWN: "확인 중", RUNNING: "실행" };
+
+export function RunTable({
+  runs,
+  onResubmit,
+  onCancel,
+  canCancel,
+  cancelFailed = false,
+}: {
+  runs: TrainRun[];
+  onResubmit?: (key: string) => void;
+  onCancel?: () => void;
+  canCancel: boolean;
+  /** C18: 작업 attention_code=HPC_CANCEL_FAILED */
+  cancelFailed?: boolean;
+}) {
   const { me } = useApp();
   const admin = me.is_global_admin;
   const [confirm, setConfirm] = useState(false);
@@ -100,7 +115,14 @@ export function RunTable({ runs, onResubmit, onCancel, canCancel }: { runs: Trai
                 </td>
                 <td>
                   <span className={`run-state ${r.state.toLowerCase()}`}>{RUN_STATE_LABEL[r.state]}</span>
-                  {r.state === "SUBMITTED" && r.hpc?.state && <span className="muted small"> ({r.hpc.state === "Q" ? "대기" : "실행"})</span>}
+                  {r.state === "SUBMITTED" && r.hpc?.state === "CANCEL_REQUESTED" ? (
+                    <span className="warn-text small" data-testid="run-cancel-failed">
+                      {" "}
+                      ({cancelFailed ? "취소 실패, 재시도 중" : "취소 요청됨"})
+                    </span>
+                  ) : (
+                    r.state === "SUBMITTED" && r.hpc?.state && <span className="muted small"> ({HPC_STATE_TEXT[r.hpc.state] ?? r.hpc.state})</span>
+                  )}
                 </td>
                 <td className="num small">{r.state === "SUBMITTED" ? fmtElapsed(r.updated_at) : "–"}</td>
                 {admin && (
@@ -228,6 +250,7 @@ export function SolveCard() {
           <RunTable
             runs={runs}
             canCancel={!!job && !isTerminal(job.state)}
+            cancelFailed={!!job && !isTerminal(job.state) && job.attention_code === "HPC_CANCEL_FAILED"}
             onCancel={cancel}
             onResubmit={hpcOn && canExec ? (k) => submit([k]) : undefined}
           />

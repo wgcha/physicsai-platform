@@ -29,7 +29,8 @@ export type NotificationEvent =
   | "MY_TURN_NEXT"
   | "HPC_COLLECTED"
   | "HPC_PARTIAL_FAILED"
-  | "ENV_CHECK_DONE";
+  | "ENV_CHECK_DONE"
+  | "HPC_CANCEL_FAILED";
 export type ArtifactKind =
   | "PREVIEW_JSON"
   | "PREVIEW_IMAGE"

@@ -1522,6 +1522,8 @@ export interface components {
         };
         /** JobSummary */
         JobSummary: {
+            /** Attention Code */
+            attention_code?: string | null;
             /** Cancel Requested */
             cancel_requested: boolean;
             /**

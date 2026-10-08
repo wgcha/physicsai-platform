@@ -2029,9 +2029,11 @@ tr.clickable {
 tr.selected td {
   background: var(--accent-weak);
 }
+.ev-hpc_cancel_failed.notif-dot,
 .ev-hpc_partial_failed.notif-dot {
   background: var(--wait);
 }
+.toast.ev-hpc_cancel_failed,
 .toast.ev-hpc_partial_failed {
   border-left-color: var(--wait);
 }

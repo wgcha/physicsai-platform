@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { Job, JobState } from "../api";
-import { JOB_STATE_LABEL, hpcSummaryText, isTerminal } from "../lib/format";
+import { JOB_STATE_LABEL, attentionText, hpcSummaryText, isTerminal } from "../lib/format";
 import { JobLogViewer } from "./JobLogViewer";
 import { ErrorBundleButton } from "./ErrorBundleButton";
 
@@ -89,6 +89,11 @@ export function JobInline({ job }: { job: Job }) {
           </span>
         )}
         {job.state === "WAITING_HPC" && job.hpc_summary && <span className="muted small">{hpcSummaryText(job.hpc_summary)}</span>}
+        {job.attention_code && !isTerminal(job.state) && (
+          <span className="warn-text small" data-testid="attention">
+            {attentionText(job.attention_code)}
+          </span>
+        )}
         {job.state === "RUNNING" && job.current_step_label && !job.progress_label && <span className="muted small">{job.current_step_label}</span>}
         <button type="button" className="link small" onClick={() => setShowLog((v) => !v)}>
           {showLog ? "로그 닫기" : "로그"}

@@ -109,6 +109,20 @@ describe("목 서버 ↔ openapi.json", () => {
       expect(paths).toContain(`/physicsai/api${p}`);
   });
 
+  it("C18: 취소 실패 작업(WAITING_HPC + attention_code)·HPC_CANCEL_FAILED 알림이 스키마에 맞다", () => {
+    const s = new MockServer({ user: "power", hpcConfigured: true, hpcCancelFails: true });
+    s.jobs.find((j) => j.id === "j-solve")!.cancel_requested = true;
+    s.tick();
+    const job = s.handle("GET", "/jobs/j-solve", new URLSearchParams(), null, new Headers());
+    expect((job.body as { attention_code: string }).attention_code).toBe("HPC_CANCEL_FAILED");
+    expect(problems(job.body, responseSchema("/jobs/{job_id}", "get"), "job")).toEqual([]);
+    const n = s.handle("GET", "/notifications", new URLSearchParams(), null, new Headers());
+    expect(problems(n.body, responseSchema("/notifications", "get"), "notifications")).toEqual([]);
+    expect((n.body as { items: { event: string }[] }).items.some((i) => i.event === "HPC_CANCEL_FAILED")).toBe(true);
+    const q = s.handle("GET", "/queue", new URLSearchParams(), null, new Headers());
+    expect(problems(q.body, responseSchema("/queue", "get"), "queue")).toEqual([]);
+  });
+
   it("input.zip: 준비 전 409 INPUT_NOT_READY", () => {
     const server = new MockServer({ user: "power" });
     const r = server.handle("GET", "/jobs/j-q2/artifacts/input.zip", new URLSearchParams(), null, new Headers());

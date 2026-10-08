@@ -3,7 +3,7 @@ import { api, errorMessage, type JobSummary, type QueueInfo } from "../api";
 import { useApp } from "../app/AppContext";
 import { usePolling } from "../hooks/usePolling";
 import { POLL } from "../lib/poll";
-import { JOB_TYPE_LABEL, STAGE_MARK, fmtElapsed, hpcSummaryText } from "../lib/format";
+import { JOB_TYPE_LABEL, STAGE_MARK, attentionText, fmtElapsed, hpcSummaryText } from "../lib/format";
 import { ProgressBar, StateDot } from "../components/ui";
 import { useOpenJob } from "../shell/useOpenJob";
 
@@ -80,6 +80,12 @@ export function QueuePanel() {
           <div className="qrow-progress hpc">
             <span className="small" data-testid="hpc-summary">
               {j.hpc_summary ? hpcSummaryText(j.hpc_summary) : j.state === "COLLECTING" ? "결과 회수 중" : "PBS 대기"}
+              {j.attention_code && (
+                <span className="warn-text" data-testid="queue-attention">
+                  {" · "}
+                  {attentionText(j.attention_code)}
+                </span>
+              )}
             </span>
             <span className="muted small ellipsis">
               {fmtElapsed(j.started_at)} 경과{j.current_step_label ? ` · ${j.current_step_label}` : ""}
