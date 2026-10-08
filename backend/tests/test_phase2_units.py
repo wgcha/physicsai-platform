@@ -327,7 +327,12 @@ def test_spdm_access_only_in_spdm_module():
             owner = getattr(getattr(n.func, "value", None), "id", None)
             if owner in ("os", "shutil", "pathlib") or name in ("write_text", "write_bytes", "copy2", "copyfile"):
                 assert name not in banned, name
-            if name == "open":
+            if owner == "os" and name == "open":  # 읽기 전용 플래그만
+                flags = ast.unparse(n.args[1])
+                assert "O_RDONLY" in flags and not re.search(r"O_(WRONLY|RDWR|CREAT|TRUNC|APPEND)", flags), flags
+            if owner == "os" and name == "fdopen":
+                assert [a.value for a in n.args[1:2] if isinstance(a, ast.Constant)] == ["rb"]
+            if isinstance(n.func, ast.Name) and name == "open":
                 modes = [a.value for a in n.args[1:2] if isinstance(a, ast.Constant)]
                 assert modes == ["rb"], modes
 

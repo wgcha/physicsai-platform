@@ -11,6 +11,7 @@ from __future__ import annotations
 import fnmatch
 import os
 import re
+import stat
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import IO
@@ -89,6 +90,8 @@ class SpdmFile:
     mtime_ns: int
     atime_ns: int
     renamed: bool
+    dev: int | None = None  # 스캔 때 lstat (st_dev, st_ino) — 열 때 대조(C17)
+    ino: int | None = None
 
 
 @dataclass(frozen=True)
@@ -137,7 +140,8 @@ def scan(path: str, patterns: Sequence[str], max_files: int) -> ScanResult:
             used.add(dest.lower())
             was_renamed = dest != "/".join(rel_parts)
             renamed += int(was_renamed)
-            files.append(SpdmFile(src, "/".join(rel_parts), dest, st.st_size, st.st_mtime_ns, st.st_atime_ns, was_renamed))
+            files.append(SpdmFile(src, "/".join(rel_parts), dest, st.st_size, st.st_mtime_ns, st.st_atime_ns, was_renamed,
+                                  st.st_dev, st.st_ino))
             total += st.st_size
             if fn.lower().endswith(".h3d"):
                 h3d += 1
@@ -148,9 +152,55 @@ def scan(path: str, patterns: Sequence[str], max_files: int) -> ScanResult:
     return ScanResult(files, total, renamed, h3d, t01, links)
 
 
+def _same_file(a: os.stat_result, b: os.stat_result) -> bool:
+    return (a.st_dev, a.st_ino) == (b.st_dev, b.st_ino)
+
+
 def open_read(f: SpdmFile) -> IO[bytes]:
-    """SPDM 원본은 읽기 모드로만 연다."""
-    return open(f.source, "rb")  # noqa: SIM115 - 호출자가 with로 닫는다
+    """SPDM 원본을 읽기 전용으로 연다(SI_SCAN~SI_COPY 사이 링크 교체 TOCTOU 방지, 변경 메모 C17).
+
+    1) 상위 폴더 구성요소와 파일 자체가 링크·reparse point가 아닌지 다시 확인(lstat)
+    2) O_RDONLY | O_NOFOLLOW(있는 OS)로 연다 — 마지막 구성요소가 링크로 바뀌었으면 여는 단계에서 실패
+    3) 연 fd의 fstat와 경로 lstat의 (st_dev, st_ino) 대조, 일반 파일만, 스캔 때 기록한 크기·mtime과 대조
+    Windows: O_NOFOLLOW가 없어 1)의 reparse 검사 + 3)의 핸들 정보(파일 인덱스·볼륨 번호) 대조로 대신한다.
+    위반 → StepFailure(INPUT_CHANGED). 쓰기·속성 변경 호출 없음.
+    """
+    from .errors import StepFailure
+
+    def changed(why: str) -> StepFailure:
+        return StepFailure("INPUT_CHANGED", f"스캔 후 SPDM 파일이 바뀌었습니다({why}): {f.source_rel}")
+
+    parts = f.source_rel.split("/")
+    base = f.source
+    for _ in parts:
+        base = os.path.dirname(base)
+    cur = base
+    for part in parts:
+        cur = os.path.join(cur, part)
+        if is_link_or_reparse(cur):
+            raise changed("링크·reparse point")
+    try:
+        st_path = os.lstat(f.source)
+    except OSError:
+        raise changed("파일 없음") from None
+    if not stat.S_ISREG(st_path.st_mode):
+        raise changed("일반 파일 아님")
+    try:
+        fd = os.open(f.source, os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0))
+    except OSError:
+        raise changed("열기 실패(링크 교체 가능성)") from None
+    try:
+        st_fd = os.fstat(fd)
+        if not stat.S_ISREG(st_fd.st_mode) or not _same_file(st_fd, st_path):
+            raise changed("다른 파일로 교체됨")
+        if f.ino is not None and (st_fd.st_dev, st_fd.st_ino) != (f.dev, f.ino):
+            raise changed("스캔 후 다른 파일로 교체됨")
+        if st_fd.st_size != f.size or st_fd.st_mtime_ns != f.mtime_ns:
+            raise changed("크기·수정 시각 변경")
+        return os.fdopen(fd, "rb")
+    except BaseException:
+        os.close(fd)
+        raise
 
 
 def probe_roots(roots: Sequence[str]) -> list[dict[str, object]]:

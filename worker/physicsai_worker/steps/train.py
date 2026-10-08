@@ -564,8 +564,7 @@ def ri_scan(ctx: Any) -> None:
         raise path_failure(exc) from None
     with ctx.ex.engine.connect() as conn:
         run_keys = {x["run_key"] for x in train_repo.runs_for_doe(conn, doe["id"])}
-    rx = re.compile(s.train_data.result_run_dir_regex, re.IGNORECASE)
-    by_lower = {k.lower(): k for k in run_keys}
+    matcher = tp.RunDirMatcher(s.train_data.result_run_dir_regex, run_keys)
     depth = s.train_data.result_match_depth
     found: dict[str, list[str]] = {}
     seen_dirs: list[str] = []
@@ -577,20 +576,24 @@ def ri_scan(ctx: Any) -> None:
             dirnames[:] = []
             continue
         for x in dirnames:
-            m = rx.match(x)
-            rk = by_lower.get(m.group("run_key").lower()) if m else None  # 대소문자 무시(§6.6)
+            rk = matcher.match(x)  # run_key 그룹만 대소문자 무시(C13)
             if rk:
                 found.setdefault(rk, []).append(os.path.join(dirpath, x))
             elif len(seen_dirs) < 20:
                 seen_dirs.append(os.path.relpath(os.path.join(dirpath, x), cp.path).replace(os.sep, "/"))
     matched = {rk: v[0] for rk, v in found.items() if len(v) == 1}
     dups = sorted(rk for rk, v in found.items() if len(v) > 1)
+    invalid = []
     for rk in dups:
-        ctx.add_warning("INPUT_INVALID", f"{rk}: 같은 run 폴더가 {len(found[rk])}개라 건너뜁니다")
+        dirs = [os.path.relpath(x, cp.path).replace(os.sep, "/") for x in found[rk]]
+        invalid.append({"run_key": rk, "reason": "같은 run의 결과 폴더가 여러 개", "dirs": dirs[:10]})
+        ctx.add_warning("RUN_FOLDER_DUPLICATE", f"{rk}: 결과 폴더가 {len(dirs)}개({', '.join(dirs[:3])}) — 이 run은 가져오지 않습니다. 하나만 남기고 다시 실행하세요")
     if not matched:
+        if dups:
+            raise StepFailure("INPUT_INVALID", f"모든 run의 결과 폴더가 중복입니다: {', '.join(dups[:10])} — run마다 폴더를 하나만 두세요")
         raise StepFailure("INPUT_INVALID", "run 폴더를 찾지 못했습니다 — 하위 폴더: " + ", ".join(seen_dirs[:20]))
     ctx.patch_result({"source_path": cp.path, "matches": {rk: matched[rk] for rk in sorted(matched)},
-                      "duplicate_runs": dups, "unmatched_dirs": seen_dirs[:20]})
+                      "duplicate_runs": dups, "invalid_runs": invalid, "unmatched_dirs": seen_dirs[:20]})
 
 
 def ri_copy(ctx: Any) -> None:

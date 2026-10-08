@@ -20,6 +20,7 @@ EVENTS = (
     "HPC_COLLECTED",
     "HPC_PARTIAL_FAILED",
     "ENV_CHECK_DONE",
+    "HPC_CANCEL_FAILED",
 )
 
 
@@ -51,6 +52,9 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
         if cnt is not None:
             return f"PBS 결과 회수 완료 — {cnt[0]}개 중 {cnt[2]}개 회수", f"{st}의 PBS 결과를 회수했습니다."
         return "PBS 결과 회수 완료", f"{st}의 PBS 결과를 회수했습니다."
+    if event == "HPC_CANCEL_FAILED":
+        return (f"PBS 취소 실패: {st}",
+                "PBS 취소 명령이 실패했습니다. 다음 폴링에서 자동으로 다시 시도합니다 — PBS 연결을 확인하세요.")
     if event == "HPC_PARTIAL_FAILED":
         cnt = _hpc_counts(result) or (0, 0, 0)
         return (f"PBS 해석 일부 실패 — {cnt[0]}개 중 {cnt[1]}개 실패, 나머지 회수 진행",

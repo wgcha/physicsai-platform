@@ -103,8 +103,8 @@ class PreviewParams(_P):
 
 
 class SelItem(_P):
-    datatype: str = Field(min_length=1, max_length=200)
-    component: str = Field(min_length=1, max_length=200)
+    datatype: str = Field(pattern=opt.FIELD_PATTERN)
+    component: str = Field(pattern=opt.FIELD_PATTERN)
 
 
 class SelParts(_P):
@@ -127,9 +127,9 @@ class H3dCurateParams(_P):
 
 
 class CurveIn(_P):
-    type: str = Field(min_length=1, max_length=200)
-    request: str = Field(min_length=1, max_length=200)
-    component: str = Field(min_length=1, max_length=200)
+    type: str = Field(pattern=opt.FIELD_PATTERN)
+    request: str = Field(pattern=opt.FIELD_PATTERN)
+    component: str = Field(pattern=opt.FIELD_PATTERN)
 
 
 class T01CurvesParams(_P):

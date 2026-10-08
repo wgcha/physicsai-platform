@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 from typing import Any
 
 from physicsai_core import curation as cu
@@ -60,7 +59,9 @@ def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[st
                 d = train_repo.get_doe(conn, body.doe_id)
                 if d is not None and d["study_id"] == study["id"]:
                     run_keys = {r["run_key"] for r in train_repo.runs_for_doe(conn, d["id"])}
-        rx = re.compile(s.train_data.result_run_dir_regex, re.IGNORECASE)
+        from physicsai_core.train_params import RunDirMatcher
+
+        matcher = RunDirMatcher(s.train_data.result_run_dir_regex, run_keys)
         matched, unmatched, files = set(), [], 0
         base = cp.path.rstrip(os.sep).count(os.sep)
         for dirpath, dirnames, filenames in os.walk(cp.path, followlinks=False):
@@ -70,9 +71,9 @@ def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[st
                 dirnames[:] = []
                 continue
             for x in dirnames:
-                m = rx.match(x)
-                if m and (run_keys is None or m.group("run_key").lower() in {k.lower() for k in run_keys}):
-                    matched.add(m.group("run_key").lower())
+                rk = matcher.match(x)
+                if rk:
+                    matched.add(rk)
                 elif len(unmatched) < 20:
                     unmatched.append(os.path.relpath(os.path.join(dirpath, x), cp.path).replace(os.sep, "/"))
         summary = {"doe_id": body.doe_id, "matched_runs": len(matched), "unmatched_dirs": unmatched, "file_count": files}

@@ -2,7 +2,7 @@
 .SYNOPSIS
   PhysicsAI 업데이트(phase2 §11.2). 기존 venv·프런트·migrations를 _backup\<UTC>로 이동(삭제 없음)한 뒤 새 묶음 설치.
 .DESCRIPTION
-  ① 실행 중 작업 확인(GET /physicsai/api/queue — 대시보드 세션 토큰 필요. 토큰이 없으면 DB 직접 조회) → 있으면 중단(-Force면 경고 후 진행)
+  ① 실행 중 작업·진행 중 환경 점검 확인(GET /physicsai/api/queue — 대시보드 세션 토큰 필요. 토큰이 없으면 DB 직접 조회) → 있으면 중단(-Force면 경고 후 진행)
   ② 작업 2개 중지 ③ 기존 venv·frontend·migrations를 <install_root>\_backup\<UTC>로 이동 ④ 새 wheel·프런트 배치
   ⑤ alembic upgrade head ⑥ 시작·health 확인 ⑦ 실패 시 되돌리는 방법 안내(자동 되돌림 없음)
 #>
@@ -36,6 +36,11 @@ function Get-ActiveJobCount {
         $n = @($q.waiting_hpc).Count + @($q.collecting).Count + @($q.queued).Count + @($q.light.queued).Count
         if ($q.running) { $n++ }
         if ($q.light.running) { $n++ }
+        # 진행 중 환경 점검(PENDING·RUNNING)도 포함 — 관리자 토큰일 때만 조회 가능(아니면 403 무시)
+        try {
+            $ec = Invoke-RestMethod -Uri "http://127.0.0.1:$($cfg.backend_port)/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
+            if ($ec.state -in @('PENDING', 'RUNNING')) { $n++ }
+        } catch { Write-Verbose '환경 점검 조회 생략(권한 없음 또는 이력 없음)' }
         return $n
     }
     # DB 직접 조회: 접속 정보는 머신 환경변수 URL에서 PG* 프로세스 환경으로만 전달(명령 인자에 비밀번호 없음)
@@ -45,14 +50,14 @@ function Get-ActiveJobCount {
     $env:PGUSER = $m.Groups['u'].Value; $env:PGHOST = $m.Groups['h'].Value; $env:PGPORT = $m.Groups['port'].Value
     $env:PGDATABASE = $m.Groups['d'].Value; $env:PGPASSWORD = [Uri]::UnescapeDataString($m.Groups['p'].Value)
     try {
-        $n = & (Join-Path $cfg.pg_bin 'psql.exe') -tAc "SELECT count(*) FROM jobs WHERE state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING')"
+        $n = & (Join-Path $cfg.pg_bin 'psql.exe') -tAc "SELECT (SELECT count(*) FROM jobs WHERE state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING')) + (SELECT count(*) FROM env_checks WHERE state IN ('PENDING','RUNNING'))"
         Assert-Ok 'psql 작업 확인'
         return [int]$n
     } finally { $env:PGPASSWORD = $null }
 }
 $active = Get-ActiveJobCount
 if ($active -gt 0) {
-    if (-not $Force) { throw "대기·실행 중 작업이 $active 건 있습니다. 끝난 뒤 다시 실행하거나 -Force로 진행하세요" }
+    if (-not $Force) { throw "대기·실행 중 작업 또는 진행 중 환경 점검이 $active 건 있습니다. 끝난 뒤 다시 실행하거나 -Force로 진행하세요" }
     Write-Warning "-Force: 실행 중 작업은 lease 만료 후 INTERRUPTED가 됩니다($active 건)"
 }
 

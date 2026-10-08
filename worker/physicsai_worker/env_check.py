@@ -7,6 +7,7 @@
 
 from __future__ import annotations
 
+import collections
 import logging
 import os
 import shutil
@@ -30,15 +31,16 @@ from physicsai_core.config import (
 )
 from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.env_check import ALTAIR_CHECK_KEYS, item, report_rel
+from physicsai_core.error_bundle import BundleMasker
 from physicsai_core.fileutil import write_json
-from physicsai_core.parsers.log_errors import Masker
 
 from . import resources
 from .steps.launcher import check_launcher
 
 log = logging.getLogger("physicsai_worker.env_check")
 PLATFORM_DIR = "_platform"
-TAIL = 4096
+TAIL = 4096  # 보고서에 넣는 출력 꼬리(문자)
+COLLECT_CAP = 65536  # 프로브 출력 수집 상한(문자) — 꼬리만 유지
 
 
 def _exec_item(key: str, path: str) -> dict[str, Any]:
@@ -59,7 +61,7 @@ def _exec_item(key: str, path: str) -> dict[str, Any]:
     return item(k, "EXECUTABLE", "OK", "정상", "WORKER", detail)
 
 
-def _probe(w: Any, tool: str, exe: str, masker: Masker, tails: dict[str, str]) -> dict[str, Any]:
+def _probe(w: Any, tool: str, exe: str, masker: Any, tails: dict[str, str]) -> dict[str, Any]:
     s = w.settings
     key = f"probe.{tool}"
     argv_t = getattr(s.env_check.probes, tool)
@@ -73,12 +75,18 @@ def _probe(w: Any, tool: str, exe: str, masker: Masker, tails: dict[str, str]) -
     env = child_env(s.worker.env_passthrough, deny_names=[s.database.url_env])
     t0 = time.time()
     proc = w.limiter.launch(argv, cwd, env, w.limits)
-    out: list[str] = []
+    out: collections.deque[str] = collections.deque()
+    kept = [0]
 
     def reader() -> None:
+        # 출력은 꼬리 COLLECT_CAP 문자까지만 메모리에 둔다(전체 적재 없음)
         assert proc.stdout is not None
         for line in proc.stdout:
+            line = line[-COLLECT_CAP:]
             out.append(line)
+            kept[0] += len(line)
+            while kept[0] > COLLECT_CAP and len(out) > 1:
+                kept[0] -= len(out.popleft())
 
     th = threading.Thread(target=reader, daemon=True)
     th.start()
@@ -96,7 +104,7 @@ def _probe(w: Any, tool: str, exe: str, masker: Masker, tails: dict[str, str]) -
             w.limiter.terminate(proc)
         w.limiter.close(proc)
     dur = int((time.time() - t0) * 1000)
-    tails[key] = masker("".join(out)[-TAIL:])
+    tails[key] = masker("".join(out))[-TAIL:]  # 마스킹 후 자른다(경계에서 비밀 일부 노출 방지)
     if timed_out:
         return item(key, "EXECUTABLE", "FAIL", "시간 초과", "WORKER", {"duration_ms": dur})
     rc = proc.poll()
@@ -180,7 +188,7 @@ def _job_object_item(w: Any) -> dict[str, Any]:
     return item("worker.job_object", "WORKER", st, "정상" if st == "OK" else "Job Object 설정이 기대와 다릅니다", "WORKER", info)
 
 
-def collect_items(w: Any, masker: Masker, tails: dict[str, str]) -> list[dict[str, Any]]:
+def collect_items(w: Any, masker: Any, tails: dict[str, str]) -> list[dict[str, Any]]:
     s = w.settings
     alt = effective_altair(s)
     items = [_exec_item(k, alt.get(k, "")) for k in ALTAIR_CHECK_KEYS]
@@ -205,7 +213,8 @@ def collect_items(w: Any, masker: Masker, tails: dict[str, str]) -> list[dict[st
 
 def run_env_check(w: Any, chk: dict[str, Any]) -> str:
     s = w.settings
-    masker = Masker(s.logging.mask_patterns)
+    # 오류 묶음과 같은 마스킹(logging.mask_patterns + DB URL·Bearer·쿠키·비밀 환경변수 값, phase2 §10.2)
+    masker = BundleMasker(s.logging.mask_patterns, s.auth.cookie_name, s.database.url_env)
     tails: dict[str, str] = {}
     try:
         items = collect_items(w, masker, tails)

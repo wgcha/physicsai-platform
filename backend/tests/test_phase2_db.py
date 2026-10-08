@@ -19,7 +19,7 @@ def test_migration_head_constant_matches_script():
 
     cfg = Config(str(REPO / "migrations" / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO / "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_current_head() == MIGRATION_HEAD == "0002_phase2"
+    assert ScriptDirectory.from_config(cfg).get_current_head() == MIGRATION_HEAD == "0003_hpc_cancel_failed"
 
 
 def test_upgrade_head_and_metadata_in_sync(engine):
@@ -93,7 +93,7 @@ def test_new_kinds_and_events_accepted(engine):
         for k in ("CURATION_CFG", "FILE_LIST", "DOE_SAMPLES", "RUN_CONFIG", "OPT_SUMMARY", "OPT_FILE"):
             c.execute(text("insert into artifacts(id, study_id, kind, rel_path, size, content_type) values (:u,:s,:k,'x',1,'text/plain')"),
                       {"u": str(uuid.uuid4()), "s": sid, "k": k})
-        for e in ("HPC_PARTIAL_FAILED", "ENV_CHECK_DONE"):
+        for e in ("HPC_PARTIAL_FAILED", "ENV_CHECK_DONE", "HPC_CANCEL_FAILED"):
             c.execute(text("insert into notifications(user_id, event, title) values ('u',:e,'t')"), {"e": e})
 
 

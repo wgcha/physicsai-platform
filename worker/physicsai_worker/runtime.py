@@ -197,17 +197,32 @@ class Worker:
                 hjobs = hpc_repo.for_job(conn, job["id"])
             active = [h for h in hjobs if h["state"] not in hpc_repo.HPC_TERMINAL]
             if job["cancel_requested_at"] is not None:
+                cancel_failed = []
                 for h in active:
                     try:
                         self.hpc.cancel(h["external_job_id"])
                     except HpcGatewayError as exc:
-                        log.warning("PBS 취소 실패(경고): %s", exc)
+                        # 취소 명령 실패: CANCELED로 적지 않는다 — CANCEL_REQUESTED 유지, 다음 폴링에서 다시 시도(변경 메모 C18)
+                        log.warning("PBS 취소 실패: %s", exc)
+                        cancel_failed.append(h["external_job_id"])
+                        with self.engine.begin() as conn:
+                            hpc_repo.update_hpc(conn, h["id"], h["version"], state="CANCEL_REQUESTED",
+                                                error_message=f"취소 명령 실패: {exc}"[:500])
+                        continue
                     with self.engine.begin() as conn:
                         hpc_repo.update_hpc(conn, h["id"], h["version"], state="CANCELED", finished_at=datetime.now(timezone.utc))
                         if job["job_type"] == "TD_SOLVE":
                             train_repo.set_run_state_by_hpc(conn, h["id"], RUN_STATE_BY_HPC["CANCELED"])
                 with self.engine.begin() as conn:
-                    hpc_repo.cancel_waiting(conn, job)
+                    if cancel_failed:
+                        job_now = jobs_repo.get_job(conn, job["id"])
+                        if job_now is not None and job_now["state"] == "WAITING_HPC" and job_now["attention_code"] != "HPC_CANCEL_FAILED":
+                            hpc_repo.set_attention(conn, job_now, "HPC_CANCEL_FAILED")
+                            from physicsai_core.db.repositories import notifications as notif_repo
+
+                            notif_repo.notify_job(conn, job["id"], "HPC_CANCEL_FAILED")
+                    else:
+                        hpc_repo.cancel_waiting(conn, jobs_repo.get_job(conn, job["id"]) or job)
                 continue
             result = dict(job["result"] or {})
             gateway_error = False

@@ -77,8 +77,13 @@ try {
     $hasRole = & $psql @common -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$($cfg.db_role)'"; Assert-Ok 'psql 역할 확인'
     if (-not $hasRole) {
         Write-Step "DB 역할 생성: $($cfg.db_role)"
-        $sql = "CREATE ROLE `"$($cfg.db_role)`" LOGIN PASSWORD '" + $appPw.Replace("'", "''") + "';"
-        $sql | & $psql @common -d postgres; Assert-Ok 'CREATE ROLE'   # SQL은 표준 입력으로(명령 인자에 비밀번호 없음)
+        # 비밀번호가 서버 로그에 남지 않게: 이 세션만 문장 로그·오류 문장 로그·느린 문장 로그를 끈 뒤 생성(superuser 세션 SET)
+        # SQL은 표준 입력으로(명령 인자에 비밀번호 없음)
+        $sql = "SET log_statement = 'none'; SET log_min_error_statement = 'panic'; SET log_min_duration_statement = -1; " +
+            "SET password_encryption = 'scram-sha-256'; " +
+            "CREATE ROLE `"$($cfg.db_role)`" LOGIN PASSWORD '" + $appPw.Replace("'", "''") + "';"
+        $sql | & $psql @common -d postgres; Assert-Ok 'CREATE ROLE'
+        Remove-Variable -Name sql -ErrorAction SilentlyContinue
     }
     $hasDb = & $psql @common -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$($cfg.db_name)'"; Assert-Ok 'psql DB 확인'
     if (-not $hasDb) {

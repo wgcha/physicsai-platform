@@ -59,3 +59,18 @@
 - 2026-10-08 · (가정) 2차 템플릿·자원 설정은 비어 있어도 설정 오류가 아니라 해당 기능만 비활성("관리자 설정 필요") · 1차만 쓰는 설치 보호, 원본 파일 일부 미반입 · phase2.md §8.1, A-11, U19
 - 2026-10-08 · (가정) Windows 배포의 서비스 등록은 작업 스케줄러(Register-ScheduledTask, 부팅 시작·재시작·실행 시간 한도 0), NSSM·pywin32 미사용. 배포 스크립트는 `deploy/`(Impl-Backend 소유), 실제 Windows 실행은 미검증 · 추가 의존성 없음 · phase2.md §11, A-14, U31
 - 2026-10-08 · 알림 이벤트 `HPC_PARTIAL_FAILED`·`ENV_CHECK_DONE` 추가, ①②⑤ 완료/실패는 기존 이벤트에 작업 표시명, 대기열에 단계 배지·PBS run 집계 표시 · 장시간 작업 인지 · phase2.md §7.3, §12.9
+
+## 2026-10-08 (2차 구현 — Impl-Backend 변경 메모 C1~C19 중 결정 성격 항목)
+
+- 2026-10-08 · (메인 결정) `/studies/{id}`의 `stage_status`에 "1"·"2"·"5" 키 추가(각 단계 최근 작업, "3"·"4"와 같은 모양) · 스텝퍼 ①②⑤ 상태 표시 · phase2.md C15
+- 2026-10-08 · (가정) migration 0001은 1차 스키마 동결본으로 만들고 이후는 명시적 DDL(0002·0003) · 0001이 현재 메타데이터를 쓰면 2차 테이블이 중복 생성 · phase2.md C1
+- 2026-10-08 · (가정) `Dataset.curation_id`는 컬럼 없이 작업 params에서 계산, `curation_id` 지정 시 입력 경로를 큐레이션 출력으로 확정 기록 · 계약 §5.8에 datasets 변경 없음 · phase2.md C2
+- 2026-10-08 · (가정) ①→④ 자동 생성 시 `eps_mesh*` starter 형태 파일은 조립 폴더에서 제외 · 1차 검증기 starter 1개 규칙과 원본 ⑤ 동작 · phase2.md C3
+- 2026-10-08 · (가정) 서버 확정 기록 params 키(doe_id·curation_id·import_id·optimization_id 등)와 엔터티 행 생성 시점 · 재시도 재현성(B8) · phase2.md C5
+- 2026-10-08 · (가정) 업데이트 스크립트의 "실행 중 작업" 확인은 토큰이 없으면 DB 직접 조회, 진행 중 환경 점검도 포함. 역할 생성 시 세션 로그 끄기 · `/queue` 인증 필요, 비밀번호 서버 로그 방지 · phase2.md C7
+- 2026-10-08 · (가정) 오류 묶음·환경 점검 출력 마스킹은 계약 규칙 + 비밀 환경변수 값(원문·JSON 이스케이프)까지 · 로그에 URL 전체가 찍히는 경우 · phase2.md C12
+- 2026-10-08 · (가정) 결과 폴더 run 매칭은 run_key 그룹만 대소문자 무시, 중복 폴더 run은 제외+경고(전부 중복이면 실패) · 오매칭 방지 · phase2.md C13
+- 2026-10-08 · (가정) Altair 결과 이름 필드(DataType·Component·Layer·Request·곡선)는 허용 문자 화이트리스트 · TCL·cfg 주입 방지 · phase2.md C16
+- 2026-10-08 · (가정) SPDM 복사는 스캔 기록(inode·크기·mtime)과 열린 파일 대조, O_NOFOLLOW. Windows는 reparse 검사+핸들 대조(상위 폴더 경합 한계 기록) · SPDM 링크 교체 TOCTOU · phase2.md C17
+- 2026-10-08 · (가정) PBS 취소 명령 실패 시 작업을 CANCELED로 끝내지 않고 WAITING_HPC+주의 코드·알림 `HPC_CANCEL_FAILED`, 폴러가 재시도(migration 0003) · PBS 쪽 해석이 계속 도는데 취소된 것처럼 보이지 않게 · phase2.md C18
+- 2026-10-08 · XML DOCTYPE·ENTITY 거부는 파서 수준(인코딩 무관) · 보안 §15.3 · phase2.md C19

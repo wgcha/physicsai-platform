@@ -283,7 +283,7 @@ notifications = Table(
     Column("read_at", TS, nullable=True),
     CheckConstraint(
         "event IN ('JOB_STARTED','JOB_SUCCEEDED','JOB_FAILED','JOB_CANCELED','JOB_INTERRUPTED','MY_TURN_NEXT','HPC_COLLECTED',"
-        "'HPC_PARTIAL_FAILED','ENV_CHECK_DONE')",
+        "'HPC_PARTIAL_FAILED','ENV_CHECK_DONE','HPC_CANCEL_FAILED')",
         name="ck_notifications_event",
     ),
 )

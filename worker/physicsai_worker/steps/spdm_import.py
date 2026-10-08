@@ -43,7 +43,8 @@ def si_scan(ctx: Any) -> None:
     if free < res.total_bytes * 1.1:
         raise StepFailure("INPUT_INVALID", f"AI 루트 여유 공간이 부족합니다(필요 {int(res.total_bytes * 1.1)} bytes, 여유 {free})")
     plan = [{"source": f.source, "source_rel": f.source_rel, "dest_rel": f.dest_rel, "size": f.size,
-             "mtime_ns": f.mtime_ns, "atime_ns": f.atime_ns, "renamed": f.renamed} for f in res.files]
+             "mtime_ns": f.mtime_ns, "atime_ns": f.atime_ns, "renamed": f.renamed, "dev": f.dev, "ino": f.ino}
+            for f in res.files]
     with open(_plan_path(ctx), "w", encoding="utf-8") as fh:
         json.dump({"spdm_path": path, "files": plan}, fh, ensure_ascii=False)
     if res.skipped_links:
@@ -65,7 +66,8 @@ def si_copy(ctx: Any) -> None:
         dst = os.path.join(I, *f["dest_rel"].split("/"))
         assert_writable(dst)
         os.makedirs(os.path.dirname(dst), exist_ok=True)
-        sf = spdm.SpdmFile(f["source"], f["source_rel"], f["dest_rel"], f["size"], f["mtime_ns"], f["atime_ns"], f["renamed"])
+        sf = spdm.SpdmFile(f["source"], f["source_rel"], f["dest_rel"], f["size"], f["mtime_ns"], f["atime_ns"], f["renamed"],
+                           f.get("dev"), f.get("ino"))
         with spdm.open_read(sf) as src, open(dst, "wb") as out:
             while True:
                 b = src.read(CHUNK)

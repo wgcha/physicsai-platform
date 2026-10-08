@@ -15,6 +15,10 @@ import re
 from typing import Any
 
 NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
+# Altair 결과 이름 필드(DataType·Component·Layer·Request) 허용 문자(변경 메모 C16): 영숫자(유니코드 포함)·공백·_ - . / ( ) : +
+# 줄바꿈·제어문자·" $ [ ] { } ; | 등은 TCL·cfg·JSON 해석기로 넘어가므로 거부한다.
+FIELD_RE = re.compile(r"[\w \-./():+]*")
+FIELD_PATTERN = r"^[\w \-./():+]{1,200}$"
 STUDY_FOLDER_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 STATS = ("MAX", "MIN", "ABSMAX")
 GOALS = ("NONE", "MINIMIZE", "MAXIMIZE", "CONSTRAINT")
@@ -77,8 +81,11 @@ def validate_responses(rows: Any, approach: str) -> tuple[list[dict[str, Any]], 
         else:
             p(i, "source는 H3D | XYDATA")
         for k in str_fields:
-            if isinstance(row.get(k), str) and "|" in row[k]:
+            v = row.get(k)
+            if isinstance(v, str) and "|" in v:
                 p(i, "'|' 문자는 사용할 수 없습니다")
+            elif isinstance(v, str) and (not FIELD_RE.fullmatch(v) or len(v) > 200):
+                p(i, f"{k}에 허용되지 않는 문자가 있습니다(영숫자·공백·_ - . / ( ) : + 만)")
         stat, goal = r.get("stat"), r.get("goal")
         if stat not in STATS:
             p(i, "stat은 MAX | MIN | ABSMAX")

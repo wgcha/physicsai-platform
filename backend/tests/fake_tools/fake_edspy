@@ -46,6 +46,11 @@ def main():
     if m == "fail":
         print("fatal: fake failure", flush=True)
         return 1
+    if "--probe-echo" in sys.argv:  # 환경 점검 프로브 시험: 긴 출력 + 비밀 문자열
+        for i in range(5000):
+            print(f"filler line {i:05d} " + "x" * 40)
+        print("db " + os.environ.get("FAKE_ECHO", ""), flush=True)
+        return 0
     if "--create-dataset" in sys.argv:
         out, spec = arg("--create-dataset"), arg("--spec")
         with open(spec, encoding="utf-8") as fh:

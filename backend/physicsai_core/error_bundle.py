@@ -22,7 +22,7 @@ class BundleMasker:
                  environ: Mapping[str, str] | None = None) -> None:
         self._user = [re.compile(p) for p in mask_patterns]
         self._fixed: list[tuple[re.Pattern[str], str]] = [
-            (re.compile(r"(postgres(?:ql)?(?:\+\w+)?://)[^@\s/]+@"), r"\1***@"),
+            (re.compile(r"(postgres(?:ql)?(?:\+\w+)?://)[^@\s]+@"), r"\1***@"),  # 계약 §10.2 규칙 그대로
             (re.compile(r"(?i)\bBearer\s+\S+"), "Bearer ***"),
             (re.compile(re.escape(cookie_name) + r"=[^\s;,\"']+"), f"{cookie_name}=***"),
         ]
@@ -33,6 +33,9 @@ class BundleMasker:
             if k.upper() in names or any(fnmatch.fnmatchcase(k.upper(), p) for p in SECRET_ENV_PATTERNS):
                 if v and len(v) >= 4:
                     secrets.append(v)
+                    # JSON 항목(job.json 등)에 이스케이프된 형태로 들어간 값도 치환
+                    secrets.append(json.dumps(v)[1:-1])
+                    secrets.append(json.dumps(v, ensure_ascii=False)[1:-1])
                 self._fixed.append((re.compile(r"\b" + re.escape(k) + r"=\S+"), f"{k}=***"))
         self._secrets = sorted(set(secrets), key=len, reverse=True)
 

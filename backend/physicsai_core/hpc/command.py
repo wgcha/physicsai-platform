@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import logging
 import os
 import re
 import string
@@ -12,6 +13,8 @@ from typing import Any
 
 from ..config import is_abs_path_str
 from .gateway import HpcAvailability, HpcGatewayError, HpcStatus, HpcSubmitResult, HpcSubmitSpec
+
+log = logging.getLogger("physicsai_core.hpc.command")
 
 PLACEHOLDERS = frozenset(
     {"job_name", "run_key", "study", "input_file", "input_dir", "result_dir", "queue", "ncpus", "walltime", "external_job_id"}
@@ -178,7 +181,12 @@ class CommandHpcGateway:
         if self.c.exit_code_regex:
             em = re.search(self.c.exit_code_regex, text, re.MULTILINE)
             if em:
-                exit_code = int(em.group("exit"))
+                try:
+                    exit_code = int(em.group("exit"))
+                except (TypeError, ValueError):
+                    # 정규식이 숫자가 아닌 값을 잡으면 판정하지 않는다(UNKNOWN → lost_after_polls 규칙)
+                    log.warning("PBS 종료코드 해석 실패: %r (job %s)", em.group("exit"), external_job_id)
+                    return HpcStatus("UNKNOWN", raw, None, False)
         return HpcStatus(mapped if mapped in VALID_STATES else "UNKNOWN", raw, exit_code, False)  # type: ignore[arg-type]
 
     def cancel(self, external_job_id: str) -> None:

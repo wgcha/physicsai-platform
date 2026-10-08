@@ -29,9 +29,7 @@ def read_extracted_xml(path: str, max_bytes: int) -> list[tuple[str, str]]:
         raise StepFailure("INPUT_INVALID", f"추출 XML이 상한({max_bytes} bytes)을 넘습니다: {size} bytes")
     with open(path, "rb") as fh:
         data = fh.read()
-    head = data.decode("utf-8", errors="replace")
-    if "<!DOCTYPE" in head.upper() or "<!ENTITY" in head.upper():
-        raise StepFailure("INPUT_INVALID", "추출 XML에 DOCTYPE·ENTITY 선언이 있어 거부했습니다")
+    _reject_dtd(data)
     try:
         root = ET.fromstring(data)
     except ET.ParseError as exc:
@@ -48,6 +46,34 @@ def read_extracted_xml(path: str, max_bytes: int) -> list[tuple[str, str]]:
         value = (v.text or "").strip()
         out.append((name, value.replace("mm", "").replace("MM", "").strip()))
     return out
+
+
+class _DtdFound(Exception):
+    pass
+
+
+def _reject_dtd(data: bytes) -> None:
+    """파서(expat) 수준에서 DOCTYPE·ENTITY 선언을 거부한다 — 인코딩(UTF-8/16·BOM·XML 선언)과 무관(phase2 §15.3).
+
+    expat이 모르는 인코딩(UTF-32 등)은 형식 오류로 거부된다.
+    """
+    from xml.parsers import expat
+
+    def found(*_a: Any) -> None:
+        raise _DtdFound()
+
+    p = expat.ParserCreate()
+    p.StartDoctypeDeclHandler = found
+    p.EntityDeclHandler = found
+    p.UnparsedEntityDeclHandler = found
+    p.ExternalEntityRefHandler = found
+    p.SetParamEntityParsing(expat.XML_PARAM_ENTITY_PARSING_NEVER)
+    try:
+        p.Parse(data, True)
+    except _DtdFound:
+        raise StepFailure("INPUT_INVALID", "추출 XML에 DOCTYPE·ENTITY 선언이 있어 거부했습니다") from None
+    except expat.ExpatError as exc:
+        raise StepFailure("INPUT_INVALID", f"추출 XML 형식 오류: {exc}") from None
 
 
 def _num(v: Any) -> float | None:
@@ -172,3 +198,36 @@ def integer_format_warnings(params: list[dict[str, Any]]) -> list[dict[str, str]
 def definition_key(params: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
     """tpl에 영향을 주는 사용 행 정의(표 변경 감지용)."""
     return [(p["name"], p.get("nominal"), p.get("min"), p.get("max"), p.get("format")) for p in used(params)]
+
+
+class RunDirMatcher:
+    """①-5 결과 폴더 이름 → DOE run_key(phase2 §6.6, 변경 메모 C13).
+
+    대소문자 무시는 run_key 그룹에만 적용한다: 정확 일치가 아니면 IGNORECASE로 맞춘 뒤 그룹 부분을 DOE run_key로
+    바꾼 이름이 대소문자 구분 정규식에도 맞아야 한다(접두·접미부는 정확히).
+    """
+
+    def __init__(self, pattern: str, run_keys: set[str] | None) -> None:
+        self.rx = re.compile(pattern)
+        self.rx_i = re.compile(pattern, re.IGNORECASE)
+        self.by_lower = {k.lower(): k for k in run_keys} if run_keys is not None else None
+
+    def match(self, name: str) -> str | None:
+        m = self.rx.match(name)
+        if m:
+            rk = m.group("run_key")
+            if self.by_lower is None:
+                return rk
+            if rk in self.by_lower.values():
+                return rk
+        m = self.rx_i.match(name)
+        if not m:
+            return None
+        got = m.group("run_key")
+        key = self.by_lower.get(got.lower()) if self.by_lower is not None else got.lower()
+        if key is None:
+            return None
+        s, e = m.span("run_key")
+        cand = name[:s] + key + name[e:]
+        m2 = self.rx.match(cand)
+        return key if m2 and m2.group("run_key") == key else None
