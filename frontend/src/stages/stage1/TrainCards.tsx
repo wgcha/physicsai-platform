@@ -54,7 +54,7 @@ export function CadExtractCard() {
           <span>
             추출 <b>{params.length}</b>개 (사용 가능 {params.filter((p) => p.valid).length})
           </span>
-          <span className="mono ellipsis" title={setup.cad.display_path}>
+          <span className="mono ellipsis" title={setup.cad.display_path ?? undefined}>
             {setup.cad.file_name}
           </span>
           <span className="muted">{fmtTime(setup.updated_at)}</span>
@@ -78,10 +78,9 @@ interface Row {
   problems: string[];
 }
 
-const probText = (p: TrainParam["problems"]): string[] => (p as unknown[]).map((x) => (typeof x === "string" ? x : String((x as { message?: string }).message ?? "")));
 const toRow = (p: TrainParam): Row => ({
-  name: p.name, raw: p.raw_nominal, nominal: p.nominal, min: p.min == null ? "" : String(p.min), max: p.max == null ? "" : String(p.max),
-  use: p.use, format: p.format, unit: p.unit, valid: p.valid, problems: probText(p.problems),
+  name: p.name, raw: p.raw_nominal, nominal: p.nominal ?? null, min: p.min == null ? "" : String(p.min), max: p.max == null ? "" : String(p.max),
+  use: p.use, format: p.format, unit: p.unit, valid: p.valid, problems: p.problems,
 });
 const num = (s: string): number | null => (s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
 
@@ -247,7 +246,7 @@ export function ParamTableCard() {
 
 // ---------------------------------------------------------------- ①-3
 function defaultOptions(t: DoeType | undefined): Record<string, string | number | boolean> {
-  return Object.fromEntries((t?.fields ?? []).map((f) => [f.key, f.default]));
+  return Object.fromEntries((t?.fields ?? []).map((f) => [f.key, f.default as string | number | boolean]));
 }
 
 function OptionInput({ f, value, onChange, disabled }: { f: DoeField; value: unknown; onChange: (v: string | number | boolean) => void; disabled: boolean }) {

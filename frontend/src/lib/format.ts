@@ -116,10 +116,14 @@ export function fmtBytes(n: number | null | undefined): string {
   return `${i === 0 ? v : v.toFixed(v >= 100 ? 0 : 1)} ${u[i]}`;
 }
 
-/** PBS run 집계 한 줄(phase2.md §12.9): "PBS 12/30 완료 · 실패 1" */
+/**
+ * PBS run 집계 한 줄(phase2.md §12.9): "PBS 12/30 완료 · 실패 1".
+ * 변경 메모 C11: succeeded는 hpc 상태 SUCCEEDED, collected는 그중 회수 완료(succeeded와 겹침) → 완료 = succeeded
+ */
 export function hpcSummaryText(h: { total: number; succeeded: number; failed: number; collected: number } | null | undefined): string {
   if (!h) return "";
-  let t = `PBS ${h.succeeded + h.collected}/${h.total} 완료`;
+  let t = `PBS ${h.succeeded}/${h.total} 완료`;
   if (h.failed) t += ` · 실패 ${h.failed}`;
+  if (h.collected) t += ` · 회수 ${h.collected}`;
   return t;
 }

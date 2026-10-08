@@ -21,6 +21,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/admin/env-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Checks */
+        get: operations["list_checks_physicsai_api_admin_env_checks_get"];
+        put?: never;
+        /** Create */
+        post: operations["create_physicsai_api_admin_env_checks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/admin/env-checks/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest */
+        get: operations["latest_physicsai_api_admin_env_checks_latest_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/admin/env-checks/{check_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Check */
+        get: operations["get_check_physicsai_api_admin_env_checks__check_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/artifacts/{artifact_id}/content": {
         parameters: {
             query?: never;
@@ -30,6 +82,40 @@ export interface paths {
         };
         /** Content */
         get: operations["content_physicsai_api_artifacts__artifact_id__content_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/curations/{curation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Curation */
+        get: operations["get_curation_physicsai_api_curations__curation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/curations/{curation_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Files */
+        get: operations["files_physicsai_api_curations__curation_id__files_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -154,6 +240,26 @@ export interface paths {
         put?: never;
         /** Cancel */
         post: operations["cancel_physicsai_api_jobs__job_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/jobs/{job_id}/error-bundle.zip": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Error Bundle
+         * @description 오류 묶음(phase2 §10): 작업 등록자 본인 또는 전역 관리자. 실패·취소·중단 또는 주의 코드가 있는 비종료 작업.
+         */
+        get: operations["error_bundle_physicsai_api_jobs__job_id__error_bundle_zip_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -306,6 +412,23 @@ export interface paths {
         };
         /** Unread */
         get: operations["unread_physicsai_api_notifications_unread_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/optimizations/{optimization_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Opt */
+        get: operations["get_opt_physicsai_api_optimizations__optimization_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -486,6 +609,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/curation-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Sources */
+        get: operations["sources_physicsai_api_studies__study_id__curation_sources_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/curations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Curations */
+        get: operations["list_curations_physicsai_api_studies__study_id__curations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/datasets": {
         parameters: {
             query?: never;
@@ -554,6 +711,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/optimizations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Opts */
+        get: operations["list_opts_physicsai_api_studies__study_id__optimizations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/optimize/response-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Candidates */
+        get: operations["candidates_physicsai_api_studies__study_id__optimize_response_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/param-sets": {
         parameters: {
             query?: never;
@@ -566,6 +757,26 @@ export interface paths {
         put?: never;
         /** Register */
         post: operations["register_physicsai_api_studies__study_id__param_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/param-sets/from-train": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * From Train
+         * @description F(phase2 §6.13): ① DOE 결과로 파라미터 세트 만들기.
+         */
+        post: operations["from_train_physicsai_api_studies__study_id__param_sets_from_train_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -600,6 +811,159 @@ export interface paths {
         put?: never;
         /** Predict Check */
         post: operations["predict_check_physicsai_api_studies__study_id__predict_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/spdm-imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Imports */
+        get: operations["list_imports_physicsai_api_studies__study_id__spdm_imports_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/train": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Setup */
+        get: operations["get_setup_physicsai_api_studies__study_id__train_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/train/does": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Does */
+        get: operations["list_does_physicsai_api_studies__study_id__train_does_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/train/params": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Params */
+        put: operations["put_params_physicsai_api_studies__study_id__train_params_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/train/tpl": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Tpl */
+        post: operations["generate_tpl_physicsai_api_studies__study_id__train_tpl_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/train-does/{doe_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Doe */
+        get: operations["get_doe_physicsai_api_train_does__doe_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/train-does/{doe_id}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Runs */
+        get: operations["list_runs_physicsai_api_train_does__doe_id__runs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/train-does/{doe_id}/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Samples */
+        get: operations["samples_physicsai_api_train_does__doe_id__samples_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/train/doe-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Doe Types */
+        get: operations["doe_types_physicsai_api_train_doe_types_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -655,6 +1019,125 @@ export interface components {
             /** Study Id */
             study_id: string;
         };
+        /** CandidateDatatype */
+        CandidateDatatype: {
+            /** Components */
+            components: string[];
+            /** Format */
+            format?: unknown;
+            /** Layers */
+            layers: string[];
+            /** Name */
+            name: string;
+        };
+        /** CandidateH3d */
+        CandidateH3d: {
+            /** Subcases */
+            subcases: components["schemas"]["CandidateSubcase"][];
+        };
+        /** CandidateSubcase */
+        CandidateSubcase: {
+            /** Datatypes */
+            datatypes: components["schemas"]["CandidateDatatype"][];
+            /** Id */
+            id: number;
+            /** Label */
+            label: string;
+        };
+        /** CandidateXy */
+        CandidateXy: {
+            /** Requests */
+            requests: {
+                [key: string]: string[];
+            };
+        };
+        /** Curation */
+        Curation: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Failed Count */
+            failed_count?: number | null;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Kind */
+            kind: string;
+            /** Missing Runs */
+            missing_runs: string[];
+            /** Ok Count */
+            ok_count?: number | null;
+            /** Output Display Path */
+            output_display_path?: string | null;
+            /** Preview Job Id */
+            preview_job_id?: string | null;
+            /** Selection */
+            selection: {
+                [key: string]: unknown;
+            };
+            source: components["schemas"]["SourceRef"];
+            /** Source Label */
+            source_label: string;
+            /** Status */
+            status: string;
+            /** Study Id */
+            study_id: string;
+            /** Target Count */
+            target_count?: number | null;
+            /** Used By Dataset Ids */
+            used_by_dataset_ids: string[];
+        };
+        /** CurationFile */
+        CurationFile: {
+            /** Exit Code */
+            exit_code?: number | null;
+            /** Input Name */
+            input_name: string;
+            /** Ok */
+            ok: boolean;
+            /** Output Name */
+            output_name?: string | null;
+            /** Run Folder */
+            run_folder: string;
+            /** Run Key */
+            run_key?: string | null;
+            /** Size */
+            size?: number | null;
+        };
+        /** CurationFilesPage */
+        CurationFilesPage: {
+            /** Items */
+            items: components["schemas"]["CurationFile"][];
+            /** Next Cursor */
+            next_cursor?: string | null;
+        };
+        /** CurationSource */
+        CurationSource: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Display Path */
+            display_path?: string | null;
+            /** H3D Count */
+            h3d_count: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Ref Id */
+            ref_id: string;
+            /** Runs Expected */
+            runs_expected?: number | null;
+            /** T01 Count */
+            t01_count: number;
+        };
         /** Dataset */
         Dataset: {
             /**
@@ -664,6 +1147,8 @@ export interface components {
             created_at: string;
             /** Created By Name */
             created_by_name: string;
+            /** Curation Id */
+            curation_id?: string | null;
             /** Dataset Display Path */
             dataset_display_path?: string | null;
             /** Eval Count */
@@ -699,6 +1184,137 @@ export interface components {
             /** Train Count */
             train_count?: number | null;
         };
+        /** DoeField */
+        DoeField: {
+            /** Default */
+            default?: unknown;
+            /** Items */
+            items?: string[] | null;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "combo" | "int" | "bool";
+        };
+        /** DoeType */
+        DoeType: {
+            /** Default Runs */
+            default_runs: number;
+            /** Fields */
+            fields: components["schemas"]["DoeField"][];
+            /** Label */
+            label: string;
+            /** Runs Editable */
+            runs_editable: boolean;
+            /** Value */
+            value: string;
+        };
+        /** EnvCheck */
+        EnvCheck: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Failure Message */
+            failure_message?: string | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Items */
+            items: components["schemas"]["EnvCheckItem"][];
+            /** Report Display Path */
+            report_display_path?: string | null;
+            /** Requested By Name */
+            requested_by_name: string;
+            /** Started At */
+            started_at?: string | null;
+            /** State */
+            state: string;
+            summary: components["schemas"]["EnvCheckCounts"];
+            /** Worker Id */
+            worker_id?: string | null;
+        };
+        /** EnvCheckCounts */
+        EnvCheckCounts: {
+            /**
+             * Fail
+             * @default 0
+             */
+            fail: number;
+            /**
+             * Ok
+             * @default 0
+             */
+            ok: number;
+            /**
+             * Skip
+             * @default 0
+             */
+            skip: number;
+            /**
+             * Warn
+             * @default 0
+             */
+            warn: number;
+        };
+        /** EnvCheckItem */
+        EnvCheckItem: {
+            /**
+             * Category
+             * @enum {string}
+             */
+            category: "CONFIG" | "DATABASE" | "AUTH" | "HPC" | "WORKER" | "EXECUTABLE" | "RESOURCE" | "STORAGE" | "GPU";
+            /** Detail */
+            detail?: unknown;
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Message */
+            message: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "API" | "WORKER";
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "OK" | "WARN" | "FAIL" | "SKIP" | "PENDING";
+        };
+        /** EnvCheckSummary */
+        EnvCheckSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Requested By Name */
+            requested_by_name: string;
+            /** State */
+            state: string;
+            summary: components["schemas"]["EnvCheckCounts"];
+        };
         /** ErrorBody */
         ErrorBody: {
             /** Code */
@@ -709,6 +1325,13 @@ export interface components {
         /** ErrorResponse */
         ErrorResponse: {
             detail: components["schemas"]["ErrorBody"];
+        };
+        /** FeatureState */
+        FeatureState: {
+            /** Enabled */
+            enabled: boolean;
+            /** Missing */
+            missing: string[];
         };
         /** FinalModelRequest */
         FinalModelRequest: {
@@ -759,12 +1382,32 @@ export interface components {
             /** Submitted At */
             submitted_at?: string | null;
         };
+        /** HpcSummary */
+        HpcSummary: {
+            /** Collected */
+            collected: number;
+            /** Failed */
+            failed: number;
+            /** Queued */
+            queued: number;
+            /** Running */
+            running: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Total */
+            total: number;
+        };
         /** Job */
         Job: {
             /** Attention Code */
             attention_code?: string | null;
             /** Can Cancel */
             can_cancel: boolean;
+            /**
+             * Can Download Error Bundle
+             * @default false
+             */
+            can_download_error_bundle: boolean;
             /** Can Retry */
             can_retry: boolean;
             /** Cancel Requested */
@@ -778,12 +1421,17 @@ export interface components {
             created_by: string;
             /** Created By Name */
             created_by_name: string;
+            /** Current Step Key */
+            current_step_key?: string | null;
+            /** Current Step Label */
+            current_step_label?: string | null;
             /** Failure Code */
             failure_code?: string | null;
             /** Failure Message */
             failure_message?: string | null;
             /** Finished At */
             finished_at?: string | null;
+            hpc_summary?: components["schemas"]["HpcSummary"] | null;
             /** Id */
             id: string;
             /** Input Display Path */
@@ -812,6 +1460,8 @@ export interface components {
             retry_of_job_id?: string | null;
             /** Stage */
             stage: number;
+            /** Stage Label */
+            stage_label?: string | null;
             /** Started At */
             started_at?: string | null;
             /** State */
@@ -835,7 +1485,7 @@ export interface components {
              * Job Type
              * @enum {string}
              */
-            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY";
+            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE";
             /** Params */
             params?: {
                 [key: string]: unknown;
@@ -883,6 +1533,11 @@ export interface components {
             created_by: string;
             /** Created By Name */
             created_by_name: string;
+            /** Current Step Key */
+            current_step_key?: string | null;
+            /** Current Step Label */
+            current_step_label?: string | null;
+            hpc_summary?: components["schemas"]["HpcSummary"] | null;
             /** Id */
             id: string;
             /** Job Type */
@@ -899,6 +1554,8 @@ export interface components {
             queue_position?: number | null;
             /** Stage */
             stage: number;
+            /** Stage Label */
+            stage_label?: string | null;
             /** Started At */
             started_at?: string | null;
             /** State */
@@ -1062,6 +1719,58 @@ export interface components {
             /** Unread Count */
             unread_count: number;
         };
+        /** Optimization */
+        Optimization: {
+            /** Approach */
+            approach: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** File Count */
+            file_count?: number | null;
+            /** File List Artifact Id */
+            file_list_artifact_id?: string | null;
+            /** Folder Display Path */
+            folder_display_path?: string | null;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Max Designs */
+            max_designs: number;
+            /** Model Id */
+            model_id: string;
+            /** Model Name */
+            model_name?: string | null;
+            /** Opt Method */
+            opt_method: string;
+            /** Param Set Id */
+            param_set_id: string;
+            /** Responses */
+            responses: {
+                [key: string]: unknown;
+            }[];
+            /** Runs Started */
+            runs_started?: number | null;
+            /** Status */
+            status: string;
+            /** Study Folder */
+            study_folder: string;
+            /** Study Id */
+            study_id: string;
+            /** Summary Artifact Id */
+            summary_artifact_id?: string | null;
+            /** Summary Meta */
+            summary_meta?: {
+                [key: string]: unknown;
+            } | null;
+            /** Summary Status */
+            summary_status: string;
+        };
         /** OutOfRange */
         OutOfRange: {
             /** Max */
@@ -1081,6 +1790,11 @@ export interface components {
             id: string;
             /** Is Current */
             is_current: boolean;
+            /**
+             * Origin
+             * @default FOLDER
+             */
+            origin: string;
             /** Parameters */
             parameters: components["schemas"]["Parameter"][];
             /**
@@ -1104,6 +1818,8 @@ export interface components {
             study_id: string;
             /** Tpl Params */
             tpl_params: components["schemas"]["TplParam"][];
+            /** Train Doe Id */
+            train_doe_id?: string | null;
             /** Unit System */
             unit_system: string;
         };
@@ -1111,6 +1827,19 @@ export interface components {
         ParamSetCreate: {
             /** Path */
             path: string;
+        };
+        /** ParamSetFromTrain */
+        ParamSetFromTrain: {
+            /** Doe Id */
+            doe_id: string;
+            /**
+             * Runs
+             * @default collected
+             * @enum {string}
+             */
+            runs: "collected" | "all";
+            /** Unit System */
+            unit_system?: string | null;
         };
         /** Parameter */
         Parameter: {
@@ -1130,13 +1859,15 @@ export interface components {
         };
         /** PathInspectRequest */
         PathInspectRequest: {
+            /** Doe Id */
+            doe_id?: string | null;
             /** Path */
             path: string;
             /**
              * Purpose
              * @enum {string}
              */
-            purpose: "DATASET_INPUT" | "MODEL_FOLDER" | "PARAM_SET";
+            purpose: "DATASET_INPUT" | "MODEL_FOLDER" | "PARAM_SET" | "CAD_FILE" | "RADIOSS_ASSEM" | "RESULT_FOLDER" | "CURATION_INPUT" | "SPDM_IMPORT";
         };
         /** PathInspectResponse */
         PathInspectResponse: {
@@ -1251,6 +1982,15 @@ export interface components {
             /** Priority */
             priority?: string | null;
         };
+        /** ResourceStatus */
+        ResourceStatus: {
+            /** Configured */
+            configured: boolean;
+            /** Key */
+            key: string;
+            /** Ok */
+            ok: boolean;
+        };
         /** ResourcesResponse */
         ResourcesResponse: {
             /** Cpu Pct */
@@ -1265,6 +2005,13 @@ export interface components {
             ram_used_gb?: number | null;
             /** Sampled At */
             sampled_at?: string | null;
+        };
+        /** ResponseCandidates */
+        ResponseCandidates: {
+            h3d?: components["schemas"]["CandidateH3d"] | null;
+            /** Source Job Id */
+            source_job_id?: string | null;
+            xydata?: components["schemas"]["CandidateXy"] | null;
         };
         /** ResponseDef */
         ResponseDef: {
@@ -1290,6 +2037,39 @@ export interface components {
             /** Value */
             value: number;
         };
+        /** RunStateCounts */
+        RunStateCounts: {
+            /**
+             * Collected
+             * @default 0
+             */
+            COLLECTED: number;
+            /**
+             * Collect Failed
+             * @default 0
+             */
+            COLLECT_FAILED: number;
+            /**
+             * Generated
+             * @default 0
+             */
+            GENERATED: number;
+            /**
+             * Solved
+             * @default 0
+             */
+            SOLVED: number;
+            /**
+             * Solve Failed
+             * @default 0
+             */
+            SOLVE_FAILED: number;
+            /**
+             * Submitted
+             * @default 0
+             */
+            SUBMITTED: number;
+        };
         /** SampleRow */
         SampleRow: {
             /** Measured */
@@ -1312,6 +2092,45 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["SampleRow"][];
         };
+        /** SourceRef */
+        SourceRef: {
+            /** Doe Id */
+            doe_id?: string | null;
+            /** Import Id */
+            import_id?: string | null;
+            /** Kind */
+            kind: string;
+            /** Path */
+            path?: string | null;
+        };
+        /** SpdmImport */
+        SpdmImport: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Dest Display Path */
+            dest_display_path?: string | null;
+            /** File Count */
+            file_count?: number | null;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Renamed Count */
+            renamed_count?: number | null;
+            /** Spdm Path */
+            spdm_path: string;
+            /** Status */
+            status: string;
+            /** Study Id */
+            study_id: string;
+            /** Total Bytes */
+            total_bytes?: number | null;
+        };
         /** StatusConfig */
         StatusConfig: {
             /** Errors */
@@ -1319,8 +2138,39 @@ export interface components {
             /** Ok */
             ok: boolean;
         };
+        /** StatusEnvCheck */
+        StatusEnvCheck: {
+            /** Fail */
+            fail?: number | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Latest Id */
+            latest_id?: string | null;
+            /** Latest State */
+            latest_state?: string | null;
+            /** Warn */
+            warn?: number | null;
+        };
+        /** StatusFeatures */
+        StatusFeatures: {
+            curation_h3d: components["schemas"]["FeatureState"];
+            curation_t01: components["schemas"]["FeatureState"];
+            optimize: components["schemas"]["FeatureState"];
+            spdm_import: components["schemas"]["FeatureState"];
+            train_doe: components["schemas"]["FeatureState"];
+            train_extract: components["schemas"]["FeatureState"];
+            train_import: components["schemas"]["FeatureState"];
+            train_resp: components["schemas"]["FeatureState"];
+            train_solve: components["schemas"]["FeatureState"];
+            train_tpl: components["schemas"]["FeatureState"];
+        };
         /** StatusHpc */
         StatusHpc: {
+            /**
+             * Collect Mode
+             * @default in_place
+             */
+            collect_mode: string;
             /** Configured */
             configured: boolean;
             /** Message */
@@ -1352,8 +2202,12 @@ export interface components {
                 [key: string]: string;
             };
             config: components["schemas"]["StatusConfig"];
+            env_check?: components["schemas"]["StatusEnvCheck"] | null;
+            features?: components["schemas"]["StatusFeatures"] | null;
             hpc: components["schemas"]["StatusHpc"];
             limits: components["schemas"]["StatusLimits"];
+            /** Resources */
+            resources?: components["schemas"]["ResourceStatus"][];
             /** Templates */
             templates: components["schemas"]["TemplateConfigured"][];
             /** Ui */
@@ -1484,6 +2338,201 @@ export interface components {
             /** Var */
             var: string;
         };
+        /** TrainCad */
+        TrainCad: {
+            /** Display Path */
+            display_path?: string | null;
+            /** File Name */
+            file_name?: string | null;
+            /** Sha256 */
+            sha256?: string | null;
+            /** Source Path */
+            source_path?: string | null;
+        };
+        /** TrainDoe */
+        TrainDoe: {
+            /** Collected Count */
+            collected_count: number;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Dir Display Path */
+            dir_display_path?: string | null;
+            /** Doe Label */
+            doe_label: string;
+            /** Doe Type */
+            doe_type: string;
+            /** Has Run Responses */
+            has_run_responses: boolean;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id: string;
+            /** Multi Execution */
+            multi_execution: number;
+            /** Num Runs Requested */
+            num_runs_requested?: number | null;
+            /** Options */
+            options: {
+                [key: string]: unknown;
+            };
+            /** Radioss Assem Source Path */
+            radioss_assem_source_path: string;
+            /** Results Display Path */
+            results_display_path?: string | null;
+            /** Run Count */
+            run_count?: number | null;
+            run_state_counts: components["schemas"]["RunStateCounts"];
+            /** Sample Status */
+            sample_status: string;
+            /** Solve Failed Count */
+            solve_failed_count: number;
+            /** Status */
+            status: string;
+            /** Study Id */
+            study_id: string;
+        };
+        /** TrainParamOut */
+        TrainParamOut: {
+            /** Format */
+            format: string;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Nominal */
+            nominal?: number | null;
+            /** Problems */
+            problems: string[];
+            /**
+             * Raw Nominal
+             * @default
+             */
+            raw_nominal: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /** Use */
+            use: boolean;
+            /** Valid */
+            valid: boolean;
+        };
+        /** TrainParamUpdate */
+        TrainParamUpdate: {
+            /** Format */
+            format?: string | null;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+            /** Use */
+            use: boolean;
+        };
+        /** TrainParamsPut */
+        TrainParamsPut: {
+            /** Parameters */
+            parameters: components["schemas"]["TrainParamUpdate"][];
+            /** Version */
+            version: number;
+        };
+        /** TrainRun */
+        TrainRun: {
+            hpc?: components["schemas"]["TrainRunHpc"] | null;
+            /** Input Display Path */
+            input_display_path?: string | null;
+            result?: components["schemas"]["TrainRunResult"] | null;
+            /** Run Key */
+            run_key: string;
+            /** Starter Name */
+            starter_name: string;
+            /** State */
+            state: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** TrainRunHpc */
+        TrainRunHpc: {
+            /** Attempt No */
+            attempt_no: number;
+            /** External Job Id */
+            external_job_id?: string | null;
+            /** State */
+            state: string;
+        };
+        /** TrainRunResult */
+        TrainRunResult: {
+            /**
+             * Files
+             * @default 0
+             */
+            files: number;
+            /**
+             * H3D
+             * @default 0
+             */
+            h3d: number;
+            /**
+             * T01
+             * @default 0
+             */
+            t01: number;
+            /**
+             * Total Bytes
+             * @default 0
+             */
+            total_bytes: number;
+        };
+        /** TrainSetup */
+        TrainSetup: {
+            cad?: components["schemas"]["TrainCad"] | null;
+            /** Extract Job Id */
+            extract_job_id?: string | null;
+            /** Parameters */
+            parameters: components["schemas"]["TrainParamOut"][];
+            /** Study Id */
+            study_id: string;
+            tpl?: components["schemas"]["TrainTpl"] | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By Name */
+            updated_by_name?: string | null;
+            /** Used Count */
+            used_count: number;
+            /** Version */
+            version: number;
+        };
+        /** TrainTpl */
+        TrainTpl: {
+            /** Display Path */
+            display_path?: string | null;
+            /** Generated At */
+            generated_at?: string | null;
+            /** Params */
+            params: components["schemas"]["TplParam"][];
+            /** Sha256 */
+            sha256?: string | null;
+            /** Stale */
+            stale: boolean;
+            /** Warnings */
+            warnings: {
+                [key: string]: string;
+            }[];
+        };
         /** UnreadCount */
         UnreadCount: {
             /** Max Seq */
@@ -1503,6 +2552,11 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VersionBody */
+        VersionBody: {
+            /** Version */
+            version: number;
         };
     };
     responses: never;
@@ -1538,6 +2592,217 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_checks_physicsai_api_admin_env_checks_get: {
+        parameters: {
+            query?: {
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvCheckSummary"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_physicsai_api_admin_env_checks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvCheck"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    latest_physicsai_api_admin_env_checks_latest_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvCheck"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_check_physicsai_api_admin_env_checks__check_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                check_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EnvCheck"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1578,6 +2843,90 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_curation_physicsai_api_curations__curation_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                curation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Curation"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    files_physicsai_api_curations__curation_id__files_get: {
+        parameters: {
+            query?: {
+                ok?: boolean | null;
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                curation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurationFilesPage"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -1888,6 +3237,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    error_bundle_physicsai_api_jobs__job_id__error_bundle_zip_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/zip": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2339,6 +3746,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["UnreadCount"];
+                };
+            };
+        };
+    };
+    get_opt_physicsai_api_optimizations__optimization_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                optimization_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Optimization"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -2813,6 +4260,88 @@ export interface operations {
             };
         };
     };
+    sources_physicsai_api_studies__study_id__curation_sources_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurationSource"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_curations_physicsai_api_studies__study_id__curations_get: {
+        parameters: {
+            query?: {
+                kind?: string | null;
+            };
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Curation"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     list_datasets_physicsai_api_studies__study_id__datasets_get: {
         parameters: {
             query?: {
@@ -3024,6 +4553,88 @@ export interface operations {
             };
         };
     };
+    list_opts_physicsai_api_studies__study_id__optimizations_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Optimization"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    candidates_physicsai_api_studies__study_id__optimize_response_candidates_get: {
+        parameters: {
+            query?: {
+                model_id?: string | null;
+            };
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponseCandidates"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_sets_physicsai_api_studies__study_id__param_sets_get: {
         parameters: {
             query?: {
@@ -3088,6 +4699,59 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["ParamSetCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    from_train_physicsai_api_studies__study_id__param_sets_from_train_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamSetFromTrain"];
             };
         };
         responses: {
@@ -3226,6 +4890,595 @@ export interface operations {
             };
             /** @description Unprocessable Content */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_imports_physicsai_api_studies__study_id__spdm_imports_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpdmImport"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_setup_physicsai_api_studies__study_id__train_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainSetup"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_does_physicsai_api_studies__study_id__train_does_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainDoe"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_params_physicsai_api_studies__study_id__train_params_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainParamsPut"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainSetup"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    generate_tpl_physicsai_api_studies__study_id__train_tpl_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VersionBody"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainSetup"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_doe_physicsai_api_train_does__doe_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainDoe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_runs_physicsai_api_train_does__doe_id__runs_get: {
+        parameters: {
+            query?: {
+                state?: string | null;
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                doe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainRun"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    samples_physicsai_api_train_does__doe_id__samples_get: {
+        parameters: {
+            query?: {
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                doe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SamplesPage"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    doe_types_physicsai_api_train_doe_types_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoeType"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

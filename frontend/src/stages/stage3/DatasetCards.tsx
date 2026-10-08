@@ -49,7 +49,7 @@ export function DatasetCreateCard() {
           {fromCuration ? (
             <div className="summary-line">
               ② 큐레이션 결과 사용 · {fmtTime(curation.created_at)} · <b>{curation.ok_count}</b>개
-              <div className="mono small muted ellipsis" title={curation.output_display_path}>
+              <div className="mono small muted ellipsis" title={curation.output_display_path ?? undefined}>
                 {curation.output_display_path}
               </div>
             </div>

@@ -252,15 +252,15 @@ export function CurationResult({ cur, datasetLink }: { cur: Curation; datasetLin
     <div className="curation-result" data-testid="curation-result">
       <div className="small">
         성공 <b>{cur.ok_count}</b>/{cur.target_count}
-        {cur.failed_count > 0 && <span className="error-text"> · 실패 {cur.failed_count}</span>}
+        {(cur.failed_count ?? 0) > 0 && <span className="error-text"> · 실패 {(cur.failed_count ?? 0)}</span>}
         {cur.missing_runs.length > 0 && <span className="muted"> · 누락 run {cur.missing_runs.length}</span>}
       </div>
       <CodeLine text={cur.output_display_path} />
-      {(cur.failed_count > 0 || cur.missing_runs.length > 0) && (
+      {((cur.failed_count ?? 0) > 0 || cur.missing_runs.length > 0) && (
         <details className="advanced">
           <summary>실패 파일·누락 run</summary>
           <div className="advanced-body grid-gap">
-            {cur.failed_count > 0 && <CurationFileList curationId={cur.id} onlyFailed />}
+            {(cur.failed_count ?? 0) > 0 && <CurationFileList curationId={cur.id} onlyFailed />}
             {cur.missing_runs.length > 0 && (
               <div className="small">
                 <div className="field-label">누락 run (출력 없음)</div>

@@ -739,7 +739,7 @@ export class MockServer {
     if (type === "DATASET_CREATE") {
       const cur = this.p2.curations.find((c) => c.id === params.curation_id);
       this.datasets.unshift({
-        id: this.nid("ds"), study_id: s.id, job_id: j.id, status: "BUILDING", source_path: cur ? cur.output_display_path : String(params.input_path), curation_id: cur?.id ?? null, h3d_count: null, train_count: null, eval_count: null,
+        id: this.nid("ds"), study_id: s.id, job_id: j.id, status: "BUILDING", source_path: cur ? cur.output_display_path ?? "" : String(params.input_path), curation_id: cur?.id ?? null, h3d_count: null, train_count: null, eval_count: null,
         holdout_ratio: 0.1, seed: Number(params.seed ?? 20261008), split_group: (params.split_group as "file") ?? "file",
         options: (params.options as Dataset["options"]) ?? { extract_faces: true, extract_mdi: false, extract_time_history_vectors: false },
         package_ready: false, created_by_name: me.display_name, created_at: j.created_at,

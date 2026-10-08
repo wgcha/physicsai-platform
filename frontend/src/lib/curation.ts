@@ -26,28 +26,46 @@ export interface H3dPreview {
   parts: { shell: number[]; solid: number[]; rbody: number[] };
   numSteps: number;
   sampleFile: string | null;
-  /** 원천 파일 목록(preview_summary.json에 있을 때만 — 계약 미확정) */
+  /** 원천 루트 기준 파일 목록(preview_summary.json `files[].rel`, C14) — exclude_files에 그대로 쓴다 */
   files: string[] | null;
 }
 
-/** PREVIEW_H3D.json(원문)·preview_summary.json → 화면용. 키 검증 실패면 null */
+const numList = (v: unknown): number[] => (Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : []);
+
+/**
+ * h3d 미리보기 → 화면용. 우선 preview_summary.json(변경 메모 C14:
+ * `{datatypes:[{name, components, usable}], parts:{shell,solid,rbody}, num_time_step, sample_file, source_file_count, files:[{rel, run_folder, size}]}`),
+ * 없으면 원문 PREVIEW_H3D.json(`datatype_info`, `lst_cid_*`, `num_time_step`)에서 usable을 직접 계산. 둘 다 형식이 맞지 않으면 null
+ */
 export function parseH3dPreview(files: Record<string, unknown>): H3dPreview | null {
-  const summary = (files["preview_summary.json"] ?? null) as Record<string, unknown> | null;
-  const raw = (files["PREVIEW_H3D.json"] ?? summary) as Record<string, unknown> | null;
-  if (!raw || typeof raw !== "object") return null;
-  const info = raw.datatype_info as Record<string, unknown> | undefined;
-  if (!info || typeof info !== "object") return null;
-  const usableMap = (summary?.usable ?? null) as Record<string, string[]> | null;
-  const ids = (k: string) => (Array.isArray(raw[k]) ? (raw[k] as unknown[]).map(Number).filter(Number.isFinite) : []);
+  const summary = files["preview_summary.json"] as Record<string, unknown> | undefined;
+  if (summary && Array.isArray(summary.datatypes)) {
+    const parts = (summary.parts ?? {}) as Record<string, unknown>;
+    return {
+      datatypes: (summary.datatypes as Record<string, unknown>[]).map((d) => {
+        const components = Array.isArray(d.components) ? d.components.map(String) : [];
+        return { name: String(d.name ?? ""), components, usable: Array.isArray(d.usable) ? d.usable.map(String) : components.filter(isUsableComponent) };
+      }),
+      parts: { shell: numList(parts.shell), solid: numList(parts.solid), rbody: numList(parts.rbody) },
+      numSteps: Number(summary.num_time_step) || 0,
+      sampleFile: (summary.sample_file as string) ?? null,
+      files: Array.isArray(summary.files)
+        ? (summary.files as unknown[]).map((f) => (typeof f === "string" ? f : String((f as { rel?: unknown }).rel ?? ""))).filter(Boolean)
+        : null,
+    };
+  }
+  const raw = files["PREVIEW_H3D.json"] as Record<string, unknown> | undefined;
+  const info = raw?.datatype_info as Record<string, unknown> | undefined;
+  if (!raw || !info || typeof info !== "object") return null;
   return {
     datatypes: Object.entries(info).map(([name, comps]) => {
       const components = Array.isArray(comps) ? comps.map(String) : [];
-      return { name, components, usable: usableMap?.[name] ?? components.filter(isUsableComponent) };
+      return { name, components, usable: components.filter(isUsableComponent) };
     }),
-    parts: { shell: ids("lst_cid_shell"), solid: ids("lst_cid_solid"), rbody: ids("lst_cid_rbody") },
+    parts: { shell: numList(raw.lst_cid_shell), solid: numList(raw.lst_cid_solid), rbody: numList(raw.lst_cid_rbody) },
     numSteps: Number(raw.num_time_step) || 0,
-    sampleFile: (summary?.sample_file as string) ?? null,
-    files: Array.isArray(summary?.files) ? (summary!.files as unknown[]).map(String) : null,
+    sampleFile: null,
+    files: null,
   };
 }
 

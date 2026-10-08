@@ -176,7 +176,8 @@ export function CopyButton({ text, label = "복사" }: { text: string; label?: s
   );
 }
 
-export function CodeLine({ text }: { text: string }) {
+export function CodeLine({ text }: { text: string | null | undefined }) {
+  if (!text) return null;
   return (
     <div className="codeline">
       <code>{text}</code>

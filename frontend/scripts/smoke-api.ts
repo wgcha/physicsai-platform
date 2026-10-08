@@ -31,14 +31,14 @@ function checkShape(name: string, schema: string, value: unknown) {
   console.log(`ok   ${name} (${schema}${Array.isArray(value) ? ` ×${value.length}` : ""})`);
 }
 
-async function step<T>(name: string, schema: string, fn: () => Promise<T>): Promise<T | null> {
+async function step<T>(name: string, schema: string, fn: () => Promise<T>, expected: string[] = []): Promise<T | null> {
   try {
     const v = await fn();
     checkShape(name, schema, v);
     return v;
   } catch (e) {
-    if (e instanceof ApiError && e.code === "NO_SAMPLE") {
-      console.log(`ok   ${name} (404 NO_SAMPLE — 워커 없음, 예상됨)`);
+    if (e instanceof ApiError && (e.code === "NO_SAMPLE" || expected.includes(e.code))) {
+      console.log(`ok   ${name} (${e.status} ${e.code} — 예상됨)`);
       return null;
     }
     failures++;
@@ -67,12 +67,48 @@ if (created) {
   await step("GET /studies/{id}/models", "Model", () => api.models(created.id));
   await step("GET /studies/{id}/param-sets", "ParamSet", () => api.paramSets(created.id));
   await step("GET /jobs", "JobSummary", () => api.jobs({ study_id: created.id }));
+  // ---- 2차(phase2.md §12) 주요 GET ----
+  const train = await step("GET /studies/{id}/train", "TrainSetup", () => api.train(created.id));
+  if (train) console.log(`     parameters=${train.parameters.length} tpl=${train.tpl ? "있음" : "없음"} version=${train.version}`);
+  // 예시 설정의 resources는 이 PC에 없으므로 409 RESOURCE_NOT_CONFIGURED / 503 CONFIG_INVALID도 계약상 정상
+  await step("GET /train/doe-types", "DoeType", () => api.doeTypes(), ["RESOURCE_NOT_CONFIGURED", "CONFIG_INVALID"]);
+  await step("GET /studies/{id}/train/does", "TrainDoe", () => api.trainDoes(created.id));
+  await step("GET /studies/{id}/curation-sources", "CurationSource", () => api.curationSources(created.id));
+  await step("GET /studies/{id}/curations", "Curation", () => api.curations(created.id));
+  await step("GET /studies/{id}/spdm-imports", "SpdmImport", () => api.spdmImports(created.id));
+  await step("GET /studies/{id}/optimizations", "Optimization", () => api.optimizations(created.id));
+  await step("GET /studies/{id}/optimize/response-candidates", "ResponseCandidates", () => api.responseCandidates(created.id));
+  if (status) {
+    const f = status.features ?? {};
+    console.log(`     features 비활성: ${Object.entries(f).filter(([, v]) => v && !v.enabled).map(([k]) => k).join(", ") || "없음"} · collect_mode=${status.hpc.collect_mode}`);
+  }
+  try {
+    await api.inspectPath(created.id, "SPDM_IMPORT", "/definitely/not/spdm");
+    console.log("FAIL paths/inspect SPDM_IMPORT: SPDM 루트 밖 경로가 거부되지 않음");
+    failures++;
+  } catch (e) {
+    console.log(`ok   POST paths/inspect SPDM_IMPORT 루트 밖 → ${(e as ApiError).status} ${(e as ApiError).code}`);
+  }
   try {
     await api.inspectPath(created.id, "DATASET_INPUT", "/definitely/outside/root");
     console.log("FAIL paths/inspect: 루트 밖 경로가 거부되지 않음");
     failures++;
   } catch (e) {
     console.log(`ok   POST paths/inspect 루트 밖 → ${(e as ApiError).status} ${(e as ApiError).code}`);
+  }
+}
+// 환경 점검(전역 관리자 전용): 관리자가 아니면 403이 정상
+if (me?.is_global_admin) {
+  const list = await step("GET /admin/env-checks", "EnvCheckSummary", async () => (await api.envChecks(20)).items);
+  if (list?.length) await step("GET /admin/env-checks/{id}", "EnvCheck", () => api.envCheck(list[0].id));
+  else await step("GET /admin/env-checks/latest", "EnvCheck", () => api.latestEnvCheck(), ["NOT_FOUND"]);
+} else {
+  try {
+    await api.envChecks(1);
+    console.log("FAIL GET /admin/env-checks: 비관리자에게 열림");
+    failures++;
+  } catch (e) {
+    console.log(`ok   GET /admin/env-checks 비관리자 → ${(e as ApiError).status} ${(e as ApiError).code}`);
   }
 }
 console.log(me ? `\n사용자 ${me.display_name}, 실패 ${failures}건` : `\n실패 ${failures}건`);

@@ -31,7 +31,7 @@ function responseSchema(p: string, method: string): Sch {
   return r.content["application/json"].schema;
 }
 
-const cases: [string, string, string][] = [
+const cases: [string, string, string, ("power" | "admin")?, { hpcConfigured?: boolean }?][] = [
   ["/me", "/me", "get"],
   ["/status", "/status", "get"],
   ["/projects", "/projects", "get"],
@@ -49,18 +49,65 @@ const cases: [string, string, string][] = [
   ["/jobs/j-pred/artifacts", "/jobs/{job_id}/artifacts", "get"],
   ["/notifications", "/notifications", "get"],
   ["/notifications/unread-count", "/notifications/unread-count", "get"],
+  // 2차(phase2.md §12)
+  ["/status", "/status", "get", "admin"],
+  ["/queue", "/queue", "get", "power", { hpcConfigured: true }],
+  ["/jobs/j-solve", "/jobs/{job_id}", "get", "power", { hpcConfigured: true }],
+  ["/jobs/j-opt", "/jobs/{job_id}", "get"],
+  ["/studies/s-cushion/train", "/studies/{study_id}/train", "get"],
+  ["/train/doe-types", "/train/doe-types", "get"],
+  ["/studies/s-cushion/train/does", "/studies/{study_id}/train/does", "get"],
+  ["/train-does/doe-1", "/train-does/{doe_id}", "get"],
+  ["/train-does/doe-1/runs?limit=50", "/train-does/{doe_id}/runs", "get", "power", { hpcConfigured: true }],
+  ["/train-does/doe-1/samples", "/train-does/{doe_id}/samples", "get"],
+  ["/studies/s-cushion/curation-sources", "/studies/{study_id}/curation-sources", "get"],
+  ["/studies/s-cushion/curations", "/studies/{study_id}/curations", "get"],
+  ["/curations/cur-1", "/curations/{curation_id}", "get"],
+  ["/curations/cur-1/files", "/curations/{curation_id}/files", "get"],
+  ["/studies/s-cushion/spdm-imports", "/studies/{study_id}/spdm-imports", "get"],
+  ["/studies/s-cushion/optimizations", "/studies/{study_id}/optimizations", "get"],
+  ["/optimizations/opt-1", "/optimizations/{optimization_id}", "get"],
+  ["/studies/s-cushion/optimize/response-candidates", "/studies/{study_id}/optimize/response-candidates", "get"],
+  ["/admin/env-checks", "/admin/env-checks", "get", "admin"],
+  ["/admin/env-checks/latest", "/admin/env-checks/latest", "get", "admin"],
+  ["/admin/env-checks/ec-3", "/admin/env-checks/{check_id}", "get", "admin"],
 ];
 
 describe("목 서버 ↔ openapi.json", () => {
-  for (const [url, p, m] of cases) {
-    it(`${m.toUpperCase()} ${p}`, () => {
-      const server = new MockServer({ user: "power" });
+  for (const [url, p, m, user = "power", opts = {}] of cases) {
+    it(`${m.toUpperCase()} ${url} (${user})`, () => {
+      const server = new MockServer({ user, ...opts });
       const u = new URL(url, "http://x");
       const r = server.handle(m.toUpperCase(), u.pathname, u.searchParams, null, new Headers());
       expect(r.status).toBe(200);
       expect(problems(r.body, responseSchema(p, m), p)).toEqual([]);
     });
   }
+
+  it("2차 쓰기 응답: PUT train/params, POST train/tpl, POST env-checks, POST from-train", () => {
+    const power = new MockServer({ user: "power" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const v = power.p2.setups["s-cushion"].version;
+    const params = power.p2.setups["s-cushion"].parameters.map((x) => ({ name: x.name, min: x.min, max: x.max, use: x.use }));
+    const put = power.handle("PUT", "/studies/s-cushion/train/params", new URLSearchParams(), { version: v, parameters: params }, h);
+    expect(put.status).toBe(200);
+    expect(problems(put.body, responseSchema("/studies/{study_id}/train/params", "put"), "PUT params")).toEqual([]);
+    const tpl = power.handle("POST", "/studies/s-cushion/train/tpl", new URLSearchParams(), { version: v + 1 }, h);
+    expect(problems(tpl.body, responseSchema("/studies/{study_id}/train/tpl", "post"), "POST tpl")).toEqual([]);
+    const ps = power.handle("POST", "/studies/s-cushion/param-sets/from-train", new URLSearchParams(), { doe_id: "doe-1" }, h);
+    expect(ps.status).toBe(201);
+    expect(problems(ps.body, responseSchema("/studies/{study_id}/param-sets/from-train", "post"), "from-train")).toEqual([]);
+    const admin = new MockServer({ user: "admin" });
+    const ec = admin.handle("POST", "/admin/env-checks", new URLSearchParams(), null, h);
+    expect(ec.status).toBe(202);
+    expect(problems(ec.body, responseSchema("/admin/env-checks", "post"), "POST env-checks")).toEqual([]);
+  });
+
+  it("목 서버의 2차 경로가 모두 openapi에 있다", () => {
+    const paths = Object.keys(spec.paths);
+    for (const p of ["/train/doe-types", "/train-does/{doe_id}/runs", "/curations/{curation_id}/files", "/admin/env-checks/{check_id}", "/jobs/{job_id}/error-bundle.zip", "/studies/{study_id}/param-sets/from-train"])
+      expect(paths).toContain(`/physicsai/api${p}`);
+  });
 
   it("input.zip: 준비 전 409 INPUT_NOT_READY", () => {
     const server = new MockServer({ user: "power" });

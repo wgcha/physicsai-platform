@@ -298,7 +298,7 @@ export function seedParamSet(): ParamSet {
       { var: "var_3", name: "E_FOAM", format: "%.3f" },
       { var: "var_4", name: "RIB_N", format: "%3i" },
     ],
-    is_current: true, registered_by_name: "김연구", registered_at: iso(60 * 5),
+    is_current: true, origin: "FOLDER", train_doe_id: null, registered_by_name: "김연구", registered_at: iso(60 * 5),
   };
 }
 

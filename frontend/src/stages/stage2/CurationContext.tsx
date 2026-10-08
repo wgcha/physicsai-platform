@@ -76,7 +76,7 @@ export function CurationProvider({ children }: { children: ReactNode }) {
     if (mode === "TRAIN_DOE" && doeId) {
       source = { kind: "TRAIN_DOE", doe_id: doeId };
       const s = sources.find((x) => x.kind === "TRAIN_DOE" && x.ref_id === doeId);
-      sourceInfo = s ? { h3d: s.h3d_count, t01: s.t01_count, runsExpected: s.runs_expected, label: s.label } : null;
+      sourceInfo = s ? { h3d: s.h3d_count, t01: s.t01_count, runsExpected: s.runs_expected ?? null, label: s.label } : null;
     } else if (mode === "SPDM_IMPORT" && importId) {
       const im = imports.find((x) => x.id === importId);
       const s = sources.find((x) => x.kind === "SPDM_IMPORT" && x.ref_id === importId);

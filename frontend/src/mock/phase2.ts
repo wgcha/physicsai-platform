@@ -194,6 +194,11 @@ function optSummary(seed: number, n: number) {
   return { columns: ["Design", "THK_TOP", "THK_FOAM", "RIB_H", "RIB_N", "MAX_VM", "DISP_X", "Feasible"], rows };
 }
 
+/** ⑤ summary.json(C14 csv_table): rows는 문자열 배열 */
+function summaryJson(t: { columns: string[]; rows: (number | string)[][] }, fileRel: string) {
+  return { parser: "hst_csv", kind: "csv_table", file_rel: fileRel, columns: t.columns, rows: t.rows.map((r) => r.map(String)) };
+}
+
 function curveSeries() {
   const x: number[] = [];
   const y: number[] = [];
@@ -350,11 +355,13 @@ export class Phase2Mock {
     ];
     J({ id: "j-opt", job_type: "OPTIMIZE", state: "SUCCEEDED", created_at: iso(60 + 10), started_at: iso(60 + 9), finished_at: iso(22), params: { approach: "OPT", opt_method: "ARSM", max_designs: 25, run_nominal: true, study_folder: "HST_PHYSICSAI_OPTIMIZATION", responses }, result: { runs_started: 25, log_error_lines: 0 } });
     const summary = optSummary(3, 25);
-    const sumId = this.s.addArtifact("j-opt", sid, "OPT_SUMMARY", "05_opt/j-opt/summary.json", "application/json", JSON.stringify(summary));
+    const sumId = this.s.addArtifact("j-opt", sid, "OPT_SUMMARY", "05_opt/j-opt/summary.json", "application/json", JSON.stringify(summaryJson(summary, "HST_PHYSICSAI_OPTIMIZATION/approaches/opt_1/opt_summary.csv")));
     const csv = [summary.columns.join(","), ...summary.rows.map((r) => r.join(","))].join("\n") + "\n";
     this.s.addArtifact("j-opt", sid, "OPT_FILE", "05_opt/j-opt/HST_PHYSICSAI_OPTIMIZATION/approaches/opt_1/opt_summary.csv", "text/csv", csv);
     this.s.addArtifact("j-opt", sid, "OPT_FILE", "05_opt/j-opt/HST_PHYSICSAI_OPTIMIZATION/run_log.txt", "text/plain", "HyperStudy optimization log (목)\nStarted run (1), model (m_1)\n…\nStarted run (25), model (m_1)\nFinished.\n");
     const fl = this.s.addArtifact("j-opt", sid, "FILE_LIST", "05_opt/j-opt/file_list.json", "application/json", JSON.stringify({
+      root: "HST_PHYSICSAI_OPTIMIZATION",
+      truncated: false,
       files: [
         { rel: "HST_PHYSICSAI_OPTIMIZATION/approaches/opt_1/opt_summary.csv", size: csv.length },
         { rel: "HST_PHYSICSAI_OPTIMIZATION/run_log.txt", size: 2140 },
@@ -385,7 +392,16 @@ export class Phase2Mock {
     const raw = { datatype_info: H3D_INFO, lst_cid_shell: [1, 2, 5, 7], lst_cid_solid: [3, 4], lst_cid_rbody: [9], num_time_step: 41 };
     const usable = Object.fromEntries(Object.entries(H3D_INFO).map(([k, v]) => [k, v.filter(usableComponent)]));
     this.s.addArtifact(jobId, studyId, "PREVIEW_JSON", `02_preview/${jobId}/PREVIEW_H3D.json`, "application/json", JSON.stringify(raw));
-    this.s.addArtifact(jobId, studyId, "PREVIEW_JSON", `02_preview/${jobId}/preview_summary.json`, "application/json", JSON.stringify({ ...raw, usable, sample_file: files[0] ?? null, files }));
+    // 변경 메모 C14 형식
+    const summary = {
+      datatypes: Object.entries(H3D_INFO).map(([name, components]) => ({ name, components, usable: usable[name] })),
+      parts: { shell: raw.lst_cid_shell, solid: raw.lst_cid_solid, rbody: raw.lst_cid_rbody },
+      num_time_step: raw.num_time_step,
+      sample_file: files[0] ?? null,
+      source_file_count: files.length,
+      files: files.map((rel) => ({ rel, run_folder: rel.split("/")[0], size: 38_000_000 })),
+    };
+    this.s.addArtifact(jobId, studyId, "PREVIEW_JSON", `02_preview/${jobId}/preview_summary.json`, "application/json", JSON.stringify(summary));
   }
 
   private sourceFiles(studyId: string, source: CurationSourceRef): string[] {
@@ -413,7 +429,10 @@ export class Phase2Mock {
     for (const r of runs) {
       if (r.state === "SUBMITTED") r.hpc?.state === "Q" ? h.queued++ : h.running++;
       else if (r.state === "SOLVED") h.succeeded++;
-      else if (r.state === "COLLECTED") h.collected++;
+      else if (r.state === "COLLECTED") {
+        h.succeeded++; // C11: collected는 succeeded와 겹친다
+        h.collected++;
+      }
       else if (r.state === "SOLVE_FAILED" || r.state === "COLLECT_FAILED") h.failed++;
     }
     return h;
@@ -637,9 +656,9 @@ export class Phase2Mock {
         o.status = "DONE";
         o.runs_started = sm.rows.length;
         o.summary_status = "PARSED";
-        o.summary_artifact_id = this.s.addArtifact(j.id, sid, "OPT_SUMMARY", `05_opt/${j.id}/summary.json`, "application/json", JSON.stringify(sm));
+        o.summary_artifact_id = this.s.addArtifact(j.id, sid, "OPT_SUMMARY", `05_opt/${j.id}/summary.json`, "application/json", JSON.stringify(summaryJson(sm, "opt_summary.csv")));
         o.summary_meta = { parser: "hst_csv", file_rel: "opt_summary.csv", row_count: sm.rows.length, columns: sm.columns };
-        o.file_list_artifact_id = this.s.addArtifact(j.id, sid, "FILE_LIST", `05_opt/${j.id}/file_list.json`, "application/json", JSON.stringify({ files: [{ rel: `${o.study_folder}/run_log.txt`, size: 900 }] }));
+        o.file_list_artifact_id = this.s.addArtifact(j.id, sid, "FILE_LIST", `05_opt/${j.id}/file_list.json`, "application/json", JSON.stringify({ root: o.study_folder, files: [{ rel: `${o.study_folder}/run_log.txt`, size: 900 }], truncated: false }));
         this.s.addArtifact(j.id, sid, "OPT_FILE", `05_opt/${j.id}/${o.study_folder}/run_log.txt`, "text/plain", "Started run (1), model (m_1)\n");
         o.file_count = 1;
         j.progress_label = null;

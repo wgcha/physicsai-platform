@@ -7,6 +7,7 @@ import { Advanced, Card, CodeLine, Field, RunAction } from "../../components/ui"
 import { FeatureGate } from "../../components/FeatureGate";
 import { Chart } from "../../components/Chart";
 import { CsvView } from "../../components/CsvView";
+import { JsonTree } from "../../components/JsonTree";
 import { fmtBytes, fmtNum, fmtTime, isTerminal } from "../../lib/format";
 import { ResponseAddRow, ResponseTable } from "./ResponseTable";
 
@@ -215,6 +216,7 @@ interface SummaryTable {
   rows: unknown[][];
 }
 
+/** summary.json(C14): csv_table `{parser, kind, file_rel, columns, rows}`(rows는 문자열 배열) / json_passthrough `{…, data}` */
 function toTable(data: unknown): SummaryTable | null {
   const d = data as { columns?: unknown; rows?: unknown };
   if (!d || !Array.isArray(d.columns) || !Array.isArray(d.rows)) return null;
@@ -341,11 +343,15 @@ function OptResult({ opt, job }: { opt: Optimization | null; job: Job | null }) 
                   <tbody>
                     {table.rows.slice(0, 1000).map((r, i) => (
                       <tr key={i}>
-                        {table.columns.map((_, j) => (
-                          <td key={j} className={typeof r[j] === "number" ? "num" : ""}>
-                            {typeof r[j] === "number" ? fmtNum(r[j] as number, 5) : String(r[j] ?? "")}
-                          </td>
-                        ))}
+                        {table.columns.map((_, j) => {
+                          const v = r[j];
+                          const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+                          return (
+                            <td key={j} className={Number.isFinite(n) ? "num" : ""}>
+                              {Number.isFinite(n) ? fmtNum(n, 5) : String(v ?? "")}
+                            </td>
+                          );
+                        })}
                       </tr>
                     ))}
                   </tbody>
@@ -353,6 +359,11 @@ function OptResult({ opt, job }: { opt: Optimization | null; job: Job | null }) 
               </div>
             </details>
           </>
+        ) : summary && (summary as { kind?: string }).kind === "json_passthrough" ? (
+          <div data-testid="summary-json">
+            <div className="field-label">결과 요약 ({String((summary as { file_rel?: string }).file_rel ?? "")})</div>
+            <JsonTree data={(summary as { data?: unknown }).data} />
+          </div>
         ) : (
           <p className="muted" data-testid="summary-unknown">
             결과 요약 형식 미확인 — 원본 파일 목록을 확인하세요
