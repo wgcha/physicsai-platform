@@ -189,4 +189,4 @@ def test_bat_extra_chars_rejected(ch):
 def test_bat_executable_path_with_parentheses_ok():
     argv = render_argv("edspy_create_dataset", T, {"out_psdata": "E:/AI/a.psdata", "spec_yaml": "E:/AI/s.yaml"},
                        executables={"edspy_path": "C:/Program Files (x86)/Altair/edspy.bat"})
-    assert argv[0] == "C:/Program Files (x86)/Altair/edspy.bat"
+    assert argv[0] == ("C:\\Program Files (x86)\\Altair\\edspy.bat" if os.name == "nt" else "C:/Program Files (x86)/Altair/edspy.bat")

@@ -127,7 +127,7 @@ def test_job_params_validation(client, loaded_config):
     assert r.status_code == 422
     r = client.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "TRAIN", "params": {}})
     assert r.status_code == 422
-    r = _job(client, sid, "DATASET_CREATE", {"input_path": "/etc"})
+    r = _job(client, sid, "DATASET_CREATE", {"input_path": str(ai.parent)})  # 루트 밖 절대경로(OS 무관)
     assert r.status_code == 422 and r.json()["detail"]["code"] == "PATH_OUTSIDE_ROOT"
     r = _job(client, sid, "DATASET_CREATE", {"input_path": str(ai / "S1" / "missing")})
     assert r.json()["detail"]["code"] == "PATH_NOT_FOUND"
@@ -204,7 +204,7 @@ def test_model_register_validation(client, loaded_config, worker_factory, engine
     # V-MR-3: 허용 루트 밖·링크·..
     import os
 
-    r = _job(client, sid, "MODEL_REGISTER", {"model_path": "/tmp"})
+    r = _job(client, sid, "MODEL_REGISTER", {"model_path": str(Path(client.app.state.ctx.settings.storage.ai_root).parent)})
     assert r.json()["detail"]["code"] == "PATH_OUTSIDE_ROOT"
     os.symlink(d3, inbox / "lnk")
     r = _job(client, sid, "MODEL_REGISTER", {"model_path": str(inbox / "lnk")})
@@ -457,7 +457,7 @@ def test_logs_etag_artifacts(client, loaded_config, worker_factory, engine):
         cur = chunk["next_cursor"]
         if chunk["eof"]:
             break
-    assert cur == size and text_all == logf.read_text(encoding="utf-8") and "�" not in text_all
+    assert cur == size and text_all == logf.read_bytes().decode("utf-8") and "�" not in text_all  # Windows 텍스트 모드 CRLF 그대로
     assert client.get(f"{API}/jobs/{jid}/log?limit=262145", headers=P).status_code == 422
     st = client.get(f"{API}/jobs/{jid}/steps/3/log", headers=P).json()
     assert "[CMD]" in st["text"]

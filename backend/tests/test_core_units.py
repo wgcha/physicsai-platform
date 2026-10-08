@@ -49,7 +49,8 @@ def test_default_templates_render_like_original():
     argv = render_argv("edspy_create_dataset", ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"],
                        {"out_psdata": "E:/AI/s/03_dataset/x/train/dataset.psdata", "spec_yaml": "E:/AI/s/03_dataset/x/train/dataset.yaml"},
                        executables=EXE)
-    assert argv == ["C:/Program Files/Altair/2026.1/edspy.bat", "--physicsai", "--create-dataset",
+    exe0 = "C:\\Program Files\\Altair\\2026.1\\edspy.bat" if os.name == "nt" else "C:/Program Files/Altair/2026.1/edspy.bat"
+    assert argv == [exe0, "--physicsai", "--create-dataset",
                     "E:/AI/s/03_dataset/x/train/dataset.psdata", "--spec", "E:/AI/s/03_dataset/x/train/dataset.yaml"]
     t = ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"]
     v = {"score_path": "/a/m.psscr", "model_psmdl": "/a/m.psmdl", "eval_psdata": "/a/e.psdata"}

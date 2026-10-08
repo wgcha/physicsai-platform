@@ -236,7 +236,12 @@ def test_demo_db_up_down():
     assert pg_bin, "PostgreSQL 실행 파일이 없습니다(PG_BIN)"
     import tempfile
 
-    work = Path(tempfile.mkdtemp(prefix="physicsai-demo-db-"))  # pytest tmp 상위는 root 전용(0700)이라 별도 폴더
+    # pytest tmp·mkdtemp는 소유자 전용 권한(0700, Windows는 ACL) → root 실행 시 postgres 계정, Windows는 initdb 제한 토큰이
+    # 접근 못 함. 상속 권한의 새 폴더를 쓴다
+    import uuid
+
+    work = Path(tempfile.gettempdir()) / f"physicsai-demo-db-{uuid.uuid4().hex[:8]}"
+    work.mkdir()
     root = work / "demo"
     root.mkdir()
     port = _free_port()

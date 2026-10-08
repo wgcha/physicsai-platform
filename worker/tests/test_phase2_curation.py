@@ -44,9 +44,10 @@ def test_h3d_preview_and_curate_from_doe(p2_env, fake_record, monkeypatch, engin
     assert pr["part_counts"] == {"shell": 2, "solid": 1, "rbody": 0} and pr["num_time_step"] == 5 and pr["source_file_count"] == 2
     W = ai / "cu1" / "02_preview" / pj["id"]
     hw = [r for r in read_record(fake_record) if r["tool"] == "hw"][-1]
-    assert hw["argv"][1:] == ["-clientconfig", "hwpost.dat", "-b", "-tcl", d["resources"]["preview_h3d_tcl"], "-h3d",
-                              str(ai / "cu1" / "01_train" / "results" / doe_id / "run__00001" / "m_3" / "drop_A001.h3d"),
-                              "-result", str(W / "PREVIEW_H3D.json")]
+    F = lambda p: str(p).replace("\\", "/")  # noqa: E731 - h3d_preview 경로 값은 '/' 표기(phase2 §8.1)
+    assert hw["argv"][1:] == ["-clientconfig", "hwpost.dat", "-b", "-tcl", F(d["resources"]["preview_h3d_tcl"]), "-h3d",
+                              F(ai / "cu1" / "01_train" / "results" / doe_id / "run__00001" / "m_3" / "drop_A001.h3d"),
+                              "-result", F(W / "PREVIEW_H3D.json")]
     summ = json.loads((W / "preview_summary.json").read_text())
     stress = next(x for x in summ["datatypes"] if x["name"] == "Stress")
     assert stress["usable"] == ["vonMises", "P1"]  # "Max Abs Principal"(3단어) 제외
@@ -139,8 +140,9 @@ def test_t01_preview_and_curves(p2_env, fake_record, monkeypatch):
     assert w.run_once_slot() == "SUCCEEDED", job(c, pj["id"])
     W = ai / "t01" / "02_preview" / pj["id"]
     hw = [r for r in read_record(fake_record) if r["tool"] == "hw"][-1]
-    assert hw["argv"][1:] == ["-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", d["resources"]["preview_hg_tcl"], "-input",
-                              str(root / "case_a" / "sub" / "dropT01"), "-output", str(W / "PREVIEW_T01.json")]
+    F = lambda p: str(p).replace("\\", "/")  # noqa: E731 - t01_preview 경로 값은 '/' 표기(phase2 §8.1)
+    assert hw["argv"][1:] == ["-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", F(d["resources"]["preview_hg_tcl"]), "-input",
+                              F(root / "case_a" / "sub" / "dropT01"), "-output", F(W / "PREVIEW_T01.json")]
     assert job(c, pj["id"])["result"]["type_count"] == 1
     monkeypatch.setenv("FAKE_TOOL_MODE_HW", "skip_one")
     cj = submit(c, sid, "CU_T01_CURVES", {"source": src, "curves": [{"type": "Rigid Body", "request": "RBODY 1", "component": "F-Mag"}]})

@@ -49,8 +49,12 @@ def test_env_check_flow(p2_env, fake_dashboard, engine, monkeypatch):
     assert wi["storage.ai_root.write"]["status"] == "OK"
     assert os.listdir(ai / "_platform" / "env_check_tmp") == []  # tempfile 자동 삭제, 남는 파일 0
     assert wi["storage.spdm_roots"]["status"] == "OK" and wi["storage.roots_overlap"]["status"] == "OK"
-    assert wi["worker.limiter"]["status"] == "WARN" and wi["worker.limiter"]["message"] == "CPU 상한 미적용(비Windows)"
-    assert wi["worker.job_object"]["status"] == "SKIP" and wi["gpu.detect"]["status"] == "OK"
+    if os.name == "nt":  # 시험 설정 제한기 = windows_job(실제 Job Object)
+        assert wi["worker.limiter"]["status"] == "OK" and wi["worker.job_object"]["status"] == "OK", (wi["worker.limiter"], wi["worker.job_object"])
+    else:
+        assert wi["worker.limiter"]["status"] == "WARN" and wi["worker.limiter"]["message"] == "CPU 상한 미적용(비Windows)"
+        assert wi["worker.job_object"]["status"] == "SKIP"
+    assert wi["gpu.detect"]["status"] == "OK"
     assert got["summary"]["fail"] == 1  # worker.heartbeat(생성 시점 오프라인)
     report = ai / "_platform" / "env_checks" / chk["id"] / "report.json"
     assert json.loads(report.read_text())["summary"] == got["summary"]

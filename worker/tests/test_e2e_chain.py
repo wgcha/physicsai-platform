@@ -140,8 +140,9 @@ def test_full_chain(client, worker_factory, loaded_config, fake_record, monkeypa
     assert pred_rec["argv"][1:] == ["--physicsai", "--predict-write", str(Pd / "RESULT" / "model0_0000_pred.h3d"),
                                     "--model", str(stored / "cushion_TNS.psmdl"), "--input-file", str(Pd / "INPUT" / "model0_0000.rad")]
     hw_rec = [r for r in read_record(fake_record) if r["tool"] == "hw"][-1]
+    F = lambda p: str(p).replace("\\", "/")  # noqa: E731 - *_fwd placeholder는 '/' 표기
     assert hw_rec["argv"][1:] == ["-clientconfig", "hwpost.dat", "-b", "-tcl", s.resources.preview_pred_h3d_tcl, "-input",
-                                  str(Pd / "RESULT" / "model0_0000_pred.h3d"), "-output", str(Pd / "H3D_PREVIEW.json")]
+                                  F(Pd / "RESULT" / "model0_0000_pred.h3d"), "-output", F(Pd / "H3D_PREVIEW.json")]
     res = jd["result"]
     assert res["preview_json_artifact_id"] and len(res["image_artifact_ids"]) == 1 and res["curve_artifact_id"]
     steps = {s_["step_key"]: s_ for s_ in jd["steps"]}

@@ -126,7 +126,7 @@ jobs:
           PHYSICSAI_CI_MEASURE_FILE: ${{ runner.temp }}\jobobject-measure.jsonl
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'pytest-windows.log'
-          cmd /c "python -m pytest -q -rs -m windows 2>&1" | Tee-Object -FilePath $log
+          cmd /c "python -m pytest -q -rfEs -m windows 2>&1" | Tee-Object -FilePath $log
           $rc = $LASTEXITCODE
           if (Test-Path $env:PHYSICSAI_CI_MEASURE_FILE) { Get-Content $env:PHYSICSAI_CI_MEASURE_FILE | ForEach-Object { Write-Host "::notice title=Job Object 실측::$_" } }
           if ($rc) { python scripts/ci_annotate.py $log 'Windows 전용 시험 실패'; exit $rc }
@@ -137,7 +137,7 @@ jobs:
           PYTHONIOENCODING: utf-8
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'pytest-all.log'
-          cmd /c "python -m pytest -q -rs --tb=short 2>&1" | Tee-Object -FilePath $log
+          cmd /c "python -m pytest -q -rfEs --tb=short 2>&1" | Tee-Object -FilePath $log
           $rc = $LASTEXITCODE
           if ($rc) { python scripts/ci_annotate.py $log 'pytest 전체 실패' 400; exit $rc }
 
@@ -183,7 +183,7 @@ jobs:
             $deployJson = @{
               install_root = $root; python_exe = (Get-Command python).Source; pg_bin = $env:PGBIN; pg_host = '127.0.0.1'; pg_port = 5432
               db_name = 'physicsai'; db_role = 'physicsai_app'; config_path = $cfgPath; service_user = "$env:USERDOMAIN\$env:USERNAME"
-              run_mode = 'Interactive'; backend_port = $port; caddy_frontend_root = (Join-Path $root 'frontend\dist')
+              run_mode = 'Interactive'; caddy_frontend_root = (Join-Path $root 'frontend\dist')
             } | ConvertTo-Json
             $jsonPath = Join-Path $t 'deploy.json'
             Set-Content -Path $jsonPath -Value $deployJson -Encoding utf8
@@ -262,7 +262,9 @@ jobs:
               for ($i = 0; $i -lt 30 -and -not $st.worker.online; $i++) { Start-Sleep 1; $st = Invoke-RestMethod "$base/physicsai/api/status" -WebSession $s }
               Write-Host "worker online=$($st.worker.online) limiter=$($st.worker.limiter)"
               if ($st.worker.limiter -ne 'windows_job') { throw "Windows 제한기가 아닙니다: $($st.worker.limiter)" }
-              $sid = (Invoke-RestMethod "$base/physicsai/api/studies?project_id=demo" -WebSession $s | Where-Object folder_name -eq 'demo_bracket').id
+              $studies = @(Invoke-RestMethod "$base/physicsai/api/studies?project_id=demo" -WebSession $s | ForEach-Object { $_ })
+              $sid = ($studies | Where-Object { $_.folder_name -eq 'demo_bracket' } | Select-Object -First 1).id
+              if (-not $sid) { throw "시연 Study를 찾지 못했습니다: $($studies | ConvertTo-Json -Depth 3 -Compress)" }
               $cad = ($demo -replace '\\', '/') + '/ai_root/demo_bracket/00_inbox/cad/demo_bracket.prt'
               $body = @{ job_type = 'TD_EXTRACT_PARAMS'; params = @{ cad_path = $cad } } | ConvertTo-Json
               $j = Invoke-RestMethod "$base/physicsai/api/studies/$sid/jobs" -Method Post -WebSession $s -Headers @{ 'X-PhysicsAI-Request' = '1' } -ContentType 'application/json; charset=utf-8' -Body $body

@@ -77,16 +77,17 @@ def test_optimize_chain(p2_env, fake_record, monkeypatch, engine):
 
     assert set(cfg) == set(RUN_CONFIG_KEYS) and "MAX_STRAIN" not in cfg
     S = ai / "op1" / "04_params" / psid
-    assert cfg["TPL_FILE"] == str(S / "simlab_parametered_mesh.tpl") and cfg["CAD_PARAM"] == str(S / "cad" / "bracket.x_t")
-    assert cfg["PHYSICSAI_INPUT_FILE"] == str(S / "radioss_assem" / "model0_0000.rad")
+    F = lambda p: str(p).replace("\\", "/")  # noqa: E731 - INPUT_HST_RUN.json 경로는 '/' 표기(원본 replace)
+    assert cfg["TPL_FILE"] == F(S / "simlab_parametered_mesh.tpl") and cfg["CAD_PARAM"] == F(S / "cad" / "bracket.x_t")
+    assert cfg["PHYSICSAI_INPUT_FILE"] == F(S / "radioss_assem" / "model0_0000.rad")
     assert cfg["PREDICTED_H3D"] == "model0_0000_pred.h3d" and cfg["PREDICTED_XYDATA"] == "model0_0000_pred.xydata"
-    assert cfg["HYPERVIEW_TCL"] == str(O / "H3D_StaticMinMax_to_CSV_FAST.tcl") and (O / "H3D_StaticMinMax_to_CSV_FAST.tcl").is_file()
-    assert cfg["ALTAIR_PATHS"] == {"simlab_path": d["altair"]["simlab_path"]} and cfg["PHYSICSAI_OVERRIDE_ENV"] is False
+    assert cfg["HYPERVIEW_TCL"] == F(O / "H3D_StaticMinMax_to_CSV_FAST.tcl") and (O / "H3D_StaticMinMax_to_CSV_FAST.tcl").is_file()
+    assert cfg["ALTAIR_PATHS"] == {"simlab_path": F(d["altair"]["simlab_path"])} and cfg["PHYSICSAI_OVERRIDE_ENV"] is False
     assert cfg["OPT_SETTINGS"] == {"ABS_CONVERGENCE": 0.001, "REL_CONVERGENCE": 1.0, "DV_CONVERGENCE": 0.001}
     assert cfg["MAX_DESIGNS"] == 4 and cfg["APPROACH"] == "OPT" and cfg["ON_FAILED"] == "IGNORE" and len(cfg["RESPONSES"]) == 3
     assert cfg["PHYSICSAI_MODEL"].endswith("cushion_TNS.psmdl")
     tools_dir = Path(d["altair"]["hstpy_path"]).parent
-    assert cfg["ALTAIR_HOME"] == "/".join(str(tools_dir).split("/")[:-3])  # hstpy 폴더/../../..
+    assert cfg["ALTAIR_HOME"] == "/".join(F(tools_dir).split("/")[:-3])  # hstpy 폴더/../../..
     rec = [r for r in read_record(fake_record) if r["tool"] == "hstpy"][-1]
     assert rec["argv"][1:] == [str(O / "BATCHRUN_hst_physicsai_optimization.py")]  # Linux: @cmd_c → 없음
     assert rec["env"]["EDS_TNS_ACTVN_CHCKPT"] == "1" and rec["env"]["ALTAIR_HOME"] == cfg["ALTAIR_HOME"] and rec["cwd"] == str(O)
