@@ -151,11 +151,11 @@ def test_t01_preview_and_curves(p2_env, fake_record, monkeypatch):
     C = ai / "t01" / "02_curated" / cid
     inp = json.loads((C / "work" / "INPUT_CURATE_CURVE.json").read_text())
     assert inp == {"curves": [{"yDataType": "Rigid Body", "yRequest": "RBODY 1", "yComponent": "F-Mag"}],
-                   "jobs": [{"inputFile": str(root / "case_a" / "sub" / "dropT01"), "outputFile": str(C / "CURVES" / "case_a" / "drop_curves.json")},
-                            {"inputFile": str(root / "case_b" / "sub" / "dropT01"), "outputFile": str(C / "CURVES" / "case_b" / "drop_curves.json")}]}
+                   "jobs": [{"inputFile": F(root / "case_a" / "sub" / "dropT01"), "outputFile": F(C / "CURVES" / "case_a" / "drop_curves.json")},
+                            {"inputFile": F(root / "case_b" / "sub" / "dropT01"), "outputFile": F(C / "CURVES" / "case_b" / "drop_curves.json")}]}
     hws = [r for r in read_record(fake_record) if r["tool"] == "hw" and "-config" in r["argv"]]
-    assert len(hws) == 1 and hws[0]["argv"][1:] == ["-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", d["resources"]["curate_hg_tcl"],
-                                                    "-config", str(C / "work" / "INPUT_CURATE_CURVE.json")]
+    assert len(hws) == 1 and hws[0]["argv"][1:] == ["-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", F(d["resources"]["curate_hg_tcl"]),
+                                                    "-config", F(C / "work" / "INPUT_CURATE_CURVE.json")]
     jd = job(c, cj["id"])
     assert jd["result"]["ok_count"] == 1 and jd["result"]["curve_artifact_id"]
     curve = c.get(f"{API}/artifacts/{jd['result']['curve_artifact_id']}/content", headers=P).json()
