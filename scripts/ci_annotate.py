@@ -15,6 +15,7 @@ def esc(s: str) -> str:
 
 
 def main() -> int:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # 러너는 UTF-8로 워크플로 명령을 읽는다
     path, title = Path(sys.argv[1]), sys.argv[2]
     n = int(sys.argv[3]) if len(sys.argv) > 3 else 200
     if not path.is_file():

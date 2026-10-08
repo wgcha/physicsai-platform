@@ -534,6 +534,12 @@ def cmd_down(args: argparse.Namespace) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # 영문 Windows(cp1252) 파이프 출력에서도 한글 안내 때문에 죽지 않게(표현 못 하는 글자는 ?)
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors="replace")  # type: ignore[union-attr]
+        except (AttributeError, ValueError):
+            pass
     ap = argparse.ArgumentParser(prog="demo_setup", description="PhysicsAI 시연 모드 준비")
     sub = ap.add_subparsers(dest="cmd", required=True)
     a = sub.add_parser("init", help="시연 폴더·가짜 도구·설정 만들기")
