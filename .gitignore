@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+.venv/
+config/platform.yaml
+state/
+*.psdata
+*.psmdl
+*.h3d
+frontend/node_modules/
+frontend/dist/

@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""가짜 SimLab.bat(§18.1): -auto SCRIPT … -nographics → cwd에 eps_mesh_1.inc."""
+import json, os, subprocess, sys, time
+
+m = os.environ.get("FAKE_TOOL_MODE_SIMLAB") or os.environ.get("FAKE_TOOL_MODE") or "ok"
+p = os.environ.get("FAKE_TOOL_RECORD")
+if p:
+    with open(p, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "simlab", "argv": sys.argv, "cwd": os.getcwd()}) + "\n")
+if m == "fail":
+    sys.exit(1)
+if m == "hang":
+    child = subprocess.Popen([sys.executable, "-c", "import time\nwhile True: time.sleep(1)"])
+    pf = os.environ.get("FAKE_TOOL_PIDFILE")
+    if pf:
+        open(pf, "w").write(f"{os.getpid()} {child.pid}\n")
+    while True:
+        time.sleep(0.2)
+a = sys.argv
+script = a[a.index("-auto") + 1]
+if not os.path.isfile(script):
+    print(f"script not found: {script}", flush=True)
+    sys.exit(2)
+with open("eps_mesh_1.inc", "w") as fh:
+    fh.write("/NODE\n1 0 0 0\n")
+print("SimLab (fake) mesh written", flush=True)

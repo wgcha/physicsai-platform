@@ -1,0 +1,14 @@
+#!/usr/bin/env python3
+"""가짜 응답값 추출: --responses J --input H --out C → name,value."""
+import json, os, sys
+
+a = sys.argv
+p = os.environ.get("FAKE_TOOL_RECORD")
+if p:
+    with open(p, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "extract", "argv": a, "cwd": os.getcwd()}) + "\n")
+resp = json.load(open(a[a.index("--responses") + 1], encoding="utf-8"))["responses"]
+with open(a[a.index("--out") + 1], "w", encoding="utf-8") as fh:
+    fh.write("name,value\n")
+    for i, r in enumerate(resp):
+        fh.write(f"{r['name']},{110.0 + i}\n")

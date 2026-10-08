@@ -1,0 +1,7 @@
+#!/usr/bin/env python3
+import json, os, sys
+
+p = os.environ.get("FAKE_TOOL_RECORD")
+if p:
+    with open(p, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "qdel", "argv": sys.argv}) + "\n")

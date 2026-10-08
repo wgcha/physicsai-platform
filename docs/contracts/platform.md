@@ -1315,3 +1315,27 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 | V-FE-8 | 3840×2160 뷰포트 스크린샷(가로 스크롤 없음, 우측 패널 폭 범위)과 1280px 폭 | 수동 증적(Playwright 가능하면 자동) |
 | V-REG-1 | `scripts/test-all` 전체 통과(Linux, PG 포함) | CI |
 | V-E2E-1 | 사용자 E2E 체크리스트 결과 기록(미수행 항목은 "미수행") | 사용자 증적 |
+
+---
+
+## 변경 메모 (Impl-Backend, 2026-10-08 — 본문 미수정, Plan 확인 요청)
+
+본문과 다르거나 본문에 없던 구현 결정. Plan이 수용하면 본문에 반영, 아니면 되돌림 지시.
+
+| # | 위치 | 내용 |
+|---|---|---|
+| B1 | §10.2 `/status` vs §10.9 | §10.9는 폴링 주기를 `/status`에 싣는다고 하나 §10.2 응답 표에 없음 → `ui:{poll_*_ms…}` 추가. §5.2 로그인 링크용 `auth:{mode, login_url}`도 추가. 워커가 보고한 설정 오류는 `config.errors`에 `worker:<key>`로 합침 |
+| B2 | §10.1 목록 페이지 | 응답이 배열이라 다음 커서 위치가 없음 → `X-Next-Cursor` 응답 헤더. `GET /notifications`는 `cursor`(더 오래된 쪽)도 받음(무한 스크롤) |
+| B3 | §9.1·§9.2 vs §18.1 | `response_extract`의 argv[0]은 `{hw}`만 가능(허용 placeholder) → 별도 `fake_extract`를 템플릿으로 가리킬 수 없음. 시험은 `fake_hw`가 `--responses` 인자를 받으면 fake_extract와 같은 동작을 하도록 구현(fake_extract 파일도 유지) |
+| B4 | §10.3 `stage_status` | 형태 미정 → `{"3": {latest_job_id, latest_job_type, latest_state}, "4": {…}}` |
+| B5 | §10.4·§10.5 응답 | `Dataset.package_rel`, `Job.attention_code`, `Artifact.file_name`(rel_path 대신) 추가. `JobStep.command`는 `?include=commands`(전역 관리자)일 때만 채움 |
+| B6 | §8.7 EV_PARSE | psscr를 등록하지 않으므로 `SCORE_FILE` artifact는 `E/score_summary.json`(`{status, metrics, score_rel}`) |
+| B7 | §15.4 등록 | 원본 파일 사본 위치를 `04_params/<id>/original/`로 정함 |
+| B8 | §10.6 PREDICT params | 저장 시 기본값을 풀어 `model_id`(Final)·`param_set_id`(current)를 확정 기록(재시도 재현성). DATASET_CREATE도 기본값(holdout·seed·split_group·options)을 채워 저장 |
+| B9 | §10.5 재시도 | `from_step` 기본값 = 첫 FAILED/CANCELED/PENDING step, 그보다 뒤 지정은 422. 이전 step은 `SKIPPED`("이전 작업 산출물 재사용"). 작업 폴더는 재시도 체인의 최초 작업 id 기준. PREDICT_VERIFY는 항상 1단계부터(HPC 제출 재사용 안 함) |
+| B10 | §11.2 renew | heartbeat 스레드 대신 작업별 LeaseKeeper 스레드가 `heartbeat_interval_s`마다 renew(동작 동일) |
+| B11 | §5.5 dev_static | `GET /projects`는 대시보드 없이 `memberships` 프로젝트 + `dev`를 합성해 돌려줌 |
+| B12 | §10.4 PATCH /models | INVALID → ACTIVE 변경은 409 `MODEL_NOT_ACTIVE`(코드 목록에 없던 경우) |
+| B13 | §4.6 vs 작업 지시 | 스크립트 이름은 계약대로 `scripts/dev-db-init|dev-backend|dev-worker|dev-frontend|test-all`(.sh/.ps1). dev-backend는 포트를 설정에서 읽으려고 `python -m physicsai_api.serve` 사용 |
+| B14 | §6.2·§6.7 | `migrations/versions/0001_initial.py`는 `physicsai_core.db.tables` 메타데이터로 생성(이후 변경은 명시적 DDL migration). `jobs`에 CHECK `FAILED/INTERRUPTED → failure_code NOT NULL` 추가 |
+| B15 | §8.3·V-CMD-7 | root 권한 시험 환경에서는 "권한 제거로 잠김 모사"가 불가 → `os.replace` 실패 주입으로 `OUTPUT_LOCKED` 시험 |
