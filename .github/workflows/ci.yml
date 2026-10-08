@@ -123,10 +123,12 @@ jobs:
       - name: Windows 전용 시험(V-JO-1~3·CREATE_SUSPENDED·V2-EC-4) — skip 없이
         env:
           PYTHONIOENCODING: utf-8
+          PHYSICSAI_CI_MEASURE_FILE: ${{ runner.temp }}\jobobject-measure.jsonl
         run: |
           $log = Join-Path $env:RUNNER_TEMP 'pytest-windows.log'
           cmd /c "python -m pytest -q -rs -m windows 2>&1" | Tee-Object -FilePath $log
           $rc = $LASTEXITCODE
+          if (Test-Path $env:PHYSICSAI_CI_MEASURE_FILE) { Get-Content $env:PHYSICSAI_CI_MEASURE_FILE | ForEach-Object { Write-Host "::notice title=Job Object 실측::$_" } }
           if ($rc) { python scripts/ci_annotate.py $log 'Windows 전용 시험 실패'; exit $rc }
 
       - name: pytest 전체(fake tools .exe 런처 + 실제 Job Object 제한기 + 시연 E2E)
@@ -224,7 +226,9 @@ jobs:
             if ($direct) { Stop-Process -Id $direct.Id -Force }
             Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
             # 등록 해제(uninstall-tasks.ps1) → 조회 시 없어야 한다
+            $savedPsm = $env:PSModulePath; $env:PSModulePath = $null   # 5.1이 pwsh 7 모듈 경로를 물려받지 않게
             powershell.exe -NoProfile -ExecutionPolicy Bypass -File dist\deploy\uninstall-tasks.ps1
+            $env:PSModulePath = $savedPsm
             if ($LASTEXITCODE) { throw 'uninstall-tasks 실패' }
             foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
               if (Get-ScheduledTask -TaskName $n -ErrorAction SilentlyContinue) { throw "$n 이 남아 있습니다" }
@@ -247,7 +251,7 @@ jobs:
           try {
             $demo = Join-Path $env:RUNNER_TEMP 'demo'
             $port = 8196
-            cmd /c "deploy\demo\start-demo.bat -DemoRoot $demo -Port $port -PgBin $env:PGBIN -PgPort 55433 -NoBrowser -ToolDelay 0 2>&1" | Tee-Object -FilePath $stepLog -Append
+            cmd /c "deploy\demo\start-demo.bat -DemoRoot $demo -Port $port -PgBin `"$env:PGBIN`" -PgPort 55433 -NoBrowser -ToolDelay 0 2>&1" | Tee-Object -FilePath $stepLog -Append
             if ($LASTEXITCODE) { Get-ChildItem "$demo\logs" -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName -Tail 60 }; throw "start-demo 실패($LASTEXITCODE)" }
             try {
               $base = "http://127.0.0.1:$port"

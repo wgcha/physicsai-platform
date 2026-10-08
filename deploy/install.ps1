@@ -37,7 +37,10 @@ function Read-Secret([string]$Prompt, [string]$EnvName) {
     if ($PasswordsFromEnv) {
         $v = [Environment]::GetEnvironmentVariable($EnvName, 'Process')
         if ($null -eq $v) { throw "-PasswordsFromEnv: 환경변수 $EnvName 이 없습니다" }
-        return (ConvertTo-SecureString -String $v -AsPlainText -Force)
+        $ss = New-Object Security.SecureString   # ConvertTo-SecureString(모듈 자동 로드) 없이
+        foreach ($ch in $v.ToCharArray()) { $ss.AppendChar($ch) }
+        $ss.MakeReadOnly()
+        return $ss
     }
     return (Read-Host -AsSecureString $Prompt)
 }
