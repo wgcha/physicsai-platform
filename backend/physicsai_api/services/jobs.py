@@ -149,6 +149,7 @@ def _prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p
     warnings: list[dict[str, str]] = []
     if job_type in P2.PARAM_MODELS:
         return P2.prepare(ctx, conn, study, job_type, p)
+    P2.check_feature(ctx, job_type)  # 1차 확정 템플릿이 설정 파일에 없으면 409 TEMPLATE_NOT_CONFIGURED
     if job_type == "DATASET_CREATE":
         if (p.input_path is None) == (p.curation_id is None):
             raise _invalid([{"loc": ["params", "input_path"], "msg": "input_path와 curation_id 중 하나만 지정하세요"}])

@@ -30,6 +30,8 @@ def main(argv: list[str] | None = None) -> int:
     if not config.ok:
         return _fail("설정 검증 실패: " + "; ".join(f"{i.key}: {i.message}" for i in config.issues))
     s = config.settings
+    for w in config.warnings:
+        log.warning("설정 안내: %s — %s", w.key, w.message)
 
     from .lockfile import AlreadyRunning, InstanceLock
 

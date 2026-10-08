@@ -41,6 +41,7 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
         "config": {
             "ok": ctx.config.ok and not worker_cfg_errors,
             "errors": ctx.config.error_keys() + [f"worker:{k}" for k in worker_cfg_errors],
+            "warnings": list(dict.fromkeys(w.key for w in ctx.config.warnings)),
         },
         "worker": {
             "online": online,

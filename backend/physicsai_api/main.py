@@ -116,6 +116,8 @@ def _app_from_env() -> FastAPI:
     config = load_config()
     if not config.ok:
         log.warning("설정 검증 실패: %s — 조회만 동작, 쓰기 API는 503", config.error_keys())
+    for w in config.warnings:
+        log.warning("설정 안내: %s — %s", w.key, w.message)
     url = os.environ.get(config.settings.database.url_env, "")
     if not url:
         raise StartupRefused(f"DB 접속 정보가 없습니다: 환경변수 {config.settings.database.url_env}")

@@ -14,7 +14,6 @@ profile: dev
 server:
   host: 127.0.0.1
   port: {{PORT}}
-  base_path: /physicsai
 
 database:
   url_env: PHYSICSAI_DATABASE_URL

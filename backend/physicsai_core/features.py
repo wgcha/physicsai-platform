@@ -31,6 +31,10 @@ FEATURES: dict[str, FeatureReq] = {
     "spdm_import": FeatureReq(needs_spdm=True),
     "optimize": FeatureReq(("hst_optimization",), ("hstpy_path", "simlab_path"),
                            ("hypermesh_include_tcl", "extract_minmax_tcl", "batchrun_dir", "pyd_dir"), ("optimization",)),
+    # 1차 확정 템플릿: 설정 파일에 키가 없으면(예시 일부만 복사) 그 기능만 비활성
+    "dataset_create": FeatureReq(("edspy_create_dataset",)),
+    "evaluate": FeatureReq(("edspy_score",)),
+    "predict": FeatureReq(("edspy_predict", "contour_preview")),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -46,6 +50,10 @@ JOB_FEATURE: dict[str, FeatureReq] = {
     "CU_T01_CURVES": FeatureReq(("t01_curve_export",), ("hw_exe_path",), ("curate_hg_tcl",)),
     "SPDM_IMPORT": FeatureReq(),
     "OPTIMIZE": FEATURES["optimize"],
+    "DATASET_CREATE": FEATURES["dataset_create"],
+    "EVALUATE": FEATURES["evaluate"],
+    "PREDICT": FEATURES["predict"],
+    "PREDICT_VERIFY": FEATURES["predict"],
 }
 
 

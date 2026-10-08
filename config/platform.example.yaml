@@ -9,7 +9,7 @@ profile: dev                      # dev | prod   (PHYSICSAI_PROFILE 환경변수
 server:
   host: 127.0.0.1
   port: 8100
-  base_path: /physicsai           # API = {base_path}/api, 프런트 = {base_path}/
+  # 경로 접두는 /physicsai 고정(API = /physicsai/api, 프런트 = /physicsai/). server.base_path는 예약(미사용) — 쓰면 경고
 
 database:
   url_env: PHYSICSAI_DATABASE_URL # 예: postgresql+psycopg://physicsai_app:<비밀번호>@127.0.0.1:5432/physicsai
@@ -143,7 +143,7 @@ commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원�
   - '^\s*\[ERROR\]'
 
 hpc:
-  gateway: none                   # none | command | adapter  (PHYSICSAI_HPC_GATEWAY 우선). 1차 기본 none
+  gateway: none                   # none | command | adapter(미구현)  (PHYSICSAI_HPC_GATEWAY 우선). 1차 기본 none
   poll_interval_s: 60
   lost_after_polls: 10
   max_unreachable_minutes: 1440
@@ -168,10 +168,9 @@ hpc:
     submit_timeout_s: 60
     status_timeout_s: 30
     cancel_timeout_s: 30
-  adapter:
-    module: null                  # 사내 어댑터 job API 확인 전까지 미구현
+  # adapter.module: 예약(미사용) — 사내 어댑터 job API 확인 전까지 미구현. 쓰면 경고
   transfer:
-    stage_in: shared_path
+    # stage_in: 예약(미사용, 항상 공유 경로) — 쓰면 경고
     path_map:                     # 이 PC 경로 → PBS 노드 경로. 사내 확인 후 교체
       - {local: "E:/shared/AI_WORK", remote: "/shared/AI_WORK"}
     collect_mode: in_place        # in_place | shared_folder | drive(= shared_folder 별칭, 가정 A-7)

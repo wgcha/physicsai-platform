@@ -53,6 +53,7 @@ class Project(Resp):
 class StatusConfig(Resp):
     ok: bool
     errors: list[str]
+    warnings: list[str] = Field(default_factory=list, description="기동은 막지 않는 설정 안내 키(누락 → 기능 비활성, 예약 키)")
 
 
 class StatusWorker(Resp):
@@ -107,6 +108,9 @@ class StatusFeatures(Resp):
     curation_t01: FeatureState
     spdm_import: FeatureState
     optimize: FeatureState
+    dataset_create: FeatureState | None = None
+    evaluate: FeatureState | None = None
+    predict: FeatureState | None = None
 
 
 class StatusEnvCheck(Resp):

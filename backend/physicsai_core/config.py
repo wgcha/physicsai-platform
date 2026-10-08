@@ -418,6 +418,7 @@ class LoadedConfig:
     issues: list[ConfigIssue] = field(default_factory=list)
     path: str | None = None
     sha256: str | None = None
+    warnings: list[ConfigIssue] = field(default_factory=list)  # 기동은 막지 않는 안내(누락 → 기능 비활성, 예약 키)
 
     @property
     def ok(self) -> bool:
@@ -508,8 +509,47 @@ def load_config_dict(
         settings = Settings.model_validate(data)
     except ValidationError as exc:
         return LoadedConfig(Settings(), _pydantic_issues(exc), path, sha256)
-    issues = validate_settings(settings)
-    return LoadedConfig(settings, issues, path, sha256)
+    absent = absent_keys(data, settings)
+    issues = validate_settings(settings, absent=absent)
+    return LoadedConfig(settings, issues, path, sha256, config_warnings(data, settings, absent))
+
+
+# 예약(미사용) 키: 값이 있어도 동작에 쓰이지 않는다(경고만). 기존 설정 파일 호환을 위해 스키마에는 남긴다.
+RESERVED_KEYS: tuple[tuple[str, ...], ...] = (("server", "base_path"), ("hpc", "transfer", "stage_in"), ("hpc", "adapter", "module"))
+
+
+def _has(data: Any, *path: str) -> bool:
+    for k in path:
+        if not isinstance(data, dict) or k not in data:
+            return False
+        data = data[k]
+    return True
+
+
+def absent_keys(data: dict[str, Any], s: Settings) -> frozenset[str]:
+    """설정 파일에 아예 없는 키(예시 yaml 일부만 복사한 경우). 이 키들은 오류가 아니라 '해당 기능 비활성'으로 다룬다.
+    명시적으로 null을 쓴 1차 확정 템플릿은 그대로 오류(V2-CFG-1)."""
+    out = {f"commands.{k}" for k in TEMPLATE_SPECS if not _has(data, "commands", k)}
+    if s.hpc.gateway == "command" and not _has(data, "hpc", "command"):
+        out.add("hpc.command")
+    if not _has(data, "worker", "gpu_query"):
+        out.add("worker.gpu_query")
+    return frozenset(out)
+
+
+def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -> list[ConfigIssue]:
+    w: list[ConfigIssue] = []
+    for path in RESERVED_KEYS:
+        if _has(data, *path):
+            w.append(ConfigIssue(".".join(path), "예약(미사용) 키입니다 — 값이 적용되지 않습니다(지워도 됩니다)"))
+    for k in sorted(absent):
+        if k.startswith("commands.") and TEMPLATE_SPECS[k.split(".", 1)[1]].required:
+            w.append(ConfigIssue(k, "설정 파일에 없어 이 명령을 쓰는 기능이 비활성입니다(config/platform.example.yaml 참고)"))
+    if "hpc.command" in absent:
+        w.append(ConfigIssue("hpc.command", "hpc.gateway=command인데 hpc.command가 없어 PBS 제출이 비활성입니다"))
+    if "worker.gpu_query" in absent:
+        w.append(ConfigIssue("worker.gpu_query", "GPU 조회 명령이 없어 GPU 사용량을 표시하지 않습니다"))
+    return w
 
 
 def _compile(key: str, pattern: str, issues: list[ConfigIssue], required_groups: tuple[str, ...] = ()) -> None:
@@ -523,7 +563,7 @@ def _compile(key: str, pattern: str, issues: list[ConfigIssue], required_groups:
             issues.append(ConfigIssue(key, f"정규식에 필수 그룹 '{g}'이 없습니다"))
 
 
-def validate_settings(s: Settings) -> list[ConfigIssue]:  # noqa: C901 - 표 기반 규칙 나열
+def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list[ConfigIssue]:  # noqa: C901 - 표 기반 규칙 나열
     issues: list[ConfigIssue] = []
     add = lambda k, m: issues.append(ConfigIssue(k, m))  # noqa: E731
 
@@ -680,6 +720,8 @@ def validate_settings(s: Settings) -> list[ConfigIssue]:  # noqa: C901 - 표 기
 
     # commands
     for key in TEMPLATE_SPECS:
+        if f"commands.{key}" in absent:
+            continue  # 파일에 없음 → 해당 기능 비활성(경고, features·작업 생성 409)
         for msg in validate_template(key, getattr(s.commands, key)):
             add(f"commands.{key}", msg)
 
@@ -709,7 +751,7 @@ def validate_settings(s: Settings) -> list[ConfigIssue]:  # noqa: C901 - 표 기
                 add(k, f"SPDM 루트와 겹칩니다: {sp}")
     if t.collect_root_remote and (has_unsafe_chars(t.collect_root_remote) or not is_abs_path_str(t.collect_root_remote)):
         add("hpc.transfer.collect_root_remote", "절대경로여야 하며 공백·메타문자를 쓸 수 없습니다")
-    if s.hpc.gateway == "command":
+    if s.hpc.gateway == "command" and "hpc.command" not in absent:  # 없으면 게이트웨이 미구성(train_solve 비활성)
         from .hpc.command import validate_command_config
 
         for msg in validate_command_config(s.hpc):

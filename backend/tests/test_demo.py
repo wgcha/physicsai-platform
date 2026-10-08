@@ -36,7 +36,7 @@ def _app(lc, engine, bind_host="127.0.0.1"):
 
 @pytest.mark.parametrize("case,key", [
     ({"profile": "prod"}, "demo.enabled"),
-    ({"server": {"host": "0.0.0.0", "port": 8100, "base_path": "/physicsai"}}, "demo.enabled"),
+    ({"server": {"host": "0.0.0.0", "port": 8100}}, "demo.enabled"),
 ])
 def test_demo_config_guard(settings_dict, tmp_path, engine, case, key):
     """운영 설정(prod) 또는 127.0.0.1 이외 바인딩에서는 시연 모드가 설정 검증 오류 + 기동 거부."""

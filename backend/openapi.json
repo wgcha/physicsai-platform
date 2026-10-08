@@ -3632,6 +3632,14 @@
           "ok": {
             "title": "Ok",
             "type": "boolean"
+          },
+          "warnings": {
+            "description": "기동은 막지 않는 설정 안내 키(누락 → 기능 비활성, 예약 키)",
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -3711,8 +3719,38 @@
           "curation_t01": {
             "$ref": "#/components/schemas/FeatureState"
           },
+          "dataset_create": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "evaluate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "optimize": {
             "$ref": "#/components/schemas/FeatureState"
+          },
+          "predict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "spdm_import": {
             "$ref": "#/components/schemas/FeatureState"

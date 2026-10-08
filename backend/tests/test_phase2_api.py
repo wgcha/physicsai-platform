@@ -15,7 +15,7 @@ def test_status_extensions(p2_env):
     res = {r["key"]: r for r in st["resources"]}
     assert res["pyd_dir"] == {"key": "pyd_dir", "configured": True, "ok": True}
     assert set(st["features"]) == {"train_extract", "train_tpl", "train_doe", "train_solve", "train_import", "train_resp",
-                                   "curation_h3d", "curation_t01", "spdm_import", "optimize"}
+                                   "curation_h3d", "curation_t01", "spdm_import", "optimize", "dataset_create", "evaluate", "predict"}
     assert st["features"]["train_doe"]["enabled"] and st["features"]["train_resp"] == {"enabled": False, "missing": ["commands.response_extract"]}
     assert st["hpc"]["collect_mode"] == "in_place" and st["env_check"] is None
     assert c.get(f"{API}/status", headers=H("tok-admin")).json()["env_check"]["latest_id"] is None

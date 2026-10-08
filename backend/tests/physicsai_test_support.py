@@ -241,7 +241,7 @@ def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> d
     d: dict[str, Any] = {
         "schema_version": 1,
         "profile": "dev",
-        "server": {"host": "127.0.0.1", "port": 8100, "base_path": "/physicsai"},
+        "server": {"host": "127.0.0.1", "port": 8100},
         "auth": {"mode": "dashboard", "cache_ttl_s": 30, "timeout_s": 3},
         "storage": {"ai_root": str(ai_root), "allowed_import_roots": [str(imports)], "spdm_roots": [str(base / "spdm")]},
         "altair": {
