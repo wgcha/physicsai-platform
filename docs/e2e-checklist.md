@@ -4,6 +4,66 @@
 - 목적: 자동 시험(Linux, 가짜 도구)으로 확인할 수 없는 실제 동작과 계약 미확정 항목(U1~U16, [platform.md §19](contracts/platform.md#19-리스크미확정)) 확인
 - 기록: 각 항목 결과 칸에 `통과` / `실패(내용)` / `미수행`과 날짜를 적고, 확인한 실제 값(명령 출력, 파일 이름)은 "메모"에 남긴다. 미확정 항목 결과는 Plan에 전달해 계약·설정을 갱신한다.
 
+## 2차 (먼저 수행 — 환경 점검부터)
+
+- 계약: [phase2.md](contracts/phase2.md). 미확정 U17~U37([§17](contracts/phase2.md#17-리스크미확정)) 확인이 목적이다. 1차 E0~E6이 끝난 PC(또는 2차 배포 스크립트로 새로 설치한 PC)에서 수행한다.
+- 원본 반입 자원: `CONFIG/BATCHRUN`(런처 .py·TCL), `CONFIG/TEMPLATE/TEMAPLATE_simlab_parametered_mesh.tpl`, `CONFIG/DATA/DATA_doe_design_type.json`, `BUILD_PYD/*.pyd`, `H3D_StaticMinMax_to_CSV_FAST.tcl`을 서버 폴더에 두고 `config/platform.yaml`의 `resources.*`에 적는다(업로드본에 없던 파일 포함, U19).
+
+### E2-0. 환경 점검·배포
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E2-0-1 | **전역 관리자로 "관리 > 환경 점검" → "점검 실행"**. 결과 표의 실패·경고를 모두 메모하고, 실패가 남아 있으면 아래 항목 전에 설정을 고친다(실행 파일 6개 존재, 자원 파일·pyd 각 1개, AI 루트 쓰기, DB head `0002_phase2`, 대시보드 인증, 워커 heartbeat, limiter `windows_job`, Job Object 적용, GPU 감지, PBS 모드) | | |
+| E2-0-2 | 환경 점검 후 `<ai_root>\_platform\env_check_tmp\`에 남은 파일이 없음, `_platform\env_checks\<id>\report.json` 생성 | | |
+| E2-0-3 | (배포) 준비 PC에서 `deploy\collect-offline` 실행 → 묶음 zip. 폐쇄망 PC에서 `deploy\install.bat` 실행: venv·wheel 설치, DB 역할·DB 생성(재실행 시 건너뜀), `alembic upgrade head`, 작업 스케줄러에 `PhysicsAI-Backend`·`PhysicsAI-Worker` 등록(실행 시간 제한 없음 확인), 재부팅 후 자동 기동, `/physicsai/api/health` 응답(U31) | | |
+| E2-0-4 | 작업 스케줄러 백그라운드(세션 0) 실행에서 SimLab·hw·hstbatch 배치가 정상 동작하는지(안 되면 `-RunMode Interactive`로 재등록 후 비교)(U31·U11) | | |
+| E2-0-5 | 대시보드 Caddyfile에 `deploy\caddy\physicsai.caddy` 스니펫 반영 후 운영 주소 `/physicsai/` 접속·로그인 공유 | | |
+| E2-0-6 | `deploy\update.bat` 실행: 실행 중 작업이 있으면 중단 안내, 기존 venv·frontend가 `_backup`으로 이동, 업데이트 후 health 정상 | | |
+| E2-0-7 | (선택) 각 Altair 도구의 버전/도움말 인자를 확인해 `env_check.probes`에 넣고 재점검(U32) | | |
+
+### E2-1. ① 학습데이터 생성
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E2-1-1 | ①-1 CAD(.prt) 경로 → "파라미터 추출": SimLab 진행률이 오르고(`Passed` 표식, U20) 파라미터 표가 채워짐. `01_train\extract\<job>\parameter_extracted.xml` 형식 메모 | | |
+| E2-1-2 | ①-2 표 편집(사용 체크·하한·상한) → "tpl 생성": `01_train\tpl\simlab_parametered_mesh.tpl`이 원본 앱으로 만든 tpl과 같은 구조인지(parameter 줄·paramitem 줄·`dir_file_prt`) 비교 | | |
+| E2-1-3 | 사용 안 함 파라미터가 형상에서 CAD 공칭값으로 유지되는지(U37), `%3i` 정수 반영으로 실수 파라미터가 깨지지 않는지(U23) | | |
+| E2-1-4 | ①-3 DOE 유형·run 수·동시 실행 → "입력 생성": hstbatch 진행(`Finished run (N), model (m_3)`), run 폴더 위치가 `approaches\*\run__*`인지, run마다 starter 1개·include가 같은 폴더에 있는지(U17), FullFact/FracFact의 실제 run 수(U22), `-multiexec` 2 이상에서 Job Object 한도 안 동작(U21) | | |
+| E2-1-5 | 샘플 표 상태(PARSED/PARTIAL/MISSING)와 `samples.csv` 값이 HyperStudy의 실제 run 값과 같은지(U18). 다르면 HyperStudy 내보내기 파일 위치 메모 | | |
+| E2-1-6 | ①-4 (PBS 설정 시) "PBS 제출": run마다 job 제출, 상태 표시, 일부 실패 시 나머지 회수·알림(U24). PBS `none`이면 버튼 비활성 + 안내 | | |
+| E2-1-7 | ①-5 수동 해석 결과 폴더 지정 → "결과 가져오기": run 폴더 이름 매칭(U25), `01_train\results\<doe>\<run>\`에 h3d·T01 복사, 누락 run 표시 | | |
+| E2-1-8 | ④ "① 결과로 만들기" → 파라미터 세트 등록, 학습 run 불러오기·최근접 run이 DOE 값과 일치 | | |
+
+### E2-2. ② 데이터 정리
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E2-2-1 | 원천 = ① DOE 결과 → "h3d 미리보기": DataType·Component·Part·Time Step 목록이 원본 앱과 같음 | | |
+| E2-2-2 | 성분·Part·time step 간격 선택 → "큐레이션 실행": `02_curated\<id>\CURATED_DATA\<run>\*.h3d` 생성, 크기가 줄었는지, HyperView에서 선택 성분만 있는지(U26) | | |
+| E2-2-3 | ③-1 기본 입력이 큐레이션 결과로 채워지고 데이터셋 생성 성공 | | |
+| E2-2-4 | T01 미리보기 → 곡선 선택 → "곡선 추출": `*_curves.json` 생성·형식 메모(U27), 화면 그래프 또는 JSON 트리 | | |
+
+### E2-5. ⑤ 최적화
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E2-5-1 | ④ 예측 1회 후 ⑤ 응답 후보 콤보가 채워짐, 응답 표 작성(목적 1개 + 제약 1개) | | |
+| E2-5-2 | "최적화 실행"(ARSM): `05_opt\<job>\INPUT_HST_RUN.json`이 원본 앱 생성본과 키·값이 같음, 진행 "run N / 25"(U29), 완료 | | |
+| E2-5-3 | 결과 폴더 파일 목록 표시, 요약 파일 형식 메모 → 파서 설정 요청(U28). DOE approach도 1회 | | |
+
+### E2-6. SPDM 가져오기·오류 묶음·알림
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E2-6-1 | SPDM Case/Scene 폴더 경로 → "가져오기": `02_import\<id>\`에 h3d·T01 복사, 공백·특수문자 이름 정리 목록(U30). **SPDM 폴더에 새 파일·변경 없음**(가져오기 전후 폴더 목록·수정 시각 비교) | | |
+| E2-6-2 | 딥링크 `/physicsai/import?spdm_path=…` 열기 → 자동 실행 없이 Study 선택 화면(D8은 대시보드 쪽 구현 후) | | |
+| E2-6-3 | 실패한 작업에서 "오류 묶음 받기"(본인·관리자만 보임) → zip 안 로그 꼬리·명령·설정 요약, DB 비밀번호·토큰 없음 | | |
+| E2-6-4 | ①②⑤ 완료·실패 토스트, PBS 일부 실패 알림, 환경 점검 완료 알림, 대기열의 단계 배지·PBS run 집계 | | |
+
+---
+
+# 1차 항목
+
 ## E0. 준비
 
 | # | 확인 | 결과 | 메모 |
