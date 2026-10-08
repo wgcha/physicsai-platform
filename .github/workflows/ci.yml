@@ -59,7 +59,13 @@ jobs:
       - name: scripts/test-all.sh (pytest + openapi 최신 여부 + vitest + tsc)
         env:
           PYTHON: python
-        run: bash scripts/test-all.sh
+        run: |
+          set -o pipefail
+          bash scripts/test-all.sh 2>&1 | tee "$RUNNER_TEMP/test-all.log" || {
+            rc=$?
+            python scripts/ci_annotate.py "$RUNNER_TEMP/test-all.log" "test-all 실패"
+            exit $rc
+          }
 
       - name: 오프라인 묶음 dry-run
         run: bash deploy/collect-offline.sh --dry-run
@@ -116,15 +122,19 @@ jobs:
 
       - name: Windows 전용 시험(V-JO-1~3·CREATE_SUSPENDED·V2-EC-4) — skip 없이
         run: |
-          python -m pytest -q -rs -m windows
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $log = Join-Path $env:RUNNER_TEMP 'pytest-windows.log'
+          cmd /c "python -m pytest -q -rs -m windows 2>&1" | Tee-Object -FilePath $log
+          $rc = $LASTEXITCODE
+          if ($rc) { python scripts/ci_annotate.py $log 'Windows 전용 시험 실패'; exit $rc }
 
       - name: pytest 전체(fake tools .exe 런처 + 실제 Job Object 제한기 + 시연 E2E)
         env:
           PYTHONUTF8: "1"   # 시험 코드의 기본 인코딩 읽기·쓰기용(제품 코드는 encoding 명시)
         run: |
-          python -m pytest -q -rs
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $log = Join-Path $env:RUNNER_TEMP 'pytest-all.log'
+          cmd /c "python -m pytest -q -rs --tb=short 2>&1" | Tee-Object -FilePath $log
+          $rc = $LASTEXITCODE
+          if ($rc) { python scripts/ci_annotate.py $log 'pytest 전체 실패' 400; exit $rc }
 
       - name: PowerShell 구문 검사(pwsh 7 + Windows PowerShell 5.1)
         if: ${{ !cancelled() }}
@@ -156,63 +166,72 @@ jobs:
         if: ${{ !cancelled() }}
         run: |
           $ErrorActionPreference = 'Stop'
-          $t = $env:RUNNER_TEMP
-          $root = Join-Path $t 'pinstall'
-          $port = 8195
-          # 시연 설정(가짜 도구·자원)을 설치 대상 config_path에 미리 만든다 → install.ps1은 "기존 설정 유지"
-          python deploy/demo/demo_setup.py init --root (Join-Path $t 'pdemo') --port $port --frontend dist/frontend
-          if ($LASTEXITCODE) { throw 'demo init 실패' }
-          $cfgPath = Join-Path $t 'pdemo\config\platform.yaml'
-          $deployJson = @{
-            install_root = $root; python_exe = (Get-Command python).Source; pg_bin = $env:PGBIN; pg_host = '127.0.0.1'; pg_port = 5432
-            db_name = 'physicsai'; db_role = 'physicsai_app'; config_path = $cfgPath; service_user = "$env:USERDOMAIN\$env:USERNAME"
-            run_mode = 'Interactive'; backend_port = $port; caddy_frontend_root = (Join-Path $root 'frontend\dist')
-          } | ConvertTo-Json
-          $jsonPath = Join-Path $t 'deploy.json'
-          Set-Content -Path $jsonPath -Value $deployJson -Encoding utf8
-          # 무인 설치: 비밀번호는 프로세스 환경변수로만(명령 인자 금지)
-          $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $env:PGPASSWORD
-          $env:PHYSICSAI_INSTALL_DB_PASSWORD = [guid]::NewGuid().ToString('N')
-          cmd /c "dist\deploy\install.bat -ConfigFile $jsonPath -PasswordsFromEnv -NoStart"
-          if ($LASTEXITCODE) { throw "install.bat 실패($LASTEXITCODE)" }
-          $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $null
-          $env:PHYSICSAI_INSTALL_DB_PASSWORD = $null
-          # 작업 스케줄러 등록 조회: ExecutionTimeLimit 0(PT0S)·재시작 999·IgnoreNew
-          foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
-            $task = Get-ScheduledTask -TaskName $n
-            $s = $task.Settings
-            Write-Host "$n : ExecutionTimeLimit=$($s.ExecutionTimeLimit) RestartCount=$($s.RestartCount) MultipleInstances=$($s.MultipleInstances) Execute=$($task.Actions[0].Execute) $($task.Actions[0].Arguments)"
-            if ($s.ExecutionTimeLimit -ne 'PT0S') { throw "$n ExecutionTimeLimit=$($s.ExecutionTimeLimit) (PT0S 필요)" }
-            if ($s.RestartCount -ne 999) { throw "$n RestartCount=$($s.RestartCount)" }
-            if ("$($s.MultipleInstances)" -ne 'IgnoreNew') { throw "$n MultipleInstances=$($s.MultipleInstances)" }
-          }
-          # 설치된 venv로 백엔드 health(작업 스케줄러 시작 → 안 되면 venv 직접 실행으로 설치본 검증)
-          $health = "http://127.0.0.1:$port/physicsai/api/health"
-          function Test-Health { try { (Invoke-RestMethod -Uri $health -TimeoutSec 3).status -eq 'ok' } catch { $false } }
-          Start-ScheduledTask -TaskName 'PhysicsAI-Backend'
-          $ok = $false
-          for ($i = 0; $i -lt 20 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health }
-          $info = Get-ScheduledTaskInfo -TaskName 'PhysicsAI-Backend'
-          Write-Host "작업 스케줄러 시작 결과: health=$ok LastTaskResult=$($info.LastTaskResult)"
-          $direct = $null
-          if (-not $ok) {
-            Write-Host '::warning::러너 세션에서 Interactive 작업이 시작되지 않음 — 설치된 venv로 직접 기동해 설치본을 검증합니다'
+          $stepLog = Join-Path $env:RUNNER_TEMP ('step-' + [guid]::NewGuid().ToString('N') + '.log')
+          try {
+            $t = $env:RUNNER_TEMP
+            $root = Join-Path $t 'pinstall'
+            $port = 8195
+            # 시연 설정(가짜 도구·자원)을 설치 대상 config_path에 미리 만든다 → install.ps1은 "기존 설정 유지"
+            python deploy/demo/demo_setup.py init --root (Join-Path $t 'pdemo') --port $port --frontend dist/frontend | Tee-Object -FilePath $stepLog -Append
+            if ($LASTEXITCODE) { throw 'demo init 실패' }
+            $cfgPath = Join-Path $t 'pdemo\config\platform.yaml'
+            $deployJson = @{
+              install_root = $root; python_exe = (Get-Command python).Source; pg_bin = $env:PGBIN; pg_host = '127.0.0.1'; pg_port = 5432
+              db_name = 'physicsai'; db_role = 'physicsai_app'; config_path = $cfgPath; service_user = "$env:USERDOMAIN\$env:USERNAME"
+              run_mode = 'Interactive'; backend_port = $port; caddy_frontend_root = (Join-Path $root 'frontend\dist')
+            } | ConvertTo-Json
+            $jsonPath = Join-Path $t 'deploy.json'
+            Set-Content -Path $jsonPath -Value $deployJson -Encoding utf8
+            # 무인 설치: 비밀번호는 프로세스 환경변수로만(명령 인자 금지)
+            $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $env:PGPASSWORD
+            $env:PHYSICSAI_INSTALL_DB_PASSWORD = [guid]::NewGuid().ToString('N')
+            cmd /c "dist\deploy\install.bat -ConfigFile $jsonPath -PasswordsFromEnv -NoStart 2>&1" | Tee-Object -FilePath $stepLog -Append
+            if ($LASTEXITCODE) { throw "install.bat 실패($LASTEXITCODE)" }
+            $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $null
+            $env:PHYSICSAI_INSTALL_DB_PASSWORD = $null
+            # 작업 스케줄러 등록 조회: ExecutionTimeLimit 0(PT0S)·재시작 999·IgnoreNew
+            foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
+              $task = Get-ScheduledTask -TaskName $n
+              $s = $task.Settings
+              Write-Host "$n : ExecutionTimeLimit=$($s.ExecutionTimeLimit) RestartCount=$($s.RestartCount) MultipleInstances=$($s.MultipleInstances) Execute=$($task.Actions[0].Execute) $($task.Actions[0].Arguments)"
+              if ($s.ExecutionTimeLimit -ne 'PT0S') { throw "$n ExecutionTimeLimit=$($s.ExecutionTimeLimit) (PT0S 필요)" }
+              if ($s.RestartCount -ne 999) { throw "$n RestartCount=$($s.RestartCount)" }
+              if ("$($s.MultipleInstances)" -ne 'IgnoreNew') { throw "$n MultipleInstances=$($s.MultipleInstances)" }
+            }
+            # 설치된 venv로 백엔드 health(작업 스케줄러 시작 → 안 되면 venv 직접 실행으로 설치본 검증)
+            $health = "http://127.0.0.1:$port/physicsai/api/health"
+            function Test-Health { try { (Invoke-RestMethod -Uri $health -TimeoutSec 3).status -eq 'ok' } catch { $false } }
+            Start-ScheduledTask -TaskName 'PhysicsAI-Backend'
+            $ok = $false
+            for ($i = 0; $i -lt 20 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health }
+            $info = Get-ScheduledTaskInfo -TaskName 'PhysicsAI-Backend'
+            Write-Host "작업 스케줄러 시작 결과: health=$ok LastTaskResult=$($info.LastTaskResult)"
+            $direct = $null
+            if (-not $ok) {
+              Write-Host '::warning::러너 세션에서 Interactive 작업이 시작되지 않음 — 설치된 venv로 직접 기동해 설치본을 검증합니다'
+              Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
+              $env:PHYSICSAI_CONFIG = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
+              $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
+              $direct = Start-Process -FilePath (Join-Path $root 'venv\Scripts\python.exe') -ArgumentList '-m', 'physicsai_api.serve' `
+                -WorkingDirectory $root -RedirectStandardOutput (Join-Path $t 'backend.out.log') -RedirectStandardError (Join-Path $t 'backend.err.log') -PassThru
+              for ($i = 0; $i -lt 30 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health }
+              if (-not $ok) { Get-Content (Join-Path $t 'backend.err.log') -Tail 80; throw '설치본 백엔드 health 실패' }
+            }
+            Write-Host "health OK: $health"
+            if ($direct) { Stop-Process -Id $direct.Id -Force }
             Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
-            $env:PHYSICSAI_CONFIG = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
-            $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
-            $direct = Start-Process -FilePath (Join-Path $root 'venv\Scripts\python.exe') -ArgumentList '-m', 'physicsai_api.serve' `
-              -WorkingDirectory $root -RedirectStandardOutput (Join-Path $t 'backend.out.log') -RedirectStandardError (Join-Path $t 'backend.err.log') -PassThru
-            for ($i = 0; $i -lt 30 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health }
-            if (-not $ok) { Get-Content (Join-Path $t 'backend.err.log') -Tail 80; throw '설치본 백엔드 health 실패' }
-          }
-          Write-Host "health OK: $health"
-          if ($direct) { Stop-Process -Id $direct.Id -Force }
-          Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
-          # 등록 해제(uninstall-tasks.ps1) → 조회 시 없어야 한다
-          powershell.exe -NoProfile -ExecutionPolicy Bypass -File dist\deploy\uninstall-tasks.ps1
-          if ($LASTEXITCODE) { throw 'uninstall-tasks 실패' }
-          foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
-            if (Get-ScheduledTask -TaskName $n -ErrorAction SilentlyContinue) { throw "$n 이 남아 있습니다" }
+            # 등록 해제(uninstall-tasks.ps1) → 조회 시 없어야 한다
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File dist\deploy\uninstall-tasks.ps1
+            if ($LASTEXITCODE) { throw 'uninstall-tasks 실패' }
+            foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
+              if (Get-ScheduledTask -TaskName $n -ErrorAction SilentlyContinue) { throw "$n 이 남아 있습니다" }
+            }
+          } catch {
+            $msg = ($_ | Out-String) + "`n" + $_.ScriptStackTrace
+            Write-Host ('::error title=install 예외::' + ($msg -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'))
+            if (Test-Path $stepLog) { python scripts/ci_annotate.py $stepLog 'install 출력' 150 }
+            foreach ($f in @((Join-Path $env:RUNNER_TEMP 'backend.err.log'))) { if ($f -and (Test-Path $f)) { python scripts/ci_annotate.py $f "install $(Split-Path -Leaf $f)" 60 } }
+            throw
           }
 
       - name: 시연 모드 원클릭(start-demo.bat → API로 ①-1 실행 → stop-demo.bat)
@@ -221,30 +240,39 @@ jobs:
           PHYSICSAI_NO_PAUSE: "1"
         run: |
           $ErrorActionPreference = 'Stop'
-          $demo = Join-Path $env:RUNNER_TEMP 'demo'
-          $port = 8196
-          cmd /c "deploy\demo\start-demo.bat -DemoRoot $demo -Port $port -PgBin $env:PGBIN -PgPort 55433 -NoBrowser -ToolDelay 0"
-          if ($LASTEXITCODE) { Get-ChildItem "$demo\logs" -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName -Tail 60 }; throw "start-demo 실패($LASTEXITCODE)" }
+          $stepLog = Join-Path $env:RUNNER_TEMP ('step-' + [guid]::NewGuid().ToString('N') + '.log')
           try {
-            $base = "http://127.0.0.1:$port"
-            $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
-            Invoke-WebRequest "$base/physicsai/api/demo/login" -Method Post -Body @{ role = 'power' } -WebSession $s | Out-Null
-            $st = Invoke-RestMethod "$base/physicsai/api/status" -WebSession $s
-            if (-not $st.demo) { throw '/status.demo가 true가 아닙니다' }
-            for ($i = 0; $i -lt 30 -and -not $st.worker.online; $i++) { Start-Sleep 1; $st = Invoke-RestMethod "$base/physicsai/api/status" -WebSession $s }
-            Write-Host "worker online=$($st.worker.online) limiter=$($st.worker.limiter)"
-            if ($st.worker.limiter -ne 'windows_job') { throw "Windows 제한기가 아닙니다: $($st.worker.limiter)" }
-            $sid = (Invoke-RestMethod "$base/physicsai/api/studies?project_id=demo" -WebSession $s | Where-Object folder_name -eq 'demo_bracket').id
-            $cad = ($demo -replace '\\', '/') + '/ai_root/demo_bracket/00_inbox/cad/demo_bracket.prt'
-            $body = @{ job_type = 'TD_EXTRACT_PARAMS'; params = @{ cad_path = $cad } } | ConvertTo-Json
-            $j = Invoke-RestMethod "$base/physicsai/api/studies/$sid/jobs" -Method Post -WebSession $s -Headers @{ 'X-PhysicsAI-Request' = '1' } -ContentType 'application/json; charset=utf-8' -Body $body
-            for ($i = 0; $i -lt 60; $i++) {
-              Start-Sleep 1
-              $jd = Invoke-RestMethod "$base/physicsai/api/jobs/$($j.id)" -WebSession $s
-              if ($jd.state -in 'SUCCEEDED', 'FAILED', 'CANCELED', 'INTERRUPTED') { break }
+            $demo = Join-Path $env:RUNNER_TEMP 'demo'
+            $port = 8196
+            cmd /c "deploy\demo\start-demo.bat -DemoRoot $demo -Port $port -PgBin $env:PGBIN -PgPort 55433 -NoBrowser -ToolDelay 0 2>&1" | Tee-Object -FilePath $stepLog -Append
+            if ($LASTEXITCODE) { Get-ChildItem "$demo\logs" -ErrorAction SilentlyContinue | ForEach-Object { "--- $($_.Name)"; Get-Content $_.FullName -Tail 60 }; throw "start-demo 실패($LASTEXITCODE)" }
+            try {
+              $base = "http://127.0.0.1:$port"
+              $s = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+              Invoke-WebRequest "$base/physicsai/api/demo/login" -Method Post -Body @{ role = 'power' } -WebSession $s | Out-Null
+              $st = Invoke-RestMethod "$base/physicsai/api/status" -WebSession $s
+              if (-not $st.demo) { throw '/status.demo가 true가 아닙니다' }
+              for ($i = 0; $i -lt 30 -and -not $st.worker.online; $i++) { Start-Sleep 1; $st = Invoke-RestMethod "$base/physicsai/api/status" -WebSession $s }
+              Write-Host "worker online=$($st.worker.online) limiter=$($st.worker.limiter)"
+              if ($st.worker.limiter -ne 'windows_job') { throw "Windows 제한기가 아닙니다: $($st.worker.limiter)" }
+              $sid = (Invoke-RestMethod "$base/physicsai/api/studies?project_id=demo" -WebSession $s | Where-Object folder_name -eq 'demo_bracket').id
+              $cad = ($demo -replace '\\', '/') + '/ai_root/demo_bracket/00_inbox/cad/demo_bracket.prt'
+              $body = @{ job_type = 'TD_EXTRACT_PARAMS'; params = @{ cad_path = $cad } } | ConvertTo-Json
+              $j = Invoke-RestMethod "$base/physicsai/api/studies/$sid/jobs" -Method Post -WebSession $s -Headers @{ 'X-PhysicsAI-Request' = '1' } -ContentType 'application/json; charset=utf-8' -Body $body
+              for ($i = 0; $i -lt 60; $i++) {
+                Start-Sleep 1
+                $jd = Invoke-RestMethod "$base/physicsai/api/jobs/$($j.id)" -WebSession $s
+                if ($jd.state -in 'SUCCEEDED', 'FAILED', 'CANCELED', 'INTERRUPTED') { break }
+              }
+              Write-Host "①-1 결과: $($jd.state) $($jd.failure_code) $($jd.failure_message)"
+              if ($jd.state -ne 'SUCCEEDED') { $jd | ConvertTo-Json -Depth 6; throw '시연 ①-1 실패' }
+            } finally {
+              cmd /c "deploy\demo\stop-demo.bat -DemoRoot $demo"
             }
-            Write-Host "①-1 결과: $($jd.state) $($jd.failure_code) $($jd.failure_message)"
-            if ($jd.state -ne 'SUCCEEDED') { $jd | ConvertTo-Json -Depth 6; throw '시연 ①-1 실패' }
-          } finally {
-            cmd /c "deploy\demo\stop-demo.bat -DemoRoot $demo"
+          } catch {
+            $msg = ($_ | Out-String) + "`n" + $_.ScriptStackTrace
+            Write-Host ('::error title=demo 예외::' + ($msg -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'))
+            if (Test-Path $stepLog) { python scripts/ci_annotate.py $stepLog 'demo 출력' 150 }
+            foreach ($f in @(Get-ChildItem (Join-Path $env:RUNNER_TEMP 'demo\logs') -Filter *.log -ErrorAction SilentlyContinue | ForEach-Object FullName)) { if ($f -and (Test-Path $f)) { python scripts/ci_annotate.py $f "demo $(Split-Path -Leaf $f)" 60 } }
+            throw
           }

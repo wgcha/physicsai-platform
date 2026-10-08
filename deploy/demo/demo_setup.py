@@ -359,7 +359,8 @@ def cmd_db_up(args: argparse.Namespace) -> int:
     if st.returncode != 0:
         _log(f"시연 PostgreSQL 시작: 127.0.0.1:{port}")
         r = _run([_pg(args.pg_bin, "pg_ctl"), "-D", str(data), "-l", str(root / "logs" / "postgres.log"), "-w", "-o",
-                  f"-p {port} -c listen_addresses=127.0.0.1", "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                  f"-p {port} -c listen_addresses=127.0.0.1" + ("" if os.name == "nt" else " -c unix_socket_directories=''"),
+                  "start"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         if r.returncode != 0:
             raise SystemExit(f"PostgreSQL 시작 실패 — {root / 'logs' / 'postgres.log'} 확인(포트 {port} 사용 중일 수 있음)")
     psql = [_pg(args.pg_bin, "psql"), "-h", "127.0.0.1", "-p", str(port), "-U", "postgres", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-tAc"]
