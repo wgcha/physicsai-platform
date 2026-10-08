@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from alembic import op
 
-from physicsai_core.db.tables import metadata, worker_slot
+from physicsai_core.db.schema_0001 import metadata, worker_slot
 
 revision = "0001_initial"
 down_revision = None
@@ -18,7 +18,7 @@ depends_on = None
 
 def upgrade() -> None:
     bind = op.get_bind()
-    # 0001은 physicsai_core.db.tables의 1차 스키마를 그대로 만든다.
+    # 0001은 1차 스키마 동결본(physicsai_core.db.schema_0001)을 그대로 만든다.
     # 이후 스키마 변경은 tables.py 수정과 함께 0002 이후 migration에 명시적 DDL로 적는다.
     metadata.create_all(bind)
     op.execute(worker_slot.insert().values(id=1, lease_generation=0))

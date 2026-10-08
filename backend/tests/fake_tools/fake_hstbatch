@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""가짜 hstbatch.exe(phase2 §16.1): -multiexec N -pyfile L.
+
+cwd의 INPUT_HST_RUN.json 필수 키 확인(없으면 5), 런처·pyd 확인, DOE_NUM_RUNS개 run을
+approaches/doe_1/run__0000k/m_3/<starter>, m_1/simlab_parametered_mesh.py(paramitem 렌더)로 생성하고
+'Finished run (k), model (m_3)'을 출력한다.
+모드(FAKE_TOOL_MODE_HSTBATCH > FAKE_TOOL_MODE): ok | fail | error_log | no_runs | partial_samples | hang
+"""
+import glob, json, os, re, subprocess, sys, time
+
+NAME = "HSTBATCH"
+m = os.environ.get(f"FAKE_TOOL_MODE_{NAME}") or os.environ.get("FAKE_TOOL_MODE") or "ok"
+rec = os.environ.get("FAKE_TOOL_RECORD")
+if rec:
+    with open(rec, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "hstbatch", "argv": sys.argv, "cwd": os.getcwd()}) + "\n")
+a = sys.argv
+if m == "fail":
+    print("hstbatch fatal", flush=True)
+    sys.exit(1)
+if m == "hang":
+    subprocess.Popen([sys.executable, "-c", "import time\nwhile True: time.sleep(1)"])
+    while True:
+        time.sleep(0.2)
+REQUIRED = ("HST_EXECUTABLE", "ALTAIR_PATHS", "DOE_NUM_RUNS", "DIR_WORK", "CAD_PARAM", "RADIOSS_ASSEM_DIR", "DOE_TYPE",
+            "DOE_METHOD_OPTIONS", "MULTI_EXECUTION")
+try:
+    cfg = json.load(open("INPUT_HST_RUN.json", encoding="utf-8"))
+except Exception as exc:
+    print(f"INPUT_HST_RUN.json: {exc}", flush=True)
+    sys.exit(5)
+missing = [k for k in REQUIRED if k not in cfg]
+if missing:
+    print(f"missing keys {missing}", flush=True)
+    sys.exit(5)
+launcher = a[a.index("-pyfile") + 1]
+if not os.path.isfile(launcher) or not glob.glob(os.path.join(os.path.dirname(launcher), "hst_gen_radioss_core*.pyd")):
+    print("ImportError: hst_gen_radioss_core", flush=True)
+    sys.exit(4)
+if a[a.index("-multiexec") + 1] != str(cfg["MULTI_EXECUTION"]):
+    print("multiexec mismatch", flush=True)
+    sys.exit(6)
+tpl = open(os.path.join(cfg["DIR_WORK"], "simlab_parametered_mesh.tpl"), encoding="utf-8").read()
+decl = re.findall(r'\{parameter\((var_\d+), "([^"]+)", ([^,]+), ([^,]+), ([^)]+)\)\}', tpl)
+fmts = dict(re.findall(r'NewValue="\{(var_\d+), (%[^}]+)\}"', tpl))
+starters = [n for n in os.listdir(cfg["RADIOSS_ASSEM_DIR"]) if n.endswith("_0000.rad") and not n.lower().startswith("eps_mesh")]
+n = 0 if m == "no_runs" else int(cfg["DOE_NUM_RUNS"])
+for k in range(1, n + 1):
+    rd = os.path.join("approaches", "doe_1", f"run__{k:05d}")
+    os.makedirs(os.path.join(rd, "m_3"), exist_ok=True)
+    os.makedirs(os.path.join(rd, "m_1"), exist_ok=True)
+    for s in starters:
+        with open(os.path.join(rd, "m_3", s), "w") as fh:
+            fh.write("#include eps_mesh_1.inc\n")
+    with open(os.path.join(rd, "m_3", "eps_mesh_1.inc"), "w") as fh:
+        fh.write("/NODE\n")
+    lines = []
+    for var, name, nom, lo, hi in decl:
+        lo, hi = float(lo), float(hi)
+        v = lo + (hi - lo) * k / (n + 1)
+        fmt = fmts.get(var, "%g")
+        if fmt[-1] in "id":
+            v = int(round(v))
+        lines.append(f'   <paramitem Name="{name}" NewValue="{fmt % v}" Value="{nom.strip()}"/>')
+    if not (m == "partial_samples" and k == 1):
+        with open(os.path.join(rd, "m_1", "simlab_parametered_mesh.py"), "w", encoding="utf-8") as fh:
+            fh.write("# rendered\n<Parameters Value=\"\">\n" + "\n".join(lines) + "\n")
+    print(f"Finished run ({k}), model (m_3)", flush=True)
+if m == "error_log":
+    print("ImportError: fake core broken", flush=True)
+print("hstbatch (fake) done", flush=True)
+sys.exit(0)

@@ -6,7 +6,9 @@
 
 from __future__ import annotations
 
+import ntpath
 import os
+import posixpath
 import re
 import string
 from collections.abc import Mapping, Sequence
@@ -21,6 +23,7 @@ EXECUTABLE_PLACEHOLDERS: dict[str, str] = {
     "hw": "hw_exe_path",
     "hstbatch": "hyperstudy_path",
     "hvtrans": "hvtrans_exe_path",
+    "hstpy": "hstpy_path",  # 2차(phase2 §8.1): 빈 값이면 hyperstudy_path 폴더의 hstpy.bat로 파생
 }
 
 EXPANSION_TOKENS = ("@cmd_c", "@write_files", "@hooks_arg")
@@ -57,6 +60,40 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
         frozenset(),
         False,
     ),
+    # ---- 2차(phase2 §8.1). null이면 그 기능만 비활성(가정 A-11) ----
+    "simlab_extract_params": TemplateSpec(frozenset({"simlab", "launcher", "cad_file", "xml_out"}), frozenset(), False),
+    "hst_gen_radioss": TemplateSpec(frozenset({"hstbatch", "multi_execution", "launcher"}), frozenset(), False),
+    "h3d_preview": TemplateSpec(frozenset({"hw", "preview_tcl", "h3d", "result_json"}), frozenset(), False),
+    "hvtrans_curate": TemplateSpec(frozenset({"hvtrans", "cfg", "h3d", "out_h3d"}), frozenset(), False),
+    "t01_preview": TemplateSpec(frozenset({"hw", "preview_tcl", "t01", "result_json"}), frozenset(), False),
+    "t01_curve_export": TemplateSpec(frozenset({"hw", "curate_tcl", "config_json"}), frozenset(), False),
+    "hst_optimization": TemplateSpec(frozenset({"hstpy", "launcher"}), frozenset({"@cmd_c"}), False),
+}
+
+PHASE2_TEMPLATE_KEYS = (
+    "simlab_extract_params", "hst_gen_radioss", "h3d_preview", "hvtrans_curate", "t01_preview", "t01_curve_export",
+    "hst_optimization",
+)
+
+# 키별 경로 표기(phase2 §8.1 "값 표기"): fwd = '/' 구분(원본 replace("\\","/")), os = OS 기본(원본 abspath/normpath).
+# 표에 없는 placeholder는 값 그대로(1차 동작 유지).
+PATH_STYLE: dict[tuple[str, str], str] = {
+    ("simlab_extract_params", "launcher"): "os",
+    ("simlab_extract_params", "cad_file"): "os",
+    ("simlab_extract_params", "xml_out"): "os",
+    ("hst_gen_radioss", "launcher"): "fwd",
+    ("h3d_preview", "preview_tcl"): "fwd",
+    ("h3d_preview", "h3d"): "fwd",
+    ("h3d_preview", "result_json"): "fwd",
+    ("hvtrans_curate", "cfg"): "os",
+    ("hvtrans_curate", "h3d"): "os",
+    ("hvtrans_curate", "out_h3d"): "os",
+    ("t01_preview", "preview_tcl"): "fwd",
+    ("t01_preview", "t01"): "fwd",
+    ("t01_preview", "result_json"): "fwd",
+    ("t01_curve_export", "curate_tcl"): "fwd",
+    ("t01_curve_export", "config_json"): "fwd",
+    ("hst_optimization", "launcher"): "os",
 }
 
 CMD_META_CHARS = set('&|<>^%!"')
@@ -98,7 +135,7 @@ def validate_template(key: str, template: object) -> list[str]:
             problems.append(f"'{key}'에서 @cmd_c는 허용되지 않습니다")
         head_idx = 1
     if head_idx >= len(elements) or elements[head_idx] not in {f"{{{p}}}" for p in EXECUTABLE_PLACEHOLDERS}:
-        problems.append(f"'{key}'의 argv[0]은 {{edspy}} {{simlab}} {{hw}} {{hstbatch}} {{hvtrans}} 중 하나여야 합니다")
+        problems.append(f"'{key}'의 argv[0]은 {{edspy}} {{simlab}} {{hw}} {{hstbatch}} {{hvtrans}} {{hstpy}} 중 하나여야 합니다")
     for i, el in enumerate(elements):
         if el.startswith("@"):
             if el not in EXPANSION_TOKENS:
@@ -155,6 +192,22 @@ def cmd_c_prefix(is_windows: bool | None = None, environ: Mapping[str, str] | No
     return [root.rstrip("\\/") + "\\System32\\cmd.exe", "/c"]
 
 
+def os_path(value: str, is_windows: bool | None = None) -> str:
+    """OS 기본 구분자 표기(원본 os.path.normpath). Windows면 '\\'."""
+    if is_windows is None:
+        is_windows = os.name == "nt"
+    return ntpath.normpath(value) if is_windows else posixpath.normpath(value)
+
+
+def styled_value(key: str, name: str, value: str, is_windows: bool | None = None) -> str:
+    style = PATH_STYLE.get((key, name))
+    if style == "fwd":
+        return fwd(value)
+    if style == "os":
+        return os_path(value, is_windows)
+    return value
+
+
 def render_argv(
     key: str,
     template: Sequence[str] | None,
@@ -205,13 +258,14 @@ def render_argv(
                         "EXECUTABLE_MISSING", f"실행 파일 설정 altair.{EXECUTABLE_PLACEHOLDERS[n]}이 비어 있습니다"
                     )
                 check_value(n, exe, allow_space=True)
-                mapping[n] = exe
+                # phase2 §2.3: Windows에서 argv[0]은 '\\' 구분자(hvtrans는 '/' 경로면 리더를 못 찾음)
+                mapping[n] = os_path(exe, True) if (is_windows if is_windows is not None else os.name == "nt") else exe
             else:
                 if n not in spec.placeholders:
                     raise StepFailure("CONFIG_INVALID", f"placeholder '{{{n}}}' 미허용")
                 if n not in values:
                     raise StepFailure("INTERNAL_ERROR", f"placeholder '{{{n}}}' 값이 준비되지 않았습니다")
-                v = values[n]
+                v = styled_value(key, n, values[n], is_windows)
                 check_value(n, v, allow_space=False, via_cmd=via_cmd)
                 mapping[n] = v
         argv.append(el.format_map(mapping) if names or ("{{" in el or "}}" in el) else el)

@@ -5,6 +5,8 @@ import { ToastHost } from "../shell/ToastHost";
 import { ProjectList } from "../pages/ProjectList";
 import { StudyList } from "../pages/StudyList";
 import { StudyPage } from "../pages/StudyPage";
+import { AdminEnvCheck } from "../pages/AdminEnvCheck";
+import { ImportLanding } from "../pages/ImportLanding";
 
 const FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
 
@@ -22,6 +24,8 @@ export function AppRoutes() {
           <Route path="/p/:projectId" element={<StudyList />} />
           <Route path="/p/:projectId/s/:studyId" element={<StudyRedirect />} />
           <Route path="/p/:projectId/s/:studyId/stage/:n" element={<StudyPage />} />
+          <Route path="/admin/env-check" element={<AdminEnvCheck />} />
+          <Route path="/import" element={<ImportLanding />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <ToastHost />

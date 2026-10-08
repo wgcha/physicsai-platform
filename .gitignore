@@ -10,3 +10,7 @@ state/
 *.h3d
 frontend/node_modules/
 frontend/dist/
+# 2차 배포(deploy/collect-offline.*) 산출·사이트별 설치 매개변수
+dist/
+physicsai-offline-*.zip
+deploy/deploy.json

@@ -13,6 +13,7 @@ from sqlalchemy import and_, select
 from physicsai_core import nearest as nearest_mod
 from physicsai_core import param_sets as ps_mod
 from physicsai_core.dataset_split import collect_h3d, n_eval_groups, split_files
+from physicsai_core.db.repositories import curations as cur_repo
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
@@ -129,6 +130,8 @@ def archive_study(ctx: AppContext, principal: Principal, study_id: str, rid: str
 
 # ---- 경로 확인 ---------------------------------------------------------------
 
+P2_PURPOSES = ("CAD_FILE", "RADIOSS_ASSEM", "RESULT_FOLDER", "CURATION_INPUT", "SPDM_IMPORT")
+
 
 def _list_direct(folder: str, patterns: list[str]) -> list[str]:
     out = []
@@ -151,6 +154,10 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
     with ctx.engine.connect() as conn:
         s = studies_repo.require(conn, study_id)
     require_power(principal, s["project_id"])
+    if body.purpose in P2_PURPOSES:
+        from .inspect2 import inspect_phase2
+
+        return inspect_phase2(ctx, s, body)
     roots = [s_cfg.storage.ai_root]
     if body.purpose == "MODEL_FOLDER":
         roots += list(s_cfg.storage.allowed_import_roots)
@@ -197,6 +204,7 @@ def list_datasets(ctx: AppContext, study_id: str, limit: int | None, cursor: str
     with ctx.engine.connect() as conn:
         st = studies_repo.require(conn, study_id)
         rows = datasets_repo.list_for_study(conn, study_id, lim + 1, off)
+        rows = [{**d, "curation_id": cur_repo.curation_id_for_dataset(conn, d["job_id"])} for d in rows[:lim + 1]]
     return [dataset_out(d, st, ctx.settings.storage.ai_root) for d in rows[:lim]], (encode_cursor(off + lim) if len(rows) > lim else None)
 
 
@@ -204,6 +212,8 @@ def get_dataset(ctx: AppContext, dataset_id: str) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         d = datasets_repo.get(conn, dataset_id)
         st = studies_repo.get(conn, d["study_id"]) if d else None
+        if d is not None:
+            d = {**d, "curation_id": cur_repo.curation_id_for_dataset(conn, d["job_id"])}
     if d is None:
         raise DomainError("NOT_FOUND", "데이터셋을 찾을 수 없습니다", status=404)
     return dataset_out(d, st, ctx.settings.storage.ai_root)
@@ -365,3 +375,111 @@ def predict_check(ctx: AppContext, study_id: str, param_set_id: str | None, valu
         "nearest": near,
     }
 
+
+
+def register_param_set_from_train(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str,
+                                  ip: str | None) -> dict[str, Any]:
+    """F(phase2 §6.13): ① DOE 결과로 파라미터 세트 폴더를 조립해 1차 검증기·등록 함수로 등록."""
+    import csv as _csv
+
+    from physicsai_core import doe_samples
+    from physicsai_core.db.repositories import train as train_repo
+    from physicsai_core.fileutil import copy_file, write_text
+
+    cfg = ctx.settings
+    with ctx.engine.connect() as conn:
+        s = studies_repo.require(conn, study_id)
+        d = train_repo.get_doe(conn, body.doe_id)
+        runs = train_repo.runs_for_doe(conn, body.doe_id) if d else []
+        setup = train_repo.get_setup(conn, study_id)
+    require_power(principal, s["project_id"])
+    require_config_ok(ctx)
+    if s["status"] != "ACTIVE":
+        raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
+    if d is None or d["study_id"] != study_id or d["status"] != "READY":
+        raise DomainError("DOE_NOT_READY", "READY 상태의 DOE가 필요합니다", status=409)
+    if d["sample_status"] not in ("PARSED", "PARTIAL") or not d["samples_rel"]:
+        raise DomainError("SAMPLES_MISSING", "DOE 샘플 표가 없습니다(샘플 추출기 설정 확인)", status=409)
+    if body.runs == "collected":
+        keys = {r["run_key"] for r in runs if r["state"] == "COLLECTED"}
+        if not keys:
+            raise DomainError("DOE_NOT_READY", "회수된 run이 없습니다", status=409)
+    else:
+        keys = {r["run_key"] for r in runs}
+    root = study_root(ctx, s)
+    D = resolve_in_study(root, d["dir_rel"])
+    tmp_id = str(uuid.uuid4())
+    A = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}")
+    os.makedirs(A)
+    snap = d["parameters_snapshot"] or []
+    write_json(os.path.join(A, "parameters.json"), {
+        "schema_version": 1, "unit_system": body.unit_system or "mm-ton-s",
+        "parameters": [{"name": p["name"], "nominal": p["nominal"], "min": p["min"], "max": p["max"],
+                        "unit": p.get("unit", "")} for p in snap],
+    })
+    names = [p["name"] for p in snap]
+    _hdr, rows = doe_samples.read_samples_csv(resolve_in_study(root, d["samples_rel"]))
+    resp_names: list[str] = []
+    resp: dict[str, dict[str, Any]] = {}
+    if d["responses_rel"] and os.path.isfile(resolve_in_study(root, d["responses_rel"])):
+        rh, rrows = doe_samples.read_samples_csv(resolve_in_study(root, d["responses_rel"]))
+        resp_names = rh[1:]
+        resp = {r["run_key"]: r["values"] for r in rrows}
+    rj = os.path.join(D, "responses.json")
+    if os.path.isfile(rj):
+        copy_file(rj, os.path.join(A, "responses.json"))
+    elif resp_names:
+        write_json(os.path.join(A, "responses.json"), {"responses": [{"name": n, "unit": "", "spec": {}} for n in resp_names]})
+    else:
+        write_json(os.path.join(A, "responses.json"), {"responses": []})
+    import io
+
+    buf = io.StringIO()
+    w = _csv.writer(buf, lineterminator="\n")
+    w.writerow(["run_key", *names, *[f"resp:{n}" for n in resp_names]])
+    for r in rows:
+        if r["run_key"] not in keys:
+            continue
+        mv = resp.get(r["run_key"], {})
+        w.writerow([r["run_key"], *[repr(r["values"][n]) for n in names],
+                    *["" if mv.get(n) is None else repr(mv[n]) for n in resp_names]])
+    write_text(os.path.join(A, "samples.csv"), buf.getvalue())
+    cad = (setup or {}).get("cad_file_name")
+    if not cad or not os.path.isfile(resolve_in_study(root, f"01_train/cad/{cad}")):
+        raise DomainError("PARAM_SET_INVALID", "CAD 사본이 없습니다", status=422,
+                          problems=[{"code": "CAD_MISSING", "message": "01_train/cad 사본이 없습니다"}])
+    copy_file(resolve_in_study(root, f"01_train/cad/{cad}"), os.path.join(A, "cad", cad))
+    copy_file(os.path.join(D, ps_mod.TPL_NAME), os.path.join(A, ps_mod.TPL_NAME))
+    assem = resolve_in_study(root, f"01_train/radioss_assem/{d['id']}")
+    for n in sorted(os.listdir(assem)) if os.path.isdir(assem) else []:
+        # eps_mesh*로 시작하는 starter 형태 파일은 SimLab 메시 산출(원본 1_gui_physicsai_opti.py:427-445 규칙) — 1차 검증기
+        # starter 1개 규칙과 충돌하므로 제외(변경 메모 C3)
+        if n.lower().startswith("eps_mesh") and fnmatch.fnmatch(n, cfg.predict.starter_glob):
+            continue
+        if os.path.isfile(os.path.join(assem, n)):
+            copy_file(os.path.join(assem, n), os.path.join(A, "radioss_assem", n))
+    f = ps_mod.validate_folder(A, max_samples=cfg.param_set.max_samples, max_total_bytes=cfg.param_set.max_total_bytes,
+                               starter_glob=cfg.predict.starter_glob)
+    if not f.ok:
+        raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
+    psid = str(uuid.uuid4())
+    label = f"① DOE {d['id'][:8]}"
+    out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}.out")
+    ps_mod.write_normalized(f, A, out_tmp, label)
+    stored_rel = f"04_params/{psid}"
+    dst = resolve_in_study(root, stored_rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
+    with ctx.engine.begin() as conn:
+        ps_repo.insert_current(conn, {
+            "id": psid, "study_id": study_id, "source_path": label, "stored_rel": stored_rel + "/",
+            "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
+            "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
+            "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
+            "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
+            "registered_by": principal.user_id, "registered_by_name": principal.display_name,
+            "origin": "TRAIN_DOE", "train_doe_id": d["id"],
+        })
+        audit(conn, principal, "PARAM_SET_FROM_TRAIN", "param_set", psid, {"doe_id": d["id"], "runs": body.runs}, rid, ip)
+        p = ps_repo.get(conn, psid)
+    return param_set_out(p)  # type: ignore[arg-type]

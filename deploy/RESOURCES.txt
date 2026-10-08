@@ -1,0 +1,17 @@
+PhysicsAI 원본 반입 자원 안내(phase2 §8.2, §11.2)
+
+설치 스크립트는 아래 자원을 다루지 않는다. 관리자가 사내 배포물(원본 OPEN_SOURCE_physics_ai_platform 배포본)에서
+복사해 두고 설정 파일(platform.yaml)의 resources.* 에 절대경로를 적는다. 값이 비어 있으면 그 기능만 비활성.
+
+  resources.batchrun_dir         원본 CONFIG/BATCHRUN (런처 BATCHRUN_*.py)
+  resources.pyd_dir              원본 BUILD_PYD (<core>*.pyd — 코어마다 정확히 1개)
+  resources.simlab_tpl_template  원본 CONFIG/TEMPLATE/TEMAPLATE_simlab_parametered_mesh.tpl
+  resources.doe_design_type_json 원본 CONFIG/DATA/DATA_doe_design_type.json
+  resources.hypermesh_include_tcl 원본 CONFIG/BATCHRUN/BATCHRUN_create_include_node_elem.tcl
+  resources.preview_h3d_tcl      원본 CONFIG/BATCHRUN/BATCHRUN_preview_h3d.tcl
+  resources.preview_hg_tcl       원본 CONFIG/BATCHRUN/BATCHRUN_preview_hg.tcl
+  resources.curate_hg_tcl        원본 CONFIG/BATCHRUN/BATCHRUN_curate_hg.tcl
+  resources.extract_minmax_tcl   원본 H3D_StaticMinMax_to_CSV_FAST.tcl
+  resources.preview_pred_h3d_tcl 원본 CONFIG/BATCHRUN/BATCHRUN_preview_pred_h3d.tcl (1차)
+
+경로에는 공백·cmd 메타문자(& | < > ^ % ! ")를 쓰지 않는다. 설치 후 "관리 > 환경 점검"으로 확인한다.

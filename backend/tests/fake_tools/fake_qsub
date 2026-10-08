@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""가짜 qsub: 12345.pbs01 출력, 상태 파일에 기록."""
+"""가짜 qsub: 제출마다 다른 id(12345.pbs01, 12346.pbs01…), 상태 파일에 id별 기록(phase2 §16.1)."""
 import json, os, sys, tempfile
 
 m = os.environ.get("FAKE_TOOL_MODE_PBS") or "ok"
@@ -8,8 +8,16 @@ p = os.environ.get("FAKE_TOOL_RECORD")
 if p:
     with open(p, "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"tool": "qsub", "argv": sys.argv}) + "\n")
-if m == "submit_fail":
+st = json.load(open(state)) if os.path.exists(state) else {}
+st.setdefault("jobs", {})
+st.setdefault("next", 12345)
+fail_at = os.environ.get("FAKE_PBS_SUBMIT_FAIL_AT")  # n번째 제출(1부터)에서 실패
+if m == "submit_fail" or (fail_at and len(st["jobs"]) + 1 == int(fail_at)):
     print("qsub: Unauthorized Request", file=sys.stderr)
     sys.exit(1)
-json.dump({"job": "12345.pbs01", "polls": 0, "argv": sys.argv}, open(state, "w"))
-print("12345.pbs01")
+jid = f"{st['next']}.pbs01"
+st["next"] += 1
+name = sys.argv[sys.argv.index("-N") + 1] if "-N" in sys.argv else ""
+st["jobs"][jid] = {"polls": 0, "name": name, "argv": sys.argv}
+json.dump(st, open(state, "w"))
+print(jid)

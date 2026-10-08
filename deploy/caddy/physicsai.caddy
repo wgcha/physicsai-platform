@@ -1,0 +1,15 @@
+# PhysicsAI Caddy 스니펫(phase2 §11.2, 1차 §20 D1·D9).
+# 대시보드 Caddyfile의 사이트 블록 안, catch-all `handle` **앞**에 넣는다.
+# 환경변수: PHYSICSAI_PORT(기본 8100), PHYSICSAI_FRONTEND_ROOT(= deploy.json caddy_frontend_root)
+redir /physicsai /physicsai/ 308
+
+handle /physicsai/api/* {
+	reverse_proxy 127.0.0.1:{$PHYSICSAI_PORT:8100}
+}
+
+handle /physicsai/* {
+	root * {$PHYSICSAI_FRONTEND_ROOT}
+	uri strip_prefix /physicsai
+	try_files {path} /index.html
+	file_server
+}

@@ -1,4 +1,4 @@
-# PhysicsAI 플랫폼 설정 예시 (계약: docs/contracts/platform.md §14)
+# PhysicsAI 플랫폼 설정 예시 (계약: docs/contracts/platform.md §14, 2차 docs/contracts/phase2.md §8.2)
 # 실제 파일은 config/platform.yaml (git 제외) 또는 PHYSICSAI_CONFIG 환경변수 경로.
 # 경로 구분자는 '/'를 권장한다. ai_root·resources·입력 경로에는 공백과 & | < > ^ % ! " 를 쓰지 않는다.
 # "사내 확인 후 교체" 표시는 원본 코드로 확인되지 않은 값이다.
@@ -34,7 +34,7 @@ auth:
 storage:
   ai_root: "E:/shared/AI_WORK"    # 임시 값. SPDM master 밖
   allowed_import_roots: []        # ③-4 모델 폴더 추가 허용 루트(읽기 전용). 예: ["F:/hpc_results"]
-  spdm_roots: []                  # 겹침 금지 검사용 SPDM master 루트 목록
+  spdm_roots: []                  # SPDM master 루트. 2차부터 이 하위가 SPDM 가져오기 허용 범위(읽기 전용, 쓰기 0)
 
 altair:                           # 하드코딩 금지 — 실행 파일 경로는 여기서만 (원본 common.py:25-37 키)
   version_label: "2026.1"
@@ -43,9 +43,24 @@ altair:                           # 하드코딩 금지 — 실행 파일 경로
   edspy_path:      "C:/Program Files/Altair/2026.1/common/eds/win64/bin/win64/edspy.bat"
   hw_exe_path:     "C:/Program Files/Altair/2026.1/hwdesktop/hw/bin/win64/hw.exe"
   hvtrans_exe_path: "C:/Program Files/Altair/2026.1/hwdesktop/io/result_readers/bin/win64/hvtrans.exe"
+  hstpy_path: ""                  # 2차. 빈 값 = hyperstudy_path 폴더의 hstpy.bat (원본 4_OPTIMIZATION/GUI:409-418)
+  altair_home: ""                 # 2차. 빈 값 = hstpy 폴더/../../.. (원본 GUI:420-422)
 
-resources:
-  preview_pred_h3d_tcl: "D:/physicsai/resources/BATCHRUN_preview_pred_h3d.tcl"   # 원본 CONFIG/BATCHRUN 반입본
+resources:                        # 원본 반입본 위치(deploy/RESOURCES.txt). 절대경로·공백/메타문자 없음. prod면 존재해야 함. 빈 값 = 그 기능 비활성
+  preview_pred_h3d_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_preview_pred_h3d.tcl"   # 1차
+  batchrun_dir: "D:/physicsai/resources/BATCHRUN"          # 원본 CONFIG/BATCHRUN (런처 .py)
+  pyd_dir: "D:/physicsai/resources/BUILD_PYD"              # 원본 BUILD_PYD (*.pyd) — 업로드본에 없음(U19)
+  simlab_tpl_template: "D:/physicsai/resources/TEMPLATE/TEMAPLATE_simlab_parametered_mesh.tpl"   # 업로드본에 없음(U19)
+  doe_design_type_json: "D:/physicsai/resources/DATA/DATA_doe_design_type.json"
+  hypermesh_include_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_create_include_node_elem.tcl"  # 업로드본에 없음(U19)
+  preview_h3d_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_preview_h3d.tcl"     # 업로드본에 없음(U19)
+  preview_hg_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_preview_hg.tcl"       # 업로드본에 없음(U19)
+  curate_hg_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_curate_hg.tcl"
+  extract_minmax_tcl: "D:/physicsai/resources/BATCHRUN/H3D_StaticMinMax_to_CSV_FAST.tcl"   # 업로드본에 없음(U8·U19)
+  launchers:                      # 런처 파일 이름(경로 구분자 없이)·pyd 코어 이름
+    extract_params: {script: BATCHRUN_get_parameter_from_cad.py, core: get_parameter_from_cad_core}
+    gen_radioss:    {script: BATCHRUN_hst_gen_radioss_input.py,   core: hst_gen_radioss_core}
+    optimization:   {script: BATCHRUN_hst_physicsai_optimization.py, core: hst_physicsai_optimization_core}
 
 worker:
   limiter: auto                   # auto | windows_job | posix | null (null은 dev만)
@@ -112,7 +127,15 @@ commands:
   rad_assemble: null                                                      # 사내 확인 후 교체(U3). null = 복사 규칙만
   edspy_predict: ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]   # 원본 1_physicsai_opti.py:310-316
   contour_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"]   # 원본 1_physicsai_opti.py:230-231
-  response_extract: null                                                  # 미확인(U8). 예: ["{hw}", "-b", "-tcl", "<추출 TCL>", "-input", "{pred_h3d_fwd}", "-config", "{responses_json}", "-output", "{out_csv}"]
+  response_extract: null                                                  # 미확인(U8·U35). 예: ["{hw}", "-b", "-tcl", "<추출 TCL>", "-input", "{pred_h3d_fwd}", "-config", "{responses_json}", "-output", "{out_csv}"]
+  # ---- 2차(phase2 §8.1) 원본 인용 기본값. null이면 그 기능만 비활성 ----
+  simlab_extract_params: ["{simlab}", "-auto", "{launcher}", "{cad_file}", "{xml_out}", "-nographics"]              # 1_create_tpl_file.py:45
+  hst_gen_radioss: ["{hstbatch}", "-multiexec", "{multi_execution}", "-pyfile", "{launcher}"]                          # 2_run_hst_gen_rad_input.py:39
+  h3d_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-h3d", "{h3d}", "-result", "{result_json}"]   # 1_curate_h3d.py:29-36
+  hvtrans_curate: ["{hvtrans}", "-c", "{cfg}", "{h3d}", "{h3d}", "-o", "{out_h3d}", "-z0"]                              # 1_curate_h3d.py:267-273
+  t01_preview: ["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{preview_tcl}", "-input", "{t01}", "-output", "{result_json}"]   # 2_curate_t0.py:37-45
+  t01_curve_export: ["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{curate_tcl}", "-config", "{config_json}"]   # 2_curate_t0.py:198-205
+  hst_optimization: ["@cmd_c", "{hstpy}", "{launcher}"]                                                                 # 1_physicsai_opti.py:120-122
 
 commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원본 2_run_hst_gen_rad_input.py:65-67)
   - '^\s*\d+\s+Error\s*:'
@@ -151,9 +174,75 @@ hpc:
     stage_in: shared_path
     path_map:                     # 이 PC 경로 → PBS 노드 경로. 사내 확인 후 교체
       - {local: "E:/shared/AI_WORK", remote: "/shared/AI_WORK"}
-    collect_mode: in_place        # 1차는 in_place만 (shared_folder | drive 는 2차)
+    collect_mode: in_place        # in_place | shared_folder | drive(= shared_folder 별칭, 가정 A-7)
+    collect_root_local: ""        # shared_folder/drive: 이 PC에서 읽는 결과 루트(읽기 전용, AI 루트·SPDM과 비중첩)
+    collect_root_remote: ""       # 같은 루트의 PBS 노드 경로
     collect_patterns: ["*.h3d", "*T01", "*_0000.out", "*_0001.out"]
     max_collect_bytes: 21474836480
+
+train_data:                       # ① 학습데이터(phase2 §6.2~§6.6). 기본값은 원본 인용
+  cad_extensions: [".prt"]
+  max_xml_bytes: 4194304
+  extract_progress_token: "Passed"          # 원본 1_create_tpl_file.py:18
+  extract_progress_total: 4                 # 원본 :51
+  param_default_range_ratio: 0.05           # 원본 1_gui_create_tpl_file.py:299-300
+  param_default_format: "%3i"               # 원본 1_create_tpl_file.py:171
+  tpl_marker: "#***************************************************************"     # 원본 :159
+  tpl_prt_regex: 'dir_file_prt\s*=\s*r"[^"]*"'
+  tpl_parameter_line_regex: '(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?'
+  tpl_paramitem_line_regex: '(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?'
+  max_runs: 2000
+  max_multi_execution: 8
+  hst_progress_regex: 'Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)'   # 원본 2_run_hst_gen_rad_input.py:59-61
+  hst_log_error_patterns:                   # 원본 :64-71
+    - '^\s*\d+\s+Error\s*:'
+    - 'Traceback \(most recent call last\):'
+    - '^\s*\[ERROR\]'
+    - '^\s*(?:FileNotFoundError|RuntimeError|ValueError|OSError|PermissionError|ImportError|TypeError|AttributeError|NameError|SyntaxError)\s*:'
+  run_dir_glob: "approaches/*/run__*"       # 사내 확인 후 교체(U17)
+  samples_extractor: paramitem              # paramitem | csv | none (U18)
+  rendered_tpl_glob: "**/*"
+  rendered_tpl_exts: [".py", ".tcl", ".txt", ".xml", ""]
+  samples_scan_max_bytes: 1048576
+  paramitem_regex: '<paramitem\s+Name="(?P<name>[^"]+)"\s+NewValue="(?P<value>[^"]*)"'
+  samples_csv_glob: null
+  samples_csv_run_column: run_key
+  max_runs_per_submit: 500
+  result_run_dir_regex: '^(?P<run_key>run__\d+)$'   # 사내 확인 후 교체(U25)
+  result_match_depth: 3
+
+curation:
+  max_files: 20000
+
+spdm_import:
+  patterns: ["*.h3d", "*T01"]
+  max_files: 20000
+  max_total_bytes: 536870912000     # 500 GiB
+
+optimize:
+  default_study_folder: HST_PHYSICSAI_OPTIMIZATION   # 원본 GUI:847
+  env: {EDS_TNS_ACTVN_CHCKPT: "1"}                   # 원본 1_physicsai_opti.py:113
+  progress_regex: 'Started\s+run\s+\(\s*(?P<run>\d+)\s*\),\s*model\s+\(\s*m_1\s*\)'   # 원본 :384
+  max_listed_files: 5000
+  viewable_globs: ["*.csv", "*.txt", "*.json", "*.log"]
+  max_viewable_files: 200
+  summary_parsers: []               # 형식 미확정(U28). 예: [{name: opt_csv, glob: "*.csv", kind: csv_table, max_rows: 1000}]
+
+env_check:
+  probe_timeout_s: 60               # 점검용 짧은 실행만의 상한(작업 step 시간 한도 아님)
+  expire_s: 900
+  min_free_gb: 50
+  probes:                           # 짧은 실행 argv. null = 존재·실행 가능 확인만(기본). 인자는 사내 확인 후(U32)
+    edspy: null
+    simlab: null
+    hw: null
+    hstbatch: null
+    hvtrans: null
+    hstpy: null
+
+error_bundle:
+  log_tail_bytes: 262144            # 로그 파일당 꼬리 상한
+  max_total_bytes: 20971520         # zip 전체(압축 전) 상한
 
 notifications:
   retention_days: 30

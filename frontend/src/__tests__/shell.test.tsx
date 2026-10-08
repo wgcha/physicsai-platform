@@ -13,13 +13,14 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
     expect(screen.getByRole("region", { name: "워커 자원" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "모델 목록" })).toBeTruthy();
     const stepper = screen.getByRole("list", { name: "단계" });
-    expect(within(stepper).getAllByText("2차")).toHaveLength(3);
+    expect(within(stepper).queryAllByText("2차")).toHaveLength(0);
+    expect(within(stepper).getAllByRole("link")).toHaveLength(5);
   });
 
-  it("①②⑤는 2차 안내만 보인다", async () => {
+  it("V2-FE-1: ①②⑤도 실제 화면(2차 안내 없음)", async () => {
     renderApp(`${STUDY}/1`, { user: "power" });
-    expect(await screen.findByText("2차에서 제공 예정입니다.")).toBeTruthy();
-    expect(screen.queryByRole("button", { name: "데이터셋 생성" })).toBeNull();
+    expect(await screen.findByRole("region", { name: "CAD 파라미터 추출" })).toBeTruthy();
+    expect(screen.queryByText("2차에서 제공 예정입니다.")).toBeNull();
   });
 
   it("401이면 대시보드 로그인 안내", async () => {

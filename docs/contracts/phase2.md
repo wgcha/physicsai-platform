@@ -1344,3 +1344,24 @@ AGENTS.md 역할표에 `deploy/**`를 Impl-Backend 소유로 추가한다(이번
 | A-12 | 환경 점검은 작업 대기열이 아닌 전용 테이블 + 워커 light 스레드 | Study 비소속·짧은 점검 |
 | A-13 | 오류 묶음은 작업 등록자 본인과 전역 관리자만 | 명령 스냅샷·설정 요약 포함(U33) |
 | A-14 | Windows 서비스 등록은 작업 스케줄러(Register-ScheduledTask) | NSSM·pywin32 미사용, 의존성 0 |
+
+---
+
+## 변경 메모(C1~) — Impl-Backend 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
+
+| # | 위치 | 내용 |
+|---|---|---|
+| C1 | §5, B14 | `0001_initial`이 `tables.py`를 쓰면 2차 테이블까지 0001에서 생겨 0002가 실패 → 1차 스키마 동결본 `physicsai_core/db/schema_0001.py`를 만들어 0001이 그것을 쓴다(DDL 동일). `tables.py` = 현재 스키마, 시험이 migration 결과와 `compare_metadata`로 일치 확인 |
+| C2 | §6.8, §12.9 `Dataset.curation_id` | `datasets`에 컬럼을 추가하지 않고 `DATASET_CREATE` 작업 `params.curation_id`에서 계산(§5.8에 datasets 변경이 없어서). `curation_id`를 주면 저장 params의 `input_path` = `02_curated/<id>/CURATED_DATA` 절대경로(B8 확정 기록), 둘 다/둘 다 없음 422 `INVALID_PARAMS` |
+| C3 | §6.13 F | 조립 폴더 `radioss_assem/`에서 `eps_mesh`로 시작하고 `predict.starter_glob`에 맞는 파일(SimLab 메시 starter)은 빼고 복사 — 1차 검증기의 "starter 정확히 1개"와 충돌(원본 ⑤도 `eps_mesh*` 제외, GUI:427-445) |
+| C4 | §7.1 T10b | T10과 (from,to) 쌍이 같아 전이 표 키로 구분 불가 → `state_machine.CONDITIONAL_TRANSITIONS["T10b"]` + `hpc_terminal_transition()`(T10/T10b/T13 판정)으로 두고 `check_transition`은 `T10`을 돌려준다. T10b 시 `result.submitted/failed` 기록(알림 본문 n/m용) |
+| C5 | §12.10 저장 params(B8 방식) | 서버가 확정 기록하는 키 추가: `TD_DOE_GEN` → `doe_id`·`doe_type`(value)·`default_runs`(runs_editable=false일 때 `DOE_NUM_RUNS`), `CU_H3D_CURATE`·`CU_T01_CURVES` → `curation_id`, `SPDM_IMPORT` → `import_id`(정규화 경로), `OPTIMIZE` → `optimization_id`·`study_folder`(기본값)·`opt_settings`. 엔터티 행은 작업 생성 트랜잭션에서 `BUILDING`(train_does·curations·spdm_imports), `optimizations` 행은 OP_PREP에서 `RUNNING`으로 만든다 |
+| C6 | §6.1.1 오류 코드 | DOE가 없거나 READY가 아니면(TD_SOLVE·TD_RESULT_IMPORT·TD_RESP_EXTRACT·② TRAIN_DOE 원천) 409 `DOE_NOT_READY`. runs_editable=false 유형에 `num_runs`를 주면 422 `DOE_OPTIONS_INVALID`. 원천 파일 0개 409 `PREREQUISITE_MISSING`(`missing:["SOURCE_FILES"]`), Radioss starter 개수 오류 409 `PREREQUISITE_MISSING`(`["RADIOSS_STARTER"]`), 재제출 대상 0개 `["SUBMITTABLE_RUN"]`, ①-6 회수 run 0개 `["COLLECTED_RUN"]`. 미리보기 JSON 형식 오류는 step 실패 `OUTPUT_MISSING`(메시지에 형식 오류) |
+| C7 | §11.2 update.ps1 ① | `GET /physicsai/api/queue`는 로그인이 필요 → 대시보드 세션 토큰을 `Read-Host -AsSecureString`으로 받아 Bearer로 호출, 토큰이 없으면 머신 환경변수 DB URL을 `PG*` 프로세스 환경으로만 넘겨 `psql`로 `jobs` 비종료 건수 확인(비밀번호는 명령 인자에 없음) |
+| C8 | §6.11 SI_SCAN | 대상 목록은 DB가 아닌 `logs/<job_id>/spdm_plan.json`(작업 로그 폴더)에 둔다(최대 2만 개 경로라 job.result에 넣지 않음). 복사 대상 상대경로는 지정한 SPDM 경로 **아래** 기준(지정 폴더 이름 자체는 포함 안 함) |
+| C9 | §8.2 `resources.launchers` | 기본값을 원본 이름 3개로 둔다(예시 YAML과 같음). 알 수 없는 런처 키는 설정 오류 |
+| C10 | §12.1 `/status.env_check` | 전역 관리자가 아니면 `null`, 관리자인데 점검 이력이 없으면 값이 모두 null인 객체 |
+| C11 | §12.9 `hpc_summary` | `queued` = SUBMITTING·QUEUED·UNKNOWN, `running` = RUNNING·CANCEL_REQUESTED, `failed` = FAILED·LOST, `collected` = collect_state COLLECTED(①-4 COLLECT가 기록) |
+| C12 | §10.2 마스킹 | 고정 규칙에 더해 `database.url_env`·`*PASSWORD*`·`*SECRET*`·`*TOKEN*`·`PG*` 환경변수의 **값 문자열 자체**(4자 이상)도 `***`로 치환(로그에 URL 전체가 찍힌 경우 대비) |
+| C14 | §6.7·§6.12 산출물 형식(프런트 가정과 대조) | `02_preview/<job>/preview_summary.json`(H3D) = `{datatypes:[{name, components, usable}], parts:{shell,solid,rbody}, num_time_step, sample_file, source_file_count, files:[{rel, run_folder, size}]}`(`files`는 원천 루트 기준). T01 미리보기는 원문 `PREVIEW_T01.json` 1개만(요약 파일 없음). FILE_LIST는 종류마다 다름: ⑤ `file_list.json` = `{root, files:[{rel, size}], truncated}`(프런트 가정과 같음), ② `file_list.json` = 배열 `[{run_folder, run_key, input_rel, output_rel, size, ok, exit_code}]`(화면은 `GET /curations/{id}/files` 사용 권장), G `import_manifest.json` = `{spdm_path, imported_at, files:[{source_rel, dest_rel, size, renamed}]}`. ⑤ `summary.json` = csv_table이면 `{parser, kind, file_rel, columns, rows}`(rows는 문자열 배열의 배열), json_passthrough면 `{parser, kind, file_rel, data}`. run별 취소 API 없음(작업 전체 취소) |
+| C13 | §6.6 RI_SCAN·§12.4 RESULT_FOLDER | `result_run_dir_regex`의 `run_key` 그룹을 DOE run_key와 **대소문자 무시**로 대응(`RUN__00002` → `run__00002`) |

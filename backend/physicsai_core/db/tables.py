@@ -1,6 +1,7 @@
 """DB 테이블(SQLAlchemy Core, 계약 §6). PostgreSQL 16 전용.
 
-0001_initial migration이 이 메타데이터 그대로 만든다. 이후 변경은 새 migration으로 명시한다.
+현재(2차) 스키마. 0001_initial은 동결본 schema_0001, 0002_phase2는 명시적 DDL로 이 상태를 만든다
+(시험 V2-DB-1이 migration 결과와 이 메타데이터를 비교한다).
 """
 
 from __future__ import annotations
@@ -215,6 +216,9 @@ param_sets = Table(
     Column("registered_by", String, nullable=False),
     Column("registered_by_name", String, nullable=False),
     Column("registered_at", TS, nullable=False, server_default=func.now()),
+    Column("origin", String, nullable=False, server_default="FOLDER"),
+    Column("train_doe_id", ID, ForeignKey("train_does.id", use_alter=True, name="fk_param_sets_train_doe"), nullable=True),
+    CheckConstraint("origin IN ('FOLDER','TRAIN_DOE')", name="ck_param_sets_origin"),
 )
 Index("ux_param_sets_current", param_sets.c.study_id, unique=True, postgresql_where=text("is_current"))
 
@@ -258,7 +262,8 @@ artifacts = Table(
     Column("content_type", String, nullable=False),
     Column("created_at", TS, nullable=False, server_default=func.now()),
     CheckConstraint(
-        "kind IN ('PREVIEW_JSON','PREVIEW_IMAGE','CURVE_JSON','RESPONSE_TABLE','SCORE_FILE','PACKAGE_COMMANDS','SPLIT_JSON')",
+        "kind IN ('PREVIEW_JSON','PREVIEW_IMAGE','CURVE_JSON','RESPONSE_TABLE','SCORE_FILE','PACKAGE_COMMANDS','SPLIT_JSON',"
+        "'CURATION_CFG','FILE_LIST','DOE_SAMPLES','RUN_CONFIG','OPT_SUMMARY','OPT_FILE')",
         name="ck_artifacts_kind",
     ),
 )
@@ -277,7 +282,8 @@ notifications = Table(
     Column("created_at", TS, nullable=False, server_default=func.now()),
     Column("read_at", TS, nullable=True),
     CheckConstraint(
-        "event IN ('JOB_STARTED','JOB_SUCCEEDED','JOB_FAILED','JOB_CANCELED','JOB_INTERRUPTED','MY_TURN_NEXT','HPC_COLLECTED')",
+        "event IN ('JOB_STARTED','JOB_SUCCEEDED','JOB_FAILED','JOB_CANCELED','JOB_INTERRUPTED','MY_TURN_NEXT','HPC_COLLECTED',"
+        "'HPC_PARTIAL_FAILED','ENV_CHECK_DONE')",
         name="ck_notifications_event",
     ),
 )
@@ -358,6 +364,176 @@ Index(
     postgresql_where=text("external_job_id IS NOT NULL"),
 )
 
+Index("ix_hpc_jobs_job_state", hpc_jobs.c.job_id, hpc_jobs.c.state)
+
+# ---------------------------------------------------------------------------
+# 2차(phase2 §5)
+# ---------------------------------------------------------------------------
+
+train_setups = Table(
+    "train_setups",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("study_id", ID, ForeignKey("studies.id"), nullable=False, unique=True),
+    Column("cad_source_path", String, nullable=True),
+    Column("cad_file_name", String, nullable=True),
+    Column("cad_sha256", String(64), nullable=True),
+    Column("extract_job_id", ID, ForeignKey("jobs.id"), nullable=True),
+    Column("parameters", JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    Column("tpl_rel", String, nullable=True),
+    Column("tpl_sha256", String(64), nullable=True),
+    Column("tpl_generated_at", TS, nullable=True),
+    Column("tpl_params", JSONB, nullable=True),
+    Column("tpl_warnings", JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    Column("updated_by", String, nullable=True),
+    Column("updated_by_name", String, nullable=True),
+    Column("updated_at", TS, nullable=False, server_default=func.now()),
+    Column("version", BigInteger, nullable=False, server_default="1"),
+)
+
+train_does = Table(
+    "train_does",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("study_id", ID, ForeignKey("studies.id"), nullable=False, index=True),
+    Column("job_id", ID, ForeignKey("jobs.id"), nullable=False),
+    Column("doe_label", String, nullable=False),
+    Column("doe_type", String, nullable=False),
+    Column("num_runs_requested", Integer, nullable=True),
+    Column("options", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
+    Column("multi_execution", Integer, nullable=False, server_default="1"),
+    Column("radioss_assem_source_path", String, nullable=False),
+    Column("dir_rel", String, nullable=False),
+    Column("assem_rel", String, nullable=False),
+    Column("parameters_snapshot", JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    Column("tpl_sha256", String(64), nullable=True),
+    Column("run_count", Integer, nullable=True),
+    Column("sample_status", String, nullable=False, server_default="PENDING"),
+    Column("samples_rel", String, nullable=True),
+    Column("responses_rel", String, nullable=True),
+    Column("status", String, nullable=False, server_default="BUILDING"),
+    Column("created_by", String, nullable=False),
+    Column("created_by_name", String, nullable=False),
+    Column("created_at", TS, nullable=False, server_default=func.now()),
+    CheckConstraint("sample_status IN ('PARSED','PARTIAL','MISSING','PENDING')", name="ck_train_does_sample_status"),
+    CheckConstraint("status IN ('BUILDING','READY','FAILED')", name="ck_train_does_status"),
+)
+
+train_runs = Table(
+    "train_runs",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("doe_id", ID, ForeignKey("train_does.id"), nullable=False),
+    Column("run_key", String(64), nullable=False),
+    Column("input_rel", String, nullable=False),
+    Column("starter_name", String, nullable=False),
+    Column("state", String, nullable=False, server_default="GENERATED"),
+    Column("last_job_id", ID, ForeignKey("jobs.id"), nullable=True),
+    Column("hpc_job_id", ID, ForeignKey("hpc_jobs.id"), nullable=True),
+    Column("result_rel", String, nullable=True),
+    Column("result_summary", JSONB, nullable=True),
+    Column("updated_at", TS, nullable=False, server_default=func.now()),
+    UniqueConstraint("doe_id", "run_key", name="uq_train_runs_doe_run"),
+    CheckConstraint(
+        "state IN ('GENERATED','SUBMITTED','SOLVED','SOLVE_FAILED','COLLECTED','COLLECT_FAILED')", name="ck_train_runs_state"
+    ),
+)
+Index("ix_train_runs_doe_state", train_runs.c.doe_id, train_runs.c.state)
+
+curations = Table(
+    "curations",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("study_id", ID, ForeignKey("studies.id"), nullable=False, index=True),
+    Column("job_id", ID, ForeignKey("jobs.id"), nullable=False),
+    Column("kind", String, nullable=False),
+    Column("source", JSONB, nullable=False),
+    Column("preview_job_id", ID, ForeignKey("jobs.id"), nullable=True),
+    Column("selection", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
+    Column("output_rel", String, nullable=False),
+    Column("file_list_rel", String, nullable=False),
+    Column("target_count", Integer, nullable=True),
+    Column("ok_count", Integer, nullable=True),
+    Column("failed_count", Integer, nullable=True),
+    Column("missing_runs", JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    Column("status", String, nullable=False, server_default="BUILDING"),
+    Column("created_by", String, nullable=False),
+    Column("created_by_name", String, nullable=False),
+    Column("created_at", TS, nullable=False, server_default=func.now()),
+    CheckConstraint("kind IN ('H3D','T01')", name="ck_curations_kind"),
+    CheckConstraint("status IN ('BUILDING','READY','FAILED')", name="ck_curations_status"),
+)
+
+spdm_imports = Table(
+    "spdm_imports",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("study_id", ID, ForeignKey("studies.id"), nullable=False, index=True),
+    Column("job_id", ID, ForeignKey("jobs.id"), nullable=False),
+    Column("spdm_path", String, nullable=False),
+    Column("dest_rel", String, nullable=False),
+    Column("file_count", Integer, nullable=True),
+    Column("total_bytes", BigInteger, nullable=True),
+    Column("renamed_count", Integer, nullable=True),
+    Column("manifest_rel", String, nullable=True),
+    Column("status", String, nullable=False, server_default="BUILDING"),
+    Column("created_by", String, nullable=False),
+    Column("created_by_name", String, nullable=False),
+    Column("created_at", TS, nullable=False, server_default=func.now()),
+    CheckConstraint("status IN ('BUILDING','READY','FAILED')", name="ck_spdm_imports_status"),
+)
+
+optimizations = Table(
+    "optimizations",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("study_id", ID, ForeignKey("studies.id"), nullable=False, index=True),
+    Column("job_id", ID, ForeignKey("jobs.id"), nullable=False),
+    Column("approach", String, nullable=False),
+    Column("opt_method", String, nullable=False),
+    Column("max_designs", Integer, nullable=False),
+    Column("model_id", ID, ForeignKey("models.id"), nullable=False),
+    Column("param_set_id", ID, ForeignKey("param_sets.id"), nullable=False),
+    Column("study_folder", String(64), nullable=False),
+    Column("dir_rel", String, nullable=False),
+    Column("runs_started", Integer, nullable=True),
+    Column("responses", JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    Column("summary_status", String, nullable=False, server_default="NONE"),
+    Column("summary_meta", JSONB, nullable=True),
+    Column("file_count", Integer, nullable=True),
+    Column("status", String, nullable=False, server_default="RUNNING"),
+    Column("created_by", String, nullable=False),
+    Column("created_by_name", String, nullable=False),
+    Column("created_at", TS, nullable=False, server_default=func.now()),
+    CheckConstraint("approach IN ('OPT','DOE')", name="ck_optimizations_approach"),
+    CheckConstraint("opt_method IN ('ARSM','GRSM','SQP')", name="ck_optimizations_method"),
+    CheckConstraint("summary_status IN ('NONE','PARSED','UNRECOGNIZED')", name="ck_optimizations_summary_status"),
+    CheckConstraint("status IN ('RUNNING','DONE','FAILED')", name="ck_optimizations_status"),
+)
+
+env_checks = Table(
+    "env_checks",
+    metadata,
+    Column("id", ID, primary_key=True),
+    Column("state", String, nullable=False, server_default="PENDING"),
+    Column("requested_by", String, nullable=False),
+    Column("requested_by_name", String, nullable=False),
+    Column("created_at", TS, nullable=False, server_default=func.now()),
+    Column("expires_at", TS, nullable=False),
+    Column("worker_id", String, nullable=True),
+    Column("started_at", TS, nullable=True),
+    Column("finished_at", TS, nullable=True),
+    Column("api_items", JSONB, nullable=False, server_default=text("'[]'::jsonb")),
+    Column("worker_items", JSONB, nullable=True),
+    Column("summary", JSONB, nullable=False, server_default=text("'{}'::jsonb")),
+    Column("report_rel", String, nullable=True),
+    Column("failure_message", String(500), nullable=True),
+    CheckConstraint("state IN ('PENDING','RUNNING','DONE','FAILED','EXPIRED')", name="ck_env_checks_state"),
+    # 동시 1건(phase2 §5.7): 위반 시 409 ENV_CHECK_BUSY
+    Index("ux_env_checks_active", text("(true)"), unique=True, postgresql_where=text("state IN ('PENDING','RUNNING')")),
+)
+Index("ix_env_checks_created", env_checks.c.created_at.desc())
+
 audit_events = Table(
     "audit_events",
     metadata,
@@ -388,5 +564,12 @@ __all__ = [
     "worker_heartbeats",
     "hpc_jobs",
     "audit_events",
+    "train_setups",
+    "train_does",
+    "train_runs",
+    "curations",
+    "spdm_imports",
+    "optimizations",
+    "env_checks",
     "TERMINAL_STATES",
 ]

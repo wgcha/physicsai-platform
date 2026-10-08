@@ -376,7 +376,7 @@ def test_predict_prerequisites_and_hpc_none(client, loaded_config, worker_factor
     r = _job(client, sid, "PREDICT_VERIFY", {"predict_job_id": "x"})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "HPC_NOT_CONFIGURED"
     st = client.get(f"{API}/status", headers=P).json()
-    assert st["hpc"] == {"mode": "none", "configured": False, "message": "PBS 연결 안 됨"}
+    assert st["hpc"] == {"mode": "none", "configured": False, "message": "PBS 연결 안 됨", "collect_mode": "in_place"}
     # V-PR-3: geom_update null → 409 TEMPLATE_NOT_CONFIGURED
     import httpx
     from fastapi.testclient import TestClient

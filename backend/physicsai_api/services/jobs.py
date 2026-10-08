@@ -13,6 +13,7 @@ from sqlalchemy import select
 
 from physicsai_core.db.repositories import artifacts as artifacts_repo
 from physicsai_core.db.repositories import datasets as datasets_repo
+from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
@@ -59,7 +60,8 @@ class DatasetOptions(_P):
 
 
 class DatasetCreateParams(_P):
-    input_path: str = Field(max_length=400)
+    input_path: str | None = Field(default=None, max_length=400)
+    curation_id: str | None = None  # phase2 §6.8: ② 큐레이션 출력(CURATED_DATA)을 입력으로
     holdout_ratio: float | None = Field(default=None, ge=0.05, le=0.5)
     seed: int | None = None
     split_group: Literal["file", "parent_dir"] | None = None
@@ -109,13 +111,16 @@ class PredictVerifyParams(_P):
     hpc: HpcOverrides | None = None
 
 
-PARAM_MODELS: dict[str, type[_P]] = {
+from . import phase2_params as P2  # noqa: E402
+
+PARAM_MODELS: dict[str, type[BaseModel]] = {
     "DATASET_CREATE": DatasetCreateParams,
     "PACKAGE_EXPORT": PackageExportParams,
     "MODEL_REGISTER": ModelRegisterParams,
     "EVALUATE": EvaluateParams,
     "PREDICT": PredictParams,
     "PREDICT_VERIFY": PredictVerifyParams,
+    **P2.PARAM_MODELS,
 }
 
 
@@ -142,12 +147,26 @@ def _prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p
     cfg = ctx.settings
     sid = study["id"]
     warnings: list[dict[str, str]] = []
+    if job_type in P2.PARAM_MODELS:
+        return P2.prepare(ctx, conn, study, job_type, p)
     if job_type == "DATASET_CREATE":
-        cp = check_user_path(p.input_path, [cfg.storage.ai_root])
+        if (p.input_path is None) == (p.curation_id is None):
+            raise _invalid([{"loc": ["params", "input_path"], "msg": "input_path와 curation_id 중 하나만 지정하세요"}])
+        if p.curation_id is not None:
+            from physicsai_core.db.repositories import curations as cur_repo
+
+            cur = cur_repo.get_curation(conn, p.curation_id)
+            if cur is None or cur["study_id"] != sid or cur["status"] != "READY" or cur["kind"] != "H3D":
+                raise _missing("READY_H3D_CURATION")
+            input_path = os.path.join(study_root(ctx, study), *cur["output_rel"].rstrip("/").split("/"))
+        else:
+            input_path = p.input_path
+        cp = check_user_path(input_path, [cfg.storage.ai_root])
         check_dataset_input(cp.path, cfg.storage.ai_root)
         opts = (p.options or DatasetOptions(**cfg.dataset.options_default.model_dump())).model_dump()
         params = {
             "input_path": cp.path,
+            **({"curation_id": p.curation_id} if p.curation_id else {}),
             "holdout_ratio": p.holdout_ratio if p.holdout_ratio is not None else cfg.dataset.holdout_ratio,
             "seed": p.seed if p.seed is not None else cfg.dataset.seed,
             "split_group": p.split_group or cfg.dataset.split_group,
@@ -251,6 +270,8 @@ def create_job(ctx: AppContext, principal: Principal, study_id: str, job_type: s
                 "train_psdata_rel": f"03_dataset/{ds_id}/train/dataset.psdata",
                 "eval_psdata_rel": f"03_dataset/{ds_id}/eval/dataset.psdata",
             })
+        if job_type in P2.PARAM_MODELS:
+            P2.after_insert(conn, principal, study, job_type, job_id, params)
         audit(conn, principal, "JOB_CREATE", "job", job_id, {"job_type": job_type, "study_id": study_id}, rid, ip)
         return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
@@ -274,7 +295,8 @@ def list_jobs(ctx: AppContext, principal: Principal, *, study_id: str | None, st
     with ctx.engine.connect() as conn:
         rows = [dict(r._mapping) for r in conn.execute(q)]
         pos = {"SLOT": jobs_repo.queue_positions(conn, "SLOT"), "LIGHT": jobs_repo.queue_positions(conn, "LIGHT")}
-    out = [job_summary(r, r["study_title"], pos[r["lane"]].get(r["id"])) for r in rows[:lim]]
+        hs = hpc_repo.summary_for_jobs(conn, [r["id"] for r in rows[:lim]])
+    out = [job_summary(r, r["study_title"], pos[r["lane"]].get(r["id"]), hs.get(r["id"])) for r in rows[:lim]]
     return out, (encode_cursor(off + lim) if len(rows) > lim else None)
 
 
@@ -375,8 +397,8 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
             from_step = default_from
         if from_step > default_from or from_step > len(steps):
             raise _invalid([{"loc": ["from_step"], "msg": f"1~{default_from}"}])
-        if from_step > 1 and old["job_type"] == "PREDICT_VERIFY":
-            from_step = 1  # HPC 제출 이력은 재사용하지 않는다
+        if from_step > 1 and old["job_type"] in ("PREDICT_VERIFY", "TD_SOLVE"):
+            from_step = 1  # HPC 제출 이력은 재사용하지 않는다(phase2 §7.1: TD_SOLVE는 항상 TS_PREP부터)
         new_id = str(uuid.uuid4())
         job = jobs_repo.insert_job(
             conn, study=study, job_type=old["job_type"], params=old["params"], user_id=principal.user_id,
@@ -385,6 +407,8 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         )
         if old["job_type"] == "DATASET_CREATE" and (old["result"] or {}).get("dataset_id"):
             datasets_repo.set_values(conn, old["result"]["dataset_id"], status="BUILDING")
+        if old["job_type"] in P2.PARAM_MODELS:
+            P2.on_retry(conn, old, new_id)
         audit(conn, principal, "JOB_RETRY", "job", new_id, {"retry_of": job_id, "from_step": from_step}, rid, ip)
         return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
@@ -393,6 +417,7 @@ def queue_view(ctx: AppContext) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         slot = queue_repo.slot_row(conn)
         rows = queue_repo.active_jobs(conn)
+        hs = hpc_repo.summary_for_jobs(conn, [r["id"] for r in rows])
     out: dict[str, Any] = {
         "slot": {"holder_job_id": slot["holder_job_id"], "since": slot["lease_acquired_at"]},
         "running": None, "queued": [], "light": {"running": None, "queued": []}, "waiting_hpc": [], "collecting": [],
@@ -412,9 +437,9 @@ def queue_view(ctx: AppContext) -> dict[str, Any]:
             else:
                 out["light"]["running"] = job_summary(r, r["study_title"], None)
         elif r["state"] == "WAITING_HPC":
-            out["waiting_hpc"].append(job_summary(r, r["study_title"], None))
+            out["waiting_hpc"].append(job_summary(r, r["study_title"], None, hs.get(r["id"])))
         elif r["state"] == "COLLECTING":
-            out["collecting"].append(job_summary(r, r["study_title"], None))
+            out["collecting"].append(job_summary(r, r["study_title"], None, hs.get(r["id"])))
     return out
 
 

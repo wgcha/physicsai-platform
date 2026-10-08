@@ -3,7 +3,7 @@ import { api, errorMessage, type JobSummary, type QueueInfo } from "../api";
 import { useApp } from "../app/AppContext";
 import { usePolling } from "../hooks/usePolling";
 import { POLL } from "../lib/poll";
-import { JOB_TYPE_LABEL, fmtElapsed } from "../lib/format";
+import { JOB_TYPE_LABEL, STAGE_MARK, fmtElapsed, hpcSummaryText } from "../lib/format";
 import { ProgressBar, StateDot } from "../components/ui";
 import { useOpenJob } from "../shell/useOpenJob";
 
@@ -36,12 +36,15 @@ export function QueuePanel() {
     }
   };
 
-  const row = (j: JobSummary, opts: { pos?: number; total?: number; running?: boolean }) => {
+  const row = (j: JobSummary, opts: { pos?: number; total?: number; running?: boolean; hpc?: boolean }) => {
     const mine = j.created_by === me.user_id;
     return (
       <li key={j.id} className={`qrow ${mine ? "mine" : ""}`} data-testid="queue-row">
         <div className="qrow-main">
           <span className="qpos">{opts.running ? <StateDot state={j.state} /> : opts.pos}</span>
+          <span className="stage-badge" title={`${j.stage}단계`} data-testid="stage-badge">
+            {j.stage_label || STAGE_MARK[j.stage] || j.stage}
+          </span>
           <button type="button" className="qtitle link" onClick={() => void openJob({ job_id: j.id, study_id: j.study_id, project_id: j.project_id })} title="작업 화면으로">
             {JOB_TYPE_LABEL[j.job_type]}
           </button>
@@ -73,12 +76,23 @@ export function QueuePanel() {
             </span>
           )}
         </div>
-        {opts.running && (
+        {opts.hpc ? (
+          <div className="qrow-progress hpc">
+            <span className="small" data-testid="hpc-summary">
+              {j.hpc_summary ? hpcSummaryText(j.hpc_summary) : j.state === "COLLECTING" ? "결과 회수 중" : "PBS 대기"}
+            </span>
+            <span className="muted small ellipsis">
+              {fmtElapsed(j.started_at)} 경과{j.current_step_label ? ` · ${j.current_step_label}` : ""}
+            </span>
+          </div>
+        ) : opts.running && (
           <div className="qrow-progress">
             <ProgressBar pct={j.progress_pct} />
             <span className="muted small ellipsis">
               {j.progress_pct != null ? `${Math.round(j.progress_pct)}% · ` : ""}
-              {fmtElapsed(j.started_at)} 경과{j.progress_label ? ` · ${j.progress_label}` : ""}
+              {fmtElapsed(j.started_at)} 경과
+              {j.current_step_label ? ` · ${j.current_step_label}` : ""}
+              {j.progress_label ? ` · ${j.progress_label}` : ""}
             </span>
           </div>
         )}
@@ -120,7 +134,7 @@ export function QueuePanel() {
           {hpc.length > 0 && (
             <>
               <div className="qsec-label">PBS 대기·회수</div>
-              <ul className="qlist">{hpc.map((j) => row(j, { running: true }))}</ul>
+              <ul className="qlist">{hpc.map((j) => row(j, { running: true, hpc: true }))}</ul>
             </>
           )}
         </>

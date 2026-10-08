@@ -16,6 +16,12 @@ def register(study_id: str, body: S.ParamSetCreate, request: Request, principal:
     return svc.register_param_set(get_ctx(request), principal, study_id, body.path, request_id(request), client_ip(request))
 
 
+@router.post("/studies/{study_id}/param-sets/from-train", response_model=S.ParamSet, status_code=201, responses=ERR)
+def from_train(study_id: str, body: S.ParamSetFromTrain, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """F(phase2 §6.13): ① DOE 결과로 파라미터 세트 만들기."""
+    return svc.register_param_set_from_train(get_ctx(request), principal, study_id, body, request_id(request), client_ip(request))
+
+
 @router.get("/studies/{study_id}/param-sets", response_model=list[S.ParamSet], responses=ERR)
 def list_sets(study_id: str, request: Request, response: Response, limit: int | None = Query(default=None, ge=1, le=200),
               cursor: str | None = None, _p: Principal = Depends(get_principal)) -> list:

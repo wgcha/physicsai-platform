@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import StreamingResponse
 
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import error_bundle as eb_svc
 from ..services import jobs as svc
 
 router = APIRouter(tags=["jobs"])
@@ -69,3 +71,16 @@ def retry(job_id: str, request: Request, body: S.RetryRequest | None = None, pri
 @router.get("/jobs/{job_id}/hpc-jobs", response_model=list[S.HpcJob], responses=ERR)
 def hpc_jobs(job_id: str, request: Request, _p: Principal = Depends(get_principal)) -> list:
     return svc.list_hpc_jobs(get_ctx(request), job_id)
+
+
+@router.get(
+    "/jobs/{job_id}/error-bundle.zip",
+    response_class=StreamingResponse,
+    responses={403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
+               200: {"content": {"application/zip": {}}}},
+)
+def error_bundle(job_id: str, request: Request, principal: Principal = Depends(get_principal)) -> StreamingResponse:
+    """오류 묶음(phase2 §10): 작업 등록자 본인 또는 전역 관리자. 실패·취소·중단 또는 주의 코드가 있는 비종료 작업."""
+    body, name = eb_svc.build(get_ctx(request), principal, job_id, request_id(request), client_ip(request))
+    return StreamingResponse(body, media_type="application/zip",
+                             headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Content-Type-Options": "nosniff"})

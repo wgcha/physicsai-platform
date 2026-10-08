@@ -24,7 +24,18 @@ from ...state_machine import (
     TERMINAL,
     check_transition,
 )
-from ..tables import datasets, job_queue_seq, job_steps, jobs, models, worker_slot
+from ..tables import (
+    curations,
+    datasets,
+    job_queue_seq,
+    job_steps,
+    jobs,
+    models,
+    optimizations,
+    spdm_imports,
+    train_does,
+    worker_slot,
+)
 from . import notifications as notif_repo
 
 TERMINAL_SQL = "('SUCCEEDED','FAILED','CANCELED','INTERRUPTED')"
@@ -169,6 +180,20 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
             .where(and_(models.c.eval_job_id == job["id"], models.c.eval_status == "RUNNING"))
             .values(eval_status="FAILED", row_version=models.c.row_version + 1)
         )
+    # 2차 엔터티(phase2 §7.2): 작업 실패·취소·중단 → BUILDING/RUNNING 행 FAILED
+    jt = job["job_type"]
+    if jt == "TD_DOE_GEN":
+        conn.execute(update(train_does).where(and_(train_does.c.job_id == job["id"], train_does.c.status == "BUILDING"))
+                     .values(status="FAILED"))
+    elif jt in ("CU_H3D_CURATE", "CU_T01_CURVES"):
+        conn.execute(update(curations).where(and_(curations.c.job_id == job["id"], curations.c.status == "BUILDING"))
+                     .values(status="FAILED"))
+    elif jt == "SPDM_IMPORT":
+        conn.execute(update(spdm_imports).where(and_(spdm_imports.c.job_id == job["id"], spdm_imports.c.status == "BUILDING"))
+                     .values(status="FAILED"))
+    elif jt == "OPTIMIZE":
+        conn.execute(update(optimizations).where(and_(optimizations.c.job_id == job["id"], optimizations.c.status == "RUNNING"))
+                     .values(status="FAILED"))
 
 
 def _interrupt(conn: Connection, job: dict[str, Any]) -> None:

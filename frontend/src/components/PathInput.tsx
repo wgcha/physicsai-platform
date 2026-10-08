@@ -12,6 +12,7 @@ export function PathInput({
   onInspected,
   canExecute,
   renderSummary,
+  extra,
 }: {
   studyId: string;
   purpose: PathPurpose;
@@ -22,6 +23,8 @@ export function PathInput({
   onInspected?: (r: PathInspectResult | null) => void;
   canExecute: boolean;
   renderSummary?: (r: PathInspectResult) => ReactNode;
+  /** phase2.md §12.4 RESULT_FOLDER의 doe_id 등 */
+  extra?: { doe_id?: string };
 }) {
   const [result, setResult] = useState<PathInspectResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,7 +34,7 @@ export function PathInput({
     setBusy(true);
     setError(null);
     try {
-      const r = await api.inspectPath(studyId, purpose, value.trim());
+      const r = await api.inspectPath(studyId, purpose, value.trim(), extra);
       setResult(r);
       onInspected?.(r);
     } catch (e) {

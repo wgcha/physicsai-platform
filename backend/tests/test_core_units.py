@@ -63,7 +63,8 @@ def test_cmd_c_expansion():
     t = ["@cmd_c", "{edspy}", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]
     v = {"pred_h3d": "/p/R/a_pred.h3d", "model_psmdl": "/m.psmdl", "starter": "/p/I/a_0000.rad"}
     win = render_argv("edspy_predict", t, v, executables=EXE, is_windows=True, environ={"SystemRoot": "C:\\Windows"})
-    assert win[:3] == ["C:\\Windows\\System32\\cmd.exe", "/c", EXE["edspy_path"]] and win[-1] == "/p/I/a_0000.rad"
+    # phase2 §2.3: Windows argv[0]은 '\\' 구분자(normpath)
+    assert win[:3] == ["C:\\Windows\\System32\\cmd.exe", "/c", EXE["edspy_path"].replace("/", "\\")] and win[-1] == "/p/I/a_0000.rad"
     lin = render_argv("edspy_predict", t, v, executables=EXE, is_windows=False)
     assert lin[0] == EXE["edspy_path"]
 
@@ -99,7 +100,10 @@ def test_null_optional_templates_ok():
     for k in ("mesh", "rad_assemble", "response_extract", "geom_update"):
         assert validate_template(k, None) == []
     assert set(TEMPLATE_SPECS) == {"edspy_create_dataset", "edspy_score", "geom_update", "mesh", "rad_assemble",
-                                   "edspy_predict", "contour_preview", "response_extract"}
+                                   "edspy_predict", "contour_preview", "response_extract",
+                                   # 2차(phase2 §8.1): null 허용
+                                   "simlab_extract_params", "hst_gen_radioss", "h3d_preview", "hvtrans_curate", "t01_preview",
+                                   "t01_curve_export", "hst_optimization"}
 
 
 def test_null_template_render_is_not_configured():

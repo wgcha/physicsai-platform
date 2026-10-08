@@ -38,6 +38,27 @@ TRANSITIONS: dict[tuple[str | None, str], str] = {
 }
 
 
+# 같은 (from, to) 쌍이지만 조건이 다른 전이(phase2 §7.1). check_transition은 기본 번호(T10)를 돌려준다.
+# T10b: TD_SOLVE + on_run_failure=collect_partial, 모든 hpc_job 종료, 성공 ≥1, 실패(FAILED·LOST) ≥1
+CONDITIONAL_TRANSITIONS: dict[str, tuple[str, str]] = {
+    "T10b": (WAITING_HPC, COLLECTING),
+}
+
+
+def hpc_terminal_transition(job_type: str, on_run_failure: str | None, hpc_states: list[str]) -> str | None:
+    """모든 hpc_job이 끝났을 때 WAITING_HPC에서 갈 전이 번호(T10·T10b·T13). 아직 진행 중이면 None."""
+    terminal = {"SUCCEEDED", "FAILED", "CANCELED", "LOST"}
+    if not hpc_states or any(s not in terminal for s in hpc_states):
+        return None
+    failed = sum(1 for s in hpc_states if s in ("FAILED", "LOST"))
+    ok = sum(1 for s in hpc_states if s == "SUCCEEDED")
+    if failed == 0:
+        return "T10"
+    if job_type == "TD_SOLVE" and (on_run_failure or "collect_partial") == "collect_partial" and ok >= 1:
+        return "T10b"
+    return "T13"
+
+
 class IllegalTransition(RuntimeError):
     def __init__(self, src: str | None, dst: str) -> None:
         super().__init__(f"허용되지 않는 상태 전이: {src} → {dst}")

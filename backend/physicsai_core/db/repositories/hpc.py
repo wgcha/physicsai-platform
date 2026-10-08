@@ -67,6 +67,52 @@ def to_collecting(conn: Connection, job: dict[str, Any]) -> bool:
     return ok
 
 
+def to_collecting_partial(conn: Connection, job: dict[str, Any], failed: int, total: int) -> bool:
+    """T10b(phase2 §7.1): 일부 run 실패 → 성공 run 회수. attention_code=HPC_RUN_FAILED, 경고·알림 HPC_PARTIAL_FAILED."""
+    warnings = list(job.get("warnings") or [])
+    warnings.append({"code": "HPC_PARTIAL_FAILED", "message": f"PBS 해석 {total}개 중 {failed}개 실패 — 성공한 run만 회수합니다"})
+    result = dict(job.get("result") or {})
+    result.update({"submitted": total, "failed": failed})
+    ok = _transition(conn, job, COLLECTING, attention_code="HPC_RUN_FAILED", warnings=warnings, result=result)
+    if ok:
+        _step_state(conn, job["id"], "HPC_WAIT", "SUCCEEDED", finished_at=func.now(),
+                    progress_label=f"{total}개 중 {failed}개 실패")
+        notif_repo.notify_job(conn, job["id"], "HPC_PARTIAL_FAILED")
+    return ok
+
+
+def summary_for_jobs(conn: Connection, job_ids: list[str]) -> dict[str, dict[str, int]]:
+    """작업별 hpc_summary(phase2 §12.9): 최신 attempt 기준 {total, queued, running, succeeded, failed, collected}."""
+    if not job_ids:
+        return {}
+    rows = conn.execute(
+        select(hpc_jobs.c.job_id, hpc_jobs.c.state, hpc_jobs.c.collect_state).where(hpc_jobs.c.job_id.in_(job_ids))
+    ).all()
+    out: dict[str, dict[str, int]] = {}
+    for r in rows:
+        d = out.setdefault(r.job_id, {"total": 0, "queued": 0, "running": 0, "succeeded": 0, "failed": 0, "collected": 0})
+        d["total"] += 1
+        if r.state in ("SUBMITTING", "QUEUED", "UNKNOWN"):
+            d["queued"] += 1
+        elif r.state in ("RUNNING", "CANCEL_REQUESTED"):
+            d["running"] += 1
+        elif r.state == "SUCCEEDED":
+            d["succeeded"] += 1
+        elif r.state in ("FAILED", "LOST"):
+            d["failed"] += 1
+        if r.collect_state == "COLLECTED":
+            d["collected"] += 1
+    return out
+
+
+def set_collect_state(conn: Connection, hid: str, collect_state: str, collected: Any = None) -> None:
+    vals: dict[str, Any] = {"collect_state": collect_state}
+    if collect_state == "COLLECTED":
+        vals["collected_at"] = func.now()
+        vals["collected"] = collected
+    conn.execute(update(hpc_jobs).where(hpc_jobs.c.id == hid).values(**vals))
+
+
 def set_attention(conn: Connection, job: dict[str, Any], code: str | None, result: dict[str, Any] | None = None) -> bool:
     """T11(WAITING_HPC 유지 + attention_code)."""
     vals: dict[str, Any] = {"attention_code": code}

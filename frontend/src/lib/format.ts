@@ -1,11 +1,12 @@
 import type { JobState, JobType, Role } from "../api";
 
+/** phase2.md §2.3: 스텝퍼 ①~⑤ 모두 활성 */
 export const STAGES = [
-  { n: 1, name: "학습데이터 생성", active: false },
-  { n: 2, name: "데이터 정리", active: false },
+  { n: 1, name: "학습데이터 생성", active: true },
+  { n: 2, name: "데이터 정리", active: true },
   { n: 3, name: "데이터셋·모델", active: true },
   { n: 4, name: "단일 예측", active: true },
-  { n: 5, name: "최적화", active: false },
+  { n: 5, name: "최적화", active: true },
 ] as const;
 
 export const STAGE_MARK = ["", "①", "②", "③", "④", "⑤"];
@@ -17,6 +18,39 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   EVALUATE: "평가",
   PREDICT: "예측",
   PREDICT_VERIFY: "PBS 검증 해석",
+  // phase2.md §7.3 job_label()
+  TD_EXTRACT_PARAMS: "파라미터 추출",
+  TD_DOE_GEN: "DOE·Radioss 입력 생성",
+  TD_SOLVE: "PBS 해석",
+  TD_RESULT_IMPORT: "결과 가져오기",
+  TD_RESP_EXTRACT: "run 응답 추출",
+  CU_H3D_PREVIEW: "h3d 미리보기",
+  CU_H3D_CURATE: "큐레이션",
+  CU_T01_PREVIEW: "T01 미리보기",
+  CU_T01_CURVES: "곡선 추출",
+  SPDM_IMPORT: "SPDM 가져오기",
+  OPTIMIZE: "최적화",
+};
+
+/** 작업 유형 → 단계 번호(phase2.md §6.1) */
+export const JOB_STAGE: Record<JobType, number> = {
+  DATASET_CREATE: 3,
+  PACKAGE_EXPORT: 3,
+  MODEL_REGISTER: 3,
+  EVALUATE: 3,
+  PREDICT: 4,
+  PREDICT_VERIFY: 4,
+  TD_EXTRACT_PARAMS: 1,
+  TD_DOE_GEN: 1,
+  TD_SOLVE: 1,
+  TD_RESULT_IMPORT: 1,
+  TD_RESP_EXTRACT: 1,
+  CU_H3D_PREVIEW: 2,
+  CU_H3D_CURATE: 2,
+  CU_T01_PREVIEW: 2,
+  CU_T01_CURVES: 2,
+  SPDM_IMPORT: 2,
+  OPTIMIZE: 5,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {
@@ -68,4 +102,24 @@ export function isTerminal(s: JobState): boolean {
 /** 정수 tpl 형식(%Ni, %Nd) — 계약 §8.8 */
 export function isIntegerFormat(fmt: string | undefined): boolean {
   return !!fmt && /^%[-0-9.]*[id]$/.test(fmt);
+}
+
+export function fmtBytes(n: number | null | undefined): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return "–";
+  const u = ["B", "KB", "MB", "GB", "TB"];
+  let v = n;
+  let i = 0;
+  while (v >= 1024 && i < u.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${i === 0 ? v : v.toFixed(v >= 100 ? 0 : 1)} ${u[i]}`;
+}
+
+/** PBS run 집계 한 줄(phase2.md §12.9): "PBS 12/30 완료 · 실패 1" */
+export function hpcSummaryText(h: { total: number; succeeded: number; failed: number; collected: number } | null | undefined): string {
+  if (!h) return "";
+  let t = `PBS ${h.succeeded + h.collected}/${h.total} 완료`;
+  if (h.failed) t += ` · 실패 ${h.failed}`;
+  return t;
 }

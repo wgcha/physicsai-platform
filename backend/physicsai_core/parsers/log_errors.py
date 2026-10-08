@@ -9,10 +9,12 @@ class ErrorDetector:
     def __init__(self, patterns: list[str]) -> None:
         self._rx = [re.compile(p, re.IGNORECASE) for p in patterns]
         self.first_match: str | None = None
+        self.count = 0
 
     def feed(self, line: str) -> bool:
         for rx in self._rx:
             if rx.search(line):
+                self.count += 1
                 if self.first_match is None:
                     self.first_match = line.strip()[:200]
                 return True

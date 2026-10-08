@@ -60,7 +60,7 @@ def test_valid_fixture(loaded_config):
         (lambda d: d["commands"].update(geom_update=["{simlab}", "{edspy}"]), "commands.geom_update"),
         (lambda d: d["commands"].update(contour_preview=["/usr/bin/hw", "-b"]), "commands.contour_preview"),
         (lambda d: d.update(hpc={"gateway": "pbs"}), "hpc.gateway"),
-        (lambda d: d.update(hpc={"transfer": {"collect_mode": "drive"}}), "hpc.transfer.collect_mode"),
+        (lambda d: d.update(hpc={"transfer": {"collect_mode": "ftp"}}), "hpc.transfer.collect_mode"),
         (lambda d: d.update(predict={"integer_rounding": "banker"}), "predict.integer_rounding"),
     ],
 )

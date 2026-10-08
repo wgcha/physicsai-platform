@@ -18,10 +18,21 @@ EVENTS = (
     "JOB_INTERRUPTED",
     "MY_TURN_NEXT",
     "HPC_COLLECTED",
+    "HPC_PARTIAL_FAILED",
+    "ENV_CHECK_DONE",
 )
 
 
-def _title(event: str, label: str, study_title: str, failure_code: str | None) -> tuple[str, str]:
+def _hpc_counts(result: dict[str, Any] | None) -> tuple[int, int, int] | None:
+    """TD_SOLVE 결과의 (제출, 실패, 회수) 수. 없으면 None."""
+    r = result or {}
+    if "submitted" not in r:
+        return None
+    return int(r.get("submitted") or 0), int(r.get("failed") or 0), int(r.get("collected") or 0)
+
+
+def _title(event: str, label: str, study_title: str, failure_code: str | None,
+           result: dict[str, Any] | None = None) -> tuple[str, str]:
     st = f"{label} ({study_title})"
     if event == "JOB_STARTED":
         return f"실행 시작: {st}", "작업이 실행을 시작했습니다."
@@ -36,7 +47,14 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None) -
     if event == "MY_TURN_NEXT":
         return f"다음 차례입니다: {st}", "현재 실행 중인 작업이 끝나면 이 작업이 실행됩니다."
     if event == "HPC_COLLECTED":
+        cnt = _hpc_counts(result)
+        if cnt is not None:
+            return f"PBS 결과 회수 완료 — {cnt[0]}개 중 {cnt[2]}개 회수", f"{st}의 PBS 결과를 회수했습니다."
         return "PBS 결과 회수 완료", f"{st}의 PBS 결과를 회수했습니다."
+    if event == "HPC_PARTIAL_FAILED":
+        cnt = _hpc_counts(result) or (0, 0, 0)
+        return (f"PBS 해석 일부 실패 — {cnt[0]}개 중 {cnt[1]}개 실패, 나머지 회수 진행",
+                f"{st}의 일부 run이 실패했습니다. 성공한 run만 회수합니다.")
     return event, ""
 
 
@@ -51,12 +69,13 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int:
             jobs.c.job_type,
             jobs.c.created_by,
             jobs.c.failure_code,
+            jobs.c.result,
             studies.c.title,
         )
         .select_from(jobs.join(studies, studies.c.id == jobs.c.study_id))
         .where(jobs.c.id == job_id)
     ).one()
-    title, body = _title(event, job_label(row.job_type), row.title, row.failure_code)
+    title, body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
     return conn.execute(
         notifications.insert()
         .values(
@@ -68,6 +87,16 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int:
             title=title[:120],
             body=body[:500],
         )
+        .returning(notifications.c.seq)
+    ).scalar_one()
+
+
+def notify_user(conn: Connection, user_id: str, event: str, title: str, body: str = "") -> int:
+    """작업과 무관한 알림(ENV_CHECK_DONE 등, job_id·study_id NULL)."""
+    assert event in EVENTS
+    return conn.execute(
+        notifications.insert()
+        .values(user_id=user_id, event=event, job_id=None, study_id=None, project_id=None, title=title[:120], body=body[:500])
         .returning(notifications.c.seq)
     ).scalar_one()
 

@@ -23,6 +23,32 @@ LINK_REPARSE_TAGS = frozenset({IO_REPARSE_TAG_SYMLINK, IO_REPARSE_TAG_MOUNT_POIN
 BACKUP_DIR = "_backup"
 # Study 폴더 직계의 플랫폼 산출 폴더(계약 §15.1). 데이터셋 입력으로 쓰거나 수집하지 않는다.
 STUDY_OUTPUT_DIRS = frozenset({"03_dataset", "03_package", "03_model", "04_params", "04_predict", "logs", BACKUP_DIR})
+# phase2 §13.4(B23 확장): 2차 산출 폴더. ③-1은 01_train/results·02_import·02_curated/*/CURATED_DATA 하위를 허용한다.
+STUDY_OUTPUT_DIRS_2 = frozenset({
+    "01_train/extract", "01_train/doe", "01_train/tpl", "01_train/radioss_assem", "02_preview", "05_opt",
+})
+ALL_OUTPUT_DIRS = tuple(sorted(STUDY_OUTPUT_DIRS | STUDY_OUTPUT_DIRS_2))
+PLATFORM_DIR = "_platform"  # <ai_root>/_platform (phase2 §13.2) — 사용자 입력 경로로 지정 불가
+_PROTECTED_ROOTS: list[str] = []
+
+
+def register_protected_roots(roots: Iterable[str]) -> None:
+    """쓰기 금지 루트(SPDM) 등록. 쓰기 헬퍼가 이 하위 경로를 받으면 예외(phase2 §13.3)."""
+    _PROTECTED_ROOTS[:] = [os.path.normpath(r) for r in roots if r]
+
+
+def assert_writable(path: str) -> None:
+    if not _PROTECTED_ROOTS:
+        return
+    cands = {os.path.normpath(path)}
+    try:
+        cands.add(_real_parent(os.path.abspath(path)))
+    except OSError:
+        pass
+    for r in _PROTECTED_ROOTS:
+        rr = {r, real(r)}
+        if any(_under(c, x) for c in cands for x in rr):
+            raise StepFailure("PATH_UNSAFE", f"SPDM 경로에는 쓸 수 없습니다: {path}")
 WINDOWS_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
 
 
@@ -132,6 +158,8 @@ def check_user_path(
     rel_parts = [] if rel == "." else rel.split(os.sep)
     if BACKUP_DIR in rel_parts:
         raise PathError("PATH_UNSAFE", "_backup 폴더 아래 경로는 쓸 수 없습니다", path=raw)
+    if rel_parts and rel_parts[0] == PLATFORM_DIR:
+        raise PathError("PATH_UNSAFE", "플랫폼 폴더(_platform)는 입력 경로로 쓸 수 없습니다", path=raw)
     cur = matched
     for part in rel_parts:
         cur = os.path.join(cur, part)
@@ -166,8 +194,13 @@ def check_dataset_input(path: str, ai_root: str) -> list[str]:
             raise PathError("PATH_UNSAFE", "AI 루트 전체는 데이터셋 입력으로 쓸 수 없습니다. h3d 폴더를 지정하세요", path=path)
         if len(parts) >= 2 and parts[1] in STUDY_OUTPUT_DIRS:
             raise PathError("PATH_UNSAFE", f"플랫폼 산출 폴더({parts[1]})는 데이터셋 입력으로 쓸 수 없습니다", path=path)
+        if len(parts) >= 2 and (parts[1] in STUDY_OUTPUT_DIRS_2 or (len(parts) >= 3 and f"{parts[1]}/{parts[2]}" in STUDY_OUTPUT_DIRS_2)):
+            what = parts[1] if parts[1] in STUDY_OUTPUT_DIRS_2 else f"{parts[1]}/{parts[2]}"
+            raise PathError("PATH_UNSAFE", f"플랫폼 산출 폴더({what})는 입력으로 쓸 수 없습니다", path=path)
         if len(parts) == 1:
-            return [os.path.join(path, d) for d in sorted(STUDY_OUTPUT_DIRS)]
+            return [os.path.join(path, *d.split("/")) for d in ALL_OUTPUT_DIRS]
+        if len(parts) == 2 and parts[1] == "01_train":
+            return [os.path.join(path, d.split("/")[1]) for d in ALL_OUTPUT_DIRS if d.startswith("01_train/")]
         return []
     return []
 
@@ -240,6 +273,7 @@ def backup_existing(study_root: str, abs_paths: Iterable[str], job_id: str, stam
     stamp = stamp or backup_stamp()
     moved: list[str] = []
     for p in abs_paths:
+        assert_writable(p)
         rel = to_rel(study_root, p)
         if rel == "." or rel.startswith("..") or os.path.isabs(rel):
             raise StepFailure("INTERNAL_ERROR", f"Study 밖 산출물은 백업할 수 없습니다: {p}")
@@ -253,3 +287,14 @@ def backup_existing(study_root: str, abs_paths: Iterable[str], job_id: str, stam
             raise StepFailure("OUTPUT_LOCKED", f"기존 산출물을 백업 폴더로 옮기지 못했습니다: {os.path.basename(p)} ({exc})")
         moved.append(rel)
     return moved
+
+
+def display_path(ai_root: str | None, folder_name: str, rel: str | None = None) -> str | None:
+    """탐색기에 붙여넣을 표시용 절대경로(B17). ai_root가 Windows 형식이면 '\\' 구분."""
+    if not ai_root:
+        return None
+    parts = [folder_name, *[x for x in (rel or "").replace("\\", "/").split("/") if x]]
+    win = len(ai_root) >= 2 and ai_root[1] == ":"
+    sep = "\\" if win else "/"
+    base = ai_root.replace("/", "\\") if win else ai_root.replace("\\", "/")
+    return base.rstrip("\\/") + sep + sep.join(parts)

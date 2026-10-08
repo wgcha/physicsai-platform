@@ -23,6 +23,8 @@ describe("권한별 버튼 (V-FE-2)", () => {
   it("power: 실행 버튼이 있고 경로 확인 후 활성", async () => {
     const { server } = renderApp(`${STUDY}/3`, { user: "power" });
     const card = await screen.findByRole("region", { name: "데이터셋 생성" });
+    // 2차: 기본 입력은 ② 큐레이션 결과 — "다른 폴더 지정"으로 전환하면 경로 확인이 필요하다
+    fireEvent.click(await within(card).findByRole("button", { name: "다른 폴더 지정" }));
     const btn = within(card).getByRole("button", { name: "데이터셋 생성" }) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
     fireEvent.change(within(card).getByLabelText(/h3d 폴더 경로/), { target: { value: "E:/shared/AI_WORK/cushion_v1/00_inbox/h3d_r3" } });

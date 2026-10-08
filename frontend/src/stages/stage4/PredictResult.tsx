@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { api, type CurveJson, type Job, type JobStep, type PredictResult as PR, type ResponseRow } from "../../api";
+import { type CurveJson, type Job, type JobStep, type PredictResult as PR, type ResponseRow } from "../../api";
 import { Chart } from "../../components/Chart";
+import { JsonTree } from "../../components/JsonTree";
+import { useArtifactJson, useArtifactUrl } from "../../hooks/useArtifact";
 import { fmtNum, fmtPct } from "../../lib/format";
 
 /** 실행 체인 4단계: 형상 → 메싱 → 입력파일 → 예측 */
@@ -48,70 +49,6 @@ export function PredictChain({ job }: { job: Job | null }) {
         );
       })}
     </ol>
-  );
-}
-
-function useArtifactUrl(id: string | null | undefined) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!id) return;
-    let alive = true;
-    let obj: string | null = null;
-    api
-      .artifactBlob(id)
-      .then((b) => {
-        if (!alive) return;
-        obj = URL.createObjectURL(b);
-        setUrl(obj);
-      })
-      .catch(() => setUrl(null));
-    return () => {
-      alive = false;
-      if (obj) URL.revokeObjectURL(obj);
-    };
-  }, [id]);
-  return url;
-}
-
-function useArtifactJson<T>(id: string | null | undefined): T | null {
-  const [data, setData] = useState<T | null>(null);
-  useEffect(() => {
-    setData(null);
-    if (!id) return;
-    let alive = true;
-    api
-      .artifactBlob(id)
-      .then((b) => b.text())
-      .then((t) => alive && setData(JSON.parse(t) as T))
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [id]);
-  return data;
-}
-
-function JsonTree({ data, depth = 0 }: { data: unknown; depth?: number }) {
-  if (data === null || typeof data !== "object") return <span className="mono">{String(data)}</span>;
-  const entries = Array.isArray(data) ? data.map((v, i) => [String(i), v] as const) : Object.entries(data as Record<string, unknown>);
-  return (
-    <ul className="tree">
-      {entries.slice(0, 200).map(([k, v]) => (
-        <li key={k}>
-          {v !== null && typeof v === "object" ? (
-            <details open={depth < 1}>
-              <summary className="mono">{k}</summary>
-              <JsonTree data={v} depth={depth + 1} />
-            </details>
-          ) : (
-            <span>
-              <span className="mono muted">{k}: </span>
-              <span className="mono">{String(v)}</span>
-            </span>
-          )}
-        </li>
-      ))}
-    </ul>
   );
 }
 

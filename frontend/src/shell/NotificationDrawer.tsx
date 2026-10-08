@@ -59,7 +59,7 @@ export function NotificationDrawer({ onClose }: { onClose: () => void }) {
                   onClick={async () => {
                     if (!n.read_at) await markRead([n.seq]);
                     onClose();
-                    if (n.job_id) void openJob(n);
+                    if (n.job_id || n.event === "ENV_CHECK_DONE") void openJob(n);
                   }}
                 >
                   <span className={`notif-dot ev-${n.event.toLowerCase()}`} />

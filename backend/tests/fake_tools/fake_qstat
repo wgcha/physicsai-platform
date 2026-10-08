@@ -1,20 +1,25 @@
 #!/usr/bin/env python3
-"""가짜 qstat: 호출 횟수에 따라 Q → R → F(+Exit_status)."""
+"""가짜 qstat: id별 호출 횟수에 따라 Q → R → F(+Exit_status).
+모드(FAKE_TOOL_MODE_PBS): ok | exit1(전부 실패) | exit1_one(FAKE_PBS_FAIL_MATCH가 job_name에 있으면 실패) | not_found | unknown
+"""
 import json, os, sys, tempfile
 
 m = os.environ.get("FAKE_TOOL_MODE_PBS") or "ok"
 state = os.environ.get("FAKE_PBS_STATE") or os.path.join(tempfile.gettempdir(), "fake_pbs_state.json")
-st = json.load(open(state)) if os.path.exists(state) else {"polls": 0}
-st["polls"] = st.get("polls", 0) + 1
+st = json.load(open(state)) if os.path.exists(state) else {"jobs": {}}
+jid = sys.argv[-1]
+job = st.setdefault("jobs", {}).setdefault(jid, {"polls": 0, "name": ""})
+job["polls"] += 1
 json.dump(st, open(state, "w"))
 if m == "not_found":
-    print(f"qstat: Unknown Job Id {sys.argv[-1]}", file=sys.stderr)
+    print(f"qstat: Unknown Job Id {jid}", file=sys.stderr)
     sys.exit(153)
 if m == "unknown":
     print("garbage output")
     sys.exit(0)
-n = st["polls"]
+n = job["polls"]
 s = "Q" if n == 1 else ("R" if n == 2 else "F")
-print(f"Job Id: {sys.argv[-1]}\n    job_state = {s}")
+print(f"Job Id: {jid}\n    job_state = {s}")
 if s == "F":
-    print(f"    Exit_status = {1 if m == 'exit1' else 0}")
+    bad = m == "exit1" or (m == "exit1_one" and os.environ.get("FAKE_PBS_FAIL_MATCH", "\0") in job.get("name", ""))
+    print(f"    Exit_status = {1 if bad else 0}")

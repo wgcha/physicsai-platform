@@ -1,0 +1,14 @@
+{
+  "install_root": "D:\\physicsai",
+  "python_exe": "D:\\Python313\\python.exe",
+  "pg_bin": "D:\\PostgreSQL\\16\\bin",
+  "pg_host": "127.0.0.1",
+  "pg_port": 5432,
+  "db_name": "physicsai",
+  "db_role": "physicsai_app",
+  "config_path": "D:\\physicsai\\config\\platform.yaml",
+  "service_user": "CORP\\svc_physicsai",
+  "run_mode": "Background",
+  "backend_port": 8100,
+  "caddy_frontend_root": "D:\\physicsai\\frontend\\dist"
+}

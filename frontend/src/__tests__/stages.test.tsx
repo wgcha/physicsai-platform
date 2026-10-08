@@ -76,7 +76,7 @@ describe("④ 화면 (V-FE-6)", () => {
   it("PBS 미구성이면 PBS 버튼 비활성 + 안내", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
     const pbs = (await screen.findByRole("button", { name: "PBS 검증 해석" })) as HTMLButtonElement;
-    await waitFor(() => expect(pbs.title).toBe("PBS 연결 안 됨 — 2차에서 제공(관리자 설정 필요)"));
+    await waitFor(() => expect(pbs.title).toBe("PBS 연결 안 됨(관리자 설정 필요)"));
     expect(pbs.disabled).toBe(true);
     expect(screen.getByTestId("pbs-note").textContent).toContain("PBS 연결 안 됨");
   });

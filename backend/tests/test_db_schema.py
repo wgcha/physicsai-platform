@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import IntegrityError
 
+from physicsai_core.db import MIGRATION_HEAD
 from physicsai_test_support import REPO
 
 
@@ -17,7 +18,7 @@ def test_upgrade_head_creates_all_tables(engine):
               "worker_slot", "worker_heartbeats", "hpc_jobs", "audit_events", "alembic_version"):
         assert t in names
     with engine.connect() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0001_initial"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
         assert c.execute(text("select count(*) from worker_slot")).scalar() == 1
         assert c.execute(text("select nextval('job_queue_seq')")).scalar() >= 1
 

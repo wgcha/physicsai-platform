@@ -1,5 +1,6 @@
-// mock 모드 화면 스크린샷(③, ④) — 1920x1080, 3840x2160 (+ 1280 폭 확인용).
-// 사용: npm run build:mock && npm run screenshots
+// mock 모드 화면 스크린샷 — 1920x1080, 3840x2160 (+ 1280 폭 확인용).
+// 사용: npm run build:mock && npm run screenshots            (1차 ③④ → screenshots/)
+//       npm run build:mock && npm run screenshots:phase2     (2차 ①②⑤·환경 점검 → screenshots/phase2/)
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
 import { spawn, execSync } from "node:child_process";
@@ -52,13 +53,24 @@ const server = spawn(process.execPath, [path.join(root, "node_modules/vite/bin/v
   }
 }
 
-const out = path.join(root, "screenshots");
+const phase2 = process.argv.includes("phase2");
+const out = path.join(root, "screenshots", phase2 ? "phase2" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
-const shots = [
-  { name: "stage3", url: `${base}/p/p-cushion/s/s-cushion/stage/3?shot=1&freeze=1&mockUser=admin` },
-  { name: "stage4", url: `${base}/p/p-cushion/s/s-cushion/stage/4?shot=1&freeze=1&mockUser=admin` },
-];
+const S = `${base}/p/p-cushion/s/s-cushion/stage`;
+const q = "shot=1&freeze=1&mockUser=admin";
+const shots = phase2
+  ? [
+      { name: "stage1", url: `${S}/1?${q}&hpc=1`, wait: ".workarea .card" },
+      { name: "stage1_pbs-none", url: `${S}/1?${q}`, wait: ".workarea .card" },
+      { name: "stage2", url: `${S}/2?${q}`, wait: ".workarea .card" },
+      { name: "stage5", url: `${S}/5?${q}`, wait: ".workarea .card" },
+      { name: "env-check", url: `${base}/admin/env-check?${q}`, wait: ".env-table" },
+    ]
+  : [
+      { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
+      { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
+    ];
 const sizes = [
   { w: 1920, h: 1080 },
   { w: 3840, h: 2160 },
@@ -73,7 +85,7 @@ try {
     const page = await ctx.newPage();
     for (const shot of shots) {
       await page.goto(shot.url, { waitUntil: "load" });
-      await page.waitForSelector(".workarea .card", { timeout: 15000 });
+      await page.waitForSelector(shot.wait, { timeout: 15000 });
       await page.waitForTimeout(1200);
       const file = path.join(out, `${shot.name}_${s.w}x${s.h}.png`);
       await page.screenshot({ path: file, fullPage: false });

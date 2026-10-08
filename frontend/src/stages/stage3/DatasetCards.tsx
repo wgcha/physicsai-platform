@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Dataset } from "../../api";
+import { api, type Curation, type Dataset } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, CopyButton, Field, RunAction } from "../../components/ui";
@@ -17,15 +17,51 @@ export function DatasetCreateCard() {
   const [seed, setSeed] = useState("");
   const [splitGroup, setSplitGroup] = useState<"file" | "parent_dir">("file");
   const [opts, setOpts] = useState({ extract_faces: true, extract_mdi: false, extract_time_history_vectors: false });
+  // phase2.md §14.4: 기본 입력 = 최근 READY H3D 큐레이션, "다른 폴더 지정"으로 전환
+  const [curation, setCuration] = useState<Curation | null>(null);
+  const [useFolder, setUseFolder] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    api
+      .curations(study.id, "H3D")
+      .then((list) => {
+        const ready = list.filter((c) => c.status === "READY").sort((a, b) => b.created_at.localeCompare(a.created_at));
+        if (alive) setCuration(ready[0] ?? null);
+      })
+      .catch(() => alive && setCuration(null));
+    return () => {
+      alive = false;
+    };
+  }, [study.id]);
+  const fromCuration = !!curation && !useFolder;
 
   const submit = () => {
-    const params: Record<string, unknown> = { input_path: path.trim(), split_group: splitGroup, options: opts };
+    const input: Record<string, unknown> = fromCuration ? { curation_id: curation!.id } : { input_path: path.trim() };
+    const params: Record<string, unknown> = { ...input, split_group: splitGroup, options: opts };
     if (seed.trim()) params.seed = Number(seed);
     void run(params).then(() => void reloadDatasets());
   };
 
   return (
     <Card step="③-1" title="데이터셋 생성">
+      {curation && (
+        <div className="input-source" data-testid="curation-default">
+          {fromCuration ? (
+            <div className="summary-line">
+              ② 큐레이션 결과 사용 · {fmtTime(curation.created_at)} · <b>{curation.ok_count}</b>개
+              <div className="mono small muted ellipsis" title={curation.output_display_path}>
+                {curation.output_display_path}
+              </div>
+            </div>
+          ) : (
+            <span className="muted small">다른 폴더를 지정합니다</span>
+          )}
+          <button type="button" className="btn small ghost" onClick={() => setUseFolder((v) => !v)}>
+            {fromCuration ? "다른 폴더 지정" : "② 큐레이션 결과 사용"}
+          </button>
+        </div>
+      )}
+      {!fromCuration && (
       <PathInput
         studyId={study.id}
         purpose="DATASET_INPUT"
@@ -45,6 +81,7 @@ export function DatasetCreateCard() {
           </div>
         )}
       />
+      )}
       <p className="note">
         평가용 홀드아웃 <b>10% 고정</b>(고정 seed). 평가용 데이터는 학습 패키지에 넣지 않고 점수 계산에만 씁니다.
       </p>
@@ -79,7 +116,7 @@ export function DatasetCreateCard() {
         label="데이터셋 생성"
         onRun={submit}
         job={job}
-        disabled={!path.trim() || !inspected}
+        disabled={!fromCuration && (!path.trim() || !inspected)}
         disabledReason="경로를 입력하고 확인하세요"
         error={error}
       />

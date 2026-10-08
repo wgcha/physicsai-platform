@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
-"""가짜 SimLab.bat(§18.1): -auto SCRIPT … -nographics → cwd에 eps_mesh_1.inc."""
-import json, os, subprocess, sys, time
+"""가짜 SimLab.bat(§18.1, phase2 §16.1).
+
+- 형상 갱신(1차): -auto SCRIPT -nographics → cwd에 eps_mesh_1.inc
+- 파라미터 추출(2차): -auto L CAD XML -nographics → <L stem>_LogFile.txt에 Passed 4줄, XML
+  L과 같은 폴더에 get_parameter_from_cad_core*.pyd가 없으면 종료코드 4
+모드(FAKE_TOOL_MODE_SIMLAB > FAKE_TOOL_MODE): ok | fail | hang | no_output | bad_xml
+"""
+import glob, json, os, subprocess, sys, time
 
 m = os.environ.get("FAKE_TOOL_MODE_SIMLAB") or os.environ.get("FAKE_TOOL_MODE") or "ok"
 p = os.environ.get("FAKE_TOOL_RECORD")
@@ -21,6 +27,32 @@ script = a[a.index("-auto") + 1]
 if not os.path.isfile(script):
     print(f"script not found: {script}", flush=True)
     sys.exit(2)
+if len(a) == 6:  # 파라미터 추출: -auto L CAD XML -nographics
+    cad, xml = a[3], a[4]
+    if not os.path.isfile(cad):
+        print(f"cad not found: {cad}", flush=True)
+        sys.exit(2)
+    if not glob.glob(os.path.join(os.path.dirname(script), "get_parameter_from_cad_core*.pyd")):
+        print("ImportError: get_parameter_from_cad_core", flush=True)
+        sys.exit(4)
+    logf = os.path.join(os.path.dirname(script), os.path.splitext(os.path.basename(script))[0] + "_LogFile.txt")
+    with open(logf, "a", encoding="utf-8") as fh:
+        for i in range(4):
+            fh.write(f"step {i + 1} Passed\n")
+            fh.flush()
+            time.sleep(float(os.environ.get("FAKE_SIMLAB_STEP_S", "0.2")))
+    if m == "no_output":
+        print("SimLab (fake) extract done without xml", flush=True)
+        sys.exit(0)
+    body = ("<Root><Model><Parameter><Name>THK_1</Name><Value>3 mm</Value></Parameter>"
+            "<Parameter><Name>RIB_H</Name><Value>12.5</Value></Parameter>"
+            "<Parameter><Name>bad name</Name><Value>x</Value></Parameter></Model></Root>")
+    if m == "bad_xml":
+        body = '<?xml version="1.0"?><!DOCTYPE r [<!ENTITY x "y">]>' + body
+    with open(xml, "w", encoding="utf-8") as fh:
+        fh.write(body)
+    print("SimLab (fake) parameters extracted", flush=True)
+    sys.exit(0)
 with open("eps_mesh_1.inc", "w") as fh:
     fh.write("/NODE\n1 0 0 0\n")
 print("SimLab (fake) mesh written", flush=True)

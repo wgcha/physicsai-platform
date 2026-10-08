@@ -66,6 +66,7 @@ class StatusHpc(Resp):
     mode: str
     configured: bool
     message: str
+    collect_mode: str = "in_place"
 
 
 class KeyOk(Resp):
@@ -84,6 +85,38 @@ class StatusLimits(Resp):
     effective: dict[str, Any] | None = None
 
 
+class ResourceStatus(Resp):
+    key: str
+    configured: bool
+    ok: bool
+
+
+class FeatureState(Resp):
+    enabled: bool
+    missing: list[str]
+
+
+class StatusFeatures(Resp):
+    train_extract: FeatureState
+    train_tpl: FeatureState
+    train_doe: FeatureState
+    train_solve: FeatureState
+    train_import: FeatureState
+    train_resp: FeatureState
+    curation_h3d: FeatureState
+    curation_t01: FeatureState
+    spdm_import: FeatureState
+    optimize: FeatureState
+
+
+class StatusEnvCheck(Resp):
+    latest_id: str | None = None
+    latest_state: str | None = None
+    finished_at: datetime | None = None
+    fail: int | None = None
+    warn: int | None = None
+
+
 class StatusResponse(Resp):
     config: StatusConfig
     worker: StatusWorker
@@ -93,6 +126,18 @@ class StatusResponse(Resp):
     limits: StatusLimits
     ui: dict[str, int]
     auth: dict[str, str]
+    resources: list[ResourceStatus] = Field(default_factory=list)
+    features: StatusFeatures | None = None
+    env_check: StatusEnvCheck | None = None
+
+
+class HpcSummary(Resp):
+    total: int
+    queued: int
+    running: int
+    succeeded: int
+    failed: int
+    collected: int
 
 
 class JobSummary(Resp):
@@ -112,6 +157,10 @@ class JobSummary(Resp):
     cancel_requested: bool
     created_at: datetime
     started_at: datetime | None = None
+    stage_label: str | None = None
+    current_step_key: str | None = None
+    current_step_label: str | None = None
+    hpc_summary: HpcSummary | None = None
 
 
 class JobStep(Resp):
@@ -142,6 +191,7 @@ class Job(JobSummary):
     version: int
     can_cancel: bool
     can_retry: bool
+    can_download_error_bundle: bool = False
     input_display_path: str | None = None
 
 
@@ -239,8 +289,10 @@ class StudyPatch(Req):
 
 
 class PathInspectRequest(Req):
-    purpose: Literal["DATASET_INPUT", "MODEL_FOLDER", "PARAM_SET"]
+    purpose: Literal["DATASET_INPUT", "MODEL_FOLDER", "PARAM_SET", "CAD_FILE", "RADIOSS_ASSEM", "RESULT_FOLDER",
+                     "CURATION_INPUT", "SPDM_IMPORT"]
     path: str = Field(max_length=400)
+    doe_id: str | None = None
 
 
 class PathProblem(Resp):
@@ -276,6 +328,7 @@ class Dataset(Resp):
     package_rel: str | None = None
     dataset_display_path: str | None = None
     package_display_path: str | None = None
+    curation_id: str | None = None
     created_by_name: str
     created_at: datetime
 
@@ -361,6 +414,8 @@ class ParamSet(Resp):
     is_current: bool
     registered_by_name: str
     registered_at: datetime
+    origin: str = "FOLDER"
+    train_doe_id: str | None = None
 
 
 class SampleRow(Resp):
@@ -409,7 +464,11 @@ class PredictCheckResponse(Resp):
 # ---- 작업 -----------------------------------------------------------------
 
 
-JobType = Literal["DATASET_CREATE", "PACKAGE_EXPORT", "MODEL_REGISTER", "EVALUATE", "PREDICT", "PREDICT_VERIFY"]
+JobType = Literal[
+    "DATASET_CREATE", "PACKAGE_EXPORT", "MODEL_REGISTER", "EVALUATE", "PREDICT", "PREDICT_VERIFY",
+    "TD_EXTRACT_PARAMS", "TD_DOE_GEN", "TD_SOLVE", "TD_RESULT_IMPORT", "TD_RESP_EXTRACT", "CU_H3D_PREVIEW", "CU_H3D_CURATE",
+    "CU_T01_PREVIEW", "CU_T01_CURVES", "SPDM_IMPORT", "OPTIMIZE",
+]
 
 
 class JobCreate(Req):
@@ -494,3 +553,297 @@ class AdminConfig(Resp):
     issues: list[dict[str, str]]
     settings: dict[str, Any]
     templates: dict[str, Any]
+
+
+# ---- 2차(phase2 §12) ---------------------------------------------------------
+
+
+class ParamSetFromTrain(Req):
+    doe_id: str
+    runs: Literal["collected", "all"] = "collected"
+    unit_system: str | None = Field(default=None, max_length=40)
+
+
+class TrainParamOut(Resp):
+    name: str
+    raw_nominal: str = ""
+    nominal: float | None = None
+    min: float | None = None
+    max: float | None = None
+    use: bool
+    format: str
+    unit: str = ""
+    valid: bool
+    problems: list[str]
+
+
+class TrainParamUpdate(Req):
+    name: str
+    min: float | None = None
+    max: float | None = None
+    use: bool
+    format: str | None = Field(default=None, max_length=16)
+    unit: str | None = Field(default=None, max_length=16)
+
+
+class TrainParamsPut(Req):
+    version: int
+    parameters: list[TrainParamUpdate]
+
+
+class VersionBody(Req):
+    version: int
+
+
+class TrainCad(Resp):
+    source_path: str | None = None
+    file_name: str | None = None
+    sha256: str | None = None
+    display_path: str | None = None
+
+
+class TrainTpl(Resp):
+    generated_at: datetime | None = None
+    sha256: str | None = None
+    display_path: str | None = None
+    params: list[TplParam]
+    warnings: list[dict[str, str]]
+    stale: bool
+
+
+class TrainSetup(Resp):
+    study_id: str
+    cad: TrainCad | None = None
+    extract_job_id: str | None = None
+    parameters: list[TrainParamOut]
+    used_count: int
+    tpl: TrainTpl | None = None
+    version: int
+    updated_by_name: str | None = None
+    updated_at: datetime | None = None
+
+
+class DoeField(Resp):
+    key: str
+    label: str
+    type: Literal["combo", "int", "bool"]
+    items: list[str] | None = None
+    default: Any = None
+    min: int | None = None
+    max: int | None = None
+
+
+class DoeType(Resp):
+    label: str
+    value: str
+    default_runs: int
+    runs_editable: bool
+    fields: list[DoeField]
+
+
+class RunStateCounts(Resp):
+    GENERATED: int = 0
+    SUBMITTED: int = 0
+    SOLVED: int = 0
+    SOLVE_FAILED: int = 0
+    COLLECTED: int = 0
+    COLLECT_FAILED: int = 0
+
+
+class TrainDoe(Resp):
+    id: str
+    study_id: str
+    job_id: str
+    status: str
+    doe_label: str
+    doe_type: str
+    num_runs_requested: int | None = None
+    options: dict[str, Any]
+    multi_execution: int
+    radioss_assem_source_path: str
+    run_count: int | None = None
+    sample_status: str
+    collected_count: int
+    solve_failed_count: int
+    has_run_responses: bool
+    dir_display_path: str | None = None
+    results_display_path: str | None = None
+    created_by_name: str
+    created_at: datetime
+    run_state_counts: RunStateCounts
+
+
+class TrainRunHpc(Resp):
+    external_job_id: str | None = None
+    state: str
+    attempt_no: int
+
+
+class TrainRunResult(Resp):
+    h3d: int = 0
+    t01: int = 0
+    files: int = 0
+    total_bytes: int = 0
+
+
+class TrainRun(Resp):
+    run_key: str
+    state: str
+    starter_name: str
+    input_display_path: str | None = None
+    hpc: TrainRunHpc | None = None
+    result: TrainRunResult | None = None
+    updated_at: datetime
+
+
+class SourceRef(Resp):
+    kind: str
+    doe_id: str | None = None
+    import_id: str | None = None
+    path: str | None = None
+
+
+class CurationSource(Resp):
+    kind: str
+    ref_id: str
+    label: str
+    display_path: str | None = None
+    h3d_count: int
+    t01_count: int
+    runs_expected: int | None = None
+    created_at: datetime
+
+
+class Curation(Resp):
+    id: str
+    study_id: str
+    job_id: str
+    kind: str
+    status: str
+    source: SourceRef
+    source_label: str
+    preview_job_id: str | None = None
+    selection: dict[str, Any]
+    target_count: int | None = None
+    ok_count: int | None = None
+    failed_count: int | None = None
+    missing_runs: list[str]
+    output_display_path: str | None = None
+    used_by_dataset_ids: list[str]
+    created_by_name: str
+    created_at: datetime
+
+
+class CurationFile(Resp):
+    run_folder: str
+    run_key: str | None = None
+    input_name: str
+    output_name: str | None = None
+    size: int | None = None
+    ok: bool
+    exit_code: int | None = None
+
+
+class CurationFilesPage(Resp):
+    items: list[CurationFile]
+    next_cursor: str | None = None
+
+
+class SpdmImport(Resp):
+    id: str
+    study_id: str
+    job_id: str
+    status: str
+    spdm_path: str
+    file_count: int | None = None
+    total_bytes: int | None = None
+    renamed_count: int | None = None
+    dest_display_path: str | None = None
+    created_by_name: str
+    created_at: datetime
+
+
+class Optimization(Resp):
+    id: str
+    study_id: str
+    job_id: str
+    status: str
+    approach: str
+    opt_method: str
+    max_designs: int
+    model_id: str
+    model_name: str | None = None
+    param_set_id: str
+    study_folder: str
+    runs_started: int | None = None
+    responses: list[dict[str, Any]]
+    summary_status: str
+    summary_meta: dict[str, Any] | None = None
+    summary_artifact_id: str | None = None
+    file_count: int | None = None
+    file_list_artifact_id: str | None = None
+    folder_display_path: str | None = None
+    created_by_name: str
+    created_at: datetime
+
+
+class CandidateDatatype(Resp):
+    name: str
+    components: list[str]
+    layers: list[str]
+    format: Any = None
+
+
+class CandidateSubcase(Resp):
+    id: int
+    label: str
+    datatypes: list[CandidateDatatype]
+
+
+class CandidateH3d(Resp):
+    subcases: list[CandidateSubcase]
+
+
+class CandidateXy(Resp):
+    requests: dict[str, list[str]]
+
+
+class ResponseCandidates(Resp):
+    source_job_id: str | None = None
+    h3d: CandidateH3d | None = None
+    xydata: CandidateXy | None = None
+
+
+class EnvCheckItem(Resp):
+    key: str
+    category: Literal["CONFIG", "DATABASE", "AUTH", "HPC", "WORKER", "EXECUTABLE", "RESOURCE", "STORAGE", "GPU"]
+    label: str
+    status: Literal["OK", "WARN", "FAIL", "SKIP", "PENDING"]
+    message: str
+    source: Literal["API", "WORKER"]
+    detail: Any = None
+
+
+class EnvCheckCounts(Resp):
+    ok: int = 0
+    warn: int = 0
+    fail: int = 0
+    skip: int = 0
+
+
+class EnvCheckSummary(Resp):
+    id: str
+    state: str
+    requested_by_name: str
+    created_at: datetime
+    finished_at: datetime | None = None
+    summary: EnvCheckCounts
+
+
+class EnvCheck(EnvCheckSummary):
+    started_at: datetime | None = None
+    expires_at: datetime
+    worker_id: str | None = None
+    items: list[EnvCheckItem]
+    failure_message: str | None = None
+    report_display_path: str | None = None

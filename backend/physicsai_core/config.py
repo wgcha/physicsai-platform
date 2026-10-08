@@ -72,10 +72,44 @@ class AltairCfg(_M):
     edspy_path: str = ""
     hw_exe_path: str = ""
     hvtrans_exe_path: str = ""
+    hstpy_path: str = ""  # 2차: 빈 값 = hyperstudy_path 폴더의 hstpy.bat (phase2 §8.1)
+    altair_home: str = ""  # 2차: 빈 값 = hstpy 폴더/../../..
+
+
+class LauncherCfg(_M):
+    script: str
+    core: str
+
+
+def _default_launchers() -> dict[str, LauncherCfg]:
+    # 원본 CONFIG/BATCHRUN 런처·BUILD_PYD 코어 이름(phase2 §8.2). 설정으로 바꿀 수 있다.
+    return {
+        "extract_params": LauncherCfg(script="BATCHRUN_get_parameter_from_cad.py", core="get_parameter_from_cad_core"),
+        "gen_radioss": LauncherCfg(script="BATCHRUN_hst_gen_radioss_input.py", core="hst_gen_radioss_core"),
+        "optimization": LauncherCfg(script="BATCHRUN_hst_physicsai_optimization.py", core="hst_physicsai_optimization_core"),
+    }
+
+
+RESOURCE_FILE_KEYS = (
+    "preview_pred_h3d_tcl", "simlab_tpl_template", "doe_design_type_json", "hypermesh_include_tcl",
+    "preview_h3d_tcl", "preview_hg_tcl", "curate_hg_tcl", "extract_minmax_tcl",
+)
+RESOURCE_DIR_KEYS = ("batchrun_dir", "pyd_dir")
+LAUNCHER_KEYS = ("extract_params", "gen_radioss", "optimization")
 
 
 class ResourcesCfg(_M):
     preview_pred_h3d_tcl: str = ""
+    batchrun_dir: str = ""
+    pyd_dir: str = ""
+    simlab_tpl_template: str = ""
+    doe_design_type_json: str = ""
+    hypermesh_include_tcl: str = ""
+    preview_h3d_tcl: str = ""
+    preview_hg_tcl: str = ""
+    curate_hg_tcl: str = ""
+    extract_minmax_tcl: str = ""
+    launchers: dict[str, LauncherCfg] = Field(default_factory=_default_launchers)
 
 
 class WorkerCfg(_M):
@@ -160,6 +194,14 @@ class CommandsCfg(_M):
     edspy_predict: list[str] | None = None
     contour_preview: list[str] | None = None
     response_extract: list[str] | None = None
+    # 2차(phase2 §8.1) — null이면 그 기능만 비활성(가정 A-11)
+    simlab_extract_params: list[str] | None = None
+    hst_gen_radioss: list[str] | None = None
+    h3d_preview: list[str] | None = None
+    hvtrans_curate: list[str] | None = None
+    t01_preview: list[str] | None = None
+    t01_curve_export: list[str] | None = None
+    hst_optimization: list[str] | None = None
 
 
 class HpcDefaultsCfg(_M):
@@ -195,7 +237,9 @@ class PathMapCfg(_M):
 class HpcTransferCfg(_M):
     stage_in: str = "shared_path"
     path_map: list[PathMapCfg] = Field(default_factory=list)
-    collect_mode: str = "in_place"
+    collect_mode: str = "in_place"  # in_place | shared_folder | drive(= shared_folder 별칭, phase2 §6.5)
+    collect_root_local: str = ""
+    collect_root_remote: str = ""
     collect_patterns: list[str] = Field(default_factory=lambda: ["*.h3d", "*T01", "*_0000.out", "*_0001.out"])
     max_collect_bytes: int = 21474836480
 
@@ -235,6 +279,92 @@ class LoggingCfg(_M):
     )
 
 
+class TrainDataCfg(_M):
+    """① 학습데이터 생성(phase2 §8.2). 기본값은 원본 인용."""
+
+    cad_extensions: list[str] = Field(default_factory=lambda: [".prt"])
+    max_xml_bytes: int = 4194304
+    extract_progress_token: str = "Passed"
+    extract_progress_total: int = 4
+    param_default_range_ratio: float = 0.05
+    param_default_format: str = "%3i"
+    tpl_marker: str = "#" + "*" * 63
+    tpl_prt_regex: str = r'dir_file_prt\s*=\s*r"[^"]*"'
+    tpl_parameter_line_regex: str = r"(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?"
+    tpl_paramitem_line_regex: str = r"(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?"
+    max_runs: int = 2000
+    max_multi_execution: int = 8
+    hst_progress_regex: str = r"Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)"
+    hst_log_error_patterns: list[str] = Field(default_factory=lambda: [
+        r"^\s*\d+\s+Error\s*:",
+        r"Traceback \(most recent call last\):",
+        r"^\s*\[ERROR\]",
+        r"^\s*(?:FileNotFoundError|RuntimeError|ValueError|OSError|PermissionError|ImportError|TypeError|AttributeError|NameError|SyntaxError)\s*:",
+    ])
+    run_dir_glob: str = "approaches/*/run__*"
+    samples_extractor: str = "paramitem"
+    rendered_tpl_glob: str = "**/*"
+    rendered_tpl_exts: list[str] = Field(default_factory=lambda: [".py", ".tcl", ".txt", ".xml", ""])
+    samples_scan_max_bytes: int = 1048576
+    paramitem_regex: str = r'<paramitem\s+Name="(?P<name>[^"]+)"\s+NewValue="(?P<value>[^"]*)"'
+    samples_csv_glob: str | None = None
+    samples_csv_run_column: str = "run_key"
+    max_runs_per_submit: int = 500
+    result_run_dir_regex: str = r"^(?P<run_key>run__\d+)$"
+    result_match_depth: int = 3
+
+
+class CurationCfg(_M):
+    max_files: int = 20000
+
+
+class SpdmImportCfg(_M):
+    patterns: list[str] = Field(default_factory=lambda: ["*.h3d", "*T01"])
+    max_files: int = 20000
+    max_total_bytes: int = 536870912000
+
+
+class SummaryParserCfg(_M):
+    name: str
+    glob: str
+    kind: str
+    max_rows: int | None = None
+
+
+class OptimizeCfg(_M):
+    default_study_folder: str = "HST_PHYSICSAI_OPTIMIZATION"
+    env: dict[str, str] = Field(default_factory=lambda: {"EDS_TNS_ACTVN_CHCKPT": "1"})
+    progress_regex: str = r"Started\s+run\s+\(\s*(?P<run>\d+)\s*\),\s*model\s+\(\s*m_1\s*\)"
+    max_listed_files: int = 5000
+    viewable_globs: list[str] = Field(default_factory=lambda: ["*.csv", "*.txt", "*.json", "*.log"])
+    max_viewable_files: int = 200
+    summary_parsers: list[SummaryParserCfg] = Field(default_factory=list)
+
+
+ENV_PROBE_TOOLS = ("edspy", "simlab", "hw", "hstbatch", "hvtrans", "hstpy")
+
+
+class EnvCheckProbesCfg(_M):
+    edspy: list[str] | None = None
+    simlab: list[str] | None = None
+    hw: list[str] | None = None
+    hstbatch: list[str] | None = None
+    hvtrans: list[str] | None = None
+    hstpy: list[str] | None = None
+
+
+class EnvCheckCfg(_M):
+    probe_timeout_s: float = 60
+    expire_s: float = 900
+    min_free_gb: float = 50
+    probes: EnvCheckProbesCfg = Field(default_factory=EnvCheckProbesCfg)
+
+
+class ErrorBundleCfg(_M):
+    log_tail_bytes: int = 262144
+    max_total_bytes: int = 20971520
+
+
 DEFAULT_LOG_ERROR_PATTERNS = [r"^\s*\d+\s+Error\s*:", r"Traceback \(most recent call last\):", r"^\s*\[ERROR\]"]
 
 
@@ -255,6 +385,12 @@ class Settings(_M):
     param_set: ParamSetCfg = Field(default_factory=ParamSetCfg)
     predict: PredictCfg = Field(default_factory=PredictCfg)
     commands: CommandsCfg = Field(default_factory=CommandsCfg)
+    train_data: TrainDataCfg = Field(default_factory=TrainDataCfg)
+    curation: CurationCfg = Field(default_factory=CurationCfg)
+    spdm_import: SpdmImportCfg = Field(default_factory=SpdmImportCfg)
+    optimize: OptimizeCfg = Field(default_factory=OptimizeCfg)
+    env_check: EnvCheckCfg = Field(default_factory=EnvCheckCfg)
+    error_bundle: ErrorBundleCfg = Field(default_factory=ErrorBundleCfg)
     commands_log_error_patterns: list[str] = Field(default_factory=lambda: list(DEFAULT_LOG_ERROR_PATTERNS))
     hpc: HpcCfg = Field(default_factory=HpcCfg)
     notifications: NotificationsCfg = Field(default_factory=NotificationsCfg)
@@ -419,25 +555,42 @@ def validate_settings(s: Settings) -> list[ConfigIssue]:  # noqa: C901 - 표 기
                 add(k, f"SPDM 루트와 겹칩니다: {sp}")
 
     # altair
-    for k in ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path"):
+    for k in ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path", "hstpy_path"):
         v = getattr(s.altair, k)
         if v:
             if not is_abs_path_str(v):
                 add(f"altair.{k}", "절대경로여야 합니다")
             elif prod and not os.path.isfile(v):
                 add(f"altair.{k}", f"실행 파일이 없습니다: {v}")
+    if s.altair.altair_home and not is_abs_path_str(s.altair.altair_home):
+        add("altair.altair_home", "절대경로여야 합니다")
 
-    # resources
-    tcl = s.resources.preview_pred_h3d_tcl
-    if tcl:
-        if not is_abs_path_str(tcl):
-            add("resources.preview_pred_h3d_tcl", "절대경로여야 합니다")
-        elif has_unsafe_chars(tcl):
-            add("resources.preview_pred_h3d_tcl", "공백·제어문자·cmd 메타문자를 쓸 수 없습니다")
-        elif prod and not os.path.isfile(tcl):
-            add("resources.preview_pred_h3d_tcl", f"파일이 없습니다: {tcl}")
-    elif prod:
-        add("resources.preview_pred_h3d_tcl", "prod에서는 필수입니다")
+    # resources (phase2 §8.2: 비었거나 절대경로·공백/메타 없음·prod면 존재)
+    for k in RESOURCE_FILE_KEYS + RESOURCE_DIR_KEYS:
+        v = getattr(s.resources, k)
+        key = f"resources.{k}"
+        if v:
+            if not is_abs_path_str(v):
+                add(key, "절대경로여야 합니다")
+            elif has_unsafe_chars(v):
+                add(key, "공백·제어문자·cmd 메타문자를 쓸 수 없습니다")
+            elif prod and k in RESOURCE_DIR_KEYS and not os.path.isdir(v):
+                add(key, f"폴더가 없습니다: {v}")
+            elif prod and k in RESOURCE_FILE_KEYS and not os.path.isfile(v):
+                add(key, f"파일이 없습니다: {v}")
+            for sp in spdm:
+                if paths_overlap(v, sp):
+                    add(key, f"SPDM 루트와 겹칩니다: {sp}")
+        elif prod and k == "preview_pred_h3d_tcl":
+            add(key, "prod에서는 필수입니다")
+    for name, lc in s.resources.launchers.items():
+        key = f"resources.launchers.{name}"
+        if name not in LAUNCHER_KEYS:
+            add(key, "알 수 없는 런처 키입니다(extract_params | gen_radioss | optimization)")
+        if not re.fullmatch(r"[A-Za-z0-9_.\-]+\.py", lc.script) or has_unsafe_chars(lc.script):
+            add(key + ".script", "파일 이름만(경로 구분자 없이) .py 로 끝나야 합니다")
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", lc.core):
+            add(key + ".core", "^[A-Za-z_][A-Za-z0-9_]*$")
 
     # worker
     w = s.worker
@@ -516,19 +669,145 @@ def validate_settings(s: Settings) -> list[ConfigIssue]:  # noqa: C901 - 표 기
     # hpc
     if s.hpc.gateway not in ("none", "command", "adapter"):
         add("hpc.gateway", "none | command | adapter")
-    if s.hpc.transfer.collect_mode != "in_place":
-        add("hpc.transfer.collect_mode", "1차는 in_place만 지원합니다(shared_folder·drive는 2차)")
+    t = s.hpc.transfer
+    if t.collect_mode not in ("in_place", "shared_folder", "drive"):
+        add("hpc.transfer.collect_mode", "in_place | shared_folder | drive")
+    elif t.collect_mode in ("shared_folder", "drive"):
+        for k in ("collect_root_local", "collect_root_remote"):
+            if not getattr(t, k):
+                add(f"hpc.transfer.{k}", "shared_folder·drive 모드에서는 필수입니다")
+    if t.collect_root_local:
+        k = "hpc.transfer.collect_root_local"
+        v = t.collect_root_local
+        if not is_abs_path_str(v):
+            add(k, "절대경로여야 합니다")
+        elif has_unsafe_chars(v):
+            add(k, "공백·제어문자·cmd 메타문자를 쓸 수 없습니다")
+        elif not os.path.isdir(v):
+            add(k, f"폴더가 없습니다: {v}")
+        if ai_root and paths_overlap(v, ai_root):
+            add(k, "AI 루트와 겹칠 수 없습니다")
+        for sp in spdm:
+            if paths_overlap(v, sp):
+                add(k, f"SPDM 루트와 겹칩니다: {sp}")
+    if t.collect_root_remote and (has_unsafe_chars(t.collect_root_remote) or not is_abs_path_str(t.collect_root_remote)):
+        add("hpc.transfer.collect_root_remote", "절대경로여야 하며 공백·메타문자를 쓸 수 없습니다")
     if s.hpc.gateway == "command":
         from .hpc.command import validate_command_config
 
         for msg in validate_command_config(s.hpc):
             add("hpc.command", msg)
 
+    _validate_phase2(s, issues)
+
     if s.notifications.retention_days < 1:
         add("notifications.retention_days", "1 이상")
     if s.ui.max_artifact_bytes <= 0:
         add("ui.max_artifact_bytes", "양수")
     return issues
+
+
+def _validate_phase2(s: Settings, issues: list[ConfigIssue]) -> None:
+    """2차 키 검증(phase2 §8.2 끝)."""
+    add = lambda k, m: issues.append(ConfigIssue(k, m))  # noqa: E731
+    td = s.train_data
+    for i, p in enumerate(td.hst_log_error_patterns):
+        _compile(f"train_data.hst_log_error_patterns[{i}]", p, issues)
+    _compile("train_data.hst_progress_regex", td.hst_progress_regex, issues, ("run",))
+    _compile("train_data.paramitem_regex", td.paramitem_regex, issues, ("name", "value"))
+    _compile("train_data.result_run_dir_regex", td.result_run_dir_regex, issues, ("run_key",))
+    for k in ("tpl_prt_regex", "tpl_parameter_line_regex", "tpl_paramitem_line_regex"):
+        _compile(f"train_data.{k}", getattr(td, k), issues)
+    _compile("optimize.progress_regex", s.optimize.progress_regex, issues, ("run",))
+    if not 1 <= td.max_multi_execution <= 64:
+        add("train_data.max_multi_execution", "1~64")
+    if not 2 <= td.max_runs <= 100000:
+        add("train_data.max_runs", "2~100000")
+    if not 0 < td.param_default_range_ratio < 1:
+        add("train_data.param_default_range_ratio", "0~1 사이")
+    if not re.fullmatch(r"%[-0-9.]*[idfeEgG]", td.param_default_format):
+        add("train_data.param_default_format", "%[-0-9.]*[idfeEgG]")
+    if td.samples_extractor not in ("paramitem", "csv", "none"):
+        add("train_data.samples_extractor", "paramitem | csv | none")
+    if td.extract_progress_total < 1:
+        add("train_data.extract_progress_total", "1 이상")
+    if not td.tpl_marker:
+        add("train_data.tpl_marker", "비어 있을 수 없습니다")
+    for e in td.cad_extensions:
+        if not re.fullmatch(r"\.[A-Za-z0-9_]{1,16}", e):
+            add("train_data.cad_extensions", f"확장자 형식 오류: {e}")
+    if td.result_match_depth < 1:
+        add("train_data.result_match_depth", "1 이상")
+    if td.max_runs_per_submit < 1:
+        add("train_data.max_runs_per_submit", "1 이상")
+    if not re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", s.optimize.default_study_folder):
+        add("optimize.default_study_folder", "^[A-Za-z0-9_-]{1,64}$")
+    for i, sp in enumerate(s.optimize.summary_parsers):
+        if sp.kind not in ("csv_table", "json_passthrough"):
+            add(f"optimize.summary_parsers[{i}].kind", "csv_table | json_passthrough")
+    for name in s.optimize.env:
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", name):
+            add("optimize.env", f"환경변수 이름 형식 오류: {name}")
+    if s.env_check.probe_timeout_s <= 0 or s.env_check.expire_s <= 0:
+        add("env_check", "probe_timeout_s·expire_s는 양수")
+    from .commands import EXECUTABLE_PLACEHOLDERS, parse_placeholders
+
+    for tool in ENV_PROBE_TOOLS:
+        argv = getattr(s.env_check.probes, tool)
+        if argv is None:
+            continue
+        key = f"env_check.probes.{tool}"
+        if not argv or not all(isinstance(x, str) for x in argv) or argv[0] != "{" + tool + "}":
+            add(key, f"argv[0]은 {{{tool}}}이어야 합니다")
+            continue
+        for el in argv[1:]:
+            try:
+                names = parse_placeholders(el)
+            except ValueError as exc:
+                add(key, str(exc))
+                continue
+            if names:
+                add(key, "도구 placeholder 외 다른 placeholder는 쓸 수 없습니다")
+        if tool not in EXECUTABLE_PLACEHOLDERS:
+            add(key, "알 수 없는 도구")
+    if s.error_bundle.log_tail_bytes < 1024 or s.error_bundle.max_total_bytes < s.error_bundle.log_tail_bytes:
+        add("error_bundle", "log_tail_bytes ≥ 1024, max_total_bytes ≥ log_tail_bytes")
+    if s.spdm_import.max_files < 1 or s.curation.max_files < 1:
+        add("spdm_import.max_files", "1 이상")
+
+
+# ---------------------------------------------------------------------------
+# 2차 파생 값(phase2 §8.1): 경로 문자열은 설정값에서만 시작한다
+# ---------------------------------------------------------------------------
+
+
+def derived_hstpy_path(a: AltairCfg) -> str:
+    if a.hstpy_path:
+        return a.hstpy_path
+    if not a.hyperstudy_path:
+        return ""
+    hs = a.hyperstudy_path.replace("\\", "/")
+    return hs.rsplit("/", 1)[0] + "/hstpy.bat" if "/" in hs else ""
+
+
+def derived_altair_home(a: AltairCfg) -> str:
+    if a.altair_home:
+        return a.altair_home.replace("\\", "/")
+    hp = derived_hstpy_path(a)
+    if not hp:
+        return ""
+    parts = hp.replace("\\", "/").split("/")[:-1]  # hstpy 폴더
+    if len(parts) <= 3:
+        return ""
+    return "/".join(parts[:-3])
+
+
+def effective_altair(s: Settings) -> dict[str, str]:
+    """명령 펼침용 실행 파일 표(altair 키 → 경로). hstpy_path·altair_home은 파생값 포함."""
+    d = {k: v for k, v in s.altair.model_dump().items() if isinstance(v, str)}
+    d["hstpy_path"] = derived_hstpy_path(s.altair)
+    d["altair_home"] = derived_altair_home(s.altair)
+    return d
 
 
 def redacted_settings(s: Settings) -> dict[str, Any]:

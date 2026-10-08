@@ -50,8 +50,10 @@ def main(argv: list[str] | None = None) -> int:
             head = conn.execute(text("select version_num from alembic_version")).scalar()
     except Exception as exc:  # noqa: BLE001
         return _fail(f"DB 연결 또는 migration 확인 실패: {exc}")
-    if head != "0001_initial":
-        return _fail(f"DB migration head 불일치: {head} (필요: 0001_initial)")
+    from physicsai_core.db import MIGRATION_HEAD
+
+    if head != MIGRATION_HEAD:
+        return _fail(f"DB migration head 불일치: {head} (필요: {MIGRATION_HEAD})")
     try:
         import tempfile
 

@@ -18,7 +18,23 @@ from physicsai_core.config import LoadedConfig, load_config
 from physicsai_core.errors import DomainError
 
 from .context import AppContext, build_context
-from .routers import admin, artifacts, datasets, jobs, models, notifications, param_sets, queue, status, studies
+from .routers import (
+    admin,
+    artifacts,
+    curations,
+    datasets,
+    env_checks,
+    jobs,
+    models,
+    notifications,
+    optimize,
+    param_sets,
+    queue,
+    spdm,
+    status,
+    studies,
+    train,
+)
 
 log = logging.getLogger("physicsai_api")
 API_PREFIX = "/physicsai/api"
@@ -50,6 +66,9 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
         redoc_url=None,
     )
     app.state.ctx = ctx
+    from physicsai_core.paths import register_protected_roots
+
+    register_protected_roots(ctx.settings.storage.spdm_roots)  # SPDM 쓰기 차단(phase2 §13.3)
 
     @app.exception_handler(DomainError)
     async def _domain(_req: Request, exc: DomainError) -> JSONResponse:
@@ -73,7 +92,8 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
         log.exception("처리되지 않은 오류")
         return _error(500, "INTERNAL_ERROR", "서버 내부 오류가 발생했습니다")
 
-    for r in (status, queue, studies, datasets, models, param_sets, jobs, artifacts, notifications, admin):
+    for r in (status, queue, studies, datasets, models, param_sets, jobs, artifacts, notifications, admin, env_checks, train,
+              curations, spdm, optimize):
         app.include_router(r.router, prefix=API_PREFIX)
     return app
 

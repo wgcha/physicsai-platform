@@ -20,12 +20,16 @@ from sqlalchemy.engine import Engine
 from physicsai_core import __version__
 from physicsai_core.childenv import child_env
 from physicsai_core.config import LoadedConfig, Settings, load_config
+from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
+from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.db.repositories import workers as workers_repo
 from physicsai_core.db.repositories.jobs import _ClaimRace
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcJobGateway, get_hpc_gateway
 from physicsai_core.limits import EffectiveLimits, detect, limits_from_settings
+from physicsai_core.paths import register_protected_roots
+from physicsai_core.state_machine import hpc_terminal_transition
 
 from . import housekeeping, resources
 from .executor import Executor
@@ -35,6 +39,8 @@ log = logging.getLogger("physicsai_worker")
 
 COLLECT_STABLE_INTERVAL_S = 10.0  # §8.10 COLLECT: 10초 간격 2회 연속 불변(시험에서 줄임)
 ALTAIR_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path")
+# hpc_jobs 상태 → train_runs 상태(phase2 §6.5 HPC_WAIT)
+RUN_STATE_BY_HPC = {"SUCCEEDED": "SOLVED", "FAILED": "SOLVE_FAILED", "LOST": "SOLVE_FAILED", "CANCELED": "SOLVE_FAILED"}
 
 
 class Worker:
@@ -63,6 +69,7 @@ class Worker:
         self._last_purge = 0.0
         self._last_resources: dict[str, Any] | None = None
         self._last_hpc_poll = 0.0
+        register_protected_roots(self.settings.storage.spdm_roots)
 
     @property
     def settings(self) -> Settings:
@@ -89,6 +96,7 @@ class Worker:
             self.claims_paused = False
             self.hpc = get_hpc_gateway(new.settings)
             self.limits = limits_from_settings(new.settings.worker, self.detected)
+            register_protected_roots(new.settings.storage.spdm_roots)
         else:
             log.error("설정 변경 후 검증 실패 — 새 claim을 멈춥니다: %s", new.error_keys())
             self.config = LoadedConfig(self.config.settings, new.issues, new.path, new.sha256)
@@ -151,6 +159,22 @@ class Worker:
             return None
         return Executor(self, job).run()
 
+    def run_light_tick(self) -> None:
+        """light 스레드: LIGHT 작업이 없을 때 환경 점검을 claim한다(phase2 §9.1)."""
+        if self.run_once_light() is None:
+            self.run_env_check_once()
+
+    def run_env_check_once(self) -> str | None:
+        if self.claims_paused:
+            return None
+        with self.engine.begin() as conn:
+            chk = env_repo.claim(conn, self.worker_id)
+        if chk is None:
+            return None
+        from .env_check import run_env_check
+
+        return run_env_check(self, chk)
+
     def run_once_collect(self) -> str | None:
         ttl = self.settings.worker.lease_ttl_s
         job = self._claim(lambda c: jobs_repo.claim_collecting(c, self.worker_id, ttl))
@@ -180,6 +204,8 @@ class Worker:
                         log.warning("PBS 취소 실패(경고): %s", exc)
                     with self.engine.begin() as conn:
                         hpc_repo.update_hpc(conn, h["id"], h["version"], state="CANCELED", finished_at=datetime.now(timezone.utc))
+                        if job["job_type"] == "TD_SOLVE":
+                            train_repo.set_run_state_by_hpc(conn, h["id"], RUN_STATE_BY_HPC["CANCELED"])
                 with self.engine.begin() as conn:
                     hpc_repo.cancel_waiting(conn, job)
                 continue
@@ -209,6 +235,9 @@ class Worker:
                         vals.update(state="LOST", finished_at=datetime.now(timezone.utc))
                 with self.engine.begin() as conn:
                     hpc_repo.update_hpc(conn, h["id"], h["version"], **vals)
+                    new_state = vals.get("state")
+                    if job["job_type"] == "TD_SOLVE" and new_state in RUN_STATE_BY_HPC and new_state != h["state"]:
+                        train_repo.set_run_state_by_hpc(conn, h["id"], RUN_STATE_BY_HPC[new_state])
             with self.engine.begin() as conn:
                 job_now = jobs_repo.get_job(conn, job["id"])
                 if job_now is None or job_now["state"] != "WAITING_HPC":
@@ -226,11 +255,18 @@ class Worker:
                     hpc_repo.set_attention(conn, job_now, job_now["attention_code"], result)
                     job_now = jobs_repo.get_job(conn, job["id"])
                 hjobs = hpc_repo.for_job(conn, job["id"])
-                if all(h["state"] in hpc_repo.HPC_TERMINAL for h in hjobs):
-                    if any(h["state"] in ("FAILED", "LOST") for h in hjobs):
-                        hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "PBS 해석이 실패했거나 상태를 잃었습니다")
-                    else:
-                        hpc_repo.to_collecting(conn, job_now)
+                if job_now["job_type"] == "TD_SOLVE":  # 최신 attempt만(재시도는 새 작업이지만 방어적으로)
+                    last = max((h["attempt_no"] for h in hjobs), default=0)
+                    hjobs = [h for h in hjobs if h["attempt_no"] == last]
+                tno = hpc_terminal_transition(job_now["job_type"], (job_now["params"] or {}).get("on_run_failure"),
+                                              [h["state"] for h in hjobs])
+                if tno == "T13":
+                    hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "PBS 해석이 실패했거나 상태를 잃었습니다")
+                elif tno == "T10b":
+                    failed = sum(1 for h in hjobs if h["state"] in ("FAILED", "LOST"))
+                    hpc_repo.to_collecting_partial(conn, job_now, failed, len(hjobs))
+                elif tno == "T10":
+                    hpc_repo.to_collecting(conn, job_now)
 
     # ---- 하트비트·자원 ----
     def heartbeat_once(self, with_resources: bool = True) -> None:
@@ -278,7 +314,7 @@ class Worker:
         self.heartbeat_once()
         housekeeping.reap(self.engine)
         self._loop("slot", self.run_once_slot, lambda: self.settings.worker.claim_interval_s)
-        self._loop("light", self.run_once_light, lambda: self.settings.worker.claim_interval_s)
+        self._loop("light", self.run_light_tick, lambda: self.settings.worker.claim_interval_s)
         self._loop("hpc", self._hpc_tick, lambda: min(5.0, self.settings.worker.claim_interval_s))
         self._loop("heartbeat", self._heartbeat_tick, lambda: self.settings.worker.heartbeat_interval_s)
         self._loop("housekeeping", self.housekeeping_once, lambda: self.settings.worker.claim_interval_s)

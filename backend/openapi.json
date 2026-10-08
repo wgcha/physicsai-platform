@@ -125,6 +125,384 @@
         "title": "Artifact",
         "type": "object"
       },
+      "CandidateDatatype": {
+        "properties": {
+          "components": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "format": {
+            "title": "Format"
+          },
+          "layers": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Layers",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "components",
+          "layers"
+        ],
+        "title": "CandidateDatatype",
+        "type": "object"
+      },
+      "CandidateH3d": {
+        "properties": {
+          "subcases": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateSubcase"
+            },
+            "title": "Subcases",
+            "type": "array"
+          }
+        },
+        "required": [
+          "subcases"
+        ],
+        "title": "CandidateH3d",
+        "type": "object"
+      },
+      "CandidateSubcase": {
+        "properties": {
+          "datatypes": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateDatatype"
+            },
+            "title": "Datatypes",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "datatypes"
+        ],
+        "title": "CandidateSubcase",
+        "type": "object"
+      },
+      "CandidateXy": {
+        "properties": {
+          "requests": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "title": "Requests",
+            "type": "object"
+          }
+        },
+        "required": [
+          "requests"
+        ],
+        "title": "CandidateXy",
+        "type": "object"
+      },
+      "Curation": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "failed_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failed Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "missing_runs": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing Runs",
+            "type": "array"
+          },
+          "ok_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ok Count"
+          },
+          "output_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Display Path"
+          },
+          "preview_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Job Id"
+          },
+          "selection": {
+            "additionalProperties": true,
+            "title": "Selection",
+            "type": "object"
+          },
+          "source": {
+            "$ref": "#/components/schemas/SourceRef"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "target_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Count"
+          },
+          "used_by_dataset_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Used By Dataset Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "study_id",
+          "job_id",
+          "kind",
+          "status",
+          "source",
+          "source_label",
+          "selection",
+          "missing_runs",
+          "used_by_dataset_ids",
+          "created_by_name",
+          "created_at"
+        ],
+        "title": "Curation",
+        "type": "object"
+      },
+      "CurationFile": {
+        "properties": {
+          "exit_code": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Code"
+          },
+          "input_name": {
+            "title": "Input Name",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "output_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Name"
+          },
+          "run_folder": {
+            "title": "Run Folder",
+            "type": "string"
+          },
+          "run_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Key"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size"
+          }
+        },
+        "required": [
+          "run_folder",
+          "input_name",
+          "ok"
+        ],
+        "title": "CurationFile",
+        "type": "object"
+      },
+      "CurationFilesPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CurationFile"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "CurationFilesPage",
+        "type": "object"
+      },
+      "CurationSource": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Path"
+          },
+          "h3d_count": {
+            "title": "H3D Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "ref_id": {
+            "title": "Ref Id",
+            "type": "string"
+          },
+          "runs_expected": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs Expected"
+          },
+          "t01_count": {
+            "title": "T01 Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "ref_id",
+          "label",
+          "h3d_count",
+          "t01_count",
+          "created_at"
+        ],
+        "title": "CurationSource",
+        "type": "object"
+      },
       "Dataset": {
         "properties": {
           "created_at": {
@@ -135,6 +513,17 @@
           "created_by_name": {
             "title": "Created By Name",
             "type": "string"
+          },
+          "curation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curation Id"
           },
           "dataset_display_path": {
             "anyOf": [
@@ -269,6 +658,347 @@
         "title": "Dataset",
         "type": "object"
       },
+      "DoeField": {
+        "properties": {
+          "default": {
+            "title": "Default"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "type": {
+            "enum": [
+              "combo",
+              "int",
+              "bool"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "type"
+        ],
+        "title": "DoeField",
+        "type": "object"
+      },
+      "DoeType": {
+        "properties": {
+          "default_runs": {
+            "title": "Default Runs",
+            "type": "integer"
+          },
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/DoeField"
+            },
+            "title": "Fields",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "runs_editable": {
+            "title": "Runs Editable",
+            "type": "boolean"
+          },
+          "value": {
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "label",
+          "value",
+          "default_runs",
+          "runs_editable",
+          "fields"
+        ],
+        "title": "DoeType",
+        "type": "object"
+      },
+      "EnvCheck": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "failure_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Message"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/EnvCheckItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "report_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Report Display Path"
+          },
+          "requested_by_name": {
+            "title": "Requested By Name",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EnvCheckCounts"
+          },
+          "worker_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worker Id"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "requested_by_name",
+          "created_at",
+          "summary",
+          "expires_at",
+          "items"
+        ],
+        "title": "EnvCheck",
+        "type": "object"
+      },
+      "EnvCheckCounts": {
+        "properties": {
+          "fail": {
+            "default": 0,
+            "title": "Fail",
+            "type": "integer"
+          },
+          "ok": {
+            "default": 0,
+            "title": "Ok",
+            "type": "integer"
+          },
+          "skip": {
+            "default": 0,
+            "title": "Skip",
+            "type": "integer"
+          },
+          "warn": {
+            "default": 0,
+            "title": "Warn",
+            "type": "integer"
+          }
+        },
+        "title": "EnvCheckCounts",
+        "type": "object"
+      },
+      "EnvCheckItem": {
+        "properties": {
+          "category": {
+            "enum": [
+              "CONFIG",
+              "DATABASE",
+              "AUTH",
+              "HPC",
+              "WORKER",
+              "EXECUTABLE",
+              "RESOURCE",
+              "STORAGE",
+              "GPU"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "detail": {
+            "title": "Detail"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "API",
+              "WORKER"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "OK",
+              "WARN",
+              "FAIL",
+              "SKIP",
+              "PENDING"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "category",
+          "label",
+          "status",
+          "message",
+          "source"
+        ],
+        "title": "EnvCheckItem",
+        "type": "object"
+      },
+      "EnvCheckSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "requested_by_name": {
+            "title": "Requested By Name",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/EnvCheckCounts"
+          }
+        },
+        "required": [
+          "id",
+          "state",
+          "requested_by_name",
+          "created_at",
+          "summary"
+        ],
+        "title": "EnvCheckSummary",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -297,6 +1027,27 @@
           "detail"
         ],
         "title": "ErrorResponse",
+        "type": "object"
+      },
+      "FeatureState": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Missing",
+            "type": "array"
+          }
+        },
+        "required": [
+          "enabled",
+          "missing"
+        ],
+        "title": "FeatureState",
         "type": "object"
       },
       "FinalModelRequest": {
@@ -475,6 +1226,44 @@
         "title": "HpcJob",
         "type": "object"
       },
+      "HpcSummary": {
+        "properties": {
+          "collected": {
+            "title": "Collected",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "queued",
+          "running",
+          "succeeded",
+          "failed",
+          "collected"
+        ],
+        "title": "HpcSummary",
+        "type": "object"
+      },
       "Job": {
         "properties": {
           "attention_code": {
@@ -490,6 +1279,11 @@
           },
           "can_cancel": {
             "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_download_error_bundle": {
+            "default": false,
+            "title": "Can Download Error Bundle",
             "type": "boolean"
           },
           "can_retry": {
@@ -512,6 +1306,28 @@
           "created_by_name": {
             "title": "Created By Name",
             "type": "string"
+          },
+          "current_step_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Step Key"
+          },
+          "current_step_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Step Label"
           },
           "failure_code": {
             "anyOf": [
@@ -546,6 +1362,16 @@
               }
             ],
             "title": "Finished At"
+          },
+          "hpc_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HpcSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "id": {
             "title": "Id",
@@ -639,6 +1465,17 @@
             "title": "Stage",
             "type": "integer"
           },
+          "stage_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Label"
+          },
           "started_at": {
             "anyOf": [
               {
@@ -722,7 +1559,18 @@
               "MODEL_REGISTER",
               "EVALUATE",
               "PREDICT",
-              "PREDICT_VERIFY"
+              "PREDICT_VERIFY",
+              "TD_EXTRACT_PARAMS",
+              "TD_DOE_GEN",
+              "TD_SOLVE",
+              "TD_RESULT_IMPORT",
+              "TD_RESP_EXTRACT",
+              "CU_H3D_PREVIEW",
+              "CU_H3D_CURATE",
+              "CU_T01_PREVIEW",
+              "CU_T01_CURVES",
+              "SPDM_IMPORT",
+              "OPTIMIZE"
             ],
             "title": "Job Type",
             "type": "string"
@@ -877,6 +1725,38 @@
             "title": "Created By Name",
             "type": "string"
           },
+          "current_step_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Step Key"
+          },
+          "current_step_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Step Label"
+          },
+          "hpc_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HpcSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -929,6 +1809,17 @@
           "stage": {
             "title": "Stage",
             "type": "integer"
+          },
+          "stage_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stage Label"
           },
           "started_at": {
             "anyOf": [
@@ -1470,6 +2361,167 @@
         "title": "NotificationList",
         "type": "object"
       },
+      "Optimization": {
+        "properties": {
+          "approach": {
+            "title": "Approach",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Count"
+          },
+          "file_list_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File List Artifact Id"
+          },
+          "folder_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Folder Display Path"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "max_designs": {
+            "title": "Max Designs",
+            "type": "integer"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Name"
+          },
+          "opt_method": {
+            "title": "Opt Method",
+            "type": "string"
+          },
+          "param_set_id": {
+            "title": "Param Set Id",
+            "type": "string"
+          },
+          "responses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "runs_started": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs Started"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "study_folder": {
+            "title": "Study Folder",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "summary_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Artifact Id"
+          },
+          "summary_meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Meta"
+          },
+          "summary_status": {
+            "title": "Summary Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "study_id",
+          "job_id",
+          "status",
+          "approach",
+          "opt_method",
+          "max_designs",
+          "model_id",
+          "param_set_id",
+          "study_folder",
+          "responses",
+          "summary_status",
+          "created_by_name",
+          "created_at"
+        ],
+        "title": "Optimization",
+        "type": "object"
+      },
       "OutOfRange": {
         "properties": {
           "max": {
@@ -1511,6 +2563,11 @@
           "is_current": {
             "title": "Is Current",
             "type": "boolean"
+          },
+          "origin": {
+            "default": "FOLDER",
+            "title": "Origin",
+            "type": "string"
           },
           "parameters": {
             "items": {
@@ -1562,6 +2619,17 @@
             "title": "Tpl Params",
             "type": "array"
           },
+          "train_doe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Doe Id"
+          },
           "unit_system": {
             "title": "Unit System",
             "type": "string"
@@ -1601,6 +2669,41 @@
         "title": "ParamSetCreate",
         "type": "object"
       },
+      "ParamSetFromTrain": {
+        "additionalProperties": false,
+        "properties": {
+          "doe_id": {
+            "title": "Doe Id",
+            "type": "string"
+          },
+          "runs": {
+            "default": "collected",
+            "enum": [
+              "collected",
+              "all"
+            ],
+            "title": "Runs",
+            "type": "string"
+          },
+          "unit_system": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit System"
+          }
+        },
+        "required": [
+          "doe_id"
+        ],
+        "title": "ParamSetFromTrain",
+        "type": "object"
+      },
       "Parameter": {
         "properties": {
           "max": {
@@ -1637,6 +2740,17 @@
       "PathInspectRequest": {
         "additionalProperties": false,
         "properties": {
+          "doe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe Id"
+          },
           "path": {
             "maxLength": 400,
             "title": "Path",
@@ -1646,7 +2760,12 @@
             "enum": [
               "DATASET_INPUT",
               "MODEL_FOLDER",
-              "PARAM_SET"
+              "PARAM_SET",
+              "CAD_FILE",
+              "RADIOSS_ASSEM",
+              "RESULT_FOLDER",
+              "CURATION_INPUT",
+              "SPDM_IMPORT"
             ],
             "title": "Purpose",
             "type": "string"
@@ -2051,6 +3170,29 @@
         "title": "ResourceLimits",
         "type": "object"
       },
+      "ResourceStatus": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "configured",
+          "ok"
+        ],
+        "title": "ResourceStatus",
+        "type": "object"
+      },
       "ResourcesResponse": {
         "properties": {
           "cpu_pct": {
@@ -2129,6 +3271,43 @@
         "title": "ResourcesResponse",
         "type": "object"
       },
+      "ResponseCandidates": {
+        "properties": {
+          "h3d": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CandidateH3d"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Job Id"
+          },
+          "xydata": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CandidateXy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ResponseCandidates",
+        "type": "object"
+      },
       "ResponseDef": {
         "properties": {
           "name": {
@@ -2187,6 +3366,42 @@
           "applied"
         ],
         "title": "Rounded",
+        "type": "object"
+      },
+      "RunStateCounts": {
+        "properties": {
+          "COLLECTED": {
+            "default": 0,
+            "title": "Collected",
+            "type": "integer"
+          },
+          "COLLECT_FAILED": {
+            "default": 0,
+            "title": "Collect Failed",
+            "type": "integer"
+          },
+          "GENERATED": {
+            "default": 0,
+            "title": "Generated",
+            "type": "integer"
+          },
+          "SOLVED": {
+            "default": 0,
+            "title": "Solved",
+            "type": "integer"
+          },
+          "SOLVE_FAILED": {
+            "default": 0,
+            "title": "Solve Failed",
+            "type": "integer"
+          },
+          "SUBMITTED": {
+            "default": 0,
+            "title": "Submitted",
+            "type": "integer"
+          }
+        },
+        "title": "RunStateCounts",
         "type": "object"
       },
       "SampleRow": {
@@ -2260,6 +3475,140 @@
         "title": "SamplesPage",
         "type": "object"
       },
+      "SourceRef": {
+        "properties": {
+          "doe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe Id"
+          },
+          "import_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Import Id"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "SourceRef",
+        "type": "object"
+      },
+      "SpdmImport": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "dest_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dest Display Path"
+          },
+          "file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Count"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "renamed_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renamed Count"
+          },
+          "spdm_path": {
+            "title": "Spdm Path",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bytes"
+          }
+        },
+        "required": [
+          "id",
+          "study_id",
+          "job_id",
+          "status",
+          "spdm_path",
+          "created_by_name",
+          "created_at"
+        ],
+        "title": "SpdmImport",
+        "type": "object"
+      },
       "StatusConfig": {
         "properties": {
           "errors": {
@@ -2281,8 +3630,123 @@
         "title": "StatusConfig",
         "type": "object"
       },
+      "StatusEnvCheck": {
+        "properties": {
+          "fail": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fail"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "latest_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Id"
+          },
+          "latest_state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest State"
+          },
+          "warn": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warn"
+          }
+        },
+        "title": "StatusEnvCheck",
+        "type": "object"
+      },
+      "StatusFeatures": {
+        "properties": {
+          "curation_h3d": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "curation_t01": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "optimize": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "spdm_import": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "train_doe": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "train_extract": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "train_import": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "train_resp": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "train_solve": {
+            "$ref": "#/components/schemas/FeatureState"
+          },
+          "train_tpl": {
+            "$ref": "#/components/schemas/FeatureState"
+          }
+        },
+        "required": [
+          "train_extract",
+          "train_tpl",
+          "train_doe",
+          "train_solve",
+          "train_import",
+          "train_resp",
+          "curation_h3d",
+          "curation_t01",
+          "spdm_import",
+          "optimize"
+        ],
+        "title": "StatusFeatures",
+        "type": "object"
+      },
       "StatusHpc": {
         "properties": {
+          "collect_mode": {
+            "default": "in_place",
+            "title": "Collect Mode",
+            "type": "string"
+          },
           "configured": {
             "title": "Configured",
             "type": "boolean"
@@ -2361,11 +3825,38 @@
           "config": {
             "$ref": "#/components/schemas/StatusConfig"
           },
+          "env_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatusEnvCheck"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "features": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatusFeatures"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "hpc": {
             "$ref": "#/components/schemas/StatusHpc"
           },
           "limits": {
             "$ref": "#/components/schemas/StatusLimits"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceStatus"
+            },
+            "title": "Resources",
+            "type": "array"
           },
           "templates": {
             "items": {
@@ -2740,6 +4231,621 @@
         "title": "TplParam",
         "type": "object"
       },
+      "TrainCad": {
+        "properties": {
+          "display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Path"
+          },
+          "file_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Name"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "source_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Path"
+          }
+        },
+        "title": "TrainCad",
+        "type": "object"
+      },
+      "TrainDoe": {
+        "properties": {
+          "collected_count": {
+            "title": "Collected Count",
+            "type": "integer"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "dir_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir Display Path"
+          },
+          "doe_label": {
+            "title": "Doe Label",
+            "type": "string"
+          },
+          "doe_type": {
+            "title": "Doe Type",
+            "type": "string"
+          },
+          "has_run_responses": {
+            "title": "Has Run Responses",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "multi_execution": {
+            "title": "Multi Execution",
+            "type": "integer"
+          },
+          "num_runs_requested": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Num Runs Requested"
+          },
+          "options": {
+            "additionalProperties": true,
+            "title": "Options",
+            "type": "object"
+          },
+          "radioss_assem_source_path": {
+            "title": "Radioss Assem Source Path",
+            "type": "string"
+          },
+          "results_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Results Display Path"
+          },
+          "run_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Count"
+          },
+          "run_state_counts": {
+            "$ref": "#/components/schemas/RunStateCounts"
+          },
+          "sample_status": {
+            "title": "Sample Status",
+            "type": "string"
+          },
+          "solve_failed_count": {
+            "title": "Solve Failed Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "study_id",
+          "job_id",
+          "status",
+          "doe_label",
+          "doe_type",
+          "options",
+          "multi_execution",
+          "radioss_assem_source_path",
+          "sample_status",
+          "collected_count",
+          "solve_failed_count",
+          "has_run_responses",
+          "created_by_name",
+          "created_at",
+          "run_state_counts"
+        ],
+        "title": "TrainDoe",
+        "type": "object"
+      },
+      "TrainParamOut": {
+        "properties": {
+          "format": {
+            "title": "Format",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal"
+          },
+          "problems": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "raw_nominal": {
+            "default": "",
+            "title": "Raw Nominal",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          },
+          "use": {
+            "title": "Use",
+            "type": "boolean"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "use",
+          "format",
+          "valid",
+          "problems"
+        ],
+        "title": "TrainParamOut",
+        "type": "object"
+      },
+      "TrainParamUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "format": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "use": {
+            "title": "Use",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "use"
+        ],
+        "title": "TrainParamUpdate",
+        "type": "object"
+      },
+      "TrainParamsPut": {
+        "additionalProperties": false,
+        "properties": {
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/TrainParamUpdate"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "parameters"
+        ],
+        "title": "TrainParamsPut",
+        "type": "object"
+      },
+      "TrainRun": {
+        "properties": {
+          "hpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainRunHpc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "input_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Display Path"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainRunResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "starter_name": {
+            "title": "Starter Name",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_key",
+          "state",
+          "starter_name",
+          "updated_at"
+        ],
+        "title": "TrainRun",
+        "type": "object"
+      },
+      "TrainRunHpc": {
+        "properties": {
+          "attempt_no": {
+            "title": "Attempt No",
+            "type": "integer"
+          },
+          "external_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "External Job Id"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "state",
+          "attempt_no"
+        ],
+        "title": "TrainRunHpc",
+        "type": "object"
+      },
+      "TrainRunResult": {
+        "properties": {
+          "files": {
+            "default": 0,
+            "title": "Files",
+            "type": "integer"
+          },
+          "h3d": {
+            "default": 0,
+            "title": "H3D",
+            "type": "integer"
+          },
+          "t01": {
+            "default": 0,
+            "title": "T01",
+            "type": "integer"
+          },
+          "total_bytes": {
+            "default": 0,
+            "title": "Total Bytes",
+            "type": "integer"
+          }
+        },
+        "title": "TrainRunResult",
+        "type": "object"
+      },
+      "TrainSetup": {
+        "properties": {
+          "cad": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainCad"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "extract_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extract Job Id"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/TrainParamOut"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "tpl": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainTpl"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
+          "used_count": {
+            "title": "Used Count",
+            "type": "integer"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "study_id",
+          "parameters",
+          "used_count",
+          "version"
+        ],
+        "title": "TrainSetup",
+        "type": "object"
+      },
+      "TrainTpl": {
+        "properties": {
+          "display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Path"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Generated At"
+          },
+          "params": {
+            "items": {
+              "$ref": "#/components/schemas/TplParam"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "params",
+          "warnings",
+          "stale"
+        ],
+        "title": "TrainTpl",
+        "type": "object"
+      },
       "UnreadCount": {
         "properties": {
           "max_seq": {
@@ -2797,6 +4903,20 @@
         ],
         "title": "ValidationError",
         "type": "object"
+      },
+      "VersionBody": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "VersionBody",
+        "type": "object"
       }
     }
   },
@@ -2832,6 +4952,279 @@
           }
         },
         "summary": "Admin Config",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/physicsai/api/admin/env-checks": {
+      "get": {
+        "operationId": "list_checks_physicsai_api_admin_env_checks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EnvCheckSummary"
+                  },
+                  "title": "Response List Checks Physicsai Api Admin Env Checks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Checks",
+        "tags": [
+          "admin"
+        ]
+      },
+      "post": {
+        "operationId": "create_physicsai_api_admin_env_checks_post",
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Create",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/physicsai/api/admin/env-checks/latest": {
+      "get": {
+        "operationId": "latest_physicsai_api_admin_env_checks_latest_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          }
+        },
+        "summary": "Latest",
+        "tags": [
+          "admin"
+        ]
+      }
+    },
+    "/physicsai/api/admin/env-checks/{check_id}": {
+      "get": {
+        "operationId": "get_check_physicsai_api_admin_env_checks__check_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "check_id",
+            "required": true,
+            "schema": {
+              "title": "Check Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnvCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Check",
         "tags": [
           "admin"
         ]
@@ -2882,6 +5275,160 @@
         "summary": "Content",
         "tags": [
           "artifacts"
+        ]
+      }
+    },
+    "/physicsai/api/curations/{curation_id}": {
+      "get": {
+        "operationId": "get_curation_physicsai_api_curations__curation_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "curation_id",
+            "required": true,
+            "schema": {
+              "title": "Curation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Curation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Curation",
+        "tags": [
+          "curations"
+        ]
+      }
+    },
+    "/physicsai/api/curations/{curation_id}/files": {
+      "get": {
+        "operationId": "files_physicsai_api_curations__curation_id__files_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "curation_id",
+            "required": true,
+            "schema": {
+              "title": "Curation Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "ok",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ok"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurationFilesPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Files",
+        "tags": [
+          "curations"
         ]
       }
     },
@@ -3360,6 +5907,75 @@
           }
         },
         "summary": "Cancel",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/physicsai/api/jobs/{job_id}/error-bundle.zip": {
+      "get": {
+        "description": "오류 묶음(phase2 §10): 작업 등록자 본인 또는 전역 관리자. 실패·취소·중단 또는 주의 코드가 있는 비종료 작업.",
+        "operationId": "error_bundle_physicsai_api_jobs__job_id__error_bundle_zip_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/zip": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Error Bundle",
         "tags": [
           "jobs"
         ]
@@ -4025,6 +6641,58 @@
         "summary": "Unread",
         "tags": [
           "notifications"
+        ]
+      }
+    },
+    "/physicsai/api/optimizations/{optimization_id}": {
+      "get": {
+        "operationId": "get_opt_physicsai_api_optimizations__optimization_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "optimization_id",
+            "required": true,
+            "schema": {
+              "title": "Optimization Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Optimization"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Opt",
+        "tags": [
+          "optimize"
         ]
       }
     },
@@ -4702,6 +7370,135 @@
         ]
       }
     },
+    "/physicsai/api/studies/{study_id}/curation-sources": {
+      "get": {
+        "operationId": "sources_physicsai_api_studies__study_id__curation_sources_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CurationSource"
+                  },
+                  "title": "Response Sources Physicsai Api Studies  Study Id  Curation Sources Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Sources",
+        "tags": [
+          "curations"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/curations": {
+      "get": {
+        "operationId": "list_curations_physicsai_api_studies__study_id__curations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^(H3D|T01)$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Kind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Curation"
+                  },
+                  "title": "Response List Curations Physicsai Api Studies  Study Id  Curations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Curations",
+        "tags": [
+          "curations"
+        ]
+      }
+    },
     "/physicsai/api/studies/{study_id}/datasets": {
       "get": {
         "operationId": "list_datasets_physicsai_api_studies__study_id__datasets_get",
@@ -5062,6 +7859,130 @@
         ]
       }
     },
+    "/physicsai/api/studies/{study_id}/optimizations": {
+      "get": {
+        "operationId": "list_opts_physicsai_api_studies__study_id__optimizations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Optimization"
+                  },
+                  "title": "Response List Opts Physicsai Api Studies  Study Id  Optimizations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Opts",
+        "tags": [
+          "optimize"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/optimize/response-candidates": {
+      "get": {
+        "operationId": "candidates_physicsai_api_studies__study_id__optimize_response_candidates_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "model_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Model Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResponseCandidates"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Candidates",
+        "tags": [
+          "optimize"
+        ]
+      }
+    },
     "/physicsai/api/studies/{study_id}/param-sets": {
       "get": {
         "operationId": "list_sets_physicsai_api_studies__study_id__param_sets_get",
@@ -5232,6 +8153,79 @@
         ]
       }
     },
+    "/physicsai/api/studies/{study_id}/param-sets/from-train": {
+      "post": {
+        "description": "F(phase2 §6.13): ① DOE 결과로 파라미터 세트 만들기.",
+        "operationId": "from_train_physicsai_api_studies__study_id__param_sets_from_train_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamSetFromTrain"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "From Train",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
     "/physicsai/api/studies/{study_id}/paths/inspect": {
       "post": {
         "operationId": "inspect_physicsai_api_studies__study_id__paths_inspect_post",
@@ -5373,6 +8367,823 @@
         "summary": "Predict Check",
         "tags": [
           "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/spdm-imports": {
+      "get": {
+        "operationId": "list_imports_physicsai_api_studies__study_id__spdm_imports_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SpdmImport"
+                  },
+                  "title": "Response List Imports Physicsai Api Studies  Study Id  Spdm Imports Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Imports",
+        "tags": [
+          "spdm"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/train": {
+      "get": {
+        "operationId": "get_setup_physicsai_api_studies__study_id__train_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainSetup"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Setup",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/train/does": {
+      "get": {
+        "operationId": "list_does_physicsai_api_studies__study_id__train_does_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrainDoe"
+                  },
+                  "title": "Response List Does Physicsai Api Studies  Study Id  Train Does Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Does",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/train/params": {
+      "put": {
+        "operationId": "put_params_physicsai_api_studies__study_id__train_params_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainParamsPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainSetup"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Put Params",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/train/tpl": {
+      "post": {
+        "operationId": "generate_tpl_physicsai_api_studies__study_id__train_tpl_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainSetup"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Generate Tpl",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/train-does/{doe_id}": {
+      "get": {
+        "operationId": "get_doe_physicsai_api_train_does__doe_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doe_id",
+            "required": true,
+            "schema": {
+              "title": "Doe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainDoe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Doe",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/train-does/{doe_id}/runs": {
+      "get": {
+        "operationId": "list_runs_physicsai_api_train_does__doe_id__runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doe_id",
+            "required": true,
+            "schema": {
+              "title": "Doe Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/TrainRun"
+                  },
+                  "title": "Response List Runs Physicsai Api Train Does  Doe Id  Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Runs",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/train-does/{doe_id}/samples": {
+      "get": {
+        "operationId": "samples_physicsai_api_train_does__doe_id__samples_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doe_id",
+            "required": true,
+            "schema": {
+              "title": "Doe Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SamplesPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Samples",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/train/doe-types": {
+      "get": {
+        "operationId": "doe_types_physicsai_api_train_doe_types_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DoeType"
+                  },
+                  "title": "Response Doe Types Physicsai Api Train Doe Types Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Doe Types",
+        "tags": [
+          "train"
         ]
       }
     }

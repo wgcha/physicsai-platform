@@ -1,0 +1,26 @@
+#!/usr/bin/env python3
+"""가짜 hvtrans.exe(phase2 §16.1): -c CFG IN IN -o OUT -z0. CFG 존재·BeginParts 포함 확인, OUT에 IN 앞 1 KiB + 표식.
+모드(FAKE_TOOL_MODE_HVTRANS > FAKE_TOOL_MODE): ok | fail | fail_match(FAKE_FAIL_MATCH 문자열이 IN 경로에 있으면 1)
+"""
+import json, os, sys
+
+m = os.environ.get("FAKE_TOOL_MODE_HVTRANS") or os.environ.get("FAKE_TOOL_MODE") or "ok"
+rec = os.environ.get("FAKE_TOOL_RECORD")
+if rec:
+    with open(rec, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "hvtrans", "argv": sys.argv, "cwd": os.getcwd()}) + "\n")
+a = sys.argv
+if m == "fail":
+    sys.exit(1)
+cfg, inp, out = a[a.index("-c") + 1], a[a.index("-c") + 2], a[a.index("-o") + 1]
+if a[a.index("-c") + 3] != inp or a[-1] != "-z0":
+    sys.exit(7)
+if not os.path.isfile(cfg) or "BeginParts" not in open(cfg, encoding="utf-8").read():
+    print("bad cfg", flush=True)
+    sys.exit(2)
+if m == "fail_match" and os.environ.get("FAKE_FAIL_MATCH", "\0") in inp:
+    print("hvtrans: read error", flush=True)
+    sys.exit(1)
+with open(inp, "rb") as fi, open(out, "wb") as fo:
+    fo.write(fi.read(1024) + b"|CURATED")
+print("hvtrans (fake) done", flush=True)

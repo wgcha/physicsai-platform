@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+"""가짜 hstpy.bat(phase2 §16.1): L. cwd INPUT_HST_RUN.json 필수 키 전부(§6.12) 확인, env ALTAIR_HOME·EDS_TNS_ACTVN_CHCKPT=1
+확인(없으면 3), STUDY_FOLDER/에 opt_summary.csv·run_log.txt, 'Started run (k), model (m_1)'을 MAX_DESIGNS까지.
+모드(FAKE_TOOL_MODE_HSTPY > FAKE_TOOL_MODE): ok | fail | hang | error_lines
+"""
+import json, os, subprocess, sys, time
+
+m = os.environ.get("FAKE_TOOL_MODE_HSTPY") or os.environ.get("FAKE_TOOL_MODE") or "ok"
+rec = os.environ.get("FAKE_TOOL_RECORD")
+if rec:
+    with open(rec, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "hstpy", "argv": sys.argv, "cwd": os.getcwd(),
+                             "env": {k: os.environ.get(k) for k in ("ALTAIR_HOME", "EDS_TNS_ACTVN_CHCKPT")}}) + "\n")
+if m == "fail":
+    sys.exit(1)
+if m == "hang":
+    subprocess.Popen([sys.executable, "-c", "import time\nwhile True: time.sleep(1)"])
+    while True:
+        time.sleep(0.2)
+KEYS = ("ALTAIR_HOME", "DIR_WORK", "STUDY_FOLDER", "CAD_PARAM", "TPL_FILE", "HYPERMESH_TCL", "RADIOSS_ASSEM_DIR",
+        "PHYSICSAI_INPUT_FILE", "PHYSICSAI_MODEL", "PREDICTED_H3D", "PREDICTED_XYDATA", "HYPERVIEW_TCL", "ALTAIR_PATHS",
+        "PHYSICSAI_OVERRIDE_ENV", "RUN_NOMINAL", "APPROACH", "OPT_METHOD", "MAX_DESIGNS", "OPT_SETTINGS", "ON_FAILED", "RESPONSES")
+if not os.environ.get("ALTAIR_HOME") or os.environ.get("EDS_TNS_ACTVN_CHCKPT") != "1":
+    print("env missing", flush=True)
+    sys.exit(3)
+cfg = json.load(open("INPUT_HST_RUN.json", encoding="utf-8"))
+missing = [k for k in KEYS if k not in cfg]
+if missing or not os.path.isfile(sys.argv[1]):
+    print(f"missing {missing}", flush=True)
+    sys.exit(5)
+for k in ("CAD_PARAM", "TPL_FILE", "HYPERMESH_TCL", "PHYSICSAI_INPUT_FILE", "PHYSICSAI_MODEL", "HYPERVIEW_TCL"):
+    if not os.path.isfile(cfg[k]):
+        print(f"file missing {k}", flush=True)
+        sys.exit(6)
+sd = os.path.join(cfg["DIR_WORK"], cfg["STUDY_FOLDER"])
+os.makedirs(os.path.join(sd, "approaches"), exist_ok=True)
+with open(os.path.join(sd, "opt_summary.csv"), "w") as fh:
+    fh.write("iter,THK_1,MAX_VM\n1,3.0,120.5\n2,3.2,110.1\n3,3.1,108.0\n")
+with open(os.path.join(sd, "run_log.txt"), "w") as fh:
+    fh.write("ok\n")
+with open(os.path.join(sd, "approaches", "big.bin"), "wb") as fh:
+    fh.write(b"\0" * 10)
+for k in range(1, int(cfg["MAX_DESIGNS"]) + 1):
+    print(f"Started run ({k}), model (m_1)", flush=True)
+if m == "error_lines":
+    print("   12 Error : evaluation failed (ignored)", flush=True)
+print("hstpy (fake) done", flush=True)
+sys.exit(0)

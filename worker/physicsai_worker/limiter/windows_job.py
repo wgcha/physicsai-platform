@@ -246,3 +246,33 @@ class WindowsJobLimiter:
         if proc.handle:
             self.k.CloseHandle(proc.handle)
             proc.handle = None
+
+
+def self_test(limiter: Any, limits: EffectiveLimits, argv: list[str]) -> dict[str, Any]:
+    """환경 점검 worker.job_object(phase2 §9.3): 고정 인자 [sys.executable, "-I", "-c", "pass"]를 제한기로 실행해
+    IsProcessInJob + QueryInformationJobObject(CPU rate·메모리 한도·KILL_ON_JOB_CLOSE)를 확인한다. Windows 전용."""
+    if not isinstance(limiter, WindowsJobLimiter):
+        raise LimiterError("JOB_OBJECT_ASSIGN_FAILED", f"제한기가 windows_job이 아닙니다: {getattr(limiter, 'name', '?')}")
+    k = limiter.k
+    k.IsProcessInJob.argtypes = [wintypes.HANDLE, wintypes.HANDLE, ctypes.POINTER(wintypes.BOOL)]
+    import os
+
+    cwd = os.getcwd()
+    proc = limiter.launch(argv, cwd, dict(os.environ), limits)
+    try:
+        in_job = wintypes.BOOL(False)
+        k.IsProcessInJob(getattr(proc.popen, "_handle", None), proc.handle, ctypes.byref(in_job))
+        ext = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
+        k.QueryInformationJobObject(proc.handle, JobObjectExtendedLimitInformation, ctypes.byref(ext), ctypes.sizeof(ext), None)
+        cpu = JOBOBJECT_CPU_RATE_CONTROL_INFORMATION()
+        k.QueryInformationJobObject(proc.handle, JobObjectCpuRateControlInformation, ctypes.byref(cpu), ctypes.sizeof(cpu), None)
+        proc.wait(timeout=30)
+        return {
+            "in_job": bool(in_job.value),
+            "kill_on_close": bool(ext.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE),
+            "cpu_rate": int(cpu.CpuRate),
+            "memory_gb": round(int(ext.JobMemoryLimit) / 2**30, 3),
+            "priority": limits.priority,
+        }
+    finally:
+        limiter.close(proc)

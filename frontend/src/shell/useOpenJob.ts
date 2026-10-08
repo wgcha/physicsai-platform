@@ -6,7 +6,11 @@ import { api, type NotificationItem } from "../api";
 export function useOpenJob() {
   const navigate = useNavigate();
   return useCallback(
-    async (n: Pick<NotificationItem, "job_id" | "study_id" | "project_id">) => {
+    async (n: Pick<NotificationItem, "job_id" | "study_id" | "project_id"> & { event?: NotificationItem["event"] }) => {
+      if (n.event === "ENV_CHECK_DONE") {
+        navigate("/admin/env-check");
+        return;
+      }
       if (!n.study_id || !n.project_id) return;
       let stage = 3;
       if (n.job_id) {

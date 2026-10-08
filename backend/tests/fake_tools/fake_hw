@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""가짜 hw.exe(§18.1): -tcl X -input H -output J."""
+"""가짜 hw.exe(§18.1, phase2 §16.1).
+
+- 1차 컨투어: -clientconfig hwpost.dat -b -tcl X -input H -output J
+- response_extract 예시: --responses J --input H --out C
+- ②-1 h3d 미리보기: -b -tcl X -h3d H -result J
+- ②-3 T01 미리보기: -b -c -tcl X -input T -output J
+- ②-4 곡선 추출: -b -c -tcl X -config C (jobs마다 outputFile)
+모드(FAKE_TOOL_MODE_HW > FAKE_TOOL_MODE): ok | fail | skip_one(곡선 첫 job 출력 없음) | no_output
+"""
 import base64, json, os, sys
 
 m = os.environ.get("FAKE_TOOL_MODE_HW") or os.environ.get("FAKE_TOOL_MODE") or "ok"
@@ -17,11 +25,39 @@ if "--responses" in a:  # response_extract 템플릿 예시 흉내(§18.1 fake_e
         for i, r in enumerate(resp):
             fh.write(f"{r['name']},{110.0 + i}\n")
     sys.exit(0)
+if "-h3d" in a:
+    h3d, out = a[a.index("-h3d") + 1], a[a.index("-result") + 1]
+    if not os.path.isfile(h3d):
+        sys.exit(2)
+    if m != "no_output":
+        with open(out, "w", encoding="utf-8") as fh:
+            json.dump({"datatype_info": {"Stress": ["vonMises", "P1 (major)", "Max Abs Principal"],
+                                         "Displacement": ["X", "Y", "Z", "Mag"]},
+                       "lst_cid_shell": [1, 2], "lst_cid_solid": [3], "lst_cid_rbody": [], "num_time_step": 5}, fh)
+    print("hw (fake) h3d preview", flush=True)
+    sys.exit(0)
+if "-config" in a:
+    cfg = json.load(open(a[a.index("-config") + 1], encoding="utf-8"))
+    for i, j in enumerate(cfg["jobs"]):
+        if m == "no_output" or (m == "skip_one" and i == 0):
+            continue
+        if not os.path.isfile(j["inputFile"]):
+            continue
+        with open(j["outputFile"], "w", encoding="utf-8") as fh:
+            json.dump({"series": [{"name": c["yComponent"], "x": [0, 1], "y": [0, 2]} for c in cfg["curves"]]}, fh)
+    print("hw (fake) curves", flush=True)
+    sys.exit(0)
 out = a[a.index("-output") + 1]
 inp = a[a.index("-input") + 1]
 if not os.path.isfile(inp):
     print(f"input not found {inp}", flush=True)
     sys.exit(2)
+if "-c" in a:  # T01 미리보기
+    if m != "no_output":
+        with open(out, "w", encoding="utf-8") as fh:
+            json.dump({"dataTypes": [{"name": "Rigid Body", "requests": [{"name": "RBODY 1", "components": ["F-Mag"]}]}]}, fh)
+    print("hw (fake) T01 preview", flush=True)
+    sys.exit(0)
 with open(out, "w", encoding="utf-8") as fh:
     json.dump({"subcases": [{"name": "Subcase 1", "datatypes": [{"name": "Stress", "components": ["vonMises"]}]}]}, fh)
 if os.environ.get("FAKE_HW_IMAGE") == "1":

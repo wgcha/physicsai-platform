@@ -29,8 +29,8 @@ def projects(request: Request, principal: Principal = Depends(get_principal)) ->
 
 
 @router.get("/status", response_model=S.StatusResponse)
-def status(request: Request, _p: Principal = Depends(get_principal)) -> dict:
-    return system.status(get_ctx(request))
+def status(request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    return system.status(get_ctx(request), principal)
 
 
 @router.get("/resources", response_model=S.ResourcesResponse, responses={404: {"model": S.ErrorResponse}})

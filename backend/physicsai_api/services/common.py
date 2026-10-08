@@ -9,10 +9,12 @@ from typing import Any
 from sqlalchemy.engine import Connection
 
 from physicsai_core.db.repositories import audit as audit_repo
+from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.paths import study_dir
+from physicsai_core.job_types import JOB_TYPES, stage_label, step_label
+from physicsai_core.paths import display_path, study_dir  # noqa: F401 - display_path 재노출
 from physicsai_core.state_machine import TERMINAL
 
 from ..auth import Principal
@@ -73,17 +75,6 @@ def encode_cursor(offset: int) -> str:
 # ---- 직렬화 ---------------------------------------------------------------
 
 
-def display_path(ai_root: str | None, folder_name: str, rel: str | None = None) -> str | None:
-    """탐색기에 붙여넣을 표시용 절대경로(ai_root + Study 폴더 + 상대경로). ai_root가 Windows 형식이면 '\\' 구분."""
-    if not ai_root:
-        return None
-    parts = [folder_name, *[x for x in (rel or "").replace("\\", "/").split("/") if x]]
-    win = len(ai_root) >= 2 and ai_root[1] == ":"
-    sep = "\\" if win else "/"
-    base = ai_root.replace("/", "\\") if win else ai_root.replace("\\", "/")
-    return base.rstrip("\\/") + sep + sep.join(parts)
-
-
 def study_out(s: dict[str, Any], principal: Principal, ai_root: str | None = None) -> dict[str, Any]:
     return {
         "folder_display_path": display_path(ai_root or s["ai_root_snapshot"], s["folder_name"]),
@@ -105,6 +96,7 @@ def dataset_out(d: dict[str, Any], study: dict[str, Any] | None = None, ai_root:
         "eval_count": d["eval_count"], "holdout_ratio": float(d["holdout_ratio"]), "seed": d["seed"],
         "split_group": d["split_group"], "options": d["options_json"] or {}, "package_ready": d["package_rel"] is not None,
         "package_rel": d["package_rel"], "created_by_name": d["created_by_name"], "created_at": d["created_at"],
+        "curation_id": d.get("curation_id"),
     }
 
 
@@ -131,11 +123,24 @@ def param_set_out(p: dict[str, Any]) -> dict[str, Any]:
         "sample_has_measured": p["sample_has_measured"], "cad_file_name": p["cad_file_name"],
         "starter_name": p["starter_name"], "tpl_params": p["tpl_params"], "is_current": p["is_current"],
         "registered_by_name": p["registered_by_name"], "registered_at": p["registered_at"],
+        "origin": p.get("origin") or "FOLDER", "train_doe_id": p.get("train_doe_id"),
     }
 
 
-def job_summary(j: dict[str, Any], study_title: str | None, position: int | None) -> dict[str, Any]:
+def current_step_key(j: dict[str, Any]) -> str | None:
+    jt = JOB_TYPES.get(j["job_type"])
+    n = j.get("current_step_no")
+    if jt is None or not n or n > len(jt.steps):
+        return None
+    return jt.steps[n - 1].key
+
+
+def job_summary(j: dict[str, Any], study_title: str | None, position: int | None,
+                hpc_summary: dict[str, int] | None = None) -> dict[str, Any]:
+    key = current_step_key(j)
     return {
+        "stage_label": stage_label(j["job_type"]), "current_step_key": key, "current_step_label": step_label(key),
+        "hpc_summary": hpc_summary,
         "id": j["id"], "study_id": j["study_id"], "project_id": j["project_id"], "study_title": study_title,
         "job_type": j["job_type"], "stage": j["stage"], "lane": j["lane"], "state": j["state"],
         "created_by": j["created_by"], "created_by_name": j["created_by_name"],
@@ -144,6 +149,18 @@ def job_summary(j: dict[str, Any], study_title: str | None, position: int | None
         "cancel_requested": j["cancel_requested_at"] is not None, "created_at": j["created_at"],
         "started_at": j["started_at"],
     }
+
+
+ERROR_BUNDLE_STATES = ("FAILED", "CANCELED", "INTERRUPTED")
+
+
+def error_bundle_available(j: dict[str, Any]) -> bool:
+    return j["state"] in ERROR_BUNDLE_STATES or (bool(j.get("attention_code")) and j["state"] not in TERMINAL)
+
+
+def can_download_error_bundle(j: dict[str, Any], principal: Principal) -> bool:
+    """phase2 §10.1: 작업 등록자 본인 또는 전역 관리자 + 대상 상태."""
+    return (principal.is_global_admin or j["created_by"] == principal.user_id) and error_bundle_available(j)
 
 
 def can_retry(j: dict[str, Any], principal: Principal) -> bool:
@@ -165,13 +182,15 @@ def job_detail(conn: Connection, j: dict[str, Any], principal: Principal, *, inc
         if include_commands:
             item["command"] = s["command"]
         steps.append(item)
-    out = job_summary(j, study["title"] if study else None, pos)
+    hs = hpc_repo.summary_for_jobs(conn, [j["id"]]).get(j["id"])
+    out = job_summary(j, study["title"] if study else None, pos, hs)
     out.update({
         "params": j["params"], "result": j["result"], "warnings": j["warnings"] or [], "steps": steps,
         "failure_code": j["failure_code"], "failure_message": j["failure_message"], "finished_at": j["finished_at"],
         "retry_of_job_id": j["retry_of_job_id"], "attention_code": j["attention_code"], "version": j["version"],
         "can_cancel": principal.is_global_admin and j["state"] not in TERMINAL,
         "can_retry": can_retry(j, principal),
+        "can_download_error_bundle": can_download_error_bundle(j, principal),
         "input_display_path": None,
     })
     if study and j["job_type"] == "PREDICT" and input_zip_ready(conn, j):

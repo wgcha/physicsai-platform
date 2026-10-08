@@ -2,6 +2,7 @@
 import type {
   Artifact,
   Dataset,
+  FeatureKey,
   Job,
   JobSummary,
   JobType,
@@ -20,6 +21,7 @@ import {
   PROJECTS,
   STEP_CHAINS,
   SKIPPED_BY_DEFAULT,
+  STEP_LABEL,
   USERS,
   baseJob,
   contourSvg,
@@ -37,12 +39,14 @@ import {
   seedStudies,
   type MockUserKey,
 } from "./data";
+import { Phase2Mock } from "./phase2";
+import { JOB_TYPE_LABEL } from "../lib/format";
 
 type Notif = NotificationItem & { user_id: string };
 interface ArtifactRec extends Artifact {
   body: string;
 }
-interface MockResp {
+export interface MockResp {
   status: number;
   body?: unknown;
   text?: string;
@@ -57,6 +61,8 @@ export interface MockOptions {
   speed?: number;
   /** /status.ui 값(B1). 시험에서 짧은 주기를 주입 */
   ui?: Record<string, number>;
+  /** 2차: 비활성 기능(/status.features enabled=false). 기본 ["train_resp"](response_extract 템플릿 null) */
+  disabledFeatures?: FeatureKey[];
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -72,14 +78,7 @@ export const DEFAULT_UI = {
   poll_status_ms: 30000,
 };
 
-const JOB_LABEL: Record<JobType, string> = {
-  DATASET_CREATE: "데이터셋 생성",
-  PACKAGE_EXPORT: "학습 패키지 내보내기",
-  MODEL_REGISTER: "모델 등록",
-  EVALUATE: "평가",
-  PREDICT: "예측",
-  PREDICT_VERIFY: "PBS 검증 해석",
-};
+const JOB_LABEL = JOB_TYPE_LABEL;
 
 const err = (status: number, code: string, message: string, extra: Record<string, unknown> = {}): MockResp => ({
   status,
@@ -103,6 +102,7 @@ export class MockServer {
   queueSeq = 100;
   queueOrder = new Map<string, number>();
   idn = 1000;
+  p2: Phase2Mock;
 
   constructor(opts: MockOptions = {}) {
     this.user = opts.user ?? "admin";
@@ -111,13 +111,14 @@ export class MockServer {
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
     this.seedJobs();
+    this.p2 = new Phase2Mock(this, opts.disabledFeatures);
   }
 
   get me(): Me | null {
     return this.user === "anon" ? null : USERS[this.user];
   }
 
-  private nid(prefix: string) {
+  nid(prefix: string) {
     return `${prefix}-${++this.idn}`;
   }
 
@@ -146,7 +147,7 @@ export class MockServer {
     this.models.find((m) => m.id === "m-2")!.eval_status = "DONE";
   }
 
-  private addArtifact(jobId: string, studyId: string, kind: Artifact["kind"], rel: string, ct: string, body: string): string {
+  addArtifact(jobId: string, studyId: string, kind: Artifact["kind"], rel: string, ct: string, body: string): string {
     const id = this.nid("a");
     this.artifacts.push({ id, study_id: studyId, job_id: jobId, kind, file_name: rel.split("/").pop()!, size: body.length, sha256: null, content_type: ct, created_at: new Date().toISOString(), body });
     return id;
@@ -210,7 +211,7 @@ export class MockServer {
     });
   }
 
-  private notifyJob(job: Job, event: NotificationItem["event"]) {
+  notifyJob(job: Job, event: NotificationItem["event"]) {
     const t = `${JOB_LABEL[job.job_type]} (${job.study_title})`;
     const title =
       event === "JOB_STARTED" ? `실행 시작: ${t}` :
@@ -233,7 +234,7 @@ export class MockServer {
     for (const j of this.jobs) if (j.state !== "QUEUED") j.queue_position = null;
   }
 
-  private bump(j: Job) {
+  bump(j: Job) {
     j.version++;
   }
 
@@ -249,13 +250,16 @@ export class MockServer {
         continue;
       }
       const sp = (j as Job & { _speed?: number })._speed ?? (j.lane === "LIGHT" ? 50 : this.speed);
-      j.progress_pct = Math.min(100, (j.progress_pct ?? 0) + sp);
+      const prev = (j as Job & { _pct?: number })._pct ?? j.progress_pct ?? 0;
+      j.progress_pct = Math.min(100, prev + sp);
+      (j as Job & { _pct?: number })._pct = j.progress_pct;
       const chain = STEP_CHAINS[j.job_type];
       const done = Math.min(chain.length, Math.floor(((j.progress_pct ?? 0) / 100) * chain.length));
       j.steps = makeSteps(j.job_type, done, done < chain.length ? done : null);
       const cur = chain[done];
       j.progress_label = cur ? `${cur.key} …` : null;
-      if (j.progress_pct >= 100) this.finish(j);
+      this.p2.onProgress(j);
+      if (((j as Job & { _pct?: number })._pct ?? 0) >= 100) this.finish(j);
       this.bump(j);
     }
     // claim
@@ -282,18 +286,25 @@ export class MockServer {
         }
       }
     }
+    this.p2.tick();
     this.refreshPositions();
   }
 
   /** 시험·데모용: 실행 중 작업을 바로 끝낸다 */
   finishAll() {
     for (let i = 0; i < 40 && this.jobs.some((j) => j.state === "RUNNING" || j.state === "QUEUED"); i++) {
-      for (const j of this.jobs) if (j.state === "RUNNING") j.progress_pct = 100;
+      for (const j of this.jobs) if (j.state === "RUNNING") (j as Job & { _pct?: number })._pct = 100;
       this.tick();
     }
   }
 
   private finish(j: Job) {
+    const r2 = this.p2.finish(j);
+    if (r2 === "waiting") {
+      j.state = "WAITING_HPC";
+      j.progress_pct = null;
+      return;
+    }
     j.state = "SUCCEEDED";
     j.finished_at = new Date().toISOString();
     j.progress_pct = 100;
@@ -305,6 +316,8 @@ export class MockServer {
       case "DATASET_CREATE": {
         const ds = this.datasets.find((d) => d.job_id === j.id);
         if (ds) Object.assign(ds, { status: "READY", h3d_count: 180, train_count: 162, eval_count: 18 });
+        const cur = this.p2.curations.find((c) => c.id === p.curation_id);
+        if (cur && ds) cur.used_by_dataset_ids.push(ds.id);
         j.result = { dataset_id: ds?.id, h3d_count: 180, train_count: 162, eval_count: 18 };
         break;
       }
@@ -362,16 +375,35 @@ export class MockServer {
   // ---------- 요약 변환 ----------
   private summary(j: Job): JobSummary {
     const { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at } = j;
-    return { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at };
+    return { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at, ...this.p2.summaryExtra(j) };
   }
 
-  private role(projectId: string) {
+  stepLabel(key: string): string {
+    return STEP_LABEL[key] ?? key;
+  }
+
+  /** phase2.md §6.13 F: ① 결과로 파라미터 세트 */
+  addParamSetFromTrain(s: Study, doeId: string, sampleCount: number): ParamSet {
+    const me = this.me!;
+    this.paramSets.forEach((p) => p.study_id === s.id && (p.is_current = false));
+    const base = seedParamSet();
+    const ps: ParamSet = {
+      ...base, id: this.nid("ps"), study_id: s.id, source_path: `① DOE ${doeId.slice(0, 8)}`, sample_count: sampleCount, sample_has_measured: false,
+      parameters: base.parameters.filter((p) => p.name !== "E_FOAM"), origin: "TRAIN_DOE", train_doe_id: doeId,
+      registered_by_name: me.display_name, registered_at: new Date().toISOString(),
+    };
+    this.samples[ps.id] = (this.p2.doeSamples[doeId] ?? []).slice(0, sampleCount);
+    this.paramSets.unshift(ps);
+    return ps;
+  }
+
+  role(projectId: string) {
     const me = this.me!;
     if (me.is_global_admin) return "admin";
     return me.roles[projectId] ?? null;
   }
 
-  private disp(studyId: string, rel: string): string {
+  disp(studyId: string, rel: string): string {
     const st = this.studies.find((x) => x.id === studyId);
     return [MOCK_AI_ROOT, st?.folder_name ?? studyId, ...rel.split("/").filter(Boolean)].join("\\");
   }
@@ -390,7 +422,7 @@ export class MockServer {
     return {
       ...this.studyOut(s),
       final_model: final ? this.modelOut(final, false) : null,
-      stage_status: { "3": latest(3), "4": latest(4) },
+      stage_status: { "1": latest(1), "2": latest(2), "3": latest(3), "4": latest(4), "5": latest(5) },
       current_param_set_id: this.paramSets.find((p) => p.study_id === s.id && p.is_current)?.id ?? null,
     };
   }
@@ -416,7 +448,15 @@ export class MockServer {
   }
 
   private jobOut(j: Job): Job {
-    return { ...j, attention_code: null, input_display_path: this.inputReady(j) ? this.disp(j.study_id, `04_predict/${j.id}/INPUT`) : null };
+    const me = this.me;
+    const failedish = ["FAILED", "CANCELED", "INTERRUPTED"].includes(j.state) || !!j.attention_code;
+    return {
+      ...j,
+      ...this.p2.summaryExtra(j),
+      attention_code: j.attention_code ?? null,
+      input_display_path: this.inputReady(j) ? this.disp(j.study_id, `04_predict/${j.id}/INPUT`) : null,
+      can_download_error_bundle: !!me && failedish && (me.is_global_admin || j.created_by === me.user_id),
+    };
   }
 
   // ---------- 라우팅 ----------
@@ -441,12 +481,13 @@ export class MockServer {
         body: {
           config: { ok: true, errors: [] },
           worker: { online: true, worker_id: "PHYSICS-PC:4412:mock", last_seen_at: new Date().toISOString(), limiter: "windows_job" },
-          hpc: this.hpcConfigured ? { mode: "command", configured: true, message: "PBS command 모드" } : { mode: "none", configured: false, message: "PBS 연결 안 됨 — 2차에서 제공(관리자 설정 필요)" },
+          hpc: this.hpcConfigured ? { mode: "command", configured: true, message: "PBS command 모드", collect_mode: "in_place" } : { mode: "none", configured: false, message: "PBS 연결 안 됨", collect_mode: "in_place" },
           altair: [{ key: "edspy_path", ok: true }, { key: "simlab_path", ok: true }, { key: "hw_exe_path", ok: true }],
           templates: [{ key: "geom_update", configured: true }, { key: "mesh", configured: false }, { key: "response_extract", configured: false }],
           limits: { configured: {}, detected: {}, effective: {} },
           ui: this.ui,
           auth: { mode: "dashboard", login_url: "/" },
+          ...this.p2.status(me.is_global_admin),
         },
       };
     if (method === "GET" && path === "/queue") {
@@ -495,6 +536,10 @@ export class MockServer {
       };
     }
 
+    // 2차(phase2.md §12)
+    const r2 = this.p2.handle(method, path, query, body);
+    if (r2) return r2;
+
     // §10.3
     if (method === "GET" && path === "/studies") {
       const pid = query.get("project_id");
@@ -542,7 +587,8 @@ export class MockServer {
         s.version++;
         return { status: 200, body: this.studyOut(s) };
       }
-      if (method === "POST" && sub === "paths" && seg[3] === "inspect") return this.inspect(String(body?.purpose), String(body?.path ?? ""));
+      if (method === "POST" && sub === "paths" && seg[3] === "inspect")
+        return this.p2.inspect(String(body?.purpose), String(body?.path ?? ""), body?.doe_id as string | undefined) ?? this.inspect(String(body?.purpose), String(body?.path ?? ""));
       if (method === "POST" && sub === "param-sets") {
         const r = this.inspect("PARAM_SET", String(body?.path ?? ""));
         if (r.status !== 200) return r;
@@ -598,6 +644,11 @@ export class MockServer {
           headers: { ETag: etag },
           body: { ...this.jobOut(j), can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: (own || me.is_global_admin) && (j.state === "FAILED" || j.state === "INTERRUPTED") },
         };
+      }
+      if (method === "GET" && seg[2] === "error-bundle.zip") {
+        if (!(me.is_global_admin || j.created_by === me.user_id)) return err(403, "PERMISSION_DENIED", "작업 등록자 또는 전역 관리자만 받을 수 있습니다.", { required: "owner_or_global_admin" });
+        if (!(["FAILED", "CANCELED", "INTERRUPTED"].includes(j.state) || j.attention_code)) return err(409, "ERROR_BUNDLE_NOT_AVAILABLE", "실패·중단된 작업만 오류 묶음을 받을 수 있습니다.");
+        return { status: 200, text: "PK\u0003\u0004 (mock error bundle)", contentType: "application/zip" };
       }
       if (method === "GET" && seg[2] === "log") return { status: 200, body: this.log(j, Number(query.get("cursor") ?? 0)) };
       if (method === "GET" && seg[2] === "artifacts" && seg[3] === "input.zip") {
@@ -672,6 +723,9 @@ export class MockServer {
       return err(409, "STUDY_JOB_BUSY", "같은 종류의 작업이 이미 실행 중이거나 대기 중입니다.");
     if (type === "PREDICT" && !params.model_id && !s.final_model_id) return err(409, "FINAL_MODEL_REQUIRED", "Final 모델을 먼저 지정하세요.");
     if (type === "PREDICT_VERIFY" && !this.hpcConfigured) return err(409, "HPC_NOT_CONFIGURED", "PBS 연결이 설정되지 않았습니다.");
+    const pre = this.p2.precheck(s, type, params);
+    if (pre) return pre;
+    if (type === "DATASET_CREATE" && params.curation_id && params.input_path) return err(422, "INVALID_PARAMS", "curation_id와 input_path는 함께 쓸 수 없습니다.");
     if (type === "PACKAGE_EXPORT" && !this.datasets.some((d) => d.id === params.dataset_id && d.status === "READY"))
       return err(409, "PREREQUISITE_MISSING", "준비된 데이터셋이 필요합니다.", { missing: ["dataset"] });
     const me = this.me!;
@@ -681,9 +735,11 @@ export class MockServer {
     });
     this.jobs.push(j);
     this.queueOrder.set(j.id, ++this.queueSeq);
+    this.p2.onCreate(j, me);
     if (type === "DATASET_CREATE") {
+      const cur = this.p2.curations.find((c) => c.id === params.curation_id);
       this.datasets.unshift({
-        id: this.nid("ds"), study_id: s.id, job_id: j.id, status: "BUILDING", source_path: String(params.input_path), h3d_count: null, train_count: null, eval_count: null,
+        id: this.nid("ds"), study_id: s.id, job_id: j.id, status: "BUILDING", source_path: cur ? cur.output_display_path : String(params.input_path), curation_id: cur?.id ?? null, h3d_count: null, train_count: null, eval_count: null,
         holdout_ratio: 0.1, seed: Number(params.seed ?? 20261008), split_group: (params.split_group as "file") ?? "file",
         options: (params.options as Dataset["options"]) ?? { extract_faces: true, extract_mdi: false, extract_time_history_vectors: false },
         package_ready: false, created_by_name: me.display_name, created_at: j.created_at,
@@ -721,7 +777,7 @@ export function createMockFetch(server: MockServer, realFetch?: typeof fetch): t
     if (r.status === 304) return new Response(null, { status: 304, headers: h });
     if (r.text !== undefined) {
       h.set("Content-Type", r.contentType ?? "text/plain");
-      return new Response(new Blob([r.text], { type: r.contentType ?? "text/plain" }), { status: r.status, headers: h });
+      return new Response(r.text, { status: r.status, headers: h });
     }
     h.set("Content-Type", "application/json");
     return new Response(JSON.stringify(r.body ?? null), { status: r.status, headers: h });

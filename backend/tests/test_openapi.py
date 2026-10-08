@@ -24,5 +24,13 @@ def test_all_routes_prefixed():
         "/jobs/{job_id}", "/jobs/{job_id}/log", "/jobs/{job_id}/steps/{step_no}/log", "/jobs/{job_id}/cancel",
         "/jobs/{job_id}/retry", "/jobs/{job_id}/artifacts", "/jobs/{job_id}/artifacts/input.zip", "/artifacts/{artifact_id}/content", "/jobs/{job_id}/hpc-jobs",
         "/notifications", "/notifications/unread-count", "/notifications/read", "/admin/config",
+        # 2차(phase2 §12)
+        "/admin/env-checks", "/admin/env-checks/latest", "/admin/env-checks/{check_id}", "/jobs/{job_id}/error-bundle.zip",
+        "/studies/{study_id}/train", "/studies/{study_id}/train/params", "/studies/{study_id}/train/tpl", "/train/doe-types",
+        "/studies/{study_id}/train/does", "/train-does/{doe_id}", "/train-does/{doe_id}/runs", "/train-does/{doe_id}/samples",
+        "/studies/{study_id}/curation-sources", "/studies/{study_id}/curations", "/curations/{curation_id}",
+        "/curations/{curation_id}/files", "/studies/{study_id}/spdm-imports", "/studies/{study_id}/optimizations",
+        "/optimizations/{optimization_id}", "/studies/{study_id}/optimize/response-candidates",
+        "/studies/{study_id}/param-sets/from-train",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected
