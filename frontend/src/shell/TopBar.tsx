@@ -62,6 +62,7 @@ function AdminMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const fail = status?.env_check?.fail ?? 0;
+  const warnings = status?.config.warnings?.length ?? 0;
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => ref.current && !ref.current.contains(e.target as Node) && setOpen(false);
@@ -72,13 +73,16 @@ function AdminMenu() {
     <div className="admin-menu" ref={ref}>
       <button type="button" className="topbar-link admin-menu-btn" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         관리
-        {fail > 0 && <span className="alert-dot" data-testid="admin-alert-dot" title={`최근 환경 점검 실패 ${fail}건`} />}
+        {(fail > 0 || warnings > 0) && (
+          <span className="alert-dot" data-testid="admin-alert-dot" title={[fail ? `최근 환경 점검 실패 ${fail}건` : "", warnings ? `설정 경고 ${warnings}건` : ""].filter(Boolean).join(" · ")} />
+        )}
       </button>
       {open && (
         <div className="admin-menu-pop" role="menu">
           <Link role="menuitem" to="/admin/env-check" onClick={() => setOpen(false)}>
             환경 점검
             {fail > 0 && <span className="muted small"> · 실패 {fail}</span>}
+            {warnings > 0 && <span className="muted small"> · 설정 경고 {warnings}</span>}
           </Link>
         </div>
       )}

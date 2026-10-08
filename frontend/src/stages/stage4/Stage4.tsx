@@ -5,6 +5,7 @@ import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CopyButton, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
+import { FeatureGate } from "../../components/FeatureGate";
 import { POLL } from "../../lib/poll";
 import { fmtTime, isIntegerFormat } from "../../lib/format";
 import { ParamInputTable, ParamScatter, RangeNote, RoundingNote } from "./ParamInputs";
@@ -377,16 +378,20 @@ function PredictWorkspace({ ps }: { ps: ParamSet }) {
                   </select>
                 </Advanced>
               </div>
-              <RunAction
-                canExecute={canExec}
-                label="예측 실행"
-                onRun={runPredict}
-                job={pjob}
-                disabled={!chosenModel || !allFinite}
-                disabledReason={!chosenModel ? "Final 모델이 필요합니다" : "모든 파라미터 값을 입력하세요"}
-                error={predict.error}
-                extra={canExec ? pbsButton : undefined}
-              />
+              <FeatureGate feature="predict">
+                {(enabled) => (
+                  <RunAction
+                    canExecute={canExec}
+                    label="예측 실행"
+                    onRun={runPredict}
+                    job={pjob}
+                    disabled={!enabled || !chosenModel || !allFinite}
+                    disabledReason={!enabled ? undefined : !chosenModel ? "Final 모델이 필요합니다" : "모든 파라미터 값을 입력하세요"}
+                    error={predict.error}
+                    extra={canExec ? pbsButton : undefined}
+                  />
+                )}
+              </FeatureGate>
               {canExec && !hpcConfigured && <p className="muted small pbs-note" data-testid="pbs-note">{PBS_DISABLED_TEXT}</p>}
               {verify.error && <p className="error-text small">{verify.error}</p>}
               {vjob && <p className="small">PBS 검증: {vjob.state}</p>}

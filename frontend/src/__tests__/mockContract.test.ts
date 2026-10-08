@@ -31,7 +31,7 @@ function responseSchema(p: string, method: string): Sch {
   return r.content["application/json"].schema;
 }
 
-const cases: [string, string, string, ("power" | "admin")?, { hpcConfigured?: boolean }?][] = [
+const cases: [string, string, string, ("power" | "admin")?, ConstructorParameters<typeof MockServer>[0]?][] = [
   ["/me", "/me", "get"],
   ["/status", "/status", "get"],
   ["/projects", "/projects", "get"],
@@ -51,6 +51,7 @@ const cases: [string, string, string, ("power" | "admin")?, { hpcConfigured?: bo
   ["/notifications/unread-count", "/notifications/unread-count", "get"],
   // 2차(phase2.md §12)
   ["/status", "/status", "get", "admin"],
+  ["/status", "/status", "get", "admin", { configWarnings: ["resources.extract_minmax_tcl 미설정"], disabledFeatures: ["dataset_create", "evaluate", "predict"] }],
   ["/queue", "/queue", "get", "power", { hpcConfigured: true }],
   ["/jobs/j-solve", "/jobs/{job_id}", "get", "power", { hpcConfigured: true }],
   ["/jobs/j-opt", "/jobs/{job_id}", "get"],

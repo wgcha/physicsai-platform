@@ -4,7 +4,7 @@ import { api, errorMessage, type PathInspectResult, type Study } from "../api";
 import { canExecuteIn, useApp } from "../app/AppContext";
 import { TopBar } from "../shell/TopBar";
 import { CodeLine, Field, NO_PERMISSION_TIP } from "../components/ui";
-import { useFeature, featureText } from "../components/FeatureGate";
+import { FeatureOffNote, useFeature } from "../components/FeatureGate";
 import { SpdmSummary } from "../stages/stage2/Sources";
 
 /**
@@ -107,7 +107,7 @@ export function ImportLanding() {
                 <div className="field-label">SPDM 경로 (읽기 전용)</div>
                 <CodeLine text={spdmPath} />
               </div>
-              {!feature.enabled && <p className="muted small feature-off" data-testid="feature-off-spdm_import">{featureText(feature)}</p>}
+              {!feature.enabled && <FeatureOffNote feature="spdm_import" f={feature} />}
               <div className="form-grid">
                 <Field label="프로젝트">
                   <select value={projectId} onChange={(e) => setProjectId(e.target.value)} aria-label="프로젝트">

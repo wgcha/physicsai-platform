@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import type { FeatureKey, FeatureState } from "../api";
 import { useApp } from "../app/AppContext";
 
@@ -24,11 +25,24 @@ export function FeatureGate({ feature, children }: { feature: FeatureKey; childr
   return (
     <>
       {children(f.enabled)}
-      {!f.enabled && (
-        <p className="muted small feature-off" data-testid={`feature-off-${feature}`}>
-          {featureText(f)}
-        </p>
-      )}
+      {!f.enabled && <FeatureOffNote feature={feature} f={f} />}
     </>
+  );
+}
+
+/** 비활성 안내 한 줄. 전역 관리자에게는 환경 점검 링크를 함께 보인다 */
+export function FeatureOffNote({ feature, f }: { feature: FeatureKey; f: FeatureState }) {
+  const { me } = useApp();
+  return (
+    <div className="feature-off-row">
+      <p className="muted small feature-off" data-testid={`feature-off-${feature}`}>
+        {featureText(f)}
+      </p>
+      {me.is_global_admin && (
+        <Link className="small" to="/admin/env-check" data-testid={`feature-off-link-${feature}`}>
+          환경 점검
+        </Link>
+      )}
+    </div>
   );
 }

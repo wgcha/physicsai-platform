@@ -4,6 +4,7 @@ import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, CopyButton, Field, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
+import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
 
 const DS_STATUS: Record<Dataset["status"], string> = { BUILDING: "생성 중", READY: "준비됨", FAILED: "실패" };
@@ -111,15 +112,19 @@ export function DatasetCreateCard() {
           ))}
         </div>
       </Advanced>
-      <RunAction
-        canExecute={canExec}
-        label="데이터셋 생성"
-        onRun={submit}
-        job={job}
-        disabled={!fromCuration && (!path.trim() || !inspected)}
-        disabledReason="경로를 입력하고 확인하세요"
-        error={error}
-      />
+      <FeatureGate feature="dataset_create">
+        {(enabled) => (
+          <RunAction
+            canExecute={canExec}
+            label="데이터셋 생성"
+            onRun={submit}
+            job={job}
+            disabled={!enabled || (!fromCuration && (!path.trim() || !inspected))}
+            disabledReason={enabled ? "경로를 입력하고 확인하세요" : undefined}
+            error={error}
+          />
+        )}
+      </FeatureGate>
       {datasets.length > 0 && (
         <div className="table-wrap">
         <table className="table compact">

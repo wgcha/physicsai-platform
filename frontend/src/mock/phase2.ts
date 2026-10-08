@@ -63,10 +63,16 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   curation_t01: ["resources.preview_hg_tcl", "resources.curate_hg_tcl"],
   spdm_import: ["storage.spdm_roots"],
   optimize: ["resources.extract_minmax_tcl", "resources.launchers.optimization", "altair.hstpy_path"],
+  dataset_create: ["altair.edspy_path"],
+  evaluate: ["altair.edspy_path"],
+  predict: ["altair.edspy_path", "commands.geom_update"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 
 const FEATURE_OF: Partial<Record<JobType, FeatureKey>> = {
+  DATASET_CREATE: "dataset_create",
+  EVALUATE: "evaluate",
+  PREDICT: "predict",
   TD_EXTRACT_PARAMS: "train_extract",
   TD_DOE_GEN: "train_doe",
   TD_SOLVE: "train_solve",

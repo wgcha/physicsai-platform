@@ -2,6 +2,7 @@
 
 - 대상: Altair 2026.1과 GPU가 있는 Windows Server(대시보드와 같은 PC)
 - 목적: 자동 시험(Linux, 가짜 도구)으로 확인할 수 없는 실제 동작과 계약 미확정 항목(U1~U16, [platform.md §19](contracts/platform.md#19-리스크미확정)) 확인
+- CI: 결과 칸에 "CI 검증됨(러너 기준), 실제 PC에서 재확인 선택"이 적힌 항목은 GitHub Actions windows 잡(깨끗한 Windows 러너, Altair 없음·가짜 도구)에서 자동 확인된 것이다(관리자 매뉴얼 §14-1). 운영 PC 고유 조건(실제 Altair·코어 수·서비스 계정·세션 0)에서 다시 보려면 같은 항목을 수행해 덮어쓴다.
 - 기록: 각 항목 결과 칸에 `통과` / `실패(내용)` / `미수행`과 날짜를 적고, 확인한 실제 값(명령 출력, 파일 이름)은 "메모"에 남긴다. 미확정 항목 결과는 Plan에 전달해 계약·설정을 갱신한다.
 
 ## 2차 (먼저 수행 — 환경 점검부터)
@@ -15,11 +16,12 @@
 |---|---|---|---|
 | E2-0-1 | **전역 관리자로 "관리 > 환경 점검" → "점검 실행"**. 결과 표의 실패·경고를 모두 메모하고, 실패가 남아 있으면 아래 항목 전에 설정을 고친다(실행 파일 6개 존재, 자원 파일·pyd 각 1개, AI 루트 쓰기, DB head `0003_hpc_cancel_failed`(phase2 C18), 대시보드 인증, 워커 heartbeat, limiter `windows_job`, Job Object 적용, GPU 감지, PBS 모드) | | |
 | E2-0-2 | 환경 점검 후 `<ai_root>\_platform\env_check_tmp\`에 남은 파일이 없음, `_platform\env_checks\<id>\report.json` 생성 | | |
-| E2-0-3 | (배포) 준비 PC에서 `deploy\collect-offline` 실행 → 묶음 zip. 폐쇄망 PC에서 `deploy\install.bat` 실행: venv·wheel 설치, DB 역할·DB 생성(재실행 시 건너뜀), `alembic upgrade head`, 작업 스케줄러에 `PhysicsAI-Backend`·`PhysicsAI-Worker` 등록(실행 시간 제한 없음 확인), 재부팅 후 자동 기동, `/physicsai/api/health` 응답(U31) | | |
+| E2-0-3 | (배포) 준비 PC에서 `deploy\collect-offline` 실행 → 묶음 zip. 폐쇄망 PC에서 `deploy\install.bat` 실행: venv·wheel 설치, DB 역할·DB 생성(재실행 시 건너뜀), `alembic upgrade head`, 작업 스케줄러에 `PhysicsAI-Backend`·`PhysicsAI-Worker` 등록(실행 시간 제한 없음 확인), 재부팅 후 자동 기동, `/physicsai/api/health` 응답(U31) | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | CI windows 잡: collect-offline 실제 실행, install.bat 무인 설치(-PasswordsFromEnv -NoStart, Interactive)·DB 생성·migration·작업 등록(PT0S·999·IgnoreNew)·health·해제. **재부팅 자동 기동·Background(세션 0)·실제 서비스 계정은 미검증 → 실제 PC에서 확인** |
 | E2-0-4 | 작업 스케줄러 백그라운드(세션 0) 실행에서 SimLab·hw·hstbatch 배치가 정상 동작하는지(안 되면 `-RunMode Interactive`로 재등록 후 비교)(U31·U11) | | |
 | E2-0-5 | 대시보드 Caddyfile에 `deploy\caddy\physicsai.caddy` 스니펫 반영 후 운영 주소 `/physicsai/` 접속·로그인 공유 | | |
 | E2-0-6 | `deploy\update.bat` 실행: 실행 중 작업이 있으면 중단 안내, 기존 venv·frontend가 `_backup`으로 이동, 업데이트 후 health 정상 | | |
 | E2-0-7 | (선택) 각 Altair 도구의 버전/도움말 인자를 확인해 `env_check.probes`에 넣고 재점검(U32) | | |
+| E2-0-8 | (선택) 시연 모드 원클릭: `deploy\demo\start-demo.bat` → `http://127.0.0.1:8190/` 시연 로그인 → ①-1 실행 성공 → `stop-demo.bat`(관리자 매뉴얼 §14) | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | CI windows 잡 "시연 모드 원클릭" |
 
 ### E2-1. ① 학습데이터 생성
 
@@ -80,12 +82,12 @@
 
 | # | 확인 | 결과 | 메모 |
 |---|---|---|---|
-| E1-1 | 실행 중 edspy 프로세스와 그 자식(python 등)이 같은 Job에 속함(Process Explorer → Job 탭) | | |
-| E1-2 | Job의 CPU rate 제한(hard cap)·메모리 한도 64 GB·우선순위 Below Normal 확인 | | |
-| E1-3 | 64코어 이상 PC라면 작업 관리자 CPU 사용률이 약 `32/전체 코어` 비율 이하로 유지 | | |
+| E1-1 | 실행 중 edspy 프로세스와 그 자식(python 등)이 같은 Job에 속함(Process Explorer → Job 탭) | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | V-JO-2(손자 프로세스 IsProcessInJob) |
+| E1-2 | Job의 CPU rate 제한(hard cap)·메모리 한도 64 GB·우선순위 Below Normal 확인 | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | V-JO-1(CPU rate hard cap·BELOW_NORMAL·JobMemoryLimit·KILL_ON_JOB_CLOSE 조회). 운영 값(64 GB 등)은 실제 PC에서 |
+| E1-3 | 64코어 이상 PC라면 작업 관리자 CPU 사용률이 약 `32/전체 코어` 비율 이하로 유지 | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | V-JO-1 실측: CPU rate 20% → 21~24%(러너) |
 | E1-4 | GPU 사용량 제한 없음(nvidia-smi로 사용률 확인), 우측 패널 GPU 막대 표시 | | |
-| E1-5 | 관리자 취소 → 2초 안팎에 프로세스 트리 전체 종료, 작업 `CANCELED`, 등록자에게 알림 | | |
-| E1-6 | 실행 중 워커 창 강제 종료 → 자식 프로세스 모두 종료, 약 1분 후 작업 `INTERRUPTED`(WORKER_LOST) | | |
+| E1-5 | 관리자 취소 → 2초 안팎에 프로세스 트리 전체 종료, 작업 `CANCELED`, 등록자에게 알림 | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | V-JO-3(TerminateJobObject 트리 종료) |
+| E1-6 | 실행 중 워커 창 강제 종료 → 자식 프로세스 모두 종료, 약 1분 후 작업 `INTERRUPTED`(WORKER_LOST) | CI 검증됨(러너 기준), 실제 PC에서 재확인 선택 | V-JO-3(워커 강제 종료 시 KILL_ON_JOB_CLOSE) |
 | E1-7 | Altair 런처가 Job 밖으로 빠져나가지 않음(BREAKAWAY 오류 없음)(U11) | | |
 
 ## E3. ③ 데이터셋·모델

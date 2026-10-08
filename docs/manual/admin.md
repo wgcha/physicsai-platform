@@ -51,7 +51,7 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 
 ### 1.3 경로 `/physicsai/`
 
-- 백엔드 라우트 접두 `/physicsai/api`와 프런트 base `/physicsai/`는 **코드에 고정**이다. 설정 `server.base_path`를 바꿔도 경로는 바뀌지 않는다(부록 C-1).
+- 백엔드 라우트 접두 `/physicsai/api`와 프런트 base `/physicsai/`는 **코드에 고정**이다. `server.base_path`는 예약(미사용) 키라 써도 경로가 바뀌지 않고 경고만 나온다(§4.4).
 - Caddy는 접두를 벗기지 않고 백엔드로 넘긴다(`/physicsai/api/*` 그대로). 프런트는 `uri strip_prefix /physicsai` 후 정적 파일을 준다.
 
 ---
@@ -103,7 +103,6 @@ bash deploy/collect-offline.sh
 | `config_path` | 플랫폼 설정 파일 위치(머신 환경변수 `PHYSICSAI_CONFIG`가 됨) | `D:\physicsai\config\platform.yaml` |
 | `service_user` | 작업 실행 계정 | `CORP\svc_physicsai` |
 | `run_mode` | `Background`(로그온 무관, 세션 0) / `Interactive`(그 계정 로그온 세션) | `Background` |
-| `backend_port` | health 확인 포트. **`platform.yaml`의 `server.port`와 같아야 한다**(설치 스크립트는 둘을 맞춰 주지 않음) | `8100` |
 | `caddy_frontend_root` | 프런트 정적 파일 배치 위치(Caddy `root`) | `D:\physicsai\frontend\dist` |
 
 ### 2.4 설치 실행
@@ -125,10 +124,11 @@ bash deploy/collect-offline.sh
 | ⑥ | 머신 환경변수 `PHYSICSAI_CONFIG`, `PHYSICSAI_DATABASE_URL` 설정(값은 출력하지 않음) | DB URL에 앱 비밀번호가 들어 있으므로 머신 환경변수 읽기 권한을 관리자로 제한 |
 | ⑦ | `alembic upgrade head` | head = `0003_hpc_cancel_failed` |
 | ⑧ | 작업 스케줄러 등록 `PhysicsAI-Backend`(`venv\Scripts\python.exe -m physicsai_api.serve`), `PhysicsAI-Worker`(`… -m physicsai_worker`), 작업 폴더 `install_root` | §2.5 |
-| ⑨ | 두 작업 시작 → `http://127.0.0.1:<backend_port>/physicsai/api/health` 60초까지 확인 | `{"status":"ok"}` |
+| ⑨ | 두 작업 시작 → `http://127.0.0.1:<server.port>/physicsai/api/health`(포트는 `platform.yaml`의 `server.port`에서 읽음) 60초까지 확인 | `{"status":"ok"}` |
 | ⑩ | Caddy 스니펫 위치·환경변수 안내 출력 | §2.6 |
 
 주의
+- `install.bat`·`update.bat`·시연 `start-demo.bat`·`stop-demo.bat`은 `PSModulePath`를 비우고 Windows PowerShell 5.1을 부른다 — PowerShell 7 창에서 실행해도 5.1 기본 모듈로 동작한다. `.ps1`을 직접 실행할 때는 Windows PowerShell 5.1 창을 쓴다.
 - **재설치 시 앱 역할 비밀번호**: 역할이 이미 있으면 비밀번호를 바꾸지 않는다. 그런데 ⑥의 DB URL은 이번에 입력한 값으로 만든다 → 기존 역할 비밀번호와 **같은 값**을 입력해야 한다.
 - `Background` 모드는 실행 계정 비밀번호를 한 번 더 묻는다(작업 등록용).
 
@@ -290,7 +290,8 @@ $env:PGPASSWORD = $null
 - 파일: 환경변수 `PHYSICSAI_CONFIG`(설치 시 머신 범위로 설정), 없으면 `config/platform.yaml`. 예시는 `config/platform.example.yaml`.
 - 환경변수 우선: `PHYSICSAI_PROFILE` > `profile`, `PHYSICSAI_HPC_GATEWAY` > `hpc.gateway`. DB 비밀번호는 설정 파일에 넣지 않고 `database.url_env`가 가리키는 환경변수에서 읽는다.
 - **알 수 없는 키는 오류**(오타 방지). 오류가 있으면 백엔드는 뜨지만 쓰기 API가 503 `CONFIG_INVALID`, 워커는 기동을 거부(종료코드 2)하거나 실행 중이면 새 작업 claim을 멈춘다. 오류 키는 `/status`와 환경 점검 `config.valid`에 나온다.
-- **생략한 키는 아래 "코드 기본값"**이 된다. 예시 파일과 코드 기본값이 다른 키가 있으니(특히 `commands.*`는 코드 기본값이 null) **예시 파일 전체를 복사해서 고치는 방식**을 권장한다.
+- **생략한 키는 아래 "코드 기본값"**이 된다. 명령 템플릿처럼 코드 기본값이 null인 키를 빼면 오류가 아니라 **그 기능만 비활성**이다(§4.4). 예시 파일 전체를 복사해서 고치는 방식을 권장한다.
+- 기동은 막지 않는 안내(예약 키 사용, 키 누락으로 비활성된 기능)는 `/status`의 `config.warnings`에 키 이름으로 나온다.
 - 경로: `/` 구분자 권장. `ai_root`·`allowed_import_roots`·`resources.*`·`collect_root_*`에는 공백·제어문자·`& | < > ^ % ! "` 금지. `storage.spdm_roots`와 겹치면(같거나 안팎) 오류.
 
 ### 4.2 반영 시점
@@ -315,8 +316,8 @@ $env:PGPASSWORD = $null
 | `schema_version` | 설정 스키마 버전(1만 허용) | `1` | `1` | B+W↻ |
 | `profile` | `dev`\|`prod`. prod면 `altair.*`·`resources.*` 파일 존재 검사, `preview_pred_h3d_tcl` 필수, `worker.limiter: null`·`auth.mode: dev_static` 금지 | `dev` | `dev`(운영은 `prod`) | B+W↻ |
 | `server.host` | 백엔드 바인딩 주소(Caddy 뒤이므로 `127.0.0.1`) | `127.0.0.1` | `127.0.0.1` | B |
-| `server.port` | 백엔드 포트(`deploy.json` `backend_port`, Caddy `PHYSICSAI_PORT`와 일치) | `8100` | `8100` | B |
-| `server.base_path` | 표시용. **코드에서 쓰지 않음**(경로는 `/physicsai` 고정, 부록 C-1) | `/physicsai` | `/physicsai` | – |
+| `server.port` | 백엔드 포트. **포트의 유일한 출처**(설치·업데이트 스크립트의 health 확인도 이 값을 읽음). Caddy `PHYSICSAI_PORT`와 일치 | `8100` | `8100` | B |
+| `server.base_path` | **예약(미사용)**. 경로는 `/physicsai` 고정. 값이 있으면 경고 `config.warnings`(지워도 됨) | `/physicsai` | (예시에서 제거됨) | – |
 | `database.url_env` | DB URL을 담은 환경변수 이름 | `PHYSICSAI_DATABASE_URL` | 같음 | B+W↻ |
 | `database.pool_size` | DB 연결 풀 크기 | `5` | `5` | B+W↻ |
 
@@ -455,7 +456,7 @@ $env:PGPASSWORD = $null
 | `commands.t01_preview` | ②-3 | null(비활성) | `["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{preview_tcl}", "-input", "{t01}", "-output", "{result_json}"]` | B |
 | `commands.t01_curve_export` | ②-4 | null(비활성) | `["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{curate_tcl}", "-config", "{config_json}"]` | B |
 | `commands.hst_optimization` | ⑤ | null(비활성) | `["@cmd_c", "{hstpy}", "{launcher}"]` | B |
-| `commands_log_error_patterns` | 1차 LOCAL step 로그 오류 정규식(대소문자 무시, 줄 단위). 일치하면 종료코드 0이어도 `LOG_ERROR_DETECTED` | 원본 3개 | `'^\s*\d+\s+Error\s*:'`, `'Traceback \(most recent call last\):'`, `'^\s*\[ERROR\]'` | W |
+| `commands_log_error_patterns` | **edspy step**(`edspy_create_dataset`·`edspy_score`·`edspy_predict`) 로그 오류 정규식(대소문자 무시, 줄 단위). 일치하면 종료코드 0이어도 `LOG_ERROR_DETECTED`. SimLab·hw step에는 적용하지 않음 | 원본 3개 | `'^\s*\d+\s+Error\s*:'`, `'Traceback \(most recent call last\):'`, `'^\s*\[ERROR\]'` | W |
 
 #### hpc(PBS)
 
@@ -474,8 +475,8 @@ $env:PGPASSWORD = $null
 | `hpc.command.not_found_regex` | "job 없음" 판별(선택) | `Unknown Job Id` | 같음 | B |
 | `hpc.command.state_map` | 원시 상태 → `QUEUED`\|`RUNNING`\|`FINISHED` | `{}`(전부 UNKNOWN!) | `{Q: QUEUED, H: QUEUED, W: QUEUED, T: QUEUED, S: QUEUED, B: RUNNING, R: RUNNING, E: RUNNING, F: FINISHED, X: FINISHED}` | B |
 | `hpc.command.submit_timeout_s` / `status_timeout_s` / `cancel_timeout_s` | PBS 명령 타임아웃(초) | `60` / `30` / `30` | 같음 | W |
-| `hpc.adapter.module` | 자리만(사용 안 함) | `null` | `null` | – |
-| `hpc.transfer.stage_in` | 자리만(**코드에서 쓰지 않음**, 부록 C-1) | `shared_path` | `shared_path` | – |
+| `hpc.adapter.module` | **예약(미사용)**. 값이 있으면 경고 | `null` | (예시에서 제거됨) | – |
+| `hpc.transfer.stage_in` | **예약(미사용)**(항상 공유 경로). 값이 있으면 경고 | `shared_path` | (예시에서 제거됨) | – |
 | `hpc.transfer.path_map` | 이 PC 경로 → PBS 노드 경로 `[{local, remote}]`. 위에서부터 첫 일치(대소문자 무시, `/` 구분) | `[]` | `[{local: "E:/shared/AI_WORK", remote: "/shared/AI_WORK"}]` | W |
 | `hpc.transfer.collect_mode` | `in_place`(결과를 Study 폴더에 직접) \| `shared_folder` \| `drive`(= shared_folder 별칭, U36) | `in_place` | `in_place` | B |
 | `hpc.transfer.collect_root_local` | shared_folder/drive: 이 PC에서 읽는 결과 루트(읽기 전용, AI 루트·SPDM과 비중첩) | `""` | `""` | B |
@@ -544,7 +545,10 @@ $env:PGPASSWORD = $null
 | `ui.max_artifact_bytes` | 화면 표시용 산출물 크기 상한 | `20971520` | B |
 | `ui.poll_job_running_ms` / `poll_job_queued_ms` / `poll_job_waiting_hpc_ms` | 작업 상태 폴링(실행·대기·PBS 대기) | `2000` / `5000` / `15000` | B |
 | `ui.poll_log_ms` / `poll_queue_ms` / `poll_resources_ms` / `poll_notifications_ms` / `poll_status_ms` | 로그·대기열·자원·알림·상태 폴링 | `2000` / `5000` / `10000` / `10000` / `30000` | B |
-| `logging.level` | 백엔드·워커 로그 수준 | `INFO` | B+W↻ |
+| `logging.level` | 백엔드·워커 로그 수준(`DEBUG`\|`INFO`\|`WARNING`\|`ERROR`\|`CRITICAL`) | `INFO` | B+W↻ |
+| `logging.dir` | 운영 파일 로그 폴더(`backend.log`·`worker.log`). 빈 값 = 작업 폴더의 `./logs` = 설치본 `<install_root>\logs`. AI 루트·SPDM 밖에 둔다 | `""` | B+W↻ |
+| `logging.max_mb` | 로그 파일 하나의 최대 크기(MB). 넘으면 회전 | `20` | B+W↻ |
+| `logging.backups` | 회전 보관 개수(`backend.log.1` … `.10`). 가장 오래된 것부터 덮어씀 | `10` | B+W↻ |
 | `logging.mask_patterns` | 외부 프로그램 출력 저장 전 마스킹 정규식. 그룹이 있으면 `<그룹1>=***`, 없으면 일치 전체를 `***` | `(?i)(password\|passwd\|token\|secret)\s*[=:]\s*\S+` | B |
 
 #### demo(시연 모드 — §14)
@@ -553,6 +557,17 @@ $env:PGPASSWORD = $null
 |---|---|---|---|
 | `demo.enabled` | 시연 모드(가짜 도구 배포판). **운영에서는 false 유지**. true는 `profile: dev` + `server.host: 127.0.0.1`에서만 허용 | `false` | B+W↻ |
 | `demo.frontend_root` | 시연 때 백엔드가 직접 서빙할 프런트 빌드 폴더(Caddy 없이, `index.html` 필요). `enabled: false`면 빈 값 | `""` | B |
+
+### 4.4 부분 설정·예약 키
+
+| 경우 | 동작 | 확인 위치 |
+|---|---|---|
+| `commands.<키>`가 파일에 **없음**(예시 일부만 복사) | 설정 오류가 아님. 그 명령을 쓰는 기능만 비활성 → 카드 "관리자 설정 필요: commands.<키>", 작업 생성 409 `TEMPLATE_NOT_CONFIGURED`. 1차 확정 템플릿이 빠지면 경고도 남는다 | `/status`의 `features`(`dataset_create`·`evaluate`·`predict` 포함)·`config.warnings` |
+| 1차 확정 템플릿(`edspy_create_dataset`·`edspy_score`·`edspy_predict`·`contour_preview`)에 **명시적 `null`** | 설정 오류(`CONFIG_INVALID`) | `config.valid` |
+| `hpc.gateway: command`인데 `hpc.command` 블록이 없음 | 오류 아님. PBS 미구성(①-4·④ PBS 검증 비활성) + 경고 | `config.warnings`, `features.train_solve` |
+| `worker.gpu_query`가 없음 | GPU 표시만 없음 + 경고 | `config.warnings` |
+| 예약 키 `server.base_path`·`hpc.transfer.stage_in`·`hpc.adapter.module` | 값이 적용되지 않음 + 경고 "예약(미사용) 키입니다 — 지워도 됩니다". 예전 설정 파일 호환용으로만 스키마에 남아 있다 | `config.warnings` |
+| 그 밖의 알 수 없는 키·형식 오류 | 설정 오류 | `config.valid` |
 
 ---
 
@@ -665,7 +680,7 @@ Python `re` 문법이다. YAML에서는 **작은따옴표**로 감싼다(역슬�
 | `hpc.command.not_found_regex` | 없음(선택 키) | 같은 출력, 먼저 검사 |
 | `training_log.parsers[].pattern` | `epoch`, `loss`(+선택 `total`) | 학습 로그 **줄마다** `search`. 위에서부터 1줄 이상 일치한 첫 파서 채택. 대소문자 구분 |
 | `score.parsers[].pattern` | `value`(+선택 `name`) | 평가 step 로그 줄마다. `name` 그룹이 없으면 파서 `name`이 지표 이름 |
-| `commands_log_error_patterns[]` | 없음 | 1차 LOCAL step 로그 줄마다, **대소문자 무시** |
+| `commands_log_error_patterns[]` | 없음 | edspy step 로그 줄마다, **대소문자 무시** |
 | `train_data.hst_log_error_patterns[]` | 없음 | ①-3(⑤는 줄 수만 셈), 대소문자 무시 |
 | `train_data.hst_progress_regex`, `optimize.progress_regex` | `run` | 줄마다 |
 | `train_data.paramitem_regex` | `name`, `value` | run 폴더 파일 줄마다 |
@@ -698,12 +713,13 @@ score:
 
 | 증상 | 원인 | 고치기 |
 |---|---|---|
-| 기동 시 `commands.edspy_score: 확정 템플릿 … null일 수 없습니다` | `commands`를 일부만 적어 나머지가 코드 기본값 null | 예시의 `commands` 블록 전체를 복사 |
+| 기동 시 `commands.edspy_score: 확정 템플릿 … null일 수 없습니다` | 1차 확정 템플릿에 **명시적으로** `null`을 씀 | 원본 인용 값으로 되돌림(키를 아예 빼면 오류 대신 그 기능만 비활성 — §4.4) |
+| 카드가 "관리자 설정 필요: commands.edspy_predict" | `commands` 블록을 일부만 복사해 그 키가 파일에 없음 | 예시의 `commands` 블록 전체를 복사 |
 | `argv[0]은 {edspy} … 중 하나여야 합니다` | 실행 파일 경로를 템플릿에 직접 씀 | 경로는 `altair.*`에, 템플릿엔 placeholder |
 | `placeholder '{model_pscfg}'은 허용되지 않습니다` | 그 키의 허용 목록 밖 | §5.3 표 확인(예: `{model_pscfg}`는 `edspy_score`·`edspy_predict`만) |
 | `'cad_file' 값에 공백이 있습니다` / `허용되지 않는 문자` | AI 루트·Study·입력 경로에 공백·메타문자 | 경로에서 공백·특수문자 제거 |
 | `.bat 실행 시 허용되지 않는 문자 = …` | SimLab.bat 등에 `key=value` 형태 값을 placeholder로 넘김 | 값을 파일(JSON 등)로 넘기거나 `=`가 없는 인자로 |
-| 종료코드 0인데 `LOG_ERROR_DETECTED` | 1차 LOCAL step(edspy뿐 아니라 SimLab 형상·메싱, hw 미리보기·응답 추출 포함) 로그에 `Traceback`·`[ERROR]`·`<숫자> Error:` 줄 | 실제 오류인지 확인. 무해한 출력이면 `commands_log_error_patterns`를 좁힘(부록 C-3) |
+| 종료코드 0인데 `LOG_ERROR_DETECTED` | edspy step(①-3은 hstbatch) 로그에 `Traceback`·`[ERROR]`·`<숫자> Error:` 줄 | 실제 오류인지 확인. 무해한 출력이면 `commands_log_error_patterns`(①-3은 `train_data.hst_log_error_patterns`)를 좁힘 |
 | 예측 경고 `MESH_OUTPUT_MISSING` 후 starter·include 오류 | SimLab 출력 메시 이름이 `eps_mesh*`가 아니거나 하위 폴더에 생김 | `predict.mesh_output_glob` 교체(U3), 출력이 `P/geom` 직계에 생기게 |
 | PBS 작업이 영원히 대기 → 결국 `LOST` | `state_map`이 비었거나 사내 상태 문자가 없음, `state_regex` 불일치 | 실제 `qstat` 출력으로 정규식·`state_map` 보완 |
 | `제출 결과에서 job id를 찾지 못했습니다` | qsub 출력이 `12345.pbs01` 한 줄이 아님 | `job_id_regex` 수정(MULTILINE이므로 `^…$`는 줄 단위) |
@@ -828,16 +844,25 @@ cpu_rate = clamp(floor(유효 코어 / 감지 코어 × 10000), 100, 10000)    #
 | SPDM 가져오기 계획 | `…/logs/<job_id>/spdm_plan.json` | |
 | 원본 도구 자체 로그 | 각 작업 폴더(예 `01_train/extract/<job>/*_LogFile.txt`) | ①-1 실패 시 step 로그 끝에 꼬리 2 KiB 첨부 |
 | 환경 점검 보고서 | `<ai_root>/_platform/env_checks/<id>/report.json` | |
-| 백엔드·워커 프로세스 로그 | **표준 출력/오류로만 나간다** | 작업 스케줄러는 이를 저장하지 않는다(부록 C-2). 문제 분석 시 §13 FAQ의 "콘솔 실행" 참고 |
+| 백엔드·워커 프로세스 로그 | `<logging.dir>\backend.log`, `worker.log`(기본 `<install_root>\logs\`) | §12.1 |
 | 작업 스케줄러 기록 | 작업 스케줄러 → 작업 → "기록" 탭 | 시작·종료·재시작·종료코드(2 = 워커 기동 거부) |
 | 감사 기록 | DB 테이블 `audit_events` | 작업 생성·취소·재시도·순서 변경·Final 지정·환경 점검·오류 묶음 내려받기 등 |
 | Caddy | 대시보드 Caddy 설정의 로그 위치 | |
+
+### 12.1 백엔드·워커 파일 로그
+
+- 작업 스케줄러는 표준 출력을 버리므로 백엔드·워커가 직접 **회전 파일 로그**를 쓴다: `<logging.dir>\backend.log`, `<logging.dir>\worker.log`. `logging.dir`이 비면 작업 폴더의 `logs\`(설치본은 `<install_root>\logs\`).
+- 회전: 파일당 `logging.max_mb`(기본 20 MB), 보관 `logging.backups`(기본 10개) → 컴포넌트당 최대 약 220 MB. 별도 정리 불필요.
+- 내용: 기동·설정 변경 감지·claim·오류·HTTP 접근(uvicorn) 기록. 저장 전에 오류 묶음과 같은 마스킹(`logging.mask_patterns` + DB URL 자격 증명·Bearer·세션 쿠키·비밀 환경변수 값)을 적용한다.
+- 수준 `logging.level`. 원인 분석 때만 `DEBUG`로 올리고 두 프로세스를 재시작한다.
+- 폴더를 만들 수 없으면 표준 오류에 알리고 콘솔 로그만으로 계속 뜬다(기동 거부 아님) — 실행 계정이 `<install_root>\logs`에 쓸 수 있어야 한다.
+- 워커 기동 거부(종료코드 2)는 원인 메시지가 `worker.log`와 작업 스케줄러 기록에 남는다.
 
 ---
 
 ## 13. 문제 해결(FAQ)
 
-**콘솔에서 직접 띄워 오류 보기** — 작업을 멈추고 관리자 PowerShell에서(머신 환경변수가 적용된 새 창):
+**먼저 `<install_root>\logs\worker.log`·`backend.log`를 본다.** 그래도 모르면 **콘솔에서 직접 띄워 오류 보기** — 작업을 멈추고 관리자 PowerShell에서(머신 환경변수가 적용된 새 창):
 
 ```powershell
 Stop-ScheduledTask PhysicsAI-Worker
@@ -920,7 +945,7 @@ deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -PgBin D:\pgsql\bin -ToolDelay 
 - PBS가 없으므로 ①-4 대신 **①-5 결과 가져오기**에 `<DemoRoot>\import\hpc_results`를 지정한다.
 - ③-4 모델 등록 폴더는 `<DemoRoot>\import\trained_model`.
 - 실패·멈춤 흉내: 환경변수 `FAKE_TOOL_MODE_<도구>=fail`(또는 `hang`)를 설정한 뒤 `start-demo`를 실행한다(도구 이름 `EDSPY`·`SIMLAB`·`HW`·`HVTRANS`·`HSTBATCH`·`HSTPY`. 예 같은 창에서 `$env:FAKE_TOOL_MODE_EDSPY='hang'` 후 `start-demo.ps1` → 관리자 취소 시연). 오류 묶음·알림·취소 흐름을 보여 줄 때 쓴다.
-- 로그: `<DemoRoot>\logs`(백엔드·워커), 작업 로그는 일반 운영과 같이 Study `logs\`.
+- 로그: `<DemoRoot>\logs\` — `backend.log`·`worker.log`(회전 파일 로그, §12.1)와 `backend.out.log`·`worker.out.log`(표준 출력 — 기동 실패 메시지는 여기). 작업 로그는 일반 운영과 같이 Study `logs\`.
 
 ### 14.3 종료
 
@@ -950,18 +975,31 @@ $env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
 
 ## 14-1. CI(GitHub Actions)
 
-워크플로 `.github/workflows/ci.yml`. 실행 시점: `push`, `pull_request`, 수동 실행(`workflow_dispatch`).
+워크플로 `.github/workflows/ci.yml`. 실행 시점: 모든 `push`, `pull_request`, 수동 실행(`workflow_dispatch`). 같은 브랜치에 새 push가 오면 진행 중인 실행은 취소된다(`concurrency`).
 
-| 잡 | 환경 | 단계 |
+| 잡 | 환경 | 단계(순서대로) |
 |---|---|---|
-| linux | ubuntu-24.04, Python 3.13, Node 22, PostgreSQL 16 | `scripts/test-all`(백엔드·워커 pytest + 프런트 vitest + 타입 검사) → `deploy/collect-offline.sh --dry-run` |
-| windows | Windows 러너 | ① `windows` 마커 시험(Job Object 등) — **skip은 실패로 처리** ② pytest 전체 ③ PowerShell 스크립트 구문 검사(pwsh 7과 Windows PowerShell 5.1) ④ `collect-offline` 실제 실행(묶음 생성) ⑤ `install.ps1` 실제 설치(무인, §14.5)·작업 스케줄러 등록·해제 ⑥ 시연 모드 원클릭 시작 확인 |
+| **linux** "Linux · test-all (PostgreSQL 16)" | ubuntu-24.04, Python 3.13, Node 22, PostgreSQL 16(시험마다 임시 클러스터), 제한 40분 | ① `deploy/requirements.lock` + pytest 설치 ② `pwsh` 확인(ps1 구문 검사 시험용) ③ `scripts/test-all.sh`(pytest + openapi 최신 여부 + vitest + tsc) ④ `deploy/collect-offline.sh --dry-run` |
+| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.13, Node 22, 러너 기본 PostgreSQL 서비스, 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(`collect-offline.ps1`; wheels·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인 ⑥ **시연 원클릭**: `start-demo.bat`(포트 8196) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
+
+③~⑥은 앞 단계가 실패해도 실행된다(취소된 경우만 제외) — 한 번에 여러 문제를 볼 수 있다.
+
+**실패 주석** — 실패한 단계는 `scripts/ci_annotate.py <로그> <제목> [줄 수]`가 로그 끝부분(기본 200줄)을 최대 4개 `::error` 주석으로 나눠 남긴다. 로그 원문을 내려받지 않아도 실행 요약 화면·Checks API에서 원인을 볼 수 있다. Windows 전용 시험의 실측값은 `::notice title=Job Object 실측::…` 주석으로 남는다.
 
 결과 보는 법
-1. GitHub 저장소 → **Actions** 탭 → 왼쪽 워크플로 이름 → 해당 커밋/PR 실행을 연다.
-2. 잡(linux·windows) 옆 녹색 체크 = 통과, 빨간 X = 실패. 잡을 눌러 실패한 단계를 펼치면 로그가 보인다(시험 이름·오류 메시지).
-3. PR 화면 아래 "Checks"에도 같은 결과가 나온다. 수동 실행은 Actions → 워크플로 → **Run workflow**.
-4. windows 잡의 ⑤⑥이 통과하면 배포 스크립트·시연 모드가 실제 Windows에서 한 번 돌았다는 증거다(그래도 운영 PC의 Altair·세션 0·Caddy 동작은 E2E 체크리스트로 따로 확인한다).
+1. GitHub 저장소 → **Actions** 탭 → 왼쪽 "CI" → 해당 커밋/PR 실행을 연다. PR 화면 아래 "Checks"에도 같은 결과가 나온다.
+2. 실행 요약 화면 위쪽 **Annotations**에 실패 주석(`test-all 실패 (1/4)`, `install 예외` 등)과 Job Object 실측 notice가 모여 있다. 먼저 여기를 본다.
+3. 잡(linux·windows)을 눌러 빨간 X 단계를 펼치면 전체 로그가 보인다.
+4. 수동 실행: Actions → CI → **Run workflow** → 브랜치 선택.
+5. windows 잡 ⑤⑥이 통과하면 배포 스크립트·작업 등록·시연 모드가 깨끗한 Windows에서 한 번 돌았다는 뜻이다. 운영 PC 고유 사항(Altair·라이선스·세션 0 렌더링·Caddy·매핑 드라이브)은 E2E 체크리스트로 따로 확인한다.
+
+**참고 — Windows 러너 실측**(구현 에이전트 보고, windows 잡 notice 기준. 러너 사양에 따라 달라질 수 있음)
+
+| 항목 | 설정 | 관측 |
+|---|---|---|
+| Job Object CPU hard cap(V-JO-1) | CPU rate 20% | 실제 CPU 사용 21~24% |
+| Job 메모리 상한 | 256 MiB | 512 MiB 할당 요청이 거부됨. `PeakJobMemoryUsed`는 **거부된 요청량까지 포함**해 보고됨 → 최대 사용량 표시가 상한보다 크게 보일 수 있다 |
+| 작업 스케줄러 등록 | install.ps1 | `ExecutionTimeLimit=PT0S`(무제한), `RestartCount=999`, `MultipleInstances=IgnoreNew` 확인 |
 
 ---
 
@@ -1011,13 +1049,14 @@ $env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
 
 ---
 
-## 부록 C. 코드와 문서의 차이(2026-10-09 확인)
+## 부록 C. 코드와 문서의 차이(2026-10-09 확인, HEAD 56801e1 기준 갱신)
 
 | # | 내용 | 영향·대응 |
 |---|---|---|
-| C-1 | `server.base_path`·`hpc.transfer.stage_in`·`hpc.adapter.module`은 설정 스키마에 있으나 코드에서 쓰지 않는다. 경로 `/physicsai`는 백엔드(`API_PREFIX`)·프런트(Vite base)에 고정 | 값을 바꿔도 효과 없음. 경로를 바꾸려면 코드 변경 필요 |
-| C-2 | 백엔드·워커 로그는 표준 출력으로만 나가고, `install.ps1`의 작업 등록은 출력을 파일로 돌리지 않는다 | 운영 중 프로세스 로그가 남지 않음. 작업 로그(Study `logs/`)·작업 스케줄러 기록·콘솔 실행으로 대체. 파일 로그 추가는 Impl-Backend 요청 대상 |
-| C-3 | `commands_log_error_patterns`는 계약(platform.md §8.3)상 edspy step에 적용인데, 코드는 1차 LOCAL step 전부(SimLab `geom_update`·`mesh`, `rad_assemble`, `contour_preview`, `response_extract` 포함)에 적용 | SimLab·hw 출력에 `Traceback`·`[ERROR]` 줄이 있으면 종료코드 0이어도 실패. 계약 확인 필요 |
+| C-1 | (해소, C23) `server.base_path`·`hpc.transfer.stage_in`·`hpc.adapter.module`은 예약(미사용) 키로 정리 — 예시에서 제거, 값이 있으면 경고. 경로 `/physicsai`는 코드 고정 | §4.4 |
+| C-2 | (해소, C26) 회전 파일 로그 `logging.dir`·`max_mb`·`backups` 추가 | §12.1 |
+| C-3 | (해소, C24) `commands_log_error_patterns`는 계약대로 edspy step에만 적용 | – |
 | C-4 | 재시도 API(`POST /jobs/{id}/retry`)와 Study 보관 API(`POST /studies/{id}/archive`)는 있으나 화면에 버튼이 없다 | 사용자는 같은 버튼을 다시 눌러 새 작업을 만든다(실패 step부터 재개되지 않음). 보관은 API로만 |
-| C-5 | 예시 YAML과 코드 기본값이 다른 키: `commands.*`(코드 null), `worker.gpu_query`(코드 null), `hpc.command.state_map`(코드 `{}`), `allowed_executables`·`submit`·`status`·`cancel`(코드 빈 값) | 예시 블록 전체 복사 권장(§4.1) |
+| C-5 | 예시 YAML과 코드 기본값이 다른 키: `commands.*`(코드 null), `worker.gpu_query`(코드 null), `hpc.command.state_map`(코드 `{}`), `allowed_executables`·`submit`·`status`·`cancel`(코드 빈 값). 키 누락은 이제 오류가 아니라 기능 비활성+경고(C25) | 예시 블록 전체 복사 권장(§4.1·§4.4) |
+| C-7 | (해소, C22) `deploy.json`의 `backend_port` 삭제 — 포트는 `platform.yaml` `server.port` 하나 | §2.3 |
 | C-6 | 자식 환경 허용목록에 `CUDA_VISIBLE_DEVICES`가 추가로 있다(B19 목록에 없음) | 영향 없음(GPU 선택 전달) |

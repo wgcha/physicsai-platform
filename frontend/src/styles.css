@@ -2056,3 +2056,21 @@ tr.selected td {
   border: 1px solid #e8c45a;
   white-space: nowrap;
 }
+.feature-off-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  margin-top: -0.35rem;
+}
+.feature-off-row .feature-off {
+  margin: 0;
+}
+.env-grid .config-warnings {
+  grid-column: 1 / -1;
+  border-color: #e8c45a;
+  background: #fffbea;
+}
+.warn-list {
+  margin: 0.3rem 0 0;
+  padding-left: 1.2rem;
+}

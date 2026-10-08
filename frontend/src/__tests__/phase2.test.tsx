@@ -47,6 +47,33 @@ describe("V2-FE-1 스텝퍼·FeatureGate", () => {
   });
 });
 
+describe("③-1·③-5·④ FeatureGate(features.dataset_create/evaluate/predict)", () => {
+  it("비활성이면 버튼 비활성 + 설정 필요 안내, 관리자에게만 환경 점검 링크", async () => {
+    const off = ["dataset_create", "evaluate", "predict"] as const;
+    const p = renderApp(`${STUDY}/3`, { user: "power", disabledFeatures: [...off] });
+    const ds = await screen.findByRole("region", { name: "데이터셋 생성" });
+    expect((await within(ds).findByTestId("feature-off-dataset_create")).textContent).toBe("관리자 설정 필요: altair.edspy_path");
+    expect((within(ds).getByRole("button", { name: "데이터셋 생성" }) as HTMLButtonElement).disabled).toBe(true);
+    const ev = screen.getByRole("region", { name: "평가 · Final 지정" });
+    expect(within(ev).getByTestId("feature-off-evaluate")).toBeTruthy();
+    expect((within(ev).getByRole("button", { name: "평가" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("feature-off-link-dataset_create")).toBeNull();
+    p.unmount();
+    clearApiCache();
+    renderApp(`${STUDY}/4`, { user: "admin", disabledFeatures: [...off] });
+    expect(await screen.findByTestId("feature-off-predict")).toBeTruthy();
+    await waitFor(() => expect((screen.getByRole("button", { name: "예측 실행" }) as HTMLButtonElement).disabled).toBe(true));
+    expect(screen.getByTestId("feature-off-link-predict").getAttribute("href")).toBe("/admin/env-check");
+  });
+
+  it("활성(기본)이면 안내 없음", async () => {
+    renderApp(`${STUDY}/3`, { user: "power" });
+    await screen.findByRole("region", { name: "데이터셋 생성" });
+    expect(screen.queryByTestId("feature-off-dataset_create")).toBeNull();
+    expect(screen.queryByTestId("feature-off-evaluate")).toBeNull();
+  });
+});
+
 describe("V2-FE-2 ① 학습데이터 생성", () => {
   it("카드 6개, 권한 없으면 조회 전용", async () => {
     renderApp(`${STUDY}/1`, { user: "general" });
@@ -331,6 +358,23 @@ describe("V2-FE-5 환경 점검(전역 관리자)", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "점검 실행" })).toBeTruthy(), { timeout: 3000 });
     await waitFor(() => expect(within(screen.getByRole("table", { name: "점검 이력" })).getAllByRole("row")).toHaveLength(5));
     expect(server.notifs.some((n) => n.event === "ENV_CHECK_DONE" && n.user_id === "u-admin")).toBe(true);
+  });
+
+  it("config.warnings: 관리자에게만 빨간 점 + 환경 점검 화면 상단 경고 목록", async () => {
+    const warn = ["resources.extract_minmax_tcl 미설정(⑤ 비활성)"];
+    const a = renderApp(`${STUDY}/3`, { user: "admin", configWarnings: warn });
+    a.server.p2.envChecks.forEach((e) => (e.summary.fail = 0)); // 점검 실패 없이 경고만으로 점이 떠야 한다
+    const btn = await screen.findByRole("button", { name: /^관리/ });
+    await waitFor(() => expect(within(btn).getByTestId("admin-alert-dot").getAttribute("title")).toBe("설정 경고 1건"));
+    fireEvent.click(btn);
+    fireEvent.click(screen.getByRole("menuitem", { name: /환경 점검/ }));
+    const box = await screen.findByRole("region", { name: "설정 경고" });
+    expect(within(box).getByText(warn[0])).toBeTruthy();
+    a.unmount();
+    clearApiCache();
+    renderApp(`${STUDY}/3`, { user: "power", configWarnings: warn });
+    await screen.findByRole("navigation", { name: "경로" });
+    expect(screen.queryByTestId("admin-alert-dot")).toBeNull();
   });
 
   it("비관리자: 메뉴 없음, URL로 들어오면 '관리자 전용입니다'", async () => {

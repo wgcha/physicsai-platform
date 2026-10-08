@@ -2139,6 +2139,11 @@ export interface components {
             errors: string[];
             /** Ok */
             ok: boolean;
+            /**
+             * Warnings
+             * @description 기동은 막지 않는 설정 안내 키(누락 → 기능 비활성, 예약 키)
+             */
+            warnings?: string[];
         };
         /** StatusEnvCheck */
         StatusEnvCheck: {
@@ -2157,7 +2162,10 @@ export interface components {
         StatusFeatures: {
             curation_h3d: components["schemas"]["FeatureState"];
             curation_t01: components["schemas"]["FeatureState"];
+            dataset_create?: components["schemas"]["FeatureState"] | null;
+            evaluate?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
+            predict?: components["schemas"]["FeatureState"] | null;
             spdm_import: components["schemas"]["FeatureState"];
             train_doe: components["schemas"]["FeatureState"];
             train_extract: components["schemas"]["FeatureState"];

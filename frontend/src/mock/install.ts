@@ -14,7 +14,7 @@ export function installMockFetch() {
   } catch {
     /* 저장소 없음 */
   }
-  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1", demo: params.get("demo") === "1" });
+  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1", demo: params.get("demo") === "1", configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

@@ -67,6 +67,8 @@ export interface MockOptions {
   hpcCancelFails?: boolean;
   /** /status.demo(시연 모드) */
   demo?: boolean;
+  /** /status.config.warnings */
+  configWarnings?: string[];
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -94,6 +96,7 @@ export class MockServer {
   hpcConfigured: boolean;
   hpcCancelFails: boolean;
   demo: boolean;
+  configWarnings: string[];
   ui: Record<string, number>;
   speed: number;
   studies: Study[] = seedStudies();
@@ -115,6 +118,7 @@ export class MockServer {
     this.hpcConfigured = opts.hpcConfigured ?? false;
     this.hpcCancelFails = opts.hpcCancelFails ?? false;
     this.demo = opts.demo ?? false;
+    this.configWarnings = opts.configWarnings ?? [];
     this.speed = opts.speed ?? 9;
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
@@ -487,7 +491,7 @@ export class MockServer {
       return {
         status: 200,
         body: {
-          config: { ok: true, errors: [] },
+          config: { ok: true, errors: [], warnings: this.configWarnings },
           worker: { online: true, worker_id: "PHYSICS-PC:4412:mock", last_seen_at: new Date().toISOString(), limiter: "windows_job" },
           hpc: this.hpcConfigured ? { mode: "command", configured: true, message: "PBS command 모드", collect_mode: "in_place" } : { mode: "none", configured: false, message: "PBS 연결 안 됨", collect_mode: "in_place" },
           altair: [{ key: "edspy_path", ok: true }, { key: "simlab_path", ok: true }, { key: "hw_exe_path", ok: true }],

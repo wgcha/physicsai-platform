@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { FeatureGate } from "../../components/FeatureGate";
 import { api, errorMessage, type Model } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
@@ -195,15 +196,19 @@ export function EvaluateCard() {
             ))}
           </select>
         </Field>
-        <RunAction
-          canExecute={canExec}
-          label="평가"
-          onRun={() => selected && void run({ model_id: selected.id })}
-          job={job}
-          disabled={!selected || !dsReady(selected)}
-          disabledReason={!selected ? "등록된 모델이 없습니다" : "모델의 데이터셋이 준비되지 않았습니다(평가 불가)"}
-          error={error}
-        />
+        <FeatureGate feature="evaluate">
+          {(enabled) => (
+            <RunAction
+              canExecute={canExec}
+              label="평가"
+              onRun={() => selected && void run({ model_id: selected.id })}
+              job={job}
+              disabled={!enabled || !selected || !dsReady(selected)}
+              disabledReason={!enabled ? undefined : !selected ? "등록된 모델이 없습니다" : "모델의 데이터셋이 준비되지 않았습니다(평가 불가)"}
+              error={error}
+            />
+          )}
+        </FeatureGate>
       </div>
       {finalError && <div className="error-text small" role="alert">{finalError}</div>}
       {shown.length === 0 ? (

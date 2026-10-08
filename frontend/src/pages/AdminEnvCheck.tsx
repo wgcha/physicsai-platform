@@ -41,6 +41,27 @@ export function AdminEnvCheck() {
   );
 }
 
+/** /status.config.warnings: 기동은 막지 않는 설정 안내(누락 → 기능 비활성, 예약 키) */
+function ConfigWarnings() {
+  const { status } = useApp();
+  const w = status?.config.warnings ?? [];
+  if (!w.length) return null;
+  return (
+    <section className="card wide config-warnings" aria-label="설정 경고">
+      <div className="card-body">
+        <div className="warn-text">
+          <b>설정 경고 {w.length}건</b> <span className="muted small">— 기동은 되지만 해당 기능이 비활성입니다</span>
+        </div>
+        <ul className="mono small warn-list">
+          {w.map((x) => (
+            <li key={x}>{x}</li>
+          ))}
+        </ul>
+      </div>
+    </section>
+  );
+}
+
 function EnvCheckBody() {
   const [history, setHistory] = useState<EnvCheckSummary[]>([]);
   const [current, setCurrent] = useState<EnvCheck | null>(null);
@@ -96,6 +117,7 @@ function EnvCheckBody() {
 
   return (
     <div className="env-grid">
+      <ConfigWarnings />
       <section className="card wide" aria-label="환경 점검">
         <header className="card-head">
           <h3>환경 점검</h3>
