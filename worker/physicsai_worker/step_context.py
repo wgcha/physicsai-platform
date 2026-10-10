@@ -17,8 +17,8 @@ from physicsai_core.childenv import child_env
 from physicsai_core.commands import EXECUTABLE_PLACEHOLDERS, parse_placeholders, render_argv
 from physicsai_core.config import effective_altair
 from physicsai_core.db.repositories import artifacts as artifacts_repo
-from physicsai_core.db.repositories import jobs as jobs_repo
-from physicsai_core.db.repositories.jobs import LeaseLost
+from physicsai_core.db.repositories import job_lease as lease_repo
+from physicsai_core.db.repositories.job_lease import LeaseLost
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import sha256_file
 from physicsai_core.parsers.log_errors import ErrorDetector
@@ -86,9 +86,9 @@ class StepContext:
         lbl = (label or self._label or "")[:120] or None
         self._label = lbl
         self.ex.db(lambda c: (
-            jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, progress_pct=pct, progress_label=lbl),
-            jobs_repo.job_update(c, self.ex.job_id, self.ex.token, progress_pct=job_pct, progress_label=lbl,
-                                 current_step_no=self.step_no),
+            lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, progress_pct=pct, progress_label=lbl),
+            lease_repo.job_update(c, self.ex.job_id, self.ex.token, progress_pct=job_pct, progress_label=lbl,
+                                  current_step_no=self.step_no),
         ))
 
     def checkpoint(self) -> None:
@@ -104,10 +104,10 @@ class StepContext:
     def start(self) -> None:
         job_pct = round(100.0 * self.done_w / self.total_w, 2)
         self.ex.db(lambda c: (
-            jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, state="RUNNING", started_at=func.now(),
-                                  progress_pct=None, progress_label=None),
-            jobs_repo.job_update(c, self.ex.job_id, self.ex.token, current_step_no=self.step_no, progress_pct=job_pct,
-                                 progress_label=self.key),
+            lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, state="RUNNING", started_at=func.now(),
+                                   progress_pct=None, progress_label=None),
+            lease_repo.job_update(c, self.ex.job_id, self.ex.token, current_step_no=self.step_no, progress_pct=job_pct,
+                                  progress_label=self.key),
         ))
         self.log(f"=== {self.key} 시작 {datetime.now(timezone.utc).isoformat()} ===")
 
@@ -121,7 +121,7 @@ class StepContext:
             vals["failure_code"] = code
             vals["failure_message"] = (message or "")[:500]
         self.log(f"=== {self.key} {state}{' ' + code if code else ''} ===")
-        self.ex.db(lambda c: jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, **vals))
+        self.ex.db(lambda c: lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, **vals))
 
     # ---- 결과·산출물 ----
     def result(self) -> dict[str, Any]:
@@ -201,7 +201,7 @@ class StepContext:
         self.last_argv = argv
         if record_command:
             command = {"argv": argv, "cwd": cwd, "env_added": dict(env_add or {})}
-            self.ex.db(lambda c: jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, command=command))
+            self.ex.db(lambda c: lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, command=command))
         self.log("[CMD] " + " ".join(argv))
         patterns = error_patterns if error_patterns is not None else s.commands_log_error_patterns
         if check_log_errors is None:
@@ -288,7 +288,7 @@ class StepContext:
         self.last_exit_code = rc
         self.log(f"[EXIT] {rc}")
         if record_command:
-            self.ex.db(lambda c: jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, exit_code=rc))
+            self.ex.db(lambda c: lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, exit_code=rc))
         self.last_error_lines = detector.count if detector is not None else 0
         if rc != 0:
             if acc.memory_limit_hit:
@@ -337,8 +337,8 @@ class StepContext:
                         first_argv = argv
                         command = {"argv": argv, "cwd": tcwd, "env_added": dict(env_add or {}), "invocations": n,
                                    "commands_rel": rel}
-                        self.ex.db(lambda c: jobs_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no,
-                                                                     command=command))
+                        self.ex.db(lambda c: lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no,
+                                                                      command=command))
                     base = (k - 1) / n * 100.0
                     self.run_local(template_key, t["values"], cwd=tcwd, env_add=env_add, check_log_errors=False,
                                    record_command=False, poll_hook=lambda b=base, i=k, x=tid: (b, f"{i}/{n} {x}"))

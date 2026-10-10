@@ -22,10 +22,11 @@ from physicsai_core.childenv import child_env
 from physicsai_core.config import LoadedConfig, Settings, load_config
 from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.db.repositories import hpc as hpc_repo
+from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.db.repositories import workers as workers_repo
-from physicsai_core.db.repositories.jobs import ClaimRace
+from physicsai_core.db.repositories.job_lease import ClaimRace
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcJobGateway, get_hpc_gateway
 from physicsai_core.limits import EffectiveLimits, detect, limits_from_settings
 from physicsai_core.paths import register_protected_roots
@@ -143,7 +144,7 @@ class Worker:
         if self.claims_paused:
             return None
         ttl = self.settings.worker.lease_ttl_s
-        job = self._claim(lambda c: jobs_repo.claim_slot(c, self.worker_id, ttl, self.env_snapshot()))
+        job = self._claim(lambda c: lease_repo.claim_slot(c, self.worker_id, ttl, self.env_snapshot()))
         if job is None:
             return None
         return Executor(self, job).run()
@@ -153,7 +154,7 @@ class Worker:
         if self.claims_paused:
             return None
         ttl = self.settings.worker.lease_ttl_s
-        job = self._claim(lambda c: jobs_repo.claim_light(c, self.worker_id, ttl, self.env_snapshot()))
+        job = self._claim(lambda c: lease_repo.claim_light(c, self.worker_id, ttl, self.env_snapshot()))
         if job is None:
             return None
         return Executor(self, job).run()
@@ -176,7 +177,7 @@ class Worker:
 
     def run_once_collect(self) -> str | None:
         ttl = self.settings.worker.lease_ttl_s
-        job = self._claim(lambda c: jobs_repo.claim_collecting(c, self.worker_id, ttl))
+        job = self._claim(lambda c: lease_repo.claim_collecting(c, self.worker_id, ttl))
         if job is None:
             return None
         return Executor(self, job).run()
@@ -184,7 +185,7 @@ class Worker:
     def claim_only(self) -> dict[str, Any] | None:
         """시험용: claim만 하고 실행하지 않는다(워커 사망 모사)."""
         ttl = self.settings.worker.lease_ttl_s
-        return self._claim(lambda c: jobs_repo.claim_slot(c, self.worker_id, ttl, self.env_snapshot()))
+        return self._claim(lambda c: lease_repo.claim_slot(c, self.worker_id, ttl, self.env_snapshot()))
 
     # ---- HPC 폴러(§12.4) ----
     def poll_hpc_once(self) -> None:

@@ -40,7 +40,7 @@ def _state(engine, jid):
 
 
 def test_fifo_positions_and_claim_order(client, engine, loaded_config, worker_factory):
-    from physicsai_core.db.repositories import jobs as jobs_repo
+    from physicsai_core.db.repositories import job_lease as lease_repo
 
     ai = loaded_config.settings.storage.ai_root
     ids = [_dataset_job(client, ai, f"F{i}")[1]["id"] for i in range(3)]
@@ -49,13 +49,13 @@ def test_fifo_positions_and_claim_order(client, engine, loaded_config, worker_fa
     order = []
     for _ in range(3):
         with engine.begin() as c:
-            j = jobs_repo.claim_slot(c, "w-test", 30)
+            j = lease_repo.claim_slot(c, "w-test", 30)
         order.append(j["id"])
         # 슬롯 보유 중에는 다음 claim 없음
         with engine.begin() as c:
-            assert jobs_repo.claim_slot(c, "w-test", 30) is None
+            assert lease_repo.claim_slot(c, "w-test", 30) is None
         with engine.begin() as c:
-            jobs_repo.release(c, j["id"], j["lease_token"], "SUCCEEDED")
+            lease_repo.release(c, j["id"], j["lease_token"], "SUCCEEDED")
     assert order == ids
 
 
@@ -76,7 +76,7 @@ def test_light_runs_while_slot_busy(client, engine, loaded_config, worker_factor
 
 
 def test_admin_move_changes_claim_order(client, engine, loaded_config):
-    from physicsai_core.db.repositories import jobs as jobs_repo
+    from physicsai_core.db.repositories import job_lease as lease_repo
 
     ai = loaded_config.settings.storage.ai_root
     ids = [_dataset_job(client, ai, f"M{i}")[1]["id"] for i in range(3)]
@@ -85,7 +85,7 @@ def test_admin_move_changes_claim_order(client, engine, loaded_config):
     assert r.status_code == 200
     assert [x["id"] for x in r.json()["queued"]] == [ids[2], ids[0], ids[1]]
     with engine.begin() as c:
-        j = jobs_repo.claim_slot(c, "w", 30)
+        j = lease_repo.claim_slot(c, "w", 30)
     assert j["id"] == ids[2]
     r = client.post(f"{API}/queue/{ids[2]}/move", headers=AW, json={"position": 1})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "JOB_NOT_QUEUED"
@@ -174,9 +174,9 @@ def test_lease_expiry_interrupted(client, engine, settings_dict, loaded_config):
     # 다른 워커의 claim이 만료 슬롯을 회수하고 다음 작업을 잡는다
     other = Worker(lc, engine)
     with engine.begin() as c:
-        from physicsai_core.db.repositories import jobs as jobs_repo
+        from physicsai_core.db.repositories import job_lease as lease_repo
 
-        nxt = jobs_repo.claim_slot(c, other.worker_id, 30)
+        nxt = lease_repo.claim_slot(c, other.worker_id, 30)
     assert nxt["id"] == j2["id"]
     st = _state(engine, j["id"])
     assert st["state"] == "INTERRUPTED" and st["failure_code"] == "WORKER_LOST" and st["lease_token"] is None
@@ -201,8 +201,8 @@ def test_reaper_interrupts_expired(client, engine, settings_dict, loaded_config)
 
 def test_concurrent_claim_single_winner(client, engine, loaded_config):
     from physicsai_core.db.engine import make_engine
-    from physicsai_core.db.repositories import jobs as jobs_repo
-    from physicsai_core.db.repositories.jobs import ClaimRace
+    from physicsai_core.db.repositories import job_lease as lease_repo
+    from physicsai_core.db.repositories.job_lease import ClaimRace
 
     ai = loaded_config.settings.storage.ai_root
     for i in range(2):
@@ -215,7 +215,7 @@ def test_concurrent_claim_single_winner(client, engine, loaded_config):
         barrier.wait()
         try:
             with e.begin() as c:
-                results.append(jobs_repo.claim_slot(c, wid, 30))
+                results.append(lease_repo.claim_slot(c, wid, 30))
         except ClaimRace:
             results.append(None)
 

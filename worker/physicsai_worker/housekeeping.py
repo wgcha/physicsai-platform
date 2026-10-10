@@ -5,13 +5,13 @@ from __future__ import annotations
 from sqlalchemy.engine import Engine
 
 from physicsai_core.db.repositories import env_checks as env_repo
-from physicsai_core.db.repositories import jobs as jobs_repo
+from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories import notifications as notif_repo
 
 
 def reap(engine: Engine) -> list[str]:
     with engine.begin() as conn:
-        out = jobs_repo.reap_expired(conn)
+        out = lease_repo.reap_expired(conn)
     expire_env_checks(engine)
     return out
 

@@ -17,9 +17,10 @@ from sqlalchemy.engine import Engine
 
 from physicsai_core.commands import TEMPLATE_SPECS
 from physicsai_core.config import Settings
+from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
-from physicsai_core.db.repositories.jobs import LeaseLost
+from physicsai_core.db.repositories.job_lease import LeaseLost
 from physicsai_core.errors import DomainError, StepFailure
 from physicsai_core.job_types import JOB_TYPES
 from physicsai_core.limits import EffectiveLimits
@@ -49,7 +50,7 @@ class LeaseKeeper(threading.Thread):
                 continue
             try:
                 with self.engine.begin() as conn:
-                    ok = jobs_repo.renew(conn, self.job_id, self.token, self.ttl, slot=self.slot)
+                    ok = lease_repo.renew(conn, self.job_id, self.token, self.ttl, slot=self.slot)
             except Exception:  # DB 일시 오류: 다음 주기에 재시도(만료 전이면 유지)
                 log.exception("lease renew 오류")
                 continue
@@ -98,10 +99,10 @@ class Executor:
         return dict((j or {}).get("result") or {})
 
     def patch_result(self, patch: dict[str, Any]) -> dict[str, Any]:
-        return self.db(lambda c: jobs_repo.patch_result(c, self.job_id, self.token, patch))
+        return self.db(lambda c: lease_repo.patch_result(c, self.job_id, self.token, patch))
 
     def add_warning(self, code: str, message: str) -> None:
-        self.db(lambda c: jobs_repo.add_warning(c, self.job_id, self.token, code, message))
+        self.db(lambda c: lease_repo.add_warning(c, self.job_id, self.token, code, message))
 
     def _on_lost(self) -> None:
         log.warning("lease 소유권 상실: %s", self.job_id)
@@ -135,7 +136,7 @@ class Executor:
             self.w.current_executor = None
 
     def _release(self, state: str, code: str | None = None, msg: str | None = None) -> str:
-        self.db(lambda c: jobs_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg))
+        self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg))
         return state
 
     def _job_log(self, text: str) -> None:
@@ -160,7 +161,7 @@ class Executor:
             if self.cancel_requested():
                 return self._release("CANCELED")
             if not collecting:
-                self.db(lambda c: jobs_repo.continue_running(c, self.job_id, self.token))
+                self.db(lambda c: lease_repo.continue_running(c, self.job_id, self.token))
             ctx = StepContext(self, s, done_w, total_w)
             ctx.start()
             try:
