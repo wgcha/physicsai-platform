@@ -10,7 +10,7 @@ import { USERS } from "../mock/data";
 import { setEnvPollMs } from "../pages/AdminEnvCheck";
 import { PBS_NONE_TEXT } from "../stages/stage1/SolveCard";
 import { isUsableComponent, timeSteps, timeStepsText } from "../lib/curation";
-import { METHOD_DEFAULTS, activeRules } from "../stages/stage5/Stage5";
+import { METHOD_DEFAULTS, activeRules } from "../stages/stage5/rules";
 
 /** server.handle 호출 기록 */
 function recordCalls(server: MockServer) {
