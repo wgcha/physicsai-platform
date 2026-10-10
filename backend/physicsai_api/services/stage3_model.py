@@ -98,12 +98,6 @@ def set_final(ctx: AppContext, principal: Principal, study_id: str, model_id: st
         require_power(principal, s["project_id"])
         if model_id is not None and m["status"] != "ACTIVE":  # type: ignore[index]
             raise DomainError("MODEL_NOT_ACTIVE", "ACTIVE 모델만 Final로 지정할 수 있습니다", status=409)
-        from sqlalchemy import func
-
-        s = studies_repo.update_cas(
-            conn, study_id, None, final_model_id=model_id,
-            final_set_by=principal.user_id if model_id else None,
-            final_set_at=func.now() if model_id else None,
-        )
+        s = studies_repo.set_final_model(conn, study_id, model_id, principal.user_id)
         audit(conn, principal, "FINAL_MODEL_SET", "study", study_id, {"model_id": model_id}, rid, ip)
     return study_out(s, principal, ctx.settings.storage.ai_root)

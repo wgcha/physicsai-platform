@@ -11,7 +11,6 @@ from pydantic import BaseModel, Field
 from physicsai_core import doe_types as dt_mod
 from physicsai_core import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
-from physicsai_core.db.tables import train_does
 from physicsai_core.errors import DomainError
 from physicsai_core.param_sets import NAME_RE, RUN_KEY_RE
 from physicsai_core.paths import check_user_path
@@ -177,8 +176,6 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
 
 def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
     """재시도: DOE 행을 새 작업으로 다시 BUILDING."""
-    from sqlalchemy import update
-
     p = old["params"] or {}
     if old["job_type"] == "TD_DOE_GEN" and p.get("doe_id"):
-        conn.execute(update(train_does).where(train_does.c.id == p["doe_id"]).values(status="BUILDING", job_id=new_id))
+        train_repo.set_building_job(conn, p["doe_id"], new_id)

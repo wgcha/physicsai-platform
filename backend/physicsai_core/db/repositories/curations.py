@@ -32,6 +32,11 @@ def set_curation(conn: Connection, cid: str, **values: Any) -> None:
     conn.execute(update(curations).where(curations.c.id == cid).values(**values))
 
 
+def set_building_job(conn: Connection, cid: str, job_id: str) -> None:
+    """재시도: 큐레이션 행을 새 작업으로 다시 BUILDING."""
+    conn.execute(update(curations).where(curations.c.id == cid).values(status="BUILDING", job_id=job_id))
+
+
 def fail_building_curation(conn: Connection, job_id: str) -> None:
     conn.execute(update(curations).where(and_(curations.c.job_id == job_id, curations.c.status == "BUILDING")).values(status="FAILED"))
 

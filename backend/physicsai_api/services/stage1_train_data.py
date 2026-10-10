@@ -5,12 +5,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from sqlalchemy import func
-
 from physicsai_core import doe_samples
 from physicsai_core import doe_types as dt_mod
 from physicsai_core import train_params as tp
 from physicsai_core import train_tpl
+from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
@@ -122,8 +121,8 @@ def generate_tpl(ctx: AppContext, principal: Principal, study_id: str, version: 
             raise DomainError("TPL_TEMPLATE_INVALID", "생성된 tpl이 검증을 통과하지 못했습니다", status=422, problems=probs)
         backup_existing(root, [out], "tpl", stamp)
         write_text(out, gen)
-        s = train_repo.update_setup(
-            conn, study_id, version, tpl_rel=TPL_REL, tpl_sha256=sha256_file(out), tpl_generated_at=func.now(),
+        s = train_repo.set_tpl_generated(
+            conn, study_id, version, tpl_rel=TPL_REL, tpl_sha256=sha256_file(out),
             tpl_params=train_tpl.tpl_params_snapshot(used), tpl_warnings=tp.integer_format_warnings(s["parameters"]),
             updated_by=principal.user_id, updated_by_name=principal.display_name,
         )
@@ -179,12 +178,8 @@ def list_runs(ctx: AppContext, doe_id: str, state: str | None, limit: int | None
         hids = [r["hpc_job_id"] for r in rows if r["hpc_job_id"]]
         hmap: dict[str, Any] = {}
         if hids:
-            from sqlalchemy import select
-
-            from physicsai_core.db.tables import hpc_jobs
-
-            for h in conn.execute(select(hpc_jobs).where(hpc_jobs.c.id.in_(hids))):
-                hmap[h.id] = {"external_job_id": h.external_job_id, "state": h.state, "attempt_no": h.attempt_no}
+            for h in hpc_repo.get_many(conn, hids):
+                hmap[h["id"]] = {"external_job_id": h["external_job_id"], "state": h["state"], "attempt_no": h["attempt_no"]}
     out = []
     for r in rows[:lim]:
         out.append({"run_key": r["run_key"], "state": r["state"], "starter_name": r["starter_name"],

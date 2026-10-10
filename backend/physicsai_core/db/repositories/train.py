@@ -50,6 +50,11 @@ def update_setup(conn: Connection, study_id: str, version: int | None, **values:
     return get_setup(conn, study_id)  # type: ignore[return-value]
 
 
+def set_tpl_generated(conn: Connection, study_id: str, version: int, **values: Any) -> dict[str, Any]:
+    """①-2 tpl 생성 기록(tpl_generated_at = DB 현재 시각). 낙관적 동시성은 update_setup과 같다."""
+    return update_setup(conn, study_id, version, tpl_generated_at=func.now(), **values)
+
+
 # ---- train_does ----------------------------------------------------------------
 
 
@@ -68,6 +73,11 @@ def list_does(conn: Connection, study_id: str) -> list[dict[str, Any]]:
 
 def set_doe(conn: Connection, doe_id: str, **values: Any) -> None:
     conn.execute(update(train_does).where(train_does.c.id == doe_id).values(**values))
+
+
+def set_building_job(conn: Connection, doe_id: str, job_id: str) -> None:
+    """재시도: DOE 행을 새 작업으로 다시 BUILDING."""
+    conn.execute(update(train_does).where(train_does.c.id == doe_id).values(status="BUILDING", job_id=job_id))
 
 
 def fail_building_doe(conn: Connection, job_id: str) -> None:

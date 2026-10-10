@@ -30,9 +30,11 @@ from ..tables import (
     job_steps,
     jobs,
     models,
+    studies,
     worker_slot,
 )
 from . import notifications as notif_repo
+
 
 class LeaseLost(RuntimeError):
     """lease 소유권 상실. 이후 그 작업에 어떤 상태 쓰기도 하지 않는다."""
@@ -149,6 +151,40 @@ def queue_positions(conn: Connection, lane: str) -> dict[str, int]:
         select(jobs.c.id).where(and_(jobs.c.state == QUEUED, jobs.c.lane == lane)).order_by(jobs.c.queue_seq)
     ).all()
     return {r.id: i for i, r in enumerate(rows, start=1)}
+
+
+def list_with_study_title(conn: Connection, *, study_id: str | None, states: list[str] | None, created_by: str | None,
+                          job_type: str | None, limit: int, offset: int) -> list[dict[str, Any]]:
+    """작업 목록(§10.2) + study_title. 최신순, limit·offset 그대로."""
+    q = select(jobs, studies.c.title.label("study_title")).select_from(jobs.join(studies, studies.c.id == jobs.c.study_id))
+    if study_id:
+        q = q.where(jobs.c.study_id == study_id)
+    if states:
+        q = q.where(jobs.c.state.in_(states))
+    if created_by:
+        q = q.where(jobs.c.created_by == created_by)
+    if job_type:
+        q = q.where(jobs.c.job_type == job_type)
+    q = q.order_by(jobs.c.created_at.desc(), jobs.c.id).limit(limit).offset(offset)
+    return [dict(r._mapping) for r in conn.execute(q)]
+
+
+def succeeded_predicts(conn: Connection, study_id: str, limit: int = 50) -> list[Any]:
+    """같은 Study의 SUCCEEDED PREDICT 작업(최근 종료 순)."""
+    return conn.execute(
+        select(jobs).where(and_(jobs.c.study_id == study_id, jobs.c.job_type == "PREDICT", jobs.c.state == "SUCCEEDED"))
+        .order_by(jobs.c.finished_at.desc().nulls_last(), jobs.c.created_at.desc()).limit(limit)
+    ).mappings().all()
+
+
+def latest_by_stage(conn: Connection, study_id: str, stage: int) -> dict[str, Any] | None:
+    """단계(jobs.stage)별 가장 최근 작업의 id·job_type·state·created_at."""
+    return row_dict(conn.execute(
+        select(jobs.c.id, jobs.c.job_type, jobs.c.state, jobs.c.created_at)
+        .where(and_(jobs.c.study_id == study_id, jobs.c.stage == stage))
+        .order_by(jobs.c.created_at.desc())
+        .limit(1)
+    ).first())
 
 
 # ---------------------------------------------------------------------------

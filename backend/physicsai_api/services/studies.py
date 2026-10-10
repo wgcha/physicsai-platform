@@ -7,13 +7,11 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-from sqlalchemy import and_, select
 
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
-from physicsai_core.db.tables import jobs
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import write_json
 
@@ -45,14 +43,9 @@ def list_studies(ctx: AppContext, principal: Principal, project_id: str | None, 
 def _stage_status(conn: Any, study_id: str) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for stage in (1, 2, 3, 4, 5):  # phase2 C15: ①·②·⑤ 추가(작업 stage 컬럼 = 단계)
-        r = conn.execute(
-            select(jobs.c.id, jobs.c.job_type, jobs.c.state, jobs.c.created_at)
-            .where(and_(jobs.c.study_id == study_id, jobs.c.stage == stage))
-            .order_by(jobs.c.created_at.desc())
-            .limit(1)
-        ).first()
+        r = jobs_repo.latest_by_stage(conn, study_id, stage)
         out[str(stage)] = (
-            {"latest_job_id": r.id, "latest_job_type": r.job_type, "latest_state": r.state}
+            {"latest_job_id": r["id"], "latest_job_type": r["job_type"], "latest_state": r["state"]}
             if r else {"latest_job_id": None, "latest_job_type": None, "latest_state": None}
         )
     return out

@@ -6,14 +6,12 @@ import os
 import uuid
 from typing import Any
 
-from sqlalchemy import select
 
 from physicsai_core.db.repositories import artifacts as artifacts_repo
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import queue as queue_repo
 from physicsai_core.db.repositories import studies as studies_repo
-from physicsai_core.db.tables import hpc_jobs, jobs, studies
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import resolve_in_study
 from physicsai_core.state_machine import TERMINAL
@@ -66,18 +64,11 @@ def create_job(ctx: AppContext, principal: Principal, study_id: str, job_type: s
 def list_jobs(ctx: AppContext, principal: Principal, *, study_id: str | None, state: str | None, mine: bool,
               job_type: str | None, limit: int | None, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
     lim, off = clamp_limit(limit), decode_cursor(cursor)
-    q = select(jobs, studies.c.title.label("study_title")).select_from(jobs.join(studies, studies.c.id == jobs.c.study_id))
-    if study_id:
-        q = q.where(jobs.c.study_id == study_id)
-    if state:
-        q = q.where(jobs.c.state.in_(state.split(",")))
-    if mine:
-        q = q.where(jobs.c.created_by == principal.user_id)
-    if job_type:
-        q = q.where(jobs.c.job_type == job_type)
-    q = q.order_by(jobs.c.created_at.desc(), jobs.c.id).limit(lim + 1).offset(off)
     with ctx.engine.connect() as conn:
-        rows = [dict(r._mapping) for r in conn.execute(q)]
+        rows = jobs_repo.list_with_study_title(
+            conn, study_id=study_id or None, states=state.split(",") if state else None,
+            created_by=principal.user_id if mine else None, job_type=job_type or None, limit=lim + 1, offset=off,
+        )
         pos = {"SLOT": jobs_repo.queue_positions(conn, "SLOT"), "LIGHT": jobs_repo.queue_positions(conn, "LIGHT")}
         hs = hpc_repo.summary_for_jobs(conn, [r["id"] for r in rows[:lim]])
     out = [job_summary(r, r["study_title"], pos[r["lane"]].get(r["id"]), hs.get(r["id"])) for r in rows[:lim]]
@@ -265,19 +256,13 @@ def artifact_file(ctx: AppContext, artifact_id: str) -> tuple[str, str, str]:
 
 
 def list_hpc_jobs(ctx: AppContext, job_id: str) -> list[dict[str, Any]]:
-    from sqlalchemy import func
-
     with ctx.engine.connect() as conn:
         _require_job(conn, job_id)
-        rows = conn.execute(
-            select(hpc_jobs, func.extract("epoch", func.coalesce(hpc_jobs.c.finished_at, func.now()) - hpc_jobs.c.submitted_at).label("elapsed"))
-            .where(hpc_jobs.c.job_id == job_id)
-            .order_by(hpc_jobs.c.attempt_no, hpc_jobs.c.run_key)
-        ).all()
+        rows = hpc_repo.list_for_job_with_elapsed(conn, job_id)
     return [
-        {"id": r.id, "run_key": r.run_key, "attempt_no": r.attempt_no, "external_job_id": r.external_job_id,
-         "state": r.state, "external_state_raw": r.external_state_raw, "submitted_at": r.submitted_at,
-         "elapsed_s": float(r.elapsed) if r.elapsed is not None else None, "collect_state": r.collect_state}
+        {"id": r["id"], "run_key": r["run_key"], "attempt_no": r["attempt_no"], "external_job_id": r["external_job_id"],
+         "state": r["state"], "external_state_raw": r["external_state_raw"], "submitted_at": r["submitted_at"],
+         "elapsed_s": float(r["elapsed"]) if r["elapsed"] is not None else None, "collect_state": r["collect_state"]}
         for r in rows
     ]
 

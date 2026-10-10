@@ -30,5 +30,10 @@ def set_import(conn: Connection, iid: str, **values: Any) -> None:
     conn.execute(update(spdm_imports).where(spdm_imports.c.id == iid).values(**values))
 
 
+def set_building_job(conn: Connection, iid: str, job_id: str) -> None:
+    """재시도: 가져오기 행을 새 작업으로 다시 BUILDING."""
+    conn.execute(update(spdm_imports).where(spdm_imports.c.id == iid).values(status="BUILDING", job_id=job_id))
+
+
 def fail_building_import(conn: Connection, job_id: str) -> None:
     conn.execute(update(spdm_imports).where(and_(spdm_imports.c.job_id == job_id, spdm_imports.c.status == "BUILDING")).values(status="FAILED"))

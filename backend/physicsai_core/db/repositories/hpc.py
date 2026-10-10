@@ -32,6 +32,21 @@ def for_job(conn: Connection, job_id: str) -> list[dict[str, Any]]:
     return [row_dict(r) for r in conn.execute(select(hpc_jobs).where(hpc_jobs.c.job_id == job_id).order_by(hpc_jobs.c.attempt_no))]
 
 
+def list_for_job_with_elapsed(conn: Connection, job_id: str) -> list[dict[str, Any]]:
+    """작업의 HPC 행 + 경과 초(elapsed: 종료 전이면 지금까지). (attempt_no, run_key) 순."""
+    rows = conn.execute(
+        select(hpc_jobs, func.extract("epoch", func.coalesce(hpc_jobs.c.finished_at, func.now()) - hpc_jobs.c.submitted_at).label("elapsed"))
+        .where(hpc_jobs.c.job_id == job_id)
+        .order_by(hpc_jobs.c.attempt_no, hpc_jobs.c.run_key)
+    ).all()
+    return [dict(r._mapping) for r in rows]
+
+
+def get_many(conn: Connection, ids: list[str]) -> list[dict[str, Any]]:
+    """id 목록의 HPC 행(순서 보장 없음)."""
+    return [dict(r._mapping) for r in conn.execute(select(hpc_jobs).where(hpc_jobs.c.id.in_(ids)))]
+
+
 def update_hpc(conn: Connection, hid: str, version: int, **values: Any) -> bool:
     r = conn.execute(
         update(hpc_jobs)

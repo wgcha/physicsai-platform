@@ -6,14 +6,12 @@ import json
 import os
 from typing import Any
 
-from sqlalchemy import and_, select
-
 from physicsai_core import optimize as opt
 from physicsai_core.db.repositories import artifacts as artifacts_repo
+from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import optimizations as opt_repo
 from physicsai_core.db.repositories import studies as studies_repo
-from physicsai_core.db.tables import jobs
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
 
@@ -73,10 +71,7 @@ def response_candidates(ctx: AppContext, study_id: str, model_id: str | None) ->
     """같은 Study의 최근 SUCCEEDED PREDICT(모델 일치 우선) 미리보기·커브에서 콤보 후보."""
     with ctx.engine.connect() as conn:
         st = studies_repo.require(conn, study_id)
-        rows = conn.execute(
-            select(jobs).where(and_(jobs.c.study_id == study_id, jobs.c.job_type == "PREDICT", jobs.c.state == "SUCCEEDED"))
-            .order_by(jobs.c.finished_at.desc().nulls_last(), jobs.c.created_at.desc()).limit(50)
-        ).mappings().all()
+        rows = jobs_repo.succeeded_predicts(conn, study_id)
         pick = None
         if model_id:
             pick = next((r for r in rows if (r["params"] or {}).get("model_id") == model_id), None)

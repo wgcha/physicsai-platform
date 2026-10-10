@@ -15,7 +15,6 @@ from physicsai_core.db.repositories import curations as cur_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import spdm_imports as imp_repo
 from physicsai_core.db.repositories import train as train_repo
-from physicsai_core.db.tables import curations, spdm_imports
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import check_dataset_input, check_user_path, resolve_in_study
 
@@ -201,10 +200,8 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
 
 def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
     """재시도: 큐레이션·가져오기 행을 새 작업으로 다시 BUILDING."""
-    from sqlalchemy import update
-
     p = old["params"] or {}
     if old["job_type"] in ("CU_H3D_CURATE", "CU_T01_CURVES") and p.get("curation_id"):
-        conn.execute(update(curations).where(curations.c.id == p["curation_id"]).values(status="BUILDING", job_id=new_id))
+        cur_repo.set_building_job(conn, p["curation_id"], new_id)
     elif old["job_type"] == "SPDM_IMPORT" and p.get("import_id"):
-        conn.execute(update(spdm_imports).where(spdm_imports.c.id == p["import_id"]).values(status="BUILDING", job_id=new_id))
+        imp_repo.set_building_job(conn, p["import_id"], new_id)

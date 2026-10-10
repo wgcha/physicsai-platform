@@ -58,3 +58,12 @@ def update_cas(conn: Connection, study_id: str, version: int | None, **values: A
     if r.rowcount != 1:
         raise DomainError("VERSION_CONFLICT", "다른 사용자가 먼저 수정했습니다. 새로 고친 뒤 다시 시도하세요", status=409)
     return require(conn, study_id)
+
+
+def set_final_model(conn: Connection, study_id: str, model_id: str | None, user_id: str) -> dict[str, Any]:
+    """Final 모델 지정·해제(§10.4). 해제(None)면 지정자·시각도 비운다."""
+    return update_cas(
+        conn, study_id, None, final_model_id=model_id,
+        final_set_by=user_id if model_id else None,
+        final_set_at=func.now() if model_id else None,
+    )

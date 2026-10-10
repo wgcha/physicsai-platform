@@ -5,10 +5,9 @@ from __future__ import annotations
 import time
 from typing import Any
 
-from sqlalchemy import text
-
 from physicsai_core.db import MIGRATION_HEAD
 from physicsai_core.db.repositories import env_checks as env_repo
+from physicsai_core.db.repositories import system as system_repo
 from physicsai_core.db.repositories import workers as workers_repo
 from physicsai_core.env_check import item, pending_worker_items
 from physicsai_core.errors import DomainError
@@ -30,9 +29,9 @@ def _api_items(ctx: AppContext, token: str | None, rid: str) -> list[dict[str, A
     head = None
     try:
         with ctx.engine.connect() as conn:
-            conn.execute(text("select 1"))
+            system_repo.ping(conn)
             ms = int((time.time() - t0) * 1000)
-            head = conn.execute(text("select version_num from alembic_version")).scalar()
+            head = system_repo.migration_version(conn)
         out.append(item("db.connection", "DATABASE", "OK", f"{ms} ms", "API", {"latency_ms": ms}))
     except Exception as exc:  # noqa: BLE001
         out.append(item("db.connection", "DATABASE", "FAIL", f"DB 연결 실패: {type(exc).__name__}", "API"))

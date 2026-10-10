@@ -20,11 +20,9 @@ PKG_ROOTS = {
     "physicsai_worker": REPO / "worker" / "physicsai_worker",
 }
 
-# 규칙 4 허용 목록(services/ 기준 상대경로, R5에서 비운다). 늘어나면 실패한다.
-SERVICE_SQL_ALLOWED: set[str] = {
-    "jobs.py", "studies.py", "env_checks.py", "stage1_train_data.py", "stage3_model.py", "stage5_optimize.py",
-    "job_params/stage1_train_data.py", "job_params/stage2_curation.py",
-}
+# 규칙 4: 예외 없음(서비스 SQL은 저장소 함수로 옮김, refactor-plan R5).
+SERVICE_SQL_ALLOWED: set[str] = set()
+
 # 규칙 6: 예외 없음(제어 예외는 signals, 수집 간격은 steps/_collect).
 STEP_BACKREF_ALLOWED: set[str] = set()
 
