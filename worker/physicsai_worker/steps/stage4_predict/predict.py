@@ -18,8 +18,8 @@ from physicsai_core.parsers.name_value import read_name_value_csv
 from physicsai_core.parsers.xydata import parse_xydata
 from physicsai_core.tpl_render import render_tpl
 
-from ..signals import StepSkipped
-from .common import load_model, verify_model_integrity
+from ...signals import StepSkipped
+from ..common import load_model, verify_model_integrity
 
 
 def _P(ctx: Any) -> str:

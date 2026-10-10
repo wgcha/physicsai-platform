@@ -12,7 +12,7 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json, write_text
 from physicsai_core.paths import PathError, check_dataset_input, check_user_path, file_safety_problem
 
-from .common import path_failure
+from ..common import path_failure
 
 
 def _ds(ctx: Any) -> tuple[str, str]:

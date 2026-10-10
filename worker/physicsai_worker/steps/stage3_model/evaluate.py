@@ -11,7 +11,7 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json
 from physicsai_core.parsers.score import parse_scores
 
-from .common import load_model, verify_model_integrity
+from ..common import load_model, verify_model_integrity
 
 
 def _E(ctx: Any, m: dict[str, Any]) -> str:

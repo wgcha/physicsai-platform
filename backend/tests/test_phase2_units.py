@@ -315,7 +315,7 @@ def test_spdm_access_only_in_spdm_module():
             assert f.name in allowed, f
     # SPDM 경로 접근은 spdm.check_spdm_path/scan/open_read/probe_roots로만
     for rel in ("backend/physicsai_api/services/phase2_params.py", "backend/physicsai_api/services/inspect2.py",
-                "worker/physicsai_worker/steps/spdm_import.py", "worker/physicsai_worker/env_check.py"):
+                "worker/physicsai_worker/steps/stage2_curation/spdm_import.py", "worker/physicsai_worker/env_check.py"):
         src = (REPO / rel).read_text(encoding="utf-8")
         assert re.search(r"spdm\.(check_spdm_path|scan|open_read|probe_roots)", src), rel
     tree = ast.parse((REPO / "backend" / "physicsai_core" / "spdm.py").read_text(encoding="utf-8"))

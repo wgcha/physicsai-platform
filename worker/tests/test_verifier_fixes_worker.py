@@ -157,7 +157,7 @@ def test_package_hardlink_or_copy(client, engine, loaded_config, worker_factory,
     assert w.run_once_slot() == "SUCCEEDED"
     ds_id = client.get(f"{API}/jobs/{j['id']}", headers=P).json()["result"]["dataset_id"]
     if link_fails:
-        from physicsai_worker.steps import package
+        from physicsai_worker.steps.stage3_model import package
 
         def no_link(*a, **k):
             raise OSError(18, "Invalid cross-device link")

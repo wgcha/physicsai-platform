@@ -14,7 +14,7 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json
 from physicsai_core.paths import PathError, assert_writable
 
-from .common import path_failure
+from ..common import path_failure
 
 CHUNK = 1024 * 1024
 

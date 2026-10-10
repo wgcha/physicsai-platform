@@ -15,8 +15,8 @@ from physicsai_core.hpc.command import map_path
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec
 from physicsai_core.parsers.name_value import read_name_value_csv
 
-from ..signals import EnterWaitingHpc, StepSkipped
-from . import _collect
+from ...signals import EnterWaitingHpc, StepSkipped
+from .. import _collect
 
 
 def _paths(ctx: Any) -> tuple[str, str]:
