@@ -1350,3 +1350,7 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 | B24 | §9.1 치환 값 | `.bat`·`.cmd` 실행 파일이거나 `@cmd_c`를 쓰는 템플릿은 치환 값에 `; , = ( )`도 거부(실행 파일 경로 자체는 제외) |
 | B25 | §11.5 WindowsJobLimiter | `OpenThread` 실패 또는 `ResumeThread` = (DWORD)-1 → `TerminateProcess` + `TerminateJobObject` 후 step FAILED `JOB_OBJECT_ASSIGN_FAILED` |
 | B26 | §8.6 MR_VALIDATE | 워커가 `log_file`(파일 이름만·직계·링크 금지·안전 문자)과 psmdl·pscfg(링크·폴더 밖 실경로 금지)를 다시 검증, 위반 시 `INPUT_INVALID` |
+
+## 변경 메모 (Plan, 2026-10-10 — 소스 구조 정리)
+
+§21 파일 표의 개별 파일 위치는 [architecture.md](../architecture.md)가 우선한다(phase2.md 변경 메모 P1). 소유권 경계는 그대로.

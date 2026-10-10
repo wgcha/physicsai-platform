@@ -1,6 +1,6 @@
 # AGENTS.md — 저장소 작업 규칙
 
-계약: 1차 [docs/contracts/platform.md](docs/contracts/platform.md), 2차 [docs/contracts/phase2.md](docs/contracts/phase2.md)(2차가 바꾸는 1차 규칙은 phase2.md §2.3, 2차 문서 우선). 계약과 다르게 구현해야 하면 먼저 Plan에 계약 수정을 요청한다(해당 문서 끝 "변경 메모"에 기록).
+구조 지도: [docs/architecture.md](docs/architecture.md) (파일 위치는 이 문서 우선). 계약: 1차 [docs/contracts/platform.md](docs/contracts/platform.md), 2차 [docs/contracts/phase2.md](docs/contracts/phase2.md)(2차가 바꾸는 1차 규칙은 phase2.md §2.3, 2차 문서 우선). 계약과 다르게 구현해야 하면 먼저 Plan에 계약 수정을 요청한다(해당 문서 끝 "변경 메모"에 기록).
 
 ## 역할 분리
 

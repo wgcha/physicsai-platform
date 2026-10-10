@@ -1379,3 +1379,9 @@ AGENTS.md 역할표에 `deploy/**`를 Impl-Backend 소유로 추가한다(이번
 | C26 | 1차 §11·운영 로그 | 백엔드·워커 회전 파일 로그: 설정 `logging.dir`(빈 값 = 작업 폴더 `./logs` = 설치본 `<install_root>\logs`, AI 루트·SPDM 밖), `logging.max_mb`(기본 20), `logging.backups`(기본 10) → `backend.log`·`worker.log`. 모든 레코드에 오류 묶음과 같은 마스킹. 폴더 생성 실패 시 콘솔만(기동 계속). 시연은 추가로 `*.out.log`(표준 출력) |
 | C27 | 배포 호환성 | `migrations/alembic.ini`를 ASCII 전용으로(Windows 로캘 인코딩으로 읽혀 깨지는 문제). `install.bat`·`update.bat`·`start-demo.bat`·`stop-demo.bat`에서 `PSModulePath`를 비우고 Windows PowerShell 5.1 실행(pwsh 7에서 불러도 5.1 기본 모듈 사용) |
 | C28 | 검증(CI) | `.github/workflows/ci.yml`: linux(test-all + collect-offline dry-run), windows(`-m windows` skip=실패 → pytest 전체 → ps1 구문 검사 pwsh 7·5.1 → collect-offline 실제 → install 실제 설치·작업 등록 확인·해제 → 시연 원클릭). V-JO-1~3, V2-EC-4, V2-DEP-1·2의 Windows 부분은 CI 러너 결과로 증적(러너 기준). 실패 로그는 `scripts/ci_annotate.py`로 `::error` 주석 |
+
+## 변경 메모(Plan, 2026-10-10 — 소스 구조 정리)
+
+| # | 위치 | 내용 |
+|---|---|---|
+| P1 | 1차 §21.1·§21.2, 이 문서 §19.1·§19.2 파일 표 | 동작 불변 리팩터링([refactor-plan.md](../refactor-plan.md))으로 파일 위치가 바뀐다. 파일 표는 **소유권 경계**(`backend/**`·`worker/**`·`frontend/**`) 기준으로만 유효하고, 개별 파일 위치는 [architecture.md](../architecture.md)가 우선한다. `worker/physicsai_worker/claim.py`(미사용 shim)는 삭제한다. 공개 API·openapi·DB·설정 키·job_type·step_key는 바뀌지 않는다 |
