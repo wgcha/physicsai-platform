@@ -25,72 +25,74 @@
 
 ## 1. 현재 구조 지도
 
-줄 수는 `wc -l` 기준. "단계"는 ①학습데이터 생성 ②데이터 정리 ③데이터셋·모델 ④단일 예측 ⑤최적화, "공통"은 단계 무관.
+백엔드·워커·시험(§1.1~§1.4)은 리팩터링 R0~R11 실행 후 기준(브랜치 `claude/phase3`, 커밋 `e125e68`), 프런트·스크립트(§1.5~§1.6)는 기준 커밋 `b4f7817` 그대로. 줄 수는 `wc -l` 기준. "단계"는 ①학습데이터 생성 ②데이터 정리 ③데이터셋·모델 ④단일 예측 ⑤최적화, "공통"은 단계 무관. 리팩터링 전 위치·문제는 §2·§3(근거)과 refactor-plan.md에 남긴다.
 
-### 1.1 `backend/physicsai_core` (공용 라이브러리, 3,900줄 남짓)
+### 1.1 `backend/physicsai_core` (공용 라이브러리)
 
-| 파일 | 줄 | 단계 | 책임 |
+| 위치 | 줄 | 단계 | 책임 |
 |---|---:|---|---|
-| `config.py` | **897** | 공통 | 설정 스키마(22–440) + 로더(441–560) + 검증 `validate_settings`(569–786, `noqa: C901`) + 2차 검증(787–860) + 파생값(861–897) |
-| `paths.py` | 300 | 공통 | 경로 검사(§17.3, B20·B23), Study 경로, 백업 이동, 표시 경로 |
-| `commands.py` | 277 | 공통 | 명령 템플릿 사양·펼침 |
-| `childenv.py`, `errors.py`, `fileutil.py`, `limits.py`, `logsetup.py`, `state_machine.py`, `job_types.py`, `features.py` | 40–223 | 공통 | |
-| `env_check.py`(47), `error_bundle.py`(143) | | 공통(운영) | 환경 점검 항목·오류 묶음. **`error_bundle.py`에 `BundleMasker`(20)가 있어 `logsetup.py:16`이 오류 묶음 모듈을 import한다** |
-| `parsers/log_errors.py` | 31 | 공통 | `ErrorDetector` + **`Masker`(24)** |
-| `hpc/` (`gateway`, `command`, `adapter`, `none`) | 311 | 공통(①-4·④ 검증) | PBS 게이트웨이 |
+| `config/` | 999 | 공통 | `schema.py`(424: Settings·*Cfg·키 상수·ConfigIssue·LoadedConfig), `rules.py`(41: 경로 문자열 규칙·`_compile`), `validate.py`(235: `validate_settings`), `validate_stages.py`(77: `_validate_phase2`), `loader.py`(99: `load_config`·`load_config_dict`·`absent_keys`·`config_warnings`), `derived.py`(43: Altair 파생·`effective_altair`·`redacted_settings`), `__init__`(80: 공개 이름 전부 재노출 — `from physicsai_core.config import …` 경로 불변) |
+| `paths.py` | 307 | 공통 | 경로 검사(§17.3, B20·B23), `allowed_roots(settings, imports=)`, `is_under`, Study 경로, 백업 이동, 표시 경로 |
+| `masking.py` | 65 | 공통 | `Masker`(step 로그), `BundleMasker`·`SECRET_ENV_PATTERNS`(오류 묶음·운영 로그), `bundle_masker(settings)` |
+| `naming.py` | 9 | 공통 | ①·④ 공용 이름 규칙 `NAME_RE`·`RUN_KEY_RE`·`TPL_NAME`(`stage4_predict/param_sets`가 import해 속성 유지) |
+| `commands.py`(277), `job_types.py`(218), `tpl_render.py`(56), `childenv.py`, `errors.py`, `fileutil.py`, `limits.py`, `logsetup.py`, `state_machine.py`, `features.py` | | 공통 | |
+| `env_check.py`(47), `error_bundle.py`(110) | | 공통(운영) | 환경 점검 항목·오류 묶음 항목 생성(마스커는 `masking.py`) |
+| `parsers/` | | 공통 | `log_errors.py`(21: `ErrorDetector`), `name_value.py`(20: `read_name_value_csv`, ①·④ 공용) |
+| `hpc/` | | 공통 | PBS 게이트웨이(`gateway`, `command`(+`map_path`), `adapter`, `none`) |
 | `db/tables.py`(575), `db/schema_0001.py`(393), `db/engine.py` | | 공통 | SQLAlchemy Core 메타데이터 |
-| `db/repositories/jobs.py` | **653** | 공통 | 작업 CRUD + 대기열 + claim/renew/release/lease(160–520) + 종료 부수효과 `_side_effects_on_end`(166–196, 7개 테이블 직접 UPDATE) + 취소·이동 |
-| `db/repositories/*.py` 나머지 16개 | 21–176 | 엔터티별 | |
-| `train_params.py`(233), `train_tpl.py`(84), `doe_types.py`(94), `doe_samples.py`(162) | | ① | |
-| `curation.py`(253), `spdm.py`(215) | | ② | |
-| `dataset_split.py`(73), `parsers/loss.py`(140), `parsers/score.py`(26) | | ③ | |
-| `param_sets.py`(347), `tpl_render.py`(56), `nearest.py`(82), `parsers/xydata.py`(67) | | ④(①이 일부 공유) | `train_params`가 `param_sets.NAME_RE`·`TPL_NAME`, `train_tpl`이 `tpl_render`를 쓴다 |
-| `optimize.py` | 281 | ⑤ | |
+| `db/repositories/jobs.py` | 312 | 공통 | 작업 생성·조회(`list_with_study_title`, `succeeded_predicts`, `latest_by_stage`)·종료 부수효과(엔터티 저장소 `fail_*` 호출)·취소·대기열 이동 |
+| `db/repositories/job_lease.py` | 391 | 공통 | claim/renew/release(CAS lease)·리퍼·`LeaseLost`·`ClaimRace`·lease 토큰으로 지키는 `step_update`/`job_update`/`patch_result`/`add_warning`. 의존은 job_lease → jobs 한 방향 |
+| `db/repositories/system.py` | 17 | 공통(운영) | `ping`, `migration_version`(헬스 체크) |
+| `db/repositories/*.py` 나머지 | 21–176 | 엔터티별 | `hpc.list_for_job_with_elapsed`·`get_many`, `studies.set_final_model`, `train.set_tpl_generated`, `{train,curations,spdm_imports}.set_building_job` 포함 |
+| `stage1_train_data/` | | ① | `train_params.py`(233), `train_tpl.py`(84), `doe_types.py`(94), `doe_samples.py`(162) |
+| `stage2_curation/` | | ② | `curation.py`(253), `spdm.py`(214) |
+| `stage3_model/` | | ③ | `dataset_split.py`(73), `loss.py`(140), `score.py`(26) |
+| `stage4_predict/` | | ④ | `param_sets.py`(345), `nearest.py`(82), `xydata.py`(67) |
+| `stage5_optimize/` | | ⑤ | `optimize.py`(278) |
 
-문제: 35개 모듈이 평평하게 놓여 있어 단계별 파일을 찾기 어렵다. 공용 유틸(경로·명령·마스킹)과 단계 도메인 모듈이 한 층에 섞여 있다.
+### 1.2 `backend/physicsai_api` (FastAPI)
 
-### 1.2 `backend/physicsai_api` (FastAPI, 4,200줄 남짓)
-
-| 파일 | 줄 | 단계 | 책임·문제 |
+| 위치 | 줄 | 단계 | 책임 |
 |---|---:|---|---|
-| `routers/*.py` 15개 | 17–86 | 자원별 | 얇음(서비스 호출만). SQL 없음(`test_routers_have_no_sql`) — **양호** |
-| `schemas/__init__.py` | **854** | 전 단계 | 모든 요청·응답 모델이 한 파일. 1차(1–562) + "2차"(563–854) 구획 |
-| `services/jobs.py` | **583** | 전 단계 | ③④ params 모델(52–125) + `_prepare` 단계별 if 사슬(145–249) + 생성·조회·로그·취소·재시도·대기열·산출물·HPC·input.zip(250–583). raw SQL(286–297, 488–500), 지역 import(157, 488) |
-| `services/phase2_params.py` | 446 | ①②⑤ | **이력 기준 이름**. ①②⑤ params 모델(37–186) + `prepare` if 사슬(267–406) + `after_insert`·`on_retry`(407–446). raw UPDATE(438–446) |
-| `services/studies.py` | 485 | ③④①→④ | Study CRUD(46–135) + 경로 검사(136–201) + 데이터셋·모델·Final(202–287, ③) + 파라미터 세트·샘플·예측 검사(288–379, ④) + ①→④ 생성(380–485, F). raw SQL(58), 지역 import(274, 386) |
-| `services/train.py` | 213 | ① | 지역 import + raw SQL(182–187) |
-| `services/curations.py` | 131 | ② | |
-| `services/optimize.py` | 93 | ⑤ | raw SQL(76–77) |
-| `services/inspect2.py` | 92 | ①②④ | **이력 기준 이름**("2차 inspect") — `studies.inspect_path`의 2차 용도 분기 |
-| `services/common.py`(217), `system.py`(132), `env_checks.py`(153), `error_bundle.py`(94) | | 공통·운영 | `env_checks.py:33–35` raw SQL(헬스 체크) |
+| `routers/*.py` 15개 | 17–86 | 자원별 | 파일·함수 이름 그대로(operationId 동결). 서비스 호출만, SQL·`physicsai_core.db` 없음(`test_layering` 규칙 3) |
+| `schemas/` | 970 | 전 단계 | `common`(44), `shell`(199), `jobs`(126), `studies`(68), `stage1_train_data`(148), `stage2_curation`(78), `stage3_model`(78), `stage4_predict`(106), `stage5_optimize`(62), `ops`(46). `__init__`가 전부 재노출(`S.Name` 불변) |
+| `services/jobs.py` | 347 | 전 단계 | 작업 생성 오케스트레이션(`job_params` 호출)·조회·로그·취소·재시도·대기열·산출물·HPC·input.zip |
+| `services/job_params/` | 812 | 전 단계 | `base.py`(48: `_P`, `HpcOverrides`, `prerequisite_missing`, `invalid_errors`(1차 형식), `invalid_at`(2차 형식), `check_feature`), `stage1_train_data.py`(181), `stage2_curation.py`(209, `resolve_source`), `stage3_model.py`(146, DATASET_CREATE 생성·재시도 후처리 포함), `stage4_predict.py`(92), `stage5_optimize.py`(84), `__init__.py`(52: `PARAM_MODELS` 병합, `parse_params`, `prepare`(check_feature 먼저)·`after_insert`·`on_retry` 디스패치) |
+| `services/studies.py` | 111 | 공통 | Study 목록·조회·생성·수정·보관, 단계 상태 |
+| `services/path_inspect.py` | 165 | ①②③④ | 경로 확인(1차 용도 + 2차 용도), `inspect_model_folder`, `starters_in` |
+| `services/stage1_train_data.py`(208), `stage2_curation.py`(131), `stage3_model.py`(103), `stage4_predict.py`(229), `stage5_optimize.py`(88) | | 단계별 | ① 파라미터 표·tpl·DOE·run, ② 원천·큐레이션·가져오기 조회, ③ 데이터셋·모델·Final, ④ 파라미터 세트·샘플·예측 확인·①→④, ⑤ 최적화 조회·응답 후보 |
+| `services/common.py`(217), `system.py`(132), `env_checks.py`(152), `error_bundle.py`(95) | | 공통·운영 | raw SQL 없음(`test_layering` 규칙 4, 예외 0) |
 | `auth.py`(205), `main.py`(133), `context.py`, `deps.py`, `demo.py`(164), `serve.py`, `export_openapi.py` | | 공통 | |
 
-### 1.3 `worker/physicsai_worker` (3,500줄 남짓)
+### 1.3 `worker/physicsai_worker`
 
-| 파일 | 줄 | 단계 | 책임·문제 |
+| 위치 | 줄 | 단계 | 책임 |
 |---|---:|---|---|
-| `executor.py` | **574** | 공통 | 제어 예외 3종(41–54) + `LeaseKeeper`(55–83) + `Executor`(84–215) + `StepContext`(216–565: 경로·로그·진행률·산출물·`run_local` 351–480·`run_fanout` 481–557) + `_sha256`(566, `fileutil.sha256_file`과 중복) |
-| `runtime.py` | 369 | 공통 | 워커 스레드·claim 루프·HPC 폴러·설정 재적재. `COLLECT_STABLE_INTERVAL_S`(40)를 정의만 하고 쓰지 않음 — step 2곳이 지역 import로 읽는다 |
-| `steps/train.py` | **717** | ① | ①-1·①-3·①-4·①-5·①-6 작업 5종의 step 22개가 한 파일 |
-| `steps/curation.py` | 323 | ② | 미리보기·h3d 큐레이션·T01 곡선 |
-| `steps/{dataset,package,model_register,evaluate}.py` | 75–159 | ③ | |
-| `steps/{predict,verify}.py` | 261, 166 | ④ | |
-| `steps/optimize.py`(158), `steps/spdm_import.py`(104) | | ⑤, ② | |
-| `steps/{common,launcher}.py` | 39, 64 | 공통 | |
-| `env_check.py`(236), `limiter/`(537), `resources.py`, `housekeeping.py`, `lockfile.py`, `__main__.py` | | 공통 | |
-| `claim.py` | 3 | — | **아무도 import하지 않는 재노출 shim**(계약 §21.1에만 이름이 남음) |
+| `executor.py` | 198 | 공통 | `LeaseKeeper`, `Executor`(step 체인 실행). `StepContext`를 import해 모듈 속성으로 둔다(시험 monkeypatch 대상) |
+| `step_context.py` | 383 | 공통 | `StepContext`: 경로·로그·진행률·산출물·`run_local`·`run_fanout`(로거 이름 `physicsai_worker.executor` 유지) |
+| `signals.py` | 17 | 공통 | 제어 예외 `Cancelled`, `StepSkipped`, `EnterWaitingHpc` |
+| `runtime.py`(369), `env_check.py`(236), `limiter/`, `resources.py`, `housekeeping.py`, `lockfile.py`, `__main__.py` | | 공통 | (`claim.py` 삭제) |
+| `steps/__init__.py`, `common.py`, `launcher.py`, `_collect.py`(`COLLECT_STABLE_INTERVAL_S`) | | 공통 | `HANDLERS` = 다섯 단계 패키지 병합(`test_step_registry`가 job_types와 대조) |
+| `steps/stage1_train_data/` | 781 | ① | `_shared.py`(74: `TPL_REL`·`TPL_NAME`·`_doe`·`_D`·`_R`·`_match_files`·`_summary`·`_write_collected_json`), `extract.py`(①-1), `doe_gen.py`(①-3), `solve.py`(①-4), `result_import.py`(①-5), `resp_extract.py`(①-6) |
+| `steps/stage2_curation/` | 461 | ② | `source.py`(원천 루트·대상 수집·큐레이션 등록 공용), `preview.py`(②-1·②-3), `h3d_curate.py`(②-2), `t01_curves.py`(②-4), `spdm_import.py`(G) |
+| `steps/stage3_model/` | | ③ | `dataset.py`, `package.py`, `model_register.py`, `evaluate.py` |
+| `steps/stage4_predict/` | | ④ | `predict.py`(248), `verify.py`(157) |
+| `steps/stage5_optimize/` | | ⑤ | `optimize.py`(158) |
+
+steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 6, 예외 0). 단계 간 step import 없음(`map_path` → `core/hpc/command`, `read_name_value_csv` → `core/parsers/name_value`).
 
 ### 1.4 시험
 
-| 위치 | 내용·문제 |
+| 위치 | 내용 |
 |---|---|
-| `backend/tests/physicsai_test_support.py`(677) | PG 임시 클러스터·가짜 도구 설치·설정 dict·가짜 대시보드·API 클라이언트·워커 팩토리·폴더 생성기. 백엔드·워커 시험 공용(`worker/tests/conftest.py`가 `sys.path`에 `backend/tests`를 넣어 사용) |
-| `backend/tests/phase2_helpers.py`(77) | ① 시험 보조(백엔드 1개 + 워커 5개 파일이 사용) — 이력 기준 이름 |
-| `backend/tests/test_*.py` 15개 | 이름이 이력 기준: `test_phase2_units.py`(410: 설정·argv·tpl·DOE·T10b·알림·정적 보안·배포가 한 파일), `test_verifier_fixes.py`, `test_phase2_api.py`, `test_phase2_db.py` |
-| `worker/tests/test_*.py` 12개 | `test_phase2_{train,curation,optimize,admin,fixes}.py`, `test_verifier_fixes_worker.py` — 단계·계층이 아닌 작성 시기로 묶임 |
-| `backend/tests/fake_tools/` | 백엔드·워커 시험과 **배포 시연 모드**가 공유(§0) |
-| 정적 시험의 하드코딩 경로 | `test_phase2_units.py:310–321`(SPDM 허용 파일 **basename** 목록과 4개 상대경로, `backend/physicsai_core/spdm.py`), `test_static_security.py:83`(`worker/physicsai_worker/executor.py`), `worker/tests/test_hpc.py:60`(`parents[2]` 기준 `hpc/adapter.py`), `worker/tests/test_hpc.py:128`(`runtime.COLLECT_STABLE_INTERVAL_S` monkeypatch), `worker/tests/test_phase2_admin.py:223–234`(`physicsai_worker.executor.StepContext.run_local` monkeypatch) — **파일을 옮기면 같은 커밋에서 고쳐야 한다(약화 금지)** |
-| 레이어 시험 | **없음**(라우터 SQL 금지만 있음) |
+| `backend/tests/physicsai_test_support.py`(677), `conftest.py`, `fake_tools/`, `data/` | 그대로(공용 픽스처, 배포 시연 모드 공유 §0). `data/operation_ids.txt` = operationId 스냅샷 |
+| `backend/tests/helpers_stage1.py` | ← `phase2_helpers.py`(① 시험 보조) |
+| `backend/tests/common/` | `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6) |
+| `backend/tests/` 루트 | 여러 주제 혼합으로 보류(H3): `test_api`, `test_core_units`, `test_demo`, `test_phase2_api`, `test_phase2_units`, `test_verifier_fixes` |
+| `worker/tests/runtime/` | `test_queue_lease`, `test_limiter`, `test_windows_job`, `test_hpc`, `test_step_registry`(신규) |
+| `worker/tests/stage1_train_data/test_stage1_train.py`, `stage2_curation/test_stage2_curation.py`, `stage5_optimize/test_stage5_optimize.py`, `ops/test_ops_admin.py`, `e2e/{test_e2e_chain,test_demo_e2e}.py` | ← `test_phase2_{train,curation,optimize,admin}.py`, e2e 2개 |
+| `worker/tests/` 루트 | 보류(H3): `test_phase2_fixes`, `test_verifier_fixes_worker` |
+| 정적 시험의 경로 | `test_phase2_units.py` SPDM 검사는 저장소 상대경로로 정확히 대조(`core/stage2_curation/spdm.py`, `core/config/{schema,validate}.py`, `api/services/{job_params/stage2_curation,path_inspect}.py`, `worker/steps/stage2_curation/spdm_import.py` 등), `test_static_security.py` timeout 검사는 `executor.py`+`step_context.py`, `test_hpc.py`는 `REPO` 기준, COLLECT 간격 monkeypatch 대상은 `physicsai_worker.steps._collect` |
 
 ### 1.5 `frontend/src` (7,900줄 남짓, 생성물 제외)
 
@@ -112,11 +114,13 @@
 
 - `scripts/`: 얇은 래퍼(4–17줄) + `ci_annotate.py`. 정리 불필요.
 - `deploy/`: Windows 배포 ps1·bat + `demo/demo_setup.py`(574, 단일 CLI 스크립트, `physicsai_*`를 import하지 않음). 정리 대상 아님(시험 `test_demo.py`·`test_phase2_units.py:340–399`가 내용 검사).
-- `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config.py`**(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/phase2.ts:55` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
+- `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config/schema.py`**(리팩터링 전 `config.py`)(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/phase2.ts:55` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
 
 ---
 
 ## 2. 의존 방향 점검 결과
+
+리팩터링 전(`b4f7817`) 점검 결과. 위반은 R1~R5에서 모두 없앴고 지금은 `backend/tests/common/test_layering.py`가 규칙 1·2·3·4·6을 예외 없이 강제한다.
 
 | 규칙 | 결과 | 근거 |
 |---|---|---|
@@ -146,7 +150,7 @@
 | P9 | 큰 단일 파일 | `config.py` 897, `schemas/__init__.py` 854, `repositories/jobs.py` 653, `physicsai_test_support.py` 677, 프런트 `Stage4.tsx` 477·`Stage5.tsx` 447·`SolveCards.tsx` 430, `mock/phase2.ts` 965·`mock/server.ts` 798 |
 | P10 | 이력 기준 이름(phase2·verifier_fixes) | 서비스 2개, 시험 8개, 프런트 목·시험 2개 — 단계로 찾을 수 없음 |
 
-부수 발견(동작 변경이라 리팩터링 범위 밖, 별도 결정 필요): `core/error_bundle.py:117`가 `os.path.realpath(p).startswith(os.path.realpath(study_root))`로 Study 하위 여부를 판정 — 접두 비교라 `…/abc`와 `…/abc2`를 구분하지 못한다. `paths._under`로 바꾸는 것은 동작 수정이므로 Impl-Backend 별도 커밋(버그 수정 + 시험)으로 처리한다.
+부수 발견(동작 변경이라 리팩터링 범위 밖, 별도 결정 필요): `core/error_bundle.py:117`가 `os.path.realpath(p).startswith(os.path.realpath(study_root))`로 Study 하위 여부를 판정 — 접두 비교라 `…/abc`와 `…/abc2`를 구분하지 못한다. `paths._under`로 바꾸는 것은 동작 수정이므로 Impl-Backend 별도 커밋(버그 수정 + 시험)으로 처리한다. → 처리됨: `d457f4d`(`is_under(real(p), real(study_root))`, 회귀 시험 `test_core_units::test_error_bundle_commands_head_requires_path_inside_study`).
 
 ---
 
