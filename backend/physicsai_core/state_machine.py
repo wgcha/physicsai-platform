@@ -73,6 +73,3 @@ def check_transition(src: str | None, dst: str) -> str:
     except KeyError:
         raise IllegalTransition(src, dst) from None
 
-
-def is_terminal(state: str) -> bool:
-    return state in TERMINAL

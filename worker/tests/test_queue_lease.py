@@ -202,7 +202,7 @@ def test_reaper_interrupts_expired(client, engine, settings_dict, loaded_config)
 def test_concurrent_claim_single_winner(client, engine, loaded_config):
     from physicsai_core.db.engine import make_engine
     from physicsai_core.db.repositories import jobs as jobs_repo
-    from physicsai_core.db.repositories.jobs import _ClaimRace
+    from physicsai_core.db.repositories.jobs import ClaimRace
 
     ai = loaded_config.settings.storage.ai_root
     for i in range(2):
@@ -216,7 +216,7 @@ def test_concurrent_claim_single_winner(client, engine, loaded_config):
         try:
             with e.begin() as c:
                 results.append(jobs_repo.claim_slot(c, wid, 30))
-        except _ClaimRace:
+        except ClaimRace:
             results.append(None)
 
     ts = [threading.Thread(target=go, args=(engine, "w1")), threading.Thread(target=go, args=(eng2, "w2"))]

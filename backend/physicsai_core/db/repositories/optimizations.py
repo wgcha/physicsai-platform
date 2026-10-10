@@ -21,10 +21,6 @@ def get_opt(conn: Connection, oid: str) -> dict[str, Any] | None:
     return row_dict(conn.execute(select(optimizations).where(optimizations.c.id == oid)).first())
 
 
-def opt_for_job(conn: Connection, job_id: str) -> dict[str, Any] | None:
-    return row_dict(conn.execute(select(optimizations).where(optimizations.c.job_id == job_id)).first())
-
-
 def list_opts(conn: Connection, study_id: str) -> list[dict[str, Any]]:
     q = select(optimizations).where(optimizations.c.study_id == study_id).order_by(optimizations.c.created_at.desc(), optimizations.c.id)
     return [row_dict(r) for r in conn.execute(q)]

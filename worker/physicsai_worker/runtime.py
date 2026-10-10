@@ -25,7 +25,7 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.db.repositories import workers as workers_repo
-from physicsai_core.db.repositories.jobs import _ClaimRace
+from physicsai_core.db.repositories.jobs import ClaimRace
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcJobGateway, get_hpc_gateway
 from physicsai_core.limits import EffectiveLimits, detect, limits_from_settings
 from physicsai_core.paths import register_protected_roots
@@ -134,7 +134,7 @@ class Worker:
         try:
             with self.engine.begin() as conn:
                 return fn(conn)
-        except _ClaimRace:
+        except ClaimRace:
             return None
 
     def run_once_slot(self) -> str | None:

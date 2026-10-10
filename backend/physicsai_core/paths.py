@@ -47,7 +47,7 @@ def assert_writable(path: str) -> None:
         pass
     for r in _PROTECTED_ROOTS:
         rr = {r, real(r)}
-        if any(_under(c, x) for c in cands for x in rr):
+        if any(is_under(c, x) for c in cands for x in rr):
             raise StepFailure("PATH_UNSAFE", f"SPDM 경로에는 쓸 수 없습니다: {path}")
 WINDOWS_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
 
@@ -96,7 +96,7 @@ def real(p: str) -> str:
     return os.path.normpath(os.path.realpath(p))
 
 
-def _under(child: str, parent: str) -> bool:
+def is_under(child: str, parent: str) -> bool:
     c, pr = _cmp(child), _cmp(parent).rstrip(os.sep)
     return c == pr or c.startswith(pr + os.sep)
 
@@ -147,7 +147,7 @@ def check_user_path(
             continue
         rr = real(r)
         for cand in (os.path.normpath(r), rr):
-            if _under(norm, cand):
+            if is_under(norm, cand):
                 matched, matched_real = cand, rr
                 break
         if matched:
@@ -168,7 +168,7 @@ def check_user_path(
         if is_link_or_reparse(cur):
             raise PathError("PATH_UNSAFE", "심볼릭 링크·junction이 포함된 경로입니다", path=raw)
     # 입력도 루트와 같은 방식(realpath)으로 풀어 루트 안인지 다시 확인
-    if os.path.lexists(norm) and not _under(real(norm), matched_real):
+    if os.path.lexists(norm) and not is_under(real(norm), matched_real):
         raise PathError("PATH_UNSAFE", "링크로 루트 밖을 가리키는 경로입니다", path=raw)
     if must_exist:
         if expect == "dir" and not os.path.isdir(norm):
@@ -185,9 +185,9 @@ def check_dataset_input(path: str, ai_root: str) -> list[str]:
     """
     p, roots = real(path), (real(ai_root), os.path.normpath(ai_root))
     for root in roots:
-        if not _under(p, root) and not _under(os.path.normpath(path), root):
+        if not is_under(p, root) and not is_under(os.path.normpath(path), root):
             continue
-        base = p if _under(p, root) else os.path.normpath(path)
+        base = p if is_under(p, root) else os.path.normpath(path)
         rel = os.path.relpath(base, root)
         parts = [] if rel == "." else rel.split(os.sep)
         if not parts:

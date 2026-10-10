@@ -125,12 +125,3 @@ def count_solve_jobs(conn: Connection, doe_id: str) -> int:
     )
     return int(conn.execute(q).scalar_one())
 
-
-def latest_ready_doe(conn: Connection, study_id: str) -> dict[str, Any] | None:
-    q = (
-        select(train_does)
-        .where(and_(train_does.c.study_id == study_id, train_does.c.status == "READY"))
-        .order_by(train_does.c.created_at.desc())
-        .limit(1)
-    )
-    return row_dict(conn.execute(q).first())

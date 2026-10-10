@@ -19,12 +19,9 @@ NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")
 # 줄바꿈·제어문자·" $ [ ] { } ; | 등은 TCL·cfg·JSON 해석기로 넘어가므로 거부한다.
 FIELD_RE = re.compile(r"[\w \-./():+]*")
 FIELD_PATTERN = r"^[\w \-./():+]{1,200}$"
-STUDY_FOLDER_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 STATS = ("MAX", "MIN", "ABSMAX")
 GOALS = ("NONE", "MINIMIZE", "MAXIMIZE", "CONSTRAINT")
 BOUNDS = ("<=", ">=", "==")
-METHODS = ("ARSM", "GRSM", "SQP")
-APPROACHES = ("OPT", "DOE")
 
 # 원본 RUN_CONFIG 키(GUI:859-889 + FUNC:364-368) — 시험 V2-OP-2가 정확히 비교한다
 RUN_CONFIG_KEYS = (

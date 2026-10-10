@@ -16,7 +16,6 @@ from . import notifications as notif_repo
 from .jobs import row_dict
 
 ACTIVE = ("PENDING", "RUNNING")
-FINAL = ("DONE", "FAILED", "EXPIRED")
 
 
 def summarize(items: list[dict[str, Any]]) -> dict[str, int]:

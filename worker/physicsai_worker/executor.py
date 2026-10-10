@@ -6,7 +6,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
@@ -28,6 +27,7 @@ from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories.jobs import LeaseLost
 from physicsai_core.errors import DomainError, StepFailure
+from physicsai_core.fileutil import sha256_file
 from physicsai_core.job_types import JOB_TYPES
 from physicsai_core.limits import EffectiveLimits
 from physicsai_core.parsers.log_errors import ErrorDetector, Masker
@@ -316,7 +316,7 @@ class StepContext:
     def add_output(self, path: str, sha: bool = False) -> None:
         item: dict[str, Any] = {"rel": self.rel(path), "size": os.path.getsize(path)}
         if sha:
-            item["sha256"] = _sha256(path)
+            item["sha256"] = sha256_file(path)
         self.outputs["files"].append(item)
 
     def register_artifact(self, kind: str, path: str, content_type: str | None = None) -> str | None:
@@ -328,7 +328,7 @@ class StepContext:
         ctype = content_type or artifacts_repo.CONTENT_TYPES.get(ext, "text/plain")
         return self.ex.db(lambda c: artifacts_repo.insert(
             c, study_id=self.study["id"], job_id=self.ex.job_id, kind=kind, rel_path=self.rel(path), size=size,
-            sha256=_sha256(path), content_type=ctype,
+            sha256=sha256_file(path), content_type=ctype,
         ))
 
     # ---- 외부 프로그램 ----
@@ -561,14 +561,6 @@ class StepContext:
             raise LeaseLost(self.ex.job_id)
         if self.ex.cancel_requested():
             raise Cancelled()
-
-
-def _sha256(path: str) -> str:
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for b in iter(lambda: fh.read(1024 * 1024), b""):
-            h.update(b)
-    return h.hexdigest()
 
 
 __all__ = ["Executor", "StepContext", "Cancelled", "StepSkipped", "EnterWaitingHpc", "TEMPLATE_SPECS"]

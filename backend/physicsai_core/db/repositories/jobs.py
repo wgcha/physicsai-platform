@@ -25,21 +25,14 @@ from ...state_machine import (
     check_transition,
 )
 from ..tables import (
-    curations,
     datasets,
     job_queue_seq,
     job_steps,
     jobs,
     models,
-    optimizations,
-    spdm_imports,
-    train_does,
     worker_slot,
 )
 from . import notifications as notif_repo
-
-TERMINAL_SQL = "('SUCCEEDED','FAILED','CANCELED','INTERRUPTED')"
-
 
 class LeaseLost(RuntimeError):
     """lease 소유권 상실. 이후 그 작업에 어떤 상태 쓰기도 하지 않는다."""
@@ -181,19 +174,21 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
             .values(eval_status="FAILED", row_version=models.c.row_version + 1)
         )
     # 2차 엔터티(phase2 §7.2): 작업 실패·취소·중단 → BUILDING/RUNNING 행 FAILED
+    # 엔터티 저장소가 이 모듈의 row_dict를 import하므로 지연 import(순환 회피)
+    from . import curations as cur_repo
+    from . import optimizations as opt_repo
+    from . import spdm_imports as imp_repo
+    from . import train as train_repo
+
     jt = job["job_type"]
     if jt == "TD_DOE_GEN":
-        conn.execute(update(train_does).where(and_(train_does.c.job_id == job["id"], train_does.c.status == "BUILDING"))
-                     .values(status="FAILED"))
+        train_repo.fail_building_doe(conn, job["id"])
     elif jt in ("CU_H3D_CURATE", "CU_T01_CURVES"):
-        conn.execute(update(curations).where(and_(curations.c.job_id == job["id"], curations.c.status == "BUILDING"))
-                     .values(status="FAILED"))
+        cur_repo.fail_building_curation(conn, job["id"])
     elif jt == "SPDM_IMPORT":
-        conn.execute(update(spdm_imports).where(and_(spdm_imports.c.job_id == job["id"], spdm_imports.c.status == "BUILDING"))
-                     .values(status="FAILED"))
+        imp_repo.fail_building_import(conn, job["id"])
     elif jt == "OPTIMIZE":
-        conn.execute(update(optimizations).where(and_(optimizations.c.job_id == job["id"], optimizations.c.status == "RUNNING"))
-                     .values(status="FAILED"))
+        opt_repo.fail_running_opt(conn, job["id"])
 
 
 def _interrupt(conn: Connection, job: dict[str, Any]) -> None:
@@ -326,7 +321,7 @@ def claim_slot(
         )
     )
     if r1.rowcount != 1 or r2.rowcount != 1:
-        raise _ClaimRace()
+        raise ClaimRace()
     _mark_started(conn, target.id, env_snapshot)
     if target.started_at is None:
         notif_repo.notify_job(conn, target.id, "JOB_STARTED")
@@ -334,7 +329,7 @@ def claim_slot(
     return get_job(conn, target.id)
 
 
-class _ClaimRace(RuntimeError):
+class ClaimRace(RuntimeError):
     pass
 
 
@@ -372,7 +367,7 @@ def claim_light(
         )
     )
     if r.rowcount != 1:
-        raise _ClaimRace()
+        raise ClaimRace()
     _mark_started(conn, target.id, env_snapshot)
     if target.started_at is None:
         notif_repo.notify_job(conn, target.id, "JOB_STARTED")

@@ -177,11 +177,6 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     ),
 }
 
-PHASE2_JOB_TYPES = (
-    "TD_EXTRACT_PARAMS", "TD_DOE_GEN", "TD_SOLVE", "TD_RESULT_IMPORT", "TD_RESP_EXTRACT", "CU_H3D_PREVIEW",
-    "CU_H3D_CURATE", "CU_T01_PREVIEW", "CU_T01_CURVES", "SPDM_IMPORT", "OPTIMIZE",
-)
-
 # step 표시명(phase2 §12.9 current_step_label, 한국어)
 STEP_LABELS: dict[str, str] = {
     "DS_SCAN": "h3d 수집·분할", "DS_YAML": "데이터셋 사양 작성", "EDSPY_DATASET_TRAIN": "학습 데이터셋 생성",

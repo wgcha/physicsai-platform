@@ -11,7 +11,7 @@ import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
@@ -467,10 +467,6 @@ def paths_overlap(a: str, b: str) -> bool:
 # ---------------------------------------------------------------------------
 
 
-def default_config_path() -> str:
-    return os.environ.get("PHYSICSAI_CONFIG", "config/platform.yaml")
-
-
 def _pydantic_issues(exc: ValidationError) -> list[ConfigIssue]:
     out = []
     for e in exc.errors():
@@ -892,6 +888,3 @@ def redacted_settings(s: Settings) -> dict[str, Any]:
     d = s.model_dump()
     d["database"] = {"url_env": s.database.url_env, "pool_size": s.database.pool_size}
     return d
-
-
-Profile = Literal["dev", "prod"]

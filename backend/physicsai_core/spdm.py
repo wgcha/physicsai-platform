@@ -16,10 +16,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import IO
 
-from .paths import MAX_PATH_LEN, PathError, WINDOWS_RESERVED, _under, is_link_or_reparse, real
+from .paths import MAX_PATH_LEN, PathError, WINDOWS_RESERVED, is_link_or_reparse, is_under, real
 
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
-CMD_META = set('&|<>^%!"')
 _NAME_BAD = re.compile(r"[\s&|<>^%!\";,=()\x00-\x1f\x7f]")
 
 
@@ -50,7 +49,7 @@ def check_spdm_path(raw: object, roots: Sequence[str]) -> str:
             continue
         rr = real(r)
         for cand in (os.path.normpath(r), rr):
-            if _under(norm, cand):
+            if is_under(norm, cand):
                 matched, matched_real = cand, rr
                 break
         if matched:
@@ -65,7 +64,7 @@ def check_spdm_path(raw: object, roots: Sequence[str]) -> str:
             break
         if is_link_or_reparse(cur):
             raise PathError("PATH_UNSAFE", "심볼릭 링크·junction이 포함된 경로입니다", path=raw)
-    if os.path.lexists(norm) and not _under(real(norm), matched_real):
+    if os.path.lexists(norm) and not is_under(real(norm), matched_real):
         raise PathError("PATH_UNSAFE", "링크로 SPDM 루트 밖을 가리키는 경로입니다", path=raw)
     if not os.path.isdir(norm):
         raise PathError("PATH_NOT_FOUND", "폴더가 없습니다", path=raw)

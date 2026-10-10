@@ -52,12 +52,6 @@ def copy_file(src: str, dst: str, progress: Callable[[int], None] | None = None,
     return total
 
 
-def copy_into_study(src: str, dst: str, progress: Callable[[int], None] | None = None,
-                    checkpoint: Callable[[], None] | None = None) -> int:
-    """Study 안으로 복사(phase2 §13.3 쓰기 헬퍼). 보호 루트(SPDM) 대상은 예외."""
-    return copy_file(src, dst, progress, checkpoint)
-
-
 def write_json(path: str, data: Any) -> int:
     _guard(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
