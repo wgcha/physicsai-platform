@@ -22,8 +22,8 @@ PKG_ROOTS = {
 
 # 규칙 4 허용 목록(R5에서 비운다). 늘어나면 실패한다.
 SERVICE_SQL_ALLOWED: set[str] = {"jobs.py", "optimize.py", "phase2_params.py", "studies.py", "train.py", "env_checks.py"}
-# 규칙 6 허용 목록(R2에서 비운다). 늘어나면 실패한다.
-STEP_BACKREF_ALLOWED: set[str] = {"predict.py", "train.py", "verify.py"}
+# 규칙 6: 예외 없음(제어 예외는 signals, 수집 간격은 steps/_collect).
+STEP_BACKREF_ALLOWED: set[str] = set()
 
 
 def _module_name(path: Path) -> tuple[str, bool]:

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import fnmatch
 import glob
 import json
@@ -15,10 +14,11 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, write_json, write_text
 from physicsai_core.param_sets import TPL_NAME, read_samples
+from physicsai_core.parsers.name_value import read_name_value_csv
 from physicsai_core.parsers.xydata import parse_xydata
 from physicsai_core.tpl_render import render_tpl
 
-from ..executor import StepSkipped
+from ..signals import StepSkipped
 from .common import load_model, verify_model_integrity
 
 
@@ -204,20 +204,6 @@ def response_extract(ctx: Any) -> None:
                                         "out_csv": out, "work_dir": P}, cwd=P, outputs_to_backup=[out])
     if not os.path.isfile(out):
         raise StepFailure("OUTPUT_MISSING", "responses_pred.csv가 만들어지지 않았습니다")
-
-
-def read_name_value_csv(path: str) -> dict[str, float | None]:
-    out: dict[str, float | None] = {}
-    if not os.path.isfile(path):
-        return out
-    with open(path, encoding="utf-8-sig", newline="") as fh:
-        for row in csv.DictReader(fh):
-            name = (row.get("name") or "").strip()
-            try:
-                out[name] = float(row.get("value", ""))
-            except (TypeError, ValueError):
-                out[name] = None
-    return out
 
 
 def build_table(responses: list[dict[str, Any]], predicted: dict[str, float | None],

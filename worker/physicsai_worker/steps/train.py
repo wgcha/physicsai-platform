@@ -19,15 +19,16 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
+from physicsai_core.hpc.command import map_path
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec
 from physicsai_core.param_sets import RUN_KEY_RE
+from physicsai_core.parsers.name_value import read_name_value_csv
 from physicsai_core.paths import PathError, check_user_path, is_link_or_reparse
 
-from ..executor import EnterWaitingHpc
+from ..signals import EnterWaitingHpc
+from . import _collect
 from .common import path_failure
 from .launcher import stage_launcher
-from .predict import read_name_value_csv
-from .verify import _map_path
 
 TPL_REL = "01_train/tpl/simlab_parametered_mesh.tpl"
 TPL_NAME = "simlab_parametered_mesh.tpl"
@@ -357,7 +358,7 @@ def _remote_result_dir(ctx: Any, doe_id: str, run_key: str) -> tuple[str, str | 
         remote = fwd(t.collect_root_remote).rstrip("/") + "/" + sub
         local = os.path.join(os.path.normpath(t.collect_root_local), ctx.study["folder_name"], doe_id, run_key)
         return remote, local
-    return _map_path(_R(ctx, doe_id, run_key), t.path_map), None
+    return map_path(_R(ctx, doe_id, run_key), t.path_map), None
 
 
 def ts_submit(ctx: Any) -> None:
@@ -381,8 +382,8 @@ def ts_submit(ctx: Any) -> None:
         job_name = re.sub(r"[^A-Za-z0-9_\-]", "_", f"{ctx.study['folder_name']}_{doe['id'][:8]}_{rk}_a{r['attempt']}")[:64]
         spec = HpcSubmitSpec(
             job_name=job_name, run_key=rk, study=ctx.study["folder_name"],
-            input_file=_map_path(os.path.join(input_dir, run["starter_name"]), hcfg.transfer.path_map),
-            input_dir=_map_path(input_dir, hcfg.transfer.path_map), result_dir=result_dir,
+            input_file=map_path(os.path.join(input_dir, run["starter_name"]), hcfg.transfer.path_map),
+            input_dir=map_path(input_dir, hcfg.transfer.path_map), result_dir=result_dir,
             queue=over.get("queue"), ncpus=over.get("ncpus"), walltime=over.get("walltime"),
         )
         try:
@@ -448,8 +449,6 @@ def _summary(root: str) -> dict[str, int]:
 
 def ts_collect(ctx: Any) -> None:
     """COLLECT(phase2 §6.5): 성공 run마다 collect_mode별 회수. run별 실패는 COLLECT_FAILED, 성공 0개면 실패."""
-    from .. import runtime
-
     s = ctx.settings
     r = ctx.result()
     doe = _doe(ctx)
@@ -470,10 +469,10 @@ def ts_collect(ctx: Any) -> None:
         if not pending:
             break
         a = {rk: _match_files(src_of[rk], pats) for rk in pending}
-        time.sleep(runtime.COLLECT_STABLE_INTERVAL_S)
+        time.sleep(_collect.COLLECT_STABLE_INTERVAL_S)
         ctx.checkpoint()
         b = {rk: _match_files(src_of[rk], pats) for rk in pending}
-        time.sleep(runtime.COLLECT_STABLE_INTERVAL_S)
+        time.sleep(_collect.COLLECT_STABLE_INTERVAL_S)
         c = {rk: _match_files(src_of[rk], pats) for rk in pending}
         for rk in list(pending):
             if not (a[rk] and a[rk] == b[rk] == c[rk]):

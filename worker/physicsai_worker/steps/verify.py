@@ -11,10 +11,12 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, write_json
+from physicsai_core.hpc.command import map_path
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec
+from physicsai_core.parsers.name_value import read_name_value_csv
 
-from ..executor import EnterWaitingHpc, StepSkipped
-from .predict import read_name_value_csv
+from ..signals import EnterWaitingHpc, StepSkipped
+from . import _collect
 
 
 def _paths(ctx: Any) -> tuple[str, str]:
@@ -49,15 +51,6 @@ def pv_prep(ctx: Any) -> None:
                       "starter": (pj["result"] or {}).get("starter")})
 
 
-def _map_path(path: str, path_map: list[Any]) -> str:
-    p = fwd(path)
-    for m in path_map:
-        local = fwd(m.local).rstrip("/")
-        if p.lower().startswith(local.lower() + "/") or p.lower() == local.lower():
-            return fwd(m.remote).rstrip("/") + p[len(local):]
-    return p
-
-
 def hpc_submit(ctx: Any) -> None:
     gw = ctx.ex.w.hpc
     av = gw.availability()
@@ -71,9 +64,9 @@ def hpc_submit(ctx: Any) -> None:
     job_name = re.sub(r"[^A-Za-z0-9_\-]", "_", f"{ctx.study['folder_name']}_{ctx.ex.job_id[:8]}_a{r['attempt']}")[:64]
     spec = HpcSubmitSpec(
         job_name=job_name, run_key="verify", study=ctx.study["folder_name"],
-        input_file=_map_path(os.path.join(V, "input", starter), hcfg.transfer.path_map),
-        input_dir=_map_path(os.path.join(V, "input"), hcfg.transfer.path_map),
-        result_dir=_map_path(os.path.join(V, "result"), hcfg.transfer.path_map),
+        input_file=map_path(os.path.join(V, "input", starter), hcfg.transfer.path_map),
+        input_dir=map_path(os.path.join(V, "input"), hcfg.transfer.path_map),
+        result_dir=map_path(os.path.join(V, "result"), hcfg.transfer.path_map),
         queue=over.get("queue"), ncpus=over.get("ncpus"), walltime=over.get("walltime"),
     )
     try:
@@ -92,8 +85,6 @@ def collect(ctx: Any) -> None:
     import fnmatch
     import time
 
-    from .. import runtime
-
     r = ctx.result()
     res_dir = os.path.join(ctx.abs(r["verify_rel"]), "result")
     pats = ctx.settings.hpc.transfer.collect_patterns
@@ -111,10 +102,10 @@ def collect(ctx: Any) -> None:
     last_err = ""
     for attempt in range(1, 4):
         a = snapshot()
-        time.sleep(runtime.COLLECT_STABLE_INTERVAL_S)
+        time.sleep(_collect.COLLECT_STABLE_INTERVAL_S)
         ctx.checkpoint()
         b = snapshot()
-        time.sleep(runtime.COLLECT_STABLE_INTERVAL_S)
+        time.sleep(_collect.COLLECT_STABLE_INTERVAL_S)
         c = snapshot()
         if a and a == b == c:
             big = [n for n, (sz, _m) in c.items() if sz > limit]

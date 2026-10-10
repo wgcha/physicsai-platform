@@ -11,6 +11,7 @@ import re
 import string
 from typing import Any
 
+from ..commands import fwd
 from ..config import is_abs_path_str
 from .gateway import HpcAvailability, HpcGatewayError, HpcStatus, HpcSubmitResult, HpcSubmitSpec
 
@@ -194,3 +195,13 @@ class CommandHpcGateway:
         rc, out, err = self._run(argv, self.c.cancel_timeout_s)
         if rc != 0:
             raise HpcGatewayError("UNAVAILABLE", f"취소 실패(종료코드 {rc}): {(err or out)[:300]}")
+
+
+def map_path(path: str, path_map: list[Any]) -> str:
+    """로컬 경로 → PBS 원격 경로(hpc.transfer.path_map 첫 일치 접두, 대소문자 무시)."""
+    p = fwd(path)
+    for m in path_map:
+        local = fwd(m.local).rstrip("/")
+        if p.lower().startswith(local.lower() + "/") or p.lower() == local.lower():
+            return fwd(m.remote).rstrip("/") + p[len(local):]
+    return p

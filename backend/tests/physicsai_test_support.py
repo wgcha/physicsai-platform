@@ -655,10 +655,10 @@ def _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, overrides
     from physicsai_api.context import build_context
     from physicsai_api.main import create_app
     from physicsai_core.config import load_config_dict
-    from physicsai_worker import runtime
+    from physicsai_worker.steps import _collect
     from physicsai_worker.runtime import Worker
 
-    monkeypatch.setattr(runtime, "COLLECT_STABLE_INTERVAL_S", 0.02)
+    monkeypatch.setattr(_collect, "COLLECT_STABLE_INTERVAL_S", 0.02)
     monkeypatch.setenv("FAKE_SIMLAB_STEP_S", "0.01")
     d = make_phase2_settings(tmp_path, fake_tools, **overrides)
     lc = load_config_dict(d, environ={})

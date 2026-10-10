@@ -37,7 +37,6 @@ from .limiter import ProcessLimiter, select_limiter
 
 log = logging.getLogger("physicsai_worker")
 
-COLLECT_STABLE_INTERVAL_S = 10.0  # §8.10 COLLECT: 10초 간격 2회 연속 불변(시험에서 줄임)
 ALTAIR_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path")
 # hpc_jobs 상태 → train_runs 상태(phase2 §6.5 HPC_WAIT)
 RUN_STATE_BY_HPC = {"SUCCEEDED": "SOLVED", "FAILED": "SOLVE_FAILED", "LOST": "SOLVE_FAILED", "CANCELED": "SOLVE_FAILED"}

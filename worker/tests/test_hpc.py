@@ -122,10 +122,10 @@ def _setup_predict(c, w, ai: Path, name: str) -> tuple[str, str]:
 def hpc_env(settings_dict, fake_tools, engine, fake_dashboard, pbs_state, monkeypatch, tmp_path):
     from physicsai_api.context import build_context
     from physicsai_api.main import create_app
-    from physicsai_worker import runtime
+    from physicsai_worker.steps import _collect
     from physicsai_worker.runtime import Worker
 
-    monkeypatch.setattr(runtime, "COLLECT_STABLE_INTERVAL_S", 0.05)
+    monkeypatch.setattr(_collect, "COLLECT_STABLE_INTERVAL_S", 0.05)
     ai = settings_dict["storage"]["ai_root"]
     lc = _hpc_settings(settings_dict, fake_tools, ai)
     ctx = build_context(lc, engine, transport=httpx.MockTransport(fake_dashboard.handler))
