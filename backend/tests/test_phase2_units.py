@@ -309,7 +309,8 @@ def test_spdm_access_only_in_spdm_module():
     """V2-SPDM-3: SPDM 경로를 읽는 코드는 spdm.py 하나(나머지는 설정 검증·기능 판정·보호 루트 등록만)."""
     # 파일 이름이 아니라 저장소 상대경로로 정확히 대조한다(refactor-plan R4: 단계 이름 파일이 여러 패키지에 있음)
     allowed = {
-        "backend/physicsai_core/spdm.py", "backend/physicsai_core/config.py", "backend/physicsai_core/features.py",
+        "backend/physicsai_core/spdm.py", "backend/physicsai_core/config/schema.py", "backend/physicsai_core/config/validate.py",
+        "backend/physicsai_core/features.py",
         "backend/physicsai_core/env_check.py", "backend/physicsai_api/main.py",
         "backend/physicsai_api/services/job_params/stage2_curation.py", "backend/physicsai_api/services/path_inspect.py",
         "worker/physicsai_worker/env_check.py", "worker/physicsai_worker/__main__.py", "worker/physicsai_worker/runtime.py",
