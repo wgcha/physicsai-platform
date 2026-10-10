@@ -8,10 +8,10 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
-from physicsai_core.stage5_optimize import optimize as opt
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.stage5_optimize import optimize as opt
 
 from ...context import AppContext
 from .base import _P, invalid_at, prerequisite_missing

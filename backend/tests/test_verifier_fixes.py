@@ -11,7 +11,6 @@ import pytest
 from physicsai_core import paths as paths_mod
 from physicsai_core.childenv import child_env
 from physicsai_core.commands import render_argv
-from physicsai_core.stage3_model.dataset_split import collect_h3d
 from physicsai_core.errors import StepFailure
 from physicsai_core.paths import (
     PathError,
@@ -22,6 +21,7 @@ from physicsai_core.paths import (
     to_rel,
     windows_reserved_name,
 )
+from physicsai_core.stage3_model.dataset_split import collect_h3d
 from physicsai_test_support import API, H
 
 # ---- 1. 매핑 드라이브·SUBST(루트가 다른 형태로 풀리는 경우) --------------------------------

@@ -6,7 +6,6 @@ import json
 import os
 from typing import Any
 
-from physicsai_core.stage5_optimize import optimize as opt
 from physicsai_core.db.repositories import artifacts as artifacts_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
@@ -14,6 +13,7 @@ from physicsai_core.db.repositories import optimizations as opt_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
+from physicsai_core.stage5_optimize import optimize as opt
 
 from ..context import AppContext
 from .common import study_root

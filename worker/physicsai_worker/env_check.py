@@ -18,7 +18,6 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from physicsai_core.stage2_curation import spdm
 from physicsai_core.childenv import child_env
 from physicsai_core.commands import EXECUTABLE_PLACEHOLDERS
 from physicsai_core.config import (
@@ -33,6 +32,7 @@ from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.env_check import ALTAIR_CHECK_KEYS, item, report_rel
 from physicsai_core.fileutil import write_json
 from physicsai_core.masking import bundle_masker
+from physicsai_core.stage2_curation import spdm
 
 from . import resources
 from .steps.launcher import check_launcher

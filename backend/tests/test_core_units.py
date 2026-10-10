@@ -8,15 +8,15 @@ import random
 
 import pytest
 
-from physicsai_core.stage4_predict import nearest as nm
 from physicsai_core.commands import TEMPLATE_SPECS, cmd_c_prefix, render_argv, validate_template
-from physicsai_core.stage3_model.dataset_split import collect_h3d, dataset_yaml, split_files
 from physicsai_core.errors import StepFailure
 from physicsai_core.limits import compute_limits
+from physicsai_core.paths import PathError, backup_existing, check_user_path, resolve_in_study
+from physicsai_core.stage3_model.dataset_split import collect_h3d, dataset_yaml, split_files
 from physicsai_core.stage3_model.loss import parse_loss_lines
 from physicsai_core.stage3_model.score import parse_scores
+from physicsai_core.stage4_predict import nearest as nm
 from physicsai_core.stage4_predict.xydata import parse_xydata
-from physicsai_core.paths import PathError, backup_existing, check_user_path, resolve_in_study
 from physicsai_core.state_machine import ALL_STATES, TRANSITIONS, IllegalTransition, check_transition
 from physicsai_core.tpl_render import parse_tpl, render_tpl
 

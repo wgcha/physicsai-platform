@@ -5,11 +5,11 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from physicsai_core.stage2_curation import curation as cu
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_text
+from physicsai_core.stage2_curation import curation as cu
 
 from .source import _C, _collect, _finish_curation, _read_json, _rel
 

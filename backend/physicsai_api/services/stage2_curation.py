@@ -6,13 +6,13 @@ import json
 import os
 from typing import Any
 
-from physicsai_core.stage2_curation import curation as cu
 from physicsai_core.db.repositories import curations as cur_repo
 from physicsai_core.db.repositories import spdm_imports as imp_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
+from physicsai_core.stage2_curation import curation as cu
 
 from ..context import AppContext
 from .common import clamp_limit, decode_cursor, encode_cursor, study_root

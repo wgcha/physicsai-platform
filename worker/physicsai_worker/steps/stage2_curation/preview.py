@@ -5,9 +5,9 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from physicsai_core.stage2_curation import curation as cu
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json
+from physicsai_core.stage2_curation import curation as cu
 
 from .source import _W, _collect, _read_json, _rel
 

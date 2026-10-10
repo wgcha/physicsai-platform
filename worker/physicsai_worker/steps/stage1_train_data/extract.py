@@ -6,11 +6,11 @@ import os
 import time
 from typing import Any
 
-from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
 from physicsai_core.paths import allowed_roots, check_user_path, PathError
+from physicsai_core.stage1_train_data import train_params as tp
 
 from ..common import path_failure
 from ..launcher import stage_launcher
