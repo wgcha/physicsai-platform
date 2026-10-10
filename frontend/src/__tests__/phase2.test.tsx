@@ -8,7 +8,7 @@ import { AppContext } from "../app/AppContext";
 import { clearApiCache, type StatusInfo } from "../api";
 import { USERS } from "../mock/data";
 import { setEnvPollMs } from "../pages/AdminEnvCheck";
-import { PBS_NONE_TEXT } from "../stages/stage1/SolveCards";
+import { PBS_NONE_TEXT } from "../stages/stage1/SolveCard";
 import { isUsableComponent, timeSteps, timeStepsText } from "../lib/curation";
 import { METHOD_DEFAULTS, activeRules } from "../stages/stage5/Stage5";
 
