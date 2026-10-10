@@ -13,7 +13,7 @@ from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
 from physicsai_core.parsers.loss import as_db_values, parse_loss_file
-from physicsai_core.paths import PathError, check_user_path, is_link_or_reparse, real, unsafe_reason
+from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_reparse, PathError, real, unsafe_reason
 
 from ..common import path_failure
 
@@ -32,7 +32,7 @@ def _under_dir(fp: str, folder: str) -> bool:
 def mr_validate(ctx: Any) -> None:
     s, p = ctx.settings, ctx.params
     try:
-        cp = check_user_path(p["model_path"], [s.storage.ai_root, *s.storage.allowed_import_roots])
+        cp = check_user_path(p["model_path"], allowed_roots(s, imports=True))
     except PathError as exc:
         raise path_failure(exc) from None
     psmdl, pscfg = _direct(cp.path, ["*.psmdl"]), _direct(cp.path, ["*.pscfg"])

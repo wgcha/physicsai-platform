@@ -31,8 +31,8 @@ from physicsai_core.config import (
 )
 from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.env_check import ALTAIR_CHECK_KEYS, item, report_rel
-from physicsai_core.error_bundle import BundleMasker
 from physicsai_core.fileutil import write_json
+from physicsai_core.masking import bundle_masker
 
 from . import resources
 from .steps.launcher import check_launcher
@@ -214,7 +214,7 @@ def collect_items(w: Any, masker: Any, tails: dict[str, str]) -> list[dict[str, 
 def run_env_check(w: Any, chk: dict[str, Any]) -> str:
     s = w.settings
     # 오류 묶음과 같은 마스킹(logging.mask_patterns + DB URL·Bearer·쿠키·비밀 환경변수 값, phase2 §10.2)
-    masker = BundleMasker(s.logging.mask_patterns, s.auth.cookie_name, s.database.url_env)
+    masker = bundle_masker(s)
     tails: dict[str, str] = {}
     try:
         items = collect_items(w, masker, tails)

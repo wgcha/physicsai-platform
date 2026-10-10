@@ -1,4 +1,4 @@
-"""외부 프로그램 로그 오류 감지(§8.3)·비밀 마스킹(§11.3)."""
+"""외부 프로그램 로그 오류 감지(§8.3). 비밀 마스킹은 physicsai_core.masking."""
 
 from __future__ import annotations
 
@@ -19,13 +19,3 @@ class ErrorDetector:
                     self.first_match = line.strip()[:200]
                 return True
         return False
-
-
-class Masker:
-    def __init__(self, patterns: list[str]) -> None:
-        self._rx = [re.compile(p) for p in patterns]
-
-    def __call__(self, line: str) -> str:
-        for rx in self._rx:
-            line = rx.sub(lambda m: (m.group(1) + "=***") if m.groups() else "***", line)
-        return line

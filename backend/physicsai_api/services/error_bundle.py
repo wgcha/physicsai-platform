@@ -16,7 +16,8 @@ from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import workers as workers_repo
-from physicsai_core.error_bundle import BundleMasker, iter_items
+from physicsai_core.error_bundle import iter_items
+from physicsai_core.masking import bundle_masker
 from physicsai_core.errors import DomainError
 
 from ..auth import Principal
@@ -64,7 +65,7 @@ def build(ctx: AppContext, principal: Principal, job_id: str, rid: str, ip: str 
     }
     env_latest = ({"id": latest["id"], "finished_at": latest["finished_at"], "summary": latest["summary"],
                    "items": list(latest["api_items"] or []) + list(latest["worker_items"] or [])} if latest else None)
-    masker = BundleMasker(s.logging.mask_patterns, s.auth.cookie_name, s.database.url_env)
+    masker = bundle_masker(s)
     root = study_root(ctx, st)
     log_dir = os.path.join(root, "logs", job_id)
     items = iter_items(

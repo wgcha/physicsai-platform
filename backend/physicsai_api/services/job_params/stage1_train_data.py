@@ -13,7 +13,7 @@ from physicsai_core import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.param_sets import NAME_RE, RUN_KEY_RE
-from physicsai_core.paths import check_user_path
+from physicsai_core.paths import allowed_roots, check_user_path
 from physicsai_core.train_tpl import tpl_params_snapshot
 
 from ...context import AppContext
@@ -84,7 +84,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     cfg = ctx.settings
     sid = study["id"]
     if job_type == "TD_EXTRACT_PARAMS":
-        cp = check_user_path(p.cad_path, [cfg.storage.ai_root, *cfg.storage.allowed_import_roots], expect="file")
+        cp = check_user_path(p.cad_path, allowed_roots(cfg, imports=True), expect="file")
         if os.path.splitext(cp.path)[1].lower() not in [e.lower() for e in cfg.train_data.cad_extensions]:
             raise invalid_at("cad_path", f"CAD 확장자는 {', '.join(cfg.train_data.cad_extensions)} 중 하나여야 합니다")
         return {"cad_path": cp.path}, None, []
@@ -94,7 +94,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise DomainError("TPL_REQUIRED", "tpl을 먼저 생성하세요(①-2)", status=409)
         if tpl_is_stale(setup):
             raise DomainError("TPL_STALE", "파라미터 표가 바뀌었습니다 — tpl을 다시 생성하세요", status=409)
-        cp = check_user_path(p.radioss_assem_path, [cfg.storage.ai_root, *cfg.storage.allowed_import_roots])
+        cp = check_user_path(p.radioss_assem_path, allowed_roots(cfg, imports=True))
         st = starters_in(cp.path, cfg.predict.starter_glob)
         if len(st) != 1:
             raise DomainError("PREREQUISITE_MISSING", f"Radioss 조립 폴더에 starter({cfg.predict.starter_glob})가 정확히 1개 있어야 합니다(현재 {len(st)}개)",
@@ -142,7 +142,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         return params, {"doe_id": d["id"]}, []
     if job_type == "TD_RESULT_IMPORT":
         d = _ready_doe(conn, sid, p.doe_id)
-        roots = [cfg.storage.ai_root, *cfg.storage.allowed_import_roots]
+        roots = allowed_roots(cfg, imports=True)
         if cfg.hpc.transfer.collect_root_local:
             roots.append(cfg.hpc.transfer.collect_root_local)
         cp = check_user_path(p.source_path, roots)

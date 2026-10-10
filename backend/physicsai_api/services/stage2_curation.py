@@ -42,7 +42,7 @@ def curation_sources(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
             counts = train_repo.run_state_counts(conn, d["id"])
             if counts["COLLECTED"] < 1:
                 continue
-            rel = f"01_train/results/{d['id']}"
+            rel = cu.source_root_rel({"kind": "TRAIN_DOE", "doe_id": d["id"]})
             h, t = _count(resolve_in_study(root, rel))
             out.append({"kind": "TRAIN_DOE", "ref_id": d["id"], "label": f"① DOE {d['doe_label']} · {d['id'][:8]}",
                         "display_path": display_path(ai, st["folder_name"], rel), "h3d_count": h, "t01_count": t,

@@ -10,7 +10,7 @@ from physicsai_core import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
-from physicsai_core.paths import PathError, check_user_path
+from physicsai_core.paths import allowed_roots, check_user_path, PathError
 
 from ..common import path_failure
 from ..launcher import stage_launcher
@@ -33,7 +33,7 @@ def _X(ctx: Any) -> str:
 def tx_prep(ctx: Any) -> None:
     s = ctx.settings
     try:
-        cp = check_user_path(ctx.params["cad_path"], [s.storage.ai_root, *s.storage.allowed_import_roots], expect="file")
+        cp = check_user_path(ctx.params["cad_path"], allowed_roots(s, imports=True), expect="file")
     except PathError as exc:
         raise path_failure(exc) from None
     name = os.path.basename(cp.path)

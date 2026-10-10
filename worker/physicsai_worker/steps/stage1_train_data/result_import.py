@@ -9,14 +9,14 @@ from physicsai_core import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file
-from physicsai_core.paths import PathError, check_user_path, is_link_or_reparse
+from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_reparse, PathError
 
 from ..common import path_failure
 from ._shared import _R, _doe, _match_files, _summary, _write_collected_json
 
 
 def _import_roots(s: Any) -> list[str]:
-    roots = [s.storage.ai_root, *s.storage.allowed_import_roots]
+    roots = allowed_roots(s, imports=True)
     if s.hpc.transfer.collect_root_local:
         roots.append(s.hpc.transfer.collect_root_local)
     return roots

@@ -241,7 +241,8 @@ def test_fanout_cancel_stops_remaining(p2_env, monkeypatch):
 
 def test_bundle_masker_rules():
     """V2-EB-2: 고정 규칙(환경변수와 무관한 DB URL 자격 증명·쿠키·비밀 환경변수 이름)."""
-    from physicsai_core.error_bundle import BundleMasker, read_tail
+    from physicsai_core.error_bundle import read_tail
+    from physicsai_core.masking import BundleMasker
 
     m = BundleMasker([r"(?i)(password|passwd|token|secret)\s*[=:]\s*\S+"], "sess", "PHYSICSAI_DATABASE_URL",
                      environ={"PGPASSWORD": "pgpw1234", "OTHER": "visible"})

@@ -11,7 +11,7 @@ from pydantic import BaseModel, Field
 
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import models as models_repo
-from physicsai_core.paths import check_dataset_input, check_user_path
+from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path
 
 from ...context import AppContext
 from ..common import study_root
@@ -96,7 +96,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise prerequisite_missing("READY_DATASET")
         return p.model_dump(), None, warnings
     if job_type == "MODEL_REGISTER":
-        cp = check_user_path(p.model_path, [cfg.storage.ai_root, *cfg.storage.allowed_import_roots])
+        cp = check_user_path(p.model_path, allowed_roots(cfg, imports=True))
         name = p.name
         if name is None:
             found = inspect_model_folder(cp.path, cfg.training_log.log_globs)["psmdl"]

@@ -23,7 +23,7 @@ from physicsai_core.db.repositories.jobs import LeaseLost
 from physicsai_core.errors import DomainError, StepFailure
 from physicsai_core.job_types import JOB_TYPES
 from physicsai_core.limits import EffectiveLimits
-from physicsai_core.parsers.log_errors import Masker
+from physicsai_core.masking import Masker
 from physicsai_core.paths import backup_stamp, real, study_dir
 
 from .limiter.base import LimiterError, ProcessLimiter

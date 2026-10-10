@@ -103,12 +103,14 @@ def resolve_source(ctx: AppContext, conn: Any, study: dict[str, Any], source: An
         d = train_repo.get_doe(conn, source.doe_id)
         if d is None or d["study_id"] != sid or d["status"] != "READY":
             raise DomainError("DOE_NOT_READY", "READY 상태의 DOE가 필요합니다", status=409)
-        return {"kind": "TRAIN_DOE", "doe_id": d["id"]}, resolve_in_study(root_dir, f"01_train/results/{d['id']}")
+        src = {"kind": "TRAIN_DOE", "doe_id": d["id"]}
+        return src, resolve_in_study(root_dir, cu.source_root_rel(src))  # type: ignore[arg-type]
     if source.kind == "SPDM_IMPORT":
         i = imp_repo.get_import(conn, source.import_id)
         if i is None or i["study_id"] != sid or i["status"] != "READY":
             raise prerequisite_missing("READY_SPDM_IMPORT")
-        return {"kind": "SPDM_IMPORT", "import_id": i["id"]}, resolve_in_study(root_dir, f"02_import/{i['id']}")
+        src = {"kind": "SPDM_IMPORT", "import_id": i["id"]}
+        return src, resolve_in_study(root_dir, cu.source_root_rel(src))  # type: ignore[arg-type]
     cp = check_user_path(source.path, [ctx.settings.storage.ai_root])
     check_dataset_input(cp.path, ctx.settings.storage.ai_root)
     return {"kind": "FOLDER", "path": cp.path}, cp.path

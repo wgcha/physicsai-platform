@@ -12,7 +12,7 @@ from physicsai_core import spdm
 from physicsai_core.dataset_split import collect_h3d, n_eval_groups, split_files
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
-from physicsai_core.paths import check_dataset_input, check_user_path, file_safety_problem
+from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path, file_safety_problem
 
 from ..auth import Principal
 from ..context import AppContext
@@ -50,9 +50,7 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
     require_power(principal, s["project_id"])
     if body.purpose in P2_PURPOSES:
         return inspect_phase2(ctx, s, body)
-    roots = [s_cfg.storage.ai_root]
-    if body.purpose == "MODEL_FOLDER":
-        roots += list(s_cfg.storage.allowed_import_roots)
+    roots = allowed_roots(s_cfg, imports=body.purpose == "MODEL_FOLDER")
     cp = check_user_path(body.path, roots)
     problems: list[dict[str, Any]] = []
     summary: dict[str, Any] = {}
@@ -108,14 +106,14 @@ def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[st
             problems.append({"code": "TOO_LARGE", "message": "총량이 상한(spdm_import.max_total_bytes)을 넘습니다"})
         return {"normalized_path": path, "ok": not problems, "problems": problems, "summary": summary}
     if body.purpose == "CAD_FILE":
-        cp = check_user_path(body.path, [s.storage.ai_root, *s.storage.allowed_import_roots], expect="file")
+        cp = check_user_path(body.path, allowed_roots(s, imports=True), expect="file")
         name = os.path.basename(cp.path)
         ok_ext = os.path.splitext(name)[1].lower() in [e.lower() for e in s.train_data.cad_extensions]
         summary = {"file_name": name, "size": os.path.getsize(cp.path), "extension_ok": ok_ext}
         if not ok_ext:
             problems.append({"code": "CAD_EXTENSION", "message": f"CAD 확장자는 {', '.join(s.train_data.cad_extensions)} 중 하나여야 합니다"})
     elif body.purpose == "RADIOSS_ASSEM":
-        cp = check_user_path(body.path, [s.storage.ai_root, *s.storage.allowed_import_roots])
+        cp = check_user_path(body.path, allowed_roots(s, imports=True))
         names = sorted(n for n in os.listdir(cp.path) if os.path.isfile(os.path.join(cp.path, n)))
         rad = [n for n in names if n.lower().endswith(".rad")]
         st = starters_in(cp.path, s.predict.starter_glob)
@@ -124,7 +122,7 @@ def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[st
         if len(st) != 1:
             problems.append({"code": "STARTER_COUNT", "message": f"starter({s.predict.starter_glob})가 정확히 1개 있어야 합니다(현재 {len(st)}개)"})
     elif body.purpose == "RESULT_FOLDER":
-        roots = [s.storage.ai_root, *s.storage.allowed_import_roots]
+        roots = allowed_roots(s, imports=True)
         if s.hpc.transfer.collect_root_local:
             roots.append(s.hpc.transfer.collect_root_local)
         cp = check_user_path(body.path, roots)

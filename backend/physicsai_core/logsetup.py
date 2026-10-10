@@ -13,7 +13,7 @@ import logging.handlers
 import os
 from typing import Any
 
-from .error_bundle import BundleMasker
+from .masking import BundleMasker, bundle_masker
 
 FORMAT = "%(asctime)s %(levelname)s %(name)s [%(process)d] %(message)s"
 _INSTALLED: dict[str, logging.Handler] = {}
@@ -65,7 +65,7 @@ def setup_file_logging(settings: Any, component: str) -> str | None:
     h = logging.handlers.RotatingFileHandler(path, maxBytes=int(lg.max_mb * 2**20), backupCount=int(lg.backups),
                                              encoding="utf-8", delay=True)
     h.setFormatter(logging.Formatter(FORMAT))
-    h.addFilter(MaskingFilter(BundleMasker(lg.mask_patterns, settings.auth.cookie_name, settings.database.url_env)))
+    h.addFilter(MaskingFilter(bundle_masker(settings)))
     level = getattr(logging, str(lg.level).upper(), logging.INFO)
     h.setLevel(level)
     root = logging.getLogger()

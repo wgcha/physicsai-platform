@@ -11,6 +11,7 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
 
 from .config import PATH_META_CHARS
 from .errors import DomainError, StepFailure
@@ -116,6 +117,12 @@ def _is_abs(raw: str) -> bool:
     if _is_windows():
         return os.path.isabs(raw) and len(raw) >= 3 and raw[1] == ":"
     return raw.startswith("/")
+
+
+def allowed_roots(settings: Any, *, imports: bool) -> list[str]:
+    """사용자 입력 경로의 허용 루트(§17.3). imports=True(외부 가져오기 용도)면 [ai_root, *allowed_import_roots]."""
+    st = settings.storage
+    return [st.ai_root, *st.allowed_import_roots] if imports else [st.ai_root]
 
 
 def check_user_path(

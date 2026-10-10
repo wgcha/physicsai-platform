@@ -16,7 +16,7 @@ from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
 from physicsai_core.param_sets import RUN_KEY_RE
-from physicsai_core.paths import PathError, check_user_path, is_link_or_reparse
+from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_reparse, PathError
 
 from ..common import path_failure
 from ..launcher import stage_launcher
@@ -39,7 +39,7 @@ def dg_prep(ctx: Any) -> None:
     if not setup.get("tpl_rel") or not setup.get("cad_file_name"):
         raise StepFailure("INPUT_INVALID", "tpl이 생성되지 않았습니다")
     try:
-        cp = check_user_path(p["radioss_assem_path"], [s.storage.ai_root, *s.storage.allowed_import_roots])
+        cp = check_user_path(p["radioss_assem_path"], allowed_roots(s, imports=True))
     except PathError as exc:
         raise path_failure(exc) from None
     D = _D(ctx)

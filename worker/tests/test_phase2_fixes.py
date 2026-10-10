@@ -112,7 +112,7 @@ def test_xml_utf32_rejected(tmp_path):
 
 
 def test_masker_contract_rule_and_json_escape():
-    from physicsai_core.error_bundle import BundleMasker
+    from physicsai_core.masking import BundleMasker
 
     m = BundleMasker([], "sess", "DBURL", environ={"MY_SECRET": 'pa"ss\\word'})
     assert m("postgresql://user:pa/ss@host/db") == "postgresql://***@host/db"
