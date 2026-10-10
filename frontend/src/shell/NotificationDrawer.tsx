@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type NotificationItem } from "../api";
 import { useNotifications } from "../hooks/useNotifications";
 import { fmtTime } from "../lib/format";
-import { useOpenJob } from "./useOpenJob";
+import { useOpenJob } from "../hooks/useOpenJob";
 
 /** 알림 이력 패널(최근 30일, 최신순). 항목 클릭 → 읽음 + 이동, "모두 읽음" */
 export function NotificationDrawer({ onClose }: { onClose: () => void }) {

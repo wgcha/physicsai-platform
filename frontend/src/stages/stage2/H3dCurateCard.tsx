@@ -1,68 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useParams } from "react-router-dom";
-import { api, type Curation, type CurationFile } from "../../api";
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { type Curation } from "../../api";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { Advanced, Card, CodeLine, Field, RunAction } from "../../components/ui";
+import { Card, Field, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
-import { parseH3dPreview, timeStepsText, type H3dPreview } from "../../lib/curation";
-import { sameSource, useCuration } from "./CurationContext";
-import { useJobJson } from "./Sources";
-
-/** 최근 h3d 미리보기 작업 + 지금 원천과 일치할 때만 결과 */
-function useH3dPreview() {
-  const c = useCuration();
-  const runner = useJobRunner("CU_H3D_PREVIEW");
-  const match = !!runner.job && sameSource((runner.job.params as { source?: unknown }).source, c.source);
-  const files = useJobJson(match ? runner.job : null, ["PREVIEW_JSON"]);
-  const preview = useMemo(() => (files ? parseH3dPreview(files) : null), [files]);
-  return { runner, match, preview };
-}
-
-// ---------------------------------------------------------------- ②-1
-export function H3dPreviewCard({ shared }: { shared: ReturnType<typeof useH3dPreview> }) {
-  const c = useCuration();
-  const canExec = useCanExecute();
-  const { runner, match, preview } = shared;
-  const [sample, setSample] = useState("");
-  return (
-    <Card step="②-1" title="h3d 구조 미리보기">
-      <Advanced>
-        <Field label="대표 파일(원천 기준 상대경로)" hint="비우면 이름순 첫 파일">
-          <input className="mono" value={sample} onChange={(e) => setSample(e.target.value)} aria-label="대표 파일" />
-        </Field>
-      </Advanced>
-      <FeatureGate feature="curation_h3d">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="h3d 미리보기"
-            onRun={() => c.source && void runner.run({ source: c.source, sample_file: sample.trim() || null })}
-            job={match ? runner.job : null}
-            disabled={!enabled || !c.source || (c.sourceInfo?.h3d ?? 1) === 0}
-            disabledReason={enabled ? "원천을 먼저 선택하세요" : undefined}
-            error={runner.error}
-          />
-        )}
-      </FeatureGate>
-      {preview ? (
-        <div className="kv-row small" data-testid="h3d-preview-summary">
-          <span className="kv">
-            DataType <b>{preview.datatypes.length}</b>
-          </span>
-          <span className="kv">
-            Part shell <b>{preview.parts.shell.length}</b> · solid <b>{preview.parts.solid.length}</b> · rbody <b>{preview.parts.rbody.length}</b>
-          </span>
-          <span className="kv">
-            Time Step <b>{preview.numSteps}</b>
-          </span>
-          {preview.sampleFile && <span className="mono muted ellipsis">{preview.sampleFile}</span>}
-        </div>
-      ) : (
-        <p className="muted small">{c.source ? "선택한 원천으로 미리보기를 실행하면 DataType·Part·Time Step이 표시됩니다." : "원천을 먼저 선택하세요."}</p>
-      )}
-    </Card>
-  );
-}
+import { timeStepsText } from "../../lib/curation";
+import { useCuration } from "./CurationContext";
+import { CurationResult } from "./CurationResult";
+import { useH3dPreview } from "./H3dPreviewCard";
 
 // ---------------------------------------------------------------- ②-2
 function PartList({ label, ids, value, onChange }: { label: string; ids: number[]; value: number[]; onChange: (v: number[]) => void }) {
@@ -244,84 +189,3 @@ export function H3dCurateCard({ shared }: { shared: ReturnType<typeof useH3dPrev
     </Card>
   );
 }
-
-export function CurationResult({ cur, datasetLink }: { cur: Curation; datasetLink?: string }) {
-  if (cur.status === "BUILDING") return <p className="muted small">큐레이션 진행 중…</p>;
-  if (cur.status === "FAILED") return <p className="error-text small">큐레이션 실패</p>;
-  return (
-    <div className="curation-result" data-testid="curation-result">
-      <div className="small">
-        성공 <b>{cur.ok_count}</b>/{cur.target_count}
-        {(cur.failed_count ?? 0) > 0 && <span className="error-text"> · 실패 {(cur.failed_count ?? 0)}</span>}
-        {cur.missing_runs.length > 0 && <span className="muted"> · 누락 run {cur.missing_runs.length}</span>}
-      </div>
-      <CodeLine text={cur.output_display_path} />
-      {((cur.failed_count ?? 0) > 0 || cur.missing_runs.length > 0) && (
-        <details className="advanced">
-          <summary>실패 파일·누락 run</summary>
-          <div className="advanced-body grid-gap">
-            {(cur.failed_count ?? 0) > 0 && <CurationFileList curationId={cur.id} onlyFailed />}
-            {cur.missing_runs.length > 0 && (
-              <div className="small">
-                <div className="field-label">누락 run (출력 없음)</div>
-                <div className="mono wrap-list">{cur.missing_runs.join(", ")}</div>
-              </div>
-            )}
-          </div>
-        </details>
-      )}
-      {cur.kind === "H3D" && (
-        <p className="small">
-          {cur.used_by_dataset_ids.length ? "③-1 입력으로 사용됨" : "③-1 데이터셋 생성의 기본 입력으로 연결됩니다"}
-          {datasetLink && (
-            <>
-              {" · "}
-              <Link to={datasetLink}>③-1로 이동</Link>
-            </>
-          )}
-        </p>
-      )}
-    </div>
-  );
-}
-
-export function CurationFileList({ curationId, onlyFailed }: { curationId: string; onlyFailed?: boolean }) {
-  const [items, setItems] = useState<CurationFile[] | null>(null);
-  useEffect(() => {
-    let alive = true;
-    api
-      .curationFiles(curationId, { ok: onlyFailed ? false : undefined, limit: 200 })
-      .then((r) => alive && setItems(r.items))
-      .catch(() => alive && setItems([]));
-    return () => {
-      alive = false;
-    };
-  }, [curationId, onlyFailed]);
-  if (!items) return <span className="muted small">불러오는 중…</span>;
-  if (!items.length) return <span className="muted small">없음</span>;
-  return (
-    <table className="table compact" aria-label="결과 파일 목록">
-      <thead>
-        <tr>
-          <th>run 폴더</th>
-          <th>입력</th>
-          <th>출력</th>
-          <th className="num">종료코드</th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((f) => (
-          <tr key={`${f.run_folder}/${f.input_name}`}>
-            <td className="mono small">{f.run_folder}</td>
-            <td className="mono small">{f.input_name}</td>
-            <td className="mono small">{f.output_name ?? <span className="error-text">없음</span>}</td>
-            <td className="num small">{f.exit_code ?? "–"}</td>
-          </tr>
-        ))}
-      </tbody>
-    </table>
-  );
-}
-
-export { useH3dPreview };
-export type { H3dPreview };
