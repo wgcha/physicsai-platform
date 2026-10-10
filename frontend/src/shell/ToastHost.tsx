@@ -1,5 +1,5 @@
 import { useNotifications } from "../hooks/useNotifications";
-import { useOpenJob } from "./useOpenJob";
+import { useOpenJob } from "../hooks/useOpenJob";
 
 /** 우하단 토스트(5초 자동 닫힘, 최대 3개, 클릭 시 작업 화면) — §13.2 */
 export function ToastHost() {

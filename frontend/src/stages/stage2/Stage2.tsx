@@ -1,6 +1,7 @@
 import { CurationProvider } from "./CurationContext";
 import { SourcePicker, SpdmImportCard } from "./Sources";
-import { H3dCurateCard, H3dPreviewCard, useH3dPreview } from "./H3dCards";
+import { H3dCurateCard } from "./H3dCurateCard";
+import { H3dPreviewCard, useH3dPreview } from "./H3dPreviewCard";
 import { T01CurvesCard, T01PreviewCard, useT01Preview } from "./T01Cards";
 
 function Stage2Cards() {

@@ -8,7 +8,7 @@ import { JsonTree } from "../../components/JsonTree";
 import { parseT01Preview, type T01Tree } from "../../lib/curation";
 import { sameSource, useCuration } from "./CurationContext";
 import { useJobJson } from "./Sources";
-import { CurationResult } from "./H3dCards";
+import { CurationResult } from "./CurationResult";
 
 export function useT01Preview() {
   const c = useCuration();

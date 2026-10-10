@@ -5,7 +5,7 @@ import { usePolling } from "../hooks/usePolling";
 import { POLL } from "../lib/poll";
 import { JOB_TYPE_LABEL, STAGE_MARK, attentionText, fmtElapsed, hpcSummaryText } from "../lib/format";
 import { ProgressBar, StateDot } from "../components/ui";
-import { useOpenJob } from "../shell/useOpenJob";
+import { useOpenJob } from "../hooks/useOpenJob";
 
 /** 실행 대기열(§16.2 ①). 순서 이동·취소는 전역 관리자만(§5.3). */
 export function QueuePanel() {
