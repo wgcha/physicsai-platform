@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
-from ..services import studies as svc
+from ..services import stage4_predict as svc
 
 router = APIRouter(tags=["param-sets"])
 ERR = {404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse}, 422: {"model": S.ErrorResponse}}

@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, get_token, request_id
+from ..services import path_inspect as inspect_svc
 from ..services import studies as svc
 
 router = APIRouter(tags=["studies"])
@@ -43,4 +44,4 @@ def archive_study(study_id: str, request: Request, principal: Principal = Depend
 
 @router.post("/studies/{study_id}/paths/inspect", response_model=S.PathInspectResponse, responses=ERR)
 def inspect(study_id: str, body: S.PathInspectRequest, request: Request, principal: Principal = Depends(get_principal)) -> dict:
-    return svc.inspect_path(get_ctx(request), principal, study_id, body)
+    return inspect_svc.inspect_path(get_ctx(request), principal, study_id, body)

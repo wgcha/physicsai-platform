@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import get_ctx, get_principal
-from ..services import optimize as svc
+from ..services import stage5_optimize as svc
 
 router = APIRouter(tags=["optimize"])
 ERR = {404: {"model": S.ErrorResponse}}

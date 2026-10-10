@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Request
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import get_ctx, get_principal
-from ..services import curations as svc
+from ..services import stage2_curation as svc
 
 router = APIRouter(tags=["spdm"])
 

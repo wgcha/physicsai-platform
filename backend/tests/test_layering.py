@@ -20,8 +20,11 @@ PKG_ROOTS = {
     "physicsai_worker": REPO / "worker" / "physicsai_worker",
 }
 
-# 규칙 4 허용 목록(R5에서 비운다). 늘어나면 실패한다.
-SERVICE_SQL_ALLOWED: set[str] = {"jobs.py", "optimize.py", "phase2_params.py", "studies.py", "train.py", "env_checks.py"}
+# 규칙 4 허용 목록(services/ 기준 상대경로, R5에서 비운다). 늘어나면 실패한다.
+SERVICE_SQL_ALLOWED: set[str] = {
+    "jobs.py", "studies.py", "env_checks.py", "stage1_train_data.py", "stage3_model.py", "stage5_optimize.py",
+    "job_params/stage1_train_data.py", "job_params/stage2_curation.py",
+}
 # 규칙 6: 예외 없음(제어 예외는 signals, 수집 간격은 steps/_collect).
 STEP_BACKREF_ALLOWED: set[str] = set()
 
@@ -107,8 +110,9 @@ def _service_sql(m: str) -> bool:
 
 
 def test_rule4_services_use_repositories_only():
+    root = PKG_ROOTS["physicsai_api"] / "services"
     files = _files("physicsai_api", "services")
-    offenders = {f.name for f in files if _violations([f], _service_sql)}
+    offenders = {f.relative_to(root).as_posix() for f in files if _violations([f], _service_sql)}
     # 허용 목록 밖 위반은 실패, 허용 목록에 있으나 이미 고쳐진 파일도 목록에서 지우도록 실패
     assert offenders - SERVICE_SQL_ALLOWED == set(), _violations(files, _service_sql)
     assert SERVICE_SQL_ALLOWED - offenders == set(), "허용 목록에서 지울 파일"
@@ -119,7 +123,7 @@ def test_rule6_steps_do_not_import_executor_or_runtime():
         return any(_starts(m, f"physicsai_worker.{x}") for x in ("executor", "runtime"))
 
     files = _files("physicsai_worker", "steps")
-    offenders = {str(f.relative_to(PKG_ROOTS["physicsai_worker"] / "steps")) for f in files if _violations([f], bad)}
+    offenders = {f.relative_to(PKG_ROOTS["physicsai_worker"] / "steps").as_posix() for f in files if _violations([f], bad)}
     assert offenders - STEP_BACKREF_ALLOWED == set(), _violations(files, bad)
     assert STEP_BACKREF_ALLOWED - offenders == set(), "허용 목록에서 지울 파일"
 

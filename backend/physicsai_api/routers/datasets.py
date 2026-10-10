@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import get_ctx, get_principal
-from ..services import studies as svc
+from ..services import stage3_model as svc
 
 router = APIRouter(tags=["datasets"])
 ERR = {404: {"model": S.ErrorResponse}}

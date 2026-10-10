@@ -307,14 +307,20 @@ def test_platform_never_imports_or_execs_launchers():
 
 def test_spdm_access_only_in_spdm_module():
     """V2-SPDM-3: SPDM 경로를 읽는 코드는 spdm.py 하나(나머지는 설정 검증·기능 판정·보호 루트 등록만)."""
-    allowed = {"spdm.py", "config.py", "features.py", "env_check.py", "__main__.py", "runtime.py", "main.py",
-               "phase2_params.py", "inspect2.py", "spdm_import.py"}
+    # 파일 이름이 아니라 저장소 상대경로로 정확히 대조한다(refactor-plan R4: 단계 이름 파일이 여러 패키지에 있음)
+    allowed = {
+        "backend/physicsai_core/spdm.py", "backend/physicsai_core/config.py", "backend/physicsai_core/features.py",
+        "backend/physicsai_core/env_check.py", "backend/physicsai_api/main.py",
+        "backend/physicsai_api/services/job_params/stage2_curation.py", "backend/physicsai_api/services/path_inspect.py",
+        "worker/physicsai_worker/env_check.py", "worker/physicsai_worker/__main__.py", "worker/physicsai_worker/runtime.py",
+        "worker/physicsai_worker/steps/stage2_curation/spdm_import.py",
+    }
     for f in _py():
         src = f.read_text(encoding="utf-8")
         if "spdm_roots" in src:
-            assert f.name in allowed, f
+            assert f.relative_to(REPO).as_posix() in allowed, f
     # SPDM 경로 접근은 spdm.check_spdm_path/scan/open_read/probe_roots로만
-    for rel in ("backend/physicsai_api/services/phase2_params.py", "backend/physicsai_api/services/inspect2.py",
+    for rel in ("backend/physicsai_api/services/job_params/stage2_curation.py", "backend/physicsai_api/services/path_inspect.py",
                 "worker/physicsai_worker/steps/stage2_curation/spdm_import.py", "worker/physicsai_worker/env_check.py"):
         src = (REPO / rel).read_text(encoding="utf-8")
         assert re.search(r"spdm\.(check_spdm_path|scan|open_read|probe_roots)", src), rel

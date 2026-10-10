@@ -20,7 +20,7 @@ from physicsai_core.paths import backup_existing, backup_stamp, display_path, re
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, clamp_limit, decode_cursor, encode_cursor, require_config_ok, require_power, study_root
-from .phase2_params import tpl_is_stale
+from .job_params.stage1_train_data import tpl_is_stale
 
 TPL_REL = "01_train/tpl/simlab_parametered_mesh.tpl"
 TPL_COPY_REL = "01_train/tpl/TEMAPLATE_simlab_parametered_mesh.tpl"

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
-from ..services import train as svc
+from ..services import stage1_train_data as svc
 
 router = APIRouter(tags=["train"])
 ERR = {403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
