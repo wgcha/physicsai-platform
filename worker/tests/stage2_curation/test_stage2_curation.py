@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from physicsai_test_support import API, H, read_record
-from phase2_helpers import _ready_doe, _write_results, job, study, submit
+from helpers_stage1 import _ready_doe, _write_results, job, study, submit
 
 PW, P = H("tok-power", write=True), H("tok-power")
 

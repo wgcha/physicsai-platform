@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from phase2_helpers import _ready_doe, _write_results, job, study, submit
+from helpers_stage1 import _ready_doe, _write_results, job, study, submit
 from physicsai_test_support import API, H, REPO, _p2_env, pbs_command_cfg
 
 PW, P, A, AW = H("tok-power", write=True), H("tok-power"), H("tok-admin"), H("tok-admin", write=True)

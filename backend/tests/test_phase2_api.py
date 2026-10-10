@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from phase2_helpers import make_inputs, study, submit
+from helpers_stage1 import make_inputs, study, submit
 from physicsai_test_support import API, H
 
 PW, P, G = H("tok-power", write=True), H("tok-power"), H("tok-general", write=True)

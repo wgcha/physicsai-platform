@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from phase2_helpers import _ready_doe, _write_results, doe_gen, extract_and_tpl, job, make_inputs, study, submit  # noqa: F401
+from helpers_stage1 import _ready_doe, _write_results, doe_gen, extract_and_tpl, job, make_inputs, study, submit  # noqa: F401
 from physicsai_test_support import API, H, _p2_env, pbs_command_cfg, read_record
 
 PW, P, AW = H("tok-power", write=True), H("tok-power"), H("tok-admin", write=True)

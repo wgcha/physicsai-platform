@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from phase2_helpers import job, study, submit
+from helpers_stage1 import job, study, submit
 from physicsai_test_support import API, H, make_model_folder, make_param_set_folder, read_record
 
 PW, P = H("tok-power", write=True), H("tok-power")

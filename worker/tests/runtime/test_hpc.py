@@ -13,7 +13,7 @@ from sqlalchemy import text
 from physicsai_core.config import load_config_dict
 from physicsai_core.hpc.command import CommandHpcGateway
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec, get_hpc_gateway
-from physicsai_test_support import API, H, make_h3d_tree, make_model_folder, make_param_set_folder, read_record
+from physicsai_test_support import API, H, REPO, make_h3d_tree, make_model_folder, make_param_set_folder, read_record
 
 PW, P, AW = H("tok-power", write=True), H("tok-power"), H("tok-admin", write=True)
 
@@ -57,7 +57,7 @@ def test_none_and_adapter():
 
 
 def test_adapter_imports_nothing():
-    src = (Path(__file__).resolve().parents[2] / "backend" / "physicsai_core" / "hpc" / "adapter.py").read_text()
+    src = (REPO / "backend" / "physicsai_core" / "hpc" / "adapter.py").read_text()
     assert "import_module" not in src and "__import__" not in src
 
 
