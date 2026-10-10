@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from .tpl_render import VALID_FMT_RE, parse_tpl
+from ..tpl_render import VALID_FMT_RE, parse_tpl
 
 ANCHOR = '<Parameters Value="">'
 

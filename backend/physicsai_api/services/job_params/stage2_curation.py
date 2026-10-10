@@ -8,9 +8,9 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from physicsai_core import curation as cu
-from physicsai_core import optimize as opt
-from physicsai_core import spdm
+from physicsai_core.stage2_curation import curation as cu
+from physicsai_core.stage5_optimize import optimize as opt
+from physicsai_core.stage2_curation import spdm
 from physicsai_core.db.repositories import curations as cur_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import spdm_imports as imp_repo

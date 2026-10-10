@@ -6,7 +6,7 @@ import json
 import os
 from typing import Any
 
-from physicsai_core import optimize as opt
+from physicsai_core.stage5_optimize import optimize as opt
 from physicsai_core.db.repositories import artifacts as artifacts_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo

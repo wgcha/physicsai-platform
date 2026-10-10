@@ -16,7 +16,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import IO
 
-from .paths import MAX_PATH_LEN, PathError, WINDOWS_RESERVED, is_link_or_reparse, is_under, real
+from ..paths import MAX_PATH_LEN, PathError, WINDOWS_RESERVED, is_link_or_reparse, is_under, real
 
 _CTRL = re.compile(r"[\x00-\x1f\x7f]")
 _NAME_BAD = re.compile(r"[\s&|<>^%!\";,=()\x00-\x1f\x7f]")
@@ -164,7 +164,7 @@ def open_read(f: SpdmFile) -> IO[bytes]:
     Windows: O_NOFOLLOW가 없어 1)의 reparse 검사 + 3)의 핸들 정보(파일 인덱스·볼륨 번호) 대조로 대신한다.
     위반 → StepFailure(INPUT_CHANGED). 쓰기·속성 변경 호출 없음.
     """
-    from .errors import StepFailure
+    from ..errors import StepFailure
 
     def changed(why: str) -> StepFailure:
         return StepFailure("INPUT_CHANGED", f"스캔 후 SPDM 파일이 바뀌었습니다({why}): {f.source_rel}")

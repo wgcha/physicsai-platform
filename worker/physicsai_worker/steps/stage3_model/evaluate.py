@@ -9,7 +9,7 @@ from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json
-from physicsai_core.parsers.score import parse_scores
+from physicsai_core.stage3_model.score import parse_scores
 
 from ..common import load_model, verify_model_integrity
 

@@ -6,13 +6,13 @@ import os
 import re
 from typing import Any
 
-from physicsai_core import optimize as opt
+from physicsai_core.stage5_optimize import optimize as opt
 from physicsai_core.config import effective_altair
 from physicsai_core.db.repositories import optimizations as opt_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, write_json
-from physicsai_core.param_sets import TPL_NAME
+from physicsai_core.naming import TPL_NAME
 
 from ..common import load_model, verify_model_integrity
 from ..launcher import stage_launcher

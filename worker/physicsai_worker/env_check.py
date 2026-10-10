@@ -18,7 +18,7 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from physicsai_core import spdm
+from physicsai_core.stage2_curation import spdm
 from physicsai_core.childenv import child_env
 from physicsai_core.commands import EXECUTABLE_PLACEHOLDERS
 from physicsai_core.config import (

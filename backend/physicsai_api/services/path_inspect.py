@@ -6,10 +6,10 @@ import fnmatch
 import os
 from typing import Any
 
-from physicsai_core import curation as cu
-from physicsai_core import param_sets as ps_mod
-from physicsai_core import spdm
-from physicsai_core.dataset_split import collect_h3d, n_eval_groups, split_files
+from physicsai_core.stage2_curation import curation as cu
+from physicsai_core.stage4_predict import param_sets as ps_mod
+from physicsai_core.stage2_curation import spdm
+from physicsai_core.stage3_model.dataset_split import collect_h3d, n_eval_groups, split_files
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path, file_safety_problem
@@ -132,7 +132,7 @@ def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[st
                 d = train_repo.get_doe(conn, body.doe_id)
                 if d is not None and d["study_id"] == study["id"]:
                     run_keys = {r["run_key"] for r in train_repo.runs_for_doe(conn, d["id"])}
-        from physicsai_core.train_params import RunDirMatcher
+        from physicsai_core.stage1_train_data.train_params import RunDirMatcher
 
         matcher = RunDirMatcher(s.train_data.result_run_dir_regex, run_keys)
         matched, unmatched, files = set(), [], 0

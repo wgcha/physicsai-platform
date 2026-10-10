@@ -8,8 +8,8 @@ import uuid
 from typing import Any
 
 
-from physicsai_core import nearest as nearest_mod
-from physicsai_core import param_sets as ps_mod
+from physicsai_core.stage4_predict import nearest as nearest_mod
+from physicsai_core.stage4_predict import param_sets as ps_mod
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
@@ -126,7 +126,7 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     """F(phase2 §6.13): ① DOE 결과로 파라미터 세트 폴더를 조립해 1차 검증기·등록 함수로 등록."""
     import csv as _csv
 
-    from physicsai_core import doe_samples
+    from physicsai_core.stage1_train_data import doe_samples
     from physicsai_core.db.repositories import train as train_repo
     from physicsai_core.fileutil import copy_file, write_text
 

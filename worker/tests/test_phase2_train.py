@@ -226,7 +226,7 @@ def test_doe_gen_chain(p2_env, fake_record, monkeypatch):
 
 def test_doe_samples_extractors(tmp_path):
     """V2-TD-4: paramitem 미렌더 건너뜀, csv(var_i 열), none."""
-    from physicsai_core import doe_samples
+    from physicsai_core.stage1_train_data import doe_samples
     from physicsai_core.config import TrainDataCfg
 
     rd = tmp_path / "run__1"

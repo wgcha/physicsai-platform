@@ -11,7 +11,7 @@ from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.param_sets import RUN_KEY_RE
+from physicsai_core.naming import RUN_KEY_RE
 
 from ...context import AppContext
 from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing

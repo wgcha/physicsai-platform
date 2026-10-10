@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from physicsai_core import train_params as tp
+from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file

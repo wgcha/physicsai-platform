@@ -169,7 +169,7 @@ def test_t01_preview_and_curves(p2_env, fake_record, monkeypatch):
 
 def test_curation_units():
     """V2-CU-1·V2-CU-2: to_cfg_datacomp, run 폴더 이름 규칙, ExtendedInfo all 플래그, Parts 블록 없음."""
-    from physicsai_core import curation as cu
+    from physicsai_core.stage2_curation import curation as cu
 
     assert [cu.to_cfg_datacomp(x) for x in ("vonMises", "Scalar value", "P1 (major)", "Max Abs Principal", "Extreme Principal", "")] == \
         ["vonMises", "Scalar", "P1", None, None, None]

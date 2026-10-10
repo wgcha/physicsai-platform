@@ -15,7 +15,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
-from .paths import is_link_or_reparse
+from ..paths import is_link_or_reparse
 
 
 @dataclass

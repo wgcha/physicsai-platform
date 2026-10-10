@@ -6,7 +6,7 @@ import json
 import os
 from typing import Any
 
-from physicsai_core.dataset_split import collect_h3d, dataset_yaml, split_files
+from physicsai_core.stage3_model.dataset_split import collect_h3d, dataset_yaml, split_files
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json, write_text

@@ -13,13 +13,11 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
-from .fileutil import copy_file, sha256_file, write_json, write_text
-from .paths import is_link_or_reparse
-from .tpl_render import VALID_FMT_RE, parse_tpl
+from ..fileutil import copy_file, sha256_file, write_json, write_text
+from ..naming import NAME_RE, RUN_KEY_RE, TPL_NAME
+from ..paths import is_link_or_reparse
+from ..tpl_render import VALID_FMT_RE, parse_tpl
 
-NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
-RUN_KEY_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
-TPL_NAME = "simlab_parametered_mesh.tpl"
 
 
 @dataclass

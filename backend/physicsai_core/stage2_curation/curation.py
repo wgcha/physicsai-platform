@@ -12,8 +12,8 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from .errors import DomainError
-from .paths import BACKUP_DIR, is_link_or_reparse
+from ..errors import DomainError
+from ..paths import BACKUP_DIR, is_link_or_reparse
 
 
 # ---------------------------------------------------------------------------

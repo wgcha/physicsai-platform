@@ -12,8 +12,8 @@ import re
 import xml.etree.ElementTree as ET
 from typing import Any
 
-from .errors import StepFailure
-from .param_sets import NAME_RE
+from ..errors import StepFailure
+from ..naming import NAME_RE
 
 FORMAT_RE = re.compile(r"^%[-0-9.]*[idfeEgG]$")
 MAX_RAW = 64

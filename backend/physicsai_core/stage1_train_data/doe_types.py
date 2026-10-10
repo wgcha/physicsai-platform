@@ -10,7 +10,7 @@ import json
 import os
 from typing import Any
 
-from .errors import DomainError
+from ..errors import DomainError
 
 FIELD_TYPES = ("combo", "int", "bool")
 

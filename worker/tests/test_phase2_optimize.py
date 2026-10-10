@@ -36,7 +36,7 @@ def _setup_opt(c, w, ai: Path, name: str) -> tuple[str, str, str]:
 
 def test_responses_validation_units():
     """V2-OP-1: 이름·중복(대소문자 무시)·'|'·CONSTRAINT·OPT 목적 필수·비제약 행 BOUND/VALUE 제거."""
-    from physicsai_core.optimize import responses_for_run, validate_responses
+    from physicsai_core.stage5_optimize.optimize import responses_for_run, validate_responses
 
     rows, probs = validate_responses(RESP, "OPT")
     assert probs == []
@@ -73,7 +73,7 @@ def test_optimize_chain(p2_env, fake_record, monkeypatch, engine):
     (O / "HST_PHYSICSAI_OPTIMIZATION" / "old.txt").write_text("old")
     assert w.run_once_slot() == "SUCCEEDED", job(c, j["id"])
     cfg = json.loads((O / "INPUT_HST_RUN.json").read_text())
-    from physicsai_core.optimize import RUN_CONFIG_KEYS
+    from physicsai_core.stage5_optimize.optimize import RUN_CONFIG_KEYS
 
     assert set(cfg) == set(RUN_CONFIG_KEYS) and "MAX_STRAIN" not in cfg
     S = ai / "op1" / "04_params" / psid

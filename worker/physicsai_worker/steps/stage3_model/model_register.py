@@ -12,7 +12,7 @@ from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
-from physicsai_core.parsers.loss import as_db_values, parse_loss_file
+from physicsai_core.stage3_model.loss import as_db_values, parse_loss_file
 from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_reparse, PathError, real, unsafe_reason
 
 from ..common import path_failure

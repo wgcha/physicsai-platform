@@ -8,7 +8,7 @@ import shutil
 from datetime import datetime, timezone
 from typing import Any
 
-from physicsai_core import spdm
+from physicsai_core.stage2_curation import spdm
 from physicsai_core.db.repositories import spdm_imports as imp_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json

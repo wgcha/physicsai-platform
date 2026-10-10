@@ -184,7 +184,7 @@ PARAMS = [
 @pytest.mark.parametrize("use_all", [True, False])
 def test_tpl_generate_matches_original(tmp_path, use_all):
     from physicsai_core.config import TrainDataCfg
-    from physicsai_core.train_tpl import TplRules, generate, num_text
+    from physicsai_core.stage1_train_data.train_tpl import TplRules, generate, num_text
 
     used = [p for p in PARAMS if use_all or p["use"]]
     tmpl = tmp_path / "TEMAPLATE.tpl"
@@ -200,7 +200,7 @@ def test_tpl_generate_matches_original(tmp_path, use_all):
 
 def test_tpl_generate_errors_and_validation():
     from physicsai_core.config import TrainDataCfg
-    from physicsai_core.train_tpl import TplRules, TplTemplateInvalid, generate, validate_generated
+    from physicsai_core.stage1_train_data.train_tpl import TplRules, TplTemplateInvalid, generate, validate_generated
 
     rules = TplRules.from_settings(TrainDataCfg())
     with pytest.raises(TplTemplateInvalid) as ei:
@@ -217,7 +217,7 @@ def test_tpl_generate_errors_and_validation():
 
 def test_train_params_units(tmp_path):
     """V2-TD-1·2: XML 파싱(mm 제거·비숫자·이름 규칙·DOCTYPE), 기본 범위, 정수 형식 경고."""
-    from physicsai_core import train_params as tp
+    from physicsai_core.stage1_train_data import train_params as tp
     from physicsai_core.errors import StepFailure
 
     x = tmp_path / "p.xml"
@@ -238,7 +238,7 @@ def test_train_params_units(tmp_path):
 
 
 def test_doe_types_parse_original_json():
-    from physicsai_core.doe_types import find, parse_doe_types, validate_options
+    from physicsai_core.stage1_train_data.doe_types import find, parse_doe_types, validate_options
     from physicsai_test_support import DOE_TYPES
 
     t = parse_doe_types(DOE_TYPES)
@@ -309,7 +309,7 @@ def test_spdm_access_only_in_spdm_module():
     """V2-SPDM-3: SPDM 경로를 읽는 코드는 spdm.py 하나(나머지는 설정 검증·기능 판정·보호 루트 등록만)."""
     # 파일 이름이 아니라 저장소 상대경로로 정확히 대조한다(refactor-plan R4: 단계 이름 파일이 여러 패키지에 있음)
     allowed = {
-        "backend/physicsai_core/spdm.py", "backend/physicsai_core/config/schema.py", "backend/physicsai_core/config/validate.py",
+        "backend/physicsai_core/stage2_curation/spdm.py", "backend/physicsai_core/config/schema.py", "backend/physicsai_core/config/validate.py",
         "backend/physicsai_core/features.py",
         "backend/physicsai_core/env_check.py", "backend/physicsai_api/main.py",
         "backend/physicsai_api/services/job_params/stage2_curation.py", "backend/physicsai_api/services/path_inspect.py",
@@ -325,7 +325,7 @@ def test_spdm_access_only_in_spdm_module():
                 "worker/physicsai_worker/steps/stage2_curation/spdm_import.py", "worker/physicsai_worker/env_check.py"):
         src = (REPO / rel).read_text(encoding="utf-8")
         assert re.search(r"spdm\.(check_spdm_path|scan|open_read|probe_roots)", src), rel
-    tree = ast.parse((REPO / "backend" / "physicsai_core" / "spdm.py").read_text(encoding="utf-8"))
+    tree = ast.parse((REPO / "backend" / "physicsai_core" / "stage2_curation" / "spdm.py").read_text(encoding="utf-8"))
     banned = {"link", "symlink", "replace", "copy2", "copyfile", "utime", "chmod", "rename", "makedirs", "mkdir", "remove",
               "unlink", "write", "write_text", "write_bytes"}
     for n in ast.walk(tree):

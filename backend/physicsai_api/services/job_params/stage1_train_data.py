@@ -8,13 +8,13 @@ from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, Field
 
-from physicsai_core import doe_types as dt_mod
-from physicsai_core import train_params as tp
+from physicsai_core.stage1_train_data import doe_types as dt_mod
+from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.param_sets import NAME_RE, RUN_KEY_RE
+from physicsai_core.naming import NAME_RE, RUN_KEY_RE
 from physicsai_core.paths import allowed_roots, check_user_path
-from physicsai_core.train_tpl import tpl_params_snapshot
+from physicsai_core.stage1_train_data.train_tpl import tpl_params_snapshot
 
 from ...context import AppContext
 from ..path_inspect import starters_in

@@ -20,7 +20,7 @@ PW, P, A, AW = H("tok-power", write=True), H("tok-power"), H("tok-admin"), H("to
 
 
 def test_spdm_open_read_rejects_swaps(tmp_path):
-    from physicsai_core import spdm
+    from physicsai_core.stage2_curation import spdm
     from physicsai_core.errors import StepFailure
 
     root = tmp_path / "spdm"
@@ -55,7 +55,7 @@ def test_spdm_open_read_rejects_swaps(tmp_path):
 
 
 def test_spdm_open_read_size_mtime(tmp_path):
-    from physicsai_core import spdm
+    from physicsai_core.stage2_curation import spdm
     from physicsai_core.errors import StepFailure
 
     (tmp_path / "r").mkdir()
@@ -81,7 +81,7 @@ BODY = "<Root><Model><Parameter><Name>A</Name><Value>3 mm</Value></Parameter></M
 @pytest.mark.parametrize("enc", ["utf-16", "utf-16-le", "utf-8-sig", "latin-1"])
 def test_xml_dtd_rejected_any_encoding(tmp_path, enc):
     from physicsai_core.errors import StepFailure
-    from physicsai_core.train_params import read_extracted_xml
+    from physicsai_core.stage1_train_data.train_params import read_extracted_xml
 
     decl = {"utf-16": "UTF-16", "utf-16-le": "UTF-16", "utf-8-sig": "UTF-8", "latin-1": "ISO-8859-1"}[enc]
     doc = f'<?xml version="1.0" encoding="{decl}"?><!DOCTYPE r [<!ENTITY e "x">]>' + BODY
@@ -99,7 +99,7 @@ def test_xml_dtd_rejected_any_encoding(tmp_path, enc):
 
 def test_xml_utf32_rejected(tmp_path):
     from physicsai_core.errors import StepFailure
-    from physicsai_core.train_params import read_extracted_xml
+    from physicsai_core.stage1_train_data.train_params import read_extracted_xml
 
     p = tmp_path / "x.xml"
     p.write_bytes(('<!DOCTYPE r [<!ENTITY e "x">]>' + BODY).encode("utf-32"))
@@ -126,7 +126,7 @@ def test_masker_contract_rule_and_json_escape():
 
 @pytest.mark.parametrize("bad", ["a\nb", 'a"b', "$x", "[a]", "{a}", "a;b", "a\tb", "a\x00"])
 def test_response_fields_whitelist(bad):
-    from physicsai_core.optimize import validate_responses
+    from physicsai_core.stage5_optimize.optimize import validate_responses
 
     row = {"name": "R1", "source": "H3D", "subcase": 1, "datatype": "Stress", "component": bad, "layer": "", "stat": "MAX",
            "goal": "MINIMIZE"}
@@ -156,7 +156,7 @@ def test_curve_and_selection_fields_whitelist(p2_env):
 
 
 def test_run_dir_matcher_prefix_exact():
-    from physicsai_core.train_params import RunDirMatcher
+    from physicsai_core.stage1_train_data.train_params import RunDirMatcher
 
     m = RunDirMatcher(r"^case_(?P<run_key>run__\d+)$", {"run__00001"})
     assert m.match("case_run__00001") == "run__00001"
