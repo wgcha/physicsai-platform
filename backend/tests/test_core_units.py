@@ -300,3 +300,28 @@ def test_effective_limits():
     assert (l.cores, l.cpu_rate) == (14, 7000) and l.memory_gb == 64
     l = compute_limits(1, 64, "normal", False, 0.7, 256, 512)
     assert l.cpu_rate == 100  # 하한 clamp(1/256 → 39 → 100)
+
+
+def test_error_bundle_commands_head_requires_path_inside_study(tmp_path):
+    """H9 회귀: commands_rel이 Study 밖 형제 폴더(…/abc2)를 가리키면 접두 문자열이 같아도 읽지 않는다."""
+    from physicsai_core.error_bundle import iter_items
+    from physicsai_core.masking import BundleMasker
+
+    root = tmp_path / "abc"
+    sibling = tmp_path / "abc2"
+    (root / "logs").mkdir(parents=True)
+    sibling.mkdir()
+    (root / "logs" / "in.commands.jsonl").write_text('{"target_id": "inside"}\n', encoding="utf-8")
+    (sibling / "out.commands.jsonl").write_text('{"target_id": "outside"}\n', encoding="utf-8")
+    steps = [
+        {"step_no": 1, "step_key": "A", "command": {"commands_rel": "logs/in.commands.jsonl"}},
+        {"step_no": 2, "step_key": "B", "command": {"commands_rel": "../abc2/out.commands.jsonl"}},
+    ]
+    job = {"id": "j1", "job_type": "PREDICT", "state": "FAILED", "failure_code": "X"}
+    items = dict(iter_items(job=job, steps=steps, log_dir=str(root / "logs"), study_root=str(root), hpc_jobs=None,
+                            config_summary={}, environment={}, env_check_latest=None, tail_bytes=1024,
+                            max_total=10**6, masker=BundleMasker([], "sess", "DBURL", environ={}), created="t"))
+    inside = items["steps/step_01_A.command.json"].decode("utf-8")
+    outside = items["steps/step_02_B.command.json"].decode("utf-8")
+    assert "commands_head" in inside and "inside" in inside
+    assert "commands_head" not in outside and "outside" not in outside.replace("../abc2/out.commands.jsonl", "")

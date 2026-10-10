@@ -13,6 +13,7 @@ from collections.abc import Iterator
 from typing import Any
 
 from .masking import BundleMasker
+from .paths import is_under, real
 
 
 def read_tail(path: str, limit: int) -> tuple[str, int]:
@@ -80,7 +81,7 @@ def iter_items(*, job: dict[str, Any], steps: list[dict[str, Any]], log_dir: str
         rel = cmd.get("commands_rel")
         if rel:
             p = os.path.join(study_root, *str(rel).split("/"))
-            if os.path.isfile(p) and os.path.realpath(p).startswith(os.path.realpath(study_root)):
+            if os.path.isfile(p) and is_under(real(p), real(study_root)):  # 경로 컴포넌트 비교(…/abc ≠ …/abc2)
                 with open(p, encoding="utf-8", errors="replace") as fh:
                     lines = []
                     for i, line in enumerate(fh):
