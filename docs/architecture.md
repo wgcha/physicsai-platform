@@ -124,12 +124,17 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 | `stages/stage5/` | 37–205 | ⑤ | `Stage5`(조립·상태 49), `rules.ts`(37: `activeRules`·`cleanResponses`·`METHOD_DEFAULTS`), `OptInputCard`(50), `OptRunCard`(121), `OptResult`(205, `HistoryChart`·`toTable`·`fileEntries`) ← `Stage5.tsx`, `ResponseTable`(197) 유지 |
 | `__tests__/` | 26–133 | 단계별 | `stepper`(V2-FE-1·FeatureGate), `stage1`·`stage2`·`stage5`·`ops`·`links` ← `phase2.test.tsx`, `stage3`·`stage4` ← `stages.test.tsx`, 나머지(`shell`, `permissions`, `queue`, `notifications`, `usePolling`, `mockContract`) 그대로. 3차: `manage`(V3-S1-3·4), `compare`(V3-S2-1~5), `manageStorage`(V3-S3-10 — `manage.test.tsx`가 300줄을 넘지 않게 분리, D3-7). `describe`·`it` 이름(V-ID)과 시험 수(100) 동일 |
 | `test/` | | 공통 | `render.tsx`, `setup.ts`, `recordCalls.ts`(신규, F4: 목 서버 `handle` 호출 기록 — 여러 시험 파일 공용) |
-| `mock/phase2.ts`(965), `mock/server.ts`(805), `mock/data.ts`(426), `install.ts` | | 전 단계 | **F5 보류**(아래) — 이력 기준 이름 그대로 |
-| `mock/manage.ts` | 95 | 공통 | 3차 목 핸들러(PATCH study·archive·unarchive·retry), `server.ts` 라우팅 1곳에서 위임 |
-| `mock/manageStorage.ts` | 162 | 공통 | 3차 S3 목(`StorageMock`: 보고서·스캔/정리 작업 생성·사전조건·종료 결과). `server.finish`가 `manage.storage.onFinish`를 부른다(스캔은 성공 알림 없음) |
+| `mock/server.ts` | 262 | 전 단계 | 1차 공유 상태(`MockServer`: 작업·산출물·알림 배열, `nid` 공유 카운터, 시드 순서)·알림·권한·**라우터 등록 `ROUTES`(한 곳, 순서 = 원래 `handle`의 if 순서)**·`createMockFetch`. `export type { MockResp }` 재노출 |
+| `mock/route.ts` | 40 | 공통 | `MockResp`·`err`·`ok`·`RouteCtx`·`Route`·`needPower`·`needAdmin`(라우트 모듈 공용) |
+| `mock/phase2.ts` | 167 | ①②⑤ | 2차 공유 상태(`Phase2Mock`: setups·does·runs·curations·opts·envChecks 등, 시험이 `s.p2.*`로 접근)·시드 순서 조립·`feature`/`status`/`summaryExtra`·작업 훅 분배(`precheck`·`onCreate`·`finish`·`tick`)·2차 경로 검사 `inspect`. `STAGE_LABEL` 등 재노출 |
+| `mock/stage1.ts`(198)·`stage1Jobs.ts`(199), `stage2.ts`(210), `stage5.ts`(139) | | ①②⑤ | 단계별 시드·출력 변환·작업 훅·라우트(`trainRoutes`·`curationRoutes`·`optimizeRoutes`). ①은 라우트·시드·파라미터 표(`stage1`)와 작업 훅·PBS run tick(`stage1Jobs`)으로 나눔 |
+| `mock/stage3.ts`(83), `stage4.ts`(108), `studies.ts`(101), `jobs.ts`(129), `engine.ts`(86), `ops.ts`(214) | | ③④·공통 | ③ 데이터셋·모델 출력·완료·§10.4 라우트, ④ 예측 결과·`check`·① 결과 파라미터 세트·완료·파라미터 세트 라우트, §10.3 Study 라우트(needPower 위치·404 그대로 한 함수), §10.5 작업(요약·생성·로그·라우트), 진행 엔진(대기열·`tick`·완료 분배), 운영(§10.2 me·상태·대기열·자원, §10.7 알림, 환경 점검 시드·진행·라우트) |
+| `mock/data.ts`(7) ← `base.ts`(30)·`steps.ts`(185)·`seed.ts`(177)·`fixtures.ts`(64)·`catalog.ts`(74), `install.ts` | | 공통 | `data.ts`는 옛 import 경로용 재노출만. 기초 값(rng·iso·사용자·프로젝트), step 체인·`makeSteps`·`baseJob`, 1차 시드·가짜 응답, 산출물 본문, 2차 공용 상수(`STAGE_LABEL`·`FEATURE_MISSING`·`FEATURE_OF`·`DOE_TYPES`) |
+| `mock/manage.ts` | 96 | 공통 | 3차 목 핸들러(PATCH study·archive·unarchive·retry), `server.ts` `ROUTES`에서 위임 |
+| `mock/manageStorage.ts` | 162 | 공통 | 3차 S3 목(`StorageMock`: 보고서·스캔/정리 작업 생성·사전조건·종료 결과). `engine.ts`의 완료 처리가 `manage.storage.onFinish`를 부른다(스캔은 성공 알림 없음) |
 | `styles.css` | 2,076 | 공통 | 전역 한 파일(H6 보류) |
 
-**F5(목 서버 분할) 보류 사유**: `Phase2Mock`은 `MockServer`를 역참조하며 상태(작업·알림 배열, 진행 `tick`·`finish`·`onProgress` 훅, `summaryExtra`)를 공유하고(`server.ts:114–126, 273–331`), 목 ID는 공유 카운터(`server.ts:134` `${prefix}-${++this.idn}`)의 **생성 순서**로 정해진다. 파일을 나누면 생성자 초기화 순서가 바뀌어 시드 데이터의 ID가 달라질 위험이 있고(시험·`dev:mock` 화면이 시드 ID에 기대는 곳 포함), 이를 막으려면 상태 저장소를 먼저 분리해야 해 "통째 이동"이 아니게 된다. 동작 불변을 시험만으로 보장하기 어려워 3차 이후로 미룬다. 3차 새 목 핸들러는 `mock/phase2.ts`에 넣지 않고 `mock/manage.ts`(Study 관리·용량, phase3.md §7)로 분리해 `server.ts`의 라우팅에서 위임한다.
+**F5(목 서버 분할, 2026-10-11 실행)**: 이전 보류 사유(공유 상태·`nid` 생성 순서)는 상태를 옮기지 않고 해결했다 — 상태는 그대로 `MockServer`·`Phase2Mock` 필드에 두고(시험의 `s.p2.setups`·`s.p2.opts`·`s.p2.summaryExtra` 교체·`server.handle` 교체가 그대로 동작), 단계 모듈은 그 인스턴스를 인자로 받는 함수다. 시드는 원래 순서(1차 시드 → `seedJobs` → ① → SPDM·② → ⑤ → 환경 점검)로 호출해 목 ID가 같다. 라우트는 `server.ts` `ROUTES` 한 곳에 원래 우선순위대로 등록(예: 2차 `param-sets/from-train`이 §10.3 `param-sets`보다 먼저). 검증은 refactor-plan.md §7.
 
 ### 1.6 `scripts`, `deploy`, `config`, `migrations`
 
@@ -137,7 +142,7 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 - 오프라인 묶음(3차 S4, D3-27): `collect-offline.{sh,ps1}`가 ① `pip wheel packages/simdash_adapters --no-deps -w dist/wheels` ② `pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock …`(로컬 wheel만으로 `simdash-adapters==0.1.0` 고정 확인) ③ `pip download -r deploy/requirements.lock …`(PyPI 외부 의존성만, `--find-links` 없음) 순서. lock 두 개: `deploy/requirements.lock` = PyPI에서 받는 외부 의존성(어댑터 없음 — 이름 선점 차단), `deploy/requirements.local.lock` = 저장소 안 패키지 고정(PyPI에서 받지 않음). 설치(`install.ps1`·`update.ps1`·`start-demo.ps1`)는 변경 없음(`--no-index --find-links wheels physicsai-platform`이 의존성으로 함께 설치). 시험 `test_adapters_compat`가 순서·내용 대조.
 - `deploy/`: Windows 배포 ps1·bat + `demo/demo_setup.py`(227: CLI 진입점·`up`/`down`, `physicsai_*`를 최상위 import하지 않음) + R12 분할 `demo_common.py`(경로·상수·공용 함수), `demo_init.py`(`init`: 가짜 도구·자원·설정), `demo_seed.py`(`seed`), `demo_db.py`(`db-up`/`db-down`). 같은 폴더 모듈을 import하므로 `sys.dont_write_bytecode = True`(deploy/ 아래 `__pycache__` 금지 — 정적 시험이 deploy/ 파일을 텍스트로 읽는다). 시험 `test_demo.py`·`test_phase2_units.py`가 내용 검사(`demo_setup.py`의 `"packages" / "simdash_adapters" / "src"` 포함).
 - `migrations/versions/`: `0001_initial`(1차 동결본)·`0002_phase2`·`0003_hpc_cancel_failed`·`0004_study_manage`(3차 S3: `jobs.stage` 0 허용, phase3.md §5.10). `MIGRATION_HEAD = "0004_study_manage"`(`physicsai_core/db/__init__.py`), downgrade는 RuntimeError.
-- `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config/schema.py`**(리팩터링 전 `config.py`)(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/phase2.ts:55` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
+- `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config/schema.py`**(리팩터링 전 `config.py`)(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/catalog.ts` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
 
 ### 1.7 `packages/simdash_adapters` (3차 S4, 공통 어댑터 패키지)
 
@@ -364,7 +369,8 @@ src/
     stage3/  Stage3.tsx, DatasetCards.tsx, ModelRegisterCard.tsx, EvaluateCard.tsx
     stage4/  Stage4.tsx(조립), ParamSetCard.tsx(+FromTrainForm), PredictWorkspace.tsx, useSamples.ts, ParamInputs.tsx, PredictResult.tsx
     stage5/  Stage5.tsx(조립), rules.ts(activeRules, cleanResponses), OptInputCard.tsx, OptRunCard.tsx, OptResult.tsx(+HistoryChart), ResponseTable.tsx
-  mock/      server.ts(라우팅·공통), data.ts, install.ts, stage1.ts, stage2.ts, stage5.ts, ops.ts ← phase2.ts 분할  (F5 보류, §1.5)
+  mock/      server.ts(공유 상태·ROUTES 등록), route.ts, phase2.ts(2차 공유 상태), stage1.ts, stage1Jobs.ts, stage2.ts, stage3.ts, stage4.ts, stage5.ts,
+             studies.ts, jobs.ts, engine.ts, ops.ts, manage.ts, manageStorage.ts, data.ts(재노출) ← base·steps·seed·fixtures·catalog, install.ts  (F5, §1.5)
   __tests__/ shell, permissions, queue, notifications, usePolling, mockContract (그대로)
              stage1.test.tsx, stage2.test.tsx, stage5.test.tsx, ops.test.tsx, links.test.tsx ← phase2.test.tsx 분할
              stage3.test.tsx, stage4.test.tsx ← stages.test.tsx 분할

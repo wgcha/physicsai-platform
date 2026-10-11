@@ -1,5 +1,5 @@
-// 3차 S3(phase3.md §5) 목: Study 용량 계산·정리. manage.ts가 위임한다(F5 보류 — phase2.ts에 넣지 않음).
-// 파일 시스템 흉내 = Study별 고정 후보 목록 + 옮긴 rel 집합. 작업 진행은 server.tick이 하고 끝날 때 onFinish가 결과를 채운다.
+// 3차 S3(phase3.md §5) 목: Study 용량 계산·정리. manage.ts가 위임한다.
+// 파일 시스템 흉내 = Study별 고정 후보 목록 + 옮긴 rel 집합. 작업 진행은 server.tick(engine.ts)이 하고 끝날 때 onFinish가 결과를 채운다.
 import type { CategoryKey, Job, Study, StorageCategory } from "../api/types";
 import type { MockResp, MockServer } from "./server";
 

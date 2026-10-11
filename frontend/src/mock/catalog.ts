@@ -1,0 +1,74 @@
+// 목 공용 상수(2차): 단계 표시·기능 → missing 키·작업 → 기능·DOE 유형. data.ts·phase2.ts가 재노출.
+import type { DoeType, FeatureKey, JobType } from "../api/types";
+
+export const STAGE_LABEL: Record<JobType, string> = {
+  DATASET_CREATE: "③-1",
+  PACKAGE_EXPORT: "③-2",
+  MODEL_REGISTER: "③-4",
+  EVALUATE: "③-5",
+  PREDICT: "④",
+  PREDICT_VERIFY: "④",
+  TD_EXTRACT_PARAMS: "①-1",
+  TD_DOE_GEN: "①-3",
+  TD_SOLVE: "①-4",
+  TD_RESULT_IMPORT: "①-5",
+  TD_RESP_EXTRACT: "①-6",
+  SPDM_IMPORT: "②-0",
+  CU_H3D_PREVIEW: "②-1",
+  CU_H3D_CURATE: "②-2",
+  CU_T01_PREVIEW: "②-3",
+  CU_T01_CURVES: "②-4",
+  OPTIMIZE: "⑤",
+  STUDY_STORAGE_SCAN: "관리",
+  STUDY_CLEANUP: "관리",
+};
+
+/** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
+export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
+  train_extract: ["resources.pyd_dir", "commands.simlab_extract_params"],
+  train_tpl: ["resources.simlab_tpl_template"],
+  train_doe: ["resources.doe_design_type_json", "resources.hypermesh_include_tcl", "resources.launchers.gen_radioss"],
+  train_solve: ["hpc.mode"],
+  train_import: ["hpc.transfer.collect_patterns"],
+  train_resp: ["commands.response_extract"],
+  curation_h3d: ["resources.preview_h3d_tcl", "altair.hvtrans_exe_path"],
+  curation_t01: ["resources.preview_hg_tcl", "resources.curate_hg_tcl"],
+  spdm_import: ["storage.spdm_roots"],
+  optimize: ["resources.extract_minmax_tcl", "resources.launchers.optimization", "altair.hstpy_path"],
+  dataset_create: ["altair.edspy_path"],
+  evaluate: ["altair.edspy_path"],
+  predict: ["altair.edspy_path", "commands.geom_update"],
+};
+export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
+
+export const FEATURE_OF: Partial<Record<JobType, FeatureKey>> = {
+  DATASET_CREATE: "dataset_create",
+  EVALUATE: "evaluate",
+  PREDICT: "predict",
+  TD_EXTRACT_PARAMS: "train_extract",
+  TD_DOE_GEN: "train_doe",
+  TD_SOLVE: "train_solve",
+  TD_RESULT_IMPORT: "train_import",
+  TD_RESP_EXTRACT: "train_resp",
+  CU_H3D_PREVIEW: "curation_h3d",
+  CU_H3D_CURATE: "curation_h3d",
+  CU_T01_PREVIEW: "curation_t01",
+  CU_T01_CURVES: "curation_t01",
+  SPDM_IMPORT: "spdm_import",
+  OPTIMIZE: "optimize",
+};
+
+export const DOE_TYPES: DoeType[] = [
+  {
+    label: "LatinHyperCube", value: "TYPE_LATINHYPERCUBE", default_runs: 30, runs_editable: true,
+    fields: [
+      { key: "RANDOM_SEED", label: "Random Seed", type: "int", default: 1, min: 1, max: 99999 },
+      { key: "INCLUDE_NOMINAL", label: "Nominal run 포함", type: "bool", default: true },
+    ],
+  },
+  { label: "Hammersley", value: "TYPE_HAMMERSLEY", default_runs: 30, runs_editable: true, fields: [] },
+  {
+    label: "FullFactorial", value: "TYPE_FULLFACT", default_runs: 9, runs_editable: false,
+    fields: [{ key: "LEVELS", label: "Levels", type: "combo", items: ["2", "3"], default: "3" }],
+  },
+];

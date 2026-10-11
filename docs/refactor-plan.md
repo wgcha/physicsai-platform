@@ -213,6 +213,7 @@ R0에서 추가하는 기준선 시험(이후 모든 단계에서 자동 확인)
 
 - `mock/phase2.ts`(965, `Phase2Mock`) → `mock/stage1.ts`, `mock/stage2.ts`, `mock/stage5.ts`, `mock/ops.ts` + 공용 상수(`STAGE_LABEL`, `FEATURE_MISSING`, `DOE_TYPES`)는 `mock/data.ts`로. `mock/server.ts`의 `handle`(475~) 라우팅은 유지하고 위임 대상만 교체.
 - 위험: 중간(목 상태 공유). `mockContract.test.ts`(목 ↔ openapi) + `npm run build:mock` + `dev:mock` 수동 확인.
+- 결과: §7(2026-10-11 실행 — 공용 상수는 `mock/catalog.ts`에 두고 `data.ts`가 재노출).
 
 ## 4. 보류 항목(이번 범위에서 하지 않음)
 
@@ -262,3 +263,16 @@ Impl-Backend, 브랜치 `claude/phase3`(기준 `a2154ea`). 목표: 300줄 넘는
 - 시험 변경: 기대값·검사 범위 무변경. 유일한 내용 수정은 `common/test_static_security.py::test_no_timeout_handling_in_executor` 검사 대상에 `step_process.py` 추가(run_local이 옮겨 간 파일 — 범위 확대, §0-4).
 - H3(시험 함수 단위 분할·`physicsai_test_support` 분할)은 위 표 범위만큼 해제. `test_phase2_api`·`test_verifier_fixes*`·`test_phase2_fixes`는 300줄 이하라 그대로.
 - 검증: `scripts/test-all.sh` 통과(pytest 454 passed·8 skipped(Windows 전용·pwsh 없음 — 기존과 같음), 수집 462개 동일, `-m windows` 7개 동일, 프런트 139), `git diff --stat backend/openapi.json` 0, 이동 전후 줄 대조(원래 파일의 코드 줄이 새 파일들에 모두 있음).
+
+## 7. F5 (2026-10-11) 목 서버 분할·300줄 초과 프런트 파일
+
+Impl-Frontend, 브랜치 `claude/phase3`(기준 `ae0985a`). 대상: `frontend/src`의 300줄 초과 `.ts/.tsx`(생성 파일 `schema.d.ts` 제외) — `mock/` 3개뿐(화면 코드는 F1~F4 후 모두 300줄 이하). **동작 불변**: 상태는 옮기지 않고(`MockServer`·`Phase2Mock` 필드 그대로) 메서드 본문을 인스턴스를 받는 함수로 옮김, 시드 호출 순서 유지(목 ID 동일), 라우터 등록은 `server.ts` `ROUTES` 한 곳(원래 `handle`의 if 순서 그대로), 옛 import 경로는 재노출(`data.ts` → 하위 모듈, `server.ts` → `MockResp`, `phase2.ts` → `STAGE_LABEL` 등). 시험 파일 무수정.
+
+| 대상(전 줄 수) | 후(파일 수, 최대 줄) | 나눈 내용 |
+|---|---|---|
+| `mock/phase2.ts`(967) | 6개, 최대 214 | `phase2`(167, 2차 공유 상태·시드 순서·훅 분배·`inspect`) + `stage1`(198, ① 시드·DOE 출력·라우트·파라미터 표)·`stage1Jobs`(199, ① 사전 검사·DOE 행·완료·PBS tick·hpc_summary)·`stage2`(210, ②·SPDM)·`stage5`(139, ⑤)·`ops`(환경 점검 부분) |
+| `mock/server.ts`(811) | 8개, 최대 262 | `server`(262, 1차 상태·알림·`ROUTES`·fetch) + `route`(40, 응답·권한 공용)·`engine`(86, 대기열·tick·완료 분배)·`jobs`(129, §10.5)·`studies`(101, §10.3)·`stage3`(83, ③)·`stage4`(108, ④)·`ops`(214, §10.2·§10.7·환경 점검) |
+| `mock/data.ts`(460) | 6개, 최대 185 | `data`(7, 재노출만) + `base`(30)·`steps`(185)·`seed`(177)·`fixtures`(64)·`catalog`(74, 계획대로 2차 공용 상수 `STAGE_LABEL`·`FEATURE_MISSING`·`DOE_TYPES`를 data 경로로) |
+
+- 예외: 없음(`frontend/src` 300줄 초과 = 0, `schema.d.ts` 생성물 제외). `Phase2Mock.handle`은 없앰(라우트가 `ROUTES`로 이동, 호출부 없음). `manage.ts`·`manageStorage.ts`는 머리 주석만 갱신.
+- 검증: `scripts/test-all.sh` 통과(프런트 vitest 139·tsc), `npm run build`·`build:mock` 성공. **차등 추적**: 시각 고정(fake Date)으로 6개 구성(admin·power+PBS·PBS 취소 실패·general·anon·기능 비활성+demo)에서 요청 약 2,100개(GET 전 경로·쓰기·작업 19종 생성·tick 30회·finishAll·전 산출물 본문)와 최종 상태(작업·산출물·알림·`p2` 전 필드·`idn`·`seq`)를 JSON으로 덤프 → 분할 전후 **바이트 동일**(6.6 MB, 임시 시험 파일은 삭제). 스크린샷(phase2·phase3·1차) 재생성 픽셀 비교: 전후 차이는 같은 코드 두 번 실행 간 차이(현재 시각·자원 게이지·상대 시각) 이하 — 화면 변화 없음. 저장소의 `screenshots/`는 갱신하지 않음.

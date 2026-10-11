@@ -1,5 +1,5 @@
 // 3차(phase3.md §3, §5, §7) 목 핸들러: Study 이름 변경·보관·보관 해제, 작업 재시도, 용량·정리(manageStorage.ts).
-// F5 보류(architecture.md §1.5)로 phase2.ts에 넣지 않고 server.ts 라우팅 1곳에서 위임한다.
+// server.ts 라우터 등록(ROUTES) 1곳에서 위임한다(F5 분할 후에도 manage 라우트 모듈로 유지).
 // 목 ID는 server의 공유 카운터(nid)를 요청 처리 때만 쓴다(시드 생성 뒤).
 import type { Job, Me } from "../api/types";
 import type { MockResp, MockServer } from "./server";
