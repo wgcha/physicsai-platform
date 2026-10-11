@@ -1385,3 +1385,24 @@ AGENTS.md 역할표에 `deploy/**`를 Impl-Backend 소유로 추가한다(이번
 | # | 위치 | 내용 |
 |---|---|---|
 | P1 | 1차 §21.1·§21.2, 이 문서 §19.1·§19.2 파일 표 | 동작 불변 리팩터링([refactor-plan.md](../refactor-plan.md))으로 파일 위치가 바뀐다. 파일 표는 **소유권 경계**(`backend/**`·`worker/**`·`frontend/**`) 기준으로만 유효하고, 개별 파일 위치는 [architecture.md](../architecture.md)가 우선한다. `worker/physicsai_worker/claim.py`(미사용 shim)는 삭제한다. 공개 API·openapi·DB·설정 키·job_type·step_key는 바뀌지 않는다 |
+
+### 옛 파일명 → 현재 위치(Plan, 2026-10-10 — 리팩터링 R0~R11·F1~F4 완료, 기준 `ad41635`)
+
+본문(§13.3·§19 등)의 옛 파일명은 고치지 않고 아래 한 줄씩으로 대응한다. 상세 위치는 [architecture.md](../architecture.md) §1.
+
+- `physicsai_core/config.py` → `physicsai_core/config/` 패키지(`_validate_phase2`는 `validate_stages.py`) — architecture.md §1.1
+- `physicsai_core/{train_tpl,train_params,doe_types,doe_samples}.py` → `stage1_train_data/` — architecture.md §1.1
+- `physicsai_core/{curation,spdm}.py` → `stage2_curation/` (§13.3 "SPDM 접근은 `spdm.py` 한 곳" 규칙은 `stage2_curation/spdm.py`에 그대로) — architecture.md §1.1
+- `physicsai_core/optimize.py` → `stage5_optimize/optimize.py` — architecture.md §1.1
+- `parsers/log_errors.Masker`·`error_bundle.BundleMasker` → `physicsai_core/masking.py` — architecture.md §1.1
+- `services/phase2_params.py` → `services/job_params/{base,stage1_train_data,stage2_curation,stage3_model,stage4_predict,stage5_optimize}.py` — architecture.md §1.2
+- `services/inspect2.py` → `services/path_inspect.py` — architecture.md §1.2
+- `services/{train,curations,optimize}.py` → `services/{stage1_train_data,stage2_curation,stage5_optimize}.py` — architecture.md §1.2
+- `worker/…/claim.py` → 삭제 — architecture.md §1.3
+- `worker/…/steps/train.py` → `steps/stage1_train_data/{extract,doe_gen,solve,result_import,resp_extract,_shared}.py` — architecture.md §1.3
+- `worker/…/steps/{curation,spdm_import}.py` → `steps/stage2_curation/{source,preview,h3d_curate,t01_curves,spdm_import}.py` — architecture.md §1.3
+- `worker/…/steps/optimize.py` → `steps/stage5_optimize/optimize.py`; `verify._map_path` → `physicsai_core/hpc/command.map_path`; COLLECT 간격 상수 → `steps/_collect.py` — architecture.md §1.3
+- 시험 `test_phase2_{db,train,curation,optimize,admin}.py`·`phase2_helpers.py` → `common/test_db_phase2_schema.py`·`stage1_train_data/test_stage1_train.py`·`stage2_curation/test_stage2_curation.py`·`stage5_optimize/test_stage5_optimize.py`·`ops/test_ops_admin.py`·`helpers_stage1.py` — architecture.md §1.4
+- 프런트 `stages/stage1/{TrainCards,SolveCards}.tsx`, `stage2/H3dCards.tsx`, `stage3/ModelCards.tsx`, `stage4/Stage4.tsx`·`stage5/Stage5.tsx`(단일 파일), `shell/useOpenJob.ts` → 카드별 파일·`hooks/useOpenJob.ts` — architecture.md §1.5
+- 프런트 시험 `__tests__/phase2.test.tsx`·`stages.test.tsx` → `stepper`·`stage1`~`stage5`·`ops`·`links.test.tsx`(V-ID 그대로), 공용 `test/recordCalls.ts` — architecture.md §1.5
+- 프런트 `mock/phase2.ts` → 그대로(F5 보류, architecture.md §1.5)

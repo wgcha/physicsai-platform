@@ -1354,3 +1354,20 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 ## 변경 메모 (Plan, 2026-10-10 — 소스 구조 정리)
 
 §21 파일 표의 개별 파일 위치는 [architecture.md](../architecture.md)가 우선한다(phase2.md 변경 메모 P1). 소유권 경계는 그대로.
+
+### 옛 파일명 → 현재 위치(Plan, 2026-10-10 — 리팩터링 R0~R11·F1~F4 완료, 기준 `ad41635`)
+
+본문(§4.4·§12.2·§21)의 옛 파일명은 고치지 않고 아래 한 줄씩으로 대응한다. 상세 위치는 [architecture.md](../architecture.md) §1.
+
+- `physicsai_core/config.py` → `physicsai_core/config/` 패키지(`schema`·`loader`·`validate`·`validate_stages`·`derived`, import 경로 불변) — architecture.md §1.1
+- `physicsai_core/parsers/{loss,score,xydata}.py` → `stage3_model/{loss,score}.py`, `stage4_predict/xydata.py`(`parsers/`에는 `log_errors`·`name_value`만) — architecture.md §1.1
+- `physicsai_core/{param_sets,nearest,dataset_split}.py` → `stage4_predict/{param_sets,nearest}.py`, `stage3_model/dataset_split.py`, 공용 이름은 `naming.py` — architecture.md §1.1
+- `physicsai_core/notifications.py` → `db/repositories/notifications.py` — architecture.md §1.1
+- `repositories/jobs.py`의 claim/renew/release → `repositories/job_lease.py` — architecture.md §1.1
+- `schemas`(단일 `__init__.py`) → `schemas/` 10개 모듈(`S.Name` 재노출) — architecture.md §1.2
+- `services/{studies(③·④ 부분),inspect2,phase2_params,train,curations,optimize}.py` → `services/{stage3_model,stage4_predict,path_inspect,job_params/,stage1_train_data,stage2_curation,stage5_optimize}.py` — architecture.md §1.2
+- `worker/physicsai_worker/claim.py` → 삭제(미사용 shim) — architecture.md §1.3
+- `worker/…/executor.py`의 StepContext·제어 예외 → `step_context.py`·`signals.py` — architecture.md §1.3
+- `worker/…/steps/{dataset,package,model_register,evaluate,predict,verify}.py` → `steps/stage3_model/`·`steps/stage4_predict/` — architecture.md §1.3
+- 시험 파일(`test_phase2_db.py`, `phase2_helpers.py`, 워커 `test_*` 루트 파일) → `backend/tests/common/`·`helpers_stage1.py`·`worker/tests/{runtime,stage*,ops,e2e}/` — architecture.md §1.4
+- §21.2 프런트 파일 표(`DatasetCreateCard`, `ModelTable`, `LossChart` 등 계획 이름) → 실제 파일은 architecture.md §1.5(`stages/stage3/{DatasetCards,ModelRegisterCard,EvaluateCard}.tsx`, `components/Chart.tsx` 등)

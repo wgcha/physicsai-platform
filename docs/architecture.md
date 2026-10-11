@@ -25,7 +25,7 @@
 
 ## 1. 현재 구조 지도
 
-백엔드·워커·시험(§1.1~§1.4)은 리팩터링 R0~R11 실행 후 기준(브랜치 `claude/phase3`, 커밋 `e125e68`), 프런트·스크립트(§1.5~§1.6)는 기준 커밋 `b4f7817` 그대로. 줄 수는 `wc -l` 기준. "단계"는 ①학습데이터 생성 ②데이터 정리 ③데이터셋·모델 ④단일 예측 ⑤최적화, "공통"은 단계 무관. 리팩터링 전 위치·문제는 §2·§3(근거)과 refactor-plan.md에 남긴다.
+백엔드·워커·시험(§1.1~§1.4)은 리팩터링 R0~R11 실행 후 기준(브랜치 `claude/phase3`, 커밋 `e125e68`), 프런트(§1.5)는 F1~F4 실행 후 기준(커밋 `ad41635`), 스크립트(§1.6)는 기준 커밋 `b4f7817` 그대로. 줄 수는 `wc -l` 기준. "단계"는 ①학습데이터 생성 ②데이터 정리 ③데이터셋·모델 ④단일 예측 ⑤최적화, "공통"은 단계 무관. 리팩터링 전 위치·문제는 §2·§3(근거)과 refactor-plan.md에 남긴다.
 
 ### 1.1 `backend/physicsai_core` (공용 라이브러리)
 
@@ -94,21 +94,24 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 | `worker/tests/` 루트 | 보류(H3): `test_phase2_fixes`, `test_verifier_fixes_worker` |
 | 정적 시험의 경로 | `test_phase2_units.py` SPDM 검사는 저장소 상대경로로 정확히 대조(`core/stage2_curation/spdm.py`, `core/config/{schema,validate}.py`, `api/services/{job_params/stage2_curation,path_inspect}.py`, `worker/steps/stage2_curation/spdm_import.py` 등), `test_static_security.py` timeout 검사는 `executor.py`+`step_context.py`, `test_hpc.py`는 `REPO` 기준, COLLECT 간격 monkeypatch 대상은 `physicsai_worker.steps._collect` |
 
-### 1.5 `frontend/src` (7,900줄 남짓, 생성물 제외)
+### 1.5 `frontend/src` (F1~F4 실행 후, 커밋 `ad41635`. 약 10,500줄, 생성물 제외)
 
-| 위치 | 줄 | 문제 |
-|---|---:|---|
-| `api/`(client 147, endpoints 137, types 261, generated) | | 경계 양호: 화면 코드에 `fetch` 없음, `mock`은 `main.tsx:10` 동적 import와 `test/render.tsx`만 |
-| `stages/stage4/Stage4.tsx` | **477** | `ParamSetCard`(17) + `FromTrainForm`(133) + `useSamples`(202) + `PredictWorkspace`(225) + `Stage4`(469) |
-| `stages/stage5/Stage5.tsx` | **447** | `activeRules`·`cleanResponses`(35–50) + `OptInputCard`(51) + `OptRunCard`(99) + `HistoryChart`(236) + `OptResult`(291) + `Stage5`(411) |
-| `stages/stage1/SolveCards.tsx` | 430 | `DoePicker`·`RunStateBar`·`RunTable`·`SolveCard`·`ResultCollectCard`·`RunResponseCard` 6개 |
-| `stages/stage1/TrainCards.tsx` | 391 | `CadExtractCard`·`ParamTableCard`·`DoeGenCard` |
-| `stages/stage2/H3dCards.tsx`(327), `stages/stage3/ModelCards.tsx`(319), `DatasetCards.tsx`(273) | | 카드 여러 개가 한 파일. phase2.md §19.2 파일 표(`CadExtractCard`, `SolveCard`, …)는 카드별 파일을 전제 |
-| `mock/phase2.ts`(965), `mock/server.ts`(798), `mock/data.ts`(426) | | 이력 기준 이름, 단계 경계 없음 |
-| `__tests__/phase2.test.tsx` | 495 | `describe`는 이미 단계별(V2-FE-2 ①, -3 ②, -4 ⑤, -5 환경 점검, -6 연결) — 파일만 이력 기준 |
-| `shell/useOpenJob.ts` | 27 | 훅이 `shell/`에 있음 |
-| `styles.css` | 2,076 | 전역 한 파일 |
-| 단계 간 import | | `pages/ImportLanding.tsx:8` → `stages/stage2/Sources`(`SpdmSummary`) 1건뿐 — 양호 |
+| 위치 | 줄 | 단계 | 책임 |
+|---|---:|---|---|
+| `api/` | client 147, endpoints 137, types 261, generated | 공통 | 경계 양호: 화면 코드에 `fetch` 없음, `mock`은 `main.tsx` 동적 import와 `test/render.tsx`만 |
+| `app/`, `pages/`, `panels/`, `shell/`, `components/`, `lib/` | | 공통 | 그대로. `shell/useOpenJob.ts`는 `hooks/`로 이동(F3) |
+| `hooks/` | 27–99 | 공통 | `useArtifact`, `useJobRunner`, `useLatestJob`, `useNotifications`, `useOpenJob`(← `shell/`), `usePolling` |
+| `stages/stage1/` | 22–188 | ① | `Stage1`(조립 23), `TrainContext`(90), `CadExtractCard`(64)·`ParamTableCard`(188, `rowIssue`)·`DoeGenCard`(154, `defaultOptions`·`OptionInput`) ← `TrainCards.tsx`, `DoePicker`(22)·`RunStateBar`(37)·`RunTable`(95)·`SolveCard`(119, `PBS_NONE_TEXT`)·`ResultCollectCard`(100)·`RunResponseCard`(83) ← `SolveCards.tsx` |
+| `stages/stage2/` | 29–224 | ② | `Stage2`, `CurationContext`, `Sources`(201, `SpdmSummary` — `pages/ImportLanding`이 import하는 유일한 단계 간 import), `H3dPreviewCard`(64, `useH3dPreview`)·`H3dCurateCard`(191, `PartList`)·`CurationResult`(44)·`CurationFileList`(40) ← `H3dCards.tsx`, `T01Cards`(224, 유지) |
+| `stages/stage3/` | 16–273 | ③ | `Stage3`(16), `DatasetCards`(273, 유지), `ModelRegisterCard`(132, `LogStatusText`·`NAME_RE`)·`EvaluateCard`(194, `useModelDetails`) ← `ModelCards.tsx` |
+| `stages/stage4/` | 14–257 | ④ | `Stage4`(조립 14), `ParamSetCard`(192, `FromTrainForm` 포함)·`useSamples.ts`(27)·`PredictWorkspace`(257) ← `Stage4.tsx`, `ParamInputs`(207)·`PredictResult`(129) 유지 |
+| `stages/stage5/` | 37–205 | ⑤ | `Stage5`(조립·상태 49), `rules.ts`(37: `activeRules`·`cleanResponses`·`METHOD_DEFAULTS`), `OptInputCard`(50), `OptRunCard`(121), `OptResult`(205, `HistoryChart`·`toTable`·`fileEntries`) ← `Stage5.tsx`, `ResponseTable`(197) 유지 |
+| `__tests__/` | 26–133 | 단계별 | `stepper`(V2-FE-1·FeatureGate), `stage1`·`stage2`·`stage5`·`ops`·`links` ← `phase2.test.tsx`, `stage3`·`stage4` ← `stages.test.tsx`, 나머지(`shell`, `permissions`, `queue`, `notifications`, `usePolling`, `mockContract`) 그대로. `describe`·`it` 이름(V-ID)과 시험 수(100) 동일 |
+| `test/` | | 공통 | `render.tsx`, `setup.ts`, `recordCalls.ts`(신규, F4: 목 서버 `handle` 호출 기록 — 여러 시험 파일 공용) |
+| `mock/phase2.ts`(965), `mock/server.ts`(798), `mock/data.ts`(426), `install.ts` | | 전 단계 | **F5 보류**(아래) — 이력 기준 이름 그대로 |
+| `styles.css` | 2,076 | 공통 | 전역 한 파일(H6 보류) |
+
+**F5(목 서버 분할) 보류 사유**: `Phase2Mock`은 `MockServer`를 역참조하며 상태(작업·알림 배열, 진행 `tick`·`finish`·`onProgress` 훅, `summaryExtra`)를 공유하고(`server.ts:114–126, 273–331`), 목 ID는 공유 카운터(`server.ts:134` `${prefix}-${++this.idn}`)의 **생성 순서**로 정해진다. 파일을 나누면 생성자 초기화 순서가 바뀌어 시드 데이터의 ID가 달라질 위험이 있고(시험·`dev:mock` 화면이 시드 ID에 기대는 곳 포함), 이를 막으려면 상태 저장소를 먼저 분리해야 해 "통째 이동"이 아니게 된다. 동작 불변을 시험만으로 보장하기 어려워 3차 이후로 미룬다. 3차 새 목 핸들러는 `mock/phase2.ts`에 넣지 않고 `mock/manage.ts`(Study 관리·용량, phase3.md §7)로 분리해 `server.ts`의 라우팅에서 위임한다.
 
 ### 1.6 `scripts`, `deploy`, `config`
 
@@ -324,7 +327,7 @@ src/
     stage3/  Stage3.tsx, DatasetCards.tsx, ModelRegisterCard.tsx, EvaluateCard.tsx
     stage4/  Stage4.tsx(조립), ParamSetCard.tsx(+FromTrainForm), PredictWorkspace.tsx, useSamples.ts, ParamInputs.tsx, PredictResult.tsx
     stage5/  Stage5.tsx(조립), rules.ts(activeRules, cleanResponses), OptInputCard.tsx, OptRunCard.tsx, OptResult.tsx(+HistoryChart), ResponseTable.tsx
-  mock/      server.ts(라우팅·공통), data.ts, install.ts, stage1.ts, stage2.ts, stage5.ts, ops.ts ← phase2.ts 분할
+  mock/      server.ts(라우팅·공통), data.ts, install.ts, stage1.ts, stage2.ts, stage5.ts, ops.ts ← phase2.ts 분할  (F5 보류, §1.5)
   __tests__/ shell, permissions, queue, notifications, usePolling, mockContract (그대로)
              stage1.test.tsx, stage2.test.tsx, stage5.test.tsx, ops.test.tsx, links.test.tsx ← phase2.test.tsx 분할
              stage3.test.tsx, stage4.test.tsx ← stages.test.tsx 분할
