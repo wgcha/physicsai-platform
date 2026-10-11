@@ -49,6 +49,8 @@ export const STAGE_LABEL: Record<JobType, string> = {
   CU_T01_PREVIEW: "②-3",
   CU_T01_CURVES: "②-4",
   OPTIMIZE: "⑤",
+  STUDY_STORAGE_SCAN: "관리",
+  STUDY_CLEANUP: "관리",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */

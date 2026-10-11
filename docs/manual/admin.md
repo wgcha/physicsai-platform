@@ -831,8 +831,18 @@ cpu_rate = clamp(floor(유효 코어 / 감지 코어 × 10000), 100, 10000)    #
 | `environment.json` | 앱·Python·OS 버전, migration head, 실행 파일 존재·크기·수정 시각, 최신 워커 하트비트(limiter·한도·GPU) |
 | `env_check_latest.json` | 최근 완료 환경 점검 요약 |
 | `TRUNCATED.txt` | 총량 상한(`max_total_bytes`)으로 빠진 항목 목록(있을 때) |
+| `manifest.json` | 로그 폴더 유무(`logs_present`). Study 정리로 `logs/<job_id>/`가 `_backup`으로 옮겨졌으면 `false` |
 
 읽는 순서: `README.txt`의 실패 코드 → `job.json`의 실패 step → 그 step의 `command.json`(인자 확인) → 같은 번호 로그 꼬리 → 필요하면 `environment.json`·`config_summary.json`. 산출물 파일(h3d·psdata 등)은 들어 있지 않다. DB URL·Bearer 토큰·쿠키·비밀 환경변수 값은 `***`로 가려진다.
+
+### 11.1 Study 용량·정리(3차 S3)
+
+Study 관리 화면 ③ "용량·정리"에서 power 사용자가 **용량 계산**(작업 `STUDY_STORAGE_SCAN`)과 **Study 정리**(작업 `STUDY_CLEANUP`)를 실행한다. 둘 다 LIGHT 레인·stage 0("관리") 작업이라 대기열·취소·로그가 다른 작업과 같다. 보관된 Study에서도 실행할 수 있다.
+
+- 정리는 **삭제하지 않는다**. 고른 범주(학습 패키지 사본, 평가 예측 psdata, 정리된 h3d, 예측 Radioss 입력, ② 미리보기 산출, 오래된 작업 로그)를 `<study>\_backup\<UTC 시각>_<작업ID>\<원래 상대경로>`로 옮기고 `CLEANUP_MANIFEST.json`을 남긴다. 등록 모델(`03_model\models`)·`03_dataset`·`04_params`·`00_inbox`·`_backup`·SPDM은 대상이 아니다.
+- 정리 중에는 그 Study의 다른 작업 생성·재시도가 409 `STUDY_CLEANUP_RUNNING`. 열린 파일 때문에 옮기지 못한 항목은 건너뛰고(경고 `PARTIAL_OUTPUT`) 결과 화면에 사유가 남는다. 전부 실패하면 `OUTPUT_LOCKED`.
+- `_backup`은 앱이 비우지 않는다. 디스크가 부족하면 탐색기에서 `_backup\<시각>_<작업ID>` 폴더를 직접 지운다. 되돌릴 때는 그 아래 파일을 원래 위치로 옮기고, 학습 패키지를 되돌렸다면 ③-2를 다시 실행해 등록한다.
+- 설정 `study_storage`(없으면 기본값): `max_entries`(스캔 상한, 넘으면 부분 스캔 — 정리 불가), `top_files`, `max_items_per_category`, `log_min_age_days`(로그 후보 최소 경과일), `keep_failed_logs`(실패 로그 보존 개수), `stale_after_hours`(계산 결과 유효 시간). 감사 기록 `STUDY_CLEANUP`에 범주·개수·바이트가 남는다.
 
 ## 12. 로그 위치
 

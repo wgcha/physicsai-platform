@@ -6,6 +6,7 @@ import { fmtTime } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
 import { Card, CodeLine, Field, NO_PERMISSION_TIP } from "../components/ui";
 import { StudyArchiveDialog } from "../components/StudyArchiveDialog";
+import { StorageSection } from "./manage/StorageSection";
 
 const CONFLICT_TEXT = "다른 사용자가 먼저 수정했습니다. 새로 고친 뒤 다시 시도하세요";
 
@@ -17,7 +18,7 @@ function ReadOnly() {
   );
 }
 
-/** phase3.md §3.4 Study 관리 화면: ① 기본 정보(이름 변경) ② 보관 (③ 용량·정리는 S3) */
+/** phase3.md §3.4·§5.8 Study 관리 화면: ① 기본 정보(이름 변경) ② 보관 ③ 용량·정리 */
 export function StudyManage() {
   const { projectId = "", studyId = "" } = useParams();
   const { projects } = useApp();
@@ -66,6 +67,7 @@ export function StudyManage() {
           <>
             <InfoSection study={study} onSaved={setStudy} reload={reload} />
             <ArchiveSection study={study} onChanged={setStudy} />
+            <StorageSection study={study} />
           </>
         )}
       </main>

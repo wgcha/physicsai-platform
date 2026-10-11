@@ -75,3 +75,21 @@ def _validate_phase2(s: Settings, issues: list[ConfigIssue]) -> None:
         add("error_bundle", "log_tail_bytes ≥ 1024, max_total_bytes ≥ log_tail_bytes")
     if s.spdm_import.max_files < 1 or s.curation.max_files < 1:
         add("spdm_import.max_files", "1 이상")
+
+
+# phase3 §5.9: study_storage 키 범위
+STUDY_STORAGE_RANGES: dict[str, tuple[int, int]] = {
+    "max_entries": (1000, 50000000),
+    "top_files": (1, 200),
+    "max_items_per_category": (10, 5000),
+    "log_min_age_days": (0, 3650),
+    "keep_failed_logs": (0, 1000),
+    "stale_after_hours": (1, 720),
+}
+
+
+def _validate_phase3(s: Settings, issues: list[ConfigIssue]) -> None:
+    """3차 키 검증(phase3 §5.9)."""
+    for k, (lo, hi) in STUDY_STORAGE_RANGES.items():
+        if not lo <= getattr(s.study_storage, k) <= hi:
+            issues.append(ConfigIssue(f"study_storage.{k}", f"{lo}~{hi}"))

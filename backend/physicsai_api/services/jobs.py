@@ -33,6 +33,9 @@ from .common import (
 )
 from . import job_params
 from .job_params.base import invalid_errors
+from .job_params.study_manage import require_retryable_type, study_gate
+
+MOVED_HINT = "Study 정리로 _backup 폴더에 옮겨졌을 수 있습니다"
 
 MAX_LOG_LIMIT = 262144
 
@@ -46,8 +49,7 @@ def create_job(ctx: AppContext, principal: Principal, study_id: str, job_type: s
         study = studies_repo.require(conn, study_id)
         require_power(principal, study["project_id"])
         require_config_ok(ctx)
-        if study["status"] != "ACTIVE":
-            raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
+        study_gate(conn, study, job_type)  # 보관(관리 작업 예외)·정리 중 차단(phase3 R3-2·R3-4)
         p = job_params.parse_params(job_type, raw_params)
         params, result, warnings = job_params.prepare(ctx, conn, study, job_type, p)
         job_id = str(uuid.uuid4())
@@ -119,7 +121,8 @@ def read_log(ctx: AppContext, job_id: str, step_no: int | None, cursor: int, lim
             rel = steps[step_no]["log_rel"]
     path = resolve_in_study(study_root(ctx, s), rel)
     if not os.path.isfile(path):
-        raise DomainError("LOG_NOT_FOUND", "로그가 아직 없습니다", status=404)
+        msg = f"로그 파일이 없습니다. {MOVED_HINT}" if j["state"] in TERMINAL else "로그가 아직 없습니다"
+        raise DomainError("LOG_NOT_FOUND", msg, status=404)
     size = os.path.getsize(path)
     with open(path, "rb") as fh:
         fh.seek(min(cursor, size))
@@ -163,9 +166,9 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         require_config_ok(ctx)
         if old["state"] not in TERMINAL or old["state"] == "SUCCEEDED":
             raise DomainError("JOB_NOT_RETRYABLE", "실패·취소·중단된 작업만 재시도할 수 있습니다", status=409)
+        require_retryable_type(old["job_type"])
         study = studies_repo.require(conn, old["study_id"])
-        if study["status"] != "ACTIVE":
-            raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
+        study_gate(conn, study, old["job_type"])
         steps = jobs_repo.get_steps(conn, job_id)
         default_from = next((s["step_no"] for s in steps if s["state"] in ("FAILED", "CANCELED", "PENDING", "RUNNING")), 1)
         if from_step is None:
@@ -314,7 +317,7 @@ def input_zip(ctx: AppContext, job_id: str) -> tuple[Any, str]:
     root = study_root(ctx, s)
     inp = resolve_in_study(root, f"04_predict/{root_id}/INPUT")
     if not os.path.isdir(inp):
-        raise DomainError("INPUT_NOT_READY", "입력 파일 폴더가 없습니다", status=409)
+        raise DomainError("INPUT_NOT_READY", f"입력 파일 폴더가 없습니다. {MOVED_HINT}", status=409)
     names = []
     for n in sorted(os.listdir(inp)):
         p = os.path.join(inp, n)

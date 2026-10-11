@@ -94,3 +94,26 @@ def test_no_timeout_key_in_schema():
     from physicsai_core.config import WorkerCfg
 
     assert not [k for k in WorkerCfg.model_fields if "timeout" in k]
+
+
+def test_study_storage_defaults_and_ranges(settings_dict):
+    """V3-S3-9: study_storage 절 없음 → 기본값, 범위 밖 → 키 오류(phase3 §5.9)."""
+    d = copy.deepcopy(settings_dict)
+    d.pop("study_storage", None)
+    lc = load_config_dict(d, environ={})
+    assert lc.ok, lc.issues
+    ss = lc.settings.study_storage
+    assert (ss.max_entries, ss.top_files, ss.max_items_per_category, ss.log_min_age_days, ss.keep_failed_logs,
+            ss.stale_after_hours) == (2000000, 20, 500, 30, 10, 24)
+    bad = {"max_entries": (999, 50000001), "top_files": (0, 201), "max_items_per_category": (9, 5001),
+           "log_min_age_days": (-1, 3651), "keep_failed_logs": (-1, 1001), "stale_after_hours": (0, 721)}
+    for k, vals in bad.items():
+        for v in vals:
+            d2 = copy.deepcopy(d)
+            d2["study_storage"] = {k: v}
+            assert f"study_storage.{k}" in _issues(d2), (k, v)
+    d2 = copy.deepcopy(d)
+    d2["study_storage"] = {"max_entries": 1000, "top_files": 200, "log_min_age_days": 0, "keep_failed_logs": 0}
+    assert load_config_dict(d2, environ={}).ok
+    d2["study_storage"] = {"unknown": 1}
+    assert "study_storage.unknown" in _issues(d2)

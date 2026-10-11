@@ -259,3 +259,11 @@ export type EnvItemStatus = EnvCheckItem["status"];
 export type EnvCategory = EnvCheckItem["category"];
 export type EnvCheckSummary = Override<S["EnvCheckSummary"], { state: EnvCheckState }>;
 export type EnvCheck = Override<S["EnvCheck"], { state: EnvCheckState; items: EnvCheckItem[] }>;
+
+/** phase3.md §5.6 Study 용량·정리 */
+export type CategoryKey = S["StorageCategory"]["key"];
+export type StorageItem = S["StorageItem"];
+export type StorageCategory = S["StorageCategory"];
+export type StorageScan = S["StorageScan"];
+export type CleanupSummary = Override<S["CleanupSummary"], { state: JobState }>;
+export type StorageReport = Override<S["StorageReport"], { last_cleanup?: CleanupSummary | null }>;

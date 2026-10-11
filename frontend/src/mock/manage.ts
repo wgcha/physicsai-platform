@@ -1,8 +1,9 @@
-// 3차(phase3.md §3, §7) 목 핸들러: Study 이름 변경·보관·보관 해제, 작업 재시도.
+// 3차(phase3.md §3, §5, §7) 목 핸들러: Study 이름 변경·보관·보관 해제, 작업 재시도, 용량·정리(manageStorage.ts).
 // F5 보류(architecture.md §1.5)로 phase2.ts에 넣지 않고 server.ts 라우팅 1곳에서 위임한다.
 // 목 ID는 server의 공유 카운터(nid)를 요청 처리 때만 쓴다(시드 생성 뒤).
 import type { Job, Me } from "../api/types";
 import type { MockResp, MockServer } from "./server";
+import { StorageMock } from "./manageStorage";
 
 const TERMINAL = ["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"];
 const err = (status: number, code: string, message: string, extra: Record<string, unknown> = {}): MockResp => ({
@@ -14,7 +15,12 @@ export class ManageMock {
   /** 시험용: 보관 해제 시 폴더가 없는 Study(409 STUDY_FOLDER_MISSING) */
   missingFolders = new Set<string>();
 
-  constructor(private s: MockServer) {}
+  /** 3차 S3 용량·정리(phase3.md §5) */
+  storage: StorageMock;
+
+  constructor(private s: MockServer) {
+    this.storage = new StorageMock(s);
+  }
 
   private needPower(projectId: string): MockResp | null {
     const r = this.s.role(projectId);
@@ -25,7 +31,18 @@ export class ManageMock {
     if (seg[0] === "studies" && seg[1] && (method === "PATCH" && !seg[2] || method === "POST" && (seg[2] === "archive" || seg[2] === "unarchive") && !seg[3]))
       return this.study(method, seg[1], seg[2], body);
     if (method === "POST" && seg[0] === "jobs" && seg[1] && seg[2] === "retry" && !seg[3]) return this.retry(seg[1], me);
+    if (seg[0] === "studies" && seg[1] && !seg[3] && ((method === "GET" && seg[2] === "storage") || (method === "POST" && seg[2] === "jobs")))
+      return this.studyStorage(method, seg[1], body);
     return null;
+  }
+
+  private studyStorage(method: string, id: string, body: Record<string, unknown> | null): MockResp | null {
+    const st = this.s.studies.find((x) => x.id === id);
+    if (!st) return err(404, "NOT_FOUND", "Study를 찾을 수 없습니다");
+    if (method === "GET") return this.storage.report(st);
+    const d = this.needPower(st.project_id);
+    if (d) return d;
+    return this.storage.createJob(st, String(body?.job_type), (body?.params ?? {}) as Record<string, unknown>);
   }
 
   private study(method: string, id: string, sub: string | undefined, body: Record<string, unknown> | null): MockResp {
@@ -66,7 +83,9 @@ export class ManageMock {
       if (d) return d;
     } else if (!me.is_global_admin) return err(403, "PERMISSION_DENIED", "전역 관리자 권한이 필요합니다", { required: "global_admin" });
     if (!TERMINAL.includes(old.state) || old.state === "SUCCEEDED") return err(409, "JOB_NOT_RETRYABLE", "실패·취소·중단된 작업만 재시도할 수 있습니다");
+    if (old.job_type.startsWith("STUDY_")) return err(409, "JOB_NOT_RETRYABLE", "이 작업은 재시도 대신 새로 실행하세요");
     const st = this.s.studies.find((x) => x.id === old.study_id)!;
+    if (this.storage.cleanupRunning(st.id)) return err(409, "STUDY_CLEANUP_RUNNING", "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요");
     const r = this.s.createJob(st, old.job_type, { ...old.params });
     if (r.status !== 201) return r;
     const nj = r.body as Job;

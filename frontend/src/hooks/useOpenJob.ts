@@ -20,7 +20,8 @@ export function useOpenJob() {
           /* 기본 ③ */
         }
       }
-      navigate(`/p/${n.project_id}/s/${n.study_id}/stage/${stage}`);
+      // stage 0 = Study 관리 작업(phase3.md R3-1) → 관리 화면
+      navigate(`/p/${n.project_id}/s/${n.study_id}/${stage === 0 ? "manage" : `stage/${stage}`}`);
     },
     [navigate],
   );

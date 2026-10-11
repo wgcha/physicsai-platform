@@ -143,6 +143,15 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
     { key: "HST_OPTIMIZE", kind: "LOCAL" },
     { key: "OP_SUMMARY", kind: "INTERNAL" },
   ],
+  STUDY_STORAGE_SCAN: [
+    { key: "SS_WALK", kind: "INTERNAL" },
+    { key: "SS_CLASSIFY", kind: "INTERNAL" },
+  ],
+  STUDY_CLEANUP: [
+    { key: "SC_VALIDATE", kind: "INTERNAL" },
+    { key: "SC_MOVE", kind: "INTERNAL" },
+    { key: "SC_RECORD", kind: "INTERNAL" },
+  ],
 };
 
 /** step_key → 한국어 표시(백엔드 current_step_label 흉내) */
@@ -163,6 +172,7 @@ export const STEP_LABEL: Record<string, string> = {
   TC_PREP: "준비", HW_CURVE_EXPORT: "곡선 내보내기", TC_REGISTER: "등록",
   SI_SCAN: "SPDM 확인", SI_COPY: "복사", SI_REGISTER: "등록",
   OP_PREP: "준비", HST_OPTIMIZE: "HyperStudy 최적화", OP_SUMMARY: "결과 정리",
+  SS_WALK: "파일 확인", SS_CLASSIFY: "정리 후보 분류", SC_VALIDATE: "정리 대상 확인", SC_MOVE: "백업 폴더로 이동", SC_RECORD: "정리 기록",
 };
 
 /** 1차 기본 설정에서 SKIPPED가 되는 step(템플릿 null) */
@@ -344,7 +354,7 @@ export function makeSteps(type: JobType, doneCount: number, runningIdx: number |
 }
 
 export function baseJob(p: Partial<Job> & Pick<Job, "id" | "study_id" | "project_id" | "study_title" | "job_type" | "state">): Job {
-  const lane = ["PACKAGE_EXPORT", "MODEL_REGISTER", "TD_RESULT_IMPORT", "SPDM_IMPORT"].includes(p.job_type) ? "LIGHT" : "SLOT";
+  const lane = ["PACKAGE_EXPORT", "MODEL_REGISTER", "TD_RESULT_IMPORT", "SPDM_IMPORT", "STUDY_STORAGE_SCAN", "STUDY_CLEANUP"].includes(p.job_type) ? "LIGHT" : "SLOT";
   return {
     stage: JOB_STAGE[p.job_type],
     lane,

@@ -130,6 +130,31 @@ describe("목 서버 ↔ openapi.json", () => {
     expect(spec.paths["/physicsai/api/studies/{study_id}/unarchive"].post.operationId).toBe("unarchive_study_physicsai_api_studies__study_id__unarchive_post");
   });
 
+  it("3차 S3 용량·정리(V3-S3-10): GET storage(계산 전·후·정리 후), POST 스캔·정리 Job, 정리 중 409", () => {
+    const s = new MockServer({ user: "power" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    s.jobs.forEach((j) => j.study_id === "s-cushion" && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state) && (j.state = "CANCELED"));
+    const get = () => s.handle("GET", "/studies/s-cushion/storage", q, null, h);
+    const sch = responseSchema("/studies/{study_id}/storage", "get");
+    expect(problems(get().body, sch, "storage(empty)")).toEqual([]);
+    const scan = s.handle("POST", "/studies/s-cushion/jobs", q, { job_type: "STUDY_STORAGE_SCAN", params: {} }, h);
+    expect(scan.status).toBe(201);
+    expect(problems(scan.body, responseSchema("/studies/{study_id}/jobs", "post"), "scan job")).toEqual([]);
+    s.finishAll();
+    const rep = get().body as { scan: { job_id: string } };
+    expect(rep.scan.job_id).toBe((scan.body as { id: string }).id);
+    expect(problems(rep, sch, "storage(scan)")).toEqual([]);
+    const cl = s.handle("POST", "/studies/s-cushion/jobs", q, { job_type: "STUDY_CLEANUP", params: { scan_job_id: rep.scan.job_id, categories: ["JOB_LOGS"] } }, h);
+    expect(cl.status).toBe(201);
+    const busy = s.handle("POST", "/studies/s-cushion/jobs", q, { job_type: "EVALUATE", params: { model_id: "m-1" } }, h);
+    expect((busy.body as { detail: { code: string } }).detail.code).toBe("STUDY_CLEANUP_RUNNING");
+    s.finishAll();
+    expect(problems(get().body, sch, "storage(cleanup)")).toEqual([]);
+    expect((get().body as { last_cleanup: { moved_count: number } }).last_cleanup.moved_count).toBe(2);
+    expect(spec.paths["/physicsai/api/studies/{study_id}/storage"].get.operationId).toBe("get_study_storage_physicsai_api_studies__study_id__storage_get");
+  });
+
   it("목 서버의 2차 경로가 모두 openapi에 있다", () => {
     const paths = Object.keys(spec.paths);
     for (const p of ["/train/doe-types", "/train-does/{doe_id}/runs", "/curations/{curation_id}/files", "/admin/env-checks/{check_id}", "/jobs/{job_id}/error-bundle.zip", "/studies/{study_id}/param-sets/from-train"])

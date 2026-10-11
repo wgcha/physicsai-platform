@@ -14,7 +14,7 @@ from .schema import (
     ConfigIssue,
     Settings,
 )
-from .validate_stages import _validate_phase2
+from .validate_stages import _validate_phase2, _validate_phase3
 
 
 def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list[ConfigIssue]:  # noqa: C901 - 표 기반 규칙 나열
@@ -227,6 +227,7 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
             add("hpc.command", msg)
 
     _validate_phase2(s, issues)
+    _validate_phase3(s, issues)
 
     if s.notifications.retention_days < 1:
         add("notifications.retention_days", "1 이상")

@@ -7,7 +7,8 @@ from typing import Any
 from sqlalchemy import and_, delete, func, select, text, update
 from sqlalchemy.engine import Connection
 
-from ...job_types import job_label
+from ...job_types import JOB_TYPES, job_label
+from ...study_storage.categories import fmt_bytes
 from ..tables import jobs, notifications, studies, worker_slot
 
 EVENTS = (
@@ -38,6 +39,9 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
     if event == "JOB_STARTED":
         return f"실행 시작: {st}", "작업이 실행을 시작했습니다."
     if event == "JOB_SUCCEEDED":
+        r = result or {}
+        if "moved_count" in r:  # STUDY_CLEANUP(phase3 §5.7)
+            return f"완료: {st}", f"{int(r['moved_count'])}개 항목, {fmt_bytes(int(r.get('moved_bytes') or 0))} 이동"
         return f"완료: {st}", "작업이 완료되었습니다."
     if event == "JOB_FAILED":
         return f"실패: {st} — {failure_code or 'INTERNAL_ERROR'}", "작업이 실패했습니다. 로그를 확인하세요."
@@ -62,8 +66,12 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
     return event, ""
 
 
-def notify_job(conn: Connection, job_id: str, event: str) -> int:
-    """작업 등록자에게 알림 1건. 생성된 seq를 돌려준다."""
+# notify_success=False 유형(phase3 R3-3)에서 만들지 않는 이벤트
+SUCCESS_EVENTS = frozenset({"JOB_STARTED", "JOB_SUCCEEDED", "MY_TURN_NEXT"})
+
+
+def notify_job(conn: Connection, job_id: str, event: str) -> int | None:
+    """작업 등록자에게 알림 1건. 생성된 seq를 돌려준다(알림을 만들지 않는 유형·이벤트면 None)."""
     assert event in EVENTS
     row = conn.execute(
         select(
@@ -79,6 +87,9 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int:
         .select_from(jobs.join(studies, studies.c.id == jobs.c.study_id))
         .where(jobs.c.id == job_id)
     ).one()
+    jt = JOB_TYPES.get(row.job_type)
+    if jt is not None and not jt.notify_success and event in SUCCESS_EVENTS:
+        return None
     title, body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
     return conn.execute(
         notifications.insert()

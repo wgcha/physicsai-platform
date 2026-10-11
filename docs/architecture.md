@@ -31,7 +31,7 @@
 
 | 위치 | 줄 | 단계 | 책임 |
 |---|---:|---|---|
-| `config/` | 999 | 공통 | `schema.py`(424: Settings·*Cfg·키 상수·ConfigIssue·LoadedConfig), `rules.py`(41: 경로 문자열 규칙·`_compile`), `validate.py`(235: `validate_settings`), `validate_stages.py`(77: `_validate_phase2`), `loader.py`(99: `load_config`·`load_config_dict`·`absent_keys`·`config_warnings`), `derived.py`(43: Altair 파생·`effective_altair`·`redacted_settings`), `__init__`(80: 공개 이름 전부 재노출 — `from physicsai_core.config import …` 경로 불변) |
+| `config/` | 999 | 공통 | `schema.py`(424: Settings·*Cfg·키 상수·ConfigIssue·LoadedConfig), `rules.py`(41: 경로 문자열 규칙·`_compile`), `validate.py`(235: `validate_settings`), `validate_stages.py`(77: `_validate_phase2`, 3차 `_validate_phase3` — `study_storage` 범위, `StudyStorageCfg`), `loader.py`(99: `load_config`·`load_config_dict`·`absent_keys`·`config_warnings`), `derived.py`(43: Altair 파생·`effective_altair`·`redacted_settings`), `__init__`(80: 공개 이름 전부 재노출 — `from physicsai_core.config import …` 경로 불변) |
 | `paths.py` | 307 | 공통 | 경로 검사(§17.3, B20·B23), `allowed_roots(settings, imports=)`, `is_under`, Study 경로, 백업 이동, 표시 경로 |
 | `masking.py` | 65 | 공통 | `Masker`(step 로그), `BundleMasker`·`SECRET_ENV_PATTERNS`(오류 묶음·운영 로그), `bundle_masker(settings)` |
 | `naming.py` | 9 | 공통 | ①·④ 공용 이름 규칙 `NAME_RE`·`RUN_KEY_RE`·`TPL_NAME`(`stage4_predict/param_sets`가 import해 속성 유지) |
@@ -49,6 +49,8 @@
 | `stage3_model/` | | ③ | `dataset_split.py`(73), `loss.py`(140), `score.py`(26) |
 | `stage4_predict/` | | ④ | `param_sets.py`(345), `nearest.py`(82), `xydata.py`(67) |
 | `stage5_optimize/` | | ⑤ | `optimize.py`(278) |
+| `study_storage/` | 397 | 공통(Study 관리, 3차 S3) | 단계 패키지 아님(단계를 import하지 않음, `test_layering` 규칙 5). `categories.py`(범주·표시명·영향 문구·폴더 묶음·항목 패턴·항상 보호 `is_protected`·`fmt_bytes`), `scan.py`(트리 걷기·집계 `walk`, 링크 미추적), `classify.py`(`StudyRefs`·`candidates`·`classify` — 스캔 분류와 정리 재검사 공용), `stale.py`(`stale_reason`) |
+| `db/repositories/study_manage.py` | 87 | 공통(3차 S3) | `latest_succeeded`·`latest_finished`·`active_of_type`·`has_active_of_type`·`has_active_except`·`finished_after`·`study_refs`(분류 입력). `datasets.clear_package`. `jobs.py`가 300줄을 넘어 별도 파일(D3-7) |
 
 ### 1.2 `backend/physicsai_api` (FastAPI)
 
@@ -62,6 +64,7 @@
 | `services/path_inspect.py` | 165 | ①②③④ | 경로 확인(1차 용도 + 2차 용도), `inspect_model_folder`, `starters_in` |
 | `services/stage1_train_data.py`(208), `stage2_curation.py`(131), `stage3_model.py`(103), `stage4_predict.py`(229), `stage5_optimize.py`(88) | | 단계별 | ① 파라미터 표·tpl·DOE·run, ② 원천·큐레이션·가져오기 조회, ③ 데이터셋·모델·Final, ④ 파라미터 세트·샘플·예측 확인·①→④, ⑤ 최적화 조회·응답 후보 |
 | `services/common.py`(217), `system.py`(132), `env_checks.py`(152), `error_bundle.py`(95) | | 공통·운영 | raw SQL 없음(`test_layering` 규칙 4, 예외 0) |
+| `services/study_storage.py`(74), `services/job_params/study_manage.py`(82), `routers/study_storage.py`, `schemas/study_storage.py` | | 공통(3차 S3) | 용량 보고서·`is_stale`, 관리 작업 params·사전조건, `study_gate`(R3-2 보관 예외·R3-4 정리 중 409 — `create_job`·`retry_job` 공용), `GET /studies/{id}/storage`(`get_study_storage`) |
 | `auth.py`(205), `main.py`(133), `context.py`, `deps.py`, `demo.py`(164), `serve.py`, `export_openapi.py` | | 공통 | |
 
 ### 1.3 `worker/physicsai_worker`
@@ -78,8 +81,9 @@
 | `steps/stage3_model/` | | ③ | `dataset.py`, `package.py`, `model_register.py`, `evaluate.py` |
 | `steps/stage4_predict/` | | ④ | `predict.py`(248), `verify.py`(157) |
 | `steps/stage5_optimize/` | | ⑤ | `optimize.py`(158) |
+| `steps/stage0_manage/` | 241 | Study 관리(3차 S3) | `storage_scan.py`(SS_WALK·SS_CLASSIFY, 중간 결과 `logs/<job>/storage_items.json`), `cleanup.py`(SC_VALIDATE·SC_MOVE·SC_RECORD, 계획 `logs/<job>/cleanup_plan.json`, `paths.backup_existing` 항목 단위 이동·삭제 없음) |
 
-steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 6, 예외 0). 단계 간 step import 없음(`map_path` → `core/hpc/command`, `read_name_value_csv` → `core/parsers/name_value`).
+steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 6, 예외 0). `HANDLERS` = 다섯 단계 + `stage0_manage`. 단계 간 step import 없음(`map_path` → `core/hpc/command`, `read_name_value_csv` → `core/parsers/name_value`).
 
 ### 1.4 시험
 
@@ -87,9 +91,10 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 |---|---|
 | `backend/tests/physicsai_test_support.py`(677), `conftest.py`, `fake_tools/`, `data/` | 그대로(공용 픽스처, 배포 시연 모드 공유 §0). `data/operation_ids.txt` = operationId 스냅샷 |
 | `backend/tests/helpers_stage1.py` | ← `phase2_helpers.py`(① 시험 보조) |
-| `backend/tests/common/` | `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6), `test_study_manage`(3차 S1: 보관 해제·`study.json` 제목, V3-S1-1·2) |
+| `backend/tests/common/` | `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6), `test_study_manage`(3차 S1: 보관 해제·`study.json` 제목, V3-S1-1·2), `test_study_storage_api`(3차 S3: V3-S3-3·5·6·8), `test_db_study_manage`(V3-DB-1). `test_layering`에 규칙 5 추가(단계 패키지 간 import 금지, `study_storage`·`stage0_manage` 포함). `helpers_manage.py`(S3 DB 행 도우미, 워커 시험 공용) |
 | `backend/tests/` 루트 | 여러 주제 혼합으로 보류(H3): `test_api`, `test_core_units`, `test_demo`, `test_phase2_api`, `test_phase2_units`, `test_verifier_fixes` |
-| `worker/tests/runtime/` | `test_queue_lease`, `test_limiter`, `test_windows_job`, `test_hpc`, `test_step_registry`(신규) |
+| `worker/tests/runtime/` | `test_queue_lease`, `test_limiter`, `test_windows_job`, `test_hpc`(+ PREDICT_INPUT), `test_step_registry`(신규) |
+| `worker/tests/stage0_manage/` | `test_storage_scan`(V3-S3-1·2·7), `test_cleanup`(V3-S3-4·7) |
 | `worker/tests/stage1_train_data/test_stage1_train.py`, `stage2_curation/test_stage2_curation.py`, `stage5_optimize/test_stage5_optimize.py`, `ops/test_ops_admin.py`, `e2e/{test_e2e_chain,test_demo_e2e}.py` | ← `test_phase2_{train,curation,optimize,admin}.py`, e2e 2개 |
 | `worker/tests/` 루트 | 보류(H3): `test_phase2_fixes`, `test_verifier_fixes_worker` |
 | 정적 시험의 경로 | `test_phase2_units.py` SPDM 검사는 저장소 상대경로로 정확히 대조(`core/stage2_curation/spdm.py`, `core/config/{schema,validate}.py`, `api/services/{job_params/stage2_curation,path_inspect}.py`, `worker/steps/stage2_curation/spdm_import.py` 등), `test_static_security.py` timeout 검사는 `executor.py`+`step_context.py`, `test_hpc.py`는 `REPO` 기준, COLLECT 간격 monkeypatch 대상은 `physicsai_worker.steps._collect` |
@@ -102,16 +107,18 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 | `app/`, `pages/`, `panels/`, `shell/`, `components/`, `lib/` | | 공통 | 그대로. `shell/useOpenJob.ts`는 `hooks/`로 이동(F3) |
 | `hooks/` | 16–99 | 공통 | `useArtifact`, `useJobRunner`, `useLatestJob`, `useNotifications`, `useOpenJob`(← `shell/`), `usePolling`, `jobRetried.ts`(3차 S1: 재시도로 생긴 새 작업을 `useLatestJob`이 이어받는 구독) |
 | `components/ConfirmDialog.tsx`(99), `JobRetryButton.tsx`(63), `StudyArchiveDialog.tsx`(44) | | 공통 | 3차 S1: 공용 확인 대화상자, `JobInline` 재시도 버튼(`retryStartText`), Study 보관·보관 해제 대화상자(목록·관리 화면 공용) |
-| `pages/StudyManage.tsx` | 181 | 공통 | 3차 S1: Study 관리 화면(`/p/:projectId/s/:studyId/manage`) ① 기본 정보(이름 변경) ② 보관. ③ 용량·정리는 S3 |
+| `pages/StudyManage.tsx` | 183 | 공통 | 3차 S1: Study 관리 화면(`/p/:projectId/s/:studyId/manage`) ① 기본 정보(이름 변경) ② 보관 ③ 용량·정리(S3, `pages/manage/`) |
+| `pages/manage/` | 384 | 공통(3차 S3) | `StorageSection.tsx`(보고서·다시 계산·실행 중 3초 재조회 `STORAGE_POLL`·최근 정리·`_backup` 안내), `StorageBars.tsx`(단계별 막대·큰 파일 표), `CleanupPreview.tsx`(범주 선택·미리보기·확인 대화상자), `storage.ts`(묶음·합계·비활성 사유·확인 문구 순수 함수) |
 | `stages/stage1/` | 22–188 | ① | `Stage1`(조립 23), `TrainContext`(90), `CadExtractCard`(64)·`ParamTableCard`(188, `rowIssue`)·`DoeGenCard`(154, `defaultOptions`·`OptionInput`) ← `TrainCards.tsx`, `DoePicker`(22)·`RunStateBar`(37)·`RunTable`(95)·`SolveCard`(119, `PBS_NONE_TEXT`)·`ResultCollectCard`(100)·`RunResponseCard`(83) ← `SolveCards.tsx` |
 | `stages/stage2/` | 29–224 | ② | `Stage2`, `CurationContext`, `Sources`(201, `SpdmSummary` — `pages/ImportLanding`이 import하는 유일한 단계 간 import), `H3dPreviewCard`(64, `useH3dPreview`)·`H3dCurateCard`(191, `PartList`)·`CurationResult`(44)·`CurationFileList`(40) ← `H3dCards.tsx`, `T01Cards`(224, 유지) |
 | `stages/stage3/` | 16–273 | ③ | `Stage3`(16), `DatasetCards`(273, 유지), `ModelRegisterCard`(132, `LogStatusText`·`NAME_RE`)·`EvaluateCard`(233, `useModelDetails`, 비교 선택 열) ← `ModelCards.tsx`. 3차 S2: `ModelCompare`(91, 상세·데이터셋 조회)·`ModelCompareChart`(56, 곡선 겹치기·범례)·`ModelCompareTable`(143, 점수·메타 표)·`compare.ts`(135, 순수 함수) |
 | `stages/stage4/` | 14–257 | ④ | `Stage4`(조립 14), `ParamSetCard`(192, `FromTrainForm` 포함)·`useSamples.ts`(27)·`PredictWorkspace`(257) ← `Stage4.tsx`, `ParamInputs`(207)·`PredictResult`(129) 유지 |
 | `stages/stage5/` | 37–205 | ⑤ | `Stage5`(조립·상태 49), `rules.ts`(37: `activeRules`·`cleanResponses`·`METHOD_DEFAULTS`), `OptInputCard`(50), `OptRunCard`(121), `OptResult`(205, `HistoryChart`·`toTable`·`fileEntries`) ← `Stage5.tsx`, `ResponseTable`(197) 유지 |
-| `__tests__/` | 26–133 | 단계별 | `stepper`(V2-FE-1·FeatureGate), `stage1`·`stage2`·`stage5`·`ops`·`links` ← `phase2.test.tsx`, `stage3`·`stage4` ← `stages.test.tsx`, 나머지(`shell`, `permissions`, `queue`, `notifications`, `usePolling`, `mockContract`) 그대로. 3차: `manage`(V3-S1-3·4), `compare`(V3-S2-1~5). `describe`·`it` 이름(V-ID)과 시험 수(100) 동일 |
+| `__tests__/` | 26–133 | 단계별 | `stepper`(V2-FE-1·FeatureGate), `stage1`·`stage2`·`stage5`·`ops`·`links` ← `phase2.test.tsx`, `stage3`·`stage4` ← `stages.test.tsx`, 나머지(`shell`, `permissions`, `queue`, `notifications`, `usePolling`, `mockContract`) 그대로. 3차: `manage`(V3-S1-3·4), `compare`(V3-S2-1~5), `manageStorage`(V3-S3-10 — `manage.test.tsx`가 300줄을 넘지 않게 분리, D3-7). `describe`·`it` 이름(V-ID)과 시험 수(100) 동일 |
 | `test/` | | 공통 | `render.tsx`, `setup.ts`, `recordCalls.ts`(신규, F4: 목 서버 `handle` 호출 기록 — 여러 시험 파일 공용) |
 | `mock/phase2.ts`(965), `mock/server.ts`(805), `mock/data.ts`(426), `install.ts` | | 전 단계 | **F5 보류**(아래) — 이력 기준 이름 그대로 |
-| `mock/manage.ts` | 76 | 공통 | 3차 목 핸들러(PATCH study·archive·unarchive·retry), `server.ts` 라우팅 1곳에서 위임 |
+| `mock/manage.ts` | 95 | 공통 | 3차 목 핸들러(PATCH study·archive·unarchive·retry), `server.ts` 라우팅 1곳에서 위임 |
+| `mock/manageStorage.ts` | 162 | 공통 | 3차 S3 목(`StorageMock`: 보고서·스캔/정리 작업 생성·사전조건·종료 결과). `server.finish`가 `manage.storage.onFinish`를 부른다(스캔은 성공 알림 없음) |
 | `styles.css` | 2,076 | 공통 | 전역 한 파일(H6 보류) |
 
 **F5(목 서버 분할) 보류 사유**: `Phase2Mock`은 `MockServer`를 역참조하며 상태(작업·알림 배열, 진행 `tick`·`finish`·`onProgress` 훅, `summaryExtra`)를 공유하고(`server.ts:114–126, 273–331`), 목 ID는 공유 카운터(`server.ts:134` `${prefix}-${++this.idn}`)의 **생성 순서**로 정해진다. 파일을 나누면 생성자 초기화 순서가 바뀌어 시드 데이터의 ID가 달라질 위험이 있고(시험·`dev:mock` 화면이 시드 ID에 기대는 곳 포함), 이를 막으려면 상태 저장소를 먼저 분리해야 해 "통째 이동"이 아니게 된다. 동작 불변을 시험만으로 보장하기 어려워 3차 이후로 미룬다. 3차 새 목 핸들러는 `mock/phase2.ts`에 넣지 않고 `mock/manage.ts`(Study 관리·용량, phase3.md §7)로 분리해 `server.ts`의 라우팅에서 위임한다.
@@ -172,6 +179,7 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 | ④ 단일 예측(+F ①→④ 파라미터 세트) | `stage4_predict` | `PREDICT`, `PREDICT_VERIFY` | `stages/stage4` |
 | ⑤ 최적화 | `stage5_optimize` | `OPTIMIZE` | `stages/stage5` |
 | 운영(환경 점검·오류 묶음·관리) | `ops` | — | `pages/AdminEnvCheck` |
+| Study 관리(stage 0, 3차 S3) | core `study_storage`(공통 — 단계 패키지 아님), 워커 `steps/stage0_manage` | `STUDY_STORAGE_SCAN`, `STUDY_CLEANUP` | `pages/manage` |
 
 - 단계 패키지 안의 파일은 하위 단계 **의미**로 이름 짓고 모듈 docstring 첫 줄에 번호를 쓴다: `"""①-3 TD_DOE_GEN: DOE·Radioss 입력 생성(phase2 §6.4)."""`.
 - `phase2`, `p2`, `2`(예: `inspect2`), `fixes`, `verifier_fixes` 같은 **이력 이름은 쓰지 않는다**.
@@ -188,7 +196,7 @@ frontend ──HTTP──▶ physicsai_api ──▶ physicsai_core ◀── ph
 2. `physicsai_api`와 `physicsai_worker`는 서로 import하지 않는다.
 3. `routers`는 `services`·`schemas`·`deps`만 쓰고 SQL·`physicsai_core.db`를 모른다(기존 시험).
 4. `services`는 `sqlalchemy`·`physicsai_core.db.tables`를 import하지 않는다(저장소 함수만). 예외 없음(R5 이후). R5 전까지는 현재 위반 파일 목록을 허용 목록으로 고정(늘어나면 실패).
-5. 단계 패키지(`stageN_*`)는 공통과 자기 단계만 import한다. 단계 간 공유가 필요하면 공통으로 올린다. 예외: `stage4_predict` 가 `stage1_train_data` 결과(DOE)로 파라미터 세트를 만드는 F 흐름은 **core 저장소/공통 모듈**을 통해서만.
+5. 단계 패키지(`stageN_*`)는 공통과 자기 단계만 import한다. 단계 간 공유가 필요하면 공통으로 올린다(3차 S3부터 `test_layering` 규칙 5로 강제: core `stageN_*`·`study_storage`, 워커 `steps/stageN_*`·`stage0_manage`). 예외: `stage4_predict` 가 `stage1_train_data` 결과(DOE)로 파라미터 세트를 만드는 F 흐름은 **core 저장소/공통 모듈**을 통해서만.
 6. 워커 `steps/**`는 `executor`·`runtime`을 import하지 않는다(제어 예외는 `signals`, 상수는 `steps/_collect.py`).
 
 ---

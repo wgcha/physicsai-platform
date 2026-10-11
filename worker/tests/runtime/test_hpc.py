@@ -213,3 +213,16 @@ def test_verify_cancel_while_waiting(hpc_env, fake_record):
     assert c.get(f"{API}/jobs/{vid}", headers=P).json()["state"] == "CANCELED"
     assert [x for x in read_record(fake_record) if x["tool"] == "qdel"][-1]["argv"][-1] == "12345.pbs01"
     assert c.get(f"{API}/status", headers=P).json()["hpc"]["configured"] is True
+
+
+def test_verify_requires_predict_input(hpc_env, tmp_path):
+    """phase3 §5.5 PREDICT_INPUT: Study 정리로 INPUT을 옮겼으면 검증 생성 409 missing PREDICT_INPUT(V3-S3-6)."""
+    import os
+
+    c, w, ai, _lc = hpc_env
+    sid, pj = _setup_predict(c, w, ai, "HV9")
+    inp = ai / "HV9" / "04_predict" / pj / "INPUT"
+    os.replace(inp, tmp_path / "moved_INPUT")
+    r = c.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "PREDICT_VERIFY", "params": {"predict_job_id": pj}})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "PREREQUISITE_MISSING"
+    assert r.json()["detail"]["missing"] == ["PREDICT_INPUT"]

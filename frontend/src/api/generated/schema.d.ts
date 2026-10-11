@@ -834,6 +834,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/storage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Study Storage */
+        get: operations["get_study_storage_physicsai_api_studies__study_id__storage_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/train": {
         parameters: {
             query?: never;
@@ -1067,6 +1084,36 @@ export interface components {
             requests: {
                 [key: string]: string[];
             };
+        };
+        /** CleanupSkip */
+        CleanupSkip: {
+            /** Reason */
+            reason: string;
+            /** Rel */
+            rel: string;
+        };
+        /** CleanupSummary */
+        CleanupSummary: {
+            /** Backup Display Path */
+            backup_display_path?: string | null;
+            /** Backup Rel */
+            backup_rel?: string | null;
+            /** Categories */
+            categories: ("PACKAGE_PSDATA" | "SCORE_PREDICTIONS" | "CURATED_H3D" | "PREDICT_INPUT" | "PREVIEW_OUTPUT" | "JOB_LOGS")[];
+            /** Finished At */
+            finished_at?: string | null;
+            /** Job Id */
+            job_id: string;
+            /** Moved Bytes */
+            moved_bytes: number;
+            /** Moved Count */
+            moved_count: number;
+            /** Skipped */
+            skipped: components["schemas"]["CleanupSkip"][];
+            /** Skipped Count */
+            skipped_count: number;
+            /** State */
+            state: string;
         };
         /** Curation */
         Curation: {
@@ -1502,7 +1549,7 @@ export interface components {
              * Job Type
              * @enum {string}
              */
-            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE";
+            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP";
             /** Params */
             params?: {
                 [key: string]: unknown;
@@ -2259,6 +2306,116 @@ export interface components {
             online: boolean;
             /** Worker Id */
             worker_id?: string | null;
+        };
+        /** StorageCategory */
+        StorageCategory: {
+            /** Impact */
+            impact: string;
+            /** Item Count */
+            item_count: number;
+            /** Items */
+            items: components["schemas"]["StorageItem"][];
+            /**
+             * Key
+             * @enum {string}
+             */
+            key: "PACKAGE_PSDATA" | "SCORE_PREDICTIONS" | "CURATED_H3D" | "PREDICT_INPUT" | "PREVIEW_OUTPUT" | "JOB_LOGS";
+            /** Label */
+            label: string;
+            /** Total Bytes */
+            total_bytes: number;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** StorageFolder */
+        StorageFolder: {
+            /** Bytes */
+            bytes: number;
+            /** Files */
+            files: number;
+            /** Key */
+            key: string;
+        };
+        /** StorageItem */
+        StorageItem: {
+            /** Bytes */
+            bytes: number;
+            /** Files */
+            files: number;
+            /** Note */
+            note?: string | null;
+            /** Ref Id */
+            ref_id?: string | null;
+            /** Rel */
+            rel: string;
+        };
+        /** StorageReport */
+        StorageReport: {
+            /** Active Cleanup Job Id */
+            active_cleanup_job_id?: string | null;
+            /** Active Scan Job Id */
+            active_scan_job_id?: string | null;
+            /** Backup Display Path */
+            backup_display_path?: string | null;
+            last_cleanup?: components["schemas"]["CleanupSummary"] | null;
+            scan?: components["schemas"]["StorageScan"] | null;
+            /** Stale */
+            stale: boolean;
+            /** Stale Reason */
+            stale_reason?: string | null;
+            /** Study Display Path */
+            study_display_path?: string | null;
+            /** Study Id */
+            study_id: string;
+        };
+        /** StorageScan */
+        StorageScan: {
+            /** Backup Bytes */
+            backup_bytes: number;
+            /** Backup Files */
+            backup_files: number;
+            /** Categories */
+            categories: components["schemas"]["StorageCategory"][];
+            /** Errors */
+            errors: number;
+            /**
+             * Finished At
+             * Format: date-time
+             */
+            finished_at: string;
+            /** Folders */
+            folders: components["schemas"]["StorageFolder"][];
+            /** Job Id */
+            job_id: string;
+            /** Partial */
+            partial: boolean;
+            /** Skipped Links */
+            skipped_links: number;
+            /**
+             * Started At
+             * Format: date-time
+             */
+            started_at: string;
+            /** Top Files */
+            top_files: components["schemas"]["StorageTopFile"][];
+            /** Total Bytes */
+            total_bytes: number;
+            /** Total Files */
+            total_files: number;
+        };
+        /** StorageTopFile */
+        StorageTopFile: {
+            /** Bytes */
+            bytes: number;
+            /** In Backup */
+            in_backup: boolean;
+            /**
+             * Modified At
+             * Format: date-time
+             */
+            modified_at: string;
+            /** Rel */
+            rel: string;
         };
         /** Study */
         Study: {
@@ -4950,6 +5107,46 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SpdmImport"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_study_storage_physicsai_api_studies__study_id__storage_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StorageReport"];
                 };
             };
             /** @description Not Found */

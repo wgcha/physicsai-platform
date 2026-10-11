@@ -42,7 +42,7 @@ export function QueuePanel() {
       <li key={j.id} className={`qrow ${mine ? "mine" : ""}`} data-testid="queue-row">
         <div className="qrow-main">
           <span className="qpos">{opts.running ? <StateDot state={j.state} /> : opts.pos}</span>
-          <span className="stage-badge" title={`${j.stage}단계`} data-testid="stage-badge">
+          <span className="stage-badge" title={j.stage === 0 ? "Study 관리" : `${j.stage}단계`} data-testid="stage-badge">
             {j.stage_label || STAGE_MARK[j.stage] || j.stage}
           </span>
           <button type="button" className="qtitle link" onClick={() => void openJob({ job_id: j.id, study_id: j.study_id, project_id: j.project_id })} title="작업 화면으로">

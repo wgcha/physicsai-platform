@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import os
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
@@ -14,6 +15,7 @@ from physicsai_core.errors import DomainError
 from physicsai_core.naming import RUN_KEY_RE
 
 from ...context import AppContext
+from ..common import study_root
 from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing
 
 
@@ -88,5 +90,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         pj = jobs_repo.get_job(conn, p.predict_job_id)
         if pj is None or pj["study_id"] != sid or pj["job_type"] != "PREDICT" or pj["state"] != "SUCCEEDED":
             raise prerequisite_missing("SUCCEEDED_PREDICT")
+        inp = os.path.join(study_root(ctx, study), "04_predict", jobs_repo.root_job_id(conn, pj), "INPUT")
+        if not os.path.isdir(inp):  # phase3 §5.5: Study 정리로 INPUT을 옮겼으면 검증 불가
+            raise prerequisite_missing("PREDICT_INPUT")
         return p.model_dump(), None, warnings
     raise invalid_errors([{"loc": ["job_type"], "msg": "unknown"}])

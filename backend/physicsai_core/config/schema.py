@@ -359,6 +359,17 @@ class EnvCheckCfg(_M):
     probes: EnvCheckProbesCfg = Field(default_factory=EnvCheckProbesCfg)
 
 
+class StudyStorageCfg(_M):
+    """Study 용량 계산·정리(phase3 §5.9). 절이 없으면 기본값."""
+
+    max_entries: int = 2000000
+    top_files: int = 20
+    max_items_per_category: int = 500
+    log_min_age_days: int = 30
+    keep_failed_logs: int = 10
+    stale_after_hours: int = 24
+
+
 class ErrorBundleCfg(_M):
     log_tail_bytes: int = 262144
     max_total_bytes: int = 20971520
@@ -390,6 +401,7 @@ class Settings(_M):
     optimize: OptimizeCfg = Field(default_factory=OptimizeCfg)
     env_check: EnvCheckCfg = Field(default_factory=EnvCheckCfg)
     error_bundle: ErrorBundleCfg = Field(default_factory=ErrorBundleCfg)
+    study_storage: StudyStorageCfg = Field(default_factory=StudyStorageCfg)
     commands_log_error_patterns: list[str] = Field(default_factory=lambda: list(DEFAULT_LOG_ERROR_PATTERNS))
     hpc: HpcCfg = Field(default_factory=HpcCfg)
     notifications: NotificationsCfg = Field(default_factory=NotificationsCfg)

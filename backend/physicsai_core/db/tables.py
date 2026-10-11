@@ -99,7 +99,7 @@ jobs = Table(
     Column("updated_at", TS, nullable=False, server_default=func.now()),
     Column("version", BigInteger, nullable=False, server_default="1"),
     CheckConstraint("lane IN ('SLOT','LIGHT')", name="ck_jobs_lane"),
-    CheckConstraint("stage BETWEEN 1 AND 5", name="ck_jobs_stage"),
+    CheckConstraint("stage BETWEEN 0 AND 5", name="ck_jobs_stage"),
     CheckConstraint(
         "state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING','SUCCEEDED','FAILED','CANCELED','INTERRUPTED')",
         name="ck_jobs_state",

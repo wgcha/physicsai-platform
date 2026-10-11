@@ -218,6 +218,115 @@
         "title": "CandidateXy",
         "type": "object"
       },
+      "CleanupSkip": {
+        "properties": {
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "reason"
+        ],
+        "title": "CleanupSkip",
+        "type": "object"
+      },
+      "CleanupSummary": {
+        "properties": {
+          "backup_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Display Path"
+          },
+          "backup_rel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Rel"
+          },
+          "categories": {
+            "items": {
+              "enum": [
+                "PACKAGE_PSDATA",
+                "SCORE_PREDICTIONS",
+                "CURATED_H3D",
+                "PREDICT_INPUT",
+                "PREVIEW_OUTPUT",
+                "JOB_LOGS"
+              ],
+              "type": "string"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "moved_bytes": {
+            "title": "Moved Bytes",
+            "type": "integer"
+          },
+          "moved_count": {
+            "title": "Moved Count",
+            "type": "integer"
+          },
+          "skipped": {
+            "items": {
+              "$ref": "#/components/schemas/CleanupSkip"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "skipped_count": {
+            "title": "Skipped Count",
+            "type": "integer"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "categories",
+          "moved_count",
+          "moved_bytes",
+          "skipped_count",
+          "skipped"
+        ],
+        "title": "CleanupSummary",
+        "type": "object"
+      },
       "Curation": {
         "properties": {
           "created_at": {
@@ -1570,7 +1679,9 @@
               "CU_T01_PREVIEW",
               "CU_T01_CURVES",
               "SPDM_IMPORT",
-              "OPTIMIZE"
+              "OPTIMIZE",
+              "STUDY_STORAGE_SCAN",
+              "STUDY_CLEANUP"
             ],
             "title": "Job Type",
             "type": "string"
@@ -3989,6 +4100,334 @@
           "online"
         ],
         "title": "StatusWorker",
+        "type": "object"
+      },
+      "StorageCategory": {
+        "properties": {
+          "impact": {
+            "title": "Impact",
+            "type": "string"
+          },
+          "item_count": {
+            "title": "Item Count",
+            "type": "integer"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/StorageItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "key": {
+            "enum": [
+              "PACKAGE_PSDATA",
+              "SCORE_PREDICTIONS",
+              "CURATED_H3D",
+              "PREDICT_INPUT",
+              "PREVIEW_OUTPUT",
+              "JOB_LOGS"
+            ],
+            "title": "Key",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "key",
+          "label",
+          "impact",
+          "total_bytes",
+          "item_count",
+          "truncated",
+          "items"
+        ],
+        "title": "StorageCategory",
+        "type": "object"
+      },
+      "StorageFolder": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          }
+        },
+        "required": [
+          "key",
+          "bytes",
+          "files"
+        ],
+        "title": "StorageFolder",
+        "type": "object"
+      },
+      "StorageItem": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "files": {
+            "title": "Files",
+            "type": "integer"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "ref_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Id"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "bytes",
+          "files"
+        ],
+        "title": "StorageItem",
+        "type": "object"
+      },
+      "StorageReport": {
+        "properties": {
+          "active_cleanup_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Cleanup Job Id"
+          },
+          "active_scan_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Scan Job Id"
+          },
+          "backup_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Backup Display Path"
+          },
+          "last_cleanup": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CleanupSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "scan": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StorageScan"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "stale_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Reason"
+          },
+          "study_display_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Display Path"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "study_id",
+          "stale"
+        ],
+        "title": "StorageReport",
+        "type": "object"
+      },
+      "StorageScan": {
+        "properties": {
+          "backup_bytes": {
+            "title": "Backup Bytes",
+            "type": "integer"
+          },
+          "backup_files": {
+            "title": "Backup Files",
+            "type": "integer"
+          },
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/StorageCategory"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "errors": {
+            "title": "Errors",
+            "type": "integer"
+          },
+          "finished_at": {
+            "format": "date-time",
+            "title": "Finished At",
+            "type": "string"
+          },
+          "folders": {
+            "items": {
+              "$ref": "#/components/schemas/StorageFolder"
+            },
+            "title": "Folders",
+            "type": "array"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "partial": {
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "skipped_links": {
+            "title": "Skipped Links",
+            "type": "integer"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "top_files": {
+            "items": {
+              "$ref": "#/components/schemas/StorageTopFile"
+            },
+            "title": "Top Files",
+            "type": "array"
+          },
+          "total_bytes": {
+            "title": "Total Bytes",
+            "type": "integer"
+          },
+          "total_files": {
+            "title": "Total Files",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "started_at",
+          "finished_at",
+          "partial",
+          "total_bytes",
+          "total_files",
+          "skipped_links",
+          "errors",
+          "backup_bytes",
+          "backup_files",
+          "folders",
+          "top_files",
+          "categories"
+        ],
+        "title": "StorageScan",
+        "type": "object"
+      },
+      "StorageTopFile": {
+        "properties": {
+          "bytes": {
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "in_backup": {
+            "title": "In Backup",
+            "type": "boolean"
+          },
+          "modified_at": {
+            "format": "date-time",
+            "title": "Modified At",
+            "type": "string"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "bytes",
+          "modified_at",
+          "in_backup"
+        ],
+        "title": "StorageTopFile",
         "type": "object"
       },
       "Study": {
@@ -8478,6 +8917,58 @@
         "summary": "List Imports",
         "tags": [
           "spdm"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/storage": {
+      "get": {
+        "operationId": "get_study_storage_physicsai_api_studies__study_id__storage_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Study Storage",
+        "tags": [
+          "studies"
         ]
       }
     },

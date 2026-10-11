@@ -54,6 +54,7 @@ README = """PhysicsAI 오류 묶음
 - environment.json: 앱·Python·OS·migration·Altair 실행 파일·워커 정보
 - env_check_latest.json: 최근 완료된 환경 점검 결과(없으면 null)
 - TRUNCATED.txt: 크기 상한으로 넣지 못한 항목(있을 때)
+- manifest.json: 로그 폴더 유무(Study 정리로 _backup에 옮겨졌으면 logs_present=false)
 비밀번호·토큰·DB 접속 정보·쿠키 값은 *** 로 가렸습니다.
 """
 
@@ -106,5 +107,10 @@ def iter_items(*, job: dict[str, Any], steps: list[dict[str, Any]], log_dir: str
             skipped.append(name)
             continue
         yield emit(name, tail_item(path, min(tail_bytes, max(1024, max_total - total))))
+    present = os.path.isdir(log_dir)
+    yield emit("manifest.json", json_bytes({
+        "job_id": job["id"], "logs_present": present,
+        "logs_note": None if present else "로그 폴더가 없습니다. Study 정리로 _backup 폴더에 옮겨졌을 수 있습니다",
+    }).decode("utf-8"))
     if skipped:
         yield emit("TRUNCATED.txt", "크기 상한(error_bundle.max_total_bytes)으로 넣지 못한 항목:\n" + "\n".join(skipped) + "\n")

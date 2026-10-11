@@ -69,6 +69,7 @@ from .schema import (  # noqa: F401
     Settings,
     SpdmImportCfg,
     StorageCfg,
+    StudyStorageCfg,
     SummaryParserCfg,
     TrainDataCfg,
     TrainingLogCfg,

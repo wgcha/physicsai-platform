@@ -20,6 +20,7 @@ class JobTypeDef:
     label: str  # 한국어 표시명
     steps: tuple[StepDef, ...]
     stage_label: str = ""  # 예 "①-3" (phase2 §12.9)
+    notify_success: bool = True  # False면 시작·성공·차례 알림 생략(phase3 R3-3)
 
     def needs_slot(self, step: StepDef) -> bool:
         if step.kind in ("LOCAL", "HPC_SUBMIT"):
@@ -175,7 +176,21 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (StepDef("OP_PREP", "INTERNAL", 3), StepDef("HST_OPTIMIZE", "LOCAL", 90), StepDef("OP_SUMMARY", "INTERNAL", 7)),
         "⑤",
     ),
+    # ---- 3차 Study 관리(stage 0, phase3 §5.2) ----
+    "STUDY_STORAGE_SCAN": JobTypeDef(
+        "STUDY_STORAGE_SCAN", 0, "LIGHT", "용량 계산",
+        (StepDef("SS_WALK", "INTERNAL", 90), StepDef("SS_CLASSIFY", "INTERNAL", 10)),
+        "관리", notify_success=False,
+    ),
+    "STUDY_CLEANUP": JobTypeDef(
+        "STUDY_CLEANUP", 0, "LIGHT", "Study 정리",
+        (StepDef("SC_VALIDATE", "INTERNAL", 5), StepDef("SC_MOVE", "INTERNAL", 90), StepDef("SC_RECORD", "INTERNAL", 5)),
+        "관리",
+    ),
 }
+
+# Study 관리 작업(phase3 R3-2·R3-4): 재시도 불가, 보관 Study에서도 생성 가능
+MANAGE_JOB_TYPES = frozenset({"STUDY_STORAGE_SCAN", "STUDY_CLEANUP"})
 
 # step 표시명(phase2 §12.9 current_step_label, 한국어)
 STEP_LABELS: dict[str, str] = {
@@ -199,6 +214,8 @@ STEP_LABELS: dict[str, str] = {
     "TC_PREP": "곡선 추출 설정 작성", "HW_CURVE_EXPORT": "곡선 추출", "TC_REGISTER": "곡선 등록",
     "SI_SCAN": "SPDM 파일 확인", "SI_COPY": "SPDM 파일 복사", "SI_REGISTER": "가져오기 등록",
     "OP_PREP": "최적화 입력 준비", "HST_OPTIMIZE": "HyperStudy 최적화", "OP_SUMMARY": "결과 정리",
+    "SS_WALK": "파일 확인", "SS_CLASSIFY": "정리 후보 분류",
+    "SC_VALIDATE": "정리 대상 확인", "SC_MOVE": "백업 폴더로 이동", "SC_RECORD": "정리 기록",
 }
 
 

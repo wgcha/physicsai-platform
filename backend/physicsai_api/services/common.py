@@ -13,7 +13,7 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.job_types import JOB_TYPES, stage_label, step_label
+from physicsai_core.job_types import JOB_TYPES, MANAGE_JOB_TYPES, stage_label, step_label
 from physicsai_core.paths import display_path, study_dir  # noqa: F401 - display_path 재노출
 from physicsai_core.state_machine import TERMINAL
 
@@ -164,7 +164,7 @@ def can_download_error_bundle(j: dict[str, Any], principal: Principal) -> bool:
 
 
 def can_retry(j: dict[str, Any], principal: Principal) -> bool:
-    if j["state"] not in TERMINAL or j["state"] == "SUCCEEDED":
+    if j["state"] not in TERMINAL or j["state"] == "SUCCEEDED" or j["job_type"] in MANAGE_JOB_TYPES:
         return False
     if principal.is_global_admin:
         return True
@@ -194,8 +194,10 @@ def job_detail(conn: Connection, j: dict[str, Any], principal: Principal, *, inc
         "input_display_path": None,
     })
     if study and j["job_type"] == "PREDICT" and input_zip_ready(conn, j):
-        out["input_display_path"] = display_path(ai_root or study["ai_root_snapshot"], study["folder_name"],
-                                                 f"04_predict/{jobs_repo.root_job_id(conn, j)}/INPUT")
+        rel = f"04_predict/{jobs_repo.root_job_id(conn, j)}/INPUT"
+        root = ai_root or study["ai_root_snapshot"]
+        if os.path.isdir(os.path.join(study_dir(root, study["folder_name"]), *rel.split("/"))):  # phase3 R3-6
+            out["input_display_path"] = display_path(root, study["folder_name"], rel)
     return out
 
 

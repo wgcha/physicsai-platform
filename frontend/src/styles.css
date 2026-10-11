@@ -2266,3 +2266,92 @@ tr.selected td {
   background: var(--ok-weak);
   color: var(--ok);
 }
+
+/* ---------------- 3차 S3 용량·정리(phase3.md §5.8) ---------------- */
+.storage-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-bottom: 0.6rem;
+}
+.storage-summary .warn-text {
+  flex-basis: 100%;
+}
+.storage-bars {
+  display: grid;
+  gap: 0.3rem;
+  margin: 0.9rem 0;
+}
+.storage-bar-row {
+  display: grid;
+  grid-template-columns: 9.5rem 1fr 11rem;
+  align-items: center;
+  gap: 0.6rem;
+}
+.storage-bar-label {
+  justify-content: flex-start;
+  text-align: left;
+}
+.storage-bar-track {
+  height: 0.7rem;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.storage-bar-fill {
+  height: 100%;
+  background: var(--accent);
+}
+.storage-bar-fill.is-backup {
+  background: var(--wait);
+}
+.storage-bar-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85rem;
+  color: var(--text-2);
+}
+.storage-bar-detail {
+  grid-column: 2 / -1;
+  margin: 0 0 0.3rem;
+  padding-left: 1rem;
+  font-size: 0.85rem;
+}
+.storage-tag {
+  display: inline-block;
+  padding: 0 0.35rem;
+  border-radius: 3px;
+  background: var(--wait-weak);
+  color: var(--wait);
+  font-size: 0.75rem;
+}
+.cleanup-title {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.95rem;
+}
+.cleanup-cats {
+  list-style: none;
+  margin: 0 0 0.6rem;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+.cleanup-impact {
+  margin-left: 1.6rem;
+}
+.cleanup-preview details {
+  margin-bottom: 0.5rem;
+}
+.cleanup-preview summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.last-cleanup {
+  margin-top: 0.9rem;
+  padding-top: 0.6rem;
+  border-top: 1px solid var(--line);
+}
+.backup-notice {
+  margin-top: 0.9rem;
+}

@@ -4,6 +4,8 @@
 규칙 2: physicsai_api와 physicsai_worker는 서로 import하지 않는다.
 규칙 3: routers는 services·schemas·deps·auth만 쓰고 sqlalchemy·physicsai_core.db를 모른다.
 규칙 4: services는 sqlalchemy(타입용 sqlalchemy.engine 제외)·physicsai_core.db.tables를 import하지 않는다.
+규칙 5: 단계 패키지(stageN_*)는 공통과 자기 단계만 import한다. 공통 패키지 study_storage(3차 Study 관리)는
+        단계 패키지를 import하지 않는다(core·워커 steps 모두).
 규칙 6: 워커 steps/**는 executor·runtime을 import하지 않는다.
 """
 
@@ -114,6 +116,35 @@ def test_rule4_services_use_repositories_only():
     # 허용 목록 밖 위반은 실패, 허용 목록에 있으나 이미 고쳐진 파일도 목록에서 지우도록 실패
     assert offenders - SERVICE_SQL_ALLOWED == set(), _violations(files, _service_sql)
     assert SERVICE_SQL_ALLOWED - offenders == set(), "허용 목록에서 지울 파일"
+
+
+# 규칙 5 대상: (패키지 루트 이름, 하위 경로). COMMON_STAGE_FREE는 단계를 import하면 안 되는 공통 패키지(검사 대상에 포함).
+RULE5_ROOTS = (("physicsai_core", ""), ("physicsai_worker", "steps"))
+COMMON_STAGE_FREE = ("study_storage", "stage0_manage")
+
+
+def _stage_of(mod: str, base: str) -> str | None:
+    if not _starts(mod, base):
+        return None
+    head = mod[len(base) + 1:].split(".", 1)[0]
+    return head if head.startswith("stage") or head in COMMON_STAGE_FREE else None
+
+
+def test_rule5_stage_packages_import_only_common_and_own_stage():
+    v: list[str] = []
+    for top, sub in RULE5_ROOTS:
+        base = ".".join([top, *([sub] if sub else [])])
+        root = PKG_ROOTS[top] / sub if sub else PKG_ROOTS[top]
+        for f in _files(top, sub):
+            own = _stage_of(_module_name(f)[0], base)
+            if own is None:
+                continue
+            for ln, m in imported_modules(f):
+                other = _stage_of(m, base)
+                if other is not None and other != own and other.startswith("stage"):
+                    v.append(f"{f.relative_to(REPO)}:{ln} {m}")
+        assert root.is_dir()
+    assert v == [], v
 
 
 def test_rule6_steps_do_not_import_executor_or_runtime():

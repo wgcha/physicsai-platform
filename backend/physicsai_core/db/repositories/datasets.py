@@ -42,3 +42,8 @@ def insert(conn: Connection, values: dict[str, Any]) -> None:
 
 def set_values(conn: Connection, dataset_id: str, **values: Any) -> None:
     conn.execute(update(datasets).where(datasets.c.id == dataset_id).values(**values))
+
+
+def clear_package(conn: Connection, dataset_id: str) -> None:
+    """S3 정리로 03_package/<id>/를 옮긴 뒤 package_rel=NULL(phase3 R3-7)."""
+    set_values(conn, dataset_id, package_rel=None)

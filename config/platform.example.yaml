@@ -243,6 +243,14 @@ error_bundle:
   log_tail_bytes: 262144            # 로그 파일당 꼬리 상한
   max_total_bytes: 20971520         # zip 전체(압축 전) 상한
 
+study_storage:                      # Study 용량 계산·정리(3차 S3). 절이 없으면 아래 기본값
+  max_entries: 2000000              # 스캔 항목 상한(1000~50000000). 닿으면 부분 스캔(정리 불가)
+  top_files: 20                     # 큰 파일 표 개수(1~200)
+  max_items_per_category: 500       # 정리 범주별 후보 상한(10~5000, 큰 것부터)
+  log_min_age_days: 30              # 작업 로그 정리 후보 최소 경과일(0~3650)
+  keep_failed_logs: 10              # 실패·중단 작업 로그 중 최근 몇 개는 정리하지 않음(0~1000)
+  stale_after_hours: 24             # 계산 결과 유효 시간(1~720). 지나면 다시 계산해야 정리 가능
+
 notifications:
   retention_days: 30
   purge_interval_h: 6

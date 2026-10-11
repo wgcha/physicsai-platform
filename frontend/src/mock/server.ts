@@ -288,7 +288,7 @@ export class MockServer {
       next.steps = makeSteps(next.job_type, 0, 0);
       this.queueOrder.delete(next.id);
       this.bump(next);
-      this.notifyJob(next, "JOB_STARTED");
+      if (next.job_type !== "STUDY_STORAGE_SCAN") this.notifyJob(next, "JOB_STARTED"); // phase3 R3-3
       if (next.job_type === "EVALUATE") {
         const m = this.models.find((x) => x.id === (next.params.model_id as string));
         if (m) m.eval_status = "RUNNING";
@@ -384,7 +384,7 @@ export class MockServer {
         break;
       }
     }
-    this.notifyJob(j, "JOB_SUCCEEDED");
+    if (this.manage.storage.onFinish(j)) this.notifyJob(j, "JOB_SUCCEEDED");
   }
 
   // ---------- 요약 변환 ----------
@@ -666,7 +666,7 @@ export class MockServer {
         return {
           status: 200,
           headers: { ETag: etag },
-          body: { ...this.jobOut(j), can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: ((own && ["power", "admin"].includes(this.role(j.project_id) ?? "")) || me.is_global_admin) && ["FAILED", "CANCELED", "INTERRUPTED"].includes(j.state) },
+          body: { ...this.jobOut(j), can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: ((own && ["power", "admin"].includes(this.role(j.project_id) ?? "")) || me.is_global_admin) && ["FAILED", "CANCELED", "INTERRUPTED"].includes(j.state) && !j.job_type.startsWith("STUDY_") },
         };
       }
       if (method === "GET" && seg[2] === "error-bundle.zip") {
