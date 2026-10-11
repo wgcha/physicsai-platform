@@ -1,6 +1,6 @@
-"""①-1 → ①-2 → ①-3 → ①-4(PBS command) → ①-5(none 수동 결과 지정) → ①-6, F(④ 파라미터 세트), T10b, 회수 모드.
+"""①-1 추출 → ①-2 파라미터 표·tpl → ①-3 DOE 생성(샘플 추출 포함), ①-4 회수 모드(shared_folder·drive)·회수 루트 설정 검증.
 
-V2-TD-1~8, V2-F-1, V2-HPC-1, V2-NT-1(일부), V2-LCH-1, V2-CMD-1(①).
+V2-TD-1·2·4·6, V2-LCH-1, V2-CMD-1(①). ①-4 제출·취소는 test_stage1_solve, ①-5·①-6·F는 test_stage1_results.
 """
 
 from __future__ import annotations
@@ -14,25 +14,10 @@ from pathlib import Path
 import pytest
 from sqlalchemy import text
 
-from helpers_stage1 import _ready_doe, _write_results, doe_gen, extract_and_tpl, job, make_inputs, study, submit  # noqa: F401
+from helpers_stage1 import _ready_doe, _write_results, doe_gen, extract_and_tpl, job, make_inputs, study, submit
 from physicsai_test_support import API, H, _p2_env, pbs_command_cfg, read_record
 
 PW, P, AW = H("tok-power", write=True), H("tok-power"), H("tok-admin", write=True)
-
-
-@pytest.fixture()
-def pbs_state(tmp_path, monkeypatch):
-    p = tmp_path / "pbs_state.json"
-    monkeypatch.setenv("FAKE_PBS_STATE", str(p))
-    monkeypatch.delenv("FAKE_TOOL_MODE_PBS", raising=False)
-    return p
-
-
-@pytest.fixture()
-def p2_pbs(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, pbs_state):
-    ai = tmp_path / "ai_root"
-    ai.mkdir(exist_ok=True)
-    yield from _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, {"hpc": pbs_command_cfg(fake_tools, str(ai))})
 
 
 def test_extract_chain_and_params(p2_env, fake_record, engine):
@@ -226,8 +211,8 @@ def test_doe_gen_chain(p2_env, fake_record, monkeypatch):
 
 def test_doe_samples_extractors(tmp_path):
     """V2-TD-4: paramitem 미렌더 건너뜀, csv(var_i 열), none."""
-    from physicsai_core.stage1_train_data import doe_samples
     from physicsai_core.config import TrainDataCfg
+    from physicsai_core.stage1_train_data import doe_samples
 
     rd = tmp_path / "run__1"
     (rd / "a").mkdir(parents=True)
@@ -241,108 +226,6 @@ def test_doe_samples_extractors(tmp_path):
     r = doe_samples.extract(str(tmp_path), [{"run_key": "run__1", "run_dir": str(rd)}, {"run_key": "run__2", "run_dir": str(rd)}], ["A", "B"], td2)
     assert r.status == "PARTIAL" and r.rows == [{"run_key": "run__1", "values": {"A": 1.0, "B": 2.0}}] and r.missing_runs == ["run__2"]
     assert doe_samples.extract(str(tmp_path), [], ["A"], TrainDataCfg(samples_extractor="none")).status == "MISSING"
-
-
-def test_solve_pbs_full_and_partial(p2_pbs, fake_record, engine, monkeypatch):
-    """V2-TD-5·V2-HPC-1·V2-NT-1: run별 제출, 폴러 다중 run, T10b(일부 실패 → 회수 + HPC_PARTIAL_FAILED), hpc_summary."""
-    c, mk, ai, lc, d = p2_pbs
-    w = mk()
-    sid, doe_id = _ready_doe(c, w, ai, "sv1")
-    monkeypatch.setenv("FAKE_TOOL_MODE_PBS", "exit1_one")
-    monkeypatch.setenv("FAKE_PBS_FAIL_MATCH", "run__00002")
-    j = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id, "hpc": {"ncpus": 4}})
-    assert w.run_once_slot() == "WAITING_HPC", job(c, j["id"])
-    subs = [r["argv"] for r in read_record(fake_record) if r["tool"] == "qsub"]
-    assert len(subs) == 3
-    names = [a[a.index("-N") + 1] for a in subs]
-    assert names[0] == f"sv1_{doe_id[:8]}_run__00001_a1".replace("-", "_") or names[0].endswith("run__00001_a1")
-    v = subs[0][subs[0].index("-v") + 1]
-    assert f"INPUT_FILE=/shared/AI_WORK/sv1/01_train/doe/{doe_id}/approaches/doe_1/run__00001/m_3/drop_0000.rad" in v
-    assert v.endswith(f"RESULT_DIR=/shared/AI_WORK/sv1/01_train/results/{doe_id}/run__00001")
-    hj = c.get(f"{API}/jobs/{j['id']}/hpc-jobs", headers=P).json()
-    assert sorted(h["external_job_id"] for h in hj) == ["12345.pbs01", "12346.pbs01", "12347.pbs01"]
-    assert [r["state"] for r in c.get(f"{API}/train-does/{doe_id}/runs", headers=P).json()] == ["SUBMITTED"] * 3
-    q = c.get(f"{API}/queue", headers=P).json()
-    assert q["waiting_hpc"][0]["hpc_summary"] == {"total": 3, "queued": 3, "running": 0, "succeeded": 0, "failed": 0, "collected": 0}
-    assert q["waiting_hpc"][0]["stage_label"] == "①-4"
-    for _ in range(3):
-        w.poll_hpc_once()
-    _write_results(ai, "sv1", doe_id, ["run__00001", "run__00003"])
-    jd = job(c, j["id"])
-    assert jd["state"] == "COLLECTING" and jd["attention_code"] == "HPC_RUN_FAILED"  # T10b
-    assert any(x["code"] == "HPC_PARTIAL_FAILED" for x in jd["warnings"])
-    runs = {r["run_key"]: r["state"] for r in c.get(f"{API}/train-does/{doe_id}/runs", headers=P).json()}
-    assert runs == {"run__00001": "SOLVED", "run__00002": "SOLVE_FAILED", "run__00003": "SOLVED"}
-    assert w.run_once_collect() == "QUEUED"
-    assert w.run_once_slot() == "SUCCEEDED", job(c, j["id"])
-    jd = job(c, j["id"])
-    assert jd["result"]["collected"] == 2 and jd["result"]["failed"] == 1 and jd["result"]["submitted"] == 3
-    runs = {r["run_key"]: r for r in c.get(f"{API}/train-does/{doe_id}/runs", headers=P).json()}
-    assert runs["run__00001"]["state"] == "COLLECTED" and runs["run__00001"]["result"] == {"h3d": 1, "t01": 1, "files": 4, "total_bytes": runs["run__00001"]["result"]["total_bytes"]}
-    assert runs["run__00002"]["state"] == "SOLVE_FAILED"
-    col = json.loads((ai / "sv1" / "01_train" / "results" / doe_id / "collected.json").read_text())
-    assert [x["run_key"] for x in col["runs"]] == ["run__00001", "run__00003"]
-    with engine.connect() as conn:
-        ev = conn.execute(text("select event, title from notifications where job_id=:j order by seq"), {"j": j["id"]}).all()
-    events = [e for e, _ in ev]
-    assert events == ["JOB_STARTED", "HPC_PARTIAL_FAILED", "HPC_COLLECTED", "JOB_SUCCEEDED"]
-    titles = dict(ev)
-    assert titles["HPC_PARTIAL_FAILED"] == "PBS 해석 일부 실패 — 3개 중 1개 실패, 나머지 회수 진행"
-    assert titles["HPC_COLLECTED"] == "PBS 결과 회수 완료 — 3개 중 2개 회수"
-    assert titles["JOB_SUCCEEDED"] == "완료: PBS 해석 (sv1)"
-    # ①-4 회수 결과 → ② 큐레이션 → ③-1 데이터셋(자동 연결)
-    src = {"kind": "TRAIN_DOE", "doe_id": doe_id}
-    pj = submit(c, sid, "CU_H3D_PREVIEW", {"source": src})
-    assert w.run_once_slot() == "SUCCEEDED", job(c, pj["id"])
-    sel = {"items": [{"datatype": "Stress", "component": "P1"}], "parts": {"shell": [], "solid": [3], "rbody": []}, "time_increment": 1}
-    cj = submit(c, sid, "CU_H3D_CURATE", {"source": src, "preview_job_id": pj["id"], "selection": sel})
-    assert w.run_once_slot() == "SUCCEEDED", job(c, cj["id"])
-    assert job(c, cj["id"])["result"]["missing_run_count"] == 1
-    dj = submit(c, sid, "DATASET_CREATE", {"curation_id": cj["result"]["curation_id"]})
-    assert w.run_once_slot() == "SUCCEEDED", job(c, dj["id"])
-    assert job(c, dj["id"])["result"]["h3d_count"] == 2
-    # 재제출 대상 = SOLVE_FAILED만, attempt 2
-    monkeypatch.setenv("FAKE_TOOL_MODE_PBS", "ok")
-    j2 = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id})
-    assert w.run_once_slot() == "WAITING_HPC"
-    assert job(c, j2["id"])["result"]["run_keys"] == ["run__00002"] and job(c, j2["id"])["result"]["attempt"] == 2
-    # 전부 실패(on_run_failure=fail 아님이어도 성공 0개) → T13
-    monkeypatch.setenv("FAKE_TOOL_MODE_PBS", "exit1")
-    for _ in range(3):
-        w.poll_hpc_once()
-    jd2 = job(c, j2["id"])
-    assert jd2["state"] == "FAILED" and jd2["failure_code"] == "HPC_RUN_FAILED"
-    assert jd2["can_download_error_bundle"] is True
-
-
-def test_solve_on_run_failure_fail_and_submit_failure(p2_pbs, fake_record, monkeypatch):
-    """V2-TD-5: on_run_failure=fail → T13, 제출 중 실패 → 이미 제출분 qdel + HPC_SUBMIT_FAILED."""
-    c, mk, ai, lc, d = p2_pbs
-    w = mk()
-    sid, doe_id = _ready_doe(c, w, ai, "sv2")
-    monkeypatch.setenv("FAKE_PBS_SUBMIT_FAIL_AT", "3")
-    j = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id})
-    assert w.run_once_slot() == "FAILED"
-    jd = job(c, j["id"])
-    assert jd["failure_code"] == "HPC_SUBMIT_FAILED"
-    dels = [r["argv"][-1] for r in read_record(fake_record) if r["tool"] == "qdel"]
-    assert sorted(dels) == ["12345.pbs01", "12346.pbs01"]
-    states = [h["state"] for h in c.get(f"{API}/jobs/{j['id']}/hpc-jobs", headers=P).json()]
-    assert states == ["CANCELED", "CANCELED"]
-    monkeypatch.delenv("FAKE_PBS_SUBMIT_FAIL_AT")
-    monkeypatch.setenv("FAKE_TOOL_MODE_PBS", "exit1_one")
-    monkeypatch.setenv("FAKE_PBS_FAIL_MATCH", "run__00001")
-    j = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id, "run_keys": ["run__00001", "run__00002"], "on_run_failure": "fail"})
-    assert w.run_once_slot() == "WAITING_HPC"
-    for _ in range(3):
-        w.poll_hpc_once()
-    assert job(c, j["id"])["state"] == "FAILED"
-    # 재시도는 항상 TS_PREP부터(HPC 제출 재사용 안 함)
-    r = c.post(f"{API}/jobs/{j['id']}/retry", headers=PW, json={"from_step": 3})
-    assert r.status_code == 201 and all(s["state"] == "PENDING" for s in r.json()["steps"])
-    # 검증 오류
-    assert submit(c, sid, "TD_SOLVE", {"doe_id": doe_id, "run_keys": ["nope"]}, expect=422)["detail"]["code"] == "INVALID_PARAMS"
-    assert submit(c, sid, "TD_SOLVE", {"doe_id": "x"}, expect=409)["detail"]["code"] == "DOE_NOT_READY"
 
 
 @pytest.mark.parametrize("mode", ["shared_folder", "drive"])
@@ -390,130 +273,3 @@ def test_collect_roots_config_validation(settings_dict, tmp_path):
     assert "hpc.transfer.collect_root_local" in load_config_dict(d, environ={}).error_keys()
 
 
-def test_result_import_none_mode_and_from_train(p2_env, monkeypatch, engine):
-    """V2-TD-7(gateway none: ①-4 409·①-5 수동 결과 지정), V2-F-1(① 결과 → ④ 파라미터 세트)."""
-    c, mk, ai, lc, d = p2_env
-    w = mk()
-    sid, doe_id = _ready_doe(c, w, ai, "ri1")
-    r = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id}, expect=409)
-    assert r["detail"]["code"] == "HPC_NOT_CONFIGURED"
-    st = c.get(f"{API}/status", headers=P).json()
-    assert st["features"]["train_solve"] == {"enabled": False, "missing": ["hpc.gateway"]}
-    # F: 회수 전에는 DOE_NOT_READY
-    r = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json={"doe_id": doe_id})
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "DOE_NOT_READY"
-    src = Path(lc.settings.storage.allowed_import_roots[0]) / "manual"
-    _write_results(ai, "ri1", doe_id, ["run__00001", "RUN__00002"], base=src / "batch")
-    (src / "batch" / "run__00099").mkdir()
-    (src / "other").mkdir()
-    insp = c.post(f"{API}/studies/{sid}/paths/inspect", headers=PW, json={"purpose": "RESULT_FOLDER", "path": str(src), "doe_id": doe_id}).json()
-    assert insp["ok"] and insp["summary"]["matched_runs"] == 2
-    j = submit(c, sid, "TD_RESULT_IMPORT", {"doe_id": doe_id, "source_path": str(src)})
-    assert j["lane"] == "LIGHT"
-    assert w.run_once_light() == "SUCCEEDED", job(c, j["id"])
-    res = job(c, j["id"])["result"]
-    assert res["matched"] == 2 and res["copied_files"] == 6 and res["missing_runs"] == ["run__00003"]
-    assert "batch/run__00099" in res["unmatched_dirs"] and "other" in res["unmatched_dirs"]
-    R = ai / "ri1" / "01_train" / "results" / doe_id / "run__00002"
-    assert sorted(os.listdir(R)) == ["drop_0000.out", "drop_A001.h3d", "drop_T01"]
-    doe = c.get(f"{API}/train-does/{doe_id}", headers=P).json()
-    assert doe["collected_count"] == 2
-    # 매칭 0개
-    empty = Path(lc.settings.storage.allowed_import_roots[0]) / "empty" / "x"
-    empty.mkdir(parents=True)
-    j = submit(c, sid, "TD_RESULT_IMPORT", {"doe_id": doe_id, "source_path": str(empty.parent)})
-    assert w.run_once_light() == "FAILED"
-    jd = job(c, j["id"])
-    assert jd["failure_code"] == "INPUT_INVALID" and "x" in jd["failure_message"]
-    # 중복 run 폴더 → 그 run 제외
-    dup = Path(lc.settings.storage.allowed_import_roots[0]) / "dup"
-    _write_results(ai, "ri1", doe_id, ["run__00001"], base=dup / "a")
-    _write_results(ai, "ri1", doe_id, ["run__00001", "run__00003"], base=dup / "b")
-    j = submit(c, sid, "TD_RESULT_IMPORT", {"doe_id": doe_id, "source_path": str(dup)})
-    assert w.run_once_light() == "SUCCEEDED"
-    jd = job(c, j["id"])
-    assert jd["result"]["matched"] == 1 and any("run__00001" in x["message"] for x in jd["warnings"])
-    # F: 파라미터 세트 생성(정의·샘플·cad·tpl·assem) → 1차 검증기 통과, origin
-    r = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json={"doe_id": doe_id, "unit_system": "mm-ton-ms"})
-    assert r.status_code == 201, r.text
-    ps = r.json()
-    assert ps["origin"] == "TRAIN_DOE" and ps["train_doe_id"] == doe_id and ps["is_current"]
-    assert ps["sample_count"] == 3 and ps["starter_name"] == "drop_0000.rad" and ps["unit_system"] == "mm-ton-ms"
-    assert ps["source_path"] == f"① DOE {doe_id[:8]}" and [p["name"] for p in ps["parameters"]] == ["THK_1", "RIB_H"]
-    S = ai / "ri1" / "04_params" / ps["id"]
-    assert (S / "cad" / "cushion_parametric.prt").is_file() and (S / "simlab_parametered_mesh.tpl").is_file()
-    assert (S / "radioss_assem" / "drop_0000.rad").is_file() and (S / "original" / "samples.csv").is_file()
-    assert list((ai / "ri1" / "logs" / "_paramset_tmp").iterdir())  # 임시 조립 폴더(삭제 호출 없음)
-    smp = c.get(f"{API}/param-sets/{ps['id']}/samples", headers=P).json()
-    assert [r_["run_key"] for r_ in smp["rows"]] == ["run__00001", "run__00002", "run__00003"]
-    r = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json={"doe_id": doe_id, "runs": "all"})
-    assert r.status_code == 201
-    # 1차 폴더 등록 경로 회귀
-    lst = c.get(f"{API}/studies/{sid}/param-sets", headers=P).json()
-    assert len(lst) == 2 and sum(1 for x in lst if x["is_current"]) == 1
-
-
-def test_samples_missing_blocks_from_train(p2_env):
-    c, mk, ai, _lc, _d = p2_env
-    w = mk()
-    sid, doe_id = _ready_doe(c, w, ai, "sm1")
-    with w.engine.begin() as conn:
-        conn.execute(text("update train_does set sample_status='MISSING', samples_rel=null where id=:d"), {"d": doe_id})
-    r = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json={"doe_id": doe_id})
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "SAMPLES_MISSING"
-
-
-def test_resp_extract(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch):
-    """V2-TD-8: 템플릿 null 409, 설정 시 팬아웃·run_responses.csv·F의 resp: 열."""
-    gen = _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, {})
-    c, mk, ai, lc, d = next(gen)
-    try:
-        w = mk()
-        sid, doe_id = _ready_doe(c, w, ai, "rx1", num_runs=2)
-        r = submit(c, sid, "TD_RESP_EXTRACT", {"doe_id": doe_id, "responses": [{"name": "MaxStress", "unit": "MPa"}]}, expect=409)
-        assert r["detail"]["code"] == "TEMPLATE_NOT_CONFIGURED"
-    finally:
-        for _ in gen:
-            pass
-    tmp2 = tmp_path / "second"
-    tmp2.mkdir()
-    gen = _p2_env(tmp2, fake_tools, engine, fake_dashboard, monkeypatch,
-                  {"commands": {"response_extract": ["{hw}", "--responses", "{responses_json}", "--input", "{pred_h3d}", "--out", "{out_csv}"]}})
-    c, mk, ai, lc, d = next(gen)
-    try:
-        w = mk()
-        sid, doe_id = _ready_doe(c, w, ai, "rx2", num_runs=2)
-        src = Path(lc.settings.storage.allowed_import_roots[0]) / "m"
-        _write_results(ai, "rx2", doe_id, ["run__00001", "run__00002"], base=src)
-        j = submit(c, sid, "TD_RESULT_IMPORT", {"doe_id": doe_id, "source_path": str(src)})
-        assert w.run_once_light() == "SUCCEEDED"
-        r = submit(c, sid, "TD_RESP_EXTRACT", {"doe_id": doe_id, "responses": [{"name": "MaxStress", "unit": "MPa"}, {"name": "Disp"}]})
-        assert w.run_once_slot() == "SUCCEEDED", job(c, r["id"])
-        D = ai / "rx2" / "01_train" / "doe" / doe_id
-        rows = list(csv.reader((D / "run_responses.csv").open()))
-        assert rows == [["run_key", "MaxStress", "Disp"], ["run__00001", "110.0", "111.0"], ["run__00002", "110.0", "111.0"]]
-        jd = job(c, r["id"])
-        step = next(s for s in jd["steps"] if s["step_key"] == "RESPONSE_EXTRACT_RUNS")
-        assert step["state"] == "SUCCEEDED"
-        cmds = (ai / "rx2" / "logs" / r["id"] / "step_02_RESPONSE_EXTRACT_RUNS.commands.jsonl").read_text().splitlines()
-        assert len(cmds) == 2 and json.loads(cmds[0])["target_id"] == "run__00001"
-        ps = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json={"doe_id": doe_id}).json()
-        assert ps["sample_has_measured"] is True and [x["name"] for x in ps["responses"]] == ["MaxStress", "Disp"]
-        assert job(c, j["id"])["state"] == "SUCCEEDED"
-    finally:
-        for _ in gen:
-            pass
-
-
-def test_solve_cancel_multi_run(p2_pbs, fake_record):
-    """V2-HPC-1: 다중 run 대기 중 취소(T12) → 모든 hpc_job qdel, run SOLVE_FAILED(재제출 대상)."""
-    c, mk, ai, lc, d = p2_pbs
-    w = mk()
-    sid, doe_id = _ready_doe(c, w, ai, "sv3", num_runs=2)
-    j = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id})
-    assert w.run_once_slot() == "WAITING_HPC"
-    assert c.post(f"{API}/jobs/{j['id']}/cancel", headers=AW).status_code == 202
-    w.poll_hpc_once()
-    assert job(c, j["id"])["state"] == "CANCELED"
-    assert sorted(r["argv"][-1] for r in read_record(fake_record) if r["tool"] == "qdel") == ["12345.pbs01", "12346.pbs01"]
-    assert [r["state"] for r in c.get(f"{API}/train-does/{doe_id}/runs", headers=P).json()] == ["SOLVE_FAILED"] * 2

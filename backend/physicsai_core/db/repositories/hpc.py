@@ -11,7 +11,8 @@ from sqlalchemy.engine import Connection
 from ...state_machine import CANCELED, COLLECTING, FAILED, WAITING_HPC, check_transition
 from ..tables import hpc_jobs, job_steps, jobs
 from . import notifications as notif_repo
-from .jobs import _side_effects_on_end, row_dict
+from .job_end import _side_effects_on_end
+from .jobs import row_dict
 
 HPC_TERMINAL = ("SUCCEEDED", "FAILED", "CANCELED", "LOST")
 

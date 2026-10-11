@@ -1,4 +1,4 @@
-"""작업 저장소: 생성, 조회, 종료 부수효과, 취소, 대기열 이동(계약 §7). lease(claim/renew/release·리퍼)는 job_lease.py."""
+"""작업 저장소: 생성, 조회, 취소, 대기열 이동(계약 §7). 종료 부수효과는 job_end.py, lease(claim/renew/release·리퍼)는 job_lease.py."""
 
 from __future__ import annotations
 
@@ -14,19 +14,17 @@ from ...job_types import JOB_TYPES
 from ...state_machine import (
     CANCELED,
     QUEUED,
-    SUCCEEDED,
     TERMINAL,
     check_transition,
 )
 from ..tables import (
-    datasets,
     job_queue_seq,
     job_steps,
     jobs,
-    models,
     studies,
 )
 from . import notifications as notif_repo
+from .job_end import _side_effects_on_end
 
 
 def row_dict(r: Any) -> dict[str, Any]:
@@ -170,46 +168,6 @@ def latest_by_stage(conn: Connection, study_id: str, stage: int) -> dict[str, An
         .order_by(jobs.c.created_at.desc())
         .limit(1)
     ).first())
-
-
-# ---------------------------------------------------------------------------
-# 종료 부수효과(lease 해제·리퍼·취소 공용). claim/renew/release는 job_lease.py
-# ---------------------------------------------------------------------------
-
-
-def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> None:
-    """종료 시 관련 행 정리(데이터셋 FAILED, 평가 상태 FAILED)."""
-    if state == SUCCEEDED:
-        return
-    res = job.get("result") or {}
-    if job["job_type"] == "DATASET_CREATE" and res.get("dataset_id"):
-        conn.execute(
-            update(datasets)
-            .where(and_(datasets.c.id == res["dataset_id"], datasets.c.status == "BUILDING"))
-            .values(status="FAILED")
-        )
-    if job["job_type"] == "EVALUATE":
-        conn.execute(
-            update(models)
-            .where(and_(models.c.eval_job_id == job["id"], models.c.eval_status == "RUNNING"))
-            .values(eval_status="FAILED", row_version=models.c.row_version + 1)
-        )
-    # 2차 엔터티(phase2 §7.2): 작업 실패·취소·중단 → BUILDING/RUNNING 행 FAILED
-    # 엔터티 저장소가 이 모듈의 row_dict를 import하므로 지연 import(순환 회피)
-    from . import curations as cur_repo
-    from . import optimizations as opt_repo
-    from . import spdm_imports as imp_repo
-    from . import train as train_repo
-
-    jt = job["job_type"]
-    if jt == "TD_DOE_GEN":
-        train_repo.fail_building_doe(conn, job["id"])
-    elif jt in ("CU_H3D_CURATE", "CU_T01_CURVES"):
-        cur_repo.fail_building_curation(conn, job["id"])
-    elif jt == "SPDM_IMPORT":
-        imp_repo.fail_building_import(conn, job["id"])
-    elif jt == "OPTIMIZE":
-        opt_repo.fail_running_opt(conn, job["id"])
 
 
 # ---------------------------------------------------------------------------

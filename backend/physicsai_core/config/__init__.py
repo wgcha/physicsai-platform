@@ -3,7 +3,7 @@
 - 알 수 없는 키는 오류(pydantic extra=forbid).
 - 스키마 검증 실패여도 API는 뜬다: `LoadedConfig.ok=False`, 쓰기 API는 503 CONFIG_INVALID.
 
-schema(스키마) ← rules(공용 규칙) ← validate_stages·validate(검증) ← loader(로드), derived(파생 값).
+schema(스키마: `_model`·`schema_stages`·`schema_hpc`·`schema_ops`를 Settings로 조립) ← rules(공용 규칙) ← validate_stages·validate(검증) ← loader(로드), derived(파생 값).
 여기서 기존 공개 이름을 전부 재노출한다(`from physicsai_core.config import ...` 경로 불변).
 """
 
@@ -29,52 +29,58 @@ from .rules import (  # noqa: F401
     paths_overlap,
 )
 from .schema import (  # noqa: F401
-    DEFAULT_LOG_ERROR_PATTERNS,
-    ENV_PROBE_TOOLS,
     LAUNCHER_KEYS,
     RESOURCE_DIR_KEYS,
     RESOURCE_FILE_KEYS,
     AltairCfg,
     AuthCfg,
-    CommandsCfg,
     ConfigIssue,
-    CurationCfg,
     DatabaseCfg,
-    DatasetCfg,
-    DatasetOptionsCfg,
-    DemoCfg,
     DevPrincipalCfg,
-    EnvCheckCfg,
-    EnvCheckProbesCfg,
-    ErrorBundleCfg,
+    LauncherCfg,
+    LoadedConfig,
+    MembershipCfg,
+    ResourcesCfg,
+    ServerCfg,
+    Settings,
+    StorageCfg,
+    WorkerCfg,
+)
+from .schema_hpc import (  # noqa: F401
+    CommandsCfg,
     HpcAdapterCfg,
     HpcCfg,
     HpcCommandCfg,
     HpcDefaultsCfg,
     HpcTransferCfg,
-    LauncherCfg,
-    LoadedConfig,
+    PathMapCfg,
+)
+from .schema_ops import (  # noqa: F401
+    DEFAULT_LOG_ERROR_PATTERNS,
+    ENV_PROBE_TOOLS,
+    DemoCfg,
+    EnvCheckCfg,
+    EnvCheckProbesCfg,
+    ErrorBundleCfg,
     LoggingCfg,
-    MembershipCfg,
     NotificationsCfg,
+    StudyStorageCfg,
+    UiCfg,
+)
+from .schema_stages import (  # noqa: F401
+    CurationCfg,
+    DatasetCfg,
+    DatasetOptionsCfg,
     OptimizeCfg,
     PackageCfg,
     ParamSetCfg,
     ParserCfg,
-    PathMapCfg,
     PredictCfg,
-    ResourcesCfg,
     ScoreCfg,
-    ServerCfg,
-    Settings,
     SpdmImportCfg,
-    StorageCfg,
-    StudyStorageCfg,
     SummaryParserCfg,
     TrainDataCfg,
     TrainingLogCfg,
-    UiCfg,
-    WorkerCfg,
 )
 from .validate import (  # noqa: F401
     validate_settings,

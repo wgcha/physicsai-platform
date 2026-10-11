@@ -2,6 +2,9 @@
 
 0001_initial migration은 이 메타데이터를 그대로 만든다(B14). 현재 스키마는 tables.py, 이후 변경은 0002 이후
 migration의 명시적 DDL로 적는다. 0001이 tables.py를 쓰면 2차 테이블까지 0001에서 만들어지므로 분리했다.
+
+300줄 규칙 예외(R12): 동결본이라 분할하지 않는다. 파일을 나누면 0001_initial이 만드는 DDL의 출처가 여러 곳이 되어
+"수정 금지" 검토가 어려워지고, 현재 스키마(`tables/` 패키지)와 달리 앞으로 고칠 일이 없어 분할 이득이 없다.
 """
 
 from __future__ import annotations

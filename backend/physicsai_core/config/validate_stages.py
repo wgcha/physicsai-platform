@@ -5,7 +5,8 @@ from __future__ import annotations
 import re
 
 from .rules import _compile
-from .schema import ENV_PROBE_TOOLS, ConfigIssue, Settings
+from .schema import ConfigIssue, Settings
+from .schema_ops import ENV_PROBE_TOOLS
 
 
 def _validate_phase2(s: Settings, issues: list[ConfigIssue]) -> None:

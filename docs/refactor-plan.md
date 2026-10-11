@@ -220,7 +220,7 @@ R0에서 추가하는 기준선 시험(이후 모든 단계에서 자동 확인)
 |---|---|---|
 | H1 | Study 상대경로 리터럴 61개를 `core/study_layout.py` 함수로 | 같은 경로가 끝 `/` 유무가 다르게 저장된다(예: `steps/train.py:534`·`:630`의 `result_rel=f"01_train/results/{id}/{rk}/"` vs `:320` 끝 `/` 없음). DB에 저장되는 값이라 함수화 중 실수하면 데이터 형태가 바뀐다. R10 이후 별도 계획으로 |
 | H2 | `backend/tests/fake_tools/` 이동(예: `tests/fixtures/`) | 배포 스크립트 3곳과 CI(`ci.yml:167`)가 경로 의존 — 배포 변경이 됨 |
-| H3 | 여러 주제가 섞인 시험 파일의 함수 단위 분할(`test_api.py`, `test_core_units.py`, `test_phase2_units.py`, `test_verifier_fixes*.py`, `test_phase2_fixes.py`), `physicsai_test_support.py` 분할 | 효과 대비 변경량 큼, fixture 노출 경로(`from physicsai_test_support import *`) 의존 |
+| H3 | 여러 주제가 섞인 시험 파일의 함수 단위 분할(`test_api.py`, `test_core_units.py`, `test_phase2_units.py`, `test_verifier_fixes*.py`, `test_phase2_fixes.py`), `physicsai_test_support.py` 분할 | 효과 대비 변경량 큼, fixture 노출 경로(`from physicsai_test_support import *`) 의존. **R12(§6)에서 300줄 초과분만 해제**(재노출로 노출 경로 유지) |
 | H4 | `Masker`와 `BundleMasker` 규칙 통합 | step 로그에 새 마스킹 규칙이 적용되는 **동작 변경**. 계약 결정 필요 |
 | H5 | `verify.collect`와 `ts_collect`의 안정성 대기 루프 통합 | 수집 범위가 다름(평면 vs 재귀·링크 제외) — 합치면 동작 변경 |
 | H6 | `styles.css`(2,076) 분할 | 선택자 순서·우선순위가 바뀌면 화면이 달라짐. 자동 시각 회귀 시험 없음 |
@@ -232,3 +232,33 @@ R0에서 추가하는 기준선 시험(이후 모든 단계에서 자동 확인)
 
 - Impl 에이전트는 단계마다 커밋 해시와 "옮긴 파일 → 새 위치" 목록을 보고하고, Plan이 architecture.md §1 지도를 갱신한다.
 - Verifier: platform.md §22·phase2.md §20 체크리스트를 전체 재판정(시험 이름이 바뀐 항목은 V-ID로 대조), openapi·생성 타입 diff 0을 증적으로 남긴다.
+
+## 6. R12 (2026-10-11) 300줄 분할
+
+Impl-Backend, 브랜치 `claude/phase3`(기준 `a2154ea`). 목표: 300줄 넘는 파이썬 파일을 의미 단위로 나눠 고치기 쉽게. **동작 불변** — 공개 import 경로는 원래 모듈(또는 패키지 `__init__`)의 재노출로 유지, `backend/openapi.json` 바이트 동일, DB 스키마 불변(`metadata` 단일·정의 순서 유지, CreateTable/Index DDL 문자열 전후 동일 확인), 시험 기대값 무수정(시험 함수는 통째 이동만).
+
+원칙(§0 보완): R7·R8처럼 이번 분할은 "옛 경로 재노출"을 쓴다(호출부 import 무수정). 순환을 피하려고 재노출하는 쪽이 항상 위(분할된 하위 모듈은 원래 모듈을 import하지 않음). 클래스 메서드 묶음은 mixin 상속으로 나눠 시험의 클래스 속성 monkeypatch(`StepContext.run_local`)가 그대로 적용되게 했다. 로거 이름은 원래 모듈 이름 그대로. 각 새 파일 첫 줄에 역할 docstring.
+
+| 대상(전 줄 수) | 후(파일 수, 최대 줄) | 나눈 내용 |
+|---|---|---|
+| `core/db/tables.py`(575) | `db/tables/` 9개, 최대 167 | `_base`(metadata 단일)·`study_job`·`model_data`·`execution`·`stage1_train_data`·`stage2_curation`·`stage5_optimize`·`ops`, `__init__` 재노출(원래 순서로 import) |
+| `core/db/schema_0001.py`(393) | **예외**(396, 분할 안 함) | 1차 동결본(0001_initial 전용, 수정 금지) — 머리 주석에 사유만 추가 |
+| `core/config/schema.py`(436) | 5개, 최대 197 | `schema`(Settings 조립·storage 등 기본 절) + `_model`·`schema_stages`·`schema_hpc`·`schema_ops`. `storage.spdm_roots`는 `schema.py`에 남김(V2-SPDM-3 정적 허용 목록) |
+| `core/db/repositories/job_lease.py`(391) | 3개, 최대 204 | `job_lease`(claim·renew, 재노출) + `job_lease_end`(release·리퍼) + `lease_guard`(LeaseLost·토큰 가드 기록) |
+| `core/db/repositories/jobs.py`(312) | 2개, 최대 270 | `job_end`(종료 부수효과) 분리 |
+| `core/stage4_predict/param_sets.py`(345) | 2개, 최대 207 | `param_set_files`(ParamSetFolder·파일별 읽기) 분리, `TPL_NAME`·`NAME_RE`·`RUN_KEY_RE` 속성 유지 |
+| `core/paths.py`(313) | 2개, 최대 277 | `path_links`(링크·reparse 판정·`real`·`is_under`) 분리, paths에서 재노출 |
+| `worker/step_context.py`(383) | 2개, 최대 264 | `step_process.StepProcessMixin`(render·run_local·run_fanout·checkpoint_cancel) |
+| `worker/runtime.py`(369) | 2개, 최대 268 | `hpc_poller.HpcPollerMixin`(poll_hpc_once·`RUN_STATE_BY_HPC`) — `spdm_roots` 등록은 runtime에 남김 |
+| `deploy/demo/demo_setup.py`(575) | 5개, 최대 227 | `demo_common`·`demo_init`·`demo_seed`·`demo_db`, 진입점·up/down은 `demo_setup.py`. `sys.dont_write_bytecode`·스크립트 폴더 sys.path 보장 |
+| `backend/tests/physicsai_test_support.py`(677) | 7개, 최대 172 | `support_base`·`support_db`·`support_tools`·`support_app`·`support_inputs`·`support_resources` + 훅·재노출 본체(100) |
+| `test_stage1_train.py`(519) | 3개+conftest, 최대 275 | `test_stage1_solve`(①-4)·`test_stage1_results`(①-5·①-6·F), `conftest.py`(pbs_state·p2_pbs). V2-TD-6 회수 모드는 계약(phase3 V3-S4-2)이 파일 이름으로 가리키므로 원래 파일에 둠 |
+| `test_api.py`(490) | 3개+helpers, 최대 247 | `test_api_models`(③·④)·`test_api_ops`(알림·로그·산출물), `helpers_api.py` |
+| `test_phase2_units.py`(418) | 2개, 최대 279 | `common/test_config_stages.py`(V2-CFG·V2-CMD). SPDM·배포 정적 시험은 원래 파일 그대로 |
+| `test_core_units.py`(327) | 2개, 최대 208 | `test_core_stage_units.py`(분할·파서·최근접·tpl) |
+| `test_queue_lease.py`(315) | 3개+helpers, 최대 132 | `test_lease`(V-LS-1~3)·`test_step_failures`(V-SM-5·6, V-CMD-5·7, V-DS-2), `helpers_queue.py` |
+| `test_stage2_curation.py`(311) | 2개, 최대 180 | `test_stage2_spdm_import.py`(V2-SPDM-1~3) |
+
+- 시험 변경: 기대값·검사 범위 무변경. 유일한 내용 수정은 `common/test_static_security.py::test_no_timeout_handling_in_executor` 검사 대상에 `step_process.py` 추가(run_local이 옮겨 간 파일 — 범위 확대, §0-4).
+- H3(시험 함수 단위 분할·`physicsai_test_support` 분할)은 위 표 범위만큼 해제. `test_phase2_api`·`test_verifier_fixes*`·`test_phase2_fixes`는 300줄 이하라 그대로.
+- 검증: `scripts/test-all.sh` 통과(pytest 454 passed·8 skipped(Windows 전용·pwsh 없음 — 기존과 같음), 수집 462개 동일, `-m windows` 7개 동일, 프런트 139), `git diff --stat backend/openapi.json` 0, 이동 전후 줄 대조(원래 파일의 코드 줄이 새 파일들에 모두 있음).

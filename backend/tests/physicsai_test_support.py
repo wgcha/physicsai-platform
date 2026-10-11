@@ -1,35 +1,74 @@
 """시험 공용 fixture: 임시 PostgreSQL, 설정, 가짜 대시보드, 가짜 도구, 앱·워커.
 
 PostgreSQL이 없으면 DB 시험은 실패한다(skip 금지, 계약 §18.2).
+
+정의는 `support_*.py`(base·db·tools·app·inputs·resources)에 있고 여기서 전부 재노출한다(R12). 시험의
+`from physicsai_test_support import …`와 conftest의 `import *`(fixture·pytest 훅 등록) 경로는 그대로다.
 """
 
 from __future__ import annotations
 
-import json
 import os
-import shutil
-import socket
-import stat
-import subprocess
-import sys
-import tempfile
-import time
-import uuid
-from pathlib import Path
-from typing import Any
 
-import httpx
 import pytest
-from sqlalchemy import create_engine, text
 
-REPO = Path(__file__).resolve().parents[2]
-FAKE_TOOLS = Path(__file__).resolve().parent / "fake_tools"
-sys.path.insert(0, str(REPO / "backend"))
-sys.path.insert(0, str(REPO / "worker"))
-
-IS_WINDOWS = os.name == "nt"
-# 시험 설정의 제한기: Linux는 posix, Windows는 실제 Job Object
-LIMITER = "windows_job" if IS_WINDOWS else "posix"
+from support_base import (  # noqa: F401 - 재노출(conftest `import *`·시험 import 경로 불변)
+    FAKE_TOOLS,
+    IS_WINDOWS,
+    LIMITER,
+    REPO,
+)
+from support_db import (  # noqa: F401 - 재노출(conftest `import *`·시험 import 경로 불변)
+    _find_pg_bin,
+    _free_port,
+    _TempCluster,
+    _with_db,
+    db_url,
+    engine,
+    pg_server,
+    run_alembic_upgrade,
+)
+from support_tools import (  # noqa: F401 - 재노출(conftest `import *`·시험 import 경로 불변)
+    _EXE_CACHE,
+    _install_fake_tools,
+    _windows_tool_exe,
+    fake_record,
+    fake_tools,
+    loaded_config,
+    make_settings_dict,
+    read_record,
+    settings_dict,
+)
+from support_app import (  # noqa: F401 - 재노출(conftest `import *`·시험 import 경로 불변)
+    API,
+    app_ctx,
+    client,
+    fake_dashboard,
+    FakeDashboard,
+    H,
+    PROJECTS,
+    USERS,
+    wait_for,
+    worker_factory,
+)
+from support_inputs import (  # noqa: F401 - 재노출(conftest `import *`·시험 import 경로 불변)
+    make_h3d_tree,
+    make_model_folder,
+    make_param_set_folder,
+    TPL_TEXT,
+)
+from support_resources import (  # noqa: F401 - 재노출(conftest `import *`·시험 import 경로 불변)
+    _p2_env,
+    DOE_TYPES,
+    LAUNCHER_TEXT,
+    LAUNCHERS,
+    make_phase2_settings,
+    make_resources,
+    p2_env,
+    pbs_command_cfg,
+    PHASE2_COMMANDS,
+    SIMLAB_TPL_TEMPLATE,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -59,619 +98,3 @@ def pytest_runtest_makereport(item, call):
         rep.longrepr = f"Windows 전용 시험이 skip되었습니다(PHYSICSAI_REQUIRE_WINDOWS_TESTS=1): {rep.longrepr}"
 
 
-# ---------------------------------------------------------------------------
-# PostgreSQL
-# ---------------------------------------------------------------------------
-
-
-def _find_pg_bin() -> str | None:
-    cand = os.environ.get("PG_BIN")
-    if cand and (os.path.isfile(os.path.join(cand, "initdb")) or os.path.isfile(os.path.join(cand, "initdb.exe"))):
-        return cand
-    base = Path("/usr/lib/postgresql")
-    if base.is_dir():
-        for v in sorted(base.iterdir(), reverse=True):
-            if (v / "bin" / "initdb").is_file():
-                return str(v / "bin")
-    w = shutil.which("initdb")
-    return os.path.dirname(w) if w else None
-
-
-def _free_port() -> int:
-    with socket.socket() as s:
-        s.bind(("127.0.0.1", 0))
-        return s.getsockname()[1]
-
-
-class _TempCluster:
-    def __init__(self) -> None:
-        self.bin = _find_pg_bin()
-        if not self.bin:
-            pytest.fail("PostgreSQL을 찾을 수 없습니다(PG_BIN 또는 PHYSICSAI_TEST_DATABASE_URL 필요). DB 시험은 skip하지 않습니다")
-        self.dir = tempfile.mkdtemp(prefix="physicsai-pg-")
-        self.port = _free_port()
-        self.as_root = hasattr(os, "geteuid") and os.geteuid() == 0
-        if self.as_root:
-            shutil.chown(self.dir, user="postgres")
-            os.chmod(self.dir, 0o700)
-        data = os.path.join(self.dir, "data")
-        self._run([f"{self.bin}/initdb", "-D", data, "-A", "trust", "-U", "postgres", "-E", "UTF8", "--no-sync"])
-        self._run(
-            [
-                f"{self.bin}/pg_ctl", "-D", data, "-l", os.path.join(self.dir, "log"), "-w", "-o",
-                f"-p {self.port} " + ("" if IS_WINDOWS else f"-k {self.dir} ")
-                + "-c listen_addresses=127.0.0.1 -c fsync=off -c max_connections=200",
-                "start",
-            ]
-        )
-        self.data = data
-        self.url = f"postgresql+psycopg://postgres@127.0.0.1:{self.port}/postgres"
-
-    def _run(self, argv: list[str]) -> None:
-        if self.as_root:
-            argv = ["runuser", "-u", "postgres", "--", *argv]
-        r = subprocess.run(argv, capture_output=True, text=True)
-        if r.returncode != 0:
-            pytest.fail(f"PostgreSQL 임시 클러스터 실패: {' '.join(argv)}\n{r.stdout}\n{r.stderr}")
-
-    def stop(self) -> None:
-        try:
-            self._run([f"{self.bin}/pg_ctl", "-D", self.data, "-m", "immediate", "stop"])
-        finally:
-            shutil.rmtree(self.dir, ignore_errors=True)
-
-
-def _with_db(url: str, db: str) -> str:
-    base, _, _ = url.rpartition("/")
-    return f"{base}/{db}"
-
-
-def run_alembic_upgrade(url: str) -> None:
-    from alembic import command
-    from alembic.config import Config
-
-    cfg = Config(str(REPO / "migrations" / "alembic.ini"))
-    cfg.set_main_option("script_location", str(REPO / "migrations"))
-    cfg.attributes["url"] = url
-    command.upgrade(cfg, "head")
-
-
-@pytest.fixture(scope="session")
-def pg_server():
-    ext = os.environ.get("PHYSICSAI_TEST_DATABASE_URL")
-    cluster = None
-    if ext:
-        from physicsai_core.db.engine import normalize_url
-
-        admin_url = _with_db(normalize_url(ext), "postgres")
-    else:
-        cluster = _TempCluster()
-        admin_url = cluster.url
-    admin = create_engine(admin_url, isolation_level="AUTOCOMMIT")
-    tpl = f"physicsai_tpl_{uuid.uuid4().hex[:8]}"
-    with admin.connect() as c:
-        c.execute(text(f'CREATE DATABASE "{tpl}"'))
-    run_alembic_upgrade(_with_db(admin_url, tpl))
-    yield {"admin": admin, "admin_url": admin_url, "template": tpl}
-    with admin.connect() as c:
-        c.execute(text(f'DROP DATABASE IF EXISTS "{tpl}" WITH (FORCE)'))
-    admin.dispose()
-    if cluster:
-        cluster.stop()
-
-
-@pytest.fixture()
-def db_url(pg_server):
-    name = f"physicsai_t_{uuid.uuid4().hex[:10]}"
-    with pg_server["admin"].connect() as c:
-        c.execute(text(f'CREATE DATABASE "{name}" TEMPLATE "{pg_server["template"]}"'))
-    url = _with_db(pg_server["admin_url"], name)
-    yield url
-    with pg_server["admin"].connect() as c:
-        c.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))
-
-
-@pytest.fixture()
-def engine(db_url):
-    from physicsai_core.db.engine import make_engine
-
-    eng = make_engine(db_url, pool_size=5)
-    yield eng
-    eng.dispose()
-
-
-# ---------------------------------------------------------------------------
-# 가짜 도구·설정
-# ---------------------------------------------------------------------------
-
-
-def _windows_tool_exe(src: Path, dest: Path) -> str:
-    """Windows: 가짜 도구를 실행 파일(<이름>.exe)로 만든다 — pip 콘솔 스크립트와 같은 distlib 런처(+#!python + zip).
-    .bat/.cmd 래퍼는 cmd.exe 재해석(B24)과 PBS 실행 파일 규칙(.bat·.cmd 금지)에 걸리므로 쓰지 않는다."""
-    from pip._vendor.distlib.scripts import ScriptMaker
-
-    staging = dest / "_src"
-    staging.mkdir(parents=True, exist_ok=True)
-    body = src.read_text(encoding="utf-8").split("\n", 1)[1]
-    (staging / src.name).write_text("#!python\n" + body, encoding="utf-8")
-    maker = ScriptMaker(str(staging), str(dest))  # source_dir 필수(None이면 경로 결합 실패)
-    maker.executable = sys.executable
-    maker.variants = {""}
-    maker.clobber = True
-    maker.add_launchers = True
-    maker.make(src.name)
-    exe = dest / f"{src.name}.exe"
-    assert exe.is_file(), exe
-    return str(exe)
-
-
-_EXE_CACHE: dict[str, Path] = {}
-
-
-def _install_fake_tools(dest: Path) -> dict[str, str]:
-    """fake_tools를 공백 없는 폴더로 복사하고 실행 권한을 준다(Windows는 .exe 런처, 세션당 1번 만들고 복사)."""
-    dest.mkdir(parents=True, exist_ok=True)
-    out = {}
-    for src in FAKE_TOOLS.iterdir():
-        if src.is_file() and src.name.startswith("fake_"):
-            if IS_WINDOWS:
-                if src.name not in _EXE_CACHE:
-                    cache = Path(tempfile.mkdtemp(prefix="physicsai-fake-exe-"))
-                    _EXE_CACHE[src.name] = Path(_windows_tool_exe(src, cache))
-                dst = dest / _EXE_CACHE[src.name].name
-                shutil.copyfile(_EXE_CACHE[src.name], dst)
-                out[src.name] = str(dst)
-                continue
-            dst = dest / src.name
-            shutil.copyfile(src, dst)
-            dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
-            out[src.name] = str(dst)
-    return out
-
-
-def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> dict[str, Any]:
-    ai_root = base / "ai_root"
-    ai_root.mkdir(exist_ok=True)
-    imports = base / "hpc_results"
-    imports.mkdir(exist_ok=True)
-    res = base / "resources"
-    res.mkdir(exist_ok=True)
-    tcl = res / "BATCHRUN_preview_pred_h3d.tcl"
-    tcl.write_text("# fake tcl\n")
-    d: dict[str, Any] = {
-        "schema_version": 1,
-        "profile": "dev",
-        "server": {"host": "127.0.0.1", "port": 8100},
-        "auth": {"mode": "dashboard", "cache_ttl_s": 30, "timeout_s": 3},
-        "storage": {"ai_root": str(ai_root), "allowed_import_roots": [str(imports)], "spdm_roots": [str(base / "spdm")]},
-        "altair": {
-            "version_label": "fake",
-            "edspy_path": tools["fake_edspy"],
-            "simlab_path": tools["fake_simlab"],
-            "hw_exe_path": tools["fake_hw"],
-            "hyperstudy_path": "",
-            "hvtrans_exe_path": "",
-        },
-        "resources": {"preview_pred_h3d_tcl": str(tcl)},
-        "worker": {
-            "limiter": LIMITER,
-            "max_logical_cores": 4,
-            "max_memory_gb": 8,
-            "heartbeat_interval_s": 0.3,
-            "lease_ttl_s": 3,
-            "claim_interval_s": 0.1,
-            "cancel_check_interval_s": 0.2,
-            "resource_sample_interval_s": 0.5,
-            "state_dir": str(base / "state"),
-            "gpu_query": [tools["fake_nvidia_smi"]],
-            "env_passthrough": ["FAKE_*"],
-        },
-        "dataset": {"holdout_ratio": 0.1, "seed": 20261008, "split_group": "file", "min_h3d_files": 2, "min_psdata_bytes": 1048576},
-        "training_log": {
-            "log_globs": ["*.log", "*.txt"],
-            "max_curve_points": 2000,
-            "parsers": [{"name": "physicsai_default", "pattern": r"epoch=\s*(?P<epoch>\d+)\s*/\s*(?P<total>\d+)\s+loss=(?P<loss>[0-9.eE+\-]+)"}],
-        },
-        "score": {"write_files": False, "parsers": [{"name": "generic", "pattern": r"^\s*(?P<name>[A-Za-z][A-Za-z0-9_ ]{0,40}?)\s*[:=]\s*(?P<value>[-+0-9.eE]+)\s*$"}]},
-        "commands": {
-            "edspy_create_dataset": ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"],
-            "edspy_score": ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"],
-            "geom_update": ["{simlab}", "-auto", "{rendered_script}", "-nographics"],
-            "mesh": None,
-            "rad_assemble": None,
-            "edspy_predict": ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"],
-            "contour_preview": ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"],
-            "response_extract": None,
-        },
-        "hpc": {"gateway": "none"},
-    }
-    for k, v in overrides.items():
-        if isinstance(v, dict) and isinstance(d.get(k), dict):
-            d[k] = {**d[k], **v}
-        else:
-            d[k] = v
-    return d
-
-
-@pytest.fixture()
-def fake_tools(tmp_path):
-    return _install_fake_tools(tmp_path / "tools")
-
-
-@pytest.fixture()
-def fake_record(tmp_path, monkeypatch):
-    rec = tmp_path / "fake_record.jsonl"
-    monkeypatch.setenv("FAKE_TOOL_RECORD", str(rec))
-    monkeypatch.delenv("FAKE_TOOL_MODE", raising=False)
-    monkeypatch.delenv("FAKE_TOOL_DELAY_S", raising=False)
-    return rec
-
-
-def read_record(path: Path) -> list[dict[str, Any]]:
-    if not path.exists():
-        return []
-    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()]
-
-
-@pytest.fixture()
-def settings_dict(tmp_path, fake_tools):
-    return make_settings_dict(tmp_path, fake_tools)
-
-
-@pytest.fixture()
-def loaded_config(settings_dict):
-    from physicsai_core.config import load_config_dict
-
-    lc = load_config_dict(settings_dict, environ={})
-    assert lc.ok, lc.issues
-    return lc
-
-
-# ---------------------------------------------------------------------------
-# 가짜 대시보드(§5.5)
-# ---------------------------------------------------------------------------
-
-USERS: dict[str, dict[str, Any]] = {
-    "tok-admin": {"id": "u-admin", "username": "admin", "display_name": "관리자", "account_status": "ACTIVE",
-                  "is_global_admin": True, "memberships": []},
-    "tok-power": {"id": "u-power", "username": "power", "display_name": "파워", "account_status": "ACTIVE",
-                  "is_global_admin": False, "memberships": [{"project_id": "p-1", "role": "power"}]},
-    "tok-power2": {"id": "u-power2", "username": "power2", "display_name": "파워2", "account_status": "ACTIVE",
-                   "is_global_admin": False, "memberships": [{"project_id": "p-1", "role": "power"}]},
-    "tok-general": {"id": "u-general", "username": "general", "display_name": "일반", "account_status": "ACTIVE",
-                    "is_global_admin": False, "memberships": [{"project_id": "p-1", "role": "general"}]},
-    "tok-nonmember": {"id": "u-non", "username": "non", "display_name": "비멤버", "account_status": "ACTIVE",
-                      "is_global_admin": False, "memberships": [{"project_id": "p-2", "role": "power"}, {"project_id": "p-1", "role": "owner"}]},
-    "tok-pending": {"id": "u-pend", "username": "pend", "display_name": "대기", "account_status": "PENDING",
-                    "is_global_admin": False, "memberships": []},
-}
-PROJECTS = [
-    {"id": "p-1", "name": "쿠션", "product_name": "Phone", "description": "x", "created_at": "2026-01-01", "selection_metadata": {}},
-    {"id": "p-2", "name": "브래킷", "product_name": "TV", "description": "y", "created_at": "2026-01-01", "selection_metadata": {}},
-]
-
-
-class FakeDashboard:
-    def __init__(self) -> None:
-        self.calls: list[httpx.Request] = []
-        self.mode: str = "ok"  # ok | 503 | timeout | badjson | 500
-
-    def handler(self, request: httpx.Request) -> httpx.Response:
-        self.calls.append(request)
-        if self.mode == "timeout":
-            raise httpx.ReadTimeout("timeout", request=request)
-        if self.mode == "503":
-            return httpx.Response(503, json={"detail": {"code": "AUTH_SETUP_REQUIRED"}})
-        if self.mode == "500":
-            return httpx.Response(500, json={})
-        if self.mode == "badjson":
-            return httpx.Response(200, content=b"<html>")
-        auth = request.headers.get("authorization", "")
-        token = auth.removeprefix("Bearer ").strip()
-        if token == "tok-suspended":
-            return httpx.Response(403, json={"detail": {"code": "AUTH_ACCOUNT_SUSPENDED"}})
-        user = USERS.get(token)
-        if user is None:
-            return httpx.Response(401, json={"detail": "인증 필요"})
-        if request.url.path == "/api/auth/me":
-            return httpx.Response(200, json={**user, "employee_id": None, "company_permissions": [], "role": None})
-        if request.url.path == "/api/projects":
-            return httpx.Response(200, json=PROJECTS)
-        return httpx.Response(404, json={})
-
-    def me_calls(self) -> int:
-        return sum(1 for c in self.calls if c.url.path == "/api/auth/me")
-
-
-@pytest.fixture()
-def fake_dashboard():
-    return FakeDashboard()
-
-
-@pytest.fixture()
-def app_ctx(engine, loaded_config, fake_dashboard):
-    from physicsai_api.context import build_context
-
-    return build_context(loaded_config, engine, transport=httpx.MockTransport(fake_dashboard.handler))
-
-
-@pytest.fixture()
-def client(app_ctx):
-    from fastapi.testclient import TestClient
-
-    from physicsai_api.main import create_app
-
-    app = create_app(app_ctx)
-    with TestClient(app, base_url="http://127.0.0.1") as c:
-        yield c
-
-
-def H(token: str, write: bool = False) -> dict[str, str]:
-    h = {"Authorization": f"Bearer {token}"}
-    if write:
-        h["X-PhysicsAI-Request"] = "1"
-    return h
-
-
-API = "/physicsai/api"
-
-
-# ---------------------------------------------------------------------------
-# 워커
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture()
-def worker_factory(engine, loaded_config):
-    from physicsai_worker.runtime import Worker
-
-    made: list[Any] = []
-
-    def make(**kw: Any) -> Any:
-        w = Worker(loaded_config, engine, **kw)
-        made.append(w)
-        return w
-
-    yield make
-    for w in made:
-        w.stop()
-
-
-def wait_for(pred, timeout: float = 20.0, interval: float = 0.05) -> Any:
-    end = time.time() + timeout
-    while time.time() < end:
-        v = pred()
-        if v:
-            return v
-        time.sleep(interval)
-    raise AssertionError("시간 내 조건 충족 실패")
-
-
-# ---------------------------------------------------------------------------
-# 입력 폴더 생성 도우미
-# ---------------------------------------------------------------------------
-
-
-def make_h3d_tree(root: Path, n: int = 10, nested: bool = True) -> Path:
-    inp = root / "00_inbox" / "h3d"
-    for i in range(n):
-        d = inp / f"run_{i:04d}" if nested else inp
-        d.mkdir(parents=True, exist_ok=True)
-        (d / f"result_{i:04d}.h3d").write_bytes(b"H3D" + bytes([i]))
-    return inp
-
-
-def make_model_folder(root: Path, name: str = "cushion_TNS", log: str | None = "default", extra_log: bool = False) -> Path:
-    d = root / f"model_{uuid.uuid4().hex[:6]}"
-    d.mkdir(parents=True)
-    (d / f"{name}.psmdl").write_bytes(os.urandom(2048))
-    (d / "settings.pscfg").write_bytes(b"\x80\x04pickle-not-opened")
-    if log == "default":
-        lines = [f"epoch= {e:3d}/  50  loss={100.0 / e:.5e}" for e in range(1, 51)]
-        (d / "train.log").write_text("start\n" + "\n".join(lines) + "\nend\n")
-    elif log == "garbage":
-        (d / "train.log").write_text("no loss lines here\n")
-    if extra_log:
-        (d / "other.txt").write_text("x\n")
-    return d
-
-
-TPL_TEXT = """﻿{parameter(var_1, "THK_1", 3.0, 2.0, 5.0)}
-{parameter(var_2, "N_RIB", 4, 2, 8)}
-#***************************************************************
-dir_file_prt = r"./bracket.x_t"
-thickness = {var_1, %8.4f}
-<paramitem Name="N_RIB" NewValue="{var_2, %3i}" Value="4"/>
-"""
-
-
-def make_param_set_folder(root: Path, *, with_samples: bool = True, with_responses: bool = True,
-                          tpl: str = TPL_TEXT, starters: int = 1) -> Path:
-    d = root / f"params_{uuid.uuid4().hex[:6]}"
-    (d / "cad").mkdir(parents=True)
-    (d / "cad" / "bracket.x_t").write_text("CAD")
-    (d / "simlab_parametered_mesh.tpl").write_text(tpl, encoding="utf-8")
-    (d / "radioss_assem").mkdir()
-    for i in range(starters):
-        (d / "radioss_assem" / f"model{i}_0000.rad").write_text("#include eps_mesh_1.inc\n")
-    (d / "radioss_assem" / "model_0001.rad").write_text("engine\n")
-    (d / "radioss_assem" / "eps_mesh_old.inc").write_text("old mesh\n")
-    (d / "radioss_assem" / "material.inc").write_text("mat\n")
-    (d / "parameters.json").write_text(json.dumps({
-        "schema_version": 1, "unit_system": "mm-ton-s",
-        "parameters": [
-            {"name": "THK_1", "nominal": 3.0, "min": 2.0, "max": 5.0, "unit": "mm"},
-            {"name": "N_RIB", "nominal": 4, "min": 2, "max": 8, "unit": ""},
-        ],
-    }))
-    if with_responses:
-        (d / "responses.json").write_text(json.dumps({"responses": [
-            {"name": "MaxStress", "unit": "MPa", "spec": {"type": "max"}},
-            {"name": "Disp", "unit": "mm", "spec": {}},
-        ]}))
-    if with_samples:
-        rows = ["run_key,THK_1,N_RIB" + (",resp:MaxStress,resp:Disp" if with_responses else "")]
-        for i, (t, n) in enumerate([(2.0, 2), (3.0, 4), (4.0, 6), (5.0, 8)]):
-            rows.append(f"run_{i:04d},{t},{n}" + (f",{100 + i * 10},{1.5 + i}" if with_responses else ""))
-        (d / "samples.csv").write_text("﻿" + "\n".join(rows) + "\n", encoding="utf-8")
-    return d
-
-
-# ---------------------------------------------------------------------------
-# 2차(phase2 §16): 원본 반입 자원·설정
-# ---------------------------------------------------------------------------
-
-# 원본 CONFIG/DATA/DATA_doe_design_type.json 사본
-DOE_TYPES = {
-    "FullFact": {"value": "TYPE_FULLFACT", "default_runs": 4, "runs_editable": False, "fields": []},
-    "FracFact": {"value": "TYPE_FRACFACT", "default_runs": 4, "runs_editable": False,
-                 "fields": [{"key": "RESOLUTION", "label": "Resolution", "type": "combo", "items": ["3", "4", "5"], "default": "3"}]},
-    "LatinHyperCube": {"value": "TYPE_LATINHYPERCUBE", "default_runs": 7, "runs_editable": True,
-                       "fields": [{"key": "RANDOM_SEED", "label": "Random Seed", "type": "int", "default": 1, "min": 0, "max": 10000}]},
-    "Sobol": {"value": "TYPE_SOBOL", "default_runs": 7, "runs_editable": True, "fields": [
-        {"key": "SEQUENCE_OFFSET", "label": "Sequence Offset", "type": "int", "default": 1, "min": 0, "max": 999999},
-        {"key": "SCRAMBLE", "label": "Scramble", "type": "bool", "default": False},
-        {"key": "SEED", "label": "Seed", "type": "int", "default": 0, "min": 0, "max": 999999}]},
-}
-
-# 원본 런처(CONFIG/BATCHRUN/BATCHRUN_*.py) 형식
-LAUNCHER_TEXT = """# Generated launcher; the core is a compiled extension.
-import importlib
-import pathlib
-import sys
-
-script_dir = (
-    pathlib.Path(__file__).resolve().parent
-    if '__file__' in globals()
-    else pathlib.Path.cwd().resolve()
-)
-sys.path.insert(0, str(script_dir))
-importlib.import_module('{core}')
-"""
-
-# SimLab tpl 템플릿(원본 TEMAPLATE_simlab_parametered_mesh.tpl은 업로드본에 없음 — 구조만 흉내, U19)
-SIMLAB_TPL_TEMPLATE = """\ufeff
-{parameter(var_1, "OLD_PARAM", 1, 0, 2)}
-# header comment
-#***************************************************************
-import simlab
-dir_file_prt = r"C:/old/place/old_part.prt"
-xml = '''
-<Parameters Value="">
-   <paramitem Name="OLD_PARAM" NewValue="{var_1, %3i}" Value="1"/>
-</Parameters>
-'''
-
-
-simlab.run(xml)
-"""
-
-LAUNCHERS = {
-    "extract_params": ("BATCHRUN_get_parameter_from_cad.py", "get_parameter_from_cad_core"),
-    "gen_radioss": ("BATCHRUN_hst_gen_radioss_input.py", "hst_gen_radioss_core"),
-    "optimization": ("BATCHRUN_hst_physicsai_optimization.py", "hst_physicsai_optimization_core"),
-}
-
-PHASE2_COMMANDS = {
-    "simlab_extract_params": ["{simlab}", "-auto", "{launcher}", "{cad_file}", "{xml_out}", "-nographics"],
-    "hst_gen_radioss": ["{hstbatch}", "-multiexec", "{multi_execution}", "-pyfile", "{launcher}"],
-    "h3d_preview": ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-h3d", "{h3d}", "-result", "{result_json}"],
-    "hvtrans_curate": ["{hvtrans}", "-c", "{cfg}", "{h3d}", "{h3d}", "-o", "{out_h3d}", "-z0"],
-    "t01_preview": ["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{preview_tcl}", "-input", "{t01}", "-output", "{result_json}"],
-    "t01_curve_export": ["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{curate_tcl}", "-config", "{config_json}"],
-    "hst_optimization": ["@cmd_c", "{hstpy}", "{launcher}"],
-}
-
-
-def make_resources(base: Path, pyd: bool = True) -> dict[str, Any]:
-    """원본 반입 자원 폴더(resources.*)를 만든다. pyd=False면 BUILD_PYD를 비운다."""
-    res = base / "resources"
-    br, pd, dt, tp = res / "BATCHRUN", res / "BUILD_PYD", res / "DATA", res / "TEMPLATE"
-    for d in (br, pd, dt, tp):
-        d.mkdir(parents=True, exist_ok=True)
-    for _k, (script, core) in LAUNCHERS.items():
-        (br / script).write_text(LAUNCHER_TEXT.replace("{core}", core), encoding="utf-8")
-        if pyd:
-            (pd / f"{core}.cp313-win_amd64.pyd").write_bytes(os.urandom(64))
-    for n in ("BATCHRUN_create_include_node_elem.tcl", "BATCHRUN_preview_h3d.tcl", "BATCHRUN_preview_hg.tcl",
-              "BATCHRUN_curate_hg.tcl", "H3D_StaticMinMax_to_CSV_FAST.tcl"):
-        (br / n).write_text(f"# fake {n}\n")
-    (dt / "DATA_doe_design_type.json").write_text(json.dumps(DOE_TYPES), encoding="utf-8")
-    (tp / "TEMAPLATE_simlab_parametered_mesh.tpl").write_text(SIMLAB_TPL_TEMPLATE, encoding="utf-8")
-    return {
-        "preview_pred_h3d_tcl": str(res / "BATCHRUN_preview_pred_h3d.tcl"),
-        "batchrun_dir": str(br), "pyd_dir": str(pd),
-        "simlab_tpl_template": str(tp / "TEMAPLATE_simlab_parametered_mesh.tpl"),
-        "doe_design_type_json": str(dt / "DATA_doe_design_type.json"),
-        "hypermesh_include_tcl": str(br / "BATCHRUN_create_include_node_elem.tcl"),
-        "preview_h3d_tcl": str(br / "BATCHRUN_preview_h3d.tcl"),
-        "preview_hg_tcl": str(br / "BATCHRUN_preview_hg.tcl"),
-        "curate_hg_tcl": str(br / "BATCHRUN_curate_hg.tcl"),
-        "extract_minmax_tcl": str(br / "H3D_StaticMinMax_to_CSV_FAST.tcl"),
-    }
-
-
-def pbs_command_cfg(tools: dict[str, str], ai_root: str) -> dict[str, Any]:
-    return {
-        "gateway": "command", "lost_after_polls": 2,
-        "command": {
-            "allowed_executables": [tools["fake_qsub"], tools["fake_qstat"], tools["fake_qdel"]],
-            "submit": [tools["fake_qsub"], "-N", "{job_name}", "-q", "{queue}", "-l", "select=1:ncpus={ncpus}", "-l",
-                       "walltime={walltime}", "-v", "INPUT_FILE={input_file},RESULT_DIR={result_dir}", "/shared/scripts/radioss_run.pbs"],
-            "status": [tools["fake_qstat"], "-x", "-f", "{external_job_id}"],
-            "cancel": [tools["fake_qdel"], "{external_job_id}"],
-            "state_map": {"Q": "QUEUED", "R": "RUNNING", "F": "FINISHED"},
-        },
-        "transfer": {"path_map": [{"local": ai_root, "remote": "/shared/AI_WORK"}]},
-    }
-
-
-def make_phase2_settings(base: Path, tools: dict[str, str], **overrides: Any) -> dict[str, Any]:
-    d = make_settings_dict(base, tools)
-    (base / "spdm").mkdir(exist_ok=True)
-    res = make_resources(base)
-    d["resources"] = res
-    d["altair"] = {**d["altair"], "hyperstudy_path": tools["fake_hstbatch"], "hvtrans_exe_path": tools["fake_hvtrans"],
-                   "hstpy_path": tools["fake_hstpy"]}
-    d["commands"] = {**d["commands"], **PHASE2_COMMANDS}
-    d["optimize"] = {"summary_parsers": [{"name": "opt_csv", "glob": "opt_summary.csv", "kind": "csv_table"}]}
-    for k, v in overrides.items():
-        if isinstance(v, dict) and isinstance(d.get(k), dict):
-            d[k] = {**d[k], **v}
-        else:
-            d[k] = v
-    return d
-
-
-@pytest.fixture()
-def p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch):
-    """2차 설정의 (client, worker 생성기, ai_root Path, LoadedConfig, settings dict) — HPC none."""
-    yield from _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, {})
-
-
-def _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, overrides):
-    from fastapi.testclient import TestClient
-
-    from physicsai_api.context import build_context
-    from physicsai_api.main import create_app
-    from physicsai_core.config import load_config_dict
-    from physicsai_worker.steps import _collect
-    from physicsai_worker.runtime import Worker
-
-    monkeypatch.setattr(_collect, "COLLECT_STABLE_INTERVAL_S", 0.02)
-    monkeypatch.setenv("FAKE_SIMLAB_STEP_S", "0.01")
-    d = make_phase2_settings(tmp_path, fake_tools, **overrides)
-    lc = load_config_dict(d, environ={})
-    assert lc.ok, lc.issues
-    ctx = build_context(lc, engine, transport=httpx.MockTransport(fake_dashboard.handler))
-    workers: list[Any] = []
-
-    def mk() -> Any:
-        w = Worker(lc, engine)
-        workers.append(w)
-        return w
-
-    with TestClient(create_app(ctx), base_url="http://127.0.0.1") as c:
-        yield c, mk, Path(lc.settings.storage.ai_root), lc, d
-    for w in workers:
-        w.stop()

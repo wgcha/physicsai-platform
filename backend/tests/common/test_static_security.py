@@ -81,8 +81,8 @@ def test_no_multipart_in_openapi():
 
 
 def test_no_timeout_handling_in_executor():
-    # run_local은 step_context.py에 있다(refactor-plan R2). 실행기와 step 컨텍스트 둘 다 검사한다.
-    for name in ("executor.py", "step_context.py"):
+    # run_local은 step_process.py에 있다(refactor-plan R2·R12). 실행기·step 컨텍스트·실행부를 모두 검사한다.
+    for name in ("executor.py", "step_context.py", "step_process.py"):
         src = (REPO / "worker" / "physicsai_worker" / name).read_text()
         assert "STEP_TIMEOUT" not in src and "timeout_s" not in src.replace("timeout_s: float = 30", ""), name
 

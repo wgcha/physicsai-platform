@@ -25,29 +25,33 @@
 
 ## 1. 현재 구조 지도
 
-백엔드·워커·시험(§1.1~§1.4)은 리팩터링 R0~R11 실행 후 기준(브랜치 `claude/phase3`, 커밋 `e125e68`), 프런트(§1.5)는 F1~F4 실행 후 기준(커밋 `ad41635`), 스크립트(§1.6)는 기준 커밋 `b4f7817` 그대로. 줄 수는 `wc -l` 기준. "단계"는 ①학습데이터 생성 ②데이터 정리 ③데이터셋·모델 ④단일 예측 ⑤최적화, "공통"은 단계 무관. 리팩터링 전 위치·문제는 §2·§3(근거)과 refactor-plan.md에 남긴다.
+백엔드·워커·시험(§1.1~§1.4)은 리팩터링 R0~R11 실행 후 기준(브랜치 `claude/phase3`, 커밋 `e125e68`)에 R12(300줄 분할, refactor-plan.md §6) 반영, 프런트(§1.5)는 F1~F4 실행 후 기준(커밋 `ad41635`), 스크립트(§1.6)는 기준 커밋 `b4f7817` 그대로. 줄 수는 `wc -l` 기준. "단계"는 ①학습데이터 생성 ②데이터 정리 ③데이터셋·모델 ④단일 예측 ⑤최적화, "공통"은 단계 무관. 리팩터링 전 위치·문제는 §2·§3(근거)과 refactor-plan.md에 남긴다.
 
 ### 1.1 `backend/physicsai_core` (공용 라이브러리)
 
 | 위치 | 줄 | 단계 | 책임 |
 |---|---:|---|---|
-| `config/` | 999 | 공통 | `schema.py`(424: Settings·*Cfg·키 상수·ConfigIssue·LoadedConfig), `rules.py`(39: 경로 문자열 규칙·`_compile`, `is_abs_path_str`는 `simdash_adapters` 재노출), `validate.py`(235: `validate_settings`), `validate_stages.py`(77: `_validate_phase2`, 3차 `_validate_phase3` — `study_storage` 범위, `StudyStorageCfg`), `loader.py`(99: `load_config`·`load_config_dict`·`absent_keys`·`config_warnings`), `derived.py`(43: Altair 파생·`effective_altair`·`redacted_settings`), `__init__`(80: 공개 이름 전부 재노출 — `from physicsai_core.config import …` 경로 불변) |
-| `paths.py` | 307 | 공통 | 경로 검사(§17.3, B20·B23), `allowed_roots(settings, imports=)`, `is_under`, Study 경로, 백업 이동, 표시 경로 |
+| `config/` | 1,081 | 공통 | `schema.py`(197: Settings 조립·server·database·auth·storage(`spdm_roots`)·altair·resources·worker 절·키 상수·ConfigIssue·LoadedConfig), `_model.py`(9: 기반 `_M`), `schema_stages.py`(124: ①~⑤ 단계 절), `schema_hpc.py`(79: commands·hpc 절), `schema_ops.py`(79: notifications·ui·demo·logging·env_check·study_storage·error_bundle 절, `ENV_PROBE_TOOLS`·`DEFAULT_LOG_ERROR_PATTERNS`), `rules.py`(39: 경로 문자열 규칙·`_compile`, `is_abs_path_str`는 `simdash_adapters` 재노출), `validate.py`(235: `validate_settings`), `validate_stages.py`(77: `_validate_phase2`, 3차 `_validate_phase3` — `study_storage` 범위, `StudyStorageCfg`), `loader.py`(99: `load_config`·`load_config_dict`·`absent_keys`·`config_warnings`), `derived.py`(43: Altair 파생·`effective_altair`·`redacted_settings`), `__init__`(87: 공개 이름 전부 재노출 — `from physicsai_core.config import …` 경로 불변) |
+| `paths.py` | 277 | 공통 | 경로 검사(§17.3, B20·B23), `allowed_roots(settings, imports=)`, Study 경로, 백업 이동, 표시 경로. `path_links`의 이름 재노출 |
+| `path_links.py` | 56 | 공통 | ← `paths.py`(R12): 링크·junction(reparse) 판정 `is_link_or_reparse`, Windows 예약 이름, `real`·`is_under`·`_real_parent` |
 | `masking.py` | 65 | 공통 | `Masker`(step 로그), `BundleMasker`·`SECRET_ENV_PATTERNS`(오류 묶음·운영 로그), `bundle_masker(settings)` |
 | `naming.py` | 9 | 공통 | ①·④ 공용 이름 규칙 `NAME_RE`·`RUN_KEY_RE`·`TPL_NAME`(`stage4_predict/param_sets`가 import해 속성 유지) |
 | `commands.py`(274, `fwd`는 `simdash_adapters` 재노출), `job_types.py`(218), `tpl_render.py`(56), `childenv.py`, `errors.py`, `fileutil.py`, `limits.py`, `logsetup.py`, `state_machine.py`, `features.py` | | 공통 | `fileutil.write_json_atomic`(3차 S1: 임시 파일 + `os.replace`) |
 | `env_check.py`(47), `error_bundle.py`(110) | | 공통(운영) | 환경 점검 항목·오류 묶음 항목 생성(마스커는 `masking.py`) |
 | `parsers/` | | 공통 | `log_errors.py`(21: `ErrorDetector`), `name_value.py`(20: `read_name_value_csv`, ①·④ 공용) |
 | `hpc/` | 81 | 공통 | **호환층**(3차 S4, 정의는 `packages/simdash_adapters` §1.7). `gateway.py`(타입 재노출 + `get_hpc_gateway(settings)`: 설정 읽기·`child_env`·로거 이름 `physicsai_core.hpc.command`를 넘겨 `make_gateway` 호출), `command.py`(`CommandHpcGateway(hpc, env_factory=None)` 얇은 하위 클래스·`validate_command_config(hpc)`·`map_path` 재노출), `none.py`·`adapter.py`(재노출) |
-| `db/tables.py`(575), `db/schema_0001.py`(393), `db/engine.py` | | 공통 | SQLAlchemy Core 메타데이터 |
-| `db/repositories/jobs.py` | 312 | 공통 | 작업 생성·조회(`list_with_study_title`, `succeeded_predicts`, `latest_by_stage`)·종료 부수효과(엔터티 저장소 `fail_*` 호출)·취소·대기열 이동 |
-| `db/repositories/job_lease.py` | 391 | 공통 | claim/renew/release(CAS lease)·리퍼·`LeaseLost`·`ClaimRace`·lease 토큰으로 지키는 `step_update`/`job_update`/`patch_result`/`add_warning`. 의존은 job_lease → jobs 한 방향 |
+| `db/tables/`(675), `db/schema_0001.py`(396), `db/engine.py` | | 공통 | SQLAlchemy Core 메타데이터. `tables/`(← `tables.py`, R12): `_base`(단일 `metadata`·`TS`·`ID`·`job_queue_seq`·`TERMINAL_STATES`), `study_job`(studies·jobs), `model_data`(datasets·models·param_sets), `execution`(job_steps·artifacts·notifications·worker_slot·worker_heartbeats·hpc_jobs), `stage1_train_data`, `stage2_curation`, `stage5_optimize`, `ops`(env_checks·audit_events). `__init__`가 원래 정의 순서대로 import해 재노출(`metadata.tables` 순서·`from ..tables import x` 불변). `schema_0001.py`는 1차 동결본이라 분할 예외(파일 머리 주석) |
+| `db/repositories/jobs.py` | 270 | 공통 | 작업 생성·조회(`list_with_study_title`, `succeeded_predicts`, `latest_by_stage`)·취소·대기열 이동 |
+| `db/repositories/job_end.py` | 46 | 공통 | ← `jobs.py`(R12): 종료 부수효과 `_side_effects_on_end`(엔터티 저장소 `fail_*` 지연 호출). jobs·job_lease_end·hpc가 import |
+| `db/repositories/job_lease.py` | 204 | 공통 | claim(SLOT·LIGHT·COLLECTING)/renew(CAS lease)·`ClaimRace`. 아래 두 파일의 이름을 재노출(`lease_repo.release`·`job_lease.LeaseLost` 경로 불변). 의존은 job_lease → job_lease_end → lease_guard → jobs 한 방향 |
+| `db/repositories/job_lease_end.py` | 174 | 공통 | ← `job_lease.py`(R12): `release`·`continue_running`, 리퍼 `reap_expired`·`_interrupt`(T9) |
+| `db/repositories/lease_guard.py` | 64 | 공통 | ← `job_lease.py`(R12): `LeaseLost`, `assert_lease`, lease 토큰으로 지키는 `step_update`/`job_update`/`patch_result`/`add_warning` |
 | `db/repositories/system.py` | 17 | 공통(운영) | `ping`, `migration_version`(헬스 체크) |
 | `db/repositories/*.py` 나머지 | 21–176 | 엔터티별 | `hpc.list_for_job_with_elapsed`·`get_many`, `studies.set_final_model`, `train.set_tpl_generated`, `{train,curations,spdm_imports}.set_building_job` 포함 |
 | `stage1_train_data/` | | ① | `train_params.py`(233), `train_tpl.py`(84), `doe_types.py`(94), `doe_samples.py`(162) |
 | `stage2_curation/` | | ② | `curation.py`(253), `spdm.py`(214) |
 | `stage3_model/` | | ③ | `dataset_split.py`(73), `loss.py`(140), `score.py`(26) |
-| `stage4_predict/` | | ④ | `param_sets.py`(345), `nearest.py`(82), `xydata.py`(67) |
+| `stage4_predict/` | | ④ | `param_sets.py`(148: `validate_folder`·`write_normalized`·`read_samples`, `ParamSetFolder`·`naming` 이름 재노출), `param_set_files.py`(207, ← `param_sets.py` R12: `ParamSetFolder`·parameters/responses/samples 읽기), `nearest.py`(82), `xydata.py`(67) |
 | `stage5_optimize/` | | ⑤ | `optimize.py`(278) |
 | `study_storage/` | 397 | 공통(Study 관리, 3차 S3) | 단계 패키지 아님(단계를 import하지 않음, `test_layering` 규칙 5). `categories.py`(범주·표시명·영향 문구·폴더 묶음·항목 패턴·항상 보호 `is_protected`·`fmt_bytes`), `scan.py`(트리 걷기·집계 `walk`, 링크 미추적), `classify.py`(`StudyRefs`·`candidates`·`classify` — 스캔 분류와 정리 재검사 공용), `stale.py`(`stale_reason`) |
 | `db/repositories/study_manage.py` | 87 | 공통(3차 S3) | `latest_succeeded`·`latest_finished`·`active_of_type`·`has_active_of_type`·`has_active_except`·`finished_after`·`study_refs`(분류 입력). `datasets.clear_package`. `jobs.py`가 300줄을 넘어 별도 파일(D3-7) |
@@ -73,9 +77,10 @@
 | 위치 | 줄 | 단계 | 책임 |
 |---|---:|---|---|
 | `executor.py` | 198 | 공통 | `LeaseKeeper`, `Executor`(step 체인 실행). `StepContext`를 import해 모듈 속성으로 둔다(시험 monkeypatch 대상) |
-| `step_context.py` | 383 | 공통 | `StepContext`: 경로·로그·진행률·산출물·`run_local`·`run_fanout`(로거 이름 `physicsai_worker.executor` 유지) |
+| `step_context.py` | 149 | 공통 | `StepContext(StepProcessMixin)`: 경로·로그·진행률·산출물·결과·경고(로거 이름 `physicsai_worker.executor` 유지) |
+| `step_process.py` | 264 | 공통 | ← `step_context.py`(R12): `StepProcessMixin` — `render`·`run_local`·`run_fanout`·`checkpoint_cancel`. 상속이라 `StepContext.run_local` monkeypatch가 `run_fanout`에도 적용 |
 | `signals.py` | 17 | 공통 | 제어 예외 `Cancelled`, `StepSkipped`, `EnterWaitingHpc` |
-| `runtime.py`(369), `env_check.py`(236), `limiter/`, `resources.py`, `housekeeping.py`, `lockfile.py`, `__main__.py` | | 공통 | (`claim.py` 삭제) |
+| `runtime.py`(268, `Worker(HpcPollerMixin)`), `hpc_poller.py`(120, ← `runtime.py` R12: `poll_hpc_once`·`RUN_STATE_BY_HPC`, 로거 `physicsai_worker`), `env_check.py`(236), `limiter/`, `resources.py`, `housekeeping.py`, `lockfile.py`, `__main__.py` | | 공통 | (`claim.py` 삭제) |
 | `steps/__init__.py`, `common.py`, `launcher.py`, `_collect.py`(`COLLECT_STABLE_INTERVAL_S`) | | 공통 | `HANDLERS` = 다섯 단계 패키지 병합(`test_step_registry`가 job_types와 대조) |
 | `steps/stage1_train_data/` | 781 | ① | `_shared.py`(74: `TPL_REL`·`TPL_NAME`·`_doe`·`_D`·`_R`·`_match_files`·`_summary`·`_write_collected_json`), `extract.py`(①-1), `doe_gen.py`(①-3), `solve.py`(①-4), `result_import.py`(①-5), `resp_extract.py`(①-6) |
 | `steps/stage2_curation/` | 461 | ② | `source.py`(원천 루트·대상 수집·큐레이션 등록 공용), `preview.py`(②-1·②-3), `h3d_curate.py`(②-2), `t01_curves.py`(②-4), `spdm_import.py`(G) |
@@ -90,16 +95,17 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 
 | 위치 | 내용 |
 |---|---|
-| `backend/tests/physicsai_test_support.py`(677), `conftest.py`, `fake_tools/`, `data/` | 그대로(공용 픽스처, 배포 시연 모드 공유 §0). `data/operation_ids.txt` = operationId 스냅샷 |
+| `backend/tests/physicsai_test_support.py`(100), `support_*.py`, `conftest.py`, `fake_tools/`, `data/` | 공용 픽스처(R12 분할): `support_base`(REPO·FAKE_TOOLS·IS_WINDOWS·LIMITER·sys.path), `support_db`(임시 PG·`engine`), `support_tools`(가짜 도구·1차 설정), `support_app`(가짜 대시보드·`client`·`worker_factory`·`H`·`API`), `support_inputs`(입력 폴더), `support_resources`(원본 반입 자원·명령 템플릿·`p2_env`). `physicsai_test_support`는 pytest 훅과 전부 재노출(conftest `import *`·시험 import 경로 불변). `fake_tools/`는 배포 시연 모드 공유 §0. `data/operation_ids.txt` = operationId 스냅샷 |
 | `backend/tests/helpers_stage1.py` | ← `phase2_helpers.py`(① 시험 보조) |
-| `backend/tests/common/` | `test_adapters_compat`(3차 S4: 호환층 같은 객체·로거 이름·의존 고정·배포 내용, V3-S4-1·7), `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6), `test_study_manage`(3차 S1: 보관 해제·`study.json` 제목, V3-S1-1·2), `test_study_storage_api`(3차 S3: V3-S3-3·5·6·8), `test_db_study_manage`(V3-DB-1). `test_layering`에 규칙 5 추가(단계 패키지 간 import 금지, `study_storage`·`stage0_manage` 포함), 규칙 7 추가(3차 S4). `test_static_security`·`test_phase2_units`의 정적 검사 범위(`CODE_DIRS`)에 `packages/simdash_adapters/src` 포함. `helpers_manage.py`(S3 DB 행 도우미, 워커 시험 공용) |
-| `backend/tests/` 루트 | 여러 주제 혼합으로 보류(H3): `test_api`, `test_core_units`, `test_demo`, `test_phase2_api`, `test_phase2_units`, `test_verifier_fixes` |
-| `worker/tests/runtime/` | `test_queue_lease`, `test_limiter`, `test_windows_job`, `test_hpc`(+ PREDICT_INPUT), `test_step_registry`(신규) |
+| `backend/tests/helpers_api.py`, `helpers_queue.py` | R12: API 시험 공용(`_study`·`_sid`·`_job`·`_model`·헤더), 대기열·lease 워커 시험 공용(`_dataset_job`·`_state`) |
+| `backend/tests/common/` | `test_adapters_compat`(3차 S4: 호환층 같은 객체·로거 이름·의존 고정·배포 내용, V3-S4-1·7), `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6), `test_study_manage`(3차 S1: 보관 해제·`study.json` 제목, V3-S1-1·2), `test_study_storage_api`(3차 S3: V3-S3-3·5·6·8), `test_db_study_manage`(V3-DB-1), `test_config_stages`(← `test_phase2_units` R12: V2-CFG-1·2, V2-CMD-1·2). `test_layering`에 규칙 5 추가(단계 패키지 간 import 금지, `study_storage`·`stage0_manage` 포함), 규칙 7 추가(3차 S4). `test_static_security`·`test_phase2_units`의 정적 검사 범위(`CODE_DIRS`)에 `packages/simdash_adapters/src` 포함. `helpers_manage.py`(S3 DB 행 도우미, 워커 시험 공용) |
+| `backend/tests/` 루트 | `test_api`(권한·Study·params) + `test_api_models`(③·④) + `test_api_ops`(알림·로그·산출물), `test_core_units` + `test_core_stage_units`(단계 core 파서·분할·최근접·tpl), `test_phase2_units`(tpl 골든·상태 머신·정적·배포) — R12 함수 단위 분할(H3 일부 해제). 그대로: `test_demo`, `test_phase2_api`, `test_verifier_fixes` |
+| `worker/tests/runtime/` | `test_queue_lease`(V-SM-2~4) + `test_lease`(V-LS-1~3) + `test_step_failures`(V-SM-5·6, V-CMD-5·7, V-DS-2) ← R12, `test_limiter`, `test_windows_job`, `test_hpc`(+ PREDICT_INPUT), `test_step_registry`(신규) |
 | `worker/tests/stage0_manage/` | `test_storage_scan`(V3-S3-1·2·7), `test_cleanup`(V3-S3-4·7) |
-| `worker/tests/stage1_train_data/test_stage1_train.py`, `stage2_curation/test_stage2_curation.py`, `stage5_optimize/test_stage5_optimize.py`, `ops/test_ops_admin.py`, `e2e/{test_e2e_chain,test_demo_e2e}.py` | ← `test_phase2_{train,curation,optimize,admin}.py`, e2e 2개 |
+| `worker/tests/stage1_train_data/{test_stage1_train(①-1~①-3·회수 모드 V2-TD-6),test_stage1_solve(①-4),test_stage1_results(①-5·①-6·F)}.py`+`conftest.py`(`pbs_state`·`p2_pbs`), `stage2_curation/{test_stage2_curation,test_stage2_spdm_import}.py`(R12 분할), `stage5_optimize/test_stage5_optimize.py`, `ops/test_ops_admin.py`, `e2e/{test_e2e_chain,test_demo_e2e}.py` | ← `test_phase2_{train,curation,optimize,admin}.py`, e2e 2개 |
 | `worker/tests/` 루트 | 보류(H3): `test_phase2_fixes`, `test_verifier_fixes_worker` |
 | `packages/simdash_adapters/tests/` | 패키지 단독 시험(플랫폼·PG 없이): `test_static`(표준 라이브러리 허용 목록·최상위 `subprocess` 없음·버전 단일 출처·`__all__` 고정, V3-S4-4), `test_command`(문구 골든·`render_argv` 값 규칙·가짜 PBS `fake_pbs.py`로 submit/status/cancel·`make_gateway`), `test_transfer`(`map_path`·`resolve_collect_dirs` 표). 루트 pytest `testpaths`에 포함 |
-| 정적 시험의 경로 | `test_phase2_units.py` SPDM 검사는 저장소 상대경로로 정확히 대조(`core/stage2_curation/spdm.py`, `core/config/{schema,validate}.py`, `api/services/{job_params/stage2_curation,path_inspect}.py`, `worker/steps/stage2_curation/spdm_import.py` 등), `test_static_security.py` timeout 검사는 `executor.py`+`step_context.py`, `test_hpc.py`는 `REPO` 기준, COLLECT 간격 monkeypatch 대상은 `physicsai_worker.steps._collect` |
+| 정적 시험의 경로 | `test_phase2_units.py` SPDM 검사는 저장소 상대경로로 정확히 대조(`core/stage2_curation/spdm.py`, `core/config/{schema,validate}.py`, `api/services/{job_params/stage2_curation,path_inspect}.py`, `worker/steps/stage2_curation/spdm_import.py` 등), `test_static_security.py` timeout 검사는 `executor.py`+`step_context.py`+`step_process.py`(R12), `test_hpc.py`는 `REPO` 기준, COLLECT 간격 monkeypatch 대상은 `physicsai_worker.steps._collect` |
 
 ### 1.5 `frontend/src` (F1~F4 실행 후, 커밋 `ad41635`. 약 10,500줄, 생성물 제외)
 
@@ -129,7 +135,7 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 
 - `scripts/`: 얇은 래퍼(4–17줄) + `ci_annotate.py`. 정리 불필요. 3차 S4: `_env.{sh,ps1}`의 `PYTHONPATH`에 `packages/simdash_adapters/src` 추가, `dev-setup.{sh,ps1}`(신규, 개발 설치 표준: `pip install -e packages/simdash_adapters` → `pip install -r deploy/requirements.lock` + pytest. 패키지를 먼저 설치하지 않고 루트에서 `pip install .`을 하면 `simdash-adapters`를 인덱스에서 찾으므로 이 스크립트를 쓴다, D3-27), `check-adapters-wheel.sh`(V3-S4-6: wheel 이름·빈 venv 설치·import).
 - 오프라인 묶음(3차 S4, D3-27): `collect-offline.{sh,ps1}`가 ① `pip wheel packages/simdash_adapters --no-deps -w dist/wheels` ② `pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock …`(로컬 wheel만으로 `simdash-adapters==0.1.0` 고정 확인) ③ `pip download -r deploy/requirements.lock …`(PyPI 외부 의존성만, `--find-links` 없음) 순서. lock 두 개: `deploy/requirements.lock` = PyPI에서 받는 외부 의존성(어댑터 없음 — 이름 선점 차단), `deploy/requirements.local.lock` = 저장소 안 패키지 고정(PyPI에서 받지 않음). 설치(`install.ps1`·`update.ps1`·`start-demo.ps1`)는 변경 없음(`--no-index --find-links wheels physicsai-platform`이 의존성으로 함께 설치). 시험 `test_adapters_compat`가 순서·내용 대조.
-- `deploy/`: Windows 배포 ps1·bat + `demo/demo_setup.py`(574, 단일 CLI 스크립트, `physicsai_*`를 import하지 않음). 정리 대상 아님(시험 `test_demo.py`·`test_phase2_units.py:340–399`가 내용 검사).
+- `deploy/`: Windows 배포 ps1·bat + `demo/demo_setup.py`(227: CLI 진입점·`up`/`down`, `physicsai_*`를 최상위 import하지 않음) + R12 분할 `demo_common.py`(경로·상수·공용 함수), `demo_init.py`(`init`: 가짜 도구·자원·설정), `demo_seed.py`(`seed`), `demo_db.py`(`db-up`/`db-down`). 같은 폴더 모듈을 import하므로 `sys.dont_write_bytecode = True`(deploy/ 아래 `__pycache__` 금지 — 정적 시험이 deploy/ 파일을 텍스트로 읽는다). 시험 `test_demo.py`·`test_phase2_units.py`가 내용 검사(`demo_setup.py`의 `"packages" / "simdash_adapters" / "src"` 포함).
 - `migrations/versions/`: `0001_initial`(1차 동결본)·`0002_phase2`·`0003_hpc_cancel_failed`·`0004_study_manage`(3차 S3: `jobs.stage` 0 허용, phase3.md §5.10). `MIGRATION_HEAD = "0004_study_manage"`(`physicsai_core/db/__init__.py`), downgrade는 RuntimeError.
 - `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config/schema.py`**(리팩터링 전 `config.py`)(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/phase2.ts:55` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
 

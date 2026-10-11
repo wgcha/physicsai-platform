@@ -1,4 +1,4 @@
-"""경로 검사(§17.3), Study 경로, 백업 이동(§8.3).
+"""경로 검사(§17.3), Study 경로, 백업 이동(§8.3). 링크 판정·realpath 비교 원시 함수는 path_links(여기서 재노출).
 
 사용자 산출물은 삭제하지 않는다. 기존 산출물은 `_backup/<UTC>_<job_id>/<상대경로>`로 os.replace 이동한다.
 """
@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import os
-import stat
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -15,12 +14,22 @@ from typing import Any
 
 from .config import PATH_META_CHARS
 from .errors import DomainError, StepFailure
+from .path_links import (  # noqa: F401 - 기존 경로 재노출(paths.is_link_or_reparse 등)
+    FILE_ATTRIBUTE_REPARSE_POINT,
+    IO_REPARSE_TAG_MOUNT_POINT,
+    IO_REPARSE_TAG_SYMLINK,
+    LINK_REPARSE_TAGS,
+    WINDOWS_RESERVED,
+    _cmp,
+    _is_windows,
+    _real_parent,
+    is_link_or_reparse,
+    is_under,
+    real,
+    windows_reserved_name,
+)
 
 MAX_PATH_LEN = 400
-FILE_ATTRIBUTE_REPARSE_POINT = 0x400
-IO_REPARSE_TAG_SYMLINK = 0xA000000C
-IO_REPARSE_TAG_MOUNT_POINT = 0xA0000003  # junction
-LINK_REPARSE_TAGS = frozenset({IO_REPARSE_TAG_SYMLINK, IO_REPARSE_TAG_MOUNT_POINT})
 BACKUP_DIR = "_backup"
 # Study 폴더 직계의 플랫폼 산출 폴더(계약 §15.1). 데이터셋 입력으로 쓰거나 수집하지 않는다.
 STUDY_OUTPUT_DIRS = frozenset({"03_dataset", "03_package", "03_model", "04_params", "04_predict", "logs", BACKUP_DIR})
@@ -56,7 +65,6 @@ def assert_writable(path: str, *, allow_final_link: bool = False) -> None:
         rr = {r, real(r)}
         if any(is_under(c, x) for c in cands for x in rr):
             raise StepFailure("PATH_UNSAFE", f"SPDM 경로에는 쓸 수 없습니다: {path}")
-WINDOWS_RESERVED = frozenset({"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)), *(f"LPT{i}" for i in range(1, 10))})
 
 
 class PathError(DomainError):
@@ -67,45 +75,6 @@ class PathError(DomainError):
 class CheckedPath:
     path: str  # 정규화된 절대경로
     root: str  # 일치한 허용 루트
-
-
-def _is_windows() -> bool:
-    return os.name == "nt"
-
-
-def _cmp(p: str) -> str:
-    return os.path.normcase(p) if _is_windows() else p
-
-
-def is_link_or_reparse(p: str) -> bool:
-    """실제 링크(symlink·junction)만 True. dedup·OneDrive 등 다른 reparse 태그는 링크로 보지 않는다."""
-    try:
-        st = os.lstat(p)
-    except OSError:
-        return False
-    if stat.S_ISLNK(st.st_mode):
-        return True
-    attrs = getattr(st, "st_file_attributes", 0)
-    if not attrs & FILE_ATTRIBUTE_REPARSE_POINT:
-        return False
-    return getattr(st, "st_reparse_tag", 0) in LINK_REPARSE_TAGS
-
-
-def windows_reserved_name(name: str) -> bool:
-    """CON·PRN·AUX·NUL·COM1-9·LPT1-9(확장자 포함, 대소문자 무시)와 끝 공백·마침표."""
-    if name != name.rstrip(" ."):
-        return True
-    stem = name.split(".", 1)[0].strip().upper()
-    return stem in WINDOWS_RESERVED
-
-
-def real(p: str) -> str:
-    return os.path.normpath(os.path.realpath(p))
-
-
-def is_under(child: str, parent: str) -> bool:
-    c, pr = _cmp(child), _cmp(parent).rstrip(os.sep)
-    return c == pr or c.startswith(pr + os.sep)
 
 
 def unsafe_reason(text: str) -> str | None:
@@ -250,11 +219,6 @@ def resolve_in_study(study_root: str, rel: str) -> str:
     if target != base and base not in target.parents:
         raise DomainError("PATH_OUTSIDE_ROOT", "Study 폴더 밖 경로입니다", status=422)
     return str(target)
-
-
-def _real_parent(p: str) -> str:
-    """마지막 요소는 풀지 않고(링크 자체를 대상으로) 상위 폴더만 realpath."""
-    return os.path.join(real(os.path.dirname(p)), os.path.basename(p))
 
 
 def to_rel(study_root: str, abs_path: str) -> str:
