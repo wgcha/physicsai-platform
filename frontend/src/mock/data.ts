@@ -256,12 +256,22 @@ export function seedDatasets(): Dataset[] {
       options: { extract_faces: true, extract_mdi: false, extract_time_history_vectors: false },
       package_ready: false, created_by_name: "김연구", created_at: iso(60 * 30),
     },
+    // phase3.md §4.4 V3-S2-5: 데이터셋이 다른 모델 비교용(기존 시드 뒤에 추가)
+    {
+      id: "ds-0a7c41e2", study_id: "s-cushion", job_id: "j-ds0", status: "READY",
+      source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/h3d_r1", h3d_count: 180, train_count: 162, eval_count: 18,
+      holdout_ratio: 0.1, seed: 20261001, split_group: "file",
+      options: { extract_faces: true, extract_mdi: false, extract_time_history_vectors: false },
+      package_ready: false, created_by_name: "김연구", created_at: iso(60 * 24 * 4),
+    },
   ];
 }
 
 export function seedModels(): Model[] {
   const c1 = lossCurve(1, 1500, 0.9);
   const c2 = lossCurve(2, 2000, 0.62);
+  const c4 = lossCurve(4, 1000, 1.1);
+  const c5 = lossCurve(5, 1180, 1.6);
   const common = {
     study_id: "s-cushion", label: null, dataset_id: "ds-2", log_parser: "default", status: "ACTIVE" as const,
     registered_by_name: "김연구", row_version: 1,
@@ -283,6 +293,20 @@ export function seedModels(): Model[] {
       ...common, id: "m-3", name: "cushion_GNN", version: 1, source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/model_gnn",
       log_status: "UNRECOGNIZED", log_parser: null, epochs_total: null, last_epoch: null, final_loss: null, min_loss: null, min_loss_epoch: null,
       loss_curve: null, curve_points: 0, eval_status: "NONE", eval_score: null, is_final: false, registered_at: iso(50),
+    },
+    // phase3.md §4.4 V3-S2-5: metrics 키가 다른 모델(m-4: RMSE 추가·다른 데이터셋, m-5: MaxErr) — 기존 시드 뒤에 추가
+    {
+      ...common, id: "m-4", name: "cushion_TNS", version: 3, label: "lr 3e-4, 1000ep", dataset_id: "ds-0a7c41e2",
+      source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/model_v3",
+      log_status: "PARSED", epochs_total: 1000, last_epoch: 1000, ...curveStats(c4), loss_curve: c4, curve_points: c4.length,
+      eval_status: "DONE", eval_score: { status: "PARSED", metrics: { R2: 0.948, MAE: 2.07, RMSE: 2.71 }, score_rel: "03_model/score/m-4/j-ev4/cushion_TNS.psscr" },
+      is_final: false, registered_at: iso(60 * 30),
+    },
+    {
+      ...common, id: "m-5", name: "cushion_MLP", version: 1, source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/model_mlp",
+      log_status: "PARSED", epochs_total: 1200, last_epoch: 1180, ...curveStats(c5), loss_curve: c5, curve_points: c5.length,
+      eval_status: "DONE", eval_score: { status: "PARSED", metrics: { MAE: 2.41, MaxErr: 7.9 }, score_rel: "03_model/score/m-5/j-ev5/cushion_MLP.psscr" },
+      is_final: false, registered_by_name: "이해석", registered_at: iso(60 * 12),
     },
   ];
 }

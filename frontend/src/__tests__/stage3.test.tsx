@@ -12,7 +12,7 @@ describe("③ 화면 (V-FE-5)", () => {
     renderApp(`${STUDY}/3`, { user: "power" });
     const table = await screen.findByRole("table", { name: "모델 표" });
     const heads = within(table).getAllByRole("columnheader").map((h) => h.textContent);
-    expect(heads).toEqual(["모델", "데이터셋", "epoch", "최종 loss", "최소 loss (epoch)", "loss 곡선", "평가 점수", "로그", "Final"]);
+    expect(heads).toEqual(["비교", "모델", "데이터셋", "epoch", "최종 loss", "최소 loss (epoch)", "loss 곡선", "평가 점수", "로그", "Final"]);
     const gnn = within(table).getAllByRole("row").find((r) => r.textContent?.includes("cushion_GNN"))!;
     expect(within(gnn).getByText("로그 형식 미확인")).toBeTruthy();
     expect(within(gnn).getByText("평가 전")).toBeTruthy();

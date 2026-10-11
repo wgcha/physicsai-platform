@@ -626,6 +626,10 @@ export class MockServer {
       const m = this.models.find((x) => x.id === seg[1]);
       return m ? { status: 200, body: this.modelOut(m, true) } : err(404, "NOT_FOUND", "모델을 찾을 수 없습니다.");
     }
+    if (method === "GET" && seg[0] === "datasets" && seg[1] && !seg[2]) {
+      const d = this.datasets.find((x) => x.id === seg[1]);
+      return d ? { status: 200, body: this.datasetOut(d) } : err(404, "NOT_FOUND", "데이터셋을 찾을 수 없습니다.");
+    }
     if (method === "GET" && seg[0] === "param-sets" && seg[1]) {
       const ps = this.paramSets.find((p) => p.id === seg[1]);
       if (!ps) return err(404, "NOT_FOUND", "파라미터 세트를 찾을 수 없습니다.");

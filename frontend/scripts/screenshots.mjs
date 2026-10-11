@@ -1,6 +1,7 @@
 // mock 모드 화면 스크린샷 — 1920x1080, 3840x2160 (+ 1280 폭 확인용).
 // 사용: npm run build:mock && npm run screenshots            (1차 ③④ → screenshots/)
 //       npm run build:mock && npm run screenshots:phase2     (2차 ①②⑤·환경 점검 → screenshots/phase2/)
+//       npm run build:mock && npm run screenshots:phase3     (3차 ③-5 모델 비교 → screenshots/phase3/)
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
 import { spawn, execSync } from "node:child_process";
@@ -54,12 +55,22 @@ const server = spawn(process.execPath, [path.join(root, "node_modules/vite/bin/v
 }
 
 const phase2 = process.argv.includes("phase2");
-const out = path.join(root, "screenshots", phase2 ? "phase2" : "");
+const phase3 = process.argv.includes("phase3");
+const out = path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
 const q = "shot=1&freeze=1&mockUser=admin";
-const shots = phase2
+// phase3: ③-5 모델 비교 — 4개 선택(데이터셋 다름·곡선 없음 포함) 후 패널을 화면 위쪽에 맞춘다
+async function openCompare(page) {
+  for (const n of ["cushion_TNS v1", "cushion_TNS v2", "cushion_TNS v3", "cushion_GNN v1"]) await page.getByLabel(`${n} 비교 선택`).check();
+  await page.getByRole("button", { name: /^선택 비교/ }).click();
+  await page.waitForSelector(".model-compare .compare-table");
+  await page.evaluate(() => document.querySelector(".model-compare")?.scrollIntoView({ block: "start" }));
+}
+const shots = phase3
+  ? [{ name: "stage3_compare", url: `${S}/3?${q}`, wait: ".workarea .card", act: openCompare, noFull: true }]
+  : phase2
   ? [
       { name: "stage1", url: `${S}/1?${q}&hpc=1`, wait: ".workarea .card" },
       { name: "stage1_pbs-none", url: `${S}/1?${q}`, wait: ".workarea .card" },
@@ -74,7 +85,7 @@ const shots = phase2
 const sizes = [
   { w: 1920, h: 1080 },
   { w: 3840, h: 2160 },
-  { w: 1280, h: 800 },
+  ...(phase3 ? [] : [{ w: 1280, h: 800 }]),
 ];
 
 const browser = await chromium.launch();
@@ -86,10 +97,11 @@ try {
     for (const shot of shots) {
       await page.goto(shot.url, { waitUntil: "load" });
       await page.waitForSelector(shot.wait, { timeout: 15000 });
+      if (shot.act) await shot.act(page);
       await page.waitForTimeout(1200);
       const file = path.join(out, `${shot.name}_${s.w}x${s.h}.png`);
       await page.screenshot({ path: file, fullPage: false });
-      if (s.w === 1920) await page.screenshot({ path: file.replace(".png", "_full.png"), fullPage: true });
+      if (s.w === 1920 && !shot.noFull) await page.screenshot({ path: file.replace(".png", "_full.png"), fullPage: true });
       const m = await page.evaluate(() => ({
         scrollW: document.documentElement.scrollWidth,
         clientW: document.documentElement.clientWidth,

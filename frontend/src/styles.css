@@ -2145,3 +2145,124 @@ tr.selected td {
   gap: 0.5rem;
   margin-bottom: 0.75rem;
 }
+
+/* ---------------- 3차 S2 모델 비교(phase3.md §4.3) ---------------- */
+/* 계열 색: 흰 배경 대비 ≥ 4:1(앱은 라이트 테마만 — D3-6) */
+:root {
+  --series-1: #1d5bbf;
+  --series-2: #c4600e;
+  --series-3: #1b8456;
+  --series-4: #8043c4;
+  --series-5: #c2306a;
+}
+.compare-bar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 0.5rem 0;
+}
+.table th.cmp-check,
+.table td.cmp-check {
+  width: 3rem;
+  text-align: center;
+}
+.model-compare {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  scroll-margin-top: 4.5rem;
+}
+.model-compare-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.model-compare-head .btn {
+  margin-left: auto;
+}
+.model-compare .compare-warn {
+  margin: 0;
+}
+.compare-chart .chart {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.chart-line.cmp {
+  stroke-width: 1.8;
+}
+.chart-pt.cmp {
+  stroke: var(--surface);
+  stroke-width: 1.2;
+}
+.chart-line.cmp-1 { stroke: var(--series-1); }
+.chart-line.cmp-2 { stroke: var(--series-2); }
+.chart-line.cmp-3 { stroke: var(--series-3); }
+.chart-line.cmp-4 { stroke: var(--series-4); }
+.chart-line.cmp-5 { stroke: var(--series-5); }
+.chart-pt.cmp-1, .swatch.cmp-1 { fill: var(--series-1); background: var(--series-1); }
+.chart-pt.cmp-2, .swatch.cmp-2 { fill: var(--series-2); background: var(--series-2); }
+.chart-pt.cmp-3, .swatch.cmp-3 { fill: var(--series-3); background: var(--series-3); }
+.chart-pt.cmp-4, .swatch.cmp-4 { fill: var(--series-4); background: var(--series-4); }
+.chart-pt.cmp-5, .swatch.cmp-5 { fill: var(--series-5); background: var(--series-5); }
+.swatch {
+  display: inline-block;
+  width: 0.9rem;
+  height: 0.25rem;
+  border-radius: 2px;
+  margin-right: 0.4rem;
+  vertical-align: middle;
+}
+.compare-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 1.25rem;
+  font-size: 0.9rem;
+}
+.compare-legend li.no-curve {
+  color: var(--muted);
+}
+.compare-legend li.no-curve .swatch {
+  background: var(--line-strong);
+}
+.compare-tables {
+  display: grid;
+  gap: 0.75rem;
+}
+.compare-table,
+.compare-meta {
+  background: var(--surface);
+  table-layout: fixed;
+  width: 100%;
+}
+.compare-table th:first-child,
+.compare-meta th:first-child {
+  width: 12rem;
+}
+.compare-table th.cmp-col,
+.compare-meta th.cmp-col {
+  min-width: 11rem;
+  vertical-align: top;
+}
+.cmp-final {
+  margin-top: 0.3rem;
+}
+.cmp-metric {
+  white-space: nowrap;
+}
+.cmp-metric > span:first-child {
+  margin-right: 0.6rem;
+}
+.compare-table td.best {
+  font-weight: 700;
+  background: var(--ok-weak);
+  color: var(--ok);
+}

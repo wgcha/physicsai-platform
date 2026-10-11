@@ -42,6 +42,7 @@ const cases: [string, string, string, ("power" | "admin")?, ConstructorParameter
   ["/studies/s-cushion/datasets", "/studies/{study_id}/datasets", "get"],
   ["/studies/s-cushion/models", "/studies/{study_id}/models", "get"],
   ["/models/m-1", "/models/{model_id}", "get"],
+  ["/datasets/ds-2", "/datasets/{dataset_id}", "get"],
   ["/studies/s-cushion/param-sets", "/studies/{study_id}/param-sets", "get"],
   ["/param-sets/ps-1/samples?limit=5", "/param-sets/{ps_id}/samples", "get"],
   ["/jobs?study_id=s-cushion", "/jobs", "get"],

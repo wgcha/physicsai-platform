@@ -61,6 +61,8 @@ export const api = {
 
   // §10.4 데이터셋·모델·파라미터 세트
   datasets: (studyId: string) => request<Dataset[]>("GET", `/studies/${studyId}/datasets`),
+  /** phase3.md §4.1: 모델 비교 메타(데이터셋별 1회) */
+  dataset: (id: string) => request<Dataset>("GET", `/datasets/${id}`),
   models: (studyId: string, status?: string) =>
     request<Model[]>("GET", `/studies/${studyId}/models`, { query: { status } }),
   model: (id: string) => request<Model>("GET", `/models/${id}`),

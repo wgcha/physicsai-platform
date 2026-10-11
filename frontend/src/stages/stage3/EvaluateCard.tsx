@@ -8,6 +8,8 @@ import { Chart, Sparkline } from "../../components/Chart";
 import { fmtNum, fmtTime } from "../../lib/format";
 import { scoreSummary } from "../../panels/ModelPanel";
 import { LogStatusText } from "./ModelRegisterCard";
+import { MAX_COMPARE, MIN_COMPARE, toggleSelection } from "./compare";
+import { ModelCompare } from "./ModelCompare";
 
 function useModelDetails(models: Model[]) {
   const [details, setDetails] = useState<Record<string, Model>>({});
@@ -35,12 +37,17 @@ export function EvaluateCard() {
   const [chartId, setChartId] = useState<string | null>(null);
   const [logY, setLogY] = useState(true);
   const [finalError, setFinalError] = useState<string | null>(null);
+  const [cmpSel, setCmpSel] = useState<string[]>([]);
+  const [cmpOpen, setCmpOpen] = useState(false);
   const { job, run, error } = useJobRunner("EVALUATE", () => void reloadModels());
   const details = useModelDetails(models);
 
   const selected = active.find((m) => m.id === modelId) ?? active.find((m) => m.is_final) ?? active[0];
   const dsReady = (m: Model | undefined) => !!m?.dataset_id && datasets.some((d) => d.id === m.dataset_id && d.status === "READY");
   const shown = useMemo(() => models.filter((m) => m.status !== "ARCHIVED"), [models]);
+  // 비교 선택은 사용 가능(ACTIVE) 모델만 유지 — 보관·무효가 된 모델은 자동 제외
+  const cmpIds = cmpSel.filter((id) => active.some((m) => m.id === id));
+  const cmpFull = cmpIds.length >= MAX_COMPARE;
   const chartModel = details[chartId ?? ""] ?? details[selected?.id ?? ""] ?? Object.values(details)[0];
 
   const setFinal = async (id: string | null) => {
@@ -86,6 +93,24 @@ export function EvaluateCard() {
         </FeatureGate>
       </div>
       {finalError && <div className="error-text small" role="alert">{finalError}</div>}
+      {shown.length > 0 && (
+        <div className="compare-bar">
+          {cmpIds.length > 0 && (
+            <button type="button" className="link small" onClick={() => (setCmpSel([]), setCmpOpen(false))}>
+              선택 지우기
+            </button>
+          )}
+          <button
+            type="button"
+            className="btn small"
+            disabled={cmpIds.length < MIN_COMPARE}
+            title={cmpIds.length < MIN_COMPARE ? "2개 이상 선택하세요" : undefined}
+            onClick={() => setCmpOpen(true)}
+          >
+            선택 비교 ({cmpIds.length})
+          </button>
+        </div>
+      )}
       {shown.length === 0 ? (
         <p className="muted">등록된 모델이 없습니다.</p>
       ) : (
@@ -93,6 +118,7 @@ export function EvaluateCard() {
           <table className="table models" aria-label="모델 표">
             <thead>
               <tr>
+                <th className="cmp-check">비교</th>
                 <th>모델</th>
                 <th>데이터셋</th>
                 <th className="num">epoch</th>
@@ -109,6 +135,16 @@ export function EvaluateCard() {
                 const d = details[m.id];
                 return (
                   <tr key={m.id} className={m.is_final ? "is-final" : ""}>
+                    <td className="cmp-check">
+                      <input
+                        type="checkbox"
+                        aria-label={`${m.name} v${m.version} 비교 선택`}
+                        checked={cmpIds.includes(m.id)}
+                        disabled={m.status !== "ACTIVE" || (cmpFull && !cmpIds.includes(m.id))}
+                        title={m.status === "ACTIVE" && cmpFull && !cmpIds.includes(m.id) ? "최대 5개까지 비교할 수 있습니다" : undefined}
+                        onChange={() => setCmpSel(toggleSelection(cmpIds, m.id))}
+                      />
+                    </td>
                     <td>
                       <b title={m.stored_display_path ?? undefined}>{m.name}</b> <span className="muted">v{m.version}</span>
                       {m.label && <div className="muted small">{m.label}</div>}
@@ -158,6 +194,9 @@ export function EvaluateCard() {
             </tbody>
           </table>
         </div>
+      )}
+      {cmpOpen && cmpIds.length >= MIN_COMPARE && (
+        <ModelCompare ids={cmpIds} canExec={canExec} onSetFinal={(id) => void setFinal(id)} onClose={() => setCmpOpen(false)} />
       )}
       {chartModel?.loss_curve && (
         <div className="losschart">

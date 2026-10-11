@@ -13,6 +13,7 @@
     "lint": "tsc --noEmit -p tsconfig.json",
     "screenshots": "node scripts/screenshots.mjs",
     "screenshots:phase2": "node scripts/screenshots.mjs phase2",
+    "screenshots:phase3": "node scripts/screenshots.mjs phase3",
     "gen:api": "openapi-typescript ../backend/openapi.json -o src/api/generated/schema.d.ts",
     "smoke:backend": "bash scripts/smoke-backend.sh"
   },
