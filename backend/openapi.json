@@ -8833,6 +8833,68 @@
         ]
       }
     },
+    "/physicsai/api/studies/{study_id}/unarchive": {
+      "post": {
+        "operationId": "unarchive_study_physicsai_api_studies__study_id__unarchive_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Study"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Unarchive Study",
+        "tags": [
+          "studies"
+        ]
+      }
+    },
     "/physicsai/api/train-does/{doe_id}": {
       "get": {
         "operationId": "get_doe_physicsai_api_train_does__doe_id__get",

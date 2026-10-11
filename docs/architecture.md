@@ -35,7 +35,7 @@
 | `paths.py` | 307 | 공통 | 경로 검사(§17.3, B20·B23), `allowed_roots(settings, imports=)`, `is_under`, Study 경로, 백업 이동, 표시 경로 |
 | `masking.py` | 65 | 공통 | `Masker`(step 로그), `BundleMasker`·`SECRET_ENV_PATTERNS`(오류 묶음·운영 로그), `bundle_masker(settings)` |
 | `naming.py` | 9 | 공통 | ①·④ 공용 이름 규칙 `NAME_RE`·`RUN_KEY_RE`·`TPL_NAME`(`stage4_predict/param_sets`가 import해 속성 유지) |
-| `commands.py`(277), `job_types.py`(218), `tpl_render.py`(56), `childenv.py`, `errors.py`, `fileutil.py`, `limits.py`, `logsetup.py`, `state_machine.py`, `features.py` | | 공통 | |
+| `commands.py`(277), `job_types.py`(218), `tpl_render.py`(56), `childenv.py`, `errors.py`, `fileutil.py`, `limits.py`, `logsetup.py`, `state_machine.py`, `features.py` | | 공통 | `fileutil.write_json_atomic`(3차 S1: 임시 파일 + `os.replace`) |
 | `env_check.py`(47), `error_bundle.py`(110) | | 공통(운영) | 환경 점검 항목·오류 묶음 항목 생성(마스커는 `masking.py`) |
 | `parsers/` | | 공통 | `log_errors.py`(21: `ErrorDetector`), `name_value.py`(20: `read_name_value_csv`, ①·④ 공용) |
 | `hpc/` | | 공통 | PBS 게이트웨이(`gateway`, `command`(+`map_path`), `adapter`, `none`) |
@@ -58,7 +58,7 @@
 | `schemas/` | 970 | 전 단계 | `common`(44), `shell`(199), `jobs`(126), `studies`(68), `stage1_train_data`(148), `stage2_curation`(78), `stage3_model`(78), `stage4_predict`(106), `stage5_optimize`(62), `ops`(46). `__init__`가 전부 재노출(`S.Name` 불변) |
 | `services/jobs.py` | 347 | 전 단계 | 작업 생성 오케스트레이션(`job_params` 호출)·조회·로그·취소·재시도·대기열·산출물·HPC·input.zip |
 | `services/job_params/` | 812 | 전 단계 | `base.py`(48: `_P`, `HpcOverrides`, `prerequisite_missing`, `invalid_errors`(1차 형식), `invalid_at`(2차 형식), `check_feature`), `stage1_train_data.py`(181), `stage2_curation.py`(209, `resolve_source`), `stage3_model.py`(146, DATASET_CREATE 생성·재시도 후처리 포함), `stage4_predict.py`(92), `stage5_optimize.py`(84), `__init__.py`(52: `PARAM_MODELS` 병합, `parse_params`, `prepare`(check_feature 먼저)·`after_insert`·`on_retry` 디스패치) |
-| `services/studies.py` | 111 | 공통 | Study 목록·조회·생성·수정·보관, 단계 상태 |
+| `services/studies.py` | 149 | 공통 | Study 목록·조회·생성·수정(+`study.json` 제목 동기화)·보관·보관 해제(3차 S1), 단계 상태 |
 | `services/path_inspect.py` | 165 | ①②③④ | 경로 확인(1차 용도 + 2차 용도), `inspect_model_folder`, `starters_in` |
 | `services/stage1_train_data.py`(208), `stage2_curation.py`(131), `stage3_model.py`(103), `stage4_predict.py`(229), `stage5_optimize.py`(88) | | 단계별 | ① 파라미터 표·tpl·DOE·run, ② 원천·큐레이션·가져오기 조회, ③ 데이터셋·모델·Final, ④ 파라미터 세트·샘플·예측 확인·①→④, ⑤ 최적화 조회·응답 후보 |
 | `services/common.py`(217), `system.py`(132), `env_checks.py`(152), `error_bundle.py`(95) | | 공통·운영 | raw SQL 없음(`test_layering` 규칙 4, 예외 0) |
@@ -87,7 +87,7 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 |---|---|
 | `backend/tests/physicsai_test_support.py`(677), `conftest.py`, `fake_tools/`, `data/` | 그대로(공용 픽스처, 배포 시연 모드 공유 §0). `data/operation_ids.txt` = operationId 스냅샷 |
 | `backend/tests/helpers_stage1.py` | ← `phase2_helpers.py`(① 시험 보조) |
-| `backend/tests/common/` | `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6) |
+| `backend/tests/common/` | `test_config`, `test_ops_config`, `test_logsetup`, `test_auth`, `test_db_schema`, `test_db_phase2_schema`(← `test_phase2_db`), `test_openapi`, `test_openapi_operation_ids`(신규), `test_static_security`, `test_layering`(신규, §4.2 규칙 1·2·3·4·6), `test_study_manage`(3차 S1: 보관 해제·`study.json` 제목, V3-S1-1·2) |
 | `backend/tests/` 루트 | 여러 주제 혼합으로 보류(H3): `test_api`, `test_core_units`, `test_demo`, `test_phase2_api`, `test_phase2_units`, `test_verifier_fixes` |
 | `worker/tests/runtime/` | `test_queue_lease`, `test_limiter`, `test_windows_job`, `test_hpc`, `test_step_registry`(신규) |
 | `worker/tests/stage1_train_data/test_stage1_train.py`, `stage2_curation/test_stage2_curation.py`, `stage5_optimize/test_stage5_optimize.py`, `ops/test_ops_admin.py`, `e2e/{test_e2e_chain,test_demo_e2e}.py` | ← `test_phase2_{train,curation,optimize,admin}.py`, e2e 2개 |
@@ -100,15 +100,18 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 |---|---:|---|---|
 | `api/` | client 147, endpoints 137, types 261, generated | 공통 | 경계 양호: 화면 코드에 `fetch` 없음, `mock`은 `main.tsx` 동적 import와 `test/render.tsx`만 |
 | `app/`, `pages/`, `panels/`, `shell/`, `components/`, `lib/` | | 공통 | 그대로. `shell/useOpenJob.ts`는 `hooks/`로 이동(F3) |
-| `hooks/` | 27–99 | 공통 | `useArtifact`, `useJobRunner`, `useLatestJob`, `useNotifications`, `useOpenJob`(← `shell/`), `usePolling` |
+| `hooks/` | 16–99 | 공통 | `useArtifact`, `useJobRunner`, `useLatestJob`, `useNotifications`, `useOpenJob`(← `shell/`), `usePolling`, `jobRetried.ts`(3차 S1: 재시도로 생긴 새 작업을 `useLatestJob`이 이어받는 구독) |
+| `components/ConfirmDialog.tsx`(99), `JobRetryButton.tsx`(63), `StudyArchiveDialog.tsx`(44) | | 공통 | 3차 S1: 공용 확인 대화상자, `JobInline` 재시도 버튼(`retryStartText`), Study 보관·보관 해제 대화상자(목록·관리 화면 공용) |
+| `pages/StudyManage.tsx` | 181 | 공통 | 3차 S1: Study 관리 화면(`/p/:projectId/s/:studyId/manage`) ① 기본 정보(이름 변경) ② 보관. ③ 용량·정리는 S3 |
 | `stages/stage1/` | 22–188 | ① | `Stage1`(조립 23), `TrainContext`(90), `CadExtractCard`(64)·`ParamTableCard`(188, `rowIssue`)·`DoeGenCard`(154, `defaultOptions`·`OptionInput`) ← `TrainCards.tsx`, `DoePicker`(22)·`RunStateBar`(37)·`RunTable`(95)·`SolveCard`(119, `PBS_NONE_TEXT`)·`ResultCollectCard`(100)·`RunResponseCard`(83) ← `SolveCards.tsx` |
 | `stages/stage2/` | 29–224 | ② | `Stage2`, `CurationContext`, `Sources`(201, `SpdmSummary` — `pages/ImportLanding`이 import하는 유일한 단계 간 import), `H3dPreviewCard`(64, `useH3dPreview`)·`H3dCurateCard`(191, `PartList`)·`CurationResult`(44)·`CurationFileList`(40) ← `H3dCards.tsx`, `T01Cards`(224, 유지) |
 | `stages/stage3/` | 16–273 | ③ | `Stage3`(16), `DatasetCards`(273, 유지), `ModelRegisterCard`(132, `LogStatusText`·`NAME_RE`)·`EvaluateCard`(194, `useModelDetails`) ← `ModelCards.tsx` |
 | `stages/stage4/` | 14–257 | ④ | `Stage4`(조립 14), `ParamSetCard`(192, `FromTrainForm` 포함)·`useSamples.ts`(27)·`PredictWorkspace`(257) ← `Stage4.tsx`, `ParamInputs`(207)·`PredictResult`(129) 유지 |
 | `stages/stage5/` | 37–205 | ⑤ | `Stage5`(조립·상태 49), `rules.ts`(37: `activeRules`·`cleanResponses`·`METHOD_DEFAULTS`), `OptInputCard`(50), `OptRunCard`(121), `OptResult`(205, `HistoryChart`·`toTable`·`fileEntries`) ← `Stage5.tsx`, `ResponseTable`(197) 유지 |
-| `__tests__/` | 26–133 | 단계별 | `stepper`(V2-FE-1·FeatureGate), `stage1`·`stage2`·`stage5`·`ops`·`links` ← `phase2.test.tsx`, `stage3`·`stage4` ← `stages.test.tsx`, 나머지(`shell`, `permissions`, `queue`, `notifications`, `usePolling`, `mockContract`) 그대로. `describe`·`it` 이름(V-ID)과 시험 수(100) 동일 |
+| `__tests__/` | 26–133 | 단계별 | `stepper`(V2-FE-1·FeatureGate), `stage1`·`stage2`·`stage5`·`ops`·`links` ← `phase2.test.tsx`, `stage3`·`stage4` ← `stages.test.tsx`, 나머지(`shell`, `permissions`, `queue`, `notifications`, `usePolling`, `mockContract`) 그대로. 3차: `manage`(V3-S1-3·4). `describe`·`it` 이름(V-ID)과 시험 수(100) 동일 |
 | `test/` | | 공통 | `render.tsx`, `setup.ts`, `recordCalls.ts`(신규, F4: 목 서버 `handle` 호출 기록 — 여러 시험 파일 공용) |
-| `mock/phase2.ts`(965), `mock/server.ts`(798), `mock/data.ts`(426), `install.ts` | | 전 단계 | **F5 보류**(아래) — 이력 기준 이름 그대로 |
+| `mock/phase2.ts`(965), `mock/server.ts`(805), `mock/data.ts`(426), `install.ts` | | 전 단계 | **F5 보류**(아래) — 이력 기준 이름 그대로 |
+| `mock/manage.ts` | 76 | 공통 | 3차 목 핸들러(PATCH study·archive·unarchive·retry), `server.ts` 라우팅 1곳에서 위임 |
 | `styles.css` | 2,076 | 공통 | 전역 한 파일(H6 보류) |
 
 **F5(목 서버 분할) 보류 사유**: `Phase2Mock`은 `MockServer`를 역참조하며 상태(작업·알림 배열, 진행 `tick`·`finish`·`onProgress` 훅, `summaryExtra`)를 공유하고(`server.ts:114–126, 273–331`), 목 ID는 공유 카운터(`server.ts:134` `${prefix}-${++this.idn}`)의 **생성 순서**로 정해진다. 파일을 나누면 생성자 초기화 순서가 바뀌어 시드 데이터의 ID가 달라질 위험이 있고(시험·`dev:mock` 화면이 시드 ID에 기대는 곳 포함), 이를 막으려면 상태 저장소를 먼저 분리해야 해 "통째 이동"이 아니게 된다. 동작 불변을 시험만으로 보장하기 어려워 3차 이후로 미룬다. 3차 새 목 핸들러는 `mock/phase2.ts`에 넣지 않고 `mock/manage.ts`(Study 관리·용량, phase3.md §7)로 분리해 `server.ts`의 라우팅에서 위임한다.

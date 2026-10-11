@@ -496,4 +496,8 @@ packages/simdash_adapters/
 
 ## 변경 메모(D3-n) — 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
 
-(비어 있음)
+- **D3-1 (S1, §3.4 재시도 시작 지점 표시명)**: `JobStep`에는 표시명(label)이 없다(API 모양 불변 유지). 시작 지점 문구는 `{step_no}. {표시명}`에서 표시명을 해당 step이 `Job.current_step_key`와 같으면 `current_step_label`(실패 작업은 실패한 step이 current), 아니면 `step_key`로 쓴다. 첫 재개 step이 1이면 "처음(1단계)". 구현 `frontend/src/components/JobRetryButton.tsx` `retryStartText`.
+- **D3-2 (S1, §3.4 재시도 후 카드 갱신)**: `JobInline`은 `useLatestJob`의 `track`을 받지 않으므로(호출처 56곳), 재시도 성공 시 `hooks/jobRetried.ts`의 구독(`emitJobRetried(이전 id, 새 작업)`)으로 알리고, 이전 작업을 추적 중이던 `useLatestJob`이 새 작업으로 갈아탄다. 재시도 버튼은 Study 문맥(`StudyProvider`) 밖에서는 보이지 않는다(`study.status` 판단 불가).
+- **D3-3 (S1, §3.2 retry 409 `STUDY_CLEANUP_RUNNING`)**: R3-4는 S3(`STUDY_CLEANUP` job_type)가 생길 때 함께 넣는다. S1 단계에서는 retry 동작 변경 없음.
+- **D3-4 (S1, §3.2 `study.json` 갱신)**: 기존 `study.json`을 읽어 `title`만 바꿔 쓴다(읽기 실패·형식 오류면 `id`·`project_id`·`title`로 새로 씀). 원자적 쓰기는 `physicsai_core.fileutil.write_json_atomic`(같은 폴더 `.study.json.tmp` + `os.replace`, 삭제 호출 없음 — 쓰기 실패 시 임시 파일이 남을 수 있음). 보관 해제가 이미 `ACTIVE`인 Study에 대해서는 감사 행을 남기지 않는다(멱등, 상태 변화 없음).
+- **D3-5 (S1, §3.4 목록·목)**: Study 목록 필터 선택은 `localStorage` 키 `physicsai.studyList.filter`. 목 `GET /jobs/{id}`의 `can_retry`를 서버와 같게 `CANCELED`도 포함하고 본인 작업은 power 이상일 때만으로 맞췄다. 기존 "보관된 Study 포함" 체크박스는 탭으로 대체.

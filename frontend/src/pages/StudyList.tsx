@@ -5,8 +5,35 @@ import { useApp, canExecuteIn } from "../app/AppContext";
 import { fmtTime } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
 import { CopyButton, Field, NO_PERMISSION_TIP } from "../components/ui";
+import { StudyArchiveDialog } from "../components/StudyArchiveDialog";
 
 const FOLDER_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+
+/** phase3.md §3.4 상태 필터(가정 A3-2: 기본 "사용 중"). 선택은 브라우저에 기억 */
+type Filter = "ACTIVE" | "ARCHIVED" | "ALL";
+const FILTERS: { key: Filter; label: string }[] = [
+  { key: "ACTIVE", label: "사용 중" },
+  { key: "ARCHIVED", label: "보관" },
+  { key: "ALL", label: "전체" },
+];
+const FILTER_KEY = "physicsai.studyList.filter";
+
+function loadFilter(): Filter {
+  try {
+    const v = localStorage.getItem(FILTER_KEY);
+    return v === "ARCHIVED" || v === "ALL" ? v : "ACTIVE";
+  } catch {
+    return "ACTIVE";
+  }
+}
+
+function saveFilter(f: Filter) {
+  try {
+    localStorage.setItem(FILTER_KEY, f);
+  } catch {
+    /* 무시 */
+  }
+}
 
 export function StudyList() {
   const { projectId = "" } = useParams();
@@ -15,7 +42,9 @@ export function StudyList() {
   const project = projects.find((p) => p.id === projectId);
   const canExec = canExecuteIn(me, projectId);
   const [studies, setStudies] = useState<Study[] | null>(null);
-  const [showArchived, setShowArchived] = useState(false);
+  const [filter, setFilterState] = useState<Filter>(loadFilter);
+  const [archiving, setArchiving] = useState<Study | null>(null);
+  const [reloadN, setReloadN] = useState(0);
   const [creating, setCreating] = useState(false);
   const [folder, setFolder] = useState("");
   const [title, setTitle] = useState("");
@@ -24,10 +53,15 @@ export function StudyList() {
   useEffect(() => {
     setStudies(null);
     api
-      .studies(projectId, showArchived ? undefined : "ACTIVE")
+      .studies(projectId, filter === "ALL" ? undefined : filter)
       .then(setStudies)
       .catch((e) => setError(errorMessage(e)));
-  }, [projectId, showArchived]);
+  }, [projectId, filter, reloadN]);
+
+  const setFilter = (f: Filter) => {
+    saveFilter(f);
+    setFilterState(f);
+  };
 
   const folderOk = FOLDER_RE.test(folder);
   const create = async () => {
@@ -46,9 +80,13 @@ export function StudyList() {
       <main className="page-main narrow">
         <div className="page-title-row">
           <h1 className="page-title">Study</h1>
-          <label className="check small">
-            <input type="checkbox" checked={showArchived} onChange={(e) => setShowArchived(e.target.checked)} /> 보관된 Study 포함
-          </label>
+          <div className="seg" role="group" aria-label="상태 필터">
+            {FILTERS.map((f) => (
+              <button key={f.key} type="button" className={filter === f.key ? "on" : ""} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
+                {f.label}
+              </button>
+            ))}
+          </div>
           <span className="spacer" />
           {canExec ? (
             <button type="button" className="btn primary" onClick={() => setCreating((v) => !v)}>
@@ -94,6 +132,7 @@ export function StudyList() {
                 <th>상태</th>
                 <th>만든 사람</th>
                 <th>수정</th>
+                <th>관리</th>
               </tr>
             </thead>
             <tbody>
@@ -109,10 +148,28 @@ export function StudyList() {
                   <td>{s.status === "ACTIVE" ? "사용 중" : "보관"}</td>
                   <td>{s.created_by_name}</td>
                   <td className="num">{fmtTime(s.updated_at)}</td>
+                  <td className="row-actions">
+                    <Link to={`/p/${projectId}/s/${s.id}/manage`}>관리</Link>
+                    {s.can_execute && s.status === "ACTIVE" && (
+                      <button type="button" className="btn small ghost" onClick={() => setArchiving(s)}>
+                        보관
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        )}
+        {archiving && (
+          <StudyArchiveDialog
+            study={archiving}
+            onCancel={() => setArchiving(null)}
+            onDone={() => {
+              setArchiving(null);
+              setReloadN((n) => n + 1);
+            }}
+          />
         )}
       </main>
     </div>

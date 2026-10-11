@@ -104,6 +104,31 @@ describe("목 서버 ↔ openapi.json", () => {
     expect(problems(ec.body, responseSchema("/admin/env-checks", "post"), "POST env-checks")).toEqual([]);
   });
 
+  it("3차 쓰기 응답(V3-S1-5): PATCH study, archive, unarchive, retry", () => {
+    const power = new MockServer({ user: "power" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    const v = power.studies.find((x) => x.id === "s-cushion")!.version;
+    const patch = power.handle("PATCH", "/studies/s-cushion", q, { version: v, title: "새 이름" }, h);
+    expect(patch.status).toBe(200);
+    expect(problems(patch.body, responseSchema("/studies/{study_id}", "patch"), "PATCH study")).toEqual([]);
+    expect(power.handle("PATCH", "/studies/s-cushion", q, { version: v, title: "x" }, h).status).toBe(409);
+    const un = power.handle("POST", "/studies/s-cushion-old/unarchive", q, null, h);
+    expect(un.status).toBe(200);
+    expect((un.body as { status: string }).status).toBe("ACTIVE");
+    expect(problems(un.body, responseSchema("/studies/{study_id}/unarchive", "post"), "unarchive")).toEqual([]);
+    const ar = power.handle("POST", "/studies/s-cushion-old/archive", q, null, h);
+    expect(problems(ar.body, responseSchema("/studies/{study_id}/archive", "post"), "archive")).toEqual([]);
+    const r = power.handle("POST", "/jobs/j-ds1/retry", q, {}, h); // 본인 실패 작업
+    expect(r.status).toBe(201);
+    expect(problems(r.body, responseSchema("/jobs/{job_id}/retry", "post"), "retry")).toEqual([]);
+    expect((r.body as { retry_of_job_id: string }).retry_of_job_id).toBe("j-ds1");
+    expect(new MockServer({ user: "general" }).handle("POST", "/jobs/j-ds1/retry", q, {}, h).status).toBe(403);
+    expect(new MockServer({ user: "general" }).handle("POST", "/studies/s-cushion/unarchive", q, null, h).status).toBe(403);
+    expect(Object.keys(spec.paths)).toContain("/physicsai/api/studies/{study_id}/unarchive");
+    expect(spec.paths["/physicsai/api/studies/{study_id}/unarchive"].post.operationId).toBe("unarchive_study_physicsai_api_studies__study_id__unarchive_post");
+  });
+
   it("목 서버의 2차 경로가 모두 openapi에 있다", () => {
     const paths = Object.keys(spec.paths);
     for (const p of ["/train/doe-types", "/train-does/{doe_id}/runs", "/curations/{curation_id}/files", "/admin/env-checks/{check_id}", "/jobs/{job_id}/error-bundle.zip", "/studies/{study_id}/param-sets/from-train"])

@@ -61,6 +61,16 @@ def write_json(path: str, data: Any) -> int:
     return len(text.encode("utf-8"))
 
 
+def write_json_atomic(path: str, data: Any) -> int:
+    """같은 폴더 임시 파일에 쓴 뒤 os.replace로 바꾼다(읽는 쪽이 반쯤 쓴 파일을 보지 않음). 삭제 호출 없음."""
+    _guard(path)
+    d = os.path.dirname(path) or "."
+    tmp = os.path.join(d, f".{os.path.basename(path)}.tmp")
+    n = write_json(tmp, data)
+    os.replace(tmp, path)
+    return n
+
+
 def write_text(path: str, text: str) -> int:
     _guard(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)

@@ -3,6 +3,7 @@ import type { Job, JobState } from "../api";
 import { JOB_STATE_LABEL, attentionText, hpcSummaryText, isTerminal } from "../lib/format";
 import { JobLogViewer } from "./JobLogViewer";
 import { ErrorBundleButton } from "./ErrorBundleButton";
+import { JobRetryButton } from "./JobRetryButton";
 
 export const NO_PERMISSION_TIP = "실행 권한(power 이상)이 필요합니다";
 
@@ -88,6 +89,7 @@ export function JobInline({ job }: { job: Job }) {
             {job.failure_message ? ` — ${job.failure_message}` : ""}
           </span>
         )}
+        <JobRetryButton job={job} />
         {job.state === "WAITING_HPC" && job.hpc_summary && <span className="muted small">{hpcSummaryText(job.hpc_summary)}</span>}
         {job.attention_code && !isTerminal(job.state) && (
           <span className="warn-text small" data-testid="attention">

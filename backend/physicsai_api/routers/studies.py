@@ -42,6 +42,11 @@ def archive_study(study_id: str, request: Request, principal: Principal = Depend
     return svc.archive_study(get_ctx(request), principal, study_id, request_id(request), client_ip(request))
 
 
+@router.post("/studies/{study_id}/unarchive", response_model=S.Study, responses=ERR)
+def unarchive_study(study_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    return svc.unarchive_study(get_ctx(request), principal, study_id, request_id(request), client_ip(request))
+
+
 @router.post("/studies/{study_id}/paths/inspect", response_model=S.PathInspectResponse, responses=ERR)
 def inspect(study_id: str, body: S.PathInspectRequest, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     return inspect_svc.inspect_path(get_ctx(request), principal, study_id, body)

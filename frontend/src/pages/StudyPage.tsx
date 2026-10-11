@@ -1,4 +1,4 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Link, Navigate, useParams } from "react-router-dom";
 import type { JobState } from "../api";
 import { useApp } from "../app/AppContext";
 import { StudyProvider, useStudy } from "../app/StudyContext";
@@ -42,8 +42,23 @@ function StudyShell({ projectId, stage }: { projectId: string; stage: number }) 
           { label: `${STAGE_MARK[stage]} ${st.name}` },
         ]}
       />
-      <StageStepper base={base} current={stage} stageStates={stageStates} />
-      {study.status === "ARCHIVED" && <div className="warn-box">보관된 Study입니다. 실행할 수 없습니다.</div>}
+      <div className="stepper-row">
+        <StageStepper base={base} current={stage} stageStates={stageStates} />
+        <Link className="btn small ghost manage-link" to={`${base}/manage`}>
+          Study 관리
+        </Link>
+      </div>
+      {study.status === "ARCHIVED" && (
+        <div className="warn-box">
+          보관된 Study입니다. 실행할 수 없습니다.
+          {study.can_execute && (
+            <>
+              {" "}
+              <Link to={`${base}/manage`}>보관 해제</Link>
+            </>
+          )}
+        </div>
+      )}
       <div className="workgrid">
         <main className="workarea" aria-label="작업영역">
           {stage === 1 ? (

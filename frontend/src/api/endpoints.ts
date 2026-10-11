@@ -51,6 +51,10 @@ export const api = {
   createStudy: (body: { project_id: string; folder_name: string; title: string }) =>
     request<Study>("POST", "/studies", { body }),
   study: (id: string) => request<StudyDetail>("GET", `/studies/${id}`),
+  /** phase3.md §3.2: 표시 이름 변경(CAS), 보관·보관 해제(멱등) */
+  patchStudy: (id: string, body: { version: number; title: string }) => request<Study>("PATCH", `/studies/${id}`, { body }),
+  archiveStudy: (id: string) => request<Study>("POST", `/studies/${id}/archive`),
+  unarchiveStudy: (id: string) => request<Study>("POST", `/studies/${id}/unarchive`),
   /** phase2.md §12.4: RESULT_FOLDER는 doe_id 선택 키 */
   inspectPath: (studyId: string, purpose: PathPurpose, path: string, extra?: { doe_id?: string }) =>
     request<PathInspectResult>("POST", `/studies/${studyId}/paths/inspect`, { body: { purpose, path, ...(extra ?? {}) } }),

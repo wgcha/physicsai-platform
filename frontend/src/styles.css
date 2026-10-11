@@ -2074,3 +2074,74 @@ tr.selected td {
   margin: 0.3rem 0 0;
   padding-left: 1.2rem;
 }
+
+/* 3차 S1: 확인 대화상자·Study 관리(phase3.md §3.4) */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgba(26, 30, 36, 0.35);
+}
+.dialog {
+  width: min(30rem, 100%);
+  padding: 1.1rem 1.25rem 1rem;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  box-shadow: 0 12px 32px rgba(26, 30, 36, 0.18);
+}
+.dialog-title {
+  margin: 0 0 0.6rem;
+  font-size: 1.05rem;
+}
+.dialog-body p {
+  margin: 0 0 0.45rem;
+  color: var(--text-2);
+  overflow-wrap: anywhere;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 0.9rem;
+}
+.stepper-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding-right: 1.25rem;
+}
+.stepper-row .stepper {
+  flex: 1;
+  min-width: 0;
+}
+.manage-link {
+  flex: none;
+  height: 2.6rem;
+  display: inline-flex;
+  align-items: center;
+}
+.job-retry {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+}
+.row-actions {
+  white-space: nowrap;
+}
+.row-actions > * + * {
+  margin-left: 0.5rem;
+}
+.manage-page .card + .card {
+  margin-top: var(--gap);
+}
+.manage-rename {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}

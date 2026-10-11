@@ -32,5 +32,7 @@ def test_all_routes_prefixed():
         "/curations/{curation_id}/files", "/studies/{study_id}/spdm-imports", "/studies/{study_id}/optimizations",
         "/optimizations/{optimization_id}", "/studies/{study_id}/optimize/response-candidates",
         "/studies/{study_id}/param-sets/from-train",
+        # 3차(phase3 §3.2)
+        "/studies/{study_id}/unarchive",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

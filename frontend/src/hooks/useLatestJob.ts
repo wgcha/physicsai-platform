@@ -3,6 +3,7 @@ import { api, type Job, type JobType } from "../api";
 import { usePolling } from "./usePolling";
 import { POLL } from "../lib/poll";
 import { isTerminal } from "../lib/format";
+import { onJobRetried } from "./jobRetried";
 
 function intervalFor(job: Job | null): number | null {
   if (!job) return null;
@@ -54,6 +55,9 @@ export function useLatestJob(studyId: string, jobType: JobType, onFinish?: (job:
       alive = false;
     };
   }, [studyId, jobType, accept]);
+
+  // 재시도 버튼(JobInline)이 만든 새 작업으로 갈아탄다(phase3 §3.4)
+  useEffect(() => onJobRetried((fromId, j) => prev.current?.id === fromId && accept(j)), [accept]);
 
   const refresh = useCallback(async () => {
     const id = prev.current?.id;

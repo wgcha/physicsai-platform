@@ -40,6 +40,7 @@ import {
   type MockUserKey,
 } from "./data";
 import { Phase2Mock } from "./phase2";
+import { ManageMock } from "./manage";
 import { JOB_TYPE_LABEL } from "../lib/format";
 
 type Notif = NotificationItem & { user_id: string };
@@ -112,6 +113,7 @@ export class MockServer {
   queueOrder = new Map<string, number>();
   idn = 1000;
   p2: Phase2Mock;
+  manage: ManageMock;
 
   constructor(opts: MockOptions = {}) {
     this.user = opts.user ?? "admin";
@@ -124,6 +126,7 @@ export class MockServer {
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
     this.seedJobs();
     this.p2 = new Phase2Mock(this, opts.disabledFeatures);
+    this.manage = new ManageMock(this);
   }
 
   get me(): Me | null {
@@ -420,7 +423,7 @@ export class MockServer {
     return [MOCK_AI_ROOT, st?.folder_name ?? studyId, ...rel.split("/").filter(Boolean)].join("\\");
   }
 
-  private studyOut(s: Study): Study {
+  studyOut(s: Study): Study {
     const r = this.role(s.project_id);
     return { ...s, can_execute: r === "power" || r === "admin", folder_display_path: this.disp(s.id, "") };
   }
@@ -549,6 +552,10 @@ export class MockServer {
       };
     }
 
+    // 3차(phase3.md §3): Study 관리·재시도
+    const r3 = this.manage.handle(method, seg, body, me);
+    if (r3) return r3;
+
     // 2차(phase2.md §12)
     const r2 = this.p2.handle(method, path, query, body);
     if (r2) return r2;
@@ -655,7 +662,7 @@ export class MockServer {
         return {
           status: 200,
           headers: { ETag: etag },
-          body: { ...this.jobOut(j), can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: (own || me.is_global_admin) && (j.state === "FAILED" || j.state === "INTERRUPTED") },
+          body: { ...this.jobOut(j), can_cancel: me.is_global_admin && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state), can_retry: ((own && ["power", "admin"].includes(this.role(j.project_id) ?? "")) || me.is_global_admin) && ["FAILED", "CANCELED", "INTERRUPTED"].includes(j.state) },
         };
       }
       if (method === "GET" && seg[2] === "error-bundle.zip") {
@@ -729,7 +736,7 @@ export class MockServer {
     return { status: 200, body: { normalized_path: path, ok: true, problems: [], summary: { parameters: 4, samples: 120, responses: 3, cad: "cushion_base.x_t", starter: "cushion_0000.rad" } } };
   }
 
-  private createJob(s: Study, type: JobType, params: Record<string, unknown>): MockResp {
+  createJob(s: Study, type: JobType, params: Record<string, unknown>): MockResp {
     if (s.status !== "ACTIVE") return err(409, "STUDY_ARCHIVED", "보관된 Study입니다.");
     if (!STEP_CHAINS[type]) return err(422, "INVALID_PARAMS", "알 수 없는 작업 유형입니다.");
     if (this.jobs.some((j) => j.study_id === s.id && j.job_type === type && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state)))

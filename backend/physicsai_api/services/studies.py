@@ -1,7 +1,9 @@
-"""Study 목록·조회·생성·수정·보관과 단계 상태(§10.3)."""
+"""Study 목록·조회·생성·수정·보관·보관 해제와 단계 상태(§10.3, phase3 §3.2)."""
 
 from __future__ import annotations
 
+import json
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -13,7 +15,7 @@ from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.fileutil import write_json
+from physicsai_core.fileutil import write_json, write_json_atomic
 
 from ..auth import Principal
 from ..context import AppContext
@@ -26,7 +28,10 @@ from .common import (
     require_config_ok,
     require_power,
     study_out,
+    study_root,
 )
+
+log = logging.getLogger(__name__)
 
 # ---- Study ----------------------------------------------------------------
 
@@ -97,7 +102,27 @@ def patch_study(ctx: AppContext, principal: Principal, study_id: str, body: Any,
         require_power(principal, s["project_id"])
         s = studies_repo.update_cas(conn, study_id, body.version, title=body.title)
         audit(conn, principal, "STUDY_UPDATE", "study", study_id, {"title": body.title}, rid, ip)
+    _sync_study_json_title(ctx, s)
     return study_out(s, principal, ctx.settings.storage.ai_root)
+
+
+def _sync_study_json_title(ctx: AppContext, s: dict[str, Any]) -> None:
+    """phase3 §3.2: DB가 정본. `study.json` 제목 갱신 실패는 API 실패가 아니다(운영 로그 WARNING)."""
+    path = os.path.join(study_root(ctx, s), "study.json")
+    try:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                meta = json.load(fh)
+            if not isinstance(meta, dict):
+                meta = {}
+        except (OSError, ValueError):
+            meta = {}
+        meta.setdefault("id", s["id"])
+        meta.setdefault("project_id", s["project_id"])
+        meta["title"] = s["title"]
+        write_json_atomic(path, meta)
+    except Exception as e:  # noqa: BLE001 — 파일 쓰기 실패는 경고만
+        log.warning("study.json 제목 갱신 실패 study_id=%s: %s", s["id"], type(e).__name__)
 
 
 def archive_study(ctx: AppContext, principal: Principal, study_id: str, rid: str, ip: str | None) -> dict[str, Any]:
@@ -108,4 +133,17 @@ def archive_study(ctx: AppContext, principal: Principal, study_id: str, rid: str
             raise DomainError("STUDY_HAS_ACTIVE_JOB", "대기 중이거나 실행 중인 작업이 있어 보관할 수 없습니다", status=409)
         s = studies_repo.update_cas(conn, study_id, None, status="ARCHIVED")
         audit(conn, principal, "STUDY_ARCHIVE", "study", study_id, None, rid, ip)
+    return study_out(s, principal, ctx.settings.storage.ai_root)
+
+
+def unarchive_study(ctx: AppContext, principal: Principal, study_id: str, rid: str, ip: str | None) -> dict[str, Any]:
+    """phase3 §3.2: 보관 해제. 이미 ACTIVE면 그대로(멱등). Study 폴더가 없으면 409."""
+    with ctx.engine.begin() as conn:
+        s = studies_repo.require(conn, study_id, for_update=True)
+        require_power(principal, s["project_id"])
+        if s["status"] != "ACTIVE":
+            if not os.path.isdir(study_root(ctx, s)):
+                raise DomainError("STUDY_FOLDER_MISSING", "AI 루트에서 Study 폴더를 찾을 수 없습니다", status=409)
+            s = studies_repo.update_cas(conn, study_id, None, status="ACTIVE")
+            audit(conn, principal, "STUDY_UNARCHIVE", "study", study_id, None, rid, ip)
     return study_out(s, principal, ctx.settings.storage.ai_root)
