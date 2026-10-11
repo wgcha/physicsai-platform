@@ -65,15 +65,20 @@ def test_platform_depends_on_exact_package_version():
 
 
 def test_lock_and_offline_bundle_include_wheel():
-    """V3-S4-7(정적): lock 항목, collect-offline이 wheel을 먼저 만들고 --find-links로 lock을 받는다, 설치는 --no-index."""
+    """V3-S4-7(정적, D3-27): PyPI lock에는 어댑터가 없고(이름 선점 차단), 로컬 고정은 requirements.local.lock.
+    collect-offline은 wheel을 먼저 만들고 로컬 고정을 --no-index로만 확인, 설치는 --no-index."""
     lock = _read("deploy/requirements.lock")
-    assert re.search(rf"^simdash-adapters=={re.escape(VERSION)}$", lock, re.MULTILINE)
+    assert not re.search(r"^simdash", lock, re.MULTILINE | re.IGNORECASE)
+    local = [ln for ln in _read("deploy/requirements.local.lock").splitlines() if ln and not ln.startswith("#")]
+    assert local == [f"simdash-adapters=={VERSION}"]
     for f in ("deploy/collect-offline.sh", "deploy/collect-offline.ps1"):
         t = _read(f)
         w = t.index("pip wheel packages/simdash_adapters --no-deps -w dist/wheels")
+        loc = t.index("pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock")
         dl = t.index("pip download -r deploy/requirements.lock")
-        assert w < dl, f
-        assert re.search(r"pip download -r deploy/requirements\.lock [^\n]*-d dist/wheels --find-links dist/wheels", t), f
+        assert w < loc < dl, f
+        assert "requirements.local.lock" not in t[dl:].split("\n")[0], f
+        assert not re.search(r"pip download -r deploy/requirements\.lock[^\n]*--find-links", t), f
     for f in ("deploy/install.ps1", "deploy/update.ps1", "deploy/demo/start-demo.ps1"):
         assert "pip install --no-index --find-links" in _read(f), f
 
@@ -85,8 +90,22 @@ def test_collect_offline_dry_run_builds_adapter_wheel_first():
     assert r.returncode == 0, r.stderr
     lines = [ln for ln in r.stdout.splitlines() if ln.startswith("+ ")]
     iw = next(i for i, ln in enumerate(lines) if "pip wheel packages/simdash_adapters --no-deps -w dist/wheels" in ln)
+    il = next(i for i, ln in enumerate(lines) if "requirements.local.lock" in ln)
     idl = next(i for i, ln in enumerate(lines) if "pip download -r deploy/requirements.lock" in ln)
-    assert iw < idl and "--find-links dist/wheels" in lines[idl]
+    assert iw < il < idl and "--no-index" in lines[il] and "--find-links" not in lines[idl]
+
+
+def test_old_hpc_module_names_still_importable():
+    """D3-26: 예전 physicsai_core.hpc.{none,adapter,command} 모듈 공개 이름 호환."""
+    from physicsai_core.hpc import adapter, command, none
+
+    names = ("HpcAvailability", "HpcGatewayError", "HpcStatus", "HpcSubmitResult", "HpcSubmitSpec")
+    for mod in (none, adapter, command):
+        for n in names:
+            assert getattr(mod, n) is getattr(simdash_adapters, n), (mod.__name__, n)
+    assert adapter._MSG == "어댑터 job API 미확인 — 미구현"
+    assert command.fwd is simdash_adapters.fwd and command.is_abs_path_str is simdash_adapters.is_abs_path_str
+    assert callable(command._check_value) and callable(command._norm_exe) and command.log.name == "physicsai_core.hpc.command"
 
 
 def test_dev_paths_and_ci_include_package():

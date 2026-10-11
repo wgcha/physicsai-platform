@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from pathlib import Path
+
+import pytest
 
 from sqlalchemy import text
 
@@ -110,3 +113,79 @@ def test_write_json_atomic_replaces(tmp_path):
     write_json_atomic(str(p), {"title": "가"})
     assert json.loads(p.read_text(encoding="utf-8")) == {"title": "가"}
     assert sorted(x.name for x in tmp_path.iterdir()) == ["a.json"]
+
+
+def test_patch_title_without_folder_does_not_create_it(client, loaded_config, caplog):
+    """D3-20: Study 폴더가 없으면 study.json을 만들지 않고(폴더 생성 금지) 경고만. 보관 해제의 STUDY_FOLDER_MISSING은 유지."""
+    from physicsai_api.services import studies as svc
+
+    ai = Path(loaded_config.settings.storage.ai_root)
+    sid = _sid(client, "M5")
+    client.post(f"{API}/studies/{sid}/archive", headers=PW)
+    (ai / "M5").rename(ai / "M5_moved")  # 시험 준비: 폴더를 치운다(삭제 아님)
+    v = client.get(f"{API}/studies/{sid}", headers=P).json()["version"]
+    with caplog.at_level(logging.WARNING, logger=svc.__name__):
+        r = client.patch(f"{API}/studies/{sid}", headers=PW, json={"version": v, "title": "폴더 없음"})
+    assert r.status_code == 200 and r.json()["title"] == "폴더 없음"
+    assert not (ai / "M5").exists() and not (ai / "M5").is_symlink()
+    assert any("Study 폴더 없음" in rec.getMessage() for rec in caplog.records)
+    r = client.post(f"{API}/studies/{sid}/unarchive", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "STUDY_FOLDER_MISSING"
+    assert not (ai / "M5").exists()
+
+
+def test_write_json_atomic_random_temp_no_makedirs(tmp_path, monkeypatch):
+    """D3-21: 임시 파일은 같은 폴더의 무작위 이름(mkstemp), 폴더를 만들지 않음, 예전 고정 임시 이름이 있어도 건드리지 않음."""
+    import tempfile
+
+    from physicsai_core import fileutil
+
+    p = tmp_path / "a.json"
+    decoy = tmp_path / ".a.json.tmp"  # 예전 고정 이름 — 미리 있어도 덮어쓰지 않는다
+    decoy.write_text("decoy", encoding="utf-8")
+    made: list[str] = []
+    real = tempfile.mkstemp
+
+    def spy(*a, **kw):
+        fd, name = real(*a, **kw)
+        made.append(name)
+        return fd, name
+
+    monkeypatch.setattr(tempfile, "mkstemp", spy)
+    fileutil.write_json_atomic(str(p), {"a": 1})
+    assert json.loads(p.read_text(encoding="utf-8")) == {"a": 1} and decoy.read_text(encoding="utf-8") == "decoy"
+    assert len(made) == 1 and Path(made[0]).parent == tmp_path and Path(made[0]).name != ".a.json.tmp"
+    assert sorted(x.name for x in tmp_path.iterdir()) == [".a.json.tmp", "a.json"]
+    with pytest.raises(FileNotFoundError):
+        fileutil.write_json_atomic(str(tmp_path / "no_dir" / "b.json"), {})
+    assert not (tmp_path / "no_dir").exists()
+
+
+def test_write_json_atomic_and_assert_writable_reject_links(tmp_path):
+    """D3-21: 대상·폴더가 링크면 거부(링크를 따라 밖에 쓰지 않음). assert_writable도 마지막 요소 링크를 거부.
+    backup_existing은 링크 자체를 옮기므로 허용(따라가지 않음)."""
+    from physicsai_core.errors import StepFailure
+    from physicsai_core.fileutil import write_json_atomic
+    from physicsai_core.paths import assert_writable, backup_existing
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    target = outside / "victim.json"
+    target.write_text("{}", encoding="utf-8")
+    study = tmp_path / "S"
+    study.mkdir()
+    try:
+        os.symlink(target, study / "study.json")
+        os.symlink(outside, study / "lnkdir", target_is_directory=True)
+    except OSError as exc:  # Windows에서 심볼릭 링크 권한이 없으면 만들 수 없다
+        pytest.skip(f"심볼릭 링크를 만들 수 없음: {exc}")
+    for p in (study / "study.json", study / "lnkdir" / "x.json"):
+        with pytest.raises(StepFailure) as ei:
+            write_json_atomic(str(p), {"title": "x"})
+        assert ei.value.code == "PATH_UNSAFE"
+    assert target.read_text(encoding="utf-8") == "{}" and not (outside / "x.json").exists()
+    with pytest.raises(StepFailure):
+        assert_writable(str(study / "study.json"))
+    assert_writable(str(study / "study.json"), allow_final_link=True)
+    moved = backup_existing(str(study), [str(study / "study.json")], "job1", "20260101T000000Z")
+    assert moved == ["study.json"] and target.read_text(encoding="utf-8") == "{}"

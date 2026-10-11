@@ -44,7 +44,7 @@ MAX_LOG_LIMIT = 262144
 def create_job(ctx: AppContext, principal: Principal, study_id: str, job_type: str, raw_params: dict[str, Any],
                rid: str, ip: str | None) -> dict[str, Any]:
     with ctx.engine.begin() as conn:
-        study = studies_repo.require(conn, study_id)
+        study = studies_repo.require(conn, study_id, for_update=True)  # 게이트·삽입 사이 경합 차단(D3-25)
         require_power(principal, study["project_id"])
         require_config_ok(ctx)
         study_gate(conn, study, job_type)  # 보관(관리 작업 예외)·정리 중 차단(phase3 R3-2·R3-4)
@@ -158,7 +158,7 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         if old["state"] not in TERMINAL or old["state"] == "SUCCEEDED":
             raise DomainError("JOB_NOT_RETRYABLE", "실패·취소·중단된 작업만 재시도할 수 있습니다", status=409)
         require_retryable_type(old["job_type"])
-        study = studies_repo.require(conn, old["study_id"])
+        study = studies_repo.require(conn, old["study_id"], for_update=True)
         study_gate(conn, study, old["job_type"])
         steps = jobs_repo.get_steps(conn, job_id)
         default_from = next((s["step_no"] for s in steps if s["state"] in ("FAILED", "CANCELED", "PENDING", "RUNNING")), 1)

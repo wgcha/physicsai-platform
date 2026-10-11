@@ -130,3 +130,52 @@ def test_cleanup_cancel_keeps_remaining(client, worker_factory, loaded_config, e
     assert r["moved_count"] == 1 and [m["rel"] for m in r["moved"]] == ["03_package/d1"]  # 큰 것부터
     assert not (root / "03_package" / "d1").exists() and (root / "03_package" / "d2").exists()
     assert (root / r["backup_rel"] / "CLEANUP_MANIFEST.json").is_file()
+
+
+def test_cleanup_validate_skips_link_item_and_continues(client, worker_factory, loaded_config, engine, tmp_path):
+    """D3-22: 스캔 뒤 항목이 Study 밖을 가리키는 링크로 바뀌면 그 항목만 LINK_OR_OUTSIDE로 빼고 나머지는 옮긴다(작업 실패 아님)."""
+    import pytest
+
+    ai = Path(loaded_config.settings.storage.ai_root)
+    w = worker_factory()
+    sid, root, *_ = _setup(client, engine, ai, "CL4")
+    scan_id, _ = _run(client, w, sid, "STUDY_STORAGE_SCAN", {})
+    outside = tmp_path / "outside_d2"
+    (root / "03_package" / "d2").rename(outside)  # 시험 준비: 치우고 같은 이름 링크로 바꾼다(삭제 아님)
+    try:
+        os.symlink(outside, root / "03_package" / "d2", target_is_directory=True)
+    except OSError as exc:
+        pytest.skip(f"심볼릭 링크를 만들 수 없음: {exc}")
+    cid, st = _run(client, w, sid, "STUDY_CLEANUP", {"scan_job_id": scan_id, "categories": ["PACKAGE_PSDATA"]})
+    j = _job(client, cid)
+    assert st == "SUCCEEDED", j
+    r = j["result"]
+    assert [m["rel"] for m in r["moved"]] == ["03_package/d1"]
+    assert [(s["rel"], s["code"], s["reason"]) for s in r["skipped"]] == [
+        ("03_package/d2", cleanup_mod.CODE_LINK_OR_OUTSIDE, cleanup_mod.SKIP_LINK)]
+    assert (outside / "dataset_train.psdata").stat().st_size == 200 and (root / "03_package" / "d2").is_symlink()
+
+
+def test_cleanup_move_distinguishes_outside_and_locked(client, worker_factory, loaded_config, engine, monkeypatch):
+    """D3-23: SC_MOVE에서 경로 탈출(Study 밖·보호 경로) 거부와 파일 잠김은 다른 사유 코드."""
+    from physicsai_core.errors import StepFailure
+
+    ai = Path(loaded_config.settings.storage.ai_root)
+    w = worker_factory()
+    sid, root, *_ = _setup(client, engine, ai, "CL5")
+    scan_id, _ = _run(client, w, sid, "STUDY_STORAGE_SCAN", {})
+
+    def fake_backup(study_root, paths, job_id, stamp):
+        if paths[0].endswith("d1"):
+            raise StepFailure("INTERNAL_ERROR", "Study 밖 산출물은 백업할 수 없습니다")
+        raise StepFailure("OUTPUT_LOCKED", "기존 산출물을 백업 폴더로 옮기지 못했습니다")
+
+    monkeypatch.setattr(cleanup_mod, "backup_existing", fake_backup)
+    cid, st = _run(client, w, sid, "STUDY_CLEANUP", {"scan_job_id": scan_id, "categories": ["PACKAGE_PSDATA"]})
+    r = _job(client, cid)["result"]
+    assert st == "FAILED"
+    assert {(s["rel"], s["code"], s["reason"]) for s in r["skipped"]} == {
+        ("03_package/d1", cleanup_mod.CODE_PATH_OUTSIDE, cleanup_mod.SKIP_OUTSIDE),
+        ("03_package/d2", cleanup_mod.CODE_LOCKED, cleanup_mod.SKIP_LOCKED)}
+    rep = client.get(f"{API}/studies/{sid}/storage", headers=P).json()
+    assert {s["reason"] for s in rep["last_cleanup"]["skipped"]} == {cleanup_mod.SKIP_OUTSIDE, cleanup_mod.SKIP_LOCKED}

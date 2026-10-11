@@ -45,12 +45,20 @@ PARAM_MODELS: dict[str, type[BaseModel]] = {
 }
 
 
+def require_no_cleanup(conn: Any, study_id: str) -> None:
+    """정리(STUDY_CLEANUP)가 대기·실행 중이면 409(R3-4, D3-24: 스캔·Final 지정 포함)."""
+    if sm_repo.has_active_of_type(conn, study_id, CLEANUP_JOB_TYPE):
+        raise DomainError("STUDY_CLEANUP_RUNNING", "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요", status=409)
+
+
 def study_gate(conn: Any, study: dict[str, Any], job_type: str) -> None:
-    """작업 생성·재시도 공통: 보관 Study(관리 작업 예외), 정리 실행 중(스캔 예외) 차단."""
+    """작업 생성·재시도 공통: 보관 Study(관리 작업 예외), 정리 대기·실행 중이면 모든 유형 차단(스캔 포함).
+
+    호출자는 Study 행을 `for_update=True`로 잠근 뒤 부른다(동시 생성 경합 차단, D3-25).
+    """
     if study["status"] != "ACTIVE" and job_type not in MANAGE_JOB_TYPES:
         raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
-    if job_type != SCAN_JOB_TYPE and sm_repo.has_active_of_type(conn, study["id"], CLEANUP_JOB_TYPE):
-        raise DomainError("STUDY_CLEANUP_RUNNING", "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요", status=409)
+    require_no_cleanup(conn, study["id"])
 
 
 def require_retryable_type(job_type: str) -> None:

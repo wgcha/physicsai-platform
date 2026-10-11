@@ -17,8 +17,12 @@ from simdash_adapters.hpc.command import (  # noqa: F401 (재노출)
     QUEUE_RE,
     VALID_STATES,
     WALLTIME_RE,
+    _check_value,
+    _norm_exe,
 )
 from simdash_adapters.hpc.config import CommandConfig, HpcDefaults
+from simdash_adapters.hpc.types import HpcAvailability, HpcGatewayError, HpcStatus, HpcSubmitResult, HpcSubmitSpec  # noqa: F401
+from simdash_adapters.pathstr import fwd, is_abs_path_str  # noqa: F401 (예전 모듈 이름 재노출)
 from simdash_adapters.transfer.paths import map_path  # noqa: F401 (재노출)
 
 from .gateway import COMMAND_LOGGER

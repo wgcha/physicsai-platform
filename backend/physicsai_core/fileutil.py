@@ -6,8 +6,12 @@ import hashlib
 import json
 import os
 import shutil
+import stat
+import tempfile
 from collections.abc import Callable
 from typing import Any
+
+from .errors import StepFailure
 
 CHUNK = 1024 * 1024
 
@@ -62,13 +66,29 @@ def write_json(path: str, data: Any) -> int:
 
 
 def write_json_atomic(path: str, data: Any) -> int:
-    """같은 폴더 임시 파일에 쓴 뒤 os.replace로 바꾼다(읽는 쪽이 반쯤 쓴 파일을 보지 않음). 삭제 호출 없음."""
+    """같은 폴더의 무작위 임시 파일(mkstemp: O_CREAT|O_EXCL)에 쓴 뒤 os.replace로 바꾼다(읽는 쪽이 반쯤 쓴 파일을 보지 않음).
+
+    - 폴더를 만들지 않는다(없으면 FileNotFoundError) — 호출자가 폴더 존재를 보장한다.
+    - 대상이나 폴더가 링크(symlink·junction)면 StepFailure(PATH_UNSAFE). SPDM 하위도 거부.
+    - 삭제 호출 없음: 쓰기 중 실패하면 `.<이름>.*.tmp`가 남을 수 있다.
+    """
+    from .paths import is_link_or_reparse
+
     _guard(path)
     d = os.path.dirname(path) or "."
-    tmp = os.path.join(d, f".{os.path.basename(path)}.tmp")
-    n = write_json(tmp, data)
+    if is_link_or_reparse(d):
+        raise StepFailure("PATH_UNSAFE", f"링크 폴더에는 쓸 수 없습니다: {d}")
+    try:
+        mode = stat.S_IMODE(os.stat(path).st_mode)
+    except FileNotFoundError:
+        mode = 0o644
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    fd, tmp = tempfile.mkstemp(prefix=f".{os.path.basename(path)}.", suffix=".tmp", dir=d)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
+        fh.write(text)
+    os.chmod(tmp, mode)
     os.replace(tmp, path)
-    return n
+    return len(text.encode("utf-8"))
 
 
 def write_text(path: str, text: str) -> int:

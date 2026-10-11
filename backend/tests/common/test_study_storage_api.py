@@ -104,7 +104,8 @@ def test_cleanup_stale_age_partial_and_success(client, engine):
 
 
 def test_cleanup_running_blocks_other_jobs_and_retry(client, engine, loaded_config):
-    """V3-S3-5 R3-4: 정리 활성 중 다른 작업 생성·재시도 409 STUDY_CLEANUP_RUNNING, 스캔은 허용. 관리 작업 재시도 불가."""
+    """V3-S3-5 R3-4(D3-24 조정): 정리 대기·실행 중 모든 작업 생성(스캔 포함)·재시도·Final 지정 409 STUDY_CLEANUP_RUNNING.
+    관리 작업 재시도 불가."""
     sid = mk_study(client, "ST3")
     failed = mk_job(engine, sid, "MODEL_REGISTER", state="FAILED")
     mk_job(engine, sid, CAT, state="QUEUED", params={"scan_job_id": "x", "categories": ["JOB_LOGS"]})
@@ -115,11 +116,42 @@ def test_cleanup_running_blocks_other_jobs_and_retry(client, engine, loaded_conf
     assert _code(client.post(f"{API}/jobs/{failed}/retry", headers=PW, json={})) == (409, "STUDY_CLEANUP_RUNNING")
     assert _code(_cleanup(client, sid, str(uuid.uuid4()))) == (409, "STUDY_CLEANUP_RUNNING")
     r = client.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "STUDY_STORAGE_SCAN", "params": {}})
-    assert r.status_code == 201, r.text
+    assert _code(r) == (409, "STUDY_CLEANUP_RUNNING")
+    assert _code(client.put(f"{API}/studies/{sid}/final-model", headers=PW, json={"model_id": None})) == (409, "STUDY_CLEANUP_RUNNING")
     fs = mk_job(engine, sid, "STUDY_STORAGE_SCAN", state="FAILED")
     r = client.post(f"{API}/jobs/{fs}/retry", headers=PW, json={})
     assert _code(r) == (409, "JOB_NOT_RETRYABLE") and "새로 실행" in r.json()["detail"]["message"]
     assert client.get(f"{API}/jobs/{fs}", headers=P).json()["can_retry"] is False
+
+
+def test_scan_and_final_allowed_after_cleanup_ends(client, engine):
+    """D3-24: 정리가 끝나면(종료 상태) 스캔·Final 지정이 다시 가능."""
+    sid = mk_study(client, "ST3B")
+    mk_job(engine, sid, CAT, state="FAILED", params={"scan_job_id": "x", "categories": ["JOB_LOGS"]})
+    r = client.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "STUDY_STORAGE_SCAN", "params": {}})
+    assert r.status_code == 201, r.text
+    assert client.put(f"{API}/studies/{sid}/final-model", headers=PW, json={"model_id": None}).status_code == 200
+
+
+def test_job_create_and_retry_lock_study_row(client, engine, monkeypatch):
+    """D3-25: 작업 생성·재시도의 Study 게이트는 Study 행을 FOR UPDATE로 잠근 뒤 검사한다(동시 생성 경합 차단)."""
+    from physicsai_core.db.repositories import studies as studies_repo
+
+    sid = mk_study(client, "ST3C")
+    failed = mk_job(engine, sid, "MODEL_REGISTER", state="FAILED")
+    seen: list[bool] = []
+    real = studies_repo.require
+
+    def spy(conn, study_id, *, for_update=False):
+        seen.append(for_update)
+        return real(conn, study_id, for_update=for_update)
+
+    monkeypatch.setattr(studies_repo, "require", spy)
+    assert client.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "STUDY_STORAGE_SCAN", "params": {}}).status_code == 201
+    assert seen == [True]
+    seen.clear()
+    client.post(f"{API}/jobs/{failed}/retry", headers=PW, json={})
+    assert seen and all(seen)
 
 
 def test_archived_study_allows_manage_jobs(client, engine, loaded_config):
@@ -131,8 +163,13 @@ def test_archived_study_allows_manage_jobs(client, engine, loaded_config):
     r = client.post(f"{API}/studies/{sid}/jobs", headers=PW,
                     json={"job_type": "MODEL_REGISTER", "params": {"model_path": str(ai / "ST4")}})
     assert _code(r) == (409, "STUDY_ARCHIVED")
-    assert _cleanup(client, sid, scan).status_code == 201
-    r = client.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "STUDY_STORAGE_SCAN", "params": {}})
+    c = _cleanup(client, sid, scan)
+    assert c.status_code == 201
+    scan_req = {"job_type": "STUDY_STORAGE_SCAN", "params": {}}
+    assert _code(client.post(f"{API}/studies/{sid}/jobs", headers=PW, json=scan_req)) == (409, "STUDY_CLEANUP_RUNNING")  # D3-24
+    with engine.begin() as cn:
+        cn.execute(text("update jobs set state='CANCELED', queue_seq=null, finished_at=now() where id=:j"), {"j": c.json()["id"]})
+    r = client.post(f"{API}/studies/{sid}/jobs", headers=PW, json=scan_req)
     assert r.status_code == 201, r.text
 
 

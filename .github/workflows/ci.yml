@@ -52,7 +52,7 @@ jobs:
           echo "PG_BIN=/usr/lib/postgresql/16/bin" >> "$GITHUB_ENV"
 
       - name: Python 의존성(공통 어댑터 패키지 → deploy/requirements.lock 고정 버전)
-        # simdash-adapters는 PyPI에 없다 — 저장소 소스로 먼저 설치하면 lock 설치가 다시 받지 않는다(phase3.md §6.5)
+        # simdash-adapters는 PyPI에서 받지 않는다(lock에 없음) — 저장소 소스로 먼저 설치한다(phase3.md §6.5·D3-27)
         run: |
           python -m pip install ./packages/simdash_adapters
           python -m pip install -r deploy/requirements.lock "pytest>=8" "pytest-timeout>=2.2"

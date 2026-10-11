@@ -16,6 +16,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import write_json, write_json_atomic
+from physicsai_core.paths import is_link_or_reparse
 
 from ..auth import Principal
 from ..context import AppContext
@@ -108,7 +109,11 @@ def patch_study(ctx: AppContext, principal: Principal, study_id: str, body: Any,
 
 def _sync_study_json_title(ctx: AppContext, s: dict[str, Any]) -> None:
     """phase3 §3.2: DB가 정본. `study.json` 제목 갱신 실패는 API 실패가 아니다(운영 로그 WARNING)."""
-    path = os.path.join(study_root(ctx, s), "study.json")
+    root = study_root(ctx, s)
+    if not os.path.isdir(root) or is_link_or_reparse(root):  # 폴더를 새로 만들지 않는다(D3-20)
+        log.warning("study.json 제목 갱신 생략(Study 폴더 없음) study_id=%s", s["id"])
+        return
+    path = os.path.join(root, "study.json")
     try:
         try:
             with open(path, encoding="utf-8") as fh:

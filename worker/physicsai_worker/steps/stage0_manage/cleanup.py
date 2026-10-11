@@ -14,7 +14,7 @@ from physicsai_core.db.repositories import audit as audit_repo
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import study_manage as sm_repo
-from physicsai_core.errors import StepFailure
+from physicsai_core.errors import DomainError, StepFailure
 from physicsai_core.fileutil import write_json_atomic
 from physicsai_core.paths import BACKUP_DIR, backup_existing, is_link_or_reparse, resolve_in_study
 from physicsai_core.study_storage.categories import SCAN_JOB_TYPE, is_protected
@@ -27,7 +27,11 @@ MANIFEST_NAME = "CLEANUP_MANIFEST.json"
 SKIP_CHANGED = "조건이 바뀌어 옮기지 않았습니다"
 SKIP_MISSING = "항목이 없습니다"
 SKIP_LINK = "링크가 들어 있어 옮기지 않았습니다"
+SKIP_OUTSIDE = "Study 폴더 밖 경로라 옮기지 않았습니다"
 SKIP_LOCKED = "파일이 사용 중"
+# 건너뜀 사유 코드(jobs.result.skipped[].code — API 응답 모양은 rel·reason 그대로, D3-22·D3-23)
+CODE_CHANGED, CODE_MISSING, CODE_LINK_OR_OUTSIDE, CODE_PATH_OUTSIDE, CODE_LOCKED = (
+    "CHANGED", "MISSING", "LINK_OR_OUTSIDE", "PATH_OUTSIDE", "LOCKED")
 RESTORE_HINT = "되돌리려면 이 폴더 아래 파일을 Study 폴더의 같은 상대경로로 옮기세요."
 
 
@@ -37,6 +41,15 @@ def _plan_path(ctx: Any) -> str:
 
 def _backup_rel(ctx: Any) -> str:
     return f"{BACKUP_DIR}/{ctx.ex.stamp}_{ctx.ex.job_id}"
+
+
+def _skip(rel: str, code: str, reason: str) -> dict[str, str]:
+    return {"rel": rel, "reason": reason, "code": code}
+
+
+def _lexically_inside(root: str, path: str) -> bool:
+    r, p = os.path.normcase(os.path.normpath(root)), os.path.normcase(os.path.normpath(path))
+    return p != r and p.startswith(r.rstrip(os.sep) + os.sep)
 
 
 def _has_link(root: str, path: str) -> bool:
@@ -81,15 +94,22 @@ def sc_validate(ctx: Any) -> None:
         rel = it["rel"]
         cand = cands.get(rel)
         if cand is None or cand.category != cat or is_protected(rel):
-            skipped.append({"rel": rel, "reason": SKIP_CHANGED})
+            skipped.append(_skip(rel, CODE_CHANGED, SKIP_CHANGED))
             continue
         path = os.path.join(ctx.root, *rel.split("/"))
-        resolve_in_study(ctx.root, rel)  # Study 밖이면 예외
-        if not os.path.lexists(path):
-            skipped.append({"rel": rel, "reason": SKIP_MISSING})
+        # 링크·탈출 검사를 resolve(링크를 따라감)보다 먼저 — 문제 항목만 빼고 나머지는 진행
+        if not _lexically_inside(ctx.root, path):
+            skipped.append(_skip(rel, CODE_LINK_OR_OUTSIDE, SKIP_OUTSIDE))
+        elif not os.path.lexists(path):
+            skipped.append(_skip(rel, CODE_MISSING, SKIP_MISSING))
         elif _has_link(ctx.root, path):
-            skipped.append({"rel": rel, "reason": SKIP_LINK})
+            skipped.append(_skip(rel, CODE_LINK_OR_OUTSIDE, SKIP_LINK))
         else:
+            try:
+                resolve_in_study(ctx.root, rel)
+            except DomainError:
+                skipped.append(_skip(rel, CODE_LINK_OR_OUTSIDE, SKIP_OUTSIDE))
+                continue
             plan.append({"rel": rel, "bytes": int(it["bytes"]), "category": cat, "ref_id": cand.ref_id})
     for s in skipped:
         ctx.log(f"[SKIP] {s['rel']}: {s['reason']}")
@@ -126,14 +146,26 @@ def sc_move(ctx: Any) -> None:
         for i, it in enumerate(plan, start=1):
             ctx.checkpoint_cancel()
             path = os.path.join(ctx.root, *it["rel"].split("/"))
+            bad = SKIP_OUTSIDE if not _lexically_inside(ctx.root, path) else SKIP_LINK if is_link_or_reparse(path) else None
+            if bad:  # 검증 뒤 바뀐 경우
+                ctx.log(f"[SKIP] {it['rel']}: {bad}")
+                skipped.append(_skip(it["rel"], CODE_LINK_OR_OUTSIDE, bad))
+                continue
             try:
                 done = backup_existing(ctx.root, [path], ctx.ex.job_id, ctx.ex.stamp)
-            except (StepFailure, OSError) as exc:
+            except StepFailure as exc:
                 ctx.log(f"[SKIP] {it['rel']}: {exc}")
-                skipped.append({"rel": it["rel"], "reason": SKIP_LOCKED})
+                if exc.code == "OUTPUT_LOCKED":
+                    skipped.append(_skip(it["rel"], CODE_LOCKED, SKIP_LOCKED))
+                else:  # Study 밖(INTERNAL_ERROR)·보호 경로(PATH_UNSAFE) — 잠김과 구분
+                    skipped.append(_skip(it["rel"], CODE_PATH_OUTSIDE, SKIP_OUTSIDE))
+                continue
+            except OSError as exc:
+                ctx.log(f"[SKIP] {it['rel']}: {exc}")
+                skipped.append(_skip(it["rel"], CODE_LOCKED, SKIP_LOCKED))
                 continue
             if not done:
-                skipped.append({"rel": it["rel"], "reason": SKIP_MISSING})
+                skipped.append(_skip(it["rel"], CODE_MISSING, SKIP_MISSING))
                 continue
             moved.append({"rel": it["rel"], "bytes": it["bytes"], "category": it["category"]})
             if it["category"] == "PACKAGE_PSDATA" and it.get("ref_id"):

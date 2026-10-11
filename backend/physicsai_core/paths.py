@@ -38,7 +38,13 @@ def register_protected_roots(roots: Iterable[str]) -> None:
     _PROTECTED_ROOTS[:] = [os.path.normpath(r) for r in roots if r]
 
 
-def assert_writable(path: str) -> None:
+def assert_writable(path: str, *, allow_final_link: bool = False) -> None:
+    """쓰기 대상 검사: 마지막 요소가 링크(symlink·junction)면 거부(링크를 따라 다른 곳에 쓰지 않는다), SPDM(보호 루트) 하위 거부.
+
+    `allow_final_link=True`는 링크 자체를 옮기는 경우(`backup_existing`의 os.replace는 링크를 따라가지 않음)만.
+    """
+    if not allow_final_link and is_link_or_reparse(path):
+        raise StepFailure("PATH_UNSAFE", f"링크에는 쓸 수 없습니다: {path}")
     if not _PROTECTED_ROOTS:
         return
     cands = {os.path.normpath(path)}
@@ -280,7 +286,7 @@ def backup_existing(study_root: str, abs_paths: Iterable[str], job_id: str, stam
     stamp = stamp or backup_stamp()
     moved: list[str] = []
     for p in abs_paths:
-        assert_writable(p)
+        assert_writable(p, allow_final_link=True)
         rel = to_rel(study_root, p)
         if rel == "." or rel.startswith("..") or os.path.isabs(rel):
             raise StepFailure("INTERNAL_ERROR", f"Study 밖 산출물은 백업할 수 없습니다: {p}")

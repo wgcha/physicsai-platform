@@ -14,6 +14,7 @@ from physicsai_core.errors import DomainError
 
 from ..auth import Principal
 from ..context import AppContext
+from .job_params.study_manage import require_no_cleanup
 from .common import (
     audit,
     clamp_limit,
@@ -96,6 +97,7 @@ def set_final(ctx: AppContext, principal: Principal, study_id: str, model_id: st
             if m is None or m["study_id"] != study_id:
                 raise DomainError("NOT_FOUND", "모델을 찾을 수 없습니다", status=404)
         require_power(principal, s["project_id"])
+        require_no_cleanup(conn, study_id)  # 정리 중 Final 변경 금지(D3-24)
         if model_id is not None and m["status"] != "ACTIVE":  # type: ignore[index]
             raise DomainError("MODEL_NOT_ACTIVE", "ACTIVE 모델만 Final로 지정할 수 있습니다", status=409)
         s = studies_repo.set_final_model(conn, study_id, model_id, principal.user_id)
