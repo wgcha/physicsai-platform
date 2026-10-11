@@ -58,11 +58,11 @@ if (Test-Path $wheels) {
     }
     $frontend = Join-Path $pkg 'frontend'
 } else {
-    # 저장소: 지정 Python에 의존성이 설치되어 있어야 한다(pip install -r deploy/requirements.lock)
+    # 저장소: 지정 Python에 의존성이 설치되어 있어야 한다(scripts\dev-setup.ps1 — 공통 어댑터 패키지는 PYTHONPATH로도 찾는다)
     $py = (Get-Command $PythonExe -ErrorAction Stop).Source
-    $env:PYTHONPATH = (Join-Path $pkg 'backend') + [IO.Path]::PathSeparator + (Join-Path $pkg 'worker')
+    $env:PYTHONPATH = (Join-Path $pkg 'backend') + [IO.Path]::PathSeparator + (Join-Path $pkg 'worker') + [IO.Path]::PathSeparator + (Join-Path $pkg 'packages\simdash_adapters\src')
     & $py -c "import physicsai_api, physicsai_worker, fastapi, psutil"
-    if ($LASTEXITCODE -ne 0) { throw "Python 의존성이 없습니다: $py -m pip install -r $pkg\deploy\requirements.lock" }
+    if ($LASTEXITCODE -ne 0) { throw "Python 의존성이 없습니다: $pkg\scripts\dev-setup.ps1 (PYTHON=$py)" }
     $frontend = Join-Path $pkg 'frontend\dist'
 }
 if (-not (Test-Path (Join-Path $frontend 'index.html'))) { throw "프런트 빌드가 없습니다: $frontend (저장소면 frontend에서 npm ci; npm run build)" }

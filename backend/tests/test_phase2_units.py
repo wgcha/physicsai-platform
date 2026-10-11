@@ -15,7 +15,8 @@ import pytest
 
 from physicsai_test_support import REPO, SIMLAB_TPL_TEMPLATE, make_phase2_settings
 
-CODE_DIRS = [REPO / "backend" / "physicsai_core", REPO / "backend" / "physicsai_api", REPO / "worker" / "physicsai_worker"]
+CODE_DIRS = [REPO / "backend" / "physicsai_core", REPO / "backend" / "physicsai_api", REPO / "worker" / "physicsai_worker",
+             REPO / "packages" / "simdash_adapters" / "src"]  # 3차 S4: 옮긴 HPC 코드도 같은 정적 검사
 
 
 def _py(dirs=CODE_DIRS):

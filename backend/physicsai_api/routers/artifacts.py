@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import get_ctx, get_principal
-from ..services import jobs as svc
+from ..services import job_files as svc
 
 router = APIRouter(tags=["artifacts"])
 

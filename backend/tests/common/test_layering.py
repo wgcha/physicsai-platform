@@ -7,6 +7,9 @@
 규칙 5: 단계 패키지(stageN_*)는 공통과 자기 단계만 import한다. 공통 패키지 study_storage(3차 Study 관리)는
         단계 패키지를 import하지 않는다(core·워커 steps 모두).
 규칙 6: 워커 steps/**는 executor·runtime을 import하지 않는다.
+규칙 7: 공통 어댑터 패키지 simdash_adapters는 physicsai_*를 import하지 않는다(phase3.md §6, V3-S4-5).
+        physicsai_api는 command 게이트웨이 모듈(simdash_adapters.hpc.command·physicsai_core.hpc.command)을 import하지 않는다
+        (API는 availability()만 — platform.md §12.2).
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ PKG_ROOTS = {
     "physicsai_core": REPO / "backend" / "physicsai_core",
     "physicsai_api": REPO / "backend" / "physicsai_api",
     "physicsai_worker": REPO / "worker" / "physicsai_worker",
+    "simdash_adapters": REPO / "packages" / "simdash_adapters" / "src" / "simdash_adapters",
 }
 
 # 규칙 4: 예외 없음(서비스 SQL은 저장소 함수로 옮김, refactor-plan R5).
@@ -155,6 +159,23 @@ def test_rule6_steps_do_not_import_executor_or_runtime():
     offenders = {f.relative_to(PKG_ROOTS["physicsai_worker"] / "steps").as_posix() for f in files if _violations([f], bad)}
     assert offenders - STEP_BACKREF_ALLOWED == set(), _violations(files, bad)
     assert STEP_BACKREF_ALLOWED - offenders == set(), "허용 목록에서 지울 파일"
+
+
+def test_rule7_adapters_package_is_platform_free():
+    v = _violations(_files("simdash_adapters"), lambda m: m.startswith("physicsai_"))
+    assert v == [], v
+    # 상대 import가 패키지 밖으로 나가지 않는다(검사기가 푼 이름이 모두 simdash_adapters 또는 표준 라이브러리)
+    import sys
+
+    outside = _violations(_files("simdash_adapters"),
+                          lambda m: not _starts(m, "simdash_adapters") and m.split(".")[0] not in sys.stdlib_module_names)
+    assert outside == [], outside
+
+
+def test_rule7_api_does_not_import_command_gateway():
+    bad = ("simdash_adapters.hpc.command", "physicsai_core.hpc.command")
+    v = _violations(_files("physicsai_api"), lambda m: any(_starts(m, b) for b in bad))
+    assert v == [], v
 
 
 def test_import_resolver_sees_relative_and_local_imports():

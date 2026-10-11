@@ -7,7 +7,7 @@
 | 역할 | 수정 가능 범위 |
 |---|---|
 | Plan | `docs/**`, `AGENTS.md`, `README.md` (애플리케이션 코드 작성 금지) |
-| Impl-Backend | `pyproject.toml`, `backend/**`, `worker/**`, `migrations/**`, `config/**`, `scripts/**`, `deploy/**`, `.gitignore` |
+| Impl-Backend | `pyproject.toml`, `backend/**`, `worker/**`, `migrations/**`, `config/**`, `scripts/**`, `deploy/**`, `packages/**`, `.github/**`, `.gitignore` |
 | Impl-Frontend | `frontend/**` |
 | Verifier | 수정 없음. platform.md §22(1차)와 phase2.md §20(2차, V2-*) 체크리스트로 판정하고 결과를 보고 |
 

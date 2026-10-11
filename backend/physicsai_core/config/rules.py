@@ -5,14 +5,12 @@ from __future__ import annotations
 import os
 import re
 
+from simdash_adapters.pathstr import is_abs_path_str  # noqa: F401 (재노출 — 정의는 simdash_adapters, phase3.md §6.4)
+
 from .schema import ConfigIssue
 
 PATH_META_CHARS = set('&|<>^%!"')
 _WIN_ABS = re.compile(r"^[A-Za-z]:[\\/]")
-
-
-def is_abs_path_str(p: str) -> bool:
-    return bool(_WIN_ABS.match(p)) or p.startswith("/")
 
 
 def has_unsafe_chars(p: str) -> bool:

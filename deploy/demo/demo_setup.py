@@ -414,7 +414,8 @@ def _child_env(root: Path, url: str) -> dict[str, str]:
                 "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"})
     env.setdefault("FAKE_DEMO_DELAY_S", "3")
     if (PKG_ROOT / "backend" / "physicsai_api").is_dir():  # 저장소에서 실행(설치본은 venv에 패키지가 있음)
-        env["PYTHONPATH"] = os.pathsep.join([str(PKG_ROOT / "backend"), str(PKG_ROOT / "worker")] +
+        env["PYTHONPATH"] = os.pathsep.join([str(PKG_ROOT / "backend"), str(PKG_ROOT / "worker"),
+                                             str(PKG_ROOT / "packages" / "simdash_adapters" / "src")] +
                                             ([env["PYTHONPATH"]] if env.get("PYTHONPATH") else []))
     return env
 

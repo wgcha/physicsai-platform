@@ -1,4 +1,4 @@
-"""작업 생성·조회·로그·취소·재시도·대기열(§10.2, §10.5, §8.2)."""
+"""작업 생성·조회·로그·취소·재시도·대기열(§10.2, §10.5, §8.2). 산출물·HPC 행·input.zip은 `job_files.py`."""
 
 from __future__ import annotations
 
@@ -6,8 +6,6 @@ import os
 import uuid
 from typing import Any
 
-
-from physicsai_core.db.repositories import artifacts as artifacts_repo
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import queue as queue_repo
@@ -19,6 +17,7 @@ from physicsai_core.state_machine import TERMINAL
 from ..auth import Principal
 from ..context import AppContext
 from .common import (
+    MOVED_HINT,
     audit,
     clamp_limit,
     decode_cursor,
@@ -28,14 +27,13 @@ from .common import (
     job_summary,
     require_config_ok,
     require_global_admin,
+    require_job,
     require_power,
     study_root,
 )
 from . import job_params
 from .job_params.base import invalid_errors
 from .job_params.study_manage import require_retryable_type, study_gate
-
-MOVED_HINT = "Study 정리로 _backup 폴더에 옮겨졌을 수 있습니다"
 
 MAX_LOG_LIMIT = 262144
 
@@ -77,16 +75,9 @@ def list_jobs(ctx: AppContext, principal: Principal, *, study_id: str | None, st
     return out, (encode_cursor(off + lim) if len(rows) > lim else None)
 
 
-def _require_job(conn: Any, job_id: str) -> dict[str, Any]:
-    j = jobs_repo.get_job(conn, job_id)
-    if j is None:
-        raise DomainError("NOT_FOUND", "작업을 찾을 수 없습니다", status=404)
-    return j
-
-
 def get_job(ctx: AppContext, principal: Principal, job_id: str, include_commands: bool) -> tuple[dict[str, Any], str]:
     with ctx.engine.connect() as conn:
-        j = _require_job(conn, job_id)
+        j = require_job(conn, job_id)
         if include_commands:
             require_global_admin(principal)
         detail = job_detail(conn, j, principal, include_commands=include_commands, ai_root=ctx.settings.storage.ai_root)
@@ -110,7 +101,7 @@ def read_log(ctx: AppContext, job_id: str, step_no: int | None, cursor: int, lim
     if cursor < 0 or limit < 1 or limit > MAX_LOG_LIMIT:
         raise invalid_errors([{"loc": ["query", "limit"], "msg": f"1~{MAX_LOG_LIMIT}"}])
     with ctx.engine.connect() as conn:
-        j = _require_job(conn, job_id)
+        j = require_job(conn, job_id)
         s = studies_repo.require(conn, j["study_id"])
         if step_no is None:
             rel = f"logs/{job_id}/job.log"
@@ -149,7 +140,7 @@ def read_log(ctx: AppContext, job_id: str, step_no: int | None, cursor: int, lim
 
 def cancel_job(ctx: AppContext, principal: Principal, job_id: str, rid: str, ip: str | None) -> dict[str, Any]:
     with ctx.engine.begin() as conn:
-        _require_job(conn, job_id)
+        require_job(conn, job_id)
         require_global_admin(principal)
         j = jobs_repo.request_cancel(conn, job_id, principal.user_id)
         audit(conn, principal, "JOB_CANCEL", "job", job_id, {"state": j["state"]}, rid, ip)
@@ -158,7 +149,7 @@ def cancel_job(ctx: AppContext, principal: Principal, job_id: str, rid: str, ip:
 
 def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int | None, rid: str, ip: str | None) -> dict[str, Any]:
     with ctx.engine.begin() as conn:
-        old = _require_job(conn, job_id)
+        old = require_job(conn, job_id)
         if old["created_by"] == principal.user_id:
             require_power(principal, old["project_id"])
         else:
@@ -220,131 +211,8 @@ def queue_view(ctx: AppContext) -> dict[str, Any]:
 
 def move_job(ctx: AppContext, principal: Principal, job_id: str, position: int, rid: str, ip: str | None) -> dict[str, Any]:
     with ctx.engine.begin() as conn:
-        _require_job(conn, job_id)
+        require_job(conn, job_id)
         require_global_admin(principal)
         jobs_repo.move_in_queue(conn, job_id, position)
         audit(conn, principal, "QUEUE_MOVE", "job", job_id, {"position": position}, rid, ip)
     return queue_view(ctx)
-
-
-# ---- 산출물·HPC ----------------------------------------------------------------
-
-
-def list_artifacts(ctx: AppContext, job_id: str) -> list[dict[str, Any]]:
-    with ctx.engine.connect() as conn:
-        _require_job(conn, job_id)
-        rows = artifacts_repo.list_for_job(conn, job_id)
-    return [
-        {"id": a["id"], "study_id": a["study_id"], "job_id": a["job_id"], "kind": a["kind"],
-         "file_name": os.path.basename(a["rel_path"]), "size": a["size"], "sha256": a["sha256"],
-         "content_type": a["content_type"], "created_at": a["created_at"]}
-        for a in rows
-    ]
-
-
-def artifact_file(ctx: AppContext, artifact_id: str) -> tuple[str, str, str]:
-    with ctx.engine.connect() as conn:
-        a = artifacts_repo.get(conn, artifact_id)
-        if a is None:
-            raise DomainError("NOT_FOUND", "산출물을 찾을 수 없습니다", status=404)
-        s = studies_repo.require(conn, a["study_id"])
-    if a["content_type"] not in artifacts_repo.ALLOWED_CONTENT_TYPES:
-        raise DomainError("NOT_FOUND", "내려받을 수 없는 형식입니다", status=404)
-    path = resolve_in_study(study_root(ctx, s), a["rel_path"])
-    if not os.path.isfile(path):
-        raise DomainError("NOT_FOUND", "산출물 파일이 없습니다", status=404)
-    if os.path.getsize(path) > ctx.settings.ui.max_artifact_bytes:
-        raise DomainError("NOT_FOUND", "산출물이 크기 상한을 넘습니다", status=404)
-    return path, a["content_type"], os.path.basename(a["rel_path"])
-
-
-def list_hpc_jobs(ctx: AppContext, job_id: str) -> list[dict[str, Any]]:
-    with ctx.engine.connect() as conn:
-        _require_job(conn, job_id)
-        rows = hpc_repo.list_for_job_with_elapsed(conn, job_id)
-    return [
-        {"id": r["id"], "run_key": r["run_key"], "attempt_no": r["attempt_no"], "external_job_id": r["external_job_id"],
-         "state": r["state"], "external_state_raw": r["external_state_raw"], "submitted_at": r["submitted_at"],
-         "elapsed_s": float(r["elapsed"]) if r["elapsed"] is not None else None, "collect_state": r["collect_state"]}
-        for r in rows
-    ]
-
-
-# ---- ④ 입력 파일 zip(스트리밍) ------------------------------------------------------
-
-ZIP_CHUNK = 1024 * 1024
-
-
-class _ZipSink:
-    """zipfile이 쓰는 비탐색(non-seekable) 출력. 쓴 바이트를 모았다가 생성기가 꺼내 간다."""
-
-    def __init__(self) -> None:
-        self.buf = bytearray()
-        self.pos = 0
-
-    def write(self, b: bytes) -> int:
-        self.buf += b
-        self.pos += len(b)
-        return len(b)
-
-    def tell(self) -> int:
-        return self.pos
-
-    def seek(self, *_a: Any) -> int:
-        raise OSError("not seekable")
-
-    def flush(self) -> None:
-        return None
-
-    def take(self) -> bytes:
-        out = bytes(self.buf)
-        self.buf.clear()
-        return out
-
-
-def input_zip(ctx: AppContext, job_id: str) -> tuple[Any, str]:
-    """PREDICT 작업의 `P/INPUT/` 직계 파일(.rad·.inc 등)을 zip으로 스트리밍. (생성기, 파일 이름)."""
-    import zipfile
-
-    from .common import input_zip_ready
-
-    with ctx.engine.connect() as conn:
-        j = _require_job(conn, job_id)
-        if not input_zip_ready(conn, j):
-            raise DomainError("INPUT_NOT_READY", "입력 파일이 아직 준비되지 않았습니다(예측 작업의 .rad 조립 완료 후 가능)", status=409)
-        s = studies_repo.require(conn, j["study_id"])
-        root_id = jobs_repo.root_job_id(conn, j)
-    root = study_root(ctx, s)
-    inp = resolve_in_study(root, f"04_predict/{root_id}/INPUT")
-    if not os.path.isdir(inp):
-        raise DomainError("INPUT_NOT_READY", f"입력 파일 폴더가 없습니다. {MOVED_HINT}", status=409)
-    names = []
-    for n in sorted(os.listdir(inp)):
-        p = os.path.join(inp, n)
-        if os.path.islink(p) or not os.path.isfile(p):
-            continue  # 링크·하위 폴더 제외(경로 탈출 방지)
-        if os.path.dirname(os.path.realpath(p)) != os.path.realpath(inp):
-            continue
-        names.append(n)
-
-    def gen() -> Any:
-        sink = _ZipSink()
-        with zipfile.ZipFile(sink, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as zf:
-            for n in names:
-                with open(os.path.join(inp, n), "rb") as src, zf.open(n, "w", force_zip64=True) as dst:
-                    while True:
-                        b = src.read(ZIP_CHUNK)
-                        if not b:
-                            break
-                        dst.write(b)
-                        chunk = sink.take()
-                        if chunk:
-                            yield chunk
-                chunk = sink.take()
-                if chunk:
-                    yield chunk
-        tail = sink.take()
-        if tail:
-            yield tail
-
-    return gen(), f"{s['folder_name']}_{job_id[:8]}_INPUT.zip"

@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "simdash-adapters"
+version = "0.1.0"
+description = "HPC(PBS) 게이트웨이·회수 경로 해석 공통 어댑터(표준 라이브러리만 사용)"
+requires-python = ">=3.11"
+dependencies = []
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+simdash_adapters = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "--import-mode=importlib -p no:cacheprovider"

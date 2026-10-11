@@ -86,7 +86,9 @@ bash deploy/collect-offline.sh --dry-run
 bash deploy/collect-offline.sh
 ```
 
-- 하는 일: `deploy/requirements.lock` 기준 win_amd64·Python 3.13 wheel 내려받기 → 우리 패키지 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
+- 하는 일: 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.13 wheel 내려받기(`--find-links dist/wheels`) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
+- 공통 어댑터 패키지 `simdash-adapters`(3차): HPC(PBS) 게이트웨이·회수 경로 해석을 떼어 낸 순수 Python 패키지(표준 라이브러리만, Windows·Linux 공용). **PyPI에 없다** — `requirements.lock`의 `simdash-adapters==0.1.0` 줄은 묶음 만들 때 먼저 만든 로컬 wheel로 채운다(`--find-links`의 로컬 파일이 우선). 플랫폼 wheel이 `simdash-adapters==0.1.0`을 정확 버전으로 요구하므로 설치(`install.ps1`·`update.ps1`)는 기존 명령(`pip install --no-index --find-links wheels physicsai-platform`) 그대로 함께 설치된다. 묶음 확인: `wheels\simdash_adapters-0.1.0-py3-none-any.whl`이 있어야 한다.
+- 버전 정책: SemVer(0.x 동안 공개 API 모양 변경 = minor, 동작 수정 = patch). 패키지 버전은 `packages/simdash_adapters/pyproject.toml`과 `__version__`이 같고, 올리면 `CHANGELOG.md`·루트 `pyproject.toml` 의존 고정·`deploy/requirements.lock`을 함께 고친다(시험이 대조).
 - 원본 반입 자원(`resources.*`)은 묶지 않는다(라이선스·사내 배포물).
 
 ### 2.3 설치 매개변수 `deploy.json`
@@ -209,15 +211,17 @@ D:\physicsai\venv\Scripts\python.exe -m alembic -c D:\physicsai\migrations\alemb
 
 ### 2.9 개발 실행(참고)
 
-설치 없이 저장소에서 돌릴 때(계약 platform.md §4.6). `.ps1`/`.sh` 쌍.
+설치 없이 저장소에서 돌릴 때(계약 platform.md §4.6). `.ps1`/`.sh` 쌍. 스크립트는 `PYTHONPATH`에 `backend`·`worker`·`packages/simdash_adapters/src`를 넣는다.
 
 | 스크립트 | 동작 |
 |---|---|
+| `scripts/dev-setup` | 의존성 설치: `pip install -e packages/simdash_adapters` → `pip install -r deploy/requirements.lock` + pytest(어댑터 패키지는 PyPI에 없어 먼저 설치) |
 | `scripts/dev-db-init` | `PHYSICSAI_DATABASE_URL` DB에 `alembic upgrade head` |
 | `scripts/dev-backend` | `python -m physicsai_api.serve`(설정 `server.host`·`port`) |
 | `scripts/dev-worker` | `python -m physicsai_worker` |
 | `scripts/dev-frontend` | Vite `127.0.0.1:5174/physicsai/`, `/physicsai/api` → `127.0.0.1:8100` 프록시 |
-| `scripts/test-all` | 백엔드·워커 pytest + 프런트 vitest + 타입 검사 |
+| `scripts/test-all` | 백엔드·워커·어댑터 패키지(`packages/simdash_adapters/tests`) pytest + 프런트 vitest + 타입 검사 |
+| `scripts/check-adapters-wheel.sh` | 어댑터 wheel을 만들어 빈 venv에 wheel만(인덱스 없이) 설치·import 확인(CI linux) |
 
 개발 로그인: 대시보드 dev(`127.0.0.1:5173`)에 먼저 로그인한다. 호스트 이름은 둘 다 `127.0.0.1`로 맞춘다(`localhost`와 섞지 않음). 대시보드 없이 하려면 `auth.mode: dev_static`(profile dev + 127.0.0.1 바인딩에서만 허용).
 
@@ -989,8 +993,8 @@ $env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
 
 | 잡 | 환경 | 단계(순서대로) |
 |---|---|---|
-| **linux** "Linux · test-all (PostgreSQL 16)" | ubuntu-24.04, Python 3.13, Node 22, PostgreSQL 16(시험마다 임시 클러스터), 제한 40분 | ① `deploy/requirements.lock` + pytest 설치 ② `pwsh` 확인(ps1 구문 검사 시험용) ③ `scripts/test-all.sh`(pytest + openapi 최신 여부 + vitest + tsc) ④ `deploy/collect-offline.sh --dry-run` |
-| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.13, Node 22, 러너 기본 PostgreSQL 서비스, 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(`collect-offline.ps1`; wheels·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인 ⑥ **시연 원클릭**: `start-demo.bat`(포트 8196) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
+| **linux** "Linux · test-all (PostgreSQL 16)" | ubuntu-24.04, Python 3.13, Node 22, PostgreSQL 16(시험마다 임시 클러스터), 제한 40분 | ① `./packages/simdash_adapters` → `deploy/requirements.lock` + pytest 설치 ② `pwsh` 확인(ps1 구문 검사 시험용) ③ `scripts/test-all.sh`(pytest(어댑터 패키지 시험 포함) + openapi 최신 여부 + vitest + tsc) ④ `deploy/collect-offline.sh --dry-run` ⑤ `scripts/check-adapters-wheel.sh`(wheel 이름·빈 venv 설치) |
+| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.13, Node 22, 러너 기본 PostgreSQL 서비스, 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(`collect-offline.ps1`; wheels(`simdash_adapters-0.1.0-py3-none-any.whl` 포함)·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인 ⑥ **시연 원클릭**: `start-demo.bat`(포트 8196) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
 
 ③~⑥은 앞 단계가 실패해도 실행된다(취소된 경우만 제외) — 한 번에 여러 문제를 볼 수 있다.
 

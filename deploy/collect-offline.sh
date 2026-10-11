@@ -2,6 +2,8 @@
 # 인터넷 되는 준비 PC에서 Windows 폐쇄망 설치 묶음(physicsai-offline-<version>.zip)을 만든다(phase2 §11.2).
 # 사용: bash deploy/collect-offline.sh [--dry-run]
 #   --dry-run : 실행할 명령만 출력하고 아무것도 실행하지 않는다.
+# 공통 어댑터 패키지(packages/simdash_adapters)는 PyPI에서 받지 않는다: 먼저 저장소 소스로 wheel을 만들고(py3-none-any),
+# requirements.lock 내려받기에 --find-links dist/wheels를 주어 그 wheel을 쓴다(phase3.md §6.5).
 # 산출 구조: dist/wheels/*.whl, dist/frontend/(vite build), dist/migrations/, dist/config/platform.example.yaml, dist/deploy/
 # 원본 반입 자원(resources.*: 런처·pyd·TCL·tpl 템플릿)은 묶지 않는다 — 라이선스·사내 배포물(RESOURCES.txt 참고).
 # 시연 모드(deploy/demo/start-demo.ps1)용으로 config/platform.demo.yaml과 가짜 도구(fake_tools)는 함께 묶는다.
@@ -22,7 +24,8 @@ run() {
 }
 
 run "mkdir -p dist/wheels dist/frontend dist/config"
-run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels"
+run "$PY -m pip wheel packages/simdash_adapters --no-deps -w dist/wheels"
+run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels --find-links dist/wheels"
 run "$PY -m pip wheel . --no-deps -w dist/wheels"
 run "(cd frontend && npm ci && npm run build)"
 run "cp -r frontend/dist/. dist/frontend/"

@@ -28,7 +28,7 @@ WH = {"X-PhysicsAI-Request": "1"}
 def _env(db_url: str, cfg: Path, extra: dict[str, str] | None = None) -> dict[str, str]:
     env = {k: v for k, v in os.environ.items() if not k.startswith(("FAKE_", "PHYSICSAI_"))}
     env.update({
-        "PYTHONPATH": os.pathsep.join([str(REPO / "backend"), str(REPO / "worker")]),
+        "PYTHONPATH": os.pathsep.join([str(REPO / "backend"), str(REPO / "worker"), str(REPO / "packages" / "simdash_adapters" / "src")]),
         "PHYSICSAI_CONFIG": str(cfg),
         "PHYSICSAI_DATABASE_URL": db_url,
         "PYTHONIOENCODING": "utf-8",

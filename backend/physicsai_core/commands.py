@@ -14,6 +14,8 @@ import string
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from simdash_adapters.pathstr import fwd  # noqa: F401 (재노출 — 정의는 simdash_adapters, phase3.md §6.4)
+
 from .errors import StepFailure
 
 # §9.1 argv[0]으로 허용되는 실행 파일 placeholder → altair 설정 키
@@ -270,8 +272,3 @@ def render_argv(
                 mapping[n] = v
         argv.append(el.format_map(mapping) if names or ("{{" in el or "}}" in el) else el)
     return argv
-
-
-def fwd(path: str) -> str:
-    """`_fwd` placeholder용 '/' 구분 경로."""
-    return path.replace("\\", "/")

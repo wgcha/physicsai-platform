@@ -8,13 +8,13 @@ import time
 from datetime import datetime, timezone
 from typing import Any
 
-from physicsai_core.commands import fwd
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file
 from physicsai_core.hpc.command import map_path
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec
+from simdash_adapters import TransferConfig, resolve_collect_dirs
 
 from ...signals import EnterWaitingHpc
 from .. import _collect
@@ -52,13 +52,8 @@ def ts_prep(ctx: Any) -> None:
 
 def _remote_result_dir(ctx: Any, doe_id: str, run_key: str) -> tuple[str, str | None]:
     """(PBS result_dir, 회수할 로컬 경로 | None=in_place)."""
-    t = ctx.settings.hpc.transfer
-    if t.collect_mode in ("shared_folder", "drive"):
-        sub = f"{ctx.study['folder_name']}/{doe_id}/{run_key}"
-        remote = fwd(t.collect_root_remote).rstrip("/") + "/" + sub
-        local = os.path.join(os.path.normpath(t.collect_root_local), ctx.study["folder_name"], doe_id, run_key)
-        return remote, local
-    return map_path(_R(ctx, doe_id, run_key), t.path_map), None
+    return resolve_collect_dirs(TransferConfig.from_obj(ctx.settings.hpc.transfer), study_folder=ctx.study["folder_name"],
+                                doe_id=doe_id, run_key=run_key, local_result_dir=_R(ctx, doe_id, run_key))
 
 
 def ts_submit(ctx: Any) -> None:

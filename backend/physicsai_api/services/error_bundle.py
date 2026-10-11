@@ -23,7 +23,7 @@ from physicsai_core.errors import DomainError
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, error_bundle_available, job_detail, study_root
-from .jobs import ZIP_CHUNK, _ZipSink, list_hpc_jobs
+from .job_files import ZIP_CHUNK, _ZipSink, list_hpc_jobs
 
 EXE_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path", "hstpy_path")
 

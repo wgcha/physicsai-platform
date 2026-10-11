@@ -1,77 +1,35 @@
-"""HpcJobGateway 프로토콜과 팩터리(§12.2). API는 availability()만 호출한다."""
+"""HpcJobGateway 프로토콜과 팩터리(§12.2). API는 availability()만 호출한다.
+
+정의는 `simdash_adapters.hpc`(phase3.md §6, R3-8). 이 모듈은 재노출 호환층이며 설정 읽기·자식 환경(`child_env`)은 플랫폼 몫이다.
+"""
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any, Literal, Protocol
+import logging
+from typing import Any
 
-HpcState = Literal["QUEUED", "RUNNING", "FINISHED", "UNKNOWN"]
+from simdash_adapters.hpc.config import CommandConfig, HpcDefaults
+from simdash_adapters.hpc.factory import make_gateway
+from simdash_adapters.hpc.types import (  # noqa: F401 (재노출)
+    HpcAvailability,
+    HpcGatewayError,
+    HpcJobGateway,
+    HpcState,
+    HpcStatus,
+    HpcSubmitResult,
+    HpcSubmitSpec,
+)
 
-
-@dataclass(frozen=True)
-class HpcAvailability:
-    configured: bool
-    mode: Literal["none", "command", "adapter"]
-    message: str
-
-
-@dataclass(frozen=True)
-class HpcSubmitSpec:
-    job_name: str
-    run_key: str
-    study: str
-    input_file: str
-    input_dir: str
-    result_dir: str
-    queue: str | None
-    ncpus: int | None
-    walltime: str | None
-
-
-@dataclass(frozen=True)
-class HpcSubmitResult:
-    external_job_id: str
-    raw_stdout: str
-
-
-@dataclass(frozen=True)
-class HpcStatus:
-    state: HpcState
-    raw_state: str | None
-    exit_code: int | None
-    not_found: bool
-
-
-class HpcGatewayError(RuntimeError):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-
-
-class HpcJobGateway(Protocol):
-    def availability(self) -> HpcAvailability: ...
-
-    def submit(self, spec: HpcSubmitSpec) -> HpcSubmitResult: ...
-
-    def status(self, external_job_id: str) -> HpcStatus: ...
-
-    def cancel(self, external_job_id: str) -> None: ...
+COMMAND_LOGGER = "physicsai_core.hpc.command"  # 운영 로그 이름 불변
 
 
 def get_hpc_gateway(settings: Any) -> HpcJobGateway:
     mode = settings.hpc.gateway
     if mode == "command":
-        from .command import CommandHpcGateway
-
         from ..childenv import child_env
 
         patterns = [*settings.worker.env_passthrough, "PBS_*"]
         deny = [settings.database.url_env]
-        return CommandHpcGateway(settings.hpc, lambda: child_env(patterns, deny_names=deny))
-    if mode == "adapter":
-        from .adapter import AdapterHpcGateway
-
-        return AdapterHpcGateway()
-    from .none import NoneHpcGateway
-
-    return NoneHpcGateway()
+        return make_gateway("command", CommandConfig.from_obj(settings.hpc.command), HpcDefaults.from_obj(settings.hpc.defaults),
+                            env_factory=lambda: child_env(patterns, deny_names=deny), logger=logging.getLogger(COMMAND_LOGGER))
+    return make_gateway(mode)

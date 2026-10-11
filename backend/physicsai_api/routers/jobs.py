@@ -7,6 +7,7 @@ from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
 from ..services import error_bundle as eb_svc
+from ..services import job_files as files_svc
 from ..services import jobs as svc
 
 router = APIRouter(tags=["jobs"])
@@ -70,7 +71,7 @@ def retry(job_id: str, request: Request, body: S.RetryRequest | None = None, pri
 
 @router.get("/jobs/{job_id}/hpc-jobs", response_model=list[S.HpcJob], responses=ERR)
 def hpc_jobs(job_id: str, request: Request, _p: Principal = Depends(get_principal)) -> list:
-    return svc.list_hpc_jobs(get_ctx(request), job_id)
+    return files_svc.list_hpc_jobs(get_ctx(request), job_id)
 
 
 @router.get(

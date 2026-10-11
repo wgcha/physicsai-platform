@@ -19,8 +19,10 @@ function Invoke-Step([string]$Text, [scriptblock]$Block) {
 }
 
 Invoke-Step 'mkdir dist\wheels dist\frontend dist\config' { New-Item -ItemType Directory -Force -Path 'dist\wheels', 'dist\frontend', 'dist\config' | Out-Null }
-Invoke-Step 'pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels' {
-    & $py -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels
+# 공통 어댑터 패키지는 PyPI에서 받지 않는다: 저장소 소스로 wheel을 먼저 만들고 --find-links로 쓴다(phase3.md §6.5)
+Invoke-Step 'pip wheel packages/simdash_adapters --no-deps -w dist/wheels' { & $py -m pip wheel packages/simdash_adapters --no-deps -w dist/wheels }
+Invoke-Step 'pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels --find-links dist/wheels' {
+    & $py -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels --find-links dist/wheels
 }
 Invoke-Step 'pip wheel . --no-deps -w dist/wheels' { & $py -m pip wheel . --no-deps -w dist/wheels }
 Invoke-Step 'npm ci && npm run build (frontend)' { Push-Location frontend; try { npm ci; npm run build } finally { Pop-Location } }

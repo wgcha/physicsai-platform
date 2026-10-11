@@ -23,7 +23,7 @@ if (Test-Path $venvPy) {
     $py = $venvPy
 } else {
     $py = (Get-Command $PythonExe -ErrorAction Stop).Source
-    $env:PYTHONPATH = (Join-Path $pkg 'backend') + [IO.Path]::PathSeparator + (Join-Path $pkg 'worker')
+    $env:PYTHONPATH = (Join-Path $pkg 'backend') + [IO.Path]::PathSeparator + (Join-Path $pkg 'worker') + [IO.Path]::PathSeparator + (Join-Path $pkg 'packages\simdash_adapters\src')
 }
 $env:PYTHONUTF8 = '1'
 & $py $setup down --root $DemoRoot

@@ -22,6 +22,8 @@ from ..context import AppContext
 
 MAX_LIMIT = 200
 
+MOVED_HINT = "Study 정리로 _backup 폴더에 옮겨졌을 수 있습니다"  # phase3 R3-5·R3-6 문구 공용
+
 
 def require_power(principal: Principal, project_id: str) -> None:
     if not principal.can_execute(project_id):
@@ -31,6 +33,13 @@ def require_power(principal: Principal, project_id: str) -> None:
 def require_global_admin(principal: Principal) -> None:
     if not principal.is_global_admin:
         raise DomainError("PERMISSION_DENIED", "전역 관리자 권한이 필요합니다", status=403, required="global_admin")
+
+
+def require_job(conn: Connection, job_id: str) -> dict[str, Any]:
+    j = jobs_repo.get_job(conn, job_id)
+    if j is None:
+        raise DomainError("NOT_FOUND", "작업을 찾을 수 없습니다", status=404)
+    return j
 
 
 def require_config_ok(ctx: AppContext) -> None:
