@@ -76,3 +76,18 @@
 - 2026-10-08 · XML DOCTYPE·ENTITY 거부는 파서 수준(인코딩 무관) · 보안 §15.3 · phase2.md C19
 - 2026-10-09 · 예측 결과 웹 3D 뷰어(컨투어·3D 모델) 보류 — 진행 안 함 · 모델이 커서 브라우저 부담(사용자 결정). 결과는 원본 TCL 이미지(A안) 유지
 - 2026-10-09 · 운영 준비 범위: CI(Linux+Windows), 시연 모드(fake tools 배포판), 관리자·사용자 매뉴얼만 진행. 대시보드 연동·용량 정리·모델 비교·main 병합은 보류 · 사용자 결정
+
+## 2026-10-11 (3차 진행 — 2026-10-09 보류 결정 일부 번복)
+
+- 2026-10-11 · 3차(S1 재시도·보관·이름변경, S2 모델 비교, S3 용량·정리, S4 `simdash_adapters` 분리) 진행 — 2026-10-09 "용량 정리·모델 비교 보류" 결정을 **번복(대체)** · 사용자 지시 "지금 구현 가능한 것 모두" · phase3.md §1
+- 2026-10-11 · (메인 결정·가정) 대시보드 연동은 `simulation_workbench` main에서 새 브랜치로 진행, 병합하지 않음 · 대시보드 운영 코드 보호, 2026-10-09 "main 병합 보류" 유지 · phase3.md
+- 2026-10-11 · (메인 승인) AGENTS.md 역할 표 `packages/**`·`.github/**` → Impl-Backend · 어댑터 패키지·CI가 백엔드 시험·배포와 함께 바뀜 · phase3.md A3-8, D3-17
+- 2026-10-11 · 정리(`STUDY_CLEANUP`) 실행 중에는 스캔 생성·`PUT /studies/{id}/final-model`도 409 `STUDY_CLEANUP_RUNNING`(R3-4의 스캔 예외 폐지) · 이동 중 스캔 결과·Final 보호 대상이 바뀌는 경합 차단 · phase3.md R3-4, D3-24
+- 2026-10-11 · 작업 생성·재시도는 Study 행 `SELECT … FOR UPDATE` 후 gate·사전조건·삽입을 한 트랜잭션에서 · 같은 Study 동시 생성 직렬화 · phase3.md D3-25
+- 2026-10-11 · 정리 사전조건 검사 순서(최신 성공 스캔 → 부분 스캔 → 비종료 작업 → 낡음 → 항목 합계), 관리 두 유형은 재시도 불가(`JOB_NOT_RETRYABLE`, 새로 실행) · 오류 문구 결정성·재현성 · phase3.md D3-9
+- 2026-10-11 · 정리 대상은 DB 행이 가리키는 경로만(고아 폴더 제외), Final 평가 묶음·유형별 최신 성공 미리보기 보존, 링크 든 항목 제외 · 사용자 산출물 보호 · phase3.md D3-11
+- 2026-10-11 · 정리 이동은 항목 단위: 링크·Study 밖·잠김·변경·없음은 작업 실패가 아니라 그 항목만 건너뜀, `PACKAGE_PSDATA`의 `package_rel=NULL`은 이동 직후 기록, 취소 시 옮긴 항목으로 매니페스트 기록 · DB·파일 일치, 삭제 호출 금지 · phase3.md D3-12, D3-22, D3-23
+- 2026-10-11 · `CleanupSkip` 응답은 `rel`·`reason`(한국어 문구)만, 사유 코드는 노출하지 않음(코드는 `jobs.result`·매니페스트에만) · openapi 불변, 사용자에게는 문구로 충분 · phase3.md D3-22
+- 2026-10-11 · `study.json` 갱신은 무작위 임시 파일 + `os.replace` 원자적 쓰기, 대상·폴더 링크 거부, 폴더 없으면 만들지 않음(이름 변경은 200 + WARNING) · 링크 경유 쓰기·폴더 재생성 방지 · phase3.md D3-20, D3-21
+- 2026-10-11 · `simdash-adapters`는 PyPI에서 받지 않는다: `deploy/requirements.lock`(PyPI 외부 의존성만)과 `deploy/requirements.local.lock`(로컬 wheel 고정, `--no-index` 확인) 분리, 개발 설치는 `scripts/dev-setup`(패키지 먼저) · PyPI 이름 선점 공격 차단 · phase3.md §6.5, D3-17, D3-27
+- 2026-10-11 · 어댑터 분리는 동작 불변: 플랫폼 `physicsai_core.hpc.*`가 패키지 객체를 같은 객체로 재노출(문구 골든 동일), 패키지는 표준 라이브러리만 import · 기존 호출처·시험 무수정 · phase3.md D3-15, D3-16, D3-26

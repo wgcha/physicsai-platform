@@ -147,10 +147,15 @@ export class StorageMock {
     };
   }
 
-  /** POST /studies/{id}/jobs 중 관리 작업. 다른 유형은 null(정리 중이면 409) */
+  /** 정리 중 409(D3-24: 스캔 생성·Final 지정 PUT 포함). 아니면 null */
+  cleanupGate(sid: string): MockResp | null {
+    return this.cleanupRunning(sid) ? err(409, "STUDY_CLEANUP_RUNNING", "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요") : null;
+  }
+
+  /** POST /studies/{id}/jobs 중 관리 작업. 다른 유형은 null(정리 중이면 스캔 포함 모두 409 — D3-24) */
   createJob(st: Study, type: string, params: Record<string, unknown>): MockResp | null {
-    if (type !== SCAN && this.cleanupRunning(st.id))
-      return err(409, "STUDY_CLEANUP_RUNNING", "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요");
+    const busy = this.cleanupGate(st.id);
+    if (busy) return busy;
     if (type !== SCAN && type !== CLEANUP) return null;
     if (type === CLEANUP) {
       const pre = this.precheck(st, params);

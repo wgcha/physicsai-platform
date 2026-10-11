@@ -85,7 +85,8 @@ export class ManageMock {
     if (!TERMINAL.includes(old.state) || old.state === "SUCCEEDED") return err(409, "JOB_NOT_RETRYABLE", "실패·취소·중단된 작업만 재시도할 수 있습니다");
     if (old.job_type.startsWith("STUDY_")) return err(409, "JOB_NOT_RETRYABLE", "이 작업은 재시도 대신 새로 실행하세요");
     const st = this.s.studies.find((x) => x.id === old.study_id)!;
-    if (this.storage.cleanupRunning(st.id)) return err(409, "STUDY_CLEANUP_RUNNING", "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요");
+    const busy = this.storage.cleanupGate(st.id);
+    if (busy) return busy;
     const r = this.s.createJob(st, old.job_type, { ...old.params });
     if (r.status !== 201) return r;
     const nj = r.body as Job;

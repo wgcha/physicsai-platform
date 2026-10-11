@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api, errorMessage, type Job, type Study, type StorageReport } from "../../api";
 import { Card, CodeLine, JobInline, NO_PERMISSION_TIP } from "../../components/ui";
 import { usePolling } from "../../hooks/usePolling";
+import { CLEANUP_RUNNING_HINT, CLEANUP_RUNNING_TEXT, cleanupRunningMessage } from "../../hooks/useCleanupRunning";
 import { fmtBytes, fmtElapsed, fmtTime } from "../../lib/format";
 import { CleanupPreview } from "./CleanupPreview";
 import { StorageBars, TopFiles } from "./StorageBars";
@@ -37,7 +38,9 @@ export function StorageSection({ study }: { study: Study }) {
       await api.createJob(study.id, "STUDY_STORAGE_SCAN", {});
       await load();
     } catch (e) {
-      setError(errorMessage(e));
+      const busy = cleanupRunningMessage(e, "용량을 다시 계산할");
+      setError(busy ?? errorMessage(e));
+      if (busy) await load();
     }
   };
 
@@ -68,9 +71,22 @@ export function StorageSection({ study }: { study: Study }) {
           </div>
           <div className="run-action-row">
             {study.can_execute ? (
-              <button type="button" className="btn" disabled={!!report.active_scan_job_id || !!report.active_cleanup_job_id} onClick={recalc}>
-                다시 계산
-              </button>
+              <>
+                <button
+                  type="button"
+                  className="btn"
+                  disabled={!!report.active_scan_job_id || !!report.active_cleanup_job_id}
+                  title={report.active_cleanup_job_id ? CLEANUP_RUNNING_HINT : undefined}
+                  onClick={recalc}
+                >
+                  다시 계산
+                </button>
+                {report.active_cleanup_job_id && (
+                  <span className="warn-text small" data-testid="scan-cleanup-running">
+                    {CLEANUP_RUNNING_TEXT} — 정리가 끝난 뒤 다시 계산할 수 있습니다
+                  </span>
+                )}
+              </>
             ) : (
               <span className="muted small" title={NO_PERMISSION_TIP}>
                 계산·정리: {NO_PERMISSION_TIP}

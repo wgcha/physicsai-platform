@@ -125,11 +125,12 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 
 **F5(목 서버 분할) 보류 사유**: `Phase2Mock`은 `MockServer`를 역참조하며 상태(작업·알림 배열, 진행 `tick`·`finish`·`onProgress` 훅, `summaryExtra`)를 공유하고(`server.ts:114–126, 273–331`), 목 ID는 공유 카운터(`server.ts:134` `${prefix}-${++this.idn}`)의 **생성 순서**로 정해진다. 파일을 나누면 생성자 초기화 순서가 바뀌어 시드 데이터의 ID가 달라질 위험이 있고(시험·`dev:mock` 화면이 시드 ID에 기대는 곳 포함), 이를 막으려면 상태 저장소를 먼저 분리해야 해 "통째 이동"이 아니게 된다. 동작 불변을 시험만으로 보장하기 어려워 3차 이후로 미룬다. 3차 새 목 핸들러는 `mock/phase2.ts`에 넣지 않고 `mock/manage.ts`(Study 관리·용량, phase3.md §7)로 분리해 `server.ts`의 라우팅에서 위임한다.
 
-### 1.6 `scripts`, `deploy`, `config`
+### 1.6 `scripts`, `deploy`, `config`, `migrations`
 
-- `scripts/`: 얇은 래퍼(4–17줄) + `ci_annotate.py`. 정리 불필요. 3차 S4: `_env.{sh,ps1}`의 `PYTHONPATH`에 `packages/simdash_adapters/src` 추가, `dev-setup.{sh,ps1}`(패키지 `pip install -e` → lock 설치), `check-adapters-wheel.sh`(V3-S4-6: wheel 이름·빈 venv 설치·import).
-- 오프라인 묶음(3차 S4): `collect-offline.{sh,ps1}`가 `pip wheel packages/simdash_adapters --no-deps -w dist/wheels`를 먼저 하고 `pip download -r deploy/requirements.lock … --find-links dist/wheels`(lock의 `simdash-adapters==0.1.0`은 PyPI에서 받지 않는다). 설치(`install.ps1`·`update.ps1`·`start-demo.ps1`)는 변경 없음(`--no-index --find-links wheels physicsai-platform`이 의존성으로 함께 설치).
+- `scripts/`: 얇은 래퍼(4–17줄) + `ci_annotate.py`. 정리 불필요. 3차 S4: `_env.{sh,ps1}`의 `PYTHONPATH`에 `packages/simdash_adapters/src` 추가, `dev-setup.{sh,ps1}`(신규, 개발 설치 표준: `pip install -e packages/simdash_adapters` → `pip install -r deploy/requirements.lock` + pytest. 패키지를 먼저 설치하지 않고 루트에서 `pip install .`을 하면 `simdash-adapters`를 인덱스에서 찾으므로 이 스크립트를 쓴다, D3-27), `check-adapters-wheel.sh`(V3-S4-6: wheel 이름·빈 venv 설치·import).
+- 오프라인 묶음(3차 S4, D3-27): `collect-offline.{sh,ps1}`가 ① `pip wheel packages/simdash_adapters --no-deps -w dist/wheels` ② `pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock …`(로컬 wheel만으로 `simdash-adapters==0.1.0` 고정 확인) ③ `pip download -r deploy/requirements.lock …`(PyPI 외부 의존성만, `--find-links` 없음) 순서. lock 두 개: `deploy/requirements.lock` = PyPI에서 받는 외부 의존성(어댑터 없음 — 이름 선점 차단), `deploy/requirements.local.lock` = 저장소 안 패키지 고정(PyPI에서 받지 않음). 설치(`install.ps1`·`update.ps1`·`start-demo.ps1`)는 변경 없음(`--no-index --find-links wheels physicsai-platform`이 의존성으로 함께 설치). 시험 `test_adapters_compat`가 순서·내용 대조.
 - `deploy/`: Windows 배포 ps1·bat + `demo/demo_setup.py`(574, 단일 CLI 스크립트, `physicsai_*`를 import하지 않음). 정리 대상 아님(시험 `test_demo.py`·`test_phase2_units.py:340–399`가 내용 검사).
+- `migrations/versions/`: `0001_initial`(1차 동결본)·`0002_phase2`·`0003_hpc_cancel_failed`·`0004_study_manage`(3차 S3: `jobs.stage` 0 허용, phase3.md §5.10). `MIGRATION_HEAD = "0004_study_manage"`(`physicsai_core/db/__init__.py`), downgrade는 RuntimeError.
 - `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config/schema.py`**(리팩터링 전 `config.py`)(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/phase2.ts:55` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
 
 ### 1.7 `packages/simdash_adapters` (3차 S4, 공통 어댑터 패키지)

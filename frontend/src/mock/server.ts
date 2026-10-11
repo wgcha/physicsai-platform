@@ -597,6 +597,8 @@ export class MockServer {
       const d = needPower(s.project_id);
       if (d) return d;
       if (method === "PUT" && sub === "final-model") {
+        const busy = this.manage.storage.cleanupGate(s.id); // D3-24: 권한 검사 뒤
+        if (busy) return busy;
         const id = body?.model_id as string | null;
         if (id) {
           const m = this.models.find((x) => x.id === id && x.study_id === s.id);

@@ -3,6 +3,7 @@ import { FeatureGate } from "../../components/FeatureGate";
 import { api, errorMessage, type Model } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
+import { CLEANUP_RUNNING_HINT, CLEANUP_RUNNING_TEXT, cleanupRunningMessage, useCleanupRunning } from "../../hooks/useCleanupRunning";
 import { Card, Field, RunAction } from "../../components/ui";
 import { Chart, Sparkline } from "../../components/Chart";
 import { fmtNum, fmtTime } from "../../lib/format";
@@ -41,6 +42,7 @@ export function EvaluateCard() {
   const [cmpOpen, setCmpOpen] = useState(false);
   const { job, run, error } = useJobRunner("EVALUATE", () => void reloadModels());
   const details = useModelDetails(models);
+  const cleanup = useCleanupRunning(study.id);
 
   const selected = active.find((m) => m.id === modelId) ?? active.find((m) => m.is_final) ?? active[0];
   const dsReady = (m: Model | undefined) => !!m?.dataset_id && datasets.some((d) => d.id === m.dataset_id && d.status === "READY");
@@ -56,7 +58,8 @@ export function EvaluateCard() {
       await api.setFinalModel(study.id, id);
       await reloadModels();
     } catch (e) {
-      setFinalError(errorMessage(e));
+      cleanup.onConflict(e);
+      setFinalError(cleanupRunningMessage(e, "Final 모델을 바꿀") ?? errorMessage(e));
     }
   };
 
@@ -92,6 +95,11 @@ export function EvaluateCard() {
           )}
         </FeatureGate>
       </div>
+      {canExec && cleanup.running && (
+        <div className="warn-text small" role="status" data-testid="final-cleanup-running">
+          {CLEANUP_RUNNING_TEXT} — Final 지정·해제는 정리가 끝난 뒤 할 수 있습니다
+        </div>
+      )}
       {finalError && <div className="error-text small" role="alert">{finalError}</div>}
       {shown.length > 0 && (
         <div className="compare-bar">
@@ -174,13 +182,25 @@ export function EvaluateCard() {
                         <span className="final-cell">
                           <span className="final-badge">Final</span>
                           {canExec && (
-                            <button type="button" className="link small" onClick={() => setFinal(null)}>
+                            <button
+                              type="button"
+                              className="link small"
+                              disabled={cleanup.running}
+                              title={cleanup.running ? CLEANUP_RUNNING_HINT : undefined}
+                              onClick={() => setFinal(null)}
+                            >
                               해제
                             </button>
                           )}
                         </span>
                       ) : canExec && m.status === "ACTIVE" ? (
-                        <button type="button" className="btn small ghost" onClick={() => setFinal(m.id)}>
+                        <button
+                          type="button"
+                          className="btn small ghost"
+                          disabled={cleanup.running}
+                          title={cleanup.running ? CLEANUP_RUNNING_HINT : undefined}
+                          onClick={() => setFinal(m.id)}
+                        >
                           Final 지정
                         </button>
                       ) : (
@@ -196,7 +216,7 @@ export function EvaluateCard() {
         </div>
       )}
       {cmpOpen && cmpIds.length >= MIN_COMPARE && (
-        <ModelCompare ids={cmpIds} canExec={canExec} onSetFinal={(id) => void setFinal(id)} onClose={() => setCmpOpen(false)} />
+        <ModelCompare ids={cmpIds} canExec={canExec} cleanupRunning={cleanup.running} onSetFinal={(id) => void setFinal(id)} onClose={() => setCmpOpen(false)} />
       )}
       {chartModel?.loss_curve && (
         <div className="losschart">

@@ -86,9 +86,9 @@ bash deploy/collect-offline.sh --dry-run
 bash deploy/collect-offline.sh
 ```
 
-- 하는 일: 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.13 wheel 내려받기(`--find-links dist/wheels`) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
-- 공통 어댑터 패키지 `simdash-adapters`(3차): HPC(PBS) 게이트웨이·회수 경로 해석을 떼어 낸 순수 Python 패키지(표준 라이브러리만, Windows·Linux 공용). **PyPI에 없다** — `requirements.lock`의 `simdash-adapters==0.1.0` 줄은 묶음 만들 때 먼저 만든 로컬 wheel로 채운다(`--find-links`의 로컬 파일이 우선). 플랫폼 wheel이 `simdash-adapters==0.1.0`을 정확 버전으로 요구하므로 설치(`install.ps1`·`update.ps1`)는 기존 명령(`pip install --no-index --find-links wheels physicsai-platform`) 그대로 함께 설치된다. 묶음 확인: `wheels\simdash_adapters-0.1.0-py3-none-any.whl`이 있어야 한다.
-- 버전 정책: SemVer(0.x 동안 공개 API 모양 변경 = minor, 동작 수정 = patch). 패키지 버전은 `packages/simdash_adapters/pyproject.toml`과 `__version__`이 같고, 올리면 `CHANGELOG.md`·루트 `pyproject.toml` 의존 고정·`deploy/requirements.lock`을 함께 고친다(시험이 대조).
+- 하는 일: 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.local.lock`을 로컬 wheel만으로 확인(`pip download --no-index --find-links dist/wheels`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.13 외부 의존성 wheel 내려받기(PyPI) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
+- 공통 어댑터 패키지 `simdash-adapters`(3차): HPC(PBS) 게이트웨이·회수 경로 해석을 떼어 낸 순수 Python 패키지(표준 라이브러리만, Windows·Linux 공용). **PyPI에 없고 PyPI에서 받지도 않는다** — lock은 두 개다: `deploy/requirements.lock` = PyPI에서 받는 외부 의존성만(어댑터 없음, 같은 이름의 외부 패키지가 섞여 들어오는 것을 막음), `deploy/requirements.local.lock` = `simdash-adapters==0.1.0`(저장소 소스로 만든 로컬 wheel로만 확인, `--no-index`). 플랫폼 wheel이 `simdash-adapters==0.1.0`을 정확 버전으로 요구하므로 설치(`install.ps1`·`update.ps1`)는 기존 명령(`pip install --no-index --find-links wheels physicsai-platform`) 그대로 함께 설치된다. 묶음 확인: `wheels\simdash_adapters-0.1.0-py3-none-any.whl`이 있어야 한다. 개발 PC에서는 루트 `pip install .` 대신 `scripts/dev-setup`을 쓴다(§2.9 — 패키지를 먼저 설치하지 않으면 의존성을 인덱스에서 찾는다).
+- 버전 정책: SemVer(0.x 동안 공개 API 모양 변경 = minor, 동작 수정 = patch). 패키지 버전은 `packages/simdash_adapters/pyproject.toml`과 `__version__`이 같고, 올리면 `CHANGELOG.md`·루트 `pyproject.toml` 의존 고정·`deploy/requirements.local.lock`을 함께 고친다(시험이 대조).
 - 원본 반입 자원(`resources.*`)은 묶지 않는다(라이선스·사내 배포물).
 
 ### 2.3 설치 매개변수 `deploy.json`
@@ -215,7 +215,7 @@ D:\physicsai\venv\Scripts\python.exe -m alembic -c D:\physicsai\migrations\alemb
 
 | 스크립트 | 동작 |
 |---|---|
-| `scripts/dev-setup` | 의존성 설치: `pip install -e packages/simdash_adapters` → `pip install -r deploy/requirements.lock` + pytest(어댑터 패키지는 PyPI에 없어 먼저 설치) |
+| `scripts/dev-setup` | 의존성 설치: `pip install -e packages/simdash_adapters` → `pip install -r deploy/requirements.lock` + pytest(어댑터 패키지는 PyPI에 없어 저장소 소스로 먼저 설치, `requirements.lock`에는 없다 — `requirements.local.lock`) |
 | `scripts/dev-db-init` | `PHYSICSAI_DATABASE_URL` DB에 `alembic upgrade head` |
 | `scripts/dev-backend` | `python -m physicsai_api.serve`(설정 `server.host`·`port`) |
 | `scripts/dev-worker` | `python -m physicsai_worker` |

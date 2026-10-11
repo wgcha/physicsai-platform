@@ -48,7 +48,19 @@ function useCompareData(ids: string[]) {
   return { models, datasets, loaded, dsIds, loading };
 }
 
-export function ModelCompare({ ids, canExec, onSetFinal, onClose }: { ids: string[]; canExec: boolean; onSetFinal: (id: string) => void; onClose: () => void }) {
+export function ModelCompare({
+  ids,
+  canExec,
+  cleanupRunning = false,
+  onSetFinal,
+  onClose,
+}: {
+  ids: string[];
+  canExec: boolean;
+  cleanupRunning?: boolean;
+  onSetFinal: (id: string) => void;
+  onClose: () => void;
+}) {
   const { study, models: listModels } = useStudy();
   const { models, datasets, loaded, dsIds, loading } = useCompareData(ids);
 
@@ -85,7 +97,7 @@ export function ModelCompare({ ids, canExec, onSetFinal, onClose }: { ids: strin
         </div>
       )}
       <ModelCompareChart series={seriesFor(loaded)} columns={columns} />
-      <ModelCompareTable columns={columns} canExec={canExec} onSetFinal={onSetFinal} />
+      <ModelCompareTable columns={columns} canExec={canExec} cleanupRunning={cleanupRunning} onSetFinal={onSetFinal} />
     </section>
   );
 }

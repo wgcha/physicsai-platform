@@ -3,6 +3,7 @@ import { useState, type ReactNode } from "react";
 import type { Dataset, Model } from "../../api";
 import { fmtNum } from "../../lib/format";
 import { LogStatusText } from "./ModelRegisterCard";
+import { CLEANUP_RUNNING_HINT, CLEANUP_RUNNING_TEXT } from "../../hooks/useCleanupRunning";
 import { bestIndices, epochText, evalStatusText, fmtDateTime, loadDirection, metricRows, saveDirection, type Direction } from "./compare";
 
 export interface CompareColumn {
@@ -19,7 +20,15 @@ export interface CompareColumn {
 
 const DIR_TEXT: Record<Direction, string> = { lower: "↓ 낮을수록", higher: "↑ 높을수록" };
 
-function ColumnHead({ c, canExec, onSetFinal, actions }: { c: CompareColumn; canExec: boolean; onSetFinal: (id: string) => void; actions: boolean }) {
+interface HeadProps {
+  c: CompareColumn;
+  canExec: boolean;
+  cleanupRunning: boolean;
+  onSetFinal: (id: string) => void;
+  actions: boolean;
+}
+
+function ColumnHead({ c, canExec, cleanupRunning, onSetFinal, actions }: HeadProps) {
   const m = c.model;
   const status = m ? evalStatusText(m) : null;
   return (
@@ -34,9 +43,18 @@ function ColumnHead({ c, canExec, onSetFinal, actions }: { c: CompareColumn; can
           {m.is_final ? (
             <span className="final-badge">Final</span>
           ) : canExec && m.status === "ACTIVE" ? (
-            <button type="button" className="btn small ghost" onClick={() => onSetFinal(m.id)}>
-              Final 지정
-            </button>
+            <>
+              <button
+                type="button"
+                className="btn small ghost"
+                disabled={cleanupRunning}
+                title={cleanupRunning ? CLEANUP_RUNNING_HINT : undefined}
+                onClick={() => onSetFinal(m.id)}
+              >
+                Final 지정
+              </button>
+              {cleanupRunning && <div className="muted small">{CLEANUP_RUNNING_TEXT}</div>}
+            </>
           ) : null}
         </div>
       )}
@@ -52,7 +70,17 @@ function datasetText(c: CompareColumn): string {
   return c.datasetFailed ? `${short} (조회 실패)` : short;
 }
 
-export function ModelCompareTable({ columns, canExec, onSetFinal }: { columns: CompareColumn[]; canExec: boolean; onSetFinal: (id: string) => void }) {
+export function ModelCompareTable({
+  columns,
+  canExec,
+  cleanupRunning = false,
+  onSetFinal,
+}: {
+  columns: CompareColumn[];
+  canExec: boolean;
+  cleanupRunning?: boolean;
+  onSetFinal: (id: string) => void;
+}) {
   const rows = metricRows(columns.map((c) => c.model));
   const [dirs, setDirs] = useState<Record<string, Direction>>({});
   const dirOf = (key: string): Direction => dirs[key] ?? loadDirection(key);
@@ -79,7 +107,7 @@ export function ModelCompareTable({ columns, canExec, onSetFinal }: { columns: C
             <tr>
               <th scope="col">지표</th>
               {columns.map((c) => (
-                <ColumnHead key={c.id} c={c} canExec={canExec} onSetFinal={onSetFinal} actions />
+                <ColumnHead key={c.id} c={c} canExec={canExec} cleanupRunning={cleanupRunning} onSetFinal={onSetFinal} actions />
               ))}
             </tr>
           </thead>
@@ -120,7 +148,7 @@ export function ModelCompareTable({ columns, canExec, onSetFinal }: { columns: C
             <tr>
               <th scope="col">항목</th>
               {columns.map((c) => (
-                <ColumnHead key={c.id} c={c} canExec={canExec} onSetFinal={onSetFinal} actions={false} />
+                <ColumnHead key={c.id} c={c} canExec={canExec} cleanupRunning={cleanupRunning} onSetFinal={onSetFinal} actions={false} />
               ))}
             </tr>
           </thead>

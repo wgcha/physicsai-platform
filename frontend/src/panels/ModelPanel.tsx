@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api, errorMessage, type Model } from "../api";
-import { useStudyOptional } from "../app/StudyContext";
+import { useStudyOptional, type StudyData } from "../app/StudyContext";
+import { CLEANUP_RUNNING_HINT, CLEANUP_RUNNING_TEXT, cleanupRunningMessage, useCleanupRunning } from "../hooks/useCleanupRunning";
 import { fmtNum } from "../lib/format";
 
 export function scoreSummary(m: Model): string {
@@ -19,9 +20,13 @@ export function scoreSummary(m: Model): string {
 /** 모델 목록·Final(§16.2 ③) */
 export function ModelPanel() {
   const ctx = useStudyOptional();
+  return ctx ? <ModelPanelBody ctx={ctx} /> : null;
+}
+
+function ModelPanelBody({ ctx }: { ctx: StudyData }) {
   const [error, setError] = useState<string | null>(null);
-  if (!ctx) return null;
   const { study, models, reloadModels } = ctx;
+  const cleanup = useCleanupRunning(study.id);
   const active = models.filter((m) => m.status !== "ARCHIVED");
 
   const setFinal = async (id: string) => {
@@ -30,7 +35,8 @@ export function ModelPanel() {
       await api.setFinalModel(study.id, id);
       await reloadModels();
     } catch (e) {
-      setError(errorMessage(e));
+      cleanup.onConflict(e);
+      setError(cleanupRunningMessage(e, "Final 모델을 바꿀") ?? errorMessage(e));
     }
   };
 
@@ -40,6 +46,11 @@ export function ModelPanel() {
         <h2>모델</h2>
         <span className="muted small">{active.length}개</span>
       </header>
+      {study.can_execute && cleanup.running && (
+        <div className="warn-text small" role="status" data-testid="panel-cleanup-running">
+          {CLEANUP_RUNNING_TEXT} — Final 지정은 정리가 끝난 뒤 할 수 있습니다
+        </div>
+      )}
       {error && <div className="error-text small">{error}</div>}
       {active.length === 0 ? (
         <div className="empty small">등록된 모델이 없습니다(③-4에서 등록)</div>
@@ -55,7 +66,13 @@ export function ModelPanel() {
                 {m.is_final ? (
                   <span className="final-badge">Final</span>
                 ) : study.can_execute && m.status === "ACTIVE" ? (
-                  <button type="button" className="btn small ghost" onClick={() => setFinal(m.id)}>
+                  <button
+                    type="button"
+                    className="btn small ghost"
+                    disabled={cleanup.running}
+                    title={cleanup.running ? CLEANUP_RUNNING_HINT : undefined}
+                    onClick={() => setFinal(m.id)}
+                  >
                     Final로 지정
                   </button>
                 ) : null}
