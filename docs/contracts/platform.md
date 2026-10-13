@@ -1371,3 +1371,4 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 - `worker/…/steps/{dataset,package,model_register,evaluate,predict,verify}.py` → `steps/stage3_model/`·`steps/stage4_predict/` — architecture.md §1.3
 - 시험 파일(`test_phase2_db.py`, `phase2_helpers.py`, 워커 `test_*` 루트 파일) → `backend/tests/common/`·`helpers_stage1.py`·`worker/tests/{runtime,stage*,ops,e2e}/` — architecture.md §1.4
 - §21.2 프런트 파일 표(`DatasetCreateCard`, `ModelTable`, `LossChart` 등 계획 이름) → 실제 파일은 architecture.md §1.5(`stages/stage3/{DatasetCards,ModelRegisterCard,EvaluateCard}.tsx`, `components/Chart.tsx` 등)
+- **2026-10-13 환경 버전 변경**(decisions.md 2026-10-13, 사용자 결정): 실행 환경은 대시보드와 동일하게 Python 3.12.13·PostgreSQL 18(대시보드와 같은 인스턴스, 별도 DB `physicsai`)·Node 22.23.2. 본문 §(의존성) "Python 3.11+(개발 확인 3.13)" → 개발·배포 확인 3.12.13, §(DB) "PostgreSQL 16 기준" → PostgreSQL 18 기준으로 읽는다 — admin.md §2.1·§2.3·§14

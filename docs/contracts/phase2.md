@@ -1406,3 +1406,4 @@ AGENTS.md 역할표에 `deploy/**`를 Impl-Backend 소유로 추가한다(이번
 - 프런트 `stages/stage1/{TrainCards,SolveCards}.tsx`, `stage2/H3dCards.tsx`, `stage3/ModelCards.tsx`, `stage4/Stage4.tsx`·`stage5/Stage5.tsx`(단일 파일), `shell/useOpenJob.ts` → 카드별 파일·`hooks/useOpenJob.ts` — architecture.md §1.5
 - 프런트 시험 `__tests__/phase2.test.tsx`·`stages.test.tsx` → `stepper`·`stage1`~`stage5`·`ops`·`links.test.tsx`(V-ID 그대로), 공용 `test/recordCalls.ts` — architecture.md §1.5
 - 프런트 `mock/phase2.ts` → 그대로(F5 보류, architecture.md §1.5)
+- **2026-10-13 환경 버전 변경**(decisions.md 2026-10-13, 사용자 결정): 실행 환경은 대시보드와 동일하게 Python 3.12.13·PostgreSQL 18·Node 22.23.2. 본문 §(배포 파일 표) `collect-offline`의 `--python-version 3.13` → `3.12`(cp312), `install.ps1` ①의 "Python 3.13 확인" → Python 3.12 확인(≠3.12 중단, PG≠18 경고, `dashboard_root`로 기본값), 시험 표 `fake_pyd`의 `cp313-win_amd64` → `cp312-win_amd64`로 읽는다 — admin.md §2.1·§2.3·§14
