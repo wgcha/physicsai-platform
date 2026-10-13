@@ -63,8 +63,10 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 | 항목 | 내용 |
 |---|---|
 | OS | Windows Server(대시보드와 같은 PC), 관리자 권한 PowerShell |
-| Python | **3.13**(오프라인 설치본을 미리 설치. 경로는 `deploy.json`의 `python_exe`) |
-| PostgreSQL | 16 기준, 이미 설치되어 있고 `postgres` 관리자 비밀번호를 알고 있음(`pg_bin`에 `psql.exe`) |
+| 실행 환경 | **대시보드와 동일**: Python **3.12.13**, PostgreSQL **18**, Node **22.23.2**(저장소 `.python-version`·`.node-version`, 대시보드와 같은 값) |
+| Python | **3.12**(3.12.13 권장 — 대시보드 고정 런타임 `<대시보드>\.tools\python\cpython-3.12.13-windows-x86_64-none\python.exe`를 그대로 써도 된다). 경로는 `deploy.json`의 `python_exe` 또는 `dashboard_root`. 3.12가 아니면 설치 중단 |
+| PostgreSQL | **18** — 대시보드가 쓰는 **같은 인스턴스에 별도 DB(`physicsai`)·역할(`physicsai_app`)**. `postgres` 관리자 비밀번호를 알고 있음(`pg_bin`에 `psql.exe`). 서버가 18이 아니면 설치는 계속하되 경고 |
+| Node | 22.23.2 — 준비 PC에서 프런트 빌드(`npm ci && npm run build`)에만 필요(폐쇄망 설치 PC에는 불필요) |
 | Caddy | 대시보드가 쓰는 Caddy(설정 파일 수정 권한) |
 | Altair 2026.1 | HyperStudy·SimLab·PhysicsAI(edspy)·HyperWorks(hw)·hvtrans 설치·라이선스 |
 | 실행 계정 | `NT AUTHORITY\SYSTEM`이 아닌 지정 계정(예 `CORP\svc_physicsai`). AI 루트 읽기·쓰기, Altair 라이선스 접근 권한 |
@@ -86,7 +88,7 @@ bash deploy/collect-offline.sh --dry-run
 bash deploy/collect-offline.sh
 ```
 
-- 하는 일: 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.local.lock`을 로컬 wheel만으로 확인(`pip download --no-index --find-links dist/wheels`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.13 외부 의존성 wheel 내려받기(PyPI) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
+- 하는 일: 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.local.lock`을 로컬 wheel만으로 확인(`pip download --no-index --find-links dist/wheels`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.12(cp312) 외부 의존성 wheel 내려받기(PyPI) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
 - 공통 어댑터 패키지 `simdash-adapters`(3차): HPC(PBS) 게이트웨이·회수 경로 해석을 떼어 낸 순수 Python 패키지(표준 라이브러리만, Windows·Linux 공용). **PyPI에 없고 PyPI에서 받지도 않는다** — lock은 두 개다: `deploy/requirements.lock` = PyPI에서 받는 외부 의존성만(어댑터 없음, 같은 이름의 외부 패키지가 섞여 들어오는 것을 막음), `deploy/requirements.local.lock` = `simdash-adapters==0.1.0`(저장소 소스로 만든 로컬 wheel로만 확인, `--no-index`). 플랫폼 wheel이 `simdash-adapters==0.1.0`을 정확 버전으로 요구하므로 설치(`install.ps1`·`update.ps1`)는 기존 명령(`pip install --no-index --find-links wheels physicsai-platform`) 그대로 함께 설치된다. 묶음 확인: `wheels\simdash_adapters-0.1.0-py3-none-any.whl`이 있어야 한다. 개발 PC에서는 루트 `pip install .` 대신 `scripts/dev-setup`을 쓴다(§2.9 — 패키지를 먼저 설치하지 않으면 의존성을 인덱스에서 찾는다).
 - 버전 정책: SemVer(0.x 동안 공개 API 모양 변경 = minor, 동작 수정 = patch). 패키지 버전은 `packages/simdash_adapters/pyproject.toml`과 `__version__`이 같고, 올리면 `CHANGELOG.md`·루트 `pyproject.toml` 의존 고정·`deploy/requirements.local.lock`을 함께 고친다(시험이 대조).
 - 원본 반입 자원(`resources.*`)은 묶지 않는다(라이선스·사내 배포물).
@@ -98,9 +100,10 @@ bash deploy/collect-offline.sh
 | 키 | 의미 | 예시 |
 |---|---|---|
 | `install_root` | 설치 루트(venv·migrations·`_backup`) | `D:\physicsai` |
-| `python_exe` | Python 3.13 실행 파일 | `D:\Python313\python.exe` |
-| `pg_bin` | PostgreSQL bin 폴더(`psql.exe`) | `D:\PostgreSQL\16\bin` |
-| `pg_host` / `pg_port` | DB 주소 | `127.0.0.1` / `5432` |
+| `dashboard_root` | (선택) 대시보드 폴더. 설정하면 아래 4개 키가 **비어 있거나 없을 때만** 대시보드 값으로 채운다: `pg_bin` ← 대시보드 `.env`의 `POSTGRES_BIN`, `pg_host`·`pg_port` ← `.env`의 `DATABASE_URL`에서 **host·port만**(사용자명·비밀번호는 읽지도 로그에 남기지도 않음), `python_exe` ← `<dashboard_root>\.tools\python\cpython-3.12.*-windows-x86_64-none\python.exe`(대시보드 `setup.ps1` 고정 런타임). deploy.json의 명시 값이 항상 우선 | `E:\simulation_workbench` |
+| `python_exe` | Python 3.12 실행 파일(`dashboard_root`가 있으면 생략 가능) | `D:\Python312\python.exe` |
+| `pg_bin` | PostgreSQL 18 bin 폴더(`psql.exe`, `dashboard_root`가 있으면 생략 가능) | `E:\PostgreSQL\18\bin` |
+| `pg_host` / `pg_port` | DB 주소(대시보드와 같은 인스턴스, `dashboard_root`가 있으면 생략 가능) | `127.0.0.1` / `5432` |
 | `db_name` / `db_role` | 만들 DB·앱 역할 | `physicsai` / `physicsai_app` |
 | `config_path` | 플랫폼 설정 파일 위치(머신 환경변수 `PHYSICSAI_CONFIG`가 됨) | `D:\physicsai\config\platform.yaml` |
 | `service_user` | 작업 실행 계정 | `CORP\svc_physicsai` |
@@ -118,7 +121,7 @@ bash deploy/collect-offline.sh
 
 | 단계 | 내용 | 확인 |
 |---|---|---|
-| ① | 관리자 권한·Python 3.13 확인 | 아니면 중단 |
+| ① | 관리자 권한·Python 3.12 확인(`dashboard_root`가 있으면 먼저 대시보드 기본값 채움 — 채운 키 이름만 출력) | 아니면 중단 |
 | ② | `<install_root>\venv` 생성, `pip install --no-index --find-links wheels physicsai-platform`, migrations 복사 | |
 | ③ | 프런트를 `caddy_frontend_root`로 복사 | |
 | ④ | `config_path`가 없으면 `platform.example.yaml` 복사(있으면 그대로) | 복사됐다면 값을 고친 뒤 작업 재시작 |
@@ -273,7 +276,7 @@ D:\physicsai\venv\Scripts\python.exe -m alembic -c D:\physicsai\migrations\alemb
 | 원본 반입 자원 | `resources.*` 폴더 사본 | 반입 시 |
 
 ```powershell
-$pg = 'D:\PostgreSQL\16\bin'
+$pg = 'E:\PostgreSQL\18\bin'
 $s = Read-Host -AsSecureString 'physicsai_app 비밀번호'
 $env:PGPASSWORD = [Runtime.InteropServices.Marshal]::PtrToStringBSTR([Runtime.InteropServices.Marshal]::SecureStringToBSTR($s))
 & "$pg\pg_dump.exe" -h 127.0.0.1 -U physicsai_app -Fc -f "D:\backup\physicsai_$(Get-Date -Format yyyyMMdd).dump" physicsai
@@ -936,15 +939,17 @@ Altair·PBS 없이 **가짜 도구(fake tools)**로 화면·대기열·알림·�
 
 ```powershell
 deploy\demo\start-demo.bat                       # 관리자 권한 불필요. 또는 start-demo.ps1
-deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -PgBin D:\pgsql\bin -ToolDelay 5
+deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -PgBin E:\PostgreSQL\18\bin -ToolDelay 5
+deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -DashboardRoot E:\simulation_workbench   # PgBin·Python을 대시보드 환경에서
 ```
 
 | 인자 | 기본 | 뜻 |
 |---|---|---|
 | `-DemoRoot` | `<시스템 드라이브>\physicsai-demo`(보통 `C:\physicsai-demo`) | 시연 폴더. 공백·특수문자 금지 |
 | `-Port` | `8190` | 백엔드 포트(127.0.0.1 전용, 운영 8100과 겹치지 않게) |
-| `-PythonExe` | PATH의 `python` | 저장소에서 실행할 때 쓸 Python(3.11+) |
-| `-PgBin` | PATH·`PGBIN`에서 찾음 | `initdb.exe`·`pg_ctl.exe`·`psql.exe` 폴더(포터블 zip 압축 해제본 가능) |
+| `-PythonExe` | PATH의 `python`(묶음에서 실행하고 `-DashboardRoot`가 있으면 대시보드 고정 Python 3.12) | Python 3.12(대시보드와 같은 3.12.13 권장) |
+| `-PgBin` | `-DashboardRoot`의 `.env` `POSTGRES_BIN` → PATH → `PGBIN` 순 | PostgreSQL 18 `initdb.exe`·`pg_ctl.exe`·`psql.exe` 폴더(예 `E:\PostgreSQL\18\bin`, 포터블 zip 압축 해제본 가능) |
+| `-DashboardRoot` | – | (선택) 대시보드 폴더(예 `E:\simulation_workbench`). `.env`의 `POSTGRES_BIN`과 `.tools` 고정 Python 3.12를 기본값으로(비밀번호는 읽지 않음, §2.3 `dashboard_root`와 같은 규칙) |
 | `-PgPort` | `55432` | 시연 전용 PostgreSQL 포트 |
 | `-UseExistingDb` | – | 시연 클러스터 대신 기존 PostgreSQL의 **빈 DB** 사용. 접속 URL은 환경변수 `PHYSICSAI_DEMO_DATABASE_URL`로만 준다(비밀번호가 든 URL을 인자로 받지 않음) |
 | `-ToolDelay` | `3`(초) | 가짜 도구 1회 실행마다 지연 — 대기열·진행률·취소를 보기 쉽게 |
@@ -993,8 +998,8 @@ $env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
 
 | 잡 | 환경 | 단계(순서대로) |
 |---|---|---|
-| **linux** "Linux · test-all (PostgreSQL 16)" | ubuntu-24.04, Python 3.13, Node 22, PostgreSQL 16(시험마다 임시 클러스터), 제한 40분 | ① `./packages/simdash_adapters` → `deploy/requirements.lock` + pytest 설치 ② `pwsh` 확인(ps1 구문 검사 시험용) ③ `scripts/test-all.sh`(pytest(어댑터 패키지 시험 포함) + openapi 최신 여부 + vitest + tsc) ④ `deploy/collect-offline.sh --dry-run` ⑤ `scripts/check-adapters-wheel.sh`(wheel 이름·빈 venv 설치) |
-| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.13, Node 22, 러너 기본 PostgreSQL 서비스, 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(`collect-offline.ps1`; wheels(`simdash_adapters-0.1.0-py3-none-any.whl` 포함)·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인 ⑥ **시연 원클릭**: `start-demo.bat`(포트 8196) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
+| **linux** "Linux · test-all (PostgreSQL 18)" | ubuntu-24.04, Python 3.12.13(`.python-version`), Node 22.23.2(`.node-version`), PostgreSQL 18(PGDG apt, 시험마다 임시 클러스터 — `PHYSICSAI_TEST_PGBIN`, `PHYSICSAI_REQUIRE_PG_MAJOR=18`), 제한 40분 | ⓪ 버전 확인(Python·Node가 고정값과 같음) ① `./packages/simdash_adapters` → `deploy/requirements.lock` + pytest 설치 ② `pwsh` 확인(ps1 구문 검사 시험용) ③ `scripts/test-all.sh`(pytest(어댑터 패키지 시험 포함) + openapi 최신 여부 + vitest + tsc) ④ `deploy/collect-offline.sh --dry-run` ⑤ `scripts/check-adapters-wheel.sh`(wheel 이름·빈 venv 설치) |
+| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.12.13(setup-python Windows 목록에 없어 대시보드처럼 uv 0.11.32로 `<가짜 대시보드>\.tools\python\cpython-3.12.13-windows-x86_64-none`에 설치 → 시험용 venv), Node 22.23.2, PostgreSQL 18(러너 기본이 18이면 그 서비스, 아니면 EDB 공식 zip 바이너리로 클러스터), 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(`collect-offline.ps1`; wheels(`simdash_adapters-0.1.0-py3-none-any.whl` 포함)·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인. 이 설치는 `deploy.json`에 `python_exe`·`pg_*` 없이 **`dashboard_root`(가짜 대시보드 `.env`·`.tools`)만** 주어 기본값 채움·PostgreSQL 18 확인·대시보드 DB 사용자·비밀번호 미출력을 검사 ⑥ **시연 원클릭**: `start-demo.bat -DashboardRoot`(포트 8196, PgBin을 대시보드 `.env`에서) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
 
 ③~⑥은 앞 단계가 실패해도 실행된다(취소된 경우만 제외) — 한 번에 여러 문제를 볼 수 있다.
 

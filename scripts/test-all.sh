@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # 백엔드·워커 pytest(+PostgreSQL) + 프런트 vitest·타입 검사 (계약 §4.6, §18.2)
-# PostgreSQL: PHYSICSAI_TEST_DATABASE_URL이 있으면 사용, 없으면 PG_BIN(예 /usr/lib/postgresql/16/bin)으로 임시 클러스터.
+# PostgreSQL: PHYSICSAI_TEST_DATABASE_URL이 있으면 사용, 없으면 PHYSICSAI_TEST_PGBIN·PG_BIN(예 /usr/lib/postgresql/18/bin) 또는
+# /usr/lib/postgresql/<최신>/bin으로 임시 클러스터(기준: 대시보드와 같은 PostgreSQL 18). Python 3.12(.python-version 3.12.13).
 set -euo pipefail
 source "$(dirname "$0")/_env.sh"
 cd "$REPO_ROOT"

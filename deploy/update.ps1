@@ -32,6 +32,11 @@ function ConvertTo-Plain([Security.SecureString]$s) {
 }
 
 $cfg = Get-Content -Raw -Encoding UTF8 $ConfigFile | ConvertFrom-Json
+if ($cfg.dashboard_root) {
+    # install.ps1과 같은 규칙: 비어 있는 pg_bin·pg_host·pg_port·python_exe만 대시보드 환경으로 채운다(dashboard-env.ps1)
+    . (Join-Path $PSScriptRoot 'dashboard-env.ps1')
+    Merge-DashboardDefaults -Config $cfg -Defaults (Get-DashboardRuntimeDefaults -DashboardRoot $cfg.dashboard_root) | Out-Null
+}
 $root = $cfg.install_root
 $pkg = Split-Path -Parent $PSScriptRoot
 $venvPy = Join-Path $root 'venv\Scripts\python.exe'

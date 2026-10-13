@@ -233,13 +233,16 @@ def test_deploy_files_and_keys():
         assert (DEPLOY / n).is_file(), n
     cfg = json.loads((DEPLOY / "deploy.example.json").read_text(encoding="utf-8"))
     keys = {"install_root", "python_exe", "pg_bin", "pg_host", "pg_port", "db_name", "db_role", "config_path", "service_user",
-            "run_mode", "caddy_frontend_root"}  # 포트는 platform.yaml server.port 한 곳(deploy.json에 없음)
+            "run_mode", "caddy_frontend_root", "dashboard_root"}  # 포트는 platform.yaml server.port 한 곳(deploy.json에 없음)
     assert set(cfg) == keys and cfg["db_name"] == "physicsai" and cfg["db_role"] == "physicsai_app"
     used = set()
     for n in ("install.ps1", "update.ps1", "uninstall-tasks.ps1"):
         used |= set(re.findall(r"\$cfg\.([A-Za-z_]+)", (DEPLOY / n).read_text(encoding="utf-8")))
     assert used <= keys and used >= keys - {"caddy_frontend_root"} | set(), used ^ keys
     inst = (DEPLOY / "install.ps1").read_text(encoding="utf-8")
+    # 실행 환경은 대시보드와 같게: Python 3.12(아니면 중단), PostgreSQL 18(아니면 경고) — decisions 2026-10-13
+    assert "-ne '3.12'" in inst and "3.13" not in inst and "SHOW server_version_num" in inst and "-ne 18" in inst
+    assert "dashboard-env.ps1" in inst and "dashboard-env.ps1" in (DEPLOY / "update.ps1").read_text(encoding="utf-8")
     assert "ExecutionTimeLimit" in inst and "New-TimeSpan -Seconds 0" in inst and "RestartCount 999" in inst
     assert "Read-Host" in inst and "-AsSecureString" in inst and "PGPASSWORD" in inst and "IgnoreNew" in inst
     assert "physicsai_api.serve" in inst and "physicsai_worker" in inst and "/physicsai/api/health" in inst
@@ -260,9 +263,60 @@ def test_collect_offline_dry_run():
     r = subprocess.run(["bash", str(DEPLOY / "collect-offline.sh"), "--dry-run"], capture_output=True, text=True, cwd=REPO, timeout=60)
     assert r.returncode == 0, r.stderr
     out = r.stdout
-    assert "pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels" in out
+    assert "pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels" in out
+    assert "3.13" not in out
     assert "pip wheel . --no-deps -w dist/wheels" in out and "npm ci" in out and "npm run build" in out
     assert "physicsai-offline-" in out and ".zip" in out
+
+
+def _pwsh() -> str | None:
+    import os
+
+    return os.environ.get("PHYSICSAI_PWSH") or shutil.which("pwsh")
+
+
+def test_dashboard_env_reads_only_bin_host_port(tmp_path):
+    """deploy/dashboard-env.ps1: 대시보드 .env에서 POSTGRES_BIN·DATABASE_URL host·port만, .tools 고정 Python 3.12. 비밀값은 출력에 없다."""
+    pwsh = _pwsh()
+    if not pwsh:
+        pytest.skip("pwsh 없음 — dashboard-env.ps1 실행 시험 미수행(CI linux·windows 잡은 pwsh 있음)")
+    dash = tmp_path / "simulation_workbench"
+    for v in ("3.12.4", "3.12.13", "3.13.1"):
+        d = dash / ".tools" / "python" / f"cpython-{v}-windows-x86_64-none"
+        d.mkdir(parents=True)
+        (d / "python.exe").write_bytes(b"")
+    secret = "Pw-Do-Not-Leak%40x"
+    (dash / ".env").write_text(
+        "# 주석 DATABASE_URL=postgresql://x:y@wrong:1/z\n"
+        f"DATABASE_URL=postgresql+psycopg://simdashboard_app:{secret}@db.intra:5433/simulation_dashboard\n"
+        "POSTGRES_BIN=\"E:\\PostgreSQL\\18\\bin\"\n", encoding="utf-8")
+    script = (DEPLOY / "dashboard-env.ps1").as_posix()
+    cmd = (f". '{script}'; $d = Get-DashboardRuntimeDefaults -DashboardRoot '{dash.as_posix()}'; "
+           "$c = [pscustomobject]@{ pg_bin = ''; pg_port = 6543; python_exe = $null }; "
+           "$f = Merge-DashboardDefaults -Config $c -Defaults $d; "
+           "[pscustomobject]@{ d = $d; c = $c; filled = @($f) } | ConvertTo-Json -Depth 4 -Compress")
+    r = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", cmd], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0, r.stderr
+    assert secret not in r.stdout + r.stderr and "simdashboard_app" not in r.stdout + r.stderr
+    out = json.loads(r.stdout)
+    assert out["d"]["PgBin"] == "E:\\PostgreSQL\\18\\bin" and out["d"]["PgHost"] == "db.intra" and out["d"]["PgPort"] == 5433
+    assert "cpython-3.12.13-windows-x86_64-none" in out["d"]["PythonExe"]
+    # deploy.json 명시 값(pg_port 6543) 우선, 빈 값만 채움
+    assert out["c"]["pg_port"] == 6543 and out["c"]["pg_bin"] == out["d"]["PgBin"] and out["c"]["pg_host"] == "db.intra"
+    assert sorted(out["filled"]) == ["pg_bin", "pg_host", "python_exe"]
+
+
+def test_postgres_server_major(engine):
+    """기준 PostgreSQL 주 버전(대시보드와 같은 18). PHYSICSAI_REQUIRE_PG_MAJOR가 있으면(CI) 시험 서버가 그 버전이어야 한다."""
+    import os
+
+    from sqlalchemy import text
+
+    with engine.connect() as c:
+        num = int(c.execute(text("SHOW server_version_num")).scalar_one())
+    want = os.environ.get("PHYSICSAI_REQUIRE_PG_MAJOR")
+    if want:
+        assert num // 10000 == int(want), num
 
 
 def test_powershell_syntax():

@@ -14,9 +14,11 @@
 .PARAMETER Port
   백엔드 포트(127.0.0.1 전용). 운영 설치(8100)와 겹치지 않게 기본 8190
 .PARAMETER PythonExe
-  Python 3.11 이상(묶음 설치는 3.13). 기본 PATH의 python
+  Python 3.12(대시보드와 같은 3.12.13 권장). 기본 PATH의 python(묶음이고 -DashboardRoot가 있으면 대시보드 고정 Python 3.12)
 .PARAMETER PgBin
-  PostgreSQL bin 폴더(initdb.exe·pg_ctl.exe·psql.exe). 비우면 PATH·PGBIN 환경변수에서 찾는다
+  PostgreSQL bin 폴더(initdb.exe·pg_ctl.exe·psql.exe, 기준 18). 비우면 -DashboardRoot의 .env POSTGRES_BIN → PATH → PGBIN 환경변수 순으로 찾는다
+.PARAMETER DashboardRoot
+  대시보드 폴더(예 E:\simulation_workbench, 선택). .env의 POSTGRES_BIN과 .tools 고정 Python 3.12를 기본값으로 쓴다(비밀번호는 읽지 않음)
 .PARAMETER PgPort
   시연 전용 PostgreSQL 포트(기본 55432)
 .PARAMETER UseExistingDb
@@ -32,6 +34,7 @@ param(
     [int]$Port = 8190,
     [string]$PythonExe = 'python',
     [string]$PgBin = '',
+    [string]$DashboardRoot = '',
     [int]$PgPort = 55432,
     [switch]$UseExistingDb,
     [double]$ToolDelay = 3,
@@ -45,12 +48,19 @@ if ($DemoRoot -match '[\s&|<>^%!";,=()]') { throw "시연 폴더 경로에 공�
 $pkg = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)   # 저장소 루트 또는 오프라인 묶음 루트
 $setup = Join-Path $PSScriptRoot 'demo_setup.py'
 New-Item -ItemType Directory -Force -Path $DemoRoot | Out-Null
+$dash = $null
+if ($DashboardRoot) {
+    . (Join-Path (Split-Path -Parent $PSScriptRoot) 'dashboard-env.ps1')
+    $dash = Get-DashboardRuntimeDefaults -DashboardRoot $DashboardRoot
+    Write-Step "대시보드 환경: $DashboardRoot (POSTGRES_BIN $(if ($dash.PgBin) { '있음' } else { '없음' }), Python 3.12 $(if ($dash.PythonExe) { '있음' } else { '없음' }))"
+}
 
 # ---- ① Python ----------------------------------------------------------------------------
 $wheels = Join-Path $pkg 'wheels'
 if (Test-Path $wheels) {
     # 오프라인 묶음: 시연 전용 venv(운영 설치와 분리)
     $py = Join-Path $DemoRoot 'venv\Scripts\python.exe'
+    if (-not $PSBoundParameters.ContainsKey('PythonExe') -and $dash -and $dash.PythonExe) { $PythonExe = $dash.PythonExe }
     if (-not (Test-Path $py)) {
         Write-Step "시연용 venv 생성: $DemoRoot\venv"
         & $PythonExe -m venv (Join-Path $DemoRoot 'venv'); Assert-Ok 'venv 생성'
@@ -78,6 +88,7 @@ if ($UseExistingDb) {
     $env:PHYSICSAI_DATABASE_URL = $env:PHYSICSAI_DEMO_DATABASE_URL
     Write-Step '기존 PostgreSQL 사용(PHYSICSAI_DEMO_DATABASE_URL — 값은 출력하지 않음)'
 } else {
+    if (-not $PgBin -and $dash -and $dash.PgBin) { $PgBin = $dash.PgBin }
     if (-not $PgBin) {
         $initdb = Get-Command initdb.exe -ErrorAction SilentlyContinue
         if ($initdb) { $PgBin = Split-Path -Parent $initdb.Source }

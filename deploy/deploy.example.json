@@ -1,7 +1,8 @@
 {
   "install_root": "D:\\physicsai",
-  "python_exe": "D:\\Python313\\python.exe",
-  "pg_bin": "D:\\PostgreSQL\\16\\bin",
+  "dashboard_root": "",
+  "python_exe": "D:\\Python312\\python.exe",
+  "pg_bin": "E:\\PostgreSQL\\18\\bin",
   "pg_host": "127.0.0.1",
   "pg_port": 5432,
   "db_name": "physicsai",

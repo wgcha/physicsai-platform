@@ -2,11 +2,13 @@
 .SYNOPSIS
   PhysicsAI Windows 폐쇄망 설치(phase2 §11). 실제 Windows 실행은 사용자 E2E로 확인한다(미검증).
 .DESCRIPTION
-  ① 관리자 권한·Python 3.13 확인 ② venv 생성·오프라인 wheel 설치 ③ 프런트 배치 ④ 설정 파일(없을 때만 예시 복사)
+  ① 관리자 권한·Python 3.12 확인(대시보드와 같은 3.12.13 권장) ② venv 생성·오프라인 wheel 설치 ③ 프런트 배치 ④ 설정 파일(없을 때만 예시 복사)
   ⑤ DB 역할·DB(없을 때만 생성) ⑥ 머신 환경변수 PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL ⑦ alembic upgrade head
   ⑧ 작업 스케줄러 등록(PhysicsAI-Backend, PhysicsAI-Worker) ⑨ 시작·health 확인 ⑩ Caddy 스니펫 안내.
   경로 문자열은 deploy.json(예: deploy.example.json 복사)과 매개변수에만 있다. 비밀번호는 Read-Host -AsSecureString으로
   받아 PGPASSWORD 프로세스 환경변수로만 전달하고 로그·파일·명령 인자에 남기지 않는다.
+  deploy.json에 dashboard_root(선택)가 있으면 대시보드 .env의 POSTGRES_BIN과 DATABASE_URL의 host·port, 대시보드 고정 Python 3.12를
+  pg_bin·pg_host·pg_port·python_exe의 기본값으로 쓴다(deploy.json 명시 값 우선, dashboard-env.ps1). PostgreSQL 서버가 18이 아니면 경고.
 .PARAMETER ConfigFile
   설치 매개변수 JSON(기본: 이 폴더의 deploy.json).
 .PARAMETER ServiceUser
@@ -66,17 +68,29 @@ if (-not (Test-Path $ConfigFile)) { throw "설치 매개변수 파일이 없습�
 $cfg = Get-Content -Raw -Encoding UTF8 $ConfigFile | ConvertFrom-Json
 if (-not $ServiceUser) { $ServiceUser = $cfg.service_user }
 if (-not $RunMode) { $RunMode = $cfg.run_mode }
+# 대시보드 실행 환경 재사용(선택): 비어 있는 pg_bin·pg_host·pg_port·python_exe만 대시보드 값으로 채운다(비밀번호·사용자명은 읽지 않음)
+if ($cfg.dashboard_root) {
+    . (Join-Path $PSScriptRoot 'dashboard-env.ps1')
+    $dash = Get-DashboardRuntimeDefaults -DashboardRoot $cfg.dashboard_root
+    $filled = Merge-DashboardDefaults -Config $cfg -Defaults $dash
+    Write-Step "대시보드 환경($($cfg.dashboard_root)): 기본값으로 채운 키 = $(if ($filled.Count) { $filled -join ', ' } else { '없음(deploy.json 명시 값 사용)' })"
+}
+foreach ($k in 'pg_bin', 'pg_host', 'pg_port', 'python_exe') {
+    if ("$($cfg.$k)" -eq '') { throw "deploy.json에 $k 값이 없습니다(직접 쓰거나 dashboard_root로 대시보드 환경을 지정하세요)" }
+}
 $root = $cfg.install_root
 $pkg = Split-Path -Parent $PSScriptRoot          # 오프라인 묶음 루트(wheels, frontend, migrations, config, deploy)
 $venvPy = Join-Path $root 'venv\Scripts\python.exe'
 $psql = Join-Path $cfg.pg_bin 'psql.exe'
 
-# ---- ① 관리자 권한·Python 3.13 --------------------------------------------------------
+# ---- ① 관리자 권한·Python 3.12(대시보드와 같은 마이너) -------------------------------------------
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw '관리자 권한 PowerShell에서 실행하세요' }
 $pyver = & $cfg.python_exe -c "import sys; print('%d.%d' % sys.version_info[:2])"
 Assert-Ok 'Python 확인'
-if ($pyver.Trim() -ne '3.13') { throw "Python 3.13이 필요합니다(현재 $pyver): $($cfg.python_exe)" }
+if ($pyver.Trim() -ne '3.12') { throw "Python 3.12가 필요합니다(대시보드와 같은 3.12.13 권장, 현재 $pyver): $($cfg.python_exe)" }
+$pyFull = & $cfg.python_exe -c 'import platform; print(platform.python_version())'
+Write-Step "Python ${pyFull}: $($cfg.python_exe)"
 
 # ---- ② venv + 오프라인 wheel -------------------------------------------------------------
 Write-Step "venv 생성: $root\venv"
@@ -106,6 +120,11 @@ $appPw = ConvertTo-Plain $appPwSecure
 $env:PGPASSWORD = ConvertTo-Plain $adminPw
 try {
     $common = @('-h', $cfg.pg_host, '-p', [string]$cfg.pg_port, '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q')
+    # 대시보드와 같은 PostgreSQL 18 인스턴스(별도 DB·역할)를 기준으로 한다 — 다른 주 버전이면 경고만(설치는 계속)
+    $verNum = & $psql @common -d postgres -tAc 'SHOW server_version_num'; Assert-Ok 'psql 서버 버전 확인'
+    $verMajor = [int][math]::Floor([int]("$verNum".Trim()) / 10000)
+    if ($verMajor -ne 18) { Write-Warning "PostgreSQL 서버 주 버전이 $verMajor 입니다(기준: 대시보드와 같은 18). 계속 진행합니다" }
+    else { Write-Step "PostgreSQL 서버 버전: $("$verNum".Trim())" }
     $hasRole = & $psql @common -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$($cfg.db_role)'"; Assert-Ok 'psql 역할 확인'
     if (-not $hasRole) {
         Write-Step "DB 역할 생성: $($cfg.db_role)"

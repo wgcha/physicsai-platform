@@ -25,8 +25,8 @@ run() {
 
 run "mkdir -p dist/wheels dist/frontend dist/config"
 run "$PY -m pip wheel packages/simdash_adapters --no-deps -w dist/wheels"
-run "$PY -m pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels"
-run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.13 -d dist/wheels"
+run "$PY -m pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
+run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
 run "$PY -m pip wheel . --no-deps -w dist/wheels"
 run "(cd frontend && npm ci && npm run build)"
 run "cp -r frontend/dist/. dist/frontend/"

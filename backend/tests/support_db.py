@@ -20,14 +20,30 @@ from support_base import IS_WINDOWS, REPO
 # ---------------------------------------------------------------------------
 
 
+def _has_initdb(d: str | os.PathLike[str]) -> bool:
+    return os.path.isfile(os.path.join(d, "initdb")) or os.path.isfile(os.path.join(d, "initdb.exe"))
+
+
+def _pg_major(name: str) -> tuple[int, ...]:
+    try:
+        return tuple(int(x) for x in name.split("."))
+    except ValueError:
+        return (-1,)
+
+
 def _find_pg_bin() -> str | None:
-    cand = os.environ.get("PG_BIN")
-    if cand and (os.path.isfile(os.path.join(cand, "initdb")) or os.path.isfile(os.path.join(cand, "initdb.exe"))):
-        return cand
+    """시험용 PostgreSQL bin: PHYSICSAI_TEST_PGBIN → PG_BIN → PGBIN → /usr/lib/postgresql/<가장 높은 버전>/bin → PATH의 initdb.
+
+    버전 경로를 하드코딩하지 않는다(기준은 대시보드와 같은 PostgreSQL 18 — CI가 18을 넣어 준다).
+    """
+    for env in ("PHYSICSAI_TEST_PGBIN", "PG_BIN", "PGBIN"):
+        cand = os.environ.get(env)
+        if cand and _has_initdb(cand):
+            return cand
     base = Path("/usr/lib/postgresql")
     if base.is_dir():
-        for v in sorted(base.iterdir(), reverse=True):
-            if (v / "bin" / "initdb").is_file():
+        for v in sorted(base.iterdir(), key=lambda p: _pg_major(p.name), reverse=True):
+            if _has_initdb(v / "bin"):
                 return str(v / "bin")
     w = shutil.which("initdb")
     return os.path.dirname(w) if w else None
@@ -43,7 +59,7 @@ class _TempCluster:
     def __init__(self) -> None:
         self.bin = _find_pg_bin()
         if not self.bin:
-            pytest.fail("PostgreSQL을 찾을 수 없습니다(PG_BIN 또는 PHYSICSAI_TEST_DATABASE_URL 필요). DB 시험은 skip하지 않습니다")
+            pytest.fail("PostgreSQL을 찾을 수 없습니다(PHYSICSAI_TEST_PGBIN·PG_BIN 또는 PHYSICSAI_TEST_DATABASE_URL 필요). DB 시험은 skip하지 않습니다")
         self.dir = tempfile.mkdtemp(prefix="physicsai-pg-")
         self.port = _free_port()
         self.as_root = hasattr(os, "geteuid") and os.geteuid() == 0
