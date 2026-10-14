@@ -268,8 +268,11 @@ def test_cancel_failure_keeps_waiting_and_retries(p2_pbs, monkeypatch, engine):
 
 
 def test_deploy_password_not_logged_and_env_checks_in_update():
+    # DB 생성·대기열 확인은 공용 함수(install-common.ps1) — install.ps1·update.ps1·setup.ps1·update-repo.ps1이 같은 코드를 쓴다
+    common = (REPO / "deploy" / "install-common.ps1").read_text(encoding="utf-8")
     inst = (REPO / "deploy" / "install.ps1").read_text(encoding="utf-8")
-    i_set, i_create = inst.index("SET log_statement = 'none'"), inst.index("CREATE ROLE")
-    assert i_set < i_create and "log_min_error_statement = 'panic'" in inst
-    upd = (REPO / "deploy" / "update.ps1").read_text(encoding="utf-8")
+    assert "Initialize-PhysicsAIDatabase" in inst and "Initialize-PhysicsAIDatabase" in (REPO / "deploy" / "setup.ps1").read_text(encoding="utf-8")
+    i_set, i_create = common.index("SET log_statement = 'none'"), common.index("CREATE ROLE")
+    assert i_set < i_create and "log_min_error_statement = 'panic'" in common
+    upd = (REPO / "deploy" / "update.ps1").read_text(encoding="utf-8") + common
     assert "FROM env_checks WHERE state IN ('PENDING','RUNNING')" in upd and "/physicsai/api/admin/env-checks/latest" in upd

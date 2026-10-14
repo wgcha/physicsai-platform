@@ -13,25 +13,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ConfigFile) { $ConfigFile = Join-Path $PSScriptRoot 'deploy.json' }
-. (Join-Path $PSScriptRoot 'loopback-http.ps1')   # 127.0.0.1 호출은 프록시 미사용(Invoke-LoopbackRest)
-function Write-Step([string]$m) { Write-Host "[PhysicsAI 업데이트] $m" }
-function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
-function Get-BackendPort([string]$ConfigPath, [string]$Py) {
-    # 포트는 platform.yaml server.port 한 곳에서만 읽는다(deploy.json에 포트 없음)
-    if ($Py -and (Test-Path $Py)) {
-        try {
-            $p = & $Py -c "import sys; from physicsai_core.config import load_config; print(load_config(sys.argv[1], environ={}).settings.server.port)" $ConfigPath 2>$null
-            if ($LASTEXITCODE -eq 0 -and "$p" -match '^\s*(\d+)\s*$') { return [int]$Matches[1] }
-        } catch { Write-Verbose "venv로 포트 읽기 실패 — yaml에서 직접 읽습니다" }
-    }
-    $m = [regex]::Match((Get-Content -Raw -Encoding UTF8 $ConfigPath), '(?m)^server:\s*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+port:\s*(\d+)')
-    if ($m.Success) { return [int]$m.Groups[1].Value }
-    return 8100   # 설정 기본값
-}
-function ConvertTo-Plain([Security.SecureString]$s) {
-    $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
-    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
-}
+$PhysicsAITag = 'PhysicsAI 업데이트'
+. (Join-Path $PSScriptRoot 'install-common.ps1')   # 작업 확인·중지·시작·health 공용 함수(update-repo.ps1과 같은 코드)
+function Write-Step([string]$m) { Write-PhysicsAIStep $m }
+function Assert-Ok([string]$what) { Assert-PhysicsAIExit $what }
 
 $cfg = Get-Content -Raw -Encoding UTF8 $ConfigFile | ConvertFrom-Json
 if ($cfg.dashboard_root) {
@@ -46,48 +31,15 @@ Write-Step "Python $($basePy.Version): $($basePy.Exe)"
 $root = $cfg.install_root
 $pkg = Split-Path -Parent $PSScriptRoot
 $venvPy = Join-Path $root 'venv\Scripts\python.exe'
-$tasks = @('PhysicsAI-Backend', 'PhysicsAI-Worker')
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $backup = Join-Path $root "_backup\$stamp"
-$port = Get-BackendPort $cfg.config_path $venvPy   # 기존 venv로 읽음(없으면 yaml에서 직접)
+$port = Get-PhysicsAIBackendPort $cfg.config_path $venvPy   # 기존 venv로 읽음(없으면 yaml에서 직접)
 
-# ---- ① 실행 중 작업 확인 -------------------------------------------------------------------
-function Get-ActiveJobCount {
-    $tokenSecure = Read-Host -AsSecureString '대시보드 세션 토큰(없으면 Enter — DB에서 직접 확인)'
-    $token = ConvertTo-Plain $tokenSecure
-    if ($token) {
-        $q = Invoke-LoopbackRest -Uri "http://127.0.0.1:$port/physicsai/api/queue" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
-        $n = @($q.waiting_hpc).Count + @($q.collecting).Count + @($q.queued).Count + @($q.light.queued).Count
-        if ($q.running) { $n++ }
-        if ($q.light.running) { $n++ }
-        # 진행 중 환경 점검(PENDING·RUNNING)도 포함 — 관리자 토큰일 때만 조회 가능(아니면 403 무시)
-        try {
-            $ec = Invoke-LoopbackRest -Uri "http://127.0.0.1:$port/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
-            if ($ec.state -in @('PENDING', 'RUNNING')) { $n++ }
-        } catch { Write-Verbose '환경 점검 조회 생략(권한 없음 또는 이력 없음)' }
-        return $n
-    }
-    # DB 직접 조회: 접속 정보는 머신 환경변수 URL에서 PG* 프로세스 환경으로만 전달(명령 인자에 비밀번호 없음)
-    $url = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
-    $m = [regex]::Match($url, '^postgres(?:ql)?(?:\+\w+)?://(?<u>[^:]+):(?<p>[^@]*)@(?<h>[^:/]+):(?<port>\d+)/(?<d>.+)$')
-    if (-not $m.Success) { throw 'PHYSICSAI_DATABASE_URL 형식을 해석할 수 없습니다' }
-    $env:PGUSER = $m.Groups['u'].Value; $env:PGHOST = $m.Groups['h'].Value; $env:PGPORT = $m.Groups['port'].Value
-    $env:PGDATABASE = $m.Groups['d'].Value; $env:PGPASSWORD = [Uri]::UnescapeDataString($m.Groups['p'].Value)
-    try {
-        $n = & (Join-Path $cfg.pg_bin 'psql.exe') -tAc "SELECT (SELECT count(*) FROM jobs WHERE state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING')) + (SELECT count(*) FROM env_checks WHERE state IN ('PENDING','RUNNING'))"
-        Assert-Ok 'psql 작업 확인'
-        return [int]$n
-    } finally { $env:PGPASSWORD = $null }
-}
-$active = Get-ActiveJobCount
-if ($active -gt 0) {
-    if (-not $Force) { throw "대기·실행 중 작업 또는 진행 중 환경 점검이 $active 건 있습니다. 끝난 뒤 다시 실행하거나 -Force로 진행하세요" }
-    Write-Warning "-Force: 실행 중 작업은 lease 만료 후 INTERRUPTED가 됩니다($active 건)"
-}
+# ---- ① 실행 중 작업 확인(대시보드 토큰이면 /physicsai/api/queue, Enter면 DB 직접) ----------------------------------
+Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -Force:$Force
 
 # ---- ② 중지 --------------------------------------------------------------------------------
-foreach ($t in $tasks) { Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue }
-Start-Sleep -Seconds 5
+Stop-PhysicsAITasks
 
 # ---- ③ 기존 설치 백업 이동(삭제 없음) -------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $backup | Out-Null
@@ -109,17 +61,10 @@ try {
     # ---- ⑤ migration(머신 환경변수의 DB URL을 이 프로세스로) -----------------------------------
     $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
     $env:PHYSICSAI_CONFIG = $cfg.config_path
-    & $venvPy -m alembic -c (Join-Path $root 'migrations\alembic.ini') upgrade head; Assert-Ok 'alembic upgrade head'
+    Invoke-PhysicsAIMigration -VenvPy $venvPy -AlembicIni (Join-Path $root 'migrations\alembic.ini')
 
-    # ---- ⑥ 시작·health ---------------------------------------------------------------------
-    foreach ($t in $tasks) { Start-ScheduledTask -TaskName $t }
-    $health = "http://127.0.0.1:$port/physicsai/api/health"
-    $ok = $false
-    for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
-        Start-Sleep -Seconds 2
-        try { $ok = ((Invoke-LoopbackRest -Uri $health -TimeoutSec 3).status -eq 'ok') } catch { $ok = $false }
-    }
-    if (-not $ok) { throw "health 확인 실패: $health" }
+    # ---- ⑥ 시작·health(/physicsai/api/health) ------------------------------------------------
+    Start-PhysicsAITasksAndWait -Port $port -LogDir (Join-Path $root 'logs') | Out-Null
     Write-Step "업데이트 완료 — health OK"
 } catch {
     # ---- ⑦ 되돌리는 방법 안내(자동 되돌림 없음) ----------------------------------------------------

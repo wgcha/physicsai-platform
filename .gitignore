@@ -15,3 +15,7 @@ packages/*/build/
 dist/
 physicsai-offline-*.zip
 deploy/deploy.json
+# git 폴더 설치(deploy/setup.ps1) 런타임: venv·프런트 배치·설정·로그·deploy.json — git pull과 충돌하지 않게
+.runtime/
+# pip가 git 폴더 소스를 설치할 때 만드는 빌드 폴더
+/build/

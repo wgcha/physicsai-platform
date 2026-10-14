@@ -239,7 +239,9 @@ def test_deploy_files_and_keys():
     for n in ("install.ps1", "update.ps1", "uninstall-tasks.ps1"):
         used |= set(re.findall(r"\$cfg\.([A-Za-z_]+)", (DEPLOY / n).read_text(encoding="utf-8")))
     assert used <= keys and used >= keys - {"caddy_frontend_root"} | set(), used ^ keys
-    inst = (DEPLOY / "install.ps1").read_text(encoding="utf-8")
+    # DB·환경변수·alembic·작업 스케줄러·health는 공용 함수(install-common.ps1) — install.ps1(묶음)·setup.ps1(git 폴더)이 같은 코드를 쓴다
+    common = (DEPLOY / "install-common.ps1").read_text(encoding="utf-8")
+    inst = (DEPLOY / "install.ps1").read_text(encoding="utf-8") + common
     # 실행 환경은 대시보드와 같게: Python 3.12(아니면 중단), PostgreSQL 18(아니면 경고) — decisions 2026-10-13
     # python_exe는 실제로 실행해 3.12인지 확인(deploy/python-select.ps1 공용 — 망가진 pyenv shim이면 원인·다음 행동, GitHub #1)
     sel = (DEPLOY / "python-select.ps1").read_text(encoding="utf-8")
@@ -253,8 +255,10 @@ def test_deploy_files_and_keys():
     assert "Read-Host" in inst and "-AsSecureString" in inst and "PGPASSWORD" in inst and "IgnoreNew" in inst
     assert "physicsai_api.serve" in inst and "physicsai_worker" in inst and "/physicsai/api/health" in inst
     upd = (DEPLOY / "update.ps1").read_text(encoding="utf-8")
-    assert "_backup" in upd and "Remove-Item" not in upd and "/physicsai/api/queue" in upd
+    assert "_backup" in upd and "Remove-Item" not in upd and "/physicsai/api/queue" in upd + common
     assert "Remove-Item" not in inst and "Remove-Item" not in (DEPLOY / "uninstall-tasks.ps1").read_text(encoding="utf-8")
+    for n in ("install.ps1", "update.ps1", "setup.ps1", "update-repo.ps1"):
+        assert "install-common.ps1" in (DEPLOY / n).read_text(encoding="utf-8"), n
     for b in ("install.bat", "update.bat"):
         assert "powershell -NoProfile -ExecutionPolicy Bypass -File" in (DEPLOY / b).read_text(encoding="utf-8")
     caddy = (DEPLOY / "caddy" / "physicsai.caddy").read_text(encoding="utf-8")

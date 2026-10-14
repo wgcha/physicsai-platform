@@ -15,7 +15,7 @@
 
 | 구성 요소 | 실행 형태 | 역할 | 기본 위치·포트 |
 |---|---|---|---|
-| 프런트엔드 | 정적 파일(Vite build) | 화면. 기본 경로 `/physicsai/` | `<install_root>\frontend\dist`(= `deploy.json`의 `caddy_frontend_root`) |
+| 프런트엔드 | 정적 파일(Vite build) | 화면. 기본 경로 `/physicsai/` | git 폴더 설치 `<git>\.runtime\frontend`, 묶음 `<install_root>\frontend\dist`(= `deploy.json`의 `caddy_frontend_root`) |
 | 백엔드(API) | `python -m physicsai_api.serve`(uvicorn) | 입력 검증·권한·작업 생성·조회. **외부 프로그램을 실행하지 않는다** | `127.0.0.1:8100`, 접두 `/physicsai/api` |
 | 워커 | `python -m physicsai_worker` | 대기열 claim, Altair·PBS 명령 실행(Job Object 안), HPC 폴링·회수, 환경 점검 워커 항목, 알림 정리 | PC당 1개(잠금 파일 `worker.state_dir/physicsai-worker.lock`) |
 | DB | PostgreSQL(대시보드 DB와 **별도** DB `physicsai`) | 작업·상태·경로·수치 요약. 파일 본문은 저장하지 않음 | `127.0.0.1:5432` |
@@ -58,6 +58,42 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 
 ## 2. 설치
 
+설치 방식은 둘이다. **대시보드와 같은 PC에 인터넷(사내 프록시 포함)이 되면 §2.0 git 폴더 설치를 쓴다**(권장). §2.2~§2.4의 오프라인 묶음 방식은 인터넷이 안 되는 **폐쇄망 서버용**이다. §2.1 준비물·§2.5~§2.8은 두 방식 공통이다.
+
+### 2.0 같은 PC·git 폴더 설치(권장)
+
+저장소를 받은 git 폴더에 그대로 설치한다(묶음·압축 없음). **관리자 권한 Windows PowerShell**에서:
+
+```powershell
+cd E:\VD_SIMULATION_WEB\physicsai-platform                                   # git 폴더(= 설치 위치)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\setup.ps1       # 설치(다시 실행해도 안전)
+git pull; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1   # 업데이트(§3.0)
+```
+
+- `.bat` 실행이 보안 정책으로 막혀도("액세스가 거부되었습니다") 위처럼 `.ps1`을 `-File`로 직접 실행하면 된다(이 프로세스에만 Bypass).
+- **묻는 것**(Enter = 괄호 안 기본값): 대시보드 폴더(`<git 폴더의 부모>\simdashboard`), AI 루트(`<git 폴더의 부모>\physicsai-data`), 원본 앱 폴더(Enter = 건너뜀 → `resources.*` 비움, 그 기능만 비활성), 확인 표 뒤 `Y/N`, 비밀번호 2개(PostgreSQL `postgres` 관리자·앱 역할 `physicsai_app` — 이미 설치돼 있고 접속되면 묻지 않음). `Background` 모드면 실행 계정 비밀번호를 한 번 더 묻는다.
+- 인자로 줄 수도 있다: `-DashboardRoot`, `-AiRoot`, `-OriginalAppRoot`, `-AltairRoot`(Altair 설치 위치가 기본과 다를 때), `-PythonExe`, `-ServiceUser`(기본 현재 사용자), `-RunMode Interactive|Background`(기본 `Interactive`), `-NonInteractive`(묻지 않음·확인 표 생략 — 비밀번호는 `-PasswordsFromEnv`), `-NoStart`, `-Force`.
+- **Python·Node**: 대시보드 고정 Python 3.12(`<대시보드>\.tools\python\cpython-3.12.*`)·Node 22(`<대시보드>\.tools\node-v22.*-win-x64`)를 먼저 쓴다. 후보를 실제로 실행해 확인하므로 PATH 첫 `python`이 망가진 pyenv shim이어도 건너뛴다(§2.2와 같은 규칙). 대시보드 Python에는 아무것도 설치하지 않는다.
+- **PostgreSQL**: 대시보드 `.env`의 `POSTGRES_BIN`과 `DATABASE_URL`의 host·port만 읽는다(예 `127.0.0.1:5434`, 비밀번호·사용자명은 읽지 않음). 같은 인스턴스에 DB `physicsai`·역할 `physicsai_app`을 **없을 때만** 만든다.
+- **Altair**: `-AltairRoot` → 레지스트리(설치 프로그램 목록의 Altair 설치 위치) → `$env:ProgramFiles\Altair\<버전>` 순으로 찾아 실행 파일 5개가 가장 많이(같으면 최신 버전) 있는 곳을 쓴다. 실행 파일의 상대 위치는 `config/platform.example.yaml`의 `altair.*`에서 읽는다. 못 찾으면 `altair.*`를 비워 두고 경고한다(Altair 기능만 비활성).
+- **원본 앱 자원**: `deploy/RESOURCES.txt` 표의 상대경로(`CONFIG/BATCHRUN`, `BUILD_PYD`, `CONFIG/TEMPLATE/…`, `CONFIG/DATA/…`)로 원본 앱 폴더 하위를 확인하고, 없으면 같은 이름 파일을 깊이 4까지 찾는다. 못 찾은 키는 빈 값(그 기능만 비활성). `resources.preview_pred_h3d_tcl`은 `profile: prod`에서 필수라 비어 있으면 워커가 시작되지 않는다(확인 표에 경고).
+
+| 단계 | 내용 |
+|---|---|
+| ① | 관리자 권한 확인(아니면 실행 방법 안내 후 중단), Python 3.12 선택 |
+| ② | 런타임 폴더 `<git>\.runtime\`(git 제외 — `git pull`과 충돌 없음): `venv`, `frontend`(빌드 배치), `config\platform.yaml`, `deploy.json`, `logs`, `state`, `_backup` |
+| ③ | `.runtime\venv`에 `deploy\requirements.lock` → `packages\simdash_adapters` → 플랫폼 패키지 **일반 설치**(editable 아님 — 업데이트 때 다시 설치). 사내 pip 설정(`pip.ini`·`PIP_INDEX_URL`)·프록시(`HTTPS_PROXY`)는 그대로 쓴다 |
+| ④ | 설정 계획(`deploy\setup_config.py`): `deploy.json`·`platform.yaml`을 **새로 만들거나, 있으면 보존하고 빠진 키만 보충**(사용자가 고친 값은 덮어쓰지 않음, 비어 있는 자원·Altair 경로는 찾은 값으로 채움). 새 설정: `profile: prod`, `server.port: 8100`, `storage.ai_root`(폴더 생성), `resources.*`, `altair.*`, `hpc.gateway: none`, `worker` 기본값(예시 값) |
+| ⑤ | 확인 표(위치·Python·PostgreSQL·AI 루트·자원 n/10·Altair n/5·설정 처리) → `Y/N` |
+| ⑥ | 이미 설치돼 있으면 대기열 확인(실행 중 작업이 있으면 중단, `-Force`) → 작업 중지 → venv 패키지 갱신. 바뀌는 기존 파일은 먼저 `.runtime\_backup\<UTC>\`로 복사. 프런트를 Node 22로 빌드(`npm ci`는 `package-lock.json`이 바뀔 때만) → `.runtime\frontend`(이전 것은 `_backup`) |
+| ⑦ | DB 역할·DB(없을 때만) → 머신 환경변수 `PHYSICSAI_CONFIG`(= `.runtime\config\platform.yaml`)·`PHYSICSAI_DATABASE_URL` → `alembic upgrade head` → 작업 스케줄러 `PhysicsAI-Backend`·`PhysicsAI-Worker`(작업 폴더 `.runtime`, 설정은 §2.5) → 시작·health. 묶음 `install.ps1`과 같은 공용 함수(`deploy\install-common.ps1`) |
+| ⑧ | 안내: Caddy 스니펫(`deploy\caddy\physicsai.caddy`, `PHYSICSAI_PORT`=8100·`PHYSICSAI_FRONTEND_ROOT`=`.runtime\frontend`, §2.6), 대시보드 `.env`의 `SIMDASH_PHYSICSAI_ENABLED=true`(대시보드 재시작), 접속 주소 `https://<대시보드 주소>/physicsai/` |
+
+- **기존 묶음 설치 이어받기**: 머신 환경변수 `PHYSICSAI_CONFIG`나 작업 스케줄러가 다른 `install_root`를 가리키면 감지한다. 그 `platform.yaml`을 `.runtime\config`로 **복사**해 이어받고(원본 그대로, 빠진 키만 보충), 같은 DB 연결(머신 환경변수 URL이 접속되면 비밀번호를 묻지 않음)을 이어 쓰며, 기존 작업 정의를 `.runtime\_backup\<UTC>\tasks\*.xml`로 남긴 뒤 이 git 폴더의 venv로 다시 등록한다. 옛 설치 폴더는 지우지 않는다(확인 후 직접 정리, Caddy `PHYSICSAI_FRONTEND_ROOT`도 새 위치로).
+- 설정은 `.runtime\config\platform.yaml`에서 직접 고친다(§4). 다시 실행하거나 업데이트해도 덮어쓰지 않는다. 고친 뒤 `Stop-ScheduledTask`/`Start-ScheduledTask PhysicsAI-Worker`(백엔드도).
+- 로그: `.runtime\logs\backend.log`·`worker.log`(작업 폴더 기준 `./logs`).
+- 제약: Caddy가 없는 대시보드 구성(대시보드 `start.ps1`의 Vite 서버만 쓰는 경우)에서는 `/physicsai/` 경로가 연결되지 않는다 — 같은 주소에서 로그인을 공유하려면 Caddy(§2.6)가 있어야 한다.
+
 ### 2.1 준비물
 
 | 항목 | 내용 |
@@ -66,15 +102,15 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 | 실행 환경 | **대시보드와 동일**: Python **3.12.13**, PostgreSQL **18**, Node **22.23.2**(저장소 `.python-version`·`.node-version`, 대시보드와 같은 값) |
 | Python | **3.12**(3.12.13 권장 — 대시보드 고정 런타임 `<대시보드>\.tools\python\cpython-3.12.13-windows-x86_64-none\python.exe`를 그대로 써도 된다). 경로는 `deploy.json`의 `python_exe` 또는 `dashboard_root`. 3.12가 아니면 설치 중단 |
 | PostgreSQL | **18** — 대시보드가 쓰는 **같은 인스턴스에 별도 DB(`physicsai`)·역할(`physicsai_app`)**. `postgres` 관리자 비밀번호를 알고 있음(`pg_bin`에 `psql.exe`). 서버가 18이 아니면 설치는 계속하되 경고 |
-| Node | 22.23.2 — 준비 PC에서 프런트 빌드(`npm ci && npm run build`)에만 필요(폐쇄망 설치 PC에는 불필요). 대시보드 고정 Node(`<대시보드>\.tools\node-v22.23.2-win-x64`)를 `collect-offline.ps1 -DashboardRoot`로 그대로 써도 된다 |
+| Node | 22.23.2 — 프런트 빌드(`npm ci && npm run build`)용: git 폴더 설치(§2.0)는 설치 PC에서, 묶음 방식은 준비 PC에서만 필요(폐쇄망 설치 PC에는 불필요). 대시보드 고정 Node(`<대시보드>\.tools\node-v22.23.2-win-x64`)를 `collect-offline.ps1 -DashboardRoot`로 그대로 써도 된다 |
 | Caddy | 대시보드가 쓰는 Caddy(설정 파일 수정 권한) |
 | Altair 2026.1 | HyperStudy·SimLab·PhysicsAI(edspy)·HyperWorks(hw)·hvtrans 설치·라이선스 |
 | 실행 계정 | `NT AUTHORITY\SYSTEM`이 아닌 지정 계정(예 `CORP\svc_physicsai`). AI 루트 읽기·쓰기, Altair 라이선스 접근 권한 |
 | AI 루트 | 산출물 폴더(예 `E:/shared/AI_WORK`). **SPDM master 밖**, 경로에 공백·`& | < > ^ % ! "` 금지 |
 | 원본 반입 자원 | 원본 앱 배포본의 런처·pyd·TCL·tpl 템플릿(§2.7, `deploy/RESOURCES.txt`) |
-| 오프라인 묶음 | `physicsai-offline-<version>.zip`(§2.2) |
+| 오프라인 묶음 | `physicsai-offline-<version>.zip`(§2.2) — 폐쇄망 서버용 묶음 방식만. git 폴더 설치(§2.0)는 git·인터넷(사내 프록시 가능)만 있으면 된다 |
 
-### 2.2 오프라인 묶음 만들기(인터넷 되는 준비 PC)
+### 2.2 오프라인 묶음 만들기(폐쇄망 서버용 — 인터넷 되는 준비 PC)
 
 ```powershell
 # Windows 준비 PC(저장소 폴더에서). 대시보드가 같은 PC에 있으면 -DashboardRoot를 주는 것을 권장(대시보드 고정 Python 3.12·Node 22 사용)
@@ -107,7 +143,7 @@ bash deploy/collect-offline.sh
 - 버전 정책: SemVer(0.x 동안 공개 API 모양 변경 = minor, 동작 수정 = patch). 패키지 버전은 `packages/simdash_adapters/pyproject.toml`과 `__version__`이 같고, 올리면 `CHANGELOG.md`·루트 `pyproject.toml` 의존 고정·`deploy/requirements.local.lock`을 함께 고친다(시험이 대조).
 - 원본 반입 자원(`resources.*`)은 묶지 않는다(라이선스·사내 배포물).
 
-### 2.3 설치 매개변수 `deploy.json`
+### 2.3 설치 매개변수 `deploy.json`(폐쇄망 서버용 묶음)
 
 폐쇄망 PC에서 zip을 풀고 `deploy\deploy.example.json`을 같은 폴더에 `deploy.json`으로 복사해 고친다. **경로 문자열은 이 파일에만** 둔다.
 
@@ -124,7 +160,7 @@ bash deploy/collect-offline.sh
 | `run_mode` | `Background`(로그온 무관, 세션 0) / `Interactive`(그 계정 로그온 세션) | `Background` |
 | `caddy_frontend_root` | 프런트 정적 파일 배치 위치(Caddy `root`) | `D:\physicsai\frontend\dist` |
 
-### 2.4 설치 실행
+### 2.4 설치 실행(폐쇄망 서버용 묶음)
 
 **권장 순서**: `config_path` 위치에 `platform.yaml`을 먼저 만들어 둔다(§4를 보고 `ai_root`·`altair.*`·`resources.*`·`profile: prod`를 채움). 설치 스크립트는 설정 파일이 없을 때만 예시를 복사하는데, 예시 값 그대로면 워커가 기동을 거부하고(종료코드 2) 작업 스케줄러가 1분마다 재시작을 반복한다.
 
@@ -246,7 +282,29 @@ D:\physicsai\venv\Scripts\python.exe -m alembic -c D:\physicsai\migrations\alemb
 
 ## 3. 업데이트·제거·백업
 
-### 3.1 업데이트
+### 3.0 업데이트(git 폴더 설치 — §2.0)
+
+```powershell
+cd E:\VD_SIMULATION_WEB\physicsai-platform
+git pull
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1      # [-Force] [-NonInteractive] [-NoStart]
+```
+
+| 단계 | 내용 |
+|---|---|
+| ① | 대기·실행 중 작업·진행 중 환경 점검 확인(§3.1 ①과 같음 — 대시보드 세션 토큰 또는 Enter로 DB 직접). 있으면 중단(`-Force`면 진행) |
+| ② | 작업 2개 중지 |
+| ③ | `.runtime\venv` 패키지 갱신(`requirements.lock` → `simdash_adapters` → 플랫폼, 로컬 패키지는 다시 설치). venv가 Python 3.12로 실행되지 않으면 `_backup`으로 옮기고 새로 만든다 |
+| ④ | 설정 보충(기존 값 유지, 새 버전에서 생긴 관리 키만. 바뀌면 먼저 `_backup` 복사) |
+| ⑤ | 프런트 재빌드(Node 22) → `.runtime\frontend`(이전 것은 `.runtime\_backup\<UTC>\frontend`) |
+| ⑥ | `alembic upgrade head` |
+| ⑦ | 시작·health |
+
+- 실패하면 되돌리는 방법을 출력한다: `git checkout <이전 커밋>` 후 다시 실행(이전 프런트는 `_backup`). migration이 이미 올라갔으면 DB는 백업에서 복원(§3.3).
+- `.runtime\_backup`은 자동으로 지우지 않는다. 확인 후 관리자가 정리한다.
+- 업데이트 전 DB 백업(§3.3)을 먼저 한다.
+
+### 3.1 업데이트(폐쇄망 서버용 묶음)
 
 ```powershell
 # 관리자 권한 PowerShell, 새 묶음의 deploy 폴더(기존 deploy.json을 복사해 둔다)

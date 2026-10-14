@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-  PhysicsAI Windows 폐쇄망 설치(phase2 §11). 실제 Windows 실행은 사용자 E2E로 확인한다(미검증).
+  PhysicsAI Windows 폐쇄망 설치(phase2 §11, 오프라인 묶음 방식 — 폐쇄망 서버용. 같은 PC·git 폴더 설치는 setup.ps1). 실제 Windows 실행은 사용자 E2E로 확인한다(미검증).
 .DESCRIPTION
   ① 관리자 권한·Python 3.12 확인(대시보드와 같은 3.12.13 권장, python_exe를 실제로 실행 — python-select.ps1) ② venv 생성·오프라인 wheel 설치 ③ 프런트 배치 ④ 설정 파일(없을 때만 예시 복사)
   ⑤ DB 역할·DB(없을 때만 생성) ⑥ 머신 환경변수 PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL ⑦ alembic upgrade head
@@ -32,38 +32,10 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 if (-not $ConfigFile) { $ConfigFile = Join-Path $PSScriptRoot 'deploy.json' }
-. (Join-Path $PSScriptRoot 'loopback-http.ps1')   # 127.0.0.1 호출은 프록시 미사용(Invoke-LoopbackRest)
-
-function Write-Step([string]$m) { Write-Host "[PhysicsAI 설치] $m" }
-function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
-function Read-Secret([string]$Prompt, [string]$EnvName) {
-    # 기본은 Read-Host -AsSecureString(대화형). -PasswordsFromEnv면 프로세스 환경변수(명령 인자·로그에 남지 않음)
-    if ($PasswordsFromEnv) {
-        $v = [Environment]::GetEnvironmentVariable($EnvName, 'Process')
-        if ($null -eq $v) { throw "-PasswordsFromEnv: 환경변수 $EnvName 이 없습니다" }
-        $ss = New-Object Security.SecureString   # ConvertTo-SecureString(모듈 자동 로드) 없이
-        foreach ($ch in $v.ToCharArray()) { $ss.AppendChar($ch) }
-        $ss.MakeReadOnly()
-        return $ss
-    }
-    return (Read-Host -AsSecureString $Prompt)
-}
-function Get-BackendPort([string]$ConfigPath, [string]$Py) {
-    # 포트는 platform.yaml server.port 한 곳에서만 읽는다(deploy.json에 포트 없음)
-    if ($Py -and (Test-Path $Py)) {
-        try {
-            $p = & $Py -c "import sys; from physicsai_core.config import load_config; print(load_config(sys.argv[1], environ={}).settings.server.port)" $ConfigPath 2>$null
-            if ($LASTEXITCODE -eq 0 -and "$p" -match '^\s*(\d+)\s*$') { return [int]$Matches[1] }
-        } catch { Write-Verbose "venv로 포트 읽기 실패 — yaml에서 직접 읽습니다" }
-    }
-    $m = [regex]::Match((Get-Content -Raw -Encoding UTF8 $ConfigPath), '(?m)^server:\s*\r?\n(?:[ \t]+.*\r?\n)*?[ \t]+port:\s*(\d+)')
-    if ($m.Success) { return [int]$m.Groups[1].Value }
-    return 8100   # 설정 기본값
-}
-function ConvertTo-Plain([Security.SecureString]$s) {
-    $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)
-    try { return [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b) } finally { [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($b) }
-}
+$PhysicsAITag = 'PhysicsAI 설치'
+. (Join-Path $PSScriptRoot 'install-common.ps1')   # DB·환경변수·alembic·작업 스케줄러·health 공용 함수(setup.ps1과 같은 코드)
+function Write-Step([string]$m) { Write-PhysicsAIStep $m }
+function Assert-Ok([string]$what) { Assert-PhysicsAIExit $what }
 
 # ---- 매개변수 -------------------------------------------------------------------
 if (-not (Test-Path $ConfigFile)) { throw "설치 매개변수 파일이 없습니다: $ConfigFile (deploy.example.json을 복사해 수정하세요)" }
@@ -83,11 +55,9 @@ foreach ($k in 'pg_bin', 'pg_host', 'pg_port', 'python_exe') {
 $root = $cfg.install_root
 $pkg = Split-Path -Parent $PSScriptRoot          # 오프라인 묶음 루트(wheels, frontend, migrations, config, deploy)
 $venvPy = Join-Path $root 'venv\Scripts\python.exe'
-$psql = Join-Path $cfg.pg_bin 'psql.exe'
 
 # ---- ① 관리자 권한·Python 3.12(대시보드와 같은 마이너) -------------------------------------------
-$me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw '관리자 권한 PowerShell에서 실행하세요' }
+Assert-PhysicsAIAdmin '.\install.ps1'
 # python_exe를 실제로 실행해 3.12인지 확인(pyenv shim 미설정·Microsoft Store 별칭·다른 버전이면 원인·다음 행동과 함께 중단). 이후 venv는 확인된 실제 실행 파일로 만든다
 . (Join-Path $PSScriptRoot 'python-select.ps1')
 $basePy = Assert-PhysicsAIPython312 -Exe "$($cfg.python_exe)"
@@ -114,99 +84,27 @@ if (-not (Test-Path $cfg.config_path)) {
     Write-Step "기존 설정 유지: $($cfg.config_path)"
 }
 
-# ---- ⑤ DB(없을 때만) — 비밀번호는 PGPASSWORD 프로세스 환경으로만 --------------------------------
-$adminPw = Read-Secret 'PostgreSQL 관리자(postgres) 비밀번호' 'PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD'
-$appPwSecure = Read-Secret "앱 DB 역할($($cfg.db_role)) 비밀번호" 'PHYSICSAI_INSTALL_DB_PASSWORD'
-$appPw = ConvertTo-Plain $appPwSecure
-$env:PGPASSWORD = ConvertTo-Plain $adminPw
-try {
-    $common = @('-h', $cfg.pg_host, '-p', [string]$cfg.pg_port, '-U', 'postgres', '-v', 'ON_ERROR_STOP=1', '-q')
-    # 대시보드와 같은 PostgreSQL 18 인스턴스(별도 DB·역할)를 기준으로 한다 — 다른 주 버전이면 경고만(설치는 계속)
-    $verNum = & $psql @common -d postgres -tAc 'SHOW server_version_num'; Assert-Ok 'psql 서버 버전 확인'
-    $verMajor = [int][math]::Floor([int]("$verNum".Trim()) / 10000)
-    if ($verMajor -ne 18) { Write-Warning "PostgreSQL 서버 주 버전이 $verMajor 입니다(기준: 대시보드와 같은 18). 계속 진행합니다" }
-    else { Write-Step "PostgreSQL 서버 버전: $("$verNum".Trim())" }
-    $hasRole = & $psql @common -d postgres -tAc "SELECT 1 FROM pg_roles WHERE rolname = '$($cfg.db_role)'"; Assert-Ok 'psql 역할 확인'
-    if (-not $hasRole) {
-        Write-Step "DB 역할 생성: $($cfg.db_role)"
-        # 비밀번호가 서버 로그에 남지 않게: 이 세션만 문장 로그·오류 문장 로그·느린 문장 로그를 끈 뒤 생성(superuser 세션 SET)
-        # SQL은 표준 입력으로(명령 인자에 비밀번호 없음)
-        $sql = "SET log_statement = 'none'; SET log_min_error_statement = 'panic'; SET log_min_duration_statement = -1; " +
-            "SET password_encryption = 'scram-sha-256'; " +
-            "CREATE ROLE `"$($cfg.db_role)`" LOGIN PASSWORD '" + $appPw.Replace("'", "''") + "';"
-        $sql | & $psql @common -d postgres; Assert-Ok 'CREATE ROLE'
-        Remove-Variable -Name sql -ErrorAction SilentlyContinue
-    }
-    $hasDb = & $psql @common -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname = '$($cfg.db_name)'"; Assert-Ok 'psql DB 확인'
-    if (-not $hasDb) {
-        Write-Step "DB 생성: $($cfg.db_name)"
-        "CREATE DATABASE `"$($cfg.db_name)`" OWNER `"$($cfg.db_role)`";" | & $psql @common -d postgres; Assert-Ok 'CREATE DATABASE'
-    }
-} finally {
-    Remove-Variable -Name adminPw -ErrorAction SilentlyContinue
-    $env:PGPASSWORD = $null
-}
+# ---- ⑤ DB(없을 때만) — 비밀번호는 Read-Host -AsSecureString(또는 -PasswordsFromEnv), PGPASSWORD 프로세스 환경으로만 ----------
+$url = Initialize-PhysicsAIDatabase -PgBin $cfg.pg_bin -PgHost $cfg.pg_host -PgPort ([int]$cfg.pg_port) -DbName $cfg.db_name -DbRole $cfg.db_role `
+    -PasswordsFromEnv:$PasswordsFromEnv
 
 # ---- ⑥ 머신 환경변수 ----------------------------------------------------------------------
-$url = "postgresql+psycopg://$($cfg.db_role):$([Uri]::EscapeDataString($appPw))@$($cfg.pg_host):$($cfg.pg_port)/$($cfg.db_name)"
-[Environment]::SetEnvironmentVariable('PHYSICSAI_CONFIG', $cfg.config_path, 'Machine')
-[Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', $url, 'Machine')
-$env:PHYSICSAI_CONFIG = $cfg.config_path
-$env:PHYSICSAI_DATABASE_URL = $url
-Write-Step '머신 환경변수 PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL 설정(값은 출력하지 않음)'
+Set-PhysicsAIMachineEnv -ConfigPath $cfg.config_path -DbUrl $url
+Remove-Variable -Name url -ErrorAction SilentlyContinue
 
 # ---- ⑦ migration --------------------------------------------------------------------------
-& $venvPy -m alembic -c (Join-Path $root 'migrations\alembic.ini') upgrade head; Assert-Ok 'alembic upgrade head'
+Invoke-PhysicsAIMigration -VenvPy $venvPy -AlembicIni (Join-Path $root 'migrations\alembic.ini')
 
-# ---- ⑧ 작업 스케줄러 등록 -----------------------------------------------------------------------
-# ExecutionTimeLimit = 0(무제한) 필수 — 기본 72시간이면 장시간 작업 중 워커가 종료된다(phase2 §11.1)
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -RestartCount 999 `
-    -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable `
-    -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries
-if ($RunMode -eq 'Interactive') {
-    $trigger = New-ScheduledTaskTrigger -AtLogOn -User $ServiceUser
-} else {
-    $trigger = New-ScheduledTaskTrigger -AtStartup
-}
-$tasks = @(
-    @{ Name = 'PhysicsAI-Backend'; Args = '-m physicsai_api.serve' },
-    @{ Name = 'PhysicsAI-Worker'; Args = '-m physicsai_worker' }
-)
-if ($RunMode -eq 'Interactive') {
-    $principal = New-ScheduledTaskPrincipal -UserId $ServiceUser -LogonType Interactive -RunLevel Limited
-} else {
-    $svcPw = Read-Secret "작업 실행 계정($ServiceUser) 비밀번호" 'PHYSICSAI_INSTALL_SERVICE_PASSWORD'
-}
-foreach ($t in $tasks) {
-    $action = New-ScheduledTaskAction -Execute $venvPy -Argument $t.Args -WorkingDirectory $root
-    if (Get-ScheduledTask -TaskName $t.Name -ErrorAction SilentlyContinue) {
-        Unregister-ScheduledTask -TaskName $t.Name -Confirm:$false
-    }
-    if ($RunMode -eq 'Interactive') {
-        Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger -Settings $settings -Principal $principal | Out-Null
-    } else {
-        Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger -Settings $settings `
-            -User $ServiceUser -Password (ConvertTo-Plain $svcPw) -RunLevel Limited | Out-Null
-    }
-    Write-Step "작업 등록: $($t.Name) ($RunMode)"
-}
-Remove-Variable -Name appPw, appPwSecure, svcPw -ErrorAction SilentlyContinue
+# ---- ⑧ 작업 스케줄러 등록(ExecutionTimeLimit 0·RestartCount 999·IgnoreNew — install-common.ps1) ---------------------------------
+Register-PhysicsAITasks -VenvPy $venvPy -WorkDir $root -ServiceUser $ServiceUser -RunMode $RunMode -PasswordsFromEnv:$PasswordsFromEnv
 
 # ---- ⑨ 시작·health ------------------------------------------------------------------------
+$port = Get-PhysicsAIBackendPort $cfg.config_path $venvPy
 if ($NoStart) {
     Write-Step '-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName PhysicsAI-Backend, PhysicsAI-Worker로 시작)'
     return
 }
-foreach ($t in $tasks) { Start-ScheduledTask -TaskName $t.Name }
-$port = Get-BackendPort $cfg.config_path $venvPy
-$health = "http://127.0.0.1:$port/physicsai/api/health"
-$ok = $false
-for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
-    Start-Sleep -Seconds 2
-    try { $r = Invoke-LoopbackRest -Uri $health -TimeoutSec 3; $ok = ($r.status -eq 'ok') } catch { $ok = $false }
-}
-if (-not $ok) { throw "health 확인 실패: $health — 작업 스케줄러 기록과 설정을 확인하세요" }
-Write-Step "health OK: $health"
+Start-PhysicsAITasksAndWait -Port $port -LogDir (Join-Path $root 'logs') | Out-Null
 
 # ---- ⑩ Caddy 안내 --------------------------------------------------------------------------
 Write-Step "대시보드 Caddyfile의 catch-all handle 앞에 $(Join-Path $PSScriptRoot 'caddy\physicsai.caddy') 내용을 넣고"

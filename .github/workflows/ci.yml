@@ -385,6 +385,147 @@ jobs:
             throw
           }
 
+      - name: 'git 폴더 설치(GitHub #1 — 사용자 방식 Windows PowerShell 5.1 -File: setup.ps1 → 재실행(idempotent) → update-repo.ps1, 가짜 pyenv shim·가짜 대시보드·가짜 원본 앱·가짜 Altair)'
+        if: ${{ !cancelled() }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $log = Join-Path $env:RUNNER_TEMP 'setup-repo.log'
+          $savedPath = $env:PATH
+          $repo = (Resolve-Path .).Path
+          $parent = Split-Path -Parent $repo
+          $rt = Join-Path $repo '.runtime'
+          $t = $env:RUNNER_TEMP
+          $direct = @()
+          function Invoke-PS51([string]$Script, [string[]]$Arguments) {
+            # 사용자 방식: powershell -NoProfile -ExecutionPolicy Bypass -File (5.1이 pwsh 7 모듈 경로를 물려받지 않게)
+            $savedPsm = $env:PSModulePath; $env:PSModulePath = $null
+            try {
+              $argLine = ($Arguments | ForEach-Object { if ($_ -match '\s') { "`"$_`"" } else { $_ } }) -join ' '
+              cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File $Script $argLine 2>&1" | Tee-Object -FilePath $log -Append | Out-Host
+              return $LASTEXITCODE
+            } finally { $env:PSModulePath = $savedPsm }
+          }
+          function Test-Health([int]$Port) { try { (Invoke-RestMethod -Uri "http://127.0.0.1:$Port/physicsai/api/health" -TimeoutSec 3).status -eq 'ok' } catch { $false } }
+          function Assert-InstalledHealth([string]$Label) {
+            # 작업 스케줄러로 시작 → 러너 세션에서 Interactive 작업이 안 뜨면 설치된 venv로 직접 기동(같은 작업 폴더·머신 환경변수)
+            $task = Get-ScheduledTask -TaskName 'PhysicsAI-Backend'
+            $exe = $task.Actions[0].Execute; $wd = $task.Actions[0].WorkingDirectory
+            if ($exe -ne (Join-Path $rt 'venv\Scripts\python.exe') -or $wd -ne $rt) { throw "$Label 작업 실행 파일·작업 폴더가 다릅니다: $exe / $wd" }
+            Start-ScheduledTask -TaskName 'PhysicsAI-Backend'
+            $ok = $false
+            for ($i = 0; $i -lt 20 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health 8100 }
+            $info = Get-ScheduledTaskInfo -TaskName 'PhysicsAI-Backend'
+            Write-Host "::notice title=$Label 작업 스케줄러 시작::health=$ok LastTaskResult=$($info.LastTaskResult)"
+            Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
+            $env:PHYSICSAI_CONFIG = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
+            $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
+            if (-not $ok) {
+              $p = Start-Process -FilePath $exe -ArgumentList '-m', 'physicsai_api.serve' -WorkingDirectory $rt `
+                -RedirectStandardOutput (Join-Path $t "setup-backend-$Label.out.log") -RedirectStandardError (Join-Path $t "setup-backend-$Label.err.log") -PassThru
+              for ($i = 0; $i -lt 30 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health 8100 }
+              Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+              if (-not $ok) { Get-Content (Join-Path $t "setup-backend-$Label.err.log") -Tail 80; throw "$Label 설치본 백엔드 health 실패" }
+            }
+            # 워커: 설정 검증(prod, 가짜 Altair·자원)을 통과해 기동 거부(종료코드 2) 없이 돌아야 한다
+            $w = Start-Process -FilePath $exe -ArgumentList '-m', 'physicsai_worker' -WorkingDirectory $rt `
+              -RedirectStandardOutput (Join-Path $t "setup-worker-$Label.out.log") -RedirectStandardError (Join-Path $t "setup-worker-$Label.err.log") -PassThru
+            Start-Sleep 12
+            if ($w.HasExited) { Get-Content (Join-Path $t "setup-worker-$Label.err.log") -Tail 60; throw "$Label 워커가 종료되었습니다(종료코드 $($w.ExitCode))" }
+            Stop-Process -Id $w.Id -Force
+            Write-Host "$Label health OK + 워커 기동 OK"
+          }
+          try {
+            # ---- 사용자 PC 재현: 대시보드는 <git 부모>\simdashboard(.env·.tools Python 3.12·Node 22), 원본 앱 폴더, Altair, 망가진 pyenv shim ----
+            $dashLink = Join-Path $parent 'simdashboard'
+            if (-not (Test-Path $dashLink)) { New-Item -ItemType Junction -Path $dashLink -Target $env:DASHBOARD_ROOT | Out-Null }
+            $nodeDir = Split-Path -Parent (Get-Command node -CommandType Application | Select-Object -First 1).Source
+            $dashNode = Join-Path $env:DASHBOARD_ROOT ('.tools\node-' + (Get-Content .node-version -Raw).Trim() + '-win-x64')
+            if (-not (Test-Path $dashNode)) { New-Item -ItemType Junction -Path $dashNode -Target $nodeDir | Out-Null }
+            $orig = Join-Path $t 'OPEN_SOURCE_physics_ai_platform'
+            foreach ($rel in 'CONFIG\BATCHRUN\BATCHRUN_preview_pred_h3d.tcl', 'CONFIG\BATCHRUN\BATCHRUN_create_include_node_elem.tcl', 'CONFIG\BATCHRUN\BATCHRUN_preview_h3d.tcl',
+                             'CONFIG\BATCHRUN\BATCHRUN_preview_hg.tcl', 'CONFIG\BATCHRUN\BATCHRUN_curate_hg.tcl', 'CONFIG\BATCHRUN\H3D_StaticMinMax_to_CSV_FAST.tcl',
+                             'CONFIG\TEMPLATE\TEMAPLATE_simlab_parametered_mesh.tpl', 'CONFIG\DATA\DATA_doe_design_type.json', 'BUILD_PYD\get_parameter_from_cad_core.cp312-win_amd64.pyd') {
+              $f = Join-Path $orig $rel; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $f) | Out-Null; Set-Content -Path $f -Value 'fake' -Encoding ascii
+            }
+            $altair = Join-Path $t 'fake-altair'
+            foreach ($rel in 'hwdesktop\hst\bin\win64\hstbatch.exe', 'SimLab\bin\win64\SimLab.bat', 'common\eds\win64\bin\win64\edspy.bat', 'hwdesktop\hw\bin\win64\hw.exe', 'hwdesktop\io\result_readers\bin\win64\hvtrans.exe') {
+              $f = Join-Path $altair "2026.1\$rel"; New-Item -ItemType Directory -Force -Path (Split-Path -Parent $f) | Out-Null; Set-Content -Path $f -Value 'fake' -Encoding ascii
+            }
+            $shim = Join-Path $t 'fake-pyenv-shims'
+            New-Item -ItemType Directory -Force -Path $shim | Out-Null
+            Set-Content -Path (Join-Path $shim 'python.bat') -Encoding ascii -Value @('@echo off', 'echo No global/local python version has been set yet. Please set the global version by typing: 1>&2', 'exit /b 1')
+            $env:PATH = "$shim;$env:PATH"
+            # 깨끗한 PC처럼: 이전 단계(install.ps1)의 머신 환경변수·DB·역할을 지운다
+            [Environment]::SetEnvironmentVariable('PHYSICSAI_CONFIG', $null, 'Machine')
+            [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', $null, 'Machine')
+            & (Join-Path $env:PGBIN 'psql.exe') -h 127.0.0.1 -p $env:PG_PORT -U $env:PGUSER -d postgres -v ON_ERROR_STOP=1 -c 'DROP DATABASE IF EXISTS physicsai WITH (FORCE)' -c 'DROP ROLE IF EXISTS physicsai_app'
+            if ($LASTEXITCODE) { throw 'DB 정리 실패' }
+
+            # ---- ① 설치: 인자는 원본 앱·Altair 위치만(대시보드·AI 루트는 git 폴더 부모 기준 기본값) ----------------------
+            $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $env:PGPASSWORD
+            $env:PHYSICSAI_INSTALL_DB_PASSWORD = 'Ci-' + [guid]::NewGuid().ToString('N')
+            Write-Host "::add-mask::$env:PHYSICSAI_INSTALL_DB_PASSWORD"
+            $rc = Invoke-PS51 '.\deploy\setup.ps1' @('-NonInteractive', '-PasswordsFromEnv', '-NoStart', '-OriginalAppRoot', $orig, '-AltairRoot', $altair)
+            if ($rc) { throw "setup.ps1 실패($rc)" }
+            $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $null; $env:PHYSICSAI_INSTALL_DB_PASSWORD = $null
+            $dj = Get-Content (Join-Path $rt 'deploy.json') -Raw | ConvertFrom-Json
+            Write-Host ($dj | ConvertTo-Json)
+            if ($dj.dashboard_root -ne $dashLink) { throw "대시보드 기본값이 <git 부모>\simdashboard가 아닙니다: $($dj.dashboard_root)" }
+            if ($dj.ai_root -ne (Join-Path $parent 'physicsai-data') -or -not (Test-Path $dj.ai_root)) { throw "AI 루트 기본값이 다르거나 폴더가 없습니다: $($dj.ai_root)" }
+            if ([int]$dj.pg_port -ne [int]$env:PG_PORT -or $dj.run_mode -ne 'Interactive') { throw "pg_port·run_mode 기본값이 다릅니다" }
+            $dashPyDir = @(Get-ChildItem (Join-Path $env:DASHBOARD_ROOT '.tools\python') -Directory -Filter 'cpython-3.12.*')[0].FullName
+            $cfgTxt = Get-Content (Join-Path $rt 'venv\pyvenv.cfg') -Raw
+            if ($cfgTxt -notmatch ('(?im)^home\s*=\s*(' + [regex]::Escape($dashPyDir) + '|' + [regex]::Escape(($dashPyDir -replace [regex]::Escape($env:DASHBOARD_ROOT), $dashLink)) + ')\s*$')) { Write-Host $cfgTxt; throw 'venv가 대시보드 Python 3.12로 만들어지지 않았습니다(가짜 pyenv shim을 골랐을 수 있음)' }
+            & (Join-Path $dashPyDir 'python.exe') -c "import importlib.util, sys; sys.exit(1 if importlib.util.find_spec('fastapi') else 0)"
+            if ($LASTEXITCODE) { throw '대시보드 Python에 패키지가 설치되었습니다' }
+            $cfgPath = Join-Path $rt 'config\platform.yaml'
+            if ([Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine') -ne $cfgPath) { throw '머신 환경변수 PHYSICSAI_CONFIG가 런타임 설정이 아닙니다' }
+            $py = Join-Path $rt 'venv\Scripts\python.exe'
+            & $py -c "import sys, yaml; c = yaml.safe_load(open(sys.argv[1], encoding='utf-8')); r = c['resources']; a = c['altair']; ok = c['profile'] == 'prod' and c['hpc']['gateway'] == 'none' and c['server']['port'] == 8100 and a['version_label'] == '2026.1' and all(a[k] for k in ('hyperstudy_path', 'simlab_path', 'edspy_path', 'hw_exe_path', 'hvtrans_exe_path')) and all(r[k] for k in r if k != 'launchers'); print(r); sys.exit(0 if ok else 1)" $cfgPath
+            if ($LASTEXITCODE) { throw 'platform.yaml 생성 값이 다릅니다' }
+            if (-not (Test-Path (Join-Path $rt 'frontend\index.html'))) { throw '프런트 배치 없음' }
+            foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
+              $s = (Get-ScheduledTask -TaskName $n).Settings
+              if ($s.ExecutionTimeLimit -ne 'PT0S' -or $s.RestartCount -ne 999 -or "$($s.MultipleInstances)" -ne 'IgnoreNew') { throw "$n 작업 설정이 다릅니다" }
+            }
+            $dirty = git status --porcelain
+            if ($dirty) { Write-Host $dirty; throw 'git 폴더에 추적되지 않은 파일·변경이 생겼습니다(.runtime·build는 git 제외여야 함)' }
+            Assert-InstalledHealth 'setup'
+
+            # ---- ② 다시 실행(idempotent): 비밀번호 환경변수 없이(기존 DB 연결 재사용), 사용자 수정값 유지 -------------------------
+            (Get-Content $cfgPath -Raw -Encoding UTF8).Replace('max_logical_cores: 32', 'max_logical_cores: 7') | Set-Content -Path $cfgPath -Encoding UTF8 -NoNewline
+            $djHash = (Get-FileHash (Join-Path $rt 'deploy.json')).Hash
+            $cfgHash = (Get-FileHash $cfgPath).Hash
+            $rc = Invoke-PS51 '.\deploy\setup.ps1' @('-NonInteractive', '-NoStart', '-OriginalAppRoot', $orig, '-AltairRoot', $altair)
+            if ($rc) { throw "setup.ps1 재실행 실패($rc)" }
+            if ((Get-FileHash (Join-Path $rt 'deploy.json')).Hash -ne $djHash) { throw '재실행에서 deploy.json이 바뀌었습니다' }
+            if ((Get-FileHash $cfgPath).Hash -ne $cfgHash) { throw '재실행에서 platform.yaml이 바뀌었습니다(사용자 수정값 유지 실패)' }
+            if (-not (Get-ChildItem (Join-Path $rt '_backup') -Recurse -Filter 'PhysicsAI-Backend.xml')) { throw '재실행 전 작업 정의 백업이 없습니다' }
+            if (git status --porcelain) { throw '재실행 후 git 폴더가 깨끗하지 않습니다' }
+            Assert-InstalledHealth 'setup-rerun'
+
+            # ---- ③ 업데이트(git pull 뒤 명령 하나): 대기열 확인 → 중지 → venv 갱신 → 프런트 재빌드 → alembic ----------------------
+            $rc = Invoke-PS51 '.\deploy\update-repo.ps1' @('-NonInteractive', '-NoStart')
+            if ($rc) { throw "update-repo.ps1 실패($rc)" }
+            if (-not (Test-Path (Join-Path $rt 'frontend\index.html'))) { throw '업데이트 후 프런트 배치 없음' }
+            if (-not (Get-ChildItem (Join-Path $rt '_backup') -Directory -Recurse -Filter 'frontend')) { throw '이전 프런트가 _backup으로 옮겨지지 않았습니다' }
+            if ((Get-FileHash $cfgPath).Hash -ne $cfgHash) { throw '업데이트에서 platform.yaml이 바뀌었습니다' }
+            if (git status --porcelain) { throw '업데이트 후 git 폴더가 깨끗하지 않습니다' }
+            Assert-InstalledHealth 'update-repo'
+          } catch {
+            $env:PATH = $savedPath
+            $msg = ($_ | Out-String) + "`n" + $_.ScriptStackTrace
+            Write-Host ('::error title=git 폴더 설치 예외::' + ($msg -replace '%', '%25' -replace "`r", '' -replace "`n", '%0A'))
+            if (Test-Path $log) { python scripts/ci_annotate.py $log 'setup·update-repo 출력' 150 }
+            foreach ($f in @(Get-ChildItem $t -Filter 'setup-*.err.log' -ErrorAction SilentlyContinue | ForEach-Object FullName)) { python scripts/ci_annotate.py $f "$(Split-Path -Leaf $f)" 60 }
+            throw
+          } finally {
+            $env:PATH = $savedPath
+            $savedPsm = $env:PSModulePath; $env:PSModulePath = $null
+            powershell.exe -NoProfile -ExecutionPolicy Bypass -File deploy\uninstall-tasks.ps1
+            $env:PSModulePath = $savedPsm
+          }
+
       - name: '저장소 모드 시연(GitHub #1 재현 — PATH 첫 python이 실패하는 가짜 pyenv shim, -DashboardRoot의 Python 3.12 → <DemoRoot>\venv) → API로 ①-1 → stop-demo.bat'
         if: ${{ !cancelled() }}
         env:

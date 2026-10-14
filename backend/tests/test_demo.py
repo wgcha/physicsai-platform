@@ -166,7 +166,8 @@ def test_demo_deploy_files_static():
         t = (REPO / "deploy" / f).read_text(encoding="utf-8-sig")
         assert "platform.demo.yaml" in t and "fake_tools" in t, f
     inst = (REPO / "deploy" / "install.ps1").read_text(encoding="utf-8-sig")
-    assert "[switch]$PasswordsFromEnv" in inst and "[switch]$NoStart" in inst and "Read-Host -AsSecureString" in inst
+    common = (REPO / "deploy" / "install-common.ps1").read_text(encoding="utf-8-sig")
+    assert "[switch]$PasswordsFromEnv" in inst and "[switch]$NoStart" in inst and "Read-Host -AsSecureString" in common
 
 
 def test_alembic_ini_is_ascii():
