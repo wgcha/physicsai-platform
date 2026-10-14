@@ -159,11 +159,11 @@ def cmd_up(args: argparse.Namespace) -> int:
         end = time.time() + float(args.timeout)
         while (err := _health_error(port)) is not None:
             if be.poll() is not None:
-                raise SystemExit(f"백엔드 기동 실패: 백엔드 프로세스가 종료됨(종료코드 {be.returncode}) — "
+                raise SystemExit(f"백엔드 기동 실패: 백엔드 프로세스가 종료됨(종료코드 {be.returncode}, 마지막 health 오류: {err}) — "
                                  f"{logs / 'backend.out.log'}·{logs / 'backend.log'} 확인")
             if time.time() > end:
                 raise SystemExit(f"백엔드 기동 실패: {args.timeout:g}초 안에 health 확인 안 됨 "
-                                 f"(http://127.0.0.1:{port}/physicsai/api/health 마지막 오류: {err}) — "
+                                 f"(http://127.0.0.1:{port}/physicsai/api/health 마지막 health 오류: {err}) — "
                                  f"{logs / 'backend.out.log'}·{logs / 'backend.log'} 확인")
             time.sleep(0.5)
         _log(f"백엔드 기동: http://127.0.0.1:{port}/")

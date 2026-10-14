@@ -151,7 +151,6 @@ def _procs(root) -> dict:
 def test_demo_up_e2e_with_bogus_proxy(db_url, tmp_path):
     """시연 init → up(migration·백엔드·health·seed·워커) → down, HTTP_PROXY 닫힌 포트 환경(GitHub #1 재현→수정).
 
-    + up 실패(시간 초과) 시 이번에 띄운 백엔드를 정리하고 원인(마지막 health 오류)을 출력
     + 이전 실행이 일부만 남아 있으면(워커 없음) 정리 후 다시 기동, 정상 실행 중이면 그대로
     """
     import psutil
@@ -164,12 +163,6 @@ def test_demo_up_e2e_with_bogus_proxy(db_url, tmp_path):
     r = _setup(env, "init", "--root", str(root), "--port", str(port))
     assert r.returncode == 0, r.stdout + r.stderr
     try:
-        # 1) 실패 경로: 시간 초과 → 종료코드≠0, 원인 출력, 띄운 백엔드 정리(포트 비움)
-        r = _setup(env, "up", "--root", str(root), "--timeout", "0")
-        assert r.returncode != 0
-        assert "백엔드 기동 실패" in r.stderr and "마지막 오류" in r.stderr, r.stderr
-        assert _procs(root) == {}
-        assert "시연 기동 실패" in (root / "logs" / "demo-setup.log").read_text(encoding="utf-8")
         # 2) 정상 경로(프록시 환경): health·seed·워커
         r = _setup(env, "up", "--root", str(root))
         assert r.returncode == 0, r.stdout + r.stderr + _tail(root)
@@ -189,6 +182,41 @@ def test_demo_up_e2e_with_bogus_proxy(db_url, tmp_path):
     finally:
         _setup(env, "down", "--root", str(root))
     assert not any(_proc_alive(v) for v in procs.values())
+
+
+def test_demo_up_failure_stops_spawned_backend(db_url, tmp_path, monkeypatch):
+    """up 실패(health 시간 초과) → 원인(마지막 health 오류) 출력·logs/demo-setup.log 기록, 이번에 띄운 백엔드 종료, 실행 정보 비움.
+
+    health를 항상 실패로 바꿔 시점과 무관하게 재현한다(Windows는 닫힌 포트 연결 거부가 ~2초 걸려 실제 기동과 경합).
+    """
+    import argparse
+
+    ds = _demo_import("demo_setup")
+    root = tmp_path / "demo"
+    env = _proxy_env()
+    r = _setup(env, "init", "--root", str(root), "--port", str(_free_port()))
+    assert r.returncode == 0, r.stdout + r.stderr
+    monkeypatch.setattr(sys, "path", list(sys.path))
+    monkeypatch.setenv("PHYSICSAI_DATABASE_URL", db_url)
+    monkeypatch.setenv("FAKE_DEMO_DELAY_S", "0")
+    monkeypatch.setattr(ds, "_health_error", lambda port: "URLError: 가짜 연결 실패")
+    spawned = []
+    real_spawn = ds._spawn
+
+    def spy(*a, **kw):
+        p = real_spawn(*a, **kw)
+        spawned.append(p)
+        return p
+
+    monkeypatch.setattr(ds, "_spawn", spy)
+    with pytest.raises(SystemExit) as ei:
+        ds.cmd_up(argparse.Namespace(root=str(root), timeout=2))
+    msg = str(ei.value)
+    assert "백엔드 기동 실패" in msg and "마지막 health 오류: URLError: 가짜 연결 실패" in msg, msg
+    assert len(spawned) == 1 and spawned[0].wait(30) is not None  # 이번에 띄운 백엔드는 종료됨
+    assert _procs(root) == {}
+    log = (root / "logs" / "demo-setup.log").read_text(encoding="utf-8")
+    assert "시연 기동 실패" in log and "프로세스 정리: backend" in log
 
 
 def _tail(root) -> str:
