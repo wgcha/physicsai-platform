@@ -247,10 +247,57 @@ jobs:
           Write-Host "검사한 파일: $($files.Count)"
           if ($bad) { exit 1 }
 
-      - name: 오프라인 묶음 만들기(collect-offline.ps1 실제 실행)
+      - name: '오프라인 묶음 만들기(GitHub #1 재현 — PATH 첫 python이 실패하는 가짜 pyenv shim, Windows PowerShell 5.1로 collect-offline.ps1 -DashboardRoot)'
         if: ${{ !cancelled() }}
         run: |
-          ./deploy/collect-offline.ps1
+          $ErrorActionPreference = 'Stop'
+          $log = Join-Path $env:RUNNER_TEMP 'collect-offline.log'
+          $savedPath = $env:PATH
+          try {
+            # 사용자 PC 재현: pyenv-win shim(전역 버전 미설정)이 PATH 맨 앞 → python 실행이 실패한다
+            $shim = Join-Path $env:RUNNER_TEMP 'fake-pyenv-shims'
+            New-Item -ItemType Directory -Force -Path $shim | Out-Null
+            Set-Content -Path (Join-Path $shim 'python.bat') -Encoding ascii -Value @(
+              '@echo off',
+              'echo No global/local python version has been set yet. Please set the global version by typing: 1>&2',
+              'echo pyenv global 3.7.4 1>&2',
+              'exit /b 1')
+            # 대시보드 고정 Node 배치(<대시보드>\.tools\node-v22.23.2-win-x64)를 setup-node 설치본 연결로 흉내
+            $nodeDir = Split-Path -Parent (Get-Command node -CommandType Application | Select-Object -First 1).Source
+            $dashNode = Join-Path $env:DASHBOARD_ROOT ('.tools\node-' + (Get-Content .node-version -Raw).Trim() + '-win-x64')
+            if (-not (Test-Path $dashNode)) { New-Item -ItemType Junction -Path $dashNode -Target $nodeDir | Out-Null }
+            $env:PATH = "$shim;$env:PATH"
+            $first = (Get-Command python -CommandType Application | Select-Object -First 1).Source
+            if ($first -ne (Join-Path $shim 'python.bat')) { throw "가짜 shim이 PATH 첫 python이 아닙니다: $first" }
+            cmd /c "python -c `"print(1)`" >nul 2>&1"
+            if ($LASTEXITCODE -eq 0) { throw '가짜 shim이 실패하지 않습니다(재현 조건 아님)' }
+            # 사용자와 같은 명령(Windows PowerShell 5.1 -File). 5.1이 pwsh 7 모듈 경로를 물려받지 않게
+            $savedPsm = $env:PSModulePath; $env:PSModulePath = $null
+            cmd /c "powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\collect-offline.ps1 -DashboardRoot `"$env:DASHBOARD_ROOT`" 2>&1" | Tee-Object -FilePath $log
+            $rc = $LASTEXITCODE; $env:PSModulePath = $savedPsm
+            if ($rc) { throw "collect-offline.ps1 실패($rc)" }
+          } catch {
+            $env:PATH = $savedPath
+            if (Test-Path $log) { python scripts/ci_annotate.py $log 'collect-offline 출력' 150 }
+            throw
+          } finally { $env:PATH = $savedPath }
+          # 대시보드 Python 3.12·Node 22를 골랐는지(콘솔 한글 인코딩과 무관하게 ASCII 경로로 확인)
+          $outTxt = Get-Content $log -Raw
+          $dashPy = (Get-ChildItem (Join-Path $env:DASHBOARD_ROOT '.tools\python') -Directory -Filter 'cpython-3.12.*' | Select-Object -First 1).FullName + '\python.exe'
+          if ($outTxt -notmatch ([regex]::Escape($dashPy) + ' \(Python 3\.12\.\d+\)')) { throw "대시보드 Python 3.12를 고르지 않았습니다: $dashPy" }
+          if ($outTxt -notmatch ([regex]::Escape((Join-Path $dashNode 'node.exe')) + ' \(Node v22\.')) { throw "대시보드 Node 22를 고르지 않았습니다: $dashNode" }
+          # 빌드용 임시 venv는 지워지고 묶음에 들어가지 않는다. 대시보드 런타임에는 설치하지 않는다
+          if (Test-Path dist/_buildvenv) { throw 'dist\_buildvenv가 남아 있습니다' }
+          $zip = Get-ChildItem physicsai-offline-*.zip | Select-Object -First 1
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $z = [IO.Compression.ZipFile]::OpenRead($zip.FullName)
+          try { $names = @($z.Entries | ForEach-Object FullName) } finally { $z.Dispose() }
+          if ($names | Where-Object { $_ -match '_buildvenv' }) { throw '묶음에 빌드용 venv가 들어 있습니다' }
+          $tops = @($names | ForEach-Object { ($_ -split '[\\/]')[0] } | Sort-Object -Unique)
+          Write-Host "묶음 최상위: $($tops -join ', ')"
+          if (Compare-Object $tops @('config', 'deploy', 'frontend', 'migrations', 'wheels')) { throw "묶음 최상위 구성이 다릅니다: $($tops -join ', ')" }
+          & $dashPy -c "import importlib.util, sys; sys.exit(1 if importlib.util.find_spec('simdash_adapters') or importlib.util.find_spec('fastapi') else 0)"
+          if ($LASTEXITCODE) { throw '대시보드 Python에 패키지가 설치되었습니다' }
           if (-not (Test-Path dist/wheels/*.whl)) { throw 'wheels 없음' }
           if (-not (Test-Path dist/wheels/simdash_adapters-0.1.0-py3-none-any.whl)) { throw 'simdash-adapters wheel 없음' }
           if (-not (Test-Path dist/frontend/index.html)) { throw '프런트 빌드 없음' }

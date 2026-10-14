@@ -1,11 +1,12 @@
 ﻿<#
 .SYNOPSIS
   대시보드(simulation_workbench) 실행 환경 재사용: deploy.json의 dashboard_root(선택)로 PostgreSQL bin·host·port와
-  Python 3.12 실행 파일 기본값을 찾는다. install.ps1·update.ps1·demo\start-demo.ps1이 dot-source 한다.
+  Python 3.12 실행 파일 기본값을 찾는다. install.ps1·update.ps1·collect-offline.ps1·demo\start-demo.ps1이 dot-source 한다.
 .DESCRIPTION
   읽는 것(대시보드 <dashboard_root>\.env): POSTGRES_BIN 값, DATABASE_URL의 host·port만.
   DATABASE_URL의 사용자명·비밀번호는 정규식에서 캡처하지 않고, 원문 줄은 파싱 직후 변수에서 지운다(출력·로그 없음).
   Python 후보: <dashboard_root>\.tools\python\cpython-3.12.*-windows-x86_64-none\python.exe (대시보드 setup.ps1 고정 런타임).
+  Node 후보: <dashboard_root>\.tools\node-v22.*-win-x64\node.exe (대시보드 고정 Node 22 — collect-offline.ps1 프런트 빌드용).
   deploy.json·매개변수의 명시 값이 항상 우선이다(여기 값은 비어 있을 때만 쓰는 기본값).
 #>
 
@@ -13,7 +14,7 @@ function Get-DashboardRuntimeDefaults {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$DashboardRoot)
     if (-not (Test-Path -LiteralPath $DashboardRoot -PathType Container)) { throw "dashboard_root 폴더가 없습니다: $DashboardRoot" }
-    $r = [ordered]@{ PgBin = $null; PgHost = $null; PgPort = $null; PythonExe = $null; EnvFile = $null }
+    $r = [ordered]@{ PgBin = $null; PgHost = $null; PgPort = $null; PythonExe = $null; NodeExe = $null; EnvFile = $null }
     $envFile = Join-Path $DashboardRoot '.env'
     if (Test-Path -LiteralPath $envFile -PathType Leaf) {
         $r.EnvFile = $envFile
@@ -43,6 +44,13 @@ function Get-DashboardRuntimeDefaults {
             Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'python.exe') -PathType Leaf } |
             Sort-Object -Descending -Property @{ Expression = { $v = [regex]::Match($_.Name, '^cpython-(\d+\.\d+\.\d+)'); if ($v.Success) { [version]$v.Groups[1].Value } else { [version]'0.0.0' } } })
         if ($cands.Count) { $r.PythonExe = Join-Path $cands[0].FullName 'python.exe' }
+    }
+    $tools = Join-Path $DashboardRoot '.tools'
+    if (Test-Path -LiteralPath $tools -PathType Container) {
+        $nodes = @(Get-ChildItem -LiteralPath $tools -Directory -Filter 'node-v22.*-win-x64' -ErrorAction SilentlyContinue |
+            Where-Object { Test-Path -LiteralPath (Join-Path $_.FullName 'node.exe') -PathType Leaf } |
+            Sort-Object -Descending -Property @{ Expression = { $v = [regex]::Match($_.Name, '^node-v(\d+\.\d+\.\d+)'); if ($v.Success) { [version]$v.Groups[1].Value } else { [version]'0.0.0' } } })
+        if ($nodes.Count) { $r.NodeExe = Join-Path $nodes[0].FullName 'node.exe' }
     }
     return [pscustomobject]$r
 }

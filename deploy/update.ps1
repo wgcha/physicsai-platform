@@ -39,6 +39,10 @@ if ($cfg.dashboard_root) {
     . (Join-Path $PSScriptRoot 'dashboard-env.ps1')
     Merge-DashboardDefaults -Config $cfg -Defaults (Get-DashboardRuntimeDefaults -DashboardRoot $cfg.dashboard_root) | Out-Null
 }
+# 기존 설치를 옮기기 전에 python_exe가 실제로 Python 3.12로 실행되는지 확인(망가진 pyenv shim 등이면 원인·다음 행동과 함께 여기서 중단 — 아무것도 바꾸지 않음)
+. (Join-Path $PSScriptRoot 'python-select.ps1')
+$basePy = Assert-PhysicsAIPython312 -Exe "$($cfg.python_exe)"
+Write-Step "Python $($basePy.Version): $($basePy.Exe)"
 $root = $cfg.install_root
 $pkg = Split-Path -Parent $PSScriptRoot
 $venvPy = Join-Path $root 'venv\Scripts\python.exe'
@@ -96,7 +100,7 @@ Write-Step "기존 venv·migrations·프런트를 이동했습니다: $backup"
 
 try {
     # ---- ④ 새 설치 ---------------------------------------------------------------------------
-    & $cfg.python_exe -m venv (Join-Path $root 'venv'); Assert-Ok 'venv 생성'
+    & $basePy.Exe -m venv (Join-Path $root 'venv'); Assert-Ok 'venv 생성'
     & $venvPy -m pip install --no-index --find-links (Join-Path $pkg 'wheels') physicsai-platform; Assert-Ok 'wheel 설치'
     Copy-Item -Recurse -Force (Join-Path $pkg 'migrations') (Join-Path $root 'migrations')
     New-Item -ItemType Directory -Force -Path $cfg.caddy_frontend_root | Out-Null

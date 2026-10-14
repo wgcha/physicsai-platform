@@ -66,7 +66,7 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 | 실행 환경 | **대시보드와 동일**: Python **3.12.13**, PostgreSQL **18**, Node **22.23.2**(저장소 `.python-version`·`.node-version`, 대시보드와 같은 값) |
 | Python | **3.12**(3.12.13 권장 — 대시보드 고정 런타임 `<대시보드>\.tools\python\cpython-3.12.13-windows-x86_64-none\python.exe`를 그대로 써도 된다). 경로는 `deploy.json`의 `python_exe` 또는 `dashboard_root`. 3.12가 아니면 설치 중단 |
 | PostgreSQL | **18** — 대시보드가 쓰는 **같은 인스턴스에 별도 DB(`physicsai`)·역할(`physicsai_app`)**. `postgres` 관리자 비밀번호를 알고 있음(`pg_bin`에 `psql.exe`). 서버가 18이 아니면 설치는 계속하되 경고 |
-| Node | 22.23.2 — 준비 PC에서 프런트 빌드(`npm ci && npm run build`)에만 필요(폐쇄망 설치 PC에는 불필요) |
+| Node | 22.23.2 — 준비 PC에서 프런트 빌드(`npm ci && npm run build`)에만 필요(폐쇄망 설치 PC에는 불필요). 대시보드 고정 Node(`<대시보드>\.tools\node-v22.23.2-win-x64`)를 `collect-offline.ps1 -DashboardRoot`로 그대로 써도 된다 |
 | Caddy | 대시보드가 쓰는 Caddy(설정 파일 수정 권한) |
 | Altair 2026.1 | HyperStudy·SimLab·PhysicsAI(edspy)·HyperWorks(hw)·hvtrans 설치·라이선스 |
 | 실행 계정 | `NT AUTHORITY\SYSTEM`이 아닌 지정 계정(예 `CORP\svc_physicsai`). AI 루트 읽기·쓰기, Altair 라이선스 접근 권한 |
@@ -77,10 +77,24 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 ### 2.2 오프라인 묶음 만들기(인터넷 되는 준비 PC)
 
 ```powershell
-# Windows 준비 PC
-powershell -NoProfile -ExecutionPolicy Bypass -File deploy\collect-offline.ps1 -DryRun   # 실행할 명령만 확인
-powershell -NoProfile -ExecutionPolicy Bypass -File deploy\collect-offline.ps1
+# Windows 준비 PC(저장소 폴더에서). 대시보드가 같은 PC에 있으면 -DashboardRoot를 주는 것을 권장(대시보드 고정 Python 3.12·Node 22 사용)
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\collect-offline.ps1 -DashboardRoot E:\VD_SIMULATION_WEB\simdashboard -DryRun   # Python·Node 확인 + 실행할 명령만 출력
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\collect-offline.ps1 -DashboardRoot E:\VD_SIMULATION_WEB\simdashboard
+# 대시보드가 없으면: -PythonExe <Python 3.12 python.exe 경로>(생략하면 py -3.12 → PATH의 python 순으로 자동 선택)
 ```
+
+| 인자 | 기본 | 뜻 |
+|---|---|---|
+| `-DashboardRoot` | – | (선택) 대시보드 폴더. `.tools\python\cpython-3.12.*\python.exe`(고정 Python 3.12)와 `.tools\node-v22.*-win-x64\node.exe`(고정 Node 22)를 후보로 쓴다(`.env` 비밀번호는 읽지 않음, `dashboard-env.ps1`) |
+| `-PythonExe` | 자동 선택 | Python 3.12 실행 파일(대시보드와 같은 3.12.13 권장) |
+| `-DryRun` | – | Python·Node 선택만 확인하고 실행할 명령을 출력(빌드·내려받기 없음) |
+
+- **Python 선택**(시연 `start-demo`와 같은 규칙, 공용 `deploy\python-select.ps1`): `-PythonExe` → `-DashboardRoot`의 고정 Python 3.12 → `py -3.12` → PATH의 `python`. 각 후보를 실제로 실행해 3.12인지 확인하고, 실행이 안 되거나(예: pyenv-win shim에 전역 버전 미설정 — "No global/local python version has been set yet", Microsoft Store 별칭) 버전이 다르면 다음 후보로 넘어간다. 고른 Python은 `[PhysicsAI 묶음] Python 선택: … → <경로>` 한 줄로 출력된다. 후보가 모두 실패하면 건너뛴 이유와 다음 행동을 출력하고 중단한다.
+- **패키지 설치 위치**: `pip wheel`·`pip download`는 고른 Python으로 만든 **빌드용 임시 venv `dist\_buildvenv`**에서 실행한다. 대시보드 런타임·시스템 Python에는 아무것도 설치하지 않으며, 임시 venv는 끝나면 지우고 묶음(zip)에도 넣지 않는다(묶음 최상위는 `wheels`·`frontend`·`migrations`·`config`·`deploy`만).
+- **Node**(프런트 빌드 `npm ci && npm run build`): `-DashboardRoot`의 고정 Node 22 → PATH의 `node` 순으로 `node --version`을 실행해 22.x인지 확인하고, 고른 Node를 `[PhysicsAI 묶음] Node 선택: …`로 출력한다(이 실행 동안만 PATH 맨 앞에 둠 — `npm`이 같은 Node를 쓰게). 없거나 22가 아니면 "Node 22를 찾지 못했습니다 … 다음 행동: Node 22.23.2를 PATH 맨 앞에 두거나 -DashboardRoot 지정"으로 중단한다. 22.23.2가 아닌 22.x면 안내만 하고 계속한다.
+- **`.bat`·스크립트 실행 차단**: 이 스크립트에는 `.bat`이 없다. 위처럼 `powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\collect-offline.ps1 …`로 직접 실행한다(실행 정책으로 `.ps1`이 막혀도 이 형식은 이 프로세스에만 Bypass를 적용). `install.bat`·`update.bat`·`start-demo.bat`이 "액세스가 거부되었습니다"로 막힐 때도 같은 형식으로 `.ps1`을 직접 실행한다(인자 동일).
+- 다시 실행해도 된다(`dist`의 폴더 안으로 내용을 덮어 복사, 빌드용 venv는 매번 새로 만듦).
+- `install.ps1`·`update.ps1`도 `deploy.json`의 `python_exe`(또는 `dashboard_root`로 채운 값)를 같은 방식으로 실제 실행해 확인한다 — 망가진 pyenv shim·다른 버전이면 원인과 다음 행동(`python_exe`를 실제 `python.exe` 경로로 고치거나 비우고 `dashboard_root` 지정)을 출력하고, `update.ps1`은 기존 설치를 옮기기 **전에** 중단한다.
 
 ```bash
 # Linux 준비 PC
@@ -88,7 +102,7 @@ bash deploy/collect-offline.sh --dry-run
 bash deploy/collect-offline.sh
 ```
 
-- 하는 일: 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.local.lock`을 로컬 wheel만으로 확인(`pip download --no-index --find-links dist/wheels`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.12(cp312) 외부 의존성 wheel 내려받기(PyPI) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
+- 하는 일: (빌드용 임시 venv에서) 공통 어댑터 패키지 wheel(`packages/simdash_adapters` → `simdash_adapters-0.1.0-py3-none-any.whl`) → `deploy/requirements.local.lock`을 로컬 wheel만으로 확인(`pip download --no-index --find-links dist/wheels`) → `deploy/requirements.lock` 기준 win_amd64·Python 3.12(cp312) 외부 의존성 wheel 내려받기(PyPI) → 플랫폼 wheel → `frontend`에서 `npm ci && npm run build` → `dist/{wheels, frontend, migrations, config, deploy}`를 `physicsai-offline-<version>.zip`으로 묶음.
 - 공통 어댑터 패키지 `simdash-adapters`(3차): HPC(PBS) 게이트웨이·회수 경로 해석을 떼어 낸 순수 Python 패키지(표준 라이브러리만, Windows·Linux 공용). **PyPI에 없고 PyPI에서 받지도 않는다** — lock은 두 개다: `deploy/requirements.lock` = PyPI에서 받는 외부 의존성만(어댑터 없음, 같은 이름의 외부 패키지가 섞여 들어오는 것을 막음), `deploy/requirements.local.lock` = `simdash-adapters==0.1.0`(저장소 소스로 만든 로컬 wheel로만 확인, `--no-index`). 플랫폼 wheel이 `simdash-adapters==0.1.0`을 정확 버전으로 요구하므로 설치(`install.ps1`·`update.ps1`)는 기존 명령(`pip install --no-index --find-links wheels physicsai-platform`) 그대로 함께 설치된다. 묶음 확인: `wheels\simdash_adapters-0.1.0-py3-none-any.whl`이 있어야 한다. 개발 PC에서는 루트 `pip install .` 대신 `scripts/dev-setup`을 쓴다(§2.9 — 패키지를 먼저 설치하지 않으면 의존성을 인덱스에서 찾는다).
 - 버전 정책: SemVer(0.x 동안 공개 API 모양 변경 = minor, 동작 수정 = patch). 패키지 버전은 `packages/simdash_adapters/pyproject.toml`과 `__version__`이 같고, 올리면 `CHANGELOG.md`·루트 `pyproject.toml` 의존 고정·`deploy/requirements.local.lock`을 함께 고친다(시험이 대조).
 - 원본 반입 자원(`resources.*`)은 묶지 않는다(라이선스·사내 배포물).
@@ -1032,7 +1046,7 @@ $env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
 | 잡 | 환경 | 단계(순서대로) |
 |---|---|---|
 | **linux** "Linux · test-all (PostgreSQL 18)" | ubuntu-24.04, Python 3.12.13(`.python-version`), Node 22.23.2(`.node-version`), PostgreSQL 18(PGDG apt, 시험마다 임시 클러스터 — `PHYSICSAI_TEST_PGBIN`, `PHYSICSAI_REQUIRE_PG_MAJOR=18`), 제한 40분 | ⓪ 버전 확인(Python·Node가 고정값과 같음) ① `./packages/simdash_adapters` → `deploy/requirements.lock` + pytest 설치 ② `pwsh` 확인(ps1 구문 검사 시험용) ③ `scripts/test-all.sh`(pytest(어댑터 패키지 시험 포함) + openapi 최신 여부 + vitest + tsc) ④ `deploy/collect-offline.sh --dry-run` ⑤ `scripts/check-adapters-wheel.sh`(wheel 이름·빈 venv 설치) |
-| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.12.13(setup-python Windows 목록에 없어 대시보드처럼 uv 0.11.32로 `<가짜 대시보드>\.tools\python\cpython-3.12.13-windows-x86_64-none`에 설치 → 시험용 venv), Node 22.23.2, PostgreSQL 18(러너 기본이 18이면 그 서비스, 아니면 EDB 공식 zip 바이너리로 클러스터), 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(`collect-offline.ps1`; wheels(`simdash_adapters-0.1.0-py3-none-any.whl` 포함)·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인. 이 설치는 `deploy.json`에 `python_exe`·`pg_*` 없이 **`dashboard_root`(가짜 대시보드 `.env`·`.tools`)만** 주어 기본값 채움·PostgreSQL 18 확인·대시보드 DB 사용자·비밀번호 미출력을 검사 ⑥ **시연 원클릭**: `start-demo.bat -DashboardRoot`(포트 8196, PgBin을 대시보드 `.env`에서) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
+| **windows** "Windows · pytest 전체 + Job Object + 배포·시연" | windows-latest, Python 3.12.13(setup-python Windows 목록에 없어 대시보드처럼 uv 0.11.32로 `<가짜 대시보드>\.tools\python\cpython-3.12.13-windows-x86_64-none`에 설치 → 시험용 venv), Node 22.23.2, PostgreSQL 18(러너 기본이 18이면 그 서비스, 아니면 EDB 공식 zip 바이너리로 클러스터), 제한 75분 | ① **Windows 전용 시험**(`pytest -m windows`: V-JO-1~3, CREATE_SUSPENDED, V2-EC-4) — `PHYSICSAI_REQUIRE_WINDOWS_TESTS=1`이라 **skip이면 실패** ② **pytest 전체**(fake tools `.exe` 런처 + 실제 Job Object 제한기 + 시연 E2E) ③ **PowerShell 구문 검사**: `deploy`·`scripts`의 모든 `.ps1`을 pwsh 7과 Windows PowerShell 5.1 양쪽 파서로 ④ **오프라인 묶음 실제 생성**(GitHub #1 재현: PATH 첫 `python`이 실패하는 가짜 pyenv shim 상태에서 사용자와 같은 Windows PowerShell 5.1 `-File`로 `collect-offline.ps1 -DashboardRoot <가짜 대시보드>` → 대시보드 Python 3.12·Node 22 선택, 빌드용 venv 삭제·묶음 미포함·대시보드 Python 무설치 확인; wheels(`simdash_adapters-0.1.0-py3-none-any.whl` 포함)·프런트·시연 가짜 도구 포함 확인) ⑤ **install 실제 설치**: 시연 설정으로 `dist\deploy\install.bat -PasswordsFromEnv -NoStart`(Interactive 모드) → 작업 2개 등록 확인(`ExecutionTimeLimit=PT0S`, `RestartCount=999`, `MultipleInstances=IgnoreNew`) → 백엔드 health(러너 세션에서 작업이 안 뜨면 설치된 venv로 직접 기동해 설치본 검증, 경고 주석) → `uninstall-tasks.ps1`로 해제·없음 확인. 이 설치는 `deploy.json`에 `python_exe`·`pg_*` 없이 **`dashboard_root`(가짜 대시보드 `.env`·`.tools`)만** 주어 기본값 채움·PostgreSQL 18 확인·대시보드 DB 사용자·비밀번호 미출력을 검사 ⑥ **시연 원클릭**: `start-demo.bat -DashboardRoot`(포트 8196, PgBin을 대시보드 `.env`에서) → power 시연 로그인 → `/status`의 `demo`·워커 온라인·limiter `windows_job` 확인 → 시연 Study에서 ①-1 파라미터 추출 작업 실행 → `SUCCEEDED` 확인 → `stop-demo.bat` |
 
 ③~⑥은 앞 단계가 실패해도 실행된다(취소된 경우만 제외) — 한 번에 여러 문제를 볼 수 있다.
 

@@ -2,7 +2,7 @@
 .SYNOPSIS
   PhysicsAI Windows 폐쇄망 설치(phase2 §11). 실제 Windows 실행은 사용자 E2E로 확인한다(미검증).
 .DESCRIPTION
-  ① 관리자 권한·Python 3.12 확인(대시보드와 같은 3.12.13 권장) ② venv 생성·오프라인 wheel 설치 ③ 프런트 배치 ④ 설정 파일(없을 때만 예시 복사)
+  ① 관리자 권한·Python 3.12 확인(대시보드와 같은 3.12.13 권장, python_exe를 실제로 실행 — python-select.ps1) ② venv 생성·오프라인 wheel 설치 ③ 프런트 배치 ④ 설정 파일(없을 때만 예시 복사)
   ⑤ DB 역할·DB(없을 때만 생성) ⑥ 머신 환경변수 PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL ⑦ alembic upgrade head
   ⑧ 작업 스케줄러 등록(PhysicsAI-Backend, PhysicsAI-Worker) ⑨ 시작·health 확인 ⑩ Caddy 스니펫 안내.
   경로 문자열은 deploy.json(예: deploy.example.json 복사)과 매개변수에만 있다. 비밀번호는 Read-Host -AsSecureString으로
@@ -88,16 +88,15 @@ $psql = Join-Path $cfg.pg_bin 'psql.exe'
 # ---- ① 관리자 권한·Python 3.12(대시보드와 같은 마이너) -------------------------------------------
 $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
 if (-not $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) { throw '관리자 권한 PowerShell에서 실행하세요' }
-$pyver = & $cfg.python_exe -c "import sys; print('%d.%d' % sys.version_info[:2])"
-Assert-Ok 'Python 확인'
-if ($pyver.Trim() -ne '3.12') { throw "Python 3.12가 필요합니다(대시보드와 같은 3.12.13 권장, 현재 $pyver): $($cfg.python_exe)" }
-$pyFull = & $cfg.python_exe -c 'import platform; print(platform.python_version())'
-Write-Step "Python ${pyFull}: $($cfg.python_exe)"
+# python_exe를 실제로 실행해 3.12인지 확인(pyenv shim 미설정·Microsoft Store 별칭·다른 버전이면 원인·다음 행동과 함께 중단). 이후 venv는 확인된 실제 실행 파일로 만든다
+. (Join-Path $PSScriptRoot 'python-select.ps1')
+$basePy = Assert-PhysicsAIPython312 -Exe "$($cfg.python_exe)"
+Write-Step "Python $($basePy.Version): $($basePy.Exe)"
 
 # ---- ② venv + 오프라인 wheel -------------------------------------------------------------
 Write-Step "venv 생성: $root\venv"
 New-Item -ItemType Directory -Force -Path $root | Out-Null
-& $cfg.python_exe -m venv (Join-Path $root 'venv'); Assert-Ok 'venv 생성'
+& $basePy.Exe -m venv (Join-Path $root 'venv'); Assert-Ok 'venv 생성'
 & $venvPy -m pip install --no-index --find-links (Join-Path $pkg 'wheels') physicsai-platform; Assert-Ok 'wheel 설치'
 Copy-Item -Recurse -Force (Join-Path $pkg 'migrations') (Join-Path $root 'migrations')
 

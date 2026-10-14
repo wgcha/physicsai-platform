@@ -241,7 +241,13 @@ def test_deploy_files_and_keys():
     assert used <= keys and used >= keys - {"caddy_frontend_root"} | set(), used ^ keys
     inst = (DEPLOY / "install.ps1").read_text(encoding="utf-8")
     # 실행 환경은 대시보드와 같게: Python 3.12(아니면 중단), PostgreSQL 18(아니면 경고) — decisions 2026-10-13
-    assert "-ne '3.12'" in inst and "3.13" not in inst and "SHOW server_version_num" in inst and "-ne 18" in inst
+    # python_exe는 실제로 실행해 3.12인지 확인(deploy/python-select.ps1 공용 — 망가진 pyenv shim이면 원인·다음 행동, GitHub #1)
+    sel = (DEPLOY / "python-select.ps1").read_text(encoding="utf-8")
+    assert "sys.version_info[:2] == (3, 12)" in sel and "3.13" not in sel
+    for n in ("install.ps1", "update.ps1"):
+        t = (DEPLOY / n).read_text(encoding="utf-8")
+        assert "python-select.ps1" in t and "Assert-PhysicsAIPython312" in t and "& $cfg.python_exe" not in t, n
+    assert "3.13" not in inst and "SHOW server_version_num" in inst and "-ne 18" in inst
     assert "dashboard-env.ps1" in inst and "dashboard-env.ps1" in (DEPLOY / "update.ps1").read_text(encoding="utf-8")
     assert "ExecutionTimeLimit" in inst and "New-TimeSpan -Seconds 0" in inst and "RestartCount 999" in inst
     assert "Read-Host" in inst and "-AsSecureString" in inst and "PGPASSWORD" in inst and "IgnoreNew" in inst
@@ -273,6 +279,69 @@ def _pwsh() -> str | None:
     import os
 
     return os.environ.get("PHYSICSAI_PWSH") or shutil.which("pwsh")
+
+
+@pytest.mark.posix  # Windows는 CI windows 잡 "오프라인 묶음 만들기"(가짜 pyenv shim이 PATH 맨 앞, -DashboardRoot)에서 실제 실행
+def test_collect_offline_ps1_selects_dashboard_runtimes(tmp_path):
+    """GitHub #1: collect-offline.ps1은 PATH의 망가진 pyenv shim 대신 -DashboardRoot의 Python 3.12·Node 22를 고르고,
+    pip는 빌드용 임시 venv(dist\\_buildvenv)에서 실행한다. Node 22가 없거나 python_exe가 망가지면 원인·다음 행동으로 중단."""
+    import os
+
+    pwsh = _pwsh()
+    if not pwsh:
+        pytest.skip("pwsh 없음 — collect-offline.ps1 실행 시험 미수행(CI linux·windows 잡은 pwsh 있음)")
+
+    def stub(path, body: str) -> str:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("#!/bin/sh\n" + body + "\n", encoding="utf-8")
+        path.chmod(0o755)
+        return path.as_posix()
+
+    shims = tmp_path / "shims"
+    stub(shims / "python", 'echo "No global/local python version has been set yet." >&2; echo "pyenv global 3.7.4" >&2; exit 1')
+    stub(shims / "python3", 'echo "No global/local python version has been set yet." >&2; exit 1')
+    dash = tmp_path / "dash"
+    dpy = stub(dash / ".tools" / "python" / "cpython-3.12.13-windows-x86_64-none" / "python.exe",
+               'echo "PHYSICSAI_PY=3.12.13 /dash/cpython-3.12.13/python.exe"; exit 0')
+    stub(dash / ".tools" / "node-v22.23.2-win-x64" / "node.exe", 'echo v22.23.2')
+    stub(dash / ".tools" / "node-v22.23.2-win-x64" / "npm.cmd", 'exit 0')
+    (dash / ".env").write_text("DATABASE_URL=postgresql://u:secret-x@h:5/d\n", encoding="utf-8")
+    script = (DEPLOY / "collect-offline.ps1").as_posix()
+    env = {**os.environ, "PATH": f"{shims}{os.pathsep}{os.environ['PATH']}"}
+
+    def run(*args: str, path: str | None = None) -> subprocess.CompletedProcess:
+        e = dict(env) if path is None else {**env, "PATH": path}
+        return subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-File", script, "-DryRun", *args],
+                              capture_output=True, text=True, cwd=REPO, env=e, timeout=120)
+
+    r = run("-DashboardRoot", dash.as_posix())
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    assert "Python 후보 건너뜀: -PythonExe" not in out and "Python 선택: 대시보드 Python 3.12 → /dash/cpython-3.12.13/python.exe" in out
+    assert "Node 선택: 대시보드 Node" in out and "v22.23.2" in out and "secret-x" not in out
+    lines = [ln for ln in r.stdout.splitlines() if ln.startswith("+ ")]
+    assert any("pip wheel packages/simdash_adapters" in ln for ln in lines) and any("npm ci" in ln for ln in lines)
+    assert not (REPO / "dist" / "_buildvenv").exists()   # -DryRun은 venv를 만들지 않는다
+
+    # 대시보드 없이 PATH 첫 python이 shim이고 다른 3.12도 없으면: 원인(건너뛴 후보)·다음 행동으로 중단
+    r = run(path=f"{shims}{os.pathsep}{tmp_path / 'empty'}")
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "No global/local python" in out and "Python 3.12를 찾지 못했습니다" in out and "-DashboardRoot" in out
+
+    # Python은 있어도 Node 22가 없으면(PATH node 20) Node 원인·다음 행동
+    stub(tmp_path / "node20" / "node", 'echo v20.11.1')
+    r = run("-PythonExe", dpy, path=f"{shims}{os.pathsep}{tmp_path / 'node20'}")
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "Python 선택: -PythonExe" in out
+    assert "Node 22를 찾지 못했습니다" in out and "Node v20.11.1(22 아님)" in out and "다음 행동" in out
+
+    # install.ps1·update.ps1의 python_exe 검증: 망가진 shim이면 원인·다음 행동
+    sel = (DEPLOY / "python-select.ps1").as_posix()
+    r = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command",
+                        f". '{sel}'; Assert-PhysicsAIPython312 -Exe '{(shims / 'python').as_posix()}'"],
+                       capture_output=True, text=True, timeout=120)
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "python_exe가 Python 3.12로 실행되지 않습니다" in out and "No global/local python" in out and "dashboard_root" in out
 
 
 def test_dashboard_env_reads_only_bin_host_port(tmp_path):

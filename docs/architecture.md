@@ -17,7 +17,7 @@
 | 설정 YAML 키, `config/*.yaml` | `test_config.py`, `test_ops_config.py`, 예시 YAML 시험 |
 | job_type, step_key, 오류 코드, 사용자 문구 | `job_types.py` 표, 워커 `HANDLERS` 키 집합 |
 | 외부에서 부르는 진입점 | `physicsai_core.config.load_config`(`deploy/install.ps1:51`, `deploy/update.ps1:21`), `python -m physicsai_api.serve`, `python -m physicsai_worker`, `physicsai_api.export_openapi.render`·`build_openapi`(`scripts/test-all.sh:10`, `scripts/test-all.ps1:7`) |
-| `backend/tests/fake_tools/` 위치 | `deploy/collect-offline.sh:33`, `deploy/collect-offline.ps1:33`, `deploy/demo/demo_setup.py:67`이 이 경로를 쓴다 |
+| `backend/tests/fake_tools/` 위치 | `deploy/collect-offline.sh:37`, `deploy/collect-offline.ps1:130`, `deploy/demo/demo_setup.py:67`이 이 경로를 쓴다 |
 
 허용: 파일 이동·분리·이름 변경으로 **import 경로만** 바뀌는 것, 죽은 코드 삭제, 같은 동작의 중복을 한 함수로 합치는 것(값·순서·문구가 같을 때만).
 
