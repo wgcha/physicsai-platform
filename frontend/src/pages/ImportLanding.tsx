@@ -6,6 +6,7 @@ import { TopBar } from "../shell/TopBar";
 import { CodeLine, Field, NO_PERMISSION_TIP } from "../components/ui";
 import { FeatureOffNote, useFeature } from "../components/FeatureGate";
 import { SpdmSummary } from "../stages/stage2/Sources";
+import { Cell, Grid } from "../design/Grid";
 
 /**
  * phase2.md §12.7 딥링크: /physicsai/import?spdm_path=…[&project_id=…]
@@ -97,12 +98,14 @@ export function ImportLanding() {
     <div className="page">
       <TopBar crumbs={[{ label: "SPDM 가져오기" }]} projectId={projectId || undefined} />
       <main className="page-main narrow">
-        <h1 className="page-title">SPDM 결과를 AI 학습 데이터로 가져오기</h1>
+        <div className="page-title-row">
+          <h1 className="page-title T">SPDM 결과를 AI 학습 데이터로 가져오기</h1>
+        </div>
         {!spdmPath ? (
           <div className="empty">SPDM 경로가 없습니다. 대시보드의 링크로 다시 들어오세요.</div>
         ) : (
-          <section className="card" aria-label="SPDM 가져오기">
-            <div className="card-body">
+          <Grid>
+            <Cell span={6} className="card" label="SPDM 가져오기" title={<h2 className="T">SPDM 가져오기</h2>} foot={<p className="muted small">가져오기를 누르면 이 Study의 ② 데이터 정리로 이동하고, 원천에 이 가져오기가 선택됩니다.</p>}>
               <div>
                 <div className="field-label">SPDM 경로 (읽기 전용)</div>
                 <CodeLine text={spdmPath} />
@@ -178,9 +181,8 @@ export function ImportLanding() {
                 )}
                 {error && <span className="error-text small" role="alert">{error}</span>}
               </div>
-              <p className="muted small">가져오기를 누르면 이 Study의 ② 데이터 정리로 이동하고, 원천에 이 가져오기가 선택됩니다.</p>
-            </div>
-          </section>
+            </Cell>
+          </Grid>
         )}
       </main>
     </div>

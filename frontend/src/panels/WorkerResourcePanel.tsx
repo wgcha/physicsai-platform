@@ -3,6 +3,7 @@ import { api, type Resources } from "../api";
 import { useApp } from "../app/AppContext";
 import { usePolling } from "../hooks/usePolling";
 import { POLL } from "../lib/poll";
+import { Cell } from "../design/Grid";
 
 const PRIORITY_LABEL: Record<string, string> = { below_normal: "낮은 우선순위", normal: "보통 우선순위", idle: "유휴 우선순위" };
 
@@ -36,13 +37,13 @@ export function WorkerResourcePanel() {
   const offline = status && !status.worker.online;
 
   return (
-    <section className="panel" aria-label="워커 자원">
-      <header className="panel-head">
-        <h2>워커 자원</h2>
-        {status && (
-          <span className={`worker-state ${offline ? "off" : "on"}`}>{offline ? "워커 오프라인" : "워커 정상"}</span>
-        )}
-      </header>
+    <Cell
+      span={3}
+      className="panel"
+      label="워커 자원"
+      title={<h2 className="T">워커 자원</h2>}
+      refText={status ? <span className={`worker-state ${offline ? "off" : "on"}`}>{offline ? "워커 오프라인" : "워커 정상"}</span> : undefined}
+    >
       {offline && <div className="warn-box small">워커가 응답하지 않습니다. 등록한 작업은 대기열에 남아 있다가 워커가 돌아오면 실행됩니다.</div>}
       {!r ? (
         <div className="empty small">{none ? "자원 정보 없음" : "불러오는 중…"}</div>
@@ -66,6 +67,6 @@ export function WorkerResourcePanel() {
           </div>
         </>
       )}
-    </section>
+    </Cell>
   );
 }

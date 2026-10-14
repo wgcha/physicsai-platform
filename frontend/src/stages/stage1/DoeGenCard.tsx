@@ -88,7 +88,23 @@ export function DoeGenCard() {
   };
 
   return (
-    <Card step="①-3" title="DOE · Radioss 입력">
+    <Card span={9} foot={
+        <>
+          <FeatureGate feature="train_doe">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="입력 생성"
+                onRun={submit}
+                job={job}
+                disabled={!enabled || !ok || !tplReady || !t || (t.runs_editable && !(Number(runs) >= 2))}
+                disabledReason={!enabled ? undefined : !tplReady ? (setup?.tpl ? "tpl을 다시 생성하세요(①-2)" : "①-2에서 tpl을 먼저 생성하세요") : !ok ? "조립 폴더를 입력하고 확인하세요" : "run 수는 2 이상"}
+                error={error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="①-3" title="DOE · Radioss 입력">
       <PathInput
         studyId={study.id}
         purpose="RADIOSS_ASSEM"
@@ -128,19 +144,6 @@ export function DoeGenCard() {
           <input className="num" inputMode="numeric" value={multi} onChange={(e) => setMulti(Math.max(1, Math.min(64, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />
         </Field>
       </Advanced>
-      <FeatureGate feature="train_doe">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="입력 생성"
-            onRun={submit}
-            job={job}
-            disabled={!enabled || !ok || !tplReady || !t || (t.runs_editable && !(Number(runs) >= 2))}
-            disabledReason={!enabled ? undefined : !tplReady ? (setup?.tpl ? "tpl을 다시 생성하세요(①-2)" : "①-2에서 tpl을 먼저 생성하세요") : !ok ? "조립 폴더를 입력하고 확인하세요" : "run 수는 2 이상"}
-            error={error}
-          />
-        )}
-      </FeatureGate>
       {latest && (
         <div className="doe-result small">
           <div>

@@ -33,17 +33,17 @@ export function Stage5() {
   const latest = [...opts].sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
 
   return (
-    <div className="stage-grid stage5">
+    <>
       <OptInputCard modelId={modelId} setModelId={setModelId} />
-      <Card step="⑤-2" title="응답">
+      <Card span={6} step="⑤-2" title="응답">
         <ResponseTable rows={responses} onChange={setResponses} readOnly={!canExec} />
         {canExec && <ResponseAddRow candidates={cands} rows={responses} onAdd={(r) => setResponses([...responses, r])} />}
         <p className="muted small">Goal이 CONSTRAINT일 때만 Bound·Value를 씁니다. 단위계 mm-ton-s.</p>
       </Card>
       <OptRunCard s={s} setS={setS} responses={responses} modelId={modelId} runner={runner} />
-      <Card step="⑤-4" title="결과">
+      <Card span={6} step="⑤-4" title="결과">
         <OptResult opt={latest} job={runner.job} />
       </Card>
-    </div>
+    </>
   );
 }

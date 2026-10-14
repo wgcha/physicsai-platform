@@ -6,6 +6,7 @@ import { POLL } from "../lib/poll";
 import { JOB_TYPE_LABEL, STAGE_MARK, attentionText, fmtElapsed, hpcSummaryText } from "../lib/format";
 import { ProgressBar, StateDot } from "../components/ui";
 import { useOpenJob } from "../hooks/useOpenJob";
+import { Cell } from "../design/Grid";
 
 /** 실행 대기열(§16.2 ①). 순서 이동·취소는 전역 관리자만(§5.3). */
 export function QueuePanel() {
@@ -111,11 +112,7 @@ export function QueuePanel() {
   const hpc = q ? [...q.waiting_hpc, ...q.collecting] : [];
 
   return (
-    <section className="panel" aria-label="실행 대기열">
-      <header className="panel-head">
-        <h2>실행 대기열</h2>
-        <span className="muted small">로컬 슬롯 1개 · 대기 {queued.length}건</span>
-      </header>
+    <Cell span={3} className="panel" label="실행 대기열" title={<h2 className="T">실행 대기열</h2>} refText={`로컬 슬롯 1개 · 대기 ${queued.length}건`}>
       {error && <div className="error-text small">{error}</div>}
       {!q ? (
         <div className="empty small">불러오는 중…</div>
@@ -145,6 +142,6 @@ export function QueuePanel() {
           )}
         </>
       )}
-    </section>
+    </Cell>
   );
 }

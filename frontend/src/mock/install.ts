@@ -24,7 +24,7 @@ export function installMockFetch() {
   if (params.get("shot") !== "1") {
     const box = document.createElement("div");
     box.style.cssText =
-      "position:fixed;left:8px;bottom:8px;z-index:9999;font:12px system-ui;background:#fff8e1;border:1px solid #e0c060;border-radius:6px;padding:4px 8px;opacity:.9";
+      "position:fixed;left:8px;bottom:8px;z-index:9999;font:var(--font-r);letter-spacing:var(--track-r);background:var(--cell);color:var(--ink);border:1px solid var(--rule);padding:4px 8px";
     box.innerHTML = `목 모드 · 사용자 <select aria-label="목 사용자">
       ${["admin", "power", "general", "anon"].map((u) => `<option ${u === server.user ? "selected" : ""}>${u}</option>`).join("")}
     </select>`;

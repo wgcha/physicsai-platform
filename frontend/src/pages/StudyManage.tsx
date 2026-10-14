@@ -7,6 +7,7 @@ import { TopBar } from "../shell/TopBar";
 import { Card, CodeLine, Field, NO_PERMISSION_TIP } from "../components/ui";
 import { StudyArchiveDialog } from "../components/StudyArchiveDialog";
 import { StorageSection } from "./manage/StorageSection";
+import { Grid } from "../design/Grid";
 
 const CONFLICT_TEXT = "다른 사용자가 먼저 수정했습니다. 새로 고친 뒤 다시 시도하세요";
 
@@ -51,9 +52,9 @@ export function StudyManage() {
           { label: "Study 관리" },
         ]}
       />
-      <main className="page-main narrow manage-page">
+      <main className="page-main manage-page">
         <div className="page-title-row">
-          <h1 className="page-title">Study 관리</h1>
+          <h1 className="page-title T">Study 관리</h1>
           <span className="spacer" />
           <Link to={`${base}/stage/3`}>작업 화면으로</Link>
         </div>
@@ -64,11 +65,11 @@ export function StudyManage() {
         ) : !study ? (
           <div className="empty">불러오는 중…</div>
         ) : (
-          <>
+          <Grid>
             <InfoSection study={study} onSaved={setStudy} reload={reload} />
             <ArchiveSection study={study} onChanged={setStudy} />
             <StorageSection study={study} />
-          </>
+          </Grid>
         )}
       </main>
     </div>
@@ -103,7 +104,7 @@ function InfoSection({ study, onSaved, reload }: { study: Study; onSaved: (s: St
   };
 
   return (
-    <Card step="①" title="기본 정보">
+    <Card span={6} step="①" title="기본 정보">
       {study.can_execute ? (
         <div className="manage-rename">
           <Field label="표시 이름" hint={`폴더 이름 ${study.folder_name}은 바뀌지 않습니다(표시 이름만 변경)`}>
@@ -155,7 +156,7 @@ function ArchiveSection({ study, onChanged }: { study: Study; onChanged: (s: Stu
   const [open, setOpen] = useState(false);
   const archived = study.status === "ARCHIVED";
   return (
-    <Card step="②" title="보관">
+    <Card span={6} step="②" title="보관">
       <p className="muted small">
         {archived
           ? "보관된 Study입니다. 조회와 용량 정리만 할 수 있고 새 작업은 실행할 수 없습니다."

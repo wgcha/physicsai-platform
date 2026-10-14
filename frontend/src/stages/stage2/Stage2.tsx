@@ -8,14 +8,14 @@ function Stage2Cards() {
   const h3d = useH3dPreview();
   const t01 = useT01Preview();
   return (
-    <div className="stage-grid stage2">
+    <>
       <SourcePicker />
       <SpdmImportCard />
       <H3dPreviewCard shared={h3d} />
       <H3dCurateCard shared={h3d} />
       <T01PreviewCard shared={t01} />
       <T01CurvesCard shared={t01} />
-    </div>
+    </>
   );
 }
 

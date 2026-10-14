@@ -43,7 +43,20 @@ export function ModelRegisterCard() {
     });
 
   return (
-    <Card step="③-4" title="모델 등록">
+    <Card span={6} foot={
+        <>
+          <p className="muted small">등록 시 파일을 Study 폴더로 복사합니다. 등록 후 원본 폴더는 지워도 됩니다.</p>
+          <RunAction
+            canExecute={canExec}
+            label="모델 등록"
+            onRun={submit}
+            job={job}
+            disabled={!ok || !nameOk || needLogChoice}
+            disabledReason={!ok ? "경로를 입력하고 확인하세요" : !nameOk ? "모델 이름을 확인하세요" : "로그 파일을 고르세요"}
+            error={error}
+          />
+        </>
+      } step="③-4" title="모델 등록">
       <PathInput
         studyId={study.id}
         purpose="MODEL_FOLDER"
@@ -103,15 +116,6 @@ export function ModelRegisterCard() {
           </Field>
         </div>
       </Advanced>
-      <RunAction
-        canExecute={canExec}
-        label="모델 등록"
-        onRun={submit}
-        job={job}
-        disabled={!ok || !nameOk || needLogChoice}
-        disabledReason={!ok ? "경로를 입력하고 확인하세요" : !nameOk ? "모델 이름을 확인하세요" : "로그 파일을 고르세요"}
-        error={error}
-      />
       {registered && (
         <div className="result-line" data-testid="register-result">
           등록됨: <b>{registered.name}</b> v{registered.version} · <LogStatusText m={registered} />
@@ -126,7 +130,6 @@ export function ModelRegisterCard() {
           )}
         </div>
       )}
-      <p className="muted small">등록 시 파일을 Study 폴더로 복사합니다. 등록 후 원본 폴더는 지워도 됩니다.</p>
     </Card>
   );
 }

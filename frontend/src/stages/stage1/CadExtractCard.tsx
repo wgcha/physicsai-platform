@@ -18,7 +18,23 @@ export function CadExtractCard() {
   const params = setup?.parameters ?? [];
 
   return (
-    <Card step="①-1" title="CAD 파라미터 추출">
+    <Card span={3} foot={
+        <>
+          <FeatureGate feature="train_extract">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="파라미터 추출"
+                onRun={() => void run({ cad_path: path.trim() })}
+                job={job}
+                disabled={!enabled || !ok}
+                disabledReason={enabled ? "CAD 파일 경로를 입력하고 확인하세요" : undefined}
+                error={error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="①-1" title="CAD 파라미터 추출">
       <PathInput
         studyId={study.id}
         purpose="CAD_FILE"
@@ -35,19 +51,6 @@ export function CadExtractCard() {
           </div>
         )}
       />
-      <FeatureGate feature="train_extract">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="파라미터 추출"
-            onRun={() => void run({ cad_path: path.trim() })}
-            job={job}
-            disabled={!enabled || !ok}
-            disabledReason={enabled ? "CAD 파일 경로를 입력하고 확인하세요" : undefined}
-            error={error}
-          />
-        )}
-      </FeatureGate>
       {setup?.cad && (
         <div className="result-line small">
           <span>

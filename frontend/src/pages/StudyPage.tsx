@@ -59,8 +59,8 @@ function StudyShell({ projectId, stage }: { projectId: string; stage: number }) 
           )}
         </div>
       )}
-      <div className="workgrid">
-        <main className="workarea" aria-label="작업영역">
+      <div className="grid workgrid">
+        <main className="workarea grid-contents" aria-label="작업영역">
           {stage === 1 ? (
             <Stage1 key={study.id} />
           ) : stage === 2 ? (

@@ -30,25 +30,28 @@ export function T01PreviewCard({ shared }: { shared: ReturnType<typeof useT01Pre
   const { runner, match, tree } = shared;
   const [sample, setSample] = useState("");
   return (
-    <Card step="②-3" title="T01 미리보기">
+    <Card span={3} foot={
+        <>
+          <FeatureGate feature="curation_t01">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="T01 미리보기"
+                onRun={() => c.source && void runner.run({ source: c.source, sample_file: sample.trim() || null })}
+                job={match ? runner.job : null}
+                disabled={!enabled || !c.source || (c.sourceInfo?.t01 ?? 1) === 0}
+                disabledReason={enabled ? "원천을 먼저 선택하세요" : undefined}
+                error={runner.error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="②-3" title="T01 미리보기">
       <Advanced>
         <Field label="대표 파일(원천 기준 상대경로)" hint="비우면 이름순 첫 파일">
           <input className="mono" value={sample} onChange={(e) => setSample(e.target.value)} aria-label="대표 T01 파일" />
         </Field>
       </Advanced>
-      <FeatureGate feature="curation_t01">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="T01 미리보기"
-            onRun={() => c.source && void runner.run({ source: c.source, sample_file: sample.trim() || null })}
-            job={match ? runner.job : null}
-            disabled={!enabled || !c.source || (c.sourceInfo?.t01 ?? 1) === 0}
-            disabledReason={enabled ? "원천을 먼저 선택하세요" : undefined}
-            error={runner.error}
-          />
-        )}
-      </FeatureGate>
       {tree ? <T01TreeView tree={tree} /> : <p className="muted small">미리보기를 실행하면 Type / Request / Component 트리가 표시됩니다.</p>}
     </Card>
   );
@@ -106,7 +109,7 @@ export function T01CurvesCard({ shared }: { shared: ReturnType<typeof useT01Prev
   const curveJobId = runner.job?.state === "SUCCEEDED" ? runner.job : latest ? ({ id: latest.job_id, state: "SUCCEEDED" } as Job) : null;
 
   return (
-    <Card step="②-4" title="T01 곡선 추출">
+    <Card span={6} step="②-4" title="T01 곡선 추출">
       {!tree ? (
         <p className="muted">②-3 미리보기를 먼저 실행하세요.</p>
       ) : (

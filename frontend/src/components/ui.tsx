@@ -4,33 +4,43 @@ import { JOB_STATE_LABEL, attentionText, hpcSummaryText, isTerminal } from "../l
 import { JobLogViewer } from "./JobLogViewer";
 import { ErrorBundleButton } from "./ErrorBundleButton";
 import { JobRetryButton } from "./JobRetryButton";
+import { Cell, type Span } from "../design/Grid";
 
 export const NO_PERMISSION_TIP = "실행 권한(power 이상)이 필요합니다";
 
+/** 격자 칸 하나(design/Grid Cell): 머리(제목 + 참조 번호) → 본문 → 발(참조 설명·버튼) */
 export function Card({
   step,
   title,
   children,
   aside,
   className,
+  span = 6,
+  rows,
+  foot,
 }: {
   step?: string;
   title: string;
   children: ReactNode;
   aside?: ReactNode;
   className?: string;
+  span?: Span;
+  rows?: number;
+  foot?: ReactNode;
 }) {
   return (
-    <section className={`card ${className ?? ""}`} aria-label={title}>
-      <header className="card-head">
-        <h3>
-          {step && <span className="card-step">{step}</span>}
-          {title}
-        </h3>
-        {aside}
-      </header>
-      <div className="card-body">{children}</div>
-    </section>
+    <Cell
+      span={span}
+      rows={rows}
+      label={title}
+      className={`card${className ? ` ${className}` : ""}`}
+      title={<h3 className="T">{title}</h3>}
+      refText={step}
+      aside={aside}
+      foot={foot}
+    >
+      {children}
+    </Cell>
   );
 }
 

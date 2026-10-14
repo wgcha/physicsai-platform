@@ -34,7 +34,8 @@ export function ParamSetCard() {
   return (
     <Card
       title="파라미터 세트"
-      className="wide paramset"
+      span={9}
+      className="paramset"
       aside={
         canExec ? (
           <button type="button" className="btn small ghost" onClick={() => setOpen((v) => !v)}>

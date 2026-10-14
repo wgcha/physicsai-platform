@@ -25,7 +25,7 @@ export function RunResponseCard() {
   });
   const valid = parsed.every((p) => p && /^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(p.name));
   return (
-    <Card step="①-6" title="run 응답 추출 (선택)" className="optional-card">
+    <Card span={3} step="①-6" title="run 응답 추출 (선택)" className="optional-card">
       <details className="advanced">
         <summary>열기</summary>
         <div className="advanced-body grid-gap">

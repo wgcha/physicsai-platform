@@ -69,7 +69,7 @@ export function EvaluateCard() {
   };
 
   return (
-    <Card step="③-5" title="평가 · Final 지정" className="wide">
+    <Card span={9} step="③-5" title="평가 · Final 지정">
       <div className="eval-row">
         <Field label="평가할 모델">
           <select value={selected?.id ?? ""} onChange={(e) => setModelId(e.target.value)} disabled={active.length === 0}>

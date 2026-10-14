@@ -44,7 +44,23 @@ export function DatasetCreateCard() {
   };
 
   return (
-    <Card step="③-1" title="데이터셋 생성">
+    <Card span={6} foot={
+        <>
+          <FeatureGate feature="dataset_create">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="데이터셋 생성"
+                onRun={submit}
+                job={job}
+                disabled={!enabled || (!fromCuration && (!path.trim() || !inspected))}
+                disabledReason={enabled ? "경로를 입력하고 확인하세요" : undefined}
+                error={error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="③-1" title="데이터셋 생성">
       {curation && (
         <div className="input-source" data-testid="curation-default">
           {fromCuration ? (
@@ -112,19 +128,6 @@ export function DatasetCreateCard() {
           ))}
         </div>
       </Advanced>
-      <FeatureGate feature="dataset_create">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="데이터셋 생성"
-            onRun={submit}
-            job={job}
-            disabled={!enabled || (!fromCuration && (!path.trim() || !inspected))}
-            disabledReason={enabled ? "경로를 입력하고 확인하세요" : undefined}
-            error={error}
-          />
-        )}
-      </FeatureGate>
       {datasets.length > 0 && (
         <div className="table-wrap">
         <table className="table compact">
@@ -209,7 +212,19 @@ export function PackageExportCard() {
     : DEFAULT_COMMANDS;
 
   return (
-    <Card step="③-2" title="학습 패키지 내보내기">
+    <Card span={3} foot={
+        <>
+          <RunAction
+            canExecute={canExec}
+            label="학습 패키지 내보내기"
+            onRun={() => selected && void run({ dataset_id: selected.id })}
+            job={job}
+            disabled={!selected}
+            disabledReason="준비된 데이터셋이 필요합니다"
+            error={error}
+          />
+        </>
+      } step="③-2" title="학습 패키지 내보내기">
       {ready.length === 0 ? (
         <p className="muted">준비된 데이터셋이 없습니다. ③-1에서 먼저 만드세요.</p>
       ) : (
@@ -224,15 +239,6 @@ export function PackageExportCard() {
           </select>
         </Field>
       )}
-      <RunAction
-        canExecute={canExec}
-        label="학습 패키지 내보내기"
-        onRun={() => selected && void run({ dataset_id: selected.id })}
-        job={job}
-        disabled={!selected}
-        disabledReason="준비된 데이터셋이 필요합니다"
-        error={error}
-      />
       {selected?.package_ready && pkgPath && (
         <div className="package">
           <div className="field-label">패키지 폴더</div>
@@ -254,7 +260,11 @@ export function PackageExportCard() {
 export function HpcTrainingNotice() {
   const { study } = useStudy();
   return (
-    <Card step="③-3" title="HPC에서 직접 학습" className="notice-card">
+    <Card span={3} foot={
+        <>
+          <p className="muted small">플랫폼은 학습을 실행하지 않으며 실시간 로그도 받지 않습니다.</p>
+        </>
+      } step="③-3" title="HPC에서 직접 학습" className="notice-card">
       <ol className="steps-text">
         <li>③-2 패키지 폴더를 HPC로 가져가 학습 명령을 실행합니다.</li>
         <li>
@@ -267,7 +277,6 @@ export function HpcTrainingNotice() {
           <CopyButton text={study.folder_display_path} label="경로 복사" />
         </div>
       )}
-      <p className="muted small">플랫폼은 학습을 실행하지 않으며 실시간 로그도 받지 않습니다.</p>
     </Card>
   );
 }

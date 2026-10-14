@@ -95,7 +95,23 @@ export function ParamTableCard() {
   }, [rows, setup?.parameters]);
 
   return (
-    <Card
+    <Card span={6} foot={
+        <>
+          <p className="muted small">단위계 mm-ton-s. 사용하지 않는 파라미터는 tpl에서 빠지고 CAD 공칭값이 유지됩니다.</p>
+          <FeatureGate feature="train_tpl">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label={busy ? "생성 중…" : "tpl 생성"}
+                onRun={() => void generate()}
+                disabled={!enabled || busy || !rows.length || hasIssue}
+                disabledReason={enabled ? (!rows.length ? "추출된 파라미터가 없습니다" : used.length === 0 ? "사용 파라미터가 1개 이상 필요합니다" : "표의 회색 문구를 확인하세요") : undefined}
+                error={error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      }
       step="①-2"
       title="파라미터 표"
       aside={
@@ -157,18 +173,6 @@ export function ParamTableCard() {
           </table>
         </div>
       )}
-      <FeatureGate feature="train_tpl">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label={busy ? "생성 중…" : "tpl 생성"}
-            onRun={() => void generate()}
-            disabled={!enabled || busy || !rows.length || hasIssue}
-            disabledReason={enabled ? (!rows.length ? "추출된 파라미터가 없습니다" : used.length === 0 ? "사용 파라미터가 1개 이상 필요합니다" : "표의 회색 문구를 확인하세요") : undefined}
-            error={error}
-          />
-        )}
-      </FeatureGate>
       {tpl && (
         <div className="tpl-state small" data-testid="tpl-state">
           <div>
@@ -182,7 +186,6 @@ export function ParamTableCard() {
           ))}
         </div>
       )}
-      <p className="muted small">단위계 mm-ton-s. 사용하지 않는 파라미터는 tpl에서 빠지고 CAD 공칭값이 유지됩니다.</p>
     </Card>
   );
 }

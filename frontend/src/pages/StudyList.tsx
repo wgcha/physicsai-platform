@@ -6,6 +6,7 @@ import { fmtTime } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
 import { CopyButton, Field, NO_PERMISSION_TIP } from "../components/ui";
 import { StudyArchiveDialog } from "../components/StudyArchiveDialog";
+import { Cell, Grid } from "../design/Grid";
 
 const FOLDER_RE = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
@@ -77,9 +78,9 @@ export function StudyList() {
   return (
     <div className="page">
       <TopBar crumbs={[{ label: project?.name ?? projectId, to: `/p/${projectId}` }]} projectId={projectId} />
-      <main className="page-main narrow">
+      <main className="page-main">
         <div className="page-title-row">
-          <h1 className="page-title">Study</h1>
+          <h1 className="page-title T">Study</h1>
           <div className="seg" role="group" aria-label="상태 필터">
             {FILTERS.map((f) => (
               <button key={f.key} type="button" className={filter === f.key ? "on" : ""} aria-pressed={filter === f.key} onClick={() => setFilter(f.key)}>
@@ -98,8 +99,9 @@ export function StudyList() {
             </span>
           )}
         </div>
+        <Grid>
         {creating && canExec && (
-          <div className="card create-form" aria-label="새 Study">
+          <Cell as="div" span={6} className="card create-form" label="새 Study">
             <div className="form-grid">
               <Field label="폴더 이름" hint="영문·숫자·_·- 64자 이내, 생성 후 변경 불가. AI 루트 아래에 같은 이름 폴더가 생깁니다.">
                 <input className="mono" value={folder} onChange={(e) => setFolder(e.target.value)} aria-invalid={!!folder && !folderOk} />
@@ -116,8 +118,9 @@ export function StudyList() {
                 닫기
               </button>
             </div>
-          </div>
+          </Cell>
         )}
+        <Cell as="div" span={12} className="study-table">
         {error && <div className="error-text" role="alert">{error}</div>}
         {studies === null ? (
           <div className="empty">불러오는 중…</div>
@@ -131,7 +134,7 @@ export function StudyList() {
                 <th>폴더</th>
                 <th>상태</th>
                 <th>만든 사람</th>
-                <th>수정</th>
+                <th className="num">수정</th>
                 <th>관리</th>
               </tr>
             </thead>
@@ -161,6 +164,8 @@ export function StudyList() {
             </tbody>
           </table>
         )}
+        </Cell>
+        </Grid>
         {archiving && (
           <StudyArchiveDialog
             study={archiving}

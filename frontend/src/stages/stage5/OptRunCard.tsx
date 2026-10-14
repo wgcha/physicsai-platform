@@ -56,7 +56,23 @@ export function OptRunCard({
     });
 
   return (
-    <Card step="⑤-3" title="실행">
+    <Card span={3} foot={
+        <>
+          <FeatureGate feature="optimize">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label={s.approach === "OPT" ? "최적화 실행" : "DOE 실행"}
+                onRun={submit}
+                job={runner.job}
+                disabled={!enabled || !!reason}
+                disabledReason={enabled ? reason ?? undefined : undefined}
+                error={runner.error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="⑤-3" title="실행">
       <div className="form-grid">
         <Field label="Approach">
           <div className="seg" role="radiogroup" aria-label="Approach">
@@ -103,19 +119,6 @@ export function OptRunCard({
           </Field>
         </div>
       </Advanced>
-      <FeatureGate feature="optimize">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label={s.approach === "OPT" ? "최적화 실행" : "DOE 실행"}
-            onRun={submit}
-            job={runner.job}
-            disabled={!enabled || !!reason}
-            disabledReason={enabled ? reason ?? undefined : undefined}
-            error={runner.error}
-          />
-        )}
-      </FeatureGate>
     </Card>
   );
 }

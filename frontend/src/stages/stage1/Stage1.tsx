@@ -10,14 +10,14 @@ import { SolveCard } from "./SolveCard";
 export function Stage1() {
   return (
     <TrainProvider>
-      <div className="stage-grid stage1">
+      <>
         <CadExtractCard />
         <ParamTableCard />
         <DoeGenCard />
         <SolveCard />
         <ResultCollectCard />
         <RunResponseCard />
-      </div>
+      </>
     </TrainProvider>
   );
 }

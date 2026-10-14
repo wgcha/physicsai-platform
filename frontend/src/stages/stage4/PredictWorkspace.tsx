@@ -113,7 +113,7 @@ export function PredictWorkspace({ ps }: { ps: ParamSet }) {
 
   return (
     <>
-      <Card title="입력 · 실행" className="wide inputs">
+      <Card span={9} title="입력 · 실행" className="inputs">
         <div className="input-split">
           <div className="input-left">
         <div className="fill-row">
@@ -208,8 +208,9 @@ export function PredictWorkspace({ ps }: { ps: ParamSet }) {
       </Card>
 
       <Card
+        span={9}
         title="결과"
-        className="wide result"
+        className="result"
         aside={
           pjob ? (
             <span className="run-action-row">

@@ -49,7 +49,7 @@ export function SolveCard() {
   };
 
   return (
-    <Card step="①-4" title="PBS 해석 제출" className="solve-card">
+    <Card span={9} step="①-4" title="PBS 해석 제출" className="solve-card">
       <DoePicker />
       <Advanced>
         <div className="form-grid">

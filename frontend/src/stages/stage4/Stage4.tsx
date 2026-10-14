@@ -6,9 +6,9 @@ import { PredictWorkspace } from "./PredictWorkspace";
 export function Stage4() {
   const { currentParamSet } = useStudy();
   return (
-    <div className="stage-grid stage4">
+    <>
       <ParamSetCard />
       {currentParamSet && <PredictWorkspace key={currentParamSet.id} ps={currentParamSet} />}
-    </div>
+    </>
   );
 }

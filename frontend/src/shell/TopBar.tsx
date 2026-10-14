@@ -11,7 +11,7 @@ export interface Crumb {
 
 export function PathBar({ crumbs }: { crumbs: Crumb[] }) {
   return (
-    <nav className="pathbar" aria-label="경로">
+    <nav className="pathbar R" aria-label="경로">
       {crumbs.map((c, i) => (
         <span key={i} className="crumb">
           {i > 0 && <span className="crumb-sep">›</span>}
@@ -27,17 +27,16 @@ export function TopBar({ crumbs, projectId }: { crumbs: Crumb[]; projectId?: str
   const role = roleIn(me, projectId);
   return (
     <header className="topbar">
-      <Link to="/" className="brand" aria-label="PhysicsAI 처음으로">
-        <span className="brand-mark">Φ</span>
+      <Link to="/" className="brand T" aria-label="PhysicsAI 처음으로">
         <span className="brand-name">PhysicsAI</span>
       </Link>
       <PathBar crumbs={[{ label: "AI 예측", to: "/" }, ...crumbs]} />
       {status?.demo && (
-        <span className="demo-badge" data-testid="demo-badge" title="시연 모드: 가짜 데이터·도구로 동작합니다">
+        <span className="demo-badge R" data-testid="demo-badge" title="시연 모드: 가짜 데이터·도구로 동작합니다">
           시연 모드
         </span>
       )}
-      <div className="topbar-right">
+      <div className="topbar-right R">
         {me.is_global_admin && <AdminMenu />}
         <a className="topbar-link" href="/">대시보드로</a>
         <NotificationBell />

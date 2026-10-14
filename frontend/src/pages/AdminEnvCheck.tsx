@@ -4,6 +4,7 @@ import { useApp } from "../app/AppContext";
 import { TopBar } from "../shell/TopBar";
 import { usePolling } from "../hooks/usePolling";
 import { CodeLine } from "../components/ui";
+import { Cell, Grid } from "../design/Grid";
 import { JsonTree } from "../components/JsonTree";
 import { fmtTime } from "../lib/format";
 
@@ -47,8 +48,7 @@ function ConfigWarnings() {
   const w = status?.config.warnings ?? [];
   if (!w.length) return null;
   return (
-    <section className="card wide config-warnings" aria-label="설정 경고">
-      <div className="card-body">
+    <Cell span={12} className="card config-warnings" label="설정 경고">
         <div className="warn-text">
           <b>설정 경고 {w.length}건</b> <span className="muted small">— 기동은 되지만 해당 기능이 비활성입니다</span>
         </div>
@@ -57,8 +57,7 @@ function ConfigWarnings() {
             <li key={x}>{x}</li>
           ))}
         </ul>
-      </div>
-    </section>
+    </Cell>
   );
 }
 
@@ -116,16 +115,19 @@ function EnvCheckBody() {
   for (const it of current?.items ?? []) groups.set(it.category, [...(groups.get(it.category) ?? []), it]);
 
   return (
-    <div className="env-grid">
+    <Grid className="env-grid">
       <ConfigWarnings />
-      <section className="card wide" aria-label="환경 점검">
-        <header className="card-head">
-          <h3>환경 점검</h3>
+      <Cell
+        span={9}
+        className="card"
+        label="환경 점검"
+        title={<h3 className="T">환경 점검</h3>}
+        aside={
           <button type="button" className="btn primary" onClick={() => void start()} disabled={busy}>
             {busy ? "점검 중…" : "점검 실행"}
           </button>
-        </header>
-        <div className="card-body">
+        }
+      >
           {error && <div className="error-text small">{error}</div>}
           {!current ? (
             <p className="muted">{history.length ? "불러오는 중…" : "점검 이력이 없습니다. \"점검 실행\"을 누르세요."}</p>
@@ -185,13 +187,8 @@ function EnvCheckBody() {
               </div>
             </>
           )}
-        </div>
-      </section>
-      <section className="card" aria-label="최근 이력">
-        <header className="card-head">
-          <h3>최근 이력</h3>
-        </header>
-        <div className="card-body">
+      </Cell>
+      <Cell span={3} className="card" label="최근 이력" title={<h3 className="T">최근 이력</h3>}>
           <table className="table compact" aria-label="점검 이력">
             <thead>
               <tr>
@@ -216,8 +213,7 @@ function EnvCheckBody() {
               ))}
             </tbody>
           </table>
-        </div>
-      </section>
-    </div>
+      </Cell>
+    </Grid>
   );
 }

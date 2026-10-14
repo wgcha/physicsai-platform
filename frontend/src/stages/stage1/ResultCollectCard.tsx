@@ -35,7 +35,24 @@ export function ResultCollectCard() {
   }, [imp.job?.id, imp.job?.version, reloadRuns]);
 
   return (
-    <Card step="①-5" title="결과 회수">
+    <Card span={6} foot={
+        <>
+          <p className="note">회수한 결과는 ② 데이터 정리의 원천으로, 파라미터·샘플은 ④ "① 결과로 만들기"에 쓰입니다.</p>
+          <FeatureGate feature="train_import">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="결과 가져오기"
+                onRun={() => doe && void imp.run({ doe_id: doe.id, source_path: path.trim() })}
+                job={imp.job}
+                disabled={!enabled || !doe || !ok}
+                disabledReason={enabled ? "결과 폴더를 입력하고 확인하세요" : undefined}
+                error={imp.error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="①-5" title="결과 회수">
       <p className="small">
         {hpcOn ? COLLECT_TEXT[status?.hpc.collect_mode ?? "in_place"] ?? `자동 회수(${status?.hpc.collect_mode})` : "PBS 연결 안 됨 — 해석한 결과 폴더를 직접 지정하세요"}
       </p>
@@ -56,19 +73,6 @@ export function ResultCollectCard() {
           </div>
         )}
       />
-      <FeatureGate feature="train_import">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="결과 가져오기"
-            onRun={() => doe && void imp.run({ doe_id: doe.id, source_path: path.trim() })}
-            job={imp.job}
-            disabled={!enabled || !doe || !ok}
-            disabledReason={enabled ? "결과 폴더를 입력하고 확인하세요" : undefined}
-            error={imp.error}
-          />
-        )}
-      </FeatureGate>
       {doe && (
         <div className="tiles" aria-label="회수 상태 요약">
           <div className="tile-stat ok">
@@ -94,7 +98,6 @@ export function ResultCollectCard() {
           <div className="mono small wrap-list">{missing.map((r) => r.run_key).join(", ")}</div>
         </details>
       )}
-      <p className="note">회수한 결과는 ② 데이터 정리의 원천으로, 파라미터·샘플은 ④ "① 결과로 만들기"에 쓰입니다.</p>
     </Card>
   );
 }

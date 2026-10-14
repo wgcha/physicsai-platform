@@ -50,7 +50,7 @@ export function SourcePicker() {
   const does = c.sources.filter((s) => s.kind === "TRAIN_DOE");
   const imps = c.imports.filter((i) => i.status === "READY");
   return (
-    <Card title="원천 선택" className="wide source-card">
+    <Card span={9} title="원천 선택" className="source-card">
       <div className="source-row">
         <div className="seg" role="radiogroup" aria-label="원천">
           {MODES.map(({ m, label }) => (
@@ -133,7 +133,24 @@ export function SpdmImportCard({ initialPath = "" }: { initialPath?: string }) {
   const [path, setPath] = useState(initialPath);
   const [ok, setOk] = useState(false);
   return (
-    <Card step="②-0" title="SPDM 가져오기">
+    <Card span={9} foot={
+        <>
+          <p className="muted small">SPDM 원본은 읽기만 합니다. 공백·특수문자가 든 이름은 복사본에서 정리됩니다.</p>
+          <FeatureGate feature="spdm_import">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="가져오기"
+                onRun={() => void run({ spdm_path: path.trim() }).then(() => void c.reload())}
+                job={job}
+                disabled={!enabled || !ok}
+                disabledReason={enabled ? "SPDM 경로를 입력하고 확인하세요" : undefined}
+                error={error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="②-0" title="SPDM 가져오기">
       <PathInput
         studyId={study.id}
         purpose="SPDM_IMPORT"
@@ -145,19 +162,6 @@ export function SpdmImportCard({ initialPath = "" }: { initialPath?: string }) {
         onInspected={(r) => setOk(!!r?.ok)}
         renderSummary={(r) => <SpdmSummary s={r.summary} />}
       />
-      <FeatureGate feature="spdm_import">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="가져오기"
-            onRun={() => void run({ spdm_path: path.trim() }).then(() => void c.reload())}
-            job={job}
-            disabled={!enabled || !ok}
-            disabledReason={enabled ? "SPDM 경로를 입력하고 확인하세요" : undefined}
-            error={error}
-          />
-        )}
-      </FeatureGate>
       {c.imports.length > 0 && (
         <div className="table-wrap">
           <table className="table compact" aria-label="가져오기 목록">
@@ -186,7 +190,6 @@ export function SpdmImportCard({ initialPath = "" }: { initialPath?: string }) {
           </table>
         </div>
       )}
-      <p className="muted small">SPDM 원본은 읽기만 합니다. 공백·특수문자가 든 이름은 복사본에서 정리됩니다.</p>
     </Card>
   );
 }

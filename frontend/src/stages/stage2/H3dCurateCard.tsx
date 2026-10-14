@@ -78,7 +78,7 @@ export function H3dCurateCard({ shared }: { shared: ReturnType<typeof useH3dPrev
   const files = preview?.files ?? null;
 
   return (
-    <Card step="②-2" title="h3d 큐레이션" className="curate-card">
+    <Card span={6} step="②-2" title="h3d 큐레이션" className="curate-card">
       {!preview ? (
         <p className="muted">②-1 미리보기를 먼저 실행하세요. DataType·Component 목록은 미리보기 결과에서 고릅니다.</p>
       ) : (

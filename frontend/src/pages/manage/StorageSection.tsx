@@ -46,7 +46,7 @@ export function StorageSection({ study }: { study: Study }) {
 
   const scan = report?.scan ?? null;
   return (
-    <Card step="③" title="용량·정리">
+    <Card span={12} step="③" title="용량·정리">
       {!report ? (
         error ? <div className="error-text small" role="alert">{error}</div> : <div className="empty">불러오는 중…</div>
       ) : (

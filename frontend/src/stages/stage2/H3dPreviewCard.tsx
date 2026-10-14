@@ -23,25 +23,28 @@ export function H3dPreviewCard({ shared }: { shared: ReturnType<typeof useH3dPre
   const { runner, match, preview } = shared;
   const [sample, setSample] = useState("");
   return (
-    <Card step="②-1" title="h3d 구조 미리보기">
+    <Card span={3} foot={
+        <>
+          <FeatureGate feature="curation_h3d">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="h3d 미리보기"
+                onRun={() => c.source && void runner.run({ source: c.source, sample_file: sample.trim() || null })}
+                job={match ? runner.job : null}
+                disabled={!enabled || !c.source || (c.sourceInfo?.h3d ?? 1) === 0}
+                disabledReason={enabled ? "원천을 먼저 선택하세요" : undefined}
+                error={runner.error}
+              />
+            )}
+          </FeatureGate>
+        </>
+      } step="②-1" title="h3d 구조 미리보기">
       <Advanced>
         <Field label="대표 파일(원천 기준 상대경로)" hint="비우면 이름순 첫 파일">
           <input className="mono" value={sample} onChange={(e) => setSample(e.target.value)} aria-label="대표 파일" />
         </Field>
       </Advanced>
-      <FeatureGate feature="curation_h3d">
-        {(enabled) => (
-          <RunAction
-            canExecute={canExec}
-            label="h3d 미리보기"
-            onRun={() => c.source && void runner.run({ source: c.source, sample_file: sample.trim() || null })}
-            job={match ? runner.job : null}
-            disabled={!enabled || !c.source || (c.sourceInfo?.h3d ?? 1) === 0}
-            disabledReason={enabled ? "원천을 먼저 선택하세요" : undefined}
-            error={runner.error}
-          />
-        )}
-      </FeatureGate>
       {preview ? (
         <div className="kv-row small" data-testid="h3d-preview-summary">
           <span className="kv">

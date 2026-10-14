@@ -1,7 +1,8 @@
 // mock 모드 화면 스크린샷 — 1920x1080, 3840x2160 (+ 1280 폭 확인용).
 // 사용: npm run build:mock && npm run screenshots            (1차 ③④ → screenshots/)
 //       npm run build:mock && npm run screenshots:phase2     (2차 ①②⑤·환경 점검 → screenshots/phase2/)
-//       npm run build:mock && npm run screenshots:phase3     (3차 ③-5 모델 비교 → screenshots/phase3/)
+//       npm run build:mock && npm run screenshots:phase3     (3차 ③-5 모델 비교·프로젝트 목록·Study 목록/관리·SPDM 가져오기 → screenshots/phase3/)
+// 격자 측정(스위스 격자, 2026-10-14): 폭 720 이상에서 모든 .cell 높이가 n×행 + (n−1)×선(행 176·선 1px)인지 잰다.
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
 import { spawn, execSync } from "node:child_process";
@@ -69,14 +70,20 @@ async function openCompare(page) {
   await page.evaluate(() => document.querySelector(".model-compare")?.scrollIntoView({ block: "start" }));
 }
 const shots = phase3
-  ? [{ name: "stage3_compare", url: `${S}/3?${q}`, wait: ".workarea .card", act: openCompare, noFull: true }]
+  ? [
+      { name: "stage3_compare", url: `${S}/3?${q}`, wait: ".workarea .card", act: openCompare, noFull: true },
+      { name: "projects", url: `${base}/?${q}`, wait: ".tile-list .cell" },
+      { name: "study-list", url: `${base}/p/p-cushion?${q}&demo=1`, wait: ".study-table table" },
+      { name: "study-manage", url: `${base}/p/p-cushion/s/s-cushion/manage?${q}`, wait: ".manage-page .card" },
+      { name: "import", url: `${base}/import?${q}&spdm_path=${encodeURIComponent("\\\\spdm\\master\\FD-X\\Case_0012\\Scene 03")}&project_id=p-cushion`, wait: ".card" },
+    ]
   : phase2
   ? [
       { name: "stage1", url: `${S}/1?${q}&hpc=1`, wait: ".workarea .card" },
       { name: "stage1_pbs-none", url: `${S}/1?${q}`, wait: ".workarea .card" },
       { name: "stage2", url: `${S}/2?${q}`, wait: ".workarea .card" },
       { name: "stage5", url: `${S}/5?${q}`, wait: ".workarea .card" },
-      { name: "env-check", url: `${base}/admin/env-check?${q}`, wait: ".env-table" },
+      { name: "env-check", url: `${base}/admin/env-check?${q}&warn=1`, wait: ".env-table" },
     ]
   : [
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
@@ -85,7 +92,7 @@ const shots = phase3
 const sizes = [
   { w: 1920, h: 1080 },
   { w: 3840, h: 2160 },
-  ...(phase3 ? [] : [{ w: 1280, h: 800 }]),
+  { w: 1280, h: 800 },
 ];
 
 const browser = await chromium.launch();
@@ -102,12 +109,24 @@ try {
       const file = path.join(out, `${shot.name}_${s.w}x${s.h}.png`);
       await page.screenshot({ path: file, fullPage: false });
       if (s.w === 1920 && !shot.noFull) await page.screenshot({ path: file.replace(".png", "_full.png"), fullPage: true });
-      const m = await page.evaluate(() => ({
-        scrollW: document.documentElement.scrollWidth,
-        clientW: document.documentElement.clientWidth,
-        panelW: document.querySelector(".rightpanel")?.getBoundingClientRect().width ?? 0,
-      }));
-      report.push({ file: path.relative(root, file), hScroll: m.scrollW > m.clientW, panelW: Math.round(m.panelW) });
+      const m = await page.evaluate(() => {
+        const cs = getComputedStyle(document.documentElement);
+        const row = parseFloat(cs.getPropertyValue("--row")) || 176;
+        const rule = parseFloat(cs.getPropertyValue("--rule-w")) || 1;
+        const cells = [...document.querySelectorAll(".grid > .cell, .grid > .grid-contents > .cell")];
+        const bad = [];
+        let maxRows = 0;
+        for (const c of cells) {
+          const h = c.getBoundingClientRect().height;
+          const n = Math.round((h + rule) / (row + rule));
+          maxRows = Math.max(maxRows, n);
+          if (Math.abs(h - (n * row + (n - 1) * rule)) > 0.5 || String(n) !== c.getAttribute("data-rows")) bad.push(`${c.getAttribute("aria-label") ?? c.className}:${h}`);
+        }
+        const cols = document.querySelector(".grid") ? getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length : 0;
+        return { scrollW: document.documentElement.scrollWidth, clientW: document.documentElement.clientWidth, cells: cells.length, bad, maxRows, cols };
+      });
+      report.push({ file: path.relative(root, file), hScroll: m.scrollW > m.clientW, cols: m.cols, cells: m.cells, offGrid: m.bad.length, maxRows: m.maxRows });
+      if (m.bad.length) console.error(path.basename(file), m.bad);
     }
     await ctx.close();
   }
@@ -116,4 +135,4 @@ try {
   server.kill();
 }
 console.table(report);
-process.exit(report.some((r) => r.hScroll) ? 1 : 0);
+process.exit(report.some((r) => r.hScroll || r.offGrid) ? 1 : 0);

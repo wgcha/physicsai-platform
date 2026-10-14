@@ -3,6 +3,7 @@ import { api, errorMessage, type Model } from "../api";
 import { useStudyOptional, type StudyData } from "../app/StudyContext";
 import { CLEANUP_RUNNING_HINT, CLEANUP_RUNNING_TEXT, cleanupRunningMessage, useCleanupRunning } from "../hooks/useCleanupRunning";
 import { fmtNum } from "../lib/format";
+import { Cell } from "../design/Grid";
 
 export function scoreSummary(m: Model): string {
   if (m.eval_status === "RUNNING") return "평가 중";
@@ -41,11 +42,7 @@ function ModelPanelBody({ ctx }: { ctx: StudyData }) {
   };
 
   return (
-    <section className="panel" aria-label="모델 목록">
-      <header className="panel-head">
-        <h2>모델</h2>
-        <span className="muted small">{active.length}개</span>
-      </header>
+    <Cell span={3} className="panel" label="모델 목록" title={<h2 className="T">모델</h2>} refText={`${active.length}개`}>
       {study.can_execute && cleanup.running && (
         <div className="warn-text small" role="status" data-testid="panel-cleanup-running">
           {CLEANUP_RUNNING_TEXT} — Final 지정은 정리가 끝난 뒤 할 수 있습니다
@@ -87,6 +84,6 @@ function ModelPanelBody({ ctx }: { ctx: StudyData }) {
           ))}
         </ul>
       )}
-    </section>
+    </Cell>
   );
 }
