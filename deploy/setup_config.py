@@ -12,6 +12,8 @@
   그래도 없으면 빈 값(그 기능만 비활성).
 - Altair 실행 파일의 상대 배치는 config/platform.example.yaml의 altair.* 값에서 읽는다(코드에 경로 없음). 후보 루트: 명시 값 →
   레지스트리(설치 프로그램 목록의 Altair InstallLocation) → 환경변수 ProgramFiles 아래 Altair\\<버전>. 실행 파일이 가장 많이, 같으면 최신 버전.
+  환경변수 이름과 파일·폴더 이름은 Windows처럼 대소문자를 구분하지 않고 찾는다(Linux 시험에서도 같은 규칙).
+  Altair를 못 찾아도 altair 절의 키(version_label·실행 파일 경로)는 항상 둔다(빈 값 = 기능 비활성, 경고).
 - 비밀번호·DB URL은 다루지 않는다.
 """
 
@@ -118,6 +120,35 @@ def _registry_altair_dirs() -> list[Path]:
     return found
 
 
+def env_value(name: str) -> str:
+    """환경변수를 Windows처럼 이름 대소문자 무시로 읽는다(정확한 이름 우선). Windows의 os.environ은 원래 그렇게 동작한다."""
+    v = os.environ.get(name)
+    if v is None:
+        low = name.lower()
+        v = next((val for k, val in sorted(os.environ.items()) if k.lower() == low), None)
+    return v or ""
+
+
+def resolve_ci(root: Path, rel: str) -> Path | None:
+    """root 아래 상대경로 rel(예 SimLab/bin/win64/SimLab.bat)의 파일 — 각 단계 이름을 대소문자 무시로 맞춘다(Windows 파일 시스템과 같은 규칙)."""
+    exact = root / rel
+    if exact.is_file():
+        return exact
+    cur = root
+    parts = [x for x in fwd(rel).split("/") if x]
+    for i, part in enumerate(parts):
+        nxt = cur / part
+        if not nxt.exists():
+            try:
+                nxt = next((c for c in sorted(cur.iterdir()) if c.name.lower() == part.lower()), None)
+            except OSError:
+                nxt = None
+            if nxt is None:
+                return None
+        cur = nxt
+    return cur if cur.is_file() else None
+
+
 def altair_candidates(explicit: str) -> list[Path]:
     roots: list[Path] = []
 
@@ -139,7 +170,7 @@ def altair_candidates(explicit: str) -> list[Path]:
             if _VERSION_DIR.match(p.name):
                 roots.append(p)
     for env in ("ProgramFiles", "ProgramW6432"):
-        v = os.environ.get(env)
+        v = env_value(env)
         if v:
             add_with_versions(Path(v) / "Altair")
     uniq, seen = [], set()
@@ -158,8 +189,8 @@ def detect_altair(explicit: str, layout: dict[str, str]) -> dict[str, Any]:
         paths = {}
         for k in ALTAIR_TOOL_KEYS:
             rel = layout.get(k)
-            p = root / rel if rel else None
-            paths[k] = fwd(str(p)) if p is not None and p.is_file() else ""
+            p = resolve_ci(root, rel) if rel else None
+            paths[k] = fwd(str(p)) if p is not None else ""
         n = sum(1 for v in paths.values() if v)
         key = (n, _version_key(root.name) if _VERSION_DIR.match(root.name) else ())
         if n and key > best_key:
@@ -382,7 +413,8 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
             rows.append({"key": key, "value": want, "action": "새로 씀"})
             changed.append(key)
         elif not has:
-            if want is None or (want == "" and path[0] in ("resources", "altair")):
+            # altair 절은 못 찾아도 키를 둔다(빈 값 = 기능 비활성) — 나중에 사용자가 값만 채우면 되게
+            if want is None or (want == "" and path[0] == "resources"):
                 rows.append({"key": key, "value": cur, "action": "없음(기능 비활성)"})
                 continue
             text = set_yaml_value(text, path, want, "setup.ps1이 보충")

@@ -73,13 +73,22 @@ def _inputs(t: dict[str, Path], **over) -> dict:
     return d
 
 
+def _child_env(over: dict[str, str]) -> dict[str, str]:
+    """os.environ + over. Windows의 os.environ 키는 대문자(PROGRAMFILES)라 {**os.environ, "ProgramFiles": …}로 두면 같은 이름이
+    두 번 들어가 자식 프로세스가 실제 값을 볼 수 있다 → 덮어쓸 이름은 대소문자 무시로 먼저 지운다."""
+    low = {k.lower() for k in over}
+    env = {k: v for k, v in os.environ.items() if k.lower() not in low}
+    env.update(over)
+    return env
+
+
 def _run(tmp: Path, t: dict[str, Path], inputs: dict, action: str = "write") -> dict:
     f = tmp / "in.json"
     f.write_text(json.dumps(inputs, ensure_ascii=False), encoding="utf-8")
     out = tmp / "out.json"
     sep = os.pathsep
-    env = {**os.environ, "ProgramFiles": str(t["pf"]), "ProgramW6432": "",
-           "PYTHONPATH": sep.join(str(REPO / p) for p in ("backend", "worker", "packages/simdash_adapters/src"))}
+    env = _child_env({"ProgramFiles": str(t["pf"]), "ProgramW6432": "",
+                      "PYTHONPATH": sep.join(str(REPO / p) for p in ("backend", "worker", "packages/simdash_adapters/src"))})
     r = subprocess.run([sys.executable, str(SCRIPT), action, "--inputs", str(f), "--out", str(out)],
                        capture_output=True, text=True, encoding="utf-8", env=env, timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -180,6 +189,62 @@ def test_setup_config_inherits_legacy_bundle_config(tmp_path):
     assert c["hpc"]["gateway"] == "none"
     assert (t["rt"] / "config" / "platform.yaml").read_text(encoding="utf-8").startswith("# 묶음 설치 설정")
     assert legacy.read_text(encoding="utf-8") == legacy_text                       # 원본은 그대로
+
+
+def test_setup_config_ignores_uppercase_env_duplicates(tmp_path, monkeypatch):
+    """Windows CI 재현(Linux에서도): 부모 환경의 대문자 PROGRAMFILES(실제 Program Files 자리)가 가짜 ProgramFiles를 가리면 안 된다.
+    미끼 폴더에 더 새 버전(2099)의 Altair를 두어 잘못 읽으면 그쪽을 고르게 한다."""
+    t = _fake_tree(tmp_path)
+    decoy = tmp_path / "decoy"
+    for rel in ALTAIR_REL.values():
+        _touch(decoy / "Altair" / "2099" / rel)
+    monkeypatch.setenv("PROGRAMFILES", str(decoy))
+    monkeypatch.setenv("PROGRAMW6432", str(decoy))
+    env = _child_env({"ProgramFiles": str(t["pf"]), "ProgramW6432": ""})
+    assert [k for k in env if k.lower() == "programfiles"] == ["ProgramFiles"]
+    res = _run(tmp_path, t, _inputs(t), action="plan")
+    assert res["altair"]["version_label"] == "2026.1" and res["altair"]["found"] == len(ALTAIR_REL), res["altair"]
+    m = _module()
+    monkeypatch.delenv("PROGRAMW6432")
+    monkeypatch.setenv("PROGRAMFILES", str(t["pf"]))
+    if sys.platform != "win32":
+        monkeypatch.delenv("ProgramFiles", raising=False)
+    assert m.env_value("ProgramFiles") == str(t["pf"])                               # 이름 대소문자 무시(Windows와 같은 규칙)
+
+
+def test_setup_config_altair_names_case_insensitive(tmp_path):
+    """Windows 파일 이름 규칙: 실제 폴더·파일 대소문자가 예시 배치(SimLab/…/SimLab.bat, hw.exe)와 달라도 찾는다(Linux에서도 같은 규칙)."""
+    t = _fake_tree(tmp_path, altair=False)
+    root = tmp_path / "alt"
+    for rel in ALTAIR_REL.values():
+        _touch(root / "2026.1" / rel.lower().replace("hw.exe", "HW.EXE"))
+    inp = _inputs(t)
+    inp["deploy_defaults"]["altair_root"] = str(root)
+    res = _run(tmp_path, t, inp, action="plan")
+    assert res["altair"]["found"] == len(ALTAIR_REL) and res["warnings"] == [], res
+    assert res["altair"]["paths"]["simlab_path"].endswith("2026.1/simlab/bin/win64/simlab.bat") or sys.platform == "win32"
+    assert Path(res["altair"]["paths"]["hw_exe_path"]).is_file()
+
+
+def test_setup_config_legacy_without_altair_keeps_altair_section(tmp_path):
+    """이어받은 설정에 altair 절이 없고 Altair도 못 찾으면: altair 키를 빈 값으로 보충(절은 항상 존재) + 경고."""
+    t = _fake_tree(tmp_path, altair=False)
+    legacy = tmp_path / "old" / "platform.yaml"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("schema_version: 1\nprofile: prod\nworker:\n  max_memory_gb: 12\n", encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t, legacy_config=str(legacy)))
+    c = _cfg(t)
+    assert c["altair"]["version_label"] == "" and all(c["altair"][k] == "" for k in ALTAIR_REL)
+    assert {"altair.version_label", *(f"altair.{k}" for k in ALTAIR_REL)} <= set(res["config_changed_keys"])
+    assert any("Altair 실행 파일을 찾지 못했습니다" in w for w in res["warnings"])
+    assert not any(i.startswith("altair.") for i in res["write"]["validation"]["issues"])
+    # 다시 실행: 빈 값 그대로(바꾸는 것 없음), Altair를 설치한 뒤 다시 실행하면 빈 값을 채운다
+    res2 = _run(tmp_path, t, _inputs(t))
+    assert not res2["config_changed"]
+    for rel in ALTAIR_REL.values():
+        _touch(t["pf"] / "Altair" / "2026.1" / rel)
+    res3 = _run(tmp_path, t, _inputs(t))
+    assert res3["config_changed"] and _cfg(t)["altair"]["version_label"] == "2026.1" and res3["warnings"] == []
 
 
 def test_setup_config_without_original_app_and_altair(tmp_path):
