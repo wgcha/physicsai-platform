@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime as _dt
 import re
 import shutil
+import urllib.request
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -21,6 +22,16 @@ DELAY_PROLOGUE = 'import os as _o, time as _t; _t.sleep(float(_o.environ.get("FA
 
 def _log(msg: str) -> None:
     print(f"[PhysicsAI 시연] {msg}", flush=True)
+
+
+# 시연 백엔드(127.0.0.1) 호출 전용 opener: HTTP_PROXY·HTTPS_PROXY 환경변수와 Windows 시스템(레지스트리) 프록시를 쓰지 않는다.
+# 회사 PC에서 루프백 요청이 프록시로 나가 health가 실패하던 문제(GitHub #1). 시연 스크립트의 모든 HTTP 호출은 이 함수만 쓴다.
+_LOCAL_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def local_urlopen(req: urllib.request.Request | str, timeout: float):
+    """프록시 없이 연다(루프백 전용). 응답 객체는 urllib.request.urlopen과 같다."""
+    return _LOCAL_OPENER.open(req, timeout=timeout)
 
 
 def fwd(p: Path | str) -> str:

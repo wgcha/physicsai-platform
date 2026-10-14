@@ -16,6 +16,7 @@ from demo_common import (
     STUDY_TITLE,
     _log,
     _write_if_missing,
+    local_urlopen,
 )
 
 # ---------------------------------------------------------------------------
@@ -31,7 +32,7 @@ def _api(url: str, method: str, path: str, body: dict | None = None) -> tuple[in
     if data is not None:
         req.add_header("Content-Type", "application/json")
     try:
-        with urllib.request.urlopen(req, timeout=30) as r:  # noqa: S310 - 127.0.0.1 시연 백엔드
+        with local_urlopen(req, timeout=30) as r:  # 127.0.0.1 시연 백엔드 — 프록시 미사용
             return r.status, json.loads(r.read().decode("utf-8") or "null")
     except urllib.error.HTTPError as e:
         return e.code, json.loads(e.read().decode("utf-8") or "null")

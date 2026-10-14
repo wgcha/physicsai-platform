@@ -121,7 +121,12 @@ if ($UseExistingDb) {
 
 # ---- ④ 백엔드·seed·워커 ------------------------------------------------------------------------------
 $env:FAKE_DEMO_DELAY_S = [string]$ToolDelay
-& $py $setup up --root $DemoRoot; Assert-Ok '시연 기동(up)'
+& $py $setup up --root $DemoRoot
+if ($LASTEXITCODE -ne 0) {
+    # up은 실패 시 자신이 띄운 백엔드·워커를 정리한다. 시연 DB는 켜 둔 채(다음 실행의 db-up이 그대로 재사용)
+    throw ("시연 기동(up) 실패(종료코드 $LASTEXITCODE). 위 출력의 원인(마지막 health 오류)과 $DemoRoot\logs\demo-setup.log·backend.log를 확인하세요.`n" +
+        "다음 행동: 원인을 고친 뒤 이 스크립트를 다시 실행하세요(남은 프로세스는 자동 정리). DB까지 끄려면 $(Join-Path $PSScriptRoot 'stop-demo.ps1') -DemoRoot $DemoRoot")
+}
 
 # ---- ⑤ 안내 ------------------------------------------------------------------------------------
 $url = "http://127.0.0.1:$Port/"

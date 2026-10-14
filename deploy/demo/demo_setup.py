@@ -28,8 +28,6 @@ import os
 import subprocess
 import sys
 import time
-import urllib.error
-import urllib.request
 from pathlib import Path
 
 HERE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -37,9 +35,10 @@ if HERE_DIR not in sys.path:  # 격리 실행(-I) 등으로 스크립트 폴더�
     sys.path.insert(0, HERE_DIR)
 sys.dont_write_bytecode = True  # deploy/ 아래에 __pycache__를 만들지 않는다(정적 검사·오프라인 묶음 대상 폴더)
 
-from demo_common import PKG_ROOT, _log  # noqa: E402
+from demo_common import PKG_ROOT, _log, local_urlopen  # noqa: E402
 from demo_db import cmd_db_down, cmd_db_up  # noqa: E402
 from demo_init import cmd_init  # noqa: E402
+from demo_procs import _orphan_backend, _proc_alive, _stop_procs, _stop_tree  # noqa: E402
 from demo_seed import cmd_seed  # noqa: E402
 
 
@@ -82,22 +81,33 @@ def _spawn(argv: list[str], env: dict[str, str], log: Path, cwd: Path) -> subpro
     return subprocess.Popen(argv, env=env, cwd=str(cwd), stdin=subprocess.DEVNULL, stdout=fh, stderr=subprocess.STDOUT, **kw)
 
 
-def _proc_alive(info: dict) -> bool:
+def _health_error(port: int) -> str | None:
+    """시연 백엔드 health. 정상이면 None, 아니면 원인 문자열(예외 종류·메시지). 프록시를 타지 않는다(local_urlopen)."""
     try:
-        import psutil
-
-        p = psutil.Process(info["pid"])
-        return abs(p.create_time() - info["create_time"]) < 1.0 and p.status() != psutil.STATUS_ZOMBIE
-    except Exception:  # noqa: BLE001
-        return False
+        with local_urlopen(f"http://127.0.0.1:{port}/physicsai/api/health", timeout=2) as r:
+            body = r.read().decode("utf-8", "replace")
+    except Exception as e:  # noqa: BLE001
+        return f"{type(e).__name__}: {e}"
+    try:
+        status = json.loads(body).get("status")
+    except (ValueError, AttributeError):
+        return f"health 응답 형식 오류: {body[:200]!r}"
+    return None if status == "ok" else f"health status={status!r}"
 
 
 def _health(port: int) -> bool:
+    return _health_error(port) is None
+
+
+def _note(root: Path, msg: str) -> None:
+    """화면 출력 + <시연 폴더>/logs/demo-setup.log(원인 추적용)."""
+    _log(msg)
     try:
-        with urllib.request.urlopen(f"http://127.0.0.1:{port}/physicsai/api/health", timeout=2) as r:  # noqa: S310
-            return json.loads(r.read().decode("utf-8")).get("status") == "ok"
-    except Exception:  # noqa: BLE001
-        return False
+        (root / "logs").mkdir(parents=True, exist_ok=True)
+        with open(root / "logs" / "demo-setup.log", "a", encoding="utf-8") as fh:
+            fh.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')} {msg}\n")
+    except OSError:
+        pass
 
 
 def cmd_up(args: argparse.Namespace) -> int:
@@ -107,7 +117,7 @@ def cmd_up(args: argparse.Namespace) -> int:
     cfg = root / "config" / "platform.yaml"
     if not cfg.is_file():
         raise SystemExit(f"시연 설정이 없습니다: {cfg} — init을 먼저 실행하세요")
-    sys.path[:0] = [str(PKG_ROOT / "backend"), str(PKG_ROOT / "worker")]
+    sys.path[:0] = [str(PKG_ROOT / "backend"), str(PKG_ROOT / "worker"), str(PKG_ROOT / "packages" / "simdash_adapters" / "src")]
     from physicsai_core.config import load_config
 
     lc = load_config(str(cfg), environ={})
@@ -116,13 +126,23 @@ def cmd_up(args: argparse.Namespace) -> int:
     port = lc.settings.server.port
     state = root / "state" / PROCS_FILE
     if state.is_file():
-        old = json.loads(state.read_text(encoding="utf-8"))
-        if any(_proc_alive(v) for v in old.values()):
-            _log(f"이미 실행 중입니다: http://127.0.0.1:{port}/  (끝내려면 down)")
-            print(json.dumps({"url": f"http://127.0.0.1:{port}/", "already_running": True}))
-            return 0
+        old = json.loads(state.read_text(encoding="utf-8") or "{}")
+        alive = sorted(k for k, v in old.items() if _proc_alive(v))
+        if alive:
+            if set(alive) >= {"backend", "worker"} and _health(port):
+                _log(f"이미 실행 중입니다: http://127.0.0.1:{port}/  (끝내려면 down)")
+                print(json.dumps({"url": f"http://127.0.0.1:{port}/", "already_running": True}))
+                return 0
+            # 이전 up이 중간에 실패해 일부만 남은 경우(예: 백엔드만 떠 있고 워커 없음) — 정리하고 처음부터 다시 띄운다
+            _note(root, f"이전 실행이 일부만 남아 있어({', '.join(alive)}) 정리하고 다시 시작합니다")
+            _stop_procs(old)
+        state.write_text("{}", encoding="utf-8")
     if _health(port):
-        raise SystemExit(f"포트 {port}를 다른 프로그램이 쓰고 있습니다 — init --port로 바꾸세요")
+        orphan = _orphan_backend(port, root)
+        if orphan is None:
+            raise SystemExit(f"포트 {port}를 다른 프로그램이 쓰고 있습니다 — init --port로 바꾸세요")
+        _note(root, f"실행 정보 없이 남은 이전 시연 백엔드(PID {orphan})를 종료합니다")
+        _stop_tree(orphan)
     url = _database_url(root)
     env = _child_env(root, url)
     logs = root / "logs"
@@ -132,23 +152,37 @@ def cmd_up(args: argparse.Namespace) -> int:
     if r.returncode != 0:
         raise SystemExit(f"DB migration 실패: {r.stderr[-2000:]}")
     procs: dict[str, dict] = {}
-    be = _spawn([sys.executable, "-m", "physicsai_api.serve"], env, logs / "backend.out.log", root)
-    procs["backend"] = {"pid": be.pid, "create_time": psutil.Process(be.pid).create_time()}
-    state.write_text(json.dumps(procs), encoding="utf-8")
-    end = time.time() + float(args.timeout)
-    while not _health(port):
-        if be.poll() is not None or time.time() > end:
-            raise SystemExit(f"백엔드 기동 실패 — {logs / 'backend.out.log'}·{logs / 'backend.log'} 확인")
-        time.sleep(0.5)
-    _log(f"백엔드 기동: http://127.0.0.1:{port}/")
-    seed = argparse.Namespace(root=str(root), url=f"http://127.0.0.1:{port}")
-    cmd_seed(seed)
-    wk = _spawn([sys.executable, "-m", "physicsai_worker", "--config", str(cfg)], env, logs / "worker.out.log", root)
-    procs["worker"] = {"pid": wk.pid, "create_time": psutil.Process(wk.pid).create_time()}
-    state.write_text(json.dumps(procs), encoding="utf-8")
-    time.sleep(1.0)
-    if wk.poll() is not None:
-        raise SystemExit(f"워커 기동 실패 — {logs / 'worker.out.log'}·{logs / 'worker.log'} 확인")
+    try:
+        be = _spawn([sys.executable, "-m", "physicsai_api.serve"], env, logs / "backend.out.log", root)
+        procs["backend"] = {"pid": be.pid, "create_time": psutil.Process(be.pid).create_time()}
+        state.write_text(json.dumps(procs), encoding="utf-8")
+        end = time.time() + float(args.timeout)
+        while (err := _health_error(port)) is not None:
+            if be.poll() is not None:
+                raise SystemExit(f"백엔드 기동 실패: 백엔드 프로세스가 종료됨(종료코드 {be.returncode}) — "
+                                 f"{logs / 'backend.out.log'}·{logs / 'backend.log'} 확인")
+            if time.time() > end:
+                raise SystemExit(f"백엔드 기동 실패: {args.timeout:g}초 안에 health 확인 안 됨 "
+                                 f"(http://127.0.0.1:{port}/physicsai/api/health 마지막 오류: {err}) — "
+                                 f"{logs / 'backend.out.log'}·{logs / 'backend.log'} 확인")
+            time.sleep(0.5)
+        _log(f"백엔드 기동: http://127.0.0.1:{port}/")
+        seed = argparse.Namespace(root=str(root), url=f"http://127.0.0.1:{port}")
+        cmd_seed(seed)
+        wk = _spawn([sys.executable, "-m", "physicsai_worker", "--config", str(cfg)], env, logs / "worker.out.log", root)
+        procs["worker"] = {"pid": wk.pid, "create_time": psutil.Process(wk.pid).create_time()}
+        state.write_text(json.dumps(procs), encoding="utf-8")
+        time.sleep(1.0)
+        if wk.poll() is not None:
+            raise SystemExit(f"워커 기동 실패 — {logs / 'worker.out.log'}·{logs / 'worker.log'} 확인")
+    except BaseException as e:
+        # 실패하면 이번에 띄운 백엔드·워커를 정리한다(다음 실행이 남은 프로세스·포트 때문에 꼬이지 않게). DB는 db-up이 재사용한다.
+        _note(root, f"시연 기동 실패: {e}")
+        stopped = _stop_procs(procs)
+        if stopped:
+            _note(root, f"이번에 띄운 프로세스 정리: {', '.join(stopped)}")
+        state.write_text("{}", encoding="utf-8")
+        raise
     _log(f"워커 기동(가짜 도구 지연 {env['FAKE_DEMO_DELAY_S']}초)")
     _log(f"브라우저에서 http://127.0.0.1:{port}/ 을 열고 시연 사용자(관리자·파워·일반)를 고르세요")
     print(json.dumps({"url": f"http://127.0.0.1:{port}/", "already_running": False}))
@@ -156,31 +190,13 @@ def cmd_up(args: argparse.Namespace) -> int:
 
 
 def cmd_down(args: argparse.Namespace) -> int:
-    import psutil
-
     root = Path(args.root).resolve()
     state = root / "state" / PROCS_FILE
     if not state.is_file():
         _log("실행 정보가 없습니다")
         return 0
-    procs = json.loads(state.read_text(encoding="utf-8"))
-    for name in ("worker", "backend"):  # 워커 먼저(자식 도구 포함 트리)
-        info = procs.get(name)
-        if not info or not _proc_alive(info):
-            continue
-        p = psutil.Process(info["pid"])
-        tree = [*p.children(recursive=True), p]
-        for q in tree:
-            try:
-                q.terminate()
-            except psutil.NoSuchProcess:
-                pass
-        _gone, alive = psutil.wait_procs(tree, timeout=15)
-        for q in alive:
-            try:
-                q.kill()
-            except psutil.NoSuchProcess:
-                pass
+    procs = json.loads(state.read_text(encoding="utf-8") or "{}")
+    for name in _stop_procs(procs):
         _log(f"{'워커' if name == 'worker' else '백엔드'} 종료")
     state.write_text("{}", encoding="utf-8")
     return 0

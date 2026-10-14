@@ -12,6 +12,7 @@ param(
     [switch]$Force
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'loopback-http.ps1')   # 127.0.0.1 호출은 프록시 미사용(Invoke-LoopbackRest)
 function Write-Step([string]$m) { Write-Host "[PhysicsAI 업데이트] $m" }
 function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
 function Get-BackendPort([string]$ConfigPath, [string]$Py) {
@@ -50,13 +51,13 @@ function Get-ActiveJobCount {
     $tokenSecure = Read-Host -AsSecureString '대시보드 세션 토큰(없으면 Enter — DB에서 직접 확인)'
     $token = ConvertTo-Plain $tokenSecure
     if ($token) {
-        $q = Invoke-RestMethod -Uri "http://127.0.0.1:$port/physicsai/api/queue" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
+        $q = Invoke-LoopbackRest -Uri "http://127.0.0.1:$port/physicsai/api/queue" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
         $n = @($q.waiting_hpc).Count + @($q.collecting).Count + @($q.queued).Count + @($q.light.queued).Count
         if ($q.running) { $n++ }
         if ($q.light.running) { $n++ }
         # 진행 중 환경 점검(PENDING·RUNNING)도 포함 — 관리자 토큰일 때만 조회 가능(아니면 403 무시)
         try {
-            $ec = Invoke-RestMethod -Uri "http://127.0.0.1:$port/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
+            $ec = Invoke-LoopbackRest -Uri "http://127.0.0.1:$port/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
             if ($ec.state -in @('PENDING', 'RUNNING')) { $n++ }
         } catch { Write-Verbose '환경 점검 조회 생략(권한 없음 또는 이력 없음)' }
         return $n
@@ -111,7 +112,7 @@ try {
     $ok = $false
     for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
         Start-Sleep -Seconds 2
-        try { $ok = ((Invoke-RestMethod -Uri $health -TimeoutSec 3).status -eq 'ok') } catch { $ok = $false }
+        try { $ok = ((Invoke-LoopbackRest -Uri $health -TimeoutSec 3).status -eq 'ok') } catch { $ok = $false }
     }
     if (-not $ok) { throw "health 확인 실패: $health" }
     Write-Step "업데이트 완료 — health OK"

@@ -7,12 +7,14 @@
 from __future__ import annotations
 
 import hashlib
+import ipaddress
 import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -48,6 +50,17 @@ def auth_required() -> DomainError:
     return _err(401, "AUTHENTICATION_REQUIRED", "대시보드에서 로그인하세요")
 
 
+def is_loopback_url(url: str) -> bool:
+    """URL 호스트가 루프백(127.0.0.0/8·::1·localhost)인지."""
+    host = (urlsplit(url).hostname or "").lower()
+    if host == "localhost" or host.endswith(".localhost"):
+        return True
+    try:
+        return ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        return False
+
+
 class DashboardClient:
     """대시보드 HTTP 호출(루프백 dashboard_internal_url만)."""
 
@@ -58,6 +71,9 @@ class DashboardClient:
             timeout=cfg.timeout_s,
             transport=transport,
             follow_redirects=False,
+            # 루프백 대시보드는 HTTP(S)_PROXY·ALL_PROXY 환경변수를 무시한다(회사 PC에서 루프백이 프록시로 나가던 문제, GitHub #1).
+            # 루프백이 아니면 기존 동작(환경 프록시·NO_PROXY 존중) 유지.
+            trust_env=not is_loopback_url(cfg.dashboard_internal_url),
         )
 
     def close(self) -> None:

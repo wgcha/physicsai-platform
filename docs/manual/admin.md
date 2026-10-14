@@ -926,6 +926,22 @@ cd D:\physicsai
 **Q. 업데이트 후 워커가 뜨지 않는다.**
 - `DB migration head 불일치` → `alembic upgrade head`를 다시 실행(⑤ 실패 여부 확인). 새 버전에서 설정 키가 바뀌었으면 `config.valid` 메시지대로 `platform.yaml` 수정.
 
+**Q. 회사 프록시 환경(`HTTP_PROXY`·`HTTPS_PROXY` 설정 PC)에서 health 확인·시연 기동이 실패한다.**
+- 증상: `backend.log`에는 `Uvicorn running on http://127.0.0.1:…`로 정상 기동했는데 `start-demo`·`install`·`update`가 "백엔드 기동 실패"/"health 확인 실패"로 끝난다. 원인은 루프백(127.0.0.1) 요청이 프록시로 나가는 것(GitHub #1).
+- 현재 버전은 루프백 호출(시연 health·seed, `install.ps1`·`update.ps1` health·대기열 조회, 대시보드 인증 `auth.dashboard_internal_url`이 127.0.0.1·localhost·::1일 때)에서 프록시를 쓰지 않는다. 외부 주소 호출과 pip·npm은 기존 프록시 설정을 그대로 쓴다. 설정 키는 없다.
+- 시연 기동이 실패하면 출력과 `<DemoRoot>\logs\demo-setup.log`에 **마지막 health 오류**(예 `URLError: … Connection refused`)가 남는다. 실패 시 이번에 띄운 백엔드·워커는 자동 종료되고, 이전 실행이 일부만 남아 있으면(예: 백엔드만 떠 있음) 다음 실행이 정리하고 다시 띄운다. 시연 DB는 켜 둔 채 다음 실행이 재사용한다.
+- 이전 버전에서 실패해 포트(예 8190)를 잡은 백엔드가 남아 있으면 `deploy\demo\stop-demo.bat`(또는 아래 직접 실행) 후 다시 시작한다.
+
+**Q. `.bat` 실행이 "액세스가 거부되었습니다"(Access is denied)로 막힌다.**
+- 회사 PC 보안 정책이 배치 파일 실행을 막는 경우다. PowerShell 스크립트를 직접 실행한다(관리자 권한 불필요, 인자는 같다).
+
+```powershell
+cd <압축 해제 폴더 또는 저장소>
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\demo\start-demo.ps1 -DashboardRoot E:\simulation_workbench
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\demo\stop-demo.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\install.ps1 -ConfigFile .\deploy\deploy.json   # 운영 설치(관리자 PowerShell)
+```
+
 **Q. 디스크가 찬다.**
 - `<study>/_backup/`(덮어쓰기 전 이동본)과 `03_dataset`(psdata), `04_predict`, `01_train/results`가 크다. 플랫폼은 자동 삭제하지 않는다. 사용자와 확인 후 관리자가 정리한다. 환경 점검 `storage.ai_root.free`로 여유 공간 경고.
 
@@ -978,6 +994,10 @@ deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -DashboardRoot E:\simulation_wo
 - ③-4 모델 등록 폴더는 `<DemoRoot>\import\trained_model`.
 - 실패·멈춤 흉내: 환경변수 `FAKE_TOOL_MODE_<도구>=fail`(또는 `hang`)를 설정한 뒤 `start-demo`를 실행한다(도구 이름 `EDSPY`·`SIMLAB`·`HW`·`HVTRANS`·`HSTBATCH`·`HSTPY`. 예 같은 창에서 `$env:FAKE_TOOL_MODE_EDSPY='hang'` 후 `start-demo.ps1` → 관리자 취소 시연). 오류 묶음·알림·취소 흐름을 보여 줄 때 쓴다.
 - 로그: `<DemoRoot>\logs\` — `backend.log`·`worker.log`(회전 파일 로그, §12.1)와 `backend.out.log`·`worker.out.log`(표준 출력 — 기동 실패 메시지는 여기). 작업 로그는 일반 운영과 같이 Study `logs\`.
+
+**회사 프록시 환경·`.bat` 차단**:
+- `HTTP_PROXY`·`HTTPS_PROXY`가 설정된 PC에서도 시연의 127.0.0.1 호출(health·seed)은 프록시를 타지 않는다(저장소 모드의 pip·npm 설치는 기존 프록시 설정 사용). 기동 실패 시 출력·`<DemoRoot>\logs\demo-setup.log`의 "마지막 오류"로 원인을 보고, 그대로 다시 실행하면 남은 백엔드·워커를 정리하고 다시 띄운다(§13 "회사 프록시 환경").
+- `start-demo.bat`이 "액세스가 거부되었습니다"로 막히면 `powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\demo\start-demo.ps1`(운영 설치는 `.\deploy\install.ps1`)를 직접 실행한다(인자 동일).
 
 ### 14.3 종료
 

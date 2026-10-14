@@ -31,6 +31,7 @@ param(
     [switch]$NoStart
 )
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'loopback-http.ps1')   # 127.0.0.1 호출은 프록시 미사용(Invoke-LoopbackRest)
 
 function Write-Step([string]$m) { Write-Host "[PhysicsAI 설치] $m" }
 function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
@@ -202,7 +203,7 @@ $health = "http://127.0.0.1:$port/physicsai/api/health"
 $ok = $false
 for ($i = 0; $i -lt 30 -and -not $ok; $i++) {
     Start-Sleep -Seconds 2
-    try { $r = Invoke-RestMethod -Uri $health -TimeoutSec 3; $ok = ($r.status -eq 'ok') } catch { $ok = $false }
+    try { $r = Invoke-LoopbackRest -Uri $health -TimeoutSec 3; $ok = ($r.status -eq 'ok') } catch { $ok = $false }
 }
 if (-not $ok) { throw "health 확인 실패: $health — 작업 스케줄러 기록과 설정을 확인하세요" }
 Write-Step "health OK: $health"
