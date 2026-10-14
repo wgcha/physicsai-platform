@@ -277,12 +277,13 @@ jobs:
               db_name = 'physicsai'; db_role = 'physicsai_app'; config_path = $cfgPath; service_user = "$env:USERDOMAIN\$env:USERNAME"
               run_mode = 'Interactive'; caddy_frontend_root = (Join-Path $root 'frontend\dist')
             } | ConvertTo-Json
-            $jsonPath = Join-Path $t 'deploy.json'
+            # 사용자 기본 사용법 재현: -ConfigFile 없이 deploy 폴더의 deploy.json을 읽어야 한다(PS 5.1 param 기본값 $PSScriptRoot 빈 값 회귀 방지, 이슈 #1)
+            $jsonPath = Join-Path (Resolve-Path 'dist\deploy') 'deploy.json'
             Set-Content -Path $jsonPath -Value $deployJson -Encoding utf8
             # 무인 설치: 비밀번호는 프로세스 환경변수로만(명령 인자 금지)
             $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $env:PGPASSWORD
             $env:PHYSICSAI_INSTALL_DB_PASSWORD = [guid]::NewGuid().ToString('N')
-            cmd /c "dist\deploy\install.bat -ConfigFile $jsonPath -PasswordsFromEnv -NoStart 2>&1" | Tee-Object -FilePath $stepLog -Append
+            cmd /c "dist\deploy\install.bat -PasswordsFromEnv -NoStart 2>&1" | Tee-Object -FilePath $stepLog -Append
             if ($LASTEXITCODE) { throw "install.bat 실패($LASTEXITCODE)" }
             $instOut = Get-Content $stepLog -Raw
             if (-not $instOut.Contains('pg_bin, pg_host, pg_port, python_exe')) { throw 'dashboard_root 기본값이 채워지지 않았습니다' }

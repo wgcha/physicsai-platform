@@ -24,13 +24,14 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$ConfigFile = (Join-Path $PSScriptRoot 'deploy.json'),
+    [string]$ConfigFile = '',   # 비우면 이 스크립트 폴더의 deploy.json (PS 5.1은 param 기본값에서 $PSScriptRoot가 빔)
     [string]$ServiceUser,
     [ValidateSet('Background', 'Interactive')][string]$RunMode,
     [switch]$PasswordsFromEnv,
     [switch]$NoStart
 )
 $ErrorActionPreference = 'Stop'
+if (-not $ConfigFile) { $ConfigFile = Join-Path $PSScriptRoot 'deploy.json' }
 . (Join-Path $PSScriptRoot 'loopback-http.ps1')   # 127.0.0.1 호출은 프록시 미사용(Invoke-LoopbackRest)
 
 function Write-Step([string]$m) { Write-Host "[PhysicsAI 설치] $m" }

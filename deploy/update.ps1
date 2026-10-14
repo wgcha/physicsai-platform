@@ -8,10 +8,11 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$ConfigFile = (Join-Path $PSScriptRoot 'deploy.json'),
+    [string]$ConfigFile = '',   # 비우면 이 스크립트 폴더의 deploy.json (PS 5.1은 param 기본값에서 $PSScriptRoot가 빔)
     [switch]$Force
 )
 $ErrorActionPreference = 'Stop'
+if (-not $ConfigFile) { $ConfigFile = Join-Path $PSScriptRoot 'deploy.json' }
 . (Join-Path $PSScriptRoot 'loopback-http.ps1')   # 127.0.0.1 호출은 프록시 미사용(Invoke-LoopbackRest)
 function Write-Step([string]$m) { Write-Host "[PhysicsAI 업데이트] $m" }
 function Assert-Ok([string]$what) { if ($LASTEXITCODE -ne 0) { throw "$what 실패(종료코드 $LASTEXITCODE)" } }
