@@ -337,7 +337,7 @@ jobs:
             throw
           }
 
-      - name: "저장소 모드 시연(GitHub #1 재현 — PATH 첫 python이 실패하는 가짜 pyenv shim, -DashboardRoot의 Python 3.12 → <DemoRoot>\venv) → API로 ①-1 → stop-demo.bat"
+      - name: '저장소 모드 시연(GitHub #1 재현 — PATH 첫 python이 실패하는 가짜 pyenv shim, -DashboardRoot의 Python 3.12 → <DemoRoot>\venv) → API로 ①-1 → stop-demo.bat'
         if: ${{ !cancelled() }}
         env:
           PHYSICSAI_NO_PAUSE: "1"
