@@ -92,3 +92,4 @@
 - 2026-10-11 · `simdash-adapters`는 PyPI에서 받지 않는다: `deploy/requirements.lock`(PyPI 외부 의존성만)과 `deploy/requirements.local.lock`(로컬 wheel 고정, `--no-index` 확인) 분리, 개발 설치는 `scripts/dev-setup`(패키지 먼저) · PyPI 이름 선점 공격 차단 · phase3.md §6.5, D3-17, D3-27
 - 2026-10-11 · 어댑터 분리는 동작 불변: 플랫폼 `physicsai_core.hpc.*`가 패키지 객체를 같은 객체로 재노출(문구 골든 동일), 패키지는 표준 라이브러리만 import · 기존 호출처·시험 무수정 · phase3.md D3-15, D3-16, D3-26
 - 2026-10-13 · 실행 환경을 대시보드와 동일하게: PG18 같은 인스턴스 별도 DB, Python 3.12.13, Node 22.23.2 — 사용자 결정 · `deploy.json` `dashboard_root`(선택)로 대시보드 `.env`의 `POSTGRES_BIN`·`DATABASE_URL` host·port와 `.tools` 고정 Python을 기본값으로(비밀번호 미독취), install은 Python≠3.12 중단·PG≠18 경고 · admin.md §2.1·§2.3·§14
+- 2026-10-14 · 플랫폼 UI를 스위스 타이포그래피 격자로 전환(12열·행 176px·1px 선, 글자 역할 4단계, IBM Plex Sans/KR npm 번들), 강조색은 빨강 1개(현재 단계·Final 모델·주요 차트 선·포커스), 대시보드에는 적용하지 않음 — 사용자 결정 · 동작·API·문구 불변, 레이아웃·스타일만 · docs/design/swiss-grid-mockup.html, architecture.md §1.5

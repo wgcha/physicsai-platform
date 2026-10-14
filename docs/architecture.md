@@ -132,7 +132,8 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 | `mock/data.ts`(7) ← `base.ts`(30)·`steps.ts`(185)·`seed.ts`(177)·`fixtures.ts`(64)·`catalog.ts`(74), `install.ts` | | 공통 | `data.ts`는 옛 import 경로용 재노출만. 기초 값(rng·iso·사용자·프로젝트), step 체인·`makeSteps`·`baseJob`, 1차 시드·가짜 응답, 산출물 본문, 2차 공용 상수(`STAGE_LABEL`·`FEATURE_MISSING`·`FEATURE_OF`·`DOE_TYPES`) |
 | `mock/manage.ts` | 96 | 공통 | 3차 목 핸들러(PATCH study·archive·unarchive·retry), `server.ts` `ROUTES`에서 위임 |
 | `mock/manageStorage.ts` | 162 | 공통 | 3차 S3 목(`StorageMock`: 보고서·스캔/정리 작업 생성·사전조건·종료 결과). `engine.ts`의 완료 처리가 `manage.storage.onFinish`를 부른다(스캔은 성공 알림 없음) |
-| `styles.css` | 2,076 | 공통 | 전역 한 파일(H6 보류) |
+| `design/` | 523 | 공통 | 스위스 격자 디자인 체계(2026-10-14, 기준 시안 `docs/design/swiss-grid-mockup.html`): `tokens.css`(색 paper·cell·ink·ink-2·ink-3·rule·rule-soft·red + 채도 낮춘 상태색 ok·warn·bad, 라이트·다크 = `prefers-color-scheme`과 `[data-theme]` 두 곳, 글자 역할 4단계 `--font-d/t/b/r`, 간격 8px 배수, `--row` 176px·`--rule-w` 1px, 모서리·그림자 전역 0), `typography.css`(유틸 `.D .T .B .R`, tabular-nums), `fonts.css`(IBM Plex Sans latin·IBM Plex Sans KR korean 400/500/600 woff2를 `@fontsource` npm에서 번들 — OFL-1.1, CDN 없음), `grid.css`(`.grid` 12열·1280 미만 6열·720 미만 2열 auto, `.cell`·`.c2~c12`·`.cell.rail`), `Grid.tsx`(`Grid`·`Cell`(머리 제목+참조 번호 → 본문 → 발 참조 설명·버튼, 내용 높이로 span 행 수 n 자동, 칸 높이 = n×176 + (n−1)px)·`Rail`/`RailSlot`(대기열·워커 자원·모델 칸을 10~12열에 1행부터 쌓음)). `components/ui.tsx` `Card`는 `Cell` 래퍼(`span`·`rows`·`foot`) |
+| `styles.css` | 16 | 공통 | import 허브만: `design/{fonts,tokens,typography,grid}.css` → `styles/{base,controls,shell,overlays,cells,tables,chart,stages,stages-predict,panels}.css`(95–271줄, 화면별 규칙 — font-size·border-radius·box-shadow 없음, `__tests__/designRules.test.ts`가 정적 검사) |
 
 **F5(목 서버 분할, 2026-10-11 실행)**: 이전 보류 사유(공유 상태·`nid` 생성 순서)는 상태를 옮기지 않고 해결했다 — 상태는 그대로 `MockServer`·`Phase2Mock` 필드에 두고(시험의 `s.p2.setups`·`s.p2.opts`·`s.p2.summaryExtra` 교체·`server.handle` 교체가 그대로 동작), 단계 모듈은 그 인스턴스를 인자로 받는 함수다. 시드는 원래 순서(1차 시드 → `seedJobs` → ① → SPDM·② → ⑤ → 환경 점검)로 호출해 목 ID가 같다. 라우트는 `server.ts` `ROUTES` 한 곳에 원래 우선순위대로 등록(예: 2차 `param-sets/from-train`이 §10.3 `param-sets`보다 먼저). 검증은 refactor-plan.md §7.
 
@@ -362,6 +363,8 @@ worker/tests/
 src/
   api/, app/, pages/, panels/, shell/, components/, lib/   (그대로)
   hooks/useOpenJob.ts          ← shell/useOpenJob.ts
+  design/    tokens.css, typography.css, fonts.css, grid.css, Grid.tsx   (스위스 격자, 2026-10-14)
+  styles/    base, controls, shell, overlays, cells, tables, chart, stages, stages-predict, panels .css  ← styles.css(이제 import 허브)
   stages/
     stage1/  Stage1.tsx, TrainContext.tsx, CadExtractCard.tsx, ParamTableCard.tsx, DoeGenCard.tsx,
              DoePicker.tsx, RunStateBar.tsx, RunTable.tsx, SolveCard.tsx, ResultCollectCard.tsx, RunResponseCard.tsx

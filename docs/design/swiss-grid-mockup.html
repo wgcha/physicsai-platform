@@ -1,0 +1,137 @@
+<title>PhysicsAI 스위스 격자 시안</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* 레이아웃: 12열 고정 격자, 행 높이 고정(176px), 가로·세로 간격 = 1px 선(동일). 와이드 모니터(1920~3840) 기준 */
+:root{
+  --paper:#FAFAF8; --cell:#FFFFFF; --ink:#111111; --ink-2:#5C5E62; --ink-3:#9A9CA0;
+  --rule:#111111; --rule-soft:#D9DADC; --red:#D52B1E;
+  --sans:"IBM Plex Sans","IBM Plex Sans KR","Helvetica Neue",Helvetica,Arial,sans-serif;
+  /* 글자 역할 4단계(8px 기준선) */
+  --d-size:44px; --d-line:48px;   /* 숫자 Display */
+  --t-size:18px; --t-line:24px;   /* 제목 Title */
+  --b-size:15px; --b-line:24px;   /* 본문 Body */
+  --r-size:12px; --r-line:16px;   /* 참조 Reference */
+  --row:176px; --pad:16px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#0E0E0F; --cell:#161618; --ink:#F2F2F0; --ink-2:#A6A8AC; --ink-3:#6E7074;
+  --rule:#F2F2F0; --rule-soft:#2E2F32; --red:#FF5446; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --paper:#0E0E0F; --cell:#161618; --ink:#F2F2F0; --ink-2:#A6A8AC; --ink-3:#6E7074;
+  --rule:#F2F2F0; --rule-soft:#2E2F32; --red:#FF5446; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);margin:0;
+  padding-left:max(24px,env(safe-area-inset-left,0px));padding-right:max(24px,env(safe-area-inset-right,0px));padding-block:24px 40px;
+  font-variant-numeric:tabular-nums}
+p,h1,h2{margin:0}
+.D{font-size:var(--d-size);line-height:var(--d-line);font-weight:500;letter-spacing:-.01em}
+.T{font-size:var(--t-size);line-height:var(--t-line);font-weight:600}
+.B{font-size:var(--b-size);line-height:var(--b-line);font-weight:400}
+.R{font-size:var(--r-size);line-height:var(--r-line);font-weight:400;color:var(--ink-2);letter-spacing:.02em}
+.red{color:var(--red)} .mute{color:var(--ink-3)}
+
+/* 사양 띠 */
+.spec{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft);margin-bottom:32px}
+.spec>div{background:var(--paper);padding:12px var(--pad);display:flex;flex-direction:column;gap:4px;min-width:0}
+
+/* 상단 바 */
+.bar{display:flex;align-items:baseline;gap:24px;border-bottom:2px solid var(--rule);padding-bottom:8px;flex-wrap:wrap}
+.bar .user{margin-left:auto}
+
+/* 단계 */
+.steps{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));border-bottom:1px solid var(--rule);margin-bottom:24px}
+.step{padding:12px var(--pad) 12px 0;display:flex;flex-direction:column;gap:0;border-right:1px solid var(--rule-soft)}
+.step+.step{padding-left:var(--pad)}
+.step:last-child{border-right:0}
+.step.on{box-shadow:inset 0 4px 0 var(--red)}
+
+/* 바둑판 격자 */
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));grid-auto-rows:var(--row);gap:1px;background:var(--rule);border:1px solid var(--rule)}
+.cell{background:var(--cell);padding:var(--pad);display:flex;flex-direction:column;gap:8px;min-width:0;overflow:hidden}
+.cell .head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.cell .foot{margin-top:auto;display:flex;align-items:center;justify-content:space-between;gap:8px}
+.c3{grid-column:span 3}.c6{grid-column:span 6}.r2{grid-row:span 2}
+.btn{font:inherit;font-size:var(--r-size);line-height:var(--r-line);font-weight:500;letter-spacing:.02em;color:var(--ink);background:transparent;border:1px solid var(--ink);border-radius:0;padding:6px 14px;cursor:pointer}
+.btn:hover{background:var(--ink);color:var(--cell)}
+.btn:focus-visible{outline:2px solid var(--red);outline-offset:2px}
+.path{word-break:break-all}
+table{width:100%;border-collapse:collapse}
+td{padding:4px 0;border-top:1px solid var(--rule-soft);vertical-align:baseline}
+td:last-child{text-align:right}
+.chart{flex:1;min-height:0;width:100%}
+.chart text{font-family:var(--sans);font-size:12px;fill:var(--ink-2)}
+
+@media (max-width:1280px){.grid{grid-template-columns:repeat(6,minmax(0,1fr))}.c6{grid-column:span 6}}
+@media (max-width:720px){.grid{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:auto}.c3,.c6{grid-column:span 2}.r2{grid-row:auto}.chart{height:220px;flex:none}
+  .steps{grid-template-columns:repeat(5,minmax(64px,1fr));overflow-x:auto}.spec{grid-template-columns:repeat(2,minmax(0,1fr))}:root{--d-size:32px;--d-line:40px}}
+</style>
+
+<section class="spec" aria-label="글자 역할">
+  <div><p class="R">숫자 Display</p><p class="D">44 / 48</p><p class="R">핵심 수치·단계 번호</p></div>
+  <div><p class="R">제목 Title</p><p class="T">18 / 24 · 600</p><p class="R">칸 제목, 화면 이름</p></div>
+  <div><p class="R">본문 Body</p><p class="B">15 / 24 · 400</p><p class="R">내용·표·경로</p></div>
+  <div><p class="R">참조 Reference</p><p class="R" style="color:var(--ink)">12 / 16 · 400</p><p class="R">번호·단위·설명·버튼</p></div>
+</section>
+
+<header class="bar">
+  <h1 class="T">PhysicsAI</h1>
+  <p class="R">AI 예측 / 힌지 낙하 / Study01 / 03 데이터셋·모델</p>
+  <p class="R user">완기 · admin · 알림 2</p>
+</header>
+
+<nav class="steps" aria-label="단계">
+  <div class="step"><p class="D mute">01</p><p class="R">학습데이터 · 완료</p></div>
+  <div class="step"><p class="D mute">02</p><p class="R">데이터 정리 · 완료</p></div>
+  <div class="step on"><p class="D red">03</p><p class="R" style="color:var(--ink)">데이터셋·모델 · 진행</p></div>
+  <div class="step"><p class="D mute">04</p><p class="R">단일 예측</p></div>
+  <div class="step"><p class="D mute">05</p><p class="R">최적화</p></div>
+</nav>
+
+<main class="grid">
+  <section class="cell c3"><div class="head"><h2 class="T">데이터셋</h2><p class="R">03-1</p></div>
+    <p class="D">43 / 5</p><div class="foot"><p class="R">학습 / 평가 run · 홀드아웃 10%</p><button class="btn" id="b1">생성</button></div></section>
+
+  <section class="cell c3"><div class="head"><h2 class="T">학습 패키지</h2><p class="R">03-2</p></div>
+    <p class="B path">E:\AI_WORK\Study01\03_package</p><div class="foot"><p class="R">psdata 2.4 GB</p><button class="btn" id="b2">경로 복사</button></div></section>
+
+  <section class="cell c3"><div class="head"><h2 class="T">학습</h2><p class="R">03-3</p></div>
+    <p class="B">HPC에서 직접 학습한 뒤 모델 폴더를 등록합니다.</p><div class="foot"><p class="R">플랫폼 관여 없음</p></div></section>
+
+  <section class="cell c3"><div class="head"><h2 class="T">모델 등록</h2><p class="R">03-4</p></div>
+    <p class="D">3</p><div class="foot"><p class="R">최근 v3 · 10-12 14:20</p><button class="btn" id="b3">폴더 등록</button></div></section>
+
+  <section class="cell c6 r2"><div class="head"><h2 class="T">평가 · loss</h2><p class="R">03-5</p></div>
+    <svg class="chart" viewBox="0 0 600 260" preserveAspectRatio="none" role="img" aria-label="모델별 loss 곡선">
+      <g stroke="var(--rule-soft)" stroke-width="1"><line x1="48" y1="20" x2="592" y2="20"/><line x1="48" y1="80" x2="592" y2="80"/><line x1="48" y1="140" x2="592" y2="140"/><line x1="48" y1="200" x2="592" y2="200"/></g>
+      <line x1="48" y1="230" x2="592" y2="230" stroke="var(--rule)" stroke-width="1"/>
+      <line x1="48" y1="12" x2="48" y2="230" stroke="var(--rule)" stroke-width="1"/>
+      <path d="M48 26 C140 140,240 190,360 205 S520 214,592 216" fill="none" stroke="var(--red)" stroke-width="2"/>
+      <path d="M48 34 C140 154,240 198,360 210 S520 220,592 222" fill="none" stroke="var(--ink)" stroke-width="1.2"/>
+      <path d="M48 42 C140 162,240 205,360 216 S520 224,592 226" fill="none" stroke="var(--ink)" stroke-width="1.2" stroke-dasharray="4 4"/>
+      <text x="44" y="24" text-anchor="end">1e-1</text><text x="44" y="144" text-anchor="end">1e-3</text>
+      <text x="48" y="252">0</text><text x="592" y="252" text-anchor="end">1500 epoch</text>
+    </svg>
+    <div class="foot"><p class="R"><span class="red">━ v3 Final</span> · ━ v2 · ┅ v1</p><button class="btn" id="b4">평가 실행</button></div></section>
+
+  <section class="cell c3 r2"><div class="head"><h2 class="T">모델</h2><p class="R">R² · 평가 10%</p></div>
+    <table class="B"><tbody>
+      <tr><td class="red">v3 · TNS · Final</td><td>0.94</td></tr>
+      <tr><td>v2 · GCNS</td><td>0.88</td></tr>
+      <tr><td>v1 · GCNS</td><td>0.81</td></tr>
+    </tbody></table>
+    <div class="foot"><p class="R">2~5개 선택해 비교</p><button class="btn" id="b5">비교</button></div></section>
+
+  <section class="cell c3"><div class="head"><h2 class="T">대기열</h2><p class="R">슬롯 1</p></div>
+    <p class="D">1</p><div class="foot"><p class="R">실행 중 · 대기 2</p></div></section>
+
+  <section class="cell c3"><div class="head"><h2 class="T">워커 자원</h2><p class="R">BELOW_NORMAL</p></div>
+    <table class="B"><tbody><tr><td>CPU</td><td>18 / 32</td></tr><tr><td>RAM</td><td>41 / 64 GB</td></tr><tr><td>GPU</td><td>92 %</td></tr></tbody></table></section>
+
+  <section class="cell c6"><div class="head"><h2 class="T">최근 작업</h2><p class="R">이 Study</p></div>
+    <table class="B"><tbody><tr><td>평가 · v3</td><td class="R">완료 · 14:52</td></tr><tr><td>모델 등록 · v3</td><td class="R">완료 · 14:20</td></tr></tbody></table></section>
+
+  <section class="cell c6"><div class="head"><h2 class="T">알림</h2><p class="R">읽지 않음 2</p></div>
+    <table class="B"><tbody><tr><td>v3 평가가 끝났습니다</td><td class="R">14:52</td></tr><tr><td>대기 순번이 내 차례입니다</td><td class="R">14:31</td></tr></tbody></table></section>
+</main>
