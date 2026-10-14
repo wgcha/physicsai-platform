@@ -947,7 +947,7 @@ deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -DashboardRoot E:\simulation_wo
 |---|---|---|
 | `-DemoRoot` | `<시스템 드라이브>\physicsai-demo`(보통 `C:\physicsai-demo`) | 시연 폴더. 공백·특수문자 금지 |
 | `-Port` | `8190` | 백엔드 포트(127.0.0.1 전용, 운영 8100과 겹치지 않게) |
-| `-PythonExe` | PATH의 `python`(묶음에서 실행하고 `-DashboardRoot`가 있으면 대시보드 고정 Python 3.12) | Python 3.12(대시보드와 같은 3.12.13 권장) |
+| `-PythonExe` | 자동 선택(아래 "Python 선택 순서") | Python 3.12(대시보드와 같은 3.12.13 권장). 시연 venv를 처음 만들 때만 쓴다 |
 | `-PgBin` | `-DashboardRoot`의 `.env` `POSTGRES_BIN` → PATH → `PGBIN` 순 | PostgreSQL 18 `initdb.exe`·`pg_ctl.exe`·`psql.exe` 폴더(예 `E:\PostgreSQL\18\bin`, 포터블 zip 압축 해제본 가능) |
 | `-DashboardRoot` | – | (선택) 대시보드 폴더(예 `E:\simulation_workbench`). `.env`의 `POSTGRES_BIN`과 `.tools` 고정 Python 3.12를 기본값으로(비밀번호는 읽지 않음, §2.3 `dashboard_root`와 같은 규칙) |
 | `-PgPort` | `55432` | 시연 전용 PostgreSQL 포트 |
@@ -955,7 +955,20 @@ deploy\demo\start-demo.ps1 -DemoRoot D:\pai-demo -DashboardRoot E:\simulation_wo
 | `-ToolDelay` | `3`(초) | 가짜 도구 1회 실행마다 지연 — 대기열·진행률·취소를 보기 쉽게 |
 | `-NoBrowser` | – | 브라우저를 자동으로 열지 않음 |
 
-하는 일: ① Python 준비(오프라인 묶음에서 실행하면 `<DemoRoot>\venv`를 만들고 wheels에서 설치, 저장소면 지정 Python) ② 시연 폴더·가짜 도구·가짜 자원·설정(`<DemoRoot>\config\platform.yaml`, 원본 `config/platform.demo.yaml`) ③ DB(시연 전용 클러스터 `<DemoRoot>\pgdata`, 127.0.0.1:`PgPort`, 또는 기존 DB) ④ migration → 백엔드(프런트 정적 서빙 포함, Caddy 불필요) → 시연 Study·샘플 데이터 → 워커 ⑤ 브라우저 열기.
+하는 일: ① Python 준비(저장소·묶음 공통 — 아래) ② 시연 폴더·가짜 도구·가짜 자원·설정(`<DemoRoot>\config\platform.yaml`, 원본 `config/platform.demo.yaml`) ③ DB(시연 전용 클러스터 `<DemoRoot>\pgdata`, 127.0.0.1:`PgPort`, 또는 기존 DB) ④ migration → 백엔드(프런트 정적 서빙 포함, Caddy 불필요) → 시연 Study·샘플 데이터 → 워커 ⑤ 브라우저 열기.
+
+**Python 선택 순서**(저장소·묶음 공통, 시연 venv를 처음 만들 때): `-PythonExe` → `-DashboardRoot`의 고정 Python 3.12(`.tools\python\cpython-3.12.*`) → `py -3.12` → PATH의 `python`. 각 후보를 실제로 실행해 Python 3.12인지 확인하고, 실행이 안 되거나(예: pyenv-win shim에 전역 버전 미설정, Microsoft Store 별칭) 버전이 다르면 다음 후보로 넘어간다. 고른 Python은 `Python 선택: … → <경로>` 한 줄로 출력된다.
+
+**패키지 설치 위치**: 대시보드 런타임이나 시스템 Python에는 아무것도 설치하지 않는다. 항상 `<DemoRoot>\venv`를 만들어 그 안에만 설치한다.
+
+| 실행 위치 | venv에 설치하는 것 | 요구사항 |
+|---|---|---|
+| 오프라인 묶음(`wheels` 폴더 있음) | `wheels`의 `physicsai-platform`(인덱스 접근 없음) | Python 3.12 |
+| 저장소(git clone) | `packages\simdash_adapters`(로컬) → `deploy\requirements.lock`. 기록 파일 `<DemoRoot>\venv\physicsai-repo-deps.sha256`의 해시가 같으면 건너뜀(lock이 바뀌면 다시 설치). 플랫폼 소스는 `PYTHONPATH`로 | Python 3.12, 패키지 인덱스 접근(PyPI 또는 사내 `PIP_INDEX_URL`·프록시 — 기존 pip 설정을 그대로 씀). `frontend\dist`가 없으면 Node 22로 `npm ci` → `npm run build`를 자동 실행(Node가 없거나 22가 아니면 중단) |
+
+- 저장소 모드에서 pip가 인덱스에 접근하지 못하면 "오프라인 묶음(`deploy\collect-offline.ps1`)으로 실행하세요" 안내와 함께 중단한다(폐쇄망 PC는 묶음 사용).
+- 기존 `<DemoRoot>\venv`가 Python 3.12가 아니면 중단한다 → 그 `venv` 폴더 이름을 바꾼 뒤 다시 실행. 의존성을 강제로 다시 설치하려면 `physicsai-repo-deps.sha256` 이름을 바꾼다.
+- 예: 대시보드가 `E:\VD_SIMULATION_WEB\simdashboard`이고 PATH 첫 `python`이 pyenv shim인 PC → `deploy\demo\start-demo.bat -DashboardRoot E:\VD_SIMULATION_WEB\simdashboard` 그대로 실행하면 대시보드 Python 3.12로 시연 venv를 만든다(GitHub #1).
 
 ### 14.2 사용
 

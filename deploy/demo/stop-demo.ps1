@@ -5,7 +5,7 @@
 .PARAMETER DemoRoot
   start-demo.ps1에 준 시연 폴더. 기본 <시스템 드라이브>\physicsai-demo
 .PARAMETER PythonExe
-  저장소에서 실행할 때 쓴 Python(오프라인 묶음이면 <시연 폴더>\venv를 자동 사용)
+  <시연 폴더>\venv가 없을 때만 쓰는 Python(보통 비워 둔다 — start-demo.ps1이 만든 venv를 자동 사용)
 .PARAMETER KeepDb
   시연 전용 PostgreSQL은 계속 실행
 #>
@@ -19,10 +19,9 @@ $ErrorActionPreference = 'Stop'
 $pkg = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $setup = Join-Path $PSScriptRoot 'demo_setup.py'
 $venvPy = Join-Path $DemoRoot 'venv\Scripts\python.exe'
-if (Test-Path $venvPy) {
-    $py = $venvPy
-} else {
-    $py = (Get-Command $PythonExe -ErrorAction Stop).Source
+# start-demo.ps1은 저장소·묶음 모두 <시연 폴더>\venv를 만든다(예전 저장소 시연은 venv 없이 -PythonExe)
+$py = if (Test-Path $venvPy) { $venvPy } else { (Get-Command $PythonExe -ErrorAction Stop).Source }
+if (Test-Path (Join-Path $pkg 'backend\physicsai_api')) {   # 저장소: 소스는 PYTHONPATH로
     $env:PYTHONPATH = (Join-Path $pkg 'backend') + [IO.Path]::PathSeparator + (Join-Path $pkg 'worker') + [IO.Path]::PathSeparator + (Join-Path $pkg 'packages\simdash_adapters\src')
 }
 $env:PYTHONUTF8 = '1'

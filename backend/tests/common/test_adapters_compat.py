@@ -79,8 +79,9 @@ def test_lock_and_offline_bundle_include_wheel():
         assert w < loc < dl, f
         assert "requirements.local.lock" not in t[dl:].split("\n")[0], f
         assert not re.search(r"pip download -r deploy/requirements\.lock[^\n]*--find-links", t), f
-    for f in ("deploy/install.ps1", "deploy/update.ps1", "deploy/demo/start-demo.ps1"):
+    for f in ("deploy/install.ps1", "deploy/update.ps1"):
         assert "pip install --no-index --find-links" in _read(f), f
+    assert "'install', '--no-index', '--find-links', $Wheels" in _read("deploy/demo/demo-python.ps1")  # 시연 venv(묶음)
 
 
 @pytest.mark.posix  # Windows는 CI windows 잡에서 collect-offline.ps1 실제 실행

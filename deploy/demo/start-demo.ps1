@@ -3,7 +3,8 @@
   PhysicsAI 시연 모드 원클릭 시작(Altair 없는 Windows PC). 관리자 권한 불필요.
 .DESCRIPTION
   가짜 도구(fake tools)로 화면·대기열·알림·취소·리소스 제한·①~⑤ 흐름을 실제로 돌려 본다.
-  ① Python 준비: 오프라인 묶음이면 <시연 폴더>\venv를 만들고 wheels에서 설치, 저장소면 지정 Python + PYTHONPATH
+  ① Python 준비(저장소·묶음 공통): Python 3.12를 골라 <시연 폴더>\venv를 만들고 거기에만 설치
+     (묶음: wheels / 저장소: packages\simdash_adapters → deploy\requirements.lock, 이미 설치돼 있으면 건너뜀. 프런트 빌드가 없으면 Node 22로 빌드)
   ② demo_setup.py init: 시연 폴더·가짜 도구(.exe)·가짜 자원·설정(<시연 폴더>\config\platform.yaml)
   ③ DB: 시연 전용 PostgreSQL 클러스터(<시연 폴더>\pgdata, 127.0.0.1:PgPort, trust) 또는 -UseExistingDb
   ④ demo_setup.py up: migration → 백엔드(프런트 정적 서빙 포함) → 시연 Study·샘플 데이터 → 워커
@@ -14,7 +15,8 @@
 .PARAMETER Port
   백엔드 포트(127.0.0.1 전용). 운영 설치(8100)와 겹치지 않게 기본 8190
 .PARAMETER PythonExe
-  Python 3.12(대시보드와 같은 3.12.13 권장). 기본 PATH의 python(묶음이고 -DashboardRoot가 있으면 대시보드 고정 Python 3.12)
+  Python 3.12(대시보드와 같은 3.12.13 권장). 선택 순서: -PythonExe > -DashboardRoot의 고정 Python 3.12 > py -3.12 > PATH의 python.
+  각 후보를 실제로 실행해 3.12인지 확인하고, 실패하면(pyenv shim 미설정 등) 다음 후보로 간다. 시연 venv를 만들 때만 쓴다
 .PARAMETER PgBin
   PostgreSQL bin 폴더(initdb.exe·pg_ctl.exe·psql.exe, 기준 18). 비우면 -DashboardRoot의 .env POSTGRES_BIN → PATH → PGBIN 환경변수 순으로 찾는다
 .PARAMETER DashboardRoot
@@ -32,7 +34,7 @@
 param(
     [string]$DemoRoot = (Join-Path $env:SystemDrive 'physicsai-demo'),
     [int]$Port = 8190,
-    [string]$PythonExe = 'python',
+    [string]$PythonExe = '',
     [string]$PgBin = '',
     [string]$DashboardRoot = '',
     [int]$PgPort = 55432,
@@ -55,27 +57,45 @@ if ($DashboardRoot) {
     Write-Step "대시보드 환경: $DashboardRoot (POSTGRES_BIN $(if ($dash.PgBin) { '있음' } else { '없음' }), Python 3.12 $(if ($dash.PythonExe) { '있음' } else { '없음' }))"
 }
 
-# ---- ① Python ----------------------------------------------------------------------------
+# ---- ① Python(저장소·묶음 공통: <시연 폴더>\venv — 대시보드 런타임·시스템 Python에는 설치하지 않는다) ----------------
+. (Join-Path $PSScriptRoot 'demo-python.ps1')
+$cands = Get-DemoPythonCandidates -PythonExe $PythonExe -DashboardPython $(if ($dash) { $dash.PythonExe } else { '' })
 $wheels = Join-Path $pkg 'wheels'
 if (Test-Path $wheels) {
-    # 오프라인 묶음: 시연 전용 venv(운영 설치와 분리)
-    $py = Join-Path $DemoRoot 'venv\Scripts\python.exe'
-    if (-not $PSBoundParameters.ContainsKey('PythonExe') -and $dash -and $dash.PythonExe) { $PythonExe = $dash.PythonExe }
-    if (-not (Test-Path $py)) {
-        Write-Step "시연용 venv 생성: $DemoRoot\venv"
-        & $PythonExe -m venv (Join-Path $DemoRoot 'venv'); Assert-Ok 'venv 생성'
-        & $py -m pip install --no-index --find-links $wheels physicsai-platform; Assert-Ok 'wheel 설치'
-    }
+    # 오프라인 묶음: wheels에서 설치(인덱스 접근 없음)
+    $py = Initialize-DemoVenv -DemoRoot $DemoRoot -Candidates $cands -Wheels $wheels
     $frontend = Join-Path $pkg 'frontend'
 } else {
-    # 저장소: 지정 Python에 의존성이 설치되어 있어야 한다(scripts\dev-setup.ps1 — 공통 어댑터 패키지는 PYTHONPATH로도 찾는다)
-    $py = (Get-Command $PythonExe -ErrorAction Stop).Source
+    # 저장소: packages\simdash_adapters 로컬 설치 → deploy\requirements.lock(기존 pip 설정 PIP_INDEX_URL 등 존중). 소스는 PYTHONPATH로
+    $py = Initialize-DemoVenv -DemoRoot $DemoRoot -Candidates $cands -RepoRoot $pkg
     $env:PYTHONPATH = (Join-Path $pkg 'backend') + [IO.Path]::PathSeparator + (Join-Path $pkg 'worker') + [IO.Path]::PathSeparator + (Join-Path $pkg 'packages\simdash_adapters\src')
-    & $py -c "import physicsai_api, physicsai_worker, fastapi, psutil"
-    if ($LASTEXITCODE -ne 0) { throw "Python 의존성이 없습니다: $pkg\scripts\dev-setup.ps1 (PYTHON=$py)" }
+    $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { & $py -c "import physicsai_api, physicsai_worker, fastapi, psutil" 2>&1 | ForEach-Object { Write-Host "$_" }; $rc = $LASTEXITCODE } finally { $ErrorActionPreference = $eap }
+    if ($rc -ne 0) {
+        throw ("시연 venv에서 플랫폼 모듈을 불러오지 못했습니다(PYTHON=$py).`n" +
+            "다음 행동: $DemoRoot\venv\physicsai-repo-deps.sha256 파일 이름을 바꿔 의존성을 다시 설치하게 한 뒤 다시 실행하세요.")
+    }
     $frontend = Join-Path $pkg 'frontend\dist'
+    if (-not (Test-Path (Join-Path $frontend 'index.html'))) {
+        $node = Get-Command node -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $node) {
+            throw ("프런트 빌드(frontend\dist)가 없고 Node.js도 없습니다.`n" +
+                "다음 행동: Node 22(.node-version)를 설치한 뒤 다시 실행하거나, 오프라인 묶음(deploy\collect-offline.ps1)으로 실행하세요.")
+        }
+        $nodeVer = "$(& $node.Source --version)".Trim()
+        if ($nodeVer -notmatch '^v22\.') {
+            throw ("프런트 빌드(frontend\dist)가 없고 Node가 22가 아닙니다($nodeVer).`n" +
+                "다음 행동: Node 22(저장소 .node-version $(try { (Get-Content (Join-Path $pkg '.node-version') -Raw).Trim() } catch { '22' }))를 PATH 맨 앞에 두고 다시 실행하세요.")
+        }
+        Write-Step "프런트 빌드가 없어 만듭니다: frontend에서 npm ci → npm run build (Node $nodeVer, 몇 분 걸림)"
+        Push-Location (Join-Path $pkg 'frontend')
+        try {
+            & npm ci; if ($LASTEXITCODE -ne 0) { throw ("npm ci 실패(종료코드 $LASTEXITCODE).`n다음 행동: 위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy 확인).") }
+            & npm run build; if ($LASTEXITCODE -ne 0) { throw ("npm run build 실패(종료코드 $LASTEXITCODE).`n다음 행동: 위 출력을 확인하세요.") }
+        } finally { Pop-Location }
+    }
 }
-if (-not (Test-Path (Join-Path $frontend 'index.html'))) { throw "프런트 빌드가 없습니다: $frontend (저장소면 frontend에서 npm ci; npm run build)" }
+if (-not (Test-Path (Join-Path $frontend 'index.html'))) { throw "프런트 빌드가 없습니다: $frontend`n다음 행동: 저장소면 frontend에서 npm ci; npm run build, 묶음이면 묶음을 다시 만드세요(deploy\collect-offline.ps1)." }
 $env:PYTHONUTF8 = '1'
 $env:PYTHONIOENCODING = 'utf-8'
 

@@ -173,3 +173,43 @@ def test_alembic_ini_is_ascii():
     """alembic은 alembic.ini를 OS 로캘 인코딩(Windows cp949/cp1252)으로 읽는다 — 한글이 있으면 Windows에서 migration 실패."""
     data = (REPO / "migrations" / "alembic.ini").read_bytes()
     assert all(b < 0x80 for b in data), "migrations/alembic.ini는 ASCII만 써야 합니다"
+
+
+@pytest.mark.posix  # Windows는 CI windows 잡 "저장소 모드 시연"(가짜 pyenv shim이 PATH 맨 앞)에서 실제 실행
+def test_demo_python_selection_skips_broken_candidates(tmp_path):
+    """GitHub #1: 후보를 실제로 실행해 3.12인지 확인 — pyenv shim(버전 미설정)·다른 버전은 건너뛰고 다음 후보를 고른다."""
+    import os
+    import shutil
+
+    pwsh = os.environ.get("PHYSICSAI_PWSH") or shutil.which("pwsh")
+    if not pwsh:
+        pytest.skip("pwsh 없음 — demo-python.ps1 실행 시험 미수행(CI linux·windows 잡은 pwsh 있음)")
+
+    def stub(name: str, body: str) -> str:
+        p = tmp_path / name
+        p.write_text("#!/bin/sh\n" + body + "\n", encoding="utf-8")
+        p.chmod(0o755)
+        return p.as_posix()
+
+    shim = stub("shim", 'echo "No global/local python version has been set yet." >&2; exit 1')
+    old = stub("py311", 'echo "PHYSICSAI_PY=3.11.9 /opt/py311/bin/python"; exit 3')
+    good = stub("py312", 'echo "noise"; echo "PHYSICSAI_PY=3.12.13 /opt/dash/python 3.12/python"; exit 0')
+    script = (REPO / "deploy" / "demo" / "demo-python.ps1").as_posix()
+
+    def run(body: str) -> subprocess.CompletedProcess:
+        return subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", f". '{script}'; {body}"],
+                              capture_output=True, text=True, timeout=120)
+
+    r = run(f"$c = Get-DemoPythonCandidates -PythonExe '{shim}' -DashboardPython '{old}'; "
+            f"$g = [pscustomobject]@{{ Label = 'good'; Exe = '{good}'; PreArgs = @() }}; "
+            "$c[0].Label; $c[1].Label; $s = Select-DemoPython -Candidates @($c[0], $c[1], $g); 'CHOSEN=' + $s.Exe + '|' + $s.Version + '|' + $s.Label")
+    assert r.returncode == 0, r.stdout + r.stderr
+    lines = r.stdout.splitlines()
+    assert lines[0] == "-PythonExe" and lines[1] == "대시보드 Python 3.12"
+    assert "CHOSEN=/opt/dash/python 3.12/python|3.12.13|good" in lines
+    assert r.stdout.count("Python 후보 건너뜀") == 2 and "3.11.9(3.12 아님)" in r.stdout and "No global/local python" in r.stdout
+    assert "Python 선택: good" in r.stdout
+
+    r = run(f"Select-DemoPython -Candidates @([pscustomobject]@{{ Label = 'shim'; Exe = '{shim}'; PreArgs = @() }})")
+    assert r.returncode != 0
+    assert "Python 3.12를 찾지 못했습니다" in r.stdout + r.stderr and "다음 행동" in r.stdout + r.stderr
