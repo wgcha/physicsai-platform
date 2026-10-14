@@ -194,7 +194,7 @@ $defaults = [ordered]@{
     config_path = (Join-Path $rt 'config\platform.yaml'); service_user = $svcUser; run_mode = $runModeV
     caddy_frontend_root = (Join-Path $rt 'frontend'); ai_root = $aiRootV; original_app_root = $origRoot; altair_root = $altRoot
 }
-$inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = $defaults; deploy_explicit = $explicit; legacy_config = $legacyConfig }
+$inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = $defaults; deploy_explicit = $explicit; legacy_config = $legacyConfig; program_files_dirs = @(@($env:ProgramFiles, $env:ProgramW6432) | Where-Object { $_ } | Select-Object -Unique) }
 $plan = Invoke-PhysicsAISetupConfig -VenvPy $venvPy -Action plan -RuntimeDir $rt -Inputs $inputs
 $d = $plan.deploy
 

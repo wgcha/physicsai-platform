@@ -83,7 +83,7 @@ try {
     Install-PhysicsAIRepoPackages -VenvPy $venvPy -RepoRoot $repo
 
     # ---- ④ 설정 보충(기존 값 유지) -------------------------------------------------------------------
-    $inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = [ordered]@{}; deploy_explicit = [ordered]@{}; legacy_config = '' }
+    $inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = [ordered]@{}; deploy_explicit = [ordered]@{}; legacy_config = ''; program_files_dirs = @(@($env:ProgramFiles, $env:ProgramW6432) | Where-Object { $_ } | Select-Object -Unique) }
     $result = Invoke-PhysicsAISetupConfig -VenvPy $venvPy -Action write -RuntimeDir $rt -Inputs $inputs
     foreach ($w in @($result.warnings)) { if ($w) { Write-Warning $w } }
     Write-PhysicsAIConfigValidation -Result $result | Out-Null

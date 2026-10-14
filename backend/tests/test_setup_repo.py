@@ -67,19 +67,10 @@ def _inputs(t: dict[str, Path], **over) -> dict:
             "config_path": str(rt / "config" / "platform.yaml"), "service_user": "CORP\\me", "run_mode": "Interactive",
             "caddy_frontend_root": str(rt / "frontend"), "ai_root": str(t["data"]), "original_app_root": str(t["orig"]), "altair_root": "",
         },
-        "deploy_explicit": {}, "legacy_config": "",
+        "deploy_explicit": {}, "legacy_config": "", "program_files_dirs": [str(t["pf"])],
     }
     d.update(over)
     return d
-
-
-def _child_env(over: dict[str, str]) -> dict[str, str]:
-    """os.environ + over. Windows의 os.environ 키는 대문자(PROGRAMFILES)라 {**os.environ, "ProgramFiles": …}로 두면 같은 이름이
-    두 번 들어가 자식 프로세스가 실제 값을 볼 수 있다 → 덮어쓸 이름은 대소문자 무시로 먼저 지운다."""
-    low = {k.lower() for k in over}
-    env = {k: v for k, v in os.environ.items() if k.lower() not in low}
-    env.update(over)
-    return env
 
 
 def _run(tmp: Path, t: dict[str, Path], inputs: dict, action: str = "write") -> dict:
@@ -87,8 +78,9 @@ def _run(tmp: Path, t: dict[str, Path], inputs: dict, action: str = "write") -> 
     f.write_text(json.dumps(inputs, ensure_ascii=False), encoding="utf-8")
     out = tmp / "out.json"
     sep = os.pathsep
-    env = _child_env({"ProgramFiles": str(t["pf"]), "ProgramW6432": "",
-                      "PYTHONPATH": sep.join(str(REPO / p) for p in ("backend", "worker", "packages/simdash_adapters/src"))})
+    # Program Files 폴더는 입력으로 넘긴다(setup.ps1과 같음). Windows는 자식 프로세스의 ProgramFiles 환경변수를 시스템 값으로 다시 정하므로
+    # 환경변수로 가짜 폴더를 넘기면 Windows에서만 못 찾는다(CI run 38558961016).
+    env = {**os.environ, "PYTHONPATH": sep.join(str(REPO / p) for p in ("backend", "worker", "packages/simdash_adapters/src"))}
     r = subprocess.run([sys.executable, str(SCRIPT), action, "--inputs", str(f), "--out", str(out)],
                        capture_output=True, text=True, encoding="utf-8", env=env, timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
@@ -191,25 +183,25 @@ def test_setup_config_inherits_legacy_bundle_config(tmp_path):
     assert legacy.read_text(encoding="utf-8") == legacy_text                       # 원본은 그대로
 
 
-def test_setup_config_ignores_uppercase_env_duplicates(tmp_path, monkeypatch):
-    """Windows CI 재현(Linux에서도): 부모 환경의 대문자 PROGRAMFILES(실제 Program Files 자리)가 가짜 ProgramFiles를 가리면 안 된다.
-    미끼 폴더에 더 새 버전(2099)의 Altair를 두어 잘못 읽으면 그쪽을 고르게 한다."""
+def test_setup_config_program_files_from_inputs_not_env(tmp_path, monkeypatch):
+    """Program Files 폴더는 입력(program_files_dirs)이 환경변수보다 우선 — 환경변수 쪽 미끼(더 새 버전 2099)를 고르면 안 된다.
+    PowerShell 5.1 ConvertTo-Json이 원소 1개 배열을 문자열로 내도 같게 동작. 입력이 없을 때만 환경변수(이름 대소문자 무시)."""
     t = _fake_tree(tmp_path)
     decoy = tmp_path / "decoy"
     for rel in ALTAIR_REL.values():
         _touch(decoy / "Altair" / "2099" / rel)
-    monkeypatch.setenv("PROGRAMFILES", str(decoy))
-    monkeypatch.setenv("PROGRAMW6432", str(decoy))
-    env = _child_env({"ProgramFiles": str(t["pf"]), "ProgramW6432": ""})
-    assert [k for k in env if k.lower() == "programfiles"] == ["ProgramFiles"]
-    res = _run(tmp_path, t, _inputs(t), action="plan")
-    assert res["altair"]["version_label"] == "2026.1" and res["altair"]["found"] == len(ALTAIR_REL), res["altair"]
+    monkeypatch.setenv("ProgramFiles", str(decoy))
+    for given in ([str(t["pf"])], str(t["pf"])):
+        res = _run(tmp_path, t, _inputs(t, program_files_dirs=given), action="plan")
+        assert res["altair"]["version_label"] == "2026.1" and res["altair"]["found"] == len(ALTAIR_REL), res["altair"]
     m = _module()
-    monkeypatch.delenv("PROGRAMW6432")
-    monkeypatch.setenv("PROGRAMFILES", str(t["pf"]))
-    if sys.platform != "win32":
-        monkeypatch.delenv("ProgramFiles", raising=False)
-    assert m.env_value("ProgramFiles") == str(t["pf"])                               # 이름 대소문자 무시(Windows와 같은 규칙)
+    assert m.program_files_dirs([str(t["pf"]), ""]) == [str(t["pf"])] and m.program_files_dirs([]) == []
+    monkeypatch.delenv("ProgramFiles")
+    monkeypatch.delenv("ProgramW6432", raising=False)
+    monkeypatch.setenv("PROGRAMFILES", str(t["pf"]))                                  # Windows os.environ 키 표기(대문자)
+    assert m.program_files_dirs(None) == [str(t["pf"])]
+    alt = m.detect_altair("", m.altair_layout(yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))))
+    assert alt["version_label"] == "2026.1" and alt["found"] == len(ALTAIR_REL)
 
 
 def test_setup_config_altair_names_case_insensitive(tmp_path):

@@ -11,7 +11,9 @@
 - resources.* 위치는 deploy/RESOURCES.txt 표(원본 앱 폴더 기준 상대경로)에서 읽는다. 없으면 같은 이름 파일을 원본 앱 폴더에서(깊이 4까지) 찾고,
   그래도 없으면 빈 값(그 기능만 비활성).
 - Altair 실행 파일의 상대 배치는 config/platform.example.yaml의 altair.* 값에서 읽는다(코드에 경로 없음). 후보 루트: 명시 값 →
-  레지스트리(설치 프로그램 목록의 Altair InstallLocation) → 환경변수 ProgramFiles 아래 Altair\\<버전>. 실행 파일이 가장 많이, 같으면 최신 버전.
+  레지스트리(설치 프로그램 목록의 Altair InstallLocation) → ProgramFiles 폴더 아래 Altair\\<버전>. 실행 파일이 가장 많이, 같으면 최신 버전.
+  ProgramFiles 폴더는 입력 program_files_dirs(setup.ps1이 $env:ProgramFiles·ProgramW6432를 넘김)에서 읽고, 입력에 없을 때만 환경변수에서 읽는다
+  (Windows는 새 프로세스의 ProgramFiles 환경변수를 시스템 값으로 다시 정하므로 부모가 바꾼 값이 자식에 전달되지 않는다).
   환경변수 이름과 파일·폴더 이름은 Windows처럼 대소문자를 구분하지 않고 찾는다(Linux 시험에서도 같은 규칙).
   Altair를 못 찾아도 altair 절의 키(version_label·실행 파일 경로)는 항상 둔다(빈 값 = 기능 비활성, 경고).
 - 비밀번호·DB URL은 다루지 않는다.
@@ -149,7 +151,15 @@ def resolve_ci(root: Path, rel: str) -> Path | None:
     return cur if cur.is_file() else None
 
 
-def altair_candidates(explicit: str) -> list[Path]:
+def program_files_dirs(given: Any) -> list[str]:
+    """입력 program_files_dirs(문자열 또는 목록 — PowerShell 5.1 ConvertTo-Json은 원소 1개 배열을 문자열로 낼 수 있음). 없으면(None) 환경변수."""
+    if given is None:
+        return [v for v in (env_value("ProgramFiles"), env_value("ProgramW6432")) if v]
+    items = [given] if isinstance(given, str) else list(given or [])
+    return [str(v) for v in items if v]
+
+
+def altair_candidates(explicit: str, pf_dirs: list[str] | None = None) -> list[Path]:
     roots: list[Path] = []
 
     def add_with_versions(p: Path) -> None:
@@ -169,10 +179,8 @@ def altair_candidates(explicit: str) -> list[Path]:
         for p in (loc, *list(loc.parents)[:2]):
             if _VERSION_DIR.match(p.name):
                 roots.append(p)
-    for env in ("ProgramFiles", "ProgramW6432"):
-        v = env_value(env)
-        if v:
-            add_with_versions(Path(v) / "Altair")
+    for v in program_files_dirs(None) if pf_dirs is None else pf_dirs:
+        add_with_versions(Path(v) / "Altair")
     uniq, seen = [], set()
     for r in roots:
         key = os.path.normcase(str(r))
@@ -182,10 +190,10 @@ def altair_candidates(explicit: str) -> list[Path]:
     return uniq
 
 
-def detect_altair(explicit: str, layout: dict[str, str]) -> dict[str, Any]:
+def detect_altair(explicit: str, layout: dict[str, str], pf_dirs: list[str] | None = None) -> dict[str, Any]:
     best: dict[str, Any] = {"root": "", "version_label": "", "paths": {k: "" for k in ALTAIR_TOOL_KEYS}, "found": 0}
     best_key: tuple = (0, ())
-    for root in altair_candidates(explicit):
+    for root in altair_candidates(explicit, pf_dirs):
         paths = {}
         for k in ALTAIR_TOOL_KEYS:
             rel = layout.get(k)
@@ -382,7 +390,7 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     ai_root = fwd(str(deploy.get("ai_root") or ""))
     if ai_root and unsafe(ai_root):
         warnings.append(f"AI 루트 경로에 공백·특수문자가 있습니다(쓸 수 없음): {ai_root}")
-    alt = detect_altair(str(deploy.get("altair_root") or ""), altair_layout(example))
+    alt = detect_altair(str(deploy.get("altair_root") or ""), altair_layout(example), program_files_dirs(inputs.get("program_files_dirs")))
     res = map_resources(str(deploy.get("original_app_root") or ""), resource_table(HERE / "RESOURCES.txt"))
 
     desired: dict[tuple[str, ...], Any] = {("profile",): "prod"}
