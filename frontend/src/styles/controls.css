@@ -1,0 +1,270 @@
+/* 버튼·입력·폼·접기. 버튼은 각진 외곽선(채움 없음), 마우스를 올리면 반전. */
+button {
+  color: inherit;
+}
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  height: var(--control);
+  padding: 0 15px;
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+  font: var(--font-r-medium);
+  letter-spacing: var(--track-r);
+  white-space: nowrap;
+  cursor: pointer;
+  text-decoration: none;
+}
+.btn:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--cell);
+}
+.btn.primary {
+  border-width: 2px;
+  padding: 0 14px;
+  font: var(--font-r-strong);
+}
+.btn.ghost {
+  border-color: var(--ink-3);
+}
+.btn.danger {
+  border-color: var(--bad);
+  color: var(--bad);
+}
+.btn.danger:hover:not(:disabled) {
+  background: var(--bad);
+  color: var(--cell);
+}
+.btn.small {
+  height: var(--s3);
+  padding: 0 7px;
+}
+.btn.on {
+  background: var(--ink);
+  color: var(--cell);
+}
+.btn:disabled {
+  border-color: var(--ink-3);
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.link {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: var(--ink);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  cursor: pointer;
+  text-align: left;
+}
+.link:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.icon-btn {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+  padding: 0 var(--s-h);
+  font: var(--font-r);
+}
+.icon-btn:hover:not(:disabled) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.icon-btn:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+
+input[type="text"],
+input[type="number"],
+input:not([type]),
+select,
+textarea {
+  height: var(--control);
+  padding: 0 var(--s1);
+  border: 1px solid var(--ink-3);
+  background: var(--cell);
+  color: var(--ink);
+  min-width: 0;
+}
+input:focus,
+select:focus {
+  border-color: var(--ink);
+}
+input[aria-invalid="true"] {
+  border-color: var(--bad);
+}
+input:disabled,
+select:disabled {
+  background: var(--tint);
+  color: var(--ink-3);
+}
+input[type="checkbox"],
+input[type="radio"],
+input[type="range"] {
+  accent-color: var(--ink);
+}
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  cursor: pointer;
+}
+.field {
+  display: grid;
+  gap: var(--s-h);
+  min-width: 0;
+}
+.field-label {
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}
+.field-hint {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}
+.inline-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 224px), 1fr));
+  gap: var(--s2);
+}
+.checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+  margin-top: var(--s1);
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--ink);
+  width: fit-content;
+}
+.seg button {
+  border: 0;
+  background: transparent;
+  height: 30px;
+  padding: 0 var(--s2);
+  cursor: pointer;
+  color: var(--ink);
+  font: var(--font-r-medium);
+  letter-spacing: var(--track-r);
+}
+.seg button + button {
+  border-left: 1px solid var(--ink);
+}
+.seg button.on {
+  background: var(--ink);
+  color: var(--cell);
+}
+.readonly {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-h);
+  height: var(--control);
+  padding: 0 var(--s2);
+  border: 1px dashed var(--ink-3);
+  color: var(--ink-2);
+  font: var(--font-r-medium);
+  letter-spacing: var(--track-r);
+}
+.readonly.small {
+  height: var(--s3);
+  padding: 0 var(--s1);
+}
+
+/* 접기·안내 */
+.advanced summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+  width: fit-content;
+}
+.advanced-body {
+  margin-top: var(--s1);
+  padding: var(--s2);
+  border: 1px solid var(--rule-soft);
+}
+.note {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+  border-left: 2px solid var(--rule);
+  padding-left: var(--s1);
+}
+.steps-text {
+  margin: 0;
+  padding-left: var(--s3);
+  display: grid;
+  gap: var(--s1);
+}
+.feature-off-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1);
+}
+.feature-off {
+  margin: 0;
+}
+
+/* 경로 입력·코드 줄 */
+.pathinput {
+  display: grid;
+  gap: var(--s-h);
+}
+.pathinput-row {
+  display: flex;
+  gap: var(--s1);
+}
+.pathinput-row input {
+  flex: 1;
+}
+.inspect {
+  padding: var(--s1) var(--s2);
+  border-left: 4px solid var(--ink-3);
+}
+.inspect.ok {
+  border-left-color: var(--ok);
+  background: var(--ok-weak);
+}
+.inspect.bad {
+  border-left-color: var(--bad);
+  background: var(--bad-weak);
+}
+.problems {
+  margin: var(--s-h) 0 0;
+  padding-left: var(--s2);
+}
+.codeline {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s-h) var(--s-h) var(--s-h) var(--s1);
+  background: var(--tint);
+  border: 1px solid var(--rule-soft);
+  min-width: 0;
+}
+.codeline code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font: var(--font-r-mono);
+}

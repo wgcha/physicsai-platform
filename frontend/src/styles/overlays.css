@@ -1,0 +1,177 @@
+/* 겹침: 알림 이력 서랍 · 토스트 · 확인 대화상자. 그림자 없이 굵은 선으로 구분한다. */
+.drawer-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background: var(--scrim);
+}
+.drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 41;
+  width: min(480px, 92vw);
+  display: flex;
+  flex-direction: column;
+  background: var(--cell);
+  border-left: 2px solid var(--rule);
+}
+.drawer-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s1) var(--s2);
+  padding: var(--s2);
+  border-bottom: 1px solid var(--rule);
+}
+.drawer-head .btn {
+  margin-left: auto;
+}
+.notif-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+}
+.notif {
+  width: 100%;
+  display: grid;
+  grid-template-columns: var(--s1) minmax(0, 1fr) auto;
+  gap: var(--s1) var(--s2);
+  align-items: baseline;
+  padding: var(--s1) var(--s2);
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--ink);
+}
+.notif:hover {
+  background: var(--tint);
+}
+.notif.read {
+  color: var(--ink-2);
+}
+.notif.unread .notif-title {
+  font-weight: 600;
+}
+.notif-dot {
+  width: var(--s1);
+  height: var(--s1);
+  background: var(--ink);
+}
+.notif.read .notif-dot {
+  background: var(--rule-soft);
+}
+.notif-main {
+  display: grid;
+  min-width: 0;
+}
+.notif-body,
+.notif-time,
+.toast-body {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}
+.notif-time {
+  white-space: nowrap;
+}
+.ev-job_failed.notif-dot,
+.ev-job_interrupted.notif-dot {
+  background: var(--bad);
+}
+.ev-job_succeeded.notif-dot,
+.ev-hpc_collected.notif-dot {
+  background: var(--ok);
+}
+.ev-hpc_cancel_failed.notif-dot,
+.ev-hpc_partial_failed.notif-dot {
+  background: var(--warn);
+}
+
+.toasts {
+  position: fixed;
+  right: var(--s3);
+  bottom: var(--s3);
+  z-index: 50;
+  display: grid;
+  gap: var(--s1);
+  width: min(384px, 90vw);
+}
+.toast {
+  display: flex;
+  align-items: start;
+  gap: var(--s1);
+  padding: var(--s1) var(--s1) var(--s1) var(--s2);
+  background: var(--cell);
+  border: 1px solid var(--rule);
+  border-left: 4px solid var(--rule);
+  animation: toast-in 0.18s ease-out;
+}
+.toast.ev-job_succeeded,
+.toast.ev-hpc_collected {
+  border-left-color: var(--ok);
+}
+.toast.ev-job_failed,
+.toast.ev-job_interrupted {
+  border-left-color: var(--bad);
+}
+.toast.ev-my_turn_next,
+.toast.ev-hpc_cancel_failed,
+.toast.ev-hpc_partial_failed {
+  border-left-color: var(--warn);
+}
+.toast-main {
+  flex: 1;
+  display: grid;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  color: var(--ink);
+  min-width: 0;
+}
+.toast-title {
+  font-weight: 600;
+}
+@keyframes toast-in {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+}
+
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--s2);
+  background: var(--scrim);
+}
+.dialog {
+  width: min(480px, 100%);
+  padding: var(--s3);
+  background: var(--cell);
+  border: 2px solid var(--rule);
+}
+.dialog-title {
+  margin: 0 0 var(--s1);
+}
+.dialog-body p {
+  margin: 0 0 var(--s1);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s1);
+  margin-top: var(--s3);
+}

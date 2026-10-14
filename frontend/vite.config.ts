@@ -23,6 +23,7 @@ export default defineConfig(({ mode }) => ({
     environment: "jsdom",
     globals: true,
     setupFiles: ["./src/test/setup.ts"],
-    css: false,
+    // 화면 CSS는 처리하지 않되, 디자인 규칙 정적 시험(designRules)이 ?raw로 읽는 src CSS 본문은 살린다
+    css: { include: [/\/src\/.*\.css\?raw$/] },
   },
 }));

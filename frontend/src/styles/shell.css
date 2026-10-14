@@ -1,0 +1,211 @@
+/* 셸: 상단 바(아래 2px 선) · 경로 · 알림 벨 · 관리 메뉴 · 시연 배지 · 단계 표시 */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) 0 var(--s1);
+  background: var(--paper);
+  border-bottom: 2px solid var(--rule);
+}
+.brand {
+  color: var(--ink);
+  text-decoration: none;
+}
+.pathbar {
+  display: flex;
+  align-items: baseline;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.crumb {
+  display: inline-flex;
+  align-items: baseline;
+  min-width: 0;
+}
+.crumb a {
+  color: var(--ink-2);
+  text-decoration: none;
+}
+.crumb a:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
+.crumb [aria-current="page"] {
+  color: var(--ink);
+}
+.crumb-sep {
+  margin: 0 var(--s1);
+  color: var(--ink-3);
+}
+.demo-badge {
+  flex: none;
+  padding: 0 var(--s1);
+  border: 1px solid var(--warn);
+  color: var(--warn);
+  font: var(--font-r-strong);
+  white-space: nowrap;
+}
+.topbar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+.topbar-link {
+  color: var(--ink-2);
+}
+.user {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--ink);
+}
+.role-chip {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  padding: 0 var(--s-h);
+  border: 1px solid var(--rule-soft);
+  color: var(--ink-2);
+}
+.role-chip.admin,
+.role-chip.power {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.bell {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--control);
+  height: var(--control);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+.bell:hover {
+  border-color: var(--ink);
+}
+.bell-badge {
+  position: absolute;
+  top: calc(-1 * var(--s-h));
+  right: calc(-1 * var(--s1));
+  min-width: var(--s2);
+  height: var(--s2);
+  padding: 0 var(--s-h);
+  background: var(--ink);
+  color: var(--cell);
+  font: var(--font-r-strong);
+  text-align: center;
+}
+.admin-menu {
+  position: relative;
+}
+.admin-menu-btn {
+  position: relative;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.alert-dot {
+  position: absolute;
+  top: 0;
+  right: calc(-1 * var(--s1));
+  width: 6px;
+  height: 6px;
+  background: var(--bad);
+}
+.admin-menu-pop {
+  position: absolute;
+  right: 0;
+  top: calc(100% + var(--s1));
+  min-width: 176px;
+  padding: var(--s-h);
+  background: var(--cell);
+  border: 1px solid var(--ink);
+  z-index: 30;
+}
+.admin-menu-pop a {
+  display: block;
+  padding: var(--s1);
+  color: var(--ink);
+  text-decoration: none;
+}
+.admin-menu-pop a:hover {
+  background: var(--tint);
+}
+
+/* 단계 표시 */
+.stepper-row {
+  display: flex;
+  align-items: stretch;
+  gap: var(--s2);
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: var(--s3);
+}
+.stepper {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.step {
+  position: relative;
+  border-right: 1px solid var(--rule-soft);
+  min-width: 0;
+}
+.step:last-child {
+  border-right: 0;
+}
+.step.current::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 4px;
+  background: var(--red);
+}
+.step a {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s2) var(--s2) var(--s1);
+  color: var(--ink-2);
+  text-decoration: none;
+  min-width: 0;
+}
+.step:first-child a {
+  padding-left: 0;
+}
+.step a:hover .step-name {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.step.current .step-label {
+  color: var(--ink);
+}
+.step-label {
+  display: flex;
+  align-items: center;
+  gap: var(--s-h);
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.step-label .dot {
+  margin-left: var(--s-h);
+}
+.manage-link {
+  flex: none;
+  align-self: center;
+}

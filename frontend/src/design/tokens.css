@@ -1,0 +1,120 @@
+/* 디자인 토큰 — docs/design/swiss-grid-mockup.html(사용자 확정 2026-10-14)과 같은 값.
+   강조색은 빨강(--red) 1개: 현재 단계·Final 모델·주요 차트 선·포커스에만 쓴다.
+   상태색(--ok·--warn·--bad)은 상태 표시에만, 채도를 낮춰 통일한다.
+   글꼴 크기·모서리·그림자 값은 이 파일과 typography.css에만 둔다(정적 시험 designRules). */
+:root {
+  --paper: #fafaf8;
+  --cell: #ffffff;
+  --ink: #111111;
+  --ink-2: #5c5e62;
+  --ink-3: #9a9ca0;
+  --rule: #111111;
+  --rule-soft: #d9dadc;
+  --red: #d52b1e;
+  /* 상태(채도 낮춤) */
+  --ok: #3f6b52;
+  --warn: #86682f;
+  --bad: #8f3f37;
+  --ok-weak: #edf2ee;
+  --warn-weak: #f4efe4;
+  --bad-weak: #f5eceb;
+  /* 칠(선택·Final 행 등 아주 옅은 바탕) */
+  --tint: #f2f2ef;
+  --scrim: rgba(17, 17, 17, 0.32);
+  /* 비교 계열: 빨강 1 + 먹 4(선 모양으로 구분) */
+  --series-1: var(--red);
+  --series-2: var(--ink);
+  --series-3: var(--ink-2);
+  --series-4: var(--ink);
+  --series-5: var(--ink-2);
+
+  /* 글꼴 */
+  --sans: "IBM Plex Sans", "IBM Plex Sans KR", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --mono: Consolas, "D2Coding", "SFMono-Regular", Menlo, monospace;
+
+  /* 글자 역할 4단계(8px 기준선) */
+  --d-size: 44px;
+  --d-line: 48px;
+  --t-size: 18px;
+  --t-line: 24px;
+  --b-size: 15px;
+  --b-line: 24px;
+  --r-size: 12px;
+  --r-line: 16px;
+  --font-d: 500 var(--d-size) / var(--d-line) var(--sans);
+  --font-t: 600 var(--t-size) / var(--t-line) var(--sans);
+  --font-b: 400 var(--b-size) / var(--b-line) var(--sans);
+  --font-r: 400 var(--r-size) / var(--r-line) var(--sans);
+  --font-r-medium: 500 var(--r-size) / var(--r-line) var(--sans);
+  --font-r-strong: 600 var(--r-size) / var(--r-line) var(--sans);
+  --font-b-strong: 600 var(--b-size) / var(--b-line) var(--sans);
+  --font-b-mono: 400 var(--b-size) / var(--b-line) var(--mono);
+  --font-r-mono: 400 var(--r-size) / var(--r-line) var(--mono);
+  --track-r: 0.02em;
+
+  /* 간격(8px 배수, 반 칸 4px은 아이콘·점 간격에만) */
+  --s-h: 4px;
+  --s1: 8px;
+  --s2: 16px;
+  --s3: 24px;
+  --s4: 32px;
+  --s5: 40px;
+  --s6: 48px;
+  --pad: 16px;
+  --control: 32px;
+
+  /* 격자 */
+  --row: 176px;
+  --rule-w: 1px;
+  --cols: 12;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #0e0e0f;
+    --cell: #161618;
+    --ink: #f2f2f0;
+    --ink-2: #a6a8ac;
+    --ink-3: #6e7074;
+    --rule: #f2f2f0;
+    --rule-soft: #2e2f32;
+    --red: #ff5446;
+    --ok: #8fb59c;
+    --warn: #cfb27c;
+    --bad: #d38c83;
+    --ok-weak: #1b241e;
+    --warn-weak: #26221a;
+    --bad-weak: #2a1c1a;
+    --tint: #1f1f22;
+    --scrim: rgba(0, 0, 0, 0.55);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #0e0e0f;
+  --cell: #161618;
+  --ink: #f2f2f0;
+  --ink-2: #a6a8ac;
+  --ink-3: #6e7074;
+  --rule: #f2f2f0;
+  --rule-soft: #2e2f32;
+  --red: #ff5446;
+  --ok: #8fb59c;
+  --warn: #cfb27c;
+  --bad: #d38c83;
+  --ok-weak: #1b241e;
+  --warn-weak: #26221a;
+  --bad-weak: #2a1c1a;
+  --tint: #1f1f22;
+  --scrim: rgba(0, 0, 0, 0.55);
+  color-scheme: dark;
+}
+
+/* 각진 모서리·그림자 없음(전역 초기화) */
+*,
+*::before,
+*::after {
+  border-radius: 0;
+  box-shadow: none;
+}

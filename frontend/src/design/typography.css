@@ -1,0 +1,64 @@
+/* 글자 역할 4단계만 쓴다: Display(.D) · Title(.T) · Body(.B) · Reference(.R).
+   컴포넌트 CSS는 font-size를 쓰지 않고 font: var(--font-*) 또는 이 유틸 클래스만 쓴다.
+   글꼴 파일은 fonts.css(npm @fontsource woff2 번들 — 폐쇄망, CDN 없음). */
+html,
+body {
+  font: var(--font-b);
+  font-variant-numeric: tabular-nums;
+}
+h1,
+h2,
+h3,
+h4,
+p,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+h1,
+h2,
+h3,
+h4 {
+  font: var(--font-t);
+}
+.D {
+  font: var(--font-d);
+  letter-spacing: -0.01em;
+}
+.T {
+  font: var(--font-t);
+}
+.B {
+  font: var(--font-b);
+}
+.R,
+.small {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+}
+.R {
+  color: var(--ink-2);
+}
+code,
+.mono {
+  font-family: var(--mono);
+  font-size: inherit;
+}
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  letter-spacing: inherit;
+}
+.red {
+  color: var(--red);
+}
+.mute,
+.muted {
+  color: var(--ink-2);
+}
+.mute.D {
+  color: var(--ink-3);
+}

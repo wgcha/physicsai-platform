@@ -1,0 +1,98 @@
+/* 표: 머리 Reference(아래 먹선), 행 사이 옅은 선. Final 행의 모델 이름만 빨강. */
+.table-wrap {
+  overflow-x: auto;
+}
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.table th {
+  text-align: left;
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+  padding: var(--s-h) var(--s1);
+  border-bottom: 1px solid var(--rule);
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+.table td {
+  padding: var(--s-h) var(--s1);
+  border-top: 1px solid var(--rule-soft);
+  vertical-align: middle;
+}
+.table th:first-child,
+.table td:first-child {
+  padding-left: 0;
+}
+.table th:last-child,
+.table td:last-child {
+  padding-right: 0;
+}
+.table td.ellipsis {
+  max-width: 288px;
+}
+.table td.wrap-date {
+  white-space: nowrap;
+}
+.table tr.is-final td {
+  background: var(--tint);
+}
+.table tr.is-final td:nth-child(2) b {
+  color: var(--red);
+}
+tr.clickable {
+  cursor: pointer;
+}
+tr.selected td {
+  background: var(--tint);
+}
+.row-actions {
+  white-space: nowrap;
+  text-align: right;
+}
+.row-actions > * + * {
+  margin-left: var(--s1);
+}
+.ds-status,
+.run-state {
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+  white-space: nowrap;
+}
+.ds-status.ready,
+.run-state.collected {
+  color: var(--ok);
+}
+.ds-status.failed,
+.run-state.solve_failed,
+.run-state.collect_failed {
+  color: var(--bad);
+}
+.final-badge {
+  display: inline-block;
+  padding: 0 var(--s-h);
+  border: 1px solid var(--red);
+  color: var(--red);
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+}
+.final-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+.spark-btn {
+  background: none;
+  border: 1px solid transparent;
+  padding: 1px;
+  cursor: pointer;
+  display: block;
+}
+.spark-btn:hover,
+.spark-btn.on {
+  border-color: var(--ink);
+}
+.study-table td.mono .btn {
+  margin-left: var(--s1);
+}

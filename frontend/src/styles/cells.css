@@ -1,0 +1,229 @@
+/* 칸 안 공용 요소: 실행 줄·작업 상태·진행 막대·로그·표·배지 */
+.cell-foot > .note,
+.cell-foot > p {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+.cell-foot > .run-action {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+.cell-foot > .run-action:has(.job-inline) {
+  flex-basis: 100%;
+}
+.panel .cell-body-in {
+  gap: var(--s1);
+}
+
+/* 실행 버튼·작업 상태 */
+.run-action {
+  display: grid;
+  gap: var(--s1);
+}
+.run-action-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+}
+.run-action-row > .job-inline {
+  flex: 1 1 288px;
+  min-width: 0;
+}
+.job-inline {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s-h) var(--s1);
+  border: 1px solid var(--rule-soft);
+}
+.job-inline-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+.job-inline-progress {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  flex: 1;
+  min-width: 192px;
+}
+.job-inline-progress .progress {
+  width: 128px;
+  flex: none;
+}
+.job-retry {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s-h);
+}
+.state {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-h);
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+}
+.progress {
+  height: var(--s-h);
+  background: var(--rule-soft);
+  overflow: hidden;
+  position: relative;
+}
+.progress-fill {
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.4s;
+}
+.progress-fill.indeterminate {
+  width: 35%;
+  position: absolute;
+  animation: indet 1.4s ease-in-out infinite;
+}
+@keyframes indet {
+  from {
+    left: -35%;
+  }
+  to {
+    left: 100%;
+  }
+}
+.dot {
+  display: inline-block;
+  width: var(--s1);
+  height: var(--s1);
+  flex: none;
+}
+.dot.ok {
+  background: var(--ok);
+}
+.dot.bad {
+  background: var(--bad);
+}
+.dot.wait {
+  background: var(--warn);
+}
+.dot.run {
+  background: var(--ink);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.dot.off {
+  background: var(--ink-3);
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+.logview {
+  border: 1px solid var(--rule-soft);
+}
+.logview-bar {
+  display: flex;
+  gap: var(--s2);
+  align-items: center;
+  padding: var(--s-h) var(--s1);
+  border-bottom: 1px solid var(--rule-soft);
+}
+.logview pre,
+.textview {
+  margin: 0;
+  max-height: 256px;
+  overflow: auto;
+  padding: var(--s1);
+  font: var(--font-r-mono);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.textview {
+  max-height: 352px;
+  background: var(--ink);
+  color: var(--cell);
+}
+
+/* 결과 줄·요약 */
+.package,
+.doe-result,
+.curation-result,
+.pbs-none,
+.runbar-wrap,
+.history,
+.scatter,
+.contour,
+.losschart {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+.result-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-h) var(--s2);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--rule-soft);
+}
+.summary-grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s-h) var(--s2);
+}
+.kv {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: var(--s1) var(--s2);
+  align-items: baseline;
+}
+.kv dt {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}
+.kv-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-h) var(--s2);
+}
+.input-source {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--rule-soft);
+  min-width: 0;
+}
+.input-source .summary-line {
+  min-width: 0;
+}
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s2);
+}
+.tile-stat {
+  display: grid;
+  border-top: 1px solid var(--rule);
+  padding-top: var(--s1);
+}
+.tile-num {
+  font: var(--font-d);
+  letter-spacing: -0.01em;
+}
+.tile-stat.ok .tile-num {
+  color: var(--ok);
+}
+.tile-stat.bad .tile-num {
+  color: var(--bad);
+}
+.tile-den,
+.tile-cap {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}

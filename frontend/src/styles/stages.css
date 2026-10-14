@@ -1,0 +1,165 @@
+/* 단계 칸 안 배치(①②③④⑤). 간격은 8px 배수, 강조는 빨강 1개(현재 값·Final). */
+/* ① */
+.param-table td {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.param-table tr.unused td {
+  color: var(--ink-3);
+}
+.num-input {
+  width: 104px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.param-table .num-input,
+.resp-table .num-input {
+  width: 88px;
+}
+.fmt-input,
+.unit-input {
+  width: 72px;
+}
+.row-note {
+  min-width: 96px;
+}
+.tpl-state {
+  display: grid;
+  gap: var(--s-h);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--rule-soft);
+}
+.runbar {
+  display: flex;
+  height: var(--s1);
+  overflow: hidden;
+  background: var(--rule-soft);
+}
+.runbar-seg {
+  display: block;
+  min-width: 2px;
+}
+.runbar-seg.gen {
+  background: var(--ink-3);
+}
+.runbar-seg.sub {
+  background: var(--ink);
+}
+.runbar-seg.solved {
+  background: var(--ink-2);
+}
+.runbar-seg.fail {
+  background: var(--bad);
+}
+.runbar-seg.col {
+  background: var(--ok);
+}
+.runbar-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-h) var(--s2);
+  color: var(--ink-2);
+}
+.runbar-legend .lg {
+  margin-right: var(--s-h);
+}
+.runtable {
+  max-height: 352px;
+  overflow-y: auto;
+  margin-top: var(--s1);
+}
+
+/* ② */
+.source-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+}
+.source-pick {
+  flex: 1 1 448px;
+  min-width: 0;
+}
+.source-pick select {
+  width: 100%;
+}
+.source-counts {
+  display: flex;
+  gap: var(--s2);
+}
+.fixed-row td {
+  background: var(--tint);
+}
+.add-row td {
+  border-top: 0;
+}
+.add-row select {
+  width: 100%;
+}
+.parts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 192px), 1fr));
+  gap: var(--s1);
+}
+.partlist {
+  margin: 0;
+  padding: var(--s1);
+  border: 1px solid var(--rule-soft);
+  min-width: 0;
+}
+.partlist legend {
+  font: var(--font-r-strong);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+  padding: 0 var(--s-h);
+}
+.partlist-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--s2);
+  max-height: 120px;
+  overflow-y: auto;
+}
+.timestep-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--s1) var(--s2);
+}
+.timestep-row .field input {
+  width: 96px;
+}
+.filecheck-list {
+  display: grid;
+  max-height: 224px;
+  overflow-y: auto;
+  margin-top: var(--s1);
+}
+.tree {
+  list-style: none;
+  margin: 0;
+  padding-left: var(--s2);
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+}
+.t01-tree {
+  padding-left: 0;
+}
+.ps-mode {
+  width: fit-content;
+}
+
+/* ③ */
+.eval-row {
+  display: flex;
+  align-items: end;
+  gap: var(--s2);
+  flex-wrap: wrap;
+}
+.eval-row .field {
+  min-width: 256px;
+}
+.eval-row .run-action {
+  flex: 1;
+  min-width: 288px;
+}

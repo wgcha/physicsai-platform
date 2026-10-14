@@ -1,0 +1,215 @@
+/* ④ 단일 예측 · ⑤ 최적화 칸 안 배치 */
+/* ④ */
+.ps-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+}
+.ps-register {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s1);
+  border-top: 1px solid var(--rule-soft);
+}
+.fill-row,
+.scatter-axes,
+.model-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+}
+.model-line .advanced {
+  margin-left: auto;
+}
+.model-line .advanced[open] {
+  flex-basis: 100%;
+  margin-left: 0;
+}
+.input-split,
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
+  gap: var(--s3);
+  align-items: start;
+}
+.input-table,
+.input-scatter,
+.input-left,
+.result-side {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  align-content: start;
+}
+.result-side {
+  gap: var(--s2);
+}
+.table.params td {
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.slider-col {
+  width: 38%;
+  min-width: 192px;
+}
+.slider-col input[type="range"] {
+  width: 100%;
+  margin: 0;
+}
+.ticks {
+  display: flex;
+  align-items: center;
+  gap: var(--s-h);
+  padding: 0 7px;
+}
+.ticks svg {
+  flex: 1;
+  height: 12px;
+}
+.tick {
+  stroke: var(--ink-3);
+  stroke-width: 1;
+}
+.tick-current {
+  stroke: var(--red);
+  stroke-width: 2;
+}
+.int-tag {
+  margin-left: var(--s-h);
+  padding: 0 var(--s-h);
+  border: 1px solid var(--rule-soft);
+  color: var(--ink-2);
+  font: var(--font-r);
+}
+.range-note {
+  margin: var(--s-h) 0 0;
+}
+.run-block {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--rule);
+}
+.run-grid {
+  display: grid;
+  grid-template-columns: minmax(224px, 0.8fr) minmax(320px, 1.4fr) minmax(352px, 1.2fr);
+  gap: var(--s3);
+  align-items: start;
+}
+.model-pick {
+  min-height: var(--control);
+  display: flex;
+  align-items: center;
+}
+.pbs-note {
+  margin: 0;
+}
+.chain {
+  list-style: none;
+  margin: var(--s-h) 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--s-h);
+}
+.chain-step {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: var(--s1);
+  align-items: center;
+  padding: var(--s1);
+  border: 1px solid var(--rule-soft);
+  border-top-width: 4px;
+}
+.chain-no {
+  grid-row: span 2;
+  display: grid;
+  place-items: center;
+  width: var(--s3);
+  height: var(--s3);
+  border: 1px solid var(--ink-3);
+  color: var(--ink-2);
+  font: var(--font-r-strong);
+}
+.chain-label {
+  font-weight: 600;
+}
+.chain-state {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+}
+.chain-step.done {
+  border-top-color: var(--ok);
+}
+.chain-step.running {
+  border-top-color: var(--ink);
+}
+.chain-step.failed {
+  border-top-color: var(--bad);
+}
+.chain-step.skipped {
+  border-style: dashed;
+}
+.result-head {
+  color: var(--ink-2);
+}
+.contour-img {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  object-fit: contain;
+  border: 1px solid var(--rule-soft);
+  background: var(--paper);
+}
+
+/* ⑤ */
+.resp-add-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+  align-items: center;
+}
+.resp-add-row > select,
+.resp-add-row > input {
+  flex: 1 1 128px;
+  min-width: 96px;
+}
+.resp-add-row > .narrow {
+  flex: 0 1 96px;
+}
+.opt-result {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+.summary-table,
+.csv-view {
+  max-height: 416px;
+  overflow: auto;
+}
+.file-list {
+  list-style: none;
+  margin: var(--s1) 0 0;
+  padding: 0;
+  display: grid;
+  gap: 2px;
+}
+.file-view {
+  margin-top: var(--s1);
+  display: grid;
+  gap: var(--s1);
+}
+/* ⑤-4 설계 이력: 최적값 추이가 주요 선(빨강), 설계별 값은 먹 점 */
+.history .chart-line.s1 {
+  stroke: var(--red);
+  stroke-width: 2;
+}
+.history .lg.line.s1 {
+  background: var(--red);
+}
+.history .lg.sample {
+  background: var(--ink);
+}
