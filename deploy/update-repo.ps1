@@ -84,6 +84,7 @@ try {
 
     # ---- ④ 설정 보충(기존 값 유지) -------------------------------------------------------------------
     $inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = [ordered]@{}; deploy_explicit = [ordered]@{}; legacy_config = ''; program_files_dirs = @(@($env:ProgramFiles, $env:ProgramW6432) | Where-Object { $_ } | Select-Object -Unique) }
+    if ($dash -and $dash.WebBasePath) { $inputs['dashboard_web_base_path'] = "$($dash.WebBasePath)" }   # phase3 D3-38
     $result = Invoke-PhysicsAISetupConfig -VenvPy $venvPy -Action write -RuntimeDir $rt -Inputs $inputs
     foreach ($w in @($result.warnings)) { if ($w) { Write-Warning $w } }
     Write-PhysicsAIConfigValidation -Result $result | Out-Null

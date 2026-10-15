@@ -53,6 +53,8 @@ export interface MockOptions {
   demo?: boolean;
   /** /status.config.warnings */
   configWarnings?: string[];
+  /** /status.auth.login_url(auth.dashboard_public_login_url, 운영 대시보드 기본 "/home/" — phase3 D3-38) */
+  loginUrl?: string;
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -92,6 +94,7 @@ export class MockServer {
   hpcCancelFails: boolean;
   demo: boolean;
   configWarnings: string[];
+  loginUrl: string;
   ui: Record<string, number>;
   speed: number;
   studies: Study[] = seedStudies();
@@ -115,6 +118,7 @@ export class MockServer {
     this.hpcCancelFails = opts.hpcCancelFails ?? false;
     this.demo = opts.demo ?? false;
     this.configWarnings = opts.configWarnings ?? [];
+    this.loginUrl = opts.loginUrl ?? "/";
     this.speed = opts.speed ?? 9;
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.seq = Math.max(...this.notifs.map((n) => n.seq));

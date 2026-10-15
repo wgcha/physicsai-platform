@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useApp, roleIn } from "../app/AppContext";
+import { loginUrl } from "../app/AuthGate";
 import { ROLE_LABEL } from "../lib/format";
 import { NotificationBell } from "./NotificationBell";
 
@@ -38,7 +39,7 @@ export function TopBar({ crumbs, projectId }: { crumbs: Crumb[]; projectId?: str
       )}
       <div className="topbar-right R">
         {me.is_global_admin && <AdminMenu />}
-        <a className="topbar-link" href="/">대시보드로</a>
+        <a className="topbar-link" href={status?.auth?.login_url || loginUrl()}>대시보드로</a>
         <NotificationBell />
         <span className="user" title={me.username}>
           <span className="user-name">{me.display_name}</span>

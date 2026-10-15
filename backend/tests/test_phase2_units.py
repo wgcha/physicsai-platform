@@ -349,7 +349,8 @@ def test_collect_offline_ps1_selects_dashboard_runtimes(tmp_path):
 
 
 def test_dashboard_env_reads_only_bin_host_port(tmp_path):
-    """deploy/dashboard-env.ps1: 대시보드 .env에서 POSTGRES_BIN·DATABASE_URL host·port만, .tools 고정 Python 3.12. 비밀값은 출력에 없다."""
+    """deploy/dashboard-env.ps1: 대시보드 .env에서 POSTGRES_BIN·DATABASE_URL host·port·WINDOWS_WEB_BASE_PATH만, .tools 고정 Python 3.12.
+    비밀값은 출력에 없다."""
     pwsh = _pwsh()
     if not pwsh:
         pytest.skip("pwsh 없음 — dashboard-env.ps1 실행 시험 미수행(CI linux·windows 잡은 pwsh 있음)")
@@ -362,7 +363,8 @@ def test_dashboard_env_reads_only_bin_host_port(tmp_path):
     (dash / ".env").write_text(
         "# 주석 DATABASE_URL=postgresql://x:y@wrong:1/z\n"
         f"DATABASE_URL=postgresql+psycopg://simdashboard_app:{secret}@db.intra:5433/simulation_dashboard\n"
-        "POSTGRES_BIN=\"E:\\PostgreSQL\\18\\bin\"\n", encoding="utf-8")
+        "POSTGRES_BIN=\"E:\\PostgreSQL\\18\\bin\"\n"
+        "WINDOWS_WEB_PORT=8080\nWINDOWS_WEB_BASE_PATH='/home/'\n", encoding="utf-8")
     script = (DEPLOY / "dashboard-env.ps1").as_posix()
     cmd = (f". '{script}'; $d = Get-DashboardRuntimeDefaults -DashboardRoot '{dash.as_posix()}'; "
            "$c = [pscustomobject]@{ pg_bin = ''; pg_port = 6543; python_exe = $null }; "
@@ -374,6 +376,7 @@ def test_dashboard_env_reads_only_bin_host_port(tmp_path):
     out = json.loads(r.stdout)
     assert out["d"]["PgBin"] == "E:\\PostgreSQL\\18\\bin" and out["d"]["PgHost"] == "db.intra" and out["d"]["PgPort"] == 5433
     assert "cpython-3.12.13-windows-x86_64-none" in out["d"]["PythonExe"]
+    assert out["d"]["WebBasePath"] == "/home/"                                # phase3 D3-38: 로그인 링크 경로용
     # deploy.json 명시 값(pg_port 6543) 우선, 빈 값만 채움
     assert out["c"]["pg_port"] == 6543 and out["c"]["pg_bin"] == out["d"]["PgBin"] and out["c"]["pg_host"] == "db.intra"
     assert sorted(out["filled"]) == ["pg_bin", "pg_host", "python_exe"]

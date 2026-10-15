@@ -21,7 +21,7 @@ database:
 auth:
   mode: dashboard                 # dashboard | dev_static | demo (dev_static은 profile=dev + 127.0.0.1 바인딩일 때만, demo는 시연 모드에서만)
   dashboard_internal_url: "http://127.0.0.1:8000"
-  dashboard_public_login_url: "/"
+  dashboard_public_login_url: "/"   # 로그인·"대시보드로" 링크(브라우저 기준 같은 origin 경로, 포트 무관). 운영 대시보드는 Vite가 WINDOWS_WEB_BASE_PATH(기본 /home/)에서 열림 — deploy/setup.ps1이 대시보드 .env 값으로 맞춤(값이 "/"이거나 없을 때만, 다른 값은 보존)
   cookie_name: analysis_canvas_session    # 대시보드 backend/app/security.py:45
   introspection_path: /api/auth/me
   projects_path: /api/projects

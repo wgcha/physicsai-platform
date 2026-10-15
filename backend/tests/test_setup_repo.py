@@ -479,3 +479,61 @@ def test_setup_config_upgrades_old_predict_defaults(tmp_path):
     assert c["commands"]["mesh"] is None
     assert c["predict"]["mesh_output_glob"] == "*.inc" and res["config_changed_keys"] == []
     assert any(w.startswith("predict.mesh_output_glob:") and "폐지" in w for w in res["write"]["validation"]["warnings"])
+
+
+def test_setup_config_dashboard_login_url_merge(tmp_path):
+    """phase3 D3-38: auth.dashboard_public_login_url = 대시보드 .env WINDOWS_WEB_BASE_PATH(없으면 /home/).
+    키가 없거나 이전 기본값 "/"일 때만 바꾸고, 사용자가 넣은 다른 값은 보존. .env에서는 그 키만 읽는다."""
+    t = _fake_tree(tmp_path)
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+
+    # 대시보드 없음 → 대시보드 Vite 기본 base /home/
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["auth"]["dashboard_public_login_url"] == "/home/" and res["warnings"] == []
+    assert "# 로그인·\"대시보드로\" 링크" in cfg_path.read_text(encoding="utf-8")       # 예시 줄 끝 주석 유지
+
+    # 이전 기본값 "/" → 대시보드 .env 값(앞뒤 '/' 보정, 따옴표 제거)
+    dash = tmp_path / "simdashboard"
+    dash.mkdir()
+    (dash / ".env").write_text("DATABASE_URL=postgresql://u:secret@h:5433/d\nWINDOWS_WEB_PORT=8080\n"
+                               "WINDOWS_WEB_BASE_PATH=\"workbench\"\n", encoding="utf-8")
+    cfg_path.write_text(cfg_path.read_text(encoding="utf-8").replace('dashboard_public_login_url: "/home/"',
+                                                                     'dashboard_public_login_url: "/"'), encoding="utf-8")
+    inp = _inputs(t, deploy_explicit={"dashboard_root": str(dash)})
+    res = _run(tmp_path, t, inp)
+    assert _cfg(t)["auth"]["dashboard_public_login_url"] == "/workbench/"
+    assert "auth.dashboard_public_login_url" in res["config_changed_keys"] and res["write"]["validation"]["ok"]
+    assert "secret" not in json.dumps(res, ensure_ascii=False)
+
+    # 다시 실행: 그대로
+    res = _run(tmp_path, t, inp)
+    assert res["config_changed_keys"] == []
+
+    # 사용자 값 보존(.env가 바뀌어도)
+    text = cfg_path.read_text(encoding="utf-8").replace('"/workbench/"', '"/my/login"')
+    cfg_path.write_text(text, encoding="utf-8")
+    res = _run(tmp_path, t, inp)
+    assert _cfg(t)["auth"]["dashboard_public_login_url"] == "/my/login" and res["config_changed_keys"] == []
+
+    # 키가 없으면 보충 — 입력 dashboard_web_base_path(setup.ps1이 dashboard-env.ps1로 읽은 값)가 .env보다 우선
+    text = re.sub(r"(?m)^  dashboard_public_login_url: .*\n", "", cfg_path.read_text(encoding="utf-8"))
+    cfg_path.write_text(text, encoding="utf-8")
+    res = _run(tmp_path, t, {**inp, "dashboard_web_base_path": "/home"})
+    c = _cfg(t)
+    assert c["auth"]["dashboard_public_login_url"] == "/home/" and c["auth"]["mode"] == "dashboard"
+    assert res["config_changed_keys"] == ["auth.dashboard_public_login_url"]
+
+    # 링크로 쓸 수 없는 값 → 경고만, 설정 그대로
+    cfg_path.write_text(cfg_path.read_text(encoding="utf-8").replace('"/home/"', '"/"', 1), encoding="utf-8")
+    res = _run(tmp_path, t, {**inp, "dashboard_web_base_path": "/a b/../"})
+    assert _cfg(t)["auth"]["dashboard_public_login_url"] == "/" and res["config_changed_keys"] == []
+    assert any("WINDOWS_WEB_BASE_PATH" in w for w in res["warnings"])
+
+
+def test_setup_config_web_base_helpers():
+    m = _module()
+    assert m.normalize_web_base(None) == ("/home/", None) and m.normalize_web_base("") == ("/home/", None)
+    assert m.normalize_web_base("/home/")[0] == "/home/" and m.normalize_web_base("sim/wb")[0] == "/sim/wb/"
+    assert m.normalize_web_base("/")[0] == "/"
+    for bad in ("/a b/", "/x/../", "http://h/x", "/a?b"):
+        assert m.normalize_web_base(bad)[0] == "" and m.normalize_web_base(bad)[1], bad

@@ -206,7 +206,9 @@ jobs:
           Set-Content -Path (Join-Path $env:DASHBOARD_ROOT '.env') -Encoding utf8 -Value @(
             '# fake dashboard .env (CI)',
             "DATABASE_URL=postgresql+psycopg://simdashboard_app:$dashSecret@127.0.0.1:$port/simulation_dashboard",
-            "POSTGRES_BIN=$bin")
+            "POSTGRES_BIN=$bin",
+            'WINDOWS_WEB_PORT=8080',
+            'WINDOWS_WEB_BASE_PATH=/home/')
           "DASH_ENV_SECRET=$dashSecret" >> $env:GITHUB_ENV
 
       - name: Windows 전용 시험(V-JO-1~3·CREATE_SUSPENDED·V2-EC-4) — skip 없이
@@ -481,7 +483,7 @@ jobs:
             $cfgPath = Join-Path $rt 'config\platform.yaml'
             if ([Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine') -ne $cfgPath) { throw '머신 환경변수 PHYSICSAI_CONFIG가 런타임 설정이 아닙니다' }
             $py = Join-Path $rt 'venv\Scripts\python.exe'
-            & $py -c "import sys, yaml; c = yaml.safe_load(open(sys.argv[1], encoding='utf-8')); r = c['resources']; a = c['altair']; ok = c['profile'] == 'prod' and c['hpc']['gateway'] == 'none' and c['server']['port'] == 8100 and a['version_label'] == '2026.1' and all(a[k] for k in ('hyperstudy_path', 'simlab_path', 'edspy_path', 'hw_exe_path', 'hvtrans_exe_path')) and all(r[k] for k in r if k != 'launchers'); print(r); sys.exit(0 if ok else 1)" $cfgPath
+            & $py -c "import sys, yaml; c = yaml.safe_load(open(sys.argv[1], encoding='utf-8')); r = c['resources']; a = c['altair']; ok = c['profile'] == 'prod' and c['hpc']['gateway'] == 'none' and c['server']['port'] == 8100 and a['version_label'] == '2026.1' and all(a[k] for k in ('hyperstudy_path', 'simlab_path', 'edspy_path', 'hw_exe_path', 'hvtrans_exe_path')) and all(r[k] for k in r if k != 'launchers') and c['auth']['dashboard_public_login_url'] == '/home/'; print(r); sys.exit(0 if ok else 1)" $cfgPath
             if ($LASTEXITCODE) { throw 'platform.yaml 생성 값이 다릅니다' }
             if (-not (Test-Path (Join-Path $rt 'frontend\index.html'))) { throw '프런트 배치 없음' }
             foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {

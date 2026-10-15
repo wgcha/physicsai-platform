@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 
 describe("공통 셸 (V-FE-1, V-FE-7)", () => {
@@ -27,6 +27,15 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
     renderApp(`${STUDY}/3`, { user: "anon" });
     expect(await screen.findByText("대시보드에서 로그인하세요")).toBeTruthy();
     expect(screen.getByRole("link", { name: "대시보드로 이동" }).getAttribute("href")).toBe("/");
+  });
+
+  it("phase3 D3-38: 상단 바 '대시보드로'는 /status.auth.login_url과 같은 값", async () => {
+    renderApp(`${STUDY}/3`, { user: "power", loginUrl: "/home/" });
+    await screen.findByRole("navigation", { name: "경로" });
+    const link = screen.getByRole("link", { name: "대시보드로" });
+    await waitFor(() => expect(link.getAttribute("href")).toBe("/home/"));
+    expect(localStorage.getItem("physicsai.loginUrl")).toBe("/home/");
+    localStorage.removeItem("physicsai.loginUrl");
   });
 
   it("demo=true면 상단 바에 '시연 모드' 배지, 기본은 없음", async () => {

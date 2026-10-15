@@ -6,8 +6,8 @@ import { POLL, applyUiPoll } from "../lib/poll";
 
 const LOGIN_URL_KEY = "physicsai.loginUrl";
 
-/** 로그인 링크: /status.auth.login_url(B1)을 기억해 두고, 모르면 "/" */
-function loginUrl(): string {
+/** 로그인 링크: /status.auth.login_url(B1)을 기억해 두고, 모르면 "/". 상단 바 "대시보드로"도 같은 값(phase3 D3-38) */
+export function loginUrl(): string {
   try {
     return localStorage.getItem(LOGIN_URL_KEY) || "/";
   } catch {

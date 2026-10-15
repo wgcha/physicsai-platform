@@ -16,6 +16,9 @@
   (Windows는 새 프로세스의 ProgramFiles 환경변수를 시스템 값으로 다시 정하므로 부모가 바꾼 값이 자식에 전달되지 않는다).
   환경변수 이름과 파일·폴더 이름은 Windows처럼 대소문자를 구분하지 않고 찾는다(Linux 시험에서도 같은 규칙).
   Altair를 못 찾아도 altair 절의 키(version_label·실행 파일 경로)는 항상 둔다(빈 값 = 기능 비활성, 경고).
+- auth.dashboard_public_login_url(로그인·"대시보드로" 링크, 같은 origin 상대경로)은 대시보드 .env의 WINDOWS_WEB_BASE_PATH(없으면 /home/ —
+  대시보드 Vite 기본 base)로 맞춘다. 키가 없거나 이전 기본값 "/"일 때만 바꾸고 사용자가 넣은 다른 값은 보존(phase3 D3-38).
+  .env에서는 이 키 한 줄만 읽는다(입력 dashboard_web_base_path가 있으면 그것을 쓴다 — setup.ps1이 dashboard-env.ps1로 읽어 넘김).
 - 비밀번호·DB URL은 다루지 않는다.
 """
 
@@ -361,6 +364,49 @@ def _set(data: dict, path: tuple[str, ...], value: Any) -> None:
     data[path[-1]] = value
 
 
+# 대시보드 웹 경로(phase3 D3-38): 운영 대시보드는 Vite가 WINDOWS_WEB_BASE_PATH(기본 /home/)에서 열린다.
+LOGIN_URL_PATH = ("auth", "dashboard_public_login_url")
+LOGIN_URL_OLD_DEFAULTS = ("/", "", None)
+DASHBOARD_WEB_BASE_KEY = "WINDOWS_WEB_BASE_PATH"
+DASHBOARD_WEB_BASE_DEFAULT = "/home/"
+_WEB_BASE_OK = re.compile(r"^/(?:[A-Za-z0-9._~\-]+/)*$")
+
+
+def read_dashboard_env_value(dashboard_root: str, key: str) -> str | None:
+    """대시보드 <root>/.env에서 key 한 줄의 값만 읽는다(따옴표 제거). 파일·키가 없으면 None. 다른 줄은 보관하지 않는다."""
+    if not dashboard_root:
+        return None
+    env = Path(dashboard_root) / ".env"
+    if not env.is_file():
+        return None
+    rx = re.compile(rf"^\s*(?:export\s+)?{re.escape(key)}\s*=\s*(.*?)\s*$")
+    for line in env.read_text(encoding="utf-8-sig", errors="replace").splitlines():
+        m = rx.match(line)
+        if m:
+            v = m.group(1)
+            if len(v) >= 2 and v[0] in "\"'" and v[-1] == v[0]:
+                v = v[1:-1]
+            return v.strip()
+    return None
+
+
+def normalize_web_base(raw: str | None) -> tuple[str, str | None]:
+    """WINDOWS_WEB_BASE_PATH → 링크 경로(앞뒤 '/'). 비었으면 기본 /home/. (값, 경고 또는 None)."""
+    v = (raw or "").strip()
+    if not v:
+        return DASHBOARD_WEB_BASE_DEFAULT, None
+    v = "/" + v.strip("/") + "/" if v.strip("/") else "/"
+    if not _WEB_BASE_OK.match(v) or any(seg in (".", "..") for seg in v.split("/")):
+        return "", f"대시보드 .env의 {DASHBOARD_WEB_BASE_KEY} 값을 링크 경로로 쓸 수 없습니다(영숫자·._~-·/만) — auth.dashboard_public_login_url을 직접 정하세요"
+    return v, None
+
+
+def dashboard_login_url(inputs: dict[str, Any], dashboard_root: str) -> tuple[str, str | None]:
+    given = inputs.get("dashboard_web_base_path")
+    raw = given if isinstance(given, str) else read_dashboard_env_value(dashboard_root, DASHBOARD_WEB_BASE_KEY)
+    return normalize_web_base(raw)
+
+
 # ---------------------------------------------------------------------------
 # 계획
 # ---------------------------------------------------------------------------
@@ -485,6 +531,19 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
                 text = remove_yaml_key(text, path)  # type: ignore[arg-type]
                 upgraded[path] = _REMOVE
                 rows.append({"key": ".".join(path), "value": None, "action": "폐지 키 제거(이전 기본값)"})
+    # 로그인·"대시보드로" 링크(D3-38): 키가 없거나 이전 기본값 "/"일 때만 대시보드 웹 경로로, 사용자 값은 보존
+    login_want, login_warn = dashboard_login_url(inputs, str(deploy.get("dashboard_root") or ""))
+    if login_warn:
+        warnings.append(login_warn)
+    has, cur = _get(base, LOGIN_URL_PATH)
+    if login_want and (not has or cur in LOGIN_URL_OLD_DEFAULTS) and cur != login_want:
+        text = set_yaml_value(text, LOGIN_URL_PATH, login_want, "" if has else "setup.ps1이 보충")
+        upgraded[LOGIN_URL_PATH] = login_want
+        rows.append({"key": ".".join(LOGIN_URL_PATH), "value": login_want,
+                     "action": "대시보드 웹 경로로 맞춤" + ("(이전 기본값)" if has else "")})
+    else:
+        rows.append({"key": ".".join(LOGIN_URL_PATH), "value": cur, "action": "유지" if cur == login_want or not has else
+                     "유지(설정 파일 값 — 바꾸려면 파일을 직접 수정)"})
     if new_file:
         hdr = "# PhysicsAI 설정 — deploy/setup.ps1이 config/platform.example.yaml에서 생성. 값은 이 파일에서 직접 고친다(setup.ps1을 다시 실행해도 덮어쓰지 않음)."
         nl = "\r\n" if "\r\n" in text else "\n"
