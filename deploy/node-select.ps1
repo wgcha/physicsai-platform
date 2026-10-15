@@ -6,7 +6,7 @@
   각 후보를 실제로 실행해(node --version) 22.x인지 확인하고, 아니면 다음 후보로 간다. npm은 고른 Node 폴더의 npm.cmd > PATH의 npm.
   기준 버전은 저장소 .node-version(대시보드와 같은 값). 22.x지만 기준과 다르면 안내만 하고 계속한다.
   저장소 빌드본 frontend-dist(phase3 D3-40)가 현재 소스와 같으면 Node가 필요 없다: Test-PhysicsAIFrontendDist(해시 규칙은
-  scripts/frontend_source_hash.py와 동일 — 시험 backend/tests/test_frontend_dist.py가 대조).
+  scripts/frontend_source_hash.py와 동일 — 시험 backend/tests/test_runtime_install.py가 대조).
 #>
 
 $PhysicsAIFrontendTopPatterns = @('index.html', 'package.json', 'package-lock.json', 'vite.config.*', 'tsconfig*.json')

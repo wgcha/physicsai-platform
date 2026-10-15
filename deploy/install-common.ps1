@@ -40,7 +40,8 @@ function Get-PhysicsAITaskAdminMessage {
     <# 이전 설치가 관리자 권한으로 등록한 작업을 일반 PowerShell에서 바꿀 수 없을 때(처음 한 번만 관리자 실행). #>
     $cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'update-repo.ps1')"
     return ("작업 스케줄러 작업(PhysicsAI-Backend·PhysicsAI-Worker)을 바꿀 권한이 없습니다(이전 설치가 관리자 권한으로 등록한 작업).`n" +
-        "다음 행동: 처음 한 번만 관리자 PowerShell로 update-repo.ps1을 실행하세요(그 뒤로는 일반 PowerShell로 됩니다):`n  $cmd")
+        "다음 행동: 처음 한 번만 지금과 같은 사용자 계정으로 PowerShell을 '관리자 권한으로 실행'해 update-repo.ps1을 실행하세요(그 뒤로는 일반 PowerShell로 됩니다).`n" +
+        "  다른 관리자 계정으로 로그인해 실행하지 마세요 — DB 접속 정보 폴더(.runtime\secrets)는 지금 사용자만 읽을 수 있고 작업도 지금 사용자로 등록됩니다:`n  $cmd")
 }
 
 function ConvertTo-PhysicsAIPlain([Security.SecureString]$Secure) {
@@ -351,7 +352,7 @@ function Register-PhysicsAITasks {
       이미 있으면 다시 등록(같은 이름). ExecutionTimeLimit = 0(무제한) 필수 — 기본 72시간이면 장시간 작업 중 워커가 종료된다(phase2 §11.1).
       Interactive(기본): 실행 계정(기본 현재 사용자) 로그온 시, LogonType Interactive·RunLevel Limited — 관리자 권한 불필요.
       Background: 부팅 시(AtStartup)·비밀번호 저장 — 이 모드만 관리자 권한이 필요할 수 있다(거부되면 안내).
-      이전 설치가 관리자 권한으로 만든 작업이라 바꿀 수 없으면(액세스 거부) "처음 한 번만 관리자 PowerShell로 update-repo.ps1" 안내로 중단.
+      이전 설치가 관리자 권한으로 만든 작업이라 바꿀 수 없으면(액세스 거부) "처음 한 번만 같은 사용자 계정으로 '관리자 권한으로 실행'해 update-repo.ps1" 안내로 중단.
     #>
     param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$WorkDir,
           [Parameter(Mandatory = $true)][string]$ServiceUser, [Parameter(Mandatory = $true)][ValidateSet('Background', 'Interactive')][string]$RunMode,
@@ -385,7 +386,7 @@ function Register-PhysicsAITasks {
             if (Test-PhysicsAIAccessDenied $_ -AlreadyExists) {
                 if ($RunMode -eq 'Background') {
                     throw ("작업 등록이 거부되었습니다($($t.Name), Background 모드). Background(부팅 시·비밀번호 저장) 등록은 관리자 권한이 필요할 수 있습니다.`n" +
-                        "다음 행동: 기본 Interactive 모드를 쓰거나(deploy.json run_mode 또는 -RunMode Interactive), 이 모드만 관리자 PowerShell에서 실행하세요.")
+                        "다음 행동: 기본 Interactive 모드를 쓰거나(deploy.json run_mode 또는 -RunMode Interactive), 이 모드만 같은 사용자 계정으로 PowerShell을 '관리자 권한으로 실행'해 실행하세요(다른 관리자 계정이면 런타임 비밀 파일을 읽지 못함).")
                 }
                 throw (Get-PhysicsAITaskAdminMessage)
             }
@@ -412,23 +413,25 @@ function Test-PhysicsAITasksCurrent {
 
 function Update-PhysicsAITaskRegistration {
     <#
-      업데이트(update-repo.ps1·update.ps1): 작업 인자가 새 방식(--runtime)과 다르면 다시 등록(Interactive만 — 질문 없음).
+      업데이트(update-repo.ps1·update.ps1): 작업 인자가 새 방식(--runtime)과 다르면 다시 등록(Interactive만 — 질문 없음). 다시 등록했으면 $true.
       Background는 비밀번호가 필요해 자동으로 다시 등록하지 않고 안내만 한다(기존 작업은 이전 머신 환경변수로 계속 동작).
+      새 코드(venv·프런트)가 배치된 뒤에 부를 것(phase3 D3-42) — 이전 코드는 --runtime 인자를 몰라 다시 등록된 작업으로 시작하지 못한다.
     #>
     param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$WorkDir,
           [Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '', [string]$ServiceUser = '', [string]$RunMode = 'Interactive')
     if (Test-PhysicsAITasksCurrent -VenvPy $VenvPy -WorkDir $WorkDir -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) {
         Write-PhysicsAIStep '작업 등록 그대로(인자 --runtime 확인)'
-        return
+        return $false
     }
     if (-not $ServiceUser) { $ServiceUser = "$env:USERDOMAIN\$env:USERNAME" }
     if ($RunMode -eq 'Background') {
         Write-Warning ("작업 인자가 새 방식(--runtime)이 아니지만 Background 모드라 자동으로 다시 등록하지 않습니다(비밀번호 필요). " +
             "기존 작업은 이전 머신 환경변수로 계속 동작합니다. 바꾸려면 setup.ps1을 다시 실행하세요(Background 등록은 관리자 권한이 필요할 수 있음).")
-        return
+        return $false
     }
     Write-PhysicsAIStep '작업 다시 등록(인자 --runtime <런타임> — 머신 환경변수 대신 런타임 파일)'
     Register-PhysicsAITasks -VenvPy $VenvPy -WorkDir $WorkDir -ServiceUser $ServiceUser -RunMode 'Interactive' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath -NonInteractive
+    return $true
 }
 
 function Stop-PhysicsAITasks {

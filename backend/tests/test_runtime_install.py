@@ -254,6 +254,21 @@ def test_update_repo_git_pull_ff_only(tmp_path):
     assert "업데이트 실패 — 접속:" in out
     _git("checkout", "--", "frontend/package-lock.json", cwd=repo)
 
+    # ②' 인증이 필요한 원격(가짜 git: pull만 인증 실패) → 자격 증명을 묻지 않음(GIT_TERMINAL_PROMPT=0 등), 기다리지 않고 "바꾼 것 없음" 중단.
+    #     safe.directory는 이 저장소 경로만(* 아님)
+    real_git = shutil.which("git")
+    gbin = tmp_path / "gitbin"
+    _fake_exe(gbin / "git", 'case " $* " in *" pull "*) '
+              'echo "PULL PROMPT=$GIT_TERMINAL_PROMPT GCM=$GCM_INTERACTIVE ARGS=$*"; '
+              'echo "fatal: could not read Username for \'https://example.invalid\': terminal prompts disabled" >&2; exit 128;; esac; '
+              f'exec "{real_git}" "$@"\n')
+    r, out = _run_update(pwsh, repo, log, {"PATH": f"{gbin}:{os.environ['PATH']}", "GIT_TERMINAL_PROMPT": "1"})
+    assert "EXIT=1" in out and "STOP" not in out and not log.exists(), out
+    assert "PULL PROMPT=0 GCM=never" in out and f"safe.directory={repo.as_posix()} " in out and "credential.interactive=never" in out
+    assert "safe.directory=*" not in out and "terminal prompts disabled" in out
+    assert "업데이트하지 않았습니다(바꾼 것 없음): git pull --ff-only 실패(종료코드 128)" in out and "자격 증명은 묻지 않습니다" in out
+    assert "업데이트 실패 — 접속:" in out
+
     # ③ 원격에 새 커밋(새 update-repo.ps1) → pull 후 새 스크립트로 다시 실행(-SkipPull), 종료코드 전달
     other = tmp_path / "other"
     _git("clone", "-q", str(bare), str(other), cwd=tmp_path)
@@ -343,6 +358,20 @@ def test_update_repo_migrates_machine_env_and_uses_runtime_file(tmp_path):
     assert "런타임 파일로 옮겼습니다" in out and "STUB migration url=True" in out and "mpw" not in out
 
 
+def _old_style_tasks(rt: Path) -> str:
+    """작업 스케줄러 대역: 이전 방식(--runtime 없음) 인자로 등록된 두 작업. Register/Unregister는 $global:FakeTasks를 바꾼다(FAKE_DENY=register면 거부)."""
+    return ("$global:FakeTasks = @{}; "
+            "foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') { $global:FakeTasks[$n] = [pscustomobject]@{ Actions = @([pscustomobject]@{ "
+            f"Execute = '{(rt / 'venv' / 'Scripts' / 'python.exe').as_posix()}'; Arguments = '-m old'; WorkingDirectory = '{rt.as_posix()}' }}) }} }}; "
+            "function Get-ScheduledTask { param($TaskName) $global:FakeTasks[$TaskName] }; "
+            "function New-ScheduledTaskSettingsSet { 'settings' }; function New-ScheduledTaskTrigger { 'trigger' }; "
+            "function New-ScheduledTaskPrincipal { param($UserId, $LogonType, $RunLevel) Write-Host \"PRINCIPAL $UserId $LogonType $RunLevel\"; 'principal' }; "
+            "function New-ScheduledTaskAction { param($Execute, $Argument, $WorkingDirectory) [pscustomobject]@{ Execute = $Execute; Arguments = $Argument; WorkingDirectory = $WorkingDirectory } }; "
+            "function Unregister-ScheduledTask { param($TaskName) if ($env:FAKE_DENY -eq 'register') { throw [UnauthorizedAccessException]::new('Access is denied.') }; $global:FakeTasks.Remove($TaskName) }; "
+            "function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Settings, $Principal) "
+            "$global:FakeTasks[$TaskName] = [pscustomobject]@{ Actions = @($Action) }; Write-Host \"REGISTER $TaskName | $($Action.Arguments)\" }; ")
+
+
 @pytest.mark.posix
 def test_update_repo_task_access_denied_and_reregistration(tmp_path):
     """관리자 검사 없음. 이전 설치가 관리자 권한으로 만든 작업이라 중지가 거부되면 바꾼 것 없이 '처음 한 번만 관리자 PowerShell' 안내.
@@ -357,19 +386,10 @@ def test_update_repo_task_access_denied_and_reregistration(tmp_path):
     r, out = _run_update(pwsh, repo, log, {"FAKE_DENY": "stop"})
     assert "EXIT=1" in out and not log.exists(), out
     assert "업데이트하지 않았습니다(바꾼 것 없음): 작업 스케줄러 작업(PhysicsAI-Backend·PhysicsAI-Worker)을 바꿀 권한이 없습니다" in out
-    assert "처음 한 번만 관리자 PowerShell로 update-repo.ps1을 실행하세요" in out and "update-repo.ps1" in out
+    assert "처음 한 번만 지금과 같은 사용자 계정으로 PowerShell을 '관리자 권한으로 실행'해 update-repo.ps1을 실행하세요" in out and "update-repo.ps1" in out
     assert "STUB packages" not in out and "START" not in out
 
-    old_style = ("$global:FakeTasks = @{}; "
-                 "foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') { $global:FakeTasks[$n] = [pscustomobject]@{ Actions = @([pscustomobject]@{ "
-                 f"Execute = '{(rt / 'venv' / 'Scripts' / 'python.exe').as_posix()}'; Arguments = '-m old'; WorkingDirectory = '{rt.as_posix()}' }}) }} }}; "
-                 "function Get-ScheduledTask { param($TaskName) $global:FakeTasks[$TaskName] }; "
-                 "function New-ScheduledTaskSettingsSet { 'settings' }; function New-ScheduledTaskTrigger { 'trigger' }; "
-                 "function New-ScheduledTaskPrincipal { param($UserId, $LogonType, $RunLevel) Write-Host \"PRINCIPAL $UserId $LogonType $RunLevel\"; 'principal' }; "
-                 "function New-ScheduledTaskAction { param($Execute, $Argument, $WorkingDirectory) [pscustomobject]@{ Execute = $Execute; Arguments = $Argument; WorkingDirectory = $WorkingDirectory } }; "
-                 "function Unregister-ScheduledTask { param($TaskName) if ($env:FAKE_DENY -eq 'register') { throw [UnauthorizedAccessException]::new('Access is denied.') }; $global:FakeTasks.Remove($TaskName) }; "
-                 "function Register-ScheduledTask { param($TaskName, $Action, $Trigger, $Settings, $Principal) "
-                 "$global:FakeTasks[$TaskName] = [pscustomobject]@{ Actions = @($Action) }; Write-Host \"REGISTER $TaskName | $($Action.Arguments)\" }; ")
+    old_style = _old_style_tasks(rt)
     r, out = _run_update(pwsh, repo, log, {}, stubs=old_style)
     assert "EXIT=0" in out, out
     assert "작업 다시 등록(인자 --runtime" in out and "PRINCIPAL CORP\\me Interactive Limited" in out
@@ -380,7 +400,43 @@ def test_update_repo_task_access_denied_and_reregistration(tmp_path):
     r, out = _run_update(pwsh, repo, log, {"FAKE_DENY": "register"}, stubs=old_style)
     assert "EXIT=1" in out, out
     assert "업데이트 실패(작업 등록): 작업 스케줄러 작업(PhysicsAI-Backend·PhysicsAI-Worker)을 바꿀 권한이 없습니다" in out
-    assert "처음 한 번만 관리자 PowerShell로 update-repo.ps1을 실행하세요" in out and "START PhysicsAI-Backend" in out and "STUB packages" not in out
+    assert "처음 한 번만 지금과 같은 사용자 계정으로 PowerShell을 '관리자 권한으로 실행'해 update-repo.ps1을 실행하세요" in out and "START PhysicsAI-Backend" in out
+    assert "다른 관리자 계정으로 로그인해 실행하지 마세요" in out and "STUB migration" not in out
+    # 작업 등록은 새 코드 배치 뒤(D3-42): 패키지·프런트 다음, migration 전
+    assert out.index("STUB packages") < out.index("저장소 빌드본 frontend-dist 사용") < out.index("업데이트 실패(작업 등록)")
+
+
+@pytest.mark.posix
+def test_update_repo_pip_failure_keeps_task_definition(tmp_path):
+    """phase3 D3-42: venv 패키지 갱신(pip)이 실패하면 작업 정의는 이전 그대로(--runtime으로 다시 등록하지 않음) — 이전 코드(--runtime을 모르는
+    argparse)가 이전 인자로 다시 시작된다. 다음 실행이 성공하면 패키지·프런트 뒤·migration 전에 다시 등록."""
+    pwsh = _need_pwsh()
+    repo = _update_repo_tree(tmp_path)
+    rt = repo / ".runtime"
+    _fake_frontend(repo, crlf=False)
+    _copy_dist(repo)
+    with open(repo / "deploy" / "install-common.ps1", "a", encoding="utf-8") as f:
+        f.write("\nfunction Install-PhysicsAIRepoPackages { param($VenvPy, $RepoRoot) "
+                "if ($env:FAKE_PIP -eq 'fail') { throw '의존성(deploy\\requirements.lock) 설치 실패(종료코드 1)' }; Write-Host 'STUB packages' }\n")
+    show = ("; foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') { \"TASK $n | $($global:FakeTasks[$n].Actions[0].Arguments)\" }")
+
+    def run(env: dict) -> str:
+        r = _run_pwsh(pwsh, _old_style_tasks(rt) + _STOP_START + f"& '{(repo / 'deploy' / 'update-repo.ps1').as_posix()}'; \"EXIT=$LASTEXITCODE\"" + show,
+                      {"NPM_LOG": str(tmp_path / "npm.log"), "FAKE_ACTIVE": "0", **env})
+        return _plain(r.stdout + r.stderr)
+
+    out = run({"FAKE_PIP": "fail"})
+    assert "EXIT=1" in out, out
+    assert "업데이트 실패(venv 패키지 갱신): 의존성" in out and "REGISTER" not in out and "작업 다시 등록" not in out
+    assert "TASK PhysicsAI-Backend | -m old" in out and "TASK PhysicsAI-Worker | -m old" in out            # 작업 정의 이전 그대로
+    assert out.index("STOP PhysicsAI-Worker") < out.index("업데이트 실패(venv 패키지 갱신)") < out.index("START PhysicsAI-Backend")
+    assert "START PhysicsAI-Worker" in out and "이전 상태로 계속 쓸 수 있습니다" in out and "STUB migration" not in out
+
+    out = run({})
+    assert "EXIT=0" in out, out
+    assert out.index("STUB packages") < out.index("REGISTER PhysicsAI-Backend") < out.index("STUB migration") < out.index("STUB start+health")
+    assert f"TASK PhysicsAI-Backend | -m physicsai_api.serve --runtime \"{rt.as_posix()}\"" in out
+    assert f"TASK PhysicsAI-Worker | -m physicsai_worker --runtime \"{rt.as_posix()}\"" in out
 
 
 def test_no_admin_check_no_machine_env_writes():

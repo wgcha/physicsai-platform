@@ -5,16 +5,18 @@
   일반 Windows PowerShell(관리자 권한 불필요 — phase3 D3-41)에서, 어느 폴더에서든:
     powershell -NoProfile -ExecutionPolicy Bypass -File <git 폴더>\deploy\update-repo.ps1
   모든 값은 <git>\.runtime\deploy.json(setup.ps1이 만든 것)에서 읽고, 아무것도 묻지 않는다(phase3 D3-39).
-  ⓪ git pull --ff-only(스스로 — D3-40). 추적 파일에 로컬 변경이 있으면 안내 후 중단(바꾼 것 없음). 분리된 HEAD(특정 커밋 고정 — 되돌리기)면
+  ⓪ git pull --ff-only(스스로 — D3-40, 자격 증명을 묻지 않음 — GIT_TERMINAL_PROMPT=0·credential.interactive=never, 인증 실패는 기다리지 않고
+     "바꾼 것 없음"으로 중단). 추적 파일에 로컬 변경이 있으면 안내 후 중단(바꾼 것 없음). 분리된 HEAD(특정 커밋 고정 — 되돌리기)면
      pull 없이 그 커밋으로 반영. 새 커밋을 받았으면 새 update-repo.ps1로 다시 실행한다(-SkipPull).
      이전 설치의 머신 환경변수 DB URL은 런타임 파일(.runtime\secrets\database_url)로 옮긴다(머신 환경변수는 그대로).
   ① 대기·실행 중 작업·진행 중 환경 점검 확인(DB 직접 조회) → 있으면 안내 후 중단(-Force면 진행)
-  ② 작업 2개 중지(+ 작업 인자가 새 방식 --runtime이 아니면 다시 등록 — 이전 설치가 관리자 권한으로 만든 작업이라 거부되면
-     "처음 한 번만 관리자 PowerShell로 update-repo.ps1" 안내)
+  ② 작업 2개 중지(이전 설치가 관리자 권한으로 만든 작업이라 거부되면 바꾼 것 없이 "처음 한 번만 같은 사용자 계정으로 '관리자 권한으로 실행'" 안내)
   ③ venv 패키지 갱신(requirements.lock → simdash_adapters → 플랫폼, 일반 설치 — 새 소스 반영)
   ④ 설정 보충(setup_config.py: 기존 값 유지, 새로 생긴 관리 키만 보충 — 바뀌면 먼저 _backup 복사)
   ⑤ 프런트 배치: 저장소 빌드본 frontend-dist가 현재 소스와 같으면 그대로 복사(Node·npm 단계 없음, D3-40). 다를 때만 Node 22로 빌드
      (npm은 창에서 직접 친 것과 같이 콘솔 그대로 — 실패하면 10초 뒤 한 번 더) → <런타임>\frontend(이전 것은 _backup)
+  ⑤' 작업 인자가 새 방식(--runtime)이 아니면 다시 등록 — venv·프런트가 새 코드로 바뀐 뒤에만(phase3 D3-42: 그 전 단계가 실패하면 작업 정의는
+     이전 그대로라 이전 코드가 이전 인자로 다시 시작된다. 이전 코드는 --runtime을 모른다)
   ⑥ alembic upgrade head ⑦ 작업 시작·health. 끝 줄은 "업데이트 성공 — 접속: …" 또는 "업데이트 실패 — 접속: …".
   ⑥ 전에 실패하면 이전 프런트를 되돌리고 작업 2개를 다시 시작한다(서비스를 멈춘 채 두지 않음). ⑥ 이후 실패는 되돌리는 방법을 안내.
 .PARAMETER Force
@@ -53,17 +55,30 @@ $migrationStarted = $false
 $stage = '준비'
 
 function Invoke-UpdateGit {
-    <# git(safe.directory는 이 실행에만 — 관리자 계정이 받은 폴더를 일반 사용자가 갱신해도 "dubious ownership"으로 막히지 않게). 출력·종료코드. #>
+    <#
+      git 실행. safe.directory는 이 저장소 경로만·이 실행에만(관리자 계정이 받은 폴더를 일반 사용자가 갱신해도 "dubious ownership"으로 막히지 않게).
+      자격 증명을 묻지 않는다(GIT_TERMINAL_PROMPT=0, Git Credential Manager도 GCM_INTERACTIVE=never·credential.interactive=never) —
+      인증이 필요하면 기다리지 않고 실패한다(저장된 자격 증명은 그대로 쓰임). 출력·종료코드.
+    #>
     param([Parameter(Mandatory = $true)][string[]]$GitArgs, [switch]$Console)
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    $saved = @{}
+    foreach ($k in 'GIT_TERMINAL_PROMPT', 'GCM_INTERACTIVE') { $saved[$k] = [Environment]::GetEnvironmentVariable($k, 'Process') }
+    $env:GIT_TERMINAL_PROMPT = '0'
+    $env:GCM_INTERACTIVE = 'never'
+    $safe = $repo -replace '\\', '/'   # git은 '/' 경로로 비교(Windows도)
+    $pre = @('-c', "safe.directory=$safe", '-c', 'credential.interactive=never', '-C', $repo)
     try {
-        if ($Console) {   # pull: 출력은 화면으로만(함수 결과에 섞이지 않게 Out-Host, stderr·자격 증명 입력은 콘솔 그대로)
-            & $script:gitExe -c 'safe.directory=*' -C $repo @GitArgs | Out-Host
+        if ($Console) {   # pull: 출력은 화면으로만(함수 결과에 섞이지 않게 Out-Host, stderr는 콘솔 그대로)
+            & $script:gitExe @pre @GitArgs | Out-Host
             return [pscustomobject]@{ Rc = $LASTEXITCODE; Out = '' }
         }
-        $o = @(& $script:gitExe -c 'safe.directory=*' -C $repo @GitArgs 2>&1 | ForEach-Object { "$_" })
+        $o = @(& $script:gitExe @pre @GitArgs 2>&1 | ForEach-Object { "$_" })
         return [pscustomobject]@{ Rc = $LASTEXITCODE; Out = ($o -join "`n").Trim() }
-    } finally { $ErrorActionPreference = $eap }
+    } finally {
+        $ErrorActionPreference = $eap
+        foreach ($k in $saved.Keys) { [Environment]::SetEnvironmentVariable($k, $saved[$k], 'Process') }
+    }
 }
 
 function Sync-UpdateRepo {
@@ -96,8 +111,9 @@ function Sync-UpdateRepo {
     Write-Step 'git pull --ff-only'
     $pull = Invoke-UpdateGit @('pull', '--ff-only') -Console
     if ($pull.Rc -ne 0) {
-        throw ("git pull --ff-only 실패(종료코드 $($pull.Rc)) — 위 git 출력을 확인하세요.`n" +
-            "다음 행동: 네트워크·자격 증명을 확인하거나, 받은 커밋 그대로 반영하려면 -SkipPull을 붙여 다시 실행하세요.")
+        throw ("git pull --ff-only 실패(종료코드 $($pull.Rc)) — 위 git 출력을 확인하세요(자격 증명은 묻지 않습니다 — 인증이 필요하면 바로 실패).`n" +
+            "다음 행동: 네트워크를 확인하거나, 자격 증명이 필요하면 이 창에서 git -C `"$repo`" pull 을 한 번 직접 실행해 저장한 뒤 다시 실행하세요. " +
+            "받은 커밋 그대로 반영하려면 -SkipPull을 붙여 다시 실행하세요.")
     }
     $after = (Invoke-UpdateGit @('rev-parse', 'HEAD')).Out
     if ($after -eq $before) { Write-Step 'git: 이미 최신'; return $false }
@@ -151,9 +167,6 @@ try {
     Stop-PhysicsAITasks
     $stopped = $true
     Write-Step '작업 2개 중지'
-    $stage = '작업 등록'
-    $runMode = if ("$($cfg.run_mode)" -eq 'Background') { 'Background' } else { 'Interactive' }
-    Update-PhysicsAITaskRegistration -VenvPy $venvPy -WorkDir $rt -RuntimeDir $rt -ConfigPath $cfg.config_path -ServiceUser "$($cfg.service_user)" -RunMode $runMode
 
     # ---- ③ venv 패키지 갱신 -------------------------------------------------------------------
     $stage = 'venv 패키지 갱신'
@@ -180,6 +193,11 @@ try {
     $stage = '프런트 배치'
     Install-PhysicsAIFrontendFromRepo -RepoRoot $repo -Dest $cfg.caddy_frontend_root -BackupDir $backupDir `
         -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -StampFile (Join-Path $rt 'frontend-deps.sha256')
+
+    # ---- ⑤' 작업 인자 갱신(--runtime) — venv·프런트가 새 코드가 된 뒤에만(D3-42). 이전 단계가 실패하면 작업 정의는 이전 그대로 -------
+    $stage = '작업 등록'
+    $runMode = if ("$($cfg.run_mode)" -eq 'Background') { 'Background' } else { 'Interactive' }
+    Update-PhysicsAITaskRegistration -VenvPy $venvPy -WorkDir $rt -RuntimeDir $rt -ConfigPath $cfg.config_path -ServiceUser "$($cfg.service_user)" -RunMode $runMode | Out-Null
 
     # ---- ⑥ migration(DB URL은 런타임 파일 → 이 프로세스 환경으로만) ------------------------------------------
     $stage = 'migration'

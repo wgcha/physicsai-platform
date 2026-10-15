@@ -4,7 +4,9 @@
 .DESCRIPTION
   일반 PowerShell(관리자 권한 불필요 — phase3 D3-41). 이전 설치의 머신 환경변수 DB URL은 <install_root>\secrets\database_url로 옮긴다(머신 환경변수는 그대로).
   ① 실행 중 작업·진행 중 환경 점검 확인(묻지 않고 DB 직접 조회) → 있으면 중단(-Force면 경고 후 진행)
-  ② 작업 2개 중지(작업 인자가 --runtime 방식이 아니면 다시 등록 — Interactive만) ③ 기존 venv·frontend·migrations를 <install_root>\_backup\<UTC>로 이동 ④ 새 wheel·프런트(묶음의 빌드본) 배치
+  ② 작업 2개 중지 ③ 기존 venv·frontend·migrations를 <install_root>\_backup\<UTC>로 이동 ④ 새 wheel·프런트(묶음의 빌드본) 배치
+  ④' 작업 인자가 --runtime 방식이 아니면 다시 등록(Interactive만) — 새 코드 배치가 끝난 뒤에만(phase3 D3-42: 그 전에 실패하면 작업 정의는
+     이전 그대로라 백업한 이전 venv를 되돌려 놓으면 그대로 시작된다. 이전 코드는 --runtime을 모른다)
   ⑤ alembic upgrade head ⑥ 시작·health 확인 ⑦ 실패 시 되돌리는 방법 안내(자동 되돌림 없음)
 #>
 [CmdletBinding()]
@@ -41,10 +43,9 @@ $dbUrl = Get-PhysicsAIDbUrl -RuntimeDir $root
 # ---- ① 실행 중 작업 확인(묻지 않고 DB 직접) ----------------------------------
 Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -DbUrl $dbUrl -Force:$Force
 
-# ---- ② 중지(+ 작업 인자 갱신) ------------------------------------------------------------------
+# ---- ② 중지(작업 인자 갱신은 새 코드 배치 뒤 ④' — D3-42) ------------------------------------------------
 Stop-PhysicsAITasks
-Update-PhysicsAITaskRegistration -VenvPy $venvPy -WorkDir $root -RuntimeDir $root -ConfigPath $cfg.config_path -ServiceUser "$($cfg.service_user)" `
-    -RunMode $(if ("$($cfg.run_mode)" -eq 'Background') { 'Background' } else { 'Interactive' })
+$taskReg = 'unchanged'   # 작업 등록 상태: unchanged | trying | done (실패 안내용)
 
 # ---- ③ 기존 설치 백업 이동(삭제 없음) -------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $backup | Out-Null
@@ -63,6 +64,12 @@ try {
     New-Item -ItemType Directory -Force -Path $cfg.caddy_frontend_root | Out-Null
     Copy-Item -Recurse -Force (Join-Path $pkg 'frontend\*') $cfg.caddy_frontend_root
 
+    # ---- ④' 작업 인자 갱신(--runtime) — 새 venv·프런트 배치가 끝난 뒤에만(D3-42) ------------------------------------
+    $taskReg = 'trying'
+    $re = Update-PhysicsAITaskRegistration -VenvPy $venvPy -WorkDir $root -RuntimeDir $root -ConfigPath $cfg.config_path -ServiceUser "$($cfg.service_user)" `
+        -RunMode $(if ("$($cfg.run_mode)" -eq 'Background') { 'Background' } else { 'Interactive' })
+    $taskReg = if (@($re)[-1] -eq $true) { 'done' } else { 'unchanged' }
+
     # ---- ⑤ migration(DB URL은 런타임 파일 → 이 프로세스 환경으로만) -----------------------------------
     $env:PHYSICSAI_DATABASE_URL = $dbUrl
     $env:PHYSICSAI_CONFIG = $cfg.config_path
@@ -77,5 +84,10 @@ try {
     Write-Warning "되돌리기: 작업 2개를 중지하고, 새 venv·migrations·프런트 폴더를 다른 이름으로 옮긴 뒤"
     Write-Warning "  $backup 의 venv·migrations·frontend_dist 를 원래 위치($root, $($cfg.caddy_frontend_root))로 이동하고 작업을 시작하세요"
     Write-Warning "  DB migration이 이미 올라갔다면 downgrade는 지원하지 않습니다 — 백업 DB 복원 절차를 따르세요"
+    if ($taskReg -ne 'unchanged') {
+        Write-Warning "  작업 인자를 새 방식(--runtime)으로 다시 등록했습니다(또는 등록 도중 실패) — 이전 venv로 되돌리면 이전 묶음의 install.ps1로 작업을 다시 등록해야 시작됩니다"
+    } else {
+        Write-Warning "  작업 등록(인자)은 바꾸지 않았습니다 — 이전 venv를 되돌리면 그대로 시작됩니다"
+    }
     throw
 }

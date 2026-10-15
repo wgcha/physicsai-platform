@@ -400,8 +400,12 @@ def test_setup_scripts_static():
         assert s in guide, s
     assert "Set-Content" not in guide and "Add-Content" not in guide and "Out-File" not in guide   # 대시보드 .env는 읽기만
     assert upd.index("Sync-UpdateRepo)") < upd.index("Move-PhysicsAIMachineEnvToRuntime") < upd.index("Assert-PhysicsAINoActiveJobs")
-    assert upd.index("Assert-PhysicsAINoActiveJobs") < upd.index("Stop-PhysicsAITasks") < upd.index("Update-PhysicsAITaskRegistration") < upd.index("Install-PhysicsAIRepoPackages")
-    assert upd.index("Install-PhysicsAIRepoPackages") < upd.index("Install-PhysicsAIFrontendFromRepo") < upd.index("Invoke-PhysicsAIMigration")
+    assert upd.index("Assert-PhysicsAINoActiveJobs") < upd.index("Stop-PhysicsAITasks") < upd.index("Install-PhysicsAIRepoPackages")
+    # 작업 인자 갱신(--runtime 다시 등록)은 새 코드(venv·프런트) 배치 뒤·migration 전(phase3 D3-42)
+    assert upd.index("Install-PhysicsAIRepoPackages") < upd.index("Install-PhysicsAIFrontendFromRepo") < upd.index("Update-PhysicsAITaskRegistration") < upd.index("Invoke-PhysicsAIMigration")
+    assert "safe.directory=*" not in upd and "GIT_TERMINAL_PROMPT = '0'" in upd and "credential.interactive=never" in upd
+    bundle = (DEPLOY / "update.ps1").read_text(encoding="utf-8-sig")
+    assert bundle.index("Stop-PhysicsAITasks") < bundle.index("wheel 설치") < bundle.index("Update-PhysicsAITaskRegistration") < bundle.index("Invoke-PhysicsAIMigration")
     assert upd.rstrip().endswith('Write-Step "업데이트 성공 — 접속: $accessUrl"') and 'Write-Step "업데이트 실패 — 접속: $accessUrl"\n    exit 1' in upd
     assert upd.index("Invoke-PhysicsAIMigration") < upd.index("Start-PhysicsAITasksAndWait")
     assert "Remove-Item" not in common and "--no-deps', '--force-reinstall'" in common and "'-r', (Join-Path $RepoRoot 'deploy\\requirements.lock')" in common

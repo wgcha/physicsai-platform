@@ -1,7 +1,7 @@
 """프런트 빌드 입력(소스)의 해시 — frontend-dist/BUILD_INFO.json의 source_hash (phase3 D3-40).
 
 같은 규칙을 deploy/node-select.ps1 Get-PhysicsAIFrontendSourceHash가 PowerShell로 구현한다(Python 없이도 서버에서 판정,
-동일성 시험: backend/tests/test_frontend_dist.py).
+동일성 시험: backend/tests/test_runtime_install.py).
 
 규칙
   대상: frontend/ 아래 index.html, package.json, package-lock.json, vite.config.*, tsconfig*.json(최상위 파일)
