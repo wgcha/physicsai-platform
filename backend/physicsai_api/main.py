@@ -108,6 +108,11 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
             app.include_router(demo.build_router(ctx.settings), prefix=API_PREFIX)
         if ctx.settings.demo.frontend_root:
             demo.mount_frontend(app, ctx.settings.demo.frontend_root)
+            return app
+    if ctx.settings.server.frontend_root:  # 운영: 대시보드 Vite 프록시가 /physicsai 전체를 넘긴다(Caddy 없이)
+        from .frontend_static import mount_frontend
+
+        mount_frontend(app, ctx.settings.server.frontend_root)
     return app
 
 

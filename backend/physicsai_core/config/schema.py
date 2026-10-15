@@ -36,6 +36,7 @@ class ServerCfg(_M):
     host: str = "127.0.0.1"
     port: int = 8100
     base_path: str = "/physicsai"
+    frontend_root: str | None = None  # 백엔드가 /physicsai/ 아래에 직접 서빙할 프런트 빌드 폴더. None·빈 값 = 서빙 안 함(Caddy 등 외부 서빙)
 
 
 class DatabaseCfg(_M):

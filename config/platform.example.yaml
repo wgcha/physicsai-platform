@@ -9,6 +9,9 @@ profile: dev                      # dev | prod   (PHYSICSAI_PROFILE 환경변수
 server:
   host: 127.0.0.1
   port: 8100
+  frontend_root: null             # 백엔드가 /physicsai/ 아래에 직접 서빙할 프런트 빌드 폴더(절대경로, 예 D:/physicsai-platform/.runtime/frontend).
+                                  # null = 서빙 안 함(Caddy 등 외부 서빙). 대시보드 Vite 프록시(/physicsai → 이 서버)로 접속하는 설치는 설정한다 —
+                                  # deploy/setup.ps1이 <git>/.runtime/frontend로 넣는다. 폴더·index.html이 없으면 기동은 하고 환경 점검이 WARN
   # 경로 접두는 /physicsai 고정(API = /physicsai/api, 프런트 = /physicsai/). server.base_path는 예약(미사용) — 쓰면 경고
 
 database:

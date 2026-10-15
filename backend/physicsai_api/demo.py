@@ -1,4 +1,4 @@
-"""시연 모드(fake tools 배포판) 전용: 내장 가짜 대시보드 인증·로그인 화면·프런트 정적 서빙.
+"""시연 모드(fake tools 배포판) 전용: 내장 가짜 대시보드 인증·로그인 화면·프런트 정적 서빙(공용 규칙은 frontend_static).
 
 - 설정 `demo.enabled=true` + `auth.mode=demo`일 때만 쓰인다. 운영 설정에서는 켤 수 없다:
   설정 검증(profile=dev, server.host=127.0.0.1)과 기동 검사(`check_demo_startup`, 실제 바인드 주소 127.0.0.1)가 이중으로 막는다.
@@ -10,13 +10,12 @@
 from __future__ import annotations
 
 import html
-from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs
 
 import httpx
 from fastapi import APIRouter, FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 
 from physicsai_core.config import Settings
 from physicsai_core.errors import DomainError
@@ -141,24 +140,7 @@ def build_router(settings: Settings) -> APIRouter:
 
 
 def mount_frontend(app: FastAPI, frontend_root: str) -> None:
-    """Caddy 없이 프런트 빌드를 /physicsai/ 아래에 서빙(try_files {path} /index.html 과 같은 규칙)."""
-    root = Path(frontend_root).resolve()
-    index = root / "index.html"
+    """시연: 프런트 빌드 서빙(공용 `frontend_static.mount_frontend`) + `/` → 시연 로그인."""
+    from .frontend_static import mount_frontend as _mount
 
-    @app.get("/", include_in_schema=False)
-    def _root() -> Response:
-        return RedirectResponse(LOGIN_PATH, status_code=307)
-
-    @app.get("/physicsai", include_in_schema=False)
-    def _base() -> Response:
-        return RedirectResponse("/physicsai/", status_code=308)
-
-    @app.get("/physicsai/{path:path}", include_in_schema=False)
-    def _static(path: str) -> Response:
-        if path == "api" or path.startswith("api/"):
-            raise DomainError("NOT_FOUND", "찾을 수 없습니다", status=404)
-        if path:
-            cand = (root / path).resolve()  # '..'·절대경로·다른 드라이브는 root 밖 → index.html
-            if cand.is_relative_to(root) and cand.is_file():
-                return FileResponse(cand)
-        return FileResponse(index, headers={"Cache-Control": "no-cache"})
+    _mount(app, frontend_root, root_redirect=LOGIN_PATH)

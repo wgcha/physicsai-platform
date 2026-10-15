@@ -11,7 +11,8 @@ STATUSES = ("OK", "WARN", "FAIL", "SKIP", "PENDING")
 ALTAIR_CHECK_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path", "hstpy_path")
 
 LABELS = {
-    "config.valid": "설정 검증", "db.connection": "DB 연결", "db.migration_head": "DB migration head",
+    "config.valid": "설정 검증", "server.frontend_root": "프런트 정적 서빙",
+    "db.connection": "DB 연결", "db.migration_head": "DB migration head",
     "auth.dashboard": "대시보드 인증", "auth.projects": "대시보드 프로젝트 목록", "hpc.gateway": "PBS 게이트웨이",
     "worker.heartbeat": "워커 하트비트", "storage.ai_root.write": "AI 루트 쓰기", "storage.ai_root.free": "AI 루트 여유 공간",
     "storage.roots_overlap": "루트 겹침", "storage.spdm_roots": "SPDM 루트 읽기", "worker.limiter": "자원 제한기",

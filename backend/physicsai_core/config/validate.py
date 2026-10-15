@@ -131,6 +131,9 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
         add("demo.frontend_root", "demo.enabled=false이면 비워 두어야 합니다")
     elif s.demo.frontend_root and not os.path.isfile(os.path.join(s.demo.frontend_root, "index.html")):
         add("demo.frontend_root", f"프런트 빌드 폴더에 index.html이 없습니다: {s.demo.frontend_root}")
+    # 폴더·index.html이 없는 것은 오류가 아니다(기동 후 배치될 수 있음) — 환경 점검 server.frontend_root가 WARN으로 알린다
+    if s.server.frontend_root and not is_abs_path_str(s.server.frontend_root):
+        add("server.frontend_root", "절대경로여야 합니다(빈 값 = 서빙 안 함)")
     if not re.match(r"^https?://[^\s/]+(:\d+)?/?$", a.dashboard_internal_url):
         add("auth.dashboard_internal_url", "URL 형식이 아닙니다(예: http://127.0.0.1:8000)")
     if not re.fullmatch(r"[A-Za-z0-9_\-]+", a.cookie_name):

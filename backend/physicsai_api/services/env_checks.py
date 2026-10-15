@@ -14,6 +14,7 @@ from physicsai_core.errors import DomainError
 
 from ..auth import Principal
 from ..context import AppContext
+from ..frontend_static import effective_root, root_status
 from .common import audit, clamp_limit, decode_cursor, encode_cursor, require_global_admin
 
 
@@ -25,6 +26,9 @@ def _api_items(ctx: AppContext, token: str | None, rid: str) -> list[dict[str, A
     else:
         out.append(item("config.valid", "CONFIG", "FAIL", f"설정 오류 {len(ctx.config.issues)}건", "API",
                         {"keys": ctx.config.error_keys()[:50]}))
+    fe_root = effective_root(s)
+    fe_status, fe_msg = root_status(fe_root)
+    out.append(item("server.frontend_root", "CONFIG", fe_status, fe_msg, "API", {"path": fe_root} if fe_root else None))
     t0 = time.time()
     head = None
     try:

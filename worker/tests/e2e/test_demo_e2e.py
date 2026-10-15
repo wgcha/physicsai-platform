@@ -97,11 +97,11 @@ def test_demo_mode_end_to_end(tmp_path, db_url):
         assert page.status_code == 200 and "시연 모드" in page.text and 'value="power"' in page.text
         assert anon.get("/physicsai/study/xyz").text.startswith("<!doctype html>")  # SPA fallback
         assert anon.get("/physicsai/assets/app.js").text == "console.log('x')"
-        trav = anon.get("/physicsai/%2e%2e/%2e%2e/config/platform.yaml")  # 프런트 폴더 밖 → index.html
-        assert "ai_root" not in trav.text
+        trav = anon.get("/physicsai/%2e%2e/%2e%2e/config/platform.yaml")  # 프런트 폴더 밖 → 404(phase3 D3-28)
+        assert trav.status_code == 404 and "ai_root" not in trav.text
         for evil in ("/physicsai//etc/passwd", "/physicsai/C:/Windows/win.ini", f"/physicsai/{cfg.as_posix()}"):
             r = anon.get(evil)
-            assert r.status_code == 200 and r.text.startswith("<!doctype html>"), evil  # root 밖 파일은 index.html
+            assert r.status_code == 404 and r.json()["detail"]["code"] == "NOT_FOUND", evil  # 절대경로·드라이브 = 탈출 시도 → 404
         assert anon.get(API + "/nope").status_code == 404
         assert anon.post(API + "/demo/login", data={"role": "root"}).status_code == 422
 
