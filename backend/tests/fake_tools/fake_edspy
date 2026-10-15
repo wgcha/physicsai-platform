@@ -84,7 +84,7 @@ def main():
         if not os.path.isfile(arg("--input-file")) or not os.path.isfile(arg("--model")):
             print("[ERROR] input missing", flush=True)
             return 2
-        if m != "no_output":
+        if m not in ("no_output", "error_log_no_output"):
             os.makedirs(os.path.dirname(h), exist_ok=True)
             with open(h, "wb") as fh:
                 fh.write(b"H3DPRED")
@@ -95,9 +95,12 @@ def main():
     else:
         print("unknown command", flush=True)
         return 4
-    if m == "error_log":
+    if m in ("error_log", "error_log_no_output"):
         print("Traceback (most recent call last):", flush=True)
         print('  File "x.py", line 1', flush=True)
+    if m == "nonzero_with_output":  # 결과는 썼지만 종료코드≠0(phase3 D3-37)
+        print("warning: fake nonzero exit", flush=True)
+        return 5
     print("done", flush=True)
     return 0
 

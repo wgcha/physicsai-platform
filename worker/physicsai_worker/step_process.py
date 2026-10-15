@@ -174,6 +174,7 @@ class StepProcessMixin:
         if record_command:
             self.ex.db(lambda c: lease_repo.step_update(c, self.ex.job_id, self.ex.token, self.step_no, exit_code=rc))
         self.last_error_lines = detector.count if detector is not None else 0
+        self.last_error_match = detector.first_match if detector is not None else None
         if rc != 0:
             if acc.memory_limit_hit:
                 raise StepFailure("RESOURCE_LIMIT", f"작업 메모리 한도({self.ex.limits.memory_gb} GB)에 도달해 종료되었습니다")

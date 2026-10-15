@@ -259,8 +259,9 @@ def test_display_path_windows_form():
 
 
 def test_log_error_patterns_apply_to_edspy_steps_only(client, worker_factory, loaded_config, monkeypatch):
-    """platform.md §8.3: commands_log_error_patterns는 edspy step 전용 — hw(컨투어)가 Traceback 줄을 내도 성공,
-    edspy가 같은 줄을 내면 종료코드 0이어도 LOG_ERROR_DETECTED."""
+    """platform.md §8.3: commands_log_error_patterns는 edspy step 전용 — hw(컨투어)가 Traceback 줄을 내도 경고 없이 성공.
+    EDSPY_PREDICT는 원본처럼 h3d 존재로 판정(phase3 D3-37): 같은 줄 + h3d 있음 → 성공 + 경고 LOG_ERROR_PATTERN,
+    h3d 없음 → OUTPUT_MISSING. 다른 edspy step의 LOG_ERROR_DETECTED는 runtime/test_step_failures."""
     sid = create_study(client, "logpat")["id"]
     sroot = Path(loaded_config.settings.storage.ai_root) / "logpat"
     w = worker_factory()
@@ -270,8 +271,13 @@ def test_log_error_patterns_apply_to_edspy_steps_only(client, worker_factory, lo
     monkeypatch.setenv("FAKE_TOOL_MODE_HW", "error_log")
     j = submit(client, sid, "PREDICT", {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"})
     assert w.run_once_slot() == "SUCCEEDED", job(client, j["id"])
+    assert job(client, j["id"])["warnings"] == []
     monkeypatch.delenv("FAKE_TOOL_MODE_HW")
     monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", "error_log")
     j = submit(client, sid, "PREDICT", {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"})
+    assert w.run_once_slot() == "SUCCEEDED", job(client, j["id"])
+    assert [x["code"] for x in job(client, j["id"])["warnings"]] == ["LOG_ERROR_PATTERN"]
+    monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", "error_log_no_output")
+    j = submit(client, sid, "PREDICT", {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"})
     assert w.run_once_slot() == "FAILED"
-    assert job(client, j["id"])["failure_code"] == "LOG_ERROR_DETECTED"
+    assert job(client, j["id"])["failure_code"] == "OUTPUT_MISSING"

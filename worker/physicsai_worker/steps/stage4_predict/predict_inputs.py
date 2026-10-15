@@ -14,7 +14,7 @@ from typing import Any
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file
-from physicsai_core.paths import PathError
+from physicsai_core.paths import PathError, is_link_or_reparse
 from physicsai_core.stage4_predict import prepared_input
 from physicsai_core.stage4_predict.prepared_input import CopyPlan, is_mesh_file
 
@@ -79,7 +79,8 @@ def _geom_values(ctx: Any, ps: dict[str, Any], S: str) -> dict[str, str]:
 
 
 def _judge_output(ctx: Any, rc: int, out: str, step: str) -> None:
-    """출력 파일 기준 판정(phase3 §11.4): 있음(크기>0) = 성공(rc≠0이면 경고), 없음 = OUTPUT_MISSING(rc≠0이면 EXIT_NONZERO)."""
+    """출력 파일 기준 판정(phase3 §11.4, EDSPY_PREDICT는 D3-37): 있음(크기>0) = 성공(rc≠0이면 경고),
+    없음 = OUTPUT_MISSING(rc≠0이면 EXIT_NONZERO)."""
     name = os.path.basename(out)
     if os.path.isfile(out) and os.path.getsize(out) > 0:
         if rc != 0:
@@ -172,10 +173,21 @@ def _assemble_parametric(ctx: Any, inp: str) -> str:
     return starters[0]
 
 
+def _reset_input(ctx: Any, inp: str) -> None:
+    """P/INPUT 기존 내용을 통째로 `_backup/<stamp>_<job>/…/INPUT`으로 옮긴다(phase3 D3-36).
+
+    원본(opti:290-292)은 매번 비우지만 플랫폼은 삭제 대신 이동한다. 재시도 때 이전 시도 파일·S6 이전 작업의
+    `EPS_mesh*`가 남아 starter 셈·edspy 입력에 섞이지 않게 한다. 빈 폴더는 그대로 둔다.
+    """
+    if os.path.lexists(inp) and not (os.path.isdir(inp) and not is_link_or_reparse(inp) and not os.listdir(inp)):
+        ctx.backup([inp])
+    os.makedirs(inp, exist_ok=True)
+
+
 def rad_assemble(ctx: Any) -> None:
     P = predict_dir(ctx)
     inp = os.path.join(P, "INPUT")
-    os.makedirs(inp, exist_ok=True)
+    _reset_input(ctx, inp)
     if is_prepared(ctx):
         plan = check_prepared(ctx)  # 원본 폴더는 읽기만(복사 원천)
         _copy_into(ctx, inp, plan.files)

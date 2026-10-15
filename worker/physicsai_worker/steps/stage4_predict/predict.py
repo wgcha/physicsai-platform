@@ -21,6 +21,7 @@ from ...signals import StepSkipped
 from ..common import load_model, verify_model_integrity
 from .predict_inputs import (
     PREPARED_SKIP,
+    _judge_output,
     check_prepared,
     geom_update,
     is_prepared,
@@ -111,17 +112,23 @@ def edspy_predict(ctx: Any) -> None:
     res_dir = os.path.join(P, "RESULT")
     os.makedirs(res_dir, exist_ok=True)
     pred = os.path.join(res_dir, f"{stem}_pred.h3d")
-    ctx.run_local(
+    # 성공 판정 = 원본 ⑤ 기준 Predict(opti:323-329)와 같이 h3d 존재만 본다(phase3 D3-37): rc≠0·로그 오류 패턴은 경고
+    rc = ctx.run_local(
         "edspy_predict",
         {"pred_h3d": pred, "model_psmdl": ctx.abs(m["psmdl_rel"]), "model_pscfg": ctx.abs(m["pscfg_rel"]),
          "starter": os.path.join(P, "INPUT", starter)},
         cwd=os.path.join(P, "INPUT"),
         outputs_to_backup=[pred],
         env_add=dict(ctx.settings.predict.env),
+        allow_nonzero_exit=True,
+        log_errors_fail=False,
     )
-    if not os.path.isfile(pred):
-        raise StepFailure("OUTPUT_MISSING", f"예측 결과 {os.path.basename(pred)}가 만들어지지 않았습니다")
-    ctx.add_output(pred)
+    match = getattr(ctx, "last_error_match", None)
+    if match and not (os.path.isfile(pred) and os.path.getsize(pred) > 0):
+        ctx.log(f"[LOG_ERROR] 로그 오류 패턴: {match}")
+    _judge_output(ctx, rc, pred, "예측")
+    if match:
+        ctx.add_warning("LOG_ERROR_PATTERN", f"예측: 로그에 오류 패턴({match})이 있었지만 결과 {os.path.basename(pred)}이(가) 있어 성공으로 처리했습니다")
     ctx.patch_result({"pred_h3d_rel": ctx.rel(pred)})
 
 

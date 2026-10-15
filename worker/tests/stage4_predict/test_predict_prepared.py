@@ -1,4 +1,5 @@
-"""④ 준비된 입력 예측(phase3 §11.5, V3-S6-7·8·11): 복사 규칙, step 2~4 SKIPPED, 응답 표, 검증·input.zip·재시도. 원본 폴더 불변."""
+"""④ 준비된 입력 예측(phase3 §11.5, V3-S6-7·8·11): 복사 규칙, step 2~4 SKIPPED, 응답 표, 검증·input.zip·재시도. 원본 폴더 불변.
+D3-36·37 후속: 재시도 시 이전 INPUT → _backup, EDSPY_PREDICT 판정 = h3d 존재(parametric 재시도 포함)."""
 
 from __future__ import annotations
 
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from physicsai_test_support import API, H, pbs_command_cfg, read_record
+from physicsai_test_support import API, MESH_INC, H, pbs_command_cfg, read_record
 
 P = H("tok-power")
 PW = H("tok-power", write=True)
@@ -133,3 +134,66 @@ def test_v3_s6_11_prepared_verify_zip_and_retry(predict_env, fake_tools, fake_re
     v_arg = sub[sub.index("-v") + 1]
     assert v_arg.startswith("INPUT_FILE=/shared/AI_WORK/pred/04_predict/") and "/verify/1/input/Face_Drop_0000.rad," in v_arg
     assert sorted(os.listdir(Pd / "verify" / "1" / "input")) == ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+
+
+# ---- 시연 안정성 후속(phase3 D3-36·37): 재시도 시 이전 INPUT → _backup, EDSPY_PREDICT 판정 = h3d 존재 ----
+
+VALUES = {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"}
+STALE = ("EPS_mesh_0000.rad", "old_try.inc", "Prev_0000.rad")
+
+
+
+@pytest.mark.parametrize("mode", ["parametric", "prepared"])
+def test_d3_36_retry_moves_old_input_to_backup(predict_env, monkeypatch, mode):
+    env = predict_env()
+    monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", "fail")
+    if mode == "parametric":
+        env.param_set()
+        j = env.submit("PREDICT", VALUES)
+        assert env.w.run_once_slot() == "FAILED"
+        jid, expected = j["id"], sorted([MESH_INC, "material.inc", "model0_0000.rad", "model_0001.rad"])
+    else:
+        jid, _jd = run_prepared(env, make_case(env.imports), expect_state="FAILED")
+        expected = ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+    assert env.job(jid)["current_step_key"] == "EDSPY_PREDICT"
+    inp = env.predict_dir(jid) / "INPUT"
+    for n in STALE:                                                       # 이전 시도·S6 이전 작업의 잔존 파일 흉내
+        (inp / n).write_text("stale\n")
+    first = {n: (inp / n).read_bytes() for n in os.listdir(inp)}
+    monkeypatch.delenv("FAKE_TOOL_MODE_EDSPY")
+    r = env.c.post(f"{API}/jobs/{jid}/retry", headers=PW, json={"from_step": 5})
+    assert r.status_code in (200, 201), r.text
+    nid = r.json()["id"]
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(nid)
+    assert sorted(os.listdir(inp)) == expected                           # 이전 파일 없음
+    backups = [p for p in (env.sroot / "_backup").glob(f"*_{nid}/04_predict/{jid}/INPUT") if p.is_dir()]
+    assert len(backups) == 1
+    assert {n: (backups[0] / n).read_bytes() for n in os.listdir(backups[0])} == first   # 통째로 보존(삭제 없음)
+
+
+def test_d3_36_empty_or_missing_input_needs_no_backup(predict_env):
+    env = predict_env()
+    jid, _jd = run_prepared(env, make_case(env.imports))
+    assert not (env.sroot / "_backup").exists() or not list((env.sroot / "_backup").rglob("INPUT"))
+
+
+@pytest.mark.parametrize("fake_mode,state,code,warnings", [
+    ("ok", "SUCCEEDED", None, []),
+    ("nonzero_with_output", "SUCCEEDED", None, ["EXIT_NONZERO_IGNORED"]),
+    ("error_log", "SUCCEEDED", None, ["LOG_ERROR_PATTERN"]),
+    ("fail", "FAILED", "EXIT_NONZERO", None),
+    ("no_output", "FAILED", "OUTPUT_MISSING", None),
+    ("error_log_no_output", "FAILED", "OUTPUT_MISSING", None),
+])
+def test_d3_37_edspy_predict_judged_by_h3d(predict_env, monkeypatch, fake_mode, state, code, warnings):
+    env = predict_env()
+    monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", fake_mode)
+    jid, jd = run_prepared(env, make_case(env.imports), expect_state=state)
+    step = env.steps(jid)["EDSPY_PREDICT"]
+    if state == "SUCCEEDED":
+        assert [w["code"] for w in jd["warnings"]] == warnings, jd["warnings"]
+        assert step["state"] == "SUCCEEDED"
+        assert step["exit_code"] == (5 if fake_mode == "nonzero_with_output" else 0)
+        assert jd["result"]["pred_h3d_rel"].endswith("RESULT/Face_Drop_0000_pred.h3d")
+    else:
+        assert jd["failure_code"] == code and jd["current_step_key"] == "EDSPY_PREDICT", jd
