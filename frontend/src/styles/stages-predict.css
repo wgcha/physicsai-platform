@@ -1,5 +1,29 @@
 /* ④ 단일 예측 · ⑤ 최적화 칸 안 배치 */
 /* ④ */
+.input-mode-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+}
+.input-mode .seg button:disabled {
+  color: var(--ink-3);
+  cursor: not-allowed;
+}
+.prepared-input {
+  display: grid;
+  gap: var(--s1);
+  padding-bottom: var(--s2);
+}
+.prepared-input p,
+.prepared-summary {
+  margin: 0;
+}
+.plain-notes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 .ps-summary {
   display: flex;
   flex-wrap: wrap;
@@ -113,6 +137,9 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: var(--s-h);
+}
+.chain.prepared {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .chain-step {
   display: grid;

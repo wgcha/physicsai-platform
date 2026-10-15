@@ -19,7 +19,8 @@ export type JobState =
   | "CANCELED"
   | "INTERRUPTED";
 export type StepState = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "SKIPPED" | "CANCELED";
-export type PathPurpose = S["PathInspectRequest"]["purpose"];
+// S6: openapi 갱신 후 gen:api로 대체 — "PREDICT_INPUT"(phase3.md §11.5)
+export type PathPurpose = S["PathInspectRequest"]["purpose"] | "PREDICT_INPUT";
 export type NotificationEvent =
   | "JOB_STARTED"
   | "JOB_SUCCEEDED"
@@ -65,7 +66,8 @@ export interface UiPoll {
   poll_status_ms?: number;
 }
 /** phase2.md §12.1 `/status.features` 키 */
-export type FeatureKey = keyof S["StatusFeatures"];
+// S6: openapi 갱신 후 gen:api로 대체 — `predict_parametric`(phase3.md §11.4)
+export type FeatureKey = keyof S["StatusFeatures"] | "predict_parametric";
 export type FeatureState = S["FeatureState"];
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
 export type EnvCheckBrief = Override<S["StatusEnvCheck"], { latest_state?: EnvCheckState | null }>;
@@ -75,7 +77,7 @@ export type StatusInfo = Override<
     ui: UiPoll & Record<string, number>;
     auth: { mode?: string; login_url?: string } & Record<string, string>;
     hpc: Override<S["StatusHpc"], { collect_mode: "in_place" | "shared_folder" | "drive" | string }>;
-    features?: Partial<S["StatusFeatures"]> | null;
+    features?: Partial<Record<FeatureKey, FeatureState | null>> | null;
     env_check?: EnvCheckBrief | null;
   }
 >;
@@ -116,6 +118,70 @@ export interface PredictResult {
   curve_artifact_id: string | null;
   response_table_artifact_id?: string | null;
   response_table: ResponseRow[];
+  // S6: openapi 갱신 후 gen:api로 대체 — prepared 결과 키(phase3.md §11.5)
+  input_mode?: PredictInputMode;
+  input_path?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// S6 ④ 준비된 입력 예측(phase3.md §11.5)
+// S6: openapi 갱신 후 gen:api로 대체 — 아래 타입은 backend/openapi.json 갱신 전 수동 확장
+// ---------------------------------------------------------------------------
+export type PredictInputMode = "parametric" | "prepared";
+
+/** PREDICT 요청 params — parametric(기본, input_mode 생략 = parametric) */
+export interface PredictParamsParametric {
+  input_mode?: "parametric";
+  param_set_id: string | null;
+  model_id: string | null;
+  values: Record<string, number>;
+  value_source: "nominal" | "run" | "manual";
+  source_run_key: string | null;
+  input_path?: null;
+}
+/** PREDICT 요청 params — prepared */
+export interface PredictParamsPrepared {
+  input_mode: "prepared";
+  input_path: string;
+  model_id?: string | null;
+  param_set_id?: string | null;
+}
+export type PredictParams = PredictParamsParametric | PredictParamsPrepared;
+
+/** 저장된 PREDICT `Job.params`(prepared는 정규화 경로·종류·starter 이름이 붙는다) */
+export interface PredictJobParams {
+  input_mode?: PredictInputMode;
+  input_path?: string | null;
+  input_kind?: "file" | "dir";
+  starter_name?: string | null;
+  model_id?: string | null;
+  param_set_id?: string | null;
+  values?: Record<string, number>;
+}
+
+export type PredictInputProblemCode = "INPUT_EXT" | "STARTER_COUNT" | "FILE_NAME_UNSAFE" | "TOO_MANY_FILES" | "TOO_LARGE";
+export interface PredictInputProblem {
+  code: PredictInputProblemCode | string;
+  message: string;
+}
+
+/** paths/inspect `purpose:"PREDICT_INPUT"` 결과(summary 또는 최상위) */
+export interface PredictInputInspect {
+  kind: "file" | "dir";
+  starter: string[];
+  starter_ok: boolean;
+  /** 최대 50개 */
+  rad: string[];
+  inc_count: number;
+  file_count: number;
+  total_bytes: number;
+  problems: PredictInputProblem[];
+}
+
+/** 422 `PREDICT_INPUT_INVALID` 오류 본문 */
+export interface PredictInputInvalidDetail extends ApiErrorDetail {
+  code: "PREDICT_INPUT_INVALID";
+  problems: PredictInputProblem[];
 }
 
 export type QueueInfo = Override<

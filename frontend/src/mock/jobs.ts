@@ -4,6 +4,7 @@ import { SKIPPED_BY_DEFAULT, STEP_CHAINS, baseJob } from "./data";
 import { err, needAdmin, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { refreshPositions } from "./engine";
+import { predictParams } from "./stage4Prepared";
 
 export function summary(srv: MockServer, j: Job): JobSummary {
   const { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at } = j;
@@ -31,6 +32,11 @@ export function createJobFor(srv: MockServer, s: Study, type: JobType, params: R
   if (!STEP_CHAINS[type]) return err(422, "INVALID_PARAMS", "알 수 없는 작업 유형입니다.");
   if (srv.jobs.some((j) => j.study_id === s.id && j.job_type === type && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state)))
     return err(409, "STUDY_JOB_BUSY", "같은 종류의 작업이 이미 실행 중이거나 대기 중입니다.");
+  if (type === "PREDICT") {
+    const r = predictParams(srv, s, params); // S6 §11.5: input_mode별 검증(422 INVALID_PARAMS·PREDICT_INPUT_INVALID, 409)
+    if ("error" in r) return r.error;
+    params = r.params;
+  }
   if (type === "PREDICT" && !params.model_id && !s.final_model_id) return err(409, "FINAL_MODEL_REQUIRED", "Final 모델을 먼저 지정하세요.");
   if (type === "PREDICT_VERIFY" && !srv.hpcConfigured) return err(409, "HPC_NOT_CONFIGURED", "PBS 연결이 설정되지 않았습니다.");
   const pre = srv.p2.precheck(s, type, params);

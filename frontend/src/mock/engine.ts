@@ -4,6 +4,7 @@ import { STEP_CHAINS, makeSteps } from "./data";
 import type { MockServer } from "./server";
 import { finishStage3 } from "./stage3";
 import { finishStage4 } from "./stage4";
+import { adjustPreparedSteps } from "./stage4Prepared";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -34,6 +35,7 @@ export function tickJobs(srv: MockServer) {
     const chain = STEP_CHAINS[j.job_type];
     const done = Math.min(chain.length, Math.floor(((j.progress_pct ?? 0) / 100) * chain.length));
     j.steps = makeSteps(j.job_type, done, done < chain.length ? done : null);
+    adjustPreparedSteps(srv, j);
     const cur = chain[done];
     j.progress_label = cur ? `${cur.key} …` : null;
     srv.p2.onProgress(j);
@@ -80,6 +82,7 @@ function finishJob(srv: MockServer, j: Job) {
   j.progress_pct = 100;
   j.progress_label = null;
   j.steps = makeSteps(j.job_type, STEP_CHAINS[j.job_type].length, null);
+  adjustPreparedSteps(srv, j);
   finishStage3(srv, j);
   finishStage4(srv, j);
   if (srv.manage.storage.onFinish(j)) srv.notifyJob(j, "JOB_SUCCEEDED");

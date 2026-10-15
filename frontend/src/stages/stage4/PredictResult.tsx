@@ -1,4 +1,7 @@
-import { type CurveJson, type Job, type JobStep, type PredictResult as PR, type ResponseRow } from "../../api";
+import { useState } from "react";
+import { api, errorMessage, type CurveJson, type Job, type JobStep, type PredictInputMode, type PredictJobParams, type PredictResult as PR, type ResponseRow } from "../../api";
+import { useStudy } from "../../app/StudyContext";
+import { Card, CopyButton } from "../../components/ui";
 import { Chart } from "../../components/Chart";
 import { JsonTree } from "../../components/JsonTree";
 import { useArtifactJson, useArtifactUrl } from "../../hooks/useArtifact";
@@ -11,6 +14,18 @@ const CHAIN: { label: string; keys: string[] }[] = [
   { label: "입력파일", keys: ["RAD_ASSEMBLE"] },
   { label: "예측", keys: ["EDSPY_PREDICT", "CONTOUR_PREVIEW", "CURVE_PICK", "RESPONSE_EXTRACT", "RESPONSE_TABLE"] },
 ];
+
+/** 준비된 입력(phase3.md §11.5): 형상·메싱 step은 SKIPPED라 숨기고 2단계로 묶는다 */
+const CHAIN_PREPARED: { label: string; keys: string[] }[] = [
+  { label: "입력파일", keys: ["PR_PREP", "RAD_ASSEMBLE"] },
+  { label: "예측", keys: ["EDSPY_PREDICT", "CONTOUR_PREVIEW", "CURVE_PICK", "RESPONSE_EXTRACT", "RESPONSE_TABLE"] },
+];
+
+/** 작업의 입력 방식(params.input_mode 생략 = parametric) */
+export function jobInputMode(job: Job | null): PredictInputMode | null {
+  if (!job) return null;
+  return (job.params as PredictJobParams).input_mode === "prepared" ? "prepared" : "parametric";
+}
 
 type ChainState = "pending" | "running" | "done" | "skipped" | "failed" | "canceled";
 const CHAIN_LABEL: Record<ChainState, string> = {
@@ -33,11 +48,14 @@ function groupState(steps: JobStep[]): ChainState {
   return "pending";
 }
 
-export function PredictChain({ job }: { job: Job | null }) {
+/** 실행 단계 표시. 작업이 있으면 작업의 입력 방식, 없으면 화면의 입력 방식(mode)을 따른다 */
+export function PredictChain({ job, mode }: { job: Job | null; mode?: PredictInputMode }) {
+  const prepared = (jobInputMode(job) ?? mode) === "prepared";
+  const groups = prepared ? CHAIN_PREPARED : CHAIN;
   return (
-    <ol className="chain" aria-label="예측 실행 단계">
-      {CHAIN.map((g, i) => {
-        const steps = job ? job.steps.filter((s) => g.keys.includes(s.step_key)) : [];
+    <ol className={`chain${prepared ? " prepared" : ""}`} aria-label="예측 실행 단계">
+      {groups.map((g, i) => {
+        const steps = job ? job.steps.filter((s) => g.keys.includes(s.step_key) && !(prepared && s.state === "SKIPPED")) : [];
         const st = job ? groupState(steps) : "pending";
         const failed = steps.find((s) => s.state === "FAILED");
         return (
@@ -125,5 +143,97 @@ export function ResponseTable({ rows, verify, nearestRun }: { rows: ResponseRow[
         ))}
       </tbody>
     </table>
+  );
+}
+
+function baseName(p: string | null | undefined): string {
+  return (p ?? "").split(/[\\/]/).filter(Boolean).pop() ?? "";
+}
+
+/** 결과 머리 한 줄: parametric은 적용값·범위, prepared는 starter 이름 */
+function ResultHead({ job, result }: { job: Job; result: PR }) {
+  const p = job.params as PredictJobParams;
+  if (jobInputMode(job) === "prepared") {
+    const path = p.input_path ?? result.input_path ?? "";
+    return (
+      <div className="result-head small" title={path}>
+        준비된 입력 <span className="mono">{p.starter_name || baseName(path)}</span>
+      </div>
+    );
+  }
+  return (
+    <div className="result-head small">
+      입력{" "}
+      {Object.entries(result.applied_values ?? result.values)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(", ")}
+      {" · "}
+      {result.out_of_range?.length ? `학습 범위 밖${result.nearest ? ` · 최근접 ${result.nearest.run_key}` : ""}` : result.nearest ? `최근접 ${result.nearest.run_key} (거리 ${result.nearest.distance.toFixed(2)})` : ""}
+    </div>
+  );
+}
+
+/** "결과" 칸(B16·B17 입력파일 받기 포함). 두 입력 방식이 같이 쓴다 */
+export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null; verifyValues: Record<string, number> | null }) {
+  const { study } = useStudy();
+  const result = pjob?.state === "SUCCEEDED" ? (pjob.result as unknown as PR | null) : null;
+  // B16·B17: 입력파일은 RAD_ASSEMBLE 이후 준비(input_display_path가 채워짐) → input.zip
+  const inputReady = !!pjob?.input_display_path;
+  const [inputError, setInputError] = useState<string | null>(null);
+  const downloadInput = async () => {
+    if (!pjob) return;
+    setInputError(null);
+    try {
+      const blob = await api.inputZip(pjob.id);
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `${study.folder_name}_${pjob.id.slice(0, 8)}_INPUT.zip`;
+      a.click();
+      URL.revokeObjectURL(a.href);
+    } catch (e) {
+      setInputError(errorMessage(e));
+    }
+  };
+
+  return (
+    <Card
+      span={9}
+      title="결과"
+      className="result"
+      aside={
+        pjob ? (
+          <span className="run-action-row">
+            {inputError && <span className="error-text small">{inputError}</span>}
+            <button type="button" className="btn small" onClick={downloadInput} disabled={!inputReady} title={inputReady ? "INPUT 폴더의 .rad·.inc를 zip으로 받습니다" : "입력파일이 아직 준비되지 않았습니다"}>
+              입력파일 받기
+            </button>
+          </span>
+        ) : undefined
+      }
+    >
+      {!result || !pjob ? (
+        <p className="muted">{pjob && pjob.state !== "SUCCEEDED" ? "예측이 끝나면 결과가 여기에 표시됩니다." : "예측 결과가 없습니다."}</p>
+      ) : (
+        <>
+          <ResultHead job={pjob} result={result} />
+          {pjob.input_display_path && (
+            <div className="codeline small" title="입력 폴더(탐색기에 붙여넣기)">
+              <code>{pjob.input_display_path}</code>
+              <CopyButton text={pjob.input_display_path} label="경로 복사" />
+            </div>
+          )}
+          <div className="result-grid">
+            <ContourPreview result={result} />
+            <div className="result-side">
+              {result.curve_artifact_id && <CurveChart artifactId={result.curve_artifact_id} />}
+              <div>
+                <div className="field-label">응답값</div>
+                <ResponseTable rows={result.response_table ?? []} verify={verifyValues} nearestRun={result.nearest?.run_key ?? null} />
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </Card>
   );
 }
