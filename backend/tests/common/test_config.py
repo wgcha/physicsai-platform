@@ -22,7 +22,14 @@ def test_example_yaml_is_valid_schema(tmp_path):
     data["storage"]["allowed_import_roots"] = []
     lc = load_config_dict(data, environ={})
     assert lc.ok, lc.issues
-    assert lc.settings.commands.mesh is None and lc.settings.hpc.gateway == "none"
+    assert lc.settings.hpc.gateway == "none" and lc.warnings == []
+    # phase3 §11.8: MESH = 원본 m_2(HyperMesh include 변환), 새 predict 기본값
+    assert lc.settings.commands.mesh == ["{hw}", "-clientconfig", "hwfepre.dat", "-b", "-tcl", "{include_tcl}", "{simlab_mesh}",
+                                         "{mesh_inc}", "{renum_csv}"]
+    pr = lc.settings.predict
+    assert (pr.simlab_mesh_name, pr.mesh_include_name, pr.renum_csv_name) == ("EPS_mesh_0000.rad", "104_replace_node_elem.inc",
+                                                                             "RENUM_INIT.csv")
+    assert pr.mesh_output_glob is None and pr.prepared_input_exts == [".rad", ".hm"] and pr.prepared_max_files == 500
 
 
 def test_valid_fixture(loaded_config):

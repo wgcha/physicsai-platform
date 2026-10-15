@@ -105,6 +105,18 @@
 
 ## E4. ④ 단일 예측
 
+### E4-0. 시연 전 — 예측 1회 성공까지 (phase3 §11)
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E4-0-1 | 관리>환경 점검 통과: `altair.edspy_path`·`simlab_path`·`hw_exe_path`, `resources.preview_pred_h3d_tcl`·`hypermesh_include_tcl` 존재, `/status` `features.predict`·`predict_parametric` = true, 워커 online, Study에 Final 모델 지정 | | |
+| E4-0-2 | (U3 1회 확인) 원본 앱이 만든 HyperStudy run 폴더(`…\run__00001\`)에서 `m_1\`에 렌더 `.py`·`EPS_mesh_0000.rad`, `m_2\`에 `104_replace_node_elem.inc`·`log_batch.txt`(끝 `COMPLETE HM BATCHRUN`). 조립 폴더에서 `findstr /i "#include" *_0000.rad` → include 이름, `RENUM_INIT.csv` 위치. 다르면 `predict.mesh_include_name`·`commands.mesh` 수정 후 워커 재시작 | | |
+| E4-0-3 | (가장 빠른 확인) ④ 입력 방식 "준비된 입력 파일" → 학습에 쓴 조립 폴더(기준 starter) → "확인"에서 starter 1개 → "예측 실행": `04_predict\<job>\RESULT\<stem>_pred.h3d` 생성, 결과 목록 표시, `.xy` 있으면 커브. 원본 ⑤ "Predict + Preview" 결과와 HyperView에서 비교 | | |
+| E4-0-4 | "파라미터로 형상 생성"에서 공칭값 실행: `geom\simlab_parametered_mesh.py`, `geom\EPS_mesh_0000.rad`, `geom\104_replace_node_elem.inc`, `geom\log_batch.txt`, `INPUT\`에 eps_mesh 없음·새 include. 경고 메모. 결과가 E4-0-3과 거의 같음 | | |
+| E4-0-5 | 값을 바꿔 1회 더: `INPUT\104_replace_node_elem.inc`가 공칭과 다름(`fc /b`), 예측 최대값 달라짐. 단계별 소요 시간 메모 | | |
+| E4-0-6 | (U9) ① run 렌더 `.py`의 `NewValue`와 HST 설계값(비정수) 비교 → `predict.integer_rounding` | | |
+| E4-0-7 | 시연 직전: 대기열 비어 있음, 라이선스 응답, E4-0-4 성공 작업을 남겨 두어 실시간 실행이 늦으면 그 결과를 보여 줌 | | |
+
 | # | 확인 | 결과 | 메모 |
 |---|---|---|---|
 | E4-1 | 파라미터 세트 폴더(parameters.json, samples.csv, responses.json, cad/, tpl, radioss_assem/) 등록 성공. tpl 변수와 파라미터 이름 불일치 시 거부 | | |

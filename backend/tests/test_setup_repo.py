@@ -446,3 +446,36 @@ def test_install_common_connect_guide(tmp_path):
     out = run("SIMDASH_PHYSICSAI_ENABLED=true\nVITE_PHYSICSAI_TARGET=http://127.0.0.1:8100\n")   # 포트가 다르면 다시 안내
     assert "이미 들어 있음" not in out
     assert (dash / ".env").read_text(encoding="utf-8").startswith("SIMDASH")                       # 읽기만
+
+
+def test_setup_config_upgrades_old_predict_defaults(tmp_path):
+    """phase3 §11.8: 기존 설정의 이전 기본값(commands.mesh: null, predict.mesh_output_glob: "eps_mesh*")은 새 기본으로 갱신,
+    사용자가 바꾼 값은 보존."""
+    t = _fake_tree(tmp_path)
+    _run(tmp_path, t, _inputs(t))
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    text = cfg_path.read_text(encoding="utf-8")
+    old = re.sub(r'(?m)^  mesh: \[.*$', "  mesh: null                 # 사내 확인 후 교체(U2)", text)
+    old = old.replace("  starter_glob:", '  mesh_output_glob: "eps_mesh*"   # 사내 확인 후 교체(U3)\n  starter_glob:', 1)
+    old = re.sub(r"(?m)^  (simlab_mesh_name|mesh_include_name|renum_csv_name|mesh_log_complete_marker): .*\n", "", old)  # S6 이전 설정
+    cfg_path.write_text(old, encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    example = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert c["commands"]["mesh"] == example["commands"]["mesh"] and "mesh_output_glob" not in c["predict"]
+    assert sorted(res["config_changed_keys"]) == ["commands.mesh", "predict.mesh_include_name", "predict.mesh_output_glob"]
+    assert c["predict"]["mesh_include_name"] == example["predict"]["mesh_include_name"]
+    assert res["write"]["validation"]["ok"] and res["write"]["validation"]["warnings"] == []
+    new_text = cfg_path.read_text(encoding="utf-8")
+    assert "# 사내 확인 후 교체(U2)" in new_text                                   # 줄 끝 주석 유지
+    assert (t["rt"] / "_backup" / "20261014T010203Z" / "platform.yaml").read_text(encoding="utf-8") == old
+    # 갱신 뒤에는 사용자 값 보존(폐지 키는 경고만): 일부러 끈 mesh: null·mesh_output_glob
+    line = next(ln for ln in new_text.split("\n") if ln.startswith("  mesh: "))
+    user = new_text.replace(line, "  mesh: null   # 일부러 끔", 1)
+    user = user.replace("  starter_glob:", '  mesh_output_glob: "*.inc"\n  starter_glob:', 1)
+    cfg_path.write_text(user, encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    assert c["commands"]["mesh"] is None
+    assert c["predict"]["mesh_output_glob"] == "*.inc" and res["config_changed_keys"] == []
+    assert any(w.startswith("predict.mesh_output_glob:") and "폐지" in w for w in res["write"]["validation"]["warnings"])

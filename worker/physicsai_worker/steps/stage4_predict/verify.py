@@ -130,7 +130,10 @@ def pv_extract(ctx: Any) -> None:
 
     with ctx.ex.engine.connect() as conn:
         pj = jobs_repo.get_job(conn, ctx.params["predict_job_id"])
-        ps = ps_repo.get(conn, (pj["params"] or {}).get("param_set_id"))
+        psid = (pj["params"] or {}).get("param_set_id")
+        ps = ps_repo.get(conn, psid) if psid else None
+    if ps is None:  # phase3 §11.5: 준비된 입력 예측은 세트가 없을 수 있다
+        raise StepSkipped("응답 정의 없음")
     S = ctx.abs(ps["stored_rel"])
     h3d = os.path.join(V, "result", h3ds[0])
     out = os.path.join(V, "responses_verify.csv")

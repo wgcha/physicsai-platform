@@ -187,8 +187,20 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
 
     if s.predict.integer_rounding not in ("half_up", "truncate"):
         add("predict.integer_rounding", "half_up | truncate")
-    if has_unsafe_chars(s.predict.rendered_script_name) or "/" in s.predict.rendered_script_name:
-        add("predict.rendered_script_name", "파일 이름만, 공백·메타문자 금지")
+    pr = s.predict
+    for k in ("rendered_script_name", "simlab_mesh_name", "mesh_include_name", "renum_csv_name"):
+        v = getattr(pr, k)
+        if not v or has_unsafe_chars(v) or "/" in v or "\\" in v or v in (".", ".."):
+            add(f"predict.{k}", "파일 이름만, 공백·메타문자 금지")
+    for i, ext in enumerate(pr.prepared_input_exts):
+        if not re.fullmatch(r"\.[A-Za-z0-9_]{1,16}", ext):
+            add(f"predict.prepared_input_exts[{i}]", "'.'으로 시작하는 확장자(예: .rad)")
+    if not pr.prepared_input_exts:
+        add("predict.prepared_input_exts", "1개 이상")
+    if not 1 <= pr.prepared_max_files <= 100000:
+        add("predict.prepared_max_files", "1~100000")
+    if pr.prepared_max_total_bytes <= 0:
+        add("predict.prepared_max_total_bytes", "양수")
 
     # commands
     for key in TEMPLATE_SPECS:

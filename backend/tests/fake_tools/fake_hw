@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """가짜 hw.exe(§18.1, phase2 §16.1).
 
-- 1차 컨투어: -clientconfig hwpost.dat -b -tcl X -input H -output J
+- 1차 컨투어: -clientconfig hwpost.dat -b -tcl X -input H -output J → J = 원본 미리보기 TCL 형식(phase3 §11.1)
+  {h3d, num_time_step, subcases:[{id, label, datatypes:[{name, format, binding, components, layers}]}]}
+- ④ MESH(원본 m_2, phase3 §11.4·V3-S6-14): -clientconfig hwfepre.dat -b -tcl X A B C → A(SimLab 메시) 확인 후 B(include)와
+  cwd log_batch.txt("COMPLETE HM BATCHRUN") 작성. 모드 FAKE_TOOL_MODE_HM(> FAKE_TOOL_MODE_HW > FAKE_TOOL_MODE):
+  ok | fail(종료코드 1, 출력 없음) | no_output(종료코드 0, include 없음) | no_marker(로그에 표식 없음) | nonzero_with_output(종료코드 3)
 - response_extract 예시: --responses J --input H --out C
 - ②-1 h3d 미리보기: -b -tcl X -h3d H -result J
 - ②-3 T01 미리보기: -b -c -tcl X -input T -output J
@@ -15,6 +19,26 @@ p = os.environ.get("FAKE_TOOL_RECORD")
 if p:
     with open(p, "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"tool": "hw", "argv": sys.argv, "cwd": os.getcwd()}) + "\n")
+if "hwfepre.dat" in sys.argv:  # HyperMesh 배치: include 변환 TCL(원본 BATCHRUN_create_include_node_elem.tcl)
+    hm = os.environ.get("FAKE_TOOL_MODE_HM") or m
+    a = sys.argv
+    tcl, mesh_in, inc_out, csv = a[a.index("-tcl") + 1: a.index("-tcl") + 5]
+    if hm == "fail":
+        sys.exit(1)
+    if not os.path.isfile(tcl) or not os.path.isfile(mesh_in):
+        print(f"input not found: {tcl} {mesh_in}", flush=True)
+        sys.exit(2)
+    log = ["hw (fake) HyperMesh batch", f"read {mesh_in}", f"renum csv {'found' if os.path.isfile(csv) else 'missing'}: {csv}"]
+    if hm != "no_output":
+        with open(inc_out, "w") as fh:
+            fh.write("/NODE\n3000001 0 0 0\n3000002 1 0 0\n/SHELL/1\n3000001 1 3000001 3000002 3000001\n")
+        log.append(f"write {inc_out}")
+    if hm != "no_marker":
+        log.append("COMPLETE HM BATCHRUN")
+    with open("log_batch.txt", "w", encoding="utf-8") as fh:
+        fh.write("\n".join(log) + "\n")
+    print("hw (fake) include written", flush=True)
+    sys.exit(3 if hm == "nonzero_with_output" else 0)
 if m == "fail":
     sys.exit(1)
 if m == "error_log":  # 종료코드 0 + 오류처럼 보이는 줄(§8.3: edspy step이 아니면 실패로 보지 않아야 함)
@@ -63,7 +87,9 @@ if "-c" in a:  # T01 미리보기
     print("hw (fake) T01 preview", flush=True)
     sys.exit(0)
 with open(out, "w", encoding="utf-8") as fh:
-    json.dump({"subcases": [{"name": "Subcase 1", "datatypes": [{"name": "Stress", "components": ["vonMises"]}]}]}, fh)
+    json.dump({"h3d": inp.replace("\\", "/"), "num_time_step": 5, "subcases": [{"id": 1, "label": "Subcase 1", "datatypes": [
+        {"name": "Stress", "format": "tensor", "binding": "element", "components": ["vonMises", "P1 (major)"], "layers": ["Max", "Min"]},
+        {"name": "Displacement", "format": "vector", "binding": "node", "components": ["X", "Y", "Z", "Mag"], "layers": []}]}]}, fh)
 if os.environ.get("FAKE_HW_IMAGE") == "1":
     png = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==")
     with open(os.path.join(os.path.dirname(out), "contour_1.png"), "wb") as fh:

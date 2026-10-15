@@ -102,6 +102,7 @@ def test_logs_etag_artifacts(client, loaded_config, worker_factory, engine):
     assert res["limits"]["cpu_cap_enforced"] is IS_WINDOWS and res["limits"]["cores"] >= 1
     st = client.get(f"{API}/status", headers=P).json()
     assert st["worker"]["online"] and st["worker"]["limiter"] == LIMITER and st["limits"]["effective"]["cpu_cap_enforced"] is IS_WINDOWS
-    assert {t["key"]: t["configured"] for t in st["templates"]}["mesh"] is False
+    tm = {t["key"]: t["configured"] for t in st["templates"]}
+    assert tm["rad_assemble"] is False and tm["mesh"] is True  # phase3 §11.4: mesh 기본 = 원본 m_2
     assert st["ui"]["poll_queue_ms"] == 5000
     time.sleep(0)

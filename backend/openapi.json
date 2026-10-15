@@ -2887,7 +2887,8 @@
               "RADIOSS_ASSEM",
               "RESULT_FOLDER",
               "CURATION_INPUT",
-              "SPDM_IMPORT"
+              "SPDM_IMPORT",
+              "PREDICT_INPUT"
             ],
             "title": "Purpose",
             "type": "string"
@@ -3854,6 +3855,16 @@
             "$ref": "#/components/schemas/FeatureState"
           },
           "predict": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "predict_parametric": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FeatureState"

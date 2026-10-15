@@ -255,6 +255,8 @@ _VALUE = re.compile(r"""^(?P<pre>[ \t]*[^:#\s][^:]*:[ \t]*)(?P<val>"(?:[^"\\]|\\
 
 
 def literal(v: Any) -> str:
+    if isinstance(v, list):  # 흐름 표기 목록(예시 파일 commands.* 표기와 같게)
+        return "[" + ", ".join(json.dumps(x, ensure_ascii=False) for x in v) + "]"
     if isinstance(v, bool):
         return "true" if v else "false"
     if isinstance(v, (int, float)):
@@ -314,6 +316,35 @@ def set_yaml_value(text: str, path: tuple[str, ...], value: Any, note: str = "")
             return nl.join(lines)
     lines.insert(start + 1, f"{indent}{key}: {lit}{comment}")
     return nl.join(lines)
+
+
+def remove_yaml_key(text: str, path: tuple[str, str]) -> str:
+    """2단계 키의 한 줄 값(스칼라)을 지운다. 없거나 여러 줄 값이면 그대로."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(nl)
+    b = _block(lines, path[0])
+    if b is None:
+        return text
+    start, end, indent = b
+    rx = re.compile(rf"^{re.escape(indent)}{re.escape(path[1])}:[ \t]*\S")
+    for i in range(start + 1, end):
+        if rx.match(lines[i]):
+            del lines[i]
+            return nl.join(lines)
+    return text
+
+
+# 이전 예시 기본값 → 새 기본값(phase3 §11.8). S6 이전 설정(= predict.mesh_include_name 없음)에서만, 사용자가 바꾸지 않은
+# (이전 기본값 그대로이거나 없는) 키만 갱신하고 표시 키(mesh_include_name)를 넣는다 — 다음 실행부터는 사용자 값(mesh: null 포함)을 건드리지 않음.
+# 새 값은 config/platform.example.yaml에서 읽는다(_REMOVE = 폐지 키 삭제).
+_REMOVE = object()
+UPGRADE_MARKER = ("predict", "mesh_include_name")
+UPGRADES: tuple[tuple[tuple[str, str], tuple[Any, ...], str], ...] = (
+    # (경로, 이전 기본값들, 없을 때: "skip" | "fill"(절이 있으면 채움) | "always"(절이 없어도 만듦))
+    (("commands", "mesh"), (None,), "fill"),                # 이전: mesh: null(SKIPPED) → 원본 m_2 HyperMesh include 변환
+    (("predict", "mesh_output_glob"), ("eps_mesh*",), "skip"),  # 폐지(새 메시는 predict.mesh_include_name)
+    (UPGRADE_MARKER, (), "always"),
+)
 
 
 def _get(data: Any, path: tuple[str, ...]) -> tuple[bool, Any]:
@@ -438,6 +469,22 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
         else:
             note = "유지" if cur == want or want in (None, "") else "유지(설정 파일 값 — 바꾸려면 파일을 직접 수정)"
             rows.append({"key": key, "value": cur, "action": note})
+    upgraded: dict[tuple[str, ...], Any] = {}
+    if not new_file and not _get(base, UPGRADE_MARKER)[0]:
+        for path, olds, missing in UPGRADES:
+            has, cur = _get(base, path)
+            ex_has, want = _get(example, path)
+            fill = missing == "always" or (missing == "fill" and isinstance(base.get(path[0]), dict))
+            if not ((has and cur in olds) or (not has and fill)):
+                continue
+            if ex_has and want is not None:
+                text = set_yaml_value(text, path, want, "" if has else "setup.ps1이 보충")
+                upgraded[path] = want
+                rows.append({"key": ".".join(path), "value": want, "action": "새 기본값으로 갱신(이전 기본값)"})
+            elif not ex_has and has:
+                text = remove_yaml_key(text, path)  # type: ignore[arg-type]
+                upgraded[path] = _REMOVE
+                rows.append({"key": ".".join(path), "value": None, "action": "폐지 키 제거(이전 기본값)"})
     if new_file:
         hdr = "# PhysicsAI 설정 — deploy/setup.ps1이 config/platform.example.yaml에서 생성. 값은 이 파일에서 직접 고친다(setup.ps1을 다시 실행해도 덮어쓰지 않음)."
         nl = "\r\n" if "\r\n" in text else "\n"
@@ -451,13 +498,19 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
         expect = copy.deepcopy(base)
         for key in changed:
             _set(expect, tuple(key.split(".")), desired[tuple(key.split("."))])
+        for path, want in upgraded.items():
+            if want is _REMOVE:
+                del expect[path[0]][path[1]]
+            else:
+                _set(expect, path, want)
         if after != expect:
             config_ok = False
     except yaml.YAMLError:
         config_ok = False
     if not config_ok:
         warnings.append(f"설정 파일을 자동으로 보충하지 못했습니다(형식이 예상과 다름) — 다음 키를 직접 추가하세요: {', '.join(changed)}")
-        text, changed = base_text, []
+        text, changed, upgraded = base_text, [], {}
+    changed += [".".join(p) for p in upgraded]
     config_changed = source != "existing" or bool(changed)
 
     if not alt["found"]:

@@ -134,7 +134,10 @@ def test_full_chain(client, worker_factory, loaded_config, fake_record, monkeypa
     assert "parameter(" not in rendered and "thickness =   3.5000" in rendered and 'NewValue="  4"' in rendered
     assert not rendered.startswith("﻿")
     inputs = sorted(os.listdir(Pd / "INPUT"))
-    assert "eps_mesh_old.inc" not in inputs and "eps_mesh_1.inc" in inputs and "model0_0000.rad" in inputs
+    # phase3 §11.4(V3-S6-1·2): SimLab → EPS_mesh_0000.rad, HyperMesh m_2 → 새 include가 기준본을 대신한다. eps_mesh*는 INPUT에 없음
+    assert inputs == ["104_replace_node_elem.inc", "material.inc", "model0_0000.rad", "model_0001.rad"]
+    assert (Pd / "INPUT" / "104_replace_node_elem.inc").read_bytes() == (Pd / "geom" / "104_replace_node_elem.inc").read_bytes()
+    assert (Pd / "geom" / "EPS_mesh_0000.rad").is_file() and "COMPLETE HM BATCHRUN" in (Pd / "geom" / "log_batch.txt").read_text()
     pred_rec = [r for r in read_record(fake_record) if "--predict-write" in r["argv"]][-1]
     assert pred_rec["env"]["EDS_TNS_ACTVN_CHCKPT"] == "1"
     assert pred_rec["argv"][1:] == ["--physicsai", "--predict-write", str(Pd / "RESULT" / "model0_0000_pred.h3d"),
@@ -146,7 +149,8 @@ def test_full_chain(client, worker_factory, loaded_config, fake_record, monkeypa
     res = jd["result"]
     assert res["preview_json_artifact_id"] and len(res["image_artifact_ids"]) == 1 and res["curve_artifact_id"]
     steps = {s_["step_key"]: s_ for s_ in jd["steps"]}
-    assert steps["MESH"]["state"] == "SKIPPED" and steps["RESPONSE_EXTRACT"]["state"] == "SKIPPED"
+    assert steps["MESH"]["state"] == "SUCCEEDED" and steps["RESPONSE_EXTRACT"]["state"] == "SKIPPED"
+    assert jd["warnings"] == []
     assert res["response_table"] == [
         {"name": "MaxStress", "unit": "MPa", "predicted": None, "nearest_measured": 110.0, "diff_pct": None},
         {"name": "Disp", "unit": "mm", "predicted": None, "nearest_measured": 2.5, "diff_pct": None},
@@ -242,7 +246,7 @@ def test_input_zip_and_display_paths(client, worker_factory, loaded_config, engi
     assert "attachment" in r.headers["content-disposition"]
     zf = zipfile.ZipFile(io.BytesIO(r.content))
     assert sorted(zf.namelist()) == sorted(n for n in os.listdir(inp_dir) if n != "evil.inc")
-    assert "model0_0000.rad" in zf.namelist() and "eps_mesh_1.inc" in zf.namelist()
+    assert "model0_0000.rad" in zf.namelist() and "104_replace_node_elem.inc" in zf.namelist()
     assert zf.read("model0_0000.rad") == (inp_dir / "model0_0000.rad").read_bytes()
     assert job(client, pj["id"])["input_display_path"] == str(inp_dir)
 

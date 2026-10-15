@@ -165,7 +165,7 @@ def test_doe_gen_chain(p2_env, fake_record, monkeypatch):
     assert cfg["DOE_METHOD_OPTIONS"] == {"RANDOM_SEED": 7} and cfg["DIR_WORK"] == str(D).replace("\\", "/")
     assert cfg["RADIOSS_ASSEM_DIR"].endswith(f"01_train/radioss_assem/{doe_id}")
     A = ai / "dg1" / "01_train" / "radioss_assem" / doe_id
-    assert sorted(os.listdir(A)) == ["drop_0000.rad", "drop_0001.rad", "eps_mesh_0000.rad", "mat.inc"]
+    assert sorted(os.listdir(A)) == ["RENUM_INIT.csv", "drop_0000.rad", "drop_0001.rad", "eps_mesh_0000.rad", "mat.inc"]
     for n in ("simlab_parametered_mesh.tpl", "cushion_parametric.prt", "DATA_doe_design_type.json",
               "BATCHRUN_create_include_node_elem.tcl", "BATCHRUN_hst_gen_radioss_input.py"):
         assert (D / n).is_file(), n

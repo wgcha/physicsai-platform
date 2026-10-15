@@ -98,6 +98,7 @@ SIMLAB_TPL_TEMPLATE = """\ufeff
 #***************************************************************
 import simlab
 dir_file_prt = r"C:/old/place/old_part.prt"
+dir_file_export = "EPS_mesh_0000.rad"
 xml = '''
 <Parameters Value="">
    <paramitem Name="OLD_PARAM" NewValue="{var_1, %3i}" Value="1"/>

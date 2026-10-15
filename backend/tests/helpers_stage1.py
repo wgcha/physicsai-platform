@@ -32,7 +32,8 @@ def make_inputs(sroot: Path) -> tuple[Path, Path]:
     cad.write_bytes(b"PRT" * 100)
     assem = sroot / "00_inbox" / "radioss_assem"
     assem.mkdir(parents=True)
-    (assem / "drop_0000.rad").write_text("#include eps_mesh_1.inc\n")
+    (assem / "drop_0000.rad").write_text("#include 104_replace_node_elem.inc\n")
+    (assem / "RENUM_INIT.csv").write_text("part,node_start\n1,3000001\n")  # phase3 §11.4: ①→④로 이어지는 번호 재지정 표
     (assem / "drop_0001.rad").write_text("/ENGINE\n")
     (assem / "eps_mesh_0000.rad").write_text("old mesh starter\n")
     (assem / "mat.inc").write_text("mat\n")

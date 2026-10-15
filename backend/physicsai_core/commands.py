@@ -47,7 +47,13 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
         True,
     ),
     "geom_update": TemplateSpec(frozenset({"simlab", "rendered_script", "cad_file", "work_dir"}), frozenset(), False),
-    "mesh": TemplateSpec(frozenset({"simlab", "rendered_script", "cad_file", "work_dir"}), frozenset(), False),
+    # phase3 §11.4: 원본 m_2(HyperMesh include 변환). {simlab}·{rendered_script}·{cad_file}은 SimLab 변형 호환용
+    "mesh": TemplateSpec(
+        frozenset({"hw", "simlab", "include_tcl", "simlab_mesh", "mesh_inc", "renum_csv", "work_dir", "rendered_script",
+                   "cad_file"}),
+        frozenset(),
+        False,
+    ),
     "rad_assemble": TemplateSpec(frozenset({"hw", "work_dir", "starter", "input_dir"}), frozenset(), False),
     "edspy_predict": TemplateSpec(
         frozenset({"edspy", "pred_h3d", "model_psmdl", "model_pscfg", "starter"}),

@@ -15,9 +15,11 @@ from ..naming import NAME_RE, RUN_KEY_RE, TPL_NAME  # noqa: F401 - 모듈 속성
 from ..paths import is_link_or_reparse
 from ..tpl_render import VALID_FMT_RE, parse_tpl
 from .param_set_files import ParamSetFolder, _load_parameters, _load_responses, _load_samples, _p, _read_text
+from .prepared_input import is_mesh_file
 
 
-def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, starter_glob: str) -> ParamSetFolder:
+def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, starter_glob: str,
+                    renum_csv_name: str | None = None) -> ParamSetFolder:
     f = ParamSetFolder()
     total = 0
     for dirpath, dirnames, filenames in os.walk(folder, followlinks=False):
@@ -76,11 +78,15 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
     if not os.path.isdir(assem):
         _p(f, "ASSEM_MISSING", "radioss_assem 폴더가 필요합니다", "radioss_assem")
     else:
+        # phase3 §11.4(§15.4 갱신): eps_mesh로 시작하는 파일은 무시(starter로 세지 않고 복사 안 함), RENUM csv는 있으면 복사
         files = sorted(
             x for x in os.listdir(assem)
-            if os.path.isfile(os.path.join(assem, x)) and x.lower().endswith((".rad", ".inc"))
+            if os.path.isfile(os.path.join(assem, x)) and x.lower().endswith((".rad", ".inc")) and not is_mesh_file(x)
         )
         f.assem_files = files
+        if renum_csv_name:
+            f.renum_csv = next((x for x in sorted(os.listdir(assem)) if x.lower() == renum_csv_name.lower()
+                                and os.path.isfile(os.path.join(assem, x))), None)
         starters = [x for x in files if fnmatch.fnmatch(x, starter_glob)]
         if len(starters) != 1:
             _p(f, "STARTER_COUNT", f"radioss_assem에 starter({starter_glob})가 정확히 1개 있어야 합니다(현재 {len(starters)}개)", "radioss_assem")
@@ -114,7 +120,7 @@ def write_normalized(f: ParamSetFolder, src: str, dst: str, source_path: str) ->
             originals[name] = sha256_file(sp)
     copy_file(os.path.join(src, "cad", f.cad_file or ""), os.path.join(dst, "cad", f.cad_file or ""))
     copy_file(os.path.join(src, TPL_NAME), os.path.join(dst, TPL_NAME))
-    for x in f.assem_files:
+    for x in f.assem_files + ([f.renum_csv] if f.renum_csv else []):
         copy_file(os.path.join(src, "radioss_assem", x), os.path.join(dst, "radioss_assem", x))
     write_json(
         os.path.join(dst, "source.json"),

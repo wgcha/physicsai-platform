@@ -13,6 +13,7 @@ from physicsai_core.stage2_curation import curation as cu
 from physicsai_core.stage2_curation import spdm
 from physicsai_core.stage3_model.dataset_split import collect_h3d, n_eval_groups, split_files
 from physicsai_core.stage4_predict import param_sets as ps_mod
+from physicsai_core.stage4_predict import prepared_input
 
 from ..auth import Principal
 from ..context import AppContext
@@ -20,8 +21,7 @@ from .common import require_power
 
 
 def starters_in(folder: str, glob_: str) -> list[str]:
-    return sorted(n for n in os.listdir(folder) if os.path.isfile(os.path.join(folder, n))
-                  and fnmatch.fnmatch(n, glob_) and not n.lower().startswith("eps_mesh"))
+    return prepared_input.starter_candidates(folder, glob_)
 
 
 P2_PURPOSES = ("CAD_FILE", "RADIOSS_ASSEM", "RESULT_FOLDER", "CURATION_INPUT", "SPDM_IMPORT")
@@ -50,6 +50,8 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
     require_power(principal, s["project_id"])
     if body.purpose in P2_PURPOSES:
         return inspect_phase2(ctx, s, body)
+    if body.purpose == "PREDICT_INPUT":
+        return inspect_predict_input(ctx, body.path)
     roots = allowed_roots(s_cfg, imports=body.purpose == "MODEL_FOLDER")
     cp = check_user_path(body.path, roots)
     problems: list[dict[str, Any]] = []
@@ -80,10 +82,19 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
             problems.append({"code": "LOG_SELECT_REQUIRED", "message": "학습 로그 후보가 여러 개입니다. 로그 파일을 선택하세요"})
     else:
         f = ps_mod.validate_folder(cp.path, max_samples=s_cfg.param_set.max_samples,
-                                   max_total_bytes=s_cfg.param_set.max_total_bytes, starter_glob=s_cfg.predict.starter_glob)
+                                   max_total_bytes=s_cfg.param_set.max_total_bytes, starter_glob=s_cfg.predict.starter_glob,
+                                   renum_csv_name=s_cfg.predict.renum_csv_name)
         problems.extend(f.problems)
         summary = f.summary()
     return {"normalized_path": cp.path, "ok": not problems, "problems": problems, "summary": summary}
+
+
+def inspect_predict_input(ctx: AppContext, raw: str) -> dict[str, Any]:
+    """phase3 §11.5 준비된 입력(파일·폴더): 복사 계획 요약과 문제 목록(작업 생성 검증과 같은 규칙)."""
+    cp = prepared_input.check_path(raw, ctx.settings)
+    plan = prepared_input.plan_copy(cp.path, ctx.settings)
+    return {"normalized_path": cp.path, "ok": not plan.problems, "problems": plan.problems,
+            "summary": prepared_input.summary(cp.path, plan, ctx.settings)}
 
 
 def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[str, Any]:

@@ -44,9 +44,7 @@ def write_samples(root: Path, sroot: Path) -> dict[str, str]:
     cad = inbox / "cad" / "demo_bracket.prt"
     _write_if_missing(cad, b"FAKE-PRT " * 64)
     assem = inbox / "radioss_assem"
-    _write_if_missing(assem / "drop_0000.rad", "#include eps_mesh_1.inc\n/BEGIN\n")
-    _write_if_missing(assem / "drop_0001.rad", "/ENGINE\n/RUN/drop/1\n")
-    _write_if_missing(assem / "material.inc", "/MAT/PLAS_JOHNS/1\n")
+    _write_assem(assem)
     # ①-5 결과 가져오기용(PBS 대신): run__00001 ~ run__00010
     results = root / "import" / "hpc_results"
     for k in range(1, 11):
@@ -66,10 +64,9 @@ def write_samples(root: Path, sroot: Path) -> dict[str, str]:
     _write_if_missing(ps / "simlab_parametered_mesh.tpl", (
         '\ufeff{parameter(var_1, "THK_1", 3.0, 2.0, 5.0)}\n{parameter(var_2, "RIB_H", 12.5, 10.0, 15.0)}\n'
         "#***************************************************************\n"
-        'dir_file_prt = r"./demo_bracket.x_t"\nthickness = {var_1, %8.4f}\n'
+        'dir_file_prt = r"./demo_bracket.x_t"\ndir_file_export = "EPS_mesh_0000.rad"\nthickness = {var_1, %8.4f}\n'
         '<paramitem Name="RIB_H" NewValue="{var_2, %8.4f}" Value="12.5"/>\n'))
-    _write_if_missing(ps / "radioss_assem" / "drop_0000.rad", "#include eps_mesh_1.inc\n")
-    _write_if_missing(ps / "radioss_assem" / "drop_0001.rad", "/ENGINE\n")
+    _write_assem(ps / "radioss_assem")
     _write_if_missing(ps / "parameters.json", json.dumps({"schema_version": 1, "unit_system": "mm-ton-s", "parameters": [
         {"name": "THK_1", "nominal": 3.0, "min": 2.0, "max": 5.0, "unit": "mm"},
         {"name": "RIB_H", "nominal": 12.5, "min": 10.0, "max": 15.0, "unit": "mm"}]}, ensure_ascii=False, indent=1))
@@ -78,7 +75,25 @@ def write_samples(root: Path, sroot: Path) -> dict[str, str]:
     rows = ["run_key,THK_1,RIB_H,resp:MaxStress,resp:Disp"] + [
         f"run_{i:04d},{2.0 + i * 0.6:.1f},{10.0 + i:.1f},{100 + i * 7},{1.5 + i * 0.4:.2f}" for i in range(6)]
     _write_if_missing(ps / "samples.csv", "\ufeff" + "\n".join(rows) + "\n")
-    return {"cad": str(cad), "radioss_assem": str(assem), "results": str(results), "model": str(model), "param_set": str(ps)}
+    # ④ 준비된 입력 예측(phase3 §11.5)용: 사용자가 준비한 Radioss 입력 폴더(읽기만 — 플랫폼은 복사본으로 예측)
+    prepared = root / "import" / "prepared_case"
+    _write_if_missing(prepared / "Face_Drop_0000.rad", "#include part_mesh.inc\n#include material.inc\n/BEGIN\n")
+    _write_if_missing(prepared / "Face_Drop_0001.rad", "/ENGINE\n/RUN/Face_Drop/1\n")
+    _write_if_missing(prepared / "part_mesh.inc", "/NODE\n1 0 0 0\n")
+    _write_if_missing(prepared / "material.inc", "/MAT/PLAS_JOHNS/1\n")
+    return {"cad": str(cad), "radioss_assem": str(assem), "results": str(results), "model": str(model), "param_set": str(ps),
+            "prepared_input": str(prepared)}
+
+
+def _write_assem(assem: Path) -> None:
+    """원본 조립 폴더 형태(phase3 §11.1): starter가 새 메시 include(104_replace_node_elem.inc)를 #include, 기준 include·
+    RENUM_INIT.csv·SimLab 메시 사본(EPS_mesh_0000.rad — 복사·starter 셈에서 제외)."""
+    _write_if_missing(assem / "drop_0000.rad", "#include 104_replace_node_elem.inc\n#include material.inc\n/BEGIN\n")
+    _write_if_missing(assem / "drop_0001.rad", "/ENGINE\n/RUN/drop/1\n")
+    _write_if_missing(assem / "material.inc", "/MAT/PLAS_JOHNS/1\n")
+    _write_if_missing(assem / "104_replace_node_elem.inc", "/NODE\n3000001 0 0 0\n")
+    _write_if_missing(assem / "RENUM_INIT.csv", "part,node_start,elem_start\n1,3000001,3000001\n")
+    _write_if_missing(assem / "EPS_mesh_0000.rad", "#RADIOSS STARTER (SimLab mesh)\n")
 
 
 def cmd_seed(args: argparse.Namespace) -> int:

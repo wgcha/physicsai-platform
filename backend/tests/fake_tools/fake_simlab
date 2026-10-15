@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """가짜 SimLab.bat(§18.1, phase2 §16.1).
 
-- 형상 갱신(1차): -auto SCRIPT -nographics → cwd에 eps_mesh_1.inc
+- 형상 갱신(phase3 §11.4, V3-S6-14): -auto SCRIPT -nographics → 렌더 스크립트의 dir_file_export(없으면 EPS_mesh_0000.rad)를
+  cwd에 작성(원본 tpl:110). 스크립트의 dir_file_prt(원본 tpl:19, 상대경로는 cwd 기준)가 없으면 종료코드 2
 - 파라미터 추출(2차): -auto L CAD XML -nographics → <L stem>_LogFile.txt에 Passed 4줄, XML
   L과 같은 폴더에 get_parameter_from_cad_core*.pyd가 없으면 종료코드 4
 모드(FAKE_TOOL_MODE_SIMLAB > FAKE_TOOL_MODE): ok | fail | hang | no_output | bad_xml
+  | nonzero_with_output(형상 갱신 출력을 쓰고 종료코드 3) | with_include(형상 갱신 때 include도 직접 작성 — mesh null 변형,
+  이름 FAKE_SIMLAB_INCLUDE, 기본 104_replace_node_elem.inc)
 """
-import glob, json, os, subprocess, sys, time
+import glob, json, os, re, subprocess, sys, time
 
 m = os.environ.get("FAKE_TOOL_MODE_SIMLAB") or os.environ.get("FAKE_TOOL_MODE") or "ok"
 p = os.environ.get("FAKE_TOOL_RECORD")
@@ -53,6 +56,23 @@ if len(a) == 6:  # 파라미터 추출: -auto L CAD XML -nographics
         fh.write(body)
     print("SimLab (fake) parameters extracted", flush=True)
     sys.exit(0)
-with open("eps_mesh_1.inc", "w") as fh:
-    fh.write("/NODE\n1 0 0 0\n")
-print("SimLab (fake) mesh written", flush=True)
+# 형상 갱신·메싱·내보내기 1회(원본 tpl:43-169)
+with open(script, encoding="utf-8-sig") as fh:
+    body = fh.read()
+mexp = re.search(r'dir_file_export\s*=\s*r?"([^"]*)"', body)
+export = mexp.group(1) if mexp else "EPS_mesh_0000.rad"
+mprt = re.search(r'dir_file_prt\s*=\s*r?"([^"]*)"', body)
+if mprt and not os.path.isfile(mprt.group(1)):
+    print(f"CAD not found: {mprt.group(1)} (cwd {os.getcwd()})", flush=True)
+    sys.exit(2)
+if m == "no_output":
+    print("SimLab (fake) finished without export", flush=True)
+    sys.exit(0)
+with open(export, "w") as fh:
+    fh.write("#RADIOSS STARTER\n/NODE\n1 0 0 0\n2 1 0 0\n/SHELL/1\n1 1 2 2 1\n")
+if m == "with_include":
+    with open(os.environ.get("FAKE_SIMLAB_INCLUDE") or "104_replace_node_elem.inc", "w") as fh:
+        fh.write("/NODE\n3000001 0 0 0\n")
+print("Complete export", flush=True)
+if m == "nonzero_with_output":
+    sys.exit(3)

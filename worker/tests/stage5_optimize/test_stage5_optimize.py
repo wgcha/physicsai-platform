@@ -136,7 +136,8 @@ def test_optimize_unrecognized_and_candidates(tmp_path, fake_tools, engine, fake
         assert w.run_once_slot() == "SUCCEEDED"
         cand = c.get(f"{API}/studies/{sid}/optimize/response-candidates?model_id={mid}", headers=P).json()
         assert cand["source_job_id"] == pj["id"]
-        assert cand["h3d"]["subcases"][0]["label"] == "Subcase 1" and cand["h3d"]["subcases"][0]["datatypes"][0]["components"] == ["vonMises"]
+        assert cand["h3d"]["subcases"][0]["label"] == "Subcase 1" and cand["h3d"]["subcases"][0]["datatypes"][0]["components"] == ["vonMises", "P1 (major)"]
+        assert cand["h3d"]["subcases"][0]["id"] == 1 and cand["h3d"]["subcases"][0]["datatypes"][0]["layers"] == ["Max", "Min"]
         assert cand["xydata"] == {"requests": {"Impact_force": []}}
         j = submit(c, sid, "OPTIMIZE", {"responses": RESP, "max_designs": 2})
         assert w.run_once_slot() == "SUCCEEDED", job(c, j["id"])

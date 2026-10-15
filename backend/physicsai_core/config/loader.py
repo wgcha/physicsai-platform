@@ -96,4 +96,14 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
         w.append(ConfigIssue("hpc.command", "hpc.gateway=command인데 hpc.command가 없어 PBS 제출이 비활성입니다"))
     if "worker.gpu_query" in absent:
         w.append(ConfigIssue("worker.gpu_query", "GPU 조회 명령이 없어 GPU 사용량을 표시하지 않습니다"))
+    if _has(data, "predict", "mesh_output_glob"):
+        w.append(ConfigIssue("predict.mesh_output_glob",
+                             "폐지된 키입니다 — 값이 적용되지 않습니다(새 메시는 predict.mesh_include_name, 지워도 됩니다)"))
+    from ..features import predict_parametric_missing  # features가 config를 import하므로 지역 import
+
+    tmpl, res = predict_parametric_missing(s)
+    if not tmpl and res:
+        w.append(ConfigIssue(res[0], "commands.mesh가 {include_tcl}을 쓰는데 이 자원이 비어 있어 ④ 파라미터 예측(형상 생성)이 비활성입니다"))
+    elif "commands.geom_update" in tmpl:
+        w.append(ConfigIssue("commands.geom_update", "형상 갱신 템플릿이 없어 ④ 파라미터 예측(형상 생성)이 비활성입니다 — 준비된 입력 예측만 쓸 수 있습니다"))
     return w
