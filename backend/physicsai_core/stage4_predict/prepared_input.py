@@ -11,7 +11,8 @@ import fnmatch
 import os
 from typing import Any, NamedTuple
 
-from ..paths import CheckedPath, PathError, allowed_roots, check_user_path, file_safety_problem, is_link_or_reparse
+from ..paths import (CheckedPath, PathError, allowed_roots, check_user_path, file_name_problem_message, file_safety_problem,
+                     is_link_or_reparse)
 
 MESH_PREFIX = "eps_mesh"  # SimLab 메시 산출(원본 opti:300, GUI :427-445) — 복사·starter 셈에서 제외(대소문자 무시)
 _COPY_EXTS = (".rad", ".inc")
@@ -80,8 +81,7 @@ def plan_copy(path: str, settings: Any) -> CopyPlan:
     for f in files:
         why = file_safety_problem(f, folder)
         if why:
-            msg = "링크 파일은 쓸 수 없습니다" if why == "링크" else f"파일 이름에 쓸 수 없는 문자가 있습니다({why})"
-            add("FILE_NAME_UNSAFE", f"{os.path.basename(f)}: {msg}")
+            add("FILE_NAME_UNSAFE", f"{os.path.basename(f)}: {file_name_problem_message(why)}")
             continue
         try:
             total += os.path.getsize(f)

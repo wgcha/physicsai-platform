@@ -8,7 +8,7 @@ from typing import Any
 
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
-from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path, file_safety_problem
+from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path, file_name_problem_message, file_safety_problem
 from physicsai_core.stage2_curation import curation as cu
 from physicsai_core.stage2_curation import spdm
 from physicsai_core.stage3_model.dataset_split import collect_h3d, n_eval_groups, split_files
@@ -61,7 +61,8 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
         for f in files:
             why = file_safety_problem(f, cp.path)
             if why:
-                problems.append({"code": "PATH_UNSAFE", "message": f"{why}가 포함된 파일", "file": os.path.relpath(f, cp.path)})
+                problems.append({"code": "PATH_UNSAFE", "message": file_name_problem_message(why),
+                                 "file": os.path.relpath(f, cp.path)})
         groups = len(files) if s_cfg.dataset.split_group == "file" else len({os.path.dirname(f) for f in files})
         if len(files) < s_cfg.dataset.min_h3d_files or groups < 2:
             problems.append({"code": "TOO_FEW_H3D", "message": f"h3d 파일이 {s_cfg.dataset.min_h3d_files}개 이상 필요합니다"})

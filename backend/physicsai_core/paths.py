@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import os
+import unicodedata
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -39,6 +40,9 @@ STUDY_OUTPUT_DIRS_2 = frozenset({
 })
 ALL_OUTPUT_DIRS = tuple(sorted(STUDY_OUTPUT_DIRS | STUDY_OUTPUT_DIRS_2))
 PLATFORM_DIR = "_platform"  # <ai_root>/_platform (phase2 §13.2) — 사용자 입력 경로로 지정 불가
+# 외부 명령 인자로 들어가는 파일 이름(준비된 입력·파라미터 세트·데이터셋 h3d)의 추가 금지 문자(phase3 D3-35).
+# cmd 메타문자(PATH_META_CHARS)에 더해 .bat 재해석 구분자(; , =)·괄호·작은따옴표.
+FILE_NAME_EXTRA_CHARS = frozenset(";,=()'")
 _PROTECTED_ROOTS: list[str] = []
 
 
@@ -138,9 +142,11 @@ def check_user_path(
         raise PathError("PATH_OUTSIDE_ROOT", "허용된 루트(AI 루트) 밖의 경로입니다", path=raw)
     rel = os.path.relpath(norm, matched)
     rel_parts = [] if rel == "." else rel.split(os.sep)
-    if BACKUP_DIR in rel_parts:
+    # 대소문자 무시(phase3 D3-34): Windows에서 `_BACKUP`·`_Platform`으로 우회하지 못하게 한다.
+    folded = [x.casefold() for x in rel_parts]
+    if BACKUP_DIR in folded:
         raise PathError("PATH_UNSAFE", "_backup 폴더 아래 경로는 쓸 수 없습니다", path=raw)
-    if rel_parts and rel_parts[0] == PLATFORM_DIR:
+    if folded and folded[0] == PLATFORM_DIR:
         raise PathError("PATH_UNSAFE", "플랫폼 폴더(_platform)는 입력 경로로 쓸 수 없습니다", path=raw)
     cur = matched
     for part in rel_parts:
@@ -171,7 +177,7 @@ def check_dataset_input(path: str, ai_root: str) -> list[str]:
             continue
         base = p if is_under(p, root) else os.path.normpath(path)
         rel = os.path.relpath(base, root)
-        parts = [] if rel == "." else rel.split(os.sep)
+        parts = [] if rel == "." else [x.casefold() for x in rel.split(os.sep)]  # 대소문자 무시(D3-34)
         if not parts:
             raise PathError("PATH_UNSAFE", "AI 루트 전체는 데이터셋 입력으로 쓸 수 없습니다. h3d 폴더를 지정하세요", path=path)
         if len(parts) >= 2 and parts[1] in STUDY_OUTPUT_DIRS:
@@ -187,9 +193,43 @@ def check_dataset_input(path: str, ai_root: str) -> list[str]:
     return []
 
 
+def name_unsafe_chars(name: str) -> str | None:
+    """파일·폴더 이름 1개에 쓸 수 없는 문자 표시(phase3 D3-35). 문제 없으면 None.
+
+    거부: 제어·서식 문자, 공백류(전각·줄바꿈 없는 공백 포함), cmd 메타문자 `& | < > ^ % ! "`, `; , = ( ) '`.
+    영숫자·`_`·`-`·`.`·한글 등 그 밖의 글자는 허용.
+    """
+    bad: set[str] = set()
+    for c in name:
+        cat = unicodedata.category(c)
+        if c.isspace() or cat.startswith("Z"):
+            bad.add("공백")
+        elif cat.startswith("C"):
+            bad.add("제어문자")
+        elif c in PATH_META_CHARS or c in FILE_NAME_EXTRA_CHARS:
+            bad.add(c)
+    if not bad:
+        return None
+    words = sorted(x for x in bad if len(x) > 1)
+    return " ".join([*words, *sorted(x for x in bad if len(x) == 1)])
+
+
+def file_name_problem_message(why: str) -> str:
+    """`file_safety_problem`·`name_unsafe_chars` 결과의 사용자 문구."""
+    return "링크 파일은 쓸 수 없습니다" if why == "링크" else f"파일 이름에 쓸 수 없는 문자({why})가 있습니다"
+
+
 def file_safety_problem(path: str, base: str) -> str | None:
-    """입력 트리 안 파일 1개의 안전성(공백·메타문자·링크). 문제 없으면 None."""
+    """입력 트리 안 파일 1개의 안전성. 문제 없으면 None, 있으면 "링크" 또는 문제 문자 표시.
+
+    `base`(검사를 마친 사용자 경로)는 경로 규칙(`unsafe_reason`), base 아래 이름(폴더·파일)은 더 엄격한
+    `name_unsafe_chars`로 본다 — 이 이름들은 복사·외부 명령 인자로 쓰인다(phase3 D3-35).
+    """
     rel = os.path.relpath(path, base)
+    for part in rel.split(os.sep):
+        reason = name_unsafe_chars(part)
+        if reason:
+            return reason
     reason = unsafe_reason(path)
     if reason:
         return reason

@@ -72,6 +72,21 @@ def test_v3_s6_6_param_set_folder_ignores_eps_mesh_and_copies_csv(client, loaded
         "material.inc", "model0_0000.rad", "model_0001.rad"]
 
 
+def test_d3_35_param_set_file_names(client, loaded_config):
+    """phase3 D3-35: 파라미터 세트의 CAD·radioss_assem 파일 이름도 `; , = ( ) '`·공백 거부(외부 명령 인자·INPUT 복사본)."""
+    ai = Path(loaded_config.settings.storage.ai_root)
+    sid = _sid(client)
+    d = make_param_set_folder(ai / "S1" / "00_inbox")
+    os.replace(d / "cad" / "bracket.x_t", d / "cad" / "bracket(v2).x_t")
+    (d / "radioss_assem" / "extra=1.inc").write_text("x")
+    insp = client.post(f"{API}/studies/{sid}/paths/inspect", headers=PW, json={"purpose": "PARAM_SET", "path": str(d)}).json()
+    assert not insp["ok"]
+    got = [(p["code"], p.get("file"), p["message"]) for p in insp["problems"]]
+    assert ("PATH_UNSAFE", "cad/bracket(v2).x_t", "CAD 파일 이름에 쓸 수 없는 문자(( ))가 있습니다") in got
+    assert ("PATH_UNSAFE", "radioss_assem/extra=1.inc", "파일 이름에 쓸 수 없는 문자(=)가 있습니다") in got
+    assert client.post(f"{API}/studies/{sid}/param-sets", headers=PW, json={"path": str(d)}).status_code == 422
+
+
 # ---- V3-S6-9 준비된 입력 경로 검사 --------------------------------------------------------------------------------------
 
 
@@ -114,7 +129,18 @@ def test_v3_s6_9_prepared_path_rejections(client, loaded_config, worker_factory,
     bad_name = _case(imp / "badname")
     (bad_name / "x;y.inc").write_text("x")                                # .bat 재해석 문자는 경로 단계에서 통과 → 이름 검사
     (bad_name / "has space.inc").write_text("x")
-    assert problems(bad_name) == ["FILE_NAME_UNSAFE"]
+    (bad_name / "run(1),v=2'.inc").write_text("x")                       # D3-35: ; , = ( ) ' 도 거부
+    assert problems(bad_name) == ["FILE_NAME_UNSAFE"] * 3
+    insp = _inspect(client, sid, bad_name).json()
+    assert [p["message"] for p in insp["problems"]] == [
+        "has space.inc: 파일 이름에 쓸 수 없는 문자(공백)가 있습니다",
+        "run(1),v=2'.inc: 파일 이름에 쓸 수 없는 문자(' ( ) , =)가 있습니다",
+        "x;y.inc: 파일 이름에 쓸 수 없는 문자(;)가 있습니다",
+    ]
+    ok_names = _case(imp / "한글_case-1.v2")                              # 영숫자·_·-·.·한글은 허용
+    (ok_names / "브래킷-부품_1.inc").write_text("x")
+    assert _job(client, sid, "PREDICT", {**OK, "input_path": str(ok_names)}).status_code == 201
+    assert w.run_once_slot() == "SUCCEEDED"
     assert problems(_case(imp / "zero", starters=())) == ["STARTER_COUNT"]
     assert problems(_case(imp / "two", starters=("A_0000.rad", "B_0000.rad"))) == ["STARTER_COUNT"]
     assert problems(real / "part.inc") == ["INPUT_EXT"]

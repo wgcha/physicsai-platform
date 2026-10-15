@@ -6,13 +6,12 @@ import csv
 import fnmatch
 import io
 import os
-import re
 from datetime import datetime, timezone
 from typing import Any
 
 from ..fileutil import copy_file, sha256_file, write_json, write_text
 from ..naming import NAME_RE, RUN_KEY_RE, TPL_NAME  # noqa: F401 - 모듈 속성 유지(architecture §1.1 naming)
-from ..paths import is_link_or_reparse
+from ..paths import file_name_problem_message, is_link_or_reparse, name_unsafe_chars
 from ..tpl_render import VALID_FMT_RE, parse_tpl
 from .param_set_files import ParamSetFolder, _load_parameters, _load_responses, _load_samples, _p, _read_text
 from .prepared_input import is_mesh_file
@@ -53,8 +52,9 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
             _p(f, "CAD_COUNT", f"cad 폴더에는 CAD 파일이 정확히 1개 있어야 합니다(현재 {len(cads)}개)", "cad")
         else:
             f.cad_file = cads[0]
-            if re.search(r"[\s&|<>^%!\"]", cads[0]):
-                _p(f, "PATH_UNSAFE", "CAD 파일 이름에 공백·cmd 메타문자를 쓸 수 없습니다", "cad/" + cads[0])
+            why = name_unsafe_chars(cads[0])
+            if why:
+                _p(f, "PATH_UNSAFE", f"CAD {file_name_problem_message(why)}", "cad/" + cads[0])
     # tpl
     tpl = os.path.join(folder, TPL_NAME)
     if not os.path.isfile(tpl):
@@ -84,6 +84,11 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
             if os.path.isfile(os.path.join(assem, x)) and x.lower().endswith((".rad", ".inc")) and not is_mesh_file(x)
         )
         f.assem_files = files
+        # 복사 뒤 외부 명령 인자(starter·include)로 쓰인다(phase3 D3-35)
+        for x in files:
+            why = name_unsafe_chars(x)
+            if why:
+                _p(f, "PATH_UNSAFE", file_name_problem_message(why), "radioss_assem/" + x)
         if renum_csv_name:
             f.renum_csv = next((x for x in sorted(os.listdir(assem)) if x.lower() == renum_csv_name.lower()
                                 and os.path.isfile(os.path.join(assem, x))), None)

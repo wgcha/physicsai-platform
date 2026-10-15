@@ -10,7 +10,8 @@ import pytest
 from physicsai_core.commands import TEMPLATE_SPECS, cmd_c_prefix, render_argv, validate_template
 from physicsai_core.errors import StepFailure
 from physicsai_core.limits import compute_limits
-from physicsai_core.paths import PathError, backup_existing, check_user_path, resolve_in_study
+from physicsai_core.paths import (PathError, backup_existing, check_dataset_input, check_user_path, file_name_problem_message,
+                                  file_safety_problem, name_unsafe_chars, resolve_in_study)
 from physicsai_core.state_machine import ALL_STATES, TRANSITIONS, IllegalTransition, check_transition
 
 # ---- V-SM-1 -----------------------------------------------------------------
@@ -141,6 +142,42 @@ def test_path_checks(tmp_path):
     with pytest.raises(PathError) as ei:
         check_user_path(str(tmp_path / "ai2"), [str(root)])
     assert ei.value.code == "PATH_OUTSIDE_ROOT"
+
+
+def test_d3_34_backup_platform_case_insensitive(tmp_path):
+    """phase3 D3-34: Windows에서 `_BACKUP`·`_Platform`으로 우회하지 못하게 대소문자 무시."""
+    root = tmp_path / "ai"
+    for rel in ("s/_BACKUP/x", "s/_Backup", "_Platform/x", "_PLATFORM", "s/in/_bAcKuP/y"):
+        with pytest.raises(PathError) as ei:
+            check_user_path(str(root / rel), [str(root)], must_exist=False)
+        assert ei.value.code == "PATH_UNSAFE", rel
+    # Study 안의 `_platform`(루트 직계가 아님)·비슷한 이름은 그대로 허용
+    for rel in ("s/_platform_x", "s/in/_platform", "s/backup"):
+        assert check_user_path(str(root / rel), [str(root)], must_exist=False).path == str(root / rel)
+    (root / "S1" / "_Backup" / "h3d").mkdir(parents=True)
+    with pytest.raises(PathError):
+        check_dataset_input(str(root / "S1" / "_Backup" / "h3d"), str(root))
+
+
+def test_d3_35_file_name_chars(tmp_path):
+    """phase3 D3-35: 외부 명령 인자로 들어가는 파일 이름은 `; , = ( ) '`·공백류도 거부, 영숫자·_·-·.·한글은 허용."""
+    for ok in ("Face_Drop_0000.rad", "part-1.v2.inc", "브래킷_모델.rad", "A1"):
+        assert name_unsafe_chars(ok) is None, ok
+    cases = {"a;b.rad": ";", "a,b.inc": ",", "a=b.inc": "=", "run(1).rad": "( )", "it's.inc": "'",
+             "a b.inc": "공백", "a\u3000b.inc": "공백", "a\xa0b.inc": "공백", "a\tb": "공백", "a&b": "&",
+             "a\u200bb.inc": "제어문자", "x(1);y.rad": "( ) ;"}
+    for name, why in cases.items():
+        assert name_unsafe_chars(name) == why, name
+    assert file_name_problem_message("( )") == "파일 이름에 쓸 수 없는 문자(( ))가 있습니다"
+    assert file_name_problem_message("링크") == "링크 파일은 쓸 수 없습니다"
+    base = tmp_path / "in(1)"                                           # 기준 폴더는 경로 규칙(check_user_path)만
+    (base / "sub=2").mkdir(parents=True)
+    for n in ("ok_0000.rad", "bad(2).rad"):
+        (base / n).write_text("x")
+    (base / "sub=2" / "a.h3d").write_text("x")
+    assert file_safety_problem(str(base / "ok_0000.rad"), str(base)) is None
+    assert file_safety_problem(str(base / "bad(2).rad"), str(base)) == "( )"
+    assert file_safety_problem(str(base / "sub=2" / "a.h3d"), str(base)) == "="
 
 
 def test_resolve_in_study_escape(tmp_path):
