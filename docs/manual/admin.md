@@ -219,6 +219,8 @@ NSSM·pywin32를 쓰지 않고 작업 스케줄러로 상시 실행한다(phase2
    ```
 
 3. 접속: `http://<대시보드 주소>/physicsai/`(대시보드에 로그인한 상태로). 이 PC 확인용 health: `http://127.0.0.1:8100/physicsai/api/health`.
+   예: 대시보드가 `WINDOWS_WEB_PORT=8080`이면 PhysicsAI `http://<서버>:8080/physicsai/`, 대시보드 `http://<서버>:8080/home/`(`WINDOWS_WEB_BASE_PATH`, 기본 `/home/`).
+   화면의 로그인·"대시보드로" 링크는 `auth.dashboard_public_login_url`(같은 origin 경로) — `setup.ps1`·`update-repo.ps1`이 대시보드 `.env`의 `WINDOWS_WEB_BASE_PATH`로 맞춘다(값이 `/`이거나 없을 때만, 직접 넣은 값은 유지).
 
 - 서빙 규칙: `/physicsai` → 308 `/physicsai/`. 빌드 폴더 안의 파일은 그대로, 없는 경로는 `index.html`(화면 내부 경로 새로고침 대응). `index.html`은 `Cache-Control: no-cache`, 해시 이름 자산(`assets/`)은 1년 캐시. `..`·드라이브 경로·빌드 폴더 밖을 가리키는 링크는 404. `/physicsai/api/…`는 정적 처리로 가지 않는다(없는 API = JSON 404).
 - 정적 파일은 인증 없이 준다(화면이 `/physicsai/api/me`로 로그인 여부를 판단). API 인증은 그대로다.
@@ -430,7 +432,7 @@ $env:PGPASSWORD = $null
 |---|---|---|---|---|
 | `auth.mode` | `dashboard`(운영) \| `dev_static`(개발 전용) \| `demo`(시연 모드 전용, `demo.enabled: true`일 때만 — §14) | `dashboard` | `dashboard` | B |
 | `auth.dashboard_internal_url` | 대시보드 백엔드 루프백 주소(`http(s)://호스트[:포트]`) | `http://127.0.0.1:8000` | 같음 | B |
-| `auth.dashboard_public_login_url` | 로그인 안내 링크(브라우저 기준) | `/` | `/` | B |
+| `auth.dashboard_public_login_url` | 로그인 안내·상단 "대시보드로" 링크(브라우저 기준 같은 origin 경로). 운영 대시보드 웹 경로 = 대시보드 `.env` `WINDOWS_WEB_BASE_PATH`(§2.6.1) | `/` | `/home/`(setup.ps1이 대시보드 `.env`에서) | B |
 | `auth.cookie_name` | 대시보드 세션 쿠키 이름(대시보드와 같아야 함, D2) | `analysis_canvas_session` | 같음 | B |
 | `auth.introspection_path` | 세션 확인 API | `/api/auth/me` | 같음 | B |
 | `auth.projects_path` | 프로젝트 목록 API | `/api/projects` | 같음 | B |
@@ -559,7 +561,7 @@ $env:PGPASSWORD = $null
 | `commands.t01_preview` | ②-3 | null(비활성) | `["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{preview_tcl}", "-input", "{t01}", "-output", "{result_json}"]` | B |
 | `commands.t01_curve_export` | ②-4 | null(비활성) | `["{hw}", "-clientconfig", "hwplot.dat", "-b", "-c", "-tcl", "{curate_tcl}", "-config", "{config_json}"]` | B |
 | `commands.hst_optimization` | ⑤ | null(비활성) | `["@cmd_c", "{hstpy}", "{launcher}"]` | B |
-| `commands_log_error_patterns` | **edspy step**(`edspy_create_dataset`·`edspy_score`·`edspy_predict`) 로그 오류 정규식(대소문자 무시, 줄 단위). 일치하면 종료코드 0이어도 `LOG_ERROR_DETECTED`. SimLab·hw step에는 적용하지 않음 | 원본 3개 | `'^\s*\d+\s+Error\s*:'`, `'Traceback \(most recent call last\):'`, `'^\s*\[ERROR\]'` | W |
+| `commands_log_error_patterns` | **edspy step**(`edspy_create_dataset`·`edspy_score`·`edspy_predict`) 로그 오류 정규식(대소문자 무시, 줄 단위). 일치하면 종료코드 0이어도 `LOG_ERROR_DETECTED`(단 `edspy_predict`는 결과 h3d가 있으면 성공 + 경고 `LOG_ERROR_PATTERN`, phase3 D3-37). SimLab·hw step에는 적용하지 않음 | 원본 3개 | `'^\s*\d+\s+Error\s*:'`, `'Traceback \(most recent call last\):'`, `'^\s*\[ERROR\]'` | W |
 
 #### hpc(PBS)
 
@@ -713,7 +715,7 @@ $env:PGPASSWORD = $null
 | `geom_update` | `{simlab}`, `{rendered_script}`(=`P/geom/<predict.rendered_script_name>`), `{cad_file}`(=`P/geom/<CAD>`), `{work_dir}`(=`P/geom`) | `P/geom` | 종료 0 + 오류 정규식 없음. 다음 RAD_ASSEMBLE이 **`P/geom` 직계**에서 `predict.mesh_output_glob` 파일을 찾음(없으면 경고 `MESH_OUTPUT_MISSING`) |
 | `mesh` | `geom_update`와 같음 | `P/geom` | 종료 0. null이면 SKIPPED(형상+메싱을 geom_update 한 번에 한다고 가정) |
 | `rad_assemble` | `{hw}`, `{work_dir}`(=`P`), `{starter}`(=`P/INPUT/<starter>`), `{input_dir}`(=`P/INPUT`) | `P/INPUT` | 복사 규칙(조립 폴더의 `eps_mesh*` 아닌 `.rad`·`.inc` + 새 메시) 후 실행. starter 정확히 1개 |
-| `edspy_predict` | `{edspy}`, `{pred_h3d}`(=`P/RESULT/<starter stem>_pred.h3d`), `{model_psmdl}`, `{model_pscfg}`, `{starter}` + `@cmd_c`, `@hooks_arg` | `P/INPUT` | env `predict.env` 추가. 종료 0 + `pred_h3d` 존재 |
+| `edspy_predict` | `{edspy}`, `{pred_h3d}`(=`P/RESULT/<starter stem>_pred.h3d`), `{model_psmdl}`, `{model_pscfg}`, `{starter}` + `@cmd_c`, `@hooks_arg` | `P/INPUT` | env `predict.env` 추가. `pred_h3d` 존재·크기>0(원본처럼 종료코드·로그 오류는 경고 — phase3 D3-37) |
 | `contour_preview` | `{hw}`, `{preview_tcl}`(=`resources.preview_pred_h3d_tcl`), `{pred_h3d_fwd}`(fwd), `{preview_json_fwd}`(=`P/H3D_PREVIEW.json`, fwd) | `P` | 종료 0 + `H3D_PREVIEW.json` 존재. `P` 직계에 새 `*.png`·`*.jpg`가 생기면 이미지로 표시(U4) |
 | `response_extract` | `{hw}`, `{pred_h3d}`, `{pred_h3d_fwd}`, `{responses_json}`(=`S/responses.json` 또는 `D/responses.json`), `{out_csv}`(=`P/responses_pred.csv`, ①-6은 `R(run)/responses_run.csv`), `{work_dir}` | `P` | 종료 0 + `out_csv` 존재(형식 `name,value` 헤더). **argv[0]은 `{hw}`만 가능** |
 | `simlab_extract_params` | `{simlab}`, `{launcher}`(OS), `{cad_file}`(OS), `{xml_out}`(OS, `parameter_extracted.xml`) | `01_train/extract/<job>` | 종료 0 + XML 존재. 오류 정규식 미적용 |
