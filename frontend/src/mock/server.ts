@@ -27,6 +27,7 @@ import { trainRoutes } from "./stage1";
 import { curationRoutes } from "./stage2";
 import { datasetModelRoutes } from "./stage3";
 import { paramSetRoutes, predictResult } from "./stage4";
+import { preparedRoutes } from "./stage4Prepared";
 import { optimizeRoutes } from "./stage5";
 import { studyRoutes } from "./studies";
 
@@ -77,6 +78,7 @@ const ROUTES: Route[] = [
   trainRoutes, // ①
   curationRoutes, // ②
   optimizeRoutes, // ⑤
+  preparedRoutes, // S6 ④ 준비된 입력 inspect(PREDICT_INPUT)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④

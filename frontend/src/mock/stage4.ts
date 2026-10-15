@@ -3,6 +3,7 @@ import type { Job, ParamSet, PredictCheck, SampleRow, Study } from "../api/types
 import { PREVIEW_JSON, contourSvg, curveJson, responseFn, seedParamSet } from "./data";
 import { err, type Route } from "./route";
 import type { MockServer } from "./server";
+import { isPrepared, preparedResult } from "./stage4Prepared";
 
 export function predictResult(srv: MockServer, job: Job, values: Record<string, number>, modelId: string, psId: string) {
   const ps = srv.paramSets.find((p) => p.id === psId)!;
@@ -74,6 +75,10 @@ export function finishStage4(srv: MockServer, j: Job) {
   const p = j.params as Record<string, unknown>;
   switch (j.job_type) {
     case "PREDICT": {
+      if (isPrepared(j)) {
+        j.result = preparedResult(srv, j);
+        break;
+      }
       const ps = (p.param_set_id as string) || srv.paramSets.find((x) => x.study_id === j.study_id && x.is_current)?.id || "ps-1";
       const study = srv.studies.find((s) => s.id === j.study_id)!;
       const nominal = Object.fromEntries(srv.paramSets.find((x) => x.id === ps)!.parameters.map((x) => [x.name, x.nominal]));

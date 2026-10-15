@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { api, errorMessage, type Job, type JobType } from "../api";
+import { ApiError, api, errorMessage, type ApiErrorDetail, type Job, type JobType } from "../api";
 import { useStudy } from "../app/StudyContext";
 import { useLatestJob } from "./useLatestJob";
 
@@ -11,11 +11,14 @@ export function useJobRunner(jobType: JobType, onFinish?: (job: Job) => void) {
     onFinish?.(j);
   });
   const [error, setError] = useState<string | null>(null);
+  /** 마지막 생성 실패의 오류 본문(422 problems 등 카드 안 표시용) */
+  const [errorDetail, setErrorDetail] = useState<ApiErrorDetail | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const run = useCallback(
     async (params: Record<string, unknown>) => {
       setError(null);
+      setErrorDetail(null);
       setSubmitting(true);
       try {
         const j = await api.createJob(study.id, jobType, params);
@@ -23,6 +26,7 @@ export function useJobRunner(jobType: JobType, onFinish?: (job: Job) => void) {
         return j;
       } catch (e) {
         setError(errorMessage(e));
+        setErrorDetail(e instanceof ApiError ? e.detail : null);
         return null;
       } finally {
         setSubmitting(false);
@@ -31,7 +35,7 @@ export function useJobRunner(jobType: JobType, onFinish?: (job: Job) => void) {
     [study.id, jobType, track],
   );
 
-  return { job, loaded, run, error, setError, submitting };
+  return { job, loaded, run, error, setError, errorDetail, submitting };
 }
 
 export function useCanExecute(): boolean {

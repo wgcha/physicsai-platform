@@ -37,7 +37,9 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   optimize: ["resources.extract_minmax_tcl", "resources.launchers.optimization", "altair.hstpy_path"],
   dataset_create: ["altair.edspy_path"],
   evaluate: ["altair.edspy_path"],
-  predict: ["altair.edspy_path", "commands.geom_update"],
+  predict: ["altair.edspy_path"],
+  // S6(phase3.md §11.4): parametric 체인 조건. predict는 prepared 조건(edspy_predict·contour_preview)
+  predict_parametric: ["commands.geom_update", "resources.hypermesh_include_tcl"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 
