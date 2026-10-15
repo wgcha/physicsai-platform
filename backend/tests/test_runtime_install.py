@@ -306,7 +306,7 @@ def test_machine_env_migrates_to_runtime_secret_with_acl(tmp_path):
     assert f"URL={url}" in out and out.count(url) == 1                                       # 진행 출력에는 값이 없음
     assert "머신 환경변수는 그대로 둠" in out and "SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', $null, 'Machine')" in out
     args = icalog.read_text(encoding="utf-8").splitlines()
-    assert args[0] == str(rt / "secrets") and "/inheritance:r" in args and "/grant:r" in args and "/T" in args
+    assert args[0] == str(rt / "secrets") and "/inheritance:r" in args and "/grant:r" in args and "/T" not in args   # 폴더만(파일은 상속)
     assert "*S-1-5-18:(OI)(CI)F" in args and "CORP\\svc:(OI)(CI)R" in args and any(a.endswith(":(OI)(CI)F") and "S-1-5-18" not in a for a in args)
     assert "현재 사용자·SYSTEM만 읽기" in out
 

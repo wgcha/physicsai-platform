@@ -220,7 +220,8 @@ function Get-PhysicsAIDbUrl {
 
 function Protect-PhysicsAISecretPath {
     <#
-      비밀 폴더·파일 ACL: 상속 해제 + 현재 사용자·SYSTEM 모든 권한(+작업 실행 계정이 다르면 읽기)만 — icacls(Windows 기본 도구).
+      비밀 폴더 ACL: 상속 해제 + 현재 사용자·SYSTEM 모든 권한(+작업 실행 계정이 다르면 읽기)만, 하위로 상속((OI)(CI)) — icacls(Windows 기본 도구).
+      폴더에만 적용한다(/T 없음 — 파일에 (OI)(CI)를 직접 주면 거부되어 빈 ACL이 남을 수 있음). 파일은 폴더에서 상속받는다.
       실패하거나 icacls가 없으면 경고만 하고 계속한다(설치를 막지 않음). 성공하면 $true.
     #>
     param([Parameter(Mandatory = $true)][string]$Path, [string]$ServiceUser = '')
@@ -231,7 +232,7 @@ function Protect-PhysicsAISecretPath {
     $grants = @("${me}:(OI)(CI)F", '*S-1-5-18:(OI)(CI)F')
     $cur = "$env:USERDOMAIN\$env:USERNAME"
     if ($ServiceUser -and $ServiceUser -ine $cur) { $grants += "${ServiceUser}:(OI)(CI)R" }
-    $icArgs = @($Path, '/inheritance:r', '/grant:r') + $grants + @('/T', '/C', '/Q')
+    $icArgs = @($Path, '/inheritance:r', '/grant:r') + $grants + @('/Q')
     $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
     try { $out = @(& $icacls.Source @icArgs 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE }
     catch { $out = @("$($_.Exception.Message)"); $rc = -1 }
@@ -252,9 +253,19 @@ function Write-PhysicsAIRuntimeSecret {
     $dir = Join-Path $RuntimeDir 'secrets'
     $f = Get-PhysicsAIRuntimeSecretPath $RuntimeDir
     New-Item -ItemType Directory -Force -Path $dir | Out-Null
-    $same = (Test-Path -LiteralPath $f -PathType Leaf) -and (([IO.File]::ReadAllText($f)).Trim() -ceq $DbUrl)
+    $ok = Protect-PhysicsAISecretPath -Path $dir -ServiceUser $ServiceUser   # 폴더 먼저 → 파일은 그 ACL을 상속
+    $same = $false
+    if (Test-Path -LiteralPath $f -PathType Leaf) {
+        try { $same = (([IO.File]::ReadAllText($f)).Trim() -ceq $DbUrl) }
+        catch {
+            # 읽을 수 없는 파일(빈 ACL 등): 상속을 되살려 폴더 ACL을 받게 한다(소유자는 권한을 바꿀 수 있음)
+            Write-Warning "DB 접속 정보 파일을 읽을 수 없어 권한을 폴더 기준으로 되돌립니다: $f"
+            $ic = Get-Command icacls -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($ic) { $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'; try { & $ic.Source $f '/reset' '/Q' 2>&1 | Out-Null } finally { $ErrorActionPreference = $eap } }
+        }
+    }
     if (-not $same) { [IO.File]::WriteAllText($f, $DbUrl, (New-Object Text.UTF8Encoding($false))) }
-    $ok = Protect-PhysicsAISecretPath -Path $dir -ServiceUser $ServiceUser
+    if (([IO.File]::ReadAllText($f)).Trim() -cne $DbUrl) { throw "DB 접속 정보 파일을 다시 읽지 못했습니다: $f" }
     $env:PHYSICSAI_DATABASE_URL = $DbUrl
     if ($ConfigPath) { $env:PHYSICSAI_CONFIG = $ConfigPath }
     Write-PhysicsAIStep "DB 접속 정보: $f $(if ($same) { '(변경 없음)' } else { '(저장)' })$(if ($ok) { ' — 현재 사용자·SYSTEM만 읽기' }) (값은 출력하지 않음)"

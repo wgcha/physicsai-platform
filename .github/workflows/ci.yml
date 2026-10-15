@@ -350,6 +350,9 @@ jobs:
             $acl = (icacls (Join-Path $root 'secrets')) -join "`n"
             Write-Host $acl
             if ($acl -match 'BUILTIN\\Users' -or $acl -notmatch 'NT AUTHORITY\\SYSTEM' -or $acl -match '\(I\)') { throw '비밀 폴더 ACL이 제한되지 않았습니다(상속·Users)' }
+            $facl = (icacls $secret) -join "`n"
+            Write-Host $facl
+            if ($facl -match 'BUILTIN\\Users' -or $facl -notmatch 'NT AUTHORITY\\SYSTEM' -or -not (Get-Content $secret -Raw)) { throw '비밀 파일 ACL·내용이 다릅니다(폴더 상속 — 현재 사용자·SYSTEM만)' }
             # 작업 스케줄러 등록 조회: ExecutionTimeLimit 0(PT0S)·재시작 999·IgnoreNew
             foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
               $task = Get-ScheduledTask -TaskName $n
@@ -504,6 +507,9 @@ jobs:
             $acl = (icacls (Join-Path $rt 'secrets')) -join "`n"
             Write-Host $acl
             if ($acl -match 'BUILTIN\\Users' -or $acl -notmatch 'NT AUTHORITY\\SYSTEM' -or $acl -match '\(I\)') { throw '비밀 폴더 ACL이 제한되지 않았습니다(상속·Users)' }
+            $facl = (icacls $secret) -join "`n"
+            Write-Host $facl
+            if ($facl -match 'BUILTIN\\Users' -or $facl -notmatch 'NT AUTHORITY\\SYSTEM' -or -not (Get-Content $secret -Raw)) { throw '비밀 파일 ACL·내용이 다릅니다(폴더 상속 — 현재 사용자·SYSTEM만)' }
             # 프런트는 저장소 빌드본(frontend-dist, Windows autocrlf 체크아웃에서도 해시 일치 — D3-40): Node·npm 없이 배치
             if (-not (Test-Path (Join-Path $rt 'frontend\BUILD_INFO.json'))) { throw '저장소 빌드본(frontend-dist)이 배치되지 않았습니다(해시 불일치로 npm 빌드?)' }
             if ((Get-Content $log -Raw) -match '\+ npm (ci|run build)') { throw 'frontend-dist가 최신인데 setup.ps1이 npm을 실행했습니다' }
