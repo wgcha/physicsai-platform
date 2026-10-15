@@ -3,6 +3,7 @@ $ErrorActionPreference = "Stop"
 . "$PSScriptRoot\_env.ps1"
 Push-Location $RepoRoot
 try {
+  & $Python scripts/frontend_source_hash.py --check $RepoRoot; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # frontend-dist 최신 여부(phase3 D3-40)
   & $Python -m pytest -q -rs @args; if ($LASTEXITCODE) { exit $LASTEXITCODE }
   & $Python -c "import sys; from physicsai_api.export_openapi import render; sys.exit(0 if open('backend/openapi.json', encoding='utf-8').read() == render() else 1)"
   if ($LASTEXITCODE) { Write-Error "backend/openapi.json이 최신이 아닙니다"; exit 1 }

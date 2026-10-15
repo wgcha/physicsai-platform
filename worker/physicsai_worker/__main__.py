@@ -1,4 +1,8 @@
-"""진입점: `python -m physicsai_worker [--config PATH]` (§11.1). 기동 검사 실패 시 종료코드 2."""
+"""진입점: `python -m physicsai_worker [--runtime DIR] [--config PATH]` (§11.1). 기동 검사 실패 시 종료코드 2.
+
+설치본(작업 스케줄러)은 `--runtime <런타임 폴더>`로 설정·DB URL 파일을 찾는다(phase3 D3-41, physicsai_core.config.runtime —
+우선순위 환경변수 > --config > 런타임 파일 > 이전 머신 환경변수). `--runtime` 없이 `--config`만 주면 종전대로 그 파일.
+"""
 
 from __future__ import annotations
 
@@ -23,8 +27,18 @@ def _fail(msg: str) -> int:
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="physicsai_worker")
     ap.add_argument("--config", default=None, help="설정 파일(기본 PHYSICSAI_CONFIG 또는 config/platform.yaml)")
+    ap.add_argument("--runtime", default=None, help="설치 런타임 폴더(config/platform.yaml, secrets/database_url)")
     args = ap.parse_args(argv)
-    config = load_config(args.config)
+    sources: dict[str, str] = {}
+    if args.runtime:
+        from physicsai_core.config.runtime import DB_URL_ENV, apply_runtime
+
+        sources = apply_runtime(args.runtime, config_arg=args.config)
+        config = load_config()
+        if config.settings.database.url_env != DB_URL_ENV:
+            sources.update(apply_runtime(args.runtime, config_arg=args.config, url_envs=(config.settings.database.url_env,)))
+    else:
+        config = load_config(args.config)
     logging.basicConfig(level=getattr(logging, config.settings.logging.level, logging.INFO),
                         format="%(asctime)s %(levelname)s %(name)s %(message)s")
     if not config.ok:
@@ -33,6 +47,10 @@ def main(argv: list[str] | None = None) -> int:
     from physicsai_core.logsetup import setup_file_logging
 
     log.info("워커 파일 로그: %s", setup_file_logging(s, "worker"))
+    if sources:
+        from physicsai_core.config.runtime import describe
+
+        log.info("설정·DB 접속 정보 출처: %s", describe(sources))
     for w in config.warnings:
         log.warning("설정 안내: %s — %s", w.key, w.message)
 

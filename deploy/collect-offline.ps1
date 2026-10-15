@@ -6,7 +6,8 @@
   각 후보를 실제로 실행해 확인하므로 PATH 첫 python이 망가진 pyenv shim이어도 다음 후보로 넘어간다.
   pip wheel·pip download는 고른 Python으로 만든 빌드용 임시 venv(dist\_buildvenv)에서 실행한다 — 대시보드 런타임·시스템 Python에는 아무것도 설치하지 않고,
   임시 venv는 끝나면 지우며 묶음에도 넣지 않는다.
-  프런트 빌드(npm)는 Node 22: -DashboardRoot의 고정 Node(.tools\node-v22.*-win-x64) > PATH의 node 순으로 실행해 확인한다.
+  프런트: 저장소 빌드본 frontend-dist가 현재 소스와 같으면 그대로 묶는다(Node·npm 불필요 — phase3 D3-40). 다를 때만 npm으로 빌드하며,
+  Node 22는 -DashboardRoot의 고정 Node(.tools\node-v22.*-win-x64) > PATH의 node 순으로 실행해 확인한다.
 .PARAMETER DryRun
   Python·Node만 확인하고 실행할 명령을 출력한다(빌드·내려받기 없음).
 .PARAMETER PythonExe
@@ -52,10 +53,17 @@ if ($DashboardRoot) {
 $cands = Get-PhysicsAIPythonCandidates -PythonExe $PythonExe -DashboardPython $(if ($dash) { "$($dash.PythonExe)" } else { '' })
 $base = Select-PhysicsAIPython -Candidates $cands -Tag $tag
 
-# Node 22 선택(deploy\node-select.ps1 공용 — setup.ps1과 같은 규칙): 대시보드 고정 Node > PATH의 node
+# 프런트: 저장소 빌드본(frontend-dist)이 소스와 같으면 그대로(Node 불필요, D3-40). 아니면 Node 22 선택(deploy\node-select.ps1 공용 — setup.ps1과 같은 규칙)
 . (Join-Path $PSScriptRoot 'node-select.ps1')
-$node = Select-PhysicsAINode -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -RepoRoot $root -Tag $tag
-$npm = [pscustomobject]@{ Source = $node.Npm }
+$feDist = Test-PhysicsAIFrontendDist -RepoRoot $root
+$node = $null
+if ($feDist.Fresh) {
+    Write-Step "프런트: 저장소 빌드본 frontend-dist 사용(소스와 일치 $($feDist.Current.Substring(0, 12)) — Node·npm 불필요)"
+} else {
+    Write-Step "프런트: $($feDist.Reason) — npm으로 빌드합니다"
+    $node = Select-PhysicsAINode -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -RepoRoot $root -Tag $tag
+    $npm = [pscustomobject]@{ Source = $node.Npm }
+}
 
 # ---- 빌드용 임시 venv(고른 Python 3.12로 만든다 — 대시보드 런타임에는 설치하지 않음, 끝나면 지움·묶음 미포함) ----------------
 $buildVenv = Join-Path $root 'dist\_buildvenv'
@@ -87,18 +95,22 @@ try {
     Invoke-Step 'pip wheel . --no-deps -w dist/wheels' {
         Invoke-Native 'pip wheel .' $py (@('-m', 'pip', 'wheel', '.', '--no-deps', '-w', 'dist/wheels') + $pipOpts) $pipHint
     }
-    Invoke-Step "npm ci && npm run build (frontend, Node $($node.Version))" {
-        $env:PATH = "$($node.Dir);$savedPath"   # 고른 Node를 이 프로세스에서만 맨 앞에(npm.cmd가 같은 node.exe를 쓰게)
-        Push-Location frontend
-        try {
-            # npm은 창에서 직접 친 것과 같이 콘솔 그대로(파이프면 esbuild spawn EPERM — node-select.ps1 Invoke-PhysicsAINpm, phase3 D3-39)
-            Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('ci') -Hint '위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy 확인).'
-            Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('run', 'build')
-        } finally { Pop-Location; $env:PATH = $savedPath }
+    $feSrc = 'frontend-dist'
+    if (-not $feDist.Fresh) {
+        $feSrc = 'frontend\dist'
+        Invoke-Step "npm ci && npm run build (frontend, Node $($node.Version))" {
+            $env:PATH = "$($node.Dir);$savedPath"   # 고른 Node를 이 프로세스에서만 맨 앞에(npm.cmd가 같은 node.exe를 쓰게)
+            Push-Location frontend
+            try {
+                # npm은 창에서 직접 친 것과 같이 콘솔 그대로(파이프면 esbuild spawn EPERM — node-select.ps1 Invoke-PhysicsAINpm, phase3 D3-39)
+                Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('ci') -Hint '위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy 확인).'
+                Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('run', 'build')
+            } finally { Pop-Location; $env:PATH = $savedPath }
+        }
     }
-    Invoke-Step 'copy frontend\dist, migrations, config(+demo), deploy(+demo fake_tools)' {
+    Invoke-Step "copy $feSrc, migrations, config(+demo), deploy(+demo fake_tools)" {
         # 폴더 안으로 내용만 복사(다시 실행해도 dist\deploy\deploy처럼 겹치지 않게)
-        Copy-Item -Recurse -Force 'frontend\dist\*' 'dist\frontend\'
+        Copy-Item -Recurse -Force "$feSrc\*" 'dist\frontend\'
         Copy-Item -Recurse -Force 'migrations\*' 'dist\migrations\'
         Copy-Item -Force 'config\platform.example.yaml' 'dist\config\platform.example.yaml'
         Copy-Item -Force 'config\platform.demo.yaml' 'dist\config\platform.demo.yaml'

@@ -5,6 +5,8 @@
 set -euo pipefail
 source "$(dirname "$0")/_env.sh"
 cd "$REPO_ROOT"
+echo "== frontend-dist 최신 여부(빌드본 = 현재 프런트 소스, phase3 D3-40) =="
+"$PYTHON" scripts/frontend_source_hash.py --check "$REPO_ROOT"
 echo "== backend/worker pytest =="
 "$PYTHON" -m pytest -q -rs "$@"
 echo "== openapi.json 최신 여부 =="

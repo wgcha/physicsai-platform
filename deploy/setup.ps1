@@ -2,21 +2,25 @@
 .SYNOPSIS
   PhysicsAI 같은 PC·git 폴더 설치(권장). 저장소를 받은 폴더에 그대로 설치한다 — 묶음·압축 없음. 다시 실행해도 안전(이미 있으면 확인 후 갱신).
 .DESCRIPTION
-  관리자 권한 Windows PowerShell에서 git 폴더 루트에서:
-    powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\setup.ps1
+  일반 Windows PowerShell(관리자 권한 불필요 — 대시보드와 같게, phase3 D3-41)에서:
+    powershell -NoProfile -ExecutionPolicy Bypass -File <git 폴더>\deploy\setup.ps1
   ① Python 3.12 선택(python-select.ps1: -PythonExe > deploy.json > 대시보드 고정 Python > py -3.12 > PATH, 각 후보를 실제 실행해 확인 — 망가진 pyenv shim은 건너뜀)
-  ② 런타임 폴더 <git>\.runtime\(git 제외): venv, frontend(빌드 배치), config\platform.yaml, deploy.json, logs, state, _backup
+  ② 런타임 폴더 <git>\.runtime\(git 제외): venv, frontend(배치), config\platform.yaml, secrets\database_url, deploy.json, logs, state, _backup
   ③ venv에 deploy\requirements.lock + packages\simdash_adapters + 플랫폼 패키지(일반 설치. 사내 pip 설정·프록시 그대로)
   ④ 설정 계획(setup_config.py): deploy.json·platform.yaml — 이미 있으면 보존하고 빠진 키만 보충(사용자 수정값 덮어쓰기 없음)
      profile prod, server.port 8100, storage.ai_root(폴더 생성), resources.*(원본 앱 폴더 하위 확인), altair.*(탐색), hpc.gateway none, worker 기본값
   ⑤ 확인 표 출력 후 Y/N(-NonInteractive면 생략)
-  ⑥ 기존 설치가 있으면 대기열 확인 후 작업 중지 → 설정 작성 → Node 22로 프런트 빌드·배치
-  ⑦ DB(대시보드와 같은 PostgreSQL에 physicsai DB·physicsai_app 역할 — 없을 때만, 기존 연결이 되면 비밀번호를 다시 묻지 않음) → 머신 환경변수 → alembic
-     → 작업 스케줄러 등록(작업 폴더 <git>\.runtime) → 시작·health  (install-common.ps1 — 묶음 install.ps1과 같은 코드)
+  ⑥ 기존 설치가 있으면 대기열 확인 후 작업 중지 → 설정 작성 → 프런트 배치(저장소 빌드본 frontend-dist가 소스와 같으면 그대로 — Node·npm 불필요,
+     다를 때만 Node 22로 빌드, phase3 D3-40)
+  ⑦ DB(대시보드와 같은 PostgreSQL에 physicsai DB·physicsai_app 역할 — 없을 때만, 기존 연결이 되면 비밀번호를 다시 묻지 않음)
+     → DB 접속 정보 파일 .runtime\secrets\database_url(현재 사용자·SYSTEM만 읽기 — 머신 환경변수 쓰지 않음) → alembic
+     → 작업 스케줄러 등록(현재 사용자 Interactive·Limited, 인자 --runtime <git>\.runtime, 작업 폴더 <git>\.runtime) → 시작·health
+     (install-common.ps1 — 묶음 install.ps1과 같은 코드)
   ⑧ 접속 연결 안내: 대시보드 .env VITE_PHYSICSAI_TARGET·SIMDASH_PHYSICSAI_ENABLED=true(백엔드가 /physicsai/ 직접 서빙), Caddy는 대안(physicsai.caddy)
   기존 묶음 설치(install.ps1, 다른 install_root)가 있으면 감지해 그 설정 파일을 복사해 이어받고(원본은 그대로), 같은 DB 연결을 이어 쓰며,
   기존 작업 정의는 .runtime\_backup\<UTC>\tasks\*.xml로 남긴 뒤 새 venv로 다시 등록한다. 덮어쓰는 파일은 먼저 .runtime\_backup\<UTC>로 복사한다.
-  업데이트: git pull 후 powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1
+  이전 설치의 머신 환경변수(PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL)는 읽기만 해서 이어받고 지우지 않는다(지우려면 관리자 필요).
+  업데이트: powershell -NoProfile -ExecutionPolicy Bypass -File <git 폴더>\deploy\update-repo.ps1 (git pull 포함)
 .PARAMETER DashboardRoot
   대시보드 폴더. 기본: deploy.json 값 → <git 폴더의 부모>\simdashboard(있으면). .env의 POSTGRES_BIN·DATABASE_URL(host·port만)과 .tools의 Python 3.12·Node 22를 쓴다
 .PARAMETER AiRoot
@@ -30,7 +34,8 @@
 .PARAMETER ServiceUser
   작업 실행 계정. 기본: deploy.json 값 → 현재 사용자(<도메인>\<이름>)
 .PARAMETER RunMode
-  Interactive(기본, 그 계정 로그온 세션 — Altair 그래픽 배치용) | Background(로그온 무관, 세션 0 — 계정 비밀번호를 한 번 더 받음)
+  Interactive(기본, 그 계정 로그온 세션 — Altair 그래픽 배치용, 관리자 권한 불필요) | Background(로그온 무관, 세션 0 — 계정 비밀번호를 한 번 더 받음.
+  부팅 시 작업 등록이라 이 모드만 관리자 권한이 필요할 수 있다)
 .PARAMETER NonInteractive
   묻지 않는다(기본값·deploy.json 값 사용, 확인 표 Y/N 생략). 비밀번호가 필요하면 -PasswordsFromEnv
 .PARAMETER PasswordsFromEnv
@@ -68,13 +73,11 @@ $parent = Split-Path -Parent $repo
 $rt = Join-Path $repo '.runtime'
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $backupDir = Join-Path $rt "_backup\$stamp"
-$selfCmd = "cd `"$repo`"; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\setup.ps1"
 
-# ---- 0. 위치·권한 -----------------------------------------------------------------------------
+# ---- 0. 위치(관리자 권한 확인 없음 — phase3 D3-41) -------------------------------------------------------
 if (-not (Test-Path -LiteralPath (Join-Path $repo 'pyproject.toml')) -or -not (Test-Path -LiteralPath (Join-Path $repo 'frontend\package.json'))) {
     throw "git 폴더(저장소)가 아닙니다: $repo`n다음 행동: 오프라인 묶음을 풀어 둔 폴더라면 deploy\install.ps1(폐쇄망 서버용)을 쓰세요."
 }
-Assert-PhysicsAIAdmin $selfCmd
 Write-Step "git 폴더: $repo  (런타임 폴더: $rt — git에서 제외)"
 New-Item -ItemType Directory -Force -Path $rt | Out-Null
 
@@ -91,7 +94,7 @@ function Get-Prev([string]$Key) {
 
 # ---- 기존 묶음 설치(install.ps1) 감지: 머신 환경변수·작업 스케줄러가 .runtime 밖을 가리키면 ------------------------
 $legacyConfig = ''
-$mCfg = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
+$mCfg = Get-PhysicsAIMachineEnv 'PHYSICSAI_CONFIG'
 if ($mCfg -and -not (Test-PhysicsAIUnderPath $mCfg $rt)) {
     if (Test-Path -LiteralPath $mCfg) {
         $legacyConfig = $mCfg
@@ -103,7 +106,8 @@ if ($mCfg -and -not (Test-PhysicsAIUnderPath $mCfg $rt)) {
 $taskExe = Get-PhysicsAITaskExecute
 $legacyTasks = [bool]($taskExe -and -not (Test-PhysicsAIUnderPath $taskExe $rt))
 if ($legacyTasks) { Write-Step "기존 작업 스케줄러 등록 감지: $taskExe — 정의를 _backup에 남기고 이 git 폴더의 venv로 다시 등록합니다" }
-$legacyDb = ConvertFrom-PhysicsAIDbUrl ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine'))
+$existingUrl = Get-PhysicsAIDbUrl -RuntimeDir $rt   # 런타임 파일 → 이전 설치의 머신 환경변수(읽기만)
+$legacyDb = ConvertFrom-PhysicsAIDbUrl $existingUrl
 
 # ---- 입력 값(명시 인자 > deploy.json > 파생 기본값). -NonInteractive가 아니면 Enter로 기본값 -------------------------
 $explicit = [ordered]@{}
@@ -239,9 +243,9 @@ if (-not $NonInteractive) {
 # ---- ⑥ 기존 설치 갱신이면 대기열 확인 → 작업 중지(venv 파일 교체 전에) ------------------------------------------
 $tasksExist = [bool](Get-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue)
 if ($tasksExist) {
-    if ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine') -and (Test-Path -LiteralPath (Join-Path $d.pg_bin 'psql.exe'))) {
+    if ($existingUrl -and (Test-Path -LiteralPath (Join-Path $d.pg_bin 'psql.exe'))) {
         $cfgForPort = if ($legacyConfig -and -not (Test-Path -LiteralPath $d.config_path)) { $legacyConfig } else { $d.config_path }
-        Assert-PhysicsAINoActiveJobs -Port (Get-PhysicsAIBackendPort $cfgForPort $venvPy) -PgBin $d.pg_bin -Force:$Force
+        Assert-PhysicsAINoActiveJobs -Port (Get-PhysicsAIBackendPort $cfgForPort $venvPy) -PgBin $d.pg_bin -DbUrl $existingUrl -Force:$Force
     }
     $n = Export-PhysicsAITasks -Dest (Join-Path $backupDir 'tasks')
     if ($n) { Write-Step "기존 작업 정의를 남겼습니다: $backupDir\tasks" }
@@ -258,18 +262,22 @@ $result = Invoke-PhysicsAISetupConfig -VenvPy $venvPy -Action write -RuntimeDir 
 $d = $result.deploy
 Write-PhysicsAIConfigValidation -Result $result | Out-Null
 
-# ---- 프런트 빌드(Node 22) → <런타임>\frontend ------------------------------------------------------------
-$node = Select-PhysicsAINode -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -RepoRoot $repo -Tag $PhysicsAITag
-Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $repo -StampFile (Join-Path $rt 'frontend-deps.sha256')   # 결과를 변수에 받지 않는다(npm 콘솔 그대로 — D3-39)
-Publish-PhysicsAIFrontend -Dist (Join-Path $repo 'frontend\dist') -Dest $d.caddy_frontend_root -BackupDir $backupDir
+# ---- 프런트 → <런타임>\frontend: 저장소 빌드본 frontend-dist가 소스와 같으면 그대로(Node·npm 없음), 아니면 Node 22로 빌드(D3-40) ----------
+# 결과를 변수에 받지 않는다(직접 빌드 때 npm 콘솔 그대로 — D3-39)
+Install-PhysicsAIFrontendFromRepo -RepoRoot $repo -Dest $d.caddy_frontend_root -BackupDir $backupDir `
+    -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -StampFile (Join-Path $rt 'frontend-deps.sha256')
 
-# ---- ⑦ DB → 머신 환경변수 → alembic → 작업 스케줄러 → 시작·health(install-common.ps1) ----------------------------------
+# ---- ⑦ DB → 런타임 DB 접속 파일 → alembic → 작업 스케줄러 → 시작·health(install-common.ps1, 관리자 권한 불필요 — D3-41) -------------
 $url = Initialize-PhysicsAIDatabase -PgBin $d.pg_bin -PgHost $d.pg_host -PgPort ([int]$d.pg_port) -DbName $d.db_name -DbRole $d.db_role `
-    -PasswordsFromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive -ReuseExisting
-Set-PhysicsAIMachineEnv -ConfigPath $d.config_path -DbUrl $url
-Remove-Variable -Name url -ErrorAction SilentlyContinue
+    -PasswordsFromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive -ReuseExisting -ExistingUrl $existingUrl
+Write-PhysicsAIRuntimeSecret -RuntimeDir $rt -DbUrl $url -ServiceUser $d.service_user -ConfigPath $d.config_path
+Remove-Variable -Name url, existingUrl -ErrorAction SilentlyContinue
+if (Get-PhysicsAIMachineEnv 'PHYSICSAI_DATABASE_URL') {
+    Write-Step "이전 설치의 머신 환경변수는 그대로 둡니다(이제 런타임 파일이 우선). 지우려면(선택, 관리자 PowerShell): [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', `$null, 'Machine')"
+}
 Invoke-PhysicsAIMigration -VenvPy $venvPy -AlembicIni (Join-Path $repo 'migrations\alembic.ini')
-Register-PhysicsAITasks -VenvPy $venvPy -WorkDir $rt -ServiceUser $d.service_user -RunMode $d.run_mode -PasswordsFromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive
+Register-PhysicsAITasks -VenvPy $venvPy -WorkDir $rt -ServiceUser $d.service_user -RunMode $d.run_mode -RuntimeDir $rt -ConfigPath $d.config_path `
+    -PasswordsFromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive
 $port = Get-PhysicsAIBackendPort $d.config_path $venvPy
 if ($NoStart) {
     Write-Step '-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName PhysicsAI-Backend, PhysicsAI-Worker로 시작)'
@@ -283,7 +291,7 @@ Write-Step '설치 완료. 남은 연결 작업:'
 Write-PhysicsAIConnectGuide -Port $port -DashboardRoot "$($d.dashboard_root)" -FrontendRoot "$($d.caddy_frontend_root)" -RepoRoot $repo
 Write-Step '  3) 관리 > 환경 점검으로 Altair·자원·AI 루트를 확인하세요. 설정은 이 파일에서 고칩니다:'
 Write-Step "     $($d.config_path)  (고친 뒤 Stop/Start-ScheduledTask PhysicsAI-Worker, PhysicsAI-Backend)"
-Write-Step "업데이트: git pull 후  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1"
+Write-Step "업데이트(일반 PowerShell, git pull 포함):  powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'update-repo.ps1')"
 if ($legacyConfig -or $legacyTasks) {
     Write-Step '기존 묶음 설치 폴더는 지우지 않았습니다 — 새 설치를 확인한 뒤 필요 없으면 직접 정리하세요(Caddy를 쓰면 PHYSICSAI_FRONTEND_ROOT도 위 값으로 바꿀 것)'
 }

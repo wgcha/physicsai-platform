@@ -358,12 +358,15 @@ def test_setup_scripts_static():
         param = t[t.index("param("): t.index(")\n$ErrorActionPreference")]
         assert "$PSScriptRoot" not in param, n                  # PS 5.1 -File: param 기본값에서 $PSScriptRoot가 빔(이슈 #1)
         assert "Remove-Item" not in t and "Program Files" not in t, n
-        assert "Assert-PhysicsAIAdmin" in t and "Install-PhysicsAIRepoPackages" in t and "Invoke-PhysicsAIFrontendBuild" in t, n
+        # phase3 D3-41: 관리자 권한 확인 없음 / D3-40: 프런트는 저장소 빌드본 우선(공용 함수 하나)
+        assert "Assert-PhysicsAIAdmin" not in t and "IsInRole" not in t and "Install-PhysicsAIRepoPackages" in t, n
+        assert "Install-PhysicsAIFrontendFromRepo -RepoRoot $repo" in t and "Select-PhysicsAINode" not in t, n
         assert "Invoke-PhysicsAIMigration" in t and "Invoke-PhysicsAISetupConfig" in t, n
         assert "New-ScheduledTaskSettingsSet" not in t and "CREATE ROLE" not in t, n     # 공용 함수만
-        assert "powershell -NoProfile -ExecutionPolicy Bypass -File .\\deploy\\" in t, n
+        assert "powershell -NoProfile -ExecutionPolicy Bypass -File" in t and "관리자 권한 Windows PowerShell" not in t, n
     setup = (DEPLOY / "setup.ps1").read_text(encoding="utf-8-sig")
-    for s in ("Initialize-PhysicsAIDatabase", "-ReuseExisting", "Set-PhysicsAIMachineEnv", "Register-PhysicsAITasks", "Start-PhysicsAITasksAndWait",
+    for s in ("Initialize-PhysicsAIDatabase", "-ReuseExisting -ExistingUrl $existingUrl", "Write-PhysicsAIRuntimeSecret -RuntimeDir $rt",
+              "Register-PhysicsAITasks", "-RuntimeDir $rt -ConfigPath $d.config_path", "Start-PhysicsAITasksAndWait",
               "Export-PhysicsAITasks", "SIMDASH_PHYSICSAI_ENABLED=true", "physicsai.caddy", "'simdashboard'", "'physicsai-data'",
               "[switch]$NonInteractive", "[switch]$PasswordsFromEnv", "Read-Host '이대로 설치할까요? (Y/N)'", "Assert-PhysicsAINoActiveJobs"):
         assert s in setup, s
@@ -384,11 +387,11 @@ def test_setup_scripts_static():
     assert "Invoke-PhysicsAINative" not in build_fn and "return" not in build_fn.split("#>")[1]
     for n in ("setup.ps1", "update-repo.ps1", "collect-offline.ps1"):
         t = (DEPLOY / n).read_text(encoding="utf-8-sig")
-        assert "= Invoke-PhysicsAIFrontendBuild" not in t and "Invoke-Native 'npm" not in t, n
+        assert "= Invoke-PhysicsAIFrontendBuild" not in t and "= Install-PhysicsAIFrontendFromRepo" not in t and "Invoke-Native 'npm" not in t, n
     assert "Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('run', 'build')" in (DEPLOY / "collect-offline.ps1").read_text(encoding="utf-8-sig")
     # migration 전 실패면 이전 프런트 복구 + 작업 재시작(표식은 Publish 뒤·migration 바로 앞에서만 켬)
-    assert upd.index("$migrationStarted = $false") < upd.index("try {") < upd.index("Assert-PhysicsAINoActiveJobs")
-    assert upd.index("Publish-PhysicsAIFrontend") < upd.index("$migrationStarted = $true") < upd.index("Invoke-PhysicsAIMigration -VenvPy")
+    assert upd.index("$migrationStarted = $false") < upd.index("\ntry {") < upd.index("Assert-PhysicsAINoActiveJobs")
+    assert upd.index("Install-PhysicsAIFrontendFromRepo") < upd.index("$migrationStarted = $true") < upd.index("Invoke-PhysicsAIMigration -VenvPy")
     catch = upd[upd.index("} catch {"):]
     assert "elseif (-not $migrationStarted)" in catch and "Restore-PhysicsAIAfterFailedUpdate" in catch and "-NoStart:$NoStart" in catch and "exit 1" in catch
     guide = common[common.index("function Write-PhysicsAIConnectGuide"):]
@@ -396,8 +399,10 @@ def test_setup_scripts_static():
               "server.frontend_root"):
         assert s in guide, s
     assert "Set-Content" not in guide and "Add-Content" not in guide and "Out-File" not in guide   # 대시보드 .env는 읽기만
-    assert upd.index("Assert-PhysicsAINoActiveJobs") < upd.index("Stop-PhysicsAITasks") < upd.index("Install-PhysicsAIRepoPackages")
-    assert upd.index("Install-PhysicsAIRepoPackages") < upd.index("Invoke-PhysicsAIFrontendBuild") < upd.index("Invoke-PhysicsAIMigration")
+    assert upd.index("Sync-UpdateRepo)") < upd.index("Move-PhysicsAIMachineEnvToRuntime") < upd.index("Assert-PhysicsAINoActiveJobs")
+    assert upd.index("Assert-PhysicsAINoActiveJobs") < upd.index("Stop-PhysicsAITasks") < upd.index("Update-PhysicsAITaskRegistration") < upd.index("Install-PhysicsAIRepoPackages")
+    assert upd.index("Install-PhysicsAIRepoPackages") < upd.index("Install-PhysicsAIFrontendFromRepo") < upd.index("Invoke-PhysicsAIMigration")
+    assert upd.rstrip().endswith('Write-Step "업데이트 성공 — 접속: $accessUrl"') and 'Write-Step "업데이트 실패 — 접속: $accessUrl"\n    exit 1' in upd
     assert upd.index("Invoke-PhysicsAIMigration") < upd.index("Start-PhysicsAITasksAndWait")
     assert "Remove-Item" not in common and "--no-deps', '--force-reinstall'" in common and "'-r', (Join-Path $RepoRoot 'deploy\\requirements.lock')" in common
     assert "-e'" not in common and "'--editable'" not in common                       # 일반 설치(editable 아님)
@@ -625,6 +630,15 @@ def test_npm_runs_on_console_without_pipe_and_retries_once(tmp_path):
     assert r.returncode == 0 and calls == ["npm ci console=n"], r.stdout + r.stderr
 
 
+def _task_stubs(repo: Path) -> str:
+    """작업 스케줄러 대역(Linux pwsh): 이미 --runtime 방식으로 등록된 두 작업(다시 등록하지 않음)."""
+    rt = (repo / ".runtime").as_posix()
+    py = (repo / ".runtime" / "venv" / "Scripts" / "python.exe").as_posix()
+    return ("function Get-ScheduledTask { param($TaskName) "
+            f"$m = if ($TaskName -eq 'PhysicsAI-Backend') {{ 'physicsai_api.serve' }} else {{ 'physicsai_worker' }}; "
+            f"[pscustomobject]@{{ Actions = @([pscustomobject]@{{ Execute = '{py}'; Arguments = \"-m $m --runtime `\"{rt}`\"\"; WorkingDirectory = '{rt}' }}) }} }}; ")
+
+
 def _update_repo_tree(tmp: Path, *, web_port: str | None = "8080") -> Path:
     """update-repo.ps1을 Linux pwsh로 끝까지 돌리는 가짜 git 폴더: deploy\\*.ps1 사본 + 가짜 venv python·대시보드 Node·npm.
     관리자 확인·대기열 DB 조회·pip·설정·migration·health는 사본 install-common.ps1 끝에 덧붙인 대역 함수(나머지 흐름은 실제 코드)."""
@@ -644,11 +658,11 @@ def _update_repo_tree(tmp: Path, *, web_port: str | None = "8080") -> Path:
     _touch(rt / "frontend" / "old.txt")
     (rt / "deploy.json").write_text(json.dumps({
         "dashboard_root": str(dash), "config_path": str(rt / "config" / "platform.yaml"), "pg_bin": str(tmp / "pg"),
-        "caddy_frontend_root": str(rt / "frontend"), "python_exe": ""}), encoding="utf-8")
+        "caddy_frontend_root": str(rt / "frontend"), "python_exe": "", "service_user": "CORP\\me", "run_mode": "Interactive"}), encoding="utf-8")
+    _touch(rt / "secrets" / "database_url").write_text("postgresql+psycopg://physicsai_app:pw@127.0.0.1:5434/physicsai", encoding="utf-8")
     with open(repo / "deploy" / "install-common.ps1", "a", encoding="utf-8") as f:
         f.write(r"""
-function Test-PhysicsAIAdmin { $true }
-function Get-PhysicsAIActiveJobCount { param($Port, $PgBin) [int]$env:FAKE_ACTIVE }
+function Get-PhysicsAIActiveJobCount { param($Port, $PgBin, $DbUrl) if (-not $DbUrl) { throw 'NO DBURL' }; [int]$env:FAKE_ACTIVE }
 function Install-PhysicsAIRepoPackages { param($VenvPy, $RepoRoot) Write-Host 'STUB packages' }
 function Invoke-PhysicsAISetupConfig { param($VenvPy, $Action, $RuntimeDir, $Inputs)
     [pscustomobject]@{ warnings = @(); write = [pscustomobject]@{ backups = @(); written = @(); validation = [pscustomobject]@{ ok = $true; warnings = @(); issues = @() } } } }
@@ -669,7 +683,8 @@ def test_update_repo_one_click_no_prompt_and_restore_on_build_failure(tmp_path):
     repo = _update_repo_tree(tmp_path)
     rt = repo / ".runtime"
     log = tmp_path / "npm.log"
-    stubs = ("function Stop-ScheduledTask { param($TaskName) Write-Host \"STOP $TaskName\" }; "
+    stubs = (_task_stubs(repo) +
+             "function Stop-ScheduledTask { param($TaskName) Write-Host \"STOP $TaskName\" }; "
              "function Start-ScheduledTask { [CmdletBinding()] param($TaskName) Write-Host \"START $TaskName\" }; "
              "function Start-Sleep { param($Seconds) Write-Host \"SLEEP $Seconds\" }; ")
 
@@ -687,6 +702,7 @@ def test_update_repo_one_click_no_prompt_and_restore_on_build_failure(tmp_path):
     assert "STUB migration" in out and "STUB start+health" in out
     assert re.search(r"\[PhysicsAI 업데이트\] 업데이트 성공 — 접속: http://[^/:\s]+:8080/physicsai/\n", r.stdout), out
     assert "토큰" not in out and "Read-Host" not in out and "NonInteractive" not in out
+    assert "git 저장소가 아니어서 git pull을 건너뜁니다" in out and "작업 등록 그대로" in out and "pw@" not in out
 
     # ② 빌드가 끝내 실패(spawn EPERM 2번): migration 없이 이전 프런트 그대로, 작업 2개 다시 시작, 직접 빌드 안내 + 접속 주소
     shutil.rmtree(rt / "frontend")
@@ -696,9 +712,10 @@ def test_update_repo_one_click_no_prompt_and_restore_on_build_failure(tmp_path):
     assert log.read_text(encoding="utf-8").splitlines() == ["npm run build console=y", "npm run build console=y"]
     assert "SLEEP 10" in out and "STUB migration" not in out
     assert sorted(p.name for p in (rt / "frontend").iterdir()) == ["old.txt"]
-    assert out.index("STOP PhysicsAI-Worker") < out.index("업데이트 실패(프런트 빌드)") < out.index("START PhysicsAI-Backend")
+    assert out.index("STOP PhysicsAI-Worker") < out.index("업데이트 실패(프런트 배치)") < out.index("START PhysicsAI-Backend")
     assert "START PhysicsAI-Worker" in out and "npm run build를 직접 실행해 결과를 알려 주세요" in out
     assert re.search(r"이전 상태로 계속 쓸 수 있습니다 — 접속: http://[^/:\s]+:8080/physicsai/", out), out
+    assert re.search(r"업데이트 실패 — 접속: http://[^/:\s]+:8080/physicsai/\s*EXIT=1", out), out
 
     # ③ 대기열에 작업이 있으면: 묻지 않고 안내 후 중단(중지·빌드 없음)
     r, out = run({"FAKE_ACTIVE": "2"})

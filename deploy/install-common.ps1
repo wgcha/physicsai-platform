@@ -2,7 +2,9 @@
 .SYNOPSIS
   PhysicsAI 설치·업데이트 공용 함수. install.ps1(묶음)·update.ps1(묶음)·setup.ps1(git 폴더)·update-repo.ps1(git 폴더)이 dot-source 한다.
 .DESCRIPTION
-  DB 역할·DB 생성, 머신 환경변수, alembic, 작업 스케줄러 등록·시작·중지, health 확인, 실행 중 작업 확인을 한 곳에 둔다(설치 방식과 무관).
+  DB 역할·DB 생성, 런타임 파일(DB 접속 정보), alembic, 작업 스케줄러 등록·시작·중지, health 확인, 실행 중 작업 확인을 한 곳에 둔다(설치 방식과 무관).
+  관리자 권한이 필요 없다(phase3 D3-41): 머신 환경변수를 쓰지 않고 DB URL은 <런타임>\secrets\database_url(현재 사용자·SYSTEM만 읽기),
+  설정 경로는 <런타임>\config\platform.yaml(또는 --config) — 작업은 현재 사용자 Interactive·Limited로 `--runtime <런타임>` 인자와 함께 등록.
   비밀번호는 Read-Host -AsSecureString(대화형) 또는 -PasswordsFromEnv(프로세스 환경변수)로만 받고, psql에는 PGPASSWORD 프로세스 환경으로만 넘긴다
   (명령 인자·로그·파일에 남기지 않음). 출력 머리말은 호출 스크립트의 $PhysicsAITag(예 'PhysicsAI 설치')를 쓴다.
   127.0.0.1 호출은 loopback-http.ps1(Invoke-LoopbackRest, 프록시 미사용)을 쓴다.
@@ -21,16 +23,24 @@ function Assert-PhysicsAIExit([string]$What) {
     if ($LASTEXITCODE -ne 0) { throw "$What 실패(종료코드 $LASTEXITCODE)" }
 }
 
-function Test-PhysicsAIAdmin {
-    $me = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-    return $me.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+function Test-PhysicsAIAccessDenied {
+    <# 오류 레코드가 권한 부족(액세스 거부)인지 — 작업 스케줄러(CIM)·파일 API 공통. -AlreadyExists면 "이미 있음"도(보이지 않는 관리자 작업). #>
+    param($ErrorRecord, [switch]$AlreadyExists)
+    if (-not $ErrorRecord) { return $false }
+    $e = if ($ErrorRecord -is [Management.Automation.ErrorRecord]) { $ErrorRecord.Exception } else { $ErrorRecord }
+    if ($ErrorRecord -is [Management.Automation.ErrorRecord] -and "$($ErrorRecord.CategoryInfo.Category)" -eq 'PermissionDenied') { return $true }
+    if ($e -is [UnauthorizedAccessException] -or $e.HResult -eq -2147024891) { return $true }   # 0x80070005
+    $m = "$($e.Message)"
+    if ($m -match '(?i)access is denied|access denied|액세스가 거부|0x80070005|E_ACCESSDENIED') { return $true }
+    if ($AlreadyExists -and ($e.HResult -eq -2147024713 -or $m -match '(?i)already exists|0x800700B7|이미 있')) { return $true }
+    return $false
 }
 
-function Assert-PhysicsAIAdmin([string]$Command = '') {
-    if (Test-PhysicsAIAdmin) { return }
-    $how = if ($Command) { "`n  $Command" } else { '' }
-    throw ("관리자 권한 PowerShell에서 실행하세요(머신 환경변수·작업 스케줄러 등록에 필요).`n" +
-        "다음 행동: 시작 메뉴에서 'Windows PowerShell'을 오른쪽 클릭 → '관리자 권한으로 실행' → 같은 폴더로 이동한 뒤 다시 실행:$how")
+function Get-PhysicsAITaskAdminMessage {
+    <# 이전 설치가 관리자 권한으로 등록한 작업을 일반 PowerShell에서 바꿀 수 없을 때(처음 한 번만 관리자 실행). #>
+    $cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'update-repo.ps1')"
+    return ("작업 스케줄러 작업(PhysicsAI-Backend·PhysicsAI-Worker)을 바꿀 권한이 없습니다(이전 설치가 관리자 권한으로 등록한 작업).`n" +
+        "다음 행동: 처음 한 번만 관리자 PowerShell로 update-repo.ps1을 실행하세요(그 뒤로는 일반 PowerShell로 됩니다):`n  $cmd")
 }
 
 function ConvertTo-PhysicsAIPlain([Security.SecureString]$Secure) {
@@ -124,21 +134,22 @@ function Test-PhysicsAIDbLogin {
 function Initialize-PhysicsAIDatabase {
     <#
       대시보드와 같은 PostgreSQL(기준 18)에 앱 역할·DB를 없을 때만 만들고, 앱 DB URL(비밀번호 포함)을 돌려준다.
-      -ReuseExisting: 머신 환경변수 PHYSICSAI_DATABASE_URL이 같은 host·port·DB·역할을 가리키고 실제로 접속되면 그 값을 그대로 쓴다(비밀번호를 묻지 않음 — 재실행·기존 설치 이어받기).
+      -ReuseExisting: 기존 DB URL(-ExistingUrl — 런타임 파일 또는 이전 설치의 머신 환경변수, Get-PhysicsAIDbUrl)이 같은 host·port·DB·역할을
+      가리키고 실제로 접속되면 그 값을 그대로 쓴다(비밀번호를 묻지 않음 — 재실행·기존 설치 이어받기).
     #>
     param([Parameter(Mandatory = $true)][string]$PgBin, [Parameter(Mandatory = $true)][string]$PgHost, [Parameter(Mandatory = $true)][int]$PgPort,
           [Parameter(Mandatory = $true)][string]$DbName, [Parameter(Mandatory = $true)][string]$DbRole,
-          [switch]$PasswordsFromEnv, [switch]$ReuseExisting, [switch]$NonInteractive)
+          [switch]$PasswordsFromEnv, [switch]$ReuseExisting, [switch]$NonInteractive, [string]$ExistingUrl = '')
     $psql = Join-Path $PgBin 'psql.exe'
     if (-not (Test-Path -LiteralPath $psql)) { throw "psql.exe가 없습니다: $psql (pg_bin 또는 대시보드 .env의 POSTGRES_BIN 확인)" }
     if ($ReuseExisting) {
-        $cur = ConvertFrom-PhysicsAIDbUrl ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine'))
+        $cur = ConvertFrom-PhysicsAIDbUrl $ExistingUrl
         if ($cur -and $cur.Host -eq $PgHost -and $cur.Port -eq $PgPort -and $cur.Db -eq $DbName -and $cur.User -eq $DbRole) {
             if (Test-PhysicsAIDbLogin -PgBin $PgBin -Parts $cur) {
                 Write-PhysicsAIStep "DB: 기존 연결 재사용($DbRole@${PgHost}:$PgPort/$DbName — 비밀번호를 다시 묻지 않음)"
-                return [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
+                return $ExistingUrl
             }
-            Write-PhysicsAIStep '기존 머신 환경변수 DB URL로 접속되지 않습니다 — 비밀번호를 다시 받습니다'
+            Write-PhysicsAIStep '기존 DB 접속 정보로 접속되지 않습니다 — 비밀번호를 다시 받습니다'
         }
     }
     $adminPw = Read-PhysicsAISecret 'PostgreSQL 관리자(postgres) 비밀번호' 'PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD' -FromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive
@@ -181,14 +192,87 @@ function Initialize-PhysicsAIDatabase {
     return $url
 }
 
-function Set-PhysicsAIMachineEnv {
-    <# 머신 환경변수 PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL(값은 출력하지 않음) + 이 프로세스에도. #>
-    param([Parameter(Mandatory = $true)][string]$ConfigPath, [Parameter(Mandatory = $true)][string]$DbUrl)
-    [Environment]::SetEnvironmentVariable('PHYSICSAI_CONFIG', $ConfigPath, 'Machine')
-    [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', $DbUrl, 'Machine')
-    $env:PHYSICSAI_CONFIG = $ConfigPath
+# ---- 런타임 파일(관리자 권한 없이 — phase3 D3-41) ------------------------------------------------------------------
+# DB URL(앱 비밀번호 포함)은 <런타임>\secrets\database_url 한 파일(UTF-8, BOM·줄바꿈 없음)에만 둔다. 백엔드·워커는
+# `--runtime <런타임>` 인자(파일 경로만 — 비밀값은 인자·로그에 없음)로 찾는다(physicsai_core.config.runtime).
+
+function Get-PhysicsAIMachineEnv([string]$Name) {
+    <# 이전 설치의 머신 환경변수 읽기(읽기만 — 쓰지 않는다. 일반 사용자도 읽을 수 있음). #>
+    return [Environment]::GetEnvironmentVariable($Name, 'Machine')
+}
+
+function Get-PhysicsAIRuntimeSecretPath([string]$RuntimeDir) { return (Join-Path (Join-Path $RuntimeDir 'secrets') 'database_url') }
+
+function Get-PhysicsAIDbUrl {
+    <# DB URL: 런타임 파일 → (없으면) 이전 설치의 머신 환경변수(읽기만) → 빈 문자열. 값은 출력하지 않는다. #>
+    param([string]$RuntimeDir = '')
+    if ($RuntimeDir) {
+        $f = Get-PhysicsAIRuntimeSecretPath $RuntimeDir
+        if (Test-Path -LiteralPath $f -PathType Leaf) {
+            $v = ([IO.File]::ReadAllText($f)).Trim().TrimStart([char]0xFEFF)
+            if ($v) { return $v }
+        }
+    }
+    $m = Get-PhysicsAIMachineEnv 'PHYSICSAI_DATABASE_URL'
+    if ($m) { return $m }
+    return ''
+}
+
+function Protect-PhysicsAISecretPath {
+    <#
+      비밀 폴더·파일 ACL: 상속 해제 + 현재 사용자·SYSTEM 모든 권한(+작업 실행 계정이 다르면 읽기)만 — icacls(Windows 기본 도구).
+      실패하거나 icacls가 없으면 경고만 하고 계속한다(설치를 막지 않음). 성공하면 $true.
+    #>
+    param([Parameter(Mandatory = $true)][string]$Path, [string]$ServiceUser = '')
+    $icacls = Get-Command icacls -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if (-not $icacls) { Write-Warning "비밀 파일 권한 제한을 건너뜁니다(icacls 없음): $Path"; return $false }
+    $me = "$env:USERDOMAIN\$env:USERNAME"
+    try { $me = '*' + [Security.Principal.WindowsIdentity]::GetCurrent().User.Value } catch { Write-Verbose '현재 사용자 SID를 읽지 못함 — 이름으로 지정' }
+    $grants = @("${me}:(OI)(CI)F", '*S-1-5-18:(OI)(CI)F')
+    $cur = "$env:USERDOMAIN\$env:USERNAME"
+    if ($ServiceUser -and $ServiceUser -ine $cur) { $grants += "${ServiceUser}:(OI)(CI)R" }
+    $icArgs = @($Path, '/inheritance:r', '/grant:r') + $grants + @('/T', '/C', '/Q')
+    $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try { $out = @(& $icacls.Source @icArgs 2>&1 | ForEach-Object { "$_" }); $rc = $LASTEXITCODE }
+    catch { $out = @("$($_.Exception.Message)"); $rc = -1 }
+    finally { $ErrorActionPreference = $eap }
+    if ($rc -ne 0) {
+        Write-Warning "비밀 파일 권한 제한 실패(icacls 종료코드 $rc): $Path — $(($out | Where-Object { $_ }) -join ' ') (설치는 계속합니다. 다른 사용자가 이 PC에 로그온한다면 이 폴더 권한을 직접 확인하세요)"
+        return $false
+    }
+    return $true
+}
+
+function Write-PhysicsAIRuntimeSecret {
+    <#
+      DB URL을 <런타임>\secrets\database_url에 쓴다(값은 출력하지 않음, 같은 값이면 다시 쓰지 않음) + ACL 제한 시도 + 이 프로세스 환경에도
+      (alembic용 — 프로세스 범위라 다른 프로세스·머신 환경변수에는 남지 않음). 관리자 권한 불필요.
+    #>
+    param([Parameter(Mandatory = $true)][string]$RuntimeDir, [Parameter(Mandatory = $true)][string]$DbUrl, [string]$ServiceUser = '', [string]$ConfigPath = '')
+    $dir = Join-Path $RuntimeDir 'secrets'
+    $f = Get-PhysicsAIRuntimeSecretPath $RuntimeDir
+    New-Item -ItemType Directory -Force -Path $dir | Out-Null
+    $same = (Test-Path -LiteralPath $f -PathType Leaf) -and (([IO.File]::ReadAllText($f)).Trim() -ceq $DbUrl)
+    if (-not $same) { [IO.File]::WriteAllText($f, $DbUrl, (New-Object Text.UTF8Encoding($false))) }
+    $ok = Protect-PhysicsAISecretPath -Path $dir -ServiceUser $ServiceUser
     $env:PHYSICSAI_DATABASE_URL = $DbUrl
-    Write-PhysicsAIStep '머신 환경변수 PHYSICSAI_CONFIG·PHYSICSAI_DATABASE_URL 설정(값은 출력하지 않음)'
+    if ($ConfigPath) { $env:PHYSICSAI_CONFIG = $ConfigPath }
+    Write-PhysicsAIStep "DB 접속 정보: $f $(if ($same) { '(변경 없음)' } else { '(저장)' })$(if ($ok) { ' — 현재 사용자·SYSTEM만 읽기' }) (값은 출력하지 않음)"
+}
+
+function Move-PhysicsAIMachineEnvToRuntime {
+    <#
+      이전 설치(관리자 권한, 머신 환경변수) → 런타임 파일 이전: 런타임 DB 파일이 없고 머신 환경변수 PHYSICSAI_DATABASE_URL이 있으면 그 값을 파일로.
+      머신 환경변수는 지우지 않는다(관리자 필요) — 이후에는 런타임 파일이 우선(--runtime). 옮겼으면 $true.
+    #>
+    param([Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ServiceUser = '')
+    $f = Get-PhysicsAIRuntimeSecretPath $RuntimeDir
+    $m = Get-PhysicsAIMachineEnv 'PHYSICSAI_DATABASE_URL'
+    if ((Test-Path -LiteralPath $f -PathType Leaf) -or -not $m) { return $false }
+    Write-PhysicsAIRuntimeSecret -RuntimeDir $RuntimeDir -DbUrl $m -ServiceUser $ServiceUser
+    Write-PhysicsAIStep '이전 설치의 머신 환경변수 DB URL을 런타임 파일로 옮겼습니다 — 이제 런타임 파일이 우선입니다(머신 환경변수는 그대로 둠)'
+    Write-PhysicsAIStep "  머신 환경변수를 지우려면(선택, 관리자 PowerShell): [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', `$null, 'Machine'); [Environment]::SetEnvironmentVariable('PHYSICSAI_CONFIG', `$null, 'Machine')"
+    return $true
 }
 
 function Invoke-PhysicsAIMigration {
@@ -217,13 +301,50 @@ function Get-PhysicsAITaskExecute {
     return ''
 }
 
+function Get-PhysicsAITaskArguments {
+    <# 작업 실행 인자: -m <모듈> --runtime "<런타임>" [--config "<설정>"](설정이 <런타임>\config\platform.yaml이 아닐 때만). 비밀값 없음(파일 경로만). #>
+    param([Parameter(Mandatory = $true)][string]$Module, [Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '')
+    $a = "-m $Module --runtime `"$($RuntimeDir.TrimEnd('\', '/'))`""
+    $defCfg = Join-Path (Join-Path $RuntimeDir 'config') 'platform.yaml'
+    if ($ConfigPath -and -not ([IO.Path]::GetFullPath($ConfigPath) -ieq [IO.Path]::GetFullPath($defCfg))) { $a += " --config `"$ConfigPath`"" }
+    return $a
+}
+
+function Get-PhysicsAITaskSpecs {
+    param([Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '')
+    return @(
+        @{ Name = 'PhysicsAI-Backend'; Args = (Get-PhysicsAITaskArguments -Module 'physicsai_api.serve' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) },
+        @{ Name = 'PhysicsAI-Worker'; Args = (Get-PhysicsAITaskArguments -Module 'physicsai_worker' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) }
+    )
+}
+
+function Grant-PhysicsAITaskAccess {
+    <#
+      등록한 작업의 보안 설명자에 실행 계정 모든 권한(FA)을 더한다(최선 노력 — 실패는 조용히). 관리자 PowerShell로 한 번 등록(이전 설치 이어받기)해도
+      그 뒤 일반 PowerShell에서 중지·시작·다시 등록할 수 있게(phase3 D3-41).
+    #>
+    param([Parameter(Mandatory = $true)][string]$TaskName, [Parameter(Mandatory = $true)][string]$User)
+    try {
+        $sid = (New-Object Security.Principal.NTAccount($User)).Translate([Security.Principal.SecurityIdentifier]).Value
+        $svc = New-Object -ComObject 'Schedule.Service'
+        $svc.Connect()
+        $task = $svc.GetFolder('\').GetTask($TaskName)
+        $sd = $task.GetSecurityDescriptor(4)   # DACL
+        if ($sd -notmatch [regex]::Escape(";;;$sid)")) { $task.SetSecurityDescriptor($sd + "(A;;FA;;;$sid)", 0) }
+    } catch { Write-Verbose "작업 권한 추가 건너뜀($TaskName): $($_.Exception.Message)" }
+}
+
 function Register-PhysicsAITasks {
     <#
-      작업 스케줄러 등록 PhysicsAI-Backend(-m physicsai_api.serve)·PhysicsAI-Worker(-m physicsai_worker). 이미 있으면 다시 등록(같은 이름).
-      ExecutionTimeLimit = 0(무제한) 필수 — 기본 72시간이면 장시간 작업 중 워커가 종료된다(phase2 §11.1)
+      작업 스케줄러 등록 PhysicsAI-Backend(-m physicsai_api.serve)·PhysicsAI-Worker(-m physicsai_worker) — 인자 --runtime <런타임>(Get-PhysicsAITaskArguments).
+      이미 있으면 다시 등록(같은 이름). ExecutionTimeLimit = 0(무제한) 필수 — 기본 72시간이면 장시간 작업 중 워커가 종료된다(phase2 §11.1).
+      Interactive(기본): 실행 계정(기본 현재 사용자) 로그온 시, LogonType Interactive·RunLevel Limited — 관리자 권한 불필요.
+      Background: 부팅 시(AtStartup)·비밀번호 저장 — 이 모드만 관리자 권한이 필요할 수 있다(거부되면 안내).
+      이전 설치가 관리자 권한으로 만든 작업이라 바꿀 수 없으면(액세스 거부) "처음 한 번만 관리자 PowerShell로 update-repo.ps1" 안내로 중단.
     #>
     param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$WorkDir,
           [Parameter(Mandatory = $true)][string]$ServiceUser, [Parameter(Mandatory = $true)][ValidateSet('Background', 'Interactive')][string]$RunMode,
+          [Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '',
           [switch]$PasswordsFromEnv, [switch]$NonInteractive)
     $settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit (New-TimeSpan -Seconds 0) -RestartCount 999 `
         -RestartInterval (New-TimeSpan -Minutes 1) -MultipleInstances IgnoreNew -StartWhenAvailable `
@@ -235,29 +356,80 @@ function Register-PhysicsAITasks {
         $trigger = New-ScheduledTaskTrigger -AtStartup
         $svcPw = Read-PhysicsAISecret "작업 실행 계정($ServiceUser) 비밀번호" 'PHYSICSAI_INSTALL_SERVICE_PASSWORD' -FromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive
     }
-    $tasks = @(
-        @{ Name = 'PhysicsAI-Backend'; Args = '-m physicsai_api.serve' },
-        @{ Name = 'PhysicsAI-Worker'; Args = '-m physicsai_worker' }
-    )
-    foreach ($t in $tasks) {
+    foreach ($t in (Get-PhysicsAITaskSpecs -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath)) {
         $action = New-ScheduledTaskAction -Execute $VenvPy -Argument $t.Args -WorkingDirectory $WorkDir
-        if (Get-ScheduledTask -TaskName $t.Name -ErrorAction SilentlyContinue) {
-            Stop-ScheduledTask -TaskName $t.Name -ErrorAction SilentlyContinue
-            Unregister-ScheduledTask -TaskName $t.Name -Confirm:$false
+        try {
+            if (Get-ScheduledTask -TaskName $t.Name -ErrorAction SilentlyContinue) {
+                Stop-ScheduledTask -TaskName $t.Name -ErrorAction SilentlyContinue
+                Unregister-ScheduledTask -TaskName $t.Name -Confirm:$false -ErrorAction Stop
+            }
+            if ($RunMode -eq 'Interactive') {
+                Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger -Settings $settings -Principal $principal -ErrorAction Stop | Out-Null
+            } else {
+                Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger -Settings $settings `
+                    -User $ServiceUser -Password (ConvertTo-PhysicsAIPlain $svcPw) -RunLevel Limited -ErrorAction Stop | Out-Null
+            }
+        } catch {
+            Remove-Variable -Name svcPw -ErrorAction SilentlyContinue
+            if (Test-PhysicsAIAccessDenied $_ -AlreadyExists) {
+                if ($RunMode -eq 'Background') {
+                    throw ("작업 등록이 거부되었습니다($($t.Name), Background 모드). Background(부팅 시·비밀번호 저장) 등록은 관리자 권한이 필요할 수 있습니다.`n" +
+                        "다음 행동: 기본 Interactive 모드를 쓰거나(deploy.json run_mode 또는 -RunMode Interactive), 이 모드만 관리자 PowerShell에서 실행하세요.")
+                }
+                throw (Get-PhysicsAITaskAdminMessage)
+            }
+            throw
         }
-        if ($RunMode -eq 'Interactive') {
-            Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger -Settings $settings -Principal $principal | Out-Null
-        } else {
-            Register-ScheduledTask -TaskName $t.Name -Action $action -Trigger $trigger -Settings $settings `
-                -User $ServiceUser -Password (ConvertTo-PhysicsAIPlain $svcPw) -RunLevel Limited | Out-Null
-        }
-        Write-PhysicsAIStep "작업 등록: $($t.Name) ($RunMode, 작업 폴더 $WorkDir)"
+        Grant-PhysicsAITaskAccess -TaskName $t.Name -User $ServiceUser
+        Write-PhysicsAIStep "작업 등록: $($t.Name) ($RunMode, $ServiceUser, 작업 폴더 $WorkDir, 인자 $($t.Args))"
     }
     Remove-Variable -Name svcPw -ErrorAction SilentlyContinue
 }
 
+function Test-PhysicsAITasksCurrent {
+    <# 등록된 두 작업의 실행 파일·인자·작업 폴더가 원하는 값과 같으면 $true(다시 등록할 필요 없음). #>
+    param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$WorkDir,
+          [Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '')
+    foreach ($t in (Get-PhysicsAITaskSpecs -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath)) {
+        $cur = Get-ScheduledTask -TaskName $t.Name -ErrorAction SilentlyContinue
+        if (-not $cur -or -not $cur.Actions.Count) { return $false }
+        $a = $cur.Actions[0]
+        if ("$($a.Execute)" -ne $VenvPy -or "$($a.Arguments)" -ne $t.Args -or "$($a.WorkingDirectory)" -ne $WorkDir) { return $false }
+    }
+    return $true
+}
+
+function Update-PhysicsAITaskRegistration {
+    <#
+      업데이트(update-repo.ps1·update.ps1): 작업 인자가 새 방식(--runtime)과 다르면 다시 등록(Interactive만 — 질문 없음).
+      Background는 비밀번호가 필요해 자동으로 다시 등록하지 않고 안내만 한다(기존 작업은 이전 머신 환경변수로 계속 동작).
+    #>
+    param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$WorkDir,
+          [Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '', [string]$ServiceUser = '', [string]$RunMode = 'Interactive')
+    if (Test-PhysicsAITasksCurrent -VenvPy $VenvPy -WorkDir $WorkDir -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) {
+        Write-PhysicsAIStep '작업 등록 그대로(인자 --runtime 확인)'
+        return
+    }
+    if (-not $ServiceUser) { $ServiceUser = "$env:USERDOMAIN\$env:USERNAME" }
+    if ($RunMode -eq 'Background') {
+        Write-Warning ("작업 인자가 새 방식(--runtime)이 아니지만 Background 모드라 자동으로 다시 등록하지 않습니다(비밀번호 필요). " +
+            "기존 작업은 이전 머신 환경변수로 계속 동작합니다. 바꾸려면 setup.ps1을 다시 실행하세요(Background 등록은 관리자 권한이 필요할 수 있음).")
+        return
+    }
+    Write-PhysicsAIStep '작업 다시 등록(인자 --runtime <런타임> — 머신 환경변수 대신 런타임 파일)'
+    Register-PhysicsAITasks -VenvPy $VenvPy -WorkDir $WorkDir -ServiceUser $ServiceUser -RunMode 'Interactive' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath -NonInteractive
+}
+
 function Stop-PhysicsAITasks {
-    foreach ($t in $PhysicsAITaskNames) { Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue }
+    <# 두 작업 중지(없으면 건너뜀). 이전 설치가 관리자 권한으로 만든 작업이라 거부되면 안내와 함께 중단(Get-PhysicsAITaskAdminMessage). #>
+    foreach ($t in $PhysicsAITaskNames) {
+        if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
+        try { Stop-ScheduledTask -TaskName $t -ErrorAction Stop }
+        catch {
+            if (Test-PhysicsAIAccessDenied $_) { throw (Get-PhysicsAITaskAdminMessage) }
+            Write-Warning "작업 중지 실패: $t — $($_.Exception.Message)"
+        }
+    }
     Start-Sleep -Seconds 5
 }
 
@@ -275,7 +447,10 @@ function Wait-PhysicsAIHealth {
 function Start-PhysicsAITasksAndWait {
     <# 두 작업 시작 → health 확인. 실패하면 원인 확인 위치와 함께 중단. health 주소를 돌려준다. #>
     param([Parameter(Mandatory = $true)][int]$Port, [string]$LogDir = '')
-    foreach ($t in $PhysicsAITaskNames) { Start-ScheduledTask -TaskName $t }
+    foreach ($t in $PhysicsAITaskNames) {
+        try { Start-ScheduledTask -TaskName $t -ErrorAction Stop }
+        catch { if (Test-PhysicsAIAccessDenied $_) { throw (Get-PhysicsAITaskAdminMessage) }; throw }
+    }
     $health = "http://127.0.0.1:$Port/physicsai/api/health"
     if (-not (Wait-PhysicsAIHealth -Port $Port)) {
         $where = if ($LogDir) { " 로그: $LogDir\backend.log" } else { '' }
@@ -287,12 +462,12 @@ function Start-PhysicsAITasksAndWait {
 
 function Get-PhysicsAIActiveJobCount {
     <#
-      대기·실행 중 작업 + 진행 중 환경 점검 수. 묻지 않고 머신 환경변수 DB URL로 psql 직접 조회한다(대시보드 세션 토큰 질문 없음 — phase3 D3-39).
-      접속 정보는 PG* 프로세스 환경으로만 전달(명령 인자에 비밀번호 없음).
+      대기·실행 중 작업 + 진행 중 환경 점검 수. 묻지 않고 DB URL(-DbUrl = Get-PhysicsAIDbUrl: 런타임 파일 → 이전 머신 환경변수)로 psql 직접 조회한다
+      (대시보드 세션 토큰 질문 없음 — phase3 D3-39). 접속 정보는 PG* 프로세스 환경으로만 전달(명령 인자에 비밀번호 없음).
     #>
-    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin)
-    $p = ConvertFrom-PhysicsAIDbUrl ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine'))
-    if (-not $p) { throw '머신 환경변수 PHYSICSAI_DATABASE_URL이 없거나 형식을 해석할 수 없어 대기열을 확인할 수 없습니다(설치 setup.ps1·install.ps1을 먼저 하세요)' }
+    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin, [string]$DbUrl = '')
+    $p = ConvertFrom-PhysicsAIDbUrl $DbUrl
+    if (-not $p) { throw 'DB 접속 정보(런타임 파일 .runtime\secrets\database_url 또는 이전 설치의 머신 환경변수 PHYSICSAI_DATABASE_URL)가 없거나 형식을 해석할 수 없어 대기열을 확인할 수 없습니다(설치 setup.ps1·install.ps1을 먼저 하세요)' }
     $env:PGUSER = $p.User; $env:PGHOST = $p.Host; $env:PGPORT = [string]$p.Port; $env:PGDATABASE = $p.Db; $env:PGPASSWORD = $p.Password
     try {
         $n = & (Join-Path $PgBin 'psql.exe') -w -tAc "SELECT (SELECT count(*) FROM jobs WHERE state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING')) + (SELECT count(*) FROM env_checks WHERE state IN ('PENDING','RUNNING'))"
@@ -305,8 +480,8 @@ function Get-PhysicsAIActiveJobCount {
 
 function Assert-PhysicsAINoActiveJobs {
     <# 대기·실행 중 작업이 있으면 묻지 않고 안내와 함께 중단(-Force면 경고 후 진행). #>
-    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin, [switch]$Force)
-    $active = Get-PhysicsAIActiveJobCount -Port $Port -PgBin $PgBin
+    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin, [string]$DbUrl = '', [switch]$Force)
+    $active = Get-PhysicsAIActiveJobCount -Port $Port -PgBin $PgBin -DbUrl $DbUrl
     if ($active -gt 0) {
         if (-not $Force) { throw "대기·실행 중 작업 또는 진행 중 환경 점검이 $active 건 있습니다. 끝난 뒤 다시 실행하세요(기다리지 않으려면 -Force)" }
         Write-Warning "-Force: 실행 중 작업은 lease 만료 후 INTERRUPTED가 됩니다($active 건)"
@@ -350,6 +525,31 @@ function Publish-PhysicsAIFrontend {
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
     Copy-Item -Recurse -Force (Join-Path $Dist '*') $Dest
     Write-PhysicsAIStep "프런트 배치: $Dest"
+}
+
+function Install-PhysicsAIFrontendFromRepo {
+    <#
+      git 폴더의 프런트를 배치(phase3 D3-40): 저장소 빌드본 <RepoRoot>\frontend-dist가 있고 BUILD_INFO.json source_hash가 현재 소스와 같으면
+      그대로 복사 — Node 선택·npm 단계 자체를 건너뜀. 다르거나 없을 때만 Node 22로 직접 빌드(Invoke-PhysicsAIFrontendBuild, 콘솔 그대로 — D3-39).
+      반환값 없음 — 결과를 변수에 받지 말 것(받으면 npm 출력이 파이프가 된다). node-select.ps1을 함께 dot-source 해야 한다.
+    #>
+    param([Parameter(Mandatory = $true)][string]$RepoRoot, [Parameter(Mandatory = $true)][string]$Dest, [Parameter(Mandatory = $true)][string]$BackupDir,
+          [string]$DashboardNode = '', [string]$StampFile = '')
+    $st = Test-PhysicsAIFrontendDist -RepoRoot $RepoRoot
+    if ($st.Fresh) {
+        Write-PhysicsAIStep "프런트: 저장소 빌드본 frontend-dist 사용(소스와 일치 $($st.Current.Substring(0, 12)) — Node·npm 불필요)"
+        Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend-dist') -Dest $Dest -BackupDir $BackupDir
+    } else {
+        Write-PhysicsAIStep "프런트: $($st.Reason) — Node 22로 직접 빌드합니다"
+        try { $node = Select-PhysicsAINode -DashboardNode $DashboardNode -RepoRoot $RepoRoot -Tag $script:PhysicsAITag }
+        catch {
+            throw ("저장소 빌드본(frontend-dist)이 현재 소스와 맞지 않아 직접 빌드해야 하는데 Node 22가 없습니다.`n" +
+                "다음 행동: 개발 쪽에 'scripts/build-frontend-dist 실행 후 frontend-dist 커밋'을 요청한 뒤 다시 업데이트하세요(Node 불필요). 또는 Node 22를 설치하세요.`n" +
+                "($($_.Exception.Message))")
+        }
+        Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $RepoRoot -StampFile $StampFile
+        Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend\dist') -Dest $Dest -BackupDir $BackupDir
+    }
 }
 
 function Restore-PhysicsAIAfterFailedUpdate {

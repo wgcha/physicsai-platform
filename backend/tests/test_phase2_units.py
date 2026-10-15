@@ -276,7 +276,8 @@ def test_collect_offline_dry_run():
     out = r.stdout
     assert "pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels" in out
     assert "3.13" not in out
-    assert "pip wheel . --no-deps -w dist/wheels" in out and "npm ci" in out and "npm run build" in out
+    # 프런트: 저장소 빌드본 frontend-dist가 최신이면 그대로(npm 없음 — phase3 D3-40)
+    assert "pip wheel . --no-deps -w dist/wheels" in out and "cp -r frontend-dist/. dist/frontend/" in out and "npm ci" not in out
     assert "physicsai-offline-" in out and ".zip" in out
 
 
@@ -311,22 +312,38 @@ def test_collect_offline_ps1_selects_dashboard_runtimes(tmp_path):
     stub(dash / ".tools" / "node-v22.23.2-win-x64" / "node.exe", 'echo v22.23.2')
     stub(dash / ".tools" / "node-v22.23.2-win-x64" / "npm.cmd", 'exit 0')
     (dash / ".env").write_text("DATABASE_URL=postgresql://u:secret-x@h:5/d\n", encoding="utf-8")
-    script = (DEPLOY / "collect-offline.ps1").as_posix()
     env = {**os.environ, "PATH": f"{shims}{os.pathsep}{os.environ['PATH']}"}
+    # 프런트 빌드본이 없는(오래된) 저장소 사본 — Node 선택·npm 경로(phase3 D3-40)
+    stale = tmp_path / "stale-repo"
+    shutil.copytree(DEPLOY, stale / "deploy", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copy(REPO / "pyproject.toml", stale / "pyproject.toml")
+    (stale / ".node-version").write_text("v22.23.2\n", encoding="utf-8")
+    (stale / "frontend").mkdir()
+    (stale / "frontend" / "package-lock.json").write_text("{}", encoding="utf-8")
 
-    def run(*args: str, path: str | None = None) -> subprocess.CompletedProcess:
+    def run(*args: str, path: str | None = None, root: Path = stale) -> subprocess.CompletedProcess:
         e = dict(env) if path is None else {**env, "PATH": path}
-        return subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-File", script, "-DryRun", *args],
-                              capture_output=True, text=True, cwd=REPO, env=e, timeout=120)
+        return subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-File", (root / "deploy" / "collect-offline.ps1").as_posix(), "-DryRun", *args],
+                              capture_output=True, text=True, cwd=root, env=e, timeout=120)
 
     r = run("-DashboardRoot", dash.as_posix())
     out = r.stdout + r.stderr
     assert r.returncode == 0, out
     assert "Python 후보 건너뜀: -PythonExe" not in out and "Python 선택: 대시보드 Python 3.12 → /dash/cpython-3.12.13/python.exe" in out
-    assert "Node 선택: 대시보드 Node" in out and "v22.23.2" in out and "secret-x" not in out
+    assert "frontend-dist가 없습니다" in out and "Node 선택: 대시보드 Node" in out and "v22.23.2" in out and "secret-x" not in out
     lines = [ln for ln in r.stdout.splitlines() if ln.startswith("+ ")]
     assert any("pip wheel packages/simdash_adapters" in ln for ln in lines) and any("npm ci" in ln for ln in lines)
-    assert not (REPO / "dist" / "_buildvenv").exists()   # -DryRun은 venv를 만들지 않는다
+    assert any("copy frontend\\dist" in ln for ln in lines)
+    assert not (stale / "dist" / "_buildvenv").exists()   # -DryRun은 venv를 만들지 않는다
+
+    # 실제 저장소(frontend-dist 최신): Node를 고르지 않고 빌드본을 묶는다(Node·npm 불필요)
+    r = run("-DashboardRoot", dash.as_posix(), root=REPO)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0, out
+    assert "저장소 빌드본 frontend-dist 사용" in out and "Node 선택" not in out
+    lines = [ln for ln in r.stdout.splitlines() if ln.startswith("+ ")]
+    assert not any("npm" in ln for ln in lines) and any("copy frontend-dist" in ln for ln in lines)
+    assert not (REPO / "dist" / "_buildvenv").exists()
 
     # 대시보드 없이 PATH 첫 python이 shim이고 다른 3.12도 없으면: 원인(건너뛴 후보)·다음 행동으로 중단
     r = run(path=f"{shims}{os.pathsep}{tmp_path / 'empty'}")

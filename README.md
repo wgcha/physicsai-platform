@@ -10,11 +10,11 @@ Altair PhysicsAI(edspy) 기반 해석 대리모델의 데이터셋·모델 관�
 
 ## 빠른 시작(운영 설치 — 대시보드와 같은 Windows PC)
 
-관리자 권한 Windows PowerShell, 저장소를 받은 git 폴더에서(묶음·압축 없이 이 폴더에 설치, 런타임 파일은 git 제외 `.runtime\`):
+일반 Windows PowerShell(관리자 권한 불필요, Node 불필요 — 빌드된 화면 `frontend-dist` 포함). 저장소를 받은 git 폴더에 그대로 설치한다(런타임 파일은 git 제외 `.runtime\`):
 
 ```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\setup.ps1        # 설치(대시보드·AI 루트·원본 앱 폴더를 묻고 확인 표 → Y)
-git pull; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1   # 업데이트
+powershell -NoProfile -ExecutionPolicy Bypass -File E:\…\physicsai-platform\deploy\setup.ps1        # 설치(대시보드·AI 루트·원본 앱 폴더를 묻고 확인 표 → Y)
+powershell -NoProfile -ExecutionPolicy Bypass -File E:\…\physicsai-platform\deploy\update-repo.ps1  # 업데이트(git pull 포함, 질문 없음)
 ```
 
 자세한 내용·폐쇄망 서버용 오프라인 묶음 방식은 [관리자 매뉴얼](docs/manual/admin.md) §2·§3.

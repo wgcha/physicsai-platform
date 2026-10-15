@@ -2,8 +2,9 @@
 .SYNOPSIS
   PhysicsAI 업데이트(phase2 §11.2). 기존 venv·프런트·migrations를 _backup\<UTC>로 이동(삭제 없음)한 뒤 새 묶음 설치.
 .DESCRIPTION
+  일반 PowerShell(관리자 권한 불필요 — phase3 D3-41). 이전 설치의 머신 환경변수 DB URL은 <install_root>\secrets\database_url로 옮긴다(머신 환경변수는 그대로).
   ① 실행 중 작업·진행 중 환경 점검 확인(묻지 않고 DB 직접 조회) → 있으면 중단(-Force면 경고 후 진행)
-  ② 작업 2개 중지 ③ 기존 venv·frontend·migrations를 <install_root>\_backup\<UTC>로 이동 ④ 새 wheel·프런트 배치
+  ② 작업 2개 중지(작업 인자가 --runtime 방식이 아니면 다시 등록 — Interactive만) ③ 기존 venv·frontend·migrations를 <install_root>\_backup\<UTC>로 이동 ④ 새 wheel·프런트(묶음의 빌드본) 배치
   ⑤ alembic upgrade head ⑥ 시작·health 확인 ⑦ 실패 시 되돌리는 방법 안내(자동 되돌림 없음)
 #>
 [CmdletBinding()]
@@ -34,12 +35,16 @@ $venvPy = Join-Path $root 'venv\Scripts\python.exe'
 $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $backup = Join-Path $root "_backup\$stamp"
 $port = Get-PhysicsAIBackendPort $cfg.config_path $venvPy   # 기존 venv로 읽음(없으면 yaml에서 직접)
+Move-PhysicsAIMachineEnvToRuntime -RuntimeDir $root -ServiceUser "$($cfg.service_user)" | Out-Null   # 이전 설치(머신 환경변수) → 런타임 파일
+$dbUrl = Get-PhysicsAIDbUrl -RuntimeDir $root
 
 # ---- ① 실행 중 작업 확인(묻지 않고 DB 직접) ----------------------------------
-Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -Force:$Force
+Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -DbUrl $dbUrl -Force:$Force
 
-# ---- ② 중지 --------------------------------------------------------------------------------
+# ---- ② 중지(+ 작업 인자 갱신) ------------------------------------------------------------------
 Stop-PhysicsAITasks
+Update-PhysicsAITaskRegistration -VenvPy $venvPy -WorkDir $root -RuntimeDir $root -ConfigPath $cfg.config_path -ServiceUser "$($cfg.service_user)" `
+    -RunMode $(if ("$($cfg.run_mode)" -eq 'Background') { 'Background' } else { 'Interactive' })
 
 # ---- ③ 기존 설치 백업 이동(삭제 없음) -------------------------------------------------------------
 New-Item -ItemType Directory -Force -Path $backup | Out-Null
@@ -58,8 +63,8 @@ try {
     New-Item -ItemType Directory -Force -Path $cfg.caddy_frontend_root | Out-Null
     Copy-Item -Recurse -Force (Join-Path $pkg 'frontend\*') $cfg.caddy_frontend_root
 
-    # ---- ⑤ migration(머신 환경변수의 DB URL을 이 프로세스로) -----------------------------------
-    $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
+    # ---- ⑤ migration(DB URL은 런타임 파일 → 이 프로세스 환경으로만) -----------------------------------
+    $env:PHYSICSAI_DATABASE_URL = $dbUrl
     $env:PHYSICSAI_CONFIG = $cfg.config_path
     Invoke-PhysicsAIMigration -VenvPy $venvPy -AlembicIni (Join-Path $root 'migrations\alembic.ini')
 

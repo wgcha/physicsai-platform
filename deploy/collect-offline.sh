@@ -28,8 +28,13 @@ run "$PY -m pip wheel packages/simdash_adapters --no-deps -w dist/wheels"
 run "$PY -m pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
 run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
 run "$PY -m pip wheel . --no-deps -w dist/wheels"
-run "(cd frontend && npm ci && npm run build)"
-run "cp -r frontend/dist/. dist/frontend/"
+# 프런트: 저장소 빌드본 frontend-dist가 현재 소스와 같으면 그대로(Node·npm 불필요, phase3 D3-40), 아니면 npm으로 빌드
+if "$PY" scripts/frontend_source_hash.py --check "$ROOT"; then
+  run "cp -r frontend-dist/. dist/frontend/"
+else
+  run "(cd frontend && npm ci && npm run build)"
+  run "cp -r frontend/dist/. dist/frontend/"
+fi
 run "cp -r migrations dist/migrations"
 run "cp config/platform.example.yaml dist/config/platform.example.yaml"
 run "cp config/platform.demo.yaml dist/config/platform.demo.yaml"

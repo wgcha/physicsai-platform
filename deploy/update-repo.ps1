@@ -1,15 +1,21 @@
 ﻿<#
 .SYNOPSIS
-  PhysicsAI git 폴더 설치(setup.ps1)의 업데이트. git pull 뒤 이 스크립트 한 번(인자·질문 없음)으로 반영한다.
+  PhysicsAI git 폴더 설치(setup.ps1)의 업데이트. 이 스크립트 한 줄(인자·질문 없음, git pull 포함)로 반영한다.
 .DESCRIPTION
-  관리자 권한 Windows PowerShell에서 git 폴더 루트에서:
-    git pull; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1
+  일반 Windows PowerShell(관리자 권한 불필요 — phase3 D3-41)에서, 어느 폴더에서든:
+    powershell -NoProfile -ExecutionPolicy Bypass -File <git 폴더>\deploy\update-repo.ps1
   모든 값은 <git>\.runtime\deploy.json(setup.ps1이 만든 것)에서 읽고, 아무것도 묻지 않는다(phase3 D3-39).
+  ⓪ git pull --ff-only(스스로 — D3-40). 추적 파일에 로컬 변경이 있으면 안내 후 중단(바꾼 것 없음). 분리된 HEAD(특정 커밋 고정 — 되돌리기)면
+     pull 없이 그 커밋으로 반영. 새 커밋을 받았으면 새 update-repo.ps1로 다시 실행한다(-SkipPull).
+     이전 설치의 머신 환경변수 DB URL은 런타임 파일(.runtime\secrets\database_url)로 옮긴다(머신 환경변수는 그대로).
   ① 대기·실행 중 작업·진행 중 환경 점검 확인(DB 직접 조회) → 있으면 안내 후 중단(-Force면 진행)
-  ② 작업 2개 중지 ③ venv 패키지 갱신(requirements.lock → simdash_adapters → 플랫폼, 일반 설치 — 새 소스 반영)
+  ② 작업 2개 중지(+ 작업 인자가 새 방식 --runtime이 아니면 다시 등록 — 이전 설치가 관리자 권한으로 만든 작업이라 거부되면
+     "처음 한 번만 관리자 PowerShell로 update-repo.ps1" 안내)
+  ③ venv 패키지 갱신(requirements.lock → simdash_adapters → 플랫폼, 일반 설치 — 새 소스 반영)
   ④ 설정 보충(setup_config.py: 기존 값 유지, 새로 생긴 관리 키만 보충 — 바뀌면 먼저 _backup 복사)
-  ⑤ 프런트 재빌드(Node 22, npm은 창에서 직접 친 것과 같이 콘솔 그대로 실행 — 실패하면 10초 뒤 한 번 더) → <런타임>\frontend(이전 것은 _backup)
-  ⑥ alembic upgrade head ⑦ 작업 시작·health. 끝에 성공/실패와 접속 주소 한 줄.
+  ⑤ 프런트 배치: 저장소 빌드본 frontend-dist가 현재 소스와 같으면 그대로 복사(Node·npm 단계 없음, D3-40). 다를 때만 Node 22로 빌드
+     (npm은 창에서 직접 친 것과 같이 콘솔 그대로 — 실패하면 10초 뒤 한 번 더) → <런타임>\frontend(이전 것은 _backup)
+  ⑥ alembic upgrade head ⑦ 작업 시작·health. 끝 줄은 "업데이트 성공 — 접속: …" 또는 "업데이트 실패 — 접속: …".
   ⑥ 전에 실패하면 이전 프런트를 되돌리고 작업 2개를 다시 시작한다(서비스를 멈춘 채 두지 않음). ⑥ 이후 실패는 되돌리는 방법을 안내.
 .PARAMETER Force
   대기·실행 중 작업이 있어도 진행(실행 중 작업은 lease 만료 후 INTERRUPTED)
@@ -17,12 +23,15 @@
   호환용(이 스크립트는 묻는 것이 없다)
 .PARAMETER NoStart
   작업 시작·health 확인을 하지 않는다
+.PARAMETER SkipPull
+  git pull 없이 현재 커밋을 반영한다(새 커밋을 받은 뒤 스스로 다시 실행할 때 쓰는 값 — 직접 쓸 일은 드묾)
 #>
 [CmdletBinding()]
 param(
     [switch]$Force,
     [switch]$NonInteractive,
-    [switch]$NoStart
+    [switch]$NoStart,
+    [switch]$SkipPull
 )
 $ErrorActionPreference = 'Stop'
 $PhysicsAITag = 'PhysicsAI 업데이트'
@@ -42,26 +51,90 @@ $cfg = $null
 $stopped = $false
 $migrationStarted = $false
 $stage = '준비'
+
+function Invoke-UpdateGit {
+    <# git(safe.directory는 이 실행에만 — 관리자 계정이 받은 폴더를 일반 사용자가 갱신해도 "dubious ownership"으로 막히지 않게). 출력·종료코드. #>
+    param([Parameter(Mandatory = $true)][string[]]$GitArgs, [switch]$Console)
+    $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+    try {
+        if ($Console) {   # pull: 출력은 화면으로만(함수 결과에 섞이지 않게 Out-Host, stderr·자격 증명 입력은 콘솔 그대로)
+            & $script:gitExe -c 'safe.directory=*' -C $repo @GitArgs | Out-Host
+            return [pscustomobject]@{ Rc = $LASTEXITCODE; Out = '' }
+        }
+        $o = @(& $script:gitExe -c 'safe.directory=*' -C $repo @GitArgs 2>&1 | ForEach-Object { "$_" })
+        return [pscustomobject]@{ Rc = $LASTEXITCODE; Out = ($o -join "`n").Trim() }
+    } finally { $ErrorActionPreference = $eap }
+}
+
+function Sync-UpdateRepo {
+    <# ⓪ git pull --ff-only. 새 커밋을 받았으면 $true(호출 쪽이 새 스크립트로 다시 실행). 로컬 변경·pull 실패는 던진다(바꾼 것 없음). #>
+    $script:gitExe = (Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+    if (-not $script:gitExe) { Write-Step 'git이 없어 git pull을 건너뜁니다(현재 파일로 반영)'; return $false }
+    $top = Invoke-UpdateGit @('rev-parse', '--show-toplevel')
+    if ($top.Rc -ne 0 -or -not $top.Out -or ([IO.Path]::GetFullPath($top.Out).TrimEnd('\', '/') -ine $repo)) {
+        Write-Step "git 저장소가 아니어서 git pull을 건너뜁니다: $repo"
+        return $false
+    }
+    $before = (Invoke-UpdateGit @('rev-parse', 'HEAD')).Out
+    $head = (Invoke-UpdateGit @('log', '-1', '--format=%h %s')).Out
+    Write-Step "git 폴더: $repo — 현재 커밋 $head"
+    if ($SkipPull) { Write-Step 'git pull 건너뜀(-SkipPull)'; return $false }
+    $dirty = Invoke-UpdateGit @('status', '--porcelain', '--untracked-files=no')
+    if ($dirty.Rc -ne 0) { throw "git status 실패: $($dirty.Out)" }
+    if ($dirty.Out) {
+        throw ("git 폴더에 로컬 변경이 있어 업데이트(git pull)를 하지 않았습니다:`n$($dirty.Out)`n" +
+            "다음 행동: 변경을 되돌리거나(git -C `"$repo`" checkout -- <파일>) 따로 보관한 뒤 다시 실행하세요. 설정은 .runtime\config\platform.yaml에서 고칩니다(git 밖).")
+    }
+    if ((Invoke-UpdateGit @('symbolic-ref', '-q', 'HEAD')).Rc -ne 0) {
+        Write-Step '분리된 HEAD(특정 커밋 고정 — 되돌리기 상태)라 git pull을 건너뜁니다(이 커밋으로 반영). 최신으로 가려면: git checkout <브랜치>'
+        return $false
+    }
+    if ((Invoke-UpdateGit @('rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{u}')).Rc -ne 0) {
+        Write-Step '현재 브랜치에 추적(upstream) 브랜치가 없어 git pull을 건너뜁니다(이 커밋으로 반영). 설정: git branch --set-upstream-to=origin/<브랜치>'
+        return $false
+    }
+    Write-Step 'git pull --ff-only'
+    $pull = Invoke-UpdateGit @('pull', '--ff-only') -Console
+    if ($pull.Rc -ne 0) {
+        throw ("git pull --ff-only 실패(종료코드 $($pull.Rc)) — 위 git 출력을 확인하세요.`n" +
+            "다음 행동: 네트워크·자격 증명을 확인하거나, 받은 커밋 그대로 반영하려면 -SkipPull을 붙여 다시 실행하세요.")
+    }
+    $after = (Invoke-UpdateGit @('rev-parse', 'HEAD')).Out
+    if ($after -eq $before) { Write-Step 'git: 이미 최신'; return $false }
+    Write-Step "git: $($before.Substring(0, [Math]::Min(7, $before.Length))) → $((Invoke-UpdateGit @('log', '-1', '--format=%h %s')).Out)"
+    return $true
+}
+
 try {
     if (-not (Test-Path -LiteralPath $deployPath)) {
-        throw "git 폴더 설치 정보가 없습니다: $deployPath — 먼저 설치하세요: powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\setup.ps1"
+        throw "git 폴더 설치 정보가 없습니다: $deployPath — 먼저 설치하세요: powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'setup.ps1')"
     }
-    Assert-PhysicsAIAdmin "cd `"$repo`"; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1"
     $cfg = Get-Content -Raw -Encoding UTF8 -LiteralPath $deployPath | ConvertFrom-Json
-    $venvPy = Join-Path $rt 'venv\Scripts\python.exe'
-    $git = Get-Command git -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
-    if ($git) {
-        $eap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
-        try { $head = "$(& $git.Source -C $repo log -1 --format='%h %s' 2>$null)" } finally { $ErrorActionPreference = $eap }
-        if ($head) { Write-Step "git 폴더: $repo — 현재 커밋 $head" }
-    }
-    $mCfg = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
-    if ($mCfg -and -not (Test-PhysicsAIUnderPath $mCfg $rt)) {
-        Write-Warning "머신 환경변수 PHYSICSAI_CONFIG가 이 git 폴더 설치가 아닌 곳을 가리킵니다: $mCfg — setup.ps1을 다시 실행하세요"
-    }
     $dash = $null
     if ($cfg.dashboard_root -and (Test-Path -LiteralPath $cfg.dashboard_root)) { $dash = Get-DashboardRuntimeDefaults -DashboardRoot $cfg.dashboard_root }
     $accessUrl = Get-PhysicsAIAccessUrl -Dash $dash
+
+    # ---- ⓪ git pull — 새 커밋이면 새 스크립트로 다시 실행(콘솔 그대로 물려줌: npm 콘솔 규칙 D3-39 유지) ----------------------
+    $stage = 'git pull'
+    if (Sync-UpdateRepo) {
+        $hostExe = (Get-Process -Id $PID).Path
+        Write-Step '받은 새 버전의 update-repo.ps1로 이어서 실행합니다'
+        $relaunch = @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', $PSCommandPath, '-SkipPull')
+        if ($Force) { $relaunch += '-Force' }
+        if ($NoStart) { $relaunch += '-NoStart' }
+        $ErrorActionPreference = 'Continue'   # 자식의 stderr로 중단되지 않게(종료코드로만 판단)
+        & $hostExe @relaunch
+        exit $LASTEXITCODE
+    }
+    $stage = '준비'
+    $venvPy = Join-Path $rt 'venv\Scripts\python.exe'
+    $mCfg = Get-PhysicsAIMachineEnv 'PHYSICSAI_CONFIG'
+    if ($mCfg -and -not (Test-PhysicsAIUnderPath $mCfg $rt)) {
+        Write-Warning "이전 설치의 머신 환경변수 PHYSICSAI_CONFIG가 이 git 폴더 설치가 아닌 곳을 가리킵니다: $mCfg — 이 설치의 작업은 --runtime으로 $($cfg.config_path)를 씁니다"
+    }
+    # 이전 설치(관리자 권한, 머신 환경변수) → 런타임 파일(값은 출력하지 않음, 머신 환경변수는 그대로)
+    Move-PhysicsAIMachineEnvToRuntime -RuntimeDir $rt -ServiceUser "$($cfg.service_user)" | Out-Null
+    $dbUrl = Get-PhysicsAIDbUrl -RuntimeDir $rt
 
     # venv가 Python 3.12로 실행되지 않으면(대시보드 Python 교체 등) 옮기고 새로 만든다 — 아무것도 바꾸기 전에 Python부터 확인
     $why = ''
@@ -73,11 +146,14 @@ try {
     }
     $port = Get-PhysicsAIBackendPort $cfg.config_path $(if ($venvOk) { $venvPy } else { '' })
 
-    # ---- ① 실행 중 작업 확인(묻지 않고 DB 직접) · ② 중지 ---------------------------------------------------------
-    Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -Force:$Force
-    $stopped = $true
+    # ---- ① 실행 중 작업 확인(묻지 않고 DB 직접) · ② 중지(거부되면 바꾼 것 없이 안내) ---------------------------------------
+    Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -DbUrl $dbUrl -Force:$Force
     Stop-PhysicsAITasks
+    $stopped = $true
     Write-Step '작업 2개 중지'
+    $stage = '작업 등록'
+    $runMode = if ("$($cfg.run_mode)" -eq 'Background') { 'Background' } else { 'Interactive' }
+    Update-PhysicsAITaskRegistration -VenvPy $venvPy -WorkDir $rt -RuntimeDir $rt -ConfigPath $cfg.config_path -ServiceUser "$($cfg.service_user)" -RunMode $runMode
 
     # ---- ③ venv 패키지 갱신 -------------------------------------------------------------------
     $stage = 'venv 패키지 갱신'
@@ -99,16 +175,17 @@ try {
     foreach ($w in @($result.warnings)) { if ($w) { Write-Warning $w } }
     Write-PhysicsAIConfigValidation -Result $result | Out-Null
 
-    # ---- ⑤ 프런트 재빌드(결과를 변수에 받지 않는다 — 받으면 npm 출력이 파이프가 되어 esbuild spawn EPERM, D3-39) ---------
-    $stage = '프런트 빌드'
-    $node = Select-PhysicsAINode -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -RepoRoot $repo -Tag $PhysicsAITag
-    Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $repo -StampFile (Join-Path $rt 'frontend-deps.sha256')
-    Publish-PhysicsAIFrontend -Dist (Join-Path $repo 'frontend\dist') -Dest $cfg.caddy_frontend_root -BackupDir $backupDir
+    # ---- ⑤ 프런트: 저장소 빌드본(frontend-dist)이 소스와 같으면 그대로, 아니면 Node 22로 빌드(D3-40) -----------------------
+    # 결과를 변수에 받지 않는다 — 받으면 npm 출력이 파이프가 되어 esbuild spawn EPERM(D3-39)
+    $stage = '프런트 배치'
+    Install-PhysicsAIFrontendFromRepo -RepoRoot $repo -Dest $cfg.caddy_frontend_root -BackupDir $backupDir `
+        -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -StampFile (Join-Path $rt 'frontend-deps.sha256')
 
-    # ---- ⑥ migration(머신 환경변수의 DB URL을 이 프로세스로) ------------------------------------------
+    # ---- ⑥ migration(DB URL은 런타임 파일 → 이 프로세스 환경으로만) ------------------------------------------
     $stage = 'migration'
     $migrationStarted = $true
-    $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
+    if (-not $dbUrl) { throw "DB 접속 정보가 없습니다: $(Get-PhysicsAIRuntimeSecretPath $rt) — setup.ps1을 다시 실행하세요" }
+    $env:PHYSICSAI_DATABASE_URL = $dbUrl
     $env:PHYSICSAI_CONFIG = $cfg.config_path
     Invoke-PhysicsAIMigration -VenvPy $venvPy -AlembicIni (Join-Path $repo 'migrations\alembic.ini')
 
@@ -133,6 +210,7 @@ try {
         Write-Step "업데이트 실패($stage): $msg"
         Write-Step "되돌리기: git checkout <이전 커밋> 뒤 이 스크립트를 다시 실행(이전 프런트·venv: $backupDir). DB migration은 되돌리지 않습니다 — 필요하면 백업 DB 복원"
     }
+    Write-Step "업데이트 실패 — 접속: $accessUrl"
     exit 1
 }
 Write-Host ''

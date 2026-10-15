@@ -19,3 +19,5 @@ deploy/deploy.json
 .runtime/
 # pip가 git 폴더 소스를 설치할 때 만드는 빌드 폴더
 /build/
+# 저장소에 포함한 프런트 빌드본(phase3 D3-40) — 무시하지 않는다(scripts/build-frontend-dist가 만들고 함께 커밋)
+!/frontend-dist/

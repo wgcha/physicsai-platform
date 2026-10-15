@@ -5,7 +5,68 @@
   후보 순서: 대시보드 고정 Node(<대시보드>\.tools\node-v22.*-win-x64\node.exe, dashboard-env.ps1) > PATH의 node.
   각 후보를 실제로 실행해(node --version) 22.x인지 확인하고, 아니면 다음 후보로 간다. npm은 고른 Node 폴더의 npm.cmd > PATH의 npm.
   기준 버전은 저장소 .node-version(대시보드와 같은 값). 22.x지만 기준과 다르면 안내만 하고 계속한다.
+  저장소 빌드본 frontend-dist(phase3 D3-40)가 현재 소스와 같으면 Node가 필요 없다: Test-PhysicsAIFrontendDist(해시 규칙은
+  scripts/frontend_source_hash.py와 동일 — 시험 backend/tests/test_frontend_dist.py가 대조).
 #>
+
+$PhysicsAIFrontendTopPatterns = @('index.html', 'package.json', 'package-lock.json', 'vite.config.*', 'tsconfig*.json')
+
+function Get-PhysicsAIFrontendSourceHash {
+    <#
+      프런트 빌드 입력 해시(scripts/frontend_source_hash.py와 같은 규칙): frontend\ 최상위 index.html·package.json·package-lock.json·vite.config.*·tsconfig*.json
+      + src\**·public\** → frontend 기준 '/' 상대경로를 서수 정렬 → 각 파일 내용(CRLF→LF) sha256 → "경로\0hex\n"을 이어 UTF-8 sha256(hex 소문자).
+    #>
+    param([Parameter(Mandatory = $true)][string]$FrontendDir)
+    $fe = [IO.Path]::GetFullPath($FrontendDir).TrimEnd('\', '/')
+    $rels = New-Object 'System.Collections.Generic.List[string]'
+    if ([IO.Directory]::Exists($fe)) {
+        foreach ($f in [IO.Directory]::GetFiles($fe)) {
+            $n = [IO.Path]::GetFileName($f)
+            foreach ($pat in $PhysicsAIFrontendTopPatterns) { if ($n -clike $pat) { $rels.Add($n); break } }
+        }
+        foreach ($tree in @('src', 'public')) {
+            $root = [IO.Path]::Combine($fe, $tree)
+            if (-not [IO.Directory]::Exists($root)) { continue }
+            foreach ($f in [IO.Directory]::GetFiles($root, '*', [IO.SearchOption]::AllDirectories)) {
+                $rels.Add($f.Substring($fe.Length).TrimStart('\', '/').Replace('\', '/'))
+            }
+        }
+    }
+    $arr = $rels.ToArray()
+    [Array]::Sort($arr, [StringComparer]::Ordinal)
+    $sha = [Security.Cryptography.SHA256]::Create()
+    $latin1 = [Text.Encoding]::GetEncoding(28591)   # 바이트 1:1 — CRLF→LF를 바이트 그대로 바꾸기 위해
+    $sb = New-Object Text.StringBuilder
+    try {
+        foreach ($rel in $arr) {
+            $bytes = [IO.File]::ReadAllBytes([IO.Path]::Combine($fe, $rel))
+            $norm = $latin1.GetBytes($latin1.GetString($bytes).Replace("`r`n", "`n"))
+            $hex = -join ($sha.ComputeHash($norm) | ForEach-Object { $_.ToString('x2') })
+            [void]$sb.Append($rel).Append([char]0).Append($hex).Append("`n")
+        }
+        return (-join ($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($sb.ToString())) | ForEach-Object { $_.ToString('x2') }))
+    } finally { $sha.Dispose() }
+}
+
+function Test-PhysicsAIFrontendDist {
+    <# <RepoRoot>\frontend-dist가 현재 프런트 소스의 빌드본인지: {Fresh, Reason, Recorded, Current}. 읽기만 한다. #>
+    param([Parameter(Mandatory = $true)][string]$RepoRoot)
+    $dist = Join-Path $RepoRoot 'frontend-dist'
+    $info = Join-Path $dist 'BUILD_INFO.json'
+    $r = [pscustomobject]@{ Fresh = $false; Reason = ''; Recorded = ''; Current = '' }
+    if (-not (Test-Path -LiteralPath $info -PathType Leaf)) { $r.Reason = '저장소 빌드본 frontend-dist가 없습니다(BUILD_INFO.json 없음)'; return $r }
+    if (-not (Test-Path -LiteralPath (Join-Path $dist 'index.html') -PathType Leaf)) { $r.Reason = '저장소 빌드본 frontend-dist에 index.html이 없습니다'; return $r }
+    try { $r.Recorded = "$((Get-Content -Raw -Encoding UTF8 -LiteralPath $info | ConvertFrom-Json).source_hash)" }
+    catch { $r.Reason = "frontend-dist\BUILD_INFO.json을 읽을 수 없습니다($($_.Exception.Message))"; return $r }
+    $r.Current = Get-PhysicsAIFrontendSourceHash -FrontendDir (Join-Path $RepoRoot 'frontend')
+    if ($r.Recorded -ne $r.Current) {
+        $rec = if ($r.Recorded.Length -ge 12) { $r.Recorded.Substring(0, 12) } else { '-' }
+        $r.Reason = "저장소 빌드본 frontend-dist가 현재 프런트 소스와 다릅니다(기록 $rec ≠ 현재 $($r.Current.Substring(0, 12)))"
+        return $r
+    }
+    $r.Fresh = $true
+    return $r
+}
 
 function Select-PhysicsAINode {
     [CmdletBinding()]

@@ -8,7 +8,7 @@
 |---|---|
 | Plan | `docs/**`, `AGENTS.md`, `README.md` (애플리케이션 코드 작성 금지) |
 | Impl-Backend | `pyproject.toml`, `backend/**`, `worker/**`, `migrations/**`, `config/**`, `scripts/**`, `deploy/**`, `packages/**`, `.github/**`, `.gitignore` |
-| Impl-Frontend | `frontend/**` |
+| Impl-Frontend | `frontend/**`, `frontend-dist/**`(빌드본 — `scripts/build-frontend-dist`로만 생성) |
 | Verifier | 수정 없음. platform.md §22(1차)와 phase2.md §20(2차, V2-*) 체크리스트로 판정하고 결과를 보고 |
 
 - 남의 소유 파일은 고치지 말고 요청한다. API 모양 변경 순서: 계약 수정(Plan) → `backend/openapi.json` 갱신(Backend) → 프런트 반영.
@@ -21,6 +21,8 @@
 - **보안**: 외부 명령은 워커에서만, `shell=False` 인자 배열로. pickle(`.pscfg`)을 열지 않는다. 원본 pyd 코어를 플랫폼 프로세스에서 import하지 않는다(런처를 Altair 도구가 실행). 업로드 엔드포인트를 만들지 않는다. 대시보드 세션 토큰을 로그·DB에 남기지 않는다.
 - DB에는 경로·상태·수치 요약만. 파일 본문 저장 금지.
 - 사용자 표시 문구·오류 메시지는 한국어.
+- **프런트 빌드본 함께 커밋**: `frontend/`(src·public·index.html·package*.json·vite.config·tsconfig)를 고치면 `scripts/build-frontend-dist` 실행 후 `frontend-dist/`를 함께 커밋한다(서버는 Node 없이 이 빌드본을 배치 — phase3 D3-40). `scripts/test-all`이 최신 여부를 검사한다. Impl-Frontend가 프런트 커밋에 함께 넣는다.
+- **설치 스크립트는 관리자 권한 없이**: 머신 환경변수·관리자 확인을 쓰지 않는다. 비밀값은 런타임 파일(`<런타임>\secrets\`)에만, 작업 실행 인자에는 경로만(phase3 D3-41).
 
 ## 커밋 규칙
 

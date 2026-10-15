@@ -283,11 +283,14 @@ jobs:
             if (Test-Path $log) { python scripts/ci_annotate.py $log 'collect-offline 출력' 150 }
             throw
           } finally { $env:PATH = $savedPath }
-          # 대시보드 Python 3.12·Node 22를 골랐는지(콘솔 한글 인코딩과 무관하게 ASCII 경로로 확인)
+          # 대시보드 Python 3.12를 골랐는지(콘솔 한글 인코딩과 무관하게 ASCII 경로로 확인)
           $outTxt = Get-Content $log -Raw
           $dashPy = (Get-ChildItem (Join-Path $env:DASHBOARD_ROOT '.tools\python') -Directory -Filter 'cpython-3.12.*' | Select-Object -First 1).FullName + '\python.exe'
           if ($outTxt -notmatch ([regex]::Escape($dashPy) + ' \(Python 3\.12\.\d+\)')) { throw "대시보드 Python 3.12를 고르지 않았습니다: $dashPy" }
-          if ($outTxt -notmatch ([regex]::Escape((Join-Path $dashNode 'node.exe')) + ' \(Node v22\.')) { throw "대시보드 Node 22를 고르지 않았습니다: $dashNode" }
+          # 프런트는 저장소 빌드본(frontend-dist — Windows autocrlf 체크아웃에서도 해시 일치, phase3 D3-40): Node 선택·npm 없음
+          if ($outTxt -notmatch '\+ copy frontend-dist,') { throw '저장소 빌드본 frontend-dist를 쓰지 않았습니다(해시 불일치?)' }
+          if ($outTxt -match ' \(Node v22\.' -or $outTxt -match '\+ npm ') { throw '빌드본이 최신인데 Node·npm을 썼습니다' }
+          if (-not (Test-Path dist/frontend/BUILD_INFO.json)) { throw '묶음 프런트에 BUILD_INFO.json이 없습니다' }
           # 빌드용 임시 venv는 지워지고 묶음에 들어가지 않는다. 대시보드 런타임에는 설치하지 않는다
           if (Test-Path dist/_buildvenv) { throw 'dist\_buildvenv가 남아 있습니다' }
           $zip = Get-ChildItem physicsai-offline-*.zip | Select-Object -First 1
@@ -340,12 +343,23 @@ jobs:
             if ($instOut.Contains('simdashboard_app') -or $instOut.Contains($env:DASH_ENV_SECRET)) { throw '대시보드 DB 사용자·비밀번호가 출력에 나왔습니다' }
             $env:PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD = $null
             $env:PHYSICSAI_INSTALL_DB_PASSWORD = $null
+            # 머신 환경변수를 쓰지 않고 DB 접속 정보는 <install_root>\secrets\database_url(상속 해제 — 현재 사용자·SYSTEM만)
+            if ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine') -or [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')) { throw 'install이 머신 환경변수를 썼습니다' }
+            $secret = Join-Path $root 'secrets\database_url'
+            if (-not (Test-Path $secret)) { throw "DB 접속 정보 파일이 없습니다: $secret" }
+            $acl = (icacls (Join-Path $root 'secrets')) -join "`n"
+            Write-Host $acl
+            if ($acl -match 'BUILTIN\\Users' -or $acl -notmatch 'NT AUTHORITY\\SYSTEM' -or $acl -match '\(I\)') { throw '비밀 폴더 ACL이 제한되지 않았습니다(상속·Users)' }
             # 작업 스케줄러 등록 조회: ExecutionTimeLimit 0(PT0S)·재시작 999·IgnoreNew
             foreach ($n in 'PhysicsAI-Backend', 'PhysicsAI-Worker') {
               $task = Get-ScheduledTask -TaskName $n
               $s = $task.Settings
-              Write-Host "$n : ExecutionTimeLimit=$($s.ExecutionTimeLimit) RestartCount=$($s.RestartCount) MultipleInstances=$($s.MultipleInstances) Execute=$($task.Actions[0].Execute) $($task.Actions[0].Arguments)"
+              Write-Host "$n : ExecutionTimeLimit=$($s.ExecutionTimeLimit) RestartCount=$($s.RestartCount) MultipleInstances=$($s.MultipleInstances) Execute=$($task.Actions[0].Execute) $($task.Actions[0].Arguments) Logon=$($task.Principal.LogonType) RunLevel=$($task.Principal.RunLevel)"
               if ($s.ExecutionTimeLimit -ne 'PT0S') { throw "$n ExecutionTimeLimit=$($s.ExecutionTimeLimit) (PT0S 필요)" }
+              # 관리자 권한 없는 설치(phase3 D3-41): 인자 --runtime <install_root> --config <설정>(비밀값 없음), Interactive·Limited
+              if ($task.Actions[0].Arguments -notmatch ('--runtime "' + [regex]::Escape($root) + '"') -or $task.Actions[0].Arguments -notmatch '--config ') { throw "$n 인자에 --runtime·--config가 없습니다" }
+              if ($task.Actions[0].Arguments -match 'postgres') { throw "$n 인자에 DB URL이 있습니다" }
+              if ("$($task.Principal.RunLevel)" -ne 'Limited' -or "$($task.Principal.LogonType)" -ne 'Interactive') { throw "$n 권한 수준·로그온 형식이 다릅니다" }
               if ($s.RestartCount -ne 999) { throw "$n RestartCount=$($s.RestartCount)" }
               if ("$($s.MultipleInstances)" -ne 'IgnoreNew') { throw "$n MultipleInstances=$($s.MultipleInstances)" }
             }
@@ -361,9 +375,9 @@ jobs:
             if (-not $ok) {
               Write-Host '::warning::러너 세션에서 Interactive 작업이 시작되지 않음 — 설치된 venv로 직접 기동해 설치본을 검증합니다'
               Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
-              $env:PHYSICSAI_CONFIG = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
-              $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
-              $direct = Start-Process -FilePath (Join-Path $root 'venv\Scripts\python.exe') -ArgumentList '-m', 'physicsai_api.serve' `
+              # 작업과 같은 실행 인자(--runtime) — 환경변수 없이 런타임 파일로 기동해야 한다
+              Remove-Item Env:PHYSICSAI_CONFIG, Env:PHYSICSAI_DATABASE_URL -ErrorAction SilentlyContinue
+              $direct = Start-Process -FilePath (Join-Path $root 'venv\Scripts\python.exe') -ArgumentList (Get-ScheduledTask -TaskName 'PhysicsAI-Backend').Actions[0].Arguments `
                 -WorkingDirectory $root -RedirectStandardOutput (Join-Path $t 'backend.out.log') -RedirectStandardError (Join-Path $t 'backend.err.log') -PassThru
               for ($i = 0; $i -lt 30 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health }
               if (-not $ok) { Get-Content (Join-Path $t 'backend.err.log') -Tail 80; throw '설치본 백엔드 health 실패' }
@@ -409,27 +423,29 @@ jobs:
           }
           function Test-Health([int]$Port) { try { (Invoke-RestMethod -Uri "http://127.0.0.1:$Port/physicsai/api/health" -TimeoutSec 3).status -eq 'ok' } catch { $false } }
           function Assert-InstalledHealth([string]$Label) {
-            # 작업 스케줄러로 시작 → 러너 세션에서 Interactive 작업이 안 뜨면 설치된 venv로 직접 기동(같은 작업 폴더·머신 환경변수)
+            # 작업 스케줄러로 시작 → 러너 세션에서 Interactive 작업이 안 뜨면 설치된 venv로 직접 기동(같은 작업 폴더·같은 인자 --runtime, 환경변수 없이)
             $task = Get-ScheduledTask -TaskName 'PhysicsAI-Backend'
-            $exe = $task.Actions[0].Execute; $wd = $task.Actions[0].WorkingDirectory
+            $exe = $task.Actions[0].Execute; $wd = $task.Actions[0].WorkingDirectory; $bArgs = $task.Actions[0].Arguments
+            $wArgs = (Get-ScheduledTask -TaskName 'PhysicsAI-Worker').Actions[0].Arguments
             if ($exe -ne (Join-Path $rt 'venv\Scripts\python.exe') -or $wd -ne $rt) { throw "$Label 작업 실행 파일·작업 폴더가 다릅니다: $exe / $wd" }
+            if ($bArgs -ne "-m physicsai_api.serve --runtime `"$rt`"" -or $wArgs -ne "-m physicsai_worker --runtime `"$rt`"") { throw "$Label 작업 인자가 다릅니다: $bArgs / $wArgs" }
+            if ("$($task.Principal.RunLevel)" -ne 'Limited' -or "$($task.Principal.LogonType)" -ne 'Interactive') { throw "$Label 작업 권한 수준·로그온 형식이 다릅니다" }
             Start-ScheduledTask -TaskName 'PhysicsAI-Backend'
             $ok = $false
             for ($i = 0; $i -lt 20 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health 8100 }
             $info = Get-ScheduledTaskInfo -TaskName 'PhysicsAI-Backend'
             Write-Host "::notice title=$Label 작업 스케줄러 시작::health=$ok LastTaskResult=$($info.LastTaskResult)"
             Stop-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue
-            $env:PHYSICSAI_CONFIG = [Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine')
-            $env:PHYSICSAI_DATABASE_URL = [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')
+            Remove-Item Env:PHYSICSAI_CONFIG, Env:PHYSICSAI_DATABASE_URL -ErrorAction SilentlyContinue
             if (-not $ok) {
-              $p = Start-Process -FilePath $exe -ArgumentList '-m', 'physicsai_api.serve' -WorkingDirectory $rt `
+              $p = Start-Process -FilePath $exe -ArgumentList $bArgs -WorkingDirectory $rt `
                 -RedirectStandardOutput (Join-Path $t "setup-backend-$Label.out.log") -RedirectStandardError (Join-Path $t "setup-backend-$Label.err.log") -PassThru
               for ($i = 0; $i -lt 30 -and -not $ok; $i++) { Start-Sleep 2; $ok = Test-Health 8100 }
               Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
               if (-not $ok) { Get-Content (Join-Path $t "setup-backend-$Label.err.log") -Tail 80; throw "$Label 설치본 백엔드 health 실패" }
             }
             # 워커: 설정 검증(prod, 가짜 Altair·자원)을 통과해 기동 거부(종료코드 2) 없이 돌아야 한다
-            $w = Start-Process -FilePath $exe -ArgumentList '-m', 'physicsai_worker' -WorkingDirectory $rt `
+            $w = Start-Process -FilePath $exe -ArgumentList $wArgs -WorkingDirectory $rt `
               -RedirectStandardOutput (Join-Path $t "setup-worker-$Label.out.log") -RedirectStandardError (Join-Path $t "setup-worker-$Label.err.log") -PassThru
             Start-Sleep 12
             if ($w.HasExited) { Get-Content (Join-Path $t "setup-worker-$Label.err.log") -Tail 60; throw "$Label 워커가 종료되었습니다(종료코드 $($w.ExitCode))" }
@@ -481,7 +497,16 @@ jobs:
             & (Join-Path $dashPyDir 'python.exe') -c "import importlib.util, sys; sys.exit(1 if importlib.util.find_spec('fastapi') else 0)"
             if ($LASTEXITCODE) { throw '대시보드 Python에 패키지가 설치되었습니다' }
             $cfgPath = Join-Path $rt 'config\platform.yaml'
-            if ([Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine') -ne $cfgPath) { throw '머신 환경변수 PHYSICSAI_CONFIG가 런타임 설정이 아닙니다' }
+            # 관리자 권한 없는 설치(phase3 D3-41): 머신 환경변수를 쓰지 않고 DB 접속 정보는 .runtime\secrets\database_url(상속 해제 — 현재 사용자·SYSTEM만)
+            if ([Environment]::GetEnvironmentVariable('PHYSICSAI_CONFIG', 'Machine') -or [Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine')) { throw 'setup.ps1이 머신 환경변수를 썼습니다' }
+            $secret = Join-Path $rt 'secrets\database_url'
+            if (-not (Test-Path $secret)) { throw "DB 접속 정보 파일이 없습니다: $secret" }
+            $acl = (icacls (Join-Path $rt 'secrets')) -join "`n"
+            Write-Host $acl
+            if ($acl -match 'BUILTIN\\Users' -or $acl -notmatch 'NT AUTHORITY\\SYSTEM' -or $acl -match '\(I\)') { throw '비밀 폴더 ACL이 제한되지 않았습니다(상속·Users)' }
+            # 프런트는 저장소 빌드본(frontend-dist, Windows autocrlf 체크아웃에서도 해시 일치 — D3-40): Node·npm 없이 배치
+            if (-not (Test-Path (Join-Path $rt 'frontend\BUILD_INFO.json'))) { throw '저장소 빌드본(frontend-dist)이 배치되지 않았습니다(해시 불일치로 npm 빌드?)' }
+            if ((Get-Content $log -Raw) -match '\+ npm (ci|run build)') { throw 'frontend-dist가 최신인데 setup.ps1이 npm을 실행했습니다' }
             $py = Join-Path $rt 'venv\Scripts\python.exe'
             & $py -c "import sys, yaml; c = yaml.safe_load(open(sys.argv[1], encoding='utf-8')); r = c['resources']; a = c['altair']; ok = c['profile'] == 'prod' and c['hpc']['gateway'] == 'none' and c['server']['port'] == 8100 and a['version_label'] == '2026.1' and all(a[k] for k in ('hyperstudy_path', 'simlab_path', 'edspy_path', 'hw_exe_path', 'hvtrans_exe_path')) and all(r[k] for k in r if k != 'launchers') and c['auth']['dashboard_public_login_url'] == '/home/'; print(r); sys.exit(0 if ok else 1)" $cfgPath
             if ($LASTEXITCODE) { throw 'platform.yaml 생성 값이 다릅니다' }
@@ -506,9 +531,18 @@ jobs:
             if (git status --porcelain) { throw '재실행 후 git 폴더가 깨끗하지 않습니다' }
             Assert-InstalledHealth 'setup-rerun'
 
-            # ---- ③ 업데이트(git pull 뒤 명령 하나): 대기열 확인 → 중지 → venv 갱신 → 프런트 재빌드 → alembic ----------------------
+            # ---- ③ 업데이트(명령 하나, git pull 포함): 이전 설치 이전(머신 환경변수 DB URL → 런타임 파일) → 대기열 확인 → 중지 → venv 갱신 → 프런트 배치 → alembic ----
+            # 이전 설치(관리자 권한 — 머신 환경변수) 흉내: 런타임 DB 파일을 치우고 머신 환경변수에만 둔다(러너는 관리자라 쓸 수 있음)
+            $moved = Join-Path $t 'database_url.moved'
+            Move-Item $secret $moved -Force
+            [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', (Get-Content $moved -Raw).Trim(), 'Machine')
+            '--- update-repo ---' | Add-Content $log
             $rc = Invoke-PS51 '.\deploy\update-repo.ps1' @('-NoStart')   # 인자·질문 없음(phase3 D3-39) — -NoStart만(러너 작업 스케줄러)
+            [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', $null, 'Machine')
             if ($rc) { throw "update-repo.ps1 실패($rc)" }
+            $updOut = ((Get-Content $log -Raw) -split '--- update-repo ---')[-1]
+            if (-not (Test-Path $secret) -or (Get-Content $secret -Raw).Trim() -ne (Get-Content $moved -Raw).Trim()) { throw '머신 환경변수 DB URL이 런타임 파일로 옮겨지지 않았습니다' }
+            if ($updOut -match '\+ npm (ci|run build)') { throw 'frontend-dist가 최신인데 update-repo.ps1이 npm을 실행했습니다' }
             if (-not (Test-Path (Join-Path $rt 'frontend\index.html'))) { throw '업데이트 후 프런트 배치 없음' }
             if (-not (Get-ChildItem (Join-Path $rt '_backup') -Directory -Recurse -Filter 'frontend')) { throw '이전 프런트가 _backup으로 옮겨지지 않았습니다' }
             if ((Get-FileHash $cfgPath).Hash -ne $cfgHash) { throw '업데이트에서 platform.yaml이 바뀌었습니다' }
