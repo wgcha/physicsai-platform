@@ -79,6 +79,7 @@ class StatusFeatures(Resp):
     dataset_create: FeatureState | None = None
     evaluate: FeatureState | None = None
     predict: FeatureState | None = None
+    predict_parametric: FeatureState | None = None
 
 
 class StatusEnvCheck(Resp):

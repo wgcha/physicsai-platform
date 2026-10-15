@@ -34,7 +34,9 @@ FEATURES: dict[str, FeatureReq] = {
     # 1차 확정 템플릿: 설정 파일에 키가 없으면(예시 일부만 복사) 그 기능만 비활성
     "dataset_create": FeatureReq(("edspy_create_dataset",)),
     "evaluate": FeatureReq(("edspy_score",)),
-    "predict": FeatureReq(("edspy_predict", "contour_preview")),
+    "predict": FeatureReq(("edspy_predict", "contour_preview")),  # phase3 §11.4: 준비된 입력 예측 조건
+    # phase3 §11.4: 파라미터로 형상 생성(기존 체인). mesh가 {include_tcl}을 쓰면 hypermesh_include_tcl도 필요(predict_parametric_missing)
+    "predict_parametric": FeatureReq(("geom_update", "edspy_predict", "contour_preview")),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -71,9 +73,30 @@ def missing_for(s: Settings, req: FeatureReq, hpc_configured: bool | None = None
     return tmpl, res
 
 
+def mesh_uses_include_tcl(s: Settings) -> bool:
+    """commands.mesh가 {include_tcl}을 쓰는지(원본 m_2 HyperMesh 형태)."""
+    from .commands import parse_placeholders
+
+    for el in s.commands.mesh or []:
+        try:
+            if "include_tcl" in parse_placeholders(el):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def predict_parametric_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """④ parametric 예측에 빠진 (템플릿, 자원) 키(phase3 §11.4)."""
+    tmpl, res = missing_for(s, FEATURES["predict_parametric"], None)
+    if mesh_uses_include_tcl(s) and not s.resources.hypermesh_include_tcl:
+        res.append("resources.hypermesh_include_tcl")
+    return tmpl, res
+
+
 def feature_status(s: Settings, hpc_configured: bool) -> dict[str, dict[str, Any]]:
     out = {}
     for name, req in FEATURES.items():
-        t, r = missing_for(s, req, hpc_configured)
+        t, r = predict_parametric_missing(s) if name == "predict_parametric" else missing_for(s, req, hpc_configured)
         out[name] = {"enabled": not t and not r, "missing": t + r}
     return out

@@ -3863,6 +3863,16 @@
               }
             ]
           },
+          "predict_parametric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "spdm_import": {
             "$ref": "#/components/schemas/FeatureState"
           },

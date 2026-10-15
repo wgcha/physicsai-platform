@@ -111,9 +111,15 @@ param_set:
   max_total_bytes: 2147483648     # 2 GiB
 
 predict:
-  rendered_script_name: simlab_parametered_mesh.py   # 사내 확인 후 교체(U2)
-  mesh_output_glob: "eps_mesh*"                      # 사내 확인 후 교체(U3)
+  rendered_script_name: simlab_parametered_mesh.py   # U2 확정(phase3 §11.2)
+  simlab_mesh_name: EPS_mesh_0000.rad                # 원본 tpl:110 dir_file_export — GEOM_UPDATE 성공 판정 파일
+  mesh_include_name: 104_replace_node_elem.inc       # 원본 m_2 출력(U3) — 서버 확인(E4-0-2) 후 다르면 이 값만 교체
+  renum_csv_name: RENUM_INIT.csv                     # 조립 폴더(radioss_assem)의 번호 재지정 표
+  mesh_log_complete_marker: "COMPLETE HM BATCHRUN"   # HyperMesh include TCL 로그(log_batch.txt) 끝 표식
   starter_glob: "*_0000.rad"
+  prepared_input_exts: [".rad", ".hm"]               # 준비된 입력 예측(phase3 §11.5) 파일 확장자
+  prepared_max_files: 500
+  prepared_max_total_bytes: 2147483648               # 2 GiB
   integer_rounding: half_up       # half_up | truncate (U9)
   env:
     EDS_TNS_ACTVN_CHCKPT: "1"     # 원본 4_OPTIMIZATION/FUNC/1_physicsai_opti.py:319
@@ -122,9 +128,9 @@ commands:
   # argv 템플릿. 허용 placeholder는 계약 §9.2. 펼침 토큰: @cmd_c, @write_files, @hooks_arg
   edspy_create_dataset: ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"]       # 원본 1_create_dataset.py:90
   edspy_score: ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"]   # 원본 4_testing.py:62-64
-  geom_update: ["{simlab}", "-auto", "{rendered_script}", "-nographics"]    # 사내 확인 후 교체(U2)
-  mesh: null                                                              # 사내 확인 후 교체(U2). null = SKIPPED
-  rad_assemble: null                                                      # 사내 확인 후 교체(U3). null = 복사 규칙만
+  geom_update: ["{simlab}", "-auto", "{rendered_script}", "-nographics"]    # U2 확정(1_create_tpl_file.py:45). 성공 = predict.simlab_mesh_name 생성
+  mesh: ["{hw}", "-clientconfig", "hwfepre.dat", "-b", "-tcl", "{include_tcl}", "{simlab_mesh}", "{mesh_inc}", "{renum_csv}"]   # 원본 ⑤ m_2(phase3 §11.4). null = SKIPPED(SimLab이 include를 직접 쓰는 변형)
+  rad_assemble: null                                                      # 선택. null = 복사 규칙만(phase3 §11.4)
   edspy_predict: ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]   # 원본 1_physicsai_opti.py:310-316
   contour_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"]   # 원본 1_physicsai_opti.py:230-231
   response_extract: null                                                  # 미확인(U8·U35). 예: ["{hw}", "-b", "-tcl", "<추출 TCL>", "-input", "{pred_h3d_fwd}", "-config", "{responses_json}", "-output", "{out_csv}"]

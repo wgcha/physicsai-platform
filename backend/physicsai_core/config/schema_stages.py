@@ -55,11 +55,20 @@ class ParamSetCfg(_M):
 
 
 class PredictCfg(_M):
+    """④ 예측(phase3 §11.4·§11.5·§11.8). 파일 이름 기본값은 원본 인용(tpl `dir_file_export`, HyperMesh m_2)."""
+
     rendered_script_name: str = "simlab_parametered_mesh.py"
-    mesh_output_glob: str = "eps_mesh*"
+    simlab_mesh_name: str = "EPS_mesh_0000.rad"
+    mesh_include_name: str = "104_replace_node_elem.inc"
+    renum_csv_name: str = "RENUM_INIT.csv"
+    mesh_log_complete_marker: str = "COMPLETE HM BATCHRUN"
+    mesh_output_glob: str | None = "eps_mesh*"  # 폐지 예정(phase3 §11.4) — 새 RAD_ASSEMBLE 전까지 기존 워커가 사용
     starter_glob: str = "*_0000.rad"
     integer_rounding: str = "half_up"
     env: dict[str, str] = Field(default_factory=lambda: {"EDS_TNS_ACTVN_CHCKPT": "1"})
+    prepared_input_exts: list[str] = Field(default_factory=lambda: [".rad", ".hm"])
+    prepared_max_files: int = 500
+    prepared_max_total_bytes: int = 2147483648
 
 
 class TrainDataCfg(_M):
