@@ -494,6 +494,146 @@ packages/simdash_adapters/
 
 ---
 
+## 11. S6 ④ 예측 원본 일치·준비된 입력 예측 (Plan, 2026-10-15)
+
+목표: 서버(Altair 2026.1)에서 ④ 예측이 원본과 같은 흐름으로 **한 번에 성공**(시연 최우선)하고, 원본 `3_PHYSICS_AI` "예측"(준비된 입력 + 모델 → edspy)을 ④의 입력 방식으로 추가한다. 원본은 읽기 전용 참고(`OPEN_SOURCE_physics_ai_platform`)이며 저장소에 복사하지 않는다. 사용자 확인: 원본 프로그램은 모든 기능이 정상 동작했다.
+
+### 11.1 원본 예측 흐름(근거)
+
+| 원본 기능 | 외부 호출(argv) | cwd·env | 입력 → 출력 | 성공 판정·후처리 |
+|---|---|---|---|---|
+| ③ 단독 예측 `3_PHYSICS_AI/FUNC/5_predict.py` | `[edspy.bat, --physicsai, --predict-write, <out>.h3d, --model, <psmdl>, --input-file, <input>, (--hooks-dir=<d>)]` (:55-66) | cwd 없음(:121), env 추가 없음 | 입력 `*.rad`/`*.hm`(GUI `5_gui_predict.py:80`), 출력 이름 사용자 지정(:90-91), 기존 출력 삭제(:100-113) | rc≠0 예외(:50-51), 출력 없으면 경고만(:123-127). 미리보기·커브 없음 |
+| ⑤ 기준 Predict+Preview `4_OPTIMIZATION/FUNC/1_physicsai_opti.py:281-340` | `[cmd, /c, edspy.bat, --physicsai, --predict-write, RESULT/<stem>_pred.h3d, --model, <psmdl>, --input-file, INPUT/<starter>]` (:308-316) | cwd `PREDICT/INPUT`(:322), env `EDS_TNS_ACTVN_CHCKPT=1`(:318-319) | `RADIOSS_ASSEM_DIR` 직계 `*.rad`·`*.inc` 중 `eps_mesh*` 아닌 것 → `PREDICT/INPUT`(:294-305). starter = `*_0000.rad`(eps_mesh 제외) 정확히 1개(GUI :427-445) | h3d 존재(:325-329). 커브 = RESULT 첫 `*.xy`/`*.xydata`(:331-333). 미리보기 `[hw.exe, -clientconfig, hwpost.dat, -b, -tcl, BATCHRUN_preview_pred_h3d.tcl, -input, <h3d>, -output, H3D_PREVIEW.json]`(:230-231), cwd PREDICT |
+| ⑤ 최적화 체인(HyperStudy, `hst_physicsai_optimization_core` pyd) | m_1 SimLab `SimLab.bat -auto <렌더 .py> -nographics` · m_2 HyperMesh `hw.exe -clientconfig hwfepre.dat -b -tcl BATCHRUN_create_include_node_elem.tcl <EPS_mesh_0000.rad> <104_replace_node_elem.inc> <RENUM_INIT.csv>` · m_3 PhysicsAI(HST 내장) · m_4 HyperView TCL | HyperStudy run 폴더 | tpl → `EPS_mesh_0000.rad`(tpl:110) → include(번호 재지정, 기본 3000001) → `<stem>_pred.h3d/.xydata` | pyd 문자열("-auto ${filepath} -nographics", "-clientconfig hwfepre.dat -b -tcl", "104_replace_node_elem", "../RENUM_INIT.csv"), include TCL 해독: 인자 [simlab 출력, include 출력, csv], 로그 cwd `log_batch.txt`, 끝 표식 "COMPLETE HM BATCHRUN" |
+| tpl 생성 `1_CREATE_TRAINING_DATA/FUNC/1_create_tpl_file.py:127-193` | — | — | `dir_file_prt = r"./<cad>"`(상대, :135-139), `NewValue="{var_i, %3i}"`(:168-173) | SimLab cwd에 CAD 사본 필요 |
+
+미리보기 TCL 해독: 이미지 없음, JSON `{"h3d","num_time_step","subcases":[{"id","label","datatypes":[{"name","format","binding","components","layers"}]}]}`.
+
+### 11.2 미확정 항목 결론
+
+| # | 결론 | 서버 1회 확인(E4-0) |
+|---|---|---|
+| U2 | **확정**. 렌더 = `<tpl stem>.py`(`simlab_parametered_mesh.py`), `SimLab.bat -auto <py> -nographics`, cwd = CAD 사본 폴더, 형상 갱신·메싱·내보내기 1회(tpl:43-169) | SimLab 성공 시 rc 메모(판정은 출력 파일 기준) |
+| U3 | **원본 근거 확정, 이름은 서버 확인**. 새 메시 = HyperMesh TCL이 `EPS_mesh_0000.rad` → `104_replace_node_elem.inc`(번호는 조립 폴더 `RENUM_INIT.csv`). starter는 이 include를 `#include`, 조립 폴더에 기준본 존재 | E4-0-2. 다르면 `predict.mesh_include_name`·`commands.mesh`만 교체 |
+| U4 | **해소**. 이미지 없음 | — |
+| U7 | **확정**. pscfg 불필요(5_predict.py:55-66, opti:310-316) | — |
+| U9 | 미확정(HyperStudy Templex 내부) | E4-0-6 |
+
+### 11.3 원본 대비 차이와 조치
+
+| 순위 | 현재 플랫폼 | 원본 | 조치 |
+|---|---|---|---|
+| P1-a | RAD_ASSEMBLE이 `geom/eps_mesh*`를 INPUT으로 복사 → `EPS_mesh_0000.rad`가 `*_0000.rad`에 걸려 starter 2개 → INPUT_INVALID | 복사·starter 모두 eps_mesh 제외 | eps_mesh 복사 폐지, starter 셈에서 제외(대소문자 무시) |
+| P1-b | MESH 기본 null → 새 메시가 starter에 연결 안 됨 → 기준 메시로 예측(조용한 오답) | m_2 include 변환 후 교체 | MESH = 원본 m_2, RAD_ASSEMBLE이 새 include로 교체, 없으면 실패 |
+| P1-c | 폴더 등록이 `EPS_mesh_0000.rad`를 starter로 셈, `RENUM_INIT.csv` 미복사 | 조립 폴더에 둘 다 있음 | §15.4 갱신 |
+| P2 | GEOM_UPDATE 성공 = rc 0, 출력 미확인 | SimLab rc 무시(1_create_tpl_file.py:76-93) | 출력 파일 기준 판정 |
+| P2 | 가짜 SimLab이 `eps_mesh_1.inc`, 시험 starter가 그것을 include | 실제 `EPS_mesh_0000.rad`/`104_replace_node_elem.inc` | 가짜 도구·시험 데이터 실제화 |
+| P3 | 가짜 hw 미리보기 JSON `{subcases:[{name}]}` | §11.1 형식 | 가짜 도구 수정(화면 파서는 두 형식 모두 수용) |
+| — | 원본 단독 예측 없음 | 있음 | §11.5 |
+
+### 11.4 parametric(기존 체인) 보정 — platform.md §8.9 대체
+
+| step | 변경 후 |
+|---|---|
+| TPL_RENDER | 그대로. 출력 `P/geom/{predict.rendered_script_name}` |
+| GEOM_UPDATE | 템플릿 그대로, cwd `P/geom`. **성공 = `P/geom/{predict.simlab_mesh_name}`(기본 `EPS_mesh_0000.rad`) 존재·크기>0**. rc≠0 + 출력 있음 → 성공 + 경고 `EXIT_NONZERO_IGNORED`. 출력 없음 → `OUTPUT_MISSING`(rc≠0이면 `EXIT_NONZERO`) |
+| MESH | 원본 m_2. 템플릿 `mesh` 기본 `["{hw}","-clientconfig","hwfepre.dat","-b","-tcl","{include_tcl}","{simlab_mesh}","{mesh_inc}","{renum_csv}"]`, cwd `P/geom`. `{include_tcl}`=`resources.hypermesh_include_tcl`, `{simlab_mesh}`=`P/geom/{simlab_mesh_name}`, `{mesh_inc}`=`P/geom/{predict.mesh_include_name}`, `{renum_csv}`=`S/radioss_assem/{predict.renum_csv_name}`(없어도 경로 전달, 경고 `RENUM_CSV_MISSING`). 성공 = `{mesh_inc}` 존재·크기>0(rc 규칙은 GEOM_UPDATE와 같음). `P/geom/log_batch.txt`를 step 로그에 덧붙이고 `predict.mesh_log_complete_marker` 없으면 경고 `MESH_LOG_INCOMPLETE`. 템플릿 null → SKIPPED(SimLab이 include를 직접 쓰는 변형) |
+| RAD_ASSEMBLE | ① `S/radioss_assem/` 직계 `*.rad`·`*.inc` 중 `eps_mesh`로 시작하지 않고 `{mesh_include_name}`(대소문자 무시)이 아닌 것 → `P/INPUT/`. ② `P/geom/{mesh_include_name}` → `P/INPUT/`(MESH가 SKIPPED면 SimLab cwd에서 같은 이름을 찾음). **없으면 `OUTPUT_MISSING` "새 메시 include(…)가 없습니다"**. ③ starter = `starter_glob` 일치·eps_mesh 아님 정확히 1개. ④ 조립 폴더에 include 기준본이 없었으면 경고 `MESH_INCLUDE_NOT_IN_ASSEM`. ⑤ `rad_assemble` 템플릿 그대로(선택). `predict.mesh_output_glob` 폐지 |
+| EDSPY_PREDICT 이후 | 그대로(원본 opti:306-340), pscfg 미전달 |
+
+§9.2 `mesh` 허용 placeholder = `{hw} {simlab} {include_tcl} {simlab_mesh} {mesh_inc} {renum_csv} {work_dir} {rendered_script} {cad_file}`. `mesh`가 `{include_tcl}`을 쓰는데 `resources.hypermesh_include_tcl`이 비었거나 `geom_update` null이면 `features.predict_parametric=false` + `config.warnings`. parametric 작업 생성 시 `predict_parametric=false`면 409 `TEMPLATE_NOT_CONFIGURED`. `features.predict`(edspy_predict·contour_preview)는 prepared 모드 조건.
+
+§15.4 `radioss_assem/`: 직계 `*.rad`·`*.inc`·`{renum_csv_name}`. `eps_mesh`로 시작하는 파일은 **무시**(starter로 세지 않고 복사 안 함). `RENUM_INIT.csv`가 있으면 복사(없어도 등록 성공). include 기준본이 없으면 등록 성공, ④ 실행 시 경고. `from-train`도 csv 복사.
+
+### 11.5 준비된 입력 예측(`input_mode: "prepared"`)
+
+원본 ③ 단독 예측 + ⑤ 기준 Predict 동작: 사용자가 준비한 Radioss starter(또는 `.hm`)로 Final(또는 지정) 모델 예측 → 미리보기·커브·(가능하면) 응답 표.
+
+params(§10.6 PREDICT 대체):
+```jsonc
+// parametric(기본, input_mode 생략 시 = 기존 호환)
+{"input_mode":"parametric","param_set_id":null,"model_id":null,"values":{"THK_1":4.0},"value_source":"manual","source_run_key":null,"input_path":null}
+// prepared
+{"input_mode":"prepared","input_path":"E:/…/case_A/Face_Drop_0000.rad","model_id":null,"param_set_id":null}
+```
+- 검증(422 `INVALID_PARAMS`): parametric → `value_source` 필수·`input_path` 금지. prepared → `input_path` 필수, `values` 비어 있음, `value_source`·`source_run_key` null.
+- `input_path`: `check_user_path`, 허용 루트 = `allowed_roots(imports=True)`. 공백·cmd 메타문자·링크·`_backup`·`_platform` 거부(`PATH_OUTSIDE_ROOT`/`PATH_UNSAFE`/`PATH_NOT_FOUND`). 파일이면 확장자 ∈ `predict.prepared_input_exts`(기본 `[".rad",".hm"]`). 폴더면 직계 `starter_glob` 일치·eps_mesh 아님 정확히 1개.
+- 복사 대상: `.rad` 파일 또는 폴더 → 그 폴더 직계 `*.rad`·`*.inc`(eps_mesh 제외, 하위 폴더 무시). `.hm` → 그 파일만. 각 파일명 `file_safety_problem` 통과, 개수 ≤ `predict.prepared_max_files`(500), 합계 ≤ `predict.prepared_max_total_bytes`(2 GiB).
+- 위반 → 422 `PREDICT_INPUT_INVALID` "준비된 입력을 쓸 수 없습니다" + `problems:[{code,message}]`, code ∈ `INPUT_EXT`·`STARTER_COUNT`·`FILE_NAME_UNSAFE`·`TOO_MANY_FILES`·`TOO_LARGE`.
+- 사전조건: ACTIVE 모델(기본 Final, 없으면 409 `FINAL_MODEL_REQUIRED`), `features.predict`. **파라미터 세트 불필요**: 지정 시 존재해야 함(409 `PREREQUISITE_MISSING` PARAM_SET), 미지정이면 현재 세트를 응답 목록용으로만 사용.
+- 저장 params: `{input_mode, input_path(정규화), input_kind:"file"|"dir", starter_name, model_id, param_set_id|null}`.
+
+step 동작(체인·step 수 불변, migration 없음):
+
+| step | prepared |
+|---|---|
+| PR_PREP | 모델 sha256 확인, `input_path` 재검사(바뀌면 `INPUT_CHANGED`), `P/params.json`. result `{model_id, param_set_id, input_mode, input_path, values:{}, applied_values:{}, out_of_range:[], nearest:null}` |
+| TPL_RENDER·GEOM_UPDATE·MESH | SKIPPED "준비된 입력 — 해당 없음" |
+| RAD_ASSEMBLE | 복사 대상 → `P/INPUT/`(원본 읽기만). starter = 지정 파일 또는 폴더 규칙. `rad_assemble` 미실행. result `starter` |
+| EDSPY_PREDICT·CONTOUR_PREVIEW·CURVE_PICK | 그대로 |
+| RESPONSE_EXTRACT | 세트에 responses + 템플릿 있으면 실행, 아니면 SKIPPED |
+| RESPONSE_TABLE | 세트에 responses 있으면 행 = responses, `nearest_measured`·`diff_pct` null. 없으면 SKIPPED, `response_table=[]` |
+
+PREDICT_VERIFY·input.zip·정리·재시도는 `P/INPUT` 기준이라 그대로.
+
+API: `POST /studies/{id}/paths/inspect`에 `purpose:"PREDICT_INPUT"`(파일·폴더) → `{kind, starter:[names], starter_ok, rad:[≤50], inc_count, file_count, total_bytes, problems:[{code,message}]}`. `/status` `features.predict_parametric`. `backend/openapi.json` 갱신.
+
+화면(최소 UI): ④ 맨 위 "입력 방식" 토글 1개 — `파라미터로 형상 생성`(기본) / `준비된 입력 파일`(선택은 localStorage `physicsai.stage4.inputMode`, try/catch). 준비된 입력에서는 파라미터 세트 카드·입력 표를 숨기고 카드 1개: 경로 입력 + "확인"(요약 한 줄 "starter · rad N · inc M", 문제는 회색 문구, "직계 파일만 복사" 참고 문구) / 모델(기본 Final) / "예측 실행" + "PBS 검증 해석"(기존 규칙). 결과는 기존 컴포넌트 재사용. 파라미터 세트가 없어도 토글·카드 표시. `predict_parametric=false`면 첫 선택지 비활성 + 툴팁 "형상 갱신 설정 필요(관리자)".
+
+### 11.6 시험·Verifier(V3-S6-*)
+
+| ID | 기준 |
+|---|---|
+| V3-S6-1 | parametric 골든 argv·cwd: GEOM_UPDATE `[simlab,-auto,P/geom/simlab_parametered_mesh.py,-nographics]`, MESH `[hw,-clientconfig,hwfepre.dat,-b,-tcl,<tcl>,P/geom/EPS_mesh_0000.rad,P/geom/104_replace_node_elem.inc,S/radioss_assem/RENUM_INIT.csv]`, cwd 둘 다 `P/geom` |
+| V3-S6-2 | INPUT에 starter·새 include(내용이 geom 산출물) 있고 `EPS_mesh*`(대소문자 변형 포함) 없음, starter 1개 |
+| V3-S6-3 | 새 include 없음 → RAD_ASSEMBLE `OUTPUT_MISSING`. MESH null + SimLab이 include 직접 작성 → 성공 |
+| V3-S6-4 | rc≠0 + 출력 → 성공 + `EXIT_NONZERO_IGNORED`. rc 0 + 출력 없음 → `OUTPUT_MISSING` |
+| V3-S6-5 | csv 없음 → `RENUM_CSV_MISSING`, 로그 표식 없음 → `MESH_LOG_INCOMPLETE` |
+| V3-S6-6 | 폴더 등록: `EPS_mesh_0000.rad` 있어도 starter 1개로 성공, csv 복사. from-train도 csv 복사 |
+| V3-S6-7 | prepared 파일·폴더·`.hm`: 복사 규칙, step 2~4 SKIPPED, edspy `--input-file P/INPUT/<starter>`, 미리보기·커브. 원본 폴더 목록·mtime 불변 |
+| V3-S6-8 | prepared 응답 표: 세트 없음 → SKIPPED·`[]`; 세트+response_extract → predicted만, nearest null |
+| V3-S6-9 | 경로 거부(루트 밖·공백·메타문자·`_backup`·링크), allowed_import_roots 허용, 파일명 메타문자, starter 0/2개, 크기 한도 |
+| V3-S6-10 | params 조합 검증, input_mode 생략 = parametric(기존 시험 무수정 통과), prepared는 geom_update null·세트 없음에서도 생성 |
+| V3-S6-11 | prepared → PREDICT_VERIFY·input.zip·재시도(RAD_ASSEMBLE부터) 동작 |
+| V3-S6-12 | inspect `PREDICT_INPUT` 응답 모양, openapi·타입 재생성 일치 |
+| V3-S6-13 | 화면: 토글 유지, prepared 요청 body, 세트 없이 카드, parametric 회귀 없음, `predict_parametric=false` 비활성 |
+| V3-S6-14 | 가짜 도구 실제 형식: fake_simlab은 렌더 스크립트의 `dir_file_export`(기본 `EPS_mesh_0000.rad`)를 cwd에 작성, 상대 CAD 없으면 rc 2(모드 `nonzero_with_output` 추가). fake_hw HyperMesh 형태(`-clientconfig hwfepre.dat -b -tcl X a b c`)는 a 확인 후 b와 cwd `log_batch.txt`("COMPLETE HM BATCHRUN") 작성(모드 `fail`·`no_output`·`no_marker`). 미리보기 JSON §11.1 형식 |
+
+### 11.7 구현 분해(파일 소유 비중첩)
+
+- **Impl-Backend**: `backend/physicsai_api/services/job_params/stage4_predict.py`, `services/path_inspect.py`, `services/stage4_predict.py`, `physicsai_core/commands.py`, `physicsai_core/features.py`, `physicsai_core/config/{schema_stages.py,validate.py}`, `physicsai_core/stage4_predict/param_sets.py`, 신규 `physicsai_core/stage4_predict/prepared_input.py`(`plan_copy(path, settings) -> (kind, starter, files[], problems[])`, API·워커 공용), `backend/openapi.json`, `config/platform.example.yaml`, `backend/tests/support_inputs.py`, backend 시험(V3-S6-6·9·10·12).
+- **Impl-Worker**: `worker/physicsai_worker/steps/stage4_predict/predict.py`(300줄 넘으면 `predict_inputs.py` 분리), `worker/physicsai_worker/step_process.py`(`allow_nonzero_exit`), `backend/tests/fake_tools/{fake_simlab,fake_hw}`, `worker/tests/e2e/test_e2e_chain.py`, 신규 `worker/tests/stage4_predict/`(V3-S6-1~5·7·8·11·14).
+- **Impl-Frontend**: `frontend/src/stages/stage4/{Stage4.tsx, PreparedPredictCard.tsx(신규), PredictResult.tsx}`, `frontend/src/mock/{jobs.ts, stage4Prepared.ts(신규)}`, 타입 재생성, 시험(V3-S6-13).
+
+### 11.8 설정 기본값(`config/platform.example.yaml`)
+
+```yaml
+predict:
+  rendered_script_name: simlab_parametered_mesh.py   # U2 확정
+  simlab_mesh_name: EPS_mesh_0000.rad                # 원본 tpl:110 dir_file_export
+  mesh_include_name: 104_replace_node_elem.inc       # 원본 m_2 출력(U3) — E4-0-2 확인
+  renum_csv_name: RENUM_INIT.csv
+  mesh_log_complete_marker: "COMPLETE HM BATCHRUN"
+  starter_glob: "*_0000.rad"
+  prepared_input_exts: [".rad", ".hm"]
+  prepared_max_files: 500
+  prepared_max_total_bytes: 2147483648
+commands:
+  geom_update: ["{simlab}", "-auto", "{rendered_script}", "-nographics"]
+  mesh: ["{hw}", "-clientconfig", "hwfepre.dat", "-b", "-tcl", "{include_tcl}", "{simlab_mesh}", "{mesh_inc}", "{renum_csv}"]
+```
+기존 설정의 `predict.mesh_output_glob`은 무시하고 `config.warnings`에 "폐지" 표시(오류 아님). `deploy/setup_config.py` 병합 시 사용자가 바꾸지 않은 이전 기본값(`mesh: null`, `mesh_output_glob`)은 새 기본으로 갱신.
+
+### 11.9 리스크
+
+| # | 내용 | 대응 |
+|---|---|---|
+| U3-6 | include 이름·csv 위치가 pyd 문자열 조각 근거 | E4-0-2, 설정값만 교체 |
+| U3-7 | SimLab·hw rc 의미 미확인 | 출력 파일 기준 판정 |
+| U3-8 | prepared 입력이 하위 폴더·절대경로를 include하면 복사본에서 깨짐(원본도 직계만) | 확인 화면 "직계 파일만 복사" 문구 |
+| U3-9 | 원본 ⑤ m_3는 HST 내장 PhysicsAI라 edspy CLI와 미세 차이 가능 | 시연 영향 없음 |
+
+
 ## 변경 메모(D3-n) — 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
 
 - **D3-1 (S1, §3.4 재시도 시작 지점 표시명)**: `JobStep`에는 표시명(label)이 없다(API 모양 불변 유지). 시작 지점 문구는 `{step_no}. {표시명}`에서 표시명을 해당 step이 `Job.current_step_key`와 같으면 `current_step_label`(실패 작업은 실패한 step이 current), 아니면 `step_key`로 쓴다. 첫 재개 step이 1이면 "처음(1단계)". 구현 `frontend/src/components/JobRetryButton.tsx` `retryStartText`. (Plan 승인)
@@ -524,3 +664,4 @@ packages/simdash_adapters/
 - **D3-26 (Verifier 결함 7, 호환)**: `physicsai_core.hpc.none`·`adapter`가 예전처럼 `HpcAvailability`·`HpcGatewayError`·`HpcStatus`·`HpcSubmitResult`·`HpcSubmitSpec`(+ adapter `_MSG`)를, `hpc.command`가 같은 값 형식과 `fwd`·`is_abs_path_str`·`_check_value`·`_norm_exe`를 재노출. (Plan 승인)
 - **D3-27 (Verifier 결함 8, PyPI 이름 선점 차단 — §6.5 조정)**: `deploy/requirements.lock`에서 `simdash-adapters` 줄을 빼고(PyPI에서 받는 외부 의존성만) 새 `deploy/requirements.local.lock`(`simdash-adapters==0.1.0`)에 고정. `collect-offline.{sh,ps1}`: 어댑터 wheel 생성 → `pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock …`(로컬 wheel만으로 고정 확인) → `pip download -r deploy/requirements.lock …`(D3-17의 `--find-links` 제거). 설치는 그대로 `--no-index`. CI·`dev-setup`은 패키지를 저장소 소스로 먼저 설치. 남은 위험: 패키지를 먼저 설치하지 않고 루트에서 `pip install .`을 하면 의존성 `simdash-adapters`를 인덱스에서 찾는다 — `scripts/dev-setup`을 쓰도록 안내. **admin.md §2.2·architecture.md §1.6의 lock 설명은 Plan 갱신 필요**(이번 지시가 docs 수정 금지). (Plan 승인 — 본문 §6.5·V3-S4-7, admin.md §2.2·§2.9, architecture.md §1.6 갱신 완료)
 - **2026-10-13 환경 버전 변경**(decisions.md 2026-10-13, 사용자 결정): 실행 환경은 대시보드와 동일하게 Python 3.12.13·PostgreSQL 18(같은 인스턴스 별도 DB)·Node 22.23.2. 본문에 옛 버전 언급은 없음 — 어댑터 wheel·외부 의존성 wheel(§6.5)은 win_amd64·cp312 기준, 버전 확인·`dashboard_root` 기본값 규칙은 admin.md §2.1·§2.3·§14
+- **D3-28 (Plan, 2026-10-15, S6 신설)**: 원본 ④ 흐름 재추적으로 platform.md §8.9의 U2·U3·U4·U7을 해소(§11.2), 시연을 막는 P1 3건(eps_mesh starter 중복, HyperMesh m_2 누락, 폴더 등록 eps_mesh·csv) 수정 규칙과 준비된 입력 예측(`input_mode`)을 §11에 정함. platform.md §19 U2·U3·U4·U7 → phase3 §11.2.
