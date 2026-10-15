@@ -47,8 +47,9 @@ const isResp = (x: PredictInputInspect | MockResp): x is MockResp => "status" in
 export function inspectPredictInput(path: string): MockResp {
   const plan = planCopy(path);
   if (isResp(plan)) return plan;
-  const ok = plan.starter_ok && plan.problems.length === 0;
-  return { status: 200, body: { normalized_path: path.replace(/\\/g, "/"), ok, problems: plan.problems, summary: { ...plan } } };
+  const { problems, ...summary } = plan;
+  const ok = plan.starter_ok && problems.length === 0;
+  return { status: 200, body: { normalized_path: path.replace(/\\/g, "/"), ok, problems, summary } };
 }
 
 /**

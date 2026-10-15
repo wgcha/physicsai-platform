@@ -19,8 +19,7 @@ export type JobState =
   | "CANCELED"
   | "INTERRUPTED";
 export type StepState = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "SKIPPED" | "CANCELED";
-// S6: openapi 갱신 후 gen:api로 대체 — "PREDICT_INPUT"(phase3.md §11.5)
-export type PathPurpose = S["PathInspectRequest"]["purpose"] | "PREDICT_INPUT";
+export type PathPurpose = S["PathInspectRequest"]["purpose"];
 export type NotificationEvent =
   | "JOB_STARTED"
   | "JOB_SUCCEEDED"
@@ -66,8 +65,7 @@ export interface UiPoll {
   poll_status_ms?: number;
 }
 /** phase2.md §12.1 `/status.features` 키 */
-// S6: openapi 갱신 후 gen:api로 대체 — `predict_parametric`(phase3.md §11.4)
-export type FeatureKey = keyof S["StatusFeatures"] | "predict_parametric";
+export type FeatureKey = keyof S["StatusFeatures"];
 export type FeatureState = S["FeatureState"];
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
 export type EnvCheckBrief = Override<S["StatusEnvCheck"], { latest_state?: EnvCheckState | null }>;
@@ -77,7 +75,7 @@ export type StatusInfo = Override<
     ui: UiPoll & Record<string, number>;
     auth: { mode?: string; login_url?: string } & Record<string, string>;
     hpc: Override<S["StatusHpc"], { collect_mode: "in_place" | "shared_folder" | "drive" | string }>;
-    features?: Partial<Record<FeatureKey, FeatureState | null>> | null;
+    features?: Partial<S["StatusFeatures"]> | null;
     env_check?: EnvCheckBrief | null;
   }
 >;
@@ -118,14 +116,14 @@ export interface PredictResult {
   curve_artifact_id: string | null;
   response_table_artifact_id?: string | null;
   response_table: ResponseRow[];
-  // S6: openapi 갱신 후 gen:api로 대체 — prepared 결과 키(phase3.md §11.5)
+  // S6 prepared 결과 키(phase3.md §11.5) — openapi에서 결과는 자유 형식이라 수동 유지
   input_mode?: PredictInputMode;
   input_path?: string | null;
 }
 
 // ---------------------------------------------------------------------------
 // S6 ④ 준비된 입력 예측(phase3.md §11.5)
-// S6: openapi 갱신 후 gen:api로 대체 — 아래 타입은 backend/openapi.json 갱신 전 수동 확장
+// openapi에서 Job params·inspect summary는 자유 형식(dict)이라 아래 타입은 수동 유지(백엔드 구현과 일치 확인)
 // ---------------------------------------------------------------------------
 export type PredictInputMode = "parametric" | "prepared";
 
@@ -165,7 +163,7 @@ export interface PredictInputProblem {
   message: string;
 }
 
-/** paths/inspect `purpose:"PREDICT_INPUT"` 결과(summary 또는 최상위) */
+/** paths/inspect `purpose:"PREDICT_INPUT"` 결과 — problems 외 키는 `summary` 안, problems는 응답 최상위(phase3 D3-30) */
 export interface PredictInputInspect {
   kind: "file" | "dir";
   starter: string[];

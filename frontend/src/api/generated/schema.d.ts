@@ -1933,7 +1933,7 @@ export interface components {
              * Purpose
              * @enum {string}
              */
-            purpose: "DATASET_INPUT" | "MODEL_FOLDER" | "PARAM_SET" | "CAD_FILE" | "RADIOSS_ASSEM" | "RESULT_FOLDER" | "CURATION_INPUT" | "SPDM_IMPORT";
+            purpose: "DATASET_INPUT" | "MODEL_FOLDER" | "PARAM_SET" | "CAD_FILE" | "RADIOSS_ASSEM" | "RESULT_FOLDER" | "CURATION_INPUT" | "SPDM_IMPORT" | "PREDICT_INPUT";
         };
         /** PathInspectResponse */
         PathInspectResponse: {
@@ -2230,6 +2230,7 @@ export interface components {
             evaluate?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
             predict?: components["schemas"]["FeatureState"] | null;
+            predict_parametric?: components["schemas"]["FeatureState"] | null;
             spdm_import: components["schemas"]["FeatureState"];
             train_doe: components["schemas"]["FeatureState"];
             train_extract: components["schemas"]["FeatureState"];

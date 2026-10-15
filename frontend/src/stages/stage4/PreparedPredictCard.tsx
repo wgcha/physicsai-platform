@@ -18,14 +18,13 @@ import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
 
 export const DIRECT_FILES_NOTE = "직계 파일만 복사합니다 — 폴더(또는 .rad 파일의 폴더)의 .rad·.inc만, 하위 폴더·EPS_mesh 제외. .hm은 그 파일만.";
 
-/** inspect 응답에서 PREDICT_INPUT 요약을 꺼낸다(summary 안 또는 최상위 — openapi 갱신 전이라 둘 다 받는다) */
+/** inspect 응답에서 PREDICT_INPUT 요약을 꺼낸다(요약 키는 summary 안, problems는 최상위 — phase3 D3-30) */
 export function predictInputInfo(r: PathInspectResult): PredictInputInspect & { ok: boolean } {
-  const top = r as unknown as Partial<PredictInputInspect>;
   const sum = (r.summary ?? {}) as Partial<PredictInputInspect>;
-  const pick = <K extends keyof PredictInputInspect>(k: K): PredictInputInspect[K] | undefined => (sum[k] ?? top[k]) as PredictInputInspect[K] | undefined;
+  const pick = <K extends keyof PredictInputInspect>(k: K): PredictInputInspect[K] | undefined => sum[k] as PredictInputInspect[K] | undefined;
   const seen = new Set<string>();
   const problems: PredictInputProblem[] = [];
-  for (const p of [...(r.problems ?? []), ...(sum.problems ?? [])]) {
+  for (const p of r.problems ?? []) {
     const key = `${p.code}|${p.message ?? ""}`;
     if (seen.has(key)) continue;
     seen.add(key);

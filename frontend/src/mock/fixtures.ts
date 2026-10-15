@@ -49,9 +49,20 @@ export function curveJson(values: Record<string, number>) {
   return { file: "cushion_0000_pred_T01.xy", series: [{ name: "Node 10234 변위 [mm]", x, y }, { name: "Node 20811 변위 [mm]", x, y: y2 }], note: null };
 }
 
+/** ④ 컨투어 미리보기 결과 목록 — 원본 미리보기 TCL 형식(phase3 §11.1, 가짜 hw와 같은 모양). 화면은 JsonTree라 이전 형식도 그대로 표시 */
 export const PREVIEW_JSON = {
-  file: "cushion_0000_pred.h3d",
-  subcases: [{ name: "Subcase 1", simulations: 42, datatypes: ["Displacement", "Stress (von Mises)", "Plastic Strain"] }],
+  h3d: "04_predict/cushion_0000_pred.h3d",
+  num_time_step: 5,
+  subcases: [
+    {
+      id: 1,
+      label: "Subcase 1",
+      datatypes: [
+        { name: "Stress", format: "tensor", binding: "element", components: ["vonMises", "P1 (major)"], layers: ["Max", "Min"] },
+        { name: "Displacement", format: "vector", binding: "node", components: ["X", "Y", "Z", "Mag"], layers: [] },
+      ],
+    },
+  ],
 };
 
 export const COMMANDS_TXT = `# PhysicsAI 학습 명령 예시 (HPC에서 직접 실행)

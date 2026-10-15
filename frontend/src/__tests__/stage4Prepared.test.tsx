@@ -192,7 +192,7 @@ describe("목 PREDICT params 검증(§11.5)", () => {
     expect(r.status).toBe(200);
     const b = r.body as { ok: boolean; normalized_path: string; problems: unknown[]; summary: Record<string, unknown> };
     expect(b.ok).toBe(true);
-    expect(Object.keys(b.summary).sort()).toEqual(["file_count", "inc_count", "kind", "problems", "rad", "starter", "starter_ok", "total_bytes"]);
+    expect(Object.keys(b.summary).sort()).toEqual(["file_count", "inc_count", "kind", "rad", "starter", "starter_ok", "total_bytes"]);
     const bad = s.handle("POST", "/studies/s-cushion/paths/inspect", q, { purpose: "PREDICT_INPUT", path: "E:/shared/AI_WORK/x/a.txt" }, h);
     expect((bad.body as { problems: { code: string }[] }).problems[0].code).toBe("INPUT_EXT");
   });
@@ -212,5 +212,21 @@ describe("목 PREDICT params 검증(§11.5)", () => {
     const prep = post(off, { input_mode: "prepared", input_path: "E:\\shared\\AI_WORK\\x\\a.rad", model_id: null, param_set_id: null });
     expect(prep.status).toBe(201);
     expect((prep.body as { params: Record<string, unknown> }).params).toMatchObject({ input_mode: "prepared", input_path: "E:/shared/AI_WORK/x/a.rad", input_kind: "file", starter_name: "a.rad" });
+  });
+});
+
+describe("④ 컨투어 결과 목록(JsonTree)", () => {
+  it("원본 형식과 이전 형식 모두 표시", async () => {
+    const { render } = await import("@testing-library/react");
+    const { JsonTree } = await import("../components/JsonTree");
+    const { PREVIEW_JSON } = await import("../mock/data");
+    const cur = render(<JsonTree data={PREVIEW_JSON} />);
+    expect(cur.container.textContent).toContain("num_time_step: 5");
+    expect(cur.container.textContent).toContain("label: Subcase 1");
+    expect(cur.container.textContent).toContain("binding: element");
+    cur.unmount();
+    const old = render(<JsonTree data={{ subcases: [{ name: "Subcase 1", datatypes: [{ name: "Stress", components: ["vonMises"] }] }] }} />);
+    expect(old.container.textContent).toContain("name: Subcase 1");
+    expect(old.container.textContent).toContain("vonMises");
   });
 });
