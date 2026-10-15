@@ -15,18 +15,20 @@
 
 | 구성 요소 | 실행 형태 | 역할 | 기본 위치·포트 |
 |---|---|---|---|
-| 프런트엔드 | 정적 파일(Vite build) | 화면. 기본 경로 `/physicsai/` | git 폴더 설치 `<git>\.runtime\frontend`, 묶음 `<install_root>\frontend\dist`(= `deploy.json`의 `caddy_frontend_root`) |
+| 프런트엔드 | 정적 파일(Vite build) | 화면. 기본 경로 `/physicsai/`. 백엔드가 직접 서빙(`server.frontend_root`, §2.6.1) 또는 Caddy(§2.6.2) | git 폴더 설치 `<git>\.runtime\frontend`, 묶음 `<install_root>\frontend\dist`(= `deploy.json`의 `caddy_frontend_root`) |
 | 백엔드(API) | `python -m physicsai_api.serve`(uvicorn) | 입력 검증·권한·작업 생성·조회. **외부 프로그램을 실행하지 않는다** | `127.0.0.1:8100`, 접두 `/physicsai/api` |
 | 워커 | `python -m physicsai_worker` | 대기열 claim, Altair·PBS 명령 실행(Job Object 안), HPC 폴링·회수, 환경 점검 워커 항목, 알림 정리 | PC당 1개(잠금 파일 `worker.state_dir/physicsai-worker.lock`) |
 | DB | PostgreSQL(대시보드 DB와 **별도** DB `physicsai`) | 작업·상태·경로·수치 요약. 파일 본문은 저장하지 않음 | `127.0.0.1:5432` |
 | 산출물 | 파일 시스템 | Study 폴더(AI 루트 아래), 환경 점검 보고서(`_platform`) | `storage.ai_root` |
 
 ```text
-브라우저 ── https://<대시보드 주소>/physicsai/…   (같은 origin → 대시보드 세션 쿠키가 함께 전송)
+브라우저 ── http://<대시보드 주소>/physicsai/…   (같은 origin → 대시보드 세션 쿠키가 함께 전송)
    │
-Caddy(대시보드 것) ─┬─ /physicsai/api/*  → PhysicsAI 백엔드 127.0.0.1:8100
-                    ├─ /physicsai/*      → PhysicsAI 프런트 정적 파일
-                    └─ 그 밖             → 대시보드(기존)
+대시보드 Vite 서버(start.ps1) ─┬─ /physicsai, /physicsai/*  → PhysicsAI 백엔드 127.0.0.1:8100(경로 그대로, §2.6.1)
+                               │     백엔드: /physicsai/api/* → API, 그 밖 → 프런트 정적 파일(server.frontend_root)
+                               └─ 그 밖             → 대시보드(기존)
+(대안) Caddy(대시보드 것) ─┬─ /physicsai/api/* → 백엔드, /physicsai/* → 프런트 정적 파일(§2.6.2)
+                           └─ 그 밖            → 대시보드(기존)
 PhysicsAI 백엔드 ── GET /api/auth/me, /api/projects ──▶ 대시보드 백엔드(루프백, 예 127.0.0.1:8000)
        │
 PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker ── Job Object ── edspy·SimLab·hw·hvtrans·hstbatch·hstpy
@@ -35,7 +37,7 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 
 ### 1.2 대시보드와의 관계
 
-- **같은 Windows Server PC**에서 대시보드와 나란히 돈다. 대시보드 코드는 바꾸지 않는다. 대시보드 Caddyfile에 PhysicsAI용 `handle` 블록 2개만 추가한다(§2.6).
+- **같은 Windows Server PC**에서 대시보드와 나란히 돈다. 대시보드 코드는 바꾸지 않는다. 대시보드 `.env`에 두 줄(`VITE_PHYSICSAI_TARGET`, `SIMDASH_PHYSICSAI_ENABLED`)만 넣는다(§2.6.1). Caddy를 쓰는 설치는 대신 Caddyfile에 PhysicsAI용 `handle` 블록 2개를 추가한다(§2.6.2).
 - **로그인 공유**: 사용자는 대시보드에서 로그인한다. 같은 주소(origin)이므로 쿠키 `analysis_canvas_session`이 `/physicsai/` 요청에도 붙고, PhysicsAI 백엔드는 이 토큰으로 대시보드 `GET /api/auth/me`를 호출해 사용자·역할을 확인한다(결과 30초 캐시). 로그아웃은 대시보드에서 한다. 토큰 값은 로그·DB에 남기지 않는다.
 - **프로젝트**: Study는 대시보드 프로젝트 1개에 속한다. 프로젝트 목록은 대시보드 `GET /api/projects`에서 가져온다.
 - **권한**: 대시보드 역할을 그대로 쓴다(DB에 역할을 복제하지 않음).
@@ -52,7 +54,7 @@ PostgreSQL `physicsai`  ◀── claim/renew/release ──  physicsai_worker �
 ### 1.3 경로 `/physicsai/`
 
 - 백엔드 라우트 접두 `/physicsai/api`와 프런트 base `/physicsai/`는 **코드에 고정**이다. `server.base_path`는 예약(미사용) 키라 써도 경로가 바뀌지 않고 경고만 나온다(§4.4).
-- Caddy는 접두를 벗기지 않고 백엔드로 넘긴다(`/physicsai/api/*` 그대로). 프런트는 `uri strip_prefix /physicsai` 후 정적 파일을 준다.
+- 대시보드 Vite 프록시는 `/physicsai` 전체를 접두 그대로 백엔드로 넘기고, 백엔드가 `/physicsai/api/*`는 API로, 그 밖은 `server.frontend_root`의 정적 파일(없는 경로는 `index.html`)로 응답한다(§2.6.1). Caddy를 쓰면 `/physicsai/api/*`만 백엔드로 넘기고 프런트는 Caddy가 `uri strip_prefix /physicsai` 후 정적 파일을 준다(§2.6.2).
 
 ---
 
@@ -83,16 +85,16 @@ git pull; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-re
 | ① | 관리자 권한 확인(아니면 실행 방법 안내 후 중단), Python 3.12 선택 |
 | ② | 런타임 폴더 `<git>\.runtime\`(git 제외 — `git pull`과 충돌 없음): `venv`, `frontend`(빌드 배치), `config\platform.yaml`, `deploy.json`, `logs`, `state`, `_backup` |
 | ③ | `.runtime\venv`에 `deploy\requirements.lock` → `packages\simdash_adapters` → 플랫폼 패키지 **일반 설치**(editable 아님 — 업데이트 때 다시 설치). 사내 pip 설정(`pip.ini`·`PIP_INDEX_URL`)·프록시(`HTTPS_PROXY`)는 그대로 쓴다 |
-| ④ | 설정 계획(`deploy\setup_config.py`): `deploy.json`·`platform.yaml`을 **새로 만들거나, 있으면 보존하고 빠진 키만 보충**(사용자가 고친 값은 덮어쓰지 않음, 비어 있는 자원·Altair 경로는 찾은 값으로 채움). 새 설정: `profile: prod`, `server.port: 8100`, `storage.ai_root`(폴더 생성), `resources.*`, `altair.*`, `hpc.gateway: none`, `worker` 기본값(예시 값) |
+| ④ | 설정 계획(`deploy\setup_config.py`): `deploy.json`·`platform.yaml`을 **새로 만들거나, 있으면 보존하고 빠진 키만 보충**(사용자가 고친 값은 덮어쓰지 않음, 비어 있는 자원·Altair 경로는 찾은 값으로 채움). 새 설정: `profile: prod`, `server.port: 8100`, `server.frontend_root`(= `.runtime\frontend` — 백엔드가 `/physicsai/` 직접 서빙. 키가 없을 때만 보충, 사용자가 바꾼 값·`null`은 유지), `storage.ai_root`(폴더 생성), `resources.*`, `altair.*`, `hpc.gateway: none`, `worker` 기본값(예시 값) |
 | ⑤ | 확인 표(위치·Python·PostgreSQL·AI 루트·자원 n/10·Altair n/5·설정 처리) → `Y/N` |
 | ⑥ | 이미 설치돼 있으면 대기열 확인(실행 중 작업이 있으면 중단, `-Force`) → 작업 중지 → venv 패키지 갱신. 바뀌는 기존 파일은 먼저 `.runtime\_backup\<UTC>\`로 복사. 프런트를 Node 22로 빌드(`npm ci`는 `package-lock.json`이 바뀔 때만) → `.runtime\frontend`(이전 것은 `_backup`) |
 | ⑦ | DB 역할·DB(없을 때만) → 머신 환경변수 `PHYSICSAI_CONFIG`(= `.runtime\config\platform.yaml`)·`PHYSICSAI_DATABASE_URL` → `alembic upgrade head` → 작업 스케줄러 `PhysicsAI-Backend`·`PhysicsAI-Worker`(작업 폴더 `.runtime`, 설정은 §2.5) → 시작·health. 묶음 `install.ps1`과 같은 공용 함수(`deploy\install-common.ps1`) |
-| ⑧ | 안내: Caddy 스니펫(`deploy\caddy\physicsai.caddy`, `PHYSICSAI_PORT`=8100·`PHYSICSAI_FRONTEND_ROOT`=`.runtime\frontend`, §2.6), 대시보드 `.env`의 `SIMDASH_PHYSICSAI_ENABLED=true`(대시보드 재시작), 접속 주소 `https://<대시보드 주소>/physicsai/` |
+| ⑧ | 접속 연결 안내(§2.6.1): 대시보드 `.env`에 `VITE_PHYSICSAI_TARGET=http://127.0.0.1:<server.port>`·`SIMDASH_PHYSICSAI_ENABLED=true`(대시보드 재시작, 이미 있으면 "이미 들어 있음"), 접속 주소 `http://<대시보드 주소>/physicsai/`. Caddy를 쓰는 설치는 `deploy\caddy\physicsai.caddy`(§2.6.2) |
 
-- **기존 묶음 설치 이어받기**: 머신 환경변수 `PHYSICSAI_CONFIG`나 작업 스케줄러가 다른 `install_root`를 가리키면 감지한다. 그 `platform.yaml`을 `.runtime\config`로 **복사**해 이어받고(원본 그대로, 빠진 키만 보충), 같은 DB 연결(머신 환경변수 URL이 접속되면 비밀번호를 묻지 않음)을 이어 쓰며, 기존 작업 정의를 `.runtime\_backup\<UTC>\tasks\*.xml`로 남긴 뒤 이 git 폴더의 venv로 다시 등록한다. 옛 설치 폴더는 지우지 않는다(확인 후 직접 정리, Caddy `PHYSICSAI_FRONTEND_ROOT`도 새 위치로).
+- **기존 묶음 설치 이어받기**: 머신 환경변수 `PHYSICSAI_CONFIG`나 작업 스케줄러가 다른 `install_root`를 가리키면 감지한다. 그 `platform.yaml`을 `.runtime\config`로 **복사**해 이어받고(원본 그대로, 빠진 키만 보충), 같은 DB 연결(머신 환경변수 URL이 접속되면 비밀번호를 묻지 않음)을 이어 쓰며, 기존 작업 정의를 `.runtime\_backup\<UTC>\tasks\*.xml`로 남긴 뒤 이 git 폴더의 venv로 다시 등록한다. 옛 설치 폴더는 지우지 않는다(확인 후 직접 정리, Caddy를 쓰면 `PHYSICSAI_FRONTEND_ROOT`도 새 위치로).
 - 설정은 `.runtime\config\platform.yaml`에서 직접 고친다(§4). 다시 실행하거나 업데이트해도 덮어쓰지 않는다. 고친 뒤 `Stop-ScheduledTask`/`Start-ScheduledTask PhysicsAI-Worker`(백엔드도).
 - 로그: `.runtime\logs\backend.log`·`worker.log`(작업 폴더 기준 `./logs`).
-- 제약: Caddy가 없는 대시보드 구성(대시보드 `start.ps1`의 Vite 서버만 쓰는 경우)에서는 `/physicsai/` 경로가 연결되지 않는다 — 같은 주소에서 로그인을 공유하려면 Caddy(§2.6)가 있어야 한다.
+- Caddy가 없는 대시보드 구성(대시보드 `start.ps1`의 Vite 서버만 쓰는 경우)이 기본이다: 대시보드 Vite가 `/physicsai`를 백엔드로 넘기고 백엔드가 프런트를 서빙한다(§2.6.1). 같은 주소라 대시보드 로그인이 공유된다.
 
 ### 2.1 준비물
 
@@ -180,7 +182,7 @@ bash deploy/collect-offline.sh
 | ⑦ | `alembic upgrade head` | head = `0003_hpc_cancel_failed` |
 | ⑧ | 작업 스케줄러 등록 `PhysicsAI-Backend`(`venv\Scripts\python.exe -m physicsai_api.serve`), `PhysicsAI-Worker`(`… -m physicsai_worker`), 작업 폴더 `install_root` | §2.5 |
 | ⑨ | 두 작업 시작 → `http://127.0.0.1:<server.port>/physicsai/api/health`(포트는 `platform.yaml`의 `server.port`에서 읽음) 60초까지 확인 | `{"status":"ok"}` |
-| ⑩ | Caddy 스니펫 위치·환경변수 안내 출력 | §2.6 |
+| ⑩ | Caddy 스니펫 위치·환경변수 안내 출력(묶음 설치는 Caddy 기준. 대시보드 Vite 프록시로 쓰려면 `server.frontend_root`를 `caddy_frontend_root`로 설정) | §2.6 |
 
 주의
 - `install.bat`·`update.bat`·시연 `start-demo.bat`·`stop-demo.bat`은 `PSModulePath`를 비우고 Windows PowerShell 5.1을 부른다 — PowerShell 7 창에서 실행해도 5.1 기본 모듈로 동작한다. `.ps1`을 직접 실행할 때는 Windows PowerShell 5.1 창을 쓴다.
@@ -202,9 +204,30 @@ NSSM·pywin32를 쓰지 않고 작업 스케줄러로 상시 실행한다(phase2
 - 수동 조작: `Start-ScheduledTask PhysicsAI-Worker`, `Stop-ScheduledTask PhysicsAI-Worker`(백엔드도 같음). 워커를 멈추면 Job Object `KILL_ON_JOB_CLOSE`로 실행 중인 Altair 프로세스 트리도 함께 끝나고, 그 작업은 약 1분(lease) 뒤 `INTERRUPTED`가 된다.
 - **세션 0 주의**: `Background`는 데스크톱이 없는 세션 0에서 돈다. HyperWorks·SimLab 배치(특히 `hw -b`로 그림을 만드는 TCL)가 세션 0에서 동작하는지는 미확인(U11·U31). 안 되면 `-RunMode Interactive`로 다시 등록하고 실행 계정을 자동 로그온해 둔다(§13 FAQ).
 
-### 2.6 Caddy 설정
+### 2.6 접속 연결
 
-`deploy\caddy\physicsai.caddy` 내용을 **대시보드 Caddyfile 사이트 블록 안, catch-all `handle` 앞**에 넣는다.
+#### 2.6.1 대시보드 Vite 프록시 + 백엔드 정적 서빙(기본)
+
+운영 대시보드(`start.ps1`)는 Caddy 없이 Vite 서버가 화면을 주고, `/physicsai` 아래 요청 전체를 PhysicsAI 백엔드로 **경로 그대로** 넘긴다. 백엔드는 `/physicsai/api/*`를 API로, 그 밖의 `/physicsai/…`를 프런트 빌드(`server.frontend_root`)로 응답한다.
+
+1. `platform.yaml`의 `server.frontend_root`를 프런트 배치 폴더로 둔다. git 폴더 설치(§2.0)는 `setup.ps1`이 `<git>\.runtime\frontend`로 넣는다(이미 있는 값은 유지). 바꾸면 백엔드 재시작.
+2. 대시보드 `<dashboard_root>\.env`에 두 줄을 넣고 대시보드를 다시 시작한다(포트는 `server.port`와 같게):
+
+   ```dotenv
+   VITE_PHYSICSAI_TARGET=http://127.0.0.1:8100
+   SIMDASH_PHYSICSAI_ENABLED=true
+   ```
+
+3. 접속: `http://<대시보드 주소>/physicsai/`(대시보드에 로그인한 상태로). 이 PC 확인용 health: `http://127.0.0.1:8100/physicsai/api/health`.
+
+- 서빙 규칙: `/physicsai` → 308 `/physicsai/`. 빌드 폴더 안의 파일은 그대로, 없는 경로는 `index.html`(화면 내부 경로 새로고침 대응). `index.html`은 `Cache-Control: no-cache`, 해시 이름 자산(`assets/`)은 1년 캐시. `..`·드라이브 경로·빌드 폴더 밖을 가리키는 링크는 404. `/physicsai/api/…`는 정적 처리로 가지 않는다(없는 API = JSON 404).
+- 정적 파일은 인증 없이 준다(화면이 `/physicsai/api/me`로 로그인 여부를 판단). API 인증은 그대로다.
+- 빌드 폴더나 `index.html`이 없어도 백엔드는 기동한다. 관리 > 환경 점검의 `프런트 정적 서빙`(`server.frontend_root`) 항목이 WARN으로 알리고, 화면 요청은 404 "프런트 빌드가 없습니다". 설정하지 않으면(`null`) 항목은 SKIP(외부 서빙).
+- PhysicsAI 백엔드가 인증을 확인하는 대시보드 내부 주소 `auth.dashboard_internal_url`의 기본값 `http://127.0.0.1:8000`은 대시보드 `start.ps1`의 백엔드 기본 포트(`-BackendPort 8000`)와 같다. 대시보드를 다른 포트로 띄우면 이 값도 바꾼다.
+
+#### 2.6.2 Caddy(대안)
+
+대시보드 앞에 Caddy를 두는 설치는 `deploy\caddy\physicsai.caddy` 내용을 **대시보드 Caddyfile 사이트 블록 안, catch-all `handle` 앞**에 넣는다. 이때 `server.frontend_root`는 `null`로 두어도 된다(프런트는 Caddy가 서빙).
 
 ```caddyfile
 redir /physicsai /physicsai/ 308
@@ -298,7 +321,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1    
 | ④ | 설정 보충(기존 값 유지, 새 버전에서 생긴 관리 키만. 바뀌면 먼저 `_backup` 복사) |
 | ⑤ | 프런트 재빌드(Node 22) → `.runtime\frontend`(이전 것은 `.runtime\_backup\<UTC>\frontend`) |
 | ⑥ | `alembic upgrade head` |
-| ⑦ | 시작·health |
+| ⑦ | 시작·health → 접속 연결 안내(§2.6.1, 대시보드 `.env` 두 줄이 이미 있으면 "이미 들어 있음") |
 
 - 실패하면 되돌리는 방법을 출력한다: `git checkout <이전 커밋>` 후 다시 실행(이전 프런트는 `_backup`). migration이 이미 올라갔으면 DB는 백업에서 복원(§3.3).
 - `.runtime\_backup`은 자동으로 지우지 않는다. 확인 후 관리자가 정리한다.
@@ -332,7 +355,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1    
 ```
 
 완전 제거가 필요하면 관리자가 직접(되돌릴 수 없으니 백업 후):
-1. 대시보드 Caddyfile에서 PhysicsAI 스니펫 삭제 → Caddy 다시 읽기
+1. 대시보드 `.env`에서 `VITE_PHYSICSAI_TARGET`·`SIMDASH_PHYSICSAI_ENABLED` 삭제 → 대시보드 재시작(Caddy를 쓰면 Caddyfile에서 PhysicsAI 스니펫 삭제 → Caddy 다시 읽기)
 2. 머신 환경변수 `PHYSICSAI_CONFIG`, `PHYSICSAI_DATABASE_URL` 삭제
 3. DB `physicsai`·역할 `physicsai_app` 삭제(`pg_dump` 백업 후)
 4. `install_root` 폴더 정리
@@ -394,8 +417,9 @@ $env:PGPASSWORD = $null
 |---|---|---|---|---|
 | `schema_version` | 설정 스키마 버전(1만 허용) | `1` | `1` | B+W↻ |
 | `profile` | `dev`\|`prod`. prod면 `altair.*`·`resources.*` 파일 존재 검사, `preview_pred_h3d_tcl` 필수, `worker.limiter: null`·`auth.mode: dev_static` 금지 | `dev` | `dev`(운영은 `prod`) | B+W↻ |
-| `server.host` | 백엔드 바인딩 주소(Caddy 뒤이므로 `127.0.0.1`) | `127.0.0.1` | `127.0.0.1` | B |
-| `server.port` | 백엔드 포트. **포트의 유일한 출처**(설치·업데이트 스크립트의 health 확인도 이 값을 읽음). Caddy `PHYSICSAI_PORT`와 일치 | `8100` | `8100` | B |
+| `server.host` | 백엔드 바인딩 주소(대시보드 프록시·Caddy 뒤이므로 `127.0.0.1`) | `127.0.0.1` | `127.0.0.1` | B |
+| `server.port` | 백엔드 포트. **포트의 유일한 출처**(설치·업데이트 스크립트의 health 확인도 이 값을 읽음). 대시보드 `.env`의 `VITE_PHYSICSAI_TARGET`(또는 Caddy `PHYSICSAI_PORT`)과 일치 | `8100` | `8100` | B |
+| `server.frontend_root` | 백엔드가 `/physicsai/` 아래에 직접 서빙할 프런트 빌드 폴더(절대경로, §2.6.1). `null`·빈 값 = 서빙 안 함(Caddy 등). 폴더·`index.html`이 없으면 기동은 하고 환경 점검 WARN. 시연은 `demo.frontend_root`가 우선 | `null` | `null`(git 설치는 `<git>/.runtime/frontend`) | B |
 | `server.base_path` | **예약(미사용)**. 경로는 `/physicsai` 고정. 값이 있으면 경고 `config.warnings`(지워도 됨) | `/physicsai` | (예시에서 제거됨) | – |
 | `database.url_env` | DB URL을 담은 환경변수 이름 | `PHYSICSAI_DATABASE_URL` | 같음 | B+W↻ |
 | `database.pool_size` | DB 연결 풀 크기 | `5` | `5` | B+W↻ |
