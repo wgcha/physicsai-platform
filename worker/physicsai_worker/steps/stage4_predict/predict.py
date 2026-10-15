@@ -1,15 +1,13 @@
-"""④ PREDICT(§8.9). 원본으로 확인 안 된 단계는 설정 템플릿(사내 확인 후 교체)."""
+"""④ PREDICT(§8.9, phase3 §11.4·§11.5). 입력 준비 step(GEOM_UPDATE·MESH·RAD_ASSEMBLE)은 predict_inputs."""
 
 from __future__ import annotations
 
-import fnmatch
 import glob
 import json
 import os
 from typing import Any
 
 from physicsai_core.commands import fwd
-from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, write_json, write_text
 from physicsai_core.naming import TPL_NAME
@@ -21,23 +19,45 @@ from physicsai_core.tpl_render import render_tpl
 
 from ...signals import StepSkipped
 from ..common import load_model, verify_model_integrity
+from .predict_inputs import (
+    PREPARED_SKIP,
+    check_prepared,
+    geom_update,
+    is_prepared,
+    mesh,
+    param_set,
+    rad_assemble,
+    require_param_set,
+)
+from .predict_inputs import predict_dir as _P
+
+_ps = require_param_set
 
 
-def _P(ctx: Any) -> str:
-    return ctx.abs(f"04_predict/{ctx.workspace_id}")
-
-
-def _ps(ctx: Any) -> tuple[dict[str, Any], str]:
-    with ctx.ex.engine.connect() as conn:
-        ps = ps_repo.get(conn, ctx.params["param_set_id"])
-    if ps is None or ps["study_id"] != ctx.study["id"]:
-        raise StepFailure("INPUT_INVALID", "파라미터 세트를 찾을 수 없습니다")
-    return ps, ctx.abs(ps["stored_rel"])
+def _pr_prep_prepared(ctx: Any, m: dict[str, Any]) -> None:
+    """PR_PREP(prepared, phase3 §11.5): 입력 재검사·params.json. 형상 값 없음."""
+    plan = check_prepared(ctx)
+    ps, _S = param_set(ctx)
+    P = _P(ctx)
+    os.makedirs(P, exist_ok=True)
+    pj = os.path.join(P, "params.json")
+    ctx.backup([pj])
+    write_json(pj, {
+        "input_mode": "prepared", "input_path": ctx.params["input_path"], "input_kind": plan.kind,
+        "starter_name": plan.starter, "files": [os.path.basename(f) for f in plan.files], "values": {},
+        "model_id": m["id"], "param_set_id": ps["id"] if ps else None, "nearest": None,
+    })
+    ctx.patch_result({
+        "model_id": m["id"], "param_set_id": ps["id"] if ps else None, "input_mode": "prepared",
+        "input_path": ctx.params["input_path"], "values": {}, "applied_values": {}, "out_of_range": [], "nearest": None,
+    })
 
 
 def pr_prep(ctx: Any) -> None:
     m = load_model(ctx, ctx.params["model_id"])
     verify_model_integrity(ctx, m)
+    if is_prepared(ctx):
+        return _pr_prep_prepared(ctx, m)
     ps, S = _ps(ctx)
     for need in (TPL_NAME, os.path.join("cad", ps["cad_file_name"]), os.path.join("radioss_assem", ps["starter_name"])):
         if not os.path.isfile(os.path.join(S, need)):
@@ -70,6 +90,8 @@ def pr_prep(ctx: Any) -> None:
 
 
 def tpl_render(ctx: Any) -> None:
+    if is_prepared(ctx):
+        raise StepSkipped(PREPARED_SKIP)
     ps, S = _ps(ctx)
     r = ctx.result()
     with open(os.path.join(S, TPL_NAME), encoding="utf-8-sig") as fh:
@@ -79,55 +101,6 @@ def tpl_render(ctx: Any) -> None:
     ctx.backup([dst])
     write_text(dst, out)
     ctx.add_output(dst)
-
-
-def _geom_values(ctx: Any) -> dict[str, str]:
-    ps, _S = _ps(ctx)
-    g = os.path.join(_P(ctx), "geom")
-    return {"rendered_script": os.path.join(g, ctx.settings.predict.rendered_script_name),
-            "cad_file": os.path.join(g, ps["cad_file_name"]), "work_dir": g}
-
-
-def geom_update(ctx: Any) -> None:
-    if ctx.settings.commands.geom_update is None:
-        raise StepFailure("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다")
-    v = _geom_values(ctx)
-    ctx.run_local("geom_update", v, cwd=v["work_dir"])
-
-
-def mesh(ctx: Any) -> None:
-    if ctx.settings.commands.mesh is None:
-        raise StepSkipped("메싱 템플릿 미설정 — 형상 갱신 단계에서 함께 수행")
-    v = _geom_values(ctx)
-    ctx.run_local("mesh", v, cwd=v["work_dir"])
-
-
-def rad_assemble(ctx: Any) -> None:
-    ps, S = _ps(ctx)
-    P = _P(ctx)
-    inp = os.path.join(P, "INPUT")
-    os.makedirs(inp, exist_ok=True)
-    assem = os.path.join(S, "radioss_assem")
-    copies: list[tuple[str, str]] = []
-    for n in sorted(os.listdir(assem)):
-        if n.lower().endswith((".rad", ".inc")) and not n.lower().startswith("eps_mesh"):
-            copies.append((os.path.join(assem, n), os.path.join(inp, n)))
-    geom = os.path.join(P, "geom")
-    for n in sorted(os.listdir(geom)):
-        if fnmatch.fnmatch(n, ctx.settings.predict.mesh_output_glob) and os.path.isfile(os.path.join(geom, n)):
-            copies.append((os.path.join(geom, n), os.path.join(inp, n)))
-    if not any(os.path.dirname(src) == geom for src, _ in copies):
-        ctx.add_warning("MESH_OUTPUT_MISSING", f"형상 갱신 결과에서 메시 파일({ctx.settings.predict.mesh_output_glob})을 찾지 못했습니다")
-    ctx.backup([d for _s, d in copies])
-    for src, dst in copies:
-        copy_file(src, dst, checkpoint=ctx.checkpoint)
-        ctx.log(f"복사 {os.path.basename(src)} → INPUT/")
-    starters = [n for n in sorted(os.listdir(inp)) if fnmatch.fnmatch(n, ctx.settings.predict.starter_glob)]
-    if len(starters) != 1:
-        raise StepFailure("INPUT_INVALID", f"starter({ctx.settings.predict.starter_glob})가 정확히 1개여야 합니다(현재 {len(starters)}개)")
-    if ctx.settings.commands.rad_assemble is not None:
-        ctx.run_local("rad_assemble", {"work_dir": P, "starter": os.path.join(inp, starters[0]), "input_dir": inp}, cwd=inp)
-    ctx.patch_result({"starter": starters[0]})
 
 
 def edspy_predict(ctx: Any) -> None:
@@ -194,7 +167,9 @@ def curve_pick(ctx: Any) -> None:
 def response_extract(ctx: Any) -> None:
     if ctx.settings.commands.response_extract is None:
         raise StepSkipped("추출 미구성")
-    ps, S = _ps(ctx)
+    ps, S = param_set(ctx)  # prepared는 세트가 없을 수 있다(phase3 §11.5)
+    if ps is None or S is None:
+        raise StepSkipped("파라미터 세트 없음")
     resp = os.path.join(S, "responses.json")
     if not ps["responses"] or not os.path.isfile(resp):
         raise StepSkipped("응답 정의 없음")
@@ -221,11 +196,16 @@ def build_table(responses: list[dict[str, Any]], predicted: dict[str, float | No
 
 
 def response_table(ctx: Any) -> None:
-    ps, S = _ps(ctx)
+    ps, _S = param_set(ctx)
+    if is_prepared(ctx) and (ps is None or not ps["responses"]):  # phase3 §11.5: 응답 정의 없음 → 빈 표
+        ctx.patch_result({"response_table": []})
+        raise StepSkipped("응답 정의 없음")
+    if ps is None:
+        raise StepFailure("INPUT_INVALID", "파라미터 세트를 찾을 수 없습니다")
     P = _P(ctx)
     predicted = read_name_value_csv(os.path.join(P, "responses_pred.csv"))
     with open(os.path.join(P, "params.json"), encoding="utf-8") as fh:
-        near = json.load(fh).get("nearest")
+        near = None if is_prepared(ctx) else json.load(fh).get("nearest")  # prepared: 최근접 실측 없음
     table = build_table(ps["responses"], predicted, (near or {}).get("measured"))
     out = os.path.join(P, "responses.json")
     ctx.backup([out])

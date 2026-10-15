@@ -63,6 +63,7 @@ class StepProcessMixin:
         poll_hook: Callable[[], tuple[float | None, str | None] | None] | None = None,
         record_command: bool = True,
         log_errors_fail: bool = True,
+        allow_nonzero_exit: bool = False,
     ) -> int:
         """외부 프로그램 1회(제한기 안, shell=False argv).
 
@@ -72,6 +73,8 @@ class StepProcessMixin:
         line_hook(line) / poll_hook(): (진행률 %, 라벨)을 돌려주면 step 진행률에 반영(phase2 §6.2·§6.4·§6.12).
         record_command=False: 팬아웃(§4.3)이 job_steps.command를 직접 기록한다.
         log_errors_fail=False: 오류 줄 수만 센다(self.last_error_lines, phase2 가정 A-8).
+        allow_nonzero_exit=True: 종료코드≠0이어도 실패로 보지 않고 rc를 돌려준다 — 호출자가 출력 파일로 성공을 판정
+        (phase3 §11.4 GEOM_UPDATE·MESH, 원본 SimLab rc 무시). 메모리 한도 종료는 그대로 RESOURCE_LIMIT.
         """
         s = self.settings
         argv, _exe_key = self.render(template_key, values)
@@ -174,7 +177,9 @@ class StepProcessMixin:
         if rc != 0:
             if acc.memory_limit_hit:
                 raise StepFailure("RESOURCE_LIMIT", f"작업 메모리 한도({self.ex.limits.memory_gb} GB)에 도달해 종료되었습니다")
-            raise StepFailure("EXIT_NONZERO", f"종료코드 {rc}: {last_line[0]}")
+            if not allow_nonzero_exit:
+                raise StepFailure("EXIT_NONZERO", f"종료코드 {rc}: {last_line[0]}")
+            self.last_line = last_line[0]
         if detector is not None and detector.first_match and log_errors_fail:
             raise StepFailure("LOG_ERROR_DETECTED", f"로그에서 오류를 감지했습니다: {detector.first_match}")
         return rc

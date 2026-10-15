@@ -29,7 +29,7 @@ def test_example_yaml_is_valid_schema(tmp_path):
     pr = lc.settings.predict
     assert (pr.simlab_mesh_name, pr.mesh_include_name, pr.renum_csv_name) == ("EPS_mesh_0000.rad", "104_replace_node_elem.inc",
                                                                              "RENUM_INIT.csv")
-    assert pr.prepared_input_exts == [".rad", ".hm"] and pr.prepared_max_files == 500
+    assert pr.mesh_output_glob is None and pr.prepared_input_exts == [".rad", ".hm"] and pr.prepared_max_files == 500
 
 
 def test_valid_fixture(loaded_config):

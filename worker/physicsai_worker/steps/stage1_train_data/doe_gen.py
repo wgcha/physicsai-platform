@@ -45,11 +45,12 @@ def dg_prep(ctx: Any) -> None:
     D = _D(ctx)
     A = ctx.abs(f"01_train/radioss_assem/{doe_id}")
     os.makedirs(D, exist_ok=True)
-    # ① 조립 폴더 직계 .rad·.inc → Study 사본(가정 A-6)
+    # ① 조립 폴더 직계 .rad·.inc(+ RENUM csv, phase3 §11.4 — ①→④ 파라미터 세트가 이어받음) → Study 사본(가정 A-6)
     copies: list[tuple[str, str]] = []
+    renum = s.predict.renum_csv_name.lower()
     for n in sorted(os.listdir(cp.path)):
         src = os.path.join(cp.path, n)
-        if n.lower().endswith((".rad", ".inc")) and os.path.isfile(src) and not is_link_or_reparse(src):
+        if (n.lower().endswith((".rad", ".inc")) or n.lower() == renum) and os.path.isfile(src) and not is_link_or_reparse(src):
             copies.append((src, os.path.join(A, n)))
     # ② D에 tpl·CAD·DOE 유형 json·include TCL
     tpl_src = ctx.abs(setup["tpl_rel"])

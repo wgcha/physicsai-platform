@@ -62,7 +62,7 @@ class PredictCfg(_M):
     mesh_include_name: str = "104_replace_node_elem.inc"
     renum_csv_name: str = "RENUM_INIT.csv"
     mesh_log_complete_marker: str = "COMPLETE HM BATCHRUN"
-    mesh_output_glob: str | None = "eps_mesh*"  # 폐지 예정(phase3 §11.4) — 새 RAD_ASSEMBLE 전까지 기존 워커가 사용
+    mesh_output_glob: str | None = None  # 폐지(phase3 §11.4) — 기존 설정 호환용으로만 받고 값은 쓰지 않는다(config.warnings)
     starter_glob: str = "*_0000.rad"
     integer_rounding: str = "half_up"
     env: dict[str, str] = Field(default_factory=lambda: {"EDS_TNS_ACTVN_CHCKPT": "1"})

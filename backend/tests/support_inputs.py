@@ -40,23 +40,40 @@ TPL_TEXT = """﻿{parameter(var_1, "THK_1", 3.0, 2.0, 5.0)}
 {parameter(var_2, "N_RIB", 4, 2, 8)}
 #***************************************************************
 dir_file_prt = r"./bracket.x_t"
+dir_file_export = "EPS_mesh_0000.rad"
 thickness = {var_1, %8.4f}
 <paramitem Name="N_RIB" NewValue="{var_2, %3i}" Value="4"/>
 """
 
 
+MESH_INC = "104_replace_node_elem.inc"  # 원본 m_2 출력(phase3 §11.8 predict.mesh_include_name)
+
+
+def make_assem_files(assem: Path, *, starters: int = 1, include_base: bool = True, renum_csv: bool = True,
+                     eps_mesh: bool = True) -> None:
+    """원본 조립 폴더 형태(phase3 §11.1): starter `model<i>_0000.rad`가 새 메시 include를 #include, 기준 include·
+    RENUM_INIT.csv·SimLab 메시 사본(`EPS_mesh_0000.rad`, 무시 대상)."""
+    assem.mkdir(parents=True, exist_ok=True)
+    for i in range(starters):
+        (assem / f"model{i}_0000.rad").write_text(f"#include {MESH_INC}\n#include material.inc\n/BEGIN\n")
+    (assem / "model_0001.rad").write_text("engine\n")
+    (assem / "material.inc").write_text("mat\n")
+    if include_base:
+        (assem / MESH_INC).write_text("/NODE\n3000001 9 9 9\n")  # 기준 메시(예측 때 새 include로 교체)
+    if renum_csv:
+        (assem / "RENUM_INIT.csv").write_text("part,node_start,elem_start\n1,3000001,3000001\n")
+    if eps_mesh:
+        (assem / "EPS_mesh_0000.rad").write_text("old SimLab mesh starter\n")
+        (assem / "eps_mesh_old.inc").write_text("old mesh\n")
+
+
 def make_param_set_folder(root: Path, *, with_samples: bool = True, with_responses: bool = True,
-                          tpl: str = TPL_TEXT, starters: int = 1) -> Path:
+                          tpl: str = TPL_TEXT, starters: int = 1, include_base: bool = True, renum_csv: bool = True) -> Path:
     d = root / f"params_{uuid.uuid4().hex[:6]}"
     (d / "cad").mkdir(parents=True)
     (d / "cad" / "bracket.x_t").write_text("CAD")
     (d / "simlab_parametered_mesh.tpl").write_text(tpl, encoding="utf-8")
-    (d / "radioss_assem").mkdir()
-    for i in range(starters):
-        (d / "radioss_assem" / f"model{i}_0000.rad").write_text("#include eps_mesh_1.inc\n")
-    (d / "radioss_assem" / "model_0001.rad").write_text("engine\n")
-    (d / "radioss_assem" / "eps_mesh_old.inc").write_text("old mesh\n")
-    (d / "radioss_assem" / "material.inc").write_text("mat\n")
+    make_assem_files(d / "radioss_assem", starters=starters, include_base=include_base, renum_csv=renum_csv)
     (d / "parameters.json").write_text(json.dumps({
         "schema_version": 1, "unit_system": "mm-ton-s",
         "parameters": [

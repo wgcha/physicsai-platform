@@ -72,6 +72,8 @@ def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> d
     res.mkdir(exist_ok=True)
     tcl = res / "BATCHRUN_preview_pred_h3d.tcl"
     tcl.write_text("# fake tcl\n")
+    inc_tcl = res / "BATCHRUN_create_include_node_elem.tcl"  # 원본 m_2 include 변환 TCL(phase3 §11.4) 자리
+    inc_tcl.write_text("# fake include tcl\n")
     d: dict[str, Any] = {
         "schema_version": 1,
         "profile": "dev",
@@ -86,7 +88,7 @@ def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> d
             "hyperstudy_path": "",
             "hvtrans_exe_path": "",
         },
-        "resources": {"preview_pred_h3d_tcl": str(tcl)},
+        "resources": {"preview_pred_h3d_tcl": str(tcl), "hypermesh_include_tcl": str(inc_tcl)},
         "worker": {
             "limiter": LIMITER,
             "max_logical_cores": 4,
@@ -111,7 +113,7 @@ def make_settings_dict(base: Path, tools: dict[str, str], **overrides: Any) -> d
             "edspy_create_dataset": ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"],
             "edspy_score": ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"],
             "geom_update": ["{simlab}", "-auto", "{rendered_script}", "-nographics"],
-            "mesh": None,
+            "mesh": ["{hw}", "-clientconfig", "hwfepre.dat", "-b", "-tcl", "{include_tcl}", "{simlab_mesh}", "{mesh_inc}", "{renum_csv}"],
             "rad_assemble": None,
             "edspy_predict": ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"],
             "contour_preview": ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"],

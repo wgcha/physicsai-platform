@@ -76,6 +76,8 @@ def test_result_import_none_mode_and_from_train(p2_env, monkeypatch, engine):
     S = ai / "ri1" / "04_params" / ps["id"]
     assert (S / "cad" / "cushion_parametric.prt").is_file() and (S / "simlab_parametered_mesh.tpl").is_file()
     assert (S / "radioss_assem" / "drop_0000.rad").is_file() and (S / "original" / "samples.csv").is_file()
+    # V3-S6-6(phase3 §11.4): from-train도 RENUM csv 복사, eps_mesh는 무시
+    assert sorted(os.listdir(S / "radioss_assem")) == ["RENUM_INIT.csv", "drop_0000.rad", "drop_0001.rad", "mat.inc"]
     assert list((ai / "ri1" / "logs" / "_paramset_tmp").iterdir())  # 임시 조립 폴더(삭제 호출 없음)
     smp = c.get(f"{API}/param-sets/{ps['id']}/samples", headers=P).json()
     assert [r_["run_key"] for r_ in smp["rows"]] == ["run__00001", "run__00002", "run__00003"]

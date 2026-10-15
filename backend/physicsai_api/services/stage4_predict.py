@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import fnmatch
 import os
 import uuid
 from typing import Any
@@ -40,7 +39,8 @@ def register_param_set(ctx: AppContext, principal: Principal, study_id: str, pat
         raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
     cp = check_user_path(path, [cfg.storage.ai_root])
     f = ps_mod.validate_folder(cp.path, max_samples=cfg.param_set.max_samples,
-                               max_total_bytes=cfg.param_set.max_total_bytes, starter_glob=cfg.predict.starter_glob)
+                               max_total_bytes=cfg.param_set.max_total_bytes, starter_glob=cfg.predict.starter_glob,
+                               renum_csv_name=cfg.predict.renum_csv_name)
     if not f.ok:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 폴더 검증에 실패했습니다", status=422, problems=f.problems)
     psid = str(uuid.uuid4())
@@ -196,14 +196,15 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     copy_file(os.path.join(D, ps_mod.TPL_NAME), os.path.join(A, ps_mod.TPL_NAME))
     assem = resolve_in_study(root, f"01_train/radioss_assem/{d['id']}")
     for n in sorted(os.listdir(assem)) if os.path.isdir(assem) else []:
-        # eps_mesh*로 시작하는 starter 형태 파일은 SimLab 메시 산출(원본 1_gui_physicsai_opti.py:427-445 규칙) — 1차 검증기
-        # starter 1개 규칙과 충돌하므로 제외(변경 메모 C3)
-        if n.lower().startswith("eps_mesh") and fnmatch.fnmatch(n, cfg.predict.starter_glob):
+        # eps_mesh*로 시작하는 파일은 SimLab 메시 산출(원본 1_physicsai_opti.py:300) — 무시(변경 메모 C3, phase3 §11.4).
+        # RENUM csv(predict.renum_csv_name)는 다른 파일과 함께 복사되고 검증기가 사본에 넣는다(V3-S6-6)
+        if n.lower().startswith("eps_mesh"):
             continue
         if os.path.isfile(os.path.join(assem, n)):
             copy_file(os.path.join(assem, n), os.path.join(A, "radioss_assem", n))
     f = ps_mod.validate_folder(A, max_samples=cfg.param_set.max_samples, max_total_bytes=cfg.param_set.max_total_bytes,
-                               starter_glob=cfg.predict.starter_glob)
+                               starter_glob=cfg.predict.starter_glob,
+                               renum_csv_name=cfg.predict.renum_csv_name)
     if not f.ok:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
     psid = str(uuid.uuid4())

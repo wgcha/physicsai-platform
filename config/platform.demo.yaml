@@ -89,7 +89,7 @@ commands:
   edspy_create_dataset: ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"]
   edspy_score: ["{edspy}", "--physicsai", "--score", "{score_path}", "--model", "{model_psmdl}", "--dataset", "{eval_psdata}", "@write_files"]
   geom_update: ["{simlab}", "-auto", "{rendered_script}", "-nographics"]
-  mesh: null
+  mesh: ["{hw}", "-clientconfig", "hwfepre.dat", "-b", "-tcl", "{include_tcl}", "{simlab_mesh}", "{mesh_inc}", "{renum_csv}"]
   rad_assemble: null
   edspy_predict: ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]
   contour_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"]
