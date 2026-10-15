@@ -4,7 +4,7 @@
   Python 3.12 실행 파일 기본값을 찾는다. install.ps1·update.ps1·collect-offline.ps1·demo\start-demo.ps1이 dot-source 한다.
 .DESCRIPTION
   읽는 것(대시보드 <dashboard_root>\.env): POSTGRES_BIN 값, DATABASE_URL의 host·port만, WINDOWS_WEB_BASE_PATH(대시보드 웹 경로 —
-  setup_config.py가 auth.dashboard_public_login_url에 씀, phase3 D3-38).
+  setup_config.py가 auth.dashboard_public_login_url에 씀, phase3 D3-38), WINDOWS_WEB_PORT(update-repo.ps1 끝 접속 주소, D3-39).
   DATABASE_URL의 사용자명·비밀번호는 정규식에서 캡처하지 않고, 원문 줄은 파싱 직후 변수에서 지운다(출력·로그 없음).
   Python 후보: <dashboard_root>\.tools\python\cpython-3.12.*-windows-x86_64-none\python.exe (대시보드 setup.ps1 고정 런타임).
   Node 후보: <dashboard_root>\.tools\node-v22.*-win-x64\node.exe (대시보드 고정 Node 22 — collect-offline.ps1 프런트 빌드용).
@@ -15,12 +15,12 @@ function Get-DashboardRuntimeDefaults {
     [CmdletBinding()]
     param([Parameter(Mandatory = $true)][string]$DashboardRoot)
     if (-not (Test-Path -LiteralPath $DashboardRoot -PathType Container)) { throw "dashboard_root 폴더가 없습니다: $DashboardRoot" }
-    $r = [ordered]@{ PgBin = $null; PgHost = $null; PgPort = $null; PythonExe = $null; NodeExe = $null; EnvFile = $null; WebBasePath = $null }
+    $r = [ordered]@{ PgBin = $null; PgHost = $null; PgPort = $null; PythonExe = $null; NodeExe = $null; EnvFile = $null; WebBasePath = $null; WebPort = $null }
     $envFile = Join-Path $DashboardRoot '.env'
     if (Test-Path -LiteralPath $envFile -PathType Leaf) {
         $r.EnvFile = $envFile
         foreach ($line in [IO.File]::ReadAllLines($envFile)) {
-            $m = [regex]::Match($line, '^\s*(?:export\s+)?(POSTGRES_BIN|DATABASE_URL|WINDOWS_WEB_BASE_PATH)\s*=\s*(.*?)\s*$')
+            $m = [regex]::Match($line, '^\s*(?:export\s+)?(POSTGRES_BIN|DATABASE_URL|WINDOWS_WEB_BASE_PATH|WINDOWS_WEB_PORT)\s*=\s*(.*?)\s*$')
             if (-not $m.Success) { continue }
             $val = $m.Groups[2].Value
             if ($val.Length -ge 2 -and ($val[0] -eq '"' -or $val[0] -eq "'") -and $val[-1] -eq $val[0]) { $val = $val.Substring(1, $val.Length - 2) }
@@ -28,6 +28,8 @@ function Get-DashboardRuntimeDefaults {
                 if ($val) { $r.PgBin = $val }
             } elseif ($m.Groups[1].Value -eq 'WINDOWS_WEB_BASE_PATH') {
                 if ($val) { $r.WebBasePath = $val }
+            } elseif ($m.Groups[1].Value -eq 'WINDOWS_WEB_PORT') {
+                if ($val -match '^\d{1,5}$') { $r.WebPort = [int]$val }
             } else {
                 # scheme://[userinfo@]host[:port]/... — userinfo는 캡처하지 않는다(host·port만)
                 $u = [regex]::Match($val, '^[A-Za-z][A-Za-z0-9+.\-]*://(?:[^@/?#]*@)?(\[[^\]]+\]|[^:/?#]+)(?::(\d+))?')

@@ -255,7 +255,8 @@ def test_deploy_files_and_keys():
     assert "Read-Host" in inst and "-AsSecureString" in inst and "PGPASSWORD" in inst and "IgnoreNew" in inst
     assert "physicsai_api.serve" in inst and "physicsai_worker" in inst and "/physicsai/api/health" in inst
     upd = (DEPLOY / "update.ps1").read_text(encoding="utf-8")
-    assert "_backup" in upd and "Remove-Item" not in upd and "/physicsai/api/queue" in upd + common
+    assert "_backup" in upd and "Remove-Item" not in upd and "FROM jobs WHERE state IN" in common
+    assert "세션 토큰(없으면" not in upd + common and "/physicsai/api/queue" not in upd + common   # phase3 D3-39: 대기열은 묻지 않고 DB 직접
     assert "Remove-Item" not in inst and "Remove-Item" not in (DEPLOY / "uninstall-tasks.ps1").read_text(encoding="utf-8")
     for n in ("install.ps1", "update.ps1", "setup.ps1", "update-repo.ps1"):
         assert "install-common.ps1" in (DEPLOY / n).read_text(encoding="utf-8"), n
@@ -377,6 +378,7 @@ def test_dashboard_env_reads_only_bin_host_port(tmp_path):
     assert out["d"]["PgBin"] == "E:\\PostgreSQL\\18\\bin" and out["d"]["PgHost"] == "db.intra" and out["d"]["PgPort"] == 5433
     assert "cpython-3.12.13-windows-x86_64-none" in out["d"]["PythonExe"]
     assert out["d"]["WebBasePath"] == "/home/"                                # phase3 D3-38: 로그인 링크 경로용
+    assert out["d"]["WebPort"] == 8080                                        # phase3 D3-39: update-repo.ps1 끝 접속 주소
     # deploy.json 명시 값(pg_port 6543) 우선, 빈 값만 채움
     assert out["c"]["pg_port"] == 6543 and out["c"]["pg_bin"] == out["d"]["PgBin"] and out["c"]["pg_host"] == "db.intra"
     assert sorted(out["filled"]) == ["pg_bin", "pg_host", "python_exe"]

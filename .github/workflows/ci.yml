@@ -507,7 +507,7 @@ jobs:
             Assert-InstalledHealth 'setup-rerun'
 
             # ---- ③ 업데이트(git pull 뒤 명령 하나): 대기열 확인 → 중지 → venv 갱신 → 프런트 재빌드 → alembic ----------------------
-            $rc = Invoke-PS51 '.\deploy\update-repo.ps1' @('-NonInteractive', '-NoStart')
+            $rc = Invoke-PS51 '.\deploy\update-repo.ps1' @('-NoStart')   # 인자·질문 없음(phase3 D3-39) — -NoStart만(러너 작업 스케줄러)
             if ($rc) { throw "update-repo.ps1 실패($rc)" }
             if (-not (Test-Path (Join-Path $rt 'frontend\index.html'))) { throw '업데이트 후 프런트 배치 없음' }
             if (-not (Get-ChildItem (Join-Path $rt '_backup') -Directory -Recurse -Filter 'frontend')) { throw '이전 프런트가 _backup으로 옮겨지지 않았습니다' }

@@ -369,8 +369,28 @@ def test_setup_scripts_static():
         assert s in setup, s
     upd = (DEPLOY / "update-repo.ps1").read_text(encoding="utf-8-sig")
     # 접속 연결 안내(대시보드 Vite 프록시 + 백엔드 정적 서빙, Caddy는 대안)는 공용 함수 하나로
-    for n, t in (("setup.ps1", setup), ("update-repo.ps1", upd)):
-        assert "Write-PhysicsAIConnectGuide -Port $port" in t and "PHYSICSAI_FRONTEND_ROOT=$(" not in t, n
+    assert "Write-PhysicsAIConnectGuide -Port $port" in setup and "PHYSICSAI_FRONTEND_ROOT=$(" not in setup
+    # phase3 D3-39: 업데이트는 인자·질문 없이 한 번(값은 deploy.json), 끝은 성공/실패 + 접속 주소 한 줄
+    assert "Get-PhysicsAIAccessUrl -Dash $dash" in upd and '"업데이트 성공 — 접속: $accessUrl"' in upd and "Write-PhysicsAIConnectGuide" not in upd
+    for n in ("update-repo.ps1", "update.ps1"):
+        assert "Read-Host" not in (DEPLOY / n).read_text(encoding="utf-8-sig"), n
+    jobs = common[common.index("function Get-PhysicsAIActiveJobCount"):common.index("# ---- git 폴더 설치")]
+    assert "Read-Host" not in jobs and "Invoke-LoopbackRest" not in jobs and "NonInteractive" not in jobs and "FROM jobs WHERE state IN" in jobs
+    # npm은 콘솔 그대로(파이프·리다이렉트 없음), 프런트 빌드 결과를 변수에 받지 않음(받으면 npm 출력이 파이프)
+    nsel = (DEPLOY / "node-select.ps1").read_text(encoding="utf-8-sig")
+    npm_fn = nsel[nsel.index("function Invoke-PhysicsAINpm"):nsel.index("function Invoke-PhysicsAIFrontendBuild")]
+    assert "& $Npm @Arguments; $rc = $LASTEXITCODE" in npm_fn and "2>" not in npm_fn.split("#>")[1] and "|" not in npm_fn.split("#>")[1]
+    build_fn = nsel[nsel.index("function Invoke-PhysicsAIFrontendBuild"):]
+    assert "Invoke-PhysicsAINative" not in build_fn and "return" not in build_fn.split("#>")[1]
+    for n in ("setup.ps1", "update-repo.ps1", "collect-offline.ps1"):
+        t = (DEPLOY / n).read_text(encoding="utf-8-sig")
+        assert "= Invoke-PhysicsAIFrontendBuild" not in t and "Invoke-Native 'npm" not in t, n
+    assert "Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('run', 'build')" in (DEPLOY / "collect-offline.ps1").read_text(encoding="utf-8-sig")
+    # migration 전 실패면 이전 프런트 복구 + 작업 재시작(표식은 Publish 뒤·migration 바로 앞에서만 켬)
+    assert upd.index("$migrationStarted = $false") < upd.index("try {") < upd.index("Assert-PhysicsAINoActiveJobs")
+    assert upd.index("Publish-PhysicsAIFrontend") < upd.index("$migrationStarted = $true") < upd.index("Invoke-PhysicsAIMigration -VenvPy")
+    catch = upd[upd.index("} catch {"):]
+    assert "elseif (-not $migrationStarted)" in catch and "Restore-PhysicsAIAfterFailedUpdate" in catch and "-NoStart:$NoStart" in catch and "exit 1" in catch
     guide = common[common.index("function Write-PhysicsAIConnectGuide"):]
     for s in ("VITE_PHYSICSAI_TARGET=$target", "SIMDASH_PHYSICSAI_ENABLED=true", "http://<대시보드 주소>/physicsai/", "'physicsai.caddy'",
               "server.frontend_root"):
@@ -537,3 +557,200 @@ def test_setup_config_web_base_helpers():
     assert m.normalize_web_base("/")[0] == "/"
     for bad in ("/a b/", "/x/../", "http://h/x", "/a?b"):
         assert m.normalize_web_base(bad)[0] == "" and m.normalize_web_base(bad)[1], bad
+
+
+
+def _run_pwsh(pwsh: str, body: str, env: dict | None = None, cwd: Path | None = None) -> subprocess.CompletedProcess:
+    # -NonInteractive(호스트): Read-Host가 불리면 오류로 끝난다 → "묻지 않음" 확인
+    return subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", body], capture_output=True, text=True,
+                          timeout=120, env={**os.environ, **(env or {})}, stdin=subprocess.DEVNULL, cwd=cwd)
+
+
+def _fake_exe(path: Path, script: str) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("#!/bin/bash\n" + script, encoding="utf-8")
+    path.chmod(0o755)
+    return path
+
+
+# 가짜 npm: 부모(pwsh)의 stdout·stderr를 그대로 물려받았는지(파이프·리다이렉트 없음) 기록. FAKE_NPM=fail이면 run build 실패
+_FAKE_NPM = r"""
+o=$(readlink /proc/$$/fd/1); po=$(readlink /proc/$PPID/fd/1); e=$(readlink /proc/$$/fd/2); pe=$(readlink /proc/$PPID/fd/2)
+echo "npm $* console=$([ "$o" = "$po" ] && [ "$e" = "$pe" ] && echo y || echo n)" >> "$NPM_LOG"
+if [ "$1" = ci ]; then mkdir -p node_modules; echo "added 1 package"; exit 0; fi
+if [ "$FAKE_NPM" = fail ]; then echo "Error: spawn EPERM" >&2; echo "    at ensureServiceIsRunning" >&2; exit 1; fi
+mkdir -p dist; echo "<html></html>" > dist/index.html; echo "built in 1.00s"; exit 0
+"""
+
+
+@pytest.mark.posix  # 가짜 npm(bash, /proc). Windows 실제 빌드는 CI windows 잡 "git 폴더 설치"
+def test_npm_runs_on_console_without_pipe_and_retries_once(tmp_path):
+    """phase3 D3-39: npm ci·npm run build는 창에서 직접 친 것과 같이 콘솔을 물려받는다(파이프면 esbuild spawn EPERM).
+    실패하면 한 번만 다시 실행하고, 그래도 실패면 '직접 실행해 결과를 알려 달라'는 안내로 중단."""
+    pwsh = _pwsh()
+    if not pwsh:
+        pytest.skip("pwsh 없음 — node-select.ps1 실행 시험 미수행")
+    repo = tmp_path / "repo"
+    (repo / "frontend").mkdir(parents=True)
+    (repo / "frontend" / "package-lock.json").write_text("{}", encoding="utf-8")
+    npm = _fake_exe(tmp_path / "node" / "npm", _FAKE_NPM)
+    log = tmp_path / "npm.log"
+    stamp = tmp_path / "stamp"
+
+    def run(call: str, mode: str = "") -> tuple[subprocess.CompletedProcess, list[str]]:
+        log.unlink(missing_ok=True)
+        shutil.rmtree(repo / "frontend" / "dist", ignore_errors=True)
+        body = (f". '{DEPLOY.as_posix()}/node-select.ps1'; "
+                f"$n = [pscustomobject]@{{ Label = 'x'; Exe = 'node'; Dir = '{npm.parent.as_posix()}'; Version = 'v22.12.0'; Npm = '{npm.as_posix()}' }}; "
+                f"{call}; 'DONE'")
+        r = _run_pwsh(pwsh, body, {"NPM_LOG": str(log), "FAKE_NPM": mode})
+        return r, (log.read_text(encoding="utf-8").splitlines() if log.exists() else [])
+
+    build = f"Invoke-PhysicsAIFrontendBuild -Node $n -RepoRoot '{repo.as_posix()}' -StampFile '{stamp.as_posix()}' -RetryDelaySec 0"
+    r, calls = run(build)
+    out = r.stdout + r.stderr
+    assert r.returncode == 0 and "DONE" in out, out
+    assert calls == ["npm ci console=y", "npm run build console=y"]
+    assert "built in 1.00s" in out and (repo / "frontend" / "dist" / "index.html").exists() and stamp.exists()
+
+    r, calls = run(build, "fail")                                                        # 실패 → 한 번만 다시 → 안내와 함께 중단
+    out = r.stdout + r.stderr
+    assert r.returncode != 0 and "DONE" not in out, out
+    assert calls == ["npm run build console=y", "npm run build console=y"]               # npm ci는 기록 파일로 건너뜀
+    assert "Error: spawn EPERM" in out and "한 번 더 실행합니다" in out and "(다시 실행)" in out
+    assert f"frontend 폴더({repo.as_posix()}/frontend)에서 npm run build를 직접 실행해 결과를 알려 주세요" in out
+
+    # 대조: 결과를 변수에 받으면 출력이 파이프가 된다(이 시험이 파이프를 구별함을 확인 — 호출 쪽은 받지 않는다)
+    r, calls = run(f"$x = Invoke-PhysicsAINpm -Npm '{npm.as_posix()}' -Arguments @('ci')")
+    assert r.returncode == 0 and calls == ["npm ci console=n"], r.stdout + r.stderr
+
+
+def _update_repo_tree(tmp: Path, *, web_port: str | None = "8080") -> Path:
+    """update-repo.ps1을 Linux pwsh로 끝까지 돌리는 가짜 git 폴더: deploy\\*.ps1 사본 + 가짜 venv python·대시보드 Node·npm.
+    관리자 확인·대기열 DB 조회·pip·설정·migration·health는 사본 install-common.ps1 끝에 덧붙인 대역 함수(나머지 흐름은 실제 코드)."""
+    repo = tmp / "git"
+    shutil.copytree(DEPLOY, repo / "deploy", ignore=shutil.ignore_patterns("demo", "caddy", "*.lock", "__pycache__"))
+    (repo / "frontend").mkdir(parents=True)
+    (repo / "frontend" / "package-lock.json").write_text("{}", encoding="utf-8")
+    (repo / ".node-version").write_text("v22.12.0", encoding="utf-8")
+    rt = repo / ".runtime"
+    _fake_exe(rt / "venv" / "Scripts" / "python.exe", 'echo "PHYSICSAI_PY=3.12.13 $0"\n')
+    dash = tmp / "dash"
+    dash.mkdir()
+    (dash / ".env").write_text(f"WINDOWS_WEB_PORT={web_port}\n" if web_port else "SIMDASH_PHYSICSAI_ENABLED=true\n", encoding="utf-8")
+    nd = dash / ".tools" / "node-v22.12.0-win-x64"
+    _fake_exe(nd / "node.exe", "echo v22.12.0\n")
+    _fake_exe(nd / "npm.cmd", _FAKE_NPM)
+    _touch(rt / "frontend" / "old.txt")
+    (rt / "deploy.json").write_text(json.dumps({
+        "dashboard_root": str(dash), "config_path": str(rt / "config" / "platform.yaml"), "pg_bin": str(tmp / "pg"),
+        "caddy_frontend_root": str(rt / "frontend"), "python_exe": ""}), encoding="utf-8")
+    with open(repo / "deploy" / "install-common.ps1", "a", encoding="utf-8") as f:
+        f.write(r"""
+function Test-PhysicsAIAdmin { $true }
+function Get-PhysicsAIActiveJobCount { param($Port, $PgBin) [int]$env:FAKE_ACTIVE }
+function Install-PhysicsAIRepoPackages { param($VenvPy, $RepoRoot) Write-Host 'STUB packages' }
+function Invoke-PhysicsAISetupConfig { param($VenvPy, $Action, $RuntimeDir, $Inputs)
+    [pscustomobject]@{ warnings = @(); write = [pscustomobject]@{ backups = @(); written = @(); validation = [pscustomobject]@{ ok = $true; warnings = @(); issues = @() } } } }
+function Invoke-PhysicsAIMigration { param($VenvPy, $AlembicIni) Write-Host 'STUB migration' }
+function Start-PhysicsAITasksAndWait { param($Port, $LogDir) Write-Host 'STUB start+health' }
+""")
+    return repo
+
+
+@pytest.mark.posix  # Windows 5.1 실제 실행은 CI windows 잡 "git 폴더 설치"(update-repo.ps1 인자 없이 -NoStart만)
+def test_update_repo_one_click_no_prompt_and_restore_on_build_failure(tmp_path):
+    """phase3 D3-39: update-repo.ps1은 인자·질문 없이 한 번(-NonInteractive 없이도 Read-Host 없음). npm은 콘솔 그대로.
+    끝은 성공/실패 + 접속 주소 한 줄(대시보드 .env WINDOWS_WEB_PORT). 빌드가 끝내 실패하면 이전 프런트 그대로·작업 2개 다시 시작.
+    대기열에 작업이 있으면 묻지 않고 안내 후 중단(아무것도 바꾸지 않음)."""
+    pwsh = _pwsh()
+    if not pwsh:
+        pytest.skip("pwsh 없음 — update-repo.ps1 실행 시험 미수행")
+    repo = _update_repo_tree(tmp_path)
+    rt = repo / ".runtime"
+    log = tmp_path / "npm.log"
+    stubs = ("function Stop-ScheduledTask { param($TaskName) Write-Host \"STOP $TaskName\" }; "
+             "function Start-ScheduledTask { [CmdletBinding()] param($TaskName) Write-Host \"START $TaskName\" }; "
+             "function Start-Sleep { param($Seconds) Write-Host \"SLEEP $Seconds\" }; ")
+
+    def run(env: dict) -> tuple[subprocess.CompletedProcess, str]:
+        log.unlink(missing_ok=True)
+        r = _run_pwsh(pwsh, stubs + f"& '{(repo / 'deploy' / 'update-repo.ps1').as_posix()}'; \"EXIT=$LASTEXITCODE\"",
+                      {"NPM_LOG": str(log), "FAKE_ACTIVE": "0", **env})
+        return r, r.stdout + r.stderr
+
+    # ① 성공: 인자 없이 끝까지, npm은 콘솔 그대로, 이전 프런트는 _backup, 끝은 한 줄
+    r, out = run({})
+    assert "EXIT=0" in out, out
+    assert log.read_text(encoding="utf-8").splitlines() == ["npm ci console=y", "npm run build console=y"]
+    assert (rt / "frontend" / "index.html").exists() and list(rt.glob("_backup/*/frontend/old.txt"))
+    assert "STUB migration" in out and "STUB start+health" in out
+    assert re.search(r"\[PhysicsAI 업데이트\] 업데이트 성공 — 접속: http://[^/:\s]+:8080/physicsai/\n", r.stdout), out
+    assert "토큰" not in out and "Read-Host" not in out and "NonInteractive" not in out
+
+    # ② 빌드가 끝내 실패(spawn EPERM 2번): migration 없이 이전 프런트 그대로, 작업 2개 다시 시작, 직접 빌드 안내 + 접속 주소
+    shutil.rmtree(rt / "frontend")
+    _touch(rt / "frontend" / "old.txt")
+    r, out = run({"FAKE_NPM": "fail"})
+    assert "EXIT=1" in out, out
+    assert log.read_text(encoding="utf-8").splitlines() == ["npm run build console=y", "npm run build console=y"]
+    assert "SLEEP 10" in out and "STUB migration" not in out
+    assert sorted(p.name for p in (rt / "frontend").iterdir()) == ["old.txt"]
+    assert out.index("STOP PhysicsAI-Worker") < out.index("업데이트 실패(프런트 빌드)") < out.index("START PhysicsAI-Backend")
+    assert "START PhysicsAI-Worker" in out and "npm run build를 직접 실행해 결과를 알려 주세요" in out
+    assert re.search(r"이전 상태로 계속 쓸 수 있습니다 — 접속: http://[^/:\s]+:8080/physicsai/", out), out
+
+    # ③ 대기열에 작업이 있으면: 묻지 않고 안내 후 중단(중지·빌드 없음)
+    r, out = run({"FAKE_ACTIVE": "2"})
+    assert "EXIT=1" in out and "STOP" not in out and not log.exists(), out
+    assert "업데이트하지 않았습니다(바꾼 것 없음): 대기·실행 중 작업 또는 진행 중 환경 점검이 2 건 있습니다" in out and "-Force" in out
+
+
+@pytest.mark.posix
+def test_restore_after_failed_update_and_access_url(tmp_path):
+    """phase3 D3-39: 배치 뒤·migration 전 실패면 이전 프런트를 원위치로(새 것은 frontend-failed — 삭제 없음), 작업 2개 다시 시작(-NoStart면 생략).
+    접속 주소: 대시보드 .env WINDOWS_WEB_PORT(없으면 80 — 주소에 포트 생략), .env를 못 읽으면 <대시보드 주소>."""
+    pwsh = _pwsh()
+    if not pwsh:
+        pytest.skip("pwsh 없음 — install-common.ps1 실행 시험 미수행")
+    common = (DEPLOY / "install-common.ps1").as_posix()
+    fe, bk = tmp_path / "rt" / "frontend", tmp_path / "rt" / "_backup" / "S"
+
+    def restore(extra: str = "") -> str:
+        shutil.rmtree(tmp_path / "rt", ignore_errors=True)
+        _touch(bk / "frontend" / "old.txt")
+        _touch(fe / "new.txt")
+        body = (f". '{common}'; $PhysicsAITag = 'T'; "
+                "function Start-ScheduledTask { [CmdletBinding()] param($TaskName) Write-Host \"START $TaskName\" }; "
+                f"Restore-PhysicsAIAfterFailedUpdate -FrontendDest '{fe.as_posix()}' -BackupDir '{bk.as_posix()}' {extra}; 'DONE'")
+        r = _run_pwsh(pwsh, body)
+        assert r.returncode == 0 and "DONE" in r.stdout, r.stdout + r.stderr
+        return r.stdout + r.stderr
+
+    out = restore()
+    assert (fe / "old.txt").exists() and not (fe / "new.txt").exists() and (bk / "frontend-failed" / "new.txt").exists()
+    assert "이전 프런트로 되돌렸습니다" in out and "START PhysicsAI-Backend" in out and "START PhysicsAI-Worker" in out
+    out = restore("-NoStart")
+    assert (fe / "old.txt").exists() and "START" not in out
+
+    dash = tmp_path / "dash"
+    dash.mkdir()
+    env_file = dash / ".env"
+    denv = (DEPLOY / "dashboard-env.ps1").as_posix()
+
+    def url(text: str | None) -> str:
+        env_file.unlink(missing_ok=True)
+        if text is not None:
+            env_file.write_text(text, encoding="utf-8")
+        body = (f". '{common}'; . '{denv}'; [Environment]::MachineName; "
+                f"Get-PhysicsAIAccessUrl -Dash (Get-DashboardRuntimeDefaults -DashboardRoot '{dash.as_posix()}'); Get-PhysicsAIAccessUrl -Dash $null")
+        r = _run_pwsh(pwsh, body)
+        assert r.returncode == 0, r.stdout + r.stderr
+        host, u, none = r.stdout.splitlines()
+        assert none == "http://<대시보드 주소>/physicsai/"
+        return u.replace(host, "<서버>")
+
+    assert url('WINDOWS_WEB_PORT="8080"\n') == "http://<서버>:8080/physicsai/"
+    assert url("WINDOWS_WEB_PORT=80\n") == "http://<서버>/physicsai/"
+    assert url("SIMDASH_PHYSICSAI_ENABLED=true\n") == "http://<서버>/physicsai/"             # 기본 80
+    assert url(None) == "http://<대시보드 주소>/physicsai/"

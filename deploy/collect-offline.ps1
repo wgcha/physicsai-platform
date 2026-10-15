@@ -91,8 +91,9 @@ try {
         $env:PATH = "$($node.Dir);$savedPath"   # 고른 Node를 이 프로세스에서만 맨 앞에(npm.cmd가 같은 node.exe를 쓰게)
         Push-Location frontend
         try {
-            Invoke-Native 'npm ci' $npm.Source @('ci') '위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy 확인).'
-            Invoke-Native 'npm run build' $npm.Source @('run', 'build')
+            # npm은 창에서 직접 친 것과 같이 콘솔 그대로(파이프면 esbuild spawn EPERM — node-select.ps1 Invoke-PhysicsAINpm, phase3 D3-39)
+            Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('ci') -Hint '위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy 확인).'
+            Invoke-PhysicsAINpm -Npm $npm.Source -Arguments @('run', 'build')
         } finally { Pop-Location; $env:PATH = $savedPath }
     }
     Invoke-Step 'copy frontend\dist, migrations, config(+demo), deploy(+demo fake_tools)' {

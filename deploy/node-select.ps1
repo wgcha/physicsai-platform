@@ -43,31 +43,57 @@ function Select-PhysicsAINode {
     return $node
 }
 
+function Invoke-PhysicsAINpm {
+    <#
+      npm을 사용자가 창에서 직접 친 것과 똑같이 실행한다(phase3 D3-39): 파이프·리다이렉트 없음 — 출력은 콘솔로 바로 가고
+      자식(vite build의 esbuild 등)은 콘솔을 그대로 물려받는다. PowerShell 파이프(2>&1 | ...)로 받으면 Windows에서 esbuild가
+      spawn EPERM으로 실패한다(같은 관리자 창에서 직접 실행은 성공). 종료코드로만 판단하고(5.1에서 stderr로 중단되지 않게
+      ErrorActionPreference 일시 Continue), 실패하면 -RetryDelaySec(기본 10초) 뒤 한 번 더 실행한다. 그래도 실패면 던진다.
+      반환값 없음 — 이 함수와 이를 부르는 함수의 결과를 변수에 받지 말 것(받으면 npm 출력이 다시 파이프가 된다).
+    #>
+    param([Parameter(Mandatory = $true)][string]$Npm, [Parameter(Mandatory = $true)][string[]]$Arguments,
+          [string]$Hint = '위 npm 출력을 확인하세요', [int]$RetryDelaySec = 10)
+    $what = "npm $($Arguments -join ' ')"
+    $rc = 0
+    for ($try = 1; $try -le 2; $try++) {
+        Write-Host "+ $what$(if ($try -gt 1) { ' (다시 실행)' })"
+        $eap = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try { & $Npm @Arguments; $rc = $LASTEXITCODE } finally { $ErrorActionPreference = $eap }
+        if ($rc -eq 0) { return }
+        if ($try -eq 1) {
+            Write-Warning "$what 실패(종료코드 $rc) — $RetryDelaySec 초 뒤 한 번 더 실행합니다"
+            Start-Sleep -Seconds $RetryDelaySec
+        }
+    }
+    throw "실패: $what (종료코드 $rc)`n다음 행동: $Hint"
+}
+
 function Invoke-PhysicsAIFrontendBuild {
     <#
       <RepoRoot>\frontend에서 npm ci(package-lock.json이 바뀌었거나 node_modules가 없을 때만 — 기록 파일 -StampFile) → npm run build.
+      결과는 <RepoRoot>\frontend\dist(index.html이 없으면 던짐). 반환값 없음 — 결과를 변수에 받지 말 것(Invoke-PhysicsAINpm, phase3 D3-39).
       고른 Node를 이 실행 동안만 PATH 맨 앞에 둔다(npm.cmd가 같은 node.exe를 쓰게). npm의 사내 레지스트리·프록시 설정(npm config)은 그대로 쓴다.
     #>
-    param([Parameter(Mandatory = $true)]$Node, [Parameter(Mandatory = $true)][string]$RepoRoot, [string]$StampFile = '')
+    param([Parameter(Mandatory = $true)]$Node, [Parameter(Mandatory = $true)][string]$RepoRoot, [string]$StampFile = '', [int]$RetryDelaySec = 10)
     $fe = Join-Path $RepoRoot 'frontend'
     $lock = Join-Path $fe 'package-lock.json'
     $want = (Get-FileHash -LiteralPath $lock -Algorithm SHA256).Hash.ToLowerInvariant() + " $($Node.Version)"
     $have = if ($StampFile -and (Test-Path -LiteralPath $StampFile)) { ([IO.File]::ReadAllText($StampFile)).Trim() } else { '' }
     $savedPath = $env:PATH
-    $env:PATH = "$($Node.Dir);$savedPath"
+    $env:PATH = "$($Node.Dir)$([IO.Path]::PathSeparator)$savedPath"
     Push-Location $fe
     try {
         if ($have -eq $want -and (Test-Path -LiteralPath (Join-Path $fe 'node_modules'))) {
             Write-Host '+ npm ci 건너뜀(package-lock.json·Node 변경 없음)'
         } else {
-            Write-Host '+ npm ci'
-            Invoke-PhysicsAINative 'npm ci' $Node.Npm @('ci') '위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy·https-proxy 확인).'
+            Invoke-PhysicsAINpm -Npm $Node.Npm -Arguments @('ci') -RetryDelaySec $RetryDelaySec `
+                -Hint '위 npm 출력을 확인하세요(사내 프록시면 npm config의 registry·proxy·https-proxy 확인).'
             if ($StampFile) { [IO.File]::WriteAllText($StampFile, $want) }
         }
-        Write-Host '+ npm run build'
-        Invoke-PhysicsAINative 'npm run build' $Node.Npm @('run', 'build')
+        Invoke-PhysicsAINpm -Npm $Node.Npm -Arguments @('run', 'build') -RetryDelaySec $RetryDelaySec `
+            -Hint "frontend 폴더($fe)에서 npm run build를 직접 실행해 결과를 알려 주세요."
     } finally { Pop-Location; $env:PATH = $savedPath }
     $dist = Join-Path $fe 'dist'
     if (-not (Test-Path -LiteralPath (Join-Path $dist 'index.html'))) { throw "프런트 빌드 결과가 없습니다: $dist\index.html" }
-    return $dist
 }

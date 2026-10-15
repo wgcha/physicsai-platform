@@ -241,7 +241,7 @@ $tasksExist = [bool](Get-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorActio
 if ($tasksExist) {
     if ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine') -and (Test-Path -LiteralPath (Join-Path $d.pg_bin 'psql.exe'))) {
         $cfgForPort = if ($legacyConfig -and -not (Test-Path -LiteralPath $d.config_path)) { $legacyConfig } else { $d.config_path }
-        Assert-PhysicsAINoActiveJobs -Port (Get-PhysicsAIBackendPort $cfgForPort $venvPy) -PgBin $d.pg_bin -Force:$Force -NonInteractive:$NonInteractive
+        Assert-PhysicsAINoActiveJobs -Port (Get-PhysicsAIBackendPort $cfgForPort $venvPy) -PgBin $d.pg_bin -Force:$Force
     }
     $n = Export-PhysicsAITasks -Dest (Join-Path $backupDir 'tasks')
     if ($n) { Write-Step "기존 작업 정의를 남겼습니다: $backupDir\tasks" }
@@ -260,8 +260,8 @@ Write-PhysicsAIConfigValidation -Result $result | Out-Null
 
 # ---- 프런트 빌드(Node 22) → <런타임>\frontend ------------------------------------------------------------
 $node = Select-PhysicsAINode -DashboardNode $(if ($dash) { "$($dash.NodeExe)" } else { '' }) -RepoRoot $repo -Tag $PhysicsAITag
-$dist = Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $repo -StampFile (Join-Path $rt 'frontend-deps.sha256')
-Publish-PhysicsAIFrontend -Dist $dist -Dest $d.caddy_frontend_root -BackupDir $backupDir
+Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $repo -StampFile (Join-Path $rt 'frontend-deps.sha256')   # 결과를 변수에 받지 않는다(npm 콘솔 그대로 — D3-39)
+Publish-PhysicsAIFrontend -Dist (Join-Path $repo 'frontend\dist') -Dest $d.caddy_frontend_root -BackupDir $backupDir
 
 # ---- ⑦ DB → 머신 환경변수 → alembic → 작업 스케줄러 → 시작·health(install-common.ps1) ----------------------------------
 $url = Initialize-PhysicsAIDatabase -PgBin $d.pg_bin -PgHost $d.pg_host -PgPort ([int]$d.pg_port) -DbName $d.db_name -DbRole $d.db_role `

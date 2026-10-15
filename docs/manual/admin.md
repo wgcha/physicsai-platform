@@ -309,23 +309,26 @@ D:\physicsai\venv\Scripts\python.exe -m alembic -c D:\physicsai\migrations\alemb
 
 ### 3.0 업데이트(git 폴더 설치 — §2.0)
 
+관리자 권한 Windows PowerShell에서 git 폴더로 이동한 뒤 **한 줄**(경로·옵션 입력 없음, 아무것도 묻지 않음 — 값은 `.runtime\deploy.json`):
+
 ```powershell
-cd E:\VD_SIMULATION_WEB\physicsai-platform
-git pull
-powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1      # [-Force] [-NonInteractive] [-NoStart]
+git pull; powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1
 ```
+
+끝에 성공/실패와 접속 주소 한 줄이 나온다(`http://<서버>:<대시보드 .env WINDOWS_WEB_PORT, 기본 80>/physicsai/`). 대기열에 작업이 있으면 안내 후 중단한다(끝난 뒤 다시 실행, 기다리지 않으려면 `-Force`).
 
 | 단계 | 내용 |
 |---|---|
-| ① | 대기·실행 중 작업·진행 중 환경 점검 확인(§3.1 ①과 같음 — 대시보드 세션 토큰 또는 Enter로 DB 직접). 있으면 중단(`-Force`면 진행) |
+| ① | 대기·실행 중 작업·진행 중 환경 점검 확인(DB 직접 조회). 있으면 안내 후 중단(`-Force`면 진행) |
 | ② | 작업 2개 중지 |
 | ③ | `.runtime\venv` 패키지 갱신(`requirements.lock` → `simdash_adapters` → 플랫폼, 로컬 패키지는 다시 설치). venv가 Python 3.12로 실행되지 않으면 `_backup`으로 옮기고 새로 만든다 |
 | ④ | 설정 보충(기존 값 유지, 새 버전에서 생긴 관리 키만. 바뀌면 먼저 `_backup` 복사) |
-| ⑤ | 프런트 재빌드(Node 22) → `.runtime\frontend`(이전 것은 `.runtime\_backup\<UTC>\frontend`) |
+| ⑤ | 프런트 재빌드(Node 22, `npm`은 창에서 직접 친 것과 같이 실행 — 실패하면 10초 뒤 한 번 더) → `.runtime\frontend`(이전 것은 `.runtime\_backup\<UTC>\frontend`) |
 | ⑥ | `alembic upgrade head` |
-| ⑦ | 시작·health → 접속 연결 안내(§2.6.1, 대시보드 `.env` 두 줄이 이미 있으면 "이미 들어 있음") |
+| ⑦ | 시작·health → 성공 + 접속 주소 한 줄 |
 
-- 실패하면 되돌리는 방법을 출력한다: `git checkout <이전 커밋>` 후 다시 실행(이전 프런트는 `_backup`). migration이 이미 올라갔으면 DB는 백업에서 복원(§3.3).
+- ⑥ 전에 실패하면(패키지·설정·프런트 빌드) 이전 프런트를 되돌리고 작업 2개를 다시 시작한다 — 이전 버전으로 계속 쓸 수 있다. ⑥ 이후 실패면 되돌리는 방법을 출력한다: `git checkout <이전 커밋>` 후 다시 실행(이전 프런트는 `_backup`). migration이 이미 올라갔으면 DB는 백업에서 복원(§3.3).
+- 프런트 빌드가 `Error: spawn EPERM`(esbuild)으로 실패하던 문제: 스크립트가 npm 출력을 PowerShell 파이프로 받던 탓이라 이제 콘솔 그대로 실행한다. 그래도 빌드가 실패하면 `frontend` 폴더에서 `npm run build`를 직접 실행해 결과를 개발 쪽에 알려 준다.
 - `.runtime\_backup`은 자동으로 지우지 않는다. 확인 후 관리자가 정리한다.
 - 업데이트 전 DB 백업(§3.3)을 먼저 한다.
 
@@ -338,7 +341,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1    
 
 | 단계 | 내용 |
 |---|---|
-| ① | 대기·실행 중 작업과 진행 중 환경 점검이 있는지 확인. 대시보드 세션 토큰을 입력하면 `GET /physicsai/api/queue`(관리자 토큰이면 환경 점검도)로, Enter만 누르면 머신 환경변수 DB URL로 `psql` 직접 조회. 1건 이상이면 **중단**(`-Force`면 경고 후 진행 → 실행 중 작업은 `INTERRUPTED`) |
+| ① | 대기·실행 중 작업과 진행 중 환경 점검이 있는지 확인(묻지 않고 머신 환경변수 DB URL로 `psql` 직접 조회). 1건 이상이면 **중단**(`-Force`면 경고 후 진행 → 실행 중 작업은 `INTERRUPTED`) |
 | ② | 작업 2개 중지 |
 | ③ | 기존 `venv`·`migrations`·프런트를 `<install_root>\_backup\<UTC yyyyMMddTHHmmssZ>\`로 **이동**(삭제 없음) |
 | ④ | 새 venv·wheel·migrations·프런트 배치 |

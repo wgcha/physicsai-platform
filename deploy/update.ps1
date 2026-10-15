@@ -2,7 +2,7 @@
 .SYNOPSIS
   PhysicsAI 업데이트(phase2 §11.2). 기존 venv·프런트·migrations를 _backup\<UTC>로 이동(삭제 없음)한 뒤 새 묶음 설치.
 .DESCRIPTION
-  ① 실행 중 작업·진행 중 환경 점검 확인(GET /physicsai/api/queue — 대시보드 세션 토큰 필요. 토큰이 없으면 DB 직접 조회) → 있으면 중단(-Force면 경고 후 진행)
+  ① 실행 중 작업·진행 중 환경 점검 확인(묻지 않고 DB 직접 조회) → 있으면 중단(-Force면 경고 후 진행)
   ② 작업 2개 중지 ③ 기존 venv·frontend·migrations를 <install_root>\_backup\<UTC>로 이동 ④ 새 wheel·프런트 배치
   ⑤ alembic upgrade head ⑥ 시작·health 확인 ⑦ 실패 시 되돌리는 방법 안내(자동 되돌림 없음)
 #>
@@ -35,7 +35,7 @@ $stamp = (Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')
 $backup = Join-Path $root "_backup\$stamp"
 $port = Get-PhysicsAIBackendPort $cfg.config_path $venvPy   # 기존 venv로 읽음(없으면 yaml에서 직접)
 
-# ---- ① 실행 중 작업 확인(대시보드 토큰이면 /physicsai/api/queue, Enter면 DB 직접) ----------------------------------
+# ---- ① 실행 중 작업 확인(묻지 않고 DB 직접) ----------------------------------
 Assert-PhysicsAINoActiveJobs -Port $port -PgBin $cfg.pg_bin -Force:$Force
 
 # ---- ② 중지 --------------------------------------------------------------------------------

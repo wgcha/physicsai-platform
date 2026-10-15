@@ -287,30 +287,12 @@ function Start-PhysicsAITasksAndWait {
 
 function Get-PhysicsAIActiveJobCount {
     <#
-      대기·실행 중 작업 + 진행 중 환경 점검 수. 대시보드 세션 토큰을 입력하면 API(/physicsai/api/queue)로, Enter·-NonInteractive면
-      머신 환경변수 DB URL로 psql 직접 조회(비밀번호는 PG* 프로세스 환경으로만).
+      대기·실행 중 작업 + 진행 중 환경 점검 수. 묻지 않고 머신 환경변수 DB URL로 psql 직접 조회한다(대시보드 세션 토큰 질문 없음 — phase3 D3-39).
+      접속 정보는 PG* 프로세스 환경으로만 전달(명령 인자에 비밀번호 없음).
     #>
-    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin, [switch]$NonInteractive)
-    $token = ''
-    if (-not $NonInteractive) {
-        $tokenSecure = Read-Host -AsSecureString '대시보드 세션 토큰(없으면 Enter — DB에서 직접 확인)'
-        $token = ConvertTo-PhysicsAIPlain $tokenSecure
-    }
-    if ($token) {
-        $q = Invoke-LoopbackRest -Uri "http://127.0.0.1:$Port/physicsai/api/queue" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
-        $n = @($q.waiting_hpc).Count + @($q.collecting).Count + @($q.queued).Count + @($q.light.queued).Count
-        if ($q.running) { $n++ }
-        if ($q.light.running) { $n++ }
-        # 진행 중 환경 점검(PENDING·RUNNING)도 포함 — 관리자 토큰일 때만 조회 가능(아니면 403 무시)
-        try {
-            $ec = Invoke-LoopbackRest -Uri "http://127.0.0.1:$Port/physicsai/api/admin/env-checks/latest" -Headers @{ Authorization = "Bearer $token" } -TimeoutSec 10
-            if ($ec.state -in @('PENDING', 'RUNNING')) { $n++ }
-        } catch { Write-Verbose '환경 점검 조회 생략(권한 없음 또는 이력 없음)' }
-        return $n
-    }
-    # DB 직접 조회: 접속 정보는 머신 환경변수 URL에서 PG* 프로세스 환경으로만 전달(명령 인자에 비밀번호 없음)
+    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin)
     $p = ConvertFrom-PhysicsAIDbUrl ([Environment]::GetEnvironmentVariable('PHYSICSAI_DATABASE_URL', 'Machine'))
-    if (-not $p) { throw 'PHYSICSAI_DATABASE_URL 형식을 해석할 수 없습니다' }
+    if (-not $p) { throw '머신 환경변수 PHYSICSAI_DATABASE_URL이 없거나 형식을 해석할 수 없어 대기열을 확인할 수 없습니다(설치 setup.ps1·install.ps1을 먼저 하세요)' }
     $env:PGUSER = $p.User; $env:PGHOST = $p.Host; $env:PGPORT = [string]$p.Port; $env:PGDATABASE = $p.Db; $env:PGPASSWORD = $p.Password
     try {
         $n = & (Join-Path $PgBin 'psql.exe') -w -tAc "SELECT (SELECT count(*) FROM jobs WHERE state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING')) + (SELECT count(*) FROM env_checks WHERE state IN ('PENDING','RUNNING'))"
@@ -322,11 +304,11 @@ function Get-PhysicsAIActiveJobCount {
 }
 
 function Assert-PhysicsAINoActiveJobs {
-    <# 실행 중 작업이 있으면 중단(-Force면 경고 후 진행). #>
-    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin, [switch]$Force, [switch]$NonInteractive)
-    $active = Get-PhysicsAIActiveJobCount -Port $Port -PgBin $PgBin -NonInteractive:$NonInteractive
+    <# 대기·실행 중 작업이 있으면 묻지 않고 안내와 함께 중단(-Force면 경고 후 진행). #>
+    param([Parameter(Mandatory = $true)][int]$Port, [Parameter(Mandatory = $true)][string]$PgBin, [switch]$Force)
+    $active = Get-PhysicsAIActiveJobCount -Port $Port -PgBin $PgBin
     if ($active -gt 0) {
-        if (-not $Force) { throw "대기·실행 중 작업 또는 진행 중 환경 점검이 $active 건 있습니다. 끝난 뒤 다시 실행하거나 -Force로 진행하세요" }
+        if (-not $Force) { throw "대기·실행 중 작업 또는 진행 중 환경 점검이 $active 건 있습니다. 끝난 뒤 다시 실행하세요(기다리지 않으려면 -Force)" }
         Write-Warning "-Force: 실행 중 작업은 lease 만료 후 INTERRUPTED가 됩니다($active 건)"
     } else {
         Write-PhysicsAIStep '대기·실행 중 작업 없음'
@@ -368,6 +350,37 @@ function Publish-PhysicsAIFrontend {
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
     Copy-Item -Recurse -Force (Join-Path $Dist '*') $Dest
     Write-PhysicsAIStep "프런트 배치: $Dest"
+}
+
+function Restore-PhysicsAIAfterFailedUpdate {
+    <#
+      update-repo.ps1이 migration 전에 실패했을 때(phase3 D3-39) 서비스가 멈춘 채 남지 않게:
+      ① 이번에 $BackupDir\frontend로 옮긴 이전 프런트가 있으면 원위치($FrontendDest)로(새로 배치하던 것은 $BackupDir\frontend-failed로 — 삭제 없음)
+      ② 작업 2개(PhysicsAI-Backend·Worker) 다시 시작(-NoStart면 생략). 스스로는 던지지 않는다(원래 실패를 가리지 않게).
+    #>
+    param([Parameter(Mandatory = $true)][string]$FrontendDest, [Parameter(Mandatory = $true)][string]$BackupDir, [switch]$NoStart)
+    $prev = Join-Path $BackupDir 'frontend'
+    try {
+        if (Test-Path -LiteralPath $prev) {
+            if (Test-Path -LiteralPath $FrontendDest) { Move-Item -LiteralPath $FrontendDest -Destination (Join-Path $BackupDir 'frontend-failed') }
+            Move-Item -LiteralPath $prev -Destination $FrontendDest
+            Write-PhysicsAIStep "이전 프런트로 되돌렸습니다: $FrontendDest"
+        }
+    } catch { Write-Warning "이전 프런트 되돌리기 실패: $($_.Exception.Message) — $prev 를 $FrontendDest 로 옮기세요" }
+    if ($NoStart) { return }
+    foreach ($t in $PhysicsAITaskNames) {
+        try { Start-ScheduledTask -TaskName $t -ErrorAction Stop; Write-PhysicsAIStep "작업 다시 시작: $t" }
+        catch { Write-Warning "작업 다시 시작 실패: $t — $($_.Exception.Message)" }
+    }
+}
+
+function Get-PhysicsAIAccessUrl {
+    <# 접속 주소 한 줄(update-repo.ps1 끝): 대시보드 .env의 WINDOWS_WEB_PORT(없으면 80) → http://<이 서버>[:포트]/physicsai/.
+       대시보드 .env를 읽지 못했으면 http://<대시보드 주소>/physicsai/ ($Dash = Get-DashboardRuntimeDefaults 결과 또는 $null). #>
+    param($Dash)
+    if (-not $Dash -or -not $Dash.EnvFile) { return 'http://<대시보드 주소>/physicsai/' }
+    $webPort = if ($Dash.WebPort) { [int]$Dash.WebPort } else { 80 }
+    return "http://$([Environment]::MachineName)$(if ($webPort -ne 80) { ":$webPort" })/physicsai/"
 }
 
 function Write-PhysicsAIUtf8File {

@@ -275,4 +275,5 @@ def test_deploy_password_not_logged_and_env_checks_in_update():
     i_set, i_create = common.index("SET log_statement = 'none'"), common.index("CREATE ROLE")
     assert i_set < i_create and "log_min_error_statement = 'panic'" in common
     upd = (REPO / "deploy" / "update.ps1").read_text(encoding="utf-8") + common
-    assert "FROM env_checks WHERE state IN ('PENDING','RUNNING')" in upd and "/physicsai/api/admin/env-checks/latest" in upd
+    # 대기열 확인은 묻지 않고 DB 직접(진행 중 환경 점검 포함) — 대시보드 세션 토큰 질문·API 조회 없음(phase3 D3-39)
+    assert "FROM env_checks WHERE state IN ('PENDING','RUNNING')" in upd and "/physicsai/api/admin/env-checks/latest" not in upd
