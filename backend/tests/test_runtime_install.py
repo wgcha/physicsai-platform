@@ -475,6 +475,7 @@ def test_worker_starts_from_runtime_without_env(tmp_path, monkeypatch, settings_
     for k in ("PHYSICSAI_CONFIG", "PHYSICSAI_DATABASE_URL"):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setattr("physicsai_core.config.runtime.machine_environment", lambda names: {})
+    monkeypatch.setattr("physicsai_core.logsetup.setup_file_logging", lambda st, name: str(tmp_path / f"{name}.log"))   # 저장소 ./logs에 쓰지 않게
     assert main(["--runtime", str(rt)]) == 2
     err = capsys.readouterr().err
     assert "DB 연결 또는 migration 확인 실패" in err and "DB 접속 정보가 없습니다" not in err and "설정 검증 실패" not in err
