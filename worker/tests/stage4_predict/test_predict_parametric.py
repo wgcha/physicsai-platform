@@ -38,7 +38,7 @@ def test_v3_s6_1_golden_argv_and_cwd(predict_env, fake_record):
     cmds = {st["step_key"]: st["command"] for st in adm["steps"]}
     assert cmds["GEOM_UPDATE"]["argv"][0] == s.altair.simlab_path and cmds["MESH"]["argv"][0] == s.altair.hw_exe_path
     assert cmds["GEOM_UPDATE"]["cwd"] == cmds["MESH"]["cwd"] == str(Pd / "geom")
-    assert jd["warnings"] == []
+    assert jd["warnings"] == [] and jd["params"]["input_mode"] == "parametric"
 
 
 def test_v3_s6_2_input_has_new_include_and_no_eps_mesh(predict_env):

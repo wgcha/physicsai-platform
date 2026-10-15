@@ -12,7 +12,9 @@ from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.features import predict_parametric_missing
 from physicsai_core.naming import RUN_KEY_RE
+from physicsai_core.stage4_predict import prepared_input
 
 from ...context import AppContext
 from ..common import study_root
@@ -20,16 +22,20 @@ from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing
 
 
 class PredictParams(_P):
+    """§10.6 PREDICT + phase3 §11.5 `input_mode`(생략 = parametric, 기존 호환)."""
+
+    input_mode: Literal["parametric", "prepared"] = "parametric"
     param_set_id: str | None = None
     model_id: str | None = None
-    values: dict[str, float]
-    value_source: Literal["nominal", "run", "manual"]
+    values: dict[str, float] | None = None
+    value_source: Literal["nominal", "run", "manual"] | None = None
     source_run_key: str | None = Field(default=None, pattern=RUN_KEY_RE)
+    input_path: str | None = Field(default=None, max_length=400)
 
     @field_validator("values")
     @classmethod
-    def _finite(cls, v: dict[str, float]) -> dict[str, float]:
-        for k, x in v.items():
+    def _finite(cls, v: dict[str, float] | None) -> dict[str, float] | None:
+        for k, x in (v or {}).items():
             if not math.isfinite(x):
                 raise ValueError(f"{k} 값은 유한해야 합니다")
         return v
@@ -52,34 +58,33 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     cfg = ctx.settings
     sid = study["id"]
     warnings: list[dict[str, str]] = []
+    if job_type == "PREDICT" and p.input_mode == "prepared":
+        return _prepare_prepared(ctx, conn, study, p)
     if job_type == "PREDICT":
+        _check_mode_fields(p)
         ps = ps_repo.get(conn, p.param_set_id) if p.param_set_id else ps_repo.current(conn, sid)
         if ps is None or ps["study_id"] != sid:
             raise prerequisite_missing("PARAM_SET")
-        if p.model_id:
-            m = models_repo.get(conn, p.model_id)
-            if m is None or m["study_id"] != sid or m["status"] != "ACTIVE":
-                raise prerequisite_missing("ACTIVE_MODEL")
-        else:
-            if not study["final_model_id"]:
-                raise DomainError("FINAL_MODEL_REQUIRED", "Final 모델을 먼저 지정하세요", status=409)
-            m = models_repo.get(conn, study["final_model_id"])
-            if m is None or m["status"] != "ACTIVE":
-                raise DomainError("FINAL_MODEL_REQUIRED", "Final 모델이 ACTIVE가 아닙니다", status=409)
+        m = _model(conn, study, p.model_id)
         if cfg.commands.geom_update is None:
             raise DomainError("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다", status=409,
                               template="geom_update")
+        tmpl, res = predict_parametric_missing(cfg)
+        if tmpl or res:  # phase3 §11.4: predict_parametric=false
+            raise DomainError("TEMPLATE_NOT_CONFIGURED", f"형상 갱신 설정 필요(관리자): {', '.join(tmpl + res)}", status=409,
+                              template="mesh" if res else tmpl[0].split(".", 1)[1], missing=tmpl + res)
+        values = p.values or {}
         names = [x["name"] for x in ps["parameters"]]
-        unknown = [k for k in p.values if k not in names]
-        missing = [n for n in names if n not in p.values]
+        unknown = [k for k in values if k not in names]
+        missing = [n for n in names if n not in values]
         if unknown or missing:
             raise invalid_errors([{"loc": ["params", "values", k], "msg": "unknown" if k in unknown else "required"}
                             for k in unknown + missing])
         if p.value_source == "run" and not p.source_run_key:
             raise invalid_errors([{"loc": ["params", "source_run_key"], "msg": "required"}])
         params = {
-            "param_set_id": ps["id"], "model_id": m["id"], "values": dict(p.values), "value_source": p.value_source,
-            "source_run_key": p.source_run_key,
+            "input_mode": "parametric", "param_set_id": ps["id"], "model_id": m["id"], "values": dict(values),
+            "value_source": p.value_source, "source_run_key": p.source_run_key,
         }
         return params, {"model_id": m["id"], "param_set_id": ps["id"]}, warnings
     if job_type == "PREDICT_VERIFY":
@@ -95,3 +100,64 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise prerequisite_missing("PREDICT_INPUT")
         return p.model_dump(), None, warnings
     raise invalid_errors([{"loc": ["job_type"], "msg": "unknown"}])
+
+
+def _check_mode_fields(p: PredictParams) -> None:
+    """phase3 §11.5 params 조합(422 INVALID_PARAMS): parametric → values·value_source 필수, input_path 금지.
+    prepared → input_path 필수, values 비어 있음, value_source·source_run_key null."""
+    errs: list[dict[str, Any]] = []
+    if p.input_mode == "parametric":
+        if p.values is None:
+            errs.append({"loc": ["params", "values"], "msg": "required"})
+        if p.value_source is None:
+            errs.append({"loc": ["params", "value_source"], "msg": "required"})
+        if p.input_path is not None:
+            errs.append({"loc": ["params", "input_path"], "msg": "parametric 모드에서는 쓸 수 없습니다"})
+    else:
+        if not p.input_path:
+            errs.append({"loc": ["params", "input_path"], "msg": "required"})
+        if p.values:
+            errs.append({"loc": ["params", "values"], "msg": "prepared 모드에서는 비어 있어야 합니다"})
+        for k in ("value_source", "source_run_key"):
+            if getattr(p, k) is not None:
+                errs.append({"loc": ["params", k], "msg": "prepared 모드에서는 null이어야 합니다"})
+    if errs:
+        raise invalid_errors(errs)
+
+
+def _model(conn: Any, study: dict[str, Any], model_id: str | None) -> dict[str, Any]:
+    """지정 모델(ACTIVE) 또는 Final(§8.2)."""
+    sid = study["id"]
+    if model_id:
+        m = models_repo.get(conn, model_id)
+        if m is None or m["study_id"] != sid or m["status"] != "ACTIVE":
+            raise prerequisite_missing("ACTIVE_MODEL")
+        return m
+    if not study["final_model_id"]:
+        raise DomainError("FINAL_MODEL_REQUIRED", "Final 모델을 먼저 지정하세요", status=409)
+    m = models_repo.get(conn, study["final_model_id"])
+    if m is None or m["status"] != "ACTIVE":
+        raise DomainError("FINAL_MODEL_REQUIRED", "Final 모델이 ACTIVE가 아닙니다", status=409)
+    return m
+
+
+def _prepare_prepared(ctx: AppContext, conn: Any, study: dict[str, Any], p: PredictParams
+                      ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
+    """phase3 §11.5 준비된 입력 예측: 경로·복사 계획 검사(422) → 모델·파라미터 세트(409). 세트는 응답 목록용(선택)."""
+    _check_mode_fields(p)
+    cp = prepared_input.check_path(p.input_path, ctx.settings)
+    plan = prepared_input.plan_copy(cp.path, ctx.settings)
+    if plan.problems:
+        raise DomainError("PREDICT_INPUT_INVALID", "준비된 입력을 쓸 수 없습니다", status=422, problems=plan.problems)
+    m = _model(conn, study, p.model_id)
+    if p.param_set_id:
+        ps = ps_repo.get(conn, p.param_set_id)
+        if ps is None or ps["study_id"] != study["id"]:
+            raise prerequisite_missing("PARAM_SET")
+    else:
+        ps = ps_repo.current(conn, study["id"])
+    params = {
+        "input_mode": "prepared", "input_path": cp.path, "input_kind": plan.kind, "starter_name": plan.starter,
+        "model_id": m["id"], "param_set_id": ps["id"] if ps else None,
+    }
+    return params, {"model_id": m["id"], "param_set_id": params["param_set_id"], "input_mode": "prepared"}, []

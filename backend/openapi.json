@@ -2887,7 +2887,8 @@
               "RADIOSS_ASSEM",
               "RESULT_FOLDER",
               "CURATION_INPUT",
-              "SPDM_IMPORT"
+              "SPDM_IMPORT",
+              "PREDICT_INPUT"
             ],
             "title": "Purpose",
             "type": "string"

@@ -177,8 +177,15 @@ def test_demo_mode_end_to_end(tmp_path, db_url):
         assert r.status_code == 201, r.text
         assert r.json()["sample_count"] == 5
         pr = _submit(c, sid, "PREDICT", {"values": {"THK_1": 3.0, "RIB_H": 12.5}, "value_source": "manual"})
-        pres = _wait_job(c, pr["id"])["result"]
+        pjob = _wait_job(c, pr["id"])
+        pres = pjob["result"]
         assert pres["preview_json_artifact_id"]
+        assert pjob["warnings"] == []  # phase3 §11.4: 새 include·RENUM csv가 ①→④로 이어짐(경고 없음)
+        # 준비된 입력 예측(phase3 §11.5): 세트 무관, 원본 폴더는 읽기만
+        before = sorted(os.listdir(seed["prepared_input"]))
+        pr2 = _submit(c, sid, "PREDICT", {"input_mode": "prepared", "input_path": seed["prepared_input"]})
+        assert _wait_job(c, pr2["id"])["result"]["starter"] == "Face_Drop_0000.rad"
+        assert sorted(os.listdir(seed["prepared_input"])) == before
 
         # ---- ⑤ 최적화 실행 중 취소(가짜 hstpy hang) ----
         resp = [{"name": "MAX_VM", "source": "H3D", "subcase": 1, "datatype": "Stress", "component": "vonMises", "layer": "",
