@@ -618,7 +618,8 @@ def test_npm_runs_on_console_without_pipe_and_retries_once(tmp_path):
     assert r.returncode != 0 and "DONE" not in out, out
     assert calls == ["npm run build console=y", "npm run build console=y"]               # npm ci는 기록 파일로 건너뜀
     assert "Error: spawn EPERM" in out and "한 번 더 실행합니다" in out and "(다시 실행)" in out
-    assert f"frontend 폴더({repo.as_posix()}/frontend)에서 npm run build를 직접 실행해 결과를 알려 주세요" in out
+    flat = re.sub(r"\s+", "", out)                                                    # 오류 표시는 터미널 폭에서 줄바꿈될 수 있음
+    assert re.sub(r"\s+", "", f"frontend 폴더({repo.as_posix()}/frontend)에서 npm run build를 직접 실행해 결과를 알려 주세요") in flat
 
     # 대조: 결과를 변수에 받으면 출력이 파이프가 된다(이 시험이 파이프를 구별함을 확인 — 호출 쪽은 받지 않는다)
     r, calls = run(f"$x = Invoke-PhysicsAINpm -Npm '{npm.as_posix()}' -Arguments @('ci')")
