@@ -321,7 +321,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File E:\VD_SIMULATION_WEB\physics
 
 끝 줄은 `업데이트 성공 — 접속: …` 또는 `업데이트 실패 — 접속: …`(`http://<서버>:<대시보드 .env WINDOWS_WEB_PORT, 기본 80>/physicsai/`). 대기열에 작업이 있으면 안내 후 중단한다(끝난 뒤 다시 실행, 기다리지 않으려면 `-Force`).
 
-- **처음 한 번만**: 이전 버전을 관리자 PowerShell로 설치했다면 작업 스케줄러 작업이 관리자 소유라 일반 PowerShell에서 중지·다시 등록이 거부될 수 있다. 그러면 "처음 한 번만 관리자 PowerShell로 update-repo.ps1을 실행하세요"가 나오고 아무것도 바꾸지 않는다 — 그대로 한 번 관리자 창에서 같은 줄을 실행하면 작업이 새 방식(`--runtime`, 실행 계정 권한 포함)으로 다시 등록되고, 그 뒤로는 일반 PowerShell로 된다.
+- **처음 한 번만**: 이전 버전을 관리자 PowerShell로 설치했다면 작업 스케줄러 작업이 관리자 소유라 일반 PowerShell에서 중지·다시 등록이 거부될 수 있다. 그러면 "처음 한 번만 관리자 PowerShell로 update-repo.ps1을 실행하세요"가 나오고 아무것도 바꾸지 않는다 — **지금과 같은 사용자 계정으로** '관리자 권한으로 실행'한 창에서(다른 계정은 `.runtime\secrets`를 읽지 못함) 한 번 같은 줄을 실행하면 작업이 새 방식(`--runtime`, 실행 계정 권한 포함)으로 다시 등록되고, 그 뒤로는 일반 PowerShell로 된다.
 
 | 단계 | 내용 |
 |---|---|
