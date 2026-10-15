@@ -7,7 +7,7 @@
 규칙
 - 이미 있는 파일은 보존한다: 사용자가 고친 값은 덮어쓰지 않고, 빠진 키(또는 비어 있는 자원·Altair 경로)만 보충한다.
 - 새 platform.yaml은 config/platform.example.yaml(주석 유지)에서 만들고 profile prod, storage.ai_root, altair.*(탐색), resources.*(원본 앱 폴더),
-  hpc.gateway none, server.port·worker 기본값(예시 값)을 넣는다. 기존 묶음 설치의 설정(legacy_config)이 있으면 그것을 이어받는다.
+  hpc.gateway none, server.port·worker 기본값(예시 값), server.frontend_root(프런트 배치 폴더 — 백엔드가 /physicsai/ 직접 서빙)를 넣는다. 기존 묶음 설치의 설정(legacy_config)이 있으면 그것을 이어받는다.
 - resources.* 위치는 deploy/RESOURCES.txt 표(원본 앱 폴더 기준 상대경로)에서 읽는다. 없으면 같은 이름 파일을 원본 앱 폴더에서(깊이 4까지) 찾고,
   그래도 없으면 빈 값(그 기능만 비활성).
 - Altair 실행 파일의 상대 배치는 config/platform.example.yaml의 altair.* 값에서 읽는다(코드에 경로 없음). 후보 루트: 명시 값 →
@@ -395,6 +395,9 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
 
     desired: dict[tuple[str, ...], Any] = {("profile",): "prod"}
     desired[("server", "port")] = (example.get("server") or {}).get("port", 8100)
+    # 백엔드가 /physicsai/를 직접 서빙(대시보드 Vite 프록시 경로). 프런트 배치 폴더 = deploy.json caddy_frontend_root(기본 <런타임>\frontend).
+    # 기존 파일에 키가 없을 때만 보충 — 사용자가 null(외부 서빙)이나 다른 경로로 바꾼 값은 유지
+    desired[("server", "frontend_root")] = fwd(str(deploy.get("caddy_frontend_root") or (runtime / "frontend")))
     desired[("storage", "ai_root")] = ai_root
     desired[("altair", "version_label")] = alt["version_label"]
     for k in ALTAIR_TOOL_KEYS:

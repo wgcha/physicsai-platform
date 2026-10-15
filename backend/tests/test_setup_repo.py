@@ -112,6 +112,7 @@ def test_setup_config_generates_prod_config(tmp_path):
     assert "이름으로 찾음" in res["resources"]["extract_minmax_tcl"]["note"]
     assert all(v["found"] for v in res["resources"].values())
     assert c["worker"]["max_logical_cores"] == 32 and c["worker"]["priority"] == "below_normal" and c["demo"]["enabled"] is False
+    assert c["server"]["frontend_root"] == fwd(t["rt"] / "frontend")      # 백엔드가 /physicsai/ 직접 서빙(배치 폴더)
     text = (t["rt"] / "config" / "platform.yaml").read_text(encoding="utf-8")
     assert text.startswith("# PhysicsAI 설정 — deploy/setup.ps1") and "# dev | prod" in text   # 예시 주석 유지
     altair_block = text.split("\naltair:")[1].split("\nresources:")[0]
@@ -163,6 +164,44 @@ def test_setup_config_preserves_user_values_and_fills_missing(tmp_path):
     assert dj2["note"] == "사용자 메모" and "altair_root" in dj2 and dj2["ai_root"] == str(tmp_path / "other")
     assert res["deploy_added"] == ["altair_root"] and res["deploy_overridden"] == ["ai_root"]
     assert (bak / "deploy.json").is_file()
+
+
+def test_setup_config_frontend_root_merge(tmp_path):
+    """server.frontend_root: 새 파일 = 배치 폴더, 키 없음 = 보충(주석 표시), 사용자 값(null·다른 경로) = 유지. 배치 폴더가 아직 없어도 검증 경고 없음."""
+    t = _fake_tree(tmp_path)
+    fwd = lambda p: str(p).replace("\\", "/")  # noqa: E731
+    res = _run(tmp_path, t, _inputs(t))
+    assert not (t["rt"] / "frontend").exists() and res["write"]["validation"]["ok"] is True
+    assert res["write"]["validation"]["warnings"] == []
+    row = next(r for r in res["config_rows"] if r["key"] == "server.frontend_root")
+    assert row["action"] == "새로 씀" and row["value"] == fwd(t["rt"] / "frontend")
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    text = cfg_path.read_text(encoding="utf-8")
+    assert re.search(r"(?m)^  frontend_root: .*# 백엔드가 /physicsai/ 아래에", text)          # 예시 주석 유지
+
+    # 이전 버전 설정(키 없음) → 보충
+    cfg_path.write_text(re.sub(r"(?m)^  frontend_root: .*\n", "", text), encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert res["config_changed_keys"] == ["server.frontend_root"]
+    assert _cfg(t)["server"]["frontend_root"] == fwd(t["rt"] / "frontend")
+    assert "frontend_root: " in cfg_path.read_text(encoding="utf-8") and "# setup.ps1이 보충" in cfg_path.read_text(encoding="utf-8")
+
+    # 사용자가 null(Caddy 등 외부 서빙) 또는 다른 경로로 바꾼 값은 유지
+    for user_value, expect in (("null", None), ('"E:/web/physicsai"', "E:/web/physicsai")):
+        cur = cfg_path.read_text(encoding="utf-8")
+        cfg_path.write_text(re.sub(r"(?m)^(  frontend_root: )\S+", lambda m: m.group(1) + user_value, cur), encoding="utf-8")
+        res = _run(tmp_path, t, _inputs(t))
+        assert "server.frontend_root" not in res["config_changed_keys"] and not res["config_changed"]
+        assert _cfg(t)["server"]["frontend_root"] == expect
+        row = next(r for r in res["config_rows"] if r["key"] == "server.frontend_root")
+        assert row["action"].startswith("유지")
+
+    # deploy.json의 caddy_frontend_root(사용자 지정 배치 폴더)를 따른다
+    t2 = _fake_tree(tmp_path / "b")
+    inp = _inputs(t2)
+    inp["deploy_defaults"]["caddy_frontend_root"] = str(tmp_path / "b" / "web")
+    _run(tmp_path / "b", t2, inp)
+    assert _cfg(t2)["server"]["frontend_root"] == fwd(tmp_path / "b" / "web")
 
 
 def test_setup_config_inherits_legacy_bundle_config(tmp_path):
@@ -329,6 +368,14 @@ def test_setup_scripts_static():
               "[switch]$NonInteractive", "[switch]$PasswordsFromEnv", "Read-Host '이대로 설치할까요? (Y/N)'", "Assert-PhysicsAINoActiveJobs"):
         assert s in setup, s
     upd = (DEPLOY / "update-repo.ps1").read_text(encoding="utf-8-sig")
+    # 접속 연결 안내(대시보드 Vite 프록시 + 백엔드 정적 서빙, Caddy는 대안)는 공용 함수 하나로
+    for n, t in (("setup.ps1", setup), ("update-repo.ps1", upd)):
+        assert "Write-PhysicsAIConnectGuide -Port $port" in t and "PHYSICSAI_FRONTEND_ROOT=$(" not in t, n
+    guide = common[common.index("function Write-PhysicsAIConnectGuide"):]
+    for s in ("VITE_PHYSICSAI_TARGET=$target", "SIMDASH_PHYSICSAI_ENABLED=true", "http://<대시보드 주소>/physicsai/", "'physicsai.caddy'",
+              "server.frontend_root"):
+        assert s in guide, s
+    assert "Set-Content" not in guide and "Add-Content" not in guide and "Out-File" not in guide   # 대시보드 .env는 읽기만
     assert upd.index("Assert-PhysicsAINoActiveJobs") < upd.index("Stop-PhysicsAITasks") < upd.index("Install-PhysicsAIRepoPackages")
     assert upd.index("Install-PhysicsAIRepoPackages") < upd.index("Invoke-PhysicsAIFrontendBuild") < upd.index("Invoke-PhysicsAIMigration")
     assert upd.index("Invoke-PhysicsAIMigration") < upd.index("Start-PhysicsAITasksAndWait")
@@ -366,3 +413,36 @@ def test_install_common_helpers(tmp_path):
     assert lines[:5] == ["physicsai_app", "a@b:c", "127.0.0.1", "5434", "physicsai"]
     assert lines[5] == "" and lines[6] == "True" and lines[7] == "False" and lines[8] == "[T] hello"
     assert "-PasswordsFromEnv" in lines[9]
+
+
+@pytest.mark.posix  # Windows는 CI windows 잡 "git 폴더 설치"에서 실제 실행
+def test_install_common_connect_guide(tmp_path):
+    pwsh = _pwsh()
+    if not pwsh:
+        pytest.skip("pwsh 없음 — install-common.ps1 실행 시험 미수행(CI linux·windows 잡은 pwsh 있음)")
+    common = (DEPLOY / "install-common.ps1").as_posix()
+    dash = tmp_path / "dash"
+    dash.mkdir()
+
+    def run(env_text: str | None) -> str:
+        env = dash / ".env"
+        if env_text is None:
+            env.unlink(missing_ok=True)
+        else:
+            env.write_text(env_text, encoding="utf-8")
+        body = (f". '{common}'; $PhysicsAITag = 'T'; "
+                f"Write-PhysicsAIConnectGuide -Port 8123 -DashboardRoot '{dash.as_posix()}' -FrontendRoot 'D:/g/.runtime/frontend' -RepoRoot 'D:/g'")
+        r = subprocess.run([pwsh, "-NoProfile", "-NonInteractive", "-Command", body], capture_output=True, text=True, timeout=120)
+        assert r.returncode == 0, r.stdout + r.stderr
+        return r.stdout
+
+    out = run(None)
+    assert "VITE_PHYSICSAI_TARGET=http://127.0.0.1:8123 , SIMDASH_PHYSICSAI_ENABLED=true 를 넣고 대시보드를 다시 시작하세요" in out
+    assert "http://<대시보드 주소>/physicsai/" in out and "http://127.0.0.1:8123/physicsai/api/health" in out
+    assert "PHYSICSAI_PORT=8123, PHYSICSAI_FRONTEND_ROOT=D:/g/.runtime/frontend" in out and "physicsai.caddy" in out
+    assert "이미 들어 있음" not in out
+    out = run('SIMDASH_PHYSICSAI_ENABLED=true\nVITE_PHYSICSAI_TARGET="http://127.0.0.1:8123"\n')
+    assert "이미 들어 있음" in out
+    out = run("SIMDASH_PHYSICSAI_ENABLED=true\nVITE_PHYSICSAI_TARGET=http://127.0.0.1:8100\n")   # 포트가 다르면 다시 안내
+    assert "이미 들어 있음" not in out
+    assert (dash / ".env").read_text(encoding="utf-8").startswith("SIMDASH")                       # 읽기만

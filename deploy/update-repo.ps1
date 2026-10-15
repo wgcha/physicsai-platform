@@ -105,7 +105,8 @@ try {
     } else {
         Start-PhysicsAITasksAndWait -Port $port -LogDir (Join-Path $rt 'logs') | Out-Null
     }
-    Write-Step '업데이트 완료'
+    Write-Step '업데이트 완료. 접속 연결(처음 한 번 — 이미 했으면 그대로):'
+    Write-PhysicsAIConnectGuide -Port $port -DashboardRoot "$($cfg.dashboard_root)" -FrontendRoot "$($cfg.caddy_frontend_root)" -RepoRoot $repo
 } catch {
     Write-Warning "업데이트 실패: $($_.Exception.Message)"
     Write-Warning '되돌리기: git으로 이전 커밋을 받은 뒤(git log로 확인 → git checkout <커밋>) 이 스크립트를 다시 실행하세요.'

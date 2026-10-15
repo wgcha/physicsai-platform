@@ -13,7 +13,7 @@
   ⑥ 기존 설치가 있으면 대기열 확인 후 작업 중지 → 설정 작성 → Node 22로 프런트 빌드·배치
   ⑦ DB(대시보드와 같은 PostgreSQL에 physicsai DB·physicsai_app 역할 — 없을 때만, 기존 연결이 되면 비밀번호를 다시 묻지 않음) → 머신 환경변수 → alembic
      → 작업 스케줄러 등록(작업 폴더 <git>\.runtime) → 시작·health  (install-common.ps1 — 묶음 install.ps1과 같은 코드)
-  ⑧ Caddy 스니펫·대시보드 .env SIMDASH_PHYSICSAI_ENABLED=true·접속 주소 안내
+  ⑧ 접속 연결 안내: 대시보드 .env VITE_PHYSICSAI_TARGET·SIMDASH_PHYSICSAI_ENABLED=true(백엔드가 /physicsai/ 직접 서빙), Caddy는 대안(physicsai.caddy)
   기존 묶음 설치(install.ps1, 다른 install_root)가 있으면 감지해 그 설정 파일을 복사해 이어받고(원본은 그대로), 같은 DB 연결을 이어 쓰며,
   기존 작업 정의는 .runtime\_backup\<UTC>\tasks\*.xml로 남긴 뒤 새 venv로 다시 등록한다. 덮어쓰는 파일은 먼저 .runtime\_backup\<UTC>로 복사한다.
   업데이트: git pull 후 powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1
@@ -276,23 +276,12 @@ if ($NoStart) {
 }
 
 # ---- ⑧ 안내 -----------------------------------------------------------------------------------------
-$dashEnvOn = $false
-if ($d.dashboard_root -and (Test-Path -LiteralPath (Join-Path $d.dashboard_root '.env'))) {
-    $dashEnvOn = [bool](Select-String -LiteralPath (Join-Path $d.dashboard_root '.env') -Pattern '^\s*SIMDASH_PHYSICSAI_ENABLED\s*=\s*"?(true|1|yes|on)"?\s*$' -Quiet)
-}
 Write-Host ''
 Write-Step '설치 완료. 남은 연결 작업:'
-Write-Step "  1) Caddy: $(Join-Path $repo 'deploy\caddy\physicsai.caddy') 를 대시보드 Caddyfile과 같은 폴더에 복사(import physicsai*.caddy)하거나 사이트 블록의 catch-all handle 앞에 붙이고,"
-Write-Step "     Caddy 환경변수 PHYSICSAI_PORT=$port, PHYSICSAI_FRONTEND_ROOT=$($d.caddy_frontend_root) 로 설정을 다시 읽으세요(서버 포트 server.port=$port 와 같게)"
-if ($d.dashboard_root) {
-    Write-Step "  2) 대시보드 $(Join-Path $d.dashboard_root '.env') 에 SIMDASH_PHYSICSAI_ENABLED=true $(if ($dashEnvOn) { '— 이미 켜져 있음' } else { '를 넣고 대시보드를 다시 시작하세요' })"
-} else {
-    Write-Step '  2) 대시보드 .env 에 SIMDASH_PHYSICSAI_ENABLED=true 를 넣고 대시보드를 다시 시작하세요'
-}
-Write-Step "  3) 접속: https://<대시보드 주소>/physicsai/ (대시보드에 로그인한 상태로). 이 PC 확인용 health: http://127.0.0.1:$port/physicsai/api/health"
-Write-Step '  4) 관리 > 환경 점검으로 Altair·자원·AI 루트를 확인하세요. 설정은 이 파일에서 고칩니다:'
+Write-PhysicsAIConnectGuide -Port $port -DashboardRoot "$($d.dashboard_root)" -FrontendRoot "$($d.caddy_frontend_root)" -RepoRoot $repo
+Write-Step '  3) 관리 > 환경 점검으로 Altair·자원·AI 루트를 확인하세요. 설정은 이 파일에서 고칩니다:'
 Write-Step "     $($d.config_path)  (고친 뒤 Stop/Start-ScheduledTask PhysicsAI-Worker, PhysicsAI-Backend)"
 Write-Step "업데이트: git pull 후  powershell -NoProfile -ExecutionPolicy Bypass -File .\deploy\update-repo.ps1"
 if ($legacyConfig -or $legacyTasks) {
-    Write-Step '기존 묶음 설치 폴더는 지우지 않았습니다 — 새 설치를 확인한 뒤 필요 없으면 직접 정리하세요(Caddy의 PHYSICSAI_FRONTEND_ROOT도 위 값으로 바꿀 것)'
+    Write-Step '기존 묶음 설치 폴더는 지우지 않았습니다 — 새 설치를 확인한 뒤 필요 없으면 직접 정리하세요(Caddy를 쓰면 PHYSICSAI_FRONTEND_ROOT도 위 값으로 바꿀 것)'
 }

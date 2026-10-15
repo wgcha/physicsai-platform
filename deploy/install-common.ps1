@@ -403,3 +403,24 @@ function Write-PhysicsAIConfigValidation {
     Write-PhysicsAIStep '설정 검증 통과'
     return $true
 }
+
+function Write-PhysicsAIConnectGuide {
+    <# 접속 연결 안내(setup.ps1·update-repo.ps1 끝). 기본: 대시보드 Vite 프록시(/physicsai → 이 백엔드) + 백엔드의 프런트 직접 서빙
+       (platform.yaml server.frontend_root). Caddy는 대안. 대시보드 .env는 읽기만 한다(두 키가 이미 있는지 확인). #>
+    [CmdletBinding()]
+    param([Parameter(Mandatory = $true)][int]$Port, [string]$DashboardRoot = '', [string]$FrontendRoot = '', [string]$RepoRoot = '')
+    $envFile = if ($DashboardRoot) { [IO.Path]::Combine($DashboardRoot, '.env') } else { '' }   # Join-Path는 없는 드라이브에서 오류
+    $target = "http://127.0.0.1:$Port"
+    $hasOn = $false; $hasTarget = $false
+    if ($envFile -and (Test-Path -LiteralPath $envFile -PathType Leaf)) {
+        $hasOn = [bool](Select-String -LiteralPath $envFile -Pattern '^\s*SIMDASH_PHYSICSAI_ENABLED\s*=\s*"?(true|1|yes|on)"?\s*$' -Quiet)
+        $hasTarget = [bool](Select-String -LiteralPath $envFile -Pattern ('^\s*VITE_PHYSICSAI_TARGET\s*=\s*"?' + [regex]::Escape($target) + '/?"?\s*$') -Quiet)
+    }
+    $where = if ($envFile) { $envFile } else { '대시보드 .env' }
+    $state = if ($hasOn -and $hasTarget) { ' — 이미 들어 있음' } else { ' 를 넣고 대시보드를 다시 시작하세요' }
+    Write-PhysicsAIStep "  1) $where 에 VITE_PHYSICSAI_TARGET=$target , SIMDASH_PHYSICSAI_ENABLED=true$state"
+    Write-PhysicsAIStep "     (대시보드 Vite가 /physicsai 전체를 이 백엔드로 넘기고, 백엔드가 프런트 $FrontendRoot 를 /physicsai/ 아래에 서빙 — 설정 server.frontend_root)"
+    Write-PhysicsAIStep "  2) 접속: http://<대시보드 주소>/physicsai/ (대시보드에 로그인한 상태로). 이 PC 확인용 health: $target/physicsai/api/health"
+    $snippet = if ($RepoRoot) { [IO.Path]::Combine($RepoRoot, 'deploy', 'caddy', 'physicsai.caddy') } else { 'deploy\caddy\physicsai.caddy' }
+    Write-PhysicsAIStep "  Caddy를 쓰는 설치: $snippet (Caddy 환경변수 PHYSICSAI_PORT=$Port, PHYSICSAI_FRONTEND_ROOT=$FrontendRoot)"
+}
