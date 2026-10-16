@@ -19,6 +19,9 @@
 - auth.dashboard_public_login_url(로그인·"대시보드로" 링크, 같은 origin 상대경로)은 대시보드 .env의 WINDOWS_WEB_BASE_PATH(없으면 /home/ —
   대시보드 Vite 기본 base)로 맞춘다. 키가 없거나 이전 기본값 "/"일 때만 바꾸고 사용자가 넣은 다른 값은 보존(phase3 D3-38).
   .env에서는 이 키 한 줄만 읽는다(입력 dashboard_web_base_path가 있으면 그것을 쓴다 — setup.ps1이 dashboard-env.ps1로 읽어 넘김).
+- 받은 파일 폴더(phase3 §12 S7, D3-46): write가 `<ai_root>/<storage.inbox_dir>`(기본 inbox)를 없으면 만든다. 입력 smb_shares
+  (setup.ps1·update-repo.ps1이 Get-SmbShare로 조회만 — 관리자 권한 없이, 실패하면 빈 목록)에서 Path가 그 폴더인 공유를 찾으면
+  storage.inbox_share_hint를 `\\\\<computer_name>\\<공유 이름>`으로 채운다(키가 없거나 비어 있을 때만 — 사용자 값 보존).
 - 비밀번호·DB URL은 다루지 않는다.
 """
 
@@ -411,6 +414,39 @@ def dashboard_login_url(inputs: dict[str, Any], dashboard_root: str) -> tuple[st
 # 계획
 # ---------------------------------------------------------------------------
 
+# 받은 파일 폴더 공유 안내(phase3 §12 S7, D3-46)
+INBOX_HINT_PATH = ("storage", "inbox_share_hint")
+INBOX_DIR_DEFAULT = "inbox"
+
+
+def inbox_folder(ai_root: str, inbox_dir: Any) -> str:
+    """`<ai_root>/<inbox_dir>`('/' 구분). 상대 이름 규칙(공백·메타문자·'..'·절대경로 없음)을 어기면 빈 값."""
+    rel = str(inbox_dir or INBOX_DIR_DEFAULT)
+    parts = rel.replace("\\", "/").split("/")
+    if not ai_root or unsafe(rel) or rel.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", rel) or any(x in ("", ".", "..") for x in parts):
+        return ""
+    return fwd(ai_root).rstrip("/") + "/" + "/".join(parts)
+
+
+def _norm_share_path(p: str) -> str:
+    return fwd(p).rstrip("/").casefold()
+
+
+def inbox_share_hint(inputs: dict[str, Any], inbox: str) -> str | None:
+    """Get-SmbShare 결과(입력 smb_shares: [{name, path}])에서 Path가 받은 파일 폴더인 공유 → `\\\\<컴퓨터>\\<공유>`."""
+    host = str(inputs.get("computer_name") or "").strip()
+    if not inbox or not host:
+        return None
+    want = _norm_share_path(inbox)
+    for sh in inputs.get("smb_shares") or []:
+        if not isinstance(sh, dict):
+            continue
+        name, path = str(sh.get("name") or "").strip(), str(sh.get("path") or "")
+        if name and path and not name.endswith("$") and _norm_share_path(path) == want:
+            return f"\\\\{host}\\{name}"
+    return None
+
+
 def _read_json(p: Path) -> dict[str, Any] | None:
     if not p.is_file():
         return None
@@ -544,6 +580,16 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     else:
         rows.append({"key": ".".join(LOGIN_URL_PATH), "value": cur, "action": "유지" if cur == login_want or not has else
                      "유지(설정 파일 값 — 바꾸려면 파일을 직접 수정)"})
+    # 받은 파일 공유 안내(D3-46): 키가 없거나 비어 있을 때만 SMB 공유 경로로, 사용자 값 보존
+    inbox = inbox_folder(ai_root, _get(base, ("storage", "inbox_dir"))[1])
+    hint_want = inbox_share_hint(inputs, inbox)
+    has, cur = _get(base, INBOX_HINT_PATH)
+    if hint_want and (not has or cur in (None, "")):
+        text = set_yaml_value(text, INBOX_HINT_PATH, hint_want, "" if has else "setup.ps1이 보충")
+        upgraded[INBOX_HINT_PATH] = hint_want
+        rows.append({"key": ".".join(INBOX_HINT_PATH), "value": hint_want, "action": "SMB 공유에서 채움"})
+    elif has and cur:
+        rows.append({"key": ".".join(INBOX_HINT_PATH), "value": cur, "action": "유지"})
     if new_file:
         hdr = "# PhysicsAI 설정 — deploy/setup.ps1이 config/platform.example.yaml에서 생성. 값은 이 파일에서 직접 고친다(setup.ps1을 다시 실행해도 덮어쓰지 않음)."
         nl = "\r\n" if "\r\n" in text else "\n"
@@ -587,7 +633,7 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
         "deploy_added": added if existing is not None else [], "deploy_overridden": overridden, "deploy_changed": deploy_changed,
         "config_path": str(config_path), "config_source": source, "config_changed": config_changed,
         "config_rows": rows, "config_changed_keys": changed, "config_text": text,
-        "altair": alt, "resources": res, "ai_root": ai_root, "warnings": warnings,
+        "altair": alt, "resources": res, "ai_root": ai_root, "inbox_path": inbox, "warnings": warnings,
     }
 
 
@@ -625,6 +671,8 @@ def write(inputs: dict[str, Any], pl: dict[str, Any]) -> dict[str, Any]:
     ai_root = pl["ai_root"]
     if ai_root and not unsafe(ai_root):
         Path(ai_root).mkdir(parents=True, exist_ok=True)
+        if pl.get("inbox_path") and not os.path.lexists(pl["inbox_path"]):
+            Path(pl["inbox_path"]).mkdir(parents=True, exist_ok=True)  # 받은 파일 폴더(D3-46) — 공유는 관리자가 따로 만든다
     out["validation"] = validate(str(cfg))
     return out
 
