@@ -1,13 +1,14 @@
-// S10 목: 예측 끝에 HyperView 배치로 방향별 PNG + 애니메이션 동영상 저장(흉내), GET /jobs/{id}/media, POST /jobs/{id}/capture(→ 202 CONTOUR_CAPTURE),
-// PUT /param-sets/{id}/display. 동영상은 목에서 정적 PNG로 대체(video_type "image/png" — 화면은 <video poster>로 이미지가 보인다).
-// MockOptions.capture로 상태를 고른다: OK(기본)·PARTIAL(right 실패·top 동영상 없음)·FAILED·DISABLED·NONE(캡처 전 결과, media 없음).
-import type { ContourDisplay, Job, JobMedia, MediaStatus, ParamSet, ResultMedia, ViewKey } from "../api/types";
+// S10 목(phase3.md §15.4): 예측 끝에 HyperView 배치로 방향별 PNG + 애니메이션 동영상 저장(흉내), GET /jobs/{id}/media,
+// GET /artifacts/{id}/media, POST /jobs/{id}/capture(→ 201 CONTOUR_RECAPTURE), PUT /param-sets/{id}/display {display}.
+// 동영상은 목에서 정적 PNG로 대체(content_type "image/png" — 화면은 <video poster>로 이미지가 보인다).
+// MockOptions.capture로 상태를 고른다: OK(기본)·PARTIAL(right 실패·top 동영상 없음)·FAILED·DISABLED(capture_enabled=false, SKIPPED)·NONE(캡처 전 결과, media 없음).
+import type { ContourDisplay, Job, JobMedia, MediaFile, MediaStatus, ParamSet, ResultMedia, ViewKey } from "../api/types";
 import { AVG_MODES, DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../lib/views";
 import { contourPng } from "./png";
 import { err, needPower, ok, type Route } from "./route";
 import type { MockServer } from "./server";
 
-export type CaptureMode = MediaStatus | "NONE";
+export type CaptureMode = "OK" | "PARTIAL" | "FAILED" | "DISABLED" | "NONE";
 
 export const DEFAULT_DISPLAY: ContourDisplay = {
   field: "Stress",
@@ -18,7 +19,7 @@ export const DEFAULT_DISPLAY: ContourDisplay = {
   views: [...DEFAULT_VIEWS],
 };
 
-const MESSAGE: Partial<Record<MediaStatus, string>> = {
+const MESSAGE: Partial<Record<CaptureMode, string>> = {
   PARTIAL: "right 방향 캡처 시간 초과 · top 동영상 없음",
   FAILED: "HyperView 종료코드 3 — 작업 로그를 확인하세요",
   DISABLED: "관리자 설정에서 컨투어 캡처가 꺼져 있습니다(capture.enabled)",
@@ -44,21 +45,37 @@ export function captureMedia(srv: MockServer, job: Job, values: Record<string, n
   });
 }
 
-const url = (id: string) => `/physicsai/api/artifacts/${id}/content`;
+function file(srv: MockServer, id: string): MediaFile {
+  const a = srv.artifacts.find((x) => x.id === id);
+  const u = `/physicsai/api/artifacts/${id}/media`;
+  return { artifact_id: id, content_type: a?.content_type ?? "image/png", size: a?.size ?? 0, url: u, download_url: `${u}?download=true` };
+}
+
+const STATUS: Record<CaptureMode, MediaStatus> = { OK: "OK", PARTIAL: "PARTIAL", FAILED: "FAILED", DISABLED: "SKIPPED", NONE: "NONE" };
 
 export function mediaOut(srv: MockServer, j: Job): JobMedia {
   const media = (j.result as { media?: ResultMedia[] | null } | null)?.media ?? [];
   const info = srv.mediaInfo.get(j.id);
+  const enabled = srv.capture !== "DISABLED";
+  const active = srv.jobs.find((x) => x.job_type === "CONTOUR_RECAPTURE" && (x.params as { predict_job_id?: string }).predict_job_id === j.id && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(x.state));
+  const ps = srv.paramSets.find((p) => p.id === (j.params as { param_set_id?: string }).param_set_id);
   return {
-    status: info?.status ?? "OK",
+    job_id: j.id,
+    status: info ? STATUS[info.status] : "NONE",
     message: info?.message ?? null,
-    views: media.map((m) => ({
+    display: ps?.display ?? DEFAULT_DISPLAY,
+    field_source: ps?.display ? "template" : "config",
+    video_ext: "mp4",
+    items: media.map((m) => ({
       view: m.view,
       label: viewLabel(m.view),
-      image_url: url(m.image_artifact_id),
-      video_url: m.video_artifact_id ? url(m.video_artifact_id) : null,
-      video_type: m.video_artifact_id ? srv.artifacts.find((a) => a.id === m.video_artifact_id)?.content_type ?? null : null,
+      job_id: j.id,
+      image: file(srv, m.image_artifact_id),
+      video: m.video_artifact_id ? file(srv, m.video_artifact_id) : null,
     })),
+    recapture: active ? { job_id: active.id, state: active.state, active: true } : null,
+    capture_enabled: enabled,
+    can_recapture: enabled && j.state === "SUCCEEDED" && !active,
   };
 }
 
@@ -75,7 +92,7 @@ export function finishCapture(srv: MockServer, j: Job) {
 
 function validDisplay(body: Record<string, unknown> | null): { display: ContourDisplay } | { problems: { code: string; message: string }[] } {
   const problems: { code: string; message: string }[] = [];
-  const b = (body ?? {}) as Partial<ContourDisplay>;
+  const b = ((body ?? {}).display ?? {}) as Partial<ContourDisplay>;
   if (!String(b.field ?? "").trim()) problems.push({ code: "FIELD", message: "결과 종류가 필요합니다" });
   if (!AVG_MODES.some((m) => m.key === b.avgmode)) problems.push({ code: "AVGMODE", message: "평균 방식을 확인하세요" });
   const views = Array.isArray(b.views) ? b.views : [];
@@ -104,14 +121,19 @@ export const captureRoutes: Route = (srv, { method, seg, body }) => {
     if (method === "POST" && seg[2] === "capture") {
       const d = needPower(srv, j.project_id);
       if (d) return d;
-      if (j.job_type !== "PREDICT" || j.state !== "SUCCEEDED") return err(409, "JOB_NOT_SUCCEEDED", "끝난 예측만 다시 캡처할 수 있습니다.");
+      if (j.job_type !== "PREDICT" || j.state !== "SUCCEEDED") return err(409, "PREREQUISITE_MISSING", "끝난 예측만 다시 캡처할 수 있습니다.");
+      if (srv.capture === "DISABLED") return err(409, "CAPTURE_NOT_CONFIGURED", "컨투어 캡처가 구성되지 않았습니다.");
       const views = (body?.views as ViewKey[] | undefined) ?? undefined;
       if (views !== undefined && (!Array.isArray(views) || !views.length || views.some((v) => !VIEW_KEYS.includes(v)))) return err(422, "INVALID_PARAMS", "views를 확인하세요.");
       const s = srv.studies.find((x) => x.id === j.study_id)!;
-      const r = srv.createJob(s, "CONTOUR_CAPTURE", { predict_job_id: j.id, views: views ?? null, display: body?.display ?? null });
-      return r.status === 201 ? { ...r, status: 202 } : r;
+      return srv.createJob(s, "CONTOUR_RECAPTURE", { predict_job_id: j.id, views: views ?? null, display: body?.display ?? null });
     }
     return null;
+  }
+  if (method === "GET" && seg[0] === "artifacts" && seg[1] && seg[2] === "media") {
+    const a = srv.artifacts.find((x) => x.id === seg[1] && x.kind.startsWith("CONTOUR_"));
+    if (!a) return err(404, "NOT_FOUND", "컨투어 파일을 찾을 수 없습니다");
+    return a.render ? { status: 200, bytes: a.render(), contentType: a.content_type } : { status: 200, text: a.body, contentType: a.content_type };
   }
   if (method === "PUT" && seg[0] === "param-sets" && seg[1] && seg[2] === "display") {
     const ps: ParamSet | undefined = srv.paramSets.find((p) => p.id === seg[1]);

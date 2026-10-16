@@ -95,7 +95,7 @@ export function finishStage4(srv: MockServer, j: Job) {
       j.result = predictResult(srv, j, (p.values as Record<string, number>) ?? nominal, (p.model_id as string) || study.final_model_id || "m-1", ps);
       break;
     }
-    case "CONTOUR_CAPTURE":
+    case "CONTOUR_RECAPTURE":
       finishCapture(srv, j);
       break;
     case "PREDICT_VERIFY": {

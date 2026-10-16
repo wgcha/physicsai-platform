@@ -90,6 +90,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/artifacts/{artifact_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Media Content
+         * @description 컨투어 이미지·동영상 파일. HTTP Range(단일 범위) → 206 + Content-Range(브라우저 <video> 탐색), 범위 밖 416.
+         */
+        get: operations["media_content_physicsai_api_artifacts__artifact_id__media_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/curations/{curation_id}": {
         parameters: {
             query?: never;
@@ -280,6 +300,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/jobs/{job_id}/capture": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recapture
+         * @description 재캡처(power): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처하는 CONTOUR_RECAPTURE 작업(LIGHT).
+         */
+        post: operations["recapture_physicsai_api_jobs__job_id__capture_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/jobs/{job_id}/error-bundle.zip": {
         parameters: {
             query?: never;
@@ -326,6 +366,26 @@ export interface paths {
         };
         /** Job Log */
         get: operations["job_log_physicsai_api_jobs__job_id__log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/jobs/{job_id}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Job Media
+         * @description 예측 작업의 방향별 컨투어 이미지·동영상(재캡처 결과는 방향별로 덮어씀).
+         */
+        get: operations["job_media_physicsai_api_jobs__job_id__media_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -492,6 +552,46 @@ export interface paths {
         patch: operations["patch_set_physicsai_api_param_sets__ps_id__patch"];
         trace?: never;
     };
+    "/physicsai/api/param-sets/{ps_id}/display": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Display
+         * @description 템플릿 컨투어 표시 설정(power). null = 지움(응답 정의 첫 항목·config 기본을 따름).
+         */
+        put: operations["put_display_physicsai_api_param_sets__ps_id__display_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Responses
+         * @description 템플릿 응답 정의(phase3 §14.6): ⑤ OptResponse H3D 형식. 422 RESPONSE_INVALID·RESPONSE_IN_USE + problems.
+         */
+        put: operations["put_responses_physicsai_api_param_sets__ps_id__responses_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/param-sets/{ps_id}/samples": {
         parameters: {
             query?: never;
@@ -501,6 +601,106 @@ export interface paths {
         };
         /** Samples */
         get: operations["samples_physicsai_api_param_sets__ps_id__samples_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/predict-batches/{batch_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Batch
+         * @description 배치 상세: 행마다 DOE #·run_key·폴더·값·응답·상태·하위 작업 id.
+         */
+        get: operations["get_batch_physicsai_api_predict_batches__batch_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/predict-batches/{batch_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Batch
+         * @description 일괄 취소(power, 등록자 또는 관리자): 부모·비종료 하위 전부, 멱등.
+         */
+        post: operations["cancel_batch_physicsai_api_predict_batches__batch_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/predict-batches/{batch_id}/curves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Batch Curves
+         * @description 커브 겹쳐보기: 완료 run의 같은 이름 계열(run ≤ predict_batch.curve_max_runs, 점 ≤ max_points, 최소·최대 보존).
+         */
+        get: operations["batch_curves_physicsai_api_predict_batches__batch_id__curves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/predict-batches/{batch_id}/retry-failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retry Failed Batch
+         * @description 실패만 다시(power): 생성 실패 run → 부모 새 작업, 실패·취소·중단 하위 → 기존 재시도.
+         */
+        post: operations["retry_failed_batch_physicsai_api_predict_batches__batch_id__retry_failed_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/predict-batches/{batch_id}/table.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Batch Table Csv
+         * @description 결과 표 CSV(UTF-8 BOM): doe_no,run_key,folder,<파라미터>,<응답>,state.
+         */
+        get: operations["batch_table_csv_physicsai_api_predict_batches__batch_id__table_csv_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -861,6 +1061,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/predict-batches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Batches */
+        get: operations["list_batches_physicsai_api_studies__study_id__predict_batches_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/predict-batches/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Batch
+         * @description 조합 미리보기(동기, 워커 없음). 조합 문제는 200 `problems`(작업 생성 때는 422 BATCH_SOURCE_INVALID).
+         */
+        post: operations["preview_batch_physicsai_api_studies__study_id__predict_batches_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/predict/check": {
         parameters: {
             query?: never;
@@ -1114,6 +1351,197 @@ export interface components {
             /** Study Id */
             study_id: string;
         };
+        /** BatchCurveSeries */
+        BatchCurveSeries: {
+            /** Doe No */
+            doe_no: number;
+            /** Run Key */
+            run_key: string;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** BatchCurves */
+        BatchCurves: {
+            /** Downsampled */
+            downsampled: boolean;
+            /** Name */
+            name?: string | null;
+            /** Names */
+            names: string[];
+            /** Series */
+            series: components["schemas"]["BatchCurveSeries"][];
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** BatchGenCounts */
+        BatchGenCounts: {
+            /** Done */
+            done: number;
+            /** Failed */
+            failed: number;
+            /** Running */
+            running: number;
+            /** Total */
+            total: number;
+            /** Waiting */
+            waiting: number;
+        };
+        /** BatchModelRef */
+        BatchModelRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** BatchPredictCounts */
+        BatchPredictCounts: {
+            /** Canceled */
+            canceled: number;
+            /** Failed */
+            failed: number;
+            /** Queued */
+            queued: number;
+            /** Running */
+            running: number;
+            /** Succeeded */
+            succeeded: number;
+        };
+        /** BatchPreviewRow */
+        BatchPreviewRow: {
+            /** Applied Values */
+            applied_values: {
+                [key: string]: number;
+            };
+            /** Doe No */
+            doe_no: number;
+            /** Out Of Range */
+            out_of_range: string[];
+            /** Run Key */
+            run_key: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** BatchProblem */
+        BatchProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Row */
+            row?: number | null;
+        };
+        /** BatchRef */
+        BatchRef: {
+            /** Id */
+            id: string;
+            /** Label */
+            label?: string | null;
+        };
+        /** BatchResponseName */
+        BatchResponseName: {
+            /** Name */
+            name: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /** BatchRetryFailed */
+        BatchRetryFailed: {
+            /** Parent Job Id */
+            parent_job_id?: string | null;
+            /** Retried Job Ids */
+            retried_job_ids: string[];
+        };
+        /** BatchRunRow */
+        BatchRunRow: {
+            /** Applied Values */
+            applied_values: {
+                [key: string]: number;
+            };
+            /** Code */
+            code?: string | null;
+            /** Doe No */
+            doe_no: number;
+            /** Folder */
+            folder: string;
+            /** Job Id */
+            job_id?: string | null;
+            /**
+             * Media Views
+             * @default []
+             */
+            media_views: string[];
+            /** Message */
+            message?: string | null;
+            /** Out Of Range */
+            out_of_range: string[];
+            /** Responses */
+            responses?: {
+                [key: string]: number | null;
+            } | null;
+            /** Run Key */
+            run_key: string;
+            /** State */
+            state: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * BatchSourceLhs
+         * @description 범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).
+         */
+        BatchSourceLhs: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lhs";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /**
+         * BatchSourceTable
+         * @description 표 붙여넣기·CSV 내용(탭/쉼표 자동, BOM 허용, 첫 줄 헤더 = 파라미터 이름 전부, 선택 열 doe 무시).
+         */
+        BatchSourceTable: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "table";
+            /** Text */
+            text: string;
+        };
+        /**
+         * BatchSourceTrainDoe
+         * @description ① 학습 DOE(같은 Study, READY, sample_status PARSED/PARTIAL)의 samples.csv 행 전부.
+         */
+        BatchSourceTrainDoe: {
+            /** Doe Id */
+            doe_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "train_doe";
+        };
         /** CandidateDatatype */
         CandidateDatatype: {
             /** Components */
@@ -1145,6 +1573,74 @@ export interface components {
             requests: {
                 [key: string]: string[];
             };
+        };
+        /**
+         * CaptureDisplay
+         * @description 표시 설정(모든 키 선택 — null = 상위 설정을 따름: config → 응답 정의 첫 항목 → 템플릿 → 작업).
+         */
+        CaptureDisplay: {
+            /** Avgmode */
+            avgmode?: ("" | "simple" | "maximum" | "minimum" | "difference") | null;
+            /** Component */
+            component?: string | null;
+            /** Comps */
+            comps?: string[] | null;
+            /** Field */
+            field?: string | null;
+            legend?: components["schemas"]["CaptureLegend"] | null;
+            /** Views */
+            views?: ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right")[] | null;
+        };
+        /**
+         * CaptureDisplayOut
+         * @description 결정된(최종) 표시 설정.
+         */
+        CaptureDisplayOut: {
+            /**
+             * Avgmode
+             * @default
+             */
+            avgmode: string;
+            /**
+             * Component
+             * @default
+             */
+            component: string;
+            /**
+             * Comps
+             * @default []
+             */
+            comps: string[];
+            /** Field */
+            field: string;
+            legend: components["schemas"]["CaptureLegendOut"];
+            /** Views */
+            views: string[];
+        };
+        /** CaptureLegend */
+        CaptureLegend: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /**
+             * Mode
+             * @default auto
+             * @enum {string}
+             */
+            mode: "auto" | "fixed";
+        };
+        /** CaptureLegendOut */
+        CaptureLegendOut: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "auto" | "fixed";
         };
         /** CleanupSkip */
         CleanupSkip: {
@@ -1610,6 +2106,7 @@ export interface components {
         Job: {
             /** Attention Code */
             attention_code?: string | null;
+            batch?: components["schemas"]["JobBatchRef"] | null;
             /** Can Cancel */
             can_cancel: boolean;
             /**
@@ -1688,17 +2185,50 @@ export interface components {
                 [key: string]: unknown;
             }[];
         };
+        /**
+         * JobBatchRef
+         * @description phase3 §14.5 일괄 예측 소속(params에서 계산): 부모 PREDICT_BATCH는 doe_no null, 하위 PREDICT는 run 번호.
+         */
+        JobBatchRef: {
+            /** Doe No */
+            doe_no?: number | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label?: string | null;
+        };
         /** JobCreate */
         JobCreate: {
             /**
              * Job Type
              * @enum {string}
              */
-            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP";
+            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP" | "PREDICT_BATCH";
             /** Params */
             params?: {
                 [key: string]: unknown;
             };
+        };
+        /** JobMedia */
+        JobMedia: {
+            /** Can Recapture */
+            can_recapture: boolean;
+            /** Capture Enabled */
+            capture_enabled: boolean;
+            display?: components["schemas"]["CaptureDisplayOut"] | null;
+            /** Field Source */
+            field_source?: string | null;
+            /** Items */
+            items: components["schemas"]["MediaItem"][];
+            /** Job Id */
+            job_id: string;
+            /** Message */
+            message?: string | null;
+            recapture?: components["schemas"]["MediaRecapture"] | null;
+            /** Status */
+            status: string;
+            /** Video Ext */
+            video_ext?: string | null;
         };
         /** JobStep */
         JobStep: {
@@ -1733,6 +2263,7 @@ export interface components {
         JobSummary: {
             /** Attention Code */
             attention_code?: string | null;
+            batch?: components["schemas"]["JobBatchRef"] | null;
             /** Cancel Requested */
             cancel_requested: boolean;
             /**
@@ -1808,6 +2339,39 @@ export interface components {
             user_id: string;
             /** Username */
             username: string;
+        };
+        /** MediaFile */
+        MediaFile: {
+            /** Artifact Id */
+            artifact_id: string;
+            /** Content Type */
+            content_type: string;
+            /** Download Url */
+            download_url: string;
+            /** Size */
+            size: number;
+            /** Url */
+            url: string;
+        };
+        /** MediaItem */
+        MediaItem: {
+            image: components["schemas"]["MediaFile"];
+            /** Job Id */
+            job_id: string;
+            /** Label */
+            label: string;
+            video?: components["schemas"]["MediaFile"] | null;
+            /** View */
+            view: string;
+        };
+        /** MediaRecapture */
+        MediaRecapture: {
+            /** Active */
+            active: boolean;
+            /** Job Id */
+            job_id: string;
+            /** State */
+            state: string;
         };
         /** Model */
         Model: {
@@ -1995,10 +2559,22 @@ export interface components {
         };
         /** ParamSet */
         ParamSet: {
+            /** Assem Rel */
+            assem_rel?: string | null;
             /** Cad File Name */
             cad_file_name: string;
+            /** Display */
+            display?: {
+                [key: string]: unknown;
+            } | null;
             /** Id */
             id: string;
+            /**
+             * Input Kind
+             * @default assembly
+             * @enum {string}
+             */
+            input_kind: "assembly" | "mesh_only";
             /** Is Current */
             is_current: boolean;
             /** Label */
@@ -2026,7 +2602,7 @@ export interface components {
             /** Source Path */
             source_path: string;
             /** Starter Name */
-            starter_name: string;
+            starter_name?: string | null;
             /** Study Id */
             study_id: string;
             /** Tpl Params */
@@ -2035,6 +2611,11 @@ export interface components {
             train_doe_id?: string | null;
             /** Unit System */
             unit_system: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["DiscoverProblem"][];
         };
         /** ParamSetCreate */
         ParamSetCreate: {
@@ -2049,6 +2630,7 @@ export interface components {
         /**
          * ParamSetDiscoverChoice
          * @description phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능.
+         *     phase3 §14.4: `radioss_assem`을 명시적 null로 주면 조립 폴더 없이 메시 단독(mesh_only) 템플릿으로 등록.
          */
         ParamSetDiscoverChoice: {
             /** Cad */
@@ -2096,6 +2678,10 @@ export interface components {
             /** Truncated */
             truncated: boolean;
         };
+        /** ParamSetDisplayUpdate */
+        ParamSetDisplayUpdate: {
+            display?: components["schemas"]["CaptureDisplay"] | null;
+        };
         /** ParamSetFromTrain */
         ParamSetFromTrain: {
             /** Doe Id */
@@ -2115,6 +2701,16 @@ export interface components {
         ParamSetPatch: {
             /** Label */
             label?: string | null;
+        };
+        /**
+         * ParamSetResponsesUpdate
+         * @description phase3 §14.6 `PUT /param-sets/{id}/responses` — 행 `{name, unit, spec|null}`. 검증 실패는 422 RESPONSE_INVALID + problems.
+         */
+        ParamSetResponsesUpdate: {
+            /** Responses */
+            responses: {
+                [key: string]: unknown;
+            }[];
         };
         /** Parameter */
         Parameter: {
@@ -2165,6 +2761,98 @@ export interface components {
             file?: string | null;
             /** Message */
             message?: string | null;
+        };
+        /** PredictBatch */
+        PredictBatch: {
+            /**
+             * Can Cancel
+             * @default false
+             */
+            can_cancel: boolean;
+            /**
+             * Can Retry Failed
+             * @default false
+             */
+            can_retry_failed: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Dir */
+            dir: string;
+            /** Finished At */
+            finished_at?: string | null;
+            gen: components["schemas"]["BatchGenCounts"];
+            /** Id */
+            id: string;
+            /**
+             * Input Kind
+             * @enum {string}
+             */
+            input_kind: "assembly" | "mesh_only";
+            /** Job Id */
+            job_id: string;
+            /** Label */
+            label: string;
+            model: components["schemas"]["BatchModelRef"];
+            /** Multi Execution */
+            multi_execution: number;
+            param_set: components["schemas"]["BatchRef"];
+            /** Parameters */
+            parameters: string[];
+            predict: components["schemas"]["BatchPredictCounts"];
+            /** Responses */
+            responses: components["schemas"]["BatchResponseName"][];
+            /** Rows */
+            rows: components["schemas"]["BatchRunRow"][];
+            /** Source Kind */
+            source_kind: string;
+            /** Status */
+            status: string;
+        };
+        /** PredictBatchPreview */
+        PredictBatchPreview: {
+            /** Count */
+            count: number;
+            /** Estimate Min */
+            estimate_min?: number | null;
+            /**
+             * Input Kind
+             * @enum {string}
+             */
+            input_kind: "assembly" | "mesh_only";
+            /** Problems */
+            problems: components["schemas"]["BatchProblem"][];
+            /** Rows */
+            rows: components["schemas"]["BatchPreviewRow"][];
+        };
+        /** PredictBatchPreviewRequest */
+        PredictBatchPreviewRequest: {
+            /** Param Set Id */
+            param_set_id?: string | null;
+            /** Source */
+            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
+        };
+        /** PredictBatchSummary */
+        PredictBatchSummary: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Run Count */
+            run_count: number;
+            /** Status */
+            status: string;
         };
         /** PredictCheckRequest */
         PredictCheckRequest: {
@@ -2232,6 +2920,12 @@ export interface components {
             /** Unread Count */
             unread_count: number;
         };
+        /** RecaptureRequest */
+        RecaptureRequest: {
+            display?: components["schemas"]["CaptureDisplay"] | null;
+            /** Views */
+            views?: ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right")[] | null;
+        };
         /** ResourceJob */
         ResourceJob: {
             /** Cpu Time S */
@@ -2296,6 +2990,10 @@ export interface components {
         ResponseDef: {
             /** Name */
             name: string;
+            /** Spec */
+            spec?: {
+                [key: string]: unknown;
+            } | null;
             /**
              * Unit
              * @default
@@ -2437,13 +3135,16 @@ export interface components {
         };
         /** StatusFeatures */
         StatusFeatures: {
+            contour_capture?: components["schemas"]["FeatureState"] | null;
             curation_h3d: components["schemas"]["FeatureState"];
             curation_t01: components["schemas"]["FeatureState"];
             dataset_create?: components["schemas"]["FeatureState"] | null;
             evaluate?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
             predict?: components["schemas"]["FeatureState"] | null;
+            predict_mesh_only?: components["schemas"]["FeatureState"] | null;
             predict_parametric?: components["schemas"]["FeatureState"] | null;
+            predict_responses?: components["schemas"]["FeatureState"] | null;
             spdm_import: components["schemas"]["FeatureState"];
             train_doe: components["schemas"]["FeatureState"];
             train_extract: components["schemas"]["FeatureState"];
@@ -3251,6 +3952,97 @@ export interface operations {
             };
         };
     };
+    media_content_physicsai_api_artifacts__artifact_id__media_get: {
+        parameters: {
+            query?: {
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                artifact_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/gif": unknown;
+                    "image/png": unknown;
+                    "video/mp4": unknown;
+                    "video/x-msvideo": unknown;
+                };
+            };
+            /** @description Partial Content */
+            206: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/gif": unknown;
+                    "image/png": unknown;
+                    "video/mp4": unknown;
+                    "video/x-msvideo": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Content Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Range 범위 밖 */
+            416: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_curation_physicsai_api_curations__curation_id__get: {
         parameters: {
             query?: never;
@@ -3280,7 +4072,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3324,7 +4116,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3405,7 +4197,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3443,7 +4235,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3557,7 +4349,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3704,7 +4496,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3715,6 +4507,68 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    recapture_physicsai_api_jobs__job_id__capture_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RecaptureRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3820,7 +4674,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3881,7 +4735,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -3892,6 +4746,64 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    job_media_physicsai_api_jobs__job_id__media_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobMedia"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3943,7 +4855,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4005,7 +4917,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4311,7 +5223,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4364,7 +5276,131 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_display_physicsai_api_param_sets__ps_id__display_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamSetDisplayUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_responses_physicsai_api_param_sets__ps_id__responses_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamSetResponsesUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4416,7 +5452,300 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_batch_physicsai_api_predict_batches__batch_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictBatch"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_batch_physicsai_api_predict_batches__batch_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictBatch"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    batch_curves_physicsai_api_predict_batches__batch_id__curves_get: {
+        parameters: {
+            query?: {
+                name?: string | null;
+                max_points?: number;
+            };
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchCurves"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    retry_failed_batch_physicsai_api_predict_batches__batch_id__retry_failed_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchRetryFailed"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    batch_table_csv_physicsai_api_predict_batches__batch_id__table_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4634,7 +5963,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4683,7 +6012,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4736,7 +6065,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4785,7 +6114,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4825,7 +6154,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -4867,7 +6196,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5016,7 +6345,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5212,7 +6541,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5265,7 +6594,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5318,7 +6647,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5371,7 +6700,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5424,7 +6753,127 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_batches_physicsai_api_studies__study_id__predict_batches_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictBatchSummary"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_batch_physicsai_api_studies__study_id__predict_batches_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PredictBatchPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictBatchPreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5477,7 +6926,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5615,7 +7064,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5682,7 +7131,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5753,7 +7202,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5824,7 +7273,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5882,7 +7331,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -5940,7 +7389,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6011,7 +7460,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6081,7 +7530,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -6146,7 +7595,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Unprocessable Entity */
+            /** @description Unprocessable Content */
             422: {
                 headers: {
                     [name: string]: unknown;

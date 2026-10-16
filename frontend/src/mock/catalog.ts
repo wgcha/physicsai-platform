@@ -22,7 +22,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   STUDY_STORAGE_SCAN: "관리",
   STUDY_CLEANUP: "관리",
   PREDICT_BATCH: "④",
-  CONTOUR_CAPTURE: "④",
+  CONTOUR_RECAPTURE: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -45,6 +45,8 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   // S9(phase3.md §14.4·§14.6): mesh_only 체인(include TCL 불필요)·응답 추출(새 방식)
   predict_mesh_only: ["commands.geom_update"],
   predict_responses: ["commands.response_extract", "resources.extract_minmax_tcl"],
+  // S10(phase3.md §15.5): 컨투어 캡처 — 목의 캡처 동작은 MockOptions.capture가 정한다
+  contour_capture: ["commands.contour_capture", "altair.hw_exe_path"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

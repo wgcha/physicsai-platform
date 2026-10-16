@@ -8,9 +8,8 @@ type Override<T, U> = Omit<T, keyof U> & U;
 
 export type Role = "general" | "power" | "admin";
 
-// S9: openapi 갱신 후 gen:api로 대체 — PREDICT_BATCH(phase3.md §14.5)
-// S10: openapi 갱신 후 gen:api로 대체 — 다시 캡처 작업(POST /jobs/{id}/capture → 202, 이름은 목 가정)
-export type JobType = S["JobCreate"]["job_type"] | "PREDICT_BATCH" | "CONTOUR_CAPTURE";
+// S10: 다시 캡처 작업 CONTOUR_RECAPTURE는 POST /jobs/{id}/capture 전용이라 JobCreate 열거에 없다(phase3.md §15.4)
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -33,7 +32,7 @@ export type NotificationEvent =
   | "HPC_PARTIAL_FAILED"
   | "ENV_CHECK_DONE"
   | "HPC_CANCEL_FAILED"
-  // S9: openapi 갱신 후 gen:api로 대체(phase3.md §14.3)
+  // S9(phase3.md §14.3) — 알림 event는 백엔드 스키마가 string이라 계약 값으로 좁힌다
   | "PREDICT_BATCH_DONE";
 export type ArtifactKind =
   | "PREVIEW_JSON"
@@ -49,7 +48,7 @@ export type ArtifactKind =
   | "RUN_CONFIG"
   | "OPT_SUMMARY"
   | "OPT_FILE"
-  // S10: openapi 갱신 후 gen:api로 대체(이름은 목 가정)
+  // S10(phase3.md §15.2) — 산출물 kind는 백엔드 스키마가 string
   | "CONTOUR_IMAGE"
   | "CONTOUR_VIDEO";
 
@@ -72,8 +71,7 @@ export interface UiPoll {
   poll_status_ms?: number;
 }
 /** phase2.md §12.1 `/status.features` 키 */
-// S9: openapi 갱신 후 gen:api로 대체 — predict_mesh_only·predict_responses(phase3.md §14.4·§14.6)
-export type FeatureKey = keyof S["StatusFeatures"] | "predict_mesh_only" | "predict_responses";
+export type FeatureKey = keyof S["StatusFeatures"];
 export type FeatureState = S["FeatureState"];
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
 export type EnvCheckBrief = Override<S["StatusEnvCheck"], { latest_state?: EnvCheckState | null }>;
@@ -90,14 +88,9 @@ export type StatusInfo = Override<
 
 /** phase2.md §12.9 PBS run 집계(C11): queued·running·succeeded·failed는 hpc 상태별, collected는 회수 완료(succeeded와 겹침) */
 export type HpcSummary = S["HpcSummary"];
-/** S9: openapi 갱신 후 gen:api로 대체 — `JobSummary.batch`(phase3.md §14.5, params에서 계산) */
-export interface JobBatchRef {
-  id: string;
-  label: string;
-  /** 하위 PREDICT의 DOE 번호(부모 PREDICT_BATCH는 null) */
-  doe_no: number | null;
-}
-export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: "SLOT" | "LIGHT"; batch?: JobBatchRef | null }>;
+/** `JobSummary.batch`(phase3.md §14.5, params에서 계산). doe_no = 하위 PREDICT의 DOE 번호(부모 PREDICT_BATCH는 null) */
+export type JobBatchRef = S["JobBatchRef"];
+export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: "SLOT" | "LIGHT" }>;
 export type JobStep = Override<S["JobStep"], { state: StepState; kind: "LOCAL" | "INTERNAL" | "HPC_SUBMIT" | "HPC_WAIT" | "COLLECT" }>;
 export type Job = Override<
   S["Job"],
@@ -107,7 +100,6 @@ export type Job = Override<
     lane: "SLOT" | "LIGHT";
     steps: JobStep[];
     warnings: { code?: string; message?: string }[];
-    batch?: JobBatchRef | null; // S9: openapi 갱신 후 gen:api로 대체
   }
 >;
 
@@ -132,7 +124,7 @@ export interface PredictResult {
   curve_artifact_id: string | null;
   response_table_artifact_id?: string | null;
   response_table: ResponseRow[];
-  /** S10: openapi 갱신 후 gen:api로 대체 — 방향별 캡처(없으면 캡처 전 결과) */
+  /** S10 방향별 캡처(§15.2, 없으면 캡처 전 결과) — 결과는 자유 형식이라 수동 유지 */
   media?: ResultMedia[] | null;
   // S6 prepared 결과 키(phase3.md §11.5) — openapi에서 결과는 자유 형식이라 수동 유지
   input_mode?: PredictInputMode;
@@ -170,7 +162,7 @@ export interface PredictJobParams {
   input_path?: string | null;
   /** prepared 입력 종류(§11.5) */
   input_kind?: "file" | "dir";
-  /** S9: openapi 갱신 후 gen:api로 대체 — 템플릿 종류(§14.4, 서버 확정 기록. 백엔드 P0 결정: PREDICT params 키 이름 template_kind) */
+  /** S9 템플릿 종류(§14.4, 서버 확정 기록, D3-51: 키 이름 template_kind) — params는 자유 형식이라 수동 유지 */
   template_kind?: InputKind | null;
   starter_name?: string | null;
   model_id?: string | null;
@@ -276,16 +268,16 @@ export type Dataset = Override<
 >;
 
 export type ParamDef = S["Parameter"];
-// S9: openapi 갱신 후 gen:api로 대체 — input_kind·assem_rel·starter_name null·responses[].spec(phase3.md §14.4·§14.6)
+// responses[].spec(§14.6)·display(§15.3)는 백엔드 스키마가 dict라 계약 형식으로 좁힌다
 export type ParamSet = Override<
   S["ParamSet"],
   {
     origin: "FOLDER" | "TRAIN_DOE";
-    input_kind?: InputKind;
-    assem_rel?: string | null;
     starter_name: string | null;
+    /** 등록 응답에만(SIMLAB_EXPORT_NAME 등), 조회는 [] */
+    warnings?: S["ParamSet"]["warnings"];
     responses: TemplateResponse[];
-    /** S10: openapi 갱신 후 gen:api로 대체 — 컨투어 표시 설정(없으면 서버 기본) */
+    /** S10 컨투어 표시 설정(없으면 서버 기본) */
     display?: ContourDisplay | null;
   }
 >;
@@ -380,8 +372,7 @@ export type FsEntry = S["FsEntry"];
 export type FsList = S["FsList"];
 
 // ---------------------------------------------------------------------------
-// S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14)
-// S9: openapi 갱신 후 gen:api로 대체 — 아래는 계약 §14.7 JSON 예시를 그대로 옮긴 수동 타입
+// S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14) — 생성 타입 기반, 열거형·dict 필드만 계약 값으로 좁힘
 // ---------------------------------------------------------------------------
 
 /** 템플릿 입력 종류: 조립 폴더 포함(assembly) / 쿠션 단독 메시(mesh_only) */
@@ -399,162 +390,67 @@ export interface ResponseSpec {
   layer: string;
   stat: ResponseStat;
 }
-export interface TemplateResponse {
-  name: string;
-  unit: string;
-  spec?: ResponseSpec | null;
-}
-/** PUT /param-sets/{id}/responses 본문. spec null = 옛 responses.json 행(이름·단위만, 추출 안 함) — 계약은 spec 필수로 적혀 있어 확인 필요 */
+/** spec은 백엔드 스키마가 dict라 계약 형식으로 좁힌다. spec null = 이름·단위만(추출 안 함, D3-51) */
+export type TemplateResponse = Override<S["ResponseDef"], { unit: string; spec?: ResponseSpec | null }>;
+/** PUT /param-sets/{id}/responses 본문(백엔드 스키마는 dict 목록). spec null = 이름·단위만(추출 안 함) */
 export interface ParamSetResponsesPut {
   responses: { name: string; unit: string; spec: ResponseSpec | null }[];
 }
 
-export type BatchSource =
-  | { kind: "lhs"; count: number; seed: number; ranges?: Record<string, [number, number]> }
-  | { kind: "table"; text: string }
-  | { kind: "train_doe"; doe_id: string };
+export type BatchSource = S["BatchSourceLhs"] | S["BatchSourceTable"] | S["BatchSourceTrainDoe"];
 export type BatchSourceKind = BatchSource["kind"];
 
 /** POST /studies/{id}/predict-batches/preview 본문 */
-export interface BatchPreviewRequest {
-  param_set_id: string;
-  source: BatchSource;
-}
-export interface BatchPreviewRow {
-  doe_no: number;
-  run_key: string;
-  values: Record<string, number>;
-  applied_values: Record<string, number>;
-  out_of_range: string[];
-}
+export type BatchPreviewRequest = Override<S["PredictBatchPreviewRequest"], { param_set_id: string; source: BatchSource }>;
+export type BatchPreviewRow = S["BatchPreviewRow"];
 export type BatchProblemCode = "TABLE_HEADER" | "TABLE_VALUE" | "TEXT_TOO_LARGE" | "TOO_MANY_ROWS" | "TOO_FEW_ROWS" | "RANGE_INVALID" | "DOE_PARAM_MISMATCH";
-export interface BatchProblem {
-  code: BatchProblemCode | string;
-  message: string;
-  row?: number | null;
-}
-export interface BatchPreview {
-  input_kind: InputKind;
-  count: number;
-  /** 최근 성공 PREDICT 5개 중앙값×N(분), 없으면 null */
-  estimate_min: number | null;
-  rows: BatchPreviewRow[];
-  problems: BatchProblem[];
-}
-/** PREDICT_BATCH 생성 params(POST /studies/{id}/jobs) */
+export type BatchProblem = S["BatchProblem"];
+/** estimate_min = 최근 성공 PREDICT 5개 중앙값×N(분), 없으면 null */
+export type BatchPreview = S["PredictBatchPreview"];
+/** PREDICT_BATCH 생성 params(POST /studies/{id}/jobs) — 작업 params는 dict라 생성 타입 없음(phase3.md §14.5·§15.3) */
 export interface PredictBatchParams {
   param_set_id: string;
   model_id: string | null;
   multi_execution: number;
   source: BatchSource;
-  /** S10: openapi 갱신 후 gen:api로 대체 — 템플릿 표시 설정 덮어쓰기(범례 범위 고정, run 비교용). 키 이름은 가정 */
+  /** S10 §15.3: 배치 단위 표시 설정(범례 fixed로 run끼리 비교) */
   display?: { legend: ContourLegend } | null;
 }
 
 export type BatchStatus = "GENERATING" | "PREDICTING" | "DONE" | "FAILED" | "CANCELED";
-export interface PredictBatchSummary {
-  id: string;
-  label: string;
-  status: BatchStatus;
-  run_count: number;
-  created_at: string;
-  created_by_name: string;
-}
+export type PredictBatchSummary = Override<S["PredictBatchSummary"], { status: BatchStatus }>;
 export type BatchRowState = "GEN_PENDING" | "GENERATING" | "GEN_FAILED" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED";
-export interface PredictBatchRow {
-  doe_no: number;
-  run_key: string;
-  folder: string;
-  values: Record<string, number>;
-  applied_values: Record<string, number>;
-  out_of_range: string[];
-  state: BatchRowState;
-  code: string | null;
-  message: string | null;
-  job_id: string | null;
-  responses: Record<string, number | null> | null;
-  /** S10: openapi 갱신 후 gen:api로 대체 — 캡처된 방향(없으면 빈 배열) */
-  media_views?: ViewKey[];
-}
-export interface PredictBatch {
-  id: string;
-  label: string;
-  status: BatchStatus;
-  dir: string;
-  input_kind: InputKind;
-  param_set: { id: string; label: string | null };
-  model: { id: string; name: string };
-  job_id: string;
-  multi_execution: number;
-  gen: { total: number; done: number; failed: number; running: number; waiting: number };
-  predict: { running: number; queued: number; succeeded: number; failed: number; canceled: number };
-  parameters: string[];
-  responses: { name: string; unit: string }[];
-  rows: PredictBatchRow[];
-}
+/** media_views = S10 캡처된 방향(없으면 빈 배열) */
+export type PredictBatchRow = Override<S["BatchRunRow"], { state: BatchRowState; media_views?: ViewKey[] }>;
+export type PredictBatch = Override<S["PredictBatch"], { status: BatchStatus; rows: PredictBatchRow[] }>;
 /** GET /predict-batches/{bid}/curves */
-export interface BatchCurves {
-  names: string[];
-  name: string | null;
-  truncated: boolean;
-  downsampled: boolean;
-  series: { doe_no: number; run_key: string; x: number[]; y: number[] }[];
-}
+export type BatchCurves = S["BatchCurves"];
 /** POST /predict-batches/{bid}/retry-failed → 201 */
-export interface BatchRetryFailed {
-  parent_job_id: string | null;
-  retried_job_ids: string[];
-}
+export type BatchRetryFailed = S["BatchRetryFailed"];
 
 // ---------------------------------------------------------------------------
-// S10 컨투어 캡처(HyperView 방향별 PNG + 애니메이션 동영상)
-// S10: openapi 갱신 후 gen:api로 대체 — 아래는 메인 확정 계약(JSON 예시)을 그대로 옮긴 수동 타입
+// S10 컨투어 캡처(HyperView 방향별 PNG + 애니메이션 동영상, phase3.md §15) — 생성 타입 기반
 // ---------------------------------------------------------------------------
 
 /** 방향 키(기본 iso·front·top·right). 서버가 더 주면 그대로 표시 */
 export type ViewKey = "iso" | "front" | "back" | "top" | "bottom" | "left" | "right" | (string & {});
 
-/** S10: openapi 갱신 후 gen:api로 대체 — PREDICT `result.media[]` */
+/** PREDICT `result.media[]`(§15.2 — result는 dict라 생성 타입 없음) */
 export interface ResultMedia {
   view: ViewKey;
   image_artifact_id: string;
   video_artifact_id: string | null;
 }
 
-/** S10: openapi 갱신 후 gen:api로 대체 — GET /jobs/{id}/media 의 views[] (URL은 산출물 내려받기 경로, 동영상은 Range 지원) */
-export interface MediaView {
-  view: ViewKey;
-  label: string;
-  image_url: string;
-  video_url: string | null;
-  video_type: string | null;
-}
-/** S10: openapi 갱신 후 gen:api로 대체 */
-export type MediaStatus = "OK" | "PARTIAL" | "FAILED" | "DISABLED";
-/** S10: openapi 갱신 후 gen:api로 대체 — GET /jobs/{id}/media */
-export interface JobMedia {
-  views: MediaView[];
-  status: MediaStatus;
-  message?: string | null;
-}
-
-/** S10: openapi 갱신 후 gen:api로 대체 — 범례 자동/고정 */
-export interface ContourLegend {
-  mode: "auto" | "fixed";
-  min: number | null;
-  max: number | null;
-}
-/** S10: openapi 갱신 후 gen:api로 대체 — 템플릿(파라미터 세트) 컨투어 표시 설정, PUT /param-sets/{id}/display 본문 */
-export interface ContourDisplay {
-  field: string;
-  component: string;
-  avgmode: string;
-  comps: string[];
-  legend: ContourLegend;
-  views: ViewKey[];
-}
-/** S10: openapi 갱신 후 gen:api로 대체 — POST /jobs/{id}/capture 본문(→ 202 Job) */
-export interface CaptureRequest {
-  views?: ViewKey[];
-  display?: Partial<ContourDisplay>;
-}
+/** 파일 1개(url = 표시용 Range 지원, download_url = 내려받기) */
+export type MediaFile = S["MediaFile"];
+export type MediaItem = Override<S["MediaItem"], { view: ViewKey }>;
+/** NONE(캡처 전·step 없음) · SKIPPED(미구성) · OK · PARTIAL · FAILED */
+export type MediaStatus = "NONE" | "SKIPPED" | "OK" | "PARTIAL" | "FAILED";
+export type ContourLegend = S["CaptureLegendOut"];
+/** 템플릿(파라미터 세트) 컨투어 표시 설정(PUT /param-sets/{id}/display 본문 `display`) */
+export type ContourDisplay = Override<S["CaptureDisplayOut"], { views: ViewKey[] }>;
+/** GET /jobs/{id}/media */
+export type JobMedia = Override<S["JobMedia"], { status: MediaStatus; items: MediaItem[]; display?: ContourDisplay | null }>;
+/** POST /jobs/{id}/capture 본문(→ 201 Job CONTOUR_RECAPTURE) */
+export type CaptureRequest = S["RecaptureRequest"];

@@ -2,7 +2,7 @@
 // 위 방향 버튼 그룹(←→ 키) · 이미지 / "영상" 토글 시 <video controls>(같은 방향) · 내려받기 · 상태 회색 문구 · 다시 캡처(power 이상).
 // 방향은 부모가 쥘 수 있다(B 결과: run을 바꿔도 같은 방향으로 비교).
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { API_PREFIX, ApiError, TERMINAL_STATES, api, errorMessage, type Job, type JobMedia, type ViewKey } from "../../api";
+import { API_PREFIX, ApiError, TERMINAL_STATES, api, errorMessage, type CaptureRequest, type Job, type JobMedia, type ViewKey } from "../../api";
 import { usePolling } from "../../hooks/usePolling";
 import { POLL } from "../../lib/poll";
 import { DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../../lib/views";
@@ -12,6 +12,7 @@ export const MEDIA_TEXT = {
   PARTIAL: "일부 방향만 캡처되었습니다",
   FAILED: "컨투어 캡처에 실패했습니다",
   DISABLED: "컨투어 캡처가 꺼져 있습니다(관리자 설정)",
+  SKIPPED: "컨투어 캡처를 하지 않았습니다(표시 설정 없음)",
   MISSING_VIEW: "이 결과에는 고른 방향의 캡처가 없습니다",
 } as const;
 
@@ -71,7 +72,7 @@ export function ContourMedia({
       setMedia(await api.jobMedia(jobId));
       setError(null);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 404) setMedia({ views: [], status: "OK" });
+      if (e instanceof ApiError && e.status === 404) setMedia({ job_id: jobId, items: [], status: "NONE", capture_enabled: false, can_recapture: false });
       else setError(errorMessage(e));
     }
   }, [jobId]);
@@ -81,12 +82,13 @@ export function ContourMedia({
     void load();
   }, [load]);
 
-  const views = media?.views ?? [];
+  const views = media?.items ?? [];
   const want = viewProp !== undefined ? viewProp : localView;
   const curKey = want ?? views[0]?.view ?? null;
   const cur = views.find((v) => v.view === curKey) ?? null;
-  const img = useMediaImage(cur?.image_url ?? null);
-  const showVideo = video && !!cur?.video_url;
+  const img = useMediaImage(cur?.image.url ?? null);
+  const videoUrl = cur?.video?.url ?? null;
+  const showVideo = video && !!videoUrl;
 
   const pick = (v: ViewKey) => {
     setLocalView(v);
@@ -104,15 +106,17 @@ export function ContourMedia({
   const label = cur?.label || (curKey ? viewLabel(curKey) : "");
   const note = !media
     ? null
-    : media.status === "DISABLED"
+    : !media.capture_enabled && !views.length
       ? MEDIA_TEXT.DISABLED
-      : media.status === "FAILED"
+      : media.status === "SKIPPED" && !views.length
+        ? MEDIA_TEXT.SKIPPED
+        : media.status === "FAILED"
         ? MEDIA_TEXT.FAILED
-        : media.status === "PARTIAL"
-          ? MEDIA_TEXT.PARTIAL
-          : !views.length
-            ? MEDIA_TEXT.NONE
-            : null;
+          : media.status === "PARTIAL"
+            ? MEDIA_TEXT.PARTIAL
+            : !views.length
+              ? MEDIA_TEXT.NONE
+              : null;
 
   return (
     <div className="contour contour-media" data-testid="contour-media">
@@ -132,8 +136,8 @@ export function ContourMedia({
             type="button"
             className={`btn small${showVideo ? " on" : ""}`}
             aria-pressed={showVideo}
-            disabled={!cur?.video_url}
-            title={cur?.video_url ? "같은 방향의 애니메이션 영상" : "이 방향은 영상이 없습니다"}
+            disabled={!videoUrl}
+            title={videoUrl ? "같은 방향의 애니메이션 영상" : "이 방향은 영상이 없습니다"}
             onClick={() => setVideo((x) => !x)}
           >
             영상
@@ -156,8 +160,8 @@ export function ContourMedia({
 
       {cur ? (
         showVideo ? (
-          <video key={cur.video_url} className="contour-img" controls preload="metadata" poster={img ?? undefined} aria-label={`컨투어 영상 — ${label}`}>
-            <source src={mediaHref(cur.video_url!)} type={cur.video_type ?? undefined} />
+          <video key={videoUrl} className="contour-img" controls preload="metadata" poster={img ?? undefined} aria-label={`컨투어 영상 — ${label}`}>
+            <source src={mediaHref(videoUrl!)} type={cur.video?.content_type ?? undefined} />
           </video>
         ) : img ? (
           <img src={img} alt={`예측 컨투어 — ${label}`} className="contour-img" />
@@ -170,24 +174,24 @@ export function ContourMedia({
 
       {cur && (
         <div className="run-action-row">
-          <a className="btn small ghost" href={img ?? mediaHref(cur.image_url)} download={`contour_${jobId.slice(0, 8)}_${cur.view}.png`}>
+          <a className="btn small ghost" href={img ?? mediaHref(cur.image.download_url)} download={`contour_${jobId.slice(0, 8)}_${cur.view}.png`}>
             이미지 받기
           </a>
-          {cur.video_url && (
-            <a className="btn small ghost" href={mediaHref(cur.video_url)} download>
+          {cur.video && (
+            <a className="btn small ghost" href={mediaHref(cur.video.download_url)} download>
               영상 받기
             </a>
           )}
         </div>
       )}
 
-      {canCapture && media && <Recapture jobId={jobId} initial={captureViews?.length ? captureViews : views.length ? views.map((v) => v.view) : DEFAULT_VIEWS} onDone={load} />}
+      {canCapture && media && (media.can_recapture || !!media.recapture?.active) && <Recapture jobId={jobId} serverBusy={!!media.recapture?.active} initial={captureViews?.length ? captureViews : views.length ? views.map((v) => v.view) : media.display?.views?.length ? media.display.views : DEFAULT_VIEWS} onDone={load} />}
     </div>
   );
 }
 
-/** 다시 캡처: 방향 체크 → POST /jobs/{id}/capture {views} → 202 작업이 끝나면 목록을 다시 읽는다 */
-function Recapture({ jobId, initial, onDone }: { jobId: string; initial: ViewKey[]; onDone: () => Promise<void> }) {
+/** 다시 캡처: 방향 체크 → POST /jobs/{id}/capture {views} → 201 CONTOUR_RECAPTURE 작업이 끝나면 목록을 다시 읽는다 */
+function Recapture({ jobId, initial, serverBusy, onDone }: { jobId: string; initial: ViewKey[]; serverBusy: boolean; onDone: () => Promise<void> }) {
   const [open, setOpen] = useState(false);
   const [checked, setChecked] = useState<ViewKey[]>(initial);
   const [job, setJob] = useState<Job | null>(null);
@@ -215,7 +219,7 @@ function Recapture({ jobId, initial, onDone }: { jobId: string; initial: ViewKey
     setBusy(true);
     setError(null);
     try {
-      setJob(await api.captureJob(jobId, { views: keys.filter((k) => checked.includes(k)) }));
+      setJob(await api.captureJob(jobId, { views: keys.filter((k) => checked.includes(k)) as CaptureRequest["views"] }));
       setOpen(false);
     } catch (e) {
       setError(errorMessage(e));
@@ -227,10 +231,10 @@ function Recapture({ jobId, initial, onDone }: { jobId: string; initial: ViewKey
   return (
     <div className="cm-capture">
       <div className="run-action-row">
-        <button type="button" className="btn small" aria-expanded={open} disabled={running} onClick={() => setOpen((x) => !x)}>
+        <button type="button" className="btn small" aria-expanded={open} disabled={running || serverBusy} onClick={() => setOpen((x) => !x)}>
           다시 캡처
         </button>
-        {running && <span className="muted small">캡처 중…</span>}
+        {(running || (serverBusy && !job)) && <span className="muted small">캡처 중…</span>}
         {error && (
           <span className="error-text small" role="alert">
             {error}

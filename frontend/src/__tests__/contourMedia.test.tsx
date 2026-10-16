@@ -7,6 +7,7 @@ import type { MockServer } from "../mock/server";
 import { MEDIA_TEXT, mediaHref } from "../stages/stage4/ContourMedia";
 import type { CaptureMode } from "../mock/capture";
 import { encodePng } from "../mock/png";
+import type { JobMedia } from "../api/types";
 
 const KEY = "physicsai.stage4.inputMode";
 const BATCH = `${STUDY}/4/batch/pb-2`;
@@ -69,8 +70,8 @@ describe("S10 컨투어 미디어 — 단일 예측 결과", () => {
     expect(video.tagName).toBe("VIDEO");
     expect(video.hasAttribute("controls")).toBe(true);
     const src = video.querySelector("source")!.getAttribute("src")!;
-    expect(src).toMatch(/^\/physicsai\/api\/artifacts\/a-\d+\/content$/);
-    expect(within(m).getByRole("link", { name: "영상 받기" }).getAttribute("href")).toBe(src);
+    expect(src).toMatch(/^\/physicsai\/api\/artifacts\/a-\d+\/media$/);
+    expect(within(m).getByRole("link", { name: "영상 받기" }).getAttribute("href")).toBe(`${src}?download=true`);
     expect(within(m).queryByRole("img", { name: /예측 컨투어/ })).toBeNull();
     // 방향을 바꿔도 영상 모드 유지 → 그 방향 영상
     fireEvent.click(within(m).getByRole("button", { name: "윗면" }));
@@ -125,7 +126,7 @@ describe("S10 컨투어 미디어 — 단일 예측 결과", () => {
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect(bodies[0]).toEqual({ views: ["iso", "front", "top", "left"] }); // 방향 순서는 고정 목록 순
     expect(await within(m).findByText("캡처 중…")).toBeTruthy();
-    const cap = server.jobs.find((j) => j.job_type === "CONTOUR_CAPTURE")!;
+    const cap = server.jobs.find((j) => j.job_type === "CONTOUR_RECAPTURE")!;
     expect(cap.params).toMatchObject({ predict_job_id: "j-pred", views: ["iso", "front", "top", "left"] });
     act(() => server.finishAll());
     await waitFor(() => expect(viewButtons(m).map((b) => b.textContent)).toEqual(["등각(iso)", "정면", "윗면", "왼쪽"]));
@@ -212,7 +213,7 @@ describe("S10 템플릿 컨투어 표시 설정·B 범례 고정", () => {
     const comp = within(sec).getByLabelText("성분") as HTMLSelectElement;
     expect(Array.from(comp.options).map((o) => o.value)).toEqual(["X", "Y", "Z", "Mag"]);
     fireEvent.change(comp, { target: { value: "Mag" } });
-    fireEvent.change(within(sec).getByLabelText("평균 방식"), { target: { value: "advanced" } });
+    fireEvent.change(within(sec).getByLabelText("평균 방식"), { target: { value: "maximum" } });
     expect((within(sec).getByLabelText("부품 이름 목록") as HTMLInputElement).value).toBe("CUSHION_TOP, FOAM");
     fireEvent.change(within(sec).getByLabelText("부품 이름 목록"), { target: { value: "CUSHION_TOP, RIB_1 ,, FOAM" } });
     expect((within(sec).getByLabelText("범례 최소") as HTMLInputElement).disabled).toBe(true);
@@ -230,12 +231,14 @@ describe("S10 템플릿 컨투어 표시 설정·B 범례 고정", () => {
     fireEvent.click(save);
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0]).toEqual({
-      field: "Displacement",
-      component: "Mag",
-      avgmode: "advanced",
-      comps: ["CUSHION_TOP", "RIB_1", "FOAM"],
-      legend: { mode: "fixed", min: 5, max: 250 },
-      views: ["iso", "front", "top", "left"],
+      display: {
+        field: "Displacement",
+        component: "Mag",
+        avgmode: "maximum",
+        comps: ["CUSHION_TOP", "RIB_1", "FOAM"],
+        legend: { mode: "fixed", min: 5, max: 250 },
+        views: ["iso", "front", "top", "left"],
+      },
     });
     expect(await within(sec).findByText(/저장했습니다/)).toBeTruthy();
     expect(server.paramSets.find((p) => p.id === "ps-1")!.display!.views).toEqual(["iso", "front", "top", "left"]);
@@ -301,11 +304,12 @@ describe("S10 목·도움 함수", () => {
     expect(Array.from(png.slice(16, 24))).toEqual([0, 0, 0, 3, 0, 0, 0, 2]);
     const { server } = renderApp(`${STUDY}/4`, { user: "general" });
     const m = server.handle("GET", "/jobs/j-pred/media", new URLSearchParams(), null, new Headers());
-    const body = m.body as { status: string; views: { view: string; image_url: string; video_url: string | null; video_type: string | null }[] };
+    const body = m.body as JobMedia;
     expect(body.status).toBe("OK");
-    expect(body.views.map((v) => v.view)).toEqual(["iso", "front", "top", "right"]);
-    expect(body.views[0].video_type).toBe("image/png"); // 목: 동영상 대체 정적 PNG
-    const r = server.handle("GET", body.views[0].image_url.replace("/physicsai/api", ""), new URLSearchParams(), null, new Headers());
+    expect(body.capture_enabled && body.job_id === "j-pred").toBe(true);
+    expect(body.items.map((v) => v.view)).toEqual(["iso", "front", "top", "right"]);
+    expect(body.items[0].video?.content_type).toBe("image/png"); // 목: 동영상 대체 정적 PNG
+    const r = server.handle("GET", body.items[0].image.url.replace("/physicsai/api", ""), new URLSearchParams(), null, new Headers());
     expect(r.contentType).toBe("image/png");
     expect(Array.from(r.bytes!.slice(1, 4))).toEqual([80, 78, 71]);
     // 다시 캡처: general은 403, 실행 중이 아닌 PREDICT만
@@ -314,6 +318,6 @@ describe("S10 목·도움 함수", () => {
     server.user = "power";
     expect(server.handle("POST", "/jobs/j-pred/capture", new URLSearchParams(), { views: ["sideways"] }, h).status).toBe(422);
     expect(server.handle("POST", "/jobs/j-q1/capture", new URLSearchParams(), {}, h).status).toBe(409);
-    expect(server.handle("POST", "/jobs/j-pred/capture", new URLSearchParams(), {}, h).status).toBe(202);
+    expect(server.handle("POST", "/jobs/j-pred/capture", new URLSearchParams(), {}, h).status).toBe(201); // §15.4: 201 CONTOUR_RECAPTURE
   });
 });

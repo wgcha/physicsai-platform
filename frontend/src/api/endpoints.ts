@@ -103,7 +103,7 @@ export const api = {
   predictCheck: (studyId: string, body: { param_set_id?: string | null; values: Record<string, number> }) =>
     request<PredictCheck>("POST", `/studies/${studyId}/predict/check`, { body }),
 
-  // phase3.md §14.7 S9 일괄 예측·템플릿 응답 — S9: openapi 갱신 후 gen:api로 대체(경로·본문은 계약 JSON 예시 그대로)
+  // phase3.md §14.7 S9 일괄 예측·템플릿 응답(타입은 생성 스키마 기반, api/types.ts)
   /** 조합 미리보기(동기, member 이상). 생성은 createJob("PREDICT_BATCH") */
   batchPreview: (studyId: string, body: BatchPreviewRequest) =>
     request<BatchPreview>("POST", `/studies/${studyId}/predict-batches/preview`, { body }),
@@ -131,13 +131,13 @@ export const api = {
     request<Job>("POST", `/jobs/${id}/retry`, { body: from_step ? { from_step } : {} }),
   artifacts: (jobId: string) => request<Artifact[]>("GET", `/jobs/${jobId}/artifacts`),
   artifactBlob: (id: string) => fetchBlob(`/artifacts/${id}/content`),
-  // S10 컨투어 캡처 — S10: openapi 갱신 후 gen:api로 대체(경로·본문은 메인 확정 계약)
-  /** 방향별 PNG·동영상 목록(URL = 산출물 내려받기 경로, 동영상 Range 지원) */
+  // S10 컨투어 캡처(phase3.md §15.4)
+  /** 방향별 PNG·동영상 목록(items[].image/video.url = /artifacts/{id}/media, 동영상 Range 지원) */
   jobMedia: (jobId: string) => request<JobMedia>("GET", `/jobs/${jobId}/media`),
-  /** 다시 캡처(power) → 202 작업 */
+  /** 다시 캡처(power) → 201 CONTOUR_RECAPTURE 작업 */
   captureJob: (jobId: string, body: CaptureRequest) => request<Job>("POST", `/jobs/${jobId}/capture`, { body }),
-  /** 템플릿 컨투어 표시 설정 저장(power) */
-  putParamSetDisplay: (id: string, body: ContourDisplay) => request<ParamSet>("PUT", `/param-sets/${id}/display`, { body }),
+  /** 템플릿 컨투어 표시 설정 저장(power, null = 지움) */
+  putParamSetDisplay: (id: string, display: ContourDisplay | null) => request<ParamSet>("PUT", `/param-sets/${id}/display`, { body: { display } }),
   /** 산출물 URL(서버가 준 내려받기 경로)을 fetch로 받기 — 목 서버도 같은 경로로 응답 */
   mediaBlob: (url: string) => fetchBlob(url.startsWith(API_PREFIX) ? url.slice(API_PREFIX.length) : url),
 

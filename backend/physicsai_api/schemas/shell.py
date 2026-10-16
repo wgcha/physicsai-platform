@@ -82,6 +82,7 @@ class StatusFeatures(Resp):
     predict_parametric: FeatureState | None = None
     predict_mesh_only: FeatureState | None = None  # phase3 §14.4 메시 단독 템플릿 예측
     predict_responses: FeatureState | None = None  # phase3 §14.6 예측 응답 추출
+    contour_capture: FeatureState | None = None  # phase3 §15.5 예측 컨투어 캡처
 
 
 class StatusEnvCheck(Resp):

@@ -101,3 +101,5 @@
 - 2026-10-16 · 모델 등록 시 `.pscfg`는 선택(0~1개, 2개 이상은 오류), `models.pscfg_*` NULL 허용(migration 0005), `{model_pscfg}` 템플릿 + pscfg 없는 모델은 작업 생성 409 `PSCFG_REQUIRED` — 사용자 결정 · 원본 예측·평가·최적화 명령에 pscfg 인자 없음(U7) · phase3.md D3-43
 - 2026-10-16 · 다른 PC의 입력은 서버 공유 `physicsai-inbox`(쓰기)에 복사하고 `physicsai-data`(AI 루트, 읽기 전용)로 결과를 본다, 화면은 서버 경로 "찾아보기"로 고름(업로드 없음) — 사용자 결정 · phase3.md §12, D3-46
 - 2026-10-16 · 파라미터 세트는 프로젝트 폴더 1개에서 자동 구성(tpl·CAD·조립 폴더, 등록 사본만 CAD 경로 `./<CAD>`), 세트 이름(label, migration 0006) — 사용자 요청 · phase3.md §13, D3-47
+- 2026-10-16 · ④ 입력 방식 3개(템플릿 값 입력·일괄 예측(DOE)·준비된 입력): 템플릿 종류 mesh_only|assembly, 일괄 예측 = 부모 `PREDICT_BATCH`(플랫폼 동시 실행기로 m_1~m_3) + run별 하위 `PREDICT`(prepared), 응답 추출은 원본 ⑤ m_4 TCL(실패는 경고), 배치 갱신은 종료 훅 `job_end.batch_on_job_end` 하나로(migration 0007) — 사용자 결정 · phase3.md §14, D3-49·D3-51
+- 2026-10-16 · 예측 끝에 HyperView 배치로 방향별 컨투어 PNG·동영상 저장(실패는 경고만), 재캡처는 별도 `CONTOUR_RECAPTURE`(원래 result 불변·조회 때 덮어쓰기), 파일 제공은 `/artifacts/{id}/media`(Range)(migration 0008) — 사용자 결정 · phase3.md §15, D3-52

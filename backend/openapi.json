@@ -5729,6 +5729,16 @@
       },
       "StatusFeatures": {
         "properties": {
+          "contour_capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "curation_h3d": {
             "$ref": "#/components/schemas/FeatureState"
           },

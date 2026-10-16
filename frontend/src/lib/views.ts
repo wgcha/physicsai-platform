@@ -16,10 +16,10 @@ export const viewLabel = (v: string) => VIEW_LABEL[v] ?? v;
 
 /** HyperView 평균 방식(avgmode) */
 export const AVG_MODES: { key: string; label: string }[] = [
-  { key: "none", label: "평균 없음" },
+  // phase3.md §15.3 avgmode(""|simple|maximum|minimum|difference) — 서버가 그 밖 값은 422
+  { key: "", label: "평균 없음" },
   { key: "simple", label: "단순 평균" },
-  { key: "advanced", label: "고급 평균" },
+  { key: "maximum", label: "최댓값" },
+  { key: "minimum", label: "최솟값" },
   { key: "difference", label: "차이" },
-  { key: "max", label: "최댓값" },
-  { key: "min", label: "최솟값" },
 ];
