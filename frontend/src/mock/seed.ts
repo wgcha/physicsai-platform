@@ -27,10 +27,11 @@ export const PARAMS = [
   { name: "RIB_N", nominal: 4, min: 2, max: 8, unit: "" },
 ];
 
+/** 응답 정의(S9 §14.6: spec = H3D 추출 정의. Energy는 옛 responses.json처럼 spec 없음) */
 export const RESPONSES = [
-  { name: "MaxStress", unit: "MPa" },
-  { name: "MaxDisp", unit: "mm" },
-  { name: "Energy", unit: "mJ" },
+  { name: "MaxStress", unit: "MPa", spec: { source: "H3D" as const, subcase: 1, datatype: "Stress", component: "vonMises", layer: "Max", stat: "MAX" as const } },
+  { name: "MaxDisp", unit: "mm", spec: { source: "H3D" as const, subcase: 1, datatype: "Displacement", component: "Mag", layer: "", stat: "MAX" as const } },
+  { name: "Energy", unit: "mJ", spec: null },
 ];
 
 /** 가짜 응답 함수(목 전용) */
@@ -149,7 +150,7 @@ export function seedParamSet(): ParamSet {
   return {
     id: "ps-1", study_id: "s-cushion", source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/params",
     unit_system: "mm-ton-s", parameters: PARAMS, responses: RESPONSES, sample_count: 120, sample_has_measured: true,
-    cad_file_name: "cushion_base.x_t", starter_name: "cushion_0000.rad",
+    cad_file_name: "cushion_base.x_t", starter_name: "cushion_0000.rad", input_kind: "assembly", assem_rel: "radioss_assem",
     tpl_params: [
       { var: "var_1", name: "THK_TOP", format: "%.4f" },
       { var: "var_2", name: "THK_FOAM", format: "%.4f" },
@@ -157,6 +158,15 @@ export function seedParamSet(): ParamSet {
       { var: "var_4", name: "RIB_N", format: "%3i" },
     ],
     is_current: true, origin: "FOLDER", train_doe_id: null, registered_by_name: "김연구", registered_at: iso(60 * 5),
+  };
+}
+
+/** S9: 조립 폴더 없는 템플릿(쿠션 단독 메시 — m1 EPS_mesh로 바로 예측) */
+export function seedMeshOnlyParamSet(): ParamSet {
+  return {
+    ...seedParamSet(), id: "ps-2", label: "쿠션 단독 v1", source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/cushion_only",
+    input_kind: "mesh_only", assem_rel: null, starter_name: null, sample_count: 0, sample_has_measured: false,
+    responses: RESPONSES.slice(0, 2), is_current: false, registered_at: iso(60 * 3),
   };
 }
 

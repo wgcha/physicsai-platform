@@ -8,7 +8,8 @@ type Override<T, U> = Omit<T, keyof U> & U;
 
 export type Role = "general" | "power" | "admin";
 
-export type JobType = S["JobCreate"]["job_type"];
+// S9: openapi 갱신 후 gen:api로 대체 — PREDICT_BATCH(phase3.md §14.5)
+export type JobType = S["JobCreate"]["job_type"] | "PREDICT_BATCH";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -30,7 +31,9 @@ export type NotificationEvent =
   | "HPC_COLLECTED"
   | "HPC_PARTIAL_FAILED"
   | "ENV_CHECK_DONE"
-  | "HPC_CANCEL_FAILED";
+  | "HPC_CANCEL_FAILED"
+  // S9: openapi 갱신 후 gen:api로 대체(phase3.md §14.3)
+  | "PREDICT_BATCH_DONE";
 export type ArtifactKind =
   | "PREVIEW_JSON"
   | "PREVIEW_IMAGE"
@@ -65,7 +68,8 @@ export interface UiPoll {
   poll_status_ms?: number;
 }
 /** phase2.md §12.1 `/status.features` 키 */
-export type FeatureKey = keyof S["StatusFeatures"];
+// S9: openapi 갱신 후 gen:api로 대체 — predict_mesh_only·predict_responses(phase3.md §14.4·§14.6)
+export type FeatureKey = keyof S["StatusFeatures"] | "predict_mesh_only" | "predict_responses";
 export type FeatureState = S["FeatureState"];
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
 export type EnvCheckBrief = Override<S["StatusEnvCheck"], { latest_state?: EnvCheckState | null }>;
@@ -75,14 +79,21 @@ export type StatusInfo = Override<
     ui: UiPoll & Record<string, number>;
     auth: { mode?: string; login_url?: string } & Record<string, string>;
     hpc: Override<S["StatusHpc"], { collect_mode: "in_place" | "shared_folder" | "drive" | string }>;
-    features?: Partial<S["StatusFeatures"]> | null;
+    features?: Partial<Record<FeatureKey, S["FeatureState"] | null>> | null;
     env_check?: EnvCheckBrief | null;
   }
 >;
 
 /** phase2.md §12.9 PBS run 집계(C11): queued·running·succeeded·failed는 hpc 상태별, collected는 회수 완료(succeeded와 겹침) */
 export type HpcSummary = S["HpcSummary"];
-export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: "SLOT" | "LIGHT" }>;
+/** S9: openapi 갱신 후 gen:api로 대체 — `JobSummary.batch`(phase3.md §14.5, params에서 계산) */
+export interface JobBatchRef {
+  id: string;
+  label: string;
+  /** 하위 PREDICT의 DOE 번호(부모 PREDICT_BATCH는 null) */
+  doe_no: number | null;
+}
+export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: "SLOT" | "LIGHT"; batch?: JobBatchRef | null }>;
 export type JobStep = Override<S["JobStep"], { state: StepState; kind: "LOCAL" | "INTERNAL" | "HPC_SUBMIT" | "HPC_WAIT" | "COLLECT" }>;
 export type Job = Override<
   S["Job"],
@@ -92,6 +103,7 @@ export type Job = Override<
     lane: "SLOT" | "LIGHT";
     steps: JobStep[];
     warnings: { code?: string; message?: string }[];
+    batch?: JobBatchRef | null; // S9: openapi 갱신 후 gen:api로 대체
   }
 >;
 
@@ -150,9 +162,14 @@ export type PredictParams = PredictParamsParametric | PredictParamsPrepared;
 export interface PredictJobParams {
   input_mode?: PredictInputMode;
   input_path?: string | null;
+  /** prepared 입력 종류(§11.5) */
   input_kind?: "file" | "dir";
+  /** S9: openapi 갱신 후 gen:api로 대체 — 템플릿 종류(§14.4, 서버 확정 기록. 백엔드 P0 결정: PREDICT params 키 이름 template_kind) */
+  template_kind?: InputKind | null;
   starter_name?: string | null;
   model_id?: string | null;
+  /** S9 일괄 예측 하위(워커만 기록) */
+  batch_run?: { batch_id: string; doe_no: number } | null;
   param_set_id?: string | null;
   values?: Record<string, number>;
 }
@@ -253,7 +270,17 @@ export type Dataset = Override<
 >;
 
 export type ParamDef = S["Parameter"];
-export type ParamSet = Override<S["ParamSet"], { origin: "FOLDER" | "TRAIN_DOE" }>;
+// S9: openapi 갱신 후 gen:api로 대체 — input_kind·assem_rel·starter_name null·responses[].spec(phase3.md §14.4·§14.6)
+export type ParamSet = Override<
+  S["ParamSet"],
+  {
+    origin: "FOLDER" | "TRAIN_DOE";
+    input_kind?: InputKind;
+    assem_rel?: string | null;
+    starter_name: string | null;
+    responses: TemplateResponse[];
+  }
+>;
 export type ParamSetCreate = S["ParamSetCreate"];
 export type ParamSetDiscover = S["ParamSetDiscoverResponse"];
 export type SampleRow = S["SampleRow"];
@@ -343,3 +370,126 @@ export type FsRoot = S["FsRoot"];
 export type FsRoots = S["FsRoots"];
 export type FsEntry = S["FsEntry"];
 export type FsList = S["FsList"];
+
+// ---------------------------------------------------------------------------
+// S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14)
+// S9: openapi 갱신 후 gen:api로 대체 — 아래는 계약 §14.7 JSON 예시를 그대로 옮긴 수동 타입
+// ---------------------------------------------------------------------------
+
+/** 템플릿 입력 종류: 조립 폴더 포함(assembly) / 쿠션 단독 메시(mesh_only) */
+export type InputKind = "mesh_only" | "assembly";
+/** ④ 화면 입력 방식(localStorage `physicsai.stage4.inputMode`) */
+export type InputMode = "template" | "batch" | "prepared";
+
+export type ResponseStat = "MAX" | "MIN" | "ABSMAX";
+/** 응답 정의 spec(§14.6, ⑤ OPTIMIZE.responses의 H3D 형식, goal·bound 없음) */
+export interface ResponseSpec {
+  source: "H3D";
+  subcase: number;
+  datatype: string;
+  component: string;
+  layer: string;
+  stat: ResponseStat;
+}
+export interface TemplateResponse {
+  name: string;
+  unit: string;
+  spec?: ResponseSpec | null;
+}
+/** PUT /param-sets/{id}/responses 본문. spec null = 옛 responses.json 행(이름·단위만, 추출 안 함) — 계약은 spec 필수로 적혀 있어 확인 필요 */
+export interface ParamSetResponsesPut {
+  responses: { name: string; unit: string; spec: ResponseSpec | null }[];
+}
+
+export type BatchSource =
+  | { kind: "lhs"; count: number; seed: number; ranges?: Record<string, [number, number]> }
+  | { kind: "table"; text: string }
+  | { kind: "train_doe"; doe_id: string };
+export type BatchSourceKind = BatchSource["kind"];
+
+/** POST /studies/{id}/predict-batches/preview 본문 */
+export interface BatchPreviewRequest {
+  param_set_id: string;
+  source: BatchSource;
+}
+export interface BatchPreviewRow {
+  doe_no: number;
+  run_key: string;
+  values: Record<string, number>;
+  applied_values: Record<string, number>;
+  out_of_range: string[];
+}
+export type BatchProblemCode = "TABLE_HEADER" | "TABLE_VALUE" | "TEXT_TOO_LARGE" | "TOO_MANY_ROWS" | "TOO_FEW_ROWS" | "RANGE_INVALID" | "DOE_PARAM_MISMATCH";
+export interface BatchProblem {
+  code: BatchProblemCode | string;
+  message: string;
+  row?: number | null;
+}
+export interface BatchPreview {
+  input_kind: InputKind;
+  count: number;
+  /** 최근 성공 PREDICT 5개 중앙값×N(분), 없으면 null */
+  estimate_min: number | null;
+  rows: BatchPreviewRow[];
+  problems: BatchProblem[];
+}
+/** PREDICT_BATCH 생성 params(POST /studies/{id}/jobs) */
+export interface PredictBatchParams {
+  param_set_id: string;
+  model_id: string | null;
+  multi_execution: number;
+  source: BatchSource;
+}
+
+export type BatchStatus = "GENERATING" | "PREDICTING" | "DONE" | "FAILED" | "CANCELED";
+export interface PredictBatchSummary {
+  id: string;
+  label: string;
+  status: BatchStatus;
+  run_count: number;
+  created_at: string;
+  created_by_name: string;
+}
+export type BatchRowState = "GEN_PENDING" | "GENERATING" | "GEN_FAILED" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "CANCELED";
+export interface PredictBatchRow {
+  doe_no: number;
+  run_key: string;
+  folder: string;
+  values: Record<string, number>;
+  applied_values: Record<string, number>;
+  out_of_range: string[];
+  state: BatchRowState;
+  code: string | null;
+  message: string | null;
+  job_id: string | null;
+  responses: Record<string, number | null> | null;
+}
+export interface PredictBatch {
+  id: string;
+  label: string;
+  status: BatchStatus;
+  dir: string;
+  input_kind: InputKind;
+  param_set: { id: string; label: string | null };
+  model: { id: string; name: string };
+  job_id: string;
+  multi_execution: number;
+  gen: { total: number; done: number; failed: number; running: number; waiting: number };
+  predict: { running: number; queued: number; succeeded: number; failed: number; canceled: number };
+  parameters: string[];
+  responses: { name: string; unit: string }[];
+  rows: PredictBatchRow[];
+}
+/** GET /predict-batches/{bid}/curves */
+export interface BatchCurves {
+  names: string[];
+  name: string | null;
+  truncated: boolean;
+  downsampled: boolean;
+  series: { doe_no: number; run_key: string; x: number[]; y: number[] }[];
+}
+/** POST /predict-batches/{bid}/retry-failed → 201 */
+export interface BatchRetryFailed {
+  parent_job_id: string | null;
+  retried_job_ids: string[];
+}

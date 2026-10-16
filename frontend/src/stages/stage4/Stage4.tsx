@@ -1,92 +1,96 @@
-import { useState } from "react";
-import type { PredictInputMode } from "../../api";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
+import { api, type InputMode, type Job, type PredictJobParams } from "../../api";
 import { useStudy } from "../../app/StudyContext";
+import { useCanExecute } from "../../hooks/useJobRunner";
 import { useFeature } from "../../components/FeatureGate";
 import { Card } from "../../components/ui";
+import { InputModeTabs, readInputMode, writeInputMode } from "./InputModeTabs";
 import { ParamSetCard } from "./ParamSetCard";
 import { PredictWorkspace } from "./PredictWorkspace";
 import { PreparedPredictCard } from "./PreparedPredictCard";
+import { PredictResultCard } from "./PredictResult";
+import { TemplatePicker, useTemplateChoice } from "./TemplatePicker";
+import { usePredictVerify } from "./predictRun";
+import { BatchSetup } from "./batch/BatchSetup";
 
-/** 입력 방식 기억(브라우저별 편의). 접근 실패해도 기본값으로 정상 렌더 */
-export const INPUT_MODE_KEY = "physicsai.stage4.inputMode";
-export const PARAMETRIC_OFF_TEXT = "형상 갱신 설정 필요(관리자)";
+export { INPUT_MODE_KEY, TEMPLATE_OFF_TEXT } from "./InputModeTabs";
 
-function readMode(): PredictInputMode {
-  try {
-    return globalThis.localStorage?.getItem(INPUT_MODE_KEY) === "prepared" ? "prepared" : "parametric";
-  } catch {
-    return "parametric";
-  }
-}
-
-function writeMode(m: PredictInputMode) {
-  try {
-    globalThis.localStorage?.setItem(INPUT_MODE_KEY, m);
-  } catch {
-    /* 저장 실패는 무시(이번 화면에서만 유지) */
-  }
-}
-
-const MODES: { key: PredictInputMode; label: string; note: string }[] = [
-  { key: "parametric", label: "파라미터로 형상 생성", note: "파라미터 세트로 형상·메시·입력파일을 만든 뒤 예측합니다." },
-  { key: "prepared", label: "준비된 입력 파일", note: "준비된 Radioss starter(.rad) 또는 .hm으로 바로 예측합니다." },
-];
-
-function InputModeCard({ mode, parametricEnabled, onChange }: { mode: PredictInputMode; parametricEnabled: boolean; onChange: (m: PredictInputMode) => void }) {
+/** A 템플릿 값 입력: 템플릿 칸(형상 템플릿 드롭다운 포함) + 진행 + 결과, "템플릿 관리"는 펼칠 때만(템플릿이 없으면 항상) */
+function TemplateMode() {
+  const canExec = useCanExecute();
+  const { list, ps, setPicked } = useTemplateChoice();
+  const [manage, setManage] = useState(false);
+  const aside = (
+    <span className="run-action-row">
+      <span className="muted small">관리자가 등록 · 사용자는 고르기만</span>
+      {canExec && (
+        <button type="button" className="btn small ghost" aria-expanded={manage} onClick={() => setManage((v) => !v)}>
+          템플릿 관리
+        </button>
+      )}
+    </span>
+  );
+  const picker = <TemplatePicker list={list} value={ps?.id ?? ""} onChange={setPicked} />;
   return (
-    <Card span={9} title="입력 방식" className="input-mode">
-      <div className="input-mode-row">
-        <div className="seg" role="radiogroup" aria-label="입력 방식">
-          {MODES.map((m) => {
-            const off = m.key === "parametric" && !parametricEnabled;
-            return (
-              <button
-                key={m.key}
-                type="button"
-                role="radio"
-                aria-checked={mode === m.key}
-                className={mode === m.key ? "on" : ""}
-                disabled={off}
-                title={off ? PARAMETRIC_OFF_TEXT : undefined}
-                onClick={() => onChange(m.key)}
-              >
-                {m.label}
-              </button>
-            );
-          })}
-        </div>
-        {!parametricEnabled && (
-          <span className="muted small" data-testid="parametric-off">
-            {PARAMETRIC_OFF_TEXT}
-          </span>
-        )}
-      </div>
-      <p className="muted small">{MODES.find((m) => m.key === mode)!.note}</p>
-    </Card>
+    <>
+      {ps ? (
+        <PredictWorkspace key={ps.id} ps={ps} picker={picker} aside={aside} />
+      ) : (
+        <Card span={9} title="템플릿" aside={aside}>
+          {picker}
+          <p className="muted">등록된 템플릿이 없습니다{canExec ? " — 아래 템플릿 관리에서 등록하세요" : " — 관리자에게 등록을 요청하세요"}.</p>
+        </Card>
+      )}
+      {(manage || (!ps && canExec)) && <ParamSetCard ps={ps} />}
+    </>
   );
 }
 
-/** ④ 단일 예측(§16.5) — 입력 방식: 파라미터로 형상 생성(기본) / 준비된 입력 파일(phase3.md §11.5) */
+/** "단일 예측으로 열기"(일괄 예측 결과 → ?job=<하위 PREDICT id>): 그 작업의 결과 칸(컨투어 결과 목록·커브·응답·입력파일) */
+function OpenedJob({ id }: { id: string }) {
+  const { study } = useStudy();
+  const [job, setJob] = useState<Job | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    api.job(id).then(setJob).catch((e) => setError(String(e?.message ?? e)));
+  }, [id]);
+  const pbs = usePredictVerify(job, job?.state === "SUCCEEDED");
+  const br = job?.batch ?? null;
+  const p = job?.params as PredictJobParams | undefined;
+  const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
+  return (
+    <>
+      <Card span={9} title={br ? `일괄 예측 ${br.label} · DOE #${br.doe_no ?? "?"}` : "예측 작업"} aside={br ? <Link to={`${base}/batch/${br.id}`}>← 일괄 예측 결과</Link> : <Link to={base}>닫기</Link>}>
+        {error ? <p className="error-text small">{error}</p> : <p className="muted small mono ellipsis">{p?.input_path ?? id}</p>}
+        <div className="run-action-row">
+          {pbs.button}
+          {pbs.notes}
+        </div>
+      </Card>
+      <PredictResultCard job={job} verifyValues={pbs.verifyValues} />
+    </>
+  );
+}
+
+/** ④ 예측(§16.5, phase3.md §14.8) — 입력 방식: 템플릿 값 입력(기본) / 일괄 예측(DOE) / 준비된 입력 파일 */
 export function Stage4() {
-  const { currentParamSet } = useStudy();
   const parametric = useFeature("predict_parametric");
-  const [stored, setStored] = useState<PredictInputMode>(readMode);
-  const mode: PredictInputMode = parametric.enabled ? stored : "prepared";
-  const choose = (m: PredictInputMode) => {
+  const meshOnly = useFeature("predict_mesh_only");
+  const templateEnabled = parametric.enabled || meshOnly.enabled;
+  const [stored, setStored] = useState<InputMode>(readInputMode);
+  const [search, setSearch] = useSearchParams();
+  const openJob = search.get("job");
+  const mode: InputMode = templateEnabled ? stored : "prepared";
+  const choose = (m: InputMode) => {
     setStored(m);
-    writeMode(m);
+    writeInputMode(m);
+    if (openJob) setSearch({}, { replace: true });
   };
   return (
     <>
-      <InputModeCard mode={mode} parametricEnabled={parametric.enabled} onChange={choose} />
-      {mode === "parametric" ? (
-        <>
-          <ParamSetCard />
-          {currentParamSet && <PredictWorkspace key={currentParamSet.id} ps={currentParamSet} />}
-        </>
-      ) : (
-        <PreparedPredictCard />
-      )}
+      <InputModeTabs mode={mode} templateEnabled={templateEnabled} onChange={choose} />
+      {openJob ? <OpenedJob key={openJob} id={openJob} /> : mode === "template" ? <TemplateMode /> : mode === "batch" ? <BatchSetup /> : <PreparedPredictCard />}
     </>
   );
 }

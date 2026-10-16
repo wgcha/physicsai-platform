@@ -11,19 +11,20 @@ import { Stage2 } from "../stages/stage2/Stage2";
 import { Stage3 } from "../stages/stage3/Stage3";
 import { Stage4 } from "../stages/stage4/Stage4";
 import { Stage5 } from "../stages/stage5/Stage5";
+import { BatchResult } from "../stages/stage4/batch/BatchResult";
 
 export function StudyPage() {
-  const { projectId = "", studyId = "", n } = useParams();
+  const { projectId = "", studyId = "", n, batchId } = useParams();
   const stage = Number(n ?? 3);
-  if (!Number.isInteger(stage) || stage < 1 || stage > 5) return <Navigate to={`/p/${projectId}/s/${studyId}/stage/3`} replace />;
+  if (!Number.isInteger(stage) || stage < 1 || stage > 5 || (batchId && stage !== 4)) return <Navigate to={`/p/${projectId}/s/${studyId}/stage/3`} replace />;
   return (
     <StudyProvider studyId={studyId}>
-      <StudyShell projectId={projectId} stage={stage} />
+      <StudyShell projectId={projectId} stage={stage} batchId={batchId ?? null} />
     </StudyProvider>
   );
 }
 
-function StudyShell({ projectId, stage }: { projectId: string; stage: number }) {
+function StudyShell({ projectId, stage, batchId }: { projectId: string; stage: number; batchId: string | null }) {
   const { projects } = useApp();
   const { study } = useStudy();
   const project = projects.find((p) => p.id === projectId);
@@ -39,7 +40,8 @@ function StudyShell({ projectId, stage }: { projectId: string; stage: number }) 
         crumbs={[
           { label: project?.name ?? projectId, to: `/p/${projectId}` },
           { label: study.title, to: `${base}/stage/3` },
-          { label: `${STAGE_MARK[stage]} ${st.name}` },
+          batchId ? { label: `${STAGE_MARK[stage]} ${st.name}`, to: `${base}/stage/4` } : { label: `${STAGE_MARK[stage]} ${st.name}` },
+          ...(batchId ? [{ label: "일괄 예측" }] : []),
         ]}
       />
       <div className="stepper-row">
@@ -67,6 +69,8 @@ function StudyShell({ projectId, stage }: { projectId: string; stage: number }) 
             <Stage2 key={study.id} />
           ) : stage === 3 ? (
             <Stage3 key={study.id} />
+          ) : stage === 4 && batchId ? (
+            <BatchResult key={batchId} batchId={batchId} />
           ) : stage === 4 ? (
             <Stage4 key={study.id} />
           ) : (

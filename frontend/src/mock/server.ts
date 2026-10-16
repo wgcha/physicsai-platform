@@ -11,6 +11,7 @@ import {
   seedDatasets,
   seedModels,
   seedNotifications,
+  seedMeshOnlyParamSet,
   seedParamSet,
   seedStudies,
   STEP_LABEL,
@@ -30,6 +31,7 @@ import { datasetModelRoutes } from "./stage3";
 import { paramSetRoutes, predictResult } from "./stage4";
 import { preparedRoutes } from "./stage4Prepared";
 import { optimizeRoutes } from "./stage5";
+import { isBatchChild, predictBatchRoutes, seedBatches, type BatchRec } from "./predictBatch";
 import { studyRoutes } from "./studies";
 
 export type { MockResp } from "./route";
@@ -56,6 +58,8 @@ export interface MockOptions {
   configWarnings?: string[];
   /** /status.auth.login_url(auth.dashboard_public_login_url, 운영 대시보드 기본 "/home/" — phase3 D3-38) */
   loginUrl?: string;
+  /** S9: "running"이면 진행 중 일괄 예측 B-003 시드(하위 PREDICT 12개가 대기열에 들어간다) */
+  batchDemo?: "running";
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -82,6 +86,7 @@ const ROUTES: Route[] = [
   curationRoutes, // ②
   optimizeRoutes, // ⑤
   preparedRoutes, // S6 ④ 준비된 입력 inspect(PREDICT_INPUT)
+  predictBatchRoutes, // S9 ④ 일괄 예측·템플릿 응답(phase3.md §14.7)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④
@@ -102,7 +107,8 @@ export class MockServer {
   studies: Study[] = seedStudies();
   datasets: Dataset[] = seedDatasets();
   models: Model[] = seedModels();
-  paramSets: ParamSet[] = [seedParamSet()];
+  paramSets: ParamSet[] = [seedParamSet(), seedMeshOnlyParamSet()];
+  batches: BatchRec[] = [];
   samples: Record<string, SampleRow[]> = { "ps-1": makeSamples(120) };
   jobs: Job[] = [];
   artifacts: ArtifactRec[] = [];
@@ -127,6 +133,7 @@ export class MockServer {
     this.seedJobs();
     this.p2 = new Phase2Mock(this, opts.disabledFeatures);
     this.manage = new ManageMock(this);
+    seedBatches(this, opts.batchDemo);
   }
 
   get me(): Me | null {
@@ -177,6 +184,9 @@ export class MockServer {
   }
 
   notifyJob(job: Job, event: NotificationItem["event"]) {
+    // S9 §14.5: 일괄 예측 하위 PREDICT는 시작·완료·실패·차례 알림 억제, 부모는 성공 알림 없음(완료 알림은 배치 1건)
+    if (isBatchChild(job) && ["JOB_STARTED", "JOB_SUCCEEDED", "JOB_FAILED", "MY_TURN_NEXT"].includes(event)) return;
+    if (job.job_type === "PREDICT_BATCH" && event === "JOB_SUCCEEDED") return;
     const t = `${JOB_LABEL[job.job_type]} (${job.study_title})`;
     const title =
       event === "JOB_STARTED" ? `실행 시작: ${t}` :

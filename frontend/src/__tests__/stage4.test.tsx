@@ -46,14 +46,14 @@ describe("④ 화면 (V-FE-6)", () => {
     await waitFor(() => expect(pbs.disabled).toBe(false));
   });
 
-  it("결과: 컨투어·커브·응답값 표, 실행 4단계", async () => {
+  it("결과: 컨투어·커브·응답값 표, 진행 5단(조립 포함 템플릿)", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
     const resp = await screen.findByRole("table", { name: "응답값" });
     expect(within(resp).getByText("MaxStress")).toBeTruthy();
     expect(within(resp).getByText("MPa")).toBeTruthy();
     const chain = screen.getByRole("list", { name: "예측 실행 단계" });
-    expect(within(chain).getAllByRole("listitem").map((li) => li.querySelector(".chain-label")!.textContent)).toEqual(["형상", "메싱", "입력파일", "예측"]);
-    expect(within(chain).getByText("생략")).toBeTruthy();
+    expect(within(chain).getAllByRole("listitem").map((li) => li.querySelector(".pstep-label")!.textContent)).toEqual(["1 형상 생성(SimLab)", "2 메시 연결(HyperMesh)", "3 조립(Radioss 입력)", "4 예측(PhysicsAI)", "5 결과"]);
+    expect(within(chain).getByText("건너뜀")).toBeTruthy(); // 목 기본: MESH 템플릿 미구성 → SKIPPED
     expect(await screen.findByAltText("예측 컨투어")).toBeTruthy();
   });
 

@@ -41,9 +41,11 @@ export function useLatestJob(studyId: string, jobType: JobType, onFinish?: (job:
     let alive = true;
     setLoaded(false);
     api
-      .jobs({ study_id: studyId, job_type: jobType, limit: 1 })
-      .then(async (list) => {
+      // S9 §14.5: 일괄 예측 하위 PREDICT(batch 있음)는 단일 예측 화면의 "최신 작업"이 아니다
+      .jobs({ study_id: studyId, job_type: jobType, limit: jobType === "PREDICT" ? 20 : 1 })
+      .then(async (all) => {
         if (!alive) return;
+        const list = all.filter((s) => !s.batch);
         if (list.length) {
           const j = await api.job(list[0].id);
           if (alive) accept(j);

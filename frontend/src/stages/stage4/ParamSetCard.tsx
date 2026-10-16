@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
-import { api, errorMessage, type TrainDoe } from "../../api";
+import { api, errorMessage, type ParamSet, type TrainDoe } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { Card } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
 import { fmtTime } from "../../lib/format";
 import { ParamSetDiscoverForm } from "./ParamSetDiscoverForm";
+import { ResponseDefs } from "./ResponseDefs";
+import { INPUT_KIND_LABEL, inputKindOf } from "./TemplatePicker";
 
 type RegMode = "discover" | "folder" | "train";
 const MODES: [RegMode, string][] = [
@@ -14,10 +16,11 @@ const MODES: [RegMode, string][] = [
   ["train", "① 결과로 만들기"],
 ];
 
-export function ParamSetCard() {
-  const { study, currentParamSet: ps, reloadParamSets } = useStudy();
+/** 템플릿 관리(phase3.md §13·§14.4·§14.6): 고른 템플릿 요약·이름·입력 종류·응답 정의 + 새 템플릿 등록(관리자가 등록 · 사용자는 고르기만) */
+export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
+  const { study, reloadParamSets } = useStudy();
   const canExec = useCanExecute();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(!ps);
   const [mode, setMode] = useState<RegMode>("discover");
   const [label, setLabel] = useState("");
   const [path, setPath] = useState("");
@@ -47,7 +50,7 @@ export function ParamSetCard() {
 
   return (
     <Card
-      title="파라미터 세트"
+      title="템플릿 관리"
       span={9}
       className="paramset"
       aside={
@@ -70,6 +73,9 @@ export function ParamSetCard() {
             학습 샘플 <b>{ps.sample_count}</b>
             {ps.sample_has_measured ? " (실측 포함)" : ""}
           </span>
+          <span data-testid="ps-input-kind">
+            입력 종류 <b>{INPUT_KIND_LABEL[inputKindOf(ps)]}</b>
+          </span>
           <span>
             응답 <b>{ps.responses.length}</b>
           </span>
@@ -82,8 +88,9 @@ export function ParamSetCard() {
           </span>
         </div>
       ) : (
-        <p className="muted">등록된 파라미터 세트가 없습니다. 프로젝트 폴더를 지정하면 tpl·CAD·조립 폴더를 찾아 등록합니다.</p>
+        <p className="muted">등록된 템플릿이 없습니다. 프로젝트 폴더를 지정하면 tpl·CAD·조립 폴더를 찾아 등록합니다.</p>
       )}
+      {ps && !open && <ResponseDefs key={ps.id} ps={ps} canEdit={canExec} />}
       {open && canExec && (
         <>
           <div className="seg ps-mode" role="group" aria-label="등록 방식">
@@ -94,8 +101,8 @@ export function ParamSetCard() {
             ))}
           </div>
           <label className="field">
-            <span className="field-label">이름(선택)</span>
-            <input type="text" value={label} maxLength={120} placeholder="예: 쿠션 v1" aria-label="파라미터 세트 이름" onChange={(e) => setLabel(e.target.value)} />
+            <span className="field-label">템플릿 이름(선택)</span>
+            <input type="text" value={label} maxLength={120} placeholder="예: 쿠션 v1" aria-label="템플릿 이름" onChange={(e) => setLabel(e.target.value)} />
           </label>
         </>
       )}
@@ -108,7 +115,7 @@ export function ParamSetCard() {
           <PathInput
             studyId={study.id}
             purpose="PARAM_SET"
-            label="파라미터 세트 폴더 경로"
+            label="템플릿 폴더 경로"
             placeholder="E:/shared/AI_WORK/cushion/00_inbox/params"
             value={path}
             onChange={setPath}

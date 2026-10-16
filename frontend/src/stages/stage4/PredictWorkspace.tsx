@@ -1,22 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, type ParamSet, type PredictCheck, type PredictParamsParametric, type PredictResult as PR } from "../../api";
+// ④ A "템플릿 값 입력"(phase3.md §14.8, 시안 01): 템플릿 칸(형상 템플릿·값 표·참고 문구·공칭·학습 run·모델·예측 실행) + 진행 칸 + 결과 칸.
+// 요청 body는 S6 parametric 그대로(param_set_id = 고른 템플릿).
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { api, type ParamSet, type PredictCheck, type PredictJobParams, type PredictParamsParametric, type PredictResult as PR } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { Card, RunAction } from "../../components/ui";
-import { FeatureGate } from "../../components/FeatureGate";
+import { Advanced, Card, RunAction } from "../../components/ui";
+import { FeatureGate, FeatureOffNote, useFeature } from "../../components/FeatureGate";
 import { POLL } from "../../lib/poll";
 import { isIntegerFormat } from "../../lib/format";
 import { ParamInputTable, ParamScatter, RangeNote, RoundingNote } from "./ParamInputs";
-import { PredictChain, PredictResultCard } from "./PredictResult";
+import { PredictChain, PredictResultCard, jobInputMode } from "./PredictResult";
+import { PredictSteps } from "./PredictSteps";
+import { inputKindOf } from "./TemplatePicker";
 import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
 import { useSamples } from "./useSamples";
 
 export { PBS_DISABLED_TEXT } from "./predictRun";
 
-export function PredictWorkspace({ ps }: { ps: ParamSet }) {
+export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: ReactNode; aside?: ReactNode }) {
   const { study } = useStudy();
   const canExec = useCanExecute();
   const samples = useSamples(ps);
+  const kind = inputKindOf(ps);
+  const tplFeature = kind === "mesh_only" ? "predict_mesh_only" : "predict_parametric";
+  const tplF = useFeature(tplFeature);
   const nominal = useMemo(() => Object.fromEntries(ps.parameters.map((p) => [p.name, p.nominal])), [ps]);
   const [values, setValues] = useState<Record<string, number>>(nominal);
   const [source, setSource] = useState<{ kind: "nominal" | "run" | "manual"; run?: string }>({ kind: "nominal" });
@@ -76,12 +83,18 @@ export function PredictWorkspace({ ps }: { ps: ParamSet }) {
   const pjob = predict.job;
   const result = pjob?.state === "SUCCEEDED" ? (pjob.result as unknown as PR | null) : null;
   const pbs = usePredictVerify(pjob, !!result);
+  // 진행 표시: 작업이 기록한 template_kind(서버 확정) → 없으면 지금 템플릿
+  const stepKind = (pjob?.params as PredictJobParams | undefined)?.template_kind ?? kind;
 
   return (
     <>
-      <Card span={9} title="입력 · 실행" className="inputs">
-        <div className="input-split">
-          <div className="input-left">
+      <Card span={6} title="템플릿" className="inputs template-card" aside={aside}>
+        {picker}
+        <div className="input-table">
+          <ParamInputTable params={ps.parameters} values={values} samples={samples} integerNames={integerNames} onChange={setOne} readOnly={false} />
+          <RangeNote check={check} />
+          <RoundingNote check={check} />
+        </div>
         <div className="fill-row">
           <span className="field-label">값 채우기</span>
           <div className="seg" role="group" aria-label="값 채우기">
@@ -109,47 +122,43 @@ export function PredictWorkspace({ ps }: { ps: ParamSet }) {
             </select>
           </label>
         </div>
-          <div className="input-table">
-            <ParamInputTable params={ps.parameters} values={values} samples={samples} integerNames={integerNames} onChange={setOne} readOnly={false} />
-            <RangeNote check={check} />
-            <RoundingNote check={check} />
-          </div>
-            <div className="run-block">
-              <ModelLine choice={choice} />
-              <FeatureGate feature="predict">
-                {(enabled) => (
-                  <RunAction
-                    canExecute={canExec}
-                    label="예측 실행"
-                    onRun={runPredict}
-                    job={pjob}
-                    disabled={!enabled || !chosenModel || !allFinite}
-                    disabledReason={!enabled ? undefined : !chosenModel ? "Final 모델이 필요합니다" : "모든 파라미터 값을 입력하세요"}
-                    error={predict.error}
-                    extra={pbs.button}
-                  />
-                )}
-              </FeatureGate>
-              {pbs.notes}
-              <PredictChain job={pjob} mode="parametric" />
-            </div>
-          </div>
-          <div className="input-scatter">
-            {ps.parameters.length >= 2 ? (
-              <ParamScatter
-                params={ps.parameters}
-                samples={samples}
-                values={values}
-                nearestRun={check?.nearest?.run_key ?? null}
-                xName={axes[0]}
-                yName={axes[1]}
-                onAxes={(x, y) => setAxes([x, y])}
+        <div className="run-block">
+          <ModelLine choice={choice} />
+          <FeatureGate feature="predict">
+            {(enabled) => (
+              <RunAction
+                canExecute={canExec}
+                label="예측 실행"
+                onRun={runPredict}
+                job={pjob}
+                disabled={!enabled || !tplF.enabled || !chosenModel || !allFinite}
+                disabledReason={!enabled || !tplF.enabled ? undefined : !chosenModel ? "Final 모델이 필요합니다" : "모든 파라미터 값을 입력하세요"}
+                error={predict.error}
+                extra={pbs.button}
               />
-            ) : (
-              <p className="muted small">파라미터가 2개 이상일 때 산점도를 표시합니다.</p>
             )}
-          </div>
+          </FeatureGate>
+          {!tplF.enabled && <FeatureOffNote feature={tplFeature} f={tplF} />}
+          {pbs.notes}
         </div>
+        {ps.parameters.length >= 2 && samples.length > 0 && (
+          <Advanced label="학습 샘플 산점도">
+            <ParamScatter
+              params={ps.parameters}
+              samples={samples}
+              values={values}
+              nearestRun={check?.nearest?.run_key ?? null}
+              xName={axes[0]}
+              yName={axes[1]}
+              onAxes={(x, y) => setAxes([x, y])}
+            />
+          </Advanced>
+        )}
+      </Card>
+
+      <Card span={3} title="진행" className="progress-card">
+        {jobInputMode(pjob) === "prepared" ? <PredictChain job={pjob} mode="prepared" /> : <PredictSteps job={pjob} kind={stepKind} />}
+        <p className="muted small">끝나면 아래에 컨투어·커브·응답 표가 나옵니다. 알림으로도 알려 줍니다.</p>
       </Card>
 
       <PredictResultCard job={pjob} verifyValues={pbs.verifyValues} />

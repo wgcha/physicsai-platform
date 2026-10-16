@@ -78,7 +78,8 @@ describe("V2-FE-6 오류 묶음·딥링크·③④ 연결·대기열", () => {
 
   it("④ '① 결과로 만들기' → 파라미터 세트(origin TRAIN_DOE)", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power" });
-    const card = await screen.findByRole("region", { name: "파라미터 세트" });
+    fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
+    const card = await screen.findByRole("region", { name: "템플릿 관리" });
     fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
     fireEvent.click(within(card).getByRole("button", { name: "① 결과로 만들기" }));
     const form = await within(card).findByTestId("from-train");

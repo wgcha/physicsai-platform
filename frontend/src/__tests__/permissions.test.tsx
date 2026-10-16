@@ -15,7 +15,7 @@ describe("권한별 버튼 (V-FE-2)", () => {
 
   it("general: ④도 예측 실행·PBS 버튼 없음", async () => {
     renderApp(`${STUDY}/4`, { user: "general" });
-    await screen.findByRole("region", { name: "입력 · 실행" });
+    await screen.findByRole("region", { name: "템플릿" });
     expect(screen.queryByRole("button", { name: "예측 실행" })).toBeNull();
     expect(screen.queryByRole("button", { name: "PBS 검증 해석" })).toBeNull();
   });

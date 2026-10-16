@@ -113,6 +113,12 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
     { key: "SC_MOVE", kind: "INTERNAL" },
     { key: "SC_RECORD", kind: "INTERNAL" },
   ],
+  // phase3.md §14.5 S9
+  PREDICT_BATCH: [
+    { key: "BP_PREP", kind: "INTERNAL" },
+    { key: "BP_GEN", kind: "LOCAL" },
+    { key: "BP_ENQUEUE", kind: "INTERNAL" },
+  ],
 };
 
 /** step_key → 한국어 표시(백엔드 current_step_label 흉내) */
@@ -134,6 +140,7 @@ export const STEP_LABEL: Record<string, string> = {
   SI_SCAN: "SPDM 확인", SI_COPY: "복사", SI_REGISTER: "등록",
   OP_PREP: "준비", HST_OPTIMIZE: "HyperStudy 최적화", OP_SUMMARY: "결과 정리",
   SS_WALK: "파일 확인", SS_CLASSIFY: "정리 후보 분류", SC_VALIDATE: "정리 대상 확인", SC_MOVE: "백업 폴더로 이동", SC_RECORD: "정리 기록",
+  BP_PREP: "입력 준비", BP_GEN: "입력 생성", BP_ENQUEUE: "예측 등록",
 };
 
 /** 1차 기본 설정에서 SKIPPED가 되는 step(템플릿 null) */

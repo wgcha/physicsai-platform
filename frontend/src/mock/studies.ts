@@ -106,6 +106,9 @@ export const studyRoutes: Route = (srv, { method, path, seg, query, body, me }) 
       srv.paramSets.unshift(ps);
       return { status: 201, body: ps };
     }
+    // S9 §14.5: batch_run은 워커만 쓴다(API 생성 요청에 있으면 422)
+    if (method === "POST" && sub === "jobs" && (body?.params as Record<string, unknown> | undefined)?.batch_run !== undefined)
+      return err(422, "INVALID_PARAMS", "batch_run은 지정할 수 없습니다.");
     if (method === "POST" && sub === "jobs") return srv.createJob(s, String(body?.job_type) as JobType, (body?.params ?? {}) as Record<string, unknown>);
   }
   return null;

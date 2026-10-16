@@ -9,6 +9,7 @@ export const POLL = {
   notifications: 10000,
   status: 30000,
   checkDebounce: 300,
+  batch: 5000, // ④ 일괄 예측 결과(진행 중 5초, phase3.md §14.8)
 };
 
 /** B1: /status.ui 값(ms)을 반영 */

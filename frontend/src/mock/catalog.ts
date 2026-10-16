@@ -21,6 +21,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   OPTIMIZE: "⑤",
   STUDY_STORAGE_SCAN: "관리",
   STUDY_CLEANUP: "관리",
+  PREDICT_BATCH: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -40,6 +41,9 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   predict: ["altair.edspy_path"],
   // S6(phase3.md §11.4): parametric 체인 조건. predict는 prepared 조건(edspy_predict·contour_preview)
   predict_parametric: ["commands.geom_update", "resources.hypermesh_include_tcl"],
+  // S9(phase3.md §14.4·§14.6): mesh_only 체인(include TCL 불필요)·응답 추출(새 방식)
+  predict_mesh_only: ["commands.geom_update"],
+  predict_responses: ["commands.response_extract", "resources.extract_minmax_tcl"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 
