@@ -650,6 +650,191 @@ commands:
 - 등록: 고른 후보를 §15.4 구조(tpl·`cad/`·parameters·`radioss_assem/`(eps_mesh 제외 `.rad`·`.inc`·RENUM csv))로 모아 기존 `validate_folder`·`write_normalized`로 `04_params/<id>`에 등록. 원본 위치는 읽기만. **등록 사본만** tpl의 CAD 경로를 `dir_file_prt = r"./<CAD 파일명>"`으로 다시 쓴다(원본 `1_create_tpl_file.py:135-139`와 같은 방식, 안내 `TPL_CAD_PATH_REWRITE`). 복사 총량 > `param_set.max_total_bytes`면 `PARAM_SET_TOO_LARGE`.
 - 세트 이름: `param_sets.label`(≤120자, migration `0006_param_set_label`), 모든 등록 방식에서 지정, `PATCH /param-sets/{id} {label}`(감사 `PARAM_SET_UPDATE`). 화면 `ParamSetCard` "프로젝트 폴더에서 찾기"(기본)·이름 입력·이름 변경, `ParamSetDiscoverForm`(후보 여러 개면 드롭다운, 자동 선택 없음).
 
+## 14. S9 템플릿 예측·DOE 일괄 예측 (Plan, 2026-10-16, D3-49)
+
+목표: ④ 맨 위 "입력 방식" 3가지 — **템플릿 값 입력(A)** / **일괄 예측(DOE)(B)** / **준비된 입력 파일**(§11.5 그대로). 템플릿 = 이름 붙은 파라미터 세트(§13 `label`). 조립 폴더는 템플릿의 **선택 항목**이고, 없으면 m1 메시(`EPS_mesh_0000.rad`)를 그대로 예측 입력으로 쓴다(`input_kind: "mesh_only"`). B는 조합 N개를 만들어 run 폴더마다 입력을 동시 생성하고 하위 예측을 대기열 1슬롯으로 순서대로 돌려 비교 표·응답 그래프·커브 겹쳐보기를 만든다. 응답(Max stress 등) 추출을 원본 ⑤ m_4 방식으로 **기본 활성화**한다(§14.6, U8 해소). 시안: `docs/design/predict-ui/01_Main.png`~`04_BatchResult.png`. 1·2·3차 원칙(단일 슬롯 FIFO, 제한기, `shell=False`, 설정만, 원본·SPDM 읽기만, AI 루트만, `_backup`, 한국어, 필수 UI) 유지.
+
+### 14.1 용어 대응표(원본 확인)
+
+| 사용자 용어 | 원본 ① `hst_gen_radioss_core`(학습데이터) | 원본 ⑤ `hst_physicsai_optimization_core` | 플랫폼 A(PREDICT step) | 플랫폼 B(run 폴더) |
+|---|---|---|---|---|
+| m1 형상·메시 | `m_1` SimLab `-auto <렌더 .py> -nographics` → `EPS_mesh_0000.rad`(tpl:110 `dir_file_export`) | `m_1` 같음 | TPL_RENDER + GEOM_UPDATE(`P/geom`) | `run__N/m_1/` |
+| m2 include 변환 | `m_2` HyperMesh `BATCHRUN_create_include_node_elem.tcl` → `104_replace_node_elem.inc`(+`log_batch.txt`) | `m_2` 같음 | MESH | `run__N/m_2/` |
+| m3 조립 rad | `m_3` 조립 폴더 rad·inc + 새 include → starter `*_0000.rad`(진행 표식 `Finished run (k), model (m_3)` FUNC:59-61, fake_hstbatch `m_3/<starter>`) | **`m_3` = HST 내장 PhysicsAI 예측**, `m_4` = HyperView 응답 | RAD_ASSEMBLE(`P/INPUT`) | `run__N/m_3/` |
+| 예측 | — | `m_3` | EDSPY_PREDICT 이후 | 하위 `PREDICT` 작업 |
+
+사용자 m1~m3 = 원본 ① 정의와 같다. ⑤의 `m_3`(예측)와 이름이 겹치므로 화면·문서에서 "m3"는 항상 ① 의미(조립 rad)로 쓴다.
+
+### 14.2 결정 요약
+
+| # | 결정 | 근거 |
+|---|---|---|
+| K1 | 템플릿 = `param_sets` 행(새 엔터티 없음). `input_kind` 열 추가, `assem_rel`·`starter_name` NULL 허용 | §13 label·discover 재사용 |
+| K2 | mesh_only 체인: MESH **SKIPPED**, RAD_ASSEMBLE은 **복사만**(SKIPPED 아님) — `P/INPUT` 불변식(PREDICT_VERIFY·input.zip·재시도·정리) 유지 | §11.4·D3-36 |
+| K3 | B 조합은 **플랫폼이 미리 계산**(LHS·표·① DOE) → 미리보기·DOE 번호 고정. 입력 생성은 **hstbatch 대신 플랫폼 동시 실행기**로 ①과 같은 m_1→m_2→m_3를 run 폴더마다 실행 | 원본 DOE 유형은 FullFact·FracFact·LHS·Sobol 4개(`DATA_doe_design_type.json`)뿐, pyd에 지정 행렬 입력 경로 없음 → CSV·① 재사용·미리보기 불가. 재사용: run 폴더 이름·`m_N` 배치, `train_data.max_multi_execution`, `hst_run_label` 진행 문구, §11.4 명령 템플릿·판정, `samples.csv` 형식 |
+| K4 | B 작업 구성 = **부모 `PREDICT_BATCH`(입력 생성) + run별 하위 `PREDICT`(`input_mode:"prepared"`)** | 아래 비교 |
+| K5 | 응답 정의 = 템플릿(`param_sets.responses[].spec`)에 ⑤ `OPTIMIZE.responses` 형식(H3D만) 재사용, 추출 = 원본 `H3D_StaticMinMax_to_CSV_FAST.tcl` 그대로 | 원본 ⑤ GUI:13-14 "RESPONSES → H3D_REQUESTS.txt → m_4에서 TCL이 값 추출" |
+| K6 | B 오른쪽 칸 = 컨투어 대신 **응답 그래프**(변수 1개 → 2D 점+선, 2개 → 3D) + **커브 겹쳐보기** | 사용자 결정 2026-10-16(컨투어 이미지 없음, U4) |
+
+| 관점 | 부모 + 하위 PREDICT(선택) | 단일 작업 내 반복 |
+|---|---|---|
+| 대기열 | 생성만 슬롯 점유, 하위는 연속 `queue_seq`로 FIFO 합류 — 대기열 화면에 "대기 12" 그대로 보임 | 35분+ 슬롯 독점, 내부 진행만 보임 |
+| 취소 | 배치 취소 = 부모 + 비종료 하위 일괄(API 1개), 행 1개만 취소도 기존 API | 전체 아니면 불가 |
+| 재시도 | 기존 `/jobs/{id}/retry`가 run 단위로 동작(RAD_ASSEMBLE부터), "실패만 다시" = 반복 호출 | 실패 run 선별 재실행 로직 새로 필요 |
+| 알림 | 하위 알림 억제 + 배치 완료 1건(새 이벤트) | 1건(자연) |
+| 재사용 | 결과 화면·컨투어·커브·PBS 검증(`predict_job_id`)·input.zip·오류 묶음·정리 범주 무수정 | 전부 run 차원으로 재작성 |
+
+### 14.3 데이터 모델 — migration `0007_predict_batch`(head 0006 → 0007, `MIGRATION_HEAD` 갱신)
+
+- `param_sets`: `input_kind VARCHAR(16) NOT NULL DEFAULT 'assembly'` CHECK `('mesh_only','assembly')`(기존 행 = assembly), `assem_rel`·`starter_name` NULL 허용(CHECK: assembly ⇒ 둘 다 NOT NULL).
+- `predict_batches`: `id PK, study_id FK, batch_no INT`(Study별 1부터, UNIQUE(study_id,batch_no), 표시 `B-003`), `job_id FK jobs`(최신 부모), `param_set_id FK, model_id FK, input_kind, source_kind`(`LHS`|`TABLE`|`TRAIN_DOE`), `source_meta JSONB`(LHS `{count,seed,ranges}`·TABLE `{row_count}`·TRAIN_DOE `{doe_id}` — 표 본문 저장 안 함), `multi_execution INT, run_count INT, dir_rel`(`04_batch/B-003`), `status`(`GENERATING`|`PREDICTING`|`DONE`|`FAILED`|`CANCELED`), `created_by, created_by_name, created_at, finished_at`.
+- `predict_batch_runs`: PK(`batch_id, doe_no`), `run_key`(UNIQUE per batch), `values JSONB`(입력), `applied_values JSONB`(정수 반영), `out_of_range JSONB`(이름 목록), `gen_state`(`PENDING`|`RUNNING`|`DONE`|`FAILED`), `gen_code, gen_message`, `input_rel`(assembly `run__N/m_3`, mesh_only `run__N/m_1/<simlab_mesh_name>`), `predict_job_id FK jobs NULL`(재시도 시 새 작업으로 갱신), `responses JSONB NULL`(`{name: 예측값}` — 하위 종료 시 복사, 수치만).
+- `notifications.ck_notifications_event`에 `'PREDICT_BATCH_DONE'` 추가.
+
+폴더 `B = <study>/04_batch/B-003/`: `batch.json`(템플릿·모델·출처·행), `samples.csv`(`doe_no,run_key,<파라미터…>` 반영값 — 파일 이름이 모두 같으므로 **폴더 ↔ 번호 ↔ 값**을 디스크에도 남김), `run__00001/{m_1,m_2,m_3}/`. run_key = `run__{doe_no:05d}`, 단 TRAIN_DOE는 doe_no = ① run 번호(`run__00014` → 14, 폴더도 같은 이름).
+
+### 14.4 A — 템플릿 등록·값 입력
+
+- 등록(§13 확장): `choice.radioss_assem`을 **명시적 `null`** → mesh_only. 키 생략 시 후보 1개 → assembly, 0개 → mesh_only(+`notes` `MESH_ONLY` "조립 폴더 없음 — m1 메시로 바로 예측합니다"), 2개 이상 → 기존 422. 폴더 등록(`{path}`)도 `radioss_assem/` 없으면 mesh_only. from-train은 항상 assembly. tpl `dir_file_export` 값 ≠ `predict.simlab_mesh_name`이면 경고 `SIMLAB_EXPORT_NAME`(등록은 성공). 권한은 기존(power), 화면 문구만 "관리자가 등록".
+- `ParamSet` 응답에 `input_kind`, `assem_rel|null`, `starter_name|null`. `/status` `features.predict_mesh_only` = `geom_update` 구성(include TCL 불필요). mesh_only 세트로 parametric 생성 시 이 값이 false면 409 `TEMPLATE_NOT_CONFIGURED`, assembly는 기존 `predict_parametric`.
+- PREDICT params 불변(`param_set_id` = 고른 템플릿, 생략 시 현재 세트). 서버가 `input_kind`를 params에 확정 기록(B8). mesh_only step:
+
+| step | mesh_only |
+|---|---|
+| PR_PREP·TPL_RENDER | 그대로(CAD → `P/geom`, 렌더 → `P/geom/simlab_parametered_mesh.py`) |
+| GEOM_UPDATE | 그대로. 성공 = `P/geom/EPS_mesh_0000.rad` 존재·크기>0 |
+| MESH | **SKIPPED** "쿠션 단독 템플릿 — 메시 연결 불필요"(`commands.mesh` 설정과 무관) |
+| RAD_ASSEMBLE | `P/INPUT` 비우기(_backup, D3-36) → `P/geom` 직계 `*.rad`·`*.inc` → `P/INPUT`. starter = `{simlab_mesh_name}`(없으면 `OUTPUT_MISSING`). `rad_assemble` 미실행, csv 무관 |
+| EDSPY_PREDICT | `[…, --predict-write, P/RESULT/EPS_mesh_0000_pred.h3d, --model, <psmdl>, --input-file, P/INPUT/EPS_mesh_0000.rad]`, cwd `P/INPUT`, env 그대로 |
+| 이후 | 그대로 |
+
+### 14.5 B — 일괄 예측
+
+조합 계산(공용 `physicsai_core/stage4_predict/batch_matrix.py`, 미리보기·작업 생성·워커가 같은 결과):
+
+| source.kind | 입력 | 규칙 |
+|---|---|---|
+| `lhs` | `count`(2~`predict_batch.max_runs`), `seed`(정수, 기본 1), `ranges{name:[lo,hi]}`(생략 = 세트 min·max) | `random.Random(seed)`: 파라미터마다 층 순열 `perm`, 값 = `lo + (perm[i] + u)/n·(hi−lo)`(u는 같은 RNG, 파라미터 순서 = 세트 순서). 정수 형식은 `predict.integer_rounding` → `applied_values`. `lo<hi` 유한, 학습 범위 밖 허용(`out_of_range`) |
+| `table` | `text`(붙여넣기·CSV 내용, ≤ `predict_batch.table_max_bytes`) | 구분자 탭/쉼표 자동, BOM 허용, 첫 줄 헤더 = 파라미터 이름 전부(순서 무관, 선택 열 `doe`는 무시), 행 1~max_runs, doe_no = 행 순서 1.. |
+| `train_doe` | `doe_id`(같은 Study, READY, `sample_status` PARSED/PARTIAL) | `samples.csv` 행 전부, 파라미터 이름 집합 = 템플릿 이름 집합(아니면 `DOE_PARAM_MISMATCH`), doe_no = run 번호 |
+
+job_type `PREDICT_BATCH`(stage 4, SLOT, 표시 "일괄 예측 입력 생성", `notify_success=False`):
+
+| step | kind | 처리 |
+|---|---|---|
+| BP_PREP | INTERNAL 3 | 모델·세트 sha256, `B` 생성, run마다 `m_1/`에 CAD 사본 + 렌더 스크립트(`tpl_render`, 반영값), `batch.json`·`samples.csv`. 재실행이면 `gen_state≠DONE` run 폴더만 `_backup` 후 다시 |
+| BP_GEN | LOCAL 90 | 새 `run_parallel`: `gen_state≠DONE` run을 doe_no 순으로 최대 `multi_execution`개 동시. run마다 순차 m_1 GEOM_UPDATE(cwd `m_1`) → assembly면 m_2 MESH(`{simlab_mesh}`=`m_1/EPS_mesh_0000.rad`, `{mesh_inc}`=`m_2/<mesh_include_name>`, `{renum_csv}`=`S/radioss_assem/…`, cwd `m_2`) → m_3 조립(RAD_ASSEMBLE ①~④ 규칙, 대상 `m_3`). 판정·경고는 §11.4와 같음. 마지막에 `prepared_input.plan_copy(input_rel)`로 하위 입력 검사. run 실패 → `gen_state=FAILED`(code·message)·계속. 성공 0 → 첫 실패 코드로 FAILED, 일부 실패 → `PARTIAL_OUTPUT`. 진행 = 완료 수/N, 라벨 `hst_run_label` + " · 실패 F" |
+| BP_ENQUEUE | INTERNAL 2 | `gen_state=DONE`이고 `predict_job_id` 없는 run마다 하위 `PREDICT`를 **한 트랜잭션에서 doe_no 순으로** 생성(QUEUED, 연속 queue_seq, created_by = 부모 등록자). params `{"input_mode":"prepared","input_path":"<B/run__N/m_3 또는 m_1/EPS_mesh_0000.rad 절대경로>","model_id","param_set_id","batch_run":{"batch_id","doe_no"}}`. 배치 `PREDICTING` |
+
+- 동시 실행·제한기: `run_parallel`의 프로세스는 **같은 제한 그룹**(Windows Job Object 1개 — hstbatch `-multiexec`가 자식들을 한 Job에 담는 것과 같음)에 들어가 작업 1개 한도(CPU·메모리)를 나눠 쓴다. 취소·lease 상실 시 그룹 전체 종료. POSIX·null 제한기는 프로세스별 한도(메모리 = 한도/M).
+- 하위 PREDICT: §11.5 prepared 그대로 + `batch_run`(API 생성 요청에 넣으면 422 `INVALID_PARAMS` — 워커만). PR_PREP이 `values`·`applied_values`·`out_of_range`를 run 행에서 채워 result에 기록(nearest null). 알림 `JOB_STARTED`·`JOB_SUCCEEDED`·`JOB_FAILED`·`MY_TURN_NEXT` 억제.
+- 종료 훅(`job_end._side_effects_on_end`): 하위 종료 시 `responses` 복사, 배치의 모든 run이 종료(생성 실패 포함)면 `DONE` + `PREDICT_BATCH_DONE` 1건 "일괄 예측 B-003 완료 — 완료 18 · 실패 2". 하위 재시도(`on_retry`)는 `predict_job_id`를 새 작업으로 바꾸고 배치를 `PREDICTING`으로 되돌림. 부모 실패 → `FAILED`(기존 `JOB_FAILED` 알림), 부모 재시도 → `GENERATING`.
+- 작업 목록: `JobSummary.batch: {id, label:"B-003", doe_no}|null`(params에서 계산).
+
+### 14.6 응답 추출 활성화(원본 ⑤ m_4 방식, U8·U35 해소)
+
+원본 TCL(tbcload, 리터럴 해독 결과): 스크립트 **자기 폴더**에서 `H3D_REQUESTS.txt`(UTF-8, `#` 줄 무시, 필드 `|` 구분)를 읽고, 같은 폴더의 `*_pred.h3d`(없으면 `*.h3d`) 전부를 HyperView로 열어 요청마다 subcase·datatype·component·layer 컨투어를 걸고 "Static MinMax Result" 측정으로 전 프레임 최소·최대를 읽어 `RESPONSES.txt`(머리 `# RESPONSES.txt generated …`, 값 줄 `RESP:<key>=%20.10e`, key = `<NAME>_MIN`·`<NAME>_MAX`, 실패 줄 `RESP:<NAME>=NO_VALUE|OPEN_ERROR|DATATYPE_ERR|HANDLE_ERR`)와 `RESPONSES.log`를 쓴다. 요청 줄 필드 순서는 로그 문구(`Request '<NAME>' : subcase= type= comp= layer=`)로 보아 `NAME|SUBCASE|DATATYPE|COMPONENT|LAYER`(E4-9-5 확인).
+
+- 응답 정의(템플릿): `param_sets.responses = [{"name":"MaxStress","unit":"MPa","spec":{"source":"H3D","subcase":1,"datatype":"Stress","component":"vonMises","layer":"","stat":"MAX"}}]`. 검증 = phase2 §6.12 RESPONSES 규칙의 H3D 부분(name 정규식·대소문자 무시 중복 금지·`|` 금지·stat `MAX|MIN|ABSMAX`, subcase ≥1), goal·bound 없음. XYDATA는 후속. 정규화본 `04_params/<id>/responses.json`도 같은 내용으로 다시 쓴다(원자적, `original/` 불변). 기존 `resp:` 실측 열 이름은 지울 수 없음(422 `RESPONSE_IN_USE`).
+- `commands.response_extract` **기본값** `["{hw}","-clientconfig","hwpost.dat","-b","-tcl","{extract_tcl}"]`(새 placeholder `{extract_tcl}`, 기존 placeholder 유지). 템플릿에 `{extract_tcl}`이 있으면 새 방식, 없으면 기존 방식(`{out_csv}` 직접 작성) 그대로. `features.predict_responses` = 템플릿 구성 + `resources.extract_minmax_tcl` 존재.
+- RESPONSE_EXTRACT(새 방식): 응답 정의 없으면 SKIPPED. `P/RESULT/`에 TCL 사본(원본 ⑤처럼 작업 폴더로 복사, FUNC:360-366)·`H3D_REQUESTS.txt` 작성(이전 `RESPONSES.*`는 `_backup`), cwd `P/RESULT`(h3d는 `<stem>_pred.h3d` 1개). 성공 = `RESPONSES.txt` 존재. stat 적용: MAX = `_MAX`, MIN = `_MIN`, ABSMAX = max(|min|,|max|), 실패 줄·없음 = null + 경고 `RESPONSE_NO_VALUE`(이름·사유). 결과를 `P/responses_pred.csv`(`name,value`)로 써서 RESPONSE_TABLE은 무수정. `RESPONSES.log`는 step 로그에 덧붙임.
+- PV_EXTRACT·①-6 `RESPONSE_EXTRACT_RUNS`도 같은 방식, 대상 폴더에 `*.h3d`가 정확히 1개일 때만(아니면 그 대상 SKIPPED + 경고 `RESP_H3D_AMBIGUOUS`).
+- 화면(템플릿 관리, `ParamSetCard` 안 "응답" 절): 표(이름·subcase·datatype·component·layer·stat·단위) + "응답 추가"(콤보는 기존 `GET /studies/{id}/optimize/response-candidates` — 최근 성공 PREDICT의 `H3D_PREVIEW.json`; 없으면 회색 "예측을 한 번 실행하면 목록이 채워집니다" + 직접 입력) + 행 삭제 + "저장". 등록 직후에는 비어 있어도 된다(첫 예측 뒤 설정).
+
+### 14.7 API(`backend/openapi.json` 갱신)
+
+```jsonc
+// 미리보기(동기, 워커 없음, member 이상) POST /studies/{id}/predict-batches/preview
+{"param_set_id":"ps-1","source":{"kind":"lhs","count":20,"seed":1,"ranges":{"THK_1":[2.0,5.0]}}}
+// → 200
+{"input_kind":"assembly","count":20,"estimate_min":35,   // 최근 성공 PREDICT 5개 중앙값×N, 없으면 null
+ "rows":[{"doe_no":1,"run_key":"run__00001","values":{"THK_1":2.31,"RIB_N":5.6},"applied_values":{"THK_1":2.31,"RIB_N":6},"out_of_range":[]}],
+ "problems":[]}                                           // {code,message,row?}
+// 생성: 기존 POST /studies/{id}/jobs (power)
+{"job_type":"PREDICT_BATCH","params":{"param_set_id":"ps-1","model_id":null,"multi_execution":4,
+ "source":{"kind":"table","text":"THK_1\tTHK_2\tRIB_H\tRIB_N\n3.0\t2.5\t1.2\t5\n"}}}
+// → 201 Job, params에 batch_id·batch_no 확정 기록
+// 조회 GET /studies/{id}/predict-batches → [{id,label,status,run_count,created_at,created_by_name}]
+// GET /predict-batches/{bid}
+{"id":"…","label":"B-003","status":"PREDICTING","dir":"E:\\…\\04_batch\\B-003","input_kind":"assembly",
+ "param_set":{"id":"ps-1","label":"쿠션 v1"},"model":{"id":"m-2","name":"cushion_TNS v1"},"job_id":"…","multi_execution":4,
+ "gen":{"total":20,"done":20,"failed":0,"running":0,"waiting":0},
+ "predict":{"running":1,"queued":12,"succeeded":7,"failed":0,"canceled":0},
+ "parameters":["THK_1","THK_2","RIB_H","RIB_N"],"responses":[{"name":"MaxStress","unit":"MPa"}],
+ "rows":[{"doe_no":7,"run_key":"run__00007","folder":"E:\\…\\B-003\\run__00007","values":{…},"applied_values":{…},
+          "out_of_range":[],"state":"SUCCEEDED","code":null,"message":null,"job_id":"…","responses":{"MaxStress":152.3}}]}
+// state ∈ GEN_PENDING|GENERATING|GEN_FAILED|QUEUED|RUNNING|SUCCEEDED|FAILED|CANCELED (화면: 생성 대기·생성 중·생성 실패·예측 대기·실행 중·완료·실패·취소)
+// GET /predict-batches/{bid}/table.csv → UTF-8 BOM, 헤더 doe_no,run_key,folder,<파라미터>,<응답>,state
+// POST /predict-batches/{bid}/cancel (power, 등록자 또는 관리자) → 202 배치. 부모·비종료 하위 전부 취소, 멱등
+// POST /predict-batches/{bid}/retry-failed (power) → 201 {"parent_job_id":…|null,"retried_job_ids":[…]}
+//   생성 실패 run이 있으면 부모 PREDICT_BATCH 새 작업({"batch_id"}만), 실패·취소·중단 하위는 기존 retry
+// GET /predict-batches/{bid}/curves?name=&max_points=500 → 완료 run의 curve.json에서 같은 이름 계열 1개씩
+{"names":["Node 100 / X"],"name":"Node 100 / X","truncated":false,"downsampled":true,
+ "series":[{"doe_no":7,"run_key":"run__00007","x":[…],"y":[…]}]}   // name 생략 = 첫 run의 첫 계열
+// PUT /param-sets/{id}/responses (power, 감사 PARAM_SET_UPDATE) {"responses":[{name,unit,spec}]} → 200 ParamSet
+```
+커브 상한: run ≤ `predict_batch.curve_max_runs`(200, 넘으면 doe_no 앞쪽만 + `truncated`), 계열당 점 ≤ `max_points`(≤2000) — 구간별 최소·최대 보존 다운샘플.
+
+오류: 422 `INVALID_PARAMS`(모양) · 422 `BATCH_SOURCE_INVALID` + `problems[{code,row?,message}]`(code ∈ `TABLE_HEADER`·`TABLE_VALUE`·`TEXT_TOO_LARGE`·`TOO_MANY_ROWS`·`TOO_FEW_ROWS`·`RANGE_INVALID`·`DOE_PARAM_MISMATCH`) · 409 `DOE_NOT_READY`·`SAMPLES_MISSING`(기존) · 409 `TEMPLATE_NOT_CONFIGURED` · 409 `FINAL_MODEL_REQUIRED` · 409 `PREREQUISITE_MISSING`(PARAM_SET) · 409 `BATCH_ACTIVE`(retry-failed 때 부모 진행 중) · 404 `BATCH_NOT_FOUND` · 422 `RESPONSE_INVALID` + problems · 422 `RESPONSE_IN_USE`. 워커 run 코드: `OUTPUT_MISSING`·`EXIT_NONZERO`·`RESOURCE_LIMIT`·`STARTER_COUNT`·`RESOURCE_MISSING`.
+
+설정(`config/platform.example.yaml` 새 절): `predict_batch: {max_runs: 200, table_max_bytes: 1048576, dir_name: "04_batch", curve_max_runs: 200}`. 동시 수 상한은 `train_data.max_multi_execution` 재사용. `commands.response_extract` 기본값 변경은 `deploy/setup_config.py`가 사용자가 바꾸지 않은 이전 기본(null)일 때만 갱신(D3-33 방식).
+
+### 14.8 화면 계약(시안 기준, 필수 UI만)
+
+- **입력 방식**(01·03): 세그먼트 3개 `템플릿 값 입력`(기본)·`일괄 예측(DOE)`·`준비된 입력 파일` + 오른쪽 회색 한 줄 설명. localStorage `physicsai.stage4.inputMode` = `template|batch|prepared`(옛 값 `parametric` → `template`, try/catch). `predict_parametric`·`predict_mesh_only`가 모두 false면 앞 두 개 비활성 + 툴팁 "형상 갱신 설정 필요(관리자)".
+- **A**(01): "형상 템플릿" 드롭다운 `<label> — <설명> N개 파라미터`, 옆 회색 `tpl · CAD · 조립 폴더 포함 · MM-DD 등록` 또는 `조립 폴더 없음(메시 단독)`. 표·참고 문구·공칭값·학습 run 불러오기·모델·"예측 실행"은 기존(§8.8). 오른쪽 **진행 4단**: 1 형상 생성(SimLab)=PR_PREP~GEOM_UPDATE · 2 메시 연결(HyperMesh)=MESH·RAD_ASSEMBLE(mesh_only면 "건너뜀") · 3 예측(PhysicsAI)=EDSPY_PREDICT · 4 결과 정리=나머지. 상태 문구 완료(소요)·실행 중·대기·실패.
+- **템플릿 등록**(02): §13 `ParamSetDiscoverForm`의 조립 폴더 드롭다운 끝에 `(없음 — 쿠션 단독 메시로 예측)`. 후보 0개면 회색 "조립 폴더 없음 — 메시 단독 템플릿으로 등록됩니다".
+- **B 설정**(03): ① 템플릿 + 조합 만들기 라디오 3개(범위·개수 LHS: 파라미터 최소·최대 표, 조합 수·시드, "조합 만들기" / 표 붙여넣기·CSV: 텍스트 영역 / ① 학습 DOE: READY DOE 드롭다운) → `preview`. ② 조합 미리보기 표(DOE #·입력 폴더·파라미터, 처음 20행 + "… N개 더", 범위 밖 값 옆 작은 회색 점, problems는 회색 줄). ③ 실행 방식 3칸 안내(고정 문구) + 동시 실행 수(1~`max_multi_execution`, 기본 `min(4, 상한)`) + 모델·예상 소요 + "입력 생성 + 일괄 예측 실행" 1개.
+- **B 결과**(04, 라우트 `/studies/:id/stage4/batch/:batchId`): 위 3칸 — 입력 생성 `done / total`(동시 M · 소요 · 실패 F), 예측 `실행 중 · 대기 · 완료` + 막대(대기열 1슬롯), 파일 위치(`dir` + 고정 안내 "파일 이름은 모두 같고 폴더 번호로 구분합니다"). 결과 표: DOE # · 폴더 · 파라미터 · 응답 · 상태, 정렬 드롭다운(응답별 낮은/높은 순, DOE #), "CSV 받기", 진행 중 5초 폴링. 실패 행은 회색 사유 + `다시 실행`(기존 retry). 표 위 `실패만 다시 실행`(실패가 있을 때)·`일괄 취소`(진행 중일 때). 응답 정의 없음·`predict_responses=false`면 응답 열 대신 회색 "응답 추출 미구성".
+- **B 오른쪽 칸**(04의 컨투어 자리 대체): ① **응답 그래프** — 결과 표 머리의 파라미터 열·응답 열 이름을 눌러 선택 표시(토글). 변수 1 + 응답 1 → 2D 점+선(x = 반영값, 점 = DOE run, x 정렬 선, 선택 run 강조, 점 클릭 = 행 선택, 자체 SVG). 변수 2 + 응답 1 → 3D(x·y = 변수, z = 응답 산점, 체크 "보간면"(기본 끔) = Delaunay 삼각면). 그 밖 조합 → 회색 "변수 1~2개와 응답 1개를 고르세요". WebGL이 없으면 "3D 그래프를 표시할 수 없습니다(WebGL 없음)". ② **커브 겹쳐보기** — `curves` API, 모든 run 선을 흐리게(불투명 0.25), 표·그래프에서 고른 run만 진하게, 계열 이름 드롭다운(여러 개일 때만). ③ 선택 run 머리 `DOE #N · run_key` + 버튼 `경로 복사`·`단일 예측으로 열기`(컨투어 결과 목록은 여기서)·`PBS 검증 해석`.
+- 3D 라이브러리: **`plotly.js-gl3d-dist-min@2.35.2`**(npm 의존성, 정확 고정, 동적 import로 별도 청크 → `frontend-dist` 포함, CDN 없음). 비교: three.js는 축·눈금·라벨을 직접 구현해야 하고, echarts+echarts-gl은 두 패키지·용량이 더 크며 Delaunay 면이 없다 — plotly는 `scatter3d`+`mesh3d`(`delaunayaxis:"z"`)로 요구를 그대로 충족.
+
+### 14.9 시험·Verifier(V3-S9-*)
+
+| ID | 기준 |
+|---|---|
+| V3-S9-1 | 0007 up: 기존 세트 `assembly`, CHECK(assembly ⇒ assem·starter), 새 테이블·알림 이벤트, `MIGRATION_HEAD` |
+| V3-S9-2 | 등록: 조립 0개 → mesh_only+`MESH_ONLY`, 명시 null, 후보 1개 생략 = assembly, 폴더 등록 무조립, from-train assembly, `SIMLAB_EXPORT_NAME` 경고 |
+| V3-S9-3 | mesh_only 골든: GEOM_UPDATE argv·cwd, MESH SKIPPED(`commands.mesh` 있어도), INPUT = `{EPS_mesh_0000.rad}`, edspy `--input-file P/INPUT/EPS_mesh_0000.rad`·`--predict-write P/RESULT/EPS_mesh_0000_pred.h3d`·cwd `P/INPUT`, 재시도·input.zip·PREDICT_VERIFY 동작 |
+| V3-S9-4 | assembly 회귀: V3-S6-1~14 무수정 통과, `features.predict_mesh_only` 조건 |
+| V3-S9-5 | `batch_matrix` 골든: LHS(seed 1, n=4) 값 고정·층마다 1개·정수 반영·`out_of_range`, 표(탭·쉼표·BOM·열 순서·`doe` 열·행 번호 오류), train_doe(doe_no = run 번호, PARTIAL) |
+| V3-S9-6 | 미리보기 행 = 작업 생성 후 `predict_batch_runs`(결정적), batch_no 연번·`B-003` 폴더 |
+| V3-S9-7 | BP_GEN(가짜 도구): 관측 동시 수 ≤ M 이고 M≥2에서 2 이상, `run__N/m_1·m_2·m_3`·`samples.csv`·`batch.json`, mesh_only는 m_1만, 일부 실패 `PARTIAL_OUTPUT`·전부 실패 FAILED, 재실행은 실패 run만 |
+| V3-S9-8 | 취소: BP_GEN 중 그룹 프로세스 전부 종료(잔존 없음)·`CANCELED`, 예측 중 대기 하위 `CANCELED`·실행 중 취소 요청, 멱등 |
+| V3-S9-9 | BP_ENQUEUE: 하위가 doe_no 순 연속 queue_seq, params(`prepared`·`batch_run`·`input_path` ⊂ `B`), API의 `batch_run` 422 |
+| V3-S9-10 | 알림: 하위 0건, 완료 1건(문구·수), 부모 실패 `JOB_FAILED` |
+| V3-S9-11 | 종료 훅·재시도: `responses` 복사, 하위 retry → `predict_job_id` 갱신·`PREDICTING`, `retry-failed`(부모·하위·`BATCH_ACTIVE`) |
+| V3-S9-12 | API: 행 짝(doe_no·run_key·folder·values·responses·state) 일치, CSV BOM·헤더, 권한(조회 member, 생성·취소 power), 404, openapi·타입 재생성 |
+| V3-S9-13 | 제한기 그룹: Windows(가짜 kernel32) Job 1개에 N프로세스·한도 1배, POSIX 메모리 한도/M |
+| V3-S9-14 | 화면: 입력 방식 3개·옛 값 이전, 템플릿 드롭다운·mesh_only 표시, 진행 4단(건너뜀), B 3방식 미리보기·실행 body, 결과 표 정렬·CSV·행 선택·버튼, 목 |
+| V3-S9-15 | e2e(가짜 도구): mesh_only·assembly 각 3 run 배치 → 생성 → 하위 예측 3개 → DONE·표 |
+| V3-S9-16 | 응답 추출: `H3D_REQUESTS.txt` 골든(필드 순서·`#` 머리), TCL 사본·cwd `P/RESULT`·argv, `RESPONSES.txt` 파싱(MAX·MIN·ABSMAX·NO_VALUE → null+경고), `responses_pred.csv`, 옛 `{out_csv}` 템플릿 호환, PV_EXTRACT h3d 2개 → SKIPPED. 가짜 hw 모드 `minmax`(요청 읽고 결정적 RESP 줄 작성) |
+| V3-S9-17 | `PUT /param-sets/{id}/responses` 검증·`responses.json` 재작성·`RESPONSE_IN_USE`, 화면 응답 추가(후보 있음·없음) |
+| V3-S9-18 | `curves` API: 계열 선택·run 상한·점 다운샘플(최소·최대 보존)·미완료 run 제외. 화면: 변수/응답 선택 조합별 2D·3D·경고, 선택 run 강조(표↔그래프↔커브), plotly 청크 분리·`frontend-dist` 포함 |
+
+### 14.10 구현 분해(파일 소유 비중첩, 병렬 순서)
+
+- **P0 Impl-Backend(선행 1커밋)**: `migrations/0007_predict_batch.py`, `db/tables/{model_data.py, predict_batch.py(신규), execution.py, __init__.py}`, `job_types.py`(`PREDICT_BATCH`), `stage4_predict/batch_matrix.py`(신규), `config/{schema_stages.py, schema_hpc.py, validate.py}`·`commands.py`(`{extract_tcl}`·기본값)·`config/platform.example.yaml`·`deploy/setup_config.py`, `db/repositories/predict_batches.py`(신규: 생성·행 갱신·하위 일괄 생성·완료 판정). 시험 V3-S9-1·5.
+- **P1(P0 뒤 병렬)**
+  - Impl-Backend(API): `services/job_params/stage4_predict.py`, `services/predict_batches.py`(신규), `routers/predict_batches.py`(신규), `schemas/stage4_predict.py`, `services/stage4_predict.py`·`stage4_predict/{param_discover.py, param_sets.py, param_set_files.py}`(mesh_only), `stage4_predict/responses.py`(신규: 응답 정의 검증·요청 줄 작성·`RESPONSES.txt` 파싱 — API·워커 공용), `routers/param_sets.py`(PUT responses), `features.py`, `db/repositories/{job_end.py, notifications.py, jobs.py}`(훅·억제·`JobSummary.batch`), `backend/openapi.json`, 시험 V3-S9-2·6·9(API 부분)·10·11·12·17·18(API).
+  - Impl-Worker: `steps/stage4_predict/{batch.py(신규), predict_inputs.py, predict.py}`, `steps/__init__.py`(HANDLERS), `steps/common.py`(`hst_run_label` 이동, `doe_gen.py`는 재노출), `step_process.py`(`run_parallel`), `limiter/{base,windows_job,posix,null}.py`(그룹), `executor.py`(여러 프로세스 취소), `steps/stage4_predict/verify.py`·`steps/stage1_train_data/resp_extract.py`(새 응답 방식), `backend/tests/fake_tools/{fake_simlab,fake_hw}`(동시 실행 기록 `FAKE_TOOL_TRACE`, hw `minmax` 모드), 시험 V3-S9-3·7·8·9(워커)·13·15·16.
+  - Impl-Frontend(목 먼저): `stages/stage4/{Stage4.tsx, InputModeTabs.tsx, TemplatePicker.tsx, PredictSteps.tsx}`(신규 3), `stages/stage4/batch/{BatchSetup.tsx, BatchPreview.tsx, BatchResult.tsx, batchTable.ts, ResponsePlot2D.tsx, ResponsePlot3D.tsx(plotly 동적 import), CurveOverlay.tsx}`(신규), `stages/stage4/ResponseDefs.tsx`(신규, 템플릿 응답 절), `components/ParamSetDiscoverForm.tsx`, 라우트, `package.json`(plotly 고정), `mock/predictBatch.ts`(신규)·`mock/jobs.ts`, 시험 V3-S9-14·17·18(화면), `frontend-dist`.
+- **P2**: 프런트 타입 재생성(openapi 후) → e2e(V3-S9-15) → Verifier.
+
+### 14.11 리스크·서버 1회 확인(E4-9)
+
+| # | 내용 | 확인·대응 |
+|---|---|---|
+| E4-9-1 | **edspy가 SimLab 메시 `EPS_mesh_0000.rad`(제어 카드 없는 메시 단독)를 `--input-file`로 받는지** | 쿠션 단독 모델로 원본 ③ 단독 예측(`5_predict.py`)에 그 파일 지정 1회 → h3d 생성 확인. 실패면 mesh_only 보류(템플릿 등록은 유지, 409 안내) |
+| E4-9-2 | SimLab·HyperMesh 배치 동시 M개(라이선스·같은 CAD 이름 다른 cwd) | M=2·4로 ① DOE(`-multiexec`)와 같은 조건 확인(E2-1-4·U21). 상한은 설정 |
+| E4-9-3 | Job Object 하나에 SimLab.bat(cmd) 자식 포함 여부(BREAKAWAY) | 작업 관리자에서 그룹 CPU 한도 확인 |
+| E4-9-4 | (선택) `hst_gen_radioss_core`가 지정 행렬 DOE를 받는지 | 받으면 생성기를 hstbatch로 바꾸는 후속 검토(계약 변경 필요) |
+| E4-9-5 | 응답 TCL 실행 방식(`hw -clientconfig hwpost.dat -b -tcl`로 되는지)·`H3D_REQUESTS.txt` 필드 순서 | 원본 ⑤ DOE 1회 실행 후 run의 `m_4` 폴더에서 `H3D_REQUESTS.txt`·`RESPONSES.txt` 확인, 같은 파일로 플랫폼 명령 1회. 다르면 `commands.response_extract` 설정과 `responses.py` 필드 순서 상수 1곳(변경 메모) |
+| R-1 | 응답은 템플릿에 정의해야 채워짐(첫 예측 뒤 설정) | 없으면 "응답 추출 미구성", 커브는 표시 |
+| R-4 | 3D(WebGL) 미지원 PC·plotly 청크 용량(~1 MB gz 수준) | 동적 import(3D 고를 때만), 실패 문구 |
+| R-2 | `04_batch/**`는 S3 정리 범주 밖(크기만 표시) | 4차 후보(§2.2와 같은 취급) |
+| R-3 | N개 하위가 대기열을 길게 점유 | FIFO 원칙 유지, 관리자 대기열 이동(기존)으로 조정. `max_runs` 200 |
+
 ## 변경 메모(D3-n) — 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
 
 - **D3-1 (S1, §3.4 재시도 시작 지점 표시명)**: `JobStep`에는 표시명(label)이 없다(API 모양 불변 유지). 시작 지점 문구는 `{step_no}. {표시명}`에서 표시명을 해당 step이 `Job.current_step_key`와 같으면 `current_step_label`(실패 작업은 실패한 step이 current), 아니면 `step_key`로 쓴다. 첫 재개 step이 1이면 "처음(1단계)". 구현 `frontend/src/components/JobRetryButton.tsx` `retryStartText`. (Plan 승인)
@@ -702,3 +887,4 @@ commands:
 - **D3-46 (사용자 결정 2026-10-16, 서버 경로 탐색·받은 파일 폴더)**: 다른 PC의 파일은 서버 공유 `physicsai-inbox`(쓰기)에 복사한 뒤 화면 "찾아보기"로 고른다(업로드 없음) — §12. `GET /fs/roots`·`/fs/list`, 권한 = 어느 프로젝트든 power 이상 또는 전역 관리자, `storage.inbox_dir`·`inbox_share_hint`, 배포가 inbox 생성·SMB 공유 조회로 힌트 채움(공유 생성은 관리자 1회, admin.md).
 - **D3-47 (사용자 요청 2026-10-16, 파라미터 세트 자동 구성·이름)**: §13. 프로젝트 폴더 1개에서 tpl·CAD·조립 폴더·파라미터를 찾아 구성(`param_discover.py`), 등록 사본만 CAD 경로 `./<CAD>`로 재작성, `param_sets.label` + `PATCH /param-sets/{id}`. migration head `0006_param_set_label`.
 - **D3-48 (사용자 보고 2026-10-16, DOE 동시 실행 표시)**: ①-3 DoeGenCard의 동시 실행 수를 고급 밖 기본 표시(1~`/status` `limits.configured.max_multi_execution` = `train_data.max_multi_execution`). 워커 `hst_gen_radioss`의 `HstRunTracker`가 완료 = `Finished run` 로그 집합(순서 무관), 시작 = run 폴더 수(2초 간격)로 집계해 진행 라벨 "실행 중 R · 대기 W · 완료 K/N (동시 M)", 진행률은 완료 수 기준(원본 FUNC:93-98). 병렬 실행 경로·Job Object 제한기는 변경 없음.
+- **D3-49 (사용자 결정 2026-10-16, S9 템플릿 예측·DOE 일괄 예측·응답 추출)**: §14. 입력 방식 3개(템플릿 값 입력·일괄 예측(DOE)·준비된 입력), 템플릿 = `param_sets`(+`input_kind` mesh_only|assembly, 조립 폴더 선택), B = 부모 `PREDICT_BATCH`(플랫폼 동시 실행기로 m_1~m_3) + run별 하위 `PREDICT`(prepared), 응답 추출 원본 ⑤ m_4 TCL 기본 활성(U8·U35 해소), B 응답 그래프(2D·3D plotly)·커브 겹쳐보기. migration `0007_predict_batch`, 서버 확인 E4-9-1~5.
