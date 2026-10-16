@@ -41,6 +41,8 @@ FEATURES: dict[str, FeatureReq] = {
     "predict_mesh_only": FeatureReq(("geom_update", "edspy_predict", "contour_preview")),
     # phase3 §14.6: 예측 응답 추출. 템플릿이 {extract_tcl}을 쓰면 resources.extract_minmax_tcl도 필요(predict_responses_missing)
     "predict_responses": FeatureReq(("response_extract",)),
+    # phase3 §15 S10: 예측 컨투어 캡처. capture.enabled·캡처 TCL은 contour_capture_missing
+    "contour_capture": FeatureReq(("contour_capture",), ("hw_exe_path",)),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -120,7 +122,16 @@ def predict_responses_missing(s: Settings) -> tuple[list[str], list[str]]:
     return tmpl, res
 
 
+def contour_capture_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """④ 컨투어 캡처에 빠진 (템플릿, 설정·자원) 키(phase3 §15): 템플릿·altair.hw_exe_path + capture.enabled·캡처 TCL."""
+    from .config.schema_capture import capture_missing
+
+    tmpl, res = missing_for(s, FEATURES["contour_capture"], None)
+    return tmpl, res + capture_missing(s)
+
+
 _SPECIAL_MISSING = {
+    "contour_capture": contour_capture_missing,
     "predict_parametric": predict_parametric_missing,
     "predict_mesh_only": predict_mesh_only_missing,
     "predict_responses": predict_responses_missing,

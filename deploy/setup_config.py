@@ -525,6 +525,10 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
         desired[("altair", k)] = alt["paths"][k]
     for k, r in res.items():
         desired[("resources", k)] = r["path"]
+    # phase3 §15 S10: 컨투어 캡처 TCL = git 폴더의 저장소 리소스(설치는 wheel이라 패키지 위치에서 찾을 수 없음). 비었거나 없을 때만 채움
+    cap_tcl = repo.joinpath("resources", "hyperview", "contour_capture.tcl")
+    if cap_tcl.is_file() and not unsafe(fwd(str(cap_tcl))):
+        desired[("resources", "contour_capture_tcl")] = fwd(str(cap_tcl))
     desired[("hpc", "gateway")] = "none"
     for k in WORKER_KEYS:
         desired[("worker", k)] = (example.get("worker") or {}).get(k)

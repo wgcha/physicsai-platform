@@ -21,6 +21,7 @@ from physicsai_core.stage1_train_data import doe_samples
 from physicsai_core.stage4_predict.batch_matrix import BatchMatrix, BatchShapeError, batch_dir_rel, build_matrix_for
 
 from ...context import AppContext
+from ...schemas.contour_capture import CaptureDisplay
 from ...schemas.predict_batch import BatchSource
 from ..common import study_root
 from .base import _P, invalid_at, prerequisite_missing, require_model_pscfg
@@ -34,6 +35,7 @@ class PredictBatchParams(_P):
     model_id: str | None = None
     multi_execution: int = Field(ge=1, le=64)
     source: BatchSource
+    display: CaptureDisplay | None = None  # phase3 §15 S10: 배치 단위 컨투어 표시(범례 fixed로 run끼리 비교)
 
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {

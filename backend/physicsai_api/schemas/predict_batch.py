@@ -125,6 +125,7 @@ class BatchRunRow(Resp):
     message: str | None = None
     job_id: str | None = None
     responses: dict[str, float | None] | None = None
+    media_views: list[str] = []  # phase3 §15 S10: 컨투어 이미지가 있는 방향(GET /jobs/{job_id}/media)
 
 
 class PredictBatch(Resp):

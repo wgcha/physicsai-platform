@@ -115,6 +115,7 @@ param_sets = Table(
     Column("label", String(120), nullable=True),  # phase3 §13 S8 사용자 표시 이름(0006_param_set_label)
     # phase3 §14.3 S9 템플릿 입력 종류: assembly(조립 폴더 포함) | mesh_only(m1 메시 그대로 예측)
     Column("input_kind", String(16), nullable=False, server_default="assembly"),
+    Column("display", JSONB, nullable=True),  # phase3 §15 S10 컨투어 표시 설정(0008_contour_capture)
     CheckConstraint("origin IN ('FOLDER','TRAIN_DOE')", name="ck_param_sets_origin"),
     CheckConstraint("input_kind IN ('mesh_only','assembly')", name="ck_param_sets_input_kind"),
     CheckConstraint("input_kind <> 'assembly' OR (assem_rel IS NOT NULL AND starter_name IS NOT NULL)",

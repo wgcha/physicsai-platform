@@ -110,5 +110,7 @@ Index(
     jobs.c.job_type,
     unique=True,
     # phase3 §14.5: 일괄 예측 하위 PREDICT(params.batch_run)는 같은 Study에 여러 개 대기하므로 제외(0007_predict_batch)
-    postgresql_where=text("state NOT IN ('SUCCEEDED','FAILED','CANCELED','INTERRUPTED') AND (params -> 'batch_run') IS NULL"),
+    # phase3 §15: 컨투어 재캡처는 예측 작업마다(같은 원래 작업만 1개 — 서비스 RECAPTURE_ACTIVE) 제외(0008_contour_capture)
+    postgresql_where=text("state NOT IN ('SUCCEEDED','FAILED','CANCELED','INTERRUPTED') AND (params -> 'batch_run') IS NULL"
+                          " AND job_type <> 'CONTOUR_RECAPTURE'"),
 )

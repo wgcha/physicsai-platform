@@ -835,6 +835,61 @@ job_type `PREDICT_BATCH`(stage 4, SLOT, 표시 "일괄 예측 입력 생성", `n
 | R-2 | `04_batch/**`는 S3 정리 범주 밖(크기만 표시) | 4차 후보(§2.2와 같은 취급) |
 | R-3 | N개 하위가 대기열을 길게 점유 | FIFO 원칙 유지, 관리자 대기열 이동(기존)으로 조정. `max_runs` 200 |
 
+## 15. S10 컨투어 캡처 (사용자 결정 2026-10-16, D3-52)
+
+목표: 예측(A 템플릿 값 입력·B 일괄 예측 하위·준비된 입력 모두)이 끝나면 **HyperView 배치로 방향별 컨투어 스크린샷(PNG)과 애니메이션 동영상**을 저장하고, 사용자가 목록에서 방향을 골라 보고 내려받는다. §14.2 K6(B 오른쪽 칸 컨투어 없음)은 그대로 두고, B 행에는 방향 목록(`media_views`)만 더한다. 1·2·3차 원칙(제한기, `shell=False`, 설정만, AI 루트만, `_backup`, 한국어) 유지.
+
+### 15.1 TCL 리소스
+
+- `resources/hyperview/contour_capture.tcl` = 사용자 제공 TCL(이슈 #2, HyperView 26.1 GUI·`hw -b -tcl` 확인). 동작은 그대로, 바꾼 곳 두 가지: (a) "사용자 설정" 블록 → `source [file join [file dirname [info script]] capture_settings.tcl]`, (b) 저장부 → `VIEWS` 반복(h3d는 한 번 열고 방향마다 `hwc view orientation $VIEW | view fit` → `<view>.png` → `<view>.<VID_EXT>`) + 끝에 `capture_result.txt` 작성 후 `exit`. 배치에서 멈추지 않게 2절 오류의 `return` 앞에도 결과 작성 + `exit`.
+- `capture_settings.tcl`(작업마다 플랫폼 생성): `H3D_PATH OUTDIR FIELD DCOMP AVGMODE USE_LAST LEGMIN LEGMAX SAVE_VIDEO VID_EXT COMPS VIEWS`. 값은 Tcl 큰따옴표 리터럴(`\ " $ [ ] { } ;` 백슬래시, ASCII 밖 문자는 `\uXXXX` — 파일은 ASCII라 HyperView 시스템 인코딩과 무관), 경로는 `/` 표기.
+- `capture_result.txt`(UTF-8): `# capture_result 1` / `STATUS=OK|SAVE_ERROR|OPEN_ERROR|HANDLE_ERROR` / `MESSAGE=…`(선택) / 방향마다 `VIEW=<view>|<image 1|0>|<view>.png|<video 1|0|->|<view>.<ext>|<오류>`.
+
+### 15.2 실행(step `CONTOUR_CAPTURE`)
+
+| 작업 | 위치 | cwd(= OUTDIR) | 실패 |
+|---|---|---|---|
+| `PREDICT` 맨 끝(LOCAL 8, 제한기 안) | `steps/stage4_predict/capture.py` | `P/RESULT/media/`(재실행이면 `_backup`) | **경고 `CAPTURE_FAILED`만**, 예측은 성공 |
+| `CONTOUR_RECAPTURE`(LIGHT, 새 job_type, step 1개 LOCAL) | 같은 모듈 | `P/RESULT/media_recapture/<재캡처 작업 id>/` | 이미지 0개면 작업 실패 `CAPTURE_FAILED`, 일부면 경고 |
+
+- 명령 `commands.contour_capture` 기본 `["{hw}","-clientconfig","hwpost.dat","-b","-tcl","{capture_tcl}"]`(새 placeholder `{capture_tcl}` = cwd에 복사한 TCL, `/` 표기). 설정 파일에 키가 없으면 이 기본값.
+- 판정 = 방향별 `<view>.png` 존재·크기>0(동영상은 선택), `capture_result.txt`는 오류 문구용. 종료코드 무시(`allow_nonzero_exit`). `capture.timeout_s`를 넘으면 이 step이 프로세스 트리를 끝내고 "시간 초과"(공통 실행기에는 시간 한도 없음 — platform.md §8.4 유지).
+- 미구성(`capture.enabled=false` 또는 템플릿 null) → SKIPPED, result `capture.status="SKIPPED"`. 실행 파일·TCL 없음·h3d 없음 → (PREDICT) 경고.
+- 산출물: kind `CONTOUR_IMAGE`(image/png, 상한 `ui.max_artifact_bytes`)·`CONTOUR_VIDEO`(`video/mp4`·`video/x-msvideo`·`image/gif`, 상한 `capture.max_video_bytes`, 넘으면 경고 `CAPTURE_VIDEO_TOO_LARGE`·등록 안 함), `artifacts.meta = {"view"}`.
+- result: `media: [{view, image_artifact_id, video_artifact_id|null}]`, `capture: {status OK|PARTIAL|FAILED|SKIPPED, views, display(최종), field_source, video, video_ext, dir_rel, message, failed_views}`. 재캡처는 원래 예측의 result를 고치지 않고 자기 result에 남긴다(조회 때 방향별 덮어쓰기).
+
+### 15.3 표시 설정(display)
+
+`{field, component, avgmode(""|simple|maximum|minimum|difference), comps[], legend:{mode:"auto"|"fixed", min, max}, views[]}` — 모든 키 선택. 결정 순서(뒤가 우선, 층이 field를 정하면 component도 그 층 값): config(`capture.default_field`, `capture.views`) → 템플릿 응답 정의 중 spec이 있는 첫 항목의 datatype/component → 템플릿 `param_sets.display`(`PUT /param-sets/{id}/display`) → B 배치 params `display`(배치 단위 범례 fixed로 run끼리 비교) → 예측 params `display`(A·준비된 입력, 선택) → 재캡처 요청. 문자 검사: field·component·comps에 `" { } [ ] $ \ ;`·제어문자 금지, 64자 이내, fixed는 min<max.
+
+### 15.4 API
+
+```jsonc
+// GET /jobs/{id}/media (로그인) — PREDICT만(아니면 404)
+{"job_id":"j1","status":"OK","message":null,"field_source":"config","video_ext":"mp4",
+ "display":{"field":"Von Mises","component":"","avgmode":"","comps":[],"legend":{"mode":"auto","min":null,"max":null},"views":["iso","front","top","right"]},
+ "items":[{"view":"iso","label":"등각","job_id":"j1",
+           "image":{"artifact_id":"a1","content_type":"image/png","size":2311,"url":"/physicsai/api/artifacts/a1/media","download_url":"/physicsai/api/artifacts/a1/media?download=true"},
+           "video":{"artifact_id":"a2","content_type":"video/mp4","size":1048576,"url":"…/a2/media","download_url":"…/a2/media?download=true"}}],
+ "recapture":null,"capture_enabled":true,"can_recapture":true}
+// GET /artifacts/{aid}/media[?download=true] (로그인) — CONTOUR_* 만. Range(단일) → 206 + Content-Range, 범위 밖 416,
+//   여러 범위 → 200 전체. Accept-Ranges: bytes, Content-Type 정확히, 상한 초과 413 ARTIFACT_TOO_LARGE
+// POST /jobs/{id}/capture {views?, display?} (power) → 201 Job(CONTOUR_RECAPTURE). 409 PREREQUISITE_MISSING(SUCCEEDED_PREDICT·PREDICT_H3D)
+//   · RECAPTURE_ACTIVE(같은 예측 진행 중) · CAPTURE_NOT_CONFIGURED{missing}
+// PUT /param-sets/{id}/display {display|null} (power, 감사 PARAM_SET_UPDATE) → 200 ParamSet(+display)
+// GET /predict-batches/{bid} 행에 media_views: ["iso", …]
+```
+
+### 15.5 설정·DB
+
+- `capture: {enabled: true, views: [iso, front, top, right], video: true, video_ext: mp4, use_last: true, default_field: "Von Mises", timeout_s: 1800, max_video_bytes: 209715200}`, `resources.contour_capture_tcl`(빈 값 = 저장소 리소스, `deploy/setup.ps1`이 git 폴더 경로로 채움), `features.contour_capture` = 템플릿 + `altair.hw_exe_path` + `capture.enabled` + TCL 파일.
+- migration `0008_contour_capture`: artifacts kind CHECK + `meta JSONB`, `param_sets.display JSONB`, `ux_jobs_study_type_active`에서 CONTOUR_RECAPTURE 제외(예측마다 재캡처 — 같은 예측 중복은 409).
+
+### 15.6 시험·서버 확인
+
+시험(V3-S10): settings 생성(이스케이프·공백·한글 경로 → ASCII, 가짜 hw 왕복, tclsh 있으면 실제 TCL을 흉내 hwc로 실행), 골든 argv·cwd, 방향별 산출물·meta, 실패 모드(fail·open_error·one_fail·no_manifest·no_video)는 경고만, 시간 초과, 동영상 상한, 표시 설정 결정 순서, API Range(206·Content-Range·416)·413·권한(401·403), 재캡처(LIGHT·409·실패), B `media_views`·배치 범례. 가짜 hw 캡처 모드(`fake_hw_capture.py`, `FAKE_TOOL_MODE_CAPTURE`).
+서버 1회 확인(E4-10): ① `hw -clientconfig hwpost.dat -b -tcl <media>/contour_capture.tcl`에서 `info script`가 경로를 돌려주는지(빈 값이면 cwd 기준이라 동작은 같음) ② 배치에서 `exit`로 HyperView가 끝나는지 ③ 방향마다 `save animation page` 뒤 프레임 되돌림·동영상 인코더(mp4) ④ 한글·공백이 든 h3d 경로 ⑤ 4방향 + 동영상 소요(기본 `timeout_s` 1800 적정성).
+
 ## 변경 메모(D3-n) — 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
 
 - **D3-1 (S1, §3.4 재시도 시작 지점 표시명)**: `JobStep`에는 표시명(label)이 없다(API 모양 불변 유지). 시작 지점 문구는 `{step_no}. {표시명}`에서 표시명을 해당 step이 `Job.current_step_key`와 같으면 `current_step_label`(실패 작업은 실패한 step이 current), 아니면 `step_key`로 쓴다. 첫 재개 step이 1이면 "처음(1단계)". 구현 `frontend/src/components/JobRetryButton.tsx` `retryStartText`. (Plan 승인)
@@ -889,3 +944,4 @@ job_type `PREDICT_BATCH`(stage 4, SLOT, 표시 "일괄 예측 입력 생성", `n
 - **D3-48 (사용자 보고 2026-10-16, DOE 동시 실행 표시)**: ①-3 DoeGenCard의 동시 실행 수를 고급 밖 기본 표시(1~`/status` `limits.configured.max_multi_execution` = `train_data.max_multi_execution`). 워커 `hst_gen_radioss`의 `HstRunTracker`가 완료 = `Finished run` 로그 집합(순서 무관), 시작 = run 폴더 수(2초 간격)로 집계해 진행 라벨 "실행 중 R · 대기 W · 완료 K/N (동시 M)", 진행률은 완료 수 기준(원본 FUNC:93-98). 병렬 실행 경로·Job Object 제한기는 변경 없음.
 - **D3-49 (사용자 결정 2026-10-16, S9 템플릿 예측·DOE 일괄 예측·응답 추출)**: §14. 입력 방식 3개(템플릿 값 입력·일괄 예측(DOE)·준비된 입력), 템플릿 = `param_sets`(+`input_kind` mesh_only|assembly, 조립 폴더 선택), B = 부모 `PREDICT_BATCH`(플랫폼 동시 실행기로 m_1~m_3) + run별 하위 `PREDICT`(prepared), 응답 추출 원본 ⑤ m_4 TCL 기본 활성(U8·U35 해소), B 응답 그래프(2D·3D plotly)·커브 겹쳐보기. migration `0007_predict_batch`, 서버 확인 E4-9-1~5.
 - **D3-50 (S9 P1 API 구체화, Plan 확인 요청)**: ① PREDICT params의 템플릿 종류 키는 `template_kind`(`assembly|mesh_only`, §14.4 B8의 `input_kind` 대신 — prepared의 `input_kind` `file|dir`와 겹치지 않게). PREDICT_BATCH 저장 params = `{batch_id, batch_no, param_set_id, model_id, multi_execution, template_kind, source:{kind, …출처 요약}}`(표 본문 없음, run 값은 `predict_batch_runs`). `multi_execution`은 필수(1~`train_data.max_multi_execution`, 넘으면 422 `INVALID_PARAMS`). `retry-failed`가 만드는 재생성 부모 params = `{batch_id, batch_no}`(§14.7의 `{batch_id}` + 표시용 `batch_no`), 하위 `batch_run`에도 `batch_no` 추가(판정은 `batch_id`·`doe_no`만). ② 하위 PREDICT 알림은 `JOB_CANCELED`·`JOB_INTERRUPTED` 포함 **전부** 억제(V3-S9-10 "하위 0건" — 일괄 취소 때 N건 방지). 일괄 취소는 배치를 먼저 `CANCELED`로 두므로 `PREDICT_BATCH_DONE`은 오지 않는다. 종료 훅 `job_end.batch_on_job_end`(모든 종료 경로가 `_side_effects_on_end`에서 호출): 재시도로 바뀐 이전 하위의 종료는 무시, 부모 실패·중단 → `FAILED`, 취소 → `CANCELED`. ③ 응답 정의 행의 `spec: null` 허용(추출 정의 없음 — 실측 `resp:` 열 이름 유지용), 실측 열 이름은 NAME 규칙이 옛 규칙이어도 그대로 허용. 검증은 새 공용 `stage4_predict/response_defs.py`(`responses.py`는 요청 줄·`RESPONSES.txt` 파싱만). `PUT`은 DB `param_sets.responses`(spec 포함)와 `04_params/<id>/responses.json`을 같은 트랜잭션에서 갱신, Study 폴더가 없으면 409 `PARAM_SET_FILES_MISSING`. 폴더 등록 때의 `responses.json` spec은 DB에 넣지 않는다(기존대로 이름·단위만). ④ 미리보기 조합 문제는 200 `problems`, 생성은 422 `BATCH_SOURCE_INVALID`. 모양 오류(kind·필드·추가 키)는 둘 다 422 `INVALID_PARAMS`. ⑤ `ParamSet`에 `input_kind`·`assem_rel|null`·`warnings[]`(등록 응답만, `SIMLAB_EXPORT_NAME`) — 새 설정 `param_set.tpl_export_regex`(기본 `dir_file_export\s*=\s*r?"[^"]*"`, 정규식 하드코딩 금지 규칙). discover는 조립 폴더 0개를 문제(`ASSEM_NOT_FOUND`) 대신 `notes` `MESH_ONLY`로(starter 여러 개 폴더 안내를 덧붙임), `choice.radioss_assem`에 없는 이름은 후보 0개여도 `CHOICE_INVALID`. ⑥ `PredictBatch` 응답에 `source_kind`·`created_at`·`created_by_name`·`finished_at`·`can_cancel`·`can_retry_failed` 추가. 행 `code`·`message` = 생성 실패면 `gen_code`·`gen_message`, 하위 실패·취소면 작업 `failure_code`·`failure_message`. CSV 파라미터 열은 반영값(`applied_values`), 줄끝 CRLF. 실패만 다시: 대상 없으면 409 `JOB_NOT_RETRYABLE`, 하위 재시도는 배치 권한(power)으로 — 하위 등록자 검사 없음. 일괄 취소 권한 거부 = 403 `PERMISSION_DENIED`(`required:"owner_or_global_admin"`). ⑦ 커브 `max_points`는 2~2000(그 밖 422), 계열 이름 목록 = 완료 run(상한 안) 계열의 첫 등장 순.
+- **D3-52 (사용자 결정 2026-10-16, S10 컨투어 캡처)**: §15. 구현에서 정한 것: ① 재캡처는 원래 예측 result를 고치지 않고 `CONTOUR_RECAPTURE` 작업 result에 남기며 `GET /jobs/{id}/media`가 방향별로 덮어써 보여 준다(파일은 `RESULT/media_recapture/<id>/`, 원래 `RESULT/media/` 보존). ② 파일 제공은 기존 `/artifacts/{id}/content`를 바꾸지 않고 새 `/artifacts/{id}/media`(CONTOUR_* 전용, Range). ③ TCL 2절 오류의 `return` 앞에 결과 작성 + `exit`를 넣었다(배치에서 멈춤 방지 — 그 밖 동작 불변). 방향마다 3절 기준 프레임으로 되돌린다(앞 방향 동영상이 프레임을 옮김). ④ `capture.timeout_s`는 캡처 step 안에서만 적용(공통 실행기 시간 한도 없음 유지, V-SM-6 정적 검사 대상 파일 무수정). ⑤ 배치 display는 그 배치의 첫 `PREDICT_BATCH` 작업 params에서 읽는다(실패만 다시의 재생성 부모 params에는 없음 — BP_ENQUEUE 무수정). ⑥ wheel 설치라 패키지 위치에서 저장소 리소스를 못 찾으므로 `deploy/setup_config.py`가 `resources.contour_capture_tcl`을 git 폴더 경로로 채운다(비었거나 없을 때만). ⑦ 같은 Study의 재캡처 동시 대기 허용(0008 index), 같은 예측 중복만 409 `RECAPTURE_ACTIVE`.

@@ -11,11 +11,20 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from ...context import AppContext
-from . import stage1_train_data, stage2_curation, stage3_model, stage4_batch, stage4_predict, stage5_optimize, study_manage
+from . import (
+    stage1_train_data,
+    stage2_curation,
+    stage3_model,
+    stage4_batch,
+    stage4_capture,
+    stage4_predict,
+    stage5_optimize,
+    study_manage,
+)
 from .base import check_feature, invalid_errors
 
 _STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage4_batch, stage1_train_data, stage2_curation,
-                                  stage5_optimize, study_manage)
+                                  stage5_optimize, study_manage, stage4_capture)
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {jt: m for mod in _STAGES for jt, m in mod.PARAM_MODELS.items()}
 _STAGE_OF: dict[str, ModuleType] = {jt: mod for mod in _STAGES for jt in mod.PARAM_MODELS}
@@ -35,7 +44,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     mod = _STAGE_OF.get(job_type)
     if mod is None:
         raise invalid_errors([{"loc": ["job_type"], "msg": "unknown"}])
-    return mod.prepare(ctx, conn, study, job_type, p)
+    params, result, warnings = mod.prepare(ctx, conn, study, job_type, p)
+    if job_type in ("PREDICT", "PREDICT_BATCH"):  # phase3 §15: 컨투어 표시 설정(선택) — 준비된 입력·배치 단위 범례
+        params.update(stage4_capture.display_param(p))
+    return params, result, warnings
 
 
 def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str, job_id: str, params: dict[str, Any],

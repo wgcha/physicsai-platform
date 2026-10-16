@@ -98,7 +98,8 @@ def test_null_optional_templates_ok():
                                    "edspy_predict", "contour_preview", "response_extract",
                                    # 2차(phase2 §8.1): null 허용
                                    "simlab_extract_params", "hst_gen_radioss", "h3d_preview", "hvtrans_curate", "t01_preview",
-                                   "t01_curve_export", "hst_optimization"}
+                                   "t01_curve_export", "hst_optimization",
+                                   "contour_capture"}  # 3차(phase3 §15 S10)
 
 
 def test_null_template_render_is_not_configured():

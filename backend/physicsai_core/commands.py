@@ -69,6 +69,8 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
         frozenset(),
         False,
     ),
+    # phase3 §15 S10: {capture_tcl} = 작업 폴더(P/RESULT/media)에 복사한 contour_capture.tcl(옆에 capture_settings.tcl)
+    "contour_capture": TemplateSpec(frozenset({"hw", "capture_tcl"}), frozenset(), False),
     # ---- 2차(phase2 §8.1). null이면 그 기능만 비활성(가정 A-11) ----
     "simlab_extract_params": TemplateSpec(frozenset({"simlab", "launcher", "cad_file", "xml_out"}), frozenset(), False),
     "hst_gen_radioss": TemplateSpec(frozenset({"hstbatch", "multi_execution", "launcher"}), frozenset(), False),
@@ -103,7 +105,8 @@ PATH_STYLE: dict[tuple[str, str], str] = {
     ("t01_curve_export", "curate_tcl"): "fwd",
     ("t01_curve_export", "config_json"): "fwd",
     ("hst_optimization", "launcher"): "os",
-    ("response_extract", "extract_tcl"): "fwd",  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
+    ("response_extract", "extract_tcl"): "fwd",
+    ("contour_capture", "capture_tcl"): "fwd",  # phase3 §15: HyperView -tcl 인자('/' 표기)  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
 }
 
 # phase3 §14.6: commands.response_extract가 이 placeholder를 쓰면 원본 ⑤ m_4 방식(H3D_REQUESTS.txt → RESPONSES.txt)

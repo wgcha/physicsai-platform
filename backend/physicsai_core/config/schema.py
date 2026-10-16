@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from pydantic import Field
 
 from ._model import _M
+from .schema_capture import CaptureCfg
 from .schema_hpc import CommandsCfg, HpcCfg
 from .schema_ops import (
     DEFAULT_LOG_ERROR_PATTERNS,
@@ -127,6 +128,7 @@ class ResourcesCfg(_M):
     preview_hg_tcl: str = ""
     curate_hg_tcl: str = ""
     extract_minmax_tcl: str = ""
+    contour_capture_tcl: str = ""  # phase3 §15 S10: 비면 저장소 resources/hyperview/contour_capture.tcl
     launchers: dict[str, LauncherCfg] = Field(default_factory=_default_launchers)
     # GPU 조회 실행 파일 자동 탐색 후보(phase3 D3-45): worker.gpu_query 첫 인자가 없거나 못 찾으면 순서대로. 이름만 = PATH, %VAR% 확장
     gpu_query_candidates: list[str] = Field(default_factory=lambda: list(GPU_QUERY_CANDIDATES))
@@ -167,6 +169,7 @@ class Settings(_M):
     param_set: ParamSetCfg = Field(default_factory=ParamSetCfg)
     predict: PredictCfg = Field(default_factory=PredictCfg)
     predict_batch: PredictBatchCfg = Field(default_factory=PredictBatchCfg)
+    capture: CaptureCfg = Field(default_factory=CaptureCfg)
     commands: CommandsCfg = Field(default_factory=CommandsCfg)
     train_data: TrainDataCfg = Field(default_factory=TrainDataCfg)
     curation: CurationCfg = Field(default_factory=CurationCfg)

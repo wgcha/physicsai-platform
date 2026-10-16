@@ -48,7 +48,7 @@ def _install_fake_tools(dest: Path) -> dict[str, str]:
     out = {}
     for src in FAKE_TOOLS.iterdir():
         if src.is_file() and src.name.startswith("fake_"):
-            if IS_WINDOWS:
+            if IS_WINDOWS and src.suffix != ".py":  # .py = 가짜 도구가 import하는 보조 모듈(fake_hw_capture.py) — 그대로 복사
                 if src.name not in _EXE_CACHE:
                     cache = Path(tempfile.mkdtemp(prefix="physicsai-fake-exe-"))
                     _EXE_CACHE[src.name] = Path(_windows_tool_exe(src, cache))
