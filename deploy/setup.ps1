@@ -201,6 +201,7 @@ $defaults = [ordered]@{
 $inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = $defaults; deploy_explicit = $explicit; legacy_config = $legacyConfig; program_files_dirs = @(@($env:ProgramFiles, $env:ProgramW6432) | Where-Object { $_ } | Select-Object -Unique) }
 # 대시보드 웹 경로(WINDOWS_WEB_BASE_PATH) → auth.dashboard_public_login_url(없으면 setup_config.py가 .env를 직접 읽거나 기본 /home/, phase3 D3-38)
 if ($dash -and $dash.WebBasePath) { $inputs['dashboard_web_base_path'] = "$($dash.WebBasePath)" }
+$inputs['computer_name'] = "$env:COMPUTERNAME"; $inputs['smb_shares'] = @(Get-PhysicsAISmbShares)   # 받은 파일 공유 안내(phase3 D3-46)
 $plan = Invoke-PhysicsAISetupConfig -VenvPy $venvPy -Action plan -RuntimeDir $rt -Inputs $inputs
 $d = $plan.deploy
 

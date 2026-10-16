@@ -175,3 +175,68 @@
   gap: var(--s1);
   margin-top: var(--s3);
 }
+
+/* 서버 경로 탐색 대화상자(phase3 §12 S7): 루트 버튼 줄 → 위로·경로 → 목록(괘선 행, 선택 = 반전) → 선택 경로·안내 */
+.dialog.picker {
+  width: min(720px, 100%);
+  display: grid;
+  gap: var(--s1);
+}
+.dialog.picker:focus {
+  outline: none;
+}
+.picker-roots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s1);
+}
+.picker-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  padding-bottom: var(--s1);
+  border-bottom: 1px solid var(--rule);
+}
+.picker-crumbs {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.picker-list {
+  height: calc(var(--row) * 2);
+  overflow-y: auto;
+  border-top: 1px solid var(--rule);
+  border-bottom: 1px solid var(--rule);
+}
+.picker-row {
+  display: grid;
+  grid-template-columns: var(--s2) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--s1);
+  width: 100%;
+  padding: var(--s-h) var(--s1);
+  border: 0;
+  border-bottom: 1px solid var(--rule-soft);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+.picker-row:hover {
+  background: var(--paper);
+}
+.picker-row.on,
+.picker-row.on .muted {
+  background: var(--ink);
+  color: var(--cell);
+}
+.picker-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.picker-empty {
+  padding: var(--s1);
+}
+.picker-target {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

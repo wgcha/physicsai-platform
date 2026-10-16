@@ -8,6 +8,8 @@ import type {
   DoeType,
   EnvCheck,
   EnvCheckSummary,
+  FsList,
+  FsRoots,
   Optimization,
   ResponseCandidates,
   SpdmImport,
@@ -61,6 +63,11 @@ export const api = {
   /** phase2.md §12.4: RESULT_FOLDER는 doe_id 선택 키 */
   inspectPath: (studyId: string, purpose: PathPurpose, path: string, extra?: { doe_id?: string }) =>
     request<PathInspectResult>("POST", `/studies/${studyId}/paths/inspect`, { body: { purpose, path, ...(extra ?? {}) } }),
+
+  /** phase3.md §12 S7: 서버 경로 탐색(이름·크기·mtime만, 실행 권한) */
+  fsRoots: () => request<FsRoots>("GET", "/fs/roots"),
+  fsList: (path: string, exts?: string[]) =>
+    request<FsList>("GET", "/fs/list", { query: { path, exts: exts && exts.length ? exts.join(",") : undefined } }),
 
   // §10.4 데이터셋·모델·파라미터 세트
   datasets: (studyId: string) => request<Dataset[]>("GET", `/studies/${studyId}/datasets`),

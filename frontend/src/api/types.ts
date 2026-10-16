@@ -335,3 +335,9 @@ export type StorageCategory = S["StorageCategory"];
 export type StorageScan = S["StorageScan"];
 export type CleanupSummary = Override<S["CleanupSummary"], { state: JobState }>;
 export type StorageReport = Override<S["StorageReport"], { last_cleanup?: CleanupSummary | null }>;
+
+// phase3.md §12 S7(D3-46) 서버 경로 탐색
+export type FsRoot = S["FsRoot"];
+export type FsRoots = S["FsRoots"];
+export type FsEntry = S["FsEntry"];
+export type FsList = S["FsList"];

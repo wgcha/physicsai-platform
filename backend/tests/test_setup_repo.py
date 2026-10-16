@@ -559,6 +559,40 @@ def test_setup_config_dashboard_login_url_merge(tmp_path):
     assert any("WINDOWS_WEB_BASE_PATH" in w for w in res["warnings"])
 
 
+def test_setup_config_inbox_folder_and_share_hint(tmp_path):
+    """phase3 §12 S7(D3-46): write가 <ai_root>/inbox를 만들고, Get-SmbShare 결과(smb_shares)에서 Path가 inbox인 공유로
+    storage.inbox_share_hint를 채운다. 키가 비어 있을 때만 — 사용자 값 보존. 공유가 없거나 조회 실패(빈 목록)면 그대로."""
+    t = _fake_tree(tmp_path)
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    res = _run(tmp_path, t, _inputs(t, computer_name="AISRV", smb_shares=[]))
+    assert (t["data"] / "inbox").is_dir() and _cfg(t)["storage"]["inbox_share_hint"] is None
+    assert res["write"]["validation"]["ok"]
+    inbox_win = str(t["data"] / "inbox").replace("/", "\\") + "\\"     # Get-SmbShare Path 표기(구분자·끝 '\\'·대소문자 무시)
+    shares = [{"name": "physicsai-data", "path": str(t["data"])}, {"name": "IPC$", "path": ""},
+              {"name": "physicsai-inbox", "path": inbox_win.upper() if os.name == "nt" else inbox_win}]
+    res = _run(tmp_path, t, _inputs(t, computer_name="AISRV", smb_shares=shares))
+    assert _cfg(t)["storage"]["inbox_share_hint"] == "\\\\AISRV\\physicsai-inbox"
+    assert res["config_changed_keys"] == ["storage.inbox_share_hint"] and res["write"]["validation"]["ok"]
+    # 다시 실행: 그대로. 사용자 값은 보존
+    assert _run(tmp_path, t, _inputs(t, computer_name="AISRV", smb_shares=shares))["config_changed_keys"] == []
+    text = cfg_path.read_text(encoding="utf-8").replace("\\\\\\\\AISRV\\\\physicsai-inbox", "\\\\\\\\NAS\\\\in")
+    cfg_path.write_text(text, encoding="utf-8")
+    assert _cfg(t)["storage"]["inbox_share_hint"] == "\\\\NAS\\in"
+    res = _run(tmp_path, t, _inputs(t, computer_name="AISRV", smb_shares=shares))
+    assert _cfg(t)["storage"]["inbox_share_hint"] == "\\\\NAS\\in" and res["config_changed_keys"] == []
+
+
+def test_setup_config_inbox_helpers():
+    m = _module()
+    assert m.inbox_folder("E:/d", None) == "E:/d/inbox" and m.inbox_folder("E:\\d\\", "in\\x") == "E:/d/in/x"
+    for bad in ("../x", "a b", "/abs", "C:/x"):
+        assert m.inbox_folder("E:/d", bad) == "", bad
+    sh = [{"name": "adm$", "path": "E:\\d\\inbox"}, {"name": "box", "path": "e:\\D\\Inbox\\"}]
+    assert m.inbox_share_hint({"computer_name": "S", "smb_shares": sh}, "E:/d/inbox") == "\\\\S\\box"
+    assert m.inbox_share_hint({"computer_name": "", "smb_shares": sh}, "E:/d/inbox") is None
+    assert m.inbox_share_hint({"computer_name": "S"}, "E:/d/inbox") is None
+
+
 def test_setup_config_web_base_helpers():
     m = _module()
     assert m.normalize_web_base(None) == ("/home/", None) and m.normalize_web_base("") == ("/home/", None)

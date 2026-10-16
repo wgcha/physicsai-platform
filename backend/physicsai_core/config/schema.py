@@ -73,6 +73,9 @@ class StorageCfg(_M):
     ai_root: str = ""
     allowed_import_roots: list[str] = Field(default_factory=list)
     spdm_roots: list[str] = Field(default_factory=list)
+    # phase3 §12 S7(D3-46): 다른 PC가 네트워크 공유로 파일을 넣는 받은 파일 폴더(AI 루트 기준 상대). 없으면 탐색 루트에서 생략.
+    inbox_dir: str = "inbox"
+    inbox_share_hint: str | None = None  # 화면 안내 문구용 공유 경로(예 "\\\\<서버>\\physicsai-inbox"). 서버는 쓰지 않는다
 
 
 class AltairCfg(_M):

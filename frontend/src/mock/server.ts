@@ -23,6 +23,7 @@ import { err, type MockResp, type Route, type RouteCtx } from "./route";
 import { tickJobs } from "./engine";
 import { createJobFor, jobRoutes } from "./jobs";
 import { envCheckRoutes, notificationRoutes, opsRoutes } from "./ops";
+import { fsRoutes } from "./fs";
 import { trainRoutes } from "./stage1";
 import { curationRoutes } from "./stage2";
 import { datasetModelRoutes } from "./stage3";
@@ -86,6 +87,7 @@ const ROUTES: Route[] = [
   paramSetRoutes, // §10.4 ④
   jobRoutes, // §10.5
   notificationRoutes, // §10.7
+  fsRoutes, // phase3 §12 S7 서버 경로 탐색
 ];
 
 export class MockServer {

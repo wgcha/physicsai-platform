@@ -604,6 +604,22 @@ function Write-PhysicsAIUtf8File {
     [IO.File]::WriteAllText($Path, $Text, (New-Object Text.UTF8Encoding($false)))
 }
 
+function Get-PhysicsAISmbShares {
+    <# 받은 파일 공유 안내(phase3 §12 S7, D3-46): 이 PC의 SMB 공유 이름·경로를 조회만 한다(관리자 권한 없이, 만들거나 바꾸지 않음).
+       Get-SmbShare가 없거나 실패하면 빈 목록 — setup_config.py가 Path가 <ai_root>\inbox인 공유로 storage.inbox_share_hint를 채운다. #>
+    $out = @()
+    try {
+        if (Get-Command Get-SmbShare -ErrorAction SilentlyContinue) {
+            foreach ($s in @(Get-SmbShare -ErrorAction Stop)) {
+                if ($s.Name -and $s.Path) { $out += [ordered]@{ name = "$($s.Name)"; path = "$($s.Path)" } }
+            }
+        }
+    } catch {
+        Write-PhysicsAIStep "SMB 공유 조회를 건너뜁니다: $($_.Exception.Message)"
+    }
+    return $out   # 호출부가 @(...)로 감싼다(0개 = 빈 배열)
+}
+
 function Invoke-PhysicsAISetupConfig {
     <# deploy\setup_config.py plan|write를 venv Python으로 실행하고 결과 JSON 객체를 돌려준다(입력·결과 파일은 <런타임>\setup-*.json, 비밀값 없음). #>
     param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][ValidateSet('plan', 'write')][string]$Action,

@@ -184,6 +184,7 @@ try {
     $stage = '설정 보충'
     $inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = [ordered]@{}; deploy_explicit = [ordered]@{}; legacy_config = ''; program_files_dirs = @(@($env:ProgramFiles, $env:ProgramW6432) | Where-Object { $_ } | Select-Object -Unique) }
     if ($dash -and $dash.WebBasePath) { $inputs['dashboard_web_base_path'] = "$($dash.WebBasePath)" }   # phase3 D3-38
+    $inputs['computer_name'] = "$env:COMPUTERNAME"; $inputs['smb_shares'] = @(Get-PhysicsAISmbShares)   # 받은 파일 공유 안내(phase3 D3-46)
     $result = Invoke-PhysicsAISetupConfig -VenvPy $venvPy -Action write -RuntimeDir $rt -Inputs $inputs
     foreach ($w in @($result.warnings)) { if ($w) { Write-Warning $w } }
     Write-PhysicsAIConfigValidation -Result $result | Out-Null
