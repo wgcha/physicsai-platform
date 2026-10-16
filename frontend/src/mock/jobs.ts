@@ -5,10 +5,19 @@ import { err, needAdmin, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { refreshPositions } from "./engine";
 import { predictParams } from "./stage4Prepared";
+import { batchLabel, isBatchChild, onBatchJobCreated, predictBatchCreate, type BatchRec } from "./predictBatch";
+
+/** S9 §14.5 JobSummary.batch(params에서 계산) */
+function batchRef(srv: MockServer, j: Job) {
+  const p = j.params as { batch_id?: string; batch_run?: { batch_id: string; doe_no: number } };
+  const id = p.batch_run?.batch_id ?? (j.job_type === "PREDICT_BATCH" ? p.batch_id : undefined);
+  const b = id ? srv.batches.find((x) => x.id === id) : undefined;
+  return b ? { id: b.id, label: batchLabel(b.batch_no), doe_no: p.batch_run?.doe_no ?? null } : null;
+}
 
 export function summary(srv: MockServer, j: Job): JobSummary {
   const { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at } = j;
-  return { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at, ...srv.p2.summaryExtra(j) };
+  return { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at, ...srv.p2.summaryExtra(j), batch: batchRef(srv, j) };
 }
 
 export function inputReady(j: Job): boolean {
@@ -21,6 +30,7 @@ function jobOut(srv: MockServer, j: Job): Job {
   return {
     ...j,
     ...srv.p2.summaryExtra(j),
+    batch: batchRef(srv, j),
     attention_code: j.attention_code ?? null,
     input_display_path: inputReady(j) ? srv.disp(j.study_id, `04_predict/${j.id}/INPUT`) : null,
     can_download_error_bundle: !!me && failedish && (me.is_global_admin || j.created_by === me.user_id),
@@ -30,8 +40,16 @@ function jobOut(srv: MockServer, j: Job): Job {
 export function createJobFor(srv: MockServer, s: Study, type: JobType, params: Record<string, unknown>): MockResp {
   if (s.status !== "ACTIVE") return err(409, "STUDY_ARCHIVED", "보관된 Study입니다.");
   if (!STEP_CHAINS[type]) return err(422, "INVALID_PARAMS", "알 수 없는 작업 유형입니다.");
-  if (srv.jobs.some((j) => j.study_id === s.id && j.job_type === type && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state)))
+  // 일괄 예측 하위 PREDICT는 서로·단일 예측을 막지 않는다(S9 §14.5, 재시도도 같은 경로)
+  if (!params.batch_run && srv.jobs.some((j) => j.study_id === s.id && j.job_type === type && !isBatchChild(j) && !["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"].includes(j.state)))
     return err(409, "STUDY_JOB_BUSY", "같은 종류의 작업이 이미 실행 중이거나 대기 중입니다.");
+  let batchRec: BatchRec | null = null;
+  if (type === "PREDICT_BATCH") {
+    const r = predictBatchCreate(srv, s, params); // S9 §14.5·§14.7 사전 검사(409·422 BATCH_SOURCE_INVALID)
+    if ("error" in r) return r.error;
+    params = r.params;
+    batchRec = r.rec;
+  }
   if (type === "PREDICT") {
     const r = predictParams(srv, s, params); // S6 §11.5: input_mode별 검증(422 INVALID_PARAMS·PREDICT_INPUT_INVALID, 409)
     if ("error" in r) return r.error;
@@ -52,6 +70,12 @@ export function createJobFor(srv: MockServer, s: Study, type: JobType, params: R
   srv.jobs.push(j);
   srv.queueOrder.set(j.id, ++srv.queueSeq);
   srv.p2.onCreate(j, me);
+  if (batchRec) onBatchJobCreated(srv, j, batchRec);
+  if (params.batch_run) {
+    // 하위 재시도: 등록자 유지(§14.5 created_by = 부모 등록자)
+    const b = srv.batches.find((x) => x.id === (params.batch_run as { batch_id: string }).batch_id);
+    if (b) Object.assign(j, { created_by: b.created_by, created_by_name: b.created_by_name });
+  }
   if (type === "DATASET_CREATE") {
     const cur = srv.p2.curations.find((c) => c.id === params.curation_id);
     srv.datasets.unshift({

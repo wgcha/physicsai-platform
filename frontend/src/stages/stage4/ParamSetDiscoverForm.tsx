@@ -3,8 +3,13 @@ import { api, errorMessage, type ParamSetDiscover } from "../../api";
 import { BrowseButton } from "../../components/BrowseButton";
 
 type Choice = { cad: string; radioss_assem: string };
+/** 조립 폴더 "없음" 선택값(S9 §14.4: choice.radioss_assem = null → mesh_only) */
+export const ASSEM_NONE = "__none__";
+export const ASSEM_NONE_LABEL = "없음(쿠션만 — 메시로 바로 예측)";
+export const ASSEM_ZERO_TEXT = "조립 폴더 없음 — 메시 단독 템플릿으로 등록됩니다";
 
-/** phase3 §13 S8: 프로젝트 폴더 1개 → 플랫폼이 tpl·CAD·조립 폴더·파라미터를 찾아 구성(읽기만). 후보가 여러 개면 드롭다운 */
+/** phase3 §13 S8: 프로젝트 폴더 1개 → 플랫폼이 tpl·CAD·조립 폴더·파라미터를 찾아 구성(읽기만). 후보가 여러 개면 드롭다운.
+ *  S9 §14.4: 조립 폴더는 선택 항목 — 드롭다운 끝 "없음" 또는 후보 0개면 메시 단독(mesh_only) 템플릿 */
 export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: string; label: string; onDone: () => Promise<void> }) {
   const [path, setPath] = useState("");
   const [found, setFound] = useState<ParamSetDiscover | null>(null);
@@ -39,7 +44,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
     try {
       await api.registerParamSet(studyId, found.path, {
         mode: "discover",
-        choice: { tpl: found.selected_tpl, cad: choice.cad, radioss_assem: choice.radioss_assem },
+        choice: { tpl: found.selected_tpl, cad: choice.cad, radioss_assem: meshOnly ? null : choice.radioss_assem },
         label: label.trim() || null,
       });
       await onDone();
@@ -50,7 +55,8 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
     }
   };
 
-  const ready = !!found && !!found.selected_tpl && !!choice.cad && !!choice.radioss_assem && found.problems.length === 0;
+  const meshOnly = !!found && (found.radioss_assem.length === 0 || choice.radioss_assem === ASSEM_NONE);
+  const ready = !!found && !!found.selected_tpl && !!choice.cad && (meshOnly || !!choice.radioss_assem) && found.problems.length === 0;
   const pick = (key: keyof Choice) => (e: ChangeEvent<HTMLSelectElement>) => setChoice((c) => ({ ...c, [key]: e.target.value }));
 
   return (
@@ -110,23 +116,24 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
             </dd>
             <dt>조립 폴더</dt>
             <dd>
-              {found.radioss_assem.length > 1 ? (
+              {found.radioss_assem.length ? (
                 <select aria-label="조립 폴더 선택" value={choice.radioss_assem} onChange={pick("radioss_assem")}>
-                  <option value="">선택하세요 ({found.radioss_assem.length}개)</option>
+                  {found.radioss_assem.length > 1 && <option value="">선택하세요 ({found.radioss_assem.length}개)</option>}
                   {found.radioss_assem.map((a) => (
                     <option key={a.rel} value={a.rel}>
                       {a.rel} · {a.starter}
                     </option>
                   ))}
+                  <option value={ASSEM_NONE}>{ASSEM_NONE_LABEL}</option>
                 </select>
-              ) : found.radioss_assem[0] ? (
-                <span className="mono">
-                  {found.radioss_assem[0].rel} · {found.radioss_assem[0].starter}
-                </span>
               ) : (
-                "없음"
+                <span className="muted" data-testid="assem-zero">
+                  {ASSEM_ZERO_TEXT}
+                </span>
               )}
             </dd>
+            <dt>입력 종류</dt>
+            <dd data-testid="ps-discover-kind">{found.selected_tpl ? (meshOnly ? "메시 단독(mesh_only) — 형상 생성 → 예측" : "조립 포함(assembly) — 형상 생성 → 메시 연결 → 조립 → 예측") : "—"}</dd>
             <dt>파라미터</dt>
             <dd data-testid="ps-discover-params">
               {found.selected_tpl

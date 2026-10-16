@@ -1,0 +1,251 @@
+/* ④ S9(phase3.md §14.8): 템플릿 고르기·진행 단계·일괄 예측 설정·결과 표·응답 그래프·커브 겹쳐보기.
+   강조는 빨강 1개(고른 run·실행 중 수), 나머지는 먹·회색. 글자 크기는 역할 토큰만. */
+
+/* 형상 템플릿 */
+.tpl-pick {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--s1) var(--s2);
+}
+.tpl-pick-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-width: 0;
+}
+.tpl-pick-field select {
+  min-width: 0;
+  max-width: 100%;
+}
+.tpl-pick.compact,
+.tpl-pick.compact .tpl-pick-field {
+  display: grid;
+  gap: var(--s-h);
+}
+.tpl-pick.compact select {
+  width: 100%;
+}
+
+/* 진행 단계(A) */
+.psteps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pstep {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1);
+  padding: var(--s1) 0;
+  border-bottom: 1px solid var(--rule-soft);
+}
+.pstep-state {
+  font: var(--font-r);
+  letter-spacing: var(--track-r);
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.pstep.run .pstep-label,
+.pstep.run .pstep-state {
+  color: var(--red);
+  font-weight: 600;
+}
+.pstep.wait .pstep-label,
+.pstep.skip .pstep-label {
+  color: var(--ink-3);
+}
+.pstep.fail .pstep-state {
+  color: var(--bad);
+}
+
+/* 범위 밖 작은 회색 점 */
+.oor-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: var(--s-h);
+  background: var(--ink-3);
+  vertical-align: middle;
+}
+.strong {
+  font-weight: 600;
+}
+.more-rows {
+  padding-top: var(--s1);
+}
+
+/* 일괄 예측 설정 */
+.radio-list {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-h);
+}
+.radio-list legend {
+  padding: 0;
+  margin-bottom: var(--s-h);
+}
+.radio-line {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  cursor: pointer;
+}
+.batch-text {
+  width: 100%;
+  resize: vertical;
+  font: var(--font-r-mono);
+}
+.batch-run-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(256px, 1fr);
+  gap: var(--s3);
+  align-items: start;
+}
+.batch-flow {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  border: 1px solid var(--rule-soft);
+}
+.batch-flow li {
+  display: grid;
+  gap: var(--s-h);
+  align-content: start;
+  padding: var(--s1) var(--s2);
+}
+.batch-flow li + li {
+  border-left: 1px solid var(--rule-soft);
+}
+.batch-run-side {
+  display: grid;
+  gap: var(--s1);
+  align-content: start;
+}
+.batch-run-side .num-input {
+  width: 80px;
+}
+.recent-batches .muted {
+  margin-left: var(--s-h);
+}
+@media (max-width: 1279px) {
+  .batch-run-grid,
+  .batch-flow {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .batch-flow li + li {
+    border-left: 0;
+    border-top: 1px solid var(--rule-soft);
+  }
+}
+
+/* 일괄 예측 결과 */
+.batch-counts {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--s-h) var(--s1);
+}
+.batch-counts .small + .D {
+  margin-left: var(--s2);
+}
+.th-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-h);
+  cursor: pointer;
+}
+.th-pick input {
+  margin: 0;
+}
+.batch-table td {
+  white-space: nowrap;
+}
+.row-state.succeeded {
+  color: var(--ink);
+}
+.row-state.running {
+  color: var(--red);
+}
+.row-state.queued,
+.row-state.gen_pending,
+.row-state.generating {
+  color: var(--ink-2);
+}
+.row-state.failed,
+.row-state.gen_failed {
+  color: var(--bad);
+}
+.batch-table td.row-state {
+  white-space: normal;
+  min-width: 96px;
+  max-width: 192px;
+}
+.row-reason {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.row-state .btn {
+  margin-top: var(--s-h);
+}
+
+/* 응답 그래프 */
+.rpt {
+  fill: var(--ink);
+  cursor: pointer;
+}
+.rpt:focus-visible {
+  outline: none;
+  stroke: var(--red);
+  stroke-width: 2;
+}
+.rpt.on {
+  fill: var(--red);
+  stroke: var(--cell);
+  stroke-width: 2;
+}
+.rplot3d {
+  display: grid;
+  gap: var(--s1);
+}
+.plot3d {
+  width: 100%;
+  height: 360px;
+}
+
+/* 커브 겹쳐보기: 모두 흐리게, 고른 run만 진하게(빨강) */
+.chart-line.overlay {
+  stroke: var(--ink);
+  stroke-opacity: 0.25;
+  stroke-width: 1;
+}
+.chart-line.overlay.on {
+  stroke: var(--red);
+  stroke-opacity: 1;
+  stroke-width: 2;
+}
+.curve-overlay {
+  display: grid;
+  gap: var(--s1);
+}
+.run-tree {
+  max-height: 288px;
+  overflow: auto;
+  border: 1px solid var(--rule-soft);
+  padding: var(--s1);
+}
+
+/* 템플릿 응답 정의 */
+.resp-defs {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--rule-soft);
+}

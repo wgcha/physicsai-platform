@@ -10,7 +10,7 @@ export function renderApp(path: string, opts: MockOptions = {}, setup?: (server:
   const server = new MockServer({ ui, ...opts });
   setup?.(server);
   vi.stubGlobal("fetch", createMockFetch(server));
-  Object.assign(POLL, { notifications: 60, queue: 60, jobActive: 60, jobQueued: 60, jobWaitingHpc: 60, checkDebounce: 10, status: 60_000, resources: 60_000 });
+  Object.assign(POLL, { notifications: 60, queue: 60, jobActive: 60, jobQueued: 60, jobWaitingHpc: 60, checkDebounce: 10, status: 60_000, resources: 60_000, batch: 60 });
   const utils = render(<TestApp path={path} />);
   return { server, ...utils };
 }

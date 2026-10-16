@@ -20,6 +20,10 @@ function recordJobBodies(server: MockServer) {
 }
 
 const modeRadio = (name: string) => screen.findByRole("radio", { name }) as Promise<HTMLButtonElement>;
+const stepLabels = () =>
+  within(screen.getByRole("list", { name: "예측 실행 단계" }))
+    .getAllByRole("listitem")
+    .map((li) => li.querySelector(".pstep-label")!.textContent);
 const chainLabels = () =>
   within(screen.getByRole("list", { name: "예측 실행 단계" }))
     .getAllByRole("listitem")
@@ -39,15 +43,15 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     localStorage.clear();
   });
 
-  it("토글: 기본은 파라미터, 선택은 localStorage에 유지되고 다시 열어도 유지", async () => {
+  it("토글: 기본은 템플릿 값 입력, 선택은 localStorage에 유지되고 다시 열어도 유지", async () => {
     const first = renderApp(`${STUDY}/4`, { user: "power" });
-    const param = await modeRadio("파라미터로 형상 생성");
+    const param = await modeRadio("템플릿 값 입력");
     expect(param.getAttribute("aria-checked")).toBe("true");
     fireEvent.click(await modeRadio("준비된 입력 파일"));
     expect(localStorage.getItem(KEY)).toBe("prepared");
     expect(await screen.findByRole("region", { name: "준비된 입력 파일" })).toBeTruthy();
-    // 파라미터 세트 카드·입력 표는 숨김
-    expect(screen.queryByRole("region", { name: "파라미터 세트" })).toBeNull();
+    // 템플릿 칸·입력 표는 숨김
+    expect(screen.queryByRole("region", { name: "템플릿" })).toBeNull();
     expect(screen.queryByRole("table", { name: "파라미터 입력" })).toBeNull();
     expect(screen.queryByText(/복사하지 않습니다/)).toBeNull();          // D3-43: 참고 문구는 하위 폴더가 있을 때만
     first.unmount();
@@ -65,7 +69,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
       throw new Error("blocked");
     });
     renderApp(`${STUDY}/4`, { user: "power" });
-    expect((await modeRadio("파라미터로 형상 생성")).getAttribute("aria-checked")).toBe("true");
+    expect((await modeRadio("템플릿 값 입력")).getAttribute("aria-checked")).toBe("true");
     fireEvent.click(await modeRadio("준비된 입력 파일"));
     expect(await screen.findByRole("region", { name: "준비된 입력 파일" })).toBeTruthy();
   });
@@ -85,7 +89,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     expect(bodies[0]).toEqual({ job_type: "PREDICT", params: { input_mode: "prepared", input_path: PATH, model_id: null, param_set_id: null } });
     expect(chainLabels()).toEqual(["입력파일", "예측"]);
     act(() => server.finishAll());
-    const job = server.jobs.find((j) => (j.params as { input_mode?: string }).input_mode === "prepared")!;
+    const job = server.jobs.find((j) => (j.params as { input_mode?: string; batch_run?: unknown }).input_mode === "prepared" && !(j.params as { batch_run?: unknown }).batch_run)!;
     expect(job.steps.filter((s) => s.state === "SKIPPED").map((s) => s.step_key)).toEqual(expect.arrayContaining(["TPL_RENDER", "GEOM_UPDATE", "MESH"]));
     const result = await screen.findByRole("region", { name: "결과" });
     await waitFor(() => expect(within(result).getByText("Face_Drop_0000.rad")).toBeTruthy(), { timeout: 3000 });
@@ -170,7 +174,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
       s.paramSets = s.paramSets.filter((p) => p.study_id !== "s-cushion");
       s.jobs = s.jobs.filter((j) => j.job_type !== "PREDICT");
     });
-    expect(await screen.findByText(/등록된 파라미터 세트가 없습니다/)).toBeTruthy();
+    expect((await screen.findAllByText(/등록된 템플릿이 없습니다/)).length).toBeGreaterThan(0);
     fireEvent.click(await modeRadio("준비된 입력 파일"));
     const card = await inspectOk("E:/shared/AI_WORK/cushion/00_inbox/case_B");
     expect((await within(card).findByTestId("prepared-summary")).textContent).toBe("✓ starter Face_Drop_0000.rad · rad 2 · inc 3");
@@ -185,14 +189,14 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     expect(job.steps.find((s) => s.step_key === "RESPONSE_TABLE")!.state).toBe("SKIPPED");
   });
 
-  it("parametric 회귀 없음: 세트 카드·입력 표·4단계, 요청 body에 input_path 없음", async () => {
+  it("템플릿 값 입력 회귀 없음: 템플릿 칸·입력 표·진행 단계, 요청 body는 S6 parametric 그대로(param_set_id = 고른 템플릿)", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power" });
     const bodies = recordJobBodies(server);
-    expect(await screen.findByRole("region", { name: "파라미터 세트" })).toBeTruthy();
+    expect(await screen.findByRole("region", { name: "템플릿" })).toBeTruthy();
     expect(await screen.findByRole("table", { name: "파라미터 입력" })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "준비된 입력 파일" })).toBeNull();
     await screen.findByRole("table", { name: "응답값" });
-    expect(chainLabels()).toEqual(["형상", "메싱", "입력파일", "예측"]);
+    expect(stepLabels()).toEqual(["1 형상 생성(SimLab)", "2 메시 연결(HyperMesh)", "3 조립(Radioss 입력)", "4 예측(PhysicsAI)", "5 결과"]);
     const run = screen.getByRole("button", { name: "예측 실행" }) as HTMLButtonElement;
     await waitFor(() => expect(run.disabled).toBe(false));
     fireEvent.click(run);
@@ -202,16 +206,17 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     expect(params.param_set_id).toBe("ps-1");
   });
 
-  it("predict_parametric=false: 첫 선택지 비활성 + 툴팁, 준비된 입력으로 표시", async () => {
+  it("predict_parametric·predict_mesh_only 모두 false: 앞 두 선택지 비활성 + 툴팁, 준비된 입력으로 표시", async () => {
     localStorage.setItem(KEY, "parametric");
-    renderApp(`${STUDY}/4`, { user: "power", disabledFeatures: ["train_resp", "predict_parametric"] });
-    const param = await modeRadio("파라미터로 형상 생성");
+    renderApp(`${STUDY}/4`, { user: "power", disabledFeatures: ["train_resp", "predict_parametric", "predict_mesh_only"] });
+    const param = await modeRadio("템플릿 값 입력");
     await waitFor(() => expect(param.disabled).toBe(true));
     expect(param.title).toBe("형상 갱신 설정 필요(관리자)");
+    expect((await modeRadio("일괄 예측(DOE)")).disabled).toBe(true);
     expect((await modeRadio("준비된 입력 파일")).getAttribute("aria-checked")).toBe("true");
-    expect(screen.getByTestId("parametric-off").textContent).toBe("형상 갱신 설정 필요(관리자)");
+    expect(screen.getByTestId("template-off").textContent).toBe("형상 갱신 설정 필요(관리자)");
     expect(await screen.findByRole("region", { name: "준비된 입력 파일" })).toBeTruthy();
-    expect(screen.queryByRole("region", { name: "파라미터 세트" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "템플릿" })).toBeNull();
     expect(localStorage.getItem(KEY)).toBe("parametric");
   });
 });

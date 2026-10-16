@@ -33,6 +33,8 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   // phase3.md §5.2 Study 관리(stage 0)
   STUDY_STORAGE_SCAN: "용량 계산",
   STUDY_CLEANUP: "Study 정리",
+  // phase3.md §14.5 S9
+  PREDICT_BATCH: "일괄 예측 입력 생성",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -56,6 +58,7 @@ export const JOB_STAGE: Record<JobType, number> = {
   OPTIMIZE: 5,
   STUDY_STORAGE_SCAN: 0,
   STUDY_CLEANUP: 0,
+  PREDICT_BATCH: 4,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

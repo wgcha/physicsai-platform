@@ -73,9 +73,12 @@ function checkPredictParams(srv: MockServer, s: Study, params: Record<string, un
   if (mode !== "parametric" && mode !== "prepared") return err(422, "INVALID_PARAMS", "input_mode는 parametric 또는 prepared입니다.");
   if (mode === "parametric") {
     if (params.input_path) return err(422, "INVALID_PARAMS", "파라미터 입력에는 input_path를 쓸 수 없습니다.");
-    if (!srv.p2.feature("predict_parametric").enabled)
-      return err(409, "TEMPLATE_NOT_CONFIGURED", "형상 갱신 설정이 필요합니다(관리자).", { missing: srv.p2.feature("predict_parametric").missing });
-    return null;
+    // S9 §14.4: 템플릿 input_kind별 기능(mesh_only = predict_mesh_only), 서버가 params에 template_kind로 확정 기록(백엔드 P0)
+    const ps = srv.paramSets.find((p) => (params.param_set_id ? p.id === params.param_set_id : p.study_id === s.id && p.is_current));
+    const kind = ps?.input_kind ?? "assembly";
+    const f = srv.p2.feature(kind === "mesh_only" ? "predict_mesh_only" : "predict_parametric");
+    if (!f.enabled) return err(409, "TEMPLATE_NOT_CONFIGURED", "형상 갱신 설정이 필요합니다(관리자).", { missing: f.missing });
+    return { ...params, template_kind: kind };
   }
   const path = typeof params.input_path === "string" ? params.input_path.trim() : "";
   if (!path) return err(422, "INVALID_PARAMS", "input_path가 필요합니다.");

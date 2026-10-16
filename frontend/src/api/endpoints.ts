@@ -2,6 +2,13 @@
 import { fetchBlob, request, requestPage } from "./client";
 import type {
   Artifact,
+  BatchCurves,
+  BatchPreview,
+  BatchPreviewRequest,
+  BatchRetryFailed,
+  ParamSetResponsesPut,
+  PredictBatch,
+  PredictBatchSummary,
   Curation,
   CurationFile,
   CurationSource,
@@ -92,6 +99,21 @@ export const api = {
     request<SamplePage>("GET", `/param-sets/${id}/samples`, { query: { limit, cursor } }),
   predictCheck: (studyId: string, body: { param_set_id?: string | null; values: Record<string, number> }) =>
     request<PredictCheck>("POST", `/studies/${studyId}/predict/check`, { body }),
+
+  // phase3.md §14.7 S9 일괄 예측·템플릿 응답 — S9: openapi 갱신 후 gen:api로 대체(경로·본문은 계약 JSON 예시 그대로)
+  /** 조합 미리보기(동기, member 이상). 생성은 createJob("PREDICT_BATCH") */
+  batchPreview: (studyId: string, body: BatchPreviewRequest) =>
+    request<BatchPreview>("POST", `/studies/${studyId}/predict-batches/preview`, { body }),
+  batches: (studyId: string) => request<PredictBatchSummary[]>("GET", `/studies/${studyId}/predict-batches`),
+  batch: (id: string) => request<PredictBatch>("GET", `/predict-batches/${id}`),
+  /** UTF-8 BOM CSV(doe_no,run_key,folder,<파라미터>,<응답>,state) */
+  batchCsv: (id: string) => fetchBlob(`/predict-batches/${id}/table.csv`),
+  batchCurves: (id: string, q: { name?: string | null; max_points?: number } = {}) =>
+    request<BatchCurves>("GET", `/predict-batches/${id}/curves`, { query: { name: q.name, max_points: q.max_points ?? 500 } }),
+  cancelBatch: (id: string) => request<PredictBatch>("POST", `/predict-batches/${id}/cancel`),
+  retryFailedBatch: (id: string) => request<BatchRetryFailed>("POST", `/predict-batches/${id}/retry-failed`),
+  /** 템플릿 응답 정의 저장(power) */
+  putParamSetResponses: (id: string, body: ParamSetResponsesPut) => request<ParamSet>("PUT", `/param-sets/${id}/responses`, { body }),
 
   // §10.5 작업·로그·산출물
   createJob: (studyId: string, job_type: JobType, params: Record<string, unknown>) =>

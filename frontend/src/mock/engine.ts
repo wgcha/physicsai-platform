@@ -5,6 +5,7 @@ import type { MockServer } from "./server";
 import { finishStage3 } from "./stage3";
 import { finishStage4 } from "./stage4";
 import { adjustPreparedSteps } from "./stage4Prepared";
+import { batchAfterChild, batchOnProgress, isBatchChild } from "./predictBatch";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -26,6 +27,7 @@ export function tickJobs(srv: MockServer) {
       j.steps.forEach((s) => s.state === "RUNNING" && (s.state = "CANCELED"));
       srv.bump(j);
       srv.notifyJob(j, "JOB_CANCELED");
+      if (isBatchChild(j)) batchAfterChild(srv, j);
       continue;
     }
     const sp = (j as Job & { _speed?: number })._speed ?? (j.lane === "LIGHT" ? 50 : srv.speed);
@@ -38,6 +40,7 @@ export function tickJobs(srv: MockServer) {
     adjustPreparedSteps(srv, j);
     const cur = chain[done];
     j.progress_label = cur ? `${cur.key} …` : null;
+    batchOnProgress(srv, j);
     srv.p2.onProgress(j);
     if (((j as Job & { _pct?: number })._pct ?? 0) >= 100) finishJob(srv, j);
     srv.bump(j);
@@ -86,4 +89,5 @@ function finishJob(srv: MockServer, j: Job) {
   finishStage3(srv, j);
   finishStage4(srv, j);
   if (srv.manage.storage.onFinish(j)) srv.notifyJob(j, "JOB_SUCCEEDED");
+  if (isBatchChild(j)) batchAfterChild(srv, j);
 }

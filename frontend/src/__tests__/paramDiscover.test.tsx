@@ -18,8 +18,14 @@ function recordRegister(server: MockServer) {
   return bodies;
 }
 
+/** 템플릿 칸의 "템플릿 관리"를 펼친다(S9: 관리는 펼칠 때만) */
+async function openManage() {
+  fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
+  return screen.findByRole("region", { name: "템플릿 관리" });
+}
+
 async function openDiscover(path: string) {
-  const card = await screen.findByRole("region", { name: "파라미터 세트" });
+  const card = await openManage();
   fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
   expect(within(card).getByRole("button", { name: "프로젝트 폴더에서 찾기" }).getAttribute("aria-pressed")).toBe("true"); // 기본
   const form = within(card).getByTestId("ps-discover");
@@ -35,7 +41,7 @@ describe("④ 프로젝트 폴더에서 찾기 (phase3 §13 S8)", () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power" });
     const bodies = recordRegister(server);
     const { card, form } = await openDiscover(`${ROOT}/project`);
-    fireEvent.change(within(card).getByLabelText("파라미터 세트 이름"), { target: { value: "쿠션 v2" } });
+    fireEvent.change(within(card).getByLabelText("템플릿 이름"), { target: { value: "쿠션 v2" } });
     expect((await within(form).findByTestId("ps-discover-params")).textContent).toBe("4개 · tpl에서 생성 — 단위 없음");
     expect(within(form).getByText("01_CAD/cushion_base.x_t")).toBeTruthy();
     expect(within(form).getByText("RADIOSS_ASSEM · cushion_0000.rad")).toBeTruthy();
@@ -72,14 +78,14 @@ describe("④ 프로젝트 폴더에서 찾기 (phase3 §13 S8)", () => {
     renderApp(`${STUDY}/4`, { user: "power" });
     const { form } = await openDiscover(`${ROOT}/empty`);
     expect(await within(form).findByText(/tpl\(\*\.tpl\)을 찾지 못했습니다/)).toBeTruthy();
-    expect(within(form).getByText(/조립 폴더를 찾지 못했습니다/)).toBeTruthy();
+    expect(within(form).getByText(/조립 폴더 없음 — m1 메시로 바로 예측합니다/)).toBeTruthy(); // S9: 조립 0개는 문제가 아니라 안내
     expect((within(form).getByRole("button", { name: "등록" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("찾아보기(§12 S7): 추가 허용 폴더까지 보이고, 고른 폴더가 프로젝트 폴더 입력란에 들어간다", async () => {
     localStorage.clear();
     renderApp(`${STUDY}/4`, { user: "power" });
-    const card = await screen.findByRole("region", { name: "파라미터 세트" });
+    const card = await openManage();
     fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
     const form = within(card).getByTestId("ps-discover");
     fireEvent.click(within(form).getByRole("button", { name: "찾아보기" }));
@@ -94,7 +100,7 @@ describe("④ 프로젝트 폴더에서 찾기 (phase3 §13 S8)", () => {
 
   it("기존 세트 이름 변경", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power" });
-    const card = await screen.findByRole("region", { name: "파라미터 세트" });
+    const card = await openManage();
     expect(within(card).getByTestId("ps-label").textContent).toContain("이름 없음");
     fireEvent.click(within(card).getByRole("button", { name: "이름 변경" }));
     fireEvent.change(within(card).getByLabelText("새 이름"), { target: { value: "쿠션 템플릿" } });
@@ -114,9 +120,11 @@ describe("④ 프로젝트 폴더에서 찾기 (phase3 §13 S8)", () => {
     }
   });
 
-  it("조회 전용 사용자는 이름 변경 버튼이 없다", async () => {
+  it("조회 전용 사용자는 템플릿 관리·이름 변경 버튼이 없다(고르기만)", async () => {
     renderApp(`${STUDY}/4`, { user: "general" });
-    const card = await screen.findByRole("region", { name: "파라미터 세트" });
-    expect(within(card).queryByRole("button", { name: "이름 변경" })).toBeNull();
+    const card = await screen.findByRole("region", { name: "템플릿" });
+    expect(within(card).getByText("관리자가 등록 · 사용자는 고르기만")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "템플릿 관리" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "이름 변경" })).toBeNull();
   });
 });
