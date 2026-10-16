@@ -96,7 +96,13 @@ export function finishStage4(srv: MockServer, j: Job) {
 }
 
 /** §10.4 파라미터 세트 단건·샘플 */
-export const paramSetRoutes: Route = (srv, { method, seg, query }) => {
+export const paramSetRoutes: Route = (srv, { method, seg, query, body }) => {
+  if (method === "PATCH" && seg[0] === "param-sets" && seg[1] && !seg[2]) {
+    const ps = srv.paramSets.find((p) => p.id === seg[1]);
+    if (!ps) return err(404, "NOT_FOUND", "파라미터 세트를 찾을 수 없습니다.");
+    ps.label = String(body?.label ?? "").trim() || null;
+    return { status: 200, body: ps };
+  }
   if (method === "GET" && seg[0] === "param-sets" && seg[1]) {
     const ps = srv.paramSets.find((p) => p.id === seg[1]);
     if (!ps) return err(404, "NOT_FOUND", "파라미터 세트를 찾을 수 없습니다.");

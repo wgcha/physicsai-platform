@@ -5,6 +5,7 @@ import { err, needPower, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { datasetOut, modelOut } from "./stage3";
 import { check } from "./stage4";
+import { discover, discoveredParams, registerDiscovered } from "./stage4Discover";
 
 export function studyDetail(srv: MockServer, s: Study): StudyDetail {
   const latest = (stage: number) => {
@@ -87,11 +88,20 @@ export const studyRoutes: Route = (srv, { method, path, seg, query, body, me }) 
     }
     if (method === "POST" && sub === "paths" && seg[3] === "inspect")
       return srv.p2.inspect(String(body?.purpose), String(body?.path ?? ""), body?.doe_id as string | undefined) ?? inspectPath(String(body?.purpose), String(body?.path ?? ""));
-    if (method === "POST" && sub === "param-sets") {
-      const r = inspectPath("PARAM_SET", String(body?.path ?? ""));
-      if (r.status !== 200) return r;
+    if (method === "POST" && sub === "param-sets" && seg[3] === "discover") return discover(String(body?.path ?? ""), body?.tpl as string | undefined);
+    if (method === "POST" && sub === "param-sets" && !seg[3]) {
+      let extra: Partial<ParamSet> = {};
+      if (body?.mode === "discover") {
+        const d = registerDiscovered(String(body?.path ?? ""), body?.choice as Record<string, string> | undefined);
+        if ("status" in d) return d;
+        extra = discoveredParams(d);
+      } else {
+        const r = inspectPath("PARAM_SET", String(body?.path ?? ""));
+        if (r.status !== 200) return r;
+      }
+      const label = String(body?.label ?? "").trim() || null;
       srv.paramSets.forEach((p) => p.study_id === s.id && (p.is_current = false));
-      const ps: ParamSet = { ...seedParamSet(), id: srv.nid("ps"), study_id: s.id, source_path: String(body?.path), registered_by_name: me.display_name, registered_at: new Date().toISOString() };
+      const ps: ParamSet = { ...seedParamSet(), ...extra, label, id: srv.nid("ps"), study_id: s.id, source_path: String(body?.path), registered_by_name: me.display_name, registered_at: new Date().toISOString() };
       srv.samples[ps.id] = srv.samples["ps-1"];
       srv.paramSets.unshift(ps);
       return { status: 201, body: ps };

@@ -1,7 +1,8 @@
-"""④ 파라미터 세트 등록·조회·샘플·예측 입력 확인, ①→④ 파라미터 세트 생성(§10.4, phase2 §6.13)."""
+"""④ 파라미터 세트 등록(폴더·프로젝트 폴더 자동 구성)·조회·이름·샘플·예측 입력 확인, ①→④ 생성(§10.4, phase2 §6.13, phase3 §13)."""
 
 from __future__ import annotations
 
+import json
 import os
 import uuid
 from typing import Any
@@ -11,8 +12,9 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import write_json
-from physicsai_core.paths import check_user_path, resolve_in_study
+from physicsai_core.paths import allowed_roots, check_user_path, resolve_in_study
 from physicsai_core.stage4_predict import nearest as nearest_mod
+from physicsai_core.stage4_predict import param_discover as disc_mod
 from physicsai_core.stage4_predict import param_sets as ps_mod
 
 from ..auth import Principal
@@ -29,14 +31,46 @@ from .common import (
 )
 
 
-def register_param_set(ctx: AppContext, principal: Principal, study_id: str, path: str, rid: str, ip: str | None) -> dict[str, Any]:
-    cfg = ctx.settings
+def _label(raw: str | None) -> str | None:
+    v = (raw or "").strip()
+    return v[:120] or None
+
+
+def _require_active_power(ctx: AppContext, principal: Principal, study_id: str) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         s = studies_repo.require(conn, study_id)
     require_power(principal, s["project_id"])
     require_config_ok(ctx)
     if s["status"] != "ACTIVE":
         raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
+    return s
+
+
+def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: Any, psid: str, stored_rel: str,
+                       source_path: str, label: str | None, action: str, detail: dict[str, Any], rid: str,
+                       ip: str | None, **extra: Any) -> dict[str, Any]:
+    with ctx.engine.begin() as conn:
+        ps_repo.insert_current(conn, {
+            "id": psid, "study_id": study_id, "source_path": source_path, "stored_rel": stored_rel + "/",
+            "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
+            "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
+            "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
+            "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
+            "registered_by": principal.user_id, "registered_by_name": principal.display_name, "label": label, **extra,
+        })
+        audit(conn, principal, action, "param_set", psid, {**detail, "label": label}, rid, ip)
+        p = ps_repo.get(conn, psid)
+    return param_set_out(p)  # type: ignore[arg-type]
+
+
+def register_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
+    if getattr(body, "mode", None) == "discover":
+        return register_param_set_discovered(ctx, principal, study_id, body, rid, ip)
+    if body.choice is not None:
+        raise DomainError("INVALID_PARAMS", "choice는 mode=discover에서만 씁니다", status=422)
+    cfg = ctx.settings
+    s = _require_active_power(ctx, principal, study_id)
+    path = body.path
     cp = check_user_path(path, [cfg.storage.ai_root])
     f = ps_mod.validate_folder(cp.path, max_samples=cfg.param_set.max_samples,
                                max_total_bytes=cfg.param_set.max_total_bytes, starter_glob=cfg.predict.starter_glob,
@@ -47,18 +81,74 @@ def register_param_set(ctx: AppContext, principal: Principal, study_id: str, pat
     root = study_root(ctx, s)
     stored_rel = f"04_params/{psid}"
     ps_mod.write_normalized(f, cp.path, resolve_in_study(root, stored_rel), cp.path)
+    return _insert_folder_set(ctx, principal, study_id, f, psid, stored_rel, cp.path, _label(body.label),
+                              "PARAM_SET_REGISTER", {"source_path": cp.path}, rid, ip)
+
+
+def discover_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any) -> dict[str, Any]:
+    """phase3 §13 S8: 프로젝트 폴더에서 후보 찾기(읽기만, 워커 불필요)."""
+    with ctx.engine.connect() as conn:
+        s = studies_repo.require(conn, study_id)
+    require_power(principal, s["project_id"])
+    cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
+    return disc_mod.discover(cp.path, ctx.settings, tpl=body.tpl).out()
+
+
+def register_param_set_discovered(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str,
+                                  ip: str | None) -> dict[str, Any]:
+    """phase3 §13 S8: 고른 후보를 §15.4 구조로 임시 폴더에 모아 기존 검증기·정규화로 등록(원본 위치는 읽기만)."""
+    cfg = ctx.settings
+    s = _require_active_power(ctx, principal, study_id)
+    cp = check_user_path(body.path, allowed_roots(cfg, imports=True))
+    choice = body.choice.model_dump() if body.choice is not None else {}
+    d = disc_mod.discover(cp.path, cfg, tpl=choice.get("tpl"))
+    tpl, cad, assem, probs = disc_mod.resolve_choice(d, choice)
+    problems = d.problems + probs
+    if problems or tpl is None or cad is None or assem is None:
+        raise DomainError("PARAM_SET_INVALID", "프로젝트 폴더에서 파라미터 세트를 구성할 수 없습니다", status=422,
+                          problems=problems or [{"code": "DISCOVER_INCOMPLETE", "message": "tpl·CAD·조립 폴더를 모두 찾아야 합니다"}])
+    need = disc_mod.planned_bytes(d, tpl, cad, assem, cfg)
+    if need > cfg.param_set.max_total_bytes:
+        raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=[
+            {"code": "PARAM_SET_TOO_LARGE", "message": f"복사할 총량이 상한({cfg.param_set.max_total_bytes} bytes)을 넘습니다"}])
+    root = study_root(ctx, s)
+    tmp_id = str(uuid.uuid4())
+    A = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}")
+    os.makedirs(A)
+    disc_mod.copy_sources(d, tpl, cad, assem, A, cfg)
+    f = ps_mod.validate_folder(A, max_samples=cfg.param_set.max_samples, max_total_bytes=cfg.param_set.max_total_bytes,
+                               starter_glob=cfg.predict.starter_glob, renum_csv_name=cfg.predict.renum_csv_name)
+    if not f.ok:
+        raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
+    psid = str(uuid.uuid4())
+    out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}.out")
+    ps_mod.write_normalized(f, A, out_tmp, cp.path)
+    picked = {"tpl": tpl.rel, "cad": cad, "radioss_assem": assem["rel"], "parameters_source": d.parameters_source,
+              "parameters_file": d.parameters_file, "samples": d.samples, "responses": d.responses}
+    src_json = os.path.join(out_tmp, "source.json")
+    with open(src_json, encoding="utf-8") as fh:
+        meta = json.load(fh)
+    write_json(src_json, {**meta, "mode": "discover", "discovered": picked})
+    stored_rel = f"04_params/{psid}"
+    dst = resolve_in_study(root, stored_rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
+    return _insert_folder_set(ctx, principal, study_id, f, psid, stored_rel, cp.path, _label(body.label),
+                              "PARAM_SET_REGISTER", {"source_path": cp.path, "mode": "discover", **picked}, rid, ip)
+
+
+def patch_param_set(ctx: AppContext, principal: Principal, ps_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
+    """표시 이름(label) 바꾸기 — 내용(파일·파라미터)은 바뀌지 않는다."""
     with ctx.engine.begin() as conn:
-        ps_repo.insert_current(conn, {
-            "id": psid, "study_id": study_id, "source_path": cp.path, "stored_rel": stored_rel + "/",
-            "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
-            "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
-            "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
-            "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
-            "registered_by": principal.user_id, "registered_by_name": principal.display_name,
-        })
-        audit(conn, principal, "PARAM_SET_REGISTER", "param_set", psid, {"source_path": cp.path}, rid, ip)
-        p = ps_repo.get(conn, psid)
-    return param_set_out(p)  # type: ignore[arg-type]
+        p = _require_param_set(conn, ps_id)
+        s = studies_repo.require(conn, p["study_id"])
+        require_power(principal, s["project_id"])
+        if "label" in body.model_fields_set:
+            lab = _label(body.label)
+            ps_repo.set_label(conn, ps_id, lab)
+            audit(conn, principal, "PARAM_SET_UPDATE", "param_set", ps_id, {"label": lab}, rid, ip)
+        p = _require_param_set(conn, ps_id)
+    return param_set_out(p)
 
 
 def list_param_sets(ctx: AppContext, study_id: str, limit: int | None, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
@@ -208,23 +298,13 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     if not f.ok:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
     psid = str(uuid.uuid4())
-    label = f"① DOE {d['id'][:8]}"
+    src_label = f"① DOE {d['id'][:8]}"
     out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}.out")
-    ps_mod.write_normalized(f, A, out_tmp, label)
+    ps_mod.write_normalized(f, A, out_tmp, src_label)
     stored_rel = f"04_params/{psid}"
     dst = resolve_in_study(root, stored_rel)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
-    with ctx.engine.begin() as conn:
-        ps_repo.insert_current(conn, {
-            "id": psid, "study_id": study_id, "source_path": label, "stored_rel": stored_rel + "/",
-            "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
-            "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
-            "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
-            "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
-            "registered_by": principal.user_id, "registered_by_name": principal.display_name,
-            "origin": "TRAIN_DOE", "train_doe_id": d["id"],
-        })
-        audit(conn, principal, "PARAM_SET_FROM_TRAIN", "param_set", psid, {"doe_id": d["id"], "runs": body.runs}, rid, ip)
-        p = ps_repo.get(conn, psid)
-    return param_set_out(p)  # type: ignore[arg-type]
+    return _insert_folder_set(ctx, principal, study_id, f, psid, stored_rel, src_label, _label(body.label),
+                              "PARAM_SET_FROM_TRAIN", {"doe_id": d["id"], "runs": body.runs}, rid, ip,
+                              origin="TRAIN_DOE", train_doe_id=d["id"])

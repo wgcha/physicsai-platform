@@ -5,24 +5,38 @@ import { useCanExecute } from "../../hooks/useJobRunner";
 import { Card } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
 import { fmtTime } from "../../lib/format";
+import { ParamSetDiscoverForm } from "./ParamSetDiscoverForm";
+
+type RegMode = "discover" | "folder" | "train";
+const MODES: [RegMode, string][] = [
+  ["discover", "프로젝트 폴더에서 찾기"],
+  ["folder", "폴더 직접 지정"],
+  ["train", "① 결과로 만들기"],
+];
 
 export function ParamSetCard() {
   const { study, currentParamSet: ps, reloadParamSets } = useStudy();
   const canExec = useCanExecute();
   const [open, setOpen] = useState(false);
-  const [mode, setMode] = useState<"folder" | "train">("folder");
+  const [mode, setMode] = useState<RegMode>("discover");
+  const [label, setLabel] = useState("");
   const [path, setPath] = useState("");
   const [ok, setOk] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const done = async () => {
+    await reloadParamSets();
+    setOpen(false);
+    setLabel("");
+  };
+
   const register = async () => {
     setBusy(true);
     setError(null);
     try {
-      await api.registerParamSet(study.id, path.trim());
-      await reloadParamSets();
-      setOpen(false);
+      await api.registerParamSet(study.id, path.trim(), { label: label.trim() || null });
+      await done();
       setPath("");
     } catch (e) {
       setError(errorMessage(e));
@@ -48,6 +62,7 @@ export function ParamSetCard() {
     >
       {ps ? (
         <div className="ps-summary">
+          <ParamSetLabel key={ps.id} id={ps.id} label={ps.label ?? null} canEdit={canExec} onSaved={reloadParamSets} />
           <span>
             파라미터 <b>{ps.parameters.length}</b>
           </span>
@@ -67,25 +82,26 @@ export function ParamSetCard() {
           </span>
         </div>
       ) : (
-        <p className="muted">등록된 파라미터 세트가 없습니다. 파라미터 정의·학습 샘플·CAD·tpl·조립 파일이 든 폴더를 등록하세요.</p>
+        <p className="muted">등록된 파라미터 세트가 없습니다. 프로젝트 폴더를 지정하면 tpl·CAD·조립 폴더를 찾아 등록합니다.</p>
       )}
       {open && canExec && (
-        <div className="seg ps-mode" role="group" aria-label="등록 방식">
-          <button type="button" className={mode === "folder" ? "on" : ""} onClick={() => setMode("folder")}>
-            폴더 등록
-          </button>
-          <button type="button" className={mode === "train" ? "on" : ""} onClick={() => setMode("train")}>
-            ① 결과로 만들기
-          </button>
-        </div>
+        <>
+          <div className="seg ps-mode" role="group" aria-label="등록 방식">
+            {MODES.map(([k, t]) => (
+              <button key={k} type="button" className={mode === k ? "on" : ""} aria-pressed={mode === k} onClick={() => setMode(k)}>
+                {t}
+              </button>
+            ))}
+          </div>
+          <label className="field">
+            <span className="field-label">이름(선택)</span>
+            <input type="text" value={label} maxLength={120} placeholder="예: 쿠션 v1" aria-label="파라미터 세트 이름" onChange={(e) => setLabel(e.target.value)} />
+          </label>
+        </>
       )}
+      {open && canExec && mode === "discover" && <ParamSetDiscoverForm studyId={study.id} label={label} onDone={done} />}
       {open && canExec && mode === "train" && (
-        <FromTrainForm
-          onDone={async () => {
-            await reloadParamSets();
-            setOpen(false);
-          }}
-        />
+        <FromTrainForm label={label} onDone={done} />
       )}
       {open && canExec && mode === "folder" && (
         <div className="ps-register">
@@ -123,7 +139,7 @@ export function ParamSetCard() {
 }
 
 /** phase2.md §6.13·§14.4: ① DOE 결과로 파라미터 세트 만들기 */
-function FromTrainForm({ onDone }: { onDone: () => Promise<void> }) {
+function FromTrainForm({ label, onDone }: { label: string; onDone: () => Promise<void> }) {
   const { study } = useStudy();
   const [does, setDoes] = useState<TrainDoe[] | null>(null);
   const [doeId, setDoeId] = useState("");
@@ -146,7 +162,7 @@ function FromTrainForm({ onDone }: { onDone: () => Promise<void> }) {
     setBusy(true);
     setError(null);
     try {
-      await api.paramSetFromTrain(study.id, { doe_id: doeId, runs });
+      await api.paramSetFromTrain(study.id, { doe_id: doeId, runs, label: label.trim() || null });
       await onDone();
     } catch (e) {
       setError(errorMessage(e));
@@ -189,5 +205,49 @@ function FromTrainForm({ onDone }: { onDone: () => Promise<void> }) {
         {error && <span className="error-text small" role="alert">{error}</span>}
       </div>
     </div>
+  );
+}
+
+/** 세트 표시 이름(label) — "쿠션 v1"처럼 사용자가 알아볼 이름. 내용은 바뀌지 않는다(phase3 §13 S8) */
+function ParamSetLabel({ id, label, canEdit, onSaved }: { id: string; label: string | null; canEdit: boolean; onSaved: () => Promise<void> }) {
+  const [edit, setEdit] = useState(false);
+  const [value, setValue] = useState(label ?? "");
+  const [error, setError] = useState<string | null>(null);
+  const save = async () => {
+    setError(null);
+    try {
+      await api.patchParamSet(id, { label: value.trim() || null });
+      await onSaved();
+      setEdit(false);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+  if (edit)
+    return (
+      <span className="fill-row">
+        <input type="text" value={value} maxLength={120} aria-label="새 이름" onChange={(e) => setValue(e.target.value)} />
+        <button type="button" className="btn small" onClick={save}>
+          저장
+        </button>
+        <button type="button" className="btn small ghost" onClick={() => setEdit(false)}>
+          취소
+        </button>
+        {error && (
+          <span className="error-text small" role="alert">
+            {error}
+          </span>
+        )}
+      </span>
+    );
+  return (
+    <span data-testid="ps-label">
+      <b>{label ?? "이름 없음"}</b>
+      {canEdit && (
+        <button type="button" className="btn small ghost" onClick={() => setEdit(true)}>
+          이름 변경
+        </button>
+      )}
+    </span>
   );
 }

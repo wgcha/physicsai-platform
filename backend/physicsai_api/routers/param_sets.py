@@ -13,7 +13,14 @@ ERR = {404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse}, 422: {"
 
 @router.post("/studies/{study_id}/param-sets", response_model=S.ParamSet, status_code=201, responses=ERR)
 def register(study_id: str, body: S.ParamSetCreate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
-    return svc.register_param_set(get_ctx(request), principal, study_id, body.path, request_id(request), client_ip(request))
+    """§15.4 폴더 등록. mode="discover"면 프로젝트 폴더에서 자동 구성(phase3 §13 S8)."""
+    return svc.register_param_set(get_ctx(request), principal, study_id, body, request_id(request), client_ip(request))
+
+
+@router.post("/studies/{study_id}/param-sets/discover", response_model=S.ParamSetDiscoverResponse, responses=ERR)
+def discover(study_id: str, body: S.ParamSetDiscoverRequest, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """phase3 §13 S8: 프로젝트 폴더에서 tpl·CAD·조립 폴더·파라미터 후보 찾기(디스크 읽기만)."""
+    return svc.discover_param_set(get_ctx(request), principal, study_id, body)
 
 
 @router.post("/studies/{study_id}/param-sets/from-train", response_model=S.ParamSet, status_code=201, responses=ERR)
@@ -34,6 +41,12 @@ def list_sets(study_id: str, request: Request, response: Response, limit: int | 
 @router.get("/param-sets/{ps_id}", response_model=S.ParamSet, responses=ERR)
 def get_set(ps_id: str, request: Request, _p: Principal = Depends(get_principal)) -> dict:
     return svc.get_param_set(get_ctx(request), ps_id)
+
+
+@router.patch("/param-sets/{ps_id}", response_model=S.ParamSet, responses=ERR)
+def patch_set(ps_id: str, body: S.ParamSetPatch, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """표시 이름(label) 바꾸기(phase3 §13 S8)."""
+    return svc.patch_param_set(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))
 
 
 @router.get("/param-sets/{ps_id}/samples", response_model=S.SamplesPage, responses=ERR)

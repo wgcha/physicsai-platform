@@ -33,7 +33,7 @@ def _model(c, sid, mid, pscfg):
 def test_upgrade_keeps_existing_pscfg_and_allows_null(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0005_pscfg_optional"
+    assert MIGRATION_HEAD >= "0005_pscfg_optional"
     name = f"physicsai_m5_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

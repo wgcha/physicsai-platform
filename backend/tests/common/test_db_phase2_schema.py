@@ -19,7 +19,7 @@ def test_migration_head_constant_matches_script():
 
     cfg = Config(str(REPO / "migrations" / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO / "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_current_head() == MIGRATION_HEAD == "0005_pscfg_optional"
+    assert ScriptDirectory.from_config(cfg).get_current_head() == MIGRATION_HEAD == "0006_param_set_label"
 
 
 def test_upgrade_head_and_metadata_in_sync(engine):

@@ -132,7 +132,7 @@ def param_set_out(p: dict[str, Any]) -> dict[str, Any]:
         "sample_has_measured": p["sample_has_measured"], "cad_file_name": p["cad_file_name"],
         "starter_name": p["starter_name"], "tpl_params": p["tpl_params"], "is_current": p["is_current"],
         "registered_by_name": p["registered_by_name"], "registered_at": p["registered_at"],
-        "origin": p.get("origin") or "FOLDER", "train_doe_id": p.get("train_doe_id"),
+        "origin": p.get("origin") or "FOLDER", "train_doe_id": p.get("train_doe_id"), "label": p.get("label"),
     }
 
 

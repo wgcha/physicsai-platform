@@ -12,11 +12,60 @@ from .common import Req, Resp
 __all__ = [
     "ParamSetCreate", "Parameter", "ResponseDef", "TplParam", "ParamSet", "SampleRow", "SamplesPage",
     "PredictCheckRequest", "OutOfRange", "Rounded", "Nearest", "PredictCheckResponse", "ParamSetFromTrain",
+    "ParamSetDiscoverChoice", "ParamSetDiscoverRequest", "DiscoverTpl", "DiscoverCad", "DiscoverAssem", "DiscoverProblem",
+    "ParamSetDiscoverResponse", "ParamSetPatch",
 ]
+
+
+class ParamSetDiscoverChoice(Req):
+    """phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능."""
+
+    tpl: str | None = Field(default=None, max_length=400)
+    cad: str | None = Field(default=None, max_length=400)
+    radioss_assem: str | None = Field(default=None, max_length=400)
 
 
 class ParamSetCreate(Req):
     path: str = Field(max_length=400)
+    # 생략 = 기존 §15.4 폴더 등록(호환). "discover" = 프로젝트 폴더에서 자동 구성(phase3 §13 S8)
+    mode: Literal["folder", "discover"] | None = None
+    choice: ParamSetDiscoverChoice | None = None
+    label: str | None = Field(default=None, max_length=120)
+
+
+class ParamSetPatch(Req):
+    label: str | None = Field(default=None, max_length=120)
+
+
+class ParamSetDiscoverRequest(Req):
+    path: str = Field(max_length=400)
+    tpl: str | None = Field(default=None, max_length=400)
+
+
+class DiscoverTpl(Resp):
+    rel: str
+    name: str
+    parameter_count: int
+    cad_ref: str | None = None
+
+
+class DiscoverCad(Resp):
+    rel: str
+    name: str
+
+
+class DiscoverAssem(Resp):
+    rel: str
+    starter: str
+    has_eps_mesh: bool
+    has_renum_csv: bool
+    file_count: int
+
+
+class DiscoverProblem(Resp):
+    code: str
+    message: str
+    file: str | None = None
 
 
 class Parameter(Resp):
@@ -55,6 +104,7 @@ class ParamSet(Resp):
     registered_at: datetime
     origin: str = "FOLDER"
     train_doe_id: str | None = None
+    label: str | None = None
 
 
 class SampleRow(Resp):
@@ -104,3 +154,21 @@ class ParamSetFromTrain(Req):
     doe_id: str
     runs: Literal["collected", "all"] = "collected"
     unit_system: str | None = Field(default=None, max_length=40)
+    label: str | None = Field(default=None, max_length=120)
+
+
+class ParamSetDiscoverResponse(Resp):
+    path: str
+    tpl: list[DiscoverTpl]
+    selected_tpl: str | None = None
+    cad: list[DiscoverCad]
+    radioss_assem: list[DiscoverAssem]
+    parameters_source: Literal["file", "tpl"] | None = None
+    parameters_file: str | None = None
+    parameters: list[Parameter]
+    samples: str | None = None
+    responses: str | None = None
+    problems: list[DiscoverProblem]
+    notes: list[DiscoverProblem]
+    truncated: bool
+    scanned: int
