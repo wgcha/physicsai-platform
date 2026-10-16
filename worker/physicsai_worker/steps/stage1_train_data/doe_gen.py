@@ -6,6 +6,7 @@ import fnmatch
 import glob
 import os
 import re
+import time
 from typing import Any
 
 from physicsai_core.commands import fwd
@@ -101,25 +102,65 @@ def dg_prep(ctx: Any) -> None:
     ctx.patch_result({"doe_id": doe_id, "launcher_rel": ctx.rel(launcher), "num_runs": num_runs})
 
 
+def hst_run_label(running: int, waiting: int | None, done: int, total: int | None, multi: int) -> str:
+    """동시 실행 현황 라벨 — 마지막 로그 줄 대신 run 수 집계(동시 실행이 화면에서 보이게)."""
+    parts = [f"실행 중 {running}"]
+    if waiting is not None:
+        parts.append(f"대기 {waiting}")
+    parts.append(f"완료 {done}" + (f"/{total}" if total else ""))
+    return " · ".join(parts) + f" (동시 {multi})"
+
+
+class HstRunTracker:
+    """HST DOE 진행 집계. 완료 = 'Finished run (k), model (m_3)' 로그(완료 순서 무관 집합),
+    시작 = run 폴더(train_data.run_dir_glob) 생성. 실행 중 = 시작−완료(동시 실행 수 이하로 제한)."""
+
+    def __init__(self, D: str, run_dir_glob: str, rx: re.Pattern[str], total: int | None, multi: int,
+                 scan_interval_s: float = 2.0) -> None:
+        self.D, self.glob, self.rx, self.total, self.multi = D, run_dir_glob, rx, total, max(1, multi)
+        self.done: set[int] = set()
+        self.started = 0
+        self.scan_interval_s = scan_interval_s
+        self._last_scan = 0.0
+
+    def snapshot(self) -> tuple[float | None, str]:
+        k = len(self.done)
+        running = min(max(self.started - k, 0), self.multi)
+        if self.total:
+            running = min(running, max(self.total - k, 0))
+        waiting = max(self.total - k - running, 0) if self.total else None
+        pct = min(10 + k / self.total * 85, 95) if self.total else None  # 원본 FUNC:93-98(완료 수 기준)
+        return pct, hst_run_label(running, waiting, k, self.total, self.multi)
+
+    def line(self, line: str) -> tuple[float | None, str | None] | None:
+        m = self.rx.search(line)
+        if not m:
+            return None
+        self.done.add(int(m.group("run")))
+        self.started = max(self.started, len(self.done))
+        return self.snapshot()
+
+    def poll(self, now: float | None = None) -> tuple[float | None, str | None] | None:
+        now = time.monotonic() if now is None else now
+        if now - self._last_scan < self.scan_interval_s:
+            return None
+        self._last_scan = now
+        n = sum(1 for d in glob.glob(os.path.join(self.D, self.glob)) if os.path.isdir(d))
+        self.started = max(n, len(self.done))
+        return self.snapshot()
+
+
 def hst_gen_radioss(ctx: Any) -> None:
     s = ctx.settings
     r = ctx.result()
     D = _D(ctx)
     doe = _doe(ctx)
-    total = doe["num_runs_requested"]
-    rx = re.compile(s.train_data.hst_progress_regex)
-
-    def hook(line: str) -> tuple[float | None, str | None] | None:
-        m = rx.search(line)
-        if not m:
-            return None
-        run = int(m.group("run"))
-        if total:
-            return min(10 + run / total * 85, 95), f"run {run} 완료"  # 원본 FUNC:93-98
-        return None, f"run {run} 완료"
-
-    ctx.run_local("hst_gen_radioss", {"multi_execution": str(doe["multi_execution"]), "launcher": ctx.abs(r["launcher_rel"])},
-                  cwd=D, error_patterns=list(s.train_data.hst_log_error_patterns), line_hook=hook)
+    multi = int(doe["multi_execution"])
+    tr = HstRunTracker(D, s.train_data.run_dir_glob, re.compile(s.train_data.hst_progress_regex),
+                       doe["num_runs_requested"], multi)
+    ctx.log(f"[MULTIEXEC] 동시 실행 수 {multi}")
+    ctx.run_local("hst_gen_radioss", {"multi_execution": str(multi), "launcher": ctx.abs(r["launcher_rel"])},
+                  cwd=D, error_patterns=list(s.train_data.hst_log_error_patterns), line_hook=tr.line, poll_hook=tr.poll)
 
 
 def _find_starter(run_dir: str, starter_glob: str) -> list[str]:

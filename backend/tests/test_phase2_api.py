@@ -19,6 +19,7 @@ def test_status_extensions(p2_env):
                                    "predict_parametric"}
     assert st["features"]["train_doe"]["enabled"] and st["features"]["train_resp"] == {"enabled": False, "missing": ["commands.response_extract"]}
     assert st["hpc"]["collect_mode"] == "in_place" and st["env_check"] is None
+    assert st["limits"]["configured"]["max_multi_execution"] == 8  # ①-3 동시 실행 수 입력 상한(화면 힌트)
     assert c.get(f"{API}/status", headers=H("tok-admin")).json()["env_check"]["latest_id"] is None
 
 

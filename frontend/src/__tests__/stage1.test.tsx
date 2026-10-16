@@ -58,6 +58,20 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
     expect(within(card).queryByLabelText("Random Seed")).toBeNull();
   });
 
+  it("DOE 동시 실행 수(multiexec)는 고급 없이 기본 표시 · 상한은 /status 설정값", async () => {
+    renderApp(`${STUDY}/1`, { user: "power" });
+    const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+    await within(card).findByLabelText("Random Seed");
+    expect(within(card).queryByRole("button", { name: /고급/ })).toBeNull();
+    const input = within(card).getByLabelText("동시 실행 수") as HTMLInputElement;
+    expect(input.value).toBe("1");
+    await waitFor(() => expect(within(card).getByText("1~8 · 높일수록 빠르지만 CPU·라이선스를 더 씀")).toBeTruthy());
+    fireEvent.change(input, { target: { value: "4" } });
+    expect(input.value).toBe("4");
+    fireEvent.change(input, { target: { value: "99" } });
+    expect(input.value).toBe("8");
+  });
+
   it("PBS none: ①-4 버튼 비활성 + 안내 + DOE 폴더 경로, ①-5 수동 결과 폴더", async () => {
     renderApp(`${STUDY}/1`, { user: "power" });
     const card = await screen.findByRole("region", { name: "PBS 해석 제출" });
