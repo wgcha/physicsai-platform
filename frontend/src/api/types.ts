@@ -254,6 +254,8 @@ export type Dataset = Override<
 
 export type ParamDef = S["Parameter"];
 export type ParamSet = Override<S["ParamSet"], { origin: "FOLDER" | "TRAIN_DOE" }>;
+export type ParamSetCreate = S["ParamSetCreate"];
+export type ParamSetDiscover = S["ParamSetDiscoverResponse"];
 export type SampleRow = S["SampleRow"];
 export type SamplePage = S["SamplesPage"];
 export type PredictCheck = S["PredictCheckResponse"];

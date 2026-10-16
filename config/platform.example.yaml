@@ -118,6 +118,9 @@ score:
 param_set:
   max_samples: 20000
   max_total_bytes: 2147483648     # 2 GiB
+  discover_max_depth: 4           # "프로젝트 폴더에서 찾기" 탐색 깊이(phase3 §13 S8)
+  discover_max_entries: 5000      # 탐색 항목 수 상한(넘으면 truncated)
+  discover_tpl_max_bytes: 1048576 # tpl 읽기 크기 상한(1 MiB)
 
 predict:
   rendered_script_name: simlab_parametered_mesh.py   # U2 확정(phase3 §11.2)

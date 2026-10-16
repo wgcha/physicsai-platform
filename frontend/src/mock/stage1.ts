@@ -160,7 +160,9 @@ export const trainRoutes: Route = (srv, { method, path, seg, query, body }) => {
       if (d.sample_status !== "PARSED" && d.sample_status !== "PARTIAL") return err(409, "SAMPLES_MISSING", "DOE 샘플 표가 없습니다.");
       const runs = (p2.runs[d.id] ?? []).filter((x) => body?.runs === "all" || x.state === "COLLECTED");
       if (!runs.length) return err(409, "DOE_NOT_READY", "회수된 run이 없습니다.");
-      return { status: 201, body: addParamSetFromTrain(p2.s, s, d.id, runs.length) };
+      const ps = addParamSetFromTrain(p2.s, s, d.id, runs.length);
+      ps.label = String(body?.label ?? "").trim() || null;
+      return { status: 201, body: ps };
     }
   }
   return null;

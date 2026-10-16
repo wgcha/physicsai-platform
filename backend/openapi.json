@@ -767,6 +767,120 @@
         "title": "Dataset",
         "type": "object"
       },
+      "DiscoverAssem": {
+        "properties": {
+          "file_count": {
+            "title": "File Count",
+            "type": "integer"
+          },
+          "has_eps_mesh": {
+            "title": "Has Eps Mesh",
+            "type": "boolean"
+          },
+          "has_renum_csv": {
+            "title": "Has Renum Csv",
+            "type": "boolean"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          },
+          "starter": {
+            "title": "Starter",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "starter",
+          "has_eps_mesh",
+          "has_renum_csv",
+          "file_count"
+        ],
+        "title": "DiscoverAssem",
+        "type": "object"
+      },
+      "DiscoverCad": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "name"
+        ],
+        "title": "DiscoverCad",
+        "type": "object"
+      },
+      "DiscoverProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "DiscoverProblem",
+        "type": "object"
+      },
+      "DiscoverTpl": {
+        "properties": {
+          "cad_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cad Ref"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parameter_count": {
+            "title": "Parameter Count",
+            "type": "integer"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rel",
+          "name",
+          "parameter_count"
+        ],
+        "title": "DiscoverTpl",
+        "type": "object"
+      },
       "DoeField": {
         "properties": {
           "default": {
@@ -2813,6 +2927,17 @@
             "title": "Is Current",
             "type": "boolean"
           },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
           "origin": {
             "default": "FOLDER",
             "title": "Origin",
@@ -2906,6 +3031,43 @@
       "ParamSetCreate": {
         "additionalProperties": false,
         "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParamSetDiscoverChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "folder",
+                  "discover"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mode"
+          },
           "path": {
             "maxLength": 400,
             "title": "Path",
@@ -2918,12 +3080,225 @@
         "title": "ParamSetCreate",
         "type": "object"
       },
+      "ParamSetDiscoverChoice": {
+        "additionalProperties": false,
+        "description": "phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능.",
+        "properties": {
+          "cad": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cad"
+          },
+          "radioss_assem": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Radioss Assem"
+          },
+          "tpl": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tpl"
+          }
+        },
+        "title": "ParamSetDiscoverChoice",
+        "type": "object"
+      },
+      "ParamSetDiscoverRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 400,
+            "title": "Path",
+            "type": "string"
+          },
+          "tpl": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tpl"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "ParamSetDiscoverRequest",
+        "type": "object"
+      },
+      "ParamSetDiscoverResponse": {
+        "properties": {
+          "cad": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverCad"
+            },
+            "title": "Cad",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverProblem"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/Parameter"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "parameters_file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters File"
+          },
+          "parameters_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "file",
+                  "tpl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameters Source"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "radioss_assem": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverAssem"
+            },
+            "title": "Radioss Assem",
+            "type": "array"
+          },
+          "responses": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responses"
+          },
+          "samples": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Samples"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "integer"
+          },
+          "selected_tpl": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Tpl"
+          },
+          "tpl": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverTpl"
+            },
+            "title": "Tpl",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "path",
+          "tpl",
+          "cad",
+          "radioss_assem",
+          "parameters",
+          "problems",
+          "notes",
+          "truncated",
+          "scanned"
+        ],
+        "title": "ParamSetDiscoverResponse",
+        "type": "object"
+      },
       "ParamSetFromTrain": {
         "additionalProperties": false,
         "properties": {
           "doe_id": {
             "title": "Doe Id",
             "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
           },
           "runs": {
             "default": "collected",
@@ -2951,6 +3326,25 @@
           "doe_id"
         ],
         "title": "ParamSetFromTrain",
+        "type": "object"
+      },
+      "ParamSetPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "title": "ParamSetPatch",
         "type": "object"
       },
       "Parameter": {
@@ -7526,6 +7920,77 @@
         "tags": [
           "param-sets"
         ]
+      },
+      "patch": {
+        "description": "표시 이름(label) 바꾸기(phase3 §13 S8).",
+        "operationId": "patch_set_physicsai_api_param_sets__ps_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamSetPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Patch Set",
+        "tags": [
+          "param-sets"
+        ]
       }
     },
     "/physicsai/api/param-sets/{ps_id}/samples": {
@@ -8853,6 +9318,7 @@
         ]
       },
       "post": {
+        "description": "§15.4 폴더 등록. mode=\"discover\"면 프로젝트 폴더에서 자동 구성(phase3 §13 S8).",
         "operationId": "register_physicsai_api_studies__study_id__param_sets_post",
         "parameters": [
           {
@@ -8918,6 +9384,79 @@
           }
         },
         "summary": "Register",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/param-sets/discover": {
+      "post": {
+        "description": "phase3 §13 S8: 프로젝트 폴더에서 tpl·CAD·조립 폴더·파라미터 후보 찾기(디스크 읽기만).",
+        "operationId": "discover_physicsai_api_studies__study_id__param_sets_discover_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamSetDiscoverRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSetDiscoverResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Discover",
         "tags": [
           "param-sets"
         ]

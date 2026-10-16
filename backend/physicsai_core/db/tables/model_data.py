@@ -112,6 +112,7 @@ param_sets = Table(
     Column("registered_at", TS, nullable=False, server_default=func.now()),
     Column("origin", String, nullable=False, server_default="FOLDER"),
     Column("train_doe_id", ID, ForeignKey("train_does.id", use_alter=True, name="fk_param_sets_train_doe"), nullable=True),
+    Column("label", String(120), nullable=True),  # phase3 §13 S8 사용자 표시 이름(0006_param_set_label)
     CheckConstraint("origin IN ('FOLDER','TRAIN_DOE')", name="ck_param_sets_origin"),
 )
 Index("ux_param_sets_current", param_sets.c.study_id, unique=True, postgresql_where=text("is_current"))

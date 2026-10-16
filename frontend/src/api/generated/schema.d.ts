@@ -485,7 +485,11 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /**
+         * Patch Set
+         * @description 표시 이름(label) 바꾸기(phase3 §13 S8).
+         */
+        patch: operations["patch_set_physicsai_api_param_sets__ps_id__patch"];
         trace?: never;
     };
     "/physicsai/api/param-sets/{ps_id}/samples": {
@@ -789,8 +793,31 @@ export interface paths {
         /** List Sets */
         get: operations["list_sets_physicsai_api_studies__study_id__param_sets_get"];
         put?: never;
-        /** Register */
+        /**
+         * Register
+         * @description §15.4 폴더 등록. mode="discover"면 프로젝트 폴더에서 자동 구성(phase3 §13 S8).
+         */
         post: operations["register_physicsai_api_studies__study_id__param_sets_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/param-sets/discover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Discover
+         * @description phase3 §13 S8: 프로젝트 폴더에서 tpl·CAD·조립 폴더·파라미터 후보 찾기(디스크 읽기만).
+         */
+        post: operations["discover_physicsai_api_studies__study_id__param_sets_discover_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1281,6 +1308,46 @@ export interface components {
             study_id: string;
             /** Train Count */
             train_count?: number | null;
+        };
+        /** DiscoverAssem */
+        DiscoverAssem: {
+            /** File Count */
+            file_count: number;
+            /** Has Eps Mesh */
+            has_eps_mesh: boolean;
+            /** Has Renum Csv */
+            has_renum_csv: boolean;
+            /** Rel */
+            rel: string;
+            /** Starter */
+            starter: string;
+        };
+        /** DiscoverCad */
+        DiscoverCad: {
+            /** Name */
+            name: string;
+            /** Rel */
+            rel: string;
+        };
+        /** DiscoverProblem */
+        DiscoverProblem: {
+            /** Code */
+            code: string;
+            /** File */
+            file?: string | null;
+            /** Message */
+            message: string;
+        };
+        /** DiscoverTpl */
+        DiscoverTpl: {
+            /** Cad Ref */
+            cad_ref?: string | null;
+            /** Name */
+            name: string;
+            /** Parameter Count */
+            parameter_count: number;
+            /** Rel */
+            rel: string;
         };
         /** DoeField */
         DoeField: {
@@ -1934,6 +2001,8 @@ export interface components {
             id: string;
             /** Is Current */
             is_current: boolean;
+            /** Label */
+            label?: string | null;
             /**
              * Origin
              * @default FOLDER
@@ -1969,13 +2038,70 @@ export interface components {
         };
         /** ParamSetCreate */
         ParamSetCreate: {
+            choice?: components["schemas"]["ParamSetDiscoverChoice"] | null;
+            /** Label */
+            label?: string | null;
+            /** Mode */
+            mode?: ("folder" | "discover") | null;
             /** Path */
             path: string;
+        };
+        /**
+         * ParamSetDiscoverChoice
+         * @description phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능.
+         */
+        ParamSetDiscoverChoice: {
+            /** Cad */
+            cad?: string | null;
+            /** Radioss Assem */
+            radioss_assem?: string | null;
+            /** Tpl */
+            tpl?: string | null;
+        };
+        /** ParamSetDiscoverRequest */
+        ParamSetDiscoverRequest: {
+            /** Path */
+            path: string;
+            /** Tpl */
+            tpl?: string | null;
+        };
+        /** ParamSetDiscoverResponse */
+        ParamSetDiscoverResponse: {
+            /** Cad */
+            cad: components["schemas"]["DiscoverCad"][];
+            /** Notes */
+            notes: components["schemas"]["DiscoverProblem"][];
+            /** Parameters */
+            parameters: components["schemas"]["Parameter"][];
+            /** Parameters File */
+            parameters_file?: string | null;
+            /** Parameters Source */
+            parameters_source?: ("file" | "tpl") | null;
+            /** Path */
+            path: string;
+            /** Problems */
+            problems: components["schemas"]["DiscoverProblem"][];
+            /** Radioss Assem */
+            radioss_assem: components["schemas"]["DiscoverAssem"][];
+            /** Responses */
+            responses?: string | null;
+            /** Samples */
+            samples?: string | null;
+            /** Scanned */
+            scanned: number;
+            /** Selected Tpl */
+            selected_tpl?: string | null;
+            /** Tpl */
+            tpl: components["schemas"]["DiscoverTpl"][];
+            /** Truncated */
+            truncated: boolean;
         };
         /** ParamSetFromTrain */
         ParamSetFromTrain: {
             /** Doe Id */
             doe_id: string;
+            /** Label */
+            label?: string | null;
             /**
              * Runs
              * @default collected
@@ -1984,6 +2110,11 @@ export interface components {
             runs: "collected" | "all";
             /** Unit System */
             unit_system?: string | null;
+        };
+        /** ParamSetPatch */
+        ParamSetPatch: {
+            /** Label */
+            label?: string | null;
         };
         /** Parameter */
         Parameter: {
@@ -4191,6 +4322,59 @@ export interface operations {
             };
         };
     };
+    patch_set_physicsai_api_param_sets__ps_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamSetPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     samples_physicsai_api_param_sets__ps_id__samples_get: {
         parameters: {
             query?: {
@@ -5061,6 +5245,59 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    discover_physicsai_api_studies__study_id__param_sets_discover_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamSetDiscoverRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSetDiscoverResponse"];
                 };
             };
             /** @description Not Found */

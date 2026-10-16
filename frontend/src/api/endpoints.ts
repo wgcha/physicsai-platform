@@ -25,6 +25,8 @@ import type {
   Model,
   NotificationList,
   ParamSet,
+  ParamSetCreate,
+  ParamSetDiscover,
   PathInspectResult,
   PathPurpose,
   PredictCheck,
@@ -78,8 +80,12 @@ export const api = {
   model: (id: string) => request<Model>("GET", `/models/${id}`),
   setFinalModel: (studyId: string, modelId: string | null) =>
     request<Study>("PUT", `/studies/${studyId}/final-model`, { body: { model_id: modelId } }),
-  registerParamSet: (studyId: string, path: string) =>
-    request<ParamSet>("POST", `/studies/${studyId}/param-sets`, { body: { path } }),
+  /** §15.4 폴더 등록. mode="discover" = 프로젝트 폴더에서 자동 구성(phase3 §13 S8) */
+  registerParamSet: (studyId: string, path: string, opts: Omit<ParamSetCreate, "path"> = {}) =>
+    request<ParamSet>("POST", `/studies/${studyId}/param-sets`, { body: { path, ...opts } }),
+  discoverParamSet: (studyId: string, path: string, tpl?: string | null) =>
+    request<ParamSetDiscover>("POST", `/studies/${studyId}/param-sets/discover`, { body: tpl ? { path, tpl } : { path } }),
+  patchParamSet: (id: string, body: { label: string | null }) => request<ParamSet>("PATCH", `/param-sets/${id}`, { body }),
   paramSets: (studyId: string) => request<ParamSet[]>("GET", `/studies/${studyId}/param-sets`),
   paramSet: (id: string) => request<ParamSet>("GET", `/param-sets/${id}`),
   samples: (id: string, limit = 200, cursor?: string | null) =>
@@ -119,7 +125,7 @@ export const api = {
   trainDoe: (id: string) => request<TrainDoe>("GET", `/train-does/${id}`),
   trainRuns: (doeId: string, q: { state?: string; limit?: number; cursor?: string | null } = {}) =>
     requestPage<TrainRun[]>(`/train-does/${doeId}/runs`, { limit: q.limit ?? 500, state: q.state, cursor: q.cursor }),
-  paramSetFromTrain: (studyId: string, body: { doe_id: string; runs?: "collected" | "all"; unit_system?: string }) =>
+  paramSetFromTrain: (studyId: string, body: { doe_id: string; runs?: "collected" | "all"; unit_system?: string; label?: string | null }) =>
     request<ParamSet>("POST", `/studies/${studyId}/param-sets/from-train`, { body }),
 
   // §12.6 ② 데이터 정리

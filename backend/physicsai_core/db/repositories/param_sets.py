@@ -36,3 +36,7 @@ def insert_current(conn: Connection, values: dict[str, Any]) -> None:
         update(param_sets).where(and_(param_sets.c.study_id == values["study_id"], param_sets.c.is_current.is_(True))).values(is_current=False)
     )
     conn.execute(param_sets.insert().values(is_current=True, **values))
+
+
+def set_label(conn: Connection, ps_id: str, label: str | None) -> None:
+    conn.execute(update(param_sets).where(param_sets.c.id == ps_id).values(label=label))

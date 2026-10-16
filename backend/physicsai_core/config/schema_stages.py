@@ -52,6 +52,10 @@ class ScoreCfg(_M):
 class ParamSetCfg(_M):
     max_samples: int = 20000
     max_total_bytes: int = 2147483648
+    # phase3 §13 S8: 프로젝트 폴더에서 자동 구성 — 탐색 깊이·항목 수·tpl 읽기 크기 상한
+    discover_max_depth: int = Field(default=4, ge=0, le=16)
+    discover_max_entries: int = Field(default=5000, ge=1, le=200000)
+    discover_tpl_max_bytes: int = Field(default=1048576, ge=1024)
 
 
 class PredictCfg(_M):
