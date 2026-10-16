@@ -24,12 +24,12 @@ ALLOWED_CONTENT_TYPES = frozenset(CONTENT_TYPES.values())
 
 
 def insert(conn: Connection, *, study_id: str, job_id: str | None, kind: str, rel_path: str, size: int,
-           sha256: str | None, content_type: str) -> str:
+           sha256: str | None, content_type: str, meta: dict[str, Any] | None = None) -> str:
     aid = str(uuid.uuid4())
     conn.execute(
         artifacts.insert().values(
             id=aid, study_id=study_id, job_id=job_id, kind=kind, rel_path=rel_path, size=size, sha256=sha256,
-            content_type=content_type,
+            content_type=content_type, meta=meta,
         )
     )
     return aid

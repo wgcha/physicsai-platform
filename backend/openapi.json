@@ -467,6 +467,14 @@
             ],
             "title": "Job Id"
           },
+          "media_views": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Media Views",
+            "type": "array"
+          },
           "message": {
             "anyOf": [
               {
@@ -712,6 +720,227 @@
           "requests"
         ],
         "title": "CandidateXy",
+        "type": "object"
+      },
+      "CaptureDisplay": {
+        "additionalProperties": false,
+        "description": "표시 설정(모든 키 선택 — null = 상위 설정을 따름: config → 응답 정의 첫 항목 → 템플릿 → 작업).",
+        "properties": {
+          "avgmode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "",
+                  "simple",
+                  "maximum",
+                  "minimum",
+                  "difference"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avgmode"
+          },
+          "component": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Component"
+          },
+          "comps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comps"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureLegend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "views": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "iso",
+                    "front",
+                    "back",
+                    "top",
+                    "bottom",
+                    "left",
+                    "right"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 7,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Views"
+          }
+        },
+        "title": "CaptureDisplay",
+        "type": "object"
+      },
+      "CaptureDisplayOut": {
+        "description": "결정된(최종) 표시 설정.",
+        "properties": {
+          "avgmode": {
+            "default": "",
+            "title": "Avgmode",
+            "type": "string"
+          },
+          "component": {
+            "default": "",
+            "title": "Component",
+            "type": "string"
+          },
+          "comps": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Comps",
+            "type": "array"
+          },
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "legend": {
+            "$ref": "#/components/schemas/CaptureLegendOut"
+          },
+          "views": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Views",
+            "type": "array"
+          }
+        },
+        "required": [
+          "field",
+          "legend",
+          "views"
+        ],
+        "title": "CaptureDisplayOut",
+        "type": "object"
+      },
+      "CaptureLegend": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "mode": {
+            "default": "auto",
+            "enum": [
+              "auto",
+              "fixed"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "title": "CaptureLegend",
+        "type": "object"
+      },
+      "CaptureLegendOut": {
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "mode": {
+            "enum": [
+              "auto",
+              "fixed"
+            ],
+            "title": "Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "CaptureLegendOut",
         "type": "object"
       },
       "CleanupSkip": {
@@ -2482,6 +2711,95 @@
         "title": "JobCreate",
         "type": "object"
       },
+      "JobMedia": {
+        "properties": {
+          "can_recapture": {
+            "title": "Can Recapture",
+            "type": "boolean"
+          },
+          "capture_enabled": {
+            "title": "Capture Enabled",
+            "type": "boolean"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureDisplayOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "field_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field Source"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MediaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "recapture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MediaRecapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "video_ext": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Ext"
+          }
+        },
+        "required": [
+          "job_id",
+          "status",
+          "items",
+          "capture_enabled",
+          "can_recapture"
+        ],
+        "title": "JobMedia",
+        "type": "object"
+      },
       "JobStep": {
         "properties": {
           "command": {
@@ -2865,6 +3183,99 @@
           "roles"
         ],
         "title": "Me",
+        "type": "object"
+      },
+      "MediaFile": {
+        "properties": {
+          "artifact_id": {
+            "title": "Artifact Id",
+            "type": "string"
+          },
+          "content_type": {
+            "title": "Content Type",
+            "type": "string"
+          },
+          "download_url": {
+            "title": "Download Url",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "artifact_id",
+          "content_type",
+          "size",
+          "url",
+          "download_url"
+        ],
+        "title": "MediaFile",
+        "type": "object"
+      },
+      "MediaItem": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/MediaFile"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MediaFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "view": {
+            "title": "View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "view",
+          "label",
+          "job_id",
+          "image"
+        ],
+        "title": "MediaItem",
+        "type": "object"
+      },
+      "MediaRecapture": {
+        "properties": {
+          "active": {
+            "title": "Active",
+            "type": "boolean"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state",
+          "active"
+        ],
+        "title": "MediaRecapture",
         "type": "object"
       },
       "Model": {
@@ -3483,6 +3894,18 @@
             "title": "Cad File Name",
             "type": "string"
           },
+          "display": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -3866,6 +4289,23 @@
           "scanned"
         ],
         "title": "ParamSetDiscoverResponse",
+        "type": "object"
+      },
+      "ParamSetDisplayUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ParamSetDisplayUpdate",
         "type": "object"
       },
       "ParamSetFromTrain": {
@@ -4584,6 +5024,48 @@
           "unread_count"
         ],
         "title": "ReadResponse",
+        "type": "object"
+      },
+      "RecaptureRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "views": {
+            "anyOf": [
+              {
+                "items": {
+                  "enum": [
+                    "iso",
+                    "front",
+                    "back",
+                    "top",
+                    "bottom",
+                    "left",
+                    "right"
+                  ],
+                  "type": "string"
+                },
+                "maxItems": 7,
+                "minItems": 1,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Views"
+          }
+        },
+        "title": "RecaptureRequest",
         "type": "object"
       },
       "ResourceJob": {
@@ -7225,6 +7707,110 @@
         ]
       }
     },
+    "/physicsai/api/artifacts/{artifact_id}/media": {
+      "get": {
+        "description": "컨투어 이미지·동영상 파일. HTTP Range(단일 범위) → 206 + Content-Range(브라우저 <video> 탐색), 범위 밖 416.",
+        "operationId": "media_content_physicsai_api_artifacts__artifact_id__media_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "artifact_id",
+            "required": true,
+            "schema": {
+              "title": "Artifact Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "download",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Download",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/gif": {},
+              "image/png": {},
+              "video/mp4": {},
+              "video/x-msvideo": {}
+            },
+            "description": "Successful Response"
+          },
+          "206": {
+            "content": {
+              "image/gif": {},
+              "image/png": {},
+              "video/mp4": {},
+              "video/x-msvideo": {}
+            },
+            "description": "Partial Content"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Content Too Large"
+          },
+          "416": {
+            "description": "Range 범위 밖"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Media Content",
+        "tags": [
+          "contour-capture"
+        ]
+      }
+    },
     "/physicsai/api/curations/{curation_id}": {
       "get": {
         "operationId": "get_curation_physicsai_api_curations__curation_id__get",
@@ -7970,6 +8556,96 @@
         ]
       }
     },
+    "/physicsai/api/jobs/{job_id}/capture": {
+      "post": {
+        "description": "재캡처(power): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처하는 CONTOUR_RECAPTURE 작업(LIGHT).",
+        "operationId": "recapture_physicsai_api_jobs__job_id__capture_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/RecaptureRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Recapture",
+        "tags": [
+          "contour-capture"
+        ]
+      }
+    },
     "/physicsai/api/jobs/{job_id}/error-bundle.zip": {
       "get": {
         "description": "오류 묶음(phase2 §10): 작업 등록자 본인 또는 전역 관리자. 실패·취소·중단 또는 주의 코드가 있는 비종료 작업.",
@@ -8207,6 +8883,79 @@
         "summary": "Job Log",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/physicsai/api/jobs/{job_id}/media": {
+      "get": {
+        "description": "예측 작업의 방향별 컨투어 이미지·동영상(재캡처 결과는 방향별로 덮어씀).",
+        "operationId": "job_media_physicsai_api_jobs__job_id__media_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobMedia"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Job Media",
+        "tags": [
+          "contour-capture"
         ]
       }
     },
@@ -8884,6 +9633,89 @@
         "summary": "Patch Set",
         "tags": [
           "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/display": {
+      "put": {
+        "description": "템플릿 컨투어 표시 설정(power). null = 지움(응답 정의 첫 항목·config 기본을 따름).",
+        "operationId": "put_display_physicsai_api_param_sets__ps_id__display_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamSetDisplayUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Put Display",
+        "tags": [
+          "contour-capture"
         ]
       }
     },

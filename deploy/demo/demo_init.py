@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import re
+import shutil
 import stat
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ from pathlib import Path
 from demo_common import (
     DELAY_PROLOGUE,
     PKG_ROOT,
+    TOOL_HELPERS,
     TOOLS,
     UNSAFE,
     _log,
@@ -61,6 +63,8 @@ def install_tools(src_dir: Path, dest_dir: Path) -> dict[str, str]:
             dst.write_text(f"#!{sys.executable}\n" + DELAY_PROLOGUE + body, encoding="utf-8")
             dst.chmod(dst.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
             out[name] = str(dst)
+    for helper in TOOL_HELPERS:
+        shutil.copyfile(src_dir / helper, dest_dir / helper)
     return out
 
 

@@ -16,6 +16,7 @@ import uuid
 from typing import Any
 
 from physicsai_core.db.repositories import artifacts as artifacts_repo
+from physicsai_core.db.repositories import contour_media as media_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
@@ -67,6 +68,7 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
     m = models_repo.get(conn, b["model_id"]) or {}
     parent = jobs_repo.get_job(conn, b["job_id"])
     rows = pb_repo.runs_with_jobs(conn, b["id"])
+    media = media_repo.media_views_for_jobs(conn, [r["predict_job_id"] for r in rows])  # phase3 §15 S10
     root = ctx.settings.storage.ai_root
     out_rows = []
     for r in rows:
@@ -80,6 +82,7 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
             "code": r["gen_code"] if gen_fail else (r["job_failure_code"] if st in ("FAILED", "CANCELED") else None),
             "message": r["gen_message"] if gen_fail else (r["job_failure_message"] if st in ("FAILED", "CANCELED") else None),
             "job_id": r["predict_job_id"], "responses": r["responses"],
+            "media_views": media.get(r["predict_job_id"] or "", []),
         })
     regen, kids = _retry_targets(rows)
     parent_active = parent is not None and parent["state"] not in TERMINAL

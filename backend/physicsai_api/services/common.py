@@ -134,6 +134,7 @@ def param_set_out(p: dict[str, Any]) -> dict[str, Any]:
         "registered_by_name": p["registered_by_name"], "registered_at": p["registered_at"],
         "origin": p.get("origin") or "FOLDER", "train_doe_id": p.get("train_doe_id"), "label": p.get("label"),
         "input_kind": p.get("input_kind") or "assembly", "assem_rel": p.get("assem_rel"), "warnings": [],
+        "display": p.get("display"),
     }
 
 

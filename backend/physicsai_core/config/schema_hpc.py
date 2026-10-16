@@ -18,6 +18,9 @@ class CommandsCfg(_M):
     edspy_predict: list[str] | None = None
     contour_preview: list[str] | None = None
     response_extract: list[str] | None = None
+    # phase3 §15 S10: 예측 컨투어 캡처(HyperView 배치). 설정 파일에 없으면 이 기본값(기능 켬, altair.hw_exe_path 필요)
+    contour_capture: list[str] | None = Field(
+        default_factory=lambda: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{capture_tcl}"])
     # 2차(phase2 §8.1) — null이면 그 기능만 비활성(가정 A-11)
     simlab_extract_params: list[str] | None = None
     hst_gen_radioss: list[str] | None = None

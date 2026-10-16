@@ -11,6 +11,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PKG_ROOT = HERE.parents[1]  # 저장소 루트 또는 오프라인 묶음 루트
 TOOLS = ("fake_edspy", "fake_simlab", "fake_hw", "fake_hstbatch", "fake_hstpy", "fake_hvtrans", "fake_nvidia_smi")
+TOOL_HELPERS = ("fake_hw_capture.py",)  # 가짜 도구가 import하는 보조 모듈(실행 파일 옆에 그대로 복사, phase3 §15 S10)
 STUDY_FOLDER = "demo_bracket"
 STUDY_TITLE = "시연 브래킷 낙하"
 PROJECT_ID = "demo"

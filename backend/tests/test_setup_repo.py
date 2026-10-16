@@ -284,7 +284,9 @@ def test_setup_config_without_original_app_and_altair(tmp_path):
     inp["deploy_defaults"]["original_app_root"] = ""
     res = _run(tmp_path, t, inp)
     c = _cfg(t)
-    assert all(v == "" for v in c["resources"].values() if isinstance(v, str))
+    # 원본 반입 자원은 전부 빈 값. 컨투어 캡처 TCL(phase3 §15)만 git 폴더의 저장소 리소스로 채운다
+    assert all(v == "" for k, v in c["resources"].items() if isinstance(v, str) and k != "contour_capture_tcl")
+    assert c["resources"]["contour_capture_tcl"] == str(REPO / "resources" / "hyperview" / "contour_capture.tcl").replace("\\", "/")
     assert all(c["altair"][k] == "" for k in ALTAIR_REL)
     w = " ".join(res["warnings"])
     assert "Altair 실행 파일을 찾지 못했습니다" in w and "preview_pred_h3d_tcl" in w and "-AltairRoot" in w

@@ -96,6 +96,7 @@ JOB_TYPES: dict[str, JobTypeDef] = {
             StepDef("CURVE_PICK", "INTERNAL", 2),
             StepDef("RESPONSE_EXTRACT", "LOCAL", 6),
             StepDef("RESPONSE_TABLE", "INTERNAL", 2),
+            StepDef("CONTOUR_CAPTURE", "LOCAL", 8),  # phase3 §15 S10: 실패는 경고(CAPTURE_FAILED)만 — 예측은 성공 유지
         ),
         "④",
     ),
@@ -118,6 +119,11 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     "PREDICT_BATCH": JobTypeDef(
         "PREDICT_BATCH", 4, "SLOT", "일괄 예측 입력 생성",
         (StepDef("BP_PREP", "INTERNAL", 3), StepDef("BP_GEN", "LOCAL", 90), StepDef("BP_ENQUEUE", "INTERNAL", 2)),
+        "④", notify_success=False,
+    ),
+    # ---- 3차 컨투어 재캡처(phase3 §15 S10): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처 ----
+    "CONTOUR_RECAPTURE": JobTypeDef(
+        "CONTOUR_RECAPTURE", 4, "LIGHT", "컨투어 다시 캡처", (StepDef("CONTOUR_CAPTURE", "LOCAL", 100),),
         "④", notify_success=False,
     ),
     # ---- 2차(phase2 §6.1) ----
@@ -222,6 +228,7 @@ STEP_LABELS: dict[str, str] = {
     "OP_PREP": "최적화 입력 준비", "HST_OPTIMIZE": "HyperStudy 최적화", "OP_SUMMARY": "결과 정리",
     "SS_WALK": "파일 확인", "SS_CLASSIFY": "정리 후보 분류",
     "SC_VALIDATE": "정리 대상 확인", "SC_MOVE": "백업 폴더로 이동", "SC_RECORD": "정리 기록",
+    "CONTOUR_CAPTURE": "컨투어 캡처",
     "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
 }
 

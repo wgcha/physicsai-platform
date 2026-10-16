@@ -13,5 +13,6 @@ PhysicsAI 원본 반입 자원 안내(phase2 §8.2, §11.2)
   resources.curate_hg_tcl        원본 CONFIG/BATCHRUN/BATCHRUN_curate_hg.tcl
   resources.extract_minmax_tcl   원본 H3D_StaticMinMax_to_CSV_FAST.tcl
   resources.preview_pred_h3d_tcl 원본 CONFIG/BATCHRUN/BATCHRUN_preview_pred_h3d.tcl (1차)
+  resources.contour_capture_tcl  (반입 불필요) 저장소 resources/hyperview/contour_capture.tcl — setup.ps1이 git 폴더 경로로 채움(phase3 §15)
 
 경로에는 공백·cmd 메타문자(& | < > ^ % ! ")를 쓰지 않는다. 설치 후 "관리 > 환경 점검"으로 확인한다.

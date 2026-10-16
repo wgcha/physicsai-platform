@@ -18,6 +18,7 @@ from physicsai_core.naming import RUN_KEY_RE
 from physicsai_core.stage4_predict import prepared_input
 
 from ...context import AppContext
+from ...schemas.contour_capture import CaptureDisplay
 from ..common import study_root
 from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing, require_model_pscfg
 
@@ -32,6 +33,7 @@ class PredictParams(_P):
     value_source: Literal["nominal", "run", "manual"] | None = None
     source_run_key: str | None = Field(default=None, pattern=RUN_KEY_RE)
     input_path: str | None = Field(default=None, max_length=400)
+    display: CaptureDisplay | None = None  # phase3 §15 S10 컨투어 표시 설정(선택, 템플릿 설정보다 우선)
 
     @field_validator("values")
     @classmethod

@@ -6,6 +6,7 @@ import re
 
 from .rules import _compile
 from .schema import ConfigIssue, Settings
+from .schema_capture import validate_capture
 from .schema_ops import ENV_PROBE_TOOLS
 
 
@@ -100,7 +101,8 @@ _BATCH_DIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$")
 
 
 def _validate_phase3(s: Settings, issues: list[ConfigIssue]) -> None:
-    """3차 키 검증(phase3 §5.9, §14.7)."""
+    """3차 키 검증(phase3 §5.9, §14.7, §15)."""
+    validate_capture(s, issues)
     for k, (lo, hi) in STUDY_STORAGE_RANGES.items():
         if not lo <= getattr(s.study_storage, k) <= hi:
             issues.append(ConfigIssue(f"study_storage.{k}", f"{lo}~{hi}"))

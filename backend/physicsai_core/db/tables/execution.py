@@ -61,9 +61,10 @@ artifacts = Table(
     Column("sha256", String(64), nullable=True),
     Column("content_type", String, nullable=False),
     Column("created_at", TS, nullable=False, server_default=func.now()),
+    Column("meta", JSONB, nullable=True),  # phase3 §15 컨투어 캡처 방향 {view}(0008_contour_capture)
     CheckConstraint(
         "kind IN ('PREVIEW_JSON','PREVIEW_IMAGE','CURVE_JSON','RESPONSE_TABLE','SCORE_FILE','PACKAGE_COMMANDS','SPLIT_JSON',"
-        "'CURATION_CFG','FILE_LIST','DOE_SAMPLES','RUN_CONFIG','OPT_SUMMARY','OPT_FILE')",
+        "'CURATION_CFG','FILE_LIST','DOE_SAMPLES','RUN_CONFIG','OPT_SUMMARY','OPT_FILE','CONTOUR_IMAGE','CONTOUR_VIDEO')",
         name="ck_artifacts_kind",
     ),
 )

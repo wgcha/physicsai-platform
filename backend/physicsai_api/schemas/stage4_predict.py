@@ -132,6 +132,7 @@ class ParamSet(Resp):
     input_kind: Literal["assembly", "mesh_only"] = "assembly"
     assem_rel: str | None = None  # Study 기준 조립 폴더 사본(04_params/<id>/radioss_assem/), mesh_only면 null
     warnings: list[DiscoverProblem] = []  # 등록 응답에만(SIMLAB_EXPORT_NAME 등), 조회는 []
+    display: dict[str, Any] | None = None  # phase3 §15 S10 컨투어 표시 설정(PUT /param-sets/{id}/display)
 
 
 class SampleRow(Resp):
