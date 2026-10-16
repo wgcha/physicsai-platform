@@ -42,6 +42,14 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
         for r in spdm:
             if paths_overlap(ai_root, r):
                 add("storage.ai_root", f"ai_root가 SPDM 루트와 겹칩니다: {r}")
+    inbox = s.storage.inbox_dir
+    inbox_parts = inbox.replace("\\", "/").split("/")
+    if (not inbox or is_abs_path_str(inbox) or inbox.startswith(("/", "\\")) or has_unsafe_chars(inbox)
+            or any(x in ("", ".", "..") for x in inbox_parts)
+            or any(x.casefold() in ("_backup", "_platform") for x in inbox_parts)):
+        add("storage.inbox_dir", "inbox_dir는 AI 루트 기준 상대 폴더 이름이어야 합니다(공백·'..'·_backup·_platform 불가)")
+    if s.storage.inbox_share_hint is not None and len(s.storage.inbox_share_hint) > 260:
+        add("storage.inbox_share_hint", "inbox_share_hint는 260자 이하여야 합니다")
     for i, r in enumerate(s.storage.allowed_import_roots):
         k = f"storage.allowed_import_roots[{i}]"
         if not is_abs_path_str(r):

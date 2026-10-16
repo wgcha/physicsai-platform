@@ -141,6 +141,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/fs/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fs List */
+        get: operations["fs_list_physicsai_api_fs_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/fs/roots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fs Roots */
+        get: operations["fs_roots_physicsai_api_fs_roots_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/health": {
         parameters: {
             query?: never;
@@ -1401,6 +1435,50 @@ export interface components {
         FinalModelRequest: {
             /** Model Id */
             model_id: string | null;
+        };
+        /** FsEntry */
+        FsEntry: {
+            /**
+             * Mtime
+             * Format: date-time
+             */
+            mtime: string;
+            /** Name */
+            name: string;
+            /** Size */
+            size?: number | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "dir" | "file";
+        };
+        /** FsList */
+        FsList: {
+            /** Entries */
+            entries: components["schemas"]["FsEntry"][];
+            /** Parent */
+            parent: string | null;
+            /** Path */
+            path: string;
+            /** Truncated */
+            truncated: boolean;
+        };
+        /** FsRoot */
+        FsRoot: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Path */
+            path: string;
+        };
+        /** FsRoots */
+        FsRoots: {
+            /** Inbox Share Hint */
+            inbox_share_hint?: string | null;
+            /** Roots */
+            roots: components["schemas"]["FsRoot"][];
         };
         /** GpuInfo */
         GpuInfo: {
@@ -3158,6 +3236,85 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fs_list_physicsai_api_fs_list_get: {
+        parameters: {
+            query: {
+                path: string;
+                exts?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FsList"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    fs_roots_physicsai_api_fs_roots_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FsRoots"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

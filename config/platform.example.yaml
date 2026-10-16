@@ -38,6 +38,8 @@ storage:
   ai_root: "E:/shared/AI_WORK"    # 임시 값. SPDM master 밖
   allowed_import_roots: []        # ③-4 모델 폴더 추가 허용 루트(읽기 전용). 예: ["F:/hpc_results"]
   spdm_roots: []                  # SPDM master 루트. 2차부터 이 하위가 SPDM 가져오기 허용 범위(읽기 전용, 쓰기 0)
+  inbox_dir: "inbox"              # 받은 파일 폴더(AI 루트 기준 상대). 다른 PC는 이 폴더의 네트워크 공유에 복사한 뒤 화면 "찾아보기"로 고른다
+  inbox_share_hint: null          # 화면 안내용 공유 경로(표시만). 예: "\\\\SERVER\\physicsai-inbox"
 
 altair:                           # 하드코딩 금지 — 실행 파일 경로는 여기서만 (원본 common.py:25-37 키)
   version_label: "2026.1"

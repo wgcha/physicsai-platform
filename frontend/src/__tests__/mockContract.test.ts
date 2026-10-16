@@ -73,6 +73,9 @@ const cases: [string, string, string, ("power" | "admin")?, ConstructorParameter
   ["/admin/env-checks", "/admin/env-checks", "get", "admin"],
   ["/admin/env-checks/latest", "/admin/env-checks/latest", "get", "admin"],
   ["/admin/env-checks/ec-3", "/admin/env-checks/{check_id}", "get", "admin"],
+  // 3차 §12 S7 서버 경로 탐색
+  ["/fs/roots", "/fs/roots", "get"],
+  ["/fs/list?path=E%3A%5Cshared%5CAI_WORK%5Cinbox&exts=.rad,.hm", "/fs/list", "get"],
 ];
 
 describe("목 서버 ↔ openapi.json", () => {

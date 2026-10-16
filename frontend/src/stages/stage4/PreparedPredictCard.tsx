@@ -13,6 +13,7 @@ import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
+import { BrowseButton } from "../../components/BrowseButton";
 import { PredictChain, PredictResultCard } from "./PredictResult";
 import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
 
@@ -126,6 +127,7 @@ export function PreparedPredictCard() {
                   setInfo(null);
                 }}
               />
+              <BrowseButton mode="dir_or_file" exts={[".rad", ".hm"]} value={path} disabled={!canExec} onPick={(p) => (setPath(p), setInfo(null))} />
               <button type="button" className="btn" onClick={inspect} disabled={!canExec || busy || !path.trim()}>
                 {busy ? "확인 중…" : "확인"}
               </button>
