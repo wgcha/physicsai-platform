@@ -187,9 +187,11 @@ class Worker(HpcPollerMixin):
         if with_resources:
             job_acc = None
             ex = self.current_executor
-            if ex is not None and ex.current_proc is not None:
-                try:
-                    acc = self.limiter.accounting(ex.current_proc)
+            group = getattr(ex, "current_group", None) if ex is not None else None
+            if ex is not None and (ex.current_proc is not None or group is not None):
+                try:  # 동시 실행 중이면 그룹(작업 1개분) 회계(phase3 §14.5)
+                    acc = self.limiter.accounting(ex.current_proc) if ex.current_proc is not None else \
+                        self.limiter.group_accounting(group)
                     job_acc = {"job_id": ex.job_id, "cpu_time_s": acc.cpu_time_s,
                                "peak_memory_gb": round(acc.peak_memory_bytes / 2**30, 3) if acc.peak_memory_bytes else None}
                 except Exception:

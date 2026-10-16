@@ -4,7 +4,9 @@
 - CPU rate hard cap, GPU 무제한
 - CREATE_SUSPENDED로 시작 → AssignProcessToJobObject → 주 스레드 ResumeThread
 - 할당 실패 시 TerminateProcess 후 JOB_OBJECT_ASSIGN_FAILED — 제한 없이 실행하는 경로는 없다
-kernel32·Popen은 주입 가능(Linux 단위 시험 V-JO-4).
+- 동시 실행 그룹(phase3 §14.5 `run_parallel`): `open_group`이 Job 1개를 만들고 그룹의 모든 프로세스를 그 Job에 넣는다
+  (hstbatch `-multiexec`처럼 작업 1개분 CPU·메모리 한도를 나눠 씀). 그룹 취소 = TerminateJobObject 1번, 닫기 = KILL_ON_JOB_CLOSE
+kernel32·Popen은 주입 가능(Linux 단위 시험 V-JO-4, V3-S9-13).
 """
 
 from __future__ import annotations
@@ -17,7 +19,7 @@ from typing import Any, Callable
 
 from physicsai_core.limits import EffectiveLimits
 
-from .base import POPEN_TEXT_KW, Accounting, LimitedProcess, LimiterError
+from .base import POPEN_TEXT_KW, Accounting, LimitedProcess, LimiterError, ProcGroup
 
 JobObjectBasicAccountingInformation = 1
 JobObjectExtendedLimitInformation = 9
@@ -188,13 +190,19 @@ class WindowsJobLimiter:
         finally:
             self.k.CloseHandle(snap)
 
-    def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits) -> LimitedProcess:
-        job = self._create_job(limits)
+    def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits,
+               group: ProcGroup | None = None) -> LimitedProcess:
+        """group이 있으면 그 Job(작업 1개분 한도)에 넣는다 — 프로세스마다 Job을 새로 만들지 않는다(phase3 §14.5)."""
+        if group is not None and (group.closed or not group.handle):
+            raise LimiterError("JOB_OBJECT_ASSIGN_FAILED", "동시 실행 그룹이 닫혀 프로세스를 시작하지 않았습니다")
+        job = group.handle if group is not None else self._create_job(limits)
+        own_job = group is None
         flags = CREATE_SUSPENDED | CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP
         try:
             p = self.popen(argv, cwd=cwd, env=env, creationflags=flags, **POPEN_TEXT_KW)
         except OSError as exc:
-            self.k.CloseHandle(job)
+            if own_job:
+                self.k.CloseHandle(job)
             raise LimiterError("EXECUTABLE_MISSING", f"프로세스를 시작할 수 없습니다: {exc}") from None
         handle = getattr(p, "_handle", None)
         if not self.k.AssignProcessToJobObject(job, handle):
@@ -205,44 +213,82 @@ class WindowsJobLimiter:
                     p.wait(timeout=10)
                 except Exception:
                     pass
-                self.k.CloseHandle(job)
+                if own_job:
+                    self.k.CloseHandle(job)
             raise LimiterError("JOB_OBJECT_ASSIGN_FAILED", "프로세스를 Job Object에 넣지 못해 실행하지 않았습니다")
         try:
             self._resume_main_thread(p.pid)
         except LimiterError:
-            # 재개 실패: 일시정지 상태 프로세스를 남기지 않는다 → TerminateProcess + Job 종료, step FAILED(JOB_OBJECT_ASSIGN_FAILED)
+            # 재개 실패: 일시정지 상태 프로세스를 남기지 않는다 → TerminateProcess(+ 자기 Job 종료), step FAILED(JOB_OBJECT_ASSIGN_FAILED)
             try:
                 self.k.TerminateProcess(handle, 1)
-                self.k.TerminateJobObject(job, 1)
+                if own_job:
+                    self.k.TerminateJobObject(job, 1)
             finally:
                 try:
                     p.wait(timeout=10)
                 except Exception:
                     pass
-                self.k.CloseHandle(job)
+                if own_job:
+                    self.k.CloseHandle(job)
             raise
-        return LimitedProcess(p, handle=job, extra={"memory_limit": int(limits.memory_gb * 2**30)})
+        mem = int((group.limits if group is not None else limits).memory_gb * 2**30)
+        if group is None:
+            return LimitedProcess(p, handle=job, extra={"memory_limit": mem})
+        proc = LimitedProcess(p, handle=None, extra={"memory_limit": mem, "group": group})
+        group.add(proc)
+        return proc
+
+    # --- 동시 실행 그룹(phase3 §14.5) ---
+    def open_group(self, limits: EffectiveLimits, size: int) -> ProcGroup:
+        """Job 1개(작업 1개분 한도 그대로 — 동시 수로 나누지 않음, CPU·메모리를 그룹이 나눠 씀)."""
+        return ProcGroup(size=max(1, int(size)), limits=limits, handle=self._create_job(limits))
+
+    def terminate_group(self, group: ProcGroup, timeout_s: float = 30) -> None:
+        if group.handle:
+            self.k.TerminateJobObject(group.handle, 1)
+        deadline = time.time() + timeout_s
+        while time.time() < deadline and group.alive():
+            time.sleep(0.1)
+
+    def group_accounting(self, group: ProcGroup) -> Accounting:
+        return self._job_accounting(group.handle, int(group.limits.memory_gb * 2**30))
+
+    def close_group(self, group: ProcGroup) -> None:
+        """핸들을 닫는다(KILL_ON_JOB_CLOSE — 남은 프로세스도 종료)."""
+        group.closed = True
+        if group.handle:
+            self.k.CloseHandle(group.handle)
+            group.handle = None
 
     def terminate(self, proc: LimitedProcess, timeout_s: float = 30) -> None:
+        group = proc.extra.get("group")
         if proc.handle:
             self.k.TerminateJobObject(proc.handle, 1)
+        elif group is not None:  # 그룹 안 프로세스 1개만: 그 프로세스만 종료(그룹 전체는 terminate_group)
+            self.k.TerminateProcess(getattr(proc.popen, "_handle", None), 1)
         deadline = time.time() + timeout_s
         while time.time() < deadline and proc.poll() is None:
             time.sleep(0.1)
 
-    def accounting(self, proc: LimitedProcess) -> Accounting:
+    def _job_accounting(self, job: Any, limit: int) -> Accounting:
         ext = JOBOBJECT_EXTENDED_LIMIT_INFORMATION()
         acc = JOBOBJECT_BASIC_ACCOUNTING_INFORMATION()
         peak = cpu = None
-        if proc.handle and self.k.QueryInformationJobObject(proc.handle, JobObjectExtendedLimitInformation, ctypes.byref(ext), ctypes.sizeof(ext), None):
+        if job and self.k.QueryInformationJobObject(job, JobObjectExtendedLimitInformation, ctypes.byref(ext), ctypes.sizeof(ext), None):
             peak = int(ext.PeakJobMemoryUsed)
-        if proc.handle and self.k.QueryInformationJobObject(proc.handle, JobObjectBasicAccountingInformation, ctypes.byref(acc), ctypes.sizeof(acc), None):
+        if job and self.k.QueryInformationJobObject(job, JobObjectBasicAccountingInformation, ctypes.byref(acc), ctypes.sizeof(acc), None):
             cpu = (acc.TotalUserTime + acc.TotalKernelTime) / 1e7
-        limit = proc.extra.get("memory_limit") or 0
         hit = bool(peak and limit and peak >= 0.98 * limit)
         return Accounting(peak_memory_bytes=peak, cpu_time_s=cpu, cpu_cap_enforced=True, memory_limit_hit=hit)
 
+    def accounting(self, proc: LimitedProcess) -> Accounting:
+        group = proc.extra.get("group")
+        job = proc.handle if proc.handle else (group.handle if group is not None else None)
+        return self._job_accounting(job, proc.extra.get("memory_limit") or 0)
+
     def close(self, proc: LimitedProcess) -> None:
+        """그룹 안 프로세스는 Job 핸들을 공유하므로 닫지 않는다(close_group이 닫음)."""
         if proc.handle:
             self.k.CloseHandle(proc.handle)
             proc.handle = None

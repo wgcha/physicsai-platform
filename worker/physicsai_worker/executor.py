@@ -80,6 +80,7 @@ class Executor:
         self.study_root = real(study_dir(self.settings.storage.ai_root, self.study["folder_name"]))
         self.stamp = backup_stamp()
         self.current_proc: Any = None
+        self.current_group: Any = None  # run_parallel 동시 실행 그룹(phase3 §14.5) — lease 상실 시 그룹 전체 종료
         self._proc_lock = threading.Lock()
         self.keeper: LeaseKeeper | None = None
         self.masker = Masker(self.settings.logging.mask_patterns)
@@ -108,11 +109,17 @@ class Executor:
         log.warning("lease 소유권 상실: %s", self.job_id)
         with self._proc_lock:
             p = self.current_proc
+            g = self.current_group
         if p is not None:
             try:
                 self.limiter.terminate(p)
             except Exception:
                 log.exception("lease 상실 후 프로세스 종료 실패")
+        if g is not None:
+            try:
+                self.limiter.terminate_group(g)
+            except Exception:
+                log.exception("lease 상실 후 동시 실행 그룹 종료 실패")
 
     def cancel_requested(self) -> bool:
         with self.engine.connect() as conn:
@@ -137,7 +144,18 @@ class Executor:
 
     def _release(self, state: str, code: str | None = None, msg: str | None = None) -> str:
         self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg))
+        if state in ("SUCCEEDED", "FAILED", "CANCELED"):
+            self._after_end(state)
         return state
+
+    def _after_end(self, state: str) -> None:
+        """종료 후 부수효과(lease 해제 뒤 별도 트랜잭션): 일괄 예측 배치 응답·완료 판정(phase3 §14.5, 멱등)."""
+        try:
+            from .steps.stage4_predict.batch import after_job_end
+
+            after_job_end(self.engine, self.job, state)
+        except Exception:  # noqa: BLE001 - 작업 상태는 이미 확정. 판정은 종료 훅(job_end)·다음 하위 종료가 다시 한다
+            log.exception("일괄 예측 종료 처리 실패: %s", self.job_id)
 
     def _job_log(self, text: str) -> None:
         with open(os.path.join(self.log_dir, "job.log"), "a", encoding="utf-8") as fh:

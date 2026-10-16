@@ -1,4 +1,5 @@
-"""④ 예측 시험 공용(phase3 §11.6): 설정을 바꾼 앱·워커 + Study·Final 모델·파라미터 세트 준비."""
+"""④ 예측 시험 공용(phase3 §11.6·§14.9): 설정을 바꾼 앱·워커 + Study·Final 모델·파라미터 세트 준비, 일괄 예측 배치 직접 생성
+(API 미구현 구간은 저장소 함수로 — 미리보기·작업 생성과 같은 `batch_matrix`·`predict_batches.create_batch`)."""
 
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ class PredictEnv:
     sid: str = ""
     sroot: Path = field(default_factory=Path)
     model_id: str = ""
+    engine: Any = None
 
     @property
     def ai(self) -> Path:
@@ -53,6 +55,56 @@ class PredictEnv:
     def predict_dir(self, jid: str) -> Path:
         return self.sroot / "04_predict" / jid
 
+    # ---- S9(phase3 §14) ----
+    def sql(self, q: str, **kw: Any) -> Any:
+        from sqlalchemy import text
+
+        with self.engine.begin() as conn:
+            return conn.execute(text(q), kw).all() if q.lstrip().lower().startswith("select") else conn.execute(text(q), kw)
+
+    def to_mesh_only(self, ps_id: str) -> None:
+        """등록된 세트를 mesh_only 템플릿으로(API 등록 경로는 Impl-Backend) — 조립 폴더 사본도 치워 쓰지 않음을 확인."""
+        import shutil
+
+        self.sql("update param_sets set input_kind='mesh_only', assem_rel=null, starter_name=null where id=:i", i=ps_id)
+        shutil.rmtree(self.sroot / "04_params" / ps_id / "radioss_assem", ignore_errors=True)
+
+    def set_responses(self, ps_id: str, responses: list[dict[str, Any]]) -> None:
+        import json
+
+        self.sql("update param_sets set responses=cast(:r as jsonb) where id=:i", r=json.dumps(responses), i=ps_id)
+
+    def make_batch(self, ps_id: str, text: str, *, multi: int = 2) -> tuple[str, str]:
+        """표 붙여넣기 조합으로 부모 PREDICT_BATCH 작업 + 배치·run 행을 만든다 → (batch_id, 부모 job_id)."""
+        from physicsai_core.db.repositories import jobs as jobs_repo
+        from physicsai_core.db.repositories import param_sets as ps_repo
+        from physicsai_core.db.repositories import predict_batches as pb
+        from physicsai_core.db.repositories import studies as studies_repo
+        from physicsai_core.stage4_predict.batch_matrix import batch_dir_rel, build_matrix_for
+
+        s = self.lc.settings
+        with self.engine.begin() as conn:
+            study = studies_repo.require(conn, self.sid, for_update=True)
+            ps = ps_repo.get(conn, ps_id)
+            source = {"kind": "table", "text": text}
+            mx = build_matrix_for(source, ps, s)
+            assert mx.ok, mx.problems
+            bid, no = pb.new_batch_id(), pb.next_batch_no(conn, self.sid)
+            job = jobs_repo.insert_job(conn, study=study, job_type="PREDICT_BATCH", user_id="u-power", user_name="파워",
+                                       params={"param_set_id": ps_id, "model_id": self.model_id, "multi_execution": multi,
+                                               "source": source, "batch_id": bid, "batch_no": no})
+            pb.create_batch(conn, batch_id=bid, batch_no=no, study_id=self.sid, job_id=job["id"], param_set_id=ps_id,
+                            model_id=self.model_id, input_kind=ps["input_kind"], matrix=mx, multi_execution=multi,
+                            dir_rel=batch_dir_rel(s.predict_batch.dir_name, no), simlab_mesh_name=s.predict.simlab_mesh_name,
+                            user_id="u-power", user_name="파워")
+        return bid, job["id"]
+
+    def batch(self, bid: str) -> dict[str, Any]:
+        from physicsai_core.db.repositories import predict_batches as pb
+
+        with self.engine.connect() as conn:
+            return {**pb.get(conn, bid), "runs": pb.runs_with_jobs(conn, bid)}  # type: ignore[dict-item]
+
 
 @pytest.fixture()
 def predict_env(settings_dict, engine, fake_dashboard, fake_record):
@@ -69,11 +121,11 @@ def predict_env(settings_dict, engine, fake_dashboard, fake_record):
 
     def make(*, commands: dict[str, Any] | None = None, predict: dict[str, Any] | None = None,
              resources: dict[str, Any] | None = None, hpc: dict[str, Any] | None = None, folder: str = "pred",
-             final_model: bool = True, model_pscfg: int = 1) -> PredictEnv:
+             final_model: bool = True, model_pscfg: int = 1, train_data: dict[str, Any] | None = None) -> PredictEnv:
         d = dict(settings_dict)
         if hpc:
             d["hpc"] = hpc
-        for k, v in (("commands", commands), ("predict", predict), ("resources", resources)):
+        for k, v in (("commands", commands), ("predict", predict), ("resources", resources), ("train_data", train_data)):
             if v:
                 d[k] = {**(d.get(k) or {}), **v}
         lc = load_config_dict(d, environ={})
@@ -82,7 +134,7 @@ def predict_env(settings_dict, engine, fake_dashboard, fake_record):
                                            base_url="http://127.0.0.1"))
         w = Worker(lc, engine)
         workers.append(w)
-        env = PredictEnv(c, w, lc)
+        env = PredictEnv(c, w, lc, engine=engine)
         r = c.post(f"{API}/studies", headers=PW, json={"project_id": "p-1", "folder_name": folder, "title": "예측"})
         assert r.status_code == 201, r.text
         env.sid, env.sroot = r.json()["id"], Path(lc.settings.storage.ai_root) / folder

@@ -1,4 +1,7 @@
-"""PosixLimiter(§11.5): nice(10), 선택적 RLIMIT_AS, CPU hard cap 없음(cpu_cap_enforced=false)."""
+"""PosixLimiter(§11.5): nice(10), 선택적 RLIMIT_AS, CPU hard cap 없음(cpu_cap_enforced=false).
+
+동시 실행 그룹(phase3 §14.5)은 프로세스별 한도(RLIMIT_AS = 메모리/동시 수, ProcGroupMixin).
+"""
 
 from __future__ import annotations
 
@@ -12,7 +15,7 @@ import psutil
 
 from physicsai_core.limits import EffectiveLimits
 
-from .base import POPEN_TEXT_KW, Accounting, LimitedProcess, LimiterError
+from .base import POPEN_TEXT_KW, Accounting, LimitedProcess, LimiterError, ProcGroup, ProcGroupMixin
 
 NICE_INC = 10
 
@@ -50,14 +53,17 @@ class _Sampler(threading.Thread):
         self._stop.set()
 
 
-class PosixLimiter:
+class PosixLimiter(ProcGroupMixin):
     name = "posix"
     cpu_cap_enforced = False
 
     def __init__(self, rlimit_as: bool = False) -> None:
         self.rlimit_as = rlimit_as
 
-    def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits) -> LimitedProcess:
+    def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits,
+               group: ProcGroup | None = None) -> LimitedProcess:
+        if group is not None:
+            limits = group.limits  # 메모리 = 작업 한도/동시 수
         mem_bytes = int(limits.memory_gb * 2**30)
         use_rlimit = self.rlimit_as
 
@@ -74,7 +80,10 @@ class PosixLimiter:
             raise LimiterError("EXECUTABLE_MISSING", f"프로세스를 시작할 수 없습니다: {exc}") from None
         s = _Sampler(p.pid)
         s.start()
-        return LimitedProcess(p, extra={"sampler": s, "pgid": p.pid})
+        proc = LimitedProcess(p, extra={"sampler": s, "pgid": p.pid, "rlimit_as_bytes": mem_bytes if use_rlimit else None})
+        if group is not None:
+            group.add(proc)
+        return proc
 
     def terminate(self, proc: LimitedProcess, timeout_s: float = 30) -> None:
         pgid = proc.extra.get("pgid", proc.pid)

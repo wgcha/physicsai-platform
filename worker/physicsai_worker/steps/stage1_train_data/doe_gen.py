@@ -19,7 +19,7 @@ from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_repa
 from physicsai_core.stage1_train_data import doe_samples
 from physicsai_core.stage1_train_data import train_params as tp
 
-from ..common import path_failure
+from ..common import hst_run_label, path_failure  # hst_run_label: 재노출(phase3 §14.10, 이전 import 경로 유지)
 from ..launcher import stage_launcher
 from ._shared import TPL_NAME, _D, _doe
 
@@ -100,15 +100,6 @@ def dg_prep(ctx: Any) -> None:
              "unit": q.get("unit", "")} for q in tp.used(setup["parameters"])]
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=sha256_file(os.path.join(D, TPL_NAME))))
     ctx.patch_result({"doe_id": doe_id, "launcher_rel": ctx.rel(launcher), "num_runs": num_runs})
-
-
-def hst_run_label(running: int, waiting: int | None, done: int, total: int | None, multi: int) -> str:
-    """동시 실행 현황 라벨 — 마지막 로그 줄 대신 run 수 집계(동시 실행이 화면에서 보이게)."""
-    parts = [f"실행 중 {running}"]
-    if waiting is not None:
-        parts.append(f"대기 {waiting}")
-    parts.append(f"완료 {done}" + (f"/{total}" if total else ""))
-    return " · ".join(parts) + f" (동시 {multi})"
 
 
 class HstRunTracker:
