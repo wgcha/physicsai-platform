@@ -60,7 +60,7 @@ export function ModelRegisterCard() {
       <PathInput
         studyId={study.id}
         purpose="MODEL_FOLDER"
-        label="모델 폴더 경로 (.psmdl·.pscfg·로그)"
+        label="모델 폴더 경로 (.psmdl·로그, .pscfg는 선택)"
         placeholder="E:/shared/AI_WORK/cushion/00_inbox/model_v3"
         value={path}
         onChange={setPath}
@@ -78,7 +78,7 @@ export function ModelRegisterCard() {
             <span>psmdl</span>
             <span className="mono">{r.summary.psmdl?.join(", ") || "없음"}</span>
             <span>pscfg</span>
-            <span className="mono">{r.summary.pscfg?.join(", ") || "없음"}</span>
+            <span className="mono">{r.summary.pscfg?.join(", ") || "없음 (선택 — 등록은 가능)"}</span>
             <span>로그</span>
             <span className="mono">{r.summary.logs?.join(", ") || "없음 (등록은 가능)"}</span>
           </div>

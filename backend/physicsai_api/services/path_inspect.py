@@ -6,6 +6,7 @@ import fnmatch
 import os
 from typing import Any
 
+from physicsai_core.commands import PSCFG_MANY_MESSAGE
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path, file_name_problem_message, file_safety_problem
@@ -77,8 +78,8 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
         summary = inspect_model_folder(cp.path, s_cfg.training_log.log_globs)
         if len(summary["psmdl"]) != 1:
             problems.append({"code": "PSMDL_COUNT", "message": f".psmdl 파일이 정확히 1개 있어야 합니다(현재 {len(summary['psmdl'])}개)"})
-        if len(summary["pscfg"]) != 1:
-            problems.append({"code": "PSCFG_COUNT", "message": f".pscfg 파일이 정확히 1개 있어야 합니다(현재 {len(summary['pscfg'])}개)"})
+        if len(summary["pscfg"]) > 1:  # D3-43: pscfg는 선택(0개 허용), 2개 이상만 모호
+            problems.append({"code": "PSCFG_COUNT", "message": PSCFG_MANY_MESSAGE.format(n=len(summary["pscfg"]))})
         if len(summary["logs"]) > 1:
             problems.append({"code": "LOG_SELECT_REQUIRED", "message": "학습 로그 후보가 여러 개입니다. 로그 파일을 선택하세요"})
     else:

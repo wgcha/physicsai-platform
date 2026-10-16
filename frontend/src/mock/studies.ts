@@ -29,8 +29,9 @@ export function inspectPath(purpose: string, path: string): MockResp {
   if (purpose === "DATASET_INPUT")
     return { status: 200, body: { normalized_path: path, ok: true, problems: [], summary: { h3d_count: 180, sample_files: ["run_0001/cushion_0001.h3d", "run_0002/cushion_0002.h3d", "run_0003/cushion_0003.h3d"], expected_train: 162, expected_eval: 18 } } };
   if (purpose === "MODEL_FOLDER") {
+    // nopscfg → pscfg 0개(선택, D3-43 — 등록 가능)
     const logs = /nolog/i.test(path) ? [] : /multi/i.test(path) ? ["train.log", "train_retry.log"] : ["train.log"];
-    return { status: 200, body: { normalized_path: path, ok: true, problems: [], summary: { psmdl: [`${last.replace(/[^A-Za-z0-9_]/g, "_")}.psmdl`], pscfg: ["settings.pscfg"], logs } } };
+    return { status: 200, body: { normalized_path: path, ok: true, problems: [], summary: { psmdl: [`${last.replace(/[^A-Za-z0-9_]/g, "_")}.psmdl`], pscfg: /nopscfg/i.test(path) ? [] : ["settings.pscfg"], logs } } };
   }
   return { status: 200, body: { normalized_path: path, ok: true, problems: [], summary: { parameters: 4, samples: 120, responses: 3, cad: "cushion_base.x_t", starter: "cushion_0000.rad" } } };
 }

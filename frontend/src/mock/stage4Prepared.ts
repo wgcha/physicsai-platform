@@ -2,6 +2,7 @@
 // 경로 이름으로 시나리오를 고른다(데모·시험용):
 //   …/X.rad → 파일(같은 폴더 .rad·.inc 복사), …/X.hm → 그 파일만, 확장자가 그 밖이면 INPUT_EXT
 //   폴더 이름에 two → starter 2개(STARTER_COUNT), nostarter → 0개, toomany → TOO_MANY_FILES, huge → TOO_LARGE, bad&name 없음(경로 검사에서 거부)
+//   경로에 nested → 하위 폴더 2개(subdir_count, 복사 안 함 — D3-43)
 import type { Job, PredictInputInspect, PredictInputProblem, Study } from "../api/types";
 import { PREVIEW_JSON, contourSvg, curveJson, responseFn } from "./data";
 import { err, needPower, type MockResp, type Route } from "./route";
@@ -25,9 +26,9 @@ export function planCopy(path: string): PredictInputInspect | MockResp {
   const problems: PredictInputProblem[] = [];
   if (ext && !EXTS.includes(ext)) {
     problems.push({ code: "INPUT_EXT", message: `입력 파일 확장자는 ${EXTS.join("·")}만 쓸 수 있습니다(${ext}).` });
-    return { kind: "file", starter: [], starter_ok: false, rad: [], inc_count: 0, file_count: 0, total_bytes: 0, problems };
+    return { kind: "file", starter: [], starter_ok: false, rad: [], inc_count: 0, file_count: 0, total_bytes: 0, subdir_count: 0, problems };
   }
-  if (ext === ".hm") return { kind: "file", starter: [name], starter_ok: true, rad: [], inc_count: 0, file_count: 1, total_bytes: 48_234_112, problems };
+  if (ext === ".hm") return { kind: "file", starter: [name], starter_ok: true, rad: [], inc_count: 0, file_count: 1, total_bytes: 48_234_112, subdir_count: 0, problems };
   const kind = ext === ".rad" ? "file" : "dir";
   const starter = kind === "file" ? [name] : /nostarter/i.test(path) ? [] : /two/i.test(path) ? ["Face_Drop_0000.rad", "Side_Drop_0000.rad"] : ["Face_Drop_0000.rad"];
   const rad = [...starter, "Face_Drop_0001.rad"];
@@ -38,7 +39,8 @@ export function planCopy(path: string): PredictInputInspect | MockResp {
     problems.push({ code: "STARTER_COUNT", message: `starter(*_0000.rad, EPS_mesh 제외)가 정확히 1개여야 합니다(현재 ${starter.length}개).` });
   if (rad.length + incCount > MAX_FILES) problems.push({ code: "TOO_MANY_FILES", message: `복사할 파일이 ${MAX_FILES}개를 넘습니다(${rad.length + incCount}개).` });
   if (total > MAX_BYTES) problems.push({ code: "TOO_LARGE", message: "복사할 파일 합계가 2 GiB를 넘습니다." });
-  return { kind, starter, starter_ok: starter.length === 1, rad, inc_count: incCount, file_count: rad.length + incCount, total_bytes: total, problems };
+  const subdirCount = /nested/i.test(path) ? 2 : 0;
+  return { kind, starter, starter_ok: starter.length === 1, rad, inc_count: incCount, file_count: rad.length + incCount, total_bytes: total, subdir_count: subdirCount, problems };
 }
 
 const isResp = (x: PredictInputInspect | MockResp): x is MockResp => "status" in x;

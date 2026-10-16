@@ -34,6 +34,17 @@ describe("③ 화면 (V-FE-5)", () => {
     expect(within(result).getByText("로그 형식 미확인")).toBeTruthy();
   });
 
+  it("③-4 pscfg 없는 모델 폴더: '없음 (선택)' 표시, 등록 가능(D3-43)", async () => {
+    renderApp(`${STUDY}/3`, { user: "power" });
+    const card = await screen.findByRole("region", { name: "모델 등록" });
+    fireEvent.change(within(card).getByLabelText(/모델 폴더 경로/), { target: { value: "E:/shared/AI_WORK/cushion_v1/00_inbox/model_nopscfg" } });
+    fireEvent.click(within(card).getByRole("button", { name: "확인" }));
+    await within(card).findByText("model_nopscfg.psmdl");
+    expect(within(card).getByText("없음 (선택 — 등록은 가능)")).toBeTruthy();
+    const btn = within(card).getByRole("button", { name: "모델 등록" }) as HTMLButtonElement;
+    await waitFor(() => expect(btn.disabled).toBe(false));
+  });
+
   it("loss 곡선 선형/로그 토글", async () => {
     renderApp(`${STUDY}/3`, { user: "power" });
     const seg = await screen.findByRole("group", { name: "축" });

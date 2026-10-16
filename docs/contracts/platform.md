@@ -31,7 +31,7 @@
 | 슬롯 | 로컬 실행 권한. 전역 1개. `SLOT` 레인 작업만 잡는다 |
 | 워커 | `python -m physicsai_worker`로 뜨는 별도 프로세스. API 프로세스는 외부 프로그램을 실행하지 않는다 |
 | 데이터셋 | ③-1 결과. 학습용(train)·평가용(eval, 홀드아웃) `.psdata` 2개와 분할 기록(`datasets`) |
-| 모델 | ③-4에서 등록한 `.psmdl` + `.pscfg` + 학습 로그 묶음(`models`) |
+| 모델 | ③-4에서 등록한 `.psmdl` + `.pscfg`(선택, phase3 D3-43) + 학습 로그 묶음(`models`) |
 | Final 모델 | Study당 1개, 사용자가 지정. ④ 예측의 기본 모델 |
 | 파라미터 세트 | ④용 파라미터 정의(이름·공칭·하한·상한)·학습 샘플값·예측 입력 파일 묶음. 폴더 경로로 등록(`param_sets`) |
 | 최근접 run | ④ 입력값과 정규화 거리가 가장 작은 학습 샘플 run |
@@ -291,7 +291,7 @@ physicsai-platform/
 | source_path | 사용자가 지정한 모델 폴더(표시용) |
 | stored_rel | `03_model/models/<id>/` (복사본 위치) |
 | psmdl_rel / psmdl_sha256 / psmdl_size | 필수 |
-| pscfg_rel / pscfg_sha256 | 필수. **경로·해시만 기록, 열지 않음** |
+| pscfg_rel / pscfg_sha256 | 선택(NULL = pscfg 없이 등록, phase3 D3-43). **경로·해시만 기록, 열지 않음** |
 | log_rel | NULL 가능 |
 | log_status | `PARSED` \| `UNRECOGNIZED`(로그는 있으나 형식 미확인) \| `MISSING` |
 | log_parser | 일치한 파서 이름 NULL |
@@ -478,7 +478,7 @@ CHECK:
 - 로그: stdout+stderr 병합, `encoding="utf-8", errors="replace"`, 줄 단위로 step 로그와 `logs/<job_id>/job.log`에 기록.
 - 오류 감지 정규식(원본 `1_CREATE_TRAINING_DATA/FUNC/2_run_hst_gen_rad_input.py:65-67`에서 이식, IGNORECASE): `^\s*\d+\s+Error\s*:|Traceback \(most recent call last\):|^\s*\[ERROR\]`. edspy step에 적용, 일치하면 종료코드 0이어도 `LOG_ERROR_DETECTED`. 설정 `commands_log_error_patterns`로 교체 가능.
 - 진행률: 작업 진행률 = step 가중치 합산. 외부 프로그램이 진행률을 내지 않으면 step은 `progress_pct=NULL`(막대 indeterminate) + 경과 시간 라벨.
-- 사용 직전 무결성: 모델 `.psmdl`·`.pscfg`는 EVALUATE·PREDICT 시작 시 sha256 재계산해 DB와 비교, 다르면 모델 `INVALID` + step `FAILED` `INPUT_CHANGED`.
+- 사용 직전 무결성: 모델 `.psmdl`·`.pscfg`(있을 때만, phase3 D3-43)는 EVALUATE·PREDICT 시작 시 sha256 재계산해 DB와 비교, 다르면 모델 `INVALID` + step `FAILED` `INPUT_CHANGED`.
 
 ### 8.4 ③-1 `DATASET_CREATE`
 
@@ -513,7 +513,7 @@ CHECK:
 edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --spec <SETTINGS>.pscfg > train.log 2>&1
 # 전이학습:
 edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --spec <SETTINGS>.pscfg --pretrained-model <PRETRAINED>.psmdl > train.log 2>&1
-# 학습이 끝나면 .psmdl, 사용한 .pscfg, train.log를 한 폴더에 모아 플랫폼 ③-4 "모델 등록"에서 그 폴더 경로를 지정하세요.
+# 학습이 끝나면 .psmdl과 train.log를 한 폴더에 모아(사용한 .pscfg는 선택 — 있으면 함께 보관) 플랫폼 ③-4 "모델 등록"에서 그 폴더 경로를 지정하세요.
 # 로그의 loss 줄 예: "epoch=   1/1500  loss=1.03956e+02"
 ```
 
@@ -523,7 +523,7 @@ edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --sp
 
 | step_key | 처리 | 실패 |
 |---|---|---|
-| MR_VALIDATE | 폴더 직계 파일만 본다(하위 폴더 무시). `*.psmdl` 정확히 1개, `*.pscfg` 정확히 1개. 로그 후보 = `training_log.log_globs`(기본 `*.log`, `*.txt`) 일치 파일: 0개 → `log_status=MISSING`(등록 계속), 1개 → 사용, 2개 이상 → `log_file` 지정 필수(없으면 `INPUT_INVALID` + 후보 목록) | `INPUT_INVALID` |
+| MR_VALIDATE | 폴더 직계 파일만 본다(하위 폴더 무시). `*.psmdl` 정확히 1개, `*.pscfg` 0개 또는 1개(선택, 2개 이상은 모호 → `INPUT_INVALID`, phase3 D3-43). 로그 후보 = `training_log.log_globs`(기본 `*.log`, `*.txt`) 일치 파일: 0개 → `log_status=MISSING`(등록 계속), 1개 → 사용, 2개 이상 → `log_file` 지정 필수(없으면 `INPUT_INVALID` + 후보 목록) | `INPUT_INVALID` |
 | MR_COPY | 3개 파일을 `<study>/03_model/models/<model_id>/`로 복사(원본 파일명 유지) + sha256. `source.json`(원본 경로·시각·sha256) 작성 | `OUTPUT_LOCKED` 등 |
 | MR_PARSE_LOG | `training_log.parsers`를 순서대로 적용, 1줄 이상 일치한 첫 파서 채택. 파서 = 정규식(필수 그룹 `epoch`, `loss`; 선택 `total`). 결과: `epochs_total`(total 마지막 값 또는 최대 epoch), `last_epoch`, `final_loss`, `min_loss`, `min_loss_epoch`, `loss_curve`. 한 줄도 일치하지 않으면 `log_status=UNRECOGNIZED`. **파싱 실패는 작업 실패가 아니다** | 없음 |
 | MR_REGISTER | `models` 행 생성(`ACTIVE`, version 자동). `dataset_id` 미지정이면 Study 최신 READY 데이터셋(없으면 NULL — 평가 불가 표시) | |
@@ -622,7 +622,7 @@ Final 지정: `PUT /studies/{id}/final-model {model_id}` — `ACTIVE` 모델만,
 | `contour_preview` | CONTOUR_PREVIEW | `{hw} {preview_tcl} {pred_h3d_fwd} {preview_json_fwd}` | `1_physicsai_opti.py:230-231` | 확정 |
 | `response_extract` | RESPONSE_EXTRACT, PV_EXTRACT | `{hw} {pred_h3d} {pred_h3d_fwd} {responses_json} {out_csv} {work_dir}` | 없음(기본 null) | 미확인(U8) |
 
-`{model_pscfg}`는 기본 템플릿에서 쓰지 않는다(원본 score·predict 명령에 pscfg 인자가 없음, U7). 사내 확인으로 필요해지면 템플릿에만 추가한다 — 플랫폼은 경로만 넘기고 파일을 열지 않는다.
+`{model_pscfg}`는 기본 템플릿에서 쓰지 않는다(원본 score·predict 명령에 pscfg 인자가 없음, U7). 사내 확인으로 필요해지면 템플릿에만 추가한다 — 플랫폼은 경로만 넘기고 파일을 열지 않는다. pscfg 없이 등록한 모델에 `{model_pscfg}` 템플릿이면 EVALUATE·PREDICT 생성 409 `PSCFG_REQUIRED`(phase3 D3-43).
 
 ### 9.3 진행률·라벨 파서
 
@@ -1041,7 +1041,7 @@ AI 루트 하위 임의 폴더. 하위 트리의 모든 `*.h3d`를 쓴다. 경�
 
 ### 15.3 ③-4 입력(모델 폴더)
 
-AI 루트 또는 `allowed_import_roots` 하위 폴더. 직계에 `*.psmdl` 1개, `*.pscfg` 1개, 학습 로그 0~1개(여러 개면 선택). `REGISTER_README.txt`에 같은 내용을 쓴다.
+AI 루트 또는 `allowed_import_roots` 하위 폴더. 직계에 `*.psmdl` 1개, `*.pscfg` 0~1개(선택, phase3 D3-43), 학습 로그 0~1개(여러 개면 선택). `REGISTER_README.txt`에 같은 내용을 쓴다.
 
 ### 15.4 ④ 입력(파라미터 세트 폴더)
 
@@ -1281,7 +1281,7 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 | V-DS-1 | ③-1: 재귀 수집·정렬, seed 고정 시 분할 재현, eval ≥1, train∩eval=∅, `parent_dir` 그룹 분할 | 단위 |
 | V-DS-2 | ③-1: yaml 2개가 원본 형식(selection: {} 포함), psdata 크기 판정(fake `small` → `OUTPUT_TOO_SMALL`) | 가짜 도구 |
 | V-DS-3 | ③-2: 패키지에 train psdata만(eval 없음), COMMANDS.txt 내용, 하드링크 실패 시 복사 | 단위 |
-| V-MR-1 | ③-4: psmdl/pscfg 0개·2개 거부, 로그 0개 MISSING, 2개 이상 선택 요구 | API |
+| V-MR-1 | ③-4: psmdl 0개·2개 거부, pscfg 0개 허용·2개 거부(phase3 D3-43), 로그 0개 MISSING, 2개 이상 선택 요구 | API |
 | V-MR-2 | ③-4: 기본 파서로 epoch/loss 추출, 최소 loss·epoch, 다운샘플(첫·끝·최소 보존, ≤2000), 형식 불일치 로그 → `UNRECOGNIZED`이고 등록 성공 | 단위 |
 | V-MR-3 | ③-4: 허용 루트 밖·링크·`..` 경로 거부 | API |
 | V-EV-1 | ③-5: eval psdata로 score 실행, 기존 psscr·predictions 백업, `score.parsers`로 metrics, 파서 없으면 UNRECOGNIZED | 가짜 도구 |

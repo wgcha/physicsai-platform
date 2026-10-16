@@ -30,7 +30,7 @@ def test_env_check_flow(p2_env, fake_dashboard, engine, monkeypatch):
     items = {i["key"]: i for i in chk["items"]}
     assert chk["state"] == "PENDING"
     assert items["config.valid"]["status"] == "OK" and items["db.connection"]["status"] == "OK"
-    assert items["db.migration_head"]["detail"] == {"current": "0004_study_manage", "head": "0004_study_manage"}
+    assert items["db.migration_head"]["detail"] == {"current": "0005_pscfg_optional", "head": "0005_pscfg_optional"}
     assert items["auth.dashboard"]["status"] == "OK" and items["auth.projects"]["detail"] == {"count": 2}
     assert items["hpc.gateway"]["status"] == "WARN" and items["worker.heartbeat"]["status"] == "FAIL"
     assert items["altair.edspy_path"]["status"] == "PENDING" and items["altair.edspy_path"]["source"] == "WORKER"
@@ -193,7 +193,7 @@ def test_error_bundle(p2_env, engine, monkeypatch):
     cmd = json.loads(zf.read("steps/step_02_SIMLAB_EXTRACT.command.json"))
     assert cmd["command"]["argv"][0] == d["altair"]["simlab_path"]
     env = json.loads(zf.read("environment.json"))
-    assert env["migration_head"] == "0004_study_manage" and env["executables"]["simlab_path"]["exists"] is True
+    assert env["migration_head"] == "0005_pscfg_optional" and env["executables"]["simlab_path"]["exists"] is True
     assert json.loads(zf.read("job.json"))["failure_code"] == "EXIT_NONZERO"
     with engine.connect() as conn:
         n = conn.execute(text("select count(*) from audit_events where action='ERROR_BUNDLE_DOWNLOAD'")).scalar()

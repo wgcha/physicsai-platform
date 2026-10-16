@@ -274,12 +274,17 @@ def test_v3_s6_12_inspect_predict_input_shape(client, loaded_config):
     assert set(body) == {"normalized_path", "ok", "problems", "summary"}
     assert body["ok"] and body["problems"] == [] and body["normalized_path"] == str(case)
     sm = body["summary"]
-    assert set(sm) == {"kind", "starter", "starter_ok", "rad", "inc_count", "file_count", "total_bytes"}
+    assert set(sm) == {"kind", "starter", "starter_ok", "rad", "inc_count", "file_count", "total_bytes", "subdir_count"}
+    assert sm["subdir_count"] == 1                                       # D3-43: 하위 폴더 수(복사 안 함)
     assert sm["kind"] == "dir" and sm["starter"] == ["Face_Drop_0000.rad"] and sm["starter_ok"] is True
     assert sm["rad"] == ["Face_Drop_0000.rad", "Face_Drop_0001.rad"] and sm["inc_count"] == 1 and sm["file_count"] == 3
     assert sm["total_bytes"] == sum((case / n).stat().st_size for n in ("Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"))
     f = _inspect(client, sid, case / "Face_Drop_0000.rad").json()["summary"]
-    assert f["kind"] == "file" and f["starter"] == ["Face_Drop_0000.rad"] and f["file_count"] == 3
+    assert f["kind"] == "file" and f["starter"] == ["Face_Drop_0000.rad"] and f["file_count"] == 3 and f["subdir_count"] == 1
+    (case / "drop.hm").write_text("hm")
+    assert _inspect(client, sid, case / "drop.hm").json()["summary"]["subdir_count"] == 0       # .hm은 그 파일만
+    flat = _case(imp / "flat")
+    assert _inspect(client, sid, flat).json()["summary"]["subdir_count"] == 0
     two = _case(imp / "two", starters=("A_0000.rad", "B_0000.rad"))
     t = _inspect(client, sid, two).json()
     assert not t["ok"] and t["summary"]["starter"] == ["A_0000.rad", "B_0000.rad"] and t["summary"]["starter_ok"] is False

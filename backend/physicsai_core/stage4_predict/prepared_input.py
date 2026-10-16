@@ -96,7 +96,8 @@ def plan_copy(path: str, settings: Any) -> CopyPlan:
 
 
 def summary(path: str, plan: CopyPlan, settings: Any) -> dict[str, Any]:
-    """경로 확인(`PREDICT_INPUT`) 요약: {kind, starter:[names], starter_ok, rad:[≤50], inc_count, file_count, total_bytes}."""
+    """경로 확인(`PREDICT_INPUT`) 요약: {kind, starter:[names], starter_ok, rad:[≤50], inc_count, file_count, total_bytes,
+    subdir_count}. subdir_count = 복사 대상 폴더(폴더 입력 또는 .rad의 폴더)의 직계 하위 폴더 수(복사 안 함), .hm이면 0(D3-43)."""
     if plan.kind == "dir":
         starters = starter_candidates(path, settings.predict.starter_glob)
     else:
@@ -116,4 +117,18 @@ def summary(path: str, plan: CopyPlan, settings: Any) -> dict[str, Any]:
         "inc_count": sum(1 for n in names if n.lower().endswith(".inc")),
         "file_count": len(names),
         "total_bytes": total,
+        "subdir_count": _subdir_count(path, plan.kind),
     }
+
+
+def _subdir_count(path: str, kind: str) -> int:
+    if kind == "dir":
+        folder = path
+    elif path.lower().endswith(".rad"):
+        folder = os.path.dirname(path)
+    else:
+        return 0
+    try:
+        return sum(1 for n in os.listdir(folder) if os.path.isdir(os.path.join(folder, n)))
+    except OSError:
+        return 0

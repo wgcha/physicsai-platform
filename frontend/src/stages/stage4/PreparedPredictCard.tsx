@@ -16,7 +16,8 @@ import { FeatureGate } from "../../components/FeatureGate";
 import { PredictChain, PredictResultCard } from "./PredictResult";
 import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
 
-export const DIRECT_FILES_NOTE = "직계 파일만 복사합니다 — 폴더(또는 .rad 파일의 폴더)의 .rad·.inc만, 하위 폴더·EPS_mesh 제외. .hm은 그 파일만.";
+/** 하위 폴더가 있을 때만 보이는 회색 참고 문구(phase3 D3-43 — 항상 보이면 오류로 오해) */
+export const subdirNote = (n: number) => `하위 폴더 ${n}개는 복사하지 않습니다(이 폴더의 .rad·.inc만 사용)`;
 
 /** inspect 응답에서 PREDICT_INPUT 요약을 꺼낸다(요약 키는 summary 안, problems는 최상위 — phase3 D3-30) */
 export function predictInputInfo(r: PathInspectResult): PredictInputInspect & { ok: boolean } {
@@ -40,16 +41,18 @@ export function predictInputInfo(r: PathInspectResult): PredictInputInspect & { 
     inc_count: pick("inc_count") ?? 0,
     file_count: pick("file_count") ?? 0,
     total_bytes: pick("total_bytes") ?? 0,
+    subdir_count: pick("subdir_count") ?? 0,
     problems,
     ok: r.ok && starterOk && problems.length === 0,
   };
 }
 
-/** 요약 한 줄 "starter · rad N · inc M" */
+/** 요약 한 줄. starter 정상이면 "✓ starter <이름> · rad N · inc M", 아니면 "<후보> · rad N · inc M" */
 export function inputSummaryLine(i: PredictInputInspect): string {
   const hm = i.starter.some((s) => /\.hm$/i.test(s));
   const radN = Math.max(i.rad.length, hm ? 0 : i.file_count - i.inc_count);
-  return `${i.starter.length ? i.starter.join(", ") : "starter 없음"} · rad ${radN} · inc ${i.inc_count}`;
+  const head = i.starter_ok && i.starter.length === 1 ? `✓ starter ${i.starter[0]}` : i.starter.length ? i.starter.join(", ") : "starter 없음";
+  return `${head} · rad ${radN} · inc ${i.inc_count}`;
 }
 
 function ProblemNotes({ problems, testId }: { problems: PredictInputProblem[]; testId: string }) {
@@ -129,12 +132,16 @@ export function PreparedPredictCard() {
             </div>
             {inspectError && <div className="error-text small" role="alert">{inspectError}</div>}
             {info && (
-              <p className="small prepared-summary" data-testid="prepared-summary">
+              <p className={`small prepared-summary${info.ok ? " ok" : ""}`} data-testid="prepared-summary">
                 {inputSummaryLine(info)}
               </p>
             )}
             {info && <ProblemNotes problems={info.problems} testId="prepared-problems" />}
-            <p className="muted small">{DIRECT_FILES_NOTE}</p>
+            {info && (info.subdir_count ?? 0) > 0 && (
+              <p className="muted small" data-testid="prepared-subdir-note">
+                {subdirNote(info.subdir_count ?? 0)}
+              </p>
+            )}
           </div>
         </div>
         <div className="run-block">

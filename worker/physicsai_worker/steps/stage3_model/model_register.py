@@ -1,4 +1,4 @@
-"""③-4 MODEL_REGISTER(§8.6). pscfg는 경로·sha256만 기록하고 열지 않는다."""
+"""③-4 MODEL_REGISTER(§8.6). pscfg는 선택(0개 또는 1개, D3-43) — 있으면 경로·sha256만 기록하고 열지 않는다."""
 
 from __future__ import annotations
 
@@ -8,6 +8,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+from physicsai_core.commands import PSCFG_MANY_MESSAGE
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.errors import StepFailure
@@ -38,8 +39,9 @@ def mr_validate(ctx: Any) -> None:
     psmdl, pscfg = _direct(cp.path, ["*.psmdl"]), _direct(cp.path, ["*.pscfg"])
     if len(psmdl) != 1:
         raise StepFailure("INPUT_INVALID", f".psmdl 파일이 정확히 1개 있어야 합니다(현재 {len(psmdl)}개)")
-    if len(pscfg) != 1:
-        raise StepFailure("INPUT_INVALID", f".pscfg 파일이 정확히 1개 있어야 합니다(현재 {len(pscfg)}개)")
+    if len(pscfg) > 1:
+        raise StepFailure("INPUT_INVALID", PSCFG_MANY_MESSAGE.format(n=len(pscfg)) + ": " + ", ".join(pscfg[:20]))
+    pscfg_name = pscfg[0] if pscfg else None
     logs = _direct(cp.path, s.training_log.log_globs)
     log_file = p.get("log_file")
     if log_file:
@@ -56,7 +58,7 @@ def mr_validate(ctx: Any) -> None:
         chosen = logs[0]
     else:
         raise StepFailure("INPUT_INVALID", "학습 로그 후보가 여러 개입니다. 로그 파일을 지정하세요: " + ", ".join(logs[:20]))
-    for n in (psmdl[0], pscfg[0], chosen):
+    for n in (psmdl[0], pscfg_name, chosen):
         if not n:
             continue
         fp = os.path.join(cp.path, n)
@@ -64,7 +66,7 @@ def mr_validate(ctx: Any) -> None:
             raise StepFailure("INPUT_INVALID", f"모델 폴더 파일이 링크이거나 이름이 안전하지 않습니다: {n}")
         if not _under_dir(fp, cp.path):
             raise StepFailure("INPUT_INVALID", f"모델 폴더 밖을 가리키는 파일입니다: {n}")
-    ctx.patch_result({"files": {"psmdl": psmdl[0], "pscfg": pscfg[0], "log": chosen}, "source_path": cp.path})
+    ctx.patch_result({"files": {"psmdl": psmdl[0], "pscfg": pscfg_name, "log": chosen}, "source_path": cp.path})
 
 
 def mr_copy(ctx: Any) -> None:
@@ -73,7 +75,7 @@ def mr_copy(ctx: Any) -> None:
     model_id = r.get("model_id") or str(uuid.uuid4())
     dest = ctx.abs(f"03_model/models/{model_id}")
     os.makedirs(dest, exist_ok=True)
-    names = [n for n in (files["psmdl"], files["pscfg"], files.get("log")) if n]
+    names = [n for n in (files["psmdl"], files.get("pscfg"), files.get("log")) if n]
     total = sum(os.path.getsize(os.path.join(src, n)) for n in names) or 1
     done = [0]
     copied: dict[str, Any] = {}
@@ -134,7 +136,8 @@ def mr_register(ctx: Any) -> None:
             "dataset_id": ds_id, "source_path": r["source_path"], "stored_rel": stored,
             "psmdl_rel": stored + files["psmdl"], "psmdl_sha256": copied[files["psmdl"]]["sha256"],
             "psmdl_size": copied[files["psmdl"]]["size"],
-            "pscfg_rel": stored + files["pscfg"], "pscfg_sha256": copied[files["pscfg"]]["sha256"],
+            "pscfg_rel": stored + files["pscfg"] if files.get("pscfg") else None,
+            "pscfg_sha256": copied[files["pscfg"]]["sha256"] if files.get("pscfg") else None,
             "log_rel": stored + files["log"] if files.get("log") else None,
             "log_status": logv.get("log_status", "MISSING"), "log_parser": logv.get("log_parser"),
             "epochs_total": logv.get("epochs_total"), "last_epoch": logv.get("last_epoch"),

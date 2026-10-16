@@ -36,6 +36,21 @@ def test_model_register_validation(client, loaded_config, worker_factory, engine
     assert w.run_once_light() == "FAILED"
     insp = client.post(f"{API}/studies/{sid}/paths/inspect", headers=PW, json={"purpose": "MODEL_FOLDER", "path": str(d2)}).json()
     assert not insp["ok"] and insp["problems"][0]["code"] == "PSMDL_COUNT"
+    # D3-43: pscfg 0개 → 확인 ok·등록 성공, 2개 → 확인 PSCFG_COUNT·등록 실패(모호)
+    dn = make_model_folder(inbox, name="NoCfg", pscfg=0)
+    insp = client.post(f"{API}/studies/{sid}/paths/inspect", headers=PW, json={"purpose": "MODEL_FOLDER", "path": str(dn)}).json()
+    assert insp["ok"] and insp["summary"]["pscfg"] == [] and insp["problems"] == []
+    r = _job(client, sid, "MODEL_REGISTER", {"model_path": str(dn)})
+    assert w.run_once_light() == "SUCCEEDED"
+    res = client.get(f"{API}/jobs/{r.json()['id']}", headers=P).json()["result"]
+    assert res["files"]["pscfg"] is None and client.get(f"{API}/models/{res['model_id']}", headers=P).json()["status"] == "ACTIVE"
+    dp = make_model_folder(inbox, name="TwoCfg", pscfg=2)
+    insp = client.post(f"{API}/studies/{sid}/paths/inspect", headers=PW, json={"purpose": "MODEL_FOLDER", "path": str(dp)}).json()
+    assert not insp["ok"] and [p["code"] for p in insp["problems"]] == ["PSCFG_COUNT"] and "여러 개" in insp["problems"][0]["message"]
+    r = _job(client, sid, "MODEL_REGISTER", {"model_path": str(dp)})
+    assert w.run_once_light() == "FAILED"
+    msg = client.get(f"{API}/jobs/{r.json()['id']}", headers=P).json()["failure_message"]
+    assert "settings.pscfg" in msg and "settings_1.pscfg" in msg
     # 로그 2개 → 선택 필요, 지정하면 성공
     d3 = make_model_folder(inbox, name="C3", extra_log=True)
     r = _job(client, sid, "MODEL_REGISTER", {"model_path": str(d3)})

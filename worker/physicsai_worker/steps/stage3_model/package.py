@@ -14,7 +14,7 @@ COMMANDS_TXT = """# PhysicsAI 학습 명령 예시 (HPC에서 직접 실행)
 edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --spec <SETTINGS>.pscfg > train.log 2>&1
 # 전이학습:
 edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --spec <SETTINGS>.pscfg --pretrained-model <PRETRAINED>.psmdl > train.log 2>&1
-# 학습이 끝나면 .psmdl, 사용한 .pscfg, train.log를 한 폴더에 모아 플랫폼 ③-4 "모델 등록"에서 그 폴더 경로를 지정하세요.
+# 학습이 끝나면 .psmdl과 train.log를 한 폴더에 모아(사용한 .pscfg는 선택 — 있으면 함께 보관) 플랫폼 ③-4 "모델 등록"에서 그 폴더 경로를 지정하세요.
 # 로그의 loss 줄 예: "epoch=   1/1500  loss=1.03956e+02"
 """
 
@@ -25,7 +25,8 @@ HPC 학습이 끝나면 아래 파일을 한 폴더에 모으고, 플랫폼 ③-
 폴더는 AI 루트 또는 관리자가 허용한 가져오기 루트 아래에 있어야 합니다(경로에 공백·특수문자 금지).
 
 - <MODEL_NAME>.psmdl : 정확히 1개 (필수)
-- <SETTINGS>.pscfg  : 정확히 1개 (필수, 플랫폼은 경로·해시만 기록하고 열지 않습니다)
+- <SETTINGS>.pscfg  : 선택 0~1개 (있으면 함께 보관. 예측·평가 기본 명령은 쓰지 않습니다.
+                      플랫폼은 경로·해시만 기록하고 열지 않습니다. 2개 이상이면 등록 오류)
 - 학습 로그(*.log 또는 *.txt) : 0~1개 (여러 개면 등록 화면에서 선택)
 
 하위 폴더는 보지 않습니다. 등록하면 파일이 Study 폴더로 복사되므로 원본 폴더는 지워도 됩니다.

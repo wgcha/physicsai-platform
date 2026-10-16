@@ -49,7 +49,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     // 파라미터 세트 카드·입력 표는 숨김
     expect(screen.queryByRole("region", { name: "파라미터 세트" })).toBeNull();
     expect(screen.queryByRole("table", { name: "파라미터 입력" })).toBeNull();
-    expect(screen.getByText(/직계 파일만 복사/)).toBeTruthy();
+    expect(screen.queryByText(/복사하지 않습니다/)).toBeNull();          // D3-43: 참고 문구는 하위 폴더가 있을 때만
     first.unmount();
 
     renderApp(`${STUDY}/4`, { user: "power" });
@@ -75,7 +75,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power" });
     const bodies = recordJobBodies(server);
     const card = await inspectOk();
-    expect((await within(card).findByTestId("prepared-summary")).textContent).toBe("Face_Drop_0000.rad · rad 2 · inc 3");
+    expect((await within(card).findByTestId("prepared-summary")).textContent).toBe("✓ starter Face_Drop_0000.rad · rad 2 · inc 3");
     expect(within(card).getByText("Final 모델(기본)")).toBeTruthy();
     expect(within(card).getByText("Final")).toBeTruthy();
     const run = within(card).getByRole("button", { name: "예측 실행" }) as HTMLButtonElement;
@@ -97,6 +97,19 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     const pbs = within(card).getByRole("button", { name: "PBS 검증 해석" }) as HTMLButtonElement;
     expect(pbs.disabled).toBe(true);
     expect(within(card).getByTestId("pbs-note").textContent).toContain("PBS 연결 안 됨");
+  });
+
+  it("하위 폴더가 있을 때만 회색 참고 문구(D3-43), 없으면 표시 안 함", async () => {
+    localStorage.setItem(KEY, "prepared");
+    renderApp(`${STUDY}/4`, { user: "power" });
+    let card = await inspectOk("E:/shared/AI_WORK/cushion/00_inbox/nested_case");
+    const note = await within(card).findByTestId("prepared-subdir-note");
+    expect(note.textContent).toBe("하위 폴더 2개는 복사하지 않습니다(이 폴더의 .rad·.inc만 사용)");
+    expect(note.className).toContain("muted");
+    expect(within(card).queryByRole("alert")).toBeNull();
+    card = await inspectOk("E:/shared/AI_WORK/cushion/00_inbox/flat_case");
+    await waitFor(() => expect(within(card).getByTestId("prepared-summary").textContent).toBe("✓ starter Face_Drop_0000.rad · rad 2 · inc 3"));
+    expect(within(card).queryByTestId("prepared-subdir-note")).toBeNull();
   });
 
   it("확인 결과 문제는 회색 참고 문구, 실행 비활성", async () => {
@@ -136,7 +149,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     expect(await screen.findByText(/등록된 파라미터 세트가 없습니다/)).toBeTruthy();
     fireEvent.click(await modeRadio("준비된 입력 파일"));
     const card = await inspectOk("E:/shared/AI_WORK/cushion/00_inbox/case_B");
-    expect((await within(card).findByTestId("prepared-summary")).textContent).toBe("Face_Drop_0000.rad · rad 2 · inc 3");
+    expect((await within(card).findByTestId("prepared-summary")).textContent).toBe("✓ starter Face_Drop_0000.rad · rad 2 · inc 3");
     const run = within(card).getByRole("button", { name: "예측 실행" }) as HTMLButtonElement;
     await waitFor(() => expect(run.disabled).toBe(false));
     fireEvent.click(run);
@@ -192,7 +205,7 @@ describe("목 PREDICT params 검증(§11.5)", () => {
     expect(r.status).toBe(200);
     const b = r.body as { ok: boolean; normalized_path: string; problems: unknown[]; summary: Record<string, unknown> };
     expect(b.ok).toBe(true);
-    expect(Object.keys(b.summary).sort()).toEqual(["file_count", "inc_count", "kind", "rad", "starter", "starter_ok", "total_bytes"]);
+    expect(Object.keys(b.summary).sort()).toEqual(["file_count", "inc_count", "kind", "rad", "starter", "starter_ok", "subdir_count", "total_bytes"]);
     const bad = s.handle("POST", "/studies/s-cushion/paths/inspect", q, { purpose: "PREDICT_INPUT", path: "E:/shared/AI_WORK/x/a.txt" }, h);
     expect((bad.body as { problems: { code: string }[] }).problems[0].code).toBe("INPUT_EXT");
   });

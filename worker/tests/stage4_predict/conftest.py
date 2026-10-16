@@ -69,7 +69,7 @@ def predict_env(settings_dict, engine, fake_dashboard, fake_record):
 
     def make(*, commands: dict[str, Any] | None = None, predict: dict[str, Any] | None = None,
              resources: dict[str, Any] | None = None, hpc: dict[str, Any] | None = None, folder: str = "pred",
-             final_model: bool = True) -> PredictEnv:
+             final_model: bool = True, model_pscfg: int = 1) -> PredictEnv:
         d = dict(settings_dict)
         if hpc:
             d["hpc"] = hpc
@@ -87,7 +87,7 @@ def predict_env(settings_dict, engine, fake_dashboard, fake_record):
         assert r.status_code == 201, r.text
         env.sid, env.sroot = r.json()["id"], Path(lc.settings.storage.ai_root) / folder
         if final_model:
-            mf = make_model_folder(env.sroot / "00_inbox", name="M1")
+            mf = make_model_folder(env.sroot / "00_inbox", name="M1", pscfg=model_pscfg)
             jb = env.submit("MODEL_REGISTER", {"model_path": str(mf)})
             assert w.run_once_light() == "SUCCEEDED"
             env.model_id = env.job(jb["id"])["result"]["model_id"]

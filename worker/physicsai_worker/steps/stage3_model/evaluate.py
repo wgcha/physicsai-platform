@@ -11,7 +11,7 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json
 from physicsai_core.stage3_model.score import parse_scores
 
-from ..common import load_model, verify_model_integrity
+from ..common import load_model, model_command_values, verify_model_integrity
 
 
 def _E(ctx: Any, m: dict[str, Any]) -> str:
@@ -36,8 +36,7 @@ def edspy_score(ctx: Any) -> None:
     preds = os.path.join(E, "predictions.psdata")
     ctx.run_local(
         "edspy_score",
-        {"score_path": score, "model_psmdl": ctx.abs(m["psmdl_rel"]), "model_pscfg": ctx.abs(m["pscfg_rel"]),
-         "eval_psdata": ctx.abs(d["eval_psdata_rel"])},
+        {"score_path": score, **model_command_values(ctx, "edspy_score", m), "eval_psdata": ctx.abs(d["eval_psdata_rel"])},
         cwd=E,
         outputs_to_backup=[score, preds],
     )

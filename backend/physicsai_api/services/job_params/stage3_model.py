@@ -16,7 +16,7 @@ from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_
 from ...context import AppContext
 from ..common import study_root
 from ..path_inspect import inspect_model_folder
-from .base import _P, invalid_errors, prerequisite_missing
+from .base import _P, invalid_errors, prerequisite_missing, require_model_pscfg
 
 MODEL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
 
@@ -117,6 +117,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         m = models_repo.get(conn, p.model_id)
         if m is None or m["study_id"] != sid or m["status"] != "ACTIVE":
             raise prerequisite_missing("ACTIVE_MODEL")
+        require_model_pscfg(cfg, "edspy_score", m)
         d = datasets_repo.get(conn, m["dataset_id"]) if m["dataset_id"] else None
         if d is None or d["status"] != "READY":
             raise prerequisite_missing("READY_DATASET")

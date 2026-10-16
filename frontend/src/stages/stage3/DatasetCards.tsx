@@ -268,7 +268,7 @@ export function HpcTrainingNotice() {
       <ol className="steps-text">
         <li>③-2 패키지 폴더를 HPC로 가져가 학습 명령을 실행합니다.</li>
         <li>
-          학습 후 <code>.psmdl</code>·<code>.pscfg</code>·<code>train.log</code>를 한 폴더에 모아 AI 루트 아래로 옮기고 ③-4에서 등록합니다.
+          학습 후 <code>.psmdl</code>·<code>train.log</code>(<code>.pscfg</code>는 선택 — 있으면 함께)를 한 폴더에 모아 AI 루트 아래로 옮기고 ③-4에서 등록합니다.
         </li>
       </ol>
       {study.folder_display_path && (

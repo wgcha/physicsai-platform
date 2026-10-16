@@ -70,6 +70,6 @@ export const COMMANDS_TXT = `# PhysicsAI 학습 명령 예시 (HPC에서 직접 
 edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --spec <SETTINGS>.pscfg > train.log 2>&1
 # 전이학습:
 edspy --physicsai --train <MODEL_NAME>.psmdl --dataset dataset_train.psdata --spec <SETTINGS>.pscfg --pretrained-model <PRETRAINED>.psmdl > train.log 2>&1
-# 학습이 끝나면 .psmdl, 사용한 .pscfg, train.log를 한 폴더에 모아 플랫폼 ③-4 "모델 등록"에서 그 폴더 경로를 지정하세요.
+# 학습이 끝나면 .psmdl과 train.log를 한 폴더에 모아(사용한 .pscfg는 선택 — 있으면 함께 보관) 플랫폼 ③-4 "모델 등록"에서 그 폴더 경로를 지정하세요.
 # 로그의 loss 줄 예: "epoch=   1/1500  loss=1.03956e+02"
 `;

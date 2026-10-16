@@ -18,7 +18,7 @@ from physicsai_core.stage4_predict import prepared_input
 
 from ...context import AppContext
 from ..common import study_root
-from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing
+from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing, require_model_pscfg
 
 
 class PredictParams(_P):
@@ -66,6 +66,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         if ps is None or ps["study_id"] != sid:
             raise prerequisite_missing("PARAM_SET")
         m = _model(conn, study, p.model_id)
+        require_model_pscfg(cfg, "edspy_predict", m)
         if cfg.commands.geom_update is None:
             raise DomainError("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다", status=409,
                               template="geom_update")
@@ -150,6 +151,7 @@ def _prepare_prepared(ctx: AppContext, conn: Any, study: dict[str, Any], p: Pred
     if plan.problems:
         raise DomainError("PREDICT_INPUT_INVALID", "준비된 입력을 쓸 수 없습니다", status=422, problems=plan.problems)
     m = _model(conn, study, p.model_id)
+    require_model_pscfg(ctx.settings, "edspy_predict", m)
     if p.param_set_id:
         ps = ps_repo.get(conn, p.param_set_id)
         if ps is None or ps["study_id"] != study["id"]:

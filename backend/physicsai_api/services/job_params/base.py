@@ -6,6 +6,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from physicsai_core.commands import PSCFG_REQUIRED_MESSAGE, model_lacks_required_pscfg
 from physicsai_core.errors import DomainError
 from physicsai_core.features import JOB_FEATURE, missing_for
 
@@ -24,6 +25,12 @@ class HpcOverrides(_P):
 
 def prerequisite_missing(*items: str) -> DomainError:
     return DomainError("PREREQUISITE_MISSING", "사전 조건이 충족되지 않았습니다", status=409, missing=list(items))
+
+
+def require_model_pscfg(cfg: Any, template_key: str, m: dict[str, Any]) -> None:
+    """D3-43: .pscfg 없이 등록한 모델 + {model_pscfg}를 쓰는 명령 템플릿 → 409 PSCFG_REQUIRED(작업 생성 거부)."""
+    if model_lacks_required_pscfg(getattr(cfg.commands, template_key, None), m):
+        raise DomainError("PSCFG_REQUIRED", PSCFG_REQUIRED_MESSAGE, status=409, template=template_key, model_id=m["id"])
 
 
 def invalid_errors(errors: list[dict[str, Any]], message: str = "요청 값이 올바르지 않습니다") -> DomainError:

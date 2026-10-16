@@ -98,3 +98,4 @@
 - 2026-10-15 · 시연 우선순위 ④ 예측: 원본 기준 SimLab(m_1)→HyperMesh include(m_2)→edspy 체인 일치화, 원본 단독 예측을 "준비된 입력" 모드로 추가, edspy 성공 = h3d 존재(원본 ⑤) · phase3.md §11, D3-29~38
 - 2026-10-15 · 빌드된 화면(`frontend-dist/`, `BUILD_INFO.json` source_hash)을 저장소에 포함 — 서버 설치·업데이트는 해시가 맞으면 Node·npm 없이 배치, `update-repo.ps1`이 스스로 `git pull --ff-only`(원클릭) — 사용자 결정("호환성 높게, 원클릭, 경로 지정 없음")·사내 보안 정책(`.bat` 차단, esbuild spawn EPERM) · phase3.md D3-40
 - 2026-10-15 · 설치·업데이트에서 관리자 권한 제거 — 머신 환경변수 대신 런타임 파일(`.runtime\secrets\database_url`, ACL 현재 사용자·SYSTEM), 작업은 현재 사용자 Interactive·Limited + `--runtime` 인자, 이전 설치는 첫 한 번만 관리자 실행 — 사용자 결정·사내 보안 정책(대시보드도 일반 권한) · phase3.md D3-41
+- 2026-10-16 · 모델 등록 시 `.pscfg`는 선택(0~1개, 2개 이상은 오류), `models.pscfg_*` NULL 허용(migration 0005), `{model_pscfg}` 템플릿 + pscfg 없는 모델은 작업 생성 409 `PSCFG_REQUIRED` — 사용자 결정 · 원본 예측·평가·최적화 명령에 pscfg 인자 없음(U7) · phase3.md D3-43

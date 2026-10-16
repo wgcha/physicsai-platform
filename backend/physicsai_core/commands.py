@@ -168,6 +168,28 @@ def validate_template(key: str, template: object) -> list[str]:
     return problems
 
 
+PSCFG_MANY_MESSAGE = ".pscfg 파일이 여러 개라 어느 것인지 알 수 없습니다 — 0개 또는 1개만 두세요(현재 {n}개)"
+PSCFG_REQUIRED_MESSAGE = "이 명령 설정은 .pscfg가 필요합니다 — pscfg가 있는 모델을 등록하거나 설정에서 {model_pscfg}를 빼세요"
+
+
+def template_uses(template: Sequence[str] | None, name: str) -> bool:
+    """템플릿 요소 중 placeholder `{name}`이 있는지(형식 오류 요소는 무시 — 검증은 validate_template)."""
+    for el in template or []:
+        if not isinstance(el, str) or el.startswith("@"):
+            continue
+        try:
+            if name in parse_placeholders(el):
+                return True
+        except ValueError:
+            continue
+    return False
+
+
+def model_lacks_required_pscfg(template: Sequence[str] | None, model: Mapping[str, object]) -> bool:
+    """D3-43: 모델에 .pscfg가 없는데(선택 등록) 템플릿이 {model_pscfg}를 쓰면 True."""
+    return not model.get("pscfg_rel") and template_uses(template, "model_pscfg")
+
+
 def check_value(name: str, value: str, *, allow_space: bool, via_cmd: bool = False) -> None:
     """치환 값 검사(§9.1). 위반 시 StepFailure(INPUT_INVALID)."""
     if not isinstance(value, str):

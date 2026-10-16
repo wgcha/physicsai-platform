@@ -173,6 +173,8 @@ export interface PredictInputInspect {
   inc_count: number;
   file_count: number;
   total_bytes: number;
+  /** 복사 대상 폴더의 직계 하위 폴더 수(복사 안 함), .hm이면 0 — phase3 D3-43 */
+  subdir_count?: number;
   problems: PredictInputProblem[];
 }
 

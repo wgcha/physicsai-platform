@@ -18,7 +18,7 @@ from physicsai_core.stage4_predict.xydata import parse_xydata
 from physicsai_core.tpl_render import render_tpl
 
 from ...signals import StepSkipped
-from ..common import load_model, verify_model_integrity
+from ..common import load_model, model_command_values, verify_model_integrity
 from .predict_inputs import (
     PREPARED_SKIP,
     _judge_output,
@@ -115,8 +115,7 @@ def edspy_predict(ctx: Any) -> None:
     # 성공 판정 = 원본 ⑤ 기준 Predict(opti:323-329)와 같이 h3d 존재만 본다(phase3 D3-37): rc≠0·로그 오류 패턴은 경고
     rc = ctx.run_local(
         "edspy_predict",
-        {"pred_h3d": pred, "model_psmdl": ctx.abs(m["psmdl_rel"]), "model_pscfg": ctx.abs(m["pscfg_rel"]),
-         "starter": os.path.join(P, "INPUT", starter)},
+        {"pred_h3d": pred, **model_command_values(ctx, "edspy_predict", m), "starter": os.path.join(P, "INPUT", starter)},
         cwd=os.path.join(P, "INPUT"),
         outputs_to_backup=[pred],
         env_add=dict(ctx.settings.predict.env),

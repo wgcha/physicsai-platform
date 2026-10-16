@@ -21,11 +21,14 @@ def make_h3d_tree(root: Path, n: int = 10, nested: bool = True) -> Path:
     return inp
 
 
-def make_model_folder(root: Path, name: str = "cushion_TNS", log: str | None = "default", extra_log: bool = False) -> Path:
+def make_model_folder(root: Path, name: str = "cushion_TNS", log: str | None = "default", extra_log: bool = False,
+                      pscfg: int = 1) -> Path:
+    """모델 폴더. pscfg = .pscfg 개수(0 = 없음, D3-43 선택)."""
     d = root / f"model_{uuid.uuid4().hex[:6]}"
     d.mkdir(parents=True)
     (d / f"{name}.psmdl").write_bytes(os.urandom(2048))
-    (d / "settings.pscfg").write_bytes(b"\x80\x04pickle-not-opened")
+    for i in range(pscfg):
+        (d / ("settings.pscfg" if i == 0 else f"settings_{i}.pscfg")).write_bytes(b"\x80\x04pickle-not-opened")
     if log == "default":
         lines = [f"epoch= {e:3d}/  50  loss={100.0 / e:.5e}" for e in range(1, 51)]
         (d / "train.log").write_text("start\n" + "\n".join(lines) + "\nend\n")
