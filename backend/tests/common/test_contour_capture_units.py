@@ -270,7 +270,8 @@ def test_resource_tcl_runs_with_mock_hyperview(tmp_path, mode):
         assert "save image" not in log
         return
     # 로그는 Tcl 목록 표기({…} = 한 인자): 한글·공백 경로·필드 이름이 각각 한 인자로 넘어간다
-    assert f"hwc open animation modelandresult {{{p['h3d']}}} {{{p['h3d']}}}" in log
+    h3d = p["h3d"].replace("\\", "/")  # 설정 파일 경로는 `/` 표기(§15.1) — Windows도 같다
+    assert f"hwc open animation modelandresult {{{h3d}}} {{{h3d}}}" in log
     assert "hwc result scalar load type= {Von Mises} avgmode= maximum displayed=true" in log
     assert "hwc result scalar legendminenabled true | result scalar legendmin 0" in log
     assert "hwc result scalar legendmaxenabled true | result scalar legendmax 152.25" in log
