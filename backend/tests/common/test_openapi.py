@@ -40,5 +40,9 @@ def test_all_routes_prefixed():
         "/fs/roots", "/fs/list",
         # 3차(phase3 §13 S8, D3-47)
         "/studies/{study_id}/param-sets/discover",
+        # 3차(phase3 §14.7 S9, D3-49)
+        "/studies/{study_id}/predict-batches/preview", "/studies/{study_id}/predict-batches", "/predict-batches/{batch_id}",
+        "/predict-batches/{batch_id}/table.csv", "/predict-batches/{batch_id}/curves", "/predict-batches/{batch_id}/cancel",
+        "/predict-batches/{batch_id}/retry-failed", "/param-sets/{ps_id}/responses",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

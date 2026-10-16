@@ -125,6 +125,502 @@
         "title": "Artifact",
         "type": "object"
       },
+      "BatchCurveSeries": {
+        "properties": {
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "doe_no",
+          "run_key",
+          "x",
+          "y"
+        ],
+        "title": "BatchCurveSeries",
+        "type": "object"
+      },
+      "BatchCurves": {
+        "properties": {
+          "downsampled": {
+            "title": "Downsampled",
+            "type": "boolean"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "$ref": "#/components/schemas/BatchCurveSeries"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "names",
+          "truncated",
+          "downsampled",
+          "series"
+        ],
+        "title": "BatchCurves",
+        "type": "object"
+      },
+      "BatchGenCounts": {
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "waiting": {
+            "title": "Waiting",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "done",
+          "failed",
+          "running",
+          "waiting"
+        ],
+        "title": "BatchGenCounts",
+        "type": "object"
+      },
+      "BatchModelRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "BatchModelRef",
+        "type": "object"
+      },
+      "BatchPredictCounts": {
+        "properties": {
+          "canceled": {
+            "title": "Canceled",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "running",
+          "queued",
+          "succeeded",
+          "failed",
+          "canceled"
+        ],
+        "title": "BatchPredictCounts",
+        "type": "object"
+      },
+      "BatchPreviewRow": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "out_of_range": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "doe_no",
+          "run_key",
+          "values",
+          "applied_values",
+          "out_of_range"
+        ],
+        "title": "BatchPreviewRow",
+        "type": "object"
+      },
+      "BatchProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "row": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "BatchProblem",
+        "type": "object"
+      },
+      "BatchRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "BatchRef",
+        "type": "object"
+      },
+      "BatchResponseName": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "BatchResponseName",
+        "type": "object"
+      },
+      "BatchRetryFailed": {
+        "properties": {
+          "parent_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent Job Id"
+          },
+          "retried_job_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Retried Job Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "retried_job_ids"
+        ],
+        "title": "BatchRetryFailed",
+        "type": "object"
+      },
+      "BatchRunRow": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "folder": {
+            "title": "Folder",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "out_of_range": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "responses": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responses"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "doe_no",
+          "run_key",
+          "folder",
+          "values",
+          "applied_values",
+          "out_of_range",
+          "state"
+        ],
+        "title": "BatchRunRow",
+        "type": "object"
+      },
+      "BatchSourceLhs": {
+        "additionalProperties": false,
+        "description": "범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "lhs",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "default": 1,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceLhs",
+        "type": "object"
+      },
+      "BatchSourceTable": {
+        "additionalProperties": false,
+        "description": "표 붙여넣기·CSV 내용(탭/쉼표 자동, BOM 허용, 첫 줄 헤더 = 파라미터 이름 전부, 선택 열 doe 무시).",
+        "properties": {
+          "kind": {
+            "const": "table",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 16777216,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "BatchSourceTable",
+        "type": "object"
+      },
+      "BatchSourceTrainDoe": {
+        "additionalProperties": false,
+        "description": "① 학습 DOE(같은 Study, READY, sample_status PARSED/PARTIAL)의 samples.csv 행 전부.",
+        "properties": {
+          "doe_id": {
+            "maxLength": 64,
+            "title": "Doe Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "train_doe",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "doe_id"
+        ],
+        "title": "BatchSourceTrainDoe",
+        "type": "object"
+      },
       "CandidateDatatype": {
         "properties": {
           "components": {
@@ -1627,6 +2123,16 @@
             ],
             "title": "Attention Code"
           },
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobBatchRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "can_cancel": {
             "title": "Can Cancel",
             "type": "boolean"
@@ -1899,6 +2405,42 @@
         "title": "Job",
         "type": "object"
       },
+      "JobBatchRef": {
+        "description": "phase3 §14.5 일괄 예측 소속(params에서 계산): 부모 PREDICT_BATCH는 doe_no null, 하위 PREDICT는 run 번호.",
+        "properties": {
+          "doe_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe No"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "JobBatchRef",
+        "type": "object"
+      },
       "JobCreate": {
         "additionalProperties": false,
         "properties": {
@@ -1922,7 +2464,8 @@
               "SPDM_IMPORT",
               "OPTIMIZE",
               "STUDY_STORAGE_SCAN",
-              "STUDY_CLEANUP"
+              "STUDY_CLEANUP",
+              "PREDICT_BATCH"
             ],
             "title": "Job Type",
             "type": "string"
@@ -2070,6 +2613,16 @@
               }
             ],
             "title": "Attention Code"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobBatchRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "cancel_requested": {
             "title": "Cancel Requested",
@@ -2915,12 +3468,32 @@
       },
       "ParamSet": {
         "properties": {
+          "assem_rel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Assem Rel"
+          },
           "cad_file_name": {
             "title": "Cad File Name",
             "type": "string"
           },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "input_kind": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "mesh_only"
+            ],
+            "title": "Input Kind",
             "type": "string"
           },
           "is_current": {
@@ -2979,8 +3552,15 @@
             "type": "string"
           },
           "starter_name": {
-            "title": "Starter Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter Name"
           },
           "study_id": {
             "title": "Study Id",
@@ -3007,6 +3587,14 @@
           "unit_system": {
             "title": "Unit System",
             "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DiscoverProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -3019,7 +3607,6 @@
           "sample_count",
           "sample_has_measured",
           "cad_file_name",
-          "starter_name",
           "tpl_params",
           "is_current",
           "registered_by_name",
@@ -3082,7 +3669,7 @@
       },
       "ParamSetDiscoverChoice": {
         "additionalProperties": false,
-        "description": "phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능.",
+        "description": "phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능.\nphase3 §14.4: `radioss_assem`을 명시적 null로 주면 조립 폴더 없이 메시 단독(mesh_only) 템플릿으로 등록.",
         "properties": {
           "cad": {
             "anyOf": [
@@ -3347,6 +3934,25 @@
         "title": "ParamSetPatch",
         "type": "object"
       },
+      "ParamSetResponsesUpdate": {
+        "additionalProperties": false,
+        "description": "phase3 §14.6 `PUT /param-sets/{id}/responses` — 행 `{name, unit, spec|null}`. 검증 실패는 422 RESPONSE_INVALID + problems.",
+        "properties": {
+          "responses": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Responses",
+            "type": "array"
+          }
+        },
+        "required": [
+          "responses"
+        ],
+        "title": "ParamSetResponsesUpdate",
+        "type": "object"
+      },
       "Parameter": {
         "properties": {
           "max": {
@@ -3487,6 +4093,262 @@
           "code"
         ],
         "title": "PathProblem",
+        "type": "object"
+      },
+      "PredictBatch": {
+        "properties": {
+          "can_cancel": {
+            "default": false,
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_retry_failed": {
+            "default": false,
+            "title": "Can Retry Failed",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "dir": {
+            "title": "Dir",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "gen": {
+            "$ref": "#/components/schemas/BatchGenCounts"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_kind": {
+            "enum": [
+              "assembly",
+              "mesh_only"
+            ],
+            "title": "Input Kind",
+            "type": "string"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "model": {
+            "$ref": "#/components/schemas/BatchModelRef"
+          },
+          "multi_execution": {
+            "title": "Multi Execution",
+            "type": "integer"
+          },
+          "param_set": {
+            "$ref": "#/components/schemas/BatchRef"
+          },
+          "parameters": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "predict": {
+            "$ref": "#/components/schemas/BatchPredictCounts"
+          },
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/BatchResponseName"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BatchRunRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "dir",
+          "input_kind",
+          "source_kind",
+          "param_set",
+          "model",
+          "job_id",
+          "multi_execution",
+          "gen",
+          "predict",
+          "parameters",
+          "responses",
+          "rows",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "PredictBatch",
+        "type": "object"
+      },
+      "PredictBatchPreview": {
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "estimate_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Min"
+          },
+          "input_kind": {
+            "enum": [
+              "assembly",
+              "mesh_only"
+            ],
+            "title": "Input Kind",
+            "type": "string"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/BatchProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/BatchPreviewRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "input_kind",
+          "count",
+          "rows",
+          "problems"
+        ],
+        "title": "PredictBatchPreview",
+        "type": "object"
+      },
+      "PredictBatchPreviewRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "param_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Set Id"
+          },
+          "source": {
+            "discriminator": {
+              "mapping": {
+                "lhs": "#/components/schemas/BatchSourceLhs",
+                "table": "#/components/schemas/BatchSourceTable",
+                "train_doe": "#/components/schemas/BatchSourceTrainDoe"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BatchSourceLhs"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceTable"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceTrainDoe"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "PredictBatchPreviewRequest",
+        "type": "object"
+      },
+      "PredictBatchSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "run_count": {
+            "title": "Run Count",
+            "type": "integer"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "run_count",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "PredictBatchSummary",
         "type": "object"
       },
       "PredictCheckRequest": {
@@ -3984,6 +4846,18 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec"
           },
           "unit": {
             "default": "",
@@ -6394,7 +7268,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Get Curation",
@@ -6496,7 +7370,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Files",
@@ -6618,7 +7492,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Fs List",
@@ -6659,7 +7533,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Fs Roots",
@@ -6890,7 +7764,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -7077,7 +7951,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -7222,7 +8096,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -7317,7 +8191,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -7406,7 +8280,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -7510,7 +8384,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -7933,7 +8807,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Get Set",
@@ -8004,10 +8878,93 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Patch Set",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/responses": {
+      "put": {
+        "description": "템플릿 응답 정의(phase3 §14.6): ⑤ OptResponse H3D 형식. 422 RESPONSE_INVALID·RESPONSE_IN_USE + problems.",
+        "operationId": "put_responses_physicsai_api_param_sets__ps_id__responses_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamSetResponsesUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Put Responses",
         "tags": [
           "param-sets"
         ]
@@ -8100,12 +9057,402 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Samples",
         "tags": [
           "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}": {
+      "get": {
+        "description": "배치 상세: 행마다 DOE #·run_key·폴더·값·응답·상태·하위 작업 id.",
+        "operationId": "get_batch_physicsai_api_predict_batches__batch_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictBatch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Get Batch",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}/cancel": {
+      "post": {
+        "description": "일괄 취소(power, 등록자 또는 관리자): 부모·비종료 하위 전부, 멱등.",
+        "operationId": "cancel_batch_physicsai_api_predict_batches__batch_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictBatch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Cancel Batch",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}/curves": {
+      "get": {
+        "description": "커브 겹쳐보기: 완료 run의 같은 이름 계열(run ≤ predict_batch.curve_max_runs, 점 ≤ max_points, 최소·최대 보존).",
+        "operationId": "batch_curves_physicsai_api_predict_batches__batch_id__curves_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 400,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_points",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 2000,
+              "minimum": 2,
+              "title": "Max Points",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchCurves"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Batch Curves",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}/retry-failed": {
+      "post": {
+        "description": "실패만 다시(power): 생성 실패 run → 부모 새 작업, 실패·취소·중단 하위 → 기존 재시도.",
+        "operationId": "retry_failed_batch_physicsai_api_predict_batches__batch_id__retry_failed_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BatchRetryFailed"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Retry Failed Batch",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}/table.csv": {
+      "get": {
+        "description": "결과 표 CSV(UTF-8 BOM): doe_no,run_key,folder,<파라미터>,<응답>,state.",
+        "operationId": "batch_table_csv_physicsai_api_predict_batches__batch_id__table_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Batch Table Csv",
+        "tags": [
+          "predict-batches"
         ]
       }
     },
@@ -8422,7 +9769,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Create Study",
@@ -8484,7 +9831,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Get Study",
@@ -8554,7 +9901,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Patch Study",
@@ -8616,7 +9963,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Archive Study",
@@ -8672,7 +10019,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Sources",
@@ -8745,7 +10092,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "List Curations",
@@ -8979,7 +10326,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -9329,7 +10676,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "List Sets",
@@ -9400,7 +10747,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Register",
@@ -9473,7 +10820,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Discover",
@@ -9546,7 +10893,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "From Train",
@@ -9618,12 +10965,171 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Inspect",
         "tags": [
           "studies"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/predict-batches": {
+      "get": {
+        "operationId": "list_batches_physicsai_api_studies__study_id__predict_batches_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PredictBatchSummary"
+                  },
+                  "title": "Response List Batches Physicsai Api Studies  Study Id  Predict Batches Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "List Batches",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/predict-batches/preview": {
+      "post": {
+        "description": "조합 미리보기(동기, 워커 없음). 조합 문제는 200 `problems`(작업 생성 때는 422 BATCH_SOURCE_INVALID).",
+        "operationId": "preview_batch_physicsai_api_studies__study_id__predict_batches_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PredictBatchPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictBatchPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Content"
+          }
+        },
+        "summary": "Preview Batch",
+        "tags": [
+          "predict-batches"
         ]
       }
     },
@@ -9690,7 +11196,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Predict Check",
@@ -9870,7 +11376,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -9956,7 +11462,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -10048,7 +11554,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -10140,7 +11646,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -10212,7 +11718,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           }
         },
         "summary": "Unarchive Study",
@@ -10284,7 +11790,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -10420,7 +11926,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -10536,7 +12042,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {
@@ -10611,7 +12117,7 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "Unprocessable Content"
           },
           "503": {
             "content": {

@@ -144,6 +144,15 @@ def set_run(conn: Connection, batch_id: str, doe_no: int, **values: Any) -> None
                  .values(**values))
 
 
+def cancel_active(conn: Connection, batch_id: str) -> bool:
+    """일괄 취소: GENERATING·PREDICTING 배치를 CANCELED + finished_at(이미 끝났으면 그대로). 바꿨으면 True."""
+    r = conn.execute(update(predict_batches)
+                     .where(and_(predict_batches.c.id == batch_id,
+                                 predict_batches.c.status.in_(["GENERATING", "PREDICTING"])))
+                     .values(status="CANCELED", finished_at=func.now()))
+    return bool(r.rowcount)
+
+
 def set_parent_job(conn: Connection, batch_id: str, job_id: str) -> None:
     """부모 재시도: 최신 부모 작업으로 바꾸고 GENERATING(§14.5)."""
     set_batch(conn, batch_id, job_id=job_id, status="GENERATING", finished_at=None)
@@ -163,7 +172,7 @@ def enqueue_children(conn: Connection, batch_id: str, *, batch_dir: str) -> list
     """BP_ENQUEUE: gen_state=DONE이고 하위가 없는 run마다 PREDICT(prepared)를 doe_no 순으로 만들고(한 트랜잭션, 등록자 = 배치
     등록자) 배치를 PREDICTING으로. batch_dir = 배치 폴더 절대경로. 만든 작업 목록을 돌려준다."""
     b = get(conn, batch_id, for_update=True)
-    if b is None:
+    if b is None or b["status"] == "CANCELED":  # 일괄 취소 뒤 늦게 끝난 부모는 하위를 만들지 않는다
         return []
     study = row_dict(conn.execute(select(studies).where(studies.c.id == b["study_id"])).first())
     created: list[dict[str, Any]] = []
@@ -175,7 +184,8 @@ def enqueue_children(conn: Connection, batch_id: str, *, batch_dir: str) -> list
             "input_path": os.path.normpath(os.path.join(batch_dir, *r["input_rel"].split("/"))),
             "model_id": b["model_id"],
             "param_set_id": b["param_set_id"],
-            "batch_run": {"batch_id": batch_id, "doe_no": r["doe_no"]},
+            # batch_no는 작업 목록 표시(JobSummary.batch.label)용 — 판정은 batch_id·doe_no만(batch_run_ref)
+            "batch_run": {"batch_id": batch_id, "doe_no": r["doe_no"], "batch_no": b["batch_no"]},
         }
         job = insert_job(conn, study=study, job_type="PREDICT", params=params, user_id=b["created_by"],
                          user_name=b["created_by_name"])
@@ -183,6 +193,15 @@ def enqueue_children(conn: Connection, batch_id: str, *, batch_dir: str) -> list
         created.append(job)
     set_batch(conn, batch_id, status="PREDICTING")
     return created
+
+
+def reset_failed_gen(conn: Connection, batch_id: str) -> int:
+    """부모 재생성(재시도·retry-failed) 전: 생성이 끝나지 않은 run(PENDING 제외)을 PENDING으로 되돌리고 사유를 지운다. 바꾼 행 수."""
+    r = conn.execute(update(predict_batch_runs)
+                     .where(and_(predict_batch_runs.c.batch_id == batch_id,
+                                 predict_batch_runs.c.gen_state.in_(["FAILED", "RUNNING"])))
+                     .values(gen_state="PENDING", gen_code=None, gen_message=None))
+    return int(r.rowcount or 0)
 
 
 def active_child_job_ids(conn: Connection, batch_id: str) -> list[str]:
@@ -262,6 +281,10 @@ def on_child_end(conn: Connection, job: Mapping[str, Any], state: str) -> tuple[
     if ref is None:
         return None
     batch_id, doe_no = ref
+    cur = row_dict(conn.execute(select(predict_batch_runs.c.predict_job_id).where(and_(
+        predict_batch_runs.c.batch_id == batch_id, predict_batch_runs.c.doe_no == doe_no))).first())
+    if cur is None or cur["predict_job_id"] != job.get("id"):  # 재시도로 바뀐 이전 하위는 무시
+        return None
     if state == "SUCCEEDED":
         set_run(conn, batch_id, doe_no, responses=responses_from_result(job.get("result")))
     done = mark_done_if_complete(conn, batch_id)

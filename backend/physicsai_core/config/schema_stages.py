@@ -56,6 +56,8 @@ class ParamSetCfg(_M):
     discover_max_depth: int = Field(default=4, ge=0, le=16)
     discover_max_entries: int = Field(default=5000, ge=1, le=200000)
     discover_tpl_max_bytes: int = Field(default=1048576, ge=1024)
+    # phase3 §14.4 S9: tpl의 SimLab 내보내기 줄(원본 tpl:110 `dir_file_export`) — 값 ≠ predict.simlab_mesh_name이면 등록 경고
+    tpl_export_regex: str = r'dir_file_export\s*=\s*r?"[^"]*"'
 
 
 class PredictCfg(_M):

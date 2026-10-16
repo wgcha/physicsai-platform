@@ -121,6 +121,7 @@ param_set:
   discover_max_depth: 4           # "프로젝트 폴더에서 찾기" 탐색 깊이(phase3 §13 S8)
   discover_max_entries: 5000      # 탐색 항목 수 상한(넘으면 truncated)
   discover_tpl_max_bytes: 1048576 # tpl 읽기 크기 상한(1 MiB)
+  tpl_export_regex: 'dir_file_export\s*=\s*r?"[^"]*"'   # tpl 내보내기 줄(원본 tpl:110). 값 ≠ predict.simlab_mesh_name이면 등록 경고 SIMLAB_EXPORT_NAME(phase3 §14.4)
 
 predict:
   rendered_script_name: simlab_parametered_mesh.py   # U2 확정(phase3 §11.2)
@@ -136,7 +137,7 @@ predict:
   env:
     EDS_TNS_ACTVN_CHCKPT: "1"     # 원본 4_OPTIMIZATION/FUNC/1_physicsai_opti.py:319
 
-predict_batch:                    # ④ 일괄 예측(DOE)(phase3 §14.5). 동시 실행 상한은 train_data.max_multi_execution
+predict_batch:                    # ④ 일괄 예측(DOE)(phase3 §14.5). 동시 실행 수는 작업 생성 때 사용자가 1~train_data.max_multi_execution으로 입력
   max_runs: 200                   # 조합 수 상한(2~2000) — LHS 개수 2~max_runs, 표 행 1~max_runs
   table_max_bytes: 1048576        # 표 붙여넣기·CSV 크기 상한(1 MiB)
   dir_name: "04_batch"            # Study 직계 배치 폴더(<study>/04_batch/B-003/run__00001/m_1·m_2·m_3)

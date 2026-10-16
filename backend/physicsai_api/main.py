@@ -30,6 +30,7 @@ from .routers import (
     notifications,
     optimize,
     param_sets,
+    predict_batches,
     queue,
     spdm,
     status,
@@ -99,8 +100,8 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
         log.exception("처리되지 않은 오류")
         return _error(500, "INTERNAL_ERROR", "서버 내부 오류가 발생했습니다")
 
-    for r in (status, queue, studies, datasets, models, param_sets, jobs, artifacts, notifications, admin, env_checks, train,
-              curations, spdm, optimize, study_storage, fs):
+    for r in (status, queue, studies, datasets, models, param_sets, predict_batches, jobs, artifacts, notifications, admin,
+              env_checks, train, curations, spdm, optimize, study_storage, fs):
         app.include_router(r.router, prefix=API_PREFIX)
     if ctx.settings.demo.enabled:  # 시연 모드(check_startup이 dev·127.0.0.1을 보장)
         from . import demo

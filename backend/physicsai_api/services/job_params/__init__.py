@@ -11,11 +11,11 @@ from typing import Any
 from pydantic import BaseModel, ValidationError
 
 from ...context import AppContext
-from . import stage1_train_data, stage2_curation, stage3_model, stage4_predict, stage5_optimize, study_manage
+from . import stage1_train_data, stage2_curation, stage3_model, stage4_batch, stage4_predict, stage5_optimize, study_manage
 from .base import check_feature, invalid_errors
 
-_STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage1_train_data, stage2_curation, stage5_optimize,
-                                  study_manage)
+_STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage4_batch, stage1_train_data, stage2_curation,
+                                  stage5_optimize, study_manage)
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {jt: m for mod in _STAGES for jt, m in mod.PARAM_MODELS.items()}
 _STAGE_OF: dict[str, ModuleType] = {jt: mod for mod in _STAGES for jt in mod.PARAM_MODELS}

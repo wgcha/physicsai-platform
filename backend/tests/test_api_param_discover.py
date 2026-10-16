@@ -187,10 +187,11 @@ def test_discover_assem_starter_rules_and_nothing_found(client, loaded_config):
     make_assem_files(empty / "two", starters=2)                           # starter 2개 → 후보 아님
     d = _discover(client, sid, empty).json()
     codes = {p["code"]: p["message"] for p in d["problems"]}
-    assert set(codes) == {"TPL_NOT_FOUND", "ASSEM_NOT_FOUND"}
-    assert "two(2개)" in codes["ASSEM_NOT_FOUND"] and d["radioss_assem"] == []
+    assert set(codes) == {"TPL_NOT_FOUND"}                                # phase3 §14.4: 조립 폴더 0개는 문제가 아님
+    notes = {n["code"]: n["message"] for n in d["notes"]}
+    assert "two(2개)" in notes["MESH_ONLY"] and d["radioss_assem"] == []
     r = _register(client, sid, empty)
-    assert r.status_code == 422 and {p["code"] for p in r.json()["detail"]["problems"]} == {"TPL_NOT_FOUND", "ASSEM_NOT_FOUND"}
+    assert r.status_code == 422 and {p["code"] for p in r.json()["detail"]["problems"]} == {"TPL_NOT_FOUND"}
 
 
 def test_discover_excludes_links_backup_and_rejects_outside(client, loaded_config, tmp_path):

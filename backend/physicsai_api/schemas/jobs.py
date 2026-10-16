@@ -10,7 +10,7 @@ from pydantic import Field
 from .common import Req, Resp
 
 __all__ = [
-    "HpcSummary", "JobSummary", "JobStep", "Job", "JobType", "JobCreate", "RetryRequest", "LogChunk", "Artifact",
+    "HpcSummary", "JobBatchRef", "JobSummary", "JobStep", "Job", "JobType", "JobCreate", "RetryRequest", "LogChunk", "Artifact",
     "HpcJob",
 ]
 
@@ -22,6 +22,14 @@ class HpcSummary(Resp):
     succeeded: int
     failed: int
     collected: int
+
+
+class JobBatchRef(Resp):
+    """phase3 §14.5 일괄 예측 소속(params에서 계산): 부모 PREDICT_BATCH는 doe_no null, 하위 PREDICT는 run 번호."""
+
+    id: str
+    label: str | None = None  # B-003
+    doe_no: int | None = None
 
 
 class JobSummary(Resp):
@@ -46,6 +54,7 @@ class JobSummary(Resp):
     current_step_label: str | None = None
     hpc_summary: HpcSummary | None = None
     attention_code: str | None = None
+    batch: JobBatchRef | None = None
 
 
 class JobStep(Resp):
@@ -82,7 +91,7 @@ class Job(JobSummary):
 JobType = Literal[
     "DATASET_CREATE", "PACKAGE_EXPORT", "MODEL_REGISTER", "EVALUATE", "PREDICT", "PREDICT_VERIFY",
     "TD_EXTRACT_PARAMS", "TD_DOE_GEN", "TD_SOLVE", "TD_RESULT_IMPORT", "TD_RESP_EXTRACT", "CU_H3D_PREVIEW", "CU_H3D_CURATE",
-    "CU_T01_PREVIEW", "CU_T01_CURVES", "SPDM_IMPORT", "OPTIMIZE", "STUDY_STORAGE_SCAN", "STUDY_CLEANUP",
+    "CU_T01_PREVIEW", "CU_T01_CURVES", "SPDM_IMPORT", "OPTIMIZE", "STUDY_STORAGE_SCAN", "STUDY_CLEANUP", "PREDICT_BATCH",
 ]
 
 

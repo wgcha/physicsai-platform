@@ -27,6 +27,7 @@ from ..naming import NAME_RE, TPL_NAME
 from ..paths import BACKUP_DIR, PLATFORM_DIR, is_link_or_reparse
 from ..tpl_render import PARAM_DECL_RE
 from .param_set_files import ParamSetFolder, _load_parameters
+from .param_sets import tpl_export_name
 from .prepared_input import is_mesh_file
 
 PARAM_FULL_RE = re.compile(
@@ -36,6 +37,7 @@ _TEMPLATE_PREFIXES = ("temaplate_", "template_")  # 원본 CONFIG/TEMPLATE 빈 �
 _ASSEM_HINTS = ("radioss", "assem")
 _CAD_DIR_HINT = "cad"
 ROOT_REL = "."
+MESH_ONLY_NOTE = "조립 폴더 없음 — m1 메시로 바로 예측합니다"
 
 
 @dataclass
@@ -299,11 +301,11 @@ def discover(root: str, settings: Any, *, tpl: str | None = None) -> Discovery:
         problems.append({"code": "TPL_NOT_FOUND",
                          "message": "{parameter(…)} 블록이 있는 SimLab tpl(*.tpl)을 찾지 못했습니다"})
     assem, multi = find_assems(sc, pr.starter_glob, pr.renum_csv_name)
-    if not assem:
-        msg = f"starter({pr.starter_glob}, eps_mesh 제외)가 정확히 1개인 Radioss 조립 폴더를 찾지 못했습니다"
+    if not assem:  # phase3 §14.4: 조립 폴더 0개 = 메시 단독(mesh_only) 템플릿 — 문제가 아니라 안내
+        msg = MESH_ONLY_NOTE
         if multi:
-            msg += " — starter가 여러 개인 폴더: " + ", ".join(multi[:5])
-        problems.append({"code": "ASSEM_NOT_FOUND", "message": msg})
+            msg += f" (starter({pr.starter_glob})가 여러 개인 폴더는 후보가 아닙니다: " + ", ".join(multi[:5]) + ")"
+        notes.append({"code": "MESH_ONLY", "message": msg})
     cad: list[str] = []
     p_src, p_file, params = None, None, []
     samples = responses = None
@@ -338,6 +340,11 @@ def discover(root: str, settings: Any, *, tpl: str | None = None) -> Discovery:
                 _check_rows(pf, sel.params)
                 params = pf.parameters
                 problems.extend(pf.problems)
+        exp = tpl_export_name(sel.text, ps.tpl_export_regex)
+        if exp is not None and exp.casefold() != pr.simlab_mesh_name.casefold():
+            notes.append({"code": "SIMLAB_EXPORT_NAME",
+                          "message": f"tpl의 내보내기 파일({exp})이 설정 predict.simlab_mesh_name({pr.simlab_mesh_name})과 "
+                                     "다릅니다 — 형상 갱신 성공 판정이 실패할 수 있습니다"})
         samples = _first_in(sc, look, ("samples.csv",))
         responses = _first_in(sc, look, ("responses.json",))
     elif len(tpls) > 1:
@@ -373,25 +380,30 @@ def _check_rows(pf: ParamSetFolder, rows: list[dict[str, Any]]) -> None:
 
 def resolve_choice(d: Discovery, choice: dict[str, str | None]) -> tuple[TplInfo | None, str | None, dict[str, Any] | None,
                                                                          list[dict[str, Any]]]:
+    """(tpl, CAD, 조립 폴더|None, problems). 조립 폴더 None + problems 없음 = mesh_only(후보 0개 또는 명시적 null)."""
     probs: list[dict[str, Any]] = []
     tpl = d.selected_tpl
     cad = _pick(d.cad, choice.get("cad"))
     rels = [a["rel"] for a in d.assem]
-    arel = _pick(rels, choice.get("radioss_assem"))
+    # phase3 §14.4: radioss_assem을 명시적 null로 주면 메시 단독(mesh_only) — 후보가 있어도 쓰지 않는다
+    mesh_only = "radioss_assem" in choice and choice["radioss_assem"] is None
+    arel = None if mesh_only else _pick(rels, choice.get("radioss_assem"))
     assem = next((a for a in d.assem if a["rel"] == arel), None)
     for key, val, cands in (("tpl", tpl, d.tpls), ("cad", cad, d.cad), ("radioss_assem", assem, d.assem)):
         given = choice.get(key)
         if key == "tpl" and given is not None:
             continue  # 고른 tpl이 목록에 없으면 discover가 CHOICE_INVALID를 이미 넣었다
-        if val is None and cands:
+        if key == "radioss_assem" and mesh_only:
+            continue
+        if val is None and (cands or given is not None):
             probs.append({"code": "CHOICE_INVALID" if given is not None else "CHOICE_REQUIRED",
                           "message": f"{key} 후보 {len(cands)}개 중 하나를 고르세요" if given is None
                           else f"고른 {key}({given})가 찾은 목록에 없습니다"})
     return tpl, cad, assem, probs
 
 
-def copy_sources(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any) -> int:
-    """§15.4 폴더 구조로 dst에 모은다. 복사한 바이트 수. 읽기만(원본 위치)."""
+def copy_sources(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any] | None, dst: str, settings: Any) -> int:
+    """§15.4 폴더 구조로 dst에 모은다. 복사한 바이트 수. 읽기만(원본 위치). assem None = mesh_only(radioss_assem/ 없음)."""
     root = d.root
     pr, td = settings.predict, settings.train_data
     cad_name = cad_rel.split("/")[-1]
@@ -413,6 +425,8 @@ def copy_sources(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any]
     for rel, name in ((d.samples, "samples.csv"), (d.responses, "responses.json")):
         if rel:
             total += copy_file(_abs(root, rel), os.path.join(dst, name))
+    if assem is None:
+        return total
     adir = _abs(root, assem["rel"])
     renum = pr.renum_csv_name.casefold()
     for n in sorted(os.listdir(adir)):
@@ -424,14 +438,15 @@ def copy_sources(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any]
     return total
 
 
-def planned_bytes(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any], settings: Any) -> int:
+def planned_bytes(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any] | None, settings: Any) -> int:
     """복사 전 총량 추정(상한 검사용)."""
     root = d.root
     files = [_abs(root, tpl.rel), _abs(root, cad_rel)]
     files += [_abs(root, r) for r in (d.parameters_file, d.samples, d.responses) if r]
-    adir = _abs(root, assem["rel"])
-    files += [os.path.join(adir, n) for n in os.listdir(adir) if not is_mesh_file(n)
-              and n.casefold().endswith((".rad", ".inc", settings.predict.renum_csv_name.casefold()))]
+    if assem is not None:
+        adir = _abs(root, assem["rel"])
+        files += [os.path.join(adir, n) for n in os.listdir(adir) if not is_mesh_file(n)
+                  and n.casefold().endswith((".rad", ".inc", settings.predict.renum_csv_name.casefold()))]
     total = 0
     for f in files:
         try:
