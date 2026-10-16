@@ -35,10 +35,17 @@ LEGEND_KEYS = frozenset({"mode", "min", "max"})
 MAX_TEXT = 64
 MAX_COMPS = 50
 # TCL이 명령 문자열을 다시 만드는 값(필드·성분·부품 이름)에서 막는 문자: 따옴표·괄호·치환 문자·명령 구분자
-_TEXT_FORBIDDEN = re.compile(r'["{}\[\]$\\;]|[\x00-\x1f\x7f]')
+# (Tcl `;`, hwc 명령 구분자 `|` — D3-53)
+_TEXT_FORBIDDEN = re.compile(r'["{}\[\]$\\;|]|[\x00-\x1f\x7f]')
+TEXT_FORBIDDEN_MSG = '따옴표·괄호({ } [ ])·$·\\·;·|·제어문자는 쓸 수 없습니다'
 
 
 # ---- 검증 ------------------------------------------------------------------------------------------
+
+
+def text_problem(v: str) -> bool:
+    """표시 설정 문자열에 금지 문자(따옴표·괄호·$·\\·;·|·제어문자)가 있으면 True — config `capture.default_field`도 같은 규칙."""
+    return bool(_TEXT_FORBIDDEN.search(v))
 
 
 def _text(errs: list[dict[str, Any]], loc: list[Any], v: Any, *, allow_empty: bool) -> None:
@@ -50,8 +57,8 @@ def _text(errs: list[dict[str, Any]], loc: list[Any], v: Any, *, allow_empty: bo
         errs.append({"loc": loc, "msg": "비어 있을 수 없습니다"})
     elif len(v) > MAX_TEXT:
         errs.append({"loc": loc, "msg": f"{MAX_TEXT}자 이내"})
-    elif _TEXT_FORBIDDEN.search(v):
-        errs.append({"loc": loc, "msg": '따옴표·괄호({ } [ ])·$·\\·;·제어문자는 쓸 수 없습니다'})
+    elif text_problem(v):
+        errs.append({"loc": loc, "msg": TEXT_FORBIDDEN_MSG})
 
 
 def validate_views(views: Any, loc: list[Any]) -> list[dict[str, Any]]:

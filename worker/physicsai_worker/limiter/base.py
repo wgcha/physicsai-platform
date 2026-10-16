@@ -66,6 +66,11 @@ class ProcGroup:
     lock: threading.Lock = field(default_factory=threading.Lock)
     launched: int = 0
     closed: bool = False
+    # 회계를 그룹 전체가 공유(Windows Job 1개) — 메모리 한도 도달이 어느 run 때문인지 시간대로 가린다(D3-53)
+    shared_accounting: bool = False
+    mem_ok_at: float | None = None  # 한도 미도달을 마지막으로 확인한 시각(monotonic, 조회 전 시각)
+    mem_hit_at: float | None = None  # 한도 도달을 처음 확인한 시각(monotonic, 조회 후 시각)
+    windows: list[list[Any]] = field(default_factory=list)  # 실행 구간 [시작, 끝|None]
 
     def add(self, proc: LimitedProcess) -> None:
         with self.lock:
@@ -75,6 +80,44 @@ class ProcGroup:
     def alive(self) -> list[LimitedProcess]:
         with self.lock:
             return [p for p in self.procs if p.poll() is None]
+
+    def note_memory(self, hit: bool, t: float) -> None:
+        """그룹 회계 표본 1개. 최고 사용량은 줄지 않으므로 도달 시각은 (mem_ok_at, mem_hit_at] 안이다."""
+        with self.lock:
+            if self.mem_hit_at is not None:
+                return
+            if hit:
+                self.mem_hit_at = t
+            elif self.mem_ok_at is None or t > self.mem_ok_at:
+                self.mem_ok_at = t
+
+    def run_started(self, t: float) -> int:
+        with self.lock:
+            self.windows.append([t, None])
+            return len(self.windows) - 1
+
+    def run_ended(self, idx: int, t: float) -> None:
+        with self.lock:
+            if self.windows[idx][1] is None:
+                self.windows[idx][1] = t
+
+    def memory_verdict(self, idx: int) -> str | None:
+        """실행 구간 idx와 그룹 메모리 한도 도달 기록의 관계(D3-53).
+
+        None = 도달 기록 없음 또는 이 구간과 겹치지 않음(이 run 탓이 아님) · "exact" = 도달 구간이 이 실행 안에 있고
+        그 사이 다른 run이 돌지 않음 · "uncertain" = 겹치지만 다른 run도 함께 돌았거나 실행 전에 도달했을 수 있음."""
+        inf = float("inf")
+        with self.lock:
+            hit, ok = self.mem_hit_at, self.mem_ok_at
+            wins = [(w[0], inf if w[1] is None else w[1]) for w in self.windows]
+        if hit is None:
+            return None
+        lo = -inf if ok is None else ok
+        start, end = wins[idx]
+        if not (start <= hit and end > lo):
+            return None
+        others = any(s <= hit and e > lo for j, (s, e) in enumerate(wins) if j != idx)
+        return "exact" if start <= lo and hit <= end and not others else "uncertain"
 
 
 def per_process_limits(limits: EffectiveLimits, size: int) -> EffectiveLimits:

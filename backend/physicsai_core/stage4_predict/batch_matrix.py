@@ -33,7 +33,7 @@ PROBLEM_CODES = (
 )
 MAX_PROBLEMS = 100  # 행 오류는 이 개수까지만 모은다(화면 회색 줄)
 DOE_COLUMN = "doe"  # 표의 선택 열(무시)
-RUN_KEY_RE = re.compile(r"^run__(\d+)$")
+RUN_KEY_RE = re.compile(r"run__([0-9]+)")  # fullmatch 전용, ASCII 숫자만(D3-53)
 
 
 class BatchShapeError(ValueError):
@@ -78,7 +78,7 @@ def run_key_for(doe_no: int) -> str:
 
 def doe_no_of(run_key: str) -> int | None:
     """`run__00014` → 14. 형식이 다르면 None."""
-    m = RUN_KEY_RE.match(run_key or "")
+    m = RUN_KEY_RE.fullmatch(run_key) if isinstance(run_key, str) else None
     return int(m.group(1)) if m and int(m.group(1)) >= 1 else None
 
 

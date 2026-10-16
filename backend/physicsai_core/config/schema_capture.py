@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 CAPTURE_VIEWS = ("iso", "front", "back", "top", "bottom", "left", "right")
 CAPTURE_VIDEO_EXTS = ("mp4", "avi", "gif")
+# 표시 설정 문자열 금지 문자(stage4_predict.contour_capture._TEXT_FORBIDDEN과 같은 규칙 — `|`는 hwc 명령 구분자, D3-53)
+DEFAULT_FIELD_FORBIDDEN = frozenset('"{}[]$\\;|')
 # 저장소 리소스(사용자 제공 이슈 #2 TCL). resources.contour_capture_tcl이 비면 이 파일을 쓴다(repo 설치·개발).
 CAPTURE_TCL_REPO_REL = ("resources", "hyperview", "contour_capture.tcl")
 
@@ -65,8 +67,9 @@ def validate_capture(s: Settings, issues: list[ConfigIssue]) -> None:
         issues.append(issue("capture.views", f"방향 1개 이상(중복 없음): {', '.join(CAPTURE_VIEWS)}"))
     if c.video_ext not in CAPTURE_VIDEO_EXTS:
         issues.append(issue("capture.video_ext", "mp4 | avi | gif"))
-    if not c.default_field.strip() or len(c.default_field) > 64 or any(ch in c.default_field for ch in '"{}[]$\\;'):
-        issues.append(issue("capture.default_field", "1~64자, 따옴표·괄호·$·\\·; 없음"))
+    df = c.default_field
+    if not df.strip() or len(df) > 64 or any(ch in DEFAULT_FIELD_FORBIDDEN or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in df):
+        issues.append(issue("capture.default_field", "1~64자, 따옴표·괄호·$·\\·;·|·제어문자 없음"))
     if c.timeout_s is not None and not 1 <= c.timeout_s <= 86400:
         issues.append(issue("capture.timeout_s", "1~86400 또는 null"))
     if not 1048576 <= c.max_video_bytes <= 4294967296:

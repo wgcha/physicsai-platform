@@ -12,7 +12,7 @@ from .jobs import JobSummary
 
 __all__ = [
     "StatusConfig", "StatusWorker", "StatusHpc", "KeyOk", "TemplateConfigured", "StatusLimits", "ResourceStatus",
-    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusResponse", "QueueSlot", "QueueLight",
+    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusResponse", "QueueSlot", "QueueLight",
     "QueueResponse", "MoveRequest", "GpuInfo", "ResourceJob", "ResourceLimits", "ResourcesResponse",
     "Notification", "NotificationList", "UnreadCount", "ReadRequest", "ReadResponse", "AdminConfig",
 ]
@@ -93,6 +93,14 @@ class StatusEnvCheck(Resp):
     warn: int | None = None
 
 
+class StatusCapture(Resp):
+    """컨투어 캡처 기본값(config `capture`) — 일괄 예측 설정 화면의 방향·동영상 기본 표시(D3-53)."""
+
+    views: list[str]
+    video: bool
+    video_ext: str
+
+
 class StatusResponse(Resp):
     config: StatusConfig
     worker: StatusWorker
@@ -105,6 +113,7 @@ class StatusResponse(Resp):
     resources: list[ResourceStatus] = Field(default_factory=list)
     features: StatusFeatures | None = None
     env_check: StatusEnvCheck | None = None
+    capture: StatusCapture | None = None
     demo: bool = Field(False, description="시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지")
 
 

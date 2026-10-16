@@ -13,6 +13,8 @@ import { TemplatePicker, inputKindOf, templateName, useTemplateChoice } from "..
 import { ModelLine, useModelChoice } from "../predictRun";
 import { BatchPreview } from "./BatchPreview";
 import { BATCH_STATUS_LABEL } from "./batchTable";
+import { BatchCaptureOptions, captureParam, type CaptureChoice } from "./BatchCaptureOptions";
+import { DEFAULT_VIEWS } from "../../../lib/views";
 
 const METHODS: { key: BatchSourceKind; label: string }[] = [
   { key: "lhs", label: "범위·개수로 자동(LHS)" },
@@ -61,6 +63,12 @@ export function BatchSetup() {
   const [legendFixed, setLegendFixed] = useState(false);
   const [legendLo, setLegendLo] = useState("");
   const [legendHi, setLegendHi] = useState("");
+  // D3-53: 컨투어 캡처 옵션(기본 = 템플릿 display.views → config capture.views, 영상 = config capture.video)
+  const defViews = ps?.display?.views?.length ? ps.display.views : status?.capture?.views?.length ? status.capture.views : DEFAULT_VIEWS;
+  const defVideo = status?.capture?.video ?? true;
+  const [cap, setCap] = useState<CaptureChoice>({ enabled: true, views: defViews, video: defVideo });
+  useEffect(() => setCap((c) => ({ ...c, views: defViews })), [defViews.join(",")]);
+  useEffect(() => setCap((c) => ({ ...c, video: defVideo })), [defVideo]);
   const choice = useModelChoice();
   const runner = useJobRunner("PREDICT_BATCH");
 
@@ -118,11 +126,14 @@ export function BatchSetup() {
   const lgLo = optNum(legendLo);
   const lgHi = optNum(legendHi);
   const legendOk = !legendFixed || (lgLo !== undefined && lgHi !== undefined && (lgLo === null || lgHi === null || lgLo < lgHi));
-  const ready = !!ps && !!previewSource && !!preview && preview.count > 0 && multiOk && legendOk && !!choice.chosenModel && tplF.enabled;
+  const capOk = !cap.enabled || cap.views.length > 0;
+  const ready = !!ps && !!previewSource && !!preview && preview.count > 0 && multiOk && legendOk && capOk && !!choice.chosenModel && tplF.enabled;
   const run = async () => {
     if (!ps || !previewSource) return;
     const params: PredictBatchParams = { param_set_id: ps.id, model_id: choice.modelId || null, multi_execution: multiN, source: previewSource };
     if (legendFixed) params.display = { legend: { mode: "fixed", min: lgLo ?? null, max: lgHi ?? null } };
+    const capture = captureParam(cap, defViews, defVideo);
+    if (capture) params.capture = capture;
     const j = await runner.run({ ...params });
     const bid = (j?.params as { batch_id?: string } | undefined)?.batch_id;
     if (bid) navigate(`/p/${study.project_id}/s/${study.id}/stage/4/batch/${bid}`);
@@ -283,6 +294,7 @@ export function BatchSetup() {
                 </span>
               )}
             </div>
+            <BatchCaptureOptions value={cap} onChange={setCap} runs={preview && previewSource ? preview.count : null} />
             <ModelLine choice={choice} />
             {preview?.estimate_min != null && previewSource && <p className="muted small">예상 소요 약 {fmtNum(preview.estimate_min, 3)}분</p>}
             <FeatureGate feature="predict">
@@ -293,7 +305,7 @@ export function BatchSetup() {
                   onRun={() => void run()}
                   job={runner.job && runner.job.state !== "SUCCEEDED" ? runner.job : null}
                   disabled={!enabled || !ready || runner.submitting}
-                  disabledReason={!enabled || !tplF.enabled ? undefined : !previewSource ? "먼저 조합을 만드세요" : !multiOk ? `동시 실행 수는 1~${maxMulti}` : !legendOk ? "범례 최소 < 최대인 숫자(비우면 미지정)" : !choice.chosenModel ? "Final 모델이 필요합니다" : undefined}
+                  disabledReason={!enabled || !tplF.enabled ? undefined : !previewSource ? "먼저 조합을 만드세요" : !multiOk ? `동시 실행 수는 1~${maxMulti}` : !legendOk ? "범례 최소 < 최대인 숫자(비우면 미지정)" : !capOk ? "캡처 방향을 1개 이상 고르세요" : !choice.chosenModel ? "Final 모델이 필요합니다" : undefined}
                   error={runner.error}
                 />
               )}

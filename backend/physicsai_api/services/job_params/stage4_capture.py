@@ -43,6 +43,19 @@ def display_param(p: Any) -> dict[str, Any]:
     return {"display": cleaned} if cleaned else {}
 
 
+def capture_param(p: Any) -> dict[str, Any]:
+    """PREDICT_BATCH params `capture`(선택, D3-53) → 저장 형태 `{capture: {enabled, views?, video?}}` 또는 {}."""
+    c = getattr(p, "capture", None)
+    if c is None:
+        return {}
+    out: dict[str, Any] = {"enabled": bool(c.enabled)}
+    if c.views:
+        out["views"] = list(c.views)
+    if c.video is not None:
+        out["video"] = bool(c.video)
+    return {"capture": out}
+
+
 def require_capture_feature(ctx: AppContext) -> None:
     tmpl, res = contour_capture_missing(ctx.settings)
     if tmpl or res:

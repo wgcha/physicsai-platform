@@ -242,7 +242,7 @@ class WindowsJobLimiter:
     # --- 동시 실행 그룹(phase3 §14.5) ---
     def open_group(self, limits: EffectiveLimits, size: int) -> ProcGroup:
         """Job 1개(작업 1개분 한도 그대로 — 동시 수로 나누지 않음, CPU·메모리를 그룹이 나눠 씀)."""
-        return ProcGroup(size=max(1, int(size)), limits=limits, handle=self._create_job(limits))
+        return ProcGroup(size=max(1, int(size)), limits=limits, handle=self._create_job(limits), shared_accounting=True)
 
     def terminate_group(self, group: ProcGroup, timeout_s: float = 30) -> None:
         if group.handle:

@@ -97,6 +97,10 @@ def test_v3_s10_capture_golden_and_media_api(predict_env, fake_record, engine):
     r = env.c.get(u, headers={**P, "Range": "bytes=64-"})
     assert r.status_code == 416 and r.headers["content-range"] == "bytes */64"
     assert env.c.get(u, headers={**P, "Range": "bytes=0-1,5-6"}).status_code == 200            # 여러 범위 → 전체
+    for rng in ("bytes=10-5", "bytes=\u0661-\u0662"):                                         # 문법 오류 → 무시(D3-53)
+        r = env.c.get(u, headers={**P, "Range": rng.encode("utf-8")})
+        assert r.status_code == 200 and r.content == full and "content-range" not in r.headers, rng
+    assert env.c.get(u, headers={**P, "Range": "bytes=-0"}).status_code == 416                 # 만족 불가만 416
     r = env.c.get(u + "?download=true", headers=P)
     assert r.headers["content-disposition"] == f'attachment; filename="{jid[:8]}_iso.mp4"'
     assert env.c.get(u).status_code == 401

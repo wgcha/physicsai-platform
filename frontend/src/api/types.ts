@@ -415,6 +415,14 @@ export interface PredictBatchParams {
   source: BatchSource;
   /** S10 §15.3: 배치 단위 표시 설정(범례 fixed로 run끼리 비교) */
   display?: { legend: ContourLegend } | null;
+  /** D3-53: 하위 예측 컨투어 캡처 옵션(없으면 기본 — 템플릿 display.views·config capture) */
+  capture?: PredictBatchCapture | null;
+}
+/** D3-53: enabled false → 하위 CONTOUR_CAPTURE SKIPPED. views·video 생략 = 기본 */
+export interface PredictBatchCapture {
+  enabled: boolean;
+  views?: ViewKey[];
+  video?: boolean;
 }
 
 export type BatchStatus = "GENERATING" | "PREDICTING" | "DONE" | "FAILED" | "CANCELED";

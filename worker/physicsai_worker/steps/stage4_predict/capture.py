@@ -3,6 +3,7 @@
 - (PREDICT, CONTOUR_CAPTURE): 예측 체인 맨 끝, cwd `P/RESULT/media/`. **실패는 경고(CAPTURE_FAILED)만** — 예측 작업은 성공 유지.
 - (CONTOUR_RECAPTURE, CONTOUR_CAPTURE): 성공한 예측의 h3d로 다시 캡처(LIGHT 레인), cwd `P/RESULT/media_recapture/<작업 id>/`.
   이미지가 하나도 없으면 작업 실패(CAPTURE_FAILED).
+- 일괄 예측 하위: 배치 params `capture{enabled, views?, video?}`를 따른다 — enabled false면 SKIPPED(D3-53).
 - 판정 = 방향별 `<view>.png` 존재·크기>0(동영상 `<view>.<ext>`는 선택), `capture_result.txt`는 오류 문구용.
 - `capture.timeout_s`를 넘기면 이 step이 프로세스 트리를 끝낸다(플랫폼 공통 실행기에는 시간 한도가 없다 — platform.md §8.4).
 """
@@ -49,6 +50,15 @@ def _batch_display(conn: Any, job: dict[str, Any]) -> dict[str, Any] | None:
     return media_repo.batch_display(conn, ref[0]) if ref else None
 
 
+def batch_capture_for(ctx: Any, job: dict[str, Any]) -> dict[str, Any]:
+    """일괄 예측 하위 PREDICT → 배치 params.capture `{enabled, views?, video?}`(D3-53). 하위가 아니거나 없으면 {}."""
+    ref = pb_repo.batch_run_ref(job)
+    if not ref:
+        return {}
+    with ctx.ex.engine.connect() as conn:
+        return media_repo.batch_capture(conn, ref[0]) or {}
+
+
 def display_for(ctx: Any, predict_job: dict[str, Any], *extra: dict[str, Any] | None) -> tuple[dict[str, Any], str]:
     """config → 응답 정의 → 템플릿 display → 배치 display → 예측 params display → extra(재캡처)."""
     psid = (predict_job.get("params") or {}).get("param_set_id")
@@ -88,9 +98,14 @@ def _timeout_hook(ctx: Any, media_dir: str, views: list[str], state: dict[str, A
     return hook
 
 
-def run_capture(ctx: Any, *, h3d: str, media_dir: str, display: dict[str, Any], views: list[str]) -> dict[str, Any]:
-    """캡처 1회 → {media, failed:[{view, reason}], message}. 설정·실행 오류는 StepFailure(호출자가 경고/실패로)."""
+def run_capture(ctx: Any, *, h3d: str, media_dir: str, display: dict[str, Any], views: list[str],
+                video: bool | None = None) -> dict[str, Any]:
+    """캡처 1회 → {media, failed:[{view, reason}], message}. 설정·실행 오류는 StepFailure(호출자가 경고/실패로).
+    video None = config capture.video(일괄 예측 캡처 옵션이 덮어씀, D3-53)."""
     s = ctx.settings
+    bad = cc.validate_display(display) + cc.validate_views(views, ["views"])
+    if bad:  # API·설정 검증을 거친 값이지만 TCL 명령 문자열로 들어가므로 쓰기 전에 한 번 더(D3-53)
+        raise StepFailure("INPUT_INVALID", f"표시 설정 오류: {'.'.join(map(str, bad[0]['loc']))} — {bad[0]['msg']}")
     missing = capture_missing(s)
     if "resources.contour_capture_tcl" in missing:
         raise StepFailure("RESOURCE_MISSING", f"캡처 TCL이 없습니다: {effective_capture_tcl(s) or 'resources.contour_capture_tcl'}")
@@ -100,7 +115,7 @@ def run_capture(ctx: Any, *, h3d: str, media_dir: str, display: dict[str, Any], 
     os.makedirs(media_dir, exist_ok=True)
     tcl = os.path.join(media_dir, cc.SCRIPT_NAME)
     copy_file(effective_capture_tcl(s), tcl, checkpoint=ctx.checkpoint)
-    save_video, ext = bool(s.capture.video), s.capture.video_ext
+    save_video, ext = bool(s.capture.video if video is None else video), s.capture.video_ext
     write_text(os.path.join(media_dir, cc.SETTINGS_NAME), cc.settings_text(
         h3d_path=h3d, out_dir=media_dir, display=display, views=views, save_video=save_video, video_ext=ext,
         use_last=s.capture.use_last))
@@ -143,14 +158,14 @@ def run_capture(ctx: Any, *, h3d: str, media_dir: str, display: dict[str, Any], 
         msg = f"시간 초과(capture.timeout_s = {s.capture.timeout_s:g}초)"
     elif failed:
         msg = "; ".join(f"{f['view']}: {f['reason']}" for f in failed)[:400]
-    return {"media": media, "failed": failed, "message": msg, "rc": rc}
+    return {"media": media, "failed": failed, "message": msg, "rc": rc, "video": save_video}
 
 
 def _summary(out: dict[str, Any] | None, *, status: str, display: dict[str, Any] | None, source: str | None,
              views: list[str], media_dir: str | None, ctx: Any, message: str | None = None) -> dict[str, Any]:
     return {
         "status": status, "views": views, "display": display, "field_source": source,
-        "video": bool(ctx.settings.capture.video), "video_ext": ctx.settings.capture.video_ext,
+        "video": bool((out or {}).get("video", ctx.settings.capture.video)), "video_ext": ctx.settings.capture.video_ext,
         "dir_rel": ctx.rel(media_dir) if media_dir and os.path.isdir(media_dir) else None,
         "message": message if message is not None else (out or {}).get("message"),
         "failed_views": [f["view"] for f in (out or {}).get("failed", [])],
@@ -170,14 +185,22 @@ def predict_capture(ctx: Any) -> None:
     if reason:
         ctx.patch_result({"media": [], "capture": {"status": "SKIPPED", "message": reason}})
         raise StepSkipped(reason)
+    opts = batch_capture_for(ctx, ctx.job)
+    if opts.get("enabled") is False:
+        reason = "일괄 예측 설정에서 컨투어 캡처를 껐습니다"
+        ctx.patch_result({"media": [], "capture": {"status": "SKIPPED", "message": reason}})
+        raise StepSkipped(reason)
     display, source = display_for(ctx, ctx.job)
+    if opts.get("views"):
+        display["views"] = list(opts["views"])
     views = list(display["views"])
+    video = opts.get("video") if isinstance(opts.get("video"), bool) else None
     media_dir = os.path.join(predict_dir(ctx), *cc.MEDIA_DIR_REL.split("/"))
     try:
         pred_rel = ctx.result().get("pred_h3d_rel")
         if not pred_rel:
             raise StepFailure("INPUT_MISSING", "예측 결과 h3d 경로가 없습니다")
-        out = run_capture(ctx, h3d=ctx.abs(pred_rel), media_dir=media_dir, display=display, views=views)
+        out = run_capture(ctx, h3d=ctx.abs(pred_rel), media_dir=media_dir, display=display, views=views, video=video)
     except _CATCH as exc:
         msg = getattr(exc, "message", None) or str(exc)
         ctx.log(f"[CAPTURE_FAILED] {msg}")
@@ -207,10 +230,12 @@ def recapture(ctx: Any) -> None:
     if not pred_rel:
         raise StepFailure("INPUT_MISSING", "원래 예측 작업에 결과 h3d가 없습니다")
     display, source = display_for(ctx, src, ctx.params.get("display"))
-    views = list(ctx.params.get("views") or display["views"])
+    opts = batch_capture_for(ctx, src)  # 일괄 예측 하위의 재캡처: 배치 캡처 방향·동영상 옵션이 기본(D3-53)
+    views = list(ctx.params.get("views") or opts.get("views") or display["views"])
     display["views"] = views
+    video = opts.get("video") if isinstance(opts.get("video"), bool) else None
     media_dir = os.path.join(ctx.abs(f"04_predict/{root_id}"), *cc.RECAPTURE_DIR_REL.split("/"), ctx.workspace_id)
-    out = run_capture(ctx, h3d=ctx.abs(pred_rel), media_dir=media_dir, display=display, views=views)
+    out = run_capture(ctx, h3d=ctx.abs(pred_rel), media_dir=media_dir, display=display, views=views, video=video)
     status = _status(out)
     ctx.patch_result({"source_job_id": src["id"], "media": out["media"],
                       "capture": _summary(out, status=status, display=display, source=source, views=views,

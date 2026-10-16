@@ -47,6 +47,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     params, result, warnings = mod.prepare(ctx, conn, study, job_type, p)
     if job_type in ("PREDICT", "PREDICT_BATCH"):  # phase3 §15: 컨투어 표시 설정(선택) — 준비된 입력·배치 단위 범례
         params.update(stage4_capture.display_param(p))
+    if job_type == "PREDICT_BATCH":  # D3-53: 하위 예측 캡처 옵션
+        params.update(stage4_capture.capture_param(p))
     return params, result, warnings
 
 

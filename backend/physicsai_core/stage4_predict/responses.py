@@ -31,7 +31,7 @@ FAIL_TOKENS = ("NO_VALUE", "OPEN_ERROR", "DATATYPE_ERR", "HANDLE_ERR")
 STATS = ("MAX", "MIN", "ABSMAX")
 PRED_H3D_GLOB = "*_pred.h3d"  # TCL이 먼저 찾는 이름(없으면 *.h3d)
 
-_RESP_RE = re.compile(r"^\s*RESP:(?P<key>[^=\s]+)\s*=\s*(?P<val>\S+)\s*$")
+_RESP_RE = re.compile(r"\s*RESP:(?P<key>[^=\s]+)\s*=\s*(?P<val>\S+)\s*")  # fullmatch 전용(D3-53)
 _FORBIDDEN = re.compile(r"[|\r\n\t]")
 
 # 응답 표 사유(화면 문구). 키 = 실패 토큰 또는 플랫폼 사유
@@ -143,7 +143,7 @@ def parse_responses_text(text: str) -> ParsedResponses:
         line = raw.strip()
         if not line or line.startswith("#"):
             continue
-        m = _RESP_RE.match(line)
+        m = _RESP_RE.fullmatch(line)
         if not m:
             continue
         key, val = m.group("key"), m.group("val")

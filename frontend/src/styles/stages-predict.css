@@ -300,7 +300,8 @@ video.contour-img {
   vertical-align: -1px;
   color: var(--ink-2);
 }
-.legend-fix {
+.legend-fix,
+.batch-capture {
   display: grid;
   gap: var(--s-h);
 }

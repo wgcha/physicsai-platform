@@ -23,7 +23,8 @@ def test_predict_batch_defaults_and_ranges(p2_dict):
     assert lc.ok and lc.settings.predict_batch.model_dump() == {
         "max_runs": 200, "table_max_bytes": 1048576, "dir_name": "04_batch", "curve_max_runs": 200}
     for k, v in (("max_runs", 1), ("max_runs", 2001), ("table_max_bytes", 100), ("curve_max_runs", 0),
-                 ("dir_name", "04_predict"), ("dir_name", "a/b"), ("dir_name", "_backup"), ("dir_name", ""), ("dir_name", "LOGS")):
+                 ("dir_name", "04_predict"), ("dir_name", "a/b"), ("dir_name", "_backup"), ("dir_name", ""), ("dir_name", "LOGS"),
+                 ("dir_name", "batch\n"), ("dir_name", "b\u0661")):  # D3-53: 끝 줄바꿈·유니코드 숫자 거부
         assert _load({**p2_dict, "predict_batch": {k: v}}).error_keys() == [f"predict_batch.{k}"], (k, v)
     assert _load({**p2_dict, "predict_batch": {"dir_name": "batch_runs", "max_runs": 2}}).ok
     assert _load({**p2_dict, "predict_batch": {"unknown": 1}}).error_keys()[0].startswith("predict_batch")  # 모르는 키는 오류

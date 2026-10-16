@@ -14,7 +14,7 @@ import re
 from collections.abc import Iterable
 from typing import Any
 
-NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]*$")  # ⑤ RESPONSES name 규칙(최대 64자)
+NAME_RE = re.compile(r"[A-Za-z][A-Za-z0-9_]*")  # ⑤ RESPONSES name 규칙(최대 64자) — fullmatch 전용(D3-53)
 NAME_MAX = 64
 FIELD_RE = re.compile(r"[\w \-./():+]*")  # ⑤ 결과 이름 필드 허용 문자(변경 메모 C16)
 FIELD_MAX = 200
@@ -92,7 +92,7 @@ def validate_response_defs(rows: Any, *, measured: Iterable[str] = ()) -> tuple[
             _problem(problems, i, "RESPONSE_INVALID", f"알 수 없는 키: {unknown}")
         name = r.get("name")
         legacy = isinstance(name, str) and name in kept  # 등록 때 이미 있던 실측 열 이름(§15.4 규칙)은 그대로 둔다
-        if not isinstance(name, str) or (not legacy and not NAME_RE.match(name)) or len(name) > NAME_MAX:
+        if not isinstance(name, str) or (not legacy and not NAME_RE.fullmatch(name)) or len(name) > NAME_MAX:
             _problem(problems, i, "RESPONSE_INVALID", "name은 영문으로 시작하고 영문/숫자/_ 만(최대 64자)")
         elif name.casefold() in seen:
             _problem(problems, i, "RESPONSE_INVALID", f"이미 있는 name입니다(대소문자 무시): {name}")

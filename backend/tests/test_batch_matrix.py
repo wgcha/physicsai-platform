@@ -161,6 +161,9 @@ def test_helpers_and_settings_entry():
 
     assert bm.run_key_for(7) == "run__00007" and bm.doe_no_of("run__00014") == 14
     assert bm.doe_no_of("run__0") is None and bm.doe_no_of("run_1") is None
+    # D3-53: fullmatch + ASCII 숫자 — 끝 줄바꿈·유니코드 숫자(아랍·전각) 거부
+    for bad in ("run__1\n", "run__00001\n", "run__\u0661", "run__\uff11", " run__1", "run__1 ", None, 5):
+        assert bm.doe_no_of(bad) is None, bad  # type: ignore[arg-type]
     assert bm.batch_label(3) == "B-003" and bm.batch_dir_rel("04_batch", 12) == "04_batch/B-012"
     assert bm.input_rel_for("run__00002", "assembly", "EPS_mesh_0000.rad") == "run__00002/m_3"
     assert bm.input_rel_for("run__00002", "mesh_only", "EPS_mesh_0000.rad") == "run__00002/m_1/EPS_mesh_0000.rad"

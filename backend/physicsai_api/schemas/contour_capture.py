@@ -12,7 +12,7 @@ from .common import Req, Resp
 
 __all__ = [
     "CaptureView", "CaptureLegend", "CaptureDisplay", "CaptureLegendOut", "CaptureDisplayOut", "ParamSetDisplayUpdate",
-    "RecaptureRequest", "MediaFile", "MediaItem", "MediaRecapture", "JobMedia",
+    "RecaptureRequest", "BatchCaptureOptions", "MediaFile", "MediaItem", "MediaRecapture", "JobMedia",
 ]
 
 CaptureView = Literal["iso", "front", "back", "top", "bottom", "left", "right"]
@@ -71,6 +71,20 @@ class RecaptureRequest(Req):
 
     @model_validator(mode="after")
     def _unique(self) -> RecaptureRequest:
+        if self.views and len(set(self.views)) != len(self.views):
+            raise ValueError("views: 같은 방향이 두 번 있습니다")
+        return self
+
+
+class BatchCaptureOptions(Req):
+    """일괄 예측 캡처 옵션(D3-53) — 하위 PREDICT의 CONTOUR_CAPTURE가 따른다(enabled false → SKIPPED)."""
+
+    enabled: bool = True
+    views: list[CaptureView] | None = Field(default=None, min_length=1, max_length=7)  # null = 템플릿 display.views → config
+    video: bool | None = None  # null = config capture.video
+
+    @model_validator(mode="after")
+    def _unique(self) -> BatchCaptureOptions:
         if self.views and len(set(self.views)) != len(self.views):
             raise ValueError("views: 같은 방향이 두 번 있습니다")
         return self

@@ -28,6 +28,7 @@ from .limiter.base import LimiterError, ProcGroup
 from .signals import Cancelled
 
 log = logging.getLogger("physicsai_worker.executor")
+MEMORY_SAMPLE_S = 0.5  # 공유 회계 그룹(Windows Job)의 메모리 한도 도달 표본 간격(초)
 
 
 @dataclass
@@ -69,7 +70,9 @@ class ParallelRunner:
     def run(self, template_key: str, values: dict[str, str], *, cwd: str, outputs_to_backup: list[str] | None = None,
             env_add: dict[str, str] | None = None) -> int:
         """외부 프로그램 1회(그룹 안, shell=False). 종료코드를 돌려준다 — 성공 판정은 호출자가 출력 파일로(§11.4).
-        메모리 한도 도달 종료 → RESOURCE_LIMIT. 취소되면 Cancelled."""
+        메모리 한도 도달 종료 → RESOURCE_LIMIT. 회계를 그룹이 공유하면(Windows Job 1개) 도달 기록이 이 실행 시간대와
+        겹칠 때만 RESOURCE_LIMIT(다른 run과 겹치면 "원인 불확실" 문구), 아니면 종료코드를 그대로 돌려준다(D3-53).
+        취소되면 Cancelled."""
         ctx = self.ctx
         self.check()
         argv, _exe = ctx.render(template_key, values)
@@ -81,7 +84,14 @@ class ParallelRunner:
         env = child_env(s.worker.env_passthrough, env_add, deny_names=[s.database.url_env])
         self.pool.record_first(argv, cwd, env_add)
         self.log("[CMD] " + " ".join(argv))
-        proc = ctx.ex.limiter.launch(argv, cwd, env, ctx.ex.limits, group=self.pool.group)
+        grp = self.pool.group
+        start, _ = self.pool.sample_memory()
+        win = grp.run_started(start)
+        try:
+            proc = ctx.ex.limiter.launch(argv, cwd, env, ctx.ex.limits, group=grp)
+        except BaseException:
+            grp.run_ended(win, time.monotonic())
+            raise
         self.pool.started()
         rc: int | None = None
         try:
@@ -99,15 +109,22 @@ class ParallelRunner:
 
             t = threading.Thread(target=reader, daemon=True)
             t.start()
+            last_sample = time.monotonic()
             while proc.poll() is None:
                 if self.pool.stop.wait(0.1):
                     break
+                if time.monotonic() - last_sample >= MEMORY_SAMPLE_S:
+                    last_sample = time.monotonic()
+                    self.pool.sample_memory()
             if self.pool.stop.is_set() and proc.poll() is None:
                 ctx.ex.limiter.terminate(proc)
             t.join(timeout=10)
             rc = proc.poll()
             acc = ctx.ex.limiter.accounting(proc)
+            _, end = self.pool.sample_memory()
+            grp.run_ended(win, end)
         finally:
+            grp.run_ended(win, time.monotonic())  # 이미 기록했으면 그대로
             ctx.ex.limiter.close(proc)
             self.pool.finished(self.item_id, template_key, argv, cwd, rc)
         if self.pool.stop.is_set():
@@ -116,7 +133,16 @@ class ParallelRunner:
         self.last_exit_code = rc
         self.log(f"[EXIT] {rc}")
         if rc != 0 and acc.memory_limit_hit:
-            raise StepFailure("RESOURCE_LIMIT", f"작업 메모리 한도({ctx.ex.limits.memory_gb} GB)에 도달해 종료되었습니다")
+            gb = ctx.ex.limits.memory_gb
+            verdict = grp.memory_verdict(win) if grp.shared_accounting else "exact"
+            if verdict is None and grp.mem_hit_at is None:  # 표본이 도달을 못 잡았는데 끝 회계는 도달 → 시간대 불명
+                verdict = "uncertain"
+            if verdict == "exact":
+                raise StepFailure("RESOURCE_LIMIT", f"작업 메모리 한도({gb} GB)에 도달해 종료되었습니다")
+            if verdict == "uncertain":
+                raise StepFailure("RESOURCE_LIMIT", f"종료코드 {rc}: 작업 묶음이 메모리 한도({gb} GB)에 도달한 적 있음"
+                                                    "(이 run의 원인인지 불확실)")
+            self.log("[INFO] 작업 묶음의 메모리 한도 도달 기록은 이 실행 시간대와 겹치지 않아 일반 종료코드로 판정합니다")
         return rc
 
 
@@ -167,6 +193,19 @@ class _Pool:
             with open(self.commands_path, "a", encoding="utf-8") as fh:
                 fh.write(json.dumps({"target_id": item_id, "template": template_key, "argv": argv, "cwd": cwd,
                                      "exit_code": rc}, ensure_ascii=False) + "\n")
+
+    def sample_memory(self) -> tuple[float, float]:
+        """그룹 회계 표본(공유 회계 그룹만 조회) → (조회 전, 조회 후) monotonic 시각. 실행 시작 = 조회 전, 끝 = 조회 후."""
+        t0 = time.monotonic()
+        if not self.group.shared_accounting or self.group.closed:
+            return t0, t0
+        try:
+            hit = bool(self.ctx.ex.limiter.group_accounting(self.group).memory_limit_hit)
+        except Exception:  # noqa: BLE001 - 표본 실패는 판정 근거가 없을 뿐(끝 회계로 판정)
+            return t0, time.monotonic()
+        t1 = time.monotonic()
+        self.group.note_memory(hit, t1 if hit else t0)
+        return t0, t1
 
     def snapshot(self) -> tuple[int, int, int, int]:
         with self.lock:

@@ -26,7 +26,7 @@ from .common import MOVED_HINT, audit, param_set_out, require_job, require_power
 API_PREFIX = "/physicsai/api"  # main.API_PREFIX와 같은 값(브라우저 <video src>가 쓰는 절대 경로)
 CHUNK = 1024 * 1024
 MEDIA_TYPES = frozenset({cc.IMAGE_CONTENT_TYPE, *cc.VIDEO_CONTENT_TYPES.values()})
-_RANGE = re.compile(r"^bytes=(\d*)-(\d*)$")
+_RANGE = re.compile(r"bytes=([0-9]*)-([0-9]*)")  # fullmatch 전용, ASCII 숫자만(D3-53)
 
 
 # ---- 목록 ----------------------------------------------------------------------------------------
@@ -78,10 +78,12 @@ def job_media(ctx: AppContext, principal: Principal, job_id: str) -> dict[str, A
 
 def parse_range(header: str | None, size: int) -> tuple[int, int] | None | str:
     """HTTP Range(단일 바이트 범위) → (start, end 포함) | None(전체 200) | "unsatisfiable"(416).
-    여러 범위·다른 단위는 무시하고 전체를 보낸다(RFC 9110 허용)."""
+
+    RFC 9110 §14.2: 문법상 잘못된 범위(`bytes=10-5`처럼 끝 < 시작, 숫자 아님·여러 범위·다른 단위)는 무시하고 전체 200.
+    416은 만족할 수 없는 범위만 — 시작 ≥ 크기, 끝에서 0바이트(`bytes=-0`), 빈 파일."""
     if not header:
         return None
-    m = _RANGE.match(header.strip().replace(" ", ""))
+    m = _RANGE.fullmatch(header.strip().replace(" ", ""))
     if not m or (not m.group(1) and not m.group(2)):
         return None
     if not m.group(1):  # bytes=-N (끝에서 N바이트)
@@ -90,10 +92,12 @@ def parse_range(header: str | None, size: int) -> tuple[int, int] | None | str:
             return "unsatisfiable"
         return max(0, size - n), size - 1
     start = int(m.group(1))
-    end = int(m.group(2)) if m.group(2) else size - 1
-    if start >= size or end < start:
+    end = int(m.group(2)) if m.group(2) else None
+    if end is not None and end < start:
+        return None  # 문법상 잘못된 범위 → 무시(200 전체)
+    if start >= size:
         return "unsatisfiable"
-    return start, min(end, size - 1)
+    return start, size - 1 if end is None else min(end, size - 1)
 
 
 def media_file(ctx: AppContext, artifact_id: str) -> dict[str, Any]:

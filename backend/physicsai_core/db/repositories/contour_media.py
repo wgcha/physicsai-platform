@@ -64,13 +64,24 @@ def media_views_for_jobs(conn: Connection, job_ids: Sequence[str]) -> dict[str, 
     return {k: [m["view"] for m in v] for k, v in out.items()}
 
 
-def batch_display(conn: Connection, batch_id: str) -> dict[str, Any] | None:
-    """일괄 예측 배치의 표시 설정 = 그 배치 PREDICT_BATCH 작업 중 처음 params.display(실패만 다시 실행한 부모에는 없다)."""
+def _batch_param(conn: Connection, batch_id: str, key: str) -> dict[str, Any] | None:
+    """그 배치 PREDICT_BATCH 작업 중 `key`가 있는 처음 작업의 params[key](실패만 다시 실행한 부모 params에는 없다)."""
     q = (select(jobs.c.params).where(and_(jobs.c.job_type == "PREDICT_BATCH", jobs.c.params["batch_id"].astext == batch_id,
-                                         jobs.c.params.has_key("display")))  # noqa: W601 - JSONB ? 연산자
+                                         jobs.c.params.has_key(key)))  # noqa: W601 - JSONB ? 연산자
          .order_by(jobs.c.created_at, jobs.c.id).limit(1))
     r = conn.execute(q).first()
-    return (r.params or {}).get("display") if r is not None else None
+    v = (r.params or {}).get(key) if r is not None else None
+    return v if isinstance(v, dict) else None
+
+
+def batch_display(conn: Connection, batch_id: str) -> dict[str, Any] | None:
+    """일괄 예측 배치의 표시 설정 = 처음 PREDICT_BATCH 작업 params.display."""
+    return _batch_param(conn, batch_id, "display")
+
+
+def batch_capture(conn: Connection, batch_id: str) -> dict[str, Any] | None:
+    """일괄 예측 배치의 캡처 옵션 `{enabled, views?, video?}` = 처음 PREDICT_BATCH 작업 params.capture(D3-53). 없으면 None."""
+    return _batch_param(conn, batch_id, "capture")
 
 
 def artifacts_by_ids(conn: Connection, ids: Sequence[str]) -> dict[str, dict[str, Any]]:

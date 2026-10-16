@@ -41,7 +41,7 @@ def test_capture_config_defaults_ranges_and_example(p2_dict, tmp_path):
     # 설정 파일에 commands.contour_capture가 없어도 기본 템플릿(기능 켬)
     assert lc.settings.commands.contour_capture == ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{capture_tcl}"]
     bad = (("views", []), ("views", ["iso", "iso"]), ("views", ["diag"]), ("video_ext", "mov"), ("default_field", 'a"b'),
-           ("timeout_s", 0), ("max_video_bytes", 10))
+           ("default_field", "Von|Mises"), ("default_field", "a\tb"), ("timeout_s", 0), ("max_video_bytes", 10))
     for k, v in bad:
         assert _load({**p2_dict, "capture": {k: v}}).error_keys() == [f"capture.{k}"], (k, v)
     assert _load({**p2_dict, "capture": {"timeout_s": None, "views": ["back"], "video_ext": "gif"}}).ok
@@ -121,6 +121,14 @@ def test_validate_display():
     for d, loc in bad:
         errs = validate_display(d)
         assert errs and errs[0]["loc"] == loc, (d, errs)
+    # D3-53: hwc 명령 구분자 '|'는 모든 문자열 값에서 거부(field·component·comps), 열거형(avgmode·views·legend.mode)도 거부
+    pipe = [({"field": "Von|Mises"}, ["display", "field"]), ({"component": "a|b"}, ["display", "component"]),
+            ({"comps": ["P1", "x|y"]}, ["display", "comps", 1]), ({"avgmode": "simple|max"}, ["display", "avgmode"]),
+            ({"views": ["iso|top"]}, ["display", "views"]), ({"legend": {"mode": "auto|fixed"}}, ["display", "legend", "mode"])]
+    for d, loc in pipe:
+        errs = validate_display(d)
+        assert errs and errs[0]["loc"] == loc, (d, errs)
+    assert "|" in validate_display({"field": "a|b"})[0]["msg"]
 
 
 def test_resolve_display_order():

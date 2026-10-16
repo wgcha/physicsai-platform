@@ -3108,6 +3108,18 @@ export interface components {
             /** Total Bytes */
             total_bytes?: number | null;
         };
+        /**
+         * StatusCapture
+         * @description 컨투어 캡처 기본값(config `capture`) — 일괄 예측 설정 화면의 방향·동영상 기본 표시(D3-53).
+         */
+        StatusCapture: {
+            /** Video */
+            video: boolean;
+            /** Video Ext */
+            video_ext: string;
+            /** Views */
+            views: string[];
+        };
         /** StatusConfig */
         StatusConfig: {
             /** Errors */
@@ -3190,6 +3202,7 @@ export interface components {
             auth: {
                 [key: string]: string;
             };
+            capture?: components["schemas"]["StatusCapture"] | null;
             config: components["schemas"]["StatusConfig"];
             /**
              * Demo
