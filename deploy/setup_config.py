@@ -420,10 +420,15 @@ INBOX_DIR_DEFAULT = "inbox"
 
 
 def inbox_folder(ai_root: str, inbox_dir: Any) -> str:
-    """`<ai_root>/<inbox_dir>`('/' 구분). 상대 이름 규칙(공백·메타문자·'..'·절대경로 없음)을 어기면 빈 값."""
+    """`<ai_root>/<inbox_dir>`('/' 구분). 상대 이름 규칙(공백·메타문자·'..'·절대경로 없음)을 어기면 빈 값(폴더를 만들지 않음).
+
+    D3-50: `_backup`·`_platform`(대소문자 무시, 끝 마침표·공백 무시)·요소 안 ':'·끝 마침표/공백도 mkdir 전에 거부.
+    """
     rel = str(inbox_dir or INBOX_DIR_DEFAULT)
     parts = rel.replace("\\", "/").split("/")
     if not ai_root or unsafe(rel) or rel.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", rel) or any(x in ("", ".", "..") for x in parts):
+        return ""
+    if any(":" in x or x[-1] in ". " or x.rstrip(" .").casefold() in ("_backup", "_platform") for x in parts):
         return ""
     return fwd(ai_root).rstrip("/") + "/" + "/".join(parts)
 

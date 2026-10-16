@@ -56,6 +56,21 @@ def copy_file(src: str, dst: str, progress: Callable[[int], None] | None = None,
     return total
 
 
+def copy_stream(fi: Any, dst: str) -> int:
+    """이미 연 원본 핸들(바이너리 읽기)에서 dst로 1 MiB 버퍼 복사. 원본 경로를 다시 열지 않는다(링크 교체 TOCTOU 방지, D3-50)."""
+    _guard(dst)
+    os.makedirs(os.path.dirname(dst) or ".", exist_ok=True)
+    total = 0
+    with open(dst, "wb") as fo:
+        while True:
+            b = fi.read(CHUNK)
+            if not b:
+                break
+            fo.write(b)
+            total += len(b)
+    return total
+
+
 def write_json(path: str, data: Any) -> int:
     _guard(path)
     os.makedirs(os.path.dirname(path) or ".", exist_ok=True)

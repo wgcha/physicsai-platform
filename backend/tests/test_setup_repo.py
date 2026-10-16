@@ -585,7 +585,7 @@ def test_setup_config_inbox_folder_and_share_hint(tmp_path):
 def test_setup_config_inbox_helpers():
     m = _module()
     assert m.inbox_folder("E:/d", None) == "E:/d/inbox" and m.inbox_folder("E:\\d\\", "in\\x") == "E:/d/in/x"
-    for bad in ("../x", "a b", "/abs", "C:/x"):
+    for bad in ("../x", "a b", "/abs", "C:/x", "_Backup", "x/_platform", "_platform.", "in:x", "inbox."):  # D3-50: mkdir 전에 거부
         assert m.inbox_folder("E:/d", bad) == "", bad
     sh = [{"name": "adm$", "path": "E:\\d\\inbox"}, {"name": "box", "path": "e:\\D\\Inbox\\"}]
     assert m.inbox_share_hint({"computer_name": "S", "smb_shares": sh}, "E:/d/inbox") == "\\\\S\\box"

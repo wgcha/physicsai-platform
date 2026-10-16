@@ -92,6 +92,26 @@ def unsafe_reason(text: str) -> str | None:
     return None
 
 
+def path_component_problem(raw: str, *, windows: bool | None = None) -> str | None:
+    """경로 요소 검사(D3-50, 플랫폼 독립 문자열 검사). 문제 없으면 None.
+
+    거부: 요소 안 `:`(NTFS 대체 데이터 스트림 `x::$INDEX_ALLOCATION`·드라이브 상대 `C:x`), 끝 마침표·공백
+    (Windows가 `_platform.`·`_backup ` 을 `_platform`·`_backup`으로 열어 이름 비교를 우회). `windows`(기본: 현재 OS)면
+    첫 요소의 드라이브 `X:`만 예외. 빈 요소·`.`·`..`는 다른 규칙이 본다.
+    """
+    win = _is_windows() if windows is None else windows
+    for i, part in enumerate(raw.replace("\\", "/").split("/")):
+        if not part or part in (".", ".."):
+            continue
+        if i == 0 and win and len(part) == 2 and part[1] == ":" and part[0].isascii() and part[0].isalpha():
+            continue
+        if ":" in part:
+            return "':'(대체 데이터 스트림·드라이브 상대 경로)"
+        if part[-1] in " .":
+            return "끝 마침표·공백"
+    return None
+
+
 def _is_abs(raw: str) -> bool:
     if _is_windows():
         return os.path.isabs(raw) and len(raw) >= 3 and raw[1] == ":"
@@ -124,6 +144,9 @@ def check_user_path(
     parts = raw.replace("\\", "/").split("/")
     if ".." in parts or "." in parts[1:]:
         raise PathError("PATH_UNSAFE", "경로에 '..' 또는 '.'을 쓸 수 없습니다", path=raw)
+    comp = path_component_problem(raw)
+    if comp:
+        raise PathError("PATH_UNSAFE", f"경로 요소에 {comp}을 쓸 수 없습니다", path=raw)
     norm = os.path.normpath(raw)
     # 루트는 설정값(문자 그대로)과 realpath(매핑 드라이브·SUBST가 UNC·실경로로 풀린 형태) 두 형태로 비교한다.
     matched: str | None = None
@@ -227,7 +250,7 @@ def file_safety_problem(path: str, base: str) -> str | None:
     """
     rel = os.path.relpath(path, base)
     for part in rel.split(os.sep):
-        reason = name_unsafe_chars(part)
+        reason = name_unsafe_chars(part) or path_component_problem(part, windows=False)
         if reason:
             return reason
     reason = unsafe_reason(path)

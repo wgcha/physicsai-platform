@@ -46,8 +46,11 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
     inbox_parts = inbox.replace("\\", "/").split("/")
     if (not inbox or is_abs_path_str(inbox) or inbox.startswith(("/", "\\")) or has_unsafe_chars(inbox)
             or any(x in ("", ".", "..") for x in inbox_parts)
-            or any(x.casefold() in ("_backup", "_platform") for x in inbox_parts)):
-        add("storage.inbox_dir", "inbox_dir는 AI 루트 기준 상대 폴더 이름이어야 합니다(공백·'..'·_backup·_platform 불가)")
+            # D3-50: ':'(대체 데이터 스트림·드라이브 상대)·끝 마침표/공백(Windows가 `_backup.`을 `_backup`으로 연다) 거부
+            or any(":" in x or x[-1:] in (".", " ") for x in inbox_parts)
+            or any(x.rstrip(" .").casefold() in ("_backup", "_platform") for x in inbox_parts)):
+        add("storage.inbox_dir", "inbox_dir는 AI 루트 기준 상대 폴더 이름이어야 합니다"
+            "(공백·':'·끝 마침표·'..'·_backup·_platform 불가)")
     if s.storage.inbox_share_hint is not None and len(s.storage.inbox_share_hint) > 260:
         add("storage.inbox_share_hint", "inbox_share_hint는 260자 이하여야 합니다")
     for i, r in enumerate(s.storage.allowed_import_roots):

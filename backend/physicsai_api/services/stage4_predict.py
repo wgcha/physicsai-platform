@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import uuid
@@ -12,6 +13,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import write_json
+from physicsai_core.naming import LABEL_MAX, label_problem
 from physicsai_core.paths import allowed_roots, check_user_path, resolve_in_study
 from physicsai_core.stage4_predict import nearest as nearest_mod
 from physicsai_core.stage4_predict import param_discover as disc_mod
@@ -32,8 +34,12 @@ from .common import (
 
 
 def _label(raw: str | None) -> str | None:
+    """표시 이름 공통 검증(D3-50, 스키마 `Label`과 같은 함수). 제어·양방향 제어 문자 → 422. 등록은 사본을 만들기 전에 부른다."""
+    why = label_problem(raw or "")
+    if why:
+        raise DomainError("LABEL_INVALID", why, status=422)
     v = (raw or "").strip()
-    return v[:120] or None
+    return v[:LABEL_MAX] or None
 
 
 def _require_active_power(ctx: AppContext, principal: Principal, study_id: str) -> dict[str, Any]:
@@ -46,20 +52,37 @@ def _require_active_power(ctx: AppContext, principal: Principal, study_id: str) 
     return s
 
 
-def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: Any, psid: str, stored_rel: str,
+def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: Any, psid: str, root: str, out_tmp: str,
                        source_path: str, label: str | None, action: str, detail: dict[str, Any], rid: str,
                        ip: str | None, **extra: Any) -> dict[str, Any]:
-    with ctx.engine.begin() as conn:
-        ps_repo.insert_current(conn, {
-            "id": psid, "study_id": study_id, "source_path": source_path, "stored_rel": stored_rel + "/",
-            "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
-            "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
-            "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
-            "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
-            "registered_by": principal.user_id, "registered_by_name": principal.display_name, "label": label, **extra,
-        })
-        audit(conn, principal, action, "param_set", psid, {**detail, "label": label}, rid, ip)
-        p = ps_repo.get(conn, psid)
+    """정규화본(`logs/_paramset_tmp/<tmp>.out`)을 `04_params/<id>`로 옮기고 DB 행을 넣는다(D3-50).
+
+    이동은 DB 트랜잭션 안에서 하고, insert·commit이 실패하면 방금 옮긴 미등록 사본을 `logs/_paramset_tmp`로 되돌린다
+    (삭제 호출 없음 — 이번 요청이 만든 사본이라 사용자 산출물이 아니며, 04_params에 DB 행 없는 고아 폴더를 남기지 않는다).
+    """
+    stored_rel = f"04_params/{psid}"
+    dst = resolve_in_study(root, stored_rel)
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    moved = False
+    try:
+        with ctx.engine.begin() as conn:
+            ps_repo.insert_current(conn, {
+                "id": psid, "study_id": study_id, "source_path": source_path, "stored_rel": stored_rel + "/",
+                "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
+                "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
+                "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
+                "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
+                "registered_by": principal.user_id, "registered_by_name": principal.display_name, "label": label, **extra,
+            })
+            audit(conn, principal, action, "param_set", psid, {**detail, "label": label}, rid, ip)
+            os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
+            moved = True
+            p = ps_repo.get(conn, psid)
+    except BaseException:
+        if moved and os.path.isdir(dst) and not os.path.lexists(out_tmp):
+            with contextlib.suppress(OSError):
+                os.replace(dst, out_tmp)  # 미등록 사본을 되돌림(04_params 고아 방지)
+        raise
     return param_set_out(p)  # type: ignore[arg-type]
 
 
@@ -70,6 +93,7 @@ def register_param_set(ctx: AppContext, principal: Principal, study_id: str, bod
         raise DomainError("INVALID_PARAMS", "choice는 mode=discover에서만 씁니다", status=422)
     cfg = ctx.settings
     s = _require_active_power(ctx, principal, study_id)
+    label = _label(body.label)
     path = body.path
     cp = check_user_path(path, [cfg.storage.ai_root])
     f = ps_mod.validate_folder(cp.path, max_samples=cfg.param_set.max_samples,
@@ -79,9 +103,9 @@ def register_param_set(ctx: AppContext, principal: Principal, study_id: str, bod
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 폴더 검증에 실패했습니다", status=422, problems=f.problems)
     psid = str(uuid.uuid4())
     root = study_root(ctx, s)
-    stored_rel = f"04_params/{psid}"
-    ps_mod.write_normalized(f, cp.path, resolve_in_study(root, stored_rel), cp.path)
-    return _insert_folder_set(ctx, principal, study_id, f, psid, stored_rel, cp.path, _label(body.label),
+    out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{uuid.uuid4()}.out")
+    ps_mod.write_normalized(f, cp.path, out_tmp, cp.path)
+    return _insert_folder_set(ctx, principal, study_id, f, psid, root, out_tmp, cp.path, label,
                               "PARAM_SET_REGISTER", {"source_path": cp.path}, rid, ip)
 
 
@@ -99,6 +123,7 @@ def register_param_set_discovered(ctx: AppContext, principal: Principal, study_i
     """phase3 §13 S8: 고른 후보를 §15.4 구조로 임시 폴더에 모아 기존 검증기·정규화로 등록(원본 위치는 읽기만)."""
     cfg = ctx.settings
     s = _require_active_power(ctx, principal, study_id)
+    label = _label(body.label)
     cp = check_user_path(body.path, allowed_roots(cfg, imports=True))
     choice = body.choice.model_dump() if body.choice is not None else {}
     d = disc_mod.discover(cp.path, cfg, tpl=choice.get("tpl"))
@@ -129,11 +154,7 @@ def register_param_set_discovered(ctx: AppContext, principal: Principal, study_i
     with open(src_json, encoding="utf-8") as fh:
         meta = json.load(fh)
     write_json(src_json, {**meta, "mode": "discover", "discovered": picked})
-    stored_rel = f"04_params/{psid}"
-    dst = resolve_in_study(root, stored_rel)
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
-    return _insert_folder_set(ctx, principal, study_id, f, psid, stored_rel, cp.path, _label(body.label),
+    return _insert_folder_set(ctx, principal, study_id, f, psid, root, out_tmp, cp.path, label,
                               "PARAM_SET_REGISTER", {"source_path": cp.path, "mode": "discover", **picked}, rid, ip)
 
 
@@ -143,6 +164,8 @@ def patch_param_set(ctx: AppContext, principal: Principal, ps_id: str, body: Any
         p = _require_param_set(conn, ps_id)
         s = studies_repo.require(conn, p["study_id"])
         require_power(principal, s["project_id"])
+        if s["status"] != "ACTIVE":
+            raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
         if "label" in body.model_fields_set:
             lab = _label(body.label)
             ps_repo.set_label(conn, ps_id, lab)
@@ -230,6 +253,7 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     require_config_ok(ctx)
     if s["status"] != "ACTIVE":
         raise DomainError("STUDY_ARCHIVED", "보관된 Study입니다", status=409)
+    label = _label(body.label)
     if d is None or d["study_id"] != study_id or d["status"] != "READY":
         raise DomainError("DOE_NOT_READY", "READY 상태의 DOE가 필요합니다", status=409)
     if d["sample_status"] not in ("PARSED", "PARTIAL") or not d["samples_rel"]:
@@ -301,10 +325,6 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     src_label = f"① DOE {d['id'][:8]}"
     out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}.out")
     ps_mod.write_normalized(f, A, out_tmp, src_label)
-    stored_rel = f"04_params/{psid}"
-    dst = resolve_in_study(root, stored_rel)
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
-    return _insert_folder_set(ctx, principal, study_id, f, psid, stored_rel, src_label, _label(body.label),
+    return _insert_folder_set(ctx, principal, study_id, f, psid, root, out_tmp, src_label, label,
                               "PARAM_SET_FROM_TRAIN", {"doe_id": d["id"], "runs": body.runs}, rid, ip,
                               origin="TRAIN_DOE", train_doe_id=d["id"])

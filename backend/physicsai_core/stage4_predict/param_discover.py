@@ -9,12 +9,16 @@
   정확히 1개(GUI :427-445). SimLab 메시 사본(`EPS_mesh_0000.rad`)·`RENUM_INIT.csv`가 함께 있으면 우선, 이름에 radioss·assem이 있으면 다음.
 - HyperStudy run 폴더(`train_data.result_run_dir_regex`, 원본 `approaches/*/run__N`)는 run마다 starter가 있어 건너뛴다.
 
-탐색: 링크·junction·숨김·`_backup`·`_platform`(대소문자 무시) 제외, 깊이·항목 수 상한(넘으면 truncated), 파일 내용은 tpl만(크기 상한).
+탐색: 링크·junction·숨김·`_backup`·`_platform`(대소문자 무시)·Study 산출 폴더(`04_params` 등) 제외, 깊이·항목 수 상한
+(넘으면 truncated), 파일 내용은 tpl만(크기 상한).
+등록 복사(D3-50): 각 원본을 복사 직전에 다시 검사(경로 요소 링크·junction 없음, realpath가 프로젝트 폴더 안)하고
+열린 핸들 기준으로 복사(O_NOFOLLOW + 연 파일과 경로의 (st_dev, st_ino) 일치) — 검사 뒤 링크로 바뀌면 거부.
 """
 
 from __future__ import annotations
 
 import fnmatch
+import io
 import os
 import re
 import stat
@@ -22,9 +26,19 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any
 
-from ..fileutil import copy_file, write_json, write_text
+from ..errors import DomainError
+from ..fileutil import copy_stream, write_json
 from ..naming import NAME_RE, TPL_NAME
-from ..paths import BACKUP_DIR, PLATFORM_DIR, is_link_or_reparse
+from ..paths import (
+    BACKUP_DIR,
+    PLATFORM_DIR,
+    STUDY_OUTPUT_DIRS,
+    STUDY_OUTPUT_DIRS_2,
+    PathError,
+    is_link_or_reparse,
+    is_under,
+    real,
+)
 from ..tpl_render import PARAM_DECL_RE
 from .param_set_files import ParamSetFolder, _load_parameters
 from .prepared_input import is_mesh_file
@@ -45,6 +59,7 @@ class Scan:
     entries: int = 0
     skipped_links: int = 0
     skipped_runs: int = 0
+    skipped_outputs: int = 0
 
 
 @dataclass
@@ -77,9 +92,32 @@ def _hidden(entry: os.DirEntry[str]) -> bool:
     return bool(attrs & getattr(stat, "FILE_ATTRIBUTE_HIDDEN", 0))
 
 
-def scan_tree(root: str, *, max_depth: int, max_entries: int, run_dir_re: re.Pattern[str] | None) -> Scan:
-    """너비 우선(얕은 곳 먼저) 탐색. 링크·숨김·_backup·_platform·HST run 폴더는 들어가지 않는다."""
+def study_output_dir(path: str, ai_root: str | None, inbox_dir: str | None = None) -> str | None:
+    """`path`가 `<ai_root>/<Study>/<플랫폼 산출 폴더>`(04_params·logs·01_train/tpl 등) 안이면 그 폴더 이름. 아니면 None."""
+    if not ai_root:
+        return None
+    inbox0 = (inbox_dir or "").replace("\\", "/").split("/")[0].casefold()
+    for base in dict.fromkeys((os.path.normpath(ai_root), real(ai_root))):
+        if not is_under(path, base):
+            continue
+        rel = os.path.relpath(path, base)
+        parts = [] if rel == "." else [x.casefold() for x in rel.split(os.sep)]
+        if len(parts) < 2 or parts[0] in (inbox0, PLATFORM_DIR):
+            continue
+        if parts[1] in STUDY_OUTPUT_DIRS or parts[1] in STUDY_OUTPUT_DIRS_2:
+            return parts[1]
+        if len(parts) >= 3 and f"{parts[1]}/{parts[2]}" in STUDY_OUTPUT_DIRS_2:
+            return f"{parts[1]}/{parts[2]}"
+    return None
+
+
+def scan_tree(root: str, *, max_depth: int, max_entries: int, run_dir_re: re.Pattern[str] | None,
+              ai_root: str | None = None, inbox_dir: str | None = None) -> Scan:
+    """너비 우선(얕은 곳 먼저) 탐색. 링크·숨김·_backup·_platform·HST run 폴더·Study 산출 폴더는 들어가지 않는다."""
     sc = Scan()
+    if study_output_dir(root, ai_root, inbox_dir):
+        sc.skipped_outputs += 1
+        return sc
     q: deque[tuple[str, int]] = deque([(ROOT_REL, 0)])
     while q:
         rel, depth = q.popleft()
@@ -105,6 +143,9 @@ def scan_tree(root: str, *, max_depth: int, max_entries: int, run_dir_re: re.Pat
                     continue
                 if run_dir_re is not None and run_dir_re.match(e.name):
                     sc.skipped_runs += 1
+                    continue
+                if study_output_dir(e.path, ai_root, inbox_dir):  # 04_params 등 플랫폼 산출 tpl·조립 사본은 후보 아님
+                    sc.skipped_outputs += 1
                     continue
                 if depth < max_depth:
                     q.append((_rel(rel, e.name), depth + 1))
@@ -276,9 +317,18 @@ def discover(root: str, settings: Any, *, tpl: str | None = None) -> Discovery:
     """프로젝트 폴더(이미 check_user_path 통과)에서 후보를 찾는다. 디스크 쓰기 없음. `tpl` = 사용자가 고른 tpl 상대경로."""
     ps, pr, td = settings.param_set, settings.predict, settings.train_data
     run_re = re.compile(td.result_run_dir_regex) if td.result_run_dir_regex else None
-    sc = scan_tree(root, max_depth=ps.discover_max_depth, max_entries=ps.discover_max_entries, run_dir_re=run_re)
+    st = settings.storage
+    sc = scan_tree(root, max_depth=ps.discover_max_depth, max_entries=ps.discover_max_entries, run_dir_re=run_re,
+                   ai_root=st.ai_root, inbox_dir=st.inbox_dir)
     problems: list[dict[str, Any]] = []
     notes: list[dict[str, Any]] = []
+    out_dir = study_output_dir(root, st.ai_root, st.inbox_dir)
+    if out_dir:
+        problems.append({"code": "STUDY_OUTPUT_DIR",
+                         "message": f"플랫폼 산출 폴더({out_dir}) 안은 찾지 않습니다 — 원본 프로젝트 폴더를 지정하세요"})
+    elif sc.skipped_outputs:
+        notes.append({"code": "STUDY_OUTPUT_SKIPPED",
+                      "message": f"플랫폼 산출 폴더(04_params 등) {sc.skipped_outputs}개는 건너뛰었습니다"})
     if sc.truncated:
         notes.append({"code": "SCAN_TRUNCATED",
                       "message": f"항목이 많아 {ps.discover_max_entries}개까지만 찾았습니다 — 더 아래 폴더를 지정하세요"})
@@ -390,48 +440,133 @@ def resolve_choice(d: Discovery, choice: dict[str, str | None]) -> tuple[TplInfo
     return tpl, cad, assem, probs
 
 
+_O_NOFOLLOW = getattr(os, "O_NOFOLLOW", 0)
+_O_BINARY = getattr(os, "O_BINARY", 0)
+_BOM = b"\xef\xbb\xbf"
+
+
+def _recheck(root: str, root_real: str, rel: str) -> str:
+    """복사 직전 재검사: 프로젝트 폴더부터 rel까지 각 요소가 링크·junction이 아니고 realpath가 프로젝트 폴더 안."""
+    if is_link_or_reparse(root):
+        raise PathError("PATH_UNSAFE", "프로젝트 폴더가 링크·junction으로 바뀌었습니다", path=root)
+    cur = root
+    for part in [] if rel == ROOT_REL else rel.split("/"):
+        cur = os.path.join(cur, part)
+        if is_link_or_reparse(cur):
+            raise PathError("PATH_UNSAFE", f"복사할 원본이 링크·junction입니다: {rel}", path=cur)
+    if not is_under(real(cur), root_real):
+        raise PathError("PATH_UNSAFE", f"복사할 원본이 프로젝트 폴더 밖을 가리킵니다: {rel}", path=cur)
+    return cur
+
+
+def _changed(rel: str) -> DomainError:
+    return DomainError("SOURCE_CHANGED", f"복사하는 동안 원본이 바뀌었습니다(링크 교체 등) — 다시 시도하세요: {rel}", status=409)
+
+
+def open_source(root: str, root_real: str, rel: str) -> Any:
+    """원본 파일을 검사 후 열어 바이너리 핸들을 돌려준다. 이후 복사는 이 핸들로만(경로를 다시 열지 않음).
+
+    POSIX: O_NOFOLLOW(마지막 요소가 링크면 열기 실패). Windows(O_NOFOLLOW 없음): 연 핸들의 (st_dev, st_ino)가
+    열기 전 lstat과 같아야 한다 — 그 사이 링크·junction으로 바뀌면 다른 파일이 열려 거부된다. 연 뒤 realpath도 다시 본다.
+    """
+    p = _recheck(root, root_real, rel)
+    try:
+        before = os.lstat(p)
+    except OSError as exc:
+        raise _changed(rel) from exc
+    if not stat.S_ISREG(before.st_mode):
+        raise PathError("PATH_UNSAFE", f"복사할 원본이 일반 파일이 아닙니다: {rel}", path=p)
+    try:
+        fd = os.open(p, os.O_RDONLY | _O_NOFOLLOW | _O_BINARY)
+    except OSError as exc:  # ELOOP 등: 검사 뒤 링크로 바뀜
+        raise _changed(rel) from exc
+    try:
+        st = os.fstat(fd)
+        # Windows st_dev(볼륨 일련번호)는 조회 방식(lstat 빠른 경로·fstat)마다 폭이 달라 파일 ID(st_ino)만 비교
+        same = st.st_ino == before.st_ino and (os.name == "nt" or st.st_dev == before.st_dev)
+        if not stat.S_ISREG(st.st_mode) or not same:
+            raise _changed(rel)
+        _recheck(root, root_real, rel)
+    except BaseException:
+        os.close(fd)
+        raise
+    return os.fdopen(fd, "rb")
+
+
+def _copy_src(root: str, root_real: str, rel: str, dst: str) -> int:
+    with open_source(root, root_real, rel) as fi:
+        return copy_stream(fi, dst)
+
+
+def rewrite_tpl_bytes(raw: bytes, prt_regex: str, cad_name: str) -> bytes:
+    """원본 바이트 기준으로 첫 `dir_file_prt` 일치 줄만 `dir_file_prt = r"./<CAD>"`로 바꾼다. BOM·CRLF·나머지 바이트 유지."""
+    bom = _BOM if raw.startswith(_BOM) else b""
+    lines = raw[len(bom):].decode("utf-8").split("\n")  # '\r'은 줄 내용 끝에 남아 그대로 돌아간다
+    rx = re.compile(prt_regex)
+    for i, line in enumerate(lines):
+        if rx.search(line):
+            lines[i] = rx.sub(lambda _m: f'dir_file_prt = r"./{cad_name}"', line, count=1)
+            break
+    return bom + "\n".join(lines).encode("utf-8")
+
+
+def assem_files(adir: str, renum_csv_name: str) -> list[str]:
+    """조립 폴더에서 등록에 복사할 파일 이름(.rad·.inc·RENUM csv, eps_mesh·링크 제외). copy_sources·planned_bytes 공통."""
+    renum = renum_csv_name.casefold()
+    out: list[str] = []
+    for n in sorted(os.listdir(adir)):
+        low = n.casefold()
+        if is_mesh_file(n) or not (low.endswith((".rad", ".inc")) or low == renum):
+            continue
+        p = os.path.join(adir, n)
+        if is_link_or_reparse(p) or not os.path.isfile(p):
+            continue
+        out.append(n)
+    return out
+
+
 def copy_sources(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any) -> int:
-    """§15.4 폴더 구조로 dst에 모은다. 복사한 바이트 수. 읽기만(원본 위치)."""
+    """§15.4 폴더 구조로 dst에 모은다. 복사한 바이트 수. 읽기만(원본 위치). 원본마다 복사 직전 재검사·핸들 기준 복사."""
     root = d.root
+    root_real = real(root)
     pr, td = settings.predict, settings.train_data
     cad_name = cad_rel.split("/")[-1]
     total = 0
     # tpl: CAD 경로가 ./<CAD>가 아니면 원본 update_parameter_file(:135-139)처럼 ./<CAD 파일명>으로 바꿔 쓴다
-    src_tpl = _abs(root, tpl.rel)
     if tpl.cad_ref is not None and (not tpl.cad_ref.startswith("./") or _cad_name(tpl.cad_ref) != cad_name):
-        text = re.sub(td.tpl_prt_regex, lambda _m: f'dir_file_prt = r"./{cad_name}"', tpl.text)
-        write_text(os.path.join(dst, TPL_NAME), text)
-        total += len(text.encode("utf-8"))
+        with open_source(root, root_real, tpl.rel) as fi:
+            raw = fi.read()
+        try:
+            data = rewrite_tpl_bytes(raw, td.tpl_prt_regex, cad_name)
+        except UnicodeDecodeError as exc:
+            raise _changed(tpl.rel) from exc
+        total += copy_stream(io.BytesIO(data), os.path.join(dst, TPL_NAME))
     else:
-        total += copy_file(src_tpl, os.path.join(dst, TPL_NAME))
-    total += copy_file(_abs(root, cad_rel), os.path.join(dst, "cad", cad_name))
+        total += _copy_src(root, root_real, tpl.rel, os.path.join(dst, TPL_NAME))
+    total += _copy_src(root, root_real, cad_rel, os.path.join(dst, "cad", cad_name))
     if d.parameters_source == "file" and d.parameters_file:
-        total += copy_file(_abs(root, d.parameters_file), os.path.join(dst, d.parameters_file.split("/")[-1].lower()))
+        total += _copy_src(root, root_real, d.parameters_file,
+                           os.path.join(dst, d.parameters_file.split("/")[-1].lower()))
     else:
         write_json(os.path.join(dst, "parameters.json"),
                    {"schema_version": 1, "unit_system": "mm-ton-s", "parameters": d.parameters})
     for rel, name in ((d.samples, "samples.csv"), (d.responses, "responses.json")):
         if rel:
-            total += copy_file(_abs(root, rel), os.path.join(dst, name))
-    adir = _abs(root, assem["rel"])
-    renum = pr.renum_csv_name.casefold()
-    for n in sorted(os.listdir(adir)):
-        p = os.path.join(adir, n)
-        if not os.path.isfile(p) or is_link_or_reparse(p) or is_mesh_file(n):
-            continue
-        if n.casefold().endswith((".rad", ".inc")) or n.casefold() == renum:
-            total += copy_file(p, os.path.join(dst, "radioss_assem", n))
+            total += _copy_src(root, root_real, rel, os.path.join(dst, name))
+    arel = assem["rel"]
+    adir = _recheck(root, root_real, arel)  # 조립 폴더 자체도 listdir 직전에 다시 본다
+    for n in assem_files(adir, pr.renum_csv_name):
+        total += _copy_src(root, root_real, _rel(arel, n), os.path.join(dst, "radioss_assem", n))
     return total
 
 
 def planned_bytes(d: Discovery, tpl: TplInfo, cad_rel: str, assem: dict[str, Any], settings: Any) -> int:
-    """복사 전 총량 추정(상한 검사용)."""
+    """복사 전 총량 추정(상한 검사용). 조립 폴더 파일 판정은 copy_sources와 같은 assem_files."""
     root = d.root
     files = [_abs(root, tpl.rel), _abs(root, cad_rel)]
     files += [_abs(root, r) for r in (d.parameters_file, d.samples, d.responses) if r]
     adir = _abs(root, assem["rel"])
-    files += [os.path.join(adir, n) for n in os.listdir(adir) if not is_mesh_file(n)
-              and n.casefold().endswith((".rad", ".inc", settings.predict.renum_csv_name.casefold()))]
+    files += [os.path.join(adir, n) for n in assem_files(adir, settings.predict.renum_csv_name)]
     total = 0
     for f in files:
         try:

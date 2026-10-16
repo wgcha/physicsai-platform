@@ -3,11 +3,25 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Annotated, Literal
 
-from pydantic import Field
+from pydantic import AfterValidator, Field
+
+from physicsai_core.naming import label_problem
 
 from .common import Req, Resp
+
+
+def _check_label(v: str | None) -> str | None:
+    """표시 이름 공통 검증(D3-50): 제어·양방향 제어 문자 → 422(INVALID_PARAMS). 서비스 `_label`도 같은 함수로 다시 본다."""
+    if v is not None:
+        why = label_problem(v)
+        if why:
+            raise ValueError(why)
+    return v
+
+
+Label = Annotated[str | None, AfterValidator(_check_label)]
 
 __all__ = [
     "ParamSetCreate", "Parameter", "ResponseDef", "TplParam", "ParamSet", "SampleRow", "SamplesPage",
@@ -30,11 +44,11 @@ class ParamSetCreate(Req):
     # 생략 = 기존 §15.4 폴더 등록(호환). "discover" = 프로젝트 폴더에서 자동 구성(phase3 §13 S8)
     mode: Literal["folder", "discover"] | None = None
     choice: ParamSetDiscoverChoice | None = None
-    label: str | None = Field(default=None, max_length=120)
+    label: Label = Field(default=None, max_length=120)
 
 
 class ParamSetPatch(Req):
-    label: str | None = Field(default=None, max_length=120)
+    label: Label = Field(default=None, max_length=120)
 
 
 class ParamSetDiscoverRequest(Req):
@@ -154,7 +168,7 @@ class ParamSetFromTrain(Req):
     doe_id: str
     runs: Literal["collected", "all"] = "collected"
     unit_system: str | None = Field(default=None, max_length=40)
-    label: str | None = Field(default=None, max_length=120)
+    label: Label = Field(default=None, max_length=120)
 
 
 class ParamSetDiscoverResponse(Resp):
