@@ -135,7 +135,7 @@ export const jobRoutes: Route = (srv, { method, path, seg, query, headers, me })
       if (!inputReady(j)) return err(409, "INPUT_NOT_READY", "입력파일이 아직 준비되지 않았습니다.");
       return { status: 200, text: "PK\u0003\u0004 (mock zip)", contentType: "application/zip" };
     }
-    if (method === "GET" && seg[2] === "artifacts") return { status: 200, body: srv.artifacts.filter((a) => a.job_id === j.id).map(({ body: _b, ...a }) => a) };
+    if (method === "GET" && seg[2] === "artifacts") return { status: 200, body: srv.artifacts.filter((a) => a.job_id === j.id).map(({ body: _b, render: _r, ...a }) => a) };
     if (method === "POST" && seg[2] === "cancel") {
       const d = needAdmin(me);
       if (d) return d;
@@ -153,6 +153,7 @@ export const jobRoutes: Route = (srv, { method, path, seg, query, headers, me })
   }
   if (method === "GET" && seg[0] === "artifacts" && seg[2] === "content") {
     const a = srv.artifacts.find((x) => x.id === seg[1]);
+    if (a?.render) return { status: 200, bytes: a.render(), contentType: a.content_type };
     return a ? { status: 200, text: a.body, contentType: a.content_type } : err(404, "NOT_FOUND", "산출물을 찾을 수 없습니다.");
   }
   return null;

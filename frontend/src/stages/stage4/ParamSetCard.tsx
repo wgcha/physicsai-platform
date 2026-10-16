@@ -7,6 +7,7 @@ import { PathInput } from "../../components/PathInput";
 import { fmtTime } from "../../lib/format";
 import { ParamSetDiscoverForm } from "./ParamSetDiscoverForm";
 import { ResponseDefs } from "./ResponseDefs";
+import { ContourDisplayForm } from "./ContourDisplayForm";
 import { INPUT_KIND_LABEL, inputKindOf } from "./TemplatePicker";
 
 type RegMode = "discover" | "folder" | "train";
@@ -16,7 +17,7 @@ const MODES: [RegMode, string][] = [
   ["train", "① 결과로 만들기"],
 ];
 
-/** 템플릿 관리(phase3.md §13·§14.4·§14.6): 고른 템플릿 요약·이름·입력 종류·응답 정의 + 새 템플릿 등록(관리자가 등록 · 사용자는 고르기만) */
+/** 템플릿 관리(phase3.md §13·§14.4·§14.6, S10): 고른 템플릿 요약·이름·입력 종류·응답 정의·컨투어 표시 + 새 템플릿 등록(관리자가 등록 · 사용자는 고르기만) */
 export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
   const { study, reloadParamSets } = useStudy();
   const canExec = useCanExecute();
@@ -91,6 +92,7 @@ export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
         <p className="muted">등록된 템플릿이 없습니다. 프로젝트 폴더를 지정하면 tpl·CAD·조립 폴더를 찾아 등록합니다.</p>
       )}
       {ps && !open && <ResponseDefs key={ps.id} ps={ps} canEdit={canExec} />}
+      {ps && !open && <ContourDisplayForm key={`d-${ps.id}`} ps={ps} canEdit={canExec} />}
       {open && canExec && (
         <>
           <div className="seg ps-mode" role="group" aria-label="등록 방식">

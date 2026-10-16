@@ -21,6 +21,7 @@ import { downsampleMinMax } from "../lib/downsample";
 import { isIntegerFormat } from "../lib/format";
 import { PREVIEW_JSON, baseJob, contourSvg, curveJson, iso, makeSteps, responseFn, rng } from "./data";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
+import { captureMedia } from "./capture";
 import type { MockServer } from "./server";
 
 export const BATCH_MAX_RUNS = 200;
@@ -204,6 +205,7 @@ export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
       state, code: state === "GEN_FAILED" ? r.gen_code : state === "FAILED" ? job?.failure_code ?? null : null,
       message: state === "GEN_FAILED" ? r.gen_message : state === "FAILED" ? job?.failure_message ?? null : null,
       job_id: job?.id ?? null, responses: responsesOf(job),
+      media_views: job?.state === "SUCCEEDED" ? ((job.result as { media?: { view: string }[] | null } | null)?.media ?? []).map((m) => m.view) : [], // S10
     };
   });
   const cnt = (s: BatchRowState) => rows.filter((r) => r.state === s).length;
@@ -314,6 +316,7 @@ export function batchChildResult(srv: MockServer, j: Job) {
     input_path: (j.params as { input_path?: string }).input_path ?? null, values: run?.values ?? {}, applied_values: vals, out_of_range: run?.out_of_range ?? [], nearest: null,
     preview_json_artifact_id: pj, image_artifact_ids: [img], curve_artifact_id: cj, response_table_artifact_id: null,
     response_table: (ps?.responses ?? []).map((r) => ({ name: r.name, unit: r.unit, predicted: pred[r.name] ?? null, nearest_measured: null, diff_pct: null })),
+    media: captureMedia(srv, j, vals), // S10
   };
 }
 

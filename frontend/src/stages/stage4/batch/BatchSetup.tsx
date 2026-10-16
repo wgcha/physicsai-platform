@@ -28,6 +28,8 @@ export function maxMultiExecution(status: { limits?: { configured?: Record<strin
 }
 
 type Ranges = Record<string, [string, string]>;
+/** 선택 숫자: 빈 값 null, 잘못된 값 undefined */
+const optNum = (s: string): number | null | undefined => (s.trim() === "" ? null : Number.isFinite(Number(s)) ? Number(s) : undefined);
 const defaultRanges = (ps: ParamSet | null): Ranges => Object.fromEntries((ps?.parameters ?? []).map((p) => [p.name, [String(p.min), String(p.max)]]));
 
 export function BatchSetup() {
@@ -55,6 +57,10 @@ export function BatchSetup() {
   const [busy, setBusy] = useState(false);
   const [multi, setMulti] = useState(String(Math.min(4, maxMulti)));
   const [recent, setRecent] = useState<PredictBatchSummary[]>([]);
+  // S10: 범례 범위 고정(run 비교용) — min·max는 선택
+  const [legendFixed, setLegendFixed] = useState(false);
+  const [legendLo, setLegendLo] = useState("");
+  const [legendHi, setLegendHi] = useState("");
   const choice = useModelChoice();
   const runner = useJobRunner("PREDICT_BATCH");
 
@@ -109,10 +115,14 @@ export function BatchSetup() {
 
   const multiN = Number(multi);
   const multiOk = Number.isInteger(multiN) && multiN >= 1 && multiN <= maxMulti;
-  const ready = !!ps && !!previewSource && !!preview && preview.count > 0 && multiOk && !!choice.chosenModel && tplF.enabled;
+  const lgLo = optNum(legendLo);
+  const lgHi = optNum(legendHi);
+  const legendOk = !legendFixed || (lgLo !== undefined && lgHi !== undefined && (lgLo === null || lgHi === null || lgLo < lgHi));
+  const ready = !!ps && !!previewSource && !!preview && preview.count > 0 && multiOk && legendOk && !!choice.chosenModel && tplF.enabled;
   const run = async () => {
     if (!ps || !previewSource) return;
     const params: PredictBatchParams = { param_set_id: ps.id, model_id: choice.modelId || null, multi_execution: multiN, source: previewSource };
+    if (legendFixed) params.display = { legend: { mode: "fixed", min: lgLo ?? null, max: lgHi ?? null } };
     const j = await runner.run({ ...params });
     const bid = (j?.params as { batch_id?: string } | undefined)?.batch_id;
     if (bid) navigate(`/p/${study.project_id}/s/${study.id}/stage/4/batch/${bid}`);
@@ -255,6 +265,24 @@ export function BatchSetup() {
               <input className="num-input" type="number" min={1} max={maxMulti} value={multi} onChange={(e) => setMulti(e.target.value)} aria-invalid={!multiOk} />
               <span className="muted small">1–{maxMulti}</span>
             </label>
+            <div className="legend-fix">
+              <label className="check">
+                <input type="checkbox" checked={legendFixed} onChange={(e) => setLegendFixed(e.target.checked)} />
+                범례 범위 고정(run 비교용)
+              </label>
+              {legendFixed && (
+                <span className="fill-row">
+                  <label className="inline-field">
+                    최소
+                    <input className="num-input" inputMode="decimal" aria-label="범례 최소" value={legendLo} placeholder="선택" onChange={(e) => setLegendLo(e.target.value)} aria-invalid={lgLo === undefined} />
+                  </label>
+                  <label className="inline-field">
+                    최대
+                    <input className="num-input" inputMode="decimal" aria-label="범례 최대" value={legendHi} placeholder="선택" onChange={(e) => setLegendHi(e.target.value)} aria-invalid={lgHi === undefined} />
+                  </label>
+                </span>
+              )}
+            </div>
             <ModelLine choice={choice} />
             {preview?.estimate_min != null && previewSource && <p className="muted small">예상 소요 약 {fmtNum(preview.estimate_min, 3)}분</p>}
             <FeatureGate feature="predict">
@@ -265,7 +293,7 @@ export function BatchSetup() {
                   onRun={() => void run()}
                   job={runner.job && runner.job.state !== "SUCCEEDED" ? runner.job : null}
                   disabled={!enabled || !ready || runner.submitting}
-                  disabledReason={!enabled || !tplF.enabled ? undefined : !previewSource ? "먼저 조합을 만드세요" : !multiOk ? `동시 실행 수는 1~${maxMulti}` : !choice.chosenModel ? "Final 모델이 필요합니다" : undefined}
+                  disabledReason={!enabled || !tplF.enabled ? undefined : !previewSource ? "먼저 조합을 만드세요" : !multiOk ? `동시 실행 수는 1~${maxMulti}` : !legendOk ? "범례 최소 < 최대인 숫자(비우면 미지정)" : !choice.chosenModel ? "Final 모델이 필요합니다" : undefined}
                   error={runner.error}
                 />
               )}

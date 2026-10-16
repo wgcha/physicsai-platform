@@ -9,7 +9,8 @@ type Override<T, U> = Omit<T, keyof U> & U;
 export type Role = "general" | "power" | "admin";
 
 // S9: openapi 갱신 후 gen:api로 대체 — PREDICT_BATCH(phase3.md §14.5)
-export type JobType = S["JobCreate"]["job_type"] | "PREDICT_BATCH";
+// S10: openapi 갱신 후 gen:api로 대체 — 다시 캡처 작업(POST /jobs/{id}/capture → 202, 이름은 목 가정)
+export type JobType = S["JobCreate"]["job_type"] | "PREDICT_BATCH" | "CONTOUR_CAPTURE";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -47,7 +48,10 @@ export type ArtifactKind =
   | "DOE_SAMPLES"
   | "RUN_CONFIG"
   | "OPT_SUMMARY"
-  | "OPT_FILE";
+  | "OPT_FILE"
+  // S10: openapi 갱신 후 gen:api로 대체(이름은 목 가정)
+  | "CONTOUR_IMAGE"
+  | "CONTOUR_VIDEO";
 
 export const TERMINAL_STATES: JobState[] = ["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"];
 
@@ -128,6 +132,8 @@ export interface PredictResult {
   curve_artifact_id: string | null;
   response_table_artifact_id?: string | null;
   response_table: ResponseRow[];
+  /** S10: openapi 갱신 후 gen:api로 대체 — 방향별 캡처(없으면 캡처 전 결과) */
+  media?: ResultMedia[] | null;
   // S6 prepared 결과 키(phase3.md §11.5) — openapi에서 결과는 자유 형식이라 수동 유지
   input_mode?: PredictInputMode;
   input_path?: string | null;
@@ -279,6 +285,8 @@ export type ParamSet = Override<
     assem_rel?: string | null;
     starter_name: string | null;
     responses: TemplateResponse[];
+    /** S10: openapi 갱신 후 gen:api로 대체 — 컨투어 표시 설정(없으면 서버 기본) */
+    display?: ContourDisplay | null;
   }
 >;
 export type ParamSetCreate = S["ParamSetCreate"];
@@ -439,6 +447,8 @@ export interface PredictBatchParams {
   model_id: string | null;
   multi_execution: number;
   source: BatchSource;
+  /** S10: openapi 갱신 후 gen:api로 대체 — 템플릿 표시 설정 덮어쓰기(범례 범위 고정, run 비교용). 키 이름은 가정 */
+  display?: { legend: ContourLegend } | null;
 }
 
 export type BatchStatus = "GENERATING" | "PREDICTING" | "DONE" | "FAILED" | "CANCELED";
@@ -463,6 +473,8 @@ export interface PredictBatchRow {
   message: string | null;
   job_id: string | null;
   responses: Record<string, number | null> | null;
+  /** S10: openapi 갱신 후 gen:api로 대체 — 캡처된 방향(없으면 빈 배열) */
+  media_views?: ViewKey[];
 }
 export interface PredictBatch {
   id: string;
@@ -492,4 +504,57 @@ export interface BatchCurves {
 export interface BatchRetryFailed {
   parent_job_id: string | null;
   retried_job_ids: string[];
+}
+
+// ---------------------------------------------------------------------------
+// S10 컨투어 캡처(HyperView 방향별 PNG + 애니메이션 동영상)
+// S10: openapi 갱신 후 gen:api로 대체 — 아래는 메인 확정 계약(JSON 예시)을 그대로 옮긴 수동 타입
+// ---------------------------------------------------------------------------
+
+/** 방향 키(기본 iso·front·top·right). 서버가 더 주면 그대로 표시 */
+export type ViewKey = "iso" | "front" | "back" | "top" | "bottom" | "left" | "right" | (string & {});
+
+/** S10: openapi 갱신 후 gen:api로 대체 — PREDICT `result.media[]` */
+export interface ResultMedia {
+  view: ViewKey;
+  image_artifact_id: string;
+  video_artifact_id: string | null;
+}
+
+/** S10: openapi 갱신 후 gen:api로 대체 — GET /jobs/{id}/media 의 views[] (URL은 산출물 내려받기 경로, 동영상은 Range 지원) */
+export interface MediaView {
+  view: ViewKey;
+  label: string;
+  image_url: string;
+  video_url: string | null;
+  video_type: string | null;
+}
+/** S10: openapi 갱신 후 gen:api로 대체 */
+export type MediaStatus = "OK" | "PARTIAL" | "FAILED" | "DISABLED";
+/** S10: openapi 갱신 후 gen:api로 대체 — GET /jobs/{id}/media */
+export interface JobMedia {
+  views: MediaView[];
+  status: MediaStatus;
+  message?: string | null;
+}
+
+/** S10: openapi 갱신 후 gen:api로 대체 — 범례 자동/고정 */
+export interface ContourLegend {
+  mode: "auto" | "fixed";
+  min: number | null;
+  max: number | null;
+}
+/** S10: openapi 갱신 후 gen:api로 대체 — 템플릿(파라미터 세트) 컨투어 표시 설정, PUT /param-sets/{id}/display 본문 */
+export interface ContourDisplay {
+  field: string;
+  component: string;
+  avgmode: string;
+  comps: string[];
+  legend: ContourLegend;
+  views: ViewKey[];
+}
+/** S10: openapi 갱신 후 gen:api로 대체 — POST /jobs/{id}/capture 본문(→ 202 Job) */
+export interface CaptureRequest {
+  views?: ViewKey[];
+  display?: Partial<ContourDisplay>;
 }

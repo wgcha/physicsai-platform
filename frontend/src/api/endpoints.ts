@@ -1,11 +1,14 @@
 // 계약 §10 엔드포인트 함수. 화면 코드는 fetch를 직접 쓰지 않고 이 객체만 쓴다.
-import { fetchBlob, request, requestPage } from "./client";
+import { API_PREFIX, fetchBlob, request, requestPage } from "./client";
 import type {
   Artifact,
   BatchCurves,
   BatchPreview,
   BatchPreviewRequest,
   BatchRetryFailed,
+  CaptureRequest,
+  ContourDisplay,
+  JobMedia,
   ParamSetResponsesPut,
   PredictBatch,
   PredictBatchSummary,
@@ -128,6 +131,16 @@ export const api = {
     request<Job>("POST", `/jobs/${id}/retry`, { body: from_step ? { from_step } : {} }),
   artifacts: (jobId: string) => request<Artifact[]>("GET", `/jobs/${jobId}/artifacts`),
   artifactBlob: (id: string) => fetchBlob(`/artifacts/${id}/content`),
+  // S10 컨투어 캡처 — S10: openapi 갱신 후 gen:api로 대체(경로·본문은 메인 확정 계약)
+  /** 방향별 PNG·동영상 목록(URL = 산출물 내려받기 경로, 동영상 Range 지원) */
+  jobMedia: (jobId: string) => request<JobMedia>("GET", `/jobs/${jobId}/media`),
+  /** 다시 캡처(power) → 202 작업 */
+  captureJob: (jobId: string, body: CaptureRequest) => request<Job>("POST", `/jobs/${jobId}/capture`, { body }),
+  /** 템플릿 컨투어 표시 설정 저장(power) */
+  putParamSetDisplay: (id: string, body: ContourDisplay) => request<ParamSet>("PUT", `/param-sets/${id}/display`, { body }),
+  /** 산출물 URL(서버가 준 내려받기 경로)을 fetch로 받기 — 목 서버도 같은 경로로 응답 */
+  mediaBlob: (url: string) => fetchBlob(url.startsWith(API_PREFIX) ? url.slice(API_PREFIX.length) : url),
+
   /** B16: ④ 입력파일 zip (409 INPUT_NOT_READY) */
   inputZip: (jobId: string) => fetchBlob(`/jobs/${jobId}/artifacts/input.zip`),
 
