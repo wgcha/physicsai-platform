@@ -4,9 +4,12 @@ import { useEffect, useState } from "react";
 import { ApiError, api, errorMessage, type ParamSet, type ResponseCandidates, type ResponseStat, type TemplateResponse } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { NAME_RE, suggestName } from "../stage5/ResponseTable";
+import { ComboInput, DEFAULT_RESULT_FIELD } from "./ComboInput";
 
 const STATS: ResponseStat[] = ["MAX", "MIN", "ABSMAX"];
 export const NO_CANDIDATES_TEXT = "예측을 한 번 실행하면 목록이 채워집니다";
+/** D3-53: datatype 후보가 없을 때 */
+export const TYPE_HINT_TEXT = `예측 결과 목록이 없으면 직접 입력하세요(예: ${DEFAULT_RESULT_FIELD})`;
 
 export function ResponseDefs({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { study, reloadParamSets } = useStudy();
@@ -129,11 +132,23 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
 
   const sc = h3d?.subcases.find((s) => String(s.id) === subcase) ?? h3d?.subcases[0];
   const dts = sc?.datatypes ?? [];
-  const dtObj = dts.find((d) => d.name === datatype) ?? (h3d ? dts[0] : undefined);
-  const dtVal = h3d ? dtObj?.name ?? "" : datatype;
-  const comps = h3d ? dtObj?.components ?? [] : null;
-  const compVal = comps ? (comps.includes(component) ? component : comps[0] ?? "") : component;
-  const layers = h3d ? (dtObj?.layers.length ? dtObj.layers : [""]) : null;
+  // D3-53: datatype·component는 목록에 없어도 직접 입력(입력란 + datalist). 후보가 오면 빈 칸만 첫 후보로 채운다
+  useEffect(() => {
+    if (!datatype && dts.length) {
+      setDatatype(dts[0].name);
+      if (!component) setComponent(dts[0].components[0] ?? "");
+    }
+  }, [h3d]);
+  const dtObj = dts.find((d) => d.name === datatype);
+  const dtVal = datatype;
+  const comps = dtObj?.components ?? [];
+  const compVal = component;
+  const onDatatype = (v: string) => {
+    setDatatype(v);
+    const d = dts.find((x) => x.name === v);
+    if (d && !d.components.includes(component)) setComponent(d.components[0] ?? "");
+  };
+  const layers = h3d && dtObj ? (dtObj.layers.length ? dtObj.layers : [""]) : null;
   const layerVal = layers ? (layers.includes(layer) ? layer : layers[0] ?? "") : layer;
   const taken = rows.map((r) => r.name);
   const nameVal = nameTouched ? name : suggestName(dtVal || "RESP", taken);
@@ -170,8 +185,8 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
     <div className="resp-add">
       <div className="resp-add-row" role="group" aria-label="응답 추가">
         {sel("subcase", sc ? String(sc.id) : subcase, h3d ? h3d.subcases.map((x) => String(x.id)) : null, setSubcase, "narrow")}
-        {sel("datatype", dtVal, h3d ? dts.map((d) => d.name) : null, setDatatype)}
-        {sel("component", compVal, comps, setComponent)}
+        <ComboInput id="resp-add-dt" label="datatype" value={dtVal} options={dts.map((d) => d.name)} onChange={onDatatype} placeholder={DEFAULT_RESULT_FIELD} />
+        <ComboInput id="resp-add-comp" label="component" value={compVal} options={comps} onChange={setComponent} placeholder="component" />
         {sel("layer", layerVal, layers, setLayer, "narrow")}
         {sel("stat", stat, STATS, (v) => setStat(v as ResponseStat), "narrow")}
         <input aria-label="단위" className="narrow" value={unit} placeholder="단위" onChange={(e) => setUnit(e.target.value)} />
@@ -188,9 +203,9 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
           응답 추가
         </button>
       </div>
-      {!h3d && (
+      {!dts.length && (
         <p className="muted small" data-testid="no-candidates">
-          {NO_CANDIDATES_TEXT} — 지금은 직접 입력할 수 있습니다.
+          {NO_CANDIDATES_TEXT} — {TYPE_HINT_TEXT}.
         </p>
       )}
       {error && (

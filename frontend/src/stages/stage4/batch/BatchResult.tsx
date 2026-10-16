@@ -20,6 +20,8 @@ import { OutDot } from "./BatchPreview";
 import { CurveOverlay } from "./CurveOverlay";
 import { ResponsePlot2D } from "./ResponsePlot2D";
 import { ResponsePlot3D } from "./ResponsePlot3D";
+import { writeBatchTab } from "./BatchMode";
+import { writeInputMode } from "../InputModeTabs";
 import { BATCH_STATUS_LABEL, PLOT_HINT, ROW_STATE_LABEL, isBatchActive, isRowFailed, plotKind, plotPoints, sortOptions, sortRows, type SortKey } from "./batchTable";
 
 export const FILE_NOTE = "파일 이름은 모두 같고 폴더 번호로 구분합니다";
@@ -145,6 +147,9 @@ export function BatchResult({ batchId }: { batchId: string }) {
         className="batch-table-card"
         aside={
           <span className="run-action-row">
+            <Link to={base} className="small" onClick={() => (writeInputMode("batch"), writeBatchTab("list"))}>
+              ← 실행 목록
+            </Link>
             <label className="inline-field small">
               정렬
               <select value={sortKey} onChange={(e) => setSort(e.target.value as SortKey)}>

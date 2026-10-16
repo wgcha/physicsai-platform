@@ -128,11 +128,29 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
 
 
 def list_batches(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
+    """배치 목록(최신 먼저) + 템플릿 이름·입력 생성·예측 집계(D3-53 "실행 목록" 탭)."""
     with ctx.engine.connect() as conn:
         studies_repo.require(conn, study_id)
         rows = pb_repo.list_for_study(conn, study_id)
-    return [{"id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"], "run_count": b["run_count"],
-             "created_at": b["created_at"], "created_by_name": b["created_by_name"]} for b in rows]
+        sets = {pid: ps_repo.get(conn, pid) or {} for pid in {b["param_set_id"] for b in rows}}
+        return [{"id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"], "run_count": b["run_count"],
+                 "created_at": b["created_at"], "created_by_name": b["created_by_name"],
+                 "param_set": {"id": b["param_set_id"], "label": sets[b["param_set_id"]].get("label")},
+                 **pb_repo.counts(conn, b["id"]), "response_summary": _response_summary(conn, b["id"], sets[b["param_set_id"]])}
+                for b in rows]
+
+
+def _response_summary(conn: Any, batch_id: str, ps: dict[str, Any]) -> dict[str, Any] | None:
+    """첫 응답의 완료 run 값 최소~최대(실행 목록 1줄). 응답 정의·값이 없으면 None."""
+    first = next((r for r in ps.get("responses") or [] if isinstance(r, dict) and r.get("name")), None)
+    if first is None:
+        return None
+    vals = [float(v) for r in pb_repo.runs_with_jobs(conn, batch_id) if r["job_state"] == "SUCCEEDED"
+            for v in [(r["responses"] or {}).get(first["name"])]
+            if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)]
+    if not vals:
+        return None
+    return {"name": first["name"], "unit": first.get("unit") or "", "min": min(vals), "max": max(vals), "count": len(vals)}
 
 
 def get_batch(ctx: AppContext, principal: Principal, batch_id: str) -> dict[str, Any]:

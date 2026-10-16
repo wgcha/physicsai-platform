@@ -206,12 +206,14 @@ describe("S10 템플릿 컨투어 표시 설정·B 범례 고정", () => {
     const puts = record(server, /^\/param-sets\/[^/]+\/display$/, "PUT");
     fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
     const sec = await screen.findByTestId("contour-display");
-    const field = within(sec).getByLabelText("결과 종류") as HTMLSelectElement;
-    await waitFor(() => expect(Array.from(field.options).map((o) => o.value)).toEqual(["Stress", "Displacement"]));
+    const field = within(sec).getByLabelText("결과 종류") as HTMLInputElement;
+    const opts = (id: string) => Array.from(within(sec).getByTestId(id).querySelectorAll("option")).map((o) => o.value);
+    expect(field.tagName).toBe("INPUT"); // D3-53: 목록에 없어도 직접 입력(datalist 후보)
+    await waitFor(() => expect(opts("cd-field-ps-1-list")).toEqual(["Stress", "Displacement"]));
     expect(field.value).toBe("Stress");
     fireEvent.change(field, { target: { value: "Displacement" } });
-    const comp = within(sec).getByLabelText("성분") as HTMLSelectElement;
-    expect(Array.from(comp.options).map((o) => o.value)).toEqual(["X", "Y", "Z", "Mag"]);
+    const comp = within(sec).getByLabelText("성분") as HTMLInputElement;
+    expect(opts("cd-comp-ps-1-list")).toEqual(["X", "Y", "Z", "Mag"]);
     fireEvent.change(comp, { target: { value: "Mag" } });
     fireEvent.change(within(sec).getByLabelText("평균 방식"), { target: { value: "maximum" } });
     expect((within(sec).getByLabelText("부품 이름 목록") as HTMLInputElement).value).toBe("CUSHION_TOP, FOAM");
@@ -319,5 +321,21 @@ describe("S10 목·도움 함수", () => {
     expect(server.handle("POST", "/jobs/j-pred/capture", new URLSearchParams(), { views: ["sideways"] }, h).status).toBe(422);
     expect(server.handle("POST", "/jobs/j-q1/capture", new URLSearchParams(), {}, h).status).toBe(409);
     expect(server.handle("POST", "/jobs/j-pred/capture", new URLSearchParams(), {}, h).status).toBe(201); // §15.4: 201 CONTOUR_RECAPTURE
+  });
+});
+
+describe("D3-53 결과 종류 직접 입력", () => {
+  it("후보에 없는 결과 종류(CornerStress)·빈 성분도 그대로 저장", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" });
+    const puts = record(server, /^\/param-sets\/[^/]+\/display$/, "PUT");
+    fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
+    const sec = await screen.findByTestId("contour-display");
+    const field = within(sec).getByLabelText("결과 종류") as HTMLInputElement;
+    await waitFor(() => expect(field.value).toBe("Stress"));
+    fireEvent.change(field, { target: { value: "CornerStress" } });
+    fireEvent.change(within(sec).getByLabelText("성분"), { target: { value: "" } });
+    fireEvent.click(within(sec).getByRole("button", { name: "표시 설정 저장" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    expect(puts[0].display).toMatchObject({ field: "CornerStress", component: "" });
   });
 });

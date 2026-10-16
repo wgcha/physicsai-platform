@@ -111,6 +111,9 @@ optimize:
 env_check:
   min_free_gb: 1
 
+capture:
+  default_field: "CornerStress"   # 예측 h3d 응력 결과(성분 없음, D3-53) — 가짜 hw 캡처도 같은 이름을 쓴다
+
 logging:
   level: INFO
   dir: "{{DEMO_ROOT}}/logs"       # backend.log·worker.log(회전·마스킹). 표준 출력은 *.out.log

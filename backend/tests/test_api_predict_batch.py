@@ -266,7 +266,12 @@ def test_v3_s9_6_preview_matches_runs(client, loaded_config, worker_factory, eng
     r = _batch(client, sid, {"kind": "table", "text": TABLE})
     assert r.status_code == 201 and r.json()["params"]["batch_no"] == 2
     assert r.json()["params"]["source"] == {"kind": "table", "row_count": 3}
-    assert [x["label"] for x in client.get(f"{API}/studies/{sid}/predict-batches", headers=P).json()] == ["B-002", "B-001"]
+    lst = client.get(f"{API}/studies/{sid}/predict-batches", headers=P).json()
+    assert [x["label"] for x in lst] == ["B-002", "B-001"]
+    # D3-53 "실행 목록": 템플릿·입력 생성·예측 집계
+    assert lst[0]["param_set"]["id"] == p["param_set_id"] and set(lst[0]["param_set"]) == {"id", "label"}
+    assert lst[0]["gen"] == {"total": 3, "done": 0, "failed": 0, "running": 0, "waiting": 3}
+    assert lst[0]["predict"] == {"running": 0, "queued": 0, "succeeded": 0, "failed": 0, "canceled": 0}
 
 
 # ---- V3-S9-9·10·11·12: 하위 짝짓기·알림·종료 훅·CSV·권한 --------------------------------------------------------------
@@ -366,6 +371,10 @@ def test_v3_s9_11_retry_failed(client, loaded_config, worker_factory, engine):
     _end(engine, kids2[0]["id"], "SUCCEEDED", {"response_table": [{"name": "MaxStress", "predicted": 2.5}]})
     d = client.get(f"{API}/predict-batches/{bid}", headers=P).json()
     assert d["status"] == "DONE" and [r["responses"]["MaxStress"] if r["responses"] else None for r in d["rows"]] == [None, 2.5, 1.5]
+    # D3-53 실행 목록: 완료 배치 행의 첫 응답 요약(값 있는 완료 run의 최소~최대)
+    (row,) = client.get(f"{API}/studies/{sid}/predict-batches", headers=P).json()
+    assert row["response_summary"] == {"name": "MaxStress", "unit": "MPa", "min": 1.5, "max": 2.5, "count": 2}
+    assert row["status"] == "DONE" and row["predict"]["succeeded"] == 3
     assert [n["title"] for n in _notifs(engine) if n["event"] == "PREDICT_BATCH_DONE"] == [
         "일괄 예측 B-001 완료 — 완료 1 · 실패 2", "일괄 예측 B-001 완료 — 완료 3 · 실패 0"]
     r = client.post(f"{API}/predict-batches/{bid}/retry-failed", headers=PW)

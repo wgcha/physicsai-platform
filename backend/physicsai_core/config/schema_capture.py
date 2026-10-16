@@ -27,7 +27,7 @@ class CaptureCfg(_M):
     video: bool = True  # 방향마다 애니메이션 동영상도 저장
     video_ext: str = "mp4"  # mp4 | avi | gif
     use_last: bool = True  # 마지막 프레임 기준 캡처(false = 첫 프레임)
-    default_field: str = "Von Mises"  # 템플릿 표시 설정·응답 정의가 없을 때의 결과 필드
+    default_field: str = "CornerStress"  # 템플릿 표시 설정·응답 정의가 없을 때의 결과 필드(예측 h3d 응력, 성분 없음 — D3-53)
     timeout_s: float | None = 1800  # 캡처 1회 상한(초). 넘으면 프로세스 종료 + 경고. null = 상한 없음
     max_video_bytes: int = 209715200  # 동영상 1개 등록·제공 상한(200 MiB)
 

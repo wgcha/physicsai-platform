@@ -72,15 +72,6 @@ class PredictBatchPreview(Resp):
     problems: list[BatchProblem]
 
 
-class PredictBatchSummary(Resp):
-    id: str
-    label: str  # B-003
-    status: str  # GENERATING | PREDICTING | DONE | FAILED | CANCELED
-    run_count: int
-    created_at: datetime
-    created_by_name: str
-
-
 class BatchRef(Resp):
     id: str
     label: str | None = None
@@ -105,6 +96,28 @@ class BatchPredictCounts(Resp):
     succeeded: int
     failed: int
     canceled: int
+
+
+class PredictBatchSummary(Resp):
+    id: str
+    label: str  # B-003
+    status: str  # GENERATING | PREDICTING | DONE | FAILED | CANCELED
+    run_count: int
+    created_at: datetime
+    created_by_name: str
+    # D3-53: "실행 목록" 탭 — 템플릿·입력 생성·예측 집계
+    param_set: BatchRef | None = None
+    gen: BatchGenCounts | None = None
+    predict: BatchPredictCounts | None = None
+    response_summary: BatchResponseSummary | None = None  # 첫 응답의 완료 run 최소~최대(값 없으면 null)
+
+
+class BatchResponseSummary(Resp):
+    name: str
+    unit: str = ""
+    min: float
+    max: float
+    count: int  # 값이 있는 완료 run 수
 
 
 class BatchResponseName(Resp):

@@ -37,7 +37,7 @@ def test_capture_config_defaults_ranges_and_example(p2_dict, tmp_path):
     assert lc.ok, lc.issues
     assert lc.settings.capture.model_dump() == {
         "enabled": True, "views": ["iso", "front", "top", "right"], "video": True, "video_ext": "mp4", "use_last": True,
-        "default_field": "Von Mises", "timeout_s": 1800, "max_video_bytes": 209715200}
+        "default_field": "CornerStress", "timeout_s": 1800, "max_video_bytes": 209715200}
     # 설정 파일에 commands.contour_capture가 없어도 기본 템플릿(기능 켬)
     assert lc.settings.commands.contour_capture == ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{capture_tcl}"]
     bad = (("views", []), ("views", ["iso", "iso"]), ("views", ["diag"]), ("video_ext", "mov"), ("default_field", 'a"b'),
@@ -137,7 +137,7 @@ def test_resolve_display_order():
 
     cfg = Settings().capture
     d, src = resolve_display(cfg, None)
-    assert src == "config" and d == {"field": "Von Mises", "component": "", "avgmode": "", "comps": [],
+    assert src == "config" and d == {"field": "CornerStress", "component": "", "avgmode": "", "comps": [],
                                      "legend": {"mode": "auto", "min": None, "max": None}, "views": ["iso", "front", "top", "right"]}
     ps = {"responses": [{"name": "M", "spec": None}, {"name": "S", "spec": {"datatype": "Stress", "component": "vonMises"}}]}
     d, src = resolve_display(cfg, ps)

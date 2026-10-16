@@ -15,7 +15,13 @@ export function useOpenJob() {
       let stage = 3;
       if (n.job_id) {
         try {
-          stage = (await api.job(n.job_id)).stage;
+          const j = await api.job(n.job_id);
+          stage = j.stage;
+          // D3-53: 일괄 예측(부모 PREDICT_BATCH) 알림 → 그 배치 결과 화면
+          if (j.job_type === "PREDICT_BATCH" && j.batch?.id) {
+            navigate(`/p/${n.project_id}/s/${n.study_id}/stage/4/batch/${j.batch.id}`);
+            return;
+          }
         } catch {
           /* 기본 ③ */
         }

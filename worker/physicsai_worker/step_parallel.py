@@ -90,7 +90,7 @@ class ParallelRunner:
         try:
             proc = ctx.ex.limiter.launch(argv, cwd, env, ctx.ex.limits, group=grp)
         except BaseException:
-            grp.run_ended(win, time.monotonic())
+            grp.run_ended(win, time.perf_counter())
             raise
         self.pool.started()
         rc: int | None = None
@@ -109,12 +109,12 @@ class ParallelRunner:
 
             t = threading.Thread(target=reader, daemon=True)
             t.start()
-            last_sample = time.monotonic()
+            last_sample = time.perf_counter()
             while proc.poll() is None:
                 if self.pool.stop.wait(0.1):
                     break
-                if time.monotonic() - last_sample >= MEMORY_SAMPLE_S:
-                    last_sample = time.monotonic()
+                if time.perf_counter() - last_sample >= MEMORY_SAMPLE_S:
+                    last_sample = time.perf_counter()
                     self.pool.sample_memory()
             if self.pool.stop.is_set() and proc.poll() is None:
                 ctx.ex.limiter.terminate(proc)
@@ -124,7 +124,7 @@ class ParallelRunner:
             _, end = self.pool.sample_memory()
             grp.run_ended(win, end)
         finally:
-            grp.run_ended(win, time.monotonic())  # 이미 기록했으면 그대로
+            grp.run_ended(win, time.perf_counter())  # 이미 기록했으면 그대로
             ctx.ex.limiter.close(proc)
             self.pool.finished(self.item_id, template_key, argv, cwd, rc)
         if self.pool.stop.is_set():
@@ -195,15 +195,16 @@ class _Pool:
                                      "exit_code": rc}, ensure_ascii=False) + "\n")
 
     def sample_memory(self) -> tuple[float, float]:
-        """그룹 회계 표본(공유 회계 그룹만 조회) → (조회 전, 조회 후) monotonic 시각. 실행 시작 = 조회 전, 끝 = 조회 후."""
-        t0 = time.monotonic()
+        """그룹 회계 표본(공유 회계 그룹만 조회) → (조회 전, 조회 후) 시각. 실행 시작 = 조회 전, 끝 = 조회 후.
+        perf_counter를 쓴다 — Windows monotonic은 약 15.6 ms 단위라 앞 run 끝과 뒤 run 시작이 같은 값이 될 수 있다."""
+        t0 = time.perf_counter()
         if not self.group.shared_accounting or self.group.closed:
             return t0, t0
         try:
             hit = bool(self.ctx.ex.limiter.group_accounting(self.group).memory_limit_hit)
         except Exception:  # noqa: BLE001 - 표본 실패는 판정 근거가 없을 뿐(끝 회계로 판정)
-            return t0, time.monotonic()
-        t1 = time.monotonic()
+            return t0, time.perf_counter()
+        t1 = time.perf_counter()
         self.group.note_memory(hit, t1 if hit else t0)
         return t0, t1
 

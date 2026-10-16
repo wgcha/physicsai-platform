@@ -164,12 +164,14 @@ describe("④ 템플릿 관리: 조립 폴더 없음·응답 추가 (V3-S9-14·1
     const defs = within(card).getByTestId("resp-defs");
     expect(within(defs).getAllByRole("row").length).toBe(4); // 머리 + 3
     const add = within(defs).getByRole("group", { name: "응답 추가" });
-    const dt = (await within(add).findByLabelText("datatype")) as HTMLSelectElement;
-    await waitFor(() => expect(dt.tagName).toBe("SELECT"));
-    expect(Array.from(dt.options).map((o) => o.value)).toEqual(["Stress", "Displacement"]);
+    const dt = (await within(add).findByLabelText("datatype")) as HTMLInputElement;
+    const opts = (id: string) => Array.from(within(add).getByTestId(id).querySelectorAll("option")).map((o) => o.value);
+    await waitFor(() => expect(opts("resp-add-dt-list")).toEqual(["Stress", "Displacement"]));
+    expect(dt.tagName).toBe("INPUT"); // D3-53: 직접 입력 + datalist 후보
+    await waitFor(() => expect(dt.value).toBe("Stress"));
     fireEvent.change(dt, { target: { value: "Displacement" } });
-    const comp = within(add).getByLabelText("component") as HTMLSelectElement;
-    expect(Array.from(comp.options).map((o) => o.value)).toEqual(["X", "Y", "Z", "Mag"]);
+    const comp = within(add).getByLabelText("component") as HTMLInputElement;
+    expect(opts("resp-add-comp-list")).toEqual(["X", "Y", "Z", "Mag"]);
     fireEvent.change(comp, { target: { value: "Z" } });
     fireEvent.change(within(add).getByLabelText("stat"), { target: { value: "ABSMAX" } });
     fireEvent.change(within(add).getByLabelText("단위"), { target: { value: "mm" } });
@@ -194,8 +196,10 @@ describe("④ 템플릿 관리: 조립 폴더 없음·응답 추가 (V3-S9-14·1
     fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
     const card = await screen.findByRole("region", { name: "템플릿 관리" });
     const add = within(card).getByRole("group", { name: "응답 추가" });
-    expect((await within(card).findByTestId("no-candidates")).textContent).toContain("예측을 한 번 실행하면 목록이 채워집니다");
-    expect((within(add).getByLabelText("datatype") as HTMLElement).tagName).toBe("INPUT");
+    const hint = (await within(card).findByTestId("no-candidates")).textContent;
+    expect(hint).toContain("예측을 한 번 실행하면 목록이 채워집니다");
+    expect(hint).toContain("예측 결과 목록이 없으면 직접 입력하세요(예: CornerStress)");
+    expect((within(add).getByLabelText("datatype") as HTMLInputElement).placeholder).toBe("CornerStress");
     fireEvent.change(within(add).getByLabelText("datatype"), { target: { value: "Stress" } });
     fireEvent.change(within(add).getByLabelText("component"), { target: { value: "vonMises" } });
     fireEvent.change(within(add).getByLabelText("응답 이름"), { target: { value: "1bad" } });

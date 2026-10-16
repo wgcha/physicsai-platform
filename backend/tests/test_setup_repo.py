@@ -846,3 +846,29 @@ def test_setup_config_upgrades_s9_response_extract_once(tmp_path):
     cfg_path.write_text(user, encoding="utf-8")
     res = _run(tmp_path, t, _inputs(t))
     assert _cfg(t)["commands"]["response_extract"][-1] == "{out_csv}" and res["config_changed_keys"] == ["predict_batch.max_runs"]
+
+
+def test_setup_config_upgrades_capture_default_field_once(tmp_path):
+    """D3-53: capture.default_field가 이전 기본 "Von Mises" 그대로면 1회 "CornerStress"로(줄 끝 표시), 사용자 값·재선택은 보존."""
+    t = _fake_tree(tmp_path)
+    _run(tmp_path, t, _inputs(t))
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    text = cfg_path.read_text(encoding="utf-8")
+    assert _cfg(t)["capture"]["default_field"] == "CornerStress"                       # 새 설치 = 예시 값
+    old = re.sub(r'(?m)^  default_field: .*$', '  default_field: "Von Mises"      # 템플릿 표시 설정·응답 정의가 없을 때 결과 필드', text)
+    cfg_path.write_text(old, encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["capture"]["default_field"] == "CornerStress" and res["config_changed_keys"] == ["capture.default_field"]
+    assert res["write"]["validation"]["ok"]
+    line = next(ln for ln in cfg_path.read_text(encoding="utf-8").split("\n") if ln.startswith("  default_field: "))
+    assert "setup.ps1 D3-53" in line
+    # 갱신 뒤 사용자가 다시 Von Mises로 고르면(표시 주석 유지) 보존
+    cfg_path.write_text(cfg_path.read_text(encoding="utf-8").replace(line, line.replace("CornerStress", '"Von Mises"', 1), 1),
+                        encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["capture"]["default_field"] == "Von Mises" and res["config_changed_keys"] == []
+    # 사용자가 지정한 다른 값은 표시가 없어도 보존
+    user = re.sub(r'(?m)^  default_field: .*$', '  default_field: "Stress"', cfg_path.read_text(encoding="utf-8"))
+    cfg_path.write_text(user, encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["capture"]["default_field"] == "Stress" and res["config_changed_keys"] == []

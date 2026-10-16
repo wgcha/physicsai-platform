@@ -1451,6 +1451,22 @@ export interface components {
              */
             unit: string;
         };
+        /** BatchResponseSummary */
+        BatchResponseSummary: {
+            /** Count */
+            count: number;
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Name */
+            name: string;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
         /** BatchRetryFailed */
         BatchRetryFailed: {
             /** Parent Job Id */
@@ -2845,10 +2861,14 @@ export interface components {
             created_at: string;
             /** Created By Name */
             created_by_name: string;
+            gen?: components["schemas"]["BatchGenCounts"] | null;
             /** Id */
             id: string;
             /** Label */
             label: string;
+            param_set?: components["schemas"]["BatchRef"] | null;
+            predict?: components["schemas"]["BatchPredictCounts"] | null;
+            response_summary?: components["schemas"]["BatchResponseSummary"] | null;
             /** Run Count */
             run_count: number;
             /** Status */

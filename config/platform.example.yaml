@@ -150,7 +150,7 @@ capture:                          # ④ 예측 컨투어 캡처(phase3 §15 S10)
   video: true                     # 방향마다 애니메이션 동영상도 저장
   video_ext: "mp4"                # mp4 | avi | gif
   use_last: true                  # 마지막 프레임 기준 캡처(false = 첫 프레임)
-  default_field: "Von Mises"      # 템플릿 표시 설정·응답 정의가 없을 때 결과 필드
+  default_field: "CornerStress"   # 템플릿 표시 설정·응답 정의가 없을 때 결과 필드(PhysicsAI 예측 h3d 응력 — hwc result scalar load type=CornerStress, 성분 없음)
   timeout_s: 1800                 # 캡처 1회 상한(초, 1~86400, null = 없음). 넘으면 HyperView를 종료하고 경고
   max_video_bytes: 209715200      # 동영상 1개 등록·제공 상한(200 MiB)
 

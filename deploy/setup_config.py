@@ -359,6 +359,41 @@ UPGRADES_S9: tuple[tuple[tuple[str, str], tuple[Any, ...], str], ...] = (
     (UPGRADE_MARKER_S9, (), "always"),
 )
 UPGRADE_GROUPS = ((UPGRADE_MARKER, UPGRADES), (UPGRADE_MARKER_S9, UPGRADES_S9))
+# phase3 D3-53: 컨투어 캡처 기본 결과 필드 "Von Mises" → 예측 h3d의 응력 결과 "CornerStress". 이전 기본값 그대로일 때만 1회 —
+# 갱신한 줄 끝 주석에 표시(CAPTURE_FIELD_MARK)를 남겨 다음 실행부터는 사용자가 다시 고른 "Von Mises"도 보존한다.
+CAPTURE_FIELD_PATH = ("capture", "default_field")
+CAPTURE_FIELD_OLD = ("Von Mises",)
+CAPTURE_FIELD_MARK = "setup.ps1 D3-53"
+
+
+def yaml_line(text: str, path: tuple[str, str]) -> tuple[int, str] | None:
+    """2단계 키 path의 줄(번호, 내용). 없으면 None."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(nl)
+    b = _block(lines, path[0])
+    if b is None:
+        return None
+    start, end, indent = b
+    rx = re.compile(rf"^{re.escape(indent)}{re.escape(path[1])}:")
+    for i in range(start + 1, end):
+        if rx.match(lines[i]):
+            return i, lines[i]
+    return None
+
+
+def set_line_comment(text: str, path: tuple[str, str], note: str) -> str:
+    """path 줄의 끝 주석을 note로 바꾼다(값은 그대로)."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    found = yaml_line(text, path)
+    if found is None:
+        return text
+    i, ln = found
+    m = _VALUE.match(ln)
+    if not m:
+        return text
+    lines = text.split(nl)
+    lines[i] = (m.group("pre") + m.group("val")).rstrip() + f"   # {note}"
+    return nl.join(lines)
 
 
 def _get(data: Any, path: tuple[str, ...]) -> tuple[bool, Any]:
@@ -586,6 +621,16 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
                 text = remove_yaml_key(text, path)  # type: ignore[arg-type]
                 upgraded[path] = _REMOVE
                 rows.append({"key": ".".join(path), "value": None, "action": "폐지 키 제거(이전 기본값)"})
+    # 컨투어 캡처 기본 필드(D3-53): 이전 기본값 "Von Mises" 그대로이고 아직 갱신 표시가 없을 때만 1회, 사용자 값은 보존
+    has, cur = _get(base, CAPTURE_FIELD_PATH)
+    ex_has, field_want = _get(example, CAPTURE_FIELD_PATH)
+    line = yaml_line(text, CAPTURE_FIELD_PATH)
+    if (not new_file and has and cur in CAPTURE_FIELD_OLD and ex_has and field_want not in CAPTURE_FIELD_OLD
+            and line is not None and CAPTURE_FIELD_MARK not in line[1]):
+        text = set_yaml_value(text, CAPTURE_FIELD_PATH, field_want)
+        text = set_line_comment(text, CAPTURE_FIELD_PATH, f"예측 h3d 응력 결과({CAPTURE_FIELD_MARK}: 이전 기본 {cur} → 새 기본)")
+        upgraded[CAPTURE_FIELD_PATH] = field_want
+        rows.append({"key": ".".join(CAPTURE_FIELD_PATH), "value": field_want, "action": "새 기본값으로 갱신(이전 기본값)"})
     # 로그인·"대시보드로" 링크(D3-38): 키가 없거나 이전 기본값 "/"일 때만 대시보드 웹 경로로, 사용자 값은 보존
     login_want, login_warn = dashboard_login_url(inputs, str(deploy.get("dashboard_root") or ""))
     if login_warn:

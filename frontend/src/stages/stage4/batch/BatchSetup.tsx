@@ -34,7 +34,8 @@ type Ranges = Record<string, [string, string]>;
 const optNum = (s: string): number | null | undefined => (s.trim() === "" ? null : Number.isFinite(Number(s)) ? Number(s) : undefined);
 const defaultRanges = (ps: ParamSet | null): Ranges => Object.fromEntries((ps?.parameters ?? []).map((p) => [p.name, [String(p.min), String(p.max)]]));
 
-export function BatchSetup() {
+/** onStarted: 실행 요청이 받아들여졌을 때(D3-53 — 다음에 돌아오면 "실행 목록" 탭) */
+export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   const { status } = useApp();
   const { study } = useStudy();
   const navigate = useNavigate();
@@ -136,6 +137,7 @@ export function BatchSetup() {
     if (capture) params.capture = capture;
     const j = await runner.run({ ...params });
     const bid = (j?.params as { batch_id?: string } | undefined)?.batch_id;
+    if (bid) onStarted?.();
     if (bid) navigate(`/p/${study.project_id}/s/${study.id}/stage/4/batch/${bid}`);
   };
 

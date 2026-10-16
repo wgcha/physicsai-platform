@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api, errorMessage, type ContourDisplay, type ParamSet, type ResponseCandidates, type ViewKey } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { AVG_MODES, DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../../lib/views";
+import { ComboInput, DEFAULT_RESULT_FIELD } from "./ComboInput";
 
 const EMPTY: ContourDisplay = { field: "", component: "", avgmode: "simple", comps: [], legend: { mode: "auto", min: null, max: null }, views: DEFAULT_VIEWS };
 
@@ -32,10 +33,22 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
   // 결과 종류·성분 목록: subcase를 가로지른 datatype 합집합
   const dts = new Map<string, string[]>();
   for (const sc of cands?.h3d?.subcases ?? []) for (const d of sc.datatypes) dts.set(d.name, [...new Set([...(dts.get(d.name) ?? []), ...d.components])]);
-  const fieldOpts = dts.size ? [...dts.keys()] : null;
-  const fieldVal = fieldOpts ? (fieldOpts.includes(field) ? field : fieldOpts[0]) : field;
-  const compOpts = fieldOpts ? dts.get(fieldVal) ?? [] : null;
-  const compVal = compOpts ? (compOpts.includes(component) ? component : compOpts[0] ?? "") : component;
+  // D3-53: 목록에 없어도 직접 입력(입력란 + datalist 후보). 후보가 오면 빈 칸만 첫 후보로 채운다
+  const fieldOpts = [...dts.keys()];
+  const compOpts = dts.get(field) ?? [];
+  useEffect(() => {
+    if (!field && fieldOpts.length) {
+      setField(fieldOpts[0]);
+      if (!component) setComponent(dts.get(fieldOpts[0])?.[0] ?? "");
+    }
+  }, [cands]);
+  const onField = (v: string) => {
+    setField(v);
+    const cs = dts.get(v);
+    if (cs && !cs.includes(component)) setComponent(cs[0] ?? "");
+  };
+  const fieldVal = field;
+  const compVal = component;
 
   const body = (): ContourDisplay => ({
     field: fieldVal.trim(),
@@ -66,19 +79,6 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
     }
   };
 
-  const sel = (label: string, value: string, opts: string[] | null, onChange: (v: string) => void) =>
-    opts ? (
-      <select aria-label={label} value={value} onChange={(e) => onChange(e.target.value)}>
-        {opts.map((o) => (
-          <option key={o} value={o}>
-            {o}
-          </option>
-        ))}
-      </select>
-    ) : (
-      <input aria-label={label} value={value} placeholder={label} onChange={(e) => onChange(e.target.value)} />
-    );
-
   return (
     <div className="resp-defs" data-testid="contour-display">
     <fieldset className="contour-display" disabled={!canEdit}>
@@ -86,11 +86,11 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
       <div className="form-grid">
         <label className="field">
           <span className="field-label">결과 종류</span>
-          {sel("결과 종류", fieldVal, fieldOpts, setField)}
+          <ComboInput id={`cd-field-${ps.id}`} label="결과 종류" value={fieldVal} options={fieldOpts} onChange={onField} placeholder={DEFAULT_RESULT_FIELD} />
         </label>
         <label className="field">
           <span className="field-label">성분</span>
-          {sel("성분", compVal, compOpts, setComponent)}
+          <ComboInput id={`cd-comp-${ps.id}`} label="성분" value={compVal} options={compOpts} onChange={setComponent} placeholder="(없음)" />
         </label>
         <label className="field">
           <span className="field-label">평균 방식</span>

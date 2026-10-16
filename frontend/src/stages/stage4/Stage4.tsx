@@ -12,7 +12,7 @@ import { PreparedPredictCard } from "./PreparedPredictCard";
 import { PredictResultCard } from "./PredictResult";
 import { TemplatePicker, useTemplateChoice } from "./TemplatePicker";
 import { usePredictVerify } from "./predictRun";
-import { BatchSetup } from "./batch/BatchSetup";
+import { BatchMode } from "./batch/BatchMode";
 
 export { INPUT_MODE_KEY, TEMPLATE_OFF_TEXT } from "./InputModeTabs";
 
@@ -90,7 +90,7 @@ export function Stage4() {
   return (
     <>
       <InputModeTabs mode={mode} templateEnabled={templateEnabled} onChange={choose} />
-      {openJob ? <OpenedJob key={openJob} id={openJob} /> : mode === "template" ? <TemplateMode /> : mode === "batch" ? <BatchSetup /> : <PreparedPredictCard />}
+      {openJob ? <OpenedJob key={openJob} id={openJob} /> : mode === "template" ? <TemplateMode /> : mode === "batch" ? <BatchMode /> : <PreparedPredictCard />}
     </>
   );
 }

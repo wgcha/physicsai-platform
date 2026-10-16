@@ -68,8 +68,8 @@ class ProcGroup:
     closed: bool = False
     # 회계를 그룹 전체가 공유(Windows Job 1개) — 메모리 한도 도달이 어느 run 때문인지 시간대로 가린다(D3-53)
     shared_accounting: bool = False
-    mem_ok_at: float | None = None  # 한도 미도달을 마지막으로 확인한 시각(monotonic, 조회 전 시각)
-    mem_hit_at: float | None = None  # 한도 도달을 처음 확인한 시각(monotonic, 조회 후 시각)
+    mem_ok_at: float | None = None  # 한도 미도달을 마지막으로 확인한 시각(perf_counter, 조회 전 시각)
+    mem_hit_at: float | None = None  # 한도 도달을 처음 확인한 시각(perf_counter, 조회 후 시각)
     windows: list[list[Any]] = field(default_factory=list)  # 실행 구간 [시작, 끝|None]
 
     def add(self, proc: LimitedProcess) -> None:
@@ -114,9 +114,9 @@ class ProcGroup:
             return None
         lo = -inf if ok is None else ok
         start, end = wins[idx]
-        if not (start <= hit and end > lo):
+        if not (start < hit and end > lo):  # 도달 확인 시각 ≤ 시작이면 시작 전 도달 → 이 run 탓 아님
             return None
-        others = any(s <= hit and e > lo for j, (s, e) in enumerate(wins) if j != idx)
+        others = any(s < hit and e > lo for j, (s, e) in enumerate(wins) if j != idx)
         return "exact" if start <= lo and hit <= end and not others else "uncertain"
 
 

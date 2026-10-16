@@ -451,7 +451,13 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
     const s = srv.studies.find((x) => x.id === seg[1]);
     if (!s) return err(404, "NOT_FOUND", "Study를 찾을 수 없습니다.");
     if (method === "GET" && !seg[3])
-      return ok(srv.batches.filter((b) => b.study_id === s.id).map((b) => ({ id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), run_count: b.runs.length, created_at: b.created_at, created_by_name: b.created_by_name })));
+      return ok(srv.batches.filter((b) => b.study_id === s.id).map((b) => {
+        const o = batchOut(srv, b); // D3-53 실행 목록: 템플릿·집계
+        const r0 = o.responses[0];
+        const vals = r0 ? o.rows.filter((r) => r.state === "SUCCEEDED").map((r) => r.responses?.[r0.name]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)) : [];
+        const response_summary = r0 && vals.length ? { name: r0.name, unit: r0.unit, min: Math.min(...vals), max: Math.max(...vals), count: vals.length } : null;
+        return { id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), run_count: b.runs.length, created_at: b.created_at, created_by_name: b.created_by_name, param_set: o.param_set, gen: o.gen, predict: o.predict, response_summary };
+      }));
     if (method === "POST" && seg[3] === "preview") {
       const ps = srv.paramSets.find((p) => p.id === body?.param_set_id && p.study_id === s.id);
       if (!ps) return err(409, "PREREQUISITE_MISSING", "템플릿을 먼저 등록하세요.", { missing: ["PARAM_SET"] });
