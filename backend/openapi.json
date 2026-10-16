@@ -7799,7 +7799,7 @@
                 }
               }
             },
-            "description": "Content Too Large"
+            "description": "Request Entity Too Large"
           },
           "416": {
             "description": "Range 범위 밖"
@@ -7812,7 +7812,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Media Content",
@@ -7864,7 +7864,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Get Curation",
@@ -7966,7 +7966,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Files",
@@ -8088,7 +8088,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Fs List",
@@ -8129,7 +8129,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Fs Roots",
@@ -8360,7 +8360,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -8547,7 +8547,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -8647,7 +8647,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Recapture",
@@ -8782,7 +8782,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -8877,7 +8877,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -8960,7 +8960,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Job Media",
@@ -9039,7 +9039,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -9143,7 +9143,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -9566,7 +9566,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Get Set",
@@ -9637,7 +9637,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Patch Set",
@@ -9720,7 +9720,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Put Display",
@@ -9803,7 +9803,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Put Responses",
@@ -9899,7 +9899,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Samples",
@@ -9972,7 +9972,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Get Batch",
@@ -10045,7 +10045,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Cancel Batch",
@@ -10147,7 +10147,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Batch Curves",
@@ -10220,7 +10220,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Retry Failed Batch",
@@ -10289,7 +10289,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Batch Table Csv",
@@ -10611,7 +10611,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Create Study",
@@ -10673,7 +10673,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Get Study",
@@ -10743,7 +10743,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Patch Study",
@@ -10805,7 +10805,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Archive Study",
@@ -10861,7 +10861,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Sources",
@@ -10934,7 +10934,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "List Curations",
@@ -11168,7 +11168,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -11518,7 +11518,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "List Sets",
@@ -11589,7 +11589,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Register",
@@ -11662,7 +11662,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Discover",
@@ -11735,7 +11735,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "From Train",
@@ -11807,7 +11807,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Inspect",
@@ -11883,7 +11883,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "List Batches",
@@ -11966,7 +11966,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Preview Batch",
@@ -12038,7 +12038,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Predict Check",
@@ -12218,7 +12218,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12304,7 +12304,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12396,7 +12396,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12488,7 +12488,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12560,7 +12560,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           }
         },
         "summary": "Unarchive Study",
@@ -12632,7 +12632,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12768,7 +12768,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12884,7 +12884,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
@@ -12959,7 +12959,7 @@
                 }
               }
             },
-            "description": "Unprocessable Content"
+            "description": "Unprocessable Entity"
           },
           "503": {
             "content": {
