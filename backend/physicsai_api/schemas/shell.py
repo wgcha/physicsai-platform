@@ -80,6 +80,8 @@ class StatusFeatures(Resp):
     evaluate: FeatureState | None = None
     predict: FeatureState | None = None
     predict_parametric: FeatureState | None = None
+    predict_mesh_only: FeatureState | None = None  # phase3 §14.4 메시 단독 템플릿 예측
+    predict_responses: FeatureState | None = None  # phase3 §14.6 예측 응답 추출
 
 
 class StatusEnvCheck(Resp):

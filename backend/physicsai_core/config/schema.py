@@ -24,6 +24,7 @@ from .schema_stages import (
     OptimizeCfg,
     PackageCfg,
     ParamSetCfg,
+    PredictBatchCfg,
     PredictCfg,
     ScoreCfg,
     SpdmImportCfg,
@@ -165,6 +166,7 @@ class Settings(_M):
     score: ScoreCfg = Field(default_factory=ScoreCfg)
     param_set: ParamSetCfg = Field(default_factory=ParamSetCfg)
     predict: PredictCfg = Field(default_factory=PredictCfg)
+    predict_batch: PredictBatchCfg = Field(default_factory=PredictBatchCfg)
     commands: CommandsCfg = Field(default_factory=CommandsCfg)
     train_data: TrainDataCfg = Field(default_factory=TrainDataCfg)
     curation: CurationCfg = Field(default_factory=CurationCfg)

@@ -89,8 +89,27 @@ STUDY_STORAGE_RANGES: dict[str, tuple[int, int]] = {
 }
 
 
+# phase3 §14.7: predict_batch 키 범위
+PREDICT_BATCH_RANGES: dict[str, tuple[int, int]] = {
+    "max_runs": (2, 2000),
+    "table_max_bytes": (1024, 67108864),
+    "curve_max_runs": (1, 2000),
+}
+_BATCH_DIR_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$")
+
+
 def _validate_phase3(s: Settings, issues: list[ConfigIssue]) -> None:
-    """3차 키 검증(phase3 §5.9)."""
+    """3차 키 검증(phase3 §5.9, §14.7)."""
     for k, (lo, hi) in STUDY_STORAGE_RANGES.items():
         if not lo <= getattr(s.study_storage, k) <= hi:
             issues.append(ConfigIssue(f"study_storage.{k}", f"{lo}~{hi}"))
+    pb = s.predict_batch
+    for k, (lo, hi) in PREDICT_BATCH_RANGES.items():
+        if not lo <= getattr(pb, k) <= hi:
+            issues.append(ConfigIssue(f"predict_batch.{k}", f"{lo}~{hi}"))
+    from ..paths import ALL_OUTPUT_DIRS
+
+    if not _BATCH_DIR_RE.match(pb.dir_name) or pb.dir_name.casefold() in {d.casefold() for d in ALL_OUTPUT_DIRS} | {
+            "_platform", "01_train", "02_import", "02_curated"}:
+        issues.append(ConfigIssue("predict_batch.dir_name",
+                                  "dir_name은 Study 직계 폴더 이름(영숫자·_·-, 64자 이내)이며 다른 산출 폴더와 같을 수 없습니다"))

@@ -136,6 +136,12 @@ predict:
   env:
     EDS_TNS_ACTVN_CHCKPT: "1"     # 원본 4_OPTIMIZATION/FUNC/1_physicsai_opti.py:319
 
+predict_batch:                    # ④ 일괄 예측(DOE)(phase3 §14.5). 동시 실행 상한은 train_data.max_multi_execution
+  max_runs: 200                   # 조합 수 상한(2~2000) — LHS 개수 2~max_runs, 표 행 1~max_runs
+  table_max_bytes: 1048576        # 표 붙여넣기·CSV 크기 상한(1 MiB)
+  dir_name: "04_batch"            # Study 직계 배치 폴더(<study>/04_batch/B-003/run__00001/m_1·m_2·m_3)
+  curve_max_runs: 200             # 커브 겹쳐보기 run 상한
+
 commands:
   # argv 템플릿. 허용 placeholder는 계약 §9.2. 펼침 토큰: @cmd_c, @write_files, @hooks_arg
   edspy_create_dataset: ["{edspy}", "--physicsai", "--create-dataset", "{out_psdata}", "--spec", "{spec_yaml}"]       # 원본 1_create_dataset.py:90
@@ -145,7 +151,7 @@ commands:
   rad_assemble: null                                                      # 선택. null = 복사 규칙만(phase3 §11.4)
   edspy_predict: ["@cmd_c", "{edspy}", "--physicsai", "--predict-write", "{pred_h3d}", "--model", "{model_psmdl}", "--input-file", "{starter}", "@hooks_arg"]   # 원본 1_physicsai_opti.py:310-316
   contour_preview: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{preview_tcl}", "-input", "{pred_h3d_fwd}", "-output", "{preview_json_fwd}"]   # 원본 1_physicsai_opti.py:230-231
-  response_extract: null                                                  # 미확인(U8·U35). 예: ["{hw}", "-b", "-tcl", "<추출 TCL>", "-input", "{pred_h3d_fwd}", "-config", "{responses_json}", "-output", "{out_csv}"]
+  response_extract: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{extract_tcl}"]   # 원본 ⑤ m_4(phase3 §14.6): H3D_REQUESTS.txt → RESPONSES.txt. {extract_tcl} 없는 옛 형태({out_csv} 직접 작성)도 허용
   # ---- 2차(phase2 §8.1) 원본 인용 기본값. null이면 그 기능만 비활성 ----
   simlab_extract_params: ["{simlab}", "-auto", "{launcher}", "{cad_file}", "{xml_out}", "-nographics"]              # 1_create_tpl_file.py:45
   hst_gen_radioss: ["{hstbatch}", "-multiexec", "{multi_execution}", "-pyfile", "{launcher}"]                          # 2_run_hst_gen_rad_input.py:39

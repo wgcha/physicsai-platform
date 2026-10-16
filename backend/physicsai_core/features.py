@@ -37,6 +37,10 @@ FEATURES: dict[str, FeatureReq] = {
     "predict": FeatureReq(("edspy_predict", "contour_preview")),  # phase3 §11.4: 준비된 입력 예측 조건
     # phase3 §11.4: 파라미터로 형상 생성(기존 체인). mesh가 {include_tcl}을 쓰면 hypermesh_include_tcl도 필요(predict_parametric_missing)
     "predict_parametric": FeatureReq(("geom_update", "edspy_predict", "contour_preview")),
+    # phase3 §14.4: 메시 단독(mesh_only) 템플릿 예측 — geom_update만(MESH SKIPPED라 include TCL 불필요)
+    "predict_mesh_only": FeatureReq(("geom_update", "edspy_predict", "contour_preview")),
+    # phase3 §14.6: 예측 응답 추출. 템플릿이 {extract_tcl}을 쓰면 resources.extract_minmax_tcl도 필요(predict_responses_missing)
+    "predict_responses": FeatureReq(("response_extract",)),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -56,6 +60,8 @@ JOB_FEATURE: dict[str, FeatureReq] = {
     "EVALUATE": FEATURES["evaluate"],
     "PREDICT": FEATURES["predict"],
     "PREDICT_VERIFY": FEATURES["predict"],
+    # phase3 §14.5: 두 입력 종류 공통 조건(geom_update). assembly의 include TCL 조건은 predict_parametric_missing으로 따로 확인
+    "PREDICT_BATCH": FEATURES["predict_mesh_only"],
 }
 
 
@@ -94,9 +100,37 @@ def predict_parametric_missing(s: Settings) -> tuple[list[str], list[str]]:
     return tmpl, res
 
 
+def predict_mesh_only_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """④ mesh_only 템플릿 예측에 빠진 (템플릿, 자원) 키(phase3 §14.4) — commands.mesh·include TCL과 무관."""
+    return missing_for(s, FEATURES["predict_mesh_only"], None)
+
+
+def response_extract_uses_tcl(s: Settings) -> bool:
+    """commands.response_extract가 {extract_tcl}(원본 ⑤ m_4 방식, phase3 §14.6)을 쓰는지."""
+    from .commands import RESPONSE_EXTRACT_TCL_PLACEHOLDER, template_uses
+
+    return template_uses(s.commands.response_extract, RESPONSE_EXTRACT_TCL_PLACEHOLDER)
+
+
+def predict_responses_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """④ 예측 응답 추출에 빠진 (템플릿, 자원) 키(phase3 §14.6). 옛 {out_csv} 템플릿은 TCL 자원 불필요."""
+    tmpl, res = missing_for(s, FEATURES["predict_responses"], None)
+    if response_extract_uses_tcl(s) and not s.resources.extract_minmax_tcl:
+        res.append("resources.extract_minmax_tcl")
+    return tmpl, res
+
+
+_SPECIAL_MISSING = {
+    "predict_parametric": predict_parametric_missing,
+    "predict_mesh_only": predict_mesh_only_missing,
+    "predict_responses": predict_responses_missing,
+}
+
+
 def feature_status(s: Settings, hpc_configured: bool) -> dict[str, dict[str, Any]]:
     out = {}
     for name, req in FEATURES.items():
-        t, r = predict_parametric_missing(s) if name == "predict_parametric" else missing_for(s, req, hpc_configured)
+        fn = _SPECIAL_MISSING.get(name)
+        t, r = fn(s) if fn else missing_for(s, req, hpc_configured)
         out[name] = {"enabled": not t and not r, "missing": t + r}
     return out

@@ -1,4 +1,4 @@
-"""설정 스키마 — 단계별 절(③ dataset·package·training_log·score, ④ param_set·predict, ① train_data, ② curation·spdm_import, ⑤ optimize)."""
+"""설정 스키마 — 단계별 절(③ dataset·package·training_log·score, ④ param_set·predict·predict_batch, ① train_data, ② curation·spdm_import, ⑤ optimize)."""
 
 from __future__ import annotations
 
@@ -73,6 +73,15 @@ class PredictCfg(_M):
     prepared_input_exts: list[str] = Field(default_factory=lambda: [".rad", ".hm"])
     prepared_max_files: int = 500
     prepared_max_total_bytes: int = 2147483648
+
+
+class PredictBatchCfg(_M):
+    """④ 일괄 예측(DOE)(phase3 §14.5·§14.7 설정). 동시 실행 상한은 train_data.max_multi_execution을 쓴다."""
+
+    max_runs: int = 200  # 조합(run) 수 상한 — LHS count 2~max_runs, 표 행 1~max_runs
+    table_max_bytes: int = 1048576  # 표 붙여넣기·CSV 텍스트 상한(UTF-8 바이트)
+    dir_name: str = "04_batch"  # Study 직계 배치 폴더(<study>/04_batch/B-003)
+    curve_max_runs: int = 200  # 커브 겹쳐보기 run 상한(doe_no 앞쪽부터)
 
 
 class TrainDataCfg(_M):

@@ -22,6 +22,7 @@ EVENTS = (
     "HPC_PARTIAL_FAILED",
     "ENV_CHECK_DONE",
     "HPC_CANCEL_FAILED",
+    "PREDICT_BATCH_DONE",  # phase3 §14.5 일괄 예측 완료 1건(0007_predict_batch)
 )
 
 

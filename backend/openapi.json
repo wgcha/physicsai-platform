@@ -4412,7 +4412,27 @@
               }
             ]
           },
+          "predict_mesh_only": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "predict_parametric": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "predict_responses": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FeatureState"
