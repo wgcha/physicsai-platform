@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { api, errorMessage, type DoeField, type DoeType } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { Advanced, Card, CodeLine, Field, RunAction } from "../../components/ui";
+import { Card, CodeLine, Field, RunAction } from "../../components/ui";
+import { useApp } from "../../app/AppContext";
 import { PathInput } from "../../components/PathInput";
 import { FeatureGate } from "../../components/FeatureGate";
 import { useTrain } from "./TrainContext";
@@ -43,6 +44,12 @@ const SAMPLE_TEXT: Record<string, string> = {
   PENDING: "샘플 표 확인 중",
 };
 
+/** /status.limits.configured.max_multi_execution(설정 train_data.max_multi_execution) — 없으면 8(기본값). */
+function maxMultiExecution(status: { limits?: { configured?: Record<string, unknown> } } | null | undefined): number {
+  const v = Number(status?.limits?.configured?.max_multi_execution);
+  return Number.isInteger(v) && v >= 1 ? v : 8;
+}
+
 export function DoeGenCard() {
   const { study } = useStudy();
   const { setup, does, reloadDoes } = useTrain();
@@ -54,6 +61,7 @@ export function DoeGenCard() {
   const [runs, setRuns] = useState("");
   const [opts, setOpts] = useState<Record<string, string | number | boolean>>({});
   const [multi, setMulti] = useState(1);
+  const maxMulti = maxMultiExecution(useApp().status);
   const [path, setPath] = useState("");
   const [ok, setOk] = useState(false);
 
@@ -139,11 +147,11 @@ export function DoeGenCard() {
           ))}
         </div>
       )}
-      <Advanced>
-        <Field label="동시 실행 수(multiexec)" hint="기본 1 — Job Object 한도 안에서 동시에 도는 해석 수">
-          <input className="num" inputMode="numeric" value={multi} onChange={(e) => setMulti(Math.max(1, Math.min(64, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />
+      <div className="form-grid">
+        <Field label="동시 실행 수(multiexec)" hint={`1~${maxMulti} · 높일수록 빠르지만 CPU·라이선스를 더 씀`}>
+          <input className="num" inputMode="numeric" value={multi} disabled={!canExec} onChange={(e) => setMulti(Math.max(1, Math.min(maxMulti, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />
         </Field>
-      </Advanced>
+      </div>
       {latest && (
         <div className="doe-result small">
           <div>

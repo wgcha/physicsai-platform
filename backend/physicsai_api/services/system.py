@@ -55,7 +55,8 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
         "templates": [{"key": k, "configured": getattr(s.commands, k) is not None} for k in TEMPLATE_SPECS],
         "limits": {
             "configured": {"cores": s.worker.max_logical_cores, "memory_gb": s.worker.max_memory_gb,
-                           "priority": s.worker.priority, "auto_detect": s.worker.auto_detect},
+                           "priority": s.worker.priority, "auto_detect": s.worker.auto_detect,
+                           "max_multi_execution": s.train_data.max_multi_execution},
             "detected": {"cores": eff.get("detected_cores"), "memory_gb": eff.get("detected_memory_gb")} if eff else None,
             "effective": {k: eff.get(k) for k in ("cores", "cpu_rate", "memory_gb", "priority", "cpu_cap_enforced")} if eff else None,
         },
