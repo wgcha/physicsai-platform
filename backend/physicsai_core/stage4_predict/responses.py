@@ -6,6 +6,8 @@
 DATATYPE_ERR|HANDLE_ERR`, 로그 `RESPONSES.log`.
 
 요청 줄 필드 순서(`REQUEST_FIELDS`)는 로그 문구로 본 **추정값**(서버 확인 E4-9-5 전) — 바뀌면 이 상수 하나만 고친다(변경 메모).
+응답 정의는 `response_defs.validate_response_defs` 정규화 형식(`{name, unit, spec|null}`, DB `param_sets.responses`와
+`04_params/<id>/responses.json` 동일)을 읽는다 — spec null 행은 요청하지 않는다(사유 NOT_DEFINED, 경고 없음).
 워커(④ RESPONSE_EXTRACT·PV_EXTRACT·①-6 RESPONSE_EXTRACT_RUNS) 공용. 순수 함수(파일 I/O는 `write_requests`·`read_responses`만).
 """
 
@@ -38,7 +40,8 @@ REASON_TEXT = {
     "OPEN_ERROR": "h3d 열기 실패(OPEN_ERROR)",
     "DATATYPE_ERR": "결과 종류 없음(DATATYPE_ERR)",
     "HANDLE_ERR": "HyperView 처리 실패(HANDLE_ERR)",
-    "NOT_H3D": "추출 정의(H3D) 없음",
+    "NOT_DEFINED": "추출 정의 없음",
+    "NOT_H3D": "추출 정의(H3D) 아님",
     "SPEC_INVALID": "추출 정의가 올바르지 않음",
     "MISSING": "RESPONSES.txt에 값 없음",
     "EXTRACT_FAILED": "추출 실패",
@@ -84,6 +87,8 @@ def h3d_request(resp: Mapping[str, Any]) -> tuple[H3dRequest | None, str | None]
     """응답 정의 `{name, unit, spec:{source:"H3D", subcase, datatype, component, layer, stat}}` → (요청, None) 또는 (None, 사유)."""
     name = str(resp.get("name") or "")
     spec = resp.get("spec")
+    if spec is None:  # 정규화 형식(response_defs): spec null = 추출 정의 없음(이름·단위만) — 추출하지 않는다
+        return None, "NOT_DEFINED"
     if not isinstance(spec, Mapping) or str(_get(spec, "source") or "H3D").upper() != "H3D":
         return None, "NOT_H3D"
     if not _get(spec, "datatype") or not _get(spec, "component"):
@@ -205,6 +210,9 @@ def pick_values(responses: Sequence[Mapping[str, Any]], parsed: ParsedResponses 
         if reason:
             reasons[name] = reason
     return values, reasons
+
+
+SILENT_REASONS = frozenset({"NOT_DEFINED"})  # 경고하지 않는 사유(정의상 추출하지 않는 응답)
 
 
 def reason_text(code: str) -> str:

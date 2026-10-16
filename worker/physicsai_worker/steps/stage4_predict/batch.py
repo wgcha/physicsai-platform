@@ -6,8 +6,8 @@
   m_1 GEOM_UPDATE → (assembly) m_2 MESH → m_3 조립(RAD_ASSEMBLE ①~④) → 하위 입력 검사(`prepared_input.plan_copy`).
   판정·경고는 단일 예측(§11.4)과 같은 함수. run 실패는 행 상태(gen_state FAILED·code·message)로 남기고 계속.
 - BP_ENQUEUE: 성공 run마다 하위 PREDICT(prepared)를 doe_no 순 연속 queue_seq로(`predict_batches.enqueue_children`).
-하위 종료: `after_job_end`(실행기 종료 직후) → `predict_batches.on_child_end` → 배치 DONE이면 알림 PREDICT_BATCH_DONE 1건.
-작업 params는 `batch_id`만 믿는다(부모 재시도 params = `{"batch_id"}`) — 나머지는 배치 행에서 읽는다.
+하위·부모 종료 후 배치 갱신(응답 복사·완료 판정·PREDICT_BATCH_DONE 알림)은 종료 훅 `job_end.batch_on_job_end`(모든 종료 경로)가 한다.
+작업 params는 `batch_id`만 믿는다 — 나머지(모델·템플릿·동시 수·종류)는 배치 행에서 읽는다.
 """
 
 from __future__ import annotations
@@ -16,7 +16,6 @@ import os
 from collections.abc import Callable
 from typing import Any
 
-from physicsai_core.db.repositories import notifications as notif_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import StepFailure
@@ -98,6 +97,7 @@ def bp_prep(ctx: Any) -> None:
         tpl_text = fh.read()
     B = _B(ctx, b)
     os.makedirs(B, exist_ok=True)
+    ctx.ex.db(lambda c: pb_repo.reset_failed_gen(c, b["id"]))  # 실패·중단 run → PENDING(사유 지움)
     with ctx.ex.engine.connect() as conn:
         rows = pb_repo.runs(conn, b["id"])
     cad_src = os.path.join(S, "cad", ps["cad_file_name"])
@@ -112,7 +112,6 @@ def bp_prep(ctx: Any) -> None:
         os.makedirs(m1, exist_ok=True)
         copy_file(cad_src, os.path.join(m1, ps["cad_file_name"]), checkpoint=ctx.checkpoint)  # tpl dir_file_prt = ./<CAD>
         write_text(os.path.join(m1, script_name), render_tpl(tpl_text, r["values"], r["applied_values"]))
-        _set_run(ctx, b, r["doe_no"], gen_state="PENDING", gen_code=None, gen_message=None)
         ctx.progress(k / len(todo) * 100.0, f"run 폴더 준비 {k}/{len(todo)}")
     bj = os.path.join(B, "batch.json")
     sc = os.path.join(B, "samples.csv")
@@ -263,57 +262,15 @@ def bp_gen(ctx: Any) -> None:
 # ---- BP_ENQUEUE ----------------------------------------------------------------------------------
 
 
-def _notify_done(conn: Any, b: dict[str, Any], done: dict[str, int]) -> None:
-    title, body = pb_repo.done_notice(b["batch_no"], done["succeeded"], done["failed"])
-    notif_repo.notify_user(conn, b["created_by"], "PREDICT_BATCH_DONE", title, body)
-
-
 def bp_enqueue(ctx: Any) -> None:
+    """성공 run마다 하위 PREDICT(prepared)를 한 트랜잭션에서 doe_no 순으로. 배치 CANCELED면 만들지 않는다(enqueue_children).
+    등록할 하위가 없고 모두 끝난 경우의 완료 판정·알림은 부모 성공 종료 훅(job_end.batch_on_job_end)이 한다."""
     b = _batch(ctx)
     B = _B(ctx, b)
-
-    def tx(conn: Any) -> tuple[list[dict[str, Any]], dict[str, int] | None]:
-        created = pb_repo.enqueue_children(conn, b["id"], batch_dir=B)
-        done = pb_repo.mark_done_if_complete(conn, b["id"])  # 등록할 하위가 없고 모두 끝난 경우(재시도 등)
-        if done is not None:
-            _notify_done(conn, b, done)
-        return created, done
-
-    created, done = ctx.ex.db(tx)
+    created = ctx.ex.db(lambda c: pb_repo.enqueue_children(c, b["id"], batch_dir=B))
     for j in created:
-        ctx.log(f"하위 예측 등록 {j['params']['batch_run']['doe_no']}: {j['id']} (queue_seq {j.get('queue_seq')})")
-    ctx.patch_result({"child_job_ids": [j["id"] for j in created], "enqueued": len(created),
-                      "batch_done": done is not None})
-
-
-# ---- 하위 PREDICT 종료 ---------------------------------------------------------------------------
-
-
-def after_job_end(engine: Any, job: dict[str, Any], state: str) -> None:
-    """작업 종료 직후(실행기, lease 해제 뒤 별도 트랜잭션) 배치 상태 보정 — 종료 훅(job_end)과 같은 판정을 멱등으로 한 번 더.
-
-    - 하위 PREDICT: 응답 복사·완료 판정(`predict_batches.on_child_end`) → 이번에 DONE이 됐으면 PREDICT_BATCH_DONE 1건.
-    - 부모 PREDICT_BATCH 실패·취소: 배치가 아직 GENERATING이고 최신 부모가 이 작업이면 FAILED·CANCELED(§14.5).
-    """
-    from physicsai_core.db.repositories import jobs as jobs_repo
-    from sqlalchemy import func
-
-    if job.get("job_type") == "PREDICT_BATCH":
-        if state not in ("FAILED", "CANCELED"):
-            return
-        bid = (job.get("params") or {}).get("batch_id")
-        with engine.begin() as conn:
-            b = pb_repo.get(conn, bid, for_update=True) if isinstance(bid, str) else None
-            if b is not None and b["job_id"] == job["id"] and b["status"] == "GENERATING":
-                pb_repo.set_batch(conn, b["id"], status=state, finished_at=func.now())
-        return
-    if job.get("job_type") != "PREDICT" or pb_repo.batch_run_ref(job) is None:
-        return
-    with engine.begin() as conn:
-        cur = jobs_repo.get_job(conn, job["id"]) or job
-        res = pb_repo.on_child_end(conn, cur, state)
-        if res is not None:
-            _notify_done(conn, *res)
+        ctx.log(f"하위 예측 등록 doe {j['params']['batch_run']['doe_no']}: {j['id']}")
+    ctx.patch_result({"child_job_ids": [j["id"] for j in created], "enqueued": len(created)})
 
 
 HANDLERS: dict[tuple[str, str], Callable[[Any], None]] = {

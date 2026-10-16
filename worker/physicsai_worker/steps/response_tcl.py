@@ -68,7 +68,8 @@ def extract_in_folder(ctx: Any, responses: Sequence[Mapping[str, Any]], folder: 
 
 
 def warn_reasons(ctx: Any, reasons: Mapping[str, str], prefix: str = "") -> None:
-    """값 없는 응답 → 경고 RESPONSE_NO_VALUE(이름·사유) 1건."""
+    """값 없는 응답 → 경고 RESPONSE_NO_VALUE(이름·사유) 1건. spec null(추출 정의 없음)은 경고하지 않는다."""
+    reasons = {n: r for n, r in reasons.items() if r not in resp_mod.SILENT_REASONS}
     if not reasons:
         return
     body = ", ".join(f"{n}: {resp_mod.reason_text(r)}" for n, r in reasons.items())

@@ -144,18 +144,7 @@ class Executor:
 
     def _release(self, state: str, code: str | None = None, msg: str | None = None) -> str:
         self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg))
-        if state in ("SUCCEEDED", "FAILED", "CANCELED"):
-            self._after_end(state)
         return state
-
-    def _after_end(self, state: str) -> None:
-        """종료 후 부수효과(lease 해제 뒤 별도 트랜잭션): 일괄 예측 배치 응답·완료 판정(phase3 §14.5, 멱등)."""
-        try:
-            from .steps.stage4_predict.batch import after_job_end
-
-            after_job_end(self.engine, self.job, state)
-        except Exception:  # noqa: BLE001 - 작업 상태는 이미 확정. 판정은 종료 훅(job_end)·다음 하위 종료가 다시 한다
-            log.exception("일괄 예측 종료 처리 실패: %s", self.job_id)
 
     def _job_log(self, text: str) -> None:
         with open(os.path.join(self.log_dir, "job.log"), "a", encoding="utf-8") as fh:

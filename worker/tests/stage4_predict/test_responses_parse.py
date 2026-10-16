@@ -48,7 +48,7 @@ def test_parse_and_stats():
     assert vals["Max_S"] == 300.0 and vals["Lo"] == 5.0                     # ABSMAX = max(|-5|, |2|) (뒤 정의가 덮음)
     assert why == {"Bad": "NO_VALUE", "Open": "OPEN_ERROR", "Nan": "NO_VALUE", "Gone": "MISSING", "Legacy": "NOT_H3D"}
     vals, why = R.pick_values([_r("A"), {"name": "B"}], None)
-    assert vals == {"A": None, "B": None} and why == {"A": "EXTRACT_FAILED", "B": "NOT_H3D"}
+    assert vals == {"A": None, "B": None} and why == {"A": "EXTRACT_FAILED", "B": "NOT_DEFINED"}
     assert R.name_value_csv_text({"A": 1.5, "B": None}) == "name,value\nA,1.5\nB,\n"
 
 

@@ -96,7 +96,7 @@ def test_v3_s9_7_assembly_parallel_folders_and_enqueue(predict_env, fake_record,
     assert [c["doe_no"] for c in ch] == [1, 2, 3, 4] and seqs == list(range(seqs[0], seqs[0] + 4))
     for c in ch:
         p = c["params"]
-        assert c["state"] == "QUEUED" and p["input_mode"] == "prepared" and p["batch_run"] == {"batch_id": bid, "doe_no": c["doe_no"]}
+        assert c["state"] == "QUEUED" and p["input_mode"] == "prepared" and p["batch_run"] == {"batch_id": bid, "doe_no": c["doe_no"], "batch_no": 1}
         assert p["input_path"] == str(B / f"run__{c['doe_no']:05d}" / "m_3") and p["param_set_id"] == ps["id"]
     jd = env.job(pj)
     assert jd["result"]["enqueued"] == 4 and jd["warnings"] == []
