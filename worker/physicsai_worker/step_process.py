@@ -1,4 +1,5 @@
-"""StepContext의 외부 프로그램 실행부(§11.3): 명령 렌더링, `run_local`(제한기·취소·진행률), 팬아웃 `run_fanout`(phase2 §4.3)."""
+"""StepContext의 외부 프로그램 실행부(§11.3): 명령 렌더링, `run_local`(제한기·취소·진행률), 팬아웃 `run_fanout`(phase2 §4.3),
+동시 실행 `run_parallel`(phase3 §14.5, step_parallel)."""
 
 from __future__ import annotations
 
@@ -261,6 +262,14 @@ class StepProcessMixin:
         if failed:
             self.add_warning("PARTIAL_OUTPUT", f"{n}개 중 {len(failed)}개 실패")
         return {"ok": ok, "failed": failed}
+
+    def run_parallel(self, items: list[Any], fn: Callable[[Any, Any], None], *, item_id: Callable[[Any], str],
+                     max_parallel: int, label: Callable[[int, int, int, int, int], str] | None = None) -> list[Any]:
+        """동시 실행(phase3 §14.5 BP_GEN): 항목마다 fn(runner, item)을 최대 max_parallel개 동시에. 모든 자식 프로세스는
+        제한기 그룹 1개(Windows Job Object 1개)를 공유한다. 상세는 step_parallel.run_parallel."""
+        from .step_parallel import run_parallel
+
+        return run_parallel(self, items, fn, item_id=item_id, max_parallel=max_parallel, label=label)
 
     def checkpoint_cancel(self) -> None:
         """취소 플래그를 즉시 확인(팬아웃 대상 사이, §4.3)."""

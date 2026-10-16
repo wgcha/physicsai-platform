@@ -11,6 +11,7 @@ import logging
 import os
 import signal
 import sys
+from typing import Any
 
 from sqlalchemy import text
 
@@ -61,7 +62,13 @@ def main(argv: list[str] | None = None) -> int:
         lock.acquire()
     except AlreadyRunning as exc:
         return _fail(str(exc))
+    try:
+        return _run(s, config, lock)
+    finally:
+        lock.release()  # 기동 검사 실패로 돌아갈 때도 잠금을 놓는다(같은 프로세스에서 다시 부르는 시험·재기동)
 
+
+def _run(s: Any, config: Any, lock: Any) -> int:
     url = os.environ.get(s.database.url_env, "")
     if not url:
         return _fail(f"DB 접속 정보가 없습니다: 환경변수 {s.database.url_env}")
@@ -102,10 +109,7 @@ def main(argv: list[str] | None = None) -> int:
         raise KeyboardInterrupt
 
     signal.signal(signal.SIGTERM, _term)
-    try:
-        worker.run_forever()
-    finally:
-        lock.release()
+    worker.run_forever()
     return 0
 
 

@@ -114,6 +114,12 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         ),
         "④",
     ),
+    # ---- 3차 일괄 예측(phase3 §14.5 S9): 입력 생성만 슬롯 점유, run별 하위 PREDICT(prepared)는 BP_ENQUEUE가 대기열에 넣는다 ----
+    "PREDICT_BATCH": JobTypeDef(
+        "PREDICT_BATCH", 4, "SLOT", "일괄 예측 입력 생성",
+        (StepDef("BP_PREP", "INTERNAL", 3), StepDef("BP_GEN", "LOCAL", 90), StepDef("BP_ENQUEUE", "INTERNAL", 2)),
+        "④", notify_success=False,
+    ),
     # ---- 2차(phase2 §6.1) ----
     "TD_EXTRACT_PARAMS": JobTypeDef(
         "TD_EXTRACT_PARAMS", 1, "SLOT", "파라미터 추출",
@@ -216,6 +222,7 @@ STEP_LABELS: dict[str, str] = {
     "OP_PREP": "최적화 입력 준비", "HST_OPTIMIZE": "HyperStudy 최적화", "OP_SUMMARY": "결과 정리",
     "SS_WALK": "파일 확인", "SS_CLASSIFY": "정리 후보 분류",
     "SC_VALIDATE": "정리 대상 확인", "SC_MOVE": "백업 폴더로 이동", "SC_RECORD": "정리 기록",
+    "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
 }
 
 

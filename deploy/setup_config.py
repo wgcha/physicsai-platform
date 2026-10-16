@@ -351,6 +351,14 @@ UPGRADES: tuple[tuple[tuple[str, str], tuple[Any, ...], str], ...] = (
     (("predict", "mesh_output_glob"), ("eps_mesh*",), "skip"),  # 폐지(새 메시는 predict.mesh_include_name)
     (UPGRADE_MARKER, (), "always"),
 )
+# phase3 §14.6·§14.7(S9): S9 이전 설정(= predict_batch.max_runs 없음)에서만 한 번 — response_extract: null(이전 기본) →
+# 원본 ⑤ m_4 방식 기본값, predict_batch 절(표시 키 max_runs)을 넣는다. 이후 사용자가 다시 null로 바꾼 값은 건드리지 않는다.
+UPGRADE_MARKER_S9 = ("predict_batch", "max_runs")
+UPGRADES_S9: tuple[tuple[tuple[str, str], tuple[Any, ...], str], ...] = (
+    (("commands", "response_extract"), (None,), "fill"),
+    (UPGRADE_MARKER_S9, (), "always"),
+)
+UPGRADE_GROUPS = ((UPGRADE_MARKER, UPGRADES), (UPGRADE_MARKER_S9, UPGRADES_S9))
 
 
 def _get(data: Any, path: tuple[str, ...]) -> tuple[bool, Any]:
@@ -557,8 +565,10 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
             note = "유지" if cur == want or want in (None, "") else "유지(설정 파일 값 — 바꾸려면 파일을 직접 수정)"
             rows.append({"key": key, "value": cur, "action": note})
     upgraded: dict[tuple[str, ...], Any] = {}
-    if not new_file and not _get(base, UPGRADE_MARKER)[0]:
-        for path, olds, missing in UPGRADES:
+    for marker, group in UPGRADE_GROUPS:
+        if new_file or _get(base, marker)[0]:
+            continue
+        for path, olds, missing in group:
             has, cur = _get(base, path)
             ex_has, want = _get(example, path)
             fill = missing == "always" or (missing == "fill" and isinstance(base.get(path[0]), dict))

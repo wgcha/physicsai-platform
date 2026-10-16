@@ -80,6 +80,7 @@ class Executor:
         self.study_root = real(study_dir(self.settings.storage.ai_root, self.study["folder_name"]))
         self.stamp = backup_stamp()
         self.current_proc: Any = None
+        self.current_group: Any = None  # run_parallel 동시 실행 그룹(phase3 §14.5) — lease 상실 시 그룹 전체 종료
         self._proc_lock = threading.Lock()
         self.keeper: LeaseKeeper | None = None
         self.masker = Masker(self.settings.logging.mask_patterns)
@@ -108,11 +109,17 @@ class Executor:
         log.warning("lease 소유권 상실: %s", self.job_id)
         with self._proc_lock:
             p = self.current_proc
+            g = self.current_group
         if p is not None:
             try:
                 self.limiter.terminate(p)
             except Exception:
                 log.exception("lease 상실 후 프로세스 종료 실패")
+        if g is not None:
+            try:
+                self.limiter.terminate_group(g)
+            except Exception:
+                log.exception("lease 상실 후 동시 실행 그룹 종료 실패")
 
     def cancel_requested(self) -> bool:
         with self.engine.connect() as conn:

@@ -19,7 +19,9 @@ from physicsai_core.tpl_render import render_tpl
 
 from ...signals import StepSkipped
 from ..common import load_model, model_command_values, verify_model_integrity
+from ..response_tcl import extract_in_folder, single_h3d, uses_tcl, warn_reasons, write_values_csv
 from .predict_inputs import (
+    MESH_ONLY,
     PREPARED_SKIP,
     _judge_output,
     check_prepared,
@@ -29,6 +31,7 @@ from .predict_inputs import (
     param_set,
     rad_assemble,
     require_param_set,
+    template_kind,
 )
 from .predict_inputs import predict_dir as _P
 
@@ -48,10 +51,28 @@ def _pr_prep_prepared(ctx: Any, m: dict[str, Any]) -> None:
         "starter_name": plan.starter, "files": [os.path.basename(f) for f in plan.files], "values": {},
         "model_id": m["id"], "param_set_id": ps["id"] if ps else None, "nearest": None,
     })
-    ctx.patch_result({
+    res = {
         "model_id": m["id"], "param_set_id": ps["id"] if ps else None, "input_mode": "prepared",
         "input_path": ctx.params["input_path"], "values": {}, "applied_values": {}, "out_of_range": [], "nearest": None,
-    })
+    }
+    run = _batch_run_row(ctx)
+    if run is not None:  # 일괄 예측 하위(phase3 §14.5): 입력값은 run 행에서
+        res.update(values=run["values"], applied_values=run["applied_values"], out_of_range=list(run["out_of_range"] or []),
+                   batch={"batch_id": run["batch_id"], "doe_no": run["doe_no"], "run_key": run["run_key"]})
+    ctx.patch_result(res)
+
+
+def _batch_run_row(ctx: Any) -> dict[str, Any] | None:
+    from physicsai_core.db.repositories import predict_batches as pb_repo
+
+    ref = pb_repo.batch_run_ref(ctx.job)
+    if ref is None:
+        return None
+    with ctx.ex.engine.connect() as conn:
+        rows = [r for r in pb_repo.runs(conn, ref[0]) if r["doe_no"] == ref[1]]
+    if not rows:
+        raise StepFailure("INPUT_INVALID", "일괄 예측 run 행을 찾을 수 없습니다")
+    return rows[0]
 
 
 def pr_prep(ctx: Any) -> None:
@@ -60,7 +81,13 @@ def pr_prep(ctx: Any) -> None:
     if is_prepared(ctx):
         return _pr_prep_prepared(ctx, m)
     ps, S = _ps(ctx)
-    for need in (TPL_NAME, os.path.join("cad", ps["cad_file_name"]), os.path.join("radioss_assem", ps["starter_name"])):
+    kind = template_kind(ctx, ps)
+    needs = [TPL_NAME, os.path.join("cad", ps["cad_file_name"])]
+    if kind != MESH_ONLY:  # mesh_only 템플릿은 조립 폴더 없음(phase3 §14.4)
+        if not ps.get("starter_name"):
+            raise StepFailure("INPUT_INVALID", "조립 폴더가 없는 템플릿(메시 단독)입니다 — 조립 체인으로 예측할 수 없습니다")
+        needs.append(os.path.join("radioss_assem", ps["starter_name"]))
+    for need in needs:
         if not os.path.isfile(os.path.join(S, need)):
             raise StepFailure("INPUT_CHANGED", f"파라미터 세트 파일이 없습니다: {need}")
     values = {k: float(v) for k, v in ctx.params["values"].items()}
@@ -85,7 +112,7 @@ def pr_prep(ctx: Any) -> None:
     copy_file(os.path.join(S, "cad", ps["cad_file_name"]), cad_dst, checkpoint=ctx.checkpoint)
     ctx.patch_result({
         "model_id": m["id"], "param_set_id": ps["id"], "values": values, "applied_values": applied,
-        "out_of_range": [o["name"] for o in oor],
+        "out_of_range": [o["name"] for o in oor], "template_kind": kind,
         "nearest": {"run_key": near["run_key"], "distance": near["distance"]} if near else None,
     })
 
@@ -170,12 +197,48 @@ def curve_pick(ctx: Any) -> None:
     ctx.patch_result({"curve_artifact_id": aid})
 
 
+def _response_extract_tcl(ctx: Any, ps: dict[str, Any]) -> None:
+    """RESPONSE_EXTRACT 새 방식(phase3 §14.6): P/RESULT에 TCL 사본·H3D_REQUESTS.txt → RESPONSES.txt → P/responses_pred.csv.
+
+    사용자 결정: 추출 실패는 그 응답만 "추출 실패"(값 null + 경고) — 예측 작업은 성공 유지. 응답별 사유는 result.response_errors.
+    """
+    from physicsai_worker.limiter.base import LimiterError
+
+    responses = list(ps.get("responses") or [])
+    if not responses:
+        raise StepSkipped("응답 정의 없음")
+    P = _P(ctx)
+    res_dir = os.path.join(P, "RESULT")
+    out = os.path.join(P, "responses_pred.csv")
+    h3d, names = single_h3d(res_dir)
+    if h3d is None:
+        ctx.add_warning("RESP_H3D_AMBIGUOUS", f"응답 추출: 예측 결과 h3d가 정확히 1개가 아닙니다({len(names)}개) — 응답 값을 비워 둡니다")
+        values: dict[str, float | None] = {r["name"]: None for r in responses}
+        reasons = {r["name"]: "EXTRACT_FAILED" for r in responses}
+    else:
+        try:
+            values, reasons = extract_in_folder(ctx, responses, res_dir, h3d)
+        except (StepFailure, LimiterError) as exc:
+            ctx.log(f"[RESPONSE FAIL] {exc.code}: {exc.message}")
+            ctx.add_warning("RESPONSE_EXTRACT_FAILED",
+                            f"응답 추출 실패({exc.code}): {exc.message} — 예측 결과는 그대로 사용합니다"[:480])
+            values = {r["name"]: None for r in responses}
+            reasons = {r["name"]: "EXTRACT_FAILED" for r in responses}
+        else:
+            warn_reasons(ctx, reasons)
+    write_values_csv(ctx, out, values)
+    ctx.add_output(out)
+    ctx.patch_result({"response_errors": reasons})
+
+
 def response_extract(ctx: Any) -> None:
     if ctx.settings.commands.response_extract is None:
         raise StepSkipped("추출 미구성")
     ps, S = param_set(ctx)  # prepared는 세트가 없을 수 있다(phase3 §11.5)
     if ps is None or S is None:
         raise StepSkipped("파라미터 세트 없음")
+    if uses_tcl(ctx):
+        return _response_extract_tcl(ctx, ps)
     resp = os.path.join(S, "responses.json")
     if not ps["responses"] or not os.path.isfile(resp):
         raise StepSkipped("응답 정의 없음")

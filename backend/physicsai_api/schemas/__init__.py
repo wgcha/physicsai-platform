@@ -11,6 +11,7 @@ from .stage1_train_data import *  # noqa: F401,F403
 from .stage2_curation import *  # noqa: F401,F403
 from .stage3_model import *  # noqa: F401,F403
 from .stage4_predict import *  # noqa: F401,F403
+from .predict_batch import *  # noqa: F401,F403
 from .stage5_optimize import *  # noqa: F401,F403
 from .ops import *  # noqa: F401,F403
 from .study_storage import *  # noqa: F401,F403

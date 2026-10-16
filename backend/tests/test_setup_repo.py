@@ -809,3 +809,38 @@ def test_restore_after_failed_update_and_access_url(tmp_path):
     assert url("WINDOWS_WEB_PORT=80\n") == "http://<서버>/physicsai/"
     assert url("SIMDASH_PHYSICSAI_ENABLED=true\n") == "http://<서버>/physicsai/"             # 기본 80
     assert url(None) == "http://<대시보드 주소>/physicsai/"
+
+
+def test_setup_config_upgrades_s9_response_extract_once(tmp_path):
+    """phase3 §14.6·§14.7: S9 이전 설정(predict_batch 절 없음)의 response_extract: null(이전 기본)만 새 기본으로, predict_batch 절 보충.
+    이후 사용자가 다시 null로 바꾼 값은 보존."""
+    t = _fake_tree(tmp_path)
+    _run(tmp_path, t, _inputs(t))
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    text = cfg_path.read_text(encoding="utf-8")
+    old = re.sub(r'(?m)^  response_extract: \[.*$', "  response_extract: null   # 미확인(U8)", text)
+    old = re.sub(r"(?ms)^predict_batch:.*?\n\n", "", old)  # S9 이전 설정
+    assert "predict_batch" not in old and "response_extract: null" in old
+    cfg_path.write_text(old, encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    example = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert c["commands"]["response_extract"] == example["commands"]["response_extract"]
+    assert "{extract_tcl}" in c["commands"]["response_extract"]
+    assert c["predict_batch"] == {"max_runs": example["predict_batch"]["max_runs"]}
+    assert sorted(res["config_changed_keys"]) == ["commands.response_extract", "predict_batch.max_runs"]
+    assert res["write"]["validation"]["ok"] and res["write"]["validation"]["warnings"] == []
+    assert "# 미확인(U8)" in cfg_path.read_text(encoding="utf-8")                       # 줄 끝 주석 유지
+    # 갱신 뒤에는 사용자가 끈 값(null)을 건드리지 않는다
+    new_text = cfg_path.read_text(encoding="utf-8")
+    line = next(ln for ln in new_text.split("\n") if ln.startswith("  response_extract: "))
+    cfg_path.write_text(new_text.replace(line, "  response_extract: null   # 일부러 끔", 1), encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["commands"]["response_extract"] is None and res["config_changed_keys"] == []
+    # 사용자가 바꾼 옛 형태({out_csv})는 S9 이전 설정이어도 보존
+    user = cfg_path.read_text(encoding="utf-8").replace(
+        "  response_extract: null   # 일부러 끔", '  response_extract: ["{hw}", "-b", "-tcl", "D:/x.tcl", "-output", "{out_csv}"]', 1)
+    user = re.sub(r"(?ms)^predict_batch:.*?(\n\n|\Z)", "", user)
+    cfg_path.write_text(user, encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["commands"]["response_extract"][-1] == "{out_csv}" and res["config_changed_keys"] == ["predict_batch.max_runs"]

@@ -63,8 +63,9 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
     "contour_preview": TemplateSpec(
         frozenset({"hw", "preview_tcl", "pred_h3d_fwd", "preview_json_fwd"}), frozenset(), True
     ),
+    # phase3 §14.6: {extract_tcl}(원본 ⑤ m_4 H3D_StaticMinMax_to_CSV_FAST.tcl 사본)이 있으면 새 방식, 없으면 {out_csv} 직접 작성(기존)
     "response_extract": TemplateSpec(
-        frozenset({"hw", "pred_h3d", "pred_h3d_fwd", "responses_json", "out_csv", "work_dir"}),
+        frozenset({"hw", "pred_h3d", "pred_h3d_fwd", "responses_json", "out_csv", "work_dir", "extract_tcl"}),
         frozenset(),
         False,
     ),
@@ -102,7 +103,11 @@ PATH_STYLE: dict[tuple[str, str], str] = {
     ("t01_curve_export", "curate_tcl"): "fwd",
     ("t01_curve_export", "config_json"): "fwd",
     ("hst_optimization", "launcher"): "os",
+    ("response_extract", "extract_tcl"): "fwd",  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
 }
+
+# phase3 §14.6: commands.response_extract가 이 placeholder를 쓰면 원본 ⑤ m_4 방식(H3D_REQUESTS.txt → RESPONSES.txt)
+RESPONSE_EXTRACT_TCL_PLACEHOLDER = "extract_tcl"
 
 CMD_META_CHARS = set('&|<>^%!"')
 # .bat·.cmd는 cmd.exe가 인자를 다시 해석한다(BatBadBut). 이때 구분자로 쓰이는 문자도 거부한다.

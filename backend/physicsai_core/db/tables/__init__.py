@@ -13,6 +13,7 @@ from .stage1_train_data import train_does, train_runs, train_setups
 from .stage2_curation import curations, spdm_imports
 from .stage5_optimize import optimizations
 from .ops import audit_events, env_checks
+from .predict_batch import predict_batch_runs, predict_batches
 
 __all__ = [
     "metadata",
@@ -36,5 +37,7 @@ __all__ = [
     "spdm_imports",
     "optimizations",
     "env_checks",
+    "predict_batches",
+    "predict_batch_runs",
     "TERMINAL_STATES",
 ]

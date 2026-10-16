@@ -17,6 +17,7 @@ from physicsai_core.parsers.name_value import read_name_value_csv
 
 from ...signals import EnterWaitingHpc, StepSkipped
 from .. import _collect
+from ..response_tcl import extract_in_folder, single_h3d, uses_tcl, warn_reasons, write_values_csv
 
 
 def _paths(ctx: Any) -> tuple[str, str]:
@@ -135,10 +136,33 @@ def pv_extract(ctx: Any) -> None:
     if ps is None:  # phase3 §11.5: 준비된 입력 예측은 세트가 없을 수 있다
         raise StepSkipped("응답 정의 없음")
     S = ctx.abs(ps["stored_rel"])
-    h3d = os.path.join(V, "result", h3ds[0])
     out = os.path.join(V, "responses_verify.csv")
+    if uses_tcl(ctx):
+        return _pv_extract_tcl(ctx, ps, os.path.join(V, "result"), out)
+    h3d = os.path.join(V, "result", h3ds[0])
     ctx.run_local("response_extract", {"responses_json": os.path.join(S, "responses.json"), "pred_h3d": h3d,
                                         "pred_h3d_fwd": fwd(h3d), "out_csv": out, "work_dir": V}, cwd=V, outputs_to_backup=[out])
+
+
+def _pv_extract_tcl(ctx: Any, ps: dict[str, Any], folder: str, out: str) -> None:
+    """PV_EXTRACT 새 방식(phase3 §14.6): 회수 폴더 h3d가 정확히 1개일 때만. 추출 실패는 경고(값 비움)."""
+    from physicsai_worker.limiter.base import LimiterError
+
+    responses = list(ps.get("responses") or [])
+    if not responses:
+        raise StepSkipped("응답 정의 없음")
+    h3d, names = single_h3d(folder)
+    if h3d is None:
+        ctx.add_warning("RESP_H3D_AMBIGUOUS", f"검증 응답 추출: 회수 폴더 h3d가 정확히 1개가 아닙니다({len(names)}개) — 건너뜁니다")
+        raise StepSkipped("h3d가 여러 개 — 응답 추출 건너뜀")
+    try:
+        values, reasons = extract_in_folder(ctx, responses, folder, h3d)
+    except (StepFailure, LimiterError) as exc:
+        ctx.add_warning("RESPONSE_EXTRACT_FAILED", f"검증 응답 추출 실패({exc.code}): {exc.message}"[:480])
+        values = {r["name"]: None for r in responses}
+    else:
+        warn_reasons(ctx, reasons, "검증 ")
+    write_values_csv(ctx, out, values)
 
 
 def pv_table(ctx: Any) -> None:

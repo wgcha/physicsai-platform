@@ -23,7 +23,7 @@ def _alembic(url: str, rev: str) -> None:
 def test_upgrade_adds_nullable_label(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0006_param_set_label"
+    assert MIGRATION_HEAD >= "0006_param_set_label"
     name = f"physicsai_m6_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

@@ -12,6 +12,7 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json
 from physicsai_core.parsers.name_value import read_name_value_csv
 
+from ..response_tcl import extract_in_folder, single_h3d, uses_tcl, warn_reasons, write_values_csv
 from ._shared import _D, _R, _doe, _match_files
 
 
@@ -36,8 +37,50 @@ def rx_prep(ctx: Any) -> None:
     ctx.patch_result({"doe_id": doe["id"], "targets": targets})
 
 
+def _rx_extract_tcl(ctx: Any, doe: dict[str, Any]) -> None:
+    """①-6 새 방식(phase3 §14.6): run마다 h3d 폴더에 TCL 사본·요청 → RESPONSES.txt → responses_run.csv.
+    h3d 폴더에 *.h3d가 정확히 1개가 아니면 그 run은 건너뜀 + 경고 RESP_H3D_AMBIGUOUS. 도구 실패는 그 run만 실패."""
+    from physicsai_worker.limiter.base import LimiterError
+
+    responses = ctx.params["responses"]
+    targets = ctx.result()["targets"]
+    ok: list[str] = []
+    failed: list[dict[str, Any]] = []
+    ambiguous: list[str] = []
+    for k, t in enumerate(targets, 1):
+        ctx.checkpoint_cancel()
+        rk = t["run_key"]
+        ctx.log(f"=== [{k}/{len(targets)}] {rk} ===")
+        R = _R(ctx, doe["id"], rk)
+        h3d, _names = single_h3d(os.path.dirname(t["h3d"]))
+        if h3d is None:
+            ambiguous.append(rk)
+            continue
+        try:
+            values, reasons = extract_in_folder(ctx, responses, os.path.dirname(h3d), h3d)
+        except (StepFailure, LimiterError) as exc:
+            ctx.log(f"[TARGET FAIL] {rk}: {exc.code} {exc.message}")
+            failed.append({"target_id": rk, "code": exc.code, "reason": exc.message[:200]})
+        else:
+            warn_reasons(ctx, reasons, f"{rk}: ")
+            write_values_csv(ctx, os.path.join(R, "responses_run.csv"), values)
+            ok.append(rk)
+        ctx.progress(k / len(targets) * 100.0, f"{k}/{len(targets)} {rk}", force=True)
+    if ambiguous:
+        ctx.add_warning("RESP_H3D_AMBIGUOUS", f"h3d가 정확히 1개가 아닌 run {len(ambiguous)}개를 건너뜀: {', '.join(ambiguous[:10])}")
+    if not ok:
+        first = failed[0] if failed else {"code": "INPUT_INVALID", "target_id": ambiguous[0] if ambiguous else "-",
+                                          "reason": "h3d가 정확히 1개인 run이 없습니다"}
+        raise StepFailure(first["code"], f"대상 {len(targets)}개 모두 실패: {first['target_id']} — {first['reason']}")
+    if failed:
+        ctx.add_warning("PARTIAL_OUTPUT", f"{len(targets)}개 중 {len(failed)}개 실패")
+    ctx.patch_result({"extracted_runs": ok, "extract_failed": [f["target_id"] for f in failed] + ambiguous})
+
+
 def rx_extract(ctx: Any) -> None:
     doe = _doe(ctx)
+    if uses_tcl(ctx):
+        return _rx_extract_tcl(ctx, doe)
     rj = os.path.join(_D(ctx, doe["id"]), "responses.json")
     targets = []
     for t in ctx.result()["targets"]:

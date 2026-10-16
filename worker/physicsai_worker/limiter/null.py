@@ -8,18 +8,22 @@ import psutil
 
 from physicsai_core.limits import EffectiveLimits
 
-from .base import POPEN_TEXT_KW, Accounting, LimitedProcess, LimiterError
+from .base import POPEN_TEXT_KW, Accounting, LimitedProcess, LimiterError, ProcGroup, ProcGroupMixin
 
 
-class NullLimiter:
+class NullLimiter(ProcGroupMixin):
     name = "null"
     cpu_cap_enforced = False
 
-    def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits) -> LimitedProcess:
+    def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits,
+               group: ProcGroup | None = None) -> LimitedProcess:
         try:
-            return LimitedProcess(subprocess.Popen(argv, cwd=cwd, env=env, **POPEN_TEXT_KW))
+            proc = LimitedProcess(subprocess.Popen(argv, cwd=cwd, env=env, **POPEN_TEXT_KW))
         except OSError as exc:
             raise LimiterError("EXECUTABLE_MISSING", f"프로세스를 시작할 수 없습니다: {exc}") from None
+        if group is not None:
+            group.add(proc)
+        return proc
 
     def terminate(self, proc: LimitedProcess, timeout_s: float = 30) -> None:
         try:

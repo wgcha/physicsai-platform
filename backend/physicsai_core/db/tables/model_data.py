@@ -103,8 +103,8 @@ param_sets = Table(
     Column("sample_has_measured", Boolean, nullable=False),
     Column("cad_file_name", String, nullable=False),
     Column("tpl_rel", String, nullable=False),
-    Column("assem_rel", String, nullable=False),
-    Column("starter_name", String, nullable=False),
+    Column("assem_rel", String, nullable=True),  # phase3 §14.3: mesh_only면 NULL(0007_predict_batch)
+    Column("starter_name", String, nullable=True),
     Column("tpl_params", JSONB, nullable=False),
     Column("is_current", Boolean, nullable=False, server_default=text("false")),
     Column("registered_by", String, nullable=False),
@@ -113,6 +113,11 @@ param_sets = Table(
     Column("origin", String, nullable=False, server_default="FOLDER"),
     Column("train_doe_id", ID, ForeignKey("train_does.id", use_alter=True, name="fk_param_sets_train_doe"), nullable=True),
     Column("label", String(120), nullable=True),  # phase3 §13 S8 사용자 표시 이름(0006_param_set_label)
+    # phase3 §14.3 S9 템플릿 입력 종류: assembly(조립 폴더 포함) | mesh_only(m1 메시 그대로 예측)
+    Column("input_kind", String(16), nullable=False, server_default="assembly"),
     CheckConstraint("origin IN ('FOLDER','TRAIN_DOE')", name="ck_param_sets_origin"),
+    CheckConstraint("input_kind IN ('mesh_only','assembly')", name="ck_param_sets_input_kind"),
+    CheckConstraint("input_kind <> 'assembly' OR (assem_rel IS NOT NULL AND starter_name IS NOT NULL)",
+                    name="ck_param_sets_assembly_files"),
 )
 Index("ux_param_sets_current", param_sets.c.study_id, unique=True, postgresql_where=text("is_current"))

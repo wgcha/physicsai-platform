@@ -11,8 +11,9 @@ from pydantic import BaseModel, Field, field_validator
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
+from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.features import predict_parametric_missing
+from physicsai_core.features import predict_mesh_only_missing, predict_parametric_missing
 from physicsai_core.naming import RUN_KEY_RE
 from physicsai_core.stage4_predict import prepared_input
 
@@ -65,15 +66,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         ps = ps_repo.get(conn, p.param_set_id) if p.param_set_id else ps_repo.current(conn, sid)
         if ps is None or ps["study_id"] != sid:
             raise prerequisite_missing("PARAM_SET")
-        m = _model(conn, study, p.model_id)
+        m = model_for(conn, study, p.model_id)
         require_model_pscfg(cfg, "edspy_predict", m)
-        if cfg.commands.geom_update is None:
-            raise DomainError("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다", status=409,
-                              template="geom_update")
-        tmpl, res = predict_parametric_missing(cfg)
-        if tmpl or res:  # phase3 §11.4: predict_parametric=false
-            raise DomainError("TEMPLATE_NOT_CONFIGURED", f"형상 갱신 설정 필요(관리자): {', '.join(tmpl + res)}", status=409,
-                              template="mesh" if res else tmpl[0].split(".", 1)[1], missing=tmpl + res)
+        kind = template_kind(ps)
+        require_template_features(cfg, kind)
         values = p.values or {}
         names = [x["name"] for x in ps["parameters"]]
         unknown = [k for k in values if k not in names]
@@ -86,6 +82,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         params = {
             "input_mode": "parametric", "param_set_id": ps["id"], "model_id": m["id"], "values": dict(values),
             "value_source": p.value_source, "source_run_key": p.source_run_key,
+            "template_kind": kind,  # phase3 §14.4(B8): 서버가 확정 기록 — mesh_only면 MESH SKIPPED·RAD_ASSEMBLE 복사만
         }
         return params, {"model_id": m["id"], "param_set_id": ps["id"]}, warnings
     if job_type == "PREDICT_VERIFY":
@@ -101,6 +98,29 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise prerequisite_missing("PREDICT_INPUT")
         return p.model_dump(), None, warnings
     raise invalid_errors([{"loc": ["job_type"], "msg": "unknown"}])
+
+
+def template_kind(ps: dict[str, Any]) -> str:
+    """파라미터 세트(템플릿) 입력 종류: assembly | mesh_only(phase3 §14.3)."""
+    return "mesh_only" if ps.get("input_kind") == "mesh_only" else "assembly"
+
+
+def require_template_features(cfg: Any, kind: str) -> None:
+    """템플릿 종류별 형상 생성 조건(409 TEMPLATE_NOT_CONFIGURED): assembly = predict_parametric(phase3 §11.4),
+    mesh_only = predict_mesh_only(geom_update만 — MESH SKIPPED라 commands.mesh·include TCL 불필요, §14.4)."""
+    if cfg.commands.geom_update is None:
+        raise DomainError("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다", status=409,
+                          template="geom_update")
+    tmpl, res = predict_mesh_only_missing(cfg) if kind == "mesh_only" else predict_parametric_missing(cfg)
+    if tmpl or res:
+        raise DomainError("TEMPLATE_NOT_CONFIGURED", f"형상 갱신 설정 필요(관리자): {', '.join(tmpl + res)}", status=409,
+                          template="mesh" if res else tmpl[0].split(".", 1)[1], missing=tmpl + res)
+
+
+def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
+    """phase3 §14.5: 일괄 예측 하위 PREDICT 재시도 → run의 predict_job_id를 새 작업으로, 배치 PREDICTING."""
+    if old["job_type"] == "PREDICT" and pb_repo.batch_run_ref(old) is not None:
+        pb_repo.replace_child_job(conn, old["id"], new_id)
 
 
 def _check_mode_fields(p: PredictParams) -> None:
@@ -126,7 +146,7 @@ def _check_mode_fields(p: PredictParams) -> None:
         raise invalid_errors(errs)
 
 
-def _model(conn: Any, study: dict[str, Any], model_id: str | None) -> dict[str, Any]:
+def model_for(conn: Any, study: dict[str, Any], model_id: str | None) -> dict[str, Any]:
     """지정 모델(ACTIVE) 또는 Final(§8.2)."""
     sid = study["id"]
     if model_id:
@@ -150,7 +170,7 @@ def _prepare_prepared(ctx: AppContext, conn: Any, study: dict[str, Any], p: Pred
     plan = prepared_input.plan_copy(cp.path, ctx.settings)
     if plan.problems:
         raise DomainError("PREDICT_INPUT_INVALID", "준비된 입력을 쓸 수 없습니다", status=422, problems=plan.problems)
-    m = _model(conn, study, p.model_id)
+    m = model_for(conn, study, p.model_id)
     require_model_pscfg(ctx.settings, "edspy_predict", m)
     if p.param_set_id:
         ps = ps_repo.get(conn, p.param_set_id)

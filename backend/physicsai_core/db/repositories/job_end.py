@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, update
+from sqlalchemy import and_, func, update
 from sqlalchemy.engine import Connection
 
 from ...state_machine import SUCCEEDED
@@ -12,7 +12,9 @@ from ..tables import datasets, models
 
 
 def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> None:
-    """종료 시 관련 행 정리(데이터셋 FAILED, 평가 상태 FAILED)."""
+    """종료 시 관련 행 정리(데이터셋 FAILED, 평가 상태 FAILED) + 일괄 예측 배치 갱신(성공 포함, phase3 §14.5)."""
+    if job["job_type"] in ("PREDICT", "PREDICT_BATCH"):
+        batch_on_job_end(conn, job, state)
     if state == SUCCEEDED:
         return
     res = job.get("result") or {}
@@ -44,3 +46,38 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
         imp_repo.fail_building_import(conn, job["id"])
     elif jt == "OPTIMIZE":
         opt_repo.fail_running_opt(conn, job["id"])
+
+
+def batch_on_job_end(conn: Connection, job: dict[str, Any], state: str) -> dict[str, Any] | None:
+    """phase3 §14.5 종료 훅(모든 종료 경로 공용 — lease 해제·대기 취소·리퍼·HPC).
+
+    - 하위 PREDICT(params.batch_run): 성공이면 `responses` 복사 → 모든 run이 끝났으면 배치 DONE + PREDICT_BATCH_DONE 1건.
+    - 부모 PREDICT_BATCH(최신 부모일 때만): 실패·중단 → FAILED, 취소 → CANCELED, 성공 → 완료 판정(BP_ENQUEUE가 PREDICTING으로 둔 뒤).
+    이번에 배치가 DONE이 되면 그 배치 행을 돌려준다.
+    """
+    from ...state_machine import CANCELED, FAILED, INTERRUPTED
+    from . import notifications as notif_repo
+    from . import predict_batches as pb_repo
+
+    if job["job_type"] == "PREDICT":
+        done = pb_repo.on_child_end(conn, job, state)
+        if done is None:
+            return None
+        batch, counts = done
+    else:
+        bid = (job.get("params") or {}).get("batch_id")
+        batch = pb_repo.get(conn, bid, for_update=True) if isinstance(bid, str) else None
+        if batch is None or batch["job_id"] != job["id"] or batch["status"] in ("DONE", "FAILED", "CANCELED"):
+            return None
+        if state in (FAILED, INTERRUPTED):
+            pb_repo.set_batch(conn, batch["id"], status="FAILED", finished_at=func.now())
+            return None
+        if state == CANCELED:
+            pb_repo.set_batch(conn, batch["id"], status="CANCELED", finished_at=func.now())
+            return None
+        res = pb_repo.mark_done_if_complete(conn, batch["id"])
+        if res is None:
+            return None
+        batch, counts = pb_repo.get(conn, batch["id"]), res
+    notif_repo.notify_batch_done(conn, batch, counts["succeeded"], counts["failed"])  # type: ignore[arg-type]
+    return batch

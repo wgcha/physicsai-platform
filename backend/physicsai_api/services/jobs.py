@@ -155,28 +155,37 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         else:
             require_global_admin(principal)
         require_config_ok(ctx)
-        if old["state"] not in TERMINAL or old["state"] == "SUCCEEDED":
-            raise DomainError("JOB_NOT_RETRYABLE", "실패·취소·중단된 작업만 재시도할 수 있습니다", status=409)
-        require_retryable_type(old["job_type"])
-        study = studies_repo.require(conn, old["study_id"], for_update=True)
-        study_gate(conn, study, old["job_type"])
-        steps = jobs_repo.get_steps(conn, job_id)
-        default_from = next((s["step_no"] for s in steps if s["state"] in ("FAILED", "CANCELED", "PENDING", "RUNNING")), 1)
-        if from_step is None:
-            from_step = default_from
-        if from_step > default_from or from_step > len(steps):
-            raise invalid_errors([{"loc": ["from_step"], "msg": f"1~{default_from}"}])
-        if from_step > 1 and old["job_type"] in ("PREDICT_VERIFY", "TD_SOLVE"):
-            from_step = 1  # HPC 제출 이력은 재사용하지 않는다(phase2 §7.1: TD_SOLVE는 항상 TS_PREP부터)
-        new_id = str(uuid.uuid4())
-        job = jobs_repo.insert_job(
-            conn, study=study, job_type=old["job_type"], params=old["params"], user_id=principal.user_id,
-            user_name=principal.display_name, result=dict(old["result"] or {}), retry_of_job_id=job_id,
-            resume_from_step=from_step if from_step > 1 else None, job_id=new_id,
-        )
-        job_params.on_retry(conn, old, new_id)
-        audit(conn, principal, "JOB_RETRY", "job", new_id, {"retry_of": job_id, "from_step": from_step}, rid, ip)
+        job = retry_locked(conn, principal, old, from_step, rid, ip)
         return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
+
+
+def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step: int | None, rid: str | None,
+                 ip: str | None) -> dict[str, Any]:
+    """재시도 본체(권한·설정 확인은 호출부): 상태·유형 → Study 잠금·게이트 → 시작 step → 새 작업 + on_retry + 감사.
+    일괄 예측 retry-failed(phase3 §14.7)가 하위마다 같은 트랜잭션에서 부른다."""
+    job_id = old["id"]
+    if old["state"] not in TERMINAL or old["state"] == "SUCCEEDED":
+        raise DomainError("JOB_NOT_RETRYABLE", "실패·취소·중단된 작업만 재시도할 수 있습니다", status=409)
+    require_retryable_type(old["job_type"])
+    study = studies_repo.require(conn, old["study_id"], for_update=True)
+    study_gate(conn, study, old["job_type"])
+    steps = jobs_repo.get_steps(conn, job_id)
+    default_from = next((s["step_no"] for s in steps if s["state"] in ("FAILED", "CANCELED", "PENDING", "RUNNING")), 1)
+    if from_step is None:
+        from_step = default_from
+    if from_step > default_from or from_step > len(steps):
+        raise invalid_errors([{"loc": ["from_step"], "msg": f"1~{default_from}"}])
+    if from_step > 1 and old["job_type"] in ("PREDICT_VERIFY", "TD_SOLVE"):
+        from_step = 1  # HPC 제출 이력은 재사용하지 않는다(phase2 §7.1: TD_SOLVE는 항상 TS_PREP부터)
+    new_id = str(uuid.uuid4())
+    job = jobs_repo.insert_job(
+        conn, study=study, job_type=old["job_type"], params=old["params"], user_id=principal.user_id,
+        user_name=principal.display_name, result=dict(old["result"] or {}), retry_of_job_id=job_id,
+        resume_from_step=from_step if from_step > 1 else None, job_id=new_id,
+    )
+    job_params.on_retry(conn, old, new_id)
+    audit(conn, principal, "JOB_RETRY", "job", new_id, {"retry_of": job_id, "from_step": from_step}, rid, ip)
+    return job
 
 
 def queue_view(ctx: AppContext) -> dict[str, Any]:

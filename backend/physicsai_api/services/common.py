@@ -133,7 +133,24 @@ def param_set_out(p: dict[str, Any]) -> dict[str, Any]:
         "starter_name": p["starter_name"], "tpl_params": p["tpl_params"], "is_current": p["is_current"],
         "registered_by_name": p["registered_by_name"], "registered_at": p["registered_at"],
         "origin": p.get("origin") or "FOLDER", "train_doe_id": p.get("train_doe_id"), "label": p.get("label"),
+        "input_kind": p.get("input_kind") or "assembly", "assem_rel": p.get("assem_rel"), "warnings": [],
     }
+
+
+def job_batch_ref(j: dict[str, Any]) -> dict[str, Any] | None:
+    """phase3 §14.5 JobSummary.batch: 부모 PREDICT_BATCH(params.batch_id·batch_no) / 하위 PREDICT(params.batch_run)."""
+    from physicsai_core.stage4_predict.batch_matrix import batch_label
+
+    p = j.get("params") if isinstance(j.get("params"), dict) else {}
+    br = p.get("batch_run") if j["job_type"] == "PREDICT" else None
+    if isinstance(br, dict) and isinstance(br.get("batch_id"), str):
+        no, doe = br.get("batch_no"), br.get("doe_no")
+        return {"id": br["batch_id"], "label": batch_label(no) if isinstance(no, int) else None,
+                "doe_no": doe if isinstance(doe, int) else None}
+    if j["job_type"] == "PREDICT_BATCH" and isinstance(p.get("batch_id"), str):
+        no = p.get("batch_no")
+        return {"id": p["batch_id"], "label": batch_label(no) if isinstance(no, int) else None, "doe_no": None}
+    return None
 
 
 def current_step_key(j: dict[str, Any]) -> str | None:
@@ -156,7 +173,7 @@ def job_summary(j: dict[str, Any], study_title: str | None, position: int | None
         "queue_position": position if j["state"] == "QUEUED" else None,
         "progress_pct": j["progress_pct"], "progress_label": j["progress_label"],
         "cancel_requested": j["cancel_requested_at"] is not None, "created_at": j["created_at"],
-        "started_at": j["started_at"],
+        "started_at": j["started_at"], "batch": job_batch_ref(j),
     }
 
 

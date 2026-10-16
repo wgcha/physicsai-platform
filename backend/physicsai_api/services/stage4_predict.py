@@ -59,10 +59,13 @@ def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: 
 
     이동은 DB 트랜잭션 안에서 하고, insert·commit이 실패하면 방금 옮긴 미등록 사본을 `logs/_paramset_tmp`로 되돌린다
     (삭제 호출 없음 — 이번 요청이 만든 사본이라 사용자 산출물이 아니며, 04_params에 DB 행 없는 고아 폴더를 남기지 않는다).
+    mesh_only(phase3 §14.4): 조립 폴더 없음 → assem_rel·starter_name NULL. 경고 SIMLAB_EXPORT_NAME은 응답 `warnings`.
     """
     stored_rel = f"04_params/{psid}"
     dst = resolve_in_study(root, stored_rel)
     os.makedirs(os.path.dirname(dst), exist_ok=True)
+    mesh_only = f.input_kind == "mesh_only"
+    warnings = ps_mod.export_name_notes(out_tmp, ctx.settings.param_set.tpl_export_regex, ctx.settings.predict.simlab_mesh_name)
     moved = False
     try:
         with ctx.engine.begin() as conn:
@@ -71,10 +74,12 @@ def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: 
                 "unit_system": f.unit_system, "parameters": f.parameters, "responses": f.responses,
                 "sample_count": len(f.samples), "sample_has_measured": f.sample_has_measured,
                 "cad_file_name": f.cad_file, "tpl_rel": f"{stored_rel}/{ps_mod.TPL_NAME}",
-                "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "tpl_params": f.tpl_params,
+                "assem_rel": None if mesh_only else f"{stored_rel}/radioss_assem/",
+                "starter_name": None if mesh_only else f.starter_name, "input_kind": f.input_kind, "tpl_params": f.tpl_params,
                 "registered_by": principal.user_id, "registered_by_name": principal.display_name, "label": label, **extra,
             })
-            audit(conn, principal, action, "param_set", psid, {**detail, "label": label}, rid, ip)
+            audit(conn, principal, action, "param_set", psid,
+                  {**detail, "label": label, "input_kind": f.input_kind, "warnings": [w["code"] for w in warnings]}, rid, ip)
             os.replace(out_tmp, dst)  # 원래 위치에서 이동(삭제 호출 없음)
             moved = True
             p = ps_repo.get(conn, psid)
@@ -83,7 +88,7 @@ def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: 
             with contextlib.suppress(OSError):
                 os.replace(dst, out_tmp)  # 미등록 사본을 되돌림(04_params 고아 방지)
         raise
-    return param_set_out(p)  # type: ignore[arg-type]
+    return {**param_set_out(p), "warnings": warnings}  # type: ignore[arg-type]
 
 
 def register_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
@@ -125,13 +130,14 @@ def register_param_set_discovered(ctx: AppContext, principal: Principal, study_i
     s = _require_active_power(ctx, principal, study_id)
     label = _label(body.label)
     cp = check_user_path(body.path, allowed_roots(cfg, imports=True))
-    choice = body.choice.model_dump() if body.choice is not None else {}
+    # exclude_unset: radioss_assem 명시적 null(= mesh_only)과 생략(후보 1개 → assembly, 0개 → mesh_only)을 구분(phase3 §14.4)
+    choice = body.choice.model_dump(exclude_unset=True) if body.choice is not None else {}
     d = disc_mod.discover(cp.path, cfg, tpl=choice.get("tpl"))
     tpl, cad, assem, probs = disc_mod.resolve_choice(d, choice)
     problems = d.problems + probs
-    if problems or tpl is None or cad is None or assem is None:
+    if problems or tpl is None or cad is None:
         raise DomainError("PARAM_SET_INVALID", "프로젝트 폴더에서 파라미터 세트를 구성할 수 없습니다", status=422,
-                          problems=problems or [{"code": "DISCOVER_INCOMPLETE", "message": "tpl·CAD·조립 폴더를 모두 찾아야 합니다"}])
+                          problems=problems or [{"code": "DISCOVER_INCOMPLETE", "message": "tpl·CAD를 모두 찾아야 합니다"}])
     need = disc_mod.planned_bytes(d, tpl, cad, assem, cfg)
     if need > cfg.param_set.max_total_bytes:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=[
@@ -148,7 +154,8 @@ def register_param_set_discovered(ctx: AppContext, principal: Principal, study_i
     psid = str(uuid.uuid4())
     out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}.out")
     ps_mod.write_normalized(f, A, out_tmp, cp.path)
-    picked = {"tpl": tpl.rel, "cad": cad, "radioss_assem": assem["rel"], "parameters_source": d.parameters_source,
+    picked = {"tpl": tpl.rel, "cad": cad, "radioss_assem": assem["rel"] if assem else None,
+              "parameters_source": d.parameters_source,
               "parameters_file": d.parameters_file, "samples": d.samples, "responses": d.responses}
     src_json = os.path.join(out_tmp, "source.json")
     with open(src_json, encoding="utf-8") as fh:
@@ -318,7 +325,7 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
             copy_file(os.path.join(assem, n), os.path.join(A, "radioss_assem", n))
     f = ps_mod.validate_folder(A, max_samples=cfg.param_set.max_samples, max_total_bytes=cfg.param_set.max_total_bytes,
                                starter_glob=cfg.predict.starter_glob,
-                               renum_csv_name=cfg.predict.renum_csv_name)
+                               renum_csv_name=cfg.predict.renum_csv_name, allow_mesh_only=False)  # ①→④는 항상 assembly
     if not f.ok:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
     psid = str(uuid.uuid4())
@@ -328,3 +335,4 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     return _insert_folder_set(ctx, principal, study_id, f, psid, root, out_tmp, src_label, label,
                               "PARAM_SET_FROM_TRAIN", {"doe_id": d["id"], "runs": body.runs}, rid, ip,
                               origin="TRAIN_DOE", train_doe_id=d["id"])
+

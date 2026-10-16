@@ -53,3 +53,12 @@ def model_command_values(ctx: Any, template_key: str, m: dict[str, Any]) -> dict
     if m.get("pscfg_rel"):
         values["model_pscfg"] = ctx.abs(m["pscfg_rel"])
     return values
+
+
+def hst_run_label(running: int, waiting: int | None, done: int, total: int | None, multi: int) -> str:
+    """동시 실행 현황 라벨 — 마지막 로그 줄 대신 run 수 집계(동시 실행이 화면에서 보이게). ① DOE(hstbatch)·④ 일괄 입력 생성 공용."""
+    parts = [f"실행 중 {running}"]
+    if waiting is not None:
+        parts.append(f"대기 {waiting}")
+    parts.append(f"완료 {done}" + (f"/{total}" if total else ""))
+    return " · ".join(parts) + f" (동시 {multi})"

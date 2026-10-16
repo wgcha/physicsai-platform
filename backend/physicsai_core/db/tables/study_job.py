@@ -109,5 +109,6 @@ Index(
     jobs.c.study_id,
     jobs.c.job_type,
     unique=True,
-    postgresql_where=text("state NOT IN ('SUCCEEDED','FAILED','CANCELED','INTERRUPTED')"),
+    # phase3 §14.5: 일괄 예측 하위 PREDICT(params.batch_run)는 같은 Study에 여러 개 대기하므로 제외(0007_predict_batch)
+    postgresql_where=text("state NOT IN ('SUCCEEDED','FAILED','CANCELED','INTERRUPTED') AND (params -> 'batch_run') IS NULL"),
 )

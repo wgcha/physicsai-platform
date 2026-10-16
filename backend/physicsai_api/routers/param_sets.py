@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import param_set_responses as resp_svc
 from ..services import stage4_predict as svc
 
 router = APIRouter(tags=["param-sets"])
@@ -47,6 +48,13 @@ def get_set(ps_id: str, request: Request, _p: Principal = Depends(get_principal)
 def patch_set(ps_id: str, body: S.ParamSetPatch, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     """표시 이름(label) 바꾸기(phase3 §13 S8)."""
     return svc.patch_param_set(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))
+
+
+@router.put("/param-sets/{ps_id}/responses", response_model=S.ParamSet, responses={**ERR, 403: {"model": S.ErrorResponse}})
+def put_responses(ps_id: str, body: S.ParamSetResponsesUpdate, request: Request,
+                  principal: Principal = Depends(get_principal)) -> dict:
+    """템플릿 응답 정의(phase3 §14.6): ⑤ OptResponse H3D 형식. 422 RESPONSE_INVALID·RESPONSE_IN_USE + problems."""
+    return resp_svc.put_responses(get_ctx(request), principal, ps_id, body.responses, request_id(request), client_ip(request))
 
 
 @router.get("/param-sets/{ps_id}/samples", response_model=S.SamplesPage, responses=ERR)

@@ -8,14 +8,30 @@
 모드(FAKE_TOOL_MODE_SIMLAB > FAKE_TOOL_MODE): ok | fail | hang | no_output | bad_xml
   | nonzero_with_output(형상 갱신 출력을 쓰고 종료코드 3) | with_include(형상 갱신 때 include도 직접 작성 — mesh null 변형,
   이름 FAKE_SIMLAB_INCLUDE, 기본 104_replace_node_elem.inc)
+동시 실행(phase3 §14.5 BP_GEN): 실행마다 cwd에만 쓰므로 동시 실행 OK. FAKE_TOOL_TRACE(jsonl)에 시작·끝 시각(time.time)·pid를 남겨
+관측 동시 수를 셀 수 있다. FAKE_SIMLAB_SLEEP_S = 형상 갱신 전 대기(겹침 관측용), FAKE_SIMLAB_FAIL_MATCH = cwd에 이 문자열이
+들어 있으면 그 실행만 종료코드 1(run 실패 격리 시험).
 """
-import glob, json, os, re, subprocess, sys, time
+import atexit, glob, json, os, re, subprocess, sys, time
 
 m = os.environ.get("FAKE_TOOL_MODE_SIMLAB") or os.environ.get("FAKE_TOOL_MODE") or "ok"
 p = os.environ.get("FAKE_TOOL_RECORD")
 if p:
     with open(p, "a", encoding="utf-8") as fh:
         fh.write(json.dumps({"tool": "simlab", "argv": sys.argv, "cwd": os.getcwd()}) + "\n")
+_trace = os.environ.get("FAKE_TOOL_TRACE")
+if _trace:
+    def _ev(ev):
+        with open(_trace, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"tool": "simlab", "ev": ev, "pid": os.getpid(), "t": time.time(), "cwd": os.getcwd()}) + "\n")
+    _ev("start")
+    atexit.register(_ev, "end")
+_fm = os.environ.get("FAKE_SIMLAB_FAIL_MATCH")
+if _fm and _fm in os.getcwd():
+    print(f"SimLab (fake) failure for {os.getcwd()}", flush=True)
+    sys.exit(1)
+if float(os.environ.get("FAKE_SIMLAB_SLEEP_S", "0") or 0) and "-auto" in sys.argv and len(sys.argv) != 6:
+    time.sleep(float(os.environ["FAKE_SIMLAB_SLEEP_S"]))
 if m == "fail":
     sys.exit(1)
 if m == "hang":
@@ -23,6 +39,9 @@ if m == "hang":
     pf = os.environ.get("FAKE_TOOL_PIDFILE")
     if pf:
         open(pf, "w").write(f"{os.getpid()} {child.pid}\n")
+    if _trace:  # 동시 실행 취소 시험: 프로세스 트리(자신·손자) pid를 모두 남긴다
+        with open(_trace, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"tool": "simlab", "ev": "hang", "pid": os.getpid(), "child": child.pid, "t": time.time()}) + "\n")
     while True:
         time.sleep(0.2)
 a = sys.argv
