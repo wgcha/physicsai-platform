@@ -857,7 +857,7 @@ class ProcessLimiter(Protocol):
 
 ### 11.6 자원 스냅샷(`resource_sample_interval_s`, 기본 10초)
 
-CPU %(`psutil.cpu_percent(interval=None)`), RAM(`psutil.virtual_memory()`), 실행 중 작업 accounting, GPU: 설정 `worker.gpu_query` argv 실행(제한기 밖, 타임아웃 5초, `nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits` 형식 파싱). 없거나 실패면 `gpu: []`. `worker_heartbeats.resources`에 최신값만 저장.
+CPU %(`psutil.cpu_percent(interval=None)`), RAM(`psutil.virtual_memory()`), 실행 중 작업 accounting, GPU: 설정 `worker.gpu_query` argv 실행(제한기 밖, 타임아웃 5초, `nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits` 형식 파싱). 없거나 실패면 `gpu: []`. 실행 파일 자동 탐색과 `gpu_status`·`gpu_message`는 phase3 D3-45. `worker_heartbeats.resources`에 최신값만 저장.
 
 ### 11.7 환경 스냅샷(`jobs.env_snapshot`)
 

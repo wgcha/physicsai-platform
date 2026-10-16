@@ -16,14 +16,15 @@ from physicsai_test_support import API, MESH_INC, REPO, make_param_set_folder
 OK = {"input_mode": "prepared"}
 
 
-def _case(root: Path, name: str = "case_A", *, starters: tuple[str, ...] = ("Face_Drop_0000.rad",)) -> Path:
+def _case(root: Path, name: str = "case_A", *, starters: tuple[str, ...] = ("Face_Drop_0000.rad",), mesh: bool = True) -> Path:
     d = root / name
     d.mkdir(parents=True)
     for s in starters:
         (d / s).write_text("#include part.inc\n")
     (d / "Face_Drop_0001.rad").write_text("/ENGINE\n")
     (d / "part.inc").write_text("/NODE\n")
-    (d / "EPS_mesh_0000.rad").write_text("mesh\n")
+    if mesh:
+        (d / "EPS_mesh_0000.rad").write_text("mesh\n")
     return d
 
 
@@ -141,8 +142,11 @@ def test_v3_s6_9_prepared_path_rejections(client, loaded_config, worker_factory,
     (ok_names / "브래킷-부품_1.inc").write_text("x")
     assert _job(client, sid, "PREDICT", {**OK, "input_path": str(ok_names)}).status_code == 201
     assert w.run_once_slot() == "SUCCEEDED"
-    assert problems(_case(imp / "zero", starters=())) == ["STARTER_COUNT"]
+    assert problems(_case(imp / "zero", starters=(), mesh=False)) == ["STARTER_COUNT"]
     assert problems(_case(imp / "two", starters=("A_0000.rad", "B_0000.rad"))) == ["STARTER_COUNT"]
+    two_mesh = _case(imp / "two_mesh", starters=("EPS_mesh_b_0000.rad",))                       # 일치 2개가 모두 eps_mesh
+    assert problems(two_mesh) == ["STARTER_COUNT"]
+    assert "EPS_mesh_0000.rad, EPS_mesh_b_0000.rad" in _inspect(client, sid, two_mesh).json()["problems"][0]["message"]
     assert problems(real / "part.inc") == ["INPUT_EXT"]
     os.symlink(imp / "real" / "part.inc", real / "linked.inc")
     assert problems(real) == ["FILE_NAME_UNSAFE"]
@@ -274,13 +278,17 @@ def test_v3_s6_12_inspect_predict_input_shape(client, loaded_config):
     assert set(body) == {"normalized_path", "ok", "problems", "summary"}
     assert body["ok"] and body["problems"] == [] and body["normalized_path"] == str(case)
     sm = body["summary"]
-    assert set(sm) == {"kind", "starter", "starter_ok", "rad", "inc_count", "file_count", "total_bytes", "subdir_count"}
+    assert set(sm) == {"kind", "starter", "starter_ok", "rad", "inc_count", "file_count", "total_bytes", "subdir_count", "starter_hints"}
     assert sm["subdir_count"] == 1                                       # D3-43: 하위 폴더 수(복사 안 함)
+    assert sm["starter_hints"] == []                                     # D3-44: starter가 있으면 힌트 없음
     assert sm["kind"] == "dir" and sm["starter"] == ["Face_Drop_0000.rad"] and sm["starter_ok"] is True
-    assert sm["rad"] == ["Face_Drop_0000.rad", "Face_Drop_0001.rad"] and sm["inc_count"] == 1 and sm["file_count"] == 3
-    assert sm["total_bytes"] == sum((case / n).stat().st_size for n in ("Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"))
+    # D3-44: 준비된 입력은 eps_mesh도 복사(starter가 include할 수 있음), starter 셈에서는 여러 개일 때만 제외
+    assert sm["rad"] == ["EPS_mesh_0000.rad", "Face_Drop_0000.rad", "Face_Drop_0001.rad"] and sm["inc_count"] == 1 and sm["file_count"] == 4
+    assert sm["total_bytes"] == sum((case / n).stat().st_size
+                                    for n in ("EPS_mesh_0000.rad", "Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"))
     f = _inspect(client, sid, case / "Face_Drop_0000.rad").json()["summary"]
-    assert f["kind"] == "file" and f["starter"] == ["Face_Drop_0000.rad"] and f["file_count"] == 3 and f["subdir_count"] == 1
+    assert f["kind"] == "file" and f["starter"] == ["Face_Drop_0000.rad"] and f["file_count"] == 4 and f["subdir_count"] == 1
+    assert f["starter_hints"] == []
     (case / "drop.hm").write_text("hm")
     assert _inspect(client, sid, case / "drop.hm").json()["summary"]["subdir_count"] == 0       # .hm은 그 파일만
     flat = _case(imp / "flat")
@@ -293,6 +301,79 @@ def test_v3_s6_12_inspect_predict_input_shape(client, loaded_config):
     comp = spec["components"]["schemas"]
     assert "PREDICT_INPUT" in comp["PathInspectRequest"]["properties"]["purpose"]["enum"]
     assert "predict_parametric" in comp["StatusFeatures"]["properties"]
+
+
+# ---- D3-44 준비된 입력: eps_mesh 포함 복사·starter 판정·하위 폴더 starter 안내 ------------------------------------------------
+
+
+def _files(d: Path, names: tuple[str, ...]) -> Path:
+    d.mkdir(parents=True, exist_ok=True)
+    for n in names:
+        (d / n).write_text(n)
+    return d
+
+
+def test_d3_44_prepared_copies_eps_mesh_and_starter_rules(loaded_config, tmp_path):
+    from physicsai_core.stage4_predict import prepared_input as pi
+
+    s = loaded_config.settings
+    plan = lambda p: pi.plan_copy(str(p), s)  # noqa: E731
+    names = lambda pl: [os.path.basename(f) for f in pl.files]  # noqa: E731
+    # 일치 2개(starter + EPS_mesh) → eps_mesh 아닌 1개가 starter, eps_mesh*.rad·.inc도 복사
+    a = _files(tmp_path / "a", ("Face_Drop_0000.rad", "EPS_mesh_0000.rad", "eps_mesh_1.inc", "part.inc", "notes.txt"))
+    pa = plan(a)
+    assert pa.problems == [] and pa.starter == "Face_Drop_0000.rad"
+    assert names(pa) == ["EPS_mesh_0000.rad", "Face_Drop_0000.rad", "eps_mesh_1.inc", "part.inc"]
+    # 일치 1개면 eps_mesh여도 그것
+    b = _files(tmp_path / "b", ("EPS_mesh_0000.rad", "part.inc"))
+    assert plan(b).starter == "EPS_mesh_0000.rad" and plan(b).problems == []
+    # eps_mesh 아닌 것 2개 → STARTER_COUNT(후보 목록 포함), 모두 eps_mesh 2개 → STARTER_COUNT
+    c = _files(tmp_path / "c", ("A_0000.rad", "B_0000.rad", "EPS_mesh_0000.rad"))
+    pc = plan(c)
+    assert pc.starter is None and [p["code"] for p in pc.problems] == ["STARTER_COUNT"]
+    assert pc.problems[0]["message"] == "starter(*_0000.rad)가 정확히 1개 있어야 합니다(현재 2개: A_0000.rad, B_0000.rad)"
+    d = _files(tmp_path / "d", ("EPS_mesh_0000.rad", "eps_mesh_b_0000.rad"))
+    assert plan(d).starter is None and plan(d).problems[0]["code"] == "STARTER_COUNT"
+    e = _files(tmp_path / "e", ("part.inc",))
+    assert plan(e).problems[0]["message"] == "starter(*_0000.rad)가 정확히 1개 있어야 합니다(현재 0개)"
+    # 파일 직접 지정 = 그 파일(eps_mesh 파일·다른 starter가 있어도), 복사 = 그 폴더 직계 전부
+    assert plan(c / "EPS_mesh_0000.rad").starter == "EPS_mesh_0000.rad" and plan(c / "EPS_mesh_0000.rad").problems == []
+    assert plan(c / "A_0000.rad").starter == "A_0000.rad" and names(plan(c / "A_0000.rad")) == ["A_0000.rad", "B_0000.rad", "EPS_mesh_0000.rad"]
+    # parametric 규칙(① 조립 폴더·파라미터 세트)은 eps_mesh 제외 유지
+    assert pi.starter_candidates(str(a), "*_0000.rad") == ["Face_Drop_0000.rad"]
+    assert pi.starter_candidates(str(b), "*_0000.rad") == []
+
+
+def test_d3_44_starter_hints(client, loaded_config, worker_factory):
+    imp = Path(loaded_config.settings.storage.allowed_import_roots[0])
+    sid = _sid(client)
+    top = _files(imp / "batch", ("readme.inc",))
+    _files(top / "case1", ("Face_Drop_0000.rad", "part.inc"))
+    _files(top / "case2", ("Side_Drop_0000.rad", "EPS_mesh_0000.rad"))       # 여러 개면 eps_mesh 제외
+    _files(top / "case3", ("deep.inc",))                                      # 후보 없음
+    _files(top / "case4" / "nested", ("Too_Deep_0000.rad",))                  # 2단계는 보지 않음
+    _files(top / "_backup", ("Old_0000.rad",))
+    os.symlink(top / "case1", top / "linked")                                # 링크 폴더는 건너뜀
+    body = _inspect(client, sid, top).json()
+    sm = body["summary"]
+    assert not body["ok"] and body["problems"][0]["code"] == "STARTER_COUNT" and sm["starter"] == []
+    assert sm["starter_hints"] == [os.path.join("case1", "Face_Drop_0000.rad"), os.path.join("case2", "Side_Drop_0000.rad")]
+    # 힌트는 읽기만: 작업 생성은 그대로 STARTER_COUNT(하위 폴더를 쓰지 않음)
+    r = _job(client, sid, "PREDICT", {**OK, "input_path": str(top)})
+    assert r.status_code == 422 and r.json()["detail"]["problems"][0]["code"] == "STARTER_COUNT"
+    assert not (top / "case1" / "INPUT").exists()
+    # 힌트 없음(하위 폴더 없음·후보 없음)·파일 지정
+    assert _inspect(client, sid, _files(imp / "empty", ("a.inc",))).json()["summary"]["starter_hints"] == []
+    assert _inspect(client, sid, top / "readme.inc").json()["summary"]["starter_hints"] == []
+    # 상한 10개
+    many = _files(imp / "many", ())
+    for i in range(12):
+        _files(many / f"c{i:02d}", (f"R{i:02d}_0000.rad",))
+    hints = _inspect(client, sid, many).json()["summary"]["starter_hints"]
+    assert hints == [os.path.join(f"c{i:02d}", f"R{i:02d}_0000.rad") for i in range(10)]
+    # 안내된 파일 경로는 그대로 쓸 수 있다
+    ok = _inspect(client, sid, top / "case1" / "Face_Drop_0000.rad").json()
+    assert ok["ok"] and ok["summary"]["starter"] == ["Face_Drop_0000.rad"]
 
 
 @pytest.mark.parametrize("purpose", ["PREDICT_INPUT"])

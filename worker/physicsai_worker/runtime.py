@@ -194,7 +194,8 @@ class Worker(HpcPollerMixin):
                                "peak_memory_gb": round(acc.peak_memory_bytes / 2**30, 3) if acc.peak_memory_bytes else None}
                 except Exception:
                     job_acc = {"job_id": ex.job_id}
-            self._last_resources = resources.sample(self.settings.worker.gpu_query, job_acc, self.child_env())
+            self._last_resources = resources.sample(self.settings.worker.gpu_query, job_acc, self.child_env(),
+                                                     self.settings.resources.gpu_query_candidates)
             if not self.config.ok:
                 self._last_resources["worker_config_errors"] = self.config.error_keys()
         eff = {**self.limits.as_dict(), "cpu_cap_enforced": bool(self.limiter.cpu_cap_enforced)}

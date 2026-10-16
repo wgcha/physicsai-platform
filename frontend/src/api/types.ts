@@ -175,6 +175,8 @@ export interface PredictInputInspect {
   total_bytes: number;
   /** 복사 대상 폴더의 직계 하위 폴더 수(복사 안 함), .hm이면 0 — phase3 D3-43 */
   subdir_count?: number;
+  /** 폴더 직계에 starter가 0개일 때 1단계 하위 폴더의 starter 후보(상대경로, 최대 10) — 안내 전용, 실행에 안 씀(D3-44) */
+  starter_hints?: string[];
   problems: PredictInputProblem[];
 }
 

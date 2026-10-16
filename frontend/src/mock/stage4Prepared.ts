@@ -3,6 +3,7 @@
 //   …/X.rad → 파일(같은 폴더 .rad·.inc 복사), …/X.hm → 그 파일만, 확장자가 그 밖이면 INPUT_EXT
 //   폴더 이름에 two → starter 2개(STARTER_COUNT), nostarter → 0개, toomany → TOO_MANY_FILES, huge → TOO_LARGE, bad&name 없음(경로 검사에서 거부)
 //   경로에 nested → 하위 폴더 2개(subdir_count, 복사 안 함 — D3-43)
+//   폴더 이름에 batch → 직계 starter 0개 + 하위 폴더 후보 starter_hints 2개(안내 전용 — D3-44)
 import type { Job, PredictInputInspect, PredictInputProblem, Study } from "../api/types";
 import { PREVIEW_JSON, contourSvg, curveJson, responseFn } from "./data";
 import { err, needPower, type MockResp, type Route } from "./route";
@@ -26,21 +27,24 @@ export function planCopy(path: string): PredictInputInspect | MockResp {
   const problems: PredictInputProblem[] = [];
   if (ext && !EXTS.includes(ext)) {
     problems.push({ code: "INPUT_EXT", message: `입력 파일 확장자는 ${EXTS.join("·")}만 쓸 수 있습니다(${ext}).` });
-    return { kind: "file", starter: [], starter_ok: false, rad: [], inc_count: 0, file_count: 0, total_bytes: 0, subdir_count: 0, problems };
+    return { kind: "file", starter: [], starter_ok: false, rad: [], inc_count: 0, file_count: 0, total_bytes: 0, subdir_count: 0, starter_hints: [], problems };
   }
-  if (ext === ".hm") return { kind: "file", starter: [name], starter_ok: true, rad: [], inc_count: 0, file_count: 1, total_bytes: 48_234_112, subdir_count: 0, problems };
+  if (ext === ".hm") return { kind: "file", starter: [name], starter_ok: true, rad: [], inc_count: 0, file_count: 1, total_bytes: 48_234_112, subdir_count: 0, starter_hints: [], problems };
   const kind = ext === ".rad" ? "file" : "dir";
-  const starter = kind === "file" ? [name] : /nostarter/i.test(path) ? [] : /two/i.test(path) ? ["Face_Drop_0000.rad", "Side_Drop_0000.rad"] : ["Face_Drop_0000.rad"];
+  const batch = kind === "dir" && /batch/i.test(path);
+  const starter = kind === "file" ? [name] : /nostarter/i.test(path) || batch ? [] : /two/i.test(path) ? ["Face_Drop_0000.rad", "Side_Drop_0000.rad"] : ["Face_Drop_0000.rad"];
+  const sep = path.includes("\\") ? "\\" : "/";
+  const hints = batch ? [`case1${sep}Face_Drop_0000.rad`, `case2${sep}Side_Drop_0000.rad`] : [];
   const rad = [...starter, "Face_Drop_0001.rad"];
   const many = /toomany/i.test(path);
   const incCount = many ? 640 : 3;
   const total = /huge/i.test(path) ? MAX_BYTES + 1 : 182_400_512;
   if (kind === "dir" && starter.length !== 1)
-    problems.push({ code: "STARTER_COUNT", message: `starter(*_0000.rad, EPS_mesh 제외)가 정확히 1개여야 합니다(현재 ${starter.length}개).` });
+    problems.push({ code: "STARTER_COUNT", message: `starter(*_0000.rad)가 정확히 1개 있어야 합니다(현재 ${starter.length}개${starter.length ? `: ${starter.join(", ")}` : ""})` });
   if (rad.length + incCount > MAX_FILES) problems.push({ code: "TOO_MANY_FILES", message: `복사할 파일이 ${MAX_FILES}개를 넘습니다(${rad.length + incCount}개).` });
   if (total > MAX_BYTES) problems.push({ code: "TOO_LARGE", message: "복사할 파일 합계가 2 GiB를 넘습니다." });
-  const subdirCount = /nested/i.test(path) ? 2 : 0;
-  return { kind, starter, starter_ok: starter.length === 1, rad, inc_count: incCount, file_count: rad.length + incCount, total_bytes: total, subdir_count: subdirCount, problems };
+  const subdirCount = /nested/i.test(path) ? 2 : batch ? 2 : 0;
+  return { kind, starter, starter_ok: starter.length === 1, rad, inc_count: incCount, file_count: rad.length + incCount, total_bytes: total, subdir_count: subdirCount, starter_hints: hints, problems };
 }
 
 const isResp = (x: PredictInputInspect | MockResp): x is MockResp => "status" in x;

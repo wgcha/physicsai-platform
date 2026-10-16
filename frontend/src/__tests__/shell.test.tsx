@@ -47,4 +47,34 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
     await screen.findByText("쿠션 두께·리브 예측", { selector: ".crumb a" });
     expect(screen.queryByTestId("demo-badge")).toBeNull();
   });
+
+  it("phase3 D3-45: GPU 목록이 비면 회색 한 줄(숨기지 않음), 있으면 GPU 막대", async () => {
+    const first = renderApp(`${STUDY}/3`, { user: "power" });
+    let panel = await screen.findByRole("region", { name: "워커 자원" });
+    expect(await within(panel).findByRole("meter", { name: "GPU" })).toBeTruthy();
+    expect(within(panel).queryByTestId("gpu-none")).toBeNull();
+    first.unmount();
+    renderApp(`${STUDY}/3`, { user: "power" }, (server) => {
+      const orig = server.handle.bind(server);
+      server.handle = (m, p, q, b, h) => {
+        const r = orig(m, p, q, b, h);
+        if (m === "GET" && p === "/resources" && r.status === 200)
+          return { ...r, body: { ...(r.body as object), gpu: [], gpu_status: "NOT_FOUND", gpu_message: "nvidia-smi를 찾지 못했습니다(시도: nvidia-smi)" } };
+        return r;
+      };
+    });
+    panel = await screen.findByRole("region", { name: "워커 자원" });
+    const none = await within(panel).findByTestId("gpu-none");
+    expect(none.textContent).toBe("GPU 정보 없음 — nvidia-smi를 찾지 못했습니다");
+    expect(none.className).toContain("muted");
+    expect(none.getAttribute("title")).toContain("시도: nvidia-smi");
+    expect(within(panel).queryByRole("meter", { name: "GPU" })).toBeNull();
+  });
+
+  it("phase3 D3-45: gpuNoneText 상태별 문구", async () => {
+    const { gpuNoneText } = await import("../panels/WorkerResourcePanel");
+    expect(gpuNoneText({ gpu_status: "NOT_FOUND" })).toBe("GPU 정보 없음 — nvidia-smi를 찾지 못했습니다");
+    expect(gpuNoneText({ gpu_status: "ERROR" })).toBe("GPU 정보 없음 — nvidia-smi 실행에 실패했습니다");
+    expect(gpuNoneText({ gpu_status: null })).toBe("GPU 정보 없음");
+  });
 });

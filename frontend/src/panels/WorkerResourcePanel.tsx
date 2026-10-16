@@ -20,6 +20,13 @@ function Meter({ label, pct, text }: { label: string; pct: number; text: string 
   );
 }
 
+/** GPU 목록이 비었을 때 회색 한 줄(phase3 D3-45 — 숨기지 않는다) */
+export function gpuNoneText(r: Pick<Resources, "gpu_status">): string {
+  if (r.gpu_status === "NOT_FOUND") return "GPU 정보 없음 — nvidia-smi를 찾지 못했습니다";
+  if (r.gpu_status === "ERROR") return "GPU 정보 없음 — nvidia-smi 실행에 실패했습니다";
+  return "GPU 정보 없음";
+}
+
 /** 워커 자원(§16.2 ②) */
 export function WorkerResourcePanel() {
   const { status } = useApp();
@@ -61,6 +68,11 @@ export function WorkerResourcePanel() {
               text={`${g.util_pct != null ? Math.round(g.util_pct) + "%" : "–"}${g.mem_used_mb != null && g.mem_total_mb ? ` · ${(g.mem_used_mb / 1024).toFixed(1)}/${(g.mem_total_mb / 1024).toFixed(0)} GB` : ""}`}
             />
           ))}
+          {r.gpu.length === 0 && (
+            <div className="muted small gpu-none" data-testid="gpu-none" title={r.gpu_message ?? undefined}>
+              {gpuNoneText(r)}
+            </div>
+          )}
           <div className="limits small">
             유효 한도 {r.limits.cores ?? "–"}코어 · {r.limits.memory_gb ?? "–"}GB · {r.limits.priority ? PRIORITY_LABEL[r.limits.priority] ?? r.limits.priority : "–"}
             {!r.limits.cpu_cap_enforced && <span className="muted"> · CPU 상한 미적용(개발 환경)</span>}

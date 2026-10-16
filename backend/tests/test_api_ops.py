@@ -99,6 +99,7 @@ def test_logs_etag_artifacts(client, loaded_config, worker_factory, engine):
     w.heartbeat_once()
     res = client.get(f"{API}/resources", headers=P).json()
     assert res["gpu"] == [{"name": "RTX A6000", "util_pct": 12.0, "mem_used_mb": 2048.0, "mem_total_mb": 49140.0}]
+    assert res["gpu_status"] == "OK" and res["gpu_message"]                # D3-45
     assert res["limits"]["cpu_cap_enforced"] is IS_WINDOWS and res["limits"]["cores"] >= 1
     st = client.get(f"{API}/status", headers=P).json()
     assert st["worker"]["online"] and st["worker"]["limiter"] == LIMITER and st["limits"]["effective"]["cpu_cap_enforced"] is IS_WINDOWS

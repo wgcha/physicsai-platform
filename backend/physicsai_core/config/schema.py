@@ -108,6 +108,10 @@ RESOURCE_DIR_KEYS = ("batchrun_dir", "pyd_dir")
 LAUNCHER_KEYS = ("extract_params", "gen_radioss", "optimization")
 
 
+GPU_QUERY_CANDIDATES = ("nvidia-smi", "%SystemRoot%\\System32\\nvidia-smi.exe",
+                        "%ProgramFiles%\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe")
+
+
 class ResourcesCfg(_M):
     preview_pred_h3d_tcl: str = ""
     batchrun_dir: str = ""
@@ -120,6 +124,8 @@ class ResourcesCfg(_M):
     curate_hg_tcl: str = ""
     extract_minmax_tcl: str = ""
     launchers: dict[str, LauncherCfg] = Field(default_factory=_default_launchers)
+    # GPU 조회 실행 파일 자동 탐색 후보(phase3 D3-45): worker.gpu_query 첫 인자가 없거나 못 찾으면 순서대로. 이름만 = PATH, %VAR% 확장
+    gpu_query_candidates: list[str] = Field(default_factory=lambda: list(GPU_QUERY_CANDIDATES))
 
 
 class WorkerCfg(_M):

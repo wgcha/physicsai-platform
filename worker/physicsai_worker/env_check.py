@@ -202,13 +202,18 @@ def collect_items(w: Any, masker: Any, tails: dict[str, str]) -> list[dict[str, 
     items.append(item("worker.limiter", "WORKER", st, msg, "WORKER",
                       {"name": lim, "cpu_cap_enforced": bool(w.limiter.cpu_cap_enforced)}))
     items.append(_job_object_item(w))
-    gpus = resources.query_gpu(s.worker.gpu_query, w.child_env())
-    if gpus:
-        items.append(item("gpu.detect", "GPU", "OK", f"GPU {len(gpus)}개", "WORKER",
-                          {"gpus": [{"name": g["name"], "memory_total_mb": g.get("mem_total_mb")} for g in gpus]}))
-    else:
-        items.append(item("gpu.detect", "GPU", "WARN", "GPU를 찾지 못했습니다", "WORKER"))
+    items.append(gpu_item(s, w.child_env()))
     return items
+
+
+def gpu_item(s: Any, child_env: dict[str, str] | None, lookup_env: Any = None) -> dict[str, Any]:
+    """`gpu.detect`: 자원 스냅샷과 같은 nvidia-smi 탐색(phase3 D3-45, 제한기 밖·5초·shell=False)."""
+    g = resources.query_gpu_status(s.worker.gpu_query, s.resources.gpu_query_candidates, child_env, lookup_env)
+    if g.gpus:
+        return item("gpu.detect", "GPU", "OK", f"GPU {len(g.gpus)}개", "WORKER",
+                    {"gpus": [{"name": x["name"], "memory_total_mb": x.get("mem_total_mb")} for x in g.gpus],
+                     "gpu_status": g.status, "exe": g.exe})
+    return item("gpu.detect", "GPU", "WARN", f"GPU를 찾지 못했습니다 — {g.message}", "WORKER", {"gpu_status": g.status, "exe": g.exe})
 
 
 def run_env_check(w: Any, chk: dict[str, Any]) -> str:

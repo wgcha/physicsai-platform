@@ -29,6 +29,10 @@ def make_case(root: Path, name: str = "case_A") -> Path:
     return d
 
 
+# make_case의 복사 대상(D3-44: eps_mesh 포함 직계 *.rad·*.inc 전부)
+PREP_INPUT = ["EPS_mesh_0000.rad", "Face_Drop_0000.rad", "Face_Drop_0001.rad", "eps_mesh_1.inc", "part.inc"]
+
+
 def snapshot(d: Path) -> dict[str, float]:
     return {str(p.relative_to(d)): p.stat().st_mtime_ns for p in sorted(d.rglob("*"))}
 
@@ -51,7 +55,9 @@ def test_v3_s6_7_prepared_rad_file_and_folder(predict_env, fake_record, use_dir)
                             "input_kind": "dir" if use_dir else "file", "starter_name": "Face_Drop_0000.rad",
                             "model_id": env.model_id, "param_set_id": None}
     Pd = env.predict_dir(jid)
-    assert sorted(os.listdir(Pd / "INPUT")) == ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+    # D3-44: 준비된 입력은 직계 *.rad·*.inc 전부(eps_mesh 포함 — starter가 include할 수 있음), txt·하위 폴더 제외
+    assert sorted(os.listdir(Pd / "INPUT")) == PREP_INPUT
+    assert (Pd / "INPUT" / "eps_mesh_1.inc").read_text() == "simlab inc\n"
     steps = env.steps(jid)
     for k in ("TPL_RENDER", "GEOM_UPDATE", "MESH"):
         assert steps[k]["state"] == "SKIPPED" and steps[k]["progress_label"] == "준비된 입력 — 해당 없음", k
@@ -121,11 +127,11 @@ def test_v3_s6_11_prepared_verify_zip_and_retry(predict_env, fake_tools, fake_re
     steps = env.steps(nid)
     assert [steps[k]["state"] for k in ("PR_PREP", "RAD_ASSEMBLE", "EDSPY_PREDICT")] == ["SKIPPED", "SUCCEEDED", "SUCCEEDED"]
     Pd = env.predict_dir(jid)                                             # 재시도 묶음 root 폴더
-    assert sorted(os.listdir(Pd / "INPUT")) == ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+    assert sorted(os.listdir(Pd / "INPUT")) == PREP_INPUT
     # input.zip
     z = env.c.get(f"{API}/jobs/{nid}/artifacts/input.zip", headers=P)
     assert z.status_code == 200
-    assert sorted(zipfile.ZipFile(io.BytesIO(z.content)).namelist()) == ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+    assert sorted(zipfile.ZipFile(io.BytesIO(z.content)).namelist()) == PREP_INPUT
     # PBS 검증: P/INPUT 기준 starter로 제출
     r = env.c.post(f"{API}/studies/{env.sid}/jobs", headers=PW, json={"job_type": "PREDICT_VERIFY", "params": {"predict_job_id": nid}})
     assert r.status_code == 201, r.text
@@ -133,7 +139,7 @@ def test_v3_s6_11_prepared_verify_zip_and_retry(predict_env, fake_tools, fake_re
     sub = [x for x in read_record(fake_record) if x["tool"] == "qsub"][-1]["argv"]
     v_arg = sub[sub.index("-v") + 1]
     assert v_arg.startswith("INPUT_FILE=/shared/AI_WORK/pred/04_predict/") and "/verify/1/input/Face_Drop_0000.rad," in v_arg
-    assert sorted(os.listdir(Pd / "verify" / "1" / "input")) == ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+    assert sorted(os.listdir(Pd / "verify" / "1" / "input")) == PREP_INPUT
 
 
 # ---- 시연 안정성 후속(phase3 D3-36·37): 재시도 시 이전 INPUT → _backup, EDSPY_PREDICT 판정 = h3d 존재 ----
@@ -154,7 +160,7 @@ def test_d3_36_retry_moves_old_input_to_backup(predict_env, monkeypatch, mode):
         jid, expected = j["id"], sorted([MESH_INC, "material.inc", "model0_0000.rad", "model_0001.rad"])
     else:
         jid, _jd = run_prepared(env, make_case(env.imports), expect_state="FAILED")
-        expected = ["Face_Drop_0000.rad", "Face_Drop_0001.rad", "part.inc"]
+        expected = PREP_INPUT
     assert env.job(jid)["current_step_key"] == "EDSPY_PREDICT"
     inp = env.predict_dir(jid) / "INPUT"
     for n in STALE:                                                       # 이전 시도·S6 이전 작업의 잔존 파일 흉내
@@ -166,6 +172,8 @@ def test_d3_36_retry_moves_old_input_to_backup(predict_env, monkeypatch, mode):
     nid = r.json()["id"]
     assert env.w.run_once_slot() == "SUCCEEDED", env.job(nid)
     assert sorted(os.listdir(inp)) == expected                           # 이전 파일 없음
+    if mode == "prepared":                                                # 원본의 EPS_mesh가 다시 복사됨(잔존 내용 아님)
+        assert (inp / "EPS_mesh_0000.rad").read_text() == "simlab mesh\n"
     backups = [p for p in (env.sroot / "_backup").glob(f"*_{nid}/04_predict/{jid}/INPUT") if p.is_dir()]
     assert len(backups) == 1
     assert {n: (backups[0] / n).read_bytes() for n in os.listdir(backups[0])} == first   # 통째로 보존(삭제 없음)

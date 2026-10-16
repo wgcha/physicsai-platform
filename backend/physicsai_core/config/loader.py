@@ -95,7 +95,8 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     if "hpc.command" in absent:
         w.append(ConfigIssue("hpc.command", "hpc.gateway=command인데 hpc.command가 없어 PBS 제출이 비활성입니다"))
     if "worker.gpu_query" in absent:
-        w.append(ConfigIssue("worker.gpu_query", "GPU 조회 명령이 없어 GPU 사용량을 표시하지 않습니다"))
+        w.append(ConfigIssue("worker.gpu_query",
+                             "GPU 조회 명령이 없어 nvidia-smi를 자동 탐색합니다(resources.gpu_query_candidates, 못 찾으면 GPU 정보 없음)"))
     if _has(data, "predict", "mesh_output_glob"):
         w.append(ConfigIssue("predict.mesh_output_glob",
                              "폐지된 키입니다 — 값이 적용되지 않습니다(새 메시는 predict.mesh_include_name, 지워도 됩니다)"))

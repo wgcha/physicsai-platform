@@ -2063,6 +2063,10 @@ export interface components {
             cpu_pct?: number | null;
             /** Gpu */
             gpu: components["schemas"]["GpuInfo"][];
+            /** Gpu Message */
+            gpu_message?: string | null;
+            /** Gpu Status */
+            gpu_status?: ("OK" | "NOT_FOUND" | "ERROR") | null;
             job?: components["schemas"]["ResourceJob"] | null;
             limits: components["schemas"]["ResourceLimits"];
             /** Ram Total Gb */

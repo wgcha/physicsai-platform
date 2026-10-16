@@ -516,7 +516,8 @@ $env:PGPASSWORD = $null
 | `worker.resource_sample_interval_s` | CPU·RAM·GPU 표본 주기(초) | `10` | `10` | W |
 | `worker.env_passthrough` | Altair 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch). DB URL·`PHYSICSAI_*`·`*PASSWORD*`·`*SECRET*`·`*TOKEN*`·`PG*`는 항상 제외 | `[]` | `[]` | W |
 | `worker.state_dir` | 단일 인스턴스 잠금 파일 폴더(상대경로면 작업 폴더 = `install_root` 기준) | `./state` | `./state` | W↻ |
-| `worker.gpu_query` | GPU 조회 argv(`nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits` 형식). null이면 GPU 표시 없음 | `null` | `["C:/Windows/System32/nvidia-smi.exe", …]` | W |
+| `worker.gpu_query` | GPU 조회 argv(`nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits` 형식). 첫 인자가 비었거나(null 포함) 못 찾으면 `resources.gpu_query_candidates`로 자동 탐색(phase3 D3-45) | `null` | `["nvidia-smi", …]` | W |
+| `resources.gpu_query_candidates` | GPU 조회 실행 파일 자동 탐색 후보(순서대로, 이름만 = PATH, `%VAR%` 확장) | `["nvidia-smi", "%SystemRoot%\\System32\\nvidia-smi.exe", "%ProgramFiles%\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe"]` | 같음 | W |
 
 실행 시간 한도 키는 의도적으로 없다(오래 걸리면 관리자가 취소).
 
@@ -681,7 +682,7 @@ $env:PGPASSWORD = $null
 | `commands.<키>`가 파일에 **없음**(예시 일부만 복사) | 설정 오류가 아님. 그 명령을 쓰는 기능만 비활성 → 카드 "관리자 설정 필요: commands.<키>", 작업 생성 409 `TEMPLATE_NOT_CONFIGURED`. 1차 확정 템플릿이 빠지면 경고도 남는다 | `/status`의 `features`(`dataset_create`·`evaluate`·`predict` 포함)·`config.warnings` |
 | 1차 확정 템플릿(`edspy_create_dataset`·`edspy_score`·`edspy_predict`·`contour_preview`)에 **명시적 `null`** | 설정 오류(`CONFIG_INVALID`) | `config.valid` |
 | `hpc.gateway: command`인데 `hpc.command` 블록이 없음 | 오류 아님. PBS 미구성(①-4·④ PBS 검증 비활성) + 경고 | `config.warnings`, `features.train_solve` |
-| `worker.gpu_query`가 없음 | GPU 표시만 없음 + 경고 | `config.warnings` |
+| `worker.gpu_query`가 없음 | nvidia-smi 자동 탐색(못 찾으면 화면에 "GPU 정보 없음 — nvidia-smi를 찾지 못했습니다") + 경고 | `config.warnings` |
 | 예약 키 `server.base_path`·`hpc.transfer.stage_in`·`hpc.adapter.module` | 값이 적용되지 않음 + 경고 "예약(미사용) 키입니다 — 지워도 됩니다". 예전 설정 파일 호환용으로만 스키마에 남아 있다 | `config.warnings` |
 | 그 밖의 알 수 없는 키·형식 오류 | 설정 오류 | `config.valid` |
 
@@ -926,7 +927,7 @@ cpu_rate = clamp(floor(유효 코어 / 감지 코어 × 10000), 100, 10000)    #
 | 원본 자원 | `resource.<key>` | 워커 | 비었으면 경고(기능 비활성), 없으면 실패, 런처는 pyd 정확히 1개 |
 | 저장소 | `storage.ai_root.write`, `.free`, `storage.roots_overlap`, `storage.spdm_roots` | 워커 | `_platform/env_check_tmp/`에 임시 파일 쓰기(자동 삭제), 여유 ≥ `min_free_gb`, 루트 비중첩, SPDM 읽기 가능 |
 | 워커 | `worker.limiter`, `worker.job_object` | 워커 | `windows_job` 정상(posix·null 경고), Job Object 자체 시험(`python -I -c pass`를 Job 안에서 실행 후 한도 값 조회) |
-| GPU | `gpu.detect` | 워커 | `gpu_query` 결과 GPU ≥1 |
+| GPU | `gpu.detect` | 워커 | `gpu_query`(또는 자동 탐색한 nvidia-smi) 결과 GPU ≥1 |
 
 - 결과: 정상(녹)·경고(노)·실패(적)·건너뜀(회)·대기(회전). 세부 "보기"에 경로·크기·지연 등. 보고서 파일 `<ai_root>/_platform/env_checks/<id>/report.json`(프로브 출력 꼬리 포함, 마스킹)은 화면의 "복사"로 경로를 얻는다.
 - 최근 점검에 실패가 있으면 상단 "관리" 옆에 빨간 점.

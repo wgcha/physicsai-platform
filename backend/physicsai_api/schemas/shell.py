@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -155,6 +155,9 @@ class ResourcesResponse(Resp):
     ram_used_gb: float | None = None
     ram_total_gb: float | None = None
     gpu: list[GpuInfo]
+    # GPU 조회 상태(phase3 D3-45): OK | NOT_FOUND(nvidia-smi 못 찾음) | ERROR(실행 실패). 이전 워커 표본은 null
+    gpu_status: Literal["OK", "NOT_FOUND", "ERROR"] | None = None
+    gpu_message: str | None = None
     job: ResourceJob | None = None
     limits: ResourceLimits
 

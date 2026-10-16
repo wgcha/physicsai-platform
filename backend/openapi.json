@@ -3336,6 +3336,33 @@
             "title": "Gpu",
             "type": "array"
           },
+          "gpu_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Message"
+          },
+          "gpu_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "OK",
+                  "NOT_FOUND",
+                  "ERROR"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Status"
+          },
           "job": {
             "anyOf": [
               {

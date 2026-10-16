@@ -19,8 +19,21 @@ import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
 /** 하위 폴더가 있을 때만 보이는 회색 참고 문구(phase3 D3-43 — 항상 보이면 오류로 오해) */
 export const subdirNote = (n: number) => `하위 폴더 ${n}개는 복사하지 않습니다(이 폴더의 .rad·.inc만 사용)`;
 
+/** starter 0개 + 하위 폴더 후보가 있을 때 안내(phase3 D3-44) */
+export const STARTER_HINT_HEAD = "하위 폴더에 starter 후보가 있습니다: ";
+export const STARTER_HINT_TAIL = " — 그 폴더나 파일 경로를 입력하세요";
+
+/** 확인한 폴더(normalized_path) + 하위 상대경로 → 절대경로. 구분자는 기준 경로의 것(\\ 있으면 \\)을 따른다 */
+export function joinHint(base: string, rel: string): string {
+  const sep = base.includes("\\") ? "\\" : "/";
+  const b = base.replace(/[\\/]+$/, "");
+  return `${b}${sep}${rel.split(/[\\/]+/).join(sep)}`;
+}
+
+type InputInfo = PredictInputInspect & { ok: boolean; normalized_path: string };
+
 /** inspect 응답에서 PREDICT_INPUT 요약을 꺼낸다(요약 키는 summary 안, problems는 최상위 — phase3 D3-30) */
-export function predictInputInfo(r: PathInspectResult): PredictInputInspect & { ok: boolean } {
+export function predictInputInfo(r: PathInspectResult): InputInfo {
   const sum = (r.summary ?? {}) as Partial<PredictInputInspect>;
   const pick = <K extends keyof PredictInputInspect>(k: K): PredictInputInspect[K] | undefined => sum[k] as PredictInputInspect[K] | undefined;
   const seen = new Set<string>();
@@ -42,8 +55,10 @@ export function predictInputInfo(r: PathInspectResult): PredictInputInspect & { 
     file_count: pick("file_count") ?? 0,
     total_bytes: pick("total_bytes") ?? 0,
     subdir_count: pick("subdir_count") ?? 0,
+    starter_hints: pick("starter_hints") ?? [],
     problems,
     ok: r.ok && starterOk && problems.length === 0,
+    normalized_path: r.normalized_path ?? "",
   };
 }
 
@@ -74,7 +89,7 @@ export function PreparedPredictCard() {
   const choice = useModelChoice();
   const predict = useJobRunner("PREDICT");
   const [path, setPath] = useState("");
-  const [info, setInfo] = useState<(PredictInputInspect & { ok: boolean }) | null>(null);
+  const [info, setInfo] = useState<InputInfo | null>(null);
   const [inspectError, setInspectError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -137,6 +152,29 @@ export function PreparedPredictCard() {
               </p>
             )}
             {info && <ProblemNotes problems={info.problems} testId="prepared-problems" />}
+            {info && info.kind === "dir" && info.starter.length === 0 && (info.starter_hints?.length ?? 0) > 0 && (
+              <p className="muted small" data-testid="prepared-starter-hints">
+                {STARTER_HINT_HEAD}
+                {info.starter_hints!.map((h, i) => (
+                  <span key={h}>
+                    {i > 0 && ", "}
+                    <button
+                      type="button"
+                      className="link mono"
+                      disabled={!canExec}
+                      title="이 파일 경로를 입력란에 채웁니다"
+                      onClick={() => {
+                        setPath(joinHint(info.normalized_path || path.trim(), h));
+                        setInfo(null);
+                      }}
+                    >
+                      {h}
+                    </button>
+                  </span>
+                ))}
+                {STARTER_HINT_TAIL}
+              </p>
+            )}
             {info && (info.subdir_count ?? 0) > 0 && (
               <p className="muted small" data-testid="prepared-subdir-note">
                 {subdirNote(info.subdir_count ?? 0)}

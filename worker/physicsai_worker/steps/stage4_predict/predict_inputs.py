@@ -2,7 +2,7 @@
 
 parametric = 원본 ⑤ 체인: SimLab(형상 갱신·메싱 → `EPS_mesh_0000.rad`) → HyperMesh m_2(include 변환 → `104_replace_node_elem.inc`)
 → 조립 폴더 사본에 새 include를 넣어 starter가 새 메시를 쓰게 한다. 성공은 종료코드가 아니라 출력 파일로 판정한다(원본 SimLab rc 무시).
-prepared = 원본 ③ 단독 예측: 사용자가 준비한 입력(읽기 전용)을 P/INPUT으로 복사.
+prepared = 원본 ③ 단독 예측: 사용자가 준비한 입력(읽기 전용)을 P/INPUT으로 복사(eps_mesh 포함, D3-44 — 제외는 parametric만).
 """
 
 from __future__ import annotations
@@ -189,7 +189,8 @@ def rad_assemble(ctx: Any) -> None:
     inp = os.path.join(P, "INPUT")
     _reset_input(ctx, inp)
     if is_prepared(ctx):
-        plan = check_prepared(ctx)  # 원본 폴더는 읽기만(복사 원천)
+        # 원본 폴더는 읽기만(복사 원천). 직계 *.rad·*.inc 전부 — eps_mesh*도 starter가 include할 수 있어 복사(D3-44)
+        plan = check_prepared(ctx)
         _copy_into(ctx, inp, plan.files)
         ctx.patch_result({"starter": plan.starter})
         return

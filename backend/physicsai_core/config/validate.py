@@ -115,6 +115,8 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
         add("worker.priority", "idle | below_normal | normal")
     if w.gpu_query is not None and (not w.gpu_query or not all(isinstance(x, str) for x in w.gpu_query)):
         add("worker.gpu_query", "문자열 배열이어야 합니다")
+    if not all(isinstance(x, str) and x.strip() for x in s.resources.gpu_query_candidates):
+        add("resources.gpu_query_candidates", "빈 문자열이 아닌 실행 파일 이름·경로 배열이어야 합니다")
 
     # auth
     a = s.auth

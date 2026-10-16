@@ -112,6 +112,30 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     expect(within(card).queryByTestId("prepared-subdir-note")).toBeNull();
   });
 
+  it("starter 0개 + 하위 폴더 후보 → 안내, 후보 클릭 시 경로 입력란을 그 파일 절대경로로(D3-44)", async () => {
+    localStorage.setItem(KEY, "prepared");
+    renderApp(`${STUDY}/4`, { user: "power" });
+    let card = await inspectOk("E:\\shared\\AI_WORK\\cushion\\00_inbox\\batch_A");
+    const hints = await within(card).findByTestId("prepared-starter-hints");
+    expect(hints.textContent).toBe("하위 폴더에 starter 후보가 있습니다: case1\\Face_Drop_0000.rad, case2\\Side_Drop_0000.rad — 그 폴더나 파일 경로를 입력하세요");
+    expect(hints.className).toContain("muted");
+    const input = within(card).getByLabelText("준비된 입력 경로") as HTMLInputElement;
+    fireEvent.click(within(hints).getByRole("button", { name: "case2\\Side_Drop_0000.rad" }));
+    // 목은 normalized_path를 / 로 돌려주므로 그 구분자로 결합
+    expect(input.value).toBe("E:/shared/AI_WORK/cushion/00_inbox/batch_A/case2/Side_Drop_0000.rad");
+    expect(within(card).queryByTestId("prepared-starter-hints")).toBeNull();
+    // starter가 있으면 안내 없음
+    card = await inspectOk("E:/shared/AI_WORK/cushion/00_inbox/flat_case");
+    await waitFor(() => expect(within(card).getByTestId("prepared-summary").textContent).toContain("✓ starter"));
+    expect(within(card).queryByTestId("prepared-starter-hints")).toBeNull();
+  });
+
+  it("joinHint: 기준 경로의 구분자를 따른다", async () => {
+    const { joinHint } = await import("../stages/stage4/PreparedPredictCard");
+    expect(joinHint("E:\\a\\batch", "case1\\X_0000.rad")).toBe("E:\\a\\batch\\case1\\X_0000.rad");
+    expect(joinHint("E:/a/batch/", "case1\\X_0000.rad")).toBe("E:/a/batch/case1/X_0000.rad");
+  });
+
   it("확인 결과 문제는 회색 참고 문구, 실행 비활성", async () => {
     localStorage.setItem(KEY, "prepared");
     renderApp(`${STUDY}/4`, { user: "power" });
@@ -205,7 +229,7 @@ describe("목 PREDICT params 검증(§11.5)", () => {
     expect(r.status).toBe(200);
     const b = r.body as { ok: boolean; normalized_path: string; problems: unknown[]; summary: Record<string, unknown> };
     expect(b.ok).toBe(true);
-    expect(Object.keys(b.summary).sort()).toEqual(["file_count", "inc_count", "kind", "rad", "starter", "starter_ok", "subdir_count", "total_bytes"]);
+    expect(Object.keys(b.summary).sort()).toEqual(["file_count", "inc_count", "kind", "rad", "starter", "starter_hints", "starter_ok", "subdir_count", "total_bytes"]);
     const bad = s.handle("POST", "/studies/s-cushion/paths/inspect", q, { purpose: "PREDICT_INPUT", path: "E:/shared/AI_WORK/x/a.txt" }, h);
     expect((bad.body as { problems: { code: string }[] }).problems[0].code).toBe("INPUT_EXT");
   });

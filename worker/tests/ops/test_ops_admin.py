@@ -110,7 +110,7 @@ def test_env_check_probes_and_failures(tmp_path, fake_tools, engine, fake_dashbo
         assert wi["altair.hw_exe_path"]["status"] == "FAIL" and wi["altair.hyperstudy_path"]["status"] == "WARN"
         assert wi["altair.hstpy_path"]["status"] == "WARN"  # hyperstudy 비어 파생도 비어 있음
         assert wi["resource.launchers.gen_radioss"]["status"] == "FAIL" and "2개" in wi["resource.launchers.gen_radioss"]["message"]
-        assert wi["gpu.detect"]["status"] == "WARN"
+        assert wi["gpu.detect"]["status"] == "WARN" and "nvidia-smi 종료코드 1" in wi["gpu.detect"]["message"]   # D3-45 ERROR
         rep = json.loads((ai / "_platform" / "env_checks" / chk["id"] / "report.json").read_text())
         assert "Altair edspy (fake) starting" in rep["probe_output_tails"]["probe.edspy"]
     finally:
