@@ -33,12 +33,15 @@ import { preparedRoutes } from "./stage4Prepared";
 import { optimizeRoutes } from "./stage5";
 import { isBatchChild, predictBatchRoutes, seedBatches, type BatchRec } from "./predictBatch";
 import { studyRoutes } from "./studies";
+import { captureRoutes, type CaptureMode } from "./capture";
 
 export type { MockResp } from "./route";
 
 type Notif = NotificationItem & { user_id: string };
 interface ArtifactRec extends Artifact {
   body: string;
+  /** S10: 바이너리 산출물(요청 때 그린다) */
+  render?: () => Uint8Array;
 }
 
 export interface MockOptions {
@@ -60,6 +63,8 @@ export interface MockOptions {
   loginUrl?: string;
   /** S9: "running"이면 진행 중 일괄 예측 B-003 시드(하위 PREDICT 12개가 대기열에 들어간다) */
   batchDemo?: "running";
+  /** S10: 예측 끝 컨투어 캡처 결과(기본 OK) */
+  capture?: CaptureMode;
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -87,6 +92,7 @@ const ROUTES: Route[] = [
   optimizeRoutes, // ⑤
   preparedRoutes, // S6 ④ 준비된 입력 inspect(PREDICT_INPUT)
   predictBatchRoutes, // S9 ④ 일괄 예측·템플릿 응답(phase3.md §14.7)
+  captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④
@@ -119,6 +125,9 @@ export class MockServer {
   idn = 1000;
   p2: Phase2Mock;
   manage: ManageMock;
+  /** S10 */
+  capture: CaptureMode = "OK";
+  mediaInfo = new Map<string, { status: Exclude<CaptureMode, "NONE">; message: string | null }>();
 
   constructor(opts: MockOptions = {}) {
     this.user = opts.user ?? "admin";
@@ -129,6 +138,7 @@ export class MockServer {
     this.loginUrl = opts.loginUrl ?? "/";
     this.speed = opts.speed ?? 9;
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
+    this.capture = opts.capture ?? "OK";
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
     this.seedJobs();
     this.p2 = new Phase2Mock(this, opts.disabledFeatures);
@@ -172,6 +182,13 @@ export class MockServer {
   addArtifact(jobId: string, studyId: string, kind: Artifact["kind"], rel: string, ct: string, body: string): string {
     const id = this.nid("a");
     this.artifacts.push({ id, study_id: studyId, job_id: jobId, kind, file_name: rel.split("/").pop()!, size: body.length, sha256: null, content_type: ct, created_at: new Date().toISOString(), body });
+    return id;
+  }
+
+  /** S10: PNG 산출물(본문은 요청 때 render로 만든다) */
+  addPngArtifact(jobId: string, studyId: string, kind: Artifact["kind"], rel: string, render: () => Uint8Array): string {
+    const id = this.nid("a");
+    this.artifacts.push({ id, study_id: studyId, job_id: jobId, kind, file_name: rel.split("/").pop()!, size: 0, sha256: null, content_type: "image/png", created_at: new Date().toISOString(), body: "", render });
     return id;
   }
 
@@ -270,6 +287,10 @@ export function createMockFetch(server: MockServer, realFetch?: typeof fetch): t
     const r = server.handle(method, url.pathname.slice(prefix.length) || "/", url.searchParams, body, headers);
     const h = new Headers(r.headers);
     if (r.status === 304) return new Response(null, { status: 304, headers: h });
+    if (r.bytes !== undefined) {
+      h.set("Content-Type", r.contentType ?? "application/octet-stream");
+      return new Response(r.bytes.slice().buffer as ArrayBuffer, { status: r.status, headers: h });
+    }
     if (r.text !== undefined) {
       h.set("Content-Type", r.contentType ?? "text/plain");
       return new Response(r.text, { status: r.status, headers: h });

@@ -22,6 +22,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   STUDY_STORAGE_SCAN: "관리",
   STUDY_CLEANUP: "관리",
   PREDICT_BATCH: "④",
+  CONTOUR_CAPTURE: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */

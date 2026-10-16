@@ -6,6 +6,8 @@ export interface MockResp {
   status: number;
   body?: unknown;
   text?: string;
+  /** S10: 바이너리 본문(PNG 등) */
+  bytes?: Uint8Array;
   contentType?: string;
   headers?: Record<string, string>;
 }

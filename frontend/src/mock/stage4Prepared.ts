@@ -9,6 +9,7 @@ import { PREVIEW_JSON, contourSvg, curveJson, responseFn } from "./data";
 import { err, needPower, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { inspectPath } from "./studies";
+import { captureMedia } from "./capture";
 
 const MAX_FILES = 500;
 const MAX_BYTES = 2147483648;
@@ -149,6 +150,7 @@ export function preparedResult(srv: MockServer, j: Job) {
     curve_artifact_id: cj,
     response_table_artifact_id: null,
     response_table: (ps?.responses ?? []).map((r) => ({ name: r.name, unit: r.unit, predicted: pred[r.name] ?? null, nearest_measured: null, diff_pct: null })),
+    media: captureMedia(srv, j, nominal), // S10
   };
 }
 

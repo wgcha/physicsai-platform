@@ -94,7 +94,7 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     const result = await screen.findByRole("region", { name: "결과" });
     await waitFor(() => expect(within(result).getByText("Face_Drop_0000.rad")).toBeTruthy(), { timeout: 3000 });
     expect(within(result).getByText(/준비된 입력/)).toBeTruthy();
-    expect(await within(result).findByAltText("예측 컨투어")).toBeTruthy();
+    expect(await within(result).findByAltText(/^예측 컨투어 — /)).toBeTruthy();
     expect(chainLabels()).toEqual(["입력파일", "예측"]);
     expect(screen.queryByText("생략")).toBeNull();
     // PBS 검증 해석: 기존 규칙(PBS 미구성 → 비활성 + 안내)

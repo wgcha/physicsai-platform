@@ -151,6 +151,8 @@ export function seedParamSet(): ParamSet {
     id: "ps-1", study_id: "s-cushion", source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/params",
     unit_system: "mm-ton-s", parameters: PARAMS, responses: RESPONSES, sample_count: 120, sample_has_measured: true,
     cad_file_name: "cushion_base.x_t", starter_name: "cushion_0000.rad", input_kind: "assembly", assem_rel: "radioss_assem",
+    // S10 컨투어 표시 설정
+    display: { field: "Stress", component: "vonMises", avgmode: "simple", comps: ["CUSHION_TOP", "FOAM"], legend: { mode: "auto", min: null, max: null }, views: ["iso", "front", "top", "right"] },
     tpl_params: [
       { var: "var_1", name: "THK_TOP", format: "%.4f" },
       { var: "var_2", name: "THK_FOAM", format: "%.4f" },

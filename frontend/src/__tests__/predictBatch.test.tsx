@@ -334,7 +334,7 @@ describe("④ B 결과 표·그래프·커브 (V3-S9-14·18)", () => {
     expect(screen.getByTestId("row-7").className).toContain("selected");
     fireEvent.click(within(panel).getByRole("button", { name: "단일 예측으로 열기" }));
     expect(await screen.findByRole("region", { name: "일괄 예측 B-002 · DOE #7" })).toBeTruthy();
-    expect(await screen.findByAltText("예측 컨투어")).toBeTruthy();
+    expect(await screen.findByAltText(/^예측 컨투어 — /)).toBeTruthy();
   });
 
   it("응답 그래프 선택 규칙: 변수 1+응답 1 = 2D, 변수 2+응답 1 = 3D(plotly 동적 import), 그 밖 = 회색 안내", async () => {

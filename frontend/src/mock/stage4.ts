@@ -5,6 +5,7 @@ import { err, type Route } from "./route";
 import type { MockServer } from "./server";
 import { isPrepared, preparedResult } from "./stage4Prepared";
 import { batchChildResult, finishBatchParent, isBatchChild } from "./predictBatch";
+import { captureMedia, finishCapture } from "./capture";
 
 export function predictResult(srv: MockServer, job: Job, values: Record<string, number>, modelId: string, psId: string) {
   const ps = srv.paramSets.find((p) => p.id === psId)!;
@@ -31,6 +32,7 @@ export function predictResult(srv: MockServer, job: Job, values: Record<string, 
       const m = chk.nearest?.measured?.[r.name] ?? null;
       return { name: r.name, unit: r.unit, predicted: p, nearest_measured: m, diff_pct: p != null && m ? ((p - m) / m) * 100 : null };
     }),
+    media: captureMedia(srv, job, applied), // S10
   };
 }
 
@@ -93,6 +95,9 @@ export function finishStage4(srv: MockServer, j: Job) {
       j.result = predictResult(srv, j, (p.values as Record<string, number>) ?? nominal, (p.model_id as string) || study.final_model_id || "m-1", ps);
       break;
     }
+    case "CONTOUR_CAPTURE":
+      finishCapture(srv, j);
+      break;
     case "PREDICT_VERIFY": {
       const pj = srv.jobs.find((x) => x.id === p.predict_job_id);
       const vals = (pj?.params.values ?? {}) as Record<string, number>;

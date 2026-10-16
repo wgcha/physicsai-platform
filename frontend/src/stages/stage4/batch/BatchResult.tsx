@@ -1,20 +1,20 @@
 // ④ B 일괄 예측 진행·결과(phase3.md §14.8, 시안 04, 라우트 …/stage/4/batch/:batchId):
 // 위 3칸(입력 생성 x/N · 예측 실행 중·대기·완료 · 파일 위치) + 결과 표(정렬·CSV·행 선택·실패만 다시·일괄 취소)
-// + 오른쪽: 응답 그래프(표 머리에서 변수 체크·응답 라디오 → 2D/3D/안내) · 커브 겹쳐보기 · 고른 DOE(결과 목록·경로 복사·단일 예측으로 열기·PBS 검증).
+// + 오른쪽: 응답 그래프(표 머리에서 변수 체크·응답 라디오 → 2D/3D/안내) · 커브 겹쳐보기 · 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, errorMessage, type Job, type PredictBatch, type PredictBatchRow, type PredictResult as PR } from "../../../api";
+import { api, errorMessage, type Job, type PredictBatch, type PredictBatchRow, type PredictResult as PR, type ViewKey } from "../../../api";
 import { useStudy } from "../../../app/StudyContext";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { usePolling } from "../../../hooks/usePolling";
-import { useArtifactJson } from "../../../hooks/useArtifact";
 import { useFeature } from "../../../components/FeatureGate";
 import { Card, CopyButton, ProgressBar } from "../../../components/ui";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
-import { JsonTree } from "../../../components/JsonTree";
 import { POLL } from "../../../lib/poll";
 import { fmtNum } from "../../../lib/format";
 import { usePredictVerify } from "../predictRun";
+import { ContourMedia } from "../ContourMedia";
+import { ResultListTree } from "../PredictResult";
 import { fmtDuration } from "../PredictSteps";
 import { OutDot } from "./BatchPreview";
 import { CurveOverlay } from "./CurveOverlay";
@@ -38,6 +38,8 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const [resp, setResp] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  /** S10: 컨투어 방향은 run을 바꿔도 유지(비교용) */
+  const [mediaView, setMediaView] = useState<ViewKey | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -218,13 +220,13 @@ export function BatchResult({ batchId }: { batchId: string }) {
             </tbody>
           </table>
         </div>
-        <p className="muted small">행을 누르면 오른쪽에 그 DOE의 결과가 열립니다. 학습 범위 밖 값은 숫자 옆 작은 회색 점. 열 이름의 체크(변수)·동그라미(응답)로 그래프를 고릅니다.</p>
+        <p className="muted small">행을 누르면 오른쪽에 그 DOE의 결과가 열립니다. DOE # 옆 카메라 표시 = 컨투어 캡처 있음(방향은 run을 바꿔도 유지). 학습 범위 밖 값은 숫자 옆 작은 회색 점. 열 이름의 체크(변수)·동그라미(응답)로 그래프를 고릅니다.</p>
         <p className="small">
           <Link to={base}>← 일괄 예측 설정</Link>
         </p>
       </Card>
 
-      <RunPanel row={selRow} base={base} />
+      <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} />
       <Card span={3} title="응답 그래프" className="batch-plot">
         {kind === "none" || !pickResp ? (
           <p className="muted small" data-testid="plot-hint">
@@ -266,6 +268,7 @@ function ResultRow({ r, b, showResp, selected, onSelect, canRetry, onRetry }: { 
         <button type="button" className={selected ? "link strong red" : "link strong"} aria-pressed={selected} aria-label={`DOE #${r.doe_no} 선택`} onClick={(e) => (e.stopPropagation(), onSelect())}>
           {r.doe_no}
         </button>
+        {!!r.media_views?.length && <CaptureMark views={r.media_views} />}
       </td>
       <td className="mono small">{r.run_key}</td>
       {b.parameters.map((n) => (
@@ -299,9 +302,22 @@ function ResultRow({ r, b, showResp, selected, onSelect, canRetry, onRetry }: { 
   );
 }
 
-/** 고른 DOE: 머리 DOE #N · run_key, 결과 목록(컨투어 JSON 트리), 경로 복사·단일 예측으로 열기·PBS 검증 해석 */
-function RunPanel({ row, base }: { row: PredictBatchRow | null; base: string }) {
+/** 미디어 있는 행 표시(작은 카메라 SVG, 이모지 아님) */
+function CaptureMark({ views }: { views: string[] }) {
+  const t = `캡처 ${views.length}방향`;
+  return (
+    <svg className="capture-mark" width="14" height="12" viewBox="0 0 14 12" role="img" aria-label={t} data-testid="capture-mark">
+      <title>{t}</title>
+      <path d="M1 3h3l1.5-2h3L10 3h3v8H1z" fill="none" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="7" cy="7" r="2.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+    </svg>
+  );
+}
+
+/** 고른 DOE: 머리 DOE #N · run_key, 컨투어(방향별 스크린샷·영상) + 접힌 결과 목록, 경로 복사·단일 예측으로 열기·PBS 검증 해석 */
+function RunPanel({ row, base, canCapture, view, onView, psId }: { row: PredictBatchRow | null; base: string; canCapture: boolean; view: ViewKey | null; onView: (v: ViewKey) => void; psId: string }) {
   const navigate = useNavigate();
+  const { paramSets } = useStudy();
   const [job, setJob] = useState<Job | null>(null);
   useEffect(() => {
     setJob(null);
@@ -313,7 +329,6 @@ function RunPanel({ row, base }: { row: PredictBatchRow | null; base: string }) 
     };
   }, [row?.job_id, row?.state]);
   const result = job?.state === "SUCCEEDED" ? (job.result as unknown as PR | null) : null;
-  const preview = useArtifactJson<unknown>(result?.preview_json_artifact_id);
   const pbs = usePredictVerify(job, !!result);
   if (!row)
     return (
@@ -321,17 +336,16 @@ function RunPanel({ row, base }: { row: PredictBatchRow | null; base: string }) 
         <p className="muted small">표나 그래프에서 run을 고르세요.</p>
       </Card>
     );
+  const done = row.state === "SUCCEEDED" && !!row.job_id;
   return (
     <Card span={3} title={`DOE #${row.doe_no}`} step={row.run_key} className="batch-run-panel">
-      <div className="field-label">결과 목록(컨투어)</div>
-      {row.state !== "SUCCEEDED" ? (
-        <p className="muted small">{ROW_STATE_LABEL[row.state]} — 예측이 끝나면 결과 목록이 나옵니다.</p>
-      ) : preview ? (
-        <div className="run-tree">
-          <JsonTree data={preview} />
-        </div>
+      {!done ? (
+        <p className="muted small">{ROW_STATE_LABEL[row.state]} — 예측이 끝나면 컨투어와 결과 목록이 나옵니다.</p>
       ) : (
-        <p className="muted small">불러오는 중…</p>
+        <>
+          <ContourMedia key={row.job_id} jobId={row.job_id!} view={view} onView={onView} canCapture={canCapture} captureViews={paramSets.find((p) => p.id === psId)?.display?.views ?? null} />
+          {result ? <ResultListTree artifactId={result.preview_json_artifact_id} /> : <p className="muted small">불러오는 중…</p>}
+        </>
       )}
       <div className="run-action-row">
         <CopyButton text={row.folder} label="경로 복사" />

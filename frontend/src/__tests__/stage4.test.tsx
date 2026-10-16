@@ -54,7 +54,7 @@ describe("④ 화면 (V-FE-6)", () => {
     const chain = screen.getByRole("list", { name: "예측 실행 단계" });
     expect(within(chain).getAllByRole("listitem").map((li) => li.querySelector(".pstep-label")!.textContent)).toEqual(["1 형상 생성(SimLab)", "2 메시 연결(HyperMesh)", "3 조립(Radioss 입력)", "4 예측(PhysicsAI)", "5 결과"]);
     expect(within(chain).getByText("건너뜀")).toBeTruthy(); // 목 기본: MESH 템플릿 미구성 → SKIPPED
-    expect(await screen.findByAltText("예측 컨투어")).toBeTruthy();
+    expect(await screen.findByAltText(/^예측 컨투어 — /)).toBeTruthy();
   });
 
   it("입력파일 받기: input_display_path가 있으면 활성, 경로 복사 표시", async () => {

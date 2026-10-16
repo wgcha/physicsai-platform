@@ -4,7 +4,9 @@ import { useStudy } from "../../app/StudyContext";
 import { Card, CopyButton } from "../../components/ui";
 import { Chart } from "../../components/Chart";
 import { JsonTree } from "../../components/JsonTree";
-import { useArtifactJson, useArtifactUrl } from "../../hooks/useArtifact";
+import { useArtifactJson } from "../../hooks/useArtifact";
+import { useCanExecute } from "../../hooks/useJobRunner";
+import { ContourMedia } from "./ContourMedia";
 import { fmtNum, fmtPct } from "../../lib/format";
 
 /** 실행 체인 4단계: 형상 → 메싱 → 입력파일 → 예측 */
@@ -70,22 +72,14 @@ export function PredictChain({ job, mode }: { job: Job | null; mode?: PredictInp
   );
 }
 
-export function ContourPreview({ result }: { result: PR }) {
-  const imgId = result.image_artifact_ids?.[0];
-  const url = useArtifactUrl(imgId);
-  const preview = useArtifactJson<unknown>(imgId ? null : result.preview_json_artifact_id);
+/** 기존 결과 목록(미리보기 TCL 출력 JSON 트리) — 컨투어 미디어 아래 접힘 */
+export function ResultListTree({ artifactId }: { artifactId: string | null | undefined }) {
+  const preview = useArtifactJson<unknown>(artifactId);
   return (
-    <div className="contour">
-      <div className="field-label">컨투어</div>
-      {imgId ? (
-        url ? <img src={url} alt="예측 컨투어" className="contour-img" /> : <div className="empty small">불러오는 중…</div>
-      ) : (
-        <>
-          <p className="muted small">컨투어 이미지 없음 — 미리보기 TCL 출력은 결과 목록입니다</p>
-          {preview ? <JsonTree data={preview} /> : <div className="empty small">결과 목록 없음</div>}
-        </>
-      )}
-    </div>
+    <details className="advanced result-list" data-testid="result-list">
+      <summary>결과 목록</summary>
+      <div className="run-tree">{preview ? <JsonTree data={preview} /> : <span className="muted small">{artifactId ? "불러오는 중…" : "결과 목록 없음"}</span>}</div>
+    </details>
   );
 }
 
@@ -175,10 +169,12 @@ function ResultHead({ job, result }: { job: Job; result: PR }) {
 
 /** "결과" 칸(B16·B17 입력파일 받기 포함). 두 입력 방식이 같이 쓴다 */
 export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null; verifyValues: Record<string, number> | null }) {
-  const { study } = useStudy();
+  const { study, paramSets } = useStudy();
+  const canCapture = useCanExecute();
   const result = pjob?.state === "SUCCEEDED" ? (pjob.result as unknown as PR | null) : null;
   // B16·B17: 입력파일은 RAD_ASSEMBLE 이후 준비(input_display_path가 채워짐) → input.zip
   const inputReady = !!pjob?.input_display_path;
+  const captureViews = paramSets.find((p) => p.id === result?.param_set_id)?.display?.views ?? null;
   const [inputError, setInputError] = useState<string | null>(null);
   const downloadInput = async () => {
     if (!pjob) return;
@@ -223,7 +219,10 @@ export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null
             </div>
           )}
           <div className="result-grid">
-            <ContourPreview result={result} />
+            <div className="result-contour">
+              <ContourMedia jobId={pjob.id} canCapture={canCapture} captureViews={captureViews} />
+              <ResultListTree artifactId={result.preview_json_artifact_id} />
+            </div>
             <div className="result-side">
               {result.curve_artifact_id && <CurveChart artifactId={result.curve_artifact_id} />}
               <div>

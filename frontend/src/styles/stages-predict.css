@@ -243,3 +243,64 @@
 .history .lg.sample {
   background: var(--ink);
 }
+
+/* S10 컨투어 캡처(방향별 스크린샷·영상) */
+.result-contour {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  align-content: start;
+}
+.cm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s2);
+}
+.cm-views {
+  flex-wrap: wrap;
+}
+.cm-views button:focus-visible {
+  outline: 2px solid var(--red);
+  outline-offset: -2px;
+}
+video.contour-img {
+  display: block;
+}
+.cm-capture {
+  display: grid;
+  gap: var(--s1);
+}
+.cm-capture-form,
+.contour-display {
+  margin: 0;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+}
+.cm-capture-form {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s1);
+  border: 1px solid var(--rule-soft);
+}
+.cm-capture-form legend,
+.contour-display legend {
+  padding: 0;
+}
+.contour-display {
+  display: grid;
+  gap: var(--s1);
+}
+.contour-display:disabled {
+  color: var(--ink-2);
+}
+.capture-mark {
+  margin-left: var(--s-h);
+  vertical-align: -1px;
+  color: var(--ink-2);
+}
+.legend-fix {
+  display: grid;
+  gap: var(--s-h);
+}
