@@ -40,3 +40,8 @@ def insert_current(conn: Connection, values: dict[str, Any]) -> None:
 
 def set_label(conn: Connection, ps_id: str, label: str | None) -> None:
     conn.execute(update(param_sets).where(param_sets.c.id == ps_id).values(label=label))
+
+
+def set_responses(conn: Connection, ps_id: str, responses: list[dict[str, Any]]) -> None:
+    """응답 정의 바꾸기(phase3 §14.6 S9) — `[{name, unit, spec|None}]`."""
+    conn.execute(update(param_sets).where(param_sets.c.id == ps_id).values(responses=responses))

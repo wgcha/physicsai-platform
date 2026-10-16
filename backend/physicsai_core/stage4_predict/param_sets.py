@@ -18,7 +18,8 @@ from .prepared_input import is_mesh_file
 
 
 def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, starter_glob: str,
-                    renum_csv_name: str | None = None) -> ParamSetFolder:
+                    renum_csv_name: str | None = None, allow_mesh_only: bool = True) -> ParamSetFolder:
+    """§15.4 폴더 검증. phase3 §14.4: `radioss_assem/`이 없으면 mesh_only(allow_mesh_only=False면 ASSEM_MISSING — ①→④)."""
     f = ParamSetFolder()
     total = 0
     for dirpath, dirnames, filenames in os.walk(folder, followlinks=False):
@@ -76,7 +77,10 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
     # radioss_assem/
     assem = os.path.join(folder, "radioss_assem")
     if not os.path.isdir(assem):
-        _p(f, "ASSEM_MISSING", "radioss_assem 폴더가 필요합니다", "radioss_assem")
+        if allow_mesh_only:
+            f.input_kind = "mesh_only"
+        else:
+            _p(f, "ASSEM_MISSING", "radioss_assem 폴더가 필요합니다", "radioss_assem")
     else:
         # phase3 §11.4(§15.4 갱신): eps_mesh로 시작하는 파일은 무시(starter로 세지 않고 복사 안 함), RENUM csv는 있으면 복사
         files = sorted(
@@ -98,6 +102,30 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
         else:
             f.starter_name = starters[0]
     return f
+
+
+def tpl_export_name(tpl_text: str, export_regex: str) -> str | None:
+    """tpl `dir_file_export = "…"`(원본 tpl:110)의 파일 이름. 없으면 None."""
+    import re
+
+    m = re.search(export_regex, tpl_text)
+    if not m:
+        return None
+    q = re.search(r'"([^"]*)"', m.group(0))
+    return q.group(1).replace("\\", "/").rstrip("/").split("/")[-1] if q else None
+
+
+def export_name_notes(folder: str, export_regex: str, simlab_mesh_name: str) -> list[dict[str, Any]]:
+    """phase3 §14.4: tpl `dir_file_export` 값이 predict.simlab_mesh_name과 다르면 경고 SIMLAB_EXPORT_NAME(등록은 성공)."""
+    try:
+        name = tpl_export_name(_read_text(os.path.join(folder, TPL_NAME)), export_regex)
+    except (OSError, UnicodeDecodeError):
+        return []
+    if name is None or name.casefold() == simlab_mesh_name.casefold():
+        return []
+    return [{"code": "SIMLAB_EXPORT_NAME",
+             "message": f"tpl의 내보내기 파일({name})이 설정 predict.simlab_mesh_name({simlab_mesh_name})과 다릅니다 — "
+                        "형상 갱신 성공 판정이 실패할 수 있습니다"}]
 
 
 def write_normalized(f: ParamSetFolder, src: str, dst: str, source_path: str) -> None:

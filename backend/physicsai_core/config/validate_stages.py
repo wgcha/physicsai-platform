@@ -21,6 +21,7 @@ def _validate_phase2(s: Settings, issues: list[ConfigIssue]) -> None:
     for k in ("tpl_prt_regex", "tpl_parameter_line_regex", "tpl_paramitem_line_regex"):
         _compile(f"train_data.{k}", getattr(td, k), issues)
     _compile("optimize.progress_regex", s.optimize.progress_regex, issues, ("run",))
+    _compile("param_set.tpl_export_regex", s.param_set.tpl_export_regex, issues)
     if not 1 <= td.max_multi_execution <= 64:
         add("train_data.max_multi_execution", "1~64")
     if not 2 <= td.max_runs <= 100000:

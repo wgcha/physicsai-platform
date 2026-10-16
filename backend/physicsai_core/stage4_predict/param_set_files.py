@@ -27,6 +27,7 @@ class ParamSetFolder:
     starter_name: str | None = None
     assem_files: list[str] = field(default_factory=list)
     renum_csv: str | None = None  # phase3 §11.4 radioss_assem/{predict.renum_csv_name}(있으면 복사)
+    input_kind: str = "assembly"  # phase3 §14.4: radioss_assem/ 없음 = mesh_only(m1 메시로 바로 예측)
     tpl_params: list[dict[str, str]] = field(default_factory=list)
     total_bytes: int = 0
     param_source: str | None = None
@@ -48,6 +49,7 @@ class ParamSetFolder:
             "cad_file_name": self.cad_file,
             "starter_name": self.starter_name,
             "renum_csv": self.renum_csv,
+            "input_kind": self.input_kind,
             "total_bytes": self.total_bytes,
         }
 

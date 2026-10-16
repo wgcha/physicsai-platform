@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -13,12 +13,13 @@ __all__ = [
     "ParamSetCreate", "Parameter", "ResponseDef", "TplParam", "ParamSet", "SampleRow", "SamplesPage",
     "PredictCheckRequest", "OutOfRange", "Rounded", "Nearest", "PredictCheckResponse", "ParamSetFromTrain",
     "ParamSetDiscoverChoice", "ParamSetDiscoverRequest", "DiscoverTpl", "DiscoverCad", "DiscoverAssem", "DiscoverProblem",
-    "ParamSetDiscoverResponse", "ParamSetPatch",
+    "ParamSetDiscoverResponse", "ParamSetPatch", "ParamSetResponsesUpdate",
 ]
 
 
 class ParamSetDiscoverChoice(Req):
-    """phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능."""
+    """phase3 §13 S8: discover가 돌려준 후보 중 사용자가 고른 것(상대경로). 후보가 1개면 생략 가능.
+    phase3 §14.4: `radioss_assem`을 명시적 null로 주면 조립 폴더 없이 메시 단독(mesh_only) 템플릿으로 등록."""
 
     tpl: str | None = Field(default=None, max_length=400)
     cad: str | None = Field(default=None, max_length=400)
@@ -79,6 +80,14 @@ class Parameter(Resp):
 class ResponseDef(Resp):
     name: str
     unit: str = ""
+    # phase3 §14.6: ⑤ OPTIMIZE.responses H3D 형식 {source:"H3D", subcase, datatype, component, layer, stat}. null = 추출 정의 없음
+    spec: dict[str, Any] | None = None
+
+
+class ParamSetResponsesUpdate(Req):
+    """phase3 §14.6 `PUT /param-sets/{id}/responses` — 행 `{name, unit, spec|null}`. 검증 실패는 422 RESPONSE_INVALID + problems."""
+
+    responses: list[dict[str, Any]]
 
 
 class TplParam(Resp):
@@ -97,7 +106,7 @@ class ParamSet(Resp):
     sample_count: int
     sample_has_measured: bool
     cad_file_name: str
-    starter_name: str
+    starter_name: str | None = None  # mesh_only면 null(phase3 §14.4)
     tpl_params: list[TplParam]
     is_current: bool
     registered_by_name: str
@@ -105,6 +114,10 @@ class ParamSet(Resp):
     origin: str = "FOLDER"
     train_doe_id: str | None = None
     label: str | None = None
+    # phase3 §14.4 S9 템플릿 입력 종류: assembly(조립 폴더 포함) | mesh_only(m1 메시 그대로 예측)
+    input_kind: Literal["assembly", "mesh_only"] = "assembly"
+    assem_rel: str | None = None  # Study 기준 조립 폴더 사본(04_params/<id>/radioss_assem/), mesh_only면 null
+    warnings: list[DiscoverProblem] = []  # 등록 응답에만(SIMLAB_EXPORT_NAME 등), 조회는 []
 
 
 class SampleRow(Resp):

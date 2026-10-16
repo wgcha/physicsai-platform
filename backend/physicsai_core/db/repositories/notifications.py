@@ -83,6 +83,7 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int | None:
             jobs.c.created_by,
             jobs.c.failure_code,
             jobs.c.result,
+            jobs.c.params,
             studies.c.title,
         )
         .select_from(jobs.join(studies, studies.c.id == jobs.c.study_id))
@@ -90,6 +91,8 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int | None:
     ).one()
     jt = JOB_TYPES.get(row.job_type)
     if jt is not None and not jt.notify_success and event in SUCCESS_EVENTS:
+        return None
+    if is_batch_child(row.params):  # phase3 §14.5: 일괄 예측 하위는 알림 없음(배치 완료 1건만)
         return None
     title, body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
     return conn.execute(
@@ -103,6 +106,25 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int | None:
             title=title[:120],
             body=body[:500],
         )
+        .returning(notifications.c.seq)
+    ).scalar_one()
+
+
+def is_batch_child(params: Any) -> bool:
+    """일괄 예측 하위 PREDICT(params.batch_run) 여부."""
+    return isinstance(params, dict) and isinstance(params.get("batch_run"), dict)
+
+
+def notify_batch_done(conn: Connection, batch: dict[str, Any], succeeded: int, failed: int) -> int:
+    """PREDICT_BATCH_DONE 1건(배치 등록자, job_id = 최신 부모 작업) — "일괄 예측 B-003 완료 — 완료 18 · 실패 2"."""
+    from .predict_batches import done_notice
+
+    title, body = done_notice(batch["batch_no"], succeeded, failed)
+    project_id = conn.execute(select(studies.c.project_id).where(studies.c.id == batch["study_id"])).scalar()
+    return conn.execute(
+        notifications.insert()
+        .values(user_id=batch["created_by"], event="PREDICT_BATCH_DONE", job_id=batch["job_id"], study_id=batch["study_id"],
+                project_id=project_id, title=title[:120], body=body[:500])
         .returning(notifications.c.seq)
     ).scalar_one()
 
