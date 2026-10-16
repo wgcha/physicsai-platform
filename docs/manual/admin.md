@@ -254,6 +254,22 @@ handle /physicsai/* {
 - 대시보드의 `@api path /api /api/*`와 `/physicsai/api`는 겹치지 않는다.
 - 확인: 운영 주소 `/physicsai/` 접속 → 대시보드 로그인 상태면 이름·역할이 보임(E2-0-5).
 
+#### 2.6.3 공유 폴더 설정(다른 PC의 입력·결과, phase3 §12)
+
+다른 PC는 서버 공유 `physicsai-inbox`(받은 파일 폴더 `<ai_root>\inbox`, 쓰기)에 입력을 복사하고 화면 "찾아보기"로 고른다. 결과는 `physicsai-data`(AI 루트, 읽기 전용)로 본다. 공유 생성은 **관리자 PowerShell로 1회**(설치 스크립트는 공유를 만들지 않고 조회만 해 `storage.inbox_share_hint`를 채운다 — 공유를 만든 뒤 `update-repo.ps1`을 한 번 실행):
+
+```powershell
+$ai = "E:\shared\AI_WORK"; $grp = "Everyone"   # 사내 그룹으로 바꾸려면 예: $grp = "CORP\PhysicsAI-Users"
+New-Item -ItemType Directory -Force "$ai\inbox" | Out-Null
+New-SmbShare -Name physicsai-data  -Path $ai         -ReadAccess   $grp
+New-SmbShare -Name physicsai-inbox -Path "$ai\inbox" -ChangeAccess $grp
+icacls $ai         /grant "${grp}:(OI)(CI)RX"   # NTFS 읽기·실행(하위 상속)
+icacls "$ai\inbox" /grant "${grp}:(OI)(CI)M"    # NTFS 수정(하위 상속)
+```
+
+- 그룹 바꾸기: `$grp`만 도메인 그룹(`도메인\그룹`)으로 두고 실행한다. 이미 만든 공유는 `Grant-SmbShareAccess -Name physicsai-inbox -AccountName <그룹> -AccessRight Change -Force` + `Revoke-SmbShareAccess -Name physicsai-inbox -AccountName Everyone -Force`(data는 `-AccessRight Read`), NTFS는 `icacls <폴더> /remove Everyone` 후 위 `/grant`를 새 그룹으로.
+- 확인: 다른 PC에서 `\\<서버>\physicsai-inbox`에 파일 복사 가능, `\\<서버>\physicsai-data`는 쓰기 거부. 화면 "찾아보기"의 받은 파일 안내에 공유 경로가 보이면 끝(`storage.inbox_share_hint`, 직접 적어도 된다).
+
 ### 2.7 원본 반입 자원 배치
 
 원본 앱 배포본에서 아래 파일을 서버 폴더(예 `D:/physicsai/resources/`)로 복사하고 `platform.yaml`의 `resources.*`에 절대경로(`/` 권장, 공백·메타문자 금지)를 적는다. 값이 비어 있으면 **그 기능만 비활성**("관리자 설정 필요: <키>")이다.
@@ -462,6 +478,8 @@ $env:PGPASSWORD = $null
 | `storage.ai_root` | 산출물 유일 루트. 절대경로·존재·쓰기 가능·공백/메타 없음·SPDM과 비중첩 | `""`(오류) | `E:/shared/AI_WORK` | B |
 | `storage.allowed_import_roots` | ③-4 모델 폴더·①-1 CAD·①-3 조립 폴더·①-5 결과 폴더를 추가로 읽을 수 있는 루트(읽기 전용) | `[]` | `[]`(예 `["F:/hpc_results"]`) | B |
 | `storage.spdm_roots` | SPDM master 루트. 이 하위는 **쓰기 금지**, ②-0 가져오기만 읽기 허용. 비면 SPDM 가져오기 비활성 | `[]` | `[]` | B |
+| `storage.inbox_dir` | 받은 파일 폴더(AI 루트 기준 상대, phase3 §12). 설치가 없으면 만든다. 절대경로·공백·`..`·`_backup`·`_platform` 불가 | `inbox` | `inbox` | B |
+| `storage.inbox_share_hint` | 화면 "찾아보기" 안내용 공유 경로(표시만, ≤260자). 비면 설치가 SMB 공유 조회로 채움(§2.6.3) | `null` | `null` | B |
 
 #### altair(실행 파일 — 경로는 여기서만)
 

@@ -99,3 +99,5 @@
 - 2026-10-15 · 빌드된 화면(`frontend-dist/`, `BUILD_INFO.json` source_hash)을 저장소에 포함 — 서버 설치·업데이트는 해시가 맞으면 Node·npm 없이 배치, `update-repo.ps1`이 스스로 `git pull --ff-only`(원클릭) — 사용자 결정("호환성 높게, 원클릭, 경로 지정 없음")·사내 보안 정책(`.bat` 차단, esbuild spawn EPERM) · phase3.md D3-40
 - 2026-10-15 · 설치·업데이트에서 관리자 권한 제거 — 머신 환경변수 대신 런타임 파일(`.runtime\secrets\database_url`, ACL 현재 사용자·SYSTEM), 작업은 현재 사용자 Interactive·Limited + `--runtime` 인자, 이전 설치는 첫 한 번만 관리자 실행 — 사용자 결정·사내 보안 정책(대시보드도 일반 권한) · phase3.md D3-41
 - 2026-10-16 · 모델 등록 시 `.pscfg`는 선택(0~1개, 2개 이상은 오류), `models.pscfg_*` NULL 허용(migration 0005), `{model_pscfg}` 템플릿 + pscfg 없는 모델은 작업 생성 409 `PSCFG_REQUIRED` — 사용자 결정 · 원본 예측·평가·최적화 명령에 pscfg 인자 없음(U7) · phase3.md D3-43
+- 2026-10-16 · 다른 PC의 입력은 서버 공유 `physicsai-inbox`(쓰기)에 복사하고 `physicsai-data`(AI 루트, 읽기 전용)로 결과를 본다, 화면은 서버 경로 "찾아보기"로 고름(업로드 없음) — 사용자 결정 · phase3.md §12, D3-46
+- 2026-10-16 · 파라미터 세트는 프로젝트 폴더 1개에서 자동 구성(tpl·CAD·조립 폴더, 등록 사본만 CAD 경로 `./<CAD>`), 세트 이름(label, migration 0006) — 사용자 요청 · phase3.md §13, D3-47

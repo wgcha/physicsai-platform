@@ -1,5 +1,6 @@
 import { useState, type ChangeEvent } from "react";
 import { api, errorMessage, type ParamSetDiscover } from "../../api";
+import { BrowseButton } from "../../components/BrowseButton";
 
 type Choice = { cad: string; radioss_assem: string };
 
@@ -10,6 +11,10 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
   const [choice, setChoice] = useState<Choice>({ cad: "", radioss_assem: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const changePath = (v: string) => {
+    setPath(v);
+    setFound(null);
+  };
 
   const find = async (tpl?: string | null) => {
     setBusy(true);
@@ -60,12 +65,10 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
             placeholder="E:/shared/AI_WORK/cushion/00_inbox/project"
             aria-label="프로젝트 폴더 경로"
             spellCheck={false}
-            onChange={(e) => {
-              setPath(e.target.value);
-              setFound(null);
-            }}
+            onChange={(e) => changePath(e.target.value)}
           />
-          {/* 찾아보기(BrowseButton, phase3 §12 S7) 자리 */}
+          {/* 찾아보기(phase3 §12 S7): discover는 allowed_roots(imports=True)라 추가 허용 폴더도 보인다(aiOnly 아님) */}
+          <BrowseButton mode="dir" value={path} onPick={changePath} disabled={busy} title="프로젝트 폴더 선택" />
           <button type="button" className="btn" onClick={() => find()} disabled={busy || !path.trim()}>
             {busy && !found ? "찾는 중…" : "찾기"}
           </button>

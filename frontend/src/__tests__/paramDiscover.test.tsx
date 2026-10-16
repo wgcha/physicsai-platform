@@ -4,6 +4,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import { MockServer } from "../mock/server";
 import specJson from "../../../backend/openapi.json";
+import { MOCK_INBOX } from "../mock/fs";
 
 const ROOT = "E:/shared/AI_WORK/cushion/00_inbox";
 
@@ -73,6 +74,22 @@ describe("④ 프로젝트 폴더에서 찾기 (phase3 §13 S8)", () => {
     expect(await within(form).findByText(/tpl\(\*\.tpl\)을 찾지 못했습니다/)).toBeTruthy();
     expect(within(form).getByText(/조립 폴더를 찾지 못했습니다/)).toBeTruthy();
     expect((within(form).getByRole("button", { name: "등록" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("찾아보기(§12 S7): 추가 허용 폴더까지 보이고, 고른 폴더가 프로젝트 폴더 입력란에 들어간다", async () => {
+    localStorage.clear();
+    renderApp(`${STUDY}/4`, { user: "power" });
+    const card = await screen.findByRole("region", { name: "파라미터 세트" });
+    fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
+    const form = within(card).getByTestId("ps-discover");
+    fireEvent.click(within(form).getByRole("button", { name: "찾아보기" }));
+    const d = await screen.findByRole("dialog");
+    expect(within(d).getByRole("button", { name: "추가 허용 폴더" })).toBeTruthy(); // imports=True 용도(aiOnly 아님)
+    await waitFor(() => expect(within(d).getByTestId("picker-target").textContent).toBe(MOCK_INBOX));
+    fireEvent.click(within(d).getByRole("button", { name: "선택" }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+    expect((within(form).getByLabelText("프로젝트 폴더 경로") as HTMLInputElement).value).toBe(MOCK_INBOX);
+    localStorage.clear();
   });
 
   it("기존 세트 이름 변경", async () => {
