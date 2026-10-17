@@ -949,6 +949,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - V-GE-12 altair 경로 불변(§1.4·§16): 기존 altair 시험 무수정 통과, 분기 지점 밖 altair 코드 diff 없음.
 - V-GE-13 독립성(§18.1·18.5): `packages/paicad`가 `physicsai_core`·`backend`·`worker`·`physicsai_worker`를 import하지 않음(검사 존재·통과, 위반 주입 시 실패 확인), 플랫폼 패키지·DB·`platform.yaml` 없이 `pytest packages/paicad` 단독 통과, 자체 `pyproject.toml`·`CHANGELOG.md`·제3자 라이선스 고지 파일 존재.
 - V-GE-14 paicad 내 플랫폼 고유 파일명·경로 하드코딩 없음(§18.1): `predict.*` 출력 파일 이름(`104_replace_node_elem.inc`·`RENUM_INIT.csv` 등)·플랫폼 폴더 레이아웃(`radioss_assem/` 등)이 `src/`에 리터럴로 없음(시험 fixture·문서 예시 제외), 모두 CLI 인자·입력 JSON 경유. paicad 메시지는 영문(한국어 문자 없음, §18.4).
+- V-GE-19 커널 격리(§18.9): `packages/paicad/src/paicad`에서 `kernel/` 밖 OCP import 0건, 경계 함수 반환에 OCP 타입 없음.
 
 ---
 
@@ -1076,6 +1077,14 @@ paicad는 실패 코드(§6.5 표)와 **영문 기술 메시지**만 낸다(`mes
 
 ### 18.7 분리 시점 기준(결정 기록용, 하나라도 충족 시 분리 검토)
 (1) 쿠션 외 2종 이상 대상 검증, (2) 다른 조직의 플랫폼 외 사용 요청, (3) 솔버 2종 이상 지원.
+
+### 18.9 커널 격리(어댑터)
+- OCCT(OCP) 호출은 `src/paicad/kernel/` 안에서만 한다. 다른 모듈(extract·tag·morph·check·writers·cli)은 OCP를 import하지 않는다.
+- `kernel/`이 제공하는 연산만 사용: STEP/BREP 읽기·쓰기, 바디 이름, 면·엣지 목록과 인접 그래프, 면 (u,v) 평가·점 투영, push/pull(면 이동), 거리·간섭 계산.
+- 경계 밖으로는 중립 타입만: 면·엣지 ID, 좌표·법선(numpy 배열), 수치. OCP 객체를 반환하지 않는다(gen 모듈 형상도 `kernel/` 입구로만 들어온다).
+- 커널 교체·OCP 메이저 업그레이드 시 `kernel/`만 재구현. 교체 경계의 교환 형식은 STEP/`.brep`.
+- 단위 시험은 가짜 커널로 morph·check 로직을 OCCT 없이 시험할 수 있게 인터페이스를 둔다.
+- 검사: `kernel/` 밖 OCP import 0건(test-all, V-GE-19).
 
 ### 18.8 로드맵(비범위, 독립 플랫폼 대비)
 - **강력한 디피처링**: 규칙 문서(작은 필렛·챔퍼·구멍·각인 문자·로고의 크기 임계 등) 기반으로 피처를 찾아 제거. 규칙은 버전 있는 설정 파일, 제거 목록은 리포트로 출력. 1차 구현·시험 없음(2026-10-17).
