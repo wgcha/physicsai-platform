@@ -7,10 +7,13 @@
 | 역할 | 수정 가능 범위 |
 |---|---|
 | Plan | `docs/**`, `AGENTS.md`, `README.md` (애플리케이션 코드 작성 금지) |
-| Impl-Backend | `pyproject.toml`, `backend/**`, `worker/**`, `migrations/**`, `config/**`, `scripts/**`, `deploy/**`, `packages/**`, `.github/**`, `.gitignore` |
+| Impl-Backend | `pyproject.toml`, `backend/**`, `worker/**`, `migrations/**`, `config/**`, `scripts/**`, `deploy/**`, `packages/**`(paicad 제외), `.github/**`, `.gitignore` |
+| Impl-Geom | `packages/paicad/**` (형상 엔진, 계약 [docs/contracts/geometry-engine.md](docs/contracts/geometry-engine.md)) |
 | Impl-Frontend | `frontend/**`, `frontend-dist/**`(빌드본 — `scripts/build-frontend-dist`로만 생성) |
 | Verifier | 수정 없음. platform.md §22(1차)와 phase2.md §20(2차, V2-*) 체크리스트로 판정하고 결과를 보고 |
 
+- 에이전트 정의·모델: `.claude/agents/*.md`(pai-explore=haiku, pai-plan·impl-geom·verifier=opus, impl-backend·impl-frontend=sonnet). 위임 시 이 이름을 쓴다.
+- 토큰: 메인은 diff를 읽지 않고 요약·판정으로 판단. 반환 상한 explore 15줄, plan 30줄, impl 10줄, verifier 20줄. 큰 파일·로그는 grep/head/tail.
 - 남의 소유 파일은 고치지 말고 요청한다. API 모양 변경 순서: 계약 수정(Plan) → `backend/openapi.json` 갱신(Backend) → 프런트 반영.
 
 ## 필수
