@@ -269,3 +269,101 @@ def test_surrogate_job_type_not_creatable_and_retry_rules(so_env):
     assert s["features"]["optimize_builtin"] == {"enabled": True, "missing": []}
     assert s["surrogate_opt"]["defaults"] == {"iterations": 3, "candidates": 4, "tol_rel": 0.01, "surrogate": "gp"}
 
+
+def test_batch_done_hook_never_enqueues_twice(so_env, monkeypatch):
+    """Verifier A: 이미 DONE인 탐색 배치의 재시도 하위가 (관리자 이동으로) 반복 작업보다 먼저 끝나도 반복 작업을 또 넣지 않고,
+    훅 실패가 하위 종료 트랜잭션을 되돌리지 않는다(하위가 RUNNING에 멈추지 않음)."""
+    from physicsai_core.db.repositories import jobs as jobs_repo
+    from physicsai_core.db.repositories import predict_batches as pb_repo
+    from physicsai_core.db.repositories import surrogate_opts as so_repo
+
+    env = so_env
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    bid = o["iterations"][0]["batch"]["id"]
+    assert env.w.run_once_slot() == "SUCCEEDED"  # 탐색 부모
+    for i in range(6):
+        if i == 5:
+            monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", "fail")
+        env.w.run_once_slot()
+    monkeypatch.delenv("FAKE_TOOL_MODE_EDSPY")
+
+    def rounds() -> int:
+        return env.sql("select count(*) from jobs where job_type='SURROGATE_OPT'")[0][0]
+
+    assert rounds() == 1 and env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()["status"] == "FITTING"
+    failed = env.sql("select predict_job_id from predict_batch_runs where batch_id=:b and doe_no=6", b=bid)[0][0]
+    r = env.c.post(f"{API}/jobs/{failed}/retry", headers=PW)
+    assert r.status_code == 201, r.text
+    child = r.json()["id"]
+    with env.engine.begin() as conn:
+        jobs_repo.move_in_queue(conn, child, 1)  # 반복 작업보다 먼저
+    assert env.w.run_once_slot() == "SUCCEEDED"
+    assert env.job(child)["state"] == "SUCCEEDED" and rounds() == 1
+    # 훅을 직접 다시 불러도(EXPLORING·현재 반복 작업 진행 중 / 넣기 실패) 예외 없이 건너뛴다
+    env.sql("update surrogate_opts set status='EXPLORING' where id=:i", i=o["id"])
+    with env.engine.begin() as conn:
+        assert so_repo.on_batch_done(conn, pb_repo.get(conn, bid)) is True
+    assert rounds() == 1
+    env.sql("update surrogate_opts set current_job_id=null where id=:i", i=o["id"])
+
+    def boom(*_a, **_k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(so_repo, "enqueue_round", boom)
+    with env.engine.begin() as conn:
+        assert so_repo.on_batch_done(conn, pb_repo.get(conn, bid)) is True
+    assert rounds() == 1
+
+
+def _fail_after_so_next(monkeypatch, times: int = 1):
+    from physicsai_core.errors import StepFailure
+    from physicsai_worker.steps import HANDLERS
+
+    orig = HANDLERS[("SURROGATE_OPT", "SO_NEXT")]
+    left = {"n": times}
+
+    def wrapped(ctx):
+        orig(ctx)
+        if left["n"] > 0 and not ctx.result().get("finished"):
+            left["n"] -= 1
+            raise StepFailure("INTERNAL_ERROR", "SO_NEXT 커밋 뒤 실패(시험)")
+
+    monkeypatch.setitem(HANDLERS, ("SURROGATE_OPT", "SO_NEXT"), wrapped)
+
+
+def test_round_fails_after_verify_batch_registered_continues(so_env, monkeypatch):
+    """Verifier B: SO_NEXT가 검증 배치를 커밋한 뒤 반복 작업이 실패해도 opt는 VERIFYING 유지 → 배치 완료 훅이 다음 반복 → DONE."""
+    env = so_env
+    _fail_after_so_next(monkeypatch)
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    seen = _drain(env)
+    assert ("SURROGATE_OPT", "FAILED") in seen
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "DONE" and [it["kind"] for it in d["iterations"]] == ["EXPLORE", "VERIFY"]
+
+
+def test_resume_after_verify_batch_registered_does_not_rerun_round(so_env, monkeypatch):
+    """Verifier B: 예전 동작으로 FAILED(ROUND_FAILED)가 된 opt — 이어서 실행은 반복을 다시 돌리지 않고 VERIFYING 복원
+    (검증 배치 완료 훅이 다음 반복 투입), 반복 작업 직접 재시도는 409(검증 배치 중복 등록·UniqueViolation 없음)."""
+    env = so_env
+    _fail_after_so_next(monkeypatch)
+    n = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    for _ in range(10):  # 탐색 부모 + 하위 6 + 반복 1(SO_NEXT 커밋 뒤 실패)
+        q = env.sql("select job_type from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1")
+        st = env.w.run_once_slot()
+        if q[0][0] == "SURROGATE_OPT":
+            assert st == "FAILED"
+            break
+    env.sql("update surrogate_opts set status='FAILED', stop_reason='ROUND_FAILED', finished_at=now() where id=:i", i=n["id"])
+    round1 = env.c.get(f"{API}/surrogate-opts/{n['id']}", headers=P).json()["current_job_id"]
+    r = env.c.post(f"{API}/jobs/{round1}/retry", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "SURROGATE_OPT_NOT_RESUMABLE"
+    r = env.c.post(f"{API}/surrogate-opts/{n['id']}/resume", headers=PW)
+    assert r.status_code == 201, r.text
+    assert r.json()["batch_retry"]["restored_batch_id"]
+    assert env.c.get(f"{API}/surrogate-opts/{n['id']}", headers=P).json()["status"] == "VERIFYING"
+    _drain(env)
+    d = env.c.get(f"{API}/surrogate-opts/{n['id']}", headers=P).json()
+    assert d["status"] == "DONE" and len(d["iterations"]) == 2
+    assert env.sql("select count(*) from surrogate_opt_iters where opt_id=:i", i=n["id"])[0][0] == 2
+

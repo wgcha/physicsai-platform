@@ -171,3 +171,10 @@ def test_cancel_checkpoint_propagates():
     bnd = {"a": (0.0, 1.0), "b": (0.0, 1.0)}
     with pytest.raises(Stop):
         infill.fit_all(_designs(lambda a, b: a + b, bnd, 8, 1), _problem(bnd), kind="gp", restarts=2, seed=1, checkpoint=cp)
+
+
+def test_constant_objective_is_reported_not_as_gp_failure():
+    bnd = {"a": (0.0, 1.0), "b": (0.0, 1.0)}
+    fit = infill.fit_all(_designs(lambda a, b: 100.0, bnd, 8, 1), _problem(bnd), kind="gp", restarts=2, seed=1)
+    assert fit.kind == "rbf" and [w["code"] for w in fit.warnings] == ["OBJECTIVE_CONSTANT"]
+    assert "실패" not in fit.warnings[0]["message"]

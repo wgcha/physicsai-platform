@@ -444,6 +444,12 @@ def resume(ctx: AppContext, principal: Principal, opt_id: str, rid: str, ip: str
             old = jobs_repo.get_job(conn, o["current_job_id"]) if o["current_job_id"] else None
             if old is None:
                 raise DomainError("SURROGATE_OPT_NOT_RESUMABLE", "이어서 실행할 반복 작업이 없습니다", status=409)
-            out["job_id"] = retry_locked(conn, principal, old, 1, rid, ip)["id"]
+            # 반복 작업이 검증 배치를 등록한 뒤 실패했으면 다시 돌리지 않고 VERIFYING으로(배치 완료 훅이 이어 감)
+            restored = so_repo.restore_verifying(conn, o, int((old.get("params") or {}).get("round") or 0))
+            if restored is not None:
+                out["job_id"] = restored["round_job_id"]
+                out["batch_retry"] = {"restored_batch_id": restored["batch_id"]}
+            else:
+                out["job_id"] = retry_locked(conn, principal, old, 1, rid, ip)["id"]
         audit(conn, principal, "SURROGATE_OPT_RESUME", "surrogate_opt", o["id"], out, rid, ip)
         return out

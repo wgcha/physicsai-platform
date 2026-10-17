@@ -39,6 +39,15 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     expect(localStorage.getItem(SO_MODE_KEY)).toBe("builtin");
   });
 
+  it("assembly여도 조립 폴더·starter가 없으면 원본 실행 막기(서버 needs_assembly_block과 같은 판정)", async () => {
+    localStorage.setItem(SO_MODE_KEY, "original");
+    renderApp(`${STUDY}/5`, { user: "power" }, (s) => {
+      const ps = s.paramSets.find((p) => p.id === "ps-1")!;
+      ps.starter_name = null;
+    });
+    expect((await screen.findByTestId("assembly-required")).textContent).toBe(ASSEMBLY_REQUIRED_TEXT);
+  });
+
   it("optimize_builtin 꺼짐 → 내장 버튼 비활성·사유, 원본 모드로 시작", async () => {
     renderApp(`${STUDY}/5`, { user: "power", disabledFeatures: ["optimize_builtin"] });
     const b = await screen.findByRole("radio", { name: "플랫폼 내장(쿠션만 가능)" });

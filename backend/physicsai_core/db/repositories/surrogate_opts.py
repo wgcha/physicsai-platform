@@ -6,6 +6,7 @@ API(생성·조회·취소·이어서 실행), 워커(SO_COLLECT~SO_NEXT), 종�
 
 from __future__ import annotations
 
+import logging
 import uuid
 from collections.abc import Mapping
 from typing import Any
@@ -13,12 +14,13 @@ from typing import Any
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.engine import Connection
 
-from ...state_machine import CANCELED, FAILED, INTERRUPTED, TERMINAL
+from ...state_machine import CANCELED, FAILED, INTERRUPTED, SUCCEEDED, TERMINAL
 from ...stage4_predict.batch_matrix import BatchMatrix, batch_dir_rel
 from ..tables import studies, surrogate_opt_iters, surrogate_opts
 from . import predict_batches as pb_repo
 from .jobs import get_job, insert_job, request_cancel, row_dict
 
+log = logging.getLogger("physicsai_core.surrogate_opts")
 ACTIVE = ("EXPLORING", "FITTING", "VERIFYING")
 TERMINAL_OPT = ("DONE", "FAILED", "CANCELED")
 ROUND_JOB_TYPE = "SURROGATE_OPT"
@@ -168,16 +170,50 @@ def enqueue_round(conn: Connection, opt: Mapping[str, Any], round_no: int) -> di
 # ---- 종료 훅(job_end) -------------------------------------------------------------------------------
 
 
+def _job_terminal(conn: Connection, job_id: str | None) -> bool:
+    j = get_job(conn, job_id) if job_id else None
+    return j is None or j["state"] in TERMINAL
+
+
 def on_batch_done(conn: Connection, batch: Mapping[str, Any]) -> bool:
-    """배치 DONE: 진행 중 opt의 최신 반복(EXPLORE·VERIFY) 배치면 반복 작업 r+1을 넣는다. 최적화 소유 배치면 True
-    (호출부가 PREDICT_BATCH_DONE 알림을 생략)."""
+    """배치 DONE: 진행 중 opt의 최신 반복(EXPLORE·VERIFY) 배치이고 opt가 EXPLORING·VERIFYING이며 최신 반복 작업이 없거나 끝났으면
+    반복 작업 r+1을 넣는다(재시도된 하위로 같은 배치가 다시 DONE이 돼도 두 번 넣지 않음). 최적화 소유 배치면 True
+    (호출부가 PREDICT_BATCH_DONE 알림을 생략). 종료 훅 트랜잭션 안이므로 실패는 기록만 하고 올리지 않는다."""
     it = owned_iter_of_batch(conn, batch["id"])
     if it is None:
         return False
     opt = get(conn, it["opt_id"], for_update=True)
-    if opt is not None and opt["status"] in ACTIVE and opt["iter_no"] == it["iter_no"]:
-        enqueue_round(conn, opt, it["iter_no"] + 1)
+    if (opt is None or opt["status"] not in ("EXPLORING", "VERIFYING") or opt["iter_no"] != it["iter_no"]
+            or not _job_terminal(conn, opt["current_job_id"])):
+        return True
+    _enqueue_safely(conn, opt, it["iter_no"] + 1)
     return True
+
+
+def _enqueue_safely(conn: Connection, opt: Mapping[str, Any], round_no: int) -> dict[str, Any] | None:
+    sp = conn.begin_nested()
+    try:
+        job = enqueue_round(conn, opt, round_no)
+        sp.commit()
+        return job
+    except Exception:  # noqa: BLE001 - 종료 훅(하위 PREDICT 해제)을 되돌리지 않는다
+        sp.rollback()
+        log.exception("내장 최적화 %s 반복 %s 작업을 넣지 못했습니다(이어서 실행으로 복구)", opt["id"], round_no)
+        return None
+
+
+def restore_verifying(conn: Connection, opt: Mapping[str, Any], round_no: int) -> dict[str, Any] | None:
+    """반복 r의 검증 배치가 이미 등록돼 있으면(SO_NEXT 커밋 뒤 작업 실패·lease 상실) opt를 VERIFYING으로 되돌리고,
+    배치가 이미 DONE이면 반복 r+1을 바로 넣는다. 등록된 배치가 없으면 None(반복 작업을 다시 실행해야 함)."""
+    it = get_iter(conn, opt["id"], round_no)
+    if it is None or it["kind"] != "VERIFY":
+        return None
+    set_opt(conn, opt["id"], status="VERIFYING", iter_no=round_no, stop_reason=None, finished_at=None)
+    b = pb_repo.get(conn, it["batch_id"])
+    job = None
+    if b is not None and b["status"] == "DONE":
+        job = _enqueue_safely(conn, {**opt, "status": "VERIFYING", "iter_no": round_no}, round_no + 1)
+    return {"batch_id": it["batch_id"], "round_job_id": job["id"] if job else None}
 
 
 def on_batch_parent_end(conn: Connection, batch: Mapping[str, Any], state: str) -> None:
@@ -191,10 +227,16 @@ def on_batch_parent_end(conn: Connection, batch: Mapping[str, Any], state: str) 
 
 def on_round_end(conn: Connection, job: Mapping[str, Any], state: str) -> None:
     """반복 작업 실패·중단 → opt FAILED(실패 코드가 알려진 정지 사유면 그것, 아니면 ROUND_FAILED), 취소 → CANCELED.
+    단 SO_NEXT가 이미 검증 배치를 등록했으면(opt VERIFYING·iter_no = 이 반복) 그대로 두어 배치 완료 훅이 이어 간다.
     opt가 이미 종료이거나 이 작업이 최신 반복 작업이 아니면 무시."""
     oid = (job.get("params") or {}).get("surrogate_opt_id")
     opt = get(conn, oid, for_update=True) if isinstance(oid, str) else None
     if opt is None or opt["status"] not in ACTIVE or opt["current_job_id"] != job["id"]:
+        return
+    rnd = (job.get("params") or {}).get("round")
+    if state != SUCCEEDED and opt["status"] == "VERIFYING" and opt["iter_no"] == rnd \
+            and get_iter(conn, opt["id"], rnd) is not None:
+        log.warning("내장 최적화 %s 반복 %s 작업이 %s로 끝났지만 검증 배치가 등록돼 있어 계속합니다", opt["id"], rnd, state)
         return
     if state in (FAILED, INTERRUPTED):
         code = job.get("failure_code") or (get_job(conn, job["id"]) or {}).get("failure_code")  # 해제 경로는 갱신 전 행

@@ -211,7 +211,10 @@ def _write_opt_json(ctx: Any, opt: dict[str, Any], O: str) -> None:
         m = load_model(ctx, opt["model_id"])
     except Exception:  # noqa: BLE001 - 기록용(모델 행이 없으면 id만)
         m = None
-    write_json_atomic(os.path.join(O, "opt.json"), {
+    oj = os.path.join(O, "opt.json")
+    if os.path.lexists(oj):
+        ctx.backup([oj])  # 기존 산출물은 _backup으로(반복마다 갱신)
+    write_json_atomic(oj, {
         "id": opt["id"], "label": so_repo.opt_label(opt["opt_no"]), "settings": opt["settings"],
         "param_set": {"id": opt["param_set_id"], "label": ps.get("label"), "input_kind": opt["input_kind"]},
         "model": {"id": opt["model_id"], "name": (m or {}).get("name"), "version": (m or {}).get("version"),
@@ -347,6 +350,12 @@ def so_next(ctx: Any) -> None:
         o = so_repo.get(c, opt["id"], for_update=True)
         if o is None or o["status"] not in so_repo.ACTIVE or o["current_job_id"] != ctx.ex.job_id:
             return None
+        prev = so_repo.get_iter(c, o["id"], r)
+        if prev is not None:  # 멱등: 이미 등록된 검증 배치(이전 시도의 커밋)를 그대로 쓴다
+            so_repo.set_opt(c, o["id"], status="VERIFYING", iter_no=r)
+            pb = pb_repo.get(c, prev["batch_id"]) or {}
+            return {"job_id": pb.get("job_id"), "batch_id": prev["batch_id"], "batch_label": batch_label(pb.get("batch_no") or 0),
+                    "reused": True}
         job, batch = so_repo.create_opt_batch(
             c, opt=o, iter_no=r, kind="VERIFY", matrix=matrix, source_meta=matrix.source_meta,
             batch_dir_name=cfg.predict_batch.dir_name, simlab_mesh_name=cfg.predict.simlab_mesh_name,

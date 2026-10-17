@@ -54,7 +54,8 @@ function OriginalOptimize({ onUseBuiltin }: { onUseBuiltin: () => void }) {
   }, [loadOpts, runner.job?.id, runner.job?.version]);
 
   const latest = [...opts].sort((a, b) => b.created_at.localeCompare(a.created_at))[0] ?? null;
-  const meshOnly = currentParamSet?.input_kind === "mesh_only";
+  // 서버 needs_assembly_block과 같은 판정: mesh_only 또는 조립 폴더·starter 없음
+  const meshOnly = !!currentParamSet && (currentParamSet.input_kind === "mesh_only" || !currentParamSet.assem_rel || !currentParamSet.starter_name);
 
   return (
     <>

@@ -79,6 +79,9 @@ def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
         if o is None or o["status"] != "FAILED" or o["current_job_id"] != old["id"]:
             raise DomainError("SURROGATE_OPT_NOT_RESUMABLE", "실패한 내장 최적화의 마지막 반복 작업만 다시 실행할 수 있습니다",
                               status=409)
+        if so_repo.get_iter(conn, o["id"], int((old.get("params") or {}).get("round") or 0)) is not None:
+            raise DomainError("SURROGATE_OPT_NOT_RESUMABLE", "이 반복의 검증 배치가 이미 등록돼 있습니다 — ⑤에서 '이어서 실행'을 쓰세요",
+                              status=409)
         if so_repo.active_for_study(conn, o["study_id"]) is not None:
             raise DomainError("SURROGATE_OPT_ACTIVE", "이 Study에 진행 중인 내장 최적화가 있습니다", status=409)
         so_repo.set_opt(conn, o["id"], status="FITTING", current_job_id=new_id, stop_reason=None, finished_at=None)

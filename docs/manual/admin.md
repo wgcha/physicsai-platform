@@ -1342,7 +1342,7 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `gp_restarts` | 8 | GP 하이퍼파라미터 최적화 시작점 수 |
 | `de_maxiter`·`de_popsize` | 200·15 | 후보 탐색(differential evolution) 세대·개체 배수 |
 | `fit_timeout_s` | 600 | 반복 1회의 학습+후보 탐색 시간 한도(넘으면 `SURROGATE_TIMEOUT`) |
-| `blas_threads` | 4 | 워커 안 numpy 스레드 상한 |
+| `blas_threads` | 4 | 워커 안 numpy 스레드 상한(바꾸면 워커 재시작 뒤 적용) |
 
 ### 17.3 실패 코드
 

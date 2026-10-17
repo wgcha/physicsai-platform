@@ -165,6 +165,12 @@ def fit_all(designs: Sequence[Design], problem: Problem, *, kind: str, restarts:
         return obj, cons
 
     used = kind
+    objs = np.array([d.objective for d in designs])
+    if kind == "gp" and float(np.ptp(objs)) <= 1e-12 * max(1.0, float(np.max(np.abs(objs)))):
+        # 목적 값이 모두 같으면 GP 우도가 정의되지 않는다 — "GP 실패"가 아니라 자료 문제로 알리고 RBF(평평한 면)로 계속
+        warnings.append({"code": "OBJECTIVE_CONSTANT",
+                         "message": "목적 값이 모든 run에서 같습니다 — 지표·탐색 범위를 확인하세요(RBF로 계속)"})
+        kind = used = "rbf"
     try:
         obj, cons = build(kind)
     except GPFitError as exc:
