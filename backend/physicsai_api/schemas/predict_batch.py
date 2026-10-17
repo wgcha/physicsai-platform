@@ -1,4 +1,4 @@
-"""API 스키마 — ④ 일괄 예측(DOE)(phase3 §14.5·§14.7 S9): 조합 출처·미리보기·배치 목록·상세·커브·실패만 다시."""
+"""API 스키마 — ④ 일괄 예측(DOE)(phase3 §14.5·§14.7 S9): 조합 출처·미리보기·배치 목록·상세·커브·실패만 다시·설계공간 지도(§17.4 S12)."""
 
 from __future__ import annotations
 
@@ -13,7 +13,8 @@ __all__ = [
     "BatchSourceLhs", "BatchSourceTable", "BatchSourceTrainDoe", "BatchSource", "PredictBatchPreviewRequest",
     "BatchProblem", "BatchPreviewRow", "PredictBatchPreview", "PredictBatchSummary", "BatchRef", "BatchModelRef",
     "BatchGenCounts", "BatchPredictCounts", "BatchResponseName", "BatchRunRow", "PredictBatch", "BatchRetryFailed",
-    "BatchCurveSeries", "BatchCurves",
+    "BatchCurveSeries", "BatchCurves", "DesignMapParameter", "DesignMapMetric", "DesignMapCurveStats", "DesignMapRun",
+    "DesignMapCounts", "DesignMap",
 ]
 
 TABLE_TEXT_MAX_CHARS = 16_777_216  # 모양 상한(요청 크기 방어). 실제 상한은 predict_batch.table_max_bytes(TEXT_TOO_LARGE)
@@ -182,3 +183,57 @@ class BatchCurves(Resp):
     truncated: bool
     downsampled: bool
     series: list[BatchCurveSeries]
+
+
+# ---- S12 설계공간 지도(phase3 §17.4, D3-59) ----------------------------------------------------------
+
+
+class DesignMapParameter(Resp):
+    name: str
+    integer: bool  # tpl 형식 %Ni/%Nd
+    min: float  # 템플릿 범위
+    max: float
+
+
+class DesignMapMetric(Resp):
+    id: str  # §17.2 지표 id(curve:max|min|absmax, resp:<NAME>_MIN|_MAX, tbl:<name>)
+    label: str
+    unit: str | None = None
+    needs_series: bool
+
+
+class DesignMapCurveStats(Resp):
+    max: float
+    min: float
+    absmax: float
+    x_at_max: float
+    x_at_min: float
+    n: int
+
+
+class DesignMapRun(Resp):
+    doe_no: int
+    run_key: str
+    state: str  # §14.7 결과 표 상태 그대로
+    values: dict[str, float]  # 반영값(applied_values)
+    curve: dict[str, DesignMapCurveStats] | None = None  # 성공 run만(curve.json 없음·너무 큼 = null)
+    resp: dict[str, float] | None = None  # 성공 run만(RESPONSES.txt 없음 = null)
+    tbl: dict[str, float | None] | None = None  # 성공 run만(결과 표 값)
+
+
+class DesignMapCounts(Resp):
+    total: int
+    succeeded: int
+    no_curve: int  # 성공 run 중 커브 없음
+    no_resp: int  # 성공 run 중 RESPONSES.txt 없음
+
+
+class DesignMap(Resp):
+    batch_id: str
+    label: str
+    status: str
+    parameters: list[DesignMapParameter]
+    series: list[str]
+    metrics: list[DesignMapMetric]
+    runs: list[DesignMapRun]
+    counts: DesignMapCounts

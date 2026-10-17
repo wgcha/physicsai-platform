@@ -1525,6 +1525,273 @@
         "title": "Dataset",
         "type": "object"
       },
+      "DesignMap": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/DesignMapCounts"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metrics": {
+            "items": {
+              "$ref": "#/components/schemas/DesignMapMetric"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/DesignMapParameter"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/DesignMapRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "series": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Series",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "label",
+          "status",
+          "parameters",
+          "series",
+          "metrics",
+          "runs",
+          "counts"
+        ],
+        "title": "DesignMap",
+        "type": "object"
+      },
+      "DesignMapCounts": {
+        "properties": {
+          "no_curve": {
+            "title": "No Curve",
+            "type": "integer"
+          },
+          "no_resp": {
+            "title": "No Resp",
+            "type": "integer"
+          },
+          "succeeded": {
+            "title": "Succeeded",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "succeeded",
+          "no_curve",
+          "no_resp"
+        ],
+        "title": "DesignMapCounts",
+        "type": "object"
+      },
+      "DesignMapCurveStats": {
+        "properties": {
+          "absmax": {
+            "title": "Absmax",
+            "type": "number"
+          },
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "x_at_max": {
+            "title": "X At Max",
+            "type": "number"
+          },
+          "x_at_min": {
+            "title": "X At Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "max",
+          "min",
+          "absmax",
+          "x_at_max",
+          "x_at_min",
+          "n"
+        ],
+        "title": "DesignMapCurveStats",
+        "type": "object"
+      },
+      "DesignMapMetric": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "needs_series": {
+            "title": "Needs Series",
+            "type": "boolean"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "needs_series"
+        ],
+        "title": "DesignMapMetric",
+        "type": "object"
+      },
+      "DesignMapParameter": {
+        "properties": {
+          "integer": {
+            "title": "Integer",
+            "type": "boolean"
+          },
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "integer",
+          "min",
+          "max"
+        ],
+        "title": "DesignMapParameter",
+        "type": "object"
+      },
+      "DesignMapRun": {
+        "properties": {
+          "curve": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/DesignMapCurveStats"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curve"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "resp": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resp"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "tbl": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tbl"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "doe_no",
+          "run_key",
+          "state",
+          "values"
+        ],
+        "title": "DesignMapRun",
+        "type": "object"
+      },
       "DiscoverAssem": {
         "properties": {
           "file_count": {
@@ -10531,6 +10798,79 @@
           }
         },
         "summary": "Batch Curves",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}/design-map": {
+      "get": {
+        "description": "설계공간 지도(§17.4 S12): run별 반영값 + 대표값(커브 계열별 max·min·|max|, RESP, 결과 표). 파일별 캐시.",
+        "operationId": "batch_design_map_physicsai_api_predict_batches__batch_id__design_map_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DesignMap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Batch Design Map",
         "tags": [
           "predict-batches"
         ]

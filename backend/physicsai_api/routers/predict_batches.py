@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import design_map as dm_svc
 from ..services import predict_batches as svc
 
 router = APIRouter(tags=["predict-batches"])
@@ -47,6 +48,13 @@ def batch_curves(batch_id: str, request: Request, name: str | None = Query(defau
                  max_points: int = Query(default=500, ge=2, le=2000), _p: Principal = Depends(get_principal)) -> dict:
     """커브 겹쳐보기: 완료 run의 같은 이름 계열(run ≤ predict_batch.curve_max_runs, 점 ≤ max_points, 최소·최대 보존)."""
     return svc.curves(get_ctx(request), batch_id, name, max_points)
+
+
+@router.get("/predict-batches/{batch_id}/design-map", response_model=S.DesignMap, responses=ERR)
+def batch_design_map(batch_id: str, request: Request, response: Response, _p: Principal = Depends(get_principal)) -> dict:
+    """설계공간 지도(§17.4 S12): run별 반영값 + 대표값(커브 계열별 max·min·|max|, RESP, 결과 표). 파일별 캐시."""
+    response.headers["Cache-Control"] = "no-store"
+    return dm_svc.design_map(get_ctx(request), batch_id)
 
 
 @router.post("/predict-batches/{batch_id}/cancel", response_model=S.PredictBatch, status_code=202, responses=ERR)
