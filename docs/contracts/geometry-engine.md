@@ -82,7 +82,7 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 | GE-9 | 정수 반올림(`%3i`) 없음 — native 세트는 tpl이 없어 `tpl_params=[]` → `applied_values = values` | 두께 연속값 |
 | GE-10 | 의존: cadquery-ocp(Windows cp312 wheel), numpy, scipy — 오프라인 묶음 포함 | 사용자 합의 |
 | GE-11 | native는 신규 별도 모듈, Altair 경로와는 외부 인터페이스만 같음. 기존 코드는 분기 지점만 최소 변경, altair 동작 불변(§1.4·§16) | 사용자 결정 |
-| GE-13 | **다중 baseline(고급 옵션, 단계 4B)**: 기본은 단일 baseline(기존 흐름 불변). 위상 변형·범위 분할을 같은 구조(`baselines/<id>/` + `param_map.json`)로, 공통 변수 이름 자동 매칭(사용자 수정 가능, 점수 정의 §11.4), 위상은 범주형 `baseline`, 배정·실패 `BASELINE_NO_COVER`, 층화 LHS, 데이터셋 1개, 새 job_type 없음(`PARAM_SET_NATIVE` + `BL_MAP`, 단일이면 건너뜀)(§11.4) | 사용자 결정 2026-10-17 |
+| GE-13 | **다중 baseline(고급 옵션, 단계 4B)**: 기본은 단일 baseline(기존 흐름 불변). 위상 변형·범위 분할을 같은 구조(`baselines/<id>/` + `param_map.json`)로, 공통 변수 이름 **자동 매칭은 초안 제시만**(점수 무관 자동 확정 없음, 사용자가 매칭표 확정 전 DOE 불가 `PARAM_MAP_UNCONFIRMED`, 점수 정의 §11.4), 위상은 범주형 `baseline`, 배정·실패 `BASELINE_NO_COVER`, 층화 LHS, 데이터셋 1개, 새 job_type 없음(`PARAM_SET_NATIVE` + `BL_MAP`, 단일이면 건너뜀)(§11.4) | 사용자 결정 2026-10-17 |
 | GE-12 | paicad SemVer(0.x) + `CHANGELOG.md`, 출력 `schema_version`은 엔진 버전과 별도, 모든 출력·DB에 사용 버전 기록(§17) | 사용자 결정 |
 
 ### 2.3 기존 계약에서 바뀌는 규칙(이 문서 우선)
@@ -359,25 +359,38 @@ component의 요소·노드 집합:
 | `S/baselines/<id>/radioss_assem/` 또는 `baseline.json.assem_ref` | 플랫폼 | 그 baseline의 조립 폴더(기준 메시 1세트 + RENUM csv). 다른 baseline과 같은 조립 폴더를 공유하면 사본 대신 `assem_ref:{rel,mesh_include_name}`(세트 안 상대 경로)로 참조 |
 | `S/baselines/<id>/native/{prep.json,extract/,tag/}` | 플랫폼·paicad | §4.2와 같은 구조, baseline별 독립(준비본 유효성·STALE도 baseline별) |
 | `S/baselines/<id>/baseline.json` | 플랫폼 | `{schema_version, engine, engine_version, id, label, nominal:{<원 파라미터>:값}, assem_ref|null, usage_role:"topology|range"}` |
-| `S/param_map.json` | `paicad map`(초안) → 사용자 편집(플랫폼) | 아래 |
+| `S/param_map.json` | `paicad map`(**제안만**) → 사용자 결정·확정(플랫폼) | 아래 |
 
 `param_map.json`(`schema_version` 필수, §17.3):
 
 ```json
-{"schema_version":1,"engine":"native","engine_version":"0.2.0","status":"OK","usage":"topology|range",
+{"schema_version":1,"engine":"native","engine_version":"0.2.0","map_status":"OK",
+ "status":"draft|confirmed","confirmed_by":null,"confirmed_at":null,"usage":"topology|range",
  "baselines":[{"id":"B1","rel":"baselines/B1"},{"id":"B2","rel":"baselines/B2"}],
  "discrete":{"name":"baseline","values":["B1","B2"]},
  "range_split":{"param":"CUSH_THK","intervals":[{"baseline":"B1","nominal":10.0},{"baseline":"B2","nominal":15.0}]},
- "common":[{"name":"CUSH_RIB_THK","type":"thickness","unit":"mm","source":"auto|user","score":0.93,
-            "map":{"B1":"CUSH_L_THK_1","B2":"CUSH_L_THK_1"}},
-           {"name":"CUSH_RIB_H","type":"height","unit":"mm","source":"auto","score":0.81,
-            "map":{"B1":"CUSH_RIB_H_1","B2":null}}],
+ "common":[{"row_id":"r1","type":"thickness","unit":"mm","signature":"sha256:…","needs_review":false,
+            "proposed":{"name":"CUSH_RIB_THK","score":0.93,"grade":"recommend",
+                        "map":{"B1":"CUSH_L_THK_1","B2":"CUSH_L_THK_1"},
+                        "candidates":[{"map":{"B1":"CUSH_L_THK_1","B2":"CUSH_L_THK_2"},"score":0.41}]},
+            "decision":{"action":"accept","name":"CUSH_RIB_THK","map":{"B1":"CUSH_L_THK_1","B2":"CUSH_L_THK_1"}}},
+           {"row_id":"r2","type":"height","unit":"mm","signature":"sha256:…","needs_review":false,
+            "proposed":{"name":"CUSH_RIB_H","score":0.58,"grade":"check",
+                        "map":{"B1":"CUSH_RIB_H_1","B2":"CUSH_RIB_H_2"},"candidates":[]},
+            "decision":null}],
  "map_options":{"weights":{"pos":0.35,"dim":0.30,"ori":0.15,"nbr":0.20},"sigma":0.1,"accept":0.7,"warn":0.5,"axis_deg":10},
- "warnings":[{"code":"MAP_LOW_SCORE","name":"CUSH_RIB_H"}]}
+ "warnings":[{"code":"MAP_LOW_SCORE","row_id":"r2"}]}
 ```
 
-- `map[<baseline>] = null` → 그 baseline에서 N/A(비활성). 한 baseline 안에서 서로 다른 공통 이름이 같은 원 파라미터를 가리키면 안 됨. `range_split`은 `usage=="range"`일 때만, `discrete`는 `usage=="topology"`일 때만(둘 다 있으면 `GEOM_INPUT_INVALID`). 공통 이름 집합 + `baseline`이 이 세트의 파라미터 표 이름 집합(§7.3.4 `PARAM_FEATURE_MISMATCH` 비교 대상)이 된다.
-- 공통 이름 충돌(같은 이름이 서로 다른 타입·단위로 정의, 이름 변경·병합 결과 중복, 예약어 `baseline`) → `PARAM_NAME_CONFLICT`(등록·저장 단계 오류, 세트 불변).
+- **제안과 결정 분리(결정 2026-10-17)**: 자동 매칭은 **초안 제시만** 한다. 점수와 관계없이 자동 확정은 없고, 사용자가 매칭표를 확인해 확정해야 DOE·run 생성이 가능하다.
+  - `status`: `draft`(기본, `paicad map` 직후) | `confirmed`. 확정 시 `confirmed_by`(대시보드 사용자 식별자, 세션 토큰 아님)·`confirmed_at`(ISO8601)을 기록하고, draft이면 둘 다 `null`. (paicad가 쓰던 성공 판정 `status: OK`는 `map_status`로 이름을 바꿨다 — §5.3.)
+  - 각 `common` 행: `proposed` = **엔진 제안**(`name`·`score`·`grade`·`map`·`candidates`, paicad만 씀, 사용자 편집 불가), `decision` = **사용자 결정**(`null` = 미결정, 아니면 `{action: accept|rename|change|split, name, map}`, 플랫폼만 씀). `action` 의미: accept = 제안 그대로, rename/change = 이름 변경·병합·원 파라미터 대응 변경·N/A 지정(결과 `name`·`map`을 기록), split = 한 행을 baseline별 별도 변수 행들로 분리(분리된 행마다 `decision` 1개). 유효 대응은 항상 `decision.map`이며 `proposed.map`은 참고용이다.
+  - `grade`(표시 등급, 판정 아님): `recommend`(S ≥ `accept`=0.7) | `check`(`warn`=0.5 ≤ S < 0.7, `MAP_LOW_SCORE` 경고 유지) | `unmatched`(S < 0.5, 상대 baseline N/A 제안). 임계 키 이름은 호환을 위해 유지하되 의미는 등급 경계다.
+  - `signature` = 행에 속한 baseline별 피처 서명(§4.3 면 서명·타입·component, 정렬 후 해시). `needs_review` = 승계되지 않아 재확인이 필요한 행(아래 승계 규칙).
+  - **승계 규칙**: baseline 추가·`remap` 뒤에는 `status`가 `draft`로 돌아가고 `confirmed_by`·`confirmed_at`은 `null`이 된다. 다만 `--user-map`으로 받은 기존 행과 **`signature`가 같은 행은 기존 `decision`을 그대로 승계**하고, 서명이 바뀌었거나 새로 생긴 행은 `decision: null`, `needs_review: true`(UI에 변경된 행만 재확인 표시).
+
+- `map[<baseline>] = null`(`decision.map` 기준) → 그 baseline에서 N/A(비활성). 한 baseline 안에서 서로 다른 공통 이름이 같은 원 파라미터를 가리키면 안 됨. `range_split`은 `usage=="range"`일 때만, `discrete`는 `usage=="topology"`일 때만(둘 다 있으면 `GEOM_INPUT_INVALID`). `status: confirmed`일 때 `decision`의 공통 이름 집합 + `baseline`이 이 세트의 파라미터 표 이름 집합(§7.3.4 `PARAM_FEATURE_MISMATCH` 비교 대상)이 된다(draft 동안은 `proposed` 이름을 표시용으로만 보여 주고 DOE에 쓰지 않는다).
+- 공통 이름 충돌(같은 이름이 서로 다른 타입·단위로 정의, 이름 변경·병합 결과 중복, 예약어 `baseline`) → `PARAM_NAME_CONFLICT`(등록·저장 단계 오류, 세트 불변, 검사 대상 = `decision`). 미확정(`status != confirmed`) 세트에서 run 생성 진입점(DOE·일괄 예측·단건 예측, §7.3.6) 요청 → 409 `PARAM_MAP_UNCONFIRMED`(§6 표).
 - values.json 키(§4.4)는 항상 **그 baseline의 원 파라미터 이름**이다(paicad는 공통 이름을 모른다 — 변환은 플랫폼, §18).
 
 ---
@@ -420,7 +433,7 @@ component의 요소·노드 집합:
 | `paicad morph --sweep` (단계 2, §11.2) | `paicad morph` 인자 + **`--sweep`**, `--steps`(기본 `5,10,20,30,40,50` %), `--params`(기본 전부), `--stop-after-fail`(기본 2단계 연속 실패), `--check`(품질·편차·재측정 포함, 기본 켬) | `envelope.json`·`envelope.csv`(성공 = 둘 다 존재), 단계별 `sweep/<param>/<±pct>/` 하위는 `--keep-steps`일 때만 보존 |
 | `paicad props scan` (단계 3S, §11.1) | **`--assem-dir`**, **`--out-dir`**, `--options` | `props.json`(PROP 목록, 성공 = 존재) |
 | `paicad props apply` (단계 3S) | **`--assem-dir`**(run 폴더 INPUT 복사본), **`--values`**, **`--props`**(`props.json`), **`--out-dir`** | `props_apply.json`(`status: OK`) + 수정된 PROP 정의 파일 사본(원본 불변) |
-| `paicad map` (단계 4B, §11.4) | **`--baselines`**(JSON `[{"id","features"}]`, features = 각 baseline의 `parameter_features.json` 경로, 2개 이상), **`--out-dir`**, `--user-map`(기존 `param_map.json` — 사용자 이름 변경·병합·분리·`source:"user"` 행 보존), `--usage`(`topology`\|`range`, 기본 `topology`), `--split-param`(range일 때), `--options` | `param_map.json`(성공 = 존재 + `status: OK`). 입력은 features JSON뿐(메시·조립 폴더 읽지 않음) |
+| `paicad map` (단계 4B, §11.4) | **`--baselines`**(JSON `[{"id","features"}]`, features = 각 baseline의 `parameter_features.json` 경로, 2개 이상), **`--out-dir`**, `--user-map`(기존 `param_map.json` — `signature`가 같은 행의 `decision` 승계, 다른 행은 `needs_review`), `--usage`(`topology`\|`range`, 기본 `topology`), `--split-param`(range일 때), `--options` | `param_map.json`(성공 = 존재 + `map_status: OK`, **`status: draft`로 `proposed`만 채움 — 확정은 하지 않음**). 입력은 features JSON뿐(메시·조립 폴더 읽지 않음) |
 | `paicad run` | update·morph·check 인자 합집합 + **`--update-dir`**, **`--morph-dir`**, **`--check-dir`**(각 단계 `--out-dir`), **`--out-inc`** | 각 단계 출력 + `--out-inc`. 한 단계가 FAIL이면 뒤 단계는 실행하지 않음(보고 파일 없음) |
 
 `--features`·`--tag-dir`는 native 준비본의 파일·폴더. `--assem-dir`은 기준본이 들어 있는 조립 폴더(기준본 자신은 제품 메시 수집에서 제외).
@@ -540,6 +553,7 @@ component의 요소·노드 집합:
 | `PROP_THICKNESS_INVALID` | `PROP` | 쉘 두께 ≤ 0 또는 범위 밖 | props apply (3S) | 11 |
 | `PROP_NOT_FOUND` | `PROP` | 지정한 PROP ID·필드를 찾지 못함(형식 변종 포함) | props apply (3S) | 11 |
 | `PARAM_NAME_CONFLICT` | `INPUT` | 공통 변수 이름 충돌(등록 단계) | map·세트 등록 (4B) | 3 |
+| `PARAM_MAP_UNCONFIRMED` | `INPUT` | 다중 baseline 매칭표 미확정(`status: draft`)에서 DOE·run 생성 요청(등록 오류, 409) | 플랫폼 요청 검증(paicad 아님, §7.3.8) | — |
 | `BASELINE_NO_COVER` | `BASELINE` | 어느 baseline도 덮지 못하는 값(범위 분할) | 플랫폼 배정(§11.4, paicad 아님) | — |
 | `GEOM_INC_FORMAT` | `INTERNAL` | include 고정폭 형식 보존 불가 | morph | 20 |
 | `GEOM_INTERNAL` | `INTERNAL` | 내부 오류 | 전부 | 20 |
@@ -706,9 +720,10 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 단일 baseline 세트·§7.3.1~7.3.7은 **그대로**이며, 아래는 `S/param_map.json`이 있는 세트에서만 동작한다(없으면 기존 코드 경로 — 분기 1곳, §16에 추가).
 
-- **job_type은 기존 `PARAM_SET_NATIVE` 하나**(GE-3 예외 없음). baseline 추가는 params `{mode:"add_baseline", param_set_id, baseline:{id, path, choice}}`로 같은 체인을 돌린다: `NP_PREP`(그 baseline 입력 복사, 대상 = `S/baselines/<id>/`, 복사 규칙은 §7.3.4와 같음) → `NP_EXTRACT` → `NP_TAG`(둘 다 baseline 폴더 대상) → **`BL_MAP`**(`paicad_map`, 새 `commands.paicad_map` + `TEMPLATE_SPECS` placeholder `{baselines_json}`·`{map_out_dir}`·`{user_map}`, 기존 `param_map.json`이 있으면 `--user-map`으로 보존) → `NP_REGISTER`(다중 모드: `param_map.json` 저장, 파라미터 표 이름 집합 = 공통 이름 + `baseline`로 갱신, 충돌이면 `PARAM_NAME_CONFLICT`로 실패·세트 불변). **단일 baseline(`baselines/` 없음, 신규·reprep 포함)이면 `BL_MAP`은 SKIPPED** — 기존 단일 흐름 불변. 첫 baseline(`id` 기본 `base`)은 기존 `S/cad`·`S/radioss_assem`·`S/native`를 가리키는 논리 항목(복사·이동 없음)으로 두 번째 baseline 추가 시 자동 등록. 매핑표만 다시 만들 때(`--user-map` 변경 없이 점수 옵션만 바꿈 등)는 params `{mode:"remap", param_set_id}`로 `BL_MAP`·`NP_REGISTER`만 실행(앞 3 step SKIPPED).
-- **매칭 규칙·점수**는 §11.4(하드 게이트 3 + 점수 S, 헝가리안 할당, 임계 0.7/0.5)이며 `BL_MAP` 안에서 `paicad map`이 계산한다. 옵션은 `options.json` `map` 절(가중치·σ·임계 — 고급 옵션에서 변경·저장).
-- API(§7.6 추가): `POST /param-sets/{id}/baselines`(202 `{job_id}`, job_type `PARAM_SET_NATIVE` `mode:"add_baseline"`), `DELETE /param-sets/{id}/baselines/{bid}`(마지막 하나는 삭제 불가 → 단일로 되돌림 `POST …/baselines/disable`, 폴더는 `_backup`), `GET`·`PUT /param-sets/{id}/param-map`(PUT은 이름 변경·병합·분리 후 저장, 충돌 시 422 `PARAM_NAME_CONFLICT`). 요청·응답 모양은 4B 착수 때 openapi로 확정.
+- **job_type은 기존 `PARAM_SET_NATIVE` 하나**(GE-3 예외 없음). baseline 추가는 params `{mode:"add_baseline", param_set_id, baseline:{id, path, choice}}`로 같은 체인을 돌린다: `NP_PREP`(그 baseline 입력 복사, 대상 = `S/baselines/<id>/`, 복사 규칙은 §7.3.4와 같음) → `NP_EXTRACT` → `NP_TAG`(둘 다 baseline 폴더 대상) → **`BL_MAP`**(`paicad_map`, 새 `commands.paicad_map` + `TEMPLATE_SPECS` placeholder `{baselines_json}`·`{map_out_dir}`·`{user_map}`, 기존 `param_map.json`이 있으면 `--user-map`으로 보존) → `NP_REGISTER`(다중 모드: `param_map.json` 저장 — **항상 `status: draft`**(add_baseline·remap 공통, 기존 `decision`은 `signature` 같은 행만 승계, §4.10), 확정(`confirmed`) 전에는 파라미터 표 이름 집합을 DOE용으로 갱신하지 않고, 충돌이면 `PARAM_NAME_CONFLICT`로 실패·세트 불변). **단일 baseline(`baselines/` 없음, 신규·reprep 포함)이면 `BL_MAP`은 SKIPPED** — 기존 단일 흐름 불변. 첫 baseline(`id` 기본 `base`)은 기존 `S/cad`·`S/radioss_assem`·`S/native`를 가리키는 논리 항목(복사·이동 없음)으로 두 번째 baseline 추가 시 자동 등록. 매핑표만 다시 만들 때(`--user-map` 변경 없이 점수 옵션만 바꿈 등)는 params `{mode:"remap", param_set_id}`로 `BL_MAP`·`NP_REGISTER`만 실행(앞 3 step SKIPPED).
+- **매칭 규칙·점수**는 §11.4(하드 게이트 3 + 점수 S, 헝가리안 할당, 표시 등급 경계 0.7/0.5 — 판정 아님)이며 `BL_MAP` 안에서 `paicad map`이 계산한다. 옵션은 `options.json` `map` 절(가중치·σ·임계 — 고급 옵션에서 변경·저장).
+- API(§7.6 추가): `POST /param-sets/{id}/baselines`(202 `{job_id}`, job_type `PARAM_SET_NATIVE` `mode:"add_baseline"`), `DELETE /param-sets/{id}/baselines/{bid}`(마지막 하나는 삭제 불가 → 단일로 되돌림 `POST …/baselines/disable`, 폴더는 `_backup`), `GET`·`PUT /param-sets/{id}/param-map`(PUT은 행별 `decision`만 저장 — `proposed`·`signature` 변경 불가, 충돌 시 422 `PARAM_NAME_CONFLICT`, `confirmed` 상태에서 PUT하면 `draft`로 되돌림), `POST /param-sets/{id}/param-map/confirm`(사용자 확정 1회 호출: `needs_review` 행·`check` 등급 행에 `decision`이 없으면 422 `GEOM_INPUT_INVALID`, 나머지 `decision: null` 행은 `accept`로 기록, `confirmed_by`·`confirmed_at` 기록, 파라미터 표 이름 집합 갱신).
+- **확정 게이트**: `param_map.json`이 있는 세트에서 run 생성 진입점(§7.3.6 — ①-3 DOE, ④ 일괄·단건 예측)은 요청 시점에 `status == confirmed`를 검사해 아니면 409 `PARAM_MAP_UNCONFIRMED`(작업 미생성, 메시지에 미결정 행 수). 단일 baseline 세트는 검사 대상 아님. 요청·응답 모양은 4B 착수 때 openapi로 확정.
 - **샘플 배정(`assign_baseline`, 플랫폼, 순수 함수)** — 입력 = 샘플 값(공통 이름), 출력 = `baseline_id` 또는 `BASELINE_NO_COVER`:
   - (a) topology: `values.baseline` = baseline id(범주형). 값 범위 검사는 그 baseline의 `feasible`로(단일과 동일, 초과는 경고만).
   - (b) range: 후보 = 모든 활성 파라미터 값이 그 baseline의 `feasible`(`source: envelope` 우선, 없으면 `estimate`) 이내인 baseline. 후보 중 **분할 변수의 공칭에 가장 가까운 baseline**(동률은 `baselines` 배열 순서). 후보 없음 → `BASELINE_NO_COVER`로 스킵. 구간 경계 = 인접 공칭의 중점, `feasible`이 겹치면 가까운 쪽, 틈이 있으면 그 구간은 미커버(등록 때 경고 `BASELINE_RANGE_GAP`).
@@ -790,7 +805,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | ③ 데이터셋·모델, ⑤ | 엔진 배지. `ENGINE_*` 오류 문구 표시 |
 | 작업 목록 | native step 이름(`STEP_LABELS_NATIVE`) |
 
-| ④ 세트 상세 "다중 baseline(고급)" (4B) | **접힘 1개, 기본 닫힘·기본 화면 변경 없음**. baseline 추가·삭제(경로 고르기는 기존 discover 후보 재사용), 자동 매칭표(행 = 공통 변수 이름, 열 = baseline별 원 파라미터명·N/A·점수, 이름 변경·병합·분리·N/A 지정, 충돌 시 `PARAM_NAME_CONFLICT` 문구), 범위 분할 시 구간 표시(분할 변수 축에 baseline별 담당 구간·`feasible` 겹침·틈 경고). 일괄 예측 표·DOE run 표에 `baseline` 열(다중일 때만), `BASELINE_NO_COVER` 행 category 배지 |
+| ④ 세트 상세 "다중 baseline(고급)" (4B) | **접힘 1개, 기본 닫힘·기본 화면 변경 없음**. baseline 추가·삭제(경로 고르기는 기존 discover 후보 재사용), 자동 매칭표(행 = 공통 변수 이름, 열 = baseline별 원 파라미터명·N/A·점수; **등급 색**(추천 녹·확인 필요 황·미매칭 제안 회)과 점수 숫자 표시, 행별 [수락]·[변경]·[분리] + N/A 지정, 충돌 시 `PARAM_NAME_CONFLICT` 문구, 재확인 행(`needs_review`)은 별도 배지, 상단 **[확정] 버튼 1개**와 상태 배지 `초안`/`확정(사용자·시각)`; 미확정이면 DOE·예측 버튼 사유 "매칭표 확정 필요"(`PARAM_MAP_UNCONFIRMED`)), 범위 분할 시 구간 표시(분할 변수 축에 baseline별 담당 구간·`feasible` 겹침·틈 경고). 일괄 예측 표·DOE run 표에 `baseline` 열(다중일 때만), `BASELINE_NO_COVER` 행 category 배지 |
 
 새 화면 없음, 시안 없음(필수 UI만).
 
@@ -850,7 +865,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 - **목적**: 한 baseline의 모핑 범위(§11.2 envelope)를 넘는 설계공간을 baseline 여러 개로 덮는다. 재메시 비범위는 그대로 — baseline마다 메시 1세트는 사용자가 준비한다. **기본은 단일 baseline이고 켜지 않으면 아무것도 바뀌지 않는다.** 착수는 4 완료 + 단계 2 envelope 보고서 확인 후.
 - **용도 2가지, 같은 구조**(`baselines/<id>/` + `param_map.json`, §4.10): (a) **위상 변형** — 리브 개수 등 위상이 다른 baseline마다 공칭 STEP + 조립 폴더 baseline 메시 1세트, 위상 수준 = 이산 변수 `baseline`(범주형, 자동 추가). (b) **범위 분할** — 같은 위상, 공칭값이 다른 baseline 여러 개로 큰 범위를 구간별 모핑. 한 세트는 둘 중 하나만(`usage`), **한 param_set에서 위상 변형(a)과 범위 분할(b)을 섞는 것은 비범위(확정)**.
-- **공통 변수 이름**: `paicad map`(`BL_MAP` 단계, §7.3.8)이 baseline마다 extract한 파라미터를 피처 대응으로 자동 매칭해 공통 이름으로 정의한다. 특정 baseline에 없는 변수는 그 baseline에서 N/A. 사용자는 매칭표에서 이름 변경·병합·분리 가능(`--user-map`으로 재실행 시 보존). 충돌 = `PARAM_NAME_CONFLICT`.
+- **공통 변수 이름**: `paicad map`(`BL_MAP` 단계, §7.3.8)이 baseline마다 extract한 파라미터를 피처 대응으로 매칭해 공통 이름 **초안(`proposed`)을 제시**한다. **자동 확정은 없다**(점수 무관). 사용자가 매칭표를 확인·확정(`status: confirmed`)해야 DOE가 가능하다(미확정 = `PARAM_MAP_UNCONFIRMED`). 특정 baseline에 없는 변수는 그 baseline에서 N/A. 사용자는 매칭표에서 행별로 수락·변경(이름 변경·병합·N/A)·분리하며(`decision`, 제안과 분리 저장) 재실행(`--user-map`) 시 피처 서명이 같은 행의 결정은 승계되고 `status`는 `draft`로 돌아간다(§4.10). 충돌 = `PARAM_NAME_CONFLICT`.
 - **매칭 점수(확정)** — baseline 쌍마다 계산, 입력은 features JSON뿐:
   - 하드 게이트(하나라도 불일치면 후보 제외): 같은 피처 타입, 같은 component, 주축 방향 일치(법선/축 각도 ≤ 10°).
   - 점수 `S = 0.35·S_pos + 0.30·S_dim + 0.15·S_ori + 0.20·S_nbr` (0~1).
@@ -861,12 +876,12 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
     | `S_dim` | `1 - min(1, abs(v1-v2) / max(v1,v2))`, v = 공칭 치수값(두께·높이 등) |
     | `S_ori` | cos(각도)를 선형 정규화(0° → 1, 10° → 0) |
     | `S_nbr` | 인접 면 타입 다중집합의 Jaccard 유사도(인접 그래프 1-hop) |
-  - 대응: baseline 쌍마다 **헝가리안 할당**으로 총점 최대화(게이트 탈락 쌍은 후보 없음). `S ≥ 0.7` → 공통 이름, `0.5 ≤ S < 0.7` → 매칭하되 `MAP_LOW_SCORE` 경고로 사용자 확인(UI에서 승인 전까지 미확정 표시), `S < 0.5` → 별도 변수(상대 baseline에서 N/A).
+  - 대응: baseline 쌍마다 **헝가리안 할당**으로 총점 최대화(게이트 탈락 쌍은 후보 없음). **점수 구간은 판정이 아니라 표시 등급**이다: `S ≥ 0.7` → "추천"(`recommend`), `0.5 ≤ S < 0.7` → "확인 필요"(`check`, `MAP_LOW_SCORE` 경고 유지), `S < 0.5` → "미매칭 제안"(`unmatched`, 별도 변수·상대 baseline N/A 제안). 어느 등급이든 사용자 확정 전에는 효력이 없다.
   - 대칭 그룹은 **그룹 단위**로 매칭(그룹 크기가 다르면 게이트 탈락).
-  - 가중치·σ·임계값(0.7·0.5)은 고급 옵션(`options.json` `map` 절: `weights{pos,dim,ori,nbr}`, `sigma`, `accept`, `warn`, `axis_deg`)에서 변경·저장(기본값 위). 사용값은 `param_map.json`에 `map_options`로 함께 기록한다.
+  - 가중치·σ·등급 경계(0.7·0.5)는 고급 옵션(`options.json` `map` 절: `weights{pos,dim,ori,nbr}`, `sigma`, `accept`, `warn`, `axis_deg`)에서 변경·저장(기본값 위). 사용값은 `param_map.json`에 `map_options`로 함께 기록한다.
 - **배정·실패·DOE·데이터**: §7.3.8(배정 규칙, `BASELINE_NO_COVER` 스킵, baseline별 층화 LHS, 데이터셋 1개·run 메타 `baseline_id`·학습 입력 범주형 `baseline`).
 - **독립성(§18)**: paicad는 features JSON만 읽고 공통 이름·배정·DOE를 모른다. 매핑 변환·배정은 플랫폼. `paicad map`의 매칭 규칙은 플랫폼 파일명·경로를 하드코딩하지 않는다(V-GE-14).
-- **리스크**: baseline 간 메시 품질·요소 크기 차이가 응답 차에 섞임(범주형 `baseline` 입력으로 일부 흡수), 구간 경계 불연속, 자동 매칭 오매칭(점수·UI 확인), N/A 변수는 0 대체 + 결측 지시 열(§7.3.8)이라 0이 실제 값처럼 읽힐 수 있음(지시 열로 분리).
+- **리스크**: baseline 간 메시 품질·요소 크기 차이가 응답 차에 섞임(범주형 `baseline` 입력으로 일부 흡수), 구간 경계 불연속, 자동 매칭 오매칭(제안만 하고 사용자 확정 필수 — 확정 단계에서 훑어보고 넘길 위험은 남음), N/A 변수는 0 대체 + 결측 지시 열(§7.3.8)이라 0이 실제 값처럼 읽힐 수 있음(지시 열로 분리).
 
 ---
 
@@ -918,7 +933,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - V-GE-9 고급 옵션 저장·병합·범위 검사, 사용값 `options.json` 기록, tag 절 변경 시 STALE.
 - V-GE-10 migration 0012 업그레이드·기존 행 기본값·CHECK.
 - V-GE-16 envelope(§11.2): `morph --sweep`이 `envelope.json/csv`를 필수 열(품질 3지표·경계 편차·재측정 오차·실패 코드)과 함께 출력, 같은 입력 2회 바이트 동일, `feasible`에 `source: envelope` 반영, 범위 초과는 UI 경고만(차단 없음), 골든 쿠션 report_envelope 존재.
-- V-GE-17 다중 baseline(§11.4): 단일 baseline 세트는 `baselines/`·`param_map.json` 없이 기존 경로·시험 불변(V-GE-12 포함), `param_map.json` `schema_version`·N/A(null)·`PARAM_NAME_CONFLICT`(map·PUT 모두), 배정 규칙(최근접 공칭·`feasible` 이내·틈 → `BASELINE_NO_COVER` 스킵·다른 run 계속), values.json 키 = baseline 원 이름. 단일 baseline 세트에서 `BL_MAP` = SKIPPED·새 job_type 없음(`JOB_TYPES`에 `PARAM_BASELINE_NATIVE` 부재), 매칭 점수 시험(게이트 3종·가중합·헝가리안·0.7/0.5 경계·대칭 그룹 크기 불일치·옵션 변경 반영), 위상+범위 혼합 입력은 `GEOM_INPUT_INVALID`.
+- V-GE-17 다중 baseline(§11.4): 단일 baseline 세트는 `baselines/`·`param_map.json` 없이 기존 경로·시험 불변(V-GE-12 포함), `param_map.json` `schema_version`·N/A(null)·`PARAM_NAME_CONFLICT`(map·PUT 모두), 배정 규칙(최근접 공칭·`feasible` 이내·틈 → `BASELINE_NO_COVER` 스킵·다른 run 계속), values.json 키 = baseline 원 이름. 단일 baseline 세트에서 `BL_MAP` = SKIPPED·새 job_type 없음(`JOB_TYPES`에 `PARAM_BASELINE_NATIVE` 부재), 매칭 점수 시험(게이트 3종·가중합·헝가리안·0.7/0.5 등급 경계·대칭 그룹 크기 불일치·옵션 변경 반영), 위상+범위 혼합 입력은 `GEOM_INPUT_INVALID`. **매칭표 확정 게이트**: `paicad map` 출력은 항상 `status: draft`·`confirmed_by/at` null·행마다 `proposed`/`decision` 분리(점수 ≥0.7이어도 `decision` null), 미확정에서 run 생성(DOE·일괄·단건) 409 `PARAM_MAP_UNCONFIRMED`, `confirm` 후 `confirmed_by/at` 기록, add_baseline·remap 후 draft 복귀 + 서명 같은 행 `decision` 승계·변경 행 `needs_review`.
 - V-GE-18 4B DOE·데이터: baseline별 샘플 수 차 ≤ 1, 같은 seed 같은 `doe_matrix.csv`, 데이터셋 1개·run 메타 `baseline_id`·학습 입력 범주형 `baseline` + N/A 변수 결측 지시 열·0 대체, `baseline_id` DB 열 없음(migration 0012 불변), `paicad map`이 플랫폼 모듈 import·플랫폼 파일명 하드코딩 없음(V-GE-13·14).
 - V-GE-15 쉘 두께(§11.1): TYPE1만 적용·TYPE9/10/11 '미지원' 표시, 출력 diff = 지정 PROP 두께 필드만(고정폭 보존), 원본·SPDM 불변, 공유 PROP 경고, 요소별 두께 → `PROP_OVERRIDDEN_BY_ELEMENT`, 두께 ≤0 → `PROP_THICKNESS_INVALID`, 두께만 있는 param_set 동작, 파라미터 표 병합·XML 호환, altair 경로 무변경.
 - V-GE-11 버전(§17): `packages/paicad` 변경 커밋마다 `__version__` 올림·CHANGELOG 최상단 항목 일치(test-all 검사 존재·통과), native JSON·옵션 사용값·DB에 `engine_version` 기록, 출력 include에 버전 주석 없음.
@@ -937,6 +952,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q3 | `104_replace_node_elem.inc` 헤더에 `/PART`·`/PROP`(·`/MAT`)가 포함되나, 아니면 노드·요소만인가? | R1은 `/NODE`만 바꾸므로 무관하게 원문 보존. 3S는 조립 폴더 전체 scan이라 무관 |
 | Q4 | ~~쉘 두께 `/PROP/SHELL`을 파라미터 범위에 넣나? PROP 정의 위치?~~ | **해결(2026-10-17)**: TYPE1 두께 포함(단계 3S, §11.1), 위치는 `props scan`이 조립 폴더에서 발견, TYPE9/10/11 비범위 |
 | Q13 | 쉘 두께(3S)를 altair 경로에도 적용하나? | altair 미적용(GE-11, 1차 native만). 재메시는 비범위 — envelope 결과(§11.2) 후 재검토 |
+| Q17 | (4B) 확정 시 `decision`이 없는 "추천" 등급 행을 일괄 수락으로 기록해도 되나, 모든 행의 명시 결정을 요구하나? | **가정(확정 대기)**: [확정] 클릭 = 일괄 `accept` 기록, 단 `check` 등급·`needs_review` 행은 명시 결정 필수 |
 | Q14 | ~~(4B) baseline에서 N/A인 변수를 학습 입력에서 어떻게 다루나?~~ | **해결(2026-10-17)**: 결측 지시 열(`<이름>__na`) + 값 0 대체(공칭 아님), §7.3.8 |
 | Q15 | ~~(4B) 자동 매칭 점수 임계값·허용오차, range 분할의 "공칭에 가장 가까움" 거리~~ | **해결(2026-10-17)**: 하드 게이트 + 가중 점수 S + 헝가리안, 임계 0.7/0.5, 옵션 변경 가능(§11.4). range 분할 변수는 `range_split.param` 1개라 최근접 공칭 비교(§7.3.8) |
 | Q16 | ~~(4B) `baseline_id` DB 열(migration 0013)을 둘지~~ | **해결(2026-10-17)**: DB 열 없음, run 메타만(0012 불변, §7.5) |
