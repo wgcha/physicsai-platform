@@ -22,6 +22,7 @@
 - **하드코딩 금지**: Altair·PBS 실행 파일 경로, 명령 인자, AI 루트, 포트, 정규식은 `config`에서만 읽는다. 코드에 `Program Files` 경로 금지.
 - **SPDM 보호**: SPDM master에 쓰지 않는다(2차 가져오기도 읽기·복사만, 하드링크 금지). 산출물은 AI 루트에만. 사용자 산출물은 삭제하지 않고 `_backup`으로 이동한다.
 - **보안**: 외부 명령은 워커에서만, `shell=False` 인자 배열로. pickle(`.pscfg`)을 열지 않는다. 원본 pyd 코어를 플랫폼 프로세스에서 import하지 않는다(런처를 Altair 도구가 실행). 업로드 엔드포인트를 만들지 않는다. 대시보드 세션 토큰을 로그·DB에 남기지 않는다.
+- **paicad 버전**: `packages/paicad`를 바꾸는 커밋마다 `__version__`(`packages/paicad/src/paicad/__init__.py`, 단일 출처)을 올리고 `packages/paicad/CHANGELOG.md` 최상단에 항목을 추가한다(geometry-engine.md §17, `scripts/test-all`이 검사).
 - DB에는 경로·상태·수치 요약만. 파일 본문 저장 금지.
 - 사용자 표시 문구·오류 메시지는 한국어.
 - **프런트 빌드본 함께 커밋**: `frontend/`(src·public·index.html·package*.json·vite.config·tsconfig)를 고치면 `scripts/build-frontend-dist` 실행 후 `frontend-dist/`를 함께 커밋한다(서버는 Node 없이 이 빌드본을 배치 — phase3 D3-40). `scripts/test-all`이 최신 여부를 검사한다. Impl-Frontend가 프런트 커밋에 함께 넣는다.

@@ -41,6 +41,8 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 
 외부 명령은 워커에서만 `shell=False` 인자 배열, 경로·명령·허용오차 기본값은 설정에서만, SPDM master·원본 프로젝트 폴더는 읽기만, 산출물은 AI 루트에만, 기존 산출물은 삭제·덮어쓰기 대신 `_backup` 이동, 사용자 문구 한국어, DB에는 경로·상태·수치 요약만. **플랫폼 프로세스(API·워커)는 `paicad`·OCP를 import하지 않는다**(원본 pyd와 같은 격리, 결과 JSON만 읽음).
 
+**기존 Altair 경로 동작 불변(GE-11)**: native는 신규 구현인 별도 모듈(`packages/paicad` + 플랫폼 native 분기)이며, 기존 Altair 경로와 같은 것은 겉(외부 인터페이스 — 출력 파일 이름·폴더 레이아웃·`parameter_extracted.xml` 호환·m_3 조립 입력)뿐이다. altair 세트의 코드 경로·설정 기본값·출력은 바꾸지 않고, 기존 코드 수정은 §16 분기 지점(`engine == "native"`일 때만 다른 경로)으로 한정한다.
+
 ---
 
 ## 2. 용어·기존 규칙 변경
@@ -79,6 +81,8 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 | GE-8 | 두께 기준면 기본 규칙 = 제품·타 바디 접촉면 고정, 반대 면 이동(확정 대기) | 사용자 합의(확정 대기) |
 | GE-9 | 정수 반올림(`%3i`) 없음 — native 세트는 tpl이 없어 `tpl_params=[]` → `applied_values = values` | 두께 연속값 |
 | GE-10 | 의존: cadquery-ocp(Windows cp312 wheel), numpy, scipy — 오프라인 묶음 포함 | 사용자 합의 |
+| GE-11 | native는 신규 별도 모듈, Altair 경로와는 외부 인터페이스만 같음. 기존 코드는 분기 지점만 최소 변경, altair 동작 불변(§1.4·§16) | 사용자 결정 |
+| GE-12 | paicad SemVer(0.x) + `CHANGELOG.md`, 출력 `schema_version`은 엔진 버전과 별도, 모든 출력·DB에 사용 버전 기록(§17) | 사용자 결정 |
 
 ### 2.3 기존 계약에서 바뀌는 규칙(이 문서 우선)
 
@@ -128,7 +132,7 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 
 ## 4. 입출력 파일 계약
 
-모든 JSON은 UTF-8(BOM 없음), `schema_version: 1`, 길이 단위 mm, 각도 deg. 플랫폼은 JSON을 `geometry.max_report_bytes`(기본 4 MiB) 이하만 읽고, 넘거나 형식이 틀리면 `INPUT_INVALID`. 좌표·ID는 기준본의 mm-ton-s 그대로(변환 없음).
+모든 JSON은 UTF-8(BOM 없음), `schema_version: 1`, 길이 단위 mm, 각도 deg. paicad·플랫폼이 쓰는 native JSON(보고·준비본·옵션 사용값·`SKIPPED.json`)은 최상위에 `engine: "native"`·`engine_version: "<paicad 버전>"`도 둔다(§17.3 — 아래 예시에서 생략돼도 필수). 플랫폼은 JSON을 `geometry.max_report_bytes`(기본 4 MiB) 이하만 읽고, 넘거나 형식이 틀리면 `INPUT_INVALID`. 좌표·ID는 기준본의 mm-ton-s 그대로(변환 없음).
 
 ### 4.1 입력
 
@@ -163,7 +167,7 @@ component의 요소·노드 집합:
 
 | 경로 | 생성 | 내용 |
 |---|---|---|
-| `native/prep.json` | 플랫폼(준비 step 끝) | `{schema_version, engine:"native", paicad_version, ocp_version, inputs:{step:{rel,sha256}|{parts:[{rel,sha256}]}, baseline_inc:{name,sha256}, renum_csv:{name,sha256}, body_map:{rel,sha256}|null}, tag_options_sha256, created_at, job_id}` |
+| `native/prep.json` | 플랫폼(준비 step 끝) | `{schema_version, engine:"native", engine_version, ocp_version, inputs:{step:{rel,sha256}|{parts:[{rel,sha256}]}, baseline_inc:{name,sha256}, renum_csv:{name,sha256}, body_map:{rel,sha256}|null}, tag_options_sha256, created_at, job_id}` |
 | `native/extract/parameter_extracted.xml` | `paicad extract` | §4.3 |
 | `native/extract/parameter_features.json` | `paicad extract` | §4.3 |
 | `native/extract/features/<NAME>.png` | `paicad extract` | 피처별 하이라이트(§4.3) |
@@ -196,7 +200,8 @@ component의 요소·노드 집합:
 ```json
 {
   "schema_version": 1,
-  "paicad_version": "0.1.0",
+  "engine": "native",
+  "engine_version": "0.1.0",
   "unit_system": "mm-ton-s",
   "cad": {"mode": "single", "files": [{"rel": "cad/model.step", "sha256": "…"}], "body_map": "xde"},
   "bodies": [
@@ -340,7 +345,7 @@ component의 요소·노드 집합:
 
 - 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_scaled_jacobian ≤ 1`, `max_aspect ≥ 1`, `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
 - 고급 옵션 UI에서 바꾸는 절 = `quality`·`interference`·`deviation`(+`tie.required`). `tag` 절 변경은 준비본 재생성 필요(§7.4).
-- 작업이 쓴 유효 옵션은 `P/geom/options.json`, `R/options.json`, `D/native/options_run.json`에 기록(사용값 고정).
+- 작업이 쓴 유효 옵션은 `P/geom/options.json`, `R/options.json`, `D/native/options_run.json`에 기록(사용값 고정). 이 세 파일에는 최상위 `engine`·`engine_version`(작업 준비 step에서 `paicad version --json`으로 읽은 값)을 함께 쓴다 — 병합·범위 검사 대상 아님, `param_sets.geom_options` 입력에 오면 422 `GEOM_OPTIONS_INVALID`.
 
 ---
 
@@ -351,7 +356,7 @@ component의 요소·노드 집합:
 | 항목 | 값 |
 |---|---|
 | 위치 | `packages/paicad/`(`pyproject.toml`, `src/paicad/`, `tests/`, `CHANGELOG.md`) — `packages/simdash_adapters`와 같은 배치 |
-| 배포 이름·버전 | `paicad==0.1.0`(루트 `pyproject.toml` 의존에 정확 고정, `deploy/requirements.local.lock`) |
+| 배포 이름·버전 | `paicad==0.1.0`(루트 `pyproject.toml` 의존에 정확 고정, `deploy/requirements.local.lock`). 버전 단일 출처·올림 규칙은 §17 |
 | 진입점 | `[project.scripts] paicad = "paicad.cli:main"`(Windows `Scripts\paicad.exe`) |
 | 의존 | `cadquery-ocp`(cp312 win_amd64 wheel이 있는 버전으로 Impl이 고정, 7.7 이상), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
 | 모듈 경계 | `paicad.brep`(OCP 사용 — STEP 읽기·XDE·피처·push/pull·투영·렌더), `paicad.mesh`(Radioss 읽기·쓰기, numpy만), `paicad.morph`·`paicad.check`(numpy·scipy + `brep` 인터페이스), `paicad.cli`. `mesh`·`morph`·`check`는 B-rep을 `SurfaceLike`/`CurveLike` 프로토콜(`eval(u,v)`, `project(p)`, `classify(u,v)`, `bounds()`)로만 쓴다 → 해석적 평면·원통 구현으로 OCP 없이 시험 가능 |
@@ -373,6 +378,7 @@ component의 요소·노드 집합:
 | 명령 | 인자(필수 **굵게**) | 출력(성공 판정 파일) |
 |---|---|---|
 | `paicad version` | `--json` | stdout JSON `{"paicad":"0.1.0","ocp":"7.x","numpy":"…","scipy":"…","python":"3.12.x"}` |
+| `paicad --version` | (최상위 옵션) | stdout 한 줄 `paicad 0.1.0`, 종료코드 0(§17.1) |
 | `paicad extract` | **`--cad`**(STEP 파일 또는 `cad/parts` 폴더), **`--out-dir`**, `--body-map`, `--renum-csv`(있으면 component 순서·대응 검사), `--options`, `--no-png` | `parameter_extracted.xml`, `parameter_features.json`(성공 = 둘 다 존재 + xml 파라미터 ≥1), `features/*.png` |
 | `paicad tag` | **`--cad`**, **`--features`**, **`--baseline-inc`**, **`--renum-csv`**, **`--assem-dir`**, **`--out-dir`**, `--body-map`, `--options` | `tag.json`(`status: OK`), `tag_nodes.npz` |
 | `paicad update` | **`--cad`**, **`--features`**, **`--values`**, **`--out-dir`**, `--tag-dir`(기준면 접촉 정보), `--body-map`, `--options` | `update.json`(`status: OK`), `sample.brep`, `face_map.json` |
@@ -664,6 +670,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | `train_setups` | `engine VARCHAR(16) NOT NULL DEFAULT 'altair'`; `features_rel VARCHAR NULL` |
 | `train_does` | `engine VARCHAR(16) NOT NULL DEFAULT 'altair'`; `geom_options JSONB NULL`(사용값 사본) |
 | `datasets` | `engine VARCHAR(16) NULL`(NULL = 모름) |
+| `param_sets`·`train_does`·`predict_batch_runs`·`datasets` | `engine_version VARCHAR(32) NULL`(paicad 버전, altair·모름 = NULL, §17.3) |
 | `models` | `engine VARCHAR(16) NULL` |
 | `artifacts` | kind 목록에 `FEATURE_PNG`(CHECK가 있으면 추가) |
 
@@ -777,6 +784,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 |---|---|
 | Impl-Backend A(paicad) | `packages/paicad/**` 전부 |
 | Impl-Backend B(플랫폼) | `physicsai_core/commands.py`(spec·실행 파일), `config/schema*.py`·`platform.example.yaml`, `physicsai_core/geometry/`(reports·options 병합), `stage4_predict/param_discover.py`·`param_sets.py`, `job_types.py`, `migrations/versions/0012_geometry_engine.py`, `db/tables/*`, `worker/.../steps/geometry_native.py`·`stage4_predict/{predict_inputs,batch,param_set_native}.py`·`stage1_train_data/{extract,doe_gen}.py`, API 서비스·라우터·openapi, fake_paicad, deploy |
+| Impl-Backend(검사) | `scripts/test-all.sh`·`.ps1`(+ 필요 시 `scripts/check_paicad_version.py`): `packages/paicad` 변경 시 `__version__` 변경 + CHANGELOG 최상단 항목 버전 == `__version__` + 루트 고정·lock 일치(§17.5). A의 첫 커밋 전에 넣는다 |
 | Impl-Frontend | §8 |
 | 순서 | A 단계 1 → B 단계 1(fake로 병행) → A 2 → A 3 + B 3 → B 4 → 프런트(단계 1·3·4 화면) |
 
@@ -794,6 +802,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - V-GE-8 엔진 혼용 409/422, altair 기존 시험 전부 통과.
 - V-GE-9 고급 옵션 저장·병합·범위 검사, 사용값 `options.json` 기록, tag 절 변경 시 STALE.
 - V-GE-10 migration 0012 업그레이드·기존 행 기본값·CHECK.
+- V-GE-11 버전(§17): `packages/paicad` 변경 커밋마다 `__version__` 올림·CHANGELOG 최상단 항목 일치(test-all 검사 존재·통과), native JSON·옵션 사용값·DB에 `engine_version` 기록, 출력 include에 버전 주석 없음.
+- V-GE-12 altair 경로 불변(§1.4·§16): 기존 altair 시험 무수정 통과, 분기 지점 밖 altair 코드 diff 없음.
 
 ---
 
@@ -811,18 +821,81 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q8 | 품질·편차 기본 기준값(min Jacobian 0.2, aspect 10, 경계 0.05 mm, 파라미터 1%)이 사내 메시 기준과 맞나? | 표 값 |
 | Q9 | 대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지 | 자동, 풀기 UI 없음(후속) |
 | Q10 | cadquery-ocp 고정 버전과 사내 보안 승인(wheel 출처 PyPI) | Impl이 cp312 win_amd64 wheel 확인 후 고정, 사용자 승인 필요 |
+| Q11 | 같은 native 데이터셋에 paicad MINOR가 다른 run이 섞일 때 경고로 충분한가, 차단(422)해야 하나? 모델 등록·예측 때 모델의 `engine_version`과 현재 paicad MINOR가 다르면? | 데이터셋 경고 `ENGINE_VERSION_MIXED`(차단 아님, §17.4). 예측 시 비교는 1차 없음 |
+| Q12 | 출력 include에 `# paicad x.y.z` 주석 줄을 허용할지(추적 편의 vs 바이트 동일 원칙) | 불허(§17.3). 허용하려면 V-GE-4·§6.4 예외 규칙을 함께 고쳐야 함 |
 
 ---
 
-## 16. 기존 코드와의 충돌·불일치(Plan 확인 결과)
+## 16. native 분기 지점(최소 변경 — Plan 확인 결과)
 
-1. `commands.py` `EXECUTABLE_PLACEHOLDERS`·`effective_altair`가 Altair 6종 고정 → `{paicad}`·`effective_executables` 추가 필요(§7.1).
-2. `predict_inputs.geom_update`·`batch.bp_gen`이 `commands.geom_update is None`이면 실패, `features.predict_parametric`도 geom_update·include TCL 기준 → native 분기가 먼저 와야 함(§7.3.5·7.3.7).
-3. `param_sets.validate_folder`: tpl 필수(`TPL_MISSING`), `cad/` 정확히 1파일, `train_data.cad_extensions=[".prt"]`; DB `param_sets.tpl_rel NOT NULL` → native 분기·migration 필요(§7.4·7.5).
-4. `assemble_into`는 기준본 부재를 경고(`MESH_INCLUDE_NOT_IN_ASSEM`)로만 처리 → native는 등록 단계 오류로 앞당김.
-5. `RENUM_INIT.csv` 내용 형식은 코드·문서 어디에도 정의되지 않음(파일 이름과 TCL 전달뿐) → Q5.
-6. `docs/manual/admin.md` §4.3 `predict` 표에 폐지된 `predict.mesh_output_glob`가 남아 있고 `commands.mesh` 기본값을 null로, §5.3 `geom_update`·`mesh` 성공 판정을 phase3 §11.4 이전 내용으로 적고 있음 → 이 계약과 별개로 Plan 후속 정정 대상.
-7. 워커 자식 환경 허용목록(B19)에 스레드 변수 없음 → `geometry.env`로만 전달(§7.1).
+원칙(GE-11, §1.4): 아래는 **기존 코드 리팩터링 대상이 아니라** native가 끼어드는 분기 지점이다. 각 지점은 `engine == "native"`일 때만 새 경로(native 전용 모듈·함수)로 보내고, altair 경로의 코드·기본값·출력·오류 코드는 그대로 둔다. 공용 함수를 일반화·재구성해야 하면 구현 전 변경 메모(`GE-C*`)로 Plan 확인. 판정: altair 기존 시험 무수정 통과(V-GE-8).
+
+1. `commands.py` `EXECUTABLE_PLACEHOLDERS`·`effective_altair`(Altair 6종) → **추가만**: `{paicad}` 항목, `effective_executables` = 기존 `effective_altair` 결과 + `paicad_path`. `effective_altair`의 이름·반환은 유지(기존 호출부 무수정, §7.1).
+2. `predict_inputs.geom_update`·`batch.bp_gen`의 `commands.geom_update is None` 검사, `features.predict_parametric` → 핸들러 **맨 앞** 엔진 분기 1곳에서 native 함수(`param_set_native`·`geometry_native`)로 위임, altair 본문 불변(§7.3.5·7.3.7).
+3. `param_sets.validate_folder`·`param_discover.discover` → `engine` 인자(기본 `"altair"`) 추가, native면 별도 함수로 위임(tpl·`.prt` 규칙은 altair 그대로). DB `param_sets.tpl_rel NOT NULL` → migration으로 NULL 허용 + CHECK(altair 행은 여전히 NOT NULL 강제, §7.4·7.5).
+4. `assemble_into` → **무수정 호출**. 기준본 부재 오류는 native 등록·검증 단계(`BASELINE_INC_MISSING`)에서 먼저 막고, `assemble_into`의 경고(`MESH_INCLUDE_NOT_IN_ASSEM`) 동작은 그대로.
+5. `RENUM_INIT.csv` 내용 형식은 코드·문서 어디에도 정의되지 않음(파일 이름과 TCL 전달뿐) → native만 읽는다(altair는 계속 TCL에 이름만 전달). 형식 → Q5.
+6. `docs/manual/admin.md` §4.3 `predict` 표에 폐지된 `predict.mesh_output_glob`가 남아 있고 `commands.mesh` 기본값을 null로, §5.3 `geom_update`·`mesh` 성공 판정을 phase3 §11.4 이전 내용으로 적고 있음 → 코드 분기 아님. 이 계약과 별개로 Plan 후속 정정 대상.
+7. 워커 자식 환경 허용목록(B19)에 스레드 변수 없음 → 허용목록은 바꾸지 않고 native 실행에만 `geometry.env`로 전달(§7.1).
+
+---
+
+## 17. 버전·변경 이력
+
+### 17.1 paicad 버전
+
+| 항목 | 규칙 |
+|---|---|
+| 체계 | SemVer, `0.1.0`부터(0.x 동안은 아래 MINOR/PATCH 기준만, MAJOR는 1.0 이후) |
+| 단일 출처 | `packages/paicad/src/paicad/__init__.py`의 `__version__ = "x.y.z"`(문자열 리터럴 1줄, 이 모듈은 OCP·numpy를 최상위 import하지 않음). `packages/paicad/pyproject.toml`은 `[project] dynamic = ["version"]` + `[tool.setuptools.dynamic] version = {attr = "paicad.__version__"}`로만 참조(정적 `version =` 금지) |
+| 노출 | `paicad --version` → `paicad x.y.z`, `paicad version --json`의 `paicad` 값(§5.3), `paicad.log` 머리줄 |
+| 플랫폼 고정 | 루트 `pyproject.toml` `paicad==x.y.z`·`deploy/requirements.local.lock`은 `__version__`과 같아야 함(§17.5 검사) |
+
+### 17.2 변경 규칙
+
+- `packages/paicad/**` 를 바꾸는 **커밋마다** `__version__`을 올리고 `packages/paicad/CHANGELOG.md` 최상단에 항목을 추가한다(같은 커밋).
+- 항목 형식:
+
+  ```markdown
+  ## 0.2.0 — 2026-10-20
+  - 변경: <무엇을 바꿨나>
+  - 영향: <출력 형상·좌표·판정이 달라질 수 있나 / 결과 불변>
+  - 계약: geometry-engine.md §6.4 (해당 없으면 "없음")
+  ```
+
+- 올림 기준:
+
+| 단계 | 기준 | 예 |
+|---|---|---|
+| MAJOR(1.0 이후) | 출력 호환 깨짐(출력 파일 이름·필수 키·CLI 인자·종료코드 의미 변경) | `check.json` 필수 키 삭제 |
+| MINOR | 같은 입력·옵션에서 출력 결과(형상·좌표·판정)가 달라질 수 있는 변경. 0.x에서는 호환 깨짐도 MINOR(+CHANGELOG "영향"에 `호환 깨짐` 명시, `schema_version` 올림) | 모핑 강성 식, 피처 인식 규칙, 검사 기본값 |
+| PATCH | 결과 불변 수정(같은 입력 → `morphed.inc`·보고 수치 바이트 동일) | 로그 문구, 성능, 리팩터링, 시험 추가 |
+
+- 결정성(§5.2 "같은 입력·옵션·버전이면 같은 출력")의 "버전" = 이 `__version__`. PATCH 올림 시 §10 결정성 시험의 기준 출력이 바뀌면 PATCH가 아니다(MINOR로 올림).
+
+### 17.3 출력 스키마 버전·기록 위치
+
+- `schema_version`(정수)은 **JSON 파일 형식** 버전으로 엔진 버전과 별도다. 키 추가(선택 키)는 그대로, 키 삭제·의미 변경·필수 키 추가 시 올린다. 플랫폼 `physicsai_core/geometry/reports.py`는 아는 `schema_version`만 읽고 모르면 `INPUT_INVALID`.
+
+| 위치 | 기록 |
+|---|---|
+| paicad JSON 출력 전부(`tag.json`·`parameter_features.json`·`update.json`·`morph.json`·`check.json`, `run` 요약) | 최상위 `schema_version`, `engine:"native"`, `engine_version:"<__version__>"`(paicad가 씀) |
+| 플랫폼이 쓰는 native JSON(`native/prep.json`, `R/SKIPPED.json`, `values.json`) | 같은 세 키. `engine_version`은 그 작업 준비 step의 `paicad version --json` 값 |
+| run·작업 폴더 옵션 사용값(`P/geom/options.json`, `R/options.json`, `D/native/options_run.json`) | `engine`·`engine_version`(§4.9) |
+| `B/batch.json`(§7.3.7) | `engine:"native"` + `engine_version`. DOE(`D`)는 `D/native/prep.json`·`options_run.json`으로 충분(새 메타 파일 없음) |
+| 출력 include(`morphed.inc`, `R/m_2/{mesh_include_name}`) | **버전 주석 불허**(1차). §6.4 "기준본과 바이트 동일, `/NODE` 좌표 필드만 다름"·V-GE-4 무변경 왕복 바이트 동일과 충돌하므로 첫 줄 `# paicad x.y.z` 등 줄 추가·변경 금지. 버전 추적은 같은 폴더의 `check.json`·`R/options.json`으로 한다 |
+| DB(migration 0012, §7.5) | `param_sets.engine_version`(준비본 생성 시), `train_does.engine_version`, `predict_batch_runs.engine_version`(run 생성 시), `datasets.engine_version`(단일이면 그 값, 섞이면 NULL + 경고) — `VARCHAR(32) NULL`, altair 행은 NULL |
+| 준비본 유효성(§4.2) | `prep.json.engine_version`의 MAJOR.MINOR가 현재 paicad와 다르면 `prep_status=STALE`(PATCH 차이는 READY) |
+
+### 17.4 데이터셋 혼용 판정(기본값, 미결 Q11)
+
+- 엔진 혼용(altair·native)은 §7.7대로 422.
+- 같은 engine(native) 안에서 `engine_version`의 **MINOR가 다른 run이 섞이면 경고**(차단 아님): DATASET_CREATE 작업 경고 `ENGINE_VERSION_MIXED` "형상 엔진 버전이 다른 학습데이터가 섞였습니다(0.2.x, 0.3.x) — 형상 결과가 다를 수 있습니다", `datasets.engine_version=NULL`. PATCH만 다르면 경고 없음. 버전 판별 불가(NULL)는 경고 없이 통과.
+
+### 17.5 검증·플랫폼 쪽 버전
+
+- `scripts/test-all` 검사(Impl-Backend, §13): (1) `packages/paicad/**` 가 비교 기준과 다르면 `__version__`도 달라야 함 — 비교 기준: 작업 트리에 `packages/paicad` 변경이 있으면 `HEAD`, 없으면 `HEAD~1`(CI는 PR base). (2) 항상: CHANGELOG 최상단 `## x.y.z — YYYY-MM-DD` 의 버전 == `__version__`, `pyproject.toml`에 정적 `version` 없음, 루트 `paicad==` 고정·`requirements.local.lock` == `__version__`. 실패 메시지 한국어.
+- 플랫폼 쪽 native 연동 코드(backend·worker의 native 분기, `physicsai_core/geometry/`)는 별도 버전을 두지 않고 기존 플랫폼 버전(루트 `pyproject.toml`)을 따른다. 대신 native 분기 동작을 바꾸면 `docs/decisions.md`에 1줄 기록(Plan에 요청).
 
 ---
 

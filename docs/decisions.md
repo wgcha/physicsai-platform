@@ -125,3 +125,5 @@
 - 2026-10-17 (확정 대기) 두께 변경 기준면 = 제품·타 바디 접촉면 고정·반대 면 이동, 동률이면 면적 큰 면 고정 — 근거: 사용자 합의(기본 규칙, 확정 대기) · geometry-engine.md GE-8, §15 Q2
 - 2026-10-17 native DOE(①-3·④ 일괄)는 플랫폼 LHS(`batch_matrix`) + 동시 실행기, run 폴더 `run__N/{m_1,m_2,m_3}`·paramitem(`m_1/native_params.xml`) 호환으로 ②③ glob 유지 — 근거: 사용자 합의 · geometry-engine.md §7.3.3·§7.3.6
 - 2026-10-17 (사용자 확인 필요) 새 런타임 의존성 cadquery-ocp(Windows cp312 wheel, paicad 프로세스에서만) + 기존 numpy·scipy, 오프라인 묶음(`collect-offline`)에 포함 — 근거: OCCT push/pull·투영을 직접 구현하지 않기 위함 · geometry-engine.md GE-10, §7.8
+- 2026-10-17 native는 기존 Altair 경로와 외부 인터페이스(출력 파일 이름·폴더 레이아웃·XML 호환·m_3 조립 입력)만 같은 신규 별도 모듈이며, 기존 코드는 리팩터링하지 않고 `engine == "native"` 분기 지점만 최소 변경, altair 경로 동작·기본값·출력 불변 — 근거: 사용자 결정 · geometry-engine.md GE-11, §1.4·§16
+- 2026-10-17 paicad는 SemVer(0.1.0부터, 단일 출처 `__version__`·pyproject 동적 참조), `packages/paicad` 변경 커밋마다 버전 올림 + CHANGELOG 항목(MINOR = 결과가 달라질 수 있는 변경, PATCH = 결과 불변), JSON `schema_version`은 엔진 버전과 별도, 모든 native JSON·옵션 사용값·DB(`engine_version`)에 사용 버전 기록(include에는 버전 주석 불허), 같은 native 데이터셋의 MINOR 혼재는 경고(확정 대기), 플랫폼 native 분기는 플랫폼 버전을 따르고 변경 시 이 문서에 기록 — 근거: 사용자 결정(재현성·데이터셋 추적) · geometry-engine.md GE-12, §17
