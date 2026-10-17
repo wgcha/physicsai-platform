@@ -78,9 +78,10 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 | GE-5 | 검사 실패는 샘플 스킵 + 사유 코드(`GEOM_*`) 기록 | 사용자 합의 |
 | GE-6 | 엔진은 `geometry.engine`(기본값) → `param_sets.engine`·`train_does.engine`·`train_setups.engine`에 생성 시 확정, 데이터셋·모델은 엔진별 분리 | 혼용 금지 |
 | GE-7 | 검사 기준 고급 옵션: 기본값 `geometry.defaults`, 세트별 덮어쓰기 `param_sets.geom_options`, 사용값은 run 폴더 `options.json` | 사용자 합의 |
-| GE-8 | 두께 기준면 기본 규칙 = 제품·타 바디 접촉면 고정, 반대 면 이동(확정 대기) | 사용자 합의(확정 대기) |
+| GE-8 | 두께 기준면 기본 규칙(확정 2026-10-17, 우선순위): ① 한쪽 면만 제품·타 바디 접촉 → 접촉면 고정·반대 면 이동 ② 양면 접촉 → 두께 변경 불가 구속(`locked`)으로 표시, 후보에 경고, 기본 `use=false` ③ 둘 다 비접촉 → 바디 중심에서 먼 면 이동. 고급 옵션에서 파라미터별 기준면 변경(§4.9) | 사용자 확정 |
 | GE-9 | 정수 반올림(`%3i`) 없음 — native 세트는 tpl이 없어 `tpl_params=[]` → `applied_values = values` | 두께 연속값 |
-| GE-10 | 의존: cadquery-ocp(Windows cp312 wheel), numpy, scipy — 오프라인 묶음 포함 | 사용자 합의 |
+| GE-10 | 의존: cadquery-ocp(Windows cp312 wheel), numpy, scipy — 오프라인 묶음 포함. **개발·테스트 전용**(배포 묶음 제외, pyproject optional extra `test`): build123d(가상 쿠션 STEP 생성)·gmsh(가상 쿠션 baseline tetra4 생성). build123d가 요구하는 cadquery-ocp 범위와 본체 고정 OCP 버전이 일치해야 함(§5.1) | 사용자 합의·확정 2026-10-17 |
+| GE-14 | 대칭 그룹 기본 = 묶음(구성원은 대표 값을 따름), 사용자가 파라미터 표·매칭표의 "분리" 동작으로 해제 가능(분리하면 구성원이 독립 파라미터, §6.2) | 사용자 확정 2026-10-17 |
 | GE-11 | native는 신규 별도 모듈, Altair 경로와는 외부 인터페이스만 같음. 기존 코드는 분기 지점만 최소 변경, altair 동작 불변(§1.4·§16) | 사용자 결정 |
 | GE-13 | **다중 baseline(고급 옵션, 단계 4B)**: 기본은 단일 baseline(기존 흐름 불변). 위상 변형·범위 분할을 같은 구조(`baselines/<id>/` + `param_map.json`)로, 공통 변수 이름 **자동 매칭은 초안 제시만**(점수 무관 자동 확정 없음, 사용자가 매칭표 확정 전 DOE 불가 `PARAM_MAP_UNCONFIRMED`, 점수 정의 §11.4), 위상은 범주형 `baseline`, 배정·실패 `BASELINE_NO_COVER`, 층화 LHS, 데이터셋 1개, 새 job_type 없음(`PARAM_SET_NATIVE` + `BL_MAP`, 단일이면 건너뜀)(§11.4) | 사용자 결정 2026-10-17 |
 | GE-12 | paicad SemVer(0.x) + `CHANGELOG.md`, 출력 `schema_version`은 엔진 버전과 별도, 모든 출력·DB에 사용 버전 기록(§17) | 사용자 결정 |
@@ -223,7 +224,7 @@ component의 요소·노드 집합:
         "F7":  {"surface": "PLANE", "normal": [0, 0, -1], "centroid": [60, 40, 0], "area": 9600.0, "bbox": [0, 0, 0, 120, 80, 0]}
       },
       "draft_deg": 0.0,
-      "ref": {"rule": "contact_fixed", "face": "F7", "reason": "제품 접촉면", "confirmed": false},
+      "ref": {"rule": "contact_fixed", "face": "F7", "reason": "제품 접촉면", "provisional": true, "locked": false},
       "measure": {"method": "face_distance", "faces": ["F12", "F7"]},
       "group": "G1",
       "png": "features/CUSH_L_THK_1.png"
@@ -232,7 +233,7 @@ component의 요소·노드 집합:
   "groups": [
     {"id": "G1", "kind": "MIRROR", "plane": {"point": [200, 0, 0], "normal": [1, 0, 0]}, "parameter": "CUSH_L_THK_1", "members": ["CUSH_L_THK_1", "CUSH_R_THK_1"]}
   ],
-  "warnings": [{"code": "REF_AMBIGUOUS", "feature": "CUSH_L_RIB_T_2", "message": "두 면이 모두 접촉면이라 기준면을 면적 큰 쪽으로 정했습니다"}]
+  "warnings": [{"code": "REF_BOTH_CONTACT", "feature": "CUSH_L_RIB_T_2", "message": "두 면이 모두 접촉면이라 두께를 바꿀 수 없습니다(후보에서 기본 제외)"}]
 }
 ```
 
@@ -241,7 +242,8 @@ component의 요소·노드 집합:
 | `F<k>` | 바디별 `TopExp::MapShapes(FACE)` 순서 1-기반. 같은 STEP·같은 OCP 버전이면 안정. 다르면 `face_signatures`로 다시 찾는다 |
 | `range` | 기본 = 공칭 × (1 ∓ `train_data.param_default_range_ratio`)(기본 0.05, 기존과 같음). `feasible` 안으로 자름 |
 | `feasible` | 위상 불변을 보장하는 대략 범위(인접 피처·벽 두께 > 0 기준, 보수적). 정보용. 샘플 값이 밖이면 update가 시도는 하되 실패 가능 |
-| `ref.confirmed` | 기준면 규칙 확정 전에는 false(§15 Q2). 화면에 "기준면 자동" 표시 |
+| `ref.provisional` | extract는 tag 전이라 접촉 정보가 없어 true(③ 중심 거리 기준 잠정). update가 `--tag-dir`로 §6.2 규칙을 다시 적용. 화면에 "기준면 자동" 표시 |
+| `ref.locked` | 양면 접촉(규칙 ②)이면 true — 파라미터 표에 "변경 불가(양면 접촉)" 표시, 기본 `use=false`, 경고 `REF_BOTH_CONTACT`. 사용자가 `use`를 켜거나 기준면을 바꾸면(§4.9) 허용 |
 | `png` | 800×600 PNG, 바디 회색 반투명 + 이동 면 주황 + 고정 면 파랑 + 치수선. 오프스크린 렌더 실패 시 PNG 없음 + 경고 `PNG_RENDER_FAILED`(extract는 성공) |
 | `measure` | check (a) 재측정 방법. `face_distance`(평행면 평균 거리), `hole_radius`(원통 피팅), `hole_center`(원통 축 투영), `pocket_depth`, `pocket_width`, `rib_height`, `fillet_radius` |
 
@@ -340,11 +342,13 @@ component의 요소·노드 집합:
   "deviation":    {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
   "interference": {"body_mm": 0.01, "product_mm": 0.05},
   "tie":          {"default_dsearch_mm": null, "required": true},
-  "thickness_ref": "contact_fixed"
+  "thickness_ref": "contact_fixed",
+  "thickness_ref_overrides": {},
+  "symmetry_split": []
 }
 ```
 
-- 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_scaled_jacobian ≤ 1`, `max_aspect ≥ 1`, `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
+- 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_scaled_jacobian ≤ 1`, `max_aspect ≥ 1`, `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
 - 고급 옵션 UI에서 바꾸는 절 = `quality`·`interference`·`deviation`(+`tie.required`). `tag` 절 변경은 준비본 재생성 필요(§7.4).
 - 작업이 쓴 유효 옵션은 `P/geom/options.json`, `R/options.json`, `D/native/options_run.json`에 기록(사용값 고정). 이 세 파일에는 최상위 `engine`·`engine_version`(작업 준비 step에서 `paicad version --json`으로 읽은 값)을 함께 쓴다 — 병합·범위 검사 대상 아님, `param_sets.geom_options` 입력에 오면 422 `GEOM_OPTIONS_INVALID`.
 
@@ -405,6 +409,7 @@ component의 요소·노드 집합:
 | 배포 이름·버전 | `paicad==0.1.0`(루트 `pyproject.toml` 의존에 정확 고정, `deploy/requirements.local.lock`). 버전 단일 출처·올림 규칙은 §17 |
 | 진입점 | `[project.scripts] paicad = "paicad.cli:main"`(Windows `Scripts\paicad.exe`) |
 | 의존 | `cadquery-ocp`(cp312 win_amd64 wheel이 있는 버전으로 Impl이 고정, 7.7 이상), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
+| 테스트 전용 extra | `[project.optional-dependencies] test = [build123d, gmsh, pytest…]`(배포 묶음·`requirements.lock`·`collect-offline` 제외, 런타임 코드 import 금지). **OCP 고정 규칙**: build123d가 요구하는 `cadquery-ocp` 버전 범위가 본체 고정 OCP 버전을 포함하는 build123d 버전만 고정하고, `test` extra 설치가 본체 OCP를 바꾸지 않아야 한다(시험 시작 때 `OCP` 버전 == 고정 버전 단언, 불일치는 시험 실패). 옵션 `gen` extra는 §18.8(로드맵) |
 | 모듈 경계 | `paicad.brep`(OCP 사용 — STEP 읽기·XDE·피처·push/pull·투영·렌더), `paicad.mesh`(Radioss 읽기·쓰기, numpy만), `paicad.morph`·`paicad.check`(numpy·scipy + `brep` 인터페이스), `paicad.cli`. `mesh`·`morph`·`check`는 B-rep을 `SurfaceLike`/`CurveLike` 프로토콜(`eval(u,v)`, `project(p)`, `classify(u,v)`, `bounds()`)로만 쓴다 → 해석적 평면·원통 구현으로 OCP 없이 시험 가능 |
 | 플랫폼 import | 금지(physicsai_core·api·worker 어디서도). 플랫폼은 결과 JSON만 읽는다(`physicsai_core/geometry/reports.py`, 표준 라이브러리만). 독립성 규칙 전체는 §18 |
 
@@ -490,8 +495,8 @@ component의 요소·노드 집합:
 | `HOLE_POS_U`/`HOLE_POS_V` | 원통 축의 위치(기준 = 바디 bbox 최소 모서리, 축에 수직인 두 주축) | 원통·인접 면 평행 이동 | 축 위치 |
 | `FILLET_RADIUS` | 원통/토러스 블렌드 면(접선 연속, 각 < 180°) | 반경 재블렌드(`BRepFilletAPI_MakeFillet` 재적용) | 피팅 반경 |
 
-- **대칭 그룹**: 같은 종류 피처 쌍이 바디 bbox 중심을 지나는 x·y·z 평면 또는 바디 간 공통 평면에 대해 면 서명이 거울(centroid 거울 거리 ≤ tol, 면적 차 ≤ 1%, 공칭 차 ≤ tol)이면 `MIRROR` 그룹. 여러 바디(좌·우 쿠션)에 걸칠 수 있음. 대표 = 이름 정렬 첫째.
-- **기준면 규칙**(`thickness_ref`, 확정 대기 GE-8): `contact_fixed` = 쌍 중 접촉면(제품·타 바디, `tag.json.contacts`)인 면 고정, 반대 면 이동. 둘 다 접촉이거나 둘 다 아니면 면적 큰 면 고정 + 경고 `REF_AMBIGUOUS`. `larger_area_fixed` = 항상 면적 큰 면 고정. extract는 tag보다 먼저 돌아 접촉 정보가 없으므로 features.json의 `ref`·`faces`는 `larger_area_fixed` 기준 잠정값(`ref.confirmed=false`)이다. **update는 `--tag-dir`가 주어지면 `contact_fixed` 규칙으로 기준면을 다시 고른다**(features.json은 바꾸지 않음, 실제 사용 기준면은 `update.json.applied[].moved`·`fixed`에 기록, check (a) 재측정은 방향과 무관). `--tag-dir` 없이 `contact_fixed`면 `larger_area_fixed`로 대체 + 경고 `REF_NO_CONTACT_INFO`.
+- **대칭 그룹**: 같은 종류 피처 쌍이 바디 bbox 중심을 지나는 x·y·z 평면 또는 바디 간 공통 평면에 대해 면 서명이 거울(centroid 거울 거리 ≤ tol, 면적 차 ≤ 1%, 공칭 차 ≤ tol)이면 `MIRROR` 그룹. 여러 바디(좌·우 쿠션)에 걸칠 수 있음. 대표 = 이름 정렬 첫째. **기본은 묶음**(구성원은 대표 값을 따름)이며, 사용자가 파라미터 표(§8)·다중 baseline 매칭표의 "분리" 동작으로 그룹을 해제하면 `values.json`·파라미터 표가 구성원별 독립 파라미터가 된다(`options.json`의 `symmetry_split: [그룹 id]`, 분리 후 다시 묶기도 가능, 분리는 세트 단위라 STALE 아님).
+- **기준면 규칙**(`thickness_ref`, 확정 GE-8, 기본 `contact_fixed`): 우선순위 ① 쌍 중 한쪽 면만 접촉(제품·타 바디, `tag.json.contacts`) → 접촉면 고정, 반대 면 이동 ② 양면 접촉 → `ref.locked=true`(두께 변경 불가 구속), 경고 `REF_BOTH_CONTACT`, 파라미터 표·후보에서 기본 `use=false`(사용자가 켜면 면적 큰 면 고정으로 이동) ③ 둘 다 비접촉 → 바디 bbox 중심에서 먼 면 이동(가까운 면 고정, 동률이면 면적 큰 면 고정). `larger_area_fixed` = 고급 옵션 전체 대체 규칙(항상 면적 큰 면 고정). 파라미터별 기준면 변경 = `options.json`의 `thickness_ref_overrides`(§4.9). extract는 tag보다 먼저 돌아 접촉 정보가 없으므로 features.json의 `ref`·`faces`는 ③ 기준 잠정값(`ref.provisional=true`)이다. **update는 `--tag-dir`가 주어지면 ①②③으로 기준면을 다시 고른다**(features.json은 바꾸지 않음, 실제 사용 기준면은 `update.json.applied[].moved`·`fixed`에 기록, check (a) 재측정은 방향과 무관). `--tag-dir` 없이 `contact_fixed`면 ③으로 대체 + 경고 `REF_NO_CONTACT_INFO`. 잠긴(②) 파라미터를 `use=true`인 채 값 변경하면 위 대체 규칙을 적용하고 run 기록에 `ref_rule` 남김.
 - `feasible`: 이동 면이 다른 면과 만나기 전 최대 Δ(인접 면 거리, 벽 두께 > 0.5 mm)를 보수적으로 추정.
 - 인식 실패한 면은 무시(피처 없음). 피처가 0개면 `GEOM_EXTRACT_EMPTY`.
 
@@ -765,7 +770,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | `PATCH /param-sets/{id}` | `geom_options` 추가 |
 | baseline·param-map(4B) | §7.3.8: `POST·DELETE /param-sets/{id}/baselines…`, `GET·PUT /param-sets/{id}/param-map`, `ParamSet` 응답에 `baselines`(다중일 때만, 단일은 필드 없음) |
 | `POST /param-sets/{id}/native-prepare` | 신규, 202 |
-| `ParamSet` 응답 | `engine`, `geom_options`(덮어쓰기), `geom_options_effective`, `native:{prep_status: READY|STALE|MISSING, feature_count, features:[{name,type,body,nominal,min,max,group,ref_confirmed,png_artifact_id}]}`|null |
+| `ParamSet` 응답 | `engine`, `geom_options`(덮어쓰기), `geom_options_effective`, `native:{prep_status: READY|STALE|MISSING, feature_count, features:[{name,type,body,nominal,min,max,group,ref_provisional,ref_locked,png_artifact_id}]}`|null |
 | `GET /param-sets/{id}/features` | 신규. `parameter_features.json` 요약(위 `features` + groups + warnings). PNG는 기존 `/artifacts/{id}/media` |
 | `POST /jobs` TD_EXTRACT_PARAMS | params `engine?` |
 | `POST /jobs` TD_DOE_GEN | native: `seed?`, `options` 금지 |
@@ -788,6 +793,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - 루트 `pyproject.toml`: 의존 `paicad==0.1.0`, pytest `testpaths`·`pythonpath`에 `packages/paicad/tests`·`packages/paicad/src`.
 - 플랫폼 시험: `backend/tests/fake_tools/fake_paicad`(Python 스크립트) — 하위 명령별로 보고 JSON·성공 파일을 쓰고, 환경변수 `FAKE_PAICAD_FAIL=<cmd>:<code>`로 실패 보고를 흉내. 플랫폼 쪽 시험은 OCP 없이 돈다.
 - paicad 시험: `mesh`·`morph`·`check`는 해석적 B-rep 대역(평면·원통)과 작은 합성 tetra 메시(저장소 안 생성 스크립트, 1 MB 미만)로 OCP 없이. `brep`·통합 시험은 OCP 필요 — Linux 개발 환경에 `cadquery-ocp` manylinux wheel을 설치해 `scripts/test-all`에서 실제로 돈다(skip을 통과로 치지 않음, AGENTS.md). 합성 STEP은 시험이 OCP로 생성(저장소에 STEP 파일 넣지 않음).
+- **가상 쿠션 시험 자료(개발·테스트 전용, §5.1 `test` extra)**: build123d로 가상 쿠션 STEP을 시험이 생성(정답 치수, 공칭/변형형 쌍, 경계 사례, 다중 바디, 바디 이름 — 저장소에 STEP 파일 없음), gmsh로 같은 형상의 baseline tetra4 메시를 생성(1 MB 미만). 배포·`collect-offline` 묶음에는 build123d·gmsh를 넣지 않는다.
 - 계층 시험(architecture R0): `physicsai_core`·`physicsai_api`·`physicsai_worker`에서 `paicad`·`OCP` import 금지 검사 추가.
 
 ---
@@ -835,6 +841,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 3. **PhysicsAI 예측 동등**(단계 4): G1 학습 모델로 (i)·(ii) 입력 예측 비교 — 응답 차가 학습 오차 수준인지 확인(정보).
 4. **회귀**: altair 경로 시험 전부 통과(엔진 기본값 altair), fake_paicad 시험, paicad 단위·통합 시험.
 5. **결정성**: 같은 입력 2회 실행 → `morphed.inc` 바이트 동일.
+6. **가상 쿠션 정답 비교**(단계 2~3, CI 자동): build123d로 공칭형·변형형(파라미터 값만 다른 쌍)을 만들고 gmsh로 공칭 baseline 메시 생성 → 공칭 STEP extract·update·morph 결과(B-rep·모핑 메시 경계)를 build123d 변형형과 비교(면별 거리·부피·재측정 파라미터 값 vs 정답 치수, 기준 = (1)과 같은 허용오차). 경계 사례(기준면 규칙 ①②③·대칭 그룹 분리·다중 바디·바디 이름 매핑)도 여기서 판정. NX 변경 샘플은 실물 확인용 1~2개로 축소((1)의 G1 S1~S3 중).
 
 ---
 
@@ -900,7 +907,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | cadquery-ocp wheel 크기·Windows DLL(VC 런타임) | 설치 실패 | 오프라인 묶음 포함, 환경 점검 `paicad_version`, 대시보드 PC VC 런타임 확인 |
 | 같은 STEP이라도 OCP 버전 바뀌면 면 번호 변경 | 준비본 무효 | `prep.json.ocp_version` 비교 → STALE, 면 서명으로 재식별 |
 | 엔진 혼용으로 모델 오용 | 조용한 오답 | DB 엔진 기록 + 409/422 |
-| 기준면 규칙 미확정 | 두께 변경 방향 오류 | `ref.confirmed=false` 표시, Q2 확정 후 기본값 변경(설정만) |
+| 기준면 자동 판정이 실제 의도와 다름(접촉 판정 오차·양면 접촉 구속) | 두께 변경 방향 오류 또는 후보 누락 | 규칙 ①②③ 확정(GE-8), `ref.provisional`·`REF_BOTH_CONTACT` 표시, 파라미터별 기준면 변경(`thickness_ref_overrides`), 가상 쿠션 정답 시험 |
+| build123d·gmsh가 본체 OCP 버전을 바꿈 | 면 번호·시험 결과 변동, 배포 오염 | `test` extra 한정·배포 묶음 제외, OCP 버전 일치 고정 규칙·시작 단언(§5.1) |
 | 쉘 두께 변경(3S)이 접촉 gap(Igap)·Δt·질량을 바꿈 | 응답 변화에 형상 외 효과 혼입, Δt 감소로 해석 시간 증가 | run 기록에 두께 값 저장, 공유 PROP 경고, 범위 ±5% |
 | 다중 baseline(4B): 자동 매칭 오매칭·baseline 간 메시 차·구간 경계 불연속 | 잘못된 공통 변수·응답에 메시 차 혼입 | 매칭 점수·사용자 확인 UI, 범주형 `baseline` 입력, `BASELINE_RANGE_GAP` 경고, 합성 정답 매핑 시험 |
 | 모핑 한계(가능 범위)를 모름 | 넓은 범위에서 스킵 급증 | 단계 2 envelope 측정(§11.2)·`feasible` 반영·UI 경고 |
@@ -911,7 +919,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 | 담당 | 파일 |
 |---|---|
-| Impl-Geom (paicad) | `packages/paicad/**` 전부 |
+| Impl-Geom (paicad) | `packages/paicad/**` 전부(가상 쿠션 생성 시험 도우미 `tests/`·`pyproject` `test` extra 포함) |
 | Impl-Backend B(플랫폼) | `physicsai_core/commands.py`(spec·실행 파일), `config/schema*.py`·`platform.example.yaml`, `physicsai_core/geometry/`(reports·options 병합), `stage4_predict/param_discover.py`·`param_sets.py`, `job_types.py`, `migrations/versions/0012_geometry_engine.py`, `db/tables/*`, `worker/.../steps/geometry_native.py`·`stage4_predict/{predict_inputs,batch,param_set_native}.py`·`stage1_train_data/{extract,doe_gen}.py`, API 서비스·라우터·openapi, fake_paicad, deploy |
 | Impl-Backend(검사) | `scripts/test-all.sh`·`.ps1`(+ 필요 시 `scripts/check_paicad_version.py`): `packages/paicad` 변경 시 `__version__` 변경 + CHANGELOG 최상단 항목 버전 == `__version__` + 루트 고정·lock 일치(§17.5). A의 첫 커밋 전에 넣는다 |
 | Impl-Backend(검사, §18) | 같은 `scripts/test-all`에 "paicad에서 플랫폼 모듈(`physicsai_core`·`backend`·`worker`·`physicsai_worker`) import 금지 검사"(AST로 `packages/paicad/src`·`tests` 스캔) + `pytest packages/paicad` 단독 실행 단계 + 플랫폼 고유 파일명·경로 하드코딩 검사 + 라이선스 고지 파일 존재 검사 |
@@ -949,7 +957,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | # | 질문 | 임시 결정(이 문서 기본값) |
 |---|---|---|
 | Q1 | ~~공칭 STEP과 기준 메시(SimLab `EPS_mesh` → m_2 include) 좌표가 같은 원점·단위·형상인가? SimLab 디피처링이 있나?~~ | **해결(2026-10-17 사용자 확정)**: 공칭 STEP과 baseline 메시 좌표 일치, SimLab 디피처링 없음. 태깅 허용오차 가정 그대로. 불일치는 계속 `GEOM_BASELINE_MISMATCH`로 차단(자동 정렬 없음) |
-| Q2 | 두께 기준면 규칙: 제품·타 바디 접촉면 고정, 반대 면 이동이 맞나? 둘 다 접촉/둘 다 비접촉일 때는? | `contact_fixed` + 동률이면 면적 큰 면 고정, `ref.confirmed=false` |
+| Q2 | ~~두께 기준면 규칙: 접촉면 고정? 둘 다 접촉/둘 다 비접촉일 때는?~~ | **해결(2026-10-17 사용자 확정)**: ① 한쪽만 접촉 → 접촉면 고정·반대 면 이동 ② 양면 접촉 → 변경 불가 구속, 후보 경고·기본 `use=false` ③ 둘 다 비접촉 → 바디 중심에서 먼 면 이동. 고급 옵션에서 파라미터별 기준면 변경(§6.2, §4.9) |
 | Q3 | ~~`104_replace_node_elem.inc` 헤더에 `/PART`·`/PROP`(·`/MAT`)가 포함되나?~~ | **해결(2026-10-17 사용자 확정)**: `104_*` inc에는 `/PART`·`/PROP` 없음(노드·요소 블록만). inc 쓰기는 `/NODE` 좌표 필드만 교체(§6.4와 일치, 변경 없음), 그 밖 줄 원문 보존. 3S는 조립 폴더 전체 scan이라 무관 |
 | Q4 | ~~쉘 두께 `/PROP/SHELL`을 파라미터 범위에 넣나? PROP 정의 위치?~~ | **해결(2026-10-17)**: TYPE1 두께 포함(단계 3S, §11.1), 위치는 `props scan`이 조립 폴더에서 발견, TYPE9/10/11 비범위 |
 | Q13 | 쉘 두께(3S)를 altair 경로에도 적용하나? | altair 미적용(GE-11, 1차 native만). 재메시는 비범위 — envelope 결과(§11.2) 후 재검토 |
@@ -961,7 +969,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q6 | `mesh_only` 템플릿(조립 폴더 없음)도 native가 필요한가? | 미지원(기준 메시 없음). 필요하면 세트에 `baseline/EPS_mesh_0000.rad`를 두는 변형을 별도 결정 |
 | Q7 | ~~tie 정의 해석 실패 시 실패(엄격)로 할지 경고로 할지, 기본 dsearch 값~~ | **해결(2026-10-17 사용자 확정)**: 엄격(실패) 원칙 유지. 단 쿠션 한정 범위에서는 쿠션에 적용된 tie가 없어 (e)는 "해당 없음 → `SKIPPED` 기록"(§6.5). 검사·실패 코드 유지(향후 범위 확대 대비). 기본 dsearch = 공칭 최대 거리 × 1.5 |
 | Q8 | 품질·편차 기본 기준값(min Jacobian 0.2, aspect 10, 경계 0.05 mm, 파라미터 1%)이 사내 메시 기준과 맞나? | 표 값 |
-| Q9 | 대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지 | 자동, 풀기 UI 없음(후속) |
+| Q9 | ~~대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지~~ | **해결(2026-10-17 사용자 확정)**: 기본 묶음, 파라미터 표·매칭표의 "분리" 동작으로 사용자가 해제(§6.2, GE-14) |
 | Q10 | cadquery-ocp 고정 버전과 사내 보안 승인(wheel 출처 PyPI) | Impl이 cp312 win_amd64 wheel 확인 후 고정, 사용자 승인 필요 |
 | Q11 | 같은 native 데이터셋에 paicad MINOR가 다른 run이 섞일 때 경고로 충분한가, 차단(422)해야 하나? 모델 등록·예측 때 모델의 `engine_version`과 현재 paicad MINOR가 다르면? | 데이터셋 경고 `ENGINE_VERSION_MIXED`(차단 아님, §17.4). 예측 시 비교는 1차 없음 |
 | Q12 | 출력 include에 `# paicad x.y.z` 주석 줄을 허용할지(추적 편의 vs 바이트 동일 원칙) | 불허(§17.3). 허용하려면 V-GE-4·§6.4 예외 규칙을 함께 고쳐야 함 |
@@ -1071,6 +1079,7 @@ paicad는 실패 코드(§6.5 표)와 **영문 기술 메시지**만 낸다(`mes
 
 ### 18.8 로드맵(비범위, 독립 플랫폼 대비)
 - **강력한 디피처링**: 규칙 문서(작은 필렛·챔퍼·구멍·각인 문자·로고의 크기 임계 등) 기반으로 피처를 찾아 제거. 규칙은 버전 있는 설정 파일, 제거 목록은 리포트로 출력. 1차 구현·시험 없음(2026-10-17).
+- **형상 생성 모듈**(옵션 extra `gen`, build123d 기반): 파라미터 템플릿 / 자연어 → 코드 → STEP. 새 형상은 baseline 메시가 없어 메셔·조립 설정이 선행돼야 하므로 R1 범위 밖(2026-10-17).
 
 ---
 
