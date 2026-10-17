@@ -528,7 +528,8 @@ component의 요소·노드 집합:
 | (d) 간섭 | 바디-바디: 모핑 외피 노드가 다른 쿠션 바디 tetra 안에 깊이 > `body_mm`로 들어감(공칭 접촉 면 쌍은 깊이 > `body_mm`일 때만). 제품: 조립 폴더 나머지 메시(쉘 중립면 ± 두께/2, 솔리드 외피)에 대한 외피 노드 관통 깊이 > `product_mm` | 관통 없음 | `GEOM_INTERFERENCE` |
 | (e) tie | 조립 폴더 `/INTER/TYPE2`에서 쿠션 노드가 secondary(또는 main 면)인 인터페이스마다, secondary 노드 ↔ main 면 투영 거리 ≤ `Dsearch`(카드 값, 0·공백이면 `tie.default_dsearch_mm`, 그것도 null이면 그 인터페이스 공칭 최대 거리 × 1.5) | 투영 실패 노드 0 | `GEOM_TIE_PROJECTION` |
 
-- `/INTER/TYPE2`·`/GRNOD`·`/SURF` 해석에 실패하면 (e) `NOT_EVALUATED` + 경고 `TIE_PARSE_SKIPPED`. `tie.required=true`(기본)여도 해석 실패는 실패가 아니라 경고(§15 Q7에서 확정).
+- **해당 없음 → `SKIPPED`**: 쿠션 노드가 secondary·main인 `/INTER/TYPE2`가 0건이면(1차 쿠션 한정 범위의 정상 상태) (e)는 `tie.status: "SKIPPED"`(`interfaces: []`, 사유 `no_tie_on_component`)로 기록하고 실패·경고가 아니다. 검사 코드·실패 코드는 향후 범위 확대 대비로 유지한다.
+- **엄격 원칙(§15 Q7, 2026-10-17 확정)**: 적용 대상 tie가 있는데 투영 실패 노드가 있으면 `FAIL`. `/INTER/TYPE2`·`/GRNOD`·`/SURF` 해석 실패도 `tie.required=true`(기본)면 `FAIL`(`GEOM_TIE_PROJECTION`, 메시지에 해석 실패 명시), `required=false`일 때만 `NOT_EVALUATED` + 경고 `TIE_PARSE_SKIPPED`.
 - 제품 메시 수집: 조립 폴더 `*.rad`·`*.inc`(기준본 제외)의 `/NODE`·`/SHELL`·`/SH3N`·`/BRICK`·`/TETRA4`·`/TETRA10`·`/PENTA6`. 쿠션 bbox + 10 mm 밖 요소는 버림. KD-tree(`scipy.spatial.cKDTree`)로 근방 탐색.
 
 **실패 코드 표**(`category`는 화면·DOE 기록용 사유 묶음. §18.4: paicad는 `code`·`category`와 영문 기술 `message`만 낸다. 아래 한국어 사유는 **플랫폼의 code→한국어 매핑 표준 문구**이며 화면에 표시하는 쪽은 플랫폼):
@@ -815,7 +816,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 | 단계 | 산출물 | 완료 기준 |
 |---|---|---|
-| **0 골든 세트** | 서버 AI 루트 `golden/geometry/G1/`: `nominal.step`(다중 바디) 또는 `parts/*.step`, `radioss_assem/`(starter·기준본·RENUM csv·제품 inc), `samples/S1~S3/`(NX로 파라미터 바꾼 `sample.step` + `values.json` + SimLab 메시 `EPS_mesh_0000.rad` + m_2 include + Radioss 결과 h3d/T01), `README.txt`(파라미터·값·단위·출처). 저장소에는 합성 소형 세트 생성 스크립트(`packages/paicad/tests/data/make_synthetic.py`)만 | 사용자가 G1 폴더 준비 확인, §15 Q1(좌표 일치)·Q3(inc 헤더) 답 확보 |
+| **0 골든 세트** | 서버 AI 루트 `golden/geometry/G1/`: `nominal.step`(다중 바디) 또는 `parts/*.step`, `radioss_assem/`(starter·기준본·RENUM csv·제품 inc), `samples/S1~S3/`(NX로 파라미터 바꾼 `sample.step` + `values.json` + SimLab 메시 `EPS_mesh_0000.rad` + m_2 include + Radioss 결과 h3d/T01), `README.txt`(파라미터·값·단위·출처). 저장소에는 합성 소형 세트 생성 스크립트(`packages/paicad/tests/data/make_synthetic.py`)만 | 사용자가 G1 폴더 준비 확인(§15 Q1 좌표 일치·Q3 inc 구성은 2026-10-17 확정) |
 | **1 tag+extract** | `paicad version/extract/tag`, `paicad.mesh` 읽기·쓰기(무변경 왕복), ①-1 native, `PARAM_SET_NATIVE`·discover·validate native, migration 0012, `/status`·환경 점검, UI(엔진 선택·피처 표·PNG), fake_paicad | G1: 바디 대응 100%, `match_ratio ≥ 0.98`, 피처 목록을 사용자가 확인(누락·오인식 목록 기록). 무변경 왕복 include = 기준본과 바이트 동일. `scripts/test-all` 통과 |
 | **2 update+morph+inc** | `paicad update/morph`, 고정폭 쓰기, face_map, **모핑 한계 측정**(`paicad morph --sweep` → `envelope.json/csv`, `parameter_features.json` `feasible` 반영, 골든 쿠션 1종 envelope 보고서 `golden/geometry/G1/report_envelope.md`+csv, §11.2) | G1 S1~S3: update B-rep vs NX `sample.step` 면별 최대 거리 ≤ 0.01 mm·부피 차 ≤ 0.1%. 모핑 메시 경계 노드 ↔ NX 형상 최대 거리 ≤ 0.05 mm. 출력 include diff = `/NODE` 좌표 필드만. 반전 요소 0. **G1 전 파라미터 envelope 완료(실패 직전·첫 실패 코드 기록), `feasible` 갱신, 같은 입력 2회 envelope 바이트 동일** |
 | **3 check+스킵** | `paicad check/run`, 실패 코드, PREDICT(A) native 체인, 고급 옵션 저장·사용값 기록, UI 고급 옵션 | 5개 실패 유형마다 의도적 실패 샘플(합성)로 코드·사유 확인. G1 S1~S3 PREDICT(A) native 성공·예측 h3d 생성. `P/geom/options.json`에 사용값 |
@@ -894,7 +895,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | 피처 오인식(구배·곡면 쿠션) | 잘못된 파라미터 | PNG 하이라이트로 사용자 확인, 재측정 (a) |
 | 대변형 시 메시 찌그러짐 | 품질 미달 스킵 | 1/V 강성, 품질 검사, ±5% 범위 |
 | 고정폭 형식 변종(긴 형식, 탭, 자유 형식) | 쓰기 실패 | 줄별 필드 감지, `GEOM_INC_FORMAT`로 차단, 무변경 왕복 시험 |
-| tie·접촉 정의 해석 실패 | (e) 미평가 | `NOT_EVALUATED` 경고, Q7 |
+| tie·접촉 정의 해석 실패 | 엄격(`required=true`면 실패), 쿠션 한정에서는 tie 없음 → `SKIPPED` | §6.5, Q7 |
 | 제품 메시가 큼(수백만 노드) | check 느림 | bbox 자르기 + KD-tree, `timeout_s` |
 | cadquery-ocp wheel 크기·Windows DLL(VC 런타임) | 설치 실패 | 오프라인 묶음 포함, 환경 점검 `paicad_version`, 대시보드 PC VC 런타임 확인 |
 | 같은 STEP이라도 OCP 버전 바뀌면 면 번호 변경 | 준비본 무효 | `prep.json.ocp_version` 비교 → STALE, 면 서명으로 재식별 |
@@ -947,9 +948,9 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 | # | 질문 | 임시 결정(이 문서 기본값) |
 |---|---|---|
-| Q1 | 공칭 STEP과 기준 메시(SimLab `EPS_mesh` → m_2 include) 좌표가 같은 원점·단위·형상인가? SimLab 디피처링(작은 필렛 제거 등)이 있나? | 일치 가정. 불일치는 `GEOM_BASELINE_MISMATCH`로 차단(자동 정렬 없음). 디피처링된 면은 피처에서 제외 |
+| Q1 | ~~공칭 STEP과 기준 메시(SimLab `EPS_mesh` → m_2 include) 좌표가 같은 원점·단위·형상인가? SimLab 디피처링이 있나?~~ | **해결(2026-10-17 사용자 확정)**: 공칭 STEP과 baseline 메시 좌표 일치, SimLab 디피처링 없음. 태깅 허용오차 가정 그대로. 불일치는 계속 `GEOM_BASELINE_MISMATCH`로 차단(자동 정렬 없음) |
 | Q2 | 두께 기준면 규칙: 제품·타 바디 접촉면 고정, 반대 면 이동이 맞나? 둘 다 접촉/둘 다 비접촉일 때는? | `contact_fixed` + 동률이면 면적 큰 면 고정, `ref.confirmed=false` |
-| Q3 | `104_replace_node_elem.inc` 헤더에 `/PART`·`/PROP`(·`/MAT`)가 포함되나, 아니면 노드·요소만인가? | R1은 `/NODE`만 바꾸므로 무관하게 원문 보존. 3S는 조립 폴더 전체 scan이라 무관 |
+| Q3 | ~~`104_replace_node_elem.inc` 헤더에 `/PART`·`/PROP`(·`/MAT`)가 포함되나?~~ | **해결(2026-10-17 사용자 확정)**: `104_*` inc에는 `/PART`·`/PROP` 없음(노드·요소 블록만). inc 쓰기는 `/NODE` 좌표 필드만 교체(§6.4와 일치, 변경 없음), 그 밖 줄 원문 보존. 3S는 조립 폴더 전체 scan이라 무관 |
 | Q4 | ~~쉘 두께 `/PROP/SHELL`을 파라미터 범위에 넣나? PROP 정의 위치?~~ | **해결(2026-10-17)**: TYPE1 두께 포함(단계 3S, §11.1), 위치는 `props scan`이 조립 폴더에서 발견, TYPE9/10/11 비범위 |
 | Q13 | 쉘 두께(3S)를 altair 경로에도 적용하나? | altair 미적용(GE-11, 1차 native만). 재메시는 비범위 — envelope 결과(§11.2) 후 재검토 |
 | Q17 | (4B) 확정 시 `decision`이 없는 "추천" 등급 행을 일괄 수락으로 기록해도 되나, 모든 행의 명시 결정을 요구하나? | **해결(2026-10-17 사용자 확정)**: [확정] 클릭 = 일괄 `accept` 기록, 단 `check` 등급·`needs_review` 행은 명시 결정 필수 |
@@ -958,7 +959,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q16 | ~~(4B) `baseline_id` DB 열(migration 0013)을 둘지~~ | **해결(2026-10-17)**: DB 열 없음, run 메타만(0012 불변, §7.5) |
 | Q5 | `RENUM_INIT.csv` 실제 형식이 `part,node_start,elem_start`이고 part = 쿠션 component 이름인가(코드에는 파일 이름만 있음)? 쿠션 외 part 행이 있나? | 사용자 진술대로. 쿠션 외 행은 STEP 바디가 없으면 `GEOM_BODY_MAP_FAILED` — 있으면 `body_map.json`에 `"<part>": null`(고정) 지원 여부 결정 필요 |
 | Q6 | `mesh_only` 템플릿(조립 폴더 없음)도 native가 필요한가? | 미지원(기준 메시 없음). 필요하면 세트에 `baseline/EPS_mesh_0000.rad`를 두는 변형을 별도 결정 |
-| Q7 | tie 정의 해석 실패 시 실패(엄격)로 할지 경고로 할지, 기본 dsearch 값 | 경고(`NOT_EVALUATED`), 기본 dsearch = 공칭 최대 거리 × 1.5 |
+| Q7 | ~~tie 정의 해석 실패 시 실패(엄격)로 할지 경고로 할지, 기본 dsearch 값~~ | **해결(2026-10-17 사용자 확정)**: 엄격(실패) 원칙 유지. 단 쿠션 한정 범위에서는 쿠션에 적용된 tie가 없어 (e)는 "해당 없음 → `SKIPPED` 기록"(§6.5). 검사·실패 코드 유지(향후 범위 확대 대비). 기본 dsearch = 공칭 최대 거리 × 1.5 |
 | Q8 | 품질·편차 기본 기준값(min Jacobian 0.2, aspect 10, 경계 0.05 mm, 파라미터 1%)이 사내 메시 기준과 맞나? | 표 값 |
 | Q9 | 대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지 | 자동, 풀기 UI 없음(후속) |
 | Q10 | cadquery-ocp 고정 버전과 사내 보안 승인(wheel 출처 PyPI) | Impl이 cp312 win_amd64 wheel 확인 후 고정, 사용자 승인 필요 |
@@ -1067,6 +1068,9 @@ paicad는 실패 코드(§6.5 표)와 **영문 기술 메시지**만 낸다(`mes
 
 ### 18.7 분리 시점 기준(결정 기록용, 하나라도 충족 시 분리 검토)
 (1) 쿠션 외 2종 이상 대상 검증, (2) 다른 조직의 플랫폼 외 사용 요청, (3) 솔버 2종 이상 지원.
+
+### 18.8 로드맵(비범위, 독립 플랫폼 대비)
+- **강력한 디피처링**: 규칙 문서(작은 필렛·챔퍼·구멍·각인 문자·로고의 크기 임계 등) 기반으로 피처를 찾아 제거. 규칙은 버전 있는 설정 파일, 제거 목록은 리포트로 출력. 1차 구현·시험 없음(2026-10-17).
 
 ---
 
