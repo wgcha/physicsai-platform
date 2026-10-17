@@ -114,6 +114,11 @@
   --font-r-medium: 500 var(--r-size) / var(--r-line) var(--sans);
   --font-r-strong: 600 var(--r-size) / var(--r-line) var(--sans);
   --font-r-mono: 400 var(--r-size) / var(--r-line) var(--mono);
+  /* 단계 버튼 ①~⑤(D3-56): 본문보다 한 단계 크게 강조 */
+  --step-size: 15px;
+  --step-line: 22px;
+  --font-step: 500 var(--step-size) / var(--step-line) var(--sans);
+  --font-step-strong: 600 var(--step-size) / var(--step-line) var(--sans);
 
   /* 간격·모서리(대시보드 tokens.css) */
   --space-1: 4px;
@@ -133,6 +138,7 @@
   --control-h-sm: 32px;
   --control-h-md: 38px;
   --control-h-lg: 44px;
+  --step-h: 52px;
   --row-h: 40px;
 
   /* 그림자(색은 테마별 --color-shadow) */

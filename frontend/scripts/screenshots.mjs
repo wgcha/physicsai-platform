@@ -2,7 +2,7 @@
 // 사용: npm run build:mock && npm run screenshots            (1차 ③④ → screenshots/)
 //       npm run build:mock && npm run screenshots:phase2     (2차 ①②⑤·환경 점검 → screenshots/phase2/)
 //       npm run build:mock && npm run screenshots:phase3     (3차 ③-5 모델 비교·프로젝트 목록·Study 목록/관리·SPDM 가져오기 → screenshots/phase3/)
-//       npm run build:mock && node scripts/screenshots.mjs tone   (대시보드 톤 D3-55: ④ 일괄 결과·③·상태 서랍, 다크·라이트, 1920·1280
+//       npm run build:mock && node scripts/screenshots.mjs tone   (대시보드 톤 D3-55·D3-56: ④·④ 일괄 결과·③·상태 서랍, 다크·라이트, 1920·1280
 //                                                                 → SHOT_OUT 또는 screenshots/tone/)
 // 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
@@ -83,6 +83,7 @@ async function openDrawer(page) {
 }
 const shots = tone
   ? [
+      { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
       { name: "stage4_batch", url: `${S}/4/batch/pb-2?${q}`, wait: ".batch-table-card", act: pickRow },
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4_drawer", url: `${S}/4?${q}&batch=running`, wait: ".workarea .card", act: openDrawer, noFull: true },
