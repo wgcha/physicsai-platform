@@ -53,5 +53,7 @@ def test_all_routes_prefixed():
         # 3차(phase3 §18.6 S13 내장 최적화, D3-60)
         "/studies/{study_id}/surrogate-opts/preview", "/studies/{study_id}/surrogate-opts", "/surrogate-opts/{opt_id}",
         "/surrogate-opts/{opt_id}/runs.csv", "/surrogate-opts/{opt_id}/cancel", "/surrogate-opts/{opt_id}/resume",
+        # 3차(phase3 §19.5 S14 결과분석 입력, D3-62)
+        "/train-does/{doe_id}/result-table",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

@@ -13,6 +13,7 @@ from .stage4_predict import TplParam
 __all__ = [
     "TrainParamOut", "TrainParamUpdate", "TrainParamsPut", "VersionBody", "TrainCad", "TrainTpl", "TrainSetup",
     "DoeField", "DoeType", "RunStateCounts", "TrainDoe", "TrainRunHpc", "TrainRunResult", "TrainRun",
+    "DoeResultParameter", "DoeResultResponse", "DoeResultMeta", "DoeResultRow", "DoeResultCounts", "DoeResultTable",
 ]
 
 
@@ -146,3 +147,52 @@ class TrainRun(Resp):
     hpc: TrainRunHpc | None = None
     result: TrainRunResult | None = None
     updated_at: datetime
+
+
+class DoeResultParameter(Resp):
+    name: str
+    integer: bool
+    min: float | None = None
+    max: float | None = None
+    unit: str | None = None
+
+
+class DoeResultResponse(Resp):
+    name: str
+    unit: str | None = None
+
+
+class DoeResultMeta(Resp):
+    engine_version: str | None = None
+    baseline_id: str | None = None
+    scene: str | None = None
+
+
+class DoeResultRow(Resp):
+    run_id: str
+    no: int
+    state: str  # train_runs.state 그대로(GENERATED·SUBMITTED·SOLVED·SOLVE_FAILED·COLLECTED·COLLECT_FAILED)
+    params: dict[str, float | None]
+    responses: dict[str, float | None]
+
+
+class DoeResultCounts(Resp):
+    total: int
+    usable: int
+    no_response: int
+
+
+class DoeResultTable(Resp):
+    """⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용."""
+
+    doe_id: str
+    label: str
+    study_id: str
+    type: str
+    parameters: list[DoeResultParameter]
+    responses: list[DoeResultResponse]
+    meta: DoeResultMeta
+    rows: list[DoeResultRow]
+    counts: DoeResultCounts
+    influence_ok: bool
+    notes: list[str]
