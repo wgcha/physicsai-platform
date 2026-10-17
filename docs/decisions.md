@@ -111,3 +111,17 @@
 - 2026-10-17 · ⑤에 "플랫폼 내장(쿠션만 가능)" 모드 추가: ④ 일괄 예측 체인으로 탐색 → GP/RBF 대리모델 → 후보 k개 실제 예측 검증 반복(기본 3회 × 4), mesh_only·assembly 모두, 반복은 종료 훅 연쇄(`SURROGATE_OPT`, migration 0010) — 근거: 사용자 결정 · contracts/s12_s13.md §18, D3-60
 - 2026-10-17 · 원본 최적화는 mesh_only 템플릿이면 생성·재시도 409 `TEMPLATE_ASSEMBLY_REQUIRED` + 워커 op_prep 가드(이슈 #4 TypeError 제거) — 근거: 사용자 결정 · contracts/s12_s13.md §18.8, D3-60
 - 2026-10-17 · (사용자 확인 필요) 내장 최적화용 새 런타임 의존성 numpy·scipy(약 55 MB wheel, 워커 계산 모듈에서만 import, 없으면 기능만 꺼짐) — 근거: GP 우도 최적화·정수 변수 전역 탐색을 직접 구현하지 않기 위함 · contracts/s12_s13.md §18.2
+
+## 2026-10-17 (native 형상 엔진 R1 모핑 — Plan 계약, contracts/geometry-engine.md)
+
+- 2026-10-17 NX·SimLab·HyperMesh 없이 동작하는 native 형상 엔진은 R1 모핑(조립 폴더 기준본 `104_replace_node_elem.inc`의 노드·요소 ID·연결·요소 수 고정, `/NODE` 좌표만 변경, renumber·메셔 불사용, 출력 inc 이름·형식 동일 → 기존 `assemble_into` 그대로) — 근거: 사용자 합의, tie·RBE 노드 참조 유지 · geometry-engine.md GE-1
+- 2026-10-17 1차 범위는 쿠션 솔리드 tetra4·위상 불변만, 쉘(형상 모핑·`/PROP/SHELL` 두께)과 mesh_only·원본 HyperStudy 최적화는 제외 — 근거: 사용자 합의 · geometry-engine.md §1.3
+- 2026-10-17 엔진은 별도 프로세스 CLI `paicad`(packages/paicad, 하위명령 version·extract·tag·update·morph·check·run), 플랫폼은 `commands.paicad_*` argv 템플릿 + `TEMPLATE_SPECS` placeholder(`{paicad}` = `geometry.paicad_path`)로만 호출하고 성공은 출력 파일·보고 JSON으로 판정, 플랫폼 프로세스는 paicad·OCP를 import하지 않음 — 근거: 사용자 합의, 기존 외부 도구 규약·pyd 격리 원칙과 같음 · geometry-engine.md GE-2, §5
+- 2026-10-17 기존 job_type·step 키를 유지하고 핸들러가 엔진으로 분기, 새 job_type은 ④ native 세트 준비 `PARAM_SET_NATIVE` 1개 — 근거: ②③⑤·배치 종료 훅·재시도·정리 범주 무수정 · geometry-engine.md GE-3, §7.3
+- 2026-10-17 파라미터 계약은 `parameter_extracted.xml`(Root/Model/Parameter/Name,Value) 호환 + `parameter_features.json`(타입·면 서명·기준면·공칭·가능 범위·그룹) + 피처별 하이라이트 PNG, 범위 기본 ±5% — 근거: 사용자 합의, ①-1 TX_PARSE 재사용 · geometry-engine.md GE-4, §4.3
+- 2026-10-17 검사(파라미터 재측정·경계 편차·품질·간섭·tie) 실패 시 샘플 스킵 + 사유 코드 `GEOM_*`(CAD 생성 불가/간섭/품질 미달/편차 초과/tie 투영 실패)를 DOE·배치 run에 기록 — 근거: 사용자 합의 · geometry-engine.md GE-5, §6.5
+- 2026-10-17 엔진 선택은 `geometry.engine`(altair|native) 기본값 → `param_sets`·`train_setups`·`train_does.engine`에 생성 시 확정, 데이터셋·모델도 엔진 기록, 혼용은 422 `ENGINE_MIXED`·409 `ENGINE_MISMATCH`(migration 0012) — 근거: 사용자 합의(혼용 금지) · geometry-engine.md GE-6, §7.5·§7.7
+- 2026-10-17 검사 기준 고급 옵션(품질·간섭·편차 허용오차)은 기본값 `geometry.defaults`, 세트별 덮어쓰기 `param_sets.geom_options`, 사용값은 run 폴더 `options.json`, UI는 접힘 1개 — 근거: 사용자 합의 · geometry-engine.md GE-7, §4.9·§8
+- 2026-10-17 (확정 대기) 두께 변경 기준면 = 제품·타 바디 접촉면 고정·반대 면 이동, 동률이면 면적 큰 면 고정 — 근거: 사용자 합의(기본 규칙, 확정 대기) · geometry-engine.md GE-8, §15 Q2
+- 2026-10-17 native DOE(①-3·④ 일괄)는 플랫폼 LHS(`batch_matrix`) + 동시 실행기, run 폴더 `run__N/{m_1,m_2,m_3}`·paramitem(`m_1/native_params.xml`) 호환으로 ②③ glob 유지 — 근거: 사용자 합의 · geometry-engine.md §7.3.3·§7.3.6
+- 2026-10-17 (사용자 확인 필요) 새 런타임 의존성 cadquery-ocp(Windows cp312 wheel, paicad 프로세스에서만) + 기존 numpy·scipy, 오프라인 묶음(`collect-offline`)에 포함 — 근거: OCCT push/pull·투영을 직접 구현하지 않기 위함 · geometry-engine.md GE-10, §7.8
