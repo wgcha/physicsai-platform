@@ -10,6 +10,7 @@ export const POLL = {
   status: 30000,
   checkDebounce: 300,
   batch: 5000, // ④ 일괄 예측 결과(진행 중 5초, phase3.md §14.8)
+  surrogate: 5000, // ⑤ 내장 최적화 결과(진행 중 5초, phase3.md §18.10)
 };
 
 /** B1: /status.ui 값(ms)을 반영 */

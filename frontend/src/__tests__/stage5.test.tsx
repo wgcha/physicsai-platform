@@ -1,11 +1,13 @@
 // phase2.md §20 V2-FE-4 (컴포넌트 시험, 목 서버)
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
 import { METHOD_DEFAULTS, activeRules } from "../stages/stage5/rules";
 
 describe("V2-FE-4 ⑤ 최적화", () => {
+  // phase3.md §18.10: 기본 모드가 "플랫폼 내장"이 되어, 원본 최적화 시험은 원본 모드를 고른 상태에서 그대로 확인한다
+  beforeEach(() => localStorage.setItem("physicsai.stage5.mode", "original"));
   it("메서드 기본값·라벨·활성 규칙(단위)", () => {
     expect(METHOD_DEFAULTS.GRSM.max_designs).toBe(50);
     expect(METHOD_DEFAULTS.SQP.dv).toBe(0);

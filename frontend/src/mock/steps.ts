@@ -121,6 +121,13 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
   ],
   // S10 다시 캡처(phase3.md §15.2, step 1개 LOCAL)
   CONTOUR_RECAPTURE: [{ key: "CONTOUR_CAPTURE", kind: "LOCAL" }],
+  // S13 내장 최적화 반복(phase3.md §18.4, INTERNAL만)
+  SURROGATE_OPT: [
+    { key: "SO_COLLECT", kind: "INTERNAL" },
+    { key: "SO_FIT", kind: "INTERNAL" },
+    { key: "SO_PROPOSE", kind: "INTERNAL" },
+    { key: "SO_NEXT", kind: "INTERNAL" },
+  ],
 };
 
 /** step_key → 한국어 표시(백엔드 current_step_label 흉내) */
@@ -144,6 +151,7 @@ export const STEP_LABEL: Record<string, string> = {
   SS_WALK: "파일 확인", SS_CLASSIFY: "정리 후보 분류", SC_VALIDATE: "정리 대상 확인", SC_MOVE: "백업 폴더로 이동", SC_RECORD: "정리 기록",
   BP_PREP: "입력 준비", BP_GEN: "입력 생성", BP_ENQUEUE: "예측 등록",
   CONTOUR_CAPTURE: "컨투어 캡처",
+  SO_COLLECT: "검증 결과 수집", SO_FIT: "대리모델 학습", SO_PROPOSE: "후보 탐색", SO_NEXT: "검증 배치 등록·마무리",
 };
 
 /** 1차 기본 설정에서 SKIPPED가 되는 step(템플릿 null) */

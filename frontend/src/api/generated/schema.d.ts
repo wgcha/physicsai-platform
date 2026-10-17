@@ -1191,6 +1191,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/surrogate-opts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Surrogate Opts */
+        get: operations["list_surrogate_opts_physicsai_api_studies__study_id__surrogate_opts_get"];
+        put?: never;
+        /**
+         * Create Surrogate Opt
+         * @description 생성(power): 탐색 PREDICT_BATCH(새 DOE) 또는 반복 작업 1(완료 배치 재사용)을 한 트랜잭션에서.
+         */
+        post: operations["create_surrogate_opt_physicsai_api_studies__study_id__surrogate_opts_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/surrogate-opts/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Surrogate Opt
+         * @description 미리보기(동기, 저장 없음): 자유·정수·고정 변수, 탐색 수, 예측 최대 run·예상 분, problems(생성 때는 422).
+         */
+        post: operations["preview_surrogate_opt_physicsai_api_studies__study_id__surrogate_opts_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/train": {
         parameters: {
             query?: never;
@@ -1270,6 +1311,86 @@ export interface paths {
         put?: never;
         /** Unarchive Study */
         post: operations["unarchive_study_physicsai_api_studies__study_id__unarchive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/surrogate-opts/{opt_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Surrogate Opt
+         * @description 상세: 반복별 배치·적합 품질·후보, 검증 run, 최적 설계, 진행 문구.
+         */
+        get: operations["get_surrogate_opt_physicsai_api_surrogate_opts__opt_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/surrogate-opts/{opt_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Surrogate Opt
+         * @description 일괄 취소(power, 등록자 또는 관리자): 반복 작업·배치 부모·비종료 하위 전부, 멱등.
+         */
+        post: operations["cancel_surrogate_opt_physicsai_api_surrogate_opts__opt_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/surrogate-opts/{opt_id}/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume Surrogate Opt
+         * @description 이어서 실행(power, FAILED만): 반복 작업 재시도 또는 배치 실패만 다시.
+         */
+        post: operations["resume_surrogate_opt_physicsai_api_surrogate_opts__opt_id__resume_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/surrogate-opts/{opt_id}/runs.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Surrogate Opt Runs Csv
+         * @description 검증 run CSV(UTF-8 BOM·CRLF): iter,batch,doe_no,run_key,<변수>,objective,<제약>,predicted,feasible,state.
+         */
+        get: operations["surrogate_opt_runs_csv_physicsai_api_surrogate_opts__opt_id__runs_csv_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3269,6 +3390,202 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["SampleRow"][];
         };
+        /** SoBatchRef */
+        SoBatchRef: {
+            /** Gen */
+            gen: {
+                [key: string]: number;
+            };
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Predict */
+            predict: {
+                [key: string]: number;
+            };
+            /** Status */
+            status: string;
+        };
+        /** SoBest */
+        SoBest: {
+            /** Batch Id */
+            batch_id?: string | null;
+            /** Batch Label */
+            batch_label: string;
+            /** Constraints */
+            constraints?: {
+                [key: string]: number | null;
+            };
+            /** Doe No */
+            doe_no: number;
+            /** Feasible */
+            feasible: boolean;
+            /** Iter No */
+            iter_no: number;
+            /** Job Id */
+            job_id?: string | null;
+            /** Objective */
+            objective?: number | null;
+            /** Run Key */
+            run_key: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** SoCandidate */
+        SoCandidate: {
+            /** Constraints Pred */
+            constraints_pred?: number[];
+            /** Doe No */
+            doe_no: number;
+            /** Ei */
+            ei?: number | null;
+            /** Predicted */
+            predicted?: number | null;
+            /** State */
+            state?: string | null;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+            /** Verified */
+            verified?: number | null;
+        };
+        /** SoConstraint */
+        SoConstraint: {
+            /** Metric */
+            metric: string;
+            /**
+             * Op
+             * @enum {string}
+             */
+            op: "<=" | ">=";
+            /** Series */
+            series?: string | null;
+            /** Value */
+            value: number;
+        };
+        /**
+         * SoExploreNew
+         * @description 새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs).
+         */
+        SoExploreNew: {
+            /** Count */
+            count?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "new";
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /**
+         * SoExploreReuse
+         * @description 완료된 배치 재사용(같은 Study·같은 템플릿·같은 모델·DONE).
+         */
+        SoExploreReuse: {
+            /** Batch Id */
+            batch_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "reuse";
+        };
+        /** SoFit */
+        SoFit: {
+            /** D Free */
+            d_free: number;
+            /** Kind */
+            kind: string;
+            /** Loo Nrmse */
+            loo_nrmse?: number | null;
+            /** Loo Rmse */
+            loo_rmse?: number | null;
+            /** N Train */
+            n_train: number;
+            /** Pred Vs Verified Mae */
+            pred_vs_verified_mae?: number | null;
+            /** Q2 */
+            q2?: number | null;
+        };
+        /** SoIteration */
+        SoIteration: {
+            batch?: components["schemas"]["SoBatchRef"] | null;
+            /** Best Feasible */
+            best_feasible?: boolean | null;
+            /** Best Value */
+            best_value?: number | null;
+            /** Candidates */
+            candidates?: components["schemas"]["SoCandidate"][] | null;
+            fit?: components["schemas"]["SoFit"] | null;
+            /** Improvement Rel */
+            improvement_rel?: number | null;
+            /** Iter No */
+            iter_no: number;
+            /** Kind */
+            kind: string;
+        };
+        /** SoObjective */
+        SoObjective: {
+            /** Metric */
+            metric: string;
+            /**
+             * Sense
+             * @default min
+             * @enum {string}
+             */
+            sense: "min" | "max";
+            /** Series */
+            series?: string | null;
+        };
+        /** SoProblem */
+        SoProblem: {
+            /** Code */
+            code: string;
+            /** Field */
+            field?: string | null;
+            /** Message */
+            message: string;
+        };
+        /**
+         * SoRun
+         * @description 검증 run 1행(탐색 포함): 수렴 그래프 점·검증 run 표.
+         */
+        SoRun: {
+            /** Batch Id */
+            batch_id: string;
+            /** Batch Label */
+            batch_label: string;
+            /** Constraints */
+            constraints?: (number | null)[];
+            /** Doe No */
+            doe_no: number;
+            /** Feasible */
+            feasible?: boolean | null;
+            /** Iter No */
+            iter_no: number;
+            /** Job Id */
+            job_id?: string | null;
+            /** Objective */
+            objective?: number | null;
+            /** Predicted */
+            predicted?: number | null;
+            /** Run Key */
+            run_key: string;
+            /** State */
+            state: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
         /** SourceRef */
         SourceRef: {
             /** Doe Id */
@@ -3378,6 +3695,7 @@ export interface components {
             dataset_create?: components["schemas"]["FeatureState"] | null;
             evaluate?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
+            optimize_builtin?: components["schemas"]["FeatureState"] | null;
             predict?: components["schemas"]["FeatureState"] | null;
             predict_mesh_only?: components["schemas"]["FeatureState"] | null;
             predict_parametric?: components["schemas"]["FeatureState"] | null;
@@ -3441,6 +3759,7 @@ export interface components {
             limits: components["schemas"]["StatusLimits"];
             /** Resources */
             resources?: components["schemas"]["ResourceStatus"][];
+            surrogate_opt?: components["schemas"]["StatusSurrogateOpt"] | null;
             /** Templates */
             templates: components["schemas"]["TemplateConfigured"][];
             /** Ui */
@@ -3448,6 +3767,30 @@ export interface components {
                 [key: string]: number;
             };
             worker: components["schemas"]["StatusWorker"];
+        };
+        /** StatusSurrogateDefaults */
+        StatusSurrogateDefaults: {
+            /** Candidates */
+            candidates: number;
+            /** Iterations */
+            iterations: number;
+            /** Surrogate */
+            surrogate: string;
+            /** Tol Rel */
+            tol_rel: number;
+        };
+        /**
+         * StatusSurrogateOpt
+         * @description ⑤ 내장 최적화 화면 기본값·상한(config `surrogate_opt`, phase3 §18.6).
+         */
+        StatusSurrogateOpt: {
+            defaults: components["schemas"]["StatusSurrogateDefaults"];
+            /** Max Candidates */
+            max_candidates: number;
+            /** Max Iterations */
+            max_iterations: number;
+            /** Max Variables */
+            max_variables: number;
         };
         /** StatusWorker */
         StatusWorker: {
@@ -3664,6 +4007,157 @@ export interface components {
             title: string;
             /** Version */
             version: number;
+        };
+        /** SurrogateOpt */
+        SurrogateOpt: {
+            best?: components["schemas"]["SoBest"] | null;
+            /** Can Cancel */
+            can_cancel: boolean;
+            /** Can Resume */
+            can_resume: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Current Job Id */
+            current_job_id?: string | null;
+            /** Dir */
+            dir: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Iter No */
+            iter_no: number;
+            /** Iterations */
+            iterations: components["schemas"]["SoIteration"][];
+            /** Label */
+            label: string;
+            /** Model */
+            model: {
+                [key: string]: unknown;
+            };
+            /** Param Set */
+            param_set: {
+                [key: string]: unknown;
+            };
+            /** Progress Text */
+            progress_text: string;
+            /** Runs */
+            runs?: components["schemas"]["SoRun"][];
+            /** Settings */
+            settings: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Stop Reason */
+            stop_reason?: string | null;
+            /** Warnings */
+            warnings?: {
+                [key: string]: string;
+            }[];
+        };
+        /**
+         * SurrogateOptCreate
+         * @description 생성·미리보기 공용 본문(phase3 §18.6). bounds 생략 = 템플릿 min·max, lo = hi는 고정.
+         */
+        SurrogateOptCreate: {
+            /** Bounds */
+            bounds?: {
+                [key: string]: number[];
+            } | null;
+            /** Candidates */
+            candidates?: number | null;
+            /**
+             * Capture
+             * @default false
+             */
+            capture: boolean;
+            /** Constraints */
+            constraints?: components["schemas"]["SoConstraint"][];
+            /** Explore */
+            explore: components["schemas"]["SoExploreNew"] | components["schemas"]["SoExploreReuse"];
+            /** Iterations */
+            iterations?: number | null;
+            /** Model Id */
+            model_id?: string | null;
+            /**
+             * Multi Execution
+             * @default 1
+             */
+            multi_execution: number;
+            objective: components["schemas"]["SoObjective"];
+            /** Param Set Id */
+            param_set_id?: string | null;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+            /** Surrogate */
+            surrogate?: ("gp" | "rbf") | null;
+            /** Tol Rel */
+            tol_rel?: number | null;
+        };
+        /** SurrogateOptPreview */
+        SurrogateOptPreview: {
+            /** Estimate Min */
+            estimate_min?: number | null;
+            /** Explore Count */
+            explore_count: number;
+            /** Fixed */
+            fixed: {
+                [key: string]: number;
+            };
+            /** Free Variables */
+            free_variables: string[];
+            /** Integer Variables */
+            integer_variables: string[];
+            /** Max Total Runs */
+            max_total_runs: number;
+            /** Objective Available */
+            objective_available: boolean;
+            /** Problems */
+            problems: components["schemas"]["SoProblem"][];
+        };
+        /** SurrogateOptResume */
+        SurrogateOptResume: {
+            /** Batch Retry */
+            batch_retry?: {
+                [key: string]: unknown;
+            } | null;
+            /** Job Id */
+            job_id?: string | null;
+        };
+        /** SurrogateOptSummary */
+        SurrogateOptSummary: {
+            /** Best Value */
+            best_value?: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Id */
+            id: string;
+            /** Iter No */
+            iter_no: number;
+            /** Iterations */
+            iterations: number;
+            /** Label */
+            label: string;
+            /** Objective */
+            objective: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
         };
         /** TemplateConfigured */
         TemplateConfigured: {
@@ -7385,6 +7879,188 @@ export interface operations {
             };
         };
     };
+    list_surrogate_opts_physicsai_api_studies__study_id__surrogate_opts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOptSummary"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_surrogate_opt_physicsai_api_studies__study_id__surrogate_opts_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurrogateOptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOpt"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_surrogate_opt_physicsai_api_studies__study_id__surrogate_opts_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurrogateOptCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOptPreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_setup_physicsai_api_studies__study_id__train_get: {
         parameters: {
             query?: never;
@@ -7679,6 +8355,238 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Study"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_surrogate_opt_physicsai_api_surrogate_opts__opt_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOpt"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_surrogate_opt_physicsai_api_surrogate_opts__opt_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOpt"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resume_surrogate_opt_physicsai_api_surrogate_opts__opt_id__resume_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOptResume"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    surrogate_opt_runs_csv_physicsai_api_surrogate_opts__opt_id__runs_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Not Found */

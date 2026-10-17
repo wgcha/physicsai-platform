@@ -7,6 +7,7 @@ import { finishStage4 } from "./stage4";
 import { adjustPreparedSteps } from "./stage4Prepared";
 import { batchAfterChild, batchOnProgress, isBatchChild } from "./predictBatch";
 import { tickScx } from "./scx";
+import { tickSurrogate } from "./surrogateOpt";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -71,6 +72,7 @@ export function tickJobs(srv: MockServer) {
     }
   }
   tickScx(srv);
+  tickSurrogate(srv); // S13 ⑤ 내장 최적화 한 단계
   srv.p2.tick();
   refreshPositions(srv);
 }

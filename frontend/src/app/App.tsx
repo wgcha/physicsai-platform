@@ -29,6 +29,8 @@ export function AppRoutes() {
           <Route path="/p/:projectId/s/:studyId/stage/:n" element={<StudyPage />} />
           {/* phase3.md §14.8: ④ 일괄 예측 진행·결과 */}
           <Route path="/p/:projectId/s/:studyId/stage/:n/batch/:batchId" element={<StudyPage />} />
+          {/* phase3.md §18.10: ⑤ 내장 최적화 결과 */}
+          <Route path="/p/:projectId/s/:studyId/stage/:n/surrogate/:optId" element={<StudyPage />} />
           <Route path="/p/:projectId/s/:studyId/manage" element={<StudyManage />} />
           <Route path="/admin/env-check" element={<AdminEnvCheck />} />
           <Route path="/import" element={<ImportLanding />} />

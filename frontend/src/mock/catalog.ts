@@ -23,6 +23,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   STUDY_CLEANUP: "관리",
   PREDICT_BATCH: "④",
   CONTOUR_RECAPTURE: "④",
+  SURROGATE_OPT: "⑤",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -47,6 +48,8 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   predict_responses: ["commands.response_extract", "resources.extract_minmax_tcl"],
   // S10(phase3.md §15.5): 컨투어 캡처 — 목의 캡처 동작은 MockOptions.capture가 정한다
   contour_capture: ["commands.contour_capture", "altair.hw_exe_path"],
+  // S13(phase3.md §18.2): 플랫폼 내장 최적화 — numpy·scipy 설치 여부
+  optimize_builtin: ["python.numpy", "python.scipy"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

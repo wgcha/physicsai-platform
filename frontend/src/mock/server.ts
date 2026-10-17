@@ -35,6 +35,7 @@ import { isBatchChild, predictBatchRoutes, seedBatches, type BatchRec } from "./
 import { studyRoutes } from "./studies";
 import { captureRoutes, type CaptureMode } from "./capture";
 import { scxRoutes } from "./scx";
+import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 
 export type { MockResp } from "./route";
 
@@ -96,6 +97,7 @@ const ROUTES: Route[] = [
   curationRoutes, // ②
   optimizeRoutes, // ⑤
   preparedRoutes, // S6 ④ 준비된 입력 inspect(PREDICT_INPUT)
+  surrogateRoutes, // S13 ⑤ 내장 최적화(phase3.md §18.6)
   predictBatchRoutes, // S9 ④ 일괄 예측·템플릿 응답(phase3.md §14.7)
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
@@ -123,6 +125,8 @@ export class MockServer {
   models: Model[] = seedModels();
   paramSets: ParamSet[] = [seedParamSet(), seedMeshOnlyParamSet()];
   batches: BatchRec[] = [];
+  /** S13 내장 최적화 */
+  surrogate: SoRec[] = [];
   samples: Record<string, SampleRow[]> = { "ps-1": makeSamples(120) };
   jobs: Job[] = [];
   artifacts: ArtifactRec[] = [];
@@ -154,6 +158,7 @@ export class MockServer {
     this.p2 = new Phase2Mock(this, opts.disabledFeatures);
     this.manage = new ManageMock(this);
     seedBatches(this, opts.batchDemo);
+    seedSurrogate(this);
   }
 
   get me(): Me | null {

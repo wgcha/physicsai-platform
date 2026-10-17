@@ -9,7 +9,8 @@ type Override<T, U> = Omit<T, keyof U> & U;
 export type Role = "general" | "power" | "admin";
 
 // S10: 다시 캡처 작업 CONTOUR_RECAPTURE는 POST /jobs/{id}/capture 전용이라 JobCreate 열거에 없다(phase3.md §15.4)
-export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE";
+// S13: 내장 최적화 반복 SURROGATE_OPT는 종료 훅·서비스만 만든다(phase3.md §18.4)
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
