@@ -6326,6 +6326,17 @@
             ],
             "title": "Legend"
           },
+          "legend_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legend Note"
+          },
           "reason": {
             "anyOf": [
               {

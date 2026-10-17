@@ -180,6 +180,7 @@ class SoFinal(Resp):
     status: str | None = None  # PENDING | DONE | FAILED | CANCELED | SKIPPED
     reason: str | None = None
     legend: dict[str, float] | None = None
+    legend_note: str | None = None  # 같은 범례 근거 또는 "이미지마다 자동 범례" 사유
     baseline_values: dict[str, float] | None = None
     baseline_predicted: float | None = None
     batch: SoBatchRef | None = None

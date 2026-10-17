@@ -33,7 +33,7 @@ interface SoRec {
 }
 
 export const soLabel = (n: number) => `SO-${String(n).padStart(3, "0")}`;
-const ACTIVE = ["EXPLORING", "FITTING", "VERIFYING"];
+const ACTIVE = ["EXPLORING", "FITTING", "VERIFYING", "FINALIZING"];
 
 function metricValue(metric: string, v: Record<string, number>): number {
   const r = responseFn(v) as Record<string, number>;
@@ -165,7 +165,7 @@ function makeFinal(srv: MockServer, o: SoRec) {
   const baseline = mk(1, base);
   const best = mk(2, b.values as Record<string, number>);
   o.final = {
-    status: "DONE", reason: null, legend: { min: 0, max: Math.max(baseline.objective, best.objective) }, baseline_values: base, baseline_predicted: baseline.objective,
+    status: "DONE", reason: null, legend: { min: 0, max: Number((Math.max(baseline.objective, best.objective) * 1.05).toPrecision(4)) }, legend_note: "같은 범례(여유 5%)", baseline_values: base, baseline_predicted: baseline.objective,
     batch: { ...batchRef(o, 9, 2, true), label: `B-${String(o.batch_no + o.iters.length).padStart(3, "0")}` }, baseline, best,
   };
 }

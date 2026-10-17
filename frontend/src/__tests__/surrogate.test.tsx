@@ -155,6 +155,11 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     expect((await screen.findByTestId("contour-none")).textContent).toBe("캡처 없음 — 컨투어 캡처가 구성되지 않았습니다(commands.contour_capture)");
     expect(screen.getByTestId("so-kpis").textContent).toContain("기준안 값 없음");
     r1.unmount();
+    const r2 = renderApp(`${STUDY}/5/surrogate/so-1`, { user: "power" }, (s) => {
+      s.surrogate[0].final = { ...s.surrogate[0].final!, legend: null, legend_note: "목적 지표가 컨투어 결과 종류(Stress)의 값이 아니라 이미지마다 자동 범례" };
+    });
+    expect(await screen.findByText(/^범례 개별 — 목적 지표가 컨투어 결과 종류/)).toBeTruthy();
+    r2.unmount();
     renderApp(`${STUDY}/5/surrogate/so-1`, { user: "power" }, (s) => {
       Object.assign(s.surrogate[0], { status: "FINALIZING", final: { ...s.surrogate[0].final, status: "PENDING", baseline: null, best: null } });
     });

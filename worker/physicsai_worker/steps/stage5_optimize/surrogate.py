@@ -14,6 +14,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import math
 import os
 import time
 from typing import Any
@@ -26,6 +27,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json_atomic, write_text
+from physicsai_core.stage4_predict import contour_capture as cc
 from physicsai_core.stage4_predict import run_metrics
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
@@ -488,12 +490,13 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
 
         x = np.array([base[n] for n in fit.free])
         pred = float(fit.sign * fit.objective.raw(fit.normalize(x))[0][0])
-        plan["baseline_predicted"] = pred
-        top = max(pred, float(best_d.get("objective") or 0.0))
-        if top > 0:
-            plan["legend"] = {"min": 0.0, "max": top}
+        plan["baseline_predicted"] = pred if math.isfinite(pred) else None
     except (OSError, ValueError, KeyError, ImportError):
-        ctx.log("[WARN] 기준안 예측(범례)을 계산하지 못했습니다 — 범례 자동")
+        ctx.log("[WARN] 기준안 예측(범례)을 계산하지 못했습니다 — 범례 개별")
+    legend, why = shared_legend(ctx.settings.capture, ps, opt["settings"]["objective"]["metric"],
+                                [plan["baseline_predicted"], best_d.get("objective")])
+    plan["legend"] = legend
+    plan["legend_note"] = why
     tmpl, res = contour_capture_missing(ctx.settings)
     if tmpl or res:
         plan.update(status="SKIPPED", reason=f"컨투어 캡처가 구성되지 않았습니다({', '.join((tmpl + res)[:3])})")
@@ -505,8 +508,31 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         return plan
     plan["matrix"] = matrix
     if plan["legend"]:
-        plan["display"] = {"legend": {"mode": "fixed", **plan["legend"]}}
+        display = {"legend": {"mode": "fixed", **plan["legend"]}}
+        if cc.validate_display(display):
+            plan.update(legend=None, legend_note="범례 설정이 올바르지 않아 이미지마다 자동 범례")
+        else:
+            plan["display"] = display
     return plan
+
+
+LEGEND_HEADROOM = 1.05
+
+
+def shared_legend(capture_cfg: Any, ps: dict[str, Any], metric: str, values: list[Any]) -> tuple[dict[str, float] | None, str]:
+    """기준안·최적안 같은 범례(D3-61): 목적이 컨투어 결과 종류의 RESP 값(`resp:<필드>_MAX|_MIN`, 또는 그 결과 종류를
+    추출하는 템플릿 응답 이름)일 때만 0 ~ max(기준안 예측, 최적값) × 1.05. 아니면 None(이미지마다 자동) + 사유."""
+    disp, _src = cc.resolve_display(capture_cfg, ps)
+    field = str(disp.get("field") or "")
+    names = {field} | {str(r.get("name")) for r in ps.get("responses") or []
+                       if isinstance(r, dict) and isinstance(r.get("spec"), dict) and r["spec"].get("datatype") == field}
+    if not any(metric in (f"resp:{n}_MAX", f"resp:{n}_MIN") for n in names if n):
+        return None, f"목적 지표가 컨투어 결과 종류({field})의 값이 아니라 이미지마다 자동 범례"
+    nums = [float(v) for v in values if isinstance(v, (int, float)) and math.isfinite(v)]
+    top = max(nums) * LEGEND_HEADROOM if nums else 0.0
+    if not math.isfinite(top) or top <= 0:
+        return None, "목적 값이 0 이하라 이미지마다 자동 범례"
+    return {"min": 0.0, "max": top}, f"같은 범례 0 ~ {top:.4g}({field}, 여유 5%)"
 
 
 def _now() -> Any:

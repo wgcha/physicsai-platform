@@ -69,6 +69,10 @@ def test_migration_0010_roundtrip(pg_server):
         idx = eng.connect().execute(text("select indexdef from pg_indexes where indexname='ux_surrogate_opts_active'")).scalar()
         assert "UNIQUE" in idx and "EXPLORING" in idx and "VERIFYING" in idx and "FINALIZING" in idx
         assert "final" in cols
+        defs = dict(eng.connect().execute(text(
+            "select conname, pg_get_constraintdef(oid) from pg_constraint where conname in "
+            "('ck_surrogate_opts_status','ck_surrogate_opt_iters_kind')")).all())
+        assert "FINALIZING" in defs["ck_surrogate_opts_status"] and "FINAL'" in defs["ck_surrogate_opt_iters_kind"]
         with pytest.raises(IntegrityError):
             with eng.begin() as c:
                 c.execute(text("insert into notifications(user_id, event, title) values ('u','NOPE','t')"))

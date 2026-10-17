@@ -117,7 +117,9 @@ def test_v3_s13_8_full_loop(so_env, kind):
     assert f["baseline"]["values"] == {"THK_1": 3.0, "N_RIB": 4}  # 템플릿 nominal
     assert f["best"]["objective"] == pytest.approx(d["best"]["objective"])  # 최적안 응답으로 목적 재확인
     assert f["baseline"]["objective"] == pytest.approx(objective_of(f["baseline"]["values"]))
-    assert f["legend"]["min"] == 0.0 and f["legend"]["max"] >= d["best"]["objective"] and f["baseline_predicted"] is not None
+    assert f["legend"]["min"] == 0.0 and f["baseline_predicted"] is not None
+    assert f["legend"]["max"] == pytest.approx(1.05 * max(f["baseline_predicted"], d["best"]["objective"]))  # 여유 5%
+    assert f["legend_note"].startswith("같은 범례")
     fp = env.sql("select params from jobs where job_type='PREDICT_BATCH' and params->>'batch_id'=:b", b=f["batch"]["id"])[0][0]
     assert fp["capture"] == {"enabled": True} and fp["display"]["legend"] == {"mode": "fixed", **f["legend"]}
     m = env.c.get(f"{API}/jobs/{f['best']['job_id']}/media", headers=P).json()
@@ -443,6 +445,15 @@ def test_final_capture_hw_failure_and_hook_idempotent(so_env, monkeypatch):
     with env.engine.begin() as conn:
         assert so_repo.on_batch_done(conn, pb_repo.get(conn, d["final"]["batch"]["id"])) is True
     assert _done_notes(env) == 1 and env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()["status"] == "DONE"
+    # 종료 훅 안 마무리 기록이 실패해도(savepoint) 예외를 올리지 않는다
+    env.sql("update surrogate_opts set status='FINALIZING' where id=:i", i=o["id"])
+
+    def boom(*_a, **_k):
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(so_repo, "complete_final", boom)
+    with env.engine.begin() as conn:
+        assert so_repo.on_batch_done(conn, pb_repo.get(conn, d["final"]["batch"]["id"])) is True
 
 
 def test_final_registered_then_round_fails_and_cancel_in_finalizing(so_env, monkeypatch):
@@ -463,3 +474,20 @@ def test_final_registered_then_round_fails_and_cancel_in_finalizing(so_env, monk
     _drain(env)
     assert env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()["final"]["status"] == "CANCELED"
 
+
+
+def test_shared_legend_rule():
+    """D3-61 범례: 목적이 컨투어 결과 종류의 RESP 값일 때만 같은 범례(×1.05), 그 밖·0 이하·NaN이면 이미지마다 자동."""
+    from types import SimpleNamespace
+
+    from physicsai_worker.steps.stage5_optimize.surrogate import shared_legend
+
+    cfg = SimpleNamespace(default_field="CornerStress", default_component="vonMises", views=["iso"])
+    ps = {"responses": [{"name": "MaxStress", "spec": {"datatype": "Stress", "component": "vonMises", "subcase": 1}}], "display": None}
+    lg, why = shared_legend(cfg, ps, "resp:MaxStress_MAX", [120.0, 90.0])
+    assert lg == {"min": 0.0, "max": pytest.approx(126.0)} and "Stress" in why
+    assert shared_legend(cfg, ps, "resp:Stress_MIN", [None, 10.0])[0] == {"min": 0.0, "max": pytest.approx(10.5)}
+    lg, why = shared_legend(cfg, ps, "curve:max", [120.0, 90.0])
+    assert lg is None and "이미지마다 자동" in why
+    assert shared_legend(cfg, {"responses": [], "display": None}, "resp:CornerStress_MAX", [float("nan"), 50.0])[0]["max"] == pytest.approx(52.5)
+    assert shared_legend(cfg, ps, "resp:MaxStress_MAX", [-3.0, -1.0])[0] is None

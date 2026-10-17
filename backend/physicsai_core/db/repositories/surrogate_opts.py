@@ -186,7 +186,7 @@ def on_batch_done(conn: Connection, batch: Mapping[str, Any]) -> bool:
     if it is None:
         return False
     if it["kind"] == "FINAL":  # D3-61: 마무리 캡처 배치 완료 → opt DONE(이미 DONE이면 아무것도 안 함)
-        complete_final(conn, it["opt_id"], "DONE", None)
+        _complete_final_safely(conn, it["opt_id"], "DONE", None)
         return True
     opt = get(conn, it["opt_id"], for_update=True)
     if (opt is None or opt["status"] not in ("EXPLORING", "VERIFYING") or opt["iter_no"] != it["iter_no"]
@@ -235,7 +235,7 @@ def on_batch_parent_end(conn: Connection, batch: Mapping[str, Any], state: str) 
         return
     it = owned_iter_of_batch(conn, batch["id"])
     if it is not None and it["kind"] == "FINAL":  # 캡처 배치 실패·취소는 최적화 결과를 지우지 않는다 — DONE + 캡처 없음
-        complete_final(conn, it["opt_id"], "CANCELED" if state == CANCELED else "FAILED",
+        _complete_final_safely(conn, it["opt_id"], "CANCELED" if state == CANCELED else "FAILED",
                        "기준안·최적안 캡처 배치가 " + ("취소되었습니다" if state == CANCELED else "실패했습니다"))
     elif it is not None and it["opt_iter_no"] == it["iter_no"]:
         fail(conn, it["opt_id"], "BATCH_FAILED")
@@ -259,6 +259,19 @@ def on_round_end(conn: Connection, job: Mapping[str, Any], state: str) -> None:
         fail(conn, opt["id"], code if code in ROUND_FAIL_REASONS else "ROUND_FAILED")
     elif state == CANCELED:
         set_opt(conn, opt["id"], status="CANCELED", stop_reason="CANCELED", finished_at=func.now())
+
+
+def _complete_final_safely(conn: Connection, opt_id: str, status: str, reason: str | None) -> bool:
+    """종료 훅 안에서 complete_final(savepoint) — 실패는 기록만 하고 하위·부모 종료 트랜잭션을 되돌리지 않는다."""
+    sp = conn.begin_nested()
+    try:
+        done = complete_final(conn, opt_id, status, reason)
+        sp.commit()
+        return done
+    except Exception:  # noqa: BLE001
+        sp.rollback()
+        log.exception("내장 최적화 %s 마무리(DONE)를 기록하지 못했습니다(이어서 실행·재조회로 복구)", opt_id)
+        return False
 
 
 def complete_final(conn: Connection, opt_id: str, status: str, reason: str | None) -> bool:

@@ -3513,6 +3513,8 @@ export interface components {
             legend?: {
                 [key: string]: number;
             } | null;
+            /** Legend Note */
+            legend_note?: string | null;
             /** Reason */
             reason?: string | null;
             /** Status */

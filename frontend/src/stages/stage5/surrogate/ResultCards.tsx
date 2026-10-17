@@ -99,7 +99,7 @@ export function ContourCompareCard({ o }: { o: SurrogateOpt }) {
   const [view, setView] = useState<ViewKey | null>(null);
   const s = o.settings as { objective: { metric: string; series?: string | null } };
   const objLabel = metricLabel(s.objective.metric, s.objective.series);
-  const legend = fin?.legend ? `같은 범례(${fmtNum(fin.legend.min)}–${fmtNum(fin.legend.max)})로 비교` : "범례 자동";
+  const legend = fin?.legend ? `같은 범례(${fmtNum(fin.legend.min)}–${fmtNum(fin.legend.max)})로 비교` : `범례 개별${fin?.legend_note ? ` — ${fin.legend_note}` : ""}`;
   const ready = fin?.status === "DONE" && fin.baseline?.job_id && fin.best?.job_id;
   return (
     <Card span={9} title="컨투어 비교 — 기준안 · 최적안" className="so-contour-card" aside={<span className="muted small">{legend}</span>}>

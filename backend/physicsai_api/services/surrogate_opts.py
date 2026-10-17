@@ -408,7 +408,7 @@ def _final_out(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str, A
                                  "objective": _value(mm, obj["metric"], obj.get("series"), r["responses"]),
                                  "constraints": [_value(mm, c.metric, c.series, r["responses"]) for c in problem.constraints],
                                  "state": pb_repo.row_state(r, r["job_state"])}
-    return {"status": f.get("status"), "reason": f.get("reason"), "legend": f.get("legend"),
+    return {"status": f.get("status"), "reason": f.get("reason"), "legend": f.get("legend"), "legend_note": f.get("legend_note"),
             "baseline_values": f.get("baseline_values"), "baseline_predicted": f.get("baseline_predicted"),
             "batch": batches.get(f.get("batch_id") or ""), "baseline": rows.get(1), "best": rows.get(2)}
 
