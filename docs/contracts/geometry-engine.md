@@ -293,7 +293,7 @@ component의 요소·노드 집합:
  "elapsed_s": 1.8}
 ```
 
-실패 시 `status: "FAIL"`, `code`·`category`·`message`(한국어) 채움, `sample.brep`·`face_map.json` 없음.
+실패 시 `status: "FAIL"`, `code`·`category`·`message`(영문 기술 메시지, §18.4) 채움, `sample.brep`·`face_map.json` 없음.
 
 ### 4.7 morph 출력(`--out-dir`)
 
@@ -360,14 +360,14 @@ component의 요소·노드 집합:
 | 진입점 | `[project.scripts] paicad = "paicad.cli:main"`(Windows `Scripts\paicad.exe`) |
 | 의존 | `cadquery-ocp`(cp312 win_amd64 wheel이 있는 버전으로 Impl이 고정, 7.7 이상), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
 | 모듈 경계 | `paicad.brep`(OCP 사용 — STEP 읽기·XDE·피처·push/pull·투영·렌더), `paicad.mesh`(Radioss 읽기·쓰기, numpy만), `paicad.morph`·`paicad.check`(numpy·scipy + `brep` 인터페이스), `paicad.cli`. `mesh`·`morph`·`check`는 B-rep을 `SurfaceLike`/`CurveLike` 프로토콜(`eval(u,v)`, `project(p)`, `classify(u,v)`, `bounds()`)로만 쓴다 → 해석적 평면·원통 구현으로 OCP 없이 시험 가능 |
-| 플랫폼 import | 금지(physicsai_core·api·worker 어디서도). 플랫폼은 결과 JSON만 읽는다(`physicsai_core/geometry/reports.py`, 표준 라이브러리만) |
+| 플랫폼 import | 금지(physicsai_core·api·worker 어디서도). 플랫폼은 결과 JSON만 읽는다(`physicsai_core/geometry/reports.py`, 표준 라이브러리만). 독립성 규칙 전체는 §18 |
 
 ### 5.2 공통 규약
 
 - 인자는 `--name value` 두 토큰(`=` 사용 안 함 — `.bat` 경유 시 구분자 문제 회피). 경로는 절대경로, 공백·cmd 메타문자 없음(플랫폼 `check_value`가 보장).
 - **쓰기**: `--out-dir`(및 `--out-inc`)에만. `--out-dir`이 없으면 만든다. **출력 파일이 이미 있으면 덮어쓰지 않고 종료코드 3 `GEOM_OUTPUT_EXISTS`**(플랫폼이 실행 전 `outputs_to_backup`으로 `_backup` 이동). 삭제 호출 없음. 입력은 읽기 전용으로 연다.
 - 임시 파일은 `--out-dir/.tmp_<pid>/` 안에서 만들고 끝에 같은 볼륨 `os.replace`로 최종 이름. 실패 시 임시 폴더는 남긴다(플랫폼 정리 범주가 처리).
-- stdout: 진행 줄 `PAICAD PROGRESS <0~100> <한국어 메시지>`, 마지막 줄 `PAICAD RESULT <status> <code|-> <보고 JSON 파일 이름>`. stderr: 경고·traceback. 모든 출력 UTF-8.
+- stdout: 진행 줄 `PAICAD PROGRESS <0~100> <영문 메시지>`(§18.4, 화면 한국어 표시는 플랫폼 매핑), 마지막 줄 `PAICAD RESULT <status> <code|-> <보고 JSON 파일 이름>`. stderr: 경고·traceback. 모든 출력 UTF-8.
 - 로그: `--out-dir/paicad.log`(stdout·stderr 사본 + 입력 sha256·버전·옵션).
 - 스레드: `--threads N`(기본 환경변수 `PAICAD_THREADS`, 없으면 4). numpy/BLAS 스레드는 플랫폼이 `geometry.env`로 지정.
 - 결정성: 같은 입력·옵션·버전이면 같은 출력(난수 없음, 정렬 고정).
@@ -481,9 +481,9 @@ component의 요소·노드 집합:
 - `/INTER/TYPE2`·`/GRNOD`·`/SURF` 해석에 실패하면 (e) `NOT_EVALUATED` + 경고 `TIE_PARSE_SKIPPED`. `tie.required=true`(기본)여도 해석 실패는 실패가 아니라 경고(§15 Q7에서 확정).
 - 제품 메시 수집: 조립 폴더 `*.rad`·`*.inc`(기준본 제외)의 `/NODE`·`/SHELL`·`/SH3N`·`/BRICK`·`/TETRA4`·`/TETRA10`·`/PENTA6`. 쿠션 bbox + 10 mm 밖 요소는 버림. KD-tree(`scipy.spatial.cKDTree`)로 근방 탐색.
 
-**실패 코드 표**(`category`는 화면·DOE 기록용 사유 묶음, 한국어 문구는 그대로 표시):
+**실패 코드 표**(`category`는 화면·DOE 기록용 사유 묶음. §18.4: paicad는 `code`·`category`와 영문 기술 `message`만 낸다. 아래 한국어 사유는 **플랫폼의 code→한국어 매핑 표준 문구**이며 화면에 표시하는 쪽은 플랫폼):
 
-| code | category | 한국어 사유(message 앞부분) | 발생 | 종료코드 |
+| code | category | 한국어 사유(플랫폼 표시 문구) | 발생 | 종료코드 |
 |---|---|---|---|---|
 | `GEOM_CAD_FAILED` | `CAD_FAILED` | CAD 생성 불가 | update | 10 |
 | `GEOM_TOPOLOGY_CHANGED` | `CAD_FAILED` | CAD 생성 불가(위상 변화: 면 수 n→m) | update | 10 |
@@ -782,9 +782,10 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 | 담당 | 파일 |
 |---|---|
-| Impl-Backend A(paicad) | `packages/paicad/**` 전부 |
+| Impl-Geom (paicad) | `packages/paicad/**` 전부 |
 | Impl-Backend B(플랫폼) | `physicsai_core/commands.py`(spec·실행 파일), `config/schema*.py`·`platform.example.yaml`, `physicsai_core/geometry/`(reports·options 병합), `stage4_predict/param_discover.py`·`param_sets.py`, `job_types.py`, `migrations/versions/0012_geometry_engine.py`, `db/tables/*`, `worker/.../steps/geometry_native.py`·`stage4_predict/{predict_inputs,batch,param_set_native}.py`·`stage1_train_data/{extract,doe_gen}.py`, API 서비스·라우터·openapi, fake_paicad, deploy |
 | Impl-Backend(검사) | `scripts/test-all.sh`·`.ps1`(+ 필요 시 `scripts/check_paicad_version.py`): `packages/paicad` 변경 시 `__version__` 변경 + CHANGELOG 최상단 항목 버전 == `__version__` + 루트 고정·lock 일치(§17.5). A의 첫 커밋 전에 넣는다 |
+| Impl-Backend(검사, §18) | 같은 `scripts/test-all`에 "paicad에서 플랫폼 모듈(`physicsai_core`·`backend`·`worker`·`physicsai_worker`) import 금지 검사"(AST로 `packages/paicad/src`·`tests` 스캔) + `pytest packages/paicad` 단독 실행 단계 + 플랫폼 고유 파일명·경로 하드코딩 검사 + 라이선스 고지 파일 존재 검사 |
 | Impl-Frontend | §8 |
 | 순서 | A 단계 1 → B 단계 1(fake로 병행) → A 2 → A 3 + B 3 → B 4 → 프런트(단계 1·3·4 화면) |
 
@@ -804,6 +805,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - V-GE-10 migration 0012 업그레이드·기존 행 기본값·CHECK.
 - V-GE-11 버전(§17): `packages/paicad` 변경 커밋마다 `__version__` 올림·CHANGELOG 최상단 항목 일치(test-all 검사 존재·통과), native JSON·옵션 사용값·DB에 `engine_version` 기록, 출력 include에 버전 주석 없음.
 - V-GE-12 altair 경로 불변(§1.4·§16): 기존 altair 시험 무수정 통과, 분기 지점 밖 altair 코드 diff 없음.
+- V-GE-13 독립성(§18.1·18.5): `packages/paicad`가 `physicsai_core`·`backend`·`worker`·`physicsai_worker`를 import하지 않음(검사 존재·통과, 위반 주입 시 실패 확인), 플랫폼 패키지·DB·`platform.yaml` 없이 `pytest packages/paicad` 단독 통과, 자체 `pyproject.toml`·`CHANGELOG.md`·제3자 라이선스 고지 파일 존재.
+- V-GE-14 paicad 내 플랫폼 고유 파일명·경로 하드코딩 없음(§18.1): `predict.*` 출력 파일 이름(`104_replace_node_elem.inc`·`RENUM_INIT.csv` 등)·플랫폼 폴더 레이아웃(`radioss_assem/` 등)이 `src/`에 리터럴로 없음(시험 fixture·문서 예시 제외), 모두 CLI 인자·입력 JSON 경유. paicad 메시지는 영문(한국어 문자 없음, §18.4).
 
 ---
 
@@ -896,6 +899,35 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 - `scripts/test-all` 검사(Impl-Backend, §13): (1) `packages/paicad/**` 가 비교 기준과 다르면 `__version__`도 달라야 함 — 비교 기준: 작업 트리에 `packages/paicad` 변경이 있으면 `HEAD`, 없으면 `HEAD~1`(CI는 PR base). (2) 항상: CHANGELOG 최상단 `## x.y.z — YYYY-MM-DD` 의 버전 == `__version__`, `pyproject.toml`에 정적 `version` 없음, 루트 `paicad==` 고정·`requirements.local.lock` == `__version__`. 실패 메시지 한국어.
 - 플랫폼 쪽 native 연동 코드(backend·worker의 native 분기, `physicsai_core/geometry/`)는 별도 버전을 두지 않고 기존 플랫폼 버전(루트 `pyproject.toml`)을 따른다. 대신 native 분기 동작을 바꾸면 `docs/decisions.md`에 1줄 기록(Plan에 요청).
+
+---
+
+## 18. 독립성(향후 분리 대비)
+
+결정(2026-10-17): paicad는 향후 독립 플랫폼(별도 저장소·제품)으로 분리될 가능성을 염두에 두고 개발한다. 지금은 physicsai-platform 안의 엔진(`packages/paicad`)으로 운영한다.
+
+### 18.1 의존 방향
+- paicad → 플랫폼 방향 의존 금지: `physicsai_core`·`backend`·`worker` import 금지, DB·`platform.yaml` 직접 읽기 금지.
+- 플랫폼 고유 값(출력 파일 이름 `predict.*`, 폴더 경로, 옵션)은 CLI 인자·입력 JSON으로만 받는다. paicad 내부 하드코딩 금지(§5.3 `--baseline-inc`·`--out-inc`·`--renum-csv`·`--assem-dir`이 그 통로). §4·§5의 예시 값은 문서 예시일 뿐 기본값이 아니다.
+
+### 18.2 경계
+입출력은 **파일 + CLI + 버전 있는 JSON 스키마**(§4, §17.3 `schema_version`)뿐이다. 프로세스 내 호출·공유 메모리·공유 모듈 없음.
+
+### 18.3 솔버 writer 플러그인
+- `packages/paicad/src/paicad/writers/` 레지스트리 인터페이스: 입력 = 노드 좌표 갱신 결과(노드 ID→새 좌표, 기준 파일 경로), 출력 = 솔버 입력 파일. 선택은 CLI 인자(`--solver`, 기본 `radioss`)·입력 JSON.
+- 1차는 Radioss만 구현(§6.4 바이트 보존 규칙). LS-DYNA·Abaqus는 **비범위**(인터페이스만, 구현·시험 없음).
+
+### 18.4 메시지
+paicad는 실패 코드(§6.5 표)와 **영문 기술 메시지**만 낸다(`message`·`PAICAD PROGRESS`·로그). 사용자 표시 한국어 문구는 플랫폼이 code→문구 매핑으로 만든다(AGENTS.md 한국어 규칙은 플랫폼 쪽에서 충족).
+
+### 18.5 패키지 자립
+자체 `pyproject.toml`, 자체 테스트(플랫폼 없이 `pytest packages/paicad` 단독 실행), 자체 버전·CHANGELOG(§17), 제3자 라이선스 고지 파일(`packages/paicad/THIRD_PARTY_NOTICES.md`: OCCT LGPL·cadquery-ocp·numpy·scipy 등) 포함.
+
+### 18.6 강제
+§13 검사 행(import 금지·단독 테스트·하드코딩·고지 파일), §14 V-GE-13·V-GE-14.
+
+### 18.7 분리 시점 기준(결정 기록용, 하나라도 충족 시 분리 검토)
+(1) 쿠션 외 2종 이상 대상 검증, (2) 다른 조직의 플랫폼 외 사용 요청, (3) 솔버 2종 이상 지원.
 
 ---
 
