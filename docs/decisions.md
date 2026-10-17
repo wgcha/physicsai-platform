@@ -107,3 +107,7 @@
 - 2026-10-17 · 단계 버튼 ①~⑤ 전체 폭(5등분)·높이 확대(52px·15px)·번호 배지(원 문자 대신 숫자 1~5), "Study 관리"는 같은 줄 오른쪽 끝 작은 버튼 — 근거: 사용자 요청 · phase3.md D3-56
 - 2026-10-17 · SCX 잡 제출(①·④ `hpc.gateway=scx`)은 대시보드 relay 경유(토큰 공유, PhysicsAI는 어댑터 미실행), 드라이브 /Users/vd.dashboard/<프로젝트>/<잡 폴더>(항상 새 폴더·삭제 없음·SPDM 루트 쓰기 금지), 결과 모름(SUBMISSION_UNKNOWN)은 자동 재제출·자동 취소 없이 사용자 확인 — 근거: 사용자 결정 · phase3.md §16, D3-57, contracts/scx_relay.md
 - 2026-10-17 · SCX 잡 화면(①-4 run 표·④ 검증 해석): `/status.hpc.mode=scx`일 때만 드라이브 잡 폴더(표시·복사)·게이트웨이 중립 단계(업로드 중→대기→실행→완료→결과 회수), 결과 모름은 "확인 필요" 배지 + 조치 3개(다시 확인·잡 ID 연결·제출 안 됨으로 처리=중복 해석 경고 확인 대화상자), ④ 버튼 "검증 해석(SCX)" — 근거: phase3 §16.5 후속 프런트(필수 요소만) · phase3.md D3-58
+- 2026-10-17 · ④ 일괄 예측 결과에 "설계공간 지도" 탭(PLS 기본·PCA·평행 좌표, 변수 z-점수, 축 설명 분산 %, 바이플롯, 연속 색 막대, 표·커브 선택 연동) — run별 대표값(커브 max·min·|max|, RESP _MIN·_MAX)은 백엔드 API(`design-map`, 파일 LRU)에서, PCA·PLS는 프런트에서 계산(새 DB·새 의존성 없음) — 근거: 사용자 결정 · contracts/s12_s13.md §17, D3-59
+- 2026-10-17 · ⑤에 "플랫폼 내장(쿠션만 가능)" 모드 추가: ④ 일괄 예측 체인으로 탐색 → GP/RBF 대리모델 → 후보 k개 실제 예측 검증 반복(기본 3회 × 4), mesh_only·assembly 모두, 반복은 종료 훅 연쇄(`SURROGATE_OPT`, migration 0010) — 근거: 사용자 결정 · contracts/s12_s13.md §18, D3-60
+- 2026-10-17 · 원본 최적화는 mesh_only 템플릿이면 생성·재시도 409 `TEMPLATE_ASSEMBLY_REQUIRED` + 워커 op_prep 가드(이슈 #4 TypeError 제거) — 근거: 사용자 결정 · contracts/s12_s13.md §18.8, D3-60
+- 2026-10-17 · (사용자 확인 필요) 내장 최적화용 새 런타임 의존성 numpy·scipy(약 55 MB wheel, 워커 계산 모듈에서만 import, 없으면 기능만 꺼짐) — 근거: GP 우도 최적화·정수 변수 전역 탐색을 직접 구현하지 않기 위함 · contracts/s12_s13.md §18.2
