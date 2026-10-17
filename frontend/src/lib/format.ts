@@ -1,15 +1,35 @@
 import type { JobState, JobType, Role } from "../api";
 
-/** phase2.md §2.3: 스텝퍼 ①~⑤ 모두 활성 */
+/** 화면 단계(phase3.md §19.3, D3-62): 표시 순서 ① 학습데이터 생성 · ② 데이터 정리 · ③ 데이터셋·모델 · ④ 예측 · ⑤ 결과분석(신설) · ⑥ 최적화.
+ *  n = 내부 단계 번호(jobs.stage·URL 숫자·stage4_predict/stage5_optimize 불변 — 최적화는 내부 5 = 표시 ⑥), path = URL 끝(/stage/<path>), 번호 배지·원 문자는 표시 순서에서 계산한다.
+ *  결과분석은 프런트 전용(n = null, 작업 없음). */
 export const STAGES = [
-  { n: 1, name: "학습데이터 생성", active: true },
-  { n: 2, name: "데이터 정리", active: true },
-  { n: 3, name: "데이터셋·모델", active: true },
-  { n: 4, name: "단일 예측", active: true },
-  { n: 5, name: "최적화", active: true },
+  { n: 1, path: "1", name: "학습데이터 생성", active: true },
+  { n: 2, path: "2", name: "데이터 정리", active: true },
+  { n: 3, path: "3", name: "데이터셋·모델", active: true },
+  { n: 4, path: "4", name: "예측", active: true },
+  { n: null, path: "analysis", name: "결과분석", active: true },
+  { n: 5, path: "5", name: "최적화", active: true },
 ] as const;
 
-export const STAGE_MARK = ["", "①", "②", "③", "④", "⑤"];
+export type StagePath = (typeof STAGES)[number]["path"];
+const CIRCLED = ["", "①", "②", "③", "④", "⑤", "⑥"];
+
+/** 표시 번호(1~6) — STAGES 표시 순서 위치 */
+export const stageNo = (path: string): number => STAGES.findIndex((s) => s.path === path) + 1;
+/** 표시 원 문자(①~⑥) */
+export const stageCircled = (path: string): string => CIRCLED[stageNo(path)] ?? "";
+/** 읽기용 이름 "⑥ 최적화" */
+export const stageTitle = (path: string): string => `${stageCircled(path)} ${STAGES.find((s) => s.path === path)?.name ?? ""}`;
+/** 내부 단계 번호(jobs.stage 1~5) → 표시 번호(내부 5 = 6) */
+export const stageDisplayNo = (n: number): number => (n === 5 ? 6 : n);
+/** 내부 단계 번호(jobs.stage 1~5) → 표시 원 문자: 내부 5(최적화) = ⑥ */
+export const stageMarkOf = (n: number): string => CIRCLED[n === 5 ? 6 : n] ?? "";
+/** 작업 `stage_label`(서버 값 불변)의 표시: 최적화 계열(OPTIMIZE·SURROGATE_OPT)의 "⑤"만 "⑥"으로, 나머지 불변(phase3.md §19.3) */
+export function stageMark(job: { job_type: JobType; stage: number; stage_label?: string | null }): string {
+  const label = job.stage_label || stageMarkOf(job.stage) || String(job.stage);
+  return job.job_type === "OPTIMIZE" || job.job_type === "SURROGATE_OPT" ? label.replace(/^⑤/, "⑥") : label;
+}
 
 export const JOB_TYPE_LABEL: Record<JobType, string> = {
   DATASET_CREATE: "데이터셋 생성",

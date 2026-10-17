@@ -1,8 +1,8 @@
 // S12 평행 좌표(phase3.md §17.5-7): 축 = 파라미터 전부(원 단위, 템플릿 순서) + 오른쪽 끝 값 축, 선 색 = 값.
 // 값 축 브러싱: 세로로 끌어 [lo, hi] → 범위 밖 선 흐리게(0.12), 머리 "값 lo ~ hi · k개 run", 더블클릭·"범위 해제"로 해제(탭 안 상태).
 import { useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
-import { tickLabel, useWidth } from "../../../../components/Chart";
-import type { DesignMapMetric } from "../../../../api/designMap";
+import { tickLabel, useWidth } from "../../../components/Chart";
+import type { DesignMapMetric } from "../../../api/designMap";
 import { axisValue, brushText, tipLines, type MapData, type MapRun, type PcAxis } from "./designMapData";
 
 export function ParallelCoords({ data, axes, colorOf, selected, onSelect, metric }: { data: MapData; axes: PcAxis[]; colorOf: (v: number) => string; selected: number | null; onSelect: (doe: number) => void; metric: DesignMapMetric | undefined }) {
@@ -22,7 +22,8 @@ export function ParallelCoords({ data, axes, colorOf, selected, onSelect, metric
   const vFromY = (y: number) => vAxis.lo + ((m.t + ih - y) / ih) * (vAxis.hi - vAxis.lo);
   const inBrush = (r: MapRun) => !brush || (r.v >= brush[0] && r.v <= brush[1]);
   const count = brush ? data.runs.filter(inBrush).length : data.runs.length;
-  const ordered = [...data.runs.filter((r) => r.doe_no !== selected), ...data.runs.filter((r) => r.doe_no === selected)];
+  const isSel = (r: MapRun) => !r.other && r.doe_no === selected;
+  const ordered = [...data.runs.filter((r) => !isSel(r)), ...data.runs.filter(isSel)];
   const localY = (e: MouseEvent) => e.clientY - (svgRef.current?.getBoundingClientRect().top ?? 0);
   const down = (e: MouseEvent) => {
     e.preventDefault();
@@ -62,20 +63,21 @@ export function ParallelCoords({ data, axes, colorOf, selected, onSelect, metric
       </div>
       <svg ref={svgRef} width={W} height={H} role="img" aria-label={`평행 좌표: 변수 ${axes.length - 1}개 · ${vAxis.label}`} data-testid="dm-pc" onMouseMove={move} onMouseUp={up} onMouseLeave={up}>
         {ordered.map((r) => {
-          const on = r.doe_no === selected;
+          const on = isSel(r);
+          const alt = !!r.other;
           const d = axes.map((a, i) => `${i ? "L" : "M"}${ax(i).toFixed(1)},${ay(a, axisValue(r, a)).toFixed(1)}`).join("");
           return (
             <path
-              key={r.doe_no}
+              key={`${alt ? "o" : "b"}${r.doe_no}`}
               d={d}
-              className={`dm-line${on ? " on" : ""}${inBrush(r) ? "" : " dim"}`}
+              className={`dm-line${on ? " on" : ""}${inBrush(r) ? "" : " dim"}${r.hollow ? " alt" : ""}`}
               stroke={on ? undefined : colorOf(r.v)}
-              role="button"
-              tabIndex={0}
-              aria-label={`선 DOE #${r.doe_no}`}
-              aria-pressed={on}
-              onClick={() => onSelect(r.doe_no)}
-              onKeyDown={(e) => key(e, r.doe_no)}
+              role={alt ? "img" : "button"}
+              tabIndex={alt ? undefined : 0}
+              aria-label={alt ? `비교 선 #${r.doe_no}` : `선 DOE #${r.doe_no}`}
+              aria-pressed={alt ? undefined : on}
+              onClick={alt ? undefined : () => onSelect(r.doe_no)}
+              onKeyDown={alt ? undefined : (e) => key(e, r.doe_no)}
               onMouseEnter={() => setHover(r)}
               onMouseLeave={() => setHover(null)}
               onFocus={() => setHover(r)}

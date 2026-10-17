@@ -1,18 +1,14 @@
 // V3-S9-14·17·18(화면, phase3.md §14.8·§14.9): 입력 방식 3개·기억, A 템플릿 요청 body·mesh_only 진행 단계, 템플릿 관리(조립 "없음"·응답 추가),
-// B 미리보기·실행 body, 결과 표 정렬·행 선택·실패만 다시, 응답 그래프 선택 규칙(2D·3D·안내), 커브 강조, 다운샘플. 목 서버(mock/predictBatch.ts) 기준.
+// B 미리보기·실행 body, 결과 표 정렬·행 선택·실패만 다시, ⑤ 링크 카드, 다운샘플. (응답 그래프·커브 화면 시험은 S14로 analysisScreen.test.tsx에 있다) 목 서버(mock/predictBatch.ts) 기준.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
 import { ok } from "../mock/route";
 import { downsampleMinMax } from "../lib/downsample";
-import { PLOT_HINT, plotKind, sortRows } from "../stages/stage4/batch/batchTable";
-import { overlayLines } from "../stages/stage4/batch/CurveOverlay";
-import { NO_WEBGL_TEXT } from "../stages/stage4/batch/ResponsePlot3D";
+import { plotKind, sortRows } from "../stages/stage4/batch/batchTable";
+import { overlayLines } from "../analysis/viz/CurveOverlay";
 import type { BatchCurves, PredictBatchRow } from "../api";
-
-const plotly = vi.hoisted(() => ({ react: vi.fn(async (el: HTMLElement) => el), purge: vi.fn() }));
-vi.mock("plotly.js-gl3d-dist-min", () => ({ default: plotly }));
 
 const KEY = "physicsai.stage4.inputMode";
 const BATCH = `${STUDY}/4/batch/pb-2`;
@@ -366,60 +362,14 @@ describe("④ B 결과 표·그래프·커브 (V3-S9-14·18)", () => {
     expect(await screen.findByAltText(/^예측 컨투어 — /)).toBeTruthy();
   });
 
-  it("응답 그래프 선택 규칙: 변수 1+응답 1 = 2D, 변수 2+응답 1 = 3D(plotly 동적 import), 그 밖 = 회색 안내", async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ({})) as never);
+  it("S14: 그래프 카드 대신 '⑤ 결과분석에서 열기' 링크 카드(/stage/analysis?source=batch&id=…), ④에는 분석 그래프·커브 카드 없음", async () => {
     renderApp(BATCH, { user: "power" });
     await screen.findByRole("region", { name: "결과 표 — B-002" });
-    const plot = screen.getByRole("region", { name: "응답 그래프" });
-    // 기본: 첫 파라미터 체크 + 첫 응답 → 2D 점 18개(값 있는 run)
-    expect(((await screen.findByRole("checkbox", { name: "THK_TOP" })) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByRole("radio", { name: "MaxStress" }) as HTMLInputElement).checked).toBe(true);
-    expect(within(plot).getByTestId("plot2d")).toBeTruthy();
-    expect(within(plot).getAllByRole("button", { name: /^점 DOE #\d+$/ })).toHaveLength(18);
-    // 점 클릭 = 행 선택
-    fireEvent.click(within(plot).getByRole("button", { name: "점 DOE #3" }));
-    expect(await screen.findByRole("region", { name: "DOE #3" })).toBeTruthy();
-    // 응답 바꾸기
-    fireEvent.click(screen.getByRole("radio", { name: "MaxDisp" }));
-    expect(within(plot).getByRole("img").getAttribute("aria-label")).toBe("응답 그래프 2D: THK_TOP – MaxDisp");
-    // 변수 2개 → 3D
-    fireEvent.click(screen.getByRole("checkbox", { name: "RIB_N" }));
-    expect(await within(plot).findByTestId("plot3d")).toBeTruthy();
-    await waitFor(() => expect(plotly.react).toHaveBeenCalled());
-    const [, data] = plotly.react.mock.calls[plotly.react.mock.calls.length - 1] as unknown as [HTMLElement, Record<string, unknown>[]];
-    expect(data[0].type).toBe("scatter3d");
-    expect((data[0].customdata as number[]).length).toBe(18);
-    fireEvent.click(within(plot).getByRole("checkbox", { name: "보간면" }));
-    await waitFor(() => expect(((plotly.react.mock.calls[plotly.react.mock.calls.length - 1] as unknown[])[1] as Record<string, unknown>[])[1]).toMatchObject({ type: "mesh3d", delaunayaxis: "z" }));
-    // 변수 3개 → 안내
-    fireEvent.click(screen.getByRole("checkbox", { name: "E_FOAM" }));
-    expect(within(plot).getByTestId("plot-hint").textContent).toBe(PLOT_HINT);
-    expect(within(plot).getByTestId("plot-hint").className).toContain("muted");
-    // 변수 0개 → 안내
-    for (const n of ["THK_TOP", "RIB_N", "E_FOAM"]) fireEvent.click(screen.getByRole("checkbox", { name: n }));
-    expect(within(plot).getByTestId("plot-hint").textContent).toBe(PLOT_HINT);
-  });
-
-  it("WebGL이 없으면 3D 자리에 안내 한 줄", async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => null) as never);
-    renderApp(BATCH, { user: "power" });
-    await screen.findByRole("region", { name: "결과 표 — B-002" });
-    fireEvent.click(await screen.findByRole("checkbox", { name: "RIB_N" }));
-    expect((await screen.findByTestId("plot3d-nogl")).textContent).toBe(NO_WEBGL_TEXT);
-  });
-
-  it("커브 겹쳐보기: 완료 run 모두 흐리게, 고른 run만 진하게(표에서 바꾸면 따라감)", async () => {
-    renderApp(BATCH, { user: "power" });
-    await screen.findByRole("region", { name: "결과 표 — B-002" });
-    const curves = screen.getByRole("region", { name: "커브 겹쳐보기" });
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay").length).toBe(18));
-    fireEvent.click(screen.getByRole("button", { name: "DOE #9 선택" }));
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay.on").length).toBe(1));
-    const on = curves.querySelector("path.overlay.on")!;
-    expect(on).toBe(curves.querySelectorAll("path.overlay")[17]); // 맨 위(마지막)에 그린다
-    expect(within(curves).getByLabelText("계열")).toBeTruthy(); // 계열 2개 → 드롭다운
-    fireEvent.click(screen.getByRole("button", { name: "DOE #1 선택" }));
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay.on").length).toBe(1));
+    const card = screen.getByRole("region", { name: "결과분석" });
+    expect(within(card).getByTestId("analysis-link").getAttribute("href")).toBe(`${STUDY}/analysis?source=batch&id=pb-2`);
+    expect(screen.queryByRole("region", { name: "응답 그래프" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "커브 겹쳐보기" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "THK_TOP" })).toBeNull(); // 그래프 변수 체크는 ⑤로 이동
   });
 
   it("진행 중 배치: 실행 중·대기 수, 일괄 취소(확인) → 하위 대기 작업 취소", async () => {

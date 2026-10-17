@@ -1,8 +1,8 @@
 // S12 투영 그림(phase3.md §17.5·§17.6): PLS·PCA 2D(바이플롯 화살표) 또는 1D 산점(x = 변수·PLS1, y = 값). 자체 SVG, 정사각.
 // 점 색 = 값(viridis), 점 클릭 = setSelected(doe_no), 고른 run = 강조색 테두리·맨 위. 툴팁 3줄(DOE#·변수·값).
 import { useState, type KeyboardEvent } from "react";
-import { niceTicks, tickLabel, useWidth } from "../../../../components/Chart";
-import type { DesignMapMetric, DesignMapParameter } from "../../../../api/designMap";
+import { niceTicks, tickLabel, useWidth } from "../../../components/Chart";
+import type { DesignMapMetric, DesignMapParameter } from "../../../api/designMap";
 import { tipLines, type PlotPoint, type Projection } from "./designMapData";
 
 type Drawn = Exclude<Projection, { kind: "message" }>;
@@ -30,7 +30,8 @@ export function ProjectionPlot({ proj, colorOf, showArrows, selected, onSelect, 
   const sy = (y: number) => m.t + ih - ((y - y0) / (y1 - y0)) * ih;
   const xt = niceTicks(x0, x1, Math.max(3, Math.floor(iw / 80)));
   const yt = niceTicks(y0, y1, Math.max(3, Math.floor(ih / 60)));
-  const ordered = [...proj.points.filter((p) => p.run.doe_no !== selected), ...proj.points.filter((p) => p.run.doe_no === selected)];
+  const isSel = (p: PlotPoint) => !p.run.other && p.run.doe_no === selected;
+  const ordered = [...proj.points.filter((p) => !isSel(p)), ...proj.points.filter(isSel)];
   const key = (e: KeyboardEvent, doe: number) => {
     if (e.key === "Enter" || e.key === " ") {
       e.preventDefault();
@@ -80,21 +81,25 @@ export function ProjectionPlot({ proj, colorOf, showArrows, selected, onSelect, 
           </g>
         ))}
         {ordered.map((p) => {
-          const on = p.run.doe_no === selected;
+          const on = isSel(p);
+          const alt = !!p.run.other;
+          const c = colorOf(p.run.v);
           return (
             <circle
-              key={p.run.doe_no}
-              className={on ? "dm-pt on" : "dm-pt"}
+              key={`${alt ? "o" : "b"}${p.run.doe_no}`}
+              className={`dm-pt${on ? " on" : ""}${p.run.hollow ? " hollow" : ""}${alt ? " other" : ""}`}
               cx={sx(p.x)}
               cy={sy(p.y)}
               r={on ? 7 : 5}
-              fill={colorOf(p.run.v)}
-              role="button"
-              tabIndex={0}
-              aria-label={`지도 점 DOE #${p.run.doe_no}`}
-              aria-pressed={on}
-              onClick={() => onSelect(p.run.doe_no)}
-              onKeyDown={(e) => key(e, p.run.doe_no)}
+              fill={p.run.hollow ? "none" : c}
+              style={p.run.hollow && !on ? { stroke: c, strokeWidth: 2 } : undefined}
+              pointerEvents="all"
+              role={alt ? "img" : "button"}
+              tabIndex={alt ? undefined : 0}
+              aria-label={alt ? `비교 지도 점 #${p.run.doe_no}` : `지도 점 DOE #${p.run.doe_no}`}
+              aria-pressed={alt ? undefined : on}
+              onClick={alt ? undefined : () => onSelect(p.run.doe_no)}
+              onKeyDown={alt ? undefined : (e) => key(e, p.run.doe_no)}
               onMouseEnter={() => setHover(p)}
               onMouseLeave={() => setHover(null)}
               onFocus={() => setHover(p)}

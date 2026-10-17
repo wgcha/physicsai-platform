@@ -1,7 +1,7 @@
 // ④ B 응답 그래프 3D(phase3.md §14.8): x·y = 변수 2개, z = 응답 산점, 체크 "보간면"(기본 끔) = Delaunay 삼각면(mesh3d delaunayaxis z).
 // plotly.js-gl3d-dist-min@2.35.2를 동적 import(별도 청크, frontend-dist 포함 — CDN 없음). WebGL이 없으면 안내 한 줄.
 import { useEffect, useRef, useState } from "react";
-import { useCurrentTheme } from "../../../design/theme";
+import { useCurrentTheme } from "../../design/theme";
 
 export const NO_WEBGL_TEXT = "3D 그래프를 표시할 수 없습니다(WebGL 없음)";
 

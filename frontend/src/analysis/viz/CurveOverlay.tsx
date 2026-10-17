@@ -2,9 +2,9 @@
 // 상한: run 200개(서버 curve_max_runs, 넘으면 앞쪽만 + truncated), 계열당 점 ≤ max_points(구간 최소·최대 보존 다운샘플). 화면도 같은 상한으로 한 번 더 막는다.
 // 계열(name)은 BatchResult가 갖는다(S12 §17.6 — 설계공간 지도의 "커브" 선택과 공유, null = 서버 기본 첫 계열).
 import { useEffect, useMemo, useState } from "react";
-import { api, type BatchCurves } from "../../../api";
-import { Chart } from "../../../components/Chart";
-import { downsampleMinMax } from "../../../lib/downsample";
+import { api, type BatchCurves } from "../../api";
+import { Chart } from "../../components/Chart";
+import { downsampleMinMax } from "../../lib/downsample";
 
 export const CURVE_MAX_RUNS = 200;
 export const CURVE_MAX_POINTS = 500;

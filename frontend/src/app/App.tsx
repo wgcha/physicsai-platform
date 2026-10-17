@@ -26,10 +26,12 @@ export function AppRoutes() {
           <Route path="/" element={<ProjectList />} />
           <Route path="/p/:projectId" element={<StudyList />} />
           <Route path="/p/:projectId/s/:studyId" element={<StudyRedirect />} />
+          {/* phase3.md §19.3: ⑤ 결과분석(신설, 프런트 전용). 숫자 URL(/stage/4 예측·/stage/5 최적화)은 불변 */}
+          <Route path="/p/:projectId/s/:studyId/stage/analysis" element={<StudyPage stage="analysis" />} />
           <Route path="/p/:projectId/s/:studyId/stage/:n" element={<StudyPage />} />
           {/* phase3.md §14.8: ④ 일괄 예측 진행·결과 */}
           <Route path="/p/:projectId/s/:studyId/stage/:n/batch/:batchId" element={<StudyPage />} />
-          {/* phase3.md §18.10: ⑤ 내장 최적화 결과 */}
+          {/* phase3.md §18.10: ⑥ 내장 최적화 결과(URL 숫자 5 유지) */}
           <Route path="/p/:projectId/s/:studyId/stage/:n/surrogate/:optId" element={<StudyPage />} />
           <Route path="/p/:projectId/s/:studyId/manage" element={<StudyManage />} />
           <Route path="/admin/env-check" element={<AdminEnvCheck />} />

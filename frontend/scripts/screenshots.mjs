@@ -8,6 +8,8 @@
 //                                                                 → SHOT_OUT 또는 screenshots/scx/)
 //       npm run build:mock && node scripts/screenshots.mjs designmap  (S12 설계공간 지도 D3-59: ④ 일괄 결과 PLS·평행 좌표, 다크·라이트 1920
 //                                                                 → SHOT_OUT 또는 screenshots/designmap/)
+//       npm run build:mock && node scripts/screenshots.mjs analysis  (S14 D3-62: ⑤ 결과분석 — 변수–응답·설계공간 지도·영향도, 6버튼 메뉴, 다크·라이트 1920 + 1280·1100 폭
+//                                                                 → SHOT_OUT 또는 screenshots/analysis/)
 // 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
@@ -66,7 +68,8 @@ const phase3 = process.argv.includes("phase3");
 const tone = process.argv.includes("tone");
 const scx = process.argv.includes("scx");
 const designmap = process.argv.includes("designmap");
-const out = designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
+const analysis = process.argv.includes("analysis");
+const out = analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
@@ -97,14 +100,26 @@ async function openMap(page, method) {
   await page.evaluate(() => document.querySelector(".batch-plot")?.scrollIntoView({ block: "center" }));
   await page.waitForTimeout(400);
 }
+// analysis: ⑤ 그래프 카드 탭을 열고 카드를 화면에 맞춘다
+const openTab = (name) => async (page) => {
+  await page.getByRole("tab", { name }).click();
+  await page.waitForTimeout(500);
+  await page.evaluate(() => document.querySelector(".analysis-plot")?.scrollIntoView({ block: "center" }));
+};
 async function openDrawer(page) {
   await page.getByTestId("chip-queue").click();
   await page.waitForSelector('[role="dialog"][aria-modal="true"] .qrow');
 }
-const shots = designmap
+const shots = analysis
   ? [
-      { name: "stage4_batch_map_pls", url: `${S}/4/batch/pb-2?${q}`, wait: ".batch-table-card", act: (p) => openMap(p, null), noFull: true },
-      { name: "stage4_batch_map_pc", url: `${S}/4/batch/pb-2?${q}`, wait: ".batch-table-card", act: (p) => openMap(p, "평행 좌표"), noFull: true },
+      { name: "stage_analysis", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: (p) => p.waitForSelector('[data-testid="plot2d"]') },
+      { name: "stage_analysis_map", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: async (p) => (await openTab("설계공간 지도")(p), p.waitForSelector('[data-testid="design-map"] svg')), noFull: true },
+      { name: "stage_analysis_influence", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: openTab("영향도"), noFull: true },
+    ]
+  : designmap
+  ? [
+      { name: "stage4_batch_map_pls", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: (p) => openMap(p, null), noFull: true },
+      { name: "stage4_batch_map_pc", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: (p) => openMap(p, "평행 좌표"), noFull: true },
     ]
   : scx
   ? [
@@ -138,7 +153,13 @@ const shots = designmap
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
     ];
-const sizes = designmap
+const sizes = analysis
+  ? [
+      { w: 1920, h: 1080 },
+      { w: 1280, h: 800 },
+      { w: 1100, h: 800 },
+    ]
+  : designmap
   ? [{ w: 1920, h: 1080 }]
   : tone || scx
   ? [
@@ -151,7 +172,7 @@ const sizes = designmap
       { w: 1280, h: 800 },
     ];
 // 테마(대시보드 localStorage 키) — tone은 다크·라이트 둘 다, 나머지는 기본(dark)
-const themes = tone || scx || designmap ? ["dark", "light"] : [null];
+const themes = tone || scx || designmap || analysis ? ["dark", "light"] : [null];
 
 const browser = await chromium.launch();
 const report = [];

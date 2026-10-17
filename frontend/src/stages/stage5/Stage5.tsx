@@ -60,13 +60,13 @@ function OriginalOptimize({ onUseBuiltin }: { onUseBuiltin: () => void }) {
   return (
     <>
       <OptInputCard modelId={modelId} setModelId={setModelId} />
-      <Card span={6} step="⑤-2" title="응답">
+      <Card span={6} step="⑥-2" title="응답">
         <ResponseTable rows={responses} onChange={setResponses} readOnly={!canExec} />
         {canExec && <ResponseAddRow candidates={cands} rows={responses} onAdd={(r) => setResponses([...responses, r])} />}
         <p className="muted small">Goal이 CONSTRAINT일 때만 Bound·Value를 씁니다. 단위계 mm-ton-s.</p>
       </Card>
       {meshOnly ? (
-        <Card span={3} step="⑤-3" title="실행" foot={
+        <Card span={3} step="⑥-3" title="실행" foot={
           <div className="run-action-row">
             <button type="button" className="btn primary" disabled title={ASSEMBLY_REQUIRED_TEXT}>최적화 실행</button>
             <button type="button" className="btn small" onClick={onUseBuiltin}>플랫폼 내장으로</button>
@@ -77,7 +77,7 @@ function OriginalOptimize({ onUseBuiltin }: { onUseBuiltin: () => void }) {
       ) : (
         <OptRunCard s={s} setS={setS} responses={responses} modelId={modelId} runner={runner} />
       )}
-      <Card span={6} step="⑤-4" title="결과">
+      <Card span={6} step="⑥-4" title="결과">
         <OptResult opt={latest} job={runner.job} />
       </Card>
     </>

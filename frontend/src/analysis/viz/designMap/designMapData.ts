@@ -1,9 +1,9 @@
 // S12 설계공간 지도 자료 규칙(phase3.md §17.5) — 순수 함수: 유효 run·유효 변수, 투영(PLS·PCA·1D), 경계 조건 문구,
 // 평행 좌표 축, 툴팁 줄, 화면 선택 저장(localStorage, try/catch).
-import { niceTicks } from "../../../../components/Chart";
-import { fmtNum } from "../../../../lib/format";
-import type { DesignMap, DesignMapMetric, DesignMapParameter, DesignMapRun } from "../../../../api/designMap";
-import { DEFAULT_METRIC } from "../../../../api/designMap";
+import { niceTicks } from "../../../components/Chart";
+import { fmtNum } from "../../../lib/format";
+import type { DesignMap, DesignMapMetric, DesignMapParameter, DesignMapRun } from "../../../api/designMap";
+import { DEFAULT_METRIC } from "../../../api/designMap";
 import { pca, plsNipals, standardize, structureArrows, zscore, type Mat } from "./linalg";
 
 export type Method = "pls" | "pca" | "pc";
@@ -45,6 +45,9 @@ export interface MapRun {
   run_key: string;
   values: Record<string, number>;
   v: number;
+  /** S14 겹쳐 보기(§19.6): 비교 표의 run(선택 불가) / 해석(solver) 출처 = 속 빈 원·점선. 단독 보기에서는 둘 다 없음 */
+  other?: boolean;
+  hollow?: boolean;
 }
 
 export interface MapData {
@@ -215,7 +218,9 @@ export function tipLines(run: MapRun, params: DesignMapParameter[], m: DesignMap
 
 export const TAB_KEY = "physicsai.stage4.batchGraphTab";
 export const PREFS_KEY = "physicsai.stage4.designMap";
-export type GraphTab = "response" | "map";
+/** S14: ⑤ 결과분석 탭(변수–응답·설계공간 지도·영향도·커브). 저장 키·옛 값(response|map)은 그대로 */
+export type GraphTab = "response" | "map" | "influence" | "curve";
+const GRAPH_TABS: GraphTab[] = ["response", "map", "influence", "curve"];
 export interface Prefs {
   method: Method;
   metric: string;
@@ -225,7 +230,8 @@ export interface Prefs {
 
 export function readTab(): GraphTab {
   try {
-    return globalThis.localStorage?.getItem(TAB_KEY) === "map" ? "map" : "response";
+    const v = globalThis.localStorage?.getItem(TAB_KEY);
+    return GRAPH_TABS.includes(v as GraphTab) ? (v as GraphTab) : "response";
   } catch {
     return "response";
   }

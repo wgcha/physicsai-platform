@@ -2,7 +2,7 @@ import { Link, Navigate, useParams } from "react-router-dom";
 import type { JobState } from "../api";
 import { useApp } from "../app/AppContext";
 import { StudyProvider, useStudy } from "../app/StudyContext";
-import { STAGES, STAGE_MARK } from "../lib/format";
+import { stageTitle } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
 import { StageStepper } from "../shell/StageStepper";
 import { RunStatusProvider, StatusChips } from "../shell/RunStatus";
@@ -10,27 +10,32 @@ import { Stage1 } from "../stages/stage1/Stage1";
 import { Stage2 } from "../stages/stage2/Stage2";
 import { Stage3 } from "../stages/stage3/Stage3";
 import { Stage4 } from "../stages/stage4/Stage4";
+import { StageAnalysis } from "../stages/stageAnalysis/StageAnalysis";
 import { Stage5 } from "../stages/stage5/Stage5";
 import { BatchResult } from "../stages/stage4/batch/BatchResult";
 import { SurrogateResult } from "../stages/stage5/surrogate/SurrogateResult";
 
-export function StudyPage() {
-  const { projectId = "", studyId = "", n, batchId, optId } = useParams();
-  const stage = Number(n ?? 3);
-  if (!Number.isInteger(stage) || stage < 1 || stage > 5 || (batchId && stage !== 4) || (optId && stage !== 5)) return <Navigate to={`/p/${projectId}/s/${studyId}/stage/3`} replace />;
+/** stage = 고정 단계(App의 /stage/analysis 라우트). 없으면 URL의 :n */
+export function StudyPage({ stage: fixed }: { stage?: "analysis" }) {
+  const { projectId = "", studyId = "", n: nParam, batchId, optId } = useParams();
+  const n = fixed ?? nParam;
+  // 단계 = URL 끝: 1~5(내부 번호, 5 = 표시 ⑥ 최적화) 또는 analysis(⑤ 결과분석, 프런트 전용 — phase3.md §19.3)
+  const path = n ?? "3";
+  const num = Number(path);
+  const ok = path === "analysis" ? !batchId && !optId : Number.isInteger(num) && num >= 1 && num <= 5 && !(batchId && num !== 4) && !(optId && num !== 5);
+  if (!ok) return <Navigate to={`/p/${projectId}/s/${studyId}/stage/3`} replace />;
   return (
     <StudyProvider studyId={studyId}>
-      <StudyShell projectId={projectId} stage={stage} batchId={batchId ?? null} optId={optId ?? null} />
+      <StudyShell projectId={projectId} stage={path} batchId={batchId ?? null} optId={optId ?? null} />
     </StudyProvider>
   );
 }
 
-function StudyShell({ projectId, stage, batchId, optId }: { projectId: string; stage: number; batchId: string | null; optId: string | null }) {
+function StudyShell({ projectId, stage, batchId, optId }: { projectId: string; stage: string; batchId: string | null; optId: string | null }) {
   const { projects } = useApp();
   const { study } = useStudy();
   const project = projects.find((p) => p.id === projectId);
   const base = `/p/${projectId}/s/${study.id}`;
-  const st = STAGES.find((s) => s.n === stage)!;
   const stageStates: Record<number, JobState | null | undefined> = Object.fromEntries(
     [1, 2, 3, 4, 5].map((n) => [n, study.stage_status?.[String(n)]?.latest_state ?? null]),
   );
@@ -43,7 +48,7 @@ function StudyShell({ projectId, stage, batchId, optId }: { projectId: string; s
           crumbs={[
             { label: project?.name ?? projectId, to: `/p/${projectId}` },
             { label: study.title, to: `${base}/stage/3` },
-            batchId || optId ? { label: `${STAGE_MARK[stage]} ${st.name}`, to: `${base}/stage/${stage}` } : { label: `${STAGE_MARK[stage]} ${st.name}` },
+            batchId || optId ? { label: stageTitle(stage), to: `${base}/stage/${stage}` } : { label: stageTitle(stage) },
             ...(batchId ? [{ label: "일괄 예측" }] : []),
             ...(optId ? [{ label: "내장 최적화" }] : []),
           ]}
@@ -67,15 +72,17 @@ function StudyShell({ projectId, stage, batchId, optId }: { projectId: string; s
         )}
         <div className="grid workgrid">
           <main className="workarea grid-contents" aria-label="작업영역">
-            {stage === 1 ? (
+            {stage === "1" ? (
               <Stage1 key={study.id} />
-            ) : stage === 2 ? (
+            ) : stage === "2" ? (
               <Stage2 key={study.id} />
-            ) : stage === 3 ? (
+            ) : stage === "3" ? (
               <Stage3 key={study.id} />
-            ) : stage === 4 && batchId ? (
+            ) : stage === "analysis" ? (
+              <StageAnalysis key={study.id} />
+            ) : stage === "4" && batchId ? (
               <BatchResult key={batchId} batchId={batchId} />
-            ) : stage === 4 ? (
+            ) : stage === "4" ? (
               <Stage4 key={study.id} />
             ) : optId ? (
               <SurrogateResult key={optId} optId={optId} />

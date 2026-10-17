@@ -1,4 +1,4 @@
-// V3-S12-5(phase3.md §17.6·§17.7): 설계공간 지도 화면 — 탭 전환·저장, 방법·색 값·커브 드롭다운(계열 1개면 숨김), 색 막대 최소·최대 숫자,
+// V3-S12-5(phase3.md §17.6·§17.7) → S14: ⑤ 결과분석으로 이동한 설계공간 지도 화면(입력만 바꿔 같은 기준으로 통과) — 탭 전환·저장, 방법·색 값·커브 드롭다운(계열 1개면 숨김), 색 막대 최소·최대 숫자,
 // 툴팁 내용, 점 클릭 → 표 행 선택·커브 강조, 표 행 클릭 → 지도 강조, 커브 계열 공유, 평행 좌표 브러싱(흐림·개수·해제),
 // 진행 중 배치에서 succeeded가 늘 때만 재요청, 목 라우트(openapi 모양). 목 서버(mock/predictBatch.ts) B-002: 20 run 중 성공 18.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -8,10 +8,10 @@ import { recordCalls } from "../test/recordCalls";
 import type { MockServer } from "../mock/server";
 import type { DesignMap } from "../api/designMap";
 import { fmtNum } from "../lib/format";
-import { PREFS_KEY, TAB_KEY, TEXT } from "../stages/stage4/batch/designMap/designMapData";
+import { PREFS_KEY, TAB_KEY, TEXT } from "../analysis/viz/designMap/designMapData";
 import specJson from "../../../backend/openapi.json";
 
-const BATCH = `${STUDY}/4/batch/pb-2`;
+const BATCH = `${STUDY}/analysis?source=batch&id=pb-2`;
 const S1 = "Node 10234 변위 [mm]";
 const S2 = "Node 20811 변위 [mm]";
 
@@ -28,7 +28,7 @@ async function openMap() {
 
 const methodBtn = (card: HTMLElement, name: string) => within(within(card).getByRole("group", { name: "지도 방법" })).getByRole("button", { name });
 
-describe("④ B 설계공간 지도 화면 (V3-S12-5)", () => {
+describe("⑤ 설계공간 지도 화면 (V3-S12-5, S14 이동)", () => {
   beforeEach(() => localStorage.clear());
   afterEach(() => {
     vi.restoreAllMocks();
@@ -139,7 +139,7 @@ describe("④ B 설계공간 지도 화면 (V3-S12-5)", () => {
     expect(fills.size).toBe(1);
   });
 
-  it("툴팁(DOE#·변수·값), 점 클릭 → 표 행 선택·DOE 칸·커브 강조, 표 행 클릭 → 지도 강조(맨 위)", async () => {
+  it("툴팁(DOE#·변수·값), 점 클릭 → 표 행 선택·커브 강조, 표 행 클릭 → 지도 강조(맨 위)", async () => {
     const { server } = renderApp(BATCH, { user: "power" });
     const card = await openMap();
     const run3 = getMap(server).runs.find((r) => r.doe_no === 3)!;
@@ -154,11 +154,13 @@ describe("④ B 설계공간 지도 화면 (V3-S12-5)", () => {
     fireEvent.mouseLeave(pt);
     expect(within(card).queryByTestId("dm-tip")).toBeNull();
     fireEvent.click(pt);
-    expect(await screen.findByRole("region", { name: "DOE #3" })).toBeTruthy();
     expect(screen.getByTestId("row-3").className).toContain("selected");
-    const curves = screen.getByRole("region", { name: "커브 겹쳐보기" });
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay.on").length).toBe(1));
     expect(within(card).getByRole("button", { name: "지도 점 DOE #3" }).getAttribute("aria-pressed")).toBe("true");
+    // 커브 탭(S14: 커브 겹쳐보기는 탭 안) — 고른 run만 진하게
+    fireEvent.click(within(card).getByRole("tab", { name: "커브" }));
+    const curves = within(card).getByRole("region", { name: "커브 겹쳐보기" });
+    await waitFor(() => expect(curves.querySelectorAll("path.overlay.on").length).toBe(1));
+    fireEvent.click(within(card).getByRole("tab", { name: "설계공간 지도" }));
     // 표에서 다른 행 → 지도 강조가 따라가고 맨 위(마지막)에 그린다
     fireEvent.click(screen.getByRole("button", { name: "DOE #9 선택" }));
     const p9 = within(card).getByRole("button", { name: "지도 점 DOE #9" });
@@ -168,16 +170,20 @@ describe("④ B 설계공간 지도 화면 (V3-S12-5)", () => {
     expect(pts[pts.length - 1]).toBe(p9);
   });
 
-  it("커브 계열 공유: 지도에서 바꾸면 커브 겹쳐보기도, 커브 겹쳐보기에서 바꾸면 지도도", async () => {
+  it("커브 계열 공유: 지도에서 바꾸면 커브 탭도, 커브 탭에서 바꾸면 지도도", async () => {
     renderApp(BATCH, { user: "power" });
     const card = await openMap();
-    const curves = screen.getByRole("region", { name: "커브 겹쳐보기" });
-    const overlaySel = (await within(curves).findByLabelText("계열")) as HTMLSelectElement;
+    fireEvent.click(within(card).getByRole("tab", { name: "커브" }));
+    const overlaySel = (await within(card).findByLabelText("계열")) as HTMLSelectElement;
     expect(overlaySel.value).toBe(S1);
+    fireEvent.click(within(card).getByRole("tab", { name: "설계공간 지도" }));
     fireEvent.change(within(card).getByLabelText("커브"), { target: { value: S2 } });
+    fireEvent.click(within(card).getByRole("tab", { name: "커브" }));
+    const curves = within(card).getByRole("region", { name: "커브 겹쳐보기" });
     await waitFor(() => expect((within(curves).getByLabelText("계열") as HTMLSelectElement).value).toBe(S2));
     expect(within(curves).getByRole("img").getAttribute("aria-label")).toBe(`커브 겹쳐보기: ${S2}`);
     fireEvent.change(within(curves).getByLabelText("계열"), { target: { value: S1 } });
+    fireEvent.click(within(card).getByRole("tab", { name: "설계공간 지도" }));
     await waitFor(() => expect((within(card).getByLabelText("커브") as HTMLSelectElement).value).toBe(S1));
   });
 
@@ -210,11 +216,11 @@ describe("④ B 설계공간 지도 화면 (V3-S12-5)", () => {
     expect(within(card).queryByRole("button", { name: "범위 해제" })).toBeNull();
     // 선 클릭 = 행 선택
     fireEvent.click(within(card).getByRole("button", { name: "선 DOE #4" }));
-    expect(await screen.findByRole("region", { name: "DOE #4" })).toBeTruthy();
+    await waitFor(() => expect(screen.getByTestId("row-4").className).toContain("selected"));
   });
 
   it("진행 중 배치: 5초 폴링마다 받지 않고 완료 수(succeeded)가 늘 때만 다시 받는다", async () => {
-    const { server } = renderApp(`${STUDY}/4/batch/pb-3`, { user: "power", batchDemo: "running" });
+    const { server } = renderApp(`${STUDY}/analysis?source=batch&id=pb-3`, { user: "power", batchDemo: "running" });
     const calls = recordCalls(server);
     const card = await openMap();
     const dmCalls = () => calls.filter((c) => c === "GET /predict-batches/pb-3/design-map").length;

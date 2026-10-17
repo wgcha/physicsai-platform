@@ -1,6 +1,7 @@
 // ④ B 응답 그래프 2D(phase3.md §14.8): x = 변수 반영값, y = 응답, 점 = DOE run, x 정렬 선, 선택 run 강조, 점 클릭 = 행 선택. 자체 SVG.
 import type { KeyboardEvent } from "react";
-import { niceTicks, tickLabel, useWidth } from "../../../components/Chart";
+import { niceTicks, tickLabel, useWidth } from "../../components/Chart";
+import { SourceLegend } from "./SourceLegend";
 
 export interface Pt2 {
   doe_no: number;
@@ -9,15 +10,23 @@ export interface Pt2 {
   y: number;
 }
 
-export function ResponsePlot2D({ pts, xLabel, yLabel, selected, onSelect }: { pts: Pt2[]; xLabel: string; yLabel: string; selected: number | null; onSelect: (doe: number) => void }) {
+/** 겹쳐 보기(S14 §19.6): 비교 표의 점 — hollow = 해석(solver, 속 빈 원), 아니면 예측(predict, 채운 점). 선택 불가 */
+export interface OtherPts {
+  pts: Pt2[];
+  hollow: boolean;
+  label: string;
+}
+
+export function ResponsePlot2D({ pts, xLabel, yLabel, selected, onSelect, hollow = false, label, other }: { pts: Pt2[]; xLabel: string; yLabel: string; selected: number | null; onSelect: (doe: number) => void; hollow?: boolean; label?: string; other?: OtherPts | null }) {
   const { ref, width } = useWidth<HTMLDivElement>(420);
   const height = Math.round(Math.max(240, Math.min(width * 0.62, 420)));
   const m = { l: 56, r: 12, t: 10, b: 40 };
   const iw = Math.max(40, width - m.l - m.r);
   const ih = Math.max(40, height - m.t - m.b);
   if (!pts.length) return <p className="muted small">응답 값이 있는 run이 아직 없습니다.</p>;
-  const xs = pts.map((p) => p.x);
-  const ys = pts.map((p) => p.y);
+  const all = other ? [...pts, ...other.pts] : pts;
+  const xs = all.map((p) => p.x);
+  const ys = all.map((p) => p.y);
   let [x0, x1] = [Math.min(...xs), Math.max(...xs)];
   let [y0, y1] = [Math.min(...ys), Math.max(...ys)];
   if (x0 === x1) [x0, x1] = [x0 - 1, x1 + 1];
@@ -60,7 +69,7 @@ export function ResponsePlot2D({ pts, xLabel, yLabel, selected, onSelect }: { pt
         {pts.map((p) => (
           <circle
             key={p.doe_no}
-            className={p.doe_no === selected ? "rpt on" : "rpt"}
+            className={`${p.doe_no === selected ? "rpt on" : "rpt"}${hollow ? " hollow" : ""}`}
             cx={sx(p.x)}
             cy={sy(p.y)}
             r={p.doe_no === selected ? 6 : 4}
@@ -74,7 +83,12 @@ export function ResponsePlot2D({ pts, xLabel, yLabel, selected, onSelect }: { pt
             <title>{`DOE #${p.doe_no} · ${xLabel} ${tickLabel(p.x)} · ${yLabel} ${tickLabel(p.y)}`}</title>
           </circle>
         ))}
-        {sel && <circle className="rpt on" cx={sx(sel.x)} cy={sy(sel.y)} r={6} pointerEvents="none" />}
+        {other?.pts.map((p) => (
+          <circle key={`o${p.doe_no}`} className={`rpt other${other.hollow ? " hollow" : ""}`} cx={sx(p.x)} cy={sy(p.y)} r={4} data-testid="plot2d-other">
+            <title>{`${other.label} #${p.doe_no} · ${xLabel} ${tickLabel(p.x)} · ${yLabel} ${tickLabel(p.y)}`}</title>
+          </circle>
+        ))}
+        {sel && <circle className={`rpt on${hollow ? " hollow" : ""}`} cx={sx(sel.x)} cy={sy(sel.y)} r={6} pointerEvents="none" />}
         <text className="chart-label" x={m.l + iw / 2} y={height - 6} textAnchor="middle">
           {xLabel}
         </text>
@@ -82,6 +96,7 @@ export function ResponsePlot2D({ pts, xLabel, yLabel, selected, onSelect }: { pt
           {yLabel}
         </text>
       </svg>
+      {other && <SourceLegend items={[{ label: label ?? "기본", hollow }, { label: other.label, hollow: other.hollow }]} />}
     </div>
   );
 }

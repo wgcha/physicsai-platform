@@ -1,6 +1,6 @@
 // S12 세로 색 막대(phase3.md §17.6): 머리 = 지표 라벨·단위, 위 최대·아래 최소 숫자(fmtNum). 값 전부 같으면 색 1개(중간색)·숫자 1개.
 import { useId } from "react";
-import { fmtNum } from "../../../../lib/format";
+import { fmtNum } from "../../../lib/format";
 import { VIRIDIS, viridis } from "./colormap";
 
 export function Colorbar({ label, min, max, height }: { label: string; min: number; max: number; height: number }) {

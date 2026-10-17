@@ -1,54 +1,48 @@
-// ④ B 설계공간 지도(phase3.md §17 S12, D3-59): run마다 변수 벡터(반영값)를 PLS(기본)·PCA로 2차원에 투영하거나 평행 좌표로 펼치고,
-// 색 = 고른 값(기본 "선택 커브의 최대값"). 표·커브 겹쳐보기와 같은 선택 모델(selected = doe_no), 커브 계열은 BatchResult와 공유.
-// 대표값은 GET /predict-batches/{bid}/design-map(백엔드 계산), 투영은 여기(linalg.ts). 다시 받기는 version(완료 수·상태)이 바뀔 때만.
+// ⑤ 설계공간 지도(phase3.md §17 S12 → §19 S14 이동): run마다 변수 벡터(반영값)를 PLS(기본)·PCA로 2차원에 투영하거나 평행 좌표로 펼치고,
+// 색 = 고른 값(기본 "선택 커브의 최대값", 해석 DOE는 첫 응답). 표·커브 겹쳐보기와 같은 선택 모델(selected = run 번호), 커브 계열은 화면(StageAnalysis)과 공유.
+// 입력은 결과 표(analysis/resultTable) — 대표값(커브·RESP)은 ④ 어댑터가 design-map API에서 가져와 표에 실어 둔다. 계산 규칙은 designMapData·linalg 그대로.
+// 겹쳐 보기(other): 두 표를 한 DesignMap으로 합쳐 같은 축·색 범위(합집합)로 그린다(tableMap.ts).
 import { useEffect, useMemo, useState } from "react";
-import { errorMessage } from "../../../../api";
-import { designMapApi, type DesignMap as DM } from "../../../../api/designMap";
 import { colorScale } from "./colormap";
 import { Colorbar } from "./Colorbar";
 import { buildMapData, METHODS, metricLabel, noteLines, parallelAxes, pickMetric, project, readPrefs, TEXT, writePrefs, type Method } from "./designMapData";
 import { ParallelCoords } from "./ParallelCoords";
 import { ProjectionPlot } from "./ProjectionPlot";
-import "../../../../styles/designMap.css";
+import { designMapOf, mergedDesignMap, tagMerged } from "./tableMap";
+import { SourceLegend } from "../SourceLegend";
+import { NO_COMMON_RESP_TEXT } from "../../compare";
+import type { ResultTable } from "../../resultTable";
+import "../../../styles/designMap.css";
 
-export function DesignMap({ batchId, version, selected, onSelect, series, onSeries }: { batchId: string; version: string; selected: number | null; onSelect: (doe: number) => void; series: string | null; onSeries: (s: string) => void }) {
-  const [dm, setDm] = useState<DM | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function DesignMap({ table, other, selected, onSelect, series, onSeries }: { table: ResultTable; other?: ResultTable | null; selected: number | null; onSelect: (doe: number) => void; series: string | null; onSeries: (s: string) => void }) {
   const [prefs] = useState(readPrefs);
   const [method, setMethod] = useState<Method>(prefs.method ?? "pls");
   const [metricId, setMetricId] = useState<string | undefined>(prefs.metric);
   const [arrows, setArrows] = useState<boolean>(prefs.arrows ?? true);
+  const dm = useMemo(() => (other ? mergedDesignMap(table, other) : designMapOf(table)), [table, other]);
+  // 저장된 계열이 이 표에 있으면 공유 계열로(커브 겹쳐보기도 따라감)
   useEffect(() => {
-    let alive = true;
-    designMapApi
-      .get(batchId)
-      .then((d) => alive && (setDm(d), setError(null)))
-      .catch((e) => alive && setError(errorMessage(e)));
-    return () => {
-      alive = false;
-    };
-  }, [batchId, version]);
-  // 저장된 계열이 이 배치에 있으면 공유 계열로(커브 겹쳐보기도 따라감)
-  useEffect(() => {
-    if (dm && series === null && prefs.series && prefs.series !== dm.series[0] && dm.series.includes(prefs.series)) onSeries(prefs.series);
+    if (series === null && prefs.series && prefs.series !== dm.series[0] && dm.series.includes(prefs.series)) onSeries(prefs.series);
   }, [dm]);
 
-  const metric = dm ? pickMetric(dm.metrics, metricId) : undefined;
-  const curSeries = dm ? (series && dm.series.includes(series) ? series : dm.series[0] ?? null) : null;
-  const data = useMemo(() => (dm && metric ? buildMapData(dm, metric.id, metric.needs_series ? curSeries : null) : null), [dm, metric?.id, curSeries]);
+  const metric = pickMetric(dm.metrics, metricId);
+  const curSeries = series && dm.series.includes(series) ? series : dm.series[0] ?? null;
+  const data = useMemo(() => {
+    if (!metric) return null;
+    const d = buildMapData(dm, metric.id, metric.needs_series ? curSeries : null);
+    return other ? tagMerged(d, table.source === "solver", other.source === "solver") : d;
+  }, [dm, metric?.id, curSeries, other, table.source]);
   const label = metricLabel(metric);
   const proj = useMemo(() => (data && method !== "pc" ? project(data, method, label) : null), [data, method, label]);
   const axes = useMemo(() => (data && method === "pc" ? parallelAxes(data, label) : []), [data, method, label]);
   useEffect(() => {
-    if (dm && metric) writePrefs({ method, metric: metric.id, series: curSeries, arrows });
-  }, [dm, method, metric?.id, curSeries, arrows]);
+    if (metric) writePrefs({ method, metric: metric.id, series: curSeries, arrows });
+  }, [method, metric?.id, curSeries, arrows]);
 
-  if (error && !dm) return <p className="error-text small">{error}</p>;
-  if (!dm) return <p className="muted small">불러오는 중…</p>;
   if (!metric || !data)
     return (
       <p className="muted small" data-testid="dm-message">
-        {TEXT.noMetric}
+        {other ? NO_COMMON_RESP_TEXT : TEXT.noMetric}
       </p>
     );
   const colorOf = colorScale(data.vmin, data.vmax);
@@ -109,13 +103,14 @@ export function DesignMap({ batchId, version, selected, onSelect, series, onSeri
           <Colorbar label={label} min={data.vmin} max={data.vmax} height={method === "pc" ? 200 : 240} />
         </div>
       )}
+      {other && <SourceLegend items={[{ label: table.origin.label, hollow: table.source === "solver" }, { label: other.origin.label, hollow: other.source === "solver" }]} />}
       <p className="muted small dm-notes" data-testid="dm-notes">
         {proj && proj.kind !== "message" && proj.note ? <span data-testid="dm-note">{proj.note}</span> : null}
         {notes.map((t) => (
           <span key={t}>{t}</span>
         ))}
         <span>점 {data.runs.length}개</span>
-        <span>{TEXT.footer}</span>
+        <span>{other ? `${TEXT.footer} · 색 범위 = 두 표 합집합` : TEXT.footer}</span>
       </p>
     </div>
   );

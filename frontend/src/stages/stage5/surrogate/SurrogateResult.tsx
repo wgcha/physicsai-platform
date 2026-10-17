@@ -65,7 +65,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
 
   return (
     <>
-      <Card span={9} title={`내장 최적화 ${o.label}`} className="so-head" aside={<Link className="small" to={`${base}/stage/5`}>⑤ 실행 목록</Link>}>
+      <Card span={9} title={`내장 최적화 ${o.label}`} className="so-head" aside={<Link className="small" to={`${base}/stage/5`}>⑥ 실행 목록</Link>}>
         <div className="run-action-row">
           <span className={`pill ${soTone(o.status)}`} data-testid="so-status">{SO_STATUS_LABEL[o.status] ?? o.status}</span>
           <span data-testid="so-progress">{o.progress_text}</span>

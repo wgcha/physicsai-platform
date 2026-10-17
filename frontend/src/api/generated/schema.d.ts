@@ -1414,6 +1414,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/train-does/{doe_id}/result-table": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Doe Result Table
+         * @description ⑤ 결과분석 입력(s14 §19.5): 샘플 표 + 응답 + run 상태. 읽기 전용, 파일 LRU, 본문 비저장.
+         */
+        get: operations["doe_result_table_physicsai_api_train_does__doe_id__result_table_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/train-does/{doe_id}/runs": {
         parameters: {
             query?: never;
@@ -2134,6 +2154,87 @@ export interface components {
              * @enum {string}
              */
             type: "combo" | "int" | "bool";
+        };
+        /** DoeResultCounts */
+        DoeResultCounts: {
+            /** No Response */
+            no_response: number;
+            /** Total */
+            total: number;
+            /** Usable */
+            usable: number;
+        };
+        /** DoeResultMeta */
+        DoeResultMeta: {
+            /** Baseline Id */
+            baseline_id?: string | null;
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Scene */
+            scene?: string | null;
+        };
+        /** DoeResultParameter */
+        DoeResultParameter: {
+            /** Integer */
+            integer: boolean;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** DoeResultResponse */
+        DoeResultResponse: {
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** DoeResultRow */
+        DoeResultRow: {
+            /** No */
+            no: number;
+            /** Params */
+            params: {
+                [key: string]: number | null;
+            };
+            /** Responses */
+            responses: {
+                [key: string]: number | null;
+            };
+            /** Run Id */
+            run_id: string;
+            /** State */
+            state: string;
+        };
+        /**
+         * DoeResultTable
+         * @description ⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용.
+         */
+        DoeResultTable: {
+            counts: components["schemas"]["DoeResultCounts"];
+            /** Doe Id */
+            doe_id: string;
+            /** Influence Ok */
+            influence_ok: boolean;
+            /** Label */
+            label: string;
+            meta: components["schemas"]["DoeResultMeta"];
+            /** Notes */
+            notes: string[];
+            /** Parameters */
+            parameters: components["schemas"]["DoeResultParameter"][];
+            /** Responses */
+            responses: components["schemas"]["DoeResultResponse"][];
+            /** Rows */
+            rows: components["schemas"]["DoeResultRow"][];
+            /** Study Id */
+            study_id: string;
+            /** Type */
+            type: string;
         };
         /** DoeType */
         DoeType: {
@@ -8697,6 +8798,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrainDoe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    doe_result_table_physicsai_api_train_does__doe_id__result_table_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoeResultTable"];
                 };
             };
             /** @description Forbidden */

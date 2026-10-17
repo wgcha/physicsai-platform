@@ -71,19 +71,6 @@ export function plotKind(vars: string[], resps: string[]): PlotKind {
 }
 export const PLOT_HINT = "변수 1~2개와 응답 1개를 고르세요";
 
-/** 그래프 점: 반영값(정수 반올림 후) 기준, 응답 값이 있는 행만 */
-export function plotPoints(rows: PredictBatchRow[], vars: string[], resp: string) {
-  const out: { doe_no: number; run_key: string; v: number[]; r: number }[] = [];
-  for (const row of rows) {
-    const r = row.responses?.[resp];
-    if (typeof r !== "number" || !Number.isFinite(r)) continue;
-    const v = vars.map((n) => row.applied_values?.[n] ?? row.values[n]);
-    if (v.some((x) => typeof x !== "number" || !Number.isFinite(x))) continue;
-    out.push({ doe_no: row.doe_no, run_key: row.run_key, v, r });
-  }
-  return out;
-}
-
 /** "B-003 run__00007" 폴더 이름 → 짧은 표시 */
 export function runFolderName(folder: string, runKey: string): string {
   return folder.split(/[\\/]/).filter(Boolean).pop() || runKey;

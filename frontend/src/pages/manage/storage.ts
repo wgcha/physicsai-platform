@@ -7,8 +7,8 @@ export const STORAGE_GROUPS = [
   { key: "s1", label: "① 학습데이터", match: (k: string) => k.startsWith("01_") },
   { key: "s2", label: "② 데이터 정리", match: (k: string) => k.startsWith("02_") },
   { key: "s3", label: "③ 데이터셋·모델", match: (k: string) => k.startsWith("03_") },
-  { key: "s4", label: "④ 단일 예측", match: (k: string) => k.startsWith("04_") },
-  { key: "s5", label: "⑤ 최적화", match: (k: string) => k.startsWith("05_") },
+  { key: "s4", label: "④ 예측", match: (k: string) => k.startsWith("04_") },
+  { key: "s5", label: "⑥ 최적화", match: (k: string) => k.startsWith("05_") },
   { key: "common", label: "공통", match: (k: string) => k === "logs" || k === "00_inbox" || k === "(기타)" },
   { key: "backup", label: "백업", match: (k: string) => k === "_backup" },
 ] as const;
