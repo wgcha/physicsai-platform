@@ -1,5 +1,6 @@
 // ④ B 커브 겹쳐보기(phase3.md §14.8): 완료 run의 같은 이름 커브를 한 그래프에 — 모두 흐리게(불투명 0.25), 고른 run만 진하게.
 // 상한: run 200개(서버 curve_max_runs, 넘으면 앞쪽만 + truncated), 계열당 점 ≤ max_points(구간 최소·최대 보존 다운샘플). 화면도 같은 상한으로 한 번 더 막는다.
+// 계열(name)은 BatchResult가 갖는다(S12 §17.6 — 설계공간 지도의 "커브" 선택과 공유, null = 서버 기본 첫 계열).
 import { useEffect, useMemo, useState } from "react";
 import { api, type BatchCurves } from "../../../api";
 import { Chart } from "../../../components/Chart";
@@ -19,8 +20,7 @@ export function overlayLines(c: BatchCurves | null, selected: number | null) {
   });
 }
 
-export function CurveOverlay({ batchId, selected, version }: { batchId: string; selected: number | null; version: number }) {
-  const [name, setName] = useState<string | null>(null);
+export function CurveOverlay({ batchId, selected, version, name, onName }: { batchId: string; selected: number | null; version: number; name: string | null; onName: (n: string) => void }) {
   const [data, setData] = useState<BatchCurves | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -42,7 +42,7 @@ export function CurveOverlay({ batchId, selected, version }: { batchId: string; 
       {data.names.length > 1 && (
         <label className="inline-field">
           계열
-          <select value={data.name ?? ""} onChange={(e) => setName(e.target.value)}>
+          <select value={data.name ?? ""} onChange={(e) => onName(e.target.value)}>
             {data.names.map((n) => (
               <option key={n}>{n}</option>
             ))}

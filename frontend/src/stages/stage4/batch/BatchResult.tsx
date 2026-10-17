@@ -1,6 +1,7 @@
 // ④ B 일괄 예측 진행·결과(phase3.md §14.8, 시안 04, 라우트 …/stage/4/batch/:batchId):
 // 위 3칸(입력 생성 x/N · 예측 실행 중·대기·완료 · 파일 위치) + 결과 표(정렬·CSV·행 선택·실패만 다시·일괄 취소)
-// + 오른쪽: 응답 그래프(표 머리에서 변수 체크·응답 라디오 → 2D/3D/안내) · 커브 겹쳐보기 · 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증).
+// + 오른쪽: 그래프 카드(BatchGraphTabs — 탭 변수–응답·설계공간 지도(S12)) · 커브 겹쳐보기 · 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증).
+// 선택 모델: selected(doe_no)를 표·그래프·지도·커브가 공유, 커브 계열(series)도 커브 겹쳐보기·설계공간 지도가 공유(§17.6).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, errorMessage, type Job, type PredictBatch, type PredictBatchRow, type PredictResult as PR, type ViewKey } from "../../../api";
@@ -18,11 +19,10 @@ import { ResultListTree } from "../PredictResult";
 import { fmtDuration } from "../PredictSteps";
 import { OutDot } from "./BatchPreview";
 import { CurveOverlay } from "./CurveOverlay";
-import { ResponsePlot2D } from "./ResponsePlot2D";
-import { ResponsePlot3D } from "./ResponsePlot3D";
+import { BatchGraphTabs } from "./BatchGraphTabs";
 import { writeBatchTab } from "./BatchMode";
 import { writeInputMode } from "../InputModeTabs";
-import { BATCH_STATUS_LABEL, PLOT_HINT, ROW_STATE_LABEL, isBatchActive, isRowFailed, rowTone, plotKind, plotPoints, sortOptions, sortRows, type SortKey } from "./batchTable";
+import { BATCH_STATUS_LABEL, ROW_STATE_LABEL, isBatchActive, isRowFailed, rowTone, sortOptions, sortRows, type SortKey } from "./batchTable";
 
 export const FILE_NOTE = "파일 이름은 모두 같고 폴더 번호로 구분합니다";
 export const NO_RESP_TEXT = "응답 추출 미구성";
@@ -39,6 +39,8 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const [vars, setVars] = useState<string[] | null>(null);
   const [resp, setResp] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  /** 커브 계열(커브 겹쳐보기·설계공간 지도 공유, null = 첫 계열) */
+  const [series, setSeries] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   /** S10: 컨투어 방향은 run을 바꿔도 유지(비교용) */
   const [mediaView, setMediaView] = useState<ViewKey | null>(null);
@@ -64,15 +66,10 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const rows = useMemo(() => (b ? sortRows(b.rows, sortKey) : []), [b, sortKey]);
   const pickVars = vars ?? (b?.parameters.slice(0, 1) ?? []);
   const pickResp = resp ?? respNames[0] ?? null;
-  const kind = plotKind(pickVars, pickResp ? [pickResp] : []);
   const selRow = b?.rows.find((r) => r.doe_no === selected) ?? null;
   useEffect(() => {
     if (selected === null && rows.length) setSelected((rows.find((r) => r.state === "SUCCEEDED") ?? rows[0]).doe_no);
   }, [rows, selected]);
-
-  const pts = useMemo(() => (b && pickResp && kind !== "none" ? plotPoints(b.rows, pickVars, pickResp) : []), [b, pickResp, kind, pickVars.join("|")]);
-  const labels3 = useMemo(() => [pickVars[0] ?? "", pickVars[1] ?? "", pickResp ?? ""] as [string, string, string], [pickVars.join("|"), pickResp]);
-  const pts3 = useMemo(() => pts.map((p) => ({ doe_no: p.doe_no, run_key: p.run_key, x: p.v[0], y: p.v[1], z: p.r })), [pts]);
 
   if (error && !b) return <Card span={9} title="일괄 예측"><p className="error-text">{error}</p></Card>;
   if (!b) return <Card span={9} title="일괄 예측"><p className="muted">불러오는 중…</p></Card>;
@@ -232,19 +229,9 @@ export function BatchResult({ batchId }: { batchId: string }) {
       </Card>
 
       <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} />
-      <Card span={3} title="응답 그래프" className="batch-plot">
-        {kind === "none" || !pickResp ? (
-          <p className="muted small" data-testid="plot-hint">
-            {showResp ? PLOT_HINT : NO_RESP_TEXT}
-          </p>
-        ) : kind === "2d" ? (
-          <ResponsePlot2D pts={pts.map((p) => ({ doe_no: p.doe_no, run_key: p.run_key, x: p.v[0], y: p.r }))} xLabel={pickVars[0]} yLabel={pickResp} selected={selected} onSelect={setSelected} />
-        ) : (
-          <ResponsePlot3D pts={pts3} labels={labels3} selected={selected} onSelect={setSelected} />
-        )}
-      </Card>
+      <BatchGraphTabs b={b} showResp={showResp} noRespText={NO_RESP_TEXT} pickVars={pickVars} pickResp={pickResp} selected={selected} onSelect={setSelected} series={series} onSeries={setSeries} />
       <Card span={3} title="커브 겹쳐보기" className="batch-curves">
-        <CurveOverlay batchId={b.id} selected={selected} version={b.predict.succeeded} />
+        <CurveOverlay batchId={b.id} selected={selected} version={b.predict.succeeded} name={series} onName={setSeries} />
       </Card>
 
       {confirmCancel && (

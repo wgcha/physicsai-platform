@@ -1,5 +1,6 @@
 // phase3.md §14 S9 목: 조합 계산(batch_matrix 흉내)·미리보기·PREDICT_BATCH 생성·진행·하위 PREDICT·결과 표·CSV·커브·
 // 일괄 취소·실패만 다시·템플릿 응답 저장. 배치 상태는 하위 작업(재시도 사슬 포함)에서 매번 계산한다(목 단순화).
+// S12(§17.4): GET /predict-batches/{bid}/design-map — 완료 run의 curve.json 계열별 max·min·|max|, RESP(가짜 응답 함수의 _MAX·_MIN), 결과 표 값.
 // 시드: s-cushion에 끝난 배치 B-002(20 run, 생성 실패 1·예측 실패 1). MockOptions.batchDemo="running"이면 진행 중 B-003도 넣는다(대기열에 하위 12개).
 import type {
   BatchCurves,
@@ -24,6 +25,7 @@ import { PREVIEW_JSON, baseJob, contourSvg, curveJson, iso, makeSteps, responseF
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import { captureMedia } from "./capture";
 import type { MockServer } from "./server";
+import type { DesignMap, DesignMapCurveStats, DesignMapMetric, DesignMapRun } from "../api/designMap";
 
 export const BATCH_MAX_RUNS = 200;
 export const BATCH_TABLE_MAX_BYTES = 1048576;
@@ -446,6 +448,75 @@ function curvesOut(srv: MockServer, b: PredictBatch, name: string | null, maxPoi
   return { names, name: pick, truncated: done.length > CURVE_MAX_RUNS, downsampled, series };
 }
 
+// ------------------------------------------------------------------ S12 설계공간 지도(백엔드 run_metrics·design_map 흉내)
+const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+export function curveStatsOf(series: { name: string; x: number[]; y: number[] }[]): Record<string, DesignMapCurveStats> {
+  const out: Record<string, DesignMapCurveStats> = {};
+  for (const s of series) {
+    if (Object.keys(out).length >= 50) break;
+    if (!s?.name || out[s.name] || !Array.isArray(s.y) || s.y.length !== s.x?.length || !s.y.length || ![...s.x, ...s.y].every(fin)) continue;
+    let iMax = 0;
+    let iMin = 0;
+    s.y.forEach((v, i) => {
+      if (v > s.y[iMax]) iMax = i;
+      if (v < s.y[iMin]) iMin = i;
+    });
+    const [hi, lo] = [s.y[iMax], s.y[iMin]];
+    out[s.name] = { max: hi, min: lo, absmax: Math.max(Math.abs(hi), Math.abs(lo)), x_at_max: s.x[iMax], x_at_min: s.x[iMin], n: s.y.length };
+  }
+  return out;
+}
+
+function designMapOut(srv: MockServer, b: PredictBatch): DesignMap {
+  const ps = srv.paramSets.find((p) => p.id === b.param_set.id)!;
+  const ints = new Set(ps.tpl_params.filter((t) => isIntegerFormat(t.format)).map((t) => t.name));
+  const h3d = ps.responses.filter((r) => r.spec);
+  const units = Object.fromEntries(ps.responses.map((r) => [r.name, r.unit || null]));
+  const series: string[] = [];
+  const respKeys = new Set<string>();
+  const counts = { total: b.rows.length, succeeded: 0, no_curve: 0, no_resp: 0 };
+  const runs: DesignMapRun[] = b.rows.map((r) => {
+    const values = Object.fromEntries(b.parameters.filter((n) => fin(r.applied_values[n])).map((n) => [n, r.applied_values[n]]));
+    const row: DesignMapRun = { doe_no: r.doe_no, run_key: r.run_key, state: r.state, values, curve: null, resp: null, tbl: null };
+    if (r.state !== "SUCCEEDED" || !r.job_id) return row;
+    counts.succeeded++;
+    const j = srv.jobs.find((x) => x.id === r.job_id);
+    const a = srv.artifacts.find((x) => x.id === (j?.result as { curve_artifact_id?: string } | null)?.curve_artifact_id);
+    const cs = a ? curveStatsOf((JSON.parse(a.body) as { series: { name: string; x: number[]; y: number[] }[] }).series) : {};
+    if (Object.keys(cs).length) {
+      row.curve = cs;
+      for (const k of Object.keys(cs)) if (!series.includes(k)) series.push(k);
+    } else counts.no_curve++;
+    if (h3d.length) {
+      const pred = responseFn(r.applied_values);
+      row.resp = Object.fromEntries(h3d.flatMap((x) => (fin(pred[x.name]) ? [[`${x.name}_MAX`, round4(pred[x.name])], [`${x.name}_MIN`, round4(pred[x.name] * 0.04)]] : [])));
+      Object.keys(row.resp).forEach((k) => respKeys.add(k));
+    } else counts.no_resp++;
+    row.tbl = r.responses ?? {};
+    return row;
+  });
+  const metrics: DesignMapMetric[] = [];
+  if (series.length)
+    metrics.push(
+      { id: "curve:max", label: "커브 최대값", unit: null, needs_series: true },
+      { id: "curve:min", label: "커브 최소값", unit: null, needs_series: true },
+      { id: "curve:absmax", label: "커브 |최대|", unit: null, needs_series: true },
+    );
+  for (const k of [...respKeys].sort()) {
+    const name = k.slice(0, k.lastIndexOf("_"));
+    metrics.push({ id: `resp:${k}`, label: `${name} ${k.endsWith("_MAX") ? "최대" : "최소"}(RESP)`, unit: units[name] ?? null, needs_series: false });
+  }
+  if (!runs.some((x) => x.resp))
+    for (const r of ps.responses)
+      if (runs.some((x) => fin(x.tbl?.[r.name]))) metrics.push({ id: `tbl:${r.name}`, label: `${r.name}(결과 표)`, unit: r.unit || null, needs_series: false });
+  return {
+    batch_id: b.id, label: b.label, status: b.status,
+    parameters: ps.parameters.map((p) => ({ name: p.name, integer: ints.has(p.name), min: p.min, max: p.max })),
+    series, metrics, runs, counts,
+  };
+}
+
 /** §14.7 일괄 예측 라우트 + PUT /param-sets/{id}/responses */
 export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me }) => {
   if (seg[0] === "studies" && seg[2] === "predict-batches") {
@@ -475,6 +546,7 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
     const out = batchOut(srv, b);
     if (method === "GET" && !seg[2]) return ok(out);
     if (method === "GET" && seg[2] === "table.csv") return { status: 200, text: csvOut(out), contentType: "text/csv; charset=utf-8" };
+    if (method === "GET" && seg[2] === "design-map") return ok(designMapOut(srv, out));
     if (method === "GET" && seg[2] === "curves") return ok(curvesOut(srv, out, query.get("name"), Math.min(2000, Number(query.get("max_points") ?? 500))));
     const d = needPower(srv, s.project_id);
     if (d) return d;

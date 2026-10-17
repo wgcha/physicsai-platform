@@ -6,6 +6,8 @@
 //                                                                 → SHOT_OUT 또는 screenshots/tone/)
 //       npm run build:mock && node scripts/screenshots.mjs scx    (S11 SCX D3-58: ① 확인 필요 행·조치, ④ 검증 해석(SCX), 다크·라이트
 //                                                                 → SHOT_OUT 또는 screenshots/scx/)
+//       npm run build:mock && node scripts/screenshots.mjs designmap  (S12 설계공간 지도 D3-59: ④ 일괄 결과 PLS·평행 좌표, 다크·라이트 1920
+//                                                                 → SHOT_OUT 또는 screenshots/designmap/)
 // 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
@@ -63,7 +65,8 @@ const phase2 = process.argv.includes("phase2");
 const phase3 = process.argv.includes("phase3");
 const tone = process.argv.includes("tone");
 const scx = process.argv.includes("scx");
-const out = scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
+const designmap = process.argv.includes("designmap");
+const out = designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
@@ -85,11 +88,25 @@ async function showUnknown(page) {
   await page.waitForSelector('[data-testid="hpc-resolve"]', { timeout: 15000 });
   await page.evaluate(() => document.querySelector('[data-testid="hpc-resolve"]')?.scrollIntoView({ block: "center" }));
 }
+// designmap: 그래프 카드 "설계공간 지도" 탭 → (평행 좌표) → DOE 하나 고르고 카드를 화면에 맞춘다
+async function openMap(page, method) {
+  await page.getByRole("tab", { name: "설계공간 지도" }).click();
+  await page.waitForSelector('[data-testid="design-map"] svg');
+  if (method) await page.getByRole("group", { name: "지도 방법" }).getByRole("button", { name: method }).click();
+  await page.locator('[data-testid^="row-"] button.link').nth(2).click();
+  await page.evaluate(() => document.querySelector(".batch-plot")?.scrollIntoView({ block: "center" }));
+  await page.waitForTimeout(400);
+}
 async function openDrawer(page) {
   await page.getByTestId("chip-queue").click();
   await page.waitForSelector('[role="dialog"][aria-modal="true"] .qrow');
 }
-const shots = scx
+const shots = designmap
+  ? [
+      { name: "stage4_batch_map_pls", url: `${S}/4/batch/pb-2?${q}`, wait: ".batch-table-card", act: (p) => openMap(p, null), noFull: true },
+      { name: "stage4_batch_map_pc", url: `${S}/4/batch/pb-2?${q}`, wait: ".batch-table-card", act: (p) => openMap(p, "평행 좌표"), noFull: true },
+    ]
+  : scx
   ? [
       { name: "stage1_scx_unknown", url: `${S}/1?${q}&hpc=scx&scx=unknown`, wait: ".workarea .card", act: showUnknown, noFull: true },
       { name: "stage4_scx", url: `${S}/4?${q}&hpc=scx`, wait: ".workarea .card" },
@@ -121,7 +138,9 @@ const shots = scx
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
     ];
-const sizes = tone || scx
+const sizes = designmap
+  ? [{ w: 1920, h: 1080 }]
+  : tone || scx
   ? [
       { w: 1920, h: 1080 },
       { w: 1280, h: 800 },
@@ -132,7 +151,7 @@ const sizes = tone || scx
       { w: 1280, h: 800 },
     ];
 // 테마(대시보드 localStorage 키) — tone은 다크·라이트 둘 다, 나머지는 기본(dark)
-const themes = tone || scx ? ["dark", "light"] : [null];
+const themes = tone || scx || designmap ? ["dark", "light"] : [null];
 
 const browser = await chromium.launch();
 const report = [];

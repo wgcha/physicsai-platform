@@ -1,0 +1,154 @@
+/* ④ B 설계공간 지도(phase3.md §17.6 S12): 점·선 색 = viridis(값, 인라인 fill·stroke), 고른 run = accent 테두리·맨 위.
+   글자·모서리·그림자는 토큰만(D3-55 대시보드 톤). DesignMap.tsx에서 import. */
+.graph-tabs[role="tablist"] {
+  gap: var(--space-4);
+}
+.design-map {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.dm-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+}
+.dm-head select {
+  max-width: 220px;
+}
+.dm-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-2);
+  align-items: start;
+}
+.dm-plot {
+  position: relative;
+}
+.dm-frame {
+  fill: none;
+  stroke: var(--color-chart-axis);
+}
+.dm-zero {
+  stroke: var(--color-chart-axis);
+  stroke-dasharray: 3 3;
+}
+.dm-axis-label {
+  cursor: help;
+}
+.dm-pt {
+  stroke: var(--color-surface-1);
+  stroke-width: 1;
+  cursor: pointer;
+}
+.dm-pt:focus-visible {
+  outline: none;
+  stroke: var(--color-focus);
+  stroke-width: 2;
+}
+.dm-pt.on {
+  stroke: var(--color-accent);
+  stroke-width: 3;
+}
+.dm-arrow line {
+  stroke: var(--color-text-muted);
+  stroke-width: 1.2;
+}
+.dm-arrow text {
+  font: var(--font-r-medium);
+  fill: var(--color-text);
+  paint-order: stroke;
+  stroke: var(--color-surface-1);
+  stroke-width: 3;
+}
+.dm-arrowhead {
+  fill: var(--color-text-muted);
+}
+.dm-tip {
+  position: absolute;
+  z-index: 2;
+  pointer-events: none;
+  max-width: 260px;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  box-shadow: var(--shadow-pop);
+  color: var(--color-text);
+  font: var(--font-r);
+}
+/* 평행 좌표 */
+.dm-line {
+  fill: none;
+  stroke-width: 1.4;
+  stroke-opacity: 0.85;
+  cursor: pointer;
+}
+.dm-line.dim {
+  stroke-opacity: 0.12;
+}
+.dm-line.on {
+  stroke: var(--color-accent);
+  stroke-width: 3;
+  stroke-opacity: 1;
+}
+.dm-line:focus-visible {
+  outline: none;
+  stroke-width: 3;
+}
+.dm-axis.value .chart-axis {
+  stroke: var(--color-text-muted);
+  stroke-width: 2;
+}
+.dm-brush {
+  fill: var(--color-info-surface);
+  fill-opacity: 0.6;
+  stroke: var(--color-accent);
+}
+.dm-brush-hit {
+  fill: transparent;
+  cursor: ns-resize;
+}
+.dm-brush-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: var(--control-h-sm);
+}
+/* 색 막대 */
+.dm-colorbar {
+  margin: 0;
+  display: grid;
+  gap: var(--space-1);
+  justify-items: start;
+}
+.dm-colorbar-head {
+  font: var(--font-r-strong);
+  color: var(--color-text-muted);
+  max-width: 96px;
+  overflow-wrap: anywhere;
+}
+.dm-colorbar-body {
+  display: flex;
+  gap: var(--space-1);
+}
+.dm-colorbar-ramp {
+  stroke: var(--color-border-strong);
+}
+.dm-colorbar-ticks {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font: var(--font-r-mono);
+  color: var(--color-text);
+}
+.dm-colorbar-ticks .dm-colorbar-mid {
+  margin: auto 0;
+}
+.dm-notes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 var(--space-4);
+  margin: 0;
+}

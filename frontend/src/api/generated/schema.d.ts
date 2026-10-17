@@ -691,6 +691,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/predict-batches/{batch_id}/design-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Batch Design Map
+         * @description 설계공간 지도(§17.4 S12): run별 반영값 + 대표값(커브 계열별 max·min·|max|, RESP, 결과 표). 파일별 캐시.
+         */
+        get: operations["batch_design_map_physicsai_api_predict_batches__batch_id__design_map_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/predict-batches/{batch_id}/retry-failed": {
         parameters: {
             query?: never;
@@ -1842,6 +1862,97 @@ export interface components {
             study_id: string;
             /** Train Count */
             train_count?: number | null;
+        };
+        /** DesignMap */
+        DesignMap: {
+            /** Batch Id */
+            batch_id: string;
+            counts: components["schemas"]["DesignMapCounts"];
+            /** Label */
+            label: string;
+            /** Metrics */
+            metrics: components["schemas"]["DesignMapMetric"][];
+            /** Parameters */
+            parameters: components["schemas"]["DesignMapParameter"][];
+            /** Runs */
+            runs: components["schemas"]["DesignMapRun"][];
+            /** Series */
+            series: string[];
+            /** Status */
+            status: string;
+        };
+        /** DesignMapCounts */
+        DesignMapCounts: {
+            /** No Curve */
+            no_curve: number;
+            /** No Resp */
+            no_resp: number;
+            /** Succeeded */
+            succeeded: number;
+            /** Total */
+            total: number;
+        };
+        /** DesignMapCurveStats */
+        DesignMapCurveStats: {
+            /** Absmax */
+            absmax: number;
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** N */
+            n: number;
+            /** X At Max */
+            x_at_max: number;
+            /** X At Min */
+            x_at_min: number;
+        };
+        /** DesignMapMetric */
+        DesignMapMetric: {
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Needs Series */
+            needs_series: boolean;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** DesignMapParameter */
+        DesignMapParameter: {
+            /** Integer */
+            integer: boolean;
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Name */
+            name: string;
+        };
+        /** DesignMapRun */
+        DesignMapRun: {
+            /** Curve */
+            curve?: {
+                [key: string]: components["schemas"]["DesignMapCurveStats"];
+            } | null;
+            /** Doe No */
+            doe_no: number;
+            /** Resp */
+            resp?: {
+                [key: string]: number;
+            } | null;
+            /** Run Key */
+            run_key: string;
+            /** State */
+            state: string;
+            /** Tbl */
+            tbl?: {
+                [key: string]: number | null;
+            } | null;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
         };
         /** DiscoverAssem */
         DiscoverAssem: {
@@ -5799,6 +5910,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BatchCurves"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    batch_design_map_physicsai_api_predict_batches__batch_id__design_map_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DesignMap"];
                 };
             };
             /** @description Forbidden */
