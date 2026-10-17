@@ -1,4 +1,5 @@
-"""⑤ 최적화 작업 params·사전조건(phase2 §6.12): OPTIMIZE."""
+"""⑤ 최적화 작업 params·사전조건(phase2 §6.12): OPTIMIZE. 이슈 #4(phase3 §18.8) mesh_only 템플릿 막기,
+SURROGATE_OPT(내장 최적화 반복, §18.4)는 POST /jobs로 만들 수 없고 재시도만 opt를 이어 받는다."""
 
 from __future__ import annotations
 
@@ -45,9 +46,42 @@ class OptimizeParams(_P):
         return v
 
 
+class SurrogateRoundParams(_P):
+    """서비스·종료 훅만 만드는 반복 작업 params(POST /jobs의 job_type 열거에 없음 → 422)."""
+
+    surrogate_opt_id: str
+    opt_no: int
+    round: int
+
+
 PARAM_MODELS: dict[str, type[BaseModel]] = {
     "OPTIMIZE": OptimizeParams,
+    "SURROGATE_OPT": SurrogateRoundParams,
 }
+
+
+def assembly_required() -> DomainError:
+    return DomainError("TEMPLATE_ASSEMBLY_REQUIRED", opt.TEMPLATE_ASSEMBLY_REQUIRED_MSG, status=409)
+
+
+def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
+    """OPTIMIZE 재시도: mesh_only 템플릿이면 409(이미 대기 중이던 옛 작업 포함, 이슈 #4).
+    SURROGATE_OPT 재시도: 실패한 최신 반복 작업이면 opt를 FITTING·새 작업으로(아니면 409 SURROGATE_OPT_NOT_RESUMABLE)."""
+    if old["job_type"] == "OPTIMIZE":
+        ps = ps_repo.get(conn, (old.get("params") or {}).get("param_set_id") or "")
+        if opt.needs_assembly_block(ps):
+            raise assembly_required()
+        return
+    if old["job_type"] == "SURROGATE_OPT":
+        from physicsai_core.db.repositories import surrogate_opts as so_repo
+
+        o = so_repo.get(conn, (old.get("params") or {}).get("surrogate_opt_id") or "", for_update=True)
+        if o is None or o["status"] != "FAILED" or o["current_job_id"] != old["id"]:
+            raise DomainError("SURROGATE_OPT_NOT_RESUMABLE", "실패한 내장 최적화의 마지막 반복 작업만 다시 실행할 수 있습니다",
+                              status=409)
+        if so_repo.active_for_study(conn, o["study_id"]) is not None:
+            raise DomainError("SURROGATE_OPT_ACTIVE", "이 Study에 진행 중인 내장 최적화가 있습니다", status=409)
+        so_repo.set_opt(conn, o["id"], status="FITTING", current_job_id=new_id, stop_reason=None, finished_at=None)
 
 
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
@@ -59,6 +93,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         ps = ps_repo.get(conn, p.param_set_id) if p.param_set_id else ps_repo.current(conn, sid)
         if ps is None or ps["study_id"] != sid:
             raise prerequisite_missing("PARAM_SET")
+        if opt.needs_assembly_block(ps):  # 이슈 #4: 쿠션 단독 템플릿은 원본 최적화 불가 — 내장 모드 안내
+            raise assembly_required()
         if p.model_id:
             m = models_repo.get(conn, p.model_id)
             if m is None or m["study_id"] != sid or m["status"] != "ACTIVE":

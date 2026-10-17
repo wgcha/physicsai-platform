@@ -188,6 +188,13 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (StepDef("OP_PREP", "INTERNAL", 3), StepDef("HST_OPTIMIZE", "LOCAL", 90), StepDef("OP_SUMMARY", "INTERNAL", 7)),
         "⑤",
     ),
+    # ---- 3차 플랫폼 내장 최적화 반복(phase3 §18.4 S13): 검증 배치 DONE 종료 훅이 넣는다(POST /jobs로 만들 수 없음) ----
+    "SURROGATE_OPT": JobTypeDef(
+        "SURROGATE_OPT", 5, "SLOT", "내장 최적화 반복",
+        (StepDef("SO_COLLECT", "INTERNAL", 10), StepDef("SO_FIT", "INTERNAL", 45), StepDef("SO_PROPOSE", "INTERNAL", 35),
+         StepDef("SO_NEXT", "INTERNAL", 10)),
+        "⑤", notify_success=False,
+    ),
     # ---- 3차 Study 관리(stage 0, phase3 §5.2) ----
     "STUDY_STORAGE_SCAN": JobTypeDef(
         "STUDY_STORAGE_SCAN", 0, "LIGHT", "용량 계산",
@@ -230,6 +237,7 @@ STEP_LABELS: dict[str, str] = {
     "SC_VALIDATE": "정리 대상 확인", "SC_MOVE": "백업 폴더로 이동", "SC_RECORD": "정리 기록",
     "CONTOUR_CAPTURE": "컨투어 캡처",
     "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
+    "SO_COLLECT": "검증 결과 수집", "SO_FIT": "대리모델 학습", "SO_PROPOSE": "후보 탐색", "SO_NEXT": "검증 배치 등록·마무리",
 }
 
 

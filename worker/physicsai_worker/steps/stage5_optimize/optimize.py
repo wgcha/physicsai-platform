@@ -33,9 +33,11 @@ def _ps(ctx: Any) -> tuple[dict[str, Any], str]:
 def op_prep(ctx: Any) -> None:
     s = ctx.settings
     p = ctx.params
+    ps, S = _ps(ctx)
+    if opt.needs_assembly_block(ps):  # 이슈 #4(phase3 §18.8): 경로 조합 전에 막는다(os.path.join(…, None) TypeError 방지)
+        raise StepFailure("TEMPLATE_ASSEMBLY_REQUIRED", opt.TEMPLATE_ASSEMBLY_REQUIRED_MSG)
     m = load_model(ctx, p["model_id"])
     psmdl, _pscfg = verify_model_integrity(ctx, m)
-    ps, S = _ps(ctx)
     O = _O(ctx)
     os.makedirs(O, exist_ok=True)
     study_dir = os.path.join(O, p["study_folder"])

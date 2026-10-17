@@ -43,6 +43,8 @@ FEATURES: dict[str, FeatureReq] = {
     "predict_responses": FeatureReq(("response_extract",)),
     # phase3 §15 S10: 예측 컨투어 캡처. capture.enabled·캡처 TCL은 contour_capture_missing
     "contour_capture": FeatureReq(("contour_capture",), ("hw_exe_path",)),
+    # phase3 §18.2 S13: 플랫폼 내장 최적화 — numpy·scipy + surrogate_opt.enabled + (parametric 또는 mesh_only 예측). optimize_builtin_missing
+    "optimize_builtin": FeatureReq(),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -130,7 +132,24 @@ def contour_capture_missing(s: Settings) -> tuple[list[str], list[str]]:
     return tmpl, res + capture_missing(s)
 
 
+def optimize_builtin_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """⑤ 내장 최적화에 빠진 (템플릿, 설정·모듈) 키(phase3 §18.2). 모듈은 find_spec만(API가 numpy를 불러오지 않음).
+    예측 기능은 템플릿 종류 둘 중 하나만 있어도 켠다(종류별 확인은 생성 때 — TEMPLATE_NOT_CONFIGURED)."""
+    from .stage5_optimize.surrogate import missing_modules
+
+    res = [f"python.{m}" for m in missing_modules()]
+    if not s.surrogate_opt.enabled:
+        res.append("surrogate_opt.enabled")
+    pt, pr = predict_parametric_missing(s)
+    mt, mr = predict_mesh_only_missing(s)
+    tmpl: list[str] = []
+    if (pt or pr) and (mt or mr):
+        tmpl, res = list(dict.fromkeys(pt + mt)), res + list(dict.fromkeys(pr + mr))
+    return tmpl, res
+
+
 _SPECIAL_MISSING = {
+    "optimize_builtin": optimize_builtin_missing,
     "contour_capture": contour_capture_missing,
     "predict_parametric": predict_parametric_missing,
     "predict_mesh_only": predict_mesh_only_missing,

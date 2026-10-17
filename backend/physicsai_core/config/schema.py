@@ -29,6 +29,7 @@ from .schema_stages import (
     PredictCfg,
     ScoreCfg,
     SpdmImportCfg,
+    SurrogateOptCfg,
     TrainDataCfg,
     TrainingLogCfg,
 )
@@ -175,6 +176,7 @@ class Settings(_M):
     curation: CurationCfg = Field(default_factory=CurationCfg)
     spdm_import: SpdmImportCfg = Field(default_factory=SpdmImportCfg)
     optimize: OptimizeCfg = Field(default_factory=OptimizeCfg)
+    surrogate_opt: SurrogateOptCfg = Field(default_factory=SurrogateOptCfg)  # phase3 §18.9 S13 내장 최적화
     env_check: EnvCheckCfg = Field(default_factory=EnvCheckCfg)
     error_bundle: ErrorBundleCfg = Field(default_factory=ErrorBundleCfg)
     study_storage: StudyStorageCfg = Field(default_factory=StudyStorageCfg)

@@ -12,7 +12,7 @@ from .jobs import JobSummary
 
 __all__ = [
     "StatusConfig", "StatusWorker", "StatusHpc", "KeyOk", "TemplateConfigured", "StatusLimits", "ResourceStatus",
-    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusResponse", "QueueSlot", "QueueLight",
+    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusSurrogateOpt", "StatusResponse", "QueueSlot", "QueueLight",
     "QueueResponse", "MoveRequest", "GpuInfo", "ResourceJob", "ResourceLimits", "ResourcesResponse",
     "Notification", "NotificationList", "UnreadCount", "ReadRequest", "ReadResponse", "AdminConfig",
 ]
@@ -83,6 +83,7 @@ class StatusFeatures(Resp):
     predict_mesh_only: FeatureState | None = None  # phase3 §14.4 메시 단독 템플릿 예측
     predict_responses: FeatureState | None = None  # phase3 §14.6 예측 응답 추출
     contour_capture: FeatureState | None = None  # phase3 §15.5 예측 컨투어 캡처
+    optimize_builtin: FeatureState | None = None  # phase3 §18.2 ⑤ 플랫폼 내장 최적화(numpy·scipy)
 
 
 class StatusEnvCheck(Resp):
@@ -113,6 +114,22 @@ class StatusCapture(Resp):
     estimate: StatusCaptureEstimate | None = None  # D3-54: 일괄 예측 "캡처 예상" 가정값
 
 
+class StatusSurrogateDefaults(Resp):
+    iterations: int
+    candidates: int
+    tol_rel: float
+    surrogate: str
+
+
+class StatusSurrogateOpt(Resp):
+    """⑤ 내장 최적화 화면 기본값·상한(config `surrogate_opt`, phase3 §18.6)."""
+
+    defaults: StatusSurrogateDefaults
+    max_variables: int
+    max_iterations: int
+    max_candidates: int
+
+
 class StatusResponse(Resp):
     config: StatusConfig
     worker: StatusWorker
@@ -126,6 +143,7 @@ class StatusResponse(Resp):
     features: StatusFeatures | None = None
     env_check: StatusEnvCheck | None = None
     capture: StatusCapture | None = None
+    surrogate_opt: StatusSurrogateOpt | None = None
     demo: bool = Field(False, description="시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지")
 
 

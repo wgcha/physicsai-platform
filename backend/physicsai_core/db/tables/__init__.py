@@ -14,6 +14,7 @@ from .stage2_curation import curations, spdm_imports
 from .stage5_optimize import optimizations
 from .ops import audit_events, env_checks
 from .predict_batch import predict_batch_runs, predict_batches
+from .surrogate_opt import surrogate_opt_iters, surrogate_opts
 
 __all__ = [
     "metadata",
@@ -39,5 +40,7 @@ __all__ = [
     "env_checks",
     "predict_batches",
     "predict_batch_runs",
+    "surrogate_opts",
+    "surrogate_opt_iters",
     "TERMINAL_STATES",
 ]

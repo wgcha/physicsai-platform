@@ -1321,6 +1321,39 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `HPC_UNREACHABLE` | 상태 조회 실패가 `hpc.max_unreachable_minutes`를 넘음(문구 "대시보드 SCX 연결 확인") | 대시보드 재로그인·relay 확인 |
 | 경고 `SCX_SUBDIR_SKIPPED`·`SCX_NOT_SUBMITTED`·`SCX_UNKNOWN_CANCELED` | 하위 폴더 입력 무시·결과 모름으로 남은 run 미제출·결과 모름 행 취소(SCX에서 직접 확인) | 해당 run 다시 제출 |
 
+## 17. ⑤ 플랫폼 내장 최적화(phase3 §18, D3-60)
+
+⑤ "플랫폼 내장(쿠션만 가능)" 모드는 HyperStudy 대신 ④ 일괄 예측 체인으로 설계를 검증하며 대리모델(GP·RBF)로 다음 후보를 고른다. mesh_only(쿠션 단독) 템플릿도 동작한다. 원본 최적화 모드는 조립 폴더가 있는 템플릿만(쿠션 단독 템플릿이면 `TEMPLATE_ASSEMBLY_REQUIRED`로 막힘).
+
+### 17.1 런타임 의존성 numpy·scipy
+
+- `pyproject.toml`·`deploy/requirements.lock`에 `numpy==2.4.6`·`scipy==1.17.1`(cp312 win_amd64 wheel, 약 12 MB + 37 MB)이 들어 있다. git 폴더 설치(`setup.ps1`·`update-repo.ps1`)는 ③ 단계 `pip install -r deploy\requirements.lock`에서 사내 pip 설정·프록시로 PyPI에서 함께 받는다(스크립트 변경 없음). 폐쇄망 묶음은 `collect-offline`이 lock을 따라 wheel을 넣는다.
+- 설치 확인: `.runtime\venv\Scripts\python.exe -c "import numpy, scipy; print(numpy.__version__, scipy.__version__)"`. 화면 확인: `/status.features.optimize_builtin.enabled` = true. 없으면 그 기능만 꺼지고(`missing`에 `python.numpy`·`python.scipy`) 나머지는 그대로 동작한다. API 프로세스는 numpy를 불러오지 않는다(워커 계산 step 안에서만).
+- CPU: 대리모델 적합·후보 탐색은 워커가 슬롯을 잡은 동안 워커 프로세스 안에서 돈다. BLAS·OpenMP 스레드는 `surrogate_opt.blas_threads`(기본 4)와 `worker.max_logical_cores` 중 작은 값으로 제한한다(첫 numpy import 전에 `OMP_NUM_THREADS`·`OPENBLAS_NUM_THREADS`·`MKL_NUM_THREADS` 설정). 자유 변수 20개·점 200개 GP 적합이 4스레드에서 약 10~15초.
+
+### 17.2 설정 키(`surrogate_opt`, 기본값은 스키마 한 곳)
+
+| 키 | 기본 | 뜻 |
+|---|---|---|
+| `enabled` | true | false면 내장 모드 버튼 비활성 |
+| `dir_name` | `05_opt/surrogate` | Study 기준 폴더(`SO-001`마다 `opt.json`·`iter_NN/`·`convergence.csv`·`verified_runs.csv`·`summary.json`) |
+| `max_variables`·`max_iterations`·`max_candidates` | 20·10·10 | 자유 변수·반복·후보 상한 |
+| `default_iterations`·`default_candidates`·`default_tol_rel`·`default_surrogate` | 3·4·0.01·gp | 화면 기본값 |
+| `gp_restarts` | 8 | GP 하이퍼파라미터 최적화 시작점 수 |
+| `de_maxiter`·`de_popsize` | 200·15 | 후보 탐색(differential evolution) 세대·개체 배수 |
+| `fit_timeout_s` | 600 | 반복 1회의 학습+후보 탐색 시간 한도(넘으면 `SURROGATE_TIMEOUT`) |
+| `blas_threads` | 4 | 워커 안 numpy 스레드 상한 |
+
+### 17.3 실패 코드
+
+| 코드(정지 사유) | 뜻 | 조치 |
+|---|---|---|
+| `TOO_FEW_POINTS` | 유효 run이 max(5, 자유 변수+2)보다 적음 | 탐색 run 수를 늘리거나 변수를 고정 |
+| `VERIFY_ALL_FAILED` | 한 반복의 검증 run이 모두 실패(값 없음 포함) | 배치 결과 화면에서 실패 사유 확인 후 ⑤ "이어서 실행" |
+| `SURROGATE_TIMEOUT` | 학습·후보 탐색이 `fit_timeout_s` 초과 | `de_maxiter`·`gp_restarts` 낮춤 또는 `fit_timeout_s` 늘림 |
+| `BATCH_FAILED`·`ROUND_FAILED` | 검증·탐색 배치 입력 생성 또는 반복 작업 실패 | 원인 해결 후 ⑤ "이어서 실행" |
+| `BATCH_OWNED_BY_OPT`(409) | 최적화 소유 배치를 ④에서 일괄 취소·실패만 다시 | ⑤에서 취소·이어서 실행 |
+
 ## 부록 C. 코드와 문서의 차이(2026-10-09 확인, HEAD 56801e1 기준 갱신)
 
 | # | 내용 | 영향·대응 |

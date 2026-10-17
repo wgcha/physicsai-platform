@@ -14,6 +14,7 @@ from .stage4_predict import *  # noqa: F401,F403
 from .predict_batch import *  # noqa: F401,F403
 from .contour_capture import *  # noqa: F401,F403
 from .stage5_optimize import *  # noqa: F401,F403
+from .surrogate_opt import *  # noqa: F401,F403
 from .ops import *  # noqa: F401,F403
 from .study_storage import *  # noqa: F401,F403
 from .fs import *  # noqa: F401,F403

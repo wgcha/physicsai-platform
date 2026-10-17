@@ -138,6 +138,25 @@ class SummaryParserCfg(_M):
     max_rows: int | None = None
 
 
+class SurrogateOptCfg(_M):
+    """⑤ 플랫폼 내장 최적화(phase3 §18.9 S13). 기본값은 이 한 곳(deploy/setup_config.py는 키를 쓰지 않는다)."""
+
+    enabled: bool = True
+    dir_name: str = "05_opt/surrogate"  # Study 기준 <study>/05_opt/surrogate/SO-001
+    max_variables: int = 20
+    max_iterations: int = 10
+    max_candidates: int = 10
+    default_iterations: int = 3
+    default_candidates: int = 4
+    default_tol_rel: float = 0.01
+    default_surrogate: str = "gp"  # gp | rbf
+    gp_restarts: int = 8
+    de_maxiter: int = 200
+    de_popsize: int = 15
+    fit_timeout_s: int = 600
+    blas_threads: int = 4  # 워커 안 numpy BLAS 스레드 상한(worker.max_logical_cores와 작은 쪽, 공유 워커 보호)
+
+
 class OptimizeCfg(_M):
     default_study_folder: str = "HST_PHYSICSAI_OPTIMIZATION"
     env: dict[str, str] = Field(default_factory=lambda: {"EDS_TNS_ACTVN_CHCKPT": "1"})

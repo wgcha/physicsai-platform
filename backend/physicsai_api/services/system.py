@@ -70,6 +70,11 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                     "estimate": {"image_mb": s.capture.estimate_image_mb, "video_mb": s.capture.estimate_video_mb,
                                  "sec_per_view": s.capture.estimate_sec_per_view,
                                  "sec_per_video": s.capture.estimate_sec_per_video}},
+        "surrogate_opt": {"defaults": {"iterations": s.surrogate_opt.default_iterations,
+                                       "candidates": s.surrogate_opt.default_candidates,
+                                       "tol_rel": s.surrogate_opt.default_tol_rel, "surrogate": s.surrogate_opt.default_surrogate},
+                          "max_variables": s.surrogate_opt.max_variables, "max_iterations": s.surrogate_opt.max_iterations,
+                          "max_candidates": s.surrogate_opt.max_candidates},
         "demo": bool(s.demo.enabled),
     }
 

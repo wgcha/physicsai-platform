@@ -15,6 +15,10 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
     """종료 시 관련 행 정리(데이터셋 FAILED, 평가 상태 FAILED) + 일괄 예측 배치 갱신(성공 포함, phase3 §14.5)."""
     if job["job_type"] in ("PREDICT", "PREDICT_BATCH"):
         batch_on_job_end(conn, job, state)
+    if job["job_type"] == "SURROGATE_OPT":  # phase3 §18.7 ③ 반복 작업 실패·중단·취소
+        from . import surrogate_opts as so_repo
+
+        so_repo.on_round_end(conn, job, state)
     if state == SUCCEEDED:
         return
     res = job.get("result") or {}
@@ -58,6 +62,7 @@ def batch_on_job_end(conn: Connection, job: dict[str, Any], state: str) -> dict[
     from ...state_machine import CANCELED, FAILED, INTERRUPTED
     from . import notifications as notif_repo
     from . import predict_batches as pb_repo
+    from . import surrogate_opts as so_repo
 
     if job["job_type"] == "PREDICT":
         done = pb_repo.on_child_end(conn, job, state)
@@ -71,13 +76,17 @@ def batch_on_job_end(conn: Connection, job: dict[str, Any], state: str) -> dict[
             return None
         if state in (FAILED, INTERRUPTED):
             pb_repo.set_batch(conn, batch["id"], status="FAILED", finished_at=func.now())
+            so_repo.on_batch_parent_end(conn, batch, state)  # phase3 §18.7 ② 최적화 소유 배치 → opt FAILED
             return None
         if state == CANCELED:
             pb_repo.set_batch(conn, batch["id"], status="CANCELED", finished_at=func.now())
+            so_repo.on_batch_parent_end(conn, batch, state)
             return None
         res = pb_repo.mark_done_if_complete(conn, batch["id"])
         if res is None:
             return None
         batch, counts = pb_repo.get(conn, batch["id"]), res
+    if so_repo.on_batch_done(conn, batch):  # type: ignore[arg-type]  # phase3 §18.7 ①: 반복 작업 투입, 완료 알림 생략
+        return batch
     notif_repo.notify_batch_done(conn, batch, counts["succeeded"], counts["failed"])  # type: ignore[arg-type]
     return batch

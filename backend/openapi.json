@@ -5961,6 +5961,622 @@
         "title": "SamplesPage",
         "type": "object"
       },
+      "SoBatchRef": {
+        "properties": {
+          "gen": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Gen",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "predict": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Predict",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "gen",
+          "predict"
+        ],
+        "title": "SoBatchRef",
+        "type": "object"
+      },
+      "SoBest": {
+        "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "batch_label": {
+            "title": "Batch Label",
+            "type": "string"
+          },
+          "constraints": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Constraints",
+            "type": "object"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "feasible": {
+            "title": "Feasible",
+            "type": "boolean"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "iter_no",
+          "batch_label",
+          "doe_no",
+          "run_key",
+          "values",
+          "feasible"
+        ],
+        "title": "SoBest",
+        "type": "object"
+      },
+      "SoCandidate": {
+        "properties": {
+          "constraints_pred": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Constraints Pred",
+            "type": "array"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "ei": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ei"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          },
+          "verified": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified"
+          }
+        },
+        "required": [
+          "doe_no",
+          "values"
+        ],
+        "title": "SoCandidate",
+        "type": "object"
+      },
+      "SoConstraint": {
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "maxLength": 200,
+            "title": "Metric",
+            "type": "string"
+          },
+          "op": {
+            "enum": [
+              "<=",
+              ">="
+            ],
+            "title": "Op",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "metric",
+          "op",
+          "value"
+        ],
+        "title": "SoConstraint",
+        "type": "object"
+      },
+      "SoExploreNew": {
+        "additionalProperties": false,
+        "description": "새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs).",
+        "properties": {
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "kind": {
+            "const": "new",
+            "title": "Kind",
+            "type": "string"
+          },
+          "seed": {
+            "default": 1,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "SoExploreNew",
+        "type": "object"
+      },
+      "SoExploreReuse": {
+        "additionalProperties": false,
+        "description": "완료된 배치 재사용(같은 Study·같은 템플릿·같은 모델·DONE).",
+        "properties": {
+          "batch_id": {
+            "maxLength": 64,
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "reuse",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "batch_id"
+        ],
+        "title": "SoExploreReuse",
+        "type": "object"
+      },
+      "SoFit": {
+        "properties": {
+          "d_free": {
+            "title": "D Free",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "loo_nrmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loo Nrmse"
+          },
+          "loo_rmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loo Rmse"
+          },
+          "n_train": {
+            "title": "N Train",
+            "type": "integer"
+          },
+          "pred_vs_verified_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Vs Verified Mae"
+          },
+          "q2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q2"
+          }
+        },
+        "required": [
+          "kind",
+          "n_train",
+          "d_free"
+        ],
+        "title": "SoFit",
+        "type": "object"
+      },
+      "SoIteration": {
+        "properties": {
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoBatchRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "best_feasible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Feasible"
+          },
+          "best_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Value"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoCandidate"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          },
+          "fit": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoFit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "improvement_rel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improvement Rel"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "iter_no",
+          "kind"
+        ],
+        "title": "SoIteration",
+        "type": "object"
+      },
+      "SoObjective": {
+        "additionalProperties": false,
+        "properties": {
+          "metric": {
+            "maxLength": 200,
+            "title": "Metric",
+            "type": "string"
+          },
+          "sense": {
+            "default": "min",
+            "enum": [
+              "min",
+              "max"
+            ],
+            "title": "Sense",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          }
+        },
+        "required": [
+          "metric"
+        ],
+        "title": "SoObjective",
+        "type": "object"
+      },
+      "SoProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "SoProblem",
+        "type": "object"
+      },
+      "SoRun": {
+        "description": "검증 run 1행(탐색 포함): 수렴 그래프 점·검증 run 표.",
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "batch_label": {
+            "title": "Batch Label",
+            "type": "string"
+          },
+          "constraints": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "feasible": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feasible"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "iter_no",
+          "batch_id",
+          "batch_label",
+          "doe_no",
+          "run_key",
+          "values",
+          "state"
+        ],
+        "title": "SoRun",
+        "type": "object"
+      },
       "SourceRef": {
         "properties": {
           "doe_id": {
@@ -6303,6 +6919,16 @@
           "optimize": {
             "$ref": "#/components/schemas/FeatureState"
           },
+          "optimize_builtin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "predict": {
             "anyOf": [
               {
@@ -6514,6 +7140,16 @@
             "title": "Resources",
             "type": "array"
           },
+          "surrogate_opt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatusSurrogateOpt"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "templates": {
             "items": {
               "$ref": "#/components/schemas/TemplateConfigured"
@@ -6543,6 +7179,62 @@
           "auth"
         ],
         "title": "StatusResponse",
+        "type": "object"
+      },
+      "StatusSurrogateDefaults": {
+        "properties": {
+          "candidates": {
+            "title": "Candidates",
+            "type": "integer"
+          },
+          "iterations": {
+            "title": "Iterations",
+            "type": "integer"
+          },
+          "surrogate": {
+            "title": "Surrogate",
+            "type": "string"
+          },
+          "tol_rel": {
+            "title": "Tol Rel",
+            "type": "number"
+          }
+        },
+        "required": [
+          "iterations",
+          "candidates",
+          "tol_rel",
+          "surrogate"
+        ],
+        "title": "StatusSurrogateDefaults",
+        "type": "object"
+      },
+      "StatusSurrogateOpt": {
+        "description": "⑤ 내장 최적화 화면 기본값·상한(config `surrogate_opt`, phase3 §18.6).",
+        "properties": {
+          "defaults": {
+            "$ref": "#/components/schemas/StatusSurrogateDefaults"
+          },
+          "max_candidates": {
+            "title": "Max Candidates",
+            "type": "integer"
+          },
+          "max_iterations": {
+            "title": "Max Iterations",
+            "type": "integer"
+          },
+          "max_variables": {
+            "title": "Max Variables",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "defaults",
+          "max_variables",
+          "max_iterations",
+          "max_candidates"
+        ],
+        "title": "StatusSurrogateOpt",
         "type": "object"
       },
       "StatusWorker": {
@@ -7172,6 +7864,452 @@
           "title"
         ],
         "title": "StudyPatch",
+        "type": "object"
+      },
+      "SurrogateOpt": {
+        "properties": {
+          "best": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoBest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "can_cancel": {
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_resume": {
+            "title": "Can Resume",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "current_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Job Id"
+          },
+          "dir": {
+            "title": "Dir",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "iterations": {
+            "items": {
+              "$ref": "#/components/schemas/SoIteration"
+            },
+            "title": "Iterations",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "model": {
+            "additionalProperties": true,
+            "title": "Model",
+            "type": "object"
+          },
+          "param_set": {
+            "additionalProperties": true,
+            "title": "Param Set",
+            "type": "object"
+          },
+          "progress_text": {
+            "title": "Progress Text",
+            "type": "string"
+          },
+          "runs": {
+            "items": {
+              "$ref": "#/components/schemas/SoRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "settings": {
+            "additionalProperties": true,
+            "title": "Settings",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "stop_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop Reason"
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "dir",
+          "param_set",
+          "model",
+          "settings",
+          "iter_no",
+          "progress_text",
+          "iterations",
+          "can_cancel",
+          "can_resume",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "SurrogateOpt",
+        "type": "object"
+      },
+      "SurrogateOptCreate": {
+        "additionalProperties": false,
+        "description": "생성·미리보기 공용 본문(phase3 §18.6). bounds 생략 = 템플릿 min·max, lo = hi는 고정.",
+        "properties": {
+          "bounds": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bounds"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Candidates"
+          },
+          "capture": {
+            "default": false,
+            "title": "Capture",
+            "type": "boolean"
+          },
+          "constraints": {
+            "items": {
+              "$ref": "#/components/schemas/SoConstraint"
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "explore": {
+            "discriminator": {
+              "mapping": {
+                "new": "#/components/schemas/SoExploreNew",
+                "reuse": "#/components/schemas/SoExploreReuse"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SoExploreNew"
+              },
+              {
+                "$ref": "#/components/schemas/SoExploreReuse"
+              }
+            ],
+            "title": "Explore"
+          },
+          "iterations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iterations"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "multi_execution": {
+            "default": 1,
+            "maximum": 64.0,
+            "minimum": 1.0,
+            "title": "Multi Execution",
+            "type": "integer"
+          },
+          "objective": {
+            "$ref": "#/components/schemas/SoObjective"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Set Id"
+          },
+          "seed": {
+            "default": 1,
+            "title": "Seed",
+            "type": "integer"
+          },
+          "surrogate": {
+            "anyOf": [
+              {
+                "enum": [
+                  "gp",
+                  "rbf"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Surrogate"
+          },
+          "tol_rel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tol Rel"
+          }
+        },
+        "required": [
+          "explore",
+          "objective"
+        ],
+        "title": "SurrogateOptCreate",
+        "type": "object"
+      },
+      "SurrogateOptPreview": {
+        "properties": {
+          "estimate_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Min"
+          },
+          "explore_count": {
+            "title": "Explore Count",
+            "type": "integer"
+          },
+          "fixed": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Fixed",
+            "type": "object"
+          },
+          "free_variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Free Variables",
+            "type": "array"
+          },
+          "integer_variables": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Integer Variables",
+            "type": "array"
+          },
+          "max_total_runs": {
+            "title": "Max Total Runs",
+            "type": "integer"
+          },
+          "objective_available": {
+            "title": "Objective Available",
+            "type": "boolean"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/SoProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          }
+        },
+        "required": [
+          "free_variables",
+          "integer_variables",
+          "fixed",
+          "explore_count",
+          "max_total_runs",
+          "objective_available",
+          "problems"
+        ],
+        "title": "SurrogateOptPreview",
+        "type": "object"
+      },
+      "SurrogateOptResume": {
+        "properties": {
+          "batch_retry": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Retry"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          }
+        },
+        "title": "SurrogateOptResume",
+        "type": "object"
+      },
+      "SurrogateOptSummary": {
+        "properties": {
+          "best_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Best Value"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "iterations": {
+            "title": "Iterations",
+            "type": "integer"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "objective": {
+            "additionalProperties": true,
+            "title": "Objective",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "objective",
+          "iter_no",
+          "iterations",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "SurrogateOptSummary",
         "type": "object"
       },
       "TemplateConfigured": {
@@ -12875,6 +14013,246 @@
         ]
       }
     },
+    "/physicsai/api/studies/{study_id}/surrogate-opts": {
+      "get": {
+        "operationId": "list_surrogate_opts_physicsai_api_studies__study_id__surrogate_opts_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SurrogateOptSummary"
+                  },
+                  "title": "Response List Surrogate Opts Physicsai Api Studies  Study Id  Surrogate Opts Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Surrogate Opts",
+        "tags": [
+          "surrogate-opts"
+        ]
+      },
+      "post": {
+        "description": "생성(power): 탐색 PREDICT_BATCH(새 DOE) 또는 반복 작업 1(완료 배치 재사용)을 한 트랜잭션에서.",
+        "operationId": "create_surrogate_opt_physicsai_api_studies__study_id__surrogate_opts_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurrogateOptCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOpt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Surrogate Opt",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/surrogate-opts/preview": {
+      "post": {
+        "description": "미리보기(동기, 저장 없음): 자유·정수·고정 변수, 탐색 수, 예측 최대 run·예상 분, problems(생성 때는 422).",
+        "operationId": "preview_surrogate_opt_physicsai_api_studies__study_id__surrogate_opts_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurrogateOptCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOptPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Preview Surrogate Opt",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
     "/physicsai/api/studies/{study_id}/train": {
       "get": {
         "operationId": "get_setup_physicsai_api_studies__study_id__train_get",
@@ -13286,6 +14664,294 @@
         "summary": "Unarchive Study",
         "tags": [
           "studies"
+        ]
+      }
+    },
+    "/physicsai/api/surrogate-opts/{opt_id}": {
+      "get": {
+        "description": "상세: 반복별 배치·적합 품질·후보, 검증 run, 최적 설계, 진행 문구.",
+        "operationId": "get_surrogate_opt_physicsai_api_surrogate_opts__opt_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opt_id",
+            "required": true,
+            "schema": {
+              "title": "Opt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOpt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Surrogate Opt",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
+    "/physicsai/api/surrogate-opts/{opt_id}/cancel": {
+      "post": {
+        "description": "일괄 취소(power, 등록자 또는 관리자): 반복 작업·배치 부모·비종료 하위 전부, 멱등.",
+        "operationId": "cancel_surrogate_opt_physicsai_api_surrogate_opts__opt_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opt_id",
+            "required": true,
+            "schema": {
+              "title": "Opt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOpt"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Cancel Surrogate Opt",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
+    "/physicsai/api/surrogate-opts/{opt_id}/resume": {
+      "post": {
+        "description": "이어서 실행(power, FAILED만): 반복 작업 재시도 또는 배치 실패만 다시.",
+        "operationId": "resume_surrogate_opt_physicsai_api_surrogate_opts__opt_id__resume_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opt_id",
+            "required": true,
+            "schema": {
+              "title": "Opt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOptResume"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Resume Surrogate Opt",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
+    "/physicsai/api/surrogate-opts/{opt_id}/runs.csv": {
+      "get": {
+        "description": "검증 run CSV(UTF-8 BOM·CRLF): iter,batch,doe_no,run_key,<변수>,objective,<제약>,predicted,feasible,state.",
+        "operationId": "surrogate_opt_runs_csv_physicsai_api_surrogate_opts__opt_id__runs_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opt_id",
+            "required": true,
+            "schema": {
+              "title": "Opt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Surrogate Opt Runs Csv",
+        "tags": [
+          "surrogate-opts"
         ]
       }
     },

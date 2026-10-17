@@ -264,9 +264,36 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
 
     _validate_phase2(s, issues)
     _validate_phase3(s, issues)
+    _validate_surrogate_opt(s, issues)
 
     if s.notifications.retention_days < 1:
         add("notifications.retention_days", "1 이상")
     if s.ui.max_artifact_bytes <= 0:
         add("ui.max_artifact_bytes", "양수")
     return issues
+
+
+# phase3 §18.9: surrogate_opt 정수 키 범위
+SURROGATE_OPT_RANGES: dict[str, tuple[int, int]] = {
+    "max_variables": (1, 50), "max_iterations": (1, 50), "max_candidates": (1, 50), "default_iterations": (1, 50),
+    "default_candidates": (1, 50), "gp_restarts": (1, 64), "de_maxiter": (1, 10000), "de_popsize": (2, 200),
+    "fit_timeout_s": (10, 86400), "blas_threads": (1, 256),
+}
+_SO_DIR_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]{0,63}(/[A-Za-z0-9][A-Za-z0-9_\-]{0,63}){0,3}")
+
+
+def _validate_surrogate_opt(s: Settings, issues: list[ConfigIssue]) -> None:
+    so = s.surrogate_opt
+    for k, (lo, hi) in SURROGATE_OPT_RANGES.items():
+        if not lo <= getattr(so, k) <= hi:
+            issues.append(ConfigIssue(f"surrogate_opt.{k}", f"{lo}~{hi}"))
+    if so.default_iterations > so.max_iterations:
+        issues.append(ConfigIssue("surrogate_opt.default_iterations", "max_iterations 이하"))
+    if so.default_candidates > so.max_candidates:
+        issues.append(ConfigIssue("surrogate_opt.default_candidates", "max_candidates 이하"))
+    if not 0.0 < so.default_tol_rel < 1.0:
+        issues.append(ConfigIssue("surrogate_opt.default_tol_rel", "0 초과 1 미만"))
+    if so.default_surrogate not in ("gp", "rbf"):
+        issues.append(ConfigIssue("surrogate_opt.default_surrogate", "gp | rbf"))
+    if not _SO_DIR_RE.fullmatch(so.dir_name) or so.dir_name.split("/")[0].casefold() in ("_platform", "_backup"):
+        issues.append(ConfigIssue("surrogate_opt.dir_name", "Study 기준 상대 폴더(영숫자·_·-, '/' 구분, 4단계 이내)"))

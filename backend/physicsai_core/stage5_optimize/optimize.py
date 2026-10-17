@@ -32,6 +32,16 @@ RUN_CONFIG_KEYS = (
 )
 
 
+TEMPLATE_ASSEMBLY_REQUIRED_MSG = ("이 템플릿은 조립 폴더가 없는 쿠션 단독(메시 단독) 템플릿이라 원본 최적화를 실행할 수 없습니다 — "
+                                  "'플랫폼 내장(쿠션만 가능)' 모드를 쓰세요")
+
+
+def needs_assembly_block(ps: dict[str, Any] | None) -> bool:
+    """원본 최적화(OPTIMIZE)를 막을 템플릿인지(이슈 #4, phase3 §18.8): mesh_only 또는 조립 폴더·starter 없음."""
+    p = ps or {}
+    return p.get("input_kind") == "mesh_only" or not p.get("assem_rel") or not p.get("starter_name")
+
+
 def validate_responses(rows: Any, approach: str) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     """검증 + 정규화(비제약 행 bound·value 제거). (정규화 행, problems)."""
     problems: list[dict[str, str]] = []

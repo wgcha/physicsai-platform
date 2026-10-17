@@ -24,6 +24,7 @@ EVENTS = (
     "HPC_CANCEL_FAILED",
     "PREDICT_BATCH_DONE",  # phase3 §14.5 일괄 예측 완료 1건(0007_predict_batch)
     "HPC_SUBMISSION_UNKNOWN",  # phase3 §16.4 SCX 제출 결과 모름(0009_scx_gateway)
+    "SURROGATE_OPT_DONE",  # phase3 §18.7 내장 최적화 완료 1건(0010_surrogate_opt)
 )
 
 
@@ -99,6 +100,8 @@ def notify_job(conn: Connection, job_id: str, event: str, *, body: str | None = 
         return None
     if is_batch_child(row.params):  # phase3 §14.5: 일괄 예측 하위는 알림 없음(배치 완료 1건만)
         return None
+    if event == "JOB_CANCELED" and is_opt_owned(row.job_type, row.params):  # phase3 §18.7: 내장 최적화 취소는 알림 없음
+        return None
     title, default_body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
     body = body or default_body
     return conn.execute(
@@ -121,6 +124,11 @@ def is_batch_child(params: Any) -> bool:
     return isinstance(params, dict) and isinstance(params.get("batch_run"), dict)
 
 
+def is_opt_owned(job_type: str, params: Any) -> bool:
+    """내장 최적화 반복 작업 또는 최적화 소유 PREDICT_BATCH(params.surrogate_opt)."""
+    return job_type == "SURROGATE_OPT" or (isinstance(params, dict) and isinstance(params.get("surrogate_opt"), dict))
+
+
 def notify_batch_done(conn: Connection, batch: dict[str, Any], succeeded: int, failed: int) -> int:
     """PREDICT_BATCH_DONE 1건(배치 등록자, job_id = 최신 부모 작업) — "일괄 예측 B-003 완료 — 완료 18 · 실패 2"."""
     from .predict_batches import done_notice
@@ -130,6 +138,17 @@ def notify_batch_done(conn: Connection, batch: dict[str, Any], succeeded: int, f
     return conn.execute(
         notifications.insert()
         .values(user_id=batch["created_by"], event="PREDICT_BATCH_DONE", job_id=batch["job_id"], study_id=batch["study_id"],
+                project_id=project_id, title=title[:120], body=body[:500])
+        .returning(notifications.c.seq)
+    ).scalar_one()
+
+
+def notify_opt_done(conn: Connection, opt: dict[str, Any], job_id: str | None, title: str, body: str) -> int:
+    """SURROGATE_OPT_DONE 1건(최적화 등록자, job_id = 마지막 반복 작업, phase3 §18.7)."""
+    project_id = conn.execute(select(studies.c.project_id).where(studies.c.id == opt["study_id"])).scalar()
+    return conn.execute(
+        notifications.insert()
+        .values(user_id=opt["created_by"], event="SURROGATE_OPT_DONE", job_id=job_id, study_id=opt["study_id"],
                 project_id=project_id, title=title[:120], body=body[:500])
         .returning(notifications.c.seq)
     ).scalar_one()

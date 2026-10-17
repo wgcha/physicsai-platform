@@ -296,6 +296,22 @@ optimize:
   max_viewable_files: 200
   summary_parsers: []               # 형식 미확정(U28). 예: [{name: opt_csv, glob: "*.csv", kind: csv_table, max_rows: 1000}]
 
+surrogate_opt:                      # ⑤ 플랫폼 내장 최적화(phase3 §18 S13): ④ 예측 체인으로 검증하는 대리모델(GP·RBF) 최적화. numpy·scipy 필요
+  enabled: true
+  dir_name: 05_opt/surrogate        # Study 기준 폴더(<study>/05_opt/surrogate/SO-001)
+  max_variables: 20                 # 자유 변수 상한
+  max_iterations: 10
+  max_candidates: 10
+  default_iterations: 3             # 화면 기본값: 반복 3 × 후보 4, 개선 기준 1%, GP
+  default_candidates: 4
+  default_tol_rel: 0.01
+  default_surrogate: gp             # gp | rbf
+  gp_restarts: 8                    # GP 하이퍼파라미터 최적화 시작점 수
+  de_maxiter: 200                   # 후보 탐색(differential_evolution) 세대 수·개체 배수
+  de_popsize: 15
+  fit_timeout_s: 600                # 반복 1회 학습+후보 탐색 시간 한도
+  blas_threads: 4                   # 워커 안 numpy 계산 스레드 상한(worker.max_logical_cores와 작은 쪽)
+
 env_check:
   probe_timeout_s: 60               # 점검용 짧은 실행만의 상한(작업 step 시간 한도 아님)
   expire_s: 900

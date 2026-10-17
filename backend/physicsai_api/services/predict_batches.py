@@ -22,6 +22,7 @@ from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
+from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
 from physicsai_core.stage4_predict.batch_matrix import batch_label
@@ -48,6 +49,15 @@ def _require_batch(conn: Any, batch_id: str, *, for_update: bool = False) -> dic
     if b is None:
         raise DomainError("BATCH_NOT_FOUND", "일괄 예측을 찾을 수 없습니다", status=404)
     return b
+
+
+def _require_not_opt_owned(conn: Any, batch_id: str) -> None:
+    """내장 최적화 소유 배치(phase3 §18.6)의 배치 단위 취소·실패만 다시 → 409 BATCH_OWNED_BY_OPT(⑤에서 조작)."""
+    it = so_repo.owned_iter_of_batch(conn, batch_id)
+    if it is not None:
+        label = so_repo.opt_label(it["opt_no"])
+        raise DomainError("BATCH_OWNED_BY_OPT", f"내장 최적화 {label}의 배치입니다 — ⑤에서 취소·이어서 실행하세요", status=409,
+                          surrogate_opt_id=it["opt_id"])
 
 
 def _can_cancel(b: dict[str, Any], principal: Principal, project_id: str) -> bool:
@@ -85,6 +95,7 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
             "media_views": media.get(r["predict_job_id"] or "", []),
         })
     regen, kids = _retry_targets(rows)
+    owned = so_repo.owned_iter_of_batch(conn, b["id"]) is not None  # phase3 §18.6: ⑤에서만 취소·이어서 실행
     parent_active = parent is not None and parent["state"] not in TERMINAL
     return {
         "id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"],
@@ -96,8 +107,8 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
         "parameters": [p["name"] for p in ps.get("parameters") or []],
         "responses": [{"name": x["name"], "unit": x.get("unit") or ""} for x in ps.get("responses") or []],
         "rows": out_rows, "created_at": b["created_at"], "created_by_name": b["created_by_name"],
-        "finished_at": b["finished_at"], "can_cancel": _can_cancel(b, principal, s["project_id"]),
-        "can_retry_failed": principal.can_execute(s["project_id"]) and not parent_active and (regen or bool(kids)),
+        "finished_at": b["finished_at"], "can_cancel": not owned and _can_cancel(b, principal, s["project_id"]),
+        "can_retry_failed": not owned and principal.can_execute(s["project_id"]) and not parent_active and (regen or bool(kids)),
     }
 
 
@@ -264,6 +275,7 @@ def cancel_batch(ctx: AppContext, principal: Principal, batch_id: str, rid: str,
         b = _require_batch(conn, batch_id, for_update=True)
         s = studies_repo.require(conn, b["study_id"])
         require_power(principal, s["project_id"])
+        _require_not_opt_owned(conn, b["id"])
         if not principal.is_global_admin and b["created_by"] != principal.user_id:
             raise DomainError("PERMISSION_DENIED", "일괄 예측 등록자 또는 관리자만 취소할 수 있습니다", status=403,
                               required="owner_or_global_admin")
@@ -287,29 +299,39 @@ def retry_failed(ctx: AppContext, principal: Principal, batch_id: str, rid: str,
         study = studies_repo.require(conn, b["study_id"], for_update=True)
         require_power(principal, study["project_id"])
         require_config_ok(ctx)
-        parent = jobs_repo.get_job(conn, b["job_id"])
-        if parent is not None and parent["state"] not in TERMINAL:
-            raise DomainError("BATCH_ACTIVE", "입력 생성이 진행 중입니다 — 끝난 뒤 다시 실행하세요", status=409)
-        regen, kids = _retry_targets(pb_repo.runs_with_jobs(conn, b["id"]))
-        if not regen and not kids:
-            raise DomainError("JOB_NOT_RETRYABLE", "다시 실행할 실패 run이 없습니다", status=409)
-        study_gate(conn, study, "PREDICT_BATCH")
-        retried = []
-        for r in kids:
-            old = jobs_repo.get_job(conn, r["predict_job_id"])
-            retried.append(retry_locked(conn, principal, old, None, rid, ip)["id"])  # type: ignore[arg-type]
-        parent_id = None
-        if regen:
-            parent_id = str(uuid.uuid4())
-            jobs_repo.insert_job(conn, study=study, job_type="PREDICT_BATCH",
-                                 params={"batch_id": b["id"], "batch_no": b["batch_no"]}, user_id=principal.user_id,
-                                 user_name=principal.display_name, job_id=parent_id,
-                                 result={"batch_id": b["id"], "batch_no": b["batch_no"], "run_count": b["run_count"],
-                                         "dir_rel": b["dir_rel"], "regenerate": True})
-            pb_repo.reset_failed_gen(conn, b["id"])
-            pb_repo.set_parent_job(conn, b["id"], parent_id)
-            audit(conn, principal, "JOB_CREATE", "job", parent_id,
-                  {"job_type": "PREDICT_BATCH", "study_id": study["id"], "batch_id": b["id"]}, rid, ip)
-        audit(conn, principal, "PREDICT_BATCH_RETRY_FAILED", "predict_batch", b["id"],
-              {"parent_job_id": parent_id, "retried_job_ids": retried}, rid, ip)
+        _require_not_opt_owned(conn, b["id"])
+        return retry_failed_locked(conn, principal, b, study, rid, ip)
+
+
+def retry_failed_locked(conn: Any, principal: Principal, b: dict[str, Any], study: dict[str, Any], rid: str | None,
+                        ip: str | None) -> dict[str, Any]:
+    """실패만 다시 본체(권한·소유 가드는 호출부 — 내장 최적화 이어서 실행이 가드 없이 부른다, phase3 §18.6)."""
+    parent = jobs_repo.get_job(conn, b["job_id"])
+    if parent is not None and parent["state"] not in TERMINAL:
+        raise DomainError("BATCH_ACTIVE", "입력 생성이 진행 중입니다 — 끝난 뒤 다시 실행하세요", status=409)
+    regen, kids = _retry_targets(pb_repo.runs_with_jobs(conn, b["id"]))
+    if not regen and not kids:
+        raise DomainError("JOB_NOT_RETRYABLE", "다시 실행할 실패 run이 없습니다", status=409)
+    study_gate(conn, study, "PREDICT_BATCH")
+    retried = []
+    for r in kids:
+        old = jobs_repo.get_job(conn, r["predict_job_id"])
+        retried.append(retry_locked(conn, principal, old, None, rid, ip)["id"])  # type: ignore[arg-type]
+    parent_id = None
+    if regen:
+        parent_id = str(uuid.uuid4())
+        params = {"batch_id": b["id"], "batch_no": b["batch_no"]}
+        owner = (parent or {}).get("params", {}).get("surrogate_opt") if parent else None
+        if owner:  # 최적화 소유 배치: 새 부모도 소유 표시를 이어 받는다(활성 인덱스 제외·⑤ 가드)
+            params = {**parent["params"]}  # type: ignore[index]
+        jobs_repo.insert_job(conn, study=study, job_type="PREDICT_BATCH", params=params, user_id=principal.user_id,
+                             user_name=principal.display_name, job_id=parent_id,
+                             result={"batch_id": b["id"], "batch_no": b["batch_no"], "run_count": b["run_count"],
+                                     "dir_rel": b["dir_rel"], "regenerate": True})
+        pb_repo.reset_failed_gen(conn, b["id"])
+        pb_repo.set_parent_job(conn, b["id"], parent_id)
+        audit(conn, principal, "JOB_CREATE", "job", parent_id,
+              {"job_type": "PREDICT_BATCH", "study_id": study["id"], "batch_id": b["id"]}, rid, ip)
+    audit(conn, principal, "PREDICT_BATCH_RETRY_FAILED", "predict_batch", b["id"],
+          {"parent_job_id": parent_id, "retried_job_ids": retried}, rid, ip)
     return {"parent_job_id": parent_id, "retried_job_ids": retried}
