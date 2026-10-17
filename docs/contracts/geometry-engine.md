@@ -30,8 +30,8 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 
 ### 1.3 비범위
 
-- 쉘(`/SHELL`·`/SH3N`) 형상 모핑, `/PROP/SHELL` 두께 파라미터 → 단계 5(선택, §11).
-- 위상 변화(구멍 추가·삭제, 리브 개수 변경), 재메싱, 번호 재지정(renumber), tetra10·hexa.
+- 쉘(`/SHELL`·`/SH3N`) 형상 모핑 → 단계 5(선택, §11). (`/PROP/TYPE1` 쉘 두께 파라미터는 **범위 포함** — 단계 3S, §11.1.)
+- 위상 변화(구멍 추가·삭제, 리브 개수 변경), 번호 재지정(renumber), tetra10·hexa. 재메싱은 1차 비범위(모핑 실패 시 재메시 폴백은 조건부 후속 옵션, §11.2). `/PROP/TYPE9·10·11`(SH_ORTH·COMP·SANDW) 두께는 비범위(`props scan`에서 '미지원' 표시만).
 - 제품(TV 세트) 메시 변경 — 제품은 읽기만(간섭 검사용).
 - `mesh_only` 템플릿(조립 폴더 없음)의 native — 기준 메시가 없으므로 미지원(§15 Q6). native 세트는 항상 `input_kind = assembly`.
 - ⑤ 원본 HyperStudy 최적화(`OPTIMIZE`)의 native — 원본은 tpl·SimLab 고정. native 세트로 생성하면 409(§7.6).
@@ -384,6 +384,8 @@ component의 요소·노드 집합:
 | `paicad update` | **`--cad`**, **`--features`**, **`--values`**, **`--out-dir`**, `--tag-dir`(기준면 접촉 정보), `--body-map`, `--options` | `update.json`(`status: OK`), `sample.brep`, `face_map.json` |
 | `paicad morph` | **`--baseline-inc`**, **`--tag-dir`**, **`--features`**, **`--update-dir`**, **`--out-dir`**, `--options` | `morph.json`(`status: OK`), `morphed.inc` |
 | `paicad check` | **`--baseline-inc`**, **`--morph-dir`**, **`--update-dir`**, **`--tag-dir`**, **`--features`**, **`--values`**, **`--assem-dir`**, **`--renum-csv`**, **`--out-dir`**, **`--out-inc`**, `--options` | `check.json`(`status: PASS`) + `--out-inc` 파일 |
+| `paicad props scan` (단계 3S, §11.1) | **`--assem-dir`**, **`--out-dir`**, `--options` | `props.json`(PROP 목록, 성공 = 존재) |
+| `paicad props apply` (단계 3S) | **`--assem-dir`**(run 폴더 INPUT 복사본), **`--values`**, **`--props`**(`props.json`), **`--out-dir`** | `props_apply.json`(`status: OK`) + 수정된 PROP 정의 파일 사본(원본 불변) |
 | `paicad run` | update·morph·check 인자 합집합 + **`--update-dir`**, **`--morph-dir`**, **`--check-dir`**(각 단계 `--out-dir`), **`--out-inc`** | 각 단계 출력 + `--out-inc`. 한 단계가 FAIL이면 뒤 단계는 실행하지 않음(보고 파일 없음) |
 
 `--features`·`--tag-dir`는 native 준비본의 파일·폴더. `--assem-dir`은 기준본이 들어 있는 조립 폴더(기준본 자신은 제품 메시 수집에서 제외).
@@ -499,8 +501,14 @@ component의 요소·노드 집합:
 | `GEOM_TAG_FAILED` | `PREP` | 경계 분류 실패 | tag | 12 |
 | `GEOM_EXTRACT_EMPTY` | `PREP` | 인식된 피처 없음 | extract | 13 |
 | `GEOM_INPUT_INVALID`·`GEOM_OUTPUT_EXISTS`·`RENUM_CSV_MISSING` | `INPUT` | 입력 오류 | 전부 | 3 |
+| `PROP_OVERRIDDEN_BY_ELEMENT` | `PROP` | 쉘 두께 무효(요소별 두께가 PROP을 덮어씀) | props apply (3S) | 11 |
+| `PROP_THICKNESS_INVALID` | `PROP` | 쉘 두께 ≤ 0 또는 범위 밖 | props apply (3S) | 11 |
+| `PROP_NOT_FOUND` | `PROP` | 지정한 PROP ID·필드를 찾지 못함(형식 변종 포함) | props apply (3S) | 11 |
+| `ID_RANGE_OVERFLOW` | `PREP` | 재메시 노드·요소 번호가 RENUM_INIT 범위 간격 초과(후속 옵션 §11.2, 1차 미구현) | remesh | 11 |
 | `GEOM_INC_FORMAT` | `INTERNAL` | include 고정폭 형식 보존 불가 | morph | 20 |
 | `GEOM_INTERNAL` | `INTERNAL` | 내부 오류 | 전부 | 20 |
+
+경고(실패 아님, `props.json`·`props_apply.json`·run 기록): `PROP_SHARED_BY_PARTS`(한 PROP을 여러 PART가 공유 — 전부 바뀜을 사용 PART 목록과 함께 표시), `PROP_UNSUPPORTED_TYPE`(TYPE9/10/11 발견, '미지원'). 새 코드의 category `PROP`은 화면·DOE에서 "쉘 두께 적용 실패"로 묶는다.
 
 check 최상위 `code` 우선순위(사용자 사유 순서): `INTERFERENCE` → `QUALITY` → `DEVIATION`(`GEOM_DEVIATION` → `GEOM_PARAM_MISMATCH`) → `TIE`. message = 첫 실패 사유 + " 외 k건"(있으면).
 
@@ -739,7 +747,9 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | **2 update+morph+inc** | `paicad update/morph`, 고정폭 쓰기, face_map | G1 S1~S3: update B-rep vs NX `sample.step` 면별 최대 거리 ≤ 0.01 mm·부피 차 ≤ 0.1%. 모핑 메시 경계 노드 ↔ NX 형상 최대 거리 ≤ 0.05 mm. 출력 include diff = `/NODE` 좌표 필드만. 반전 요소 0 |
 | **3 check+스킵** | `paicad check/run`, 실패 코드, PREDICT(A) native 체인, 고급 옵션 저장·사용값 기록, UI 고급 옵션 | 5개 실패 유형마다 의도적 실패 샘플(합성)로 코드·사유 확인. G1 S1~S3 PREDICT(A) native 성공·예측 h3d 생성. `P/geom/options.json`에 사용값 |
 | **4 DOE native** | ①-3 native(LHS·tag 1회·run 병렬·SKIPPED.json·paramitem), ④ PREDICT_BATCH native, ⑤ 내장 최적화 경유 확인, 엔진 분리(datasets·models·409) | G1 LHS 20 run: 스킵률·사유 표, ② h3d 미리보기·③ 데이터셋 생성이 코드 변경 없이 run 폴더를 찾음, `samples.csv`(paramitem) 값 = `doe_matrix.csv`. 혼용 시 422/409 |
-| **5 (선택) 쉘** | `/PROP/SHELL` 두께 파라미터, 쉘 형상 모핑 | 별도 계약(§15 Q4 답 후) |
+| **3S 쉘 두께**(단계 3과 병행 가능, CAD 불필요) | `paicad props scan/apply`, 파라미터 표 병합(extract 결과 + PROP), 두께만 있는 param_set 허용, UI 표 행, 합성 시험 | 합성 조립 rad(공유 PROP·요소별 두께·TYPE9 포함)로 `PROP_OVERRIDDEN_BY_ELEMENT`·`PROP_THICKNESS_INVALID`·공유 경고·'미지원' 표시 확인, 출력 diff = 해당 PROP 두께 필드만, 원본·SPDM 불변 |
+| **5 (선택) 쉘 형상** | 쉘 형상 모핑 | 별도 계약 |
+| (후속 옵션) 재메시 폴백 | §11.2, 1차 미구현 | 조건·절차는 §11.2 |
 
 ---
 
@@ -753,10 +763,28 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 ---
 
-## 11. 단계 5(선택) 미리 정한 경계
+## 11. 단계 3S(쉘 두께, 확정) · 단계 5(선택) · 후속 옵션 경계
 
-- 쉘 두께: `/PROP/SHELL`의 `Thick` 필드만 바꾸는 파라미터 `<COMP>_SHELL_T`(R1과 무관, inc 헤더에 PROP이 있는지 §15 Q3·Q4 답에 따라 기준본 또는 조립 rad 사본에서 수정). 위치 규칙은 이 문서 §6.4 고정폭 규칙 재사용.
-- 쉘 형상 모핑: 면 노드 매핑만(내부 해 없음), 품질 = 쉘 Jacobian·warpage.
+### 11.1 단계 3S — 쉘 두께 파라미터 (이번 범위 포함, 결정 2026-10-17)
+
+- **대상**: 조립 폴더 `/PROP/TYPE1`(SHELL)의 두께 필드만. `/PROP/TYPE9·10·11`(SH_ORTH·COMP·SANDW)은 비범위 — 발견되면 `props.json`에 `supported=false`(`PROP_UNSUPPORTED_TYPE`)로 목록에만 표시, 선택 불가.
+- **발견**: `paicad props scan`이 조립 rad/inc를 읽어 PROP ID·제목·현재 두께·사용 PART 목록·정의 파일(조립 폴더 상대 경로)을 `props.json`(JSON)으로 출력. 사용자가 선택, 범위 기본 ±5%(기존과 동일, min·max 편집). PROP 정의 위치(기준본 헤더 vs 조립 rad)는 scan이 조립 폴더 전체에서 찾으므로 위치에 무관(Q3·Q4 해소).
+- **파라미터 표**: 이름 `<PROP_TITLE 정규화>_SHELL_T`(제목 없으면 `PROP<ID>_SHELL_T`, 충돌 시 ID 접미), `parameter_extracted.xml` 호환(Root/Model/Parameter/Name,Value) 유지. extract 결과(형상)와 PROP 행을 **하나의 파라미터 표**로 합친다(`parameter_features.json`에는 넣지 않고 `props.json`을 별도 입력으로 병합, 표의 `source = prop`).
+- **적용**: run 폴더 INPUT의 **복사본**에서 해당 PROP 카드의 두께 필드만 §6.4 고정폭 형식을 보존하며 교체(`props apply`). 원본 조립 폴더·SPDM 불변. 노드 inc(R1 모핑)와 독립 — 형상 파라미터 없이 쉘 두께만 있는 param_set 허용(이때 tag·update·morph·check 생략).
+- **검사(실패 시 샘플 스킵 + 코드)**: (i) 한 PROP을 여러 PART가 공유 → 경고 `PROP_SHARED_BY_PARTS`(전체 PART 표시, 실패 아님). (ii) `/SHELL` 요소 줄에 요소별 두께가 0이 아니면 PROP 변경이 무효 → `PROP_OVERRIDDEN_BY_ELEMENT` 실패(scan에서도 사전 표시). (iii) 두께 ≤ 0 → `PROP_THICKNESS_INVALID`.
+- **영향(리스크)**: 쉘 두께 변경은 접촉 gap(두께 기반 Igap)·Δt·질량을 바꿀 수 있어 응답 변화에 형상 외 효과가 섞임(§12).
+- **altair 경로 적용은 미결**(GE-11 원칙상 1차 native만, §15 Q13).
+
+### 11.2 모핑 실패 시 재메시 폴백 (조건부 후속 옵션, 1차 미구현)
+
+- 1차: 모핑 실패는 스킵(기존 합의 유지).
+- **허용 조건**: 단계 0 ID 참조 스캐너가 해당 쿠션 component에 대해 tie/RBE/명시적 노드·세그먼트 집합 참조 0건일 때만. 참조가 있으면 재메시해도 집합 소속이 깨지므로 R2 번들 재생성이 필요 — 비범위.
+- **절차**: 재메시 결과를 run 폴더 하위 `remesh/`에 저장 → component 시작번호(`RENUM_INIT`)로 renumber → 노드·요소 수가 범위 간격을 넘는지 검사(넘으면 `ID_RANGE_OVERFLOW` 실패) → 해석 케이스 저장. run 메타에 `mesh_origin: morph|remesh` 기록, 데이터셋 화면에서 구분 표시(위상 상이 샘플 혼재 경고). 메셔(Netgen 등)는 그때 결정.
+- R1 원칙(GE-1, renumber·메셔 불사용)의 예외이므로 구현 전 별도 계약 절·GE-C 메모로 Plan 확인.
+
+### 11.3 단계 5(선택)
+
+- 쉘 형상 모핑: 면 노드 매핑만(내부 해 없음), 품질 = 쉘 Jacobian·warpage. 별도 계약.
 
 ---
 
@@ -775,6 +803,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | 같은 STEP이라도 OCP 버전 바뀌면 면 번호 변경 | 준비본 무효 | `prep.json.ocp_version` 비교 → STALE, 면 서명으로 재식별 |
 | 엔진 혼용으로 모델 오용 | 조용한 오답 | DB 엔진 기록 + 409/422 |
 | 기준면 규칙 미확정 | 두께 변경 방향 오류 | `ref.confirmed=false` 표시, Q2 확정 후 기본값 변경(설정만) |
+| 쉘 두께 변경(3S)이 접촉 gap(Igap)·Δt·질량을 바꿈 | 응답 변화에 형상 외 효과 혼입, Δt 감소로 해석 시간 증가 | run 기록에 두께 값 저장, 공유 PROP 경고, 범위 ±5% |
+| 재메시 폴백(후속) 샘플 혼재 | 위상 상이 샘플이 데이터셋 품질 저하 | `mesh_origin` 기록·구분 표시·혼재 경고 |
 
 ---
 
@@ -787,7 +817,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Impl-Backend(검사) | `scripts/test-all.sh`·`.ps1`(+ 필요 시 `scripts/check_paicad_version.py`): `packages/paicad` 변경 시 `__version__` 변경 + CHANGELOG 최상단 항목 버전 == `__version__` + 루트 고정·lock 일치(§17.5). A의 첫 커밋 전에 넣는다 |
 | Impl-Backend(검사, §18) | 같은 `scripts/test-all`에 "paicad에서 플랫폼 모듈(`physicsai_core`·`backend`·`worker`·`physicsai_worker`) import 금지 검사"(AST로 `packages/paicad/src`·`tests` 스캔) + `pytest packages/paicad` 단독 실행 단계 + 플랫폼 고유 파일명·경로 하드코딩 검사 + 라이선스 고지 파일 존재 검사 |
 | Impl-Frontend | §8 |
-| 순서 | A 단계 1 → B 단계 1(fake로 병행) → A 2 → A 3 + B 3 → B 4 → 프런트(단계 1·3·4 화면) |
+| 순서 | A 단계 1 → B 단계 1(fake로 병행) → A 2 → A 3 + B 3 → B 4 → 프런트(단계 1·3·4 화면). 단계 3S(`props scan/apply`: A, 파라미터 표 병합·두께만 param_set·fake_paicad: B, UI 행: 프런트)는 단계 3과 병행 가능(CAD 불필요) |
 
 ---
 
@@ -803,6 +833,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - V-GE-8 엔진 혼용 409/422, altair 기존 시험 전부 통과.
 - V-GE-9 고급 옵션 저장·병합·범위 검사, 사용값 `options.json` 기록, tag 절 변경 시 STALE.
 - V-GE-10 migration 0012 업그레이드·기존 행 기본값·CHECK.
+- V-GE-15 쉘 두께(§11.1): TYPE1만 적용·TYPE9/10/11 '미지원' 표시, 출력 diff = 지정 PROP 두께 필드만(고정폭 보존), 원본·SPDM 불변, 공유 PROP 경고, 요소별 두께 → `PROP_OVERRIDDEN_BY_ELEMENT`, 두께 ≤0 → `PROP_THICKNESS_INVALID`, 두께만 있는 param_set 동작, 파라미터 표 병합·XML 호환, altair 경로 무변경.
 - V-GE-11 버전(§17): `packages/paicad` 변경 커밋마다 `__version__` 올림·CHANGELOG 최상단 항목 일치(test-all 검사 존재·통과), native JSON·옵션 사용값·DB에 `engine_version` 기록, 출력 include에 버전 주석 없음.
 - V-GE-12 altair 경로 불변(§1.4·§16): 기존 altair 시험 무수정 통과, 분기 지점 밖 altair 코드 diff 없음.
 - V-GE-13 독립성(§18.1·18.5): `packages/paicad`가 `physicsai_core`·`backend`·`worker`·`physicsai_worker`를 import하지 않음(검사 존재·통과, 위반 주입 시 실패 확인), 플랫폼 패키지·DB·`platform.yaml` 없이 `pytest packages/paicad` 단독 통과, 자체 `pyproject.toml`·`CHANGELOG.md`·제3자 라이선스 고지 파일 존재.
@@ -816,8 +847,9 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 |---|---|---|
 | Q1 | 공칭 STEP과 기준 메시(SimLab `EPS_mesh` → m_2 include) 좌표가 같은 원점·단위·형상인가? SimLab 디피처링(작은 필렛 제거 등)이 있나? | 일치 가정. 불일치는 `GEOM_BASELINE_MISMATCH`로 차단(자동 정렬 없음). 디피처링된 면은 피처에서 제외 |
 | Q2 | 두께 기준면 규칙: 제품·타 바디 접촉면 고정, 반대 면 이동이 맞나? 둘 다 접촉/둘 다 비접촉일 때는? | `contact_fixed` + 동률이면 면적 큰 면 고정, `ref.confirmed=false` |
-| Q3 | `104_replace_node_elem.inc` 헤더에 `/PART`·`/PROP`(·`/MAT`)가 포함되나, 아니면 노드·요소만인가? | R1은 `/NODE`만 바꾸므로 무관하게 원문 보존. 단계 5에 영향 |
-| Q4 | 쉘 두께 `/PROP/SHELL`을 파라미터 범위에 넣나(단계 5)? 넣는다면 PROP 정의 위치(기준본 vs 조립 rad)? | 1차 제외 |
+| Q3 | `104_replace_node_elem.inc` 헤더에 `/PART`·`/PROP`(·`/MAT`)가 포함되나, 아니면 노드·요소만인가? | R1은 `/NODE`만 바꾸므로 무관하게 원문 보존. 3S는 조립 폴더 전체 scan이라 무관 |
+| Q4 | ~~쉘 두께 `/PROP/SHELL`을 파라미터 범위에 넣나? PROP 정의 위치?~~ | **해결(2026-10-17)**: TYPE1 두께 포함(단계 3S, §11.1), 위치는 `props scan`이 조립 폴더에서 발견, TYPE9/10/11 비범위 |
+| Q13 | 쉘 두께(3S)를 altair 경로에도 적용하나? 모핑 실패 재메시 폴백(§11.2)을 언제·어떤 메셔로? | altair 미적용(GE-11, 1차 native만). 재메시는 후속 옵션, 미구현 |
 | Q5 | `RENUM_INIT.csv` 실제 형식이 `part,node_start,elem_start`이고 part = 쿠션 component 이름인가(코드에는 파일 이름만 있음)? 쿠션 외 part 행이 있나? | 사용자 진술대로. 쿠션 외 행은 STEP 바디가 없으면 `GEOM_BODY_MAP_FAILED` — 있으면 `body_map.json`에 `"<part>": null`(고정) 지원 여부 결정 필요 |
 | Q6 | `mesh_only` 템플릿(조립 폴더 없음)도 native가 필요한가? | 미지원(기준 메시 없음). 필요하면 세트에 `baseline/EPS_mesh_0000.rad`를 두는 변형을 별도 결정 |
 | Q7 | tie 정의 해석 실패 시 실패(엄격)로 할지 경고로 할지, 기본 dsearch 값 | 경고(`NOT_EVALUATED`), 기본 dsearch = 공칭 최대 거리 × 1.5 |
