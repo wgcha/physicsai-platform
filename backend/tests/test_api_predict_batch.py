@@ -498,12 +498,22 @@ def test_v3_s9_17_put_responses(client, loaded_config):
         [{"name": "A", "spec": {**spec, "component": "von|Mises"}}],
         [{"name": "A", "spec": {**spec, "source": "XYDATA"}}],
         [{"name": "A", "spec": {**spec, "goal": "MINIMIZE"}}],
+        [{"name": "A", "spec": {**spec, "component": None}}],          # 선택 항목이어도 값은 문자열(layer와 같은 규칙)
+        [{"name": "A", "spec": {**spec, "component": 'von"Mises'}}],
     ]
     for rows in bad:
         rows = rows + [{"name": "MaxStress", "spec": None}, {"name": "Disp", "spec": None}]
         r = client.put(f"{API}/param-sets/{ps['id']}/responses", headers=PW, json={"responses": rows})
         assert r.status_code == 422 and r.json()["detail"]["code"] == "RESPONSE_INVALID", rows
         assert r.json()["detail"]["problems"]
+    # D3-54: component는 선택(빈 값·키 없음 = "") — PhysicsAI 예측 h3d CornerStress처럼 성분 없는 결과
+    corner = {k: v for k, v in spec.items() if k != "component"} | {"datatype": "CornerStress"}
+    rows = [*body["responses"], {"name": "Corner", "unit": "MPa", "spec": {**corner, "component": ""}},
+            {"name": "Corner2", "unit": "", "spec": corner}]
+    r = client.put(f"{API}/param-sets/{ps['id']}/responses", headers=PW, json={"responses": rows})
+    assert r.status_code == 200, r.text
+    assert [x["spec"]["component"] for x in r.json()["responses"][3:]] == ["", ""]
+    assert json.loads((stored / "responses.json").read_text(encoding="utf-8"))["responses"][4]["spec"] == {**corner, "component": ""}
     r = client.put(f"{API}/param-sets/{ps['id']}/responses", headers=PW, json={"responses": [{"name": "MaxStress", "spec": spec}]})
     assert r.status_code == 422 and r.json()["detail"]["code"] == "RESPONSE_IN_USE"
     assert "Disp" in r.json()["detail"]["problems"][0]["message"]

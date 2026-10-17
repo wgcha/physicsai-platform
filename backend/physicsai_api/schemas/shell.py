@@ -12,7 +12,7 @@ from .jobs import JobSummary
 
 __all__ = [
     "StatusConfig", "StatusWorker", "StatusHpc", "KeyOk", "TemplateConfigured", "StatusLimits", "ResourceStatus",
-    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusResponse", "QueueSlot", "QueueLight",
+    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusResponse", "QueueSlot", "QueueLight",
     "QueueResponse", "MoveRequest", "GpuInfo", "ResourceJob", "ResourceLimits", "ResourcesResponse",
     "Notification", "NotificationList", "UnreadCount", "ReadRequest", "ReadResponse", "AdminConfig",
 ]
@@ -93,12 +93,24 @@ class StatusEnvCheck(Resp):
     warn: int | None = None
 
 
+class StatusCaptureEstimate(Resp):
+    """일괄 예측 화면 "캡처 예상" 참고 문구의 가정값(config `capture.estimate_*`, 서버 실측 아님)."""
+
+    image_mb: float
+    video_mb: float
+    sec_per_view: float
+    sec_per_video: float
+
+
 class StatusCapture(Resp):
     """컨투어 캡처 기본값(config `capture`) — 일괄 예측 설정 화면의 방향·동영상 기본 표시(D3-53)."""
 
     views: list[str]
     video: bool
     video_ext: str
+    default_field: str = "CornerStress"  # D3-54: 화면 결과 종류 기본·성분 후보 판단
+    default_component: str = ""  # D3-54: 결과 종류가 default_field일 때 성분 기본(빈 값 = 없음)
+    estimate: StatusCaptureEstimate | None = None  # D3-54: 일괄 예측 "캡처 예상" 가정값
 
 
 class StatusResponse(Resp):

@@ -332,8 +332,13 @@ describe("D3-53 결과 종류 직접 입력", () => {
     const sec = await screen.findByTestId("contour-display");
     const field = within(sec).getByLabelText("결과 종류") as HTMLInputElement;
     await waitFor(() => expect(field.value).toBe("Stress"));
+    const comp = within(sec).getByLabelText("성분") as HTMLInputElement;
+    expect(comp.placeholder).toBe("(없음)");
     fireEvent.change(field, { target: { value: "CornerStress" } });
-    fireEvent.change(within(sec).getByLabelText("성분"), { target: { value: "" } });
+    fireEvent.change(comp, { target: { value: "" } });
+    // D3-54: CornerStress면 성분 후보·placeholder로 vonMises(비워 두면 서버가 capture.default_component를 쓴다)
+    expect(comp.placeholder).toBe("vonMises(기본)");
+    expect(Array.from(within(sec).getByTestId("cd-comp-ps-1-list").querySelectorAll("option")).map((o) => o.value)).toEqual(["vonMises"]);
     fireEvent.click(within(sec).getByRole("button", { name: "표시 설정 저장" }));
     await waitFor(() => expect(puts).toHaveLength(1));
     expect(puts[0].display).toMatchObject({ field: "CornerStress", component: "" });

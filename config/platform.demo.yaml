@@ -112,7 +112,8 @@ env_check:
   min_free_gb: 1
 
 capture:
-  default_field: "CornerStress"   # 예측 h3d 응력 결과(성분 없음, D3-53) — 가짜 hw 캡처도 같은 이름을 쓴다
+  default_field: "CornerStress"   # 예측 h3d 응력 결과(D3-53) — 가짜 hw 캡처도 같은 이름을 쓴다
+  default_component: "vonMises"   # D3-54: 결과 필드가 CornerStress이고 성분이 비면 이 성분
 
 logging:
   level: INFO

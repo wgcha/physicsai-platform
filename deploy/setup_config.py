@@ -364,6 +364,10 @@ UPGRADE_GROUPS = ((UPGRADE_MARKER, UPGRADES), (UPGRADE_MARKER_S9, UPGRADES_S9))
 CAPTURE_FIELD_PATH = ("capture", "default_field")
 CAPTURE_FIELD_OLD = ("Von Mises",)
 CAPTURE_FIELD_MARK = "setup.ps1 D3-53"
+# D3-54: 성분 기본 capture.default_component("vonMises") — capture 절은 있는데 키가 없는(D3-54 이전) 설정에만 1회 보충(줄 끝 표시).
+# 이후 사용자가 바꾼 값(빈 값 = 성분 없음 포함)은 보존한다. 키가 없어도 프로그램 기본값은 같다.
+CAPTURE_COMPONENT_PATH = ("capture", "default_component")
+CAPTURE_COMPONENT_MARK = "setup.ps1 D3-54"
 
 
 def yaml_line(text: str, path: tuple[str, str]) -> tuple[int, str] | None:
@@ -631,6 +635,13 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
         text = set_line_comment(text, CAPTURE_FIELD_PATH, f"예측 h3d 응력 결과({CAPTURE_FIELD_MARK}: 이전 기본 {cur} → 새 기본)")
         upgraded[CAPTURE_FIELD_PATH] = field_want
         rows.append({"key": ".".join(CAPTURE_FIELD_PATH), "value": field_want, "action": "새 기본값으로 갱신(이전 기본값)"})
+    has, cur = _get(base, CAPTURE_COMPONENT_PATH)
+    ex_has, comp_want = _get(example, CAPTURE_COMPONENT_PATH)
+    if not new_file and not has and ex_has and isinstance(comp_want, str) and isinstance(base.get("capture"), dict):
+        text = set_yaml_value(text, CAPTURE_COMPONENT_PATH, comp_want,
+                              f"결과 필드가 default_field일 때 성분({CAPTURE_COMPONENT_MARK}이 보충)")
+        upgraded[CAPTURE_COMPONENT_PATH] = comp_want
+        rows.append({"key": ".".join(CAPTURE_COMPONENT_PATH), "value": comp_want, "action": "보충(새 설정 키)"})
     # 로그인·"대시보드로" 링크(D3-38): 키가 없거나 이전 기본값 "/"일 때만 대시보드 웹 경로로, 사용자 값은 보존
     login_want, login_warn = dashboard_login_url(inputs, str(deploy.get("dashboard_root") or ""))
     if login_warn:

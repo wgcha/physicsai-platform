@@ -3133,12 +3133,37 @@ export interface components {
          * @description 컨투어 캡처 기본값(config `capture`) — 일괄 예측 설정 화면의 방향·동영상 기본 표시(D3-53).
          */
         StatusCapture: {
+            /**
+             * Default Component
+             * @default
+             */
+            default_component: string;
+            /**
+             * Default Field
+             * @default CornerStress
+             */
+            default_field: string;
+            estimate?: components["schemas"]["StatusCaptureEstimate"] | null;
             /** Video */
             video: boolean;
             /** Video Ext */
             video_ext: string;
             /** Views */
             views: string[];
+        };
+        /**
+         * StatusCaptureEstimate
+         * @description 일괄 예측 화면 "캡처 예상" 참고 문구의 가정값(config `capture.estimate_*`, 서버 실측 아님).
+         */
+        StatusCaptureEstimate: {
+            /** Image Mb */
+            image_mb: number;
+            /** Sec Per Video */
+            sec_per_video: number;
+            /** Sec Per View */
+            sec_per_view: number;
+            /** Video Mb */
+            video_mb: number;
         };
         /** StatusConfig */
         StatusConfig: {

@@ -5712,6 +5712,26 @@
       "StatusCapture": {
         "description": "컨투어 캡처 기본값(config `capture`) — 일괄 예측 설정 화면의 방향·동영상 기본 표시(D3-53).",
         "properties": {
+          "default_component": {
+            "default": "",
+            "title": "Default Component",
+            "type": "string"
+          },
+          "default_field": {
+            "default": "CornerStress",
+            "title": "Default Field",
+            "type": "string"
+          },
+          "estimate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatusCaptureEstimate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "video": {
             "title": "Video",
             "type": "boolean"
@@ -5734,6 +5754,35 @@
           "video_ext"
         ],
         "title": "StatusCapture",
+        "type": "object"
+      },
+      "StatusCaptureEstimate": {
+        "description": "일괄 예측 화면 \"캡처 예상\" 참고 문구의 가정값(config `capture.estimate_*`, 서버 실측 아님).",
+        "properties": {
+          "image_mb": {
+            "title": "Image Mb",
+            "type": "number"
+          },
+          "sec_per_video": {
+            "title": "Sec Per Video",
+            "type": "number"
+          },
+          "sec_per_view": {
+            "title": "Sec Per View",
+            "type": "number"
+          },
+          "video_mb": {
+            "title": "Video Mb",
+            "type": "number"
+          }
+        },
+        "required": [
+          "image_mb",
+          "video_mb",
+          "sec_per_view",
+          "sec_per_video"
+        ],
+        "title": "StatusCaptureEstimate",
         "type": "object"
       },
       "StatusConfig": {

@@ -65,7 +65,11 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
         "resources": _resource_status(s),
         "features": feature_status(s, av.configured),
         "env_check": env_status(ctx, principal) if principal is not None else None,
-        "capture": {"views": list(s.capture.views), "video": bool(s.capture.video), "video_ext": s.capture.video_ext},
+        "capture": {"views": list(s.capture.views), "video": bool(s.capture.video), "video_ext": s.capture.video_ext,
+                    "default_field": s.capture.default_field, "default_component": s.capture.default_component,
+                    "estimate": {"image_mb": s.capture.estimate_image_mb, "video_mb": s.capture.estimate_video_mb,
+                                 "sec_per_view": s.capture.estimate_sec_per_view,
+                                 "sec_per_video": s.capture.estimate_sec_per_video}},
         "demo": bool(s.demo.enabled),
     }
 

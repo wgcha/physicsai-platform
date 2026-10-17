@@ -152,7 +152,8 @@ def resolve_display(cfg: Any, param_set: Mapping[str, Any] | None, *overrides: M
                     ) -> tuple[dict[str, Any], str]:
     """최종 표시 설정과 필드 출처(`config`|`response`|`template`|`params`).
 
-    cfg = Settings.capture. 층마다 null이 아닌 키만 덮어쓴다. 어떤 층이 field를 정하면 component는 그 층 값(없으면 '')."""
+    cfg = Settings.capture. 층마다 null이 아닌 키만 덮어쓴다. 어떤 층이 field를 정하면 component는 그 층 값(없으면 '').
+    마지막에 성분이 비었고 field가 `capture.default_field`이면 `capture.default_component`(D3-54)."""
     out: dict[str, Any] = {"field": cfg.default_field, "component": "", "avgmode": "", "comps": [],
                            "legend": {"mode": "auto", "min": None, "max": None}, "views": list(cfg.views)}
     source = "config"
@@ -177,6 +178,9 @@ def resolve_display(cfg: Any, param_set: Mapping[str, Any] | None, *overrides: M
             mode = lg.get("mode") or "auto"
             out["legend"] = {"mode": mode, "min": lg.get("min") if mode == "fixed" else None,
                              "max": lg.get("max") if mode == "fixed" else None}
+    # D3-54: 성분이 비었고 결과 필드가 config 기본(CornerStress)이면 capture.default_component(vonMises)
+    if not out["component"] and out["field"] == cfg.default_field:
+        out["component"] = getattr(cfg, "default_component", "") or ""
     return out, source
 
 

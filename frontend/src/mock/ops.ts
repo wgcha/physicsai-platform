@@ -106,7 +106,10 @@ export const opsRoutes: Route = (srv, { method, path, seg, query, body, headers,
         ui: srv.ui,
         auth: { mode: "dashboard", login_url: srv.loginUrl },
         demo: srv.demo,
-        capture: { views: ["iso", "front", "top", "right"], video: true, video_ext: "mp4" }, // D3-53 config capture 기본
+        capture: {
+          views: ["iso", "front", "top", "right"], video: true, video_ext: "mp4", default_field: "CornerStress", default_component: "vonMises",
+          estimate: { image_mb: 0.3, video_mb: 1, sec_per_view: 20, sec_per_video: 40 },
+        }, // D3-53·D3-54 config capture 기본
         ...srv.p2.status(me.is_global_admin),
       },
     };

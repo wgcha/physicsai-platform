@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -27,7 +28,14 @@ class CaptureCfg(_M):
     video: bool = True  # 방향마다 애니메이션 동영상도 저장
     video_ext: str = "mp4"  # mp4 | avi | gif
     use_last: bool = True  # 마지막 프레임 기준 캡처(false = 첫 프레임)
-    default_field: str = "CornerStress"  # 템플릿 표시 설정·응답 정의가 없을 때의 결과 필드(예측 h3d 응력, 성분 없음 — D3-53)
+    default_field: str = "CornerStress"  # 템플릿 표시 설정·응답 정의가 없을 때의 결과 필드(예측 h3d 응력 — D3-53)
+    # D3-54: 최종 표시 설정의 성분이 비었고 결과 필드가 default_field이면 이 성분(capture_settings.tcl DCOMP). "" = 성분 없음
+    default_component: str = "vonMises"
+    # D3-54: 일괄 예측 화면 "캡처 예상" 참고 문구의 가정값(서버 실측 아님) — 방향 1개당 이미지·영상 크기(MB), 캡처 시간(초)
+    estimate_image_mb: float = 0.3
+    estimate_video_mb: float = 1.0
+    estimate_sec_per_view: float = 20
+    estimate_sec_per_video: float = 40
     timeout_s: float | None = 1800  # 캡처 1회 상한(초). 넘으면 프로세스 종료 + 경고. null = 상한 없음
     max_video_bytes: int = 209715200  # 동영상 1개 등록·제공 상한(200 MiB)
 
@@ -70,6 +78,14 @@ def validate_capture(s: Settings, issues: list[ConfigIssue]) -> None:
     df = c.default_field
     if not df.strip() or len(df) > 64 or any(ch in DEFAULT_FIELD_FORBIDDEN or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in df):
         issues.append(issue("capture.default_field", "1~64자, 따옴표·괄호·$·\\·;·|·제어문자 없음"))
+    dc = c.default_component
+    if len(dc) > 64 or any(ch in DEFAULT_FIELD_FORBIDDEN or ord(ch) < 0x20 or ord(ch) == 0x7F for ch in dc):
+        issues.append(issue("capture.default_component", "0~64자(빈 값 = 성분 없음), 따옴표·괄호·$·\\·;·|·제어문자 없음"))
+    for k, hi in (("estimate_image_mb", 1024), ("estimate_video_mb", 4096), ("estimate_sec_per_view", 3600),
+                  ("estimate_sec_per_video", 3600)):
+        v = getattr(c, k)
+        if not (math.isfinite(v) and 0 <= v <= hi):
+            issues.append(issue(f"capture.{k}", f"0~{hi}"))
     if c.timeout_s is not None and not 1 <= c.timeout_s <= 86400:
         issues.append(issue("capture.timeout_s", "1~86400 또는 null"))
     if not 1048576 <= c.max_video_bytes <= 4294967296:

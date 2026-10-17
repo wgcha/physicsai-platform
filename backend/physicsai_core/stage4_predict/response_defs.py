@@ -2,6 +2,8 @@
 
 형식 = 원본 ⑤ `OPTIMIZE.responses`의 H3D 부분(phase2 §6.12 RESPONSES 규칙): 행 `{name, unit, spec}`,
 spec `{source:"H3D", subcase(≥1 정수), datatype, component, layer, stat(MAX|MIN|ABSMAX)}`. goal·bound 없음, XYDATA는 후속.
+component는 layer와 같은 **선택 항목**(D3-54): 없으면 "", 있으면 문자열(⑤ 결과 이름 필드 문자 규칙·`|` 금지·200자) —
+PhysicsAI 예측 h3d 응력 `CornerStress`처럼 성분 없는 결과. 요청 줄에는 빈 필드(`NAME|1|CornerStress||`)로 쓴다.
 spec이 null인 행 = 추출 정의 없음(이름·단위만 — 실측 `resp:` 열 이름을 유지할 때).
 요청 파일(`H3D_REQUESTS.txt`) 작성·`RESPONSES.txt` 파싱은 워커 공용 `responses.py`가 이 정규화 형식을 읽는다.
 
@@ -58,14 +60,15 @@ def _spec(out: list[dict[str, Any]], i: int, spec: Any) -> dict[str, Any] | None
     sc = spec.get("subcase")
     if isinstance(sc, bool) or not isinstance(sc, int) or sc < 1:
         _problem(out, i, "RESPONSE_INVALID", "subcase는 1 이상 정수")
+    component = spec.get("component", "")  # D3-54: 선택 항목(layer와 같은 규칙)
     layer = spec.get("layer", "")
     _check_field(out, i, "datatype", spec.get("datatype"), required=True)
-    _check_field(out, i, "component", spec.get("component"), required=True)
+    _check_field(out, i, "component", component, required=False)
     _check_field(out, i, "layer", layer, required=False)
     if spec.get("stat") not in STATS:
         _problem(out, i, "RESPONSE_INVALID", "stat은 MAX | MIN | ABSMAX")
     return {"source": spec.get("source"), "subcase": sc, "datatype": spec.get("datatype"),
-            "component": spec.get("component"), "layer": layer, "stat": spec.get("stat")}
+            "component": component, "layer": layer, "stat": spec.get("stat")}
 
 
 def validate_response_defs(rows: Any, *, measured: Iterable[str] = ()) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

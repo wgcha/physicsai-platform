@@ -25,6 +25,20 @@ def test_request_line_order_and_validation():
                                                       "# NAME|SUBCASE|DATATYPE|COMPONENT|LAYER"]
 
 
+def test_empty_component_request_line_and_parse():
+    """D3-54: component는 선택 — 빈 값·키 없음은 요청 줄의 빈 필드(layer와 같은 처리), RESPONSES.txt는 이름으로 읽는다."""
+    corner = {"name": "Corner", "unit": "MPa", "spec": {"source": "H3D", "subcase": 1, "datatype": "CornerStress",
+                                                         "component": "", "layer": "", "stat": "ABSMAX"}}
+    nokey = {"name": "Corner2", "spec": {"SOURCE": "H3D", "SUBCASE": 1, "DATATYPE": "CornerStress", "STAT": "MAX"}}
+    reqs, skipped = R.build_requests([corner, nokey])
+    assert skipped == {} and [q.line() for q in reqs] == ["Corner|1|CornerStress||", "Corner2|1|CornerStress||"]
+    assert R.requests_text(reqs).splitlines()[2:] == ["Corner|1|CornerStress||", "Corner2|1|CornerStress||"]
+    p = R.parse_responses_text("# RESPONSES.txt generated\nRESP:Corner_MIN=-3.0e+01\nRESP:Corner_MAX=2.5e+01\n"
+                               "RESP:Corner2=DATATYPE_ERR\n")
+    vals, why = R.pick_values([corner, nokey], p)
+    assert vals == {"Corner": 30.0, "Corner2": None} and why == {"Corner2": "DATATYPE_ERR"}
+
+
 def test_field_order_is_one_constant(monkeypatch):
     """E4-9-5에서 순서가 다르면 REQUEST_FIELDS 상수 하나만 바꾼다."""
     monkeypatch.setattr(R, "REQUEST_FIELDS", ("NAME", "DATATYPE", "COMPONENT", "LAYER", "SUBCASE"))

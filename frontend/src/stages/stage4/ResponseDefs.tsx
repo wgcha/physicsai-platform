@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api, errorMessage, type ParamSet, type ResponseCandidates, type ResponseStat, type TemplateResponse } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { NAME_RE, suggestName } from "../stage5/ResponseTable";
-import { ComboInput, DEFAULT_RESULT_FIELD } from "./ComboInput";
+import { ComboInput, DEFAULT_RESULT_COMPONENT, DEFAULT_RESULT_FIELD, componentOptions } from "./ComboInput";
 
 const STATS: ResponseStat[] = ["MAX", "MIN", "ABSMAX"];
 export const NO_CANDIDATES_TEXT = "예측을 한 번 실행하면 목록이 채워집니다";
@@ -141,7 +141,9 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
   }, [h3d]);
   const dtObj = dts.find((d) => d.name === datatype);
   const dtVal = datatype;
-  const comps = dtObj?.components ?? [];
+  // D3-54: component는 선택(비우면 요청 줄의 빈 필드). datatype이 CornerStress면 후보에 vonMises
+  const comps = componentOptions(dtVal, dtObj?.components ?? []);
+  const compHint = dtVal.trim() === DEFAULT_RESULT_FIELD ? `없음(예: ${DEFAULT_RESULT_COMPONENT})` : "없음";
   const compVal = component;
   const onDatatype = (v: string) => {
     setDatatype(v);
@@ -161,8 +163,7 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
     const s = Number(sc ? sc.id : subcase);
     if (!Number.isInteger(s) || s < 1) return setError("subcase는 1 이상 정수");
     if (!dtVal.trim()) return setError("datatype을 입력하세요");
-    if (!compVal.trim()) return setError("component를 입력하세요");
-    onAdd({ name: nameVal, unit: unit.trim(), spec: { source: "H3D", subcase: s, datatype: dtVal, component: compVal, layer: layerVal, stat } });
+    onAdd({ name: nameVal, unit: unit.trim(), spec: { source: "H3D", subcase: s, datatype: dtVal, component: compVal.trim(), layer: layerVal, stat } });
     setNameTouched(false);
     setName("");
     setUnit("");
@@ -186,7 +187,7 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
       <div className="resp-add-row" role="group" aria-label="응답 추가">
         {sel("subcase", sc ? String(sc.id) : subcase, h3d ? h3d.subcases.map((x) => String(x.id)) : null, setSubcase, "narrow")}
         <ComboInput id="resp-add-dt" label="datatype" value={dtVal} options={dts.map((d) => d.name)} onChange={onDatatype} placeholder={DEFAULT_RESULT_FIELD} />
-        <ComboInput id="resp-add-comp" label="component" value={compVal} options={comps} onChange={setComponent} placeholder="component" />
+        <ComboInput id="resp-add-comp" label="component" value={compVal} options={comps} onChange={setComponent} placeholder={compHint} />
         {sel("layer", layerVal, layers, setLayer, "narrow")}
         {sel("stat", stat, STATS, (v) => setStat(v as ResponseStat), "narrow")}
         <input aria-label="단위" className="narrow" value={unit} placeholder="단위" onChange={(e) => setUnit(e.target.value)} />

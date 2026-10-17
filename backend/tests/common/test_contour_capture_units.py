@@ -37,14 +37,18 @@ def test_capture_config_defaults_ranges_and_example(p2_dict, tmp_path):
     assert lc.ok, lc.issues
     assert lc.settings.capture.model_dump() == {
         "enabled": True, "views": ["iso", "front", "top", "right"], "video": True, "video_ext": "mp4", "use_last": True,
-        "default_field": "CornerStress", "timeout_s": 1800, "max_video_bytes": 209715200}
+        "default_field": "CornerStress", "default_component": "vonMises", "estimate_image_mb": 0.3, "estimate_video_mb": 1.0,
+        "estimate_sec_per_view": 20, "estimate_sec_per_video": 40, "timeout_s": 1800, "max_video_bytes": 209715200}
     # 설정 파일에 commands.contour_capture가 없어도 기본 템플릿(기능 켬)
     assert lc.settings.commands.contour_capture == ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{capture_tcl}"]
     bad = (("views", []), ("views", ["iso", "iso"]), ("views", ["diag"]), ("video_ext", "mov"), ("default_field", 'a"b'),
-           ("default_field", "Von|Mises"), ("default_field", "a\tb"), ("timeout_s", 0), ("max_video_bytes", 10))
+           ("default_field", "Von|Mises"), ("default_field", "a\tb"), ("timeout_s", 0), ("max_video_bytes", 10),
+           ("default_component", "a|b"), ("default_component", 'v"m'), ("default_component", "x" * 65),
+           ("estimate_video_mb", -1), ("estimate_sec_per_view", float("inf")), ("estimate_image_mb", 5000))
     for k, v in bad:
         assert _load({**p2_dict, "capture": {k: v}}).error_keys() == [f"capture.{k}"], (k, v)
     assert _load({**p2_dict, "capture": {"timeout_s": None, "views": ["back"], "video_ext": "gif"}}).ok
+    assert _load({**p2_dict, "capture": {"default_component": ""}}).ok                      # D3-54: 빈 값 = 성분 없음
     assert _load({**p2_dict, "capture": {"bogus": 1}}).error_keys()[0].startswith("capture")
     for v, ok in (("relative/x.tcl", False), ("/a b/x.tcl", False), (str(tmp_path / "x.tcl"), True)):
         res = {**p2_dict["resources"], "contour_capture_tcl": v}
@@ -137,7 +141,7 @@ def test_resolve_display_order():
 
     cfg = Settings().capture
     d, src = resolve_display(cfg, None)
-    assert src == "config" and d == {"field": "CornerStress", "component": "", "avgmode": "", "comps": [],
+    assert src == "config" and d == {"field": "CornerStress", "component": "vonMises", "avgmode": "", "comps": [],
                                      "legend": {"mode": "auto", "min": None, "max": None}, "views": ["iso", "front", "top", "right"]}
     ps = {"responses": [{"name": "M", "spec": None}, {"name": "S", "spec": {"datatype": "Stress", "component": "vonMises"}}]}
     d, src = resolve_display(cfg, ps)
@@ -151,6 +155,12 @@ def test_resolve_display_order():
                                                               {"mode": "fixed", "min": 0.0, "max": 200.0})
     d, src = resolve_display(cfg, ps, batch, {"field": "Von Mises", "legend": {"mode": "auto"}})
     assert (src, d["field"], d["legend"]["mode"], d["views"]) == ("params", "Von Mises", "auto", ["top"])
+    # D3-54: 성분이 비었고 field가 capture.default_field(CornerStress)일 때만 capture.default_component
+    corner = {"responses": [{"name": "C", "spec": {"datatype": "CornerStress", "component": ""}}]}
+    assert resolve_display(cfg, corner)[0]["component"] == "vonMises"
+    assert resolve_display(cfg, corner, {"field": "CornerStress", "component": "P1"})[0]["component"] == "P1"
+    assert resolve_display(cfg, ps, {"field": "Stress"})[0]["component"] == ""                  # 다른 field는 그대로 빈 값
+    assert resolve_display(cfg.model_copy(update={"default_component": ""}), corner)[0]["component"] == ""
 
 
 # ---- capture_settings.tcl ------------------------------------------------------------------------

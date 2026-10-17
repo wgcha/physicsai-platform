@@ -150,9 +150,15 @@ capture:                          # ④ 예측 컨투어 캡처(phase3 §15 S10)
   video: true                     # 방향마다 애니메이션 동영상도 저장
   video_ext: "mp4"                # mp4 | avi | gif
   use_last: true                  # 마지막 프레임 기준 캡처(false = 첫 프레임)
-  default_field: "CornerStress"   # 템플릿 표시 설정·응답 정의가 없을 때 결과 필드(PhysicsAI 예측 h3d 응력 — hwc result scalar load type=CornerStress, 성분 없음)
+  default_field: "CornerStress"   # 템플릿 표시 설정·응답 정의가 없을 때 결과 필드(PhysicsAI 예측 h3d 응력 — hwc result scalar load type=CornerStress)
+  default_component: "vonMises"   # 성분이 비었고 결과 필드가 default_field일 때 성분(component= "vonMises", 실패 시 type만 재시도). "" = 없음
   timeout_s: 1800                 # 캡처 1회 상한(초, 1~86400, null = 없음). 넘으면 HyperView를 종료하고 경고
   max_video_bytes: 209715200      # 동영상 1개 등록·제공 상한(200 MiB)
+  # 일괄 예측 화면 "캡처 예상" 참고 문구의 가정값(서버 실측 아님): 방향 1개당 이미지·영상 크기(MB), 캡처 시간(초)
+  estimate_image_mb: 0.3
+  estimate_video_mb: 1
+  estimate_sec_per_view: 20
+  estimate_sec_per_video: 40
 
 commands:
   # argv 템플릿. 허용 placeholder는 계약 §9.2. 펼침 토큰: @cmd_c, @write_files, @hooks_arg

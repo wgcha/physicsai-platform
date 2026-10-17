@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
-import { captureEstimate, captureParam } from "../stages/stage4/batch/BatchCaptureOptions";
+import { captureAssume, captureEstimate, captureParam } from "../stages/stage4/batch/BatchCaptureOptions";
 
 const KEY = "physicsai.stage4.inputMode";
 
@@ -86,5 +86,11 @@ describe("B 컨투어 캡처 옵션 (D3-53)", () => {
     expect(captureParam({ enabled: true, views: ["iso"], video: true }, d, true)).toEqual({ enabled: true, views: ["iso"] });
     expect(captureParam({ enabled: false, views: d, video: true }, d, true)).toEqual({ enabled: false });
     expect(captureEstimate(10, { enabled: true, views: d, video: false })).toBe("캡처 예상: run 10 × 방향 2 = 이미지 20장 · 디스크 약 6 MB · 시간 약 7분 추가(가정값 기준 참고)");
+    // D3-54: 영상 1개당 1 MB(기본) — 20장 × (0.3 + 1) = 26 MB, 20 × (20 + 40)초 = 20분
+    expect(captureEstimate(10, { enabled: true, views: d, video: true })).toBe("캡처 예상: run 10 × 방향 2 = 이미지 20장 + 영상 20개 · 디스크 약 26 MB · 시간 약 20분 추가(가정값 기준 참고)");
+    // /status.capture.estimate(config capture.estimate_*)를 쓴다
+    const a = captureAssume({ image_mb: 1, video_mb: 2, sec_per_view: 30, sec_per_video: 30 });
+    expect(captureEstimate(10, { enabled: true, views: d, video: true }, a)).toBe("캡처 예상: run 10 × 방향 2 = 이미지 20장 + 영상 20개 · 디스크 약 60 MB · 시간 약 20분 추가(가정값 기준 참고)");
+    expect(captureAssume(null)).toEqual({ imageMb: 0.3, videoMb: 1, secPerView: 20, secPerVideo: 40 });
   });
 });

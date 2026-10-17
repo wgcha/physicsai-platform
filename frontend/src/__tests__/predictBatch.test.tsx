@@ -206,6 +206,31 @@ describe("④ 템플릿 관리: 조립 폴더 없음·응답 추가 (V3-S9-14·1
     fireEvent.click(within(add).getByRole("button", { name: "응답 추가" }));
     expect(within(card).getByRole("alert").textContent).toContain("영문자로 시작");
   });
+
+  it("D3-54: component는 선택 — CornerStress면 후보 vonMises, 비워 두고 추가하면 spec component \"\"", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" }, (s) => {
+      const orig = s.handle.bind(s);
+      s.handle = (m, p, q, b, h) => (p.endsWith("/optimize/response-candidates") ? ok({ source_job_id: null, h3d: null, xydata: null }) : orig(m, p, q, b, h));
+    });
+    const puts = record(server, /\/param-sets\/[^/]+\/responses$/, "PUT");
+    fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
+    const card = await screen.findByRole("region", { name: "템플릿 관리" });
+    const defs = within(card).getByTestId("resp-defs");
+    const add = within(card).getByRole("group", { name: "응답 추가" });
+    const comp = within(add).getByLabelText("component") as HTMLInputElement;
+    const opts = (id: string) => Array.from(within(add).getByTestId(id).querySelectorAll("option")).map((o) => o.value);
+    expect(comp.placeholder).toBe("없음");
+    fireEvent.change(within(add).getByLabelText("datatype"), { target: { value: "CornerStress" } });
+    expect(comp.placeholder).toBe("없음(예: vonMises)");
+    expect(opts("resp-add-comp-list")).toEqual(["vonMises"]);
+    fireEvent.change(within(add).getByLabelText("응답 이름"), { target: { value: "Corner" } });
+    fireEvent.click(within(add).getByRole("button", { name: "응답 추가" }));
+    expect(within(card).queryByRole("alert")).toBeNull();
+    fireEvent.click(within(defs).getByRole("button", { name: "응답 저장" }));
+    await waitFor(() => expect(puts).toHaveLength(1));
+    const list = puts[0].responses as { name: string; spec: Record<string, unknown> | null }[];
+    expect(list[list.length - 1]).toEqual({ name: "Corner", unit: "", spec: { source: "H3D", subcase: 1, datatype: "CornerStress", component: "", layer: "", stat: "MAX" } });
+  });
 });
 
 describe("④ B 일괄 예측 설정 (V3-S9-14)", () => {

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, api, errorMessage, type ContourDisplay, type ParamSet, type ResponseCandidates, type ViewKey } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { AVG_MODES, DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../../lib/views";
-import { ComboInput, DEFAULT_RESULT_FIELD } from "./ComboInput";
+import { ComboInput, DEFAULT_RESULT_COMPONENT, DEFAULT_RESULT_FIELD, componentOptions } from "./ComboInput";
 
 const EMPTY: ContourDisplay = { field: "", component: "", avgmode: "simple", comps: [], legend: { mode: "auto", min: null, max: null }, views: DEFAULT_VIEWS };
 
@@ -35,7 +35,9 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
   for (const sc of cands?.h3d?.subcases ?? []) for (const d of sc.datatypes) dts.set(d.name, [...new Set([...(dts.get(d.name) ?? []), ...d.components])]);
   // D3-53: 목록에 없어도 직접 입력(입력란 + datalist 후보). 후보가 오면 빈 칸만 첫 후보로 채운다
   const fieldOpts = [...dts.keys()];
-  const compOpts = dts.get(field) ?? [];
+  // D3-54: 결과 종류가 CornerStress(비우면 config 기본도 CornerStress)면 성분 후보·placeholder로 vonMises — 비워 두면 서버가 같은 값을 쓴다
+  const isDefField = !field.trim() || field.trim() === DEFAULT_RESULT_FIELD;
+  const compOpts = componentOptions(field.trim() || DEFAULT_RESULT_FIELD, dts.get(field) ?? []);
   useEffect(() => {
     if (!field && fieldOpts.length) {
       setField(fieldOpts[0]);
@@ -90,7 +92,7 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
         </label>
         <label className="field">
           <span className="field-label">성분</span>
-          <ComboInput id={`cd-comp-${ps.id}`} label="성분" value={compVal} options={compOpts} onChange={setComponent} placeholder="(없음)" />
+          <ComboInput id={`cd-comp-${ps.id}`} label="성분" value={compVal} options={compOpts} onChange={setComponent} placeholder={isDefField ? `${DEFAULT_RESULT_COMPONENT}(기본)` : "(없음)"} />
         </label>
         <label className="field">
           <span className="field-label">평균 방식</span>

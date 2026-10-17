@@ -872,3 +872,23 @@ def test_setup_config_upgrades_capture_default_field_once(tmp_path):
     cfg_path.write_text(user, encoding="utf-8")
     res = _run(tmp_path, t, _inputs(t))
     assert _cfg(t)["capture"]["default_field"] == "Stress" and res["config_changed_keys"] == []
+
+
+def test_setup_config_adds_capture_default_component_once(tmp_path):
+    """D3-54: capture 절은 있는데 default_component가 없는(이전) 설정이면 1회 보충(줄 끝 표시), 사용자 값(빈 값 포함)은 보존."""
+    t = _fake_tree(tmp_path)
+    _run(tmp_path, t, _inputs(t))
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    assert _cfg(t)["capture"]["default_component"] == "vonMises"                     # 새 설치 = 예시 값
+    old = re.sub(r"(?m)^  default_component: .*\n", "", cfg_path.read_text(encoding="utf-8"))
+    cfg_path.write_text(old, encoding="utf-8")
+    assert "default_component" not in _cfg(t)["capture"]
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["capture"]["default_component"] == "vonMises" and res["config_changed_keys"] == ["capture.default_component"]
+    assert res["write"]["validation"]["ok"]
+    line = next(ln for ln in cfg_path.read_text(encoding="utf-8").split("\n") if ln.startswith("  default_component: "))
+    assert "setup.ps1 D3-54" in line
+    # 사용자가 비우면(성분 없음) 보존
+    cfg_path.write_text(cfg_path.read_text(encoding="utf-8").replace(line, '  default_component: ""', 1), encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["capture"]["default_component"] == "" and res["config_changed_keys"] == []

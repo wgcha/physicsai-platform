@@ -54,7 +54,7 @@ def test_v3_s10_capture_golden_and_media_api(predict_env, fake_record, engine):
     st = rec["settings"]
     assert st["H3D_PATH"] == str(Pd / "RESULT" / "Face_Drop_0000_pred.h3d").replace("\\", "/")
     assert st["OUTDIR"] == str(media).replace("\\", "/") and st["VIEWS"] == VIEWS4 and st["FIELD"] == "CornerStress"
-    assert (st["DCOMP"], st["LEGMIN"], st["LEGMAX"], st["SAVE_VIDEO"], st["VID_EXT"], st["USE_LAST"]) == ("", "", "", "1", "mp4", "1")
+    assert (st["DCOMP"], st["LEGMIN"], st["LEGMAX"], st["SAVE_VIDEO"], st["VID_EXT"], st["USE_LAST"]) == ("vonMises", "", "", "1", "mp4", "1")  # D3-54 default_component
     assert (media / "contour_capture.tcl").read_text(encoding="utf-8").startswith("# =====")
     res = jd["result"]
     assert [m["view"] for m in res["media"]] == VIEWS4 and all(m["image_artifact_id"] and m["video_artifact_id"] for m in res["media"])

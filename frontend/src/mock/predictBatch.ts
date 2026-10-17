@@ -367,7 +367,8 @@ export function validateResponses(list: unknown): { problems: { code: string; me
     if ([name, sp.datatype, sp.component, sp.layer, r.unit].some((v) => String(v ?? "").includes("|"))) problems.push({ code: "PIPE", message: `${name}: 문자 | 는 쓸 수 없습니다` });
     if (!["MAX", "MIN", "ABSMAX"].includes(sp.stat)) problems.push({ code: "STAT", message: `${name}: stat은 MAX·MIN·ABSMAX` });
     if (!Number.isInteger(sp.subcase) || sp.subcase < 1) problems.push({ code: "SUBCASE", message: `${name}: subcase는 1 이상 정수` });
-    if (!String(sp.datatype ?? "").trim() || !String(sp.component ?? "").trim()) problems.push({ code: "SPEC", message: `${name}: datatype·component가 필요합니다` });
+    // D3-54: component는 선택(layer와 같은 규칙) — datatype만 필수
+    if (!String(sp.datatype ?? "").trim()) problems.push({ code: "SPEC", message: `${name}: datatype이 필요합니다` });
   }
   return { problems, rows };
 }

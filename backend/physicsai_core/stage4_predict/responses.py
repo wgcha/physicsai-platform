@@ -91,7 +91,7 @@ def h3d_request(resp: Mapping[str, Any]) -> tuple[H3dRequest | None, str | None]
         return None, "NOT_DEFINED"
     if not isinstance(spec, Mapping) or str(_get(spec, "source") or "H3D").upper() != "H3D":
         return None, "NOT_H3D"
-    if not _get(spec, "datatype") or not _get(spec, "component"):
+    if not _get(spec, "datatype"):
         return None, "NOT_H3D"
     try:
         sc = _get(spec, "subcase")
@@ -100,7 +100,8 @@ def h3d_request(resp: Mapping[str, Any]) -> tuple[H3dRequest | None, str | None]
         subcase = 0
     stat = str(_get(spec, "stat") or "MAX").upper()
     datatype, component, layer = (str(_get(spec, k) or "").strip() for k in ("datatype", "component", "layer"))
-    if (not name or subcase < 1 or stat not in STATS or not datatype or not component
+    # component·layer는 선택(D3-54) — 비면 요청 줄의 빈 필드(`NAME|1|CornerStress||`)
+    if (not name or subcase < 1 or stat not in STATS or not datatype
             or any(_FORBIDDEN.search(x) for x in (name, datatype, component, layer))):
         return None, "SPEC_INVALID"
     return H3dRequest(name, subcase, datatype, component, layer, stat), None

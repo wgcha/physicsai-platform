@@ -13,7 +13,7 @@ import { TemplatePicker, inputKindOf, templateName, useTemplateChoice } from "..
 import { ModelLine, useModelChoice } from "../predictRun";
 import { BatchPreview } from "./BatchPreview";
 import { BATCH_STATUS_LABEL } from "./batchTable";
-import { BatchCaptureOptions, captureParam, type CaptureChoice } from "./BatchCaptureOptions";
+import { BatchCaptureOptions, captureAssume, captureParam, type CaptureChoice } from "./BatchCaptureOptions";
 import { DEFAULT_VIEWS } from "../../../lib/views";
 
 const METHODS: { key: BatchSourceKind; label: string }[] = [
@@ -296,7 +296,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
                 </span>
               )}
             </div>
-            <BatchCaptureOptions value={cap} onChange={setCap} runs={preview && previewSource ? preview.count : null} />
+            <BatchCaptureOptions value={cap} onChange={setCap} runs={preview && previewSource ? preview.count : null} assume={captureAssume(status?.capture?.estimate)} />
             <ModelLine choice={choice} />
             {preview?.estimate_min != null && previewSource && <p className="muted small">예상 소요 약 {fmtNum(preview.estimate_min, 3)}분</p>}
             <FeatureGate feature="predict">
