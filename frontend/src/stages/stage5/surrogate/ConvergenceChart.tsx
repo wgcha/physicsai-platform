@@ -7,6 +7,7 @@ import { convergence, metricLabel } from "./soRules";
 export function ConvergenceChart({ opt }: { opt: SurrogateOpt }) {
   const d = convergence(opt);
   const s = opt.settings as { objective: { metric: string; series?: string | null; sense: string }; tol_rel: number };
+  const baseline = opt.final?.baseline?.objective ?? null; // D3-61 기준안(마무리 캡처 run) 수평선
   if (!d.verified.length && !d.predicted.length) return <p className="muted small">아직 검증된 run이 없습니다.</p>;
   return (
     <div className="so-convergence" data-testid="so-convergence">
@@ -18,7 +19,10 @@ export function ConvergenceChart({ opt }: { opt: SurrogateOpt }) {
         xLabel="반복"
         yLabel={metricLabel(s.objective.metric, s.objective.series)}
         xDomain={[-0.3, d.xMax + 0.3]}
-        lines={d.best.length ? [{ name: "best", pts: d.best, className: "chart-line" }] : []}
+        lines={[
+          ...(d.best.length ? [{ name: "best", pts: d.best, className: "chart-line" }] : []),
+          ...(baseline != null ? [{ name: "baseline", pts: [[0, baseline], [d.xMax, baseline]] as [number, number][], className: "chart-line s1" }] : []),
+        ]}
         points={[
           ...d.verified.map((p) => ({ ...p, r: 3, className: "chart-pt sample" })),
           ...d.predicted.map((p) => ({ ...p, r: 4.5, className: "chart-pt nearest" })),
@@ -32,6 +36,12 @@ export function ConvergenceChart({ opt }: { opt: SurrogateOpt }) {
         <span>대리모델 예측</span>
         <span className="lg line" aria-hidden="true" />
         <span>지금까지 최선({s.objective.sense === "max" ? "최대화" : "최소화"})</span>
+        {baseline != null && (
+          <>
+            <span className="lg line s1" aria-hidden="true" />
+            <span data-testid="baseline-key">기준안 {Number(baseline.toPrecision(4))}</span>
+          </>
+        )}
         <span className="muted">수렴 기준: 개선 &lt; {Number((s.tol_rel * 100).toPrecision(3))}%</span>
       </div>
     </div>

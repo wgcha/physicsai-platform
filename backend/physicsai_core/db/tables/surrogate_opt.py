@@ -24,9 +24,9 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from ._base import ID, TS, metadata
 
-SO_STATUSES = ("EXPLORING", "FITTING", "VERIFYING", "DONE", "FAILED", "CANCELED")
-SO_ACTIVE = ("EXPLORING", "FITTING", "VERIFYING")
-SO_ITER_KINDS = ("EXPLORE", "REUSE", "VERIFY")
+SO_STATUSES = ("EXPLORING", "FITTING", "VERIFYING", "FINALIZING", "DONE", "FAILED", "CANCELED")
+SO_ACTIVE = ("EXPLORING", "FITTING", "VERIFYING", "FINALIZING")
+SO_ITER_KINDS = ("EXPLORE", "REUSE", "VERIFY", "FINAL")
 
 surrogate_opts = Table(
     "surrogate_opts",
@@ -43,6 +43,7 @@ surrogate_opts = Table(
     Column("current_job_id", ID, ForeignKey("jobs.id"), nullable=True),
     Column("best", JSONB, nullable=True),
     Column("stop_reason", String(32), nullable=True),
+    Column("final", JSONB, nullable=True),  # D3-61 마무리 캡처 {status, reason, batch_id, legend, notice}(0011)
     Column("dir_rel", String, nullable=False),
     Column("created_by", String, nullable=False),
     Column("created_by_name", String, nullable=False),
@@ -50,12 +51,12 @@ surrogate_opts = Table(
     Column("finished_at", TS, nullable=True),
     UniqueConstraint("study_id", "opt_no", name="uq_surrogate_opts_study_no"),
     CheckConstraint("opt_no >= 1", name="ck_surrogate_opts_opt_no"),
-    CheckConstraint("status IN ('EXPLORING','FITTING','VERIFYING','DONE','FAILED','CANCELED')",
+    CheckConstraint("status IN ('EXPLORING','FITTING','VERIFYING','FINALIZING','DONE','FAILED','CANCELED')",
                     name="ck_surrogate_opts_status"),
     CheckConstraint("input_kind IN ('mesh_only','assembly')", name="ck_surrogate_opts_input_kind"),
 )
 Index("ux_surrogate_opts_active", surrogate_opts.c.study_id, unique=True,
-      postgresql_where=text("status IN ('EXPLORING','FITTING','VERIFYING')"))
+      postgresql_where=text("status IN ('EXPLORING','FITTING','VERIFYING','FINALIZING')"))
 
 surrogate_opt_iters = Table(
     "surrogate_opt_iters",
@@ -72,6 +73,6 @@ surrogate_opt_iters = Table(
     Column("improvement_rel", Float, nullable=True),
     Column("created_at", TS, nullable=False, server_default=func.now()),
     CheckConstraint("iter_no >= 0", name="ck_surrogate_opt_iters_iter_no"),
-    CheckConstraint("kind IN ('EXPLORE','REUSE','VERIFY')", name="ck_surrogate_opt_iters_kind"),
+    CheckConstraint("kind IN ('EXPLORE','REUSE','VERIFY','FINAL')", name="ck_surrogate_opt_iters_kind"),
 )
 Index("ix_surrogate_opt_iters_batch", surrogate_opt_iters.c.batch_id)

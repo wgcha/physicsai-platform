@@ -1,17 +1,18 @@
 // ⑤ 내장 최적화 화면 규칙(phase3.md §18.10, 순수 함수): 상태 문구·톤, 지표 목록, 변수 범위 행, 요청 본문, 품질 등급, 수렴 그래프 자료.
 import type { ParamSet } from "../../../api";
-import type { DesignMapMetric, SoIteration, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
+import type { DesignMapMetric, SoIteration, SoParameter, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
 import { fmtNum } from "../../../lib/format";
 
 export const SO_STATUS_LABEL: Record<string, string> = {
   EXPLORING: "탐색 중",
   FITTING: "대리모델 학습",
   VERIFYING: "검증 중",
+  FINALIZING: "마무리(캡처)",
   DONE: "완료",
   FAILED: "실패",
   CANCELED: "취소",
 };
-export const soTone = (s: string) => (s === "DONE" ? "ok" : s === "FAILED" ? "bad" : ["EXPLORING", "FITTING", "VERIFYING"].includes(s) ? "run" : "");
+export const soTone = (s: string) => (s === "DONE" ? "ok" : s === "FAILED" ? "bad" : ["EXPLORING", "FITTING", "VERIFYING", "FINALIZING"].includes(s) ? "run" : "");
 
 const CURVE_LABEL: Record<string, string> = { "curve:max": "커브 최대값", "curve:min": "커브 최소값", "curve:absmax": "커브 |최대|" };
 
@@ -173,3 +174,85 @@ export function writeMode(m: OptMode) {
   }
 }
 export const SO_TAB_KEY = "physicsai.stage5.surrogateTab";
+
+// ---- D3-61 결과 화면: 최적안 — 기준안 대비 · 결과 요약 ---------------------------------------------------
+
+export interface CompareRow {
+  name: string;
+  unit: string;
+  min: number;
+  max: number;
+  base: number | null;
+  opt: number | null;
+  delta: number | null;
+  /** 최적안이 학습 범위 끝에 닿음 */
+  bound: "upper" | "lower" | null;
+  /** 트랙 위 위치(0~1) */
+  basePos: number | null;
+  optPos: number | null;
+}
+
+/** 변수마다 학습 범위·기준안(템플릿 nominal)·최적안·변화·범위 끝 도달 */
+export function compareRows(params: SoParameter[], base: Record<string, number> | null | undefined, opt: Record<string, number> | null | undefined): CompareRow[] {
+  return params.map((p) => {
+    const b = base?.[p.name] ?? p.nominal ?? null;
+    const o = opt?.[p.name] ?? null;
+    const span = p.max - p.min;
+    const pos = (v: number | null) => (v == null || span <= 0 ? null : Math.min(1, Math.max(0, (v - p.min) / span)));
+    const tol = 1e-9 * Math.max(1, Math.abs(span));
+    const bound = o == null || span <= 0 ? null : o >= p.max - tol ? "upper" : o <= p.min + tol ? "lower" : null;
+    return { name: p.name, unit: p.unit ?? "", min: p.min, max: p.max, base: b, opt: o, delta: b != null && o != null ? o - b : null, bound, basePos: pos(b), optPos: pos(o) };
+  });
+}
+
+/** 범위 끝 도달 안내 한 줄(없으면 null) */
+export function boundNote(rows: CompareRow[]): string | null {
+  const hit = rows.filter((r) => r.bound);
+  if (!hit.length) return null;
+  const names = hit.map((r) => `${r.name}(${r.bound === "upper" ? "상한" : "하한"})`).join(", ");
+  return `${names}이(가) 학습 범위 끝에 닿았습니다 — 범위를 넓혀 학습하면 추가 개선 여지가 있습니다`;
+}
+
+export interface Kpi {
+  label: string;
+  value: string;
+  unit: string;
+  sub: string;
+  tone: string;
+}
+
+/** 결과 요약 타일: 목적(최적 vs 기준안 절대·%), 제약(만족·기준안), 대리모델 품질(마지막 Q²), 예측 수·소요 */
+export function kpis(o: SurrogateOpt): Kpi[] {
+  const s = o.settings as { objective: { metric: string; series?: string | null; sense: string }; constraints: { metric: string; series?: string | null; op: string; value: number }[]; multi_execution?: number };
+  const best = o.best;
+  const fin = o.final;
+  const baseObj = fin?.baseline?.objective ?? fin?.baseline_predicted ?? null;
+  const out: Kpi[] = [];
+  const objLabel = metricLabel(s.objective.metric, s.objective.series);
+  let sub = "기준안 값 없음";
+  let tone = "";
+  if (best?.objective != null && baseObj != null) {
+    const d = best.objective - baseObj;
+    const pct = baseObj !== 0 ? (d / Math.abs(baseObj)) * 100 : null;
+    const good = s.objective.sense === "max" ? d >= 0 : d <= 0;
+    sub = `${d >= 0 ? "+" : ""}${fmtNum(d)}${pct != null ? ` (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%)` : ""} vs 기준안${fin?.baseline?.objective == null ? "(예측)" : ""}`;
+    tone = good ? "ok" : "bad";
+  }
+  out.push({ label: `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`, value: fmtNum(best?.objective ?? null), unit: "", sub, tone });
+  s.constraints.forEach((c, i) => {
+    const key = c.series ? `${c.metric}@${c.series}` : c.metric;
+    const v = (best?.constraints as Record<string, number | null> | undefined)?.[key] ?? (best?.constraints as Record<string, number | null> | undefined)?.[c.metric] ?? null;
+    const ok = v != null && (c.op === "<=" ? v <= c.value : v >= c.value);
+    const bv = fin?.baseline?.constraints?.[i];
+    out.push({ label: `${metricLabel(c.metric, c.series)} (제약 ${c.op === "<=" ? "≤" : "≥"} ${fmtNum(c.value)})`, value: fmtNum(v), unit: "",
+      sub: `${ok ? "만족" : "위반"}${bv != null ? ` · 기준안 ${fmtNum(bv)}` : ""}`, tone: ok ? "ok" : "bad" });
+  });
+  const lastFit = [...(o.iterations as SoIteration[])].reverse().find((it) => it.fit)?.fit;
+  const g = qualityGrade(lastFit?.q2);
+  out.push({ label: `대리모델 품질${lastFit ? `(${lastFit.kind === "rbf" ? "RBF" : "GP"})` : ""}`, value: lastFit?.q2 != null ? `Q² ${fmtNum(lastFit.q2, 3)}` : "—", unit: "",
+    sub: `${g.label}${lastFit?.loo_rmse != null ? ` · LOO RMSE ${fmtNum(lastFit.loo_rmse)}` : ""}`, tone: g.tone });
+  const n = (o.runs ?? []).length + (fin?.baseline ? 1 : 0) + (fin?.best ? 1 : 0);
+  const mins = o.finished_at ? Math.round((Date.parse(o.finished_at) - Date.parse(o.created_at)) / 60000) : null;
+  out.push({ label: "소요", value: String(n), unit: "예측", sub: `${mins != null ? `약 ${mins >= 60 ? `${Math.floor(mins / 60)}시간 ${mins % 60}분` : `${mins}분`}` : "진행 중"} · 동시 ${s.multi_execution ?? 1}`, tone: "" });
+  return out;
+}

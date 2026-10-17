@@ -34,7 +34,7 @@ def _job(c, sid: str, params: dict, seq: int) -> str:
 def test_migration_0010_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0010_surrogate_opt"
+    assert MIGRATION_HEAD == "0011_surrogate_final"
     name = f"physicsai_m10_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -49,6 +49,7 @@ def test_migration_0010_roundtrip(pg_server):
                            " values (:i,'p-1','M10','t','/x','u','u')"), {"i": sid})
             j_old = _job(c, sid, {"batch_id": "b0"}, 1)  # 0009 시점 수동 배치(대기) — 보존
         _alembic(url, "0010_surrogate_opt")
+        _alembic(url, "0011_surrogate_final")  # D3-61 마무리 캡처(FINALIZING·FINAL·final 열)
         with eng.begin() as c:
             assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
             assert c.execute(text("select state from jobs where id=:i"), {"i": j_old}).scalar() == "QUEUED"
@@ -60,13 +61,14 @@ def test_migration_0010_roundtrip(pg_server):
                 _job(c, sid, {"batch_id": "b2"}, 3)
         cols = {r[0] for r in eng.connect().execute(text(
             "select column_name from information_schema.columns where table_name='surrogate_opts'"))}
-        assert {"opt_no", "settings", "status", "iter_no", "current_job_id", "best", "stop_reason", "dir_rel"} <= cols
+        assert {"final", "opt_no", "settings", "status", "iter_no", "current_job_id", "best", "stop_reason", "dir_rel"} <= cols
         icols = {r[0] for r in eng.connect().execute(text(
             "select column_name from information_schema.columns where table_name='surrogate_opt_iters'"))}
         assert {"opt_id", "iter_no", "kind", "batch_id", "round_job_id", "fit", "candidates", "best_value",
                 "best_feasible", "improvement_rel"} <= icols
         idx = eng.connect().execute(text("select indexdef from pg_indexes where indexname='ux_surrogate_opts_active'")).scalar()
-        assert "UNIQUE" in idx and "EXPLORING" in idx and "VERIFYING" in idx
+        assert "UNIQUE" in idx and "EXPLORING" in idx and "VERIFYING" in idx and "FINALIZING" in idx
+        assert "final" in cols
         with pytest.raises(IntegrityError):
             with eng.begin() as c:
                 c.execute(text("insert into notifications(user_id, event, title) values ('u','NOPE','t')"))

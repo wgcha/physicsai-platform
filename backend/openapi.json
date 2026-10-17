@@ -6255,6 +6255,166 @@
         "title": "SoExploreReuse",
         "type": "object"
       },
+      "SoFinal": {
+        "properties": {
+          "baseline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoFinalRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "baseline_predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Predicted"
+          },
+          "baseline_values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Values"
+          },
+          "batch": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoBatchRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "best": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoFinalRun"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legend"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "title": "SoFinal",
+        "type": "object"
+      },
+      "SoFinalRun": {
+        "description": "D3-61 마무리 캡처 run(doe 1 = 기준안, 2 = 최적안): 값·목적·제약 확인, 컨투어는 GET /jobs/{job_id}/media.",
+        "properties": {
+          "constraints": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objective"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "doe_no",
+          "values",
+          "state"
+        ],
+        "title": "SoFinalRun",
+        "type": "object"
+      },
       "SoFit": {
         "properties": {
           "d_free": {
@@ -6441,6 +6601,45 @@
           "metric"
         ],
         "title": "SoObjective",
+        "type": "object"
+      },
+      "SoParameter": {
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "min",
+          "max"
+        ],
+        "title": "SoParameter",
         "type": "object"
       },
       "SoProblem": {
@@ -7910,6 +8109,16 @@
             "title": "Dir",
             "type": "string"
           },
+          "final": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoFinal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "finished_at": {
             "anyOf": [
               {
@@ -7950,6 +8159,13 @@
             "additionalProperties": true,
             "title": "Param Set",
             "type": "object"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/SoParameter"
+            },
+            "title": "Parameters",
+            "type": "array"
           },
           "progress_text": {
             "title": "Progress Text",

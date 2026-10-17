@@ -1,0 +1,111 @@
+/* ⑤ 내장 최적화 결과(D3-61): 기준안 대비 범위 막대·결과 요약 타일·컨투어 비교. 토큰만 사용(designRules). */
+.so-range {
+  position: relative;
+  height: 18px;
+  min-width: 160px;
+}
+.so-range .track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 7px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+}
+.so-range .seg {
+  position: absolute;
+  top: 7px;
+  height: 4px;
+  background: var(--color-chart-series-1);
+  opacity: 0.35;
+}
+.so-range .mk {
+  position: absolute;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  margin-left: -7px;
+  border-radius: 50%;
+}
+.so-range .mk.base {
+  background: var(--color-surface-1);
+  border: 2px solid var(--color-chart-axis);
+}
+.so-range .mk.opt {
+  background: var(--color-chart-series-1);
+  border: 2px solid var(--color-surface-1);
+}
+.so-range .mk.opt.at-bound {
+  background: var(--color-warning);
+}
+.so-compare td.delta.up {
+  color: var(--color-danger);
+}
+.so-compare td.delta.down {
+  color: var(--color-success);
+}
+.so-compare .bound-flag {
+  color: var(--color-warning);
+}
+.so-legend-keys {
+  display: inline-flex;
+  gap: var(--space-4);
+  align-items: center;
+  color: var(--color-text-muted);
+}
+.so-legend-keys .mk-key {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-right: var(--space-1);
+  vertical-align: -1px;
+}
+.so-legend-keys .mk-key.base {
+  border: 2px solid var(--color-chart-axis);
+}
+.so-legend-keys .mk-key.opt {
+  background: var(--color-chart-series-1);
+}
+.so-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+.so-kpi {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  padding: var(--space-3) var(--space-4);
+  min-width: 0;
+}
+.so-kpi .kpi-value {
+  color: var(--color-text-strong);
+}
+.so-kpi .kpi-sub.ok {
+  color: var(--color-success);
+}
+.so-kpi .kpi-sub.bad {
+  color: var(--color-danger);
+}
+.so-kpi .kpi-sub.warn {
+  color: var(--color-warning);
+}
+.so-contours {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 1100px) {
+  .so-contours {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.so-contour-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}

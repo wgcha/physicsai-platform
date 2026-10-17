@@ -3498,6 +3498,46 @@ export interface components {
              */
             kind: "reuse";
         };
+        /** SoFinal */
+        SoFinal: {
+            baseline?: components["schemas"]["SoFinalRun"] | null;
+            /** Baseline Predicted */
+            baseline_predicted?: number | null;
+            /** Baseline Values */
+            baseline_values?: {
+                [key: string]: number;
+            } | null;
+            batch?: components["schemas"]["SoBatchRef"] | null;
+            best?: components["schemas"]["SoFinalRun"] | null;
+            /** Legend */
+            legend?: {
+                [key: string]: number;
+            } | null;
+            /** Reason */
+            reason?: string | null;
+            /** Status */
+            status?: string | null;
+        };
+        /**
+         * SoFinalRun
+         * @description D3-61 마무리 캡처 run(doe 1 = 기준안, 2 = 최적안): 값·목적·제약 확인, 컨투어는 GET /jobs/{job_id}/media.
+         */
+        SoFinalRun: {
+            /** Constraints */
+            constraints?: (number | null)[];
+            /** Doe No */
+            doe_no: number;
+            /** Job Id */
+            job_id?: string | null;
+            /** Objective */
+            objective?: number | null;
+            /** State */
+            state: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
         /** SoFit */
         SoFit: {
             /** D Free */
@@ -3544,6 +3584,22 @@ export interface components {
             sense: "min" | "max";
             /** Series */
             series?: string | null;
+        };
+        /** SoParameter */
+        SoParameter: {
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Name */
+            name: string;
+            /** Nominal */
+            nominal?: number | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
         };
         /** SoProblem */
         SoProblem: {
@@ -4026,6 +4082,7 @@ export interface components {
             current_job_id?: string | null;
             /** Dir */
             dir: string;
+            final?: components["schemas"]["SoFinal"] | null;
             /** Finished At */
             finished_at?: string | null;
             /** Id */
@@ -4044,6 +4101,8 @@ export interface components {
             param_set: {
                 [key: string]: unknown;
             };
+            /** Parameters */
+            parameters?: components["schemas"]["SoParameter"][];
             /** Progress Text */
             progress_text: string;
             /** Runs */

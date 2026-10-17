@@ -21,7 +21,7 @@ from . import predict_batches as pb_repo
 from .jobs import get_job, insert_job, request_cancel, row_dict
 
 log = logging.getLogger("physicsai_core.surrogate_opts")
-ACTIVE = ("EXPLORING", "FITTING", "VERIFYING")
+ACTIVE = ("EXPLORING", "FITTING", "VERIFYING", "FINALIZING")
 TERMINAL_OPT = ("DONE", "FAILED", "CANCELED")
 ROUND_JOB_TYPE = "SURROGATE_OPT"
 # 반복 작업 실패 코드 중 정지 사유로 그대로 쓰는 것(그 밖은 ROUND_FAILED)
@@ -129,7 +129,8 @@ def _study(conn: Connection, study_id: str) -> dict[str, Any]:
 
 def create_opt_batch(conn: Connection, *, opt: Mapping[str, Any], iter_no: int, kind: str, matrix: BatchMatrix,
                      source_meta: Mapping[str, Any], batch_dir_name: str, simlab_mesh_name: str,
-                     round_job_id: str | None = None, candidates: list[dict[str, Any]] | None = None
+                     round_job_id: str | None = None, candidates: list[dict[str, Any]] | None = None,
+                     capture: bool | None = None, display: Mapping[str, Any] | None = None
                      ) -> tuple[dict[str, Any], dict[str, Any]]:
     """최적화 소유 PREDICT_BATCH 부모 작업(QUEUED) + 배치·run 행 + 반복 행(한 트랜잭션, 등록자 = opt 등록자).
 
@@ -143,9 +144,11 @@ def create_opt_batch(conn: Connection, *, opt: Mapping[str, Any], iter_no: int, 
         "batch_id": batch_id, "batch_no": batch_no, "param_set_id": opt["param_set_id"], "model_id": opt["model_id"],
         "multi_execution": int(s["multi_execution"]), "template_kind": opt["input_kind"],
         "source": {"kind": "lhs" if matrix.source_kind == "LHS" else "table", **dict(source_meta)},
-        "capture": {"enabled": bool(s.get("capture"))},
+        "capture": {"enabled": bool(s.get("capture")) if capture is None else bool(capture)},
         "surrogate_opt": {"id": opt["id"], "opt_no": opt["opt_no"], "iter_no": iter_no},
     }
+    if display:  # D3-61 마무리 캡처: 기준안·최적안 같은 범례(fixed)
+        params["display"] = dict(display)
     result = {"batch_id": batch_id, "batch_no": batch_no, "run_count": len(matrix.rows), "dir_rel": dir_rel}
     job = insert_job(conn, study=study, job_type="PREDICT_BATCH", params=params, user_id=opt["created_by"],
                      user_name=opt["created_by_name"], result=result)
@@ -182,6 +185,9 @@ def on_batch_done(conn: Connection, batch: Mapping[str, Any]) -> bool:
     it = owned_iter_of_batch(conn, batch["id"])
     if it is None:
         return False
+    if it["kind"] == "FINAL":  # D3-61: 마무리 캡처 배치 완료 → opt DONE(이미 DONE이면 아무것도 안 함)
+        complete_final(conn, it["opt_id"], "DONE", None)
+        return True
     opt = get(conn, it["opt_id"], for_update=True)
     if (opt is None or opt["status"] not in ("EXPLORING", "VERIFYING") or opt["iter_no"] != it["iter_no"]
             or not _job_terminal(conn, opt["current_job_id"])):
@@ -206,10 +212,17 @@ def restore_verifying(conn: Connection, opt: Mapping[str, Any], round_no: int) -
     """반복 r의 검증 배치가 이미 등록돼 있으면(SO_NEXT 커밋 뒤 작업 실패·lease 상실) opt를 VERIFYING으로 되돌리고,
     배치가 이미 DONE이면 반복 r+1을 바로 넣는다. 등록된 배치가 없으면 None(반복 작업을 다시 실행해야 함)."""
     it = get_iter(conn, opt["id"], round_no)
-    if it is None or it["kind"] != "VERIFY":
+    if it is None or it["kind"] not in ("VERIFY", "FINAL"):
         return None
-    set_opt(conn, opt["id"], status="VERIFYING", iter_no=round_no, stop_reason=None, finished_at=None)
     b = pb_repo.get(conn, it["batch_id"])
+    if it["kind"] == "FINAL":  # 마무리 캡처까지 등록됐으면 FINALIZING(배치가 끝났으면 바로 DONE)
+        set_opt(conn, opt["id"], status="FINALIZING", stop_reason=(opt.get("final") or {}).get("stop_reason") or opt["stop_reason"],
+                finished_at=None)
+        if b is not None and b["status"] in ("DONE", "FAILED", "CANCELED"):
+            complete_final(conn, opt["id"], "DONE" if b["status"] == "DONE" else "FAILED",
+                           None if b["status"] == "DONE" else "기준안·최적안 캡처 배치가 끝나지 않았습니다")
+        return {"batch_id": it["batch_id"], "round_job_id": None}
+    set_opt(conn, opt["id"], status="VERIFYING", iter_no=round_no, stop_reason=None, finished_at=None)
     job = None
     if b is not None and b["status"] == "DONE":
         job = _enqueue_safely(conn, {**opt, "status": "VERIFYING", "iter_no": round_no}, round_no + 1)
@@ -221,7 +234,10 @@ def on_batch_parent_end(conn: Connection, batch: Mapping[str, Any], state: str) 
     if state not in (FAILED, INTERRUPTED, CANCELED):
         return
     it = owned_iter_of_batch(conn, batch["id"])
-    if it is not None and it["opt_iter_no"] == it["iter_no"]:
+    if it is not None and it["kind"] == "FINAL":  # 캡처 배치 실패·취소는 최적화 결과를 지우지 않는다 — DONE + 캡처 없음
+        complete_final(conn, it["opt_id"], "CANCELED" if state == CANCELED else "FAILED",
+                       "기준안·최적안 캡처 배치가 " + ("취소되었습니다" if state == CANCELED else "실패했습니다"))
+    elif it is not None and it["opt_iter_no"] == it["iter_no"]:
         fail(conn, it["opt_id"], "BATCH_FAILED")
 
 
@@ -234,7 +250,7 @@ def on_round_end(conn: Connection, job: Mapping[str, Any], state: str) -> None:
     if opt is None or opt["status"] not in ACTIVE or opt["current_job_id"] != job["id"]:
         return
     rnd = (job.get("params") or {}).get("round")
-    if state != SUCCEEDED and opt["status"] == "VERIFYING" and opt["iter_no"] == rnd \
+    if state != SUCCEEDED and opt["status"] in ("VERIFYING", "FINALIZING") and isinstance(rnd, int) \
             and get_iter(conn, opt["id"], rnd) is not None:
         log.warning("내장 최적화 %s 반복 %s 작업이 %s로 끝났지만 검증 배치가 등록돼 있어 계속합니다", opt["id"], rnd, state)
         return
@@ -245,13 +261,32 @@ def on_round_end(conn: Connection, job: Mapping[str, Any], state: str) -> None:
         set_opt(conn, opt["id"], status="CANCELED", stop_reason="CANCELED", finished_at=func.now())
 
 
+def complete_final(conn: Connection, opt_id: str, status: str, reason: str | None) -> bool:
+    """마무리(D3-61): FINALIZING opt → DONE + final.status(DONE|FAILED|CANCELED|SKIPPED)·사유 + 완료 알림 1건(final.notice).
+    이미 DONE 등 FINALIZING이 아니면 아무것도 하지 않는다(멱등). 바꿨으면 True."""
+    from . import notifications as notif_repo
+
+    opt = get(conn, opt_id, for_update=True)
+    if opt is None or opt["status"] != "FINALIZING":
+        return False
+    final = {**(opt.get("final") or {}), "status": status, "reason": reason}
+    stop = final.get("stop_reason") or opt["stop_reason"]
+    set_opt(conn, opt_id, status="DONE", final=final, stop_reason=stop, finished_at=func.now())
+    notice = final.get("notice") or {}
+    if notice.get("title"):
+        notif_repo.notify_opt_done(conn, opt, opt["current_job_id"], notice["title"], notice.get("body") or "")
+    return True
+
+
 # ---- 일괄 취소 --------------------------------------------------------------------------------------
 
 
 def cancel(conn: Connection, opt: Mapping[str, Any], user_id: str) -> list[str]:
     """opt를 먼저 CANCELED로 두고(훅이 아무것도 하지 않게) 비종료 반복 작업 + 진행 중 배치(부모·비종료 하위 전부) 취소.
     멱등. 취소 요청한 작업 id 목록."""
-    if opt["status"] in ACTIVE:
+    if opt["status"] == "FINALIZING":  # 최적화는 끝났다 — 캡처만 취소하고 결과는 DONE으로 남긴다
+        complete_final(conn, opt["id"], "CANCELED", "사용자가 캡처를 취소했습니다")
+    elif opt["status"] in ACTIVE:
         set_opt(conn, opt["id"], status="CANCELED", stop_reason="CANCELED", finished_at=func.now())
     targets: list[str] = []
     for it in iters(conn, opt["id"]):

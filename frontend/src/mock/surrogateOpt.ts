@@ -3,7 +3,8 @@ import type { ParamSet } from "../api/types";
 import type { SoIteration, SoRun, SurrogateOpt } from "../api/surrogateOpt";
 import { err, needPower, ok, type Route } from "./route";
 import type { MockServer } from "./server";
-import { iso, rng, responseFn } from "./data";
+import { baseJob, iso, makeSteps, rng, responseFn } from "./data";
+import { captureMedia } from "./capture";
 
 interface SoRec {
   id: string;
@@ -27,6 +28,8 @@ interface SoRec {
   created_at: string;
   finished_at: string | null;
   batch_no: number;
+  /** D3-61 마무리 캡처 */
+  final?: SurrogateOpt["final"];
 }
 
 export const soLabel = (n: number) => `SO-${String(n).padStart(3, "0")}`;
@@ -95,7 +98,7 @@ function batchRef(o: SoRec, it: number, n: number, done: boolean) {
 }
 
 /** 한 단계 진행(엔진 tick) */
-export function advance(o: SoRec) {
+export function advance(o: SoRec, srv?: MockServer) {
   const rnd = rng(o.opt_no * 97 + o.iter_no + o.runs.length);
   const s = o.settings;
   if (o.status === "EXPLORING") {
@@ -132,16 +135,51 @@ export function advance(o: SoRec) {
     it.fit = { ...it.fit!, pred_vs_verified_mae: Number((errs.reduce((a, b) => a + b, 0) / Math.max(1, errs.length)).toPrecision(4)) };
     it.batch = batchRef(o, it.iter_no, s.candidates, true);
     updateBest(o, it.iter_no);
-    if (it.improvement_rel != null && it.iter_no >= 1 && it.improvement_rel < s.tol_rel && it.iter_no > 1) finish(o, "CONVERGED");
-    else if (it.iter_no >= s.iterations) finish(o, "MAX_ITER");
+    if (it.improvement_rel != null && it.iter_no >= 1 && it.improvement_rel < s.tol_rel && it.iter_no > 1) finish(o, "CONVERGED", srv);
+    else if (it.iter_no >= s.iterations) finish(o, "MAX_ITER", srv);
     else o.status = "FITTING";
   }
 }
 
-function finish(o: SoRec, reason: string) {
+function finish(o: SoRec, reason: string, srv?: MockServer) {
   o.status = "DONE";
   o.stop_reason = reason;
   o.finished_at = new Date().toISOString();
+  if (srv) makeFinal(srv, o);
+}
+
+/** D3-61 마무리 캡처 흉내: 기준안(nominal)·최적안 2 run(예측 작업 + 컨투어 media), 같은 범례 0~max */
+function makeFinal(srv: MockServer, o: SoRec) {
+  const ps = srv.paramSets.find((p) => p.id === o.param_set_id);
+  const base = Object.fromEntries((ps?.parameters ?? []).map((p) => [p.name, p.nominal ?? p.min]));
+  const b = bestRun(o, Math.max(...o.iters.map((x) => x.iter_no), 0));
+  if (!b) {
+    o.final = { status: "SKIPPED", reason: "최적안이 없어 캡처하지 않았습니다", baseline_values: base };
+    return;
+  }
+  // 예측 작업·media는 화면이 처음 볼 때 만든다(ensureFinalJobs) — 시드 때 목 id 순서를 바꾸지 않으려고
+  const mk = (doe: number, v: Record<string, number>) => {
+    const objective = Number(metricValue(o.settings.objective.metric, v).toPrecision(6));
+    return { doe_no: doe, job_id: null as string | null, values: v, objective, constraints: o.settings.constraints.map((c) => Number(metricValue(c.metric, v).toPrecision(6))), state: "SUCCEEDED" };
+  };
+  const baseline = mk(1, base);
+  const best = mk(2, b.values as Record<string, number>);
+  o.final = {
+    status: "DONE", reason: null, legend: { min: 0, max: Math.max(baseline.objective, best.objective) }, baseline_values: base, baseline_predicted: baseline.objective,
+    batch: { ...batchRef(o, 9, 2, true), label: `B-${String(o.batch_no + o.iters.length).padStart(3, "0")}` }, baseline, best,
+  };
+}
+
+function ensureFinalJobs(srv: MockServer, o: SoRec) {
+  for (const run of [o.final?.baseline, o.final?.best]) {
+    if (!run || run.job_id) continue;
+    const v = run.values as Record<string, number>;
+    const job = baseJob({ id: srv.nid("j"), study_id: o.study_id, project_id: "p-cushion", study_title: "쿠션 두께·리브 예측", job_type: "PREDICT", state: "SUCCEEDED",
+      created_at: iso(5), finished_at: iso(1), steps: makeSteps("PREDICT", 11, null), progress_pct: 100, params: { param_set_id: o.param_set_id, values: v } });
+    job.result = { values: v, applied_values: v, media: captureMedia(srv, job, v, null, "OK") };
+    srv.jobs.push(job);
+    run.job_id = job.id;
+  }
 }
 
 function progressText(o: SoRec): string {
@@ -159,6 +197,7 @@ function progressText(o: SoRec): string {
 }
 
 function detail(srv: MockServer, o: SoRec): SurrogateOpt {
+  ensureFinalJobs(srv, o);
   const me = srv.me!;
   const s = srv.studies.find((x) => x.id === o.study_id)!;
   const ps = srv.paramSets.find((p) => p.id === o.param_set_id);
@@ -186,6 +225,8 @@ function detail(srv: MockServer, o: SoRec): SurrogateOpt {
     runs: o.runs, best: b, stop_reason: o.stop_reason,
     can_cancel: ACTIVE.includes(o.status) && canExec && (me.is_global_admin || o.created_by === me.user_id), can_resume: o.status === "FAILED" && canExec,
     warnings: [], current_job_id: null, created_at: o.created_at, created_by_name: o.created_by_name, finished_at: o.finished_at,
+    final: o.final ?? null,
+    parameters: (ps?.parameters ?? []).map((p) => ({ name: p.name, nominal: p.nominal ?? null, min: p.min, max: p.max, unit: p.unit ?? "" })),
   };
 }
 
@@ -234,13 +275,13 @@ export function seedSurrogate(srv: MockServer) {
   if ("error" in n) return;
   const o: SoRec = { id: "so-1", study_id: "s-cushion", opt_no: 1, param_set_id: "ps-2", settings: n.settings, status: "EXPLORING", iter_no: 0, iters: [], runs: [], stop_reason: null,
     created_by: "u-power", created_by_name: "김연구", created_at: iso(60 * 3), finished_at: null, batch_no: 10 };
-  for (let i = 0; i < 20 && o.status !== "DONE"; i++) advance(o);
+  for (let i = 0; i < 20 && o.status !== "DONE"; i++) advance(o, srv);
   o.finished_at = iso(20);
   srv.surrogate.push(o);
 }
 
 export function tickSurrogate(srv: MockServer) {
-  for (const o of srv.surrogate) if (ACTIVE.includes(o.status)) advance(o);
+  for (const o of srv.surrogate) if (ACTIVE.includes(o.status)) advance(o, srv);
 }
 
 export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {

@@ -16,7 +16,10 @@ export type SoBest = S["SoBest"];
 export type SoFit = S["SoFit"];
 export type SoCandidate = S["SoCandidate"];
 export type SurrogateOptResume = S["SurrogateOptResume"];
-export type SoStatus = "EXPLORING" | "FITTING" | "VERIFYING" | "DONE" | "FAILED" | "CANCELED";
+export type SoFinal = S["SoFinal"];
+export type SoFinalRun = S["SoFinalRun"];
+export type SoParameter = S["SoParameter"];
+export type SoStatus = "EXPLORING" | "FITTING" | "VERIFYING" | "FINALIZING" | "DONE" | "FAILED" | "CANCELED";
 
 export const surrogateApi = {
   preview: (studyId: string, body: SurrogateOptCreate) =>
@@ -29,5 +32,5 @@ export const surrogateApi = {
   resume: (id: string) => request<SurrogateOptResume>("POST", `/surrogate-opts/${id}/resume`),
 };
 
-export const SO_ACTIVE: SoStatus[] = ["EXPLORING", "FITTING", "VERIFYING"];
+export const SO_ACTIVE: SoStatus[] = ["EXPLORING", "FITTING", "VERIFYING", "FINALIZING"];
 export const isSoActive = (s: string) => (SO_ACTIVE as string[]).includes(s);

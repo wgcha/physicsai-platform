@@ -12,7 +12,7 @@ from .common import Req, Resp
 __all__ = [
     "SoExploreNew", "SoExploreReuse", "SoExplore", "SoObjective", "SoConstraint", "SurrogateOptCreate", "SoProblem",
     "SurrogateOptPreview", "SurrogateOptSummary", "SoBatchRef", "SoFit", "SoCandidate", "SoIteration", "SoBest", "SoRun",
-    "SurrogateOpt", "SurrogateOptResume",
+    "SurrogateOpt", "SurrogateOptResume", "SoFinalRun", "SoFinal", "SoParameter",
 ]
 
 METRIC_PATTERN = r"^(curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63})$"
@@ -165,6 +165,36 @@ class SoRun(Resp):
     state: str
 
 
+class SoFinalRun(Resp):
+    """D3-61 마무리 캡처 run(doe 1 = 기준안, 2 = 최적안): 값·목적·제약 확인, 컨투어는 GET /jobs/{job_id}/media."""
+
+    doe_no: int
+    job_id: str | None = None
+    values: dict[str, float]
+    objective: float | None = None
+    constraints: list[float | None] = Field(default_factory=list)
+    state: str
+
+
+class SoFinal(Resp):
+    status: str | None = None  # PENDING | DONE | FAILED | CANCELED | SKIPPED
+    reason: str | None = None
+    legend: dict[str, float] | None = None
+    baseline_values: dict[str, float] | None = None
+    baseline_predicted: float | None = None
+    batch: SoBatchRef | None = None
+    baseline: SoFinalRun | None = None
+    best: SoFinalRun | None = None
+
+
+class SoParameter(Resp):
+    name: str
+    nominal: float | None = None
+    min: float
+    max: float
+    unit: str = ""
+
+
 class SurrogateOpt(Resp):
     id: str
     label: str
@@ -186,6 +216,8 @@ class SurrogateOpt(Resp):
     created_at: datetime
     created_by_name: str
     finished_at: datetime | None = None
+    final: SoFinal | None = None
+    parameters: list[SoParameter] = Field(default_factory=list)
 
 
 class SurrogateOptResume(Resp):

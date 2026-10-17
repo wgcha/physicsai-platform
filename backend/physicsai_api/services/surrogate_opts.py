@@ -334,6 +334,10 @@ def progress_text(o: dict[str, Any], its: list[dict[str, Any]], batches: dict[st
         return f"반복 {o['iter_no'] + 1}/{T} · 대리모델 학습"
     if st == "VERIFYING" and b:
         return f"반복 {o['iter_no']}/{T} · 검증 {b['label']} 예측 {b['predict']['succeeded']}/{b['gen']['total']}"
+    if st == "FINALIZING":
+        fb = batches.get(((o.get("final") or {}).get("batch_id")) or "")
+        cnt = f" {fb['label']} 예측 {fb['predict']['succeeded']}/{fb['gen']['total']}" if fb else ""
+        return f"마무리 — 기준안·최적안 컨투어 캡처{cnt}"
     if st == "DONE":
         return f"완료 — {_stop_text(o, its)}"
     if st == "FAILED":
@@ -349,9 +353,10 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
     from physicsai_core.db.repositories import models as models_repo
 
     m = models_repo.get(conn, o["model_id"]) or {}
-    its = so_repo.iters(conn, o["id"])
+    its_all = so_repo.iters(conn, o["id"])
+    its = [it for it in its_all if it["kind"] != "FINAL"]  # D3-61 마무리 캡처 배치는 반복이 아니다
     batches: dict[str, dict[str, Any]] = {}
-    for it in its:
+    for it in its_all:
         b = pb_repo.get(conn, it["batch_id"])
         if b is not None:
             batches[b["id"]] = {"id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"],
@@ -370,7 +375,11 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
     job = jobs_repo.get_job(conn, o["current_job_id"]) if o["current_job_id"] else None
     fail_msg = job["failure_message"] if job and o["status"] == "FAILED" and job["state"] in ("FAILED", "INTERRUPTED") else None
     can_exec = principal.can_execute(s["project_id"])
+    final_it = next((it for it in its_all if it["kind"] == "FINAL"), None)
     return {
+        "final": _final_out(ctx, conn, s, o, final_it, batches),
+        "parameters": [{"name": p["name"], "nominal": p.get("nominal"), "min": p["min"], "max": p["max"], "unit": p.get("unit") or ""}
+                       for p in ps.get("parameters") or []],
         "id": o["id"], "label": so_repo.opt_label(o["opt_no"]), "status": o["status"],
         "dir": display_path(ctx.settings.storage.ai_root, s["folder_name"], o["dir_rel"]),
         "param_set": {"id": o["param_set_id"], "label": ps.get("label"), "input_kind": o["input_kind"]},
@@ -384,6 +393,26 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
     }
 
 
+def _final_out(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str, Any], it: dict[str, Any] | None,
+               batches: dict[str, dict[str, Any]]) -> dict[str, Any] | None:
+    """D3-61 마무리: 상태·사유·범례·기준안 예측(대리모델) + 캡처 배치의 기준안(doe 1)·최적안(doe 2) run(값·응답 확인·작업 id)."""
+    f = o.get("final")
+    if not f:
+        return None
+    obj = o["settings"]["objective"]
+    problem = ds.Problem.from_settings(o["settings"])
+    rows: dict[int, dict[str, Any]] = {}
+    if it is not None:
+        for r, mm in _run_metric_rows(ctx, conn, study, it["batch_id"]):
+            rows[r["doe_no"]] = {"doe_no": r["doe_no"], "job_id": r["predict_job_id"], "values": r["applied_values"],
+                                 "objective": _value(mm, obj["metric"], obj.get("series"), r["responses"]),
+                                 "constraints": [_value(mm, c.metric, c.series, r["responses"]) for c in problem.constraints],
+                                 "state": pb_repo.row_state(r, r["job_state"])}
+    return {"status": f.get("status"), "reason": f.get("reason"), "legend": f.get("legend"),
+            "baseline_values": f.get("baseline_values"), "baseline_predicted": f.get("baseline_predicted"),
+            "batch": batches.get(f.get("batch_id") or ""), "baseline": rows.get(1), "best": rows.get(2)}
+
+
 def get_opt(ctx: AppContext, principal: Principal, opt_id: str) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         return _detail(ctx, conn, _require_opt(conn, opt_id), principal)
@@ -394,7 +423,7 @@ def runs_csv(ctx: AppContext, principal: Principal, opt_id: str) -> tuple[bytes,
     with ctx.engine.connect() as conn:
         o = _require_opt(conn, opt_id)
         s = studies_repo.require(conn, o["study_id"])
-        runs = collect_runs(ctx, conn, s, o, so_repo.iters(conn, o["id"]))
+        runs = collect_runs(ctx, conn, s, o, [it for it in so_repo.iters(conn, o["id"]) if it["kind"] != "FINAL"])
     problem = ds.Problem.from_settings(o["settings"])
     pts = [ds.Point(r["iter_no"], r["batch_label"], r["doe_no"], r["run_key"], dict(r["values"] or {}), r["objective"],
                     list(r["constraints"]), r["state"]) for r in runs]

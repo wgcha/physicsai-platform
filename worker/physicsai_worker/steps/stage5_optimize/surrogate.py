@@ -432,16 +432,81 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
              f"{_fmt(best_d['objective'] if best_d else None)} (반복 {t} · 검증 {n_verify} run)")
     body = summary["stop_text"] + ("" if not best_d or best_d["feasible"] else " · 제약을 만족하는 설계 없음(위반 최소 설계)")
 
-    def tx(c: Any) -> bool:
-        o = so_repo.get(c, opt["id"], for_update=True)
-        if o is None or o["status"] not in so_repo.ACTIVE:
-            return False
-        so_repo.set_opt(c, o["id"], status="DONE", best=best_d, stop_reason=reason, finished_at=_now())
-        notif_repo.notify_opt_done(c, o, ctx.ex.job_id, title, body)
-        return True
+    final_plan = _final_plan(ctx, opt, r, best_d, problem)
+    final_plan.update({"stop_reason": reason, "notice": {"title": title, "body": body}})
 
-    ctx.ex.db(tx)
-    ctx.patch_result({"finished": True, "stop_text": summary["stop_text"]})
+    def tx(c: Any) -> str | None:
+        studies_repo.require(c, opt["study_id"], for_update=True)  # D3-25: batch_no 경합 차단
+        o = so_repo.get(c, opt["id"], for_update=True)
+        if o is None or o["status"] not in so_repo.ACTIVE or o["current_job_id"] != ctx.ex.job_id:
+            return None
+        prev = so_repo.get_iter(c, o["id"], r)
+        if prev is not None and prev["kind"] == "FINAL":  # 멱등: 이미 마무리 캡처 배치를 등록함
+            return "reused"
+        if final_plan["status"] == "SKIPPED" or final_plan.get("matrix") is None:
+            so_repo.set_opt(c, o["id"], status="DONE", best=best_d, stop_reason=reason, finished_at=_now(),
+                            final=_final_json(final_plan))
+            notif_repo.notify_opt_done(c, o, ctx.ex.job_id, title, body)
+            return "done"
+        job, batch = so_repo.create_opt_batch(
+            c, opt=o, iter_no=r, kind="FINAL", matrix=final_plan["matrix"], source_meta=final_plan["matrix"].source_meta,
+            batch_dir_name=ctx.settings.predict_batch.dir_name, simlab_mesh_name=ctx.settings.predict.simlab_mesh_name,
+            round_job_id=ctx.ex.job_id, capture=True, display=final_plan.get("display"))
+        final_plan["batch_id"] = batch["id"]
+        so_repo.set_opt(c, o["id"], status="FINALIZING", best=best_d, stop_reason=reason, final=_final_json(final_plan))
+        return "finalizing"
+
+    outcome = ctx.ex.db(tx)
+    ctx.log(f"마무리: {outcome} — 캡처 {final_plan['status']}{(' · ' + final_plan['reason']) if final_plan.get('reason') else ''}")
+    ctx.patch_result({"finished": True, "stop_text": summary["stop_text"], "final": outcome})
+
+
+def _final_json(plan: dict[str, Any]) -> dict[str, Any]:
+    return {k: v for k, v in plan.items() if k not in ("matrix", "display")}
+
+
+def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | None, problem: ds.Problem) -> dict[str, Any]:
+    """D3-61 마무리 캡처 계획: 기준안(템플릿 nominal) + 최적안 2행 표 조합, 같은 범례(0 ~ max(기준안 예측, 최적값)).
+    캡처가 구성되지 않았거나 최적안이 없으면 SKIPPED(사유)."""
+    from physicsai_core.features import contour_capture_missing
+
+    with ctx.ex.engine.connect() as conn:
+        ps = ps_repo.get(conn, opt["param_set_id"])
+    if ps is None or not best_d:
+        return {"status": "SKIPPED", "reason": "최적안이 없어 캡처하지 않았습니다"}
+    names = [str(p["name"]) for p in ps["parameters"]]
+    base = {str(p["name"]): float(p.get("nominal", p["min"])) for p in ps["parameters"]}
+    plan: dict[str, Any] = {"status": "PENDING", "reason": None, "baseline_values": base, "legend": None,
+                            "baseline_predicted": None, "baseline_doe": 1, "best_doe": 2}
+    try:
+        _threads(ctx)
+        from physicsai_core.stage5_optimize.surrogate import infill
+
+        with open(os.path.join(_iter_dir(_O(ctx, opt), r), "surrogate.json"), encoding="utf-8") as fh:
+            fit = infill.FitResult.from_json(json.load(fh))
+        import numpy as np
+
+        x = np.array([base[n] for n in fit.free])
+        pred = float(fit.sign * fit.objective.raw(fit.normalize(x))[0][0])
+        plan["baseline_predicted"] = pred
+        top = max(pred, float(best_d.get("objective") or 0.0))
+        if top > 0:
+            plan["legend"] = {"min": 0.0, "max": top}
+    except (OSError, ValueError, KeyError, ImportError):
+        ctx.log("[WARN] 기준안 예측(범례)을 계산하지 못했습니다 — 범례 자동")
+    tmpl, res = contour_capture_missing(ctx.settings)
+    if tmpl or res:
+        plan.update(status="SKIPPED", reason=f"컨투어 캡처가 구성되지 않았습니다({', '.join((tmpl + res)[:3])})")
+        return plan
+    vals = [base, {n: float((best_d.get("values") or {}).get(n, base[n])) for n in names}]
+    matrix = build_matrix_for({"kind": "table", "text": _table_text(names, [{"values": v} for v in vals])}, ps, ctx.settings)
+    if matrix.problems or len(matrix.rows) != 2:
+        plan.update(status="SKIPPED", reason=f"캡처 조합을 만들 수 없습니다: {matrix.problems[:2]}")
+        return plan
+    plan["matrix"] = matrix
+    if plan["legend"]:
+        plan["display"] = {"legend": {"mode": "fixed", **plan["legend"]}}
+    return plan
 
 
 def _now() -> Any:

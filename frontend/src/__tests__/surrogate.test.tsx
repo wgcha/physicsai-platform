@@ -5,7 +5,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import { recordCalls } from "../test/recordCalls";
 import { ASSEMBLY_REQUIRED_TEXT } from "../stages/stage5/Stage5";
-import { SO_MODE_KEY, buildBody, convergence, previewText, qualityGrade, rowIssue, varRows, type SoForm } from "../stages/stage5/surrogate/soRules";
+import { SO_MODE_KEY, boundNote, buildBody, compareRows, convergence, previewText, qualityGrade, rowIssue, varRows, type SoForm } from "../stages/stage5/surrogate/soRules";
 import { seedParamSet } from "../mock/seed";
 import type { MockServer } from "../mock/server";
 
@@ -112,9 +112,29 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     const calls = recordCalls(server);
     expect((await screen.findByTestId("so-status")).textContent).toBe("완료");
     expect(screen.getByTestId("so-progress").textContent).toMatch(/^완료 — /);
-    const best = screen.getByRole("region", { name: "최적 설계" });
+    const best = screen.getByRole("region", { name: "최적안 — 기준안 대비" });
     expect(within(best).getByTestId("so-best-link").getAttribute("href")).toMatch(/\/stage\/4\/batch\/b-so-so-1-\d$/);
     expect(within(best).getByText(/PBS 검증 해석/)).toBeTruthy();
+    // D3-61: 변수마다 학습 범위·기준안(nominal)·최적안·변화
+    const cmp = within(best).getByRole("table", { name: "기준안 대비" });
+    expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "범위(학습)", "기준안", "최적안", "변화"]);
+    const o = server.surrogate[0];
+    const top = within(cmp).getByTestId("cmp-THK_TOP");
+    expect(top.textContent).toContain("0.6"); // nominal
+    const bestTop = (o.final!.best!.values as Record<string, number>).THK_TOP;
+    if (bestTop >= 1.2) expect(within(best).getByTestId("bound-note").textContent).toContain("THK_TOP(상한)");
+    // 결과 요약 타일: 목적(기준안 대비 %)·제약·품질·소요
+    const kp = screen.getByTestId("so-kpis");
+    expect(kp.textContent).toMatch(/vs 기준안/);
+    expect(kp.textContent).toMatch(/제약 ≤ 14/);
+    expect(kp.textContent).toMatch(/Q² /);
+    expect(kp.textContent).toMatch(/예측/);
+    // 컨투어 비교: 기준안·최적안 둘, 같은 범례 문구
+    const cc = screen.getByRole("region", { name: "컨투어 비교 — 기준안 · 최적안" });
+    expect(within(cc).getByText(/같은 범례\(0–/)).toBeTruthy();
+    expect(within(cc).getByTestId("contour-기준안")).toBeTruthy();
+    expect(within(cc).getByTestId("contour-최적안")).toBeTruthy();
+    expect(within(cc).getAllByTestId("contour-media")).toHaveLength(2);
     expect(screen.getByRole("img", { name: "수렴 그래프" })).toBeTruthy();
     const q = screen.getByRole("table", { name: "대리모델 품질" });
     expect(within(q).getAllByRole("row")).toHaveLength(4); // 머리 + 반복 1~3
@@ -126,6 +146,20 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     fireEvent.click(screen.getByRole("button", { name: "CSV 받기" }));
     await waitFor(() => expect(calls).toContain("GET /surrogate-opts/so-1/runs.csv"));
     expect(screen.getByTestId("so-dir").textContent).toContain("05_opt\\surrogate\\SO-001");
+  });
+
+  it("마무리 캡처 없음(미구성·실패) → '캡처 없음 — 사유', 진행 중 → 캡처 중 문구", async () => {
+    const r1 = renderApp(`${STUDY}/5/surrogate/so-1`, { user: "power" }, (s) => {
+      s.surrogate[0].final = { status: "SKIPPED", reason: "컨투어 캡처가 구성되지 않았습니다(commands.contour_capture)", baseline_values: { THK_TOP: 0.6 } };
+    });
+    expect((await screen.findByTestId("contour-none")).textContent).toBe("캡처 없음 — 컨투어 캡처가 구성되지 않았습니다(commands.contour_capture)");
+    expect(screen.getByTestId("so-kpis").textContent).toContain("기준안 값 없음");
+    r1.unmount();
+    renderApp(`${STUDY}/5/surrogate/so-1`, { user: "power" }, (s) => {
+      Object.assign(s.surrogate[0], { status: "FINALIZING", final: { ...s.surrogate[0].final, status: "PENDING", baseline: null, best: null } });
+    });
+    expect((await screen.findByTestId("contour-none")).textContent).toMatch(/^기준안·최적안 컨투어를 캡처하는 중입니다/);
+    expect(screen.getByTestId("so-status").textContent).toBe("마무리(캡처)");
   });
 
   it("진행 중 → 일괄 취소(확인) → 취소됨, 실패면 이어서 실행", async () => {
@@ -148,6 +182,14 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     renderApp(`${STUDY}/5/surrogate/so-1`, { user: "general" }, fail);
     expect((await screen.findByTestId("so-status")).textContent).toBe("실패");
     expect(screen.queryByRole("button", { name: "이어서 실행" })).toBeNull();
+  });
+
+  it("순수 규칙: 기준안 대비 행·범위 끝 안내", () => {
+    const rows = compareRows([{ name: "A", nominal: 1, min: 0, max: 2, unit: "mm" }, { name: "B", nominal: 5, min: 2, max: 8, unit: "" }], null, { A: 2, B: 4 });
+    expect(rows[0]).toMatchObject({ base: 1, opt: 2, delta: 1, bound: "upper", basePos: 0.5, optPos: 1 });
+    expect(rows[1]).toMatchObject({ base: 5, opt: 4, delta: -1, bound: null });
+    expect(boundNote(rows)).toBe("A(상한)이(가) 학습 범위 끝에 닿았습니다 — 범위를 넓혀 학습하면 추가 개선 여지가 있습니다");
+    expect(boundNote(rows.slice(1))).toBeNull();
   });
 
   it("순수 규칙: 본문(바뀐 범위·고정만), 행 검증, 미리보기 문구, 품질 등급, 수렴 자료", () => {

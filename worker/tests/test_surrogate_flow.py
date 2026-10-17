@@ -107,9 +107,22 @@ def test_v3_s13_8_full_loop(so_env, kind):
     assert d["stop_reason"] in ("MAX_ITER", "CONVERGED") and d["progress_text"].startswith("완료 — ")
     n_iter = len(d["iterations"])
     assert [it["kind"] for it in d["iterations"]] == ["EXPLORE", *["VERIFY"] * (n_iter - 1)]
-    assert types.count("SURROGATE_OPT") == n_iter and types.count("PREDICT_BATCH") == n_iter
+    # 배치 = 탐색 1 + 검증(반복) + 마무리 캡처 1(D3-61: 기준안·최적안 2 run, 캡처 켬·같은 범례)
+    assert types.count("SURROGATE_OPT") == n_iter and types.count("PREDICT_BATCH") == n_iter + 1
     if d["stop_reason"] == "MAX_ITER":
-        assert n_iter == 3 and types.count("PREDICT") == 6 + 2 * 2
+        assert n_iter == 3 and types.count("PREDICT") == 6 + 2 * 2 + 2
+    f = d["final"]
+    assert f["status"] == "DONE" and f["reason"] is None and f["batch"]["status"] == "DONE"
+    assert f["baseline"]["doe_no"] == 1 and f["best"]["doe_no"] == 2 and f["baseline"]["job_id"] and f["best"]["job_id"]
+    assert f["baseline"]["values"] == {"THK_1": 3.0, "N_RIB": 4}  # 템플릿 nominal
+    assert f["best"]["objective"] == pytest.approx(d["best"]["objective"])  # 최적안 응답으로 목적 재확인
+    assert f["baseline"]["objective"] == pytest.approx(objective_of(f["baseline"]["values"]))
+    assert f["legend"]["min"] == 0.0 and f["legend"]["max"] >= d["best"]["objective"] and f["baseline_predicted"] is not None
+    fp = env.sql("select params from jobs where job_type='PREDICT_BATCH' and params->>'batch_id'=:b", b=f["batch"]["id"])[0][0]
+    assert fp["capture"] == {"enabled": True} and fp["display"]["legend"] == {"mode": "fixed", **f["legend"]}
+    m = env.c.get(f"{API}/jobs/{f['best']['job_id']}/media", headers=P).json()
+    assert m["status"] == "OK" and m["items"]
+    assert {p["name"] for p in d["parameters"]} == {"THK_1", "N_RIB"} and d["parameters"][0]["nominal"] == 3.0
     # FIFO: 탐색 부모 → 하위 6 → 반복 1 → 검증 부모 → 하위 2 → 반복 2 …
     assert types[:8] == ["PREDICT_BATCH", *["PREDICT"] * 6, "SURROGATE_OPT"]
     # 반복별 적합 품질·후보(정수 변수 정수, 예측·실제 값)
@@ -315,7 +328,7 @@ def test_batch_done_hook_never_enqueues_twice(so_env, monkeypatch):
     assert rounds() == 1
 
 
-def _fail_after_so_next(monkeypatch, times: int = 1):
+def _fail_after_so_next(monkeypatch, times: int = 1, include_final: bool = False):
     from physicsai_core.errors import StepFailure
     from physicsai_worker.steps import HANDLERS
 
@@ -324,7 +337,7 @@ def _fail_after_so_next(monkeypatch, times: int = 1):
 
     def wrapped(ctx):
         orig(ctx)
-        if left["n"] > 0 and not ctx.result().get("finished"):
+        if left["n"] > 0 and (include_final or not ctx.result().get("finished")):
             left["n"] -= 1
             raise StepFailure("INTERNAL_ERROR", "SO_NEXT 커밋 뒤 실패(시험)")
 
@@ -365,5 +378,88 @@ def test_resume_after_verify_batch_registered_does_not_rerun_round(so_env, monke
     _drain(env)
     d = env.c.get(f"{API}/surrogate-opts/{n['id']}", headers=P).json()
     assert d["status"] == "DONE" and len(d["iterations"]) == 2
-    assert env.sql("select count(*) from surrogate_opt_iters where opt_id=:i", i=n["id"])[0][0] == 2
+    assert env.sql("select count(*) from surrogate_opt_iters where opt_id=:i and kind <> 'FINAL'", i=n["id"])[0][0] == 2
+
+
+# ---- D3-61 마무리 캡처 --------------------------------------------------------------------------------
+
+
+def _run_until_finalizing(env, oid: str) -> None:
+    for _ in range(40):
+        if env.c.get(f"{API}/surrogate-opts/{oid}", headers=P).json()["status"] in ("FINALIZING", "DONE"):
+            return
+        assert env.w.run_once_slot() is not None
+    raise AssertionError("FINALIZING에 이르지 못했습니다")
+
+
+def _done_notes(env) -> int:
+    return env.sql("select count(*) from notifications where event='SURROGATE_OPT_DONE'")[0][0]
+
+
+def test_final_capture_not_configured_skips_and_done(so_env, monkeypatch):
+    """캡처 미구성 → 마무리 배치 없이 바로 DONE, final SKIPPED·사유, 완료 알림 1건."""
+    import physicsai_core.features as features
+
+    monkeypatch.setattr(features, "contour_capture_missing", lambda s: (["commands.contour_capture"], []))
+    env = so_env
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    seen = _drain(env)
+    assert [t for t, _ in seen].count("PREDICT_BATCH") == 2  # 탐색 + 검증(마무리 없음)
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "DONE" and d["final"]["status"] == "SKIPPED" and "컨투어 캡처가 구성되지 않았습니다" in d["final"]["reason"]
+    assert d["final"]["batch"] is None and d["final"]["baseline_values"] == {"THK_1": 3.0, "N_RIB": 4}
+    assert _done_notes(env) == 1
+
+
+def test_final_capture_batch_failure_still_done(so_env, monkeypatch):
+    """마무리 캡처 배치 입력 생성 실패 → opt는 DONE(최적화 결과 유지) + final FAILED·사유, 완료 알림 1건, 이어서 실행 없음."""
+    env = so_env
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    _run_until_finalizing(env, o["id"])
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "FINALIZING" and d["progress_text"].startswith("마무리 — 기준안·최적안 컨투어 캡처")
+    assert d["final"]["status"] == "PENDING" and _done_notes(env) == 0 and d["can_cancel"] is True
+    monkeypatch.setenv("FAKE_TOOL_MODE_SIMLAB", "fail")
+    assert env.w.run_once_slot() == "FAILED"  # 마무리 배치 부모
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "DONE" and d["final"]["status"] == "FAILED" and "실패" in d["final"]["reason"]
+    assert d["best"] is not None and d["can_resume"] is False and _done_notes(env) == 1
+
+
+def test_final_capture_hw_failure_and_hook_idempotent(so_env, monkeypatch):
+    """캡처 도구 실패여도 예측은 성공 → 배치 DONE·opt DONE(화면은 '캡처 없음'), 배치 완료 훅을 다시 불러도 알림 1건."""
+    from physicsai_core.db.repositories import predict_batches as pb_repo
+    from physicsai_core.db.repositories import surrogate_opts as so_repo
+
+    env = so_env
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    _run_until_finalizing(env, o["id"])
+    monkeypatch.setenv("FAKE_TOOL_MODE_CAPTURE", "fail")
+    _drain(env)
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "DONE" and d["final"]["status"] == "DONE" and d["final"]["best"]["state"] == "SUCCEEDED"
+    m = env.c.get(f"{API}/jobs/{d['final']['best']['job_id']}/media", headers=P).json()
+    assert m["status"] != "OK"
+    with env.engine.begin() as conn:
+        assert so_repo.on_batch_done(conn, pb_repo.get(conn, d["final"]["batch"]["id"])) is True
+    assert _done_notes(env) == 1 and env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()["status"] == "DONE"
+
+
+def test_final_registered_then_round_fails_and_cancel_in_finalizing(so_env, monkeypatch):
+    """마무리 배치를 등록한 뒤 반복 작업이 실패해도 FINALIZING 유지(중복 등록 없음), FINALIZING에서 일괄 취소 → DONE + 캡처 취소."""
+    env = so_env
+    _fail_after_so_next(monkeypatch, times=2, include_final=True)  # 반복 1(검증 등록 뒤)·반복 2(마무리 등록 뒤) 모두 실패
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    _run_until_finalizing(env, o["id"])
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "FINALIZING"
+    assert env.sql("select count(*) from jobs where job_type='SURROGATE_OPT' and state='FAILED'")[0][0] == 2
+    assert env.sql("select count(*) from surrogate_opt_iters where opt_id=:i and kind='FINAL'", i=o["id"])[0][0] == 1
+    r = env.c.post(f"{API}/surrogate-opts/{o['id']}/cancel", headers=PW)
+    assert r.status_code == 202, r.text
+    d = r.json()
+    assert d["status"] == "DONE" and d["final"]["status"] == "CANCELED" and d["best"] is not None
+    assert _done_notes(env) == 1
+    _drain(env)
+    assert env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()["final"]["status"] == "CANCELED"
 

@@ -1,5 +1,5 @@
 // ⑤ 내장 최적화 결과(phase3.md §18.10, 라우트 …/stage/5/surrogate/:optId, 진행 중 POLL.surrogate):
-// 상태·진행 문구·일괄 취소·이어서 실행 / 최적 설계 / 수렴 그래프 / 대리모델 품질 / 검증 run 표(CSV) / 파일 위치.
+// 상태·진행 문구·일괄 취소·이어서 실행 / 최적안 — 기준안 대비 · 결과 요약 / 컨투어 비교(D3-61) / 수렴 그래프 / 대리모델 품질 / 검증 run 표(CSV) / 파일 위치.
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorMessage } from "../../../api";
@@ -12,9 +12,10 @@ import { fmtNum } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
 import { ROW_STATE_LABEL, rowTone } from "../../stage4/batch/batchTable";
 import { ConvergenceChart } from "./ConvergenceChart";
+import { ContourCompareCard, OptimumCompareCard, ResultSummaryCard } from "./ResultCards";
+import "../../../styles/surrogateOpt.css";
 import { SO_STATUS_LABEL, metricLabel, qualityGrade, soTone } from "./soRules";
 
-export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — ④ 배치 결과에서 이 행을 단일 예측으로 열어 확인하고, PBS 검증 해석으로 실해석을 권장합니다";
 
 export function SurrogateResult({ optId }: { optId: string }) {
   const { study } = useStudy();
@@ -77,31 +78,10 @@ export function SurrogateResult({ optId }: { optId: string }) {
         {o.warnings?.map((w, i) => <p key={i} className="muted small">{w.message}</p>)}
         {actionError && <p className="error-text small" role="alert">{actionError}</p>}
       </Card>
-      <Card span={3} title="최적 설계" className="so-best">
-        {b ? (
-          <>
-            <div className="D mono" data-testid="so-best-value">{fmtNum(b.objective)}</div>
-            <p className="muted small">{objLabel} · {b.feasible ? "제약 만족" : "제약 만족 설계 없음 — 위반 최소"}</p>
-            <dl className="kv small">
-              {Object.entries(b.values).map(([k, v]) => (
-                <div key={k} className="kv-row"><dt className="mono">{k}</dt><dd className="mono">{fmtNum(v)}</dd></div>
-              ))}
-              {Object.entries(b.constraints ?? {}).map(([k, v]) => (
-                <div key={k} className="kv-row"><dt>{metricLabel(k.split("@")[0])}</dt><dd className="mono">{fmtNum(v)}</dd></div>
-              ))}
-            </dl>
-            {b.batch_id && (
-              <p className="small">
-                <Link to={`${base}/stage/4/batch/${b.batch_id}`} data-testid="so-best-link">{b.batch_label} DOE #{b.doe_no}</Link>
-              </p>
-            )}
-            <p className="muted small">{VERIFY_HINT}</p>
-          </>
-        ) : (
-          <p className="muted small">아직 검증된 설계가 없습니다.</p>
-        )}
-      </Card>
-      <Card span={6} title="수렴 그래프">
+      <OptimumCompareCard o={o} base={base} />
+      <ResultSummaryCard o={o} />
+      <ContourCompareCard o={o} />
+      <Card span={9} title="수렴 그래프">
         <ConvergenceChart opt={o} />
       </Card>
       <Card span={9} title="대리모델 품질" aside={<span className="muted small">LOO(하나 빼기) · 등급 Q² ≥ 0.9 좋음 · 0.7~0.9 보통</span>}>
