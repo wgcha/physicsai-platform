@@ -34,6 +34,7 @@ import { optimizeRoutes } from "./stage5";
 import { isBatchChild, predictBatchRoutes, seedBatches, type BatchRec } from "./predictBatch";
 import { studyRoutes } from "./studies";
 import { captureRoutes, type CaptureMode } from "./capture";
+import { scxRoutes } from "./scx";
 
 export type { MockResp } from "./route";
 
@@ -47,6 +48,10 @@ interface ArtifactRec extends Artifact {
 export interface MockOptions {
   user?: MockUserKey;
   hpcConfigured?: boolean;
+  /** phase3 §16 SCX(D3-58): hpcConfigured일 때 게이트웨이 모드(기본 command) */
+  hpcMode?: "command" | "scx";
+  /** SCX 시드: 진행 중 ① 제출의 한 run을 결과 모름(SUBMISSION_UNKNOWN)으로 */
+  scxUnknown?: boolean;
   /** 실행 중 작업이 tick마다 진행되는 정도(%) */
   speed?: number;
   /** /status.ui 값(B1). 시험에서 짧은 주기를 주입 */
@@ -96,6 +101,7 @@ const ROUTES: Route[] = [
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④
+  scxRoutes, // phase3 §16 S11 SCX hpc-jobs·resolve
   jobRoutes, // §10.5
   notificationRoutes, // §10.7
   fsRoutes, // phase3 §12 S7 서버 경로 탐색
@@ -105,6 +111,8 @@ export class MockServer {
   user: MockUserKey;
   hpcConfigured: boolean;
   hpcCancelFails: boolean;
+  hpcMode: "none" | "command" | "scx";
+  scxUnknown: boolean;
   demo: boolean;
   configWarnings: string[];
   loginUrl: string;
@@ -133,6 +141,8 @@ export class MockServer {
     this.user = opts.user ?? "admin";
     this.hpcConfigured = opts.hpcConfigured ?? false;
     this.hpcCancelFails = opts.hpcCancelFails ?? false;
+    this.hpcMode = this.hpcConfigured ? (opts.hpcMode ?? "command") : "none";
+    this.scxUnknown = opts.scxUnknown ?? false;
     this.demo = opts.demo ?? false;
     this.configWarnings = opts.configWarnings ?? [];
     this.loginUrl = opts.loginUrl ?? "/";

@@ -318,6 +318,10 @@ export type SampleStatus = "PARSED" | "PARTIAL" | "MISSING" | "PENDING";
 export type TrainDoe = Override<S["TrainDoe"], { status: EntityStatus; sample_status: SampleStatus }>;
 export type TrainRun = Override<S["TrainRun"], { state: TrainRunState }>;
 
+/** phase3 §16.5·§16.9: HPC 행(GET /jobs/{id}/hpc-jobs). scx 필드(gateway_mode·remote_dir·submission_unknown·resolve_pending)는 선택 */
+export type HpcJob = S["HpcJob"];
+export type HpcResolveAction = S["HpcResolveRequest"]["action"];
+
 /** §4.4 */
 export type CurationSourceRef =
   | { kind: "TRAIN_DOE"; doe_id: string }

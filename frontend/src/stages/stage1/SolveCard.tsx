@@ -4,6 +4,7 @@ import { useApp } from "../../app/AppContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, Field, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
+import { latestByRun, useHpcRows, useScxMode } from "../../components/HpcScx";
 import { isTerminal } from "../../lib/format";
 import { useTrain } from "./TrainContext";
 import { DoePicker } from "./DoePicker";
@@ -23,6 +24,8 @@ export function SolveCard() {
   const [actionError, setActionError] = useState<string | null>(null);
   const hpcOn = !!status?.hpc.configured;
   const job = solve.job;
+  const scx = useScxMode();
+  const hpcRows = useHpcRows(job, scx);
 
   useEffect(() => {
     void reloadRuns();
@@ -111,6 +114,11 @@ export function SolveCard() {
             cancelFailed={!!job && !isTerminal(job.state) && job.attention_code === "HPC_CANCEL_FAILED"}
             onCancel={cancel}
             onResubmit={hpcOn && canExec ? (k) => submit([k]) : undefined}
+            scx={
+              scx && job
+                ? { jobId: job.id, rows: latestByRun(hpcRows.rows), canAct: canExec, onChange: hpcRows.replace, onReload: hpcRows.reload }
+                : undefined
+            }
           />
         </details>
       )}

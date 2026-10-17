@@ -1,6 +1,6 @@
 // npm run dev:mock 전용: window.fetch를 목 서버로 바꾸고 2초마다 작업을 진행시킨다.
 // ?mockUser=admin|power|general|anon 으로 사용자 전환(localStorage에 기억), ?hpc=1 이면 PBS 구성됨, ?demo=1 이면 시연 모드,
-// ?batch=running 이면 진행 중 일괄 예측 B-003 시드(S9).
+// ?batch=running 이면 진행 중 일괄 예측 B-003 시드(S9). ?hpc=scx 이면 SCX 게이트웨이(D3-58), &scx=unknown 이면 결과 모름 run 1개.
 import { MockServer, createMockFetch } from "./server";
 import type { MockUserKey } from "./data";
 
@@ -15,7 +15,7 @@ export function installMockFetch() {
   } catch {
     /* 저장소 없음 */
   }
-  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1", demo: params.get("demo") === "1", batchDemo: params.get("batch") === "running" ? "running" : undefined, configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
+  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1" || params.get("hpc") === "scx", hpcMode: params.get("hpc") === "scx" ? "scx" : undefined, scxUnknown: params.get("scx") === "unknown", demo: params.get("demo") === "1", batchDemo: params.get("batch") === "running" ? "running" : undefined, configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

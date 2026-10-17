@@ -143,6 +143,7 @@ export function hpcSummaryText(h: { total: number; succeeded: number; failed: nu
 export const ATTENTION_TEXT: Record<string, string> = {
   HPC_CANCEL_FAILED: "취소 실패, 재시도 중",
   HPC_RUN_FAILED: "PBS 일부 실패",
+  HPC_SUBMISSION_UNKNOWN: "SCX 제출 확인 필요",
 };
 export function attentionText(code: string | null | undefined): string | null {
   if (!code) return null;

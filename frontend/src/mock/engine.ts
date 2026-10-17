@@ -6,6 +6,7 @@ import { finishStage3 } from "./stage3";
 import { finishStage4 } from "./stage4";
 import { adjustPreparedSteps } from "./stage4Prepared";
 import { batchAfterChild, batchOnProgress, isBatchChild } from "./predictBatch";
+import { tickScx } from "./scx";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -69,6 +70,7 @@ export function tickJobs(srv: MockServer) {
       }
     }
   }
+  tickScx(srv);
   srv.p2.tick();
   refreshPositions(srv);
 }

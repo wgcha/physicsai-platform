@@ -357,6 +357,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/jobs/{job_id}/hpc-jobs/{hpc_job_id}/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Hpc Job
+         * @description SCX 제출 결과 모름 조치(phase3 §16.5) — recheck(같은 request_id로 다시 확인)·attach(SCX에서 찾은 잡 ID 연결)·
+         *     mark_not_submitted(제출 안 됨 확인 → 행 실패). 요청만 기록하고 워커가 다음 폴링에서 처리한다(202, resolve_pending=true).
+         *     주의: SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면 같은 해석이 두 번 돌 수 있습니다(폴더는 따로).
+         */
+        post: operations["resolve_hpc_job_physicsai_api_jobs__job_id__hpc_jobs__hpc_job_id__resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/jobs/{job_id}/log": {
         parameters: {
             query?: never;
@@ -2090,18 +2112,65 @@ export interface components {
             collect_state: string;
             /** Elapsed S */
             elapsed_s?: number | null;
+            /** Error Message */
+            error_message?: string | null;
             /** External Job Id */
             external_job_id?: string | null;
             /** External State Raw */
             external_state_raw?: string | null;
+            /** Gateway Mode */
+            gateway_mode?: string | null;
             /** Id */
             id: string;
+            /** Output Path */
+            output_path?: string | null;
+            /**
+             * Remote Dir
+             * @description SCX 잡 폴더(표시 경로, hpc.scx.home_display 기준)
+             */
+            remote_dir?: string | null;
+            /** Request Id */
+            request_id?: string | null;
+            /**
+             * Resolve Pending
+             * @default false
+             */
+            resolve_pending: boolean;
             /** Run Key */
             run_key: string;
             /** State */
             state: string;
+            /**
+             * Submission Unknown
+             * @default false
+             */
+            submission_unknown: boolean;
             /** Submitted At */
             submitted_at?: string | null;
+            /**
+             * Version
+             * @description 결과 모름 조치(resolve) 요청의 version
+             */
+            version?: number | null;
+        };
+        /**
+         * HpcResolveRequest
+         * @description SCX 제출 결과 모름 조치(phase3 §16.5). 주의: SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면
+         *     같은 해석이 두 번 돌 수 있습니다(폴더는 따로).
+         */
+        HpcResolveRequest: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "recheck" | "attach" | "mark_not_submitted";
+            /**
+             * External Job Id
+             * @description attach만: SCX 화면에서 찾은 잡 ID
+             */
+            external_job_id?: string | null;
+            /** Version */
+            version: number;
         };
         /** HpcSummary */
         HpcSummary: {
@@ -4712,6 +4781,78 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HpcJob"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    resolve_hpc_job_physicsai_api_jobs__job_id__hpc_jobs__hpc_job_id__resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+                hpc_job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HpcResolveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HpcJob"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Not Found */

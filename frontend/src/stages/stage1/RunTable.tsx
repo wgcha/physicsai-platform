@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { type TrainRun, type TrainRunState } from "../../api";
+import { Fragment, useState } from "react";
+import { type HpcJob, type TrainRun, type TrainRunState } from "../../api";
 import { useApp } from "../../app/AppContext";
+import { CheckPill, FolderCell, HpcResolvePanel, hpcPhaseText, isScxRow, needsCheck } from "../../components/HpcScx";
 import { fmtElapsed } from "../../lib/format";
 
 const RUN_STATE_LABEL: Record<TrainRunState, string> = {
@@ -14,12 +15,22 @@ const RUN_STATE_LABEL: Record<TrainRunState, string> = {
 
 const HPC_STATE_TEXT: Record<string, string> = { SUBMITTING: "제출 중", QUEUED: "대기", UNKNOWN: "확인 중", RUNNING: "실행" };
 
+/** phase3 §16 SCX(D3-58): run별 HPC 행과 결과 모름 조치 */
+export interface ScxRows {
+  jobId: string;
+  rows: Record<string, HpcJob>;
+  canAct: boolean;
+  onChange: (r: HpcJob) => void;
+  onReload: () => unknown;
+}
+
 export function RunTable({
   runs,
   onResubmit,
   onCancel,
   canCancel,
   cancelFailed = false,
+  scx,
 }: {
   runs: TrainRun[];
   onResubmit?: (key: string) => void;
@@ -27,6 +38,8 @@ export function RunTable({
   canCancel: boolean;
   /** C18: 작업 attention_code=HPC_CANCEL_FAILED */
   cancelFailed?: boolean;
+  /** hpc.mode=scx일 때만 */
+  scx?: ScxRows;
 }) {
   const { me } = useApp();
   const admin = me.is_global_admin;
@@ -37,7 +50,8 @@ export function RunTable({
         <thead>
           <tr>
             <th>run</th>
-            <th>PBS job</th>
+            <th>{scx ? "잡 ID" : "PBS job"}</th>
+            {scx && <th>드라이브 폴더</th>}
             <th>상태</th>
             <th className="num">경과</th>
             {admin && <th />}
@@ -46,22 +60,32 @@ export function RunTable({
         <tbody>
           {runs.map((r) => {
             const failed = r.state === "SOLVE_FAILED" || r.state === "COLLECT_FAILED";
+            const row = scx?.rows[r.run_key];
+            const scxRow = isScxRow(row) ? row : null;
+            const check = needsCheck(scxRow);
             return (
-              <tr key={r.run_key} className={`run-${r.state.toLowerCase()}`}>
+              <Fragment key={r.run_key}>
+              <tr className={`run-${r.state.toLowerCase()}`}>
                 <td className="mono">{r.run_key}</td>
                 <td className="mono small">
                   {r.hpc?.external_job_id ?? "–"}
                   {r.hpc && r.hpc.attempt_no > 1 ? <span className="muted"> · {r.hpc.attempt_no}차</span> : null}
                 </td>
+                {scx && (
+                  <td>
+                    <FolderCell path={scxRow?.remote_dir} />
+                  </td>
+                )}
                 <td>
-                  <span className={`run-state ${r.state.toLowerCase()}`}>{RUN_STATE_LABEL[r.state]}</span>
-                  {r.state === "SUBMITTED" && r.hpc?.state === "CANCEL_REQUESTED" ? (
+                  {check ? <CheckPill /> : <span className={`run-state ${r.state.toLowerCase()}`}>{RUN_STATE_LABEL[r.state]}</span>}
+                  {check ? null : r.state === "SUBMITTED" && r.hpc?.state === "CANCEL_REQUESTED" ? (
                     <span className="warn-text small" data-testid="run-cancel-failed">
                       {" "}
                       ({cancelFailed ? "취소 실패, 재시도 중" : "취소 요청됨"})
                     </span>
                   ) : (
-                    r.state === "SUBMITTED" && r.hpc?.state && <span className="muted small"> ({HPC_STATE_TEXT[r.hpc.state] ?? r.hpc.state})</span>
+                    (r.state === "SUBMITTED" || (!!scxRow && r.state === "SOLVED" && scxRow.collect_state === "COLLECTING")) &&
+                    r.hpc?.state && <span className="muted small"> ({scxRow ? hpcPhaseText(scxRow) : HPC_STATE_TEXT[r.hpc.state] ?? r.hpc.state})</span>
                   )}
                 </td>
                 <td className="num small">{r.state === "SUBMITTED" ? fmtElapsed(r.updated_at) : "–"}</td>
@@ -86,6 +110,14 @@ export function RunTable({
                   </td>
                 )}
               </tr>
+              {check && scx && scxRow && (
+                <tr className="run-detail">
+                  <td colSpan={admin ? 6 : 5}>
+                    <HpcResolvePanel jobId={scx.jobId} row={scxRow} canAct={scx.canAct} onChange={scx.onChange} onReload={scx.onReload} />
+                  </td>
+                </tr>
+              )}
+              </Fragment>
             );
           })}
         </tbody>

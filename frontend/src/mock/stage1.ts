@@ -5,6 +5,7 @@ import { DOE_TYPES, FEATURE_MISSING } from "./catalog";
 import { err, ok, type MockResp, type Route } from "./route";
 import type { Phase2Mock, SeedJob } from "./phase2";
 import { addParamSetFromTrain } from "./stage4";
+import { markUnknown } from "./scx";
 
 export const runKey = (i: number) => `run__${String(i).padStart(5, "0")}`;
 
@@ -86,6 +87,10 @@ export function seedTrain(p2: Phase2Mock, J: SeedJob, sid: string): { doeId: str
       rr.updated_at = iso(states[i][2]);
       rr._job = solve.id;
     });
+    if (p2.s.hpcMode === "scx") {
+      runs.slice(24).forEach((rr) => rr.hpc?.external_job_id && (rr.hpc.external_job_id = `scx-${rr.hpc.external_job_id.split(".")[0]}`));
+      if (p2.s.scxUnknown) markUnknown(p2.s, solve, runs[runs.length - 1]);
+    }
   } else {
     J({ id: "j-ri", job_type: "TD_RESULT_IMPORT", state: "SUCCEEDED", created_at: iso(60 * 3 + 10), params: { doe_id: doeId, source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/pbs_results" }, result: { matched: 24, copied_files: 96, total_bytes: 4_400_000_000, unmatched_dirs: [], missing_runs: runs.slice(24).map((x) => x.run_key) } });
     runs.slice(0, 24).forEach(collect);

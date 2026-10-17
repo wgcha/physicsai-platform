@@ -56,6 +56,9 @@ const cases: [string, string, string, ("power" | "admin")?, ConstructorParameter
   ["/queue", "/queue", "get", "power", { hpcConfigured: true }],
   ["/jobs/j-solve", "/jobs/{job_id}", "get", "power", { hpcConfigured: true }],
   ["/jobs/j-opt", "/jobs/{job_id}", "get"],
+  // 3차 §16 S11 SCX(D3-58): hpc-jobs scx 필드
+  ["/jobs/j-solve/hpc-jobs", "/jobs/{job_id}/hpc-jobs", "get", "power", { hpcConfigured: true, hpcMode: "scx", scxUnknown: true }],
+  ["/jobs/j-solve/hpc-jobs", "/jobs/{job_id}/hpc-jobs", "get", "power", { hpcConfigured: true }],
   ["/studies/s-cushion/train", "/studies/{study_id}/train", "get"],
   ["/train/doe-types", "/train/doe-types", "get"],
   ["/studies/s-cushion/train/does", "/studies/{study_id}/train/does", "get"],
@@ -183,5 +186,25 @@ describe("목 서버 ↔ openapi.json", () => {
     const r = server.handle("GET", "/jobs/j-q2/artifacts/input.zip", new URLSearchParams(), null, new Headers());
     expect(r.status).toBe(409);
     expect((r.body as { detail: { code: string } }).detail.code).toBe("INPUT_NOT_READY");
+  });
+
+  it("3차 §16.5 SCX resolve(D3-58): 202 HpcJob(resolve_pending), 409 HPC_RESOLVE_PENDING·HPC_NOT_UNKNOWN·VERSION_CONFLICT", () => {
+    const srv = new MockServer({ user: "admin", hpcConfigured: true, hpcMode: "scx", scxUnknown: true });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    const rows = srv.handle("GET", "/jobs/j-solve/hpc-jobs", q, null, h).body as { id: string; state: string; submission_unknown: boolean; version: number }[];
+    const unk = rows.find((r) => r.submission_unknown)!;
+    const other = rows.find((r) => !r.submission_unknown)!;
+    const url = (id: string) => `/jobs/j-solve/hpc-jobs/${id}/resolve`;
+    expect((srv.handle("POST", url(unk.id), q, { action: "recheck", version: unk.version + 1 }, h).body as { detail: { code: string } }).detail.code).toBe("VERSION_CONFLICT");
+    const ok = srv.handle("POST", url(unk.id), q, { action: "recheck", version: unk.version }, h);
+    expect(ok.status).toBe(202);
+    expect((ok.body as { resolve_pending: boolean }).resolve_pending).toBe(true);
+    expect(problems(ok.body, responseSchema("/jobs/{job_id}/hpc-jobs/{hpc_job_id}/resolve", "post"), "resolve")).toEqual([]);
+    const again = srv.handle("POST", url(unk.id), q, { action: "recheck", version: unk.version + 1 }, h);
+    expect((again.body as { detail: { code: string } }).detail.code).toBe("HPC_RESOLVE_PENDING");
+    const no = srv.handle("POST", url(other.id), q, { action: "recheck", version: other.version }, h);
+    expect(no.status).toBe(409);
+    expect((no.body as { detail: { code: string } }).detail.code).toBe("HPC_NOT_UNKNOWN");
   });
 });

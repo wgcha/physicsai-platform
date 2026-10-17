@@ -27,6 +27,8 @@ import type {
   TrainRun,
   TrainSetup,
   Dataset,
+  HpcJob,
+  HpcResolveAction,
   Job,
   JobSummary,
   JobType,
@@ -129,6 +131,11 @@ export const api = {
   cancelJob: (id: string) => request<Job>("POST", `/jobs/${id}/cancel`),
   retryJob: (id: string, from_step?: number) =>
     request<Job>("POST", `/jobs/${id}/retry`, { body: from_step ? { from_step } : {} }),
+  /** run별 HPC 행(phase2 §12, phase3 §16.9 scx 필드) */
+  hpcJobs: (jobId: string) => request<HpcJob[]>("GET", `/jobs/${jobId}/hpc-jobs`),
+  /** phase3 §16.5: SCX 제출 결과 모름 조치(202, 워커가 다음 확인 때 처리). version = 행 version */
+  resolveHpcJob: (jobId: string, hid: string, body: { action: HpcResolveAction; external_job_id?: string; version: number }) =>
+    request<HpcJob>("POST", `/jobs/${jobId}/hpc-jobs/${hid}/resolve`, { body }),
   artifacts: (jobId: string) => request<Artifact[]>("GET", `/jobs/${jobId}/artifacts`),
   artifactBlob: (id: string) => fetchBlob(`/artifacts/${id}/content`),
   // S10 컨투어 캡처(phase3.md §15.4)

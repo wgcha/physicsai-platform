@@ -5,6 +5,7 @@ import { useApp } from "../../app/AppContext";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced } from "../../components/ui";
+import { ScxJobStatus, useScxMode } from "../../components/HpcScx";
 
 export const PBS_DISABLED_TEXT = "PBS 연결 안 됨(관리자 설정 필요)";
 
@@ -51,12 +52,15 @@ export function ModelLine({ choice }: { choice: ModelChoice }) {
   );
 }
 
-/** "PBS 검증 해석"(§16.5 기존 규칙): PBS 구성 + 성공한 예측 결과 + 실행 권한일 때만 활성 */
+/** "PBS 검증 해석"(scx면 "검증 해석(SCX)", D3-58)(§16.5 기존 규칙): PBS 구성 + 성공한 예측 결과 + 실행 권한일 때만 활성 */
 export function usePredictVerify(pjob: Job | null, hasResult: boolean) {
   const { status } = useApp();
   const canExec = useCanExecute();
   const verify = useJobRunner("PREDICT_VERIFY");
   const hpcConfigured = !!status?.hpc.configured;
+  // D3-58: availability(/status.hpc.mode)가 scx면 게이트웨이 중립 이름
+  const scx = useScxMode();
+  const label = scx ? "검증 해석(SCX)" : "PBS 검증 해석";
   const vjob: Job | null = verify.job && (verify.job.params as { predict_job_id?: string }).predict_job_id === pjob?.id ? verify.job : null;
   const verifyValues = vjob?.state === "SUCCEEDED" ? ((vjob.result as { verify_values?: Record<string, number> } | null)?.verify_values ?? null) : null;
 
@@ -68,7 +72,7 @@ export function usePredictVerify(pjob: Job | null, hasResult: boolean) {
       title={!hpcConfigured ? PBS_DISABLED_TEXT : !hasResult ? "성공한 예측 결과가 필요합니다" : undefined}
       onClick={() => pjob && void verify.run({ predict_job_id: pjob.id, hpc: { queue: null, ncpus: null, walltime: null } })}
     >
-      PBS 검증 해석
+      {label}
     </button>
   ) : undefined;
 
@@ -76,7 +80,8 @@ export function usePredictVerify(pjob: Job | null, hasResult: boolean) {
     <>
       {canExec && !hpcConfigured && <p className="muted small pbs-note" data-testid="pbs-note">{PBS_DISABLED_TEXT}</p>}
       {verify.error && <p className="error-text small">{verify.error}</p>}
-      {vjob && <p className="small">PBS 검증: {vjob.state}</p>}
+      {vjob && <p className="small">{scx ? "검증 해석" : "PBS 검증"}: {vjob.state}</p>}
+      {vjob && scx && <ScxJobStatus job={vjob} canAct={canExec} />}
     </>
   );
 

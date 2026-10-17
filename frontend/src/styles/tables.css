@@ -85,6 +85,51 @@ tr.selected td {
   background: var(--color-danger-surface);
   color: var(--color-danger);
 }
+/* phase3 §16 SCX(D3-58): 결과 모름 "확인 필요" */
+.run-state.needs-check {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+  border: 1px solid var(--color-warning-border);
+}
+.folder-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  max-width: 260px;
+}
+.folder-cell code {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.run-detail > td {
+  background: var(--color-warning-surface);
+}
+.hpc-resolve {
+  display: grid;
+  gap: var(--space-2);
+}
+.hpc-resolve p {
+  margin: 0;
+}
+.hpc-resolve-actions,
+.hpc-attach {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.hpc-attach input {
+  width: 160px;
+}
+.scx-job {
+  display: grid;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+.scx-job p {
+  margin: 0;
+}
 .final-badge {
   display: inline-block;
   padding: 1px var(--space-2);

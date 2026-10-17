@@ -90,7 +90,8 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
       for (const r of runs) {
         r.state = "SUBMITTED";
         r._job = j.id;
-        r.hpc = { external_job_id: `${p2.hpcSeq++}.pbs01`, state: "QUEUED", attempt_no: (r.hpc?.attempt_no ?? 0) + 1 };
+        r.hpc = { external_job_id: p2.s.hpcMode === "scx" ? `scx-${p2.hpcSeq++}` : `${p2.hpcSeq++}.pbs01`, state: "QUEUED", attempt_no: (r.hpc?.attempt_no ?? 0) + 1 };
+        delete (r as RunRec & { _scx?: unknown })._scx; // 새 시도 = 새 행·새 잡 폴더(§16.3)
         r.updated_at = new Date().toISOString();
       }
       j.steps = makeSteps("TD_SOLVE", 2, 2);
@@ -151,7 +152,7 @@ export function tickSolve(p2: Phase2Mock) {
       continue;
     }
     if (j.state === "WAITING_HPC") {
-      const pending = runs.filter((r) => r.state === "SUBMITTED");
+      const pending = runs.filter((r) => r.state === "SUBMITTED" && r.hpc?.state !== "UNKNOWN"); // §16.5 결과 모름은 사용자 조치까지 그대로
       pending.slice(0, 2).forEach((r, i) => {
         if (r.hpc?.state === "QUEUED") r.hpc.state = "RUNNING";
         else {
