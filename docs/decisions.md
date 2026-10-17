@@ -112,3 +112,4 @@
 - 2026-10-17 · 원본 최적화는 mesh_only 템플릿이면 생성·재시도 409 `TEMPLATE_ASSEMBLY_REQUIRED` + 워커 op_prep 가드(이슈 #4 TypeError 제거) — 근거: 사용자 결정 · contracts/s12_s13.md §18.8, D3-60
 - 2026-10-17 · (사용자 확인 필요) 내장 최적화용 새 런타임 의존성 numpy·scipy(약 55 MB wheel, 워커 계산 모듈에서만 import, 없으면 기능만 꺼짐) — 근거: GP 우도 최적화·정수 변수 전역 탐색을 직접 구현하지 않기 위함 · contracts/s12_s13.md §18.2
 - 2026-10-17 · 화면 단계 재편: ④ 예측 · ⑤ 결과분석(신설: 결과 표 입력 = 일괄 예측 배치 또는 해석 DOE, PLS·PCA·커브·영향도(PRCC·표준화 회귀계수)·solver vs predict 겹쳐 보기) · ⑥ 최적화(기존 ⑤), 내부 코드 경로·job·DB·URL 숫자·e2e 번호 유지·표시만 변경, 새 읽기 전용 API `GET /train-does/{doe_id}/result-table` — 근거: 사용자 결정 · contracts/s14_analysis.md §19, D3-62
+- 2026-10-18: S14 계약 예시값 정정·겹쳐 보기 응답은 공통 응답만·해석 폴더 직접 지정 보류 (근거: Verifier 판정, 사용자 '추천대로')
