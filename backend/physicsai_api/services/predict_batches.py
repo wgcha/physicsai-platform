@@ -23,8 +23,11 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
+from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
+from physicsai_core.sampling import designs as sampling_designs
+from physicsai_core.sampling import registry as sampling_registry
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.state_machine import TERMINAL
 
@@ -42,6 +45,53 @@ RETRY_CHILD_STATES = ("FAILED", "CANCELED", "INTERRUPTED")
 
 
 # ---- 공용 --------------------------------------------------------------------------------------
+
+
+def _active_unit_points(meta: dict[str, Any], rows: list[dict[str, Any]]) -> list[list[float]]:
+    """meta.ranges의 활성 변수(lo < hi) 단위 좌표 — 기존 `lhs`의 quality를 meta에 저장하지 않고 계산한다(V3-S9-5 골든 보존)."""
+    ranges = meta.get("ranges") if isinstance(meta.get("ranges"), dict) else {}
+    act = [(n, r[0], r[1]) for n, r in ranges.items()
+           if isinstance(r, list) and len(r) == 2 and all(isinstance(v, (int, float)) for v in r) and r[0] < r[1]]
+    pts = []
+    for row in rows:
+        vals = row.get("values") or {}
+        if any(not isinstance(vals.get(n), (int, float)) for n, _lo, _hi in act):
+            return []
+        pts.append([(float(vals[n]) - lo) / (hi - lo) for n, lo, hi in act])
+    return pts if act and len(pts) >= 2 else []
+
+
+def _sampling_info(conn: Any, source_kind: str, meta: dict[str, Any] | None, owned_kind: str | None,
+                   rows: list[dict[str, Any]], recommended: int | None) -> dict[str, Any] | None:
+    """배치·미리보기 `sampling`(S15 §20.6): 방식·라벨·desc_id·등급(§20.7)·meta. 알 수 없는 source_kind면 None."""
+    kind = sampling_registry.kind_of_source(source_kind)
+    if kind is None:
+        return None
+    meta = dict(meta or {})
+    doe_type = doe_opts = None
+    if source_kind == "TRAIN_DOE":
+        d = train_repo.get_doe(conn, str(meta.get("doe_id") or ""))
+        if d is not None:
+            doe_type, doe_opts = d["doe_type"], d.get("options") if isinstance(d.get("options"), dict) else {}
+    cls, note = sampling_registry.batch_influence(source_kind, meta, owned_kind, doe_type, doe_opts)
+    if source_kind == "LHS" and "quality" not in meta:
+        pts = _active_unit_points(meta, rows)
+        if pts:
+            meta["quality"] = sampling_designs.quality(pts)
+    _method, label, desc_id = sampling_registry.method_info(kind)
+    return {"kind": kind, "method": source_kind, "desc_id": desc_id, "label": label, "influence_class": cls,
+            "influence_note": note, "recommended_count": recommended, "meta": meta}
+
+
+def _sampling_summary(b: dict[str, Any]) -> dict[str, Any] | None:
+    kind = sampling_registry.kind_of_source(b["source_kind"])
+    if kind is None:
+        return None
+    meta = b.get("source_meta") or {}
+    seed, offset = meta.get("seed"), meta.get("offset")
+    return {"kind": kind, "method": b["source_kind"], "label": sampling_registry.method_info(kind)[1], "count": b["run_count"],
+            "seed": seed if isinstance(seed, int) and not isinstance(seed, bool) else None,
+            "offset": offset if isinstance(offset, int) and not isinstance(offset, bool) else None}
 
 
 def _require_batch(conn: Any, batch_id: str, *, for_update: bool = False) -> dict[str, Any]:
@@ -95,12 +145,15 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
             "media_views": media.get(r["predict_job_id"] or "", []),
         })
     regen, kids = _retry_targets(rows)
-    owned = so_repo.owned_iter_of_batch(conn, b["id"]) is not None  # phase3 §18.6: ⑤에서만 취소·이어서 실행
+    owned_it = so_repo.owned_iter_of_batch(conn, b["id"])
+    owned = owned_it is not None  # phase3 §18.6: ⑤에서만 취소·이어서 실행
     parent_active = parent is not None and parent["state"] not in TERMINAL
     return {
         "id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"],
         "dir": display_path(root, s["folder_name"], b["dir_rel"]), "input_kind": b["input_kind"],
         "source_kind": b["source_kind"],
+        "sampling": _sampling_info(conn, b["source_kind"], b.get("source_meta"), owned_it["kind"] if owned_it else None,
+                                   rows, None),
         "param_set": {"id": b["param_set_id"], "label": ps.get("label")},
         "model": {"id": b["model_id"], "name": f"{m['name']} v{m['version']}" if m else b["model_id"]},
         "job_id": b["job_id"], "multi_execution": b["multi_execution"], **pb_repo.counts(conn, b["id"]),
@@ -134,8 +187,27 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
         ps = resolve_param_set(conn, s, body.param_set_id)
         matrix = build_matrix(ctx, conn, s, ps, body.source.model_dump())
         est = _estimate_min(conn, study_id, len(matrix.rows)) if matrix.rows else None
+        rows = [{"values": r.values} for r in matrix.rows]
+        sampling = _sampling_info(conn, matrix.source_kind, matrix.source_meta, None, rows,
+                                  _recommended(ctx, body.source.kind, matrix.source_meta, ps))
     return {"input_kind": ps.get("input_kind") or "assembly", "count": len(matrix.rows), "estimate_min": est,
-            "rows": [r.as_dict() for r in matrix.rows], "problems": matrix.problems}
+            "rows": [r.as_dict() for r in matrix.rows], "problems": matrix.problems, "notes": matrix.notes,
+            "sampling": sampling}
+
+
+def _recommended(ctx: AppContext, kind: str, meta: dict[str, Any], ps: dict[str, Any]) -> int | None:
+    """미리보기 `recommended_count`(§20.4 계산식과 같은 값). 이어서 추가 Sobol은 기존 개수(합계 2배)."""
+    cont = meta.get("continue_from")
+    if kind == "sobol" and cont and isinstance(meta.get("offset"), int) and meta["offset"] > 0:
+        return max(4, meta["offset"] & -meta["offset"])
+    active = meta.get("active")
+    if isinstance(active, list):
+        k = len(active)
+    else:
+        ranges = meta.get("ranges") if isinstance(meta.get("ranges"), dict) else {}
+        k = sum(1 for p in ps.get("parameters") or []
+                if (lambda r: r[0] < r[1])(ranges.get(p["name"]) or [p["min"], p["max"]]))
+    return sampling_registry.recommended_count(kind, k, ctx.settings.predict_batch.max_runs)
 
 
 def list_batches(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
@@ -147,7 +219,8 @@ def list_batches(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
         return [{"id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"], "run_count": b["run_count"],
                  "created_at": b["created_at"], "created_by_name": b["created_by_name"],
                  "param_set": {"id": b["param_set_id"], "label": sets[b["param_set_id"]].get("label")},
-                 **pb_repo.counts(conn, b["id"]), "response_summary": _response_summary(conn, b["id"], sets[b["param_set_id"]])}
+                 **pb_repo.counts(conn, b["id"]), "response_summary": _response_summary(conn, b["id"], sets[b["param_set_id"]]),
+                 "sampling": _sampling_summary(b)}
                 for b in rows]
 
 

@@ -1,6 +1,6 @@
 """⑤ 결과분석 입력 API(s14_analysis.md §19.5, D3-62): V3-S14-1 — GET /train-does/{doe_id}/result-table.
 
-모양, 샘플 표만(응답 없음)·응답 있음·실패 run null·부분 PARSED, 행 상한 notes, influence_ok(LHS·n 조건),
+모양, 샘플 표만(응답 없음)·응답 있음·실패 run null·부분 PARSED, 행 상한 notes, influence_ok(등급 ≠ off — D3-63),
 오류(404 DOE_NOT_FOUND·SAMPLES_MISSING, 409 DOE_NOT_READY), 권한(401·member 200), Study 밖·링크 거부,
 DB 쓰기 없음(전 테이블 행 수·DOE/run 행 불변), LRU(같은 파일 두 번 읽지 않음·mtime 변경 시 다시), no-store.
 """
@@ -119,11 +119,11 @@ def test_v3_s14_1_shape_responses_failed_null_influence(p2_env, engine):
     _set_states(engine, doe_id, {keys[1]: "COLLECTED"})
     d = c.get(_url(doe_id), headers=P).json()
     assert d["counts"] == {"total": 7, "usable": 7, "no_response": 0} and d["influence_ok"] is True
-    # LHS 아님 → 비활성
+    # D3-63(S15): LHS 아닌 유형도 등급으로 켜진다 — Sobol 정식(influence_ok = class != off). 등급 상세는 test_sampling_api(V3-S15-10)
     with engine.begin() as conn:
         train_repo.set_doe(conn, doe_id, doe_type="TYPE_SOBOL")
     d = c.get(_url(doe_id), headers=P).json()
-    assert d["type"] == "TYPE_SOBOL" and d["influence_ok"] is False
+    assert d["type"] == "TYPE_SOBOL" and d["influence_ok"] is True and d["influence_class"] == "formal"
     # 접두사 resp: 열도 같은 값으로 읽는다
     with engine.begin() as conn:
         train_repo.set_doe(conn, doe_id, doe_type="TYPE_LATINHYPERCUBE")

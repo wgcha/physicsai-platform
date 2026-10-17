@@ -23,7 +23,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from ._base import ID, TS, metadata
 
 BATCH_STATUSES = ("GENERATING", "PREDICTING", "DONE", "FAILED", "CANCELED")
-BATCH_SOURCE_KINDS = ("LHS", "TABLE", "TRAIN_DOE")
+BATCH_SOURCE_KINDS = ("LHS", "LHS_OPT", "SOBOL", "FULLFACT", "FRACFACT", "PB", "BBD", "CCD", "TABLE", "TRAIN_DOE")  # 0012(S15)
 GEN_STATES = ("PENDING", "RUNNING", "DONE", "FAILED")
 
 predict_batches = Table(
@@ -49,7 +49,9 @@ predict_batches = Table(
     UniqueConstraint("study_id", "batch_no", name="uq_predict_batches_study_no"),
     CheckConstraint("batch_no >= 1", name="ck_predict_batches_batch_no"),
     CheckConstraint("input_kind IN ('mesh_only','assembly')", name="ck_predict_batches_input_kind"),
-    CheckConstraint("source_kind IN ('LHS','TABLE','TRAIN_DOE')", name="ck_predict_batches_source_kind"),
+    CheckConstraint(
+        "source_kind IN ('LHS','LHS_OPT','SOBOL','FULLFACT','FRACFACT','PB','BBD','CCD','TABLE','TRAIN_DOE')",
+        name="ck_predict_batches_source_kind"),
     CheckConstraint("status IN ('GENERATING','PREDICTING','DONE','FAILED','CANCELED')", name="ck_predict_batches_status"),
     CheckConstraint("multi_execution >= 1", name="ck_predict_batches_multi_execution"),
     CheckConstraint("run_count >= 1", name="ck_predict_batches_run_count"),

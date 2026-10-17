@@ -138,7 +138,7 @@ def test_migration_0009_roundtrip(pg_server):
     """0008 → 0009: 기존 hpc_jobs 행 보존(submission_unknown=false), request_id 부분 유일, 알림 이벤트 추가, downgrade 거부."""
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0011_surrogate_final"
+    assert MIGRATION_HEAD == "0012_sampling_kinds"
     name = f"physicsai_m9_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

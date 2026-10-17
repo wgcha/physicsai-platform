@@ -255,6 +255,25 @@
         "title": "BatchModelRef",
         "type": "object"
       },
+      "BatchNote": {
+        "description": "막지 않는 안내(S15 §20.9): FIXED_EXCLUDED·FULL_FACTORIAL_USED·BBD_PAIRWISE·DUPLICATE_ROWS·SEQUENCE_CONTINUED·INFLUENCE_TOO_FEW.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "BatchNote",
+        "type": "object"
+      },
       "BatchPredictCounts": {
         "properties": {
           "canceled": {
@@ -575,6 +594,172 @@
         "title": "BatchRunRow",
         "type": "object"
       },
+      "BatchSourceBbd": {
+        "additionalProperties": false,
+        "description": "Box–Behnken(변수 3개 이상, 중심점 1개).",
+        "properties": {
+          "kind": {
+            "const": "bbd",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceBbd",
+        "type": "object"
+      },
+      "BatchSourceCcd": {
+        "additionalProperties": false,
+        "description": "중심 합성: alpha face(면중심, 기본) | inscribed(내접). 중심점 1개.",
+        "properties": {
+          "alpha": {
+            "default": "face",
+            "enum": [
+              "face",
+              "inscribed"
+            ],
+            "title": "Alpha",
+            "type": "string"
+          },
+          "kind": {
+            "const": "ccd",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceCcd",
+        "type": "object"
+      },
+      "BatchSourceFracfact": {
+        "additionalProperties": false,
+        "description": "부분 요인 2수준: resolution 4 | 5(기본 5).",
+        "properties": {
+          "kind": {
+            "const": "fracfact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "resolution": {
+            "default": 5,
+            "enum": [
+              4,
+              5
+            ],
+            "title": "Resolution",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceFracfact",
+        "type": "object"
+      },
+      "BatchSourceFullfact": {
+        "additionalProperties": false,
+        "description": "전체 요인: levels {변수: 수준 수 1~10}(생략한 활성 변수 = 2; 2~10 검사와 정수 변수 검사는 problems).",
+        "properties": {
+          "kind": {
+            "const": "fullfact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "maximum": 10.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Levels"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceFullfact",
+        "type": "object"
+      },
       "BatchSourceLhs": {
         "additionalProperties": false,
         "description": "범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).",
@@ -616,6 +801,155 @@
           "count"
         ],
         "title": "BatchSourceLhs",
+        "type": "object"
+      },
+      "BatchSourceLhsOpt": {
+        "additionalProperties": false,
+        "description": "최적화 LHS: count 2~predict_batch.max_runs, seed 0 이상(기본 1), criterion maximin(최소 거리, 기본) | corr(상관 최소).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "criterion": {
+            "default": "maximin",
+            "enum": [
+              "maximin",
+              "corr"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "kind": {
+            "const": "lhs_opt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceLhsOpt",
+        "type": "object"
+      },
+      "BatchSourcePb": {
+        "additionalProperties": false,
+        "description": "Plackett–Burman(2수준 선별).",
+        "properties": {
+          "kind": {
+            "const": "pb",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourcePb",
+        "type": "object"
+      },
+      "BatchSourceSobol": {
+        "additionalProperties": false,
+        "description": "Sobol(스크램블): count = 2^m(4~max_runs), seed 0~4294967295(생략 = 1), continue_from = 이전 Sobol 배치 id(이어서 추가 —\nseed·ranges는 생략하고 이전 값을 쓴다).",
+        "properties": {
+          "continue_from": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continue From"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "sobol",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceSobol",
         "type": "object"
       },
       "BatchSourceTable": {
@@ -2163,6 +2497,42 @@
         "title": "DoeResultRow",
         "type": "object"
       },
+      "DoeResultSampling": {
+        "description": "① DOE 표본 방식(S15 §20.6): 정의 파일 유형 value·라벨·설명 id·옵션(RESOLUTION 등).",
+        "properties": {
+          "desc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "label"
+        ],
+        "title": "DoeResultSampling",
+        "type": "object"
+      },
       "DoeResultTable": {
         "description": "⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용.",
         "properties": {
@@ -2172,6 +2542,26 @@
           "doe_id": {
             "title": "Doe Id",
             "type": "string"
+          },
+          "influence_class": {
+            "enum": [
+              "formal",
+              "reference",
+              "off"
+            ],
+            "title": "Influence Class",
+            "type": "string"
+          },
+          "influence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Influence Note"
           },
           "influence_ok": {
             "title": "Influence Ok",
@@ -2212,6 +2602,9 @@
             "title": "Rows",
             "type": "array"
           },
+          "sampling": {
+            "$ref": "#/components/schemas/DoeResultSampling"
+          },
           "study_id": {
             "title": "Study Id",
             "type": "string"
@@ -2231,6 +2624,8 @@
           "meta",
           "rows",
           "counts",
+          "sampling",
+          "influence_class",
           "influence_ok",
           "notes"
         ],
@@ -2243,6 +2638,17 @@
             "title": "Default Runs",
             "type": "integer"
           },
+          "desc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc Id"
+          },
           "fields": {
             "items": {
               "$ref": "#/components/schemas/DoeField"
@@ -2250,9 +2656,23 @@
             "title": "Fields",
             "type": "array"
           },
+          "influence_class": {
+            "default": "reference",
+            "enum": [
+              "formal",
+              "reference"
+            ],
+            "title": "Influence Class",
+            "type": "string"
+          },
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "recommended": {
+            "default": false,
+            "title": "Recommended",
+            "type": "boolean"
           },
           "runs_editable": {
             "title": "Runs Editable",
@@ -5312,6 +5732,16 @@
             "title": "Rows",
             "type": "array"
           },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplingInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_kind": {
             "title": "Source Kind",
             "type": "string"
@@ -5368,6 +5798,14 @@
             "title": "Input Kind",
             "type": "string"
           },
+          "notes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BatchNote"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
           "problems": {
             "items": {
               "$ref": "#/components/schemas/BatchProblem"
@@ -5381,6 +5819,16 @@
             },
             "title": "Rows",
             "type": "array"
+          },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplingInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5409,7 +5857,14 @@
           "source": {
             "discriminator": {
               "mapping": {
+                "bbd": "#/components/schemas/BatchSourceBbd",
+                "ccd": "#/components/schemas/BatchSourceCcd",
+                "fracfact": "#/components/schemas/BatchSourceFracfact",
+                "fullfact": "#/components/schemas/BatchSourceFullfact",
                 "lhs": "#/components/schemas/BatchSourceLhs",
+                "lhs_opt": "#/components/schemas/BatchSourceLhsOpt",
+                "pb": "#/components/schemas/BatchSourcePb",
+                "sobol": "#/components/schemas/BatchSourceSobol",
                 "table": "#/components/schemas/BatchSourceTable",
                 "train_doe": "#/components/schemas/BatchSourceTrainDoe"
               },
@@ -5418,6 +5873,27 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/BatchSourceLhs"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceLhsOpt"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceSobol"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceFullfact"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceFracfact"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourcePb"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceBbd"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceCcd"
               },
               {
                 "$ref": "#/components/schemas/BatchSourceTable"
@@ -5497,6 +5973,16 @@
           "run_count": {
             "title": "Run Count",
             "type": "integer"
+          },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplingSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "status": {
             "title": "Status",
@@ -6223,6 +6709,123 @@
           "rows"
         ],
         "title": "SamplesPage",
+        "type": "object"
+      },
+      "SamplingInfo": {
+        "description": "표본 방식 요약(미리보기·배치 상세). 등급은 서버가 정한다(§20.7) — formal | reference(off는 ①만).",
+        "properties": {
+          "desc_id": {
+            "title": "Desc Id",
+            "type": "string"
+          },
+          "influence_class": {
+            "enum": [
+              "formal",
+              "reference"
+            ],
+            "title": "Influence Class",
+            "type": "string"
+          },
+          "influence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Influence Note"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "recommended_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Count"
+          }
+        },
+        "required": [
+          "kind",
+          "method",
+          "desc_id",
+          "label",
+          "influence_class",
+          "meta"
+        ],
+        "title": "SamplingInfo",
+        "type": "object"
+      },
+      "SamplingSummary": {
+        "description": "배치 목록 한 줄용(Sobol 이어서 추가 후보·⑤ 출처 라벨).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "kind",
+          "method",
+          "label",
+          "count"
+        ],
+        "title": "SamplingSummary",
         "type": "object"
       },
       "SoBatchRef": {

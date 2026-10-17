@@ -260,6 +260,7 @@ train_data:                       # ① 학습데이터(phase2 §6.2~§6.6). 기
   tpl_parameter_line_regex: '(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?'
   tpl_paramitem_line_regex: '(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?'
   max_runs: 2000
+  recommended_doe_type: "TYPE_LATINHYPERCUBE"   # ① DOE 생성 화면 추천(기본 선택) 유형 value — DATA_doe_design_type.json의 value. 빈 문자열 = 추천 없음(첫 항목)
   max_multi_execution: 8
   hst_progress_regex: 'Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)'   # 원본 2_run_hst_gen_rad_input.py:59-61
   hst_log_error_patterns:                   # 원본 :64-71

@@ -16,14 +16,15 @@ from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.path_links import is_link_or_reparse
 from physicsai_core.paths import resolve_in_study
+from physicsai_core.sampling import registry as sampling_registry
 from physicsai_core.stage1_train_data import doe_samples
+from physicsai_core.stage1_train_data import doe_types as dt_mod
 from physicsai_core.stage4_predict.nearest import integer_vars
 from physicsai_core.stage4_predict.run_metrics import _Lru
 
 from ..context import AppContext
 from .common import study_root
 
-LHS_TYPE = "TYPE_LATINHYPERCUBE"  # DATA_doe_design_type.json의 LatinHyperCube.value
 FAILED_STATES = ("SOLVE_FAILED", "COLLECT_FAILED")
 _CACHE = _Lru(64)
 _NO_RE = re.compile(r"(\d+)$")
@@ -64,6 +65,15 @@ def _finite(v: Any) -> float | None:
 def _run_no(run_key: str, idx: int) -> int:
     m = _NO_RE.search(run_key)
     return int(m.group(1)) if m else idx + 1
+
+
+def _type_label(ctx: AppContext, value: str) -> str:
+    """정의 파일의 유형 라벨(없거나 파일 오류면 value 그대로)."""
+    try:
+        types = dt_mod.load_doe_types(ctx.settings.resources.doe_design_type_json, ctx.settings.ui.max_artifact_bytes)
+    except DomainError:
+        return value
+    return next((t["label"] for t in types if t["value"] == value), value)
 
 
 def result_table(ctx: AppContext, doe_id: str) -> dict[str, Any]:
@@ -132,9 +142,18 @@ def result_table(ctx: AppContext, doe_id: str) -> dict[str, Any]:
                        "max": hi if hi is not None else (max(vs) if vs else None),
                        "unit": (s.get("unit") or None) if s else None})
     total = len(out_rows)
-    ok = d["doe_type"] == LHS_TYPE and bool(resp_names) and usable >= max(5, len(names) + 2)
+    need = max(5, len(names) + 2)
+    options = d["options"] if isinstance(d.get("options"), dict) else {}
+    if not resp_names:  # off: s14 조건(§20.7) — 사유는 influence_note
+        cls, note = sampling_registry.OFF, sampling_registry.NOTE_NO_RESPONSE
+    elif usable < need:
+        cls, note = sampling_registry.OFF, sampling_registry.note_too_few_usable(need, usable)
+    else:
+        cls, note = sampling_registry.doe_influence(d["doe_type"], options)
     return {"doe_id": d["id"], "label": d["doe_label"], "study_id": d["study_id"], "type": d["doe_type"],
             "parameters": params, "responses": [{"name": n, "unit": None} for n in resp_names],
             "meta": {"engine_version": None, "baseline_id": None, "scene": None}, "rows": out_rows,
             "counts": {"total": total, "usable": usable, "no_response": total - usable},
-            "influence_ok": ok, "notes": notes}
+            "sampling": {"method": d["doe_type"], "label": _type_label(ctx, d["doe_type"]),
+                         "desc_id": sampling_registry.DOE_DESC_IDS.get(d["doe_type"]), "options": options},
+            "influence_class": cls, "influence_note": note, "influence_ok": cls != sampling_registry.OFF, "notes": notes}

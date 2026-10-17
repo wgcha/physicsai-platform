@@ -100,6 +100,7 @@ class TrainDataCfg(_M):
     tpl_parameter_line_regex: str = r"(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?"
     tpl_paramitem_line_regex: str = r"(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?"
     max_runs: int = 2000
+    recommended_doe_type: str = "TYPE_LATINHYPERCUBE"  # ① 추천 DOE 유형 value(S15, D3-63). 빈 문자열·정의 파일에 없는 값 = 추천 없음
     max_multi_execution: int = 8
     hst_progress_regex: str = r"Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)"
     hst_log_error_patterns: list[str] = Field(default_factory=lambda: [

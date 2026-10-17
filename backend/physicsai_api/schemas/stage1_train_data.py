@@ -13,7 +13,7 @@ from .stage4_predict import TplParam
 __all__ = [
     "TrainParamOut", "TrainParamUpdate", "TrainParamsPut", "VersionBody", "TrainCad", "TrainTpl", "TrainSetup",
     "DoeField", "DoeType", "RunStateCounts", "TrainDoe", "TrainRunHpc", "TrainRunResult", "TrainRun",
-    "DoeResultParameter", "DoeResultResponse", "DoeResultMeta", "DoeResultRow", "DoeResultCounts", "DoeResultTable",
+    "DoeResultParameter", "DoeResultResponse", "DoeResultMeta", "DoeResultRow", "DoeResultCounts", "DoeResultSampling", "DoeResultTable",
 ]
 
 
@@ -92,6 +92,9 @@ class DoeType(Resp):
     default_runs: int
     runs_editable: bool
     fields: list[DoeField]
+    desc_id: str | None = None  # S15 설명 id(hs_lhs·hs_sobol·hs_fullfact·hs_fracfact, 그 밖 null = 일반 문구)
+    recommended: bool = False  # value == train_data.recommended_doe_type인 항목 하나
+    influence_class: Literal["formal", "reference"] = "reference"  # ⑤ 영향도 등급(§20.7)
 
 
 class RunStateCounts(Resp):
@@ -182,6 +185,15 @@ class DoeResultCounts(Resp):
     no_response: int
 
 
+class DoeResultSampling(Resp):
+    """① DOE 표본 방식(S15 §20.6): 정의 파일 유형 value·라벨·설명 id·옵션(RESOLUTION 등)."""
+
+    method: str
+    label: str
+    desc_id: str | None = None
+    options: dict[str, Any] = {}
+
+
 class DoeResultTable(Resp):
     """⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용."""
 
@@ -194,5 +206,8 @@ class DoeResultTable(Resp):
     meta: DoeResultMeta
     rows: list[DoeResultRow]
     counts: DoeResultCounts
-    influence_ok: bool
+    sampling: DoeResultSampling
+    influence_class: Literal["formal", "reference", "off"]  # §20.7: 서버가 정함
+    influence_note: str | None = None  # reference·off 문구(formal은 null)
+    influence_ok: bool  # = influence_class != "off"
     notes: list[str]
