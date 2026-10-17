@@ -23,6 +23,7 @@ EVENTS = (
     "ENV_CHECK_DONE",
     "HPC_CANCEL_FAILED",
     "PREDICT_BATCH_DONE",  # phase3 §14.5 일괄 예측 완료 1건(0007_predict_batch)
+    "HPC_SUBMISSION_UNKNOWN",  # phase3 §16.4 SCX 제출 결과 모름(0009_scx_gateway)
 )
 
 
@@ -60,6 +61,10 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
     if event == "HPC_CANCEL_FAILED":
         return (f"PBS 취소 실패: {st}",
                 "PBS 취소 명령이 실패했습니다. 다음 폴링에서 자동으로 다시 시도합니다 — PBS 연결을 확인하세요.")
+    if event == "HPC_SUBMISSION_UNKNOWN":
+        return (f"SCX 제출 확인 필요: {st}",
+                "SCX 제출 결과를 알 수 없습니다 — SCX 화면에서 잡을 확인한 뒤 조치(다시 확인·잡 ID 연결·제출 안 됨)를 고르세요. "
+                "자동으로 다시 제출하지 않습니다.")
     if event == "HPC_PARTIAL_FAILED":
         cnt = _hpc_counts(result) or (0, 0, 0)
         return (f"PBS 해석 일부 실패 — {cnt[0]}개 중 {cnt[1]}개 실패, 나머지 회수 진행",
@@ -71,8 +76,8 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
 SUCCESS_EVENTS = frozenset({"JOB_STARTED", "JOB_SUCCEEDED", "MY_TURN_NEXT"})
 
 
-def notify_job(conn: Connection, job_id: str, event: str) -> int | None:
-    """작업 등록자에게 알림 1건. 생성된 seq를 돌려준다(알림을 만들지 않는 유형·이벤트면 None)."""
+def notify_job(conn: Connection, job_id: str, event: str, *, body: str | None = None) -> int | None:
+    """작업 등록자에게 알림 1건. 생성된 seq를 돌려준다(알림을 만들지 않는 유형·이벤트면 None). `body`는 본문 덮어쓰기."""
     assert event in EVENTS
     row = conn.execute(
         select(
@@ -94,7 +99,8 @@ def notify_job(conn: Connection, job_id: str, event: str) -> int | None:
         return None
     if is_batch_child(row.params):  # phase3 §14.5: 일괄 예측 하위는 알림 없음(배치 완료 1건만)
         return None
-    title, body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
+    title, default_body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
+    body = body or default_body
     return conn.execute(
         notifications.insert()
         .values(

@@ -40,4 +40,11 @@ def redacted_settings(s: Settings) -> dict[str, Any]:
     """관리 조회용(§10.8). DB URL·비밀은 설정 파일에 없지만 혹시 모를 값을 가린다."""
     d = s.model_dump()
     d["database"] = {"url_env": s.database.url_env, "pool_size": s.database.pool_size}
+    # scx relay 비밀(phase3 §16.10-3): 경로와 읽힘 여부만(값 없음)
+    from simdash_adapters.hpc.scx import read_secret_file
+
+    from ..hpc.gateway import scx_secret_path
+
+    sp = scx_secret_path(s)
+    d["hpc"]["scx"]["secret"] = {"path": sp, "present": bool(sp) and read_secret_file(sp)[0] is not None}
     return d

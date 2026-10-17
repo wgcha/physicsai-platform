@@ -46,5 +46,7 @@ def test_all_routes_prefixed():
         "/predict-batches/{batch_id}/retry-failed", "/param-sets/{ps_id}/responses",
         # 3차(phase3 §15 S10)
         "/jobs/{job_id}/media", "/artifacts/{artifact_id}/media", "/jobs/{job_id}/capture", "/param-sets/{ps_id}/display",
+        # 3차(phase3 §16.5 S11 SCX 결과 모름 조치, D3-57)
+        "/jobs/{job_id}/hpc-jobs/{hpc_job_id}/resolve",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

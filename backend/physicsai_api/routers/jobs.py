@@ -7,6 +7,7 @@ from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
 from ..services import error_bundle as eb_svc
+from ..services import hpc_resolve as resolve_svc
 from ..services import job_files as files_svc
 from ..services import jobs as svc
 
@@ -72,6 +73,17 @@ def retry(job_id: str, request: Request, body: S.RetryRequest | None = None, pri
 @router.get("/jobs/{job_id}/hpc-jobs", response_model=list[S.HpcJob], responses=ERR)
 def hpc_jobs(job_id: str, request: Request, _p: Principal = Depends(get_principal)) -> list:
     return files_svc.list_hpc_jobs(get_ctx(request), job_id)
+
+
+@router.post("/jobs/{job_id}/hpc-jobs/{hpc_job_id}/resolve", response_model=S.HpcJob, status_code=202,
+             responses={**ERR, 403: {"model": S.ErrorResponse}})
+def resolve_hpc_job(job_id: str, hpc_job_id: str, body: S.HpcResolveRequest, request: Request,
+                    principal: Principal = Depends(get_principal)) -> dict:
+    """SCX 제출 결과 모름 조치(phase3 §16.5) — recheck(같은 request_id로 다시 확인)·attach(SCX에서 찾은 잡 ID 연결)·
+    mark_not_submitted(제출 안 됨 확인 → 행 실패). 요청만 기록하고 워커가 다음 폴링에서 처리한다(202, resolve_pending=true).
+    주의: SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면 같은 해석이 두 번 돌 수 있습니다(폴더는 따로)."""
+    return resolve_svc.request_resolve(get_ctx(request), principal, job_id, hpc_job_id, body.action, body.external_job_id,
+                                       body.version, request_id(request), client_ip(request))
 
 
 @router.get(

@@ -1,4 +1,4 @@
-"""설정 스키마 — 외부 명령 템플릿(commands)과 HPC 절(hpc.defaults·command·adapter·transfer)."""
+"""설정 스키마 — 외부 명령 템플릿(commands)과 HPC 절(hpc.defaults·command·adapter·transfer·scx)."""
 
 from __future__ import annotations
 
@@ -71,6 +71,36 @@ class HpcTransferCfg(_M):
     max_collect_bytes: int = 21474836480
 
 
+class HpcScxCfg(_M):
+    """scx 모드(phase3 §16.8) — 대시보드 SCX relay 경유 Radioss 제출. 기본값의 단일 출처(환경별 값은 설정 파일에서만)."""
+
+    relay_url: str = ""                     # scx면 필수. http://127.0.0.1:<port> | http://[::1]:<port> | http://localhost:<port>
+    secret_file: str = ""                   # "" = <런타임>/secrets/scx_relay_key (한 줄 base64url 43~128자, 값은 어디에도 기록하지 않음)
+    drive_base: str = "~"                   # "~"(공용 계정 홈) | "~/<상대>"
+    home_display: str = "/Users/vd.dashboard"  # 표시 전용(계산에 쓰지 않음)
+    appliance: str = ""                     # 필수(E4-11-1)
+    version: str = ""                       # 필수(E4-11-2)
+    ncpu: int = 16
+    memory_gb: int | None = None
+    queue_type: str = "implicit"
+    run_type: str = "both - use starter and engine files"
+    mpi: str = "SMP (default)"
+    single_precision: bool = False
+    poll_interval_s: float | None = None    # null = hpc.poll_interval_s
+    max_download_bytes: int = 21474836480
+    stage_patterns: list[str] = Field(default_factory=lambda: ["*.rad", "*.inc", "*.csv"])
+    list_additional_paths: bool = True      # E4-11-4
+    max_stage_bytes: int = 21474836480
+    stage_poll_s: float = 5
+    stage_timeout_s: float = 7200
+    submit_replay_attempts: int = 3
+    submit_replay_wait_s: float = 10
+    http_timeout_s: float = 30
+    transfer_timeout_s: float = 3600
+    collect_max_depth: int = 2
+    health_ttl_s: float = 30
+
+
 class HpcCfg(_M):
     gateway: str = "none"
     poll_interval_s: float = 60
@@ -80,3 +110,4 @@ class HpcCfg(_M):
     command: HpcCommandCfg = Field(default_factory=HpcCommandCfg)
     adapter: HpcAdapterCfg = Field(default_factory=HpcAdapterCfg)
     transfer: HpcTransferCfg = Field(default_factory=HpcTransferCfg)
+    scx: HpcScxCfg = Field(default_factory=HpcScxCfg)

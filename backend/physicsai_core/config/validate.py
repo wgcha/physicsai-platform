@@ -223,8 +223,8 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
             add(f"commands.{key}", msg)
 
     # hpc
-    if s.hpc.gateway not in ("none", "command", "adapter"):
-        add("hpc.gateway", "none | command | adapter")
+    if s.hpc.gateway not in ("none", "command", "adapter", "scx"):
+        add("hpc.gateway", "none | command | adapter | scx")
     t = s.hpc.transfer
     if t.collect_mode not in ("in_place", "shared_folder", "drive"):
         add("hpc.transfer.collect_mode", "in_place | shared_folder | drive")
@@ -253,6 +253,14 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
 
         for msg in validate_command_config(s.hpc):
             add("hpc.command", msg)
+    if s.hpc.gateway == "scx":  # phase3 §16.8 — 비밀 파일 유무는 설정 오류가 아니라 availability(configured=false)
+        from simdash_adapters.hpc.scx import validate_scx_config
+
+        for msg in validate_scx_config(s.hpc.scx):
+            add("hpc.scx", msg)
+        sf = s.hpc.scx.secret_file
+        if sf and not is_abs_path_str(sf):
+            add("hpc.scx.secret_file", "절대경로여야 합니다(빈 값 = <런타임>/secrets/scx_relay_key)")
 
     _validate_phase2(s, issues)
     _validate_phase3(s, issues)

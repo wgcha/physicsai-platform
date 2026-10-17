@@ -23,7 +23,9 @@ PUBLIC_API = {
     "fwd", "is_abs_path_str",
 }
 # 허용 표준 라이브러리(§6.3 설계 규칙 + 타입 표기용 collections.abc·types·__future__)
-STDLIB_ALLOWED = {"__future__", "dataclasses", "typing", "re", "string", "os", "logging", "subprocess", "collections", "types"}
+# + scx relay 클라이언트(phase3 §16.2 — http.client만, R3-8): http·urllib(urlsplit·quote)·hashlib·json·fnmatch·unicodedata·time·threading
+STDLIB_ALLOWED = {"__future__", "dataclasses", "typing", "re", "string", "os", "logging", "subprocess", "collections", "types",
+                  "http", "urllib", "hashlib", "json", "fnmatch", "unicodedata", "time", "threading"}
 
 
 def _sources() -> list[Path]:

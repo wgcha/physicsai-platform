@@ -239,7 +239,7 @@ class Worker(HpcPollerMixin):
                  self.limits.cores, self.limits.memory_gb)
 
     def _hpc_tick(self) -> None:
-        if time.time() - self._last_hpc_poll >= self.settings.hpc.poll_interval_s:
+        if time.time() - self._last_hpc_poll >= self.hpc_poll_interval_s():  # scx: hpc.scx.poll_interval_s(phase3 §16.4)
             self._last_hpc_poll = time.time()
             self.poll_hpc_once()
         self.run_once_collect()

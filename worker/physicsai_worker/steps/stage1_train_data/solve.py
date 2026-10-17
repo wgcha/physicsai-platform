@@ -1,4 +1,4 @@
-"""①-4 TD_SOLVE: run별 PBS 제출·회수·등록(phase2 §6.5)."""
+"""①-4 TD_SOLVE: run별 PBS 제출·회수·등록(phase2 §6.5). scx 모드(phase3 §16)는 HPC_SUBMIT·COLLECT 안쪽만 steps/_scx."""
 
 from __future__ import annotations
 
@@ -15,9 +15,10 @@ from physicsai_core.fileutil import copy_file
 from physicsai_core.hpc.command import map_path
 from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec
 from simdash_adapters import TransferConfig, resolve_collect_dirs
+from simdash_adapters.hpc import scx_naming as _scx_naming
 
 from ...signals import EnterWaitingHpc
-from .. import _collect
+from .. import _collect, _scx
 from ._shared import _R, _doe, _match_files, _summary, _write_collected_json
 
 
@@ -61,6 +62,8 @@ def ts_submit(ctx: Any) -> None:
     av = gw.availability()
     if not av.configured:
         raise StepFailure("HPC_SUBMIT_FAILED", f"PBS 연결 안 됨: {av.message}")
+    if av.mode == "scx":
+        return _ts_submit_scx(ctx, gw)
     r = ctx.result()
     doe = _doe(ctx)
     hcfg = ctx.settings.hpc
@@ -113,6 +116,54 @@ def ts_submit(ctx: Any) -> None:
     raise EnterWaitingHpc()
 
 
+def _ts_submit_scx(ctx: Any, gw: Any) -> None:
+    """scx(phase3 §16.4): 단계 A STAGE_IN(모든 run) → 단계 B 제출. ①은 run 상태를 STAGE_IN에서 바꾸지 않는다."""
+    r = ctx.result()
+    doe = _doe(ctx)
+    health = _scx.check_health(ctx, gw)
+    with ctx.ex.engine.connect() as conn:
+        by_key = {x["run_key"]: x for x in train_repo.runs_for_doe(conn, doe["id"])}
+        d_no = hpc_repo.doe_number(conn, ctx.study["id"], doe["id"])
+    ts = _scx.timestamp()
+    plans = []
+    for rk in r["run_keys"]:
+        run = by_key[rk]
+        plans.append(_scx.RunStage(
+            run_key=rk, input_dir=ctx.abs(run["input_rel"]), starter=run["starter_name"] or "",
+            job_name=_scx_naming.train_job_name(d_no, rk, ts),
+            client_ref={"app": "physicsai", "job_id": ctx.ex.job_id, "run_key": rk}))
+    for p in plans:
+        _scx.scan_inputs(ctx, gw, p, health)
+    _scx.plan_remote_dirs(ctx, gw, plans, health)
+    _scx.stage_in(ctx, gw, plans, int(r["attempt"]))
+
+    def link_run(c: Any, p: Any, _state: str) -> None:
+        train_repo.set_run(c, doe["id"], p.run_key, state="SUBMITTED", hpc_job_id=p.hid, last_job_id=ctx.ex.job_id)
+
+    res = _scx.submit_all(ctx, gw, plans, link_run)
+    ctx.patch_result({"submitted": len(res.submitted) + (1 if res.unknown else 0)})
+    if res.unknown is not None:
+        _scx.flag_unknown(ctx, res)
+    raise EnterWaitingHpc()
+
+
+def _ts_collect_scx(ctx: Any, gw: Any, doe: dict[str, Any], ok_rows: list[dict[str, Any]]) -> tuple[dict[str, list[str]], dict[str, str]]:
+    """scx COLLECT: relay 다운로드(완료 잡 — 안정성 대기 없음). (회수 run → 파일, 실패 run → 사유)."""
+    collected: dict[str, list[str]] = {}
+    failed: dict[str, str] = {}
+    try:
+        hmax = gw.health().get("max_download_bytes")
+    except HpcGatewayError:
+        hmax = None
+    for h in ok_rows:
+        rk = h["run_key"]
+        try:
+            collected[rk] = sorted(_scx.collect_run(ctx, gw, h, _R(ctx, doe["id"], rk), hmax))
+        except _scx.CollectFail as exc:
+            failed[rk] = f"{exc.code}: {exc.message}" if exc.code != "COLLECT_FAILED" else exc.message
+    return collected, failed
+
+
 def ts_collect(ctx: Any) -> None:
     """COLLECT(phase2 §6.5): 성공 run마다 collect_mode별 회수. run별 실패는 COLLECT_FAILED, 성공 0개면 실패."""
     s = ctx.settings
@@ -124,6 +175,8 @@ def ts_collect(ctx: Any) -> None:
         hj = [h for h in hpc_repo.for_job(conn, ctx.ex.job_id) if h["attempt_no"] == int(r["attempt"])]
     ok_rows = [h for h in hj if h["state"] == "SUCCEEDED"]
     failed_n = sum(1 for h in hj if h["state"] in ("FAILED", "LOST"))
+    if any(h["gateway_mode"] == "scx" for h in ok_rows):
+        return _ts_collect_record(ctx, doe, hj, ok_rows, failed_n, *_ts_collect_scx(ctx, ctx.ex.w.hpc, doe, ok_rows))
     pending = {h["run_key"]: h for h in ok_rows}
     src_of = {}
     for rk in pending:
@@ -158,7 +211,11 @@ def ts_collect(ctx: Any) -> None:
             ctx.log(f"회수 재시도 {attempt}/3: 남은 run {len(pending)}개(결과 파일 없음 또는 아직 바뀌는 중)")
     for rk in pending:
         failed[rk] = "결과 파일 없음 또는 아직 바뀌는 중"
+    _ts_collect_record(ctx, doe, hj, ok_rows, failed_n, collected, failed)
 
+
+def _ts_collect_record(ctx: Any, doe: dict[str, Any], hj: list[dict[str, Any]], ok_rows: list[dict[str, Any]], failed_n: int,
+                       collected: dict[str, list[str]], failed: dict[str, str]) -> None:
     def rec(c: Any) -> None:
         for h in ok_rows:
             rk = h["run_key"]

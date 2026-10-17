@@ -84,7 +84,7 @@ notifications = Table(
     Column("read_at", TS, nullable=True),
     CheckConstraint(
         "event IN ('JOB_STARTED','JOB_SUCCEEDED','JOB_FAILED','JOB_CANCELED','JOB_INTERRUPTED','MY_TURN_NEXT','HPC_COLLECTED',"
-        "'HPC_PARTIAL_FAILED','ENV_CHECK_DONE','HPC_CANCEL_FAILED','PREDICT_BATCH_DONE')",
+        "'HPC_PARTIAL_FAILED','ENV_CHECK_DONE','HPC_CANCEL_FAILED','PREDICT_BATCH_DONE','HPC_SUBMISSION_UNKNOWN')",
         name="ck_notifications_event",
     ),
 )
@@ -148,6 +148,16 @@ hpc_jobs = Table(
     Column("unknown_count", Integer, nullable=False, server_default="0"),
     Column("error_message", String(500), nullable=True),
     Column("version", BigInteger, nullable=False, server_default="1"),
+    # phase3 §16.9 scx(0009_scx_gateway): 드라이브 잡 폴더(홈 기준 상대)·제출 request_id(pai-<id>)·올린 파일·결과 위치·결과 모름 조치
+    Column("remote_dir", String(1024), nullable=True),
+    Column("request_id", String(128), nullable=True),
+    Column("staged", JSONB, nullable=True),
+    Column("output_path", String(1024), nullable=True),
+    Column("output_rel", String(1024), nullable=True),
+    Column("submission_unknown", Boolean, nullable=False, server_default=text("false")),
+    Column("resolve_request", JSONB, nullable=True),
+    Column("resolved_by", String, nullable=True),
+    Column("resolved_at", TS, nullable=True),
     UniqueConstraint("job_id", "run_key", "attempt_no", name="uq_hpc_jobs_run"),
     CheckConstraint(
         "state IN ('SUBMITTING','QUEUED','RUNNING','SUCCEEDED','FAILED','CANCEL_REQUESTED','CANCELED','UNKNOWN','LOST')",
@@ -166,3 +176,4 @@ Index(
 )
 
 Index("ix_hpc_jobs_job_state", hpc_jobs.c.job_id, hpc_jobs.c.state)
+Index("ux_hpc_jobs_request_id", hpc_jobs.c.request_id, unique=True, postgresql_where=text("request_id IS NOT NULL"))

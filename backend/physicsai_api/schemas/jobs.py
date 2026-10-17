@@ -11,7 +11,7 @@ from .common import Req, Resp
 
 __all__ = [
     "HpcSummary", "JobBatchRef", "JobSummary", "JobStep", "Job", "JobType", "JobCreate", "RetryRequest", "LogChunk", "Artifact",
-    "HpcJob",
+    "HpcJob", "HpcResolveRequest",
 ]
 
 
@@ -133,3 +133,22 @@ class HpcJob(Resp):
     submitted_at: datetime | None = None
     elapsed_s: float | None = None
     collect_state: str
+    # phase3 §16.9 scx(선택 — 기존 클라이언트 영향 없음)
+    gateway_mode: str | None = None
+    remote_dir: str | None = Field(default=None, description="SCX 잡 폴더(표시 경로, hpc.scx.home_display 기준)")
+    request_id: str | None = None
+    output_path: str | None = None
+    submission_unknown: bool = False
+    resolve_pending: bool = False
+    error_message: str | None = None
+    version: int | None = Field(default=None, description="결과 모름 조치(resolve) 요청의 version")
+
+
+class HpcResolveRequest(Req):
+    """SCX 제출 결과 모름 조치(phase3 §16.5). 주의: SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면
+    같은 해석이 두 번 돌 수 있습니다(폴더는 따로)."""
+
+    action: Literal["recheck", "attach", "mark_not_submitted"]
+    external_job_id: str | None = Field(default=None, min_length=1, max_length=128, pattern=r"^[^\x00-\x1f\x7f]+$",
+                                        description="attach만: SCX 화면에서 찾은 잡 ID")
+    version: int = Field(ge=1)

@@ -892,3 +892,24 @@ def test_setup_config_adds_capture_default_component_once(tmp_path):
     cfg_path.write_text(cfg_path.read_text(encoding="utf-8").replace(line, '  default_component: ""', 1), encoding="utf-8")
     res = _run(tmp_path, t, _inputs(t))
     assert _cfg(t)["capture"]["default_component"] == "" and res["config_changed_keys"] == []
+
+
+def test_setup_config_adds_scx_block_once(tmp_path):
+    """phase3 §16.8: hpc 절은 있는데 hpc.scx가 없으면 예시의 주석 달린 기본 절을 1회 보충(gateway·사용자 값 보존)."""
+    t = _fake_tree(tmp_path)
+    _run(tmp_path, t, _inputs(t))
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    ex = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert _cfg(t)["hpc"]["scx"] == ex["hpc"]["scx"]                                   # 새 설치 = 예시 절
+    txt = cfg_path.read_text(encoding="utf-8")
+    start = txt.index("  scx:")
+    end = txt.index("\n\n", start)
+    cfg_path.write_text((txt[:start] + txt[end + 1:]).replace("  gateway: none", "  gateway: command", 1), encoding="utf-8")
+    assert "scx" not in _cfg(t)["hpc"]
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    assert c["hpc"]["scx"] == ex["hpc"]["scx"] and c["hpc"]["gateway"] == "command"   # 사용자 값 보존
+    assert res["config_changed_keys"] == ["hpc.scx"]
+    assert "setup.ps1이 보충 — phase3 §16.8" in cfg_path.read_text(encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert res["config_changed_keys"] == []

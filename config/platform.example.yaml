@@ -186,7 +186,7 @@ commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원�
   - '^\s*\[ERROR\]'
 
 hpc:
-  gateway: none                   # none | command | adapter(미구현)  (PHYSICSAI_HPC_GATEWAY 우선). 1차 기본 none
+  gateway: none                   # none | command | adapter(미구현) | scx(SCX — 대시보드 relay 경유)  (PHYSICSAI_HPC_GATEWAY 우선). 기본 none
   poll_interval_s: 60
   lost_after_polls: 10
   max_unreachable_minutes: 1440
@@ -221,6 +221,32 @@ hpc:
     collect_root_remote: ""       # 같은 루트의 PBS 노드 경로
     collect_patterns: ["*.h3d", "*T01", "*_0000.out", "*_0001.out"]
     max_collect_bytes: 21474836480
+  scx:                            # gateway: scx일 때만 사용(phase3 §16.8 — 대시보드 SCX relay 경유 Radioss 제출, 관리자 매뉴얼 §16)
+    relay_url: ""                 # 대시보드 relay(loopback만): http://127.0.0.1:<대시보드 백엔드 포트>
+    secret_file: ""               # "" = <런타임>/secrets/scx_relay_key(대시보드 SIMDASH_SCX_RELAY_SECRET_FILE과 같은 값의 파일 — 값은 여기 쓰지 않음)
+    drive_base: "~"               # "~"(= 공용 계정 홈 /Users/vd.dashboard) 또는 "~/<상대>"(예 "~/physicsai")
+    home_display: "/Users/vd.dashboard"   # 표시 전용
+    appliance: ""                 # 필수 — SCX Radioss appliance 이름(서버 확인 E4-11-1)
+    version: ""                   # 필수 — Radioss 버전 문자열(E4-11-2)
+    ncpu: 16                      # 작업 params hpc.ncpus가 있으면 덮어씀
+    memory_gb: null
+    queue_type: implicit
+    run_type: "both - use starter and engine files"
+    mpi: "SMP (default)"
+    single_precision: false
+    poll_interval_s: null         # null = hpc.poll_interval_s
+    max_download_bytes: 21474836480
+    stage_patterns: ["*.rad", "*.inc", "*.csv"]   # 입력 폴더 직속 파일 중 올릴 것(하위 폴더는 올리지 않음)
+    list_additional_paths: true   # include를 additional_paths에 나열(E4-11-4)
+    max_stage_bytes: 21474836480
+    stage_poll_s: 5
+    stage_timeout_s: 7200
+    submit_replay_attempts: 3     # 응답을 잃은 제출은 같은 request_id로만 replay(중복 제출 아님)
+    submit_replay_wait_s: 10
+    http_timeout_s: 30
+    transfer_timeout_s: 3600
+    collect_max_depth: 2
+    health_ttl_s: 30
 
 train_data:                       # ① 학습데이터(phase2 §6.2~§6.6). 기본값은 원본 인용
   cad_extensions: [".prt"]

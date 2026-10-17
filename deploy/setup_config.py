@@ -22,6 +22,8 @@
 - 받은 파일 폴더(phase3 §12 S7, D3-46): write가 `<ai_root>/<storage.inbox_dir>`(기본 inbox)를 없으면 만든다. 입력 smb_shares
   (setup.ps1·update-repo.ps1이 Get-SmbShare로 조회만 — 관리자 권한 없이, 실패하면 빈 목록)에서 Path가 그 폴더인 공유를 찾으면
   storage.inbox_share_hint를 `\\\\<computer_name>\\<공유 이름>`으로 채운다(키가 없거나 비어 있을 때만 — 사용자 값 보존).
+- SCX 잡 제출(phase3 §16.8, D3-57): 기존 설정에 hpc 절은 있는데 hpc.scx 절이 없으면 예시 파일의 주석 달린 기본 절(gateway는 그대로 —
+  scx는 관리자가 켠다)을 hpc 절 끝에 보충한다(값 덮어쓰기 없음). relay 공유 비밀 파일은 만들지 않는다(관리자 매뉴얼 §16).
 - 비밀번호·DB URL은 다루지 않는다.
 """
 
@@ -370,6 +372,49 @@ CAPTURE_COMPONENT_PATH = ("capture", "default_component")
 CAPTURE_COMPONENT_MARK = "setup.ps1 D3-54"
 
 
+SCX_PATH = ("hpc", "scx")
+SCX_MARK = "setup.ps1이 보충 — phase3 §16.8"
+
+
+def example_subblock(example_text: str, section: str, key: str) -> list[str] | None:
+    """예시 파일 `section:` 절 안의 `  key:` 하위 절(주석 줄 포함) 원문 줄. 없으면 None."""
+    lines = example_text.replace("\r\n", "\n").split("\n")
+    b = _block(lines, section)
+    if b is None:
+        return None
+    start, end, indent = b
+    head = re.compile(rf"^{re.escape(indent)}{re.escape(key)}:[ \t]*(#.*)?$")
+    for i in range(start + 1, end):
+        if head.match(lines[i]):
+            out = [lines[i]]
+            for j in range(i + 1, end):
+                ln = lines[j]
+                if ln.strip() and not ln.startswith(indent + " "):
+                    break
+                out.append(ln)
+            while out and not out[-1].strip():
+                out.pop()
+            return out
+    return None
+
+
+def insert_subblock(text: str, section: str, block: list[str], note: str) -> str | None:
+    """`section:` 절 끝(다음 최상위 키 앞)에 하위 절 줄을 넣는다. 절의 들여쓰기가 두 칸이 아니면 None(직접 추가 안내)."""
+    nl = "\r\n" if "\r\n" in text else "\n"
+    lines = text.split(nl)
+    b = _block(lines, section)
+    if b is None or b[2] != "  ":
+        return None
+    _start, end, _indent = b
+    at = end
+    while at - 1 > _start and not lines[at - 1].strip():
+        at -= 1
+    first = block[0].split("#", 1)[0].rstrip()
+    new = [f"{first}  # {note}", *block[1:]]
+    lines[at:at] = new
+    return nl.join(lines)
+
+
 def yaml_line(text: str, path: tuple[str, str]) -> tuple[int, str] | None:
     """2단계 키 path의 줄(번호, 내용). 없으면 None."""
     nl = "\r\n" if "\r\n" in text else "\n"
@@ -642,6 +687,17 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
                               f"결과 필드가 default_field일 때 성분({CAPTURE_COMPONENT_MARK}이 보충)")
         upgraded[CAPTURE_COMPONENT_PATH] = comp_want
         rows.append({"key": ".".join(CAPTURE_COMPONENT_PATH), "value": comp_want, "action": "보충(새 설정 키)"})
+    # SCX(phase3 §16.8): hpc 절은 있는데 hpc.scx가 없으면 예시의 주석 달린 기본 절 보충(gateway·다른 값은 그대로)
+    if not new_file and not _get(base, SCX_PATH)[0] and (base.get("hpc") is None or isinstance(base.get("hpc"), dict)):
+        ex_has, scx_want = _get(example, SCX_PATH)
+        block = example_subblock(example_text, *SCX_PATH)
+        added = insert_subblock(text, "hpc", block, SCX_MARK) if ex_has and block else None
+        if added is not None:
+            text = added
+            upgraded[SCX_PATH] = copy.deepcopy(scx_want)
+            rows.append({"key": "hpc.scx", "value": "(예시 기본 절)", "action": "보충(새 설정 절 — gateway: scx일 때만 사용)"})
+        else:
+            warnings.append("hpc.scx 절을 자동으로 넣지 못했습니다 — SCX 제출을 쓰려면 config/platform.example.yaml의 hpc.scx 절을 직접 복사하세요")
     # 로그인·"대시보드로" 링크(D3-38): 키가 없거나 이전 기본값 "/"일 때만 대시보드 웹 경로로, 사용자 값은 보존
     login_want, login_warn = dashboard_login_url(inputs, str(deploy.get("dashboard_root") or ""))
     if login_warn:

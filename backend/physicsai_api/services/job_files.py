@@ -50,16 +50,28 @@ def artifact_file(ctx: AppContext, artifact_id: str) -> tuple[str, str, str]:
     return path, a["content_type"], os.path.basename(a["rel_path"])
 
 
+def hpc_row_out(ctx: AppContext, r: dict[str, Any]) -> dict[str, Any]:
+    """HpcJob 응답 1행. scx 잡 폴더는 표시 경로(hpc.scx.home_display + 상대, phase3 §16.3)."""
+    from simdash_adapters.hpc.scx_naming import display_path
+
+    elapsed = r.get("elapsed")
+    return {
+        "id": r["id"], "run_key": r["run_key"], "attempt_no": r["attempt_no"], "external_job_id": r["external_job_id"],
+        "state": r["state"], "external_state_raw": r["external_state_raw"], "submitted_at": r["submitted_at"],
+        "elapsed_s": float(elapsed) if elapsed is not None else None, "collect_state": r["collect_state"],
+        "gateway_mode": r["gateway_mode"],
+        "remote_dir": display_path(ctx.settings.hpc.scx.home_display, r["remote_dir"]) if r.get("remote_dir") else None,
+        "request_id": r.get("request_id"), "output_path": r.get("output_path"),
+        "submission_unknown": bool(r.get("submission_unknown")), "resolve_pending": r.get("resolve_request") is not None,
+        "error_message": r.get("error_message"), "version": r.get("version"),
+    }
+
+
 def list_hpc_jobs(ctx: AppContext, job_id: str) -> list[dict[str, Any]]:
     with ctx.engine.connect() as conn:
         require_job(conn, job_id)
         rows = hpc_repo.list_for_job_with_elapsed(conn, job_id)
-    return [
-        {"id": r["id"], "run_key": r["run_key"], "attempt_no": r["attempt_no"], "external_job_id": r["external_job_id"],
-         "state": r["state"], "external_state_raw": r["external_state_raw"], "submitted_at": r["submitted_at"],
-         "elapsed_s": float(r["elapsed"]) if r["elapsed"] is not None else None, "collect_state": r["collect_state"]}
-        for r in rows
-    ]
+    return [hpc_row_out(ctx, r) for r in rows]
 
 
 # ---- ④ 입력 파일 zip(스트리밍) ------------------------------------------------------

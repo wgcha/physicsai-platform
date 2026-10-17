@@ -65,3 +65,28 @@ def defaults_mapping():
 @pytest.fixture()
 def pbs(tmp_path):
     return PbsState(tmp_path / "pbs_state.json")
+
+
+def _load_fake_relay():
+    import importlib.util
+
+    name = "simdash_fake_scx_relay"
+    if name in sys.modules:
+        return sys.modules[name]
+    spec = importlib.util.spec_from_file_location(name, HERE / "fake_scx_relay.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+@pytest.fixture()
+def fake_relay(tmp_path):
+    """가짜 SCX relay(phase3 §16.12) — 127.0.0.1 임의 포트, 드라이브 = tmp_path/drive."""
+    mod = _load_fake_relay()
+    f = mod.FakeRelay(tmp_path / "drive").start()
+    try:
+        yield f
+    finally:
+        f.stop()
+

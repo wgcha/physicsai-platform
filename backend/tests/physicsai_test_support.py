@@ -71,6 +71,12 @@ from support_resources import (  # noqa: F401 - 재노출(conftest `import *`·�
     PHASE2_COMMANDS,
     SIMLAB_TPL_TEMPLATE,
 )
+from support_scx import (  # noqa: F401 - 재노출(phase3 §16.12 가짜 SCX relay)
+    fake_relay,
+    fake_relay_module,
+    p2_scx,
+    scx_hpc_cfg,
+)
 
 
 # ---------------------------------------------------------------------------

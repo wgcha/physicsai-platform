@@ -2277,6 +2277,17 @@
             ],
             "title": "Elapsed S"
           },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
           "external_job_id": {
             "anyOf": [
               {
@@ -2299,9 +2310,59 @@
             ],
             "title": "External State Raw"
           },
+          "gateway_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gateway Mode"
+          },
           "id": {
             "title": "Id",
             "type": "string"
+          },
+          "output_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Path"
+          },
+          "remote_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SCX 잡 폴더(표시 경로, hpc.scx.home_display 기준)",
+            "title": "Remote Dir"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "resolve_pending": {
+            "default": false,
+            "title": "Resolve Pending",
+            "type": "boolean"
           },
           "run_key": {
             "title": "Run Key",
@@ -2310,6 +2371,11 @@
           "state": {
             "title": "State",
             "type": "string"
+          },
+          "submission_unknown": {
+            "default": false,
+            "title": "Submission Unknown",
+            "type": "boolean"
           },
           "submitted_at": {
             "anyOf": [
@@ -2322,6 +2388,18 @@
               }
             ],
             "title": "Submitted At"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "결과 모름 조치(resolve) 요청의 version",
+            "title": "Version"
           }
         },
         "required": [
@@ -2332,6 +2410,47 @@
           "collect_state"
         ],
         "title": "HpcJob",
+        "type": "object"
+      },
+      "HpcResolveRequest": {
+        "additionalProperties": false,
+        "description": "SCX 제출 결과 모름 조치(phase3 §16.5). 주의: SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면\n같은 해석이 두 번 돌 수 있습니다(폴더는 따로).",
+        "properties": {
+          "action": {
+            "enum": [
+              "recheck",
+              "attach",
+              "mark_not_submitted"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "external_job_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]+$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "attach만: SCX 화면에서 찾은 잡 ID",
+            "title": "External Job Id"
+          },
+          "version": {
+            "minimum": 1.0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "action",
+          "version"
+        ],
+        "title": "HpcResolveRequest",
         "type": "object"
       },
       "HpcSummary": {
@@ -8955,6 +9074,108 @@
           }
         },
         "summary": "Hpc Jobs",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
+    "/physicsai/api/jobs/{job_id}/hpc-jobs/{hpc_job_id}/resolve": {
+      "post": {
+        "description": "SCX 제출 결과 모름 조치(phase3 §16.5) — recheck(같은 request_id로 다시 확인)·attach(SCX에서 찾은 잡 ID 연결)·\nmark_not_submitted(제출 안 됨 확인 → 행 실패). 요청만 기록하고 워커가 다음 폴링에서 처리한다(202, resolve_pending=true).\n주의: SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면 같은 해석이 두 번 돌 수 있습니다(폴더는 따로).",
+        "operationId": "resolve_hpc_job_physicsai_api_jobs__job_id__hpc_jobs__hpc_job_id__resolve_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "hpc_job_id",
+            "required": true,
+            "schema": {
+              "title": "Hpc Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/HpcResolveRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HpcJob"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Resolve Hpc Job",
         "tags": [
           "jobs"
         ]

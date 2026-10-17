@@ -6,6 +6,7 @@
 런타임 폴더(<git>/.runtime 또는 묶음 install_root):
   config/platform.yaml     설정(기본 위치 — 다르면 --config)
   secrets/database_url     DB URL 한 줄(현재 사용자·SYSTEM만 읽기, install-common.ps1 Write-PhysicsAIRuntimeSecret)
+  secrets/scx_relay_key    SCX relay 공유 비밀(phase3 §16.8 — hpc.scx.secret_file 기본 위치, 관리자가 만든다. 값은 어디에도 기록하지 않음)
 
 우선순위(이름마다, 높은 것부터):
   1) 이 프로세스에 직접 준 환경변수 — 머신 환경변수에서 물려받은 값과 다를 때(개발·시험·수동 실행)
@@ -23,6 +24,9 @@ from pathlib import Path
 
 CONFIG_ENV = "PHYSICSAI_CONFIG"
 DB_URL_ENV = "PHYSICSAI_DATABASE_URL"
+RUNTIME_ENV = "PHYSICSAI_RUNTIME_DIR"  # 런타임 폴더를 직접 줄 때(경로만 — scx 비밀 파일 기본 위치 계산용)
+_APPLIED_RUNTIME: list[Path] = []      # 이 프로세스에서 apply_runtime(--runtime)이 정한 런타임 폴더(환경변수는 건드리지 않음)
+SCX_SECRET_NAME = "scx_relay_key"
 _MACHINE_ENV_KEY = r"SYSTEM\CurrentControlSet\Control\Session Manager\Environment"
 
 
@@ -32,6 +36,32 @@ def runtime_config_path(runtime_dir: str | os.PathLike[str]) -> Path:
 
 def runtime_secret_path(runtime_dir: str | os.PathLike[str]) -> Path:
     return Path(runtime_dir) / "secrets" / "database_url"
+
+
+def runtime_scx_secret_path(runtime_dir: str | os.PathLike[str]) -> Path:
+    return Path(runtime_dir) / "secrets" / SCX_SECRET_NAME
+
+
+def current_runtime_dir(environ: MutableMapping[str, str] | None = None) -> Path | None:
+    """이 프로세스의 런타임 폴더: PHYSICSAI_RUNTIME_DIR > --runtime(apply_runtime) > 설정 파일이 `<런타임>/config/platform.yaml`이면
+    그 상위. 없으면 None."""
+    env = os.environ if environ is None else environ
+    if env.get(RUNTIME_ENV):
+        return Path(env[RUNTIME_ENV])
+    if _APPLIED_RUNTIME and environ is None:
+        return _APPLIED_RUNTIME[-1]
+    cfg = env.get(CONFIG_ENV)
+    if cfg:
+        p = Path(cfg).resolve().parent
+        if p.name == "config":
+            return p.parent
+    return None
+
+
+def default_scx_secret_path(environ: MutableMapping[str, str] | None = None) -> str:
+    """`hpc.scx.secret_file`이 빈 값일 때의 위치(`<런타임>/secrets/scx_relay_key`). 런타임을 모르면 ""."""
+    rt = current_runtime_dir(environ)
+    return str(runtime_scx_secret_path(rt)) if rt is not None else ""
 
 
 def machine_environment(names: Iterable[str]) -> dict[str, str]:
@@ -75,6 +105,8 @@ def apply_runtime(
     machine = machine_environment(names) if machine_env is None else machine_env
     rt = Path(runtime_dir) if runtime_dir else None
     sources: dict[str, str] = {}
+    if rt is not None and environ is None:
+        _APPLIED_RUNTIME[:] = [rt]
 
     def explicit(name: str) -> bool:
         value = env.get(name)

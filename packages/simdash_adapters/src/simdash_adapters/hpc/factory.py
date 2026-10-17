@@ -11,7 +11,8 @@ from .types import HpcJobGateway
 
 def make_gateway(mode: str, command: Any = None, defaults: Any = None,
                  env_factory: Callable[[], Mapping[str, str]] | None = None,
-                 logger: logging.Logger | None = None) -> HpcJobGateway:
+                 logger: logging.Logger | None = None, *, scx: Any = None, scx_secret_path: str | None = None,
+                 on_secret: Callable[[str], None] | None = None) -> HpcJobGateway:
     if mode == "command":
         from .command import CommandHpcGateway
 
@@ -22,6 +23,12 @@ def make_gateway(mode: str, command: Any = None, defaults: Any = None,
         from .adapter import AdapterHpcGateway
 
         return AdapterHpcGateway()
+    if mode == "scx":
+        from .scx import ScxHpcGateway
+
+        if scx is None:
+            raise ValueError("scx 모드에는 scx 설정이 필요합니다")
+        return ScxHpcGateway(scx, scx_secret_path, logger=logger, on_secret=on_secret)
     from .none import NoneHpcGateway
 
     return NoneHpcGateway()

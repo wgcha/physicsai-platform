@@ -1,3 +1,3 @@
 """DB 계층. MIGRATION_HEAD = alembic 스크립트 head(phase2 §5, V2-DB-1)."""
 
-MIGRATION_HEAD = "0008_contour_capture"
+MIGRATION_HEAD = "0009_scx_gateway"

@@ -20,12 +20,27 @@ class Masker:
         self._rx = [re.compile(p) for p in patterns]
 
     def __call__(self, line: str) -> str:
+        line = _mask_registered(line)
         for rx in self._rx:
             line = rx.sub(lambda m: (m.group(1) + "=***") if m.groups() else "***", line)
         return line
 
 
 SECRET_ENV_PATTERNS = ("*PASSWORD*", "*SECRET*", "*TOKEN*", "PG*")
+# 파일에서 읽은 비밀 값(phase3 §16.10-3 scx relay 키). 게이트웨이가 읽을 때 등록하고 두 마스커 모두 값 자체를 *** 로 바꾼다.
+_REGISTERED: set[str] = set()
+
+
+def register_secret_value(value: str) -> None:
+    if value and len(value) >= 8:
+        _REGISTERED.add(value)
+
+
+def _mask_registered(text: str) -> str:
+    for s in sorted(_REGISTERED, key=len, reverse=True):
+        if s in text:
+            text = text.replace(s, "***")
+    return text
 
 
 class BundleMasker:
@@ -51,6 +66,7 @@ class BundleMasker:
         self._secrets = sorted(set(secrets), key=len, reverse=True)
 
     def __call__(self, text: str) -> str:
+        text = _mask_registered(text)
         for s in self._secrets:
             text = text.replace(s, "***")
         for rx, rep in self._fixed:

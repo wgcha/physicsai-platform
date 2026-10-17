@@ -597,7 +597,7 @@ $env:PGPASSWORD = $null
 
 | 키 | 의미 | 코드 기본값 | 예시 값 | 반영 |
 |---|---|---|---|---|
-| `hpc.gateway` | `none`(PBS 기능 비활성) \| `command` \| `adapter`(자리만, 항상 미구성) | `none` | `none` | B |
+| `hpc.gateway` | `none`(PBS 기능 비활성) \| `command` \| `adapter`(자리만, 항상 미구성) \| `scx`(SCX — 대시보드 relay 경유, §16) | `none` | `none` | B |
 | `hpc.poll_interval_s` | PBS 상태 조회 주기(초) | `60` | `60` | W |
 | `hpc.lost_after_polls` | UNKNOWN 연속 이 횟수면 그 run `LOST`(실패) | `10` | `10` | W |
 | `hpc.max_unreachable_minutes` | PBS 명령 연속 실패가 이 시간을 넘으면 작업 `HPC_UNREACHABLE` 실패 | `1440` | `1440` | W |
@@ -618,6 +618,7 @@ $env:PGPASSWORD = $null
 | `hpc.transfer.collect_root_remote` | 같은 루트의 PBS 노드 경로 | `""` | `""` | B |
 | `hpc.transfer.collect_patterns` | 회수할 파일 패턴 | `["*.h3d", "*T01", "*_0000.out", "*_0001.out"]` | 같음 | W |
 | `hpc.transfer.max_collect_bytes` | 회수 파일당 상한 | `21474836480`(20 GiB) | 같음 | W |
+| `hpc.scx.*` | SCX 잡 제출 설정(`gateway: scx`일 때만) — 키 표는 §16.3 | (§16.3) | 예시 파일 `hpc.scx` 절 | B |
 
 #### train_data(① 학습데이터)
 
@@ -1228,6 +1229,97 @@ $env:PHYSICSAI_INSTALL_SERVICE_PASSWORD = '…'      # Background 모드일 때
 | U37 | 미사용 파라미터의 CAD 공칭 유지 | E2-1-3 | 안 되면 계약 변경(tpl 생성 규칙) |
 
 ---
+
+## 16. SCX 잡 제출(scx 모드 — phase3 §16, D3-57)
+
+①-4 해석 제출(`TD_SOLVE`)과 ④ 검증(`PREDICT_VERIFY`)의 Radioss를 Siemens Simcenter X(SCX)에 제출한다. PhysicsAI는 SCX 어댑터를 직접 쓰지 않고
+**대시보드의 SCX 연결(공용 계정 토큰)을 같이 쓴다** — 대시보드가 loopback 전용 내부 API "SCX relay"(`/internal/scx-relay/v1`)를 열고
+PhysicsAI 워커가 그것을 부른다(계약 `docs/contracts/scx_relay.md`). 토큰·워커 잠금은 대시보드 하나만 가진다.
+
+- 드라이브 위치: 공용 계정 홈(`/Users/vd.dashboard`) 아래 `<Study 폴더 이름>/<잡 폴더>/`. 잡 폴더는 항상 새로 만든다
+  (① `01_D-<NNN>_<run>_<시각>`, ④ `04_V-<NNN>_<시각>`, 이미 있으면 `_2`…`_9`). 드라이브에서 지우거나 옮기거나 덮어쓰지 않는다.
+- **SPDM 마스터 루트(대시보드 `SIMDASH_SCX_DRIVE_ROOT`) 안이나 그 상위 폴더 이름과 같은 프로젝트 폴더에는 쓰지 않는다**(양쪽 검사, 예외 설정 없음).
+  홈 바로 아래가 걱정되면 `hpc.scx.drive_base: "~/physicsai"`처럼 하위 폴더를 쓴다.
+- 흐름: 입력 폴더 직속 `*.rad`·`*.inc`·`*.csv`를 대시보드 업로드 대기열로 올림(관리 › 업로드 대기열에 출처 "PhysicsAI") → 제출 →
+  상태 조회(`hpc.scx.poll_interval_s`) → 결과(`hpc.transfer.collect_patterns`)를 relay로 내려받아 AI 루트의 결과 폴더에 저장(`.part` → sha256 확인 → 최종 이름).
+
+### 16.1 켜는 순서
+
+1. **대시보드 쪽**(대시보드 관리자): SCX 드라이브 모드(`SIMDASH_DRIVE_GATEWAY=scx`), 드라이브 쓰기(`SIMDASH_DRIVE_WRITES_ENABLED=true` + SPDM 루트),
+   어댑터 v0.3.0 이상(잡 API), relay 켜기 `SIMDASH_SCX_RELAY_ENABLED=true`, 비밀 파일 `SIMDASH_SCX_RELAY_SECRET_FILE`(대시보드 문서 `docs/features/scx-relay.md`).
+2. **공유 비밀 파일 만들기**(한 번, 두 앱이 같은 값): PowerShell에서 값을 화면에 찍지 않고 바로 파일로 쓴다.
+   ```powershell
+   # PhysicsAI 런타임 비밀 폴더(git 폴더 설치 = <git>\.runtime\secrets, 묶음 설치 = <install_root>\secrets)
+   $dst = "<런타임>\secrets\scx_relay_key"
+   $b = New-Object byte[] 48; [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($b)
+   [IO.File]::WriteAllText($dst, ([Convert]::ToBase64String($b).TrimEnd('=').Replace('+','-').Replace('/','_')))
+   icacls $dst /inheritance:r /grant:r "${env:USERNAME}:R" "SYSTEM:F"   # 작업 스케줄러 실행 계정이 다르면 그 계정에 R
+   # 같은 파일을 대시보드 비밀 폴더에 복사하고 SIMDASH_SCX_RELAY_SECRET_FILE에 그 절대 경로를 넣는다
+   ```
+   파일 내용은 한 줄 base64url 43~128자. 값은 어떤 문서·git·설정 파일·채팅에도 두지 않는다. 바꾸면 두 앱을 모두 다시 시작한다.
+3. **PhysicsAI 설정**(`platform.yaml`): `hpc.gateway: scx`, `hpc.scx.relay_url: "http://127.0.0.1:<대시보드 백엔드 포트>"`,
+   `hpc.scx.appliance`·`hpc.scx.version`(필수, 서버 확인 E4-11-1·2). `hpc.scx.secret_file`을 비우면 `<런타임>\secrets\scx_relay_key`를 읽는다.
+   (`deploy\setup.ps1`은 `hpc.scx` 절이 없을 때 예시 기본 절만 보충하고 `gateway`는 바꾸지 않는다.)
+4. API·워커 재시작 후 확인: 상태 화면(`GET /status`)의 HPC가 `SCX(대시보드 연결)`이고 configured=true. 비밀 파일이 없거나 형식이 틀리면
+   configured=false와 파일 경로만 보인다(값은 보이지 않음). 관리 › 설정 조회에는 `hpc.scx.secret = {path, present}`만 나온다.
+
+### 16.2 결과 모름(확인 필요)
+
+제출 응답을 잃으면(relay `SUBMISSION_UNKNOWN`, 또는 같은 request_id replay를 다 써도 응답 없음) 그 run은 `UNKNOWN`(확인 필요)이 되고
+작업은 `WAITING_HPC`에 남는다(attention·알림 `HPC_SUBMISSION_UNKNOWN`). **자동 재제출·자동 취소는 하지 않고** 남은 run은 제출하지 않는다.
+SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인한 뒤 `POST /jobs/{id}/hpc-jobs/{hid}/resolve`로 조치한다(작업 등록자 power 이상 또는 전역 관리자):
+`recheck`(같은 request_id로 다시 확인) · `attach`(SCX에서 찾은 잡 ID 연결) · `mark_not_submitted`(제출 안 됨 → 그 run 실패, ①은 "실패 run 다시 제출"로 새 폴더에 재제출).
+**SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면 같은 해석이 두 번 돌 수 있다(폴더는 따로).** 워커가 제출 도중 멈춘 경우도 housekeeping이 같은 `UNKNOWN`으로 바꾼다.
+
+### 16.3 설정 키(`hpc.scx`, 기본값은 스키마 한 곳)
+
+| 키 | 기본 | 설명 |
+|---|---|---|
+| `relay_url` | `""`(scx면 필수) | `http://127.0.0.1:<port>`·`http://[::1]:<port>`·`http://localhost:<port>`만(경로·쿼리 없음) |
+| `secret_file` | `""` | 비밀 파일 절대 경로(빈 값 = `<런타임>/secrets/scx_relay_key`) |
+| `drive_base` | `"~"` | `"~"` 또는 `"~/<상대>"` |
+| `home_display` | `/Users/vd.dashboard` | 화면·로그 표시 전용 |
+| `appliance` / `version` | `""`(필수) | SCX Radioss appliance·버전 문자열(E4-11-1·2) |
+| `ncpu` / `memory_gb` | `16` / `null` | 작업 params `hpc.ncpus`가 있으면 ncpu를 덮어씀(`queue`·`walltime`은 무시) |
+| `queue_type` / `run_type` / `mpi` / `single_precision` | `implicit` / `both - use starter and engine files` / `SMP (default)` / `false` | E4-11-10 |
+| `poll_interval_s` | `null` | 상태 조회 주기(null = `hpc.poll_interval_s`) |
+| `stage_patterns` | `["*.rad","*.inc","*.csv"]` | 올릴 파일(입력 폴더 직속, 대소문자 무시) |
+| `list_additional_paths` | `true` | include를 `additional_paths`에 나열(E4-11-4) |
+| `max_stage_bytes` / `max_download_bytes` | 20 GiB / 20 GiB | run당 업로드 합계 / 파일당 다운로드 상한 |
+| `stage_poll_s` / `stage_timeout_s` | `5` / `7200` | 업로드 대기열 폴링 간격 / 시간 한도 |
+| `submit_replay_attempts` / `submit_replay_wait_s` | `3` / `10` | 응답을 잃은 제출의 같은 request_id replay |
+| `http_timeout_s` / `transfer_timeout_s` | `30` / `3600` | 요청 1개 / 파일 1개 전송 |
+| `collect_max_depth` | `2` | 결과 폴더 하위 탐색 깊이 |
+| `health_ttl_s` | `30` | 상태 화면용 relay health 캐시 |
+
+### 16.4 서버 확인 목록(E4-11, 처음 켤 때)
+
+| # | 확인 | 다르면 |
+|---|---|---|
+| E4-11-1 | Radioss appliance 이름(SCX 화면·HPC_SDK 예제) | `hpc.scx.appliance` |
+| E4-11-2 | version 문자열(`2026.1`인지 `Radioss 2026.1`인지) | `hpc.scx.version` |
+| E4-11-3 | `input_path` 표기(상대·`~/`·절대) — 시험 폴더 1개로 3가지 | 대시보드 `SIMDASH_SCX_RELAY_JOB_PATH_FORM` |
+| E4-11-4 | include(`*.inc`·`RENUM_INIT.csv`)를 `additional_paths`에 꼭 넣어야 하는지 | `hpc.scx.list_additional_paths` |
+| E4-11-5 | `run_type` both에서 engine(`_0001.rad`)을 `engine_paths`로 줘야 하는지 | 개발 요청(step 규칙) |
+| E4-11-6 | 결과 위치(`output_path` 표기·위치·하위 깊이), relay로 읽히는지 | relay output_rel 변환·`collect_max_depth` |
+| E4-11-7 | 상태 문자열 전체(Queued·Running·Completed·Failed·Aborted 외 값) | 개발 요청(상태 표) |
+| E4-11-8 | 대기·실행·완료 잡의 terminate 동작과 이후 상태 | 개발 요청(취소 처리) |
+| E4-11-9 | 대시보드 어댑터 ≥ 0.3.0·잡 API 노출(relay `/health`의 `job_api`·`adapter_version`) | 어댑터 업데이트 |
+| E4-11-10 | `ncpu`·`memory_gb`·`queue_type`·`mpi` 허용 값 | `hpc.scx.*` |
+| E4-11-11 | 1 GB 이상 `.rad` 업로드·10 GB h3d 다운로드 시간과 그동안 대시보드 반응 | 대시보드 `SIMDASH_SCX_MAX_CONCURRENCY`·운영 시간대 |
+| E4-11-12 | 결과 파일 이름이 `hpc.transfer.collect_patterns`와 맞는지 | `hpc.transfer.collect_patterns` |
+
+### 16.5 실패 코드·문제 해결
+
+| 코드 | 뜻 | 조치 |
+|---|---|---|
+| `HPC_SUBMIT_FAILED` | relay 연결 실패·잡 API 없음·드라이브 쓰기 꺼짐·확정 제출 실패(이미 제출한 run은 terminate) | 대시보드 relay·SCX 연결·로그 확인 |
+| `SCX_STAGE_IN_FAILED` | 업로드 대기열 CONFLICT·FAILED·CANCELLED·PARTIAL·시간 초과(아무것도 제출하지 않음) | 대시보드 업로드 대기열 화면, `stage_timeout_s` |
+| `SCX_PATH_NOT_ALLOWED` | 잡 폴더가 SPDM 루트 안이거나 형식 위반 | Study 폴더 이름·`drive_base` |
+| `SCX_REMOTE_DIR_EXISTS` | 같은 이름 폴더가 `_9`까지 있음 | 잠시 뒤 다시(시각이 바뀜) |
+| `INPUT_INVALID` | 올릴 파일 이름·크기 상한 위반, starter 없음 | 입력 폴더 확인 |
+| `HPC_UNREACHABLE` | 상태 조회 실패가 `hpc.max_unreachable_minutes`를 넘음(문구 "대시보드 SCX 연결 확인") | 대시보드 재로그인·relay 확인 |
+| 경고 `SCX_SUBDIR_SKIPPED`·`SCX_NOT_SUBMITTED`·`SCX_UNKNOWN_CANCELED` | 하위 폴더 입력 무시·결과 모름으로 남은 run 미제출·결과 모름 행 취소(SCX에서 직접 확인) | 해당 run 다시 제출 |
 
 ## 부록 C. 코드와 문서의 차이(2026-10-09 확인, HEAD 56801e1 기준 갱신)
 
