@@ -1,7 +1,7 @@
 // phase2.md §20 V2-FE-2 (컴포넌트 시험, 목 서버)
 import { describe, expect, it } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { renderApp, STUDY } from "../test/render";
+import { openStatusDrawer, renderApp, STUDY } from "../test/render";
 import { PBS_NONE_TEXT } from "../stages/stage1/SolveCard";
 import { recordCalls } from "../test/recordCalls";
 
@@ -115,6 +115,7 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
     expect(server.notifs.filter((n) => n.event === "HPC_CANCEL_FAILED")).toHaveLength(1);
     act(() => server.tick());
     expect(server.notifs.filter((n) => n.event === "HPC_CANCEL_FAILED")).toHaveLength(1); // 1회만
+    await openStatusDrawer();
     const q = screen.getByRole("region", { name: "실행 대기열" });
     await waitFor(() => expect(within(q).getByTestId("queue-attention").textContent).toContain("취소 실패, 재시도 중"), { timeout: 3000 });
     expect((await within(card).findByTestId("attention", {}, { timeout: 3000 })).textContent).toBe("취소 실패, 재시도 중");

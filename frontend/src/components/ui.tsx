@@ -8,7 +8,7 @@ import { Cell, type Span } from "../design/Grid";
 
 export const NO_PERMISSION_TIP = "실행 권한(power 이상)이 필요합니다";
 
-/** 격자 칸 하나(design/Grid Cell): 머리(제목 + 참조 번호) → 본문 → 발(참조 설명·버튼) */
+/** 카드 하나(design/Grid Cell): 머리(제목 + 참조 번호) → 본문 → 발(참조 설명·버튼) */
 export function Card({
   step,
   title,
@@ -16,7 +16,6 @@ export function Card({
   aside,
   className,
   span = 6,
-  rows,
   foot,
 }: {
   step?: string;
@@ -25,13 +24,11 @@ export function Card({
   aside?: ReactNode;
   className?: string;
   span?: Span;
-  rows?: number;
   foot?: ReactNode;
 }) {
   return (
     <Cell
       span={span}
-      rows={rows}
       label={title}
       className={`card${className ? ` ${className}` : ""}`}
       title={<h3 className="T">{title}</h3>}

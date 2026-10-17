@@ -56,7 +56,7 @@ export function ResponsePlot2D({ pts, xLabel, yLabel, selected, onSelect }: { pt
         ))}
         <line className="chart-axis" x1={m.l} x2={m.l + iw} y1={m.t + ih} y2={m.t + ih} />
         <line className="chart-axis" x1={m.l} x2={m.l} y1={m.t} y2={m.t + ih} />
-        <path className="chart-line s1" d={d} />
+        <path className="chart-line" d={d} />
         {pts.map((p) => (
           <circle
             key={p.doe_no}

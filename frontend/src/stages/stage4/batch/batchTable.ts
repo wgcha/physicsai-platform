@@ -22,6 +22,9 @@ export const BATCH_STATUS_LABEL: Record<BatchStatus, string> = {
 };
 
 export const isBatchActive = (s: BatchStatus) => s === "GENERATING" || s === "PREDICTING";
+/** 상태 pill 색(대시보드식): ok 완료 · run 진행 · bad 실패 · "" 대기·취소 */
+export const batchTone = (s: BatchStatus): string => (s === "DONE" ? "ok" : isBatchActive(s) ? "run" : s === "FAILED" ? "bad" : "");
+export const rowTone = (s: BatchRowState): string => (s === "SUCCEEDED" ? "ok" : s === "RUNNING" || s === "GENERATING" ? "run" : s === "FAILED" || s === "GEN_FAILED" ? "bad" : "");
 export const isRowFailed = (s: BatchRowState) => s === "GEN_FAILED" || s === "FAILED" || s === "CANCELED";
 
 /** 정렬 키: "doe" 또는 "<응답 이름>:asc|desc" */

@@ -22,7 +22,7 @@ import { ResponsePlot2D } from "./ResponsePlot2D";
 import { ResponsePlot3D } from "./ResponsePlot3D";
 import { writeBatchTab } from "./BatchMode";
 import { writeInputMode } from "../InputModeTabs";
-import { BATCH_STATUS_LABEL, PLOT_HINT, ROW_STATE_LABEL, isBatchActive, isRowFailed, plotKind, plotPoints, sortOptions, sortRows, type SortKey } from "./batchTable";
+import { BATCH_STATUS_LABEL, PLOT_HINT, ROW_STATE_LABEL, isBatchActive, isRowFailed, rowTone, plotKind, plotPoints, sortOptions, sortRows, type SortKey } from "./batchTable";
 
 export const FILE_NOTE = "파일 이름은 모두 같고 폴더 번호로 구분합니다";
 export const NO_RESP_TEXT = "응답 추출 미구성";
@@ -117,7 +117,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
       </Card>
       <Card span={3} title="예측" aside={<span className="muted small">대기열 1슬롯</span>} className="batch-stat">
         <div className="batch-counts" data-testid="predict-counts">
-          <span className="D red">{b.predict.running}</span>
+          <span className="D accent">{b.predict.running}</span>
           <span className="small muted">실행 중</span>
           <span className="D">{b.predict.queued}</span>
           <span className="small muted">대기</span>
@@ -270,7 +270,7 @@ function ResultRow({ r, b, showResp, selected, onSelect, canRetry, onRetry }: { 
   return (
     <tr className={`clickable${selected ? " selected" : ""}`} onClick={onSelect} data-testid={`row-${r.doe_no}`}>
       <td>
-        <button type="button" className={selected ? "link strong red" : "link strong"} aria-pressed={selected} aria-label={`DOE #${r.doe_no} 선택`} onClick={(e) => (e.stopPropagation(), onSelect())}>
+        <button type="button" className={selected ? "link strong accent" : "link strong"} aria-pressed={selected} aria-label={`DOE #${r.doe_no} 선택`} onClick={(e) => (e.stopPropagation(), onSelect())}>
           {r.doe_no}
         </button>
         {!!r.media_views?.length && <CaptureMark views={r.media_views} />}
@@ -289,7 +289,7 @@ function ResultRow({ r, b, showResp, selected, onSelect, canRetry, onRetry }: { 
           </td>
         ))}
       <td className={`num row-state ${r.state.toLowerCase()}`}>
-        {ROW_STATE_LABEL[r.state]}
+        <span className={`pill ${rowTone(r.state)}`}>{ROW_STATE_LABEL[r.state]}</span>
         {failed && (r.code || r.message) && (
           <span className="muted small row-reason" title={r.message ?? ""}>
             {" "}

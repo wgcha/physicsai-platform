@@ -1,19 +1,25 @@
-/* 셸: 상단 바(아래 2px 선) · 경로 · 알림 벨 · 관리 메뉴 · 시연 배지 · 단계 표시 */
+/* 셸(대시보드 톤): 상단 바(반투명·흐림, 아래 1px 선) · 경로 · 상태 칩 · 알림 벨 · 관리 메뉴 · 시연 배지 · 단계 버튼 */
 .topbar {
   position: sticky;
   top: 0;
   z-index: 20;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s3);
-  padding: var(--s2) 0 var(--s1);
-  background: var(--paper);
-  border-bottom: 2px solid var(--rule);
+  gap: var(--space-2) var(--space-4);
+  margin: 0 calc(-1 * var(--shell-pad-x)) var(--space-5);
+  padding: var(--space-3) var(--shell-pad-x);
+  background: var(--color-topbar-bg);
+  border-bottom: 1px solid var(--color-border);
+  backdrop-filter: blur(16px);
 }
 .brand {
-  color: var(--ink);
+  color: var(--color-text-strong);
   text-decoration: none;
+}
+.brand:hover {
+  text-decoration: none;
+  color: var(--color-accent);
 }
 .pathbar {
   display: flex;
@@ -21,6 +27,8 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+  font: var(--font-b);
+  color: var(--color-text-muted);
 }
 .crumb {
   display: inline-flex;
@@ -28,25 +36,25 @@
   min-width: 0;
 }
 .crumb a {
-  color: var(--ink-2);
-  text-decoration: none;
+  color: var(--color-text-muted);
 }
 .crumb a:hover {
-  color: var(--ink);
-  text-decoration: underline;
+  color: var(--color-text);
 }
 .crumb [aria-current="page"] {
-  color: var(--ink);
+  color: var(--color-text);
 }
 .crumb-sep {
-  margin: 0 var(--s1);
-  color: var(--ink-3);
+  margin: 0 var(--space-2);
+  color: var(--color-border-strong);
 }
 .demo-badge {
   flex: none;
-  padding: 0 var(--s1);
-  border: 1px solid var(--warn);
-  color: var(--warn);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-warning-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
   font: var(--font-r-strong);
   white-space: nowrap;
 }
@@ -54,52 +62,113 @@
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--space-2) var(--space-4);
+  font: var(--font-c);
 }
 .topbar-link {
-  color: var(--ink-2);
+  color: var(--color-accent);
 }
 .user {
   display: flex;
   align-items: center;
-  gap: var(--s1);
-  color: var(--ink);
+  gap: var(--space-2);
+  color: var(--color-text-muted);
+}
+.user-name {
+  color: var(--color-text);
 }
 .role-chip {
-  font: var(--font-r);
-  letter-spacing: var(--track-r);
-  padding: 0 var(--s-h);
-  border: 1px solid var(--rule-soft);
-  color: var(--ink-2);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font: var(--font-r-medium);
 }
 .role-chip.admin,
 .role-chip.power {
-  border-color: var(--ink);
-  color: var(--ink);
+  border-color: var(--color-border-strong);
+  background: var(--color-info-surface);
+  color: var(--color-accent);
 }
+
+/* 상태 칩 2개(레이아웃 A): 대기열 · 워커 자원 → 클릭하면 상태 서랍 */
+.status-chips {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-interactive);
+  color: var(--color-text);
+  font: var(--font-c);
+  white-space: nowrap;
+  cursor: pointer;
+}
+.chip:hover {
+  border-color: var(--color-focus);
+}
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--color-text-muted);
+}
+.chip.running .chip-dot {
+  background: var(--color-accent);
+}
+.chip.mine {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-info-surface);
+}
+.chip.mine .chip-dot {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+.chip.open {
+  border-color: var(--color-accent);
+}
+.chip.bad {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+
 .bell {
   position: relative;
   display: grid;
   place-items: center;
-  width: var(--control);
-  height: var(--control);
+  width: var(--control-h-sm);
+  height: var(--control-h-sm);
   border: 1px solid transparent;
+  border-radius: var(--radius-md);
   background: transparent;
-  color: var(--ink);
+  color: var(--color-text);
   cursor: pointer;
 }
 .bell:hover {
-  border-color: var(--ink);
+  border-color: var(--color-border-strong);
+  background: var(--color-surface-interactive);
 }
 .bell-badge {
   position: absolute;
-  top: calc(-1 * var(--s-h));
-  right: calc(-1 * var(--s1));
-  min-width: var(--s2);
-  height: var(--s2);
-  padding: 0 var(--s-h);
-  background: var(--ink);
-  color: var(--cell);
+  top: calc(-1 * var(--space-1));
+  right: calc(-1 * var(--space-1));
+  min-width: 18px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  border-radius: var(--radius-pill);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
   font: var(--font-r-strong);
   text-align: center;
 }
@@ -112,100 +181,86 @@
   background: none;
   cursor: pointer;
   padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+  color: var(--color-accent);
 }
 .alert-dot {
   position: absolute;
   top: 0;
-  right: calc(-1 * var(--s1));
+  right: calc(-1 * var(--space-2));
   width: 6px;
   height: 6px;
-  background: var(--bad);
+  border-radius: 50%;
+  background: var(--color-danger);
 }
 .admin-menu-pop {
   position: absolute;
   right: 0;
-  top: calc(100% + var(--s1));
+  top: calc(100% + var(--space-2));
   min-width: 176px;
-  padding: var(--s-h);
-  background: var(--cell);
-  border: 1px solid var(--ink);
+  padding: var(--space-1);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
   z-index: 30;
 }
 .admin-menu-pop a {
   display: block;
-  padding: var(--s1);
-  color: var(--ink);
-  text-decoration: none;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
 }
 .admin-menu-pop a:hover {
-  background: var(--tint);
+  background: var(--color-surface-interactive);
+  text-decoration: none;
 }
 
-/* 단계 표시 */
+/* 단계 버튼 ①~⑤ */
 .stepper-row {
   display: flex;
-  align-items: stretch;
-  gap: var(--s2);
-  border-bottom: 1px solid var(--rule);
-  margin-bottom: var(--s3);
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  margin-bottom: var(--space-4);
 }
 .stepper {
   flex: 1;
   min-width: 0;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
   margin: 0;
   padding: 0;
   list-style: none;
 }
-.step {
-  position: relative;
-  border-right: 1px solid var(--rule-soft);
-  min-width: 0;
-}
-.step:last-child {
-  border-right: 0;
-}
-.step.current::before {
-  content: "";
-  position: absolute;
-  inset: 0 0 auto 0;
-  height: 4px;
-  background: var(--red);
-}
 .step a {
-  display: flex;
-  flex-direction: column;
-  padding: var(--s2) var(--s2) var(--s1);
-  color: var(--ink-2);
-  text-decoration: none;
-  min-width: 0;
-}
-.step:first-child a {
-  padding-left: 0;
-}
-.step a:hover .step-name {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.step.current .step-label {
-  color: var(--ink);
-}
-.step-label {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--s-h);
-  min-width: 0;
+  gap: var(--space-1);
+  height: var(--control-h-md);
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text-muted);
+  font: var(--font-b);
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  text-decoration: none;
 }
-.step-label .dot {
-  margin-left: var(--s-h);
+.step a:hover {
+  color: var(--color-text);
+  border-color: var(--color-border-strong);
+  text-decoration: none;
+}
+.step.current a {
+  border-color: var(--color-accent);
+  background: var(--color-surface-selected);
+  color: var(--color-text-strong);
+  font: var(--font-b-strong);
+}
+.step .dot {
+  margin-left: var(--space-1);
 }
 .manage-link {
   flex: none;
-  align-self: center;
 }

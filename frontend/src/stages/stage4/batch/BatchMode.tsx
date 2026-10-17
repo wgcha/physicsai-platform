@@ -11,7 +11,7 @@ import { usePolling } from "../../../hooks/usePolling";
 import { fmtNum, fmtTime } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
 import { BatchSetup } from "./BatchSetup";
-import { BATCH_STATUS_LABEL, isBatchActive } from "./batchTable";
+import { BATCH_STATUS_LABEL, batchTone, isBatchActive } from "./batchTable";
 
 export type BatchTab = "list" | "new";
 export const BATCH_TAB_KEY = "physicsai.stage4.batchTab";
@@ -90,7 +90,7 @@ export function BatchMode() {
   return (
     <>
       <Card span={9} title="일괄 예측" className="batch-tabs">
-        <div className="seg" role="tablist" aria-label="일괄 예측">
+        <div className="tabs" role="tablist" aria-label="일괄 예측">
           {TABS.map((t) => (
             <button key={t.key} type="button" role="tab" aria-selected={cur === t.key} className={cur === t.key ? "on" : ""} onClick={() => choose(t.key)}>
               {t.label}
@@ -151,7 +151,7 @@ function BatchList({ list, error, onNew }: { list: PredictBatchSummary[]; error:
                   <td className="small">{b.param_set?.label ?? b.param_set?.id ?? "—"}</td>
                   <td className="num">{b.run_count}</td>
                   <td className="small">
-                    <span className={isBatchActive(b.status) ? "red" : ""}>{BATCH_STATUS_LABEL[b.status] ?? String(b.status)}</span>
+                    <span className={`pill ${batchTone(b.status)}`}>{BATCH_STATUS_LABEL[b.status] ?? String(b.status)}</span>
                     <span className="muted"> · {batchCountsText(b)}</span>
                   </td>
                   <td className="small mono" data-testid={`summary-${b.label}`}>

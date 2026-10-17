@@ -7,6 +7,7 @@ import { StudyList } from "../pages/StudyList";
 import { StudyPage } from "../pages/StudyPage";
 import { StudyManage } from "../pages/StudyManage";
 import { AdminEnvCheck } from "../pages/AdminEnvCheck";
+import { useThemeSync } from "../design/theme";
 import { ImportLanding } from "../pages/ImportLanding";
 
 const FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
@@ -17,6 +18,7 @@ function StudyRedirect() {
 }
 
 export function AppRoutes() {
+  useThemeSync();
   return (
     <AuthGate>
       <NotificationsProvider>

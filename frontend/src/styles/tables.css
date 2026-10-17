@@ -1,4 +1,4 @@
-/* 표: 머리 Reference(아래 먹선), 행 사이 옅은 선. Final 행의 모델 이름만 빨강. */
+/* 표(대시보드 톤): 머리 = muted Control 글자 + 아래 선, 행 높이 40, 행 사이 옅은 선, 선택·Final 행 = selected 바탕. */
 .table-wrap {
   overflow-x: auto;
 }
@@ -8,26 +8,25 @@
 }
 .table th {
   text-align: left;
-  font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
-  padding: var(--s-h) var(--s1);
-  border-bottom: 1px solid var(--rule);
+  font: var(--font-c);
+  color: var(--color-text-muted);
+  padding: var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
   white-space: nowrap;
   vertical-align: bottom;
 }
+.table th.num {
+  text-align: right;
+}
 .table td {
-  padding: var(--s-h) var(--s1);
-  border-top: 1px solid var(--rule-soft);
+  height: var(--row-h);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
   vertical-align: middle;
 }
 .table th:first-child,
 .table td:first-child {
-  padding-left: 0;
-}
-.table th:last-child,
-.table td:last-child {
-  padding-right: 0;
+  padding-left: var(--space-2);
 }
 .table td.ellipsis {
   max-width: 288px;
@@ -35,64 +34,83 @@
 .table td.wrap-date {
   white-space: nowrap;
 }
-.table tr.is-final td {
-  background: var(--tint);
+.table tbody tr:hover td {
+  background: var(--color-surface-interactive);
+}
+.table tbody tr.is-final td {
+  background: var(--color-surface-selected);
 }
 .table tr.is-final td:nth-child(2) b {
-  color: var(--red);
+  color: var(--color-accent);
 }
 tr.clickable {
   cursor: pointer;
 }
+.table tbody tr.selected td,
 tr.selected td {
-  background: var(--tint);
+  background: var(--color-surface-selected);
 }
 .row-actions {
   white-space: nowrap;
   text-align: right;
 }
 .row-actions > * + * {
-  margin-left: var(--s1);
+  margin-left: var(--space-2);
 }
+/* 상태 글자 → pill */
 .ds-status,
 .run-state {
+  display: inline-block;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
   font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
   white-space: nowrap;
 }
 .ds-status.ready,
+.run-state.solved,
 .run-state.collected {
-  color: var(--ok);
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.ds-status.building,
+.run-state.submitted {
+  background: var(--color-info-surface);
+  color: var(--color-accent);
 }
 .ds-status.failed,
 .run-state.solve_failed,
 .run-state.collect_failed {
-  color: var(--bad);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
 }
 .final-badge {
   display: inline-block;
-  padding: 0 var(--s-h);
-  border: 1px solid var(--red);
-  color: var(--red);
+  padding: 1px var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-info-surface);
+  color: var(--color-accent);
   font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
 }
 .final-cell {
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .spark-btn {
   background: none;
   border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   padding: 1px;
   cursor: pointer;
   display: block;
 }
 .spark-btn:hover,
 .spark-btn.on {
-  border-color: var(--ink);
+  border-color: var(--color-accent);
 }
 .study-table td.mono .btn {
-  margin-left: var(--s1);
+  margin-left: var(--space-2);
 }

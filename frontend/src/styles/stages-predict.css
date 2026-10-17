@@ -1,26 +1,26 @@
-/* ④ 단일 예측 · ⑤ 최적화 칸 안 배치 */
+/* ④ 예측 · ⑤ 최적화 카드 안 배치(대시보드 톤) */
 /* ④ */
 .input-mode-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
 }
 .input-mode .seg button:disabled {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
   cursor: not-allowed;
 }
 .prepared-input {
   display: grid;
-  gap: var(--s1);
-  padding-bottom: var(--s2);
+  gap: var(--space-2);
+  padding-bottom: var(--space-4);
 }
 .prepared-input p,
 .prepared-summary {
   margin: 0;
 }
 .prepared-summary.ok {
-  color: var(--ok);
+  color: var(--color-success);
 }
 .plain-notes {
   list-style: none;
@@ -31,13 +31,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s1) var(--s3);
+  gap: var(--space-2) var(--space-5);
 }
 .ps-register {
   display: grid;
-  gap: var(--s1);
-  padding-top: var(--s1);
-  border-top: 1px solid var(--rule-soft);
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
 }
 .fill-row,
 .scatter-axes,
@@ -45,7 +45,7 @@
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
 }
 .model-line .advanced {
   margin-left: auto;
@@ -58,7 +58,7 @@
 .result-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 560px), 1fr));
-  gap: var(--s3);
+  gap: var(--space-5);
   align-items: start;
 }
 .input-table,
@@ -66,12 +66,12 @@
 .input-left,
 .result-side {
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
   min-width: 0;
   align-content: start;
 }
 .result-side {
-  gap: var(--s2);
+  gap: var(--space-4);
 }
 .table.params td {
   padding-top: 2px;
@@ -88,7 +88,7 @@
 .ticks {
   display: flex;
   align-items: center;
-  gap: var(--s-h);
+  gap: var(--space-1);
   padding: 0 7px;
 }
 .ticks svg {
@@ -96,37 +96,38 @@
   height: 12px;
 }
 .tick {
-  stroke: var(--ink-3);
+  stroke: var(--color-chart-axis);
   stroke-width: 1;
 }
 .tick-current {
-  stroke: var(--red);
+  stroke: var(--color-chart-series-2);
   stroke-width: 2;
 }
 .int-tag {
-  margin-left: var(--s-h);
-  padding: 0 var(--s-h);
-  border: 1px solid var(--rule-soft);
-  color: var(--ink-2);
+  margin-left: var(--space-1);
+  padding: 0 var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
   font: var(--font-r);
 }
 .range-note {
-  margin: var(--s-h) 0 0;
+  margin: var(--space-1) 0 0;
 }
 .run-block {
   display: grid;
-  gap: var(--s1);
-  padding-top: var(--s2);
-  border-top: 1px solid var(--rule);
+  gap: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--color-border);
 }
 .run-grid {
   display: grid;
   grid-template-columns: minmax(224px, 0.8fr) minmax(320px, 1.4fr) minmax(352px, 1.2fr);
-  gap: var(--s3);
+  gap: var(--space-5);
   align-items: start;
 }
 .model-pick {
-  min-height: var(--control);
+  min-height: var(--control-h-sm);
   display: flex;
   align-items: center;
 }
@@ -135,11 +136,11 @@
 }
 .chain {
   list-style: none;
-  margin: var(--s-h) 0 0;
+  margin: var(--space-1) 0 0;
   padding: 0;
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: var(--s-h);
+  gap: var(--space-1);
 }
 .chain.prepared {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -147,20 +148,23 @@
 .chain-step {
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: var(--s1);
+  column-gap: var(--space-2);
   align-items: center;
-  padding: var(--s1);
-  border: 1px solid var(--rule-soft);
-  border-top-width: 4px;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+  box-shadow: inset 0 3px 0 var(--color-border-strong);
 }
 .chain-no {
   grid-row: span 2;
   display: grid;
   place-items: center;
-  width: var(--s3);
-  height: var(--s3);
-  border: 1px solid var(--ink-3);
-  color: var(--ink-2);
+  width: var(--space-5);
+  height: var(--space-5);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 50%;
+  color: var(--color-text-muted);
   font: var(--font-r-strong);
 }
 .chain-label {
@@ -168,38 +172,38 @@
 }
 .chain-state {
   font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .chain-step.done {
-  border-top-color: var(--ok);
+  box-shadow: inset 0 3px 0 var(--color-success);
 }
 .chain-step.running {
-  border-top-color: var(--ink);
+  box-shadow: inset 0 3px 0 var(--color-accent);
 }
 .chain-step.failed {
-  border-top-color: var(--bad);
+  box-shadow: inset 0 3px 0 var(--color-danger);
 }
 .chain-step.skipped {
   border-style: dashed;
 }
 .result-head {
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .contour-img {
   width: 100%;
   height: auto;
   max-height: 70vh;
   object-fit: contain;
-  border: 1px solid var(--rule-soft);
-  background: var(--paper);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-app-bg);
 }
 
 /* ⑤ */
 .resp-add-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1);
+  gap: var(--space-2);
   align-items: center;
 }
 .resp-add-row > select,
@@ -212,7 +216,7 @@
 }
 .opt-result {
   display: grid;
-  gap: var(--s2);
+  gap: var(--space-4);
   min-width: 0;
 }
 .summary-table,
@@ -222,32 +226,28 @@
 }
 .file-list {
   list-style: none;
-  margin: var(--s1) 0 0;
+  margin: var(--space-2) 0 0;
   padding: 0;
   display: grid;
   gap: 2px;
 }
 .file-view {
-  margin-top: var(--s1);
+  margin-top: var(--space-2);
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
-/* ⑤-4 설계 이력: 최적값 추이가 주요 선(빨강), 설계별 값은 먹 점 */
-.history .chart-line.s1 {
-  stroke: var(--red);
-  stroke-width: 2;
-}
-.history .lg.line.s1 {
-  background: var(--red);
+/* ⑤-4 설계 이력: 최적값 추이 = series-1 선, 설계별 값 = 축 색 점 */
+.history .chart-pt {
+  fill: var(--color-chart-axis);
 }
 .history .lg.sample {
-  background: var(--ink);
+  background: var(--color-chart-axis);
 }
 
 /* S10 컨투어 캡처(방향별 스크린샷·영상) */
 .result-contour {
   display: grid;
-  gap: var(--s2);
+  gap: var(--space-4);
   min-width: 0;
   align-content: start;
 }
@@ -255,13 +255,13 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
 }
 .cm-views {
   flex-wrap: wrap;
 }
 .cm-views button:focus-visible {
-  outline: 2px solid var(--red);
+  outline: 2px solid var(--color-focus);
   outline-offset: -2px;
 }
 video.contour-img {
@@ -269,7 +269,7 @@ video.contour-img {
 }
 .cm-capture {
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .cm-capture-form,
 .contour-display {
@@ -280,9 +280,10 @@ video.contour-img {
 }
 .cm-capture-form {
   display: grid;
-  gap: var(--s1);
-  padding: var(--s1);
-  border: 1px solid var(--rule-soft);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 .cm-capture-form legend,
 .contour-display legend {
@@ -290,18 +291,18 @@ video.contour-img {
 }
 .contour-display {
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .contour-display:disabled {
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .capture-mark {
-  margin-left: var(--s-h);
+  margin-left: var(--space-1);
   vertical-align: -1px;
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .legend-fix,
 .batch-capture {
   display: grid;
-  gap: var(--s-h);
+  gap: var(--space-1);
 }

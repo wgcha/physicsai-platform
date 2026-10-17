@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 import { TestApp } from "../app/App";
 import { MockServer, createMockFetch, type MockOptions } from "../mock/server";
@@ -16,3 +16,9 @@ export function renderApp(path: string, opts: MockOptions = {}, setup?: (server:
 }
 
 export const STUDY = "/p/p-cushion/s/s-cushion/stage";
+
+/** 레이아웃 A: 상단 바 대기열 칩을 눌러 상태 서랍(실행 대기열·워커 자원)을 연다 */
+export async function openStatusDrawer(): Promise<HTMLElement> {
+  fireEvent.click(await screen.findByTestId("chip-queue"));
+  return screen.findByRole("dialog", { name: "실행 상태" });
+}

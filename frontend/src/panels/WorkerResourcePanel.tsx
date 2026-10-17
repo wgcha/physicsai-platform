@@ -1,9 +1,7 @@
-import { useCallback, useState } from "react";
-import { api, type Resources } from "../api";
+import type { Resources } from "../api";
 import { useApp } from "../app/AppContext";
-import { usePolling } from "../hooks/usePolling";
-import { POLL } from "../lib/poll";
-import { Cell } from "../design/Grid";
+import { useRunStatus } from "../shell/RunStatus";
+import { DrawerSection } from "./DrawerSection";
 
 const PRIORITY_LABEL: Record<string, string> = { below_normal: "낮은 우선순위", normal: "보통 우선순위", idle: "유휴 우선순위" };
 
@@ -27,28 +25,15 @@ export function gpuNoneText(r: Pick<Resources, "gpu_status">): string {
   return "GPU 정보 없음";
 }
 
-/** 워커 자원(§16.2 ②) */
+/** 워커 자원(§16.2 ②) — 상태 서랍 안. 데이터는 RunStatusProvider 폴링 */
 export function WorkerResourcePanel() {
   const { status } = useApp();
-  const [r, setR] = useState<Resources | null>(null);
-  const [none, setNone] = useState(false);
-  const load = useCallback(async () => {
-    try {
-      setR(await api.resources());
-      setNone(false);
-    } catch {
-      setNone(true);
-    }
-  }, []);
-  usePolling(load, POLL.resources);
+  const { resources: r, resourcesNone: none } = useRunStatus();
   const offline = status && !status.worker.online;
 
   return (
-    <Cell
-      span={3}
-      className="panel"
+    <DrawerSection
       label="워커 자원"
-      title={<h2 className="T">워커 자원</h2>}
       refText={status ? <span className={`worker-state ${offline ? "off" : "on"}`}>{offline ? "워커 오프라인" : "워커 정상"}</span> : undefined}
     >
       {offline && <div className="warn-box small">워커가 응답하지 않습니다. 등록한 작업은 대기열에 남아 있다가 워커가 돌아오면 실행됩니다.</div>}
@@ -79,6 +64,6 @@ export function WorkerResourcePanel() {
           </div>
         </>
       )}
-    </Cell>
+    </DrawerSection>
   );
 }

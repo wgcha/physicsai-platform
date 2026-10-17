@@ -1,120 +1,155 @@
-/* 디자인 토큰 — docs/design/swiss-grid-mockup.html(사용자 확정 2026-10-14)과 같은 값.
-   강조색은 빨강(--red) 1개: 현재 단계·Final 모델·주요 차트 선·포커스에만 쓴다.
-   상태색(--ok·--warn·--bad)은 상태 표시에만, 채도를 낮춰 통일한다.
-   글꼴 크기·모서리·그림자 값은 이 파일과 typography.css에만 둔다(정적 시험 designRules). */
-:root {
-  --paper: #fafaf8;
-  --cell: #ffffff;
-  --ink: #111111;
-  --ink-2: #5c5e62;
-  --ink-3: #9a9ca0;
-  --rule: #111111;
-  --rule-soft: #d9dadc;
-  --red: #d52b1e;
-  /* 상태(채도 낮춤) */
-  --ok: #3f6b52;
-  --warn: #86682f;
-  --bad: #8f3f37;
-  --ok-weak: #edf2ee;
-  --warn-weak: #f4efe4;
-  --bad-weak: #f5eceb;
-  /* 칠(선택·Final 행 등 아주 옅은 바탕) */
-  --tint: #f2f2ef;
-  --scrim: rgba(17, 17, 17, 0.32);
-  /* 비교 계열: 빨강 1 + 먹 4(선 모양으로 구분) */
-  --series-1: var(--red);
-  --series-2: var(--ink);
-  --series-3: var(--ink-2);
-  --series-4: var(--ink);
-  --series-5: var(--ink-2);
-
-  /* 글꼴 */
-  --sans: "IBM Plex Sans", "IBM Plex Sans KR", "Helvetica Neue", Helvetica, Arial, sans-serif;
-  --mono: Consolas, "D2Coding", "SFMono-Regular", Menlo, monospace;
-
-  /* 글자 역할 4단계(8px 기준선) */
-  --d-size: 44px;
-  --d-line: 48px;
-  --t-size: 18px;
-  --t-line: 24px;
-  --b-size: 15px;
-  --b-line: 24px;
-  --r-size: 12px;
-  --r-line: 16px;
-  --font-d: 500 var(--d-size) / var(--d-line) var(--sans);
-  --font-t: 600 var(--t-size) / var(--t-line) var(--sans);
-  --font-b: 400 var(--b-size) / var(--b-line) var(--sans);
-  --font-r: 400 var(--r-size) / var(--r-line) var(--sans);
-  --font-r-medium: 500 var(--r-size) / var(--r-line) var(--sans);
-  --font-r-strong: 600 var(--r-size) / var(--r-line) var(--sans);
-  --font-b-strong: 600 var(--b-size) / var(--b-line) var(--sans);
-  --font-b-mono: 400 var(--b-size) / var(--b-line) var(--mono);
-  --font-r-mono: 400 var(--r-size) / var(--r-line) var(--mono);
-  --track-r: 0.02em;
-
-  /* 간격(8px 배수, 반 칸 4px은 아이콘·점 간격에만) */
-  --s-h: 4px;
-  --s1: 8px;
-  --s2: 16px;
-  --s3: 24px;
-  --s4: 32px;
-  --s5: 40px;
-  --s6: 48px;
-  --pad: 16px;
-  --control: 32px;
-
-  /* 격자 */
-  --row: 176px;
-  --rule-w: 1px;
-  --cols: 12;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #0e0e0f;
-    --cell: #161618;
-    --ink: #f2f2f0;
-    --ink-2: #a6a8ac;
-    --ink-3: #6e7074;
-    --rule: #f2f2f0;
-    --rule-soft: #2e2f32;
-    --red: #ff5446;
-    --ok: #8fb59c;
-    --warn: #cfb27c;
-    --bad: #d38c83;
-    --ok-weak: #1b241e;
-    --warn-weak: #26221a;
-    --bad-weak: #2a1c1a;
-    --tint: #1f1f22;
-    --scrim: rgba(0, 0, 0, 0.55);
-    color-scheme: dark;
-  }
-}
+/* 디자인 토큰 — 대시보드(simdashboard frontend/src/theme.css·tokens.css)와 같은 값(2026-10-17 사용자 결정: 톤앤매너 통일).
+   색: 대시보드 다크·라이트 세트를 그대로 가져와 [data-theme='dark'|'light']로 적용(기본 dark — 대시보드와 같음).
+   테마 값은 design/theme.ts가 대시보드 localStorage 키를 읽어 <html data-theme>에 넣는다.
+   글꼴 크기·모서리·그림자 값은 design/ 묶음에만 둔다(화면 CSS는 var(--font-*)·var(--radius-*)·var(--shadow-*)만 — 정적 시험 designRules). */
+:root,
 :root[data-theme="dark"] {
-  --paper: #0e0e0f;
-  --cell: #161618;
-  --ink: #f2f2f0;
-  --ink-2: #a6a8ac;
-  --ink-3: #6e7074;
-  --rule: #f2f2f0;
-  --rule-soft: #2e2f32;
-  --red: #ff5446;
-  --ok: #8fb59c;
-  --warn: #cfb27c;
-  --bad: #d38c83;
-  --ok-weak: #1b241e;
-  --warn-weak: #26221a;
-  --bad-weak: #2a1c1a;
-  --tint: #1f1f22;
-  --scrim: rgba(0, 0, 0, 0.55);
+  --color-app-bg: #07111d;
+  --color-app-background: radial-gradient(circle at 42% -20%, #163555 0, #07111d 42%);
+  --color-surface-1: #0d1c2b;
+  --color-surface-2: #10263a;
+  --color-surface-3: #132c40;
+  --color-border: #213549;
+  --color-text: #e9f3fc;
+  --color-text-muted: #8198ad;
+  --color-accent: #51d3ff;
+  --color-danger: #ff5d73;
+  --color-success: #4fd6a0;
+  --color-warning: #ffbf57;
+  --color-topbar-bg: rgba(7, 17, 29, 0.82);
+  --color-surface-raised: #0d2031;
+  --color-surface-interactive: #10263a;
+  --color-surface-selected: #102c3f;
+  --color-text-strong: #f1f8ff;
+  --color-text-on-accent: #03141e;
+  --color-border-strong: #31536d;
+  --color-focus: #4dcffb;
+  --color-chart-grid: #26394c;
+  --color-chart-axis: #71899f;
+  --color-chart-series-1: #61d4ff;
+  --color-chart-series-2: #ff647d;
+  --color-chart-series-3: #70e0a8;
+  --color-chart-series-4: #ffbf57;
+  --color-chart-series-5: #8b9cff;
+  --color-chart-series-target: #ff9948;
+  --color-shadow: rgba(0, 0, 0, 0.16);
+  --color-overlay: rgba(2, 10, 18, 0.72);
+  --color-accent-shadow: rgba(81, 211, 255, 0.22);
+  --color-danger-surface: #2a1720;
+  --color-success-surface: #0e2b25;
+  --color-warning-surface: #302715;
+  --color-info-surface: #102c3f;
+  --color-danger-border: #7c3745;
+  --color-success-border: #287b62;
+  --color-warning-border: #87682d;
   color-scheme: dark;
 }
 
-/* 각진 모서리·그림자 없음(전역 초기화) */
-*,
-*::before,
-*::after {
-  border-radius: 0;
-  box-shadow: none;
+:root[data-theme="light"] {
+  --color-app-bg: #f4f7fb;
+  --color-app-background: #f4f7fb;
+  --color-surface-1: #ffffff;
+  --color-surface-2: #eef3f8;
+  --color-surface-3: #e5effb;
+  --color-border: #d7e0ea;
+  --color-text: #142033;
+  --color-text-muted: #536276;
+  --color-accent: #034ea2;
+  --color-danger: #b42318;
+  --color-success: #13734f;
+  --color-warning: #9a5b00;
+  --color-topbar-bg: rgba(255, 255, 255, 0.88);
+  --color-surface-raised: #ffffff;
+  --color-surface-interactive: #eef3f8;
+  --color-surface-selected: #e8f1fc;
+  --color-text-strong: #101d31;
+  --color-text-on-accent: #ffffff;
+  --color-border-strong: #b8cde5;
+  --color-focus: #034ea2;
+  --color-chart-grid: #d8e2ec;
+  --color-chart-axis: #5c6d80;
+  --color-chart-series-1: #0369a1;
+  --color-chart-series-2: #be123c;
+  --color-chart-series-3: #047857;
+  --color-chart-series-4: #a16207;
+  --color-chart-series-5: #6d28d9;
+  --color-chart-series-target: #c2410c;
+  --color-shadow: rgba(25, 52, 80, 0.08);
+  --color-overlay: rgba(20, 32, 51, 0.32);
+  --color-accent-shadow: rgba(3, 78, 162, 0.18);
+  --color-danger-surface: #fce8eb;
+  --color-success-surface: #e4f4ed;
+  --color-warning-surface: #fff0d9;
+  --color-info-surface: #e8f1fc;
+  --color-danger-border: #e7b7b2;
+  --color-success-border: #9fd8bd;
+  --color-warning-border: #edc98f;
+  color-scheme: light;
+}
+
+:root {
+  /* 글꼴 — 대시보드 styles.css 1행과 같은 스택. Pretendard는 npm 패키지에서 번들(fonts.css, CDN 없음) */
+  --sans: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
+  --mono: Consolas, "D2Coding", "Liberation Mono", "SFMono-Regular", Menlo, monospace;
+
+  /* 글자 역할 5단계: Display(큰 숫자) · Title(칸 제목) · Body · Control(버튼·칩·표 머리) · Reference(보조·배지) */
+  --d-size: 24px;
+  --d-line: 32px;
+  --t-size: 18px;
+  --t-line: 26px;
+  --b-size: 14px;
+  --b-line: 22px;
+  --c-size: 13px;
+  --c-line: 20px;
+  --r-size: 12px;
+  --r-line: 18px;
+  --font-d: 600 var(--d-size) / var(--d-line) var(--sans);
+  --font-t: 600 var(--t-size) / var(--t-line) var(--sans);
+  --font-b: 400 var(--b-size) / var(--b-line) var(--sans);
+  --font-b-strong: 600 var(--b-size) / var(--b-line) var(--sans);
+  --font-b-mono: 400 var(--b-size) / var(--b-line) var(--mono);
+  --font-c: 500 var(--c-size) / var(--c-line) var(--sans);
+  --font-c-strong: 600 var(--c-size) / var(--c-line) var(--sans);
+  --font-r: 400 var(--r-size) / var(--r-line) var(--sans);
+  --font-r-medium: 500 var(--r-size) / var(--r-line) var(--sans);
+  --font-r-strong: 600 var(--r-size) / var(--r-line) var(--sans);
+  --font-r-mono: 400 var(--r-size) / var(--r-line) var(--mono);
+
+  /* 간격·모서리(대시보드 tokens.css) */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 999px;
+  --shell-pad-x: clamp(24px, 2vw, 40px);
+
+  /* 컨트롤·행 높이(대시보드 .app-shell 최소값) */
+  --control-h-xs: 26px;
+  --control-h-sm: 32px;
+  --control-h-md: 38px;
+  --control-h-lg: 44px;
+  --row-h: 40px;
+
+  /* 그림자(색은 테마별 --color-shadow) */
+  --shadow-card: 0 1px 2px var(--color-shadow), 0 8px 24px var(--color-shadow);
+  --shadow-pop: 0 18px 54px var(--color-shadow);
+  --shadow-drawer: -8px 0 24px var(--color-shadow);
+  --shadow-primary: 0 5px 14px var(--color-accent-shadow);
+  --shadow-focus: 0 0 0 3px var(--color-accent-shadow);
+
+  /* 레이아웃 */
+  --cols: 12;
+  --gap: 16px;
+  --drawer-w: 420px;
+}
+
+@media (max-width: 620px) {
+  :root {
+    --shell-pad-x: 14px;
+  }
 }

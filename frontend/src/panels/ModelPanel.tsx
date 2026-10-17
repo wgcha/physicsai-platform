@@ -18,7 +18,7 @@ export function scoreSummary(m: Model): string {
     .join(" · ");
 }
 
-/** 모델 목록·Final(§16.2 ③) */
+/** 모델 목록·Final(§16.2 ③) — 레이아웃 A(2026-10-17)부터 ③ 화면 안 카드(우측 고정 열 없음) */
 export function ModelPanel() {
   const ctx = useStudyOptional();
   return ctx ? <ModelPanelBody ctx={ctx} /> : null;

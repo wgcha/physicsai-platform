@@ -182,7 +182,9 @@ export function SpdmImportCard({ initialPath = "" }: { initialPath?: string }) {
                   </td>
                   <td className="num">{i.file_count ?? "–"}</td>
                   <td className="num small">{fmtBytes(i.total_bytes)}</td>
-                  <td className={`ds-status ${i.status.toLowerCase()}`}>{i.status === "READY" ? "준비됨" : i.status === "BUILDING" ? "가져오는 중" : "실패"}</td>
+                  <td>
+                    <span className={`ds-status ${i.status.toLowerCase()}`}>{i.status === "READY" ? "준비됨" : i.status === "BUILDING" ? "가져오는 중" : "실패"}</span>
+                  </td>
                   <td className="small wrap-date">{fmtTime(i.created_at)}</td>
                 </tr>
               ))}

@@ -1,11 +1,11 @@
-/* 단계 칸 안 배치(①②③④⑤). 간격은 8px 배수, 강조는 빨강 1개(현재 값·Final). */
+/* 단계 카드 안 배치(①②③④⑤). 간격은 --space-*, 강조는 accent(현재 값·Final). */
 /* ① */
 .param-table td {
   padding-top: 2px;
   padding-bottom: 2px;
 }
 .param-table tr.unused td {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
 }
 .num-input {
   width: 104px;
@@ -25,48 +25,49 @@
 }
 .tpl-state {
   display: grid;
-  gap: var(--s-h);
-  padding: var(--s1) 0;
-  border-top: 1px solid var(--rule-soft);
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
 }
 .runbar {
   display: flex;
-  height: var(--s1);
+  height: var(--space-2);
   overflow: hidden;
-  background: var(--rule-soft);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-3);
 }
 .runbar-seg {
   display: block;
   min-width: 2px;
 }
 .runbar-seg.gen {
-  background: var(--ink-3);
+  background: var(--color-text-muted);
 }
 .runbar-seg.sub {
-  background: var(--ink);
+  background: var(--color-accent);
 }
 .runbar-seg.solved {
-  background: var(--ink-2);
+  background: var(--color-chart-series-5);
 }
 .runbar-seg.fail {
-  background: var(--bad);
+  background: var(--color-danger);
 }
 .runbar-seg.col {
-  background: var(--ok);
+  background: var(--color-success);
 }
 .runbar-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-h) var(--s2);
-  color: var(--ink-2);
+  gap: var(--space-1) var(--space-4);
+  color: var(--color-text-muted);
 }
 .runbar-legend .lg {
-  margin-right: var(--s-h);
+  margin-right: var(--space-1);
 }
 .runtable {
   max-height: 352px;
   overflow-y: auto;
-  margin-top: var(--s1);
+  margin-top: var(--space-2);
 }
 
 /* ② */
@@ -74,7 +75,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s1) var(--s3);
+  gap: var(--space-2) var(--space-5);
 }
 .source-pick {
   flex: 1 1 448px;
@@ -85,10 +86,10 @@
 }
 .source-counts {
   display: flex;
-  gap: var(--s2);
+  gap: var(--space-4);
 }
 .fixed-row td {
-  background: var(--tint);
+  background: var(--color-surface-2);
 }
 .add-row td {
   border-top: 0;
@@ -99,24 +100,24 @@
 .parts-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 192px), 1fr));
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .partlist {
   margin: 0;
-  padding: var(--s1);
-  border: 1px solid var(--rule-soft);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   min-width: 0;
 }
 .partlist legend {
   font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
-  padding: 0 var(--s-h);
+  color: var(--color-text-muted);
+  padding: 0 var(--space-1);
 }
 .partlist-items {
   display: flex;
   flex-wrap: wrap;
-  gap: 2px var(--s2);
+  gap: 2px var(--space-4);
   max-height: 120px;
   overflow-y: auto;
 }
@@ -124,7 +125,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: flex-end;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
 }
 .timestep-row .field input {
   width: 96px;
@@ -133,14 +134,13 @@
   display: grid;
   max-height: 224px;
   overflow-y: auto;
-  margin-top: var(--s1);
+  margin-top: var(--space-2);
 }
 .tree {
   list-style: none;
   margin: 0;
-  padding-left: var(--s2);
+  padding-left: var(--space-4);
   font: var(--font-r);
-  letter-spacing: var(--track-r);
 }
 .t01-tree {
   padding-left: 0;
@@ -153,7 +153,7 @@
 .eval-row {
   display: flex;
   align-items: end;
-  gap: var(--s2);
+  gap: var(--space-4);
   flex-wrap: wrap;
 }
 .eval-row .field {

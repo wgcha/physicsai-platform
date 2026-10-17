@@ -1,5 +1,6 @@
-// 스위스 격자 디자인 규칙(docs/design/swiss-grid-mockup.html, 2026-10-14) 정적 시험.
-// 글자 크기·모서리·그림자 값은 design/(토큰·글자 역할·격자)에만 둔다. 화면 CSS·컴포넌트 TSX는 역할 유틸(.D .T .B .R)·var(--font-*)만 쓴다.
+// 디자인 규칙(대시보드 톤, 2026-10-17 — 스위스 격자 규칙 대체) 정적 시험.
+// 글자 크기·모서리·그림자 값은 design/(토큰·글자 역할·격자)에만 둔다. 화면 CSS는 var(--font-*)·var(--radius-*)·var(--shadow-*)만 쓴다.
+// 색은 대시보드(simdashboard theme.css)와 같은 다크·라이트 세트, 본문 글자 대비 4.5:1 이상.
 import { describe, expect, it } from "vitest";
 
 const css = import.meta.glob(["../**/*.css", "!../design/**"], { query: "?raw", import: "default", eager: true }) as Record<string, string>;
@@ -18,41 +19,96 @@ function hits(files: Record<string, string>, re: RegExp): string[] {
   return out;
 }
 
-describe("디자인 규칙(스위스 격자)", () => {
+const tokens = () => design["../design/tokens.css"];
+
+/** 테마 블록 하나에서 --color-* 값 */
+function themeColors(theme: "dark" | "light"): Record<string, string> {
+  const src = tokens().replace(/\/\*[\s\S]*?\*\//g, "");
+  const sel = theme === "dark" ? /:root,\s*:root\[data-theme="dark"\]\s*\{([^}]*)\}/ : /:root\[data-theme="light"\]\s*\{([^}]*)\}/;
+  const block = src.match(sel)?.[1] ?? "";
+  return Object.fromEntries([...block.matchAll(/--color-([a-z0-9-]+):\s*([^;]+);/g)].map((m) => [m[1], m[2].trim()]));
+}
+
+function lum(hex: string): number {
+  const h = hex.replace("#", "");
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+function contrast(a: string, b: string): number {
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+describe("디자인 규칙(대시보드 톤)", () => {
   it("검사 대상 파일을 찾는다", () => {
     expect(Object.keys(css).length).toBeGreaterThan(5);
     expect(Object.keys(tsx).length).toBeGreaterThan(30);
     expect(Object.keys(design).sort()).toEqual(["../design/fonts.css", "../design/grid.css", "../design/tokens.css", "../design/typography.css"]);
   });
 
-  it("화면 CSS에 임의 font-size·border-radius·box-shadow·숫자 font 단축 속성이 없다", () => {
-    expect(hits(css, /font-size\s*:|border-radius\s*:|box-shadow\s*:|\bfont\s*:\s*\d/)).toEqual([]);
+  it("화면 CSS: font-size·숫자 font 단축 속성 없음, 모서리·그림자는 토큰(var(--radius-*)·var(--shadow-*)·50%)만", () => {
+    expect(hits(css, /font-size\s*:|\bfont\s*:\s*\d/)).toEqual([]);
+    expect(hits(css, /border-radius\s*:(?!\s*(var\(--radius-[a-z]+\)|50%|0|[0-9.]+px);)/)).toEqual([]);
+    // 픽셀 모서리는 막대 끝 둥글림(1~3px)만
+    expect(hits(css, /border-radius\s*:\s*([4-9]|\d{2,})px/)).toEqual([]);
+    expect(hits(css, /box-shadow\s*:(?!\s*(var\(--shadow-[a-z]+\)|none|inset\s))/)).toEqual([]);
   });
 
   it("컴포넌트 TSX 인라인 스타일에 글자 크기·모서리·그림자가 없다", () => {
     expect(hits(tsx, /fontSize|borderRadius|boxShadow|font-size|border-radius|box-shadow/)).toEqual([]);
   });
 
-  it("CSS에 Google Fonts 등 외부 글꼴 주소가 없다(폐쇄망 번들)", () => {
-    expect(hits({ ...css, ...design }, /fonts\.googleapis|fonts\.gstatic|@import\s+url\(\s*["']?https?:/)).toEqual([]);
+  it("CSS에 Google Fonts·CDN 글꼴 주소가 없다(폐쇄망 번들), 글꼴은 Pretendard(npm) + 대시보드와 같은 스택", () => {
+    expect(hits({ ...css, ...design }, /fonts\.googleapis|fonts\.gstatic|cdn\.jsdelivr|@import\s+url\(\s*["']?https?:/)).toEqual([]);
+    expect(design["../design/fonts.css"]).toMatch(/@import\s+"pretendard\/dist\/web\/variable\/pretendardvariable-dynamic-subset\.css"/);
+    expect(tokens()).toContain(`--sans: "Pretendard Variable", Pretendard, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;`);
+    expect(hits({ ...css, ...design }, /IBM Plex/)).toEqual([]);
   });
 
-  it("글자 역할은 4단계(Display 44/48·Title 18/24·Body 15/24·Reference 12/16)만 정의한다", () => {
-    const tokens = design["../design/tokens.css"];
-    const sizes = [...tokens.matchAll(/--([dtbr])-size:\s*(\d+)px/g)].map((m) => `${m[1]}${m[2]}`);
-    expect(sizes).toEqual(["d44", "t18", "b15", "r12"]);
-    const lines = [...tokens.matchAll(/--([dtbr])-line:\s*(\d+)px/g)].map((m) => Number(m[2]));
-    expect(lines).toEqual([48, 24, 24, 16]);
-    expect(lines.every((l) => l % 8 === 0)).toBe(true);
-    expect(tokens).toMatch(/--row:\s*176px/);
+  it("글자 역할 5단계(Display 24·Title 18·Body 14·Control 13·Reference 12), 모서리 4/8/12, 간격 4~32, 컨트롤 32/38/44, 행 40", () => {
+    const t = tokens();
+    expect([...t.matchAll(/--([dtbcr])-size:\s*(\d+)px/g)].map((m) => `${m[1]}${m[2]}`)).toEqual(["d24", "t18", "b14", "c13", "r12"]);
+    expect([...t.matchAll(/--radius-(sm|md|lg):\s*(\d+)px/g)].map((m) => Number(m[2]))).toEqual([4, 8, 12]);
+    expect([...t.matchAll(/--space-\d:\s*(\d+)px/g)].map((m) => Number(m[1]))).toEqual([4, 8, 12, 16, 24, 32]);
+    expect([...t.matchAll(/--control-h-(sm|md|lg):\s*(\d+)px/g)].map((m) => Number(m[2]))).toEqual([32, 38, 44]);
+    expect(t).toMatch(/--row-h:\s*40px/);
+    expect(design["../design/grid.css"]).toMatch(/gap:\s*var\(--gap\)/);
+    expect(t).toMatch(/--gap:\s*16px/);
   });
 
-  it("색 토큰은 라이트·다크(prefers-color-scheme와 data-theme 두 곳) 모두 정의한다", () => {
-    const tokens = design["../design/tokens.css"];
-    for (const k of ["paper", "cell", "ink", "ink-2", "ink-3", "rule", "rule-soft", "red"]) {
-      expect(tokens.match(new RegExp(`--${k}:`, "g"))?.length, k).toBe(3);
+  it("색: 대시보드 다크·라이트 세트를 [data-theme]로 정의(같은 이름, 기본 dark)", () => {
+    const dark = themeColors("dark");
+    const light = themeColors("light");
+    const need = [
+      "app-bg", "app-background", "surface-1", "surface-2", "surface-3", "border", "border-strong", "text", "text-strong", "text-muted", "accent",
+      "danger", "success", "warning", "danger-surface", "success-surface", "warning-surface", "danger-border", "success-border", "warning-border",
+      "focus", "chart-grid", "chart-axis", "chart-series-1", "chart-series-2", "chart-series-3", "chart-series-4", "chart-series-5", "chart-series-target", "shadow", "overlay",
+    ];
+    for (const k of need) {
+      expect(dark[k], `dark ${k}`).toBeTruthy();
+      expect(light[k], `light ${k}`).toBeTruthy();
     }
-    expect(tokens).toMatch(/prefers-color-scheme:\s*dark/);
-    expect(tokens).toMatch(/:root\[data-theme="dark"\]/);
+    expect(Object.keys(dark).sort()).toEqual(Object.keys(light).sort());
+    // 대시보드 원본 대표값
+    expect(dark["app-bg"]).toBe("#07111d");
+    expect(dark.accent).toBe("#51d3ff");
+    expect(light.accent).toBe("#034ea2");
+    expect(light["surface-1"]).toBe("#ffffff");
+  });
+
+  it("대비 4.5:1 이상(다크·라이트): 본문·보조 글자·상태색·accent 글자, accent 채움 위 글자", () => {
+    for (const theme of ["dark", "light"] as const) {
+      const c = themeColors(theme);
+      const pairs: [string, string][] = [
+        ["text", "surface-1"], ["text", "app-bg"], ["text", "surface-2"], ["text-strong", "surface-1"],
+        ["text-muted", "surface-1"], ["text-muted", "app-bg"], ["text-muted", "surface-2"],
+        ["accent", "surface-1"], ["accent", "surface-selected"], ["accent", "info-surface"],
+        ["danger", "surface-1"], ["danger", "danger-surface"],
+        ["success", "surface-1"], ["success", "success-surface"],
+        ["warning", "surface-1"], ["warning", "warning-surface"],
+        ["text-on-accent", "accent"], ["text", "surface-interactive"],
+      ];
+      for (const [fg, bg] of pairs) expect(contrast(c[fg], c[bg]), `${theme} ${fg}/${bg}`).toBeGreaterThanOrEqual(4.5);
+    }
   });
 });

@@ -5,7 +5,7 @@ import { StudyProvider, useStudy } from "../app/StudyContext";
 import { STAGES, STAGE_MARK } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
 import { StageStepper } from "../shell/StageStepper";
-import { RightPanel } from "../shell/RightPanel";
+import { RunStatusProvider, StatusChips } from "../shell/RunStatus";
 import { Stage1 } from "../stages/stage1/Stage1";
 import { Stage2 } from "../stages/stage2/Stage2";
 import { Stage3 } from "../stages/stage3/Stage3";
@@ -34,51 +34,53 @@ function StudyShell({ projectId, stage, batchId }: { projectId: string; stage: n
     [1, 2, 3, 4, 5].map((n) => [n, study.stage_status?.[String(n)]?.latest_state ?? null]),
   );
   return (
-    <div className="page">
-      <TopBar
-        projectId={projectId}
-        crumbs={[
-          { label: project?.name ?? projectId, to: `/p/${projectId}` },
-          { label: study.title, to: `${base}/stage/3` },
-          batchId ? { label: `${STAGE_MARK[stage]} ${st.name}`, to: `${base}/stage/4` } : { label: `${STAGE_MARK[stage]} ${st.name}` },
-          ...(batchId ? [{ label: "일괄 예측" }] : []),
-        ]}
-      />
-      <div className="stepper-row">
-        <StageStepper base={base} current={stage} stageStates={stageStates} />
-        <Link className="btn small ghost manage-link" to={`${base}/manage`}>
-          Study 관리
-        </Link>
-      </div>
-      {study.status === "ARCHIVED" && (
-        <div className="warn-box">
-          보관된 Study입니다. 실행할 수 없습니다.
-          {study.can_execute && (
-            <>
-              {" "}
-              <Link to={`${base}/manage`}>보관 해제</Link>
-            </>
-          )}
+    <RunStatusProvider>
+      <div className="page">
+        <TopBar
+          projectId={projectId}
+          status={<StatusChips />}
+          crumbs={[
+            { label: project?.name ?? projectId, to: `/p/${projectId}` },
+            { label: study.title, to: `${base}/stage/3` },
+            batchId ? { label: `${STAGE_MARK[stage]} ${st.name}`, to: `${base}/stage/4` } : { label: `${STAGE_MARK[stage]} ${st.name}` },
+            ...(batchId ? [{ label: "일괄 예측" }] : []),
+          ]}
+        />
+        <div className="stepper-row">
+          <StageStepper base={base} current={stage} stageStates={stageStates} />
+          <Link className="btn small ghost manage-link" to={`${base}/manage`}>
+            Study 관리
+          </Link>
         </div>
-      )}
-      <div className="grid workgrid">
-        <main className="workarea grid-contents" aria-label="작업영역">
-          {stage === 1 ? (
-            <Stage1 key={study.id} />
-          ) : stage === 2 ? (
-            <Stage2 key={study.id} />
-          ) : stage === 3 ? (
-            <Stage3 key={study.id} />
-          ) : stage === 4 && batchId ? (
-            <BatchResult key={batchId} batchId={batchId} />
-          ) : stage === 4 ? (
-            <Stage4 key={study.id} />
-          ) : (
-            <Stage5 key={study.id} />
-          )}
-        </main>
-        <RightPanel />
+        {study.status === "ARCHIVED" && (
+          <div className="warn-box">
+            보관된 Study입니다. 실행할 수 없습니다.
+            {study.can_execute && (
+              <>
+                {" "}
+                <Link to={`${base}/manage`}>보관 해제</Link>
+              </>
+            )}
+          </div>
+        )}
+        <div className="grid workgrid">
+          <main className="workarea grid-contents" aria-label="작업영역">
+            {stage === 1 ? (
+              <Stage1 key={study.id} />
+            ) : stage === 2 ? (
+              <Stage2 key={study.id} />
+            ) : stage === 3 ? (
+              <Stage3 key={study.id} />
+            ) : stage === 4 && batchId ? (
+              <BatchResult key={batchId} batchId={batchId} />
+            ) : stage === 4 ? (
+              <Stage4 key={study.id} />
+            ) : (
+              <Stage5 key={study.id} />
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </RunStatusProvider>
   );
 }

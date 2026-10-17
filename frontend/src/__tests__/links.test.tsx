@@ -1,7 +1,7 @@
 // phase2.md §20 V2-FE-6 (컴포넌트 시험, 목 서버)
 import { describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { renderApp, STUDY } from "../test/render";
+import { openStatusDrawer, renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
 import { clearApiCache } from "../api";
 import { recordCalls } from "../test/recordCalls";
@@ -92,6 +92,7 @@ describe("V2-FE-6 오류 묶음·딥링크·③④ 연결·대기열", () => {
 
   it("대기열: 단계 배지와 PBS run 집계", async () => {
     renderApp(`${STUDY}/1`, { user: "power", hpcConfigured: true });
+    await openStatusDrawer();
     const q = await screen.findByRole("region", { name: "실행 대기열" });
     const hpc = await within(q).findByTestId("hpc-summary");
     expect(hpc.textContent).toBe("PBS 2/6 완료 · 실패 1");

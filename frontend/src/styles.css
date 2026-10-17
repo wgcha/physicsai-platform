@@ -1,5 +1,5 @@
-/* PhysicsAI 전역 스타일 진입점 — 스위스 타이포그래피 격자(docs/design/swiss-grid-mockup.html, 2026-10-14 확정).
-   design/: 토큰·글꼴·글자 역할·격자(이 묶음만 font-size·모서리 값을 가진다). styles/: 화면별 규칙. */
+/* PhysicsAI 전역 스타일 진입점 — 대시보드(simdashboard) 톤앤매너(2026-10-17 결정, 스위스 격자 대체).
+   design/: 토큰·글꼴·글자 역할·카드 격자(이 묶음만 font-size·모서리·그림자 값을 가진다). styles/: 화면별 규칙. */
 @import "./design/fonts.css";
 @import "./design/tokens.css";
 @import "./design/typography.css";

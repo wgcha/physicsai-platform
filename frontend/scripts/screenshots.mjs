@@ -2,7 +2,9 @@
 // 사용: npm run build:mock && npm run screenshots            (1차 ③④ → screenshots/)
 //       npm run build:mock && npm run screenshots:phase2     (2차 ①②⑤·환경 점검 → screenshots/phase2/)
 //       npm run build:mock && npm run screenshots:phase3     (3차 ③-5 모델 비교·프로젝트 목록·Study 목록/관리·SPDM 가져오기 → screenshots/phase3/)
-// 격자 측정(스위스 격자, 2026-10-14): 폭 720 이상에서 모든 .cell 높이가 n×행 + (n−1)×선(행 176·선 1px)인지 잰다.
+//       npm run build:mock && node scripts/screenshots.mjs tone   (대시보드 톤 D3-55: ④ 일괄 결과·③·상태 서랍, 다크·라이트, 1920·1280
+//                                                                 → SHOT_OUT 또는 screenshots/tone/)
+// 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
 import { spawn, execSync } from "node:child_process";
@@ -57,7 +59,8 @@ const server = spawn(process.execPath, [path.join(root, "node_modules/vite/bin/v
 
 const phase2 = process.argv.includes("phase2");
 const phase3 = process.argv.includes("phase3");
-const out = path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
+const tone = process.argv.includes("tone");
+const out = tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
@@ -69,7 +72,22 @@ async function openCompare(page) {
   await page.waitForSelector(".model-compare .compare-table");
   await page.evaluate(() => document.querySelector(".model-compare")?.scrollIntoView({ block: "start" }));
 }
-const shots = phase3
+// tone: 일괄 결과에서 DOE 행 하나를 고른다 / 상태 서랍을 연다
+async function pickRow(page) {
+  await page.locator('[data-testid^="row-"] button.link').nth(2).click();
+  await page.waitForTimeout(600);
+}
+async function openDrawer(page) {
+  await page.getByTestId("chip-queue").click();
+  await page.waitForSelector('[role="dialog"][aria-modal="true"] .qrow');
+}
+const shots = tone
+  ? [
+      { name: "stage4_batch", url: `${S}/4/batch/pb-2?${q}`, wait: ".batch-table-card", act: pickRow },
+      { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
+      { name: "stage4_drawer", url: `${S}/4?${q}&batch=running`, wait: ".workarea .card", act: openDrawer, noFull: true },
+    ]
+  : phase3
   ? [
       { name: "stage3_compare", url: `${S}/3?${q}`, wait: ".workarea .card", act: openCompare, noFull: true },
       { name: "projects", url: `${base}/?${q}`, wait: ".tile-list .cell" },
@@ -89,44 +107,40 @@ const shots = phase3
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
     ];
-const sizes = [
-  { w: 1920, h: 1080 },
-  { w: 3840, h: 2160 },
-  { w: 1280, h: 800 },
-];
+const sizes = tone
+  ? [
+      { w: 1920, h: 1080 },
+      { w: 1280, h: 800 },
+    ]
+  : [
+      { w: 1920, h: 1080 },
+      { w: 3840, h: 2160 },
+      { w: 1280, h: 800 },
+    ];
+// 테마(대시보드 localStorage 키) — tone은 다크·라이트 둘 다, 나머지는 기본(dark)
+const themes = tone ? ["dark", "light"] : [null];
 
 const browser = await chromium.launch();
 const report = [];
 try {
-  for (const s of sizes) {
+  for (const s of sizes) for (const theme of themes) {
     const ctx = await browser.newContext({ viewport: { width: s.w, height: s.h }, deviceScaleFactor: 1, locale: "ko-KR" });
+    if (theme) await ctx.addInitScript((t) => localStorage.setItem("simdashboard.workspace.theme.v1", t), theme);
     const page = await ctx.newPage();
     for (const shot of shots) {
       await page.goto(shot.url, { waitUntil: "load" });
       await page.waitForSelector(shot.wait, { timeout: 15000 });
       if (shot.act) await shot.act(page);
       await page.waitForTimeout(1200);
-      const file = path.join(out, `${shot.name}_${s.w}x${s.h}.png`);
+      const file = path.join(out, `${shot.name}${theme ? `_${theme}` : ""}_${s.w}x${s.h}.png`);
       await page.screenshot({ path: file, fullPage: false });
       if (s.w === 1920 && !shot.noFull) await page.screenshot({ path: file.replace(".png", "_full.png"), fullPage: true });
       const m = await page.evaluate(() => {
-        const cs = getComputedStyle(document.documentElement);
-        const row = parseFloat(cs.getPropertyValue("--row")) || 176;
-        const rule = parseFloat(cs.getPropertyValue("--rule-w")) || 1;
         const cells = [...document.querySelectorAll(".grid > .cell, .grid > .grid-contents > .cell")];
-        const bad = [];
-        let maxRows = 0;
-        for (const c of cells) {
-          const h = c.getBoundingClientRect().height;
-          const n = Math.round((h + rule) / (row + rule));
-          maxRows = Math.max(maxRows, n);
-          if (Math.abs(h - (n * row + (n - 1) * rule)) > 0.5 || String(n) !== c.getAttribute("data-rows")) bad.push(`${c.getAttribute("aria-label") ?? c.className}:${h}`);
-        }
         const cols = document.querySelector(".grid") ? getComputedStyle(document.querySelector(".grid")).gridTemplateColumns.split(" ").length : 0;
-        return { scrollW: document.documentElement.scrollWidth, clientW: document.documentElement.clientWidth, cells: cells.length, bad, maxRows, cols };
+        return { scrollW: document.documentElement.scrollWidth, clientW: document.documentElement.clientWidth, cells: cells.length, cols, theme: document.documentElement.dataset.theme ?? "" };
       });
-      report.push({ file: path.relative(root, file), hScroll: m.scrollW > m.clientW, cols: m.cols, cells: m.cells, offGrid: m.bad.length, maxRows: m.maxRows });
-      if (m.bad.length) console.error(path.basename(file), m.bad);
+      report.push({ file: path.relative(root, file), theme: m.theme, hScroll: m.scrollW > m.clientW, cols: m.cols, cells: m.cells });
     }
     await ctx.close();
   }
@@ -135,4 +149,4 @@ try {
   server.kill();
 }
 console.table(report);
-process.exit(report.some((r) => r.hScroll || r.offGrid) ? 1 : 0);
+process.exit(report.some((r) => r.hScroll) ? 1 : 0);

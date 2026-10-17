@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { screen, waitFor, within } from "@testing-library/react";
-import { renderApp, STUDY } from "../test/render";
+import { openStatusDrawer, renderApp, STUDY } from "../test/render";
 
 describe("공통 셸 (V-FE-1, V-FE-7)", () => {
-  it("경로바·스텝퍼·우측 패널 3종을 그린다", async () => {
+  it("경로바·스텝퍼·상태 칩 2개(레이아웃 A — 우측 고정 열 없음), ③에 모델 카드", async () => {
     renderApp(`${STUDY}/3`, { user: "power" });
     const nav = await screen.findByRole("navigation", { name: "경로" });
     expect(within(nav).getByText("AI 예측")).toBeTruthy();
     expect(await within(nav).findByText("쿠션 두께·리브 예측")).toBeTruthy();
     expect(within(nav).getByText(/데이터셋·모델/)).toBeTruthy();
-    expect(screen.getByRole("region", { name: "실행 대기열" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "워커 자원" })).toBeTruthy();
-    expect(screen.getByRole("region", { name: "모델 목록" })).toBeTruthy();
+    expect(screen.getByTestId("chip-queue")).toBeTruthy();
+    expect(screen.getByTestId("chip-resources")).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "실행 대기열" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "워커 자원" })).toBeNull();
+    const work = screen.getByRole("main", { name: "작업영역" });
+    expect(within(work).getByRole("region", { name: "모델 목록" })).toBeTruthy();
     const stepper = screen.getByRole("list", { name: "단계" });
     expect(within(stepper).queryAllByText("2차")).toHaveLength(0);
     expect(within(stepper).getAllByRole("link")).toHaveLength(5);
@@ -50,6 +53,7 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
 
   it("phase3 D3-45: GPU 목록이 비면 회색 한 줄(숨기지 않음), 있으면 GPU 막대", async () => {
     const first = renderApp(`${STUDY}/3`, { user: "power" });
+    await openStatusDrawer();
     let panel = await screen.findByRole("region", { name: "워커 자원" });
     expect(await within(panel).findByRole("meter", { name: "GPU" })).toBeTruthy();
     expect(within(panel).queryByTestId("gpu-none")).toBeNull();
@@ -63,6 +67,8 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
         return r;
       };
     });
+    expect(await screen.findByText(/GPU —/)).toBeTruthy();
+    await openStatusDrawer();
     panel = await screen.findByRole("region", { name: "워커 자원" });
     const none = await within(panel).findByTestId("gpu-none");
     expect(none.textContent).toBe("GPU 정보 없음 — nvidia-smi를 찾지 못했습니다");

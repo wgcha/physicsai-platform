@@ -1,36 +1,27 @@
-import { useCallback, useState } from "react";
-import { api, errorMessage, type JobSummary, type QueueInfo } from "../api";
+import { useState } from "react";
+import { api, errorMessage, type JobSummary } from "../api";
 import { useApp } from "../app/AppContext";
-import { usePolling } from "../hooks/usePolling";
-import { POLL } from "../lib/poll";
 import { JOB_TYPE_LABEL, STAGE_MARK, attentionText, fmtElapsed, hpcSummaryText } from "../lib/format";
 import { ProgressBar, StateDot } from "../components/ui";
 import { useOpenJob } from "../hooks/useOpenJob";
-import { Cell } from "../design/Grid";
+import { useRunStatus } from "../shell/RunStatus";
+import { DrawerSection } from "./DrawerSection";
 
-/** 실행 대기열(§16.2 ①). 순서 이동·취소는 전역 관리자만(§5.3). */
+/** 실행 대기열(§16.2 ①) — 상태 서랍 안. 순서 이동·취소는 전역 관리자만(§5.3). 데이터는 RunStatusProvider 폴링 */
 export function QueuePanel() {
   const { me } = useApp();
-  const [q, setQ] = useState<QueueInfo | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { queue: q, queueError, reloadQueue: load } = useRunStatus();
+  const [actError, setError] = useState<string | null>(null);
+  const error = actError ?? queueError;
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const admin = me.is_global_admin;
   const openJob = useOpenJob();
-
-  const load = useCallback(async () => {
-    try {
-      setQ(await api.queue());
-      setError(null);
-    } catch (e) {
-      setError(errorMessage(e));
-    }
-  }, []);
-  usePolling(load, POLL.queue);
 
   const act = async (fn: () => Promise<unknown>) => {
     try {
       await fn();
       setConfirmId(null);
+      setError(null);
       await load();
     } catch (e) {
       setError(errorMessage(e));
@@ -112,7 +103,7 @@ export function QueuePanel() {
   const hpc = q ? [...q.waiting_hpc, ...q.collecting] : [];
 
   return (
-    <Cell span={3} className="panel" label="실행 대기열" title={<h2 className="T">실행 대기열</h2>} refText={`로컬 슬롯 1개 · 대기 ${queued.length}건`}>
+    <DrawerSection label="실행 대기열" refText={`로컬 슬롯 1개 · 대기 ${queued.length}건`}>
       {error && <div className="error-text small">{error}</div>}
       {!q ? (
         <div className="empty small">불러오는 중…</div>
@@ -142,6 +133,6 @@ export function QueuePanel() {
           )}
         </>
       )}
-    </Cell>
+    </DrawerSection>
   );
 }

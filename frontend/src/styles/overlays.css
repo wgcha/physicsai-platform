@@ -1,9 +1,9 @@
-/* 겹침: 알림 이력 서랍 · 토스트 · 확인 대화상자. 그림자 없이 굵은 선으로 구분한다. */
+/* 겹침: 알림 이력 서랍 · 상태 서랍(대기열·자원) · 토스트 · 확인 대화상자. 둥근 모서리·부드러운 그림자(대시보드 톤). */
 .drawer-scrim {
   position: fixed;
   inset: 0;
   z-index: 40;
-  background: var(--scrim);
+  background: var(--color-overlay);
 }
 .drawer {
   position: fixed;
@@ -14,18 +14,59 @@
   width: min(480px, 92vw);
   display: flex;
   flex-direction: column;
-  background: var(--cell);
-  border-left: 2px solid var(--rule);
+  background: var(--color-surface-raised);
+  border-left: 1px solid var(--color-border);
+  box-shadow: var(--shadow-drawer);
+}
+/* 상태 서랍(레이아웃 A): 상단 바 아래로 겹쳐 열림, 폭 ~420px */
+.status-drawer {
+  width: min(var(--drawer-w), 92vw);
+}
+.drawer-body {
+  flex: 1;
+  overflow-y: auto;
+  display: grid;
+  align-content: start;
+  gap: 20px;
+  padding: 20px;
+}
+.dsec {
+  display: grid;
+  gap: var(--space-2);
+}
+.dsec-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.dsec-head h3 {
+  font: var(--font-b-strong);
+  color: var(--color-text-muted);
+}
+.dsec-body {
+  display: grid;
+  gap: var(--space-2);
 }
 .drawer-head {
   display: flex;
-  align-items: baseline;
-  gap: var(--s1) var(--s2);
-  padding: var(--s2);
-  border-bottom: 1px solid var(--rule);
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  padding: var(--space-4) 20px;
+  border-bottom: 1px solid var(--color-border);
 }
-.drawer-head .btn {
+.drawer-head .btn,
+.drawer-head .drawer-close {
   margin-left: auto;
+}
+.drawer-head .btn + .icon-btn {
+  margin-left: 0;
+}
+.drawer-close {
+  min-width: 36px;
+  height: 36px;
+  border-color: var(--color-border);
+  border-radius: var(--radius-md);
 }
 .notif-list {
   list-style: none;
@@ -37,33 +78,34 @@
 .notif {
   width: 100%;
   display: grid;
-  grid-template-columns: var(--s1) minmax(0, 1fr) auto;
-  gap: var(--s1) var(--s2);
+  grid-template-columns: var(--space-2) minmax(0, 1fr) auto;
+  gap: var(--space-2) var(--space-4);
   align-items: baseline;
-  padding: var(--s1) var(--s2);
+  padding: var(--space-2) var(--space-4);
   border: 0;
-  border-bottom: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--color-border);
   background: transparent;
   text-align: left;
   cursor: pointer;
-  color: var(--ink);
+  color: var(--color-text);
 }
 .notif:hover {
-  background: var(--tint);
+  background: var(--color-surface-2);
 }
 .notif.read {
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .notif.unread .notif-title {
   font-weight: 600;
 }
 .notif-dot {
-  width: var(--s1);
-  height: var(--s1);
-  background: var(--ink);
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
+  background: var(--color-accent);
 }
 .notif.read .notif-dot {
-  background: var(--rule-soft);
+  background: var(--color-border);
 }
 .notif-main {
   display: grid;
@@ -73,56 +115,57 @@
 .notif-time,
 .toast-body {
   font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .notif-time {
   white-space: nowrap;
 }
 .ev-job_failed.notif-dot,
 .ev-job_interrupted.notif-dot {
-  background: var(--bad);
+  background: var(--color-danger);
 }
 .ev-job_succeeded.notif-dot,
 .ev-hpc_collected.notif-dot {
-  background: var(--ok);
+  background: var(--color-success);
 }
 .ev-hpc_cancel_failed.notif-dot,
 .ev-hpc_partial_failed.notif-dot {
-  background: var(--warn);
+  background: var(--color-warning);
 }
 
 .toasts {
   position: fixed;
-  right: var(--s3);
-  bottom: var(--s3);
+  right: var(--space-5);
+  bottom: var(--space-5);
   z-index: 50;
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
   width: min(384px, 90vw);
 }
 .toast {
   display: flex;
   align-items: start;
-  gap: var(--s1);
-  padding: var(--s1) var(--s1) var(--s1) var(--s2);
-  background: var(--cell);
-  border: 1px solid var(--rule);
-  border-left: 4px solid var(--rule);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-pop);
+  border-left: 4px solid var(--color-border-strong);
   animation: toast-in 0.18s ease-out;
 }
 .toast.ev-job_succeeded,
 .toast.ev-hpc_collected {
-  border-left-color: var(--ok);
+  border-left-color: var(--color-success);
 }
 .toast.ev-job_failed,
 .toast.ev-job_interrupted {
-  border-left-color: var(--bad);
+  border-left-color: var(--color-danger);
 }
 .toast.ev-my_turn_next,
 .toast.ev-hpc_cancel_failed,
 .toast.ev-hpc_partial_failed {
-  border-left-color: var(--warn);
+  border-left-color: var(--color-warning);
 }
 .toast-main {
   flex: 1;
@@ -132,7 +175,7 @@
   border: 0;
   padding: 0;
   cursor: pointer;
-  color: var(--ink);
+  color: var(--color-text);
   min-width: 0;
 }
 .toast-title {
@@ -152,35 +195,37 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--s2);
-  background: var(--scrim);
+  padding: var(--space-4);
+  background: var(--color-overlay);
 }
 .dialog {
   width: min(480px, 100%);
-  padding: var(--s3);
-  background: var(--cell);
-  border: 2px solid var(--rule);
+  padding: var(--space-5);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
 }
 .dialog-title {
-  margin: 0 0 var(--s1);
+  margin: 0 0 var(--space-2);
 }
 .dialog-body p {
-  margin: 0 0 var(--s1);
-  color: var(--ink-2);
+  margin: 0 0 var(--space-2);
+  color: var(--color-text-muted);
   overflow-wrap: anywhere;
 }
 .dialog-actions {
   display: flex;
   justify-content: flex-end;
-  gap: var(--s1);
-  margin-top: var(--s3);
+  gap: var(--space-2);
+  margin-top: var(--space-5);
 }
 
-/* 서버 경로 탐색 대화상자(phase3 §12 S7): 루트 버튼 줄 → 위로·경로 → 목록(괘선 행, 선택 = 반전) → 선택 경로·안내 */
+/* 서버 경로 탐색 대화상자(phase3 §12 S7): 루트 버튼 줄 → 위로·경로 → 목록(행, 선택 = selected 바탕·accent) → 선택 경로·안내 */
 .dialog.picker {
   width: min(720px, 100%);
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .dialog.picker:focus {
   outline: none;
@@ -188,45 +233,48 @@
 .picker-roots {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .picker-bar {
   display: flex;
   align-items: center;
-  gap: var(--s1);
-  padding-bottom: var(--s1);
-  border-bottom: 1px solid var(--rule);
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--color-border);
 }
 .picker-crumbs {
   min-width: 0;
   overflow-wrap: anywhere;
 }
 .picker-list {
-  height: calc(var(--row) * 2);
+  height: 352px;
   overflow-y: auto;
-  border-top: 1px solid var(--rule);
-  border-bottom: 1px solid var(--rule);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-app-bg);
 }
 .picker-row {
   display: grid;
-  grid-template-columns: var(--s2) minmax(0, 1fr) auto;
+  grid-template-columns: var(--space-4) minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--space-2);
   width: 100%;
-  padding: var(--s-h) var(--s1);
+  min-height: var(--row-h);
+  padding: var(--space-1) var(--space-3);
   border: 0;
-  border-bottom: 1px solid var(--rule-soft);
+  border-bottom: 1px solid var(--color-border);
   background: transparent;
+  color: var(--color-text);
   text-align: left;
   cursor: pointer;
 }
 .picker-row:hover {
-  background: var(--paper);
+  background: var(--color-surface-interactive);
 }
-.picker-row.on,
-.picker-row.on .muted {
-  background: var(--ink);
-  color: var(--cell);
+.picker-row.on {
+  background: var(--color-surface-selected);
+  color: var(--color-accent);
+  box-shadow: inset 3px 0 var(--color-accent);
 }
 .picker-name {
   overflow: hidden;
@@ -234,7 +282,7 @@
   white-space: nowrap;
 }
 .picker-empty {
-  padding: var(--s1);
+  padding: var(--space-2);
 }
 .picker-target {
   margin: 0;

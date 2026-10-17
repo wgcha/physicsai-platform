@@ -1,36 +1,34 @@
-/* 바둑판 격자: 12열, 행 높이 고정(--row 176px), 가로·세로 간격 = 1px 선.
-   칸 높이 = n × --row + (n − 1) × --rule-w. n은 Cell이 내용 높이로 정한다(Grid.tsx useAutoRows).
-   선은 칸의 outline(1px)이 간격을 채워 그린다 — 빈 자리는 종이색으로 남는다.
-   1280 미만 6열, 720 미만 2열(행 높이 auto). */
+/* 12열 카드 격자(대시보드 톤): 칸 = 둥근 모서리·부드러운 테두리·그림자 카드, 사이 간격 16px, 높이는 내용대로.
+   Study 작업 영역(.workgrid)은 2026-10-17 레이아웃 A로 우측 고정 열을 없앴다 — 화면 컴포넌트의 9열 기준 span을
+   12열로 환산한다(9→12, 6→8, 3→4; 8은 12열 기준 그대로 — ③-5 평가 8 + 모델 4). 1280 미만 6열, 720 미만 2열. */
 .grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
-  grid-auto-rows: var(--row);
-  gap: var(--rule-w);
-  padding: var(--rule-w);
+  gap: var(--gap);
+  align-items: start;
   margin: 0;
+  padding: 0;
   list-style: none;
 }
 .cell {
-  grid-row: span var(--span, 1);
-  background: var(--cell);
-  outline: var(--rule-w) solid var(--rule);
-  padding: var(--pad);
+  background: var(--color-surface-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  padding: var(--space-4) 20px;
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: var(--space-3);
   min-width: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 .cell > * {
-  flex: 0 0 auto;
   min-width: 0;
 }
 .cell-head {
   display: flex;
-  align-items: baseline;
-  gap: var(--s1);
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
 }
 .cell-head > :first-child {
   flex: 1;
@@ -40,14 +38,9 @@
   flex: none;
   white-space: nowrap;
 }
-.cell > .cell-body {
-  flex: 0 1 auto;
-  min-height: 0;
-  overflow: auto;
-}
 .cell-body-in {
   display: grid;
-  gap: var(--s2);
+  gap: var(--space-4);
   align-content: start;
   min-width: 0;
 }
@@ -57,33 +50,36 @@
   justify-self: start;
 }
 .cell-foot {
-  margin-top: auto;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border);
 }
 .c2 { grid-column: span 2; }
 .c3 { grid-column: span 3; }
 .c4 { grid-column: span 4; }
 .c6 { grid-column: span 6; }
+.c8 { grid-column: span 8; }
 .c9 { grid-column: span 9; }
 .c12 { grid-column: span 12; }
-/* 공통 칸(대기열·워커 자원·모델): 10~12열 세로 띠, 시작 행은 Rail이 계산 */
-.cell.rail {
-  grid-column: 10 / span 3;
-  grid-row: var(--row-start, auto) / span var(--span, 1);
-}
-/* 격자 안에서 의미 요소(main·aside)를 유지하면서 칸을 같은 격자에 올린다 */
+/* 격자 안에서 의미 요소(main)를 유지하면서 칸을 같은 격자에 올린다 */
 .grid-contents {
   display: contents;
 }
 
+@media (min-width: 1280px) {
+  .workgrid .c9 { grid-column: span 12; }
+  .workgrid .c6 { grid-column: span 8; }
+  .workgrid .c3 { grid-column: span 4; }
+}
 @media (max-width: 1279px) {
   .grid {
     grid-template-columns: repeat(6, minmax(0, 1fr));
   }
+  .c8,
   .c9,
   .c12 {
     grid-column: span 6;
@@ -91,31 +87,18 @@
   .c4 {
     grid-column: span 3;
   }
-  .cell.rail {
-    grid-column: span 3;
-    grid-row: span var(--span, 1);
-  }
 }
 @media (max-width: 719px) {
   .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    grid-auto-rows: auto;
   }
   .c2,
   .c3,
   .c4,
   .c6,
+  .c8,
   .c9,
-  .c12,
-  .cell.rail {
+  .c12 {
     grid-column: span 2;
-  }
-  .cell,
-  .cell.rail {
-    grid-row: auto;
-    overflow: visible;
-  }
-  .cell > .cell-body {
-    overflow: visible;
   }
 }

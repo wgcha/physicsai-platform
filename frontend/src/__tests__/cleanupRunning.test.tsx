@@ -129,7 +129,7 @@ describe("D3-24 화면: 정리 진행 중 안내", () => {
     expect(await within(card).findByText(BUSY_SCAN)).toBeTruthy();
   });
 
-  it("우측 모델 패널: 정리 중이면 Final로 지정 비활성 + 안내, 끝나면 활성", async () => {
+  it("③ 모델 카드: 정리 중이면 Final로 지정 비활성 + 안내, 끝나면 활성", async () => {
     CLEANUP_POLL.ms = 60;
     const { server } = renderApp(`${STUDY}/3`, { user: "power" }, startCleanup);
     const panel = await screen.findByRole("region", { name: "모델 목록" });

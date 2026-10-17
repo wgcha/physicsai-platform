@@ -3,7 +3,7 @@ import type { JobState } from "../api";
 import { JOB_STATE_LABEL, STAGES, STAGE_MARK } from "../lib/format";
 import { StateDot } from "../components/ui";
 
-/** 단계 표시: 큰 번호 01~05(Display) + 이름·상태(Reference), 세로 구분선, 현재 단계 위쪽 빨간 4px */
+/** 단계 탐색(대시보드 톤, 2026-10-17): 작은 단계 버튼 ①~⑤ — 현재 단계 accent 테두리·selected 바탕, 최근 작업 상태 점 */
 export function StageStepper({
   base,
   current,
@@ -21,14 +21,9 @@ export function StageStepper({
         return (
           <li key={s.n} className={`step ${on ? "current" : ""}`}>
             <Link to={`${base}/stage/${s.n}`} aria-current={on ? "step" : undefined}>
-              <span className={`step-no D ${on ? "red" : "mute"}`} aria-hidden="true">
-                {String(s.n).padStart(2, "0")}
-              </span>
-              <span className="step-label R">
-                <span className="step-mark">{STAGE_MARK[s.n]}</span> <span className="step-name">{s.name}</span>
-                {st && <span className="step-state"> · {JOB_STATE_LABEL[st]}</span>}
-                <StateDot state={st} />
-              </span>
+              <span className="step-mark">{STAGE_MARK[s.n]}</span> <span className="step-name">{s.name}</span>
+              {st && <span className="step-state sr-only"> · {JOB_STATE_LABEL[st]}</span>}
+              <StateDot state={st} />
             </Link>
           </li>
         );

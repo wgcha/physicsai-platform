@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, type NotificationItem } from "../api";
 import { useNotifications } from "../hooks/useNotifications";
 import { fmtTime } from "../lib/format";
@@ -31,7 +32,8 @@ export function NotificationDrawer({ onClose }: { onClose: () => void }) {
     if (items && items.length >= limit && el.scrollTop + el.clientHeight > el.scrollHeight - 40) setLimit((l) => Math.min(200, l + 50));
   };
 
-  return (
+  // 상단 바(backdrop-filter) 밖 body로 내보내 화면 전체 높이로 연다
+  return createPortal(
     <>
       <div className="drawer-scrim" onClick={onClose} />
       <aside className="drawer" role="dialog" aria-label="알림 이력">
@@ -74,6 +76,7 @@ export function NotificationDrawer({ onClose }: { onClose: () => void }) {
           </ul>
         )}
       </aside>
-    </>
+    </>,
+    document.body,
   );
 }

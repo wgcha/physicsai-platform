@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useApp, roleIn } from "../app/AppContext";
 import { loginUrl } from "../app/AuthGate";
@@ -23,7 +23,8 @@ export function PathBar({ crumbs }: { crumbs: Crumb[] }) {
   );
 }
 
-export function TopBar({ crumbs, projectId }: { crumbs: Crumb[]; projectId?: string }) {
+/** 상단 바: 브랜드 · 경로 · (Study 화면) 상태 칩 · 관리 · 대시보드로 · 알림 벨 · 사용자 */
+export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; projectId?: string; status?: ReactNode }) {
   const { me, status } = useApp();
   const role = roleIn(me, projectId);
   return (
@@ -37,7 +38,8 @@ export function TopBar({ crumbs, projectId }: { crumbs: Crumb[]; projectId?: str
           시연 모드
         </span>
       )}
-      <div className="topbar-right R">
+      <div className="topbar-right">
+        {chips && <div className="status-chips">{chips}</div>}
         {me.is_global_admin && <AdminMenu />}
         <a className="topbar-link" href={status?.auth?.login_url || loginUrl()}>대시보드로</a>
         <NotificationBell />

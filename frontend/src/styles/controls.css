@@ -1,84 +1,103 @@
-/* 버튼·입력·폼·접기. 버튼은 각진 외곽선(채움 없음), 마우스를 올리면 반전. */
+/* 버튼·입력·폼·세그먼트·접기(대시보드 톤): 주요 = accent 채움, 보조 = 테두리(border-strong)·raised 바탕, 위험 = danger. */
 button {
   color: inherit;
 }
 .btn {
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
-  height: var(--control);
-  padding: 0 15px;
-  border: 1px solid var(--ink);
-  background: transparent;
-  color: var(--ink);
-  font: var(--font-r-medium);
-  letter-spacing: var(--track-r);
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
+  font: var(--font-c);
   white-space: nowrap;
   cursor: pointer;
   text-decoration: none;
+  transition: border-color 0.12s, color 0.12s, background-color 0.12s;
 }
 .btn:hover:not(:disabled) {
-  background: var(--ink);
-  color: var(--cell);
+  border-color: var(--color-focus);
+  color: var(--color-accent);
+  text-decoration: none;
 }
 .btn.primary {
-  border-width: 2px;
-  padding: 0 14px;
-  font: var(--font-r-strong);
+  border-color: var(--color-accent);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  font: var(--font-c-strong);
+  box-shadow: var(--shadow-primary);
+}
+.btn.primary:hover:not(:disabled) {
+  color: var(--color-text-on-accent);
+  filter: brightness(1.08);
 }
 .btn.ghost {
-  border-color: var(--ink-3);
+  background: transparent;
 }
 .btn.danger {
-  border-color: var(--bad);
-  color: var(--bad);
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
 }
 .btn.danger:hover:not(:disabled) {
-  background: var(--bad);
-  color: var(--cell);
+  border-color: var(--color-danger);
+  color: var(--color-danger);
 }
 .btn.small {
-  height: var(--s3);
-  padding: 0 7px;
+  height: var(--control-h-xs);
+  padding: 0 var(--space-2);
+  font: var(--font-r-medium);
 }
 .btn.on {
-  background: var(--ink);
-  color: var(--cell);
+  border-color: var(--color-accent);
+  background: var(--color-surface-selected);
+  color: var(--color-accent);
 }
 .btn:disabled {
-  border-color: var(--ink-3);
-  color: var(--ink-3);
+  opacity: 0.5;
+  box-shadow: none;
   cursor: not-allowed;
 }
 .link {
   background: none;
   border: 0;
   padding: 0;
-  color: var(--ink);
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 3px;
+  color: var(--color-accent);
   cursor: pointer;
   text-align: left;
 }
+.link:hover:not(:disabled) {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .link:disabled {
-  color: var(--ink-3);
+  color: var(--color-text-muted);
+  opacity: 0.7;
   cursor: not-allowed;
 }
 .icon-btn {
+  display: inline-grid;
+  place-items: center;
+  min-width: var(--control-h-xs);
+  height: var(--control-h-xs);
   background: none;
   border: 1px solid transparent;
-  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0 var(--s-h);
+  padding: 0 var(--space-1);
   font: var(--font-r);
 }
 .icon-btn:hover:not(:disabled) {
-  border-color: var(--ink);
-  color: var(--ink);
+  border-color: var(--color-border-strong);
+  color: var(--color-text);
 }
 .icon-btn:disabled {
-  color: var(--ink-3);
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -87,138 +106,171 @@ input[type="number"],
 input:not([type]),
 select,
 textarea {
-  height: var(--control);
-  padding: 0 var(--s1);
-  border: 1px solid var(--ink-3);
-  background: var(--cell);
-  color: var(--ink);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  color: var(--color-text);
   min-width: 0;
 }
+textarea {
+  height: auto;
+  padding: var(--space-2);
+}
 input:focus,
-select:focus {
-  border-color: var(--ink);
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--color-focus);
+  box-shadow: var(--shadow-focus);
 }
 input[aria-invalid="true"] {
-  border-color: var(--bad);
+  border-color: var(--color-danger);
 }
 input:disabled,
-select:disabled {
-  background: var(--tint);
-  color: var(--ink-3);
+select:disabled,
+textarea:disabled {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  opacity: 0.8;
 }
 input[type="checkbox"],
 input[type="radio"],
 input[type="range"] {
-  accent-color: var(--ink);
+  accent-color: var(--color-accent);
 }
 .check {
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--space-2);
   cursor: pointer;
 }
 .field {
   display: grid;
-  gap: var(--s-h);
+  gap: var(--space-1);
   min-width: 0;
 }
 .field-label {
-  font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  font: var(--font-c-strong);
+  color: var(--color-text-muted);
 }
 .field-hint {
   font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .inline-field {
   display: inline-flex;
   align-items: center;
-  gap: var(--s1);
-  font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  gap: var(--space-2);
+  font: var(--font-c);
+  color: var(--color-text-muted);
 }
 .form-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 224px), 1fr));
-  gap: var(--s2);
+  gap: var(--space-4);
 }
 .checks {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s2);
-  margin-top: var(--s1);
+  gap: var(--space-2) var(--space-4);
+  margin-top: var(--space-2);
 }
+/* 세그먼트 컨트롤: 바탕 위 둥근 묶음, 고른 항목 = accent 채움 */
 .seg {
   display: inline-flex;
-  border: 1px solid var(--ink);
+  gap: var(--space-1);
+  padding: var(--space-1);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-app-bg);
   width: fit-content;
 }
 .seg button {
   border: 0;
+  border-radius: var(--radius-md);
   background: transparent;
   height: 30px;
-  padding: 0 var(--s2);
+  padding: 0 var(--space-4);
   cursor: pointer;
-  color: var(--ink);
-  font: var(--font-r-medium);
-  letter-spacing: var(--track-r);
+  color: var(--color-text-muted);
+  font: var(--font-c);
 }
-.seg button + button {
-  border-left: 1px solid var(--ink);
+.seg button:hover:not(:disabled):not(.on) {
+  color: var(--color-text);
+  background: var(--color-surface-interactive);
 }
 .seg button.on {
-  background: var(--ink);
-  color: var(--cell);
+  background: var(--color-accent);
+  color: var(--color-text-on-accent);
+  font: var(--font-c-strong);
 }
 .readonly {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-h);
-  height: var(--control);
-  padding: 0 var(--s2);
-  border: 1px dashed var(--ink-3);
-  color: var(--ink-2);
-  font: var(--font-r-medium);
-  letter-spacing: var(--track-r);
+  gap: var(--space-1);
+  height: var(--control-h-sm);
+  padding: 0 var(--space-4);
+  border: 1px dashed var(--color-border-strong);
+  border-radius: var(--radius-md);
+  color: var(--color-text-muted);
+  font: var(--font-c);
 }
 .readonly.small {
-  height: var(--s3);
-  padding: 0 var(--s1);
+  height: var(--control-h-xs);
+  padding: 0 var(--space-2);
+}
+
+/* 탭(밑줄형) */
+[role="tablist"].tabs {
+  display: flex;
+  gap: var(--space-4);
+}
+.tabs [role="tab"] {
+  padding: 6px 2px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: var(--font-c);
+  cursor: pointer;
+}
+.tabs [role="tab"][aria-selected="true"] {
+  border-bottom-color: var(--color-accent);
+  color: var(--color-text-strong);
 }
 
 /* 접기·안내 */
 .advanced summary {
   cursor: pointer;
-  color: var(--ink-2);
-  font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
+  color: var(--color-text-muted);
+  font: var(--font-c-strong);
   width: fit-content;
 }
 .advanced-body {
-  margin-top: var(--s1);
-  padding: var(--s2);
-  border: 1px solid var(--rule-soft);
+  margin-top: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
 }
 .note {
   font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
-  border-left: 2px solid var(--rule);
-  padding-left: var(--s1);
+  color: var(--color-text-muted);
+  border-left: 3px solid var(--color-border-strong);
+  padding-left: var(--space-2);
 }
 .steps-text {
   margin: 0;
-  padding-left: var(--s3);
+  padding-left: var(--space-5);
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .feature-off-row {
   display: flex;
   align-items: baseline;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .feature-off {
   margin: 0;
@@ -227,38 +279,40 @@ input[type="range"] {
 /* 경로 입력·코드 줄 */
 .pathinput {
   display: grid;
-  gap: var(--s-h);
+  gap: var(--space-1);
 }
 .pathinput-row {
   display: flex;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .pathinput-row input {
   flex: 1;
 }
 .inspect {
-  padding: var(--s1) var(--s2);
-  border-left: 4px solid var(--ink-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
 }
 .inspect.ok {
-  border-left-color: var(--ok);
-  background: var(--ok-weak);
+  border-color: var(--color-success-border);
+  background: var(--color-success-surface);
 }
 .inspect.bad {
-  border-left-color: var(--bad);
-  background: var(--bad-weak);
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
 }
 .problems {
-  margin: var(--s-h) 0 0;
-  padding-left: var(--s2);
+  margin: var(--space-1) 0 0;
+  padding-left: var(--space-4);
 }
 .codeline {
   display: flex;
   align-items: center;
-  gap: var(--s1);
-  padding: var(--s-h) var(--s-h) var(--s-h) var(--s1);
-  background: var(--tint);
-  border: 1px solid var(--rule-soft);
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-1) var(--space-1) var(--space-2);
+  background: var(--color-app-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
   min-width: 0;
 }
 .codeline code {

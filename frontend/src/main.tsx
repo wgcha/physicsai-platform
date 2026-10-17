@@ -2,7 +2,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./app/App";
 import "./styles.css";
+import { applyTheme, readTheme } from "./design/theme";
 
+// 대시보드 테마를 첫 렌더 전에 적용(깜박임 방지). 이후 변경은 App의 useThemeSync가 따라간다.
+applyTheme(readTheme());
 
 async function start() {
   if (__MOCK__) {

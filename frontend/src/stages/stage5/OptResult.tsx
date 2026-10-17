@@ -68,7 +68,7 @@ function HistoryChart({ table, responses }: { table: SummaryTable; responses: Op
         ariaLabel="설계 이력"
         xLabel="설계"
         yLabel={col}
-        lines={best.length ? [{ name: "best", pts: best, className: "chart-line s1" }] : []}
+        lines={best.length ? [{ name: "best", pts: best, className: "chart-line" }] : []}
         points={pts.map(([x, y]) => ({ x, y, className: "chart-pt", title: `설계 ${x}: ${y}` }))}
       />
       {best.length > 0 && (
@@ -77,7 +77,7 @@ function HistoryChart({ table, responses }: { table: SummaryTable; responses: Op
             <span className="lg sample" /> 설계별 값
           </span>
           <span>
-            <span className="lg line s1" /> 최적값 추이
+            <span className="lg line" /> 최적값 추이
           </span>
         </div>
       )}

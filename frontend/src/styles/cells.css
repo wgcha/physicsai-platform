@@ -1,4 +1,4 @@
-/* 칸 안 공용 요소: 실행 줄·작업 상태·진행 막대·로그·표·배지 */
+/* 카드 안 공용 요소: 실행 줄·작업 상태 pill·진행 막대·로그·요약 */
 .cell-foot > .note,
 .cell-foot > p {
   flex: 1 1 240px;
@@ -13,19 +13,19 @@
   flex-basis: 100%;
 }
 .panel .cell-body-in {
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 
 /* 실행 버튼·작업 상태 */
 .run-action {
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
 }
 .run-action-row {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
 }
 .run-action-row > .job-inline {
   flex: 1 1 288px;
@@ -33,21 +33,23 @@
 }
 .job-inline {
   display: grid;
-  gap: var(--s1);
-  padding: var(--s-h) var(--s1);
-  border: 1px solid var(--rule-soft);
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
 }
 .job-inline-row {
   display: flex;
   align-items: center;
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
   flex-wrap: wrap;
   min-width: 0;
 }
 .job-inline-progress {
   display: flex;
   align-items: center;
-  gap: var(--s1);
+  gap: var(--space-2);
   flex: 1;
   min-width: 192px;
 }
@@ -59,24 +61,58 @@
   display: inline-flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--s-h);
+  gap: var(--space-1);
 }
-.state {
+/* 상태 pill(대시보드식): 완료 success · 실행 중 accent · 대기 muted · 실패 danger · 취소 muted */
+.state,
+.pill {
   display: inline-flex;
   align-items: center;
-  gap: var(--s-h);
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
   font: var(--font-r-strong);
-  letter-spacing: var(--track-r);
+  white-space: nowrap;
+}
+.state-succeeded,
+.pill.ok {
+  background: var(--color-success-surface);
+  color: var(--color-success);
+}
+.state-running,
+.state-waiting_hpc,
+.state-collecting,
+.pill.run {
+  background: var(--color-info-surface);
+  color: var(--color-accent);
+}
+.state-failed,
+.state-interrupted,
+.pill.bad {
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.pill.warn {
+  background: var(--color-warning-surface);
+  color: var(--color-warning);
+}
+.state .dot {
+  width: 6px;
+  height: 6px;
 }
 .progress {
-  height: var(--s-h);
-  background: var(--rule-soft);
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-surface-3);
   overflow: hidden;
   position: relative;
 }
 .progress-fill {
   height: 100%;
-  background: var(--ink);
+  border-radius: 3px;
+  background: var(--color-accent);
   transition: width 0.4s;
 }
 .progress-fill.indeterminate {
@@ -94,25 +130,27 @@
 }
 .dot {
   display: inline-block;
-  width: var(--s1);
-  height: var(--s1);
+  width: var(--space-2);
+  height: var(--space-2);
+  border-radius: 50%;
   flex: none;
 }
 .dot.ok {
-  background: var(--ok);
+  background: var(--color-success);
 }
 .dot.bad {
-  background: var(--bad);
+  background: var(--color-danger);
 }
 .dot.wait {
-  background: var(--warn);
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--color-text-muted);
 }
 .dot.run {
-  background: var(--ink);
+  background: var(--color-accent);
   animation: pulse 1.4s ease-in-out infinite;
 }
 .dot.off {
-  background: var(--ink-3);
+  background: var(--color-text-muted);
 }
 @keyframes pulse {
   50% {
@@ -120,29 +158,36 @@
   }
 }
 .logview {
-  border: 1px solid var(--rule-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  overflow: hidden;
 }
 .logview-bar {
   display: flex;
-  gap: var(--s2);
+  gap: var(--space-4);
   align-items: center;
-  padding: var(--s-h) var(--s1);
-  border-bottom: 1px solid var(--rule-soft);
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
 }
 .logview pre,
 .textview {
   margin: 0;
   max-height: 256px;
   overflow: auto;
-  padding: var(--s1);
+  padding: var(--space-2);
   font: var(--font-r-mono);
   white-space: pre-wrap;
   word-break: break-all;
 }
+.logview pre {
+  background: var(--color-app-bg);
+}
 .textview {
   max-height: 352px;
-  background: var(--ink);
-  color: var(--cell);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-app-bg);
+  color: var(--color-text);
 }
 
 /* 결과 줄·요약 */
@@ -156,46 +201,45 @@
 .contour,
 .losschart {
   display: grid;
-  gap: var(--s1);
+  gap: var(--space-2);
   min-width: 0;
 }
 .result-line {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--s-h) var(--s2);
-  padding: var(--s1) 0;
-  border-top: 1px solid var(--rule-soft);
+  gap: var(--space-1) var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
 }
 .summary-grid {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--s-h) var(--s2);
+  gap: var(--space-1) var(--space-4);
 }
 .kv {
   display: grid;
   grid-template-columns: max-content minmax(0, 1fr);
-  gap: var(--s1) var(--s2);
+  gap: var(--space-2) var(--space-4);
   align-items: baseline;
 }
 .kv dt {
   font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
 .kv-row {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--s-h) var(--s2);
+  gap: var(--space-1) var(--space-4);
 }
 .input-source {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--s2);
-  padding: var(--s1) 0;
-  border-top: 1px solid var(--rule-soft);
-  border-bottom: 1px solid var(--rule-soft);
+  gap: var(--space-4);
+  padding: var(--space-2) 0;
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   min-width: 0;
 }
 .input-source .summary-line {
@@ -204,26 +248,27 @@
 .tiles {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s2);
+  gap: var(--space-4);
 }
 .tile-stat {
   display: grid;
-  border-top: 1px solid var(--rule);
-  padding-top: var(--s1);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
 }
 .tile-num {
   font: var(--font-d);
-  letter-spacing: -0.01em;
+  color: var(--color-text-strong);
 }
 .tile-stat.ok .tile-num {
-  color: var(--ok);
+  color: var(--color-success);
 }
 .tile-stat.bad .tile-num {
-  color: var(--bad);
+  color: var(--color-danger);
 }
 .tile-den,
 .tile-cap {
   font: var(--font-r);
-  letter-spacing: var(--track-r);
-  color: var(--ink-2);
+  color: var(--color-text-muted);
 }
