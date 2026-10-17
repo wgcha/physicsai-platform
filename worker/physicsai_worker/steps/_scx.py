@@ -18,6 +18,7 @@ import fnmatch
 import os
 import tempfile
 import time
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -31,7 +32,15 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import sha256_file
 from physicsai_core.hpc.gateway import HpcGatewayError
 from physicsai_core.masking import bundle_masker
-from physicsai_core.paths import PathError, allowed_roots, assert_writable, check_user_path, is_link_or_reparse, is_under
+from physicsai_core.paths import (
+    PathError,
+    allowed_roots,
+    assert_writable,
+    check_user_path,
+    is_link_or_reparse,
+    is_under,
+    windows_reserved_name,
+)
 from simdash_adapters.hpc.scx import ScxRadiossRequest
 from simdash_adapters.hpc.scx_naming import file_name_problem, forbidden_reason, join_rel, rel_problem, sanitize_project
 
@@ -154,7 +163,12 @@ def plan_remote_dirs(ctx: Any, gw: Any, plans: list[RunStage], health: dict[str,
     parent = join_rel(gw.base, project)
     forbidden = list(health.get("forbidden_prefixes") or [])
     seg_from = len(gw.base.split("/")) if gw.base else 0
+    home = gw.cfg.home_display
     for plan in plans:
+        # 목록 조회 전에 먼저 검사(SPDM 루트 안·그 상위 프로젝트 폴더면 relay를 부르지 않음)
+        why = forbidden_reason(join_rel(parent, plan.job_name), forbidden, base=gw.base, home_display=home)
+        if why:
+            raise StepFailure("SCX_PATH_NOT_ALLOWED", f"SCX 잡 폴더를 쓸 수 없습니다({why}): {gw.display(join_rel(parent, plan.job_name))}")
         try:
             name = gw.ensure_new_dir(parent, plan.job_name)
         except HpcGatewayError as exc:
@@ -164,7 +178,7 @@ def plan_remote_dirs(ctx: Any, gw: Any, plans: list[RunStage], health: dict[str,
                 raise StepFailure("SCX_PATH_NOT_ALLOWED", mask(ctx, f"{plan.run_key}: SCX 드라이브 경로 거부 — {exc}")) from None
             raise StepFailure("HPC_SUBMIT_FAILED", mask(ctx, f"{plan.run_key}: 드라이브 폴더 확인 실패 — {exc}")) from None
         rel = join_rel(parent, name)
-        why = rel_problem(rel, segment_check_from=seg_from) or forbidden_reason(rel, forbidden, base=gw.base)
+        why = rel_problem(rel, segment_check_from=seg_from) or forbidden_reason(rel, forbidden, base=gw.base, home_display=home)
         if why:
             raise StepFailure("SCX_PATH_NOT_ALLOWED", f"SCX 잡 폴더를 쓸 수 없습니다({why}): {gw.display(rel)}")
         plan.remote_dir = rel
@@ -202,7 +216,7 @@ def stage_in(ctx: Any, gw: Any, plans: list[RunStage], attempt_no: int) -> None:
     try:
         for p in plans:
             gw.mkdirs(p.remote_dir, f"{p.request_id}:mkdir")
-            for f in p.files:
+            for idx, f in enumerate(p.files, 1):
                 ctx.checkpoint()
 
                 def tick(n: int) -> None:
@@ -210,7 +224,7 @@ def stage_in(ctx: Any, gw: Any, plans: list[RunStage], attempt_no: int) -> None:
                     ctx.checkpoint()
 
                 bid = gw.upload(os.path.join(p.input_dir, f["name"]), p.remote_dir, f["name"], f["sha256"],
-                                f"{p.request_id}:f:{f['name']}", size=int(f["size"]), on_chunk=tick)
+                                f"{p.request_id}:f:{idx}", size=int(f["size"]), on_chunk=tick)  # 이름 대신 순번(헤더 ASCII 규칙)
                 p.batches.append(bid)
             ctx.log(f"SCX 업로드 요청 {p.run_key}: {len(p.files)}개 → {gw.display(p.remote_dir)}")
         _wait_batches(ctx, gw, plans, total)
@@ -276,10 +290,9 @@ def build_request(ctx: Any, gw: Any, p: RunStage) -> ScxRadiossRequest:
     cfg = gw.cfg
     names = [f["name"] for f in p.files]
     engine: list[str] = []
-    if p.starter.endswith("_0000.rad"):
-        eng = p.starter[: -len("_0000.rad")] + "_0001.rad"
-        if eng in names:
-            engine = [eng]
+    if p.starter.casefold().endswith("_0000.rad"):
+        want = (p.starter[: -len("_0000.rad")] + "_0001.rad").casefold()
+        engine = [n for n in names if n.casefold() == want][:1]
     rest = sorted(n for n in names if n != p.starter and n not in engine) if cfg.list_additional_paths else []
     over = ctx.params.get("hpc") or {}
     ncpu = int(over.get("ncpus") or cfg.ncpu)
@@ -412,10 +425,16 @@ def _walk(gw: Any, root: str, max_depth: int) -> list[tuple[str, int]]:
     return sorted(out)
 
 
+WINDOWS_BAD_CHARS = frozenset('?*<>"|:')
+
+
 def _safe_target(ctx: Any, result_dir: str, rel: str) -> str:
+    """원격 상대 경로 → 결과 폴더 안 로컬 경로. Windows에서 쓸 수 없는 이름(예약어 CON·NUL…, `?*<>"|:`, 끝 마침표·공백)·`..`·
+    링크·AI 루트 밖·이미 있는 폴더 이름이면 PATH_UNSAFE."""
     parts = rel.split("/")
-    if any(p in ("", ".", "..") or file_name_problem(p) for p in parts):
-        raise CollectFail("PATH_UNSAFE", f"결과 파일 경로를 쓸 수 없습니다: {rel[:200]}")
+    for p in parts:
+        if p in ("", ".", "..") or file_name_problem(p) or windows_reserved_name(p) or WINDOWS_BAD_CHARS.intersection(p):
+            raise CollectFail("PATH_UNSAFE", f"결과 파일 경로를 쓸 수 없습니다(Windows 예약 이름·금지 문자 포함): {rel[:200]}")
     dst = os.path.join(result_dir, *parts)
     try:
         check_user_path(dst, allowed_roots(ctx.settings, imports=False), expect="file", must_exist=False)
@@ -426,7 +445,26 @@ def _safe_target(ctx: Any, result_dir: str, rel: str) -> str:
         raise CollectFail("PATH_UNSAFE", f"{exc.message}: {rel[:200]}") from None
     if not is_under(os.path.realpath(dst), os.path.realpath(result_dir)):
         raise CollectFail("PATH_UNSAFE", f"결과 폴더 밖 경로입니다: {rel[:200]}")
+    if os.path.isdir(dst):
+        raise CollectFail("PATH_UNSAFE", f"같은 이름의 폴더가 이미 있습니다: {rel[:200]}")
     return dst
+
+
+def _collisions(rels: list[str]) -> str | None:
+    """대소문자만 다른 경로(A.h3d·a.h3d) 또는 파일 이름이 다른 파일의 상위 폴더 이름과 같은 경우(Windows에서 덮어씀·충돌)."""
+    seen: dict[str, str] = {}
+    for r in rels:
+        k = unicodedata.normalize("NFC", r).casefold()
+        if k in seen:
+            return f"{seen[k]} · {r}"
+        seen[k] = r
+    for r in rels:
+        parts = unicodedata.normalize("NFC", r).casefold().split("/")
+        for i in range(1, len(parts)):
+            d = "/".join(parts[:i])
+            if d in seen:
+                return f"{seen[d]} · {r}"
+    return None
 
 
 def collect_run(ctx: Any, gw: Any, row: dict[str, Any], result_dir: str, health_max: int | None) -> list[str]:
@@ -458,24 +496,34 @@ def collect_run(ctx: Any, gw: Any, row: dict[str, Any], result_dir: str, health_
     big = [r for r, sz in files if sz > limit]
     if big:
         raise CollectFail("COLLECT_FAILED", f"회수 파일이 상한을 넘습니다: {big[0]}")
+    clash = _collisions([r for r, _sz in files])
+    if clash:
+        raise CollectFail("PATH_UNSAFE", f"대소문자·폴더 이름만 다른 결과 파일이 겹칩니다: {clash[:200]}")
+    targets = [(r, _safe_target(ctx, result_dir, r)) for r, _sz in files]  # 하나라도 안 되면 내려받기 전에 그 run 실패
     got: list[str] = []
-    for r, _sz in files:
-        dst = _safe_target(ctx, result_dir, r)
-        os.makedirs(os.path.dirname(dst), exist_ok=True)
-        for attempt in (1, 2):
-            ctx.checkpoint()
-            # `<이름>.<임의>.part`(같은 폴더) — 성공하면 os.replace, 실패·취소면 tempfile이 지운다(.part를 남기지 않음, §16.4 9)
-            with tempfile.NamedTemporaryFile(dir=os.path.dirname(dst), prefix=os.path.basename(dst) + ".", suffix=".part",
-                                             delete=True, delete_on_close=False) as tf:
-                tf.close()
-                try:
-                    gw.download(f"{out_rel}/{r}", tf.name, limit, on_chunk=lambda _n: ctx.checkpoint())
-                except HpcGatewayError as exc:
-                    if exc.relay_code == "HASH_MISMATCH" and attempt == 1:
-                        ctx.log(f"SCX 다운로드 해시 불일치 — 1회 다시 받습니다: {r}")
-                        continue
-                    raise CollectFail("COLLECT_FAILED", f"SCX 다운로드 실패({r}): {mask(ctx, str(exc))}") from None
-                os.replace(tf.name, dst)
-            got.append(r)
-            break
+    for r, dst in targets:
+        try:
+            got.append(_download_one(ctx, gw, f"{out_rel}/{r}", r, dst, limit))
+        except OSError as exc:
+            raise CollectFail("COLLECT_FAILED", f"결과 파일을 쓸 수 없습니다({type(exc).__name__}): {r[:200]}") from None
     return got
+
+
+def _download_one(ctx: Any, gw: Any, remote: str, r: str, dst: str, limit: int) -> str:
+    os.makedirs(os.path.dirname(dst), exist_ok=True)
+    for attempt in (1, 2):
+        ctx.checkpoint()
+        # `<이름>.<임의>.part`(같은 폴더) — 성공하면 os.replace, 실패·취소면 tempfile이 지운다(.part를 남기지 않음, §16.4 9)
+        with tempfile.NamedTemporaryFile(dir=os.path.dirname(dst), prefix=os.path.basename(dst) + ".", suffix=".part",
+                                         delete=True, delete_on_close=False) as tf:
+            tf.close()
+            try:
+                gw.download(remote, tf.name, limit, on_chunk=lambda _n: ctx.checkpoint())
+            except HpcGatewayError as exc:
+                if exc.relay_code == "HASH_MISMATCH" and attempt == 1:
+                    ctx.log(f"SCX 다운로드 해시 불일치 — 1회 다시 받습니다: {r}")
+                    continue
+                raise CollectFail("COLLECT_FAILED", f"SCX 다운로드 실패({r}): {mask(ctx, str(exc))}") from None
+            os.replace(tf.name, dst)
+        return r
+    raise CollectFail("COLLECT_FAILED", f"SCX 다운로드 실패({r})")

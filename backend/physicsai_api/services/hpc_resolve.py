@@ -39,6 +39,10 @@ def request_resolve(ctx: AppContext, principal: Principal, job_id: str, hid: str
             raise invalid_errors([{"loc": ["body", "external_job_id"], "msg": "external_job_id는 attach에서만 씁니다"}])
         if not (row["state"] == "UNKNOWN" and row["submission_unknown"]):
             raise DomainError("HPC_NOT_UNKNOWN", "SCX 제출 결과 모름 상태인 행이 아닙니다", status=409)
+        if job["state"] != "WAITING_HPC" and action != "mark_not_submitted":
+            # 끝난(중단·실패·취소) 작업의 결과 모름 행은 기록 정리(제출 안 됨)만 — 다시 확인·연결은 작업을 되살리지 않는다
+            raise DomainError("HPC_RESOLVE_NOT_ALLOWED", "대기 중(WAITING_HPC)이 아닌 작업은 '제출 안 됨' 조치만 할 수 있습니다",
+                              status=409)
         if row["resolve_request"] is not None:
             raise DomainError("HPC_RESOLVE_PENDING", "이미 요청한 조치를 워커가 처리하는 중입니다", status=409)
         req = {"action": action, "by": principal.user_id, "by_name": principal.display_name,

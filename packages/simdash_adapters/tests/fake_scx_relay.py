@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import threading
 import unicodedata
 import uuid
@@ -25,6 +26,7 @@ from typing import Any
 from urllib.parse import parse_qs, unquote, urlsplit
 
 PREFIX = "/internal/scx-relay/v1"
+REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_.:\-]{1,128}$")
 SECRET = "k" * 22 + "-_" + "A1b2C3d4E5f6G7h8I9j0K"  # 43자 base64url(시험 전용)
 
 
@@ -384,6 +386,8 @@ class _Handler(BaseHTTPRequestHandler):
                 return self._err(413, "TOO_LARGE")
             sha = (self.headers.get("X-Content-SHA256") or "").lower()
             rid = self.headers.get("X-Request-Id") or ""
+            if not REQUEST_ID_RE.match(rid):  # scx_relay.md §5.3
+                return self._err(400, "INVALID_REQUEST", "X-Request-Id 형식 오류")
             if sha != _sha(data):
                 return self._err(400, "HASH_MISMATCH", retryable=True)
             with f.lock:

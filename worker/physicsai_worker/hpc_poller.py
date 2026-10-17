@@ -144,7 +144,8 @@ class HpcPollerMixin:
             hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "PBS 해석이 실패했거나 상태를 잃었습니다")
         elif tno == "T10b":
             failed = sum(1 for h in hjobs if h["state"] in ("FAILED", "LOST"))
-            hpc_repo.to_collecting_partial(conn, job_now, failed, len(hjobs))
+            total = sum(1 for h in hjobs if (h.get("staged") or {}).get("phase") != "not_submitted")  # scx 미제출 행 제외
+            hpc_repo.to_collecting_partial(conn, job_now, failed, total)
         elif tno == "T10":
             hpc_repo.to_collecting(conn, job_now)
 
@@ -214,8 +215,12 @@ class HpcPollerMixin:
         run_state: str | None = None
         warning: tuple[str, str] | None = None
         notify_body: str | None = None
+        with self.engine.connect() as conn:
+            job0 = jobs_repo.get_job(conn, h["job_id"])
         if not (h["state"] == "UNKNOWN" and h["submission_unknown"]):
             vals["error_message"] = "조치 대상이 아닙니다(결과 모름 상태가 아님)"
+        elif action != "mark_not_submitted" and (job0 is None or job0["state"] != "WAITING_HPC"):
+            vals["error_message"] = "대기 중이 아닌 작업은 '제출 안 됨' 조치만 처리합니다"
         elif not hasattr(gw, "submit_radioss"):
             vals["error_message"] = "scx 게이트웨이가 아니어서 조치를 처리할 수 없습니다(hpc.gateway 확인)"
         elif action == "recheck":

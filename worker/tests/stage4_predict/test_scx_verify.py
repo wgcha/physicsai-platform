@@ -236,3 +236,24 @@ def test_scx_stage_in_paused_then_timeout(scx_env, monkeypatch):
     fake.batch_steps = ["PAUSED", "PAUSED", "DONE"]
     vid2 = _verify(c, sid, pj)
     assert w.run_once_slot() == "WAITING_HPC", _job(c, vid2)["failure_message"]
+
+
+def test_scx_resolve_on_finished_job_only_mark_not_submitted(scx_env, engine):
+    """minor b: 작업이 WAITING_HPC가 아니면(중단 등) recheck·attach는 409 HPC_RESOLVE_NOT_ALLOWED, mark_not_submitted만 처리."""
+    c, w, ai, fake = scx_env
+    sid, pj = _setup_predict(c, w, ai, "SV8")
+    fake.submit_mode = "unknown"
+    vid = _verify(c, sid, pj)
+    assert w.run_once_slot() == "WAITING_HPC"
+    with engine.begin() as conn:
+        conn.execute(text("update jobs set state='FAILED', finished_at=now(), failure_code='WORKER_LOST' where id=:j"), {"j": vid})
+    h = _hpc(c, vid)[0]
+    url = f"{API}/jobs/{vid}/hpc-jobs/{h['id']}/resolve"
+    for body in ({"action": "recheck"}, {"action": "attach", "external_job_id": "scx-1"}):
+        r = c.post(url, headers=PW, json={**body, "version": h["version"]})
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "HPC_RESOLVE_NOT_ALLOWED", r.text
+    r = c.post(url, headers=PW, json={"action": "mark_not_submitted", "version": h["version"]})
+    assert r.status_code == 202
+    w.poll_hpc_once()
+    h = _hpc(c, vid)[0]
+    assert h["state"] == "FAILED" and h["resolve_pending"] is False and _job(c, vid)["state"] == "FAILED"

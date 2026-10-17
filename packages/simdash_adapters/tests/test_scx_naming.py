@@ -74,3 +74,12 @@ def test_forbidden_prefixes():
     assert n.forbidden_reason("physicsai/SPDM/01_x", ["physicsai/SPDM"], base="physicsai")
     assert n.forbidden_reason("cushion/01_x", ["~"]) is not None  # 홈 전체가 SPDM이면 모두 거부
     assert n.display_path("/Users/vd.dashboard", "cushion/01_x") == "/Users/vd.dashboard/cushion/01_x"
+
+
+def test_forbidden_prefix_forms():
+    """금지 접두는 상대·`~/`·절대(home_display 기준) 표기를 모두 같은 것으로 본다(대소문자 무시)."""
+    hd = "/Users/vd.dashboard"
+    for raw in ("SPDM", "~/SPDM", "/Users/vd.dashboard/SPDM", "/users/VD.dashboard/spdm/"):
+        assert n.forbidden_reason("SPDM/x/01_a", [raw], home_display=hd), raw
+        assert n.forbidden_reason("cushion/01_a", [raw], home_display=hd) is None, raw
+    assert n.forbidden_reason("cushion/01_a", ["/Users/vd.dashboard"], home_display=hd)  # 홈 전체 = 모두 거부

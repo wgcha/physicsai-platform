@@ -228,7 +228,9 @@ def _ts_collect_record(ctx: Any, doe: dict[str, Any], hj: list[dict[str, Any]], 
     ctx.ex.db(rec)
     for rk, why in sorted(failed.items()):
         ctx.log(f"[COLLECT_FAILED] {rk}: {why}")
-    ctx.patch_result({"submitted": len(hj), "failed": failed_n, "collected": len(collected),
+    # scx: 결과 모름·확정 실패로 제출하지 않은 행(staged.phase=not_submitted)은 제출 수에서 뺀다
+    submitted = sum(1 for h in hj if (h.get("staged") or {}).get("phase") != "not_submitted")
+    ctx.patch_result({"submitted": submitted, "failed": failed_n, "collected": len(collected),
                       "collected_runs": sorted(collected), "collect_failed": sorted(failed)})
     if not collected:
         raise StepFailure("COLLECT_FAILED", f"PBS 결과 회수 실패: {next(iter(failed.values()), '회수할 run이 없습니다')}")

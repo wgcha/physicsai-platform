@@ -155,7 +155,19 @@ def _fold(s: str) -> str:
     return unicodedata.normalize("NFC", s).casefold()
 
 
-def forbidden_reason(rel: str, forbidden_prefixes: list[str] | tuple[str, ...], base: str = "") -> str | None:
+def _prefix_rel(raw: str, home_display: str) -> str:
+    """금지 접두 표기(상대 `SPDM`·`~/SPDM`·절대 `<home_display>/SPDM`) → 홈 기준 상대(대소문자 접기·NFC)."""
+    v = _fold(str(raw).strip()).replace("\\", "/")
+    home = _fold(home_display or "").rstrip("/")
+    if home and (v == home or v.startswith(home + "/")):
+        v = v[len(home):]
+    elif v.startswith("~"):
+        v = v[1:]
+    return v.strip("/")
+
+
+def forbidden_reason(rel: str, forbidden_prefixes: list[str] | tuple[str, ...], base: str = "",
+                     home_display: str = "") -> str | None:
     """SPDM 루트 보호(§16.3, 대소문자 무시·NFC): `rel`이 금지 접두 S와 같거나 그 안이면, 또는 `rel`의 프로젝트 폴더
     (`base` 바로 아래 첫 구간까지)가 S 자신이거나 S의 상위 폴더면(예 S=`SPDM`·프로젝트 `SPDM`, S=`Projects/SPDM`·프로젝트 `Projects`) 사유."""
     p = _fold(rel.strip("/"))
@@ -163,7 +175,7 @@ def forbidden_reason(rel: str, forbidden_prefixes: list[str] | tuple[str, ...], 
     tail = p[len(b) + 1:] if b and p.startswith(b + "/") else p
     project = join_rel(b, tail.split("/")[0]) if tail else b
     for raw in forbidden_prefixes or ():
-        s = _fold(str(raw).strip().lstrip("~").strip("/"))
+        s = _prefix_rel(raw, home_display)
         if not s:
             return "SPDM 루트가 홈 전체입니다"
         if p == s or p.startswith(s + "/"):

@@ -168,6 +168,7 @@ def test_scx_unknown_then_attach(p2_scx, engine):
     assert w.run_once_slot() == "SUCCEEDED", job(c, j["id"])
     runs = _runs(c, doe_id)
     assert runs["run__00001"]["state"] == runs["run__00002"]["state"] == "COLLECTED"
+    assert job(c, j["id"])["result"]["submitted"] == 2  # 미제출(not_submitted) 행 제외
 
 
 def fake_relay_add(fake, job_dir: str) -> str:
@@ -360,3 +361,116 @@ def test_scx_collect_path_safety(tmp_path, settings_dict):
     assert _scx._walk(GW(), "out", 1) == [("d/x.h3d", 2), ("ok.h3d", 3)]
     assert _scx._walk(GW(), "out", 2) == [("d/deep/y.h3d", 2), ("d/x.h3d", 2), ("ok.h3d", 3)]
     assert _scx._walk(GW(), "out", 0) == [("ok.h3d", 3)]
+
+
+def _stub_ctx(settings, logs=None):
+    import types
+
+    ex = types.SimpleNamespace(db=lambda fn: None)
+    return types.SimpleNamespace(settings=settings, checkpoint=lambda: None, log=(logs or []).append, ex=ex, params={})
+
+
+@pytest.mark.parametrize("rel", ["NUL.h3d", "con/x.h3d", "CON/x", "a?.h3d", "a*.h3d", "a<b.h3d", 'a"b.h3d', "a|b.h3d",
+                                 "lpt1.out", "x./a.h3d", "sub /a.h3d"])
+def test_scx_collect_rejects_windows_unsafe_names(settings_dict, rel):
+    """M1: Windows 예약 이름·금지 문자·끝 마침표/공백 → 그 run PATH_UNSAFE(Linux에서도 같은 판정)."""
+    import os
+
+    from physicsai_core.config import load_config_dict
+    from physicsai_worker.steps import _scx
+
+    lc = load_config_dict(settings_dict, environ={})
+    res = os.path.join(lc.settings.storage.ai_root, "S2", "r")
+    os.makedirs(res)
+    with pytest.raises(_scx.CollectFail) as ei:
+        _scx._safe_target(_stub_ctx(lc.settings), res, rel)
+    assert ei.value.code == "PATH_UNSAFE"
+
+
+def test_scx_collect_collisions_and_local_errors(settings_dict):
+    """M1: 대소문자만 다른 경로·파일/폴더 이름 충돌·이미 있는 같은 이름 폴더·로컬 쓰기 오류는 그 run만 실패(CollectFail)."""
+    import os
+    import types
+
+    from physicsai_core.config import load_config_dict
+    from physicsai_worker.steps import _scx
+
+    assert _scx._collisions(["A.h3d", "b.h3d", "a.h3d"]) == "A.h3d · a.h3d"
+    assert _scx._collisions(["d", "D/x.h3d"]) == "d · D/x.h3d"
+    assert _scx._collisions(["a.h3d", "sub/a.h3d"]) is None
+    lc = load_config_dict(settings_dict, environ={})
+    ctx = _stub_ctx(lc.settings)
+    res = os.path.join(lc.settings.storage.ai_root, "S3", "r")
+    os.makedirs(os.path.join(res, "x.h3d"))  # 같은 이름 폴더가 이미 있음
+    with pytest.raises(_scx.CollectFail) as ei:
+        _scx._safe_target(ctx, res, "x.h3d")
+    assert ei.value.code == "PATH_UNSAFE"
+
+    class GW:
+        cfg = types.SimpleNamespace(max_download_bytes=1 << 30, collect_max_depth=2)
+
+        def __init__(self, entries, fail=None):
+            self.entries, self.fail, self.got = entries, fail, []
+
+        def list(self, rel, _n):
+            return self.entries.get(rel, [])
+
+        def download(self, remote, dst, _limit, on_chunk=None):
+            if self.fail:
+                raise self.fail
+            with open(dst, "wb") as fh:
+                fh.write(b"x")
+            self.got.append(remote)
+            return 1, "h"
+
+    row = {"id": "h1", "output_rel": "out", "external_job_id": "j"}
+    f = lambda n: {"name": n, "kind": "file", "size": 1}  # noqa: E731
+    gw = GW({"out": [f("A.h3d"), f("a.h3d")]})
+    with pytest.raises(_scx.CollectFail) as ei:
+        _scx.collect_run(ctx, gw, row, res, None)
+    assert ei.value.code == "PATH_UNSAFE" and gw.got == []  # 내려받기 전에 실패
+    gw = GW({"out": [f("ok.h3d"), f("NUL.h3d")]})
+    with pytest.raises(_scx.CollectFail):
+        _scx.collect_run(ctx, gw, row, res, None)
+    assert gw.got == []  # 모든 대상 검사 후에만 내려받음
+    gw = GW({"out": [f("ok.h3d")]}, fail=IsADirectoryError("x"))
+    with pytest.raises(_scx.CollectFail) as ei:
+        _scx.collect_run(ctx, gw, row, res, None)
+    assert ei.value.code == "COLLECT_FAILED" and "IsADirectoryError" in ei.value.message
+    gw = GW({"out": [f("ok.h3d"), {"name": "s", "kind": "dir"}], "out/s": [f("ok2.h3d")]})
+    assert _scx.collect_run(ctx, gw, row, res, None) == ["ok.h3d", "s/ok2.h3d"]
+    assert not [p for p in os.listdir(res) if p.endswith(".part")]
+
+
+def test_scx_build_request_engine_casefold():
+    """minor c: starter `_0000.RAD`(대소문자 무관) → 같은 기준 이름의 `_0001` engine."""
+    import types
+
+    from physicsai_worker.steps import _scx
+
+    cfg = types.SimpleNamespace(list_additional_paths=True, ncpu=8, version="v", appliance="a", memory_gb=None,
+                                queue_type="q", run_type="r", mpi="m", single_precision=False)
+    gw = types.SimpleNamespace(cfg=cfg)
+    p = _scx.RunStage(run_key="r1", input_dir="", starter="DROP_0000.RAD", job_name="j", client_ref={},
+                      files=[{"name": n} for n in ("DROP_0000.RAD", "drop_0001.rad", "a.inc")], remote_dir="p/j",
+                      request_id="pai-x", hid="x")
+    req = _scx.build_request(types.SimpleNamespace(params={}), gw, p)
+    assert req.engine_paths == ("p/j/drop_0001.rad",) and req.additional_paths == ("p/j/a.inc",)
+
+
+def test_scx_upload_odd_file_names(p2_scx):
+    """M2: 비ASCII·공백·괄호·+·긴 파일 이름도 올린다(X-Request-Id는 순번, 이름은 쿼리 UTF-8)."""
+    c, mk, ai, lc, d, fake = p2_scx
+    w = mk()
+    sid, doe_id = _ready_doe(c, w, ai, "sx9", num_runs=2)
+    names = ["메시 파일.inc", "a (1)+b.inc", "L" * 120 + ".inc"]
+    for st in sorted((ai / "sx9" / "01_train" / "doe" / doe_id).rglob("drop_0000.rad")):
+        for n in names:
+            (st.parent / n).write_text("x", encoding="utf-8")
+    j = submit(c, sid, "TD_SOLVE", {"doe_id": doe_id, "run_keys": ["run__00001"]})
+    assert w.run_once_slot() == "WAITING_HPC", job(c, j["id"])
+    jd0 = next((fake.drive / "sx9").iterdir())
+    up = {p.name for p in jd0.iterdir()}
+    assert set(names) <= up
+    rids = [h["x-request-id"] for h in fake.headers_seen if "x-request-id" in h]
+    assert rids and all(re.fullmatch(r"pai-[0-9a-f-]{36}:f:\d+", r) for r in rids)
