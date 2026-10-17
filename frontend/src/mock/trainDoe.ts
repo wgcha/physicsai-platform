@@ -5,6 +5,8 @@ import type { TrainDoe } from "../api/types";
 import { isIntegerFormat } from "../lib/format";
 import { err, ok, type MockResp } from "./route";
 import { responseFn } from "./seed";
+import { doeInfluence } from "./sampling";
+import { DOE_TYPES } from "./catalog";
 import type { Phase2Mock } from "./phase2";
 
 export const RESULT_TABLE_MAX_RUNS = 200;
@@ -34,15 +36,21 @@ export function doeResultTable(p2: Phase2Mock, d: TrainDoe): MockResp {
     };
   });
   const usable = respNames.length ? rows.filter((r) => respNames.every((n) => finite(r.responses[n]))).length : 0;
-  const lhs = /LATIN|LHS/i.test(d.doe_type);
   const notes: string[] = [];
   if (!respNames.length) notes.push("응답 파일이 없습니다");
   if (samples.length > RESULT_TABLE_MAX_RUNS) notes.push(`앞 ${RESULT_TABLE_MAX_RUNS}행만 표시합니다`);
+  // §20.7: 응답 없음·유효 run 부족 = off(사유), 그 밖은 ① 유형 등급
+  const need = Math.max(5, names.length + 2);
+  const inf = doeInfluence(d.doe_type, d.options);
+  const off = !respNames.length ? "응답이 없어 영향도를 계산할 수 없습니다" : usable < need ? `영향도에는 유효 run이 ${need}개 이상 필요합니다(현재 ${usable}개)` : null;
+  const cls: "formal" | "reference" | "off" = off ? "off" : inf.cls;
+  const note = off ?? inf.note;
   const body: DoeResultTable = {
     doe_id: d.id,
     label: d.doe_label,
     study_id: d.study_id,
-    type: lhs ? "LHS" : d.doe_type,
+    type: d.doe_type,
+    sampling: { method: d.doe_type, label: DOE_TYPES.find((t) => t.value === d.doe_type)?.label ?? d.doe_label, desc_id: DOE_TYPES.find((t) => t.value === d.doe_type)?.desc_id ?? null, options: d.options },
     parameters: names.map((n) => {
       const vs = samples.map((s) => s.values[n]).filter(finite);
       return { name: n, integer: isIntegerFormat(fmt.get(n)), min: vs.length ? Math.min(...vs) : null, max: vs.length ? Math.max(...vs) : null, unit: null };
@@ -51,7 +59,9 @@ export function doeResultTable(p2: Phase2Mock, d: TrainDoe): MockResp {
     meta: { engine_version: null, baseline_id: null, scene: null },
     rows,
     counts: { total: rows.length, usable, no_response: rows.length - usable },
-    influence_ok: lhs && usable >= Math.max(5, names.length + 2),
+    influence_class: cls,
+    influence_note: note,
+    influence_ok: cls !== "off",
     notes,
   };
   return ok(body);

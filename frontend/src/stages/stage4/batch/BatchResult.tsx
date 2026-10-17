@@ -13,6 +13,7 @@ import { Card, CopyButton, ProgressBar } from "../../../components/ui";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { POLL } from "../../../lib/poll";
 import { fmtNum } from "../../../lib/format";
+import { samplingSummary } from "../../../lib/sampling";
 import { usePredictVerify } from "../predictRun";
 import { ContourMedia } from "../ContourMedia";
 import { ResultListTree } from "../PredictResult";
@@ -72,6 +73,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const anyFailed = b.rows.some((r) => isRowFailed(r.state));
   const genElapsed = parent?.started_at && parent?.finished_at ? fmtDuration(Date.parse(parent.finished_at) - Date.parse(parent.started_at)) : null;
   const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
+  const sampleLine = samplingSummary(b.sampling, b.rows.length); // S15 §20.10
 
   const act = async (f: () => Promise<unknown>) => {
     setActionError(null);
@@ -167,6 +169,11 @@ export function BatchResult({ batchId }: { batchId: string }) {
         {actionError && (
           <p className="error-text small" role="alert">
             {actionError}
+          </p>
+        )}
+        {sampleLine && (
+          <p className="muted small batch-sampling" data-testid="batch-sampling">
+            표본: {sampleLine}
           </p>
         )}
         {!showResp && <p className="muted small" data-testid="no-resp">{NO_RESP_TEXT}</p>}

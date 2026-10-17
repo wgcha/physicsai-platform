@@ -1578,6 +1578,16 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * BatchNote
+         * @description 막지 않는 안내(S15 §20.9): FIXED_EXCLUDED·FULL_FACTORIAL_USED·BBD_PAIRWISE·DUPLICATE_ROWS·SEQUENCE_CONTINUED·INFLUENCE_TOO_FEW.
+         */
+        BatchNote: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
         /** BatchPredictCounts */
         BatchPredictCounts: {
             /** Canceled */
@@ -1694,6 +1704,82 @@ export interface components {
             };
         };
         /**
+         * BatchSourceBbd
+         * @description Box–Behnken(변수 3개 이상, 중심점 1개).
+         */
+        BatchSourceBbd: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bbd";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
+         * BatchSourceCcd
+         * @description 중심 합성: alpha face(면중심, 기본) | inscribed(내접). 중심점 1개.
+         */
+        BatchSourceCcd: {
+            /**
+             * Alpha
+             * @default face
+             * @enum {string}
+             */
+            alpha: "face" | "inscribed";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "ccd";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
+         * BatchSourceFracfact
+         * @description 부분 요인 2수준: resolution 4 | 5(기본 5).
+         */
+        BatchSourceFracfact: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fracfact";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Resolution
+             * @default 5
+             * @enum {integer}
+             */
+            resolution: 4 | 5;
+        };
+        /**
+         * BatchSourceFullfact
+         * @description 전체 요인: levels {변수: 수준 수 1~10}(생략한 활성 변수 = 2; 2~10 검사와 정수 변수 검사는 problems).
+         */
+        BatchSourceFullfact: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fullfact";
+            /** Levels */
+            levels?: {
+                [key: string]: number;
+            } | null;
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
          * BatchSourceLhs
          * @description 범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).
          */
@@ -1714,6 +1800,71 @@ export interface components {
              * @default 1
              */
             seed: number;
+        };
+        /**
+         * BatchSourceLhsOpt
+         * @description 최적화 LHS: count 2~predict_batch.max_runs, seed 0 이상(기본 1), criterion maximin(최소 거리, 기본) | corr(상관 최소).
+         */
+        BatchSourceLhsOpt: {
+            /** Count */
+            count: number;
+            /**
+             * Criterion
+             * @default maximin
+             * @enum {string}
+             */
+            criterion: "maximin" | "corr";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lhs_opt";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /**
+         * BatchSourcePb
+         * @description Plackett–Burman(2수준 선별).
+         */
+        BatchSourcePb: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pb";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
+         * BatchSourceSobol
+         * @description Sobol(스크램블): count = 2^m(4~max_runs), seed 0~4294967295(생략 = 1), continue_from = 이전 Sobol 배치 id(이어서 추가 —
+         *     seed·ranges는 생략하고 이전 값을 쓴다).
+         */
+        BatchSourceSobol: {
+            /** Continue From */
+            continue_from?: string | null;
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sobol";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /** Seed */
+            seed?: number | null;
         };
         /**
          * BatchSourceTable
@@ -2211,6 +2362,25 @@ export interface components {
             state: string;
         };
         /**
+         * DoeResultSampling
+         * @description ① DOE 표본 방식(S15 §20.6): 정의 파일 유형 value·라벨·설명 id·옵션(RESOLUTION 등).
+         */
+        DoeResultSampling: {
+            /** Desc Id */
+            desc_id?: string | null;
+            /** Label */
+            label: string;
+            /** Method */
+            method: string;
+            /**
+             * Options
+             * @default {}
+             */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /**
          * DoeResultTable
          * @description ⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용.
          */
@@ -2218,6 +2388,13 @@ export interface components {
             counts: components["schemas"]["DoeResultCounts"];
             /** Doe Id */
             doe_id: string;
+            /**
+             * Influence Class
+             * @enum {string}
+             */
+            influence_class: "formal" | "reference" | "off";
+            /** Influence Note */
+            influence_note?: string | null;
             /** Influence Ok */
             influence_ok: boolean;
             /** Label */
@@ -2231,6 +2408,7 @@ export interface components {
             responses: components["schemas"]["DoeResultResponse"][];
             /** Rows */
             rows: components["schemas"]["DoeResultRow"][];
+            sampling: components["schemas"]["DoeResultSampling"];
             /** Study Id */
             study_id: string;
             /** Type */
@@ -2240,10 +2418,23 @@ export interface components {
         DoeType: {
             /** Default Runs */
             default_runs: number;
+            /** Desc Id */
+            desc_id?: string | null;
             /** Fields */
             fields: components["schemas"]["DoeField"][];
+            /**
+             * Influence Class
+             * @default reference
+             * @enum {string}
+             */
+            influence_class: "formal" | "reference";
             /** Label */
             label: string;
+            /**
+             * Recommended
+             * @default false
+             */
+            recommended: boolean;
             /** Runs Editable */
             runs_editable: boolean;
             /** Value */
@@ -3226,6 +3417,7 @@ export interface components {
             responses: components["schemas"]["BatchResponseName"][];
             /** Rows */
             rows: components["schemas"]["BatchRunRow"][];
+            sampling?: components["schemas"]["SamplingInfo"] | null;
             /** Source Kind */
             source_kind: string;
             /** Status */
@@ -3242,17 +3434,23 @@ export interface components {
              * @enum {string}
              */
             input_kind: "assembly" | "mesh_only";
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["BatchNote"][];
             /** Problems */
             problems: components["schemas"]["BatchProblem"][];
             /** Rows */
             rows: components["schemas"]["BatchPreviewRow"][];
+            sampling?: components["schemas"]["SamplingInfo"] | null;
         };
         /** PredictBatchPreviewRequest */
         PredictBatchPreviewRequest: {
             /** Param Set Id */
             param_set_id?: string | null;
             /** Source */
-            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
+            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceLhsOpt"] | components["schemas"]["BatchSourceSobol"] | components["schemas"]["BatchSourceFullfact"] | components["schemas"]["BatchSourceFracfact"] | components["schemas"]["BatchSourcePb"] | components["schemas"]["BatchSourceBbd"] | components["schemas"]["BatchSourceCcd"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
         };
         /** PredictBatchSummary */
         PredictBatchSummary: {
@@ -3273,6 +3471,7 @@ export interface components {
             response_summary?: components["schemas"]["BatchResponseSummary"] | null;
             /** Run Count */
             run_count: number;
+            sampling?: components["schemas"]["SamplingSummary"] | null;
             /** Status */
             status: string;
         };
@@ -3490,6 +3689,51 @@ export interface components {
             next_cursor?: string | null;
             /** Rows */
             rows: components["schemas"]["SampleRow"][];
+        };
+        /**
+         * SamplingInfo
+         * @description 표본 방식 요약(미리보기·배치 상세). 등급은 서버가 정한다(§20.7) — formal | reference(off는 ①만).
+         */
+        SamplingInfo: {
+            /** Desc Id */
+            desc_id: string;
+            /**
+             * Influence Class
+             * @enum {string}
+             */
+            influence_class: "formal" | "reference";
+            /** Influence Note */
+            influence_note?: string | null;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
+            /** Method */
+            method: string;
+            /** Recommended Count */
+            recommended_count?: number | null;
+        };
+        /**
+         * SamplingSummary
+         * @description 배치 목록 한 줄용(Sobol 이어서 추가 후보·⑤ 출처 라벨).
+         */
+        SamplingSummary: {
+            /** Count */
+            count: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Method */
+            method: string;
+            /** Offset */
+            offset?: number | null;
+            /** Seed */
+            seed?: number | null;
         };
         /** SoBatchRef */
         SoBatchRef: {

@@ -77,17 +77,6 @@
 }
 
 /* 일괄 예측 설정 */
-.radio-list {
-  border: 0;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  gap: var(--space-1);
-}
-.radio-list legend {
-  padding: 0;
-  margin-bottom: var(--space-1);
-}
 .radio-line {
   display: flex;
   align-items: center;

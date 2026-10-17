@@ -313,6 +313,7 @@ type EntityStatus = "BUILDING" | "READY" | "FAILED";
 export type TrainParam = S["TrainParamOut"];
 export type TrainSetup = Override<S["TrainSetup"], { parameters: TrainParam[]; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string }[] }>) | null }>;
 export type DoeField = S["DoeField"];
+/** S15(§20.6): desc_id = 설명문 id(없으면 null), recommended = 설정 train_data.recommended_doe_type 항목 하나, influence_class = 영향도 등급 */
 export type DoeType = S["DoeType"];
 export type TrainRunState = keyof S["RunStateCounts"];
 export type SampleStatus = "PARSED" | "PARTIAL" | "MISSING" | "PENDING";
@@ -402,13 +403,25 @@ export interface ParamSetResponsesPut {
   responses: { name: string; unit: string; spec: ResponseSpec | null }[];
 }
 
-export type BatchSource = S["BatchSourceLhs"] | S["BatchSourceTable"] | S["BatchSourceTrainDoe"];
+/** S15(§20.6): 10개 kind(기존 lhs·table·train_doe + 7개) — 생성 타입의 discriminated union */
+export type BatchSource = S["PredictBatchPreviewRequest"]["source"];
 export type BatchSourceKind = BatchSource["kind"];
+
+/** 영향도 등급(§20.7): formal 정식 · reference 참고용(회색 안내) · off 비활성(사유) */
+export type InfluenceClass = S["DoeResultTable"]["influence_class"];
+/** 표본 방식 요약(미리보기·배치 상세 `sampling`). 서버가 등급을 정한다(formal·reference) */
+export type BatchSampling = S["SamplingInfo"];
+/** GET /studies/{id}/predict-batches 행의 `sampling` */
+export type BatchSamplingBrief = S["SamplingSummary"];
+/** 미리보기 `notes[]`(막지 않는 안내, §20.9) */
+export type BatchNote = S["BatchNote"];
 
 /** POST /studies/{id}/predict-batches/preview 본문 */
 export type BatchPreviewRequest = Override<S["PredictBatchPreviewRequest"], { param_set_id: string; source: BatchSource }>;
 export type BatchPreviewRow = S["BatchPreviewRow"];
-export type BatchProblemCode = "TABLE_HEADER" | "TABLE_VALUE" | "TEXT_TOO_LARGE" | "TOO_MANY_ROWS" | "TOO_FEW_ROWS" | "RANGE_INVALID" | "DOE_PARAM_MISMATCH";
+export type BatchProblemCode =
+  | "TABLE_HEADER" | "TABLE_VALUE" | "TEXT_TOO_LARGE" | "TOO_MANY_ROWS" | "TOO_FEW_ROWS" | "RANGE_INVALID" | "DOE_PARAM_MISMATCH"
+  | "COUNT_NOT_POW2" | "CONTINUE_INVALID" | "SEQUENCE_MISMATCH" | "LEVELS_INVALID" | "DESIGN_UNSUPPORTED" | "GENERATOR_UNAVAILABLE";
 export type BatchProblem = S["BatchProblem"];
 /** estimate_min = 최근 성공 PREDICT 5개 중앙값×N(분), 없으면 null */
 export type BatchPreview = S["PredictBatchPreview"];

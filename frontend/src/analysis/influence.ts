@@ -130,24 +130,25 @@ export const MISMATCH_TEXT = (names: string[]) => `부호 불일치: ${names.joi
 
 // ---- 결과 표 → 영향도 보기(화면 규칙) ---------------------------------------------------------------
 
-export const NOT_LHS_TEXT = "영향도는 LHS DOE에서만 제공합니다";
-export const REF_ONLY_TEXT = "LHS가 아닌 표 — 참고용";
+/** 서버가 알려 주지 않을 때만 쓰는 대체 문구(문구 본문은 서버 influence_note — S15 §20.7) */
+export const UNKNOWN_METHOD_TEXT = "표본 방식을 알 수 없어 영향도는 참고용입니다";
+export const OFF_FALLBACK_TEXT = "영향도를 계산할 수 없습니다";
 
 export interface InfluenceView {
   /** 비활성 사유(있으면 표를 그리지 않는다) */
   disabled: string | null;
-  /** 출처 (a)가 LHS 배치가 아님 — 참고용 회색 안내 */
-  refOnly: boolean;
+  /** 참고용 방식(reference)의 회색 안내 한 줄(정식이면 null) */
+  note: string | null;
   result: InfluenceResult | null;
   rows: InfluenceRow[];
   mismatch: string[];
   weak: boolean;
 }
 
-/** 색 값(응답) 1개의 영향도. 사용 조건: 출처 (b) influence_ok(LHS·n), 출처 (a) 유효 run ≥ max(5, p+2)(§19.6) */
+/** 색 값(응답) 1개의 영향도. 사용 조건: 출처 (b) 서버 등급 ≠ off, 출처 (a) 유효 run ≥ max(5, p+2)(§19.6, §20.7) */
 export function influenceFor(rt: ResultTable, resp: string | null): InfluenceView {
-  const off = (disabled: string): InfluenceView => ({ disabled, refOnly: false, result: null, rows: [], mismatch: [], weak: false });
-  if (rt.source === "solver" && !rt.influence.ok) return off(rt.influence.reason ?? NOT_LHS_TEXT);
+  const off = (disabled: string): InfluenceView => ({ disabled, note: null, result: null, rows: [], mismatch: [], weak: false });
+  if (rt.source === "solver" && !rt.influence.ok) return off(rt.influence.reason ?? OFF_FALLBACK_TEXT);
   if (!resp) return off("응답이 없어 영향도를 계산할 수 없습니다");
   const names = rt.parameters.map((p) => p.name);
   const use = rt.rows.filter((r) => isOkState(r.state) && isFin(r.responses[resp]) && names.every((n) => isFin(r.params[n])));
@@ -156,5 +157,5 @@ export function influenceFor(rt: ResultTable, resp: string | null): InfluenceVie
   const result = computeInfluence(names, names.map((n) => use.map((r) => r.params[n] as number)), use.map((r) => r.responses[resp] as number));
   if (result.unavailable) return off(result.unavailable);
   const rows = influenceRows(result);
-  return { disabled: null, refOnly: rt.source === "predict" && !rt.influence.lhs, result, rows, mismatch: rows.filter((r) => r.mismatch).map((r) => r.name), weak: result.r2 !== null && result.r2 < WEAK_R2 };
+  return { disabled: null, note: rt.influence.cls === "reference" ? rt.influence.note : null, result, rows, mismatch: rows.filter((r) => r.mismatch).map((r) => r.name), weak: result.r2 !== null && result.r2 < WEAK_R2 };
 }

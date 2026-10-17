@@ -5,6 +5,7 @@ import type { components } from "./generated/schema";
 
 type S = components["schemas"];
 
+/** S15(§20.6): influence_class(formal·reference·off)·influence_note(reference 문구·off 사유)·sampling(① 유형·옵션). influence_ok = influence_class ≠ off */
 export type DoeResultTable = S["DoeResultTable"];
 export type DoeResultTableRow = S["DoeResultRow"];
 

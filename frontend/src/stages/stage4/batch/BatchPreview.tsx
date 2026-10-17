@@ -10,6 +10,16 @@ export function OutDot({ on }: { on: boolean }) {
   return on ? <span className="oor-dot" title={OUT_OF_RANGE_TIP} aria-label={OUT_OF_RANGE_TIP} /> : null;
 }
 
+const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+/** sampling.meta.quality → "최소 거리 0.21 · 최대 상관 0.08"(있는 것만) */
+export function qualityText(meta: Record<string, unknown> | undefined): string | null {
+  const q = meta?.quality as Record<string, unknown> | undefined;
+  const d = num(q?.min_dist);
+  const c = num(q?.max_abs_corr);
+  const parts = [d !== null ? `최소 거리 ${d}` : null, c !== null ? `최대 상관 ${c}` : null].filter((x): x is string => !!x);
+  return parts.length ? parts.join(" · ") : null;
+}
+
 export function BatchPreview({ preview, names, problems, error }: { preview: BP | null; names: string[]; problems: BatchProblem[]; error: string | null }) {
   const rows = preview?.rows ?? [];
   return (
@@ -30,6 +40,21 @@ export function BatchPreview({ preview, names, problems, error }: { preview: BP 
             <li key={i}>{p.row ? `${p.row}행 · ` : ""}{p.message}</li>
           ))}
         </ul>
+      )}
+      {preview?.sampling && (
+        <div className="samp-head small" data-testid="preview-sampling">
+          <p>
+            <b>
+              실제 run {preview.count}개 · {preview.sampling.label}
+            </b>
+            {qualityText(preview.sampling.meta) && <span className="muted" data-testid="preview-quality"> · {qualityText(preview.sampling.meta)}</span>}
+          </p>
+          {(preview.notes ?? []).map((n, i) => (
+            <p key={i} className="muted" data-testid="preview-note">
+              {n.message}
+            </p>
+          ))}
+        </div>
       )}
       {!preview && !error && !problems.length && <p className="muted">조합을 만들면 여기에 DOE 번호·입력 폴더·값이 나옵니다.</p>}
       {rows.length > 0 && (

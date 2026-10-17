@@ -2,7 +2,7 @@
 // 픽스처 생성: frontend/scripts/gen_influence_golden.py (PRCC = 순위 변수 잔차의 상관, SRC = z-점수 OLS) — 아래 코드는 역행렬 방식이라 정의가 서로 독립이다.
 import { describe, expect, it } from "vitest";
 import golden from "./fixtures/influenceGolden.json";
-import { avgRanks, computeInfluence, influenceFor, influenceRows, invert, NOT_LHS_TEXT, WEAK_R2 } from "../analysis/influence";
+import { avgRanks, computeInfluence, influenceFor, influenceRows, invert, WEAK_R2 } from "../analysis/influence";
 import type { ResultTable, RtRow } from "../analysis/resultTable";
 
 type Case = { name: string; names: string[]; cols: number[][]; y: number[]; prcc: (number | null)[]; src: (number | null)[]; r2: number | null };
@@ -61,7 +61,7 @@ describe("영향도 골든 (V3-S14-2)", () => {
     expect(rows.filter((r) => r.mismatch).map((r) => r.name)).toEqual(["d"]);
   });
 
-  it("influenceFor: 비 LHS 해석 DOE는 비활성(문구), 출처 a는 유효 run ≥ max(5, p+2)", () => {
+  it("influenceFor: 해석 DOE는 서버 등급(off = 사유, reference = 안내), 출처 a는 유효 run ≥ max(5, p+2)", () => {
     const g = cases[0];
     const rows: RtRow[] = g.y.map((y, i) => ({ run_id: `run__${i}`, no: i + 1, state: "SUCCEEDED", params: Object.fromEntries(g.names.map((n, j) => [n, g.cols[j][i]])), responses: { R: y }, curve: null }));
     const rt: ResultTable = {
@@ -72,17 +72,18 @@ describe("영향도 골든 (V3-S14-2)", () => {
       meta: { engine_version: null, baseline_id: null, scene: null },
       rows,
       counts: { total: rows.length, usable: rows.length, no_response: 0 },
-      influence: { ok: false, lhs: false, reason: NOT_LHS_TEXT },
+      influence: { ok: false, cls: "off", note: null, reason: "서버 사유" },
       notes: [],
     };
-    expect(influenceFor(rt, "R").disabled).toBe(NOT_LHS_TEXT);
-    const ok = influenceFor({ ...rt, influence: { ok: true, lhs: true, reason: null } }, "R");
+    expect(influenceFor(rt, "R").disabled).toBe("서버 사유");
+    const ok = influenceFor({ ...rt, influence: { ok: true, cls: "formal", note: null, reason: null } }, "R");
     expect(ok.disabled).toBeNull();
     expect(ok.rows).toHaveLength(4);
     expect(ok.weak).toBe((ok.result!.r2 as number) < WEAK_R2);
-    const few = influenceFor({ ...rt, source: "predict", influence: { ok: true, lhs: true, reason: null }, rows: rows.slice(0, 5) }, "R");
+    const few = influenceFor({ ...rt, source: "predict", influence: { ok: true, cls: "formal", note: null, reason: null }, rows: rows.slice(0, 5) }, "R");
     expect(few.disabled).toBe("영향도에는 유효 run이 6개 이상 필요합니다(현재 5개)");
-    expect(influenceFor({ ...rt, source: "predict", influence: { ok: true, lhs: false, reason: null } }, "R").refOnly).toBe(true);
-    expect(influenceFor({ ...rt, influence: { ok: true, lhs: true, reason: null } }, null).disabled).toContain("응답이 없어");
+    expect(influenceFor({ ...rt, source: "predict", influence: { ok: true, cls: "reference", note: "참고용 문구", reason: null } }, "R").note).toBe("참고용 문구");
+    expect(ok.note).toBeNull();
+    expect(influenceFor({ ...rt, influence: { ok: true, cls: "formal", note: null, reason: null } }, null).disabled).toContain("응답이 없어");
   });
 });

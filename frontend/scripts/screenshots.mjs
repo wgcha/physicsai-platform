@@ -10,6 +10,8 @@
 //                                                                 → SHOT_OUT 또는 screenshots/designmap/)
 //       npm run build:mock && node scripts/screenshots.mjs analysis  (S14 D3-62: ⑤ 결과분석 — 변수–응답·설계공간 지도·영향도, 6버튼 메뉴, 다크·라이트 1920 + 1280·1100 폭
 //                                                                 → SHOT_OUT 또는 screenshots/analysis/)
+//       npm run build:mock && node scripts/screenshots.mjs sampling  (S15 D3-63: ④ 표본 방식(최적화 LHS 기본·Sobol 이어서 추가·전체 요인 수준), ① DOE 설명, ⑤ 영향도 참고용 문구, 다크·라이트 1920
+//                                                                 → SHOT_OUT 또는 screenshots/sampling/)
 // 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
@@ -69,7 +71,8 @@ const tone = process.argv.includes("tone");
 const scx = process.argv.includes("scx");
 const designmap = process.argv.includes("designmap");
 const analysis = process.argv.includes("analysis");
-const out = analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
+const sampling = process.argv.includes("sampling");
+const out = sampling ? process.env.SHOT_OUT || path.join(root, "screenshots", "sampling") : analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
@@ -106,11 +109,45 @@ const openTab = (name) => async (page) => {
   await page.waitForTimeout(500);
   await page.evaluate(() => document.querySelector(".analysis-plot")?.scrollIntoView({ block: "center" }));
 };
+// sampling: ④ 일괄 예측(DOE) 설정 카드를 화면에 맞추고 방식을 고른다
+const setupCard = (page) => page.evaluate(() => (document.querySelector(".batch-setup")?.scrollIntoView({ block: "start" }), window.scrollBy(0, -90)));
+async function samplingDefault(page) {
+  await page.getByRole("button", { name: "조합 만들기" }).click();
+  await page.waitForSelector('[data-testid="preview-sampling"]');
+  await setupCard(page);
+}
+async function samplingSobolContinue(page) {
+  await page.getByLabel("표본 방식").selectOption("sobol");
+  await page.getByRole("checkbox", { name: "이전 Sobol 배치에 이어서 추가" }).check();
+  await page.waitForTimeout(500);
+  await page.getByRole("button", { name: "조합 만들기" }).click();
+  await page.waitForSelector('[data-testid="preview-note"]');
+  await setupCard(page);
+}
+async function samplingFullfact(page) {
+  await page.getByLabel("표본 방식").selectOption("fullfact");
+  await page.getByLabel("RIB_N 수준").fill("2");
+  await page.getByRole("button", { name: "조합 만들기" }).click();
+  await page.waitForSelector('[data-testid="preview-sampling"]');
+  await setupCard(page);
+}
+async function doeCard(page) {
+  await page.waitForSelector('[data-testid="hs-note"]');
+  await page.evaluate(() => document.querySelector('[data-testid="hs-note"]')?.scrollIntoView({ block: "end" }));
+}
 async function openDrawer(page) {
   await page.getByTestId("chip-queue").click();
   await page.waitForSelector('[role="dialog"][aria-modal="true"] .qrow');
 }
-const shots = analysis
+const shots = sampling
+  ? [
+      { name: "stage4_sampling_lhsopt", url: `${S}/4?${q}`, wait: ".batch-setup", act: samplingDefault, noFull: true },
+      { name: "stage4_sampling_sobol_continue", url: `${S}/4?${q}&batch=sobol`, wait: ".batch-setup", act: samplingSobolContinue, noFull: true },
+      { name: "stage4_sampling_fullfact", url: `${S}/4?${q}`, wait: ".batch-setup", act: samplingFullfact, noFull: true },
+      { name: "stage1_doe_desc", url: `${S}/1?${q}`, wait: '[data-testid="hs-note"]', act: doeCard, noFull: true },
+      { name: "stage_analysis_influence_ref", url: `${S}/analysis?${q}&batch=bbd&source=batch&id=pb-3`, wait: ".analysis-table", act: openTab("영향도"), noFull: true },
+    ]
+  : analysis
   ? [
       { name: "stage_analysis", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: (p) => p.waitForSelector('[data-testid="plot2d"]') },
       { name: "stage_analysis_map", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: async (p) => (await openTab("설계공간 지도")(p), p.waitForSelector('[data-testid="design-map"] svg')), noFull: true },
@@ -153,7 +190,9 @@ const shots = analysis
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
     ];
-const sizes = analysis
+const sizes = sampling
+  ? [{ w: 1920, h: 1080 }]
+  : analysis
   ? [
       { w: 1920, h: 1080 },
       { w: 1280, h: 800 },
@@ -172,7 +211,7 @@ const sizes = analysis
       { w: 1280, h: 800 },
     ];
 // 테마(대시보드 localStorage 키) — tone은 다크·라이트 둘 다, 나머지는 기본(dark)
-const themes = tone || scx || designmap || analysis ? ["dark", "light"] : [null];
+const themes = tone || scx || designmap || analysis || sampling ? ["dark", "light"] : [null];
 
 const browser = await chromium.launch();
 const report = [];
@@ -180,6 +219,7 @@ try {
   for (const s of sizes) for (const theme of themes) {
     const ctx = await browser.newContext({ viewport: { width: s.w, height: s.h }, deviceScaleFactor: 1, locale: "ko-KR" });
     if (theme) await ctx.addInitScript((t) => localStorage.setItem("simdashboard.workspace.theme.v1", t), theme);
+    if (sampling) await ctx.addInitScript(() => localStorage.setItem("physicsai.stage4.inputMode", "batch")); // ④ 일괄 예측(DOE)로 연다
     const page = await ctx.newPage();
     for (const shot of shots) {
       await page.goto(shot.url, { waitUntil: "load" });

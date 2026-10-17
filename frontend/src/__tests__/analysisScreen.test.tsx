@@ -11,7 +11,7 @@ import { NO_WEBGL_TEXT } from "../analysis/viz/ResponsePlot3D";
 import { EMPTY_TEXT, SOURCE_KEY } from "../stages/stageAnalysis/SourcePicker";
 import { NO3D_COMPARE_TEXT } from "../stages/stageAnalysis/AnalysisTabs";
 import { META_DIFF_TEXT, NO_COMMON_RESP_TEXT } from "../analysis/compare";
-import { NOT_LHS_TEXT, REF_ONLY_TEXT } from "../analysis/influence";
+import { UNKNOWN_METHOD_TEXT } from "../analysis/influence";
 import { TAB_KEY } from "../analysis/viz/designMap/designMapData";
 import { fmtNum } from "../lib/format";
 import specJson from "../../../backend/openapi.json";
@@ -125,15 +125,26 @@ describe("⑤ 결과분석 화면: 출처·탭·빈 상태 (V3-S14-5)", () => {
     expect(within(card).queryByTestId("influence-ref")).toBeNull();
   });
 
-  it("영향도 비활성: 비 LHS DOE·응답 없는 DOE·유효 run 부족", async () => {
+  it("영향도 등급(S15): 알 수 없는 DOE 유형·부분 요인 = 참고용 회색 한 줄(표 있음), 응답 없는 DOE·유효 run 부족 = 비활성(사유만)", async () => {
     const r1 = renderApp(DOE, { user: "power" }, (s) => {
       withResp(s);
-      s.p2.does[0].doe_type = "TYPE_FULLFACTORIAL";
+      s.p2.does[0].doe_type = "TYPE_HAMMERSLEY";
     });
     let card = await screen.findByRole("region", { name: "응답 그래프" });
     fireEvent.click(tab(card, "영향도"));
-    expect((await within(card).findByTestId("influence-off")).textContent).toBe(NOT_LHS_TEXT);
+    expect((await within(card).findByTestId("influence-ref")).textContent).toBe(UNKNOWN_METHOD_TEXT);
+    expect(within(card).getAllByTestId(/^inf-/)).toHaveLength(4);
+    expect(within(card).queryByTestId("influence-off")).toBeNull();
     r1.unmount();
+    const r1b = renderApp(DOE, { user: "power" }, (s) => {
+      withResp(s);
+      s.p2.does[0].doe_type = "TYPE_FRACFACT";
+      s.p2.does[0].options = { RESOLUTION: "4" };
+    });
+    card = await screen.findByRole("region", { name: "응답 그래프" });
+    fireEvent.click(tab(card, "영향도"));
+    expect((await within(card).findByTestId("influence-ref")).textContent).toContain("부분 요인(해상도 IV)");
+    r1b.unmount();
     const r2 = renderApp(DOE, { user: "power" }); // 시드: 응답 파일 없음
     card = await screen.findByRole("region", { name: "응답 그래프" });
     fireEvent.click(tab(card, "영향도"));
@@ -150,7 +161,7 @@ describe("⑤ 결과분석 화면: 출처·탭·빈 상태 (V3-S14-5)", () => {
     expect((await within(card).findByTestId("influence-off")).textContent).toBe("영향도에는 유효 run이 6개 이상 필요합니다(현재 5개)");
   });
 
-  it("출처 a(예측 배치) 영향도: LHS 배치는 안내 없음, 표(TABLE) 배치는 '참고용' 회색 안내", async () => {
+  it("출처 a(예측 배치) 영향도: LHS 배치는 안내 없음(정식), 표(TABLE) 배치는 서버 influence_note 회색 안내(참고용)", async () => {
     const r1 = renderApp(BATCH, { user: "power" });
     let card = await screen.findByRole("region", { name: "응답 그래프" });
     fireEvent.click(tab(card, "영향도"));
@@ -163,7 +174,99 @@ describe("⑤ 결과분석 화면: 출처·탭·빈 상태 (V3-S14-5)", () => {
     });
     card = await screen.findByRole("region", { name: "응답 그래프" });
     fireEvent.click(tab(card, "영향도"));
-    expect((await within(card).findByTestId("influence-ref")).textContent).toContain(REF_ONLY_TEXT);
+    expect((await within(card).findByTestId("influence-ref")).textContent).toBe("직접 만든 표 — 표본 분포를 알 수 없어 영향도는 참고용입니다");
+    expect(within(card).getAllByTestId(/^inf-/)).toHaveLength(4);
+  });
+});
+
+describe("⑤ 영향도 등급 표시·출처 라벨 (V3-S15-14)", () => {
+  beforeEach(() => localStorage.clear());
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+  const open = async (path: string, setup?: (s: MockServer) => void) => {
+    const r = renderApp(path, { user: "power" }, setup);
+    const card = await screen.findByRole("region", { name: "응답 그래프" });
+    fireEvent.click(tab(card, "영향도"));
+    return { ...r, card };
+  };
+  const REF: Record<string, string> = {
+    FRACFACT: "부분 요인(해상도 V) — 3인자 이상 교호작용과 교락되어 영향도는 참고용입니다",
+    PB: "Plackett–Burman — 주효과가 2인자 교호작용과 부분적으로 교락되어 영향도는 참고용입니다",
+    BBD: "2차 응답면 설계 — 점이 중심·모서리에 몰려 곡률 효과가 선형 영향도에 작게 보일 수 있어 참고용입니다. 변수–응답 그래프로 확인하세요",
+    CCD: "2차 응답면 설계 — 점이 중심·모서리에 몰려 곡률 효과가 선형 영향도에 작게 보일 수 있어 참고용입니다. 변수–응답 그래프로 확인하세요",
+  };
+
+  it("정식(LHS·최적화 LHS·Sobol·전체 요인 배치)은 안내 없이 표만, 참고용(부분 요인·PB·BBD·CCD·표)은 표 위 회색 influence_note 한 줄과 표", async () => {
+    for (const kind of ["LHS", "LHS_OPT", "SOBOL", "FULLFACT"]) {
+      const { card, unmount } = await open(BATCH, (s) => (s.batches.find((b) => b.id === "pb-2")!.source_kind = kind));
+      await within(card).findByTestId("influence");
+      expect(within(card).getAllByTestId(/^inf-/), kind).toHaveLength(4);
+      expect(within(card).queryByTestId("influence-ref"), kind).toBeNull();
+      expect(within(card).queryByTestId("influence-off"), kind).toBeNull();
+      unmount();
+    }
+    for (const [kind, note] of Object.entries(REF)) {
+      const { card, unmount } = await open(BATCH, (s) => {
+        const b = s.batches.find((x) => x.id === "pb-2")!;
+        b.source_kind = kind;
+        b.meta = kind === "FRACFACT" ? { resolution: 5 } : {};
+      });
+      const line = await within(card).findByTestId("influence-ref");
+      expect(line.textContent, kind).toBe(note);
+      expect(line.className).toContain("muted");
+      expect(within(card).getAllByTestId(/^inf-/), kind).toHaveLength(4); // 참고용도 표는 보인다
+      // 안내 줄이 표보다 위
+      expect(line.compareDocumentPosition(within(card).getByRole("table", { name: "영향도" })) & Node.DOCUMENT_POSITION_FOLLOWING, kind).toBeTruthy();
+      unmount();
+    }
+  });
+
+  it("비활성(off)은 표 없이 사유만: 출처 a 유효 run 부족(프런트 판정) — 참고용 방식이어도 사유가 먼저", async () => {
+    const { card } = await open(BATCH, (s) => {
+      const b = s.batches.find((x) => x.id === "pb-2")!;
+      b.source_kind = "PB";
+      b.meta = {};
+      b.runs = b.runs.slice(0, 5);
+    });
+    expect((await within(card).findByTestId("influence-off")).textContent).toBe("영향도에는 유효 run이 6개 이상 필요합니다(현재 4개)"); // 앞 5행 중 실패 1행 제외
+    expect(within(card).queryByTestId("influence-ref")).toBeNull();
+    expect(within(card).queryAllByTestId(/^inf-/)).toHaveLength(0);
+  });
+
+  it("출처 b(해석 DOE): Sobol·FullFact = 정식, FracFact = 참고용(Resolution별 문구), 서버 off 사유는 그대로", async () => {
+    for (const t of ["TYPE_SOBOL", "TYPE_FULLFACT", "TYPE_LATINHYPERCUBE"]) {
+      const { card, unmount } = await open(DOE, (s) => (withResp(s), (s.p2.does[0].doe_type = t)));
+      await within(card).findByTestId("influence");
+      expect(within(card).queryByTestId("influence-ref"), t).toBeNull();
+      expect(within(card).getAllByTestId(/^inf-/), t).toHaveLength(4);
+      unmount();
+    }
+    const ref: Record<string, string> = {
+      "3": "부분 요인(해상도 III) — 주효과가 2인자 교호작용과 교락되어 영향도는 참고용입니다",
+      "4": "부분 요인(해상도 IV) — 2인자 교호작용끼리 교락되어 영향도는 참고용입니다(주효과는 2인자 교호작용과 교락 없음)",
+    };
+    for (const [res, note] of Object.entries(ref)) {
+      const { card, unmount } = await open(DOE, (s) => (withResp(s), (s.p2.does[0].doe_type = "TYPE_FRACFACT"), (s.p2.does[0].options = { RESOLUTION: res })));
+      expect((await within(card).findByTestId("influence-ref")).textContent, res).toBe(note);
+      unmount();
+    }
+    const { card } = await open(DOE); // 응답 파일 없음 → 서버가 off + 사유
+    expect((await within(card).findByTestId("influence-off")).textContent).toBe("응답이 없어 영향도를 계산할 수 없습니다");
+  });
+
+  it("출처 라벨에 방식: '<배치> · <방식> · N run · 시각', DOE는 '<유형> · N run · 시각'", async () => {
+    renderApp(A, { user: "power" }, (s) => {
+      withResp(s);
+      const b = s.batches.find((x) => x.id === "pb-2")!;
+      b.source_kind = "SOBOL";
+      b.meta = { count: 20, seed: 1, offset: 0 };
+    });
+    const sel = await srcSelect();
+    expect([...sel.options].map((o) => o.textContent)).toEqual([expect.stringMatching(/^B-002 · Sobol · 20 run · /)]);
+    fireEvent.click(within(screen.getByRole("group", { name: "기본 출처" })).getByRole("button", { name: "해석 DOE 결과(해석)" }));
+    expect([...(await srcSelect()).options].map((o) => o.textContent)).toEqual([expect.stringMatching(/^LatinHyperCube · 30 run · /)]);
   });
 });
 

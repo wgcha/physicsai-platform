@@ -1,6 +1,7 @@
 // S14 어댑터 (a): 기존 일괄 예측 배치(GET /predict-batches/{bid} 결과 표 + GET …/design-map 의 커브 요약) → 결과 표(source "predict").
 // 파라미터 값 = 반영값(applied_values), state가 SUCCEEDED가 아니면 응답 전부 null, curve = design-map run.curve(성공 run만). 새 API 없음(§19.2 A3).
-import type { PredictBatch } from "../../api";
+import type { InfluenceClass, PredictBatch } from "../../api";
+import { UNKNOWN_METHOD_TEXT } from "../influence";
 import type { DesignMap } from "../../api/designMap";
 import { finOrNull, NO_META, usableRowCount, type ResultTable, type RtMeta } from "../resultTable";
 
@@ -22,7 +23,9 @@ export function fromBatch(b: PredictBatch, dm: DesignMap | null, meta: RtMeta = 
       curve: ok ? (curveOf.get(r.doe_no) ?? null) : null,
     };
   });
-  const lhs = b.source_kind.toUpperCase() === "LHS";
+  // S15 §20.7: 등급·안내는 서버 sampling이 정한다(없으면 알 수 없는 방식 = 참고용). n·응답 판정만 여기서 한다
+  const cls: InfluenceClass = b.sampling?.influence_class ?? "reference";
+  const note = cls === "reference" ? (b.sampling ? (b.sampling.influence_note ?? null) : UNKNOWN_METHOD_TEXT) : null;
   const rt: ResultTable = {
     source: "predict",
     origin: { kind: "predict_batch", id: b.id, label: b.label },
@@ -31,7 +34,7 @@ export function fromBatch(b: PredictBatch, dm: DesignMap | null, meta: RtMeta = 
     meta,
     rows,
     counts: { total: rows.length, usable: 0, no_response: 0 },
-    influence: { ok: false, lhs, reason: null },
+    influence: { ok: false, cls, note, reason: null },
     notes: [],
     designMap: dm,
   };

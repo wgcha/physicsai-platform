@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fromBatch } from "../analysis/adapters/fromBatch";
 import { fromDoe } from "../analysis/adapters/fromDoe";
 import { commonResponses, metaChips, metaDiffers, nameSetDiff, unionRange } from "../analysis/compare";
-import { NOT_LHS_TEXT } from "../analysis/influence";
+import { OFF_FALLBACK_TEXT, UNKNOWN_METHOD_TEXT } from "../analysis/influence";
 import { NO_META } from "../analysis/resultTable";
 import type { PredictBatch } from "../api";
 import type { DesignMap } from "../api/designMap";
@@ -29,7 +29,11 @@ const doe: DoeResultTable = {
   meta: { engine_version: null, baseline_id: null, scene: null },
   rows: [{ run_id: "run__00014", no: 14, state: "SUCCEEDED", params: { THK: 2.31, RIB_N: 6 }, responses: { Stress: 151.9 } }, { run_id: "run__00015", no: 15, state: "SOLVE_FAILED", params: { THK: 3, RIB_N: 5 }, responses: { Stress: null } }],
   counts: { total: 2, usable: 1, no_response: 1 }, influence_ok: false, notes: ["응답 파일이 없습니다"],
+  influence_class: "off", influence_note: "영향도에는 유효 run이 5개 이상 필요합니다(현재 1개)",
+  sampling: { method: "TYPE_LATINHYPERCUBE", label: "LatinHyperCube", desc_id: "hs_lhs", options: {} },
 };
+/** S15 §20.6: 서버가 정한 표본 방식 등급 */
+const samp = (kind: string, cls: "formal" | "reference", note: string | null) => ({ kind, method: kind.toUpperCase(), desc_id: kind, label: kind, influence_class: cls, influence_note: note, recommended_count: null, meta: {} });
 
 describe("어댑터 (V3-S14-4)", () => {
   it("fromBatch: 반영값·실패 run 응답 null·비유한 null·curve 요약·메타 null", () => {
@@ -50,16 +54,21 @@ describe("어댑터 (V3-S14-4)", () => {
     expect(t.designMap).toBe(dm);
   });
 
-  it("fromBatch: design-map 없이도(null) 동작 — 범위·curve 없음, LHS가 아니면 influence.lhs false", () => {
-    const t = fromBatch({ ...batch, source_kind: "TABLE" } as PredictBatch, null);
+  it("fromBatch: design-map 없이도(null) 동작 — 범위·curve 없음, 등급·문구는 서버 sampling(reference), n 부족은 프런트가 판정", () => {
+    const note = "직접 만든 표 — 표본 분포를 알 수 없어 영향도는 참고용입니다";
+    const t = fromBatch({ ...batch, source_kind: "TABLE", sampling: samp("table", "reference", note) } as PredictBatch, null);
     expect(t.parameters.map((p) => [p.min, p.max])).toEqual([[null, null], [null, null]]);
     expect(t.rows.every((r) => r.curve === null)).toBe(true);
-    expect(t.influence.lhs).toBe(false);
+    expect(t.influence.cls).toBe("reference");
+    expect(t.influence.note).toBe(note);
     expect(t.influence.ok).toBe(false); // 유효 1개 < max(5, p+2)
     expect(t.influence.reason).toBe("영향도에는 유효 run이 5개 이상 필요합니다(현재 1개)");
+    // formal은 안내 없음, sampling이 없으면(옛 응답) 알 수 없는 방식 = 참고용
+    expect(fromBatch({ ...batch, sampling: samp("sobol", "formal", null) } as PredictBatch, null).influence).toMatchObject({ cls: "formal", note: null });
+    expect(fromBatch(batch, null).influence).toMatchObject({ cls: "reference", note: UNKNOWN_METHOD_TEXT });
   });
 
-  it("fromDoe: solver 출처, curve 없음, 영향도 사유(비 LHS·응답 없음·n 부족), 메타 null 허용", () => {
+  it("fromDoe: solver 출처, curve 없음, 영향도 등급·사유는 서버(influence_class·influence_note), 메타 null 허용", () => {
     const t = fromDoe(doe);
     expect(t.source).toBe("solver");
     expect(t.origin).toEqual({ kind: "train_doe", id: "doe-1", label: "DOE-001" });
@@ -68,10 +77,12 @@ describe("어댑터 (V3-S14-4)", () => {
     expect(t.rows[1].responses).toEqual({ Stress: null });
     expect(t.meta).toEqual(NO_META);
     expect(t.notes).toEqual(["응답 파일이 없습니다"]);
-    expect(t.influence).toEqual({ ok: false, lhs: true, reason: "영향도에는 유효 run이 5개 이상 필요합니다(현재 1개)" });
-    expect(fromDoe({ ...doe, type: "TYPE_FULLFACTORIAL" }).influence.reason).toBe(NOT_LHS_TEXT);
-    expect(fromDoe({ ...doe, responses: [], type: "TYPE_LATINHYPERCUBE" }).influence).toMatchObject({ lhs: true, reason: "응답이 없어 영향도를 계산할 수 없습니다" });
-    expect(fromDoe({ ...doe, influence_ok: true }).influence).toEqual({ ok: true, lhs: true, reason: null });
+    expect(t.influence).toEqual({ ok: false, cls: "off", note: null, reason: "영향도에는 유효 run이 5개 이상 필요합니다(현재 1개)" });
+    const ref = "부분 요인(해상도 IV) — 2인자 교호작용끼리 교락되어 영향도는 참고용입니다(주효과는 2인자 교호작용과 교락 없음)";
+    expect(fromDoe({ ...doe, influence_ok: true, influence_class: "reference", influence_note: ref }).influence).toEqual({ ok: true, cls: "reference", note: ref, reason: null });
+    expect(fromDoe({ ...doe, influence_ok: true, influence_class: "formal", influence_note: null }).influence).toEqual({ ok: true, cls: "formal", note: null, reason: null });
+    // off인데 사유가 없으면 대체 문구
+    expect(fromDoe({ ...doe, influence_note: null }).influence.reason).toBe(OFF_FALLBACK_TEXT);
   });
 
   it("두 출처는 같은 ResultTable 모양(키 집합 동일, designMap만 선택)", () => {

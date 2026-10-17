@@ -5,7 +5,9 @@
 import type {
   BatchCurves,
   BatchPreviewRow,
+  BatchNote,
   BatchProblem,
+  BatchSampling,
   BatchRowState,
   BatchSource,
   BatchStatus,
@@ -24,6 +26,8 @@ import { isIntegerFormat } from "../lib/format";
 import { PREVIEW_JSON, baseJob, contourSvg, curveJson, iso, makeSteps, responseFn, rng } from "./data";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import { captureMedia } from "./capture";
+import { isNewKind, mockBrief, mockDesign, mockSampling } from "./sampling";
+import { isSamplingKind, recommendedCount } from "../lib/sampling";
 import type { MockServer } from "./server";
 import type { DesignMap, DesignMapCurveStats, DesignMapMetric, DesignMapRun } from "../api/designMap";
 
@@ -48,7 +52,10 @@ export interface BatchRec {
   param_set_id: string;
   model_id: string;
   input_kind: InputKind;
-  source_kind: "LHS" | "TABLE" | "TRAIN_DOE";
+  /** DB source_kind(S15: 10종) */
+  source_kind: string;
+  /** source_meta(방식 인자·품질·이어서 추가 정보, §20.5) */
+  meta: Record<string, unknown>;
   multi_execution: number;
   created_by: string;
   created_by_name: string;
@@ -126,9 +133,33 @@ function parseTable(ps: ParamSet, text: string): { rows: BatchPreviewRow[]; prob
   return problems.length ? { rows: [], problems } : { rows: applyRows(ps, raw), problems };
 }
 
-/** batch_matrix 흉내. 409 오류는 MockResp, 그 밖은 rows·problems */
-export function batchMatrix(srv: MockServer, ps: ParamSet, source: BatchSource | undefined): MockResp | { rows: BatchPreviewRow[]; problems: BatchProblem[] } {
+export interface BatchMatrixOut {
+  rows: BatchPreviewRow[];
+  problems: BatchProblem[];
+  notes?: BatchNote[];
+  /** source_meta */
+  meta?: Record<string, unknown>;
+}
+
+/** 새 7개 kind의 모양 오류(422 INVALID_PARAMS) — 서버 pydantic 흉내 */
+function shapeError(source: BatchSource): MockResp | null {
+  const s = source as Record<string, unknown>;
+  if (s.kind === "fracfact" && s.resolution !== 4 && s.resolution !== 5) return err(422, "INVALID_PARAMS", "resolution은 4·5입니다.");
+  if (s.kind === "ccd" && s.alpha !== "face" && s.alpha !== "inscribed") return err(422, "INVALID_PARAMS", "alpha는 face·inscribed입니다.");
+  if (s.kind === "lhs_opt" && s.criterion !== "maximin" && s.criterion !== "corr") return err(422, "INVALID_PARAMS", "criterion은 maximin·corr입니다.");
+  if ((s.kind === "sobol" || s.kind === "lhs_opt") && s.seed != null && (!Number.isInteger(s.seed) || (s.seed as number) < 0 || (s.seed as number) > 4294967295)) return err(422, "INVALID_PARAMS", "seed는 0~4294967295 정수입니다.");
+  return null;
+}
+
+/** batch_matrix 흉내. 409 오류는 MockResp, 그 밖은 rows·problems(+notes·meta) */
+export function batchMatrix(srv: MockServer, ps: ParamSet, source: BatchSource | undefined): MockResp | BatchMatrixOut {
   if (!source || typeof source !== "object") return err(422, "INVALID_PARAMS", "source가 필요합니다.");
+  if (isNewKind(source.kind)) {
+    const bad = shapeError(source);
+    if (bad) return bad;
+    const d = mockDesign(ps, source, BATCH_MAX_RUNS, srv.batches.filter((b) => b.study_id === ps.study_id));
+    return { rows: applyRows(ps, d.rows), problems: d.problems, notes: d.notes, meta: d.meta };
+  }
   if (source.kind === "lhs") {
     const count = Number(source.count);
     const seed = Number(source.seed ?? 1);
@@ -138,7 +169,7 @@ export function batchMatrix(srv: MockServer, ps: ParamSet, source: BatchSource |
     const ranges = (source.ranges ?? {}) as Record<string, [number, number]>;
     const bad = Object.entries(ranges).filter(([n, r]) => !ps.parameters.some((p) => p.name === n) || !Array.isArray(r) || !Number.isFinite(r[0]) || !Number.isFinite(r[1]) || !(r[0] < r[1]));
     if (bad.length) return { rows: [], problems: bad.map(([n]) => ({ code: "RANGE_INVALID", message: `${n} 범위는 최소 < 최대인 유한한 값이어야 합니다` })) };
-    return { rows: lhs(ps, count, seed, ranges), problems: [] };
+    return { rows: lhs(ps, count, seed, ranges), problems: [], meta: { count, seed, ranges } };
   }
   if (source.kind === "table") return parseTable(ps, String(source.text ?? ""));
   if (source.kind === "train_doe") {
@@ -150,9 +181,9 @@ export function batchMatrix(srv: MockServer, ps: ParamSet, source: BatchSource |
     const have = Object.keys(samples[0]?.values ?? {}).sort();
     if (names.join() !== have.join())
       return { rows: [], problems: [{ code: "DOE_PARAM_MISMATCH", message: `① DOE 파라미터(${have.join(", ")})가 템플릿 파라미터(${names.join(", ")})와 다릅니다` }] };
-    return { rows: applyRows(ps, samples.map((s) => ({ doe_no: Number(/(\d+)$/.exec(s.run_key)?.[1] ?? 0), values: s.values }))), problems: [] };
+    return { rows: applyRows(ps, samples.map((s) => ({ doe_no: Number(/(\d+)$/.exec(s.run_key)?.[1] ?? 0), values: s.values }))), problems: [], meta: { doe_id: doe.id } };
   }
-  return err(422, "INVALID_PARAMS", "source.kind는 lhs·table·train_doe입니다.");
+  return err(422, "INVALID_PARAMS", "source.kind를 확인하세요.");
 }
 
 const isResp = (x: unknown): x is MockResp => !!x && typeof x === "object" && "status" in x;
@@ -197,6 +228,13 @@ function responsesOf(job: Job | null): Record<string, number | null> | null {
   return Object.fromEntries(t.map((x) => [x.name, x.predicted == null ? null : Number(x.predicted.toFixed(4))]));
 }
 
+/** §20.6 배치 상세·미리보기 sampling(등급은 서버가 정함 — 목은 §20.7 표 그대로) */
+export function samplingOf(srv: MockServer, b: BatchRec): BatchSampling {
+  const doe = b.source_kind === "TRAIN_DOE" ? srv.p2.does.find((d) => d.id === b.meta.doe_id) : undefined;
+  // 최적화 소유 VERIFY·FINAL 배치는 kind보다 우선 reference(§20.7) — 목은 소유 배치를 만들지 않는다
+  return mockSampling(b.source_kind, b.meta, { doeType: doe?.doe_type ?? null, doeOptions: doe?.options, });
+}
+
 export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
   const ps = srv.paramSets.find((p) => p.id === b.param_set_id)!;
   const model = srv.models.find((m) => m.id === b.model_id);
@@ -219,7 +257,7 @@ export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
     job_id: parentJob(srv, b)?.id ?? b.job_id, multi_execution: b.multi_execution, gen,
     predict: { running: cnt("RUNNING"), queued: cnt("QUEUED"), succeeded: cnt("SUCCEEDED"), failed: cnt("FAILED"), canceled: cnt("CANCELED") },
     parameters: ps.parameters.map((p) => p.name), responses: ps.responses.map((r) => ({ name: r.name, unit: r.unit })), rows,
-    source_kind: b.source_kind, created_at: b.created_at, created_by_name: b.created_by_name, finished_at: null,
+    source_kind: b.source_kind, sampling: samplingOf(srv, b), created_at: b.created_at, created_by_name: b.created_by_name, finished_at: null,
     can_cancel: ["GENERATING", "PREDICTING"].includes(batchStatus(srv, b)),
     can_retry_failed: rows.some((r) => r.state === "GEN_FAILED" || r.state === "FAILED" || r.state === "CANCELED"),
   };
@@ -258,7 +296,7 @@ export function predictBatchCreate(srv: MockServer, s: Study, params: Record<str
   const src = params.source as BatchSource;
   const rec: BatchRec = {
     id: srv.nid("pb"), study_id: s.id, batch_no: no, job_id: "", param_set_id: ps.id, model_id: modelId, input_kind: kind,
-    source_kind: src.kind === "lhs" ? "LHS" : src.kind === "table" ? "TABLE" : "TRAIN_DOE", multi_execution: multi,
+    source_kind: src.kind.toUpperCase(), meta: m.meta ?? {}, multi_execution: multi,
     created_by: me.user_id, created_by_name: me.display_name, created_at: new Date().toISOString(), canceled: false, done_notified: false,
     runs: m.rows.map((r) => ({ ...r, gen_state: "PENDING", gen_code: null, gen_message: null, predict_job_id: null })),
   };
@@ -376,12 +414,15 @@ export function validateResponses(list: unknown): { problems: { code: string; me
 }
 
 // ------------------------------------------------------------------ 시드
-function seedBatch(srv: MockServer, no: number, count: number, opts: { running?: boolean; genFail?: number[]; predFail?: number[] }) {
+function seedBatch(srv: MockServer, no: number, count: number, opts: { running?: boolean; genFail?: number[]; predFail?: number[]; source?: BatchSource }) {
   const s = srv.studies.find((x) => x.id === "s-cushion")!;
   const ps = srv.paramSets.find((p) => p.id === "ps-1")!;
-  const rows = lhs(ps, count, no, {});
+  // S15 시드: source를 주면 그 방식의 조합(mockDesign)으로 만든다(예: 화면 확인용 Sobol·Box–Behnken 배치)
+  const design = opts.source && isNewKind(opts.source.kind) ? mockDesign(ps, opts.source, BATCH_MAX_RUNS, []) : null;
+  const rows = design ? applyRows(ps, design.rows) : lhs(ps, count, no, {});
   const rec: BatchRec = {
-    id: `pb-${no}`, study_id: s.id, batch_no: no, job_id: `j-pb${no}`, param_set_id: ps.id, model_id: s.final_model_id ?? "m-2", input_kind: "assembly", source_kind: "LHS",
+    meta: design ? design.meta : { count, seed: no, ranges: Object.fromEntries(ps.parameters.map((p) => [p.name, [p.min, p.max]])) },
+    id: `pb-${no}`, study_id: s.id, batch_no: no, job_id: `j-pb${no}`, param_set_id: ps.id, model_id: s.final_model_id ?? "m-2", input_kind: "assembly", source_kind: opts.source ? opts.source.kind.toUpperCase() : "LHS",
     multi_execution: 4, created_by: "u-power", created_by_name: "김연구", created_at: iso(opts.running ? 40 : 60 * 6), canceled: false, done_notified: true,
     runs: rows.map((r) => ({ ...r, gen_state: "DONE", gen_code: null, gen_message: null, predict_job_id: null })),
   };
@@ -389,7 +430,7 @@ function seedBatch(srv: MockServer, no: number, count: number, opts: { running?:
   const parent = baseJob({
     id: rec.job_id, study_id: s.id, project_id: s.project_id, study_title: s.title, job_type: "PREDICT_BATCH", state: "SUCCEEDED",
     created_at: rec.created_at, started_at: iso(opts.running ? 39 : 60 * 6 - 1), finished_at: iso(opts.running ? 27 : 60 * 6 - 13), progress_pct: 100,
-    steps: makeSteps("PREDICT_BATCH", 3, null), params: { param_set_id: ps.id, model_id: null, multi_execution: 4, source: { kind: "lhs", count, seed: no }, batch_id: rec.id, batch_no: no },
+    steps: makeSteps("PREDICT_BATCH", 3, null), params: { param_set_id: ps.id, model_id: null, multi_execution: 4, source: opts.source ?? { kind: "lhs", count, seed: no }, batch_id: rec.id, batch_no: no },
   });
   srv.jobs.push(parent);
   for (const n of opts.genFail ?? []) Object.assign(rec.runs[n - 1], { gen_state: "FAILED", gen_code: "OUTPUT_MISSING", gen_message: "m_1 EPS_mesh_0000.rad가 만들어지지 않았습니다" });
@@ -409,9 +450,12 @@ function seedBatch(srv: MockServer, no: number, count: number, opts: { running?:
   });
 }
 
-export function seedBatches(srv: MockServer, demo?: "running") {
+/** demo: "running" 진행 중 B-003 · "sobol" 끝난 Sobol 16개 B-003(이어서 추가 후보) · "bbd" 끝난 Box–Behnken B-003(⑤ 영향도 참고용 확인) */
+export function seedBatches(srv: MockServer, demo?: "running" | "sobol" | "bbd") {
   seedBatch(srv, 2, 20, { genFail: [12], predFail: [5] });
   if (demo === "running") seedBatch(srv, 3, 20, { running: true });
+  if (demo === "sobol") seedBatch(srv, 3, 16, { source: { kind: "sobol", count: 16, seed: 1, ranges: null, continue_from: null } });
+  if (demo === "bbd") seedBatch(srv, 3, 25, { source: { kind: "bbd", ranges: null } });
 }
 
 // ------------------------------------------------------------------ 라우트
@@ -528,14 +572,23 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
         const r0 = o.responses[0];
         const vals = r0 ? o.rows.filter((r) => r.state === "SUCCEEDED").map((r) => r.responses?.[r0.name]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)) : [];
         const response_summary = r0 && vals.length ? { name: r0.name, unit: r0.unit, min: Math.min(...vals), max: Math.max(...vals), count: vals.length } : null;
-        return { id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), run_count: b.runs.length, created_at: b.created_at, created_by_name: b.created_by_name, param_set: o.param_set, gen: o.gen, predict: o.predict, response_summary };
+        return { id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), run_count: b.runs.length, created_at: b.created_at, created_by_name: b.created_by_name, param_set: o.param_set, gen: o.gen, predict: o.predict, response_summary, sampling: mockBrief(b) };
       }));
     if (method === "POST" && seg[3] === "preview") {
       const ps = srv.paramSets.find((p) => p.id === body?.param_set_id && p.study_id === s.id);
       if (!ps) return err(409, "PREREQUISITE_MISSING", "템플릿을 먼저 등록하세요.", { missing: ["PARAM_SET"] });
       const m = batchMatrix(srv, ps, body?.source as BatchSource);
       if (isResp(m)) return m;
-      return ok({ input_kind: inputKindOf(ps), count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: m.problems });
+      const src = body?.source as BatchSource;
+      const out: Record<string, unknown> = { input_kind: inputKindOf(ps), count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: m.problems };
+      const need = Math.max(5, ps.parameters.length + 2);
+      const notes = [...(m.notes ?? [])];
+      if (m.rows.length && m.rows.length < need) notes.push({ code: "INFLUENCE_TOO_FEW", message: `run이 ${need}개보다 적어 ⑤ 영향도는 계산되지 않습니다` });
+      const act = (m.meta?.active as string[] | undefined)?.length ?? ps.parameters.length;
+      const doe = src.kind === "train_doe" ? srv.p2.does.find((d) => d.id === src.doe_id) : undefined;
+      out.notes = notes;
+      out.sampling = mockSampling(src.kind.toUpperCase(), m.meta ?? {}, { recommended: isSamplingKind(src.kind) ? recommendedCount(src.kind, act, BATCH_MAX_RUNS) : null, doeType: doe?.doe_type ?? null, doeOptions: doe?.options });
+      return ok(out);
     }
     return null;
   }

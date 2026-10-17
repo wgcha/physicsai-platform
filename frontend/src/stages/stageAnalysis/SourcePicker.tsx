@@ -2,6 +2,7 @@
 // 마지막 선택은 브라우저별 기억(localStorage physicsai.analysis.source, try/catch). 쿼리(?source=batch&id=…|?source=doe&id=…)가 있으면 쿼리 우선.
 import type { PredictBatchSummary, TrainDoe } from "../../api";
 import { fmtTime } from "../../lib/format";
+import { methodShortLabel } from "../../lib/sampling";
 import type { SourceKind } from "./useResultTable";
 
 export const SOURCE_KEY = "physicsai.analysis.source";
@@ -63,13 +64,14 @@ export function SourcePicker({ slot, sel, batches, does, onChange }: { slot: str
           {sel.kind === "batch"
             ? bs.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.label} · run {b.run_count} · {fmtTime(b.created_at)}
+                  {b.label}
+                  {methodShortLabel(b.sampling) ? ` · ${methodShortLabel(b.sampling)}` : ""} · {b.run_count} run · {fmtTime(b.created_at)}
                   {b.status !== "DONE" ? " · 진행 중" : ""}
                 </option>
               ))
             : ds.map((d) => (
                 <option key={d.id} value={d.id}>
-                  {d.doe_label} · run {d.run_count ?? "–"} · {fmtTime(d.created_at)}
+                  {d.doe_label} · {d.run_count ?? "–"} run · {fmtTime(d.created_at)}
                 </option>
               ))}
         </select>

@@ -1,6 +1,7 @@
 // S14 결과 표(phase3.md §19.4, D3-62): ⑤ 결과분석의 공통 입력. 출처 둘 — solver(① 해석 DOE)·predict(④ 일괄 예측 배치) — 을 같은 모양으로 변환해
 // 같은 분석 컴포넌트(analysis/viz)에 넣는다. 변환은 adapters/fromBatch.ts·fromDoe.ts. 순수 타입·함수만(React 없음).
 import type { DesignMap, DesignMapCurveStats } from "../api/designMap";
+import type { InfluenceClass } from "../api/types";
 
 export type TableSource = "solver" | "predict";
 
@@ -46,8 +47,9 @@ export interface ResultTable {
   meta: RtMeta;
   rows: RtRow[];
   counts: RtCounts;
-  /** 영향도(PRCC·SRC) 사용 가능 여부와 사유 — 출처별 규칙은 influenceGate */
-  influence: { ok: boolean; lhs: boolean; reason: string | null };
+  /** 영향도(PRCC·SRC) 사용 가능 여부·등급·안내 — S15 §20.7. cls = 표본 방식 등급(formal 정식 · reference 참고용 · off 비활성),
+   *  note = reference일 때 표 위 회색 한 줄, reason = 비활성 사유(ok false). solver는 서버 값, predict는 서버 sampling 등급 + 프런트가 n·응답을 판정 */
+  influence: { ok: boolean; cls: InfluenceClass; note: string | null; reason: string | null };
   /** 한국어 안내(예: "응답 파일이 없습니다") */
   notes: string[];
   /** predict 출처만: GET …/design-map 원본(§17.2 지표 전체 보존 — 단독 보기의 색 값 목록) */

@@ -6,6 +6,8 @@ import { Card, CodeLine, Field, RunAction } from "../../components/ui";
 import { useApp } from "../../app/AppContext";
 import { PathInput } from "../../components/PathInput";
 import { FeatureGate } from "../../components/FeatureGate";
+import { SamplingDescription } from "../../components/SamplingDescription";
+import { HS_NOTE, descIdOf, hsCalcNote } from "../../lib/sampling";
 import { useTrain } from "./TrainContext";
 
 // ---------------------------------------------------------------- ①-3
@@ -70,10 +72,12 @@ export function DoeGenCard() {
       .doeTypes()
       .then((t) => {
         setTypes(t);
-        if (t[0]) {
-          setLabel(t[0].label);
-          setRuns(String(t[0].default_runs));
-          setOpts(defaultOptions(t[0]));
+        // S15 §20.10: 기본 = 서버가 추천한 유형(없으면 첫 항목)
+        const first = t.find((x) => x.recommended) ?? t[0];
+        if (first) {
+          setLabel(first.label);
+          setRuns(String(first.default_runs));
+          setOpts(defaultOptions(first));
         }
       })
       .catch((e) => setTypesError(errorMessage(e)));
@@ -135,7 +139,10 @@ export function DoeGenCard() {
           <Field label="DOE 유형">
             <select value={label} onChange={(e) => pick(e.target.value)} disabled={!canExec} aria-label="DOE 유형">
               {types.map((x) => (
-                <option key={x.label}>{x.label}</option>
+                <option key={x.label} value={x.label}>
+                  {x.label}
+                  {x.recommended ? " · 추천" : ""}
+                </option>
               ))}
             </select>
           </Field>
@@ -145,6 +152,14 @@ export function DoeGenCard() {
           {(t?.fields ?? []).map((f) => (
             <OptionInput key={f.key} f={f} value={opts[f.key]} disabled={!canExec} onChange={(v) => setOpts((o) => ({ ...o, [f.key]: v }))} />
           ))}
+        </div>
+      )}
+      {!typesError && t && (
+        <div className="samp-pick">
+          <SamplingDescription id={descIdOf(t.desc_id)} recommended={!!t.recommended} calc={hsCalcNote(descIdOf(t.desc_id), (setup?.parameters ?? []).filter((p) => p.use).length)} />
+          <p className="muted small hs-note" data-testid="hs-note">
+            {HS_NOTE}
+          </p>
         </div>
       )}
       <div className="form-grid">

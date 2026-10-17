@@ -111,6 +111,38 @@ describe("목 서버 ↔ openapi.json", () => {
     expect(problems(ec.body, responseSchema("/admin/env-checks", "post"), "POST env-checks")).toEqual([]);
   });
 
+  it("S15 표본 방식 응답(V3-S15-8·10 모양): 미리보기 10개 kind·배치 상세·목록 sampling·doe-types·result-table", () => {
+    const power = new MockServer({ user: "power", batchDemo: "sobol" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    const previewSchema = responseSchema("/studies/{study_id}/predict-batches/preview", "post");
+    const sources: Record<string, unknown>[] = [
+      { kind: "lhs", count: 6, seed: 1 }, { kind: "lhs_opt", count: 6, seed: 1, criterion: "maximin" }, { kind: "sobol", count: 8, seed: 1 }, { kind: "sobol", count: 8, continue_from: "pb-3" },
+      { kind: "fullfact", levels: { THK_TOP: 2, THK_FOAM: 2, E_FOAM: 2, RIB_N: 2 } }, { kind: "fracfact", resolution: 4 }, { kind: "pb" }, { kind: "bbd" }, { kind: "ccd", alpha: "inscribed" },
+      { kind: "table", text: "THK_TOP\tTHK_FOAM\tE_FOAM\tRIB_N\n0.5\t2\t8\t4\n" }, { kind: "train_doe", doe_id: "doe-1" },
+    ];
+    for (const source of sources) {
+      const r = power.handle("POST", "/studies/s-cushion/predict-batches/preview", q, { param_set_id: "ps-1", source }, h);
+      expect(r.status, JSON.stringify(source)).toBe(200);
+      expect(problems(r.body, previewSchema, `preview ${String(source.kind)}`)).toEqual([]);
+      const body = r.body as { sampling: { kind: string; influence_class: string }; rows: unknown[]; count: number };
+      expect(body.sampling.kind).toBe(source.kind);
+      expect(["formal", "reference"]).toContain(body.sampling.influence_class);
+      expect(body.count).toBe(body.rows.length);
+    }
+    const detail = power.handle("GET", "/predict-batches/pb-3", q, null, h);
+    expect(problems(detail.body, responseSchema("/predict-batches/{batch_id}", "get"), "detail")).toEqual([]);
+    expect((detail.body as { sampling: { kind: string } }).sampling.kind).toBe("sobol");
+    const list = power.handle("GET", "/studies/s-cushion/predict-batches", q, null, h);
+    expect(problems(list.body, responseSchema("/studies/{study_id}/predict-batches", "get"), "list")).toEqual([]);
+    expect((list.body as { sampling: { kind: string } }[]).every((b) => b.sampling !== null)).toBe(true);
+    const types = power.handle("GET", "/train/doe-types", q, null, h);
+    expect(problems(types.body, responseSchema("/train/doe-types", "get"), "doe-types")).toEqual([]);
+    expect((types.body as { value: string; recommended: boolean }[]).filter((t) => t.recommended).map((t) => t.value)).toEqual(["TYPE_LATINHYPERCUBE"]);
+    const rt = power.handle("GET", "/train-does/doe-1/result-table", q, null, h);
+    expect(problems(rt.body, responseSchema("/train-does/{doe_id}/result-table", "get"), "result-table")).toEqual([]);
+  });
+
   it("3차 쓰기 응답(V3-S1-5): PATCH study, archive, unarchive, retry", () => {
     const power = new MockServer({ user: "power" });
     const h = new Headers({ "X-PhysicsAI-Request": "1" });

@@ -70,17 +70,27 @@ export const FEATURE_OF: Partial<Record<JobType, FeatureKey>> = {
   OPTIMIZE: "optimize",
 };
 
+/** HyperStudy 유형 정의 파일(DATA_doe_design_type.json)의 4개 그대로 + S15 §20.6 desc_id·recommended(설정 train_data.recommended_doe_type = LHS)·influence_class.
+ *  목록 첫 항목은 FullFact — 기본 선택이 첫 항목이 아니라 recommended임을 보인다. */
 export const DOE_TYPES: DoeType[] = [
+  { label: "FullFact", value: "TYPE_FULLFACT", default_runs: 9, runs_editable: false, fields: [], desc_id: "hs_fullfact", recommended: false, influence_class: "formal" },
+  {
+    label: "FracFact", value: "TYPE_FRACFACT", default_runs: 8, runs_editable: false,
+    fields: [{ key: "RESOLUTION", label: "Resolution", type: "combo", items: ["3", "4", "5"], default: "3" }],
+    desc_id: "hs_fracfact", recommended: false, influence_class: "reference",
+  },
   {
     label: "LatinHyperCube", value: "TYPE_LATINHYPERCUBE", default_runs: 30, runs_editable: true,
-    fields: [
-      { key: "RANDOM_SEED", label: "Random Seed", type: "int", default: 1, min: 1, max: 99999 },
-      { key: "INCLUDE_NOMINAL", label: "Nominal run 포함", type: "bool", default: true },
-    ],
+    fields: [{ key: "RANDOM_SEED", label: "Random Seed", type: "int", default: 1, min: 0, max: 10000 }],
+    desc_id: "hs_lhs", recommended: true, influence_class: "formal",
   },
-  { label: "Hammersley", value: "TYPE_HAMMERSLEY", default_runs: 30, runs_editable: true, fields: [] },
   {
-    label: "FullFactorial", value: "TYPE_FULLFACT", default_runs: 9, runs_editable: false,
-    fields: [{ key: "LEVELS", label: "Levels", type: "combo", items: ["2", "3"], default: "3" }],
+    label: "Sobol", value: "TYPE_SOBOL", default_runs: 32, runs_editable: true,
+    fields: [
+      { key: "SEQUENCE_OFFSET", label: "Sequence Offset", type: "int", default: 1 },
+      { key: "SCRAMBLE", label: "Scramble", type: "bool", default: false },
+      { key: "SEED", label: "Seed", type: "int", default: 0 },
+    ],
+    desc_id: "hs_sobol", recommended: false, influence_class: "formal",
   },
 ];

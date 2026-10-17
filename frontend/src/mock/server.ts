@@ -68,7 +68,7 @@ export interface MockOptions {
   /** /status.auth.login_url(auth.dashboard_public_login_url, 운영 대시보드 기본 "/home/" — phase3 D3-38) */
   loginUrl?: string;
   /** S9: "running"이면 진행 중 일괄 예측 B-003 시드(하위 PREDICT 12개가 대기열에 들어간다) */
-  batchDemo?: "running";
+  batchDemo?: "running" | "sobol" | "bbd";
   /** S10: 예측 끝 컨투어 캡처 결과(기본 OK) */
   capture?: CaptureMode;
 }

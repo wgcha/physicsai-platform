@@ -1,22 +1,14 @@
 // S14 어댑터 (b): 해석 DOE result-table API(§19.5) → 결과 표(source "solver"). 거의 그대로 옮기고, 영향도 사용 가능 여부·사유만 채운다.
 import type { DoeResultTable } from "../../api/analysis";
-import { NOT_LHS_TEXT } from "../influence";
+import type { InfluenceClass } from "../../api";
+import { OFF_FALLBACK_TEXT } from "../influence";
 import { finOrNull, NO_META, type ResultTable } from "../resultTable";
 
-/** 서버 type = doe_type 원값(TYPE_LATINHYPERCUBE 등) — 영향도 사유 문구 선택에만 쓴다. 사용 가능 여부는 서버 influence_ok만 따른다 */
-export const isLhsType = (t: string | null | undefined) => /LHS|LATIN/i.test(t ?? "");
-
+/** 영향도 사용 가능 여부·등급·문구는 서버(influence_class·influence_note, S15 §20.7)를 따른다 */
 export function fromDoe(t: DoeResultTable): ResultTable {
-  const lhs = isLhsType(t.type);
-  const p = t.parameters.length;
-  const usable = t.counts.usable;
-  const reason = t.influence_ok
-    ? null
-    : !lhs
-      ? NOT_LHS_TEXT
-      : !t.responses.length
-        ? "응답이 없어 영향도를 계산할 수 없습니다"
-        : `영향도에는 유효 run이 ${Math.max(5, p + 2)}개 이상 필요합니다(현재 ${usable}개)`;
+  const cls: InfluenceClass = t.influence_class;
+  const ok = cls !== "off";
+  const note = t.influence_note ?? null;
   return {
     source: "solver",
     origin: { kind: "train_doe", id: t.doe_id, label: t.label },
@@ -32,7 +24,7 @@ export function fromDoe(t: DoeResultTable): ResultTable {
       curve: null,
     })),
     counts: { ...t.counts },
-    influence: { ok: t.influence_ok, lhs, reason },
+    influence: { ok, cls, note: cls === "reference" ? note : null, reason: ok ? null : (note ?? OFF_FALLBACK_TEXT) },
     notes: [...t.notes],
     designMap: null,
   };
