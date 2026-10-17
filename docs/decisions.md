@@ -105,3 +105,4 @@
 - 2026-10-16 · 예측 끝에 HyperView 배치로 방향별 컨투어 PNG·동영상 저장(실패는 경고만), 재캡처는 별도 `CONTOUR_RECAPTURE`(원래 result 불변·조회 때 덮어쓰기), 파일 제공은 `/artifacts/{id}/media`(Range)(migration 0008) — 사용자 결정 · phase3.md §15, D3-52
 - 2026-10-17 · PhysicsAI 화면 톤앤매너를 대시보드(simdashboard)와 통일(색 토큰 다크·라이트 그대로·Pretendard npm 번들·카드형 12열), 테마는 대시보드 localStorage(`simdashboard.workspace.theme.v1` → 레거시 `vd-workbench-theme` → dark)를 읽고 `storage` 이벤트로 따라감, 레이아웃 A(우측 고정 열 제거 → 상단 상태 칩 2개 + 오른쪽 서랍, 모델 목록은 ③) — 사용자 결정 · 2026-10-14 스위스 격자 결정("대시보드에는 적용하지 않음")을 대체 · architecture.md §1.5, phase3.md D3-55
 - 2026-10-17 · 단계 버튼 ①~⑤ 전체 폭(5등분)·높이 확대(52px·15px)·번호 배지(원 문자 대신 숫자 1~5), "Study 관리"는 같은 줄 오른쪽 끝 작은 버튼 — 근거: 사용자 요청 · phase3.md D3-56
+- 2026-10-17 · SCX 잡 제출(①·④ `hpc.gateway=scx`)은 대시보드 relay 경유(토큰 공유, PhysicsAI는 어댑터 미실행), 드라이브 /Users/vd.dashboard/<프로젝트>/<잡 폴더>(항상 새 폴더·삭제 없음·SPDM 루트 쓰기 금지), 결과 모름(SUBMISSION_UNKNOWN)은 자동 재제출·자동 취소 없이 사용자 확인 — 근거: 사용자 결정 · phase3.md §16, D3-57, contracts/scx_relay.md

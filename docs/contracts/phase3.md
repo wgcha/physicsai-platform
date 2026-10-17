@@ -890,6 +890,205 @@ job_type `PREDICT_BATCH`(stage 4, SLOT, 표시 "일괄 예측 입력 생성", `n
 시험(V3-S10): settings 생성(이스케이프·공백·한글 경로 → ASCII, 가짜 hw 왕복, tclsh 있으면 실제 TCL을 흉내 hwc로 실행), 골든 argv·cwd, 방향별 산출물·meta, 실패 모드(fail·open_error·one_fail·no_manifest·no_video)는 경고만, 시간 초과, 동영상 상한, 표시 설정 결정 순서, API Range(206·Content-Range·416)·413·권한(401·403), 재캡처(LIGHT·409·실패), B `media_views`·배치 범례. 가짜 hw 캡처 모드(`fake_hw_capture.py`, `FAKE_TOOL_MODE_CAPTURE`).
 서버 1회 확인(E4-10): ① `hw -clientconfig hwpost.dat -b -tcl <media>/contour_capture.tcl`에서 `info script`가 경로를 돌려주는지(빈 값이면 cwd 기준이라 동작은 같음) ② 배치에서 `exit`로 HyperView가 끝나는지 ③ 방향마다 `save animation page` 뒤 프레임 되돌림·동영상 인코더(mp4) ④ 한글·공백이 든 h3d 경로 ⑤ 4방향 + 동영상 소요(기본 `timeout_s` 1800 적정성).
 
+## 16. S11 SCX 잡 제출 (사용자 결정 2026-10-17, D3-57)
+
+목표: ① `TD_SOLVE`와 ④ `PREDICT_VERIFY`가 새 HPC 게이트웨이 모드 `scx`로 Siemens Simcenter X(SCX)에 Radioss를 제출한다. 입력 폴더를 SCX 드라이브의 새 잡 폴더에 올리고(STAGE_IN) → 제출 → 상태 조회 → 결과를 드라이브에서 내려받아 기존 `result_dir`에 놓는다. 그 뒤 등록·추출 step은 그대로. 1·2·3차 원칙(설정만·하드코딩 없음, AI 루트만 쓰기, 삭제 없음, 한국어) 유지.
+
+### 16.1 결정(사용자, 구속)
+
+| # | 결정 | 계약 반영 |
+|---|---|---|
+| U1 | 토큰·계정은 **대시보드 SCX 연결을 같이 쓴다**("같이 써") | PhysicsAI는 어댑터를 import·실행하지 않는다. 대시보드가 유일한 어댑터 소유자이고 loopback 전용 "SCX relay" HTTP API를 연다 — 전체 계약 `docs/contracts/scx_relay.md`(대시보드 사본 `simdashboard/docs/features/scx-relay.md`). 이유: refresh token 회전 + 대시보드의 단일 프로세스 워커 잠금(`dashboard.lock`) — 같은 토큰으로 워커 두 개면 한쪽 토큰이 무효가 된다 |
+| U2 | 드라이브 기준 `/Users/vd.dashboard`(공용 계정 홈) → `<프로젝트>/<잡 폴더>/`, 잡 폴더는 항상 새로, 삭제 없음 | §16.3. 기준은 설정 `hpc.scx.drive_base`(기본 `"~"` = 홈) |
+| U3 | ①·④ 모두 `scx` 모드 | §16.4·§16.5 |
+
+### 16.2 구성 요소
+
+```
+PhysicsAI 워커 ── HTTP(127.0.0.1, X-SCX-Relay-Key) ──▶ 대시보드 /internal/scx-relay/v1 ──▶ WorkerDriveGateway(단일) ──▶ SCX
+  ScxHpcGateway(simdash_adapters.hpc.scx)                 mkdirs·files(대기열 경유)·list·files(다운로드)
+  ScxRelayClient(표준 라이브러리 http.client만)            jobs/radioss·jobs/{id}·terminate·submissions/{rid}/resolve·health
+```
+
+- relay 엔드포인트(요약, 상세·오류 코드표는 scx_relay.md §5·§7): `GET /health`, `POST /mkdirs`(대기열 MKDIR, 멱등), `POST /files?dir&name`(스트리밍 본문 + `X-Content-SHA256` + `X-Request-Id` → 202 묶음, 대기열 MKDIR+FILE), `GET /batches/{id}`, `GET /list?path`, `GET /files?path&max_bytes`(스트리밍 다운로드 + `X-Content-SHA256`), `POST /jobs/radioss`(같은 `request_id` replay는 어댑터 재호출 없음), `GET /jobs/{id}`, `POST /jobs/{id}/terminate`, `POST /submissions/{rid}/resolve`.
+- 업로드는 **대시보드 업로드 대기열 경유(비동기)**: 큰 `.rad`를 요청 스레드에 붙잡지 않고, 기존 재시도·`AUTH_REQUIRED` 일시정지·덮어쓰기 금지·관리 화면을 그대로 쓴다. PhysicsAI는 묶음 상태를 폴링한다.
+- 다운로드는 **relay가 스트리밍하고 PhysicsAI가 자기 AI 루트 안에 쓴다**(relay는 PhysicsAI 폴더에 쓰지 않고, PhysicsAI는 대시보드 폴더를 읽지 않음 — 양쪽 경로 규칙 유지).
+- 패키지 규칙 유지: `simdash_adapters`는 표준 라이브러리만 import(R3-8) → relay 클라이언트는 `http.client`(리다이렉트 따르지 않음, 시간 한도 필수).
+
+### 16.3 드라이브 경로·이름
+
+- 표기: 내부 값은 **공용 계정 홈 기준 상대 경로**(어댑터 `drive_root="~"` 관례, relay API 경로). 설정 `hpc.scx.drive_base`는 `"~"`(= 홈) 또는 `"~/<상대>"`만 허용 → 내부 기준 `""` 또는 `<상대>`. 화면·로그 표시는 `hpc.scx.home_display`(기본 `/Users/vd.dashboard`) + `/` + 상대 경로(표시 전용, 계산에 쓰지 않음).
+- 잡 폴더 = `<기준>/<프로젝트>/<잡 이름>`:
+  - 프로젝트 = Study 폴더 이름 `studies.folder_name`을 정규화: NFC → `[A-Za-z0-9_-]` 밖 문자는 `_` → `_` 연속은 하나로 → 앞뒤 `_`·`-` 제거 → 64자 자름 → 비면 `study`. Windows 예약 이름(`CON PRN AUX NUL COM1-9 LPT1-9`, 대소문자 무시)이면 앞에 `s_`. (현재 `folder_name` CHECK `^[A-Za-z0-9][A-Za-z0-9_\-]{0,63}$`이라 대부분 그대로.)
+  - ① 잡 이름 `01_D-<NNN>_<run_key>_<ts>` 예 `cushion/01_D-003_run__00012_20261017T105700/`. `D-<NNN>` = 그 Study의 `train_does`를 `(created_at, id)` 순으로 센 1부터의 번호(3자리 0 채움, 1000 이상은 그대로).
+  - ④ 잡 이름 `04_V-<NNN>_<ts>` 예 `cushion/04_V-007_20261017T105700/`. `V-<NNN>` = 그 Study의 `PREDICT_VERIFY` 작업을 `(created_at, id)` 순으로 센 이 작업의 번호.
+  - `<ts>` = HPC_SUBMIT step 시작 시 워커 현지 시각 `%Y%m%dT%H%M%S`(한 작업의 run들은 같은 값).
+  - 번호·시각은 HPC_SUBMIT에서 한 번 계산해 `hpc_jobs.remote_dir`에 고정(뒤에 다시 계산하지 않음).
+- 검사: 프로젝트·잡 폴더 구간은 `^[A-Za-z0-9][A-Za-z0-9_.\-]{0,127}$`, 파일 이름은 입력 파일 이름 그대로(§16.4 2번 규칙), 전체 ≤ 1024자. relay도 같은 규칙과 SPDM 루트 금지를 다시 검사한다(scx_relay.md §4).
+- **항상 새 폴더**: 잡 폴더를 `list`(부모)로 확인해 이미 있으면 `_2`…`_9`를 붙이고, 그래도 있으면 step 실패 `SCX_REMOTE_DIR_EXISTS`. 기존 폴더를 재사용·덮어쓰지 않는다. 같은 작업 안 재요청은 멱등(`request_id`)이라 새 폴더를 만들지 않는다.
+- **SPDM 마스터 루트 보호(P1, 예외 없음)**: 잡 폴더는 `SIMDASH_SCX_DRIVE_ROOT`와 같거나 그 안일 수 없다. PhysicsAI는 `/health`의 `forbidden_prefixes`로 미리 검사해(작업 실패 `SCX_PATH_NOT_ALLOWED`, 프로젝트 이름이 SPDM 루트 첫 구간과 같을 때 포함), relay가 최종 거부(403 `PATH_NOT_ALLOWED`). 이를 허용하는 설정은 두지 않는다.
+
+### 16.4 흐름(step 키는 바꾸지 않음)
+
+step 정의·작업 유형·재시도 시작 지점은 그대로다(`TS_PREP → HPC_SUBMIT → COLLECT → TS_REGISTER`, `PV_PREP → HPC_SUBMIT → COLLECT → PV_EXTRACT → PV_TABLE`). `scx` 모드에서 HPC_SUBMIT·COLLECT 안쪽만 달라진다(공통 헬퍼 `worker/physicsai_worker/steps/_scx.py`). 다른 모드(`none`·`command`)의 동작은 불변.
+
+**HPC_SUBMIT — 단계 A: STAGE_IN (모든 run 먼저)**
+1. `gw.health()` — `job_api=false` → 실패 `HPC_SUBMIT_FAILED` "대시보드 어댑터에 잡 API 없음(v0.3.0 이상 필요)", `writes_active=false` → "대시보드 드라이브 쓰기 꺼짐", 연결 실패 → `HPC_SUBMIT_FAILED`(UNAVAILABLE).
+2. run마다(④는 1개) 입력 폴더 = ① `train_runs.input_rel`, ④ `V/input`. 올릴 파일 = **직속 정규 파일 중 `hpc.scx.stage_patterns`(기본 `["*.rad","*.inc","*.csv"]`) 일치**, 링크·reparse·`_backup` 제외, 하위 폴더는 올리지 않음(하위 폴더에 패턴 파일이 있으면 경고 `SCX_SUBDIR_SKIPPED`). 파일 이름 검사(제어문자·`/\:` 금지, ≤255자), 파일 크기 ≤ `/health.max_upload_bytes`, run 합계 ≤ `hpc.scx.max_stage_bytes`. 위반 → 실패 `INPUT_INVALID`.
+3. `hpc_jobs` 행을 먼저 삽입: `state=SUBMITTING`, `gateway_mode="scx"`, `remote_dir`, `request_id = "pai-" + hpc_jobs.id`, `staged = {files:[{name,size,sha256}]}`. (①은 run 상태 바꾸지 않음.)
+4. `POST /mkdirs`(잡 폴더) → 파일마다 `POST /files`(`X-Request-Id = <request_id>:f:<name>`) → 묶음이 모두 `DONE`일 때까지 `GET /batches`를 `hpc.scx.stage_poll_s`(기본 5) 간격으로 폴링(`ctx.checkpoint()`로 취소 반영, 진행률 = 끝난 바이트/전체). `PAUSED`(대시보드 재로그인 필요)는 로그 한 줄 남기고 계속 기다림. `hpc.scx.stage_timeout_s`(기본 7200) 초과 또는 `CONFLICT`·`FAILED`·`CANCELLED`·`PARTIAL` → 실패 `SCX_STAGE_IN_FAILED`(그 행 `FAILED`, 드라이브에 올라간 것은 그대로 둠 — 삭제 없음). STAGE_IN 실패는 **아직 아무것도 제출하지 않았으므로 취소할 것이 없다**.
+
+**HPC_SUBMIT — 단계 B: 제출 (run 순서대로)**
+5. 요청: `input_path = <잡 폴더>/<starter>`(① `train_runs.starter_name`, ④ 원 예측 result의 `starter`). `engine_paths` = starter가 `<base>_0000.rad`이고 올린 파일에 `<base>_0001.rad`가 있으면 그 1개, 아니면 빈 배열. `additional_paths` = `hpc.scx.list_additional_paths`(기본 true)이면 올린 나머지 파일 전부(starter·engine 제외, 이름순), false면 빈 배열(폴더 전체를 서버가 쓴다고 가정). 둘 다 서버 확인 E4-11-4·5. 자원 = `hpc.scx.{appliance, version, ncpu, memory_gb, queue_type, run_type, mpi, single_precision}`, 작업 params `hpc.ncpus`가 있으면 ncpu를 덮어씀(`queue`·`walltime`은 scx에서 무시하고 로그 한 줄).
+6. `POST /jobs/radioss`(`request_id` = 행의 값). 전송 오류·시간 초과·`SUBMISSION_IN_PROGRESS`이면 **같은 request_id로** `hpc.scx.submit_replay_attempts`(기본 3)회까지 `hpc.scx.submit_replay_wait_s`(기본 10) 간격 replay — relay가 어댑터를 다시 부르지 않으므로 중복 제출이 아니다.
+7. 결과:
+   - 성공 → 행 `QUEUED`, `external_job_id`, `submitted_at`, `output_path`/`output_rel`(있으면). ①은 run `SUBMITTED`(기존과 같음).
+   - **`SUBMISSION_UNKNOWN`**(relay 409, 또는 replay를 다 써도 응답 없음) → 행 `state=UNKNOWN`, `submission_unknown=true`, `external_job_id=NULL`, error_message "SCX 제출 결과를 알 수 없습니다 — SCX에서 확인 필요". ①은 run `SUBMITTED`로 두고 `hpc_job_id` 연결. **자동 재제출 없음, 이미 제출한 다른 run 자동 취소 없음.** 남은 run은 제출하지 않고(행도 만들지 않음) result `not_submitted`에 기록 + 경고 `SCX_NOT_SUBMITTED`. 작업 attention `HPC_SUBMISSION_UNKNOWN` + 알림 `HPC_SUBMISSION_UNKNOWN`(등록자). 그 뒤 `EnterWaitingHpc`(행이 하나라도 있으므로).
+   - 그 밖 오류(relay가 확정 실패로 돌려준 코드: `INVALID_PATH`·`PATH_NOT_ALLOWED`·`NOT_FOUND`·`FORBIDDEN`·`DRIVE_AUTH_REQUIRED`·`JOB_API_UNAVAILABLE`·`SCX_JOB_ERROR`·`INVALID_REQUEST` 등) → 행 `FAILED`, 그 다음은 기존 규칙(phase2 §6.5): 이미 제출한 run을 `terminate`로 취소 시도 + `HPC_SUBMIT_FAILED`. (확정 실패에서만 형제 취소. UNKNOWN에서는 하지 않음.)
+
+**대기(WAITING_HPC) — 폴러**: §16.6 표. 주기 = `hpc.scx.poll_interval_s`(null이면 `hpc.poll_interval_s`).
+
+**COLLECT (scx)**
+8. `SUCCEEDED` 행마다 `output_rel`(없으면 마지막 `GET /jobs/{id}`로 다시 받음) → 없으면 그 run 회수 실패 "SCX 결과 위치 없음"(`SCX_OUTPUT_MISSING`). 있으면 `GET /list`를 깊이 `hpc.scx.collect_max_depth`(기본 2)까지 재귀(항목 합계 ≤ 20000), 파일 이름이 `hpc.transfer.collect_patterns` 중 하나와 맞는 것만.
+9. 파일마다 크기 ≤ min(`hpc.scx.max_download_bytes`, `hpc.transfer.max_collect_bytes`, `/health.max_download_bytes`) — 넘으면 그 run 회수 실패. `GET /files` → `<result_dir>/<상대 경로>.part`에 쓰며 sha256 계산 → `X-Content-SHA256`·길이 일치하면 `os.replace`로 최종 이름, 불일치면 `.part`를 남기지 않고 1회 다시, 그래도 틀리면 회수 실패. `result_dir` = ① `01_train/results/<doe>/<run>`(TS_PREP가 `_backup` 처리·생성), ④ `V/result`. 경로 결합은 `ctx.abs` 기준 안쪽만(`..`·절대·링크 거부).
+10. 완료 잡이므로 기존 "10초 간격 2회 불변" 안정성 대기는 하지 않는다. 기록·부분 실패·`COLLECT_FAILED` 규칙, `collect_state`, ① `collected_runs`/`TS_REGISTER`, ④ `PV_EXTRACT`(h3d 정확히 1개 규칙)는 그대로.
+
+**취소**: 작업 취소 → 폴러가 행마다 `terminate`(기존 경로) → 성공 `CANCELED`, 실패 `CANCEL_REQUESTED` 유지·`HPC_CANCEL_FAILED`(기존). `external_job_id`가 없는 `UNKNOWN` 행은 원격 호출 없이 `CANCELED` + error_message "원격 잡 확인 불가 — SCX에서 직접 확인하세요"(`submission_unknown`은 true로 남김) + 작업 경고.
+
+### 16.5 결과 모름(SUBMISSION_UNKNOWN) — 사용자 조치
+
+- 표시: `GET /jobs/{id}/hpc-jobs` 행에 `submission_unknown`, `remote_dir`(표시 경로), `request_id`, `resolve_pending`, `error_message`. 화면(후속 프런트 작업)은 "확인 필요" 배지와 조치 3개.
+- API: `POST /jobs/{id}/hpc-jobs/{hid}/resolve` (power 이상, 작업 취소와 같은 소유자·관리자 규칙, 감사 `HPC_RESOLVE`) 본문 `{"action": "recheck" | "attach" | "mark_not_submitted", "external_job_id"?: str(attach만, 1~128자, 제어문자 금지), "version": int}` → 202 `HpcJob`(`resolve_pending:true`). 오류: 409 `HPC_NOT_UNKNOWN`(행이 UNKNOWN·submission_unknown 아님) · 409 `HPC_RESOLVE_PENDING` · 409 `VERSION_CONFLICT` · 422 `INVALID_PARAMS`.
+- API는 게이트웨이를 부르지 않는다(platform.md §12.2 "API는 availability()만"). 요청을 `hpc_jobs.resolve_request`에 적고 **워커 폴러가 다음 주기에 처리**:
+  - `recheck`: 같은 request_id로 `POST /jobs/radioss` replay(어댑터 재호출 없음) → relay가 `SUBMITTED`를 돌려주면 그 job_id로 `QUEUED`(정상 진행), 여전히 `SUBMISSION_UNKNOWN`이면 그대로 + 알림 문구 "아직 확인 불가".
+  - `attach`: 사용자가 SCX 화면에서 찾은 잡 ID → relay `POST /submissions/{rid}/resolve {attach, job_id}`(relay가 `get_job`으로 존재 확인·중복 거부) → 성공 시 행 `QUEUED`/상태값, `external_job_id`, `submission_unknown=false`. 실패면 행 그대로 + `error_message`에 이유.
+  - `mark_not_submitted`: 사용자가 SCX에 잡이 없음을 확인 → relay `resolve {abandon}`(relay 실패여도 PhysicsAI 쪽은 진행, 경고 기록) → 행 `FAILED`, error_message "제출되지 않음(사용자 확인)". ① run `SOLVE_FAILED` → 기존 "실패 run 다시 제출"(새 `TD_SOLVE`, 새 잡 폴더)로 재제출. ④는 작업이 T13/T10b 규칙으로 끝나고 검증을 새로 실행.
+  - 처리 후 `resolved_by`·`resolved_at` 기록, `resolve_request` 비움, 남은 UNKNOWN 행이 없으면 attention 해제.
+- 자동 처리 없음: UNKNOWN 행은 `lost_after_polls`·`max_unreachable_minutes`로 LOST·실패가 되지 않는다(폴러가 `external_job_id IS NULL` 행은 상태 조회를 건너뜀). 작업은 사용자가 조치하거나 취소할 때까지 WAITING_HPC에 머문다.
+- 주의 문구(화면·API 설명): "SCX에 잡이 실제로 있는데 '제출 안 됨'으로 표시하면 같은 해석이 두 번 돌 수 있습니다(폴더는 따로)."
+
+### 16.6 상태 매핑
+
+| 출처 | 값 | `hpc_jobs.state` | 비고 |
+|---|---|---|---|
+| HPC_SUBMIT | 행 삽입(제출 전) | `SUBMITTING` | 워커 중단 후 남은 `SUBMITTING`은 housekeeping이 `UNKNOWN`+`submission_unknown`으로(결과를 모름) |
+| `POST /jobs/radioss` | 201/200 | `QUEUED` | `external_job_id` 기록 |
+| 〃 | 409 `SUBMISSION_UNKNOWN`·replay 소진 | `UNKNOWN` + `submission_unknown=true` | §16.5 |
+| 〃 | 확정 오류 | `FAILED` | 형제 취소(기존) |
+| `GET /jobs/{id}`.status | `Queued` | `QUEUED` | |
+| 〃 | `Running` | `RUNNING` | |
+| 〃 | `Completed` | `SUCCEEDED` | `HpcStatus(state="FINISHED", outcome="SUCCEEDED")` |
+| 〃 | `Failed` | `FAILED` | `outcome="FAILED"`, `error_message` = JobInfo.error_message(마스킹·500자) |
+| 〃 | `Aborted` | 행이 `CANCEL_REQUESTED`면 `CANCELED`, 아니면 `FAILED` | 문구 "SCX에서 중단됨" |
+| 〃 | 그 밖 문자열 | 상태 유지, `unknown_count`+1 → `lost_after_polls`면 `LOST` | `external_state_raw`에 원문 |
+| relay | 404 `SCX_JOB_NOT_FOUND` | 위와 같음(UNKNOWN 계수) | PBS의 "not_found → 끝남" 규칙은 scx에 쓰지 않음(`not_found=false`) |
+| relay | 연결 실패·5xx·`DRIVE_AUTH_REQUIRED`·`DRIVE_BUSY` 등 | 상태 유지 | `HpcGatewayError(UNAVAILABLE)` → 기존 `hpc_unreachable_since`·`max_unreachable_minutes`(문구에 "대시보드 SCX 연결 확인") |
+| relay | 404 `JOB_NOT_FOUND`(relay 기록에 없음) | 상태 유지, error_message | 설정·DB 불일치 — UNAVAILABLE과 같이 처리 |
+
+`collect_state`(`NONE→PENDING→COLLECTING→COLLECTED|FAILED`)와 `hpc_terminal_transition`(T10·T10b·T13)은 그대로. `UNKNOWN`은 종료 상태가 아니므로 작업이 기다린다.
+
+### 16.7 게이트웨이 확장(`simdash_adapters.hpc`, platform.md §12.5)
+
+- `HpcAvailability.mode`에 `"scx"`, `HpcGatewayError.code`에 `"SUBMISSION_UNKNOWN"` 추가. `HpcStatus`에 선택 필드 `outcome: Literal["SUCCEEDED","FAILED"] | None = None`, `output_path: str | None = None`, `output_rel: str | None = None`, `error_message: str | None = None`(기본값 있어 기존 생성 코드 불변). 폴러: `FINISHED`에서 `outcome`이 있으면 그것을, 없으면 기존 exit_code 규칙.
+- `ScxHpcGateway`는 `HpcJobGateway`(availability·submit·status·cancel)를 구현하고 scx 전용 메서드를 더한다: `health()`, `ensure_new_dir(parent, name) -> str`, `mkdirs(rel, request_id)`, `upload(local_path, rel_dir, name, sha256, request_id) -> batch_id`, `batch(batch_id)`, `submit_radioss(req: ScxRadiossRequest) -> ScxSubmitOutcome`, `list(rel, max_entries)`, `download(rel, dst_local, max_bytes) -> (size, sha256)`, `resolve(request_id, action, job_id=None)`. 범용 `submit(spec)`은 scx에서 `NOT_CONFIGURED`("scx 모드는 단계 A·B 흐름으로 제출")를 낸다 — step이 `availability().mode == "scx"`로 분기.
+- `availability()`: 설정 검증(아래) + 비밀 파일 읽힘 → `configured=true`. 네트워크 health는 TTL `hpc.scx.health_ttl_s`(기본 30)·시간 한도 3초로 캐시해 message에만 반영("SCX(대시보드 연결)" / "대시보드 연결 확인 실패(일시)" / "대시보드 어댑터에 잡 API 없음" — 마지막은 `configured=false`). 일시 장애로 작업 생성을 막지 않는다.
+
+### 16.8 설정(`hpc.scx`, 기본값은 스키마 한 곳)
+
+| 키 | 기본 | 검증 |
+|---|---|---|
+| `hpc.gateway` | `none` | `none | command | adapter | scx`(환경변수 `PHYSICSAI_HPC_GATEWAY` 우선, 기존) |
+| `relay_url` | `""`(scx면 필수) | `http://127.0.0.1:<port>` · `http://[::1]:<port>` · `http://localhost:<port>`만(경로·쿼리·사용자 정보 없음). 클라이언트가 `/internal/scx-relay/v1`을 붙임 |
+| `secret_file` | `""` = `<런타임>/secrets/scx_relay_key` | 파일 한 줄 base64url 43~128자. 없거나 형식 틀리면 `configured=false`(사유에 경로만, 값 없음) |
+| `drive_base` | `"~"` | `"~"` 또는 `"~/<상대>"`(§4 규칙) |
+| `home_display` | `/Users/vd.dashboard` | 표시 전용 |
+| `appliance` | `""`(필수) | 1~128자, 제어문자 금지(E4-11-1) |
+| `version` | `""`(필수) | 1~128자(E4-11-2) |
+| `ncpu` | `16` | 1~4096 |
+| `memory_gb` | `null` | null 또는 1~65536 |
+| `queue_type` | `implicit` | 1~64자 |
+| `run_type` | `both - use starter and engine files` | 1~128자 |
+| `mpi` | `SMP (default)` | 1~128자 |
+| `single_precision` | `false` | bool |
+| `poll_interval_s` | `null`(= `hpc.poll_interval_s`) | null 또는 10~3600 |
+| `max_download_bytes` | `21474836480` | 1 MiB~2^40 |
+| `stage_patterns` | `["*.rad","*.inc","*.csv"]` | 1~32개 fnmatch, `/\` 금지 |
+| `list_additional_paths` | `true` | bool(E4-11-4) |
+| `max_stage_bytes` | `21474836480` | 1 MiB~2^40 |
+| `stage_poll_s` / `stage_timeout_s` | `5` / `7200` | 1~60 / 60~86400 |
+| `submit_replay_attempts` / `submit_replay_wait_s` | `3` / `10` | 0~10 / 1~120 |
+| `http_timeout_s` / `transfer_timeout_s` | `30` / `3600` | 요청 1개(파일 전송 제외) / 파일 1개 전송 |
+| `collect_max_depth` | `2` | 0~5 |
+| `health_ttl_s` | `30` | 0~600 |
+
+`deploy/setup_config.py`는 `hpc.scx` 절이 없을 때만 주석 달린 기본 절을 보충(값 덮어쓰기 없음). 비밀 파일은 설치 스크립트가 만들지 않는다 — 관리자가 한 번 만든 같은 값을 대시보드 `SIMDASH_SCX_RELAY_SECRET_FILE`과 PhysicsAI `secret_file`에 넣는다(admin.md에 생성 명령·ACL 안내, 실제 값은 어떤 문서·git에도 두지 않음).
+
+### 16.9 DB — migration `0009_scx_gateway`
+
+- `hpc_jobs` 열 추가: `remote_dir VARCHAR(1024)`, `request_id VARCHAR(128)`(부분 유일 `WHERE request_id IS NOT NULL`), `staged JSONB`, `output_path VARCHAR(1024)`, `output_rel VARCHAR(1024)`, `submission_unknown BOOLEAN NOT NULL DEFAULT false`, `resolve_request JSONB`, `resolved_by VARCHAR`, `resolved_at TIMESTAMPTZ`. 상태 CHECK는 그대로(`UNKNOWN` 이미 있음).
+- `notifications` event CHECK에 `HPC_SUBMISSION_UNKNOWN` 추가.
+- 응답 `HpcJob`에 `gateway_mode`, `remote_dir`(표시 경로), `output_path`, `submission_unknown`, `resolve_pending`, `error_message` 추가(선택 필드, 기존 클라이언트 영향 없음).
+
+### 16.10 안전
+
+1. **SPDM 루트 쓰기 금지**(§16.3, 양쪽 검사, 예외 설정 없음). 드라이브 삭제·이동·덮어쓰기 없음 — PhysicsAI 클라이언트에 그런 메서드가 없다(정적 시험).
+2. **경로 검증 양쪽**: PhysicsAI(이름·깊이·길이·기준 안·금지 접두) → relay(`validate_drive_rel_path` + 범위 + 금지). 로컬 쓰기는 `ctx.abs` 기준 안, `.part` → `os.replace`, 링크 거부.
+3. **비밀**: 헤더 `X-SCX-Relay-Key`만, URL·쿼리·로그·오류 묶음(`error_bundle`)·설정 요약에 값 없음. 워커 기동 때 값을 로그 마스킹 목록에 등록. 설정 요약은 `secret_file` 경로와 `present: true|false`만. 저장소·문서에는 실제 값을 두지 않는다.
+4. **loopback 전용**: `relay_url` 검증(§16.8) + relay 쪽 client 주소·프록시 헤더 검사 + `/internal` 경로가 프록시 대상 아님.
+5. **제출 중복 방지**: `request_id` = `pai-<hpc_jobs.id>`(행 먼저 삽입), replay만 자동, 새 제출은 새 행·새 폴더.
+6. relay `error_message`·`JobInfo.error_message`는 PhysicsAI 쪽에서도 마스킹(기존 hpc 마스킹 함수) 후 500자.
+
+### 16.11 서버 확인(E4-11, 사용자)
+
+| # | 확인 | 방법 | 다르면 |
+|---|---|---|---|
+| E4-11-1 | Radioss appliance 이름 | SCX 화면·HPC_SDK 예제에서 Radioss 제출 시 appliance 값 | `hpc.scx.appliance` |
+| E4-11-2 | version 문자열(예 `2026.1`인지 `Radioss 2026.1`인지) | 같은 곳 | `hpc.scx.version` |
+| E4-11-3 | `input_path`가 받는 표기(상대 `cushion/…` / `~/cushion/…` / `/Users/vd.dashboard/cushion/…`) | 테스트 폴더 1개로 relay 표기 3가지 제출 | 대시보드 `SIMDASH_SCX_RELAY_JOB_PATH_FORM` |
+| E4-11-4 | include(`*.inc`·`RENUM_INIT.csv`)를 `additional_paths`에 꼭 넣어야 하는지(아니면 폴더째 복사되는지) | include 있는 run 1개를 true/false로 각각 | `hpc.scx.list_additional_paths` |
+| E4-11-5 | `run_type` "both"에서 engine(`_0001.rad`)을 `engine_paths`로 줘야 하는지 | 같은 시험 | step 규칙(변경 메모) |
+| E4-11-6 | 결과 위치: `JobInfo.output_path` 표기와 위치(잡 폴더 안/서버 작업 폴더), `list_dir`·`download_to`로 읽히는지, 하위 폴더 깊이 | 완료 잡 1개 | relay output_rel 변환·`collect_max_depth` |
+| E4-11-7 | 상태 문자열 전체(Queued·Running·Completed·Failed·Aborted 외 값 여부, 대소문자) | 대기·실행·완료·실패·중단 각 1회 | §16.6 표 |
+| E4-11-8 | `terminate_job`: 대기·실행·완료 잡에서 동작과 이후 상태(Aborted?) | 시험 잡 | 취소 처리 |
+| E4-11-9 | 대시보드에 설치된 어댑터 버전 ≥ 0.3.0이고 `WorkerDriveGateway`가 잡 API를 노출하는지, `SUBMISSION_UNKNOWN` 코드 값 | relay `/health`의 `job_api`·`adapter_version` | 어댑터 업데이트 |
+| E4-11-10 | `ncpu`·`memory_gb`·`queue_type`·`mpi` 허용 값 | SCX 화면 | 설정 |
+| E4-11-11 | 1 GB 이상 `.rad` 업로드·10 GB h3d 다운로드 소요와 그동안 대시보드 화면 반응(워커 1개 공유) | 시험 | `SIMDASH_SCX_MAX_CONCURRENCY`·운영 시간대 |
+| E4-11-12 | 결과 파일 이름이 `collect_patterns`(`*.h3d`·`*T01`·`*_0000.out`·`*_0001.out`)와 맞는지 | 완료 잡 목록 | `hpc.transfer.collect_patterns` |
+
+### 16.12 시험
+
+**PhysicsAI**(Linux, Altair·대시보드 없이): 가짜 relay `packages/simdash_adapters/tests/fake_scx_relay.py` — `http.server`를 127.0.0.1 임의 포트에 띄워 scx_relay.md §5를 임시 폴더("드라이브")로 흉내(키 검사, 묶음 상태 진행, replay 기록, 주입: `SUBMISSION_UNKNOWN`·응답 끊김·`BUSY`·`PAUSED`·`CONFLICT`·상태 시퀀스·해시 불일치·`job_api=false`). `backend/tests`는 같은 가짜를 fixture로 재사용.
+1. 설정: relay_url loopback 외 거부, secret_file 없음/형식 → configured=false(값 비노출), drive_base 표기, 필수 appliance·version.
+2. 이름: 프로젝트 정규화(예약어·빈 값·64자), D-/V- 번호, ts 고정, `_2` 접미, 1024자, SPDM 접두 거부.
+3. STAGE_IN: 패턴·링크·하위 폴더 경고·크기 상한·sha·묶음 PAUSED 대기·시간 초과·CONFLICT 실패(제출 0건).
+4. 제출: engine 판정, additional_paths(true/false), params ncpus, replay(전송 끊김 → 같은 request_id, 가짜 relay 어댑터 호출 1회), 확정 실패 → 형제 terminate(기존), **SUBMISSION_UNKNOWN → 형제 취소 없음·남은 run 미제출·attention·알림·WAITING_HPC**.
+5. 폴러: §16.6 표 전부, UNKNOWN 행 조회 건너뜀·LOST 안 됨, Aborted/CANCEL_REQUESTED → CANCELED, 연결 실패 → hpc_unreachable_since.
+6. resolve API: 권한(401·403), 409 3종, 202 → 폴러 처리 recheck/attach/mark_not_submitted, 감사 행, ① run 상태·재제출 경로, ④ 종료 전이.
+7. COLLECT: 패턴·깊이·크기 상한·sha 불일치 재시도·`.part` 미잔존·output_rel 없음 실패, ① 부분 회수(T10b)·④ h3d 1개.
+8. 취소: terminate, UNKNOWN 행 로컬 CANCELED + 경고.
+9. 정적: `simdash_adapters`가 표준 라이브러리만 import, scx 클라이언트에 delete·move·overwrite 계열 이름 없음, 비밀 값이 로그·error_bundle에 없음(caplog). migration 0009 PG 왕복(upgrade만).
+**대시보드**: scx_relay.md §8.
+
+### 16.13 파일 소유(병렬 구현 2개 — 겹치는 파일 없음)
+
+| 에이전트 | 저장소 | 파일 |
+|---|---|---|
+| **Impl-Relay** | simdashboard(브랜치 `claude/scx-drive`에서 새 브랜치) | scx_relay.md §9 목록만. PhysicsAI 저장소는 읽기만 |
+| **Impl-SCX**(PhysicsAI 백엔드) | physicsai-platform `claude/phase3` | 새: `packages/simdash_adapters/src/simdash_adapters/hpc/scx.py`·`scx_client.py`·`scx_naming.py`, `packages/simdash_adapters/tests/fake_scx_relay.py`·`test_scx_*.py`, `migrations/versions/0009_scx_gateway.py`, `worker/physicsai_worker/steps/_scx.py`, `backend/tests/test_scx_*.py`. 수정: `packages/simdash_adapters/src/simdash_adapters/hpc/types.py`·`factory.py`·`__init__.py`, `backend/physicsai_core/hpc/gateway.py`, `backend/physicsai_core/config/schema_hpc.py`·`validate.py`·`runtime.py`, `backend/physicsai_core/db/tables/execution.py`, `backend/physicsai_core/db/repositories/hpc.py`, `backend/physicsai_core/state_machine.py`(필요 시), `worker/physicsai_worker/hpc_poller.py`·`housekeeping.py`, `worker/physicsai_worker/steps/stage1_train_data/solve.py`, `worker/physicsai_worker/steps/stage4_predict/verify.py`, `backend/physicsai_api/routers/jobs.py`, `backend/physicsai_api/schemas/jobs.py`, `openapi` 산출물, `deploy/setup_config.py`, `docs/admin.md`(scx 절), 설정 예시 파일 |
+| (후속) Impl-Frontend | physicsai-platform `frontend/**` | "확인 필요" 배지·조치 3개·원격 폴더 표시. 이번 두 에이전트는 `frontend/**`를 건드리지 않음 |
+
+인터페이스 고정점: relay HTTP 계약(scx_relay.md) — 양쪽은 서로의 코드를 import하지 않고 이 문서와 각자의 가짜(대시보드 `drive_fakes.py` 잡 API, PhysicsAI `fake_scx_relay.py`)로 시험한다.
+
+### 16.14 리스크
+
+- **어댑터 워커 1개 공유**: 큰 업로드·다운로드 동안 대시보드 화면의 드라이브 읽기가 늦어진다(다운로드는 BACKGROUND 우선순위, 업로드는 대기열 순서). E4-11-11.
+- **서버 임시 공간 이중 사용**: 업로드·다운로드가 대시보드 `SIMDASH_SCX_STAGING_DIR`를 거친다(파일 크기 + 1 GiB 여유 검사).
+- relay 쓰기는 `SIMDASH_DRIVE_WRITES_ENABLED=true` + SPDM 루트 설정(대기열 동작)에 묶인다. 대시보드 재로그인 필요(`AUTH_REQUIRED`)면 대시보드 자체 업로드와 함께 멈춘다.
+- **결과 위치 미확인**(E4-11-6): output_path가 드라이브 경로가 아니면 회수 방식을 다시 정해야 한다.
+- SUBMISSION_UNKNOWN은 사람 조치 전까지 작업이 WAITING_HPC에 남고, "제출 안 됨"을 잘못 고르면 중복 해석이 생긴다.
+- 공용 계정 홈 바로 아래에 프로젝트 폴더를 만들므로 같은 이름의 다른 용도 폴더가 있으면 그 안에 잡 폴더가 생긴다(덮어쓰기는 없음). 필요하면 `drive_base: "~/physicsai"`로 바꿀 수 있다.
+- 비밀 교체는 두 앱 재시작이 필요하다. 대시보드 migration 번호(0044)는 다른 브랜치와 충돌할 수 있어 구현 때 다음 번호로.
+
 ## 변경 메모(D3-n) — 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
 
 - **D3-1 (S1, §3.4 재시도 시작 지점 표시명)**: `JobStep`에는 표시명(label)이 없다(API 모양 불변 유지). 시작 지점 문구는 `{step_no}. {표시명}`에서 표시명을 해당 step이 `Job.current_step_key`와 같으면 `current_step_label`(실패 작업은 실패한 step이 current), 아니면 `step_key`로 쓴다. 첫 재개 step이 1이면 "처음(1단계)". 구현 `frontend/src/components/JobRetryButton.tsx` `retryStartText`. (Plan 승인)
@@ -950,3 +1149,4 @@ job_type `PREDICT_BATCH`(stage 4, SLOT, 표시 "일괄 예측 입력 생성", `n
 - **D3-54 (사용자 결정 2026-10-17, S9·S10)**: ① 템플릿 응답 정의 spec.component = 선택 항목 — ⑤ OPTIMIZE.responses의 layer 규칙과 같게(키 없음 = "", 값은 문자열·결과 이름 필드 문자·`|` 금지·200자), 요청 줄은 빈 필드(`NAME|1|CornerStress||`, ⑤ m_4가 빈 LAYER를 쓰는 방식과 동일), 화면 "응답 추가" 성분 비움 허용(placeholder "없음"). ⑤ 자체(validate_responses·ResponseTable)는 component 필수 그대로(바꾸지 않음). ② `capture.default_component`(기본 "vonMises", 사용자 확인: CornerStress 성분) — 최종 표시 설정 component가 비었고 field가 `capture.default_field`이면 DCOMP로 전달(TCL은 실패 시 type만 재시도). setup.ps1은 capture 절에 키가 없을 때만 1회 보충(줄 끝 "setup.ps1 D3-54"), 사용자 값(빈 값 포함) 보존. 컨투어 표시·응답 추가 폼은 결과 종류 CornerStress일 때 성분 후보 vonMises. ③ 일괄 예측 "캡처 예상" 가정값을 config `capture.estimate_image_mb 0.3·estimate_video_mb 1(기존 5)·estimate_sec_per_view 20·estimate_sec_per_video 40`으로 옮기고 `/status.capture.estimate`(+default_field·default_component)로 화면에 전달, 문구 "가정값 기준 참고" 유지.
 - **D3-55 (사용자 결정 2026-10-17, 화면 톤·레이아웃 A)**: 2026-10-14 스위스 격자 결정을 대체 — PhysicsAI 화면 톤앤매너를 대시보드와 같게(시안 ToneDark·ToneLightDrawer 승인). ① 색: 대시보드 `theme.css` 다크·라이트 변수 세트를 이름·값 그대로 `[data-theme]`로(기본 dark), 빨강 강조·1px 바둑판 격자선·IBM Plex 제거. 글꼴 Pretendard(npm `pretendard@1.3.9` dynamic-subset 번들, CDN 없음, 대시보드와 같은 스택). 12열 격자는 카드형(radius 12·border·shadow·gap 16, 높이 내용대로). ② 테마 동기화: 같은 origin의 localStorage `simdashboard.workspace.theme.v1`(`dark`|`light`) → 레거시 `vd-workbench-theme` → `dark`(접근 실패도 dark), `storage` 이벤트로 대시보드 변경을 따라감. PhysicsAI는 저장하지 않고 자체 토글도 두지 않음. ③ 레이아웃 A: 우측 고정 열(대기열·워커 자원·모델) 제거, 작업 영역 12열 전체(화면 컴포넌트의 9열 기준 span을 `.workgrid`에서 12열로 환산 9→12·6→8·3→4). 상단 바에 상태 칩 2개("대기열 실행 R · 대기 W" — R = 로컬 슬롯+가벼운 작업 실행 수, W = 대기 수, 내 작업 실행 중이면 accent 강조 / "CPU x% · RAM a/b · GPU y%" — GPU 없으면 "GPU —", 워커 오프라인이면 "워커 오프라인"). 칩 → 오른쪽 서랍(폭 420, 겹쳐 열림, body 포털, `aria-modal`·`aria-expanded`, 포커스 트랩, Esc·바깥 클릭 닫기, 칩으로 포커스 복귀): 실행 대기열 상세(관리 버튼 권한 그대로)·워커 자원 상세. 대기열·자원 폴링은 칩과 서랍이 함께 쓰는 1곳(Study 화면에서만, 기존 주기). 모델 목록·Final 지정은 ③ 화면 카드(③-5 옆 4열)로, ④는 기존 "모델: <이름> vN Final · 다른 모델" 줄 유지. 단계 탐색은 큰 번호 01~05 대신 단계 버튼 ①~⑤(현재 = accent 테두리·selected 바탕, 최근 작업 상태 점 success/accent/danger). ④ 상태 배지(완료·실행 중·대기·실패·취소)는 pill, 버튼 주요 = accent 채움·보조 = 테두리, 차트는 `--color-chart-series-*`(단일 선 series-1, 고른 점 series-2). 상단 바가 `backdrop-filter`를 쓰므로 알림 서랍도 body 포털로 옮김. API·문구·동작 불변(서랍 안 구획 이름 "실행 대기열"·"워커 자원", ③ 카드 "모델 목록" 유지). 시험: designRules 갱신(토큰·대비 4.5:1 계산), tone.test(테마 3경우·칩→서랍·③ 모델·④ 우측 열 없음·단계 버튼).
 - **D3-56 (사용자 요청 2026-10-17, 단계 버튼 강조)**: D3-55 단계 버튼 ①~⑤를 보강 — ① 가로: 스텝퍼를 내용 폭 5등분 격자(`repeat(5, minmax(0, 1fr))`, gap 8, radius 8)로 꽉 채우고 "Study 관리"는 같은 줄 오른쪽 끝 작은 버튼(`.stepper-row` = `1fr auto` 격자, 단계 폭을 줄이지 않을 만큼 작음). ② 세로: 최소 높이 52(`--step-h`), 글자 15px(`--font-step`/`--font-step-strong`, 현재 단계 600·accent 테두리 2겹·selected 바탕), 상태 점은 오른쪽 끝. ③ 번호: Pretendard에서 원 문자 ①~⑤가 작게(⊙처럼) 보여 숫자 배지(원 26px, 숫자 1~5, `aria-hidden`; 현재 단계는 accent 채움·`--color-text-on-accent`)로 바꾸고, 읽기용 이름은 sr-only 원 문자로 "① 학습데이터 생성" 그대로. 경로바의 원 문자는 그대로(범위 밖). ④ 좁은 화면: 1280 이하 페이지 가로 스크롤 없음, ≤1100에서 단계 최소 폭 170·스텝퍼 안에서만 가로 스크롤(약 1030 미만), 한글은 `keep-all`로 단어 단위 줄바꿈. API·문구·동작 불변. 시험: tone.test(5칸 격자·숫자 배지·aria-current·Study 관리 같은 줄, CSS 토큰 52/15). 스크린샷 tone 모드에 ④(stage4) 추가.
+- **D3-57 (사용자 결정 2026-10-17, S11 SCX 잡 제출 — Plan)**: §16, 대시보드 쪽 계약 `docs/contracts/scx_relay.md`. ① 토큰 공유: PhysicsAI는 어댑터를 실행하지 않고 대시보드 loopback relay(`/internal/scx-relay/v1`, 헤더 `X-SCX-Relay-Key` 공유 비밀 파일·`hmac.compare_digest`·프록시 헤더 거부, 기본 꺼짐 `SIMDASH_SCX_RELAY_ENABLED`)를 부른다. ② 드라이브 `~`(= `/Users/vd.dashboard`, `hpc.scx.drive_base`) `/<Study 폴더 이름 정규화>/<01_D-NNN_<run>_<ts> | 04_V-NNN_<ts>>`, 항상 새 폴더(`_2`…`_9`), SPDM 루트(`SIMDASH_SCX_DRIVE_ROOT`) 안 쓰기 금지(예외 설정 없음), 삭제·이동·덮어쓰기 없음. ③ step 키 불변 — HPC_SUBMIT 안에서 단계 A STAGE_IN(모든 run 업로드 완료 후) → 단계 B 제출, COLLECT는 relay list·스트리밍 다운로드(`.part`→`os.replace`, sha256 확인). 업로드는 대시보드 업로드 대기열 경유(비동기 묶음 폴링). ④ `SUBMISSION_UNKNOWN` → `hpc_jobs.state=UNKNOWN`·`submission_unknown`, 자동 재제출·형제 자동 취소 없음, 남은 run 미제출, attention·알림 `HPC_SUBMISSION_UNKNOWN`, 사용자 조치 `POST /jobs/{id}/hpc-jobs/{hid}/resolve` recheck·attach·mark_not_submitted(워커가 처리). 같은 `request_id`(`pai-<hpc_jobs.id>`) replay만 자동(relay가 어댑터를 다시 부르지 않음). 확정 실패는 기존 형제 취소 유지. ⑤ 게이트웨이 확장: mode `scx`, 오류 코드 `SUBMISSION_UNKNOWN`, `HpcStatus.outcome·output_path·output_rel·error_message`(선택), 범용 `submit()`은 scx에서 `NOT_CONFIGURED`. migration `0009_scx_gateway`(hpc_jobs 9열 + 알림 이벤트). ⑥ Plan 가정(확인 요청): include는 `additional_paths`에 모두 나열(`list_additional_paths: true`), engine = `<base>_0001.rad` 있으면 `engine_paths`, 경로 표기 `rel`, output_path는 드라이브 경로 — E4-11-3~6에서 확인. D-/V- 번호는 DB 순번 계산(새 열 없음), 시각은 워커 현지 시각. 프런트 "확인 필요" 화면은 후속 작업.

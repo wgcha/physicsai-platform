@@ -882,6 +882,7 @@ CPU %(`psutil.cpu_percent(interval=None)`), RAM(`psutil.virtual_memory()`), 실�
 | `none` | `configured=false`, message "PBS 연결 안 됨". HPC 필요한 작업 생성은 409 `HPC_NOT_CONFIGURED`. UI 버튼 비활성 + 안내 |
 | `command` | 설정 argv 템플릿으로 submit/status/cancel. 템플릿 누락·검증 실패면 `configured=false`(사유) |
 | `adapter` | 자리만. 항상 `configured=false`, message "어댑터 job API 미확인 — 미구현". 어댑터 패키지 import 없음 |
+| `scx` | (phase3 §16, D3-57) Siemens SCX에 Radioss 제출 — 대시보드 loopback relay 경유(토큰 공유, 어댑터 import 없음). 설정 `hpc.scx.*` 검증 + 비밀 파일 읽힘이면 `configured=true`. §12.5 |
 
 ### 12.2 프로토콜(`backend/physicsai_core/hpc/gateway.py`)
 
@@ -943,7 +944,15 @@ class HpcJobGateway(Protocol):
 ### 12.4 폴러·회수
 
 - `poll_interval_s`(기본 60)마다 `WAITING_HPC` 작업의 비종료 hpc_jobs에 `status`. 연속 게이트웨이 오류 시작 시각은 `jobs.result.hpc_unreachable_since`.
-- 회수: 1차는 `in_place`만(설정에 `shared_folder`·`drive`가 오면 설정 검증 실패 "2차"). 파일당 상한 `max_collect_bytes`.
+- 회수: 1차는 `in_place`만(설정에 `shared_folder`·`drive`가 오면 설정 검증 실패 "2차"). 파일당 상한 `max_collect_bytes`. scx 모드는 relay 다운로드로 회수(phase3 §16.4 COLLECT).
+
+### 12.5 scx 모드 확장(phase3 §16)
+
+- `HpcAvailability.mode`에 `"scx"`, `HpcGatewayError.code`에 `"SUBMISSION_UNKNOWN"`(제출 결과 모름 — 자동 재제출·형제 취소 금지).
+- `HpcStatus` 선택 필드(기본값 있음, 기존 생성 코드 불변): `outcome: Literal["SUCCEEDED","FAILED"] | None = None`, `output_path`, `output_rel`, `error_message`(`str | None = None`). 폴러는 `FINISHED`에서 `outcome`이 있으면 그것으로 판정, 없으면 exit_code 규칙.
+- `ScxHpcGateway`(`simdash_adapters.hpc.scx`)는 위 프로토콜 + scx 전용 메서드(health·mkdirs·upload·batch·submit_radioss·list·download·resolve). 범용 `submit(spec)`은 scx에서 `NOT_CONFIGURED` — HPC_SUBMIT·COLLECT step이 mode로 분기해 STAGE_IN → 제출 → 다운로드 회수를 한다(step 키 불변).
+- `hpc_jobs` 추가 열(`0009_scx_gateway`): `remote_dir`, `request_id`(부분 유일), `staged`, `output_path`, `output_rel`, `submission_unknown`, `resolve_request`, `resolved_by`, `resolved_at`. `external_job_id IS NULL`인 `UNKNOWN` 행은 폴러가 상태 조회·LOST 계수를 하지 않는다.
+- API는 여전히 `availability()`만 부른다. 결과 모름 조치 `POST /jobs/{id}/hpc-jobs/{hid}/resolve`는 요청만 기록하고 워커 폴러가 처리한다.
 
 ---
 
@@ -960,6 +969,7 @@ class HpcJobGateway(Protocol):
 | `JOB_INTERRUPTED` | T9 | 등록자 | "워커 중단으로 작업이 멈췄습니다" |
 | `MY_TURN_NEXT` | 대기열 변화(T1·T2·T3·T8·순서 변경) 후 SLOT 레인 대기 1번이 된 작업, 슬롯이 사용 중일 때, 작업당 1회(`next_notified_at`) | 등록자 | "다음 차례입니다: 예측 (cushion)" |
 | `HPC_COLLECTED` | T14, T15 | 등록자 | "PBS 결과 회수 완료" |
+| `HPC_SUBMISSION_UNKNOWN` | scx 제출 결과 모름 행 기록(phase3 §16.4, migration 0009) | 등록자 | "SCX 제출 확인 필요: 학습데이터 해석 (cushion)" |
 
 ### 13.2 전달·보관
 
