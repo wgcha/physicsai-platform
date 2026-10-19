@@ -6,6 +6,7 @@ import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
 import { useTrain } from "./TrainContext";
+import { featureTypeFromName, isPositionType, typeLabel } from "../../lib/geometry";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -48,6 +49,8 @@ export function ParamTableCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverProblems, setServerProblems] = useState<Record<string, string>>({});
+  // geometry-engine.md §8 ①-2: native는 tpl 없음 — 표 저장만, 피처 종류 열(이름 약어 §4.3)
+  const native = setup?.engine === "native";
 
   useEffect(() => {
     setRows((setup?.parameters ?? []).map(toRow));
@@ -71,6 +74,7 @@ export function ParamTableCard() {
         parameters: rows.map((r) => ({ name: r.name, min: num(r.min), max: num(r.max), use: r.use, format: r.format, unit: r.unit })),
       });
       setSetup(saved);
+      if (native) return;
       try {
         setSetup(await api.generateTpl(study.id, saved.version));
       } catch (e) {
@@ -97,12 +101,16 @@ export function ParamTableCard() {
   return (
     <Card span={6} foot={
         <>
-          <p className="muted small">단위계 mm-ton-s. 사용하지 않는 파라미터는 tpl에서 빠지고 CAD 공칭값이 유지됩니다.</p>
-          <FeatureGate feature="train_tpl">
+          <p className="muted small">
+            {native
+              ? `native · 피처 ${rows.length}개. 사용하지 않는 피처는 공칭값이 유지됩니다(위치형은 mm 범위).`
+              : "단위계 mm-ton-s. 사용하지 않는 파라미터는 tpl에서 빠지고 CAD 공칭값이 유지됩니다."}
+          </p>
+          <FeatureGate feature={native ? "geometry_native" : "train_tpl"}>
             {(enabled) => (
               <RunAction
                 canExecute={canExec}
-                label={busy ? "생성 중…" : "tpl 생성"}
+                label={busy ? (native ? "저장 중…" : "생성 중…") : native ? "표 저장" : "tpl 생성"}
                 onRun={() => void generate()}
                 disabled={!enabled || busy || !rows.length || hasIssue}
                 disabledReason={enabled ? (!rows.length ? "추출된 파라미터가 없습니다" : used.length === 0 ? "사용 파라미터가 1개 이상 필요합니다" : "표의 회색 문구를 확인하세요") : undefined}
@@ -131,6 +139,7 @@ export function ParamTableCard() {
               <tr>
                 <th>사용</th>
                 <th>이름</th>
+                {native && <th>종류</th>}
                 <th className="num">공칭</th>
                 <th className="num">하한</th>
                 <th className="num">상한</th>
@@ -148,6 +157,12 @@ export function ParamTableCard() {
                       <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !r.valid || r.nominal === null} onChange={(e) => set(i, { use: e.target.checked })} />
                     </td>
                     <td className="mono">{r.name}</td>
+                    {native && (
+                      <td className="small">
+                        {typeLabel(featureTypeFromName(r.name))}
+                        {isPositionType(featureTypeFromName(r.name)) && <span className="muted"> · mm 범위</span>}
+                      </td>
+                    )}
                     <td className="num mono">{r.raw}</td>
                     <td className="num">
                       <input className="num-input" aria-label={`${r.name} 하한`} value={r.min} disabled={!canExec || !r.use} inputMode="decimal" onChange={(e) => set(i, { min: e.target.value })} />
@@ -173,7 +188,7 @@ export function ParamTableCard() {
           </table>
         </div>
       )}
-      {tpl && (
+      {tpl && !native && (
         <div className="tpl-state small" data-testid="tpl-state">
           <div>
             tpl 생성됨 · 사용 <b>{tpl.params.length}</b>개 · {fmtTime(tpl.generated_at)}

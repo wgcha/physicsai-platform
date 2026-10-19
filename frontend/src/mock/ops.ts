@@ -5,6 +5,7 @@ import { err, needAdmin, ok, type Route } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { queued, refreshPositions } from "./engine";
 import { summary } from "./jobs";
+import { geometryStatus } from "./geometry";
 
 function envItems(variant: number, pendingWorker = false): EnvCheckItem[] {
   const it = (key: string, category: EnvCheckItem["category"], label: string, status: EnvCheckItem["status"], message: string, source: "API" | "WORKER", detail: Record<string, unknown> | null = null): EnvCheckItem => ({
@@ -111,6 +112,7 @@ export const opsRoutes: Route = (srv, { method, path, seg, query, body, headers,
           estimate: { image_mb: 0.3, video_mb: 1, sec_per_view: 20, sec_per_video: 40 },
         }, // D3-53·D3-54 config capture 기본
         ...srv.p2.status(me.is_global_admin),
+        geometry: geometryStatus(srv), // geometry-engine.md §7.1
       },
     };
   if (method === "GET" && path === "/queue") {

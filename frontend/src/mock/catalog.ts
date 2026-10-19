@@ -26,6 +26,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   SURROGATE_OPT: "⑤",
   FEM_VERIFY: "④",
   PB_RESP_EXTRACT: "④",
+  PARAM_SET_NATIVE: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -55,6 +56,8 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   // S16(phase3.md §21.3.8): 조립 FEM 검증 — 해석 연결(HPC) + 메시 교체는 mesh 템플릿·include TCL
   fem_verify: ["hpc.mode"],
   fem_verify_rebuild: ["commands.mesh", "resources.hypermesh_include_tcl"],
+  // geometry-engine.md §7.1: native 형상 엔진(paicad 실행 파일)
+  geometry_native: ["geometry.paicad_exe", "commands.paicad_extract"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

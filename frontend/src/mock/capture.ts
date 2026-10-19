@@ -138,7 +138,7 @@ export const captureRoutes: Route = (srv, { method, seg, body }) => {
     return null;
   }
   if (method === "GET" && seg[0] === "artifacts" && seg[1] && seg[2] === "media") {
-    const a = srv.artifacts.find((x) => x.id === seg[1] && x.kind.startsWith("CONTOUR_"));
+    const a = srv.artifacts.find((x) => x.id === seg[1] && (x.kind.startsWith("CONTOUR_") || x.kind === "FEATURE_PNG"));
     if (!a) return err(404, "NOT_FOUND", "컨투어 파일을 찾을 수 없습니다");
     return a.render ? { status: 200, bytes: a.render(), contentType: a.content_type } : { status: 200, text: a.body, contentType: a.content_type };
   }

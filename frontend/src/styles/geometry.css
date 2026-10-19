@@ -1,0 +1,60 @@
+/* native 형상 엔진(geometry-engine.md §8): ④ 세트 상세 피처 표·하이라이트·고급 접힘·매칭표 */
+.native-detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+.feature-table tbody tr {
+  cursor: pointer;
+}
+.feature-table tr.picked td {
+  background: var(--color-info-surface);
+}
+.feature-table tr.unused td,
+.match-table tr.unused td {
+  color: var(--color-text-muted);
+}
+.feature-png {
+  margin: 0;
+}
+.feature-png img {
+  display: block;
+  max-width: 400px;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.geom-opts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+.geom-opt-group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-2);
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.geom-opts > .run-action-row {
+  flex-basis: 100%;
+}
+.bl-list ul.plain {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.bl-add .pathinput-row .bl-id {
+  flex: 0 0 96px;
+  width: 96px;
+}
+.multi-bl,
+.match-block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}

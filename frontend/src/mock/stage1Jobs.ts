@@ -5,6 +5,7 @@ import { DOE_TYPES } from "./catalog";
 import { err, type MockResp } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
+import { nativeTrainParams } from "./geometry";
 
 export function hpcSummary(p2: Phase2Mock, j: Job): HpcSummary | null {
   if (j.job_type !== "TD_SOLVE" && j.job_type !== "PREDICT_VERIFY") return null;
@@ -26,7 +27,7 @@ export function hpcSummary(p2: Phase2Mock, j: Job): HpcSummary | null {
 }
 
 export function precheckTrain(p2: Phase2Mock, s: Study, type: JobType, params: Record<string, unknown>): MockResp | null {
-  if (type === "TD_DOE_GEN") {
+  if (type === "TD_DOE_GEN" && p2.setups[s.id]?.engine !== "native") {
     const t = p2.setups[s.id]?.tpl;
     if (!t) return err(409, "TPL_REQUIRED", "tpl을 먼저 생성하세요.");
     if (t.stale) return err(409, "TPL_STALE", "파라미터 표가 바뀌었습니다 — tpl을 다시 생성하세요.");
@@ -47,7 +48,7 @@ export function onCreateTrain(p2: Phase2Mock, j: Job, me: { display_name: string
     p.doe_id = id;
     const t = DOE_TYPES.find((x) => x.label === p.doe_label) ?? DOE_TYPES[0];
     p2.does.unshift({
-      id, study_id: sid, job_id: j.id, status: "BUILDING", doe_label: t.label, doe_type: t.value, num_runs_requested: t.runs_editable ? Number(p.num_runs ?? t.default_runs) : null,
+      id, study_id: sid, job_id: j.id, engine: p.engine === "native" ? "native" : "altair", status: "BUILDING", doe_label: t.label, doe_type: t.value, num_runs_requested: t.runs_editable ? Number(p.num_runs ?? t.default_runs) : null,
       options: (p.options as Record<string, unknown>) ?? {}, multi_execution: Number(p.multi_execution ?? 1), radioss_assem_source_path: String(p.radioss_assem_path ?? ""),
       run_count: null, sample_status: "PENDING", collected_count: 0, solve_failed_count: 0, has_run_responses: false,
       dir_display_path: p2.s.disp(sid, `01_train/doe/${id}`), results_display_path: p2.s.disp(sid, `01_train/results/${id}`), created_by_name: me.display_name, created_at: now,
@@ -62,11 +63,12 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
   const sid = j.study_id;
   switch (j.job_type) {
     case "TD_EXTRACT_PARAMS": {
-      const params = trainParams().map((x) => ({ ...x }));
+      const native = p.engine === "native";
+      const params = native ? nativeTrainParams() : trainParams().map((x) => ({ ...x }));
       const old = p2.setups[sid];
       const file = String(p.cad_path ?? "").split(/[\\/]/).pop() ?? "model.prt";
       p2.setups[sid] = {
-        study_id: sid, cad: { source_path: String(p.cad_path), file_name: file, sha256: "…", display_path: p2.s.disp(sid, `01_train/cad/${file}`) },
+        study_id: sid, engine: native ? "native" : "altair", cad: { source_path: String(p.cad_path), file_name: file, sha256: "…", display_path: p2.s.disp(sid, `01_train/cad/${file}`) },
         extract_job_id: j.id, parameters: params, used_count: params.filter((x) => x.use).length,
         tpl: old?.tpl ? { ...old.tpl, stale: true } : null, version: (old?.version ?? 0) + 1, updated_by_name: j.created_by_name, updated_at: new Date().toISOString(),
       };

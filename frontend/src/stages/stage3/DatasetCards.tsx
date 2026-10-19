@@ -5,6 +5,7 @@ import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, CopyButton, Field, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
 import { FeatureGate } from "../../components/FeatureGate";
+import { EngineBadge } from "../../components/EngineSelect";
 import { fmtTime } from "../../lib/format";
 
 const DS_STATUS: Record<Dataset["status"], string> = { BUILDING: "생성 중", READY: "준비됨", FAILED: "실패" };
@@ -145,7 +146,7 @@ export function DatasetCreateCard() {
             {datasets.map((d) => (
               <tr key={d.id}>
                 <td>
-                  <span className={`ds-status ${d.status.toLowerCase()}`}>{DS_STATUS[d.status]}</span>
+                  <span className={`ds-status ${d.status.toLowerCase()}`}>{DS_STATUS[d.status]}</span> <EngineBadge engine={d.engine} />
                 </td>
                 <td className="num">{d.h3d_count ?? "–"}</td>
                 <td className="num">

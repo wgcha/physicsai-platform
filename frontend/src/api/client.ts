@@ -1,5 +1,6 @@
 // 계약 §5.4·§10.1: 상대경로 /physicsai/api, 비GET에 X-PhysicsAI-Request: 1, 오류 {detail:{code,message}}.
 import type { ApiErrorDetail } from "./types";
+import { geomErrorText } from "../lib/geometry";
 
 export const API_PREFIX = "/physicsai/api";
 
@@ -140,7 +141,8 @@ export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     const missing = (e.detail as { missing?: unknown }).missing;
     if (Array.isArray(missing) && missing.length) return `${e.message} (${missing.join(", ")})`;
-    return e.message;
+    // 형상 엔진 오류 코드(geometry-engine.md §7.6): 서버 문구가 한국어가 아니면 코드 표의 한국어
+    return geomErrorText(e.code, e.message);
   }
   if (e instanceof Error) return e.message;
   return String(e);

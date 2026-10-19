@@ -38,6 +38,7 @@ import { scxRoutes } from "./scx";
 import { predictRunsRoutes, seedPredictRuns } from "./predictRuns";
 import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
+import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 
 export type { MockResp } from "./route";
 
@@ -77,6 +78,10 @@ export interface MockOptions {
   predictRuns?: "history";
   /** S16 V2: "demo"면 FEM 검증 시드(FV-001 완료·FV-002 실패·FV-003 동반 예측 대기) */
   femVerify?: "demo";
+  /** geometry-engine.md §7.1 /status.geometry.engine_default(기본 altair) */
+  geometryDefault?: "altair" | "native";
+  /** "native" = native 세트 ps-n1 시드, "multi" = ps-n1에 baseline B2 추가(4B 매칭표 초안) */
+  geometry?: "native" | "multi";
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -108,6 +113,7 @@ const ROUTES: Route[] = [
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
   femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)
+  geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B 목
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④
@@ -152,6 +158,9 @@ export class MockServer {
   /** S16 V3: 방향별 영상 content_type 덮어쓰기(avi·gif 흉내) */
   videoTypes: Record<string, string> = {};
   mediaInfo = new Map<string, { status: Exclude<CaptureMode, "NONE">; message: string | null }>();
+  /** native 세트별 피처·쉘 PROP·매칭표 */
+  geom = new Map<string, GeomRec>();
+  geometryDefault: "altair" | "native" = "altair";
 
   constructor(opts: MockOptions = {}) {
     this.user = opts.user ?? "admin";
@@ -173,6 +182,8 @@ export class MockServer {
     seedSurrogate(this);
     if (opts.predictRuns === "history") seedPredictRuns(this);
     if (opts.femVerify === "demo") seedFemVerify(this);
+    this.geometryDefault = opts.geometryDefault ?? "altair";
+    if (opts.geometry) seedNative(this, opts.geometry === "multi");
   }
 
   get me(): Me | null {

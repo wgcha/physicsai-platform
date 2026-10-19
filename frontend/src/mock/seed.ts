@@ -148,7 +148,7 @@ export function seedModels(): Model[] {
 
 export function seedParamSet(): ParamSet {
   return {
-    id: "ps-1", study_id: "s-cushion", source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/params",
+    id: "ps-1", study_id: "s-cushion", source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/params", engine: "altair",
     unit_system: "mm-ton-s", parameters: PARAMS, responses: RESPONSES, sample_count: 120, sample_has_measured: true,
     cad_file_name: "cushion_base.x_t", starter_name: "cushion_0000.rad", input_kind: "assembly", assem_rel: "radioss_assem",
     // S10 컨투어 표시 설정
