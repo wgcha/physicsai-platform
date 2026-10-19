@@ -5,6 +5,7 @@ V3-S16-11(FV_CURVE 정의 출처·T01·짝), V3-S16-12(FV_CAPTURE 범례·두 �
 from __future__ import annotations
 
 import csv
+import hashlib
 import json
 import os
 
@@ -149,6 +150,10 @@ def test_v3_s16_8_reuse_predict_input_and_curves(predict_env, fake_tools, fake_r
     assert sorted(os.listdir(A / "input")) == sorted(os.listdir(env.predict_dir(pj) / "INPUT"))
     assert env.steps(jid)["FV_MESH"]["state"] == "SKIPPED" and env.steps(jid)["FV_MESH"]["progress_label"] == "예측 입력 재사용"
     assert os.listdir(A / "assem") == []
+    vj = json.loads((A.parent / "verify.json").read_text(encoding="utf-8"))           # D3-64 후속: reuse도 파일별 sha256
+    files = vj["assembly"]["files"]
+    assert sorted(f["name"] for f in files) == sorted(os.listdir(A / "input"))
+    assert all(f["sha256"] == hashlib.sha256((A / "input" / f["name"]).read_bytes()).hexdigest() for f in files)
     d = finish_hpc(env, d["id"], RESULT_FILES)
     assert d["status"] == "DONE", d
     req = (A / "result" / "H3D_REQUESTS.txt").read_text(encoding="utf-8").splitlines()[2:]

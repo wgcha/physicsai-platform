@@ -59,7 +59,11 @@
 .so-pairs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--space-3);
+  gap: var(--space-4);
+}
+.so-pairs > .so-pareto-plot {
+  min-width: 0;
+  overflow: hidden;
 }
 @media (max-width: 1100px) {
   .so-pairs {

@@ -358,6 +358,53 @@ def test_v3_s16_15_cancel_idempotent(predict_env, fake_tools, tmp_path, monkeypa
     assert acts.count("FEM_VERIFY_CANCEL") == 2 and acts.count("FEM_VERIFY_RERUN") == 1
 
 
+def test_d3_64_companion_duplicate_and_retry_limits(predict_env, fake_tools, tmp_path, engine):
+    """D3-64 후속: 동반 예측 출처도 같은 설계점(적용값)+같은 조립 원본 중복 409, `/jobs/{id}/retry`·다시 실행은
+    검증 행을 되살리기 전에 max_active(FEM_VERIFY_LIMIT)·중복(FEM_VERIFY_ACTIVE)을 다시 본다."""
+    env, ps = fv_env(predict_env, fake_tools, tmp_path)
+    pj = predict(env, {"THK_1": 2.5, "N_RIB": 3})
+    vals = lambda t, n=4: {"source": {"kind": "values", "param_set_id": ps["id"], "values": {"THK_1": t, "N_RIB": n}}}  # noqa: E731
+    url = f"{API}/studies/{env.sid}/fem-verifications"
+    c1 = create(env, vals(3.1))
+    assert c1["predict"]["companion"] is True
+    r = env.c.post(url, headers=PW, json=vals(3.1))                                       # 같은 값 동반 → 409
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_ACTIVE"
+    r = env.c.post(url, headers=PW, json={"source": {**vals(3.1)["source"], "reuse_existing": False}})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_ACTIVE"
+    c2 = create(env, vals(3.2))                                                          # 다른 값 → 201
+    # 동반 예측 실패 → 같은 값으로 새 검증(앞 검증은 끝남) → 앞 동반 예측 재시도는 중복 409
+    _end(engine, c1["predict"]["job_id"], "FAILED", "TOOL_FAILED")
+    assert detail(env, c1["id"])["status"] == "FAILED"
+    c3 = create(env, vals(3.1))
+    r = env.c.post(f"{API}/jobs/{c1['predict']['job_id']}/retry", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_ACTIVE"
+    r = env.c.post(f"{API}/fem-verifications/{c1['id']}/rerun", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_ACTIVE"
+    assert detail(env, c1["id"])["status"] == "FAILED"                                   # 되살리지 않음
+    # FEM_VERIFY 실패 → 같은 예측 새 검증 진행 중 → 앞 FEM_VERIFY 재시도 409(중복)
+    f1 = create(env, {"source": {"kind": "predict_job", "job_id": pj}})
+    _end(engine, f1["job"]["id"], "FAILED", "HPC_SUBMIT_FAILED")
+    f2 = create(env, {"source": {"kind": "predict_job", "job_id": pj}})
+    r = env.c.post(f"{API}/jobs/{f1['job']['id']}/retry", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_ACTIVE"
+    env.c.post(f"{API}/fem-verifications/{f2['id']}/cancel", headers=PW)
+    # 진행 중 2건(c2·c3) = 상한 → FEM_VERIFY 재시도·다시 실행 409 LIMIT, 상한을 올리면 201
+    n_active = env.sql("select count(*) from fem_verifications where status in ('WAITING_PREDICT','RUNNING')")[0][0]
+    assert n_active == 2
+    env.lc.settings.fem_verify.max_active = 2
+    r = env.c.post(f"{API}/jobs/{f1['job']['id']}/retry", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_LIMIT"
+    assert r.json()["detail"]["message"] == "진행 중인 FEM 검증이 2건입니다(상한 2)"
+    r = env.c.post(f"{API}/fem-verifications/{f1['id']}/rerun", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "FEM_VERIFY_LIMIT"
+    n_jobs = env.sql("select count(*) from jobs")[0][0]
+    env.lc.settings.fem_verify.max_active = 4
+    r = env.c.post(f"{API}/jobs/{f1['job']['id']}/retry", headers=PW)
+    assert r.status_code == 201, r.text
+    assert detail(env, f1["id"])["status"] == "RUNNING" and env.sql("select count(*) from jobs")[0][0] == n_jobs + 1
+    del c2, c3
+
+
 # ---- V3-S16-16 조회 ----------------------------------------------------------------------------------
 
 

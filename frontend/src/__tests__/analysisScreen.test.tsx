@@ -43,7 +43,8 @@ describe("⑤ 결과분석 화면: 출처·탭·빈 상태 (V3-S14-5)", () => {
 
   it("기본 출처 = 완료 배치 첫 번째, 세그먼트로 해석 DOE 전환 → 표·저장(physicsai.analysis.source), 새로 열어도 유지", async () => {
     const first = renderApp(A, { user: "power" }, withResp);
-    expect(((await srcSelect()).value)).toBe("pb-2");
+    const sel0 = await srcSelect();
+    await waitFor(() => expect(sel0.value).toBe("pb-2")); // option이 로드되기 전에는 value가 ''
     await screen.findByRole("region", { name: "결과 표 — B-002" });
     const seg = screen.getByRole("group", { name: "기본 출처" });
     expect(within(seg).getAllByRole("button").map((b) => b.textContent)).toEqual(["일괄 예측 결과(예측)", "해석 DOE 결과(해석)"]);
@@ -57,14 +58,16 @@ describe("⑤ 결과분석 화면: 출처·탭·빈 상태 (V3-S14-5)", () => {
     first.unmount();
     renderApp(A, { user: "power" }, withResp);
     await screen.findByRole("region", { name: "결과 표 — LatinHyperCube" });
-    expect((await srcSelect()).value).toBe("doe-1");
+    const sel1 = await srcSelect();
+    await waitFor(() => expect(sel1.value).toBe("doe-1"));
   });
 
   it("쿼리가 저장값보다 우선, 저장 실패(localStorage 막힘)여도 렌더", async () => {
     localStorage.setItem(SOURCE_KEY, JSON.stringify({ kind: "doe", id: "doe-1" }));
     renderApp(BATCH, { user: "power" });
     await screen.findByRole("region", { name: "결과 표 — B-002" });
-    expect((await srcSelect()).value).toBe("pb-2");
+    const sel2 = await srcSelect();
+    await waitFor(() => expect(sel2.value).toBe("pb-2"));
     vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
       throw new Error("blocked");
     });

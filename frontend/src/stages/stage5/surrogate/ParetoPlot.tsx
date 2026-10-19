@@ -17,6 +17,21 @@ export function stairPath(pts: [number, number][], yMin: boolean): string {
   return d;
 }
 
+/** 축 라벨 글자 폭 추정(한글·전각 ≈ 12px, 그 밖 ≈ 7px) — 좁은 쌍 그림에서 옆 그림과 겹치지 않게 말줄임에 쓴다. */
+export function fitLabel(text: string, maxPx: number): string {
+  const w = (c: string) => (c.charCodeAt(0) > 0x2e7f ? 12 : 7);
+  const chars = [...text];
+  if (chars.reduce((a, c) => a + w(c), 0) <= maxPx) return text;
+  let acc = w("…");
+  let out = "";
+  for (const c of chars) {
+    if (acc + w(c) > maxPx) break;
+    acc += w(c);
+    out += c;
+  }
+  return `${out}…`;
+}
+
 const dir = (s: string) => (s === "max" ? "↑ 좋음" : "↓ 좋음");
 
 export function ParetoPlot({ model, xi, yi, sel, onToggle, showPred, recKey, height = 300, testid = "pareto-plot" }: {
@@ -47,6 +62,8 @@ export function ParetoPlot({ model, xi, yi, sel, onToggle, showPred, recKey, hei
   [x0, x1, y0, y1] = [x0 - px, x1 + px, y0 - py, y1 + py];
   const iw = Math.max(60, width - M.l - M.r);
   const ih = Math.max(60, height - M.t - M.b);
+  const xLabel = `${dx.label}${dx.unit ? ` [${dx.unit}]` : ""} ${dir(dx.sense)}`;
+  const yLabel = `${dy.label}${dy.unit ? ` [${dy.unit}]` : ""} ${dir(dy.sense)}`;
   const sx = (v: number) => M.l + ((v - x0) / (x1 - x0)) * iw;
   const sy = (v: number) => M.t + ih - ((v - y0) / (y1 - y0)) * ih;
   const xt = niceTicks(x0, x1, Math.max(3, Math.floor(iw / 90)));
@@ -90,8 +107,8 @@ export function ParetoPlot({ model, xi, yi, sel, onToggle, showPred, recKey, hei
         ))}
         <line className="chart-axis" x1={M.l} x2={M.l + iw} y1={M.t + ih} y2={M.t + ih} />
         <line className="chart-axis" x1={M.l} x2={M.l} y1={M.t} y2={M.t + ih} />
-        <text className="chart-label" x={M.l + iw / 2} y={height - 6} textAnchor="middle">{dx.label}{dx.unit ? ` [${dx.unit}]` : ""} {dir(dx.sense)}</text>
-        <text className="chart-label" transform={`translate(13 ${M.t + ih / 2}) rotate(-90)`} textAnchor="middle">{dy.label}{dy.unit ? ` [${dy.unit}]` : ""} {dir(dy.sense)}</text>
+        <text className="chart-label" x={M.l + iw / 2} y={height - 6} textAnchor="middle"><title>{xLabel}</title>{fitLabel(xLabel, iw)}</text>
+        <text className="chart-label" transform={`translate(13 ${M.t + ih / 2}) rotate(-90)`} textAnchor="middle"><title>{yLabel}</title>{fitLabel(yLabel, ih)}</text>
         {frontXY.length > 1 && <path className="so-stair" data-testid="pareto-stair" d={stairPath(frontXY, yMin)} fill="none" />}
         {showPred && predXY.length > 1 && <path className="so-pred-line" data-testid="pareto-pred-line" d={`M${predXY.map(([a, b]) => `${a} ${b}`).join(" L")}`} fill="none" />}
         {model.others.map((p) => (
