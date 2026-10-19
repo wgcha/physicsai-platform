@@ -2,6 +2,7 @@
 
 형식 = 원본 ⑤ `OPTIMIZE.responses`의 H3D 부분(phase2 §6.12 RESPONSES 규칙): 행 `{name, unit, spec}`,
 spec `{source:"H3D", subcase(≥1 정수), datatype, component, layer, stat(MAX|MIN|ABSMAX)}`. goal·bound 없음, XYDATA는 후속.
+S17(§22.3.1): spec `{source:"CURVE", series(문자열 1~200자 또는 null = 첫 계열), stat}` — 예측 curve.json 계열 1개의 대표값.
 component는 layer와 같은 **선택 항목**(D3-54): 없으면 "", 있으면 문자열(⑤ 결과 이름 필드 문자 규칙·`|` 금지·200자) —
 PhysicsAI 예측 h3d 응력 `CornerStress`처럼 성분 없는 결과. 요청 줄에는 빈 필드(`NAME|1|CornerStress||`)로 쓴다.
 spec이 null인 행 = 추출 정의 없음(이름·단위만 — 실측 `resp:` 열 이름을 유지할 때).
@@ -22,9 +23,11 @@ FIELD_RE = re.compile(r"[\w \-./():+]*")  # ⑤ 결과 이름 필드 허용 문�
 FIELD_MAX = 200
 UNIT_MAX = 40
 STATS = ("MAX", "MIN", "ABSMAX")
-SOURCES = ("H3D",)
+SOURCES = ("H3D", "CURVE")
 MAX_RESPONSES = 100
 SPEC_KEYS = frozenset({"source", "subcase", "datatype", "component", "layer", "stat"})
+CURVE_SPEC_KEYS = frozenset({"source", "series", "stat"})
+SERIES_MAX = 200
 ROW_KEYS = frozenset({"name", "unit", "spec"})
 
 
@@ -52,11 +55,13 @@ def _spec(out: list[dict[str, Any]], i: int, spec: Any) -> dict[str, Any] | None
     if not isinstance(spec, dict):
         _problem(out, i, "RESPONSE_INVALID", "spec은 객체여야 합니다")
         return None
+    if spec.get("source") == "CURVE":
+        return _curve_spec(out, i, spec)
     unknown = sorted(set(spec) - SPEC_KEYS)
     if unknown:
         _problem(out, i, "RESPONSE_INVALID", f"spec에 알 수 없는 키: {unknown}")
     if spec.get("source") not in SOURCES:
-        _problem(out, i, "RESPONSE_INVALID", "source는 H3D만 쓸 수 있습니다(XYDATA는 후속)")
+        _problem(out, i, "RESPONSE_INVALID", "source는 H3D 또는 CURVE입니다(XYDATA는 후속)")
     sc = spec.get("subcase")
     if isinstance(sc, bool) or not isinstance(sc, int) or sc < 1:
         _problem(out, i, "RESPONSE_INVALID", "subcase는 1 이상 정수")
@@ -69,6 +74,22 @@ def _spec(out: list[dict[str, Any]], i: int, spec: Any) -> dict[str, Any] | None
         _problem(out, i, "RESPONSE_INVALID", "stat은 MAX | MIN | ABSMAX")
     return {"source": spec.get("source"), "subcase": sc, "datatype": spec.get("datatype"),
             "component": component, "layer": layer, "stat": spec.get("stat")}
+
+
+def _curve_spec(out: list[dict[str, Any]], i: int, spec: dict[str, Any]) -> dict[str, Any]:
+    """CURVE spec(§22.3.1): 키 {source, series, stat}만. series = null(첫 계열) 또는 1~200자(제어문자·'|' 금지)."""
+    unknown = sorted(set(spec) - CURVE_SPEC_KEYS)
+    if unknown:
+        _problem(out, i, "RESPONSE_INVALID", f"커브 spec에 알 수 없는 키: {unknown}")
+    series = spec.get("series")
+    if series is not None:
+        if not isinstance(series, str) or not series or len(series) > SERIES_MAX:
+            _problem(out, i, "RESPONSE_INVALID", f"series는 1~{SERIES_MAX}자 문자열 또는 null(첫 계열)입니다")
+        elif "|" in series or any(ord(ch) < 32 or ord(ch) == 127 for ch in series):
+            _problem(out, i, "RESPONSE_INVALID", "series에 '|'·제어문자는 쓸 수 없습니다")
+    if spec.get("stat") not in STATS:
+        _problem(out, i, "RESPONSE_INVALID", "stat은 MAX | MIN | ABSMAX")
+    return {"source": "CURVE", "series": series, "stat": spec.get("stat")}
 
 
 def validate_response_defs(rows: Any, *, measured: Iterable[str] = ()) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:

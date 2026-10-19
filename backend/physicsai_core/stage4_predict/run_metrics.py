@@ -4,6 +4,7 @@
 - `curve:max|min|absmax` — 고른 계열 y의 최대·최소·max(|max|,|min|) (계열 이름은 id 밖 `series`, 생략 = 첫 계열)
 - `resp:<NAME>_MIN|_MAX` — 원본 m_4 TCL `RESPONSES.txt`의 값(실패 줄은 키 없음)
 - `tbl:<name>` — 결과 표 값(`predict_batch_runs.responses`, 옛 방식 run)
+- `perf:<NAME>` — 템플릿 성능 값(stat 적용, S17 §22.3.2 — 계산은 `performance.perf_value`)
 
 파일 I/O는 `load_run_metrics`(+ 경로 찾기 `locate_run_files`의 존재 확인)만. 파일별 LRU(키 = 경로·mtime_ns·크기,
 2048개, 잠금) — 같은 파일을 두 번 읽지 않고, 파일이 바뀌면(mtime·크기) 다시 읽는다. 링크·Study 밖 경로는 읽지 않는다.
@@ -22,10 +23,11 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..path_links import is_link_or_reparse, is_under, real
-from .responses import RESPONSES_FILE, read_responses
+from .responses import REQUESTS_FILE, RESPONSES_FILE, parse_requests_text, read_responses
 
 METRIC_RE = re.compile(
-    r"curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63}", re.ASCII)
+    r"curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63}"
+    r"|perf:[A-Za-z][A-Za-z0-9_]{0,63}", re.ASCII)
 CURVE_KINDS = ("max", "min", "absmax")
 MAX_SERIES = 50
 CACHE_SIZE = 2048
@@ -42,10 +44,13 @@ class RunFiles:
 @dataclass(frozen=True)
 class RunMetrics:
     """curve = {계열: {"max","min","absmax","x_at_max","x_at_min","n"}}(curve.json 없음·너무 큼 = None),
-    resp = {"CornerStress_MAX": 1.5e2, …}(RESPONSES.txt 없음 = None). 공유 캐시 값이므로 고치지 않는다."""
+    resp = {"CornerStress_MAX": 1.5e2, …}(RESPONSES.txt 없음 = None),
+    requests = {NAME: (SUBCASE, DATATYPE, COMPONENT, LAYER)}(H3D_REQUESTS.txt 없음 = None, S17 §22.3.3).
+    공유 캐시 값이므로 고치지 않는다."""
 
     curve: dict[str, dict[str, float]] | None
     resp: dict[str, float] | None
+    requests: dict[str, tuple[str, ...]] | None = None
 
 
 # ---- 순수 함수 ------------------------------------------------------------------------------------
@@ -93,11 +98,19 @@ def _finite(v: Any) -> float | None:
 
 
 def metric_value(m: RunMetrics, metric_id: str, *, series: str | None,
-                 table: Mapping[str, Any] | None) -> float | None:
-    """지표 값(유한 수, 없으면 None). series 생략 = 그 run의 첫 계열. 지표 id가 문법 밖이면 ValueError."""
+                 table: Mapping[str, Any] | None, perfs: Mapping[str, Any] | None = None) -> float | None:
+    """지표 값(유한 수, 없으면 None). series 생략 = 그 run의 첫 계열. 지표 id가 문법 밖이면 ValueError.
+    `perf:<NAME>`은 perfs(`performance.perf_defs`)에 이름이 있어야 한다(없으면 None, 사유는 `perf_value`로)."""
     if not isinstance(metric_id, str) or not METRIC_RE.fullmatch(metric_id):
         raise ValueError(f"알 수 없는 지표 id: {metric_id!r}")
     kind, _, key = metric_id.partition(":")
+    if kind == "perf":
+        d = (perfs or {}).get(key)
+        if d is None:
+            return None
+        from .performance import perf_value  # 순환 import 회피(performance → run_metrics)
+
+        return _finite(perf_value(d, m)[0])
     if kind == "curve":
         if not m.curve:
             return None
@@ -229,8 +242,16 @@ def _load_resp(folder: str) -> dict[str, float] | None:
     return None if parsed is None else dict(parsed.values)
 
 
+def _load_requests(path: str) -> dict[str, tuple[str, ...]] | None:
+    try:
+        with open(path, encoding="utf-8", errors="replace") as fh:
+            return parse_requests_text(fh.read())
+    except OSError:
+        return None
+
+
 def load_run_metrics(files: RunFiles, *, max_bytes: int) -> RunMetrics:
-    """파일 → 지표(LRU). curve.json이 max_bytes보다 크면 커브 없음(None), RESPONSES.txt도 같은 상한."""
+    """파일 → 지표(LRU). curve.json이 max_bytes보다 크면 커브 없음(None), RESPONSES.txt·H3D_REQUESTS.txt도 같은 상한."""
     curve = None
     if files.curve_json:
         key = _stat_key("curve", files.curve_json)
@@ -242,4 +263,10 @@ def load_run_metrics(files: RunFiles, *, max_bytes: int) -> RunMetrics:
         key = None if is_link_or_reparse(rp) else _stat_key("resp", rp)
         if key is not None and key[3] <= max_bytes:
             resp = _CACHE.get_or_load(key, lambda: _load_resp(files.result_dir))  # type: ignore[arg-type]
-    return RunMetrics(curve=curve, resp=resp)
+    requests = None
+    if files.result_dir:
+        qp = os.path.join(files.result_dir, REQUESTS_FILE)
+        key = None if is_link_or_reparse(qp) else _stat_key("req", qp)
+        if key is not None and key[3] <= max_bytes:
+            requests = _CACHE.get_or_load(key, lambda: _load_requests(qp))
+    return RunMetrics(curve=curve, resp=resp, requests=requests)

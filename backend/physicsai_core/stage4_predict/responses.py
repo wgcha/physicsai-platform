@@ -45,6 +45,12 @@ REASON_TEXT = {
     "SPEC_INVALID": "추출 정의가 올바르지 않음",
     "MISSING": "RESPONSES.txt에 값 없음",
     "EXTRACT_FAILED": "추출 실패",
+    # S17 §22.3.3 성능 값 사유
+    "SPEC_CHANGED": "정의가 바뀐 뒤 추출하지 않음 — 다시 추출 필요",
+    "NOT_EXTRACTED": "추출 결과 없음",
+    "NO_CURVE": "커브 없음",
+    "SERIES_MISSING": "커브 계열 없음",
+    "CURVE": "커브 성능(예측 커브에서 계산)",
 }
 
 
@@ -89,6 +95,8 @@ def h3d_request(resp: Mapping[str, Any]) -> tuple[H3dRequest | None, str | None]
     spec = resp.get("spec")
     if spec is None:  # 정규화 형식(response_defs): spec null = 추출 정의 없음(이름·단위만) — 추출하지 않는다
         return None, "NOT_DEFINED"
+    if isinstance(spec, Mapping) and str(_get(spec, "source") or "").upper() == "CURVE":
+        return None, "CURVE"  # S17 §22.3.4: curve.json에서 계산(H3D 요청 아님, 경고 없음)
     if not isinstance(spec, Mapping) or str(_get(spec, "source") or "H3D").upper() != "H3D":
         return None, "NOT_H3D"
     if not _get(spec, "datatype"):
@@ -163,6 +171,30 @@ def parse_responses_text(text: str) -> ParsedResponses:
     return out
 
 
+def parse_requests_text(text: str) -> dict[str, tuple[str, ...]]:
+    """`H3D_REQUESTS.txt` 본문 → {NAME: (SUBCASE, DATATYPE, COMPONENT, LAYER)}(`REQUEST_FIELDS` 순서로 분해, `#`·빈 줄 무시,
+    필드 수가 다른 줄 무시, 같은 이름은 첫 줄). 값은 앞뒤 공백 제거(§22.3.3 P5)."""
+    out: dict[str, tuple[str, ...]] = {}
+    rest = [k for k in REQUEST_FIELDS if k != "NAME"]
+    for raw in text.lstrip("\ufeff").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        parts = [p.strip() for p in line.split(REQUEST_SEP)]
+        if len(parts) != len(REQUEST_FIELDS):
+            continue
+        f = dict(zip(REQUEST_FIELDS, parts))
+        if f["NAME"] and f["NAME"] not in out:
+            out[f["NAME"]] = tuple(f[k] for k in rest)
+    return out
+
+
+def request_key(req: H3dRequest) -> tuple[str, ...]:
+    """정의 → 요청 줄 비교 키(NAME 제외 필드, `REQUEST_FIELDS` 순서)."""
+    f = req.fields()
+    return tuple(f[k].strip() for k in REQUEST_FIELDS if k != "NAME")
+
+
 def read_responses(folder: str) -> ParsedResponses | None:
     """folder/RESPONSES.txt(없으면 None)."""
     path = os.path.join(folder, RESPONSES_FILE)
@@ -213,7 +245,7 @@ def pick_values(responses: Sequence[Mapping[str, Any]], parsed: ParsedResponses 
     return values, reasons
 
 
-SILENT_REASONS = frozenset({"NOT_DEFINED"})  # 경고하지 않는 사유(정의상 추출하지 않는 응답)
+SILENT_REASONS = frozenset({"NOT_DEFINED", "CURVE"})  # 경고하지 않는 사유(정의상 H3D로 추출하지 않는 응답)
 
 
 def reason_text(code: str) -> str:
