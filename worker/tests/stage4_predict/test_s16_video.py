@@ -103,7 +103,7 @@ def test_v3_s16_20_settings_vid_scope_escape():
     t = TCL.read_text(encoding="utf-8")
     assert "hwc save animation window" in t and "hwc save animation page" in t
     assert "ERROR: 동영상 파일 없음 - $vid_path" in t and "SUCCESS: 동영상 저장 완료" in t and "ERROR: 동영상 저장 실패" in t
-    assert "파일이 만들어지지 않았습니다(HyperView 성공 보고)" in t
+    assert r"video: \ud30c\uc77c\uc774 \ub9cc\ub4e4\uc5b4\uc9c0\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4(HyperView \uc131\uacf5 \ubcf4\uace0); " in t                 # \\uXXXX(시스템 인코딩 무관)
 
 
 @pytest.mark.skipif(not (shutil.which("tclsh") or shutil.which("tclsh8.6")), reason="tclsh 없음 — 문자열 골든만(위 시험)")

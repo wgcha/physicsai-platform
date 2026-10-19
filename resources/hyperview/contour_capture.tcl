@@ -169,7 +169,8 @@ foreach VIEW $VIEWS {
         } elseif {![file exists $vid_path] || [file size $vid_path] <= 0} {
             # HyperView가 성공을 보고해도 파일이 없거나 0바이트일 수 있다(phase3 §21.4.2 S16)
             puts "ERROR: 동영상 파일 없음 - $vid_path"
-            append err_txt "video: 파일이 만들어지지 않았습니다(HyperView 성공 보고); "
+            # 오류 문구는 \uXXXX(시스템 인코딩과 무관 — capture_result.txt는 UTF-8): "파일이 만들어지지 않았습니다(HyperView 성공 보고)"
+            append err_txt "video: \ud30c\uc77c\uc774 \ub9cc\ub4e4\uc5b4\uc9c0\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4(HyperView \uc131\uacf5 \ubcf4\uace0); "
             set vid_state 0
         } else {
             puts "SUCCESS: 동영상 저장 완료 -> $vid_path"

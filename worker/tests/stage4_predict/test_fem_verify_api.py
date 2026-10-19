@@ -69,7 +69,7 @@ def test_v3_s16_5_sources(predict_env, fake_tools, tmp_path):
     assert pv["problems"] == [] and pv["predict"] == {"job_id": pj, "state": "SUCCEEDED", "reuse": True, "will_run": False,
                                                       "companion": False}
     assert pv["input_mode"] == "reuse" and pv["assembly"]["kind"] == "PREDICT_INPUT" and pv["assembly"]["starter"] == "model0_0000.rad"
-    assert pv["mesh"]["available"] is True and pv["mesh"]["path"].endswith(f"04_predict/{pj}/geom/EPS_mesh_0000.rad")
+    assert pv["mesh"]["available"] is True and pv["mesh"]["path"] == str(env.predict_dir(pj) / "geom" / "EPS_mesh_0000.rad")
     assert pv["design"]["values"] == VALUES and pv["design"]["param_set"]["id"] == ps["id"] and pv["hpc_mode"] == "command"
     assert pv["source_label"].startswith("④ 예측 ") and pv["fem_field"] == "CornerStress"
     # train_doe 지정 → rebuild, 요약
@@ -334,7 +334,7 @@ def test_v3_s16_15_rerun_from_start_and_from_extract(predict_env, fake_tools, tm
     steps = env.steps(nj)
     assert [steps[k]["state"] for k in ("FV_PREP", "HPC_SUBMIT", "COLLECT", "FV_EXTRACT")] == ["SKIPPED", "SKIPPED", "SKIPPED", "SUCCEEDED"]
     d = detail(env, d["id"])
-    assert d["status"] == "DONE" and d["attempt_no"] == 2 and d["paths"]["input_dir"].endswith("FV-001/a2/input")
+    assert d["status"] == "DONE" and d["attempt_no"] == 2 and d["paths"]["input_dir"] == str(env.sroot / "04_verify" / "FV-001" / "a2" / "input")
 
 
 def test_v3_s16_15_cancel_idempotent(predict_env, fake_tools, tmp_path, monkeypatch):

@@ -95,7 +95,7 @@ def test_v3_s16_8_rebuild_mesh_only_train_doe_full(predict_env, fake_tools, fake
     assert "FEM_RESPONSE_WHOLE_MODEL" in codes
     # FV_CAPTURE(V3-S16-12): 두 쪽 같은 범례·출력 폴더·meta side/fv_id, FEM comps = 자동(쿠션 /PART 없음 → 표시 그대로)
     caps = [r["settings"] for r in read_record(fake_record) if r["tool"] == "hw_capture"][-2:]
-    assert [c["OUTDIR"] for c in caps] == [str(A / "media" / "pred"), str(A / "media" / "fem")]
+    assert [c["OUTDIR"] for c in caps] == [str(A / "media" / x).replace("\\", "/") for x in ("pred", "fem")]  # Tcl '/' 표기
     assert caps[0]["LEGMIN"] == caps[1]["LEGMIN"] != "" and caps[0]["LEGMAX"] == caps[1]["LEGMAX"] != ""
     assert caps[0]["COMPS"] == [] and caps[1]["COMPS"] == ["2000001", "2000002"]                   # mesh_only → 자동 격리
     assert caps[0]["FIELD"] == caps[1]["FIELD"] == "CornerStress"

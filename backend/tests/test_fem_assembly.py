@@ -103,10 +103,14 @@ def test_v3_s16_6_custom_path_rules(settings, tmp_path):
     sb = _assem(spdm / "_backup" / "z")
     sp = spdm / "with space"
     sp.mkdir()
+    cases = [(str(outside), "PATH_OUTSIDE_ROOT"), (str(bk), "PATH_UNSAFE"), (str(sb), "PATH_UNSAFE"), (str(sp), "PATH_UNSAFE")]
     link = ai / "S" / "lnk"
-    os.symlink(a1, link)
-    for raw, code in ((str(outside), "PATH_OUTSIDE_ROOT"), (str(bk), "PATH_UNSAFE"), (str(sb), "PATH_UNSAFE"),
-                      (str(sp), "PATH_UNSAFE"), (str(link), "PATH_UNSAFE")):
+    try:
+        os.symlink(a1, link, target_is_directory=True)
+        cases.append((str(link), "PATH_UNSAFE"))
+    except OSError:  # Windows 권한 없음 — 링크 경우만 건너뜀
+        pass
+    for raw, code in cases:
         with pytest.raises(PathError) as ei:
             check_custom_path(raw, settings)
         assert ei.value.code == code, raw

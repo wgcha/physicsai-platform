@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -158,8 +159,9 @@ def test_v3_s16_2_predict_run_detail(client, worker_factory, loaded_config, engi
     assert d["response_table"][0] == {"name": "R0", "unit": "MPa", "predicted": 100.0, "nearest_measured": 99.0, "diff_pct": 1.0}
     assert d["display"]["field"] == "CornerStress"
     base = str(sroot / "04_predict" / a1)
-    assert d["paths"] == {"dir": base, "input_dir": base + "/INPUT", "result_dir": base + "/RESULT",
-                          "pred_h3d": base + "/RESULT/EPS_mesh_0000_pred.h3d", "media_dir": base + "/RESULT/media",
+    j = os.path.join
+    assert d["paths"] == {"dir": base, "input_dir": j(base, "INPUT"), "result_dir": j(base, "RESULT"),
+                          "pred_h3d": j(base, "RESULT", "EPS_mesh_0000_pred.h3d"), "media_dir": j(base, "RESULT", "media"),
                           "geom_dir": None}
     # 정리로 옮겨진 폴더 → null
     (sroot / "_backup").mkdir(exist_ok=True)
