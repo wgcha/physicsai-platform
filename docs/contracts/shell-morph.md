@@ -647,3 +647,11 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
 ## 변경 메모
 
 (구현 중 계약과 다르게 해야 하면 여기에 `SM-C1~`로 기록하고 Plan 확인을 받는다.)
+
+- **SM-C1(2026-10-20, paicad 0.8.0 구현 해석 — 본문 §4·§5·§6·§7 대신 이 해석이 기준)**:
+  - morph 비드 면 사상: 비드 면의 정규화 (u,v)는 **비드 단면·경로 기준 정규화 위치**(필렛·원뿔·원통 면은 면 자체 (u,v)와 같고, 평면 플랭크·바닥은 비드 정렬 좌표). 꼭짓점·엣지는 샘플 정규화 t 그대로(§6.5).
+  - `shell_update.json` 선택 키 `expected_measured`(변경 비드 피처 전부의 기대 측정값 — `keep_angle` 깊이 변경 시 폭도 바뀜, check (a) 비교 대상)·`beads`(비드 단면 전정밀 데이터, morph 비드 면 사상 입력)·`applied[].expected` 추가. 폭 Δ = 값 − 공칭(플랭크 Δ/2 대칭 이동), 위치 = 축 방향 가장 가까운 고정 직선 엣지 거리(값 증가 = 엣지에서 멀어짐, `ref.sign`).
+  - extract `feasible` 최소 깊이 = 플랭크가 남는 정확 조건 **`(Rt+Rb)(1−cosθ)`**(θ = 플랭크 각). 본문 `Rt+Rb`는 SM1 공칭 깊이 4 = 2+2라 축소가 불가능해 정정.
+  - 면내 해(경계 변경 면, §6.5): **직접 희소 LU**(sweep 단계 간 인수분해 재사용, 미수렴 시 GE §6.4-2 CG 대체). 면내 평활화는 좌표가 아닌 **변위장 이완**(`relax_iters`, 강체 이동 보존). 품질 보고 선택 키 `failed_elements`·`margins`.
+  - 기본 대상 component `chassis_rear`(§12)는 **플랫폼 설정**이다. paicad는 기본 대상을 갖지 않고 `--parts`/`--features`로만 받는다(없으면 fixed-scan 목록 모드).
+  - 종료코드(§5.3 구체화): update FAIL 10(`SHELL_FIXED_REGION_VIOLATION` 사전 검사 포함), morph·check FAIL 11(morph의 고정 노드 목표 초과 `SHELL_FIXED_REGION_VIOLATION`도 11), 준비 실패 12(tag·fixed-scan — `SHELL_FIXED_PARSE_FAILED`·`SHELL_UNSUPPORTED_ELEMENT`·`SHELL_BODY_NOT_SHEET`), `SHELL_PART_NOT_FOUND` 3.

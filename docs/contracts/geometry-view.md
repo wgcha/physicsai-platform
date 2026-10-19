@@ -660,7 +660,7 @@ API(`backend/openapi.json` 갱신 — Backend):
 ### 13.6 프런트 — 컨투어 모드
 
 - 같은 three.js 청크·`GLTFLoader`·`OrbitControls`를 재사용(§7.1 허용 모듈 목록 불변, 새 로더·외부 요청 없음). 컬러맵은 `colormap.ts`에 자체 구현(jet/turbo류 256단계 표, `Lut` 모듈 미사용).
-- **진입**: 기존 컨투어 결과 목록(방향별 PNG·영상) 옆 탭 [그림/영상 | 3D]. `features.contour3d=false`거나 WebGL 불가면 3D 탭 숨김/비활성(기존 PNG·영상 유지). [3D로 보기] 클릭 → `POST /contour3d`, 폴링 0.5 s(§6.5 규칙), 실패 시 사유 표시 + [다시].
+- **진입**: 기존 컨투어 결과 목록(방향별 PNG·영상) 옆 탭 [그림/영상 | 3D]. `features.contour3d=false`거나 WebGL 불가면 3D 탭 숨김/비활성(기존 PNG·영상 유지). [3D로 보기] 클릭 → `POST /contour3d`, 폴링 0.5 s(§6.5 규칙), 실패 시 사유 표시 + [다시]. **열 때 생성(사용자 확정 2026-10-20)**: 3D 컨투어는 사용자가 3D 탭·[3D로 보기]로 열 때만 생성한다(해석·예측 완료 시 자동 생성 안 함). 캐시가 없는 첫 생성 동안 **대기 안내 화면**을 보여 준다 — 현재 단계(준비·추출·변환·등록 = `C3_*` step), 예상 시간(같은 원본 종류의 최근 `timing` 또는 노드·프레임 수 기반 추정, 없으면 "수 분"), 진행(step 진행률), [취소](작업 취소 → `CANCELED`, 캐시 안 함). 캐시 적중이면 안내 없이 바로 표시.
 - **표시**: `contour.glb`를 1회 로드, 정점 색을 현재 프레임 스칼라로 갱신(`color` 속성 갱신, NaN = 회색). 범례 모드 [고정(`range`) | 프레임별(`list[i]`)], 값 단위 `unit`. **타임스텝 슬라이더**(프레임 `time` 표시)·재생/정지(fps 선택 1~30, 반복)·이전/다음 프레임. **변형 배율** 선택(`has_disp` 때만 활성: 0·1·5·10·50 + 직접 입력, 위치 = `POSITION + scale·disp`).
 - **로드**: `contour_frames.bin`을 프레임 단위 Range 요청(`record_bytes` 사용), 현재·다음 프레임 선로딩, 최근 N프레임(기본 8)만 메모리 유지. Range 미지원 응답이면 전체를 한 번 받는 대체.
 - 렌더는 onDemand(재생 중에만 연속), 패널을 닫으면 `dispose()`(§7.4와 같음). 노드 클릭 시 가장 가까운 정점의 `_NODE_ID`와 값 툴팁(선택 기능, 1차 가능하면).
@@ -688,3 +688,11 @@ Radioss 해석 입력에 `/ANIM` 출력을 추가해 애니메이션 파일(`A00
 ## 변경 메모
 
 (구현 중 계약과 다르게 해야 하면 여기에 `GV-C1~`로 기록하고 Plan 확인을 받는다. three 청크 크기 측정값도 여기에 기록.)
+
+- **GV-C1(2026-10-20, paicad 0.9.0 구현 차이 — 본문 대신 이 해석이 기준)**:
+  - 치수선(§4.3 `dimension`): `RIB_H`·`POCKET_D`는 **캡/바닥 면 centroid → host 평면 발**(host centroid는 피처 밖이고 리브마다 같아서). 위치형(`HOLE_U/V`) `p0` = measure 기준인 **바디 bbox 최소 평면 위의 점**(발).
+  - `_DISP_MM`(B-rep 미리보기): 정점에서 같은 face_id 공칭 면의 **무한 surface까지 거리**(평면형 B-spline은 평면, ≤ 1e-6 = 0). FE GLB `_ELEM_ID` = 그 노드를 쓰는 외피 요소 중 **최소 ID**.
+  - GLB 레이아웃: UNSIGNED_SHORT 정점 속성(`_FACE_ID` 등)은 4바이트 정렬을 위해 **`byteStride` 4**.
+  - FE GLB(`preview_fe.glb`) 크기 상한 초과(`fe_edges` 제외 재시도 후): 최상위 `status: FAIL`·`VIEW_TOO_LARGE`·**종료코드 14**. 단 check FAIL이면 check 코드(11)가 우선.
+  - `view preview`의 `update/`에는 update 단독과 같은 `update.json`과 함께 **`sample.brep`·`face_map.json`**도 쓴다(solver include `morphed.inc`·`files/`는 쓰지 않음).
+  - update FAIL manifest: `bodies: []`, 피처 `dimension: null`(GLB 없음).

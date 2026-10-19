@@ -475,6 +475,7 @@ component의 요소·노드 집합:
 | 11 | 검사 실패(check FAIL) 또는 모핑 실패(morph FAIL) | `check.json`/`morph.json` |
 | 12 | tag 실패 | `tag.json` |
 | 13 | extract 결과 없음 `GEOM_EXTRACT_EMPTY` | `parameter_features.json`(features 빈 배열) |
+| 14 | 3D 보기 출력 실패 `VIEW_TESSELLATION_FAILED`·`VIEW_TOO_LARGE`(`paicad view`, geometry-view.md §5.4·GV-C1) | `view_manifest.json`/`preview_manifest.json`(FAIL) |
 | 20 | 내부 오류 `GEOM_INTERNAL`(예외 traceback은 stderr·로그) | 가능하면 있음 |
 | 130 | 중단 | 없음 |
 
