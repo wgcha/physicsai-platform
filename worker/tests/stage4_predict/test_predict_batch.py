@@ -109,7 +109,7 @@ def test_v3_s9_7_assembly_parallel_folders_and_enqueue(predict_env, fake_record,
 
 def test_v3_s9_7_mesh_only_m1_only(predict_env, tmp_path, monkeypatch):
     trace = _trace(tmp_path, monkeypatch)
-    monkeypatch.setenv("FAKE_SIMLAB_SLEEP_S", "1.5")  # Windows CI: 파이썬 가짜 도구 기동이 느려 3개가 겹치려면 여유 필요
+    monkeypatch.setenv("FAKE_SIMLAB_SLEEP_S", "3.0")  # Windows CI: 파이썬 가짜 도구 기동이 느려 3개가 겹치려면 여유 필요(1.5초는 간헐 실패)
     env = predict_env()
     ps = env.param_set()
     env.to_mesh_only(ps["id"])
