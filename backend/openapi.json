@@ -9414,9 +9414,41 @@
             ],
             "title": "Objective"
           },
+          "objectives": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objectives"
+          },
           "run_key": {
             "title": "Run Key",
             "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
           },
           "values": {
             "additionalProperties": {
@@ -9424,6 +9456,20 @@
             },
             "title": "Values",
             "type": "object"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
           }
         },
         "required": [
@@ -9439,6 +9485,17 @@
       },
       "SoCandidate": {
         "properties": {
+          "acq": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acq"
+          },
           "constraints_pred": {
             "items": {
               "type": "number"
@@ -9472,6 +9529,45 @@
             ],
             "title": "Predicted"
           },
+          "predicted_objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Objectives"
+          },
+          "predicted_std": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Std"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
           "state": {
             "anyOf": [
               {
@@ -9500,6 +9596,41 @@
               }
             ],
             "title": "Verified"
+          },
+          "verified_objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Objectives"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
           }
         },
         "required": [
@@ -9511,7 +9642,30 @@
       },
       "SoConstraint": {
         "additionalProperties": false,
+        "description": "제약: `<=`·`>=`는 value, `range`(S17 §22.4.1)는 lo < hi(유한).",
         "properties": {
+          "hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hi"
+          },
+          "lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lo"
+          },
           "metric": {
             "maxLength": 200,
             "title": "Metric",
@@ -9520,7 +9674,8 @@
           "op": {
             "enum": [
               "<=",
-              ">="
+              ">=",
+              "range"
             ],
             "title": "Op",
             "type": "string"
@@ -9538,16 +9693,94 @@
             "title": "Series"
           },
           "value": {
-            "title": "Value",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metric",
+          "op"
+        ],
+        "title": "SoConstraint",
+        "type": "object"
+      },
+      "SoConstraintDef": {
+        "properties": {
+          "hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hi"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lo"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
           }
         },
         "required": [
           "metric",
           "op",
-          "value"
+          "label"
         ],
-        "title": "SoConstraint",
+        "title": "SoConstraintDef",
         "type": "object"
       },
       "SoExploreNew": {
@@ -9811,6 +10044,20 @@
             "title": "N Train",
             "type": "integer"
           },
+          "per_objective": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoFitObjective"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Objective"
+          },
           "pred_vs_verified_mae": {
             "anyOf": [
               {
@@ -9840,6 +10087,208 @@
           "d_free"
         ],
         "title": "SoFit",
+        "type": "object"
+      },
+      "SoFitObjective": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "loo_nrmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loo Nrmse"
+          },
+          "loo_rmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loo Rmse"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "n_train": {
+            "title": "N Train",
+            "type": "integer"
+          },
+          "pred_vs_verified_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Vs Verified Mae"
+          },
+          "q2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q2"
+          }
+        },
+        "required": [
+          "metric",
+          "kind",
+          "n_train"
+        ],
+        "title": "SoFitObjective",
+        "type": "object"
+      },
+      "SoFrontPoint": {
+        "description": "검증된 파레토 해 1개(같은 설계 평균, key = 첫 run `\"<iter_no>:<doe_no>\"`).",
+        "properties": {
+          "batch_label": {
+            "title": "Batch Label",
+            "type": "string"
+          },
+          "constraints": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Constraints",
+            "type": "object"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "objectives": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Objectives",
+            "type": "array"
+          },
+          "observed": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Observed",
+            "type": "object"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "iter_no",
+          "doe_no",
+          "run_key",
+          "batch_label",
+          "values",
+          "objectives"
+        ],
+        "title": "SoFrontPoint",
+        "type": "object"
+      },
+      "SoHvPoint": {
+        "properties": {
+          "front_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Front Size"
+          },
+          "hv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv"
+          },
+          "improvement_rel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improvement Rel"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "iter_no"
+        ],
+        "title": "SoHvPoint",
         "type": "object"
       },
       "SoIteration": {
@@ -9899,6 +10348,28 @@
                 "type": "null"
               }
             ]
+          },
+          "front_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Front Size"
+          },
+          "hv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv"
           },
           "improvement_rel": {
             "anyOf": [
@@ -9963,6 +10434,107 @@
         "title": "SoObjective",
         "type": "object"
       },
+      "SoObjectiveDef": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "sense": {
+            "title": "Sense",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "sense",
+          "label"
+        ],
+        "title": "SoObjectiveDef",
+        "type": "object"
+      },
+      "SoObserve": {
+        "additionalProperties": false,
+        "description": "관찰 지표(값만 기록·표시, S17).",
+        "properties": {
+          "metric": {
+            "maxLength": 200,
+            "title": "Metric",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          }
+        },
+        "required": [
+          "metric"
+        ],
+        "title": "SoObserve",
+        "type": "object"
+      },
+      "SoObserveDef": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "label"
+        ],
+        "title": "SoObserveDef",
+        "type": "object"
+      },
       "SoParameter": {
         "properties": {
           "max": {
@@ -10002,8 +10574,205 @@
         "title": "SoParameter",
         "type": "object"
       },
+      "SoPareto": {
+        "properties": {
+          "frame": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame"
+          },
+          "front": {
+            "items": {
+              "$ref": "#/components/schemas/SoFrontPoint"
+            },
+            "title": "Front",
+            "type": "array"
+          },
+          "hv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv"
+          },
+          "predicted": {
+            "items": {
+              "$ref": "#/components/schemas/SoPredictedPoint"
+            },
+            "title": "Predicted",
+            "type": "array"
+          },
+          "predicted_iter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Iter"
+          },
+          "recommended_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Key"
+          }
+        },
+        "title": "SoPareto",
+        "type": "object"
+      },
+      "SoPerformance": {
+        "description": "미리보기 성능 목록(S17 §22.4.2): available·total·spec_changed는 재사용일 때만.",
+        "properties": {
+          "available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "spec_changed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Changed"
+          },
+          "stat": {
+            "title": "Stat",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "stat",
+          "label"
+        ],
+        "title": "SoPerformance",
+        "type": "object"
+      },
+      "SoPredictedPoint": {
+        "description": "대리모델 예측 전선 점(미검증).",
+        "properties": {
+          "mean": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Mean",
+            "type": "array"
+          },
+          "pof": {
+            "title": "Pof",
+            "type": "number"
+          },
+          "std": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Std",
+            "type": "array"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values",
+          "mean",
+          "std",
+          "pof"
+        ],
+        "title": "SoPredictedPoint",
+        "type": "object"
+      },
       "SoProblem": {
         "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
           "code": {
             "title": "Code",
             "type": "string"
@@ -10022,6 +10791,17 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "performance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performance"
           }
         },
         "required": [
@@ -10086,6 +10866,17 @@
             ],
             "title": "Job Id"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "objective": {
             "anyOf": [
               {
@@ -10097,6 +10888,39 @@
             ],
             "title": "Objective"
           },
+          "objectives": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Objectives",
+            "type": "array"
+          },
+          "observed": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Observed",
+            "type": "object"
+          },
+          "on_front": {
+            "default": false,
+            "title": "On Front",
+            "type": "boolean"
+          },
           "predicted": {
             "anyOf": [
               {
@@ -10107,6 +10931,17 @@
               }
             ],
             "title": "Predicted"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "run_key": {
             "title": "Run Key",
@@ -10134,6 +10969,23 @@
           "state"
         ],
         "title": "SoRun",
+        "type": "object"
+      },
+      "SoVerifyPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "SoVerifyPoint",
         "type": "object"
       },
       "SourceRef": {
@@ -10825,8 +11677,23 @@
             "title": "Max Candidates",
             "type": "integer"
           },
+          "max_extra_points": {
+            "default": 10,
+            "title": "Max Extra Points",
+            "type": "integer"
+          },
           "max_iterations": {
             "title": "Max Iterations",
+            "type": "integer"
+          },
+          "max_objectives": {
+            "default": 3,
+            "title": "Max Objectives",
+            "type": "integer"
+          },
+          "max_observe": {
+            "default": 10,
+            "title": "Max Observe",
             "type": "integer"
           },
           "max_variables": {
@@ -11492,6 +12359,18 @@
             "title": "Can Resume",
             "type": "boolean"
           },
+          "can_verify_more": {
+            "default": false,
+            "title": "Can Verify More",
+            "type": "boolean"
+          },
+          "constraints_def": {
+            "items": {
+              "$ref": "#/components/schemas/SoConstraintDef"
+            },
+            "title": "Constraints Def",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -11538,6 +12417,20 @@
             ],
             "title": "Finished At"
           },
+          "hv_history": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoHvPoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv History"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -11557,10 +12450,29 @@
             "title": "Label",
             "type": "string"
           },
+          "mode": {
+            "default": "single",
+            "title": "Mode",
+            "type": "string"
+          },
           "model": {
             "additionalProperties": true,
             "title": "Model",
             "type": "object"
+          },
+          "objectives": {
+            "items": {
+              "$ref": "#/components/schemas/SoObjectiveDef"
+            },
+            "title": "Objectives",
+            "type": "array"
+          },
+          "observe": {
+            "items": {
+              "$ref": "#/components/schemas/SoObserveDef"
+            },
+            "title": "Observe",
+            "type": "array"
           },
           "param_set": {
             "additionalProperties": true,
@@ -11573,6 +12485,16 @@
             },
             "title": "Parameters",
             "type": "array"
+          },
+          "pareto": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoPareto"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "progress_text": {
             "title": "Progress Text",
@@ -11614,6 +12536,13 @@
             },
             "title": "Warnings",
             "type": "array"
+          },
+          "weights": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Weights",
+            "type": "array"
           }
         },
         "required": [
@@ -11637,7 +12566,7 @@
       },
       "SurrogateOptCreate": {
         "additionalProperties": false,
-        "description": "생성·미리보기 공용 본문(phase3 §18.6). bounds 생략 = 템플릿 min·max, lo = hi는 고정.",
+        "description": "생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.\n목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.",
         "properties": {
           "bounds": {
             "anyOf": [
@@ -11676,6 +12605,7 @@
             "items": {
               "$ref": "#/components/schemas/SoConstraint"
             },
+            "maxItems": 20,
             "title": "Constraints",
             "type": "array"
           },
@@ -11727,7 +12657,37 @@
             "type": "integer"
           },
           "objective": {
-            "$ref": "#/components/schemas/SoObjective"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoObjective"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoObjective"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objectives"
+          },
+          "observe": {
+            "items": {
+              "$ref": "#/components/schemas/SoObserve"
+            },
+            "maxItems": 50,
+            "title": "Observe",
+            "type": "array"
           },
           "param_set_id": {
             "anyOf": [
@@ -11770,11 +12730,25 @@
               }
             ],
             "title": "Tol Rel"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
           }
         },
         "required": [
-          "explore",
-          "objective"
+          "explore"
         ],
         "title": "SurrogateOptCreate",
         "type": "object"
@@ -11821,9 +12795,21 @@
             "title": "Max Total Runs",
             "type": "integer"
           },
+          "mode": {
+            "default": "single",
+            "title": "Mode",
+            "type": "string"
+          },
           "objective_available": {
             "title": "Objective Available",
             "type": "boolean"
+          },
+          "performances": {
+            "items": {
+              "$ref": "#/components/schemas/SoPerformance"
+            },
+            "title": "Performances",
+            "type": "array"
           },
           "problems": {
             "items": {
@@ -11933,6 +12919,59 @@
           "created_by_name"
         ],
         "title": "SurrogateOptSummary",
+        "type": "object"
+      },
+      "SurrogateOptVerify": {
+        "additionalProperties": false,
+        "description": "추가 검증(S17 §22.7): 고른 해(검증·예측 전선 점) 1~max_extra_points개를 최적화 소유 배치(iters EXTRA)로 예측 검증.",
+        "properties": {
+          "capture": {
+            "default": false,
+            "title": "Capture",
+            "type": "boolean"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/SoVerifyPoint"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "points"
+        ],
+        "title": "SurrogateOptVerify",
+        "type": "object"
+      },
+      "SurrogateOptVerifyResult": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "batch_label": {
+            "title": "Batch Label",
+            "type": "string"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "batch_label",
+          "job_id",
+          "iter_no"
+        ],
+        "title": "SurrogateOptVerifyResult",
         "type": "object"
       },
       "TemplateConfigured": {
@@ -19675,6 +20714,89 @@
           }
         },
         "summary": "Surrogate Opt Runs Csv",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
+    "/physicsai/api/surrogate-opts/{opt_id}/verify": {
+      "post": {
+        "description": "추가 검증(power, 등록자 또는 관리자, DONE만 — phase3 §22.7): 고른 해를 최적화 소유 배치(iters EXTRA)로 예측 검증.",
+        "operationId": "verify_surrogate_opt_physicsai_api_surrogate_opts__opt_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opt_id",
+            "required": true,
+            "schema": {
+              "title": "Opt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurrogateOptVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOptVerifyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Verify Surrogate Opt",
         "tags": [
           "surrogate-opts"
         ]

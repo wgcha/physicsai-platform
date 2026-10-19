@@ -77,7 +77,9 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                                        "candidates": s.surrogate_opt.default_candidates,
                                        "tol_rel": s.surrogate_opt.default_tol_rel, "surrogate": s.surrogate_opt.default_surrogate},
                           "max_variables": s.surrogate_opt.max_variables, "max_iterations": s.surrogate_opt.max_iterations,
-                          "max_candidates": s.surrogate_opt.max_candidates},
+                          "max_candidates": s.surrogate_opt.max_candidates,
+                          "max_objectives": s.surrogate_opt.max_objectives, "max_observe": s.surrogate_opt.max_observe,
+                          "max_extra_points": s.surrogate_opt.max_extra_points},
         "demo": bool(s.demo.enabled),
     }
 

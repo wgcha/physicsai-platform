@@ -134,6 +134,9 @@ class StatusSurrogateOpt(Resp):
     max_variables: int
     max_iterations: int
     max_candidates: int
+    max_objectives: int = 3  # S17 §22.10
+    max_observe: int = 10
+    max_extra_points: int = 10
 
 
 class StatusResponse(Resp):

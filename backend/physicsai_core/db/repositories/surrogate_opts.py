@@ -79,11 +79,12 @@ def get_iter(conn: Connection, opt_id: str, iter_no: int) -> dict[str, Any] | No
 
 
 def owned_iter_of_batch(conn: Connection, batch_id: str) -> dict[str, Any] | None:
-    """배치를 소유한(EXPLORE·VERIFY) 반복 행 + opt 열(opt_status·opt_iter_no). 재사용(REUSE) 배치는 소유가 아니다."""
+    """배치를 소유한(EXPLORE·VERIFY·FINAL) 반복 행 + opt 열(opt_status·opt_iter_no). 재사용(REUSE) 배치와 추가 검증(EXTRA,
+    S17 §22.7 — 끝난 최적화의 일반 배치처럼 ④에서 취소·실패만 다시, 종료 훅은 반복 작업 없이 PREDICT_BATCH_DONE)은 소유가 아니다."""
     q = (select(surrogate_opt_iters, surrogate_opts.c.status.label("opt_status"), surrogate_opts.c.iter_no.label("opt_iter_no"),
                 surrogate_opts.c.opt_no.label("opt_no"))
          .select_from(surrogate_opt_iters.join(surrogate_opts, surrogate_opts.c.id == surrogate_opt_iters.c.opt_id))
-         .where(and_(surrogate_opt_iters.c.batch_id == batch_id, surrogate_opt_iters.c.kind != "REUSE")))
+         .where(and_(surrogate_opt_iters.c.batch_id == batch_id, surrogate_opt_iters.c.kind.notin_(("REUSE", "EXTRA")))))
     return row_dict(conn.execute(q).first())
 
 
@@ -130,7 +131,7 @@ def _study(conn: Connection, study_id: str) -> dict[str, Any]:
 def create_opt_batch(conn: Connection, *, opt: Mapping[str, Any], iter_no: int, kind: str, matrix: BatchMatrix,
                      source_meta: Mapping[str, Any], batch_dir_name: str, simlab_mesh_name: str,
                      round_job_id: str | None = None, candidates: list[dict[str, Any]] | None = None,
-                     capture: bool | None = None, display: Mapping[str, Any] | None = None
+                     capture: bool | None = None, display: Mapping[str, Any] | None = None, extra: bool = False
                      ) -> tuple[dict[str, Any], dict[str, Any]]:
     """최적화 소유 PREDICT_BATCH 부모 작업(QUEUED) + 배치·run 행 + 반복 행(한 트랜잭션, 등록자 = opt 등록자).
 
@@ -145,7 +146,7 @@ def create_opt_batch(conn: Connection, *, opt: Mapping[str, Any], iter_no: int, 
         "multi_execution": int(s["multi_execution"]), "template_kind": opt["input_kind"],
         "source": {"kind": "lhs" if matrix.source_kind == "LHS" else "table", **dict(source_meta)},
         "capture": {"enabled": bool(s.get("capture")) if capture is None else bool(capture)},
-        "surrogate_opt": {"id": opt["id"], "opt_no": opt["opt_no"], "iter_no": iter_no},
+        "surrogate_opt": {"id": opt["id"], "opt_no": opt["opt_no"], "iter_no": iter_no, **({"extra": True} if extra else {})},
     }
     if display:  # D3-61 마무리 캡처: 기준안·최적안 같은 범례(fixed)
         params["display"] = dict(display)
@@ -305,7 +306,7 @@ def cancel(conn: Connection, opt: Mapping[str, Any], user_id: str) -> list[str]:
     for it in iters(conn, opt["id"]):
         if it["round_job_id"]:
             targets.append(it["round_job_id"])
-        if it["kind"] == "REUSE":
+        if it["kind"] in ("REUSE", "EXTRA"):  # 추가 검증 배치는 ④ 일반 배치처럼 따로 취소(S17)
             continue
         b = pb_repo.get(conn, it["batch_id"], for_update=True)
         if b is None:
