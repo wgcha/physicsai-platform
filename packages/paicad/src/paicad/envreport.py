@@ -2,7 +2,8 @@
 
 Per parameter and direction: last OK step, first failing step and code, and the limiting metric
 (the criterion with the smallest margin = value / threshold, at the first failure or, when nothing
-failed, at the last OK step). Pure functions of ``envelope.json`` content: deterministic.
+failed, at the last OK step). Steps are shown with their unit ('20 %' for dimension parameters,
+'3 mm' for position parameters). Pure functions of ``envelope.json`` content: deterministic.
 """
 
 from __future__ import annotations
@@ -16,11 +17,12 @@ REPORT_CSV = "report_envelope.csv"
 REPORT_COLUMNS = (
     "param",
     "nominal",
-    "last_ok_pct_plus",
-    "last_ok_pct_minus",
-    "first_fail_pct_plus",
+    "unit",
+    "last_ok_plus",
+    "last_ok_minus",
+    "first_fail_plus",
     "first_fail_code_plus",
-    "first_fail_pct_minus",
+    "first_fail_minus",
     "first_fail_code_minus",
     "limit_metric_plus",
     "limit_margin_plus",
@@ -62,25 +64,30 @@ def margins(row: dict, opts: dict) -> dict[str, float]:
 def limit_metric(rows: list[dict], opts: dict) -> dict:
     """Limiting criterion of one parameter direction (rows in step order)."""
     if not rows:
-        return {"metric": None, "margin": None, "at_pct": None, "source": None}
+        return {"metric": None, "margin": None, "at_pct": None, "at": None, "unit": None, "source": None}
     ff = next((r for r in rows if r["status"] == "FAIL"), None)
     row = ff
     if row is None:
         row = rows[-1]
     m = margins(row, opts)
+    at = {"at_pct": row.get("pct"), "at": row.get("step", row.get("pct")), "unit": row.get("unit", "%")}
     if ff is not None and not m:  # CAD / morph failure: no mesh metrics
-        return {"metric": ff["fail_code"], "margin": None, "at_pct": ff["pct"], "source": "first_fail"}
+        return {"metric": ff["fail_code"], "margin": None, **at, "source": "first_fail"}
     if not m:
-        return {"metric": None, "margin": None, "at_pct": row["pct"], "source": "last_ok"}
+        return {"metric": None, "margin": None, **at, "source": "last_ok"}
     name = min(sorted(m), key=lambda k: m[k])
     v = m[name]
-    return {"metric": name, "margin": round(v, 4) if math.isfinite(v) else None, "at_pct": row["pct"], "source": "first_fail" if ff is not None else "last_ok"}
+    return {"metric": name, "margin": round(v, 4) if math.isfinite(v) else None, **at, "source": "first_fail" if ff is not None else "last_ok"}
 
 
 def _pct(x) -> str:
     if x is None:
         return "-"
     return str(int(x)) if float(x).is_integer() else repr(float(x))
+
+
+def _lab(x, unit: str) -> str:
+    return "-" if x is None else f"{_pct(x)} {unit}"
 
 
 def _lm(s: dict, d: str) -> tuple[str, str]:
@@ -93,15 +100,18 @@ def render(env: dict) -> tuple[str, str]:
     for s in env["summary"]:
         mp, gp = _lm(s, "+")
         mm, gm = _lm(s, "-")
+        u = s.get("unit", "%")
+        lo, ff = s.get("last_ok", s.get("last_ok_pct")), s.get("first_fail", s.get("first_fail_pct"))
         rows.append(
             [
                 s["param"],
                 repr(float(s["nominal"])),
-                _pct(s["last_ok_pct"]["+"]),
-                _pct(s["last_ok_pct"]["-"]),
-                _pct(s["first_fail_pct"]["+"]),
+                u,
+                _lab(lo["+"], u),
+                _lab(lo["-"], u),
+                _lab(ff["+"], u),
                 s["first_fail_code"]["+"] or "-",
-                _pct(s["first_fail_pct"]["-"]),
+                _lab(ff["-"], u),
                 s["first_fail_code"]["-"] or "-",
                 mp,
                 gp,
@@ -117,22 +127,25 @@ def render(env: dict) -> tuple[str, str]:
     w.writerows(rows)
     q = env["options"]["quality"]
     steps = ", ".join(_pct(x) for x in env["steps_pct"])
+    pos_steps = ", ".join(_pct(x) for x in env.get("pos_steps_mm") or [])
     md = [
         "# Morphing envelope report",
         "",
         f"- engine_version: {env['engine_version']}",
         f"- sweep_id: {env['sweep_id']}",
-        f"- steps (% of nominal, each direction): {steps}; stop after {env['stop_after_fail']} consecutive failures",
+        f"- steps, dimension parameters (% of nominal, each direction): {steps}",
+        f"- steps, position parameters (mm from nominal, each direction): {pos_steps or '-'}",
+        f"- stop a direction after {env['stop_after_fail']} consecutive failures",
         f"- quality: min_stretch {q['min_stretch']}, max_aspect {q['max_aspect']}, min_edge_ratio {q['min_edge_ratio']}, "
         f"dt_ratio_min {q['dt_ratio_min']}, min_edge_mm {q['min_edge_mm']}",
         f"- position_ref: {env['options'].get('position_ref')}",
         "- limit = criterion with the smallest margin (value / threshold) at the first failure, else at the last OK step",
         "",
-        "| param | nominal | last OK + % | last OK - % | first fail + | first fail - | limit + (margin) | limit - (margin) | feasible |",
-        "|---|---|---|---|---|---|---|---|---|",
+        "| param | nominal | unit | last OK + | last OK - | first fail + | first fail - | limit + (margin) | limit - (margin) | feasible |",
+        "|---|---|---|---|---|---|---|---|---|---|",
     ]
     for r in rows:
-        ffp = "-" if r[4] == "-" else f"{r[4]} % {r[5]}"
-        ffm = "-" if r[6] == "-" else f"{r[6]} % {r[7]}"
-        md.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {ffp} | {ffm} | {r[8]} ({r[9]}) | {r[10]} ({r[11]}) | {r[12]} .. {r[13]} |")
+        ffp = "-" if r[5] == "-" else f"{r[5]} {r[6]}"
+        ffm = "-" if r[7] == "-" else f"{r[7]} {r[8]}"
+        md.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {r[4]} | {ffp} | {ffm} | {r[9]} ({r[10]}) | {r[11]} ({r[12]}) | {r[13]} .. {r[14]} |")
     return "\n".join(md) + "\n", buf.getvalue()

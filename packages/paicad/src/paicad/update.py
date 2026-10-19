@@ -15,8 +15,10 @@ Every sample starts from the nominal geometry. Feature values are turned into fa
 * FILLET_RADIUS and every plane/plane blend next to a moved face: blend re-fitted tangent to its
   two (moved) planes with the requested radius.
 
+Before the rebuild, the planned moves are checked for feature collisions (``collision.py``: feature
+boundaries overlapping on a face, wall penetration, self-intersecting wires) -> GEOM_FEATURE_COLLISION.
 The kernel rebuilds the solid with the same topology; failures map to GEOM_CAD_FAILED /
-GEOM_TOPOLOGY_CHANGED (exit 10) without crashing.
+GEOM_TOPOLOGY_CHANGED. All three are category CAD_FAILED, exit 10, without crashing.
 """
 
 from __future__ import annotations
@@ -30,6 +32,7 @@ from pathlib import Path
 import numpy as np
 
 from . import cadload, options
+from .collision import find_collisions
 from .common import (
     CODE_CATEGORY,
     EXIT_CAD,
@@ -497,6 +500,7 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
         applied += plan.applied
         warnings += plan.warnings
         moves = dict(plan.moves)
+        _precheck(body, feats, moves, opts)
         new = _move(body, moves)
         for _ in range(HOLE_POS_ITER):
             if not plan.hole_pos:
@@ -546,6 +550,26 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
             face_map[name]["uv_fallback"] = uvf  # faces where the normalized (u,v) mapping is not valid (section 6.4 fallback)
         out_bodies.append(new)
     return UpdateResult(out_bodies, applied, {"same_as_nominal": True, "counts": topo_counts}, face_map, warnings, positions)
+
+
+def _precheck(body: BodyGeom, feats: list[dict], moves: dict[int, FaceMove], opts: dict) -> None:
+    """Feature collision pre-check on the planned moves (raises GEOM_FEATURE_COLLISION)."""
+    owner: dict[int, list[str]] = {}
+    for f in feats:
+        for x in list(f["measure"]["faces"]) + list((f.get("faces") or {}).get("moving") or []):
+            owner.setdefault(_fid(x), [])
+            if f["name"] not in owner[_fid(x)]:
+                owner[_fid(x)].append(f["name"])
+    hits = find_collisions(body, moves, owner, options.body_tol(opts, body.summary().bbox))
+    if hits:
+        first = hits[0]
+        more = f" (+{len(hits) - 1} more)" if len(hits) > 1 else ""
+        who = ", ".join(first.features[:4]) or "-"
+        raise PaicadError(
+            "GEOM_FEATURE_COLLISION",
+            f"{body.name}: feature collision {first.kind}: {first.detail} [{who}]{more}",
+            detail={"collisions": [dict(h.as_dict(), body=body.name) for h in hits]},
+        )
 
 
 UV_MOVED_TOL = 1.0e-7
@@ -609,7 +633,7 @@ def run(args, rep: Reporter) -> int:
         if e.exit_code != EXIT_CAD:
             raise
         rep.warn(f"{e.code}: {e.message}")
-        rep_doc = envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, **head, applied=[], topology=None, elapsed_s=rnd(time.monotonic() - t0, 3))
+        rep_doc = envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, **head, applied=[], topology=None, **(e.detail or {}), elapsed_s=rnd(time.monotonic() - t0, 3))
         out.write_text(UPDATE_JSON, dumps(rep_doc))
         out.commit([UPDATE_JSON])
         rep.result("FAIL", e.code, UPDATE_JSON)

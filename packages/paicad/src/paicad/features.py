@@ -49,6 +49,7 @@ MEASURE = {
     "FILLET_RADIUS": "fillet_radius",
 }
 PAIR_TYPES = ("THICKNESS", "POCKET_WIDTH", "RIB_THICKNESS")  # reference-face rule applies
+POSITION_TYPES = ("HOLE_POS_U", "HOLE_POS_V")  # position parameters: absolute mm range / sweep steps
 WALL_MIN_MM = 0.5
 NAME_MAX = 64
 
@@ -609,6 +610,7 @@ def finalize(
     overrides = opts.get("thickness_ref_overrides") or {}
     mode = opts.get("thickness_ref", "contact_fixed")
     ratio = float(opts["extract"]["range_ratio"])
+    pos_mm = float(opts["extract"]["position_range_mm"])
     cos_par = math.cos(math.radians(float(opts["extract"]["draft_max_deg"])))
     for bname, part, body, feats in per_body:
         topo = body.topology()
@@ -653,7 +655,7 @@ def finalize(
         ft.feasible = _feasible(list(topo.faces), topo, ft, owner.get(ft.body, {}), bbox_of[ft.body], cos_par)
     groups = symmetry_groups(ordered, topo_of, bbox_of, tol_of)
     for ft in ordered:
-        ft.range = _range(ft.nominal, ratio, ft.feasible)
+        ft.range = _range_mm(ft.nominal, pos_mm, ft.feasible) if ft.type in POSITION_TYPES else _range(ft.nominal, ratio, ft.feasible)
     return ordered, groups, warnings
 
 
@@ -666,6 +668,15 @@ def _range(nom: float, ratio: float, feas: dict) -> dict:
     if hi < lo:
         lo = hi = min(max(nom, feas["min"]), feas["max"])
     return {"min": rnd(lo), "max": rnd(hi), "ratio": ratio}
+
+
+def _range_mm(nom: float, mm: float, feas: dict) -> dict:
+    """Position parameters: absolute range nominal +- ``mm`` (clipped to ``feasible``)."""
+    lo = max(nom - mm, feas["min"])
+    hi = min(nom + mm, feas["max"])
+    if hi < lo:
+        lo = hi = min(max(nom, feas["min"]), feas["max"])
+    return {"min": rnd(lo), "max": rnd(hi), "mm": mm}
 
 
 def face_signature(f: FaceData) -> dict:

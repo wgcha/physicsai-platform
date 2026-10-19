@@ -146,7 +146,7 @@ def test_run_pass_writes_every_stage(golden, tmp_path):
 @pytest.mark.parametrize(
     "values,step,code_name,exit_code",
     [
-        ({"CUSH_L_POCKET_D_1": 25.0}, "update", "GEOM_CAD_FAILED", 10),
+        ({"CUSH_L_POCKET_D_1": 25.0}, "update", "GEOM_FEATURE_COLLISION", 10),  # 0.4.0 pre-check
         ({"CUSH_L_RIB_H_1": 4.0, "CUSH_L_THK_3": 12.5}, "check", "GEOM_QUALITY", 11),
     ],
 )
@@ -195,7 +195,7 @@ def test_sweep_writes_envelope_report(golden, tmp_path):
     assert code == 0
     outs = []
     for k in (1, 2):
-        code, text = run_morph(golden, tmp_path / "u", tmp_path / f"e{k}", "--sweep", "--params", "CUSH_L_THK_2,CUSH_L_HOLE_U_1", "--steps", "10")
+        code, text = run_morph(golden, tmp_path / "u", tmp_path / f"e{k}", "--sweep", "--params", "CUSH_L_THK_2,CUSH_L_HOLE_U_1", "--steps", "10", "--pos-steps", "2")
         assert code == 0, text
         outs.append([(tmp_path / f"e{k}" / n).read_bytes() for n in ("report_envelope.md", "report_envelope.csv")])
     assert outs[0] == outs[1]
@@ -207,8 +207,13 @@ def test_sweep_writes_envelope_report(golden, tmp_path):
     with open(tmp_path / "e1" / "report_envelope.csv", newline="") as f:
         table = list(csv.DictReader(f))
     assert [t["param"] for t in table] == ["CUSH_L_THK_2", "CUSH_L_HOLE_U_1"]
+    assert [t["unit"] for t in table] == ["%", "mm"]
+    assert {(r["param"], r["unit"], r["step"]) for r in rows} == {("CUSH_L_THK_2", "%", 10.0), ("CUSH_L_HOLE_U_1", "mm", 2.0)}
+    hole = {r["direction"]: r for r in rows if r["param"] == "CUSH_L_HOLE_U_1"}
+    assert hole["+"]["value"] == pytest.approx(14.0) and hole["-"]["value"] == pytest.approx(10.0) and hole["+"]["pct"] is None
     for t, s in zip(table, env["summary"]):
-        assert t["last_ok_pct_plus"] == "10" and t["limit_metric_plus"] == s["limit_metric"]["+"]["metric"] and t["limit_metric_plus"]
+        assert t["last_ok_plus"] == ("10 %" if s["unit"] == "%" else "2 mm") and s["last_ok_label"]["+"] == t["last_ok_plus"]
+        assert t["limit_metric_plus"] == s["limit_metric"]["+"]["metric"] and t["limit_metric_plus"]
         assert t["limit_metric_minus"] == s["limit_metric"]["-"]["metric"]
     md = (tmp_path / "e1" / "report_envelope.md").read_text(encoding="utf-8")
     assert md.startswith("# Morphing envelope report") and "CUSH_L_THK_2" in md and env["sweep_id"] in md
@@ -224,7 +229,7 @@ def test_limit_metric_picks_smallest_margin():
     cad = dict(ok, status="FAIL", pct=10.0, fail_code="GEOM_CAD_FAILED", min_stretch=None, max_aspect=None, min_edge_ratio=None, dt_ratio=None,
                boundary_dev_max_mm=None, param_remeasure_err={"abs": None, "rel": None}, inverted_elems=None)
     lm = limit_metric([ok, cad], opts)
-    assert lm == {"metric": "GEOM_CAD_FAILED", "margin": None, "at_pct": 10.0, "source": "first_fail"}
+    assert lm == {"metric": "GEOM_CAD_FAILED", "margin": None, "at_pct": 10.0, "at": 10.0, "unit": "%", "source": "first_fail"}
 
 
 # ------------------------------------------------------------- selftest kit

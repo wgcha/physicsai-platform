@@ -24,7 +24,8 @@ DEFAULTS: dict = {
     # hole position parameters keep their distance to the nearest fixed face (or scale with the body length)
     "position_ref": "nearest_fixed",
     # extract tuning (section 6.2 defaults; optional section, absent in platform-written files is fine)
-    "extract": {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "sample_grid": 12},
+    # position_range_mm: default value range of position parameters (HOLE_POS_U/V) = nominal +- this many mm
+    "extract": {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "position_range_mm": 5.0, "sample_grid": 12},
 }
 
 
@@ -80,6 +81,8 @@ def validate(opts: dict) -> list[str]:
         p.append("extract.overlap_min must be in (0, 1]")
     if not (_pos(e.get("range_ratio")) and e["range_ratio"] < 1):
         p.append("extract.range_ratio must be in (0, 1)")
+    if not _pos(e.get("position_range_mm")):
+        p.append("extract.position_range_mm must be a finite number > 0")
     if not (isinstance(e.get("sample_grid"), int) and 4 <= e["sample_grid"] <= 64):
         p.append("extract.sample_grid must be an integer in [4, 64]")
     return p

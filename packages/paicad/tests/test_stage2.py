@@ -273,9 +273,9 @@ def test_symmetry_split_makes_members_independent(golden, tmp_path):
 @pytest.mark.parametrize(
     "values,code_name",
     [
-        ({"CUSH_L_POCKET_D_1": 25.0}, "GEOM_CAD_FAILED"),  # floor through the bottom face
-        ({"CUSH_L_THK_3": 7.0}, "GEOM_CAD_FAILED"),  # base thinner than the pocket: self-intersection
-        ({"CUSH_L_RIB_T_1": 0.0}, "GEOM_TOPOLOGY_CHANGED"),  # rib side faces collapse
+        ({"CUSH_L_POCKET_D_1": 25.0}, "GEOM_FEATURE_COLLISION"),  # floor through the bottom face (0.4.0 pre-check)
+        ({"CUSH_L_THK_3": 7.0}, "GEOM_FEATURE_COLLISION"),  # base thinner than the pocket
+        ({"CUSH_L_RIB_T_1": 0.0}, "GEOM_FEATURE_COLLISION"),  # rib foot print collapses
         ({"CUSH_L_HOLE_R_1": -1.0}, "GEOM_CAD_FAILED"),
     ],
 )
@@ -285,6 +285,21 @@ def test_update_cad_failure_codes(golden, tmp_path, values, code_name):
     d = load(tmp_path / "u" / "update.json")
     assert (d["status"], d["code"], d["category"]) == ("FAIL", code_name, "CAD_FAILED") and d["message"]
     assert not (tmp_path / "u" / "sample.brep").exists() and not (tmp_path / "u" / "face_map.json").exists()
+
+
+@pytest.mark.parametrize(
+    "values,code_name",
+    [
+        ({"CUSH_L_POCKET_D_1": 25.0}, "GEOM_CAD_FAILED"),  # without the pre-check the kernel still refuses (self-intersection)
+        ({"CUSH_L_RIB_T_1": 0.0}, "GEOM_TOPOLOGY_CHANGED"),
+    ],
+)
+def test_update_kernel_failure_codes_without_precheck(golden, tmp_path, monkeypatch, values, code_name):
+    import paicad.update as upd_mod
+
+    monkeypatch.setattr(upd_mod, "_precheck", lambda *a, **k: None)
+    code, text, _ = run_update(golden, tmp_path / "u", values)
+    assert code == 10 and f"PAICAD RESULT FAIL {code_name} update.json" in text
 
 
 def test_update_occt_exception_is_a_cad_failure(golden, tmp_path, monkeypatch):
@@ -445,7 +460,7 @@ def test_sweep_stops_after_consecutive_failures_and_keeps_steps(golden, nominal_
     rows = load(tmp_path / "e" / "envelope.json")["rows"]
     plus = [r for r in rows if r["direction"] == "+"]
     assert [r["pct"] for r in plus] == [20.0, 160.0, 170.0]  # 160 and 170 %: floor through the bottom face -> stop
-    assert plus[0]["status"] == "OK" and [r["fail_code"] for r in plus[1:]] == ["GEOM_CAD_FAILED", "GEOM_CAD_FAILED"]
+    assert plus[0]["status"] == "OK" and [r["fail_code"] for r in plus[1:]] == ["GEOM_FEATURE_COLLISION", "GEOM_FEATURE_COLLISION"]
     assert (tmp_path / "e" / "sweep" / "CUSH_L_POCKET_D_1" / "+20" / "morphed.inc").is_file()
     assert (tmp_path / "e" / "sweep" / "CUSH_L_POCKET_D_1" / "+20" / "check.json").is_file()
     assert (tmp_path / "e" / "sweep" / "CUSH_L_POCKET_D_1" / "+160" / "update.json").is_file()

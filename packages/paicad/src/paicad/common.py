@@ -37,6 +37,7 @@ CODE_EXIT = {
     "PARAM_NAME_CONFLICT": EXIT_INPUT,
     "GEOM_CAD_FAILED": EXIT_CAD,
     "GEOM_TOPOLOGY_CHANGED": EXIT_CAD,
+    "GEOM_FEATURE_COLLISION": EXIT_CAD,
     "GEOM_BODY_MAP_FAILED": EXIT_TAG,
     "GEOM_BASELINE_MISMATCH": EXIT_TAG,
     "GEOM_UNSUPPORTED_ELEMENT": EXIT_TAG,
@@ -55,6 +56,7 @@ CODE_EXIT = {
 CODE_CATEGORY = {
     "GEOM_CAD_FAILED": "CAD_FAILED",
     "GEOM_TOPOLOGY_CHANGED": "CAD_FAILED",
+    "GEOM_FEATURE_COLLISION": "CAD_FAILED",
     "GEOM_INTERFERENCE": "INTERFERENCE",
     "GEOM_QUALITY": "QUALITY",
     "GEOM_MORPH_FAILED": "QUALITY",
@@ -77,10 +79,11 @@ CODE_CATEGORY = {
 class PaicadError(Exception):
     """A contract failure: ``code`` from the section 6.5 table, English ``message``."""
 
-    def __init__(self, code: str, message: str, exit_code: int | None = None):
+    def __init__(self, code: str, message: str, exit_code: int | None = None, detail: dict | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.detail = detail  # optional extra report keys (e.g. update.json "collisions")
         self.exit_code = exit_code if exit_code is not None else CODE_EXIT.get(code, EXIT_INTERNAL)
 
 

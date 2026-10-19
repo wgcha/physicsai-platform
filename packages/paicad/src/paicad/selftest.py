@@ -136,6 +136,7 @@ def run(args, rep: Reporter) -> int:
                 solver=None,
                 sweep=True,
                 steps=args.envelope_steps,
+                pos_steps=getattr(args, "envelope_pos_steps", None) or "1,3",
                 params=args.envelope_params,
                 stop_after_fail=args.stop_after_fail,
                 check="on",
@@ -253,14 +254,15 @@ def _envelope_summary(d: dict | None) -> dict | None:
         out.append(
             {
                 "param": s["param"],
-                "last_ok_pct": s["last_ok_pct"],
-                "first_fail_pct": s["first_fail_pct"],
+                "unit": s.get("unit", "%"),
+                "last_ok": s.get("last_ok", s.get("last_ok_pct")),
+                "first_fail": s.get("first_fail", s.get("first_fail_pct")),
                 "first_fail_code": s["first_fail_code"],
                 "limit_metric": {k: (lm.get(k) or {}).get("metric") for k in ("+", "-")},
             }
         )
     rows = d.get("rows") or []
-    return {"steps_pct": d.get("steps_pct"), "steps_run": len(rows), "steps_failed": sum(1 for r in rows if r["status"] == "FAIL"), "params": out}
+    return {"steps_pct": d.get("steps_pct"), "pos_steps_mm": d.get("pos_steps_mm"), "steps_run": len(rows), "steps_failed": sum(1 for r in rows if r["status"] == "FAIL"), "params": out}
 
 
 def _v(x) -> str:
@@ -307,9 +309,10 @@ def render_md(r: dict) -> str:
         ]
     en = r.get("envelope")
     if en:
-        L += ["", "## Short envelope", "", f"- steps {en['steps_pct']} %, {en['steps_run']} run, {en['steps_failed']} failed", ""]
-        L += ["| param | last OK + % | last OK - % | first fail + | first fail - | limit + | limit - |", "|---|---|---|---|---|---|---|"]
+        L += ["", "## Short envelope", "", f"- steps {en['steps_pct']} % (position parameters {en.get('pos_steps_mm')} mm), {en['steps_run']} run, {en['steps_failed']} failed", ""]
+        L += ["| param | unit | last OK + | last OK - | first fail + | first fail - | limit + | limit - |", "|---|---|---|---|---|---|---|---|"]
         for p in en["params"]:
-            ff = {d: "-" if p["first_fail_pct"][d] is None else f"{p['first_fail_pct'][d]} {p['first_fail_code'][d]}" for d in ("+", "-")}
-            L.append(f"| {p['param']} | {p['last_ok_pct']['+']} | {p['last_ok_pct']['-']} | {ff['+']} | {ff['-']} | {_v(p['limit_metric']['+'])} | {_v(p['limit_metric']['-'])} |")
+            u = p["unit"]
+            ff = {d: "-" if p["first_fail"][d] is None else f"{p['first_fail'][d]} {u} {p['first_fail_code'][d]}" for d in ("+", "-")}
+            L.append(f"| {p['param']} | {u} | {p['last_ok']['+']} {u} | {p['last_ok']['-']} {u} | {ff['+']} | {ff['-']} | {_v(p['limit_metric']['+'])} | {_v(p['limit_metric']['-'])} |")
     return "\n".join(L) + "\n"
