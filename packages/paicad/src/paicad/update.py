@@ -1,0 +1,569 @@
+"""``paicad update`` - apply sample values to the nominal B-rep by push/pull (contract sections 4.6, 6.3).
+
+Every sample starts from the nominal geometry. Feature values are turned into face moves:
+
+* pair features (THICKNESS, RIB_THICKNESS, POCKET_WIDTH): the moving face (reference-face rule
+  section 6.2, re-evaluated with ``--tag-dir`` contacts) is offset along its normal;
+* RIB_HEIGHT / POCKET_DEPTH: cap / floor offset; the whole rib / pocket (cap or floor + adjacent
+  side faces) follows its base / entry face rigidly so that the other parameters keep their values;
+* HOLE_RADIUS: new cylinder radius; HOLE_POS_U/V: cylinder shifted along the axis of the coordinate
+  (measured from the body bbox minimum, so it is corrected when the bbox minimum moves);
+* FILLET_RADIUS and every plane/plane blend next to a moved face: blend re-fitted tangent to its
+  two (moved) planes with the requested radius.
+
+The kernel rebuilds the solid with the same topology; failures map to GEOM_CAD_FAILED /
+GEOM_TOPOLOGY_CHANGED (exit 10) without crashing.
+"""
+
+from __future__ import annotations
+
+import json
+import math
+import time
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import numpy as np
+
+from . import cadload, options
+from .common import (
+    CODE_CATEGORY,
+    EXIT_CAD,
+    EXIT_OK,
+    OutDir,
+    PaicadError,
+    Reporter,
+    dumps,
+    envelope,
+    rnd,
+    vec,
+)
+from .features import choose_ref
+from .kernel import BodyGeom, CadInputError, FaceMove, move_faces, save_brep
+from .kernel.base import FaceData, Topology
+
+UPDATE_JSON = "update.json"
+SAMPLE_BREP = "sample.brep"
+FACE_MAP_JSON = "face_map.json"
+
+OP = {
+    "THICKNESS": "FACE_OFFSET",
+    "RIB_THICKNESS": "FACE_OFFSET",
+    "POCKET_WIDTH": "FACE_OFFSET",
+    "RIB_HEIGHT": "FACE_OFFSET",
+    "POCKET_DEPTH": "FACE_OFFSET",
+    "HOLE_RADIUS": "CYLINDER_RADIUS",
+    "HOLE_POS_U": "AXIS_SHIFT",
+    "HOLE_POS_V": "AXIS_SHIFT",
+    "FILLET_RADIUS": "REBLEND",
+}
+SIG_ANGLE_DEG = 1.0
+HOLE_POS_ITER = 3
+
+
+# ------------------------------------------------------------------ inputs
+def read_json(path: str | Path, what: str) -> dict:
+    try:
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+    except (OSError, ValueError) as ex:
+        raise PaicadError("GEOM_INPUT_INVALID", f"cannot read {what}: {ex.__class__.__name__}") from None
+    if not isinstance(doc, dict):
+        raise PaicadError("GEOM_INPUT_INVALID", f"{what} must be a JSON object")
+    return doc
+
+
+def load_features(path: str | Path) -> dict:
+    doc = read_json(path, "features file")
+    if doc.get("schema_version") != 1 or not isinstance(doc.get("features"), list) or not isinstance(doc.get("bodies"), list):
+        raise PaicadError("GEOM_INPUT_INVALID", "features file: unsupported schema or missing features/bodies")
+    return doc
+
+
+def split_groups(doc: dict, opts: dict) -> set[str]:
+    ids = {g["id"] for g in doc.get("groups") or []}
+    split = set(opts.get("symmetry_split") or [])
+    unknown = sorted(split - ids)
+    if unknown:
+        raise PaicadError("GEOM_INPUT_INVALID", f"symmetry_split: unknown group ids: {', '.join(unknown[:10])}")
+    return split
+
+
+def param_keys(doc: dict, opts: dict) -> list[str]:
+    """values.json key set (section 4.4): group representatives + ungrouped features (+ members of split groups)."""
+    split = split_groups(doc, opts)
+    grp = {g["id"]: g for g in doc.get("groups") or []}
+    keys = []
+    for f in doc["features"]:
+        g = f.get("group")
+        if g is None or g in split or grp.get(g, {}).get("parameter") == f["name"]:
+            keys.append(f["name"])
+    return keys
+
+
+def feature_values(doc: dict, opts: dict, values: dict[str, float]) -> dict[str, float]:
+    """Value of every feature: members of (unsplit) groups follow the representative; missing = nominal."""
+    split = split_groups(doc, opts)
+    grp = {g["id"]: g for g in doc.get("groups") or []}
+    out = {}
+    for f in doc["features"]:
+        g = f.get("group")
+        key = f["name"]
+        if g is not None and g not in split:
+            key = grp[g]["parameter"]
+        out[f["name"]] = float(values.get(key, _nominal(doc, key)))
+    return out
+
+
+def _nominal(doc: dict, name: str) -> float:
+    for f in doc["features"]:
+        if f["name"] == name:
+            return float(f["nominal"])
+    raise PaicadError("GEOM_INPUT_INVALID", f"unknown parameter: {name}")
+
+
+def load_values(path: str | Path, doc: dict, opts: dict) -> dict[str, float]:
+    v = read_json(path, "values file")
+    if v.get("schema_version", 1) != 1 or not isinstance(v.get("values"), dict):
+        raise PaicadError("GEOM_INPUT_INVALID", "values file must be {schema_version: 1, values: {name: number}}")
+    keys = param_keys(doc, opts)
+    unknown = sorted(set(v["values"]) - set(keys))
+    if unknown:
+        raise PaicadError("GEOM_INPUT_INVALID", f"unknown parameter names in values: {', '.join(unknown[:10])}")
+    out = {}
+    for k in keys:
+        x = v["values"].get(k, _nominal(doc, k))
+        if isinstance(x, bool) or not isinstance(x, (int, float)) or not math.isfinite(float(x)):
+            raise PaicadError("GEOM_INPUT_INVALID", f"value of {k} must be a finite number")
+        out[k] = float(x)
+    return out
+
+
+def contacts_from_tag(tag_dir: str | Path | None, doc: dict) -> dict[str, set[int]] | None:
+    """{body name: contact face ids} from tag.json (None when no tag dir)."""
+    if not tag_dir:
+        return None
+    t = read_json(Path(tag_dir) / "tag.json", "tag.json")
+    if t.get("status") != "OK":
+        raise PaicadError("GEOM_INPUT_INVALID", "tag.json status is not OK")
+    body_of_part = {b["part"]: b["body"] for b in doc["bodies"]}
+    out: dict[str, set[int]] = {b["body"]: set() for b in doc["bodies"]}
+    for c in t.get("contacts") or []:
+        b = body_of_part.get(c.get("part"))
+        f = str(c.get("face", ""))
+        if b is not None and f[:1] == "F" and f[1:].isdigit():
+            out.setdefault(b, set()).add(int(f[1:]))
+    return out
+
+
+def nominal_bodies(cad_path: str | Path, doc: dict, body_map: str | None) -> list[BodyGeom]:
+    """Nominal bodies in features ``bodies`` order."""
+    cad = cadload.load(cad_path)
+    byname = cad.by_name()
+    names = [b["body"] for b in doc["bodies"]]
+    if all(n in byname for n in names):
+        return [byname[n] for n in names]
+    pairs = cadload.correspond(cad, None, body_map)
+    by_part = {p: b for b, p, _ in pairs}
+    out = []
+    for b in doc["bodies"]:
+        x = byname.get(b["body"]) or by_part.get(b["part"])
+        if x is None:
+            raise PaicadError("GEOM_BODY_MAP_FAILED", f"body {b['body']} of the features file is not in the CAD")
+        out.append(x)
+    return out
+
+
+# ------------------------------------------------------------------ face resolution
+def _fid(s: str) -> int:
+    return int(str(s)[1:])
+
+
+def resolve_face(topo: Topology, fid: int, sig: dict | None, tol: float) -> int:
+    """Face id in this B-rep: the stored id if its signature matches, else a signature search."""
+
+    def ok(f: FaceData) -> bool:
+        if sig is None:
+            return True
+        if f.surface != sig.get("surface"):
+            return False
+        c = np.asarray(sig.get("centroid", f.centroid), dtype=float)
+        if float(np.linalg.norm(f.centroid - c)) > max(tol, 1e-3 * (1 + float(np.abs(c).max()))):
+            return False
+        a = float(sig.get("area", f.area))
+        if abs(f.area - a) > 0.01 * max(a, f.area) + 1e-9:
+            return False
+        if sig.get("normal") is not None and f.normal is not None:
+            n = np.asarray(sig["normal"], dtype=float)
+            if float(np.dot(n, f.normal)) < math.cos(math.radians(SIG_ANGLE_DEG)):
+                return False
+        return True
+
+    if 1 <= fid <= len(topo.faces) and ok(topo.face(fid)):
+        return fid
+    hits = [f.id for f in topo.faces if ok(f)]
+    if len(hits) == 1:
+        return hits[0]
+    raise PaicadError("GEOM_INPUT_INVALID", f"face F{fid} of the features file does not match the CAD (re-run extract)")
+
+
+# ------------------------------------------------------------------ planning
+@dataclass
+class BodyPlan:
+    moves: dict[int, FaceMove]
+    applied: list[dict]
+    hole_pos: list[tuple[int, int, float]]  # (cylinder face, axis index, target coordinate from bbox min)
+    warnings: list[dict]
+
+
+def _neighbors(topo: Topology, fid: int) -> list[int]:
+    out = []
+    for e in topo.face(fid).edges:
+        for g in topo.edge(e).faces:
+            if g != fid and g not in out:
+                out.append(g)
+    return out
+
+
+def _blends(topo: Topology) -> list[tuple[int, int, int]]:
+    """(blend face, plane 1, plane 2): cylinders (span < 180 deg) tangent to two planes."""
+    out = []
+    for f in topo.faces:
+        if f.surface != "CYLINDER" or f.span_deg is None or f.span_deg >= 180.0:
+            continue
+        planes = []
+        for e in f.edges:
+            ed = topo.edge(e)
+            if ed.convexity != "SMOOTH":
+                continue
+            for g in ed.faces:
+                if g != f.id and topo.face(g).surface == "PLANE" and g not in planes:
+                    planes.append(g)
+        if len(planes) == 2:
+            out.append((f.id, planes[0], planes[1]))
+    return out
+
+
+def _bbox_min_shift(topo: Topology, bbox: np.ndarray, T: dict[int, np.ndarray]) -> np.ndarray:
+    """Estimated shift of the body bbox minimum from the planar face moves (refined after the rebuild)."""
+    out = np.zeros(3)
+    scale = 1e-6 * (1.0 + float(np.abs(bbox).max()))
+    for a in range(3):
+        moves = [float(T[f.id][a]) for f in topo.faces if f.id in T and f.normal is not None and f.normal[a] < -0.999 and abs(f.bbox[a] - bbox[a]) <= scale]
+        if moves:
+            out[a] = min(moves)
+    return out
+
+
+def plan_body(
+    body: BodyGeom,
+    feats: list[dict],
+    fvalues: dict[str, float],
+    contacts: set[int] | None,
+    opts: dict,
+    members_of: dict[str, list[str]],
+    keys: set[str],
+) -> BodyPlan:
+    topo = body.topology()
+    s = body.summary()
+    tol = options.body_tol(opts, s.bbox)
+    center = 0.5 * (s.bbox[:3] + s.bbox[3:])
+    mode = opts.get("thickness_ref", "contact_fixed")
+    overrides = opts.get("thickness_ref_overrides") or {}
+    warnings: list[dict] = []
+    T: dict[int, np.ndarray] = {}
+    R: dict[int, float] = {}
+
+    def add(fid: int, v: np.ndarray) -> None:
+        T[fid] = T.get(fid, np.zeros(3)) + v
+
+    def normal(fid: int) -> np.ndarray:
+        n = topo.face(fid).normal
+        if n is None:
+            raise PaicadError("GEOM_INPUT_INVALID", f"face F{fid} is not planar")
+        return np.asarray(n, dtype=float)
+
+    resolved = []
+    for f in feats:
+        sigs = f.get("face_signatures") or {}
+        mf = [resolve_face(topo, _fid(x), sigs.get(x), tol) for x in f["measure"]["faces"]]
+        resolved.append((f, mf))
+    applied: list[dict] = []
+    primaries, groups_feats, others = [], [], []
+    for f, mf in resolved:
+        (primaries if f["type"] == "THICKNESS" else groups_feats if f["type"] in ("RIB_HEIGHT", "RIB_THICKNESS", "POCKET_DEPTH", "POCKET_WIDTH") else others).append((f, mf))
+
+    def pair_ref(f: dict, mf: list[int]) -> tuple[int, int, str]:
+        fa, fb = topo.face(mf[0]), topo.face(mf[1])
+        ov = overrides.get(f["name"])
+        ov_id = _fid(ov) if isinstance(ov, str) and ov[:1] == "F" and ov[1:].isdigit() else None
+        if ov_id is not None and ov_id not in mf:
+            raise PaicadError("GEOM_INPUT_INVALID", f"thickness_ref_overrides[{f['name']}] = {ov} is not a face of the feature")
+        r = choose_ref(fa, fb, body_center=center, mode=mode, contacts=contacts, override_fixed=ov_id)
+        if mode == "contact_fixed" and contacts is None and r["rule"] == "center_distance":
+            warnings.append({"code": "REF_NO_CONTACT_INFO", "feature": f["name"], "message": "no tag contact info: face nearer the body center fixed"})
+        if r.get("warning") and abs(fvalues[f["name"]] - float(f["nominal"])) > 0:
+            warnings.append({"code": r["warning"], "feature": f["name"], "message": "both faces are contact faces: larger area face fixed"})
+        return r["moving"], r["fixed"], r["rule"]
+
+    def record(f: dict, moved: list[int], fixed: list[int], rule: str) -> None:
+        if f["name"] not in keys:
+            return
+        applied.append(
+            {
+                "name": f["name"],
+                "body": f["body"],
+                "nominal": float(f["nominal"]),
+                "value": rnd(fvalues[f["name"]], 9),
+                "delta": rnd(fvalues[f["name"]] - float(f["nominal"]), 9),
+                "op": OP[f["type"]],
+                "moved": [f"F{i}" for i in moved],
+                "fixed": [f"F{i}" for i in fixed],
+                "ref_rule": rule,
+                "members": members_of.get(f["name"], []),
+            }
+        )
+
+    # 1. primary thickness moves
+    for f, mf in primaries:
+        d = fvalues[f["name"]] - float(f["nominal"])
+        mv, fx, rule = pair_ref(f, mf)
+        if d:
+            add(mv, d * normal(mv))
+        record(f, [mv], [fx], rule)
+    # 2. rigid groups (rib = cap + its neighbours, pocket = floor + its neighbours) follow their host face
+    hosted: dict[int, int] = {}
+    for f, mf in groups_feats:
+        if f["type"] in ("RIB_HEIGHT", "POCKET_DEPTH"):
+            cap, host = mf[0], mf[1]
+            for g in [cap] + [x for x in _neighbors(topo, cap) if x != host]:
+                hosted.setdefault(g, host)
+    for g, host in sorted(hosted.items()):
+        if host in T and g != host:
+            add(g, T[host].copy())
+    # 3. group features
+    for f, mf in groups_feats:
+        d = fvalues[f["name"]] - float(f["nominal"])
+        t = f["type"]
+        if t in ("RIB_THICKNESS", "POCKET_WIDTH"):
+            mv, fx, rule = pair_ref(f, mf)
+            if d:
+                add(mv, (d if t == "RIB_THICKNESS" else -d) * normal(mv))
+            record(f, [mv], [fx], rule)
+        else:
+            cap, host = mf[0], mf[1]
+            if d:
+                add(cap, (d if t == "RIB_HEIGHT" else -d) * normal(cap))
+            record(f, [cap], [host], "feature_default")
+    # 4. holes and fillets (hole positions are measured from the bbox minimum: anticipate its shift)
+    shift = _bbox_min_shift(topo, s.bbox, T)
+    hole_pos = []
+    for f, mf in others:
+        d = fvalues[f["name"]] - float(f["nominal"])
+        t = f["type"]
+        c = mf[0]
+        if t == "HOLE_RADIUS":
+            if d:
+                R[c] = fvalues[f["name"]]
+        elif t in ("HOLE_POS_U", "HOLE_POS_V"):
+            ax = "xyz".index(f["measure"].get("axis", "x"))
+            hole_pos.append((c, ax, fvalues[f["name"]]))
+            if d or shift[ax]:
+                e = np.zeros(3)
+                e[ax] = d + shift[ax]
+                add(c, e)
+        elif t == "FILLET_RADIUS":
+            if d:
+                if topo.face(c).surface != "CYLINDER":
+                    raise PaicadError("GEOM_CAD_FAILED", f"{f['name']}: radius change of a {topo.face(c).surface} blend is not supported")
+                R[c] = fvalues[f["name"]]
+        record(f, [c], [], "feature_default")
+    for fid, r in R.items():
+        if not (r > 0 and math.isfinite(r)):
+            raise PaicadError("GEOM_CAD_FAILED", f"face F{fid}: radius must be > 0 (got {r!r})")
+    # 5. blends tangent to two planes follow the planes (and take a new radius)
+    for bf, p1, p2 in _blends(topo):
+        if bf not in R and p1 not in T and p2 not in T:
+            continue
+        fd = topo.face(bf)
+        r_old = float(fd.radius)
+        r_new = R.get(bf, r_old)
+        sg = -1.0 if fd.concave else 1.0
+        n1, n2 = normal(p1), normal(p2)
+        d1 = float(np.dot(T.get(p1, np.zeros(3)), n1))
+        d2 = float(np.dot(T.get(p2, np.zeros(3)), n2))
+        ax = np.asarray(fd.axis_dir, dtype=float)
+        along = float(np.dot(T.get(bf, np.zeros(3)), ax))
+        A = np.vstack([n1, n2, ax])
+        rhs = np.array([d1 - sg * (r_new - r_old), d2 - sg * (r_new - r_old), along])
+        try:
+            T[bf] = np.linalg.solve(A, rhs)
+        except np.linalg.LinAlgError:
+            raise PaicadError("GEOM_CAD_FAILED", f"blend F{bf}: neighbouring planes are parallel") from None
+        if bf in R or r_new != r_old:
+            R[bf] = r_new
+    moves = {}
+    for fid in sorted(set(T) | set(R)):
+        t = T.get(fid)
+        if t is not None and not np.any(t):
+            t = None
+        mvv = FaceMove(translate=t, radius=R.get(fid))
+        if mvv.is_effective():
+            moves[fid] = mvv
+    return BodyPlan(moves, applied, hole_pos, warnings)
+
+
+# ------------------------------------------------------------------ core (also used by the sweep)
+@dataclass
+class UpdateResult:
+    bodies: list[BodyGeom]
+    applied: list[dict]
+    topology: dict
+    face_map: dict
+    warnings: list[dict]
+
+
+def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], contacts: dict[str, set[int]] | None, opts: dict) -> UpdateResult:
+    """Apply ``values`` (values.json keys) to the nominal bodies (features ``bodies`` order). Raises PaicadError."""
+    fvalues = feature_values(doc, opts, values)
+    keys = set(param_keys(doc, opts))
+    split = split_groups(doc, opts)
+    members_of = {}
+    for g in doc.get("groups") or []:
+        if g["id"] not in split:
+            members_of[g["parameter"]] = [m for m in g["members"] if m != g["parameter"]]
+    out_bodies, applied, warnings = [], [], []
+    topo_counts, face_map = {}, {}
+    for bdoc, body in zip(doc["bodies"], nominal):
+        name = bdoc["body"]
+        feats = [f for f in doc["features"] if f["body"] == name]
+        plan = plan_body(body, feats, fvalues, None if contacts is None else contacts.get(name, set()), opts, members_of, keys)
+        applied += plan.applied
+        warnings += plan.warnings
+        moves = dict(plan.moves)
+        new = _move(body, moves)
+        for _ in range(HOLE_POS_ITER):
+            if not plan.hole_pos:
+                break
+            bb = new.summary().bbox
+            topo = new.topology()
+            fix = {}
+            for c, ax, target in plan.hole_pos:
+                got = float(topo.face(c).axis_point[ax] - bb[ax])
+                if abs(got - target) > 1e-9:
+                    fix.setdefault(c, np.zeros(3))[ax] += target - got
+            if not fix:
+                break
+            for c, v in fix.items():
+                old = moves.get(c, FaceMove())
+                t = (old.translate if old.translate is not None else np.zeros(3)) + v
+                moves[c] = FaceMove(translate=t, radius=old.radius)
+            new = _move(body, moves)
+        tn, ts = body.topology(), new.topology()
+        cn = [len(tn.faces), len(tn.edges), len(tn.vertices)]
+        cs = [len(ts.faces), len(ts.edges), len(ts.vertices)]
+        if cn != cs:
+            raise PaicadError("GEOM_TOPOLOGY_CHANGED", f"{name}: topology changed: faces {cn[0]}->{cs[0]}")
+        topo_counts[name] = {"nominal": cn, "sample": cs}
+        _check_faces(name, tn, ts, moves)
+        face_map[name] = {
+            "F": {str(i): i for i in range(1, cn[0] + 1)},
+            "E": {str(i): i for i in range(1, cn[1] + 1)},
+            "V": {str(i): i for i in range(1, cn[2] + 1)},
+        }
+        uvf = sorted(set(getattr(new, "uv_changed", set()) or []) | _inner_wires_moved(body, new))
+        if uvf:
+            face_map[name]["uv_fallback"] = uvf  # faces where the normalized (u,v) mapping is not valid (section 6.4 fallback)
+        out_bodies.append(new)
+    return UpdateResult(out_bodies, applied, {"same_as_nominal": True, "counts": topo_counts}, face_map, warnings)
+
+
+UV_MOVED_TOL = 1.0e-7
+
+
+def _inner_wires_moved(nominal: BodyGeom, sample: BodyGeom) -> set[int]:
+    """Faces whose inner wires (hole boundaries) moved in normalized (u,v) of the face (section 6.4 fallback rule)."""
+    out = set()
+    tn = nominal.topology()
+    ts = sample.topology()
+    tt = np.linspace(0.0, 1.0, 5)
+    for fa, fb in zip(tn.faces, ts.faces):
+        if not fa.inner_wires:
+            continue
+        if fa.uv_bounds == fb.uv_bounds and all(np.allclose(tn.vertices[v - 1], ts.vertices[v - 1], atol=0, rtol=0) for w in fa.inner_wires for e in w for v in tn.edge(e).vertices):
+            continue
+        for e in {e for w in fa.inner_wires for e in w}:
+            _, uv_n, _, _ = nominal.project_to_face(fa.id, nominal.eval_edge(e, tt))
+            _, uv_s, _, _ = sample.project_to_face(fb.id, sample.eval_edge(e, tt))
+            if float(np.abs(uv_n - uv_s).max()) > UV_MOVED_TOL:
+                out.add(fa.id)
+                break
+    return out
+
+
+def _move(body: BodyGeom, moves: dict[int, FaceMove]) -> BodyGeom:
+    try:
+        return move_faces(body, moves)
+    except CadInputError as e:
+        raise PaicadError(e.code, f"{body.name}: {e.message}") from None
+
+
+def _check_faces(name: str, tn: Topology, ts: Topology, moves: dict[int, FaceMove]) -> None:
+    """Section 6.3 step 3: every nominal face has its sample face (same surface kind, normal within 1 deg, centroid moved <= |delta| + tol)."""
+    cosmax = math.cos(math.radians(SIG_ANGLE_DEG))
+    for fa, fb in zip(tn.faces, ts.faces):
+        if fa.surface != fb.surface:
+            raise PaicadError("GEOM_TOPOLOGY_CHANGED", f"{name}: face F{fa.id} changed surface type {fa.surface}->{fb.surface}")
+        if fa.normal is not None and fb.normal is not None and float(np.dot(fa.normal, fb.normal)) < cosmax:
+            raise PaicadError("GEOM_TOPOLOGY_CHANGED", f"{name}: face F{fa.id} flipped or rotated")
+        if fb.area <= 1e-9:
+            raise PaicadError("GEOM_TOPOLOGY_CHANGED", f"{name}: face F{fa.id} vanished (area {fb.area:.3g})")
+
+
+# ------------------------------------------------------------------ CLI
+def run(args, rep: Reporter) -> int:
+    t0 = time.monotonic()
+    opts = options.load(args.options)
+    out = OutDir(args.out_dir, [UPDATE_JSON, SAMPLE_BREP, FACE_MAP_JSON])
+    out.prepare()
+    doc = load_features(args.features)
+    values = load_values(args.values, doc, opts)
+    contacts = contacts_from_tag(args.tag_dir, doc)
+    rep.progress(10, "loading nominal CAD")
+    nominal = nominal_bodies(args.cad, doc, args.body_map)
+    rep.progress(30, "applying push/pull")
+    head = dict(values={k: values[k] for k in values})
+    try:
+        res = update_core(nominal, doc, values, contacts, opts)
+    except PaicadError as e:
+        if e.exit_code != EXIT_CAD:
+            raise
+        rep.warn(f"{e.code}: {e.message}")
+        rep_doc = envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, **head, applied=[], topology=None, elapsed_s=rnd(time.monotonic() - t0, 3))
+        out.write_text(UPDATE_JSON, dumps(rep_doc))
+        out.commit([UPDATE_JSON])
+        rep.result("FAIL", e.code, UPDATE_JSON)
+        return EXIT_CAD
+    rep.progress(85, "writing sample B-rep")
+    try:
+        save_brep(res.bodies, out.tmp_path(SAMPLE_BREP))
+    except CadInputError as e:
+        raise PaicadError(e.code, e.message) from None
+    out.write_text(FACE_MAP_JSON, dumps(res.face_map))
+    rep_doc = envelope(
+        status="OK",
+        code=None,
+        category=None,
+        message=None,
+        **head,
+        applied=res.applied,
+        topology=res.topology,
+        bodies=[{"body": b["body"], "volume": rnd(x.summary().volume), "bbox": vec(x.summary().bbox)} for b, x in zip(doc["bodies"], res.bodies)],
+        warnings=res.warnings,
+        elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
+    out.write_text(UPDATE_JSON, dumps(rep_doc))
+    out.commit([SAMPLE_BREP, FACE_MAP_JSON, UPDATE_JSON])
+    rep.progress(100, "update done")
+    rep.result("OK", None, UPDATE_JSON)
+    return EXIT_OK

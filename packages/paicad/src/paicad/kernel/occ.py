@@ -12,11 +12,13 @@ from pathlib import Path
 
 import numpy as np
 from OCP.Bnd import Bnd_Box
-from OCP.BRep import BRep_Tool
+from OCP.BRep import BRep_Builder, BRep_Tool
 from OCP.BRepAdaptor import BRepAdaptor_Curve, BRepAdaptor_Surface
 from OCP.BRepBndLib import BRepBndLib
+from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeVertex
 from OCP.BRepClass import BRepClass_FaceClassifier
 from OCP.BRepClass3d import BRepClass3d_SolidClassifier
+from OCP.BRepExtrema import BRepExtrema_DistShapeShape
 from OCP.BRepGProp import BRepGProp
 from OCP.BRepLProp import BRepLProp_SLProps
 from OCP.BRepTools import BRepTools
@@ -54,14 +56,14 @@ from OCP.TopAbs import (
 )
 from OCP.TopExp import TopExp, TopExp_Explorer
 from OCP.TopLoc import TopLoc_Location
-from OCP.TopoDS import TopoDS
+from OCP.TopoDS import TopoDS, TopoDS_Compound, TopoDS_Shape
 from OCP.TopTools import (
     TopTools_IndexedDataMapOfShapeListOfShape,
     TopTools_IndexedMapOfShape,
 )
 from OCP.XCAFDoc import XCAFDoc_DocumentTool
 
-from .base import BodySummary, EdgeData, FaceData, Topology
+from .base import BodySummary, EdgeData, FaceData, FaceMove, Topology
 
 
 class KernelError(Exception):
@@ -228,6 +230,7 @@ class OccBody:
         self._summary: BodySummary | None = None
         self._surf_cache: dict[int, tuple] = {}
         self._curve_cache: dict[int, tuple] = {}
+        self.uv_changed: set[int] = set()  # faces whose (u,v) parametrization differs from the nominal (push/pull)
 
     # ---------------- summary / topology ----------------
     def summary(self) -> BodySummary:
@@ -518,5 +521,95 @@ class OccBody:
             res[i] = cls.State() == TopAbs_IN
         return res
 
+    def eval_edge(self, edge_id: int, t: np.ndarray) -> np.ndarray:
+        e, ad, u1, u2, total = self._curve(edge_id)
+        t = np.clip(np.asarray(t, dtype=float).reshape(-1), 0.0, 1.0)
+        out = np.zeros((len(t), 3))
+        linear = ad.GetType() in (GeomAbs_Line, GeomAbs_Circle)
+        for i, ti in enumerate(t):
+            if linear or total <= 0:
+                u = u1 + ti * (u2 - u1)
+            elif ti <= 0.0:
+                u = u1
+            elif ti >= 1.0:
+                u = u2
+            else:
+                ap = GCPnts_AbscissaPoint(1e-10, ad, ti * total, u1)
+                u = ap.Parameter() if ap.IsDone() else u1 + ti * (u2 - u1)
+            out[i] = _xyz(ad.Value(u))
+        return out
 
-__all__ = ["KernelError", "OccBody", "load_parts_dir", "load_step", "occt_version", "ocp_version"]
+    def classify_face_uv(self, face_id: int, uv: np.ndarray) -> np.ndarray:
+        f, _, _, (umin, umax, vmin, vmax) = self._surf(face_id)
+        uv = np.asarray(uv, dtype=float).reshape(-1, 2)
+        res = np.zeros(len(uv), dtype=bool)
+        for i, (a, b) in enumerate(uv):
+            st = BRepClass_FaceClassifier(f, gp_Pnt2d(umin + a * (umax - umin), vmin + b * (vmax - vmin)), 1e-6).State()
+            res[i] = st in (TopAbs_IN, TopAbs_ON)
+        return res
+
+    def distance(self, pts: np.ndarray) -> np.ndarray:
+        pts = np.asarray(pts, dtype=float).reshape(-1, 3)
+        out = np.full(len(pts), np.inf)
+        if getattr(self, "_faces_compound", None) is None:
+            comp = TopoDS_Compound()
+            bld = BRep_Builder()
+            bld.MakeCompound(comp)
+            for f in self._faces:
+                bld.Add(comp, f)
+            self._faces_compound = comp
+        for i, q in enumerate(pts):
+            ext = BRepExtrema_DistShapeShape(BRepBuilderAPI_MakeVertex(gp_Pnt(*q)).Vertex(), self._faces_compound)
+            if ext.IsDone():
+                out[i] = float(ext.Value())
+        return out
+
+    # ---------------- push/pull (section 6.3) ----------------
+    def moved(self, moves: dict[int, FaceMove]) -> OccBody:
+        """New body with face moves applied (same topology and sub-shape order). Raises KernelError."""
+        from .occ_push import PushPullError, push_pull
+
+        eff = {int(k): v for k, v in moves.items() if v.is_effective()}
+        if not eff:
+            return OccBody(self.name, self._solid)
+        try:
+            solid, uv_changed = push_pull(self, eff)
+        except PushPullError as e:
+            raise KernelError(e.code, e.message) from None
+        except Exception as e:  # OCCT exceptions -> CAD failure, never a crash
+            raise KernelError("GEOM_CAD_FAILED", f"OCCT error during push/pull: {e.__class__.__name__}: {e}") from None
+        nb = OccBody(self.name, solid)
+        nb.uv_changed = set(uv_changed)
+        if (len(nb._faces), len(nb._edges), len(nb._verts)) != (len(self._faces), len(self._edges), len(self._verts)):
+            raise KernelError(
+                "GEOM_TOPOLOGY_CHANGED",
+                f"topology changed: faces {len(self._faces)}->{len(nb._faces)}, edges {len(self._edges)}->{len(nb._edges)}",
+            )
+        if nb.summary().volume <= 0:
+            raise KernelError("GEOM_CAD_FAILED", "rebuilt solid has non-positive volume")
+        return nb
+
+
+def write_brep(bodies: list[OccBody], path: str | Path) -> None:
+    """OCCT native BRep: compound of the bodies' solids in the given order."""
+    comp = TopoDS_Compound()
+    bld = BRep_Builder()
+    bld.MakeCompound(comp)
+    for b in bodies:
+        bld.Add(comp, b._solid)
+    if not BRepTools.Write_s(comp, str(path)):
+        raise KernelError("GEOM_INTERNAL", f"cannot write BRep file: {Path(path).name}")
+
+
+def load_brep(path: str | Path, names: list[str]) -> list[OccBody]:
+    """Read a compound written by :func:`write_brep`; solids are named from ``names`` in order."""
+    shape = TopoDS_Shape()
+    if not BRepTools.Read_s(shape, str(path), BRep_Builder()) or shape.IsNull():
+        raise KernelError("GEOM_INPUT_INVALID", f"cannot read BRep file: {Path(path).name}")
+    solids = _solids(shape)
+    if len(solids) != len(names):
+        raise KernelError("GEOM_INPUT_INVALID", f"{Path(path).name}: expected {len(names)} solids, found {len(solids)}")
+    return [OccBody(n, s) for n, s in zip(names, solids)]
+
+
+__all__ = ["KernelError", "OccBody", "load_brep", "load_parts_dir", "load_step", "occt_version", "ocp_version", "write_brep"]

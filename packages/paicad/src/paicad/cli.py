@@ -39,6 +39,31 @@ def _parser() -> argparse.ArgumentParser:
     t.add_argument("--body-map")
     t.add_argument("--options")
     t.add_argument("--threads", type=int)
+    u = sub.add_parser("update", help="apply sample values to the nominal B-rep (push/pull)", allow_abbrev=False)
+    for a in ("--cad", "--features", "--values", "--out-dir"):
+        u.add_argument(a, required=True)
+    u.add_argument("--tag-dir")
+    u.add_argument("--body-map")
+    u.add_argument("--options")
+    u.add_argument("--threads", type=int)
+
+    m = sub.add_parser("morph", help="move baseline node coordinates onto the sample B-rep (or --sweep: morphing envelope)", allow_abbrev=False)
+    for a in ("--baseline-inc", "--tag-dir", "--features", "--update-dir", "--out-dir"):
+        m.add_argument(a, required=True)
+    m.add_argument("--options")
+    m.add_argument("--threads", type=int)
+    m.add_argument("--sweep", action="store_true", help="1D parameter sweep -> envelope.json/csv")
+    m.add_argument("--steps", default="5,10,20,30,40,50", help="sweep steps in percent of the nominal value")
+    m.add_argument("--params", help="comma-separated parameter names (default: all values.json keys)")
+    m.add_argument("--stop-after-fail", type=int, default=2, help="stop a direction after this many consecutive failures")
+    m.add_argument("--check", default="on", choices=["on", "off"], help="evaluate quality/deviation/re-measurement per step")
+    m.add_argument("--keep-steps", action="store_true", help="keep per-step outputs under sweep/<param>/<+-pct>/")
+
+    c = sub.add_parser("check", help="check the morphed mesh and write the include on PASS", allow_abbrev=False)
+    for a in ("--baseline-inc", "--morph-dir", "--update-dir", "--tag-dir", "--features", "--values", "--assem-dir", "--renum-csv", "--out-dir", "--out-inc"):
+        c.add_argument(a, required=True)
+    c.add_argument("--options")
+    c.add_argument("--threads", type=int)
     return p
 
 
@@ -59,15 +84,23 @@ def versions() -> dict:
     return out
 
 
-def _tag_fail_report(out_dir: str, code: str, message: str) -> str | None:
+REPORTS = {"tag": "tag.json", "update": "update.json", "morph": "morph.json", "check": "check.json"}
+
+
+def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
+    """Best-effort FAIL report for input/internal errors (section 5.4: report when possible); never overwrites."""
     from .common import CODE_CATEGORY, dumps, envelope
 
-    p = Path(out_dir) / "tag.json"
+    name = REPORTS.get(cmd)
+    if name is None:
+        return None
+    p = Path(out_dir) / name
     if p.exists():
         return None
-    doc = envelope(status="FAIL", code=code, category=CODE_CATEGORY.get(code), message=message, parts=[], contacts=[], files={}, warnings=[])
+    extra = {"tag": dict(parts=[], contacts=[], files={}, warnings=[])}.get(cmd, {})
+    doc = envelope(status="FAIL", code=code, category=CODE_CATEGORY.get(code), message=message, **extra)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
-    tmp = p.with_name(f".tag.json.{os.getpid()}")
+    tmp = p.with_name(f".{name}.{os.getpid()}")
     tmp.write_text(dumps(doc), encoding="utf-8")
     os.replace(tmp, p)
     return p.name
@@ -105,12 +138,24 @@ def main(argv: list[str] | None = None) -> int:
             from . import tag
 
             return tag.run(args, rep)
+        if args.cmd == "update":
+            from . import update
+
+            return update.run(args, rep)
+        if args.cmd == "morph":
+            from . import morph
+
+            return morph.run(args, rep)
+        if args.cmd == "check":
+            from . import check
+
+            return check.run(args, rep)
         return 2
     except PaicadError as e:
         rep.warn(f"{e.code}: {e.message}")
         report = None
-        if args.cmd == "tag" and e.code != "GEOM_OUTPUT_EXISTS":
-            report = _tag_fail_report(args.out_dir, e.code, e.message)
+        if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd == "morph" and getattr(args, "sweep", False)):
+            report = _fail_report(args.cmd, args.out_dir, e.code, e.message)
         rep.result("FAIL", e.code, report)
         return e.exit_code
     except KeyboardInterrupt:

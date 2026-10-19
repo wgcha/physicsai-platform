@@ -64,6 +64,21 @@ class Topology:
 
 
 @dataclass(frozen=True)
+class FaceMove:
+    """Requested change of one face for push/pull (section 6.3).
+
+    ``translate``: rigid translation of the face surface (mm, global axes); for a plane only the
+    normal component matters. ``radius``: new radius of a cylindrical face (None = unchanged).
+    """
+
+    translate: np.ndarray | None = None  # (3,)
+    radius: float | None = None
+
+    def is_effective(self) -> bool:
+        return (self.translate is not None and bool(np.any(np.asarray(self.translate) != 0))) or self.radius is not None
+
+
+@dataclass(frozen=True)
 class BodySummary:
     name: str
     volume: float
@@ -109,4 +124,16 @@ class BodyGeom(Protocol):
 
     def points_inside(self, pts: np.ndarray) -> np.ndarray:
         """bool[n]: point strictly inside the solid."""
+        ...
+
+    def eval_edge(self, edge_id: int, t: np.ndarray) -> np.ndarray:
+        """Points[n,3] at arc-length normalized parameters t in [0,1] (same convention as project_to_edge)."""
+        ...
+
+    def classify_face_uv(self, face_id: int, uv: np.ndarray) -> np.ndarray:
+        """bool[n]: normalized (u,v) lies IN or ON the trimmed face."""
+        ...
+
+    def distance(self, pts: np.ndarray) -> np.ndarray:
+        """dist[n]: distance from each point to the body boundary (faces)."""
         ...

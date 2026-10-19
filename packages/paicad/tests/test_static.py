@@ -136,7 +136,16 @@ def test_kernel_returns_neutral_types(golden):
         b.eval_face(1, np.array([[0.5, 0.5]])),
         b.sample_face(1, 4),
         b.points_inside(pts),
+        b.eval_edge(1, np.array([0.0, 0.5, 1.0])),
+        b.classify_face_uv(1, np.array([[0.5, 0.5]])),
+        b.distance(pts),
     ]
+    from paicad.kernel import FaceMove, move_faces
+
+    plain = next(f for f in topo.faces if f.surface == "PLANE" and all(topo.face(g).surface == "PLANE" for e in f.edges for g in topo.edge(e).faces))
+    moved = move_faces(b, {plain.id: FaceMove(translate=np.asarray(plain.normal) * 0.5)})
+    assert moved.__class__.__module__ == "paicad.kernel.occ"  # the kernel's own BodyGeom, never an OCP object
+    results += [moved.summary(), moved.topology()]
 
     def walk(o, depth=0):
         assert not type(o).__module__.startswith("OCP"), type(o)
@@ -163,7 +172,7 @@ def test_cli_entry_point_version():
     assert r.stdout.strip() == f"paicad {paicad.__version__}"
 
 
-@pytest.mark.parametrize("argv", [["extract"], ["tag", "--cad", "x"], ["bogus"]])
+@pytest.mark.parametrize("argv", [["extract"], ["tag", "--cad", "x"], ["bogus"], ["update", "--cad", "x"], ["morph", "--sweep"], ["check"]])
 def test_cli_argument_errors_exit_2(argv):
     r = subprocess.run([sys.executable, "-m", "paicad", *argv], capture_output=True, text=True, timeout=60)
     assert r.returncode == 2

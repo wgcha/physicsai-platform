@@ -95,3 +95,20 @@ class FakeBox:
     def points_inside(self, pts):
         pts = np.asarray(pts, float).reshape(-1, 3)
         return np.all((pts > self.lo) & (pts < self.hi), axis=1)
+
+    def eval_edge(self, edge_id, t):
+        a, b = self._v[list(self._edges[edge_id - 1])]
+        t = np.clip(np.asarray(t, float).reshape(-1), 0, 1)
+        return a + t[:, None] * (b - a)
+
+    def classify_face_uv(self, face_id, uv):
+        uv = np.asarray(uv, float).reshape(-1, 2)
+        return np.all((uv >= -1e-9) & (uv <= 1 + 1e-9), axis=1)
+
+    def distance(self, pts):
+        pts = np.asarray(pts, float).reshape(-1, 3)
+        q = np.clip(pts, self.lo, self.hi)
+        out = np.linalg.norm(pts - q, axis=1)
+        inside = self.points_inside(pts)
+        d_in = np.minimum(pts - self.lo, self.hi - pts).min(axis=1)
+        return np.where(inside, d_in, out)

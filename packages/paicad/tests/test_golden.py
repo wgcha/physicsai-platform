@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 from collections import defaultdict
 
 import numpy as np
+import paicad
 import pytest
 from conftest import run_cli
 from paicad.features import choose_ref
@@ -86,7 +87,7 @@ def test_extract_xml_and_names(golden):
 
 def test_extract_json_envelope(golden):
     d = golden["features"]
-    assert d["schema_version"] == 1 and d["engine"] == "native" and d["engine_version"] == "0.1.0"
+    assert d["schema_version"] == 1 and d["engine"] == "native" and d["engine_version"] == paicad.__version__
     assert d["cad"]["mode"] == "single" and d["cad"]["body_map"] == "xde" and len(d["cad"]["files"][0]["sha256"]) == 64
     assert [b["part"] for b in d["bodies"]] == ["CUSH_L", "CUSH_R"] and [b["renum_row"] for b in d["bodies"]] == [1, 2]
     for f in d["features"]:
@@ -186,7 +187,7 @@ def test_extract_parts_folder_mode(golden, tmp_path):
 # ------------------------------------------------------------- tag
 def test_tag_all_nodes_classified(golden):
     t = golden["tag"]
-    assert t["status"] == "OK" and t["schema_version"] == 1 and t["engine_version"] == "0.1.0"
+    assert t["status"] == "OK" and t["schema_version"] == 1 and t["engine_version"] == paicad.__version__
     assert t["match_ratio"] == 1.0
     assert [p["part"] for p in t["parts"]] == ["CUSH_L", "CUSH_R"] and all(p["body"] == p["part"] for p in t["parts"])
     for p in t["parts"]:

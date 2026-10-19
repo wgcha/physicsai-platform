@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .base import BodyGeom, BodySummary, EdgeData, FaceData, Topology
+from .base import BodyGeom, BodySummary, EdgeData, FaceData, FaceMove, Topology
 
 
 class CadInputError(Exception):
@@ -40,10 +40,54 @@ def load_cad(path: str | Path, extensions: tuple[str, ...] = (".step", ".stp")) 
         raise CadInputError(e.code, e.message) from None
 
 
+def move_faces(body: BodyGeom, moves: dict[int, FaceMove]) -> BodyGeom:
+    """Push/pull: new body with the face moves applied, same topology and sub-shape numbering (section 6.3).
+
+    Raises CadInputError with code GEOM_CAD_FAILED / GEOM_TOPOLOGY_CHANGED; never lets OCCT errors escape.
+    """
+    from . import occ
+
+    try:
+        return body.moved(moves)  # type: ignore[attr-defined]
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
+def save_brep(bodies: list[BodyGeom], path: str | Path) -> None:
+    from . import occ
+
+    try:
+        occ.write_brep(bodies, path)  # type: ignore[arg-type]
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
+def load_brep(path: str | Path, names: list[str]) -> list[BodyGeom]:
+    from . import occ
+
+    try:
+        return list(occ.load_brep(path, names))
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
 def kernel_versions() -> dict[str, str]:
     from . import occ
 
     return {"ocp": occ.ocp_version()}
 
 
-__all__ = ["BodyGeom", "BodySummary", "CadInputError", "EdgeData", "FaceData", "Topology", "kernel_versions", "load_cad"]
+__all__ = [
+    "BodyGeom",
+    "BodySummary",
+    "CadInputError",
+    "EdgeData",
+    "FaceData",
+    "FaceMove",
+    "Topology",
+    "kernel_versions",
+    "load_brep",
+    "load_cad",
+    "move_faces",
+    "save_brep",
+]
