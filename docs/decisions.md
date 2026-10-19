@@ -114,3 +114,4 @@
 - 2026-10-17 · 화면 단계 재편: ④ 예측 · ⑤ 결과분석(신설: 결과 표 입력 = 일괄 예측 배치 또는 해석 DOE, PLS·PCA·커브·영향도(PRCC·표준화 회귀계수)·solver vs predict 겹쳐 보기) · ⑥ 최적화(기존 ⑤), 내부 코드 경로·job·DB·URL 숫자·e2e 번호 유지·표시만 변경, 새 읽기 전용 API `GET /train-does/{doe_id}/result-table` — 근거: 사용자 결정 · contracts/s14_analysis.md §19, D3-62
 - 2026-10-18: S14 계약 예시값 정정·겹쳐 보기 응답은 공통 응답만·해석 폴더 직접 지정 보류 (근거: Verifier 판정, 사용자 '추천대로')
 - 2026-10-18: S15 표본 방식 — ④ 7종 추가(기본 최적화 LHS), ① HyperStudy 4종 유지+설명·추천(LHS), 영향도 formal/reference/off 서버 판정, migration 0012 (근거: 사용자 결정, s15_sampling.md §20, D3-63)
+- 2026-10-19: S16 VOC — ④ 단일 예측 실행 목록, 조립 FEM 검증(FEM_VERIFY, 기존 해석 제출 경로), 영상 실패 노출·ffmpeg 선택 변환, migration 0013 (근거: 사용자 VOC·결정, s16_voc.md §21, D3-64)
