@@ -116,3 +116,4 @@
 - 2026-10-18: S15 표본 방식 — ④ 7종 추가(기본 최적화 LHS), ① HyperStudy 4종 유지+설명·추천(LHS), 영향도 formal/reference/off 서버 판정, migration 0012 (근거: 사용자 결정, s15_sampling.md §20, D3-63)
 - 2026-10-19: S16 VOC — ④ 단일 예측 실행 목록, 조립 FEM 검증(FEM_VERIFY, 기존 해석 제출 경로), 영상 실패 노출·ffmpeg 선택 변환, migration 0013 (근거: 사용자 VOC·결정, s16_voc.md §21, D3-64)
 - 2026-10-19: S17 성능 정의(템플릿 응답 확장 H3D+CURVE, perf:<NAME>)·다목적 내장 최적화(파레토 전선 기본+가중 추천 슬라이더, ParEGO+HVI, HV 수렴), migration 0014, S16 뒤 병합 (근거: 사용자 VOC·결정, s17_multiobj.md §22, D3-65)
+- 2026-10-19: S18 ① 학습 DOE 플랫폼 동시 생성(기본, run_parallel 4) + hstbatch 호환 모드 무변경, 형상 경계 run_chain(native 교체 지점), migration 0015 (근거: 사용자 VOC·결정 'HST에 힘쓰지 말자', s18_doe_parallel.md §23, D3-66)
