@@ -49,11 +49,13 @@ class MoCfg:
     rho: float = 0.05
     ref_offset: float = 0.1
     gp_restarts: int = 4
+    hvi_share_m3: float = 0.5  # 3목적: HVI 활용 후보 = ⌈k·share⌉(0 = 계약 원안 1개), 고른 점을 전선에 더하며 서로 다른 점
+    front_prox_m3: float = 6.0  # 3목적: ParEGO 획득값 × exp(−prox·(예측 전선 점까지 정규화 거리))(0 = 끔)
 
     @classmethod
     def from_settings(cls, so: Any) -> MoCfg:
         return cls(so.mo_lattice_h2, so.mo_lattice_h3, so.mo_de_maxiter, so.de_popsize, so.mo_rho, so.mo_ref_offset,
-                   so.mo_gp_restarts)
+                   so.mo_gp_restarts, so.mo_hvi_share_m3, so.mo_front_prox_m3)
 
 
 # ---- 격자·스칼라화 -------------------------------------------------------------------------------
@@ -361,15 +363,28 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
     Fv = [pareto.normalize((st.signs * np.asarray(d.objectives)).tolist(), frame_ideal, frame_nadir) for d in feas]
     Fv = [Fv[i] for i in pareto.nondominated(Fv)]
     cand_idx = nd or list(range(len(pool)))
-    order = c1_order([pareto.normalize(mu_p[i].tolist(), frame_ideal, frame_nadir) for i in cand_idx], Fv, R)
-    if progress is not None:
-        progress(1, k, f"후보 1/{k}")
-    for pos, hvi in order:
-        i = cand_idx[pos]
-        c = st.make(pool[i], "hvi", None, float(hvi))
-        if not st.is_dup(c.values):
-            st.picked.append(c)
+    pred_n = [pareto.normalize(mu_p[i].tolist(), frame_ideal, frame_nadir) for i in cand_idx]
+    n_hvi = max(1, math.ceil(k * cfg.hvi_share_m3)) if m == 3 and cfg.hvi_share_m3 > 0 else 1
+    taken: set[int] = set()
+    Fb = list(Fv)
+    while len(st.picked) < min(n_hvi, k):
+        if progress is not None:
+            progress(len(st.picked) + 1, k, f"후보 {len(st.picked) + 1}/{k}")
+        got = False
+        for pos, hvi in c1_order(pred_n, Fb, R):
+            if pos in taken:
+                continue
+            taken.add(pos)
+            c = st.make(pool[cand_idx[pos]], "hvi", None, float(hvi))
+            if not st.is_dup(c.values):
+                st.picked.append(c)
+                Fb.append(pred_n[pos])  # 다음 HVI 후보는 고른 점을 전선에 더한 뒤(서로 다른 점)
+                got = True
+                break
+        if not got:
             break
+    prox = cfg.front_prox_m3 if m == 3 else 0.0
+    Xfront = Xp[nd] if prox > 0 and nd else None
 
     # ③ c₂… — ParEGO(GP) 또는 RBF 거리 규칙
     chosen, used = assign_weights(len(W), k - len(st.picked), seed=seed, round_no=round_no, used=used_weights)
@@ -397,7 +412,11 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
             def acq(xT: np.ndarray, gpw: Any = gpw, fmin: float = fmin) -> np.ndarray:
                 Xn = fit.normalize(np.atleast_2d(xT.T))
                 mm, ss = gpw.predict(Xn)
-                return -(_ei(mm, ss, fmin) * st.pof(Xn))
+                a = _ei(mm, ss, fmin) * st.pof(Xn)
+                if Xfront is not None:
+                    dist = np.sqrt(((Xn[:, None, :] - Xfront[None, :, :]) ** 2).sum(axis=2)).min(axis=1)
+                    a = a * np.exp(-prox * dist / math.sqrt(Xn.shape[1]))
+                return -a
 
             pop = _de_full(acq, st.bounds, st.ints, seed=base + 700 + j, maxiter=cfg.de_maxiter, popsize=cfg.de_popsize,
                            checkpoint=checkpoint)

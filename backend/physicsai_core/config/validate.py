@@ -300,6 +300,10 @@ def _validate_surrogate_opt(s: Settings, issues: list[ConfigIssue]) -> None:
         issues.append(ConfigIssue("surrogate_opt.default_surrogate", "gp | rbf"))
     if not 0.0 <= so.mo_rho <= 1.0:
         issues.append(ConfigIssue("surrogate_opt.mo_rho", "0~1"))
+    if not 0.0 <= so.mo_hvi_share_m3 <= 1.0:
+        issues.append(ConfigIssue("surrogate_opt.mo_hvi_share_m3", "0~1"))
+    if not 0.0 <= so.mo_front_prox_m3 <= 50.0:
+        issues.append(ConfigIssue("surrogate_opt.mo_front_prox_m3", "0~50"))
     if not 0.01 <= so.mo_ref_offset <= 1.0:
         issues.append(ConfigIssue("surrogate_opt.mo_ref_offset", "0.01~1"))
     if not _SO_DIR_RE.fullmatch(so.dir_name) or so.dir_name.split("/")[0].casefold() in ("_platform", "_backup"):

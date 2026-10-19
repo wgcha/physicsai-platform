@@ -350,6 +350,8 @@ surrogate_opt:                      # ⑤ 플랫폼 내장 최적화(phase3 §18
   mo_rho: 0.05                      # 증강 Chebyshev ρ(0~1)
   mo_ref_offset: 0.1                # HV 기준점 1 + offset(0.01~1)
   mo_gp_restarts: 4                 # ParEGO 스칼라화 GP 재시작 수
+  mo_hvi_share_m3: 0.5              # 3목적: HVI 활용 후보 ⌈k·비율⌉개(0 = 1개)
+  mo_front_prox_m3: 6.0             # 3목적: ParEGO 후보를 예측 전선 가까이(0 = 끔)
 
 env_check:
   probe_timeout_s: 60               # 점검용 짧은 실행만의 상한(작업 step 시간 한도 아님)

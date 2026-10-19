@@ -8,6 +8,8 @@ cd "$REPO_ROOT"
 echo "== frontend-dist 최신 여부(빌드본 = 현재 프런트 소스, phase3 D3-40) =="
 "$PYTHON" scripts/frontend_source_hash.py --check "$REPO_ROOT"
 echo "== backend/worker pytest =="
+# --slow: slow 마커 시험까지 전체(nightly 등 별도 명령). 기본은 pyproject addopts의 -m 'not slow'
+if [ "${1:-}" = "--slow" ]; then shift; set -- -m "" "$@"; fi
 "$PYTHON" -m pytest -q -rs "$@"
 echo "== openapi.json 최신 여부 =="
 "$PYTHON" -c "import sys; from physicsai_api.export_openapi import render; sys.exit(0 if open('backend/openapi.json', encoding='utf-8').read() == render() else 1)" \

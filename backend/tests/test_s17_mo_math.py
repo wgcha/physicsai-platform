@@ -201,3 +201,20 @@ def test_v3_s17_8_gp_failure_falls_back_for_that_objective(monkeypatch):
     assert fit.quality["kind"] == "mixed"
     rt = mo.FitResult.from_json(fit.to_json())
     assert len(rt.objectives) == 2 and rt.signs == [1.0, 1.0]
+
+
+def test_v3_s17_8_three_objectives_hvi_share_and_prox():
+    """3목적 조정 키(mo_hvi_share_m3·mo_front_prox_m3): k=4 → HVI 2개(서로 다른 점) + ParEGO 2개, 0이면 계약 원안(HVI 1개)."""
+    import dataclasses
+
+    def f3(x):
+        return [float(x[0]), float(x[1]), float(2 - x[0] - x[1] + (x[2] - 0.5) ** 2)]
+
+    pr = _problem(("a", "b", "c"), senses=("min", "min", "min"))
+    designs, _ = _designs(pr, _lhs(14, 3), f3)
+    for share, prox, roles in ((0.5, 6.0, ["hvi", "hvi", "parego", "parego"]), (0.0, 0.0, ["hvi", "parego", "parego", "parego"])):
+        cfg = dataclasses.replace(FAST, hvi_share_m3=share, front_prox_m3=prox)
+        fit = mo.fit_mo(designs, pr, kind="gp", restarts=2, seed=1001)
+        p = mo.propose_mo(fit, pr, designs, [], k=4, seed=1, round_no=1, cfg=cfg, hv_frame=_frame(pr, designs))
+        assert [c.role for c in p.candidates] == roles
+        assert len({tuple(round(c.values[n], 9) for n in pr.names) for c in p.candidates}) == 4

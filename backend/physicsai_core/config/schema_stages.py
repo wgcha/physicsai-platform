@@ -166,6 +166,8 @@ class SurrogateOptCfg(_M):
     mo_rho: float = 0.05  # 증강 Chebyshev ρ
     mo_ref_offset: float = 0.1  # HV 기준점 = (1 + offset)·1
     mo_gp_restarts: int = 4  # ParEGO 스칼라화 GP 재시작
+    mo_hvi_share_m3: float = 0.5  # 3목적 HVI 활용 후보 비율(⌈k·share⌉, 0 = 1개 — 계약 §22.5.4 원안)
+    mo_front_prox_m3: float = 6.0  # 3목적 ParEGO 획득값 × exp(−prox·예측 전선까지 정규화 거리)(0 = 끔)
 
 
 class OptimizeCfg(_M):
