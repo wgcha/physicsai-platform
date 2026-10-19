@@ -5,7 +5,8 @@ For every parameter (values.json key; others nominal) and each direction, the st
 stopping a direction after ``--stop-after-fail`` consecutive failures. The nominal geometry is the
 ``sample.brep`` of ``--update-dir``, which must be an update run with all values nominal.
 
-Outputs (``--out-dir``): ``envelope.json``, ``envelope.csv`` and ``parameter_features.json`` (copy of
+Outputs (``--out-dir``): ``envelope.json``, ``envelope.csv``, ``report_envelope.md``/``.csv`` (per-parameter
+last_ok / first_fail and the limiting metric) and ``parameter_features.json`` (copy of
 the input with ``feasible`` from the envelope: ``source: envelope`` + ``sweep_id``; unswept features
 keep the extract estimate with ``source: estimate``). Per-step files only with ``--keep-steps``.
 Output is deterministic (no timestamps): the same inputs give byte-identical files.
@@ -21,7 +22,7 @@ import json
 import math
 from pathlib import Path
 
-from . import options
+from . import envreport, options
 from .check import check_core
 from .common import CODE_CATEGORY, EXIT_CAD, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd, sha256_file
 from .kernel import CadInputError, load_brep, save_brep
@@ -42,6 +43,7 @@ CSV_COLUMNS = (
     "min_stretch",
     "max_aspect",
     "min_edge_ratio",
+    "dt_ratio",
     "boundary_dev_max_mm",
     "param_remeasure_err_abs",
     "param_remeasure_err_rel",
@@ -65,7 +67,7 @@ def _pct_label(p: float) -> str:
 
 def run(args, rep: Reporter) -> int:
     opts = options.load(args.options)
-    outs = [ENVELOPE_JSON, ENVELOPE_CSV, FEATURES_JSON]
+    outs = [ENVELOPE_JSON, ENVELOPE_CSV, FEATURES_JSON, envreport.REPORT_MD, envreport.REPORT_CSV]
     out = OutDir(args.out_dir, outs + (["sweep"] if args.keep_steps else []))
     out.prepare()
     doc = load_features(args.features)
@@ -121,6 +123,8 @@ def run(args, rep: Reporter) -> int:
                 else:
                     consecutive = 0
     summary = _summary(params, rows, nominal_vals)
+    for srow in summary:
+        srow["limit_metric"] = {d: envreport.limit_metric([r for r in rows if r["param"] == srow["param"] and r["direction"] == d], opts) for d in ("+", "-")}
     env = envelope(
         sweep_id=sweep_id,
         inputs={
@@ -138,7 +142,10 @@ def run(args, rep: Reporter) -> int:
     out.write_text(ENVELOPE_JSON, dumps(env))
     out.write_text(ENVELOPE_CSV, _csv(rows))
     out.write_text(FEATURES_JSON, dumps(_features_with_envelope(doc, summary, sweep_id, opts)))
-    out.commit(keep + [FEATURES_JSON, ENVELOPE_CSV, ENVELOPE_JSON])
+    md, rcsv = envreport.render(env)
+    out.write_text(envreport.REPORT_MD, md)
+    out.write_text(envreport.REPORT_CSV, rcsv)
+    out.commit(keep + [FEATURES_JSON, envreport.REPORT_CSV, envreport.REPORT_MD, ENVELOPE_CSV, ENVELOPE_JSON])
     nfail = sum(1 for r in rows if r["status"] == "FAIL")
     rep.progress(100, f"sweep done: {len(rows)} steps, {nfail} failed")
     rep.result("OK", None, ENVELOPE_JSON)
@@ -164,8 +171,10 @@ def _step(p, dlabel, pct, value, vals, nominal, doc, contacts, opts, mesh, base_
         "min_stretch": None,
         "max_aspect": None,
         "min_edge_ratio": None,
+        "dt_ratio": None,
         "boundary_dev_max_mm": None,
         "param_remeasure_err": {"abs": None, "rel": None},
+        "param_margin": None,
         "inverted_elems": None,
     }
     try:
@@ -183,7 +192,7 @@ def _step(p, dlabel, pct, value, vals, nominal, doc, contacts, opts, mesh, base_
         save_brep(res.bodies, out.tmp_path(f"{sub}/{SAMPLE_BREP}"))
         keep.append(f"{sub}/{SAMPLE_BREP}")
         _keep(out, keep, f"{sub}/{FACE_MAP_JSON}", dumps(res.face_map))
-        _keep(out, keep, f"{sub}/{UPDATE_JSON}", dumps(envelope(status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, topology=res.topology, warnings=res.warnings)))
+        _keep(out, keep, f"{sub}/{UPDATE_JSON}", dumps(envelope(status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, topology=res.topology, positions=res.positions, warnings=res.warnings)))
     try:
         m = morph_core(mesh, comps, sample, opts)
     except MorphFailed as e:
@@ -198,7 +207,8 @@ def _step(p, dlabel, pct, value, vals, nominal, doc, contacts, opts, mesh, base_
         _keep(out, keep, f"{sub}/{MORPH_JSON}", dumps(envelope(status="OK", code=None, category=None, message=None, max_disp_mm=rnd(m.max_disp), parts=m.parts)))
     if not check_on:
         return row
-    c = check_core(mesh, m.xyz, comps, sample, doc, vals, opts, None, baseline_path, full=False)
+    expected = {e["name"]: float(e["expected_measured"]) for e in res.positions}
+    c = check_core(mesh, m.xyz, comps, sample, doc, vals, opts, None, baseline_path, full=False, expected=expected)
     s = c.summary
     row.update(
         status="OK" if c.status == "PASS" else "FAIL",
@@ -206,8 +216,10 @@ def _step(p, dlabel, pct, value, vals, nominal, doc, contacts, opts, mesh, base_
         min_stretch=s["min_stretch"],
         max_aspect=s["max_aspect"],
         min_edge_ratio=s["min_edge_ratio"],
+        dt_ratio=s["dt_ratio"],
         boundary_dev_max_mm=s["boundary_dev_max_mm"],
         param_remeasure_err=s["param_remeasure_err"],
+        param_margin=s["param_margin"],
         inverted_elems=s["inverted_elems"],
     )
     if sub:
@@ -295,6 +307,7 @@ def _csv(rows: list[dict]) -> str:
                 _c(r["min_stretch"]),
                 _c(r["max_aspect"]),
                 _c(r["min_edge_ratio"]),
+                _c(r["dt_ratio"]),
                 _c(r["boundary_dev_max_mm"]),
                 _c(e.get("abs")),
                 _c(e.get("rel")),

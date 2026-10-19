@@ -13,13 +13,16 @@ DEFAULTS: dict = {
     "schema_version": 1,
     "tag": {"tol_abs_mm": 0.05, "tol_rel": 1.0e-4, "min_match_ratio": 0.98, "contact_mm": 0.1, "contact_min_ratio": 0.2},
     "morph": {"poisson": 0.3, "solver_rtol": 1.0e-8, "solver_maxiter": 5000},
-    "quality": {"min_stretch": 0.1, "max_aspect": 10.0, "min_edge_mm": 1.0, "min_edge_ratio": 0.8, "relative_to_baseline": True},
+    # min_edge_mm: optional absolute floor (None = off); min_edge_ratio / dt_ratio_min are relative to the baseline mesh
+    "quality": {"min_stretch": 0.1, "max_aspect": 10.0, "min_edge_mm": None, "min_edge_ratio": 0.8, "dt_ratio_min": 0.8, "relative_to_baseline": True},
     "deviation": {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
     "interference": {"body_mm": 0.01, "product_mm": 0.05},
     "tie": {"default_dsearch_mm": None, "required": True},
     "thickness_ref": "contact_fixed",
     "thickness_ref_overrides": {},
     "symmetry_split": [],
+    # hole position parameters keep their distance to the nearest fixed face (or scale with the body length)
+    "position_ref": "nearest_fixed",
     # extract tuning (section 6.2 defaults; optional section, absent in platform-written files is fine)
     "extract": {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "sample_grid": 12},
 }
@@ -55,6 +58,21 @@ def validate(opts: dict) -> list[str]:
         p.append("thickness_ref_overrides must be an object")
     if not isinstance(opts.get("symmetry_split"), list):
         p.append("symmetry_split must be a list")
+    q = opts["quality"]
+    if not (_pos(q.get("min_stretch")) and q["min_stretch"] <= 1):
+        p.append("quality.min_stretch must be in (0, 1]")
+    if not (_pos(q.get("max_aspect")) and q["max_aspect"] >= 1):
+        p.append("quality.max_aspect must be >= 1")
+    me = q.get("min_edge_mm")
+    if me is not None and not (_pos(me) or (isinstance(me, (int, float)) and not isinstance(me, bool) and me == 0)):
+        p.append("quality.min_edge_mm must be null or a finite number >= 0")
+    for k in ("min_edge_ratio", "dt_ratio_min"):
+        if not (_pos(q.get(k)) and q[k] <= 1):
+            p.append(f"quality.{k} must be in (0, 1]")
+    if not isinstance(q.get("relative_to_baseline"), bool):
+        p.append("quality.relative_to_baseline must be true or false")
+    if opts.get("position_ref") not in ("nearest_fixed", "proportional"):
+        p.append("position_ref must be nearest_fixed or proportional")
     e = opts["extract"]
     if not (_pos(e.get("draft_max_deg")) and e["draft_max_deg"] < 45):
         p.append("extract.draft_max_deg must be in (0, 45)")

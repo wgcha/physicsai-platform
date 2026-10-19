@@ -6,8 +6,12 @@ Every sample starts from the nominal geometry. Feature values are turned into fa
   section 6.2, re-evaluated with ``--tag-dir`` contacts) is offset along its normal;
 * RIB_HEIGHT / POCKET_DEPTH: cap / floor offset; the whole rib / pocket (cap or floor + adjacent
   side faces) follows its base / entry face rigidly so that the other parameters keep their values;
-* HOLE_RADIUS: new cylinder radius; HOLE_POS_U/V: cylinder shifted along the axis of the coordinate
-  (measured from the body bbox minimum, so it is corrected when the bbox minimum moves);
+* HOLE_RADIUS: new cylinder radius; HOLE_POS_U/V: cylinder shifted along the axis of the coordinate.
+  Reference (``position_ref``): ``nearest_fixed`` (default) keeps the distance to the nearest planar
+  face normal to that axis that does not move in this sample (tie: larger area, then lower id), the
+  value change moving the hole along +axis; ``proportional`` keeps the position as a fraction of the
+  body length along the axis. The resulting value measured from the bbox minimum is reported in
+  ``update.json`` ``positions[].expected_measured`` (check (a) compares against it);
 * FILLET_RADIUS and every plane/plane blend next to a moved face: blend re-fitted tangent to its
   two (moved) planes with the requested radius.
 
@@ -209,10 +213,28 @@ def resolve_face(topo: Topology, fid: int, sig: dict | None, tol: float) -> int:
 
 # ------------------------------------------------------------------ planning
 @dataclass
+class HolePos:
+    name: str
+    body: str
+    face: int  # cylinder face
+    axis: int  # global axis index
+    mode: str  # nearest_fixed | proportional
+    ref: int | None  # fixed reference face (nearest_fixed)
+    offset: float  # nearest_fixed: target axis coordinate - reference plane coordinate
+    frac: float  # proportional: target position from the bbox minimum / body length
+
+    def target(self, topo: Topology, bbox: np.ndarray) -> float:
+        a = self.axis
+        if self.mode == "nearest_fixed" and self.ref is not None:
+            return float(topo.face(self.ref).centroid[a]) + self.offset
+        return float(bbox[a]) + self.frac * float(bbox[3 + a] - bbox[a])
+
+
+@dataclass
 class BodyPlan:
     moves: dict[int, FaceMove]
     applied: list[dict]
-    hole_pos: list[tuple[int, int, float]]  # (cylinder face, axis index, target coordinate from bbox min)
+    hole_pos: list[HolePos]
     warnings: list[dict]
 
 
@@ -244,15 +266,36 @@ def _blends(topo: Topology) -> list[tuple[int, int, int]]:
     return out
 
 
-def _bbox_min_shift(topo: Topology, bbox: np.ndarray, T: dict[int, np.ndarray]) -> np.ndarray:
-    """Estimated shift of the body bbox minimum from the planar face moves (refined after the rebuild)."""
-    out = np.zeros(3)
+def _bbox_shift(topo: Topology, bbox: np.ndarray, T: dict[int, np.ndarray]) -> tuple[np.ndarray, np.ndarray]:
+    """Estimated shift of the body bbox minimum / maximum from the planar face moves (refined after the rebuild)."""
+    lo, hi = np.zeros(3), np.zeros(3)
     scale = 1e-6 * (1.0 + float(np.abs(bbox).max()))
     for a in range(3):
-        moves = [float(T[f.id][a]) for f in topo.faces if f.id in T and f.normal is not None and f.normal[a] < -0.999 and abs(f.bbox[a] - bbox[a]) <= scale]
-        if moves:
-            out[a] = min(moves)
-    return out
+        m = [float(T[f.id][a]) for f in topo.faces if f.id in T and f.normal is not None and f.normal[a] < -0.999 and abs(f.bbox[a] - bbox[a]) <= scale]
+        if m:
+            lo[a] = min(m)
+        m = [float(T[f.id][a]) for f in topo.faces if f.id in T and f.normal is not None and f.normal[a] > 0.999 and abs(f.bbox[3 + a] - bbox[3 + a]) <= scale]
+        if m:
+            hi[a] = max(m)
+    return lo, hi
+
+
+AXIS_COS = 0.999  # planar face counts as normal to an axis (about 2.6 deg: drafted walls included)
+TIE_MM = 1.0e-6
+
+
+def nearest_fixed_face(topo: Topology, axis: int, coord: float, T: dict[int, np.ndarray]) -> int | None:
+    """Nearest planar face normal to ``axis`` that does not move along it in this sample (tie: larger area, lower id)."""
+    best = None
+    for f in topo.faces:
+        if f.surface != "PLANE" or f.normal is None or abs(float(f.normal[axis])) < AXIS_COS:
+            continue
+        if f.id in T and abs(float(T[f.id][axis])) > 0:
+            continue
+        key = (round(abs(float(f.centroid[axis]) - coord) / TIE_MM), -float(f.area), f.id)
+        if best is None or key < best[0]:
+            best = (key, f.id)
+    return None if best is None else best[1]
 
 
 def plan_body(
@@ -355,9 +398,10 @@ def plan_body(
             if d:
                 add(cap, (d if t == "RIB_HEIGHT" else -d) * normal(cap))
             record(f, [cap], [host], "feature_default")
-    # 4. holes and fillets (hole positions are measured from the bbox minimum: anticipate its shift)
-    shift = _bbox_min_shift(topo, s.bbox, T)
-    hole_pos = []
+    # 4. holes and fillets (hole position reference: nearest fixed face or proportional, see module doc)
+    lo_shift, hi_shift = _bbox_shift(topo, s.bbox, T)
+    pos_mode = opts.get("position_ref", "nearest_fixed")
+    hole_pos: list[HolePos] = []
     for f, mf in others:
         d = fvalues[f["name"]] - float(f["nominal"])
         t = f["type"]
@@ -367,10 +411,21 @@ def plan_body(
                 R[c] = fvalues[f["name"]]
         elif t in ("HOLE_POS_U", "HOLE_POS_V"):
             ax = "xyz".index(f["measure"].get("axis", "x"))
-            hole_pos.append((c, ax, fvalues[f["name"]]))
-            if d or shift[ax]:
+            h0 = float(topo.face(c).axis_point[ax])
+            ref = nearest_fixed_face(topo, ax, h0, T) if pos_mode == "nearest_fixed" else None
+            if pos_mode == "nearest_fixed" and ref is None:
+                warnings.append({"code": "POS_REF_NO_FIXED_FACE", "feature": f["name"], "message": "no fixed face normal to the axis: position kept proportional to the body length"})
+            L0 = float(s.bbox[3 + ax] - s.bbox[ax])
+            if ref is not None:
+                hp = HolePos(f["name"], f["body"], c, ax, "nearest_fixed", ref, h0 - float(topo.face(ref).centroid[ax]) + d, 0.0)
+                est = h0 + d
+            else:
+                hp = HolePos(f["name"], f["body"], c, ax, "proportional", None, 0.0, (h0 - float(s.bbox[ax]) + d) / L0)
+                est = float(s.bbox[ax]) + lo_shift[ax] + hp.frac * (L0 + hi_shift[ax] - lo_shift[ax])
+            hole_pos.append(hp)
+            if abs(est - h0) > 0:
                 e = np.zeros(3)
-                e[ax] = d + shift[ax]
+                e[ax] = est - h0
                 add(c, e)
         elif t == "FILLET_RADIUS":
             if d:
@@ -421,6 +476,7 @@ class UpdateResult:
     topology: dict
     face_map: dict
     warnings: list[dict]
+    positions: list[dict] = field(default_factory=list)
 
 
 def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], contacts: dict[str, set[int]] | None, opts: dict) -> UpdateResult:
@@ -432,7 +488,7 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
     for g in doc.get("groups") or []:
         if g["id"] not in split:
             members_of[g["parameter"]] = [m for m in g["members"] if m != g["parameter"]]
-    out_bodies, applied, warnings = [], [], []
+    out_bodies, applied, warnings, positions = [], [], [], []
     topo_counts, face_map = {}, {}
     for bdoc, body in zip(doc["bodies"], nominal):
         name = bdoc["body"]
@@ -448,10 +504,11 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
             bb = new.summary().bbox
             topo = new.topology()
             fix = {}
-            for c, ax, target in plan.hole_pos:
-                got = float(topo.face(c).axis_point[ax] - bb[ax])
+            for hp in plan.hole_pos:
+                got = float(topo.face(hp.face).axis_point[hp.axis])
+                target = hp.target(topo, bb)
                 if abs(got - target) > 1e-9:
-                    fix.setdefault(c, np.zeros(3))[ax] += target - got
+                    fix.setdefault(hp.face, np.zeros(3))[hp.axis] += target - got
             if not fix:
                 break
             for c, v in fix.items():
@@ -459,6 +516,19 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
                 t = (old.translate if old.translate is not None else np.zeros(3)) + v
                 moves[c] = FaceMove(translate=t, radius=old.radius)
             new = _move(body, moves)
+        if plan.hole_pos:
+            bb, topo = new.summary().bbox, new.topology()
+            for hp in plan.hole_pos:
+                positions.append(
+                    {
+                        "name": hp.name,
+                        "body": hp.body,
+                        "axis": "xyz"[hp.axis],
+                        "mode": hp.mode,
+                        "ref_face": None if hp.ref is None else f"F{hp.ref}",
+                        "expected_measured": rnd(hp.target(topo, bb) - float(bb[hp.axis]), 9),
+                    }
+                )
         tn, ts = body.topology(), new.topology()
         cn = [len(tn.faces), len(tn.edges), len(tn.vertices)]
         cs = [len(ts.faces), len(ts.edges), len(ts.vertices)]
@@ -475,7 +545,7 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
         if uvf:
             face_map[name]["uv_fallback"] = uvf  # faces where the normalized (u,v) mapping is not valid (section 6.4 fallback)
         out_bodies.append(new)
-    return UpdateResult(out_bodies, applied, {"same_as_nominal": True, "counts": topo_counts}, face_map, warnings)
+    return UpdateResult(out_bodies, applied, {"same_as_nominal": True, "counts": topo_counts}, face_map, warnings, positions)
 
 
 UV_MOVED_TOL = 1.0e-7
@@ -559,6 +629,7 @@ def run(args, rep: Reporter) -> int:
         applied=res.applied,
         topology=res.topology,
         bodies=[{"body": b["body"], "volume": rnd(x.summary().volume), "bbox": vec(x.summary().bbox)} for b, x in zip(doc["bodies"], res.bodies)],
+        positions=res.positions,
         warnings=res.warnings,
         elapsed_s=rnd(time.monotonic() - t0, 3),
     )

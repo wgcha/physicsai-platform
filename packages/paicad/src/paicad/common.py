@@ -194,3 +194,21 @@ class Reporter:
         if self._log:
             self._log.close()
             self._log = None
+
+
+class StageReporter(Reporter):
+    """Reporter of one stage inside ``paicad run`` / ``selftest``: own log in the stage folder, progress
+    rescaled into [lo, hi] of the parent, stage RESULT shown as a progress line (the parent prints the
+    single final ``PAICAD RESULT`` line)."""
+
+    def __init__(self, out_dir: Path, parent: Reporter, stage: str, lo: int, hi: int):
+        super().__init__(out_dir, stdout=parent.stdout, stderr=parent.stderr)
+        self.parent, self.stage, self.lo, self.hi = parent, stage, lo, hi
+
+    def progress(self, pct: int, msg: str) -> None:
+        self.log(f"PAICAD PROGRESS {int(pct)} {msg}")
+        self.parent.progress(self.lo + int((self.hi - self.lo) * max(0, min(100, int(pct))) / 100), f"{self.stage}: {msg}")
+
+    def result(self, status: str, code: str | None, report: str | None) -> None:
+        self.log(f"PAICAD RESULT {status} {code or '-'} {report or '-'}")
+        self.parent.progress(self.hi, f"{self.stage} {status} {code or '-'}")

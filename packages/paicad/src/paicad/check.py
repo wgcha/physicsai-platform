@@ -2,8 +2,8 @@
 
 Items (all evaluated, no short-circuit): (a) parameter re-measurement on the morphed mesh,
 (b) boundary-node deviation from the sample B-rep, (c) quality (tetra stretch, boundary-triangle
-aspect, minimum edge, inverted, time-step ratio; baseline evaluated with the same criteria ->
-BASELINE_QUALITY_BELOW warning), (d) body-body / product interference, (e) tie projection.
+aspect, inverted, minimum-edge and time-step ratios to the baseline, optional absolute minimum edge;
+baseline evaluated on the absolute shape criteria -> BASELINE_QUALITY_BELOW warning), (d) body-body / product interference, (e) tie projection.
 Top-level code priority: INTERFERENCE -> QUALITY -> DEVIATION (GEOM_DEVIATION, GEOM_PARAM_MISMATCH) -> TIE.
 """
 
@@ -24,7 +24,7 @@ from .mesh.radioss import RadMesh, collect_assembly_surface, parse_text, read_me
 from .meshdata import KIND_EDGE, KIND_FACE, KIND_VERTEX, Comp, components_from_tag, load_tag
 from .meshgeom import TriangleSet
 from .morph import MORPHED_INC, SampleSet, load_sample, read_baseline
-from .update import feature_values, load_features, load_values
+from .update import UPDATE_JSON, feature_values, load_features, load_values, read_json
 
 CHECK_JSON = "check.json"
 PRIORITY = ("GEOM_INTERFERENCE", "GEOM_QUALITY", "GEOM_DEVIATION", "GEOM_PARAM_MISMATCH", "GEOM_TIE_PROJECTION")
@@ -41,33 +41,49 @@ class CheckResult:
 
 
 # ------------------------------------------------------------------ (a) parameters
-def check_params(doc: dict, fvalues: dict[str, float], comps: list[Comp], fis: dict[str, FaceIndex], sample: SampleSet, X: np.ndarray, dev: dict) -> tuple[dict, str | None, dict]:
+def check_params(
+    doc: dict, fvalues: dict[str, float], comps: list[Comp], fis: dict[str, FaceIndex], sample: SampleSet, X: np.ndarray, dev: dict, expected: dict[str, float] | None = None
+) -> tuple[dict, str | None, dict]:
+    """``expected``: measured value the update intended when it differs from the input (hole positions
+    kept relative to the nearest fixed face are measured from the bbox minimum, update.json ``positions``)."""
     items = []
+    expected = expected or {}
+    margin = np.inf  # min over items of tol / err (envelope limiting metric)
     worst_abs = worst_rel = 0.0
     bad = []
     comp_of = {c.body: c for c in comps}
     for f in doc["features"]:
         c = comp_of.get(f["body"])
         inp = float(fvalues[f["name"]])
-        tol = max(float(dev["param_abs_mm"]), float(dev["param_rel"]) * abs(inp))
+        want = float(expected.get(f["name"], inp))
+        tol = max(float(dev["param_abs_mm"]), float(dev["param_rel"]) * abs(want))
         meas = None
         if c is not None:
             meas = measure_feature(f, fis[c.body], sample.face_map[c.body]["F"], X[c.gidx])
         if meas is None:
-            items.append({"name": f["name"], "input": rnd(inp, 9), "measured": None, "err": None, "tol": rnd(tol), "status": "FAIL"})
+            it = {"name": f["name"], "input": rnd(inp, 9), "measured": None, "err": None, "tol": rnd(tol), "status": "FAIL"}
+            if want != inp:
+                it["expected"] = rnd(want, 9)
+            items.append(it)
             bad.append(f"{f['name']} cannot be measured")
             worst_abs = worst_rel = float("inf")
+            margin = 0.0
             continue
-        err = abs(meas - inp)
+        err = abs(meas - want)
         worst_abs = max(worst_abs, err)
-        worst_rel = max(worst_rel, err / abs(inp) if inp else err)
+        worst_rel = max(worst_rel, err / abs(want) if want else err)
         ok = err <= tol
-        items.append({"name": f["name"], "input": rnd(inp, 9), "measured": rnd(meas), "err": rnd(err), "tol": rnd(tol), "status": "PASS" if ok else "FAIL"})
+        if err > 0:
+            margin = min(margin, tol / err)
+        it = {"name": f["name"], "input": rnd(inp, 9), "measured": rnd(meas), "err": rnd(err), "tol": rnd(tol), "status": "PASS" if ok else "FAIL"}
+        if want != inp:
+            it["expected"] = rnd(want, 9)
+        items.append(it)
         if not ok:
-            bad.append(f"{f['name']} measured {meas:.4f} vs input {inp:.4f}")
+            bad.append(f"{f['name']} measured {meas:.4f} vs {'expected' if want != inp else 'input'} {want:.4f}")
     rep = {"status": "FAIL" if bad else "PASS", "items": items}
     msg = "parameter re-measurement: " + "; ".join(bad[:3]) + (f" (+{len(bad) - 3} more)" if len(bad) > 3 else "") if bad else None
-    return rep, msg, {"abs": _fin(worst_abs), "rel": _fin(worst_rel)}
+    return rep, msg, {"abs": _fin(worst_abs), "rel": _fin(worst_rel), "margin": _fin(margin)}
 
 
 def _fin(x: float):
@@ -267,14 +283,15 @@ def check_core(
     assem_dir: str | None,
     baseline_path: Path,
     full: bool = True,
+    expected: dict[str, float] | None = None,
 ) -> CheckResult:
-    """``full=False`` (sweep): (a)(b)(c) only, (d)(e) NOT_EVALUATED."""
+    """``full=False`` (sweep): (a)(b)(c) only, (d)(e) NOT_EVALUATED. ``expected``: see check_params."""
     Xb = mesh.xyz
     fvalues = feature_values(doc, opts, values)
     fis = {c.body: FaceIndex(c, sample.bodies[c.body].topology(), sample.face_map[c.body], Xb) for c in comps}
     fails: dict[str, str] = {}
     warnings: list[dict] = []
-    p_rep, p_msg, p_err = check_params(doc, fvalues, comps, fis, sample, Xm, opts["deviation"])
+    p_rep, p_msg, p_err = check_params(doc, fvalues, comps, fis, sample, Xm, opts["deviation"], expected)
     if p_msg:
         fails["GEOM_PARAM_MISMATCH"] = p_msg
     d_rep, d_msg = check_deviation(comps, sample, Xm, mesh, float(opts["deviation"]["boundary_max_mm"]))
@@ -282,7 +299,8 @@ def check_core(
         fails["GEOM_DEVIATION"] = d_msg
     tets = np.concatenate([c.gidx[c.tets] for c in comps])
     skin = np.concatenate([c.gidx[c.skin] for c in comps])
-    q = quality.evaluate(Xb, Xm, tets, skin, opts["quality"])
+    tet_part = np.concatenate([np.full(len(c.tets), k) for k, c in enumerate(comps)])
+    q = quality.evaluate(Xb, Xm, tets, skin, opts["quality"], tet_part)
     if q.message:
         fails["GEOM_QUALITY"] = q.message
     if not q.baseline_ok:
@@ -290,8 +308,8 @@ def check_core(
             {
                 "code": "BASELINE_QUALITY_BELOW",
                 "message": (
-                    f"baseline mesh is below the quality criteria (min stretch {q.report['baseline_min_stretch']}, "
-                    f"max aspect {q.report['baseline_max_aspect']}, min edge {q.report['baseline_min_edge_mm']} mm)"
+                    f"baseline mesh is below the absolute quality criteria (min stretch {q.report['baseline_min_stretch']}, "
+                    f"max boundary aspect {q.report['baseline_max_aspect']})"
                 ),
             }
         )
@@ -315,12 +333,29 @@ def check_core(
     summary = {
         "min_stretch": q.report["min_stretch"],
         "max_aspect": q.report["max_aspect"],
-        "min_edge_ratio": q.report["dt_ratio"],
+        "min_edge_ratio": q.report["edge_ratio"],
+        "dt_ratio": q.report["dt_ratio"],
         "boundary_dev_max_mm": d_rep["max_mm"],
-        "param_remeasure_err": p_err,
+        "param_remeasure_err": {"abs": p_err["abs"], "rel": p_err["rel"]},
+        "param_margin": p_err["margin"],
         "inverted_elems": q.report["inverted"],
     }
     return CheckResult("FAIL" if code else "PASS", code, msg, checks, warnings, summary)
+
+
+def expected_measures(update_dir: str | Path) -> dict[str, float]:
+    """{feature: expected measured value} from update.json ``positions`` (absent in 0.2.0 outputs -> {})."""
+    p = Path(update_dir) / UPDATE_JSON
+    if not p.is_file():
+        return {}
+    u = read_json(p, "update.json")
+    out = {}
+    for e in u.get("positions") or []:
+        try:
+            out[str(e["name"])] = float(e["expected_measured"])
+        except (KeyError, TypeError, ValueError):
+            raise PaicadError("GEOM_INPUT_INVALID", "update.json: malformed positions entry") from None
+    return out
 
 
 # ------------------------------------------------------------------ CLI
@@ -349,8 +384,9 @@ def run(args, rep: Reporter) -> int:
     if sorted(r.part for r in renum) != sorted(c.part for c in comps):
         raise PaicadError("GEOM_INPUT_INVALID", "renumber table parts do not match the tag parts")
     sample = load_sample(args.update_dir, doc)
+    expected = expected_measures(args.update_dir)
     rep.progress(20, "checking")
-    res = check_core(mesh, mm.xyz, comps, sample, doc, values, opts, args.assem_dir, Path(args.baseline_inc))
+    res = check_core(mesh, mm.xyz, comps, sample, doc, values, opts, args.assem_dir, Path(args.baseline_inc), expected=expected)
     d = envelope(
         status=res.status,
         code=res.code,

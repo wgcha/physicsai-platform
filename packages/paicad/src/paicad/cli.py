@@ -52,6 +52,7 @@ def _parser() -> argparse.ArgumentParser:
         m.add_argument(a, required=True)
     m.add_argument("--options")
     m.add_argument("--threads", type=int)
+    m.add_argument("--solver", default=None, help="solver writer for the morphed file (default radioss)")
     m.add_argument("--sweep", action="store_true", help="1D parameter sweep -> envelope.json/csv")
     m.add_argument("--steps", default="5,10,20,30,40,50", help="sweep steps in percent of the nominal value")
     m.add_argument("--params", help="comma-separated parameter names (default: all values.json keys)")
@@ -64,6 +65,25 @@ def _parser() -> argparse.ArgumentParser:
         c.add_argument(a, required=True)
     c.add_argument("--options")
     c.add_argument("--threads", type=int)
+
+    r = sub.add_parser("run", help="update -> morph -> check in one call (stops at the first failing stage)", allow_abbrev=False)
+    for a in ("--cad", "--features", "--values", "--baseline-inc", "--tag-dir", "--assem-dir", "--renum-csv", "--update-dir", "--morph-dir", "--check-dir", "--out-inc"):
+        r.add_argument(a, required=True)
+    r.add_argument("--body-map")
+    r.add_argument("--options")
+    r.add_argument("--solver", default=None, help="solver writer (default radioss)")
+    r.add_argument("--threads", type=int)
+
+    st = sub.add_parser("selftest", help="site acceptance kit: numeric summary report only (no CAD/mesh content)", allow_abbrev=False)
+    for a in ("--cad", "--baseline-inc", "--renum-csv", "--assem-dir", "--out-dir"):
+        st.add_argument(a, required=True)
+    st.add_argument("--body-map")
+    st.add_argument("--options")
+    st.add_argument("--envelope-steps", default="5,10", help="short envelope steps in percent (default 5,10)")
+    st.add_argument("--envelope-params", help="comma-separated parameter names (default: all)")
+    st.add_argument("--stop-after-fail", type=int, default=1)
+    st.add_argument("--no-envelope", action="store_true")
+    st.add_argument("--threads", type=int)
     return p
 
 
@@ -84,7 +104,7 @@ def versions() -> dict:
     return out
 
 
-REPORTS = {"tag": "tag.json", "update": "update.json", "morph": "morph.json", "check": "check.json"}
+REPORTS = {"tag": "tag.json", "update": "update.json", "morph": "morph.json", "check": "check.json", "run": "run.json"}
 
 
 def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
@@ -106,6 +126,64 @@ def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
     return p.name
 
 
+def dispatch(args, rep) -> int:
+    if args.cmd == "extract":
+        from . import extract
+
+        return extract.run(args, rep)
+    if args.cmd == "tag":
+        from . import tag
+
+        return tag.run(args, rep)
+    if args.cmd == "update":
+        from . import update
+
+        return update.run(args, rep)
+    if args.cmd == "morph":
+        from . import morph
+
+        return morph.run(args, rep)
+    if args.cmd == "check":
+        from . import check
+
+        return check.run(args, rep)
+    if args.cmd == "run":
+        from . import runner
+
+        return runner.run(args, rep)
+    if args.cmd == "selftest":
+        from . import selftest
+
+        return selftest.run(args, rep)
+    return 2
+
+
+def guarded(args, rep) -> tuple[int, str | None, str | None]:
+    """Run one command with the section 5.4 error mapping: (exit code, failure code, message)."""
+    from .common import EXIT_INTERNAL, EXIT_INTERRUPTED, PaicadError
+
+    try:
+        return dispatch(args, rep), None, None
+    except PaicadError as e:
+        rep.warn(f"{e.code}: {e.message}")
+        report = None
+        if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd == "morph" and getattr(args, "sweep", False)):
+            report = _fail_report(args.cmd, args.out_dir, e.code, e.message)
+        rep.result("FAIL", e.code, report)
+        return e.exit_code, e.code, e.message
+    except KeyboardInterrupt:
+        rep.warn("interrupted")
+        if getattr(args, "_nested", False):
+            raise
+        return EXIT_INTERRUPTED, None, "interrupted"
+    except Exception as e:  # noqa: BLE001 - contract: GEOM_INTERNAL with traceback on stderr/log
+        tb = traceback.format_exc()
+        rep.warn(tb)
+        rep.result("FAIL", "GEOM_INTERNAL", None)
+        print(f"GEOM_INTERNAL: {e.__class__.__name__}: {e}", file=sys.stderr)
+        return EXIT_INTERNAL, "GEOM_INTERNAL", f"{e.__class__.__name__}: {e}"
+
+
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.cmd is None:
@@ -123,50 +201,16 @@ def main(argv: list[str] | None = None) -> int:
     if hasattr(signal, "SIGBREAK"):  # Windows CTRL_BREAK -> KeyboardInterrupt
         signal.signal(signal.SIGBREAK, signal.default_int_handler)  # type: ignore[attr-defined]
 
-    from .common import EXIT_INTERNAL, EXIT_INTERRUPTED, PaicadError, Reporter
+    from .common import Reporter
 
+    if args.cmd == "run":
+        args.out_dir = args.check_dir  # run-level log and run.json live with the final stage
     out_dir = Path(args.out_dir)
     rep = Reporter(out_dir)
     rep.log(f"argv: {' '.join(sys.argv[1:] if argv is None else argv)}")
     rep.log("versions: " + json.dumps(versions()))
     try:
-        if args.cmd == "extract":
-            from . import extract
-
-            return extract.run(args, rep)
-        if args.cmd == "tag":
-            from . import tag
-
-            return tag.run(args, rep)
-        if args.cmd == "update":
-            from . import update
-
-            return update.run(args, rep)
-        if args.cmd == "morph":
-            from . import morph
-
-            return morph.run(args, rep)
-        if args.cmd == "check":
-            from . import check
-
-            return check.run(args, rep)
-        return 2
-    except PaicadError as e:
-        rep.warn(f"{e.code}: {e.message}")
-        report = None
-        if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd == "morph" and getattr(args, "sweep", False)):
-            report = _fail_report(args.cmd, args.out_dir, e.code, e.message)
-        rep.result("FAIL", e.code, report)
-        return e.exit_code
-    except KeyboardInterrupt:
-        rep.warn("interrupted")
-        return EXIT_INTERRUPTED
-    except Exception as e:  # noqa: BLE001 - contract: GEOM_INTERNAL with traceback on stderr/log
-        tb = traceback.format_exc()
-        rep.warn(tb)
-        rep.result("FAIL", "GEOM_INTERNAL", None)
-        print(f"GEOM_INTERNAL: {e.__class__.__name__}: {e}", file=sys.stderr)
-        return EXIT_INTERNAL
+        return guarded(args, rep)[0]
     finally:
         rep.close()
 

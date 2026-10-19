@@ -22,7 +22,7 @@ from scipy.sparse.linalg import cg, spsolve
 from . import options
 from .common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd
 from .kernel import BodyGeom, CadInputError, load_brep
-from .mesh.radioss import RadMesh, parse_text, rewrite_nodes
+from .mesh.radioss import RadMesh, parse_text
 from .meshdata import KIND_EDGE, KIND_FACE, KIND_UNMATCHED, KIND_VERTEX, Comp, components_from_tag, load_tag
 from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON, load_features, read_json
 
@@ -346,19 +346,11 @@ def morph_core(mesh: RadMesh, comps: list[Comp], sample: SampleSet, opts: dict) 
     return MorphResult(new_xyz, moved, parts_out, tg.fallback_faces, float(disp.max()) if disp.size else 0.0)
 
 
-def write_morphed(base_bytes: bytes, base_mesh: RadMesh, moved: dict) -> bytes:
-    """Section 6.4 step 4: rewrite only coordinate fields, then verify ids/connectivity/counts."""
-    data = rewrite_nodes(base_bytes, moved)
-    m2 = parse_text(data.decode("latin-1"))
-    same = np.array_equal(m2.node_ids, base_mesh.node_ids) and len(m2.blocks) == len(base_mesh.blocks)
-    if same:
-        for a, b in zip(base_mesh.blocks, m2.blocks):
-            if a.keyword != b.keyword or a.part_id != b.part_id or not np.array_equal(a.ids, b.ids) or not np.array_equal(a.conn, b.conn):
-                same = False
-                break
-    if not same:
-        raise PaicadError("GEOM_INTERNAL", "morphed include changed node ids, element ids, connectivity or counts")
-    return data
+def write_morphed(base_bytes: bytes, base_mesh: RadMesh, moved: dict, solver: str | None = None) -> bytes:
+    """Section 6.4 step 4 through the solver writer registry (section 18.3, default radioss)."""
+    from .writers import get_writer
+
+    return get_writer(solver).write(base_bytes, base_mesh, moved)
 
 
 def read_baseline(path: str | Path) -> tuple[bytes, RadMesh]:
@@ -377,6 +369,9 @@ def run(args, rep: Reporter) -> int:
         return sweep.run(args, rep)
     t0 = time.monotonic()
     opts = options.load(args.options)
+    from .writers import get_writer
+
+    get_writer(getattr(args, "solver", None))  # unknown solver -> GEOM_INPUT_INVALID before any work
     out = OutDir(args.out_dir, [MORPH_JSON, MORPHED_INC])
     out.prepare()
     doc = load_features(args.features)
@@ -397,7 +392,7 @@ def run(args, rep: Reporter) -> int:
         rep.result("FAIL", e.code, MORPH_JSON)
         return EXIT_CHECK
     rep.progress(85, "writing morphed include")
-    data = write_morphed(base_bytes, mesh, res.moved)
+    data = write_morphed(base_bytes, mesh, res.moved, getattr(args, "solver", None))
     with open(out.tmp_path(MORPHED_INC), "wb") as f:
         f.write(data)
     d = envelope(
