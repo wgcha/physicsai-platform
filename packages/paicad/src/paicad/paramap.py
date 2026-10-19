@@ -112,7 +112,16 @@ def load_baselines(path: str | Path) -> list[tuple[str, str | None, dict]]:
         if not fp.is_absolute():
             fp = base / fp
         rel = e.get("rel")
-        out.append((bid, rel if isinstance(rel, str) else None, load_features(fp)))
+        doc = read_json(fp, "features file")
+        if doc.get("kind") == "shell":
+            from .shell.common import load_shell_features
+
+            out.append((bid, rel if isinstance(rel, str) else None, load_shell_features(fp)))
+        else:
+            out.append((bid, rel if isinstance(rel, str) else None, load_features(fp)))
+    kinds = {d.get("kind", "solid") for _, _, d in out}
+    if len(kinds) > 1:
+        raise PaicadError("GEOM_INPUT_INVALID", "baselines mix solid and shell features (one kind per set)")
     return out
 
 
@@ -293,6 +302,12 @@ def grade_of(score: float, complete: bool, mo: dict) -> str:
 def build_doc(bl: list[tuple[str, str | None, dict]], opts: dict, usage: str, split_param: str | None, user_map: dict | None) -> dict:
     mo = opts["map"]
     order = [b for b, _, _ in bl]
+    if bl and bl[0][2].get("kind") == "shell":
+        from .shell.mapping import build_rows
+
+        common, warnings = build_rows(bl, mo, user_map, _fit_name, grade_of)
+        _check_decisions(common)
+        return _finish(bl, order, usage, split_param, common, warnings, mo, kind="shell")
     units_by_bl = [(b, build_units(b, doc)) for b, _, doc in bl]
     rows = match(units_by_bl, mo)
     prev = {}
@@ -350,6 +365,10 @@ def build_doc(bl: list[tuple[str, str | None, dict]], opts: dict, usage: str, sp
             warnings.append({"code": "MAP_LOW_SCORE", "row_id": row["row_id"], "message": f"row {row['row_id']} ({name}) score {score:.3f} < {mo['accept']}: needs a check"})
         common.append(row)
     _check_decisions(common)
+    return _finish(bl, order, usage, split_param, common, warnings, mo)
+
+
+def _finish(bl, order, usage, split_param, common, warnings, mo, kind: str | None = None) -> dict:
     range_split = None
     if usage == "range" and split_param:
         row = next((c for c in common if c["proposed"]["name"] == split_param), None)
@@ -357,7 +376,9 @@ def build_doc(bl: list[tuple[str, str | None, dict]], opts: dict, usage: str, sp
             raise PaicadError("GEOM_INPUT_INVALID", f"--split-param {split_param}: no proposed row of that name present in every baseline")
         iv = sorted(({"baseline": b, "nominal": row["proposed"]["nominal"][b]} for b in order), key=lambda d: (d["nominal"], d["baseline"]))
         range_split = {"param": split_param, "intervals": iv}
+    extra = {"kind": kind} if kind else {}
     return envelope(
+        **extra,
         map_status="OK",
         status="draft",
         confirmed_by=None,

@@ -214,6 +214,8 @@ _CURV = {GeomAbs_Line: "LINE", GeomAbs_Circle: "CIRCLE", GeomAbs_Ellipse: "ELLIP
 class OccBody:
     """One solid. Holds OCP objects privately; every public method returns neutral types."""
 
+    _bbox_optimal = True  # sub-shape boxes: optimal (solids) / fast enclosing boxes (sheets, candidate filters only)
+
     def __init__(self, name: str | None, solid):
         self.name = name  # may be None for unnamed XDE bodies (caller reports GEOM_BODY_MAP_FAILED)
         self._solid = solid
@@ -291,7 +293,7 @@ class OccBody:
             seam = len(flist) == 1 and BRep_Tool.IsClosed_s(e, self._faces[flist[0] - 1])
             conv, dih = ("SEAM", None) if seam else self._convexity(e, ad, flist)
             edges.append(
-                EdgeData(id=i, curve=ctype, length=length, vertices=tuple(vids), faces=tuple(sorted(flist)), convexity=conv, bbox=_bbox(e), dihedral_deg=dih)
+                EdgeData(id=i, curve=ctype, length=length, vertices=tuple(vids), faces=tuple(sorted(flist)), convexity=conv, bbox=_bbox(e, self._bbox_optimal), dihedral_deg=dih)
             )
         self._topo = Topology(faces=tuple(faces), edges=tuple(edges), vertices=verts)
         return self._topo
@@ -371,7 +373,7 @@ class OccBody:
             surface=kind,
             area=area,
             centroid=centroid,
-            bbox=_bbox(f),
+            bbox=_bbox(f, self._bbox_optimal),
             edges=tuple(all_edges),
             outer_edges=outer_ids,
             inner_wires=tuple(inner),
