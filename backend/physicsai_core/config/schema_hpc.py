@@ -29,6 +29,29 @@ class CommandsCfg(_M):
     t01_preview: list[str] | None = None
     t01_curve_export: list[str] | None = None
     hst_optimization: list[str] | None = None
+    # native 형상 엔진(geometry-engine.md §7.1) — 외부 도구 의존이 없으므로 기본값이 켜져 있다. null이면 그 기능만 꺼짐
+    paicad_extract: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "extract", "--cad", "{cad_input}", "--renum-csv", "{renum_csv}", "--options", "{options_json}",
+        "--out-dir", "{out_dir}"])
+    paicad_tag: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "tag", "--cad", "{cad_input}", "--features", "{features_json}", "--baseline-inc", "{baseline_inc}",
+        "--renum-csv", "{renum_csv}", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"])
+    paicad_update: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "update", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
+        "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--out-dir", "{update_dir}"])
+    paicad_morph: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "morph", "--baseline-inc", "{baseline_inc}", "--tag-dir", "{tag_dir}", "--features", "{features_json}",
+        "--update-dir", "{update_dir}", "--options", "{options_json}", "--out-dir", "{morph_dir}"])
+    paicad_check: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "check", "--baseline-inc", "{baseline_inc}", "--morph-dir", "{morph_dir}", "--update-dir", "{update_dir}",
+        "--tag-dir", "{tag_dir}", "--features", "{features_json}", "--values", "{values_json}", "--assem-dir", "{assem_dir}",
+        "--renum-csv", "{renum_csv}", "--options", "{options_json}", "--out-dir", "{check_dir}", "--out-inc", "{out_inc}"])
+    paicad_run: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "run", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
+        "--baseline-inc", "{baseline_inc}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}",
+        "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}",
+        "--out-inc", "{out_inc}"])
+    paicad_version: list[str] | None = Field(default_factory=lambda: ["{paicad}", "version", "--json"])
 
 
 class HpcDefaultsCfg(_M):

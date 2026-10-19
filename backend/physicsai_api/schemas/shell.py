@@ -84,6 +84,7 @@ class StatusFeatures(Resp):
     predict_responses: FeatureState | None = None  # phase3 §14.6 예측 응답 추출
     contour_capture: FeatureState | None = None  # phase3 §15.5 예측 컨투어 캡처
     optimize_builtin: FeatureState | None = None  # phase3 §18.2 ⑤ 플랫폼 내장 최적화(numpy·scipy)
+    geometry_native: FeatureState | None = None  # geometry-engine.md §7.1 native 형상 엔진(paicad)
 
 
 class StatusEnvCheck(Resp):
@@ -130,6 +131,14 @@ class StatusSurrogateOpt(Resp):
     max_candidates: int
 
 
+class StatusGeometry(Resp):
+    """native 형상 엔진 상태(geometry-engine.md §7.1)."""
+
+    engine_default: str = Field(description="새 파라미터 세트·추출·DOE의 기본 엔진: altair | native")
+    native_available: bool
+    reason: str | None = Field(None, description="native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null")
+
+
 class StatusResponse(Resp):
     config: StatusConfig
     worker: StatusWorker
@@ -144,6 +153,7 @@ class StatusResponse(Resp):
     env_check: StatusEnvCheck | None = None
     capture: StatusCapture | None = None
     surrogate_opt: StatusSurrogateOpt | None = None
+    geometry: StatusGeometry | None = None
     demo: bool = Field(False, description="시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지")
 
 

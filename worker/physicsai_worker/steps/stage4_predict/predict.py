@@ -34,53 +34,19 @@ from .predict_inputs import (
     template_kind,
 )
 from .predict_inputs import predict_dir as _P
+from . import predict_native, predict_prep
 
 _ps = require_param_set
-
-
-def _pr_prep_prepared(ctx: Any, m: dict[str, Any]) -> None:
-    """PR_PREP(prepared, phase3 §11.5): 입력 재검사·params.json. 형상 값 없음."""
-    plan = check_prepared(ctx)
-    ps, _S = param_set(ctx)
-    P = _P(ctx)
-    os.makedirs(P, exist_ok=True)
-    pj = os.path.join(P, "params.json")
-    ctx.backup([pj])
-    write_json(pj, {
-        "input_mode": "prepared", "input_path": ctx.params["input_path"], "input_kind": plan.kind,
-        "starter_name": plan.starter, "files": [os.path.basename(f) for f in plan.files], "values": {},
-        "model_id": m["id"], "param_set_id": ps["id"] if ps else None, "nearest": None,
-    })
-    res = {
-        "model_id": m["id"], "param_set_id": ps["id"] if ps else None, "input_mode": "prepared",
-        "input_path": ctx.params["input_path"], "values": {}, "applied_values": {}, "out_of_range": [], "nearest": None,
-    }
-    run = _batch_run_row(ctx)
-    if run is not None:  # 일괄 예측 하위(phase3 §14.5): 입력값은 run 행에서
-        res.update(values=run["values"], applied_values=run["applied_values"], out_of_range=list(run["out_of_range"] or []),
-                   batch={"batch_id": run["batch_id"], "doe_no": run["doe_no"], "run_key": run["run_key"]})
-    ctx.patch_result(res)
-
-
-def _batch_run_row(ctx: Any) -> dict[str, Any] | None:
-    from physicsai_core.db.repositories import predict_batches as pb_repo
-
-    ref = pb_repo.batch_run_ref(ctx.job)
-    if ref is None:
-        return None
-    with ctx.ex.engine.connect() as conn:
-        rows = [r for r in pb_repo.runs(conn, ref[0]) if r["doe_no"] == ref[1]]
-    if not rows:
-        raise StepFailure("INPUT_INVALID", "일괄 예측 run 행을 찾을 수 없습니다")
-    return rows[0]
 
 
 def pr_prep(ctx: Any) -> None:
     m = load_model(ctx, ctx.params["model_id"])
     verify_model_integrity(ctx, m)
     if is_prepared(ctx):
-        return _pr_prep_prepared(ctx, m)
+        return predict_prep.pr_prep_prepared(ctx, m)
     ps, S = _ps(ctx)
+    if predict_native.is_native_set(ps):  # geometry-engine.md §7.3.5
+        return predict_native.pr_prep(ctx, m, ps, S)
     kind = template_kind(ctx, ps)
     needs = [TPL_NAME, os.path.join("cad", ps["cad_file_name"])]
     if kind != MESH_ONLY:  # mesh_only 템플릿은 조립 폴더 없음(phase3 §14.4)
@@ -121,6 +87,8 @@ def tpl_render(ctx: Any) -> None:
     if is_prepared(ctx):
         raise StepSkipped(PREPARED_SKIP)
     ps, S = _ps(ctx)
+    if predict_native.is_native_set(ps):
+        return predict_native.tpl_render(ctx)
     r = ctx.result()
     with open(os.path.join(S, TPL_NAME), encoding="utf-8-sig") as fh:
         text = fh.read()

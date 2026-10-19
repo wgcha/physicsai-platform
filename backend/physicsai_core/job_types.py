@@ -121,6 +121,13 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (StepDef("BP_PREP", "INTERNAL", 3), StepDef("BP_GEN", "LOCAL", 90), StepDef("BP_ENQUEUE", "INTERNAL", 2)),
         "④", notify_success=False,
     ),
+    # ---- native 형상 엔진 세트 등록(geometry-engine.md §7.3.4): paicad extract·tag 후 세트 등록. 사용자 선택 job_type이 아니라 등록 API가 만든다 ----
+    "PARAM_SET_NATIVE": JobTypeDef(
+        "PARAM_SET_NATIVE", 4, "SLOT", "형상 준비(native)",
+        (StepDef("NP_PREP", "INTERNAL", 5), StepDef("NP_EXTRACT", "LOCAL", 30), StepDef("NP_TAG", "LOCAL", 55),
+         StepDef("BL_MAP", "LOCAL", 5), StepDef("NP_REGISTER", "INTERNAL", 5)),
+        "④", notify_success=True,
+    ),
     # ---- 3차 컨투어 재캡처(phase3 §15 S10): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처 ----
     "CONTOUR_RECAPTURE": JobTypeDef(
         "CONTOUR_RECAPTURE", 4, "LIGHT", "컨투어 다시 캡처", (StepDef("CONTOUR_CAPTURE", "LOCAL", 100),),
@@ -238,12 +245,22 @@ STEP_LABELS: dict[str, str] = {
     "CONTOUR_CAPTURE": "컨투어 캡처",
     "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
     "SO_COLLECT": "검증 결과 수집", "SO_FIT": "대리모델 학습", "SO_PROPOSE": "후보 탐색", "SO_NEXT": "검증 배치 등록·마무리",
+    "NP_PREP": "준비 파일 모으기", "NP_EXTRACT": "형상 피처 추출", "NP_TAG": "경계 노드 분류",
+    "BL_MAP": "baseline 변수 매칭", "NP_REGISTER": "템플릿 등록",
+}
+
+# native 엔진 작업의 화면 step 이름(geometry-engine.md §7.3 — 작업 params의 engine이 native일 때 덮어쓴다)
+STEP_LABELS_NATIVE: dict[str, str] = {
+    "SIMLAB_EXTRACT": "형상 피처 추출", "HST_GEN_RADIOSS": "형상 모핑 입력 생성", "TPL_RENDER": "샘플 값 작성",
+    "GEOM_UPDATE": "CAD 갱신", "MESH": "메시 모핑·검사",
 }
 
 
-def step_label(step_key: str | None) -> str | None:
+def step_label(step_key: str | None, engine: str | None = None) -> str | None:
     if step_key is None:
         return None
+    if engine == "native" and step_key in STEP_LABELS_NATIVE:
+        return STEP_LABELS_NATIVE[step_key]
     return STEP_LABELS.get(step_key, step_key)
 
 

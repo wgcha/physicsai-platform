@@ -1,0 +1,337 @@
+#!/usr/bin/env python3
+"""가짜 paicad(geometry-engine.md §5, §7.8): 하위 명령별로 보고 JSON·성공 파일을 쓴다. OCP·numpy 없이 표준 라이브러리만.
+
+- version --json | --version | extract | tag | update | morph | check | run  (인자는 `--name value` 두 토큰)
+- 출력 파일이 이미 있으면 덮어쓰지 않고 종료코드 3(GEOM_OUTPUT_EXISTS) — 보고는 건드리지 않는다.
+- stdout: `PAICAD PROGRESS <pct> <msg>` 줄들, 마지막 `PAICAD RESULT <status> <code|-> <보고 파일 이름>`.
+환경변수
+  FAKE_PAICAD_VERSION            version 출력(기본 0.5.0)
+  FAKE_PAICAD_FAIL               `<cmd>:<code>[,<cmd>:<code>…]` 해당 명령을 그 코드로 FAIL 보고(cmd = extract|tag|update|morph|check|run:<단계>)
+  FAKE_PAICAD_FAIL_WHEN          `<cmd>:<code>:<이름><op><값>` values의 그 이름이 조건(> < >= <=)이면 FAIL(run별 결정적 스킵 시험)
+  FAKE_PAICAD_NOREPORT           `<cmd>` 보고 파일을 쓰지 않고 종료코드 1
+  FAKE_PAICAD_EXIT_AFTER_OK      `<cmd>:<rc>` 정상 출력을 쓰고 그 종료코드로 끝남(EXIT_NONZERO_IGNORED 시험)
+  FAKE_PAICAD_FEATURES           extract가 낼 features JSON 배열(기본: A_THK_1·A_THK_2(대칭 그룹 G1)·B_RIB_H_1·C_HOLE_R_1)
+  FAKE_PAICAD_SLEEP_S            명령마다 대기(겹침 관측용)
+  FAKE_TOOL_RECORD / FAKE_TOOL_TRACE  호출 기록(jsonl) / 시작·끝 시각 기록
+"""
+import atexit, hashlib, json, os, shutil, sys, time
+
+VERSION = os.environ.get("FAKE_PAICAD_VERSION", "0.5.0")
+argv = sys.argv[1:]
+rec = os.environ.get("FAKE_TOOL_RECORD")
+if rec:
+    with open(rec, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "paicad", "argv": sys.argv, "cwd": os.getcwd(),
+                             "env": {k: os.environ.get(k) for k in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "PAICAD_THREADS")}}) + "\n")
+trace = os.environ.get("FAKE_TOOL_TRACE")
+if trace:
+    def _ev(ev):
+        with open(trace, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"tool": "paicad", "ev": ev, "pid": os.getpid(), "t": time.time(), "cwd": os.getcwd()}) + "\n")
+    _ev("start")
+    atexit.register(_ev, "end")
+
+if argv[:1] == ["--version"]:
+    print(f"paicad {VERSION}")
+    sys.exit(0)
+if not argv:
+    sys.exit(2)
+cmd, rest = argv[0], argv[1:]
+if cmd == "version":
+    print(json.dumps({"paicad": VERSION, "ocp": "7.8.1.1.post1", "numpy": "2.0", "scipy": "1.13", "python": sys.version.split()[0]}))
+    sys.exit(0)
+if cmd not in ("extract", "tag", "update", "morph", "check", "run"):
+    sys.exit(2)
+args, flags, i = {}, set(), 0
+while i < len(rest):
+    a = rest[i]
+    if not a.startswith("--"):
+        sys.exit(2)
+    if i + 1 < len(rest) and not rest[i + 1].startswith("--"):
+        args[a[2:]] = rest[i + 1]
+        i += 2
+    else:
+        flags.add(a[2:])
+        i += 1
+
+EXIT = {"CAD_FAILED": 10, "INTERFERENCE": 11, "QUALITY": 11, "DEVIATION": 11, "TIE": 11, "PREP": 12, "INPUT": 3, "INTERNAL": 20}
+CATEGORY = {"GEOM_CAD_FAILED": "CAD_FAILED", "GEOM_TOPOLOGY_CHANGED": "CAD_FAILED", "GEOM_FEATURE_COLLISION": "CAD_FAILED",
+            "GEOM_INTERFERENCE": "INTERFERENCE", "GEOM_QUALITY": "QUALITY", "GEOM_MORPH_FAILED": "QUALITY", "GEOM_DEVIATION": "DEVIATION",
+            "GEOM_PARAM_MISMATCH": "DEVIATION", "GEOM_TIE_PROJECTION": "TIE", "GEOM_BODY_MAP_FAILED": "PREP",
+            "GEOM_BASELINE_MISMATCH": "PREP", "GEOM_UNSUPPORTED_ELEMENT": "PREP", "GEOM_TAG_FAILED": "PREP",
+            "GEOM_EXTRACT_EMPTY": "PREP", "GEOM_INPUT_INVALID": "INPUT", "GEOM_OUTPUT_EXISTS": "INPUT", "RENUM_CSV_MISSING": "INPUT",
+            "GEOM_INTERNAL": "INTERNAL"}
+ENGLISH = {"GEOM_TOPOLOGY_CHANGED": "topology changed: faces 42 -> 44", "GEOM_DEVIATION": "boundary deviation 0.083 mm > 0.05 mm",
+           "GEOM_QUALITY": "min stretch 0.04 < 0.1"}
+BASE = {"schema_version": 1, "engine": "native", "engine_version": VERSION}
+
+
+def progress(pct, msg):
+    print(f"PAICAD PROGRESS {pct} {msg}", flush=True)
+
+
+def write_json(path, doc):
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, ensure_ascii=False, indent=1)
+
+
+def read_json(path):
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def exists_exit(paths):
+    for p in paths:
+        if os.path.exists(p):
+            print(f"output exists: {p}", file=sys.stderr, flush=True)
+            print("PAICAD RESULT FAIL GEOM_OUTPUT_EXISTS -", flush=True)
+            sys.exit(3)
+
+
+def need(name):
+    p = args.get(name)
+    if not p or not os.path.exists(p):
+        print(f"missing input --{name}: {p}", file=sys.stderr, flush=True)
+        print("PAICAD RESULT FAIL GEOM_INPUT_INVALID -", flush=True)
+        sys.exit(3)
+    return p
+
+
+def fails(key):
+    out = {}
+    for item in (os.environ.get("FAKE_PAICAD_FAIL") or "").split(","):
+        if ":" in item:
+            k, _, c = item.partition(":")
+            out[k.strip()] = c.strip()
+    return out.get(key)
+
+
+def fail_when(step, values):
+    spec = os.environ.get("FAKE_PAICAD_FAIL_WHEN") or ""
+    for item in spec.split(";"):
+        parts = item.split(":", 2)
+        if len(parts) != 3 or parts[0] != step:
+            continue
+        cond = parts[2]
+        for op in (">=", "<=", ">", "<"):
+            if op in cond:
+                name, _, thr = cond.partition(op)
+                v = values.get(name.strip())
+                if v is not None and {">=": v >= float(thr), "<=": v <= float(thr), ">": v > float(thr), "<": v < float(thr)}[op]:
+                    return parts[1]
+                break
+    return None
+
+
+def finish(report_name, status, code, rc):
+    print(f"PAICAD RESULT {status} {code or '-'} {report_name}", flush=True)
+    sys.exit(rc)
+
+
+def fail_report(step, path, code, base_extra=None):
+    cat = CATEGORY.get(code, "INTERNAL")
+    doc = dict(BASE, status="FAIL", code=code, category=cat, message=ENGLISH.get(code, f"fake {step} failure {code}"))
+    if base_extra:
+        doc.update(base_extra)
+    write_json(path, doc)
+    return EXIT.get(cat, 20)
+
+
+def maybe_nonzero(step):
+    spec = os.environ.get("FAKE_PAICAD_EXIT_AFTER_OK") or ""
+    for item in spec.split(","):
+        k, _, rc = item.partition(":")
+        if k == step and rc:
+            return int(rc)
+    return 0
+
+
+if os.environ.get("FAKE_PAICAD_SLEEP_S"):
+    time.sleep(float(os.environ["FAKE_PAICAD_SLEEP_S"]))
+
+DEFAULT_FEATURES = [
+    {"name": "A_THK_1", "type": "THICKNESS", "body": "A", "nominal": 10.0, "unit": "mm", "range": {"min": 9.5, "max": 10.5, "ratio": 0.05},
+     "feasible": {"min": 6.0, "max": 14.0, "limited_by": None}, "group": "G1", "ref": {"rule": "contact_fixed", "provisional": True, "locked": False}},
+    {"name": "A_THK_2", "type": "THICKNESS", "body": "A", "nominal": 10.0, "unit": "mm", "range": {"min": 9.5, "max": 10.5, "ratio": 0.05},
+     "group": "G1", "ref": {"rule": "contact_fixed", "provisional": True, "locked": False}},
+    {"name": "B_RIB_H_1", "type": "RIB_HEIGHT", "body": "B", "nominal": 20.0, "unit": "mm", "range": {"min": 19.0, "max": 21.0, "ratio": 0.05},
+     "group": None, "ref": {"rule": "contact_fixed", "provisional": True, "locked": True}},
+    {"name": "C_HOLE_R_1", "type": "HOLE_RADIUS", "body": "B", "nominal": 4.0, "unit": "mm", "range": {"min": 3.8, "max": 4.2, "ratio": 0.05},
+     "group": None, "ref": {"rule": "contact_fixed", "provisional": True, "locked": False}},
+]
+
+
+def do_extract():
+    cad = need("cad")
+    out = args.get("out-dir") or sys.exit(2)
+    os.makedirs(out, exist_ok=True)
+    xml, fj = os.path.join(out, "parameter_extracted.xml"), os.path.join(out, "parameter_features.json")
+    exists_exit([xml, fj])
+    progress(10, "reading CAD")
+    code = fails("extract")
+    if os.environ.get("FAKE_PAICAD_NOREPORT") == "extract":
+        sys.exit(1)
+    if code:
+        sys.exit(fail_report("extract", fj, code))
+    feats = json.loads(os.environ["FAKE_PAICAD_FEATURES"]) if os.environ.get("FAKE_PAICAD_FEATURES") else DEFAULT_FEATURES
+    progress(60, "recognizing features")
+    groups = []
+    for f in feats:
+        if f.get("group") and not any(g["id"] == f["group"] for g in groups):
+            groups.append({"id": f["group"], "kind": "MIRROR", "parameter": f["name"],
+                           "members": [x["name"] for x in feats if x.get("group") == f["group"]]})
+    for f in feats:
+        f.setdefault("png", f"features/{f['name']}.png")
+    doc = dict(BASE, unit_system="mm-ton-s", cad={"mode": "parts" if os.path.isdir(cad) else "single",
+                                               "files": [{"rel": os.path.basename(cad), "sha256": "0" * 64}], "body_map": "xde"},
+               bodies=[], features=feats, groups=groups,
+               warnings=[{"code": "REF_BOTH_CONTACT", "feature": "B_RIB_H_1", "message": "both faces are in contact"}] if any(
+                   (f.get("ref") or {}).get("locked") for f in feats) else [])
+    if not feats:
+        write_json(fj, doc)
+        finish("parameter_features.json", "FAIL", "GEOM_EXTRACT_EMPTY", 13)
+    reps = {g["parameter"] for g in groups}
+    members = {m for g in groups for m in g["members"]}
+    with open(xml, "w", encoding="utf-8") as fh:
+        fh.write('<?xml version="1.0" encoding="utf-8"?>\n<Root>\n  <Model Name="%s">\n' % os.path.basename(cad))
+        for f in feats:
+            if f["name"] in reps or f["name"] not in members:
+                fh.write("    <Parameter><Name>%s</Name><Value>%r mm</Value></Parameter>\n" % (f["name"], float(f["nominal"])))
+        fh.write("  </Model>\n</Root>\n")
+    os.makedirs(os.path.join(out, "features"), exist_ok=True)
+    for f in feats:
+        with open(os.path.join(out, f["png"]), "wb") as fh:
+            fh.write(b"\x89PNG\r\n\x1a\nfake")
+    write_json(fj, doc)
+    with open(os.path.join(out, "paicad.log"), "w", encoding="utf-8") as fh:
+        fh.write("fake paicad extract ok\n")
+    progress(100, "done")
+    rc = maybe_nonzero("extract")
+    finish("parameter_features.json", "OK", None, rc)
+
+
+def do_tag():
+    need("cad"); need("features"); need("baseline-inc"); need("renum-csv"); need("assem-dir")
+    out = args.get("out-dir") or sys.exit(2)
+    os.makedirs(out, exist_ok=True)
+    tj, npz = os.path.join(out, "tag.json"), os.path.join(out, "tag_nodes.npz")
+    exists_exit([tj, npz])
+    progress(30, "classifying boundary nodes")
+    if os.environ.get("FAKE_PAICAD_NOREPORT") == "tag":
+        sys.exit(1)
+    code = fails("tag")
+    if code:
+        sys.exit(fail_report("tag", tj, code))
+    with open(npz, "wb") as fh:
+        fh.write(b"fake-npz")
+    with open(args["baseline-inc"], "rb") as fh:
+        sha = hashlib.sha256(fh.read()).hexdigest()
+    write_json(tj, dict(BASE, status="OK", code=None, message=None, baseline_inc={"name": os.path.basename(args["baseline-inc"]), "sha256": sha},
+                        tolerance={"abs_mm": 0.05, "rel": 1e-4}, match_ratio=0.9993, parts=[], contacts=[], files={"nodes": "tag_nodes.npz"},
+                        warnings=[]))
+    progress(100, "done")
+    finish("tag.json", "OK", None, maybe_nonzero("tag"))
+
+
+def step_update(out, values_path, step="update"):
+    need("cad"); feats = need("features")
+    values_doc = read_json(need("values") if not values_path else values_path)
+    out_files = [os.path.join(out, n) for n in ("update.json", "sample.brep", "face_map.json")]
+    os.makedirs(out, exist_ok=True)
+    exists_exit(out_files)
+    names = {f["name"] for f in read_json(feats)["features"]}
+    values = values_doc.get("values", {})
+    uj = out_files[0]
+    code = fails(step) or fails("run:update" if step == "update" and cmd == "run" else "-")
+    unknown = [n for n in values if n not in names]
+    if unknown:
+        return fail_report("update", uj, "GEOM_INPUT_INVALID", {"message": "unknown name(s): " + ", ".join(unknown)}), "GEOM_INPUT_INVALID"
+    code = code or fail_when("update", values)
+    if code:
+        return fail_report("update", uj, code), code
+    with open(out_files[1], "wb") as fh:
+        fh.write(b"fake-brep:" + json.dumps(values, sort_keys=True).encode())
+    write_json(out_files[2], {"A": {"F": {"1": 1}}})
+    write_json(uj, dict(BASE, status="OK", code=None, category=None, message=None, values=values, positions=[], applied=[],
+                        topology={"same_as_nominal": True, "counts": {}}, elapsed_s=0.1))
+    return 0, None
+
+
+def step_morph(out, update_dir, step="morph"):
+    need("baseline-inc"); need("tag-dir"); need("features")
+    os.makedirs(out, exist_ok=True)
+    mj, inc = os.path.join(out, "morph.json"), os.path.join(out, "morphed.inc")
+    exists_exit([mj, inc])
+    vals = {}
+    try:
+        vals = read_json(os.path.join(update_dir, "update.json")).get("values", {})
+    except (OSError, ValueError):
+        pass
+    code = fails("morph") or fail_when("morph", vals)
+    if code:
+        return fail_report("morph", mj, code), code
+    with open(args["baseline-inc"], "rb") as fh:
+        data = fh.read()
+    with open(inc, "wb") as fh:
+        fh.write(data)
+    write_json(mj, dict(BASE, status="OK", code=None, category=None, message=None, max_disp_mm=0.4, parts=[], elapsed_s=0.2))
+    return 0, None
+
+
+def step_check(out, update_dir, morph_dir):
+    need("tag-dir"); need("assem-dir"); need("renum-csv")
+    os.makedirs(out, exist_ok=True)
+    cj, out_inc = os.path.join(out, "check.json"), args["out-inc"]
+    exists_exit([cj, out_inc])
+    vals = {}
+    try:
+        vals = read_json(os.path.join(update_dir, "update.json")).get("values", {})
+    except (OSError, ValueError):
+        pass
+    code = fails("check") or fail_when("check", vals)
+    if code:
+        rc = fail_report("check", cj, code, {"checks": {}, "warnings": [], "elapsed_s": 0.3})
+        return rc, code
+    shutil.copyfile(os.path.join(morph_dir, "morphed.inc"), out_inc)
+    write_json(cj, dict(BASE, status="PASS", code=None, category=None, message=None,
+                        checks={"quality": {"status": "PASS", "min_stretch": 0.31, "baseline_min_stretch": 0.33, "max_aspect": 6.2},
+                                "deviation": {"status": "PASS", "max_mm": 0.012, "tol_mm": 0.05}},
+                        warnings=[], options={}, out_inc=os.path.basename(out_inc), elapsed_s=0.3))
+    return 0, None
+
+
+if cmd == "extract":
+    do_extract()
+elif cmd == "tag":
+    do_tag()
+elif cmd == "update":
+    rc, code = step_update(args["out-dir"], None)
+    if os.environ.get("FAKE_PAICAD_NOREPORT") == "update":
+        sys.exit(1)
+    finish("update.json", "FAIL" if code else "OK", code, rc or maybe_nonzero("update"))
+elif cmd == "morph":
+    rc, code = step_morph(args["out-dir"], args["update-dir"])
+    finish("morph.json", "FAIL" if code else "OK", code, rc or maybe_nonzero("morph"))
+elif cmd == "check":
+    rc, code = step_check(args["out-dir"], args["update-dir"], args["morph-dir"])
+    finish("check.json", "FAIL" if code else "PASS", code, rc or maybe_nonzero("check"))
+else:  # run
+    runj = os.path.join(args["check-dir"], "run.json")
+    steps = {}
+    result = ("OK", None, 0)
+    for name, fn in (("update", lambda: step_update(args["update-dir"], None, "update")),
+                     ("morph", lambda: step_morph(args["morph-dir"], args["update-dir"])),
+                     ("check", lambda: step_check(args["check-dir"], args["update-dir"], args["morph-dir"]))):
+        progress({"update": 20, "morph": 60, "check": 90}[name], f"run {name}")
+        rc, code = fn()
+        steps[name] = {"status": "FAIL" if code else "OK", "code": code}
+        if code:
+            result = ("FAIL", code, rc)
+            break
+    os.makedirs(args["check-dir"], exist_ok=True)
+    stat = "FAIL" if result[0] == "FAIL" else "PASS"
+    write_json(runj, dict(BASE, status=stat, code=result[1], category=CATEGORY.get(result[1] or "", None), stages=steps,
+                          skip={"code": result[1], "step": next((k for k, v in steps.items() if v["code"]), None),
+                                "category": CATEGORY.get(result[1] or "", None), "message": ENGLISH.get(result[1] or "", None),
+                                "report": None} if result[1] else None))
+    finish("run.json", stat, result[1], result[2])

@@ -165,8 +165,9 @@ def current_step_key(j: dict[str, Any]) -> str | None:
 def job_summary(j: dict[str, Any], study_title: str | None, position: int | None,
                 hpc_summary: dict[str, int] | None = None) -> dict[str, Any]:
     key = current_step_key(j)
+    eng = j["params"].get("engine") if isinstance(j.get("params"), dict) else None  # geometry-engine.md §7.3: native면 step 이름을 덮어쓴다
     return {
-        "stage_label": stage_label(j["job_type"]), "current_step_key": key, "current_step_label": step_label(key),
+        "stage_label": stage_label(j["job_type"]), "current_step_key": key, "current_step_label": step_label(key, eng),
         "hpc_summary": hpc_summary, "attention_code": j.get("attention_code"),
         "id": j["id"], "study_id": j["study_id"], "project_id": j["project_id"], "study_title": study_title,
         "job_type": j["job_type"], "stage": j["stage"], "lane": j["lane"], "state": j["state"],

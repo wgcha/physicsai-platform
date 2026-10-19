@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import os
+import sys
 from typing import Any
 
 from .schema import AltairCfg, Settings
@@ -33,6 +35,23 @@ def effective_altair(s: Settings) -> dict[str, str]:
     d = {k: v for k, v in s.altair.model_dump().items() if isinstance(v, str)}
     d["hstpy_path"] = derived_hstpy_path(s.altair)
     d["altair_home"] = derived_altair_home(s.altair)
+    return d
+
+
+def derived_paicad_path(s: Settings, python: str | None = None) -> str:
+    """paicad 실행 파일(geometry-engine.md §7.1): 설정값, 비면 워커 Python 폴더의 Scripts\\paicad.exe(Windows)·bin/paicad(그 외)."""
+    if s.geometry.paicad_path:
+        return s.geometry.paicad_path
+    folder = os.path.dirname(os.path.abspath(python or sys.executable))
+    if os.name == "nt":
+        return os.path.join(folder, "paicad.exe") if os.path.basename(folder).lower() == "scripts" else os.path.join(folder, "Scripts", "paicad.exe")
+    return os.path.join(folder, "paicad")
+
+
+def effective_executables(s: Settings) -> dict[str, str]:
+    """명령 펼침용 실행 파일 표(§7.1): effective_altair + `paicad_path` 파생값."""
+    d = effective_altair(s)
+    d["paicad_path"] = derived_paicad_path(s)
     return d
 
 

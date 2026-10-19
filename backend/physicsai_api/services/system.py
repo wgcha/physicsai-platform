@@ -7,7 +7,7 @@ from typing import Any
 
 from physicsai_core.commands import TEMPLATE_SPECS
 from physicsai_core.config import RESOURCE_DIR_KEYS, RESOURCE_FILE_KEYS, effective_altair, redacted_settings
-from physicsai_core.features import feature_status
+from physicsai_core.features import feature_status, geometry_status
 from physicsai_core.db.repositories import notifications as notif_repo
 from physicsai_core.db.repositories import workers as workers_repo
 from physicsai_core.errors import DomainError
@@ -75,6 +75,7 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                                        "tol_rel": s.surrogate_opt.default_tol_rel, "surrogate": s.surrogate_opt.default_surrogate},
                           "max_variables": s.surrogate_opt.max_variables, "max_iterations": s.surrogate_opt.max_iterations,
                           "max_candidates": s.surrogate_opt.max_candidates},
+        "geometry": geometry_status(s),  # geometry-engine.md §7.1
         "demo": bool(s.demo.enabled),
     }
 

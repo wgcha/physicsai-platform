@@ -20,7 +20,9 @@ from physicsai_core.stage1_train_data import doe_samples
 from physicsai_core.stage1_train_data import train_params as tp
 
 from ..common import hst_run_label, path_failure  # hst_run_label: 재노출(phase3 §14.10, 이전 import 경로 유지)
+from ..geometry_native import is_native
 from ..launcher import stage_launcher
+from . import doe_native
 from ._shared import TPL_NAME, _D, _doe
 
 
@@ -33,6 +35,8 @@ def _setup(ctx: Any) -> dict[str, Any]:
 
 
 def dg_prep(ctx: Any) -> None:
+    if is_native(ctx.params):  # geometry-engine.md §7.3.3
+        return doe_native.dg_prep(ctx)
     s = ctx.settings
     p = ctx.params
     doe_id = p["doe_id"]
@@ -142,6 +146,8 @@ class HstRunTracker:
 
 
 def hst_gen_radioss(ctx: Any) -> None:
+    if is_native(ctx.params):
+        return doe_native.hst_gen(ctx)
     s = ctx.settings
     r = ctx.result()
     D = _D(ctx)
@@ -183,6 +189,10 @@ def dg_scan(ctx: Any) -> None:
             skipped.append({"run_key": rk, "reason": "같은 이름의 run 폴더가 여러 개입니다"})
             continue
         st = _find_starter(d, s.predict.starter_glob)
+        sk = doe_native.skipped_entry(d, s.geometry.max_report_bytes) if is_native(ctx.params) and not st else None
+        if sk is not None:  # native: 생성 실패 run — 사유 코드·범주·문구를 그대로(기존 RUN_INPUT_INVALID 대신)
+            skipped.append({"run_key": rk, **sk})
+            continue
         if len(st) != 1:
             skipped.append({"run_key": rk, "reason": f"starter({s.predict.starter_glob})가 {len(st)}개"})
             continue
@@ -190,7 +200,8 @@ def dg_scan(ctx: Any) -> None:
         runs.append({"run_key": rk, "input_rel": ctx.rel(os.path.dirname(st[0])), "starter_name": os.path.basename(st[0]),
                      "run_dir": d})
     for sk in skipped:
-        ctx.add_warning("RUN_INPUT_INVALID", f"{sk.get('run_key') or sk.get('dir')}: {sk['reason']}")
+        if "category" not in sk:
+            ctx.add_warning("RUN_INPUT_INVALID", f"{sk.get('run_key') or sk.get('dir')}: {sk['reason']}")
     if not runs:
         raise StepFailure("OUTPUT_MISSING", "Radioss 입력 run 폴더를 찾지 못했습니다 — 설정 train_data.run_dir_glob 확인")
     doe = _doe(ctx)

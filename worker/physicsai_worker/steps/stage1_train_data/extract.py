@@ -13,7 +13,9 @@ from physicsai_core.paths import allowed_roots, check_user_path, PathError
 from physicsai_core.stage1_train_data import train_params as tp
 
 from ..common import path_failure
+from ..geometry_native import is_native
 from ..launcher import stage_launcher
+from . import extract_native
 
 
 def _tail(path: str, n: int = 2048) -> str:
@@ -31,6 +33,8 @@ def _X(ctx: Any) -> str:
 
 
 def tx_prep(ctx: Any) -> None:
+    if is_native(ctx.params):  # geometry-engine.md §7.3.1
+        return extract_native.tx_prep(ctx)
     s = ctx.settings
     try:
         cp = check_user_path(ctx.params["cad_path"], allowed_roots(s, imports=True), expect="file")
@@ -51,6 +55,8 @@ def tx_prep(ctx: Any) -> None:
 
 
 def simlab_extract(ctx: Any) -> None:
+    if is_native(ctx.params):
+        return extract_native.extract(ctx)
     s = ctx.settings
     r = ctx.result()
     X = _X(ctx)
@@ -87,11 +93,14 @@ def simlab_extract(ctx: Any) -> None:
 def tx_parse(ctx: Any) -> None:
     s = ctx.settings
     r = ctx.result()
+    native = is_native(ctx.params)
     xml = os.path.join(_X(ctx), "parameter_extracted.xml")
     pairs = tp.read_extracted_xml(xml, s.train_data.max_xml_bytes)
     if not pairs:
         raise StepFailure("OUTPUT_MISSING", "추출 XML에 파라미터가 없습니다")
     params = tp.build_from_extracted(pairs, s.train_data.param_default_range_ratio, s.train_data.param_default_format)
+    if native:
+        extract_native.adjust_params(ctx, params)
     pj = ctx.abs("01_train/params.json")
     ctx.backup([pj])
     write_json(pj, {"schema_version": 1, "parameters": params})
@@ -101,12 +110,15 @@ def tx_parse(ctx: Any) -> None:
             c, ctx.study["id"], None, parameters=params, cad_source_path=ctx.params["cad_path"],
             cad_file_name=r["cad_file_name"], cad_sha256=r["cad_sha256"], extract_job_id=ctx.ex.job_id,
             tpl_params=None, updated_by=ctx.job["created_by"], updated_by_name=ctx.job["created_by_name"],
+            **({} if native else {"engine": "altair", "features_rel": None}),
         )
 
     ctx.ex.db(upd)
     valid = sum(1 for p in params if p["valid"])
     ctx.log(f"파라미터 {len(params)}개 추출(유효 {valid}개)")
     ctx.patch_result({"param_count": len(params), "valid_count": valid, "cad_file_name": r["cad_file_name"]})
+    if native:
+        extract_native.after_parse(ctx, params)
 
 
 HANDLERS = {

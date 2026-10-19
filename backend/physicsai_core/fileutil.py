@@ -112,3 +112,23 @@ def write_text(path: str, text: str) -> int:
     with open(path, "w", encoding="utf-8", newline="\n") as fh:
         fh.write(text)
     return len(text.encode("utf-8"))
+
+
+def copy_tree(src: str, dst: str, checkpoint: Callable[[], None] | None = None) -> list[str]:
+    """폴더 src의 파일을 dst로 복사(하위 폴더 포함, 링크·재해석 지점·_backup은 건너뜀). 복사한 상대 경로 목록(정렬).
+    dst에 같은 이름이 이미 있으면 호출자가 먼저 `_backup`으로 옮긴 상태여야 한다(덮어쓰기 가드는 copy_file이 한다)."""
+    from .paths import is_link_or_reparse
+
+    out: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(src, followlinks=False):
+        dirnames[:] = sorted(d for d in dirnames if d != "_backup" and not is_link_or_reparse(os.path.join(dirpath, d)))
+        rel_dir = os.path.relpath(dirpath, src)
+        os.makedirs(os.path.join(dst, rel_dir) if rel_dir != "." else dst, exist_ok=True)
+        for f in sorted(filenames):
+            p = os.path.join(dirpath, f)
+            if is_link_or_reparse(p) or not os.path.isfile(p):
+                continue
+            rel = f if rel_dir == "." else os.path.join(rel_dir, f)
+            copy_file(p, os.path.join(dst, rel), checkpoint=checkpoint)
+            out.append(rel.replace(os.sep, "/"))
+    return out

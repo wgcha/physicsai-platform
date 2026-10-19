@@ -46,6 +46,9 @@ datasets = Table(
     Column("created_by", String, nullable=False),
     Column("created_by_name", String, nullable=False),
     Column("created_at", TS, nullable=False, server_default=func.now()),
+    Column("engine", String(16), nullable=True),  # geometry-engine.md §7.5: 학습데이터 형상 엔진(NULL = 모름, 0012)
+    Column("engine_version", String(32), nullable=True),  # paicad 버전(altair·모름 = NULL, §17.3)
+    CheckConstraint("engine IS NULL OR engine IN ('altair','native')", name="ck_datasets_engine"),
     CheckConstraint("status IN ('BUILDING','READY','FAILED')", name="ck_datasets_status"),
     CheckConstraint("split_group IN ('file','parent_dir')", name="ck_datasets_split_group"),
 )
@@ -83,7 +86,9 @@ models = Table(
     Column("registered_by_name", String, nullable=False),
     Column("registered_at", TS, nullable=False, server_default=func.now()),
     Column("row_version", BigInteger, nullable=False, server_default="1"),
+    Column("engine", String(16), nullable=True),  # geometry-engine.md §7.7: 학습 데이터셋의 형상 엔진(NULL = 모름, 0012)
     UniqueConstraint("study_id", "name", "version", name="uq_models_study_name_version"),
+    CheckConstraint("engine IS NULL OR engine IN ('altair','native')", name="ck_models_engine"),
     CheckConstraint("log_status IN ('PARSED','UNRECOGNIZED','MISSING')", name="ck_models_log_status"),
     CheckConstraint("eval_status IN ('NONE','RUNNING','DONE','FAILED')", name="ck_models_eval_status"),
     CheckConstraint("status IN ('ACTIVE','ARCHIVED','INVALID')", name="ck_models_status"),
@@ -102,7 +107,7 @@ param_sets = Table(
     Column("sample_count", Integer, nullable=False),
     Column("sample_has_measured", Boolean, nullable=False),
     Column("cad_file_name", String, nullable=False),
-    Column("tpl_rel", String, nullable=False),
+    Column("tpl_rel", String, nullable=True),  # native는 NULL(ck_param_sets_tpl_engine, 0012)
     Column("assem_rel", String, nullable=True),  # phase3 §14.3: mesh_only면 NULL(0007_predict_batch)
     Column("starter_name", String, nullable=True),
     Column("tpl_params", JSONB, nullable=False),
@@ -116,6 +121,13 @@ param_sets = Table(
     # phase3 §14.3 S9 템플릿 입력 종류: assembly(조립 폴더 포함) | mesh_only(m1 메시 그대로 예측)
     Column("input_kind", String(16), nullable=False, server_default="assembly"),
     Column("display", JSONB, nullable=True),  # phase3 §15 S10 컨투어 표시 설정(0008_contour_capture)
+    # geometry-engine.md §7.5 (0012): 형상 엔진·세트별 옵션 덮어쓰기(기본값 아님)·paicad 버전
+    Column("engine", String(16), nullable=False, server_default="altair"),
+    Column("geom_options", JSONB, nullable=True),
+    Column("engine_version", String(32), nullable=True),
+    CheckConstraint("engine IN ('altair','native')", name="ck_param_sets_engine"),
+    CheckConstraint("engine = 'native' OR tpl_rel IS NOT NULL", name="ck_param_sets_tpl_engine"),
+    CheckConstraint("engine <> 'native' OR input_kind = 'assembly'", name="ck_param_sets_native_assembly"),
     CheckConstraint("origin IN ('FOLDER','TRAIN_DOE')", name="ck_param_sets_origin"),
     CheckConstraint("input_kind IN ('mesh_only','assembly')", name="ck_param_sets_input_kind"),
     CheckConstraint("input_kind <> 'assembly' OR (assem_rel IS NOT NULL AND starter_name IS NOT NULL)",

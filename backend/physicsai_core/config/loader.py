@@ -100,7 +100,10 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     if _has(data, "predict", "mesh_output_glob"):
         w.append(ConfigIssue("predict.mesh_output_glob",
                              "폐지된 키입니다 — 값이 적용되지 않습니다(새 메시는 predict.mesh_include_name, 지워도 됩니다)"))
-    from ..features import predict_parametric_missing  # features가 config를 import하므로 지역 import
+    from ..features import geometry_status, predict_parametric_missing  # features가 config를 import하므로 지역 import
+
+    if s.geometry.engine == "native" and not geometry_status(s)["native_available"]:
+        w.append(ConfigIssue("geometry.engine", "기본 엔진 native를 쓸 수 없습니다 — paicad 설치 확인"))
 
     tmpl, res = predict_parametric_missing(s)
     if not tmpl and res:
