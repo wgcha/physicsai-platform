@@ -892,7 +892,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - **표(`envelope.json` + `envelope.csv`, 한 행 = 파라미터·방향·단계)**: `param`, `direction`(±), `step`(단계 크기), `unit`(`"%"`(치수형)\|`"mm"`(위치형)), `value`, `status`(OK/FAIL), `fail_code`(`GEOM_*`, 첫 실패), 품질 지표 `min_stretch`·`max_aspect`·`edge_ratio`(최소 엣지/공칭 최소 엣지)·`dt_ratio`(Δt 추정 비, §6.5), `boundary_dev_max_mm`, `param_remeasure_err`(abs·rel), `inverted_elems`. 파라미터별 요약: `last_ok`·`first_fail`(단위 = 행 `unit`)·`last_ok_label`·`first_fail_label`(방향 포함 표기)·`first_fail_code`, mm 파라미터는 `last_ok_pct`=null. 행의 최소 엣지 비 열 이름 = `edge_ratio`(CSV 포함). 상단에 `schema_version`(**2**, 요약 의미 변경, §17.2)·`engine_version`·옵션 사용값.
 - **0.2.0 구현 해석(GE-C7)**: sweep은 `--update-dir`(공칭 update 결과)의 `sample.brep`을 공칭으로 사용. feasible을 반영한 `parameter_features.json`은 입력을 바꾸지 않고 **`--out-dir` 사본**에 쓴다. 파라미터 요약의 첫 실패 코드 키 = `first_fail_code`. 각 단계의 |변위| ≤ 1e-6 mm는 0(공칭)으로 본다. **0.3.0(GE-C9)**: `report_envelope.md`·csv는 sweep `--out-dir`에 쓴다(저장소 `golden/geometry/G1/`로의 복사는 사람이 수행).
 - **반영**: 요약의 `last_ok`를 `parameter_features.json`의 `feasible`(min·max)에 기록(`source: "envelope"`, `sweep_id`; 미측정은 `source: "estimate"` = §6.2 추정). 사용자 범위가 `feasible`을 넘으면 UI 경고(§8, **차단 아님**).
-- **보고서**: 골든 쿠션 1종(G1) envelope 결과(sweep 출력 폴더의 `report_envelope.md`+csv)를 `golden/geometry/G1/`에 남겨 재메시 필요성 판단 근거로 사용(파라미터별 모핑 가능 범위, 한계를 정하는 지표·실패 코드, 기본 ±5% 대비 여유).
+- **보고서**: 골든 쿠션 1종(G1) envelope 결과(sweep 출력 폴더의 `report_envelope.md`+csv)를 `packages/paicad/tests/golden/geometry/G1/`(가상 쿠션, 재생성 `tests/data/make_envelope_report.py --write`, 바이트 동일 시험; 실물 G1 결과는 현장 키트 수치로만)에 남겨 재메시 필요성 판단 근거로 사용(파라미터별 모핑 가능 범위, 한계를 정하는 지표·실패 코드, 기본 ±5% 대비 여유).
 
 ### 11.3 단계 5(선택)
 
