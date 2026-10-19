@@ -80,7 +80,7 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 | GE-7 | 검사 기준 고급 옵션: 기본값 `geometry.defaults`, 세트별 덮어쓰기 `param_sets.geom_options`, 사용값은 run 폴더 `options.json` | 사용자 합의 |
 | GE-8 | 두께 기준면 기본 규칙(확정 2026-10-17, 우선순위): ① 한쪽 면만 제품·타 바디 접촉 → 접촉면 고정·반대 면 이동 ② 양면 접촉 → 두께 변경 불가 구속(`locked`)으로 표시, 후보에 경고, 기본 `use=false` ③ 둘 다 비접촉 → 바디 중심에서 먼 면 이동. 고급 옵션에서 파라미터별 기준면 변경(§4.9) | 사용자 확정 |
 | GE-9 | 정수 반올림(`%3i`) 없음 — native 세트는 tpl이 없어 `tpl_params=[]` → `applied_values = values` | 두께 연속값 |
-| GE-10 | 의존: cadquery-ocp(Windows cp312 wheel), numpy, scipy — 오프라인 묶음 포함. **개발·테스트 전용**(배포 묶음 제외, pyproject optional extra `test`): build123d(가상 쿠션 STEP 생성)·gmsh(가상 쿠션 baseline tetra4 생성). build123d가 요구하는 cadquery-ocp 범위와 본체 고정 OCP 버전이 일치해야 함(§5.1) | 사용자 합의·확정 2026-10-17 |
+| GE-10 | 의존: cadquery-ocp(Windows cp312 wheel), numpy, scipy — 오프라인 묶음 포함(별도 사내 보안 승인 이슈 없음, Q10 해결). 소스 개발은 인터넷 PC(GitHub), 폐쇄망 배포는 설치 형식(오프라인 묶음 `deploy/collect-offline.ps1` → 설치). **개발·테스트 전용**(배포 묶음 제외 유지, pyproject optional extra `test`): build123d(가상 쿠션 STEP 생성)·gmsh(가상 쿠션 baseline tetra4 생성, 파라미터 §7.8). build123d가 요구하는 cadquery-ocp 범위와 본체 고정 OCP 버전이 일치해야 함(§5.1) | 사용자 합의·확정 2026-10-17, 배포 경로 확정 2026-10-19 |
 | GE-14 | 대칭 그룹 기본 = 묶음(구성원은 대표 값을 따름), 사용자가 파라미터 표·매칭표의 "분리" 동작으로 해제 가능(분리하면 구성원이 독립 파라미터, §6.2) | 사용자 확정 2026-10-17 |
 | GE-11 | native는 신규 별도 모듈, Altair 경로와는 외부 인터페이스만 같음. 기존 코드는 분기 지점만 최소 변경, altair 동작 불변(§1.4·§16) | 사용자 결정 |
 | GE-13 | **다중 baseline(고급 옵션, 단계 4B)**: 기본은 단일 baseline(기존 흐름 불변). 위상 변형·범위 분할을 같은 구조(`baselines/<id>/` + `param_map.json`)로, 공통 변수 이름 **자동 매칭은 초안 제시만**(점수 무관 자동 확정 없음, 사용자가 매칭표 확정 전 DOE 불가 `PARAM_MAP_UNCONFIRMED`, 점수 정의 §11.4), 위상은 범주형 `baseline`, 배정·실패 `BASELINE_NO_COVER`, 층화 LHS, 데이터셋 1개, 새 job_type 없음(`PARAM_SET_NATIVE` + `BL_MAP`, 단일이면 건너뜀)(§11.4) | 사용자 결정 2026-10-17 |
@@ -318,18 +318,20 @@ component의 요소·노드 집합:
   "checks": {
     "param":        {"status": "PASS", "items": [{"name": "CUSH_L_THK_1", "input": 12.9, "measured": 12.897, "err": 0.003, "tol": 0.129}]},
     "deviation":    {"status": "PASS", "max_mm": 0.012, "tol_mm": 0.05, "worst_node": 3001234},
-    "quality":      {"status": "PASS", "inverted": 0, "min_scaled_jacobian": 0.31, "baseline_min_scaled_jacobian": 0.33,
-                     "max_aspect": 6.2, "baseline_max_aspect": 5.9, "min_edge_mm": 0.82, "baseline_min_edge_mm": 0.90, "dt_ratio": 0.91},
+    "quality":      {"status": "PASS", "inverted": 0, "min_stretch": 0.31, "baseline_min_stretch": 0.33, "min_scaled_jacobian": 0.40,
+                     "max_aspect": 6.2, "baseline_max_aspect": 5.9, "min_edge_mm": 1.42, "baseline_min_edge_mm": 1.55, "dt_ratio": 0.91,
+                     "baseline_status": "PASS"},
     "interference": {"status": "PASS", "body_body_max_mm": 0.0, "product_max_mm": 0.0, "pairs": []},
     "tie":          {"status": "PASS", "interfaces": [{"id": 12, "dsearch_mm": 1.0, "max_gap_mm": 0.21, "failed_nodes": 0}]}
   },
+  "warnings": [],
   "options": {"…": "사용값"},
   "out_inc": "104_replace_node_elem.inc",
   "elapsed_s": 6.4
 }
 ```
 
-`status`: 항목별 `PASS|FAIL|NOT_EVALUATED`. 최상위는 FAIL 항목이 하나라도 있으면 FAIL, `code`는 §6.5 우선순위의 첫 실패.
+`warnings[]`: 공칭(무변형) baseline 메시를 같은 기준으로 평가해 `quality.baseline_status`(`PASS|FAIL`)를 기록하고, `FAIL`이면 경고 `BASELINE_QUALITY_BELOW`(차단 아님, §6.5). `status`: 항목별 `PASS|FAIL|NOT_EVALUATED`. 최상위는 FAIL 항목이 하나라도 있으면 FAIL, `code`는 §6.5 우선순위의 첫 실패.
 
 ### 4.9 옵션 `options.json`(geom_options)
 
@@ -338,7 +340,7 @@ component의 요소·노드 집합:
   "schema_version": 1,
   "tag":          {"tol_abs_mm": 0.05, "tol_rel": 1.0e-4, "min_match_ratio": 0.98, "contact_mm": 0.1, "contact_min_ratio": 0.2},
   "morph":        {"poisson": 0.3, "solver_rtol": 1.0e-8, "solver_maxiter": 5000},
-  "quality":      {"min_scaled_jacobian": 0.2, "max_aspect": 10.0, "min_edge_ratio": 0.8, "relative_to_baseline": true},
+  "quality":      {"min_stretch": 0.1, "max_aspect": 10.0, "min_edge_mm": 1.0, "min_edge_ratio": 0.8, "relative_to_baseline": true},
   "deviation":    {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
   "interference": {"body_mm": 0.01, "product_mm": 0.05},
   "tie":          {"default_dsearch_mm": null, "required": true},
@@ -348,7 +350,8 @@ component의 요소·노드 집합:
 }
 ```
 
-- 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_scaled_jacobian ≤ 1`, `max_aspect ≥ 1`, `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
+- 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_stretch ≤ 1`, `max_aspect ≥ 1`, `min_edge_mm ≥ 0`(0 = 끔), `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
+- **품질 기본값 출처(2026-10-19, Q8 해결)**: 현행 SimLab 메시 설정(internal grading 2, quality min 0.1(tet stretch, 1=이상), identify feature: merge tiny fillet·min size 1 mm·avg size 10 mm·grade factor 1.5, geometry approximation: max angle per element 45°·curvature min elem size 5 mm·surface mesh aspect ratio 10·iso mesh)에서 가져온 `min_stretch=0.1`·`max_aspect=10`·`min_edge_mm=1.0`. 기존 Δt 비 기준(`min_edge_ratio`)은 유지. `min_scaled_jacobian`은 기준 키에서 빼고 `check.json`의 정보 수치로만 남긴다(계약 초안 단계라 호환 이슈 없음).
 - 고급 옵션 UI에서 바꾸는 절 = `quality`·`interference`·`deviation`(+`tie.required`). `tag` 절 변경은 준비본 재생성 필요(§7.4).
 - 작업이 쓴 유효 옵션은 `P/geom/options.json`, `R/options.json`, `D/native/options_run.json`에 기록(사용값 고정). 이 세 파일에는 최상위 `engine`·`engine_version`(작업 준비 step에서 `paicad version --json`으로 읽은 값)을 함께 쓴다 — 병합·범위 검사 대상 아님, `param_sets.geom_options` 입력에 오면 422 `GEOM_OPTIONS_INVALID`.
 
@@ -408,8 +411,8 @@ component의 요소·노드 집합:
 | 위치 | `packages/paicad/`(`pyproject.toml`, `src/paicad/`, `tests/`, `CHANGELOG.md`) — `packages/simdash_adapters`와 같은 배치 |
 | 배포 이름·버전 | `paicad==0.1.0`(루트 `pyproject.toml` 의존에 정확 고정, `deploy/requirements.local.lock`). 버전 단일 출처·올림 규칙은 §17 |
 | 진입점 | `[project.scripts] paicad = "paicad.cli:main"`(Windows `Scripts\paicad.exe`) |
-| 의존 | `cadquery-ocp`(cp312 win_amd64 wheel이 있는 버전으로 Impl이 고정, 7.7 이상), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
-| 테스트 전용 extra | `[project.optional-dependencies] test = [build123d, gmsh, pytest…]`(배포 묶음·`requirements.lock`·`collect-offline` 제외, 런타임 코드 import 금지). **OCP 고정 규칙**: build123d가 요구하는 `cadquery-ocp` 버전 범위가 본체 고정 OCP 버전을 포함하는 build123d 버전만 고정하고, `test` extra 설치가 본체 OCP를 바꾸지 않아야 한다(시험 시작 때 `OCP` 버전 == 고정 버전 단언, 불일치는 시험 실패). 옵션 `gen` extra는 §18.8(로드맵) |
+| 의존 | `cadquery-ocp`(cp312 win_amd64 wheel이 있는 버전으로 Impl이 고정, 7.7 이상 — wheel 포함·사내 보안 승인 이슈 없음, 2026-10-19 확정; 소스 개발은 인터넷 PC(GitHub), 폐쇄망은 `deploy/collect-offline.ps1` 묶음 → 설치), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
+| 테스트 전용 extra | `[project.optional-dependencies] test = [build123d, gmsh, pytest…]`(배포 묶음·`requirements.lock`·`collect-offline` 제외, 런타임 코드 import 금지). **OCP 고정 규칙**: build123d가 요구하는 `cadquery-ocp` 버전 범위가 본체 고정 OCP 버전을 포함하는 build123d 버전만 고정하고, `test` extra 설치가 본체 OCP를 바꾸지 않아야 한다(2026-10-19: build123d·gmsh는 배포 묶음 제외 유지)(시험 시작 때 `OCP` 버전 == 고정 버전 단언, 불일치는 시험 실패). 옵션 `gen` extra는 §18.8(로드맵) |
 | 모듈 경계 | `paicad.brep`(OCP 사용 — STEP 읽기·XDE·피처·push/pull·투영·렌더), `paicad.mesh`(Radioss 읽기·쓰기, numpy만), `paicad.morph`·`paicad.check`(numpy·scipy + `brep` 인터페이스), `paicad.cli`. `mesh`·`morph`·`check`는 B-rep을 `SurfaceLike`/`CurveLike` 프로토콜(`eval(u,v)`, `project(p)`, `classify(u,v)`, `bounds()`)로만 쓴다 → 해석적 평면·원통 구현으로 OCP 없이 시험 가능 |
 | 플랫폼 import | 금지(physicsai_core·api·worker 어디서도). 플랫폼은 결과 JSON만 읽는다(`physicsai_core/geometry/reports.py`, 표준 라이브러리만). 독립성 규칙 전체는 §18 |
 
@@ -529,10 +532,12 @@ component의 요소·노드 집합:
 |---|---|---|---|
 | (a) 파라미터 재측정 | `measure` 방법으로 **모핑 메시**(경계 노드)에서 값 측정 | `|측정−입력| ≤ max(param_abs_mm, param_rel·|입력|)` | `GEOM_PARAM_MISMATCH` |
 | (b) 경계 편차 | 경계 노드(kind 1~3) ↔ 대응 샘플 엔티티 최대 거리 | ≤ `boundary_max_mm`(0.05) | `GEOM_DEVIATION` |
-| (c) 품질 | 요소별 scaled Jacobian(꼭짓점 4곳 `√2·6V/(|e1||e2||e3|)` 중 최소, 정사면체 1), aspect = 최장 엣지 / (2√6 · 내접 구 반지름)(정사면체 1), 최소 엣지 길이, 반전(부피 ≤ 0) | 반전 0, `min_scaled_jacobian ≥ 0.2`, `max_aspect ≤ 10`, `min_edge ≥ min_edge_ratio × 기준본 min_edge`. `relative_to_baseline=true`면 기준본이 이미 기준 밖인 요소는 "기준본 값보다 나빠지지 않음"(Jacobian ≥ 0.9×기준본, aspect ≤ 1.1×기준본)으로 판정. `dt_ratio` = 모핑 min_edge / 기준본 min_edge(시간 간격 비 추정, 정보) | `GEOM_QUALITY` |
+| (c) 품질 | 요소별 **stretch** = `2√6 · r_in / L_max`(tet 내접구 반지름 `r_in = 3V/ΣA_face`, `L_max` 최장 엣지, 정사면체 1 — SimLab "quality min 0.1(tet stretch, 1=이상)"과 같은 정의로 둠), aspect = 최장 엣지 / (2√6 · 내접 구 반지름)(정사면체 1, 이 정의에서는 `1/stretch`), 최소 엣지 길이, 반전(부피 ≤ 0). 정보용으로 scaled Jacobian(`√2·6V/(|e1||e2||e3|)` 꼭짓점 4곳 최솟값)도 기록 | 반전 0, `min_stretch ≥ 0.1`, `max_aspect ≤ 10`, `min_edge ≥ min_edge_mm`(1.0 mm) 이고 `min_edge ≥ min_edge_ratio × 기준본 min_edge`(Δt 비 기준). `relative_to_baseline=true`면 기준본이 이미 기준 밖인 요소는 "기준본 값보다 나빠지지 않음"(stretch ≥ 0.9×기준본, aspect ≤ 1.1×기준본, 엣지는 ≥ 0.9×기준본 엣지)으로 판정. `dt_ratio` = 모핑 min_edge / 기준본 min_edge(시간 간격 비 추정, 정보) | `GEOM_QUALITY` |
 | (d) 간섭 | 바디-바디: 모핑 외피 노드가 다른 쿠션 바디 tetra 안에 깊이 > `body_mm`로 들어감(공칭 접촉 면 쌍은 깊이 > `body_mm`일 때만). 제품: 조립 폴더 나머지 메시(쉘 중립면 ± 두께/2, 솔리드 외피)에 대한 외피 노드 관통 깊이 > `product_mm` | 관통 없음 | `GEOM_INTERFERENCE` |
 | (e) tie | 조립 폴더 `/INTER/TYPE2`에서 쿠션 노드가 secondary(또는 main 면)인 인터페이스마다, secondary 노드 ↔ main 면 투영 거리 ≤ `Dsearch`(카드 값, 0·공백이면 `tie.default_dsearch_mm`, 그것도 null이면 그 인터페이스 공칭 최대 거리 × 1.5) | 투영 실패 노드 0 | `GEOM_TIE_PROJECTION` |
 
+- **baseline 품질 전제(2026-10-19)**: baseline(공칭 무변형) 메시는 위 기준을 만족한다고 본다. check가 공칭 메시를 같은 기준으로 한 번 평가해 FAIL이면 경고 `BASELINE_QUALITY_BELOW`(샘플 판정 차단 아님, 상대 판정 `relative_to_baseline`이 그 요소를 흡수). 기준을 baseline 최솟값으로 완화할지는 사용자 선택 — UI가 `check.json`의 `baseline_*` 값을 보여주고 "baseline 최솟값으로" 누르면 `geom_options.quality`에 그 값을 저장(자동 완화 없음).
+- **stretch 정의 리스크**: 위 식이 SimLab 내부 stretch 식과 정확히 같은지는 미확인(정규화 상수·기준 길이 차 가능). 이 정의에서 `min_stretch 0.1`과 `max_aspect 10`은 같은 조건이라 한쪽이 중복이다 — 현장 인수 시험(§9 (b))에서 SimLab 실측과 비교해 차이가 크면 식·기본값 조정(§15 Q18).
 - **해당 없음 → `SKIPPED`**: 쿠션 노드가 secondary·main인 `/INTER/TYPE2`가 0건이면(1차 쿠션 한정 범위의 정상 상태) (e)는 `tie.status: "SKIPPED"`(`interfaces: []`, 사유 `no_tie_on_component`)로 기록하고 실패·경고가 아니다. 검사 코드·실패 코드는 향후 범위 확대 대비로 유지한다.
 - **엄격 원칙(§15 Q7, 2026-10-17 확정)**: 적용 대상 tie가 있는데 투영 실패 노드가 있으면 `FAIL`. `/INTER/TYPE2`·`/GRNOD`·`/SURF` 해석 실패도 `tie.required=true`(기본)면 `FAIL`(`GEOM_TIE_PROJECTION`, 메시지에 해석 실패 명시), `required=false`일 때만 `NOT_EVALUATED` + 경고 `TIE_PARSE_SKIPPED`.
 - 제품 메시 수집: 조립 폴더 `*.rad`·`*.inc`(기준본 제외)의 `/NODE`·`/SHELL`·`/SH3N`·`/BRICK`·`/TETRA4`·`/TETRA10`·`/PENTA6`. 쿠션 bbox + 10 mm 밖 요소는 버림. KD-tree(`scipy.spatial.cKDTree`)로 근방 탐색.
@@ -591,7 +596,7 @@ geometry:                          # native 형상 엔진(contracts/geometry-eng
   defaults:                        # §4.9 options.json 기본값(세트별 덮어쓰기 param_sets.geom_options)
     tag: {tol_abs_mm: 0.05, tol_rel: 1.0e-4, min_match_ratio: 0.98, contact_mm: 0.1, contact_min_ratio: 0.2}
     morph: {poisson: 0.3, solver_rtol: 1.0e-8, solver_maxiter: 5000}
-    quality: {min_scaled_jacobian: 0.2, max_aspect: 10.0, min_edge_ratio: 0.8, relative_to_baseline: true}
+    quality: {min_stretch: 0.1, max_aspect: 10.0, min_edge_mm: 1.0, min_edge_ratio: 0.8, relative_to_baseline: true}
     deviation: {boundary_max_mm: 0.05, param_abs_mm: 0.05, param_rel: 0.01}
     interference: {body_mm: 0.01, product_mm: 0.05}
     tie: {default_dsearch_mm: null, required: true}
@@ -634,7 +639,7 @@ commands:
 - 판정 `judge_paicad(rc, report_path, success_paths)`: §5.4 규칙. 보고 FAIL → `StepFailure(code, message)`(code = 보고의 `GEOM_*`). 일괄·DOE에서는 예외 대신 run 실패로 기록.
 - 보고 JSON은 `physicsai_core/geometry/reports.py`(신규, 표준 라이브러리)로 읽고 키 존재·타입만 검사.
 - 각 단계 로그: `paicad.log` 꼬리 4 KiB를 step 로그에 덧붙임.
-- 성공한 단계의 주요 수치(`check.json`의 min Jacobian·max deviation·elapsed)는 PREDICT `result.geometry`에 요약(수치만).
+- 성공한 단계의 주요 수치(`check.json`의 min stretch·max deviation·elapsed)는 PREDICT `result.geometry`에 요약(수치만).
 
 ### 7.3 job step 체인 변경(키 불변, 엔진 분기)
 
@@ -793,7 +798,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - 루트 `pyproject.toml`: 의존 `paicad==0.1.0`, pytest `testpaths`·`pythonpath`에 `packages/paicad/tests`·`packages/paicad/src`.
 - 플랫폼 시험: `backend/tests/fake_tools/fake_paicad`(Python 스크립트) — 하위 명령별로 보고 JSON·성공 파일을 쓰고, 환경변수 `FAKE_PAICAD_FAIL=<cmd>:<code>`로 실패 보고를 흉내. 플랫폼 쪽 시험은 OCP 없이 돈다.
 - paicad 시험: `mesh`·`morph`·`check`는 해석적 B-rep 대역(평면·원통)과 작은 합성 tetra 메시(저장소 안 생성 스크립트, 1 MB 미만)로 OCP 없이. `brep`·통합 시험은 OCP 필요 — Linux 개발 환경에 `cadquery-ocp` manylinux wheel을 설치해 `scripts/test-all`에서 실제로 돈다(skip을 통과로 치지 않음, AGENTS.md). 합성 STEP은 시험이 OCP로 생성(저장소에 STEP 파일 넣지 않음).
-- **가상 쿠션 시험 자료(개발·테스트 전용, §5.1 `test` extra)**: build123d로 가상 쿠션 STEP을 시험이 생성(정답 치수, 공칭/변형형 쌍, 경계 사례, 다중 바디, 바디 이름 — 저장소에 STEP 파일 없음), gmsh로 같은 형상의 baseline tetra4 메시를 생성(1 MB 미만). 배포·`collect-offline` 묶음에는 build123d·gmsh를 넣지 않는다.
+- **가상 쿠션 시험 자료(개발·테스트 전용, §5.1 `test` extra)**: 개발 환경 골든(§9 단계 0 (a))의 원천. build123d로 가상 쿠션 STEP을 시험이 생성(다중 바디·바디 이름·리브·포켓·구배·작은 필렛, 정답 치수, 공칭/변형형 쌍, 경계 사례 — 저장소에 STEP 파일 없음), gmsh로 같은 형상의 baseline tetra4 메시 생성(1 MB 미만), 합성 조립 폴더 생성(가짜 starter rad + `104_*.inc`(`/NODE`·`/TETRA`만, `/PART`·`/PROP` 없음) + 합성 `RENUM_INIT.csv`). 배포·`collect-offline` 묶음에는 build123d·gmsh를 넣지 않는다.
+- **gmsh baseline 생성 파라미터(2026-10-19, 현행 SimLab 설정에 맞춤, §4.9)**: 평균 요소 크기 10 mm, 최소 1 mm, grade factor 1.5(크기 장 증가율), 곡률 기반 크기 — 요소당 최대 각도 45°·곡률 최소 요소 크기 5 mm, 작은 필렛은 "merge tiny fillet"에 대응해 min size 1 mm 미만 피처 병합(가상 쿠션의 작은 필렛은 이 임계 근처 크기로 한 개 넣어 경계 사례로 사용), 표면 aspect ≤ 10, 4면체 일차(tetra4), 내부 격자 grading 2에 해당하는 완만한 크기 전이. 생성 후 baseline이 §6.5 (c) 기준을 만족하는지 시험이 확인(불만족이면 파라미터 조정 — 시험 실패로 처리).
 - 계층 시험(architecture R0): `physicsai_core`·`physicsai_api`·`physicsai_worker`에서 `paicad`·`OCP` import 금지 검사 추가.
 
 ---
@@ -804,7 +810,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 |---|---|
 | ④ `ParamSetCard`·`ParamSetDiscoverForm` | "형상 엔진" 2단 선택 [SimLab | native](기본 `/status.geometry.engine_default`, native 불가면 비활성 + 사유). native: tpl 칸 숨김, CAD 후보 = STEP, 조립 폴더 필수 안내 "기준 메시 104_replace_node_elem.inc 필요". 등록 = 작업 진행 표시(기존 작업 진행 컴포넌트) |
 | ④ 세트 상세 | 피처 표(이름·종류·바디·공칭·범위·모핑 가능 범위(`feasible`)·그룹·기준면 "자동"; 사용자 범위가 가능 범위를 넘으면 경고 배지, 저장은 허용) + 행 클릭 시 하이라이트 PNG. 준비 상태 배지 READY/STALE(+ "형상 준비 다시" 버튼) |
-| ④ 세트 상세 "검사 기준(고급)" | **접힘 1개**. 품질(min Jacobian·max aspect·min edge 비), 간섭(바디·제품 mm), 편차(경계 mm·파라미터 abs/rel), tie 필수 여부. 칸 placeholder = 기본값, 저장 = `PATCH geom_options`, "기본값으로" = 해당 키 제거 |
+| ④ 세트 상세 "검사 기준(고급)" | **접힘 1개**. 품질(min stretch·max aspect·min edge mm·Δt 비), 간섭(바디·제품 mm), 편차(경계 mm·파라미터 abs/rel), tie 필수 여부. 칸 placeholder = 기본값, 저장 = `PATCH geom_options`, "기본값으로" = 해당 키 제거 |
 | ④ 일괄 예측 결과 표 | 생성 실패 행 사유 칸에 category 배지(CAD 생성 불가/간섭/품질 미달/편차 초과/tie 투영 실패) + message |
 | ①-1 | 엔진 선택(같은 2단), native는 STEP만 |
 | ①-2 | native: tpl 생성 버튼 숨김, "피처 n개 · 하이라이트 보기" |
@@ -822,10 +828,10 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 | 단계 | 산출물 | 완료 기준 |
 |---|---|---|
-| **0 골든 세트** | 서버 AI 루트 `golden/geometry/G1/`: `nominal.step`(다중 바디) 또는 `parts/*.step`, `radioss_assem/`(starter·기준본·RENUM csv·제품 inc), `samples/S1~S3/`(NX로 파라미터 바꾼 `sample.step` + `values.json` + SimLab 메시 `EPS_mesh_0000.rad` + m_2 include + Radioss 결과 h3d/T01), `README.txt`(파라미터·값·단위·출처). 저장소에는 합성 소형 세트 생성 스크립트(`packages/paicad/tests/data/make_synthetic.py`)만 | 사용자가 G1 폴더 준비 확인(§15 Q1 좌표 일치·Q3 inc 구성은 2026-10-17 확정) |
-| **1 tag+extract** | `paicad version/extract/tag`, `paicad.mesh` 읽기·쓰기(무변경 왕복), ①-1 native, `PARAM_SET_NATIVE`·discover·validate native, migration 0012, `/status`·환경 점검, UI(엔진 선택·피처 표·PNG), fake_paicad | G1: 바디 대응 100%, `match_ratio ≥ 0.98`, 피처 목록을 사용자가 확인(누락·오인식 목록 기록). 무변경 왕복 include = 기준본과 바이트 동일. `scripts/test-all` 통과 |
-| **2 update+morph+inc** | `paicad update/morph`, 고정폭 쓰기, face_map, **모핑 한계 측정**(`paicad morph --sweep` → `envelope.json/csv`, `parameter_features.json` `feasible` 반영, 골든 쿠션 1종 envelope 보고서 `golden/geometry/G1/report_envelope.md`+csv, §11.2) | G1 S1~S3: update B-rep vs NX `sample.step` 면별 최대 거리 ≤ 0.01 mm·부피 차 ≤ 0.1%. 모핑 메시 경계 노드 ↔ NX 형상 최대 거리 ≤ 0.05 mm. 출력 include diff = `/NODE` 좌표 필드만. 반전 요소 0. **G1 전 파라미터 envelope 완료(실패 직전·첫 실패 코드 기록), `feasible` 갱신, 같은 입력 2회 envelope 바이트 동일** |
-| **3 check+스킵** | `paicad check/run`, 실패 코드, PREDICT(A) native 체인, 고급 옵션 저장·사용값 기록, UI 고급 옵션 | 5개 실패 유형마다 의도적 실패 샘플(합성)로 코드·사유 확인. G1 S1~S3 PREDICT(A) native 성공·예측 h3d 생성. `P/geom/options.json`에 사용값 |
+| **0 골든(개발 환경 + 현장 인수 키트)** | **(a) 개발 환경 골든**(저장소·CI, 실물 CAD·조립 폴더는 사내 반출 불가라 쓰지 않음): build123d 가상 쿠션(다중 바디·바디 이름·리브·포켓·구배·작은 필렛) + gmsh tetra4 baseline(§7.8 파라미터) + 합성 조립 폴더(가짜 starter rad·`104_*.inc`(`/NODE`·`/TETRA`만)·합성 `RENUM_INIT.csv`). 생성 스크립트 `packages/paicad/tests/data/make_synthetic.py`(저장소에 STEP·메시 파일 없음). **정답 비교의 1차 근거**. **(b) 현장 인수시험 키트**: 폐쇄망에서 사용자가 실물(G1 폴더: 공칭 STEP·`radioss_assem/`·NX 변경 샘플 S1~S3)로 실행하는 `paicad selftest`(및 검증 스크립트). **CAD·메시 본문 없이 수치 요약 리포트만** 생성(`selftest_report.json`·`.md`: 태깅 미분류 수·`match_ratio`, 파라미터 재측정 오차, 경계 편차, 품질 지표(stretch·aspect·min edge), envelope 요약, 무변경 왕복 바이트 동일 여부, NX 변경 샘플 비교 수치). 사용자가 요약 수치만 전달 | (a) `scripts/test-all`에서 가상 쿠션 시험 통과(단계 1~3 정답 비교, 키트 코드 자체도 합성 세트로 시험). (b) 키트 명세(`selftest` 인자·리포트 필수 키)가 계약에 확정되고 합성 세트로 리포트 생성 확인 — 실물 실행·수치 회신은 단계별 "현장 인수"(§15 Q1 좌표 일치·Q3 inc 구성은 2026-10-17 확정) |
+| **1 tag+extract** | `paicad version/extract/tag`, `paicad.mesh` 읽기·쓰기(무변경 왕복), ①-1 native, `PARAM_SET_NATIVE`·discover·validate native, migration 0012, `/status`·환경 점검, UI(엔진 선택·피처 표·PNG), fake_paicad | (a) 가상 쿠션: 바디 대응 100%, `match_ratio ≥ 0.98`, 피처 목록 = 정답 목록(누락·오인식 0), 무변경 왕복 include = 기준본과 바이트 동일, `scripts/test-all` 통과. **현장 인수(키트 (b))**: 실물 G1 바디 대응 100%·`match_ratio ≥ 0.98`·태깅 미분류 수·무변경 왕복 바이트 동일 여부 수치 회신, 피처 목록(누락·오인식)은 사용자가 현장에서 확인해 건수만 회신 |
+| **2 update+morph+inc** | `paicad update/morph`, 고정폭 쓰기, face_map, **모핑 한계 측정**(`paicad morph --sweep` → `envelope.json/csv`, `parameter_features.json` `feasible` 반영, 가상 쿠션 envelope 보고서 `report_envelope.md`+csv(개발 환경 산출물), §11.2) | (a) 가상 쿠션 공칭/변형형 쌍: update B-rep vs 정답 변형형 면별 최대 거리 ≤ 0.01 mm·부피 차 ≤ 0.1%, 모핑 메시 경계 노드 ↔ 정답 형상 최대 거리 ≤ 0.05 mm, 출력 include diff = `/NODE` 좌표 필드만, 반전 요소 0, **전 파라미터 envelope 완료(실패 직전·첫 실패 코드 기록), `feasible` 갱신, 같은 입력 2회 envelope 바이트 동일**. **현장 인수(키트 (b))**: 실물 S1~S3(NX 변경 샘플) update vs `sample.step` 면별 거리·부피 차, 경계 편차, 품질 지표, 실물 쿠션 envelope 요약(`report_envelope` 대체로 요약 수치만 회신, 같은 기준) |
+| **3 check+스킵** | `paicad check/run`, 실패 코드, PREDICT(A) native 체인, 고급 옵션 저장·사용값 기록, UI 고급 옵션, `BASELINE_QUALITY_BELOW` 경고 | (a) 5개 실패 유형마다 의도적 실패 샘플(합성·가상 쿠션)로 코드·사유 확인, 가상 쿠션 baseline이 §6.5 (c) 기준 통과(`baseline_status: PASS`)·기준을 일부러 높이면 `BASELINE_QUALITY_BELOW`, PREDICT(A) native 체인(fake 솔버 경유) 성공, `P/geom/options.json`에 사용값. **현장 인수(키트 (b))**: 실물 S1~S3 PREDICT(A) native 성공·예측 h3d 생성 여부, 실물 baseline의 `baseline_status`(FAIL이면 `BASELINE_QUALITY_BELOW` 및 baseline 최솟값 수치 회신) |
 | **4 DOE native** | ①-3 native(LHS·tag 1회·run 병렬·SKIPPED.json·paramitem), ④ PREDICT_BATCH native, ⑤ 내장 최적화 경유 확인, 엔진 분리(datasets·models·409) | G1 LHS 20 run: 스킵률·사유 표, ② h3d 미리보기·③ 데이터셋 생성이 코드 변경 없이 run 폴더를 찾음, `samples.csv`(paramitem) 값 = `doe_matrix.csv`. 혼용 시 422/409 |
 | **4B 다중 baseline**(고급 옵션, **단계 2 envelope 결과 확인 후 착수**, 4 이후) | `paicad map`, `param_map.json`(§4.10), `PARAM_SET_NATIVE` `BL_MAP` 단계(§7.3.8)·`assign_baseline`·층화 LHS, `baseline_id` run 메타·범주형 입력, 합성 세트 2종(리브 개수 다른 2 baseline = 위상 변형 / 같은 위상·공칭 다른 3 baseline = 범위 분할), UI 접힘, fake_paicad `map` | 합성 세트로: 자동 매칭률(정답 매핑 대비)·N/A 처리, 이름 충돌 `PARAM_NAME_CONFLICT`, 범위 분할 경계·겹침·틈(`BASELINE_NO_COVER`) 배정 표, 층화 LHS baseline별 샘플 수 차 ≤ 1·같은 seed 같은 행렬, 데이터셋 1개에 `baseline_id`. **단일 baseline 세트의 기존 시험 무수정 통과** |
 | **3S 쉘 두께**(단계 3과 병행 가능, CAD 불필요) | `paicad props scan/apply`, 파라미터 표 병합(extract 결과 + PROP), 두께만 있는 param_set 허용, UI 표 행, 합성 시험 | 합성 조립 rad(공유 PROP·요소별 두께·TYPE9 포함)로 `PROP_OVERRIDDEN_BY_ELEMENT`·`PROP_THICKNESS_INVALID`·공유 경고·'미지원' 표시 확인, 출력 diff = 해당 PROP 두께 필드만, 원본·SPDM 불변 |
@@ -836,12 +842,12 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 ## 10. 검증 계획
 
-1. **골든 형상 비교**(단계 2·3): G1 샘플마다 (a) native 샘플 B-rep ↔ NX STEP 면별 Hausdorff, (b) native 모핑 메시 경계 ↔ NX STEP 거리, (c) 바디 부피·표면적 차, (d) native 메시 ↔ SimLab 메시(위상 다름) 외피 Hausdorff ≤ 메시 크기 0.25배. 표로 기록(`golden/geometry/G1/report_native.csv`).
-2. **Radioss 응답 동등**(단계 3): 같은 조립 rad로 (i) SimLab 메시(m_2 include) (ii) native include를 각각 Radioss 해석(사용자 PBS/SCX). 비교 지표: 쿠션 최대 von Mises·최대 변형률, 제품 최대 가속도(T01), 내부 에너지 최대, 시간 이력 NRMSE. 기준(제안): 피크 차 ≤ 5%, NRMSE ≤ 5%, 시간 간격 비(dt) 차 ≤ 10%. 기준 밖이면 원인(메시 품질·형상 차) 분석 후 허용오차 조정 제안.
-3. **PhysicsAI 예측 동등**(단계 4): G1 학습 모델로 (i)·(ii) 입력 예측 비교 — 응답 차가 학습 오차 수준인지 확인(정보).
+1. **골든 형상 비교**(단계 2·3, **(a) 개발 환경 = 가상 쿠션 정답 비교(6)가 1차**, 실물 의존 항목은 **현장 인수(키트 (b))**로 표시): 현장 인수 시 실물 G1 샘플마다 (a) native 샘플 B-rep ↔ NX STEP 면별 Hausdorff, (b) native 모핑 메시 경계 ↔ NX STEP 거리, (c) 바디 부피·표면적 차, (d) native 메시 ↔ SimLab 메시(위상 다름) 외피 Hausdorff ≤ 메시 크기 0.25배 — **`paicad selftest`가 수치 요약(`report_native.csv`, CAD·메시 본문 없음)만 생성**하고 사용자가 수치만 전달. 실물 NX 변경 샘플 비교도 키트에서 현장 실행.
+2. **Radioss 응답 동등**(단계 3, **현장 인수**): 같은 조립 rad로 (i) SimLab 메시(m_2 include) (ii) native include를 각각 Radioss 해석(사용자 PBS/SCX). 비교 지표: 쿠션 최대 von Mises·최대 변형률, 제품 최대 가속도(T01), 내부 에너지 최대, 시간 이력 NRMSE. 기준(제안): 피크 차 ≤ 5%, NRMSE ≤ 5%, 시간 간격 비(dt) 차 ≤ 10%. 기준 밖이면 원인(메시 품질·형상 차) 분석 후 허용오차 조정 제안. 사용자는 지표 수치만 회신(결과 파일 반출 없음).
+3. **PhysicsAI 예측 동등**(단계 4, **현장 인수**): 실물 학습 모델로 (i)·(ii) 입력 예측 비교 — 응답 차가 학습 오차 수준인지 확인(정보, 수치만 회신).
 4. **회귀**: altair 경로 시험 전부 통과(엔진 기본값 altair), fake_paicad 시험, paicad 단위·통합 시험.
 5. **결정성**: 같은 입력 2회 실행 → `morphed.inc` 바이트 동일.
-6. **가상 쿠션 정답 비교**(단계 2~3, CI 자동): build123d로 공칭형·변형형(파라미터 값만 다른 쌍)을 만들고 gmsh로 공칭 baseline 메시 생성 → 공칭 STEP extract·update·morph 결과(B-rep·모핑 메시 경계)를 build123d 변형형과 비교(면별 거리·부피·재측정 파라미터 값 vs 정답 치수, 기준 = (1)과 같은 허용오차). 경계 사례(기준면 규칙 ①②③·대칭 그룹 분리·다중 바디·바디 이름 매핑)도 여기서 판정. NX 변경 샘플은 실물 확인용 1~2개로 축소((1)의 G1 S1~S3 중).
+6. **가상 쿠션 정답 비교**(단계 2~3, CI 자동, 개발 환경 골든 (a) — 정답 비교의 1차 근거): build123d로 공칭형·변형형(파라미터 값만 다른 쌍)을 만들고 gmsh로 공칭 baseline 메시 생성(§7.8 파라미터) → 합성 조립 폴더에 넣어 공칭 STEP extract·update·morph·check 결과(B-rep·모핑 메시 경계)를 build123d 변형형과 비교(면별 거리·부피·재측정 파라미터 값 vs 정답 치수, 기준 = (1)과 같은 허용오차). 경계 사례(기준면 규칙 ①②③·대칭 그룹 분리·다중 바디·바디 이름 매핑·작은 필렛·`BASELINE_QUALITY_BELOW`)도 여기서 판정. NX 변경 샘플 비교는 실물이 필요하므로 키트 (b)로 현장 실행한다.
 
 ---
 
@@ -861,7 +867,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 - **재메시**: 비범위 — 모핑 성능 한계를 아직 모르므로 envelope 결과를 본 뒤 재검토. 모핑 실패는 스킵(§6.5).
 - **명령**: `paicad morph --sweep`(§5.3). 파라미터별 **1D 스윕**(다른 파라미터는 공칭): 공칭 대비 ±5%, ±10%, ±20%, ±30%, … 실패 직전까지(각 방향 독립, `--stop-after-fail` 연속 실패 시 중단). 각 단계는 update → morph → check 전체를 실행.
-- **표(`envelope.json` + `envelope.csv`, 한 행 = 파라미터·방향·단계)**: `param`, `direction`(±), `pct`, `value`, `status`(OK/FAIL), `fail_code`(`GEOM_*`, 첫 실패), 품질 지표 `min_jacobian`·`max_aspect`·`min_edge_ratio`(Δt 비 = 최소 엣지/공칭 최소 엣지), `boundary_dev_max_mm`, `param_remeasure_err`(abs·rel), `inverted_elems`. 파라미터별 요약: `last_ok_pct`(+/−)·`first_fail_pct`·`first_fail_code`. 상단에 `schema_version`·`engine_version`·옵션 사용값.
+- **표(`envelope.json` + `envelope.csv`, 한 행 = 파라미터·방향·단계)**: `param`, `direction`(±), `pct`, `value`, `status`(OK/FAIL), `fail_code`(`GEOM_*`, 첫 실패), 품질 지표 `min_stretch`·`max_aspect`·`min_edge_ratio`(Δt 비 = 최소 엣지/공칭 최소 엣지), `boundary_dev_max_mm`, `param_remeasure_err`(abs·rel), `inverted_elems`. 파라미터별 요약: `last_ok_pct`(+/−)·`first_fail_pct`·`first_fail_code`. 상단에 `schema_version`·`engine_version`·옵션 사용값.
 - **반영**: 요약의 `last_ok`를 `parameter_features.json`의 `feasible`(min·max)에 기록(`source: "envelope"`, `sweep_id`; 미측정은 `source: "estimate"` = §6.2 추정). 사용자 범위가 `feasible`을 넘으면 UI 경고(§8, **차단 아님**).
 - **보고서**: 골든 쿠션 1종(G1) envelope 결과를 `golden/geometry/G1/report_envelope.md`+csv로 남겨 재메시 필요성 판단 근거로 사용(파라미터별 모핑 가능 범위, 한계를 정하는 지표·실패 코드, 기본 ±5% 대비 여유).
 
@@ -897,7 +903,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 | 리스크 | 영향 | 대응 |
 |---|---|---|
-| 공칭 STEP과 기준 메시 좌표 불일치(원점·단위·디피처링) | tag 실패 → native 불가 | 단계 0에서 확인(Q1), `GEOM_BASELINE_MISMATCH`로 조기 차단, 자동 정렬 안 함 |
+| 공칭 STEP과 기준 메시 좌표 불일치(원점·단위·디피처링) | tag 실패 → native 불가 | 현장 인수(키트 (b))에서 확인(Q1), `GEOM_BASELINE_MISMATCH`로 조기 차단, 자동 정렬 안 함 |
 | OCCT push/pull이 위상을 바꿈(면 병합·분할, 필렛 소멸) | CAD 생성 불가 스킵 증가 | `feasible` 범위, 위상 검사, 범위 기본 ±5% |
 | 피처 오인식(구배·곡면 쿠션) | 잘못된 파라미터 | PNG 하이라이트로 사용자 확인, 재측정 (a) |
 | 대변형 시 메시 찌그러짐 | 품질 미달 스킵 | 1/V 강성, 품질 검사, ±5% 범위 |
@@ -911,6 +917,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | build123d·gmsh가 본체 OCP 버전을 바꿈 | 면 번호·시험 결과 변동, 배포 오염 | `test` extra 한정·배포 묶음 제외, OCP 버전 일치 고정 규칙·시작 단언(§5.1) |
 | 쉘 두께 변경(3S)이 접촉 gap(Igap)·Δt·질량을 바꿈 | 응답 변화에 형상 외 효과 혼입, Δt 감소로 해석 시간 증가 | run 기록에 두께 값 저장, 공유 PROP 경고, 범위 ±5% |
 | 다중 baseline(4B): 자동 매칭 오매칭·baseline 간 메시 차·구간 경계 불연속 | 잘못된 공통 변수·응답에 메시 차 혼입 | 매칭 점수·사용자 확인 UI, 범주형 `baseline` 입력, `BASELINE_RANGE_GAP` 경고, 합성 정답 매핑 시험 |
+| 실물 골든을 반출할 수 없어 개발 환경이 가상 쿠션에만 의존 | 실물 특성(복잡 곡면·메시 품질 분포)이 시험에 없음 → 현장에서 처음 발견 | 키트 (b) 수치 요약 리포트로 단계별 현장 인수, 실패 항목은 수치로 가상 쿠션 시험에 재현 케이스 추가 |
+| stretch 식이 SimLab과 다르거나 baseline이 기준 미달 | 기준이 과하거나 느슨 / 모든 샘플 경고 | 정의 명시(§6.5), 키트에서 baseline 수치 회신, `BASELINE_QUALITY_BELOW`는 비차단·기준 완화는 사용자 선택(Q18) |
 | 모핑 한계(가능 범위)를 모름 | 넓은 범위에서 스킵 급증 | 단계 2 envelope 측정(§11.2)·`feasible` 반영·UI 경고 |
 
 ---
@@ -941,7 +949,9 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - V-GE-8 엔진 혼용 409/422, altair 기존 시험 전부 통과.
 - V-GE-9 고급 옵션 저장·병합·범위 검사, 사용값 `options.json` 기록, tag 절 변경 시 STALE.
 - V-GE-10 migration 0012 업그레이드·기존 행 기본값·CHECK.
-- V-GE-16 envelope(§11.2): `morph --sweep`이 `envelope.json/csv`를 필수 열(품질 3지표·경계 편차·재측정 오차·실패 코드)과 함께 출력, 같은 입력 2회 바이트 동일, `feasible`에 `source: envelope` 반영, 범위 초과는 UI 경고만(차단 없음), 골든 쿠션 report_envelope 존재.
+- V-GE-16 envelope(§11.2): `morph --sweep`이 `envelope.json/csv`를 필수 열(품질 3지표(stretch·aspect·엣지)·경계 편차·재측정 오차·실패 코드)과 함께 출력, 같은 입력 2회 바이트 동일, `feasible`에 `source: envelope` 반영, 범위 초과는 UI 경고만(차단 없음), 골든 쿠션 report_envelope 존재.
+- V-GE-20 골든·키트(§9 단계 0): 개발 환경 골든이 build123d·gmsh(§7.8 파라미터)·합성 조립 폴더로 생성되고 저장소에 STEP·메시 파일 없음, `paicad selftest` 리포트에 CAD·메시 본문·좌표 배열이 없고 필수 수치 키만 존재, 실물 의존 항목이 "현장 인수"로 표시됨.
+- V-GE-21 품질 기준(§6.5): 기본값 stretch ≥ 0.1·aspect ≤ 10·min edge ≥ 1 mm·Δt 비 유지, 공칭 baseline 평가 `baseline_status`·FAIL 시 `BASELINE_QUALITY_BELOW`(비차단), 옵션 범위·사용값 기록.
 - V-GE-17 다중 baseline(§11.4): 단일 baseline 세트는 `baselines/`·`param_map.json` 없이 기존 경로·시험 불변(V-GE-12 포함), `param_map.json` `schema_version`·N/A(null)·`PARAM_NAME_CONFLICT`(map·PUT 모두), 배정 규칙(최근접 공칭·`feasible` 이내·틈 → `BASELINE_NO_COVER` 스킵·다른 run 계속), values.json 키 = baseline 원 이름. 단일 baseline 세트에서 `BL_MAP` = SKIPPED·새 job_type 없음(`JOB_TYPES`에 `PARAM_BASELINE_NATIVE` 부재), 매칭 점수 시험(게이트 3종·가중합·헝가리안·0.7/0.5 등급 경계·대칭 그룹 크기 불일치·옵션 변경 반영), 위상+범위 혼합 입력은 `GEOM_INPUT_INVALID`. **매칭표 확정 게이트**: `paicad map` 출력은 항상 `status: draft`·`confirmed_by/at` null·행마다 `proposed`/`decision` 분리(점수 ≥0.7이어도 `decision` null), 미확정에서 run 생성(DOE·일괄·단건) 409 `PARAM_MAP_UNCONFIRMED`, `confirm` 후 `confirmed_by/at` 기록, add_baseline·remap 후 draft 복귀 + 서명 같은 행 `decision` 승계·변경 행 `needs_review`.
 - V-GE-18 4B DOE·데이터: baseline별 샘플 수 차 ≤ 1, 같은 seed 같은 `doe_matrix.csv`, 데이터셋 1개·run 메타 `baseline_id`·학습 입력 범주형 `baseline` + N/A 변수 결측 지시 열·0 대체, `baseline_id` DB 열 없음(migration 0012 불변), `paicad map`이 플랫폼 모듈 import·플랫폼 파일명 하드코딩 없음(V-GE-13·14).
 - V-GE-15 쉘 두께(§11.1): TYPE1만 적용·TYPE9/10/11 '미지원' 표시, 출력 diff = 지정 PROP 두께 필드만(고정폭 보존), 원본·SPDM 불변, 공유 PROP 경고, 요소별 두께 → `PROP_OVERRIDDEN_BY_ELEMENT`, 두께 ≤0 → `PROP_THICKNESS_INVALID`, 두께만 있는 param_set 동작, 파라미터 표 병합·XML 호환, altair 경로 무변경.
@@ -969,9 +979,11 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q5 | `RENUM_INIT.csv` 실제 형식이 `part,node_start,elem_start`이고 part = 쿠션 component 이름인가(코드에는 파일 이름만 있음)? 쿠션 외 part 행이 있나? | 사용자 진술대로. 쿠션 외 행은 STEP 바디가 없으면 `GEOM_BODY_MAP_FAILED` — 있으면 `body_map.json`에 `"<part>": null`(고정) 지원 여부 결정 필요 |
 | Q6 | `mesh_only` 템플릿(조립 폴더 없음)도 native가 필요한가? | 미지원(기준 메시 없음). 필요하면 세트에 `baseline/EPS_mesh_0000.rad`를 두는 변형을 별도 결정 |
 | Q7 | ~~tie 정의 해석 실패 시 실패(엄격)로 할지 경고로 할지, 기본 dsearch 값~~ | **해결(2026-10-17 사용자 확정)**: 엄격(실패) 원칙 유지. 단 쿠션 한정 범위에서는 쿠션에 적용된 tie가 없어 (e)는 "해당 없음 → `SKIPPED` 기록"(§6.5). 검사·실패 코드 유지(향후 범위 확대 대비). 기본 dsearch = 공칭 최대 거리 × 1.5 |
-| Q8 | 품질·편차 기본 기준값(min Jacobian 0.2, aspect 10, 경계 0.05 mm, 파라미터 1%)이 사내 메시 기준과 맞나? | 표 값 |
+| Q8 | ~~품질·편차 기본 기준값이 사내 메시 기준과 맞나?~~ | **해결(2026-10-19 사용자 확정)**: 현행 SimLab 설정 기준 — stretch ≥ 0.1, aspect ≤ 10, min edge ≥ 1 mm(Δt 비 기준 유지), 경계 0.05 mm·파라미터 1%는 유지. gmsh baseline 파라미터도 같은 값(§7.8). baseline이 기준 미달이면 `BASELINE_QUALITY_BELOW` 경고(비차단). 정확한 SimLab stretch 식과의 차이는 Q18 |
 | Q9 | ~~대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지~~ | **해결(2026-10-17 사용자 확정)**: 기본 묶음, 파라미터 표·매칭표의 "분리" 동작으로 사용자가 해제(§6.2, GE-14) |
-| Q10 | cadquery-ocp 고정 버전과 사내 보안 승인(wheel 출처 PyPI) | Impl이 cp312 win_amd64 wheel 확인 후 고정, 사용자 승인 필요 |
+| Q10 | ~~cadquery-ocp 고정 버전과 사내 보안 승인~~ | **해결(2026-10-19 사용자 확정)**: 소스 개발은 인터넷 PC(GitHub), 폐쇄망 배포는 설치 형식(오프라인 묶음 `deploy/collect-offline.ps1` → 설치), cadquery-ocp wheel 포함, 별도 사내 보안 승인 이슈 없음. Impl이 cp312 win_amd64 wheel 버전 고정. 테스트 의존(build123d·gmsh)은 배포 묶음 제외 유지 |
+| Q18 | SimLab "tet stretch" 정확한 식이 §6.5 정의(`2√6·r_in/L_max`)와 같은가? (이 정의에서는 stretch 0.1 ≡ aspect 10) | 같다고 가정. 현장 인수 키트 (b)의 baseline 수치로 비교 후 조정(미결) |
+| Q19 | 실물 G1 인수 키트 `paicad selftest` 리포트 필수 키·회신 수치 목록 확정, 씬 엔진 자료 | 키트 명세는 Impl 초안 → Plan 확인. 씬 엔진 자료는 나중(2026-10-19, 변경 없음) |
 | Q11 | 같은 native 데이터셋에 paicad MINOR가 다른 run이 섞일 때 경고로 충분한가, 차단(422)해야 하나? 모델 등록·예측 때 모델의 `engine_version`과 현재 paicad MINOR가 다르면? | 데이터셋 경고 `ENGINE_VERSION_MIXED`(차단 아님, §17.4). 예측 시 비교는 1차 없음 |
 | Q12 | 출력 include에 `# paicad x.y.z` 주석 줄을 허용할지(추적 편의 vs 바이트 동일 원칙) | 불허(§17.3). 허용하려면 V-GE-4·§6.4 예외 규칙을 함께 고쳐야 함 |
 

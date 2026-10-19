@@ -139,3 +139,8 @@
 - 2026-10-17 Q2·Q9 해결 및 시험 의존성 확정: 두께 기준면 = ① 한쪽만 접촉 → 접촉면 고정 ② 양면 접촉 → 변경 불가 구속(경고·기본 use=false) ③ 비접촉 → 중심에서 먼 면 이동, 파라미터별 변경은 고급 옵션; 대칭 그룹 기본 묶음·표의 "분리"로 해제; envelope는 5·10·20·30·40·50% 스윕·연속 2회 실패 중단 확정; build123d·gmsh는 개발·테스트 전용(extra `test`, 배포 제외, build123d 요구 cadquery-ocp 범위 ∋ 본체 고정 OCP), §10에 가상 쿠션 정답 비교 추가·NX 샘플 1~2개로 축소, 형상 생성 모듈(extra `gen`)은 §18.8 로드맵(비범위) — 근거: 사용자 확정 · geometry-engine.md GE-8·GE-10·GE-14, §5.1·§6.2·§10·§15·§18.8
 - 2026-10-17 paicad 커널 격리: OCCT 호출은 kernel/ 어댑터 안에서만, 경계는 중립 타입 — OCP 업그레이드·커널 교체·gen 모듈 연결 대비(geometry-engine §18.9, V-GE-19)
 - 2026-10-17 화면 단계 재편: ④예측·⑤결과분석(신설, 입력=결과 표: 해석 DOE 또는 일괄 예측)·⑥최적화. 내부 코드 경로·job 이름은 유지하고 메뉴·표시 번호만 변경, ⑤의 해석 DOE 결과 표 API만 백엔드 추가 — 영향도 분석은 출처 무관, 리팩터링 최소화(별도 브랜치·계약으로 진행)
+
+## 2026-10-19
+
+- 2026-10-19 골든 세트(실물 CAD·조립 폴더) 사내 반출 불가 → 단계 0 재정의: (a) 개발 환경 골든 = build123d 가상 쿠션 + gmsh tetra4 baseline + 합성 조립 폴더(정답 비교 1차 근거), (b) 현장 인수 키트 `paicad selftest`(폐쇄망 실물 실행, CAD·메시 본문 없이 수치 요약만 회신, NX 변경 샘플 비교 포함), 실물 의존 항목은 "현장 인수" 표시 — 근거: 사용자 확정(반출 불가) · geometry-engine.md §9·§10·V-GE-20
+- 2026-10-19 Q8 해결(현행 SimLab 설정 기준): check 기본값 stretch ≥ 0.1·aspect ≤ 10·min edge ≥ 1 mm(Δt 비 유지), gmsh baseline = avg 10/min 1/grade 1.5/곡률 45°·5 mm, baseline 기준 미달은 `BASELINE_QUALITY_BELOW`(비차단, 완화는 사용자 선택), SimLab stretch 식 차이 가능성은 Q18 미결. Q10 해결: 인터넷 PC(GitHub) 개발 → 오프라인 묶음 설치 배포, cadquery-ocp wheel 포함·보안 승인 이슈 없음, build123d·gmsh는 배포 제외 유지 — 근거: 사용자 확정 · geometry-engine.md §4.9·§6.5·§7.8·§15
