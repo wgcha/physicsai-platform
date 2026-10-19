@@ -59,14 +59,22 @@ def validate(opts: dict) -> list[str]:
         p.append("thickness_ref_overrides must be an object")
     if not isinstance(opts.get("symmetry_split"), list):
         p.append("symmetry_split must be a list")
+    m = opts["morph"]
+    nu = m.get("poisson")
+    if not (isinstance(nu, (int, float)) and not isinstance(nu, bool) and math.isfinite(nu) and 0 <= nu < 0.5):
+        p.append("morph.poisson must be in [0, 0.5)")
+    if not (_pos(m.get("solver_rtol")) and m["solver_rtol"] < 1):
+        p.append("morph.solver_rtol must be in (0, 1)")
+    if not (isinstance(m.get("solver_maxiter"), int) and not isinstance(m["solver_maxiter"], bool) and m["solver_maxiter"] >= 1):
+        p.append("morph.solver_maxiter must be an integer >= 1")
     q = opts["quality"]
     if not (_pos(q.get("min_stretch")) and q["min_stretch"] <= 1):
         p.append("quality.min_stretch must be in (0, 1]")
     if not (_pos(q.get("max_aspect")) and q["max_aspect"] >= 1):
         p.append("quality.max_aspect must be >= 1")
     me = q.get("min_edge_mm")
-    if me is not None and not (_pos(me) or (isinstance(me, (int, float)) and not isinstance(me, bool) and me == 0)):
-        p.append("quality.min_edge_mm must be null or a finite number >= 0")
+    if me is not None and not _pos(me):
+        p.append("quality.min_edge_mm must be null or a finite number > 0")
     for k in ("min_edge_ratio", "dt_ratio_min"):
         if not (_pos(q.get(k)) and q[k] <= 1):
             p.append(f"quality.{k} must be in (0, 1]")
@@ -88,6 +96,27 @@ def validate(opts: dict) -> list[str]:
     return p
 
 
+# keys allowed in an options file besides the DEFAULTS tree: platform metadata (section 4.9 / 17.3)
+_META_KEYS = ("schema_version", "engine", "engine_version")
+# contract section 4.9 places position_range_mm at the top level; paicad keeps it in the extract section
+_TOP_ALIASES = {"position_range_mm": ("extract", "position_range_mm")}
+# sections whose values are free-form maps (keys = parameter names), not checked against DEFAULTS
+_FREE_SECTIONS = ("thickness_ref_overrides",)
+
+
+def unknown_keys(over: dict) -> list[str]:
+    """Dotted names of keys that are not options (typos must not be ignored silently)."""
+    bad: list[str] = []
+    for k, v in over.items():
+        if k in _META_KEYS or k in _TOP_ALIASES:
+            continue
+        if k not in DEFAULTS:
+            bad.append(k)
+        elif isinstance(DEFAULTS[k], dict) and k not in _FREE_SECTIONS and isinstance(v, dict):
+            bad += [f"{k}.{s}" for s in v if s not in DEFAULTS[k]]
+    return bad
+
+
 def load(path: str | Path | None) -> dict:
     over: dict = {}
     if path:
@@ -100,7 +129,21 @@ def load(path: str | Path | None) -> dict:
             raise PaicadError("GEOM_INPUT_INVALID", "options file must be a JSON object")
         if over.get("schema_version", 1) != 1:
             raise PaicadError("GEOM_INPUT_INVALID", f"unsupported options schema_version: {over.get('schema_version')}")
-    opts = _merge(DEFAULTS, {k: v for k, v in over.items() if k not in ("engine", "engine_version")})
+    bad = unknown_keys(over)
+    if bad:
+        raise PaicadError("GEOM_INPUT_INVALID", "invalid options: unknown keys: " + ", ".join(bad))
+    over = {k: v for k, v in over.items() if k not in ("engine", "engine_version")}
+    for alias, (sec, key) in _TOP_ALIASES.items():
+        if alias in over:
+            v = over.pop(alias)
+            sec_over = over.get(sec)
+            if isinstance(sec_over, dict) and key in sec_over and sec_over[key] != v:
+                raise PaicadError("GEOM_INPUT_INVALID", f"invalid options: {alias} and {sec}.{key} disagree")
+            over[sec] = {**(sec_over if isinstance(sec_over, dict) else {}), key: v}
+    probs = [f"{k} must be an object" for k, v in over.items() if isinstance(DEFAULTS.get(k), dict) and k not in _FREE_SECTIONS and not isinstance(v, dict)]
+    if probs:
+        raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))
+    opts = _merge(DEFAULTS, over)
     probs = validate(opts)
     if probs:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))

@@ -223,10 +223,10 @@ def test_limit_metric_picks_smallest_margin():
     from paicad.envreport import limit_metric
 
     opts = options.load(None)
-    ok = {"status": "OK", "pct": 5.0, "value": 10.0, "fail_code": None, "min_stretch": 0.5, "max_aspect": 3.0, "min_edge_ratio": 0.9, "dt_ratio": 0.85,
+    ok = {"status": "OK", "pct": 5.0, "value": 10.0, "fail_code": None, "min_stretch": 0.5, "max_aspect": 3.0, "edge_ratio": 0.9, "dt_ratio": 0.85,
           "boundary_dev_max_mm": 0.001, "param_remeasure_err": {"abs": 0.001, "rel": 0.0001}, "inverted_elems": 0}
     assert limit_metric([ok], opts)["metric"] == "dt_ratio"
-    cad = dict(ok, status="FAIL", pct=10.0, fail_code="GEOM_CAD_FAILED", min_stretch=None, max_aspect=None, min_edge_ratio=None, dt_ratio=None,
+    cad = dict(ok, status="FAIL", pct=10.0, fail_code="GEOM_CAD_FAILED", min_stretch=None, max_aspect=None, edge_ratio=None, dt_ratio=None,
                boundary_dev_max_mm=None, param_remeasure_err={"abs": None, "rel": None}, inverted_elems=None)
     lm = limit_metric([ok, cad], opts)
     assert lm == {"metric": "GEOM_CAD_FAILED", "margin": None, "at_pct": 10.0, "at": 10.0, "unit": "%", "source": "first_fail"}

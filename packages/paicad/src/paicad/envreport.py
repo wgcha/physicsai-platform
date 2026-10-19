@@ -45,8 +45,8 @@ def margins(row: dict, opts: dict) -> dict[str, float]:
         out["max_aspect"] = float(q["max_aspect"]) / row["max_aspect"] if row["max_aspect"] > 0 else math.inf
     elif row.get("min_stretch") is not None:  # metrics recorded but aspect not finite: degenerate boundary triangle
         out["max_aspect"] = 0.0
-    if row.get("min_edge_ratio") is not None:
-        out["min_edge_ratio"] = row["min_edge_ratio"] / float(q["min_edge_ratio"])
+    if row.get("edge_ratio") is not None:
+        out["edge_ratio"] = row["edge_ratio"] / float(q["min_edge_ratio"])
     if row.get("dt_ratio") is not None:
         out["dt_ratio"] = row["dt_ratio"] / float(q["dt_ratio_min"])
     if row.get("boundary_dev_max_mm") is not None:
@@ -131,6 +131,7 @@ def render(env: dict) -> tuple[str, str]:
     md = [
         "# Morphing envelope report",
         "",
+        f"- schema_version: {env.get('schema_version')}",
         f"- engine_version: {env['engine_version']}",
         f"- sweep_id: {env['sweep_id']}",
         f"- steps, dimension parameters (% of nominal, each direction): {steps}",

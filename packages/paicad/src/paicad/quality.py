@@ -153,6 +153,26 @@ def evaluate(base_xyz: np.ndarray, new_xyz: np.ndarray, tets: np.ndarray, skin: 
     return QualityResult(status, report, "quality: " + "; ".join(problems) if problems else None, baseline_ok)
 
 
+METRIC_KEYS = (
+    "min_stretch",
+    "baseline_min_stretch",
+    "min_scaled_jacobian",
+    "max_aspect",
+    "baseline_max_aspect",
+    "min_edge_mm",
+    "baseline_min_edge_mm",
+    "edge_ratio",
+    "min_char_len_mm",
+    "baseline_min_char_len_mm",
+    "dt_ratio",
+)
+
+
+def nonfinite_metrics(report: dict) -> list[str]:
+    """Report keys whose value is null (no finite value over the elements): QUALITY_METRIC_NONFINITE."""
+    return [k for k in METRIC_KEYS if k in report and report[k] is None]
+
+
 def _r(x) -> float | None:
     """Rounded report value; non-finite (degenerate element) -> None (JSON null)."""
     if not np.isfinite(float(x)):

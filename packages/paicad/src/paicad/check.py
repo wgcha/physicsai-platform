@@ -313,6 +313,15 @@ def check_core(
                 ),
             }
         )
+    nonfinite = quality.nonfinite_metrics(q.report)
+    if nonfinite:
+        warnings.append(
+            {
+                "code": "QUALITY_METRIC_NONFINITE",
+                "metrics": nonfinite,
+                "message": f"quality metrics are not finite (degenerate elements or triangles), reported as null: {', '.join(nonfinite)}",
+            }
+        )
     if full:
         i_rep, i_msg = check_interference(comps, Xb, Xm, assem_dir, baseline_path, opts)
         if i_msg:
@@ -333,7 +342,7 @@ def check_core(
     summary = {
         "min_stretch": q.report["min_stretch"],
         "max_aspect": q.report["max_aspect"],
-        "min_edge_ratio": q.report["edge_ratio"],
+        "edge_ratio": q.report["edge_ratio"],
         "dt_ratio": q.report["dt_ratio"],
         "boundary_dev_max_mm": d_rep["max_mm"],
         "param_remeasure_err": {"abs": p_err["abs"], "rel": p_err["rel"]},

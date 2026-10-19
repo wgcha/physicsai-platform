@@ -419,18 +419,18 @@ def test_sweep_envelope_deterministic_and_feasible(golden, nominal_update, tmp_p
     for name in ("envelope.json", "envelope.csv", "parameter_features.json"):
         assert (tmp_path / "e1" / name).read_bytes() == (tmp_path / "e2" / name).read_bytes(), name
     env = load(tmp_path / "e1" / "envelope.json")
-    assert env["schema_version"] == 1 and env["engine_version"] == paicad.__version__ and env["steps_pct"] == [5.0, 20.0]
+    assert env["schema_version"] == 2 and env["engine_version"] == paicad.__version__ and env["steps_pct"] == [5.0, 20.0]
     assert env["options"]["quality"]["min_stretch"] == 0.1 and env["sweep_id"].startswith("S-")
     rows = env["rows"]
     assert {r["param"] for r in rows} == set(params.split(","))
     for r in rows:
         assert r["direction"] in ("+", "-") and r["status"] in ("OK", "FAIL")
         assert (r["fail_code"] is None) == (r["status"] == "OK")
-        assert r["min_stretch"] > 0 and r["max_aspect"] >= 1 and r["min_edge_ratio"] > 0 and r["inverted_elems"] >= 0
+        assert r["min_stretch"] > 0 and r["max_aspect"] >= 1 and r["edge_ratio"] > 0 and r["inverted_elems"] >= 0
         assert r["boundary_dev_max_mm"] <= BOUNDARY_TOL and r["param_remeasure_err"]["rel"] <= REMEASURE_REL
     with open(tmp_path / "e1" / "envelope.csv", newline="") as f:
         table = list(csv.DictReader(f))
-    assert len(table) == len(rows) and {"min_stretch", "max_aspect", "min_edge_ratio", "boundary_dev_max_mm", "fail_code", "param_remeasure_err_rel"} <= set(table[0])
+    assert len(table) == len(rows) and {"min_stretch", "max_aspect", "edge_ratio", "boundary_dev_max_mm", "fail_code", "param_remeasure_err_rel"} <= set(table[0])
     summ = {s["param"]: s for s in env["summary"]}
     feats = {f["name"]: f for f in load(tmp_path / "e1" / "parameter_features.json")["features"]}
     for p, s in summ.items():
@@ -452,7 +452,7 @@ def test_sweep_envelope_deterministic_and_feasible(golden, nominal_update, tmp_p
 
 def test_sweep_stops_after_consecutive_failures_and_keeps_steps(golden, nominal_update, tmp_path):
     upd, _ = nominal_update
-    opts = write_json(tmp_path / "o.json", {"schema_version": 1, "quality": {"min_edge_mm": 0, "min_edge_ratio": 0.01}})
+    opts = write_json(tmp_path / "o.json", {"schema_version": 1, "quality": {"min_edge_mm": None, "min_edge_ratio": 0.01}})
     code, text = run_sweep(
         golden, upd, tmp_path / "e", "--params", "CUSH_L_POCKET_D_1", "--steps", "20,160,170,180", "--stop-after-fail", "2", "--keep-steps", "--options", opts
     )

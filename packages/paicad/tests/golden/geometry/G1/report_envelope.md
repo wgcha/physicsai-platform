@@ -1,0 +1,27 @@
+# Morphing envelope report
+
+- schema_version: 2
+- engine_version: 0.5.0
+- sweep_id: S-fd06831a5868
+- steps, dimension parameters (% of nominal, each direction): 5, 10, 20, 30, 40, 50
+- steps, position parameters (mm from nominal, each direction): 1, 2, 3, 5, 8, 10
+- stop a direction after 2 consecutive failures
+- quality: min_stretch 0.1, max_aspect 10.0, min_edge_ratio 0.8, dt_ratio_min 0.8, min_edge_mm None
+- position_ref: nearest_fixed
+- limit = criterion with the smallest margin (value / threshold) at the first failure, else at the last OK step
+
+| param | nominal | unit | last OK + | last OK - | first fail + | first fail - | limit + (margin) | limit - (margin) | feasible |
+|---|---|---|---|---|---|---|---|---|---|
+| CUSH_L_THK_1 | 80.0 | % | 20 % | 10 % | 30 % GEOM_QUALITY | 20 % GEOM_FEATURE_COLLISION | min_stretch (0.7264) | GEOM_FEATURE_COLLISION (-) | 72.0 .. 96.0 |
+| CUSH_L_THK_2 | 120.0 | % | 20 % | 5 % | 30 % GEOM_QUALITY | 10 % GEOM_QUALITY | min_stretch (0.0145) | min_stretch (0.1777) | 114.0 .. 144.0 |
+| CUSH_L_THK_3 | 20.0 | % | 50 % | 20 % | - | 30 % GEOM_QUALITY | edge_ratio (1.2773) | edge_ratio (0.8888) | 16.0 .. 30.0 |
+| CUSH_L_POCKET_D_1 | 8.0 | % | 50 % | 50 % | - | - | dt_ratio (1.25) | dt_ratio (1.25) | 4.0 .. 12.0 |
+| CUSH_L_POCKET_W_1 | 29.855975 | % | 20 % | 30 % | 30 % GEOM_QUALITY | 40 % GEOM_QUALITY | min_stretch (0.5493) | min_stretch (0.5386) | 20.899182 .. 35.82717 |
+| CUSH_L_POCKET_W_2 | 39.854506 | % | 20 % | 20 % | 30 % GEOM_QUALITY | 30 % GEOM_QUALITY | max_aspect (0.4336) | min_stretch (0.9155) | 31.883605 .. 47.825407 |
+| CUSH_L_RIB_T_1 | 6.0 | % | 50 % | 50 % | - | - | dt_ratio (1.25) | dt_ratio (1.25) | 3.0 .. 9.0 |
+| CUSH_L_RIB_H_1 | 15.0 | % | 50 % | 50 % | - | - | dt_ratio (1.25) | dt_ratio (1.25) | 7.5 .. 22.5 |
+| CUSH_L_HOLE_R_1 | 5.0 | % | 50 % | 50 % | - | - | dt_ratio (1.25) | min_stretch (1.0978) | 2.5 .. 7.5 |
+| CUSH_L_HOLE_U_1 | 12.0 | mm | 5 mm | 3 mm | 8 mm GEOM_QUALITY | 5 mm GEOM_QUALITY | min_stretch (-1.2911) | max_aspect (0.0103) | 9.0 .. 17.0 |
+| CUSH_L_HOLE_V_1 | 12.0 | mm | 5 mm | 3 mm | 8 mm GEOM_QUALITY | 5 mm GEOM_QUALITY | min_stretch (0.2156) | min_stretch (-0.8371) | 9.0 .. 17.0 |
+| CUSH_L_FILLET_R_1 | 1.0 | % | 30 % | 20 % | 40 % GEOM_QUALITY | 30 % GEOM_QUALITY | dt_ratio (0.9786) | edge_ratio (0.8941) | 0.8 .. 1.3 |
+| CUSH_R_HOLE_U_1 | 108.0 | mm | 3 mm | 5 mm | 5 mm GEOM_QUALITY | 8 mm GEOM_QUALITY | min_stretch (-0.492) | min_stretch (-1.3618) | 103.0 .. 111.0 |

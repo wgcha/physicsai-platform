@@ -36,6 +36,8 @@ from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON, _nominal, contacts_
 ENVELOPE_JSON = "envelope.json"
 ENVELOPE_CSV = "envelope.csv"
 FEATURES_JSON = "parameter_features.json"
+# envelope.json format version (0.5.0: row key min_edge_ratio -> edge_ratio, same name as check.json)
+ENVELOPE_SCHEMA_VERSION = 2
 CSV_COLUMNS = (
     "param",
     "direction",
@@ -47,7 +49,7 @@ CSV_COLUMNS = (
     "fail_code",
     "min_stretch",
     "max_aspect",
-    "min_edge_ratio",
+    "edge_ratio",
     "dt_ratio",
     "boundary_dev_max_mm",
     "param_remeasure_err_abs",
@@ -145,6 +147,7 @@ def run(args, rep: Reporter) -> int:
     for srow in summary:
         srow["limit_metric"] = {d: envreport.limit_metric([r for r in rows if r["param"] == srow["param"] and r["direction"] == d], opts) for d in ("+", "-")}
     env = envelope(
+        schema_version=ENVELOPE_SCHEMA_VERSION,
         sweep_id=sweep_id,
         inputs={
             "features_sha256": sha256_file(args.features),
@@ -192,7 +195,7 @@ def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, 
         "fail_code": None,
         "min_stretch": None,
         "max_aspect": None,
-        "min_edge_ratio": None,
+        "edge_ratio": None,
         "dt_ratio": None,
         "boundary_dev_max_mm": None,
         "param_remeasure_err": {"abs": None, "rel": None},
@@ -237,7 +240,7 @@ def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, 
         fail_code=c.code,
         min_stretch=s["min_stretch"],
         max_aspect=s["max_aspect"],
-        min_edge_ratio=s["min_edge_ratio"],
+        edge_ratio=s["edge_ratio"],
         dt_ratio=s["dt_ratio"],
         boundary_dev_max_mm=s["boundary_dev_max_mm"],
         param_remeasure_err=s["param_remeasure_err"],
@@ -343,7 +346,7 @@ def _csv(rows: list[dict]) -> str:
                 r["fail_code"] or "",
                 _c(r["min_stretch"]),
                 _c(r["max_aspect"]),
-                _c(r["min_edge_ratio"]),
+                _c(r["edge_ratio"]),
                 _c(r["dt_ratio"]),
                 _c(r["boundary_dev_max_mm"]),
                 _c(e.get("abs")),
