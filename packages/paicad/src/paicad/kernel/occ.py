@@ -596,6 +596,110 @@ class OccBody:
             out.append((i, pts, tris))
         return out
 
+    # ---------------- 3D view (geometry-view.md section 5.3) ----------------
+    def tessellate(self, linear_mm: float, angular_deg: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        """View tessellation: (positions float64[n,3], normals float64[n,3], triangles int64[m,3], face_ids int32[m]).
+
+        Vertices are not shared between faces; triangles are grouped by ascending face id (mesher order
+        inside a face) and oriented with the outward normal; normals are the face surface normals at the
+        nodes. Single-threaded ``BRepMesh_IncrementalMesh`` on a copy (the body's shape stays untouched,
+        bounding boxes are not affected by a stored triangulation). Faces without triangles are skipped.
+        """
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+        from OCP.BRepLib import BRepLib_ToolTriangulatedShape
+        from OCP.BRepMesh import BRepMesh_IncrementalMesh
+
+        if not (linear_mm > 0 and angular_deg > 0):
+            raise KernelError("VIEW_TESSELLATION_FAILED", "tessellation tolerances must be > 0")
+        try:
+            copy = BRepBuilderAPI_Copy(self._solid, True, False).Shape()
+            BRepMesh_IncrementalMesh(copy, float(linear_mm), False, math.radians(float(angular_deg)), False)
+        except Exception as e:  # OCCT exception -> view failure, never a crash
+            raise KernelError("VIEW_TESSELLATION_FAILED", f"OCCT meshing error: {e.__class__.__name__}: {e}") from None
+        fmap = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(copy, TopAbs_FACE, fmap)
+        if fmap.Extent() != len(self._faces):
+            raise KernelError("VIEW_TESSELLATION_FAILED", "tessellation copy has a different face count")
+        pos, nrm, tris, fids = [], [], [], []
+        off = 0
+        for i in range(1, fmap.Extent() + 1):
+            f = TopoDS.Face_s(fmap.FindKey(i))
+            loc = TopLoc_Location()
+            tri = BRep_Tool.Triangulation_s(f, loc)
+            if tri is None or tri.NbTriangles() == 0 or tri.NbNodes() == 0:
+                continue
+            if not tri.HasNormals():
+                BRepLib_ToolTriangulatedShape.ComputeNormals_s(f, tri)  # surface normals at the UV nodes (face orientation applied)
+            trsf = loc.Transformation()
+            nn = tri.NbNodes()
+            p = np.array([_xyz(tri.Node(k).Transformed(trsf)) for k in range(1, nn + 1)], dtype=float).reshape(-1, 3)
+            n = np.array([_dir(tri.Normal(k).Transformed(trsf)) for k in range(1, nn + 1)], dtype=float).reshape(-1, 3)
+            t = np.array([tri.Triangle(k).Get() for k in range(1, tri.NbTriangles() + 1)], dtype=np.int64).reshape(-1, 3) - 1
+            if f.Orientation() == TopAbs_REVERSED:
+                t = t[:, [0, 2, 1]]
+            # nodal normals follow the outward (winding) side: ComputeNormals ignores the face orientation
+            w = np.cross(p[t[:, 1]] - p[t[:, 0]], p[t[:, 2]] - p[t[:, 0]])
+            if float(np.einsum("ij,ij->", w, n[t[:, 0]] + n[t[:, 1]] + n[t[:, 2]])) < 0:
+                n = -n
+            pos.append(p)
+            nrm.append(n)
+            tris.append(t + off)
+            fids.append(np.full(len(t), i, dtype=np.int32))
+            off += nn
+        if not tris:
+            raise KernelError("VIEW_TESSELLATION_FAILED", f"{self.name}: tessellation produced no triangles")
+        return np.concatenate(pos), np.concatenate(nrm), np.concatenate(tris), np.concatenate(fids)
+
+    def edge_polylines(self, linear_mm: float, angular_deg: float) -> list[tuple[int, np.ndarray]]:
+        """[(edge id, points[k,3])] for every non-degenerated B-rep edge (tangential deflection discretization)."""
+        from OCP.GCPnts import GCPnts_TangentialDeflection
+
+        out = []
+        for i, e in enumerate(self._edges, 1):
+            if BRep_Tool.Degenerated_s(e):
+                continue
+            try:
+                ad = BRepAdaptor_Curve(e)
+                td = GCPnts_TangentialDeflection(ad, math.radians(float(angular_deg)), float(linear_mm), 2, 1e-9, 1e-7)
+                pts = np.array([_xyz(td.Value(k)) for k in range(1, td.NbPoints() + 1)], dtype=float).reshape(-1, 3)
+            except Exception as ex:  # OCCT exception -> view failure
+                raise KernelError("VIEW_TESSELLATION_FAILED", f"edge E{i} discretization failed: {ex.__class__.__name__}") from None
+            if len(pts) >= 2:
+                out.append((i, pts))
+        return out
+
+    def distance_to_face(self, face_id: int, pts: np.ndarray) -> np.ndarray:
+        """dist[n] from each point to the (untrimmed) surface of face ``face_id``: plane / cylinder exact,
+        other surfaces by point projection; points whose projection fails use the distance to the body."""
+        _, sad, sas, _ = self._surf(face_id)
+        pts = np.asarray(pts, dtype=float).reshape(-1, 3)
+        st = sad.GetType()
+        pl = sad.Plane() if st == GeomAbs_Plane else None
+        if pl is None and st != GeomAbs_Cylinder:
+            ip = GeomLib_IsPlanarSurface(BRep_Tool.Surface_s(self._faces[face_id - 1]), 1e-6)
+            if ip.IsPlanar():  # planar B-spline (drafted / lofted flat face): its infinite plane, like a PLANE face
+                pl = ip.Plan()
+        if pl is not None:
+            d = np.abs((pts - _xyz(pl.Location())) @ _dir(pl.Axis().Direction()))
+        elif st == GeomAbs_Cylinder:
+            cy = sad.Cylinder()
+            a, ax = _xyz(cy.Location()), _dir(cy.Axis().Direction())
+            r = pts - a
+            rp = r - np.outer(r @ ax, ax)
+            d = np.abs(np.linalg.norm(rp, axis=1) - float(cy.Radius()))
+        else:
+            d = np.full(len(pts), np.nan)
+            for k, q in enumerate(pts):
+                try:
+                    uv = sas.ValueOfUV(gp_Pnt(*q), 1e-7)
+                    d[k] = float(np.linalg.norm(q - _xyz(sad.Value(uv.X(), uv.Y()))))
+                except Exception:  # noqa: BLE001 - projection failure -> body distance below
+                    pass
+        bad = ~np.isfinite(d)
+        if bad.any():
+            d[bad] = self.distance(pts[bad])
+        return d
+
     # ---------------- push/pull (section 6.3) ----------------
     def moved(self, moves: dict[int, FaceMove]) -> OccBody:
         """New body with face moves applied (same topology and sub-shape order). Raises KernelError."""

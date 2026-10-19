@@ -361,6 +361,24 @@ def read_baseline(path: str | Path) -> tuple[bytes, RadMesh]:
     return data, parse_text(data.decode("latin-1"))
 
 
+# ------------------------------------------------------------------ reports (also written by ``paicad view preview``)
+def fail_report(e: PaicadError, t0: float) -> dict:
+    return envelope(status="FAIL", code=e.code, category=CODE_CATEGORY[e.code], message=e.message, max_disp_mm=None, parts=[], elapsed_s=rnd(time.monotonic() - t0, 3))
+
+
+def ok_report(res: MorphResult, t0: float) -> dict:
+    return envelope(
+        status="OK",
+        code=None,
+        category=None,
+        message=None,
+        max_disp_mm=rnd(res.max_disp),
+        parts=res.parts,
+        fallback_faces={b: [f"F{i}" for i in v] for b, v in res.fallback_faces.items()},
+        elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
+
+
 # ------------------------------------------------------------------ CLI
 def run(args, rep: Reporter) -> int:
     if getattr(args, "sweep", False):
@@ -386,8 +404,7 @@ def run(args, rep: Reporter) -> int:
         res = morph_core(mesh, comps, sample, opts)
     except MorphFailed as e:
         rep.warn(f"{e.code}: {e.message}")
-        d = envelope(status="FAIL", code=e.code, category=CODE_CATEGORY[e.code], message=e.message, max_disp_mm=None, parts=[], elapsed_s=rnd(time.monotonic() - t0, 3))
-        out.write_text(MORPH_JSON, dumps(d))
+        out.write_text(MORPH_JSON, dumps(fail_report(e, t0)))
         out.commit([MORPH_JSON])
         rep.result("FAIL", e.code, MORPH_JSON)
         return EXIT_CHECK
@@ -395,17 +412,7 @@ def run(args, rep: Reporter) -> int:
     data = write_morphed(base_bytes, mesh, res.moved, getattr(args, "solver", None))
     with open(out.tmp_path(MORPHED_INC), "wb") as f:
         f.write(data)
-    d = envelope(
-        status="OK",
-        code=None,
-        category=None,
-        message=None,
-        max_disp_mm=rnd(res.max_disp),
-        parts=res.parts,
-        fallback_faces={b: [f"F{i}" for i in v] for b, v in res.fallback_faces.items()},
-        elapsed_s=rnd(time.monotonic() - t0, 3),
-    )
-    out.write_text(MORPH_JSON, dumps(d))
+    out.write_text(MORPH_JSON, dumps(ok_report(res, t0)))
     out.commit([MORPHED_INC, MORPH_JSON])
     rep.progress(100, f"morph done: max displacement {res.max_disp:.4f} mm")
     rep.result("OK", None, MORPH_JSON)

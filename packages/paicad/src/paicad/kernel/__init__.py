@@ -121,6 +121,33 @@ def load_sheet_brep(path: str | Path, names: list[str]) -> list[BodyGeom]:
         return list(occ_sheet.load_sheet_brep(path, names))
     except occ.KernelError as e:
         raise CadInputError(e.code, e.message) from None
+def _view_call(fn, what: str):
+    """Run a 3D-view kernel operation; kernel/OCCT errors -> CadInputError (VIEW_TESSELLATION_FAILED by default)."""
+    try:
+        return fn()
+    except CadInputError:
+        raise
+    except Exception as e:  # noqa: BLE001 - KernelError (code) or an unexpected OCCT/implementation error
+        code = getattr(e, "code", None) or "VIEW_TESSELLATION_FAILED"
+        msg = getattr(e, "message", None) or f"{what} failed: {e.__class__.__name__}: {e}"
+        raise CadInputError(code, msg) from None
+
+
+def tessellate(body: BodyGeom, linear_mm: float, angular_deg: float):
+    """(positions float64[n,3], normals float64[n,3], triangles int64[m,3], face_ids int32[m]) - geometry-view.md section 5.3.
+
+    No vertex is shared between faces; triangles grouped by ascending face id, outward oriented."""
+    return _view_call(lambda: body.tessellate(float(linear_mm), float(angular_deg)), "tessellation")  # type: ignore[attr-defined]
+
+
+def edge_polylines(body: BodyGeom, linear_mm: float, angular_deg: float) -> list:
+    """[(edge id, points[k,3])] of the B-rep edges (display lines)."""
+    return _view_call(lambda: body.edge_polylines(float(linear_mm), float(angular_deg)), "edge discretization")  # type: ignore[attr-defined]
+
+
+def distance_to_face(points, body: BodyGeom, face_id: int):
+    """dist[n]: distance of each point to the surface of face ``face_id`` of ``body`` (fallback: body distance)."""
+    return _view_call(lambda: body.distance_to_face(int(face_id), points), "face distance")  # type: ignore[attr-defined]
 
 
 def kernel_versions() -> dict[str, str]:
@@ -138,7 +165,10 @@ __all__ = [
     "FaceMove",
     "SurfaceEdit",
     "Topology",
+    "distance_to_face",
+    "edge_polylines",
     "kernel_versions",
+    "tessellate",
     "load_brep",
     "load_cad",
     "load_sheet_brep",
