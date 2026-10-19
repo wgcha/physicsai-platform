@@ -5,5 +5,6 @@ $ErrorActionPreference = "Stop"
 Push-Location $RepoRoot
 try {
   & $Python -m pip install -e packages/simdash_adapters; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+  & $Python -m pip install --no-deps -e packages/paicad; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # native 형상 엔진(geometry-engine.md §7.8)
   & $Python -m pip install -r deploy/requirements.lock "pytest>=8" "pytest-timeout>=2.2"; exit $LASTEXITCODE
 } finally { Pop-Location }

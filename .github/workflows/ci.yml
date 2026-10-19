@@ -69,6 +69,12 @@ jobs:
           python -m pip install ./packages/simdash_adapters
           python -m pip install -r deploy/requirements.lock "pytest>=8" "pytest-timeout>=2.2"
 
+      - name: paicad 시험 의존성(native 형상 엔진 단독 시험 — 가상 쿠션 골든: build123d·gmsh는 시험 전용, 배포 묶음 제외)
+        # cadquery-ocp·numpy·scipy는 위 lock 고정이 그대로 쓰인다(test extra가 본체 OCP를 바꾸지 않음, geometry-engine.md §5.1·§7.8)
+        run: |
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends libglu1-mesa
+          python -m pip install -e "./packages/paicad[test]"
+
       - name: pwsh 확인(deploy·scripts *.ps1 구문 검사 시험용)
         run: pwsh --version
 

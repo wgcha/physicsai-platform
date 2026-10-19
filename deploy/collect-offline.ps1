@@ -84,6 +84,10 @@ try {
     Invoke-Step 'pip wheel packages/simdash_adapters --no-deps -w dist/wheels' {
         Invoke-Native 'pip wheel packages/simdash_adapters' $py (@('-m', 'pip', 'wheel', 'packages/simdash_adapters', '--no-deps', '-w', 'dist/wheels') + $pipOpts) $pipHint
     }
+    # native 형상 엔진 paicad도 저장소 소스 wheel(geometry-engine.md §7.8). cadquery-ocp(+vtk)는 requirements.lock에서 받는다
+    Invoke-Step 'pip wheel packages/paicad --no-deps -w dist/wheels' {
+        Invoke-Native 'pip wheel packages/paicad' $py (@('-m', 'pip', 'wheel', 'packages/paicad', '--no-deps', '-w', 'dist/wheels') + $pipOpts) $pipHint
+    }
     Invoke-Step 'pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels' {
         Invoke-Native 'pip download (requirements.local.lock)' $py (@('-m', 'pip', 'download', '--no-index', '--find-links', 'dist/wheels', '-r', 'deploy/requirements.local.lock',
             '--only-binary=:all:', '--platform', 'win_amd64', '--python-version', '3.12', '-d', 'dist/wheels') + $pipOpts) $pipHint

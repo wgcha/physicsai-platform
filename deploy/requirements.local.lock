@@ -1,4 +1,6 @@
 # 저장소 안 패키지 고정 버전 — PyPI에서 받지 않는다(항상 --no-index --find-links <로컬 wheel 폴더>, phase3.md §6.5·D3-27).
 # collect-offline이 packages/simdash_adapters로 wheel을 만든 뒤 이 고정과 맞는지 --no-index로 확인한다.
 # 버전을 올리면 packages/simdash_adapters/pyproject.toml·루트 pyproject.toml 의존 고정과 함께 바꾼다(시험이 대조).
+# paicad(packages/paicad, geometry-engine.md §17.5)는 __version__·CHANGELOG·루트 pyproject 고정과 같아야 한다(scripts/check_paicad.py).
 simdash-adapters==0.1.0
+paicad==0.5.0

@@ -525,6 +525,7 @@ function Install-PhysicsAIRepoPackages {
     param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$RepoRoot)
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '-r', (Join-Path $RepoRoot 'deploy\requirements.lock')) -What '의존성(deploy\requirements.lock) 설치'
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\simdash_adapters')) -What '공통 어댑터 패키지(simdash-adapters) 설치'
+    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\paicad')) -What 'native 형상 엔진(paicad) 설치'
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', $RepoRoot) -What '플랫폼 패키지(physicsai-platform) 설치'
     Invoke-PhysicsAINative '설치 확인(import)' $VenvPy @('-c', 'import physicsai_api, physicsai_worker, simdash_adapters, fastapi, psycopg, alembic, yaml') '위 오류를 확인하세요(venv 패키지 설치가 끝나지 않음)'
 }

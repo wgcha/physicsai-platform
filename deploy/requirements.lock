@@ -35,3 +35,17 @@ typing-inspection==0.4.4
 typing_extensions==4.16.0
 tzdata==2025.2
 uvicorn==0.53.0
+# native 형상 엔진 paicad(packages/paicad, geometry-engine.md §5.1·§7.8): cadquery-ocp 7.8.1.1.post1(cp312 win_amd64, vtk 의존) 고정.
+#   paicad 자신은 이 파일이 아니라 requirements.local.lock(로컬 wheel). numpy·scipy는 위 고정을 그대로 공유한다.
+cadquery-ocp==7.8.1.1.post1
+contourpy==1.4.0
+cycler==0.12.1
+fonttools==4.67.0
+kiwisolver==1.5.1
+matplotlib==3.11.2
+packaging==26.3
+pillow==13.0.0
+pyparsing==3.3.3
+python-dateutil==2.9.0.post0
+six==1.17.0
+vtk==9.3.1

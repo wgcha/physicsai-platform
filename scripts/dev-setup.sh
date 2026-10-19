@@ -5,4 +5,6 @@ set -euo pipefail
 source "$(dirname "$0")/_env.sh"
 cd "$REPO_ROOT"
 "$PYTHON" -m pip install -e packages/simdash_adapters
+# native 형상 엔진(별도 프로세스로만 실행, geometry-engine.md §7.8). 외부 의존(cadquery-ocp 등)은 아래 requirements.lock
+"$PYTHON" -m pip install --no-deps -e packages/paicad
 "$PYTHON" -m pip install -r deploy/requirements.lock "pytest>=8" "pytest-timeout>=2.2"

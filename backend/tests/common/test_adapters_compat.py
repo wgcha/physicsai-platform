@@ -70,7 +70,8 @@ def test_lock_and_offline_bundle_include_wheel():
     lock = _read("deploy/requirements.lock")
     assert not re.search(r"^simdash", lock, re.MULTILINE | re.IGNORECASE)
     local = [ln for ln in _read("deploy/requirements.local.lock").splitlines() if ln and not ln.startswith("#")]
-    assert local == [f"simdash-adapters=={VERSION}"]
+    # paicad 고정은 geometry-engine.md §17.5(scripts/check_paicad.py가 __version__과 대조 — test_paicad_checks)
+    assert [x for x in local if not x.startswith("paicad==")] == [f"simdash-adapters=={VERSION}"]
     for f in ("deploy/collect-offline.sh", "deploy/collect-offline.ps1"):
         t = _read(f)
         w = t.index("pip wheel packages/simdash_adapters --no-deps -w dist/wheels")

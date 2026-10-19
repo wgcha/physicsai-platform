@@ -4,6 +4,7 @@
 #   --dry-run : 실행할 명령만 출력하고 아무것도 실행하지 않는다.
 # 공통 어댑터 패키지(packages/simdash_adapters)는 PyPI에서 받지 않는다: 저장소 소스로 wheel을 만들고(py3-none-any),
 # deploy/requirements.local.lock 고정과 맞는지 --no-index로만 확인한다(PyPI 이름 선점 차단, phase3.md §6.5·D3-27).
+# paicad(packages/paicad)도 같은 방식으로 wheel을 만든다(geometry-engine.md §7.8). cadquery-ocp(+vtk)는 requirements.lock에서 받는다.
 # 산출 구조: dist/wheels/*.whl, dist/frontend/(vite build), dist/migrations/, dist/config/platform.example.yaml, dist/deploy/
 # 원본 반입 자원(resources.*: 런처·pyd·TCL·tpl 템플릿)은 묶지 않는다 — 라이선스·사내 배포물(RESOURCES.txt 참고).
 # 시연 모드(deploy/demo/start-demo.ps1)용으로 config/platform.demo.yaml과 가짜 도구(fake_tools)는 함께 묶는다.
@@ -25,6 +26,7 @@ run() {
 
 run "mkdir -p dist/wheels dist/frontend dist/config"
 run "$PY -m pip wheel packages/simdash_adapters --no-deps -w dist/wheels"
+run "$PY -m pip wheel packages/paicad --no-deps -w dist/wheels"   # native 형상 엔진(geometry-engine.md §7.8) — OCP 등 외부 의존은 requirements.lock
 run "$PY -m pip download --no-index --find-links dist/wheels -r deploy/requirements.local.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
 run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
 run "$PY -m pip wheel . --no-deps -w dist/wheels"

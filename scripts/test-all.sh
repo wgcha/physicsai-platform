@@ -7,8 +7,16 @@ source "$(dirname "$0")/_env.sh"
 cd "$REPO_ROOT"
 echo "== frontend-dist 최신 여부(빌드본 = 현재 프런트 소스, phase3 D3-40) =="
 "$PYTHON" scripts/frontend_source_hash.py --check "$REPO_ROOT"
+echo "== paicad 정적 검사(버전·CHANGELOG·고정, 플랫폼↔paicad import 금지, kernel/ 밖 OCP 금지 — geometry-engine.md §17.5·§18.6) =="
+"$PYTHON" scripts/check_paicad.py
 echo "== backend/worker pytest =="
 "$PYTHON" -m pytest -q -rs "$@"
+# paicad 단독 시험(플랫폼 모듈·DB·platform.yaml 없이 — V-GE-13). 가상 쿠션 골든이 OCP·build123d·gmsh를 실제로 쓴다(skip을 통과로 치지 않음).
+# PAICAD_SKIP_SLOW=1이면 G1 envelope 바이트 동일 재생성 시험(약 2분)을 뺀다(개발 중 빠른 확인용 — 완료 판정·CI는 전체).
+echo "== paicad 단독 pytest =="
+PAICAD_DESELECT=()
+[ "${PAICAD_SKIP_SLOW:-0}" = "1" ] && PAICAD_DESELECT=(--deselect "tests/test_v050.py::test_golden_report_regenerates_byte_identical")
+(cd packages/paicad && env -u PYTHONPATH "$PYTHON" -m pytest -q -rs ${PAICAD_DESELECT[@]+"${PAICAD_DESELECT[@]}"})
 echo "== openapi.json 최신 여부 =="
 "$PYTHON" -c "import sys; from physicsai_api.export_openapi import render; sys.exit(0 if open('backend/openapi.json', encoding='utf-8').read() == render() else 1)" \
   || { echo "backend/openapi.json이 최신이 아닙니다: python -m physicsai_api.export_openapi"; exit 1; }
