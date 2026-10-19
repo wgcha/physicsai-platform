@@ -584,7 +584,8 @@ component의 요소·노드 집합:
 | `GEOM_INPUT_INVALID`·`GEOM_OUTPUT_EXISTS`·`RENUM_CSV_MISSING` | `INPUT` | 입력 오류 | 전부 | 3 |
 | `PROP_OVERRIDDEN_BY_ELEMENT` | `PROP` | 쉘 두께 무효(요소별 두께가 PROP을 덮어씀) | props apply (3S) | 11 |
 | `PROP_THICKNESS_INVALID` | `PROP` | 쉘 두께 ≤ 0 또는 범위 밖 | props apply (3S) | 11 |
-| `PROP_NOT_FOUND` | `PROP` | 지정한 PROP ID·필드를 찾지 못함(형식 변종 포함) | props apply (3S) | 11 |
+| `PROP_NOT_FOUND` | `PROP` | 지정한 PROP ID·필드를 찾지 못함(형식 변종 포함) | props apply (3S) | 3 |
+| `PROP_OVERRIDDEN_BY_PART` (예정 0.7.0) | `PROP` | `/PART`의 Thick ≠ 0이라 PROP 두께가 무효(0.7.0 예정, 현재 미구현) | props scan·apply (3S) | 11 |
 | `PARAM_NAME_CONFLICT` | `INPUT` | 공통 변수 이름 충돌(등록 단계) | map·세트 등록 (4B) | 3 |
 | `PARAM_MAP_UNCONFIRMED` | `INPUT` | 다중 baseline 매칭표 미확정(`status: draft`)에서 DOE·run 생성 요청(등록 오류, 409) | 플랫폼 요청 검증(paicad 아님, §7.3.8) | — |
 | `BASELINE_NO_COVER` | `BASELINE` | 어느 baseline도 덮지 못하는 값(범위 분할) | 플랫폼 배정(§11.4, paicad 아님) | — |
@@ -848,6 +849,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 ## 9. 단계별 산출물·완료 기준
 
+> 상태(2026-10-19): 단계 0(a)~4 구현 완료, 3S·4B·§8(UI)은 진행 중.
+
 | 단계 | 산출물 | 완료 기준 |
 |---|---|---|
 | **0 골든(개발 환경 + 현장 인수 키트)** | **(a) 개발 환경 골든**(저장소·CI, 실물 CAD·조립 폴더는 사내 반출 불가라 쓰지 않음): build123d 가상 쿠션(다중 바디·바디 이름·리브·포켓·구배·작은 필렛) + gmsh tetra4 baseline(§7.8 파라미터) + 합성 조립 폴더(가짜 starter rad·`104_*.inc`(`/NODE`·`/TETRA`만)·합성 `RENUM_INIT.csv`). 생성 스크립트 `packages/paicad/tests/data/make_synthetic.py`(저장소에 STEP·메시 파일 없음). **정답 비교의 1차 근거**. **(b) 현장 인수시험 키트**: 폐쇄망에서 사용자가 실물(G1 폴더: 공칭 STEP·`radioss_assem/`·NX 변경 샘플 S1~S3)로 실행하는 `paicad selftest`(및 검증 스크립트). **CAD·메시 본문 없이 수치 요약 리포트만** 생성(`selftest_report.json`·`.md`: 태깅 미분류 수·`match_ratio`, 파라미터 재측정 오차, 경계 편차, 품질 지표(stretch·aspect·min edge), envelope 요약, 무변경 왕복 바이트 동일 여부, NX 변경 샘플 비교 수치). 사용자가 요약 수치만 전달 | (a) `scripts/test-all`에서 가상 쿠션 시험 통과(단계 1~3 정답 비교, 키트 코드 자체도 합성 세트로 시험). (b) 키트 명세(`selftest` 인자·리포트 필수 키)가 계약에 확정되고 합성 세트로 리포트 생성 확인 — 실물 실행·수치 회신은 단계별 "현장 인수"(§15 Q1 좌표 일치·Q3 inc 구성은 2026-10-17 확정) |
@@ -857,7 +860,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | **4 DOE native** | ①-3 native(LHS·tag 1회·run 병렬·SKIPPED.json·paramitem), ④ PREDICT_BATCH native, ⑤ 내장 최적화 경유 확인, 엔진 분리(datasets·models·409) | G1 LHS 20 run: 스킵률·사유 표, ② h3d 미리보기·③ 데이터셋 생성이 코드 변경 없이 run 폴더를 찾음, `samples.csv`(paramitem) 값 = `doe_matrix.csv`. 혼용 시 422/409 |
 | **4B 다중 baseline**(고급 옵션, **단계 2 envelope 결과 확인 후 착수**, 4 이후) | `paicad map`, `param_map.json`(§4.10), `PARAM_SET_NATIVE` `BL_MAP` 단계(§7.3.8)·`assign_baseline`·층화 LHS, `baseline_id` run 메타·범주형 입력, 합성 세트 2종(리브 개수 다른 2 baseline = 위상 변형 / 같은 위상·공칭 다른 3 baseline = 범위 분할), UI 접힘, fake_paicad `map` | 합성 세트로: 자동 매칭률(정답 매핑 대비)·N/A 처리, 이름 충돌 `PARAM_NAME_CONFLICT`, 범위 분할 경계·겹침·틈(`BASELINE_NO_COVER`) 배정 표, 층화 LHS baseline별 샘플 수 차 ≤ 1·같은 seed 같은 행렬, 데이터셋 1개에 `baseline_id`. **단일 baseline 세트의 기존 시험 무수정 통과** |
 | **3S 쉘 두께**(단계 3과 병행 가능, CAD 불필요) | `paicad props scan/apply`, 파라미터 표 병합(extract 결과 + PROP), 두께만 있는 param_set 허용, UI 표 행, 합성 시험 | 합성 조립 rad(공유 PROP·요소별 두께·TYPE9 포함)로 `PROP_OVERRIDDEN_BY_ELEMENT`·`PROP_THICKNESS_INVALID`·공유 경고·'미지원' 표시 확인, 출력 diff = 해당 PROP 두께 필드만, 원본·SPDM 불변 |
-| **5 (선택) 쉘 형상** | 쉘 형상 모핑 | 별도 계약 |
+| **5 (선택) 쉘 형상** | 쉘 형상 모핑 | 별도 계약. 단계 5(hstpy 대체)는 phase3 S17 내장 다목적 최적화(§22)로 대체 검토 |
 | (비범위) 재메시 | 비범위 — 모핑 한계 측정 결과를 본 뒤 재검토 | 근거 = 단계 2 envelope 보고서(§11.2) |
 
 ---
@@ -1145,5 +1148,7 @@ paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 
 | GE-C8 | 품질 상대 기준(`min_edge_ratio`·`dt_ratio_min` 0.8, `min_edge_mm` 선택 null)·`position_ref` 옵션 추가(§4.9·§6.2·§6.5, 사용자 확정) |
 | GE-C9 | paicad 0.3.0(403e224) 구현 차이 반영(2026-10-19): `dt_ratio`=Δt 추정 비(h=3V/최대 면적, component별)·`edge_ratio` 별도·비유한 지표 null, 위치 값 = 공칭+Δ(가장 가까운 고정 면)·`update.json.positions[].expected_measured`로 check (a) 비교, `run.json`은 `--check-dir`·run 중 단계 RESULT 줄은 PROGRESS, `report_envelope.md`·csv는 sweep 출력 폴더, `--solver`는 morph·run, selftest 인자·키는 Q19 초안(§5.3.1), 위치형 기본 범위 절대 ±5 mm(`position_range_mm`)·envelope 위치형 mm 단계(1·2·3·5·8·10), update 피처 간 충돌 사전 검사 `GEOM_FEATURE_COLLISION`(CAD 생성 불가 범주) |
 | GE-C10 | Verifier 판정(paicad 0.4.0) 구현 기준 정정(2026-10-19): `update.json.positions[]` 키 = name·body·axis·mode·ref_face·expected_measured, 선택 `collisions`, envelope 행 `step`·`unit`·요약 `last_ok`/`first_fail`/`*_label`(mm는 `last_ok_pct` null)·`edge_ratio`·`schema_version` 2, `position_range_mm`은 `extract` 하위, `--pos-steps`, `--solver` = writer 선택, selftest 실물 입력 인자 확정(Q19), 경고 `TAG_VERTEX_NO_NODE`, options 모르는 키 거부 |
+| GE-C11 | paicad 0.6.0 구현 차이(2026-10-19): ① `props scan`→`props.json`, `props apply`→`props_apply.json`, PROP 실패 category `PROP`·종료코드 `PROP_OVERRIDDEN_BY_ELEMENT`·`PROP_THICKNESS_INVALID` = 11, `PROP_NOT_FOUND` = 3 ② 두께 파라미터 이름 `<제목>_SHELL_T`, 제목 중복 시 `<제목>_<ID>_SHELL_T`, 제목 없음 `PROP<ID>_SHELL_T` ③ `paicad map`: `--baselines` JSON `[{id,features,rel?}]`, `--user-map`, `--usage topology\|range`, `--split-param`, options `map{weights,sigma,accept,warn,axis_deg}` ④ `param_map.json` 추가 키 `feature_type`·`nominal`·`group_size`, features JSON에 `adjacent_surfaces` ⑤ `check.json` `quality.nonfinite_excluded`(비유한 지표는 판정에서 제외, 목록 기록) ⑥ PNG는 numpy 소프트웨어 래스터(사유: OCP 동봉 VTK는 X 서버 없는 헤드리스 환경에서 프로세스가 abort되어 예외로 잡을 수 없음, matplotlib은 새 런타임 의존 — 둘 다 미사용) ⑦ `selftest --nx-samples`(`<이름>.json`+`<이름>.step` 쌍 → 요약 `nx_samples`) ⑧ inc 지수 표기는 유효숫자 7자리가 보장될 때만 사용, 자유형식 줄은 선행 공백 1칸 ⑨ `/SHELL`·`/SH3N` 요소 두께는 81-100열(Radioss 2017+ 가정). 예정(0.7.0): `/PART` Thick ≠ 0 → `PROP_OVERRIDDEN_BY_PART`(종료 11) |
+| GE-C12 | 단계 4 플랫폼 구현 차이(GE-C12, 2026-10-19): ① geometry_native 기능은 `commands.paicad_extract`·`paicad_tag`·`paicad_update`·`paicad_morph`·`paicad_check` 모두 필요(단건 예측이 단계별 명령 사용) ② 플랫폼 실패 코드 `GEOM_TIMEOUT` ③ 데이터셋 엔진 판별 경로 `01_train/results/<id>`(doe 경로도 인식) ④ native 세트 ①→④ 파라미터 이름 검증은 부분집합 검사 ⑤ 스킵 정보는 `TD_DOE_GEN` 작업 `result.skipped_runs` ⑥ migration `0015_geometry_engine`(down `0014_multiobj`)으로 확정, 문서 내 0012 표기는 재번호 이력뿐 ⑦ ⑥ 최적화 입력의 엔진 검사는 `surrogate_opt_problem.normalize`에 위치 |
 
 추가 사실: 런타임 Python 3.12 전용(OCP 7.8이 vtk 의존, cp313 휠 없음). 고정 `cadquery-ocp==7.8.1.1.post1`, test extra `build123d==0.10.0`·`ocp_gordon==0.1.18`(최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP 교체 — 금지). gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 리스크: vtk로 오프라인 묶음 용량 증가.
