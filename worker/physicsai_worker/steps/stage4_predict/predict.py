@@ -19,7 +19,8 @@ from physicsai_core.tpl_render import render_tpl
 
 from ...signals import StepSkipped
 from ..common import load_model, model_command_values, verify_model_integrity
-from ..response_tcl import extract_in_folder, single_h3d, uses_tcl, warn_reasons, write_values_csv
+from ..response_tcl import (append_curve_csv, curve_values, extract_in_folder, has_h3d, merge_curve, single_h3d, uses_tcl,
+                            warn_reasons, write_values_csv)
 from .predict_inputs import (
     MESH_ONLY,
     PREPARED_SKIP,
@@ -211,7 +212,11 @@ def _response_extract_tcl(ctx: Any, ps: dict[str, Any]) -> None:
     res_dir = os.path.join(P, "RESULT")
     out = os.path.join(P, "responses_pred.csv")
     h3d, names = single_h3d(res_dir)
-    if h3d is None:
+    ok = True
+    if not has_h3d(responses):  # S17 §22.3.4: CURVE 성능뿐이면 TCL·요청 파일 없이 curve.json에서만
+        values, reasons = extract_in_folder(ctx, responses, res_dir, "")
+    elif h3d is None:
+        ok = False
         ctx.add_warning("RESP_H3D_AMBIGUOUS", f"응답 추출: 예측 결과 h3d가 정확히 1개가 아닙니다({len(names)}개) — 응답 값을 비워 둡니다")
         values: dict[str, float | None] = {r["name"]: None for r in responses}
         reasons = {r["name"]: "EXTRACT_FAILED" for r in responses}
@@ -224,8 +229,10 @@ def _response_extract_tcl(ctx: Any, ps: dict[str, Any]) -> None:
                             f"응답 추출 실패({exc.code}): {exc.message} — 예측 결과는 그대로 사용합니다"[:480])
             values = {r["name"]: None for r in responses}
             reasons = {r["name"]: "EXTRACT_FAILED" for r in responses}
-        else:
-            warn_reasons(ctx, reasons)
+            ok = False
+    cvals, creasons = curve_values(ctx, responses, os.path.join(P, "curve.json"))
+    merge_curve(responses, values, reasons, cvals, creasons)
+    warn_reasons(ctx, reasons if ok else creasons)
     write_values_csv(ctx, out, values)
     ctx.add_output(out)
     ctx.patch_result({"response_errors": reasons})
@@ -249,6 +256,7 @@ def response_extract(ctx: Any) -> None:
                                         "out_csv": out, "work_dir": P}, cwd=P, outputs_to_backup=[out])
     if not os.path.isfile(out):
         raise StepFailure("OUTPUT_MISSING", "responses_pred.csv가 만들어지지 않았습니다")
+    append_curve_csv(ctx, ps["responses"], out, os.path.join(P, "curve.json"))  # S17 §22.3.4: 옛 방식도 CURVE 값
 
 
 def build_table(responses: list[dict[str, Any]], predicted: dict[str, float | None],

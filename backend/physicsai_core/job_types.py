@@ -138,6 +138,12 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (StepDef("BP_PREP", "INTERNAL", 3), StepDef("BP_GEN", "LOCAL", 90), StepDef("BP_ENQUEUE", "INTERNAL", 2)),
         "④", notify_success=False,
     ),
+    # ---- 3차 S17(phase3 §22.3.5): 끝난 배치의 H3D 성능 다시 추출(①-6 TD_RESP_EXTRACT와 같은 HyperView 슬롯) ----
+    "PB_RESP_EXTRACT": JobTypeDef(
+        "PB_RESP_EXTRACT", 4, "SLOT", "일괄 예측 성능 다시 추출",
+        (StepDef("PX_PREP", "INTERNAL", 5), StepDef("RESPONSE_EXTRACT_RUNS", "LOCAL", 90), StepDef("PX_TABLE", "INTERNAL", 5)),
+        "④",
+    ),
     # ---- 3차 컨투어 재캡처(phase3 §15 S10): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처 ----
     "CONTOUR_RECAPTURE": JobTypeDef(
         "CONTOUR_RECAPTURE", 4, "LIGHT", "컨투어 다시 캡처", (StepDef("CONTOUR_CAPTURE", "LOCAL", 100),),
@@ -256,6 +262,7 @@ STEP_LABELS: dict[str, str] = {
     "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
     "FV_PREP": "조립 입력 준비", "FV_MESH": "메시 교체(include 변환)", "FV_ASSEMBLE": "조립 입력 만들기",
     "FV_EXTRACT": "응답 추출(예측·FEM)", "FV_CURVE": "커브 비교", "FV_CAPTURE": "컨투어 캡처(예측·FEM)", "FV_COMPARE": "비교 정리",
+    "PX_PREP": "다시 추출 대상 확인", "PX_TABLE": "배치 성능 표 갱신",
     "SO_COLLECT": "검증 결과 수집", "SO_FIT": "대리모델 학습", "SO_PROPOSE": "후보 탐색", "SO_NEXT": "검증 배치 등록·마무리",
 }
 

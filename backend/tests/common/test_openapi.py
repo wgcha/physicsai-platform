@@ -61,5 +61,7 @@ def test_all_routes_prefixed():
         "/studies/{study_id}/fem-verifications/preview", "/studies/{study_id}/fem-verifications", "/fem-verifications/{fid}",
         "/fem-verifications/{fid}/media", "/fem-verifications/{fid}/curves", "/fem-verifications/{fid}/table.csv",
         "/fem-verifications/{fid}/cancel", "/fem-verifications/{fid}/rerun",
+        # 3차(phase3 §22.10 S17 성능 다시 추출·추가 검증, D3-65)
+        "/predict-batches/{batch_id}/extract-responses",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

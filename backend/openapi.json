@@ -5484,7 +5484,8 @@
               "OPTIMIZE",
               "STUDY_STORAGE_SCAN",
               "STUDY_CLEANUP",
-              "PREDICT_BATCH"
+              "PREDICT_BATCH",
+              "PB_RESP_EXTRACT"
             ],
             "title": "Job Type",
             "type": "string"
@@ -16105,6 +16106,79 @@
           }
         },
         "summary": "Batch Design Map",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-batches/{batch_id}/extract-responses": {
+      "post": {
+        "description": "성능 다시 추출(power, phase3 §22.3.5): 끝난 배치의 H3D 성능을 현재 템플릿 정의로 다시 추출하는 PB_RESP_EXTRACT 작업.",
+        "operationId": "extract_batch_responses_physicsai_api_predict_batches__batch_id__extract_responses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Extract Batch Responses",
         "tags": [
           "predict-batches"
         ]

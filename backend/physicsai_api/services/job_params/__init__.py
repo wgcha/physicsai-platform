@@ -18,13 +18,14 @@ from . import (
     stage4_batch,
     stage4_capture,
     stage4_predict,
+    stage4_resp,
     stage5_optimize,
     study_manage,
 )
 from .base import check_feature, invalid_errors
 
 _STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage4_batch, stage1_train_data, stage2_curation,
-                                  stage5_optimize, study_manage, stage4_capture)
+                                  stage5_optimize, study_manage, stage4_capture, stage4_resp)
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {jt: m for mod in _STAGES for jt, m in mod.PARAM_MODELS.items()}
 _STAGE_OF: dict[str, ModuleType] = {jt: mod for mod in _STAGES for jt in mod.PARAM_MODELS}

@@ -408,3 +408,12 @@ def retry_failed_locked(conn: Any, principal: Principal, b: dict[str, Any], stud
     audit(conn, principal, "PREDICT_BATCH_RETRY_FAILED", "predict_batch", b["id"],
           {"parent_job_id": parent_id, "retried_job_ids": retried}, rid, ip)
     return {"parent_job_id": parent_id, "retried_job_ids": retried}
+
+
+def extract_responses(ctx: AppContext, principal: Principal, batch_id: str, rid: str, ip: str | None) -> dict[str, Any]:
+    """S17 §22.3.5 `POST /predict-batches/{bid}/extract-responses` → PB_RESP_EXTRACT 작업(사전조건은 job_params.stage4_resp)."""
+    from .jobs import create_job
+
+    with ctx.engine.connect() as conn:
+        b = _require_batch(conn, batch_id)
+    return create_job(ctx, principal, b["study_id"], "PB_RESP_EXTRACT", {"batch_id": batch_id}, rid, ip)
