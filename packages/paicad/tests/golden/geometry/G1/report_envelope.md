@@ -1,8 +1,8 @@
 # Morphing envelope report
 
 - schema_version: 2
-- engine_version: 0.5.0
-- sweep_id: S-fd06831a5868
+- engine_version: 0.6.0
+- sweep_id: S-6f1748b6d6b1
 - steps, dimension parameters (% of nominal, each direction): 5, 10, 20, 30, 40, 50
 - steps, position parameters (mm from nominal, each direction): 1, 2, 3, 5, 8, 10
 - stop a direction after 2 consecutive failures

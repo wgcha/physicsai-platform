@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import __version__
 
-EPILOG = "Exit codes: 0 ok, 2 arguments, 3 input, 10 CAD, 11 check/morph, 12 tag, 13 extract empty, 20 internal, 130 interrupted."
+EPILOG = "Exit codes: 0 ok, 2 arguments, 3 input, 10 CAD, 11 check/morph/props apply, 12 tag, 13 extract empty, 20 internal, 130 interrupted."
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -75,6 +75,27 @@ def _parser() -> argparse.ArgumentParser:
     r.add_argument("--solver", default=None, help="solver writer (default radioss)")
     r.add_argument("--threads", type=int)
 
+    pr = sub.add_parser("props", help="shell thickness parameters (/PROP/TYPE1): scan | apply", allow_abbrev=False)
+    psub = pr.add_subparsers(dest="props_cmd", metavar="action", required=True)
+    ps = psub.add_parser("scan", help="list shell properties of the assembly folder -> props.json", allow_abbrev=False)
+    ps.add_argument("--assem-dir", required=True)
+    ps.add_argument("--out-dir", required=True)
+    ps.add_argument("--options")
+    ps.add_argument("--threads", type=int)
+    pa = psub.add_parser("apply", help="write copies of PROP files with new thicknesses -> props_apply.json", allow_abbrev=False)
+    for a in ("--assem-dir", "--values", "--props", "--out-dir"):
+        pa.add_argument(a, required=True)
+    pa.add_argument("--threads", type=int)
+
+    mp = sub.add_parser("map", help="multi-baseline parameter matching draft -> param_map.json", allow_abbrev=False)
+    mp.add_argument("--baselines", required=True, help='JSON file [{"id", "features", "rel"?}] (2 or more baselines)')
+    mp.add_argument("--out-dir", required=True)
+    mp.add_argument("--user-map", help="previous param_map.json: decisions of rows with the same signature are kept")
+    mp.add_argument("--usage", default="topology", choices=["topology", "range"])
+    mp.add_argument("--split-param", help="range usage: proposed common name of the split parameter")
+    mp.add_argument("--options")
+    mp.add_argument("--threads", type=int)
+
     st = sub.add_parser("selftest", help="site acceptance kit: numeric summary report only (no CAD/mesh content)", allow_abbrev=False)
     for a in ("--cad", "--baseline-inc", "--renum-csv", "--assem-dir", "--out-dir"):
         st.add_argument(a, required=True)
@@ -85,6 +106,7 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--envelope-params", help="comma-separated parameter names (default: all)")
     st.add_argument("--stop-after-fail", type=int, default=1)
     st.add_argument("--no-envelope", action="store_true")
+    st.add_argument("--nx-samples", help="folder of NX change samples: <name>.json (values) + <name>.step per sample")
     st.add_argument("--threads", type=int)
     return p
 
@@ -106,11 +128,12 @@ def versions() -> dict:
     return out
 
 
-REPORTS = {"tag": "tag.json", "update": "update.json", "morph": "morph.json", "check": "check.json", "run": "run.json"}
+REPORTS = {"tag": "tag.json", "update": "update.json", "morph": "morph.json", "check": "check.json", "run": "run.json", "props apply": "props_apply.json"}
 
 
 def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
-    """Best-effort FAIL report for input/internal errors (section 5.4: report when possible); never overwrites."""
+    """Best-effort FAIL report for input/internal errors (section 5.4: report when possible); never overwrites.
+    Success-by-existence outputs (props.json, param_map.json, extract files) never get a FAIL report."""
     from .common import CODE_CATEGORY, dumps, envelope
 
     name = REPORTS.get(cmd)
@@ -153,6 +176,14 @@ def dispatch(args, rep) -> int:
         from . import runner
 
         return runner.run(args, rep)
+    if args.cmd == "props":
+        from . import props
+
+        return props.run(args, rep)
+    if args.cmd == "map":
+        from . import paramap
+
+        return paramap.run(args, rep)
     if args.cmd == "selftest":
         from . import selftest
 
@@ -170,7 +201,8 @@ def guarded(args, rep) -> tuple[int, str | None, str | None]:
         rep.warn(f"{e.code}: {e.message}")
         report = None
         if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd == "morph" and getattr(args, "sweep", False)):
-            report = _fail_report(args.cmd, args.out_dir, e.code, e.message)
+            cmd = f"props {args.props_cmd}" if args.cmd == "props" else args.cmd
+            report = _fail_report(cmd, args.out_dir, e.code, e.message)
         rep.result("FAIL", e.code, report)
         return e.exit_code, e.code, e.message
     except KeyboardInterrupt:

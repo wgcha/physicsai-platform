@@ -333,8 +333,14 @@ def collect_assembly_surface(assem_dir: str | Path, exclude: list[str | Path], b
 _TOKEN = re.compile(rb"\S+")
 
 
+MIN_SIG = 7  # section 6.4: at least 7 significant digits
+
+
 def _fmt(value: float, width: int) -> bytes:
-    for p in range(width - 1, 6, -1):
+    """Section 6.4 value format: ``%.{p}g`` with the most significant digits that fit (p >= 7; a narrow
+    field (< 8) still takes the ``%.7g`` text when it fits), else exponent notation keeping 7 significant
+    digits (a shorter exponent text only when it is the same 7-digit value), else GEOM_INC_FORMAT."""
+    for p in range(max(width - 1, MIN_SIG), MIN_SIG - 1, -1):
         s = f"{value:.{p}g}"
         if "e" in s or "E" in s:
             continue
@@ -342,11 +348,12 @@ def _fmt(value: float, width: int) -> bytes:
             s += "."
         if len(s) <= width:
             return s.rjust(width).encode("ascii")
-    for p in range(width - 1, 0, -1):
+    ref = float(f"{value:.{MIN_SIG}g}")
+    for p in range(width - 1, -1, -1):
         s = f"{value:.{p}e}"
-        if len(s) <= width:
+        if len(s) <= width and (p >= MIN_SIG - 1 or float(s) == ref):
             return s.rjust(width).encode("ascii")
-    raise PaicadError("GEOM_INC_FORMAT", f"value {value!r} does not fit a {width}-wide field")
+    raise PaicadError("GEOM_INC_FORMAT", f"value {value!r} does not fit a {width}-wide field with {MIN_SIG} significant digits")
 
 
 def rewrite_nodes(data: bytes, new_xyz: dict[int, tuple[float, float, float]]) -> bytes:
@@ -384,9 +391,17 @@ def rewrite_nodes(data: bytes, new_xyz: dict[int, tuple[float, float, float]]) -
             out.append(line)
             continue
         buf = bytearray(body)
+        # standard I10,F20,F20,F20 columns: the value may fill its field (positional); any other layout
+        # (free format) keeps one blank before the value so that tokens never merge
+        fixed = all(toks[k].end() == 10 + 20 * k for k in range(4))
         for k in range(3):
             start = toks[k].end()
             end = toks[k + 1].end()
-            buf[start:end] = _fmt(float(new[k]), end - start)
+            if fixed:
+                buf[start:end] = _fmt(float(new[k]), end - start)
+            elif end - start < 2:
+                raise PaicadError("GEOM_INC_FORMAT", f"value {float(new[k])!r} does not fit a {end - start}-wide free-format field")
+            else:
+                buf[start:end] = b" " + _fmt(float(new[k]), end - start - 1)
         out.append(bytes(buf) + eol)
     return b"".join(out)

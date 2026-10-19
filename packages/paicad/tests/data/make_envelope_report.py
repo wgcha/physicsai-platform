@@ -14,6 +14,11 @@ second export in the same process numbers them differently, and a longer id can 
 Both are pinned before extract so that
 the input hashes, and thus the ``sweep_id`` printed in the report, are stable.
 
+The comparison normalizes the ``engine_version`` and ``sweep_id`` lines of ``report_envelope.md``
+(:func:`normalize_report`): the sweep id hashes inputs that carry ``engine_version`` (features, tag),
+so a paicad version bump alone does not require regenerating the committed report; any change of
+the envelope numbers still does.
+
 Usage: python make_envelope_report.py [--write]   (``--write`` refreshes the committed files)
 """
 
@@ -33,6 +38,12 @@ _STEP_DATE = re.compile(rb"(FILE_NAME\('[^']*',')[^']*(')")
 PINNED_DATE = b"2026-01-01T00:00:00"
 _NAUO = re.compile(rb"NEXT_ASSEMBLY_USAGE_OCCURRENCE\('[^']*'(.*?);", re.S)
 _WRAP = re.compile(rb"\r?\n\s*")
+_VERSION_LINES = re.compile(rb"^- (engine_version|sweep_id): .*$", re.M)
+
+
+def normalize_report(data: bytes) -> bytes:
+    """Report bytes with the version-dependent header lines (engine_version, sweep_id) blanked."""
+    return _VERSION_LINES.sub(lambda m: b"- " + m.group(1) + b": <normalized>", data)
 
 
 def _cli(*argv) -> str:
@@ -92,7 +103,7 @@ def main(argv: list[str]) -> int:
             (GOLDEN_DIR / name).write_bytes(data)
         print(f"wrote {', '.join(REPORT_FILES)} to {GOLDEN_DIR}")
         return 0
-    same = all((GOLDEN_DIR / n).is_file() and (GOLDEN_DIR / n).read_bytes() == d for n, d in rep.items())
+    same = all((GOLDEN_DIR / n).is_file() and normalize_report((GOLDEN_DIR / n).read_bytes()) == normalize_report(d) for n, d in rep.items())
     print("identical" if same else "DIFFERENT (run with --write to refresh)")
     return 0 if same else 1
 

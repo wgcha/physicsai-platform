@@ -564,6 +564,36 @@ class OccBody:
                 out[i] = float(ext.Value())
         return out
 
+    def triangulate(self, deflection: float | None = None, angle_deg: float = 20.0) -> list[tuple[int, np.ndarray, np.ndarray]]:
+        """Display tessellation (feature highlight PNG): [(face id, points[n,3], triangles[m,3] 0-based)],
+        triangles oriented with the outward normal. Meshes a copy so the body's own shape stays untouched."""
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_Copy
+        from OCP.BRepMesh import BRepMesh_IncrementalMesh
+
+        if deflection is None:
+            bb = self.summary().bbox
+            deflection = max(1e-3, 0.002 * float(np.linalg.norm(bb[3:] - bb[:3])))
+        copy = BRepBuilderAPI_Copy(self._solid, True, False).Shape()
+        BRepMesh_IncrementalMesh(copy, float(deflection), False, math.radians(angle_deg), True)
+        fmap = TopTools_IndexedMapOfShape()
+        TopExp.MapShapes_s(copy, TopAbs_FACE, fmap)
+        if fmap.Extent() != len(self._faces):
+            raise KernelError("GEOM_INTERNAL", "tessellation copy has a different face count")
+        out = []
+        for i in range(1, fmap.Extent() + 1):
+            f = TopoDS.Face_s(fmap.FindKey(i))
+            loc = TopLoc_Location()
+            tri = BRep_Tool.Triangulation_s(f, loc)
+            if tri is None:
+                continue
+            trsf = loc.Transformation()
+            pts = np.array([_xyz(tri.Node(k).Transformed(trsf)) for k in range(1, tri.NbNodes() + 1)], dtype=float).reshape(-1, 3)
+            tris = np.array([tri.Triangle(k).Get() for k in range(1, tri.NbTriangles() + 1)], dtype=np.int64).reshape(-1, 3) - 1
+            if f.Orientation() == TopAbs_REVERSED:
+                tris = tris[:, [0, 2, 1]]
+            out.append((i, pts, tris))
+        return out
+
     # ---------------- push/pull (section 6.3) ----------------
     def moved(self, moves: dict[int, FaceMove]) -> OccBody:
         """New body with face moves applied (same topology and sub-shape order). Raises KernelError."""

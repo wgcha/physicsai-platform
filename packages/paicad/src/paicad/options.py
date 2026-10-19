@@ -26,6 +26,8 @@ DEFAULTS: dict = {
     # extract tuning (section 6.2 defaults; optional section, absent in platform-written files is fine)
     # position_range_mm: default value range of position parameters (HOLE_POS_U/V) = nominal +- this many mm
     "extract": {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "position_range_mm": 5.0, "sample_grid": 12},
+    # paicad map (multi-baseline matching, section 11.4): score weights, position sigma, grade bounds, axis gate
+    "map": {"weights": {"pos": 0.35, "dim": 0.30, "ori": 0.15, "nbr": 0.20}, "sigma": 0.1, "accept": 0.7, "warn": 0.5, "axis_deg": 10.0},
 }
 
 
@@ -93,6 +95,20 @@ def validate(opts: dict) -> list[str]:
         p.append("extract.position_range_mm must be a finite number > 0")
     if not (isinstance(e.get("sample_grid"), int) and 4 <= e["sample_grid"] <= 64):
         p.append("extract.sample_grid must be an integer in [4, 64]")
+    mp = opts["map"]
+    w = mp.get("weights")
+    if not isinstance(w, dict) or set(w) != {"pos", "dim", "ori", "nbr"}:
+        p.append("map.weights must be an object with keys pos, dim, ori, nbr")
+    else:
+        fin = all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0 for x in w.values())
+        if not fin or sum(w.values()) <= 0:
+            p.append("map.weights must be finite numbers >= 0 with a positive sum")
+    if not _pos(mp.get("sigma")):
+        p.append("map.sigma must be a finite number > 0")
+    if not (_pos(mp.get("warn")) and _pos(mp.get("accept")) and mp["warn"] <= mp["accept"] <= 1):
+        p.append("map.warn / map.accept must satisfy 0 < warn <= accept <= 1")
+    if not (_pos(mp.get("axis_deg")) and mp["axis_deg"] < 90):
+        p.append("map.axis_deg must be in (0, 90)")
     return p
 
 

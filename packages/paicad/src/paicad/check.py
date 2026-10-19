@@ -319,7 +319,7 @@ def check_core(
             {
                 "code": "QUALITY_METRIC_NONFINITE",
                 "metrics": nonfinite,
-                "message": f"quality metrics are not finite (degenerate elements or triangles), reported as null: {', '.join(nonfinite)}",
+                "message": f"non-finite quality values (degenerate elements or triangles) excluded from the judgement; null = no finite value: {', '.join(nonfinite)}",
             }
         )
     if full:
