@@ -155,7 +155,7 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         else:
             require_global_admin(principal)
         require_config_ok(ctx)
-        job = retry_locked(conn, principal, old, from_step, rid, ip)
+        job = retry_locked(conn, principal, old, from_step, rid, ip, settings=ctx.settings)
         return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
 
@@ -163,7 +163,7 @@ FEM_VERIFY_REUSE_FROM = 7  # FV_EXTRACT step 번호(job_types FEM_VERIFY)
 
 
 def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step: int | None, rid: str | None,
-                 ip: str | None) -> dict[str, Any]:
+                 ip: str | None, *, settings: Any = None) -> dict[str, Any]:
     """재시도 본체(권한·설정 확인은 호출부): 상태·유형 → Study 잠금·게이트 → 시작 step → 새 작업 + on_retry + 감사.
     일괄 예측 retry-failed(phase3 §14.7)가 하위마다 같은 트랜잭션에서 부른다."""
     job_id = old["id"]
@@ -172,6 +172,10 @@ def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step
     require_retryable_type(old["job_type"])
     study = studies_repo.require(conn, old["study_id"], for_update=True)
     study_gate(conn, study, old["job_type"])
+    if settings is not None:  # D3-64 후속: 검증 행을 되살리는 재시도는 fem_verify.max_active·중복 재검사(409)
+        from .fem_verify import check_retry_reactivate
+
+        check_retry_reactivate(settings, conn, old)
     steps = jobs_repo.get_steps(conn, job_id)
     default_from = next((s["step_no"] for s in steps if s["state"] in ("FAILED", "CANCELED", "PENDING", "RUNNING")), 1)
     if from_step is None:

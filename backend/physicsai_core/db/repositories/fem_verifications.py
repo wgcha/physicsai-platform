@@ -56,16 +56,26 @@ def count_active(conn: Connection, study_id: str) -> int:
 
 
 def active_duplicate(conn: Connection, study_id: str, predict_job_id: str | None, assem_kind: str,
-                     assem_ref: Mapping[str, Any] | None) -> dict[str, Any] | None:
-    """같은 예측·같은 조립 원본의 진행 중 검증(409 FEM_VERIFY_ACTIVE). 예측이 아직 없으면(동반) 검사하지 않는다."""
+                     assem_ref: Mapping[str, Any] | None, *, exclude_id: str | None = None) -> dict[str, Any] | None:
+    """같은 예측·같은 조립 원본의 진행 중 검증(409 FEM_VERIFY_ACTIVE). 예측이 아직 없으면(동반) 검사하지 않는다 —
+    동반 예측은 `active_companions`로 설계점을 비교한다."""
     if not predict_job_id:
         return None
     q = select(fv).where(and_(fv.c.study_id == study_id, fv.c.predict_job_id == predict_job_id, fv.c.assem_kind == assem_kind,
                               fv.c.status.in_(FV_ACTIVE)))
     for r in conn.execute(q):
-        if (r.assem_ref or None) == (dict(assem_ref) if assem_ref else None):
+        if r.id != exclude_id and (r.assem_ref or None) == (dict(assem_ref) if assem_ref else None):
             return row_dict(r)
     return None
+
+
+def active_companions(conn: Connection, study_id: str, param_set_id: str, model_id: str, assem_kind: str,
+                      assem_ref: Mapping[str, Any] | None, *, exclude_id: str | None = None) -> list[dict[str, Any]]:
+    """같은 템플릿·모델·조립 원본의 진행 중 동반 예측 검증(설계점 값 비교는 호출자 몫, D3-64 후속)."""
+    q = select(fv).where(and_(fv.c.study_id == study_id, fv.c.companion.is_(True), fv.c.param_set_id == param_set_id,
+                              fv.c.model_id == model_id, fv.c.assem_kind == assem_kind, fv.c.status.in_(FV_ACTIVE)))
+    want = dict(assem_ref) if assem_ref else None
+    return [row_dict(r) for r in conn.execute(q) if r.id != exclude_id and (r.assem_ref or None) == want]
 
 
 def list_for_study(conn: Connection, study_id: str, *, predict_job_ids: Sequence[str] | None = None,
@@ -201,7 +211,7 @@ def job_terminal(conn: Connection, job_id: str | None) -> bool:
     return j is None or j["state"] in TERMINAL
 
 
-__all__ = ["FV_ACTIVE", "FV_STATUSES", "label", "next_fv_no", "insert", "get", "set_row", "count_active", "active_duplicate", "list_for_study",
+__all__ = ["FV_ACTIVE", "FV_STATUSES", "label", "next_fv_no", "insert", "get", "set_row", "count_active", "active_duplicate", "active_companions", "list_for_study",
            "by_predict_job", "by_job", "enqueue_fem_verify", "done_notice", "on_job_end", "on_retry", "job_terminal", "jobs"]
 
 

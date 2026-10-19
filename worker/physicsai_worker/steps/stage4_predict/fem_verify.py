@@ -18,7 +18,6 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, write_json
-from physicsai_core.paths import file_name_problem_message, file_safety_problem
 from physicsai_core.stage4_predict import fem_assembly
 from physicsai_core.stage4_predict.prepared_input import is_mesh_file
 
@@ -146,9 +145,9 @@ def fv_prep(ctx: Any) -> None:
             p = os.path.join(src, x)
             if not os.path.isfile(p):
                 continue
-            why = file_safety_problem(p, src)
+            why = fem_assembly.assembly_name_problem(p, src)
             if why:
-                raise StepFailure("INPUT_INVALID", f"{x}: {file_name_problem_message(why)}")
+                raise StepFailure("INPUT_INVALID", f"{x}: {why}")
             copy_file(p, os.path.join(A, "input", x), checkpoint=ctx.checkpoint)
             names.append(x)
         starter = (pj.get("result") or {}).get("starter")
@@ -156,7 +155,7 @@ def fv_prep(ctx: Any) -> None:
             raise StepFailure("INPUT_INVALID", "예측 입력의 starter가 조립 상태가 아닙니다(쿠션 메시뿐)")
         res["starter"] = starter
         res["assem_files"] = names
-        assem_info.update(path=src, files=[{"name": x} for x in names])
+        assem_info.update(path=src, files=[{"name": x, "sha256": _sha256(os.path.join(A, "input", x))} for x in names])
     parts_src = [os.path.join(A, "mesh", s.predict.simlab_mesh_name), os.path.join(A, "input", s.predict.mesh_include_name),
                  os.path.join(A, "input", s.predict.simlab_mesh_name)]
     res["cushion_part_ids"] = next((fem_assembly.mesh_part_ids(p) for p in parts_src if os.path.isfile(p)), [])

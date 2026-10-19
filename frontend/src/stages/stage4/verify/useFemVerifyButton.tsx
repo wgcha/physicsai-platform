@@ -1,13 +1,16 @@
 // ④·⑤·⑥ 공용 "FEM 검증" 진입(phase3 §21.3.10): 버튼 → `…/stage/4/verify?new=1&…`, 이 출처의 기존 검증이 있으면 회색 링크.
 // 해석 연결(fem_verify 기능)이 꺼져 있으면 버튼 비활성 + 문구. 옛 PREDICT_VERIFY 기록의 검증 값 열은 verifyValues로 계속 노출한다.
+// 옛 PREDICT_VERIFY가 아직 진행 중이면(특히 SCX 결과 모름 = 확인 필요) 상태 줄 + 기존 SCX 조치 UI(ScxJobStatus)를 notes에 둔다(D3-64 후속).
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import type { Job } from "../../../api";
 import { femVerifyApi, type FemSourceReq, type FemVerifySummary } from "../../../api/femVerify";
 import { useStudy } from "../../../app/StudyContext";
 import { useFeature } from "../../../components/FeatureGate";
+import { ScxJobStatus, useScxMode } from "../../../components/HpcScx";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { useLatestJob } from "../../../hooks/useLatestJob";
+import { JOB_STATE_LABEL, isTerminal } from "../../../lib/format";
 import { FEM_BUTTON_LABEL, FEM_DISABLED_TEXT, fvLinkText, lookupFilter, matchesSource, sourceToQuery } from "./verifyRules";
 
 /** 안정된 키(출처가 같으면 재조회하지 않음) */
@@ -47,6 +50,10 @@ export function useFemVerifyButton(source: FemSourceReq | null, hasResult: boole
     [vjob],
   );
 
+  // 진행 중인 옛 검증 해석(호환 유지 작업) — SCX면 잡 상태·확인 필요 조치
+  const scx = useScxMode();
+  const legacyActive = vjob && !isTerminal(vjob.state) ? vjob : null;
+
   const disabled = !feature.enabled || !hasResult || !source;
   const button: ReactNode = canExec ? (
     <button
@@ -67,6 +74,12 @@ export function useFemVerifyButton(source: FemSourceReq | null, hasResult: boole
           {FEM_DISABLED_TEXT}
         </p>
       )}
+      {legacyActive && (
+        <p className="small" data-testid="legacy-verify">
+          {scx ? "검증 해석" : "PBS 검증 해석"}(이전 방식): {scx && legacyActive.state === "WAITING_HPC" ? "SCX 대기" : (JOB_STATE_LABEL[legacyActive.state] ?? legacyActive.state)}
+        </p>
+      )}
+      {legacyActive && scx && <ScxJobStatus job={legacyActive} canAct={canExec} />}
       {existing && (
         <p className="small fem-existing" data-testid="fem-existing">
           <Link className="muted" to={`${base}/${existing.id}`}>

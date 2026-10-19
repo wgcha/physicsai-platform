@@ -21,6 +21,7 @@ from physicsai_core.db.repositories import contour_media as media_repo
 from physicsai_core.db.repositories import fem_verifications as fv_repo
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
+from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
@@ -28,6 +29,7 @@ from physicsai_core.features import mesh_uses_include_tcl
 from physicsai_core.paths import display_path, resolve_in_study
 from physicsai_core.stage4_predict import contour_capture as cc
 from physicsai_core.stage4_predict import fem_assembly
+from physicsai_core.stage4_predict import nearest as nearest_mod
 from physicsai_core.state_machine import TERMINAL
 
 from ..auth import Principal
@@ -35,7 +37,7 @@ from ..context import AppContext
 from . import job_params
 from .common import audit, clamp_limit, job_summary, require_config_ok, require_power, study_root
 from .contour_capture import file_out
-from .fem_verify_sources import Resolved, input_is_assembly, resolve
+from .fem_verify_sources import APPLIED_TOL, Resolved, input_is_assembly, resolve
 from .job_params.study_manage import study_gate
 from .predict_batches import downsample
 
@@ -209,6 +211,63 @@ def _design(r: Resolved) -> dict[str, Any]:
             "values": r.values, "applied_values": r.applied_values, "out_of_range": r.out_of_range}
 
 
+# ---- 진행 중 상한·중복(생성·재시도·다시 실행 공통, D3-64 후속) --------------------------------------
+
+
+def _applied(settings: Any, ps: dict[str, Any] | None, values: dict[str, Any]) -> dict[str, float]:
+    vals = {k: float(v) for k, v in (values or {}).items()}
+    return nearest_mod.applied_values(ps["tpl_params"], vals, settings.predict.integer_rounding) if ps else vals
+
+
+def _same_point(a: dict[str, float], b: dict[str, float]) -> bool:
+    return set(a) == set(b) and all(abs(a[k] - b[k]) <= APPLIED_TOL for k in a)
+
+
+def check_active_rules(settings: Any, conn: Any, study_id: str, *, predict_job_id: str | None, companion: bool,
+                       param_set_id: str | None, model_id: str | None, values: dict[str, Any] | None, assem_kind: str,
+                       assem_ref: dict[str, Any] | None, exclude_id: str | None = None) -> None:
+    """Study당 진행 중 `fem_verify.max_active`(409 FEM_VERIFY_LIMIT)와 같은 예측·같은 조립 원본 중복(409 FEM_VERIFY_ACTIVE).
+    동반 예측은 아직 예측 id가 없어 같은 템플릿·모델·적용값(정수 반올림 후) + 같은 조립 원본의 진행 중 동반 검증과 비교한다.
+    호출자가 Study 행을 FOR UPDATE로 잡고 부른다(D3-25)."""
+    n = fv_repo.count_active(conn, study_id)
+    if n >= settings.fem_verify.max_active:
+        raise DomainError("FEM_VERIFY_LIMIT", f"진행 중인 FEM 검증이 {n}건입니다(상한 {settings.fem_verify.max_active})", status=409)
+    dup = fv_repo.active_duplicate(conn, study_id, predict_job_id, assem_kind, assem_ref, exclude_id=exclude_id)
+    if dup is None and companion and param_set_id and model_id:
+        rows = fv_repo.active_companions(conn, study_id, param_set_id, model_id, assem_kind, assem_ref, exclude_id=exclude_id)
+        if rows:
+            ps = ps_repo.get(conn, param_set_id)
+            mine = _applied(settings, ps, values or {})
+            dup = next((x for x in rows if _same_point(mine, _applied(settings, ps, (x.get("source_ref") or {}).get("values") or {}))),
+                       None)
+    if dup is not None:
+        raise DomainError("FEM_VERIFY_ACTIVE", "같은 예측·같은 조립 원본의 검증이 진행 중입니다", status=409)
+
+
+def check_row_reactivate(settings: Any, conn: Any, row: dict[str, Any]) -> None:
+    """끝난(FAILED·CANCELED) 검증 행을 다시 진행 중으로 만들기 전 상한·중복 재검사."""
+    if row["status"] in fv_repo.FV_ACTIVE:
+        return
+    check_active_rules(settings, conn, row["study_id"], predict_job_id=row.get("predict_job_id"), companion=bool(row["companion"]),
+                       param_set_id=row.get("param_set_id"), model_id=row.get("model_id"),
+                       values=(row.get("source_ref") or {}).get("values"), assem_kind=row["assem_kind"],
+                       assem_ref=row.get("assem_ref"), exclude_id=row["id"])
+
+
+def check_retry_reactivate(settings: Any, conn: Any, old: dict[str, Any]) -> None:
+    """`/jobs/{id}/retry`·다시 실행: 동반 PREDICT·FEM_VERIFY 재시도가 검증 행을 되살리면(on_retry) 그 전에 재검사."""
+    p = old.get("params") or {}
+    fid = p.get("fem_verify_id") if isinstance(p, dict) else None
+    if not isinstance(fid, str) or old["job_type"] not in ("PREDICT", "FEM_VERIFY"):
+        return
+    row = fv_repo.get(conn, fid, for_update=True)
+    if row is None:
+        return
+    revives = row["predict_job_id"] == old["id"] if old["job_type"] == "PREDICT" else row["job_id"] == old["id"]
+    if revives:
+        check_row_reactivate(settings, conn, row)
+
+
 # ---- 미리보기·생성 ---------------------------------------------------------------------------------
 
 
@@ -230,13 +289,12 @@ def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid:
         r: Resolved = pl["resolved"]
         if r.problems:
             raise DomainError("FEM_VERIFY_INVALID", "FEM 검증을 만들 수 없습니다", status=422, problems=r.problems)
-        n = fv_repo.count_active(conn, study["id"])
-        if n >= s.fem_verify.max_active:
-            raise DomainError("FEM_VERIFY_LIMIT", f"진행 중인 FEM 검증이 {n}건입니다(상한 {s.fem_verify.max_active})", status=409)
         pj = r.predict_job
         akind = ASSEM_KIND[pl["kind"]]
-        if fv_repo.active_duplicate(conn, study["id"], pj["id"] if pj else None, akind, pl["assem_ref"]):
-            raise DomainError("FEM_VERIFY_ACTIVE", "같은 예측·같은 조립 원본의 검증이 진행 중입니다", status=409)
+        c = r.companion or {}
+        check_active_rules(s, conn, study["id"], predict_job_id=pj["id"] if pj else None, companion=r.companion is not None,
+                           param_set_id=c.get("param_set_id"), model_id=c.get("model_id"), values=c.get("values"),
+                           assem_kind=akind, assem_ref=pl["assem_ref"])
         fid = str(uuid.uuid4())
         no = fv_repo.next_fv_no(conn, study["id"])
         options = {"fem": pl["fem"], "display": pl["display"], "hpc": body.hpc.model_dump() if body.hpc else None,
@@ -333,7 +391,6 @@ def _detail(ctx: AppContext, conn: Any, row: dict[str, Any], principal: Principa
     ref = row.get("source_ref") or {}
     ps = None
     from physicsai_core.db.repositories import models as models_repo
-    from physicsai_core.db.repositories import param_sets as ps_repo
 
     if row.get("param_set_id"):
         ps = ps_repo.get(conn, row["param_set_id"])
@@ -569,7 +626,7 @@ def rerun(ctx: AppContext, principal: Principal, fid: str, rid: str, ip: str | N
         row = fv_repo.get(conn, fid, for_update=True)
         if row is None:
             raise DomainError("FEM_VERIFY_NOT_FOUND", "FEM 검증을 찾을 수 없습니다", status=404)
-        study = studies_repo.require(conn, row["study_id"])
+        study = studies_repo.require(conn, row["study_id"], for_update=True)
         _require_owner(principal, row, study)
         require_config_ok(ctx)
         if row["status"] not in ("FAILED", "CANCELED"):
@@ -580,10 +637,11 @@ def rerun(ctx: AppContext, principal: Principal, fid: str, rid: str, ip: str | N
         if row["companion"] and pj is not None and pj["state"] != "SUCCEEDED":
             if pj["state"] not in TERMINAL:
                 raise DomainError("FEM_VERIFY_NOT_RERUNNABLE", "함께 실행한 예측이 아직 끝나지 않았습니다", status=409)
-            new = retry_locked(conn, principal, pj, None, rid, ip)
+            new = retry_locked(conn, principal, pj, None, rid, ip, settings=ctx.settings)
         elif job is not None and job["state"] in TERMINAL and job["state"] != "SUCCEEDED":
-            new = retry_locked(conn, principal, job, None, rid, ip)
+            new = retry_locked(conn, principal, job, None, rid, ip, settings=ctx.settings)
         elif job is None and pj is not None and pj["state"] == "SUCCEEDED":
+            check_row_reactivate(ctx.settings, conn, row)
             new = fv_repo.enqueue_fem_verify(conn, row)
         else:
             raise DomainError("FEM_VERIFY_NOT_RERUNNABLE", "다시 실행할 작업이 없습니다", status=409)

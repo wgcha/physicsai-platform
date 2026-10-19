@@ -87,6 +87,21 @@ def test_v3_s16_6_plan_problems_and_warnings(settings, tmp_path):
     assert _codes(plan_assembly(str(bad), settings)["problems"]) == ["FILE_NAME_UNSAFE"]
 
 
+@pytest.mark.parametrize("name", ["CON.inc", "nul.rad", "Aux.INC", "COM1.rad", "lpt9.inc", "PRN.backup.inc"])
+def test_d3_64_plan_windows_reserved_names(settings, tmp_path, name):
+    """D3-64 후속: 조립 파일 이름의 Windows 예약어(확장자 포함·대소문자 무시) → FILE_NAME_UNSAFE(이름 + 예약 이름 문구)."""
+    from physicsai_core.stage4_predict.fem_assembly import assembly_name_problem, plan_assembly
+
+    d = _assem(tmp_path / "res")
+    (d / name).write_text("x\n")
+    p = plan_assembly(str(d), settings)
+    assert _codes(p["problems"]) == ["FILE_NAME_UNSAFE"]
+    assert p["problems"][0]["message"].startswith(f"{name}: Windows 예약 이름")
+    assert name not in [x[0] for x in p["signature"]]
+    assert assembly_name_problem(str(d / "Face_0001.rad"), str(d)) is None
+    assert assembly_name_problem(str(d / "CONSOLE.inc"), str(d)) is None  # 예약어로 시작할 뿐인 이름은 허용
+
+
 def test_v3_s16_6_custom_path_rules(settings, tmp_path):
     from physicsai_core.paths import PathError
     from physicsai_core.stage4_predict.fem_assembly import check_custom_path

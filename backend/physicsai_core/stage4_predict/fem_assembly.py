@@ -13,7 +13,8 @@ import os
 from typing import Any
 
 from ..fileutil import copy_stream
-from ..paths import BACKUP_DIR, PLATFORM_DIR, file_name_problem_message, file_safety_problem, is_link_or_reparse, real
+from ..paths import (BACKUP_DIR, PLATFORM_DIR, file_name_problem_message, file_safety_problem, is_link_or_reparse, real,
+                     windows_reserved_name)
 from .param_discover import open_source
 from .prepared_input import is_mesh_file
 
@@ -24,6 +25,17 @@ INCLUDE_REF_MAX_LINE = 4096
 
 def _p(code: str, message: str) -> dict[str, str]:
     return {"code": code, "message": message}
+
+
+def assembly_name_problem(path: str, base: str) -> str | None:
+    """조립 파일 1개의 이름·링크 문제 사용자 문구(없으면 None). `file_safety_problem` + Windows 예약어
+    (CON·PRN·AUX·NUL·COM1-9·LPT1-9, 확장자 포함·대소문자 무시) — 스냅숏이 Windows HPC·SCX로 올라간다(D3-64 후속)."""
+    why = file_safety_problem(path, base)
+    if why:
+        return file_name_problem_message(why)
+    if windows_reserved_name(os.path.basename(path)):
+        return "Windows 예약 이름(CON·PRN·AUX·NUL·COM1~9·LPT1~9)은 파일 이름으로 쓸 수 없습니다"
+    return None
 
 
 def assembly_files(folder: str, settings: Any) -> list[str]:
@@ -76,9 +88,9 @@ def plan_assembly(path: str, settings: Any) -> dict[str, Any]:
     sig = []
     for n in names:
         p = os.path.join(path, n)
-        why = file_safety_problem(p, path)
+        why = assembly_name_problem(p, path)
         if why:
-            out["problems"].append(_p("FILE_NAME_UNSAFE", f"{n}: {file_name_problem_message(why)}"))
+            out["problems"].append(_p("FILE_NAME_UNSAFE", f"{n}: {why}"))
             continue
         st = os.stat(p)
         total += st.st_size

@@ -8,7 +8,7 @@ import type { MockServer } from "../mock/server";
 import { fromBatch } from "../analysis/adapters/fromBatch";
 import { curveColumns, curveValue, NO_RESP_HINT, perfValue, withPerfMetrics } from "../analysis/perfColumns";
 import { perfRows, rolesIssue, rolesToBody, roleValueIssue, SAVE_FIRST_TEXT } from "../stages/stage5/surrogate/perfRules";
-import { stairPath } from "../stages/stage5/surrogate/ParetoPlot";
+import { fitLabel, stairPath } from "../stages/stage5/surrogate/ParetoPlot";
 import { recommend } from "../stages/stage5/surrogate/pareto";
 import type { PredictBatch, TemplateResponse } from "../api";
 import type { DesignMap } from "../api/designMap";
@@ -83,6 +83,14 @@ describe("V3-S17-12 ⑥ 성능 표", () => {
   it("ParetoPlot 계단선: y 최소면 가로→세로, 최대면 세로→가로", () => {
     expect(stairPath([[0, 10], [5, 4]], true)).toBe("M0 10 H5 V4");
     expect(stairPath([[0, 10], [5, 4]], false)).toBe("M0 10 V4 H5");
+  });
+
+  it("축 라벨 말줄임(쌍 그림 겹침 방지): 폭 안이면 그대로, 넘치면 …로 줄여 폭을 넘지 않음", () => {
+    expect(fitLabel("최대 변위 [mm] ↓ 좋음", 400)).toBe("최대 변위 [mm] ↓ 좋음");
+    const cut = fitLabel("최대 변위 [mm] ↓ 좋음", 60);
+    expect(cut.endsWith("…")).toBe(true);
+    expect(cut.length).toBeLessThan("최대 변위 [mm] ↓ 좋음".length);
+    expect(fitLabel("abc", 0)).toBe("…");
   });
 });
 
