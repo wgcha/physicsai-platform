@@ -5390,6 +5390,7 @@ export interface components {
             predict_responses?: components["schemas"]["FeatureState"] | null;
             spdm_import: components["schemas"]["FeatureState"];
             train_doe: components["schemas"]["FeatureState"];
+            train_doe_platform?: components["schemas"]["FeatureState"] | null;
             train_extract: components["schemas"]["FeatureState"];
             train_import: components["schemas"]["FeatureState"];
             train_resp: components["schemas"]["FeatureState"];
@@ -5968,6 +5969,13 @@ export interface components {
             doe_label: string;
             /** Doe Type */
             doe_type: string;
+            gen?: components["schemas"]["TrainDoeGenCounts"] | null;
+            /**
+             * Generator
+             * @default hyperstudy
+             * @enum {string}
+             */
+            generator: "platform" | "hyperstudy";
             /** Has Run Responses */
             has_run_responses: boolean;
             /** Id */
@@ -5991,12 +5999,45 @@ export interface components {
             run_state_counts: components["schemas"]["RunStateCounts"];
             /** Sample Status */
             sample_status: string;
+            sampling?: components["schemas"]["TrainDoeSampling"] | null;
             /** Solve Failed Count */
             solve_failed_count: number;
             /** Status */
             status: string;
             /** Study Id */
             study_id: string;
+        };
+        /**
+         * TrainDoeGenCounts
+         * @description 플랫폼 DOE run별 입력 생성 상태 집계(train_doe_points).
+         */
+        TrainDoeGenCounts: {
+            /** Done */
+            done: number;
+            /** Failed */
+            failed: number;
+            /** Pending */
+            pending: number;
+            /** Running */
+            running: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * TrainDoeSampling
+         * @description 플랫폼 DOE 표본 방식(§23.4): kind·표시 이름·설명 id(td_<kind>)·meta(DG_PREP 전 null).
+         */
+        TrainDoeSampling: {
+            /** Desc Id */
+            desc_id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** TrainParamOut */
         TrainParamOut: {

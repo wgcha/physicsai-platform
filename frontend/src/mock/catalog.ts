@@ -55,6 +55,8 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   // S16(phase3.md §21.3.8): 조립 FEM 검증 — 해석 연결(HPC) + 메시 교체는 mesh 템플릿·include TCL
   fem_verify: ["hpc.mode"],
   fem_verify_rebuild: ["commands.mesh", "resources.hypermesh_include_tcl"],
+  // S18(phase3.md §23.8): ① 플랫폼 생성 — geom_update 템플릿 + SimLab 경로(HyperStudy 자원은 필요 없음)
+  train_doe_platform: ["commands.geom_update", "altair.simlab_path"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

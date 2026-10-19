@@ -322,6 +322,10 @@ export type DoeField = S["DoeField"];
 export type DoeType = S["DoeType"];
 export type TrainRunState = keyof S["RunStateCounts"];
 export type SampleStatus = "PARSED" | "PARTIAL" | "MISSING" | "PENDING";
+/** S18(§23.4): generator = 생성 방식(기본 hyperstudy), sampling = 플랫폼 표본 요약(desc_id `td_<kind>`), gen = run별 생성 상태 집계(platform만) */
+export type DoeGenerator = S["TrainDoe"]["generator"];
+export type DoeGenCounts = S["TrainDoeGenCounts"];
+export type DoeSamplingBrief = S["TrainDoeSampling"];
 export type TrainDoe = Override<S["TrainDoe"], { status: EntityStatus; sample_status: SampleStatus }>;
 export type TrainRun = Override<S["TrainRun"], { state: TrainRunState }>;
 

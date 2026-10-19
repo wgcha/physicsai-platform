@@ -5,6 +5,8 @@ import { DOE_TYPES } from "./catalog";
 import { err, type MockResp } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
+import { checkSampling, generatorOf, platformLabel } from "./doePlatform";
+import { isPlatformKind } from "../lib/sampling";
 
 export function hpcSummary(p2: Phase2Mock, j: Job): HpcSummary | null {
   if (j.job_type !== "TD_SOLVE" && j.job_type !== "PREDICT_VERIFY") return null;
@@ -30,6 +32,11 @@ export function precheckTrain(p2: Phase2Mock, s: Study, type: JobType, params: R
     const t = p2.setups[s.id]?.tpl;
     if (!t) return err(409, "TPL_REQUIRED", "tpl을 먼저 생성하세요.");
     if (t.stale) return err(409, "TPL_STALE", "파라미터 표가 바뀌었습니다 — tpl을 다시 생성하세요.");
+    // S18 §23.4: 플랫폼 표본 조합 검증(422 DOE_SAMPLING_INVALID + problems)
+    if (generatorOf(params) === "platform") {
+      const c = checkSampling(p2.setups[s.id], (params.sampling ?? {}) as Record<string, unknown>);
+      if (c.problems.length) return err(422, "DOE_SAMPLING_INVALID", "표본 설정을 확인하세요.", { problems: c.problems });
+    }
   }
   if (type === "TD_SOLVE" || type === "TD_RESULT_IMPORT") {
     const d = p2.does.find((x) => x.id === params.doe_id && x.study_id === s.id);
@@ -45,13 +52,36 @@ export function onCreateTrain(p2: Phase2Mock, j: Job, me: { display_name: string
   if (j.job_type === "TD_DOE_GEN") {
     const id = p2.s.nid("doe");
     p.doe_id = id;
-    const t = DOE_TYPES.find((x) => x.label === p.doe_label) ?? DOE_TYPES[0];
-    p2.does.unshift({
-      id, study_id: sid, job_id: j.id, status: "BUILDING", doe_label: t.label, doe_type: t.value, num_runs_requested: t.runs_editable ? Number(p.num_runs ?? t.default_runs) : null,
-      options: (p.options as Record<string, unknown>) ?? {}, multi_execution: Number(p.multi_execution ?? 1), radioss_assem_source_path: String(p.radioss_assem_path ?? ""),
-      run_count: null, sample_status: "PENDING", collected_count: 0, solve_failed_count: 0, has_run_responses: false,
+    const common = {
+      id, study_id: sid, job_id: j.id, status: "BUILDING" as const, radioss_assem_source_path: String(p.radioss_assem_path ?? ""),
+      run_count: null, sample_status: "PENDING" as const, collected_count: 0, solve_failed_count: 0, has_run_responses: false,
       dir_display_path: p2.s.disp(sid, `01_train/doe/${id}`), results_display_path: p2.s.disp(sid, `01_train/results/${id}`), created_by_name: me.display_name, created_at: now,
       run_state_counts: { GENERATED: 0, SUBMITTED: 0, SOLVED: 0, SOLVE_FAILED: 0, COLLECTED: 0, COLLECT_FAILED: 0 },
+    };
+    if (generatorOf(p) === "platform") {
+      // S18 §23.4 B8: 서버가 확정 기록하는 params + train_does 행(generator·doe_type = 방식 이름·options = kind를 뺀 입력·sampling·gen)
+      const { kind: k0, ...input } = (p.sampling ?? {}) as Record<string, unknown>;
+      const kind = isPlatformKind(String(k0)) ? (String(k0) as Parameters<typeof platformLabel>[0]) : "lhs_opt";
+      const chk = checkSampling(p2.setups[sid], { kind, ...input });
+      const n = chk.runs ?? 0;
+      const label = platformLabel(kind);
+      p.generator = "platform";
+      p.doe_label = label;
+      p.doe_type = kind.toUpperCase();
+      p.num_runs = n;
+      p.multi_execution = Number(p.multi_execution ?? 4);
+      p.on_run_failure = p.on_run_failure ?? "fail";
+      if (chk.notes.length) j.warnings = chk.notes.map((x) => ({ code: x.code, message: x.message }));
+      p2.does.unshift({
+        ...common, doe_label: label, doe_type: kind.toUpperCase(), num_runs_requested: n, options: input, multi_execution: Number(p.multi_execution),
+        generator: "platform", sampling: { kind, label, desc_id: `td_${kind}`, meta: null }, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
+      });
+      return;
+    }
+    const t = DOE_TYPES.find((x) => x.label === p.doe_label) ?? DOE_TYPES[0];
+    p2.does.unshift({
+      ...common, doe_label: t.label, doe_type: t.value, num_runs_requested: t.runs_editable ? Number(p.num_runs ?? t.default_runs) : null,
+      options: (p.options as Record<string, unknown>) ?? {}, multi_execution: Number(p.multi_execution ?? 1), generator: "hyperstudy", sampling: null, gen: null,
     });
   }
 }
@@ -82,6 +112,13 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
       const r = rng(n);
       p2.runs[d.id] = Array.from({ length: n }, (_, i) => ({ run_key: runKey(i + 1), state: "GENERATED" as TrainRunState, starter_name: "cushion_0000.rad", input_display_path: p2.s.disp(sid, `01_train/doe/${d.id}/approaches/doe_1/${runKey(i + 1)}/m_3`), hpc: null, result: null, updated_at: new Date().toISOString() }));
       p2.doeSamples[d.id] = p2.runs[d.id].map((x) => ({ run_key: x.run_key, values: { THK_TOP: Number((0.3 + r() * 0.9).toFixed(4)), THK_FOAM: Number((1 + r() * 2).toFixed(4)), RIB_H: 12, RIB_N: 2 + Math.floor(r() * 7) }, measured: {} }));
+      if (d.generator === "platform") {
+        // S18: run별 생성 상태 집계(전부 완료)·표본 meta(§20.5 — 목은 run 수만)
+        d.gen = { total: n, pending: 0, running: 0, done: n, failed: 0 };
+        if (d.sampling) d.sampling.meta = { count: n, ...d.options };
+        j.result = { doe_id: d.id, run_count: n, sample_status: "PARSED", skipped_runs: [], gen_done: n, gen_failed: [], multi_execution: d.multi_execution };
+        return "done";
+      }
       j.result = { doe_id: d.id, run_count: n, sample_status: "PARSED", skipped_runs: [] };
       return "done";
     }

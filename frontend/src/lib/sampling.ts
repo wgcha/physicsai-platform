@@ -3,7 +3,10 @@
 import type { BatchSampling, BatchSamplingBrief } from "../api/types";
 
 export type SamplingKind = "lhs_opt" | "sobol" | "lhs" | "fullfact" | "fracfact" | "pb" | "bbd" | "ccd" | "table" | "train_doe";
-export type DescId = SamplingKind | "hs_lhs" | "hs_sobol" | "hs_fullfact" | "hs_fracfact" | "generic";
+/** S18 ① 플랫폼 생성 방식 8종(§23.9): ④ 방식에서 `table`·`train_doe`를 뺀 것 */
+export type PlatformKind = Exclude<SamplingKind, "table" | "train_doe">;
+export type TdDescId = `td_${PlatformKind}`;
+export type DescId = SamplingKind | TdDescId | "hs_lhs" | "hs_sobol" | "hs_fullfact" | "hs_fracfact" | "generic";
 export interface SamplingDesc {
   /** 설명 상자 머리(선택창 표시 이름과 같은 말) */
   name: string;
@@ -24,6 +27,16 @@ export const SAMPLING_GROUPS: { label: string; kinds: SamplingKind[] }[] = [
 ];
 export const SAMPLING_KINDS: SamplingKind[] = SAMPLING_GROUPS.flatMap((g) => g.kinds);
 
+/** S18 ①-3 플랫폼 생성 드롭다운: ④ 묶음·순서에서 직접 지정 묶음(table·train_doe)만 뺀 8개(§23.9) */
+export const PLATFORM_GROUPS: { label: string; kinds: PlatformKind[] }[] = SAMPLING_GROUPS.filter((g) => g.label !== "직접 지정") as { label: string; kinds: PlatformKind[] }[];
+export const PLATFORM_KINDS: PlatformKind[] = PLATFORM_GROUPS.flatMap((g) => g.kinds);
+export const isPlatformKind = (k: string): k is PlatformKind => (PLATFORM_KINDS as string[]).includes(k);
+export const tdDescId = (k: PlatformKind): TdDescId => `td_${k}`;
+/** ①-3 플랫폼 run 상한 기본값(설정 train_data.platform_max_runs = /status.limits.configured.doe_platform_max_runs, 없으면 이 값) */
+export const DEFAULT_PLATFORM_MAX_RUNS = 500;
+/** ①-3 플랫폼 동시 실행 수 기본값(설정 train_data.platform_parallel_default) */
+export const DEFAULT_PLATFORM_PARALLEL = 4;
+
 /** 선택창 표시 이름(§20.4 표) */
 export const SAMPLING_LABEL: Record<SamplingKind, string> = {
   lhs_opt: "최적화 LHS",
@@ -39,7 +52,7 @@ export const SAMPLING_LABEL: Record<SamplingKind, string> = {
 };
 export const isSamplingKind = (k: string): k is SamplingKind => (SAMPLING_KINDS as string[]).includes(k);
 
-export const DESCRIPTIONS: Record<DescId, SamplingDesc> = {
+const BASE_DESCRIPTIONS: Record<SamplingKind | "hs_lhs" | "hs_sobol" | "hs_fullfact" | "hs_fracfact" | "generic", SamplingDesc> = {
   lhs_opt: {
     name: "최적화 LHS",
     lines: [
@@ -176,7 +189,27 @@ export const DESCRIPTIONS: Record<DescId, SamplingDesc> = {
     ],
   },
 };
-export const HS_NOTE = "최적화 LHS·Box–Behnken·CCD·Plackett–Burman은 ④ 일괄 예측에서만 고를 수 있습니다(① 해석 DOE는 HyperStudy 유형 정의 파일의 방식만).";
+
+const tdFrom = (base: PlatformKind, over: Record<number, string>): SamplingDesc => ({ name: BASE_DESCRIPTIONS[base].name, lines: BASE_DESCRIPTIONS[base].lines.map((l, i) => over[i] ?? l) });
+export const DESCRIPTIONS: Record<DescId, SamplingDesc> = {
+  ...BASE_DESCRIPTIONS,
+  // ---- S18 ① 플랫폼 생성(§23.10): ④ 문구를 쓰고 아래 줄만 바꾼다(lhs·lhs_opt·bbd·fullfact = 4줄, sobol = 1·3·4줄). fracfact·pb·ccd는 ④ 문구 그대로
+  td_lhs: tdFrom("lhs", { 3: "run 수: 자유(2 이상, 상한은 입력란에 표시). 권장 10 × 변수 수." }),
+  td_lhs_opt: tdFrom("lhs_opt", { 3: "run 수: 자유(2 이상, 상한은 입력란에 표시). 권장 10 × 변수 수(최소 변수 수 + 2). run이 많으면 생성 준비에 수십 초 걸릴 수 있습니다." }),
+  td_sobol: tdFrom("sobol", {
+    0: "저불일치 수열로 공간을 균일하게 채웁니다(스크램블, 같은 시드로 같은 표본).",
+    2: "영향도: 정식. AI 학습에 적합합니다.",
+    3: "run 수: 2^m(4·8·16·32·64·128·256). 권장 = 10 × 변수 수 이상인 가장 작은 2^m.",
+  }),
+  td_fullfact: tdFrom("fullfact", { 3: "run 수 = 수준 수의 곱(상한 이내). 수준 2~10, 정수 변수는 범위 안 정수 개수까지." }),
+  td_fracfact: tdFrom("fracfact", {}),
+  td_pb: tdFrom("pb", {}),
+  td_bbd: tdFrom("bbd", { 3: "run 수 = 2·k·(k−1) + 1(중심점 1개 — 같은 입력의 해석은 같은 결과라 반복하지 않음). 변수 3개 이상." }),
+  td_ccd: tdFrom("ccd", {}),
+};
+export const HS_NOTE = "최적화 LHS·Box–Behnken·CCD·Plackett–Burman은 '플랫폼 생성'에서 고를 수 있습니다(원본 HyperStudy 방식은 유형 정의 파일의 방식만).";
+/** S18 §23.9: 원본 HyperStudy(호환) 모드 회색 줄 하나 더 */
+export const HS_COMPAT_NOTE = "호환 모드 — hstbatch -multiexec로 실행합니다. 실제 동시 실행 수는 HyperStudy가 정하며 입력 생성이 run마다 순차로 될 수 있습니다.";
 
 /** ① 설명 id: 서버 desc_id(없거나 모르면 일반 문구) */
 export function descIdOf(descId: string | null | undefined): DescId {

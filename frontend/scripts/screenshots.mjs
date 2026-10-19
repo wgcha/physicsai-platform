@@ -14,6 +14,8 @@
 //                                                                 → SHOT_OUT 또는 screenshots/sampling/)
 //       npm run build:mock && node scripts/screenshots.mjs s17  (S17 D3-65: ⑥ 성능 표(역할)·2목적 결과(산점도·슬라이더·파레토 표)·3목적 쌍 그림, ⑤ 영향도(커브 지표), 다크·라이트 1920
 //                                                                 → SHOT_OUT 또는 screenshots/s17/)
+//       npm run build:mock && node scripts/screenshots.mjs s18  (S18 D3-66: ①-3 DOE 생성 카드 — 플랫폼 생성(최적화 LHS 기본·설명 상자·동시 4)·원본 HyperStudy(호환), 다크·라이트 1920
+//                                                                 → SHOT_OUT 또는 screenshots/s18/)
 // 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
@@ -75,7 +77,8 @@ const designmap = process.argv.includes("designmap");
 const analysis = process.argv.includes("analysis");
 const sampling = process.argv.includes("sampling");
 const s17 = process.argv.includes("s17");
-const out = s17 ? process.env.SHOT_OUT || path.join(root, "screenshots", "s17") : sampling ? process.env.SHOT_OUT || path.join(root, "screenshots", "sampling") : analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
+const s18 = process.argv.includes("s18");
+const out = s18 ? process.env.SHOT_OUT || path.join(root, "screenshots", "s18") : s17 ? process.env.SHOT_OUT || path.join(root, "screenshots", "s17") : sampling ? process.env.SHOT_OUT || path.join(root, "screenshots", "sampling") : analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
@@ -167,7 +170,25 @@ const paretoView = (sel) => async (page) => {
   await page.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "start" }), ".so-pareto-card");
   await page.evaluate(() => window.scrollBy(0, -90));
 };
-const shots = s17
+// s18: ①-3 DOE 생성 카드 — 조립 폴더를 확인하고 카드를 화면에 맞춘다
+const DOE_CARD = { name: "DOE · Radioss 입력" };
+async function doeGenCard(page, hyperstudy) {
+  const card = page.getByRole("region", DOE_CARD);
+  if (hyperstudy) {
+    await card.getByRole("button", { name: "원본 HyperStudy(호환)" }).click();
+    await card.getByLabel("Random Seed").waitFor();
+  }
+  await card.getByLabel("Radioss 조립 폴더").fill("E:/shared/AI_WORK/cushion/00_inbox/radioss_assem");
+  await card.getByRole("button", { name: "확인", exact: true }).click();
+  await card.getByText(/starter/).waitFor();
+  await page.evaluate((n) => (document.querySelector(`[aria-label="${n}"]`)?.scrollIntoView({ block: "start" }), window.scrollBy(0, -90)), DOE_CARD.name);
+}
+const shots = s18
+  ? [
+      { name: "s18_stage1_platform", url: `${S}/1?${q}`, wait: ".workarea .card", act: (p) => doeGenCard(p, false), noFull: true },
+      { name: "s18_stage1_hyperstudy", url: `${S}/1?${q}`, wait: ".workarea .card", act: (p) => doeGenCard(p, true), noFull: true },
+    ]
+  : s17
   ? [
       { name: "s17_perf_table", url: `${S}/5?${q}`, wait: ".workarea .card", act: perfTable, noFull: true },
       { name: "s17_result_2obj", url: `${S}/5/surrogate/so-2?${q}&hpc=1`, wait: '[data-testid="pareto-plot"]', act: paretoView('[data-testid="pareto-plot"]'), noFull: true },
@@ -225,7 +246,7 @@ const shots = s17
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
     ];
-const sizes = s17 || sampling
+const sizes = s18 || s17 || sampling
   ? [{ w: 1920, h: 1080 }]
   : analysis
   ? [
@@ -246,7 +267,7 @@ const sizes = s17 || sampling
       { w: 1280, h: 800 },
     ];
 // 테마(대시보드 localStorage 키) — tone은 다크·라이트 둘 다, 나머지는 기본(dark)
-const themes = tone || scx || designmap || analysis || sampling || s17 ? ["dark", "light"] : [null];
+const themes = tone || scx || designmap || analysis || sampling || s17 || s18 ? ["dark", "light"] : [null];
 
 const browser = await chromium.launch();
 const report = [];

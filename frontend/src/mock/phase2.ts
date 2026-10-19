@@ -24,6 +24,7 @@ import { finishTrain, hpcSummary, onCreateTrain, precheckTrain, tickSolve } from
 import { finishCuration, onCreateCuration, precheckCuration, seedCuration } from "./stage2";
 import { finishOptimize, onCreateOptimize, onProgressOptimize, precheckOptimize, seedOptimize } from "./stage5";
 import { seedEnvChecks, tickEnvChecks } from "./ops";
+import { checkGeneratorShape, generatorOf } from "./doePlatform";
 
 export { ALL_FEATURES, DOE_TYPES, FEATURE_MISSING, STAGE_LABEL } from "./catalog";
 export { usableComponent } from "./stage2";
@@ -110,7 +111,12 @@ export class Phase2Mock {
 
   // ---------------- 작업 생성·진행 ----------------
   precheck(s: Study, type: JobType, params: Record<string, unknown>): MockResp | null {
-    const f = FEATURE_OF[type];
+    // S18 §23.8: TD_DOE_GEN은 방식별 기능 판정(platform = train_doe_platform, hyperstudy = train_doe)
+    if (type === "TD_DOE_GEN") {
+      const bad = checkGeneratorShape(params);
+      if (bad) return bad;
+    }
+    const f = type === "TD_DOE_GEN" && generatorOf(params) === "platform" ? "train_doe_platform" : FEATURE_OF[type];
     if (type === "TD_SOLVE" && !this.s.hpcConfigured) return err(409, "HPC_NOT_CONFIGURED", "PBS 연결이 설정되지 않았습니다.");
     if (type === "SPDM_IMPORT" && this.disabled.has("spdm_import")) return err(409, "SPDM_IMPORT_DISABLED", "SPDM 가져오기가 설정되지 않았습니다.");
     if (f && this.disabled.has(f)) return err(409, f === "train_resp" ? "TEMPLATE_NOT_CONFIGURED" : "RESOURCE_NOT_CONFIGURED", "관리자 설정이 필요합니다.", { missing: FEATURE_MISSING[f] });

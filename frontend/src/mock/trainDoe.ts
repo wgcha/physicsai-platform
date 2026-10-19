@@ -50,7 +50,10 @@ export function doeResultTable(p2: Phase2Mock, d: TrainDoe): MockResp {
     label: d.doe_label,
     study_id: d.study_id,
     type: d.doe_type,
-    sampling: { method: d.doe_type, label: DOE_TYPES.find((t) => t.value === d.doe_type)?.label ?? d.doe_label, desc_id: DOE_TYPES.find((t) => t.value === d.doe_type)?.desc_id ?? null, options: d.options },
+    // S18 §23.4: 플랫폼 DOE = desc_id `td_<kind>`
+    sampling: d.generator === "platform"
+      ? { method: d.doe_type, label: d.doe_label, desc_id: d.sampling?.desc_id ?? `td_${d.doe_type.toLowerCase()}`, options: d.options }
+      : { method: d.doe_type, label: DOE_TYPES.find((t) => t.value === d.doe_type)?.label ?? d.doe_label, desc_id: DOE_TYPES.find((t) => t.value === d.doe_type)?.desc_id ?? null, options: d.options },
     parameters: names.map((n) => {
       const vs = samples.map((s) => s.values[n]).filter(finite);
       return { name: n, integer: isIntegerFormat(fmt.get(n)), min: vs.length ? Math.min(...vs) : null, max: vs.length ? Math.max(...vs) : null, unit: null };

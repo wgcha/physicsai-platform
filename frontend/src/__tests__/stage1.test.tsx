@@ -7,6 +7,9 @@ import { recordCalls } from "../test/recordCalls";
 import { DOE_TYPES } from "../mock/catalog";
 import { DESCRIPTIONS, HS_NOTE } from "../lib/sampling";
 
+/** S18: ①-3 화면 기본은 플랫폼 생성 — 기존 HyperStudy 시험은 호환 모드로 먼저 전환한다 */
+const openHyperstudy = (card: HTMLElement) => fireEvent.click(within(card).getByRole("button", { name: "원본 HyperStudy(호환)" }));
+
 describe("V2-FE-2 ① 학습데이터 생성", () => {
   it("카드 6개, 권한 없으면 조회 전용", async () => {
     renderApp(`${STUDY}/1`, { user: "general" });
@@ -50,6 +53,7 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
   it("DOE 유형별 동적 옵션(int·bool·combo)과 runs_editable — 기본 선택은 추천 유형(S15)", async () => {
     renderApp(`${STUDY}/1`, { user: "power" });
     const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+    openHyperstudy(card);
     await within(card).findByLabelText("Random Seed");
     const sel = within(card).getByLabelText("DOE 유형") as HTMLSelectElement;
     expect(sel.value).toBe("LatinHyperCube"); // 목록 첫 항목(FullFact)이 아니라 recommended
@@ -68,6 +72,7 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
   it("DOE 동시 실행 수(multiexec)는 고급 없이 기본 표시 · 상한은 /status 설정값", async () => {
     renderApp(`${STUDY}/1`, { user: "power" });
     const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+    openHyperstudy(card);
     await within(card).findByLabelText("Random Seed");
     expect(within(card).queryByRole("button", { name: /고급/ })).toBeNull();
     const input = within(card).getByLabelText("동시 실행 수") as HTMLInputElement;
@@ -144,6 +149,7 @@ describe("V3-S15-13 ① DOE 생성: 추천 기본값·설명 상자", () => {
   it("기본 선택 = 서버가 추천한 유형(목록 첫 항목이 아님), 이름 옆 추천 표시, 설명문 4줄·계산값·회색 한 줄", async () => {
     renderApp(`${STUDY}/1`, { user: "power" });
     const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+    openHyperstudy(card);
     await within(card).findByLabelText("Random Seed");
     const sel = within(card).getByLabelText("DOE 유형") as HTMLSelectElement;
     expect(sel.value).toBe("LatinHyperCube");
@@ -172,6 +178,7 @@ describe("V3-S15-13 ① DOE 생성: 추천 기본값·설명 상자", () => {
     try {
       renderApp(`${STUDY}/1`, { user: "power" });
       const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+      openHyperstudy(card);
       await waitFor(() => expect((within(card).getByLabelText("DOE 유형") as HTMLSelectElement).value).toBe("FullFact"));
       expect(within(card).getByTestId("samp-desc").getAttribute("data-desc-id")).toBe("generic");
       expect(lines(card)).toEqual(DESCRIPTIONS.generic.lines);
