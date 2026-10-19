@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .base import BodyGeom, BodySummary, EdgeData, FaceData, FaceMove, Topology
+from .base import BodyGeom, BodySummary, EdgeData, FaceData, FaceMove, SurfaceEdit, Topology
 
 
 class CadInputError(Exception):
@@ -71,6 +71,58 @@ def load_brep(path: str | Path, names: list[str]) -> list[BodyGeom]:
         raise CadInputError(e.code, e.message) from None
 
 
+def load_sheets(path: str | Path, extensions: tuple[str, ...] = (".step", ".stp")) -> tuple[str, list[BodyGeom]]:
+    """Load mid-surface (sheet) bodies (shell-morph section 4.1). Returns (mode, bodies) like :func:`load_cad`;
+    a solid body raises CadInputError SHELL_BODY_NOT_SHEET."""
+    from . import occ, occ_sheet
+
+    p = Path(path)
+    exts = tuple(e.lower() for e in extensions)
+    try:
+        if p.is_dir():
+            return "parts", list(occ_sheet.load_sheet_parts_dir(p, exts))
+        if not p.is_file():
+            raise CadInputError("GEOM_INPUT_INVALID", f"CAD path not found: {p.name}")
+        if p.suffix.lower() not in exts:
+            raise CadInputError("GEOM_INPUT_INVALID", f"unsupported CAD extension: {p.suffix}")
+        return "single", list(occ_sheet.load_sheet_step(p))
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
+def rebuild_sheet(body: BodyGeom, face_edits: dict, edge_points: dict, vertex_pos: dict) -> BodyGeom:
+    """Topology-preserving geometry replacement of a sheet body (shell-morph section 6.4).
+
+    ``face_edits`` {face id: SurfaceEdit}, ``edge_points`` {edge id: points[3,3]} = images of the old edge
+    points at arc-length t = 0, 1/2, 1 (closed edges: 0, 1/3, 2/3), ``vertex_pos`` {vertex id: xyz}.
+    Raises CadInputError GEOM_CAD_FAILED / GEOM_TOPOLOGY_CHANGED.
+    """
+    from . import occ
+
+    try:
+        return body.rebuilt(face_edits, edge_points, vertex_pos)  # type: ignore[attr-defined]
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
+def save_sheet_brep(bodies: list[BodyGeom], path: str | Path) -> None:
+    from . import occ, occ_sheet
+
+    try:
+        occ_sheet.write_sheet_brep(bodies, path)  # type: ignore[arg-type]
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
+def load_sheet_brep(path: str | Path, names: list[str]) -> list[BodyGeom]:
+    from . import occ, occ_sheet
+
+    try:
+        return list(occ_sheet.load_sheet_brep(path, names))
+    except occ.KernelError as e:
+        raise CadInputError(e.code, e.message) from None
+
+
 def kernel_versions() -> dict[str, str]:
     from . import occ
 
@@ -84,10 +136,15 @@ __all__ = [
     "EdgeData",
     "FaceData",
     "FaceMove",
+    "SurfaceEdit",
     "Topology",
     "kernel_versions",
     "load_brep",
     "load_cad",
+    "load_sheet_brep",
+    "load_sheets",
     "move_faces",
+    "rebuild_sheet",
     "save_brep",
+    "save_sheet_brep",
 ]

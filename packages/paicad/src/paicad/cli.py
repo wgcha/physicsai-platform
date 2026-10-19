@@ -108,6 +108,10 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--no-envelope", action="store_true")
     st.add_argument("--nx-samples", help="folder of NX change samples: <name>.json (values) + <name>.step per sample")
     st.add_argument("--threads", type=int)
+
+    from .shell.cli import add_parser as add_shell_parser
+
+    add_shell_parser(sub)
     return p
 
 
@@ -136,14 +140,22 @@ def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
     Success-by-existence outputs (props.json, param_map.json, extract files) never get a FAIL report."""
     from .common import CODE_CATEGORY, dumps, envelope
 
-    name = REPORTS.get(cmd)
+    if cmd.startswith("shell "):
+        from .shell.cli import REPORTS as SHELL_REPORTS
+        from .shell.common import shell_envelope
+
+        name = SHELL_REPORTS.get(cmd[6:])
+        mk = shell_envelope
+    else:
+        name = REPORTS.get(cmd)
+        mk = envelope
     if name is None:
         return None
     p = Path(out_dir) / name
     if p.exists():
         return None
     extra = {"tag": dict(parts=[], contacts=[], files={}, warnings=[])}.get(cmd, {})
-    doc = envelope(status="FAIL", code=code, category=CODE_CATEGORY.get(code), message=message, **extra)
+    doc = mk(status="FAIL", code=code, category=CODE_CATEGORY.get(code), message=message, **extra)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(f".{name}.{os.getpid()}")
     tmp.write_text(dumps(doc), encoding="utf-8")
@@ -188,6 +200,10 @@ def dispatch(args, rep) -> int:
         from . import selftest
 
         return selftest.run(args, rep)
+    if args.cmd == "shell":
+        from .shell.cli import dispatch as shell_dispatch
+
+        return shell_dispatch(args, rep)
     return 2
 
 
@@ -200,8 +216,8 @@ def guarded(args, rep) -> tuple[int, str | None, str | None]:
     except PaicadError as e:
         rep.warn(f"{e.code}: {e.message}")
         report = None
-        if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd == "morph" and getattr(args, "sweep", False)):
-            cmd = f"props {args.props_cmd}" if args.cmd == "props" else args.cmd
+        if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd in ("morph", "shell") and getattr(args, "sweep", False)):
+            cmd = {"props": f"props {getattr(args, 'props_cmd', '')}", "shell": f"shell {getattr(args, 'shell_cmd', '')}"}.get(args.cmd, args.cmd)
             report = _fail_report(cmd, args.out_dir, e.code, e.message)
         rep.result("FAIL", e.code, report)
         return e.exit_code, e.code, e.message
@@ -237,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
 
     from .common import Reporter
 
-    if args.cmd == "run":
+    if args.cmd == "run" or (args.cmd == "shell" and args.shell_cmd == "run"):
         args.out_dir = args.check_dir  # run-level log and run.json live with the final stage
     out_dir = Path(args.out_dir)
     rep = Reporter(out_dir)

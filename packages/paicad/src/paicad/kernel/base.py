@@ -79,6 +79,21 @@ class FaceMove:
 
 
 @dataclass(frozen=True)
+class SurfaceEdit:
+    """Requested new surface of one sheet face (shell-morph section 6.4), applied to the face's own surface
+    so that its frame (and thus its (u,v) orientation) is kept: rotation (about ``rotate_point`` /
+    ``rotate_axis`` by ``rotate_angle`` radians) first, then ``translate``; then ``radius`` (cylinder radius,
+    torus major radius, cone reference radius) and ``semi_angle`` (cone, radians, OCCT sign convention)."""
+
+    translate: np.ndarray | None = None
+    rotate_point: np.ndarray | None = None
+    rotate_axis: np.ndarray | None = None
+    rotate_angle: float = 0.0
+    radius: float | None = None
+    semi_angle: float | None = None
+
+
+@dataclass(frozen=True)
 class BodySummary:
     name: str
     volume: float
