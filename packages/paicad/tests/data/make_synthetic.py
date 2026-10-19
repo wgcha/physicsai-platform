@@ -290,7 +290,7 @@ def _prop_type1(pid: int, title: str, thick: float | None, kw: str = "TYPE1", fr
     ]
 
 
-def write_shell_assembly(folder: Path) -> dict:
+def write_shell_assembly(folder: Path, part_thick: dict[int, str] | None = None) -> dict:
     """Synthetic assembly with shell PROPs (section 11.1 cases), pure Python (no gmsh/CAD).
 
     PROP 1 Bracket (TYPE1, 1.2, CRLF file in a subfolder, PART 10)
@@ -299,6 +299,9 @@ def write_shell_assembly(folder: Path) -> dict:
     PROP 4 Laminate (/PROP/TYPE9 -> unsupported)
     PROP 5 untitled (TYPE1, thickness 0 -> PROP_THICKNESS_INVALID, name PROP5_SHELL_T)
     PROP 6 Cover (TYPE1, free format card, PART 14 /SH3N with element thickness 0 -> name conflict with PROP 2)
+
+    ``part_thick`` = {part id: raw text after ``prop_ID mat_ID``} appended to that /PART data line (e.g.
+    ``"         0              1.10"`` = subset 0, Thick 1.1 in columns 31-50) - default none (0.6.0 layout).
     """
     folder = Path(folder)
     (folder / "props").mkdir(parents=True, exist_ok=True)
@@ -308,7 +311,7 @@ def write_shell_assembly(folder: Path) -> dict:
     parts = [(10, "BRACKET", 1), (11, "COVER_A", 2), (12, "COVER_B", 2), (13, "PANEL", 3), (14, "LID", 6), (15, "SKIN", 4), (16, "DUMMY", 5)]
     part_lines = []
     for pid, title, prop in parts:
-        part_lines += [f"/PART/{pid}", title, "#  prop_ID    mat_ID", f"{prop:10d}{1:10d}"]
+        part_lines += [f"/PART/{pid}", title, "#  prop_ID    mat_ID", f"{prop:10d}{1:10d}" + (part_thick or {}).get(pid, "")]
     starter = (
         ["#RADIOSS STARTER", "/BEGIN", "SHELLS", "      2024         0"]
         + part_lines

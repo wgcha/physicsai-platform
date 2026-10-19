@@ -8,7 +8,8 @@ Card layout (Radioss 2017+ input format, fixed width; free-format lines fall bac
 * ``/PROP/TYPE1/prop_ID[/unit_ID]`` -> title line -> data line 1 (Ishell ...) -> data line 2 (hm hf hr dm dn)
   -> data line 3 ``N Istrain Thick Ashear . Ithick Iplas``; ``Thick`` = columns 21-40.
   Blank lines are data lines (all fields default); ``#``/``$`` lines are comments.
-* ``/PART/part_ID`` -> title -> ``prop_ID mat_ID ...`` (prop_ID = columns 1-10).
+* ``/PART/part_ID`` -> title -> ``prop_ID mat_ID subset_ID Thick`` (prop_ID = columns 1-10, Thick = columns
+  31-50; Thick != 0 overrides the PROP thickness for that part -> PROP_OVERRIDDEN_BY_PART).
 * ``/SHELL/part_ID`` element lines ``shell_ID n1 n2 n3 n4 . phi Thick`` and ``/SH3N/part_ID``
   ``sh3n_ID n1 n2 n3 . . phi Thick``: element thickness = columns 81-100 (0 or blank = take the PROP).
 
@@ -50,6 +51,8 @@ UNSUPPORTED = {"TYPE9": "SH_ORTH", "SH_ORTH": "SH_ORTH", "TYPE10": "SH_COMP", "S
 PROP_FIELDS = (0, 10, 20, 40, 60, 70, 80, 90)  # card 3 field starts; Thick = field 2 ([20, 40))
 PROP_THICK = (2, 20, 40)  # (field index, start, end)
 ELEM_FIELDS = (0, 10, 20, 30, 40, 50, 60, 80, 100)
+PART_FIELDS = (0, 10, 20, 30, 50)
+PART_THICK = (3, 30, 50)  # /PART card: prop_ID mat_ID subset_ID Thick
 ELEM_THICK = {"SHELL": (6, 80, 100), "SH3N": (5, 80, 100)}  # free-format token index differs (3 nodes)
 _TOK = re.compile(r"[^\s,]+")
 
@@ -66,6 +69,7 @@ class PropDef:
     thickness: float | None = None
     parts: list[tuple[int, str]] = field(default_factory=list)
     element_overrides: int = 0
+    part_overrides: list[tuple[int, str, float]] = field(default_factory=list)  # parts whose /PART Thick != 0
 
 
 # ------------------------------------------------------------------ field helpers
@@ -112,6 +116,14 @@ def field_value(line: str, starts: tuple[int, ...], spec: tuple[int, int, int]) 
     return _float(line[a:b])
 
 
+def part_thickness(line: str) -> float:
+    """``Thick`` of a /PART data line (0 when absent: short fixed line or fewer than 4 free-format tokens)."""
+    if _is_fixed(line, PART_FIELDS):
+        return _float(line[PART_THICK[1] : PART_THICK[2]])
+    toks = _TOK.findall(line)
+    return _float(toks[PART_THICK[0]]) if len(toks) > PART_THICK[0] else 0.0
+
+
 def _is_comment(line: str) -> bool:
     return line.startswith(("#", "$"))
 
@@ -144,7 +156,7 @@ def scan_tree(assem_dir: str | Path) -> tuple[dict[int, PropDef], list[dict]]:
     Returns ({prop id: PropDef}, file list [{rel, sha256}])."""
     root = Path(assem_dir)
     props: dict[int, PropDef] = {}
-    part_prop: dict[int, tuple[int, str]] = {}  # part id -> (prop id, part title)
+    part_prop: dict[int, tuple[int, str, float]] = {}  # part id -> (prop id, part title, /PART Thick)
     elem_thick: dict[int, int] = {}  # part id -> elements with own thickness != 0
     files = []
     for p in assembly_files(root):
@@ -193,7 +205,7 @@ def scan_tree(assem_dir: str | Path) -> tuple[dict[int, PropDef], list[dict]]:
                     s = lines[j]
                     pid = _int(s[0:10].strip()) if _is_fixed(s, (0, 10, 20, 30, 50)) else (_int(_TOK.findall(s)[0]) if _TOK.findall(s) else None)
                     if pid is not None:
-                        part_prop[int(kw[1])] = (pid, title)
+                        part_prop[int(kw[1])] = (pid, title, part_thickness(s))
             elif head in ELEM_THICK and len(kw) >= 2 and _int(kw[1]) is not None:
                 part = int(kw[1])
                 spec = ELEM_THICK[head]
@@ -205,10 +217,12 @@ def scan_tree(assem_dir: str | Path) -> tuple[dict[int, PropDef], list[dict]]:
                     j += 1
                 elem_thick[part] = elem_thick.get(part, 0) + cnt
             i = max(j, i + 1)
-    for part, (pid, title) in sorted(part_prop.items()):
+    for part, (pid, title, thick) in sorted(part_prop.items()):
         if pid in props:
             props[pid].parts.append((part, title))
             props[pid].element_overrides += elem_thick.get(part, 0)
+            if thick != 0.0:
+                props[pid].part_overrides.append((part, title, thick))
     return props, files
 
 
@@ -262,6 +276,7 @@ def scan_doc(assem_dir: str | Path, opts: dict) -> dict:
             "file": pd.file,
             "line": pd.line,
             "element_overrides": pd.element_overrides,
+            "part_overrides": [{"id": a, "title": t, "thickness": rnd(x, 9)} for a, t, x in pd.part_overrides],
             "selectable": False,
         }
         if not supported:
@@ -273,7 +288,7 @@ def scan_doc(assem_dir: str | Path, opts: dict) -> dict:
             t = float(pd.thickness)
             if t > 0:
                 row["range"] = {"min": rnd(t * (1 - ratio)), "max": rnd(t * (1 + ratio)), "ratio": ratio}
-                row["selectable"] = pd.element_overrides == 0
+                row["selectable"] = pd.element_overrides == 0 and not pd.part_overrides
             else:
                 warnings.append({"code": "PROP_THICKNESS_INVALID", "prop": pid, "message": f"PROP {pid}: thickness {t!r} <= 0"})
             if pd.element_overrides:
@@ -282,6 +297,16 @@ def scan_doc(assem_dir: str | Path, opts: dict) -> dict:
                         "code": "PROP_OVERRIDDEN_BY_ELEMENT",
                         "prop": pid,
                         "message": f"PROP {pid}: {pd.element_overrides} shell elements of its parts carry their own thickness (a PROP change has no effect)",
+                    }
+                )
+            if pd.part_overrides:
+                ids = [a for a, _, _ in pd.part_overrides]
+                warnings.append(
+                    {
+                        "code": "PROP_OVERRIDDEN_BY_PART",
+                        "prop": pid,
+                        "parts": ids,
+                        "message": f"PROP {pid}: /PART Thick != 0 on parts {', '.join(str(a) for a in ids)} (a PROP change has no effect there)",
                     }
                 )
         if len(pd.parts) > 1:
@@ -366,6 +391,9 @@ def apply_values(assem_dir: str | Path, pdoc: dict, values: dict[str, float]) ->
             raise PropFail(
                 "PROP_OVERRIDDEN_BY_ELEMENT", f"{name}: {pd.element_overrides} shell elements of PROP {pd.id} carry their own thickness (PROP change has no effect)"
             )
+        if changed and pd.part_overrides:
+            ids = ", ".join(str(a) for a, _, _ in pd.part_overrides)
+            raise PropFail("PROP_OVERRIDDEN_BY_PART", f"{name}: /PART Thick != 0 on parts {ids} of PROP {pd.id} (PROP change has no effect)")
         edits.setdefault(pd.file, [])
         if changed:
             edits[pd.file].append((pd.thick_line, x))
@@ -447,4 +475,4 @@ def run_apply(args, rep: Reporter) -> int:
     return EXIT_OK
 
 
-__all__ = ["APPLY_JSON", "PROPS_JSON", "apply_values", "parameter_names", "scan_doc", "scan_tree"]
+__all__ = ["APPLY_JSON", "PROPS_JSON", "apply_values", "parameter_names", "part_thickness", "scan_doc", "scan_tree"]
