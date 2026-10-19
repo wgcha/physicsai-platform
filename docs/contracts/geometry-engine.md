@@ -345,14 +345,14 @@ component의 요소·노드 집합:
   "deviation":    {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
   "interference": {"body_mm": 0.01, "product_mm": 0.05},
   "tie":          {"default_dsearch_mm": null, "required": true},
-  "extract":      {"max_draft_deg": 5.0, "overlap_ratio": 0.5, "range_ratio": 0.05},
+  "extract":      {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "sample_grid": 12},
   "thickness_ref": "contact_fixed",
   "thickness_ref_overrides": {},
   "symmetry_split": []
 }
 ```
 
-- `extract` 절(선택, GE-C5): `max_draft_deg` 구배 허용각(이 이하 면은 평면 취급)·`overlap_ratio` 대향 면 겹침 비율·`range_ratio` 값 범위 비율. 수치는 예시이며 구현 기본값을 따름.
+- `extract` 절(선택, GE-C5): `draft_max_deg` 구배 허용각(기본 3°, 이 이하 면은 평면 취급)·`overlap_min` 대향 면 겹침 최소 비율(0.5)·`range_ratio` 값 범위 비율(0.05)·`sample_grid` 겹침 판정 샘플 격자(12). 0.1.0 구현 기본값과 일치.
 - 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_stretch ≤ 1`, `max_aspect ≥ 1`, `min_edge_mm ≥ 0`(0 = 끔), `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
 - **품질 기본값 출처(2026-10-19, Q8 해결)**: 현행 SimLab 메시 설정(internal grading 2, quality min 0.1(tet stretch, 1=이상), identify feature: merge tiny fillet·min size 1 mm·avg size 10 mm·grade factor 1.5, geometry approximation: max angle per element 45°·curvature min elem size 5 mm·surface mesh aspect ratio 10·iso mesh)에서 가져온 `min_stretch=0.1`·`max_aspect=10`·`min_edge_mm=1.0`. 기존 Δt 비 기준(`min_edge_ratio`)은 유지. `min_scaled_jacobian`은 기준 키에서 빼고 `check.json`의 정보 수치로만 남긴다(계약 초안 단계라 호환 이슈 없음).
 - 고급 옵션 UI에서 바꾸는 절 = `quality`·`interference`·`deviation`(+`tie.required`). `tag` 절 변경은 준비본 재생성 필요(§7.4).
