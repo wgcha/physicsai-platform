@@ -257,15 +257,81 @@ def make_all(out: Path, spec: CushionSpec | None = None) -> dict:
     t = truth(spec)
     t["renum"] = info["renum"]
     (out / "truth.json").write_text(json.dumps(t, indent=1), encoding="utf-8")
+    shell = write_shell_assembly(out / "assem_shell")
     return {
         "step": step,
         "assem": assem,
+        "assem_shell": shell["folder"],
         "baseline": assem / BASELINE_INC,
         "renum": assem / RENUM_CSV,
         "truth": t,
         "meshes": meshes,
         "names": names,
     }
+
+
+# ---------------------------------------------------------------- stage 3S: shell properties
+SHELL_STARTER = "SHELL_0000.rad"
+SHELL_MESH = "shell_mesh.inc"
+SHELL_PROPS = "props/shell_props.inc"  # subfolder + CRLF line ends
+
+
+def _prop_type1(pid: int, title: str, thick: float | None, kw: str = "TYPE1", free: bool = False) -> list[str]:
+    card3 = f"{5:10d}{0:10d}{thick:20.4f}{0.0:20.4f}{'':10s}{1:10d}{1:10d}" if not free else f"5 0 {thick!r} 0.0 1 1"
+    return [
+        f"/PROP/{kw}/{pid}",
+        title,
+        "#   Ishell    Ismstr     Ish3n    Idrill                            P_thick_fail",
+        f"{24:10d}{0:10d}{0:10d}{0:10d}{'':40s}{0:10d}",
+        "#                 hm                  hf                  hr                  dm                  dn",
+        "",  # blank data line = all defaults
+        "#        N   Istrain               Thick              Ashear              Ithick     Iplas",
+        card3,
+    ]
+
+
+def write_shell_assembly(folder: Path) -> dict:
+    """Synthetic assembly with shell PROPs (section 11.1 cases), pure Python (no gmsh/CAD).
+
+    PROP 1 Bracket (TYPE1, 1.2, CRLF file in a subfolder, PART 10)
+    PROP 2 Cover (/PROP/SHELL, 0.8, shared by PART 11 and 12 -> PROP_SHARED_BY_PARTS)
+    PROP 3 Panel (TYPE1, 2.0, PART 13 /SHELL elements carry their own thickness -> PROP_OVERRIDDEN_BY_ELEMENT)
+    PROP 4 Laminate (/PROP/TYPE9 -> unsupported)
+    PROP 5 untitled (TYPE1, thickness 0 -> PROP_THICKNESS_INVALID, name PROP5_SHELL_T)
+    PROP 6 Cover (TYPE1, free format card, PART 14 /SH3N with element thickness 0 -> name conflict with PROP 2)
+    """
+    folder = Path(folder)
+    (folder / "props").mkdir(parents=True, exist_ok=True)
+    props1 = ["#RADIOSS include: shell properties (paicad golden)"] + _prop_type1(1, "Bracket", 1.2)
+    (folder / SHELL_PROPS).write_bytes(("\r\n".join(props1) + "\r\n").encode("ascii"))
+    lam = ["/PROP/TYPE9/4", "Laminate", "#   Ishell    Ismstr     Ish3n", f"{24:10d}{0:10d}{0:10d}", "", f"{5:10d}{0:10d}{1.5:20.4f}"]
+    parts = [(10, "BRACKET", 1), (11, "COVER_A", 2), (12, "COVER_B", 2), (13, "PANEL", 3), (14, "LID", 6), (15, "SKIN", 4), (16, "DUMMY", 5)]
+    part_lines = []
+    for pid, title, prop in parts:
+        part_lines += [f"/PART/{pid}", title, "#  prop_ID    mat_ID", f"{prop:10d}{1:10d}"]
+    starter = (
+        ["#RADIOSS STARTER", "/BEGIN", "SHELLS", "      2024         0"]
+        + part_lines
+        + _prop_type1(2, "Cover", 0.8, kw="SHELL")
+        + _prop_type1(3, "Panel", 2.0)
+        + lam
+        + _prop_type1(5, "", 0.0)
+        + _prop_type1(6, "Cover", 1.5, free=True)
+        + [f"#include {SHELL_PROPS}", f"#include {SHELL_MESH}", "/END"]
+    )
+    (folder / SHELL_STARTER).write_text("\n".join(starter) + "\n", encoding="ascii")
+    nodes = ["/NODE"]
+    for i in range(1, 13):
+        nodes.append(f"{i:10d}{float(i % 4) * 10:20.10f}{float(i // 4) * 10:20.10f}{0.0:20.10f}")
+    mesh = nodes
+    mesh += ["/SHELL/10", f"{1:10d}{1:10d}{2:10d}{6:10d}{5:10d}"]  # no phi / thickness columns
+    mesh += ["/SHELL/11", f"{2:10d}{2:10d}{3:10d}{7:10d}{6:10d}{'':10s}{0.0:20.4f}{0.0:20.4f}"]
+    mesh += ["/SHELL/12", f"{3:10d}{3:10d}{4:10d}{8:10d}{7:10d}"]
+    mesh += ["/SHELL/13", f"{4:10d}{5:10d}{6:10d}{10:10d}{9:10d}{'':10s}{0.0:20.4f}{2.5:20.4f}", f"{5:10d}{6:10d}{7:10d}{11:10d}{10:10d}{'':10s}{0.0:20.4f}{2.5:20.4f}"]
+    mesh += ["/SH3N/14", f"{6:10d}{7:10d}{8:10d}{12:10d}{'':10s}{'':10s}{0.0:20.4f}{0.0:20.4f}"]
+    mesh += ["/SHELL/15", f"{7:10d}{9:10d}{10:10d}{11:10d}{12:10d}"]
+    (folder / SHELL_MESH).write_text("\n".join(mesh) + "\n", encoding="ascii")
+    return {"folder": folder, "starter": folder / SHELL_STARTER, "props_file": folder / SHELL_PROPS, "mesh": folder / SHELL_MESH}
 
 
 if __name__ == "__main__":  # pragma: no cover

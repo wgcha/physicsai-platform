@@ -691,3 +691,14 @@ def face_signature(f: FaceData) -> dict:
     sig["area"] = rnd(f.area)
     sig["bbox"] = vec(f.bbox)
     return sig
+
+
+def adjacent_surfaces(topo: Topology, faces) -> list[str]:
+    """Sorted surface kinds of the faces sharing an edge with the feature's faces (1-hop, feature faces
+    excluded) - the neighbourhood descriptor used by ``paicad map`` (S_nbr)."""
+    own = {int(f) for f in faces}
+    adj: set[int] = set()
+    for f in own:
+        for e in topo.face(f).edges:
+            adj.update(g for g in topo.edge(e).faces if g not in own)
+    return sorted(topo.face(g).surface for g in adj)

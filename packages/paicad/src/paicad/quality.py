@@ -79,20 +79,37 @@ class QualityResult:
 
 
 def _min_ratio(new: np.ndarray, base: np.ndarray, part: np.ndarray | None) -> float:
-    """min over parts of (min new / min base); parts may differ in material, so each keeps its own reference."""
+    """min over parts of (min new / min base); parts may differ in material, so each keeps its own reference.
+    Non-finite element values are left out; NaN when no part has finite values on both sides."""
     keys = [None] if part is None else sorted(set(part.tolist()))
     out = np.inf
     for k in keys:
-        sel = slice(None) if k is None else part == k
-        b = float(base[sel].min())
-        out = min(out, float(new[sel].min()) / b if b > 0 else 0.0)
-    return float(out) if np.isfinite(out) else 0.0
+        sel = np.ones(len(new), dtype=bool) if k is None else part == k
+        nb, bb = new[sel & np.isfinite(new)], base[sel & np.isfinite(base)]
+        if nb.size == 0 or bb.size == 0:
+            continue
+        b = float(bb.min())
+        out = min(out, float(nb.min()) / b if b > 0 else 0.0)
+    return float(out) if np.isfinite(out) else float("nan")
+
+
+def _fmin(a: np.ndarray, default: float = 0.0) -> float:
+    f = a[np.isfinite(a)]
+    return float(f.min()) if f.size else (default if a.size == 0 else float("nan"))
+
+
+def _fmax(a: np.ndarray, default: float = 0.0) -> float:
+    f = a[np.isfinite(a)]
+    return float(f.max()) if f.size else (default if a.size == 0 else float("nan"))
 
 
 def evaluate(base_xyz: np.ndarray, new_xyz: np.ndarray, tets: np.ndarray, skin: np.ndarray, q: dict, tet_part: np.ndarray | None = None) -> QualityResult:
     """Section 6.5 (c) on all cushion tets (``tets``) and boundary triangles (``skin``), global node rows.
 
     ``tet_part``: component index per tetra (time-step ratio per part); None = one part.
+    Non-finite element values (degenerate elements / triangles) are excluded from the judgement of that
+    metric and counted in ``nonfinite_excluded`` (check.json warning QUALITY_METRIC_NONFINITE); a metric
+    without any finite value is reported as null. Degenerate tetra still count as inverted (V <= 0).
     """
     b = tet_metrics(base_xyz, tets)
     m = tet_metrics(new_xyz, tets)
@@ -103,28 +120,30 @@ def evaluate(base_xyz: np.ndarray, new_xyz: np.ndarray, tets: np.ndarray, skin: 
     eratio, dtmin = float(q["min_edge_ratio"]), float(q["dt_ratio_min"])
     rel = bool(q.get("relative_to_baseline", True))
     inverted = int((m.vol <= 0).sum())
-    ok_s = m.stretch >= smin
-    ok_a = am <= amax
-    ok_e = m.min_edge >= emin if emin > 0 else np.ones(len(tets), dtype=bool)
+    nf_s, nf_a, nf_e = ~np.isfinite(m.stretch), ~np.isfinite(am), ~np.isfinite(m.min_edge)
+    ok_s = (m.stretch >= smin) | nf_s
+    ok_a = (am <= amax) | nf_a
+    ok_e = (m.min_edge >= emin) | nf_e if emin > 0 else np.ones(len(tets), dtype=bool)
     if rel:
         ok_s |= (b.stretch < smin) & (m.stretch >= 0.9 * b.stretch)
         ok_a |= (ab > amax) & (am <= 1.1 * ab)
         if emin > 0:
             ok_e |= (b.min_edge < emin) & (m.min_edge >= 0.9 * b.min_edge)
-    bmin_e = float(b.min_edge.min())
-    mmin_e = float(m.min_edge.min())
+    bmin_e = _fmin(b.min_edge)
+    mmin_e = _fmin(m.min_edge)
     edge_ratio = _min_ratio(m.min_edge, b.min_edge, tet_part)
     dt_ratio = _min_ratio(np.maximum(m.char_len, 0.0), b.char_len, tet_part)
-    ok_er = edge_ratio >= eratio
-    ok_dt = dt_ratio >= dtmin
-    baseline_ok = bool((b.vol > 0).all() and (b.stretch >= smin).all() and (ab <= amax).all())
+    ok_er = not np.isfinite(edge_ratio) or edge_ratio >= eratio
+    ok_dt = not np.isfinite(dt_ratio) or dt_ratio >= dtmin
+    fb_s, fb_a = np.isfinite(b.stretch), np.isfinite(ab)
+    baseline_ok = bool((b.vol > 0).all() and (b.stretch[fb_s] >= smin).all() and (ab[fb_a] <= amax).all())
     problems = []
     if inverted:
         problems.append(f"{inverted} inverted elements")
     if not ok_s.all():
-        problems.append(f"{int((~ok_s).sum())} tetra below min stretch {smin:g} (min {float(m.stretch.min()):.3f})")
+        problems.append(f"{int((~ok_s).sum())} tetra below min stretch {smin:g} (min {_fmin(m.stretch):.3f})")
     if not ok_a.all():
-        problems.append(f"{int((~ok_a).sum())} boundary triangles above max aspect {amax:g} (max {float(am.max()):.2f})")
+        problems.append(f"{int((~ok_a).sum())} boundary triangles above max aspect {amax:g} (max {_fmax(am):.2f})")
     if not ok_e.all():
         problems.append(f"{int((~ok_e).sum())} tetra with an edge below {emin:g} mm (min {mmin_e:.3f} mm)")
     if not ok_er:
@@ -135,21 +154,38 @@ def evaluate(base_xyz: np.ndarray, new_xyz: np.ndarray, tets: np.ndarray, skin: 
     report = {
         "status": status,
         "inverted": inverted,
-        "min_stretch": _r(m.stretch.min()),
-        "baseline_min_stretch": _r(b.stretch.min()),
-        "min_scaled_jacobian": _r(m.scaled_jacobian.min()),
-        "max_aspect": _r(am.max() if am.size else 0.0),
-        "baseline_max_aspect": _r(ab.max() if ab.size else 0.0),
+        "min_stretch": _r(_fmin(m.stretch)),
+        "baseline_min_stretch": _r(_fmin(b.stretch)),
+        "min_scaled_jacobian": _r(_fmin(m.scaled_jacobian)),
+        "max_aspect": _r(_fmax(am)),
+        "baseline_max_aspect": _r(_fmax(ab)),
         "min_edge_mm": _r(mmin_e),
         "baseline_min_edge_mm": _r(bmin_e),
         "edge_ratio": _r(edge_ratio),
-        "min_char_len_mm": _r(m.char_len.min()),
-        "baseline_min_char_len_mm": _r(b.char_len.min()),
+        "min_char_len_mm": _r(_fmin(m.char_len)),
+        "baseline_min_char_len_mm": _r(_fmin(b.char_len)),
         "dt_ratio": _r(dt_ratio),
         "failed_elements": int((~(ok_s & ok_e & (m.vol > 0))).sum()),
         "failed_triangles": int((~ok_a).sum()),
         "baseline_status": "PASS" if baseline_ok else "FAIL",
     }
+    excluded = {
+        k: int((~np.isfinite(a)).sum())
+        for k, a in (
+            ("min_stretch", m.stretch),
+            ("baseline_min_stretch", b.stretch),
+            ("min_scaled_jacobian", m.scaled_jacobian),
+            ("max_aspect", am),
+            ("baseline_max_aspect", ab),
+            ("min_edge_mm", m.min_edge),
+            ("baseline_min_edge_mm", b.min_edge),
+            ("min_char_len_mm", m.char_len),
+            ("baseline_min_char_len_mm", b.char_len),
+        )
+    }
+    excluded = {k: v for k, v in excluded.items() if v}
+    if excluded:
+        report["nonfinite_excluded"] = excluded
     return QualityResult(status, report, "quality: " + "; ".join(problems) if problems else None, baseline_ok)
 
 
@@ -169,8 +205,10 @@ METRIC_KEYS = (
 
 
 def nonfinite_metrics(report: dict) -> list[str]:
-    """Report keys whose value is null (no finite value over the elements): QUALITY_METRIC_NONFINITE."""
-    return [k for k in METRIC_KEYS if k in report and report[k] is None]
+    """Metric keys with non-finite element values (excluded from the judgement) or a null value (no finite
+    value at all): QUALITY_METRIC_NONFINITE."""
+    ex = report.get("nonfinite_excluded") or {}
+    return [k for k in METRIC_KEYS if k in report and (report[k] is None or ex.get(k))]
 
 
 def _r(x) -> float | None:

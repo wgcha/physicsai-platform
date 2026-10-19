@@ -224,14 +224,13 @@ def test_golden_report_committed_and_well_formed():
 
 
 def test_golden_report_regenerates_byte_identical(tmp_path):
-    """Full default sweep of the virtual cushion (about 2 min): committed report == regenerated."""
+    """Full default sweep of the virtual cushion (about 2 min): committed report == regenerated, apart from
+    the engine_version / sweep_id header lines (0.6.0: a version bump alone needs no regeneration)."""
     import paicad
-    from data.make_envelope_report import GOLDEN_DIR, REPORT_FILES, generate
+    from data.make_envelope_report import GOLDEN_DIR, REPORT_FILES, generate, normalize_report
 
     committed = {n: (GOLDEN_DIR / n).read_bytes() for n in REPORT_FILES}
-    assert f"- engine_version: {paicad.__version__}\n".encode() in committed["report_envelope.md"], (
-        "golden report is from another paicad version: run tests/data/make_envelope_report.py --write"
-    )
     regenerated = generate(tmp_path / "g1")
+    assert f"- engine_version: {paicad.__version__}\n".encode() in regenerated["report_envelope.md"]
     for n in REPORT_FILES:
-        assert regenerated[n].decode() == committed[n].decode(), n
+        assert normalize_report(regenerated[n]).decode() == normalize_report(committed[n]).decode(), n

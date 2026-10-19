@@ -6,7 +6,11 @@ and writes ``selftest_report.json`` / ``selftest_report.md`` with **numbers only
 content, no coordinates, no node or element ids (the report is what the user sends back).
 
 Report sections: tag unclassified (unmatched) boundary nodes and match ratio, unchanged round trip
-byte identity (writer and nominal morph), nominal check metrics, short envelope summary.
+byte identity (writer and nominal morph), nominal check metrics, short envelope summary, and with
+``--nx-samples <dir>`` the NX change sample comparison: per sample ``<name>.json`` (values.json, original
+parameter names) + ``<name>.step`` (NX geometry with those values) -> update + morph (+ check) with the
+values, then distance of the morphed boundary nodes to the NX STEP surface, distance of the native sample
+B-rep to the NX surface, body volume difference and the parameter re-measurement error (numbers only).
 Exit code 0 when the report is written (stage failures are recorded in it).
 """
 
@@ -17,7 +21,17 @@ import json
 import time
 from pathlib import Path
 
-from .common import EXIT_OK, OutDir, Reporter, StageReporter, dumps, envelope, rnd, sha256_file
+from .common import (
+    EXIT_OK,
+    OutDir,
+    PaicadError,
+    Reporter,
+    StageReporter,
+    dumps,
+    envelope,
+    rnd,
+    sha256_file,
+)
 
 REPORT_JSON = "selftest_report.json"
 REPORT_MD = "selftest_report.md"
@@ -60,14 +74,14 @@ def run(args, rep: Reporter) -> int:
     common = dict(options=args.options, threads=args.threads, body_map=args.body_map, _nested=True)
     stages: dict[str, dict] = {}
 
-    def stage(name: str, ns: argparse.Namespace, lo: int, hi: int, report: str | None) -> dict | None:
+    def stage(name: str, ns: argparse.Namespace, lo: int, hi: int, report: str | None, store: dict | None = None) -> dict | None:
         srep = StageReporter(Path(ns.out_dir), rep, name, lo, hi)
         try:
             code, err, _msg = guarded(ns, srep)
         finally:
             srep.close()
         d = _read(Path(ns.out_dir) / report) if report else None
-        stages[name] = {"exit_code": code, "status": (d or {}).get("status") or ("OK" if code == 0 else "FAIL"), "code": (d or {}).get("code") or err}
+        (stages if store is None else store)[name] = {"exit_code": code, "status": (d or {}).get("status") or ("OK" if code == 0 else "FAIL"), "code": (d or {}).get("code") or err}
         return d
 
     ex, tg = work / "extract", work / "tag"
@@ -143,7 +157,10 @@ def run(args, rep: Reporter) -> int:
                 keep_steps=False,
                 **common,
             )
-            env = stage("envelope", ns, 70, 98, "envelope.json")
+            env = stage("envelope", ns, 70, 90, "envelope.json")
+    nx = None
+    if getattr(args, "nx_samples", None):
+        nx = _nx_samples(args, work, feats, tg, common, stage, rep) if ok_tag else {"count": 0, "samples": [], "skipped": "tag failed"}
     v = versions()
     report = envelope(
         status="OK",
@@ -161,6 +178,7 @@ def run(args, rep: Reporter) -> int:
         roundtrip=roundtrip,
         nominal_check=_check_summary(cdoc),
         envelope=_envelope_summary(env),
+        **({"nx_samples": nx} if nx is not None else {}),
         elapsed_s=rnd(time.monotonic() - t0, 3),
     )
     out.write_text(REPORT_JSON, dumps(report))
@@ -169,6 +187,131 @@ def run(args, rep: Reporter) -> int:
     rep.progress(100, "selftest report written")
     rep.result("OK", None, REPORT_JSON)
     return EXIT_OK
+
+
+NX_TESS_DEFLECTION_MM = 0.002  # NX surface tessellation chord error (distance error bound on curved faces)
+NX_CUTOFF_MM = 5.0  # points farther than this from the tessellation fall back to the exact B-rep distance
+
+
+def _stats(d) -> dict:
+    import numpy as np
+
+    d = np.asarray(d, dtype=float)
+    if d.size == 0:
+        return {"n": 0, "max": None, "mean": None, "p95": None}
+    return {"n": int(d.size), "max": rnd(float(d.max())), "mean": rnd(float(d.mean())), "p95": rnd(float(np.percentile(d, 95)))}
+
+
+def _nx_distance(nx_body, tset, pts):
+    """Distance of points to the NX body surface: tessellation (exact on planes, <= deflection on curved
+    faces), exact B-rep distance for the points beyond the cutoff."""
+    d, _ = tset.distance(pts, NX_CUTOFF_MM)
+    far = ~(d < float("inf"))
+    if far.any():
+        d[far] = nx_body.distance(pts[far])
+    return d
+
+
+def _nx_samples(args, work: Path, feats: Path, tg: Path, common: dict, stage, rep: Reporter) -> dict:
+    """NX change sample comparison (section 9 stage 0 (b), section 10 (1)); numbers only."""
+    import numpy as np
+
+    from . import bodymap, cadload
+    from .mesh.radioss import parse_text
+    from .meshdata import KIND_FACE, components_from_tag, load_tag
+    from .meshgeom import TriangleSet
+    from .morph import MORPHED_INC, load_sample, read_baseline
+    from .update import load_features
+
+    folder = Path(args.nx_samples)
+    if not folder.is_dir():
+        return {"count": 0, "samples": [], "skipped": "nx samples folder not found"}
+    doc = load_features(feats)
+    names = [b["body"] for b in doc["bodies"]]
+    _, mesh = read_baseline(args.baseline_inc)
+    tag = load_tag(tg)
+    comps = components_from_tag(mesh, tag)
+    samples = []
+    jsons = sorted(p for p in folder.iterdir() if p.is_file() and p.suffix.lower() == ".json")
+    for k, vp in enumerate(jsons):
+        stem = vp.stem
+        step = next((vp.with_suffix(e) for e in (".step", ".stp", ".STEP", ".STP") if vp.with_suffix(e).is_file()), None)
+        entry: dict = {"sample": stem, "stages": {}}
+        samples.append(entry)
+        if step is None:
+            entry["error"] = "NX STEP file missing"
+            continue
+        sd = work / "nx" / f"{k + 1:03d}"
+        upd, mor, chk = sd / "update", sd / "morph", sd / "check"
+        lo = 90 + int(8 * k / max(1, len(jsons)))
+        st = entry["stages"]
+        stage("nx update", argparse.Namespace(cmd="update", cad=args.cad, features=str(feats), values=str(vp), out_dir=str(upd), tag_dir=str(tg), **common), lo, lo, "update.json", st)
+        if st["nx update"]["exit_code"] != 0:
+            continue
+        stage(
+            "nx morph",
+            argparse.Namespace(cmd="morph", baseline_inc=args.baseline_inc, tag_dir=str(tg), features=str(feats), update_dir=str(upd), out_dir=str(mor), solver=None, sweep=False, **common),
+            lo,
+            lo,
+            "morph.json",
+            st,
+        )
+        if st["nx morph"]["exit_code"] != 0:
+            continue
+        cdoc = stage(
+            "nx check",
+            argparse.Namespace(
+                cmd="check", baseline_inc=args.baseline_inc, morph_dir=str(mor), update_dir=str(upd), tag_dir=str(tg), features=str(feats), values=str(vp),
+                assem_dir=args.assem_dir, renum_csv=args.renum_csv, out_dir=str(chk), out_inc=str(sd / "check_out" / Path(args.baseline_inc).name), **common,
+            ),
+            lo,
+            lo,
+            "check.json",
+            st,
+        )
+        items = (((cdoc or {}).get("checks") or {}).get("param") or {}).get("items") or []
+        errs = [it["err"] for it in items if it.get("err") is not None]
+        rels = [it["err"] / abs(it.get("expected", it["input"])) for it in items if it.get("err") is not None and it.get("expected", it["input"])]
+        entry["param_remeasure"] = {"n_params": len(items), "unmeasured": sum(1 for it in items if it.get("err") is None), "max_abs_mm": rnd(max(errs)) if errs else None, "max_rel": rnd(max(rels)) if rels else None}
+        entry["check_boundary_dev_max_mm"] = (((cdoc or {}).get("checks") or {}).get("deviation") or {}).get("max_mm")
+        try:
+            nx = cadload.load(step)
+            m = bodymap.match([b.name for b in nx.bodies], names)
+        except PaicadError as e:
+            entry["error"] = e.code
+            continue
+        nx_of = {m_body: b for b in nx.bodies for m_body in [m.get(b.name)] if m_body is not None}
+        Xm = parse_text((mor / MORPHED_INC).read_bytes().decode("latin-1")).xyz
+        sample = load_sample(upd, doc)
+        node_d, brep_d, bodies = [], [], []
+        for c in comps:
+            nb = nx_of.get(c.body)
+            if nb is None:
+                continue
+            tset = TriangleSet(np.concatenate([p[t] for _, p, t in nb.triangulate(NX_TESS_DEFLECTION_MM, 5.0)]))
+            own = (c.owner == c.index) & (c.kind >= KIND_FACE)
+            dn = _nx_distance(nb, tset, Xm[c.gidx[own]])
+            sb = sample.bodies[c.body]
+            pts = np.concatenate([sb.sample_face(f.id, 6) for f in sb.topology().faces] or [np.zeros((0, 3))])
+            db = _nx_distance(nb, tset, pts)
+            v_nx, v_s = nb.summary().volume, sb.summary().volume
+            bodies.append({"body_index": len(bodies) + 1, "boundary_nodes_mm": _stats(dn), "brep_mm": _stats(db), "volume_rel_diff": rnd((v_s - v_nx) / v_nx) if v_nx else None})
+            node_d.append(dn)
+            brep_d.append(db)
+        entry["boundary_vs_nx_mm"] = _stats(np.concatenate(node_d) if node_d else [])
+        entry["brep_vs_nx_mm"] = _stats(np.concatenate(brep_d) if brep_d else [])
+        entry["volume_rel_diff_max"] = max((abs(b["volume_rel_diff"]) for b in bodies if b["volume_rel_diff"] is not None), default=None)
+        entry["bodies"] = bodies
+    worst = [s["boundary_vs_nx_mm"]["max"] for s in samples if (s.get("boundary_vs_nx_mm") or {}).get("max") is not None]
+    rem = [s["param_remeasure"]["max_abs_mm"] for s in samples if (s.get("param_remeasure") or {}).get("max_abs_mm") is not None]
+    return {
+        "count": len(samples),
+        "compared": len(worst),
+        "tess_deflection_mm": NX_TESS_DEFLECTION_MM,
+        "boundary_vs_nx_max_mm": max(worst) if worst else None,
+        "param_remeasure_max_abs_mm": max(rem) if rem else None,
+        "samples": samples,
+    }
 
 
 def _extract_summary(d: dict | None) -> dict | None:
@@ -315,4 +458,17 @@ def render_md(r: dict) -> str:
             u = p["unit"]
             ff = {d: "-" if p["first_fail"][d] is None else f"{p['first_fail'][d]} {u} {p['first_fail_code'][d]}" for d in ("+", "-")}
             L.append(f"| {p['param']} | {u} | {p['last_ok']['+']} {u} | {p['last_ok']['-']} {u} | {ff['+']} | {ff['-']} | {_v(p['limit_metric']['+'])} | {_v(p['limit_metric']['-'])} |")
+    nx = r.get("nx_samples")
+    if nx is not None:
+        L += ["", "## NX change samples", "", f"- samples {nx['count']}, compared {nx.get('compared', 0)}; worst boundary node distance to NX {_v(nx.get('boundary_vs_nx_max_mm'))} mm; worst re-measurement error {_v(nx.get('param_remeasure_max_abs_mm'))} mm (NX tessellation chord {nx.get('tess_deflection_mm')} mm)", ""]
+        L += ["| sample | update | morph | check | boundary vs NX max / p95 mm | B-rep vs NX max mm | volume rel diff | re-measure max mm |", "|---|---|---|---|---|---|---|---|"]
+        for s in nx["samples"]:
+            st = s.get("stages") or {}
+            stt = {k: _v((st.get(f"nx {k}") or {}).get("code") or (st.get(f"nx {k}") or {}).get("status")) for k in ("update", "morph", "check")}
+            b = s.get("boundary_vs_nx_mm") or {}
+            br = s.get("brep_vs_nx_mm") or {}
+            L.append(
+                f"| {s['sample']} | {stt['update']} | {stt['morph']} | {stt['check']} | {_v(b.get('max'))} / {_v(b.get('p95'))} | {_v(br.get('max'))} | "
+                f"{_v(s.get('volume_rel_diff_max'))} | {_v((s.get('param_remeasure') or {}).get('max_abs_mm'))} |" + (f" {s['error']}" if s.get("error") else "")
+            )
     return "\n".join(L) + "\n"
