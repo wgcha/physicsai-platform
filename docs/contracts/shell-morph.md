@@ -624,9 +624,9 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
 
 | # | 질문 | 임시 결정(이 문서 기본값) |
 |---|---|---|
-| Q1 | 실물 쉘 메시(chassis_rear)는 중립면 위 노드인가, 그리고 중립면 STEP의 바디 이름을 Radioss `/PART` 제목과 맞춰 반출(현장 보관)할 수 있나? | 중립면 노드·이름 일치 가정. 불일치는 `GEOM_BASELINE_MISMATCH`/`GEOM_BODY_MAP_FAILED`, 이름은 `body_map.json`으로 우회 |
-| Q2 | 쉘 품질 기본값(warpage 15°·skew 60°·aspect 5·Jacobian 0.6, 엣지·Δt 비 0.8)이 사내 HyperMesh 품질 기준과 맞나? | 이 값으로 시작, 현장 baseline 수치로 조정 |
-| Q3 | 한 param_set에서 쿠션 솔리드 형상과 쉘 비드 형상을 함께 바꿔야 하나? | 1차 비범위(쉘 형상 + 3S 두께만). 필요 시 run 순서(쉘 먼저 → 솔리드 check (d)가 모핑 쉘 사용) 계약 추가 |
+| Q1 | ~~실물 쉘 메시는 중립면 위 노드인가, 바디 이름을 `/PART` 제목과 맞출 수 있나?~~ | **해결(2026-10-19 사용자 확정)**: 중립면 위 노드, 이름 일치 가능. 대상 부품은 표준화되어 `chassis_rear`로 고정 — 기본 대상 component 이름 `chassis_rear`(설정 `shell.default_component`, 변경 가능), 바디 이름 불일치 시 `body_map.json` 우회 유지 |
+| Q2 | ~~쉘 품질 기본값이 사내 HyperMesh 기준과 맞나?~~ | **해결(2026-10-19 사용자 확정)**: warpage 15°·skew 60°·aspect 5·Jacobian 0.6(절대), 엣지·Δt 비 0.8(상대) 확정 |
+| Q3 | ~~쿠션 솔리드와 쉘 비드를 한 param_set에서 함께 바꾸나?~~ | **해결(2026-10-19 사용자 확정)**: 함께 바꾸지 않음 — 한 param_set은 솔리드 또는 쉘(+3S 두께) 중 하나(혼합 비범위 확정) |
 | Q4 | (비차단) 고정 종류 기본 포함 RBE3·RBODY·BCS·공유 노드가 적절한가? | 보수적으로 포함, 옵션으로 제외 가능 |
 | Q5 | (비차단) 깊이 변경 기본 방식 `keep_angle`(입구 고정·플랭크 각 유지·바닥 크기 변화) vs `keep_bottom` | `keep_angle`(솔리드 FACE_OFFSET과 같은 거동), 고급 옵션 |
 
