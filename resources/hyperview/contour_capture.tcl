@@ -7,10 +7,11 @@
 #   (b) 6·7절 저장 부분 → VIEWS 목록 반복(h3d는 한 번만 열고 방향마다 view orientation | view fit →
 #       <view>.png → <view>.<VID_EXT>), 끝에 capture_result.txt(방향별 성공·파일 이름·오류)를 쓰고 exit.
 #       배치에서 멈추지 않도록 2절 오류의 return도 capture_result.txt 작성 + exit로 바꿨다.
+#   (c) S16(§21.4.2): 동영상 저장 범위 VID_SCOPE(page|window), 저장 성공 보고 뒤 파일 존재·크기 확인.
 
 # ------------------------------------------------------------------------------
 # 1. 설정 (경로 및 옵션) — 플랫폼이 만든 capture_settings.tcl
-#    H3D_PATH OUTDIR FIELD DCOMP AVGMODE USE_LAST LEGMIN LEGMAX SAVE_VIDEO VID_EXT COMPS VIEWS
+#    H3D_PATH OUTDIR FIELD DCOMP AVGMODE USE_LAST LEGMIN LEGMAX SAVE_VIDEO VID_EXT VID_SCOPE COMPS VIEWS
 # ------------------------------------------------------------------------------
 source [file join [file dirname [info script]] capture_settings.tcl]
 
@@ -155,9 +156,21 @@ foreach VIEW $VIEWS {
     if {$SAVE_VIDEO} {
         set vid_name "${VIEW}.${VID_EXT}"
         set vid_path [file join $OUTDIR $vid_name]
-        if {[catch { hwc save animation page "$vid_path" } err]} {
+        # 저장 범위 VID_SCOPE(page|window, capture.video_scope — 설정 파일에 없으면 page = 원본 동작)
+        if {[info exists VID_SCOPE] && $VID_SCOPE eq "window"} {
+            set vid_cmd [list hwc save animation window $vid_path]
+        } else {
+            set vid_cmd [list hwc save animation page $vid_path]
+        }
+        if {[catch { {*}$vid_cmd } err]} {
             puts "ERROR: 동영상 저장 실패 - $err"
             append err_txt "video: $err; "
+            set vid_state 0
+        } elseif {![file exists $vid_path] || [file size $vid_path] <= 0} {
+            # HyperView가 성공을 보고해도 파일이 없거나 0바이트일 수 있다(phase3 §21.4.2 S16)
+            puts "ERROR: 동영상 파일 없음 - $vid_path"
+            # 오류 문구는 \uXXXX(시스템 인코딩과 무관 — capture_result.txt는 UTF-8): "파일이 만들어지지 않았습니다(HyperView 성공 보고)"
+            append err_txt "video: \ud30c\uc77c\uc774 \ub9cc\ub4e4\uc5b4\uc9c0\uc9c0 \uc54a\uc558\uc2b5\ub2c8\ub2e4(HyperView \uc131\uacf5 \ubcf4\uace0); "
             set vid_state 0
         } else {
             puts "SUCCESS: 동영상 저장 완료 -> $vid_path"

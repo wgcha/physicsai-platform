@@ -1,0 +1,156 @@
+/* S17 다목적(D3-65): ⑥ 성능 표·파레토 산점도·쌍 그림·가중치·파레토 표·HV 그래프. 토큰만 사용(designRules). */
+.so-pareto-plot svg {
+  display: block;
+  max-width: 100%;
+}
+.so-pt {
+  cursor: default;
+}
+.so-pt.front,
+.so-pt.pred {
+  cursor: pointer;
+}
+.so-pt:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+}
+.so-dot {
+  fill: var(--color-chart-axis);
+  opacity: 0.3;
+}
+.so-x {
+  stroke: var(--color-chart-axis);
+  stroke-width: 1.4;
+  fill: none;
+  opacity: 0.7;
+}
+.so-front {
+  fill: var(--color-accent);
+  stroke: var(--color-surface-1);
+  stroke-width: 1.5;
+}
+.so-hollow {
+  fill: var(--color-surface-1);
+  stroke: var(--color-accent);
+  stroke-width: 1.6;
+}
+.so-sel {
+  fill: none;
+  stroke: var(--color-text-strong);
+  stroke-width: 1.4;
+  stroke-dasharray: 3 2;
+}
+.so-rec {
+  fill: none;
+  stroke: var(--color-accent);
+  stroke-width: 2.6;
+}
+.so-stair {
+  stroke: var(--color-accent);
+  stroke-width: 1.4;
+  opacity: 0.6;
+}
+.so-pred-line {
+  stroke: var(--color-accent);
+  stroke-width: 1.2;
+  stroke-dasharray: 4 3;
+  opacity: 0.6;
+}
+.so-pairs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+@media (max-width: 1100px) {
+  .so-pairs {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.so-legend {
+  margin-top: var(--space-2);
+}
+.so-lg-front {
+  background: var(--color-accent);
+}
+.so-lg-dom {
+  background: var(--color-chart-axis);
+  opacity: 0.35;
+}
+.so-lg-x {
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  color: var(--color-chart-axis);
+  line-height: 1;
+}
+.so-lg-hollow {
+  background: var(--color-surface-1);
+  border: 2px solid var(--color-accent);
+  box-sizing: border-box;
+}
+.so-lg-rec {
+  background: transparent;
+  border: 2.5px solid var(--color-accent);
+  box-sizing: border-box;
+  width: 12px;
+  height: 12px;
+}
+.so-weight-row {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-3);
+}
+.so-weight-ctl {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.so-weight-ctl input[type="range"] {
+  flex: 1;
+  min-width: 0;
+}
+.so-weight-pct {
+  min-width: 3.2em;
+  text-align: right;
+}
+.so-recommend {
+  margin-top: var(--space-3);
+  color: var(--color-text-strong);
+}
+.so-weight-inputs {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.so-weight-input {
+  display: grid;
+  grid-template-columns: 8em minmax(0, 1fr) 3em;
+  align-items: center;
+  gap: var(--space-3);
+}
+.so-range-inputs {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.so-removed {
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+.so-miss {
+  margin-top: var(--space-1);
+}
+.so-pred-row {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+.so-pareto-table tr.recommended td {
+  background: var(--color-info-surface);
+}
+.so-actions {
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+.so-hv .chart-tick.so-hv-imp {
+  fill: var(--color-text-muted);
+}

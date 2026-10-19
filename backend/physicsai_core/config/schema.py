@@ -8,6 +8,7 @@ from pydantic import Field
 
 from ._model import _M
 from .schema_capture import CaptureCfg
+from .schema_fem_verify import FemVerifyCfg
 from .schema_geometry import GeometryCfg
 from .schema_hpc import CommandsCfg, HpcCfg
 from .schema_ops import (
@@ -179,6 +180,7 @@ class Settings(_M):
     spdm_import: SpdmImportCfg = Field(default_factory=SpdmImportCfg)
     optimize: OptimizeCfg = Field(default_factory=OptimizeCfg)
     surrogate_opt: SurrogateOptCfg = Field(default_factory=SurrogateOptCfg)  # phase3 §18.9 S13 내장 최적화
+    fem_verify: FemVerifyCfg = Field(default_factory=FemVerifyCfg)  # phase3 §21.3.10 S16 조립 FEM 검증
     env_check: EnvCheckCfg = Field(default_factory=EnvCheckCfg)
     error_bundle: ErrorBundleCfg = Field(default_factory=ErrorBundleCfg)
     study_storage: StudyStorageCfg = Field(default_factory=StudyStorageCfg)

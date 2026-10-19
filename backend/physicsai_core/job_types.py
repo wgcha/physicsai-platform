@@ -115,6 +115,23 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         ),
         "④",
     ),
+    # ---- 3차 조립 FEM 검증(phase3 §21.3.5 S16): 검증 API·종료 훅만 만든다(POST /jobs 불가). HPC 대기는 슬롯 미점유 ----
+    "FEM_VERIFY": JobTypeDef(
+        "FEM_VERIFY", 4, "SLOT", "조립 FEM 검증",
+        (
+            StepDef("FV_PREP", "INTERNAL", 3),
+            StepDef("FV_MESH", "LOCAL", 5),
+            StepDef("FV_ASSEMBLE", "INTERNAL", 2),
+            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5),
+            StepDef("HPC_WAIT", "HPC_WAIT", 55),
+            StepDef("COLLECT", "COLLECT", 10),
+            StepDef("FV_EXTRACT", "LOCAL", 6),
+            StepDef("FV_CURVE", "LOCAL", 5),
+            StepDef("FV_CAPTURE", "LOCAL", 8),
+            StepDef("FV_COMPARE", "INTERNAL", 1),
+        ),
+        "④", notify_success=False,
+    ),
     # ---- 3차 일괄 예측(phase3 §14.5 S9): 입력 생성만 슬롯 점유, run별 하위 PREDICT(prepared)는 BP_ENQUEUE가 대기열에 넣는다 ----
     "PREDICT_BATCH": JobTypeDef(
         "PREDICT_BATCH", 4, "SLOT", "일괄 예측 입력 생성",
@@ -127,6 +144,12 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (StepDef("NP_PREP", "INTERNAL", 5), StepDef("NP_EXTRACT", "LOCAL", 30), StepDef("NP_TAG", "LOCAL", 55),
          StepDef("BL_MAP", "LOCAL", 5), StepDef("NP_REGISTER", "INTERNAL", 5)),
         "④", notify_success=True,
+    ),
+    # ---- 3차 S17(phase3 §22.3.5): 끝난 배치의 H3D 성능 다시 추출(①-6 TD_RESP_EXTRACT와 같은 HyperView 슬롯) ----
+    "PB_RESP_EXTRACT": JobTypeDef(
+        "PB_RESP_EXTRACT", 4, "SLOT", "일괄 예측 성능 다시 추출",
+        (StepDef("PX_PREP", "INTERNAL", 5), StepDef("RESPONSE_EXTRACT_RUNS", "LOCAL", 90), StepDef("PX_TABLE", "INTERNAL", 5)),
+        "④",
     ),
     # ---- 3차 컨투어 재캡처(phase3 §15 S10): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처 ----
     "CONTOUR_RECAPTURE": JobTypeDef(
@@ -244,6 +267,9 @@ STEP_LABELS: dict[str, str] = {
     "SC_VALIDATE": "정리 대상 확인", "SC_MOVE": "백업 폴더로 이동", "SC_RECORD": "정리 기록",
     "CONTOUR_CAPTURE": "컨투어 캡처",
     "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
+    "FV_PREP": "조립 입력 준비", "FV_MESH": "메시 교체(include 변환)", "FV_ASSEMBLE": "조립 입력 만들기",
+    "FV_EXTRACT": "응답 추출(예측·FEM)", "FV_CURVE": "커브 비교", "FV_CAPTURE": "컨투어 캡처(예측·FEM)", "FV_COMPARE": "비교 정리",
+    "PX_PREP": "다시 추출 대상 확인", "PX_TABLE": "배치 성능 표 갱신",
     "SO_COLLECT": "검증 결과 수집", "SO_FIT": "대리모델 학습", "SO_PROPOSE": "후보 탐색", "SO_NEXT": "검증 배치 등록·마무리",
     "NP_PREP": "준비 파일 모으기", "NP_EXTRACT": "형상 피처 추출", "NP_TAG": "경계 노드 분류",
     "BL_MAP": "baseline 변수 매칭", "NP_REGISTER": "템플릿 등록",

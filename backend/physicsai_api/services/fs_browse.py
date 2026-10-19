@@ -20,10 +20,10 @@ def require_any_power(principal: Principal) -> None:
     raise DomainError("PERMISSION_DENIED", "실행 권한(power 이상)이 필요합니다", status=403, required="power")
 
 
-def roots(ctx: AppContext, principal: Principal) -> dict[str, Any]:
+def roots(ctx: AppContext, principal: Principal, include_spdm: bool = False) -> dict[str, Any]:
     require_any_power(principal)
     st = ctx.settings.storage
-    return {"roots": fs_browse.roots(ctx.settings), "inbox_share_hint": st.inbox_share_hint or None}
+    return {"roots": fs_browse.roots(ctx.settings, include_spdm=include_spdm), "inbox_share_hint": st.inbox_share_hint or None}
 
 
 def list_dir(ctx: AppContext, principal: Principal, path: str, exts: str | None) -> dict[str, Any]:

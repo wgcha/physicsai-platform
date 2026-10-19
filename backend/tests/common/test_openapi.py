@@ -53,6 +53,17 @@ def test_all_routes_prefixed():
         # 3차(phase3 §18.6 S13 내장 최적화, D3-60)
         "/studies/{study_id}/surrogate-opts/preview", "/studies/{study_id}/surrogate-opts", "/surrogate-opts/{opt_id}",
         "/surrogate-opts/{opt_id}/runs.csv", "/surrogate-opts/{opt_id}/cancel", "/surrogate-opts/{opt_id}/resume",
-            "/param-sets/{ps_id}/native-prepare", "/param-sets/{ps_id}/features",  # geometry-engine.md §7.6
+        # 3차(phase3 §19.5 S14 결과분석 입력, D3-62)
+        "/train-does/{doe_id}/result-table",
+        # 3차(phase3 §21.2 S16 V1 단일 예측 실행 목록, D3-64)
+        "/studies/{study_id}/predict-runs", "/predict-runs/{job_id}",
+        # 3차(phase3 §21.3.8 S16 V2 조립 FEM 검증, D3-64)
+        "/studies/{study_id}/fem-verifications/preview", "/studies/{study_id}/fem-verifications", "/fem-verifications/{fid}",
+        "/fem-verifications/{fid}/media", "/fem-verifications/{fid}/curves", "/fem-verifications/{fid}/table.csv",
+        "/fem-verifications/{fid}/cancel", "/fem-verifications/{fid}/rerun",
+        # 3차(phase3 §22.10 S17 성능 다시 추출·추가 검증, D3-65)
+        "/predict-batches/{batch_id}/extract-responses", "/surrogate-opts/{opt_id}/verify",
+        # geometry-engine.md §7.6 native 형상 엔진
+        "/param-sets/{ps_id}/native-prepare", "/param-sets/{ps_id}/features",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

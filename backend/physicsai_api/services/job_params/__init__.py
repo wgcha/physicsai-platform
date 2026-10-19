@@ -19,13 +19,14 @@ from . import (
     stage4_capture,
     stage4_native,
     stage4_predict,
+    stage4_resp,
     stage5_optimize,
     study_manage,
 )
 from .base import check_feature, invalid_errors
 
 _STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage4_batch, stage1_train_data, stage2_curation,
-                                  stage5_optimize, study_manage, stage4_capture, stage4_native)
+                                  stage5_optimize, study_manage, stage4_capture, stage4_native, stage4_resp)
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {jt: m for mod in _STAGES for jt, m in mod.PARAM_MODELS.items()}
 _STAGE_OF: dict[str, ModuleType] = {jt: mod for mod in _STAGES for jt in mod.PARAM_MODELS}
@@ -85,3 +86,7 @@ def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
     hook = getattr(_STAGE_OF.get(old["job_type"]), "on_retry", None)
     if hook is not None:
         hook(conn, old, new_id)
+    if old["job_type"] in ("PREDICT", "FEM_VERIFY"):  # phase3 §21.3.9 S16: 검증 행의 예측·작업 id 갱신
+        from physicsai_core.db.repositories import fem_verifications as fv_repo
+
+        fv_repo.on_retry(conn, old, new_id)

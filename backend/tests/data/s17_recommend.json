@@ -1,0 +1,16 @@
+{
+  "note": "phase3 §22.6 가중 추천 골든(V3-S17-10) — Python pareto.recommend와 TS pareto.ts 공용 표. scores 순서 = front 순서(A,B,C,D), 허용 오차 5e-5. 5행(f2 max) S_B·S_D는 §22.6 식으로 다시 계산한 값(계약 표 0.7361·0.5는 식과 다름 — 변경 메모 요청).",
+  "front": [
+    {"key": "A", "f": [1, 9]},
+    {"key": "B", "f": [3, 4]},
+    {"key": "C", "f": [6, 2]},
+    {"key": "D", "f": [10, 1]}
+  ],
+  "cases": [
+    {"id": "w50_50", "senses": ["min", "min"], "weights": [50, 50], "scores": [0.5, 0.2986, 0.3403, 0.5], "recommended": "B"},
+    {"id": "w80_20", "senses": ["min", "min"], "weights": [80, 20], "scores": [0.2, 0.2528, 0.4694, 0.8], "recommended": "A"},
+    {"id": "w20_80", "senses": ["min", "min"], "weights": [20, 80], "scores": [0.8, 0.3444, 0.2111, 0.2], "recommended": "D"},
+    {"id": "w0_0", "senses": ["min", "min"], "weights": [0, 0], "scores": [0.5, 0.2986, 0.3403, 0.5], "recommended": "B"},
+    {"id": "f2max_w50_50", "senses": ["min", "max"], "weights": [50, 50], "scores": [0.0, 0.4236, 0.7153, 1.0], "recommended": "A"}
+  ]
+}

@@ -108,27 +108,27 @@ describe("레이아웃 A: 상태 칩 → 서랍", () => {
     expect(await within(work4).findByText("모델", { selector: ".field-label" })).toBeTruthy();
   });
 
-  it("단계 버튼 ①~⑤: 현재 단계 aria-current, 큰 번호 01~05 없음", async () => {
+  it("단계 버튼 ①~⑥(S14): 현재 단계 aria-current, 큰 번호 01~06 없음", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
     const stepper = await screen.findByRole("list", { name: "단계" });
     const links = within(stepper).getAllByRole("link");
-    expect(links.map((a) => a.querySelector(".sr-only")?.textContent)).toEqual(["①", "②", "③", "④", "⑤"]);
+    expect(links.map((a) => a.querySelector(".sr-only")?.textContent)).toEqual(["①", "②", "③", "④", "⑤", "⑥"]);
     expect(links[3].getAttribute("aria-current")).toBe("step");
     expect(links.filter((a) => a.hasAttribute("aria-current"))).toHaveLength(1);
-    expect(stepper.textContent).not.toMatch(/0[1-5]/);
+    expect(stepper.textContent).not.toMatch(/0[1-6]/);
   });
 
-  it("D3-56 단계 버튼: 5칸 같은 폭 격자 + 숫자 배지 1~5(원 문자 글리프 대신), 읽기용 이름은 '① 학습데이터 생성' 그대로, Study 관리는 같은 줄 끝", async () => {
+  it("D3-56·S14 단계 버튼: 6칸 같은 폭 격자 + 숫자 배지 1~6(원 문자 글리프 대신), 읽기용 이름은 '① 학습데이터 생성' 그대로, Study 관리는 같은 줄 끝", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
     const stepper = await screen.findByRole("list", { name: "단계" });
     expect(stepper.classList.contains("stepper")).toBe(true);
     const items = within(stepper).getAllByRole("listitem");
-    expect(items).toHaveLength(5);
+    expect(items).toHaveLength(6);
     const badges = items.map((li) => li.querySelector(".step-num"));
-    expect(badges.map((b) => b?.textContent)).toEqual(["1", "2", "3", "4", "5"]);
+    expect(badges.map((b) => b?.textContent)).toEqual(["1", "2", "3", "4", "5", "6"]);
     expect(badges.every((b) => b?.getAttribute("aria-hidden") === "true")).toBe(true);
     expect(within(stepper).getByRole("link", { name: /^① 학습데이터 생성/ })).toBeTruthy();
-    const cur = within(stepper).getByRole("link", { name: /^④ 단일 예측/ });
+    const cur = within(stepper).getByRole("link", { name: /^④ 예측/ });
     expect(cur.getAttribute("aria-current")).toBe("step");
     expect(cur.closest("li")?.classList.contains("current")).toBe(true);
     const row = stepper.parentElement!;
@@ -136,8 +136,8 @@ describe("레이아웃 A: 상태 칩 → 서랍", () => {
     expect(row.lastElementChild?.textContent).toBe("Study 관리");
   });
 
-  it("D3-56 CSS: 스텝퍼 repeat(5, minmax(0, 1fr)), 버튼 높이 --step-h 52px·글자 15px", () => {
-    expect(shellCss).toMatch(/\.stepper\s*\{[^}]*grid-template-columns:\s*repeat\(5,\s*minmax\(0,\s*1fr\)\)/);
+  it("D3-56·S14 CSS: 스텝퍼 repeat(6, minmax(0, 1fr)), 버튼 높이 --step-h 52px·글자 15px", () => {
+    expect(shellCss).toMatch(/\.stepper\s*\{[^}]*grid-template-columns:\s*repeat\(6,\s*minmax\(0,\s*1fr\)\)/);
     expect(shellCss).toMatch(/\.step a\s*\{[^}]*min-height:\s*var\(--step-h\)/);
     expect(tokensCss).toMatch(/--step-h:\s*52px/);
     expect(tokensCss).toMatch(/--step-size:\s*15px/);

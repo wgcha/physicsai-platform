@@ -120,6 +120,9 @@ export const api = {
   /** 템플릿 응답 정의 저장(power) */
   putParamSetResponses: (id: string, body: ParamSetResponsesPut) => request<ParamSet>("PUT", `/param-sets/${id}/responses`, { body }),
 
+  /** S17 §22.3.5 끝난 배치의 H3D 성능 다시 추출(power) → 작업 PB_RESP_EXTRACT */
+  extractBatchResponses: (id: string) => request<Job>("POST", `/predict-batches/${id}/extract-responses`),
+
   // §10.5 작업·로그·산출물
   createJob: (studyId: string, job_type: JobType, params: Record<string, unknown>) =>
     request<Job>("POST", `/studies/${studyId}/jobs`, { body: { job_type, params } }),

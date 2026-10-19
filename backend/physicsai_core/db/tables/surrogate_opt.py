@@ -1,7 +1,7 @@
 """⑤ 플랫폼 내장 최적화 테이블(phase3 §18.3 S13, migration 0010_surrogate_opt).
 
 - surrogate_opts: 최적화 1개(표시 `SO-001` = opt_no). 설정 정규화본·상태·현재 반복·최신 반복 작업·최선(검증된 설계만).
-- surrogate_opt_iters: 반복마다 그 배치(탐색 EXPLORE·재사용 REUSE·검증 VERIFY)와 적합 요약·후보·최선 추이(수치만).
+- surrogate_opt_iters: 반복마다 그 배치(탐색 EXPLORE·재사용 REUSE·검증 VERIFY·마무리 FINAL·추가 검증 EXTRA)와 적합 요약·후보·최선 추이(수치만).
 """
 
 from __future__ import annotations
@@ -26,7 +26,7 @@ from ._base import ID, TS, metadata
 
 SO_STATUSES = ("EXPLORING", "FITTING", "VERIFYING", "FINALIZING", "DONE", "FAILED", "CANCELED")
 SO_ACTIVE = ("EXPLORING", "FITTING", "VERIFYING", "FINALIZING")
-SO_ITER_KINDS = ("EXPLORE", "REUSE", "VERIFY", "FINAL")
+SO_ITER_KINDS = ("EXPLORE", "REUSE", "VERIFY", "FINAL", "EXTRA")
 
 surrogate_opts = Table(
     "surrogate_opts",
@@ -44,6 +44,7 @@ surrogate_opts = Table(
     Column("best", JSONB, nullable=True),
     Column("stop_reason", String(32), nullable=True),
     Column("final", JSONB, nullable=True),  # D3-61 마무리 캡처 {status, reason, batch_id, legend, notice}(0011)
+    Column("hv_frame", JSONB, nullable=True),  # S17 §22.5.1 HV 정규화 틀 {ideal, nadir, ref_offset, signs}(0014)
     Column("dir_rel", String, nullable=False),
     Column("created_by", String, nullable=False),
     Column("created_by_name", String, nullable=False),
@@ -71,8 +72,11 @@ surrogate_opt_iters = Table(
     Column("best_value", Float, nullable=True),
     Column("best_feasible", Boolean, nullable=True),
     Column("improvement_rel", Float, nullable=True),
+    Column("hv", Float, nullable=True),  # S17 §22.5.6 다목적 HV(고정 틀)(0014)
+    Column("front_size", Integer, nullable=True),
+    Column("predicted_front", JSONB, nullable=True),  # ≤ 28점 {values, mean, std, pof}(원 단위)
     Column("created_at", TS, nullable=False, server_default=func.now()),
     CheckConstraint("iter_no >= 0", name="ck_surrogate_opt_iters_iter_no"),
-    CheckConstraint("kind IN ('EXPLORE','REUSE','VERIFY','FINAL')", name="ck_surrogate_opt_iters_kind"),
+    CheckConstraint("kind IN ('EXPLORE','REUSE','VERIFY','FINAL','EXTRA')", name="ck_surrogate_opt_iters_kind"),
 )
 Index("ix_surrogate_opt_iters_batch", surrogate_opt_iters.c.batch_id)

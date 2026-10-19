@@ -5,7 +5,9 @@ Push-Location $RepoRoot
 try {
   & $Python scripts/frontend_source_hash.py --check $RepoRoot; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # frontend-dist 최신 여부(phase3 D3-40)
   & $Python scripts/check_paicad.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # paicad 버전·import 금지 검사(geometry-engine.md §17.5·§18.6)
-  & $Python -m pytest -q -rs @args; if ($LASTEXITCODE) { exit $LASTEXITCODE }
+  $pyArgs = @($args)
+  if ($pyArgs.Count -gt 0 -and $pyArgs[0] -eq "--slow") { $pyArgs = @("-m", "") + @($pyArgs | Select-Object -Skip 1) }   # slow 마커 포함 전체
+  & $Python -m pytest -q -rs @pyArgs; if ($LASTEXITCODE) { exit $LASTEXITCODE }
   # paicad 단독 시험(플랫폼 모듈·DB 없이). PAICAD_SKIP_SLOW=1이면 G1 envelope 재생성 시험(약 2분)을 뺀다
   Push-Location packages/paicad
   $savedPyPath = $env:PYTHONPATH

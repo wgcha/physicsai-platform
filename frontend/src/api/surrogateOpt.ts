@@ -19,6 +19,20 @@ export type SurrogateOptResume = S["SurrogateOptResume"];
 export type SoFinal = S["SoFinal"];
 export type SoFinalRun = S["SoFinalRun"];
 export type SoParameter = S["SoParameter"];
+export type SoConstraint = S["SoConstraint"];
+export type SoObjective = S["SoObjective"];
+export type SoObserve = S["SoObserve"];
+export type SoObjectiveDef = S["SoObjectiveDef"];
+export type SoConstraintDef = S["SoConstraintDef"];
+export type SoObserveDef = S["SoObserveDef"];
+export type SoPareto = S["SoPareto"];
+export type SoFrontPoint = S["SoFrontPoint"];
+export type SoPredictedPoint = S["SoPredictedPoint"];
+export type SoHvPoint = S["SoHvPoint"];
+export type SoPerformance = S["SoPerformance"];
+export type SoProblem = S["SoProblem"];
+export type SurrogateOptVerify = S["SurrogateOptVerify"];
+export type SurrogateOptVerifyResult = S["SurrogateOptVerifyResult"];
 export type SoStatus = "EXPLORING" | "FITTING" | "VERIFYING" | "FINALIZING" | "DONE" | "FAILED" | "CANCELED";
 
 export const surrogateApi = {
@@ -30,6 +44,8 @@ export const surrogateApi = {
   runsCsv: (id: string) => fetchBlob(`/surrogate-opts/${id}/runs.csv`),
   cancel: (id: string) => request<SurrogateOpt>("POST", `/surrogate-opts/${id}/cancel`),
   resume: (id: string) => request<SurrogateOptResume>("POST", `/surrogate-opts/${id}/resume`),
+  /** S17 §22.7 추가 검증(EXTRA 배치) — DONE만, power */
+  verify: (id: string, body: SurrogateOptVerify) => request<SurrogateOptVerifyResult>("POST", `/surrogate-opts/${id}/verify`, { body }),
 };
 
 export const SO_ACTIVE: SoStatus[] = ["EXPLORING", "FITTING", "VERIFYING", "FINALIZING"];

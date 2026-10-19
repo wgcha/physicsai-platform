@@ -100,6 +100,10 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     if _has(data, "predict", "mesh_output_glob"):
         w.append(ConfigIssue("predict.mesh_output_glob",
                              "폐지된 키입니다 — 값이 적용되지 않습니다(새 메시는 predict.mesh_include_name, 지워도 됩니다)"))
+    from .schema_capture import capture_warnings
+
+    for key, msg in capture_warnings(s):  # phase3 §21.4.4 S16: avi 대체·ffmpeg 파일 없음
+        w.append(ConfigIssue(key, msg))
     from ..features import geometry_status, predict_parametric_missing  # features가 config를 import하므로 지역 import
 
     if s.geometry.engine == "native" and not geometry_status(s)["native_available"]:

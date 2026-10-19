@@ -215,7 +215,7 @@
   text-decoration: none;
 }
 
-/* 단계 버튼 ①~⑤ (D3-56): 내용 폭 5등분(꽉 채움) + 오른쪽 끝 "Study 관리" 작은 버튼, 높이 52 */
+/* 단계 버튼 ①~⑥ (D3-56·S14): 내용 폭 6등분(꽉 채움) + 오른쪽 끝 "Study 관리" 작은 버튼, 높이 52 */
 .stepper-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -226,7 +226,7 @@
 .stepper {
   min-width: 0;
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: var(--space-2);
   margin: 0;
   padding: 0;
@@ -292,7 +292,7 @@
    padding·음수 margin 4px = 스크롤 영역에서 포커스 테두리(2px + offset 2px)가 잘리지 않게 */
 @media (max-width: 1100px) {
   .stepper {
-    grid-template-columns: repeat(5, minmax(170px, 1fr));
+    grid-template-columns: repeat(6, minmax(170px, 1fr));
     overflow-x: auto;
     padding: var(--space-1);
     margin: calc(-1 * var(--space-1));

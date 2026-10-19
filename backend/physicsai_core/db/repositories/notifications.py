@@ -25,6 +25,7 @@ EVENTS = (
     "PREDICT_BATCH_DONE",  # phase3 §14.5 일괄 예측 완료 1건(0007_predict_batch)
     "HPC_SUBMISSION_UNKNOWN",  # phase3 §16.4 SCX 제출 결과 모름(0009_scx_gateway)
     "SURROGATE_OPT_DONE",  # phase3 §18.7 내장 최적화 완료 1건(0010_surrogate_opt)
+    "FEM_VERIFY_DONE",  # phase3 §21.3.9 조립 FEM 검증 완료 1건(0013_fem_verify)
 )
 
 
@@ -100,6 +101,8 @@ def notify_job(conn: Connection, job_id: str, event: str, *, body: str | None = 
         return None
     if is_batch_child(row.params):  # phase3 §14.5: 일괄 예측 하위는 알림 없음(배치 완료 1건만)
         return None
+    if event in SUCCESS_EVENTS and is_fem_companion(row.job_type, row.params):  # phase3 §21.3.2: 동반 예측은 실패 알림만
+        return None
     if event == "JOB_CANCELED" and is_opt_owned(row.job_type, row.params):  # phase3 §18.7: 내장 최적화 취소는 알림 없음
         return None
     title, default_body = _title(event, job_label(row.job_type), row.title, row.failure_code, row.result)
@@ -124,9 +127,15 @@ def is_batch_child(params: Any) -> bool:
     return isinstance(params, dict) and isinstance(params.get("batch_run"), dict)
 
 
+def is_fem_companion(job_type: str, params: Any) -> bool:
+    """FEM 검증 동반 PREDICT(params.fem_verify_id, phase3 §21.3.2)."""
+    return job_type == "PREDICT" and isinstance(params, dict) and isinstance(params.get("fem_verify_id"), str)
+
+
 def is_opt_owned(job_type: str, params: Any) -> bool:
-    """내장 최적화 반복 작업 또는 최적화 소유 PREDICT_BATCH(params.surrogate_opt)."""
-    return job_type == "SURROGATE_OPT" or (isinstance(params, dict) and isinstance(params.get("surrogate_opt"), dict))
+    """내장 최적화 반복 작업 또는 최적화 소유 PREDICT_BATCH(params.surrogate_opt). 추가 검증(extra, S17)은 일반 배치처럼 알린다."""
+    so = params.get("surrogate_opt") if isinstance(params, dict) else None
+    return job_type == "SURROGATE_OPT" or (isinstance(so, dict) and not so.get("extra"))
 
 
 def notify_batch_done(conn: Connection, batch: dict[str, Any], succeeded: int, failed: int) -> int:

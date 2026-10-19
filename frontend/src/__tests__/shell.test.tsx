@@ -17,7 +17,7 @@ describe("공통 셸 (V-FE-1, V-FE-7)", () => {
     expect(within(work).getByRole("region", { name: "모델 목록" })).toBeTruthy();
     const stepper = screen.getByRole("list", { name: "단계" });
     expect(within(stepper).queryAllByText("2차")).toHaveLength(0);
-    expect(within(stepper).getAllByRole("link")).toHaveLength(5);
+    expect(within(stepper).getAllByRole("link")).toHaveLength(6); // S14: ① ~ ⑥
   });
 
   it("V2-FE-1: ①②⑤도 실제 화면(2차 안내 없음)", async () => {

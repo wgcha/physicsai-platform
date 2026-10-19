@@ -175,3 +175,73 @@ def test_helpers_and_settings_entry():
     assert _codes(bm.build_matrix_for({"kind": "lhs", "count": 201}, {"parameters": P, "tpl_params": T}, s)) == ["TOO_MANY_ROWS"]
     assert bm.samples_csv_text(["THK_1", "RIB_N"], m.rows[:1]).splitlines() == [
         "doe_no,run_key,THK_1,RIB_N", f"1,run__00001,{m.rows[0].applied_values['THK_1']!r},{float(m.rows[0].applied_values['RIB_N'])!r}"]
+
+
+# ---- V3-S15-7 새 kind 분기(phase3 §20.5, D3-63) — 설계 성질은 test_sampling_designs --------------------------------------
+
+P3 = [{"name": "A", "min": 2.0, "max": 5.0}, {"name": "N", "min": 4.0, "max": 8.0}, {"name": "C", "min": 0.0, "max": 1.0}]
+T3 = [{"name": "A", "format": "%5.2f"}, {"name": "N", "format": "%3i"}, {"name": "C", "format": "%5.2f"}]
+S15_SOURCES = {
+    "lhs_opt": {"kind": "lhs_opt", "count": 8, "seed": 2},
+    "sobol": {"kind": "sobol", "count": 8, "seed": 2},
+    "fullfact": {"kind": "fullfact", "levels": {"A": 3}},
+    "fracfact": {"kind": "fracfact", "resolution": 4},
+    "pb": {"kind": "pb"},
+    "bbd": {"kind": "bbd"},
+    "ccd": {"kind": "ccd", "alpha": "inscribed"},
+}
+S15_DB_KINDS = {"lhs_opt": "LHS_OPT", "sobol": "SOBOL", "fullfact": "FULLFACT", "fracfact": "FRACFACT", "pb": "PB", "bbd": "BBD",
+                "ccd": "CCD", "lhs": "LHS", "table": "TABLE", "train_doe": "TRAIN_DOE"}
+S15_META_KEYS = {
+    "lhs_opt": {"count", "seed", "criterion", "candidates", "iterations", "ranges", "active", "fixed", "quality"},
+    "sobol": {"count", "m", "seed", "ranges", "scramble", "offset", "continue_from", "generator", "active", "fixed", "quality"},
+    "fullfact": {"levels", "ranges", "active", "fixed"},
+    "fracfact": {"resolution", "letters", "generators", "runs", "full", "ranges", "active", "fixed"},
+    "pb": {"runs", "construction", "ranges", "active", "fixed"},
+    "bbd": {"center", "pairwise", "ranges", "active", "fixed"},
+    "ccd": {"alpha_kind", "alpha", "factorial", "generators", "center", "ranges", "active", "fixed"},
+}
+
+
+def test_v3_s15_7_kind_to_source_kind_ten():
+    from physicsai_core.sampling import registry
+
+    assert bm.SOURCE_KINDS == S15_DB_KINDS == registry.SOURCE_KINDS and len(bm.SOURCE_KINDS) == 10
+    for kind, src in S15_SOURCES.items():
+        m = bm.build_matrix(src, parameters=P3, tpl_params=T3, max_runs=200, table_max_bytes=64)
+        assert m.ok and m.source_kind == S15_DB_KINDS[kind], (kind, m.problems)
+        assert set(m.source_meta) == S15_META_KEYS[kind], (kind, set(m.source_meta) ^ S15_META_KEYS[kind])
+        assert [r.doe_no for r in m.rows] == list(range(1, len(m.rows) + 1))
+        assert [r.run_key for r in m.rows] == [f"run__{i:05d}" for i in range(1, len(m.rows) + 1)]
+        assert all(isinstance(r.applied_values["N"], int) for r in m.rows)             # 정수 변수 반영값
+    with pytest.raises(bm.BatchShapeError) as e:
+        bm.build_matrix({"kind": "nope"}, parameters=P3, tpl_params=T3, max_runs=200, table_max_bytes=1)
+    assert "lhs_opt" in str(e.value) and "sobol" in str(e.value)
+
+
+def test_v3_s15_7_influence_too_few_note_and_lhs_unchanged():
+    few = bm.build_matrix({"kind": "pb"}, parameters=P3, tpl_params=T3, max_runs=200, table_max_bytes=1)   # 8 run ≥ max(5, 5) ok
+    assert "INFLUENCE_TOO_FEW" not in [n["code"] for n in few.notes]
+    four = bm.build_matrix({"kind": "lhs_opt", "count": 4}, parameters=P3, tpl_params=T3, max_runs=200, table_max_bytes=1)
+    assert [n for n in four.notes if n["code"] == "INFLUENCE_TOO_FEW"] == [
+        {"code": "INFLUENCE_TOO_FEW", "message": "run이 5개보다 적어 ⑤ 영향도는 계산되지 않습니다"}]
+    p6 = [{"name": f"V{i}", "min": 0.0, "max": 1.0} for i in range(6)]
+    t6 = [{"name": f"V{i}", "format": "%5.2f"} for i in range(6)]
+    f = bm.build_matrix({"kind": "fracfact", "resolution": 4}, parameters=p6, tpl_params=t6, max_runs=200, table_max_bytes=1)
+    assert f.ok and len(f.rows) == 16 and "INFLUENCE_TOO_FEW" not in [n["code"] for n in f.notes]
+    f2 = bm.build_matrix({"kind": "lhs_opt", "count": 7}, parameters=p6, tpl_params=t6, max_runs=200, table_max_bytes=1)
+    assert [n["message"] for n in f2.notes if n["code"] == "INFLUENCE_TOO_FEW"] == ["run이 8개보다 적어 ⑤ 영향도는 계산되지 않습니다"]
+    # 기존 kind는 notes 없음·메타 불변(V3-S9-5 골든)
+    lhs = _m({"kind": "lhs", "count": 4, "seed": 1})
+    assert lhs.notes == [] and set(lhs.source_meta) == {"count", "seed", "ranges"}
+    assert _m({"kind": "table", "text": "THK_1\tRIB_N\n3\t4\n"}).source_meta == {"row_count": 1}
+
+
+def test_v3_s15_7_range_errors_and_unknown_range_name():
+    bad = bm.build_matrix({"kind": "pb", "ranges": {"A": [5, 2], "ZZ": [0, 1]}}, parameters=P3, tpl_params=T3, max_runs=200,
+                          table_max_bytes=1)
+    assert [p["code"] for p in bad.problems] == ["RANGE_INVALID", "RANGE_INVALID"] and bad.rows == []
+    ok = bm.build_matrix({"kind": "pb", "ranges": {"A": [1.0, 9.0]}}, parameters=P3, tpl_params=T3, max_runs=200, table_max_bytes=1)
+    assert ok.ok and ok.source_meta["ranges"]["A"] == [1.0, 9.0] and ok.source_meta["ranges"]["N"] == [4.0, 8.0]
+    assert {r.values["A"] for r in ok.rows} == {1.0, 9.0} 
+    assert all(r.out_of_range == ["A"] for r in ok.rows)                          # 학습 범위 밖은 표시하고 허용

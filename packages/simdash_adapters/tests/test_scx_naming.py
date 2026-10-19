@@ -83,3 +83,16 @@ def test_forbidden_prefix_forms():
         assert n.forbidden_reason("SPDM/x/01_a", [raw], home_display=hd), raw
         assert n.forbidden_reason("cushion/01_a", [raw], home_display=hd) is None, raw
     assert n.forbidden_reason("cushion/01_a", ["/Users/vd.dashboard"], home_display=hd)  # 홈 전체 = 모두 거부
+
+
+def test_v3_s16_9_fem_verify_job_name():
+    """phase3 §21.3.7 S16: ④ 조립 FEM 검증 잡 폴더 `04_FV-<NNN>_<ts>`(검사·접미 규칙은 V와 같다)."""
+    ts = "20261019T101500"
+    assert n.fem_verify_job_name(3, ts) == "04_FV-003_20261019T101500"
+    assert n.fem_verify_job_name(1234, ts) == "04_FV-1234_20261019T101500"
+    assert n.with_suffix(n.fem_verify_job_name(3, ts), 2) == "04_FV-003_20261019T101500_2"
+    assert n.SEGMENT_RE.match(n.fem_verify_job_name(3, ts))
+    with pytest.raises(ValueError):
+        n.fem_verify_job_name(1, "2026-10-19")
+    with pytest.raises(ValueError):
+        n.fem_verify_job_name(0, ts)

@@ -6,6 +6,7 @@ import { err, ok, type MockResp, type Route } from "./route";
 import type { Phase2Mock, SeedJob } from "./phase2";
 import { addParamSetFromTrain } from "./stage4";
 import { markUnknown } from "./scx";
+import { doeResultTable } from "./trainDoe";
 
 export const runKey = (i: number) => `run__${String(i).padStart(5, "0")}`;
 
@@ -125,6 +126,7 @@ export const trainRoutes: Route = (srv, { method, path, seg, query, body }) => {
       const next = start + limit < runs.length ? String(start + limit) : null;
       return { status: 200, body: runs.slice(start, start + limit).map(({ _job: _j, ...r }) => r), headers: next ? { "X-Next-Cursor": next } : {} };
     }
+    if (method === "GET" && seg[2] === "result-table") return doeResultTable(p2, d); // S14 §19.5
     if (method === "GET" && seg[2] === "samples") {
       const rows = p2.doeSamples[d.id];
       if (!rows) return err(404, "SAMPLES_MISSING", "샘플 표가 없습니다.");

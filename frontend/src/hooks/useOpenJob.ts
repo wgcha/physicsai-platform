@@ -17,6 +17,12 @@ export function useOpenJob() {
         try {
           const j = await api.job(n.job_id);
           stage = j.stage;
+          // S16: FEM 검증 알림 → 그 검증의 상세 화면
+          const fid = (j.params as { fem_verify_id?: string } | null)?.fem_verify_id;
+          if (j.job_type === "FEM_VERIFY" && fid) {
+            navigate(`/p/${n.project_id}/s/${n.study_id}/stage/4/verify/${fid}`);
+            return;
+          }
           // D3-53: 일괄 예측(부모 PREDICT_BATCH) 알림 → 그 배치 결과 화면
           if (j.job_type === "PREDICT_BATCH" && j.batch?.id) {
             navigate(`/p/${n.project_id}/s/${n.study_id}/stage/4/batch/${j.batch.id}`);

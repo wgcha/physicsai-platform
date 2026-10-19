@@ -913,3 +913,27 @@ def test_setup_config_adds_scx_block_once(tmp_path):
     assert "setup.ps1이 보충 — phase3 §16.8" in cfg_path.read_text(encoding="utf-8")
     res = _run(tmp_path, t, _inputs(t))
     assert res["config_changed_keys"] == []
+
+
+def test_v3_s16_23_setup_config_adds_capture_ffmpeg_once(tmp_path):
+    """phase3 §21.4.4 S16: capture 절은 있는데 capture.ffmpeg가 없으면 예시 기본 절을 1회 보충(다른 값 보존, 덮어쓰기 없음)."""
+    t = _fake_tree(tmp_path)
+    _run(tmp_path, t, _inputs(t))
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    ex = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert _cfg(t)["capture"]["ffmpeg"] == ex["capture"]["ffmpeg"] and ex["capture"]["ffmpeg"]["exe"] == ""
+    txt = cfg_path.read_text(encoding="utf-8")
+    start = txt.index("  ffmpeg:")
+    end = txt.index("\n\n", start)
+    cfg_path.write_text((txt[:start] + txt[end + 1:]).replace("  video: true", "  video: false", 1), encoding="utf-8")
+    assert "ffmpeg" not in _cfg(t)["capture"]
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    assert c["capture"]["ffmpeg"] == ex["capture"]["ffmpeg"] and c["capture"]["video"] is False
+    assert res["config_changed_keys"] == ["capture.ffmpeg"] and res["write"]["validation"]["ok"]
+    assert "setup.ps1이 보충 — phase3 §21.4.4" in cfg_path.read_text(encoding="utf-8")
+    # 사용자가 exe를 채우면 다시 실행해도 보존
+    cfg_path.write_text(cfg_path.read_text(encoding="utf-8").replace('    exe: ""', '    exe: "C:/ffmpeg/bin/ffmpeg.exe"', 1),
+                        encoding="utf-8")
+    res = _run(tmp_path, t, _inputs(t))
+    assert res["config_changed_keys"] == [] and _cfg(t)["capture"]["ffmpeg"]["exe"] == "C:/ffmpeg/bin/ffmpeg.exe"

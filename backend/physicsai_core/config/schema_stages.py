@@ -100,6 +100,7 @@ class TrainDataCfg(_M):
     tpl_parameter_line_regex: str = r"(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?"
     tpl_paramitem_line_regex: str = r"(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?"
     max_runs: int = 2000
+    recommended_doe_type: str = "TYPE_LATINHYPERCUBE"  # ① 추천 DOE 유형 value(S15, D3-63). 빈 문자열·정의 파일에 없는 값 = 추천 없음
     max_multi_execution: int = 8
     hst_progress_regex: str = r"Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)"
     hst_log_error_patterns: list[str] = Field(default_factory=lambda: [
@@ -155,6 +156,18 @@ class SurrogateOptCfg(_M):
     de_popsize: int = 15
     fit_timeout_s: int = 600
     blas_threads: int = 4  # 워커 안 numpy BLAS 스레드 상한(worker.max_logical_cores와 작은 쪽, 공유 워커 보호)
+    # S17 다목적(phase3 §22.11)
+    max_objectives: int = 3
+    max_observe: int = 10
+    max_extra_points: int = 10
+    mo_lattice_h2: int = 10  # 2목적 Das–Dennis 격자 H(→ 11점)
+    mo_lattice_h3: int = 6  # 3목적 격자 H(→ 28점)
+    mo_de_maxiter: int = 100
+    mo_rho: float = 0.05  # 증강 Chebyshev ρ
+    mo_ref_offset: float = 0.1  # HV 기준점 = (1 + offset)·1
+    mo_gp_restarts: int = 4  # ParEGO 스칼라화 GP 재시작
+    mo_hvi_share_m3: float = 0.5  # 3목적 HVI 활용 후보 비율(⌈k·share⌉, 0 = 1개 — 계약 §22.5.4 원안)
+    mo_front_prox_m3: float = 6.0  # 3목적 ParEGO 획득값 × exp(−prox·예측 전선까지 정규화 거리)(0 = 끔)
 
 
 class OptimizeCfg(_M):

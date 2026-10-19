@@ -2,9 +2,9 @@
 // 표준화·PCA 고유값·%·점수(부호 규칙)·PLS X%·값%·점수·부호·구조 상관 화살표, 경계 조건 표 6행(문구 포함)·상수 변수 안내·색지도.
 import { describe, expect, it } from "vitest";
 import golden from "./fixtures/designMapGolden.json";
-import { corr, jacobiEigen, pca, plsNipals, standardize, structureArrows, zscore } from "../stages/stage4/batch/designMap/linalg";
-import { buildMapData, noteLines, parallelAxes, project, runValue, TEXT, brushText, tipLines, pickMetric } from "../stages/stage4/batch/designMap/designMapData";
-import { VIRIDIS, colorScale, viridis } from "../stages/stage4/batch/designMap/colormap";
+import { corr, jacobiEigen, pca, plsNipals, standardize, structureArrows, zscore } from "../analysis/viz/designMap/linalg";
+import { buildMapData, noteLines, parallelAxes, project, runValue, TEXT, brushText, tipLines, pickMetric } from "../analysis/viz/designMap/designMapData";
+import { VIRIDIS, colorScale, viridis } from "../analysis/viz/designMap/colormap";
 import type { DesignMap, DesignMapRun } from "../api/designMap";
 import { METRIC_RE } from "../api/designMap";
 

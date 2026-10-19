@@ -1,5 +1,6 @@
-// ⑤ 내장 최적화 결과(phase3.md §18.10, 라우트 …/stage/5/surrogate/:optId, 진행 중 POLL.surrogate):
-// 상태·진행 문구·일괄 취소·이어서 실행 / 최적안 — 기준안 대비 · 결과 요약 / 컨투어 비교(D3-61) / 수렴 그래프 / 대리모델 품질 / 검증 run 표(CSV) / 파일 위치.
+// ⑥ 내장 최적화 결과(phase3.md §18.10·§22.12, 라우트 …/stage/5/surrogate/:optId, 진행 중 POLL.surrogate):
+// 상태·진행 문구·일괄 취소·이어서 실행 / [다목적: 파레토 전선·가중치·파레토 표·HV 그래프] / 최적안(추천점) — 기준안 대비 · 결과 요약 / 컨투어 비교(D3-61) /
+// [단일 목적: 수렴 그래프] / 대리모델 품질 / 검증 run 표(CSV) / 파일 위치.
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorMessage } from "../../../api";
@@ -12,9 +13,16 @@ import { fmtNum } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
 import { ROW_STATE_LABEL, rowTone } from "../../stage4/batch/batchTable";
 import { ConvergenceChart } from "./ConvergenceChart";
+import { HvChart } from "./HvChart";
+import { ParetoSection } from "./ParetoCard";
 import { ContourCompareCard, OptimumCompareCard, ResultSummaryCard } from "./ResultCards";
+import { FemEntryButton } from "../../stage4/verify/useFemVerifyButton";
 import "../../../styles/surrogateOpt.css";
-import { SO_STATUS_LABEL, metricLabel, qualityGrade, soTone } from "./soRules";
+import "../../../styles/surrogateMulti.css";
+import { SO_STATUS_LABEL, metricLabel, objectiveDefs, qualityGrade, soTone } from "./soRules";
+import { KIND_LABEL } from "./ParetoTable";
+
+const BATCH_ACTIVE = ["GENERATING", "PREDICTING"];
 
 
 export function SurrogateResult({ optId }: { optId: string }) {
@@ -34,13 +42,17 @@ export function SurrogateResult({ optId }: { optId: string }) {
   useEffect(() => {
     void load();
   }, [load]);
-  usePolling(load, o && isSoActive(o.status) ? POLL.surrogate : null, false, [optId]);
+  // S17: 끝난 최적화도 추가 검증(EXTRA) 배치가 도는 동안은 결과(파레토 표·전선)를 다시 읽는다
+  const extraActive = !!o?.iterations?.some((it) => it.kind === "EXTRA" && it.batch && BATCH_ACTIVE.includes(it.batch.status));
+  usePolling(load, o && (isSoActive(o.status) || extraActive) ? POLL.surrogate : null, false, [optId]);
 
   if (error && !o) return <Card span={9} title="내장 최적화"><p className="error-text">{error}</p></Card>;
   if (!o) return <Card span={9} title="내장 최적화"><p className="muted">불러오는 중…</p></Card>;
 
   const base = `/p/${study.project_id}/s/${study.id}`;
   const s = o.settings as { names: string[]; objective: { metric: string; series?: string | null; sense: string }; constraints: { metric: string; series?: string | null; op: string; value: number }[]; iterations: number };
+  const multi = o.mode === "multi";
+  const defs = objectiveDefs(o);
   const act = async (f: () => Promise<unknown>) => {
     setActionError(null);
     try {
@@ -59,17 +71,17 @@ export function SurrogateResult({ optId }: { optId: string }) {
       a.click();
       URL.revokeObjectURL(a.href);
     });
-  const objLabel = metricLabel(s.objective.metric, s.objective.series);
+  const objLabel = multi ? defs.map((d) => d.label).join(" · ") : defs[0]?.label ?? metricLabel(s.objective.metric, s.objective.series);
   const b = o.best;
   const runs = (o.runs ?? []) as SoRun[];
 
   return (
     <>
-      <Card span={9} title={`내장 최적화 ${o.label}`} className="so-head" aside={<Link className="small" to={`${base}/stage/5`}>⑤ 실행 목록</Link>}>
+      <Card span={9} title={`내장 최적화 ${o.label}`} className="so-head" aside={<Link className="small" to={`${base}/stage/5`}>⑥ 실행 목록</Link>}>
         <div className="run-action-row">
           <span className={`pill ${soTone(o.status)}`} data-testid="so-status">{SO_STATUS_LABEL[o.status] ?? o.status}</span>
           <span data-testid="so-progress">{o.progress_text}</span>
-          <span className="muted small">{objLabel} {s.objective.sense === "max" ? "최대화" : "최소화"} · 반복 {o.iter_no}/{s.iterations} · {(o.param_set as { label?: string }).label ?? "템플릿"} · {(o.model as { name?: string }).name}</span>
+          <span className="muted small">{multi ? `다목적(${defs.length}개) ${objLabel}` : `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`} · 반복 {o.iter_no}/{s.iterations} · {(o.param_set as { label?: string }).label ?? "템플릿"} · {(o.model as { name?: string }).name}</span>
         </div>
         <div className="run-action-row">
           {o.can_cancel && <button type="button" className="btn small danger" onClick={() => setConfirm(true)}>일괄 취소</button>}
@@ -78,17 +90,25 @@ export function SurrogateResult({ optId }: { optId: string }) {
         {o.warnings?.map((w, i) => <p key={i} className="muted small">{w.message}</p>)}
         {actionError && <p className="error-text small" role="alert">{actionError}</p>}
       </Card>
+      {multi && <ParetoSection o={o} base={base} onChanged={() => void load()} downloadCsv={() => void downloadCsv()} />}
+      {multi && (
+        <Card span={9} title="HV 그래프" aside={<span className="muted small">검증된 전선의 하이퍼볼륨 — 기준점은 탐색 자료로 고정</span>}>
+          <HvChart opt={o} />
+        </Card>
+      )}
       <OptimumCompareCard o={o} base={base} />
       <ResultSummaryCard o={o} />
       <ContourCompareCard o={o} />
-      <Card span={9} title="수렴 그래프">
-        <ConvergenceChart opt={o} />
-      </Card>
-      <Card span={9} title="대리모델 품질" aside={<span className="muted small">LOO(하나 빼기) · 등급 Q² ≥ 0.9 좋음 · 0.7~0.9 보통</span>}>
-        <QualityTable iterations={o.iterations as SoIteration[]} />
+      {!multi && (
+        <Card span={9} title="수렴 그래프">
+          <ConvergenceChart opt={o} />
+        </Card>
+      )}
+      <Card span={9} title="대리모델 품질" aside={<span className="muted small">{multi ? "LOO(하나 빼기) · 목적별" : "LOO(하나 빼기) · 등급 Q² ≥ 0.9 좋음 · 0.7~0.9 보통"}</span>}>
+        {multi ? <QualityTableMulti o={o} /> : <QualityTable iterations={o.iterations as SoIteration[]} />}
       </Card>
       <Card span={9} title="검증 run" aside={<button type="button" className="btn small" onClick={() => void downloadCsv()}>CSV 받기</button>}>
-        <RunsTable runs={runs} names={s.names} constraints={s.constraints.map((c) => metricLabel(c.metric, c.series))} best={b} />
+        <RunsTable o={o} optId={optId} runs={runs} names={s.names} best={b} />
       </Card>
       <Card span={9} title="파일 위치">
         <div className="run-action-row">
@@ -145,7 +165,41 @@ function QualityTable({ iterations }: { iterations: SoIteration[] }) {
   );
 }
 
-function RunsTable({ runs, names, constraints, best }: { runs: SoRun[]; names: string[]; constraints: string[]; best: SurrogateOpt["best"] }) {
+/** 다목적 품질 표: 반복 × 목적 행(목적별 모델 — iterations[].fit.per_objective) */
+function QualityTableMulti({ o }: { o: SurrogateOpt }) {
+  const defs = objectiveDefs(o);
+  const rows = (o.iterations as SoIteration[]).flatMap((it) => (it.fit?.per_objective ?? []).map((f, i) => ({ it, f, i })));
+  if (!rows.length) return <p className="muted small">아직 학습한 대리모델이 없습니다.</p>;
+  return (
+    <div className="table-wrap">
+      <table className="table compact" aria-label="대리모델 품질">
+        <thead>
+          <tr><th className="num">반복</th><th>목적</th><th>종류</th><th className="num">n</th><th className="num">LOO RMSE</th><th className="num">NRMSE</th><th className="num">예측-검증 MAE</th></tr>
+        </thead>
+        <tbody>
+          {rows.map(({ it, f, i }) => (
+            <tr key={`${it.iter_no}-${f.metric}-${i}`} data-testid={`fit-${it.iter_no}-${i + 1}`}>
+              <td className="num">{it.iter_no}</td>
+              <td className="small">{defs.find((d) => d.metric === f.metric)?.label ?? defs[i]?.label ?? metricLabel(f.metric)}</td>
+              <td>{f.kind === "gp" ? "GP" : "RBF"}</td>
+              <td className="num">{f.n_train}</td>
+              <td className="num mono">{fmtNum(f.loo_rmse)}</td>
+              <td className="num mono">{fmtNum(f.loo_nrmse, 3)}</td>
+              <td className="num mono">{i === 0 ? fmtNum(it.fit?.pred_vs_verified_mae) : ""}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RunsTable({ o, optId, runs, names, best }: { o: SurrogateOpt; optId: string; runs: SoRun[]; names: string[]; best: SurrogateOpt["best"] }) {
+  const multi = o.mode === "multi";
+  const defs = objectiveDefs(o);
+  const s = o.settings as { constraints: { metric: string; series?: string | null }[] };
+  const cons = o.constraints_def?.length ? o.constraints_def.map((c) => c.label) : s.constraints.map((c) => metricLabel(c.metric, c.series));
+  const obs = o.observe ?? [];
   if (!runs.length) return <p className="muted small">아직 run이 없습니다.</p>;
   return (
     <div className="table-wrap">
@@ -154,9 +208,10 @@ function RunsTable({ runs, names, constraints, best }: { runs: SoRun[]; names: s
           <tr>
             <th className="num">반복</th><th>배치</th><th className="num">DOE #</th>
             {names.map((n) => <th key={n} className="num mono">{n}</th>)}
-            <th className="num">목적</th>
-            {constraints.map((c, i) => <th key={i} className="num">{c}</th>)}
-            <th className="num">예측</th><th>만족</th><th>상태</th>
+            {multi ? defs.map((d) => <th key={d.metric} className="num" title={d.label}>{d.label}</th>) : <th className="num">목적</th>}
+            {cons.map((c, i) => <th key={i} className="num">{c}</th>)}
+            {obs.map((c) => <th key={c.metric} className="num" title={c.label}>{c.label} <span className="muted">관찰</span></th>)}
+            <th className="num">예측</th><th>만족</th>{multi && <th>전선</th>}<th>상태</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -164,15 +219,18 @@ function RunsTable({ runs, names, constraints, best }: { runs: SoRun[]; names: s
             const isBest = !!best && best.batch_id === r.batch_id && best.doe_no === r.doe_no;
             return (
               <tr key={`${r.batch_id}-${r.doe_no}`} className={isBest ? "selected" : ""} data-testid={`run-${r.iter_no}-${r.doe_no}`}>
-                <td className="num">{r.iter_no}</td>
+                <td className="num">{r.kind === "EXTRA" ? KIND_LABEL.EXTRA : r.iter_no}</td>
                 <td>{r.batch_label}</td>
                 <td className="num">{r.doe_no}</td>
                 {names.map((n) => <td key={n} className="num mono">{fmtNum((r.values as Record<string, number>)[n])}</td>)}
-                <td className="num mono">{fmtNum(r.objective)}</td>
-                {constraints.map((_, i) => <td key={i} className="num mono">{fmtNum(r.constraints?.[i] ?? null)}</td>)}
+                {multi ? defs.map((d, i) => <td key={d.metric} className="num mono">{fmtNum(r.objectives?.[i] ?? null)}</td>) : <td className="num mono">{fmtNum(r.objective)}</td>}
+                {cons.map((_, i) => <td key={i} className="num mono">{fmtNum(r.constraints?.[i] ?? null)}</td>)}
+                {obs.map((c) => <td key={c.metric} className="num mono">{fmtNum(r.observed?.[c.metric] ?? null)}</td>)}
                 <td className="num mono muted">{fmtNum(r.predicted)}</td>
                 <td className="small">{r.feasible == null ? "—" : r.feasible ? "만족" : "위반"}</td>
+                {multi && <td className="small">{r.on_front ? <span className="pill ok">전선</span> : ""}</td>}
                 <td className="small"><span className={`pill ${rowTone(r.state as never)}`}>{ROW_STATE_LABEL[r.state as keyof typeof ROW_STATE_LABEL] ?? r.state}</span></td>
+                <td><FemEntryButton source={{ kind: "opt_design", opt_id: optId, pick: "run", iter_no: r.iter_no, doe_no: r.doe_no }} hasResult={r.state === "SUCCEEDED"} /></td>
               </tr>
             );
           })}

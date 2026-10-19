@@ -38,7 +38,7 @@ train_setups = Table(
     Column("updated_by_name", String, nullable=True),
     Column("updated_at", TS, nullable=False, server_default=func.now()),
     Column("version", BigInteger, nullable=False, server_default="1"),
-    Column("engine", String(16), nullable=False, server_default="altair"),  # geometry-engine.md §7.5 (0012)
+    Column("engine", String(16), nullable=False, server_default="altair"),  # geometry-engine.md §7.5 (0015)
     Column("features_rel", String, nullable=True),  # native: parameter_features.json 상대 경로
     CheckConstraint("engine IN ('altair','native')", name="ck_train_setups_engine"),
 )
@@ -67,7 +67,7 @@ train_does = Table(
     Column("created_by", String, nullable=False),
     Column("created_by_name", String, nullable=False),
     Column("created_at", TS, nullable=False, server_default=func.now()),
-    Column("engine", String(16), nullable=False, server_default="altair"),  # geometry-engine.md §7.5 (0012)
+    Column("engine", String(16), nullable=False, server_default="altair"),  # geometry-engine.md §7.5 (0015)
     Column("geom_options", JSONB, nullable=True),  # native: 사용한 유효 옵션 사본
     Column("engine_version", String(32), nullable=True),
     CheckConstraint("engine IN ('altair','native')", name="ck_train_does_engine"),

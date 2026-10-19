@@ -14,8 +14,9 @@ ERR = {403: {"model": S.ErrorResponse}, 422: {"model": S.ErrorResponse}}
 
 
 @router.get("/fs/roots", response_model=S.FsRoots, responses=ERR)
-def fs_roots(request: Request, principal: Principal = Depends(get_principal)) -> dict:
-    return svc.roots(get_ctx(request), principal)
+def fs_roots(request: Request, include_spdm: bool = False, principal: Principal = Depends(get_principal)) -> dict:
+    """include_spdm=true(phase3 §21.3.8 S16): SPDM 루트(설정)를 `SPDM <i>(읽기 전용)` 루트로 덧붙인다."""
+    return svc.roots(get_ctx(request), principal, include_spdm)
 
 
 @router.get("/fs/list", response_model=S.FsList, responses=ERR)

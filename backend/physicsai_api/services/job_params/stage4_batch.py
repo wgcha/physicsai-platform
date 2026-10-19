@@ -18,7 +18,13 @@ from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import resolve_in_study
 from physicsai_core.stage1_train_data import doe_samples
-from physicsai_core.stage4_predict.batch_matrix import BatchMatrix, BatchShapeError, batch_dir_rel, build_matrix_for
+from physicsai_core.stage4_predict.batch_matrix import (
+    BatchMatrix,
+    BatchShapeError,
+    batch_dir_rel,
+    batch_label,
+    build_matrix_for,
+)
 
 from ...context import AppContext
 from ...schemas.contour_capture import BatchCaptureOptions, CaptureDisplay
@@ -59,6 +65,7 @@ def build_matrix(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str
                  ) -> BatchMatrix:
     """source(모양 검사 끝난 dict) → 조합. train_doe는 DOE 상태 확인(409) 후 samples.csv를 읽는다. 모양 오류 → 422."""
     header = rows = None
+    cont = _continue_batch(conn, study, source)
     if source.get("kind") == "train_doe":
         d = train_repo.get_doe(conn, source.get("doe_id") or "")
         if d is None or d["study_id"] != study["id"] or d["status"] != "READY":
@@ -70,9 +77,23 @@ def build_matrix(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str
             raise DomainError("SAMPLES_MISSING", "DOE 샘플 표 파일이 없습니다(Study 정리로 옮겨졌을 수 있습니다)", status=409)
         header, rows = doe_samples.read_samples_csv(path)
     try:
-        return build_matrix_for(source, ps, ctx.settings, samples_header=header, samples=rows)
+        return build_matrix_for(source, ps, ctx.settings, samples_header=header, samples=rows, continue_batch=cont)
     except BatchShapeError as exc:
         raise invalid_at("source", str(exc)) from None
+
+
+def _continue_batch(conn: Any, study: dict[str, Any], source: dict[str, Any]) -> dict[str, Any] | None:
+    """Sobol 이어서 추가(S15 §20.5.3): 같은 Study의 이전 배치 행(id·표시·종류·템플릿·meta·run 값). 없거나 다른 Study면 {"missing": True}."""
+    cid = source.get("continue_from") if source.get("kind") == "sobol" else None
+    if not isinstance(cid, str) or not cid:
+        return None
+    b = pb_repo.get(conn, cid)
+    if b is None or b["study_id"] != study["id"]:
+        return {"missing": True}
+    runs = ([{"doe_no": r["doe_no"], "values": r["values"]} for r in pb_repo.runs(conn, b["id"])]
+            if b["source_kind"] == "SOBOL" else [])
+    return {"id": b["id"], "label": batch_label(b["batch_no"]), "source_kind": b["source_kind"],
+            "param_set_id": b["param_set_id"], "source_meta": b["source_meta"] or {}, "runs": runs}
 
 
 def source_invalid(problems: list[dict[str, Any]]) -> DomainError:

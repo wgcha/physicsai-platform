@@ -77,7 +77,7 @@ function solveRows(srv: MockServer, j: Job): { row: HpcJob; host: RunRec; scx: S
 
 function verifyRow(srv: MockServer, j: Job): { row: HpcJob; scx: ScxRow } | null {
   if (j.state === "QUEUED") return null;
-  const scx = scxRowFor(srv, j as Host, `hj-${j.id}`, j.study_id, `04_V-001_${SCX_TS}`);
+  const scx = scxRowFor(srv, j as Host, `hj-${j.id}`, j.study_id, j.job_type === "FEM_VERIFY" ? `04_FV-${String(j.params.fv_no ?? 1).padStart(3, "0")}_${SCX_TS}` : `04_V-001_${SCX_TS}`);
   const map: Record<string, [string, string]> = { RUNNING: ["RUNNING", "NONE"], COLLECTING: ["SUCCEEDED", "COLLECTING"], SUCCEEDED: ["SUCCEEDED", "COLLECTED"], FAILED: ["FAILED", "NONE"], CANCELED: ["CANCELED", "NONE"], INTERRUPTED: ["FAILED", "NONE"] };
   const [state, collect] = j.state === "WAITING_HPC" ? [scx.state ?? "RUNNING", "NONE"] : map[j.state] ?? ["RUNNING", "NONE"];
   const ext = j.state === "WAITING_HPC" && scx.state === "UNKNOWN" ? null : scx.external_job_id ?? `scx-${j.id}`;
@@ -86,7 +86,8 @@ function verifyRow(srv: MockServer, j: Job): { row: HpcJob; scx: ScxRow } | null
 
 function rowsFor(srv: MockServer, j: Job) {
   if (j.job_type === "TD_SOLVE") return solveRows(srv, j);
-  if (j.job_type === "PREDICT_VERIFY") {
+  // S16: FEM_VERIFY(FEM 검증 잡)도 같은 단일 행(run_key=verify) — 잡 이름만 04_FV-NNN_<ts>
+  if (j.job_type === "PREDICT_VERIFY" || j.job_type === "FEM_VERIFY") {
     const v = verifyRow(srv, j);
     return v ? [{ row: v.row, host: null, scx: v.scx }] : [];
   }

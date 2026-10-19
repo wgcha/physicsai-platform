@@ -201,7 +201,8 @@ def test_v3_s9_batch_create_validation(client, loaded_config, worker_factory):
     cap = s.train_data.max_multi_execution
     assert client.get(f"{API}/status", headers=P).json()["limits"]["configured"]["max_multi_execution"] == cap
     for params, code in [
-        ({"multi_execution": 2, "source": {"kind": "sobol", "count": 3}}, "INVALID_PARAMS"),
+        ({"multi_execution": 2, "source": {"kind": "nope", "count": 3}}, "INVALID_PARAMS"),
+        ({"multi_execution": 2, "source": {"kind": "sobol", "count": 3}}, "BATCH_SOURCE_INVALID"),  # S15: sobol은 2^m
         ({"multi_execution": 2, "source": {"kind": "lhs"}}, "INVALID_PARAMS"),
         ({"multi_execution": 2, "source": {"kind": "table", "text": TABLE, "x": 1}}, "INVALID_PARAMS"),
         ({"multi_execution": 0, "source": {"kind": "table", "text": TABLE}}, "INVALID_PARAMS"),

@@ -103,6 +103,9 @@ _BATCH_DIR_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_\-]{0,63}")  # fullmatch 전�
 def _validate_phase3(s: Settings, issues: list[ConfigIssue]) -> None:
     """3차 키 검증(phase3 §5.9, §14.7, §15)."""
     validate_capture(s, issues)
+    from .schema_fem_verify import validate_fem_verify
+
+    validate_fem_verify(s, issues)
     for k, (lo, hi) in STUDY_STORAGE_RANGES.items():
         if not lo <= getattr(s.study_storage, k) <= hi:
             issues.append(ConfigIssue(f"study_storage.{k}", f"{lo}~{hi}"))

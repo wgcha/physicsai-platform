@@ -8,6 +8,7 @@ from fastapi.responses import Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import surrogate_opt_pareto as pareto_svc
 from ..services import surrogate_opts as svc
 
 router = APIRouter(tags=["surrogate-opts"])
@@ -59,3 +60,10 @@ def cancel_surrogate_opt(opt_id: str, request: Request, principal: Principal = D
 def resume_surrogate_opt(opt_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     """이어서 실행(power, FAILED만): 반복 작업 재시도 또는 배치 실패만 다시."""
     return svc.resume(get_ctx(request), principal, opt_id, request_id(request), client_ip(request))
+
+
+@router.post("/surrogate-opts/{opt_id}/verify", response_model=S.SurrogateOptVerifyResult, status_code=201, responses=ERR)
+def verify_surrogate_opt(opt_id: str, body: S.SurrogateOptVerify, request: Request,
+                         principal: Principal = Depends(get_principal)) -> dict:
+    """추가 검증(power, 등록자 또는 관리자, DONE만 — phase3 §22.7): 고른 해를 최적화 소유 배치(iters EXTRA)로 예측 검증."""
+    return pareto_svc.verify(get_ctx(request), principal, opt_id, body, request_id(request), client_ip(request))

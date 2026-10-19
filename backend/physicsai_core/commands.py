@@ -367,3 +367,60 @@ def render_argv(
         check_value("extra_arg", v, allow_space=False, via_cmd=via_cmd)
         argv.append(v)
     return argv
+
+
+# ---- phase3 §21.4.4 S16: 파생 영상 템플릿(commands 절이 아니라 capture.ffmpeg에서 만든다) ----------------------
+# 실행 파일 placeholder → 펼침용 executables 키(effective_altair 표 밖, capture.ffmpeg.exe·probe_exe)
+VIDEO_EXECUTABLE_PLACEHOLDERS: dict[str, str] = {"ffmpeg": "ffmpeg_exe", "ffprobe": "ffprobe_exe"}
+VIDEO_TEMPLATE_SPECS: dict[str, TemplateSpec] = {
+    "video_transcode": TemplateSpec(frozenset({"video_in", "video_out", "scale", "crf", "fps"}), frozenset(), False),
+    "video_probe": TemplateSpec(frozenset({"video_in"}), frozenset(), False),
+}
+_VIDEO_HEAD = {"video_transcode": "ffmpeg", "video_probe": "ffprobe"}
+
+
+def video_template(capture_cfg: object, key: str) -> list[str] | None:
+    """`video_transcode = ["{ffmpeg}", *capture.ffmpeg.args]`, `video_probe = ["{ffprobe}", *probe_args]`. exe 빈 값 = None."""
+    f = capture_cfg.ffmpeg  # type: ignore[attr-defined]
+    if key == "video_transcode":
+        return ["{ffmpeg}", *f.args] if f.exe else None
+    if key == "video_probe":
+        return ["{ffprobe}", *f.probe_args] if f.probe_exe else None
+    raise KeyError(key)
+
+
+def video_executables(capture_cfg: object) -> dict[str, str]:
+    f = capture_cfg.ffmpeg  # type: ignore[attr-defined]
+    return {"ffmpeg_exe": f.exe, "ffprobe_exe": f.probe_exe}
+
+
+def render_video_argv(key: str, template: Sequence[str] | None, values: Mapping[str, str], *,
+                      executables: Mapping[str, str], is_windows: bool | None = None) -> list[str]:
+    """파생 영상 템플릿 펼침(shell=False argv). argv[0] = {ffmpeg}|{ffprobe}, 나머지는 허용 값 placeholder만."""
+    if template is None:
+        raise StepFailure("TEMPLATE_NOT_CONFIGURED", f"영상 변환 실행 파일이 설정되지 않았습니다({key})")
+    spec = VIDEO_TEMPLATE_SPECS[key]
+    head = _VIDEO_HEAD[key]
+    if not template or template[0] != f"{{{head}}}":
+        raise StepFailure("CONFIG_INVALID", f"'{key}'의 argv[0]은 {{{head}}}여야 합니다")
+    exe = executables.get(VIDEO_EXECUTABLE_PLACEHOLDERS[head]) or ""
+    if not exe:
+        raise StepFailure("EXECUTABLE_MISSING", f"실행 파일 설정 capture.ffmpeg.{'exe' if head == 'ffmpeg' else 'probe_exe'}이 비어 있습니다")
+    check_value(head, exe, allow_space=True)
+    win = is_windows if is_windows is not None else os.name == "nt"
+    argv = [os_path(exe, True) if win else exe]
+    for el in template[1:]:
+        try:
+            names = parse_placeholders(el)
+        except ValueError as exc:
+            raise StepFailure("CONFIG_INVALID", f"'{key}': {exc}") from exc
+        mapping: dict[str, str] = {}
+        for n in names:
+            if n not in spec.placeholders:
+                raise StepFailure("CONFIG_INVALID", f"'{key}'에서 placeholder '{{{n}}}'은 허용되지 않습니다")
+            if n not in values:
+                raise StepFailure("INTERNAL_ERROR", f"placeholder '{{{n}}}' 값이 준비되지 않았습니다")
+            check_value(n, values[n], allow_space=False)
+            mapping[n] = values[n]
+        argv.append(el.format_map(mapping) if names or ("{{" in el or "}}" in el) else el)
+    return argv

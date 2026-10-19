@@ -6,6 +6,7 @@ import { renderApp, STUDY } from "../test/render";
 import { recordCalls } from "../test/recordCalls";
 import { ASSEMBLY_REQUIRED_TEXT } from "../stages/stage5/Stage5";
 import { SO_MODE_KEY, boundNote, buildBody, compareRows, convergence, previewText, qualityGrade, rowIssue, varRows, type SoForm } from "../stages/stage5/surrogate/soRules";
+import { perfRows } from "../stages/stage5/surrogate/perfRules";
 import { seedParamSet } from "../mock/seed";
 import type { MockServer } from "../mock/server";
 
@@ -69,26 +70,26 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     fireEvent.change(within(vars).getByLabelText("THK_TOP 상한"), { target: { value: "1.0" } });
     fireEvent.click(within(vars).getByLabelText("E_FOAM 고정"));
     fireEvent.change(within(vars).getByLabelText("E_FOAM 하한"), { target: { value: "8" } });
-    fireEvent.change(screen.getByLabelText("목적 지표"), { target: { value: "resp:MaxStress_MAX" } });
+    // S17 §22.12: ③ 성능 표 — 역할(목적·제약)을 행마다 고른다
+    fireEvent.change(screen.getByLabelText("MaxStress 역할"), { target: { value: "min" } });
     expect(await screen.findByTestId("so-preview")).toBeTruthy();
     await waitFor(() => expect(screen.getByTestId("so-preview").textContent).toBe("예측 최대 24 run(탐색 12 + 3 × 4) · 예상 53분"));
-    fireEvent.click(screen.getByRole("button", { name: "제약 추가" }));
-    fireEvent.change(screen.getByLabelText("제약 1 지표"), { target: { value: "resp:MaxDisp_MAX" } });
-    fireEvent.change(screen.getByLabelText("제약 1 값"), { target: { value: "14" } });
+    fireEvent.change(screen.getByLabelText("MaxDisp 역할"), { target: { value: "le" } });
+    fireEvent.change(screen.getByLabelText("MaxDisp 값"), { target: { value: "14" } });
     fireEvent.click(radio("대리모델", "RBF"));
     await waitFor(() => expect((screen.getByRole("button", { name: "최적화 시작" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "최적화 시작" }));
     expect(await screen.findByTestId("so-status")).toBeTruthy();
     expect(posts[0]).toMatchObject({
-      param_set_id: "ps-1", explore: { kind: "new", count: null, seed: 1 }, objective: { metric: "resp:MaxStress_MAX", sense: "min" },
-      constraints: [{ metric: "resp:MaxDisp_MAX", op: "<=", value: 14 }], bounds: { THK_TOP: [0.3, 1], E_FOAM: [8, 8] },
+      param_set_id: "ps-1", explore: { kind: "new", count: null, seed: 1 }, objectives: [{ metric: "perf:MaxStress", series: null, sense: "min" }],
+      constraints: [{ metric: "perf:MaxDisp", series: null, op: "<=", value: 14 }], observe: [], bounds: { THK_TOP: [0.3, 1], E_FOAM: [8, 8] },
       surrogate: "rbf", iterations: 3, candidates: 4, tol_rel: 0.01, capture: false,
     });
     expect(screen.getByTestId("so-progress").textContent).toMatch(/^탐색 B-/);
     expect(screen.getByRole("button", { name: "일괄 취소" })).toBeTruthy();
   });
 
-  it("재사용: 같은 템플릿 DONE 배치 드롭다운, 지표 목록 = design-map metrics, 커브 지표면 계열 선택", async () => {
+  it("재사용: 같은 템플릿 DONE 배치 드롭다운, design-map 읽기(커브 계열 후보), 성능 표에 값 있는 run n/N", async () => {
     const { server } = renderApp(`${STUDY}/5`, { user: "power" });
     const calls = recordCalls(server);
     fireEvent.click(await screen.findByRole("tab", { name: /새 최적화/ }));
@@ -96,15 +97,8 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     const sel = (await screen.findByLabelText("재사용 배치")) as HTMLSelectElement;
     expect(sel.options[0].textContent).toMatch(/^B-002 · 20 run · /);
     await waitFor(() => expect(calls.some((c) => /GET \/predict-batches\/.+\/design-map/.test(c))).toBe(true));
-    const dm = server.handle("GET", `/predict-batches/${sel.value}/design-map`, new URLSearchParams(), null, new Headers()).body as {
-      metrics: { id: string }[]; series: string[];
-    };
-    const metric = screen.getByLabelText("목적 지표") as HTMLSelectElement;
-    await waitFor(() => expect([...metric.options].map((o) => o.value)).toEqual(dm.metrics.map((m) => m.id)));
-    expect(metric.value).toBe("curve:max");
-    if (dm.series.length > 1) expect((screen.getByLabelText("커브 계열") as HTMLSelectElement).options.length).toBe(dm.series.length);
-    fireEvent.change(metric, { target: { value: dm.metrics.find((m) => m.id.startsWith("resp:"))!.id } });
-    expect(screen.queryByLabelText("커브 계열")).toBeNull();
+    fireEvent.change(await screen.findByLabelText("MaxStress 역할"), { target: { value: "min" } });
+    await waitFor(() => expect(screen.getByTestId("perf-avail-MaxStress").textContent).toMatch(/^\d+\/\d+/));
   });
 
   it("결과 화면: 최적 설계·링크, 수렴 그래프, 품질 등급, 검증 run 표·CSV, 완료면 취소·이어서 실행 없음", async () => {
@@ -114,7 +108,7 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     expect(screen.getByTestId("so-progress").textContent).toMatch(/^완료 — /);
     const best = screen.getByRole("region", { name: "최적안 — 기준안 대비" });
     expect(within(best).getByTestId("so-best-link").getAttribute("href")).toMatch(/\/stage\/4\/batch\/b-so-so-1-\d$/);
-    expect(within(best).getByText(/PBS 검증 해석/)).toBeTruthy();
+    expect(within(best).getByText(/FEM 검증 버튼으로 조립 상태 해석/)).toBeTruthy();
     // D3-61: 변수마다 학습 범위·기준안(nominal)·최적안·변화
     const cmp = within(best).getByRole("table", { name: "기준안 대비" });
     expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "범위(학습)", "기준안", "최적안", "변화"]);
@@ -202,19 +196,22 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     const rows = varRows(ps);
     expect(rows.find((r) => r.name === "RIB_N")!.integer).toBe(true);
     const f: SoForm = {
-      paramSetId: "ps-1", modelId: null, explore: "reuse", count: "", exploreSeed: "1", batchId: "b-1", metric: "curve:max", series: "Node 100 / Z",
-      sense: "max", constraints: [{ metric: "", op: "<=", value: "" }], rows: rows.map((r) => (r.name === "RIB_N" ? { ...r, fixed: true, lo: "4" } : r)),
+      paramSetId: "ps-1", modelId: null, explore: "reuse", count: "", exploreSeed: "1", batchId: "b-1",
+      sels: { MaxStress: { role: "max", a: "", b: "" }, MaxDisp: { role: "le", a: "", b: "" } }, weights: {},
+      rows: rows.map((r) => (r.name === "RIB_N" ? { ...r, fixed: true, lo: "4" } : r)),
       surrogate: "gp", iterations: "2", candidates: "3", tolPct: "0.5", seed: "7", multi: "2", capture: true,
     };
-    expect(buildBody(f)).toEqual({
-      param_set_id: "ps-1", model_id: null, explore: { kind: "reuse", batch_id: "b-1" }, objective: { metric: "curve:max", series: "Node 100 / Z", sense: "max" },
-      constraints: [], bounds: { RIB_N: [4, 4] }, surrogate: "gp", iterations: 2, candidates: 3, tol_rel: 0.005, seed: 7, multi_execution: 2, capture: true,
+    const perfs = perfRows(ps.responses);
+    expect(buildBody(f, perfs)).toEqual({
+      param_set_id: "ps-1", model_id: null, explore: { kind: "reuse", batch_id: "b-1" }, objectives: [{ metric: "perf:MaxStress", series: null, sense: "max" }],
+      constraints: [], observe: [], bounds: { RIB_N: [4, 4] }, surrogate: "gp", iterations: 2, candidates: 3, tol_rel: 0.005, seed: 7, multi_execution: 2, capture: true,
     });
     expect(rowIssue({ ...rows[3], lo: "3.2", hi: "3.8" })).toBe("정수가 없습니다");
     expect(rowIssue({ ...rows[0], lo: "1", hi: "0.5" })).toBe("하한 ≤ 상한");
     expect(rowIssue(rows[0])).toBeNull();
     expect(previewText({ explore_count: 20, max_total_runs: 32, estimate_min: 70 }, 3, 4)).toBe("예측 최대 32 run(탐색 20 + 3 × 4) · 예상 70분");
     expect(previewText({ explore_count: 0, max_total_runs: 12, estimate_min: null }, 3, 4)).toBe("예측 최대 12 run(재사용 + 3 × 4)");
+    expect(previewText({ explore_count: 20, max_total_runs: 32, estimate_min: 70 }, 3, 4, 2)).toBe("예측 최대 32 run(탐색 20 + 3 × 4) · 예상 70분 · 목적 2개(다목적)");
     expect([qualityGrade(0.95).label, qualityGrade(0.8).label, qualityGrade(0.5).label, qualityGrade(null).label]).toEqual(["좋음", "보통", "낮음", "—"]);
     expect(qualityGrade(0.5).hint).toBe("탐색 run을 늘리세요");
     const c = convergence({

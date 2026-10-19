@@ -12,10 +12,11 @@ import { ParamInputTable, ParamScatter, RangeNote, RoundingNote } from "./ParamI
 import { PredictChain, PredictResultCard, jobInputMode } from "./PredictResult";
 import { PredictSteps } from "./PredictSteps";
 import { inputKindOf } from "./TemplatePicker";
-import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
+import { ModelLine, useModelChoice } from "./predictRun";
+import { useFemVerifyButton } from "./verify/useFemVerifyButton";
+
 import { useSamples } from "./useSamples";
 
-export { PBS_DISABLED_TEXT } from "./predictRun";
 
 export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: ReactNode; aside?: ReactNode }) {
   const { study } = useStudy();
@@ -82,7 +83,7 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
 
   const pjob = predict.job;
   const result = pjob?.state === "SUCCEEDED" ? (pjob.result as unknown as PR | null) : null;
-  const pbs = usePredictVerify(pjob, !!result);
+  const pbs = useFemVerifyButton(pjob ? { kind: "predict_job", job_id: pjob.id } : null, !!result, pjob);
   // 진행 표시: 작업이 기록한 template_kind(서버 확정) → 없으면 지금 템플릿
   const stepKind = (pjob?.params as PredictJobParams | undefined)?.template_kind ?? kind;
 

@@ -1,7 +1,8 @@
-// ④ 템플릿 관리 "응답" 절(phase3.md §14.6): 표(이름·subcase·datatype·component·layer·stat·단위) + "응답 추가" + 행 삭제 + 저장.
-// 추가 줄의 목록은 ⑤ response-candidates API(최근 성공 예측의 H3D_PREVIEW.json)를 재사용 — 없으면 회색 안내 + 직접 입력.
+// ④ 템플릿 관리 "응답" 절(phase3.md §14.6, S17 §22.3): 표(이름·출처·subcase·datatype(커브면 계열)·component·layer·stat·단위) + "응답 추가"(출처 H3D·커브) + 행 삭제 + 저장.
+// 추가 줄의 목록은 ⑤ response-candidates API(최근 성공 예측의 H3D_PREVIEW.json·xydata)를 재사용 — 없으면 회색 안내 + 직접 입력.
 import { useEffect, useState } from "react";
 import { ApiError, api, errorMessage, type ParamSet, type ResponseCandidates, type ResponseStat, type TemplateResponse } from "../../api";
+import { specCells, SRC_LABEL } from "../stage5/surrogate/perfRules";
 import { useStudy } from "../../app/StudyContext";
 import { NAME_RE, suggestName } from "../stage5/ResponseTable";
 import { ComboInput, DEFAULT_RESULT_COMPONENT, DEFAULT_RESULT_FIELD, componentOptions } from "./ComboInput";
@@ -52,8 +53,9 @@ export function ResponseDefs({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }
           <thead>
             <tr>
               <th>이름</th>
+              <th>출처</th>
               <th className="num">subcase</th>
-              <th>datatype</th>
+              <th>datatype · 커브 계열</th>
               <th>component</th>
               <th>layer</th>
               <th>stat</th>
@@ -64,19 +66,22 @@ export function ResponseDefs({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }
           <tbody>
             {!rows.length && (
               <tr>
-                <td colSpan={canEdit ? 8 : 7} className="muted small">
+                <td colSpan={canEdit ? 9 : 8} className="muted small">
                   응답 정의가 없습니다{canEdit ? " — 첫 예측 뒤 아래에서 추가하세요" : ""}.
                 </td>
               </tr>
             )}
-            {rows.map((r, i) => (
+            {rows.map((r, i) => {
+              const c = r.spec ? specCells(r.spec) : null;
+              return (
               <tr key={r.name}>
                 <td className="mono">{r.name}</td>
-                <td className="num">{r.spec?.subcase ?? "—"}</td>
-                <td>{r.spec?.datatype ?? <span className="muted small">추출 정의 없음</span>}</td>
-                <td>{r.spec?.component ?? ""}</td>
-                <td>{r.spec?.layer ?? ""}</td>
-                <td>{r.spec?.stat ?? ""}</td>
+                <td className="small">{r.spec ? SRC_LABEL[r.spec.source] ?? r.spec.source : ""}</td>
+                <td className="num">{c?.subcase || "—"}</td>
+                <td>{c ? c.datatype : <span className="muted small">추출 정의 없음</span>}</td>
+                <td>{c?.component ?? ""}</td>
+                <td>{c?.layer ?? ""}</td>
+                <td>{c?.stat ?? ""}</td>
                 <td className="small">{r.unit}</td>
                 {canEdit && (
                   <td>
@@ -86,7 +91,8 @@ export function ResponseDefs({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }
                   </td>
                 )}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -118,8 +124,22 @@ export function ResponseDefs({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }
 }
 
 /** "응답 추가" 줄: subcase → datatype → component·layer(후보 목록에서 고르기), stat, 단위, 이름 */
-export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseCandidates | null; rows: TemplateResponse[]; onAdd: (r: TemplateResponse) => void }) {
+/** S17 §22.12 커브 계열 후보: xydata 요청(request / component) + 최근 예측의 계열(extra) */
+export function curveSeriesOptions(candidates: ResponseCandidates | null, extra: string[] = []): string[] {
+  const out = [...extra];
+  for (const [req, comps] of Object.entries(candidates?.xydata?.requests ?? {})) {
+    for (const c of comps.length ? comps : [""]) {
+      const s = c ? `${req} / ${c}` : req;
+      if (!out.includes(s)) out.push(s);
+    }
+  }
+  return out;
+}
+
+export function ResponseAdd({ candidates, rows, onAdd, seriesHints = [] }: { candidates: ResponseCandidates | null; rows: TemplateResponse[]; onAdd: (r: TemplateResponse) => void; seriesHints?: string[] }) {
   const h3d = candidates?.h3d ?? null;
+  const [src, setSrc] = useState<"H3D" | "CURVE">("H3D");
+  const [series, setSeries] = useState("");
   const [subcase, setSubcase] = useState("1");
   const [datatype, setDatatype] = useState("");
   const [component, setComponent] = useState("");
@@ -155,6 +175,22 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
   const taken = rows.map((r) => r.name);
   const nameVal = nameTouched ? name : suggestName(dtVal || "RESP", taken);
 
+  const seriesOpts = curveSeriesOptions(candidates, seriesHints);
+  const curveName = nameTouched ? name : suggestName(series.trim() ? series.replace(/[^A-Za-z0-9]+/g, "_") || "CURVE" : "CURVE", taken);
+  const addCurve = () => {
+    setError(null);
+    const sName = series.trim();
+    if ([curveName, sName, unit].some((s) => s.includes("|"))) return setError("문자 | 는 쓸 수 없습니다");
+    if ([...sName].some((ch) => ch.charCodeAt(0) < 32)) return setError("계열 이름에 제어 문자는 쓸 수 없습니다");
+    if (sName.length > 200) return setError("계열 이름은 200자 이하");
+    if (!NAME_RE.test(curveName) || curveName.length > 64) return setError("이름은 영문자로 시작하는 영문·숫자·_ (64자 이하)");
+    if (taken.some((t) => t.toLowerCase() === curveName.toLowerCase())) return setError("같은 이름이 있습니다");
+    onAdd({ name: curveName, unit: unit.trim(), spec: { source: "CURVE", series: sName === "" ? null : sName, stat } });
+    setNameTouched(false);
+    setName("");
+    setUnit("");
+    setSeries("");
+  };
   const add = () => {
     setError(null);
     if ([nameVal, dtVal, compVal, layerVal, unit].some((s) => s.includes("|"))) return setError("문자 | 는 쓸 수 없습니다");
@@ -185,26 +221,37 @@ export function ResponseAdd({ candidates, rows, onAdd }: { candidates: ResponseC
   return (
     <div className="resp-add">
       <div className="resp-add-row" role="group" aria-label="응답 추가">
-        {sel("subcase", sc ? String(sc.id) : subcase, h3d ? h3d.subcases.map((x) => String(x.id)) : null, setSubcase, "narrow")}
-        <ComboInput id="resp-add-dt" label="datatype" value={dtVal} options={dts.map((d) => d.name)} onChange={onDatatype} placeholder={DEFAULT_RESULT_FIELD} />
-        <ComboInput id="resp-add-comp" label="component" value={compVal} options={comps} onChange={setComponent} placeholder={compHint} />
-        {sel("layer", layerVal, layers, setLayer, "narrow")}
+        <select aria-label="출처" className="narrow" value={src} onChange={(e) => setSrc(e.target.value as "H3D" | "CURVE")}>
+          <option value="H3D">H3D</option>
+          <option value="CURVE">커브</option>
+        </select>
+        {src === "H3D" ? (
+          <>
+            {sel("subcase", sc ? String(sc.id) : subcase, h3d ? h3d.subcases.map((x) => String(x.id)) : null, setSubcase, "narrow")}
+            <ComboInput id="resp-add-dt" label="datatype" value={dtVal} options={dts.map((d) => d.name)} onChange={onDatatype} placeholder={DEFAULT_RESULT_FIELD} />
+            <ComboInput id="resp-add-comp" label="component" value={compVal} options={comps} onChange={setComponent} placeholder={compHint} />
+            {sel("layer", layerVal, layers, setLayer, "narrow")}
+          </>
+        ) : (
+          <ComboInput id="resp-add-series" label="커브 계열" value={series} options={seriesOpts} onChange={setSeries} placeholder="비우면 첫 계열" />
+        )}
         {sel("stat", stat, STATS, (v) => setStat(v as ResponseStat), "narrow")}
         <input aria-label="단위" className="narrow" value={unit} placeholder="단위" onChange={(e) => setUnit(e.target.value)} />
         <input
           aria-label="응답 이름"
           className="mono"
-          value={nameVal}
+          value={src === "H3D" ? nameVal : curveName}
           onChange={(e) => {
             setNameTouched(true);
             setName(e.target.value);
           }}
         />
-        <button type="button" className="btn small" onClick={add}>
+        <button type="button" className="btn small" onClick={src === "H3D" ? add : addCurve}>
           응답 추가
         </button>
       </div>
-      {!dts.length && (
+      {src === "CURVE" && <p className="muted small" data-testid="curve-hint">커브 성능은 예측 run의 curve.json 계열 1개의 대표값(최대·최소·|최대|)입니다.</p>}
+      {src === "H3D" && !dts.length && (
         <p className="muted small" data-testid="no-candidates">
           {NO_CANDIDATES_TEXT} — {TYPE_HINT_TEXT}.
         </p>

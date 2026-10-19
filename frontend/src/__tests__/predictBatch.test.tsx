@@ -1,18 +1,15 @@
 // V3-S9-14·17·18(화면, phase3.md §14.8·§14.9): 입력 방식 3개·기억, A 템플릿 요청 body·mesh_only 진행 단계, 템플릿 관리(조립 "없음"·응답 추가),
-// B 미리보기·실행 body, 결과 표 정렬·행 선택·실패만 다시, 응답 그래프 선택 규칙(2D·3D·안내), 커브 강조, 다운샘플. 목 서버(mock/predictBatch.ts) 기준.
+// B 미리보기·실행 body, 결과 표 정렬·행 선택·실패만 다시, ⑤ 링크 카드, 다운샘플. (응답 그래프·커브 화면 시험은 S14로 analysisScreen.test.tsx에 있다) 목 서버(mock/predictBatch.ts) 기준.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
 import { ok } from "../mock/route";
 import { downsampleMinMax } from "../lib/downsample";
-import { PLOT_HINT, plotKind, sortRows } from "../stages/stage4/batch/batchTable";
-import { overlayLines } from "../stages/stage4/batch/CurveOverlay";
-import { NO_WEBGL_TEXT } from "../stages/stage4/batch/ResponsePlot3D";
+import { plotKind, sortRows } from "../stages/stage4/batch/batchTable";
+import { overlayLines } from "../analysis/viz/CurveOverlay";
 import type { BatchCurves, PredictBatchRow } from "../api";
-
-const plotly = vi.hoisted(() => ({ react: vi.fn(async (el: HTMLElement) => el), purge: vi.fn() }));
-vi.mock("plotly.js-gl3d-dist-min", () => ({ default: plotly }));
+import { DESCRIPTIONS, SAMPLING_LABEL } from "../lib/sampling";
 
 const KEY = "physicsai.stage4.inputMode";
 const BATCH = `${STUDY}/4/batch/pb-2`;
@@ -27,6 +24,8 @@ function record(server: MockServer, re: RegExp, method = "POST") {
   };
   return bodies;
 }
+/** S15: 표본 방식 드롭다운에서 kind 고르기(기본은 최적화 LHS) */
+const pickKind = (setup: HTMLElement, kind: string) => fireEvent.change(within(setup).getByLabelText("표본 방식"), { target: { value: kind } });
 const radio = (name: string) => screen.findByRole("radio", { name }) as Promise<HTMLInputElement>;
 const stepLabels = () =>
   within(screen.getByRole("list", { name: "예측 실행 단계" }))
@@ -245,7 +244,9 @@ describe("④ B 일괄 예측 설정 (V3-S9-14)", () => {
     const previews = record(server, /\/predict-batches\/preview$/);
     const jobs = record(server, /\/studies\/[^/]+\/jobs$/);
     const setup = await screen.findByRole("region", { name: "1 템플릿·조합" });
-    expect((await radio("범위·개수로 자동(LHS)")).checked).toBe(true);
+    expect((within(setup).getByLabelText("표본 방식") as HTMLSelectElement).value).toBe("lhs_opt"); // S15: 기본 = 최적화 LHS(추천)
+    pickKind(setup, "lhs"); // 기존 LHS body 불변(V3-S9-14)
+    expect(within(setup).getByRole("option", { name: "LHS(무작위 층화)" })).toBeTruthy();
     const run = screen.getByRole("button", { name: "입력 생성 + 일괄 예측 실행" }) as HTMLButtonElement;
     expect(run.disabled).toBe(true); // 미리보기 전
     fireEvent.change(within(setup).getByLabelText("THK_TOP 최대"), { target: { value: "1.5" } });
@@ -294,8 +295,8 @@ describe("④ B 일괄 예측 설정 (V3-S9-14)", () => {
 
   it("표 붙여넣기: 머리 줄 오류는 회색 problems, 고치면 미리보기", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
-    fireEvent.click(await radio("표 붙여넣기 / CSV"));
-    const setup = screen.getByRole("region", { name: "1 템플릿·조합" });
+    const setup = await screen.findByRole("region", { name: "1 템플릿·조합" });
+    pickKind(setup, "table");
     const ta = within(setup).getByLabelText(/조합 표/);
     fireEvent.change(ta, { target: { value: "THK_TOP\tRIB_N\n0.5\t4\n" } });
     fireEvent.click(within(setup).getByRole("button", { name: "조합 만들기" }));
@@ -313,12 +314,224 @@ describe("④ B 일괄 예측 설정 (V3-S9-14)", () => {
 
   it("① 학습 DOE 재사용: 파라미터 이름이 다르면 DOE_PARAM_MISMATCH 안내", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
-    fireEvent.click(await radio("① 학습 DOE 그대로 재사용"));
-    const setup = screen.getByRole("region", { name: "1 템플릿·조합" });
+    const setup = await screen.findByRole("region", { name: "1 템플릿·조합" });
+    pickKind(setup, "train_doe");
     await waitFor(() => expect((within(setup).getByLabelText("① 학습 DOE") as HTMLSelectElement).value).toBe("doe-1"));
     fireEvent.click(within(setup).getByRole("button", { name: "조합 만들기" }));
     expect((await screen.findByTestId("batch-problems")).textContent).toContain("템플릿 파라미터");
     expect((screen.getByRole("button", { name: "입력 생성 + 일괄 예측 실행" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
+describe("④ B 표본 방식 (V3-S15-12)", () => {
+  beforeEach(() => localStorage.setItem(KEY, "batch"));
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+  const NAMES4 = ["THK_TOP", "THK_FOAM", "E_FOAM", "RIB_N"];
+  const open = async () => {
+    const r = renderApp(`${STUDY}/4`, { user: "power" });
+    const setup = await screen.findByRole("region", { name: "1 템플릿·조합" });
+    const previews = record(r.server, /\/predict-batches\/preview$/);
+    return { ...r, setup, previews };
+  };
+  const make = async (setup: HTMLElement) => {
+    fireEvent.click(within(setup).getByRole("button", { name: "조합 만들기" }));
+    await screen.findByTestId("preview-sampling");
+  };
+
+  it("드롭다운: 4묶음·10방식 순서, 기본 최적화 LHS + 추천 배지 + 설명 4줄(계약 문구)·권장 run 계산값, 저장하지 않음, 고를 때마다 설명이 바뀐다", async () => {
+    const { setup } = await open();
+    const sel = within(setup).getByLabelText("표본 방식") as HTMLSelectElement;
+    expect(sel.value).toBe("lhs_opt");
+    const groups = [...sel.querySelectorAll("optgroup")];
+    expect(groups.map((g) => [g.label, [...g.querySelectorAll("option")].map((o) => o.value)])).toEqual([
+      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "lhs"]],
+      ["요인 설계(경향·선별)", ["fullfact", "fracfact", "pb"]],
+      ["2차 응답면", ["bbd", "ccd"]],
+      ["직접 지정", ["table", "train_doe"]],
+    ]);
+    expect([...sel.options].map((o) => o.textContent)).toEqual([
+      "최적화 LHS · 추천", "Sobol(스크램블 QMC)", "LHS(무작위 층화)", "전체 요인", "부분 요인(2수준)", "Plackett–Burman", "Box–Behnken", "중심 합성(CCD)", "표 붙여넣기 / CSV", "① 학습 DOE 그대로 재사용",
+    ]);
+    const desc = () => within(setup).getByTestId("samp-desc");
+    expect(desc().getAttribute("data-desc-id")).toBe("lhs_opt");
+    expect(within(desc()).getByTestId("samp-badge").textContent).toBe("추천");
+    expect([1, 2, 3, 4].map((n) => within(desc()).getByTestId(`samp-line-${n}`).firstChild!.textContent)).toEqual(DESCRIPTIONS.lhs_opt.lines);
+    expect(within(desc()).getByTestId("samp-calc").textContent!.trim()).toBe("현재 변수 4개 → 권장 40");
+    expect((within(setup).getByLabelText("조합 수") as HTMLInputElement).value).toBe("40"); // 기본 = 권장 계산값
+    expect(Object.keys(localStorage).filter((k) => /sampl|method/i.test(k))).toEqual([]);
+    fireEvent.change(sel, { target: { value: "sobol" } });
+    expect(desc().getAttribute("data-desc-id")).toBe("sobol");
+    expect(within(desc()).queryByTestId("samp-badge")).toBeNull(); // 추천 배지는 최적화 LHS만
+    expect(within(desc()).getByTestId("samp-line-2").textContent).toBe(DESCRIPTIONS.sobol.lines[1]);
+    fireEvent.change(sel, { target: { value: "bbd" } });
+    expect(within(desc()).getByTestId("samp-calc").textContent!.trim()).toBe("현재 변수 4개 → 25 run");
+    fireEvent.change(sel, { target: { value: "table" } });
+    expect(desc().getAttribute("data-desc-id")).toBe("table");
+    expect(within(desc()).queryByTestId("samp-calc")).toBeNull();
+    expect(SAMPLING_LABEL.table).toBe("표 붙여넣기 / CSV");
+  });
+
+  it("최적화 LHS: body(범위는 고친 변수만, 기준 세그먼트), 미리보기 머리 '실제 run N개 · 방식' + quality, 7개 kind 모두 같은 규칙", async () => {
+    const { setup, previews } = await open();
+    fireEvent.change(within(setup).getByLabelText("THK_TOP 최대"), { target: { value: "1.5" } });
+    fireEvent.change(within(setup).getByLabelText("조합 수"), { target: { value: "12" } });
+    fireEvent.click(within(setup).getByRole("button", { name: "상관 최소" }));
+    await make(setup);
+    expect(previews[0]).toEqual({ param_set_id: "ps-1", source: { kind: "lhs_opt", count: 12, seed: 1, ranges: { THK_TOP: [0.3, 1.5] }, criterion: "corr" } });
+    expect(screen.getByTestId("preview-sampling").textContent).toContain("실제 run 12개 · 최적화 LHS");
+    expect(screen.getByTestId("preview-quality").textContent).toMatch(/최소 거리 [\d.]+ · 최대 상관 [\d.]+/);
+    expect(within(screen.getByRole("table", { name: "조합 미리보기" })).getAllByRole("row")).toHaveLength(13); // 머리 + 12행(20행 이하)
+    // 범위를 고치지 않으면 ranges null, 조합 수는 권장값을 따라간다
+    fireEvent.change(within(setup).getByLabelText("THK_TOP 최대"), { target: { value: "1.2" } });
+    fireEvent.change(within(setup).getByLabelText("조합 수"), { target: { value: "40" } });
+    fireEvent.click(within(setup).getByRole("button", { name: "최소 거리" }));
+    await make(setup);
+    expect(previews[1].source).toEqual({ kind: "lhs_opt", count: 40, seed: 1, ranges: null, criterion: "maximin" });
+  });
+
+  it("Sobol: run 수 드롭다운(2^m, 기본 권장 64), 시드, body, 2의 거듭제곱이 아니면 서버 problems(COUNT_NOT_POW2)", async () => {
+    const { server, setup, previews } = await open();
+    fireEvent.change(within(setup).getByLabelText("표본 방식"), { target: { value: "sobol" } });
+    const cnt = within(setup).getByLabelText("run 수") as HTMLSelectElement;
+    expect([...cnt.options].map((o) => o.value)).toEqual(["4", "8", "16", "32", "64", "128"]);
+    expect(cnt.value).toBe("64");
+    fireEvent.change(cnt, { target: { value: "16" } });
+    fireEvent.change(within(setup).getByLabelText("시드"), { target: { value: "5" } });
+    await make(setup);
+    expect(previews[0].source).toEqual({ kind: "sobol", count: 16, seed: 5, ranges: null, continue_from: null });
+    expect(screen.getByTestId("preview-sampling").textContent).toContain("실제 run 16개 · Sobol(스크램블 QMC)");
+    // 서버가 막는 조합: 목에서 직접 확인(드롭다운은 2^m만 허용)
+    const r = server.handle("POST", "/studies/s-cushion/predict-batches/preview", new URLSearchParams(), { param_set_id: "ps-1", source: { kind: "sobol", count: 12, seed: 1, ranges: null, continue_from: null } }, new Headers({ "X-PhysicsAI-Request": "1" }));
+    expect((r.body as { problems: { code: string }[] }).problems.map((p) => p.code)).toEqual(["COUNT_NOT_POW2"]);
+    expect((r.body as { sampling: { kind: string } }).sampling.kind).toBe("sobol"); // problems가 있어도 sampling은 채운다
+  });
+
+  it("Sobol 이어서 추가: 같은 템플릿 Sobol 배치만 후보, 범위·시드 비활성(이전 값), run 수 기본 = 이전 합계, body, 미리보기 notes", async () => {
+    const r = renderApp(`${STUDY}/4`, { user: "power" }, (srv) => {
+      // 시드 배치 B-002(LHS) → Sobol 16개·시드 3으로 바꿔 후보로 만든다
+      const b = srv.batches.find((x) => x.id === "pb-2")!;
+      b.source_kind = "SOBOL";
+      b.meta = { count: 16, m: 4, seed: 3, offset: 0, scramble: true, continue_from: null, generator: "scipy 1.17.1", active: NAMES4, fixed: [], ranges: { THK_TOP: [0.3, 1.1], THK_FOAM: [1, 3], E_FOAM: [2, 20], RIB_N: [2, 8] } };
+    });
+    const setup = await screen.findByRole("region", { name: "1 템플릿·조합" });
+    const previews = record(r.server, /\/predict-batches\/preview$/);
+    fireEvent.change(within(setup).getByLabelText("표본 방식"), { target: { value: "sobol" } });
+    const check = within(setup).getByRole("checkbox", { name: "이전 Sobol 배치에 이어서 추가" }) as HTMLInputElement;
+    await waitFor(() => expect(check.disabled).toBe(false));
+    fireEvent.click(check);
+    const pick = within(setup).getByLabelText("이어서 추가할 배치") as HTMLSelectElement;
+    expect([...pick.options].map((o) => o.textContent)).toEqual(["B-002 · 16개 · 시드 3"]);
+    expect((within(setup).getByLabelText("시드") as HTMLInputElement).disabled).toBe(true);
+    expect((within(setup).getByLabelText("시드") as HTMLInputElement).value).toBe("3");
+    await waitFor(() => expect((within(setup).getByLabelText("THK_TOP 최대") as HTMLInputElement).value).toBe("1.1")); // 이전 범위를 보여 준다
+    expect((within(setup).getByLabelText("THK_TOP 최대") as HTMLInputElement).disabled).toBe(true);
+    expect((within(setup).getByLabelText("run 수") as HTMLSelectElement).value).toBe("16"); // 이전 합계
+    await make(setup);
+    expect(previews[0].source).toEqual({ kind: "sobol", count: 16, seed: null, ranges: null, continue_from: "pb-2" });
+    expect(screen.getByTestId("preview-note").textContent).toBe("B-002과 합치면 32개(균형 유지)");
+    // 체크를 끄면 다시 새 수열(시드·범위 입력 활성)
+    fireEvent.click(check);
+    expect((within(setup).getByLabelText("시드") as HTMLInputElement).disabled).toBe(false);
+  });
+
+  it("Sobol 이어서 추가 후보가 없으면 체크 비활성 + 안내(LHS 배치는 후보가 아님)", async () => {
+    const { setup } = await open();
+    fireEvent.change(within(setup).getByLabelText("표본 방식"), { target: { value: "sobol" } });
+    await waitFor(() => expect(within(setup).getByText("같은 템플릿의 Sobol 배치가 없습니다.")).toBeTruthy());
+    expect((within(setup).getByRole("checkbox", { name: "이전 Sobol 배치에 이어서 추가" }) as HTMLInputElement).disabled).toBe(true);
+  });
+
+  it("전체 요인: 범위 표 '수준' 열(기본 3^k ≤ R이면 3), 곱 run 수 표시, body levels, 상한 초과는 안내", async () => {
+    const { setup, previews } = await open();
+    fireEvent.change(within(setup).getByLabelText("표본 방식"), { target: { value: "fullfact" } });
+    expect(NAMES4.map((n) => (within(setup).getByLabelText(`${n} 수준`) as HTMLInputElement).value)).toEqual(["3", "3", "3", "3"]);
+    expect(within(setup).getByTestId("fullfact-runs").textContent).toContain("3 × 3 × 3 × 3 = 81");
+    fireEvent.change(within(setup).getByLabelText("RIB_N 수준"), { target: { value: "2" } });
+    expect(within(setup).getByTestId("fullfact-runs").textContent).toContain("= 54");
+    await make(setup);
+    expect(previews[0].source).toEqual({ kind: "fullfact", levels: { THK_TOP: 3, THK_FOAM: 3, E_FOAM: 3, RIB_N: 2 }, ranges: null });
+    expect(screen.getByTestId("preview-sampling").textContent).toContain("실제 run 54개 · 전체 요인");
+    fireEvent.change(within(setup).getByLabelText("RIB_N 수준"), { target: { value: "10" } });
+    expect(within(setup).getByTestId("fullfact-runs").textContent).toContain("상한 200개 초과");
+  });
+
+  it("부분 요인 해상도 V(기본)·IV, CCD α 면중심(기본)·내접, PB·BBD는 범위 표만 — kind별 body와 run 수", async () => {
+    const { setup, previews } = await open();
+    const sel = within(setup).getByLabelText("표본 방식");
+    fireEvent.change(sel, { target: { value: "fracfact" } });
+    expect(within(setup).getByRole("button", { name: "V" }).getAttribute("aria-pressed")).toBe("true");
+    await make(setup);
+    fireEvent.click(within(setup).getByRole("button", { name: "IV" }));
+    await make(setup);
+    expect(previews.map((p) => p.source)).toEqual([{ kind: "fracfact", resolution: 5, ranges: null }, { kind: "fracfact", resolution: 4, ranges: null }]);
+    expect(screen.getByTestId("preview-sampling").textContent).toContain("실제 run 8개"); // k = 4, 해상도 IV
+    expect(screen.getByTestId("samp-calc").textContent!.trim()).toBe("현재 변수 4개 · 해상도 IV → 8 run");
+    fireEvent.change(sel, { target: { value: "ccd" } });
+    expect(within(setup).getByRole("button", { name: "면중심" }).getAttribute("aria-pressed")).toBe("true");
+    fireEvent.click(within(setup).getByRole("button", { name: "내접" }));
+    await make(setup);
+    expect(previews[2].source).toEqual({ kind: "ccd", alpha: "inscribed", ranges: null });
+    expect(screen.getByTestId("preview-sampling").textContent).toContain("실제 run 25개");
+    for (const [kind, runs] of [["pb", 8], ["bbd", 25]] as const) {
+      fireEvent.change(sel, { target: { value: kind } });
+      expect(within(setup).queryByRole("group", { name: "해상도" })).toBeNull();
+      await make(setup);
+      expect(previews[previews.length - 1].source).toEqual({ kind, ranges: null });
+      expect(screen.getByTestId("preview-sampling").textContent).toContain(`실제 run ${runs}개`);
+    }
+  });
+
+  it("미리보기 notes: run 부족 안내는 회색 줄, 범위 오류(RANGE_INVALID)·변수 수 밖(DESIGN_UNSUPPORTED)은 problems", async () => {
+    const { setup } = await open();
+    fireEvent.change(within(setup).getByLabelText("조합 수"), { target: { value: "4" } });
+    await make(setup);
+    expect(screen.getAllByTestId("preview-note").map((n) => n.textContent)).toEqual(["run이 6개보다 적어 ⑤ 영향도는 계산되지 않습니다"]);
+    fireEvent.change(within(setup).getByLabelText("THK_TOP 최대"), { target: { value: "0.3" } }); // 최소 = 최대
+    fireEvent.click(within(setup).getByRole("button", { name: "조합 만들기" }));
+    await waitFor(() => expect(screen.getByTestId("batch-problems").textContent).toContain("THK_TOP 범위는 최소 < 최대"));
+  });
+
+  it("Box–Behnken은 변수 3개 이상: 템플릿 변수가 2개면 DESIGN_UNSUPPORTED 안내", async () => {
+    renderApp(`${STUDY}/4`, { user: "power" }, (srv) => {
+      srv.paramSets[0].parameters = srv.paramSets[0].parameters.slice(0, 2);
+    });
+    const setup = await screen.findByRole("region", { name: "1 템플릿·조합" });
+    pickKind(setup, "bbd");
+    fireEvent.click(within(setup).getByRole("button", { name: "조합 만들기" }));
+    expect((await screen.findByTestId("batch-problems")).textContent).toContain("Box–Behnken은 범위가 있는 변수가 3개 이상이어야 합니다");
+  });
+
+  it("작업 생성 body = 미리본 source, DB source_kind·sampling(상세)·목록 sampling, 배치 결과 머리 '표본: …'", async () => {
+    const { server, setup, previews } = await open();
+    const jobs = record(server, /\/studies\/[^/]+\/jobs$/);
+    fireEvent.change(within(setup).getByLabelText("표본 방식"), { target: { value: "sobol" } });
+    fireEvent.change(within(setup).getByLabelText("run 수"), { target: { value: "16" } });
+    await make(setup);
+    const run = screen.getByRole("button", { name: "입력 생성 + 일괄 예측 실행" }) as HTMLButtonElement;
+    fireEvent.change(screen.getByLabelText(/입력 생성 동시 실행 수/), { target: { value: "2" } });
+    await waitFor(() => expect(run.disabled).toBe(false));
+    fireEvent.click(run);
+    await waitFor(() => expect(jobs).toHaveLength(1));
+    expect((jobs[0].params as { source: unknown }).source).toEqual(previews[0].source);
+    expect(await screen.findByRole("region", { name: "결과 표 — B-003" })).toBeTruthy();
+    expect(server.batches.find((b) => b.batch_no === 3)!.source_kind).toBe("SOBOL");
+    expect((await screen.findByTestId("batch-sampling")).textContent).toBe("표본: Sobol 16개 · 시드 1");
+    const d = server.handle("GET", "/predict-batches/" + server.batches.find((b) => b.batch_no === 3)!.id, new URLSearchParams(), null, new Headers()).body as { sampling: { influence_class: string; kind: string } };
+    expect(d.sampling).toMatchObject({ kind: "sobol", influence_class: "formal" });
+    const list = server.handle("GET", "/studies/s-cushion/predict-batches", new URLSearchParams(), null, new Headers()).body as { label: string; sampling: unknown }[];
+    expect(list.find((b) => b.label === "B-003")!.sampling).toMatchObject({ kind: "sobol", count: 16, seed: 1, offset: 0 });
+  });
+
+  it("배치 결과 머리: 이어서 추가·부분 요인 요약 문구", async () => {
+    renderApp(BATCH, { user: "power" }, (srv) => {
+      const b = srv.batches.find((x) => x.id === "pb-2")!;
+      b.source_kind = "SOBOL";
+      b.meta = { count: 16, seed: 3, offset: 16, continue_from: { batch_id: "pb-1", label: "B-001" }, active: NAMES4, fixed: [], ranges: {} };
+    });
+    expect((await screen.findByTestId("batch-sampling")).textContent).toBe("표본: Sobol 16개 · 시드 3 · B-001에 이어서");
   });
 });
 
@@ -366,60 +579,14 @@ describe("④ B 결과 표·그래프·커브 (V3-S9-14·18)", () => {
     expect(await screen.findByAltText(/^예측 컨투어 — /)).toBeTruthy();
   });
 
-  it("응답 그래프 선택 규칙: 변수 1+응답 1 = 2D, 변수 2+응답 1 = 3D(plotly 동적 import), 그 밖 = 회색 안내", async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => ({})) as never);
+  it("S14: 그래프 카드 대신 '⑤ 결과분석에서 열기' 링크 카드(/stage/analysis?source=batch&id=…), ④에는 분석 그래프·커브 카드 없음", async () => {
     renderApp(BATCH, { user: "power" });
     await screen.findByRole("region", { name: "결과 표 — B-002" });
-    const plot = screen.getByRole("region", { name: "응답 그래프" });
-    // 기본: 첫 파라미터 체크 + 첫 응답 → 2D 점 18개(값 있는 run)
-    expect(((await screen.findByRole("checkbox", { name: "THK_TOP" })) as HTMLInputElement).checked).toBe(true);
-    expect((screen.getByRole("radio", { name: "MaxStress" }) as HTMLInputElement).checked).toBe(true);
-    expect(within(plot).getByTestId("plot2d")).toBeTruthy();
-    expect(within(plot).getAllByRole("button", { name: /^점 DOE #\d+$/ })).toHaveLength(18);
-    // 점 클릭 = 행 선택
-    fireEvent.click(within(plot).getByRole("button", { name: "점 DOE #3" }));
-    expect(await screen.findByRole("region", { name: "DOE #3" })).toBeTruthy();
-    // 응답 바꾸기
-    fireEvent.click(screen.getByRole("radio", { name: "MaxDisp" }));
-    expect(within(plot).getByRole("img").getAttribute("aria-label")).toBe("응답 그래프 2D: THK_TOP – MaxDisp");
-    // 변수 2개 → 3D
-    fireEvent.click(screen.getByRole("checkbox", { name: "RIB_N" }));
-    expect(await within(plot).findByTestId("plot3d")).toBeTruthy();
-    await waitFor(() => expect(plotly.react).toHaveBeenCalled());
-    const [, data] = plotly.react.mock.calls[plotly.react.mock.calls.length - 1] as unknown as [HTMLElement, Record<string, unknown>[]];
-    expect(data[0].type).toBe("scatter3d");
-    expect((data[0].customdata as number[]).length).toBe(18);
-    fireEvent.click(within(plot).getByRole("checkbox", { name: "보간면" }));
-    await waitFor(() => expect(((plotly.react.mock.calls[plotly.react.mock.calls.length - 1] as unknown[])[1] as Record<string, unknown>[])[1]).toMatchObject({ type: "mesh3d", delaunayaxis: "z" }));
-    // 변수 3개 → 안내
-    fireEvent.click(screen.getByRole("checkbox", { name: "E_FOAM" }));
-    expect(within(plot).getByTestId("plot-hint").textContent).toBe(PLOT_HINT);
-    expect(within(plot).getByTestId("plot-hint").className).toContain("muted");
-    // 변수 0개 → 안내
-    for (const n of ["THK_TOP", "RIB_N", "E_FOAM"]) fireEvent.click(screen.getByRole("checkbox", { name: n }));
-    expect(within(plot).getByTestId("plot-hint").textContent).toBe(PLOT_HINT);
-  });
-
-  it("WebGL이 없으면 3D 자리에 안내 한 줄", async () => {
-    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation((() => null) as never);
-    renderApp(BATCH, { user: "power" });
-    await screen.findByRole("region", { name: "결과 표 — B-002" });
-    fireEvent.click(await screen.findByRole("checkbox", { name: "RIB_N" }));
-    expect((await screen.findByTestId("plot3d-nogl")).textContent).toBe(NO_WEBGL_TEXT);
-  });
-
-  it("커브 겹쳐보기: 완료 run 모두 흐리게, 고른 run만 진하게(표에서 바꾸면 따라감)", async () => {
-    renderApp(BATCH, { user: "power" });
-    await screen.findByRole("region", { name: "결과 표 — B-002" });
-    const curves = screen.getByRole("region", { name: "커브 겹쳐보기" });
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay").length).toBe(18));
-    fireEvent.click(screen.getByRole("button", { name: "DOE #9 선택" }));
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay.on").length).toBe(1));
-    const on = curves.querySelector("path.overlay.on")!;
-    expect(on).toBe(curves.querySelectorAll("path.overlay")[17]); // 맨 위(마지막)에 그린다
-    expect(within(curves).getByLabelText("계열")).toBeTruthy(); // 계열 2개 → 드롭다운
-    fireEvent.click(screen.getByRole("button", { name: "DOE #1 선택" }));
-    await waitFor(() => expect(curves.querySelectorAll("path.overlay.on").length).toBe(1));
+    const card = screen.getByRole("region", { name: "결과분석" });
+    expect(within(card).getByTestId("analysis-link").getAttribute("href")).toBe(`${STUDY}/analysis?source=batch&id=pb-2`);
+    expect(screen.queryByRole("region", { name: "응답 그래프" })).toBeNull();
+    expect(screen.queryByRole("region", { name: "커브 겹쳐보기" })).toBeNull();
+    expect(screen.queryByRole("checkbox", { name: "THK_TOP" })).toBeNull(); // 그래프 변수 체크는 ⑤로 이동
   });
 
   it("진행 중 배치: 실행 중·대기 수, 일괄 취소(확인) → 하위 대기 작업 취소", async () => {

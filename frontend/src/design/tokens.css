@@ -114,7 +114,7 @@
   --font-r-medium: 500 var(--r-size) / var(--r-line) var(--sans);
   --font-r-strong: 600 var(--r-size) / var(--r-line) var(--sans);
   --font-r-mono: 400 var(--r-size) / var(--r-line) var(--mono);
-  /* 단계 버튼 ①~⑤(D3-56): 본문보다 한 단계 크게 강조 */
+  /* 단계 버튼 ①~⑥(D3-56·S14): 본문보다 한 단계 크게 강조 */
   --step-size: 15px;
   --step-line: 22px;
   --font-step: 500 var(--step-size) / var(--step-line) var(--sans);

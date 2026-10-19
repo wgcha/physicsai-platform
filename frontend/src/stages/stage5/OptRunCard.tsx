@@ -72,7 +72,7 @@ export function OptRunCard({
             )}
           </FeatureGate>
         </>
-      } step="⑤-3" title="실행">
+      } step="⑥-3" title="실행">
       <div className="form-grid">
         <Field label="Approach">
           <div className="seg" role="radiogroup" aria-label="Approach">

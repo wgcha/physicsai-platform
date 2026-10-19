@@ -1,0 +1,34 @@
+#!/usr/bin/env python3
+"""가짜 ffmpeg(phase3 §21.4.3 S16 영상 변환). argv: … -i {video_in} … -crf {crf} … {video_out}(마지막 인자).
+
+모드 FAKE_TOOL_MODE_FFMPEG: ok | fail(종료코드 1, 출력 없음) | no_output(종료코드 0, 출력 없음) | fail_after_1(첫 단계만 성공) |
+hang(FAKE_FFMPEG_HANG_S초 대기). 출력 크기 FAKE_FFMPEG_SIZES="b1,b2,…" — 시도 파일 이름 `<view>.try<k>.mp4`의 k번째(모자라면 마지막),
+기본 1000. 기록은 FAKE_TOOL_RECORD에 {"tool":"ffmpeg","argv","cwd"}."""
+import json, os, re, sys, time
+
+argv = sys.argv
+rec = os.environ.get("FAKE_TOOL_RECORD")
+if rec:
+    with open(rec, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"tool": "ffmpeg", "argv": argv, "cwd": os.getcwd()}, ensure_ascii=False) + "\n")
+mode = os.environ.get("FAKE_TOOL_MODE_FFMPEG") or "ok"
+src = argv[argv.index("-i") + 1] if "-i" in argv else ""
+out = argv[-1]
+m = re.search(r"\.try(\d+)\.", os.path.basename(out))
+k = int(m.group(1)) if m else 1
+if mode == "hang":
+    time.sleep(float(os.environ.get("FAKE_FFMPEG_HANG_S") or "60"))
+    sys.exit(0)
+if mode == "fail" or (mode == "fail_after_1" and k > 1):
+    print("fake ffmpeg: Unknown encoder 'libx264'", file=sys.stderr)
+    sys.exit(1)
+if not os.path.isfile(src):
+    print(f"fake ffmpeg: {src}: No such file", file=sys.stderr)
+    sys.exit(1)
+if mode == "no_output":
+    sys.exit(0)
+sizes = [int(x) for x in (os.environ.get("FAKE_FFMPEG_SIZES") or "1000").split(",") if x.strip()]
+size = sizes[min(k, len(sizes)) - 1]
+with open(out, "wb") as fh:
+    fh.write((b"\x00\x00\x00\x18ftypisom" + b"\x01" * size)[:size])
+print(f"fake ffmpeg ok {size}", flush=True)

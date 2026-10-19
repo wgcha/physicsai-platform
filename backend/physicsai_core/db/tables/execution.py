@@ -85,7 +85,7 @@ notifications = Table(
     CheckConstraint(
         "event IN ('JOB_STARTED','JOB_SUCCEEDED','JOB_FAILED','JOB_CANCELED','JOB_INTERRUPTED','MY_TURN_NEXT','HPC_COLLECTED',"
         "'HPC_PARTIAL_FAILED','ENV_CHECK_DONE','HPC_CANCEL_FAILED','PREDICT_BATCH_DONE','HPC_SUBMISSION_UNKNOWN',"
-        "'SURROGATE_OPT_DONE')",
+        "'SURROGATE_OPT_DONE','FEM_VERIFY_DONE')",  # phase3 §21.3.4 S16(0013_fem_verify)
         name="ck_notifications_event",
     ),
 )

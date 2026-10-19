@@ -15,6 +15,7 @@ from .stage5_optimize import optimizations
 from .ops import audit_events, env_checks
 from .predict_batch import predict_batch_runs, predict_batches
 from .surrogate_opt import surrogate_opt_iters, surrogate_opts
+from .fem_verify import fem_verifications
 
 __all__ = [
     "metadata",
@@ -42,5 +43,6 @@ __all__ = [
     "predict_batch_runs",
     "surrogate_opts",
     "surrogate_opt_iters",
+    "fem_verifications",
     "TERMINAL_STATES",
 ]

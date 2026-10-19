@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import Any
 
 from physicsai_core.db.repositories import jobs as jobs_repo
@@ -16,23 +15,24 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.features import optimize_builtin_missing
 from physicsai_core.paths import display_path
-from physicsai_core.stage4_predict import nearest, run_metrics
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for, lhs_values
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 
 from ..auth import Principal
 from ..context import AppContext
-from .common import audit, require_config_ok, require_power, study_root
-from .geometry_gate import check_engine_match, engine_of, native_set_gate
-from .job_params.stage4_batch import resolve_param_set
-from .job_params.stage4_predict import model_for, require_template_features, template_kind
+from . import surrogate_opt_pareto as so_pareto
+from .common import audit, require_config_ok, require_power
 from .job_params.study_manage import study_gate
 from .jobs import retry_locked
 from .predict_batches import _estimate_min, retry_failed_locked
+from .surrogate_opt_problem import MAX_CONSTRAINTS, require_feature  # noqa: F401 - 재노출(기존 import 경로)
+from .surrogate_opt_problem import metric_value as _metric_value
+from .surrogate_opt_problem import normalize as _normalize
+from .surrogate_opt_problem import run_metric_rows as _run_metric_rows
+from .surrogate_opt_problem import snapshot_perfs
+from .surrogate_opt_problem import value as _value
 
-MAX_CONSTRAINTS = 5
 FAIL_TEXT = {
     "BATCH_FAILED": "검증·탐색 배치 입력 생성이 실패했습니다", "ROUND_FAILED": "반복 작업이 실패했습니다",
     ds.FAIL_VERIFY_ALL: "검증 run이 모두 실패했습니다", ds.FAIL_TOO_FEW: "유효 run이 부족합니다 — 탐색 run 수를 늘리세요",
@@ -53,173 +53,6 @@ def _invalid(problems: list[dict[str, Any]]) -> DomainError:
     return DomainError("SURROGATE_OPT_INVALID", "내장 최적화 설정이 올바르지 않습니다", status=422, problems=problems)
 
 
-def _p(out: list[dict[str, Any]], code: str, message: str, field: str | None = None) -> None:
-    out.append({"code": code, "field": field, "message": message})
-
-
-def require_feature(ctx: AppContext) -> None:
-    tmpl, res = optimize_builtin_missing(ctx.settings)
-    if tmpl or res:
-        raise DomainError("FEATURE_NOT_AVAILABLE", f"플랫폼 내장 최적화를 쓸 수 없습니다(관리자 설정 필요): {', '.join(tmpl + res)}",
-                          status=409, missing=tmpl + res)
-
-
-# ---- 지표(run_metrics) ------------------------------------------------------------------------------
-
-
-def _run_metric_rows(ctx: AppContext, conn: Any, study: dict[str, Any], batch_id: str) -> list[tuple[dict[str, Any], Any]]:
-    """배치 run 행 + (성공이면) RunMetrics."""
-    root = study_root(ctx, study)
-    out = []
-    for r in pb_repo.runs_with_jobs(conn, batch_id):
-        m = None
-        if pb_repo.row_state(r, r["job_state"]) == "SUCCEEDED":
-            m = run_metrics.load_run_metrics(run_metrics.locate_run_files(conn, root, jobs_repo.get_job(conn, r["predict_job_id"])),
-                                             max_bytes=ctx.settings.ui.max_artifact_bytes)
-        out.append((r, m))
-    return out
-
-
-def _value(m: Any, metric: str, series: str | None, table: Any) -> float | None:
-    if m is None:
-        return None
-    try:
-        return run_metrics.metric_value(m, metric, series=series, table=table)
-    except ValueError:
-        return None
-
-
-def _new_metrics(ps: dict[str, Any]) -> set[str]:
-    """새 DOE에서 고를 수 있는 지표: 템플릿 응답 이름 → resp:<NAME>_MIN|_MAX, curve:*."""
-    out = {f"curve:{k}" for k in run_metrics.CURVE_KINDS}
-    for r in ps.get("responses") or []:
-        name = r.get("name") if isinstance(r, dict) else None
-        if isinstance(name, str):
-            for suf in ("MIN", "MAX"):
-                mid = f"resp:{name}_{suf}"
-                if run_metrics.METRIC_RE.fullmatch(mid):
-                    out.add(mid)
-    return out
-
-
-# ---- 정규화(미리보기·생성 공용) --------------------------------------------------------------------------
-
-
-def _normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[str, Any]:
-    """사전조건(409)과 설정 정규화. 반환: {ps, model, kind, settings, problems, free, integer, fixed, explore_count,
-    reuse_batch, valid_points}."""
-    cfg = ctx.settings
-    so = cfg.surrogate_opt
-    require_feature(ctx)
-    ps = resolve_param_set(conn, study, body.param_set_id)
-    kind = template_kind(ps)
-    m = model_for(conn, study, body.model_id)
-    check_engine_match(ps, m)
-    if engine_of(ps) == "native":
-        native_set_gate(ctx, ps)
-    else:
-        require_template_features(cfg, kind)
-    problems: list[dict[str, Any]] = []
-    params = list(ps["parameters"])
-    names = [str(p["name"]) for p in params]
-    integer = sorted(set(nearest.integer_vars(list(ps.get("tpl_params") or []))) & set(names))
-    given = body.bounds or {}
-    for k in given:
-        if k not in names:
-            _p(problems, "BOUNDS_INVALID", f"'{k}'는 템플릿 파라미터가 아닙니다", f"bounds.{k}")
-    bounds: dict[str, list[float]] = {}
-    for p in params:
-        n, tlo, thi = str(p["name"]), float(p["min"]), float(p["max"])
-        b = given.get(n)
-        if b is None:
-            bounds[n] = [tlo, thi]
-            continue
-        if len(b) != 2 or not all(isinstance(v, (int, float)) and math.isfinite(v) for v in b) or b[0] > b[1]:
-            _p(problems, "BOUNDS_INVALID", f"'{n}' 범위는 유한한 [하한, 상한]이고 하한 ≤ 상한이어야 합니다", f"bounds.{n}")
-            continue
-        lo, hi = float(b[0]), float(b[1])
-        if lo < tlo - 1e-12 * max(1.0, abs(tlo)) or hi > thi + 1e-12 * max(1.0, abs(thi)):
-            _p(problems, "BOUNDS_OUT_OF_RANGE", f"'{n}' 범위는 학습 범위 {tlo:g}~{thi:g} 안이어야 합니다", f"bounds.{n}")
-            continue
-        if n in integer and lo < hi and math.ceil(lo - 1e-9) > math.floor(hi + 1e-9):
-            _p(problems, "BOUNDS_INVALID", f"'{n}'(정수) 범위 안에 정수가 없습니다", f"bounds.{n}")
-            continue
-        bounds[n] = [lo, hi]
-    fixed = {n: b[0] for n, b in bounds.items() if b[0] == b[1]}
-    free = [n for n in names if n in bounds and n not in fixed]
-    if not free and len(bounds) == len(names):
-        _p(problems, "NO_FREE_VARIABLE", "범위가 있는 자유 변수가 1개 이상 필요합니다", "bounds")
-    if len(free) > so.max_variables:
-        _p(problems, "TOO_MANY_VARIABLES", f"자유 변수는 최대 {so.max_variables}개입니다(현재 {len(free)}개)", "bounds")
-    iterations = body.iterations if body.iterations is not None else so.default_iterations
-    candidates = body.candidates if body.candidates is not None else so.default_candidates
-    tol = body.tol_rel if body.tol_rel is not None else so.default_tol_rel
-    if not 1 <= iterations <= so.max_iterations:
-        _p(problems, "ITERATIONS_RANGE", f"반복은 1~{so.max_iterations}회입니다", "iterations")
-    if not 1 <= candidates <= so.max_candidates:
-        _p(problems, "CANDIDATES_RANGE", f"후보는 1~{so.max_candidates}개입니다", "candidates")
-    if not 0.0 < tol < 1.0:
-        _p(problems, "TOL_RANGE", "개선 기준은 0 초과 1 미만입니다(예 0.01 = 1%)", "tol_rel")
-    if body.multi_execution > cfg.train_data.max_multi_execution:
-        _p(problems, "MULTI_EXECUTION_RANGE", f"동시 실행 수는 1~{cfg.train_data.max_multi_execution}", "multi_execution")
-    # 탐색
-    need = ds.min_points(len(free))
-    reuse = None
-    reuse_rows: list[tuple[dict[str, Any], Any]] = []
-    if body.explore.kind == "reuse":
-        reuse = pb_repo.get(conn, body.explore.batch_id)
-        if reuse is None or reuse["study_id"] != study["id"]:
-            raise DomainError("BATCH_NOT_FOUND", "일괄 예측을 찾을 수 없습니다", status=404)
-        reason = ("NOT_DONE" if reuse["status"] != "DONE" else "TEMPLATE_MISMATCH" if reuse["param_set_id"] != ps["id"]
-                  else "MODEL_MISMATCH" if reuse["model_id"] != m["id"] else None)
-        if reason:
-            msg = {"NOT_DONE": "완료(DONE)된 배치만 재사용할 수 있습니다", "TEMPLATE_MISMATCH": "같은 템플릿의 배치가 아닙니다",
-                   "MODEL_MISMATCH": "같은 모델로 예측한 배치가 아닙니다"}[reason]
-            raise DomainError("BATCH_NOT_REUSABLE", msg, status=409, reason=reason)
-        reuse_rows = _run_metric_rows(ctx, conn, study, reuse["id"])
-        explore_count = 0
-    else:
-        explore_count = body.explore.count if body.explore.count is not None else \
-            ds.default_explore_count(len(free), cfg.predict_batch.max_runs)
-        if explore_count < need:
-            _p(problems, "EXPLORE_TOO_FEW", f"탐색 run은 최소 {need}개입니다(자유 변수 {len(free)}개)", "explore.count")
-        elif explore_count > cfg.predict_batch.max_runs:
-            _p(problems, "EXPLORE_TOO_MANY", f"탐색 run은 최대 {cfg.predict_batch.max_runs}개입니다", "explore.count")
-    # 지표
-    if reuse is not None:
-        allowed = {f"curve:{k}" for k in run_metrics.CURVE_KINDS if any(mm and mm.curve for _r, mm in reuse_rows)}
-        allowed |= {f"resp:{k}" for _r, mm in reuse_rows if mm and mm.resp for k in mm.resp}
-        allowed |= {f"tbl:{k}" for r, mm in reuse_rows if mm is not None for k in (r["responses"] or {})}
-    else:
-        allowed = _new_metrics(ps)
-    obj = body.objective
-    if not run_metrics.METRIC_RE.fullmatch(obj.metric) or obj.metric not in allowed:
-        _p(problems, "METRIC_UNKNOWN", f"목적 지표 '{obj.metric}'를 쓸 수 없습니다", "objective.metric")
-    if len(body.constraints) > MAX_CONSTRAINTS:
-        _p(problems, "CONSTRAINT_INVALID", f"제약은 최대 {MAX_CONSTRAINTS}개입니다", "constraints")
-    for i, c in enumerate(body.constraints):
-        if not run_metrics.METRIC_RE.fullmatch(c.metric) or c.metric not in allowed or not math.isfinite(c.value):
-            _p(problems, "CONSTRAINT_INVALID", f"제약 {i + 1}의 지표 '{c.metric}'를 쓸 수 없습니다", f"constraints.{i}")
-    valid_points = None
-    if reuse is not None:
-        valid_points = sum(1 for r, mm in reuse_rows if _value(mm, obj.metric, obj.series, r["responses"]) is not None)
-        if valid_points < need:
-            _p(problems, "EXPLORE_TOO_FEW", f"재사용 배치에 목적 값이 있는 성공 run이 {valid_points}개뿐입니다(최소 {need}개)",
-               "explore.batch_id")
-    explore = ({"kind": "reuse", "batch_id": reuse["id"]} if reuse is not None
-               else {"kind": "new", "count": explore_count, "seed": body.explore.seed})
-    settings = {
-        "names": names, "integer": integer, "bounds": bounds,
-        "objective": {"metric": obj.metric, "series": obj.series, "sense": obj.sense},
-        "constraints": [{"metric": c.metric, "series": c.series, "op": c.op, "value": float(c.value)} for c in body.constraints],
-        "surrogate": body.surrogate or so.default_surrogate, "iterations": iterations, "candidates": candidates,
-        "tol_rel": tol, "seed": body.seed, "multi_execution": body.multi_execution, "capture": bool(body.capture),
-        "explore": explore,
-    }
-    return {"ps": ps, "model": m, "kind": kind, "settings": settings, "problems": problems, "free": free,
-            "integer": integer, "fixed": fixed, "explore_count": explore_count, "reuse": reuse, "valid_points": valid_points}
-
-
 def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         s = studies_repo.require(conn, study_id)
@@ -229,7 +62,8 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
         est = _estimate_min(conn, study_id, total) if total else None
     return {"free_variables": n["free"], "integer_variables": [x for x in n["integer"] if x in n["free"]],
             "fixed": n["fixed"], "explore_count": n["explore_count"], "max_total_runs": total, "estimate_min": est,
-            "objective_available": n["valid_points"] is None or n["valid_points"] > 0, "problems": n["problems"]}
+            "objective_available": n["valid_points"] is None or n["valid_points"] > 0, "problems": n["problems"],
+            "mode": st["mode"], "performances": n["performances"]}
 
 
 def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
@@ -295,9 +129,9 @@ def list_opts(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
 
 def collect_runs(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str, Any], its: list[dict[str, Any]]
                  ) -> list[dict[str, Any]]:
-    """반복마다 배치 run 전부의 목적·제약·예측·만족 여부(run_metrics, 성공 run만 값)."""
+    """반복마다 배치 run 전부의 목적들·제약·관찰·예측·만족 여부(run_metrics·성능 스냅샷, 성공 run만 값)."""
     problem = ds.Problem.from_settings(o["settings"])
-    obj = o["settings"]["objective"]
+    perfs = snapshot_perfs(o["settings"])
     out = []
     for it in its:
         b = pb_repo.get(conn, it["batch_id"])
@@ -306,14 +140,26 @@ def collect_runs(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str,
         preds = {c.get("doe_no"): c.get("predicted") for c in it.get("candidates") or []}
         for r, mm in _run_metric_rows(ctx, conn, study, b["id"]):
             state = pb_repo.row_state(r, r["job_state"])
-            objective = _value(mm, obj["metric"], obj.get("series"), r["responses"])
-            cons = [_value(mm, c.metric, c.series, r["responses"]) for c in problem.constraints]
-            valid = state == "SUCCEEDED" and objective is not None and all(v is not None for v in cons)
+            reasons: dict[str, str] = {}
+
+            def val(metric: str, series: str | None, key: str, r: dict[str, Any] = r, mm: Any = mm,
+                    reasons: dict[str, str] = reasons) -> float | None:
+                v, why = _metric_value(mm, metric, series, r["responses"], perfs)
+                if v is None and why and mm is not None:
+                    reasons.setdefault(key, why)
+                return v
+
+            objs = [val(x.metric, x.series, x.key) for x in problem.objectives]
+            cons = [val(c.metric, c.series, c.key) for c in problem.constraints]
+            obs = {x.key: val(x.metric, x.series, x.key) for x in problem.observe}
+            valid = state == "SUCCEEDED" and all(v is not None for v in objs) and all(v is not None for v in cons)
             out.append({"iter_no": it["iter_no"], "batch_id": b["id"], "batch_label": batch_label(b["batch_no"]),
                         "doe_no": r["doe_no"], "run_key": r["run_key"], "job_id": r["predict_job_id"],
-                        "values": r["applied_values"], "objective": objective, "constraints": cons,
+                        "values": r["applied_values"], "objective": objs[0], "constraints": cons,
                         "predicted": preds.get(r["doe_no"]),
-                        "feasible": ds.is_feasible(cons, problem.constraints) if valid else None, "state": state})
+                        "feasible": ds.is_feasible(cons, problem.constraints) if valid else None, "state": state,
+                        "objectives": objs, "observed": obs, "reason": next(iter(reasons.values()), None),
+                        "on_front": False, "kind": it["kind"]})
     return out
 
 
@@ -376,12 +222,14 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
                       "state": (by.get((it["iter_no"], c.get("doe_no"))) or {}).get("state")} for c in it["candidates"]]
         iterations.append({"iter_no": it["iter_no"], "kind": it["kind"], "batch": batches.get(it["batch_id"]), "fit": it["fit"],
                            "candidates": cands, "best_value": it["best_value"], "best_feasible": it["best_feasible"],
-                           "improvement_rel": it["improvement_rel"]})
+                           "improvement_rel": it["improvement_rel"], "hv": it.get("hv"), "front_size": it.get("front_size")})
     job = jobs_repo.get_job(conn, o["current_job_id"]) if o["current_job_id"] else None
     fail_msg = job["failure_message"] if job and o["status"] == "FAILED" and job["state"] in ("FAILED", "INTERRUPTED") else None
     can_exec = principal.can_execute(s["project_id"])
     final_it = next((it for it in its_all if it["kind"] == "FINAL"), None)
+    s17 = so_pareto.detail_extra(ctx, conn, o, ps, its, runs, can_exec)  # S17 §22.10: 역할 정의·파레토·HV 추이
     return {
+        **s17,
         "final": _final_out(ctx, conn, s, o, final_it, batches),
         "parameters": [{"name": p["name"], "nominal": p.get("nominal"), "min": p["min"], "max": p["max"], "unit": p.get("unit") or ""}
                        for p in ps.get("parameters") or []],
@@ -406,12 +254,14 @@ def _final_out(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str, A
         return None
     obj = o["settings"]["objective"]
     problem = ds.Problem.from_settings(o["settings"])
+    perfs = snapshot_perfs(o["settings"])
     rows: dict[int, dict[str, Any]] = {}
     if it is not None:
         for r, mm in _run_metric_rows(ctx, conn, study, it["batch_id"]):
             rows[r["doe_no"]] = {"doe_no": r["doe_no"], "job_id": r["predict_job_id"], "values": r["applied_values"],
-                                 "objective": _value(mm, obj["metric"], obj.get("series"), r["responses"]),
-                                 "constraints": [_value(mm, c.metric, c.series, r["responses"]) for c in problem.constraints],
+                                 "objective": _value(mm, obj["metric"], obj.get("series"), r["responses"], perfs),
+                                 "constraints": [_value(mm, c.metric, c.series, r["responses"], perfs)
+                                                 for c in problem.constraints],
                                  "state": pb_repo.row_state(r, r["job_state"])}
     return {"status": f.get("status"), "reason": f.get("reason"), "legend": f.get("legend"), "legend_note": f.get("legend_note"),
             "baseline_values": f.get("baseline_values"), "baseline_predicted": f.get("baseline_predicted"),
@@ -424,14 +274,16 @@ def get_opt(ctx: AppContext, principal: Principal, opt_id: str) -> dict[str, Any
 
 
 def runs_csv(ctx: AppContext, principal: Principal, opt_id: str) -> tuple[bytes, str]:
-    """iter,batch,doe_no,run_key,<변수>,objective,<제약>,predicted,feasible,state (UTF-8 BOM·CRLF)."""
+    """iter,batch,doe_no,run_key,<변수>,objective(다목적 objective_1..m),<제약>,(obs:·reason),predicted,feasible,state
+    (UTF-8 BOM·CRLF, §22.4.3). FINAL 제외, EXTRA 포함."""
     with ctx.engine.connect() as conn:
         o = _require_opt(conn, opt_id)
         s = studies_repo.require(conn, o["study_id"])
         runs = collect_runs(ctx, conn, s, o, [it for it in so_repo.iters(conn, o["id"]) if it["kind"] != "FINAL"])
     problem = ds.Problem.from_settings(o["settings"])
     pts = [ds.Point(r["iter_no"], r["batch_label"], r["doe_no"], r["run_key"], dict(r["values"] or {}), r["objective"],
-                    list(r["constraints"]), r["state"]) for r in runs]
+                    list(r["constraints"]), r["state"], objectives=list(r["objectives"]), observed=dict(r["observed"]),
+                    reasons={"": r["reason"]} if r["reason"] else {}) for r in runs]
     preds = {(r["iter_no"], r["doe_no"]): r["predicted"] for r in runs if r["predicted"] is not None}
     text = ds.dataset_csv(pts, problem, predicted=preds, with_feasible=True, bom=True, crlf=True)
     return text.encode("utf-8"), f"{so_repo.opt_label(o['opt_no'])}_runs.csv"

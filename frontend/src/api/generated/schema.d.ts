@@ -161,6 +161,120 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/fem-verifications/{fid}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Fem Verification */
+        get: operations["get_fem_verification_physicsai_api_fem_verifications__fid__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/fem-verifications/{fid}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Fem Verification
+         * @description 취소(power, 등록자·관리자, 멱등): 예측 대기 중이면 동반 예측, 해석 중이면 FEM_VERIFY를 취소한다.
+         */
+        post: operations["cancel_fem_verification_physicsai_api_fem_verifications__fid__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/fem-verifications/{fid}/curves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fem Verification Curves */
+        get: operations["fem_verification_curves_physicsai_api_fem_verifications__fid__curves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/fem-verifications/{fid}/media": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fem Verification Media
+         * @description 컨투어 두 쪽(예측·FEM, 같은 범례). MediaFile = §15.4 + S16 playable·codec·transcoded.
+         */
+        get: operations["fem_verification_media_physicsai_api_fem_verifications__fid__media_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/fem-verifications/{fid}/rerun": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Rerun Fem Verification
+         * @description 다시 실행(FAILED·CANCELED만, 아니면 409 FEM_VERIFY_NOT_RERUNNABLE).
+         */
+        post: operations["rerun_fem_verification_physicsai_api_fem_verifications__fid__rerun_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/fem-verifications/{fid}/table.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fem Verification Table Csv
+         * @description 응답 비교 표 CSV(UTF-8 BOM): name,unit,stat,pred_min,pred_max,fem_min,fem_max,pred_value,fem_value,diff,diff_pct.
+         */
+        get: operations["fem_verification_table_csv_physicsai_api_fem_verifications__fid__table_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/fs/list": {
         parameters: {
             query?: never;
@@ -185,7 +299,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Fs Roots */
+        /**
+         * Fs Roots
+         * @description include_spdm=true(phase3 §21.3.8 S16): SPDM 루트(설정)를 `SPDM <i>(읽기 전용)` 루트로 덧붙인다.
+         */
         get: operations["fs_roots_physicsai_api_fs_roots_get"];
         put?: never;
         post?: never;
@@ -711,6 +828,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/predict-batches/{batch_id}/extract-responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Batch Responses
+         * @description 성능 다시 추출(power, phase3 §22.3.5): 끝난 배치의 H3D 성능을 현재 템플릿 정의로 다시 추출하는 PB_RESP_EXTRACT 작업.
+         */
+        post: operations["extract_batch_responses_physicsai_api_predict_batches__batch_id__extract_responses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/predict-batches/{batch_id}/retry-failed": {
         parameters: {
             query?: never;
@@ -743,6 +880,26 @@ export interface paths {
          * @description 결과 표 CSV(UTF-8 BOM): doe_no,run_key,folder,<파라미터>,<응답>,state.
          */
         get: operations["batch_table_csv_physicsai_api_predict_batches__batch_id__table_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/predict-runs/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Predict Run
+         * @description 단일 예측 상세: 목록 행 + 최근접·응답 표·경로(없으면 null)·표시 설정. 일괄 하위·다른 유형은 404 NOT_PREDICT_RUN.
+         */
+        get: operations["get_predict_run_physicsai_api_predict_runs__job_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -934,6 +1091,50 @@ export interface paths {
         get: operations["list_datasets_physicsai_api_studies__study_id__datasets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/fem-verifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Fem Verifications
+         * @description 목록(최신순). 다음 페이지가 있으면 헤더 X-Next-Cursor.
+         */
+        get: operations["list_fem_verifications_physicsai_api_studies__study_id__fem_verifications_get"];
+        put?: never;
+        /**
+         * Create Fem Verification
+         * @description 생성(power): 같은 설계점의 성공한 예측이 없으면 동반 예측(WAITING_PREDICT), 있으면 FEM_VERIFY(RUNNING).
+         */
+        post: operations["create_fem_verification_physicsai_api_studies__study_id__fem_verifications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/fem-verifications/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Fem Verification
+         * @description 미리보기(저장 없음, power): 출처 해석·조립 원본 검사·FEM 필드·문제/경고. 409 HPC_NOT_CONFIGURED·TEMPLATE_NOT_CONFIGURED 등.
+         */
+        post: operations["preview_fem_verification_physicsai_api_studies__study_id__fem_verifications_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1134,6 +1335,27 @@ export interface paths {
          * @description 조합 미리보기(동기, 워커 없음). 조합 문제는 200 `problems`(작업 생성 때는 422 BATCH_SOURCE_INVALID).
          */
         post: operations["preview_batch_physicsai_api_studies__study_id__predict_batches_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/predict-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Predict Runs
+         * @description 그 Study의 단일 예측(일괄 하위 제외, 재시도 묶음은 최신 1행). mode = all | template | prepared,
+         *     state = 쉼표 구분 작업 상태. 다음 페이지가 있으면 헤더 X-Next-Cursor.
+         */
+        get: operations["list_predict_runs_physicsai_api_studies__study_id__predict_runs_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1397,6 +1619,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/surrogate-opts/{opt_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Surrogate Opt
+         * @description 추가 검증(power, 등록자 또는 관리자, DONE만 — phase3 §22.7): 고른 해를 최적화 소유 배치(iters EXTRA)로 예측 검증.
+         */
+        post: operations["verify_surrogate_opt_physicsai_api_surrogate_opts__opt_id__verify_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/train-does/{doe_id}": {
         parameters: {
             query?: never;
@@ -1406,6 +1648,26 @@ export interface paths {
         };
         /** Get Doe */
         get: operations["get_doe_physicsai_api_train_does__doe_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/train-does/{doe_id}/result-table": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Doe Result Table
+         * @description ⑤ 결과분석 입력(s14 §19.5): 샘플 표 + 응답 + run 상태. 읽기 전용, 파일 LRU, 본문 비저장.
+         */
+        get: operations["doe_result_table_physicsai_api_train_does__doe_id__result_table_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1558,6 +1820,16 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * BatchNote
+         * @description 막지 않는 안내(S15 §20.9): FIXED_EXCLUDED·FULL_FACTORIAL_USED·BBD_PAIRWISE·DUPLICATE_ROWS·SEQUENCE_CONTINUED·INFLUENCE_TOO_FEW.
+         */
+        BatchNote: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
         /** BatchPredictCounts */
         BatchPredictCounts: {
             /** Canceled */
@@ -1674,6 +1946,82 @@ export interface components {
             };
         };
         /**
+         * BatchSourceBbd
+         * @description Box–Behnken(변수 3개 이상, 중심점 1개).
+         */
+        BatchSourceBbd: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bbd";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
+         * BatchSourceCcd
+         * @description 중심 합성: alpha face(면중심, 기본) | inscribed(내접). 중심점 1개.
+         */
+        BatchSourceCcd: {
+            /**
+             * Alpha
+             * @default face
+             * @enum {string}
+             */
+            alpha: "face" | "inscribed";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "ccd";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
+         * BatchSourceFracfact
+         * @description 부분 요인 2수준: resolution 4 | 5(기본 5).
+         */
+        BatchSourceFracfact: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fracfact";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Resolution
+             * @default 5
+             * @enum {integer}
+             */
+            resolution: 4 | 5;
+        };
+        /**
+         * BatchSourceFullfact
+         * @description 전체 요인: levels {변수: 수준 수 1~10}(생략한 활성 변수 = 2; 2~10 검사와 정수 변수 검사는 problems).
+         */
+        BatchSourceFullfact: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fullfact";
+            /** Levels */
+            levels?: {
+                [key: string]: number;
+            } | null;
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
          * BatchSourceLhs
          * @description 범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).
          */
@@ -1694,6 +2042,71 @@ export interface components {
              * @default 1
              */
             seed: number;
+        };
+        /**
+         * BatchSourceLhsOpt
+         * @description 최적화 LHS: count 2~predict_batch.max_runs, seed 0 이상(기본 1), criterion maximin(최소 거리, 기본) | corr(상관 최소).
+         */
+        BatchSourceLhsOpt: {
+            /** Count */
+            count: number;
+            /**
+             * Criterion
+             * @default maximin
+             * @enum {string}
+             */
+            criterion: "maximin" | "corr";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lhs_opt";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /**
+         * BatchSourcePb
+         * @description Plackett–Burman(2수준 선별).
+         */
+        BatchSourcePb: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pb";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+        };
+        /**
+         * BatchSourceSobol
+         * @description Sobol(스크램블): count = 2^m(4~max_runs), seed 0~4294967295(생략 = 1), continue_from = 이전 Sobol 배치 id(이어서 추가 —
+         *     seed·ranges는 생략하고 이전 값을 쓴다).
+         */
+        BatchSourceSobol: {
+            /** Continue From */
+            continue_from?: string | null;
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sobol";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /** Seed */
+            seed?: number | null;
         };
         /**
          * BatchSourceTable
@@ -2135,14 +2548,135 @@ export interface components {
              */
             type: "combo" | "int" | "bool";
         };
+        /** DoeResultCounts */
+        DoeResultCounts: {
+            /** No Response */
+            no_response: number;
+            /** Total */
+            total: number;
+            /** Usable */
+            usable: number;
+        };
+        /** DoeResultMeta */
+        DoeResultMeta: {
+            /** Baseline Id */
+            baseline_id?: string | null;
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Scene */
+            scene?: string | null;
+        };
+        /** DoeResultParameter */
+        DoeResultParameter: {
+            /** Integer */
+            integer: boolean;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** DoeResultResponse */
+        DoeResultResponse: {
+            /** Name */
+            name: string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** DoeResultRow */
+        DoeResultRow: {
+            /** No */
+            no: number;
+            /** Params */
+            params: {
+                [key: string]: number | null;
+            };
+            /** Responses */
+            responses: {
+                [key: string]: number | null;
+            };
+            /** Run Id */
+            run_id: string;
+            /** State */
+            state: string;
+        };
+        /**
+         * DoeResultSampling
+         * @description ① DOE 표본 방식(S15 §20.6): 정의 파일 유형 value·라벨·설명 id·옵션(RESOLUTION 등).
+         */
+        DoeResultSampling: {
+            /** Desc Id */
+            desc_id?: string | null;
+            /** Label */
+            label: string;
+            /** Method */
+            method: string;
+            /**
+             * Options
+             * @default {}
+             */
+            options: {
+                [key: string]: unknown;
+            };
+        };
+        /**
+         * DoeResultTable
+         * @description ⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용.
+         */
+        DoeResultTable: {
+            counts: components["schemas"]["DoeResultCounts"];
+            /** Doe Id */
+            doe_id: string;
+            /**
+             * Influence Class
+             * @enum {string}
+             */
+            influence_class: "formal" | "reference" | "off";
+            /** Influence Note */
+            influence_note?: string | null;
+            /** Influence Ok */
+            influence_ok: boolean;
+            /** Label */
+            label: string;
+            meta: components["schemas"]["DoeResultMeta"];
+            /** Notes */
+            notes: string[];
+            /** Parameters */
+            parameters: components["schemas"]["DoeResultParameter"][];
+            /** Responses */
+            responses: components["schemas"]["DoeResultResponse"][];
+            /** Rows */
+            rows: components["schemas"]["DoeResultRow"][];
+            sampling: components["schemas"]["DoeResultSampling"];
+            /** Study Id */
+            study_id: string;
+            /** Type */
+            type: string;
+        };
         /** DoeType */
         DoeType: {
             /** Default Runs */
             default_runs: number;
+            /** Desc Id */
+            desc_id?: string | null;
             /** Fields */
             fields: components["schemas"]["DoeField"][];
+            /**
+             * Influence Class
+             * @default reference
+             * @enum {string}
+             */
+            influence_class: "formal" | "reference";
             /** Label */
             label: string;
+            /**
+             * Recommended
+             * @default false
+             */
+            recommended: boolean;
             /** Runs Editable */
             runs_editable: boolean;
             /** Value */
@@ -2264,6 +2798,93 @@ export interface components {
             /** Missing */
             missing: string[];
         };
+        /** FemVerification */
+        FemVerification: {
+            assembly: components["schemas"]["FvAssemblyOut"];
+            /** Attempt No */
+            attempt_no: number;
+            /** Can Cancel */
+            can_cancel: boolean;
+            /** Can Rerun */
+            can_rerun: boolean;
+            compare?: components["schemas"]["FvCompare"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            design: components["schemas"]["FvDesign"];
+            /** Dir */
+            dir?: string | null;
+            failure?: components["schemas"]["FvProblem"] | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Input Mode */
+            input_mode: string;
+            job?: components["schemas"]["JobSummary"] | null;
+            /** Label */
+            label: string;
+            links: components["schemas"]["FvLinks"];
+            paths: components["schemas"]["FvPaths"];
+            predict: components["schemas"]["FvPredictRef"];
+            source: components["schemas"]["FvSourceOut"];
+            /** Status */
+            status: string;
+            /** Status Text */
+            status_text: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["FvProblem"][];
+        };
+        /** FemVerifyCreate */
+        FemVerifyCreate: {
+            assembly?: components["schemas"]["FvAssembly"] | null;
+            display?: components["schemas"]["CaptureDisplay"] | null;
+            fem?: components["schemas"]["FvFem"] | null;
+            hpc?: components["schemas"]["FvHpc"] | null;
+            /** Source */
+            source: components["schemas"]["FvSourcePredictJob"] | components["schemas"]["FvSourceBatchRun"] | components["schemas"]["FvSourceValues"] | components["schemas"]["FvSourceOptDesign"];
+        };
+        /** FemVerifyListItem */
+        FemVerifyListItem: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            links: components["schemas"]["FvLinks"];
+            /** Max Abs Diff Pct */
+            max_abs_diff_pct?: number | null;
+            /** Source Kind */
+            source_kind: string;
+            /** Source Label */
+            source_label: string;
+            /** Status */
+            status: string;
+            /**
+             * Values
+             * @default {}
+             */
+            values: {
+                [key: string]: number;
+            };
+            /** Worst */
+            worst?: string | null;
+        };
         /** FinalModelRequest */
         FinalModelRequest: {
             /** Model Id */
@@ -2312,6 +2933,430 @@ export interface components {
             inbox_share_hint?: string | null;
             /** Roots */
             roots: components["schemas"]["FsRoot"][];
+        };
+        /** FvAssembly */
+        FvAssembly: {
+            /** Doe Id */
+            doe_id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "predict_input" | "train_doe" | "custom";
+            /** Path */
+            path?: string | null;
+        };
+        /** FvAssemblyOut */
+        FvAssemblyOut: {
+            /** File Count */
+            file_count?: number | null;
+            /** Inc Count */
+            inc_count?: number | null;
+            /** Include Baseline */
+            include_baseline?: boolean | null;
+            /** Include Referenced */
+            include_referenced?: boolean | null;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label?: string | null;
+            /** Path */
+            path?: string | null;
+            /**
+             * Rad
+             * @default []
+             */
+            rad: string[];
+            /** Renum Csv */
+            renum_csv?: boolean | null;
+            /** Snapshot Dir */
+            snapshot_dir?: string | null;
+            /** Starter */
+            starter?: string | null;
+            /** Total Bytes */
+            total_bytes?: number | null;
+        };
+        /** FvCompare */
+        FvCompare: {
+            curve?: components["schemas"]["FvCurveSummary"] | null;
+            legend?: components["schemas"]["FvLegend"] | null;
+            /** Max Abs Diff Pct */
+            max_abs_diff_pct?: number | null;
+            /** Media */
+            media?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Responses
+             * @default []
+             */
+            responses: components["schemas"]["FvCompareRow"][];
+            /** Worst */
+            worst?: string | null;
+        };
+        /** FvCompareRow */
+        FvCompareRow: {
+            /** Diff */
+            diff?: number | null;
+            /** Diff Pct */
+            diff_pct?: number | null;
+            /** Fem Max */
+            fem_max?: number | null;
+            /** Fem Min */
+            fem_min?: number | null;
+            /** Fem Value */
+            fem_value?: number | null;
+            /** Max Diff */
+            max_diff?: number | null;
+            /** Max Diff Pct */
+            max_diff_pct?: number | null;
+            /** Min Diff */
+            min_diff?: number | null;
+            /** Min Diff Pct */
+            min_diff_pct?: number | null;
+            /** Name */
+            name: string;
+            /** Note */
+            note?: string | null;
+            /** Pred Max */
+            pred_max?: number | null;
+            /** Pred Min */
+            pred_min?: number | null;
+            /** Pred Value */
+            pred_value?: number | null;
+            /** Stat */
+            stat?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /** FvCurveSeries */
+        FvCurveSeries: {
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
+        /** FvCurveSummary */
+        FvCurveSummary: {
+            /** Message */
+            message?: string | null;
+            /**
+             * Names
+             * @default []
+             */
+            names: string[];
+            /** Status */
+            status: string;
+            /**
+             * Unmatched Fem
+             * @default []
+             */
+            unmatched_fem: string[];
+            /**
+             * Unmatched Pred
+             * @default []
+             */
+            unmatched_pred: string[];
+        };
+        /** FvCurves */
+        FvCurves: {
+            /**
+             * Downsampled
+             * @default false
+             */
+            downsampled: boolean;
+            fem?: components["schemas"]["FvCurveSeries"] | null;
+            /** Name */
+            name?: string | null;
+            /**
+             * Names
+             * @default []
+             */
+            names: string[];
+            pred?: components["schemas"]["FvCurveSeries"] | null;
+        };
+        /** FvDesign */
+        FvDesign: {
+            /**
+             * Applied Values
+             * @default {}
+             */
+            applied_values: {
+                [key: string]: number;
+            };
+            model?: components["schemas"]["FvModelRef"] | null;
+            /**
+             * Out Of Range
+             * @default []
+             */
+            out_of_range: string[];
+            param_set?: components["schemas"]["FvParamSetRef"] | null;
+            /**
+             * Values
+             * @default {}
+             */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** FvFem */
+        FvFem: {
+            /** Component */
+            component?: string | null;
+            /** Comps */
+            comps?: string[] | null;
+            /** Field */
+            field?: string | null;
+        };
+        /** FvHpc */
+        FvHpc: {
+            /** Ncpus */
+            ncpus?: number | null;
+            /** Queue */
+            queue?: string | null;
+            /** Walltime */
+            walltime?: string | null;
+        };
+        /** FvLegend */
+        FvLegend: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Mode */
+            mode: string;
+            /** Note */
+            note?: string | null;
+            /** Source */
+            source?: string | null;
+        };
+        /** FvLinks */
+        FvLinks: {
+            /** Batch Id */
+            batch_id?: string | null;
+            /** Doe No */
+            doe_no?: number | null;
+            /** Opt Id */
+            opt_id?: string | null;
+            /** Predict Job Id */
+            predict_job_id?: string | null;
+        };
+        /** FvMedia */
+        FvMedia: {
+            /** Display */
+            display?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["FvMediaItem"][];
+            legend?: components["schemas"]["FvLegend"] | null;
+            /** Status */
+            status: string;
+        };
+        /** FvMediaItem */
+        FvMediaItem: {
+            fem?: components["schemas"]["FvMediaSide"] | null;
+            /** Label */
+            label: string;
+            pred?: components["schemas"]["FvMediaSide"] | null;
+            /** View */
+            view: string;
+        };
+        /** FvMediaSide */
+        FvMediaSide: {
+            image: components["schemas"]["MediaFile"];
+            video?: components["schemas"]["MediaFile"] | null;
+            /** Video Error */
+            video_error?: string | null;
+        };
+        /** FvMeshRef */
+        FvMeshRef: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /** Path */
+            path?: string | null;
+        };
+        /** FvModelRef */
+        FvModelRef: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+        };
+        /** FvOrigin */
+        FvOrigin: {
+            /** Job Id */
+            job_id?: string | null;
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "optimize";
+        };
+        /** FvParamSetRef */
+        FvParamSetRef: {
+            /** Id */
+            id: string;
+            /** Input Kind */
+            input_kind: string;
+            /** Label */
+            label?: string | null;
+        };
+        /** FvPaths */
+        FvPaths: {
+            /**
+             * Collected
+             * @default []
+             */
+            collected: string[];
+            /** Input Dir */
+            input_dir?: string | null;
+            /** Remote Dir */
+            remote_dir?: string | null;
+            /** Result Dir */
+            result_dir?: string | null;
+            /** Starter */
+            starter?: string | null;
+        };
+        /** FvPredictRef */
+        FvPredictRef: {
+            /**
+             * Companion
+             * @default false
+             */
+            companion: boolean;
+            /** Job Id */
+            job_id?: string | null;
+            /**
+             * Reuse
+             * @default false
+             */
+            reuse: boolean;
+            /** State */
+            state?: string | null;
+            /**
+             * Will Run
+             * @default false
+             */
+            will_run: boolean;
+        };
+        /** FvPreview */
+        FvPreview: {
+            assembly?: components["schemas"]["FvAssemblyOut"] | null;
+            /**
+             * Comps Auto
+             * @default []
+             */
+            comps_auto: string[];
+            design: components["schemas"]["FvDesign"];
+            /** Fem Field */
+            fem_field?: string | null;
+            /** Hpc Mode */
+            hpc_mode: string;
+            /** Input Mode */
+            input_mode?: ("reuse" | "rebuild") | null;
+            mesh: components["schemas"]["FvMeshRef"];
+            predict: components["schemas"]["FvPredictRef"];
+            /**
+             * Problems
+             * @default []
+             */
+            problems: components["schemas"]["FvProblem"][];
+            /** Source Label */
+            source_label: string;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["FvProblem"][];
+        };
+        /** FvProblem */
+        FvProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** FvSourceBatchRun */
+        FvSourceBatchRun: {
+            /** Batch Id */
+            batch_id: string;
+            /** Doe No */
+            doe_no: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "batch_run";
+        };
+        /** FvSourceOptDesign */
+        FvSourceOptDesign: {
+            /** Doe No */
+            doe_no?: number | null;
+            /** Iter No */
+            iter_no?: number | null;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "opt_design";
+            /** Opt Id */
+            opt_id: string;
+            /**
+             * Pick
+             * @enum {string}
+             */
+            pick: "best" | "final_optimum" | "surrogate_optimum" | "run";
+        };
+        /** FvSourceOut */
+        FvSourceOut: {
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+        };
+        /** FvSourcePredictJob */
+        FvSourcePredictJob: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "predict_job";
+        };
+        /** FvSourceValues */
+        FvSourceValues: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "values";
+            /** Model Id */
+            model_id?: string | null;
+            origin?: components["schemas"]["FvOrigin"] | null;
+            /** Param Set Id */
+            param_set_id: string;
+            /**
+             * Reuse Existing
+             * @default true
+             */
+            reuse_existing: boolean;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
         };
         /** GpuInfo */
         GpuInfo: {
@@ -2514,13 +3559,17 @@ export interface components {
             /** Label */
             label?: string | null;
         };
-        /** JobCreate */
+        /**
+         * JobCreate
+         * @description 작업 생성. PREDICT_VERIFY는 구식(호환 유지) — 화면은 FEM_VERIFY(phase3 §21) 사용. FEM_VERIFY는 이 API로 만들 수 없다
+         *     (`/studies/{id}/fem-verifications`).
+         */
         JobCreate: {
             /**
              * Job Type
              * @enum {string}
              */
-            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP" | "PREDICT_BATCH";
+            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP" | "PREDICT_BATCH" | "PB_RESP_EXTRACT";
             /** Params */
             params?: {
                 [key: string]: unknown;
@@ -2661,12 +3710,21 @@ export interface components {
         MediaFile: {
             /** Artifact Id */
             artifact_id: string;
+            /** Codec */
+            codec?: string | null;
             /** Content Type */
             content_type: string;
             /** Download Url */
             download_url: string;
+            /** Playable */
+            playable?: boolean | null;
             /** Size */
             size: number;
+            /**
+             * Transcoded
+             * @default false
+             */
+            transcoded: boolean;
             /** Url */
             url: string;
         };
@@ -2678,6 +3736,8 @@ export interface components {
             /** Label */
             label: string;
             video?: components["schemas"]["MediaFile"] | null;
+            /** Video Error */
+            video_error?: string | null;
             /** View */
             view: string;
         };
@@ -3055,7 +4115,7 @@ export interface components {
              * Purpose
              * @enum {string}
              */
-            purpose: "DATASET_INPUT" | "MODEL_FOLDER" | "PARAM_SET" | "CAD_FILE" | "RADIOSS_ASSEM" | "RESULT_FOLDER" | "CURATION_INPUT" | "SPDM_IMPORT" | "PREDICT_INPUT";
+            purpose: "DATASET_INPUT" | "MODEL_FOLDER" | "PARAM_SET" | "CAD_FILE" | "RADIOSS_ASSEM" | "RESULT_FOLDER" | "CURATION_INPUT" | "SPDM_IMPORT" | "PREDICT_INPUT" | "FEM_ASSEMBLY";
         };
         /** PathInspectResponse */
         PathInspectResponse: {
@@ -3125,6 +4185,7 @@ export interface components {
             responses: components["schemas"]["BatchResponseName"][];
             /** Rows */
             rows: components["schemas"]["BatchRunRow"][];
+            sampling?: components["schemas"]["SamplingInfo"] | null;
             /** Source Kind */
             source_kind: string;
             /** Status */
@@ -3141,17 +4202,23 @@ export interface components {
              * @enum {string}
              */
             input_kind: "assembly" | "mesh_only";
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["BatchNote"][];
             /** Problems */
             problems: components["schemas"]["BatchProblem"][];
             /** Rows */
             rows: components["schemas"]["BatchPreviewRow"][];
+            sampling?: components["schemas"]["SamplingInfo"] | null;
         };
         /** PredictBatchPreviewRequest */
         PredictBatchPreviewRequest: {
             /** Param Set Id */
             param_set_id?: string | null;
             /** Source */
-            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
+            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceLhsOpt"] | components["schemas"]["BatchSourceSobol"] | components["schemas"]["BatchSourceFullfact"] | components["schemas"]["BatchSourceFracfact"] | components["schemas"]["BatchSourcePb"] | components["schemas"]["BatchSourceBbd"] | components["schemas"]["BatchSourceCcd"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
         };
         /** PredictBatchSummary */
         PredictBatchSummary: {
@@ -3172,6 +4239,7 @@ export interface components {
             response_summary?: components["schemas"]["BatchResponseSummary"] | null;
             /** Run Count */
             run_count: number;
+            sampling?: components["schemas"]["SamplingSummary"] | null;
             /** Status */
             status: string;
         };
@@ -3191,6 +4259,269 @@ export interface components {
             out_of_range: components["schemas"]["OutOfRange"][];
             /** Rounded */
             rounded: components["schemas"]["Rounded"][];
+        };
+        /** PredictRunCapture */
+        PredictRunCapture: {
+            /** Status */
+            status?: string | null;
+            /**
+             * Views
+             * @default []
+             */
+            views: string[];
+        };
+        /** PredictRunDetail */
+        PredictRunDetail: {
+            /**
+             * Applied Values
+             * @default {}
+             */
+            applied_values: {
+                [key: string]: number;
+            };
+            /** Attempts */
+            attempts: number;
+            capture?: components["schemas"]["PredictRunCapture"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Display */
+            display?: {
+                [key: string]: unknown;
+            } | null;
+            /** Duration S */
+            duration_s?: number | null;
+            failure?: components["schemas"]["PredictRunFailure"] | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Has Curve
+             * @default false
+             */
+            has_curve: boolean;
+            /**
+             * Input Mode
+             * @enum {string}
+             */
+            input_mode: "template" | "prepared";
+            /** Input Path */
+            input_path?: string | null;
+            /** Job Id */
+            job_id: string;
+            model?: components["schemas"]["PredictRunModel"] | null;
+            nearest?: components["schemas"]["PredictRunNearest"] | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "manual" | "fem_verify";
+            /**
+             * Out Of Range
+             * @default []
+             */
+            out_of_range: string[];
+            paths: components["schemas"]["PredictRunPaths"];
+            /**
+             * Response Table
+             * @default []
+             */
+            response_table: components["schemas"]["PredictRunTableRow"][];
+            /**
+             * Responses
+             * @default []
+             */
+            responses: components["schemas"]["PredictRunResponse"][];
+            /** Root Job Id */
+            root_job_id: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Starter */
+            starter?: string | null;
+            /** State */
+            state: string;
+            template?: components["schemas"]["PredictRunTemplate"] | null;
+            /**
+             * Values
+             * @default {}
+             */
+            values: {
+                [key: string]: number;
+            };
+            verify?: components["schemas"]["PredictRunVerify"] | null;
+            /**
+             * Warnings Count
+             * @default 0
+             */
+            warnings_count: number;
+        };
+        /** PredictRunFailure */
+        PredictRunFailure: {
+            /** Code */
+            code: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+        };
+        /** PredictRunModel */
+        PredictRunModel: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Version */
+            version: number;
+        };
+        /** PredictRunNearest */
+        PredictRunNearest: {
+            /** Distance */
+            distance?: number | null;
+            /** Run Key */
+            run_key?: string | null;
+        };
+        /**
+         * PredictRunPaths
+         * @description 표시용 절대경로(OS 표기). 폴더·파일이 없으면(정리로 _backup에 옮겨짐 등) null.
+         */
+        PredictRunPaths: {
+            /** Dir */
+            dir?: string | null;
+            /** Geom Dir */
+            geom_dir?: string | null;
+            /** Input Dir */
+            input_dir?: string | null;
+            /** Media Dir */
+            media_dir?: string | null;
+            /** Pred H3D */
+            pred_h3d?: string | null;
+            /** Result Dir */
+            result_dir?: string | null;
+        };
+        /** PredictRunResponse */
+        PredictRunResponse: {
+            /** Name */
+            name?: string | null;
+            /** Predicted */
+            predicted?: number | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /** PredictRunSummary */
+        PredictRunSummary: {
+            /**
+             * Applied Values
+             * @default {}
+             */
+            applied_values: {
+                [key: string]: number;
+            };
+            /** Attempts */
+            attempts: number;
+            capture?: components["schemas"]["PredictRunCapture"] | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Duration S */
+            duration_s?: number | null;
+            failure?: components["schemas"]["PredictRunFailure"] | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /**
+             * Has Curve
+             * @default false
+             */
+            has_curve: boolean;
+            /**
+             * Input Mode
+             * @enum {string}
+             */
+            input_mode: "template" | "prepared";
+            /** Input Path */
+            input_path?: string | null;
+            /** Job Id */
+            job_id: string;
+            model?: components["schemas"]["PredictRunModel"] | null;
+            /**
+             * Origin
+             * @enum {string}
+             */
+            origin: "manual" | "fem_verify";
+            /**
+             * Out Of Range
+             * @default []
+             */
+            out_of_range: string[];
+            /**
+             * Responses
+             * @default []
+             */
+            responses: components["schemas"]["PredictRunResponse"][];
+            /** Root Job Id */
+            root_job_id: string;
+            /** Started At */
+            started_at?: string | null;
+            /** Starter */
+            starter?: string | null;
+            /** State */
+            state: string;
+            template?: components["schemas"]["PredictRunTemplate"] | null;
+            /**
+             * Values
+             * @default {}
+             */
+            values: {
+                [key: string]: number;
+            };
+            verify?: components["schemas"]["PredictRunVerify"] | null;
+            /**
+             * Warnings Count
+             * @default 0
+             */
+            warnings_count: number;
+        };
+        /** PredictRunTableRow */
+        PredictRunTableRow: {
+            /** Diff Pct */
+            diff_pct?: number | null;
+            /** Name */
+            name?: string | null;
+            /** Nearest Measured */
+            nearest_measured?: number | null;
+            /** Predicted */
+            predicted?: number | null;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** PredictRunTemplate */
+        PredictRunTemplate: {
+            /** Id */
+            id: string;
+            /** Input Kind */
+            input_kind: string;
+            /** Label */
+            label?: string | null;
+        };
+        /**
+         * PredictRunVerify
+         * @description 기존 PREDICT_VERIFY 요약(이 예측을 가리키는 최신 1건).
+         */
+        PredictRunVerify: {
+            /** Job Id */
+            job_id: string;
+            /** State */
+            state: string;
         };
         /** Project */
         Project: {
@@ -3390,6 +4721,51 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["SampleRow"][];
         };
+        /**
+         * SamplingInfo
+         * @description 표본 방식 요약(미리보기·배치 상세). 등급은 서버가 정한다(§20.7) — formal | reference(off는 ①만).
+         */
+        SamplingInfo: {
+            /** Desc Id */
+            desc_id: string;
+            /**
+             * Influence Class
+             * @enum {string}
+             */
+            influence_class: "formal" | "reference";
+            /** Influence Note */
+            influence_note?: string | null;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Meta */
+            meta: {
+                [key: string]: unknown;
+            };
+            /** Method */
+            method: string;
+            /** Recommended Count */
+            recommended_count?: number | null;
+        };
+        /**
+         * SamplingSummary
+         * @description 배치 목록 한 줄용(Sobol 이어서 추가 후보·⑤ 출처 라벨).
+         */
+        SamplingSummary: {
+            /** Count */
+            count: number;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Method */
+            method: string;
+            /** Offset */
+            offset?: number | null;
+            /** Seed */
+            seed?: number | null;
+        };
         /** SoBatchRef */
         SoBatchRef: {
             /** Gen */
@@ -3427,15 +4803,25 @@ export interface components {
             job_id?: string | null;
             /** Objective */
             objective?: number | null;
+            /** Objectives */
+            objectives?: {
+                [key: string]: number | null;
+            } | null;
             /** Run Key */
             run_key: string;
+            /** Score */
+            score?: number | null;
             /** Values */
             values: {
                 [key: string]: number;
             };
+            /** Weights */
+            weights?: number[] | null;
         };
         /** SoCandidate */
         SoCandidate: {
+            /** Acq */
+            acq?: number | null;
             /** Constraints Pred */
             constraints_pred?: number[];
             /** Doe No */
@@ -3444,6 +4830,12 @@ export interface components {
             ei?: number | null;
             /** Predicted */
             predicted?: number | null;
+            /** Predicted Objectives */
+            predicted_objectives?: number[] | null;
+            /** Predicted Std */
+            predicted_std?: number[] | null;
+            /** Role */
+            role?: string | null;
             /** State */
             state?: string | null;
             /** Values */
@@ -3452,20 +4844,53 @@ export interface components {
             };
             /** Verified */
             verified?: number | null;
+            /** Verified Objectives */
+            verified_objectives?: (number | null)[] | null;
+            /** Weight */
+            weight?: number[] | null;
         };
-        /** SoConstraint */
+        /**
+         * SoConstraint
+         * @description 제약: `<=`·`>=`는 value, `range`(S17 §22.4.1)는 lo < hi(유한).
+         */
         SoConstraint: {
+            /** Hi */
+            hi?: number | null;
+            /** Lo */
+            lo?: number | null;
             /** Metric */
             metric: string;
             /**
              * Op
              * @enum {string}
              */
-            op: "<=" | ">=";
+            op: "<=" | ">=" | "range";
             /** Series */
             series?: string | null;
             /** Value */
-            value: number;
+            value?: number | null;
+        };
+        /** SoConstraintDef */
+        SoConstraintDef: {
+            /** Hi */
+            hi?: number | null;
+            /** Label */
+            label: string;
+            /** Lo */
+            lo?: number | null;
+            /** Metric */
+            metric: string;
+            /** Op */
+            op: string;
+            /** Series */
+            series?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /** Value */
+            value?: number | null;
         };
         /**
          * SoExploreNew
@@ -3552,10 +4977,72 @@ export interface components {
             loo_rmse?: number | null;
             /** N Train */
             n_train: number;
+            /** Per Objective */
+            per_objective?: components["schemas"]["SoFitObjective"][] | null;
             /** Pred Vs Verified Mae */
             pred_vs_verified_mae?: number | null;
             /** Q2 */
             q2?: number | null;
+        };
+        /** SoFitObjective */
+        SoFitObjective: {
+            /** Kind */
+            kind: string;
+            /** Loo Nrmse */
+            loo_nrmse?: number | null;
+            /** Loo Rmse */
+            loo_rmse?: number | null;
+            /** Metric */
+            metric: string;
+            /** N Train */
+            n_train: number;
+            /** Pred Vs Verified Mae */
+            pred_vs_verified_mae?: number | null;
+            /** Q2 */
+            q2?: number | null;
+        };
+        /**
+         * SoFrontPoint
+         * @description 검증된 파레토 해 1개(같은 설계 평균, key = 첫 run `"<iter_no>:<doe_no>"`).
+         */
+        SoFrontPoint: {
+            /** Batch Label */
+            batch_label: string;
+            /** Constraints */
+            constraints?: {
+                [key: string]: number | null;
+            };
+            /** Doe No */
+            doe_no: number;
+            /** Iter No */
+            iter_no: number;
+            /** Job Id */
+            job_id?: string | null;
+            /** Key */
+            key: string;
+            /** Objectives */
+            objectives: number[];
+            /** Observed */
+            observed?: {
+                [key: string]: number | null;
+            };
+            /** Run Key */
+            run_key: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** SoHvPoint */
+        SoHvPoint: {
+            /** Front Size */
+            front_size?: number | null;
+            /** Hv */
+            hv?: number | null;
+            /** Improvement Rel */
+            improvement_rel?: number | null;
+            /** Iter No */
+            iter_no: number;
         };
         /** SoIteration */
         SoIteration: {
@@ -3567,6 +5054,10 @@ export interface components {
             /** Candidates */
             candidates?: components["schemas"]["SoCandidate"][] | null;
             fit?: components["schemas"]["SoFit"] | null;
+            /** Front Size */
+            front_size?: number | null;
+            /** Hv */
+            hv?: number | null;
             /** Improvement Rel */
             improvement_rel?: number | null;
             /** Iter No */
@@ -3587,6 +5078,46 @@ export interface components {
             /** Series */
             series?: string | null;
         };
+        /** SoObjectiveDef */
+        SoObjectiveDef: {
+            /** Label */
+            label: string;
+            /** Metric */
+            metric: string;
+            /** Sense */
+            sense: string;
+            /** Series */
+            series?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
+         * SoObserve
+         * @description 관찰 지표(값만 기록·표시, S17).
+         */
+        SoObserve: {
+            /** Metric */
+            metric: string;
+            /** Series */
+            series?: string | null;
+        };
+        /** SoObserveDef */
+        SoObserveDef: {
+            /** Label */
+            label: string;
+            /** Metric */
+            metric: string;
+            /** Series */
+            series?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
         /** SoParameter */
         SoParameter: {
             /** Max */
@@ -3603,14 +5134,80 @@ export interface components {
              */
             unit: string;
         };
+        /** SoPareto */
+        SoPareto: {
+            /** Frame */
+            frame?: {
+                [key: string]: unknown;
+            } | null;
+            /** Front */
+            front?: components["schemas"]["SoFrontPoint"][];
+            /** Hv */
+            hv?: number | null;
+            /** Predicted */
+            predicted?: components["schemas"]["SoPredictedPoint"][];
+            /** Predicted Iter */
+            predicted_iter?: number | null;
+            /** Recommended Key */
+            recommended_key?: string | null;
+        };
+        /**
+         * SoPerformance
+         * @description 미리보기 성능 목록(S17 §22.4.2): available·total·spec_changed는 재사용일 때만.
+         */
+        SoPerformance: {
+            /** Available */
+            available?: number | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Spec Changed */
+            spec_changed?: number | null;
+            /** Stat */
+            stat: string;
+            /** Total */
+            total?: number | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
+         * SoPredictedPoint
+         * @description 대리모델 예측 전선 점(미검증).
+         */
+        SoPredictedPoint: {
+            /** Mean */
+            mean: number[];
+            /** Pof */
+            pof: number;
+            /** Std */
+            std: number[];
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
         /** SoProblem */
         SoProblem: {
+            /** Action */
+            action?: string | null;
+            /** Batch Id */
+            batch_id?: string | null;
             /** Code */
             code: string;
             /** Field */
             field?: string | null;
             /** Message */
             message: string;
+            /** Performance */
+            performance?: string | null;
         };
         /**
          * SoRun
@@ -3631,14 +5228,36 @@ export interface components {
             iter_no: number;
             /** Job Id */
             job_id?: string | null;
+            /** Kind */
+            kind?: string | null;
             /** Objective */
             objective?: number | null;
+            /** Objectives */
+            objectives?: (number | null)[];
+            /** Observed */
+            observed?: {
+                [key: string]: number | null;
+            };
+            /**
+             * On Front
+             * @default false
+             */
+            on_front: boolean;
             /** Predicted */
             predicted?: number | null;
+            /** Reason */
+            reason?: string | null;
             /** Run Key */
             run_key: string;
             /** State */
             state: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** SoVerifyPoint */
+        SoVerifyPoint: {
             /** Values */
             values: {
                 [key: string]: number;
@@ -3699,10 +5318,19 @@ export interface components {
              */
             default_field: string;
             estimate?: components["schemas"]["StatusCaptureEstimate"] | null;
+            /**
+             * Transcode
+             * @default false
+             */
+            transcode: boolean;
             /** Video */
             video: boolean;
             /** Video Ext */
             video_ext: string;
+            /** Video Ext Effective */
+            video_ext_effective?: string | null;
+            /** Video Target Bytes */
+            video_target_bytes?: number | null;
             /** Views */
             views: string[];
         };
@@ -3752,6 +5380,8 @@ export interface components {
             curation_t01: components["schemas"]["FeatureState"];
             dataset_create?: components["schemas"]["FeatureState"] | null;
             evaluate?: components["schemas"]["FeatureState"] | null;
+            fem_verify?: components["schemas"]["FeatureState"] | null;
+            fem_verify_rebuild?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
             optimize_builtin?: components["schemas"]["FeatureState"] | null;
             predict?: components["schemas"]["FeatureState"] | null;
@@ -3845,8 +5475,23 @@ export interface components {
             defaults: components["schemas"]["StatusSurrogateDefaults"];
             /** Max Candidates */
             max_candidates: number;
+            /**
+             * Max Extra Points
+             * @default 10
+             */
+            max_extra_points: number;
             /** Max Iterations */
             max_iterations: number;
+            /**
+             * Max Objectives
+             * @default 3
+             */
+            max_objectives: number;
+            /**
+             * Max Observe
+             * @default 10
+             */
+            max_observe: number;
             /** Max Variables */
             max_variables: number;
         };
@@ -4074,6 +5719,13 @@ export interface components {
             /** Can Resume */
             can_resume: boolean;
             /**
+             * Can Verify More
+             * @default false
+             */
+            can_verify_more: boolean;
+            /** Constraints Def */
+            constraints_def?: components["schemas"]["SoConstraintDef"][];
+            /**
              * Created At
              * Format: date-time
              */
@@ -4087,6 +5739,8 @@ export interface components {
             final?: components["schemas"]["SoFinal"] | null;
             /** Finished At */
             finished_at?: string | null;
+            /** Hv History */
+            hv_history?: components["schemas"]["SoHvPoint"][] | null;
             /** Id */
             id: string;
             /** Iter No */
@@ -4095,16 +5749,26 @@ export interface components {
             iterations: components["schemas"]["SoIteration"][];
             /** Label */
             label: string;
+            /**
+             * Mode
+             * @default single
+             */
+            mode: string;
             /** Model */
             model: {
                 [key: string]: unknown;
             };
+            /** Objectives */
+            objectives?: components["schemas"]["SoObjectiveDef"][];
+            /** Observe */
+            observe?: components["schemas"]["SoObserveDef"][];
             /** Param Set */
             param_set: {
                 [key: string]: unknown;
             };
             /** Parameters */
             parameters?: components["schemas"]["SoParameter"][];
+            pareto?: components["schemas"]["SoPareto"] | null;
             /** Progress Text */
             progress_text: string;
             /** Runs */
@@ -4121,10 +5785,13 @@ export interface components {
             warnings?: {
                 [key: string]: string;
             }[];
+            /** Weights */
+            weights?: number[];
         };
         /**
          * SurrogateOptCreate
-         * @description 생성·미리보기 공용 본문(phase3 §18.6). bounds 생략 = 템플릿 min·max, lo = hi는 고정.
+         * @description 생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.
+         *     목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.
          */
         SurrogateOptCreate: {
             /** Bounds */
@@ -4151,7 +5818,11 @@ export interface components {
              * @default 1
              */
             multi_execution: number;
-            objective: components["schemas"]["SoObjective"];
+            objective?: components["schemas"]["SoObjective"] | null;
+            /** Objectives */
+            objectives?: components["schemas"]["SoObjective"][] | null;
+            /** Observe */
+            observe?: components["schemas"]["SoObserve"][];
             /** Param Set Id */
             param_set_id?: string | null;
             /**
@@ -4163,6 +5834,8 @@ export interface components {
             surrogate?: ("gp" | "rbf") | null;
             /** Tol Rel */
             tol_rel?: number | null;
+            /** Weights */
+            weights?: number[] | null;
         };
         /** SurrogateOptPreview */
         SurrogateOptPreview: {
@@ -4180,8 +5853,15 @@ export interface components {
             integer_variables: string[];
             /** Max Total Runs */
             max_total_runs: number;
+            /**
+             * Mode
+             * @default single
+             */
+            mode: string;
             /** Objective Available */
             objective_available: boolean;
+            /** Performances */
+            performances?: components["schemas"]["SoPerformance"][];
             /** Problems */
             problems: components["schemas"]["SoProblem"][];
         };
@@ -4219,6 +5899,30 @@ export interface components {
             };
             /** Status */
             status: string;
+        };
+        /**
+         * SurrogateOptVerify
+         * @description 추가 검증(S17 §22.7): 고른 해(검증·예측 전선 점) 1~max_extra_points개를 최적화 소유 배치(iters EXTRA)로 예측 검증.
+         */
+        SurrogateOptVerify: {
+            /**
+             * Capture
+             * @default false
+             */
+            capture: boolean;
+            /** Points */
+            points: components["schemas"]["SoVerifyPoint"][];
+        };
+        /** SurrogateOptVerifyResult */
+        SurrogateOptVerifyResult: {
+            /** Batch Id */
+            batch_id: string;
+            /** Batch Label */
+            batch_label: string;
+            /** Iter No */
+            iter_no: number;
+            /** Job Id */
+            job_id: string;
         };
         /** TemplateConfigured */
         TemplateConfigured: {
@@ -4960,6 +6664,357 @@ export interface operations {
             };
         };
     };
+    get_fem_verification_physicsai_api_fem_verifications__fid__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FemVerification"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_fem_verification_physicsai_api_fem_verifications__fid__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FemVerification"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    fem_verification_curves_physicsai_api_fem_verifications__fid__curves_get: {
+        parameters: {
+            query?: {
+                name?: string | null;
+                max_points?: number;
+            };
+            header?: never;
+            path: {
+                fid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FvCurves"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    fem_verification_media_physicsai_api_fem_verifications__fid__media_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FvMedia"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    rerun_fem_verification_physicsai_api_fem_verifications__fid__rerun_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FemVerification"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    fem_verification_table_csv_physicsai_api_fem_verifications__fid__table_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fid: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     fs_list_physicsai_api_fs_list_get: {
         parameters: {
             query: {
@@ -5003,7 +7058,9 @@ export interface operations {
     };
     fs_roots_physicsai_api_fs_roots_get: {
         parameters: {
-            query?: never;
+            query?: {
+                include_spdm?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -6563,6 +8620,64 @@ export interface operations {
             };
         };
     };
+    extract_batch_responses_physicsai_api_predict_batches__batch_id__extract_responses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     retry_failed_batch_physicsai_api_predict_batches__batch_id__retry_failed_post: {
         parameters: {
             query?: never;
@@ -6670,6 +8785,64 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_predict_run_physicsai_api_predict_runs__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictRunDetail"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7169,6 +9342,195 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_fem_verifications_physicsai_api_studies__study_id__fem_verifications_get: {
+        parameters: {
+            query?: {
+                predict_job_id?: string | null;
+                batch_id?: string | null;
+                opt_id?: string | null;
+                status?: string | null;
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FemVerifyListItem"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_fem_verification_physicsai_api_studies__study_id__fem_verifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FemVerifyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FemVerification"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_fem_verification_physicsai_api_studies__study_id__fem_verifications_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FemVerifyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FvPreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -7798,6 +10160,69 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_predict_runs_physicsai_api_studies__study_id__predict_runs_get: {
+        parameters: {
+            query?: {
+                mode?: string | null;
+                state?: string | null;
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PredictRunSummary"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8679,6 +11104,68 @@ export interface operations {
             };
         };
     };
+    verify_surrogate_opt_physicsai_api_surrogate_opts__opt_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurrogateOptVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOptVerifyResult"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_doe_physicsai_api_train_does__doe_id__get: {
         parameters: {
             query?: never;
@@ -8697,6 +11184,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrainDoe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    doe_result_table_physicsai_api_train_does__doe_id__result_table_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                doe_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoeResultTable"];
                 };
             };
             /** @description Forbidden */

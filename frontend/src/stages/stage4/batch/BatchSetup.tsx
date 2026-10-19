@@ -1,8 +1,8 @@
 // ④ B "일괄 예측(DOE)" 설정(phase3.md §14.5·§14.8, 시안 03):
-// 1 템플릿·조합(LHS 범위·개수·시드 / 표 붙여넣기·CSV / ① 학습 DOE 재사용 → preview) · 2 조합 미리보기 · 3 실행 방식(동시 실행 수·모델·실행 1개).
+// 1 템플릿·조합(표본 방식 드롭다운 + 설명 상자 + 방식별 입력 — S15 §20.10 / 표 붙여넣기·CSV / ① 학습 DOE 재사용 → preview) · 2 조합 미리보기 · 3 실행 방식(동시 실행 수·모델·실행 1개).
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiError, api, errorMessage, type BatchPreview as BP, type BatchProblem, type BatchSource, type BatchSourceKind, type ParamSet, type PredictBatchParams, type PredictBatchSummary, type TrainDoe } from "../../../api";
+import { ApiError, api, errorMessage, type BatchPreview as BP, type BatchProblem, type BatchSource, type PredictBatchParams, type PredictBatchSummary, type TrainDoe } from "../../../api";
 import { useApp } from "../../../app/AppContext";
 import { useStudy } from "../../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../../hooks/useJobRunner";
@@ -15,12 +15,10 @@ import { BatchPreview } from "./BatchPreview";
 import { BATCH_STATUS_LABEL } from "./batchTable";
 import { BatchCaptureOptions, captureAssume, captureParam, type CaptureChoice } from "./BatchCaptureOptions";
 import { DEFAULT_VIEWS } from "../../../lib/views";
+import { DEFAULT_MAX_RUNS } from "../../../lib/sampling";
+import { SamplingPicker } from "./SamplingPicker";
+import { buildSource, initialSampling, resetForTemplate, type ContinueCand, type Ranges, type SamplingState } from "./samplingSource";
 
-const METHODS: { key: BatchSourceKind; label: string }[] = [
-  { key: "lhs", label: "범위·개수로 자동(LHS)" },
-  { key: "table", label: "표 붙여넣기 / CSV" },
-  { key: "train_doe", label: "① 학습 DOE 그대로 재사용" },
-];
 export const RUN_LABEL = "입력 생성 + 일괄 예측 실행";
 
 /** /status.limits.configured.max_multi_execution(설정 train_data.max_multi_execution) — 없으면 8(기본값) */
@@ -29,10 +27,8 @@ export function maxMultiExecution(status: { limits?: { configured?: Record<strin
   return Number.isInteger(v) && v >= 1 ? v : 8;
 }
 
-type Ranges = Record<string, [string, string]>;
 /** 선택 숫자: 빈 값 null, 잘못된 값 undefined */
 const optNum = (s: string): number | null | undefined => (s.trim() === "" ? null : Number.isFinite(Number(s)) ? Number(s) : undefined);
-const defaultRanges = (ps: ParamSet | null): Ranges => Object.fromEntries((ps?.parameters ?? []).map((p) => [p.name, [String(p.min), String(p.max)]]));
 
 /** onStarted: 실행 요청이 받아들여졌을 때(D3-53 — 다음에 돌아오면 "실행 목록" 탭) */
 export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
@@ -46,10 +42,9 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   const tplF = useFeature(tplFeature);
   const maxMulti = maxMultiExecution(status);
 
-  const [method, setMethod] = useState<BatchSourceKind>("lhs");
-  const [ranges, setRanges] = useState<Ranges>(() => defaultRanges(ps));
-  const [count, setCount] = useState("20");
-  const [seed, setSeed] = useState("1");
+  // S15: 처음 열면 최적화 LHS(추천) — 저장하지 않는다(§20.10)
+  const [samp, setSamp] = useState<SamplingState>(() => initialSampling(ps));
+  const [contRanges, setContRanges] = useState<{ id: string; ranges: Ranges } | null>(null);
   const [text, setText] = useState("");
   const [does, setDoes] = useState<TrainDoe[]>([]);
   const [doeId, setDoeId] = useState("");
@@ -90,19 +85,44 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     setPreviewError(null);
   };
   useEffect(() => {
-    setRanges(defaultRanges(ps));
+    setSamp((x) => resetForTemplate(x, ps));
     clear();
   }, [ps?.id]);
+  const changeSamp = (next: SamplingState) => {
+    setSamp(next);
+    clear();
+  };
+  const method = samp.kind;
+
+  // Sobol 이어서 추가 후보: 같은 템플릿의 Sobol 배치(최신 먼저)
+  const cands = useMemo(
+    (): ContinueCand[] =>
+      recent
+        .filter((b) => b.sampling?.kind === "sobol" && !!ps && b.param_set?.id === ps.id && b.status !== "FAILED" && b.status !== "CANCELED")
+        .map((b) => ({ id: b.id, label: b.label, count: b.sampling!.count, seed: b.sampling!.seed ?? null, offset: b.sampling!.offset ?? null })),
+    [recent, ps?.id],
+  );
+  const cand = samp.cont ? (cands.find((c) => c.id === samp.contId) ?? null) : null;
+  useEffect(() => {
+    if (!samp.cont || !samp.contId) return;
+    let alive = true;
+    api
+      .batch(samp.contId)
+      .then((b) => {
+        const r = (b.sampling?.meta as { ranges?: Record<string, number[]> } | undefined)?.ranges;
+        if (alive && r) setContRanges({ id: samp.contId, ranges: Object.fromEntries(Object.entries(r).map(([n, v]) => [n, [String(v[0]), String(v[1])]])) });
+      })
+      .catch(() => alive && setContRanges(null));
+    return () => {
+      alive = false;
+    };
+  }, [samp.cont, samp.contId]);
 
   const source = useMemo((): BatchSource | null => {
-    if (method === "lhs") {
-      const r: Record<string, [number, number]> = {};
-      for (const [n, [lo, hi]] of Object.entries(ranges)) r[n] = [Number(lo), Number(hi)];
-      return { kind: "lhs", count: Number(count), seed: Number(seed), ranges: r };
-    }
     if (method === "table") return text.trim() ? { kind: "table", text } : null;
-    return doeId ? { kind: "train_doe", doe_id: doeId } : null;
-  }, [method, ranges, count, seed, text, doeId]);
+    if (method === "train_doe") return doeId ? { kind: "train_doe", doe_id: doeId } : null;
+    return buildSource(samp, ps, cand, DEFAULT_MAX_RUNS);
+  }, [method, samp, ps, cand, text, doeId]);
 
   const make = async () => {
     if (!ps || !source) return;
@@ -147,10 +167,6 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     setText(await f.text()); // 브라우저 안에서 읽기만(업로드 없음)
     clear();
   };
-  const setRange = (n: string, i: 0 | 1, v: string) => {
-    setRanges((r) => ({ ...r, [n]: (i === 0 ? [v, r[n][1]] : [r[n][0], v]) as [string, string] }));
-    clear();
-  };
   const names = ps?.parameters.map((p) => p.name) ?? [];
   const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
 
@@ -159,62 +175,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
       <Card span={3} title="1 템플릿·조합" className="batch-setup" aside={ps ? <span className="muted small">{templateName(ps)}</span> : undefined}>
         <TemplatePicker list={list} value={ps?.id ?? ""} onChange={setPicked} compact />
         {!ps && <p className="muted small">등록된 템플릿이 없습니다 — "템플릿 값 입력"의 템플릿 관리에서 등록하세요.</p>}
-        <fieldset className="radio-list">
-          <legend className="field-label">조합 만들기</legend>
-          {METHODS.map((m) => (
-            <label key={m.key} className="radio-line">
-              <input
-                type="radio"
-                name="batch-method"
-                value={m.key}
-                checked={method === m.key}
-                onChange={() => {
-                  setMethod(m.key);
-                  clear();
-                }}
-              />
-              {m.label}
-            </label>
-          ))}
-        </fieldset>
-        {method === "lhs" && ps && (
-          <>
-            <table className="table compact" aria-label="파라미터 범위">
-              <thead>
-                <tr>
-                  <th>파라미터</th>
-                  <th className="num">최소</th>
-                  <th className="num">최대</th>
-                </tr>
-              </thead>
-              <tbody>
-                {ps.parameters.map((p) => (
-                  <tr key={p.name}>
-                    <td>
-                      {p.name} <span className="muted small">{p.unit}</span>
-                    </td>
-                    <td className="num">
-                      <input className="num-input" inputMode="decimal" aria-label={`${p.name} 최소`} value={ranges[p.name]?.[0] ?? ""} onChange={(e) => setRange(p.name, 0, e.target.value)} />
-                    </td>
-                    <td className="num">
-                      <input className="num-input" inputMode="decimal" aria-label={`${p.name} 최대`} value={ranges[p.name]?.[1] ?? ""} onChange={(e) => setRange(p.name, 1, e.target.value)} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="fill-row">
-              <label className="inline-field">
-                조합 수
-                <input className="num-input" inputMode="numeric" value={count} onChange={(e) => (setCount(e.target.value), clear())} />
-              </label>
-              <label className="inline-field">
-                시드
-                <input className="num-input" inputMode="numeric" value={seed} onChange={(e) => (setSeed(e.target.value), clear())} />
-              </label>
-            </div>
-          </>
-        )}
+        <SamplingPicker ps={ps} state={samp} onChange={changeSamp} maxRuns={DEFAULT_MAX_RUNS} cands={cands} contRanges={contRanges && contRanges.id === samp.contId ? contRanges.ranges : null} />
         {method === "table" && (
           <>
             <label className="field">

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { api, errorMessage, type FsEntry, type FsList, type FsRoot } from "../api";
+import { femVerifyApi } from "../api/femVerify";
 import { fmtBytes } from "../lib/format";
 
 /**
@@ -46,6 +47,7 @@ export function PathPickerDialog({
   mode,
   exts,
   aiOnly,
+  includeSpdm,
   initialPath,
   onPick,
   onCancel,
@@ -56,6 +58,8 @@ export function PathPickerDialog({
   exts?: string[];
   /** AI 루트 안만 허용하는 용도면 "추가 허용 폴더" 루트를 숨긴다 */
   aiOnly?: boolean;
+  /** S16 V2: SPDM 루트(읽기 전용)도 보인다(/fs/roots?include_spdm=true) — FEM 검증 조립 원본 직접 지정 */
+  includeSpdm?: boolean;
   /** 입력란의 현재 값. 열 수 있는 폴더면 거기서 시작 */
   initialPath?: string;
   onPick: (path: string) => void;
@@ -94,7 +98,7 @@ export function PathPickerDialog({
     const prev = document.activeElement as HTMLElement | null;
     (async () => {
       try {
-        const r = await api.fsRoots();
+        const r = includeSpdm ? await femVerifyApi.fsRootsSpdm() : await api.fsRoots();
         if (!alive) return;
         const rs = aiOnly ? r.roots.filter((x) => !x.key.startsWith("import_")) : r.roots;
         setRoots(rs);

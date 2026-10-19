@@ -7,6 +7,7 @@ from typing import Any
 
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
+from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import write_json_atomic
 from physicsai_core.paths import resolve_in_study
@@ -39,8 +40,25 @@ def put_responses(ctx: AppContext, principal: Principal, ps_id: str, rows: list[
             raise DomainError("RESPONSE_IN_USE" if in_use else "RESPONSE_INVALID",
                               "실측 응답 열은 지울 수 없습니다" if in_use else "응답 정의가 올바르지 않습니다",
                               status=422, problems=problems)
+        _require_perf_unchanged(conn, p, out)
         ps_repo.set_responses(conn, ps_id, out)
         write_json_atomic(os.path.join(stored, "responses.json"), {"responses": out})
         audit(conn, principal, "PARAM_SET_UPDATE", "param_set", ps_id, {"responses": [r["name"] for r in out]}, rid, ip)
         p = ps_repo.get(conn, ps_id)
     return param_set_out(p)  # type: ignore[arg-type]
+
+
+def _require_perf_unchanged(conn: Any, ps: dict[str, Any], rows: list[dict[str, Any]]) -> None:
+    """S17 §22.3.1: 진행 중 내장 최적화가 `settings.performances`에 스냅샷한 성능의 spec 변경·삭제 → 409 PERF_IN_USE_BY_OPT
+    (단위만 바뀌는 것은 허용)."""
+    opt = so_repo.active_for_study(conn, ps["study_id"])
+    if opt is None or opt["param_set_id"] != ps["id"]:
+        return
+    snap = (opt.get("settings") or {}).get("performances") or {}
+    new = {r["name"]: r.get("spec") for r in rows}
+    for name, d in snap.items():
+        if name not in new or new[name] != (d or {}).get("spec"):
+            label = so_repo.opt_label(opt["opt_no"])
+            raise DomainError("PERF_IN_USE_BY_OPT",
+                              f"내장 최적화 {label}이 이 성능을 쓰고 있어 정의를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요",
+                              status=409, surrogate_opt_id=opt["id"], performance=name)

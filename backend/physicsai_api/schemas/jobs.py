@@ -92,10 +92,14 @@ JobType = Literal[
     "DATASET_CREATE", "PACKAGE_EXPORT", "MODEL_REGISTER", "EVALUATE", "PREDICT", "PREDICT_VERIFY",
     "TD_EXTRACT_PARAMS", "TD_DOE_GEN", "TD_SOLVE", "TD_RESULT_IMPORT", "TD_RESP_EXTRACT", "CU_H3D_PREVIEW", "CU_H3D_CURATE",
     "CU_T01_PREVIEW", "CU_T01_CURVES", "SPDM_IMPORT", "OPTIMIZE", "STUDY_STORAGE_SCAN", "STUDY_CLEANUP", "PREDICT_BATCH",
+    "PB_RESP_EXTRACT",
 ]
 
 
 class JobCreate(Req):
+    """작업 생성. PREDICT_VERIFY는 구식(호환 유지) — 화면은 FEM_VERIFY(phase3 §21) 사용. FEM_VERIFY는 이 API로 만들 수 없다
+    (`/studies/{id}/fem-verifications`)."""
+
     job_type: JobType
     params: dict[str, Any] = Field(default_factory=dict)
 

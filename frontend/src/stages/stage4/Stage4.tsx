@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { api, type InputMode, type Job, type PredictJobParams } from "../../api";
+import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { type InputMode } from "../../api";
+import { predictRunsApi } from "../../api/predictRuns";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { useFeature } from "../../components/FeatureGate";
@@ -9,10 +10,11 @@ import { InputModeTabs, readInputMode, writeInputMode } from "./InputModeTabs";
 import { ParamSetCard } from "./ParamSetCard";
 import { PredictWorkspace } from "./PredictWorkspace";
 import { PreparedPredictCard } from "./PreparedPredictCard";
-import { PredictResultCard } from "./PredictResult";
 import { TemplatePicker, useTemplateChoice } from "./TemplatePicker";
-import { usePredictVerify } from "./predictRun";
 import { BatchMode } from "./batch/BatchMode";
+import { PredictRunList } from "./history/PredictRunList";
+import { PredictRunView } from "./history/PredictRunView";
+import { SingleTabs, readSingleTab, writeSingleTab, type SingleTab } from "./history/SingleTabs";
 
 export { INPUT_MODE_KEY, TEMPLATE_OFF_TEXT } from "./InputModeTabs";
 
@@ -47,34 +49,9 @@ function TemplateMode() {
   );
 }
 
-/** "단일 예측으로 열기"(일괄 예측 결과 → ?job=<하위 PREDICT id>): 그 작업의 결과 칸(컨투어 결과 목록·커브·응답·입력파일) */
-function OpenedJob({ id }: { id: string }) {
-  const { study } = useStudy();
-  const [job, setJob] = useState<Job | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    api.job(id).then(setJob).catch((e) => setError(String(e?.message ?? e)));
-  }, [id]);
-  const pbs = usePredictVerify(job, job?.state === "SUCCEEDED");
-  const br = job?.batch ?? null;
-  const p = job?.params as PredictJobParams | undefined;
-  const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
-  return (
-    <>
-      <Card span={9} title={br ? `일괄 예측 ${br.label} · DOE #${br.doe_no ?? "?"}` : "예측 작업"} aside={br ? <Link to={`${base}/batch/${br.id}`}>← 일괄 예측 결과</Link> : <Link to={base}>닫기</Link>}>
-        {error ? <p className="error-text small">{error}</p> : <p className="muted small mono ellipsis">{p?.input_path ?? id}</p>}
-        <div className="run-action-row">
-          {pbs.button}
-          {pbs.notes}
-        </div>
-      </Card>
-      <PredictResultCard job={job} verifyValues={pbs.verifyValues} />
-    </>
-  );
-}
-
-/** ④ 예측(§16.5, phase3.md §14.8) — 입력 방식: 템플릿 값 입력(기본) / 일괄 예측(DOE) / 준비된 입력 파일 */
+/** ④ 예측(§16.5, phase3.md §14.8·§21.2) — 입력 방식: 템플릿 값 입력(기본) / 일괄 예측(DOE) / 준비된 입력 파일. 템플릿·준비된 입력은 하위 탭 "새 예측 | 실행 목록" */
 export function Stage4() {
+  const { study } = useStudy();
   const parametric = useFeature("predict_parametric");
   const meshOnly = useFeature("predict_mesh_only");
   const templateEnabled = parametric.enabled || meshOnly.enabled;
@@ -82,15 +59,45 @@ export function Stage4() {
   const [search, setSearch] = useSearchParams();
   const openJob = search.get("job");
   const mode: InputMode = templateEnabled ? stored : "prepared";
+  const [tab, setTab] = useState<SingleTab>(() => readSingleTab() ?? "new");
+  const chosen = useRef(false);
+  // 기본 탭: 진행 중(QUEUED·RUNNING) 단일 예측이 있으면 실행 목록(사용자가 이미 고르지 않았을 때만)
+  useEffect(() => {
+    let alive = true;
+    predictRunsApi
+      .list(study.id, { mode: "all", state: "QUEUED,RUNNING", limit: 1 })
+      .then((r) => alive && !chosen.current && r.items.length && setTab("list"))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [study.id]);
+  const chooseTab = (t: SingleTab) => {
+    chosen.current = true;
+    setTab(t);
+    writeSingleTab(t);
+  };
   const choose = (m: InputMode) => {
     setStored(m);
     writeInputMode(m);
     if (openJob) setSearch({}, { replace: true });
   };
+  const backToList = () => {
+    chooseTab("list");
+    setSearch({});
+  };
+  const single = mode === "template" || mode === "prepared";
   return (
     <>
       <InputModeTabs mode={mode} templateEnabled={templateEnabled} onChange={choose} />
-      {openJob ? <OpenedJob key={openJob} id={openJob} /> : mode === "template" ? <TemplateMode /> : mode === "batch" ? <BatchMode /> : <PreparedPredictCard />}
+      {openJob ? (
+        <PredictRunView key={openJob} id={openJob} onBackToList={backToList} />
+      ) : (
+        <>
+          {single && <SingleTabs tab={tab} onChange={chooseTab} />}
+          {mode === "batch" ? <BatchMode /> : tab === "list" ? <PredictRunList key={mode} initialMode={mode === "prepared" ? "prepared" : "template"} onNew={() => chooseTab("new")} /> : mode === "template" ? <TemplateMode /> : <PreparedPredictCard />}
+        </>
+      )}
     </>
   );
 }

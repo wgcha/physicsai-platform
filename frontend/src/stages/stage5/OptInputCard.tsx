@@ -8,7 +8,7 @@ export function OptInputCard({ modelId, setModelId }: { modelId: string; setMode
   const final = active.find((m) => m.is_final);
   const chosen = active.find((m) => m.id === modelId) ?? final;
   return (
-    <Card span={3} step="⑤-1" title="입력">
+    <Card span={3} step="⑥-1" title="입력">
       {ps ? (
         <div className="ps-summary small">
           <span>

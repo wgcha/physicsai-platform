@@ -33,8 +33,9 @@ include = ["physicsai_core*", "physicsai_api*", "physicsai_worker*"]
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "worker/tests", "packages/simdash_adapters/tests"]
 pythonpath = ["backend", "worker", "packages/simdash_adapters/src", "packages/paicad/src"]
-addopts = "--import-mode=importlib -p no:cacheprovider"
+addopts = "--import-mode=importlib -p no:cacheprovider -m 'not slow'"
 timeout = 180
 markers = [
+  "slow: 긴 시험(S17 다목적 HV 루프 등) — 기본 제외, scripts/test-all --slow 또는 pytest -m \"\"로 전체 실행",
   "windows: Windows 전용 시험(Job Object). Linux에서는 skip — 통과로 기록하지 않는다",
 ]

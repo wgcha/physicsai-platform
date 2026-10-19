@@ -4,6 +4,8 @@ import { act, fireEvent, screen, waitFor, within } from "@testing-library/react"
 import { openStatusDrawer, renderApp, STUDY } from "../test/render";
 import { PBS_NONE_TEXT } from "../stages/stage1/SolveCard";
 import { recordCalls } from "../test/recordCalls";
+import { DOE_TYPES } from "../mock/catalog";
+import { DESCRIPTIONS, HS_NOTE } from "../lib/sampling";
 
 describe("V2-FE-2 ① 학습데이터 생성", () => {
   it("카드 6개, 권한 없으면 조회 전용", async () => {
@@ -45,16 +47,21 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
     expect(calls.filter((c) => c.includes("/train/"))).toEqual(["PUT /studies/s-cushion/train/params"]);
   });
 
-  it("DOE 유형별 동적 옵션(int·bool·combo)과 runs_editable", async () => {
+  it("DOE 유형별 동적 옵션(int·bool·combo)과 runs_editable — 기본 선택은 추천 유형(S15)", async () => {
     renderApp(`${STUDY}/1`, { user: "power" });
     const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
     await within(card).findByLabelText("Random Seed");
-    expect(within(card).getByText("Nominal run 포함")).toBeTruthy();
+    const sel = within(card).getByLabelText("DOE 유형") as HTMLSelectElement;
+    expect(sel.value).toBe("LatinHyperCube"); // 목록 첫 항목(FullFact)이 아니라 recommended
+    expect([...sel.options].map((o) => o.value)).toEqual(["FullFact", "FracFact", "LatinHyperCube", "Sobol"]);
     expect((within(card).getByLabelText("run 수") as HTMLInputElement).disabled).toBe(false);
-    fireEvent.change(within(card).getByLabelText("DOE 유형"), { target: { value: "FullFactorial" } });
+    fireEvent.change(sel, { target: { value: "Sobol" } });
+    expect(within(card).getByText("Scramble")).toBeTruthy(); // bool
+    expect(within(card).getByLabelText("Sequence Offset")).toBeTruthy(); // int
+    fireEvent.change(sel, { target: { value: "FracFact" } });
     expect((within(card).getByLabelText("run 수") as HTMLInputElement).disabled).toBe(true);
     expect(within(card).getByText("자동 계산(HyperStudy 결정)")).toBeTruthy();
-    expect((within(card).getByLabelText("Levels") as HTMLSelectElement).value).toBe("3");
+    expect((within(card).getByLabelText("Resolution") as HTMLSelectElement).value).toBe("3"); // combo
     expect(within(card).queryByLabelText("Random Seed")).toBeNull();
   });
 
@@ -128,5 +135,49 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
     await waitFor(() => expect(within(table).getAllByRole("row").length).toBe(31));
     expect(within(table).queryByRole("button", { name: "재제출" })).toBeNull();
     expect(within(table).queryByRole("button", { name: "취소" })).toBeNull();
+  });
+});
+
+describe("V3-S15-13 ① DOE 생성: 추천 기본값·설명 상자", () => {
+  const lines = (card: HTMLElement) => [1, 2, 3, 4].map((n) => within(card).getByTestId(`samp-line-${n}`).firstChild!.textContent);
+
+  it("기본 선택 = 서버가 추천한 유형(목록 첫 항목이 아님), 이름 옆 추천 표시, 설명문 4줄·계산값·회색 한 줄", async () => {
+    renderApp(`${STUDY}/1`, { user: "power" });
+    const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+    await within(card).findByLabelText("Random Seed");
+    const sel = within(card).getByLabelText("DOE 유형") as HTMLSelectElement;
+    expect(sel.value).toBe("LatinHyperCube");
+    expect([...sel.options].map((o) => o.textContent)).toEqual(["FullFact", "FracFact", "LatinHyperCube · 추천", "Sobol"]);
+    expect(within(card).getByTestId("samp-desc").getAttribute("data-desc-id")).toBe("hs_lhs");
+    expect(lines(card)).toEqual(DESCRIPTIONS.hs_lhs.lines);
+    expect(within(card).getByTestId("samp-badge").textContent).toBe("추천");
+    expect(within(card).getByTestId("samp-calc").textContent!.trim()).toMatch(/^현재 변수 \d+개 → 권장 \d+$/);
+    expect(within(card).getByTestId("hs-note").textContent).toBe(HS_NOTE);
+    // 고를 때마다 바뀐다(추천 배지는 추천 유형만, 계산값은 hs_lhs·hs_sobol만)
+    fireEvent.change(sel, { target: { value: "Sobol" } });
+    expect(within(card).getByTestId("samp-desc").getAttribute("data-desc-id")).toBe("hs_sobol");
+    expect(lines(card)).toEqual(DESCRIPTIONS.hs_sobol.lines);
+    expect(within(card).queryByTestId("samp-badge")).toBeNull();
+    fireEvent.change(sel, { target: { value: "FullFact" } });
+    expect(lines(card)).toEqual(DESCRIPTIONS.hs_fullfact.lines);
+    expect(within(card).queryByTestId("samp-calc")).toBeNull();
+    fireEvent.change(sel, { target: { value: "FracFact" } });
+    expect(lines(card)).toEqual(DESCRIPTIONS.hs_fracfact.lines);
+    expect(within(card).getByTestId("hs-note").textContent).toBe(HS_NOTE); // 고정
+  });
+
+  it("추천 유형이 없으면 첫 항목이 기본, desc_id가 null이면 일반 문구", async () => {
+    const saved = DOE_TYPES.map((t) => [t.recommended, t.desc_id] as const);
+    DOE_TYPES.forEach((t) => ((t.recommended = false), (t.desc_id = null)));
+    try {
+      renderApp(`${STUDY}/1`, { user: "power" });
+      const card = await screen.findByRole("region", { name: "DOE · Radioss 입력" });
+      await waitFor(() => expect((within(card).getByLabelText("DOE 유형") as HTMLSelectElement).value).toBe("FullFact"));
+      expect(within(card).getByTestId("samp-desc").getAttribute("data-desc-id")).toBe("generic");
+      expect(lines(card)).toEqual(DESCRIPTIONS.generic.lines);
+      expect(within(card).queryByTestId("samp-badge")).toBeNull();
+    } finally {
+      DOE_TYPES.forEach((t, i) => ((t.recommended = saved[i][0]), (t.desc_id = saved[i][1])));
+    }
   });
 });

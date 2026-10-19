@@ -1,4 +1,4 @@
-"""geometry-engine.md §7.5 / V-GE-8: migration 0012_geometry_engine — 기존 행 altair/NULL, native 제약, FEATURE_PNG, downgrade 거부."""
+"""geometry-engine.md §7.5 / V-GE-8: migration 0015_geometry_engine — 기존 행 altair/NULL, native 제약, FEATURE_PNG, downgrade 거부."""
 
 from __future__ import annotations
 
@@ -33,10 +33,10 @@ def _ps(c, sid: str, *, tpl: bool = True, engine: str | None = None, input_kind:
               {"i": str(uuid.uuid4()), "s": sid})
 
 
-def test_migration_0012_roundtrip(pg_server):
+def test_migration_0015_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0012_geometry_engine"
+    assert MIGRATION_HEAD == "0015_geometry_engine"
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -44,12 +44,12 @@ def test_migration_0012_roundtrip(pg_server):
     url = f"{base}/{name}"
     eng = create_engine(url)
     try:
-        _alembic(url, "0011_surrogate_final")
+        _alembic(url, "0014_multiobj")
         sid = str(uuid.uuid4())
         with eng.begin() as c:
             c.execute(text("insert into studies(id, project_id, folder_name, title, ai_root_snapshot, created_by, created_by_name)"
                            " values (:i,'p-1','M12','t','/x','u','u')"), {"i": sid})
-            _ps(c, sid)  # 0011 시점 세트(altair 템플릿)
+            _ps(c, sid)  # 0014 시점 세트(altair 템플릿)
         _alembic(url, "head")
         with eng.begin() as c:
             assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
@@ -74,7 +74,7 @@ def test_migration_0012_roundtrip(pg_server):
             "select conname, pg_get_constraintdef(oid) from pg_constraint where conname in ('ck_artifacts_kind','ck_datasets_engine')")).all())
         assert "FEATURE_PNG" in defs["ck_artifacts_kind"] and "native" in defs["ck_datasets_engine"]
         with pytest.raises(RuntimeError):
-            _alembic(url, "0011_surrogate_final", down=True)
+            _alembic(url, "0014_multiobj", down=True)
     finally:
         eng.dispose()
         with pg_server["admin"].connect() as c:

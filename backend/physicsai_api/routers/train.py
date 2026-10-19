@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import doe_result_table as rt_svc
 from ..services import stage1_train_data as svc
 
 router = APIRouter(tags=["train"])
@@ -58,3 +59,10 @@ def list_runs(doe_id: str, request: Request, response: Response, state: str | No
 def samples(doe_id: str, request: Request, limit: int | None = Query(default=None, ge=1, le=200), cursor: str | None = None,
             _p: Principal = Depends(get_principal)) -> dict:
     return svc.doe_samples_page(get_ctx(request), doe_id, limit, cursor)
+
+
+@router.get("/train-does/{doe_id}/result-table", response_model=S.DoeResultTable, responses=ERR)
+def doe_result_table(doe_id: str, request: Request, response: Response, _p: Principal = Depends(get_principal)) -> dict:
+    """⑤ 결과분석 입력(s14 §19.5): 샘플 표 + 응답 + run 상태. 읽기 전용, 파일 LRU, 본문 비저장."""
+    response.headers["Cache-Control"] = "no-store"
+    return rt_svc.result_table(get_ctx(request), doe_id)

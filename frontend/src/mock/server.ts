@@ -35,6 +35,8 @@ import { isBatchChild, predictBatchRoutes, seedBatches, type BatchRec } from "./
 import { studyRoutes } from "./studies";
 import { captureRoutes, type CaptureMode } from "./capture";
 import { scxRoutes } from "./scx";
+import { predictRunsRoutes, seedPredictRuns } from "./predictRuns";
+import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 
 export type { MockResp } from "./route";
@@ -68,9 +70,13 @@ export interface MockOptions {
   /** /status.auth.login_url(auth.dashboard_public_login_url, 운영 대시보드 기본 "/home/" — phase3 D3-38) */
   loginUrl?: string;
   /** S9: "running"이면 진행 중 일괄 예측 B-003 시드(하위 PREDICT 12개가 대기열에 들어간다) */
-  batchDemo?: "running";
+  batchDemo?: "running" | "sobol" | "bbd";
   /** S10: 예측 끝 컨투어 캡처 결과(기본 OK) */
   capture?: CaptureMode;
+  /** S16 V1: "history"면 단일 예측 이력 시드(템플릿·준비된 입력·재시도·실패·진행 중) */
+  predictRuns?: "history";
+  /** S16 V2: "demo"면 FEM 검증 시드(FV-001 완료·FV-002 실패·FV-003 동반 예측 대기) */
+  femVerify?: "demo";
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -100,6 +106,8 @@ const ROUTES: Route[] = [
   surrogateRoutes, // S13 ⑤ 내장 최적화(phase3.md §18.6)
   predictBatchRoutes, // S9 ④ 일괄 예측·템플릿 응답(phase3.md §14.7)
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
+  predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
+  femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④
@@ -139,6 +147,10 @@ export class MockServer {
   manage: ManageMock;
   /** S10 */
   capture: CaptureMode = "OK";
+  /** S16 V2 FEM 검증 */
+  fems: FemRec[] = [];
+  /** S16 V3: 방향별 영상 content_type 덮어쓰기(avi·gif 흉내) */
+  videoTypes: Record<string, string> = {};
   mediaInfo = new Map<string, { status: Exclude<CaptureMode, "NONE">; message: string | null }>();
 
   constructor(opts: MockOptions = {}) {
@@ -159,6 +171,8 @@ export class MockServer {
     this.manage = new ManageMock(this);
     seedBatches(this, opts.batchDemo);
     seedSurrogate(this);
+    if (opts.predictRuns === "history") seedPredictRuns(this);
+    if (opts.femVerify === "demo") seedFemVerify(this);
   }
 
   get me(): Me | null {

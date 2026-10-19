@@ -1,0 +1,68 @@
+/* S15(phase3.md §20.10): 표본 방식 선택창 + 설명 상자(① DoeGenCard·④ SamplingPicker 공용), ④ 미리보기 머리·배치 결과 머리 한 줄.
+   회색(muted) 안내만 쓰고 색 강조는 `추천` 배지 하나. 글자 크기·모서리는 역할 토큰만. */
+.samp-pick {
+  display: grid;
+  gap: var(--space-2);
+}
+.samp-pick select {
+  width: 100%;
+}
+.samp-desc {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-2);
+}
+.samp-desc-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.samp-line {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+.samp-line:nth-of-type(1) {
+  color: var(--color-text);
+}
+.samp-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--color-info-surface);
+  color: var(--color-accent);
+  font: var(--font-r-strong);
+}
+.samp-calc {
+  color: var(--color-accent);
+}
+.samp-note {
+  margin: 0;
+}
+.samp-sub {
+  display: grid;
+  gap: var(--space-2);
+}
+.samp-sub table .num-input {
+  max-width: 96px;
+}
+.samp-head {
+  display: grid;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+.samp-head p {
+  margin: 0;
+}
+.batch-sampling {
+  margin: 0 0 var(--space-2);
+}
+.hs-note {
+  margin: 0;
+}
+.samp-sub .inline-field {
+  white-space: nowrap;
+}

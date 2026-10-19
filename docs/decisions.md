@@ -111,6 +111,11 @@
 - 2026-10-17 · ⑤에 "플랫폼 내장(쿠션만 가능)" 모드 추가: ④ 일괄 예측 체인으로 탐색 → GP/RBF 대리모델 → 후보 k개 실제 예측 검증 반복(기본 3회 × 4), mesh_only·assembly 모두, 반복은 종료 훅 연쇄(`SURROGATE_OPT`, migration 0010) — 근거: 사용자 결정 · contracts/s12_s13.md §18, D3-60
 - 2026-10-17 · 원본 최적화는 mesh_only 템플릿이면 생성·재시도 409 `TEMPLATE_ASSEMBLY_REQUIRED` + 워커 op_prep 가드(이슈 #4 TypeError 제거) — 근거: 사용자 결정 · contracts/s12_s13.md §18.8, D3-60
 - 2026-10-17 · (사용자 확인 필요) 내장 최적화용 새 런타임 의존성 numpy·scipy(약 55 MB wheel, 워커 계산 모듈에서만 import, 없으면 기능만 꺼짐) — 근거: GP 우도 최적화·정수 변수 전역 탐색을 직접 구현하지 않기 위함 · contracts/s12_s13.md §18.2
+- 2026-10-17 · 화면 단계 재편: ④ 예측 · ⑤ 결과분석(신설: 결과 표 입력 = 일괄 예측 배치 또는 해석 DOE, PLS·PCA·커브·영향도(PRCC·표준화 회귀계수)·solver vs predict 겹쳐 보기) · ⑥ 최적화(기존 ⑤), 내부 코드 경로·job·DB·URL 숫자·e2e 번호 유지·표시만 변경, 새 읽기 전용 API `GET /train-does/{doe_id}/result-table` — 근거: 사용자 결정 · contracts/s14_analysis.md §19, D3-62
+- 2026-10-18: S14 계약 예시값 정정·겹쳐 보기 응답은 공통 응답만·해석 폴더 직접 지정 보류 (근거: Verifier 판정, 사용자 '추천대로')
+- 2026-10-18: S15 표본 방식 — ④ 7종 추가(기본 최적화 LHS), ① HyperStudy 4종 유지+설명·추천(LHS), 영향도 formal/reference/off 서버 판정, migration 0012 (근거: 사용자 결정, s15_sampling.md §20, D3-63)
+- 2026-10-19: S16 VOC — ④ 단일 예측 실행 목록, 조립 FEM 검증(FEM_VERIFY, 기존 해석 제출 경로), 영상 실패 노출·ffmpeg 선택 변환, migration 0013 (근거: 사용자 VOC·결정, s16_voc.md §21, D3-64)
+- 2026-10-19: S17 성능 정의(템플릿 응답 확장 H3D+CURVE, perf:<NAME>)·다목적 내장 최적화(파레토 전선 기본+가중 추천 슬라이더, ParEGO+HVI, HV 수렴), migration 0014, S16 뒤 병합 (근거: 사용자 VOC·결정, s17_multiobj.md §22, D3-65)
 
 ## 2026-10-17 (native 형상 엔진 R1 모핑 — Plan 계약, contracts/geometry-engine.md)
 
@@ -120,7 +125,7 @@
 - 2026-10-17 기존 job_type·step 키를 유지하고 핸들러가 엔진으로 분기, 새 job_type은 ④ native 세트 준비 `PARAM_SET_NATIVE` 1개 — 근거: ②③⑤·배치 종료 훅·재시도·정리 범주 무수정 · geometry-engine.md GE-3, §7.3
 - 2026-10-17 파라미터 계약은 `parameter_extracted.xml`(Root/Model/Parameter/Name,Value) 호환 + `parameter_features.json`(타입·면 서명·기준면·공칭·가능 범위·그룹) + 피처별 하이라이트 PNG, 범위 기본 ±5% — 근거: 사용자 합의, ①-1 TX_PARSE 재사용 · geometry-engine.md GE-4, §4.3
 - 2026-10-17 검사(파라미터 재측정·경계 편차·품질·간섭·tie) 실패 시 샘플 스킵 + 사유 코드 `GEOM_*`(CAD 생성 불가/간섭/품질 미달/편차 초과/tie 투영 실패)를 DOE·배치 run에 기록 — 근거: 사용자 합의 · geometry-engine.md GE-5, §6.5
-- 2026-10-17 엔진 선택은 `geometry.engine`(altair|native) 기본값 → `param_sets`·`train_setups`·`train_does.engine`에 생성 시 확정, 데이터셋·모델도 엔진 기록, 혼용은 422 `ENGINE_MIXED`·409 `ENGINE_MISMATCH`(migration 0012) — 근거: 사용자 합의(혼용 금지) · geometry-engine.md GE-6, §7.5·§7.7
+- 2026-10-17 엔진 선택은 `geometry.engine`(altair|native) 기본값 → `param_sets`·`train_setups`·`train_does.engine`에 생성 시 확정, 데이터셋·모델도 엔진 기록, 혼용은 422 `ENGINE_MIXED`·409 `ENGINE_MISMATCH`(migration 0015 — phase3 병합 시 0012에서 재번호) — 근거: 사용자 합의(혼용 금지) · geometry-engine.md GE-6, §7.5·§7.7
 - 2026-10-17 검사 기준 고급 옵션(품질·간섭·편차 허용오차)은 기본값 `geometry.defaults`, 세트별 덮어쓰기 `param_sets.geom_options`, 사용값은 run 폴더 `options.json`, UI는 접힘 1개 — 근거: 사용자 합의 · geometry-engine.md GE-7, §4.9·§8
 - 2026-10-17 (확정 대기) 두께 변경 기준면 = 제품·타 바디 접촉면 고정·반대 면 이동, 동률이면 면적 큰 면 고정 — 근거: 사용자 합의(기본 규칙, 확정 대기) · geometry-engine.md GE-8, §15 Q2
 - 2026-10-17 native DOE(①-3·④ 일괄)는 플랫폼 LHS(`batch_matrix`) + 동시 실행기, run 폴더 `run__N/{m_1,m_2,m_3}`·paramitem(`m_1/native_params.xml`) 호환으로 ②③ glob 유지 — 근거: 사용자 합의 · geometry-engine.md §7.3.3·§7.3.6
@@ -149,3 +154,4 @@
 - 2026-10-19 위치형 파라미터(HOLE_U/V) 기준 = 가장 가까운 고정 면까지 거리(동률 면적 큰 면), 대안 `position_ref: proportional`; paicad 0.2.0 해석 GE-C7(위상 보존 재구성·face_map 항등·sweep `--update-dir`) 반영 — 사용자 확정·구현 해석 · geometry-engine §6.2·§6.3·§11.2
 - 2026-10-19 paicad 0.3.0 구현 차이 GE-C9 반영 + 위치형 파라미터(HOLE_U/V) 기본 범위는 절대 mm(±5, `position_range_mm`, 고급 옵션)·치수형은 ±% 유지·envelope 위치형 mm 단계(1·2·3·5·8·10), update 피처 간 충돌 사전 검사 `GEOM_FEATURE_COLLISION`(CAD 생성 불가 범주) — 사용자 확정 · geometry-engine §4.3·§4.9·§6.3·§11.2·GE-C9
 - 2026-10-19 Verifier 판정(paicad 0.4.0)에 따라 계약을 구현 기준으로 정정(GE-C10): update `positions[]` 키·`collisions`, envelope `step`/`unit`/`last_ok`/`edge_ratio`·`schema_version` 2, `extract.position_range_mm`, `--pos-steps`, `--solver` = writer 선택, selftest 실물 입력 인자 확정(Q19), `TAG_VERTEX_NO_NODE`, options 모르는 키 거부 — 근거: Verifier 판정 · geometry-engine.md §4.6·§4.9·§5.3·§11.2·GE-C10
+- 2026-10-19 `claude/phase3`(S14~S17, migration 0012_sampling_kinds·0013_fem_verify·0014_multiobj) 병합: native migration `0012_geometry_engine`을 `0015_geometry_engine`(down_revision `0014_multiobj`)으로 재번호, `MIGRATION_HEAD` = 0015, ⑥ 내장 최적화 엔진 게이트(ENGINE_MISMATCH·native 세트 게이트)는 phase3 `surrogate_opt_problem.normalize`로 이식 — 근거: 병합 지시(phase3 번호 우선) · geometry-engine.md §7.5

@@ -68,3 +68,9 @@ def cancel_batch(batch_id: str, request: Request, principal: Principal = Depends
 def retry_failed_batch(batch_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     """실패만 다시(power): 생성 실패 run → 부모 새 작업, 실패·취소·중단 하위 → 기존 재시도."""
     return svc.retry_failed(get_ctx(request), principal, batch_id, request_id(request), client_ip(request))
+
+
+@router.post("/predict-batches/{batch_id}/extract-responses", response_model=S.Job, status_code=201, responses=ERR)
+def extract_batch_responses(batch_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """성능 다시 추출(power, phase3 §22.3.5): 끝난 배치의 H3D 성능을 현재 템플릿 정의로 다시 추출하는 PB_RESP_EXTRACT 작업."""
+    return svc.extract_responses(get_ctx(request), principal, batch_id, request_id(request), client_ip(request))

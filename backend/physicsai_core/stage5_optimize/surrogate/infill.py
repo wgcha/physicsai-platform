@@ -21,7 +21,7 @@ import numpy as np
 from scipy.optimize import differential_evolution
 from scipy.stats import norm
 
-from .dataset import Design, Problem, free_variables, same_design
+from .dataset import Constraint, Design, Problem, free_variables, same_design
 from .gp import GPFitError, GPModel, fit_gp
 from .rbf import RBFFitError, RBFModel, fit_rbf
 
@@ -66,6 +66,8 @@ class FitResult:
     warnings: list[dict[str, str]] = field(default_factory=list)
     quality: dict[str, Any] = field(default_factory=dict)
     seed: int = 1
+    objectives: list[Scaled] = field(default_factory=list)  # S17 다목적: 목적별 모델(부호 통일 값), objective = [0]
+    signs: list[float] = field(default_factory=list)
 
     def normalize(self, X: np.ndarray) -> np.ndarray:
         return (np.atleast_2d(X) - self.lo) / (self.hi - self.lo)
@@ -85,9 +87,13 @@ class FitResult:
                 d["log_nugget"] = float(m.log_nugget)
             return d
 
-        return {"kind": self.kind, "free": self.free, "lo": self.lo.tolist(), "hi": self.hi.tolist(), "fill": self.fill,
-                "sign": self.sign, "seed": self.seed, "objective": one(self.objective),
-                "constraints": [one(c) for c in self.constraints], "warnings": self.warnings, "quality": self.quality}
+        d = {"kind": self.kind, "free": self.free, "lo": self.lo.tolist(), "hi": self.hi.tolist(), "fill": self.fill,
+             "sign": self.sign, "seed": self.seed, "objective": one(self.objective),
+             "constraints": [one(c) for c in self.constraints], "warnings": self.warnings, "quality": self.quality}
+        if self.objectives:
+            d["objectives"] = [one(o) for o in self.objectives]
+            d["signs"] = list(self.signs)
+        return d
 
     @classmethod
     def from_json(cls, d: dict[str, Any]) -> FitResult:
@@ -100,7 +106,8 @@ class FitResult:
         return cls(d["kind"], list(d["free"]), np.asarray(d["lo"], dtype=float), np.asarray(d["hi"], dtype=float),
                    {k: float(v) for k, v in d["fill"].items()}, float(d["sign"]), one(d["objective"]),
                    [one(c) for c in d["constraints"]], list(d.get("warnings") or []), dict(d.get("quality") or {}),
-                   int(d.get("seed", 1)))
+                   int(d.get("seed", 1)), [one(o) for o in d.get("objectives") or []],
+                   [float(x) for x in d.get("signs") or []])
 
 
 def _standardize(v: np.ndarray) -> tuple[np.ndarray, float, float]:
@@ -218,6 +225,27 @@ def _de(func: Callable[[np.ndarray], np.ndarray], bounds: list[tuple[float, floa
     return np.asarray(r.x, dtype=float)
 
 
+def cons_violation(c: Constraint, m: np.ndarray) -> np.ndarray:
+    """예측 위반량(원 단위, 벡터) — dataset.Constraint.violation과 같은 식(range 포함)."""
+    if c.op == "range":
+        return np.maximum(0.0, float(c.lo) - m) + np.maximum(0.0, m - float(c.hi))  # type: ignore[arg-type]
+    return np.maximum(0.0, m - float(c.value)) if c.op == "<=" else np.maximum(0.0, float(c.value) - m)  # type: ignore[arg-type]
+
+
+def cons_pof(c: Constraint, m: np.ndarray, s: np.ndarray) -> np.ndarray:
+    """만족 확률: ≤ Φ((c−μ)/σ), ≥ 1 − Φ((c−μ)/σ), range Φ((hi−μ)/σ) − Φ((lo−μ)/σ)."""
+    s = np.maximum(s, 1e-12)
+    if c.op == "range":
+        return np.maximum(0.0, norm.cdf((float(c.hi) - m) / s) - norm.cdf((float(c.lo) - m) / s))  # type: ignore[arg-type]
+    z = (float(c.value) - m) / s  # type: ignore[arg-type]
+    return norm.cdf(z) if c.op == "<=" else norm.sf(z)
+
+
+def cons_ok(c: Constraint, v: float) -> bool:
+    """예측 평균이 제약을 만족하는지(kriging believer의 fmin 갱신용)."""
+    return c.violation(v) <= 0.0
+
+
 def _ei(mean: np.ndarray, std: np.ndarray, fmin: float) -> np.ndarray:
     s = np.maximum(std, 1e-12)
     z = (fmin - mean) / s
@@ -254,8 +282,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
     def penalty(cr: list[tuple[np.ndarray, np.ndarray]], models: list[Scaled]) -> np.ndarray:
         p = np.zeros(cr[0][0].shape if cr else 1)
         for (m, _s), c, sm in zip(cr, cons, models):
-            v = np.maximum(0.0, m - c.value) if c.op == "<=" else np.maximum(0.0, c.value - m)
-            p = p + v / max(sm.std, 1e-12)
+            p = p + cons_violation(c, m) / max(sm.std, 1e-12)
         return p
 
     def round_x(x: np.ndarray) -> np.ndarray:
@@ -302,8 +329,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
     if fit.kind == "gp":
         valid_obj = np.array([fit.sign * x.objective for x in designs])
         feas = [i for i, x in enumerate(designs) if all(
-            (v <= c.value + 1e-9 * max(1.0, abs(c.value))) if c.op == "<=" else (v >= c.value - 1e-9 * max(1.0, abs(c.value)))
-            for v, c in zip(x.constraints, cons))]
+            c.violation(v) <= 1e-9 * max([1.0, *[abs(b) for b in c.bounds()]]) for v, c in zip(x.constraints, cons))]
         fmin_std = float((np.min(valid_obj[feas]) - obj.mean) / obj.std) if feas else None
         om, cms = obj, list(cmods)
 
@@ -311,8 +337,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
             """가짜 관측(예측 평균)을 더하고, 예측상 제약을 만족하면 현재 최선(fmin)도 그 값으로 갱신."""
             nonlocal om, cms, fmin_std
             mo = om.model.predict(xn)[0]
-            ok = all((float(m) <= c.value) if c.op == "<=" else (float(m) >= c.value)
-                     for c, m in zip(cons, [cm.raw(xn)[0][0] for cm in cms]))
+            ok = all(cons_ok(c, float(m)) for c, m in zip(cons, [cm.raw(xn)[0][0] for cm in cms]))
             om = Scaled(om.model.with_points(xn, mo), om.mean, om.std)
             cms = [Scaled(cm.model.with_points(xn, cm.model.predict(xn)[0]), cm.mean, cm.std) for cm in cms]
             if ok:
@@ -331,8 +356,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
                 pof = np.ones(Xn.shape[0])
                 for c, cm in zip(cons, cms_):
                     mc, sc = cm.raw(Xn)
-                    z = (c.value - mc) / np.maximum(sc, 1e-12)
-                    pof = pof * (norm.cdf(z) if c.op == "<=" else norm.sf(z))
+                    pof = pof * cons_pof(c, mc, sc)
                 a = pof if fmin_ is None else _ei(m, s, fmin_) * pof
                 return -a
 

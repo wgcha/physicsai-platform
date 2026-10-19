@@ -11,6 +11,7 @@ from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.fileutil import copy_file, sha256_file, write_json, write_text
 from physicsai_core.paths import backup_existing, backup_stamp, display_path, resolve_in_study
+from physicsai_core.sampling import registry as sampling_registry
 from physicsai_core.stage1_train_data import doe_samples
 from physicsai_core.stage1_train_data import doe_types as dt_mod
 from physicsai_core.stage1_train_data import train_params as tp
@@ -134,7 +135,15 @@ def generate_tpl(ctx: AppContext, principal: Principal, study_id: str, version: 
 
 
 def doe_types(ctx: AppContext) -> list[dict[str, Any]]:
-    return dt_mod.load_doe_types(ctx.settings.resources.doe_design_type_json, ctx.settings.ui.max_artifact_bytes)
+    """정의 파일 유형 그대로 + S15 꾸밈(§20.6): desc_id·recommended(설정 `train_data.recommended_doe_type`)·influence_class."""
+    types = dt_mod.load_doe_types(ctx.settings.resources.doe_design_type_json, ctx.settings.ui.max_artifact_bytes)
+    rec = ctx.settings.train_data.recommended_doe_type
+    out = []
+    for t in types:
+        cls, _note = sampling_registry.doe_influence(t["value"], {"RESOLUTION": "3"})
+        out.append({**t, "desc_id": sampling_registry.DOE_DESC_IDS.get(t["value"]),
+                    "recommended": bool(rec) and t["value"] == rec, "influence_class": cls})
+    return out
 
 
 def doe_out(ctx: AppContext, conn: Any, study: dict[str, Any], d: dict[str, Any]) -> dict[str, Any]:

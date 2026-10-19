@@ -148,7 +148,10 @@ capture:                          # ④ 예측 컨투어 캡처(phase3 §15 S10)
   enabled: true                   # false = 끔. altair.hw_exe_path가 비어도 꺼짐(/status features.contour_capture)
   views: ["iso", "front", "top", "right"]   # 기본 방향(iso front back top bottom left right). 템플릿·작업 display.views가 우선
   video: true                     # 방향마다 애니메이션 동영상도 저장
-  video_ext: "mp4"                # mp4 | avi | gif
+  video_ext: "mp4"                # mp4 | gif | avi(allow_avi: true일 때만 — 아니면 설정 경고 + 실제 mp4)
+  allow_avi: false                # avi는 브라우저가 재생하지 못한다(phase3 §21.4.4 S16)
+  video_scope: "page"             # page | window — TCL `hwc save animation <scope>`(서버 확인 E4-14-V7)
+  video_target_bytes: 1048576     # 표시용 영상 목표 크기(1 MiB, 64 KiB~max_video_bytes). 변환이 있으면 이 크기 이하가 될 때까지 단계 재인코딩
   use_last: true                  # 마지막 프레임 기준 캡처(false = 첫 프레임)
   default_field: "CornerStress"   # 템플릿 표시 설정·응답 정의가 없을 때 결과 필드(PhysicsAI 예측 h3d 응력 — hwc result scalar load type=CornerStress)
   default_component: "vonMises"   # 성분이 비었고 결과 필드가 default_field일 때 성분(component= "vonMises", 실패 시 type만 재시도). "" = 없음
@@ -159,6 +162,32 @@ capture:                          # ④ 예측 컨투어 캡처(phase3 §15 S10)
   estimate_video_mb: 1
   estimate_sec_per_view: 20
   estimate_sec_per_video: 40
+  ffmpeg:                         # 선택적 영상 변환(H.264·yuv420p·faststart mp4). 원본은 media/raw/에 보존
+    exe: ""                       # ffmpeg 실행 파일 절대경로. 빈 값 = 변환 안 함
+    probe_exe: ""                 # ffprobe 절대경로(선택). 빈 값 = 코덱 확인 안 함
+    args: ["-hide_banner", "-loglevel", "error", "-y", "-i", "{video_in}", "-an",
+           "-vf", "scale=trunc(iw*{scale}/2)*2:trunc(ih*{scale}/2)*2,fps={fps}",
+           "-c:v", "libx264", "-preset", "veryfast", "-crf", "{crf}", "-pix_fmt", "yuv420p", "-movflags", "+faststart", "{video_out}"]
+    probe_args: ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name,pix_fmt", "-of", "default=nw=1", "{video_in}"]
+    ladder:                       # 차례로 시도해 video_target_bytes 이하인 첫 결과를 쓴다(scale 0.1~1.0, crf 0~51, fps 1~60)
+      - {scale: 1.0, crf: 28, fps: 15}
+      - {scale: 0.75, crf: 30, fps: 12}
+      - {scale: 0.5, crf: 32, fps: 10}
+      - {scale: 0.5, crf: 38, fps: 8}
+    timeout_s: 300                # 변환 1회 상한(초)
+
+fem_verify:                       # ④ 조립 FEM 검증(phase3 §21 S16): 예측 설계점을 조립 상태 Radioss로 해석(PBS·SCX)해 예측과 비교
+  enabled: true
+  dir_name: "04_verify"           # Study 직계 폴더(FV-001/a1/…)
+  max_active: 4                   # Study당 진행 중(예측 대기·해석 중) 검증 상한, 1~20
+  field_map: {}                   # 예측 h3d 결과 이름 → FEM h3d 결과 이름(예: {"CornerStress": "Element Stresses (2D & 3D)"}) — 서버 확인 E4-14-F2
+  legend_subcase: 1               # 같은 범례 min·max를 읽을 subcase(≥1)
+  auto_isolate_cushion: true      # mesh_only 템플릿이면 FEM 컨투어를 쿠션 include의 /PART id로 격리(E4-14-F3)
+  zero_tol: 1.0e-12               # 오차% 기준값(FEM)이 이 값 이하면 오차% 없음("기준값 0")
+  max_assem_files: 500            # 조립 원본 파일 수 상한
+  max_assem_bytes: 2147483648     # 조립 원본 합계 크기 상한(2 GiB)
+  include_scan_max_bytes: 16777216   # #include 참조 검사 대상 파일 크기 상한(16 MiB)
+  max_pred_h3d_copy_bytes: 4294967296  # 예측 응답 재추출용 h3d 사본 상한(4 GiB)
 
 geometry:                          # native 형상 엔진(docs/contracts/geometry-engine.md). 절이 없으면 아래 기본값
   engine: altair                   # altair | native — 새 파라미터 세트·①-1 추출·①-3 DOE의 기본 엔진(화면 기본 선택)
@@ -281,6 +310,7 @@ train_data:                       # ① 학습데이터(phase2 §6.2~§6.6). 기
   tpl_parameter_line_regex: '(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?'
   tpl_paramitem_line_regex: '(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?'
   max_runs: 2000
+  recommended_doe_type: "TYPE_LATINHYPERCUBE"   # ① DOE 생성 화면 추천(기본 선택) 유형 value — DATA_doe_design_type.json의 value. 빈 문자열 = 추천 없음(첫 항목)
   max_multi_execution: 8
   hst_progress_regex: 'Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)'   # 원본 2_run_hst_gen_rad_input.py:59-61
   hst_log_error_patterns:                   # 원본 :64-71
@@ -332,6 +362,17 @@ surrogate_opt:                      # ⑤ 플랫폼 내장 최적화(phase3 §18
   de_popsize: 15
   fit_timeout_s: 600                # 반복 1회 학습+후보 탐색 시간 한도
   blas_threads: 4                   # 워커 안 numpy 계산 스레드 상한(worker.max_logical_cores와 작은 쪽)
+  max_objectives: 3                 # 다목적(phase3 §22 S17): 목적 1~3 · 관찰 ≤ 10 · 추가 검증 점 ≤ 10
+  max_observe: 10
+  max_extra_points: 10
+  mo_lattice_h2: 10                 # 예측 전선 가중 격자(2목적 11점·3목적 28점)
+  mo_lattice_h3: 6
+  mo_de_maxiter: 100                # 예측 전선·ParEGO 후보 탐색 세대 수
+  mo_rho: 0.05                      # 증강 Chebyshev ρ(0~1)
+  mo_ref_offset: 0.1                # HV 기준점 1 + offset(0.01~1)
+  mo_gp_restarts: 4                 # ParEGO 스칼라화 GP 재시작 수
+  mo_hvi_share_m3: 0.5              # 3목적: HVI 활용 후보 ⌈k·비율⌉개(0 = 1개)
+  mo_front_prox_m3: 6.0             # 3목적: ParEGO 후보를 예측 전선 가까이(0 = 끔)
 
 env_check:
   probe_timeout_s: 60               # 점검용 짧은 실행만의 상한(작업 step 시간 한도 아님)

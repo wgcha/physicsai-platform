@@ -1,7 +1,7 @@
 // ④ B 일괄 예측 진행·결과(phase3.md §14.8, 시안 04, 라우트 …/stage/4/batch/:batchId):
 // 위 3칸(입력 생성 x/N · 예측 실행 중·대기·완료 · 파일 위치) + 결과 표(정렬·CSV·행 선택·실패만 다시·일괄 취소)
-// + 오른쪽: 그래프 카드(BatchGraphTabs — 탭 변수–응답·설계공간 지도(S12)) · 커브 겹쳐보기 · 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증).
-// 선택 모델: selected(doe_no)를 표·그래프·지도·커브가 공유, 커브 계열(series)도 커브 겹쳐보기·설계공간 지도가 공유(§17.6).
+// + 오른쪽: 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증) · "⑤ 결과분석에서 열기" 링크 카드.
+// S14(D3-62, §19.7): 변수–응답 그래프·설계공간 지도·커브 겹쳐보기(분석)는 ⑤ 결과분석(/stage/analysis?source=batch&id=<batchId>)으로 이동했다.
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, errorMessage, type Job, type PredictBatch, type PredictBatchRow, type PredictResult as PR, type ViewKey } from "../../../api";
@@ -13,13 +13,13 @@ import { Card, CopyButton, ProgressBar } from "../../../components/ui";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { POLL } from "../../../lib/poll";
 import { fmtNum } from "../../../lib/format";
-import { usePredictVerify } from "../predictRun";
+import { samplingSummary } from "../../../lib/sampling";
+import { useFemVerifyButton } from "../verify/useFemVerifyButton";
+
 import { ContourMedia } from "../ContourMedia";
 import { ResultListTree } from "../PredictResult";
 import { fmtDuration } from "../PredictSteps";
 import { OutDot } from "./BatchPreview";
-import { CurveOverlay } from "./CurveOverlay";
-import { BatchGraphTabs } from "./BatchGraphTabs";
 import { writeBatchTab } from "./BatchMode";
 import { writeInputMode } from "../InputModeTabs";
 import { BATCH_STATUS_LABEL, ROW_STATE_LABEL, isBatchActive, isRowFailed, rowTone, sortOptions, sortRows, type SortKey } from "./batchTable";
@@ -36,11 +36,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [sort, setSort] = useState<SortKey | null>(null);
-  const [vars, setVars] = useState<string[] | null>(null);
-  const [resp, setResp] = useState<string | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
-  /** 커브 계열(커브 겹쳐보기·설계공간 지도 공유, null = 첫 계열) */
-  const [series, setSeries] = useState<string | null>(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   /** S10: 컨투어 방향은 run을 바꿔도 유지(비교용) */
   const [mediaView, setMediaView] = useState<ViewKey | null>(null);
@@ -64,8 +60,6 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const respNames = useMemo(() => (showResp ? b!.responses.map((r) => r.name) : []), [showResp, b]);
   const sortKey: SortKey = sort ?? (respNames[0] ? `${respNames[0]}:asc` : "doe");
   const rows = useMemo(() => (b ? sortRows(b.rows, sortKey) : []), [b, sortKey]);
-  const pickVars = vars ?? (b?.parameters.slice(0, 1) ?? []);
-  const pickResp = resp ?? respNames[0] ?? null;
   const selRow = b?.rows.find((r) => r.doe_no === selected) ?? null;
   useEffect(() => {
     if (selected === null && rows.length) setSelected((rows.find((r) => r.state === "SUCCEEDED") ?? rows[0]).doe_no);
@@ -80,6 +74,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const anyFailed = b.rows.some((r) => isRowFailed(r.state));
   const genElapsed = parent?.started_at && parent?.finished_at ? fmtDuration(Date.parse(parent.finished_at) - Date.parse(parent.started_at)) : null;
   const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
+  const sampleLine = samplingSummary(b.sampling, b.rows.length); // S15 §20.10
 
   const act = async (f: () => Promise<unknown>) => {
     setActionError(null);
@@ -99,7 +94,6 @@ export function BatchResult({ batchId }: { batchId: string }) {
       a.click();
       URL.revokeObjectURL(a.href);
     });
-  const toggleVar = (n: string) => setVars((v) => ((v ?? pickVars).includes(n) ? (v ?? pickVars).filter((x) => x !== n) : [...(v ?? pickVars), n]));
 
   return (
     <>
@@ -178,6 +172,11 @@ export function BatchResult({ batchId }: { batchId: string }) {
             {actionError}
           </p>
         )}
+        {sampleLine && (
+          <p className="muted small batch-sampling" data-testid="batch-sampling">
+            표본: {sampleLine}
+          </p>
+        )}
         {!showResp && <p className="muted small" data-testid="no-resp">{NO_RESP_TEXT}</p>}
         <div className="table-wrap">
           <table className="table compact batch-table" aria-label="일괄 예측 결과">
@@ -187,19 +186,13 @@ export function BatchResult({ batchId }: { batchId: string }) {
                 <th>폴더</th>
                 {b.parameters.map((n) => (
                   <th key={n} className="num">
-                    <label className="th-pick" title="응답 그래프 변수로 쓰기">
-                      <input type="checkbox" checked={pickVars.includes(n)} onChange={() => toggleVar(n)} />
-                      {n}
-                    </label>
+                    {n}
                   </th>
                 ))}
                 {showResp &&
                   b.responses.map((r) => (
                     <th key={r.name} className="num">
-                      <label className="th-pick" title="응답 그래프 응답으로 쓰기">
-                        <input type="radio" name={`plot-resp-${b.id}`} checked={pickResp === r.name} onChange={() => setResp(r.name)} />
-                        {r.name}
-                      </label>
+                      {r.name}
                       {r.unit && <span className="muted"> {r.unit}</span>}
                     </th>
                   ))}
@@ -222,16 +215,20 @@ export function BatchResult({ batchId }: { batchId: string }) {
             </tbody>
           </table>
         </div>
-        <p className="muted small">행을 누르면 오른쪽에 그 DOE의 결과가 열립니다. DOE # 옆 카메라 표시 = 컨투어 캡처 있음(방향은 run을 바꿔도 유지). 학습 범위 밖 값은 숫자 옆 작은 회색 점. 열 이름의 체크(변수)·동그라미(응답)로 그래프를 고릅니다.</p>
+        <p className="muted small">행을 누르면 오른쪽에 그 DOE의 결과가 열립니다. DOE # 옆 카메라 표시 = 컨투어 캡처 있음(방향은 run을 바꿔도 유지). 학습 범위 밖 값은 숫자 옆 작은 회색 점.</p>
         <p className="small">
           <Link to={base}>← 일괄 예측 설정</Link>
         </p>
       </Card>
 
-      <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} />
-      <BatchGraphTabs b={b} showResp={showResp} noRespText={NO_RESP_TEXT} pickVars={pickVars} pickResp={pickResp} selected={selected} onSelect={setSelected} series={series} onSeries={setSeries} />
-      <Card span={3} title="커브 겹쳐보기" className="batch-curves">
-        <CurveOverlay batchId={b.id} selected={selected} version={b.predict.succeeded} name={series} onName={setSeries} />
+      <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} batchId={batchId} />
+      <Card span={3} title="결과분석" className="batch-analysis-link">
+        <div className="link-card">
+          <p className="muted small">변수–응답 그래프, 설계공간 지도, 영향도, 커브 겹쳐보기는 ⑤ 결과분석에서 봅니다.</p>
+          <Link className="btn small" to={`/p/${study.project_id}/s/${study.id}/stage/analysis?source=batch&id=${b.id}`} data-testid="analysis-link">
+            ⑤ 결과분석에서 열기
+          </Link>
+        </div>
       </Card>
 
       {confirmCancel && (
@@ -306,8 +303,8 @@ function CaptureMark({ views }: { views: string[] }) {
   );
 }
 
-/** 고른 DOE: 머리 DOE #N · run_key, 컨투어(방향별 스크린샷·영상) + 접힌 결과 목록, 경로 복사·단일 예측으로 열기·PBS 검증 해석 */
-function RunPanel({ row, base, canCapture, view, onView, psId }: { row: PredictBatchRow | null; base: string; canCapture: boolean; view: ViewKey | null; onView: (v: ViewKey) => void; psId: string }) {
+/** 고른 DOE: 머리 DOE #N · run_key, 컨투어(방향별 스크린샷·영상) + 접힌 결과 목록, 경로 복사·단일 예측으로 열기·FEM 검증 */
+function RunPanel({ row, base, canCapture, view, onView, psId, batchId }: { row: PredictBatchRow | null; base: string; canCapture: boolean; view: ViewKey | null; onView: (v: ViewKey) => void; psId: string; batchId: string }) {
   const navigate = useNavigate();
   const { paramSets } = useStudy();
   const [job, setJob] = useState<Job | null>(null);
@@ -321,7 +318,7 @@ function RunPanel({ row, base, canCapture, view, onView, psId }: { row: PredictB
     };
   }, [row?.job_id, row?.state]);
   const result = job?.state === "SUCCEEDED" ? (job.result as unknown as PR | null) : null;
-  const pbs = usePredictVerify(job, !!result);
+  const pbs = useFemVerifyButton(row ? { kind: "batch_run", batch_id: batchId, doe_no: row.doe_no } : null, !!result, job);
   if (!row)
     return (
       <Card span={3} title="DOE" className="batch-run-panel">

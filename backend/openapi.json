@@ -255,6 +255,25 @@
         "title": "BatchModelRef",
         "type": "object"
       },
+      "BatchNote": {
+        "description": "막지 않는 안내(S15 §20.9): FIXED_EXCLUDED·FULL_FACTORIAL_USED·BBD_PAIRWISE·DUPLICATE_ROWS·SEQUENCE_CONTINUED·INFLUENCE_TOO_FEW.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "BatchNote",
+        "type": "object"
+      },
       "BatchPredictCounts": {
         "properties": {
           "canceled": {
@@ -586,6 +605,172 @@
         "title": "BatchRunRow",
         "type": "object"
       },
+      "BatchSourceBbd": {
+        "additionalProperties": false,
+        "description": "Box–Behnken(변수 3개 이상, 중심점 1개).",
+        "properties": {
+          "kind": {
+            "const": "bbd",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceBbd",
+        "type": "object"
+      },
+      "BatchSourceCcd": {
+        "additionalProperties": false,
+        "description": "중심 합성: alpha face(면중심, 기본) | inscribed(내접). 중심점 1개.",
+        "properties": {
+          "alpha": {
+            "default": "face",
+            "enum": [
+              "face",
+              "inscribed"
+            ],
+            "title": "Alpha",
+            "type": "string"
+          },
+          "kind": {
+            "const": "ccd",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceCcd",
+        "type": "object"
+      },
+      "BatchSourceFracfact": {
+        "additionalProperties": false,
+        "description": "부분 요인 2수준: resolution 4 | 5(기본 5).",
+        "properties": {
+          "kind": {
+            "const": "fracfact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "resolution": {
+            "default": 5,
+            "enum": [
+              4,
+              5
+            ],
+            "title": "Resolution",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceFracfact",
+        "type": "object"
+      },
+      "BatchSourceFullfact": {
+        "additionalProperties": false,
+        "description": "전체 요인: levels {변수: 수준 수 1~10}(생략한 활성 변수 = 2; 2~10 검사와 정수 변수 검사는 problems).",
+        "properties": {
+          "kind": {
+            "const": "fullfact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "maximum": 10.0,
+                  "minimum": 1.0,
+                  "type": "integer"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Levels"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourceFullfact",
+        "type": "object"
+      },
       "BatchSourceLhs": {
         "additionalProperties": false,
         "description": "범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).",
@@ -627,6 +812,155 @@
           "count"
         ],
         "title": "BatchSourceLhs",
+        "type": "object"
+      },
+      "BatchSourceLhsOpt": {
+        "additionalProperties": false,
+        "description": "최적화 LHS: count 2~predict_batch.max_runs, seed 0 이상(기본 1), criterion maximin(최소 거리, 기본) | corr(상관 최소).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "criterion": {
+            "default": "maximin",
+            "enum": [
+              "maximin",
+              "corr"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "kind": {
+            "const": "lhs_opt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceLhsOpt",
+        "type": "object"
+      },
+      "BatchSourcePb": {
+        "additionalProperties": false,
+        "description": "Plackett–Burman(2수준 선별).",
+        "properties": {
+          "kind": {
+            "const": "pb",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "BatchSourcePb",
+        "type": "object"
+      },
+      "BatchSourceSobol": {
+        "additionalProperties": false,
+        "description": "Sobol(스크램블): count = 2^m(4~max_runs), seed 0~4294967295(생략 = 1), continue_from = 이전 Sobol 배치 id(이어서 추가 —\nseed·ranges는 생략하고 이전 값을 쓴다).",
+        "properties": {
+          "continue_from": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Continue From"
+          },
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "sobol",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceSobol",
         "type": "object"
       },
       "BatchSourceTable": {
@@ -2007,11 +2341,347 @@
         "title": "DoeField",
         "type": "object"
       },
+      "DoeResultCounts": {
+        "properties": {
+          "no_response": {
+            "title": "No Response",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "usable": {
+            "title": "Usable",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "usable",
+          "no_response"
+        ],
+        "title": "DoeResultCounts",
+        "type": "object"
+      },
+      "DoeResultMeta": {
+        "properties": {
+          "baseline_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline Id"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "scene": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene"
+          }
+        },
+        "title": "DoeResultMeta",
+        "type": "object"
+      },
+      "DoeResultParameter": {
+        "properties": {
+          "integer": {
+            "title": "Integer",
+            "type": "boolean"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "name",
+          "integer"
+        ],
+        "title": "DoeResultParameter",
+        "type": "object"
+      },
+      "DoeResultResponse": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "DoeResultResponse",
+        "type": "object"
+      },
+      "DoeResultRow": {
+        "properties": {
+          "no": {
+            "title": "No",
+            "type": "integer"
+          },
+          "params": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Params",
+            "type": "object"
+          },
+          "responses": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Responses",
+            "type": "object"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "run_id",
+          "no",
+          "state",
+          "params",
+          "responses"
+        ],
+        "title": "DoeResultRow",
+        "type": "object"
+      },
+      "DoeResultSampling": {
+        "description": "① DOE 표본 방식(S15 §20.6): 정의 파일 유형 value·라벨·설명 id·옵션(RESOLUTION 등).",
+        "properties": {
+          "desc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "options": {
+            "additionalProperties": true,
+            "default": {},
+            "title": "Options",
+            "type": "object"
+          }
+        },
+        "required": [
+          "method",
+          "label"
+        ],
+        "title": "DoeResultSampling",
+        "type": "object"
+      },
+      "DoeResultTable": {
+        "description": "⑤ 결과분석 입력(s14_analysis.md §19.5): 해석 DOE의 run별 파라미터 + 응답. 읽기 전용.",
+        "properties": {
+          "counts": {
+            "$ref": "#/components/schemas/DoeResultCounts"
+          },
+          "doe_id": {
+            "title": "Doe Id",
+            "type": "string"
+          },
+          "influence_class": {
+            "enum": [
+              "formal",
+              "reference",
+              "off"
+            ],
+            "title": "Influence Class",
+            "type": "string"
+          },
+          "influence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Influence Note"
+          },
+          "influence_ok": {
+            "title": "Influence Ok",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "meta": {
+            "$ref": "#/components/schemas/DoeResultMeta"
+          },
+          "notes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/DoeResultParameter"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "responses": {
+            "items": {
+              "$ref": "#/components/schemas/DoeResultResponse"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/DoeResultRow"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "sampling": {
+            "$ref": "#/components/schemas/DoeResultSampling"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "doe_id",
+          "label",
+          "study_id",
+          "type",
+          "parameters",
+          "responses",
+          "meta",
+          "rows",
+          "counts",
+          "sampling",
+          "influence_class",
+          "influence_ok",
+          "notes"
+        ],
+        "title": "DoeResultTable",
+        "type": "object"
+      },
       "DoeType": {
         "properties": {
           "default_runs": {
             "title": "Default Runs",
             "type": "integer"
+          },
+          "desc_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Desc Id"
           },
           "fields": {
             "items": {
@@ -2020,9 +2690,23 @@
             "title": "Fields",
             "type": "array"
           },
+          "influence_class": {
+            "default": "reference",
+            "enum": [
+              "formal",
+              "reference"
+            ],
+            "title": "Influence Class",
+            "type": "string"
+          },
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "recommended": {
+            "default": false,
+            "title": "Recommended",
+            "type": "boolean"
           },
           "runs_editable": {
             "title": "Runs Editable",
@@ -2332,6 +3016,316 @@
         "title": "FeatureState",
         "type": "object"
       },
+      "FemVerification": {
+        "properties": {
+          "assembly": {
+            "$ref": "#/components/schemas/FvAssemblyOut"
+          },
+          "attempt_no": {
+            "title": "Attempt No",
+            "type": "integer"
+          },
+          "can_cancel": {
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_rerun": {
+            "title": "Can Rerun",
+            "type": "boolean"
+          },
+          "compare": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCompare"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "design": {
+            "$ref": "#/components/schemas/FvDesign"
+          },
+          "dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvProblem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_mode": {
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "links": {
+            "$ref": "#/components/schemas/FvLinks"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/FvPaths"
+          },
+          "predict": {
+            "$ref": "#/components/schemas/FvPredictRef"
+          },
+          "source": {
+            "$ref": "#/components/schemas/FvSourceOut"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "status_text",
+          "source",
+          "links",
+          "design",
+          "predict",
+          "assembly",
+          "input_mode",
+          "attempt_no",
+          "paths",
+          "can_cancel",
+          "can_rerun",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "FemVerification",
+        "type": "object"
+      },
+      "FemVerifyCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvAssembly"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvFem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvHpc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "discriminator": {
+              "mapping": {
+                "batch_run": "#/components/schemas/FvSourceBatchRun",
+                "opt_design": "#/components/schemas/FvSourceOptDesign",
+                "predict_job": "#/components/schemas/FvSourcePredictJob",
+                "values": "#/components/schemas/FvSourceValues"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FvSourcePredictJob"
+              },
+              {
+                "$ref": "#/components/schemas/FvSourceBatchRun"
+              },
+              {
+                "$ref": "#/components/schemas/FvSourceValues"
+              },
+              {
+                "$ref": "#/components/schemas/FvSourceOptDesign"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "FemVerifyCreate",
+        "type": "object"
+      },
+      "FemVerifyListItem": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "links": {
+            "$ref": "#/components/schemas/FvLinks"
+          },
+          "max_abs_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Abs Diff Pct"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          },
+          "worst": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "source_label",
+          "source_kind",
+          "links",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "FemVerifyListItem",
+        "type": "object"
+      },
       "FinalModelRequest": {
         "additionalProperties": false,
         "properties": {
@@ -2478,6 +3472,1382 @@
           "roots"
         ],
         "title": "FsRoots",
+        "type": "object"
+      },
+      "FvAssembly": {
+        "additionalProperties": false,
+        "properties": {
+          "doe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe Id"
+          },
+          "kind": {
+            "enum": [
+              "predict_input",
+              "train_doe",
+              "custom"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FvAssembly",
+        "type": "object"
+      },
+      "FvAssemblyOut": {
+        "properties": {
+          "file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Count"
+          },
+          "inc_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inc Count"
+          },
+          "include_baseline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Baseline"
+          },
+          "include_referenced": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Referenced"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "rad": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Rad",
+            "type": "array"
+          },
+          "renum_csv": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renum Csv"
+          },
+          "snapshot_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Dir"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bytes"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FvAssemblyOut",
+        "type": "object"
+      },
+      "FvCompare": {
+        "properties": {
+          "curve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCurveSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvLegend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_abs_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Abs Diff Pct"
+          },
+          "media": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media"
+          },
+          "responses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvCompareRow"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "worst": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst"
+          }
+        },
+        "title": "FvCompare",
+        "type": "object"
+      },
+      "FvCompareRow": {
+        "properties": {
+          "diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Pct"
+          },
+          "fem_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Max"
+          },
+          "fem_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Min"
+          },
+          "fem_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Value"
+          },
+          "max_diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Diff"
+          },
+          "max_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Diff Pct"
+          },
+          "min_diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Diff"
+          },
+          "min_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Diff Pct"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pred_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Max"
+          },
+          "pred_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Min"
+          },
+          "pred_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Value"
+          },
+          "stat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stat"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FvCompareRow",
+        "type": "object"
+      },
+      "FvCurveSeries": {
+        "properties": {
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "FvCurveSeries",
+        "type": "object"
+      },
+      "FvCurveSummary": {
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unmatched_fem": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Fem",
+            "type": "array"
+          },
+          "unmatched_pred": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Pred",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "FvCurveSummary",
+        "type": "object"
+      },
+      "FvCurves": {
+        "properties": {
+          "downsampled": {
+            "default": false,
+            "title": "Downsampled",
+            "type": "boolean"
+          },
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCurveSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "pred": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCurveSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "FvCurves",
+        "type": "object"
+      },
+      "FvDesign": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvModelRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "out_of_range": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "param_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvParamSetRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "title": "FvDesign",
+        "type": "object"
+      },
+      "FvFem": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Component"
+          },
+          "comps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comps"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          }
+        },
+        "title": "FvFem",
+        "type": "object"
+      },
+      "FvHpc": {
+        "additionalProperties": false,
+        "properties": {
+          "ncpus": {
+            "anyOf": [
+              {
+                "maximum": 4096.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ncpus"
+          },
+          "queue": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-@]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue"
+          },
+          "walltime": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,4}:\\d{2}:\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walltime"
+          }
+        },
+        "title": "FvHpc",
+        "type": "object"
+      },
+      "FvLegend": {
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "FvLegend",
+        "type": "object"
+      },
+      "FvLinks": {
+        "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "doe_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe No"
+          },
+          "opt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opt Id"
+          },
+          "predict_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predict Job Id"
+          }
+        },
+        "title": "FvLinks",
+        "type": "object"
+      },
+      "FvMedia": {
+        "properties": {
+          "display": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvMediaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvLegend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "FvMedia",
+        "type": "object"
+      },
+      "FvMediaItem": {
+        "properties": {
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvMediaSide"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pred": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvMediaSide"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "view": {
+            "title": "View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "view",
+          "label"
+        ],
+        "title": "FvMediaItem",
+        "type": "object"
+      },
+      "FvMediaSide": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/MediaFile"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MediaFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Error"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "FvMediaSide",
+        "type": "object"
+      },
+      "FvMeshRef": {
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "title": "FvMeshRef",
+        "type": "object"
+      },
+      "FvModelRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "title": "FvModelRef",
+        "type": "object"
+      },
+      "FvOrigin": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "const": "optimize",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FvOrigin",
+        "type": "object"
+      },
+      "FvParamSetRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_kind": {
+            "title": "Input Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id",
+          "input_kind"
+        ],
+        "title": "FvParamSetRef",
+        "type": "object"
+      },
+      "FvPaths": {
+        "properties": {
+          "collected": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Collected",
+            "type": "array"
+          },
+          "input_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Dir"
+          },
+          "remote_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Dir"
+          },
+          "result_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Dir"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          }
+        },
+        "title": "FvPaths",
+        "type": "object"
+      },
+      "FvPredictRef": {
+        "properties": {
+          "companion": {
+            "default": false,
+            "title": "Companion",
+            "type": "boolean"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "reuse": {
+            "default": false,
+            "title": "Reuse",
+            "type": "boolean"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "will_run": {
+            "default": false,
+            "title": "Will Run",
+            "type": "boolean"
+          }
+        },
+        "title": "FvPredictRef",
+        "type": "object"
+      },
+      "FvPreview": {
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvAssemblyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comps_auto": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Comps Auto",
+            "type": "array"
+          },
+          "design": {
+            "$ref": "#/components/schemas/FvDesign"
+          },
+          "fem_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Field"
+          },
+          "hpc_mode": {
+            "title": "Hpc Mode",
+            "type": "string"
+          },
+          "input_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reuse",
+                  "rebuild"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Mode"
+          },
+          "mesh": {
+            "$ref": "#/components/schemas/FvMeshRef"
+          },
+          "predict": {
+            "$ref": "#/components/schemas/FvPredictRef"
+          },
+          "problems": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_label",
+          "design",
+          "predict",
+          "mesh",
+          "hpc_mode"
+        ],
+        "title": "FvPreview",
+        "type": "object"
+      },
+      "FvProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "FvProblem",
+        "type": "object"
+      },
+      "FvSourceBatchRun": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "doe_no": {
+            "minimum": 1.0,
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "batch_run",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "batch_id",
+          "doe_no"
+        ],
+        "title": "FvSourceBatchRun",
+        "type": "object"
+      },
+      "FvSourceOptDesign": {
+        "additionalProperties": false,
+        "properties": {
+          "doe_no": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe No"
+          },
+          "iter_no": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iter No"
+          },
+          "kind": {
+            "const": "opt_design",
+            "title": "Kind",
+            "type": "string"
+          },
+          "opt_id": {
+            "title": "Opt Id",
+            "type": "string"
+          },
+          "pick": {
+            "enum": [
+              "best",
+              "final_optimum",
+              "surrogate_optimum",
+              "run"
+            ],
+            "title": "Pick",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "opt_id",
+          "pick"
+        ],
+        "title": "FvSourceOptDesign",
+        "type": "object"
+      },
+      "FvSourceOut": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "FvSourceOut",
+        "type": "object"
+      },
+      "FvSourcePredictJob": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "predict_job",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job_id"
+        ],
+        "title": "FvSourcePredictJob",
+        "type": "object"
+      },
+      "FvSourceValues": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "values",
+            "title": "Kind",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "param_set_id": {
+            "title": "Param Set Id",
+            "type": "string"
+          },
+          "reuse_existing": {
+            "default": true,
+            "title": "Reuse Existing",
+            "type": "boolean"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "param_set_id",
+          "values"
+        ],
+        "title": "FvSourceValues",
         "type": "object"
       },
       "GpuInfo": {
@@ -3125,6 +5495,7 @@
       },
       "JobCreate": {
         "additionalProperties": false,
+        "description": "작업 생성. PREDICT_VERIFY는 구식(호환 유지) — 화면은 FEM_VERIFY(phase3 §21) 사용. FEM_VERIFY는 이 API로 만들 수 없다\n(`/studies/{id}/fem-verifications`).",
         "properties": {
           "job_type": {
             "enum": [
@@ -3147,7 +5518,8 @@
               "OPTIMIZE",
               "STUDY_STORAGE_SCAN",
               "STUDY_CLEANUP",
-              "PREDICT_BATCH"
+              "PREDICT_BATCH",
+              "PB_RESP_EXTRACT"
             ],
             "title": "Job Type",
             "type": "string"
@@ -3644,6 +6016,17 @@
             "title": "Artifact Id",
             "type": "string"
           },
+          "codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec"
+          },
           "content_type": {
             "title": "Content Type",
             "type": "string"
@@ -3652,9 +6035,25 @@
             "title": "Download Url",
             "type": "string"
           },
+          "playable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playable"
+          },
           "size": {
             "title": "Size",
             "type": "integer"
+          },
+          "transcoded": {
+            "default": false,
+            "title": "Transcoded",
+            "type": "boolean"
           },
           "url": {
             "title": "Url",
@@ -3693,6 +6092,17 @@
                 "type": "null"
               }
             ]
+          },
+          "video_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Error"
           },
           "view": {
             "title": "View",
@@ -5312,7 +7722,8 @@
               "RESULT_FOLDER",
               "CURATION_INPUT",
               "SPDM_IMPORT",
-              "PREDICT_INPUT"
+              "PREDICT_INPUT",
+              "FEM_ASSEMBLY"
             ],
             "title": "Purpose",
             "type": "string"
@@ -5486,6 +7897,16 @@
             "title": "Rows",
             "type": "array"
           },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplingInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_kind": {
             "title": "Source Kind",
             "type": "string"
@@ -5542,6 +7963,14 @@
             "title": "Input Kind",
             "type": "string"
           },
+          "notes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BatchNote"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
           "problems": {
             "items": {
               "$ref": "#/components/schemas/BatchProblem"
@@ -5555,6 +7984,16 @@
             },
             "title": "Rows",
             "type": "array"
+          },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplingInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -5583,7 +8022,14 @@
           "source": {
             "discriminator": {
               "mapping": {
+                "bbd": "#/components/schemas/BatchSourceBbd",
+                "ccd": "#/components/schemas/BatchSourceCcd",
+                "fracfact": "#/components/schemas/BatchSourceFracfact",
+                "fullfact": "#/components/schemas/BatchSourceFullfact",
                 "lhs": "#/components/schemas/BatchSourceLhs",
+                "lhs_opt": "#/components/schemas/BatchSourceLhsOpt",
+                "pb": "#/components/schemas/BatchSourcePb",
+                "sobol": "#/components/schemas/BatchSourceSobol",
                 "table": "#/components/schemas/BatchSourceTable",
                 "train_doe": "#/components/schemas/BatchSourceTrainDoe"
               },
@@ -5592,6 +8038,27 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/BatchSourceLhs"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceLhsOpt"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceSobol"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceFullfact"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceFracfact"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourcePb"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceBbd"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceCcd"
               },
               {
                 "$ref": "#/components/schemas/BatchSourceTable"
@@ -5672,6 +8139,16 @@
             "title": "Run Count",
             "type": "integer"
           },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SamplingSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -5748,6 +8225,761 @@
           "rounded"
         ],
         "title": "PredictCheckResponse",
+        "type": "object"
+      },
+      "PredictRunCapture": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "views": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Views",
+            "type": "array"
+          }
+        },
+        "title": "PredictRunCapture",
+        "type": "object"
+      },
+      "PredictRunDetail": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_curve": {
+            "default": false,
+            "title": "Has Curve",
+            "type": "boolean"
+          },
+          "input_mode": {
+            "enum": [
+              "template",
+              "prepared"
+            ],
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "input_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Path"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nearest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunNearest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "enum": [
+              "manual",
+              "fem_verify"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "out_of_range": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/PredictRunPaths"
+          },
+          "response_table": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunTableRow"
+            },
+            "title": "Response Table",
+            "type": "array"
+          },
+          "responses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunResponse"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "root_job_id": {
+            "title": "Root Job Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          },
+          "verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunVerify"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings_count": {
+            "default": 0,
+            "title": "Warnings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "root_job_id",
+          "attempts",
+          "state",
+          "origin",
+          "created_at",
+          "created_by_name",
+          "input_mode",
+          "paths"
+        ],
+        "title": "PredictRunDetail",
+        "type": "object"
+      },
+      "PredictRunFailure": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "PredictRunFailure",
+        "type": "object"
+      },
+      "PredictRunModel": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "title": "PredictRunModel",
+        "type": "object"
+      },
+      "PredictRunNearest": {
+        "properties": {
+          "distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance"
+          },
+          "run_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Key"
+          }
+        },
+        "title": "PredictRunNearest",
+        "type": "object"
+      },
+      "PredictRunPaths": {
+        "description": "표시용 절대경로(OS 표기). 폴더·파일이 없으면(정리로 _backup에 옮겨짐 등) null.",
+        "properties": {
+          "dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir"
+          },
+          "geom_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geom Dir"
+          },
+          "input_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Dir"
+          },
+          "media_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Dir"
+          },
+          "pred_h3d": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred H3D"
+          },
+          "result_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Dir"
+          }
+        },
+        "title": "PredictRunPaths",
+        "type": "object"
+      },
+      "PredictRunResponse": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "title": "PredictRunResponse",
+        "type": "object"
+      },
+      "PredictRunSummary": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_curve": {
+            "default": false,
+            "title": "Has Curve",
+            "type": "boolean"
+          },
+          "input_mode": {
+            "enum": [
+              "template",
+              "prepared"
+            ],
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "input_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Path"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "enum": [
+              "manual",
+              "fem_verify"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "out_of_range": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "responses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunResponse"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "root_job_id": {
+            "title": "Root Job Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          },
+          "verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunVerify"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings_count": {
+            "default": 0,
+            "title": "Warnings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "root_job_id",
+          "attempts",
+          "state",
+          "origin",
+          "created_at",
+          "created_by_name",
+          "input_mode"
+        ],
+        "title": "PredictRunSummary",
+        "type": "object"
+      },
+      "PredictRunTableRow": {
+        "properties": {
+          "diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Pct"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "nearest_measured": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nearest Measured"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "title": "PredictRunTableRow",
+        "type": "object"
+      },
+      "PredictRunTemplate": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_kind": {
+            "title": "Input Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id",
+          "input_kind"
+        ],
+        "title": "PredictRunTemplate",
+        "type": "object"
+      },
+      "PredictRunVerify": {
+        "description": "기존 PREDICT_VERIFY 요약(이 예측을 가리키는 최신 1건).",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state"
+        ],
+        "title": "PredictRunVerify",
         "type": "object"
       },
       "Project": {
@@ -6399,6 +9631,123 @@
         "title": "SamplesPage",
         "type": "object"
       },
+      "SamplingInfo": {
+        "description": "표본 방식 요약(미리보기·배치 상세). 등급은 서버가 정한다(§20.7) — formal | reference(off는 ①만).",
+        "properties": {
+          "desc_id": {
+            "title": "Desc Id",
+            "type": "string"
+          },
+          "influence_class": {
+            "enum": [
+              "formal",
+              "reference"
+            ],
+            "title": "Influence Class",
+            "type": "string"
+          },
+          "influence_note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Influence Note"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "meta": {
+            "additionalProperties": true,
+            "title": "Meta",
+            "type": "object"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "recommended_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Count"
+          }
+        },
+        "required": [
+          "kind",
+          "method",
+          "desc_id",
+          "label",
+          "influence_class",
+          "meta"
+        ],
+        "title": "SamplingInfo",
+        "type": "object"
+      },
+      "SamplingSummary": {
+        "description": "배치 목록 한 줄용(Sobol 이어서 추가 후보·⑤ 출처 라벨).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "offset": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Offset"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          }
+        },
+        "required": [
+          "kind",
+          "method",
+          "label",
+          "count"
+        ],
+        "title": "SamplingSummary",
+        "type": "object"
+      },
       "SoBatchRef": {
         "properties": {
           "gen": {
@@ -6503,9 +9852,41 @@
             ],
             "title": "Objective"
           },
+          "objectives": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objectives"
+          },
           "run_key": {
             "title": "Run Key",
             "type": "string"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
           },
           "values": {
             "additionalProperties": {
@@ -6513,6 +9894,20 @@
             },
             "title": "Values",
             "type": "object"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
           }
         },
         "required": [
@@ -6528,6 +9923,17 @@
       },
       "SoCandidate": {
         "properties": {
+          "acq": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acq"
+          },
           "constraints_pred": {
             "items": {
               "type": "number"
@@ -6561,6 +9967,45 @@
             ],
             "title": "Predicted"
           },
+          "predicted_objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Objectives"
+          },
+          "predicted_std": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Std"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role"
+          },
           "state": {
             "anyOf": [
               {
@@ -6589,6 +10034,41 @@
               }
             ],
             "title": "Verified"
+          },
+          "verified_objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verified Objectives"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weight"
           }
         },
         "required": [
@@ -6600,7 +10080,30 @@
       },
       "SoConstraint": {
         "additionalProperties": false,
+        "description": "제약: `<=`·`>=`는 value, `range`(S17 §22.4.1)는 lo < hi(유한).",
         "properties": {
+          "hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hi"
+          },
+          "lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lo"
+          },
           "metric": {
             "maxLength": 200,
             "title": "Metric",
@@ -6609,7 +10112,8 @@
           "op": {
             "enum": [
               "<=",
-              ">="
+              ">=",
+              "range"
             ],
             "title": "Op",
             "type": "string"
@@ -6627,16 +10131,94 @@
             "title": "Series"
           },
           "value": {
-            "title": "Value",
-            "type": "number"
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "metric",
+          "op"
+        ],
+        "title": "SoConstraint",
+        "type": "object"
+      },
+      "SoConstraintDef": {
+        "properties": {
+          "hi": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hi"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "lo": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lo"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "op": {
+            "title": "Op",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
           }
         },
         "required": [
           "metric",
           "op",
-          "value"
+          "label"
         ],
-        "title": "SoConstraint",
+        "title": "SoConstraintDef",
         "type": "object"
       },
       "SoExploreNew": {
@@ -6900,6 +10482,20 @@
             "title": "N Train",
             "type": "integer"
           },
+          "per_objective": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoFitObjective"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Per Objective"
+          },
           "pred_vs_verified_mae": {
             "anyOf": [
               {
@@ -6929,6 +10525,208 @@
           "d_free"
         ],
         "title": "SoFit",
+        "type": "object"
+      },
+      "SoFitObjective": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "loo_nrmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loo Nrmse"
+          },
+          "loo_rmse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loo Rmse"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "n_train": {
+            "title": "N Train",
+            "type": "integer"
+          },
+          "pred_vs_verified_mae": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Vs Verified Mae"
+          },
+          "q2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q2"
+          }
+        },
+        "required": [
+          "metric",
+          "kind",
+          "n_train"
+        ],
+        "title": "SoFitObjective",
+        "type": "object"
+      },
+      "SoFrontPoint": {
+        "description": "검증된 파레토 해 1개(같은 설계 평균, key = 첫 run `\"<iter_no>:<doe_no>\"`).",
+        "properties": {
+          "batch_label": {
+            "title": "Batch Label",
+            "type": "string"
+          },
+          "constraints": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Constraints",
+            "type": "object"
+          },
+          "doe_no": {
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "objectives": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Objectives",
+            "type": "array"
+          },
+          "observed": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Observed",
+            "type": "object"
+          },
+          "run_key": {
+            "title": "Run Key",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "key",
+          "iter_no",
+          "doe_no",
+          "run_key",
+          "batch_label",
+          "values",
+          "objectives"
+        ],
+        "title": "SoFrontPoint",
+        "type": "object"
+      },
+      "SoHvPoint": {
+        "properties": {
+          "front_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Front Size"
+          },
+          "hv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv"
+          },
+          "improvement_rel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Improvement Rel"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "iter_no"
+        ],
+        "title": "SoHvPoint",
         "type": "object"
       },
       "SoIteration": {
@@ -6988,6 +10786,28 @@
                 "type": "null"
               }
             ]
+          },
+          "front_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Front Size"
+          },
+          "hv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv"
           },
           "improvement_rel": {
             "anyOf": [
@@ -7052,6 +10872,107 @@
         "title": "SoObjective",
         "type": "object"
       },
+      "SoObjectiveDef": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "sense": {
+            "title": "Sense",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "sense",
+          "label"
+        ],
+        "title": "SoObjectiveDef",
+        "type": "object"
+      },
+      "SoObserve": {
+        "additionalProperties": false,
+        "description": "관찰 지표(값만 기록·표시, S17).",
+        "properties": {
+          "metric": {
+            "maxLength": 200,
+            "title": "Metric",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          }
+        },
+        "required": [
+          "metric"
+        ],
+        "title": "SoObserve",
+        "type": "object"
+      },
+      "SoObserveDef": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "series": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Series"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "metric",
+          "label"
+        ],
+        "title": "SoObserveDef",
+        "type": "object"
+      },
       "SoParameter": {
         "properties": {
           "max": {
@@ -7091,8 +11012,205 @@
         "title": "SoParameter",
         "type": "object"
       },
+      "SoPareto": {
+        "properties": {
+          "frame": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frame"
+          },
+          "front": {
+            "items": {
+              "$ref": "#/components/schemas/SoFrontPoint"
+            },
+            "title": "Front",
+            "type": "array"
+          },
+          "hv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv"
+          },
+          "predicted": {
+            "items": {
+              "$ref": "#/components/schemas/SoPredictedPoint"
+            },
+            "title": "Predicted",
+            "type": "array"
+          },
+          "predicted_iter": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted Iter"
+          },
+          "recommended_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recommended Key"
+          }
+        },
+        "title": "SoPareto",
+        "type": "object"
+      },
+      "SoPerformance": {
+        "description": "미리보기 성능 목록(S17 §22.4.2): available·total·spec_changed는 재사용일 때만.",
+        "properties": {
+          "available": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Available"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "title": "Source",
+            "type": "string"
+          },
+          "spec_changed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec Changed"
+          },
+          "stat": {
+            "title": "Stat",
+            "type": "string"
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "source",
+          "stat",
+          "label"
+        ],
+        "title": "SoPerformance",
+        "type": "object"
+      },
+      "SoPredictedPoint": {
+        "description": "대리모델 예측 전선 점(미검증).",
+        "properties": {
+          "mean": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Mean",
+            "type": "array"
+          },
+          "pof": {
+            "title": "Pof",
+            "type": "number"
+          },
+          "std": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Std",
+            "type": "array"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values",
+          "mean",
+          "std",
+          "pof"
+        ],
+        "title": "SoPredictedPoint",
+        "type": "object"
+      },
       "SoProblem": {
         "properties": {
+          "action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Action"
+          },
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
           "code": {
             "title": "Code",
             "type": "string"
@@ -7111,6 +11229,17 @@
           "message": {
             "title": "Message",
             "type": "string"
+          },
+          "performance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performance"
           }
         },
         "required": [
@@ -7175,6 +11304,17 @@
             ],
             "title": "Job Id"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "objective": {
             "anyOf": [
               {
@@ -7186,6 +11326,39 @@
             ],
             "title": "Objective"
           },
+          "objectives": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Objectives",
+            "type": "array"
+          },
+          "observed": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Observed",
+            "type": "object"
+          },
+          "on_front": {
+            "default": false,
+            "title": "On Front",
+            "type": "boolean"
+          },
           "predicted": {
             "anyOf": [
               {
@@ -7196,6 +11369,17 @@
               }
             ],
             "title": "Predicted"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           },
           "run_key": {
             "title": "Run Key",
@@ -7223,6 +11407,23 @@
           "state"
         ],
         "title": "SoRun",
+        "type": "object"
+      },
+      "SoVerifyPoint": {
+        "additionalProperties": false,
+        "properties": {
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "values"
+        ],
+        "title": "SoVerifyPoint",
         "type": "object"
       },
       "SourceRef": {
@@ -7382,6 +11583,11 @@
               }
             ]
           },
+          "transcode": {
+            "default": false,
+            "title": "Transcode",
+            "type": "boolean"
+          },
           "video": {
             "title": "Video",
             "type": "boolean"
@@ -7389,6 +11595,28 @@
           "video_ext": {
             "title": "Video Ext",
             "type": "string"
+          },
+          "video_ext_effective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Ext Effective"
+          },
+          "video_target_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Target Bytes"
           },
           "views": {
             "items": {
@@ -7555,6 +11783,26 @@
             ]
           },
           "evaluate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fem_verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fem_verify_rebuild": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FeatureState"
@@ -7919,8 +12167,23 @@
             "title": "Max Candidates",
             "type": "integer"
           },
+          "max_extra_points": {
+            "default": 10,
+            "title": "Max Extra Points",
+            "type": "integer"
+          },
           "max_iterations": {
             "title": "Max Iterations",
+            "type": "integer"
+          },
+          "max_objectives": {
+            "default": 3,
+            "title": "Max Objectives",
+            "type": "integer"
+          },
+          "max_observe": {
+            "default": 10,
+            "title": "Max Observe",
             "type": "integer"
           },
           "max_variables": {
@@ -8586,6 +12849,18 @@
             "title": "Can Resume",
             "type": "boolean"
           },
+          "can_verify_more": {
+            "default": false,
+            "title": "Can Verify More",
+            "type": "boolean"
+          },
+          "constraints_def": {
+            "items": {
+              "$ref": "#/components/schemas/SoConstraintDef"
+            },
+            "title": "Constraints Def",
+            "type": "array"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -8632,6 +12907,20 @@
             ],
             "title": "Finished At"
           },
+          "hv_history": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoHvPoint"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hv History"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -8651,10 +12940,29 @@
             "title": "Label",
             "type": "string"
           },
+          "mode": {
+            "default": "single",
+            "title": "Mode",
+            "type": "string"
+          },
           "model": {
             "additionalProperties": true,
             "title": "Model",
             "type": "object"
+          },
+          "objectives": {
+            "items": {
+              "$ref": "#/components/schemas/SoObjectiveDef"
+            },
+            "title": "Objectives",
+            "type": "array"
+          },
+          "observe": {
+            "items": {
+              "$ref": "#/components/schemas/SoObserveDef"
+            },
+            "title": "Observe",
+            "type": "array"
           },
           "param_set": {
             "additionalProperties": true,
@@ -8667,6 +12975,16 @@
             },
             "title": "Parameters",
             "type": "array"
+          },
+          "pareto": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoPareto"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "progress_text": {
             "title": "Progress Text",
@@ -8708,6 +13026,13 @@
             },
             "title": "Warnings",
             "type": "array"
+          },
+          "weights": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Weights",
+            "type": "array"
           }
         },
         "required": [
@@ -8731,7 +13056,7 @@
       },
       "SurrogateOptCreate": {
         "additionalProperties": false,
-        "description": "생성·미리보기 공용 본문(phase3 §18.6). bounds 생략 = 템플릿 min·max, lo = hi는 고정.",
+        "description": "생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.\n목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.",
         "properties": {
           "bounds": {
             "anyOf": [
@@ -8770,6 +13095,7 @@
             "items": {
               "$ref": "#/components/schemas/SoConstraint"
             },
+            "maxItems": 20,
             "title": "Constraints",
             "type": "array"
           },
@@ -8821,7 +13147,37 @@
             "type": "integer"
           },
           "objective": {
-            "$ref": "#/components/schemas/SoObjective"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SoObjective"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SoObjective"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Objectives"
+          },
+          "observe": {
+            "items": {
+              "$ref": "#/components/schemas/SoObserve"
+            },
+            "maxItems": 50,
+            "title": "Observe",
+            "type": "array"
           },
           "param_set_id": {
             "anyOf": [
@@ -8864,11 +13220,25 @@
               }
             ],
             "title": "Tol Rel"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Weights"
           }
         },
         "required": [
-          "explore",
-          "objective"
+          "explore"
         ],
         "title": "SurrogateOptCreate",
         "type": "object"
@@ -8915,9 +13285,21 @@
             "title": "Max Total Runs",
             "type": "integer"
           },
+          "mode": {
+            "default": "single",
+            "title": "Mode",
+            "type": "string"
+          },
           "objective_available": {
             "title": "Objective Available",
             "type": "boolean"
+          },
+          "performances": {
+            "items": {
+              "$ref": "#/components/schemas/SoPerformance"
+            },
+            "title": "Performances",
+            "type": "array"
           },
           "problems": {
             "items": {
@@ -9027,6 +13409,59 @@
           "created_by_name"
         ],
         "title": "SurrogateOptSummary",
+        "type": "object"
+      },
+      "SurrogateOptVerify": {
+        "additionalProperties": false,
+        "description": "추가 검증(S17 §22.7): 고른 해(검증·예측 전선 점) 1~max_extra_points개를 최적화 소유 배치(iters EXTRA)로 예측 검증.",
+        "properties": {
+          "capture": {
+            "default": false,
+            "title": "Capture",
+            "type": "boolean"
+          },
+          "points": {
+            "items": {
+              "$ref": "#/components/schemas/SoVerifyPoint"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "points"
+        ],
+        "title": "SurrogateOptVerify",
+        "type": "object"
+      },
+      "SurrogateOptVerifyResult": {
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "batch_label": {
+            "title": "Batch Label",
+            "type": "string"
+          },
+          "iter_no": {
+            "title": "Iter No",
+            "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "batch_id",
+          "batch_label",
+          "job_id",
+          "iter_no"
+        ],
+        "title": "SurrogateOptVerifyResult",
         "type": "object"
       },
       "TemplateConfigured": {
@@ -10456,6 +14891,467 @@
         ]
       }
     },
+    "/physicsai/api/fem-verifications/{fid}": {
+      "get": {
+        "operationId": "get_fem_verification_physicsai_api_fem_verifications__fid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/cancel": {
+      "post": {
+        "description": "취소(power, 등록자·관리자, 멱등): 예측 대기 중이면 동반 예측, 해석 중이면 FEM_VERIFY를 취소한다.",
+        "operationId": "cancel_fem_verification_physicsai_api_fem_verifications__fid__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Cancel Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/curves": {
+      "get": {
+        "operationId": "fem_verification_curves_physicsai_api_fem_verifications__fid__curves_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 400,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_points",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 5000,
+              "minimum": 2,
+              "title": "Max Points",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FvCurves"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Fem Verification Curves",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/media": {
+      "get": {
+        "description": "컨투어 두 쪽(예측·FEM, 같은 범례). MediaFile = §15.4 + S16 playable·codec·transcoded.",
+        "operationId": "fem_verification_media_physicsai_api_fem_verifications__fid__media_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FvMedia"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Fem Verification Media",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/rerun": {
+      "post": {
+        "description": "다시 실행(FAILED·CANCELED만, 아니면 409 FEM_VERIFY_NOT_RERUNNABLE).",
+        "operationId": "rerun_fem_verification_physicsai_api_fem_verifications__fid__rerun_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Rerun Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/table.csv": {
+      "get": {
+        "description": "응답 비교 표 CSV(UTF-8 BOM): name,unit,stat,pred_min,pred_max,fem_min,fem_max,pred_value,fem_value,diff,diff_pct.",
+        "operationId": "fem_verification_table_csv_physicsai_api_fem_verifications__fid__table_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Fem Verification Table Csv",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
     "/physicsai/api/fs/list": {
       "get": {
         "operationId": "fs_list_physicsai_api_fs_list_get",
@@ -10528,7 +15424,20 @@
     },
     "/physicsai/api/fs/roots": {
       "get": {
+        "description": "include_spdm=true(phase3 §21.3.8 S16): SPDM 루트(설정)를 `SPDM <i>(읽기 전용)` 루트로 덧붙인다.",
         "operationId": "fs_roots_physicsai_api_fs_roots_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_spdm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Spdm",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -12886,6 +17795,79 @@
         ]
       }
     },
+    "/physicsai/api/predict-batches/{batch_id}/extract-responses": {
+      "post": {
+        "description": "성능 다시 추출(power, phase3 §22.3.5): 끝난 배치의 H3D 성능을 현재 템플릿 정의로 다시 추출하는 PB_RESP_EXTRACT 작업.",
+        "operationId": "extract_batch_responses_physicsai_api_predict_batches__batch_id__extract_responses_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "batch_id",
+            "required": true,
+            "schema": {
+              "title": "Batch Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Job"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Extract Batch Responses",
+        "tags": [
+          "predict-batches"
+        ]
+      }
+    },
     "/physicsai/api/predict-batches/{batch_id}/retry-failed": {
       "post": {
         "description": "실패만 다시(power): 생성 실패 run → 부모 새 작업, 실패·취소·중단 하위 → 기존 재시도.",
@@ -13025,6 +18007,79 @@
         "summary": "Batch Table Csv",
         "tags": [
           "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/predict-runs/{job_id}": {
+      "get": {
+        "description": "단일 예측 상세: 목록 행 + 최근접·응답 표·경로(없으면 null)·표시 설정. 일괄 하위·다른 유형은 404 NOT_PREDICT_RUN.",
+        "operationId": "get_predict_run_physicsai_api_predict_runs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Predict Run",
+        "tags": [
+          "jobs"
         ]
       }
     },
@@ -13760,6 +18815,345 @@
         "summary": "List Datasets",
         "tags": [
           "datasets"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/fem-verifications": {
+      "get": {
+        "description": "목록(최신순). 다음 페이지가 있으면 헤더 X-Next-Cursor.",
+        "operationId": "list_fem_verifications_physicsai_api_studies__study_id__fem_verifications_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "predict_job_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Predict Job Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Batch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "opt_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Opt Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FemVerifyListItem"
+                  },
+                  "title": "Response List Fem Verifications Physicsai Api Studies  Study Id  Fem Verifications Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Fem Verifications",
+        "tags": [
+          "fem_verify"
+        ]
+      },
+      "post": {
+        "description": "생성(power): 같은 설계점의 성공한 예측이 없으면 동반 예측(WAITING_PREDICT), 있으면 FEM_VERIFY(RUNNING).",
+        "operationId": "create_fem_verification_physicsai_api_studies__study_id__fem_verifications_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FemVerifyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/fem-verifications/preview": {
+      "post": {
+        "description": "미리보기(저장 없음, power): 출처 해석·조립 원본 검사·FEM 필드·문제/경고. 409 HPC_NOT_CONFIGURED·TEMPLATE_NOT_CONFIGURED 등.",
+        "operationId": "preview_fem_verification_physicsai_api_studies__study_id__fem_verifications_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FemVerifyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FvPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Preview Fem Verification",
+        "tags": [
+          "fem_verify"
         ]
       }
     },
@@ -14712,6 +20106,149 @@
         "summary": "Preview Batch",
         "tags": [
           "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/predict-runs": {
+      "get": {
+        "description": "그 Study의 단일 예측(일괄 하위 제외, 재시도 묶음은 최신 1행). mode = all | template | prepared,\nstate = 쉼표 구분 작업 상태. 다음 페이지가 있으면 헤더 X-Next-Cursor.",
+        "operationId": "list_predict_runs_physicsai_api_studies__study_id__predict_runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PredictRunSummary"
+                  },
+                  "title": "Response List Predict Runs Physicsai Api Studies  Study Id  Predict Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Predict Runs",
+        "tags": [
+          "jobs"
         ]
       }
     },
@@ -15837,6 +21374,89 @@
         ]
       }
     },
+    "/physicsai/api/surrogate-opts/{opt_id}/verify": {
+      "post": {
+        "description": "추가 검증(power, 등록자 또는 관리자, DONE만 — phase3 §22.7): 고른 해를 최적화 소유 배치(iters EXTRA)로 예측 검증.",
+        "operationId": "verify_surrogate_opt_physicsai_api_surrogate_opts__opt_id__verify_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "opt_id",
+            "required": true,
+            "schema": {
+              "title": "Opt Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SurrogateOptVerify"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SurrogateOptVerifyResult"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Verify Surrogate Opt",
+        "tags": [
+          "surrogate-opts"
+        ]
+      }
+    },
     "/physicsai/api/train-does/{doe_id}": {
       "get": {
         "operationId": "get_doe_physicsai_api_train_does__doe_id__get",
@@ -15914,6 +21534,89 @@
           }
         },
         "summary": "Get Doe",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/train-does/{doe_id}/result-table": {
+      "get": {
+        "description": "⑤ 결과분석 입력(s14 §19.5): 샘플 표 + 응답 + run 상태. 읽기 전용, 파일 LRU, 본문 비저장.",
+        "operationId": "doe_result_table_physicsai_api_train_does__doe_id__result_table_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "doe_id",
+            "required": true,
+            "schema": {
+              "title": "Doe Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoeResultTable"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Doe Result Table",
         "tags": [
           "train"
         ]

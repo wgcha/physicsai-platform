@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from physicsai_core.commands import TEMPLATE_SPECS
+from physicsai_core.config.schema_capture import effective_video_ext, transcode_enabled
 from physicsai_core.config import RESOURCE_DIR_KEYS, RESOURCE_FILE_KEYS, effective_altair, redacted_settings
 from physicsai_core.features import feature_status, geometry_status
 from physicsai_core.db.repositories import notifications as notif_repo
@@ -69,12 +70,16 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                     "default_field": s.capture.default_field, "default_component": s.capture.default_component,
                     "estimate": {"image_mb": s.capture.estimate_image_mb, "video_mb": s.capture.estimate_video_mb,
                                  "sec_per_view": s.capture.estimate_sec_per_view,
-                                 "sec_per_video": s.capture.estimate_sec_per_video}},
+                                 "sec_per_video": s.capture.estimate_sec_per_video},
+                    "video_target_bytes": s.capture.video_target_bytes, "transcode": transcode_enabled(s),
+                    "video_ext_effective": effective_video_ext(s)},
         "surrogate_opt": {"defaults": {"iterations": s.surrogate_opt.default_iterations,
                                        "candidates": s.surrogate_opt.default_candidates,
                                        "tol_rel": s.surrogate_opt.default_tol_rel, "surrogate": s.surrogate_opt.default_surrogate},
                           "max_variables": s.surrogate_opt.max_variables, "max_iterations": s.surrogate_opt.max_iterations,
-                          "max_candidates": s.surrogate_opt.max_candidates},
+                          "max_candidates": s.surrogate_opt.max_candidates,
+                          "max_objectives": s.surrogate_opt.max_objectives, "max_observe": s.surrogate_opt.max_observe,
+                          "max_extra_points": s.surrogate_opt.max_extra_points},
         "geometry": geometry_status(s),  # geometry-engine.md §7.1
         "demo": bool(s.demo.enabled),
     }

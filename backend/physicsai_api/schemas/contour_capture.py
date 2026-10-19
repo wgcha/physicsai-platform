@@ -96,6 +96,10 @@ class MediaFile(Resp):
     size: int
     url: str  # 브라우저 표시용(<img>·<video>, Range 지원)
     download_url: str  # 내려받기(Content-Disposition: attachment)
+    # S16(phase3 §21.4.5): 브라우저 재생 가능 여부(null = 확인 안 함), 코덱(ffprobe), ffmpeg 변환 여부
+    playable: bool | None = None
+    codec: str | None = None
+    transcoded: bool = False
 
 
 class MediaItem(Resp):
@@ -104,6 +108,7 @@ class MediaItem(Resp):
     job_id: str  # 이 파일을 만든 작업(예측 또는 재캡처)
     image: MediaFile
     video: MediaFile | None = None
+    video_error: str | None = None  # S16: 동영상을 켰는데 등록되지 않은 원인(§21.4.3)
 
 
 class MediaRecapture(Resp):
