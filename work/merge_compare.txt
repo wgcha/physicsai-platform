@@ -1,0 +1,27 @@
+병합본(origin/claude/phase3 → feat/native-geom-r1) vs phase3 기준선 — 2026-10-19
+명령: PYTHON=python3.12 bash scripts/test-all.sh --junitxml=... (exit=0)
+
+| 항목 | phase3 기준선 | 병합본 | 증감 |
+|---|---|---|---|
+| pytest passed | 1108 (환경 실패 1건 단독 재실행 통과 포함) | 1202 | +94 (native 시험) |
+| pytest skipped | 34 | 34 | 0 (신규 skip 0) |
+| pytest failed | 0 (phase3 자체) | 0 | 0 |
+| pytest deselected(slow) | 5 | 5 | 0 |
+| paicad 단독 | 없음 | 158 passed | +158 |
+| vitest | 419 passed (41 files) | 419 passed (41 files) | 0 |
+| tsc | 통과 | 통과 | - |
+| openapi.json 최신 | 통과 | 통과 | - |
+| frontend-dist 최신 | 통과(8d2d7c55fceb) | 통과(8d2d7c55fceb) | - |
+
+## 이름 대조(junit xml)
+기준선(phase3) pytest: {'passed': 1108, 'skipped': 34}
+병합본 pytest:        {'passed': 1202, 'skipped': 34}
+기준선 통과 1108건 중 병합본에서 통과가 아닌 것: 0
+병합본에만 있는 시험(native 등): 94건 — {'passed': 94}
+native 변경 시험 파일 소속 시험: {'passed': 173, 'skipped': 1}
+skip: 기준선 34 / 병합본 34 (병합본 신규 skip 0건)
+병합본 실패 합계: 0
+
+판정: phase3 기준선 통과 시험 전부 병합본 통과, native 시험 통과, paicad 158 통과, vitest·tsc 통과 → 실패 0
+
+참고: 1차 병합 실행에서 backend.tests.test_s17_db::test_v3_s17_1_migration_0014_roundtrip 실패(head가 0015가 되어 downgrade -1이 0015의 거부에 걸림) → 시험을 0014 리비전으로 고정하는 별도 커밋으로 수정 후 위 결과.

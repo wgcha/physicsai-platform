@@ -1,0 +1,15 @@
+phase3 기준선 — origin/claude/phase3 (detached worktree, 시험만 실행·파일 변경 없음)
+명령: PYTHON=python3.12 bash scripts/test-all.sh --junitxml=<scratch>/baseline.xml   (2026-10-19, PostgreSQL 16 임시 클러스터)
+
+[frontend-dist 최신 여부] 통과 (source_hash 8d2d7c55fceb)
+[backend/worker pytest]  1107 passed, 34 skipped, 5 deselected(slow 마커, addopts -m 'not slow'), 1 failed  (713 s)
+  실패 1건: worker/tests/e2e/test_demo_e2e.py::test_demo_db_up_down
+    원인 = 환경(phase3 자체 실패 아님): worktree가 0700 scratchpad 아래에 있어 runuser -u postgres가 deploy/demo/demo_setup.py를 못 읽음(Errno 13).
+    worktree를 /home/claude/.wt_phase3_baseline(0755)로 옮겨 단독 재실행 → 1 passed.
+  → 기준선 판정: pytest 1108 passed / 34 skipped / phase3 자체 실패 0
+[openapi.json 최신 여부] 통과 (pytest 실패로 test-all이 중단돼 별도 실행)
+[frontend vitest] 41 files / 419 tests passed (별도 실행)
+[frontend tsc]    통과 (별도 실행)
+paicad 단독 시험: phase3에는 없음(native 전용)
+
+시험 이름별 상태: 병합 비교에 junit xml 사용(merge_compare.txt 참고).
