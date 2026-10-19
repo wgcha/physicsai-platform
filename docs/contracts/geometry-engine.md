@@ -193,7 +193,8 @@ component의 요소·노드 집합:
 ```
 
 - 파라미터 = 대칭 그룹 대표만(구성원은 같은 값을 따름). 순서 = component(RENUM 행 순) → 피처 종류(§6.2 표 순) → 면 서명 centroid(x,y,z 사전순).
-- 이름 = `<COMP>_<TYPE>_<k>`(정규화 component 이름, k는 같은 component·종류 안 1부터). 64자 넘으면 component 부분을 줄이고 `~<4자 해시>`. 규칙 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`(`NAME_RE`) 위반이 없게 만든다.
+- 이름 = `<COMP>_<TYPE>_<k>`(정규화 component 이름, k는 같은 component·종류 안 1부터). 64자 넘으면 component 부분을 줄이고 `_<4자 해시>`(NAME_RE 준수, `~` 아님, GE-C1). 규칙 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`(`NAME_RE`) 위반이 없게 만든다.
+- 피처 종류 약어(GE-C4): THK(두께)·POCKET_D·POCKET_W·RIB_T·RIB_H·HOLE_R·HOLE_U·HOLE_V·FILLET_R. 이름 예 `CUSH_L_POCKET_W_1`.
 - 값은 `repr(float)` 최단 표기 + `" mm"`(각도 피처는 없음 — 필렛은 반경 mm).
 - DOCTYPE·ENTITY 없음.
 
@@ -205,7 +206,7 @@ component의 요소·노드 집합:
   "engine": "native",
   "engine_version": "0.1.0",
   "unit_system": "mm-ton-s",
-  "cad": {"mode": "single", "files": [{"rel": "cad/model.step", "sha256": "…"}], "body_map": "xde"},
+  "cad": {"mode": "single", "files": [{"rel": "model.step", "sha256": "…"}], "body_map": "xde"},
   "bodies": [
     {"body": "CUSH_L", "part": "CUSH_L", "renum_row": 1, "volume": 812345.2, "bbox": [0, 0, 0, 120, 80, 60], "faces": 42, "edges": 120, "vertices": 80}
   ],
@@ -224,7 +225,7 @@ component의 요소·노드 집합:
         "F7":  {"surface": "PLANE", "normal": [0, 0, -1], "centroid": [60, 40, 0], "area": 9600.0, "bbox": [0, 0, 0, 120, 80, 0]}
       },
       "draft_deg": 0.0,
-      "ref": {"rule": "contact_fixed", "face": "F7", "reason": "제품 접촉면", "provisional": true, "locked": false},
+      "ref": {"rule": "contact_fixed", "face": "F7", "reason": "contact face with product", "provisional": true, "locked": false},
       "measure": {"method": "face_distance", "faces": ["F12", "F7"]},
       "group": "G1",
       "png": "features/CUSH_L_THK_1.png"
@@ -233,7 +234,7 @@ component의 요소·노드 집합:
   "groups": [
     {"id": "G1", "kind": "MIRROR", "plane": {"point": [200, 0, 0], "normal": [1, 0, 0]}, "parameter": "CUSH_L_THK_1", "members": ["CUSH_L_THK_1", "CUSH_R_THK_1"]}
   ],
-  "warnings": [{"code": "REF_BOTH_CONTACT", "feature": "CUSH_L_RIB_T_2", "message": "두 면이 모두 접촉면이라 두께를 바꿀 수 없습니다(후보에서 기본 제외)"}]
+  "warnings": [{"code": "REF_BOTH_CONTACT", "feature": "CUSH_L_RIB_T_2", "message": "both faces are in contact; thickness cannot change (excluded from candidates by default)"}]
 }
 ```
 
@@ -344,12 +345,14 @@ component의 요소·노드 집합:
   "deviation":    {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
   "interference": {"body_mm": 0.01, "product_mm": 0.05},
   "tie":          {"default_dsearch_mm": null, "required": true},
+  "extract":      {"max_draft_deg": 5.0, "overlap_ratio": 0.5, "range_ratio": 0.05},
   "thickness_ref": "contact_fixed",
   "thickness_ref_overrides": {},
   "symmetry_split": []
 }
 ```
 
+- `extract` 절(선택, GE-C5): `max_draft_deg` 구배 허용각(이 이하 면은 평면 취급)·`overlap_ratio` 대향 면 겹침 비율·`range_ratio` 값 범위 비율. 수치는 예시이며 구현 기본값을 따름.
 - 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_stretch ≤ 1`, `max_aspect ≥ 1`, `min_edge_mm ≥ 0`(0 = 끔), `0 < min_edge_ratio ≤ 1`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
 - **품질 기본값 출처(2026-10-19, Q8 해결)**: 현행 SimLab 메시 설정(internal grading 2, quality min 0.1(tet stretch, 1=이상), identify feature: merge tiny fillet·min size 1 mm·avg size 10 mm·grade factor 1.5, geometry approximation: max angle per element 45°·curvature min elem size 5 mm·surface mesh aspect ratio 10·iso mesh)에서 가져온 `min_stretch=0.1`·`max_aspect=10`·`min_edge_mm=1.0`. 기존 Δt 비 기준(`min_edge_ratio`)은 유지. `min_scaled_jacobian`은 기준 키에서 빼고 `check.json`의 정보 수치로만 남긴다(계약 초안 단계라 호환 이슈 없음).
 - 고급 옵션 UI에서 바꾸는 절 = `quality`·`interference`·`deviation`(+`tie.required`). `tag` 절 변경은 준비본 재생성 필요(§7.4).
@@ -411,9 +414,9 @@ component의 요소·노드 집합:
 | 위치 | `packages/paicad/`(`pyproject.toml`, `src/paicad/`, `tests/`, `CHANGELOG.md`) — `packages/simdash_adapters`와 같은 배치 |
 | 배포 이름·버전 | `paicad==0.1.0`(루트 `pyproject.toml` 의존에 정확 고정, `deploy/requirements.local.lock`). 버전 단일 출처·올림 규칙은 §17 |
 | 진입점 | `[project.scripts] paicad = "paicad.cli:main"`(Windows `Scripts\paicad.exe`) |
-| 의존 | `cadquery-ocp`(cp312 win_amd64 wheel이 있는 버전으로 Impl이 고정, 7.7 이상 — wheel 포함·사내 보안 승인 이슈 없음, 2026-10-19 확정; 소스 개발은 인터넷 PC(GitHub), 폐쇄망은 `deploy/collect-offline.ps1` 묶음 → 설치), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
-| 테스트 전용 extra | `[project.optional-dependencies] test = [build123d, gmsh, pytest…]`(배포 묶음·`requirements.lock`·`collect-offline` 제외, 런타임 코드 import 금지). **OCP 고정 규칙**: build123d가 요구하는 `cadquery-ocp` 버전 범위가 본체 고정 OCP 버전을 포함하는 build123d 버전만 고정하고, `test` extra 설치가 본체 OCP를 바꾸지 않아야 한다(2026-10-19: build123d·gmsh는 배포 묶음 제외 유지)(시험 시작 때 `OCP` 버전 == 고정 버전 단언, 불일치는 시험 실패). 옵션 `gen` extra는 §18.8(로드맵) |
-| 모듈 경계 | `paicad.brep`(OCP 사용 — STEP 읽기·XDE·피처·push/pull·투영·렌더), `paicad.mesh`(Radioss 읽기·쓰기, numpy만), `paicad.morph`·`paicad.check`(numpy·scipy + `brep` 인터페이스), `paicad.cli`. `mesh`·`morph`·`check`는 B-rep을 `SurfaceLike`/`CurveLike` 프로토콜(`eval(u,v)`, `project(p)`, `classify(u,v)`, `bounds()`)로만 쓴다 → 해석적 평면·원통 구현으로 OCP 없이 시험 가능 |
+| 의존 | `cadquery-ocp==7.8.1.1.post1`(고정, cp312 win_amd64, vtk 의존, 런타임 **Python 3.12 전용** — cp313 휠 없음. 당초 표기 7.7 이상 — wheel 포함·사내 보안 승인 이슈 없음, 2026-10-19 확정; 소스 개발은 인터넷 PC(GitHub), 폐쇄망은 `deploy/collect-offline.ps1` 묶음 → 설치), `numpy>=2,<3`, `scipy>=1.13,<2`(기존 lock 버전 공유). 그 밖 금지 |
+| 테스트 전용 extra | `[project.optional-dependencies] test = [build123d==0.10.0, ocp_gordon==0.1.18, gmsh, pytest…]`(배포 묶음·`requirements.lock`·`collect-offline` 제외, 런타임 코드 import 금지). **OCP 고정 규칙**: build123d가 요구하는 `cadquery-ocp` 버전 범위가 본체 고정 OCP 버전을 포함하는 build123d 버전만 고정하고, `test` extra 설치가 본체 OCP를 바꾸지 않아야 한다(2026-10-19: build123d·gmsh는 배포 묶음 제외 유지)(시험 시작 때 `OCP` 버전 == 고정 버전 단언, 불일치는 시험 실패). 최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP를 교체하므로 금지. gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 옵션 `gen` extra는 §18.8(로드맵) |
+| 모듈 경계 | `paicad.kernel`(`src/paicad/kernel/`, OCP 사용 — STEP 읽기·XDE·피처·push/pull·투영·렌더, §18.9; GE-C2), `paicad.mesh`(Radioss 읽기·쓰기, numpy만), `paicad.morph`·`paicad.check`(numpy·scipy + `kernel` 인터페이스), `paicad.cli`. `mesh`·`morph`·`check`는 B-rep을 `SurfaceLike`/`CurveLike` 프로토콜(`eval(u,v)`, `project(p)`, `classify(u,v)`, `bounds()`)로만 쓴다 → 해석적 평면·원통 구현으로 OCP 없이 시험 가능 |
 | 플랫폼 import | 금지(physicsai_core·api·worker 어디서도). 플랫폼은 결과 JSON만 읽는다(`physicsai_core/geometry/reports.py`, 표준 라이브러리만). 독립성 규칙 전체는 §18 |
 
 ### 5.2 공통 규약
@@ -910,7 +913,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | 고정폭 형식 변종(긴 형식, 탭, 자유 형식) | 쓰기 실패 | 줄별 필드 감지, `GEOM_INC_FORMAT`로 차단, 무변경 왕복 시험 |
 | tie·접촉 정의 해석 실패 | 엄격(`required=true`면 실패), 쿠션 한정에서는 tie 없음 → `SKIPPED` | §6.5, Q7 |
 | 제품 메시가 큼(수백만 노드) | check 느림 | bbox 자르기 + KD-tree, `timeout_s` |
-| cadquery-ocp wheel 크기·Windows DLL(VC 런타임) | 설치 실패 | 오프라인 묶음 포함, 환경 점검 `paicad_version`, 대시보드 PC VC 런타임 확인 |
+| cadquery-ocp wheel 크기(vtk 의존으로 오프라인 묶음 용량 증가)·Windows DLL(VC 런타임) | 설치 실패·묶음 비대 | 오프라인 묶음 포함, 환경 점검 `paicad_version`, 대시보드 PC VC 런타임 확인 |
 | 같은 STEP이라도 OCP 버전 바뀌면 면 번호 변경 | 준비본 무효 | `prep.json.ocp_version` 비교 → STALE, 면 서명으로 재식별 |
 | 엔진 혼용으로 모델 오용 | 조용한 오답 | DB 엔진 기록 + 409/422 |
 | 기준면 자동 판정이 실제 의도와 다름(접촉 판정 오차·양면 접촉 구속) | 두께 변경 방향 오류 또는 후보 누락 | 규칙 ①②③ 확정(GE-8), `ref.provisional`·`REF_BOTH_CONTACT` 표시, 파라미터별 기준면 변경(`thickness_ref_overrides`), 가상 쿠션 정답 시험 |
@@ -1107,3 +1110,16 @@ paicad는 실패 코드(§6.5 표)와 **영문 기술 메시지**만 낸다(`mes
 ## 변경 메모
 
 (구현 중 계약과 다르게 해야 하면 여기에 `GE-C1~`로 기록하고 Plan 확인을 받는다.)
+
+paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 완료).
+
+| ID | 변경 |
+|---|---|
+| GE-C1 | 64자 초과 이름 축약 접미사 `_<4자 해시>`(`~` 아님, NAME_RE 준수) |
+| GE-C2 | OCP 사용 모듈 위치 `src/paicad/kernel/`(§5.1 `paicad.brep` → `paicad.kernel`, §18.9와 일치) |
+| GE-C3 | `ref.reason`·경고 문구 영문(§18.4) |
+| GE-C4 | 피처 종류 약어 추가 POCKET_W·RIB_H·HOLE_R·HOLE_U·HOLE_V·FILLET_R(§4.3) |
+| GE-C5 | options.json 선택 절 `extract`(구배 허용각·겹침 비율·범위 비율, §4.9) |
+| GE-C6 | `cad.files[].rel`은 `--cad` 기준 상대경로 |
+
+추가 사실: 런타임 Python 3.12 전용(OCP 7.8이 vtk 의존, cp313 휠 없음). 고정 `cadquery-ocp==7.8.1.1.post1`, test extra `build123d==0.10.0`·`ocp_gordon==0.1.18`(최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP 교체 — 금지). gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 리스크: vtk로 오프라인 묶음 용량 증가.

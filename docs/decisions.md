@@ -144,3 +144,4 @@
 
 - 2026-10-19 골든 세트(실물 CAD·조립 폴더) 사내 반출 불가 → 단계 0 재정의: (a) 개발 환경 골든 = build123d 가상 쿠션 + gmsh tetra4 baseline + 합성 조립 폴더(정답 비교 1차 근거), (b) 현장 인수 키트 `paicad selftest`(폐쇄망 실물 실행, CAD·메시 본문 없이 수치 요약만 회신, NX 변경 샘플 비교 포함), 실물 의존 항목은 "현장 인수" 표시 — 근거: 사용자 확정(반출 불가) · geometry-engine.md §9·§10·V-GE-20
 - 2026-10-19 Q8 해결(현행 SimLab 설정 기준): check 기본값 stretch ≥ 0.1·aspect ≤ 10·min edge ≥ 1 mm(Δt 비 유지), gmsh baseline = avg 10/min 1/grade 1.5/곡률 45°·5 mm, baseline 기준 미달은 `BASELINE_QUALITY_BELOW`(비차단, 완화는 사용자 선택), SimLab stretch 식 차이 가능성은 Q18 미결. Q10 해결: 인터넷 PC(GitHub) 개발 → 오프라인 묶음 설치 배포, cadquery-ocp wheel 포함·보안 승인 이슈 없음, build123d·gmsh는 배포 제외 유지 — 근거: 사용자 확정 · geometry-engine.md §4.9·§6.5·§7.8·§15
+- 2026-10-19 paicad 0.1.0 구현 변경 GE-C1~C6 승인(해시 접미사 `_xxxx`·`kernel/` 위치·영문 reason·피처 약어·`extract` 옵션 절·cad.rel 상대경로) + OCP 7.8.1.1.post1 고정·Python 3.12 전용·build123d 0.10.0 고정(novtk 금지)·libGLU 필요 — 근거: 구현 중 발견, Plan 승인 · geometry-engine.md 변경 메모
