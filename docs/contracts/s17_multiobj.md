@@ -2,6 +2,8 @@
 
 > 이 문서는 phase3.md §22와 변경 메모 D3-65입니다. s12_s13.md·s14_analysis.md·s15_sampling.md와 같은 사정으로 별도 파일로 두며, 다음 Plan 커밋에서 phase3.md 본문과 변경 메모 목록으로 옮깁니다. 절 번호·용어·원칙은 phase3.md, [s12_s13.md](s12_s13.md)(§17 지표·`run_metrics`, §18 내장 최적화, D3-60·D3-61), [s14_analysis.md](s14_analysis.md)(표시 번호: ⑤ 결과분석, ⑥ 최적화 = 내부 stage 5·URL `/stage/5`)와 같습니다.
 >
+> **후속(2026-10-20)**: 알고리즘 `ga`·`nsga2`, 검증 방식 `none`, 범주 `baseline`, HyperStudy 레거시화는 [opt-native.md](opt-native.md)를 따릅니다. 아래 P7의 "NSGA-II를 직접 구현하지 않습니다"는 opt-native.md ON-6으로 대체됩니다.
+>
 > 기준선은 `claude/phase3` df8fc77(S15 0012까지)입니다. **S16(§21, migration 0013, D3-64)이 먼저 병합되어야 합니다.** 이 문서의 migration은 `0014_multiobj`(Revises = S16의 0013 revision id)입니다.
 
 ## 22. S17 성능 정의·다목적 내장 최적화 (사용자 VOC·결정 2026-10-19, D3-65)
