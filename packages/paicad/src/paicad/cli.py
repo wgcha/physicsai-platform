@@ -13,7 +13,7 @@ from pathlib import Path
 
 from . import __version__
 
-EPILOG = "Exit codes: 0 ok, 2 arguments, 3 input, 10 CAD, 11 check/morph/props apply, 12 tag, 13 extract empty, 20 internal, 130 interrupted."
+EPILOG = "Exit codes: 0 ok, 2 arguments, 3 input, 10 CAD, 11 check/morph/props apply, 12 tag, 13 extract empty, 14 view output, 20 internal, 130 interrupted."
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -96,6 +96,28 @@ def _parser() -> argparse.ArgumentParser:
     mp.add_argument("--options")
     mp.add_argument("--threads", type=int)
 
+    vw = sub.add_parser("view", help="3D view (GLB) of the nominal B-rep | parameter preview", allow_abbrev=False)
+    vsub = vw.add_subparsers(dest="view_cmd", metavar="action", required=True)
+    ve = vsub.add_parser("export", help="nominal B-rep -> view.glb + view_manifest.json", allow_abbrev=False)
+    for a in ("--cad", "--features", "--out-dir"):
+        ve.add_argument(a, required=True)
+    ve.add_argument("--body-map")
+    ve.add_argument("--view-options", help="view_options.json (tessellation tolerances, size limits)")
+    ve.add_argument("--threads", type=int)
+    vp = vsub.add_parser("preview", help="values -> changed B-rep preview.glb (+ morphed FE skin) + preview_manifest.json", allow_abbrev=False)
+    for a in ("--cad", "--features", "--values", "--out-dir"):
+        vp.add_argument(a, required=True)
+    vp.add_argument("--tag-dir")
+    vp.add_argument("--body-map")
+    vp.add_argument("--options", help="geometry options (update/morph/check behaviour)")
+    vp.add_argument("--view-options")
+    vp.add_argument("--nominal-manifest", help="nominal view_manifest.json (nominal_ref and tessellation tolerances)")
+    vp.add_argument("--fe", default="off", choices=["off", "morph", "check"], help="also morph (and check) the baseline mesh (default off)")
+    vp.add_argument("--baseline-inc")
+    vp.add_argument("--renum-csv")
+    vp.add_argument("--assem-dir")
+    vp.add_argument("--threads", type=int)
+
     st = sub.add_parser("selftest", help="site acceptance kit: numeric summary report only (no CAD/mesh content)", allow_abbrev=False)
     for a in ("--cad", "--baseline-inc", "--renum-csv", "--assem-dir", "--out-dir"):
         st.add_argument(a, required=True)
@@ -128,7 +150,16 @@ def versions() -> dict:
     return out
 
 
-REPORTS = {"tag": "tag.json", "update": "update.json", "morph": "morph.json", "check": "check.json", "run": "run.json", "props apply": "props_apply.json"}
+REPORTS = {
+    "tag": "tag.json",
+    "update": "update.json",
+    "morph": "morph.json",
+    "check": "check.json",
+    "run": "run.json",
+    "props apply": "props_apply.json",
+    "view export": "view_manifest.json",
+    "view preview": "preview_manifest.json",
+}
 
 
 def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
@@ -142,7 +173,11 @@ def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
     p = Path(out_dir) / name
     if p.exists():
         return None
-    extra = {"tag": dict(parts=[], contacts=[], files={}, warnings=[])}.get(cmd, {})
+    extra = {
+        "tag": dict(parts=[], contacts=[], files={}, warnings=[]),
+        "view export": dict(kind="solid", mode="nominal", glb=None, warnings=[]),
+        "view preview": dict(kind="solid", mode="preview", glb=None, warnings=[]),
+    }.get(cmd, {})
     doc = envelope(status="FAIL", code=code, category=CODE_CATEGORY.get(code), message=message, **extra)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(f".{name}.{os.getpid()}")
@@ -184,6 +219,10 @@ def dispatch(args, rep) -> int:
         from . import paramap
 
         return paramap.run(args, rep)
+    if args.cmd == "view":
+        from . import view
+
+        return view.run(args, rep)
     if args.cmd == "selftest":
         from . import selftest
 
@@ -201,7 +240,7 @@ def guarded(args, rep) -> tuple[int, str | None, str | None]:
         rep.warn(f"{e.code}: {e.message}")
         report = None
         if e.code != "GEOM_OUTPUT_EXISTS" and not (args.cmd == "morph" and getattr(args, "sweep", False)):
-            cmd = f"props {args.props_cmd}" if args.cmd == "props" else args.cmd
+            cmd = f"props {args.props_cmd}" if args.cmd == "props" else f"view {args.view_cmd}" if args.cmd == "view" else args.cmd
             report = _fail_report(cmd, args.out_dir, e.code, e.message)
         rep.result("FAIL", e.code, report)
         return e.exit_code, e.code, e.message

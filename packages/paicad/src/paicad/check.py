@@ -367,6 +367,21 @@ def expected_measures(update_dir: str | Path) -> dict[str, float]:
     return out
 
 
+def report(res: CheckResult, opts: dict, out_inc_name: str | None, t0: float) -> dict:
+    """``check.json`` (also written by ``paicad view preview``, where ``out_inc`` is always null)."""
+    return envelope(
+        status=res.status,
+        code=res.code,
+        category=CODE_CATEGORY.get(res.code) if res.code else None,
+        message=res.message,
+        checks=res.checks,
+        warnings=res.warnings,
+        options={k: v for k, v in opts.items() if k != "schema_version"},
+        out_inc=out_inc_name,
+        elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
+
+
 # ------------------------------------------------------------------ CLI
 def run(args, rep: Reporter) -> int:
     t0 = time.monotonic()
@@ -396,18 +411,7 @@ def run(args, rep: Reporter) -> int:
     expected = expected_measures(args.update_dir)
     rep.progress(20, "checking")
     res = check_core(mesh, mm.xyz, comps, sample, doc, values, opts, args.assem_dir, Path(args.baseline_inc), expected=expected)
-    d = envelope(
-        status=res.status,
-        code=res.code,
-        category=CODE_CATEGORY.get(res.code) if res.code else None,
-        message=res.message,
-        checks=res.checks,
-        warnings=res.warnings,
-        options={k: v for k, v in opts.items() if k != "schema_version"},
-        out_inc=out_inc.name if res.status == "PASS" else None,
-        elapsed_s=rnd(time.monotonic() - t0, 3),
-    )
-    out.write_text(CHECK_JSON, dumps(d))
+    out.write_text(CHECK_JSON, dumps(report(res, opts, out_inc.name if res.status == "PASS" else None, t0)))
     if res.status == "PASS":
         out_inc.parent.mkdir(parents=True, exist_ok=True)
         tmp = out_inc.with_name(f".{out_inc.name}.tmp{os.getpid()}")

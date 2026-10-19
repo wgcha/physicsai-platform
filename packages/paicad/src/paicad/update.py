@@ -165,7 +165,16 @@ def contacts_from_tag(tag_dir: str | Path | None, doc: dict) -> dict[str, set[in
 
 def nominal_bodies(cad_path: str | Path, doc: dict, body_map: str | None) -> list[BodyGeom]:
     """Nominal bodies in features ``bodies`` order."""
+    return nominal_cad(cad_path, doc, body_map)[1]
+
+
+def nominal_cad(cad_path: str | Path, doc: dict, body_map: str | None) -> tuple[cadload.CadSet, list[BodyGeom]]:
+    """(loaded CAD set with file hashes, nominal bodies in features ``bodies`` order)."""
     cad = cadload.load(cad_path)
+    return cad, _bodies_of(cad, doc, body_map)
+
+
+def _bodies_of(cad: cadload.CadSet, doc: dict, body_map: str | None) -> list[BodyGeom]:
     byname = cad.by_name()
     names = [b["body"] for b in doc["bodies"]]
     if all(n in byname for n in names):
@@ -614,6 +623,30 @@ def _check_faces(name: str, tn: Topology, ts: Topology, moves: dict[int, FaceMov
             raise PaicadError("GEOM_TOPOLOGY_CHANGED", f"{name}: face F{fa.id} vanished (area {fb.area:.3g})")
 
 
+# ------------------------------------------------------------------ reports (also written by ``paicad view preview``)
+def fail_report(e: PaicadError, values: dict[str, float], t0: float) -> dict:
+    """``update.json`` of a CAD failure (exit 10)."""
+    return envelope(
+        status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, values=dict(values), applied=[], topology=None, **(e.detail or {}), elapsed_s=rnd(time.monotonic() - t0, 3)
+    )
+
+
+def ok_report(res: UpdateResult, doc: dict, values: dict[str, float], t0: float) -> dict:
+    return envelope(
+        status="OK",
+        code=None,
+        category=None,
+        message=None,
+        values=dict(values),
+        applied=res.applied,
+        topology=res.topology,
+        bodies=[{"body": b["body"], "volume": rnd(x.summary().volume), "bbox": vec(x.summary().bbox)} for b, x in zip(doc["bodies"], res.bodies)],
+        positions=res.positions,
+        warnings=res.warnings,
+        elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
+
+
 # ------------------------------------------------------------------ CLI
 def run(args, rep: Reporter) -> int:
     t0 = time.monotonic()
@@ -626,15 +659,13 @@ def run(args, rep: Reporter) -> int:
     rep.progress(10, "loading nominal CAD")
     nominal = nominal_bodies(args.cad, doc, args.body_map)
     rep.progress(30, "applying push/pull")
-    head = dict(values={k: values[k] for k in values})
     try:
         res = update_core(nominal, doc, values, contacts, opts)
     except PaicadError as e:
         if e.exit_code != EXIT_CAD:
             raise
         rep.warn(f"{e.code}: {e.message}")
-        rep_doc = envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, **head, applied=[], topology=None, **(e.detail or {}), elapsed_s=rnd(time.monotonic() - t0, 3))
-        out.write_text(UPDATE_JSON, dumps(rep_doc))
+        out.write_text(UPDATE_JSON, dumps(fail_report(e, values, t0)))
         out.commit([UPDATE_JSON])
         rep.result("FAIL", e.code, UPDATE_JSON)
         return EXIT_CAD
@@ -644,20 +675,7 @@ def run(args, rep: Reporter) -> int:
     except CadInputError as e:
         raise PaicadError(e.code, e.message) from None
     out.write_text(FACE_MAP_JSON, dumps(res.face_map))
-    rep_doc = envelope(
-        status="OK",
-        code=None,
-        category=None,
-        message=None,
-        **head,
-        applied=res.applied,
-        topology=res.topology,
-        bodies=[{"body": b["body"], "volume": rnd(x.summary().volume), "bbox": vec(x.summary().bbox)} for b, x in zip(doc["bodies"], res.bodies)],
-        positions=res.positions,
-        warnings=res.warnings,
-        elapsed_s=rnd(time.monotonic() - t0, 3),
-    )
-    out.write_text(UPDATE_JSON, dumps(rep_doc))
+    out.write_text(UPDATE_JSON, dumps(ok_report(res, doc, values, t0)))
     out.commit([SAMPLE_BREP, FACE_MAP_JSON, UPDATE_JSON])
     rep.progress(100, "update done")
     rep.result("OK", None, UPDATE_JSON)

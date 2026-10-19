@@ -112,3 +112,35 @@ class FakeBox:
         inside = self.points_inside(pts)
         d_in = np.minimum(pts - self.lo, self.hi - pts).min(axis=1)
         return np.where(inside, d_in, out)
+
+    # ---------------- 3D view (geometry-view.md section 5.3)
+    def tessellate(self, linear_mm, angular_deg):
+        """Two outward triangles per face, 4 unshared vertices per face, face id order."""
+        pos, nrm, tris, fids = [], [], [], []
+        for k, (axis, side, verts, _, n, bb) in enumerate(self._faces, 1):
+            u, v = self._uv_axes(axis)
+            quad = []
+            for a, b in ((0, 0), (1, 0), (1, 1), (0, 1)):
+                p = np.zeros(3)
+                p[axis] = bb[axis]
+                p[u] = bb[u] if a == 0 else bb[3 + u]
+                p[v] = bb[v] if b == 0 else bb[3 + v]
+                quad.append(p)
+            quad = np.array(quad)
+            t = np.array([[0, 1, 2], [0, 2, 3]])
+            w = np.cross(quad[1] - quad[0], quad[2] - quad[0])
+            if float(np.dot(w, n)) < 0:
+                t = t[:, [0, 2, 1]]
+            off = 4 * (k - 1)
+            pos.append(quad)
+            nrm.append(np.tile(n, (4, 1)))
+            tris.append(t + off)
+            fids.append(np.full(2, k, dtype=np.int32))
+        return np.concatenate(pos), np.concatenate(nrm), np.concatenate(tris).astype(np.int64), np.concatenate(fids)
+
+    def edge_polylines(self, linear_mm, angular_deg):
+        return [(k, self._v[list(e)].astype(float)) for k, e in enumerate(self._edges, 1)]
+
+    def distance_to_face(self, face_id, pts):
+        axis, _, _, _, _, bb = self._faces[face_id - 1]
+        return np.abs(np.asarray(pts, float).reshape(-1, 3)[:, axis] - bb[axis])
