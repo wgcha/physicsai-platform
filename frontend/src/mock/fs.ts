@@ -37,6 +37,13 @@ const TREE: Record<string, Tree> = {
   [MOCK_IMPORT_ROOT]: { model_v4: { "cushion_TNS.psmdl": 12_000_000, "train.log": 10_000 } },
 };
 
+/** S16 §21: FEM 검증 조립 원본용 SPDM 읽기 전용 루트(include_spdm=true일 때만 /fs/roots에 나온다). mock/femVerify.ts MOCK_SPDM_ROOT와 같은 값 */
+const MOCK_SPDM_ROOT = "S:\\SPDM\\cushion";
+TREE[MOCK_SPDM_ROOT] = {
+  assem_v7: { "Face_Drop_0000.rad": 4_096, "Face_Drop_0001.rad": 190_000, "104_replace_node_elem.inc": 8_400_000, "renum.csv": 2_048 },
+  assem_v6: { "Side_Drop_0000.rad": 4_100, "Side_Drop_0001.rad": 188_000 },
+};
+
 export const MOCK_INBOX = `${MOCK_AI_ROOT}\\inbox`;
 /** 화면 안내용 공유 경로(목) */
 export const MOCK_SHARE_HINT = "\\\\AI-SERVER\\physicsai-inbox";
@@ -78,6 +85,7 @@ export const fsRoutes: Route = (_srv, c) => {
         { key: "ai_root", label: "AI 루트", path: MOCK_AI_ROOT },
         { key: "inbox", label: "받은 파일(공유 폴더)", path: MOCK_INBOX },
         { key: "import_0", label: "추가 허용 폴더", path: MOCK_IMPORT_ROOT },
+        ...(c.query.get("include_spdm") === "true" ? [{ key: "spdm_0", label: "SPDM(읽기 전용)", path: MOCK_SPDM_ROOT }] : []),
       ],
       inbox_share_hint: MOCK_SHARE_HINT,
     });

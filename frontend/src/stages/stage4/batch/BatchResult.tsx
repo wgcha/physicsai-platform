@@ -14,7 +14,8 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { POLL } from "../../../lib/poll";
 import { fmtNum } from "../../../lib/format";
 import { samplingSummary } from "../../../lib/sampling";
-import { usePredictVerify } from "../predictRun";
+import { useFemVerifyButton } from "../verify/useFemVerifyButton";
+
 import { ContourMedia } from "../ContourMedia";
 import { ResultListTree } from "../PredictResult";
 import { fmtDuration } from "../PredictSteps";
@@ -220,7 +221,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
         </p>
       </Card>
 
-      <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} />
+      <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} batchId={batchId} />
       <Card span={3} title="결과분석" className="batch-analysis-link">
         <div className="link-card">
           <p className="muted small">변수–응답 그래프, 설계공간 지도, 영향도, 커브 겹쳐보기는 ⑤ 결과분석에서 봅니다.</p>
@@ -302,8 +303,8 @@ function CaptureMark({ views }: { views: string[] }) {
   );
 }
 
-/** 고른 DOE: 머리 DOE #N · run_key, 컨투어(방향별 스크린샷·영상) + 접힌 결과 목록, 경로 복사·단일 예측으로 열기·PBS 검증 해석 */
-function RunPanel({ row, base, canCapture, view, onView, psId }: { row: PredictBatchRow | null; base: string; canCapture: boolean; view: ViewKey | null; onView: (v: ViewKey) => void; psId: string }) {
+/** 고른 DOE: 머리 DOE #N · run_key, 컨투어(방향별 스크린샷·영상) + 접힌 결과 목록, 경로 복사·단일 예측으로 열기·FEM 검증 */
+function RunPanel({ row, base, canCapture, view, onView, psId, batchId }: { row: PredictBatchRow | null; base: string; canCapture: boolean; view: ViewKey | null; onView: (v: ViewKey) => void; psId: string; batchId: string }) {
   const navigate = useNavigate();
   const { paramSets } = useStudy();
   const [job, setJob] = useState<Job | null>(null);
@@ -317,7 +318,7 @@ function RunPanel({ row, base, canCapture, view, onView, psId }: { row: PredictB
     };
   }, [row?.job_id, row?.state]);
   const result = job?.state === "SUCCEEDED" ? (job.result as unknown as PR | null) : null;
-  const pbs = usePredictVerify(job, !!result);
+  const pbs = useFemVerifyButton(row ? { kind: "batch_run", batch_id: batchId, doe_no: row.doe_no } : null, !!result, job);
   if (!row)
     return (
       <Card span={3} title="DOE" className="batch-run-panel">

@@ -1,0 +1,118 @@
+/* ④ 조립 FEM 검증(phase3 §21.3.11): 새 검증 카드·상세 진행 단·컨투어/커브 비교. 토큰만 사용(designRules). */
+.fv-new-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+.fv-section {
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.fv-section + .fv-section {
+  border-top: 1px solid var(--color-border);
+  padding-top: var(--space-3);
+}
+.fv-radios {
+  display: grid;
+  gap: var(--space-2);
+}
+.fv-radio {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.fv-radio.off {
+  color: var(--color-text-muted);
+}
+.fv-radio .pathinput-row {
+  flex: 1 1 320px;
+}
+.fv-notes {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fv-adv {
+  display: grid;
+  gap: var(--space-3);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+}
+.fv-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.fv-stage {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+  color: var(--color-text-muted);
+}
+.fv-stage.running {
+  border-color: var(--color-accent);
+  color: var(--color-text);
+}
+.fv-stage.done {
+  color: var(--color-text);
+}
+.fv-stage.failed {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+.fv-stage .no {
+  font-variant-numeric: tabular-nums;
+}
+.fv-compare {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+@media (max-width: 1100px) {
+  .fv-compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.fv-side-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: baseline;
+}
+.chart-line.fv-pred {
+  stroke: var(--color-chart-series-1);
+  stroke-width: 2;
+}
+.chart-line.fv-fem {
+  stroke: var(--color-chart-series-2);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+}
+.lg.line.fv-pred {
+  background: var(--color-chart-series-1);
+}
+.lg.line.fv-fem {
+  background: var(--color-chart-series-2);
+}
+tr.fv-value td {
+  font-weight: 600;
+}
+tr.fv-minmax td {
+  color: var(--color-text-muted);
+}
+.fv-prior {
+  color: var(--color-text-muted);
+}
+.media-video-fail {
+  display: grid;
+  gap: var(--space-1);
+}

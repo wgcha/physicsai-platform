@@ -15,7 +15,12 @@ export function installMockFetch() {
   } catch {
     /* 저장소 없음 */
   }
-  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1" || params.get("hpc") === "scx", hpcMode: params.get("hpc") === "scx" ? "scx" : undefined, scxUnknown: params.get("scx") === "unknown", demo: params.get("demo") === "1", batchDemo: ["running", "sobol", "bbd"].includes(params.get("batch") ?? "") ? (params.get("batch") as "running" | "sobol" | "bbd") : undefined, configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
+  const server = new MockServer({ user: user ?? "admin", hpcConfigured: params.get("hpc") === "1" || params.get("hpc") === "scx", hpcMode: params.get("hpc") === "scx" ? "scx" : undefined, scxUnknown: params.get("scx") === "unknown", predictRuns: params.get("runs") === "history" ? "history" : undefined, femVerify: params.get("fv") === "demo" ? "demo" : undefined, demo: params.get("demo") === "1", batchDemo: ["running", "sobol", "bbd"].includes(params.get("batch") ?? "") ? (params.get("batch") as "running" | "sobol" | "bbd") : undefined, configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
+  // S16: ?vt=top:video/x-msvideo,iso:video/mp4 — 방향별 영상 content-type(avi 안내 시연)
+  for (const kv of (params.get("vt") ?? "").split(",").filter(Boolean)) {
+    const [view, ct] = kv.split(":");
+    if (view && ct) server.videoTypes[view] = ct;
+  }
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

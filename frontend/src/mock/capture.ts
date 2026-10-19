@@ -45,11 +45,17 @@ export function captureMedia(srv: MockServer, job: Job, values: Record<string, n
   });
 }
 
-function file(srv: MockServer, id: string): MediaFile {
+export function file(srv: MockServer, id: string, view?: string, isVideo = false): MediaFile {
   const a = srv.artifacts.find((x) => x.id === id);
   const u = `/physicsai/api/artifacts/${id}/media`;
-  return { artifact_id: id, content_type: a?.content_type ?? "image/png", size: a?.size ?? 0, url: u, download_url: `${u}?download=true` };
+  // S16 V3: srv.videoTypes[view] = 영상 content_type 덮어쓰기(avi·gif 등). avi는 playable=false
+  const ct = isVideo && view && srv.videoTypes[view] ? srv.videoTypes[view] : (a?.content_type ?? "image/png");
+  const f: MediaFile = { artifact_id: id, content_type: ct, size: a?.size ?? 0, url: u, download_url: `${u}?download=true` };
+  if (isVideo && ct === "video/x-msvideo") f.playable = false;
+  return f;
 }
+
+const VIDEO_ERROR: Record<string, string> = { top: "파일이 만들어지지 않았습니다(HyperView 성공 보고)" };
 
 const STATUS: Record<CaptureMode, MediaStatus> = { OK: "OK", PARTIAL: "PARTIAL", FAILED: "FAILED", DISABLED: "SKIPPED", NONE: "NONE" };
 
@@ -71,7 +77,8 @@ export function mediaOut(srv: MockServer, j: Job): JobMedia {
       label: viewLabel(m.view),
       job_id: j.id,
       image: file(srv, m.image_artifact_id),
-      video: m.video_artifact_id ? file(srv, m.video_artifact_id) : null,
+      video: m.video_artifact_id ? file(srv, m.video_artifact_id, m.view, true) : null,
+      video_error: m.video_artifact_id ? null : (VIDEO_ERROR[m.view] ?? null),
     })),
     recapture: active ? { job_id: active.id, state: active.state, active: true } : null,
     capture_enabled: enabled,

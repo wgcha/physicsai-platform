@@ -46,10 +46,15 @@ export function useLatestJob(studyId: string, jobType: JobType, onFinish?: (job:
       .then(async (all) => {
         if (!alive) return;
         const list = all.filter((s) => !s.batch);
-        if (list.length) {
-          const j = await api.job(list[0].id);
-          if (alive) accept(j);
-        } else accept(null);
+        // S16: FEM 검증이 함께 돌리는 동반 PREDICT(params.fem_verify_id)도 단일 예측 화면의 "최신 작업"이 아니다
+        let found: Job | null = null;
+        for (const s of list) {
+          const j = await api.job(s.id);
+          if (jobType === "PREDICT" && (j.params as { fem_verify_id?: string } | null)?.fem_verify_id) continue;
+          found = j;
+          break;
+        }
+        if (alive) accept(found);
       })
       .catch(() => undefined)
       .finally(() => alive && setLoaded(true));

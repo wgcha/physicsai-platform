@@ -59,6 +59,8 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   CONTOUR_RECAPTURE: "컨투어 다시 캡처",
   // phase3.md §18.4 S13
   SURROGATE_OPT: "내장 최적화 반복",
+  // phase3.md §21.3.5 S16
+  FEM_VERIFY: "조립 FEM 검증",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -85,6 +87,7 @@ export const JOB_STAGE: Record<JobType, number> = {
   PREDICT_BATCH: 4,
   CONTOUR_RECAPTURE: 4,
   SURROGATE_OPT: 5,
+  FEM_VERIFY: 4,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

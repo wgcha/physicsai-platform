@@ -13,11 +13,11 @@ describe("권한별 버튼 (V-FE-2)", () => {
     expect(screen.queryByRole("button", { name: "Final 지정" })).toBeNull();
   });
 
-  it("general: ④도 예측 실행·PBS 버튼 없음", async () => {
+  it("general: ④도 예측 실행·FEM 검증 버튼 없음", async () => {
     renderApp(`${STUDY}/4`, { user: "general" });
     await screen.findByRole("region", { name: "템플릿" });
     expect(screen.queryByRole("button", { name: "예측 실행" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "PBS 검증 해석" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "FEM 검증" })).toBeNull();
   });
 
   it("power: 실행 버튼이 있고 경로 확인 후 활성", async () => {

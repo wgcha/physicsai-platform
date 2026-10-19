@@ -15,7 +15,9 @@ import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { BrowseButton } from "../../components/BrowseButton";
 import { PredictChain, PredictResultCard } from "./PredictResult";
-import { ModelLine, useModelChoice, usePredictVerify } from "./predictRun";
+import { ModelLine, useModelChoice } from "./predictRun";
+import { useFemVerifyButton } from "./verify/useFemVerifyButton";
+
 
 /** 하위 폴더가 있을 때만 보이는 회색 참고 문구(phase3 D3-43 — 항상 보이면 오류로 오해) */
 export const subdirNote = (n: number) => `하위 폴더 ${n}개는 복사하지 않습니다(이 폴더의 .rad·.inc만 사용)`;
@@ -119,7 +121,7 @@ export function PreparedPredictCard() {
 
   const pjob = predict.job;
   const result = pjob?.state === "SUCCEEDED" ? (pjob.result as unknown as PR | null) : null;
-  const pbs = usePredictVerify(pjob, !!result);
+  const pbs = useFemVerifyButton(pjob ? { kind: "predict_job", job_id: pjob.id } : null, !!result, pjob);
   const runProblems = predict.errorDetail?.code === "PREDICT_INPUT_INVALID" ? ((predict.errorDetail.problems as PredictInputProblem[] | undefined) ?? []) : [];
 
   return (

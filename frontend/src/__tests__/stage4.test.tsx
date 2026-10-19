@@ -32,17 +32,17 @@ describe("④ 화면 (V-FE-6)", () => {
     expect((screen.getByLabelText("THK_TOP 값") as HTMLInputElement).value).toBe("0.6");
   });
 
-  it("PBS 미구성이면 PBS 버튼 비활성 + 안내", async () => {
+  it("해석 연결 미구성이면 FEM 검증 버튼 비활성 + 안내", async () => {
     renderApp(`${STUDY}/4`, { user: "power" });
-    const pbs = (await screen.findByRole("button", { name: "PBS 검증 해석" })) as HTMLButtonElement;
-    await waitFor(() => expect(pbs.title).toBe("PBS 연결 안 됨(관리자 설정 필요)"));
+    const pbs = (await screen.findByRole("button", { name: "FEM 검증" })) as HTMLButtonElement;
+    await waitFor(() => expect(pbs.title).toBe("해석 연결 안 됨(관리자 설정 필요)"));
     expect(pbs.disabled).toBe(true);
-    expect(screen.getByTestId("pbs-note").textContent).toContain("PBS 연결 안 됨");
+    expect(screen.getByTestId("fem-note").textContent).toContain("해석 연결 안 됨");
   });
 
-  it("PBS 구성되고 예측 결과가 있으면 활성", async () => {
+  it("해석 연결 구성되고 예측 결과가 있으면 FEM 검증 활성", async () => {
     renderApp(`${STUDY}/4`, { user: "power", hpcConfigured: true });
-    const pbs = (await screen.findByRole("button", { name: "PBS 검증 해석" })) as HTMLButtonElement;
+    const pbs = (await screen.findByRole("button", { name: "FEM 검증" })) as HTMLButtonElement;
     await waitFor(() => expect(pbs.disabled).toBe(false));
   });
 

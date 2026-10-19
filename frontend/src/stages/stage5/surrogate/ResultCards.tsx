@@ -7,9 +7,10 @@ import type { SurrogateOpt } from "../../../api/surrogateOpt";
 import { Card } from "../../../components/ui";
 import { fmtNum } from "../../../lib/format";
 import { ContourMedia } from "../../stage4/ContourMedia";
+import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
 import { boundNote, compareRows, kpis, metricLabel } from "./soRules";
 
-export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — 최적안은 PBS 검증 해석으로 실해석 확인을 권장합니다";
+export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — FEM 검증 버튼으로 조립 상태 해석과 비교할 수 있습니다";
 export const FINAL_TEXT: Record<string, string> = {
   PENDING: "기준안·최적안 컨투어를 캡처하는 중입니다",
   SKIPPED: "캡처 없음",
@@ -27,6 +28,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
   const fin = o.final;
   const rows = compareRows(o.parameters ?? [], fin?.baseline_values ?? null, b?.values ?? null);
   const note = boundNote(rows);
+  const fem = useFemVerifyButton(b ? { kind: "opt_design", opt_id: o.id, pick: "best" } : null, !!b);
   return (
     <Card span={8} title="최적안 — 기준안 대비" className="so-compare"
       aside={b?.batch_id ? <Link className="small" to={`${base}/stage/4/batch/${b.batch_id}`} data-testid="so-best-link">{b.batch_label} DOE #{b.doe_no}</Link> : undefined}>
@@ -72,6 +74,8 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
           </p>
           {note && <p className="small bound-flag" data-testid="bound-note">학습 범위 상한/하한 도달 — {note}</p>}
           <p className="muted small">{VERIFY_HINT}</p>
+          <div className="run-action-row">{fem.button}</div>
+          {fem.notes}
         </>
       )}
     </Card>
@@ -101,8 +105,9 @@ export function ContourCompareCard({ o }: { o: SurrogateOpt }) {
   const objLabel = metricLabel(s.objective.metric, s.objective.series);
   const legend = fin?.legend ? `같은 범례(${fmtNum(fin.legend.min)}–${fmtNum(fin.legend.max)})로 비교` : `범례 개별${fin?.legend_note ? ` — ${fin.legend_note}` : ""}`;
   const ready = fin?.status === "DONE" && fin.baseline?.job_id && fin.best?.job_id;
+  const fem = useFemVerifyButton(fin?.best ? { kind: "opt_design", opt_id: o.id, pick: "final_optimum" } : null, !!ready);
   return (
-    <Card span={9} title="컨투어 비교 — 기준안 · 최적안" className="so-contour-card" aside={<span className="muted small">{legend}</span>}>
+    <Card span={9} title="컨투어 비교 — 기준안 · 최적안" className="so-contour-card" aside={<span className="run-action-row"><span className="muted small">{legend}</span>{fem.button}</span>}>
       {!fin ? (
         <p className="muted small" data-testid="contour-none">최적화가 끝나면 기준안·최적안을 같은 범례로 캡처합니다.</p>
       ) : !ready ? (

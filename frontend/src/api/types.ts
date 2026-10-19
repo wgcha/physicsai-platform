@@ -10,7 +10,8 @@ export type Role = "general" | "power" | "admin";
 
 // S10: 다시 캡처 작업 CONTOUR_RECAPTURE는 POST /jobs/{id}/capture 전용이라 JobCreate 열거에 없다(phase3.md §15.4)
 // S13: 내장 최적화 반복 SURROGATE_OPT는 종료 훅·서비스만 만든다(phase3.md §18.4)
-export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT";
+// S16 V2: FEM_VERIFY는 FEM 검증 API·종료 훅만 만든다(POST /jobs 불가, phase3 §21.3.5)
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -21,7 +22,8 @@ export type JobState =
   | "CANCELED"
   | "INTERRUPTED";
 export type StepState = "PENDING" | "RUNNING" | "SUCCEEDED" | "FAILED" | "SKIPPED" | "CANCELED";
-export type PathPurpose = S["PathInspectRequest"]["purpose"];
+// S16 V2: FEM_ASSEMBLY(조립 원본 폴더 확인, phase3 §21.3.8) — BE-V2 openapi 반영 전에도 같은 값으로 보낸다
+export type PathPurpose = S["PathInspectRequest"]["purpose"] | "FEM_ASSEMBLY";
 export type NotificationEvent =
   | "JOB_STARTED"
   | "JOB_SUCCEEDED"
@@ -34,7 +36,9 @@ export type NotificationEvent =
   | "ENV_CHECK_DONE"
   | "HPC_CANCEL_FAILED"
   // S9(phase3.md §14.3) — 알림 event는 백엔드 스키마가 string이라 계약 값으로 좁힌다
-  | "PREDICT_BATCH_DONE";
+  | "PREDICT_BATCH_DONE"
+  // S16 V2(phase3.md §21.3.9)
+  | "FEM_VERIFY_DONE";
 export type ArtifactKind =
   | "PREVIEW_JSON"
   | "PREVIEW_IMAGE"
@@ -72,7 +76,8 @@ export interface UiPoll {
   poll_status_ms?: number;
 }
 /** phase2.md §12.1 `/status.features` 키 */
-export type FeatureKey = keyof S["StatusFeatures"];
+// S16 V2(phase3 §21.3.8): /status.features.fem_verify·fem_verify_rebuild — BE-V2 openapi 반영 전에도 같은 키로 읽는다
+export type FeatureKey = keyof S["StatusFeatures"] | "fem_verify" | "fem_verify_rebuild";
 export type FeatureState = S["FeatureState"];
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
 export type EnvCheckBrief = Override<S["StatusEnvCheck"], { latest_state?: EnvCheckState | null }>;
@@ -469,8 +474,9 @@ export interface ResultMedia {
 }
 
 /** 파일 1개(url = 표시용 Range 지원, download_url = 내려받기) */
-export type MediaFile = S["MediaFile"];
-export type MediaItem = Override<S["MediaItem"], { view: ViewKey }>;
+// S16 V3(§21.4.5): playable·codec·transcoded·video_error — BE-V3 openapi 반영 전에도 같은 모양으로 읽는다
+export type MediaFile = Omit<S["MediaFile"], "playable" | "codec" | "transcoded"> & { playable?: boolean | null; codec?: string | null; transcoded?: boolean };
+export type MediaItem = Override<S["MediaItem"], { view: ViewKey; image: MediaFile; video?: MediaFile | null; video_error?: string | null }>;
 /** NONE(캡처 전·step 없음) · SKIPPED(미구성) · OK · PARTIAL · FAILED */
 export type MediaStatus = "NONE" | "SKIPPED" | "OK" | "PARTIAL" | "FAILED";
 export type ContourLegend = S["CaptureLegendOut"];

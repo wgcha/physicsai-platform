@@ -24,6 +24,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   PREDICT_BATCH: "④",
   CONTOUR_RECAPTURE: "④",
   SURROGATE_OPT: "⑤",
+  FEM_VERIFY: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -50,6 +51,9 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   contour_capture: ["commands.contour_capture", "altair.hw_exe_path"],
   // S13(phase3.md §18.2): 플랫폼 내장 최적화 — numpy·scipy 설치 여부
   optimize_builtin: ["python.numpy", "python.scipy"],
+  // S16(phase3.md §21.3.8): 조립 FEM 검증 — 해석 연결(HPC) + 메시 교체는 mesh 템플릿·include TCL
+  fem_verify: ["hpc.mode"],
+  fem_verify_rebuild: ["commands.mesh", "resources.hypermesh_include_tcl"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

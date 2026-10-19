@@ -31,6 +31,9 @@ export function AppRoutes() {
           <Route path="/p/:projectId/s/:studyId/stage/:n" element={<StudyPage />} />
           {/* phase3.md §14.8: ④ 일괄 예측 진행·결과 */}
           <Route path="/p/:projectId/s/:studyId/stage/:n/batch/:batchId" element={<StudyPage />} />
+          {/* phase3.md §21.3.11: ④ 공통 FEM 검증(목록·새 검증·상세) */}
+          <Route path="/p/:projectId/s/:studyId/stage/:n/verify" element={<StudyPage verify />} />
+          <Route path="/p/:projectId/s/:studyId/stage/:n/verify/:fvId" element={<StudyPage verify />} />
           {/* phase3.md §18.10: ⑥ 내장 최적화 결과(URL 숫자 5 유지) */}
           <Route path="/p/:projectId/s/:studyId/stage/:n/surrogate/:optId" element={<StudyPage />} />
           <Route path="/p/:projectId/s/:studyId/manage" element={<StudyManage />} />

@@ -54,7 +54,7 @@ export class Phase2Mock {
   }
 
   feature(k: FeatureKey): FeatureState {
-    if (k === "train_solve" && !this.s.hpcConfigured) return { enabled: false, missing: ["hpc.mode"] };
+    if ((k === "train_solve" || k === "fem_verify" || k === "fem_verify_rebuild") && !this.s.hpcConfigured) return { enabled: false, missing: ["hpc.mode"] };
     return this.disabled.has(k) ? { enabled: false, missing: FEATURE_MISSING[k] } : { enabled: true, missing: [] };
   }
 

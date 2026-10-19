@@ -114,7 +114,7 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     expect(screen.getByTestId("so-progress").textContent).toMatch(/^완료 — /);
     const best = screen.getByRole("region", { name: "최적안 — 기준안 대비" });
     expect(within(best).getByTestId("so-best-link").getAttribute("href")).toMatch(/\/stage\/4\/batch\/b-so-so-1-\d$/);
-    expect(within(best).getByText(/PBS 검증 해석/)).toBeTruthy();
+    expect(within(best).getByText(/FEM 검증 버튼으로 조립 상태 해석/)).toBeTruthy();
     // D3-61: 변수마다 학습 범위·기준안(nominal)·최적안·변화
     const cmp = within(best).getByRole("table", { name: "기준안 대비" });
     expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "범위(학습)", "기준안", "최적안", "변화"]);

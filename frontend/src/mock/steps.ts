@@ -128,6 +128,19 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
     { key: "SO_PROPOSE", kind: "INTERNAL" },
     { key: "SO_NEXT", kind: "INTERNAL" },
   ],
+  // S16 V2 조립 FEM 검증(phase3.md §21.3.5, step 10개)
+  FEM_VERIFY: [
+    { key: "FV_PREP", kind: "INTERNAL" },
+    { key: "FV_MESH", kind: "LOCAL" },
+    { key: "FV_ASSEMBLE", kind: "INTERNAL" },
+    { key: "HPC_SUBMIT", kind: "HPC_SUBMIT" },
+    { key: "HPC_WAIT", kind: "HPC_WAIT" },
+    { key: "COLLECT", kind: "COLLECT" },
+    { key: "FV_EXTRACT", kind: "LOCAL" },
+    { key: "FV_CURVE", kind: "LOCAL" },
+    { key: "FV_CAPTURE", kind: "LOCAL" },
+    { key: "FV_COMPARE", kind: "INTERNAL" },
+  ],
 };
 
 /** step_key → 한국어 표시(백엔드 current_step_label 흉내) */
@@ -151,6 +164,7 @@ export const STEP_LABEL: Record<string, string> = {
   SS_WALK: "파일 확인", SS_CLASSIFY: "정리 후보 분류", SC_VALIDATE: "정리 대상 확인", SC_MOVE: "백업 폴더로 이동", SC_RECORD: "정리 기록",
   BP_PREP: "입력 준비", BP_GEN: "입력 생성", BP_ENQUEUE: "예측 등록",
   CONTOUR_CAPTURE: "컨투어 캡처",
+  FV_PREP: "조립 입력 준비", FV_MESH: "메시 교체", FV_ASSEMBLE: "입력 조립", FV_EXTRACT: "응답 추출", FV_CURVE: "커브 추출", FV_CAPTURE: "컨투어 캡처", FV_COMPARE: "비교 정리",
   SO_COLLECT: "검증 결과 수집", SO_FIT: "대리모델 학습", SO_PROPOSE: "후보 탐색", SO_NEXT: "검증 배치 등록·마무리",
 };
 

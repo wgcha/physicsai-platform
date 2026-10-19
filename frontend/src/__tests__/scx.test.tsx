@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import { SCX_MARK_WARNING, SCX_UNKNOWN_TEXT, hpcPhaseText } from "../components/HpcScx";
-import { baseJob, iso } from "../mock/data";
 import type { MockServer } from "../mock/server";
 
 /** server.handle 호출(본문 포함) 기록 */
@@ -129,23 +128,10 @@ describe("S11 SCX 잡 화면(D3-58)", () => {
     expect(calls.some((c) => c.call.includes("/hpc-jobs"))).toBe(false);
   });
 
-  it("④ scx: 버튼 '검증 해석(SCX)', 결과 모름 검증 잡에 확인 필요·잡 폴더·조치", async () => {
-    const { server } = renderApp(`${STUDY}/4`, { user: "power", hpcConfigured: true, hpcMode: "scx" }, (srv) => {
-      const v = baseJob({ id: "j-pv", study_id: "s-cushion", project_id: "p-cushion", study_title: "쿠션", job_type: "PREDICT_VERIFY", state: "WAITING_HPC", created_by: "u-power", created_at: iso(1), started_at: iso(1), params: { predict_job_id: "j-pred", hpc: {} } });
-      (v as unknown as { _scx: unknown })._scx = { id: "hj-j-pv", version: 3, remote_dir: "/Users/vd.dashboard/cushion_v1/04_V-001_20261017T105700", request_id: "pai-hj-j-pv", submission_unknown: true, resolve: null, error_message: "SCX 제출 결과를 알 수 없습니다 — SCX에서 확인 필요", state: "UNKNOWN" };
-      srv.jobs.push(v);
-    });
-    expect(await screen.findByRole("button", { name: "검증 해석(SCX)" })).toBeTruthy();
+  it("④ scx: PBS 검증 해석 버튼 없음 — 'FEM 검증'으로 대체(S16 §21), 잡 상태는 FEM 검증 상세(femVerifyScreens.test)", async () => {
+    renderApp(`${STUDY}/4`, { user: "power", hpcConfigured: true, hpcMode: "scx" });
+    expect(await screen.findByRole("button", { name: "FEM 검증" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "검증 해석(SCX)" })).toBeNull();
     expect(screen.queryByRole("button", { name: "PBS 검증 해석" })).toBeNull();
-    const panel = await screen.findByTestId("hpc-resolve");
-    expect(within(panel).getByTestId("hpc-needs-check")).toBeTruthy();
-    expect(within(panel).getByText("/Users/vd.dashboard/cushion_v1/04_V-001_20261017T105700")).toBeTruthy();
-    const calls = recordBodies(server);
-    fireEvent.click(within(panel).getByRole("button", { name: "다시 확인" }));
-    await within(panel).findByTestId("hpc-resolve-pending");
-    expect(calls.find((c) => c.call.endsWith("/resolve"))).toEqual({ call: "POST /jobs/j-pv/hpc-jobs/hj-j-pv/resolve", body: { action: "recheck", version: 3 } });
-    act(() => server.tick());
-    expect(await screen.findByTestId("scx-phase", {}, { timeout: 3000 })).toBeTruthy();
-    expect(screen.getByTestId("scx-phase").textContent).toBe("대기");
   });
 });

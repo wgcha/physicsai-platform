@@ -13,6 +13,7 @@ import { POLL } from "../../../lib/poll";
 import { ROW_STATE_LABEL, rowTone } from "../../stage4/batch/batchTable";
 import { ConvergenceChart } from "./ConvergenceChart";
 import { ContourCompareCard, OptimumCompareCard, ResultSummaryCard } from "./ResultCards";
+import { FemEntryButton } from "../../stage4/verify/useFemVerifyButton";
 import "../../../styles/surrogateOpt.css";
 import { SO_STATUS_LABEL, metricLabel, qualityGrade, soTone } from "./soRules";
 
@@ -88,7 +89,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
         <QualityTable iterations={o.iterations as SoIteration[]} />
       </Card>
       <Card span={9} title="검증 run" aside={<button type="button" className="btn small" onClick={() => void downloadCsv()}>CSV 받기</button>}>
-        <RunsTable runs={runs} names={s.names} constraints={s.constraints.map((c) => metricLabel(c.metric, c.series))} best={b} />
+        <RunsTable optId={optId} runs={runs} names={s.names} constraints={s.constraints.map((c) => metricLabel(c.metric, c.series))} best={b} />
       </Card>
       <Card span={9} title="파일 위치">
         <div className="run-action-row">
@@ -145,7 +146,7 @@ function QualityTable({ iterations }: { iterations: SoIteration[] }) {
   );
 }
 
-function RunsTable({ runs, names, constraints, best }: { runs: SoRun[]; names: string[]; constraints: string[]; best: SurrogateOpt["best"] }) {
+function RunsTable({ optId, runs, names, constraints, best }: { optId: string; runs: SoRun[]; names: string[]; constraints: string[]; best: SurrogateOpt["best"] }) {
   if (!runs.length) return <p className="muted small">아직 run이 없습니다.</p>;
   return (
     <div className="table-wrap">
@@ -156,7 +157,7 @@ function RunsTable({ runs, names, constraints, best }: { runs: SoRun[]; names: s
             {names.map((n) => <th key={n} className="num mono">{n}</th>)}
             <th className="num">목적</th>
             {constraints.map((c, i) => <th key={i} className="num">{c}</th>)}
-            <th className="num">예측</th><th>만족</th><th>상태</th>
+            <th className="num">예측</th><th>만족</th><th>상태</th><th></th>
           </tr>
         </thead>
         <tbody>
@@ -173,6 +174,7 @@ function RunsTable({ runs, names, constraints, best }: { runs: SoRun[]; names: s
                 <td className="num mono muted">{fmtNum(r.predicted)}</td>
                 <td className="small">{r.feasible == null ? "—" : r.feasible ? "만족" : "위반"}</td>
                 <td className="small"><span className={`pill ${rowTone(r.state as never)}`}>{ROW_STATE_LABEL[r.state as keyof typeof ROW_STATE_LABEL] ?? r.state}</span></td>
+                <td><FemEntryButton source={{ kind: "opt_design", opt_id: optId, pick: "run", iter_no: r.iter_no, doe_no: r.doe_no }} hasResult={r.state === "SUCCEEDED"} /></td>
               </tr>
             );
           })}

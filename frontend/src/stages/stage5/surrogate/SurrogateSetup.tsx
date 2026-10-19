@@ -235,7 +235,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
         <label className="check">
           <input type="checkbox" checked={f.capture} onChange={(e) => set({ capture: e.target.checked })} /> 검증 run 컨투어 캡처
         </label>
-        <p className="muted small">최적 설계는 끝난 뒤 다시 캡처(④)할 수 있습니다. 목적 값 자체가 예측이므로 최적 설계는 PBS 검증 해석으로 확인하세요.</p>
+        <p className="muted small">최적 설계는 끝난 뒤 다시 캡처(④)할 수 있습니다. 목적 값 자체가 예측이므로 FEM 검증 버튼으로 조립 상태 해석과 비교할 수 있습니다.</p>
       </Card>
     </>
   );

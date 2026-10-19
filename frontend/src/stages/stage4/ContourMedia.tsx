@@ -2,7 +2,8 @@
 // 위 방향 버튼 그룹(←→ 키) · 이미지 / "영상" 토글 시 <video controls>(같은 방향) · 내려받기 · 상태 회색 문구 · 다시 캡처(power 이상).
 // 방향은 부모가 쥘 수 있다(B 결과: run을 바꿔도 같은 방향으로 비교).
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent } from "react";
-import { API_PREFIX, ApiError, TERMINAL_STATES, api, errorMessage, type CaptureRequest, type Job, type JobMedia, type ViewKey } from "../../api";
+import { ApiError, TERMINAL_STATES, api, errorMessage, type CaptureRequest, type Job, type JobMedia, type ViewKey } from "../../api";
+import { MediaVideo, VIDEO_UNPLAYABLE, mediaHref } from "../../components/MediaVideo";
 import { usePolling } from "../../hooks/usePolling";
 import { POLL } from "../../lib/poll";
 import { DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../../lib/views";
@@ -14,16 +15,13 @@ export const MEDIA_TEXT = {
   DISABLED: "컨투어 캡처가 꺼져 있습니다(관리자 설정)",
   SKIPPED: "컨투어 캡처를 하지 않았습니다(표시 설정 없음)",
   MISSING_VIEW: "이 결과에는 고른 방향의 캡처가 없습니다",
+  VIDEO_UNPLAYABLE,
 } as const;
 
-/** 서버가 준 내려받기 경로 → 브라우저 주소(API 접두어 없으면 붙인다) */
-export function mediaHref(url: string): string {
-  if (/^https?:\/\//.test(url) || url.startsWith(API_PREFIX)) return url;
-  return API_PREFIX + (url.startsWith("/") ? url : `/${url}`);
-}
+export { mediaHref };
 
 /** 이미지는 fetch → blob URL(목 서버·쿠키 인증 모두 같은 길) */
-function useMediaImage(url: string | null): string | null {
+export function useMediaImage(url: string | null): string | null {
   const [obj, setObj] = useState<string | null>(null);
   useEffect(() => {
     setObj(null);
@@ -137,7 +135,7 @@ export function ContourMedia({
             className={`btn small${showVideo ? " on" : ""}`}
             aria-pressed={showVideo}
             disabled={!videoUrl}
-            title={videoUrl ? "같은 방향의 애니메이션 영상" : "이 방향은 영상이 없습니다"}
+            title={videoUrl ? "같은 방향의 애니메이션 영상" : cur?.video_error ? `영상 없음 — ${cur.video_error}` : "이 방향은 영상이 없습니다"}
             onClick={() => setVideo((x) => !x)}
           >
             영상
@@ -159,10 +157,8 @@ export function ContourMedia({
       )}
 
       {cur ? (
-        showVideo ? (
-          <video key={videoUrl} className="contour-img" controls preload="metadata" poster={img ?? undefined} aria-label={`컨투어 영상 — ${label}`}>
-            <source src={mediaHref(videoUrl!)} type={cur.video?.content_type ?? undefined} />
-          </video>
+        showVideo && cur.video ? (
+          <MediaVideo file={cur.video} poster={img} label={label} downloadName={`contour_${jobId.slice(0, 8)}_${cur.view}`} />
         ) : img ? (
           <img src={img} alt={`예측 컨투어 — ${label}`} className="contour-img" />
         ) : (
@@ -170,6 +166,12 @@ export function ContourMedia({
         )
       ) : (
         views.length > 0 && <p className="muted small">{MEDIA_TEXT.MISSING_VIEW} ({viewLabel(String(curKey))})</p>
+      )}
+
+      {cur && !videoUrl && cur.video_error && (
+        <p className="muted small" data-testid="video-error">
+          영상 없음 — {cur.video_error}
+        </p>
       )}
 
       {cur && (
