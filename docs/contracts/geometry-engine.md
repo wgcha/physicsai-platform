@@ -844,6 +844,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 새 화면 없음, 시안 없음(필수 UI만).
 
+가시화(3D 보기·파라미터 미리보기) → [geometry-view.md](geometry-view.md).
+
 ---
 
 ## 9. 단계별 산출물·완료 기준

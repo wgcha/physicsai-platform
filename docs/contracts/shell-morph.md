@@ -554,6 +554,8 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
 
 새 화면 없음. 다중 baseline 매칭표는 group 단위 동작만 추가(§7.2).
 
+가시화(3D 보기·파라미터 미리보기, `paicad shell view`) → [geometry-view.md](geometry-view.md).
+
 ### 8.6 엔진 분리·버전
 
 엔진은 `native` 그대로(혼용 규칙 GE §7.7). 같은 데이터셋에 solid·shell 세트 run이 섞이는 경우는 세트가 달라 발생하지 않는다(데이터셋 = DOE 1개). `engine_version` 기록 GE §17.3 그대로.
