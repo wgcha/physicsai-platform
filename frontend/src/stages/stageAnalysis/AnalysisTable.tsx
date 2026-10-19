@@ -23,8 +23,8 @@ export const SOLVER_STATE_LABEL: Record<string, string> = {
 export const stateLabel = (s: string): string => (ROW_STATE_LABEL as Record<string, string>)[s] ?? SOLVER_STATE_LABEL[s] ?? s;
 export const stateTone = (s: string): string => (isOkState(s) ? "ok" : /FAILED/.test(s) ? "bad" : s === "RUNNING" || s === "SUBMITTED" || s === "GENERATING" ? "run" : "");
 
-export function sortOptionList(responses: string[]): { key: SortKey; label: string }[] {
-  return [...responses.flatMap((r) => [{ key: `${r}:asc`, label: `${r} 낮은 순` }, { key: `${r}:desc`, label: `${r} 높은 순` }]), { key: "doe", label: "DOE # 순" }];
+export function sortOptionList(responses: string[], labels: Record<string, string> = {}): { key: SortKey; label: string }[] {
+  return [...responses.flatMap((r) => [{ key: `${r}:asc`, label: `${labels[r] ?? r} 낮은 순` }, { key: `${r}:desc`, label: `${labels[r] ?? r} 높은 순` }]), { key: "doe", label: "DOE # 순" }];
 }
 
 /** 응답 정렬은 값 없는 행을 뒤로, 같으면 번호 순 */
@@ -47,6 +47,7 @@ export function sortRtRows(rows: RtRow[], key: SortKey): RtRow[] {
 
 export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pickResp, onPickResp, selectable, selected, onSelect, openHref }: { table: ResultTable; sort: SortKey; onSort: (k: SortKey) => void; pickVars: string[]; onToggleVar: (n: string) => void; pickResp: string | null; onPickResp: (n: string) => void; selectable?: string[]; selected: number | null; onSelect: (no: number) => void; openHref: string | null }) {
   const respNames = table.responses.map((r) => r.name);
+  const labelMap = Object.fromEntries(table.responses.filter((r) => r.label).map((r) => [r.name, r.label as string]));
   // §21.3.10: 예측 배치 표에서 고른 행(예측 출처)만 FEM 검증 진입. 해석(DOE) 출처 표는 이미 해석 값이라 대상이 아니다.
   const selRow = table.origin.kind === "predict_batch" ? table.rows.find((r) => r.no === selected) ?? null : null;
   const fem = useFemVerifyButton(selRow ? { kind: "batch_run", batch_id: table.origin.id, doe_no: selRow.no } : null, !!selRow && isOkState(selRow.state));
@@ -67,7 +68,7 @@ export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pick
           <label className="inline-field small">
             정렬
             <select value={sort} onChange={(e) => onSort(e.target.value)}>
-              {sortOptionList(respNames).map((o) => (
+              {sortOptionList(respNames, labelMap).map((o) => (
                 <option key={o.key} value={o.key}>
                   {o.label}
                 </option>
@@ -107,7 +108,7 @@ export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pick
                 <th key={r.name} className="num">
                   <label className="th-pick" title={selectable && !selectable.includes(r.name) ? "비교 표에 없는 응답 — 겹쳐 보기에서는 고를 수 없습니다" : "응답 그래프 응답으로 쓰기"}>
                     <input type="radio" name={`plot-resp-${table.origin.id}`} checked={pickResp === r.name} disabled={!!selectable && !selectable.includes(r.name)} onChange={() => onPickResp(r.name)} />
-                    {r.name}
+                    {r.label ?? r.name}
                   </label>
                   {r.unit && <span className="muted"> {r.unit}</span>}
                 </th>

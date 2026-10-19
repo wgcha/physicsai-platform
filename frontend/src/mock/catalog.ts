@@ -25,6 +25,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   CONTOUR_RECAPTURE: "④",
   SURROGATE_OPT: "⑤",
   FEM_VERIFY: "④",
+  PB_RESP_EXTRACT: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */

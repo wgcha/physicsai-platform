@@ -9,6 +9,7 @@ import { CurveOverlay } from "../../analysis/viz/CurveOverlay";
 import { DesignMap } from "../../analysis/viz/designMap/DesignMap";
 import { readTab, writeTab, type GraphTab } from "../../analysis/viz/designMap/designMapData";
 import { tablePlotPoints, type ResultTable } from "../../analysis/resultTable";
+import { NO_RESP_HINT } from "../../analysis/perfColumns";
 import { InfluencePanel } from "./InfluencePanel";
 
 export const NO_RESP_TEXT = "응답 없음 — 응답 값이 있는 표에서 변수–응답 그래프와 영향도를 쓸 수 있습니다";
@@ -68,7 +69,7 @@ export function AnalysisTabs({ table, other, pickVars, pickResp, selected, onSel
         </div>
       ) : kind === "none" || !pickResp ? (
         <p className="muted small" data-testid="plot-hint">
-          {hasResp ? PLOT_HINT : NO_RESP_TEXT}
+          {hasResp ? PLOT_HINT : table.source === "predict" ? `${NO_RESP_TEXT} — ${NO_RESP_HINT}` : NO_RESP_TEXT}
         </p>
       ) : kind === "2d" ? (
         <>

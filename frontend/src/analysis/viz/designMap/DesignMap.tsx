@@ -12,6 +12,7 @@ import { designMapOf, mergedDesignMap, tagMerged } from "./tableMap";
 import { SourceLegend } from "../SourceLegend";
 import { NO_COMMON_RESP_TEXT } from "../../compare";
 import type { ResultTable } from "../../resultTable";
+import { NO_RESP_HINT } from "../../perfColumns";
 import "../../../styles/designMap.css";
 
 export function DesignMap({ table, other, selected, onSelect, series, onSeries }: { table: ResultTable; other?: ResultTable | null; selected: number | null; onSelect: (doe: number) => void; series: string | null; onSeries: (s: string) => void }) {
@@ -42,7 +43,7 @@ export function DesignMap({ table, other, selected, onSelect, series, onSeries }
   if (!metric || !data)
     return (
       <p className="muted small" data-testid="dm-message">
-        {other ? NO_COMMON_RESP_TEXT : TEXT.noMetric}
+        {other ? NO_COMMON_RESP_TEXT : table.source === "predict" ? `${TEXT.noMetric} — ${NO_RESP_HINT}` : TEXT.noMetric}
       </p>
     );
   const colorOf = colorScale(data.vmin, data.vmax);

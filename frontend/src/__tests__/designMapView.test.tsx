@@ -74,7 +74,7 @@ describe("⑤ 설계공간 지도 화면 (V3-S12-5, S14 이동)", () => {
     const card = await openMap();
     const metric = within(card).getByLabelText("색 값") as HTMLSelectElement;
     expect([...metric.options].map((o) => o.textContent)).toEqual([
-      "커브 최대값", "커브 최소값", "커브 |최대|", "MaxDisp 최대(RESP) [mm]", "MaxDisp 최소(RESP) [mm]", "MaxStress 최대(RESP) [MPa]", "MaxStress 최소(RESP) [MPa]",
+      "커브 최대값", "커브 최소값", "커브 |최대|", "MaxDisp 최대(RESP) [mm]", "MaxDisp 최소(RESP) [mm]", "MaxStress 최대(RESP) [MPa]", "MaxStress 최소(RESP) [MPa]", "MaxStress (MAX) [MPa]", "MaxDisp (MAX) [mm]", // S17 D3-65 보강 2: 템플릿 성능(perf:)
     ]);
     const curve = within(card).getByLabelText("커브") as HTMLSelectElement;
     expect([...curve.options].map((o) => o.value)).toEqual([S1, S2]);

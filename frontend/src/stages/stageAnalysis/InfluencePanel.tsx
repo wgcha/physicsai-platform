@@ -24,7 +24,7 @@ export function InfluencePanel({ table, resp, title }: { table: ResultTable; res
           )}
           <div className="head-row small">
             <span>
-              응답 <b>{resp}</b> · 유효 run {v.result.n}개
+              응답 <b>{table.responses.find((x) => x.name === resp)?.label ?? resp}</b> · 유효 run {v.result.n}개
             </span>
             <span data-testid="influence-r2">R² {v.result.r2 === null ? "–" : v.result.r2.toFixed(2)}</span>
           </div>

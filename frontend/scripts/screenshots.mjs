@@ -12,6 +12,8 @@
 //                                                                 → SHOT_OUT 또는 screenshots/analysis/)
 //       npm run build:mock && node scripts/screenshots.mjs sampling  (S15 D3-63: ④ 표본 방식(최적화 LHS 기본·Sobol 이어서 추가·전체 요인 수준), ① DOE 설명, ⑤ 영향도 참고용 문구, 다크·라이트 1920
 //                                                                 → SHOT_OUT 또는 screenshots/sampling/)
+//       npm run build:mock && node scripts/screenshots.mjs s17  (S17 D3-65: ⑥ 성능 표(역할)·2목적 결과(산점도·슬라이더·파레토 표)·3목적 쌍 그림, ⑤ 영향도(커브 지표), 다크·라이트 1920
+//                                                                 → SHOT_OUT 또는 screenshots/s17/)
 // 확인: 가로 스크롤 없음, 카드 수(대시보드 톤 2026-10-17 — 행 높이 고정 격자 측정은 없앴다).
 // Playwright는 설치하지 않고 환경의 것을 쓴다(PLAYWRIGHT_BROWSERS_PATH, 전역 playwright 모듈).
 import { createRequire } from "node:module";
@@ -72,7 +74,8 @@ const scx = process.argv.includes("scx");
 const designmap = process.argv.includes("designmap");
 const analysis = process.argv.includes("analysis");
 const sampling = process.argv.includes("sampling");
-const out = sampling ? process.env.SHOT_OUT || path.join(root, "screenshots", "sampling") : analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
+const s17 = process.argv.includes("s17");
+const out = s17 ? process.env.SHOT_OUT || path.join(root, "screenshots", "s17") : sampling ? process.env.SHOT_OUT || path.join(root, "screenshots", "sampling") : analysis ? process.env.SHOT_OUT || path.join(root, "screenshots", "analysis") : designmap ? process.env.SHOT_OUT || path.join(root, "screenshots", "designmap") : scx ? process.env.SHOT_OUT || path.join(root, "screenshots", "scx") : tone ? process.env.SHOT_OUT || path.join(root, "screenshots", "tone") : path.join(root, "screenshots", phase2 ? "phase2" : phase3 ? "phase3" : "");
 mkdirSync(out, { recursive: true });
 const base = `http://127.0.0.1:${port}/physicsai`;
 const S = `${base}/p/p-cushion/s/s-cushion/stage`;
@@ -139,7 +142,39 @@ async function openDrawer(page) {
   await page.getByTestId("chip-queue").click();
   await page.waitForSelector('[role="dialog"][aria-modal="true"] .qrow');
 }
-const shots = sampling
+// s17: ⑥ 새 최적화 — 커브 성능(AccelPeak)을 추가·저장하고 역할을 지정한 성능 표를 화면에 맞춘다
+async function perfTable(page) {
+  await page.getByRole("tab", { name: /새 최적화/ }).click();
+  await page.waitForSelector('[data-testid="perf-table"]');
+  const add = page.getByRole("group", { name: "응답 추가" });
+  await add.getByLabel("출처").selectOption("CURVE");
+  await add.getByLabel("응답 이름").fill("AccelPeak");
+  await add.getByLabel("커브 계열").fill("Node 100 / X");
+  await add.getByLabel("stat").selectOption("ABSMAX");
+  await add.getByLabel("단위").fill("g");
+  await add.getByRole("button", { name: "응답 추가" }).click();
+  await page.getByRole("button", { name: "성능 정의 저장(템플릿)" }).click();
+  await page.waitForSelector('[aria-label="AccelPeak 역할"]');
+  await page.getByLabel("MaxStress 역할").selectOption("min");
+  await page.getByLabel("MaxDisp 역할").selectOption("min");
+  await page.getByLabel("AccelPeak 역할").selectOption("le");
+  await page.getByLabel("AccelPeak 값").fill("12");
+  await page.evaluate(() => document.querySelector('[data-testid="perf-table"]')?.scrollIntoView({ block: "center" }));
+}
+// s17: 결과 화면의 파레토 영역을 화면에 맞춘다
+const paretoView = (sel) => async (page) => {
+  await page.waitForSelector(sel);
+  await page.evaluate((s) => document.querySelector(s)?.scrollIntoView({ block: "start" }), ".so-pareto-card");
+  await page.evaluate(() => window.scrollBy(0, -90));
+};
+const shots = s17
+  ? [
+      { name: "s17_perf_table", url: `${S}/5?${q}`, wait: ".workarea .card", act: perfTable, noFull: true },
+      { name: "s17_result_2obj", url: `${S}/5/surrogate/so-2?${q}&hpc=1`, wait: '[data-testid="pareto-plot"]', act: paretoView('[data-testid="pareto-plot"]'), noFull: true },
+      { name: "s17_result_3obj", url: `${S}/5/surrogate/so-3?${q}`, wait: '[data-testid="pair-plots"]', act: paretoView('[data-testid="pair-plots"]'), noFull: true },
+      { name: "s17_analysis_curve_metrics", url: `${S}/analysis?${q}&source=batch&id=pb-2`, wait: ".analysis-table", act: async (p) => (await p.locator('input[type=radio][name^="plot-resp"]').nth(3).check(), openTab("영향도")(p)), noFull: true },
+    ]
+  : sampling
   ? [
       { name: "stage4_sampling_lhsopt", url: `${S}/4?${q}`, wait: ".batch-setup", act: samplingDefault, noFull: true },
       { name: "stage4_sampling_sobol_continue", url: `${S}/4?${q}&batch=sobol`, wait: ".batch-setup", act: samplingSobolContinue, noFull: true },
@@ -190,7 +225,7 @@ const shots = sampling
       { name: "stage3", url: `${S}/3?${q}`, wait: ".workarea .card" },
       { name: "stage4", url: `${S}/4?${q}`, wait: ".workarea .card" },
     ];
-const sizes = sampling
+const sizes = s17 || sampling
   ? [{ w: 1920, h: 1080 }]
   : analysis
   ? [
@@ -211,7 +246,7 @@ const sizes = sampling
       { w: 1280, h: 800 },
     ];
 // 테마(대시보드 localStorage 키) — tone은 다크·라이트 둘 다, 나머지는 기본(dark)
-const themes = tone || scx || designmap || analysis || sampling ? ["dark", "light"] : [null];
+const themes = tone || scx || designmap || analysis || sampling || s17 ? ["dark", "light"] : [null];
 
 const browser = await chromium.launch();
 const report = [];

@@ -12,8 +12,8 @@ export type DesignMapParameter = S["DesignMapParameter"];
 export type DesignMapCurveStats = S["DesignMapCurveStats"];
 export type DesignMapCounts = S["DesignMapCounts"];
 
-/** §17.2 지표 id 문법(백엔드 run_metrics.METRIC_RE와 같음) */
-export const METRIC_RE = /^(curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63})$/;
+/** §17.2 지표 id 문법(백엔드 run_metrics.METRIC_RE와 같음, S17 §22.3.2 perf: 추가) */
+export const METRIC_RE = /^(curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63}|perf:[A-Za-z][A-Za-z0-9_]{0,63})$/;
 export const DEFAULT_METRIC = "curve:max";
 
 export const designMapApi = {

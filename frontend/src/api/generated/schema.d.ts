@@ -828,6 +828,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/predict-batches/{batch_id}/extract-responses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Extract Batch Responses
+         * @description 성능 다시 추출(power, phase3 §22.3.5): 끝난 배치의 H3D 성능을 현재 템플릿 정의로 다시 추출하는 PB_RESP_EXTRACT 작업.
+         */
+        post: operations["extract_batch_responses_physicsai_api_predict_batches__batch_id__extract_responses_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/predict-batches/{batch_id}/retry-failed": {
         parameters: {
             query?: never;
@@ -1593,6 +1613,26 @@ export interface paths {
         get: operations["surrogate_opt_runs_csv_physicsai_api_surrogate_opts__opt_id__runs_csv_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/surrogate-opts/{opt_id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verify Surrogate Opt
+         * @description 추가 검증(power, 등록자 또는 관리자, DONE만 — phase3 §22.7): 고른 해를 최적화 소유 배치(iters EXTRA)로 예측 검증.
+         */
+        post: operations["verify_surrogate_opt_physicsai_api_surrogate_opts__opt_id__verify_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3529,7 +3569,7 @@ export interface components {
              * Job Type
              * @enum {string}
              */
-            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP" | "PREDICT_BATCH";
+            job_type: "DATASET_CREATE" | "PACKAGE_EXPORT" | "MODEL_REGISTER" | "EVALUATE" | "PREDICT" | "PREDICT_VERIFY" | "TD_EXTRACT_PARAMS" | "TD_DOE_GEN" | "TD_SOLVE" | "TD_RESULT_IMPORT" | "TD_RESP_EXTRACT" | "CU_H3D_PREVIEW" | "CU_H3D_CURATE" | "CU_T01_PREVIEW" | "CU_T01_CURVES" | "SPDM_IMPORT" | "OPTIMIZE" | "STUDY_STORAGE_SCAN" | "STUDY_CLEANUP" | "PREDICT_BATCH" | "PB_RESP_EXTRACT";
             /** Params */
             params?: {
                 [key: string]: unknown;
@@ -4763,15 +4803,25 @@ export interface components {
             job_id?: string | null;
             /** Objective */
             objective?: number | null;
+            /** Objectives */
+            objectives?: {
+                [key: string]: number | null;
+            } | null;
             /** Run Key */
             run_key: string;
+            /** Score */
+            score?: number | null;
             /** Values */
             values: {
                 [key: string]: number;
             };
+            /** Weights */
+            weights?: number[] | null;
         };
         /** SoCandidate */
         SoCandidate: {
+            /** Acq */
+            acq?: number | null;
             /** Constraints Pred */
             constraints_pred?: number[];
             /** Doe No */
@@ -4780,6 +4830,12 @@ export interface components {
             ei?: number | null;
             /** Predicted */
             predicted?: number | null;
+            /** Predicted Objectives */
+            predicted_objectives?: number[] | null;
+            /** Predicted Std */
+            predicted_std?: number[] | null;
+            /** Role */
+            role?: string | null;
             /** State */
             state?: string | null;
             /** Values */
@@ -4788,20 +4844,53 @@ export interface components {
             };
             /** Verified */
             verified?: number | null;
+            /** Verified Objectives */
+            verified_objectives?: (number | null)[] | null;
+            /** Weight */
+            weight?: number[] | null;
         };
-        /** SoConstraint */
+        /**
+         * SoConstraint
+         * @description 제약: `<=`·`>=`는 value, `range`(S17 §22.4.1)는 lo < hi(유한).
+         */
         SoConstraint: {
+            /** Hi */
+            hi?: number | null;
+            /** Lo */
+            lo?: number | null;
             /** Metric */
             metric: string;
             /**
              * Op
              * @enum {string}
              */
-            op: "<=" | ">=";
+            op: "<=" | ">=" | "range";
             /** Series */
             series?: string | null;
             /** Value */
-            value: number;
+            value?: number | null;
+        };
+        /** SoConstraintDef */
+        SoConstraintDef: {
+            /** Hi */
+            hi?: number | null;
+            /** Label */
+            label: string;
+            /** Lo */
+            lo?: number | null;
+            /** Metric */
+            metric: string;
+            /** Op */
+            op: string;
+            /** Series */
+            series?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+            /** Value */
+            value?: number | null;
         };
         /**
          * SoExploreNew
@@ -4888,10 +4977,72 @@ export interface components {
             loo_rmse?: number | null;
             /** N Train */
             n_train: number;
+            /** Per Objective */
+            per_objective?: components["schemas"]["SoFitObjective"][] | null;
             /** Pred Vs Verified Mae */
             pred_vs_verified_mae?: number | null;
             /** Q2 */
             q2?: number | null;
+        };
+        /** SoFitObjective */
+        SoFitObjective: {
+            /** Kind */
+            kind: string;
+            /** Loo Nrmse */
+            loo_nrmse?: number | null;
+            /** Loo Rmse */
+            loo_rmse?: number | null;
+            /** Metric */
+            metric: string;
+            /** N Train */
+            n_train: number;
+            /** Pred Vs Verified Mae */
+            pred_vs_verified_mae?: number | null;
+            /** Q2 */
+            q2?: number | null;
+        };
+        /**
+         * SoFrontPoint
+         * @description 검증된 파레토 해 1개(같은 설계 평균, key = 첫 run `"<iter_no>:<doe_no>"`).
+         */
+        SoFrontPoint: {
+            /** Batch Label */
+            batch_label: string;
+            /** Constraints */
+            constraints?: {
+                [key: string]: number | null;
+            };
+            /** Doe No */
+            doe_no: number;
+            /** Iter No */
+            iter_no: number;
+            /** Job Id */
+            job_id?: string | null;
+            /** Key */
+            key: string;
+            /** Objectives */
+            objectives: number[];
+            /** Observed */
+            observed?: {
+                [key: string]: number | null;
+            };
+            /** Run Key */
+            run_key: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** SoHvPoint */
+        SoHvPoint: {
+            /** Front Size */
+            front_size?: number | null;
+            /** Hv */
+            hv?: number | null;
+            /** Improvement Rel */
+            improvement_rel?: number | null;
+            /** Iter No */
+            iter_no: number;
         };
         /** SoIteration */
         SoIteration: {
@@ -4903,6 +5054,10 @@ export interface components {
             /** Candidates */
             candidates?: components["schemas"]["SoCandidate"][] | null;
             fit?: components["schemas"]["SoFit"] | null;
+            /** Front Size */
+            front_size?: number | null;
+            /** Hv */
+            hv?: number | null;
             /** Improvement Rel */
             improvement_rel?: number | null;
             /** Iter No */
@@ -4923,6 +5078,46 @@ export interface components {
             /** Series */
             series?: string | null;
         };
+        /** SoObjectiveDef */
+        SoObjectiveDef: {
+            /** Label */
+            label: string;
+            /** Metric */
+            metric: string;
+            /** Sense */
+            sense: string;
+            /** Series */
+            series?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
+         * SoObserve
+         * @description 관찰 지표(값만 기록·표시, S17).
+         */
+        SoObserve: {
+            /** Metric */
+            metric: string;
+            /** Series */
+            series?: string | null;
+        };
+        /** SoObserveDef */
+        SoObserveDef: {
+            /** Label */
+            label: string;
+            /** Metric */
+            metric: string;
+            /** Series */
+            series?: string | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
         /** SoParameter */
         SoParameter: {
             /** Max */
@@ -4939,14 +5134,80 @@ export interface components {
              */
             unit: string;
         };
+        /** SoPareto */
+        SoPareto: {
+            /** Frame */
+            frame?: {
+                [key: string]: unknown;
+            } | null;
+            /** Front */
+            front?: components["schemas"]["SoFrontPoint"][];
+            /** Hv */
+            hv?: number | null;
+            /** Predicted */
+            predicted?: components["schemas"]["SoPredictedPoint"][];
+            /** Predicted Iter */
+            predicted_iter?: number | null;
+            /** Recommended Key */
+            recommended_key?: string | null;
+        };
+        /**
+         * SoPerformance
+         * @description 미리보기 성능 목록(S17 §22.4.2): available·total·spec_changed는 재사용일 때만.
+         */
+        SoPerformance: {
+            /** Available */
+            available?: number | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /** Name */
+            name: string;
+            /** Source */
+            source: string;
+            /** Spec Changed */
+            spec_changed?: number | null;
+            /** Stat */
+            stat: string;
+            /** Total */
+            total?: number | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
+         * SoPredictedPoint
+         * @description 대리모델 예측 전선 점(미검증).
+         */
+        SoPredictedPoint: {
+            /** Mean */
+            mean: number[];
+            /** Pof */
+            pof: number;
+            /** Std */
+            std: number[];
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
         /** SoProblem */
         SoProblem: {
+            /** Action */
+            action?: string | null;
+            /** Batch Id */
+            batch_id?: string | null;
             /** Code */
             code: string;
             /** Field */
             field?: string | null;
             /** Message */
             message: string;
+            /** Performance */
+            performance?: string | null;
         };
         /**
          * SoRun
@@ -4967,14 +5228,36 @@ export interface components {
             iter_no: number;
             /** Job Id */
             job_id?: string | null;
+            /** Kind */
+            kind?: string | null;
             /** Objective */
             objective?: number | null;
+            /** Objectives */
+            objectives?: (number | null)[];
+            /** Observed */
+            observed?: {
+                [key: string]: number | null;
+            };
+            /**
+             * On Front
+             * @default false
+             */
+            on_front: boolean;
             /** Predicted */
             predicted?: number | null;
+            /** Reason */
+            reason?: string | null;
             /** Run Key */
             run_key: string;
             /** State */
             state: string;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /** SoVerifyPoint */
+        SoVerifyPoint: {
             /** Values */
             values: {
                 [key: string]: number;
@@ -5192,8 +5475,23 @@ export interface components {
             defaults: components["schemas"]["StatusSurrogateDefaults"];
             /** Max Candidates */
             max_candidates: number;
+            /**
+             * Max Extra Points
+             * @default 10
+             */
+            max_extra_points: number;
             /** Max Iterations */
             max_iterations: number;
+            /**
+             * Max Objectives
+             * @default 3
+             */
+            max_objectives: number;
+            /**
+             * Max Observe
+             * @default 10
+             */
+            max_observe: number;
             /** Max Variables */
             max_variables: number;
         };
@@ -5421,6 +5719,13 @@ export interface components {
             /** Can Resume */
             can_resume: boolean;
             /**
+             * Can Verify More
+             * @default false
+             */
+            can_verify_more: boolean;
+            /** Constraints Def */
+            constraints_def?: components["schemas"]["SoConstraintDef"][];
+            /**
              * Created At
              * Format: date-time
              */
@@ -5434,6 +5739,8 @@ export interface components {
             final?: components["schemas"]["SoFinal"] | null;
             /** Finished At */
             finished_at?: string | null;
+            /** Hv History */
+            hv_history?: components["schemas"]["SoHvPoint"][] | null;
             /** Id */
             id: string;
             /** Iter No */
@@ -5442,16 +5749,26 @@ export interface components {
             iterations: components["schemas"]["SoIteration"][];
             /** Label */
             label: string;
+            /**
+             * Mode
+             * @default single
+             */
+            mode: string;
             /** Model */
             model: {
                 [key: string]: unknown;
             };
+            /** Objectives */
+            objectives?: components["schemas"]["SoObjectiveDef"][];
+            /** Observe */
+            observe?: components["schemas"]["SoObserveDef"][];
             /** Param Set */
             param_set: {
                 [key: string]: unknown;
             };
             /** Parameters */
             parameters?: components["schemas"]["SoParameter"][];
+            pareto?: components["schemas"]["SoPareto"] | null;
             /** Progress Text */
             progress_text: string;
             /** Runs */
@@ -5468,10 +5785,13 @@ export interface components {
             warnings?: {
                 [key: string]: string;
             }[];
+            /** Weights */
+            weights?: number[];
         };
         /**
          * SurrogateOptCreate
-         * @description 생성·미리보기 공용 본문(phase3 §18.6). bounds 생략 = 템플릿 min·max, lo = hi는 고정.
+         * @description 생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.
+         *     목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.
          */
         SurrogateOptCreate: {
             /** Bounds */
@@ -5498,7 +5818,11 @@ export interface components {
              * @default 1
              */
             multi_execution: number;
-            objective: components["schemas"]["SoObjective"];
+            objective?: components["schemas"]["SoObjective"] | null;
+            /** Objectives */
+            objectives?: components["schemas"]["SoObjective"][] | null;
+            /** Observe */
+            observe?: components["schemas"]["SoObserve"][];
             /** Param Set Id */
             param_set_id?: string | null;
             /**
@@ -5510,6 +5834,8 @@ export interface components {
             surrogate?: ("gp" | "rbf") | null;
             /** Tol Rel */
             tol_rel?: number | null;
+            /** Weights */
+            weights?: number[] | null;
         };
         /** SurrogateOptPreview */
         SurrogateOptPreview: {
@@ -5527,8 +5853,15 @@ export interface components {
             integer_variables: string[];
             /** Max Total Runs */
             max_total_runs: number;
+            /**
+             * Mode
+             * @default single
+             */
+            mode: string;
             /** Objective Available */
             objective_available: boolean;
+            /** Performances */
+            performances?: components["schemas"]["SoPerformance"][];
             /** Problems */
             problems: components["schemas"]["SoProblem"][];
         };
@@ -5566,6 +5899,30 @@ export interface components {
             };
             /** Status */
             status: string;
+        };
+        /**
+         * SurrogateOptVerify
+         * @description 추가 검증(S17 §22.7): 고른 해(검증·예측 전선 점) 1~max_extra_points개를 최적화 소유 배치(iters EXTRA)로 예측 검증.
+         */
+        SurrogateOptVerify: {
+            /**
+             * Capture
+             * @default false
+             */
+            capture: boolean;
+            /** Points */
+            points: components["schemas"]["SoVerifyPoint"][];
+        };
+        /** SurrogateOptVerifyResult */
+        SurrogateOptVerifyResult: {
+            /** Batch Id */
+            batch_id: string;
+            /** Batch Label */
+            batch_label: string;
+            /** Iter No */
+            iter_no: number;
+            /** Job Id */
+            job_id: string;
         };
         /** TemplateConfigured */
         TemplateConfigured: {
@@ -8263,6 +8620,64 @@ export interface operations {
             };
         };
     };
+    extract_batch_responses_physicsai_api_predict_batches__batch_id__extract_responses_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                batch_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Job"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     retry_failed_batch_physicsai_api_predict_batches__batch_id__retry_failed_post: {
         parameters: {
             query?: never;
@@ -10649,6 +11064,68 @@ export interface operations {
                 };
                 content: {
                     "text/csv": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    verify_surrogate_opt_physicsai_api_surrogate_opts__opt_id__verify_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                opt_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SurrogateOptVerify"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SurrogateOptVerifyResult"];
                 };
             };
             /** @description Forbidden */

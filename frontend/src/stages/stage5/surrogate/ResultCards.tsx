@@ -8,7 +8,7 @@ import { Card } from "../../../components/ui";
 import { fmtNum } from "../../../lib/format";
 import { ContourMedia } from "../../stage4/ContourMedia";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
-import { boundNote, compareRows, kpis, metricLabel } from "./soRules";
+import { boundNote, compareRows, kpis, objectiveDefs } from "./soRules";
 
 export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — FEM 검증 버튼으로 조립 상태 해석과 비교할 수 있습니다";
 export const FINAL_TEXT: Record<string, string> = {
@@ -29,17 +29,18 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
   const rows = compareRows(o.parameters ?? [], fin?.baseline_values ?? null, b?.values ?? null);
   const note = boundNote(rows);
   const fem = useFemVerifyButton(b ? { kind: "opt_design", opt_id: o.id, pick: "best" } : null, !!b);
+  const noun = o.mode === "multi" ? "추천점" : "최적안";
   return (
-    <Card span={8} title="최적안 — 기준안 대비" className="so-compare"
+    <Card span={8} title={o.mode === "multi" ? "최적안(가중 추천점) — 기준안 대비" : "최적안 — 기준안 대비"} className="so-compare"
       aside={b?.batch_id ? <Link className="small" to={`${base}/stage/4/batch/${b.batch_id}`} data-testid="so-best-link">{b.batch_label} DOE #{b.doe_no}</Link> : undefined}>
       {!b ? (
-        <p className="muted small">아직 검증된 최적안이 없습니다.</p>
+        <p className="muted small">아직 검증된 {noun}이 없습니다.</p>
       ) : (
         <>
           <div className="table-wrap">
             <table className="table compact" aria-label="기준안 대비">
               <thead>
-                <tr><th>변수</th><th>범위(학습)</th><th className="num">기준안</th><th className="num">최적안</th><th className="num">변화</th></tr>
+                <tr><th>변수</th><th>범위(학습)</th><th className="num">기준안</th><th className="num">{noun === "추천점" ? "추천점" : "최적안"}</th><th className="num">변화</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -69,7 +70,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
           </div>
           <p className="small so-legend-keys">
             <span><span className="mk-key base" />기준안(템플릿 nominal)</span>
-            <span><span className="mk-key opt" />최적안</span>
+            <span><span className="mk-key opt" />{noun}</span>
             <span>{b.feasible ? "제약 만족" : "제약 만족 설계 없음 — 위반 최소"}</span>
           </p>
           {note && <p className="small bound-flag" data-testid="bound-note">학습 범위 상한/하한 도달 — {note}</p>}
@@ -101,15 +102,15 @@ export function ResultSummaryCard({ o }: { o: SurrogateOpt }) {
 export function ContourCompareCard({ o }: { o: SurrogateOpt }) {
   const fin = o.final;
   const [view, setView] = useState<ViewKey | null>(null);
-  const s = o.settings as { objective: { metric: string; series?: string | null } };
-  const objLabel = metricLabel(s.objective.metric, s.objective.series);
+  const objLabel = objectiveDefs(o)[0]?.label ?? "";
+  const noun = o.mode === "multi" ? "추천점" : "최적안";
   const legend = fin?.legend ? `같은 범례(${fmtNum(fin.legend.min)}–${fmtNum(fin.legend.max)})로 비교` : `범례 개별${fin?.legend_note ? ` — ${fin.legend_note}` : ""}`;
   const ready = fin?.status === "DONE" && fin.baseline?.job_id && fin.best?.job_id;
   const fem = useFemVerifyButton(fin?.best ? { kind: "opt_design", opt_id: o.id, pick: "final_optimum" } : null, !!ready);
   return (
-    <Card span={9} title="컨투어 비교 — 기준안 · 최적안" className="so-contour-card" aside={<span className="run-action-row"><span className="muted small">{legend}</span>{fem.button}</span>}>
+    <Card span={9} title={`컨투어 비교 — 기준안 · ${noun}`} className="so-contour-card" aside={<span className="run-action-row"><span className="muted small">{legend}</span>{fem.button}</span>}>
       {!fin ? (
-        <p className="muted small" data-testid="contour-none">최적화가 끝나면 기준안·최적안을 같은 범례로 캡처합니다.</p>
+        <p className="muted small" data-testid="contour-none">최적화가 끝나면 기준안·{noun}을 같은 범례로 캡처합니다.</p>
       ) : !ready ? (
         <p className="muted small" data-testid="contour-none">
           {FINAL_TEXT[fin.status ?? ""] ?? "캡처 없음"}{fin.reason ? ` — ${fin.reason}` : ""}
@@ -117,7 +118,7 @@ export function ContourCompareCard({ o }: { o: SurrogateOpt }) {
         </p>
       ) : (
         <div className="so-contours">
-          {([["기준안", fin.baseline!], ["최적안", fin.best!]] as const).map(([lbl, run]) => (
+          {([["기준안", fin.baseline!], [noun, fin.best!]] as const).map(([lbl, run]) => (
             <div key={lbl} data-testid={`contour-${lbl}`}>
               <div className="so-contour-head">
                 <b>{lbl}</b>

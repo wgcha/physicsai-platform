@@ -1,7 +1,8 @@
 // ⑤ 내장 최적화 화면 규칙(phase3.md §18.10, 순수 함수): 상태 문구·톤, 지표 목록, 변수 범위 행, 요청 본문, 품질 등급, 수렴 그래프 자료.
 import type { ParamSet } from "../../../api";
-import type { DesignMapMetric, SoIteration, SoParameter, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
+import type { SoIteration, SoParameter, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
 import { fmtNum } from "../../../lib/format";
+import { rolesToBody, type PerfRow, type RoleSel } from "./perfRules";
 
 export const SO_STATUS_LABEL: Record<string, string> = {
   EXPLORING: "탐색 중",
@@ -16,21 +17,22 @@ export const soTone = (s: string) => (s === "DONE" ? "ok" : s === "FAILED" ? "ba
 
 const CURVE_LABEL: Record<string, string> = { "curve:max": "커브 최대값", "curve:min": "커브 최소값", "curve:absmax": "커브 |최대|" };
 
-/** 새 DOE: 템플릿 응답 이름 → resp:<NAME>_MAX|_MIN + curve:* (값이 있는지는 실행 뒤 판정, §18.6) */
-export function newDoeMetrics(ps: ParamSet | null): DesignMapMetric[] {
-  const out: DesignMapMetric[] = [];
-  for (const r of ps?.responses ?? []) {
-    if (!/^[A-Za-z][A-Za-z0-9_]{0,63}$/.test(r.name)) continue;
-    out.push({ id: `resp:${r.name}_MAX`, label: `${r.name} 최대(RESP)`, unit: r.unit || null, needs_series: false });
-    out.push({ id: `resp:${r.name}_MIN`, label: `${r.name} 최소(RESP)`, unit: r.unit || null, needs_series: false });
-  }
-  for (const id of Object.keys(CURVE_LABEL)) out.push({ id, label: CURVE_LABEL[id], unit: null, needs_series: true });
-  return out;
-}
-
 export function metricLabel(id: string, series?: string | null): string {
   if (CURVE_LABEL[id]) return series ? `${CURVE_LABEL[id]}(${series})` : CURVE_LABEL[id];
-  return id.replace(/^(resp|tbl):/, "");
+  return id.replace(/^(resp|tbl|perf):/, "");
+}
+
+/** 목적 정의(서버 상세 objectives[].label — 없으면 settings.objective 한 개로) */
+export interface ObjDef {
+  metric: string;
+  sense: "min" | "max";
+  label: string;
+  unit: string;
+}
+export function objectiveDefs(o: Pick<SurrogateOpt, "objectives" | "settings">): ObjDef[] {
+  if (o.objectives?.length) return o.objectives.map((x) => ({ metric: x.metric, sense: x.sense === "max" ? "max" : "min", label: x.label || metricLabel(x.metric, x.series), unit: x.unit ?? "" }));
+  const s = (o.settings as { objective?: { metric: string; series?: string | null; sense: string } }).objective;
+  return s ? [{ metric: s.metric, sense: s.sense === "max" ? "max" : "min", label: metricLabel(s.metric, s.series), unit: "" }] : [];
 }
 
 /** 정수 변수 = tpl 형식 %Ni/%Nd(nearest.integer_vars) */
@@ -64,12 +66,6 @@ export function rowIssue(r: VarRow): string | null {
   return null;
 }
 
-export interface Constraint {
-  metric: string;
-  op: "<=" | ">=";
-  value: string;
-}
-
 export interface SoForm {
   paramSetId: string | null;
   modelId: string | null;
@@ -77,10 +73,10 @@ export interface SoForm {
   count: string;
   exploreSeed: string;
   batchId: string;
-  metric: string;
-  series: string | null;
-  sense: "min" | "max";
-  constraints: Constraint[];
+  /** 성능 이름 → 역할(S17 §22.12). 저장된 성능만 */
+  sels: Record<string, RoleSel>;
+  /** 성능 이름 → 가중치 슬라이더 0~100(목적일 때만 쓴다) */
+  weights: Record<string, number>;
   rows: VarRow[];
   surrogate: "gp" | "rbf";
   iterations: string;
@@ -93,22 +89,25 @@ export interface SoForm {
 
 const int = (s: string, d: number) => (s.trim() === "" || !Number.isFinite(Number(s)) ? d : Math.trunc(Number(s)));
 
-/** 화면 상태 → 생성·미리보기 본문(§18.6). 범위는 바뀐 변수·고정 변수만 보낸다(생략 = 템플릿 min·max) */
-export function buildBody(f: SoForm): SurrogateOptCreate {
+/** 화면 상태 → 생성·미리보기 본문(§22.4.1). 범위는 바뀐 변수·고정 변수만 보낸다(생략 = 템플릿 min·max). 목적은 항상 `objectives` 배열 */
+export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
   const bounds: Record<string, number[]> = {};
   for (const r of f.rows) {
     const lo = Number(r.lo);
     const hi = r.fixed ? lo : Number(r.hi);
     if (r.fixed || lo !== r.min || hi !== r.max) bounds[r.name] = [lo, hi];
   }
+  const roles = rolesToBody(perfs, f.sels, f.weights);
   return {
     param_set_id: f.paramSetId,
     model_id: f.modelId,
     explore: f.explore === "new"
       ? { kind: "new", count: f.count.trim() === "" ? null : int(f.count, 10), seed: int(f.exploreSeed, 1) }
       : { kind: "reuse", batch_id: f.batchId },
-    objective: { metric: f.metric, series: f.series, sense: f.sense },
-    constraints: f.constraints.filter((c) => c.metric && c.value.trim() !== "").map((c) => ({ metric: c.metric, series: null, op: c.op, value: Number(c.value) })),
+    objectives: roles.objectives,
+    constraints: roles.constraints,
+    observe: roles.observe,
+    ...(roles.weights ? { weights: roles.weights } : {}),
     bounds: Object.keys(bounds).length ? bounds : null,
     surrogate: f.surrogate,
     iterations: int(f.iterations, 3),
@@ -121,10 +120,11 @@ export function buildBody(f: SoForm): SurrogateOptCreate {
 }
 
 /** 미리보기 한 줄: "예측 최대 32 run(탐색 20 + 3 × 4) · 예상 70분" */
-export function previewText(p: { explore_count: number; max_total_runs: number; estimate_min?: number | null }, it: number, k: number): string {
+export function previewText(p: { explore_count: number; max_total_runs: number; estimate_min?: number | null }, it: number, k: number, objectives = 1): string {
   const parts = p.explore_count ? `탐색 ${p.explore_count} + ${it} × ${k}` : `재사용 + ${it} × ${k}`;
   const est = p.estimate_min != null ? ` · 예상 ${Math.round(p.estimate_min)}분` : "";
-  return `예측 최대 ${p.max_total_runs} run(${parts})${est}`;
+  const multi = objectives > 1 ? ` · 목적 ${objectives}개(다목적)` : "";
+  return `예측 최대 ${p.max_total_runs} run(${parts})${est}${multi}`;
 }
 
 /** 품질 등급(§18.5): Q² ≥ 0.9 좋음 · 0.7~0.9 보통 · < 0.7 낮음 */
@@ -223,6 +223,7 @@ export interface Kpi {
 
 /** 결과 요약 타일: 목적(최적 vs 기준안 절대·%), 제약(만족·기준안), 대리모델 품질(마지막 Q²), 예측 수·소요 */
 export function kpis(o: SurrogateOpt): Kpi[] {
+  if (o.mode === "multi") return kpisMulti(o);
   const s = o.settings as { objective: { metric: string; series?: string | null; sense: string }; constraints: { metric: string; series?: string | null; op: string; value: number }[]; multi_execution?: number };
   const best = o.best;
   const fin = o.final;
@@ -254,5 +255,40 @@ export function kpis(o: SurrogateOpt): Kpi[] {
   const n = (o.runs ?? []).length + (fin?.baseline ? 1 : 0) + (fin?.best ? 1 : 0);
   const mins = o.finished_at ? Math.round((Date.parse(o.finished_at) - Date.parse(o.created_at)) / 60000) : null;
   out.push({ label: "소요", value: String(n), unit: "예측", sub: `${mins != null ? `약 ${mins >= 60 ? `${Math.floor(mins / 60)}시간 ${mins % 60}분` : `${mins}분`}` : "진행 중"} · 동시 ${s.multi_execution ?? 1}`, tone: "" });
+  return out;
+}
+
+/** key로 못 찾으면 순서(positional)로 — 서버 best.objectives는 지표 id 키(§22.10) */
+function pickByMetric(dict: Record<string, number | null> | null | undefined, metric: string, i: number): number | null {
+  if (!dict) return null;
+  if (metric in dict) return dict[metric];
+  const vals = Object.values(dict);
+  return vals[i] ?? null;
+}
+
+/** 다목적 결과 요약 타일(§22.12): 파레토 해·HV, 추천점 목적별 값, 제약 만족, 품질, 소요 */
+export function kpisMulti(o: SurrogateOpt): Kpi[] {
+  const defs = objectiveDefs(o);
+  const best = o.best;
+  const out: Kpi[] = [];
+  const front = o.pareto?.front ?? [];
+  out.push({ label: "검증된 파레토 해", value: String(front.length), unit: "개", sub: o.pareto?.hv != null ? `HV ${fmtNum(o.pareto.hv, 3)}` : "HV —", tone: front.length ? "ok" : "" });
+  defs.forEach((d, i) => {
+    const v = pickByMetric(best?.objectives as Record<string, number | null> | null | undefined, d.metric, i);
+    out.push({ label: `${d.label} ${d.sense === "max" ? "최대화" : "최소화"}`, value: fmtNum(v), unit: d.unit, sub: best ? "가중 추천점" : "추천점 없음", tone: "" });
+  });
+  for (const c of o.constraints_def ?? []) {
+    const v = (best?.constraints as Record<string, number | null> | undefined)?.[c.metric] ?? null;
+    const ok = v != null && (c.op === "range" ? c.lo != null && c.hi != null && v >= c.lo && v <= c.hi : c.op === "<=" ? v <= (c.value ?? Infinity) : v >= (c.value ?? -Infinity));
+    const bound = c.op === "range" ? `${fmtNum(c.lo)} ~ ${fmtNum(c.hi)}` : `${c.op === "<=" ? "≤" : "≥"} ${fmtNum(c.value)}`;
+    out.push({ label: `${c.label} (제약 ${bound})`, value: fmtNum(v), unit: c.unit, sub: v == null ? "값 없음" : ok ? "만족" : "위반", tone: v == null ? "" : ok ? "ok" : "bad" });
+  }
+  const lastFit = [...(o.iterations as SoIteration[])].reverse().find((it) => it.fit)?.fit;
+  const worst = Math.max(...(lastFit?.per_objective ?? []).map((x) => x.loo_nrmse ?? 0), 0);
+  out.push({ label: `대리모델 품질${lastFit ? `(${lastFit.kind === "rbf" ? "RBF" : "GP"})` : ""}`, value: lastFit ? (lastFit.q2 != null ? `Q² ${fmtNum(lastFit.q2, 3)}` : `NRMSE ${fmtNum(worst, 3)}`) : "—", unit: "", sub: lastFit?.per_objective?.length ? "목적 중 최대 오차" : "", tone: "" });
+  const n = (o.runs ?? []).length;
+  const mins = o.finished_at ? Math.round((Date.parse(o.finished_at) - Date.parse(o.created_at)) / 60000) : null;
+  const multi = (o.settings as { multi_execution?: number }).multi_execution ?? 1;
+  out.push({ label: "소요", value: String(n), unit: "예측", sub: `${mins != null ? `약 ${mins >= 60 ? `${Math.floor(mins / 60)}시간 ${mins % 60}분` : `${mins}분`}` : "진행 중"} · 동시 ${multi}`, tone: "" });
   return out;
 }

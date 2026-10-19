@@ -393,7 +393,7 @@ export type InputMode = "template" | "batch" | "prepared";
 
 export type ResponseStat = "MAX" | "MIN" | "ABSMAX";
 /** 응답 정의 spec(§14.6, ⑤ OPTIMIZE.responses의 H3D 형식, goal·bound 없음) */
-export interface ResponseSpec {
+export interface H3dResponseSpec {
   source: "H3D";
   subcase: number;
   datatype: string;
@@ -401,6 +401,13 @@ export interface ResponseSpec {
   layer: string;
   stat: ResponseStat;
 }
+/** S17 §22.3.1 성능 정의 CURVE: 예측 run curve.json 계열 1개의 대표값. series null = 그 run의 첫 계열 */
+export interface CurveResponseSpec {
+  source: "CURVE";
+  series: string | null;
+  stat: ResponseStat;
+}
+export type ResponseSpec = H3dResponseSpec | CurveResponseSpec;
 /** spec은 백엔드 스키마가 dict라 계약 형식으로 좁힌다. spec null = 이름·단위만(추출 안 함, D3-51) */
 export type TemplateResponse = Override<S["ResponseDef"], { unit: string; spec?: ResponseSpec | null }>;
 /** PUT /param-sets/{id}/responses 본문(백엔드 스키마는 dict 목록). spec null = 이름·단위만(추출 안 함) */

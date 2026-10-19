@@ -4,6 +4,7 @@
 // 행렬이 특이(공선·n 부족)하면 해당 값은 null("계산 불가"). 상수 변수는 행렬에서 빼고 그 변수만 null.
 
 import { isFin, isOkState, type ResultTable } from "./resultTable";
+import { NO_RESP_HINT } from "./perfColumns";
 
 export const SINGULAR_EPS = 1e-10;
 export const WEAK_R2 = 0.7;
@@ -149,11 +150,13 @@ export interface InfluenceView {
 export function influenceFor(rt: ResultTable, resp: string | null): InfluenceView {
   const off = (disabled: string): InfluenceView => ({ disabled, note: null, result: null, rows: [], mismatch: [], weak: false });
   if (rt.source === "solver" && !rt.influence.ok) return off(rt.influence.reason ?? OFF_FALLBACK_TEXT);
-  if (!resp) return off("응답이 없어 영향도를 계산할 수 없습니다");
+  // S17 D3-65 보강 2: 일괄 예측 출처에서 응답 열이 모두 비면 사유에 안내를 덧붙인다
+  const hint = rt.source === "predict" && !rt.responses.some((x) => rt.rows.some((r) => isFin(r.responses[x.name]))) ? ` — ${NO_RESP_HINT}` : "";
+  if (!resp) return off(`응답이 없어 영향도를 계산할 수 없습니다${hint}`);
   const names = rt.parameters.map((p) => p.name);
   const use = rt.rows.filter((r) => isOkState(r.state) && isFin(r.responses[resp]) && names.every((n) => isFin(r.params[n])));
   const need = Math.max(5, names.length + 2);
-  if (use.length < need) return off(`영향도에는 유효 run이 ${need}개 이상 필요합니다(현재 ${use.length}개)`);
+  if (use.length < need) return off(`영향도에는 유효 run이 ${need}개 이상 필요합니다(현재 ${use.length}개)${hint}`);
   const result = computeInfluence(names, names.map((n) => use.map((r) => r.params[n] as number)), use.map((r) => r.responses[resp] as number));
   if (result.unavailable) return off(result.unavailable);
   const rows = influenceRows(result);

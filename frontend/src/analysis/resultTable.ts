@@ -16,6 +16,10 @@ export interface RtParameter {
 export interface RtResponse {
   name: string;
   unit: string | null;
+  /** 표시 이름(없으면 name) — S17 D3-65 보강 2의 커브 대표값 열은 name이 `curve:max|<계열>` 키라 라벨을 따로 둔다 */
+  label?: string | null;
+  /** 열 종류(없으면 기존 결과 표 열): perf = 템플릿 성능(S17), curve = 커브 대표값 */
+  kind?: "perf" | "curve";
 }
 export interface RtRow {
   /** 출처의 run_key(run__00014) */

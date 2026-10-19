@@ -1,4 +1,4 @@
-// ⑤ 새 내장 최적화(phase3.md §18.10): ① 템플릿·모델 ② 탐색(새 DOE / 완료 배치 재사용) ③ 목적 ④ 제약 ⑤ 변수 범위 ⑥ 설정 ⑦ 미리보기·시작.
+// ⑥ 새 내장 최적화(phase3.md §18.10, S17 §22.12): ① 템플릿·모델 ② 탐색(새 DOE / 완료 배치 재사용) ③ 성능 표(정의 편집·역할·가중치) ④ 변수 범위 ⑤ 설정·미리보기·시작.
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, errorMessage, type PredictBatchSummary } from "../../../api";
@@ -7,14 +7,16 @@ import { designMapApi, type DesignMap } from "../../../api/designMap";
 import { useApp } from "../../../app/AppContext";
 import { useStudy } from "../../../app/StudyContext";
 import { useCanExecute } from "../../../hooks/useJobRunner";
+import { useLatestJob } from "../../../hooks/useLatestJob";
 import { Card, Field, NO_PERMISSION_TIP } from "../../../components/ui";
-import { fmtNum, fmtTime } from "../../../lib/format";
+import { fmtNum, fmtTime, isTerminal } from "../../../lib/format";
 import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/TemplatePicker";
 import { ModelLine, useModelChoice } from "../../stage4/predictRun";
 import { maxMultiExecution } from "../../stage4/batch/BatchSetup";
-import { buildBody, newDoeMetrics, previewText, rowIssue, varRows, type Constraint, type SoForm, type VarRow } from "./soRules";
-
-const MAX_CONSTRAINTS = 5;
+import { buildBody, previewText, rowIssue, varRows, type SoForm, type VarRow } from "./soRules";
+import { PerfTable } from "./PerfTable";
+import { DEFAULT_MAX_OBJECTIVES, DEFAULT_MAX_OBSERVE, perfRows, pruneSels, rolesIssue, roleCounts, type RoleSel } from "./perfRules";
+import "../../../styles/surrogateMulti.css";
 
 export function SurrogateSetup({ active, onStarted }: { active: boolean; onStarted?: () => void }) {
   const { status } = useApp();
@@ -23,12 +25,13 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const canExec = useCanExecute();
   const { list, ps, setPicked } = useTemplateChoice();
   const choice = useModelChoice();
-  const defs = (status as { surrogate_opt?: { defaults?: { iterations: number; candidates: number; tol_rel: number; surrogate: string } } } | null)
-    ?.surrogate_opt?.defaults;
+  const soStatus = (status as { surrogate_opt?: { defaults?: { iterations: number; candidates: number; tol_rel: number; surrogate: string }; max_objectives?: number; max_observe?: number } } | null)?.surrogate_opt;
+  const defs = soStatus?.defaults;
+  const limits = { maxObjectives: soStatus?.max_objectives ?? DEFAULT_MAX_OBJECTIVES, maxObserve: soStatus?.max_observe ?? DEFAULT_MAX_OBSERVE };
   const maxMulti = maxMultiExecution(status);
   const [f, setF] = useState<SoForm>(() => ({
     paramSetId: ps?.id ?? null, modelId: null, explore: "new", count: "", exploreSeed: "1", batchId: "",
-    metric: "", series: null, sense: "min", constraints: [], rows: varRows(ps),
+    sels: {}, weights: {}, rows: varRows(ps),
     surrogate: defs?.surrogate === "rbf" ? "rbf" : "gp", iterations: String(defs?.iterations ?? 3), candidates: String(defs?.candidates ?? 4),
     tolPct: String((defs?.tol_rel ?? 0.01) * 100), seed: "1", multi: String(Math.min(4, maxMulti)), capture: false,
   }));
@@ -38,8 +41,16 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const [preview, setPreview] = useState<SurrogateOptPreview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [tick, setTick] = useState(0);
+  const [extractErr, setExtractErr] = useState<string | null>(null);
+  // S17 §22.3.5: 재사용 배치의 H3D 성능 다시 추출(PB_RESP_EXTRACT) — 끝나면 미리보기를 다시 받는다
+  const extract = useLatestJob(study.id, "PB_RESP_EXTRACT", () => setTick((n) => n + 1));
+  const extractActive = !!extract.job && !isTerminal(extract.job.state);
 
-  useEffect(() => set({ paramSetId: ps?.id ?? null, rows: varRows(ps), batchId: "" }), [ps?.id]);
+  useEffect(() => set({ paramSetId: ps?.id ?? null, rows: varRows(ps), batchId: "", sels: {}, weights: {} }), [ps?.id]);
+  const perfs = useMemo(() => perfRows(ps?.responses), [ps?.responses]);
+  // 템플릿 정의가 바뀌어 사라진 성능의 역할은 버린다
+  useEffect(() => setF((x) => ({ ...x, sels: pruneSels(x.sels, perfs) })), [perfs]);
   useEffect(() => set({ modelId: choice.modelId || null }), [choice.modelId]);
   useEffect(() => {
     api.batches(study.id).then(setBatches).catch(() => setBatches([]));
@@ -54,17 +65,11 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
     designMapApi.get(f.batchId).then(setDm).catch(() => setDm(null));
   }, [f.explore, f.batchId]);
 
-  const metrics = f.explore === "reuse" ? dm?.metrics ?? [] : newDoeMetrics(ps);
-  useEffect(() => {
-    if (!metrics.some((m) => m.id === f.metric)) set({ metric: metrics[0]?.id ?? "", series: null });
-  }, [metrics.map((m) => m.id).join("|")]);
-  const curMetric = metrics.find((m) => m.id === f.metric) ?? null;
-  const seriesList = f.explore === "reuse" && curMetric?.needs_series ? dm?.series ?? [] : [];
-
   const rowProblems = f.rows.map(rowIssue);
-  const body = useMemo(() => buildBody(f), [f]);
+  const body = useMemo(() => buildBody(f, perfs), [f, perfs]);
   const bodyKey = JSON.stringify(body);
-  const ready = !!ps && !!f.metric && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
+  const roleProblem = rolesIssue(perfs, f.sels);
+  const ready = !!ps && !roleProblem && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
   useEffect(() => {
     if (!ready) {
       setPreview(null);
@@ -78,12 +83,23 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
       live = false;
       clearTimeout(t);
     };
-  }, [bodyKey, ready, study.id]);
+  }, [bodyKey, ready, study.id, tick]);
 
   const setRow = (i: number, p: Partial<VarRow>) => set({ rows: f.rows.map((r, j) => (j === i ? { ...r, ...p } : r)) });
-  const setCons = (i: number, p: Partial<Constraint>) => set({ constraints: f.constraints.map((c, j) => (j === i ? { ...c, ...p } : c)) });
+  const setSel = (name: string, s: RoleSel) => setF((x) => ({ ...x, sels: { ...x.sels, [name]: s } }));
+  const setWeight = (name: string, v: number) => setF((x) => ({ ...x, weights: { ...x.weights, [name]: v } }));
+  const startExtract = async (batchId: string) => {
+    setExtractErr(null);
+    try {
+      extract.track(await api.extractBatchResponses(batchId));
+    } catch (e) {
+      setExtractErr(errorMessage(e));
+    }
+  };
+  const extractNote = extractErr ?? (extractActive ? `성능 다시 추출 진행 중${extract.job?.progress_pct != null ? ` ${Math.round(extract.job.progress_pct)}%` : ""} — 작업 대기열에서 확인하세요` : null);
+  const nObj = roleCounts(f.sels, perfs.map((p) => p.name)).objectives;
   const reason = !ps ? "템플릿이 필요합니다" : !choice.chosenModel ? "Final 모델을 먼저 지정하세요" : active ? "진행 중인 내장 최적화가 있습니다" :
-    !ready ? "입력값을 확인하세요" : preview?.problems.length ? "문제를 해결하세요" : null;
+    roleProblem ? roleProblem : !ready ? "입력값을 확인하세요" : preview?.problems.length ? "문제를 해결하세요" : null;
   const start = async () => {
     setBusy(true);
     setError(null);
@@ -133,53 +149,18 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
           <p className="muted small">{ps ? `${templateName(ps)}로 완료된 일괄 예측이 없습니다 — ④에서 먼저 실행하세요` : "템플릿이 없습니다"}</p>
         )}
       </Card>
-      <Card span={3} step="③" title="목적">
-        <div className="form-grid">
-          <Field label="지표">
-            <select value={f.metric} onChange={(e) => set({ metric: e.target.value, series: null })} aria-label="목적 지표">
-              {!metrics.length && <option value="">지표 없음</option>}
-              {metrics.map((m) => <option key={m.id} value={m.id}>{m.label}{m.unit ? ` [${m.unit}]` : ""}</option>)}
-            </select>
-          </Field>
-          {seriesList.length > 1 && (
-            <Field label="커브">
-              <select value={f.series ?? seriesList[0]} onChange={(e) => set({ series: e.target.value })} aria-label="커브 계열">
-                {seriesList.map((s) => <option key={s}>{s}</option>)}
-              </select>
-            </Field>
-          )}
-          <Field label="방향">
-            <div className="seg" role="radiogroup" aria-label="방향">
-              {(["min", "max"] as const).map((k) => (
-                <button key={k} type="button" role="radio" aria-checked={f.sense === k} className={f.sense === k ? "on" : ""} onClick={() => set({ sense: k })}>
-                  {k === "min" ? "최소화" : "최대화"}
-                </button>
-              ))}
-            </div>
-          </Field>
-        </div>
-      </Card>
-      <Card span={6} step="④" title="제약(선택)">
-        {f.constraints.map((c, i) => (
-          <div key={i} className="form-grid so-cons-row" data-testid={`cons-${i}`}>
-            <select value={c.metric} onChange={(e) => setCons(i, { metric: e.target.value })} aria-label={`제약 ${i + 1} 지표`}>
-              {metrics.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-            </select>
-            <select value={c.op} onChange={(e) => setCons(i, { op: e.target.value as "<=" | ">=" })} aria-label={`제약 ${i + 1} 부호`}>
-              <option value="<=">≤</option>
-              <option value=">=">≥</option>
-            </select>
-            <input className="num" value={c.value} onChange={(e) => setCons(i, { value: e.target.value })} aria-label={`제약 ${i + 1} 값`} />
-            <button type="button" className="btn small ghost" onClick={() => set({ constraints: f.constraints.filter((_, j) => j !== i) })}>삭제</button>
-          </div>
-        ))}
-        {f.constraints.length < MAX_CONSTRAINTS && (
-          <button type="button" className="btn small" disabled={!metrics.length} onClick={() => set({ constraints: [...f.constraints, { metric: metrics[0]?.id ?? "", op: "<=", value: "" }] })}>
-            제약 추가
-          </button>
+      <Card span={9} step="③" title="성능" aside={<span className="muted small">성능 = 템플릿 응답 정의(H3D·커브) · 역할은 이 최적화에만 적용됩니다</span>}>
+        {ps ? (
+          <PerfTable
+            ps={ps} canEdit={canExec} sels={f.sels} onSel={setSel} weights={f.weights} onWeight={setWeight} limits={limits}
+            preview={preview} reuse={f.explore === "reuse"} problems={preview?.problems ?? []} seriesHints={dm?.series ?? []}
+            onExtract={(id) => void startExtract(id)} extractNote={extractNote} extractBusy={extractActive}
+          />
+        ) : (
+          <p className="muted small">템플릿이 없습니다</p>
         )}
       </Card>
-      <Card span={9} step="⑤" title="변수 범위" aside={<span className="muted small">학습 범위 안만 · 하한 = 상한이면 고정</span>}>
+      <Card span={9} step="④" title="변수 범위" aside={<span className="muted small">학습 범위 안만 · 하한 = 상한이면 고정</span>}>
         <div className="table-wrap">
           <table className="table compact" aria-label="변수 범위">
             <thead>
@@ -201,7 +182,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
           </table>
         </div>
       </Card>
-      <Card span={9} step="⑥" title="설정" foot={
+      <Card span={9} step="⑤" title="설정" foot={
         <div className="run-action">
           <div className="run-action-row">
             {canExec ? (
@@ -209,10 +190,11 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
             ) : (
               <span className="readonly" title={NO_PERMISSION_TIP}>조회 전용 <span className="muted small">· {NO_PERMISSION_TIP}</span></span>
             )}
-            {preview && <span className="small" data-testid="so-preview">{previewText(preview, Number(f.iterations) || 0, Number(f.candidates) || 0)}</span>}
+            {preview && <span className="small" data-testid="so-preview">{previewText(preview, Number(f.iterations) || 0, Number(f.candidates) || 0, nObj)}</span>}
             {canExec && reason && <span className="muted small">{reason}</span>}
           </div>
-          {preview?.problems.map((p, i) => <p key={i} className="muted small" data-testid="so-problem">{p.message}</p>)}
+          {preview?.problems.filter((p) => !(p.code === "PERF_MISSING_IN_BATCH" && perfs.some((x) => x.name === p.performance))).map((p, i) => <p key={i} className="muted small" data-testid="so-problem">{p.message}</p>)}
+          {nObj > 1 && <p className="muted small" data-testid="multi-hint">다목적은 탐색 run을 늘리면 전선이 안정됩니다</p>}
           {error && <div className="error-text small" role="alert">{error}</div>}
         </div>
       }>

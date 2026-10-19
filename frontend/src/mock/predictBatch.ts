@@ -404,8 +404,16 @@ export function validateResponses(list: unknown): { problems: { code: string; me
     seen.add(name.toLowerCase());
     const sp = r?.spec as ResponseSpec | null | undefined;
     if (!sp) continue;
-    if ([name, sp.datatype, sp.component, sp.layer, r.unit].some((v) => String(v ?? "").includes("|"))) problems.push({ code: "PIPE", message: `${name}: 문자 | 는 쓸 수 없습니다` });
     if (!["MAX", "MIN", "ABSMAX"].includes(sp.stat)) problems.push({ code: "STAT", message: `${name}: stat은 MAX·MIN·ABSMAX` });
+    // S17 §22.3.1: CURVE spec = {source, series, stat}(series 문자열 1~200자·| 금지·제어문자 금지, null = 첫 계열)
+    if (sp.source === "CURVE") {
+      const se = sp.series;
+      if (Object.keys(sp).some((k) => !["source", "series", "stat"].includes(k))) problems.push({ code: "SPEC", message: `${name}: 커브 정의 키는 source·series·stat뿐입니다` });
+      if (se != null && (typeof se !== "string" || se.length < 1 || se.length > 200 || se.includes("|") || [...se].some((c) => c.charCodeAt(0) < 32)))
+        problems.push({ code: "SERIES", message: `${name}: 계열 이름은 1~200자, | 와 제어 문자는 쓸 수 없습니다` });
+      continue;
+    }
+    if ([name, sp.datatype, sp.component, sp.layer, r.unit].some((v) => String(v ?? "").includes("|"))) problems.push({ code: "PIPE", message: `${name}: 문자 | 는 쓸 수 없습니다` });
     if (!Number.isInteger(sp.subcase) || sp.subcase < 1) problems.push({ code: "SUBCASE", message: `${name}: subcase는 1 이상 정수` });
     // D3-54: component는 선택(layer와 같은 규칙) — datatype만 필수
     if (!String(sp.datatype ?? "").trim()) problems.push({ code: "SPEC", message: `${name}: datatype이 필요합니다` });
@@ -620,6 +628,13 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
       b.canceled = true;
       return ok(batchOut(srv, b), 202);
     }
+    // S17 §22.3.5 끝난 배치의 H3D 성능 다시 추출
+    if (method === "POST" && seg[2] === "extract-responses") {
+      if (out.status !== "DONE") return err(409, "BATCH_NOT_DONE", "끝난 일괄 예측만 성능을 다시 추출할 수 있습니다.");
+      const ps = srv.paramSets.find((p) => p.id === b.param_set_id)!;
+      if (!ps.responses.some((r) => r.spec?.source === "H3D")) return err(422, "NO_H3D_PERFORMANCE", "템플릿에 H3D 성능 정의가 없습니다.");
+      return srv.createJob(s, "PB_RESP_EXTRACT", { batch_id: b.id });
+    }
     if (method === "POST" && seg[2] === "retry-failed") {
       if (out.status === "GENERATING") return err(409, "BATCH_ACTIVE", "입력 생성이 진행 중입니다.");
       b.canceled = false;
@@ -648,6 +663,14 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
     if (d) return d;
     const v = validateResponses(body?.responses);
     if (v.problems.length) return err(422, "RESPONSE_INVALID", "응답 정의를 확인하세요", { problems: v.problems });
+    // S17 §22.3.1: 진행 중 내장 최적화가 스냅샷한 성능의 spec 변경·삭제는 409(단위만 바뀌는 것은 허용)
+    const busy = srv.surrogate.find((o) => o.study_id === ps.study_id && o.param_set_id === ps.id && ["EXPLORING", "FITTING", "VERIFYING", "FINALIZING"].includes(o.status));
+    if (busy)
+      for (const [name, def] of Object.entries(busy.settings.performances)) {
+        const next = v.rows.find((r) => r.name === name);
+        if (!next || JSON.stringify(next.spec ?? null) !== JSON.stringify(def.spec))
+          return err(409, "PERF_IN_USE_BY_OPT", `내장 최적화 ${`SO-${String(busy.opt_no).padStart(3, "0")}`}이 이 성능을 쓰고 있어 정의를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요`);
+      }
     ps.responses = v.rows.map((r) => ({ name: r.name, unit: r.unit ?? "", spec: r.spec ?? null }));
     return ok(ps);
   }
