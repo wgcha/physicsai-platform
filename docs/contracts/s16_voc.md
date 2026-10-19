@@ -509,4 +509,4 @@ ffmpeg:
 - /home/claude/physicsai-platform/resources/hyperview/contour_capture.tcl
 - /home/claude/physicsai-platform/frontend/src/stages/stage4/ContourMedia.tsx
 - /home/claude/physicsai-platform/backend/physicsai_api/services/job_params/stage4_predict.py
-- /home/claude/physicsai-platform/backend/physicsai_core/db/repositories/job_end.py
+- /home/claude/physicsai-platform/backend/physicsai_core/db/repositories/job_end.py- **D3-64 구현 메모 (2026-10-19, Verifier 판정 반영)**: TCL은 VID_SCOPE 값이 있을 때만 page/window 분기(기존 골든 유지). 영상 상한 초과는 video_error + 기존 `CAPTURE_VIDEO_TOO_LARGE`로만(CAPTURE_VIDEO_FAILED 건수 제외). `FvCompareRow`에 min/max_diff(_pct) 추가, 커브 짝은 `compare.curve.pairs`. 목록 밖 수정: core/fs_browse.py(SPDM 목록·check_spdm_dir), schemas/studies.py(FEM_ASSEMBLY), step_process.py(파생 영상 템플릿), config/loader.py(capture 경고), schemas/jobs.py(PREDICT_VERIFY 구식 표기), study_job.py(활성 인덱스). 후속(minor): 조립 파일 이름 Windows 예약어 검사, reuse 모드 verify.json sha256, 동반 예측 출처 중복 검사·FEM_VERIFY retry 시 max_active 재검사, 옛 PREDICT_VERIFY SCX 확인 필요 조치 UI 복구.
