@@ -537,7 +537,7 @@ component의 요소·노드 집합:
 | (e) tie | 조립 폴더 `/INTER/TYPE2`에서 쿠션 노드가 secondary(또는 main 면)인 인터페이스마다, secondary 노드 ↔ main 면 투영 거리 ≤ `Dsearch`(카드 값, 0·공백이면 `tie.default_dsearch_mm`, 그것도 null이면 그 인터페이스 공칭 최대 거리 × 1.5) | 투영 실패 노드 0 | `GEOM_TIE_PROJECTION` |
 
 - **baseline 품질 전제(2026-10-19)**: baseline(공칭 무변형) 메시는 위 기준을 만족한다고 본다. check가 공칭 메시를 같은 기준으로 한 번 평가해 FAIL이면 경고 `BASELINE_QUALITY_BELOW`(샘플 판정 차단 아님, 상대 판정 `relative_to_baseline`이 그 요소를 흡수). 기준을 baseline 최솟값으로 완화할지는 사용자 선택 — UI가 `check.json`의 `baseline_*` 값을 보여주고 "baseline 최솟값으로" 누르면 `geom_options.quality`에 그 값을 저장(자동 완화 없음).
-- **stretch 정의 리스크**: 위 식이 SimLab 내부 stretch 식과 정확히 같은지는 미확인(정규화 상수·기준 길이 차 가능). 이 정의에서 `min_stretch 0.1`과 `max_aspect 10`은 같은 조건이라 한쪽이 중복이다 — 현장 인수 시험(§9 (b))에서 SimLab 실측과 비교해 차이가 크면 식·기본값 조정(§15 Q18).
+- **stretch 정의 리스크**: 위 식이 SimLab 내부 stretch 식과 정확히 같은지는 미확인(정규화 상수·기준 길이 차 가능). 적용 대상이 다르다: `min_stretch`는 tetra(체적 요소, HyperMesh/SimLab tetra stretch = √24·r_in/L_max와 같은 꼴), `max_aspect`는 SimLab 'surface mesh quality' 기준이므로 **경계 삼각형(외곽 면)**에만 적용 — 중복 아님 — 현장 인수 시험(§9 (b))에서 SimLab 실측과 비교해 차이가 크면 식·기본값 조정(§15 Q18).
 - **해당 없음 → `SKIPPED`**: 쿠션 노드가 secondary·main인 `/INTER/TYPE2`가 0건이면(1차 쿠션 한정 범위의 정상 상태) (e)는 `tie.status: "SKIPPED"`(`interfaces: []`, 사유 `no_tie_on_component`)로 기록하고 실패·경고가 아니다. 검사 코드·실패 코드는 향후 범위 확대 대비로 유지한다.
 - **엄격 원칙(§15 Q7, 2026-10-17 확정)**: 적용 대상 tie가 있는데 투영 실패 노드가 있으면 `FAIL`. `/INTER/TYPE2`·`/GRNOD`·`/SURF` 해석 실패도 `tie.required=true`(기본)면 `FAIL`(`GEOM_TIE_PROJECTION`, 메시지에 해석 실패 명시), `required=false`일 때만 `NOT_EVALUATED` + 경고 `TIE_PARSE_SKIPPED`.
 - 제품 메시 수집: 조립 폴더 `*.rad`·`*.inc`(기준본 제외)의 `/NODE`·`/SHELL`·`/SH3N`·`/BRICK`·`/TETRA4`·`/TETRA10`·`/PENTA6`. 쿠션 bbox + 10 mm 밖 요소는 버림. KD-tree(`scipy.spatial.cKDTree`)로 근방 탐색.
@@ -982,7 +982,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q8 | ~~품질·편차 기본 기준값이 사내 메시 기준과 맞나?~~ | **해결(2026-10-19 사용자 확정)**: 현행 SimLab 설정 기준 — stretch ≥ 0.1, aspect ≤ 10, min edge ≥ 1 mm(Δt 비 기준 유지), 경계 0.05 mm·파라미터 1%는 유지. gmsh baseline 파라미터도 같은 값(§7.8). baseline이 기준 미달이면 `BASELINE_QUALITY_BELOW` 경고(비차단). 정확한 SimLab stretch 식과의 차이는 Q18 |
 | Q9 | ~~대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지~~ | **해결(2026-10-17 사용자 확정)**: 기본 묶음, 파라미터 표·매칭표의 "분리" 동작으로 사용자가 해제(§6.2, GE-14) |
 | Q10 | ~~cadquery-ocp 고정 버전과 사내 보안 승인~~ | **해결(2026-10-19 사용자 확정)**: 소스 개발은 인터넷 PC(GitHub), 폐쇄망 배포는 설치 형식(오프라인 묶음 `deploy/collect-offline.ps1` → 설치), cadquery-ocp wheel 포함, 별도 사내 보안 승인 이슈 없음. Impl이 cp312 win_amd64 wheel 버전 고정. 테스트 의존(build123d·gmsh)은 배포 묶음 제외 유지 |
-| Q18 | SimLab "tet stretch" 정확한 식이 §6.5 정의(`2√6·r_in/L_max`)와 같은가? (이 정의에서는 stretch 0.1 ≡ aspect 10) | 같다고 가정. 현장 인수 키트 (b)의 baseline 수치로 비교 후 조정(미결) |
+| Q18 | SimLab "tet stretch" 정확한 식이 §6.5 정의(`2√6·r_in/L_max`)와 같은가? (aspect 10은 경계 삼각형, stretch 0.1은 tetra에 적용 — 중복 아님) | 같다고 가정. 현장 인수 키트 (b)의 baseline 수치로 비교 후 조정(미결) |
 | Q19 | 실물 G1 인수 키트 `paicad selftest` 리포트 필수 키·회신 수치 목록 확정, 씬 엔진 자료 | 키트 명세는 Impl 초안 → Plan 확인. 씬 엔진 자료는 나중(2026-10-19, 변경 없음) |
 | Q11 | 같은 native 데이터셋에 paicad MINOR가 다른 run이 섞일 때 경고로 충분한가, 차단(422)해야 하나? 모델 등록·예측 때 모델의 `engine_version`과 현재 paicad MINOR가 다르면? | 데이터셋 경고 `ENGINE_VERSION_MIXED`(차단 아님, §17.4). 예측 시 비교는 1차 없음 |
 | Q12 | 출력 include에 `# paicad x.y.z` 주석 줄을 허용할지(추적 편의 vs 바이트 동일 원칙) | 불허(§17.3). 허용하려면 V-GE-4·§6.4 예외 규칙을 함께 고쳐야 함 |
