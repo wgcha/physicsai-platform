@@ -51,3 +51,28 @@ def native_set_gate(ctx: Any, ps: dict[str, Any]) -> None:
     if state is not None and state.status != "READY":
         raise DomainError("GEOM_PREP_STALE", state.reason or "형상 준비본이 유효하지 않습니다 — 형상 준비를 다시 하세요", status=409,
                           prep_status=state.status, param_set_id=ps["id"])
+    bad = nat.baseline_prep_problems(ctx, ps)  # 4B: 준비본 유효성은 baseline별(§7.3.8)
+    if bad:
+        bid, why = bad[0]
+        raise DomainError("GEOM_PREP_STALE", f"baseline {bid}: {why}", status=409, prep_status="STALE", param_set_id=ps["id"],
+                          baseline_id=bid)
+
+
+def require_map_confirmed(ctx: Any, ps: dict[str, Any]) -> None:
+    """4B 확정 게이트(§7.3.8): param_map.json이 있는 세트에서 형상을 만드는 run 생성(①-3 DOE·④ 일괄 생성)은 confirmed일 때만.
+    단일 baseline 세트·단건 예측은 대상 아님. 미확정 → 409 PARAM_MAP_UNCONFIRMED(미결정 행 수)."""
+    from physicsai_core.geometry import baselines as bl
+
+    from . import param_set_native_api as nat
+
+    if engine_of(ps) != "native":
+        return
+    S = nat.set_path(ctx, ps)
+    try:
+        pm = bl.load(S, ctx.settings.geometry.max_report_bytes)
+    except bl.MapError as exc:
+        raise DomainError(exc.code, exc.message, status=422, problems=exc.problems) from None
+    if pm is not None and pm.get("status") != "confirmed":
+        n = bl.undecided_count(pm)
+        raise DomainError("PARAM_MAP_UNCONFIRMED", f"다중 baseline 매칭표가 확정되지 않았습니다(미결정 행 {n}개) — 매칭표를 확인해 확정하세요",
+                          status=409, param_set_id=ps["id"], undecided_rows=n, unresolved_rows=bl.unresolved(pm))

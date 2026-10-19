@@ -65,5 +65,9 @@ def test_all_routes_prefixed():
         "/predict-batches/{batch_id}/extract-responses", "/surrogate-opts/{opt_id}/verify",
         # geometry-engine.md §7.6 native 형상 엔진
         "/param-sets/{ps_id}/native-prepare", "/param-sets/{ps_id}/features",
+        # geometry-engine.md §11.1 단계 3S 쉘 두께 · §7.3.8 단계 4B 다중 baseline · ① native 피처 조회
+        "/param-sets/{ps_id}/props/scan", "/param-sets/{ps_id}/props", "/param-sets/{ps_id}/baselines",
+        "/param-sets/{ps_id}/baselines/disable", "/param-sets/{ps_id}/baselines/{baseline_id}", "/param-sets/{ps_id}/remap",
+        "/param-sets/{ps_id}/param-map", "/param-sets/{ps_id}/param-map/confirm", "/studies/{study_id}/train/features",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

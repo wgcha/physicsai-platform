@@ -42,6 +42,10 @@ def _A(ctx: Any) -> str:
 
 
 def dg_prep(ctx: Any) -> None:
+    if ctx.params.get("param_set_id"):  # 세트 기준 DOE(3S·4B, §7.3.8)
+        from . import doe_native_set
+
+        return doe_native_set.dg_prep(ctx)
     s, p = ctx.settings, ctx.params
     doe_id = p["doe_id"]
     setup = _setup(ctx)
@@ -109,6 +113,10 @@ def _matrix(D: str) -> list[tuple[int, str, dict[str, float]]]:
 
 
 def hst_gen(ctx: Any) -> None:
+    if ctx.params.get("param_set_id"):
+        from . import doe_native_set
+
+        return doe_native_set.hst_gen(ctx)
     s = ctx.settings
     r = ctx.result()
     D, A = _D(ctx), _A(ctx)

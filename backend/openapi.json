@@ -125,6 +125,143 @@
         "title": "Artifact",
         "type": "object"
       },
+      "BaselineAddRequest": {
+        "additionalProperties": false,
+        "description": "`POST /param-sets/{id}/baselines` → 202 {job_id}(PARAM_SET_NATIVE mode add_baseline). path = 그 baseline 프로젝트 폴더.",
+        "properties": {
+          "choice": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Choice"
+          },
+          "id": {
+            "maxLength": 32,
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "path": {
+            "maxLength": 400,
+            "title": "Path",
+            "type": "string"
+          },
+          "split_param": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split Param"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "enum": [
+                  "topology",
+                  "range"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          }
+        },
+        "required": [
+          "id",
+          "path"
+        ],
+        "title": "BaselineAddRequest",
+        "type": "object"
+      },
+      "BaselineInfo": {
+        "properties": {
+          "feature_count": {
+            "default": 0,
+            "title": "Feature Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "prep_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Reason"
+          },
+          "prep_status": {
+            "default": "MISSING",
+            "enum": [
+              "READY",
+              "STALE",
+              "MISSING"
+            ],
+            "title": "Prep Status",
+            "type": "string"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "rel"
+        ],
+        "title": "BaselineInfo",
+        "type": "object"
+      },
       "BatchCurveSeries": {
         "properties": {
           "doe_no": {
@@ -6649,6 +6786,16 @@
             ],
             "title": "Prep Status",
             "type": "string"
+          },
+          "props_scanned": {
+            "default": false,
+            "title": "Props Scanned",
+            "type": "boolean"
+          },
+          "shell_only": {
+            "default": false,
+            "title": "Shell Only",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7027,6 +7174,534 @@
         "title": "OutOfRange",
         "type": "object"
       },
+      "ParamMap": {
+        "description": "`GET·PUT /param-sets/{id}/param-map`, `POST …/confirm` 본문(param_map.json + 요약).",
+        "properties": {
+          "baselines": {
+            "items": {
+              "$ref": "#/components/schemas/ParamMapBaseline"
+            },
+            "title": "Baselines",
+            "type": "array"
+          },
+          "common": {
+            "items": {
+              "$ref": "#/components/schemas/ParamMapRow"
+            },
+            "title": "Common",
+            "type": "array"
+          },
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed At"
+          },
+          "confirmed_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed By"
+          },
+          "discrete": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discrete"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "map_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map Options"
+          },
+          "range_split": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Range Split"
+          },
+          "status": {
+            "enum": [
+              "draft",
+              "confirmed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "undecided_count": {
+            "default": 0,
+            "title": "Undecided Count",
+            "type": "integer"
+          },
+          "unresolved_rows": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unresolved Rows",
+            "type": "array"
+          },
+          "usage": {
+            "enum": [
+              "topology",
+              "range"
+            ],
+            "title": "Usage",
+            "type": "string"
+          },
+          "variables": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Variables",
+            "type": "array"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ParamMapWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status",
+          "usage",
+          "baselines",
+          "common"
+        ],
+        "title": "ParamMap",
+        "type": "object"
+      },
+      "ParamMapBaseline": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "rel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rel"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "ParamMapBaseline",
+        "type": "object"
+      },
+      "ParamMapDecision": {
+        "additionalProperties": false,
+        "description": "사용자 결정: accept(제안 그대로) | rename·change(name·map 지정, map 값 null = 그 baseline N/A) | split(parts마다 변수 1개).",
+        "properties": {
+          "action": {
+            "enum": [
+              "accept",
+              "rename",
+              "change",
+              "split"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "map": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Map"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "parts": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ParamMapDecisionPart"
+                },
+                "maxItems": 32,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parts"
+          }
+        },
+        "required": [
+          "action"
+        ],
+        "title": "ParamMapDecision",
+        "type": "object"
+      },
+      "ParamMapDecisionPart": {
+        "additionalProperties": false,
+        "properties": {
+          "map": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Map",
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "map"
+        ],
+        "title": "ParamMapDecisionPart",
+        "type": "object"
+      },
+      "ParamMapProposed": {
+        "properties": {
+          "candidates": {
+            "default": [],
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Candidates",
+            "type": "array"
+          },
+          "grade": {
+            "anyOf": [
+              {
+                "enum": [
+                  "recommend",
+                  "check",
+                  "unmatched"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Grade"
+          },
+          "group_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group Size"
+          },
+          "map": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "Map",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "Nominal",
+            "type": "object"
+          },
+          "score": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Score"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ParamMapProposed",
+        "type": "object"
+      },
+      "ParamMapRemapRequest": {
+        "additionalProperties": false,
+        "description": "`POST /param-sets/{id}/remap` → 202 {job_id}(PARAM_SET_NATIVE mode remap). 생략 = 기존 usage·분할 변수.",
+        "properties": {
+          "split_param": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Split Param"
+          },
+          "usage": {
+            "anyOf": [
+              {
+                "enum": [
+                  "topology",
+                  "range"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          }
+        },
+        "title": "ParamMapRemapRequest",
+        "type": "object"
+      },
+      "ParamMapRow": {
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decision"
+          },
+          "feature_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature Type"
+          },
+          "needs_review": {
+            "default": false,
+            "title": "Needs Review",
+            "type": "boolean"
+          },
+          "proposed": {
+            "$ref": "#/components/schemas/ParamMapProposed"
+          },
+          "requires_decision": {
+            "default": false,
+            "title": "Requires Decision",
+            "type": "boolean"
+          },
+          "row_id": {
+            "title": "Row Id",
+            "type": "string"
+          },
+          "signature": {
+            "default": "",
+            "title": "Signature",
+            "type": "string"
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          },
+          "unit": {
+            "default": "mm",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_id",
+          "proposed"
+        ],
+        "title": "ParamMapRow",
+        "type": "object"
+      },
+      "ParamMapRowDecision": {
+        "additionalProperties": false,
+        "properties": {
+          "decision": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ParamMapDecision"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "row_id": {
+            "maxLength": 64,
+            "title": "Row Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row_id",
+          "decision"
+        ],
+        "title": "ParamMapRowDecision",
+        "type": "object"
+      },
+      "ParamMapUpdate": {
+        "additionalProperties": false,
+        "description": "`PUT /param-sets/{id}/param-map`: 행별 decision만 저장(proposed·signature 불변). 확정 상태면 draft로 되돌린다.",
+        "properties": {
+          "decisions": {
+            "items": {
+              "$ref": "#/components/schemas/ParamMapRowDecision"
+            },
+            "maxItems": 2000,
+            "title": "Decisions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "decisions"
+        ],
+        "title": "ParamMapUpdate",
+        "type": "object"
+      },
+      "ParamMapWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "row_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Id"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "ParamMapWarning",
+        "type": "object"
+      },
       "ParamSet": {
         "properties": {
           "assem_rel": {
@@ -7039,6 +7714,20 @@
               }
             ],
             "title": "Assem Rel"
+          },
+          "baselines": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/BaselineInfo"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baselines"
           },
           "cad_file_name": {
             "title": "Cad File Name",
@@ -7143,9 +7832,24 @@
             "title": "Origin",
             "type": "string"
           },
+          "param_map_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "draft",
+                  "confirmed"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Map Status"
+          },
           "parameters": {
             "items": {
-              "$ref": "#/components/schemas/Parameter"
+              "$ref": "#/components/schemas/ParamSetParameter"
             },
             "title": "Parameters",
             "type": "array"
@@ -7313,6 +8017,11 @@
             "maxLength": 400,
             "title": "Path",
             "type": "string"
+          },
+          "shell_only": {
+            "default": false,
+            "title": "Shell Only",
+            "type": "boolean"
           }
         },
         "required": [
@@ -7608,6 +8317,75 @@
           "doe_id"
         ],
         "title": "ParamSetFromTrain",
+        "type": "object"
+      },
+      "ParamSetParameter": {
+        "description": "세트 파라미터 표 행. geometry-engine.md §11.1(3S): 쉘 두께 행 source=\"prop\"·prop_id(형상 행은 null),\n§7.3.8(4B): 확정 공통 변수의 baseline별 대응 {id: {param, nominal, min, max, feasible}|null}.",
+        "properties": {
+          "baselines": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baselines"
+          },
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "title": "Nominal",
+            "type": "number"
+          },
+          "prop_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prop Id"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "const": "prop",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "nominal",
+          "min",
+          "max"
+        ],
+        "title": "ParamSetParameter",
         "type": "object"
       },
       "ParamSetPatch": {
@@ -9746,6 +10524,335 @@
           "count"
         ],
         "title": "SamplingSummary",
+        "type": "object"
+      },
+      "ShellProp": {
+        "description": "props scan 결과 1행 + 현재 선택. selectable=false면 reason_code(PROP_UNSUPPORTED_TYPE·PROP_OVERRIDDEN_BY_ELEMENT·\nPROP_OVERRIDDEN_BY_PART·PROP_THICKNESS_INVALID).",
+        "properties": {
+          "element_overrides": {
+            "default": 0,
+            "title": "Element Overrides",
+            "type": "integer"
+          },
+          "file": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "keyword": {
+            "default": "",
+            "title": "Keyword",
+            "type": "string"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "parameter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameter"
+          },
+          "part_overrides": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShellPropPart"
+            },
+            "title": "Part Overrides",
+            "type": "array"
+          },
+          "parts": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShellPropPart"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "range": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Range"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "selectable": {
+            "default": false,
+            "title": "Selectable",
+            "type": "boolean"
+          },
+          "selected": {
+            "default": false,
+            "title": "Selected",
+            "type": "boolean"
+          },
+          "supported": {
+            "default": false,
+            "title": "Supported",
+            "type": "boolean"
+          },
+          "thickness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thickness"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "title": "ShellProp",
+        "type": "object"
+      },
+      "ShellPropPart": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "thickness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thickness"
+          },
+          "title": {
+            "default": "",
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "ShellPropPart",
+        "type": "object"
+      },
+      "ShellPropSelect": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "ShellPropSelect",
+        "type": "object"
+      },
+      "ShellPropWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "parts": {
+            "default": [],
+            "items": {
+              "type": "integer"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "prop": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prop"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "ShellPropWarning",
+        "type": "object"
+      },
+      "ShellProps": {
+        "description": "`GET /param-sets/{id}/props`: 스캔 전이면 scanned=false·빈 목록.",
+        "properties": {
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "include_geometry": {
+            "default": true,
+            "title": "Include Geometry",
+            "type": "boolean"
+          },
+          "props": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShellProp"
+            },
+            "title": "Props",
+            "type": "array"
+          },
+          "scanned": {
+            "title": "Scanned",
+            "type": "boolean"
+          },
+          "shell_only": {
+            "default": false,
+            "title": "Shell Only",
+            "type": "boolean"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShellPropWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scanned"
+        ],
+        "title": "ShellProps",
+        "type": "object"
+      },
+      "ShellPropsUpdate": {
+        "additionalProperties": false,
+        "description": "`PUT /param-sets/{id}/props`: 선택 전체 교체. include_geometry=false면 형상 행을 빼고 쉘 두께만(§11.1, 다중 baseline 세트 불가).",
+        "properties": {
+          "include_geometry": {
+            "default": true,
+            "title": "Include Geometry",
+            "type": "boolean"
+          },
+          "selected": {
+            "items": {
+              "$ref": "#/components/schemas/ShellPropSelect"
+            },
+            "maxItems": 500,
+            "title": "Selected",
+            "type": "array"
+          }
+        },
+        "required": [
+          "selected"
+        ],
+        "title": "ShellPropsUpdate",
         "type": "object"
       },
       "SoBatchRef": {
@@ -17086,6 +18193,234 @@
         ]
       }
     },
+    "/physicsai/api/param-sets/{ps_id}/baselines": {
+      "post": {
+        "description": "baseline 추가(PARAM_SET_NATIVE mode add_baseline: 준비·추출·tag·BL_MAP 매칭 초안). 매칭표는 항상 draft로 저장된다.",
+        "operationId": "baseline_add_physicsai_api_param_sets__ps_id__baselines_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BaselineAddRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Baseline Add",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/baselines/disable": {
+      "post": {
+        "description": "단일 baseline으로 되돌림(baselines/·param_map.json은 _backup으로).",
+        "operationId": "baseline_disable_physicsai_api_param_sets__ps_id__baselines_disable_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Baseline Disable",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/baselines/{baseline_id}": {
+      "delete": {
+        "description": "추가 baseline 삭제(폴더는 _backup, 매칭표 draft). 첫 baseline·남은 추가 baseline이 1개면 409.",
+        "operationId": "baseline_delete_physicsai_api_param_sets__ps_id__baselines__baseline_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "baseline_id",
+            "required": true,
+            "schema": {
+              "title": "Baseline Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Baseline Delete",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
     "/physicsai/api/param-sets/{ps_id}/display": {
       "put": {
         "description": "템플릿 컨투어 표시 설정(power). null = 지움(응답 정의 첫 항목·config 기본을 따름).",
@@ -17290,6 +18625,503 @@
           }
         },
         "summary": "Native Prepare",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/param-map": {
+      "get": {
+        "description": "다중 baseline 매칭표(제안·결정·확정 상태·확정 전 필수 결정 행).",
+        "operationId": "param_map_get_physicsai_api_param_sets__ps_id__param_map_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamMap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Param Map Get",
+        "tags": [
+          "param-sets"
+        ]
+      },
+      "put": {
+        "description": "행별 decision 저장(proposed·signature 불변). 확정 상태면 draft로 되돌린다. 충돌 422 PARAM_NAME_CONFLICT.",
+        "operationId": "param_map_put_physicsai_api_param_sets__ps_id__param_map_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamMapUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamMap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Param Map Put",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/param-map/confirm": {
+      "post": {
+        "description": "매칭표 확정: 추천 등의 미결정 행은 accept로 기록, check 등급·needs_review 행은 명시 결정 필수(없으면 422 GEOM_INPUT_INVALID).",
+        "operationId": "param_map_confirm_physicsai_api_param_sets__ps_id__param_map_confirm_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamMap"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Param Map Confirm",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/props": {
+      "get": {
+        "description": "PROP 스캔 결과 + 현재 선택(스캔 전이면 scanned=false).",
+        "operationId": "props_get_physicsai_api_param_sets__ps_id__props_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShellProps"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Props Get",
+        "tags": [
+          "param-sets"
+        ]
+      },
+      "put": {
+        "description": "쉘 두께 파라미터 선택 저장(파라미터 표 source=prop 행 전체 교체). 422 PROP_SELECTION_INVALID + problems.",
+        "operationId": "props_put_physicsai_api_param_sets__ps_id__props_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShellPropsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ParamSet"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Props Put",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/props/scan": {
+      "post": {
+        "description": "조립 폴더의 /PROP/TYPE1 쉘 두께 목록을 다시 찾는다(PARAM_SET_NATIVE mode props_scan 작업).",
+        "operationId": "props_scan_physicsai_api_param_sets__ps_id__props_scan_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Props Scan",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/remap": {
+      "post": {
+        "description": "매칭표만 다시 만든다(PARAM_SET_NATIVE mode remap: BL_MAP·NP_REGISTER만, 서명 같은 행 결정 승계).",
+        "operationId": "param_map_remap_physicsai_api_param_sets__ps_id__remap_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ParamMapRemapRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Param Map Remap",
         "tags": [
           "param-sets"
         ]
@@ -20835,6 +22667,89 @@
           }
         },
         "summary": "List Does",
+        "tags": [
+          "train"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/train/features": {
+      "get": {
+        "description": "geometry-engine.md §7.3.1: ① native 추출 피처(종류·범위·그룹·하이라이트 PNG artifact id — PNG는 /artifacts/{id}/media).",
+        "operationId": "train_features_physicsai_api_studies__study_id__train_features_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeFeatures"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Train Features",
         "tags": [
           "train"
         ]

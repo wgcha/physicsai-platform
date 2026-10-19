@@ -19,7 +19,7 @@ from physicsai_core.stage1_train_data.train_tpl import tpl_params_snapshot
 from ...context import AppContext
 from ..path_inspect import starters_in
 from .base import HpcOverrides, _P, invalid_at, prerequisite_missing
-from .stage1_native import native_doe_gen, native_extract_params
+from .stage1_native import native_doe_from_set, native_doe_gen, native_extract_params
 
 
 class TdExtractParams(_P):
@@ -33,7 +33,10 @@ class TdDoeGenParams(_P):
     options: dict[str, Any] = Field(default_factory=dict)
     seed: int | None = Field(default=None, ge=0)  # native LHS 전용(§7.3.3). altair는 쓸 수 없다
     multi_execution: int = Field(default=1, ge=1)
-    radioss_assem_path: str = Field(max_length=400)
+    # 세트 기준 native DOE(geometry-engine.md §7.3.8·§11.1)면 생략(세트 조립 폴더 사용), 그 밖에는 필수
+    radioss_assem_path: str | None = Field(default=None, max_length=400)
+    # native 파라미터 세트 기준 DOE(쉘 두께·다중 baseline 포함). 지정하면 ①-1 setup 대신 세트 준비본·파라미터 표를 쓴다
+    param_set_id: str | None = Field(default=None, max_length=64)
 
 
 class TdSolveParams(_P):
@@ -93,6 +96,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         if os.path.splitext(cp.path)[1].lower() not in [e.lower() for e in cfg.train_data.cad_extensions]:
             raise invalid_at("cad_path", f"CAD 확장자는 {', '.join(cfg.train_data.cad_extensions)} 중 하나여야 합니다")
         return {"cad_path": cp.path}, None, []
+    if job_type == "TD_DOE_GEN" and p.param_set_id is not None:
+        return native_doe_from_set(ctx, conn, study, p)
+    if job_type == "TD_DOE_GEN" and p.radioss_assem_path is None:
+        raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     if job_type == "TD_DOE_GEN":
         setup = train_repo.get_setup(conn, sid)
         if setup is not None and setup.get("engine") == "native":
@@ -175,6 +182,8 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
     if job_type == "TD_DOE_GEN":
         did = params["doe_id"]
         native = {"engine": "native", "options": {"seed": params["seed"]}} if params.get("engine") == "native" else {}
+        if native and params.get("param_set_id"):
+            native["options"]["param_set_id"] = params["param_set_id"]
         train_repo.insert_doe(conn, {
             **base, "id": did, "doe_label": params["doe_label"], "doe_type": params["doe_type"],
             "num_runs_requested": params["num_runs"], "options": params["options"],

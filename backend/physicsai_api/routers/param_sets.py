@@ -6,7 +6,9 @@ from fastapi.responses import JSONResponse
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import param_set_baselines_api as bl_svc
 from ..services import param_set_native_api as native_svc
+from ..services import param_set_props_api as props_svc
 from ..services import param_set_responses as resp_svc
 from ..services import stage4_predict as svc
 
@@ -84,3 +86,66 @@ def native_prepare(ps_id: str, request: Request, principal: Principal = Depends(
 def native_features(ps_id: str, request: Request, _p: Principal = Depends(get_principal)) -> dict:
     """geometry-engine.md §7.6: 추출된 형상 피처·그룹·경고(하이라이트 PNG artifact id 포함)."""
     return native_svc.features(get_ctx(request), ps_id)
+
+
+# ---- 단계 3S 쉘 두께(geometry-engine.md §11.1) ----
+@router.post("/param-sets/{ps_id}/props/scan", response_model=S.NativeAccepted, status_code=202, responses=ERR)
+def props_scan(ps_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """조립 폴더의 /PROP/TYPE1 쉘 두께 목록을 다시 찾는다(PARAM_SET_NATIVE mode props_scan 작업)."""
+    return props_svc.start_scan(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))
+
+
+@router.get("/param-sets/{ps_id}/props", response_model=S.ShellProps, responses=ERR)
+def props_get(ps_id: str, request: Request, _p: Principal = Depends(get_principal)) -> dict:
+    """PROP 스캔 결과 + 현재 선택(스캔 전이면 scanned=false)."""
+    return props_svc.get_props(get_ctx(request), ps_id)
+
+
+@router.put("/param-sets/{ps_id}/props", response_model=S.ParamSet, responses={**ERR, 403: {"model": S.ErrorResponse}})
+def props_put(ps_id: str, body: S.ShellPropsUpdate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """쉘 두께 파라미터 선택 저장(파라미터 표 source=prop 행 전체 교체). 422 PROP_SELECTION_INVALID + problems."""
+    return props_svc.put_props(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))
+
+
+# ---- 단계 4B 다중 baseline(geometry-engine.md §7.3.8) ----
+@router.post("/param-sets/{ps_id}/baselines", response_model=S.NativeAccepted, status_code=202, responses=ERR)
+def baseline_add(ps_id: str, body: S.BaselineAddRequest, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """baseline 추가(PARAM_SET_NATIVE mode add_baseline: 준비·추출·tag·BL_MAP 매칭 초안). 매칭표는 항상 draft로 저장된다."""
+    return bl_svc.add_baseline(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))
+
+
+@router.post("/param-sets/{ps_id}/baselines/disable", response_model=S.ParamSet, responses={**ERR, 403: {"model": S.ErrorResponse}})
+def baseline_disable(ps_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """단일 baseline으로 되돌림(baselines/·param_map.json은 _backup으로)."""
+    return bl_svc.disable(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))
+
+
+@router.delete("/param-sets/{ps_id}/baselines/{baseline_id}", response_model=S.ParamSet,
+               responses={**ERR, 403: {"model": S.ErrorResponse}})
+def baseline_delete(ps_id: str, baseline_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """추가 baseline 삭제(폴더는 _backup, 매칭표 draft). 첫 baseline·남은 추가 baseline이 1개면 409."""
+    return bl_svc.delete_baseline(get_ctx(request), principal, ps_id, baseline_id, request_id(request), client_ip(request))
+
+
+@router.post("/param-sets/{ps_id}/remap", response_model=S.NativeAccepted, status_code=202, responses=ERR)
+def param_map_remap(ps_id: str, body: S.ParamMapRemapRequest, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """매칭표만 다시 만든다(PARAM_SET_NATIVE mode remap: BL_MAP·NP_REGISTER만, 서명 같은 행 결정 승계)."""
+    return bl_svc.remap(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))
+
+
+@router.get("/param-sets/{ps_id}/param-map", response_model=S.ParamMap, responses=ERR)
+def param_map_get(ps_id: str, request: Request, _p: Principal = Depends(get_principal)) -> dict:
+    """다중 baseline 매칭표(제안·결정·확정 상태·확정 전 필수 결정 행)."""
+    return bl_svc.get_map(get_ctx(request), ps_id)
+
+
+@router.put("/param-sets/{ps_id}/param-map", response_model=S.ParamMap, responses={**ERR, 403: {"model": S.ErrorResponse}})
+def param_map_put(ps_id: str, body: S.ParamMapUpdate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """행별 decision 저장(proposed·signature 불변). 확정 상태면 draft로 되돌린다. 충돌 422 PARAM_NAME_CONFLICT."""
+    return bl_svc.put_map(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))
+
+
+@router.post("/param-sets/{ps_id}/param-map/confirm", response_model=S.ParamMap, responses={**ERR, 403: {"model": S.ErrorResponse}})
+def param_map_confirm(ps_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """매칭표 확정: 추천 등의 미결정 행은 accept로 기록, check 등급·needs_review 행은 명시 결정 필수(없으면 422 GEOM_INPUT_INVALID)."""
+    return bl_svc.confirm_map(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))

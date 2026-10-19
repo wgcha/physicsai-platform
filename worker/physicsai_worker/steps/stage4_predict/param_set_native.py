@@ -1,7 +1,14 @@
-"""④ PARAM_SET_NATIVE(geometry-engine.md §7.3.4): NP_PREP → NP_EXTRACT → NP_TAG → BL_MAP(항상 SKIPPED) → NP_REGISTER.
+"""④ PARAM_SET_NATIVE(geometry-engine.md §7.3.4·§7.3.8·§11.1): NP_PREP → NP_EXTRACT → NP_TAG → BL_MAP → NP_REGISTER.
 
-new: 프로젝트 폴더에서 후보를 다시 찾아 `logs/_paramset_tmp/<job_id>/`(T)에 모으고, 등록 때 `04_params/<id>`로 옮긴다.
-reprep: 대상 = 기존 세트 S. `S/native/`를 `_backup`으로 옮기고 `native/extract/`만 되살린 뒤 tag를 다시 돌린다.
+mode(작업 params, 서버가 확정):
+- new: 프로젝트 폴더에서 후보를 다시 찾아 `logs/_paramset_tmp/<job_id>/`(T)에 모으고, 등록 때 `04_params/<id>`로 옮긴다.
+  `shell_only`(단계 3S): 조립 폴더만 복사, NP_EXTRACT = `paicad props scan`, NP_TAG SKIPPED(§11.1 tag 생략).
+- reprep: 대상 = 기존 세트 S. `S/native/`를 `_backup`으로 옮기고 `native/extract/`(·`props/`)만 되살린 뒤 tag를 다시 돌린다.
+- props_scan(단계 3S): 대상 = S. NP_EXTRACT = `paicad props scan` → `S/native/props/props.json`, 나머지 SKIPPED/기록.
+- add_baseline(단계 4B): 새 baseline 입력을 T에 모아 extract·tag → BL_MAP(`paicad map`) → 등록 때 `S/baselines/<id>`로 옮기고
+  `S/param_map.json`(항상 draft, signature 같은 행 decision 승계) 저장.
+- remap(단계 4B): BL_MAP·NP_REGISTER만(앞 3 step SKIPPED).
+BL_MAP은 다중 baseline(add_baseline·remap)일 때만 실행하고 단일 baseline이면 항상 SKIPPED("단일 baseline").
 등록(NP_REGISTER)은 `np_register`.
 """
 
@@ -13,11 +20,15 @@ from typing import Any
 
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
-from physicsai_core.fileutil import copy_tree
+from physicsai_core.fileutil import copy_tree, write_json
+from physicsai_core.geometry import baselines as bl
 from physicsai_core.geometry.options import check_against_features
+from physicsai_core.geometry.prep import is_shell_only
+from physicsai_core.geometry.shell import PROPS_DIR
 from physicsai_core.paths import PathError, allowed_roots, check_user_path
 from physicsai_core.stage4_predict import param_discover_native as dn
 
+from ...signals import StepSkipped
 from ..common import path_failure
 from ..geometry_native import (
     LocalRunner,
@@ -28,15 +39,16 @@ from ..geometry_native import (
     run_paicad,
     write_native_options,
 )
-from ...signals import StepSkipped
 from .np_register import np_register
 
 FEATURES = "parameter_features.json"
 XML = "parameter_extracted.xml"
+MULTI_MODES = ("add_baseline", "remap")
+SHELL_MODES = ("props_scan",)
 
 
 def target(ctx: Any) -> str:
-    """작업 대상 폴더: new = T, reprep = 세트 S."""
+    """작업 대상 폴더: new·add_baseline = T, reprep·props_scan·remap = 세트 S."""
     r = ctx.result()
     return ctx.abs(r["target_rel"])
 
@@ -49,30 +61,46 @@ def _ps(ctx: Any) -> dict[str, Any]:
     return ps
 
 
+def _shell(ctx: Any) -> bool:
+    """이 작업이 props scan을 하는가(쉘 두께 전용 신규 등록 또는 props_scan)."""
+    p = ctx.params
+    return p["mode"] in SHELL_MODES or (p["mode"] == "new" and bool(p.get("shell_only")))
+
+
 def _have_features(base: str) -> bool:
     ex = os.path.join(base, "native", "extract")
     return os.path.isfile(os.path.join(ex, FEATURES)) and os.path.isfile(os.path.join(ex, XML))
 
 
-def _prep_new(ctx: Any) -> str:
-    s, p = ctx.settings, ctx.params
+def _discover(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool) -> tuple[Any, str | None, dict[str, Any], str]:
+    s = ctx.settings
     try:
-        cp = check_user_path(p["path"], allowed_roots(s, imports=True))
+        cp = check_user_path(path, allowed_roots(s, imports=True))
     except PathError as exc:
         raise path_failure(exc) from None
     d = dn.discover_native(cp.path, s)
-    cad, assem, probs = dn.resolve_choice_native(d, p.get("choice") or {})
-    problems = d.problems + probs
-    if problems or cad is None or assem is None:
+    cad, assem, probs = dn.resolve_choice_native(d, choice or {})
+    problems = dn.shell_only_problems(d.problems + probs) if shell_only else d.problems + probs
+    if problems or assem is None or (cad is None and not shell_only):
         raise StepFailure("INPUT_INVALID", "프로젝트 폴더에서 세트를 구성할 수 없습니다: "
                           + "; ".join(f"{q['code']} {q['message']}" for q in problems[:3]))
-    if dn.planned_bytes_native(d, cad, assem, s) > s.param_set.max_total_bytes:
+    return d, cad, assem, cp.path
+
+
+def _collect(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool = False) -> str:
+    """후보를 T(`logs/_paramset_tmp/<job_id>`)에 모은다(new·add_baseline 공통, 원본 재검사·핸들 복사)."""
+    s = ctx.settings
+    d, cad, assem, src = _discover(ctx, path, choice, shell_only)
+    if not shell_only and dn.planned_bytes_native(d, cad, assem, s) > s.param_set.max_total_bytes:
         raise StepFailure("INPUT_INVALID", f"복사할 총량이 상한({s.param_set.max_total_bytes} bytes)을 넘습니다 — PARAM_SET_TOO_LARGE")
     T = ctx.abs(f"logs/_paramset_tmp/{ctx.ex.job_id}")
     ctx.backup([T])
     os.makedirs(T, exist_ok=True)
-    dn.copy_sources_native(d, cad, assem, T, s)
-    ctx.patch_result({"picked": {"cad": cad, "radioss_assem": assem["rel"], "source_path": cp.path}})
+    if shell_only:
+        dn.copy_assem_native(d, assem, T, s)
+    else:
+        dn.copy_sources_native(d, cad, assem, T, s)
+    ctx.patch_result({"picked": {"cad": cad, "radioss_assem": assem["rel"], "source_path": src}})
     return T
 
 
@@ -83,8 +111,9 @@ def _prep_reprep(ctx: Any) -> str:
     moved = ctx.backup([nat])
     if moved:
         old = ctx.abs(f"_backup/{ctx.ex.stamp}_{ctx.ex.job_id}/{moved[0]}")
-        if os.path.isdir(os.path.join(old, "extract")):
-            copy_tree(os.path.join(old, "extract"), os.path.join(nat, "extract"), checkpoint=ctx.checkpoint)
+        for sub in ("extract", "props"):  # 이전 extract·쉘 PROP 목록은 재사용(tag만 다시)
+            if os.path.isdir(os.path.join(old, sub)):
+                copy_tree(os.path.join(old, sub), os.path.join(nat, sub), checkpoint=ctx.checkpoint)
     return S
 
 
@@ -92,20 +121,54 @@ def np_prep(ctx: Any) -> None:
     s, p = ctx.settings, ctx.params
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
-    if p["mode"] == "new":
-        base, geom = _prep_new(ctx), p.get("geom_options")
-    else:
-        base, geom = _prep_reprep(ctx), _ps(ctx).get("geom_options")
+    mode = p["mode"]
+    extra: dict[str, Any] = {}
+    if mode == "new":
+        base, geom = _collect(ctx, p["path"], p.get("choice") or {}, bool(p.get("shell_only"))), p.get("geom_options")
+    elif mode == "reprep":
+        ps = _ps(ctx)
+        if is_shell_only(ctx.abs(ps["stored_rel"])):
+            raise StepFailure("INPUT_INVALID", "쉘 두께 전용 세트는 형상 준비가 없습니다 — PROP 스캔을 다시 하세요")
+        base, geom = _prep_reprep(ctx), ps.get("geom_options")
+    elif mode == "add_baseline":
+        ps = _ps(ctx)
+        b = p["baseline"]
+        base, geom = _collect(ctx, b["path"], b.get("choice") or {}), ps.get("geom_options")
+        extra = {"baseline_id": b["id"], "param_set_rel": ps["stored_rel"].rstrip("/")}
+    else:  # props_scan · remap: 대상 = S(복사 없음)
+        ps = _ps(ctx)
+        base, geom = ctx.abs(ps["stored_rel"]), ps.get("geom_options")
+        extra = {"param_set_rel": ps["stored_rel"].rstrip("/")}
     opts = effective_opts(s, geom)
     os.makedirs(os.path.join(base, "native"), exist_ok=True)
-    write_native_options(os.path.join(base, "native"), opts, ver)
-    ctx.patch_result({"mode": p["mode"], "target_rel": ctx.rel(base), "engine_version": ver, "ocp_version": ocp,
-                      "have_features": _have_features(base), "opts": opts})
+    if mode in ("new", "reprep", "add_baseline"):
+        write_native_options(os.path.join(base, "native"), opts, ver)
+    ctx.patch_result({"mode": mode, "target_rel": ctx.rel(base), "engine_version": ver, "ocp_version": ocp,
+                      "have_features": _have_features(base), "opts": opts, "shell_only": bool(p.get("shell_only")), **extra})
+
+
+def _props_scan(ctx: Any, base: str) -> None:
+    from ..geometry_props import run_scan
+    from physicsai_core.geometry.options import usage_document
+
+    s, r = ctx.settings, ctx.result()
+    out = os.path.join(base, *PROPS_DIR.split("/"))
+    os.makedirs(out, exist_ok=True)
+    opts_json = os.path.join(out, "options_run.json")
+    ctx.backup([opts_json])
+    write_json(opts_json, usage_document(r["opts"], r.get("engine_version")))
+    v = run_scan(LocalRunner(ctx), s, os.path.join(base, "radioss_assem"), out, opts_json)
+    v.raise_if_failed()
+    ctx.add_output(os.path.join(out, "props.json"))
 
 
 def np_extract(ctx: Any) -> None:
-    s = ctx.settings
+    s, p = ctx.settings, ctx.params
     base, r = target(ctx), ctx.result()
+    if _shell(ctx):
+        return _props_scan(ctx, base)
+    if p["mode"] == "remap":
+        raise StepSkipped("매칭표만 다시 만듦")
     if r.get("have_features"):
         raise StepSkipped("준비된 피처 파일 사용")
     inp = native_inputs(s, base, os.path.join(base, "radioss_assem"))
@@ -121,7 +184,11 @@ def np_extract(ctx: Any) -> None:
 
 
 def np_tag(ctx: Any) -> None:
-    s = ctx.settings
+    s, p = ctx.settings, ctx.params
+    if _shell(ctx):
+        raise StepSkipped("쉘 두께만 — 경계 분류 생략" if p["mode"] == "new" else "PROP 스캔만")
+    if p["mode"] == "remap":
+        raise StepSkipped("매칭표만 다시 만듦")
     base, r = target(ctx), ctx.result()
     inp = native_inputs(s, base, os.path.join(base, "radioss_assem"))
     doc = read_json(inp.features, s.geometry.max_report_bytes)
@@ -138,7 +205,13 @@ def np_tag(ctx: Any) -> None:
 
 
 def bl_map(ctx: Any) -> None:
-    raise StepSkipped("단일 baseline")  # 다중 baseline(4B)은 이 단계에서 구현하지 않는다
+    """BL_MAP(§7.3.8): 다중 baseline(add_baseline·remap)일 때만 `paicad map` → 매칭 초안. 단일 baseline이면 SKIPPED."""
+    p = ctx.params
+    if p["mode"] not in MULTI_MODES:
+        raise StepSkipped("단일 baseline")
+    from .baseline_map import run_map
+
+    run_map(ctx)
 
 
 HANDLERS: dict[tuple[str, str], Callable[[Any], None]] = {
@@ -148,3 +221,5 @@ HANDLERS: dict[tuple[str, str], Callable[[Any], None]] = {
     ("PARAM_SET_NATIVE", "BL_MAP"): bl_map,
     ("PARAM_SET_NATIVE", "NP_REGISTER"): np_register,
 }
+
+__all__ = ["HANDLERS", "bl", "target"]

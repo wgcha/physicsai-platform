@@ -25,13 +25,14 @@ from physicsai_core.stage4_predict.batch_matrix import (
     batch_label,
     build_matrix_for,
 )
+from physicsai_core.stage4_predict.batch_multi import build_multi_matrix
 
 from ...context import AppContext
 from ...schemas.contour_capture import BatchCaptureOptions, CaptureDisplay
 from ...schemas.predict_batch import BatchSource
 from ..common import study_root
 from .base import _P, invalid_at, prerequisite_missing, require_model_pscfg
-from ..geometry_gate import check_engine_match, engine_of, native_set_gate
+from ..geometry_gate import check_engine_match, engine_of, native_set_gate, require_map_confirmed
 from .stage4_predict import model_for, require_template_features, template_kind
 
 
@@ -64,6 +65,12 @@ def resolve_param_set(conn: Any, study: dict[str, Any], param_set_id: str | None
 def build_matrix(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str, Any], source: dict[str, Any]
                  ) -> BatchMatrix:
     """source(모양 검사 끝난 dict) → 조합. train_doe는 DOE 상태 확인(409) 후 samples.csv를 읽는다. 모양 오류 → 422."""
+    pm = multi_map(ctx, ps)
+    if pm is not None:  # geometry-engine.md §7.3.8: 확정 다중 baseline 세트 = baseline별 층화 LHS(lhs만)
+        try:
+            return build_multi_matrix(source, ps, pm, ctx.settings)
+        except BatchShapeError as exc:
+            raise invalid_at("source", str(exc)) from None
     header = rows = None
     cont = _continue_batch(conn, study, source)
     if source.get("kind") == "train_doe":
@@ -80,6 +87,21 @@ def build_matrix(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str
         return build_matrix_for(source, ps, ctx.settings, samples_header=header, samples=rows, continue_batch=cont)
     except BatchShapeError as exc:
         raise invalid_at("source", str(exc)) from None
+
+
+def multi_map(ctx: AppContext, ps: dict[str, Any]) -> dict[str, Any] | None:
+    """확정된 다중 baseline 매칭표(native 세트만, 없거나 draft면 None — draft는 작업 생성 때 409로 막힌다)."""
+    if engine_of(ps) != "native":
+        return None
+    from physicsai_core.geometry import baselines as bl
+
+    from ..param_set_native_api import set_path
+
+    try:
+        pm = bl.load(set_path(ctx, ps), ctx.settings.geometry.max_report_bytes)
+    except bl.MapError as exc:
+        raise DomainError(exc.code, exc.message, status=422, problems=exc.problems) from None
+    return pm if pm is not None and pm.get("status") == "confirmed" else None
 
 
 def _continue_batch(conn: Any, study: dict[str, Any], source: dict[str, Any]) -> dict[str, Any] | None:
@@ -114,6 +136,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     warnings = check_engine_match(ps, m)
     if native:  # geometry-engine.md §7.7
         native_set_gate(ctx, ps)
+        require_map_confirmed(ctx, ps)  # §7.3.8 확정 게이트(일괄 생성)
     else:
         require_template_features(cfg, kind)
     cap = cfg.train_data.max_multi_execution

@@ -10,7 +10,7 @@ from pydantic import AfterValidator, Field, model_serializer
 from physicsai_core.naming import label_problem
 
 from .common import Req, Resp
-from .geometry import NativeInfo
+from .geometry import BaselineInfo, NativeInfo
 
 
 def _check_label(v: str | None) -> str | None:
@@ -25,7 +25,7 @@ def _check_label(v: str | None) -> str | None:
 Label = Annotated[str | None, AfterValidator(_check_label)]
 
 __all__ = [
-    "ParamSetCreate", "Parameter", "ResponseDef", "TplParam", "ParamSet", "SampleRow", "SamplesPage",
+    "ParamSetCreate", "Parameter", "ParamSetParameter", "ResponseDef", "TplParam", "ParamSet", "SampleRow", "SamplesPage",
     "PredictCheckRequest", "OutOfRange", "Rounded", "Nearest", "PredictCheckResponse", "ParamSetFromTrain",
     "ParamSetDiscoverChoice", "ParamSetDiscoverRequest", "DiscoverTpl", "DiscoverCad", "DiscoverAssem", "DiscoverProblem",
     "ParamSetDiscoverResponse", "ParamSetPatch", "ParamSetResponsesUpdate",
@@ -50,6 +50,8 @@ class ParamSetCreate(Req):
     # geometry-engine.md §7.4: native면 202 {job_id}. 생략 = geometry.engine 기본값(mode=discover일 때만 native 가능)
     engine: Literal["altair", "native"] | None = None
     geom_options: dict[str, Any] | None = None
+    # geometry-engine.md §11.1 단계 3S: native 쉘 두께 전용 세트(STEP 불필요, tag·update·morph·check 생략). choice.cad 무시
+    shell_only: bool = False
 
 
 class ParamSetPatch(Req):
@@ -106,6 +108,15 @@ class Parameter(Resp):
     unit: str = ""
 
 
+class ParamSetParameter(Parameter):
+    """세트 파라미터 표 행. geometry-engine.md §11.1(3S): 쉘 두께 행 source="prop"·prop_id(형상 행은 null),
+    §7.3.8(4B): 확정 공통 변수의 baseline별 대응 {id: {param, nominal, min, max, feasible}|null}."""
+
+    source: Literal["prop"] | None = None
+    prop_id: int | None = None
+    baselines: dict[str, Any] | None = None
+
+
 class ResponseDef(Resp):
     name: str
     unit: str = ""
@@ -130,7 +141,7 @@ class ParamSet(Resp):
     study_id: str
     source_path: str
     unit_system: str
-    parameters: list[Parameter]
+    parameters: list[ParamSetParameter]
     responses: list[ResponseDef]
     sample_count: int
     sample_has_measured: bool
@@ -154,6 +165,9 @@ class ParamSet(Resp):
     geom_options_effective: dict[str, Any] | None = None
     engine_version: str | None = None
     native: NativeInfo | None = None
+    # geometry-engine.md §7.3.8(4B): 다중 baseline 세트만(단일은 null). 첫 항목 = base(세트 자신)
+    baselines: list[BaselineInfo] | None = None
+    param_map_status: Literal["draft", "confirmed"] | None = None
 
 
 class SampleRow(Resp):

@@ -46,6 +46,8 @@ def _feature_type(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: s
 
         if job_type == "TD_EXTRACT_PARAMS":
             return None if (getattr(p, "engine", None) or ctx.settings.geometry.engine) == "native" else job_type
+        if getattr(p, "param_set_id", None) is not None:  # 세트 기준 native DOE(§7.3.8): prepare가 native 게이트
+            return None
         setup = train_repo.get_setup(conn, study["id"])
         return None if setup is not None and setup.get("engine") == "native" else job_type
     if job_type != "PREDICT_BATCH":

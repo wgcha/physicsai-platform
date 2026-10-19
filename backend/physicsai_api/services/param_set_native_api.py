@@ -13,7 +13,8 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.geometry import features_view
 from physicsai_core.geometry.options import effective_options, tag_section_changed
-from physicsai_core.geometry.prep import prep_state
+from physicsai_core.geometry.prep import is_shell_only, prep_state
+from physicsai_core.geometry.shell import PROPS_JSON
 from physicsai_core.geometry.reports import ReportError, read_report
 from physicsai_core.paths import allowed_roots, check_user_path, resolve_in_study
 from physicsai_core.stage4_predict import param_discover_native as dn
@@ -51,15 +52,20 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
     over = validate_geom_options(ctx.settings, body.geom_options)
     cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
     choice = body.choice.model_dump(exclude_unset=True) if body.choice is not None else {}
+    shell_only = bool(getattr(body, "shell_only", False))  # §11.1 쉘 두께 전용: STEP·번호 표 불필요
+    if shell_only:
+        choice.pop("cad", None)
     d = dn.discover_native(cp.path, ctx.settings)
     cad, assem, probs = dn.resolve_choice_native(d, choice)
-    problems = d.problems + probs
-    if problems or cad is None or assem is None:
+    problems = dn.shell_only_problems(d.problems + probs) if shell_only else d.problems + probs
+    if problems or assem is None or (cad is None and not shell_only):
         raise DomainError("PARAM_SET_INVALID", "프로젝트 폴더에서 파라미터 세트를 구성할 수 없습니다", status=422,
                           problems=problems or [{"code": "DISCOVER_INCOMPLETE", "message": "STEP·조립 폴더를 모두 찾아야 합니다"}])
-    job = jobs_svc.create_job(ctx, principal, study_id, "PARAM_SET_NATIVE",
-                              {"mode": "new", "path": cp.path, "choice": {"cad": cad, "radioss_assem": assem["rel"]},
-                               "label": label, "geom_options": over or None}, rid, ip)
+    params = {"mode": "new", "path": cp.path, "choice": {"cad": None if shell_only else cad, "radioss_assem": assem["rel"]},
+              "label": label, "geom_options": over or None}
+    if shell_only:
+        params["shell_only"] = True
+    job = jobs_svc.create_job(ctx, principal, study_id, "PARAM_SET_NATIVE", params, rid, ip)
     return {"job_id": job["id"]}
 
 
@@ -94,6 +100,21 @@ def _state(ctx: AppContext, p: dict[str, Any]) -> tuple[Any, dict[str, Any], str
     return st, opts, S
 
 
+def set_path(ctx: AppContext, p: dict[str, Any]) -> str:
+    with ctx.engine.connect() as conn:
+        return _S(ctx, conn, p)
+
+
+def baseline_prep_problems(ctx: AppContext, p: dict[str, Any]) -> list[tuple[str, str]]:
+    """다중 baseline 세트의 추가 baseline 중 준비본이 READY가 아닌 것(§7.3.8)."""
+    if (p.get("engine") or "altair") != "native":
+        return []
+    from .param_set_baselines_api import prep_problems
+
+    _st, opts, S = _state(ctx, p)
+    return prep_problems(ctx, p, S, opts)
+
+
 def prep_state_of(ctx: AppContext, p: dict[str, Any]) -> Any:
     """native 세트의 준비본 상태(PrepState), altair 세트면 None. 엔진 버전 비교는 워커가 실행 때 한다(API는 paicad를 실행하지 않는다)."""
     return _state(ctx, p)[0] if (p.get("engine") or "altair") == "native" else None
@@ -106,7 +127,13 @@ def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str,
     st, opts, S = _state(ctx, p)
     doc = _features_doc(ctx, S) or {}
     out["geom_options_effective"] = opts
-    out["native"] = {"prep_status": st.status, "prep_reason": st.reason, "feature_count": len(doc.get("features", []))}
+    out["native"] = {"prep_status": st.status, "prep_reason": st.reason, "feature_count": len(doc.get("features", [])),
+                     "shell_only": is_shell_only(S), "props_scanned": os.path.isfile(os.path.join(S, *PROPS_JSON.split("/")))}
+    from .param_set_baselines_api import baselines_info  # 4B(§7.3.8): 다중 baseline 세트만
+
+    info = baselines_info(ctx, p, S, opts)
+    if info is not None:
+        out["baselines"], out["param_map_status"] = info
     return out
 
 
@@ -217,3 +244,26 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
             os.replace(dst, T)  # 04_params에 DB 행 없는 고아 폴더를 남기지 않는다(삭제 없음)
         raise
     return enrich(ctx, row, {**param_set_out(row), "warnings": []})  # type: ignore[arg-type]
+
+
+def train_features(ctx: AppContext, study_id: str) -> dict[str, Any]:
+    """① 학습 native 피처 요약(`GET /studies/{id}/train/features`, §7.3.1 TX_PARSE 결과): 종류·범위·하이라이트 PNG artifact id."""
+    from physicsai_core.db.repositories import train as train_repo
+
+    with ctx.engine.connect() as conn:
+        st = studies_repo.require(conn, study_id)
+        setup = train_repo.get_setup(conn, study_id)
+        rel = (setup or {}).get("features_rel")
+        if not setup or setup.get("engine") != "native" or not rel:
+            raise DomainError("NATIVE_PREP_MISSING", "① native 형상 피처가 없습니다 — 파라미터 추출을 native로 먼저 하세요", status=409)
+        root = study_root(ctx, st)
+        prefix = os.path.dirname(rel).rstrip("/") + "/features/"
+        arts = art_repo.list_by_prefix(conn, study_id, "FEATURE_PNG", prefix)
+    try:
+        doc = read_report(resolve_in_study(root, rel), ctx.settings.geometry.max_report_bytes)
+    except ReportError:
+        raise DomainError("NATIVE_PREP_MISSING", "형상 피처 파일을 읽을 수 없습니다 — 파라미터 추출을 다시 하세요", status=409) from None
+    ids: dict[str, str] = {}
+    for a in arts:
+        ids.setdefault(os.path.splitext(os.path.basename(a["rel_path"]))[0], a["id"])
+    return features_view.summary(doc, ids)

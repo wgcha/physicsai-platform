@@ -20,6 +20,14 @@ def get_setup(study_id: str, request: Request, _p: Principal = Depends(get_princ
     return svc.get_setup(get_ctx(request), study_id)
 
 
+@router.get("/studies/{study_id}/train/features", response_model=S.NativeFeatures, responses=ERR)
+def train_features(study_id: str, request: Request, _p: Principal = Depends(get_principal)) -> dict:
+    """geometry-engine.md §7.3.1: ① native 추출 피처(종류·범위·그룹·하이라이트 PNG artifact id — PNG는 /artifacts/{id}/media)."""
+    from ..services import param_set_native_api as native_svc
+
+    return native_svc.train_features(get_ctx(request), study_id)
+
+
 @router.put("/studies/{study_id}/train/params", response_model=S.TrainSetup, responses=ERR)
 def put_params(study_id: str, body: S.TrainParamsPut, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     return svc.put_params(get_ctx(request), principal, study_id, body, request_id(request), client_ip(request))

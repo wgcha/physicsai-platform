@@ -57,11 +57,12 @@ def find_cad_input(base: str, step_exts: list[str]) -> str:
     raise StepFailure("INPUT_CHANGED", "공칭 STEP 파일이 없습니다 — 형상 준비를 다시 하세요")
 
 
-def native_inputs(settings: Any, base: str, assem_dir: str) -> NativeInputs:
+def native_inputs(settings: Any, base: str, assem_dir: str, *, need_cad: bool = True) -> NativeInputs:
+    """need_cad=False: 쉘 두께 전용 세트(§11.1) — STEP 없음(cad_input 빈 값, paicad 형상 단계를 부르지 않는다)."""
     pr = settings.predict
     bm = os.path.join(base, "cad", "body_map.json")
     return NativeInputs(
-        cad_input=find_cad_input(base, settings.geometry.step_extensions),
+        cad_input=find_cad_input(base, settings.geometry.step_extensions) if need_cad else "",
         features=os.path.join(base, "native", "extract", "parameter_features.json"),
         tag_dir=os.path.join(base, "native", "tag"),
         baseline_inc=os.path.join(assem_dir, pr.mesh_include_name),

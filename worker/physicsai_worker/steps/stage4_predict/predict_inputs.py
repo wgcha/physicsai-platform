@@ -288,7 +288,13 @@ def rad_assemble(ctx: Any) -> None:
         starter = mesh_only_into(ctx.settings, _geom(ctx), inp, checkpoint=ctx.checkpoint, log=ctx.log)
         ctx.patch_result({"starter": starter})
         return
-    starter = _assemble_parametric(ctx, inp)
+    ps0, S0 = param_set(ctx)
+    if (ps0 or {}).get("engine") == "native":  # geometry-engine.md §11.1·§7.3.8: 배정 baseline 조립·쉘 두께 적용(엔진 분기 1곳)
+        from . import predict_native
+
+        starter = predict_native.rad_assemble(ctx, S0, inp)  # type: ignore[arg-type]
+    else:
+        starter = _assemble_parametric(ctx, inp)
     if ctx.settings.commands.rad_assemble is not None:
         ctx.run_local("rad_assemble", {"work_dir": P, "starter": os.path.join(inp, starter), "input_dir": inp}, cwd=inp)
     ctx.patch_result({"starter": starter})
