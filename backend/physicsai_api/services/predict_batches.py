@@ -15,6 +15,7 @@ import statistics
 import uuid
 from typing import Any
 
+from physicsai_core.geometry.messages import MAX_MESSAGE, category_of
 from physicsai_core.db.repositories import artifacts as artifacts_repo
 from physicsai_core.db.repositories import contour_media as media_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
@@ -88,9 +89,9 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
             "doe_no": r["doe_no"], "run_key": r["run_key"],
             "folder": display_path(root, s["folder_name"], f"{b['dir_rel']}/{r['run_key']}"),
             "values": r["values"], "applied_values": r["applied_values"], "out_of_range": r["out_of_range"] or [],
-            "state": st,
+            "state": st, "gen_category": category_of(r["gen_code"]) if gen_fail else None,  # §6.5 category(GEOM_*만)
             "code": r["gen_code"] if gen_fail else (r["job_failure_code"] if st in ("FAILED", "CANCELED") else None),
-            "message": r["gen_message"] if gen_fail else (r["job_failure_message"] if st in ("FAILED", "CANCELED") else None),
+            "message": (r["gen_message"] or "")[:MAX_MESSAGE] if gen_fail else (r["job_failure_message"] if st in ("FAILED", "CANCELED") else None),
             "job_id": r["predict_job_id"], "responses": r["responses"],
             "media_views": media.get(r["predict_job_id"] or "", []),
         })

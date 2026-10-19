@@ -31,6 +31,8 @@ class Dataset(Resp):
     dataset_display_path: str | None = None
     package_display_path: str | None = None
     curation_id: str | None = None
+    engine: Literal["altair", "native"] | None = None  # geometry-engine.md §7.7: 학습데이터 형상 엔진(null = 모름)
+    engine_version: str | None = None
     created_by_name: str
     created_at: datetime
 
@@ -42,6 +44,7 @@ class Model(Resp):
     version: int
     label: str | None = None
     dataset_id: str | None = None
+    engine: Literal["altair", "native"] | None = None
     source_path: str
     log_status: str
     log_parser: str | None = None

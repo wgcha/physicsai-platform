@@ -42,3 +42,11 @@ def get(conn: Connection, artifact_id: str) -> dict[str, Any] | None:
 def list_for_job(conn: Connection, job_id: str) -> list[dict[str, Any]]:
     q = select(artifacts).where(artifacts.c.job_id == job_id).order_by(artifacts.c.created_at, artifacts.c.id)
     return [row_dict(r) for r in conn.execute(q)]
+
+
+def list_by_prefix(conn: Connection, study_id: str, kind: str, rel_prefix: str) -> list[dict[str, Any]]:
+    """Study의 kind 산출물 중 rel_path가 prefix로 시작하는 것(최신 순) — 세트 폴더 아래 FEATURE_PNG 찾기."""
+    q = select(artifacts).where(artifacts.c.study_id == study_id, artifacts.c.kind == kind,
+                                artifacts.c.rel_path.like(rel_prefix.replace("%", "").replace("_", "\\_") + "%", escape="\\")
+                                ).order_by(artifacts.c.created_at.desc())
+    return [row_dict(r) for r in conn.execute(q)]

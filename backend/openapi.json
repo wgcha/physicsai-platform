@@ -489,6 +489,17 @@
             "title": "Folder",
             "type": "string"
           },
+          "gen_category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gen Category"
+          },
           "job_id": {
             "anyOf": [
               {
@@ -1403,6 +1414,32 @@
             ],
             "title": "Dataset Display Path"
           },
+          "engine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "altair",
+                  "native"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
           "eval_count": {
             "anyOf": [
               {
@@ -1798,6 +1835,17 @@
             "title": "File Count",
             "type": "integer"
           },
+          "has_baseline_inc": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Baseline Inc"
+          },
           "has_eps_mesh": {
             "title": "Has Eps Mesh",
             "type": "boolean"
@@ -1826,21 +1874,7 @@
         "type": "object"
       },
       "DiscoverCad": {
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "rel": {
-            "title": "Rel",
-            "type": "string"
-          }
-        },
-        "required": [
-          "rel",
-          "name"
-        ],
-        "title": "DiscoverCad",
+        "additionalProperties": true,
         "type": "object"
       },
       "DiscoverProblem": {
@@ -3715,6 +3749,21 @@
             ],
             "title": "Dataset Id"
           },
+          "engine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "altair",
+                  "native"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
           "epochs_total": {
             "anyOf": [
               {
@@ -3953,6 +4002,278 @@
           "position"
         ],
         "title": "MoveRequest",
+        "type": "object"
+      },
+      "NativeAccepted": {
+        "description": "native 세트 등록·다시 준비 202 본문 — 진행은 job으로 본다.",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "NativeAccepted",
+        "type": "object"
+      },
+      "NativeFeature": {
+        "properties": {
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "feasible": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feasible"
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal"
+          },
+          "png_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Png Artifact Id"
+          },
+          "ref_locked": {
+            "default": false,
+            "title": "Ref Locked",
+            "type": "boolean"
+          },
+          "ref_provisional": {
+            "default": false,
+            "title": "Ref Provisional",
+            "type": "boolean"
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          },
+          "unit": {
+            "default": "mm",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "NativeFeature",
+        "type": "object"
+      },
+      "NativeFeatures": {
+        "properties": {
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "features": {
+            "items": {
+              "$ref": "#/components/schemas/NativeFeature"
+            },
+            "title": "Features",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/NativeGroup"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/NativeWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "features",
+          "groups",
+          "warnings"
+        ],
+        "title": "NativeFeatures",
+        "type": "object"
+      },
+      "NativeGroup": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "members": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Members",
+            "type": "array"
+          },
+          "parameter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parameter"
+          }
+        },
+        "title": "NativeGroup",
+        "type": "object"
+      },
+      "NativeInfo": {
+        "properties": {
+          "feature_count": {
+            "default": 0,
+            "title": "Feature Count",
+            "type": "integer"
+          },
+          "prep_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prep Reason"
+          },
+          "prep_status": {
+            "enum": [
+              "READY",
+              "STALE",
+              "MISSING"
+            ],
+            "title": "Prep Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "prep_status"
+        ],
+        "title": "NativeInfo",
+        "type": "object"
+      },
+      "NativeWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "feature": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Feature"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "NativeWarning",
         "type": "object"
       },
       "Nearest": {
@@ -4325,6 +4646,50 @@
             ],
             "title": "Display"
           },
+          "engine": {
+            "default": "altair",
+            "enum": [
+              "altair",
+              "native"
+            ],
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "geom_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geom Options"
+          },
+          "geom_options_effective": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geom Options Effective"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -4352,6 +4717,16 @@
               }
             ],
             "title": "Label"
+          },
+          "native": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NativeInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "origin": {
             "default": "FOLDER",
@@ -4470,6 +4845,33 @@
               }
             ]
           },
+          "engine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "altair",
+                  "native"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "geom_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geom Options"
+          },
           "label": {
             "anyOf": [
               {
@@ -4556,6 +4958,21 @@
       "ParamSetDiscoverRequest": {
         "additionalProperties": false,
         "properties": {
+          "engine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "altair",
+                  "native"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
           "path": {
             "maxLength": 400,
             "title": "Path",
@@ -4588,6 +5005,15 @@
             },
             "title": "Cad",
             "type": "array"
+          },
+          "engine": {
+            "default": "altair",
+            "enum": [
+              "altair",
+              "native"
+            ],
+            "title": "Engine",
+            "type": "string"
           },
           "notes": {
             "items": {
@@ -4777,6 +5203,18 @@
       "ParamSetPatch": {
         "additionalProperties": false,
         "properties": {
+          "geom_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geom Options"
+          },
           "label": {
             "anyOf": [
               {
@@ -7126,6 +7564,16 @@
               }
             ]
           },
+          "geometry_native": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "optimize": {
             "$ref": "#/components/schemas/FeatureState"
           },
@@ -7214,6 +7662,38 @@
           "optimize"
         ],
         "title": "StatusFeatures",
+        "type": "object"
+      },
+      "StatusGeometry": {
+        "description": "native 형상 엔진 상태(geometry-engine.md §7.1).",
+        "properties": {
+          "engine_default": {
+            "description": "새 파라미터 세트·추출·DOE의 기본 엔진: altair | native",
+            "title": "Engine Default",
+            "type": "string"
+          },
+          "native_available": {
+            "title": "Native Available",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null",
+            "title": "Reason"
+          }
+        },
+        "required": [
+          "engine_default",
+          "native_available"
+        ],
+        "title": "StatusGeometry",
         "type": "object"
       },
       "StatusHpc": {
@@ -7331,6 +7811,16 @@
             "anyOf": [
               {
                 "$ref": "#/components/schemas/StatusFeatures"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StatusGeometry"
               },
               {
                 "type": "null"
@@ -8664,6 +9154,26 @@
             "title": "Doe Type",
             "type": "string"
           },
+          "engine": {
+            "default": "altair",
+            "enum": [
+              "altair",
+              "native"
+            ],
+            "title": "Engine",
+            "type": "string"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
           "has_run_responses": {
             "title": "Has Run Responses",
             "type": "boolean"
@@ -9055,6 +9565,15 @@
                 "type": "null"
               }
             ]
+          },
+          "engine": {
+            "default": "altair",
+            "enum": [
+              "altair",
+              "native"
+            ],
+            "title": "Engine",
+            "type": "string"
           },
           "extract_job_id": {
             "anyOf": [
@@ -11741,6 +12260,132 @@
         ]
       }
     },
+    "/physicsai/api/param-sets/{ps_id}/features": {
+      "get": {
+        "description": "geometry-engine.md §7.6: 추출된 형상 피처·그룹·경고(하이라이트 PNG artifact id 포함).",
+        "operationId": "native_features_physicsai_api_param_sets__ps_id__features_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeFeatures"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Native Features",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/native-prepare": {
+      "post": {
+        "description": "geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).",
+        "operationId": "native_prepare_physicsai_api_param_sets__ps_id__native_prepare_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAccepted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Native Prepare",
+        "tags": [
+          "param-sets"
+        ]
+      }
+    },
     "/physicsai/api/param-sets/{ps_id}/responses": {
       "put": {
         "description": "템플릿 응답 정의(phase3 §14.6): ⑤ OptResponse H3D 형식. 422 RESPONSE_INVALID·RESPONSE_IN_USE + problems.",
@@ -13645,6 +14290,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeAccepted"
+                }
+              }
+            },
+            "description": "engine=native: 형상 준비 작업이 만들어졌습니다"
           },
           "404": {
             "content": {

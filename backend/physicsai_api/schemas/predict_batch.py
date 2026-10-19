@@ -137,6 +137,7 @@ class BatchRunRow(Resp):
     state: str
     code: str | None = None
     message: str | None = None
+    gen_category: str | None = None  # geometry-engine.md §7.6: code가 GEOM_*면 §6.5 category(CAD_FAILED·QUALITY 등)
     job_id: str | None = None
     responses: dict[str, float | None] | None = None
     media_views: list[str] = []  # phase3 §15 S10: 컨투어 이미지가 있는 방향(GET /jobs/{job_id}/media)

@@ -17,7 +17,7 @@ def test_status_extensions(p2_env):
     assert set(st["features"]) == {"train_extract", "train_tpl", "train_doe", "train_solve", "train_import", "train_resp",
                                    "curation_h3d", "curation_t01", "spdm_import", "optimize", "dataset_create", "evaluate", "predict",
                                    "predict_parametric", "predict_mesh_only", "predict_responses", "contour_capture",
-                                   "optimize_builtin"}
+                                   "optimize_builtin", "geometry_native"}
     assert st["features"]["train_doe"]["enabled"] and st["features"]["train_resp"] == {"enabled": False, "missing": ["commands.response_extract"]}
     assert st["hpc"]["collect_mode"] == "in_place" and st["env_check"] is None
     assert st["limits"]["configured"]["max_multi_execution"] == 8  # ①-3 동시 실행 수 입력 상한(화면 힌트)

@@ -149,6 +149,10 @@ def create_opt_batch(conn: Connection, *, opt: Mapping[str, Any], iter_no: int, 
     }
     if display:  # D3-61 마무리 캡처: 기준안·최적안 같은 범례(fixed)
         params["display"] = dict(display)
+    from .param_sets import get as _get_ps
+
+    if (_get_ps(conn, opt["param_set_id"]) or {}).get("engine") == "native":  # geometry-engine.md §7.7: 워커가 엔진으로 분기
+        params["engine"] = "native"
     result = {"batch_id": batch_id, "batch_no": batch_no, "run_count": len(matrix.rows), "dir_rel": dir_rel}
     job = insert_job(conn, study=study, job_type="PREDICT_BATCH", params=params, user_id=opt["created_by"],
                      user_name=opt["created_by_name"], result=result)

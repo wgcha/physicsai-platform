@@ -8,16 +8,17 @@ import logging
 import os
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from typing import Any
 
 from physicsai_core.childenv import child_env
 from physicsai_core.commands import (
     EXECUTABLE_PLACEHOLDERS,
+    executable_config_name,
     parse_placeholders,
     render_argv,
 )
-from physicsai_core.config import effective_altair
+from physicsai_core.config import effective_executables
 from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories.job_lease import LeaseLost
 from physicsai_core.errors import StepFailure
@@ -34,12 +35,15 @@ class StepProcessMixin:
     `run_fanout`의 `self.run_local` 호출에 그대로 적용된다)."""
 
     # ---- 외부 프로그램 ----
-    def render(self, template_key: str, values: dict[str, str]) -> tuple[list[str], str | None]:
-        """(argv, 실행 파일 altair 키). 실행 파일이 없으면 StepFailure(EXECUTABLE_MISSING)."""
+    def render(self, template_key: str, values: dict[str, str],
+               extra_args: Sequence[str] = ()) -> tuple[list[str], str | None]:
+        """(argv, 실행 파일 설정 키). 실행 파일이 없으면 StepFailure(EXECUTABLE_MISSING).
+        extra_args: argv 끝에 덧붙일 `--옵션 경로` 쌍(예: paicad `--body-map`, geometry-engine.md §7.1)."""
         s = self.settings
         template = getattr(s.commands, template_key)
-        exes = effective_altair(s)
-        argv = render_argv(template_key, template, values, executables=exes, write_files=s.score.write_files)
+        exes = effective_executables(s)
+        argv = render_argv(template_key, template, values, executables=exes, write_files=s.score.write_files,
+                           extra_args=extra_args)
         exe_key = next(
             (EXECUTABLE_PLACEHOLDERS[n] for el in (template or []) if not el.startswith("@")
              for n in parse_placeholders(el) if n in EXECUTABLE_PLACEHOLDERS),
@@ -47,7 +51,7 @@ class StepProcessMixin:
         )
         exe = exes.get(exe_key or "", "") if exe_key else ""
         if not exe or not os.path.isfile(exe):
-            raise StepFailure("EXECUTABLE_MISSING", f"실행 파일이 없습니다: altair.{exe_key} = {exe}")
+            raise StepFailure("EXECUTABLE_MISSING", f"실행 파일이 없습니다: {executable_config_name(exe_key or '')} = {exe}")
         return argv, exe_key
 
     def run_local(
@@ -65,6 +69,7 @@ class StepProcessMixin:
         record_command: bool = True,
         log_errors_fail: bool = True,
         allow_nonzero_exit: bool = False,
+        extra_args: Sequence[str] = (),
     ) -> int:
         """외부 프로그램 1회(제한기 안, shell=False argv).
 
@@ -78,7 +83,7 @@ class StepProcessMixin:
         (phase3 §11.4 GEOM_UPDATE·MESH, 원본 SimLab rc 무시). 메모리 한도 종료는 그대로 RESOURCE_LIMIT.
         """
         s = self.settings
-        argv, _exe_key = self.render(template_key, values)
+        argv, _exe_key = self.render(template_key, values, extra_args)
         if outputs_to_backup:
             self.backup(outputs_to_backup)
         os.makedirs(cwd, exist_ok=True)

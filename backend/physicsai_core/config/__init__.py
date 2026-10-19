@@ -12,7 +12,9 @@ from __future__ import annotations
 from .derived import (  # noqa: F401
     derived_altair_home,
     derived_hstpy_path,
+    derived_paicad_path,
     effective_altair,
+    effective_executables,
     redacted_settings,
 )
 from .loader import (  # noqa: F401
@@ -46,6 +48,7 @@ from .schema import (  # noqa: F401
     StorageCfg,
     WorkerCfg,
 )
+from .schema_geometry import GEOMETRY_ENGINES, GeometryCfg  # noqa: F401
 from .schema_hpc import (  # noqa: F401
     CommandsCfg,
     HpcAdapterCfg,

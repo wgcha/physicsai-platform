@@ -71,6 +71,7 @@ class TrainSetup(Resp):
     used_count: int
     tpl: TrainTpl | None = None
     version: int
+    engine: Literal["altair", "native"] = "altair"  # geometry-engine.md §7.3.1
     updated_by_name: str | None = None
     updated_at: datetime | None = None
 
@@ -115,6 +116,8 @@ class TrainDoe(Resp):
     radioss_assem_source_path: str
     run_count: int | None = None
     sample_status: str
+    engine: Literal["altair", "native"] = "altair"
+    engine_version: str | None = None
     collected_count: int
     solve_failed_count: int
     has_run_responses: bool

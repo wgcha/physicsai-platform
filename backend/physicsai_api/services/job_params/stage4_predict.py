@@ -20,6 +20,7 @@ from physicsai_core.stage4_predict import prepared_input
 from ...context import AppContext
 from ...schemas.contour_capture import CaptureDisplay
 from ..common import study_root
+from ..geometry_gate import check_engine_match, engine_of, native_set_gate
 from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing, require_model_pscfg
 
 
@@ -70,8 +71,13 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise prerequisite_missing("PARAM_SET")
         m = model_for(conn, study, p.model_id)
         require_model_pscfg(cfg, "edspy_predict", m)
+        warnings += check_engine_match(ps, m)
+        native = engine_of(ps) == "native"
         kind = template_kind(ps)
-        require_template_features(cfg, kind)
+        if native:  # geometry-engine.md §7.7: paicad 사용 가능·준비본 READY
+            native_set_gate(ctx, ps)
+        else:
+            require_template_features(cfg, kind)
         values = p.values or {}
         names = [x["name"] for x in ps["parameters"]]
         unknown = [k for k in values if k not in names]
@@ -86,6 +92,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             "value_source": p.value_source, "source_run_key": p.source_run_key,
             "template_kind": kind,  # phase3 §14.4(B8): 서버가 확정 기록 — mesh_only면 MESH SKIPPED·RAD_ASSEMBLE 복사만
         }
+        if native:
+            params["engine"] = "native"  # 워커가 엔진으로 분기(§16)
         return params, {"model_id": m["id"], "param_set_id": ps["id"]}, warnings
     if job_type == "PREDICT_VERIFY":
         av = ctx.hpc.availability()

@@ -26,7 +26,16 @@ EXECUTABLE_PLACEHOLDERS: dict[str, str] = {
     "hstbatch": "hyperstudy_path",
     "hvtrans": "hvtrans_exe_path",
     "hstpy": "hstpy_path",  # 2차(phase2 §8.1): 빈 값이면 hyperstudy_path 폴더의 hstpy.bat로 파생
+    "paicad": "paicad_path",  # native 형상 엔진(geometry-engine.md §7.1): 설정 키는 geometry.paicad_path(빈 값 = 워커 Python 폴더에서 파생)
 }
+# 실행 파일 설정 키의 사용자 표시 이름(오류 문구용). 목록에 없으면 altair.<키>
+EXECUTABLE_CONFIG_NAME: dict[str, str] = {"paicad_path": "geometry.paicad_path"}
+PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version")
+
+
+def executable_config_name(exe_key: str) -> str:
+    return EXECUTABLE_CONFIG_NAME.get(exe_key, f"altair.{exe_key}")
+
 
 EXPANSION_TOKENS = ("@cmd_c", "@write_files", "@hooks_arg")
 
@@ -81,6 +90,24 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
     "hst_optimization": TemplateSpec(frozenset({"hstpy", "launcher"}), frozenset({"@cmd_c"}), False),
 }
 
+# ---- native 형상 엔진(geometry-engine.md §7.1). 모두 required=False, 토큰 없음, 경로 표기 os ----
+_P = frozenset
+_UPD = {"cad_input", "features_json", "values_json", "tag_dir", "options_json", "update_dir"}
+_MORPH = {"baseline_inc", "tag_dir", "features_json", "update_dir", "options_json", "morph_dir"}
+_CHECK = {"baseline_inc", "morph_dir", "update_dir", "tag_dir", "features_json", "values_json", "assem_dir", "renum_csv",
+          "options_json", "check_dir", "out_inc"}
+_NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
+    "paicad_extract": _P({"paicad", "cad_input", "renum_csv", "options_json", "out_dir"}),
+    "paicad_tag": _P({"paicad", "cad_input", "features_json", "baseline_inc", "renum_csv", "assem_dir", "options_json", "out_dir"}),
+    "paicad_update": _P({"paicad"} | _UPD),
+    "paicad_morph": _P({"paicad"} | _MORPH),
+    "paicad_check": _P({"paicad"} | _CHECK),
+    "paicad_run": _P({"paicad"} | _UPD | _MORPH | _CHECK),
+    "paicad_version": _P({"paicad"}),
+}
+for _k, _ph in _NATIVE_PLACEHOLDERS.items():
+    TEMPLATE_SPECS[_k] = TemplateSpec(_ph, frozenset(), False)
+
 PHASE2_TEMPLATE_KEYS = (
     "simlab_extract_params", "hst_gen_radioss", "h3d_preview", "hvtrans_curate", "t01_preview", "t01_curve_export",
     "hst_optimization",
@@ -108,6 +135,13 @@ PATH_STYLE: dict[tuple[str, str], str] = {
     ("response_extract", "extract_tcl"): "fwd",
     ("contour_capture", "capture_tcl"): "fwd",  # phase3 §15: HyperView -tcl 인자('/' 표기)  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
 }
+
+for _k, _ph in _NATIVE_PLACEHOLDERS.items():
+    for _n in _ph - {"paicad"}:
+        PATH_STYLE[(_k, _n)] = "os"  # 모든 paicad 경로 인자는 OS 표기(§7.1)
+
+# {renum_csv}가 없을 때 인자 쌍째 생략하는 (키, placeholder) → 옵션 이름(§7.3.1, 이 키·이 쌍 한정)
+OPTIONAL_PAIRS: dict[tuple[str, str], str] = {("paicad_extract", "renum_csv"): "--renum-csv"}
 
 # phase3 §14.6: commands.response_extract가 이 placeholder를 쓰면 원본 ⑤ m_4 방식(H3D_REQUESTS.txt → RESPONSES.txt)
 RESPONSE_EXTRACT_TCL_PLACEHOLDER = "extract_tcl"
@@ -150,7 +184,10 @@ def validate_template(key: str, template: object) -> list[str]:
         if "@cmd_c" not in spec.tokens:
             problems.append(f"'{key}'에서 @cmd_c는 허용되지 않습니다")
         head_idx = 1
-    if head_idx >= len(elements) or elements[head_idx] not in {f"{{{p}}}" for p in EXECUTABLE_PLACEHOLDERS}:
+    if key in PAICAD_KEYS:
+        if head_idx >= len(elements) or elements[head_idx] != "{paicad}":
+            problems.append(f"'{key}'의 argv[0]은 {{paicad}}여야 합니다")
+    elif head_idx >= len(elements) or elements[head_idx] not in {f"{{{p}}}" for p in EXECUTABLE_PLACEHOLDERS if p != "paicad"}:
         problems.append(f"'{key}'의 argv[0]은 {{edspy}} {{simlab}} {{hw}} {{hstbatch}} {{hvtrans}} {{hstpy}} 중 하나여야 합니다")
     for i, el in enumerate(elements):
         if el.startswith("@"):
@@ -169,6 +206,8 @@ def validate_template(key: str, template: object) -> list[str]:
         for n in names:
             if n not in spec.placeholders:
                 problems.append(f"'{key}'에서 placeholder '{{{n}}}'은 허용되지 않습니다")
+            if n == "paicad" and key not in PAICAD_KEYS:
+                problems.append(f"'{key}'에서 {{paicad}}는 쓸 수 없습니다(paicad_* 명령 전용)")
             if n in EXECUTABLE_PLACEHOLDERS and i != head_idx:
                 problems.append(f"'{key}'에서 실행 파일 placeholder '{{{n}}}'은 argv[0]에만 쓸 수 있습니다")
         if _CONTROL_RE.search(el):
@@ -255,10 +294,12 @@ def render_argv(
     write_files: bool = False,
     is_windows: bool | None = None,
     environ: Mapping[str, str] | None = None,
+    extra_args: Sequence[str] = (),
 ) -> list[str]:
     """템플릿을 argv 목록으로 펼친다.
 
-    values: 템플릿 키별 허용 placeholder 값(경로 등). executables: altair 설정 키 → 경로.
+    values: 템플릿 키별 허용 placeholder 값(경로 등). executables: 실행 파일 설정 키(altair 키·paicad_path) → 경로.
+    extra_args: argv 끝에 덧붙일 요소(값 검사 동일) — `["--body-map", <경로>]`(geometry-engine.md §7.1, 템플릿 밖).
     """
     if template is None:
         raise StepFailure("TEMPLATE_NOT_CONFIGURED", f"명령 템플릿 '{key}'이 설정되지 않았습니다")
@@ -276,7 +317,18 @@ def render_argv(
                 via_cmd = via_cmd or exe0.endswith(BAT_EXTENSIONS)
         break
     argv: list[str] = []
-    for el in template:
+    skip_next = False
+    tpl = list(template)
+    for idx, el in enumerate(tpl):
+        if skip_next:
+            skip_next = False
+            continue
+        nxt = tpl[idx + 1] if idx + 1 < len(tpl) else ""
+        for (okey, oname), flag in OPTIONAL_PAIRS.items():  # 값 없는 선택 인자 쌍 생략(이 키·이 쌍 한정)
+            if okey == key and el == flag and nxt == "{" + oname + "}" and not values.get(oname):
+                skip_next = True
+        if skip_next:
+            continue
         if el == "@cmd_c":
             argv.extend(cmd_c_prefix(is_windows, environ))
             continue
@@ -293,7 +345,7 @@ def render_argv(
                 exe = executables.get(EXECUTABLE_PLACEHOLDERS[n]) or ""
                 if not exe:
                     raise StepFailure(
-                        "EXECUTABLE_MISSING", f"실행 파일 설정 altair.{EXECUTABLE_PLACEHOLDERS[n]}이 비어 있습니다"
+                        "EXECUTABLE_MISSING", f"실행 파일 설정 {executable_config_name(EXECUTABLE_PLACEHOLDERS[n])}이 비어 있습니다"
                     )
                 check_value(n, exe, allow_space=True)
                 # phase2 §2.3: Windows에서 argv[0]은 '\\' 구분자(hvtrans는 '/' 경로면 리더를 못 찾음)
@@ -307,4 +359,11 @@ def render_argv(
                 check_value(n, v, allow_space=False, via_cmd=via_cmd)
                 mapping[n] = v
         argv.append(el.format_map(mapping) if names or ("{{" in el or "}}" in el) else el)
+    for x in extra_args:
+        if x.startswith("--"):
+            argv.append(x)  # 옵션 이름(코드 상수)
+            continue
+        v = os_path(x, is_windows)
+        check_value("extra_arg", v, allow_space=False, via_cmd=via_cmd)
+        argv.append(v)
     return argv

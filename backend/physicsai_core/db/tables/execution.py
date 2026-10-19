@@ -64,7 +64,7 @@ artifacts = Table(
     Column("meta", JSONB, nullable=True),  # phase3 §15 컨투어 캡처 방향 {view}(0008_contour_capture)
     CheckConstraint(
         "kind IN ('PREVIEW_JSON','PREVIEW_IMAGE','CURVE_JSON','RESPONSE_TABLE','SCORE_FILE','PACKAGE_COMMANDS','SPLIT_JSON',"
-        "'CURATION_CFG','FILE_LIST','DOE_SAMPLES','RUN_CONFIG','OPT_SUMMARY','OPT_FILE','CONTOUR_IMAGE','CONTOUR_VIDEO')",
+        "'CURATION_CFG','FILE_LIST','DOE_SAMPLES','RUN_CONFIG','OPT_SUMMARY','OPT_FILE','CONTOUR_IMAGE','CONTOUR_VIDEO','FEATURE_PNG')",
         name="ck_artifacts_kind",
     ),
 )

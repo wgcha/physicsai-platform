@@ -105,7 +105,7 @@ def dataset_out(d: dict[str, Any], study: dict[str, Any] | None = None, ai_root:
         "eval_count": d["eval_count"], "holdout_ratio": float(d["holdout_ratio"]), "seed": d["seed"],
         "split_group": d["split_group"], "options": d["options_json"] or {}, "package_ready": d["package_rel"] is not None,
         "package_rel": d["package_rel"], "created_by_name": d["created_by_name"], "created_at": d["created_at"],
-        "curation_id": d.get("curation_id"),
+        "curation_id": d.get("curation_id"), "engine": d.get("engine"), "engine_version": d.get("engine_version"),
     }
 
 
@@ -115,7 +115,7 @@ def model_out(m: dict[str, Any], final_model_id: str | None, *, with_curve: bool
     return {
         "stored_display_path": display_path(ai_root or study["ai_root_snapshot"], study["folder_name"], m["stored_rel"]) if study else None,
         "id": m["id"], "study_id": m["study_id"], "name": m["name"], "version": m["version"], "label": m["label"],
-        "dataset_id": m["dataset_id"], "source_path": m["source_path"], "log_status": m["log_status"],
+        "dataset_id": m["dataset_id"], "engine": m.get("engine"), "source_path": m["source_path"], "log_status": m["log_status"],
         "log_parser": m["log_parser"], "epochs_total": m["epochs_total"], "last_epoch": m["last_epoch"],
         "final_loss": m["final_loss"], "min_loss": m["min_loss"], "min_loss_epoch": m["min_loss_epoch"],
         "loss_curve": curve if with_curve else None, "curve_points": len(curve or []),
@@ -134,7 +134,8 @@ def param_set_out(p: dict[str, Any]) -> dict[str, Any]:
         "registered_by_name": p["registered_by_name"], "registered_at": p["registered_at"],
         "origin": p.get("origin") or "FOLDER", "train_doe_id": p.get("train_doe_id"), "label": p.get("label"),
         "input_kind": p.get("input_kind") or "assembly", "assem_rel": p.get("assem_rel"), "warnings": [],
-        "display": p.get("display"),
+        "display": p.get("display"), "engine": p.get("engine") or "altair", "geom_options": p.get("geom_options"),
+        "engine_version": p.get("engine_version"),
     }
 
 
@@ -165,8 +166,9 @@ def current_step_key(j: dict[str, Any]) -> str | None:
 def job_summary(j: dict[str, Any], study_title: str | None, position: int | None,
                 hpc_summary: dict[str, int] | None = None) -> dict[str, Any]:
     key = current_step_key(j)
+    eng = j["params"].get("engine") if isinstance(j.get("params"), dict) else None  # geometry-engine.md §7.3: native면 step 이름을 덮어쓴다
     return {
-        "stage_label": stage_label(j["job_type"]), "current_step_key": key, "current_step_label": step_label(key),
+        "stage_label": stage_label(j["job_type"]), "current_step_key": key, "current_step_label": step_label(key, eng),
         "hpc_summary": hpc_summary, "attention_code": j.get("attention_code"),
         "id": j["id"], "study_id": j["study_id"], "project_id": j["project_id"], "study_title": study_title,
         "job_type": j["job_type"], "stage": j["stage"], "lane": j["lane"], "state": j["state"],

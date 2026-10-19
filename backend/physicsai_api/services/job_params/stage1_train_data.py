@@ -19,16 +19,19 @@ from physicsai_core.stage1_train_data.train_tpl import tpl_params_snapshot
 from ...context import AppContext
 from ..path_inspect import starters_in
 from .base import HpcOverrides, _P, invalid_at, prerequisite_missing
+from .stage1_native import native_doe_gen, native_extract_params
 
 
 class TdExtractParams(_P):
     cad_path: str = Field(max_length=400)
+    engine: Literal["altair", "native"] | None = None  # geometry-engine.md §7.3.1: 생략 = geometry.engine 기본값, 서버가 params.engine에 기록
 
 
 class TdDoeGenParams(_P):
     doe_label: str = Field(max_length=120)
     num_runs: int | None = Field(default=None, ge=2)
     options: dict[str, Any] = Field(default_factory=dict)
+    seed: int | None = Field(default=None, ge=0)  # native LHS 전용(§7.3.3). altair는 쓸 수 없다
     multi_execution: int = Field(default=1, ge=1)
     radioss_assem_path: str = Field(max_length=400)
 
@@ -83,6 +86,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     """사전조건 확인(§8.2) → (저장할 params, 초기 result, warnings). 기능 확인(check_feature)은 디스패처가 먼저 한다."""
     cfg = ctx.settings
     sid = study["id"]
+    if job_type == "TD_EXTRACT_PARAMS" and (p.engine or cfg.geometry.engine) == "native":
+        return native_extract_params(ctx, p)
     if job_type == "TD_EXTRACT_PARAMS":
         cp = check_user_path(p.cad_path, allowed_roots(cfg, imports=True), expect="file")
         if os.path.splitext(cp.path)[1].lower() not in [e.lower() for e in cfg.train_data.cad_extensions]:
@@ -90,6 +95,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         return {"cad_path": cp.path}, None, []
     if job_type == "TD_DOE_GEN":
         setup = train_repo.get_setup(conn, sid)
+        if setup is not None and setup.get("engine") == "native":
+            return native_doe_gen(ctx, setup, p)
+        if p.seed is not None:
+            raise invalid_at("seed", "seed는 native 형상 엔진 DOE에서만 쓸 수 있습니다")
         if setup is None or not setup.get("tpl_rel"):
             raise DomainError("TPL_REQUIRED", "tpl을 먼저 생성하세요(①-2)", status=409)
         if tpl_is_stale(setup):
@@ -165,12 +174,13 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
             "created_by_name": principal.display_name}
     if job_type == "TD_DOE_GEN":
         did = params["doe_id"]
+        native = {"engine": "native", "options": {"seed": params["seed"]}} if params.get("engine") == "native" else {}
         train_repo.insert_doe(conn, {
             **base, "id": did, "doe_label": params["doe_label"], "doe_type": params["doe_type"],
             "num_runs_requested": params["num_runs"], "options": params["options"],
             "multi_execution": params["multi_execution"], "radioss_assem_source_path": params["radioss_assem_path"],
             "dir_rel": f"01_train/doe/{did}/", "assem_rel": f"01_train/radioss_assem/{did}/", "status": "BUILDING",
-            "sample_status": "PENDING",
+            "sample_status": "PENDING", **native,
         })
 
 

@@ -34,7 +34,7 @@ def _job(c, sid: str, params: dict, seq: int) -> str:
 def test_migration_0010_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0011_surrogate_final"
+    assert MIGRATION_HEAD == "0012_geometry_engine"
     name = f"physicsai_m10_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -51,7 +51,7 @@ def test_migration_0010_roundtrip(pg_server):
         _alembic(url, "0010_surrogate_opt")
         _alembic(url, "0011_surrogate_final")  # D3-61 마무리 캡처(FINALIZING·FINAL·final 열)
         with eng.begin() as c:
-            assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
+            assert c.execute(text("select version_num from alembic_version")).scalar() == "0011_surrogate_final"
             assert c.execute(text("select state from jobs where id=:i"), {"i": j_old}).scalar() == "QUEUED"
             # 최적화 소유 배치는 수동 배치와 함께 대기 가능
             _job(c, sid, {"batch_id": "b1", "surrogate_opt": {"id": "o", "opt_no": 1, "iter_no": 0}}, 2)

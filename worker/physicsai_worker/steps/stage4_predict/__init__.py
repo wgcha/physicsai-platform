@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from . import batch, capture, predict, verify
+from . import batch, capture, param_set_native, predict, verify
 
 HANDLERS: dict[tuple[str, str], Callable[[Any], None]] = {}
-for _mod in (predict, verify, batch, capture):
+for _mod in (predict, verify, batch, capture, param_set_native):
     HANDLERS.update(_mod.HANDLERS)

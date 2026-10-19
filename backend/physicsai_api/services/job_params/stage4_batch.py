@@ -25,6 +25,7 @@ from ...schemas.contour_capture import BatchCaptureOptions, CaptureDisplay
 from ...schemas.predict_batch import BatchSource
 from ..common import study_root
 from .base import _P, invalid_at, prerequisite_missing, require_model_pscfg
+from ..geometry_gate import check_engine_match, engine_of, native_set_gate
 from .stage4_predict import model_for, require_template_features, template_kind
 
 
@@ -85,10 +86,15 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     if job_type != "PREDICT_BATCH":
         raise invalid_at("job_type", "unknown")
     ps = resolve_param_set(conn, study, p.param_set_id)
+    native = engine_of(ps) == "native"
     kind = template_kind(ps)
-    require_template_features(cfg, kind)
     m = model_for(conn, study, p.model_id)
     require_model_pscfg(cfg, "edspy_predict", m)
+    warnings = check_engine_match(ps, m)
+    if native:  # geometry-engine.md §7.7
+        native_set_gate(ctx, ps)
+    else:
+        require_template_features(cfg, kind)
     cap = cfg.train_data.max_multi_execution
     if p.multi_execution > cap:
         raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
@@ -106,8 +112,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     }
     _PENDING.set({"batch_id": batch_id, "matrix": matrix, "dir_rel": dir_rel,
                   "simlab_mesh_name": cfg.predict.simlab_mesh_name})
+    if native:
+        params["engine"] = "native"
     result = {"batch_id": batch_id, "batch_no": batch_no, "run_count": len(matrix.rows), "dir_rel": dir_rel}
-    return params, result, []
+    return params, result, warnings
 
 
 def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str, job_id: str, params: dict[str, Any],

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, Query, Request, Response
+from fastapi.responses import JSONResponse
 
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..services import param_set_native_api as native_svc
 from ..services import param_set_responses as resp_svc
 from ..services import stage4_predict as svc
 
@@ -12,10 +14,14 @@ router = APIRouter(tags=["param-sets"])
 ERR = {404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse}, 422: {"model": S.ErrorResponse}}
 
 
-@router.post("/studies/{study_id}/param-sets", response_model=S.ParamSet, status_code=201, responses=ERR)
+@router.post("/studies/{study_id}/param-sets", response_model=S.ParamSet, status_code=201,
+             responses={**ERR, 202: {"model": S.NativeAccepted, "description": "engine=native: 형상 준비 작업이 만들어졌습니다"}})
 def register(study_id: str, body: S.ParamSetCreate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     """§15.4 폴더 등록. mode="discover"면 프로젝트 폴더에서 자동 구성(phase3 §13 S8)."""
-    return svc.register_param_set(get_ctx(request), principal, study_id, body, request_id(request), client_ip(request))
+    out = svc.register_param_set(get_ctx(request), principal, study_id, body, request_id(request), client_ip(request))
+    if "job_id" in out and "id" not in out:  # engine=native: 202 {job_id}(geometry-engine.md §7.4)
+        return JSONResponse(out, status_code=202)  # type: ignore[return-value]
+    return out
 
 
 @router.post("/studies/{study_id}/param-sets/discover", response_model=S.ParamSetDiscoverResponse, responses=ERR)
@@ -66,3 +72,15 @@ def samples(ps_id: str, request: Request, limit: int | None = Query(default=None
 @router.post("/studies/{study_id}/predict/check", response_model=S.PredictCheckResponse, responses=ERR)
 def predict_check(study_id: str, body: S.PredictCheckRequest, request: Request, _p: Principal = Depends(get_principal)) -> dict:
     return svc.predict_check(get_ctx(request), study_id, body.param_set_id, body.values)
+
+
+@router.post("/param-sets/{ps_id}/native-prepare", response_model=S.NativeAccepted, status_code=202, responses=ERR)
+def native_prepare(ps_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후)."""
+    return native_svc.prepare_native(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))
+
+
+@router.get("/param-sets/{ps_id}/features", response_model=S.NativeFeatures, responses=ERR)
+def native_features(ps_id: str, request: Request, _p: Principal = Depends(get_principal)) -> dict:
+    """geometry-engine.md §7.6: 추출된 형상 피처·그룹·경고(하이라이트 PNG artifact id 포함)."""
+    return native_svc.features(get_ctx(request), ps_id)

@@ -262,6 +262,7 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
         if sf and not is_abs_path_str(sf):
             add("hpc.scx.secret_file", "절대경로여야 합니다(빈 값 = <런타임>/secrets/scx_relay_key)")
 
+    _validate_geometry(s, issues)
     _validate_phase2(s, issues)
     _validate_phase3(s, issues)
     _validate_surrogate_opt(s, issues)
@@ -297,3 +298,35 @@ def _validate_surrogate_opt(s: Settings, issues: list[ConfigIssue]) -> None:
         issues.append(ConfigIssue("surrogate_opt.default_surrogate", "gp | rbf"))
     if not _SO_DIR_RE.fullmatch(so.dir_name) or so.dir_name.split("/")[0].casefold() in ("_platform", "_backup"):
         issues.append(ConfigIssue("surrogate_opt.dir_name", "Study 기준 상대 폴더(영숫자·_·-, '/' 구분, 4단계 이내)"))
+
+
+def _validate_geometry(s: Settings, issues: list[ConfigIssue]) -> None:
+    """`geometry` 절(geometry-engine.md §7.1): 엔진 이름·경로·확장자·진행 정규식·타임아웃·환경변수·기본 옵션 범위."""
+    from ..geometry.options import effective_options
+    from .schema_geometry import GEOMETRY_ENGINES, GEOMETRY_TIMEOUT_KEYS
+
+    g = s.geometry
+    add = lambda k, m: issues.append(ConfigIssue(k, m))  # noqa: E731
+    if g.engine not in GEOMETRY_ENGINES:
+        add("geometry.engine", "altair | native")
+    if g.paicad_path:
+        if not is_abs_path_str(g.paicad_path):
+            add("geometry.paicad_path", "절대경로여야 합니다(빈 값 = 워커 Python 폴더에서 파생)")
+        elif s.profile == "prod" and not os.path.isfile(g.paicad_path):
+            add("geometry.paicad_path", f"실행 파일이 없습니다: {g.paicad_path}")
+    if not g.step_extensions or not all(re.fullmatch(r"\.[A-Za-z0-9]{1,8}", e) for e in g.step_extensions):
+        add("geometry.step_extensions", "'.'으로 시작하는 확장자 1개 이상(예: .step)")
+    if g.max_report_bytes < 1024:
+        add("geometry.max_report_bytes", "1024 이상")
+    _compile("geometry.progress_regex", g.progress_regex, issues, ("pct", "msg"))
+    for k, v in g.timeout_s.items():
+        if k not in GEOMETRY_TIMEOUT_KEYS:
+            add(f"geometry.timeout_s.{k}", "extract | tag | update | morph | check | run")
+        elif v is not None and v <= 0:
+            add(f"geometry.timeout_s.{k}", "양수 또는 null(없음)")
+    for k, v in g.env.items():
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", k) or not isinstance(v, str) or "\x00" in v:
+            add("geometry.env", f"환경변수 이름·값 형식 오류: {k}")
+    _opts, problems = effective_options(g.defaults, None)
+    for p in problems:
+        add("geometry.defaults", f"{p['key']}: {p['message']}")

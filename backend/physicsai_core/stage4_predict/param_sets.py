@@ -18,8 +18,16 @@ from .prepared_input import is_mesh_file
 
 
 def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, starter_glob: str,
-                    renum_csv_name: str | None = None, allow_mesh_only: bool = True) -> ParamSetFolder:
-    """§15.4 폴더 검증. phase3 §14.4: `radioss_assem/`이 없으면 mesh_only(allow_mesh_only=False면 ASSEM_MISSING — ①→④)."""
+                    renum_csv_name: str | None = None, allow_mesh_only: bool = True, engine: str = "altair",
+                    baseline_inc_name: str = "", step_extensions: list[str] | None = None) -> ParamSetFolder:
+    """§15.4 폴더 검증. phase3 §14.4: `radioss_assem/`이 없으면 mesh_only(allow_mesh_only=False면 ASSEM_MISSING — ①→④).
+    engine="native"(geometry-engine.md §7.4): tpl 검사 없이 STEP·기준본·RENUM csv·준비본(native/)을 검사(param_set_native)."""
+    if engine == "native":
+        from .param_set_native import validate_native_folder
+
+        return validate_native_folder(folder, max_total_bytes=max_total_bytes, starter_glob=starter_glob,
+                                      renum_csv_name=renum_csv_name or "", baseline_inc_name=baseline_inc_name,
+                                      step_extensions=step_extensions or [".step", ".stp"])
     f = ParamSetFolder()
     total = 0
     for dirpath, dirnames, filenames in os.walk(folder, followlinks=False):

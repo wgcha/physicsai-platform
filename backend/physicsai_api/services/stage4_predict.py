@@ -21,6 +21,7 @@ from physicsai_core.stage4_predict import param_sets as ps_mod
 
 from ..auth import Principal
 from ..context import AppContext
+from . import param_set_native_api as native_api
 from .common import (
     audit,
     clamp_limit,
@@ -92,6 +93,9 @@ def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: 
 
 
 def register_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
+    if native_api.wants_native(ctx, body):  # geometry-engine.md §7.3.4: 202 {job_id}
+        _require_active_power(ctx, principal, study_id)
+        return native_api.register_native(ctx, principal, study_id, body, _label(body.label), rid, ip)
     if getattr(body, "mode", None) == "discover":
         return register_param_set_discovered(ctx, principal, study_id, body, rid, ip)
     if body.choice is not None:
@@ -119,8 +123,10 @@ def discover_param_set(ctx: AppContext, principal: Principal, study_id: str, bod
     with ctx.engine.connect() as conn:
         s = studies_repo.require(conn, study_id)
     require_power(principal, s["project_id"])
+    if native_api.wants_native(ctx, body, discover=True):
+        return native_api.discover_native_out(ctx, body.path)
     cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
-    return disc_mod.discover(cp.path, ctx.settings, tpl=body.tpl).out()
+    return {**disc_mod.discover(cp.path, ctx.settings, tpl=body.tpl).out(), "engine": "altair"}
 
 
 def register_param_set_discovered(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str,
@@ -177,8 +183,10 @@ def patch_param_set(ctx: AppContext, principal: Principal, ps_id: str, body: Any
             lab = _label(body.label)
             ps_repo.set_label(conn, ps_id, lab)
             audit(conn, principal, "PARAM_SET_UPDATE", "param_set", ps_id, {"label": lab}, rid, ip)
+        if "geom_options" in body.model_fields_set:
+            native_api.patch_geom_options(ctx, conn, principal, p, body.geom_options, rid, ip)
         p = _require_param_set(conn, ps_id)
-    return param_set_out(p)
+    return native_api.enrich(ctx, p, param_set_out(p))
 
 
 def list_param_sets(ctx: AppContext, study_id: str, limit: int | None, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
@@ -186,7 +194,7 @@ def list_param_sets(ctx: AppContext, study_id: str, limit: int | None, cursor: s
     with ctx.engine.connect() as conn:
         studies_repo.require(conn, study_id)
         rows = ps_repo.list_for_study(conn, study_id, lim + 1, off)
-    return [param_set_out(p) for p in rows[:lim]], (encode_cursor(off + lim) if len(rows) > lim else None)
+    return [native_api.enrich(ctx, p, param_set_out(p)) for p in rows[:lim]], (encode_cursor(off + lim) if len(rows) > lim else None)
 
 
 def _require_param_set(conn: Any, ps_id: str) -> dict[str, Any]:
@@ -198,7 +206,8 @@ def _require_param_set(conn: Any, ps_id: str) -> dict[str, Any]:
 
 def get_param_set(ctx: AppContext, ps_id: str) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
-        return param_set_out(_require_param_set(conn, ps_id))
+        p = _require_param_set(conn, ps_id)
+    return native_api.enrich(ctx, p, param_set_out(p))
 
 
 def _load_samples(ctx: AppContext, conn: Any, p: dict[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
@@ -273,6 +282,8 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
         keys = {r["run_key"] for r in runs}
     root = study_root(ctx, s)
     D = resolve_in_study(root, d["dir_rel"])
+    if d.get("engine") == "native":  # geometry-engine.md §7.3.4: tpl·샘플 없이 준비본 복사
+        return native_api.from_train(ctx, principal, s, d, D, label, body, rid, ip)
     tmp_id = str(uuid.uuid4())
     A = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}")
     os.makedirs(A)

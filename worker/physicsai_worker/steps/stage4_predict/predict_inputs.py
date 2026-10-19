@@ -122,6 +122,11 @@ def geom_update(ctx: Any) -> None:
     """GEOM_UPDATE: SimLab `-auto <렌더 .py> -nographics`(cwd P/geom). 성공 = P/geom/{simlab_mesh_name}."""
     if is_prepared(ctx):
         raise StepSkipped(PREPARED_SKIP)
+    ps0, S0 = param_set(ctx)
+    if (ps0 or {}).get("engine") == "native":  # geometry-engine.md §7.3.5: 엔진 분기가 먼저(geom_update 설정 무관)
+        from . import predict_native
+
+        return predict_native.geom_update(ctx, S0)  # type: ignore[arg-type]
     if ctx.settings.commands.geom_update is None:
         raise StepFailure("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다")
     ps, S = require_param_set(ctx)
@@ -167,6 +172,10 @@ def mesh(ctx: Any) -> None:
     if is_prepared(ctx):
         raise StepSkipped(PREPARED_SKIP)
     ps, S = require_param_set(ctx)
+    if ps.get("engine") == "native":
+        from . import predict_native
+
+        return predict_native.mesh(ctx, S)
     if template_kind(ctx, ps) == MESH_ONLY:  # phase3 §14.4: commands.mesh 설정과 무관
         raise StepSkipped(MESH_ONLY_SKIP)
     if ctx.settings.commands.mesh is None:

@@ -53,5 +53,6 @@ def test_all_routes_prefixed():
         # 3차(phase3 §18.6 S13 내장 최적화, D3-60)
         "/studies/{study_id}/surrogate-opts/preview", "/studies/{study_id}/surrogate-opts", "/surrogate-opts/{opt_id}",
         "/surrogate-opts/{opt_id}/runs.csv", "/surrogate-opts/{opt_id}/cancel", "/surrogate-opts/{opt_id}/resume",
+            "/param-sets/{ps_id}/native-prepare", "/param-sets/{ps_id}/features",  # geometry-engine.md §7.6
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

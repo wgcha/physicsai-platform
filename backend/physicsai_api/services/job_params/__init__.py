@@ -17,6 +17,7 @@ from . import (
     stage3_model,
     stage4_batch,
     stage4_capture,
+    stage4_native,
     stage4_predict,
     stage5_optimize,
     study_manage,
@@ -24,7 +25,7 @@ from . import (
 from .base import check_feature, invalid_errors
 
 _STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage4_batch, stage1_train_data, stage2_curation,
-                                  stage5_optimize, study_manage, stage4_capture)
+                                  stage5_optimize, study_manage, stage4_capture, stage4_native)
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {jt: m for mod in _STAGES for jt, m in mod.PARAM_MODELS.items()}
 _STAGE_OF: dict[str, ModuleType] = {jt: mod for mod in _STAGES for jt in mod.PARAM_MODELS}
@@ -37,10 +38,29 @@ def parse_params(job_type: str, params: dict[str, Any]) -> Any:
         raise invalid_errors([{"loc": ["params", *e["loc"]], "msg": e["msg"]} for e in exc.errors()]) from None
 
 
+def _feature_type(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any) -> str | None:
+    """native 세트의 일괄 예측은 geom_update 대신 paicad가 형상을 만들므로 단건 예측과 같은 기능 조건(geometry-engine.md §7.7)."""
+    if job_type in ("TD_EXTRACT_PARAMS", "TD_DOE_GEN"):  # native는 prepare가 자체 게이트(paicad 사용 가능)를 한다
+        from physicsai_core.db.repositories import train as train_repo
+
+        if job_type == "TD_EXTRACT_PARAMS":
+            return None if (getattr(p, "engine", None) or ctx.settings.geometry.engine) == "native" else job_type
+        setup = train_repo.get_setup(conn, study["id"])
+        return None if setup is not None and setup.get("engine") == "native" else job_type
+    if job_type != "PREDICT_BATCH":
+        return job_type
+    from physicsai_core.db.repositories import param_sets as ps_repo
+
+    ps = ps_repo.get(conn, p.param_set_id) if p.param_set_id else ps_repo.current(conn, study["id"])
+    return "PREDICT" if ps is not None and ps.get("engine") == "native" else job_type
+
+
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
             ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     """사전조건 확인(§8.2) → (저장할 params, 초기 result, warnings). 템플릿·자원 기능 확인이 먼저(409)."""
-    check_feature(ctx, job_type)
+    ft = _feature_type(ctx, conn, study, job_type, p)
+    if ft is not None:
+        check_feature(ctx, ft)
     mod = _STAGE_OF.get(job_type)
     if mod is None:
         raise invalid_errors([{"loc": ["job_type"], "msg": "unknown"}])

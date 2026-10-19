@@ -8,6 +8,7 @@ from pydantic import Field
 
 from ._model import _M
 from .schema_capture import CaptureCfg
+from .schema_geometry import GeometryCfg
 from .schema_hpc import CommandsCfg, HpcCfg
 from .schema_ops import (
     DEFAULT_LOG_ERROR_PATTERNS,
@@ -171,6 +172,7 @@ class Settings(_M):
     predict: PredictCfg = Field(default_factory=PredictCfg)
     predict_batch: PredictBatchCfg = Field(default_factory=PredictBatchCfg)
     capture: CaptureCfg = Field(default_factory=CaptureCfg)
+    geometry: GeometryCfg = Field(default_factory=GeometryCfg)  # native 형상 엔진(geometry-engine.md §7.1)
     commands: CommandsCfg = Field(default_factory=CommandsCfg)
     train_data: TrainDataCfg = Field(default_factory=TrainDataCfg)
     curation: CurationCfg = Field(default_factory=CurationCfg)

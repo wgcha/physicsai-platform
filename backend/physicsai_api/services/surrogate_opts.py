@@ -25,6 +25,7 @@ from physicsai_core.stage5_optimize.surrogate import dataset as ds
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, require_config_ok, require_power, study_root
+from .geometry_gate import check_engine_match, engine_of, native_set_gate
 from .job_params.stage4_batch import resolve_param_set
 from .job_params.stage4_predict import model_for, require_template_features, template_kind
 from .job_params.study_manage import study_gate
@@ -112,8 +113,12 @@ def _normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> 
     require_feature(ctx)
     ps = resolve_param_set(conn, study, body.param_set_id)
     kind = template_kind(ps)
-    require_template_features(cfg, kind)
     m = model_for(conn, study, body.model_id)
+    check_engine_match(ps, m)
+    if engine_of(ps) == "native":
+        native_set_gate(ctx, ps)
+    else:
+        require_template_features(cfg, kind)
     problems: list[dict[str, Any]] = []
     params = list(ps["parameters"])
     names = [str(p["name"]) for p in params]

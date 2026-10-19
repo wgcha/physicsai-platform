@@ -16,6 +16,7 @@ from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_
 from ...context import AppContext
 from ..common import study_root
 from ..path_inspect import inspect_model_folder
+from .dataset_engine import detect as detect_engine
 from .base import _P, invalid_errors, prerequisite_missing, require_model_pscfg
 
 MODEL_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_]{0,63}$")
@@ -89,7 +90,11 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             "split_group": p.split_group or cfg.dataset.split_group,
             "options": opts,
         }
-        return params, {"dataset_id": str(uuid.uuid4())}, warnings
+        engine, engine_version, ew = detect_engine(ctx, conn, study, cp.path)  # geometry-engine.md §7.7
+        result = {"dataset_id": str(uuid.uuid4())}
+        if engine is not None:
+            result.update({"engine": engine, "engine_version": engine_version})
+        return params, result, warnings + ew
     if job_type == "PACKAGE_EXPORT":
         d = datasets_repo.get(conn, p.dataset_id)
         if d is None or d["study_id"] != sid or d["status"] != "READY":
@@ -135,6 +140,7 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
             "holdout_ratio": params["holdout_ratio"], "seed": params["seed"], "split_group": params["split_group"],
             "options_json": params["options"], "status": "BUILDING", "created_by": principal.user_id,
             "created_by_name": principal.display_name,
+            "engine": (result or {}).get("engine"), "engine_version": (result or {}).get("engine_version"),
             "split_rel": f"03_dataset/{ds_id}/split.json",
             "train_psdata_rel": f"03_dataset/{ds_id}/train/dataset.psdata",
             "eval_psdata_rel": f"03_dataset/{ds_id}/eval/dataset.psdata",

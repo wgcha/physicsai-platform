@@ -21,8 +21,6 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json, write_text
 from physicsai_core.naming import TPL_NAME
-from physicsai_core.paths import PathError
-from physicsai_core.stage4_predict import prepared_input
 from physicsai_core.stage4_predict.batch_matrix import (
     BatchRow,
     batch_label,
@@ -32,6 +30,7 @@ from physicsai_core.tpl_render import render_tpl
 
 from ...signals import StepSkipped
 from ..common import hst_run_label, load_model, verify_model_integrity
+from . import batch_native
 from .predict_inputs import (
     LOG_BATCH,
     MESH_ONLY,
@@ -85,6 +84,8 @@ def bp_prep(ctx: Any) -> None:
     m = load_model(ctx, b["model_id"])
     verify_model_integrity(ctx, m)
     ps, S = _param_set(ctx, b)
+    if ps.get("engine") == "native":  # geometry-engine.md §7.3.7
+        return batch_native.bp_prep(ctx, b, m, ps, S, _B(ctx, b))
     needs = [TPL_NAME, os.path.join("cad", ps["cad_file_name"])]
     if b["input_kind"] != MESH_ONLY:
         if not ps.get("starter_name"):
@@ -141,6 +142,8 @@ def bp_prep(ctx: Any) -> None:
 def _gen_one(ctx: Any, b: dict[str, Any], ps: dict[str, Any], S: str, B: str) -> Callable[[Any, dict[str, Any]], None]:
     """run 1개 입력 생성(작업 스레드에서 실행). 실패는 StepFailure로 — run_parallel이 그 run만 실패로 기록."""
     s = ctx.settings
+    if ps.get("engine") == "native":
+        return batch_native.gen_one(ctx, b, S, B)
     pr = s.predict
     assembly = b["input_kind"] != MESH_ONLY
     assem = os.path.join(S, "radioss_assem")
@@ -190,15 +193,7 @@ def _gen_one(ctx: Any, b: dict[str, Any], ps: dict[str, Any], S: str, B: str) ->
             for w in warns:
                 runner.warn(*w)
             input_path = m3
-        # 하위 PREDICT(prepared)가 PR_PREP에서 다시 하는 검사를 여기서 먼저(실패면 생성 실패로)
-        try:
-            cp = prepared_input.check_path(input_path, s)
-        except PathError as exc:
-            raise StepFailure("INPUT_INVALID", f"생성된 입력을 예측 입력으로 쓸 수 없습니다: {exc.message}") from None
-        plan = prepared_input.plan_copy(cp.path, s)
-        if plan.problems:
-            p0 = plan.problems[0]
-            raise StepFailure(p0["code"] if p0["code"] == "STARTER_COUNT" else "INPUT_INVALID", p0["message"])
+        batch_native.check_child_input(s, input_path)  # 하위 PREDICT(prepared)가 PR_PREP에서 다시 하는 검사를 먼저
         _set_run(ctx, b, r["doe_no"], gen_state="DONE", gen_code=None, gen_message=None)
 
     return gen
@@ -218,7 +213,7 @@ def _aggregate_warnings(ctx: Any, outcomes: list[Any]) -> None:
 def bp_gen(ctx: Any) -> None:
     b = _batch(ctx)
     ps, S = _param_set(ctx, b)
-    if ctx.settings.commands.geom_update is None:
+    if ps.get("engine") != "native" and ctx.settings.commands.geom_update is None:
         raise StepFailure("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다")
     todo = _pending(ctx, b)
     if not todo:

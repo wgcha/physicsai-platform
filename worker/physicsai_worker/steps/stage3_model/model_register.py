@@ -130,10 +130,11 @@ def mr_register(ctx: Any) -> None:
         if ds_id is None:
             d = datasets_repo.latest_ready(conn, study_id)
             ds_id = d["id"] if d else None
+        explicit = datasets_repo.get(conn, p["dataset_id"]) if p.get("dataset_id") else None  # geometry-engine.md §7.7
         version = models_repo.next_version(conn, study_id, p["name"])
         models_repo.insert(conn, {
             "id": model_id, "study_id": study_id, "name": p["name"], "version": version, "label": p.get("label"),
-            "dataset_id": ds_id, "source_path": r["source_path"], "stored_rel": stored,
+            "dataset_id": ds_id, "engine": explicit["engine"] if explicit else None, "source_path": r["source_path"], "stored_rel": stored,
             "psmdl_rel": stored + files["psmdl"], "psmdl_sha256": copied[files["psmdl"]]["sha256"],
             "psmdl_size": copied[files["psmdl"]]["size"],
             "pscfg_rel": stored + files["pscfg"] if files.get("pscfg") else None,

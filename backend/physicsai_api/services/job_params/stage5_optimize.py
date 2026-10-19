@@ -96,6 +96,9 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         ps = ps_repo.get(conn, p.param_set_id) if p.param_set_id else ps_repo.current(conn, sid)
         if ps is None or ps["study_id"] != sid:
             raise prerequisite_missing("PARAM_SET")
+        if ps.get("engine") == "native":  # geometry-engine.md §7.7: 원본(HyperStudy) 최적화는 altair 전용 — 내장 최적화를 쓴다
+            raise DomainError("ENGINE_NATIVE_UNSUPPORTED", "native 형상 엔진 세트는 원본 최적화를 지원하지 않습니다 — 내장 최적화를 쓰세요",
+                              status=409)
         if opt.needs_assembly_block(ps):  # 이슈 #4: 쿠션 단독 템플릿은 원본 최적화 불가 — 내장 모드 안내
             raise assembly_required()
         if p.model_id:

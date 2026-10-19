@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, Field
+from pydantic import AfterValidator, Field, model_serializer
 
 from physicsai_core.naming import label_problem
 
 from .common import Req, Resp
+from .geometry import NativeInfo
 
 
 def _check_label(v: str | None) -> str | None:
@@ -46,15 +47,20 @@ class ParamSetCreate(Req):
     mode: Literal["folder", "discover"] | None = None
     choice: ParamSetDiscoverChoice | None = None
     label: Label = Field(default=None, max_length=120)
+    # geometry-engine.md §7.4: native면 202 {job_id}. 생략 = geometry.engine 기본값(mode=discover일 때만 native 가능)
+    engine: Literal["altair", "native"] | None = None
+    geom_options: dict[str, Any] | None = None
 
 
 class ParamSetPatch(Req):
     label: Label = Field(default=None, max_length=120)
+    geom_options: dict[str, Any] | None = None  # native 세트 전용(altair는 422). 전체 덮어쓰기, tag 절이 바뀌면 prep_status STALE
 
 
 class ParamSetDiscoverRequest(Req):
     path: str = Field(max_length=400)
     tpl: str | None = Field(default=None, max_length=400)
+    engine: Literal["altair", "native"] | None = None  # 생략 = geometry.engine 기본값
 
 
 class DiscoverTpl(Resp):
@@ -67,6 +73,14 @@ class DiscoverTpl(Resp):
 class DiscoverCad(Resp):
     rel: str
     name: str
+    kind: Literal["file", "parts"] | None = None  # native: STEP 파일 | component별 STEP이 든 parts 폴더(altair 응답에는 키 없음)
+
+    @model_serializer(mode="wrap")
+    def _drop_empty_kind(self, handler: Any) -> dict[str, Any]:
+        d = handler(self)
+        if d.get("kind") is None:
+            d.pop("kind", None)
+        return d
 
 
 class DiscoverAssem(Resp):
@@ -75,6 +89,7 @@ class DiscoverAssem(Resp):
     has_eps_mesh: bool
     has_renum_csv: bool
     file_count: int
+    has_baseline_inc: bool | None = None  # native: 기준 메시 존재(없으면 후보에서 제외됨)
 
 
 class DiscoverProblem(Resp):
@@ -133,6 +148,12 @@ class ParamSet(Resp):
     assem_rel: str | None = None  # Study 기준 조립 폴더 사본(04_params/<id>/radioss_assem/), mesh_only면 null
     warnings: list[DiscoverProblem] = []  # 등록 응답에만(SIMLAB_EXPORT_NAME 등), 조회는 []
     display: dict[str, Any] | None = None  # phase3 §15 S10 컨투어 표시 설정(PUT /param-sets/{id}/display)
+    # geometry-engine.md §7.4: 형상 엔진·세트 덮어쓰기·유효 옵션·paicad 버전·준비본 상태(native만 native 채움)
+    engine: Literal["altair", "native"] = "altair"
+    geom_options: dict[str, Any] | None = None
+    geom_options_effective: dict[str, Any] | None = None
+    engine_version: str | None = None
+    native: NativeInfo | None = None
 
 
 class SampleRow(Resp):
@@ -187,6 +208,7 @@ class ParamSetFromTrain(Req):
 
 class ParamSetDiscoverResponse(Resp):
     path: str
+    engine: Literal["altair", "native"] = "altair"
     tpl: list[DiscoverTpl]
     selected_tpl: str | None = None
     cad: list[DiscoverCad]

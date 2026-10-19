@@ -121,11 +121,13 @@ def predict_env(settings_dict, engine, fake_dashboard, fake_record):
 
     def make(*, commands: dict[str, Any] | None = None, predict: dict[str, Any] | None = None,
              resources: dict[str, Any] | None = None, hpc: dict[str, Any] | None = None, folder: str = "pred",
-             final_model: bool = True, model_pscfg: int = 1, train_data: dict[str, Any] | None = None) -> PredictEnv:
+             final_model: bool = True, model_pscfg: int = 1, train_data: dict[str, Any] | None = None,
+             geometry: dict[str, Any] | None = None) -> PredictEnv:
         d = dict(settings_dict)
         if hpc:
             d["hpc"] = hpc
-        for k, v in (("commands", commands), ("predict", predict), ("resources", resources), ("train_data", train_data)):
+        for k, v in (("commands", commands), ("predict", predict), ("resources", resources), ("train_data", train_data),
+                     ("geometry", geometry)):
             if v:
                 d[k] = {**(d.get(k) or {}), **v}
         lc = load_config_dict(d, environ={})
@@ -159,3 +161,15 @@ def pbs_state(tmp_path, monkeypatch):
     monkeypatch.setenv("FAKE_PBS_STATE", str(p))
     monkeypatch.delenv("FAKE_TOOL_MODE_PBS", raising=False)
     return p
+
+
+@pytest.fixture()
+def native_env(predict_env, fake_tools, fake_record):
+    """native 형상 엔진(가짜 paicad) 설정의 PredictEnv(geometry-engine.md §7.8). native_env(engine="native", geometry={…}, **predict_env 인자)."""
+
+    def make(*, engine: str = "native", geometry: dict[str, Any] | None = None, **kw: Any) -> PredictEnv:
+        geo = {"engine": engine, "paicad_path": fake_tools["fake_paicad"], **(geometry or {})}
+        return predict_env(geometry=geo, **kw)
+
+    return make
+

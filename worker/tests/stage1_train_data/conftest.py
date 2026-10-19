@@ -20,3 +20,10 @@ def p2_pbs(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, pbs_state)
     ai = tmp_path / "ai_root"
     ai.mkdir(exist_ok=True)
     yield from _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, {"hpc": pbs_command_cfg(fake_tools, str(ai))})
+
+
+@pytest.fixture()
+def p2_native(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch):
+    """native 형상 엔진(가짜 paicad) 설정의 2차 환경 — geometry-engine.md §7.3.1·§7.3.3 시험."""
+    geo = {"engine": "native", "paicad_path": fake_tools["fake_paicad"]}
+    yield from _p2_env(tmp_path, fake_tools, engine, fake_dashboard, monkeypatch, {"geometry": geo})

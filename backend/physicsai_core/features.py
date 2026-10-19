@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Any
 
-from .config import Settings, effective_altair
+from .config import Settings, derived_paicad_path, effective_altair
 
 
 @dataclass(frozen=True)
@@ -45,6 +46,8 @@ FEATURES: dict[str, FeatureReq] = {
     "contour_capture": FeatureReq(("contour_capture",), ("hw_exe_path",)),
     # phase3 §18.2 S13: 플랫폼 내장 최적화 — numpy·scipy + surrogate_opt.enabled + (parametric 또는 mesh_only 예측). optimize_builtin_missing
     "optimize_builtin": FeatureReq(),
+    # geometry-engine.md §7.1: native 형상 엔진 — paicad_update·paicad_morph·paicad_check(또는 paicad_run) 비null + 실행 파일 존재
+    "geometry_native": FeatureReq(),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -143,12 +146,38 @@ def optimize_builtin_missing(s: Settings) -> tuple[list[str], list[str]]:
     pt, pr = predict_parametric_missing(s)
     mt, mr = predict_mesh_only_missing(s)
     tmpl: list[str] = []
-    if (pt or pr) and (mt or mr):
+    nt, nr = geometry_native_missing(s)  # native 엔진 세트는 geom_update 없이 paicad_*로 형상을 만든다(§7.1)
+    qt, qr = missing_for(s, FEATURES["predict"], None)
+    if (pt or pr) and (mt or mr) and (nt or nr or qt or qr):
         tmpl, res = list(dict.fromkeys(pt + mt)), res + list(dict.fromkeys(pr + mr))
     return tmpl, res
 
 
+def geometry_native_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """native 형상 엔진에 빠진 (템플릿, 실행 파일) 키(geometry-engine.md §7.1)."""
+    # ④ 단건 예측(GEOM_UPDATE·MESH)이 단계별 명령을 쓰므로 update·morph·check는 paicad_run과 무관하게 필요하다
+    tmpl = [f"commands.{k}" for k in ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check")
+            if getattr(s.commands, k) is None]
+    res: list[str] = []
+    exe = derived_paicad_path(s)
+    if not exe or not os.path.isfile(exe):
+        res.append("geometry.paicad_path")
+    return tmpl, res
+
+
+def geometry_status(s: Settings) -> dict[str, Any]:
+    """`/status.geometry`: {engine_default, native_available, reason|null}(§7.1). reason은 한국어."""
+    t, r = geometry_native_missing(s)
+    reason = None
+    if r:
+        reason = "paicad 실행 파일을 찾을 수 없습니다 — paicad 설치 또는 geometry.paicad_path를 확인하세요"
+    elif t:
+        reason = "형상 명령 설정이 비어 있습니다: " + ", ".join(t)
+    return {"engine_default": s.geometry.engine, "native_available": not t and not r, "reason": reason}
+
+
 _SPECIAL_MISSING = {
+    "geometry_native": geometry_native_missing,
     "optimize_builtin": optimize_builtin_missing,
     "contour_capture": contour_capture_missing,
     "predict_parametric": predict_parametric_missing,

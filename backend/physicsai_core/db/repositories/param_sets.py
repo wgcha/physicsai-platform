@@ -45,3 +45,8 @@ def set_label(conn: Connection, ps_id: str, label: str | None) -> None:
 def set_responses(conn: Connection, ps_id: str, responses: list[dict[str, Any]]) -> None:
     """응답 정의 바꾸기(phase3 §14.6 S9) — `[{name, unit, spec|None}]`."""
     conn.execute(update(param_sets).where(param_sets.c.id == ps_id).values(responses=responses))
+
+
+def set_values(conn: Connection, ps_id: str, **values: Any) -> None:
+    """native 형상 엔진 필드(geom_options·engine_version 등) 갱신(geometry-engine.md §7.4)."""
+    conn.execute(update(param_sets).where(param_sets.c.id == ps_id).values(**values))

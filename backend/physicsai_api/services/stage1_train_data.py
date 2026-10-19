@@ -44,7 +44,7 @@ def setup_out(ctx: AppContext, study: dict[str, Any], s: dict[str, Any] | None) 
                "display_path": display_path(_ai(ctx), study["folder_name"], s["tpl_rel"]),
                "params": s["tpl_params"] or [], "warnings": s["tpl_warnings"] or [], "stale": tpl_is_stale(s)}
     return {"study_id": study["id"], "cad": cad, "extract_job_id": s["extract_job_id"], "parameters": params,
-            "used_count": sum(1 for p in params if p.get("use")), "tpl": tpl, "version": s["version"],
+            "used_count": sum(1 for p in params if p.get("use")), "tpl": tpl, "version": s["version"], "engine": s.get("engine") or "altair",
             "updated_by_name": s["updated_by_name"], "updated_at": s["updated_at"]}
 
 
@@ -87,6 +87,9 @@ def generate_tpl(ctx: AppContext, principal: Principal, study_id: str, version: 
         require_power(principal, st["project_id"])
         require_config_ok(ctx)
         s = train_repo.get_setup(conn, study_id, for_update=True)
+        if s is not None and s.get("engine") == "native":  # geometry-engine.md §7.3.2: tpl은 altair 전용
+            raise DomainError("ENGINE_NATIVE_NO_TPL", "native 형상 엔진에는 tpl이 없습니다 — 파라미터 표만 확정하고 DOE를 만드세요",
+                              status=409)
         if s is None or not s["parameters"] or not s.get("cad_file_name"):
             raise DomainError("TRAIN_PARAMS_REQUIRED", "파라미터를 먼저 추출하세요(①-1)", status=409)
         if not cfg.resources.simlab_tpl_template:
@@ -140,7 +143,8 @@ def doe_out(ctx: AppContext, conn: Any, study: dict[str, Any], d: dict[str, Any]
         "id": d["id"], "study_id": d["study_id"], "job_id": d["job_id"], "status": d["status"], "doe_label": d["doe_label"],
         "doe_type": d["doe_type"], "num_runs_requested": d["num_runs_requested"], "options": d["options"] or {},
         "multi_execution": d["multi_execution"], "radioss_assem_source_path": d["radioss_assem_source_path"],
-        "run_count": d["run_count"], "sample_status": d["sample_status"], "collected_count": counts["COLLECTED"],
+        "run_count": d["run_count"], "sample_status": d["sample_status"], "engine": d["engine"],
+        "engine_version": d.get("engine_version"), "collected_count": counts["COLLECTED"],
         "solve_failed_count": counts["SOLVE_FAILED"], "has_run_responses": bool(d["responses_rel"]),
         "dir_display_path": display_path(_ai(ctx), study["folder_name"], d["dir_rel"]),
         "results_display_path": display_path(_ai(ctx), study["folder_name"], f"01_train/results/{d['id']}"),

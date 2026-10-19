@@ -68,14 +68,15 @@ class ParallelRunner:
             raise Cancelled()
 
     def run(self, template_key: str, values: dict[str, str], *, cwd: str, outputs_to_backup: list[str] | None = None,
-            env_add: dict[str, str] | None = None) -> int:
+            env_add: dict[str, str] | None = None, extra_args: Sequence[str] = (), timeout_s: float | None = None) -> int:
         """외부 프로그램 1회(그룹 안, shell=False). 종료코드를 돌려준다 — 성공 판정은 호출자가 출력 파일로(§11.4).
         메모리 한도 도달 종료 → RESOURCE_LIMIT. 회계를 그룹이 공유하면(Windows Job 1개) 도달 기록이 이 실행 시간대와
         겹칠 때만 RESOURCE_LIMIT(다른 run과 겹치면 "원인 불확실" 문구), 아니면 종료코드를 그대로 돌려준다(D3-53).
-        취소되면 Cancelled."""
+        취소되면 Cancelled. extra_args = argv 끝에 덧붙이는 `--옵션 경로` 쌍, timeout_s = 이 실행 1회 시간 상한(넘으면 이 프로세스만
+        종료하고 GEOM_TIMEOUT)."""
         ctx = self.ctx
         self.check()
-        argv, _exe = ctx.render(template_key, values)
+        argv, _exe = ctx.render(template_key, values, extra_args) if extra_args else ctx.render(template_key, values)
         if outputs_to_backup:
             with self.pool.fs_lock:
                 ctx.backup(outputs_to_backup)
@@ -94,6 +95,7 @@ class ParallelRunner:
             raise
         self.pool.started()
         rc: int | None = None
+        timed_out = False
         try:
             if self.pool.stop.is_set():  # 그룹 종료와 launch가 엇갈린 경우
                 ctx.ex.limiter.terminate(proc)
@@ -110,8 +112,13 @@ class ParallelRunner:
             t = threading.Thread(target=reader, daemon=True)
             t.start()
             last_sample = time.perf_counter()
+            began = time.monotonic()
             while proc.poll() is None:
                 if self.pool.stop.wait(0.1):
+                    break
+                if timeout_s is not None and time.monotonic() - began > timeout_s:
+                    timed_out = True
+                    ctx.ex.limiter.terminate(proc)
                     break
                 if time.perf_counter() - last_sample >= MEMORY_SAMPLE_S:
                     last_sample = time.perf_counter()
@@ -129,6 +136,8 @@ class ParallelRunner:
             self.pool.finished(self.item_id, template_key, argv, cwd, rc)
         if self.pool.stop.is_set():
             raise Cancelled()
+        if timed_out:
+            raise StepFailure("GEOM_TIMEOUT", f"실행 시간 제한({timeout_s:g}초)을 넘어 중단했습니다")
         rc = -1 if rc is None else rc
         self.last_exit_code = rc
         self.log(f"[EXIT] {rc}")
