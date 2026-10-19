@@ -63,6 +63,8 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   FEM_VERIFY: "조립 FEM 검증",
   // phase3.md §22.3.5 S17
   PB_RESP_EXTRACT: "일괄 예측 성능 다시 추출",
+  // geometry-engine.md §7.3.4 native 세트 등록·다시 준비·baseline 추가
+  PARAM_SET_NATIVE: "형상 준비(native)",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -91,6 +93,7 @@ export const JOB_STAGE: Record<JobType, number> = {
   SURROGATE_OPT: 5,
   FEM_VERIFY: 4,
   PB_RESP_EXTRACT: 4,
+  PARAM_SET_NATIVE: 4,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

@@ -11,7 +11,8 @@ export type Role = "general" | "power" | "admin";
 // S10: 다시 캡처 작업 CONTOUR_RECAPTURE는 POST /jobs/{id}/capture 전용이라 JobCreate 열거에 없다(phase3.md §15.4)
 // S13: 내장 최적화 반복 SURROGATE_OPT는 종료 훅·서비스만 만든다(phase3.md §18.4)
 // S16 V2: FEM_VERIFY는 FEM 검증 API·종료 훅만 만든다(POST /jobs 불가, phase3 §21.3.5)
-export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY";
+// native 세트 등록·다시 준비 PARAM_SET_NATIVE는 param-sets API 전용(geometry-engine.md §7.3.4)
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -55,7 +56,9 @@ export type ArtifactKind =
   | "OPT_FILE"
   // S10(phase3.md §15.2) — 산출물 kind는 백엔드 스키마가 string
   | "CONTOUR_IMAGE"
-  | "CONTOUR_VIDEO";
+  | "CONTOUR_VIDEO"
+  // geometry-engine.md §7.5 피처 하이라이트 PNG
+  | "FEATURE_PNG";
 
 export const TERMINAL_STATES: JobState[] = ["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"];
 
@@ -285,10 +288,98 @@ export type ParamSet = Override<
     responses: TemplateResponse[];
     /** S10 컨투어 표시 설정(없으면 서버 기본) */
     display?: ContourDisplay | null;
+    /** 4B 다중 baseline일 때만(단일은 필드 없음, §7.6) — openapi 병합 전 수동 */
+    baselines?: BaselineInfo[];
   }
 >;
 export type ParamSetCreate = S["ParamSetCreate"];
-export type ParamSetDiscover = S["ParamSetDiscoverResponse"];
+/** discover CAD 후보 — openapi는 dict라 계약(geometry-engine.md §7.4) 키로 좁힌다. native = STEP 파일 또는 parts/ 폴더 */
+export interface DiscoverCad {
+  rel: string;
+  name?: string;
+  kind?: string;
+  [k: string]: unknown;
+}
+export type ParamSetDiscover = Override<S["ParamSetDiscoverResponse"], { cad: DiscoverCad[] }>;
+
+// ---------------------------------------------------------------------------
+// native 형상 엔진(geometry-engine.md §7.6·§8)
+// ---------------------------------------------------------------------------
+export type Engine = "altair" | "native";
+export type StatusGeometry = S["StatusGeometry"];
+export type NativeInfo = S["NativeInfo"];
+export type NativeGroup = S["NativeGroup"];
+export type NativeWarning = S["NativeWarning"];
+/** feasible = {min, max, limited_by?, source?}(§4.3·§11.2) — openapi는 dict라 좁힌다 */
+export type NativeFeature = Override<S["NativeFeature"], { feasible?: { min?: number | null; max?: number | null; limited_by?: string | null; source?: string | null } | null }>;
+export type NativeFeatures = Override<S["NativeFeatures"], { features: NativeFeature[] }>;
+/** geom_options(§4.9) 부분 객체 — 절 이름 → 키 → 값(최상위 문자열 키도 있음) */
+export type GeomOptions = Record<string, unknown>;
+
+// ---- 단계 3S 쉘 두께(§11.1) — openapi 병합 전 계약 모양(props.json 행)으로 수동 유지. 병합 후 gen:api 타입으로 교체 ----
+export interface ShellProp {
+  id: number;
+  title: string | null;
+  type: string;
+  keyword?: string;
+  supported: boolean;
+  parameter: string | null;
+  thickness: number | null;
+  unit?: string;
+  range: { min: number; max: number; ratio?: number } | null;
+  parts: { id: number; title: string | null }[];
+  file?: string;
+  element_overrides: number;
+  selectable: boolean;
+}
+export interface ShellPropSel {
+  prop_id: number;
+  name: string;
+  min: number;
+  max: number;
+}
+export interface ShellPropsDoc {
+  props: ShellProp[];
+  selected: ShellPropSel[];
+  warnings: { code: string; prop?: number; message: string; parts?: number[] }[];
+}
+
+// ---- 단계 4B 다중 baseline(§4.10·§7.3.8) — openapi 병합 전 계약 모양(param_map.json)으로 수동 유지 ----
+export type MapGrade = "recommend" | "check" | "unmatched";
+export type MapAction = "accept" | "rename" | "change" | "split";
+export interface MapDecision {
+  action: MapAction;
+  name: string;
+  map: Record<string, string | null>;
+}
+export interface MapRow {
+  row_id: string;
+  type: string;
+  unit: string;
+  signature?: string;
+  needs_review: boolean;
+  proposed: { name: string; score: number; grade: MapGrade; map: Record<string, string | null>; candidates?: { map: Record<string, string | null>; score: number }[] };
+  decision: MapDecision | null;
+}
+export interface ParamMap {
+  schema_version: number;
+  status: "draft" | "confirmed";
+  confirmed_by: string | null;
+  confirmed_at: string | null;
+  usage: "topology" | "range";
+  baselines: { id: string; rel: string; label?: string | null }[];
+  range_split?: { param: string; intervals: { baseline: string; nominal: number }[] } | null;
+  common: MapRow[];
+  warnings: { code: string; row_id?: string; message?: string }[];
+  /** 각 baseline의 원 파라미터 이름(변경 칸 후보) — 플랫폼이 extract 결과에서 채움 */
+  params?: Record<string, string[]>;
+}
+export interface BaselineInfo {
+  id: string;
+  label?: string | null;
+  source_path?: string | null;
+  prep_status?: "READY" | "STALE" | "MISSING";
+}
 export type SampleRow = S["SampleRow"];
 export type SamplePage = S["SamplesPage"];
 export type PredictCheck = S["PredictCheckResponse"];

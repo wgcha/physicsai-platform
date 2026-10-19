@@ -10,6 +10,7 @@ import { fmtNum, fmtTime } from "../../lib/format";
 import { scoreSummary } from "../../panels/ModelPanel";
 import { LogStatusText } from "./ModelRegisterCard";
 import { MAX_COMPARE, MIN_COMPARE, toggleSelection } from "./compare";
+import { EngineBadge } from "../../components/EngineSelect";
 import { ModelCompare } from "./ModelCompare";
 
 function useModelDetails(models: Model[]) {
@@ -154,7 +155,7 @@ export function EvaluateCard() {
                       />
                     </td>
                     <td>
-                      <b title={m.stored_display_path ?? undefined}>{m.name}</b> <span className="muted">v{m.version}</span>
+                      <b title={m.stored_display_path ?? undefined}>{m.name}</b> <span className="muted">v{m.version}</span> <EngineBadge engine={m.engine} />
                       {m.label && <div className="muted small">{m.label}</div>}
                       {m.status === "INVALID" && <div className="error-text small">파일 변경 감지(사용 불가)</div>}
                     </td>

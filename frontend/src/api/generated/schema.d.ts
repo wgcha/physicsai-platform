@@ -711,6 +711,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/param-sets/{ps_id}/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Native Features
+         * @description geometry-engine.md §7.6: 추출된 형상 피처·그룹·경고(하이라이트 PNG artifact id 포함).
+         */
+        get: operations["native_features_physicsai_api_param_sets__ps_id__features_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/native-prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Native Prepare
+         * @description geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).
+         */
+        post: operations["native_prepare_physicsai_api_param_sets__ps_id__native_prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/param-sets/{ps_id}/responses": {
         parameters: {
             query?: never;
@@ -1921,6 +1961,8 @@ export interface components {
             doe_no: number;
             /** Folder */
             folder: string;
+            /** Gen Category */
+            gen_category?: string | null;
             /** Job Id */
             job_id?: string | null;
             /**
@@ -2364,6 +2406,10 @@ export interface components {
             curation_id?: string | null;
             /** Dataset Display Path */
             dataset_display_path?: string | null;
+            /** Engine */
+            engine?: ("altair" | "native") | null;
+            /** Engine Version */
+            engine_version?: string | null;
             /** Eval Count */
             eval_count?: number | null;
             /** H3D Count */
@@ -2492,6 +2538,8 @@ export interface components {
         DiscoverAssem: {
             /** File Count */
             file_count: number;
+            /** Has Baseline Inc */
+            has_baseline_inc?: boolean | null;
             /** Has Eps Mesh */
             has_eps_mesh: boolean;
             /** Has Renum Csv */
@@ -2501,12 +2549,8 @@ export interface components {
             /** Starter */
             starter: string;
         };
-        /** DiscoverCad */
         DiscoverCad: {
-            /** Name */
-            name: string;
-            /** Rel */
-            rel: string;
+            [key: string]: unknown;
         };
         /** DiscoverProblem */
         DiscoverProblem: {
@@ -3759,6 +3803,8 @@ export interface components {
             curve_points: number;
             /** Dataset Id */
             dataset_id?: string | null;
+            /** Engine */
+            engine?: ("altair" | "native") | null;
             /** Epochs Total */
             epochs_total?: number | null;
             /** Eval Score */
@@ -3822,6 +3868,110 @@ export interface components {
         MoveRequest: {
             /** Position */
             position: number;
+        };
+        /**
+         * NativeAccepted
+         * @description native 세트 등록·다시 준비 202 본문 — 진행은 job으로 본다.
+         */
+        NativeAccepted: {
+            /** Job Id */
+            job_id: string;
+        };
+        /** NativeFeature */
+        NativeFeature: {
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /** Feasible */
+            feasible?: {
+                [key: string]: unknown;
+            } | null;
+            /** Group */
+            group?: string | null;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Nominal */
+            nominal?: number | null;
+            /** Png Artifact Id */
+            png_artifact_id?: string | null;
+            /**
+             * Ref Locked
+             * @default false
+             */
+            ref_locked: boolean;
+            /**
+             * Ref Provisional
+             * @default false
+             */
+            ref_provisional: boolean;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+            /**
+             * Unit
+             * @default mm
+             */
+            unit: string;
+        };
+        /** NativeFeatures */
+        NativeFeatures: {
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Features */
+            features: components["schemas"]["NativeFeature"][];
+            /** Groups */
+            groups: components["schemas"]["NativeGroup"][];
+            /** Warnings */
+            warnings: components["schemas"]["NativeWarning"][];
+        };
+        /** NativeGroup */
+        NativeGroup: {
+            /** Id */
+            id?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /**
+             * Members
+             * @default []
+             */
+            members: string[];
+            /** Parameter */
+            parameter?: string | null;
+        };
+        /** NativeInfo */
+        NativeInfo: {
+            /**
+             * Feature Count
+             * @default 0
+             */
+            feature_count: number;
+            /** Prep Reason */
+            prep_reason?: string | null;
+            /**
+             * Prep Status
+             * @enum {string}
+             */
+            prep_status: "READY" | "STALE" | "MISSING";
+        };
+        /** NativeWarning */
+        NativeWarning: {
+            /** Code */
+            code: string;
+            /** Feature */
+            feature?: string | null;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
         };
         /** Nearest */
         Nearest: {
@@ -3944,6 +4094,22 @@ export interface components {
             display?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Engine
+             * @default altair
+             * @enum {string}
+             */
+            engine: "altair" | "native";
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Geom Options */
+            geom_options?: {
+                [key: string]: unknown;
+            } | null;
+            /** Geom Options Effective */
+            geom_options_effective?: {
+                [key: string]: unknown;
+            } | null;
             /** Id */
             id: string;
             /**
@@ -3956,6 +4122,7 @@ export interface components {
             is_current: boolean;
             /** Label */
             label?: string | null;
+            native?: components["schemas"]["NativeInfo"] | null;
             /**
              * Origin
              * @default FOLDER
@@ -3997,6 +4164,12 @@ export interface components {
         /** ParamSetCreate */
         ParamSetCreate: {
             choice?: components["schemas"]["ParamSetDiscoverChoice"] | null;
+            /** Engine */
+            engine?: ("altair" | "native") | null;
+            /** Geom Options */
+            geom_options?: {
+                [key: string]: unknown;
+            } | null;
             /** Label */
             label?: string | null;
             /** Mode */
@@ -4019,6 +4192,8 @@ export interface components {
         };
         /** ParamSetDiscoverRequest */
         ParamSetDiscoverRequest: {
+            /** Engine */
+            engine?: ("altair" | "native") | null;
             /** Path */
             path: string;
             /** Tpl */
@@ -4028,6 +4203,12 @@ export interface components {
         ParamSetDiscoverResponse: {
             /** Cad */
             cad: components["schemas"]["DiscoverCad"][];
+            /**
+             * Engine
+             * @default altair
+             * @enum {string}
+             */
+            engine: "altair" | "native";
             /** Notes */
             notes: components["schemas"]["DiscoverProblem"][];
             /** Parameters */
@@ -4076,6 +4257,10 @@ export interface components {
         };
         /** ParamSetPatch */
         ParamSetPatch: {
+            /** Geom Options */
+            geom_options?: {
+                [key: string]: unknown;
+            } | null;
             /** Label */
             label?: string | null;
         };
@@ -5382,6 +5567,7 @@ export interface components {
             evaluate?: components["schemas"]["FeatureState"] | null;
             fem_verify?: components["schemas"]["FeatureState"] | null;
             fem_verify_rebuild?: components["schemas"]["FeatureState"] | null;
+            geometry_native?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
             optimize_builtin?: components["schemas"]["FeatureState"] | null;
             predict?: components["schemas"]["FeatureState"] | null;
@@ -5395,6 +5581,24 @@ export interface components {
             train_resp: components["schemas"]["FeatureState"];
             train_solve: components["schemas"]["FeatureState"];
             train_tpl: components["schemas"]["FeatureState"];
+        };
+        /**
+         * StatusGeometry
+         * @description native 형상 엔진 상태(geometry-engine.md §7.1).
+         */
+        StatusGeometry: {
+            /**
+             * Engine Default
+             * @description 새 파라미터 세트·추출·DOE의 기본 엔진: altair | native
+             */
+            engine_default: string;
+            /** Native Available */
+            native_available: boolean;
+            /**
+             * Reason
+             * @description native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null
+             */
+            reason?: string | null;
         };
         /** StatusHpc */
         StatusHpc: {
@@ -5443,6 +5647,7 @@ export interface components {
             demo: boolean;
             env_check?: components["schemas"]["StatusEnvCheck"] | null;
             features?: components["schemas"]["StatusFeatures"] | null;
+            geometry?: components["schemas"]["StatusGeometry"] | null;
             hpc: components["schemas"]["StatusHpc"];
             limits: components["schemas"]["StatusLimits"];
             /** Resources */
@@ -5968,6 +6173,14 @@ export interface components {
             doe_label: string;
             /** Doe Type */
             doe_type: string;
+            /**
+             * Engine
+             * @default altair
+             * @enum {string}
+             */
+            engine: "altair" | "native";
+            /** Engine Version */
+            engine_version?: string | null;
             /** Has Run Responses */
             has_run_responses: boolean;
             /** Id */
@@ -6102,6 +6315,12 @@ export interface components {
         /** TrainSetup */
         TrainSetup: {
             cad?: components["schemas"]["TrainCad"] | null;
+            /**
+             * Engine
+             * @default altair
+             * @enum {string}
+             */
+            engine: "altair" | "native";
             /** Extract Job Id */
             extract_job_id?: string | null;
             /** Parameters */
@@ -8271,6 +8490,104 @@ export interface operations {
             };
         };
     };
+    native_features_physicsai_api_param_sets__ps_id__features_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeFeatures"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    native_prepare_physicsai_api_param_sets__ps_id__native_prepare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeAccepted"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     put_responses_physicsai_api_param_sets__ps_id__responses_put: {
         parameters: {
             query?: never;
@@ -9859,6 +10176,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description engine=native: 형상 준비 작업이 만들어졌습니다 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeAccepted"];
                 };
             };
             /** @description Not Found */

@@ -9,6 +9,8 @@ import { ParamSetDiscoverForm } from "./ParamSetDiscoverForm";
 import { ResponseDefs } from "./ResponseDefs";
 import { ContourDisplayForm } from "./ContourDisplayForm";
 import { INPUT_KIND_LABEL, inputKindOf } from "./TemplatePicker";
+import { EngineBadge } from "../../components/EngineSelect";
+import { NativeDetail } from "./geometry/NativeDetail";
 
 type RegMode = "discover" | "folder" | "train";
 const MODES: [RegMode, string][] = [
@@ -67,6 +69,7 @@ export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
       {ps ? (
         <div className="ps-summary">
           <ParamSetLabel key={ps.id} id={ps.id} label={ps.label ?? null} canEdit={canExec} onSaved={reloadParamSets} />
+          <EngineBadge engine={ps.engine} />
           <span>
             파라미터 <b>{ps.parameters.length}</b>
           </span>
@@ -91,6 +94,7 @@ export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
       ) : (
         <p className="muted">등록된 템플릿이 없습니다. 프로젝트 폴더를 지정하면 tpl·CAD·조립 폴더를 찾아 등록합니다.</p>
       )}
+      {ps && !open && ps.engine === "native" && <NativeDetail key={`n-${ps.id}`} ps={ps} canEdit={canExec} />}
       {ps && !open && <ResponseDefs key={ps.id} ps={ps} canEdit={canExec} />}
       {ps && !open && <ContourDisplayForm key={`d-${ps.id}`} ps={ps} canEdit={canExec} />}
       {open && canExec && (

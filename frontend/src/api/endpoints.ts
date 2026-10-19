@@ -39,6 +39,13 @@ import type {
   ParamSet,
   ParamSetCreate,
   ParamSetDiscover,
+  Engine,
+  GeomOptions,
+  NativeFeatures,
+  ShellPropsDoc,
+  ShellPropSel,
+  ParamMap,
+  MapDecision,
   PathInspectResult,
   PathPurpose,
   PredictCheck,
@@ -93,11 +100,26 @@ export const api = {
   setFinalModel: (studyId: string, modelId: string | null) =>
     request<Study>("PUT", `/studies/${studyId}/final-model`, { body: { model_id: modelId } }),
   /** §15.4 폴더 등록. mode="discover" = 프로젝트 폴더에서 자동 구성(phase3 §13 S8) */
+  /** engine:"native" → 202 {job_id}(PARAM_SET_NATIVE, geometry-engine.md §7.3.4), altair → 201 ParamSet */
   registerParamSet: (studyId: string, path: string, opts: Omit<ParamSetCreate, "path"> = {}) =>
-    request<ParamSet>("POST", `/studies/${studyId}/param-sets`, { body: { path, ...opts } }),
-  discoverParamSet: (studyId: string, path: string, tpl?: string | null) =>
-    request<ParamSetDiscover>("POST", `/studies/${studyId}/param-sets/discover`, { body: tpl ? { path, tpl } : { path } }),
-  patchParamSet: (id: string, body: { label: string | null }) => request<ParamSet>("PATCH", `/param-sets/${id}`, { body }),
+    request<ParamSet | { job_id: string }>("POST", `/studies/${studyId}/param-sets`, { body: { path, ...opts } }),
+  discoverParamSet: (studyId: string, path: string, tpl?: string | null, engine?: Engine) =>
+    request<ParamSetDiscover>("POST", `/studies/${studyId}/param-sets/discover`, { body: { path, ...(tpl ? { tpl } : {}), ...(engine ? { engine } : {}) } }),
+  /** label·geom_options(§7.4 부분 객체, 422 GEOM_OPTIONS_INVALID problems) */
+  patchParamSet: (id: string, body: { label?: string | null; geom_options?: GeomOptions | null }) => request<ParamSet>("PATCH", `/param-sets/${id}`, { body }),
+  /** §7.6 native: 형상 준비 다시(202 job), 피처 요약 */
+  nativePrepare: (id: string) => request<{ job_id: string }>("POST", `/param-sets/${id}/native-prepare`),
+  paramSetFeatures: (id: string) => request<NativeFeatures>("GET", `/param-sets/${id}/features`),
+  /** 3S 쉘 두께(§11.1) — openapi 병합 전 목 라우트 모양(props.json 행 + 선택) */
+  shellProps: (id: string) => request<ShellPropsDoc>("GET", `/param-sets/${id}/props`),
+  putShellProps: (id: string, selected: ShellPropSel[]) => request<ShellPropsDoc>("PUT", `/param-sets/${id}/props`, { body: { selected } }),
+  /** 4B 다중 baseline(§7.3.8) — openapi 병합 전 계약 모양 */
+  addBaseline: (id: string, body: { id: string; path: string; choice: { cad?: string | null; radioss_assem?: string | null }; label?: string | null }) =>
+    request<{ job_id: string }>("POST", `/param-sets/${id}/baselines`, { body: { baseline: body } }),
+  deleteBaseline: (id: string, bid: string) => request<ParamSet>("DELETE", `/param-sets/${id}/baselines/${bid}`),
+  paramMap: (id: string) => request<ParamMap>("GET", `/param-sets/${id}/param-map`),
+  putParamMap: (id: string, decisions: { row_id: string; decision: MapDecision | null }[]) => request<ParamMap>("PUT", `/param-sets/${id}/param-map`, { body: { decisions } }),
+  confirmParamMap: (id: string) => request<ParamMap>("POST", `/param-sets/${id}/param-map/confirm`),
   paramSets: (studyId: string) => request<ParamSet[]>("GET", `/studies/${studyId}/param-sets`),
   paramSet: (id: string) => request<ParamSet>("GET", `/param-sets/${id}`),
   samples: (id: string, limit = 200, cursor?: string | null) =>

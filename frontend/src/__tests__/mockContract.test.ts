@@ -79,6 +79,11 @@ const cases: [string, string, string, ("power" | "admin")?, ConstructorParameter
   // 3차 §12 S7 서버 경로 탐색
   ["/fs/roots", "/fs/roots", "get"],
   ["/fs/list?path=E%3A%5Cshared%5CAI_WORK%5Cinbox&exts=.rad,.hm", "/fs/list", "get"],
+  // geometry-engine.md §7.6 native 세트·피처·상태
+  ["/param-sets/ps-n1", "/param-sets/{ps_id}", "get", "power", { geometry: "native" }],
+  ["/param-sets/ps-n1/features", "/param-sets/{ps_id}/features", "get", "power", { geometry: "native" }],
+  ["/studies/s-cushion/param-sets", "/studies/{study_id}/param-sets", "get", "power", { geometry: "multi" }],
+  ["/status", "/status", "get", "power", { disabledFeatures: ["geometry_native"] }],
 ];
 
 describe("목 서버 ↔ openapi.json", () => {

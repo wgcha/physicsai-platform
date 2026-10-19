@@ -17,7 +17,7 @@ export function discover(path: string, tpl?: string | null): MockResp {
   const chk = inspectPath("PARAM_SET", path);
   if (chk.status !== 200) return chk;
   const base: ParamSetDiscover = {
-    path, tpl: [], selected_tpl: null, cad: [], radioss_assem: [], parameters_source: null, parameters_file: null,
+    path, engine: "altair", tpl: [], selected_tpl: null, cad: [], radioss_assem: [], parameters_source: null, parameters_file: null,
     parameters: [], samples: null, responses: null, problems: [], notes: [], truncated: false, scanned: 42,
   };
   if (/empty/i.test(path))

@@ -6,6 +6,8 @@ import { PathInput } from "../../components/PathInput";
 import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
 import { useTrain } from "./TrainContext";
+import { EngineSelect, useGeometryStatus } from "../../components/EngineSelect";
+import type { Engine } from "../../api";
 
 // ---------------------------------------------------------------- ①-1
 export function CadExtractCard() {
@@ -16,6 +18,10 @@ export function CadExtractCard() {
   const [path, setPath] = useState("");
   const [ok, setOk] = useState(false);
   const params = setup?.parameters ?? [];
+  // geometry-engine.md §8 ①-1: 엔진 2단 선택, native는 STEP만
+  const { engineDefault, nativeAvailable } = useGeometryStatus();
+  const [engine, setEngine] = useState<Engine>(engineDefault);
+  const native = engine === "native";
 
   return (
     <Card span={3} foot={
@@ -25,7 +31,7 @@ export function CadExtractCard() {
               <RunAction
                 canExecute={canExec}
                 label="파라미터 추출"
-                onRun={() => void run({ cad_path: path.trim() })}
+                onRun={() => void run(native ? { cad_path: path.trim(), engine } : { cad_path: path.trim() })}
                 job={job}
                 disabled={!enabled || !ok}
                 disabledReason={enabled ? "CAD 파일 경로를 입력하고 확인하세요" : undefined}
@@ -35,11 +41,12 @@ export function CadExtractCard() {
           </FeatureGate>
         </>
       } step="①-1" title="CAD 파라미터 추출">
+      {nativeAvailable && <EngineSelect value={engine} onChange={setEngine} />}
       <PathInput
         studyId={study.id}
         purpose="CAD_FILE"
-        label="CAD 파일 경로 (.prt)"
-        placeholder="E:/shared/AI_WORK/cushion/00_inbox/cad/cushion_parametric_modeling.prt"
+        label={native ? "CAD 파일 경로 (.step)" : "CAD 파일 경로 (.prt)"}
+        placeholder={native ? "E:/shared/AI_WORK/cushion/00_inbox/cad/cushion_base.step" : "E:/shared/AI_WORK/cushion/00_inbox/cad/cushion_parametric_modeling.prt"}
         value={path}
         onChange={setPath}
         canExecute={canExec}

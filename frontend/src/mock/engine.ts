@@ -9,6 +9,7 @@ import { batchAfterChild, batchOnProgress, isBatchChild } from "./predictBatch";
 import { tickScx } from "./scx";
 import { tickSurrogate } from "./surrogateOpt";
 import { syncFem } from "./femVerify";
+import { finishGeometry } from "./geometry";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -94,6 +95,7 @@ function finishJob(srv: MockServer, j: Job) {
   adjustPreparedSteps(srv, j);
   finishStage3(srv, j);
   finishStage4(srv, j);
+  finishGeometry(srv, j);
   if (srv.manage.storage.onFinish(j)) srv.notifyJob(j, "JOB_SUCCEEDED");
   if (isBatchChild(j)) batchAfterChild(srv, j);
 }

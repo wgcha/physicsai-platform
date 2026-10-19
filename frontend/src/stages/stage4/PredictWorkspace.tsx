@@ -16,6 +16,8 @@ import { ModelLine, useModelChoice } from "./predictRun";
 import { useFemVerifyButton } from "./verify/useFemVerifyButton";
 
 import { useSamples } from "./useSamples";
+import { EngineMismatchNote } from "../../components/EngineSelect";
+import { GEOM_ERROR_TEXT } from "../../lib/geometry";
 
 
 export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: ReactNode; aside?: ReactNode }) {
@@ -125,6 +127,8 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
         </div>
         <div className="run-block">
           <ModelLine choice={choice} />
+          <EngineMismatchNote modelEngine={chosenModel?.engine} ps={ps} />
+          {ps.engine === "native" && ps.native && ps.native.prep_status !== "READY" && <p className="warn-text small">{GEOM_ERROR_TEXT.GEOM_PREP_STALE}</p>}
           <FeatureGate feature="predict">
             {(enabled) => (
               <RunAction

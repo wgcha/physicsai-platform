@@ -24,7 +24,9 @@ function mmdd(iso: string): string {
 
 /** 옆 회색 한 줄: tpl · CAD · 조립 폴더 포함 · MM-DD 등록 */
 export function templateMeta(ps: ParamSet): string {
-  return ["tpl", "CAD", INPUT_KIND_LABEL[inputKindOf(ps)], `${mmdd(ps.registered_at)} 등록`].join(" · ");
+  // geometry-engine.md §7.7: 세트 목록에 엔진 표시(native = STEP·피처, tpl 없음)
+  const src = ps.engine === "native" ? ["native", "STEP"] : ["tpl", "CAD"];
+  return [...src, INPUT_KIND_LABEL[inputKindOf(ps)], `${mmdd(ps.registered_at)} 등록`].join(" · ");
 }
 
 export function TemplatePicker({ list, value, onChange, compact = false }: { list: ParamSet[]; value: string; onChange: (id: string) => void; compact?: boolean }) {
