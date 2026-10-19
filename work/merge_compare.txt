@@ -1,3 +1,36 @@
+병합본(feat/native-geom-r1 942a7cf+d1aa8da = 4c03804 + feat/r1-shell-docs b051619(paicad 0.8.0 쉘) + feat/r1-view-docs dadebb1(paicad 0.9.0 view)) vs phase3 기준선 db5fb68 — 2026-10-20
+명령: PYTHON=python3.12 bash scripts/test-all.sh --junitxml=... (exit=0, 작업 트리 = 커밋 d1aa8da와 동일)
+
+| 항목 | phase3 기준선(db5fb68) | 병합본 | 증감 |
+|---|---|---|---|
+| pytest passed | 1148 | 1272 | +124 (native 시험, 이전 병합 4c03804와 같음) |
+| pytest skipped | 34 | 34 | 0 (신규 skip 0) |
+| pytest failed | 0 | 0 | 0 |
+| pytest deselected(slow) | 5 | 5 | 0 |
+| paicad 단독 | 없음 | 265 passed(0.7.0 192 → +쉘·view 73) | +265 |
+| vitest | 435 passed (42 files) | 462 passed (44 files) | +27 (native 화면) |
+| tsc | 통과 | 통과 | - |
+| openapi.json 최신 | 통과 | 통과 | - |
+| frontend-dist 최신 | 통과(752b65ea887f) | 통과(be3fb36d8384) | 변경 없음(프런트 소스 무수정) |
+| paicad 정적 검사 | - | 통과(__version__ 0.9.0, 루트·lock 고정 0.9.0) | - |
+
+## 이름 대조(junit xml, classname::name)
+기준선 통과 1148건 중 병합본에서 통과가 아닌 것: 0
+기준선 시험 중 병합본에 없는 것: 0
+병합본 신규 skip: 0 / 병합본 실패: 0
+병합본에만 있는 통과 시험: 124건(이전 병합과 같은 native 플랫폼 시험 — 쉘·view 병합은 packages/paicad·docs만 변경)
+
+판정: phase3 기준선(db5fb68) 통과 시험 전부 병합본 통과, 신규 skip 0, 실패 0, paicad 265·vitest 462·tsc 통과
+
+## 쉘·view 병합 충돌 해소
+- __init__ __version__ 0.9.0, CHANGELOG 0.9.0(view) → 0.8.0(shell) → 0.7.0
+- common.py: 종료코드 12(SHELL_* 준비 실패)·14(VIEW_*) 모두, CODE_CATEGORY FIXED·PREP·VIEW 합집합
+- kernel/__init__: 시트 API(load_sheets·rebuild_sheet·save/load_sheet_brep) + view API(tessellate·edge_polylines·distance_to_face) 합집합
+- cli.py: _fail_report = shell_envelope 선택 + view export/preview FAIL extra, guarded 명령 이름 props/shell/view
+- editable 설치 paicad 0.9.0으로 갱신(/usr/local dist-packages, 기존 설치 위치 그대로)
+
+---
+(이전 병합 기록 — 4c03804)
 병합본(feat/native-geom-r1 + feat/r1-front + feat/r1-docs + origin/claude/phase3 db5fb68) vs phase3 기준선 db5fb68 — 2026-10-20
 명령: PYTHON=python3.12 bash scripts/test-all.sh --junitxml=... (exit=0, 병합 작업 트리 = 커밋 대상과 동일)
 
