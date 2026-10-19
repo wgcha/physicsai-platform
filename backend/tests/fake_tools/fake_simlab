@@ -11,6 +11,8 @@
 동시 실행(phase3 §14.5 BP_GEN): 실행마다 cwd에만 쓰므로 동시 실행 OK. FAKE_TOOL_TRACE(jsonl)에 시작·끝 시각(time.time)·pid를 남겨
 관측 동시 수를 셀 수 있다. FAKE_SIMLAB_SLEEP_S = 형상 갱신 전 대기(겹침 관측용), FAKE_SIMLAB_FAIL_MATCH = cwd에 이 문자열이
 들어 있으면 그 실행만 종료코드 1(run 실패 격리 시험).
+동시 실행 하한(phase3 §23.11 S18): FAKE_SIMLAB_BARRIER=<폴더>:<n> → 형상 갱신 실행마다 <폴더>/<pid>를 만들고 파일이 n개 이상이 될
+때까지 기다린다(순차 실행이면 풀리지 않음). FAKE_SIMLAB_BARRIER_TIMEOUT_S(기본 90)를 넘으면 "barrier timeout" 출력 후 종료코드 9.
 """
 import atexit, glob, json, os, re, subprocess, sys, time
 
@@ -30,6 +32,17 @@ _fm = os.environ.get("FAKE_SIMLAB_FAIL_MATCH")
 if _fm and _fm in os.getcwd():
     print(f"SimLab (fake) failure for {os.getcwd()}", flush=True)
     sys.exit(1)
+_bar = os.environ.get("FAKE_SIMLAB_BARRIER")
+if _bar and "-auto" in sys.argv and len(sys.argv) != 6:
+    _bdir, _, _bn = _bar.rpartition(":")
+    os.makedirs(_bdir, exist_ok=True)
+    open(os.path.join(_bdir, str(os.getpid())), "w").close()
+    _deadline = time.time() + float(os.environ.get("FAKE_SIMLAB_BARRIER_TIMEOUT_S", "90") or 90)
+    while len(os.listdir(_bdir)) < int(_bn):
+        if time.time() > _deadline:
+            print("barrier timeout", flush=True)
+            sys.exit(9)
+        time.sleep(0.05)
 if float(os.environ.get("FAKE_SIMLAB_SLEEP_S", "0") or 0) and "-auto" in sys.argv and len(sys.argv) != 6:
     time.sleep(float(os.environ["FAKE_SIMLAB_SLEEP_S"]))
 if m == "fail":

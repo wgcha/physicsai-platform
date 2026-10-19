@@ -691,6 +691,66 @@ export interface paths {
         patch: operations["patch_set_physicsai_api_param_sets__ps_id__patch"];
         trace?: never;
     };
+    "/physicsai/api/param-sets/{ps_id}/baselines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Baseline Add
+         * @description baseline 추가(PARAM_SET_NATIVE mode add_baseline: 준비·추출·tag·BL_MAP 매칭 초안). 매칭표는 항상 draft로 저장된다.
+         */
+        post: operations["baseline_add_physicsai_api_param_sets__ps_id__baselines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/baselines/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Baseline Disable
+         * @description 단일 baseline으로 되돌림(baselines/·param_map.json은 _backup으로).
+         */
+        post: operations["baseline_disable_physicsai_api_param_sets__ps_id__baselines_disable_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/baselines/{baseline_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Baseline Delete
+         * @description 추가 baseline 삭제(폴더는 _backup, 매칭표 draft). 첫 baseline·남은 추가 baseline이 1개면 409.
+         */
+        delete: operations["baseline_delete_physicsai_api_param_sets__ps_id__baselines__baseline_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/param-sets/{ps_id}/display": {
         parameters: {
             query?: never;
@@ -745,6 +805,114 @@ export interface paths {
          * @description geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).
          */
         post: operations["native_prepare_physicsai_api_param_sets__ps_id__native_prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/param-map": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Param Map Get
+         * @description 다중 baseline 매칭표(제안·결정·확정 상태·확정 전 필수 결정 행).
+         */
+        get: operations["param_map_get_physicsai_api_param_sets__ps_id__param_map_get"];
+        /**
+         * Param Map Put
+         * @description 행별 decision 저장(proposed·signature 불변). 확정 상태면 draft로 되돌린다. 충돌 422 PARAM_NAME_CONFLICT.
+         */
+        put: operations["param_map_put_physicsai_api_param_sets__ps_id__param_map_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/param-map/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Param Map Confirm
+         * @description 매칭표 확정: 추천 등의 미결정 행은 accept로 기록, check 등급·needs_review 행은 명시 결정 필수(없으면 422 GEOM_INPUT_INVALID).
+         */
+        post: operations["param_map_confirm_physicsai_api_param_sets__ps_id__param_map_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/props": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Props Get
+         * @description PROP 스캔 결과 + 현재 선택(스캔 전이면 scanned=false).
+         */
+        get: operations["props_get_physicsai_api_param_sets__ps_id__props_get"];
+        /**
+         * Props Put
+         * @description 쉘 두께 파라미터 선택 저장(파라미터 표 source=prop 행 전체 교체). 422 PROP_SELECTION_INVALID + problems.
+         */
+        put: operations["props_put_physicsai_api_param_sets__ps_id__props_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/props/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Props Scan
+         * @description 조립 폴더의 /PROP/TYPE1 쉘 두께 목록을 다시 찾는다(PARAM_SET_NATIVE mode props_scan 작업).
+         */
+        post: operations["props_scan_physicsai_api_param_sets__ps_id__props_scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/remap": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Param Map Remap
+         * @description 매칭표만 다시 만든다(PARAM_SET_NATIVE mode remap: BL_MAP·NP_REGISTER만, 서명 같은 행 결정 승계).
+         */
+        post: operations["param_map_remap_physicsai_api_param_sets__ps_id__remap_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1528,6 +1696,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/train/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Train Features
+         * @description geometry-engine.md §7.3.1: ① native 추출 피처(종류·범위·그룹·하이라이트 PNG artifact id — PNG는 /artifacts/{id}/media).
+         */
+        get: operations["train_features_physicsai_api_studies__study_id__train_features_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/train/params": {
         parameters: {
             query?: never;
@@ -1815,6 +2003,48 @@ export interface components {
             size: number;
             /** Study Id */
             study_id: string;
+        };
+        /**
+         * BaselineAddRequest
+         * @description `POST /param-sets/{id}/baselines` → 202 {job_id}(PARAM_SET_NATIVE mode add_baseline). path = 그 baseline 프로젝트 폴더.
+         */
+        BaselineAddRequest: {
+            /** Choice */
+            choice?: {
+                [key: string]: string | null;
+            } | null;
+            /** Id */
+            id: string;
+            /** Label */
+            label?: string | null;
+            /** Path */
+            path: string;
+            /** Split Param */
+            split_param?: string | null;
+            /** Usage */
+            usage?: ("topology" | "range") | null;
+        };
+        /** BaselineInfo */
+        BaselineInfo: {
+            /**
+             * Feature Count
+             * @default 0
+             */
+            feature_count: number;
+            /** Id */
+            id: string;
+            /** Label */
+            label?: string | null;
+            /** Prep Reason */
+            prep_reason?: string | null;
+            /**
+             * Prep Status
+             * @default MISSING
+             * @enum {string}
+             */
+            prep_status: "READY" | "STALE" | "MISSING";
+            /** Rel */
+            rel: string;
         };
         /** BatchCurveSeries */
         BatchCurveSeries: {
@@ -3960,6 +4190,16 @@ export interface components {
              * @enum {string}
              */
             prep_status: "READY" | "STALE" | "MISSING";
+            /**
+             * Props Scanned
+             * @default false
+             */
+            props_scanned: boolean;
+            /**
+             * Shell Only
+             * @default false
+             */
+            shell_only: boolean;
         };
         /** NativeWarning */
         NativeWarning: {
@@ -4084,10 +4324,210 @@ export interface components {
             /** Value */
             value: number;
         };
+        /**
+         * ParamMap
+         * @description `GET·PUT /param-sets/{id}/param-map`, `POST …/confirm` 본문(param_map.json + 요약).
+         */
+        ParamMap: {
+            /** Baselines */
+            baselines: components["schemas"]["ParamMapBaseline"][];
+            /** Common */
+            common: components["schemas"]["ParamMapRow"][];
+            /** Confirmed At */
+            confirmed_at?: string | null;
+            /** Confirmed By */
+            confirmed_by?: string | null;
+            /** Discrete */
+            discrete?: {
+                [key: string]: unknown;
+            } | null;
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Map Options */
+            map_options?: {
+                [key: string]: unknown;
+            } | null;
+            /** Range Split */
+            range_split?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "draft" | "confirmed";
+            /**
+             * Undecided Count
+             * @default 0
+             */
+            undecided_count: number;
+            /**
+             * Unresolved Rows
+             * @default []
+             */
+            unresolved_rows: string[];
+            /**
+             * Usage
+             * @enum {string}
+             */
+            usage: "topology" | "range";
+            /**
+             * Variables
+             * @default []
+             */
+            variables: string[];
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["ParamMapWarning"][];
+        };
+        /** ParamMapBaseline */
+        ParamMapBaseline: {
+            /** Id */
+            id: string;
+            /** Rel */
+            rel?: string | null;
+        };
+        /**
+         * ParamMapDecision
+         * @description 사용자 결정: accept(제안 그대로) | rename·change(name·map 지정, map 값 null = 그 baseline N/A) | split(parts마다 변수 1개).
+         */
+        ParamMapDecision: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "accept" | "rename" | "change" | "split";
+            /** Map */
+            map?: {
+                [key: string]: string | null;
+            } | null;
+            /** Name */
+            name?: string | null;
+            /** Parts */
+            parts?: components["schemas"]["ParamMapDecisionPart"][] | null;
+        };
+        /** ParamMapDecisionPart */
+        ParamMapDecisionPart: {
+            /** Map */
+            map: {
+                [key: string]: string | null;
+            };
+            /** Name */
+            name: string;
+        };
+        /** ParamMapProposed */
+        ParamMapProposed: {
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: {
+                [key: string]: unknown;
+            }[];
+            /** Grade */
+            grade?: ("recommend" | "check" | "unmatched") | null;
+            /** Group Size */
+            group_size?: number | null;
+            /**
+             * Map
+             * @default {}
+             */
+            map: {
+                [key: string]: string | null;
+            };
+            /** Name */
+            name: string;
+            /**
+             * Nominal
+             * @default {}
+             */
+            nominal: {
+                [key: string]: number | null;
+            };
+            /** Score */
+            score?: number | null;
+        };
+        /**
+         * ParamMapRemapRequest
+         * @description `POST /param-sets/{id}/remap` → 202 {job_id}(PARAM_SET_NATIVE mode remap). 생략 = 기존 usage·분할 변수.
+         */
+        ParamMapRemapRequest: {
+            /** Split Param */
+            split_param?: string | null;
+            /** Usage */
+            usage?: ("topology" | "range") | null;
+        };
+        /** ParamMapRow */
+        ParamMapRow: {
+            /** Decision */
+            decision?: {
+                [key: string]: unknown;
+            } | null;
+            /** Feature Type */
+            feature_type?: string | null;
+            /**
+             * Needs Review
+             * @default false
+             */
+            needs_review: boolean;
+            proposed: components["schemas"]["ParamMapProposed"];
+            /**
+             * Requires Decision
+             * @default false
+             */
+            requires_decision: boolean;
+            /** Row Id */
+            row_id: string;
+            /**
+             * Signature
+             * @default
+             */
+            signature: string;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+            /**
+             * Unit
+             * @default mm
+             */
+            unit: string;
+        };
+        /** ParamMapRowDecision */
+        ParamMapRowDecision: {
+            decision: components["schemas"]["ParamMapDecision"] | null;
+            /** Row Id */
+            row_id: string;
+        };
+        /**
+         * ParamMapUpdate
+         * @description `PUT /param-sets/{id}/param-map`: 행별 decision만 저장(proposed·signature 불변). 확정 상태면 draft로 되돌린다.
+         */
+        ParamMapUpdate: {
+            /** Decisions */
+            decisions: components["schemas"]["ParamMapRowDecision"][];
+        };
+        /** ParamMapWarning */
+        ParamMapWarning: {
+            /** Code */
+            code: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /** Row Id */
+            row_id?: string | null;
+        };
         /** ParamSet */
         ParamSet: {
             /** Assem Rel */
             assem_rel?: string | null;
+            /** Baselines */
+            baselines?: components["schemas"]["BaselineInfo"][] | null;
             /** Cad File Name */
             cad_file_name: string;
             /** Display */
@@ -4128,8 +4568,10 @@ export interface components {
              * @default FOLDER
              */
             origin: string;
+            /** Param Map Status */
+            param_map_status?: ("draft" | "confirmed") | null;
             /** Parameters */
-            parameters: components["schemas"]["Parameter"][];
+            parameters: components["schemas"]["ParamSetParameter"][];
             /**
              * Registered At
              * Format: date-time
@@ -4176,6 +4618,11 @@ export interface components {
             mode?: ("folder" | "discover") | null;
             /** Path */
             path: string;
+            /**
+             * Shell Only
+             * @default false
+             */
+            shell_only: boolean;
         };
         /**
          * ParamSetDiscoverChoice
@@ -4254,6 +4701,34 @@ export interface components {
             runs: "collected" | "all";
             /** Unit System */
             unit_system?: string | null;
+        };
+        /**
+         * ParamSetParameter
+         * @description 세트 파라미터 표 행. geometry-engine.md §11.1(3S): 쉘 두께 행 source="prop"·prop_id(형상 행은 null),
+         *     §7.3.8(4B): 확정 공통 변수의 baseline별 대응 {id: {param, nominal, min, max, feasible}|null}.
+         */
+        ParamSetParameter: {
+            /** Baselines */
+            baselines?: {
+                [key: string]: unknown;
+            } | null;
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Name */
+            name: string;
+            /** Nominal */
+            nominal: number;
+            /** Prop Id */
+            prop_id?: number | null;
+            /** Source */
+            source?: "prop" | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
         };
         /** ParamSetPatch */
         ParamSetPatch: {
@@ -4951,6 +5426,157 @@ export interface components {
             /** Seed */
             seed?: number | null;
         };
+        /**
+         * ShellProp
+         * @description props scan 결과 1행 + 현재 선택. selectable=false면 reason_code(PROP_UNSUPPORTED_TYPE·PROP_OVERRIDDEN_BY_ELEMENT·
+         *     PROP_OVERRIDDEN_BY_PART·PROP_THICKNESS_INVALID).
+         */
+        ShellProp: {
+            /**
+             * Element Overrides
+             * @default 0
+             */
+            element_overrides: number;
+            /** File */
+            file?: string | null;
+            /** Id */
+            id?: number | null;
+            /**
+             * Keyword
+             * @default
+             */
+            keyword: string;
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Parameter */
+            parameter?: string | null;
+            /**
+             * Part Overrides
+             * @default []
+             */
+            part_overrides: components["schemas"]["ShellPropPart"][];
+            /**
+             * Parts
+             * @default []
+             */
+            parts: components["schemas"]["ShellPropPart"][];
+            /** Range */
+            range?: {
+                [key: string]: unknown;
+            } | null;
+            /** Reason Code */
+            reason_code?: string | null;
+            /**
+             * Selectable
+             * @default false
+             */
+            selectable: boolean;
+            /**
+             * Selected
+             * @default false
+             */
+            selected: boolean;
+            /**
+             * Supported
+             * @default false
+             */
+            supported: boolean;
+            /** Thickness */
+            thickness?: number | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+        };
+        /** ShellPropPart */
+        ShellPropPart: {
+            /** Id */
+            id?: number | null;
+            /** Thickness */
+            thickness?: number | null;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+        };
+        /** ShellPropSelect */
+        ShellPropSelect: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+        };
+        /** ShellPropWarning */
+        ShellPropWarning: {
+            /** Code */
+            code: string;
+            /**
+             * Message
+             * @default
+             */
+            message: string;
+            /**
+             * Parts
+             * @default []
+             */
+            parts: number[];
+            /** Prop */
+            prop?: number | null;
+        };
+        /**
+         * ShellProps
+         * @description `GET /param-sets/{id}/props`: 스캔 전이면 scanned=false·빈 목록.
+         */
+        ShellProps: {
+            /** Engine Version */
+            engine_version?: string | null;
+            /**
+             * Include Geometry
+             * @default true
+             */
+            include_geometry: boolean;
+            /**
+             * Props
+             * @default []
+             */
+            props: components["schemas"]["ShellProp"][];
+            /** Scanned */
+            scanned: boolean;
+            /**
+             * Shell Only
+             * @default false
+             */
+            shell_only: boolean;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["ShellPropWarning"][];
+        };
+        /**
+         * ShellPropsUpdate
+         * @description `PUT /param-sets/{id}/props`: 선택 전체 교체. include_geometry=false면 형상 행을 빼고 쉘 두께만(§11.1, 다중 baseline 세트 불가).
+         */
+        ShellPropsUpdate: {
+            /**
+             * Include Geometry
+             * @default true
+             */
+            include_geometry: boolean;
+            /** Selected */
+            selected: components["schemas"]["ShellPropSelect"][];
+        };
         /** SoBatchRef */
         SoBatchRef: {
             /** Gen */
@@ -5576,6 +6202,7 @@ export interface components {
             predict_responses?: components["schemas"]["FeatureState"] | null;
             spdm_import: components["schemas"]["FeatureState"];
             train_doe: components["schemas"]["FeatureState"];
+            train_doe_platform?: components["schemas"]["FeatureState"] | null;
             train_extract: components["schemas"]["FeatureState"];
             train_import: components["schemas"]["FeatureState"];
             train_resp: components["schemas"]["FeatureState"];
@@ -6181,6 +6808,13 @@ export interface components {
             engine: "altair" | "native";
             /** Engine Version */
             engine_version?: string | null;
+            gen?: components["schemas"]["TrainDoeGenCounts"] | null;
+            /**
+             * Generator
+             * @default hyperstudy
+             * @enum {string}
+             */
+            generator: "platform" | "hyperstudy";
             /** Has Run Responses */
             has_run_responses: boolean;
             /** Id */
@@ -6204,12 +6838,45 @@ export interface components {
             run_state_counts: components["schemas"]["RunStateCounts"];
             /** Sample Status */
             sample_status: string;
+            sampling?: components["schemas"]["TrainDoeSampling"] | null;
             /** Solve Failed Count */
             solve_failed_count: number;
             /** Status */
             status: string;
             /** Study Id */
             study_id: string;
+        };
+        /**
+         * TrainDoeGenCounts
+         * @description 플랫폼 DOE run별 입력 생성 상태 집계(train_doe_points).
+         */
+        TrainDoeGenCounts: {
+            /** Done */
+            done: number;
+            /** Failed */
+            failed: number;
+            /** Pending */
+            pending: number;
+            /** Running */
+            running: number;
+            /** Total */
+            total: number;
+        };
+        /**
+         * TrainDoeSampling
+         * @description 플랫폼 DOE 표본 방식(§23.4): kind·표시 이름·설명 id(td_<kind>)·meta(DG_PREP 전 null).
+         */
+        TrainDoeSampling: {
+            /** Desc Id */
+            desc_id: string;
+            /** Kind */
+            kind: string;
+            /** Label */
+            label: string;
+            /** Meta */
+            meta?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** TrainParamOut */
         TrainParamOut: {
@@ -8428,6 +9095,176 @@ export interface operations {
             };
         };
     };
+    baseline_add_physicsai_api_param_sets__ps_id__baselines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BaselineAddRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeAccepted"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    baseline_disable_physicsai_api_param_sets__ps_id__baselines_disable_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    baseline_delete_physicsai_api_param_sets__ps_id__baselines__baseline_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+                baseline_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     put_display_physicsai_api_param_sets__ps_id__display_put: {
         parameters: {
             query?: never;
@@ -8549,6 +9386,388 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeAccepted"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    param_map_get_physicsai_api_param_sets__ps_id__param_map_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamMap"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    param_map_put_physicsai_api_param_sets__ps_id__param_map_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamMapUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamMap"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    param_map_confirm_physicsai_api_param_sets__ps_id__param_map_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamMap"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    props_get_physicsai_api_param_sets__ps_id__props_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ShellProps"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    props_put_physicsai_api_param_sets__ps_id__props_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ShellPropsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ParamSet"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    props_scan_physicsai_api_param_sets__ps_id__props_scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeAccepted"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    param_map_remap_physicsai_api_param_sets__ps_id__remap_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ParamMapRemapRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {
@@ -10958,6 +12177,73 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TrainDoe"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    train_features_physicsai_api_studies__study_id__train_features_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeFeatures"];
                 };
             };
             /** @description Forbidden */

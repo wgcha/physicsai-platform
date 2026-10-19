@@ -1,4 +1,9 @@
-"""①-3 TD_DOE_GEN: DOE·Radioss 입력 생성(phase2 §6.4)."""
+"""①-3 TD_DOE_GEN: DOE·Radioss 입력 생성(phase2 §6.4).
+
+생성 방식(train_does.generator, phase3 §23.5 S18): HYPERSTUDY = 이 파일의 기존 hstbatch 경로(무변경),
+PLATFORM = `doe_platform_gen`(run_parallel). native 엔진(params.engine, geometry-engine.md §7.3.3)은 그보다 먼저 `doe_native`로.
+세 step 처리기 머리에서 분기한다.
+"""
 
 from __future__ import annotations
 
@@ -34,9 +39,22 @@ def _setup(ctx: Any) -> dict[str, Any]:
     return s
 
 
+def _platform(ctx: Any) -> Any:
+    """플랫폼 DOE면 doe_platform_gen 모듈(지연 import — 이 모듈과 순환 없음), 아니면 None.
+    native DOE(geometry-engine.md §7.3.3)도 generator = PLATFORM이지만 자체 분기(doe_native)를 쓰므로 제외한다."""
+    if is_native(ctx.params) or _doe(ctx).get("generator") != "PLATFORM":
+        return None
+    from . import doe_platform_gen
+
+    return doe_platform_gen
+
+
 def dg_prep(ctx: Any) -> None:
     if is_native(ctx.params):  # geometry-engine.md §7.3.3
         return doe_native.dg_prep(ctx)
+    plat = _platform(ctx)
+    if plat is not None:
+        return plat.dg_prep(ctx)
     s = ctx.settings
     p = ctx.params
     doe_id = p["doe_id"]
@@ -110,9 +128,10 @@ class HstRunTracker:
     """HST DOE 진행 집계. 완료 = 'Finished run (k), model (m_3)' 로그(완료 순서 무관 집합),
     시작 = run 폴더(train_data.run_dir_glob) 생성. 실행 중 = 시작−완료(동시 실행 수 이하로 제한)."""
 
-    def __init__(self, D: str, run_dir_glob: str, rx: re.Pattern[str], total: int | None, multi: int,
+    def __init__(self, D: str, run_dir_glob: str | list[str], rx: re.Pattern[str], total: int | None, multi: int,
                  scan_interval_s: float = 2.0) -> None:
-        self.D, self.glob, self.rx, self.total, self.multi = D, run_dir_glob, rx, total, max(1, multi)
+        self.D, self.rx, self.total, self.multi = D, rx, total, max(1, multi)
+        self.globs = [run_dir_glob] if isinstance(run_dir_glob, str) else list(run_dir_glob)  # 패턴 목록(이슈 #7)
         self.done: set[int] = set()
         self.started = 0
         self.scan_interval_s = scan_interval_s
@@ -140,7 +159,7 @@ class HstRunTracker:
         if now - self._last_scan < self.scan_interval_s:
             return None
         self._last_scan = now
-        n = sum(1 for d in glob.glob(os.path.join(self.D, self.glob)) if os.path.isdir(d))
+        n = len(_run_dirs(self.D, self.globs))
         self.started = max(n, len(self.done))
         return self.snapshot()
 
@@ -148,16 +167,37 @@ class HstRunTracker:
 def hst_gen_radioss(ctx: Any) -> None:
     if is_native(ctx.params):
         return doe_native.hst_gen(ctx)
+    plat = _platform(ctx)
+    if plat is not None:
+        return plat.gen_platform(ctx)
     s = ctx.settings
     r = ctx.result()
     D = _D(ctx)
     doe = _doe(ctx)
     multi = int(doe["multi_execution"])
-    tr = HstRunTracker(D, s.train_data.run_dir_glob, re.compile(s.train_data.hst_progress_regex),
+    tr = HstRunTracker(D, s.train_data.run_dir_globs(), re.compile(s.train_data.hst_progress_regex),
                        doe["num_runs_requested"], multi)
     ctx.log(f"[MULTIEXEC] 동시 실행 수 {multi}")
     ctx.run_local("hst_gen_radioss", {"multi_execution": str(multi), "launcher": ctx.abs(r["launcher_rel"])},
                   cwd=D, error_patterns=list(s.train_data.hst_log_error_patterns), line_hook=tr.line, poll_hook=tr.poll)
+
+
+def _run_dirs(D: str, globs: list[str]) -> list[str]:
+    """D 기준 패턴 목록에 맞는 run 폴더(중복 경로 1번) — (이름, 경로) 순."""
+    found = {os.path.normpath(d) for g in globs for d in glob.glob(os.path.join(D, g))
+             if os.path.isdir(d) and "_backup" not in os.path.relpath(d, D).replace("\\", "/").split("/")}
+    return sorted(found, key=lambda d: (os.path.basename(d), d))
+
+
+def _scan_dirs(D: str, td: Any) -> list[str]:
+    """DG_SCAN run 폴더(이슈 #7): 설정 패턴 목록. 사용자 문자열 1개로 0개면 `*/<패턴>`을 한 번 더 시도하되
+    상위 이름이 `setup_`로 시작하는 공칭 run(HyperStudy approaches/setup_1-def)은 제외."""
+    globs = td.run_dir_globs()
+    dirs = _run_dirs(D, globs)
+    if not dirs and td.run_dir_glob_user_string():
+        dirs = [d for d in _run_dirs(D, ["*/" + g.replace("\\", "/") for g in globs])
+                if not os.path.basename(os.path.dirname(d)).lower().startswith("setup_")]
+    return dirs
 
 
 def _find_starter(run_dir: str, starter_glob: str) -> list[str]:
@@ -171,22 +211,31 @@ def _find_starter(run_dir: str, starter_glob: str) -> list[str]:
 
 
 def dg_scan(ctx: Any) -> None:
+    plat = _platform(ctx)
+    if plat is not None:
+        return plat.dg_scan(ctx)
     s = ctx.settings
     doe_id = ctx.params["doe_id"]
     D = _D(ctx)
-    dirs = sorted((d for d in glob.glob(os.path.join(D, s.train_data.run_dir_glob)) if os.path.isdir(d)),
-                  key=lambda d: (os.path.basename(d), d))
+    dirs = _scan_dirs(D, s.train_data)
     runs: list[dict[str, Any]] = []
     skipped: list[dict[str, str]] = []
     seen: set[str] = set()
+    # 같은 run_key 폴더가 여러 개(패턴끼리 겹침 포함, 이슈 #7)면 어느 것을 쓸지 모호 → 그 run은 모두 제외 + 경고
+    by_key: dict[str, list[str]] = {}
+    for d in dirs:
+        by_key.setdefault(os.path.basename(d), []).append(d)
     for d in dirs:
         rk = os.path.basename(d)
         rel_dir = ctx.rel(d)
         if not RUN_KEY_RE.match(rk):
             skipped.append({"dir": rel_dir, "reason": "run 폴더 이름이 run_key 규칙에 맞지 않습니다"})
             continue
-        if rk in seen:
-            skipped.append({"run_key": rk, "reason": "같은 이름의 run 폴더가 여러 개입니다"})
+        if len(by_key[rk]) > 1:
+            if rk not in seen:
+                seen.add(rk)
+                skipped.append({"run_key": rk, "reason": "같은 이름의 run 폴더가 여러 개입니다("
+                                + ", ".join(ctx.rel(x) for x in by_key[rk][:3]) + ")"})
             continue
         st = _find_starter(d, s.predict.starter_glob)
         sk = doe_native.skipped_entry(d, s.geometry.max_report_bytes) if is_native(ctx.params) and not st else None
@@ -203,7 +252,8 @@ def dg_scan(ctx: Any) -> None:
         if "category" not in sk:
             ctx.add_warning("RUN_INPUT_INVALID", f"{sk.get('run_key') or sk.get('dir')}: {sk['reason']}")
     if not runs:
-        raise StepFailure("OUTPUT_MISSING", "Radioss 입력 run 폴더를 찾지 못했습니다 — 설정 train_data.run_dir_glob 확인")
+        raise StepFailure("OUTPUT_MISSING", "Radioss 입력 run 폴더를 찾지 못했습니다 — 설정 train_data.run_dir_glob 확인"
+                          f"({', '.join(s.train_data.run_dir_globs())})")
     doe = _doe(ctx)
     names = [q["name"] for q in doe["parameters_snapshot"]]
     sr = doe_samples.extract(D, [{"run_key": r["run_key"], "run_dir": r["run_dir"]} for r in runs], names, s.train_data)

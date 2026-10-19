@@ -63,7 +63,7 @@ def test_native_doe_layout_matrix_and_samples(p2_native, fake_record):
     assert [r["run_key"] for r in rows] == [f"run__0000{i}" for i in range(1, 5)] and "A_THK_1" in rows[0]
     assert "B_RIB_H_1" not in rows[0]                                            # use=false 파라미터는 행렬에 없음
     for r in rows:
-        R = D / "approaches" / "native_lhs" / r["run_key"]
+        R = D / "approaches" / "doe_1" / r["run_key"]
         for rel in ("options.json", "m_1/values.json", "m_1/native_params.xml", "m_1/update/update.json", "m_2/morph/morph.json",
                     "m_2/check/check.json", f"m_2/{MESH_INC}", "m_3/model0_0000.rad"):
             assert (R / rel).is_file(), (r["run_key"], rel)
@@ -95,7 +95,7 @@ def test_native_doe_skips_failed_runs_with_reason(p2_native, monkeypatch):
     assert jd["result"]["run_count"] == 6 - len(sk) and jd["result"]["run_count"] >= 1
     assert "PARTIAL_OUTPUT" in [x["code"] for x in jd["warnings"]]
     D = ai / "nd2" / "01_train" / "doe" / jd["result"]["doe_id"]
-    R = D / "approaches" / "native_lhs" / sk[0]["run_key"]
+    R = D / "approaches" / "doe_1" / sk[0]["run_key"]
     d = json.loads((R / "SKIPPED.json").read_text())
     assert d["code"] == "GEOM_QUALITY" and d["step"] == "check" and not (R / "m_3").exists() and (R / "m_1" / "values.json").is_file()
 
@@ -168,3 +168,49 @@ def test_dataset_engine_detection_and_mixing(p2_native, engine):
     (other / "a.h3d").write_bytes(b"H3D")
     r = create(other)
     assert r.status_code == 201 and "engine" not in r.json()["result"]                # 판별 불가 → NULL
+
+
+def test_native_doe_as_s18_platform_path(p2_native, engine, monkeypatch):
+    """S18 병합(phase3 §23 + geometry-engine.md §7.3.3): native DOE = 생성 방식 platform의 한 경로.
+    sampling{kind:lhs}도 받고(다른 kind·hyperstudy 422), generator=PLATFORM·engine=native로 기록, 동시 수 기본 = 플랫폼 기본,
+    run 생성은 native(doe_matrix·approaches/doe_1·SKIPPED)이고 S18 run별 점 표는 쓰지 않음, on_run_failure=fail이면 일부 실패 = GEN_PARTIAL_FAILED."""
+    from sqlalchemy import text
+
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    sid = study(c, "nd6")
+    proj, _ = _extract(c, w, sid, ai, "nd6")
+    assem = str(proj / "assem")
+
+    def post(params):
+        return c.post(f"{API}/studies/{sid}/jobs", headers=PW, json={"job_type": "TD_DOE_GEN", "params": params})
+
+    r = post({"generator": "hyperstudy", "doe_label": "LHS", "num_runs": 4, "radioss_assem_path": assem})
+    assert r.status_code == 422, r.text
+    r = post({"generator": "platform", "sampling": {"kind": "lhs_opt", "count": 4, "seed": 1}, "radioss_assem_path": assem})
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "DOE_SAMPLING_INVALID", r.text
+    assert r.json()["detail"]["problems"][0]["code"] == "DESIGN_UNSUPPORTED"
+    r = post({"sampling": {"kind": "lhs", "count": 4, "seed": 7}, "num_runs": 4, "radioss_assem_path": assem})
+    assert r.status_code == 422, r.text                                              # sampling과 num_runs 동시 금지
+    r = post({"generator": "platform", "sampling": {"kind": "lhs", "count": 4, "seed": 7}, "radioss_assem_path": assem})
+    assert r.status_code == 201, r.text
+    p = r.json()["params"]
+    assert p["engine"] == "native" and p["generator"] == "platform" and p["num_runs"] == 4 and p["seed"] == 7
+    assert p["doe_label"] == "LHS(native)" and p["on_run_failure"] == "continue"
+    assert w.run_once_slot() == "SUCCEEDED", job(c, r.json()["id"])
+    doe_id = job(c, r.json()["id"])["result"]["doe_id"]
+    with engine.connect() as conn:
+        row = conn.execute(text("select generator, engine, sampling, doe_type from train_does where id=:i"), {"i": doe_id}).one()
+        npts = conn.execute(text("select count(*) from train_doe_points where doe_id=:i"), {"i": doe_id}).scalar()
+    assert tuple(row) == ("PLATFORM", "native", None, "NATIVE_LHS") and npts == 0
+    D = ai / "nd6" / "01_train" / "doe" / doe_id
+    assert (D / "doe_matrix.csv").is_file() and (D / "approaches" / "doe_1" / "run__00004" / "m_3").is_dir()
+    d = c.get(f"{API}/train-does/{doe_id}", headers=P).json()
+    assert d["generator"] == "platform" and d["gen"] is None and d["sampling"] is None and d["run_count"] == 4
+    # 같은 seed·run 수면 계약 §7.3.3 모양과 같은 행렬
+    jd = _doe(c, w, sid, proj)
+    assert (ai / "nd6" / "01_train" / "doe" / jd["result"]["doe_id"] / "doe_matrix.csv").read_text() == (D / "doe_matrix.csv").read_text()
+    # on_run_failure=fail: 일부 실패면 작업 실패(GEN_PARTIAL_FAILED), continue(기본)면 스킵 + PARTIAL_OUTPUT
+    monkeypatch.setenv("FAKE_PAICAD_FAIL_WHEN", "check:GEOM_QUALITY:A_THK_1>10.0")
+    jf = _doe(c, w, sid, proj, expect="FAILED", num_runs=6, on_run_failure="fail")
+    assert jf["failure_code"] == "GEN_PARTIAL_FAILED" and "SKIPPED.json" in jf["failure_message"]

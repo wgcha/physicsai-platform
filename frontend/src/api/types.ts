@@ -292,7 +292,7 @@ export type ParamSet = Override<
     baselines?: BaselineInfo[];
   }
 >;
-export type ParamSetCreate = S["ParamSetCreate"];
+export type ParamSetCreate = Omit<S["ParamSetCreate"], "shell_only"> & { shell_only?: boolean }; // 서버 기본 false(geometry-engine.md §11.1)
 /** discover CAD 후보 — openapi는 dict라 계약(geometry-engine.md §7.4) 키로 좁힌다. native = STEP 파일 또는 parts/ 폴더 */
 export interface DiscoverCad {
   rel: string;
@@ -376,6 +376,8 @@ export interface ParamMap {
 }
 export interface BaselineInfo {
   id: string;
+  /** 세트 폴더 기준 상대 경로(기준 = ".", 그 밖 = baselines/<id>) — openapi BaselineInfo.rel */
+  rel: string;
   label?: string | null;
   source_path?: string | null;
   prep_status?: "READY" | "STALE" | "MISSING";
@@ -413,6 +415,10 @@ export type DoeField = S["DoeField"];
 export type DoeType = S["DoeType"];
 export type TrainRunState = keyof S["RunStateCounts"];
 export type SampleStatus = "PARSED" | "PARTIAL" | "MISSING" | "PENDING";
+/** S18(§23.4): generator = 생성 방식(기본 hyperstudy), sampling = 플랫폼 표본 요약(desc_id `td_<kind>`), gen = run별 생성 상태 집계(platform만) */
+export type DoeGenerator = S["TrainDoe"]["generator"];
+export type DoeGenCounts = S["TrainDoeGenCounts"];
+export type DoeSamplingBrief = S["TrainDoeSampling"];
 export type TrainDoe = Override<S["TrainDoe"], { status: EntityStatus; sample_status: SampleStatus }>;
 export type TrainRun = Override<S["TrainRun"], { state: TrainRunState }>;
 

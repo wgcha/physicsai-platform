@@ -26,10 +26,11 @@ from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
 
 from ..common import hst_run_label
 from ..geometry_native import effective_opts, engine_version, ensure_prep_ready, native_inputs, read_json, write_native_options
-from ..geometry_sample import SKIPPED_JSON, backup_path, generate_sample, write_no_cover, write_sample_inputs
+from ..geometry_sample import backup_path, generate_sample, write_no_cover, write_sample_inputs
+from . import doe_native
 from ._shared import _D, _doe
+from .doe_platform_gen import run_root
 
-APPROACH = "approaches/native_lhs"
 
 
 def _set(ctx: Any) -> tuple[dict[str, Any], str]:
@@ -129,7 +130,7 @@ def hst_gen(ctx: Any) -> None:
 
     def gen(runner: Any, row: tuple[int, str, str | None, dict[str, float | None]]) -> None:
         doe_no, run_key, bid, vals = row
-        R = os.path.join(D, APPROACH, run_key)
+        R = os.path.join(run_root(ctx), run_key)  # S18 platform_run_root(run_dir_glob과 맞음이 설정 검증됨)
         if os.path.lexists(R):
             backup_path(runner, R)
         geo, shell = sh.split_values(params, {k: v for k, v in vals.items() if v is not None})  # type: ignore[misc]
@@ -152,10 +153,4 @@ def hst_gen(ctx: Any) -> None:
         return f"run {done + failed}/{total} 완료 · 스킵 {failed} · " + hst_run_label(running, None, done, total, mm)
 
     outcomes = ctx.run_parallel(rows, gen, item_id=lambda t: t[1], max_parallel=m, label=label)
-    failed = [o for o in outcomes if not o.ok]
-    ctx.patch_result({"gen_ok": len(outcomes) - len(failed), "gen_skipped": len(failed)})
-    if outcomes and len(failed) == len(outcomes):
-        f0 = failed[0]
-        raise StepFailure(f0.code or "GEOM_INTERNAL", f"run {len(outcomes)}개 모두 생성 실패: {f0.item_id} — {f0.message}")
-    if failed:
-        ctx.add_warning("PARTIAL_OUTPUT", f"run {len(outcomes)}개 중 {len(failed)}개를 스킵했습니다(사유는 run 폴더의 {SKIPPED_JSON})")
+    doe_native.finish_outcomes(ctx, outcomes)

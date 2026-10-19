@@ -1,4 +1,4 @@
-"""① 학습데이터 저장소: train_setups·train_does·train_runs(phase2 §5.1~§5.3)."""
+"""① 학습데이터 저장소: train_setups·train_does·train_runs(phase2 §5.1~§5.3)·train_doe_points(phase3 §23.7 S18)."""
 
 from __future__ import annotations
 
@@ -9,11 +9,13 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.engine import Connection
 
 from ...errors import DomainError
-from ..tables import jobs, train_does, train_runs, train_setups
+from ..tables import jobs, train_doe_points, train_does, train_runs, train_setups
 from .jobs import row_dict
 
 RUN_STATES = ("GENERATED", "SUBMITTED", "SOLVED", "SOLVE_FAILED", "COLLECTED", "COLLECT_FAILED")
 RESUBMIT_STATES = ("GENERATED", "SOLVE_FAILED", "COLLECT_FAILED")
+GENERATORS = ("HYPERSTUDY", "PLATFORM")
+POINT_STATES = ("PENDING", "RUNNING", "DONE", "FAILED")
 
 
 # ---- train_setups --------------------------------------------------------------
@@ -59,6 +61,7 @@ def set_tpl_generated(conn: Connection, study_id: str, version: int, **values: A
 
 
 def insert_doe(conn: Connection, values: dict[str, Any]) -> None:
+    """DOE 행 삽입. `generator`(HYPERSTUDY 기본 | PLATFORM)·`sampling`({kind, input, meta}, 플랫폼만)을 받는다(§23.7)."""
     conn.execute(train_does.insert().values(**values))
 
 
@@ -135,3 +138,62 @@ def count_solve_jobs(conn: Connection, doe_id: str) -> int:
     )
     return int(conn.execute(q).scalar_one())
 
+
+
+# ---- train_doe_points(phase3 §23.7 S18: 플랫폼 DOE run별 표본·생성 상태) ----------------------------
+
+
+def insert_points(conn: Connection, doe_id: str, rows: list[dict[str, Any]]) -> None:
+    """rows = [{doe_no, run_key, values, applied_values}] → PENDING 행."""
+    if rows:
+        conn.execute(train_doe_points.insert(), [
+            {"doe_id": doe_id, "doe_no": int(r["doe_no"]), "run_key": r["run_key"], "values": r["values"],
+             "applied_values": r["applied_values"], "gen_state": "PENDING"} for r in rows])
+
+
+def points(conn: Connection, doe_id: str, states: list[str] | None = None) -> list[dict[str, Any]]:
+    q = select(train_doe_points).where(train_doe_points.c.doe_id == doe_id)
+    if states:
+        q = q.where(train_doe_points.c.gen_state.in_(states))
+    return [row_dict(r) for r in conn.execute(q.order_by(train_doe_points.c.doe_no))]
+
+
+def set_point(conn: Connection, doe_id: str, doe_no: int, **values: Any) -> None:
+    conn.execute(update(train_doe_points)
+                 .where(and_(train_doe_points.c.doe_id == doe_id, train_doe_points.c.doe_no == doe_no))
+                 .values(updated_at=func.now(), **values))
+
+
+def reset_points(conn: Connection, doe_id: str, from_states: list[str] | tuple[str, ...]) -> int:
+    """from_states 행 → PENDING(사유 지움). 바뀐 행 수."""
+    r = conn.execute(update(train_doe_points)
+                     .where(and_(train_doe_points.c.doe_id == doe_id, train_doe_points.c.gen_state.in_(list(from_states))))
+                     .values(gen_state="PENDING", gen_code=None, gen_message=None, updated_at=func.now()))
+    return int(r.rowcount or 0)
+
+
+def reset_running_points(conn: Connection, doe_id: str) -> int:
+    """RUNNING → PENDING(취소·lease 상실·리퍼 — 종료 훅, §23.5)."""
+    return reset_points(conn, doe_id, ("RUNNING",))
+
+
+def point_counts(conn: Connection, doe_id: str) -> dict[str, int]:
+    """{total, pending, running, done, failed}."""
+    out = {s.lower(): 0 for s in POINT_STATES}
+    for st, n in conn.execute(select(train_doe_points.c.gen_state, func.count())
+                              .where(train_doe_points.c.doe_id == doe_id).group_by(train_doe_points.c.gen_state)):
+        out[str(st).lower()] = int(n)
+    return {"total": sum(out.values()), **out}
+
+
+def point_counts_many(conn: Connection, doe_ids: list[str]) -> dict[str, dict[str, int]]:
+    """여러 DOE의 point_counts(목록 응답용 한 번 조회)."""
+    res: dict[str, dict[str, int]] = {d: {"total": 0, **{s.lower(): 0 for s in POINT_STATES}} for d in doe_ids}
+    if not doe_ids:
+        return res
+    for did, st, n in conn.execute(select(train_doe_points.c.doe_id, train_doe_points.c.gen_state, func.count())
+                                   .where(train_doe_points.c.doe_id.in_(doe_ids))
+                                   .group_by(train_doe_points.c.doe_id, train_doe_points.c.gen_state)):
+        res[did][str(st).lower()] = int(n)
+        res[did]["total"] += int(n)
+    return res

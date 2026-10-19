@@ -132,7 +132,7 @@ def test_shell_only_registration_and_set_doe(native_env, fake_record):
     rows = list(csv.DictReader((D / "doe_matrix.csv").open(encoding="utf-8")))
     assert len(rows) == 3 and set(rows[0]) == {"doe_no", "run_key", "BRACKET_SHELL_T", "COVER_SHELL_T"}
     for row in rows:
-        R = D / "approaches" / "native_lhs" / row["run_key"]
+        R = D / "approaches" / "doe_1" / row["run_key"]
         assert not (R / "m_1" / "update").exists()                                  # 형상 단계 생략
         assert f"#FAKE_PROP 1 {float(row['BRACKET_SHELL_T'])!r}" in (R / "m_3" / "material.inc").read_text()
         assert 1.14 <= float(row["BRACKET_SHELL_T"]) <= 1.26
@@ -156,7 +156,7 @@ def test_set_doe_props_failure_is_skipped_run(native_env, monkeypatch):
     sk = {s["run_key"]: s for s in jd["result"]["skipped_runs"]}
     assert set(sk) == set(hi) and all(s["reason"] == "PROP_THICKNESS_INVALID" and s["category"] == "PROP" for s in sk.values())
     for rk in hi:
-        R = D / "approaches" / "native_lhs" / rk
+        R = D / "approaches" / "doe_1" / rk
         assert not (R / "m_3").exists() and json.loads((R / "SKIPPED.json").read_text())["step"] == "props"
 
 

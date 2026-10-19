@@ -20,7 +20,7 @@ def _insert(c, sid, stage):
 def test_stage_zero_allowed_and_range_checked(engine):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0015_geometry_engine"
+    assert MIGRATION_HEAD == "0016_geometry_engine"
     sid = str(uuid.uuid4())
     with engine.begin() as c:
         assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD

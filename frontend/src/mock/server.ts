@@ -82,6 +82,8 @@ export interface MockOptions {
   geometryDefault?: "altair" | "native";
   /** "native" = native 세트 ps-n1 시드, "multi" = ps-n1에 baseline B2 추가(4B 매칭표 초안) */
   geometry?: "native" | "multi";
+  /** S18: /status.limits.configured.doe_generator_default(기본 platform — 설정 train_data.doe_generator_default) */
+  doeGenerator?: "platform" | "hyperstudy";
 }
 
 export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
@@ -153,6 +155,7 @@ export class MockServer {
   manage: ManageMock;
   /** S10 */
   capture: CaptureMode = "OK";
+  doeGenerator: "platform" | "hyperstudy" = "platform";
   /** S16 V2 FEM 검증 */
   fems: FemRec[] = [];
   /** S16 V3: 방향별 영상 content_type 덮어쓰기(avi·gif 흉내) */
@@ -174,6 +177,7 @@ export class MockServer {
     this.speed = opts.speed ?? 9;
     this.ui = { ...DEFAULT_UI, ...(opts.ui ?? {}) };
     this.capture = opts.capture ?? "OK";
+    this.doeGenerator = opts.doeGenerator ?? "platform";
     this.seq = Math.max(...this.notifs.map((n) => n.seq));
     this.seedJobs();
     this.p2 = new Phase2Mock(this, opts.disabledFeatures);

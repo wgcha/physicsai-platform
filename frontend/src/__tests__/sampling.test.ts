@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 import text from "./fixtures/samplingText.json";
 import runs from "./fixtures/samplingRuns.json";
 import {
-  DESCRIPTIONS, HS_NOTE, RECOMMENDED_KIND, SAMPLING_GROUPS, SAMPLING_LABEL, calcNote, defaultLevel, descIdOf, expectedRuns, hsCalcNote, methodShortLabel,
+  DESCRIPTIONS, HS_COMPAT_NOTE, HS_NOTE, PLATFORM_GROUPS, PLATFORM_KINDS, RECOMMENDED_KIND, SAMPLING_GROUPS, SAMPLING_LABEL, calcNote, defaultLevel, descIdOf, expectedRuns, hsCalcNote, methodShortLabel,
   pbSizes, recommendedCount, samplingSummary, sobolCounts,
 } from "../lib/sampling";
 import type { BatchSampling, ParamSet } from "../api/types";
@@ -13,9 +13,9 @@ import { activeNames, buildSource, fullfactRuns, initialSampling, resetForTempla
 const fx = text.descriptions as Record<string, { name: string; lines: string[] }>;
 
 describe("표본 방식 설명문 (V3-S15-11)", () => {
-  it("계약 §20.4 설명 id 전부(④ 10 + ① 4 + 일반 1) — 이름·4줄이 글자 단위로 같고 빈 줄이 없다", () => {
+  it("계약 §20.4·§23.10 설명 id 전부(④ 10 + ① 4 + 일반 1 + ① 플랫폼 td_ 8) — 이름·4줄이 글자 단위로 같고 빈 줄이 없다", () => {
     expect(Object.keys(DESCRIPTIONS).sort()).toEqual(Object.keys(fx).sort());
-    expect(Object.keys(fx)).toHaveLength(15);
+    expect(Object.keys(fx)).toHaveLength(23);
     for (const [id, d] of Object.entries(DESCRIPTIONS)) {
       expect(d.name, id).toBe(fx[id].name);
       expect(d.lines, id).toEqual(fx[id].lines);
@@ -23,6 +23,7 @@ describe("표본 방식 설명문 (V3-S15-11)", () => {
       expect(d.lines.every((l) => l.trim().length > 0), id).toBe(true);
     }
     expect(HS_NOTE).toBe(text.hsNote);
+    expect(HS_COMPAT_NOTE).toBe(text.hsCompatNote);
   });
 
   it("묶음·순서·추천: 4묶음 10방식, 기본 추천 = 최적화 LHS, 기존 라벨 LHS(무작위 층화)", () => {
@@ -160,5 +161,29 @@ describe("화면 상태 → source (samplingSource.ts, V3-S15-12)", () => {
     expect(resetForTemplate(s, ps)).toBe(s);
     const ps2 = { id: "ps-y", parameters: [{ name: "Z", min: 0, max: 1 }] } as unknown as ParamSet;
     expect(resetForTemplate(s, ps2)).toMatchObject({ psId: "ps-y", count: null, ranges: { Z: ["0", "1"] } });
+  });
+});
+
+describe("S18 ① 플랫폼 방식(§23.9·§23.10)", () => {
+  it("드롭다운 = ④ 묶음·순서에서 table·train_doe를 뺀 8개, 첫 항목이 추천", () => {
+    expect(PLATFORM_GROUPS.map((g) => [g.label, g.kinds])).toEqual([
+      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "lhs"]],
+      ["요인 설계(경향·선별)", ["fullfact", "fracfact", "pb"]],
+      ["2차 응답면", ["bbd", "ccd"]],
+    ]);
+    expect(PLATFORM_KINDS).toHaveLength(8);
+    expect(PLATFORM_KINDS[0]).toBe(RECOMMENDED_KIND);
+  });
+
+  it("상한 R = 500: sobol 허용 4~256, 권장 run 수와 설계 run 수가 R에 맞는다", () => {
+    expect(sobolCounts(500)).toEqual([4, 8, 16, 32, 64, 128, 256]);
+    expect(recommendedCount("lhs_opt", 25, 500)).toBe(250);
+    expect(recommendedCount("lhs", 60, 500)).toBe(500);
+    expect(recommendedCount("sobol", 13, 500)).toBe(256);
+    expect(expectedRuns("bbd", 4, { maxRuns: 500 })).toBe(25);
+    expect(expectedRuns("fullfact", 4, { levels: [3, 3, 3, 3], maxRuns: 500 })).toBe(81);
+    expect(expectedRuns("fullfact", 4, { levels: [10, 10, 10, 10], maxRuns: 500 })).toBeNull();
+    expect(defaultLevel(5, 500)).toBe(3); // 3^5 = 243 ≤ 500
+    expect(defaultLevel(6, 500)).toBe(2); // 729 > 500
   });
 });

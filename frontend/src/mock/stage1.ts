@@ -53,7 +53,7 @@ export function seedTrain(p2: Phase2Mock, J: SeedJob, sid: string): { doeId: str
   J({ id: "j-doe", job_type: "TD_DOE_GEN", state: "SUCCEEDED", created_at: iso(60 * 5), params: { doe_id: doeId, doe_label: "LatinHyperCube", num_runs: 30, options: { RANDOM_SEED: 1, INCLUDE_NOMINAL: true }, multi_execution: 2, radioss_assem_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/radioss_assem" }, result: { doe_id: doeId, run_count: 30, sample_status: "PARSED", skipped_runs: [] } });
   p2.does.push({
     id: doeId, study_id: sid, job_id: "j-doe", engine: "altair", status: "READY", doe_label: "LatinHyperCube", doe_type: "TYPE_LATINHYPERCUBE", num_runs_requested: 30,
-    options: { RANDOM_SEED: 1, INCLUDE_NOMINAL: true }, multi_execution: 2, radioss_assem_source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/radioss_assem",
+    options: { RANDOM_SEED: 1, INCLUDE_NOMINAL: true }, multi_execution: 2, generator: "hyperstudy", sampling: null, gen: null, radioss_assem_source_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/radioss_assem",
     run_count: 30, sample_status: "PARSED", collected_count: 0, solve_failed_count: 0, has_run_responses: false,
     dir_display_path: p2.s.disp(sid, `01_train/doe/${doeId}`), results_display_path: p2.s.disp(sid, `01_train/results/${doeId}`),
     created_by_name: "김연구", created_at: iso(60 * 5),

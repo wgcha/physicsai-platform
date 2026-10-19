@@ -1,4 +1,4 @@
-"""0015_geometry_engine — native 형상 엔진(geometry-engine.md §7.5). 명시적 DDL(B14).
+"""0016_geometry_engine — native 형상 엔진(geometry-engine.md §7.5). 명시적 DDL(B14).
 
 - param_sets: engine('altair' 기본, 기존 행 = altair)·geom_options(JSONB NULL)·engine_version, tpl_rel NULL 허용
   (CHECK: native 아니면 tpl_rel 필요, native는 assembly 입력만)
@@ -7,8 +7,8 @@
 - artifacts.kind에 FEATURE_PNG 추가
 - 다운그레이드는 기존 정책(거부)
 
-Revision ID: 0015_geometry_engine
-Revises: 0014_multiobj
+Revision ID: 0016_geometry_engine
+Revises: 0015_doe_platform_gen
 """
 
 from __future__ import annotations
@@ -17,8 +17,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects.postgresql import JSONB
 
-revision = "0015_geometry_engine"
-down_revision = "0014_multiobj"
+revision = "0016_geometry_engine"
+down_revision = "0015_doe_platform_gen"
 branch_labels = None
 depends_on = None
 

@@ -19,6 +19,39 @@ DOE_TYPE_NATIVE = "NATIVE_LHS"
 DOE_LABEL_NATIVE = "LHS(native)"
 
 
+def _native_doe_common(cfg: Any, p: Any) -> tuple[str, int, int, int, str]:
+    """native DOE 공통 입력(geometry-engine.md §7.3.3 + phase3 §23.4 S18 통합) → (doe_label, num_runs, seed, 동시 수, 실패 처리).
+
+    native는 S18 생성 방식 `platform`의 한 경로(LHS + paicad)다. `generator`는 생략 또는 platform만.
+    입력은 두 모양 중 하나: (a) 계약 §7.3.3 `{doe_label?, num_runs, seed?}` (b) S18 `sampling:{kind:"lhs", count, seed}`.
+    동시 수 생략 = S18 플랫폼 기본(min(platform_parallel_default, max_multi_execution)). 실패 처리 생략 = continue(스킵 후 경고).
+    """
+    if p.generator == "hyperstudy":
+        raise invalid_at("generator", "native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다")
+    if p.options:
+        raise invalid_at("options", "native DOE는 options를 쓸 수 없습니다(seed 사용)", "DOE_OPTIONS_INVALID")
+    given = p.model_fields_set
+    if p.sampling is not None:
+        sp = p.sampling.model_dump()
+        if sp.get("kind") != "lhs":
+            raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                              problems=[{"code": "DESIGN_UNSUPPORTED",
+                                         "message": "native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다"}])
+        for k in ("num_runs", "seed"):
+            if k in given:
+                raise invalid_at(k, f"표본 방식(sampling)을 쓰면 {k}를 함께 쓸 수 없습니다")
+        num_runs, seed = sp.get("count"), sp.get("seed")
+    else:
+        num_runs, seed = p.num_runs, p.seed
+    if num_runs is None or not 2 <= num_runs <= cfg.train_data.max_runs:
+        raise invalid_at("num_runs", f"run 수는 2~{cfg.train_data.max_runs}", "DOE_OPTIONS_INVALID")
+    cap = cfg.train_data.max_multi_execution
+    multi = min(cfg.train_data.platform_parallel_default, cap) if p.multi_execution is None else p.multi_execution
+    if multi > cap:
+        raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
+    return p.doe_label or DOE_LABEL_NATIVE, int(num_runs), int(seed if seed is not None else 1), multi, p.on_run_failure or "continue"
+
+
 def native_extract_params(ctx: AppContext, p: Any) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     cfg = ctx.settings
     require_native_available(cfg)
@@ -34,12 +67,7 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any) -> tuple[dict
     if not setup.get("features_rel") or not setup.get("cad_file_name") or not tp.used(setup.get("parameters") or []):
         raise DomainError("PREREQUISITE_MISSING", "형상 피처와 사용 파라미터가 필요합니다(①-1을 native로 먼저)", status=409,
                           missing=["GEOM_FEATURES"])
-    if p.options:
-        raise invalid_at("options", "native DOE는 options를 쓸 수 없습니다(seed 사용)", "DOE_OPTIONS_INVALID")
-    if p.num_runs is None or not 2 <= p.num_runs <= cfg.train_data.max_runs:
-        raise invalid_at("num_runs", f"run 수는 2~{cfg.train_data.max_runs}", "DOE_OPTIONS_INVALID")
-    if p.multi_execution > cfg.train_data.max_multi_execution:
-        raise invalid_at("multi_execution", f"동시 실행 수는 1~{cfg.train_data.max_multi_execution}")
+    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p)
     if p.radioss_assem_path is None:
         raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     cp = check_user_path(p.radioss_assem_path, allowed_roots(cfg, imports=True))
@@ -55,11 +83,10 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any) -> tuple[dict
     if missing:
         raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개·기준 메시·번호 재지정 표가 모두 있어야 합니다", status=409,
                           missing=missing)
-    seed = p.seed if p.seed is not None else 1
     doe_id = str(uuid.uuid4())
-    params = {"engine": "native", "doe_label": p.doe_label, "doe_type": DOE_TYPE_NATIVE, "num_runs": p.num_runs,
-              "default_runs": p.num_runs, "options": {}, "seed": seed, "multi_execution": p.multi_execution,
-              "radioss_assem_path": cp.path, "doe_id": doe_id}
+    params = {"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
+              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
+              "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id}
     return params, {"doe_id": doe_id}, []
 
 
@@ -80,17 +107,12 @@ def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: An
         raise DomainError("ENGINE_MISMATCH", "세트 기준 DOE는 native 형상 엔진 세트에서만 만듭니다", status=409)
     native_set_gate(ctx, ps)
     require_map_confirmed(ctx, ps)
-    if p.options:
-        raise invalid_at("options", "native DOE는 options를 쓸 수 없습니다(seed 사용)", "DOE_OPTIONS_INVALID")
     if p.radioss_assem_path is not None:
         raise invalid_at("radioss_assem_path", "세트 기준 DOE는 세트의 조립 폴더를 씁니다(radioss_assem_path 생략)")
-    if p.num_runs is None or not 2 <= p.num_runs <= cfg.train_data.max_runs:
-        raise invalid_at("num_runs", f"run 수는 2~{cfg.train_data.max_runs}", "DOE_OPTIONS_INVALID")
-    if p.multi_execution > cfg.train_data.max_multi_execution:
-        raise invalid_at("multi_execution", f"동시 실행 수는 1~{cfg.train_data.max_multi_execution}")
-    seed = p.seed if p.seed is not None else 1
+    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p)
     doe_id = str(uuid.uuid4())
-    params = {"engine": "native", "doe_label": p.doe_label, "doe_type": DOE_TYPE_NATIVE, "num_runs": p.num_runs,
-              "default_runs": p.num_runs, "options": {}, "seed": seed, "multi_execution": p.multi_execution,
-              "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"), "doe_id": doe_id, "param_set_id": ps["id"]}
+    params = {"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
+              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
+              "on_run_failure": on_fail, "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"),
+              "doe_id": doe_id, "param_set_id": ps["id"]}
     return params, {"doe_id": doe_id, "param_set_id": ps["id"]}, []

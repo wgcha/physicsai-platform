@@ -148,6 +148,48 @@ describe("목 서버 ↔ openapi.json", () => {
     expect(problems(rt.body, responseSchema("/train-does/{doe_id}/result-table", "get"), "result-table")).toEqual([]);
   });
 
+  it("S18 플랫폼 DOE(V3-S18-10): TD_DOE_GEN platform 생성 → 목록·상세·result-table 모양, /status 설정값·기능", () => {
+    const s = new MockServer({ user: "power" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    const st = s.handle("GET", "/status", q, null, h);
+    expect(problems(st.body, responseSchema("/status", "get"), "status")).toEqual([]);
+    const sb = st.body as { limits: { configured: Record<string, unknown> }; features: Record<string, { enabled: boolean }> };
+    expect(sb.limits.configured).toMatchObject({ doe_generator_default: "platform", doe_platform_parallel_default: 4, doe_platform_max_runs: 500 });
+    expect(sb.features.train_doe_platform.enabled).toBe(true);
+    // 금지 조합 422(INVALID_PARAMS) 5종, 표본 조합 오류 422(DOE_SAMPLING_INVALID)
+    const post = (params: Record<string, unknown>) => s.handle("POST", "/studies/s-cushion/jobs", q, { job_type: "TD_DOE_GEN", params }, h);
+    const code = (r: { status: number; body?: unknown }) => `${r.status} ${(r.body as { detail: { code: string } }).detail.code}`;
+    const base = { radioss_assem_path: "E:/shared/AI_WORK/cushion/00_inbox/radioss_assem" };
+    const samp = { kind: "lhs_opt", count: 12, seed: 1, criterion: "maximin" };
+    expect(code(post({ ...base, generator: "platform" }))).toBe("422 INVALID_PARAMS");
+    expect(code(post({ ...base, generator: "platform", sampling: samp, doe_label: "LatinHyperCube" }))).toBe("422 INVALID_PARAMS");
+    expect(code(post({ ...base, generator: "platform", sampling: samp, options: {} }))).toBe("422 INVALID_PARAMS");
+    expect(code(post({ ...base, generator: "hyperstudy", doe_label: "LatinHyperCube", sampling: samp }))).toBe("422 INVALID_PARAMS");
+    expect(code(post({ ...base, doe_label: "LatinHyperCube", on_run_failure: "fail" }))).toBe("422 INVALID_PARAMS");
+    const bad = post({ ...base, sampling: { kind: "bbd" }, multi_execution: 4 });
+    expect(bad.status).toBe(201); // generator 생략 + sampling = platform(G10), 변수 4개라 bbd 가능
+    s.finishAll();
+    const toomany = post({ ...base, generator: "platform", sampling: { kind: "lhs", count: 501, seed: 1 } });
+    expect(code(toomany)).toBe("422 DOE_SAMPLING_INVALID");
+    expect((toomany.body as { detail: { problems: { code: string }[] } }).detail.problems.map((x) => x.code)).toEqual(["TOO_MANY_ROWS"]);
+    const r = post({ ...base, generator: "platform", sampling: samp, multi_execution: 4, on_run_failure: "continue" });
+    expect(r.status).toBe(201);
+    s.finishAll();
+    const list = s.handle("GET", "/studies/s-cushion/train/does", q, null, h);
+    expect(problems(list.body, responseSchema("/studies/{study_id}/train/does", "get"), "does")).toEqual([]);
+    const does = list.body as { id: string; generator: string; gen: { total: number; done: number } | null; sampling: { desc_id: string } | null }[];
+    const plat = does.filter((d) => d.generator === "platform");
+    expect(plat.map((d) => d.sampling?.desc_id).sort()).toEqual(["td_bbd", "td_lhs_opt"]);
+    expect(plat.every((d) => d.gen !== null && d.gen.done === d.gen.total)).toBe(true);
+    expect(does.find((d) => d.generator === "hyperstudy")!.gen).toBeNull();
+    const detail = s.handle("GET", `/train-does/${plat[0].id}`, q, null, h);
+    expect(problems(detail.body, responseSchema("/train-does/{doe_id}", "get"), "doe")).toEqual([]);
+    const rt = s.handle("GET", `/train-does/${plat[0].id}/result-table`, q, null, h);
+    expect(problems(rt.body, responseSchema("/train-does/{doe_id}/result-table", "get"), "result-table")).toEqual([]);
+    expect((rt.body as { sampling: { desc_id: string } }).sampling.desc_id).toMatch(/^td_/);
+  });
+
   it("3차 쓰기 응답(V3-S1-5): PATCH study, archive, unarchive, retry", () => {
     const power = new MockServer({ user: "power" });
     const h = new Headers({ "X-PhysicsAI-Request": "1" });

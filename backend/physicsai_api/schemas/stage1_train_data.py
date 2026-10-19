@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field
 
@@ -14,6 +14,7 @@ __all__ = [
     "TrainParamOut", "TrainParamUpdate", "TrainParamsPut", "VersionBody", "TrainCad", "TrainTpl", "TrainSetup",
     "DoeField", "DoeType", "RunStateCounts", "TrainDoe", "TrainRunHpc", "TrainRunResult", "TrainRun",
     "DoeResultParameter", "DoeResultResponse", "DoeResultMeta", "DoeResultRow", "DoeResultCounts", "DoeResultSampling", "DoeResultTable",
+    "TrainSampling", "TrainDoeSampling", "TrainDoeGenCounts",
 ]
 
 
@@ -107,6 +108,78 @@ class RunStateCounts(Resp):
     COLLECT_FAILED: int = 0
 
 
+# ---- S18 ① 플랫폼 DOE 표본(phase3 §23.4) — 범위는 ①-2 표(ranges·continue_from 없음), 추가 키 금지 ----------------------
+
+
+class TrainSamplingLhs(Req):
+    kind: Literal["lhs"]
+    count: int = Field(ge=2)
+    seed: int = Field(default=1, ge=0)
+
+
+class TrainSamplingLhsOpt(Req):
+    kind: Literal["lhs_opt"]
+    count: int = Field(ge=2)
+    seed: int = Field(default=1, ge=0)
+    criterion: Literal["maximin", "corr"] = "maximin"
+
+
+class TrainSamplingSobol(Req):
+    kind: Literal["sobol"]
+    count: int = Field(ge=4)
+    seed: int = Field(default=1, ge=0, le=4294967295)
+
+
+class TrainSamplingFullfact(Req):
+    """levels {변수: 수준 수 1~10}(생략한 변수 = 2)."""
+
+    kind: Literal["fullfact"]
+    levels: dict[str, Annotated[int, Field(ge=1, le=10)]] = Field(default_factory=dict)
+
+
+class TrainSamplingFracfact(Req):
+    kind: Literal["fracfact"]
+    resolution: Literal[4, 5] = 5
+
+
+class TrainSamplingPb(Req):
+    kind: Literal["pb"]
+
+
+class TrainSamplingBbd(Req):
+    kind: Literal["bbd"]
+
+
+class TrainSamplingCcd(Req):
+    kind: Literal["ccd"]
+    alpha: Literal["face", "inscribed"] = "face"
+
+
+TrainSampling = Annotated[
+    Union[TrainSamplingLhs, TrainSamplingLhsOpt, TrainSamplingSobol, TrainSamplingFullfact, TrainSamplingFracfact,
+          TrainSamplingPb, TrainSamplingBbd, TrainSamplingCcd],
+    Field(discriminator="kind")]
+
+
+class TrainDoeSampling(Resp):
+    """플랫폼 DOE 표본 방식(§23.4): kind·표시 이름·설명 id(td_<kind>)·meta(DG_PREP 전 null)."""
+
+    kind: str
+    label: str
+    desc_id: str
+    meta: dict[str, Any] | None = None
+
+
+class TrainDoeGenCounts(Resp):
+    """플랫폼 DOE run별 입력 생성 상태 집계(train_doe_points)."""
+
+    total: int
+    pending: int
+    running: int
+    done: int
+    failed: int
+
+
 class TrainDoe(Resp):
     id: str
     study_id: str
@@ -130,6 +203,9 @@ class TrainDoe(Resp):
     created_by_name: str
     created_at: datetime
     run_state_counts: RunStateCounts
+    generator: Literal["platform", "hyperstudy"] = "hyperstudy"  # S18 생성 방식(§23.4)
+    sampling: TrainDoeSampling | None = None  # platform만
+    gen: TrainDoeGenCounts | None = None  # platform만(run별 생성 상태 집계)
 
 
 class TrainRunHpc(Resp):

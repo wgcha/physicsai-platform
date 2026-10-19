@@ -325,6 +325,11 @@ export const REF_NOTES = REF_TEXT;
 
 /** ① doe_type(+options) → 등급·문구 */
 export function doeInfluence(type: string, options: Record<string, unknown> = {}): { cls: "formal" | "reference"; note: string | null } {
+  // S18 §23.4: 플랫폼 DOE의 doe_type = 방식 이름(LHS_OPT 등) → ④ 배치와 같은 등급(fracfact 해상도는 options.resolution)
+  if (isSamplingKind(type.toLowerCase())) {
+    const m = mockSampling(type, { resolution: options.resolution ?? 5 });
+    return { cls: m.influence_class as "formal" | "reference", note: m.influence_note ?? null };
+  }
   if (["TYPE_LATINHYPERCUBE", "TYPE_SOBOL", "TYPE_FULLFACT"].includes(type)) return { cls: "formal", note: null };
   if (type === "TYPE_FRACFACT") {
     const r = String(options.RESOLUTION ?? "3");

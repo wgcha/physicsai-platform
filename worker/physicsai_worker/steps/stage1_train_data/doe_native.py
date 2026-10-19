@@ -25,8 +25,8 @@ from ..common import hst_run_label, path_failure
 from ..geometry_native import LocalRunner, engine_version, read_json, run_paicad, write_native_options
 from ..geometry_sample import SKIPPED_JSON, backup_path, generate_sample, native_inputs, write_sample_inputs
 from ._shared import _D, _doe
+from .doe_platform_gen import run_root
 
-APPROACH = "approaches/native_lhs"
 
 
 def _setup(ctx: Any) -> dict[str, Any]:
@@ -143,7 +143,7 @@ def hst_gen(ctx: Any) -> None:
 
     def gen(runner: Any, row: tuple[int, str, dict[str, float]]) -> None:
         doe_no, run_key, vals = row
-        R = os.path.join(D, APPROACH, run_key)
+        R = os.path.join(run_root(ctx), run_key)  # S18 platform_run_root(run_dir_glob과 맞음이 설정 검증됨)
         if os.path.lexists(R):
             backup_path(runner, R)
         write_sample_inputs(R, vals, {"kind": "doe", "id": doe["id"], "doe_no": doe_no}, opts, nominals, ver)
@@ -153,11 +153,21 @@ def hst_gen(ctx: Any) -> None:
         return f"run {done + failed}/{total} 완료 · 스킵 {failed} · " + hst_run_label(running, None, done, total, mm)
 
     outcomes = ctx.run_parallel(rows, gen, item_id=lambda t: t[1], max_parallel=m, label=label)
+    finish_outcomes(ctx, outcomes)
+
+
+def finish_outcomes(ctx: Any, outcomes: list[Any]) -> None:
+    """run별 생성 결과 판정(§7.3.3 + phase3 §23.2 G9): 전부 실패 → 첫 실패 코드로 실패.
+    일부 실패: on_run_failure `continue`(native 기본) → 경고 PARTIAL_OUTPUT, `fail` → GEN_PARTIAL_FAILED(재시도 = 전체 다시 생성)."""
     failed = [o for o in outcomes if not o.ok]
     ctx.patch_result({"gen_ok": len(outcomes) - len(failed), "gen_skipped": len(failed)})
     if outcomes and len(failed) == len(outcomes):
         f0 = failed[0]
         raise StepFailure(f0.code or "GEOM_INTERNAL", f"run {len(outcomes)}개 모두 생성 실패: {f0.item_id} — {f0.message}")
+    if failed and ctx.params.get("on_run_failure") == "fail":
+        f0 = failed[0]
+        raise StepFailure("GEN_PARTIAL_FAILED", f"run {len(outcomes)}개 중 {len(failed)}개 입력 생성 실패(첫 실패 {f0.item_id}: "
+                          f"{f0.message}) — 사유는 run 폴더의 {SKIPPED_JSON}")
     if failed:
         ctx.add_warning("PARTIAL_OUTPUT", f"run {len(outcomes)}개 중 {len(failed)}개를 스킵했습니다(사유는 run 폴더의 {SKIPPED_JSON})")
 

@@ -1,6 +1,6 @@
 # 계약: native 형상 엔진(R1 모핑) — `paicad`
 
-> Plan 2026-10-17. 구현 에이전트는 **이 문서만 보고** 구현한다. 절 번호·용어·원칙은 [platform.md](platform.md)·[phase2.md](phase2.md)·[phase3.md](phase3.md)를 따르고, 이 문서가 바꾸는 규칙은 §2.3에 모았다(이 문서 우선). 기준선: `claude/phase3` a1ac614, migration head `0011_surrogate_final`(병합 후 phase3 head `0014_multiobj`) → 이 문서는 `0015_geometry_engine`부터(§7.5). 결정 번호는 `GE-n`(phase3 D3-xx와 겹치지 않게).
+> Plan 2026-10-17. 구현 에이전트는 **이 문서만 보고** 구현한다. 절 번호·용어·원칙은 [platform.md](platform.md)·[phase2.md](phase2.md)·[phase3.md](phase3.md)를 따르고, 이 문서가 바꾸는 규칙은 §2.3에 모았다(이 문서 우선). 기준선: `claude/phase3` a1ac614, migration head `0011_surrogate_final`(병합 후 phase3 head `0014_multiobj`) → 이 문서는 `0016_geometry_engine`부터(§7.5, S18 병합으로 재번호). 결정 번호는 `GE-n`(phase3 D3-xx와 겹치지 않게).
 
 ## 0. 한 줄 요약
 
@@ -65,7 +65,7 @@ NX·SimLab·HyperMesh 없이, 조립 폴더(`radioss_assem/`)의 기준 쿠션 �
 | 면 서명 | 면 식별 정보 `{surface, normal|axis, centroid, area, bbox}` — 위상 순서가 바뀌어도 면을 다시 찾기 위함 |
 | 샘플 스킵 | check(또는 update) 실패 → 그 샘플만 실패로 기록하고 나머지는 계속 |
 
-경로 약어: `S` = `<study>/04_params/<param_set_id>/`, `P` = `<study>/04_predict/<job_id>/`, `B` = `<study>/04_batch/B-xxx/`, `X` = `<study>/01_train/extract/<job_id>/`, `D` = `<study>/01_train/doe/<doe_id>/`, `R` = run 폴더(`B/run__N` 또는 `D/approaches/native_lhs/run__N`).
+경로 약어: `S` = `<study>/04_params/<param_set_id>/`, `P` = `<study>/04_predict/<job_id>/`, `B` = `<study>/04_batch/B-xxx/`, `X` = `<study>/01_train/extract/<job_id>/`, `D` = `<study>/01_train/doe/<doe_id>/`, `R` = run 폴더(`B/run__N` 또는 `D/{train_data.platform_run_root}/run__N`, 기본 `D/approaches/doe_1/run__N` — S18 병합 후).
 
 ### 2.2 결정 요약
 
@@ -686,12 +686,12 @@ params `{cad_path, engine:"native"}`. `X` 동일.
 
 #### 7.3.3 ①-3 `TD_DOE_GEN`(native) — 단계 4
 
-params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), multi_execution?, radioss_assem_path, engine:"native"}`. `options`는 받지 않음(있으면 422). `train_does.doe_type='NATIVE_LHS'`, `options={"seed":…}`, `engine='native'`, 사전조건: 파라미터 표 저장(use ≥1) + `features_rel` 존재(tpl 불필요).
+params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), multi_execution?, radioss_assem_path, engine:"native"}`. S18 병합(phase3 §23) 후: native는 생성 방식 `platform`의 한 경로(`train_does.generator`=PLATFORM, 작업 params `generator:"platform"`) — `generator:"hyperstudy"`는 422, `{num_runs, seed}` 대신 `sampling:{kind:"lhs", count, seed}`도 받음(다른 kind 422 `DOE_SAMPLING_INVALID`), `multi_execution` 생략 = min(`train_data.platform_parallel_default`, `max_multi_execution`), `on_run_failure` 생략 = `continue`(아래 스킵·`PARTIAL_OUTPUT`), `fail`이면 일부 실패 시 `GEN_PARTIAL_FAILED`. `options`는 받지 않음(있으면 422). `train_does.doe_type='NATIVE_LHS'`, `options={"seed":…}`, `engine='native'`, 사전조건: 파라미터 표 저장(use ≥1) + `features_rel` 존재(tpl 불필요).
 
 | step | native 처리 | 성공 판정 |
 |---|---|---|
 | DG_PREP | ① 조립 폴더 → `01_train/radioss_assem/<doe_id>/`(기존, RENUM csv 포함). 기준본 없음 → `INPUT_INVALID` "조립 폴더에 기준 메시(104_replace_node_elem.inc)가 없습니다", RENUM csv 없음 → `INPUT_INVALID`. ② `D/cad/` STEP 사본(+ body_map), `D/native/extract/` ← ①-1 산출(xml·features·PNG) 복사, `D/native/options.json`(유효 옵션, 기본값만 — ①에는 세트가 없음). ③ 조합 = `batch_matrix.lhs_values(use 파라미터 이름(표 순서), {name:(min,max)}, num_runs, seed)` → `D/doe_matrix.csv`(`doe_no,run_key,<이름…>`). INPUT_HST_RUN.json·런처 없음. ④ `parameters_snapshot`, `tpl_sha256=NULL` | |
-| HST_GEN_RADIOSS | ① `paicad_tag`(cwd `D/native/tag`, `{features_json}`=`D/native/extract/parameter_features.json`, `{baseline_inc}`=`A/<mesh_include_name>`, `{assem_dir}`=`A`) → 실패면 step 실패(코드 그대로). `D/native/prep.json` 작성. ② run마다(`ctx.run_parallel`, 최대 `multi_execution`, doe_no 순) §7.3.6 샘플 생성(R = `D/approaches/native_lhs/run__{doe_no:05d}`). 진행 = 완료 수/N, 라벨 "run k/N 완료 · 스킵 F" | 성공 run ≥1(0 → 첫 실패 코드로 실패), 일부 실패 → 경고 `PARTIAL_OUTPUT` |
+| HST_GEN_RADIOSS | ① `paicad_tag`(cwd `D/native/tag`, `{features_json}`=`D/native/extract/parameter_features.json`, `{baseline_inc}`=`A/<mesh_include_name>`, `{assem_dir}`=`A`) → 실패면 step 실패(코드 그대로). `D/native/prep.json` 작성. ② run마다(`ctx.run_parallel`, 최대 `multi_execution`, doe_no 순) §7.3.6 샘플 생성(R = `D/{train_data.platform_run_root}/run__{doe_no:05d}`, 기본 `approaches/doe_1` — S18 병합으로 run_dir_glob 기본이 `approaches/doe_*/run__*`가 되어 S18 플랫폼 run 상위와 같게 둠). 진행 = 완료 수/N, 라벨 "run k/N 완료 · 스킵 F" | 성공 run ≥1(0 → 첫 실패 코드로 실패), 일부 실패 → 경고 `PARTIAL_OUTPUT` |
 | DG_SCAN | 기존 그대로(`run_dir_glob` 기본 `approaches/*/run__*`가 그대로 맞음, starter는 `m_3`에서만 나옴). 추가: run 폴더의 `SKIPPED.json`을 읽어 `skipped_runs`에 `{run_key, reason:<code>, category, message}`로 넣음(기존 `RUN_INPUT_INVALID` 대신). samples 추출기 `paramitem`이 `m_1/native_params.xml`을 읽음(§7.3.6) | 기존 |
 
 #### 7.3.4 ④ 세트 등록(native) — 새 job_type `PARAM_SET_NATIVE`
@@ -772,7 +772,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 - `validate_folder(folder, ..., engine="native")`: tpl 검사 생략, `cad/` 규칙(§2.3), `radioss_assem/` 필수 + 기준본·RENUM csv 필수, `native/prep.json`·`native/extract/parameter_features.json`·`native/tag/tag.json` 필수(`NATIVE_PREP_MISSING`), parameters 이름 집합 = features 대표 이름 집합(`PARAM_FEATURE_MISMATCH`).
 - `PATCH /param-sets/{id} {geom_options}`: 부분 객체 저장(감사 `PARAM_SET_UPDATE`). `tag` 절이 바뀌면 응답 `native.prep_status="STALE"` + 안내 "경계 분류 기준이 바뀌어 형상 준비를 다시 해야 합니다". altair 세트에 보내면 422.
 
-### 7.5 DB — migration `0015_geometry_engine`(head 0014 → 0015, `MIGRATION_HEAD` 갱신 — phase3 S15~S17이 0012~0014를 써서 병합 시 0012에서 재번호, down_revision `0014_multiobj`)
+### 7.5 DB — migration `0016_geometry_engine`(head 0015 → 0016, `MIGRATION_HEAD` 갱신 — phase3 S15~S18이 0012~0015를 써서 병합 시 0012 → 0015 → 0016으로 재번호, down_revision `0015_doe_platform_gen`)
 
 | 테이블 | 변경 |
 |---|---|
@@ -954,7 +954,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | 담당 | 파일 |
 |---|---|
 | Impl-Geom (paicad) | `packages/paicad/**` 전부(가상 쿠션 생성 시험 도우미 `tests/`·`pyproject` `test` extra 포함) |
-| Impl-Backend B(플랫폼) | `physicsai_core/commands.py`(spec·실행 파일), `config/schema*.py`·`platform.example.yaml`, `physicsai_core/geometry/`(reports·options 병합), `stage4_predict/param_discover.py`·`param_sets.py`, `job_types.py`, `migrations/versions/0015_geometry_engine.py`, `db/tables/*`, `worker/.../steps/geometry_native.py`·`stage4_predict/{predict_inputs,batch,param_set_native}.py`·`stage1_train_data/{extract,doe_gen}.py`, API 서비스·라우터·openapi, fake_paicad, deploy |
+| Impl-Backend B(플랫폼) | `physicsai_core/commands.py`(spec·실행 파일), `config/schema*.py`·`platform.example.yaml`, `physicsai_core/geometry/`(reports·options 병합), `stage4_predict/param_discover.py`·`param_sets.py`, `job_types.py`, `migrations/versions/0016_geometry_engine.py`, `db/tables/*`, `worker/.../steps/geometry_native.py`·`stage4_predict/{predict_inputs,batch,param_set_native}.py`·`stage1_train_data/{extract,doe_gen}.py`, API 서비스·라우터·openapi, fake_paicad, deploy |
 | Impl-Backend(검사) | `scripts/test-all.sh`·`.ps1`(+ 필요 시 `scripts/check_paicad_version.py`): `packages/paicad` 변경 시 `__version__` 변경 + CHANGELOG 최상단 항목 버전 == `__version__` + 루트 고정·lock 일치(§17.5). A의 첫 커밋 전에 넣는다 |
 | Impl-Backend(검사, §18) | 같은 `scripts/test-all`에 "paicad에서 플랫폼 모듈(`physicsai_core`·`backend`·`worker`·`physicsai_worker`) import 금지 검사"(AST로 `packages/paicad/src`·`tests` 스캔) + `pytest packages/paicad` 단독 실행 단계 + 플랫폼 고유 파일명·경로 하드코딩 검사 + 라이선스 고지 파일 존재 검사 |
 | Impl-Frontend | §8 |
@@ -1149,6 +1149,6 @@ paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 
 | GE-C9 | paicad 0.3.0(403e224) 구현 차이 반영(2026-10-19): `dt_ratio`=Δt 추정 비(h=3V/최대 면적, component별)·`edge_ratio` 별도·비유한 지표 null, 위치 값 = 공칭+Δ(가장 가까운 고정 면)·`update.json.positions[].expected_measured`로 check (a) 비교, `run.json`은 `--check-dir`·run 중 단계 RESULT 줄은 PROGRESS, `report_envelope.md`·csv는 sweep 출력 폴더, `--solver`는 morph·run, selftest 인자·키는 Q19 초안(§5.3.1), 위치형 기본 범위 절대 ±5 mm(`position_range_mm`)·envelope 위치형 mm 단계(1·2·3·5·8·10), update 피처 간 충돌 사전 검사 `GEOM_FEATURE_COLLISION`(CAD 생성 불가 범주) |
 | GE-C10 | Verifier 판정(paicad 0.4.0) 구현 기준 정정(2026-10-19): `update.json.positions[]` 키 = name·body·axis·mode·ref_face·expected_measured, 선택 `collisions`, envelope 행 `step`·`unit`·요약 `last_ok`/`first_fail`/`*_label`(mm는 `last_ok_pct` null)·`edge_ratio`·`schema_version` 2, `position_range_mm`은 `extract` 하위, `--pos-steps`, `--solver` = writer 선택, selftest 실물 입력 인자 확정(Q19), 경고 `TAG_VERTEX_NO_NODE`, options 모르는 키 거부 |
 | GE-C11 | paicad 0.6.0 구현 차이(2026-10-19): ① `props scan`→`props.json`, `props apply`→`props_apply.json`, PROP 실패 category `PROP`·종료코드 `PROP_OVERRIDDEN_BY_ELEMENT`·`PROP_THICKNESS_INVALID` = 11, `PROP_NOT_FOUND` = 3 ② 두께 파라미터 이름 `<제목>_SHELL_T`, 제목 중복 시 `<제목>_<ID>_SHELL_T`, 제목 없음 `PROP<ID>_SHELL_T` ③ `paicad map`: `--baselines` JSON `[{id,features,rel?}]`, `--user-map`, `--usage topology\|range`, `--split-param`, options `map{weights,sigma,accept,warn,axis_deg}` ④ `param_map.json` 추가 키 `feature_type`·`nominal`·`group_size`, features JSON에 `adjacent_surfaces` ⑤ `check.json` `quality.nonfinite_excluded`(비유한 지표는 판정에서 제외, 목록 기록) ⑥ PNG는 numpy 소프트웨어 래스터(사유: OCP 동봉 VTK는 X 서버 없는 헤드리스 환경에서 프로세스가 abort되어 예외로 잡을 수 없음, matplotlib은 새 런타임 의존 — 둘 다 미사용) ⑦ `selftest --nx-samples`(`<이름>.json`+`<이름>.step` 쌍 → 요약 `nx_samples`) ⑧ inc 지수 표기는 유효숫자 7자리가 보장될 때만 사용, 자유형식 줄은 선행 공백 1칸 ⑨ `/SHELL`·`/SH3N` 요소 두께는 81-100열(Radioss 2017+ 가정). 예정(0.7.0): `/PART` Thick ≠ 0 → `PROP_OVERRIDDEN_BY_PART`(종료 11) |
-| GE-C12 | 단계 4 플랫폼 구현 차이(GE-C12, 2026-10-19): ① geometry_native 기능은 `commands.paicad_extract`·`paicad_tag`·`paicad_update`·`paicad_morph`·`paicad_check` 모두 필요(단건 예측이 단계별 명령 사용) ② 플랫폼 실패 코드 `GEOM_TIMEOUT` ③ 데이터셋 엔진 판별 경로 `01_train/results/<id>`(doe 경로도 인식) ④ native 세트 ①→④ 파라미터 이름 검증은 부분집합 검사 ⑤ 스킵 정보는 `TD_DOE_GEN` 작업 `result.skipped_runs` ⑥ migration `0015_geometry_engine`(down `0014_multiobj`)으로 확정, 문서 내 0012 표기는 재번호 이력뿐 ⑦ ⑥ 최적화 입력의 엔진 검사는 `surrogate_opt_problem.normalize`에 위치 |
+| GE-C12 | 단계 4 플랫폼 구현 차이(GE-C12, 2026-10-19): ① geometry_native 기능은 `commands.paicad_extract`·`paicad_tag`·`paicad_update`·`paicad_morph`·`paicad_check` 모두 필요(단건 예측이 단계별 명령 사용) ② 플랫폼 실패 코드 `GEOM_TIMEOUT` ③ 데이터셋 엔진 판별 경로 `01_train/results/<id>`(doe 경로도 인식) ④ native 세트 ①→④ 파라미터 이름 검증은 부분집합 검사 ⑤ 스킵 정보는 `TD_DOE_GEN` 작업 `result.skipped_runs` ⑥ migration `0016_geometry_engine`(down `0015_doe_platform_gen`, S18 병합 재번호)으로 확정, 문서 내 0012 표기는 재번호 이력뿐 ⑦ ⑥ 최적화 입력의 엔진 검사는 `surrogate_opt_problem.normalize`에 위치 |
 
 추가 사실: 런타임 Python 3.12 전용(OCP 7.8이 vtk 의존, cp313 휠 없음). 고정 `cadquery-ocp==7.8.1.1.post1`, test extra `build123d==0.10.0`·`ocp_gordon==0.1.18`(최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP 교체 — 금지). gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 리스크: vtk로 오프라인 묶음 용량 증가.

@@ -6,6 +6,9 @@ from pydantic import Field
 
 from ._model import _M
 
+DEFAULT_RUN_DIR_GLOBS = ("approaches/doe_*/run__*", "*/approaches/doe_*/run__*")
+LEGACY_RUN_DIR_GLOB = "approaches/*/run__*"  # S18 이전 기본(예시 yaml이 문자열로 넣던 값)
+
 
 class DatasetOptionsCfg(_M):
     extract_faces: bool = True
@@ -109,7 +112,9 @@ class TrainDataCfg(_M):
         r"^\s*\[ERROR\]",
         r"^\s*(?:FileNotFoundError|RuntimeError|ValueError|OSError|PermissionError|ImportError|TypeError|AttributeError|NameError|SyntaxError)\s*:",
     ])
-    run_dir_glob: str = "approaches/*/run__*"
+    # ① run 폴더 = D 기준 glob 패턴 목록(문자열 1개도 허용 — 하위호환). 실제 HyperStudy 출력은 D/HST_GEN_RADIOSS_INPUT/approaches/
+    # doe_1/run__N(이슈 #7) — 공칭 run(approaches/setup_*-def)·reports는 doe_* 패턴으로 제외. 패턴끼리 같은 run_key가 겹치면 제외+경고
+    run_dir_glob: str | list[str] = Field(default_factory=lambda: list(DEFAULT_RUN_DIR_GLOBS))
     samples_extractor: str = "paramitem"
     rendered_tpl_glob: str = "**/*"
     rendered_tpl_exts: list[str] = Field(default_factory=lambda: [".py", ".tcl", ".txt", ".xml", ""])
@@ -120,6 +125,25 @@ class TrainDataCfg(_M):
     max_runs_per_submit: int = 500
     result_run_dir_regex: str = r"^(?P<run_key>run__\d+)$"
     result_match_depth: int = 3
+    # S18 ① 플랫폼 DOE 생성(phase3 §23.8, D3-66)
+    doe_generator_default: str = "platform"  # ①-3 화면 기본 생성 방식(platform | hyperstudy). API 기본은 sampling 유무(G10)
+    platform_parallel_default: int = 4  # 화면 동시 실행 수 기본(실제 = min(값, max_multi_execution))
+    platform_max_runs: int = 500  # 플랫폼 표본 run 상한(≤ max_runs)
+    platform_run_root: str = "approaches/doe_1"  # run 폴더 상위(DOE 폴더 기준 상대). <root>/run__00001이 run_dir_glob 패턴 중 하나와 맞아야 함
+
+
+    def run_dir_globs(self) -> list[str]:
+        """run_dir_glob → 패턴 목록(문자열이면 1개짜리 목록). 옛 기본 문자열(LEGACY_RUN_DIR_GLOB)은 새 기본 목록으로 정규화
+        (이슈 #7 — 서버 platform.yaml을 고치지 않아도 실제 HyperStudy 출력 구조를 찾게, 설정 경고 없음)."""
+        g = self.run_dir_glob
+        if isinstance(g, str):
+            return list(DEFAULT_RUN_DIR_GLOBS) if g.replace("\\", "/") == LEGACY_RUN_DIR_GLOB else [g]
+        return list(g)
+
+    def run_dir_glob_user_string(self) -> bool:
+        """사용자가 정한 문자열 1개(옛 기본 아님)인지 — DG_SCAN 0개일 때 `*/` 접두 변형을 한 번 더 시도하는 대상."""
+        g = self.run_dir_glob
+        return isinstance(g, str) and g.replace("\\", "/") != LEGACY_RUN_DIR_GLOB
 
 
 class CurationCfg(_M):

@@ -138,7 +138,7 @@ def test_topology_add_confirm_gate_doe_remap(native_env, monkeypatch, fake_recor
     assert [r["baseline_id"] for r in rows_m] == ["base", "base", "base", "B2", "B2"]
     assert all(r["POCKET_D"] == "" for r in rows_m[:3]) and all(r["C_HOLE_R_1"] == "" for r in rows_m[3:])
     for r in rows_m:
-        R = D / "approaches" / "native_lhs" / r["run_key"]
+        R = D / "approaches" / "doe_1" / r["run_key"]
         v = json.loads((R / "m_1" / "values.json").read_text())
         assert v["baseline_id"] == r["baseline_id"]
         if r["baseline_id"] == "B2":
@@ -240,6 +240,6 @@ def test_range_usage_assignment_no_cover(native_env, monkeypatch):
     sk = {s["run_key"]: s for s in jd["result"]["skipped_runs"]}
     assert set(sk) == set(nc) and all(s["reason"] == "BASELINE_NO_COVER" and s["category"] == "BASELINE" for s in sk.values())
     for rk in nc:
-        sj = json.loads((D / "approaches" / "native_lhs" / rk / "SKIPPED.json").read_text())
+        sj = json.loads((D / "approaches" / "doe_1" / rk / "SKIPPED.json").read_text())
         assert sj["code"] == "BASELINE_NO_COVER" and sj["step"] == "assign" and "baseline" in sj["message"]
     assert "baseline__base" not in _snap(env, jd["result"]["doe_id"]) and "A_THK_1" in _snap(env, jd["result"]["doe_id"])

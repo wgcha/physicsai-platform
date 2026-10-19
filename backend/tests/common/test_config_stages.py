@@ -95,7 +95,7 @@ def test_example_yaml_has_phase2_defaults(tmp_path):
     assert lc.ok, lc.issues
     for k, v in PHASE2_COMMANDS.items():
         assert getattr(lc.settings.commands, k) == v, k
-    assert lc.settings.train_data.run_dir_glob == "approaches/*/run__*" and lc.settings.env_check.expire_s == 900
+    assert lc.settings.train_data.run_dir_glob == ["approaches/doe_*/run__*", "*/approaches/doe_*/run__*"] and lc.settings.env_check.expire_s == 900
     assert set(lc.settings.resources.launchers) == {"extract_params", "gen_radioss", "optimization"}
 
 

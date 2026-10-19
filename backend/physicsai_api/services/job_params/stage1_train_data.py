@@ -10,15 +10,19 @@ from pydantic import BaseModel, Field
 
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.features import FEATURES, missing_for, train_doe_platform_missing
 from physicsai_core.naming import NAME_RE, RUN_KEY_RE
 from physicsai_core.paths import allowed_roots, check_user_path
+from physicsai_core.stage1_train_data import doe_platform
 from physicsai_core.stage1_train_data import doe_types as dt_mod
 from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.stage1_train_data.train_tpl import tpl_params_snapshot
+from physicsai_core.stage4_predict.batch_matrix import BatchShapeError
 
 from ...context import AppContext
+from ...schemas.stage1_train_data import TrainSampling
 from ..path_inspect import starters_in
-from .base import HpcOverrides, _P, invalid_at, prerequisite_missing
+from .base import HpcOverrides, _P, invalid_at, invalid_errors, prerequisite_missing, raise_feature_missing
 from .stage1_native import native_doe_from_set, native_doe_gen, native_extract_params
 
 
@@ -28,13 +32,19 @@ class TdExtractParams(_P):
 
 
 class TdDoeGenParams(_P):
-    doe_label: str = Field(max_length=120)
+    """①-3 DOE 생성(phase2 §6.4 + phase3 §23.4 S18). generator 생략 → sampling이 있으면 platform, 없으면 hyperstudy(G10).
+    platform: sampling 필수, doe_label·num_runs·options 금지. hyperstudy: 기존 키(doe_label 필수), sampling·on_run_failure 금지."""
+
+    generator: Literal["platform", "hyperstudy"] | None = None
+    doe_label: str | None = Field(default=None, max_length=120)
     num_runs: int | None = Field(default=None, ge=2)
-    options: dict[str, Any] = Field(default_factory=dict)
-    seed: int | None = Field(default=None, ge=0)  # native LHS 전용(§7.3.3). altair는 쓸 수 없다
-    multi_execution: int = Field(default=1, ge=1)
+    options: dict[str, Any] | None = None
+    sampling: TrainSampling | None = None
+    seed: int | None = Field(default=None, ge=0)  # native LHS 전용(geometry-engine.md §7.3.3). altair는 쓸 수 없다
+    multi_execution: int | None = Field(default=None, ge=1)
     # 세트 기준 native DOE(geometry-engine.md §7.3.8·§11.1)면 생략(세트 조립 폴더 사용), 그 밖에는 필수
     radioss_assem_path: str | None = Field(default=None, max_length=400)
+    on_run_failure: Literal["fail", "continue"] | None = None
     # native 파라미터 세트 기준 DOE(쉘 두께·다중 baseline 포함). 지정하면 ①-1 setup 대신 세트 준비본·파라미터 표를 쓴다
     param_set_id: str | None = Field(default=None, max_length=64)
 
@@ -84,6 +94,48 @@ def tpl_is_stale(setup: dict[str, Any]) -> bool:
     return setup.get("tpl_params") != tpl_params_snapshot(tp.used(setup.get("parameters") or []))
 
 
+def doe_generator(p: TdDoeGenParams) -> str:
+    """생성 방식 확정(§23.4 G10) + 방식별 금지 키(422 INVALID_PARAMS). 키 존재는 요청에 적힌 것 기준(model_fields_set)."""
+    given = p.model_fields_set
+    gen = p.generator or ("platform" if p.sampling is not None else "hyperstudy")
+    if gen == "platform":
+        if p.sampling is None:
+            raise invalid_at("sampling", "플랫폼 생성에는 표본 방식(sampling)이 필요합니다")
+        for k in ("doe_label", "num_runs", "options"):
+            if k in given:
+                raise invalid_at(k, f"플랫폼 생성에서는 {k}를 쓸 수 없습니다(표본 방식 sampling으로 정합니다)")
+    else:
+        for k in ("sampling", "on_run_failure"):
+            if k in given:
+                raise invalid_at(k, f"원본 HyperStudy 생성에서는 {k}를 쓸 수 없습니다")
+    return gen
+
+
+def _prepare_platform(cfg: Any, setup: dict[str, Any], p: TdDoeGenParams, assem_path: str
+                      ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
+    """플랫폼 DOE(§23.4): 동시 수(기본 min(platform_parallel_default, max_multi_execution)) → 표본 검증(lhs_opt는 lhs로 대신)."""
+    td = cfg.train_data
+    cap = td.max_multi_execution
+    multi = min(td.platform_parallel_default, cap) if p.multi_execution is None else p.multi_execution
+    if multi > cap:
+        raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
+    assert p.sampling is not None
+    try:
+        plan = doe_platform.check(p.sampling.model_dump(), setup, cfg)
+    except BatchShapeError as exc:
+        raise invalid_at("sampling", str(exc)) from None
+    if plan.problems or not plan.rows:
+        raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                          problems=[{"code": x["code"], "message": x["message"]} for x in plan.problems]
+                          or [{"code": "TOO_FEW_ROWS", "message": "표본이 없습니다"}])
+    doe_id = str(uuid.uuid4())
+    params = {"generator": "platform", "doe_id": doe_id, "doe_label": plan.label, "doe_type": plan.doe_type,
+              "sampling": {"kind": plan.kind, **plan.input}, "num_runs": plan.run_count, "multi_execution": multi,
+              "on_run_failure": p.on_run_failure or "fail", "radioss_assem_path": assem_path}
+    warnings = [{"code": n["code"], "message": n["message"]} for n in plan.notes]
+    return params, {"doe_id": doe_id}, warnings
+
+
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
             ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     """사전조건 확인(§8.2) → (저장할 params, 초기 result, warnings). 기능 확인(check_feature)은 디스패처가 먼저 한다."""
@@ -102,8 +154,13 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     if job_type == "TD_DOE_GEN":
         setup = train_repo.get_setup(conn, sid)
-        if setup is not None and setup.get("engine") == "native":
+        if setup is not None and setup.get("engine") == "native":  # native = 플랫폼 생성의 한 경로(자체 게이트, §7.3.3)
             return native_doe_gen(ctx, setup, p)
+        gen = doe_generator(p)
+        if gen == "hyperstudy":
+            raise_feature_missing(*missing_for(cfg, FEATURES["train_doe"], None))
+        else:
+            raise_feature_missing(*train_doe_platform_missing(cfg))
         if p.seed is not None:
             raise invalid_at("seed", "seed는 native 형상 엔진 DOE에서만 쓸 수 있습니다")
         if setup is None or not setup.get("tpl_rel"):
@@ -115,6 +172,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         if len(st) != 1:
             raise DomainError("PREREQUISITE_MISSING", f"Radioss 조립 폴더에 starter({cfg.predict.starter_glob})가 정확히 1개 있어야 합니다(현재 {len(st)}개)",
                               status=409, missing=["RADIOSS_STARTER"])
+        if gen == "platform":
+            return _prepare_platform(cfg, setup, p, cp.path)
+        if p.doe_label is None:
+            raise invalid_errors([{"loc": ["params", "doe_label"], "msg": "Field required"}])
         types = dt_mod.load_doe_types(cfg.resources.doe_design_type_json, cfg.ui.max_artifact_bytes)
         t = dt_mod.find(types, p.doe_label)
         if t is None:
@@ -124,15 +185,17 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         num_runs = (p.num_runs if p.num_runs is not None else t["default_runs"]) if t["runs_editable"] else None
         if num_runs is not None and not 2 <= num_runs <= cfg.train_data.max_runs:
             raise invalid_at("num_runs", f"run 수는 2~{cfg.train_data.max_runs}", "DOE_OPTIONS_INVALID")
-        probs = dt_mod.validate_options(t, p.options)
+        options = dict(p.options or {})
+        probs = dt_mod.validate_options(t, options)
         if probs:
             raise DomainError("DOE_OPTIONS_INVALID", "DOE 옵션이 올바르지 않습니다", status=422, problems=probs)
-        if p.multi_execution > cfg.train_data.max_multi_execution:
+        multi = 1 if p.multi_execution is None else p.multi_execution
+        if multi > cfg.train_data.max_multi_execution:
             raise invalid_at("multi_execution", f"동시 실행 수는 1~{cfg.train_data.max_multi_execution}")
         doe_id = str(uuid.uuid4())
-        params = {"doe_label": t["label"], "doe_type": t["value"], "num_runs": num_runs, "default_runs": t["default_runs"],
-                  "options": dict(p.options), "multi_execution": p.multi_execution, "radioss_assem_path": cp.path,
-                  "doe_id": doe_id}
+        params = {"generator": "hyperstudy", "doe_label": t["label"], "doe_type": t["value"], "num_runs": num_runs,
+                  "default_runs": t["default_runs"], "options": options, "multi_execution": multi,
+                  "radioss_assem_path": cp.path, "doe_id": doe_id}
         return params, {"doe_id": doe_id}, []
     if job_type == "TD_SOLVE":
         d = _ready_doe(conn, sid, p.doe_id)
@@ -181,12 +244,20 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
             "created_by_name": principal.display_name}
     if job_type == "TD_DOE_GEN":
         did = params["doe_id"]
-        native = {"engine": "native", "options": {"seed": params["seed"]}} if params.get("engine") == "native" else {}
-        if native and params.get("param_set_id"):
-            native["options"]["param_set_id"] = params["param_set_id"]
+        platform = params.get("generator") == "platform"
+        native = {"engine": "native"} if params.get("engine") == "native" else {}
+        if native:  # geometry-engine.md §7.3.3: native = 플랫폼 생성(LHS) + paicad. options = {seed(, param_set_id)}, sampling 없음
+            opts = {"seed": params["seed"], **({"param_set_id": params["param_set_id"]} if params.get("param_set_id") else {})}
+            extra = {"options": opts, "generator": "PLATFORM", "sampling": None}
+        elif platform:  # §23.4: options = 정규화 표본 입력(kind 제외), sampling = {kind, input, meta: null}(DG_PREP이 meta)
+            inp = {k: v for k, v in params["sampling"].items() if k != "kind"}
+            extra = {"options": inp, "generator": "PLATFORM",
+                     "sampling": {"kind": params["sampling"]["kind"], "input": inp, "meta": None}}
+        else:
+            extra = {"options": params["options"], "generator": "HYPERSTUDY", "sampling": None}
         train_repo.insert_doe(conn, {
             **base, "id": did, "doe_label": params["doe_label"], "doe_type": params["doe_type"],
-            "num_runs_requested": params["num_runs"], "options": params["options"],
+            "num_runs_requested": params["num_runs"], **extra,
             "multi_execution": params["multi_execution"], "radioss_assem_source_path": params["radioss_assem_path"],
             "dir_rel": f"01_train/doe/{did}/", "assem_rel": f"01_train/radioss_assem/{did}/", "status": "BUILDING",
             "sample_status": "PENDING", **native,

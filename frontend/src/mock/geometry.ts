@@ -155,7 +155,7 @@ function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, lab
     responses: [], sample_count: 0, sample_has_measured: false, cad_file_name: "cushion_base.step", starter_name: "cushion_0000.rad",
     input_kind: "assembly", assem_rel: "radioss_assem", tpl_params: [], origin: "FOLDER", label, is_current: true, train_doe_id: null,
     registered_by_name: srv.me?.display_name ?? "김연구", registered_at: new Date().toISOString(), display: null, warnings: [],
-    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length },
+    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false },
   } as ParamSet;
 }
 
@@ -197,8 +197,8 @@ function draftMap(ps: ParamSet, bids: string[], prev: ParamMap | null): ParamMap
 }
 
 function addBaselineDone(srv: MockServer, ps: ParamSet, b: { id: string; label?: string | null; path?: string }) {
-  const list = ps.baselines?.length ? ps.baselines : [{ id: "base", label: "기준", source_path: ps.source_path, prep_status: "READY" as const }];
-  ps.baselines = [...list.filter((x) => x.id !== b.id), { id: b.id, label: b.label ?? null, source_path: b.path ?? null, prep_status: "READY" }];
+  const list = ps.baselines?.length ? ps.baselines : [{ id: "base", rel: ".", label: "기준", source_path: ps.source_path, prep_status: "READY" as const }];
+  ps.baselines = [...list.filter((x) => x.id !== b.id), { id: b.id, rel: `baselines/${b.id}`, label: b.label ?? null, source_path: b.path ?? null, prep_status: "READY" }];
   const rec = srv.geom.get(ps.id)!;
   rec.map = draftMap(ps, ps.baselines.map((x) => x.id), rec.map);
 }
@@ -292,7 +292,7 @@ export function finishGeometry(srv: MockServer, j: Job) {
       const b = p.baseline as { id: string; label?: string | null; path?: string };
       addBaselineDone(srv, ps, b);
     } else {
-      ps.native = { ...(ps.native ?? { feature_count: 0 }), prep_status: "READY", prep_reason: null };
+      ps.native = { ...(ps.native ?? { feature_count: 0, props_scanned: false, shell_only: false }), prep_status: "READY", prep_reason: null };
     }
     j.result = { param_set_id: ps.id };
   }

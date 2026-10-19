@@ -17,7 +17,7 @@ def test_status_extensions(p2_env):
     assert set(st["features"]) == {"train_extract", "train_tpl", "train_doe", "train_solve", "train_import", "train_resp",
                                    "curation_h3d", "curation_t01", "spdm_import", "optimize", "dataset_create", "evaluate", "predict",
                                    "predict_parametric", "predict_mesh_only", "predict_responses", "contour_capture",
-                                   "optimize_builtin", "fem_verify", "fem_verify_rebuild",  # S16 §21.3.8
+                                   "optimize_builtin", "fem_verify", "fem_verify_rebuild", "train_doe_platform",  # S16 §21.3.8, S18 §23.8
                                    "geometry_native"}  # geometry-engine.md §7.1
     assert st["features"]["train_doe"]["enabled"] and st["features"]["train_resp"] == {"enabled": False, "missing": ["commands.response_extract"]}
     assert st["hpc"]["collect_mode"] == "in_place" and st["env_check"] is None

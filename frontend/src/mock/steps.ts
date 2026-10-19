@@ -165,7 +165,7 @@ export const STEP_LABEL: Record<string, string> = {
   PR_PREP: "준비", TPL_RENDER: "tpl 렌더", GEOM_UPDATE: "형상 갱신", MESH: "메싱", RAD_ASSEMBLE: "입력파일", EDSPY_PREDICT: "예측", CONTOUR_PREVIEW: "컨투어", CURVE_PICK: "커브", RESPONSE_EXTRACT: "응답 추출", RESPONSE_TABLE: "응답 표",
   PV_PREP: "준비", HPC_SUBMIT: "PBS 제출", HPC_WAIT: "PBS 대기", COLLECT: "결과 회수", PV_EXTRACT: "응답 추출", PV_TABLE: "응답 표",
   TX_PREP: "CAD 복사", SIMLAB_EXTRACT: "SimLab 추출", TX_PARSE: "XML 해석",
-  DG_PREP: "입력 준비", HST_GEN_RADIOSS: "HyperStudy 입력 생성", DG_SCAN: "run 확인",
+  DG_PREP: "입력 준비", HST_GEN_RADIOSS: "입력 생성(run별)", DG_SCAN: "run 확인",
   TS_PREP: "run 준비", TS_REGISTER: "회수 등록",
   RI_SCAN: "run 매칭", RI_COPY: "복사", RI_REGISTER: "등록",
   RX_PREP: "준비", RESPONSE_EXTRACT_RUNS: "run 응답 추출", RX_TABLE: "표 작성",

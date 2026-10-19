@@ -58,6 +58,8 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   fem_verify_rebuild: ["commands.mesh", "resources.hypermesh_include_tcl"],
   // geometry-engine.md §7.1: native 형상 엔진(paicad 실행 파일)
   geometry_native: ["geometry.paicad_exe", "commands.paicad_extract"],
+  // S18(phase3.md §23.8): ① 플랫폼 생성 — geom_update 템플릿 + SimLab 경로(HyperStudy 자원은 필요 없음)
+  train_doe_platform: ["commands.geom_update", "altair.simlab_path"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

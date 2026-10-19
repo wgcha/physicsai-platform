@@ -9,7 +9,7 @@ from ._base import ID, TS, TERMINAL_STATES, job_queue_seq, metadata
 from .study_job import jobs, studies
 from .model_data import datasets, models, param_sets
 from .execution import artifacts, hpc_jobs, job_steps, notifications, worker_heartbeats, worker_slot
-from .stage1_train_data import train_does, train_runs, train_setups
+from .stage1_train_data import train_doe_points, train_does, train_runs, train_setups
 from .stage2_curation import curations, spdm_imports
 from .stage5_optimize import optimizations
 from .ops import audit_events, env_checks
@@ -34,6 +34,7 @@ __all__ = [
     "audit_events",
     "train_setups",
     "train_does",
+    "train_doe_points",
     "train_runs",
     "curations",
     "spdm_imports",
