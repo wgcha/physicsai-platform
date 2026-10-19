@@ -115,6 +115,23 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         ),
         "④",
     ),
+    # ---- 3차 조립 FEM 검증(phase3 §21.3.5 S16): 검증 API·종료 훅만 만든다(POST /jobs 불가). HPC 대기는 슬롯 미점유 ----
+    "FEM_VERIFY": JobTypeDef(
+        "FEM_VERIFY", 4, "SLOT", "조립 FEM 검증",
+        (
+            StepDef("FV_PREP", "INTERNAL", 3),
+            StepDef("FV_MESH", "LOCAL", 5),
+            StepDef("FV_ASSEMBLE", "INTERNAL", 2),
+            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5),
+            StepDef("HPC_WAIT", "HPC_WAIT", 55),
+            StepDef("COLLECT", "COLLECT", 10),
+            StepDef("FV_EXTRACT", "LOCAL", 6),
+            StepDef("FV_CURVE", "LOCAL", 5),
+            StepDef("FV_CAPTURE", "LOCAL", 8),
+            StepDef("FV_COMPARE", "INTERNAL", 1),
+        ),
+        "④", notify_success=False,
+    ),
     # ---- 3차 일괄 예측(phase3 §14.5 S9): 입력 생성만 슬롯 점유, run별 하위 PREDICT(prepared)는 BP_ENQUEUE가 대기열에 넣는다 ----
     "PREDICT_BATCH": JobTypeDef(
         "PREDICT_BATCH", 4, "SLOT", "일괄 예측 입력 생성",
@@ -237,6 +254,8 @@ STEP_LABELS: dict[str, str] = {
     "SC_VALIDATE": "정리 대상 확인", "SC_MOVE": "백업 폴더로 이동", "SC_RECORD": "정리 기록",
     "CONTOUR_CAPTURE": "컨투어 캡처",
     "BP_PREP": "일괄 입력 준비", "BP_GEN": "run 입력 생성", "BP_ENQUEUE": "예측 대기열 등록",
+    "FV_PREP": "조립 입력 준비", "FV_MESH": "메시 교체(include 변환)", "FV_ASSEMBLE": "조립 입력 만들기",
+    "FV_EXTRACT": "응답 추출(예측·FEM)", "FV_CURVE": "커브 비교", "FV_CAPTURE": "컨투어 캡처(예측·FEM)", "FV_COMPARE": "비교 정리",
     "SO_COLLECT": "검증 결과 수집", "SO_FIT": "대리모델 학습", "SO_PROPOSE": "후보 탐색", "SO_NEXT": "검증 배치 등록·마무리",
 }
 

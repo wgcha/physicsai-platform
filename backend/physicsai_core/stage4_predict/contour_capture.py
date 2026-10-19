@@ -213,9 +213,13 @@ def _num(v: float | None) -> str:
     return "" if v is None else format(float(v), ".12g")
 
 
+VIDEO_SCOPES: tuple[str, ...] = ("page", "window")
+
+
 def settings_text(*, h3d_path: str, out_dir: str, display: Mapping[str, Any], views: list[str], save_video: bool,
-                  video_ext: str, use_last: bool) -> str:
-    """capture_settings.tcl 본문(ASCII). 원본 TCL 1절 변수 + VIEWS."""
+                  video_ext: str, use_last: bool, video_scope: str | None = None) -> str:
+    """capture_settings.tcl 본문(ASCII). 원본 TCL 1절 변수 + VIEWS. video_scope(S16 §21.4.2)가 있으면 `VID_SCOPE` 줄
+    (page|window, 없으면 줄 생략 = TCL 기본 page)."""
     lg = display.get("legend") or {}
     fixed = lg.get("mode") == "fixed"
     rows = [
@@ -229,6 +233,7 @@ def settings_text(*, h3d_path: str, out_dir: str, display: Mapping[str, Any], vi
         ("LEGMAX", tcl_quote(_num(lg.get("max")) if fixed else "")),
         ("SAVE_VIDEO", "1" if save_video else "0"),
         ("VID_EXT", tcl_quote(video_ext)),
+        *((("VID_SCOPE", tcl_quote(video_scope if video_scope in VIDEO_SCOPES else "page")),) if video_scope else ()),
         ("COMPS", tcl_list(display.get("comps") or [])),
         ("VIEWS", tcl_list(views)),
     ]

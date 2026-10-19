@@ -33,8 +33,9 @@ def inbox_path(settings: Any) -> str | None:
     return os.path.normpath(os.path.join(st.ai_root, *st.inbox_dir.replace("\\", "/").split("/")))
 
 
-def roots(settings: Any) -> list[dict[str, str]]:
-    """탐색 시작점: AI 루트, 받은 파일 폴더(있고 경로 규칙을 통과할 때만), 추가 허용 폴더."""
+def roots(settings: Any, *, include_spdm: bool = False) -> list[dict[str, str]]:
+    """탐색 시작점: AI 루트, 받은 파일 폴더(있고 경로 규칙을 통과할 때만), 추가 허용 폴더.
+    include_spdm(phase3 §21.3.8 S16 조립 원본 직접 지정)이면 `storage.spdm_roots`도 `SPDM <i>(읽기 전용)`로 덧붙인다."""
     st = settings.storage
     out: list[dict[str, str]] = []
     if st.ai_root:
@@ -48,7 +49,37 @@ def roots(settings: Any) -> list[dict[str, str]]:
     for i, r in enumerate(st.allowed_import_roots):
         if r:
             out.append({"key": f"import_{i}", "label": "추가 허용 폴더", "path": os.path.normpath(r)})
+    if include_spdm:
+        for i, r in enumerate(st.spdm_roots, start=1):
+            if r:
+                out.append({"key": f"spdm_{i}", "label": f"SPDM {i}(읽기 전용)", "path": os.path.normpath(r)})
     return out
+
+
+def _checked_dir(settings: Any, raw: object) -> str:
+    """허용 루트(AI·가져오기) 아래면 그 규칙, 밖이고 SPDM 루트 아래면 SPDM 규칙(읽기 전용 목록만, phase3 §21.3.8)."""
+    try:
+        return check_user_path(raw, allowed_roots(settings, imports=True), expect="dir").path
+    except PathError as exc:
+        if exc.code != "PATH_OUTSIDE_ROOT" or not settings.storage.spdm_roots:
+            raise
+    return check_spdm_dir(raw, settings.storage.spdm_roots)
+
+
+def check_spdm_dir(raw: object, roots: Any) -> str:
+    """SPDM 루트 아래 폴더 검사(읽기 전용 — §13.3 규칙 `spdm.check_spdm_path`). 단계 패키지가 공용 경로로 쓰게 둔 얇은 포장."""
+    from .stage2_curation import spdm
+
+    return spdm.check_spdm_path(raw, roots)
+
+
+def spdm_configured(settings: Any) -> bool:
+    return bool(settings.storage.spdm_roots)
+
+
+def check_spdm_dir_for(settings: Any, raw: object) -> str:
+    """설정의 SPDM 루트로 `check_spdm_dir`(phase3 §21.3.3 조립 원본 직접 지정)."""
+    return check_spdm_dir(raw, settings.storage.spdm_roots)
 
 
 def parse_exts(raw: str | None) -> frozenset[str] | None:
@@ -73,7 +104,7 @@ def _hidden(entry: os.DirEntry, st: os.stat_result) -> bool:
 
 def _parent(path: str, settings: Any) -> str | None:
     """허용 루트 자체면 None(루트 위로 못 감)."""
-    for r in allowed_roots(settings, imports=True):
+    for r in [*allowed_roots(settings, imports=True), *settings.storage.spdm_roots]:
         if r and _cmp(path) in {_cmp(os.path.normpath(r)), _cmp(real(r))}:
             return None
     up = os.path.dirname(path)
@@ -84,10 +115,10 @@ def list_dir(settings: Any, raw: object, exts: frozenset[str] | None = None) -> 
     """폴더 한 단계 목록. 폴더 먼저·이름순(대소문자 무시), 최대 MAX_ENTRIES개. 위반 시 PathError/DomainError."""
     if isinstance(raw, str) and _is_unc(raw):
         raise PathError("PATH_UNSAFE", "네트워크(UNC) 경로는 쓸 수 없습니다. 서버의 드라이브 경로를 쓰세요", path=raw)
-    cp = check_user_path(raw, allowed_roots(settings, imports=True), expect="dir")
+    cp_path = _checked_dir(settings, raw)
     rows: list[dict[str, Any]] = []
     try:
-        with os.scandir(cp.path) as it:
+        with os.scandir(cp_path) as it:
             for e in it:
                 try:
                     if is_link_or_reparse(e.path):
@@ -111,9 +142,9 @@ def list_dir(settings: Any, raw: object, exts: frozenset[str] | None = None) -> 
                     row["size"] = st.st_size
                 rows.append(row)
     except PermissionError:
-        raise DomainError("PATH_UNREADABLE", "폴더를 읽을 권한이 없습니다", status=422, path=cp.path)
+        raise DomainError("PATH_UNREADABLE", "폴더를 읽을 권한이 없습니다", status=422, path=cp_path)
     except OSError as exc:
-        raise DomainError("PATH_UNREADABLE", f"폴더를 읽지 못했습니다({exc.__class__.__name__})", status=422, path=cp.path)
+        raise DomainError("PATH_UNREADABLE", f"폴더를 읽지 못했습니다({exc.__class__.__name__})", status=422, path=cp_path)
     rows.sort(key=lambda r: (r["type"] != "dir", r["name"].casefold(), r["name"]))
-    return {"path": cp.path, "parent": _parent(cp.path, settings), "entries": rows[:MAX_ENTRIES],
+    return {"path": cp_path, "parent": _parent(cp_path, settings), "entries": rows[:MAX_ENTRIES],
             "truncated": len(rows) > MAX_ENTRIES}

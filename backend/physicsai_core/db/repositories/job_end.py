@@ -19,6 +19,10 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
         from . import surrogate_opts as so_repo
 
         so_repo.on_round_end(conn, job, state)
+    if job["job_type"] in ("PREDICT", "FEM_VERIFY"):  # phase3 §21.3.9 S16 동반 예측 → FEM_VERIFY 연쇄, 검증 상태
+        from . import fem_verifications as fv_repo
+
+        fv_repo.on_job_end(conn, job, state)
     if state == SUCCEEDED:
         return
     res = job.get("result") or {}

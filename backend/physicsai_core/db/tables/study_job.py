@@ -114,5 +114,8 @@ Index(
     # phase3 §18.3: 내장 최적화 소유 PREDICT_BATCH(params.surrogate_opt)는 수동 배치와 함께 대기할 수 있게 제외(0010_surrogate_opt)
     postgresql_where=text("state NOT IN ('SUCCEEDED','FAILED','CANCELED','INTERRUPTED') AND (params -> 'batch_run') IS NULL"
                           " AND job_type <> 'CONTOUR_RECAPTURE'"
-                          " AND NOT (job_type = 'PREDICT_BATCH' AND (params -> 'surrogate_opt') IS NOT NULL)"),
+                          " AND NOT (job_type = 'PREDICT_BATCH' AND (params -> 'surrogate_opt') IS NOT NULL)"
+                          # phase3 §21.3.4 S16: FEM_VERIFY·동반 PREDICT(params.fem_verify_id) 제외(0013_fem_verify)
+                          " AND job_type <> 'FEM_VERIFY'"
+                          " AND NOT (job_type = 'PREDICT' AND (params -> 'fem_verify_id') IS NOT NULL)"),
 )

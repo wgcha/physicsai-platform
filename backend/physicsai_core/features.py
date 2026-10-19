@@ -45,6 +45,9 @@ FEATURES: dict[str, FeatureReq] = {
     "contour_capture": FeatureReq(("contour_capture",), ("hw_exe_path",)),
     # phase3 §18.2 S13: 플랫폼 내장 최적화 — numpy·scipy + surrogate_opt.enabled + (parametric 또는 mesh_only 예측). optimize_builtin_missing
     "optimize_builtin": FeatureReq(),
+    # phase3 §21.3.8 S16: 조립 FEM 검증 = fem_verify.enabled + HPC 연결. rebuild는 + mesh 템플릿·include TCL(fem_verify_missing)
+    "fem_verify": FeatureReq(needs_hpc=True),
+    "fem_verify_rebuild": FeatureReq(needs_hpc=True),
 }
 
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
@@ -157,10 +160,26 @@ _SPECIAL_MISSING = {
 }
 
 
+def fem_verify_missing(s: Settings, hpc_configured: bool | None, *, rebuild: bool = False) -> tuple[list[str], list[str]]:
+    """④ 조립 FEM 검증에 빠진 (템플릿, 설정) 키(phase3 §21.3.8). rebuild = 메시 교체(m_2) 조건까지."""
+    tmpl, res = missing_for(s, FEATURES["fem_verify"], hpc_configured)
+    if not s.fem_verify.enabled:
+        res.insert(0, "fem_verify.enabled")
+    if rebuild:
+        if s.commands.mesh is None:
+            tmpl.append("commands.mesh")
+        if mesh_uses_include_tcl(s) and not s.resources.hypermesh_include_tcl:
+            res.append("resources.hypermesh_include_tcl")
+    return tmpl, res
+
+
 def feature_status(s: Settings, hpc_configured: bool) -> dict[str, dict[str, Any]]:
     out = {}
     for name, req in FEATURES.items():
         fn = _SPECIAL_MISSING.get(name)
-        t, r = fn(s) if fn else missing_for(s, req, hpc_configured)
+        if name in ("fem_verify", "fem_verify_rebuild"):
+            t, r = fem_verify_missing(s, hpc_configured, rebuild=name == "fem_verify_rebuild")
+        else:
+            t, r = fn(s) if fn else missing_for(s, req, hpc_configured)
         out[name] = {"enabled": not t and not r, "missing": t + r}
     return out

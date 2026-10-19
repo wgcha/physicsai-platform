@@ -96,6 +96,9 @@ JobType = Literal[
 
 
 class JobCreate(Req):
+    """작업 생성. PREDICT_VERIFY는 구식(호환 유지) — 화면은 FEM_VERIFY(phase3 §21) 사용. FEM_VERIFY는 이 API로 만들 수 없다
+    (`/studies/{id}/fem-verifications`)."""
+
     job_type: JobType
     params: dict[str, Any] = Field(default_factory=dict)
 

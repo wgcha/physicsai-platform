@@ -2,7 +2,8 @@
 
 - 드라이브 경로는 모두 **공용 계정 홈 기준 상대 경로**(어댑터 `drive_root="~"` 관례, relay API 경로): `/` 구분, 앞 `/`·`~` 없음.
 - 설정 `hpc.scx.drive_base`는 `"~"`(= 홈) 또는 `"~/<상대>"`만 → 내부 기준 `""` 또는 `<상대>`.
-- 프로젝트 = Study 폴더 이름 정규화, 잡 폴더 = `01_D-<NNN>_<run_key>_<ts>` | `04_V-<NNN>_<ts>`, 이미 있으면 `_2`…`_9`.
+- 프로젝트 = Study 폴더 이름 정규화, 잡 폴더 = `01_D-<NNN>_<run_key>_<ts>` | `04_V-<NNN>_<ts>` | `04_FV-<NNN>_<ts>`(phase3 §21.3.7),
+  이미 있으면 `_2`…`_9`.
 - SPDM 마스터 루트(relay `/health`의 `forbidden_prefixes`)와 같거나 그 안이면 거부(예외 설정 없음).
 """
 
@@ -13,7 +14,7 @@ import unicodedata
 
 __all__ = [
     "SEGMENT_RE", "MAX_REL_LEN", "MAX_SUFFIX", "WINDOWS_RESERVED",
-    "sanitize_project", "fmt_no", "train_job_name", "verify_job_name", "with_suffix",
+    "sanitize_project", "fmt_no", "train_job_name", "verify_job_name", "fem_verify_job_name", "with_suffix",
     "drive_base_rel", "join_rel", "rel_problem", "file_name_problem", "forbidden_reason", "display_path",
 ]
 
@@ -71,6 +72,13 @@ def verify_job_name(v_no: int, ts: str) -> str:
     if not _TS_RE.match(ts or ""):
         raise ValueError("시각 형식 오류(%Y%m%dT%H%M%S)")
     return f"04_V-{fmt_no(v_no)}_{ts}"
+
+
+def fem_verify_job_name(fv_no: int, ts: str) -> str:
+    """④ 조립 FEM 검증 잡 폴더 이름 `04_FV-<NNN>_<ts>`(phase3 §21.3.7 S16)."""
+    if not _TS_RE.match(ts or ""):
+        raise ValueError("시각 형식 오류(%Y%m%dT%H%M%S)")
+    return f"04_FV-{fmt_no(fv_no)}_{ts}"
 
 
 def with_suffix(name: str, n: int) -> str:

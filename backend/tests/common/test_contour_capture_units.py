@@ -35,7 +35,10 @@ def test_capture_config_defaults_ranges_and_example(p2_dict, tmp_path):
 
     lc = _load(p2_dict)
     assert lc.ok, lc.issues
-    assert lc.settings.capture.model_dump() == {
+    dumped = lc.settings.capture.model_dump()
+    s16 = {k: dumped.pop(k) for k in ("allow_avi", "video_scope", "video_target_bytes", "ffmpeg")}  # S16 키는 V3-S16-23에서 검사
+    assert s16["video_target_bytes"] == 1048576 and s16["ffmpeg"]["exe"] == ""
+    assert dumped == {
         "enabled": True, "views": ["iso", "front", "top", "right"], "video": True, "video_ext": "mp4", "use_last": True,
         "default_field": "CornerStress", "default_component": "vonMises", "estimate_image_mb": 0.3, "estimate_video_mb": 1.0,
         "estimate_sec_per_view": 20, "estimate_sec_per_video": 40, "timeout_s": 1800, "max_video_bytes": 209715200}

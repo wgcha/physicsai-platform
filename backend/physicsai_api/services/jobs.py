@@ -159,6 +159,9 @@ def retry_job(ctx: AppContext, principal: Principal, job_id: str, from_step: int
         return job_detail(conn, job, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)
 
 
+FEM_VERIFY_REUSE_FROM = 7  # FV_EXTRACT step 번호(job_types FEM_VERIFY)
+
+
 def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step: int | None, rid: str | None,
                  ip: str | None) -> dict[str, Any]:
     """재시도 본체(권한·설정 확인은 호출부): 상태·유형 → Study 잠금·게이트 → 시작 step → 새 작업 + on_retry + 감사.
@@ -177,6 +180,8 @@ def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step
         raise invalid_errors([{"loc": ["from_step"], "msg": f"1~{default_from}"}])
     if from_step > 1 and old["job_type"] in ("PREDICT_VERIFY", "TD_SOLVE"):
         from_step = 1  # HPC 제출 이력은 재사용하지 않는다(phase2 §7.1: TD_SOLVE는 항상 TS_PREP부터)
+    if old["job_type"] == "FEM_VERIFY" and from_step <= FEM_VERIFY_REUSE_FROM - 1:
+        from_step = 1  # phase3 §21.3.5 F10: 해석 전(≤ COLLECT) 실패는 새 시도·새 원격 폴더, 후처리(≥ FV_EXTRACT)는 그 step부터
     new_id = str(uuid.uuid4())
     job = jobs_repo.insert_job(
         conn, study=study, job_type=old["job_type"], params=old["params"], user_id=principal.user_id,

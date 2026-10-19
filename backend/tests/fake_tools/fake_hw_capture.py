@@ -3,7 +3,8 @@
 TCL 옆 capture_settings.tcl(Tcl `set NAME 값` 줄)을 읽어 H3D_PATH 존재를 확인하고 OUTDIR에 방향(VIEWS)마다 작은 PNG·동영상
 바이트와 capture_result.txt(원본 TCL과 같은 형식)를 쓴다. 모드 FAKE_TOOL_MODE_CAPTURE(다른 hw 모드와 독립):
 ok | fail(종료코드 1, 출력 없음) | no_video(동영상 저장 실패) | one_fail(첫 방향 이미지 실패) | open_error(h3d 열기 실패,
-STATUS=OPEN_ERROR) | no_manifest(파일만, capture_result.txt 없음) | hang(FAKE_CAPTURE_HANG_S초 대기 후 출력 없이 종료).
+STATUS=OPEN_ERROR) | no_manifest(파일만, capture_result.txt 없음) | hang(FAKE_CAPTURE_HANG_S초 대기 후 출력 없이 종료) |
+no_file(S16: 동영상 성공 보고(video=1)인데 파일 없음) | zero_video(S16: 성공 보고 + 0바이트 파일).
 FAKE_CAPTURE_VIDEO_BYTES = 동영상 크기(기본 64). 기록은 FAKE_TOOL_RECORD에 {"tool":"hw_capture","mode":"capture","settings":{…}}(다른 hw 기록과 구분).
 """
 
@@ -101,6 +102,11 @@ def main(argv: list[str]) -> int:
                 if mode == "no_video":
                     vid = "0"
                     err.append("video: fake encoder missing")
+                elif mode == "no_file":
+                    vid = "1"
+                elif mode == "zero_video":
+                    open(os.path.join(out_dir, vname), "wb").close()
+                    vid = "1"
                 else:
                     size = int(os.environ.get("FAKE_CAPTURE_VIDEO_BYTES") or "64")
                     with open(os.path.join(out_dir, vname), "wb") as fh:

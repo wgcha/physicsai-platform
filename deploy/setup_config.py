@@ -374,6 +374,9 @@ CAPTURE_COMPONENT_MARK = "setup.ps1 D3-54"
 
 SCX_PATH = ("hpc", "scx")
 SCX_MARK = "setup.ps1이 보충 — phase3 §16.8"
+# phase3 §21.4.4 S16: capture 절은 있는데 capture.ffmpeg가 없을 때만 예시의 주석 달린 기본 절 보충(exe 빈 값 = 변환 안 함)
+FFMPEG_PATH = ("capture", "ffmpeg")
+FFMPEG_MARK = "setup.ps1이 보충 — phase3 §21.4.4"
 
 
 def example_subblock(example_text: str, section: str, key: str) -> list[str] | None:
@@ -698,6 +701,17 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
             rows.append({"key": "hpc.scx", "value": "(예시 기본 절)", "action": "보충(새 설정 절 — gateway: scx일 때만 사용)"})
         else:
             warnings.append("hpc.scx 절을 자동으로 넣지 못했습니다 — SCX 제출을 쓰려면 config/platform.example.yaml의 hpc.scx 절을 직접 복사하세요")
+    # 영상 변환(phase3 §21.4.4 S16): capture 절이 있고 capture.ffmpeg가 없으면 예시 기본 절 보충(값 덮어쓰기 없음)
+    if not new_file and not _get(base, FFMPEG_PATH)[0] and isinstance(base.get("capture"), dict):
+        ex_has, ff_want = _get(example, FFMPEG_PATH)
+        block = example_subblock(example_text, *FFMPEG_PATH)
+        added = insert_subblock(text, "capture", block, FFMPEG_MARK) if ex_has and block else None
+        if added is not None:
+            text = added
+            upgraded[FFMPEG_PATH] = copy.deepcopy(ff_want)
+            rows.append({"key": "capture.ffmpeg", "value": "(예시 기본 절)", "action": "보충(새 설정 절 — exe 빈 값 = 변환 안 함)"})
+        else:
+            warnings.append("capture.ffmpeg 절을 자동으로 넣지 못했습니다 — 영상 변환을 쓰려면 config/platform.example.yaml의 capture.ffmpeg 절을 직접 복사하세요")
     # 로그인·"대시보드로" 링크(D3-38): 키가 없거나 이전 기본값 "/"일 때만 대시보드 웹 경로로, 사용자 값은 보존
     login_want, login_warn = dashboard_login_url(inputs, str(deploy.get("dashboard_root") or ""))
     if login_warn:

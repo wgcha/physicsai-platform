@@ -90,3 +90,25 @@ def single_h3d(folder: str) -> tuple[str | None, list[str]]:
     except OSError:
         names = []
     return (os.path.join(folder, names[0]) if len(names) == 1 else None), names
+
+
+def extract_requests(ctx: Any, reqs: Sequence[resp_mod.H3dRequest], folder: str, h3d: str) -> resp_mod.ParsedResponses:
+    """요청 목록을 그대로 써서 folder에서 원본 TCL 실행 → RESPONSES.txt 파싱(phase3 §21.3.6 S16 FV_EXTRACT — FEM datatype
+    덮어쓰기·범례 줄 `__FV_LEGEND`). 도구 실패는 StepFailure(호출자가 경고로)."""
+    tcl_src = ctx.settings.resources.extract_minmax_tcl
+    if not tcl_src or not os.path.isfile(tcl_src):
+        raise StepFailure("RESOURCE_MISSING", f"resources.extract_minmax_tcl 파일이 없습니다: {tcl_src}")
+    tcl = os.path.join(folder, os.path.basename(tcl_src))
+    olds = [os.path.join(folder, n) for n in (resp_mod.REQUESTS_FILE, resp_mod.RESPONSES_FILE, resp_mod.RESPONSES_LOG)]
+    ctx.backup([tcl, *olds])
+    copy_file(tcl_src, tcl)
+    resp_mod.write_requests(folder, reqs)
+    values = {"extract_tcl": tcl, "pred_h3d": h3d, "pred_h3d_fwd": fwd(h3d), "work_dir": folder}
+    rc = ctx.run_local("response_extract", values, cwd=folder, allow_nonzero_exit=True)
+    _append_log(ctx, folder)
+    parsed = resp_mod.read_responses(folder)
+    if parsed is None:
+        if rc != 0:
+            raise StepFailure("EXIT_NONZERO", f"종료코드 {rc}: {resp_mod.RESPONSES_FILE}가 만들어지지 않았습니다")
+        raise StepFailure("OUTPUT_MISSING", f"{resp_mod.RESPONSES_FILE}가 만들어지지 않았습니다")
+    return parsed

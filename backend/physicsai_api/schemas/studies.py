@@ -50,7 +50,7 @@ class StudyPatch(Req):
 
 class PathInspectRequest(Req):
     purpose: Literal["DATASET_INPUT", "MODEL_FOLDER", "PARAM_SET", "CAD_FILE", "RADIOSS_ASSEM", "RESULT_FOLDER",
-                     "CURATION_INPUT", "SPDM_IMPORT", "PREDICT_INPUT"]
+                     "CURATION_INPUT", "SPDM_IMPORT", "PREDICT_INPUT", "FEM_ASSEMBLY"]
     path: str = Field(max_length=400)
     doe_id: str | None = None
 

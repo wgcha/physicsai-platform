@@ -32,10 +32,31 @@ _RANGE = re.compile(r"bytes=([0-9]*)-([0-9]*)")  # fullmatch 전용, ASCII 숫�
 # ---- 목록 ----------------------------------------------------------------------------------------
 
 
+def _playable(a: dict[str, Any]) -> bool | None:
+    """S16 §21.4.3: meta.playable 우선, 없으면 avi = false·gif·png = true·그 밖(mp4 미확인) = null."""
+    meta = a.get("meta") or {}
+    if isinstance(meta.get("playable"), bool):
+        return meta["playable"]
+    ct = a["content_type"]
+    if ct == cc.VIDEO_CONTENT_TYPES["avi"]:
+        return False
+    if ct in (cc.VIDEO_CONTENT_TYPES["gif"], cc.IMAGE_CONTENT_TYPE):
+        return True
+    return None
+
+
 def _file_out(a: dict[str, Any]) -> dict[str, Any]:
     url = f"{API_PREFIX}/artifacts/{a['id']}/media"
+    meta = a.get("meta") or {}
     return {"artifact_id": a["id"], "content_type": a["content_type"], "size": a["size"], "url": url,
-            "download_url": url + "?download=true"}
+            "download_url": url + "?download=true", "playable": _playable(a),
+            "codec": meta.get("codec") if isinstance(meta.get("codec"), str) else None,
+            "transcoded": bool(meta.get("transcoded"))}
+
+
+def file_out(a: dict[str, Any]) -> dict[str, Any]:
+    """MediaFile 모양(V2 FEM 검증 컨투어 공용)."""
+    return _file_out(a)
 
 
 def capture_enabled(ctx: AppContext) -> bool:
@@ -60,7 +81,8 @@ def job_media(ctx: AppContext, principal: Principal, job_id: str) -> dict[str, A
             continue  # Study 정리로 옮겨졌거나 파일이 없어진 방향은 목록에서 뺀다
         vid = arts.get(m.get("video_artifact_id") or "")
         items.append({"view": m["view"], "label": cc.VIEW_LABELS.get(m["view"], m["view"]), "job_id": m["job_id"],
-                      "image": _file_out(img), "video": _file_out(vid) if vid else None})
+                      "image": _file_out(img), "video": _file_out(vid) if vid else None,
+                      "video_error": m.get("video_error") if not vid else None})
     cap = eff["capture"] or {}
     enabled = capture_enabled(ctx)
     recap = eff["recapture"]

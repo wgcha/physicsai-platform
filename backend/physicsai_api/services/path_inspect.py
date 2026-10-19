@@ -53,6 +53,8 @@ def inspect_path(ctx: AppContext, principal: Principal, study_id: str, body: Any
         return inspect_phase2(ctx, s, body)
     if body.purpose == "PREDICT_INPUT":
         return inspect_predict_input(ctx, body.path)
+    if body.purpose == "FEM_ASSEMBLY":
+        return inspect_fem_assembly(ctx, body.path)
     roots = allowed_roots(s_cfg, imports=body.purpose == "MODEL_FOLDER")
     cp = check_user_path(body.path, roots)
     problems: list[dict[str, Any]] = []
@@ -97,6 +99,16 @@ def inspect_predict_input(ctx: AppContext, raw: str) -> dict[str, Any]:
     plan = prepared_input.plan_copy(cp.path, ctx.settings)
     return {"normalized_path": cp.path, "ok": not plan.problems, "problems": plan.problems,
             "summary": prepared_input.summary(cp.path, plan, ctx.settings)}
+
+
+def inspect_fem_assembly(ctx: AppContext, raw: str) -> dict[str, Any]:
+    """phase3 §21.3.8 S16 조립 원본 직접 지정: 허용 루트(AI·가져오기·SPDM 읽기) + `plan_assembly` 요약. 쓰기 없음."""
+    from physicsai_core.stage4_predict import fem_assembly
+
+    path, _where = fem_assembly.check_custom_path(raw, ctx.settings)
+    plan = fem_assembly.plan_assembly(path, ctx.settings)
+    return {"normalized_path": path, "ok": not plan["problems"], "problems": plan["problems"],
+            "summary": {**fem_assembly.summary(plan), "warnings": plan["warnings"]}}
 
 
 def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[str, Any]:

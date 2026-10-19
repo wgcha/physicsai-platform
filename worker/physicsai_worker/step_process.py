@@ -14,8 +14,13 @@ from typing import Any
 from physicsai_core.childenv import child_env
 from physicsai_core.commands import (
     EXECUTABLE_PLACEHOLDERS,
+    VIDEO_EXECUTABLE_PLACEHOLDERS,
+    VIDEO_TEMPLATE_SPECS,
     parse_placeholders,
     render_argv,
+    render_video_argv,
+    video_executables,
+    video_template,
 )
 from physicsai_core.config import effective_altair
 from physicsai_core.db.repositories import job_lease as lease_repo
@@ -37,6 +42,14 @@ class StepProcessMixin:
     def render(self, template_key: str, values: dict[str, str]) -> tuple[list[str], str | None]:
         """(argv, 실행 파일 altair 키). 실행 파일이 없으면 StepFailure(EXECUTABLE_MISSING)."""
         s = self.settings
+        if template_key in VIDEO_TEMPLATE_SPECS:  # phase3 §21.4.4 S16: capture.ffmpeg 파생 템플릿
+            vexes = video_executables(s.capture)
+            vt = video_template(s.capture, template_key)
+            argv = render_video_argv(template_key, vt, values, executables=vexes)
+            vkey = VIDEO_EXECUTABLE_PLACEHOLDERS[(vt or ["{}"])[0].strip("{}")]
+            if not os.path.isfile(vexes[vkey]):
+                raise StepFailure("EXECUTABLE_MISSING", f"실행 파일이 없습니다: {vexes[vkey]}")
+            return argv, vkey
         template = getattr(s.commands, template_key)
         exes = effective_altair(s)
         argv = render_argv(template_key, template, values, executables=exes, write_files=s.score.write_files)

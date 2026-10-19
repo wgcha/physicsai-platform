@@ -84,6 +84,8 @@ class StatusFeatures(Resp):
     predict_responses: FeatureState | None = None  # phase3 §14.6 예측 응답 추출
     contour_capture: FeatureState | None = None  # phase3 §15.5 예측 컨투어 캡처
     optimize_builtin: FeatureState | None = None  # phase3 §18.2 ⑤ 플랫폼 내장 최적화(numpy·scipy)
+    fem_verify: FeatureState | None = None  # phase3 §21.3.8 S16 조립 FEM 검증(fem_verify.enabled + HPC)
+    fem_verify_rebuild: FeatureState | None = None  # + 메시 교체(commands.mesh·include TCL)
 
 
 class StatusEnvCheck(Resp):
@@ -112,6 +114,10 @@ class StatusCapture(Resp):
     default_field: str = "CornerStress"  # D3-54: 화면 결과 종류 기본·성분 후보 판단
     default_component: str = ""  # D3-54: 결과 종류가 default_field일 때 성분 기본(빈 값 = 없음)
     estimate: StatusCaptureEstimate | None = None  # D3-54: 일괄 예측 "캡처 예상" 가정값
+    # S16(phase3 §21.4.4): 표시용 영상 목표 크기, ffmpeg 변환 가능 여부, 실제 저장 확장자(avi → mp4 대체 반영)
+    video_target_bytes: int | None = None
+    transcode: bool = False
+    video_ext_effective: str | None = None
 
 
 class StatusSurrogateDefaults(Resp):

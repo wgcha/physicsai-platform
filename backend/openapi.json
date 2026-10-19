@@ -2982,6 +2982,316 @@
         "title": "FeatureState",
         "type": "object"
       },
+      "FemVerification": {
+        "properties": {
+          "assembly": {
+            "$ref": "#/components/schemas/FvAssemblyOut"
+          },
+          "attempt_no": {
+            "title": "Attempt No",
+            "type": "integer"
+          },
+          "can_cancel": {
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_rerun": {
+            "title": "Can Rerun",
+            "type": "boolean"
+          },
+          "compare": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCompare"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "design": {
+            "$ref": "#/components/schemas/FvDesign"
+          },
+          "dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvProblem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_mode": {
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "links": {
+            "$ref": "#/components/schemas/FvLinks"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/FvPaths"
+          },
+          "predict": {
+            "$ref": "#/components/schemas/FvPredictRef"
+          },
+          "source": {
+            "$ref": "#/components/schemas/FvSourceOut"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "status_text",
+          "source",
+          "links",
+          "design",
+          "predict",
+          "assembly",
+          "input_mode",
+          "attempt_no",
+          "paths",
+          "can_cancel",
+          "can_rerun",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "FemVerification",
+        "type": "object"
+      },
+      "FemVerifyCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvAssembly"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvFem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hpc": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvHpc"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "discriminator": {
+              "mapping": {
+                "batch_run": "#/components/schemas/FvSourceBatchRun",
+                "opt_design": "#/components/schemas/FvSourceOptDesign",
+                "predict_job": "#/components/schemas/FvSourcePredictJob",
+                "values": "#/components/schemas/FvSourceValues"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FvSourcePredictJob"
+              },
+              {
+                "$ref": "#/components/schemas/FvSourceBatchRun"
+              },
+              {
+                "$ref": "#/components/schemas/FvSourceValues"
+              },
+              {
+                "$ref": "#/components/schemas/FvSourceOptDesign"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "FemVerifyCreate",
+        "type": "object"
+      },
+      "FemVerifyListItem": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "links": {
+            "$ref": "#/components/schemas/FvLinks"
+          },
+          "max_abs_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Abs Diff Pct"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          },
+          "worst": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "status",
+          "source_label",
+          "source_kind",
+          "links",
+          "created_at",
+          "created_by_name"
+        ],
+        "title": "FemVerifyListItem",
+        "type": "object"
+      },
       "FinalModelRequest": {
         "additionalProperties": false,
         "properties": {
@@ -3128,6 +3438,1382 @@
           "roots"
         ],
         "title": "FsRoots",
+        "type": "object"
+      },
+      "FvAssembly": {
+        "additionalProperties": false,
+        "properties": {
+          "doe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe Id"
+          },
+          "kind": {
+            "enum": [
+              "predict_input",
+              "train_doe",
+              "custom"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FvAssembly",
+        "type": "object"
+      },
+      "FvAssemblyOut": {
+        "properties": {
+          "file_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File Count"
+          },
+          "inc_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inc Count"
+          },
+          "include_baseline": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Baseline"
+          },
+          "include_referenced": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Include Referenced"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          },
+          "rad": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Rad",
+            "type": "array"
+          },
+          "renum_csv": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Renum Csv"
+          },
+          "snapshot_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Snapshot Dir"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          },
+          "total_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Bytes"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FvAssemblyOut",
+        "type": "object"
+      },
+      "FvCompare": {
+        "properties": {
+          "curve": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCurveSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvLegend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "max_abs_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Abs Diff Pct"
+          },
+          "media": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media"
+          },
+          "responses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvCompareRow"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "worst": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Worst"
+          }
+        },
+        "title": "FvCompare",
+        "type": "object"
+      },
+      "FvCompareRow": {
+        "properties": {
+          "diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff"
+          },
+          "diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Pct"
+          },
+          "fem_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Max"
+          },
+          "fem_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Min"
+          },
+          "fem_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Value"
+          },
+          "max_diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Diff"
+          },
+          "max_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Diff Pct"
+          },
+          "min_diff": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Diff"
+          },
+          "min_diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min Diff Pct"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pred_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Max"
+          },
+          "pred_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Min"
+          },
+          "pred_value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred Value"
+          },
+          "stat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stat"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "FvCompareRow",
+        "type": "object"
+      },
+      "FvCurveSeries": {
+        "properties": {
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "FvCurveSeries",
+        "type": "object"
+      },
+      "FvCurveSummary": {
+        "properties": {
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          },
+          "names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "unmatched_fem": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Fem",
+            "type": "array"
+          },
+          "unmatched_pred": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched Pred",
+            "type": "array"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "FvCurveSummary",
+        "type": "object"
+      },
+      "FvCurves": {
+        "properties": {
+          "downsampled": {
+            "default": false,
+            "title": "Downsampled",
+            "type": "boolean"
+          },
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCurveSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "names": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Names",
+            "type": "array"
+          },
+          "pred": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvCurveSeries"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "FvCurves",
+        "type": "object"
+      },
+      "FvDesign": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvModelRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "out_of_range": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "param_set": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvParamSetRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "title": "FvDesign",
+        "type": "object"
+      },
+      "FvFem": {
+        "additionalProperties": false,
+        "properties": {
+          "component": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Component"
+          },
+          "comps": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 50,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comps"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          }
+        },
+        "title": "FvFem",
+        "type": "object"
+      },
+      "FvHpc": {
+        "additionalProperties": false,
+        "properties": {
+          "ncpus": {
+            "anyOf": [
+              {
+                "maximum": 4096.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ncpus"
+          },
+          "queue": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_.\\-@]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue"
+          },
+          "walltime": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{1,4}:\\d{2}:\\d{2}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Walltime"
+          }
+        },
+        "title": "FvHpc",
+        "type": "object"
+      },
+      "FvLegend": {
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "mode": {
+            "title": "Mode",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "mode"
+        ],
+        "title": "FvLegend",
+        "type": "object"
+      },
+      "FvLinks": {
+        "properties": {
+          "batch_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Batch Id"
+          },
+          "doe_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe No"
+          },
+          "opt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opt Id"
+          },
+          "predict_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predict Job Id"
+          }
+        },
+        "title": "FvLinks",
+        "type": "object"
+      },
+      "FvMedia": {
+        "properties": {
+          "display": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
+          "items": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvMediaItem"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvLegend"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "FvMedia",
+        "type": "object"
+      },
+      "FvMediaItem": {
+        "properties": {
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvMediaSide"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "pred": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvMediaSide"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "view": {
+            "title": "View",
+            "type": "string"
+          }
+        },
+        "required": [
+          "view",
+          "label"
+        ],
+        "title": "FvMediaItem",
+        "type": "object"
+      },
+      "FvMediaSide": {
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/MediaFile"
+          },
+          "video": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/MediaFile"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "video_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Error"
+          }
+        },
+        "required": [
+          "image"
+        ],
+        "title": "FvMediaSide",
+        "type": "object"
+      },
+      "FvMeshRef": {
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "title": "FvMeshRef",
+        "type": "object"
+      },
+      "FvModelRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "title": "FvModelRef",
+        "type": "object"
+      },
+      "FvOrigin": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "const": "optimize",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "FvOrigin",
+        "type": "object"
+      },
+      "FvParamSetRef": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_kind": {
+            "title": "Input Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id",
+          "input_kind"
+        ],
+        "title": "FvParamSetRef",
+        "type": "object"
+      },
+      "FvPaths": {
+        "properties": {
+          "collected": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Collected",
+            "type": "array"
+          },
+          "input_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Dir"
+          },
+          "remote_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Remote Dir"
+          },
+          "result_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Dir"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          }
+        },
+        "title": "FvPaths",
+        "type": "object"
+      },
+      "FvPredictRef": {
+        "properties": {
+          "companion": {
+            "default": false,
+            "title": "Companion",
+            "type": "boolean"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "reuse": {
+            "default": false,
+            "title": "Reuse",
+            "type": "boolean"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "will_run": {
+            "default": false,
+            "title": "Will Run",
+            "type": "boolean"
+          }
+        },
+        "title": "FvPredictRef",
+        "type": "object"
+      },
+      "FvPreview": {
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvAssemblyOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "comps_auto": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Comps Auto",
+            "type": "array"
+          },
+          "design": {
+            "$ref": "#/components/schemas/FvDesign"
+          },
+          "fem_field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fem Field"
+          },
+          "hpc_mode": {
+            "title": "Hpc Mode",
+            "type": "string"
+          },
+          "input_mode": {
+            "anyOf": [
+              {
+                "enum": [
+                  "reuse",
+                  "rebuild"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Mode"
+          },
+          "mesh": {
+            "$ref": "#/components/schemas/FvMeshRef"
+          },
+          "predict": {
+            "$ref": "#/components/schemas/FvPredictRef"
+          },
+          "problems": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "source_label": {
+            "title": "Source Label",
+            "type": "string"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/FvProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_label",
+          "design",
+          "predict",
+          "mesh",
+          "hpc_mode"
+        ],
+        "title": "FvPreview",
+        "type": "object"
+      },
+      "FvProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "FvProblem",
+        "type": "object"
+      },
+      "FvSourceBatchRun": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "doe_no": {
+            "minimum": 1.0,
+            "title": "Doe No",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "batch_run",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "batch_id",
+          "doe_no"
+        ],
+        "title": "FvSourceBatchRun",
+        "type": "object"
+      },
+      "FvSourceOptDesign": {
+        "additionalProperties": false,
+        "properties": {
+          "doe_no": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe No"
+          },
+          "iter_no": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Iter No"
+          },
+          "kind": {
+            "const": "opt_design",
+            "title": "Kind",
+            "type": "string"
+          },
+          "opt_id": {
+            "title": "Opt Id",
+            "type": "string"
+          },
+          "pick": {
+            "enum": [
+              "best",
+              "final_optimum",
+              "surrogate_optimum",
+              "run"
+            ],
+            "title": "Pick",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "opt_id",
+          "pick"
+        ],
+        "title": "FvSourceOptDesign",
+        "type": "object"
+      },
+      "FvSourceOut": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "FvSourceOut",
+        "type": "object"
+      },
+      "FvSourcePredictJob": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "predict_job",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "job_id"
+        ],
+        "title": "FvSourcePredictJob",
+        "type": "object"
+      },
+      "FvSourceValues": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "values",
+            "title": "Kind",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model Id"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FvOrigin"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "param_set_id": {
+            "title": "Param Set Id",
+            "type": "string"
+          },
+          "reuse_existing": {
+            "default": true,
+            "title": "Reuse Existing",
+            "type": "boolean"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind",
+          "param_set_id",
+          "values"
+        ],
+        "title": "FvSourceValues",
         "type": "object"
       },
       "GpuInfo": {
@@ -3775,6 +5461,7 @@
       },
       "JobCreate": {
         "additionalProperties": false,
+        "description": "작업 생성. PREDICT_VERIFY는 구식(호환 유지) — 화면은 FEM_VERIFY(phase3 §21) 사용. FEM_VERIFY는 이 API로 만들 수 없다\n(`/studies/{id}/fem-verifications`).",
         "properties": {
           "job_type": {
             "enum": [
@@ -4294,6 +5981,17 @@
             "title": "Artifact Id",
             "type": "string"
           },
+          "codec": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Codec"
+          },
           "content_type": {
             "title": "Content Type",
             "type": "string"
@@ -4302,9 +6000,25 @@
             "title": "Download Url",
             "type": "string"
           },
+          "playable": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Playable"
+          },
           "size": {
             "title": "Size",
             "type": "integer"
+          },
+          "transcoded": {
+            "default": false,
+            "title": "Transcoded",
+            "type": "boolean"
           },
           "url": {
             "title": "Url",
@@ -4343,6 +6057,17 @@
                 "type": "null"
               }
             ]
+          },
+          "video_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Error"
           },
           "view": {
             "title": "View",
@@ -5558,7 +7283,8 @@
               "RESULT_FOLDER",
               "CURATION_INPUT",
               "SPDM_IMPORT",
-              "PREDICT_INPUT"
+              "PREDICT_INPUT",
+              "FEM_ASSEMBLY"
             ],
             "title": "Purpose",
             "type": "string"
@@ -6060,6 +7786,761 @@
           "rounded"
         ],
         "title": "PredictCheckResponse",
+        "type": "object"
+      },
+      "PredictRunCapture": {
+        "properties": {
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "views": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Views",
+            "type": "array"
+          }
+        },
+        "title": "PredictRunCapture",
+        "type": "object"
+      },
+      "PredictRunDetail": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_curve": {
+            "default": false,
+            "title": "Has Curve",
+            "type": "boolean"
+          },
+          "input_mode": {
+            "enum": [
+              "template",
+              "prepared"
+            ],
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "input_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Path"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "nearest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunNearest"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "enum": [
+              "manual",
+              "fem_verify"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "out_of_range": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "paths": {
+            "$ref": "#/components/schemas/PredictRunPaths"
+          },
+          "response_table": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunTableRow"
+            },
+            "title": "Response Table",
+            "type": "array"
+          },
+          "responses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunResponse"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "root_job_id": {
+            "title": "Root Job Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          },
+          "verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunVerify"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings_count": {
+            "default": 0,
+            "title": "Warnings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "root_job_id",
+          "attempts",
+          "state",
+          "origin",
+          "created_at",
+          "created_by_name",
+          "input_mode",
+          "paths"
+        ],
+        "title": "PredictRunDetail",
+        "type": "object"
+      },
+      "PredictRunFailure": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "title": "PredictRunFailure",
+        "type": "object"
+      },
+      "PredictRunModel": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "version"
+        ],
+        "title": "PredictRunModel",
+        "type": "object"
+      },
+      "PredictRunNearest": {
+        "properties": {
+          "distance": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Distance"
+          },
+          "run_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Key"
+          }
+        },
+        "title": "PredictRunNearest",
+        "type": "object"
+      },
+      "PredictRunPaths": {
+        "description": "표시용 절대경로(OS 표기). 폴더·파일이 없으면(정리로 _backup에 옮겨짐 등) null.",
+        "properties": {
+          "dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir"
+          },
+          "geom_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Geom Dir"
+          },
+          "input_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Dir"
+          },
+          "media_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Dir"
+          },
+          "pred_h3d": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pred H3D"
+          },
+          "result_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Dir"
+          }
+        },
+        "title": "PredictRunPaths",
+        "type": "object"
+      },
+      "PredictRunResponse": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "title": "PredictRunResponse",
+        "type": "object"
+      },
+      "PredictRunSummary": {
+        "properties": {
+          "applied_values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Applied Values",
+            "type": "object"
+          },
+          "attempts": {
+            "title": "Attempts",
+            "type": "integer"
+          },
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunCapture"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "duration_s": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration S"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunFailure"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "has_curve": {
+            "default": false,
+            "title": "Has Curve",
+            "type": "boolean"
+          },
+          "input_mode": {
+            "enum": [
+              "template",
+              "prepared"
+            ],
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "input_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Path"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunModel"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "origin": {
+            "enum": [
+              "manual",
+              "fem_verify"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "out_of_range": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Out Of Range",
+            "type": "array"
+          },
+          "responses": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunResponse"
+            },
+            "title": "Responses",
+            "type": "array"
+          },
+          "root_job_id": {
+            "title": "Root Job Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunTemplate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          },
+          "verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunVerify"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings_count": {
+            "default": 0,
+            "title": "Warnings Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "root_job_id",
+          "attempts",
+          "state",
+          "origin",
+          "created_at",
+          "created_by_name",
+          "input_mode"
+        ],
+        "title": "PredictRunSummary",
+        "type": "object"
+      },
+      "PredictRunTableRow": {
+        "properties": {
+          "diff_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Diff Pct"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "nearest_measured": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nearest Measured"
+          },
+          "predicted": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Predicted"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          }
+        },
+        "title": "PredictRunTableRow",
+        "type": "object"
+      },
+      "PredictRunTemplate": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "input_kind": {
+            "title": "Input Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "id",
+          "input_kind"
+        ],
+        "title": "PredictRunTemplate",
+        "type": "object"
+      },
+      "PredictRunVerify": {
+        "description": "기존 PREDICT_VERIFY 요약(이 예측을 가리키는 최신 1건).",
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "job_id",
+          "state"
+        ],
+        "title": "PredictRunVerify",
         "type": "object"
       },
       "Project": {
@@ -7811,6 +10292,11 @@
               }
             ]
           },
+          "transcode": {
+            "default": false,
+            "title": "Transcode",
+            "type": "boolean"
+          },
           "video": {
             "title": "Video",
             "type": "boolean"
@@ -7818,6 +10304,28 @@
           "video_ext": {
             "title": "Video Ext",
             "type": "string"
+          },
+          "video_ext_effective": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Ext Effective"
+          },
+          "video_target_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Video Target Bytes"
           },
           "views": {
             "items": {
@@ -7984,6 +10492,26 @@
             ]
           },
           "evaluate": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fem_verify": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fem_verify_rebuild": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FeatureState"
@@ -10804,6 +13332,467 @@
         ]
       }
     },
+    "/physicsai/api/fem-verifications/{fid}": {
+      "get": {
+        "operationId": "get_fem_verification_physicsai_api_fem_verifications__fid__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/cancel": {
+      "post": {
+        "description": "취소(power, 등록자·관리자, 멱등): 예측 대기 중이면 동반 예측, 해석 중이면 FEM_VERIFY를 취소한다.",
+        "operationId": "cancel_fem_verification_physicsai_api_fem_verifications__fid__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Cancel Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/curves": {
+      "get": {
+        "operationId": "fem_verification_curves_physicsai_api_fem_verifications__fid__curves_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "name",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 400,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Name"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_points",
+            "required": false,
+            "schema": {
+              "default": 500,
+              "maximum": 5000,
+              "minimum": 2,
+              "title": "Max Points",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FvCurves"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Fem Verification Curves",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/media": {
+      "get": {
+        "description": "컨투어 두 쪽(예측·FEM, 같은 범례). MediaFile = §15.4 + S16 playable·codec·transcoded.",
+        "operationId": "fem_verification_media_physicsai_api_fem_verifications__fid__media_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FvMedia"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Fem Verification Media",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/rerun": {
+      "post": {
+        "description": "다시 실행(FAILED·CANCELED만, 아니면 409 FEM_VERIFY_NOT_RERUNNABLE).",
+        "operationId": "rerun_fem_verification_physicsai_api_fem_verifications__fid__rerun_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Rerun Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/fem-verifications/{fid}/table.csv": {
+      "get": {
+        "description": "응답 비교 표 CSV(UTF-8 BOM): name,unit,stat,pred_min,pred_max,fem_min,fem_max,pred_value,fem_value,diff,diff_pct.",
+        "operationId": "fem_verification_table_csv_physicsai_api_fem_verifications__fid__table_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "fid",
+            "required": true,
+            "schema": {
+              "title": "Fid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Fem Verification Table Csv",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
     "/physicsai/api/fs/list": {
       "get": {
         "operationId": "fs_list_physicsai_api_fs_list_get",
@@ -10876,7 +13865,20 @@
     },
     "/physicsai/api/fs/roots": {
       "get": {
+        "description": "include_spdm=true(phase3 §21.3.8 S16): SPDM 루트(설정)를 `SPDM <i>(읽기 전용)` 루트로 덧붙인다.",
         "operationId": "fs_roots_physicsai_api_fs_roots_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "include_spdm",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Include Spdm",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -13250,6 +16252,79 @@
         ]
       }
     },
+    "/physicsai/api/predict-runs/{job_id}": {
+      "get": {
+        "description": "단일 예측 상세: 목록 행 + 최근접·응답 표·경로(없으면 null)·표시 설정. 일괄 하위·다른 유형은 404 NOT_PREDICT_RUN.",
+        "operationId": "get_predict_run_physicsai_api_predict_runs__job_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PredictRunDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Predict Run",
+        "tags": [
+          "jobs"
+        ]
+      }
+    },
     "/physicsai/api/projects": {
       "get": {
         "operationId": "projects_physicsai_api_projects_get",
@@ -13982,6 +17057,345 @@
         "summary": "List Datasets",
         "tags": [
           "datasets"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/fem-verifications": {
+      "get": {
+        "description": "목록(최신순). 다음 페이지가 있으면 헤더 X-Next-Cursor.",
+        "operationId": "list_fem_verifications_physicsai_api_studies__study_id__fem_verifications_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "predict_job_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Predict Job Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batch_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Batch Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "opt_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Opt Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FemVerifyListItem"
+                  },
+                  "title": "Response List Fem Verifications Physicsai Api Studies  Study Id  Fem Verifications Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Fem Verifications",
+        "tags": [
+          "fem_verify"
+        ]
+      },
+      "post": {
+        "description": "생성(power): 같은 설계점의 성공한 예측이 없으면 동반 예측(WAITING_PREDICT), 있으면 FEM_VERIFY(RUNNING).",
+        "operationId": "create_fem_verification_physicsai_api_studies__study_id__fem_verifications_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FemVerifyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FemVerification"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Fem Verification",
+        "tags": [
+          "fem_verify"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/fem-verifications/preview": {
+      "post": {
+        "description": "미리보기(저장 없음, power): 출처 해석·조립 원본 검사·FEM 필드·문제/경고. 409 HPC_NOT_CONFIGURED·TEMPLATE_NOT_CONFIGURED 등.",
+        "operationId": "preview_fem_verification_physicsai_api_studies__study_id__fem_verifications_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FemVerifyCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FvPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Preview Fem Verification",
+        "tags": [
+          "fem_verify"
         ]
       }
     },
@@ -14924,6 +18338,149 @@
         "summary": "Preview Batch",
         "tags": [
           "predict-batches"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/predict-runs": {
+      "get": {
+        "description": "그 Study의 단일 예측(일괄 하위 제외, 재시도 묶음은 최신 1행). mode = all | template | prepared,\nstate = 쉼표 구분 작업 상태. 다음 페이지가 있으면 헤더 X-Next-Cursor.",
+        "operationId": "list_predict_runs_physicsai_api_studies__study_id__predict_runs_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "mode",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Mode"
+            }
+          },
+          {
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "State"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/PredictRunSummary"
+                  },
+                  "title": "Response List Predict Runs Physicsai Api Studies  Study Id  Predict Runs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "List Predict Runs",
+        "tags": [
+          "jobs"
         ]
       }
     },

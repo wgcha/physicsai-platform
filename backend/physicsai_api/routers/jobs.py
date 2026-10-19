@@ -4,12 +4,14 @@ from fastapi import APIRouter, Depends, Query, Request, Response
 from fastapi.responses import StreamingResponse
 
 from .. import schemas as S
+from ..schemas import predict_runs as PR
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
 from ..services import error_bundle as eb_svc
 from ..services import hpc_resolve as resolve_svc
 from ..services import job_files as files_svc
 from ..services import jobs as svc
+from ..services import predict_runs as runs_svc
 
 router = APIRouter(tags=["jobs"])
 ERR = {404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse}, 422: {"model": S.ErrorResponse},
@@ -97,3 +99,24 @@ def error_bundle(job_id: str, request: Request, principal: Principal = Depends(g
     body, name = eb_svc.build(get_ctx(request), principal, job_id, request_id(request), client_ip(request))
     return StreamingResponse(body, media_type="application/zip",
                              headers={"Content-Disposition": f'attachment; filename="{name}"', "X-Content-Type-Options": "nosniff"})
+
+
+# ---- ④ 단일 예측 실행 목록(phase3 §21.2 S16 V1) ----------------------------------------------------
+
+
+@router.get("/studies/{study_id}/predict-runs", response_model=list[PR.PredictRunSummary], responses=ERR)
+def list_predict_runs(study_id: str, request: Request, response: Response, mode: str | None = None,
+                      state: str | None = None, limit: int | None = Query(default=None, ge=1, le=200),
+                      cursor: str | None = None, principal: Principal = Depends(get_principal)) -> list:
+    """그 Study의 단일 예측(일괄 하위 제외, 재시도 묶음은 최신 1행). mode = all | template | prepared,
+    state = 쉼표 구분 작업 상태. 다음 페이지가 있으면 헤더 X-Next-Cursor."""
+    items, nxt = runs_svc.list_runs(get_ctx(request), principal, study_id, mode=mode, state=state, limit=limit, cursor=cursor)
+    if nxt:
+        response.headers["X-Next-Cursor"] = nxt
+    return items
+
+
+@router.get("/predict-runs/{job_id}", response_model=PR.PredictRunDetail, responses=ERR)
+def get_predict_run(job_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """단일 예측 상세: 목록 행 + 최근접·응답 표·경로(없으면 null)·표시 설정. 일괄 하위·다른 유형은 404 NOT_PREDICT_RUN."""
+    return runs_svc.get_run(get_ctx(request), principal, job_id)

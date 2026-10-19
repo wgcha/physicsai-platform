@@ -1,4 +1,5 @@
-"""④ PREDICT_VERIFY(§8.10). 1차 기본 hpc.gateway=none이면 작업 생성 단계에서 409. scx 모드(phase3 §16)는 HPC_SUBMIT·COLLECT 안쪽만 steps/_scx."""
+"""④ PREDICT_VERIFY(§8.10). 1차 기본 hpc.gateway=none이면 작업 생성 단계에서 409. scx 모드(phase3 §16)는 HPC_SUBMIT·COLLECT 안쪽만 steps/_scx.
+HPC_SUBMIT·COLLECT 몸체는 `_verify_hpc`(phase3 §21.3.7 — FEM_VERIFY와 공유, 동작·문구 불변)."""
 
 from __future__ import annotations
 
@@ -11,14 +12,12 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, write_json
-from physicsai_core.hpc.command import map_path
-from physicsai_core.hpc.gateway import HpcGatewayError, HpcSubmitSpec
 from physicsai_core.parsers.name_value import read_name_value_csv
 
 from simdash_adapters.hpc import scx_naming as _scx_naming
 
-from ...signals import EnterWaitingHpc, StepSkipped
-from .. import _collect, _scx
+from ...signals import StepSkipped
+from . import _verify_hpc
 from ..response_tcl import extract_in_folder, single_h3d, uses_tcl, warn_reasons, write_values_csv
 
 
@@ -55,111 +54,23 @@ def pv_prep(ctx: Any) -> None:
 
 
 def hpc_submit(ctx: Any) -> None:
-    gw = ctx.ex.w.hpc
-    av = gw.availability()
-    if not av.configured:
-        raise StepFailure("HPC_SUBMIT_FAILED", f"PBS 연결 안 됨: {av.message}")
-    if av.mode == "scx":
-        return _hpc_submit_scx(ctx, gw)
+    """PBS(command) 또는 scx(`04_V-<NNN>_<ts>`) 제출 — 몸체는 `_verify_hpc.submit`(phase3 §21.3.7 공유)."""
     r = ctx.result()
     V = ctx.abs(r["verify_rel"])
-    hcfg = ctx.settings.hpc
-    over = ctx.params.get("hpc") or {}
-    starter = r.get("starter") or ""
     job_name = re.sub(r"[^A-Za-z0-9_\-]", "_", f"{ctx.study['folder_name']}_{ctx.ex.job_id[:8]}_a{r['attempt']}")[:64]
-    spec = HpcSubmitSpec(
-        job_name=job_name, run_key="verify", study=ctx.study["folder_name"],
-        input_file=map_path(os.path.join(V, "input", starter), hcfg.transfer.path_map),
-        input_dir=map_path(os.path.join(V, "input"), hcfg.transfer.path_map),
-        result_dir=map_path(os.path.join(V, "result"), hcfg.transfer.path_map),
-        queue=over.get("queue"), ncpus=over.get("ncpus"), walltime=over.get("walltime"),
-    )
-    try:
-        res = gw.submit(spec)
-    except HpcGatewayError as exc:
-        raise StepFailure("HPC_SUBMIT_FAILED", str(exc)) from None
-    ctx.log(f"PBS 제출: {res.external_job_id}")
-    ctx.ex.db(lambda c: hpc_repo.insert(c, job_id=ctx.ex.job_id, step_id=ctx.step["id"], run_key="verify",
-                                         attempt_no=int(r["attempt"]), gateway_mode=av.mode,
-                                         external_job_id=res.external_job_id, submit_argv=None))
-    raise EnterWaitingHpc()
 
+    def scx_name(ts: str) -> str:
+        with ctx.ex.engine.connect() as conn:
+            v_no = hpc_repo.verify_number(conn, ctx.study["id"], ctx.ex.job_id)
+        return _scx_naming.verify_job_name(v_no, ts)
 
-def _hpc_submit_scx(ctx: Any, gw: Any) -> None:
-    """scx(phase3 §16.4): V/input 직속 파일을 새 잡 폴더 `04_V-<NNN>_<ts>`에 올리고 제출(run 1개)."""
-    r = ctx.result()
-    V = ctx.abs(r["verify_rel"])
-    health = _scx.check_health(ctx, gw)
-    with ctx.ex.engine.connect() as conn:
-        v_no = hpc_repo.verify_number(conn, ctx.study["id"], ctx.ex.job_id)
-    plan = _scx.RunStage(run_key="verify", input_dir=os.path.join(V, "input"), starter=r.get("starter") or "",
-                         job_name=_scx_naming.verify_job_name(v_no, _scx.timestamp()),
-                         client_ref={"app": "physicsai", "job_id": ctx.ex.job_id, "run_key": "verify"})
-    _scx.scan_inputs(ctx, gw, plan, health)
-    _scx.plan_remote_dirs(ctx, gw, [plan], health)
-    _scx.stage_in(ctx, gw, [plan], int(r["attempt"]))
-    res = _scx.submit_all(ctx, gw, [plan], lambda _c, _p, _st: None)
-    if res.unknown is not None:
-        _scx.flag_unknown(ctx, res)
-    raise EnterWaitingHpc()
-
-
-def _collect_scx(ctx: Any, gw: Any, row: dict[str, Any], res_dir: str) -> None:
-    try:
-        hmax = gw.health().get("max_download_bytes")
-    except HpcGatewayError:
-        hmax = None
-    try:
-        got = _scx.collect_run(ctx, gw, row, res_dir, hmax)
-    except _scx.CollectFail as exc:
-        ctx.ex.db(lambda c: hpc_repo.set_collect_state(c, row["id"], "FAILED"))
-        tag = "" if exc.code == "COLLECT_FAILED" else f"({exc.code})"
-        raise StepFailure("COLLECT_FAILED", f"SCX 결과 회수 실패{tag}: {exc.message}") from None
-    ctx.ex.db(lambda c: hpc_repo.set_collect_state(c, row["id"], "COLLECTED", sorted(got)))
-    ctx.patch_result({"collected": sorted(got)})
+    _verify_hpc.submit(ctx, input_dir=os.path.join(V, "input"), result_dir=os.path.join(V, "result"),
+                       starter=r.get("starter") or "", job_name=job_name, attempt=int(r["attempt"]), scx_job_name=scx_name)
 
 
 def collect(ctx: Any) -> None:
-    """1차 in_place: V/result의 collect_patterns 파일이 존재하고 크기·mtime이 간격 2회 연속 불변.
-    scx(phase3 §16.4): relay 다운로드로 V/result에 받는다(완료 잡 — 안정성 대기 없음)."""
-    import fnmatch
-    import time
-
-    r = ctx.result()
-    res_dir = os.path.join(ctx.abs(r["verify_rel"]), "result")
-    with ctx.ex.engine.connect() as conn:
-        ok = [h for h in hpc_repo.for_job(conn, ctx.ex.job_id) if h["state"] == "SUCCEEDED" and h["gateway_mode"] == "scx"]
-    if ok:
-        return _collect_scx(ctx, ctx.ex.w.hpc, ok[-1], res_dir)
-    pats = ctx.settings.hpc.transfer.collect_patterns
-    limit = ctx.settings.hpc.transfer.max_collect_bytes
-
-    def snapshot() -> dict[str, tuple[int, float]]:
-        out = {}
-        for n in sorted(os.listdir(res_dir)) if os.path.isdir(res_dir) else []:
-            p = os.path.join(res_dir, n)
-            if os.path.isfile(p) and any(fnmatch.fnmatch(n, pat) for pat in pats):
-                st = os.stat(p)
-                out[n] = (st.st_size, st.st_mtime)
-        return out
-
-    last_err = ""
-    for attempt in range(1, 4):
-        a = snapshot()
-        time.sleep(_collect.COLLECT_STABLE_INTERVAL_S)
-        ctx.checkpoint()
-        b = snapshot()
-        time.sleep(_collect.COLLECT_STABLE_INTERVAL_S)
-        c = snapshot()
-        if a and a == b == c:
-            big = [n for n, (sz, _m) in c.items() if sz > limit]
-            if big:
-                raise StepFailure("COLLECT_FAILED", f"회수 파일이 상한을 넘습니다: {big[0]}")
-            ctx.patch_result({"collected": sorted(c)})
-            return
-        last_err = "결과 파일 없음" if not c else "결과 파일이 아직 바뀌는 중"
-        ctx.log(f"회수 재시도 {attempt}/3: {last_err}")
-    raise StepFailure("COLLECT_FAILED", f"PBS 결과 회수 실패: {last_err}")
+    """1차 in_place 안정성 대기 / scx relay 다운로드 — 몸체는 `_verify_hpc.collect`."""
+    _verify_hpc.collect(ctx, os.path.join(ctx.abs(ctx.result()["verify_rel"]), "result"))
 
 
 def pv_extract(ctx: Any) -> None:

@@ -65,3 +65,7 @@ def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
     hook = getattr(_STAGE_OF.get(old["job_type"]), "on_retry", None)
     if hook is not None:
         hook(conn, old, new_id)
+    if old["job_type"] in ("PREDICT", "FEM_VERIFY"):  # phase3 §21.3.9 S16: 검증 행의 예측·작업 id 갱신
+        from physicsai_core.db.repositories import fem_verifications as fv_repo
+
+        fv_repo.on_retry(conn, old, new_id)
