@@ -292,12 +292,13 @@ component의 요소·노드 집합:
 ```json
 {"schema_version": 1, "status": "OK", "code": null, "category": null, "message": null,
  "values": {"CUSH_L_THK_1": 12.9},
- "positions": [{"name": "CUSH_L_HOLE_U_1", "nominal": 20.0, "value": 22.0, "delta": 2.0, "ref_face": "F7", "expected_measured": 22.0}],
+ "positions": [{"name": "CUSH_L_HOLE_U_1", "body": "CUSH_L", "axis": "U", "mode": "nearest_fixed", "ref_face": "F7", "expected_measured": 22.0}],
  "applied": [{"name": "CUSH_L_THK_1", "nominal": 12.5, "value": 12.9, "delta": 0.4, "op": "PRISM", "moved": ["F12"], "fixed": ["F7"], "ref_rule": "contact_fixed", "members": ["CUSH_R_THK_1"]}],
  "topology": {"same_as_nominal": true, "counts": {"CUSH_L": {"nominal": [42, 120, 80], "sample": [42, 120, 80]}}},
  "elapsed_s": 1.8}
 ```
 
+- **`positions[]` 키(GE-C10)**: `name`·`body`·`axis`·`mode`(`position_ref` 사용값)·`ref_face`·`expected_measured` (구현 기준, `nominal`·`value`·`delta`는 없음 — 값은 `values`, 공칭은 features). 선택 키 `collisions`: 피처 간 충돌 검사 결과 목록(충돌 없으면 생략 또는 빈 목록).
 - **위치형 값(GE-C9)**: 위치 파라미터 값 = 공칭 + Δ이며 Δ는 가장 가까운 고정 면 기준(`position_ref: nearest_fixed`). bbox 기준 기대 측정값(check (a) 비교 대상)은 `positions[].expected_measured`에 기록한다(고정 면이 움직이거나 body bbox가 바뀌어도 측정 방법 `hole_center`와 같은 기준).
 
 실패 시 `status: "FAIL"`, `code`·`category`·`message`(영문 기술 메시지, §18.4) 채움, `sample.brep`·`face_map.json` 없음.
@@ -335,7 +336,7 @@ component의 요소·노드 집합:
 }
 ```
 
-**지표 키(GE-C9, 0.3.0)**: `dt_ratio` = Δt 추정 비(요소 대표 길이 h = 3V/최대 면적, component별로 모핑 최솟값 / 기준본 최솟값), 최소 엣지 비는 별도 키 `edge_ratio`(= `min_edge`/기준본 `min_edge`). 비유한(NaN·inf) 지표는 JSON에서 `null`(check는 해당 항목을 FAIL이 아닌 `NOT_EVALUATED`로 두지 않고 유한한 값만 판정, 전부 null이면 경고 `QUALITY_METRIC_NONFINITE`).
+**지표 키(GE-C9, 0.3.0)**: `dt_ratio` = Δt 추정 비(요소 대표 길이 h = 3V/최대 면적, component별로 모핑 최솟값 / 기준본 최솟값), 최소 엣지 비는 별도 키 `edge_ratio`(= `min_edge`/기준본 `min_edge`). 비유한(NaN·inf) 지표는 JSON에서 `null`(check는 해당 항목을 FAIL이 아닌 `NOT_EVALUATED`로 두지 않고 유한한 값만 판정, 전부 null이면 경고 `QUALITY_METRIC_NONFINITE`, 유지·구현 추가 예정).
 
 `warnings[]`: 공칭(무변형) baseline 메시를 같은 기준으로 평가해 `quality.baseline_status`(`PASS|FAIL`)를 기록하고, `FAIL`이면 경고 `BASELINE_QUALITY_BELOW`(차단 아님, §6.5). `baseline_status`는 **절대 기준(stretch·aspect)** 미달일 때만 FAIL — 상대 기준(최소 엣지·Δt)은 baseline 자신에 대해 항상 충족. `status`: 항목별 `PASS|FAIL|NOT_EVALUATED`. 최상위는 FAIL 항목이 하나라도 있으면 FAIL, `code`는 §6.5 우선순위의 첫 실패.
 
@@ -350,20 +351,20 @@ component의 요소·노드 집합:
   "deviation":    {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
   "interference": {"body_mm": 0.01, "product_mm": 0.05},
   "tie":          {"default_dsearch_mm": null, "required": true},
-  "extract":      {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "sample_grid": 12},
+  "extract":      {"position_range_mm": 5.0, "draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "sample_grid": 12},
   "thickness_ref": "contact_fixed",
   "position_ref": "nearest_fixed",
-  "position_range_mm": 5.0,
   "thickness_ref_overrides": {},
   "symmetry_split": []
 }
 ```
 
-- `extract` 절(선택, GE-C5): `draft_max_deg` 구배 허용각(기본 3°, 이 이하 면은 평면 취급)·`overlap_min` 대향 면 겹침 최소 비율(0.5)·`range_ratio` 값 범위 비율(0.05)·`sample_grid` 겹침 판정 샘플 격자(12). 0.1.0 구현 기본값과 일치.
+- `extract` 절(선택, GE-C5): `draft_max_deg` 구배 허용각(기본 3°, 이 이하 면은 평면 취급)·`overlap_min` 대향 면 겹침 최소 비율(0.5)·`range_ratio` 값 범위 비율(0.05)·`sample_grid` 겹침 판정 샘플 격자(12)·`position_range_mm`(위치형 기본 범위, GE-C10). 0.1.0 구현 기본값과 일치.
+- **모르는 키 거부(GE-C10)**: `options.json`의 최상위·절 안 알 수 없는 키는 무시하지 않고 `GEOM_INPUT_INVALID`로 거부(구현 예정). 플랫폼은 API 단계에서 `GEOM_OPTIONS_INVALID`.
 - 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_stretch ≤ 1`, `max_aspect ≥ 1`, `min_edge_mm`(null 또는 > 0, null = 미사용), `0 < min_edge_ratio ≤ 1`, `0 < dt_ratio_min ≤ 1`, `position_ref ∈ {nearest_fixed, proportional}`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
 - **품질 기본값 출처(2026-10-19, Q8 해결)**: 현행 SimLab 메시 설정(internal grading 2, quality min 0.1(tet stretch, 1=이상), identify feature: merge tiny fillet·min size 1 mm·avg size 10 mm·grade factor 1.5, geometry approximation: max angle per element 45°·curvature min elem size 5 mm·surface mesh aspect ratio 10·iso mesh)에서 가져온 `min_stretch=0.1`·`max_aspect=10`(절대 기준 유지). **최소 엣지·Δt는 상대 기준(2026-10-19 사용자 확정)**: `min_edge_ratio`(기본 0.8) × baseline 최소 엣지, Δt 비 ≥ `dt_ratio_min`(기본 0.8, baseline 대비). 절대값 `min_edge_mm`은 선택(기본 null = 미사용, 값을 주면 추가 하한). 이 품질 키는 고급 옵션에서 변경·저장. `min_scaled_jacobian`은 기준 키에서 빼고 `check.json`의 정보 수치로만 남긴다(계약 초안 단계라 호환 이슈 없음).
 - `position_ref`(2026-10-19 확정): 위치형 파라미터(`HOLE_U`/`HOLE_V`)의 기준. 기본 `nearest_fixed`(가장 가까운 고정 면까지 거리 유지), 대안 `proportional`(바디 길이 비례 위치). §6.2.
-- `position_range_mm`(2026-10-19 사용자 확정, GE-C9): 위치형 파라미터(HOLE_U·HOLE_V)의 기본 범위 = 공칭 ∓ 이 값(절대 mm, 기본 5.0, 범위 `> 0` 유한). 치수형은 기존 ±%(`param_default_range_ratio`) 유지. 고급 옵션에서 변경.
+- `position_range_mm`(**`extract` 절 하위 `extract.position_range_mm`**, GE-C10; 2026-10-19 사용자 확정, GE-C9): 위치형 파라미터(HOLE_U·HOLE_V)의 기본 범위 = 공칭 ∓ 이 값(절대 mm, 기본 5.0, 범위 `> 0` 유한). 치수형은 기존 ±%(`param_default_range_ratio`) 유지. 고급 옵션에서 변경.
 - 고급 옵션 UI에서 바꾸는 절 = `quality`·`position_ref`·`position_range_mm`·`interference`·`deviation`(+`tie.required`). `tag` 절 변경은 준비본 재생성 필요(§7.4).
 - 작업이 쓴 유효 옵션은 `P/geom/options.json`, `R/options.json`, `D/native/options_run.json`에 기록(사용값 고정). 이 세 파일에는 최상위 `engine`·`engine_version`(작업 준비 step에서 `paicad version --json`으로 읽은 값)을 함께 쓴다 — 병합·범위 검사 대상 아님, `param_sets.geom_options` 입력에 오면 422 `GEOM_OPTIONS_INVALID`.
 
@@ -448,18 +449,18 @@ component의 요소·노드 집합:
 | `paicad extract` | **`--cad`**(STEP 파일 또는 `cad/parts` 폴더), **`--out-dir`**, `--body-map`, `--renum-csv`(있으면 component 순서·대응 검사), `--options`, `--no-png` | `parameter_extracted.xml`, `parameter_features.json`(성공 = 둘 다 존재 + xml 파라미터 ≥1), `features/*.png` |
 | `paicad tag` | **`--cad`**, **`--features`**, **`--baseline-inc`**, **`--renum-csv`**, **`--assem-dir`**, **`--out-dir`**, `--body-map`, `--options` | `tag.json`(`status: OK`), `tag_nodes.npz` |
 | `paicad update` | **`--cad`**, **`--features`**, **`--values`**, **`--out-dir`**, `--tag-dir`(기준면 접촉 정보), `--body-map`, `--options` | `update.json`(`status: OK`), `sample.brep`, `face_map.json` |
-| `paicad morph` | **`--baseline-inc`**, **`--tag-dir`**, **`--features`**, **`--update-dir`**, **`--out-dir`**, `--solver`(선형 해법 선택, GE-C9), `--options` | `morph.json`(`status: OK`), `morphed.inc` |
+| `paicad morph` | **`--baseline-inc`**, **`--tag-dir`**, **`--features`**, **`--update-dir`**, **`--out-dir`**, `--solver`(solver writer 선택, §18.3, 기본 `radioss`), `--options` | `morph.json`(`status: OK`), `morphed.inc` |
 | `paicad check` | **`--baseline-inc`**, **`--morph-dir`**, **`--update-dir`**, **`--tag-dir`**, **`--features`**, **`--values`**, **`--assem-dir`**, **`--renum-csv`**, **`--out-dir`**, **`--out-inc`**, `--options` | `check.json`(`status: PASS`) + `--out-inc` 파일 |
-| `paicad morph --sweep` (단계 2, §11.2) | `paicad morph` 인자 + **`--sweep`**, `--steps`(치수형 %, 기본 `5,10,20,30,40,50`), `--position-steps`(위치형 mm, 기본 `1,2,3,5,8,10`), `--params`(기본 전부), `--stop-after-fail`(기본 2단계 연속 실패), `--check on|off`(품질·편차·재측정 포함, 기본 `on`), `--update-dir`(공칭 update 출력 — 그 `sample.brep` 사용) | `envelope.json`·`envelope.csv`·`report_envelope.md`(모두 sweep `--out-dir`에 씀, 성공 = json·csv 존재), 단계별 `sweep/<param>/<±pct>/` 하위는 `--keep-steps`일 때만 보존 |
+| `paicad morph --sweep` (단계 2, §11.2) | `paicad morph` 인자 + **`--sweep`**, `--steps`(치수형 %, 기본 `5,10,20,30,40,50`), `--pos-steps`(위치형 mm, 기본 `1,2,3,5,8,10`), `--params`(기본 전부), `--stop-after-fail`(기본 2단계 연속 실패), `--check on|off`(품질·편차·재측정 포함, 기본 `on`), `--update-dir`(공칭 update 출력 — 그 `sample.brep` 사용) | `envelope.json`·`envelope.csv`·`report_envelope.md`(모두 sweep `--out-dir`에 씀, 성공 = json·csv 존재), 단계별 `sweep/<param>/<±pct>/` 하위는 `--keep-steps`일 때만 보존 |
 | `paicad props scan` (단계 3S, §11.1) | **`--assem-dir`**, **`--out-dir`**, `--options` | `props.json`(PROP 목록, 성공 = 존재) |
 | `paicad props apply` (단계 3S) | **`--assem-dir`**(run 폴더 INPUT 복사본), **`--values`**, **`--props`**(`props.json`), **`--out-dir`** | `props_apply.json`(`status: OK`) + 수정된 PROP 정의 파일 사본(원본 불변) |
 | `paicad map` (단계 4B, §11.4) | **`--baselines`**(JSON `[{"id","features"}]`, features = 각 baseline의 `parameter_features.json` 경로, 2개 이상), **`--out-dir`**, `--user-map`(기존 `param_map.json` — `signature`가 같은 행의 `decision` 승계, 다른 행은 `needs_review`), `--usage`(`topology`\|`range`, 기본 `topology`), `--split-param`(range일 때), `--options` | `param_map.json`(성공 = 존재 + `map_status: OK`, **`status: draft`로 `proposed`만 채움 — 확정은 하지 않음**). 입력은 features JSON뿐(메시·조립 폴더 읽지 않음) |
 | `paicad run` | update·morph·check 인자 합집합 + **`--update-dir`**, **`--morph-dir`**, **`--check-dir`**(각 단계 `--out-dir`), **`--out-inc`**, `--solver` | 각 단계 출력 + `--out-inc` + **`run.json`(`--check-dir`에 씀**, 단계별 status·elapsed 요약, GE-C9). 한 단계가 FAIL이면 뒤 단계는 실행하지 않음. run 중 단계 `RESULT` 줄은 stdout 진행 로그 `PROGRESS`로 출력(GE-C9) |
-| `paicad selftest` (현장 인수 키트, §9 (b)) | `--out-dir`, `--workdir`, `--keep` 등(**Q19 초안**, 확정 전) | `selftest_report.json`(수치 요약만, CAD·메시 본문 없음). 현재 구현 기술은 아래 §5.3.1 |
+| `paicad selftest` (현장 인수 키트, §9 (b)) | **`--cad`**, **`--baseline-inc`**, **`--renum-csv`**, **`--assem-dir`**, **`--out-dir`**, 선택 `--envelope-*`(`--envelope-pos-steps` 등 sweep 인자, 지정 시 envelope 요약 포함) | `selftest_report.json`(수치 요약만, CAD·메시 본문 없음). 상세 §5.3.1 |
 
-#### 5.3.1 selftest 현재 구현(0.3.0, Q19 초안 — 확정 아님)
+#### 5.3.1 selftest(GE-C10, Q19 인자 확정)
 
-현 구현은 개발 환경 가상 쿠션(build123d·gmsh 없이도 도는 내장 합성 케이스)으로 update→morph→check를 한 번 돌리고 단계별 PASS/FAIL·품질 지표·경과 시간을 `selftest_report.json`에 쓴다. 인자명·보고서 키는 Q19에서 확정할 때까지 변경될 수 있으며, 다른 문서·플랫폼 코드가 이 키에 의존하지 않는다.
+실물 입력(G1 폴더의 공칭 STEP·baseline inc·`RENUM_INIT.csv`·조립 폴더)으로 extract→tag→update→morph→check를 실행해 단계별 PASS/FAIL·품질 지표·경과 시간을 `selftest_report.json`에 쓴다. 필수 인자 `--cad --baseline-inc --renum-csv --assem-dir --out-dir`, 선택 `--envelope-*`(sweep 인자 접두 `--envelope-`, 예 `--envelope-pos-steps`, 지정 시 envelope 요약 수행). 인자명은 이것으로 확정이며 **리포트 키는 구현(`selftest_report.json`)을 기준**으로 하고 플랫폼 코드는 이 키에 의존하지 않는다. 내장 합성 케이스(가상 쿠션)로 도는 시험은 개발용 시험(§9 (a), `scripts/test-all`)이며 CLI 계약이 아니다.
 
 `--features`·`--tag-dir`는 native 준비본의 파일·폴더. `--assem-dir`은 기준본이 들어 있는 조립 폴더(기준본 자신은 제품 메시 수집에서 제외).
 
@@ -496,7 +497,7 @@ component의 요소·노드 집합:
    - 아니면 면까지 ≤ tol이고 투영점이 면 안(`BRepClass_FaceClassifier` IN/ON) → `kind=1`, `uv` = 면 매개변수 영역(`BRepTools::UVBounds`)으로 정규화.
    - 아니면 `kind=-1`(미일치).
 3. 일관성: 외피 삼각형의 세 노드가 서로 다른 면(kind=1)에 붙으면 그 삼각형 노드를 공통 엣지로 재분류 시도. 꼭짓점 V마다 kind=3 노드가 정확히 1개가 아니면 가장 가까운 노드 1개만 kind=3, 나머지는 엣지로.
-4. `match_ratio` = (경계 노드 − 미일치) / 경계 노드. **`match_ratio < min_match_ratio`(기본 0.98) → `GEOM_BASELINE_MISMATCH`**(메시지에 평균·최대 거리와 "공칭 STEP과 기준 메시 좌표가 맞지 않습니다 — 원점·단위·형상 차이 확인"). 자동 정렬(강체 맞춤)은 하지 않는다(§15 Q1). 미일치 노드가 남아도 비율을 넘으면 OK + 경고 `TAG_UNMATCHED`, 미일치 노드는 morph에서 이웃 경계 변위를 받는 "자유 경계"로 취급(내부와 같게 풀림).
+4. `match_ratio` = (경계 노드 − 미일치) / 경계 노드. **`match_ratio < min_match_ratio`(기본 0.98) → `GEOM_BASELINE_MISMATCH`**(메시지에 평균·최대 거리와 "공칭 STEP과 기준 메시 좌표가 맞지 않습니다 — 원점·단위·형상 차이 확인"). 자동 정렬(강체 맞춤)은 하지 않는다(§15 Q1). 미일치 노드가 남아도 비율을 넘으면 OK + 경고 `TAG_UNMATCHED`(tag, 꼭짓점에 대응 노드 없음은 경고 `TAG_VERTEX_NO_NODE`(tag)), 미일치 노드는 morph에서 이웃 경계 변위를 받는 "자유 경계"로 취급(내부와 같게 풀림).
 5. 내부 노드 `kind=0`.
 6. 접촉(`contacts`): 면 F의 kind=1 노드 중 제품 외피(조립 폴더 나머지 메시, §6.5 수집 규칙) 또는 다른 쿠션 바디 면까지 거리 ≤ `tag.contact_mm`(기본 0.1)인 노드가 그 면 노드의 `tag.contact_min_ratio`(기본 0.2) 이상 → 접촉면. 기준면 규칙(§6.2)과 간섭 판정(공칭 접촉 면 쌍 구분)에 쓴다.
 
@@ -887,8 +888,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 ### 11.2 모핑 한계 측정(envelope, 단계 2 산출물) · 재메시 비범위
 
 - **재메시**: 비범위 — 모핑 성능 한계를 아직 모르므로 envelope 결과를 본 뒤 재검토. 모핑 실패는 스킵(§6.5).
-- **명령**: `paicad morph --sweep`(§5.3). 파라미터별 **1D 스윕**(다른 파라미터는 공칭): 치수형은 공칭 대비 ±5%, ±10%, ±20%, ±30%, …, 위치형은 mm 단계(기본 ±1·2·3·5·8·10 mm, `--position-steps`) 실패 직전까지(각 방향 독립, `--stop-after-fail` 연속 실패 시 중단). 각 단계는 update → morph → check 전체를 실행.
-- **표(`envelope.json` + `envelope.csv`, 한 행 = 파라미터·방향·단계)**: `param`, `direction`(±), `pct`(치수형, 위치형은 null), `step_mm`(위치형, 치수형은 null), `value`, `status`(OK/FAIL), `fail_code`(`GEOM_*`, 첫 실패), 품질 지표 `min_stretch`·`max_aspect`·`edge_ratio`(최소 엣지/공칭 최소 엣지)·`dt_ratio`(Δt 추정 비, §6.5), `boundary_dev_max_mm`, `param_remeasure_err`(abs·rel), `inverted_elems`. 파라미터별 요약: `last_ok_pct`(+/−)·`first_fail_pct`·`first_fail_code`. 상단에 `schema_version`·`engine_version`·옵션 사용값.
+- **명령**: `paicad morph --sweep`(§5.3). 파라미터별 **1D 스윕**(다른 파라미터는 공칭): 치수형은 공칭 대비 ±5%, ±10%, ±20%, ±30%, …, 위치형은 mm 단계(기본 ±1·2·3·5·8·10 mm, `--pos-steps`) 실패 직전까지(각 방향 독립, `--stop-after-fail` 연속 실패 시 중단). 각 단계는 update → morph → check 전체를 실행.
+- **표(`envelope.json` + `envelope.csv`, 한 행 = 파라미터·방향·단계)**: `param`, `direction`(±), `step`(단계 크기), `unit`(`"%"`(치수형)\|`"mm"`(위치형)), `value`, `status`(OK/FAIL), `fail_code`(`GEOM_*`, 첫 실패), 품질 지표 `min_stretch`·`max_aspect`·`edge_ratio`(최소 엣지/공칭 최소 엣지)·`dt_ratio`(Δt 추정 비, §6.5), `boundary_dev_max_mm`, `param_remeasure_err`(abs·rel), `inverted_elems`. 파라미터별 요약: `last_ok`·`first_fail`(단위 = 행 `unit`)·`last_ok_label`·`first_fail_label`(방향 포함 표기)·`first_fail_code`, mm 파라미터는 `last_ok_pct`=null. 행의 최소 엣지 비 열 이름 = `edge_ratio`(CSV 포함). 상단에 `schema_version`(**2**, 요약 의미 변경, §17.2)·`engine_version`·옵션 사용값.
 - **0.2.0 구현 해석(GE-C7)**: sweep은 `--update-dir`(공칭 update 결과)의 `sample.brep`을 공칭으로 사용. feasible을 반영한 `parameter_features.json`은 입력을 바꾸지 않고 **`--out-dir` 사본**에 쓴다. 파라미터 요약의 첫 실패 코드 키 = `first_fail_code`. 각 단계의 |변위| ≤ 1e-6 mm는 0(공칭)으로 본다. **0.3.0(GE-C9)**: `report_envelope.md`·csv는 sweep `--out-dir`에 쓴다(저장소 `golden/geometry/G1/`로의 복사는 사람이 수행).
 - **반영**: 요약의 `last_ok`를 `parameter_features.json`의 `feasible`(min·max)에 기록(`source: "envelope"`, `sweep_id`; 미측정은 `source: "estimate"` = §6.2 추정). 사용자 범위가 `feasible`을 넘으면 UI 경고(§8, **차단 아님**).
 - **보고서**: 골든 쿠션 1종(G1) envelope 결과(sweep 출력 폴더의 `report_envelope.md`+csv)를 `golden/geometry/G1/`에 남겨 재메시 필요성 판단 근거로 사용(파라미터별 모핑 가능 범위, 한계를 정하는 지표·실패 코드, 기본 ±5% 대비 여유).
@@ -1005,7 +1006,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | Q9 | ~~대칭 그룹을 자동으로 묶을지, 사용자가 풀 수 있어야 하는지~~ | **해결(2026-10-17 사용자 확정)**: 기본 묶음, 파라미터 표·매칭표의 "분리" 동작으로 사용자가 해제(§6.2, GE-14) |
 | Q10 | ~~cadquery-ocp 고정 버전과 사내 보안 승인~~ | **해결(2026-10-19 사용자 확정)**: 소스 개발은 인터넷 PC(GitHub), 폐쇄망 배포는 설치 형식(오프라인 묶음 `deploy/collect-offline.ps1` → 설치), cadquery-ocp wheel 포함, 별도 사내 보안 승인 이슈 없음. Impl이 cp312 win_amd64 wheel 버전 고정. 테스트 의존(build123d·gmsh)은 배포 묶음 제외 유지 |
 | Q18 | SimLab "tet stretch" 정확한 식이 §6.5 정의(`2√6·r_in/L_max`)와 같은가? (aspect 10은 경계 삼각형, stretch 0.1은 tetra에 적용 — 중복 아님) | 같다고 가정. 현장 인수 키트 (b)의 baseline 수치로 비교 후 조정(미결) |
-| Q19 | 실물 G1 인수 키트 `paicad selftest` 리포트 필수 키·회신 수치 목록 확정, 씬 엔진 자료 | 키트 명세는 Impl 초안 → Plan 확인. 씬 엔진 자료는 나중(2026-10-19, 변경 없음) |
+| Q19 | 실물 G1 인수 키트 `paicad selftest` **인자 확정(GE-C10)**, 리포트 필수 키·회신 수치 목록은 구현 기준 확정 대기, 씬 엔진 자료 | 키트 명세는 Impl 초안 → Plan 확인. 씬 엔진 자료는 나중(2026-10-19, 변경 없음) |
 | Q11 | 같은 native 데이터셋에 paicad MINOR가 다른 run이 섞일 때 경고로 충분한가, 차단(422)해야 하나? 모델 등록·예측 때 모델의 `engine_version`과 현재 paicad MINOR가 다르면? | 데이터셋 경고 `ENGINE_VERSION_MIXED`(차단 아님, §17.4). 예측 시 비교는 1차 없음 |
 | Q12 | 출력 include에 `# paicad x.y.z` 주석 줄을 허용할지(추적 편의 vs 바이트 동일 원칙) | 불허(§17.3). 허용하려면 V-GE-4·§6.4 예외 규칙을 함께 고쳐야 함 |
 
@@ -1143,5 +1144,6 @@ paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 
 | GE-C7 | paicad 0.2.0 구현 해석(2026-10-19): push/pull = 위상 보존 면 재구성(op `FACE_OFFSET`·`CYLINDER_RADIUS`·`AXIS_SHIFT`·`REBLEND`, face_map 항등, 선택 키 `uv_fallback`), sweep `--update-dir`·feasible 반영 features는 out-dir 사본·`first_fail_code`·`--check on|off`, \|변위\| ≤ 1e-6 mm → 0(§4.6·§6.3·§11.2) |
 | GE-C8 | 품질 상대 기준(`min_edge_ratio`·`dt_ratio_min` 0.8, `min_edge_mm` 선택 null)·`position_ref` 옵션 추가(§4.9·§6.2·§6.5, 사용자 확정) |
 | GE-C9 | paicad 0.3.0(403e224) 구현 차이 반영(2026-10-19): `dt_ratio`=Δt 추정 비(h=3V/최대 면적, component별)·`edge_ratio` 별도·비유한 지표 null, 위치 값 = 공칭+Δ(가장 가까운 고정 면)·`update.json.positions[].expected_measured`로 check (a) 비교, `run.json`은 `--check-dir`·run 중 단계 RESULT 줄은 PROGRESS, `report_envelope.md`·csv는 sweep 출력 폴더, `--solver`는 morph·run, selftest 인자·키는 Q19 초안(§5.3.1), 위치형 기본 범위 절대 ±5 mm(`position_range_mm`)·envelope 위치형 mm 단계(1·2·3·5·8·10), update 피처 간 충돌 사전 검사 `GEOM_FEATURE_COLLISION`(CAD 생성 불가 범주) |
+| GE-C10 | Verifier 판정(paicad 0.4.0) 구현 기준 정정(2026-10-19): `update.json.positions[]` 키 = name·body·axis·mode·ref_face·expected_measured, 선택 `collisions`, envelope 행 `step`·`unit`·요약 `last_ok`/`first_fail`/`*_label`(mm는 `last_ok_pct` null)·`edge_ratio`·`schema_version` 2, `position_range_mm`은 `extract` 하위, `--pos-steps`, `--solver` = writer 선택, selftest 실물 입력 인자 확정(Q19), 경고 `TAG_VERTEX_NO_NODE`, options 모르는 키 거부 |
 
 추가 사실: 런타임 Python 3.12 전용(OCP 7.8이 vtk 의존, cp313 휠 없음). 고정 `cadquery-ocp==7.8.1.1.post1`, test extra `build123d==0.10.0`·`ocp_gordon==0.1.18`(최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP 교체 — 금지). gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 리스크: vtk로 오프라인 묶음 용량 증가.
