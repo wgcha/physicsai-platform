@@ -18,6 +18,7 @@ import {
   type MockUserKey,
 } from "./data";
 import { Phase2Mock } from "./phase2";
+import { STEP_LABELS_NATIVE } from "../lib/steps";
 import { ManageMock } from "./manage";
 import { JOB_TYPE_LABEL } from "../lib/format";
 import { err, type MockResp, type Route, type RouteCtx } from "./route";
@@ -115,7 +116,7 @@ const ROUTES: Route[] = [
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
   femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)
-  geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B 목
+  geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B·① train/features(openapi 모양)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
   paramSetRoutes, // §10.4 ④
@@ -275,7 +276,9 @@ export class MockServer {
     }
   }
 
-  stepLabel(key: string): string {
+  /** native 작업(params.engine = native·PARAM_SET_NATIVE)은 STEP_LABELS_NATIVE 덮어쓰기(백엔드 step_label) */
+  stepLabel(key: string, engine?: string | null): string {
+    if (engine === "native" && STEP_LABELS_NATIVE[key]) return STEP_LABELS_NATIVE[key];
     return STEP_LABEL[key] ?? key;
   }
 

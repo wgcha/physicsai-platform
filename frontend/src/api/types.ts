@@ -277,6 +277,8 @@ export type Dataset = Override<
 >;
 
 export type ParamDef = S["Parameter"];
+/** 세트 파라미터 행: source "prop" = 3S 쉘 두께(prop_id), baselines = 4B baseline별 원 이름·범위 */
+export type ParamSetParameter = S["ParamSetParameter"];
 // responses[].spec(§14.6)·display(§15.3)는 백엔드 스키마가 dict라 계약 형식으로 좁힌다
 export type ParamSet = Override<
   S["ParamSet"],
@@ -288,8 +290,6 @@ export type ParamSet = Override<
     responses: TemplateResponse[];
     /** S10 컨투어 표시 설정(없으면 서버 기본) */
     display?: ContourDisplay | null;
-    /** 4B 다중 baseline일 때만(단일은 필드 없음, §7.6) — openapi 병합 전 수동 */
-    baselines?: BaselineInfo[];
   }
 >;
 export type ParamSetCreate = Omit<S["ParamSetCreate"], "shell_only"> & { shell_only?: boolean }; // 서버 기본 false(geometry-engine.md §11.1)
@@ -316,72 +316,28 @@ export type NativeFeatures = Override<S["NativeFeatures"], { features: NativeFea
 /** geom_options(§4.9) 부분 객체 — 절 이름 → 키 → 값(최상위 문자열 키도 있음) */
 export type GeomOptions = Record<string, unknown>;
 
-// ---- 단계 3S 쉘 두께(§11.1) — openapi 병합 전 계약 모양(props.json 행)으로 수동 유지. 병합 후 gen:api 타입으로 교체 ----
-export interface ShellProp {
-  id: number;
-  title: string | null;
-  type: string;
-  keyword?: string;
-  supported: boolean;
-  parameter: string | null;
-  thickness: number | null;
-  unit?: string;
-  range: { min: number; max: number; ratio?: number } | null;
-  parts: { id: number; title: string | null }[];
-  file?: string;
-  element_overrides: number;
-  selectable: boolean;
+// ---- 단계 3S 쉘 두께(§11.1)·4B 다중 baseline(§4.10·§7.3.8) — 생성 타입 ----
+export type ShellProp = S["ShellProp"];
+/** GET /param-sets/{id}/props — 스캔 전이면 scanned=false·빈 목록 */
+export type ShellProps = S["ShellProps"];
+/** PUT /param-sets/{id}/props 본문(선택 = 파라미터 이름 + min·max, 응답 = ParamSet) */
+export type ShellPropsUpdate = S["ShellPropsUpdate"];
+export type ShellPropSelect = S["ShellPropSelect"];
+export type BaselineInfo = S["BaselineInfo"];
+export type BaselineAddRequest = S["BaselineAddRequest"];
+export type ParamMapRemapRequest = S["ParamMapRemapRequest"];
+export type MapGrade = NonNullable<S["ParamMapProposed"]["grade"]>;
+export type MapAction = S["ParamMapDecision"]["action"];
+export type MapDecision = S["ParamMapDecision"];
+export type MapRowDecision = S["ParamMapRowDecision"];
+/** decision은 openapi에서 dict라 ParamMapDecision 모양으로 좁힌다 */
+export type MapRow = Override<S["ParamMapRow"], { decision?: MapDecision | null }>;
+/** range_split(§4.10 usage=range일 때만) — openapi dict를 계약 모양으로 좁힌다 */
+export interface RangeSplit {
+  param: string;
+  intervals: { baseline: string; nominal: number | null }[];
 }
-export interface ShellPropSel {
-  prop_id: number;
-  name: string;
-  min: number;
-  max: number;
-}
-export interface ShellPropsDoc {
-  props: ShellProp[];
-  selected: ShellPropSel[];
-  warnings: { code: string; prop?: number; message: string; parts?: number[] }[];
-}
-
-// ---- 단계 4B 다중 baseline(§4.10·§7.3.8) — openapi 병합 전 계약 모양(param_map.json)으로 수동 유지 ----
-export type MapGrade = "recommend" | "check" | "unmatched";
-export type MapAction = "accept" | "rename" | "change" | "split";
-export interface MapDecision {
-  action: MapAction;
-  name: string;
-  map: Record<string, string | null>;
-}
-export interface MapRow {
-  row_id: string;
-  type: string;
-  unit: string;
-  signature?: string;
-  needs_review: boolean;
-  proposed: { name: string; score: number; grade: MapGrade; map: Record<string, string | null>; candidates?: { map: Record<string, string | null>; score: number }[] };
-  decision: MapDecision | null;
-}
-export interface ParamMap {
-  schema_version: number;
-  status: "draft" | "confirmed";
-  confirmed_by: string | null;
-  confirmed_at: string | null;
-  usage: "topology" | "range";
-  baselines: { id: string; rel: string; label?: string | null }[];
-  range_split?: { param: string; intervals: { baseline: string; nominal: number }[] } | null;
-  common: MapRow[];
-  warnings: { code: string; row_id?: string; message?: string }[];
-  /** 각 baseline의 원 파라미터 이름(변경 칸 후보) — 플랫폼이 extract 결과에서 채움 */
-  params?: Record<string, string[]>;
-}
-export interface BaselineInfo {
-  id: string;
-  /** 세트 폴더 기준 상대 경로(기준 = ".", 그 밖 = baselines/<id>) — openapi BaselineInfo.rel */
-  rel: string;
-  label?: string | null;
-  source_path?: string | null;
-  prep_status?: "READY" | "STALE" | "MISSING";
-}
+export type ParamMap = Override<S["ParamMap"], { common: MapRow[]; range_split?: RangeSplit | null }>;
 export type SampleRow = S["SampleRow"];
 export type SamplePage = S["SamplesPage"];
 export type PredictCheck = S["PredictCheckResponse"];

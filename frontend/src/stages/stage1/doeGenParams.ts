@@ -133,3 +133,45 @@ export function buildHyperstudyParams(o: { label: string; options: Record<string
 export function genText(gen: { total: number; done: number; failed: number } | null | undefined): string | null {
   return gen ? `생성 완료 ${gen.done} · 실패 ${gen.failed} / 전체 ${gen.total}` : null;
 }
+
+// ---------------------------------------------------------------- native(geometry-engine.md §7.3.3·§7.3.8, S18 플랫폼 생성의 한 경로)
+
+/** native 입력 상태 — 표본 방식은 LHS 고정(doe_type NATIVE_LHS, 표시 "LHS(native)") */
+export interface NativeDoeState {
+  count: string;
+  seed: string;
+  /** 실패한 run(형상 생성 스킵)이 있어도 계속(서버 기본 continue) */
+  continueOnFailure: boolean;
+}
+export const NATIVE_DOE_LABEL = "LHS(native)";
+export const initialNative = (): NativeDoeState => ({ count: "20", seed: "1", continueOnFailure: true });
+
+/** native params: generator platform + sampling {kind:"lhs", count, seed}. 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path */
+export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null }): Record<string, unknown> | null {
+  const count = parseInt0(s.count);
+  const seed = parseInt0(s.seed);
+  if (count === null || count < 2 || count > o.maxRuns || seed === null || seed < 0) return null;
+  const base = { generator: "platform", sampling: { kind: "lhs", count, seed }, multi_execution: o.multi, on_run_failure: s.continueOnFailure ? "continue" : "fail" };
+  return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath };
+}
+
+/** 층화 LHS baseline별 run 수(백엔드 baselines.stratum_counts: ⌊N/B⌋ + 앞쪽부터 나머지 1씩, 차 ≤ 1) */
+export function stratumCounts(n: number, b: number): number[] {
+  if (!(b >= 1) || !(n >= 0)) return [];
+  const q = Math.floor(n / b);
+  const r = n % b;
+  return Array.from({ length: b }, (_, k) => q + (k < r ? 1 : 0));
+}
+
+/** TD_DOE_GEN 결과 skipped_runs[] 한 행(native = SKIPPED.json 해석: reason = 코드, category = §6.5) */
+export interface SkippedRun {
+  run_key: string;
+  reason?: string;
+  category?: string;
+  message?: string;
+}
+export function skippedRuns(result: unknown, doeId: string | null | undefined): SkippedRun[] {
+  const r = result as { doe_id?: string; skipped_runs?: unknown } | null | undefined;
+  if (!r || !doeId || r.doe_id !== doeId || !Array.isArray(r.skipped_runs)) return [];
+  return r.skipped_runs.filter((x): x is SkippedRun => !!x && typeof (x as SkippedRun).run_key === "string");
+}

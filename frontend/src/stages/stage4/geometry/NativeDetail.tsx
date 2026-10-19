@@ -178,7 +178,7 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
 }
 
 /** 하이라이트 PNG(§4.3 features/<NAME>.png → FEATURE_PNG artifact). 이미지는 fetch → blob URL(목·쿠키 인증 같은 길) */
-function FeaturePng({ name, artifactId }: { name: string; artifactId: string }) {
+export function FeaturePng({ name, artifactId }: { name: string; artifactId: string }) {
   const src = useMediaImage(`${API_PREFIX}/artifacts/${artifactId}/media`);
   return (
     <figure className="feature-png" data-testid="feature-png">

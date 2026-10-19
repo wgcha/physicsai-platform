@@ -42,10 +42,12 @@ import type {
   Engine,
   GeomOptions,
   NativeFeatures,
-  ShellPropsDoc,
-  ShellPropSel,
+  ShellProps,
+  ShellPropsUpdate,
+  BaselineAddRequest,
+  ParamMapRemapRequest,
   ParamMap,
-  MapDecision,
+  MapRowDecision,
   PathInspectResult,
   PathPurpose,
   PredictCheck,
@@ -110,15 +112,17 @@ export const api = {
   /** §7.6 native: 형상 준비 다시(202 job), 피처 요약 */
   nativePrepare: (id: string) => request<{ job_id: string }>("POST", `/param-sets/${id}/native-prepare`),
   paramSetFeatures: (id: string) => request<NativeFeatures>("GET", `/param-sets/${id}/features`),
-  /** 3S 쉘 두께(§11.1) — openapi 병합 전 목 라우트 모양(props.json 행 + 선택) */
-  shellProps: (id: string) => request<ShellPropsDoc>("GET", `/param-sets/${id}/props`),
-  putShellProps: (id: string, selected: ShellPropSel[]) => request<ShellPropsDoc>("PUT", `/param-sets/${id}/props`, { body: { selected } }),
-  /** 4B 다중 baseline(§7.3.8) — openapi 병합 전 계약 모양 */
-  addBaseline: (id: string, body: { id: string; path: string; choice: { cad?: string | null; radioss_assem?: string | null }; label?: string | null }) =>
-    request<{ job_id: string }>("POST", `/param-sets/${id}/baselines`, { body: { baseline: body } }),
-  deleteBaseline: (id: string, bid: string) => request<ParamSet>("DELETE", `/param-sets/${id}/baselines/${bid}`),
+  /** 3S 쉘 두께(§11.1): 스캔(202 job PARAM_SET_NATIVE props_scan) → GET 목록·선택 → PUT 선택 전체 교체(응답 = 갱신된 ParamSet) */
+  scanShellProps: (id: string) => request<{ job_id: string }>("POST", `/param-sets/${id}/props/scan`),
+  shellProps: (id: string) => request<ShellProps>("GET", `/param-sets/${id}/props`),
+  putShellProps: (id: string, body: ShellPropsUpdate) => request<ParamSet>("PUT", `/param-sets/${id}/props`, { body }),
+  /** 4B 다중 baseline(§7.3.8): 추가·다시 매칭 = 202 job(PARAM_SET_NATIVE add_baseline·remap), 삭제·끄기 = 갱신된 ParamSet */
+  addBaseline: (id: string, body: BaselineAddRequest) => request<{ job_id: string }>("POST", `/param-sets/${id}/baselines`, { body }),
+  deleteBaseline: (id: string, bid: string) => request<ParamSet>("DELETE", `/param-sets/${id}/baselines/${encodeURIComponent(bid)}`),
+  disableBaselines: (id: string) => request<ParamSet>("POST", `/param-sets/${id}/baselines/disable`),
+  remapParamSet: (id: string, body: ParamMapRemapRequest = {}) => request<{ job_id: string }>("POST", `/param-sets/${id}/remap`, { body }),
   paramMap: (id: string) => request<ParamMap>("GET", `/param-sets/${id}/param-map`),
-  putParamMap: (id: string, decisions: { row_id: string; decision: MapDecision | null }[]) => request<ParamMap>("PUT", `/param-sets/${id}/param-map`, { body: { decisions } }),
+  putParamMap: (id: string, decisions: MapRowDecision[]) => request<ParamMap>("PUT", `/param-sets/${id}/param-map`, { body: { decisions } }),
   confirmParamMap: (id: string) => request<ParamMap>("POST", `/param-sets/${id}/param-map/confirm`),
   paramSets: (studyId: string) => request<ParamSet[]>("GET", `/studies/${studyId}/param-sets`),
   paramSet: (id: string) => request<ParamSet>("GET", `/param-sets/${id}`),
@@ -188,6 +192,8 @@ export const api = {
   ) => request<TrainSetup>("PUT", `/studies/${studyId}/train/params`, { body }),
   generateTpl: (studyId: string, version: number) => request<TrainSetup>("POST", `/studies/${studyId}/train/tpl`, { body: { version } }),
   doeTypes: () => request<DoeType[]>("GET", "/train/doe-types"),
+  /** geometry-engine.md §7.3.1: ① native 추출 피처(종류·범위·그룹·하이라이트 PNG artifact id) */
+  trainFeatures: (studyId: string) => request<NativeFeatures>("GET", `/studies/${studyId}/train/features`),
   trainDoes: (studyId: string) => request<TrainDoe[]>("GET", `/studies/${studyId}/train/does`),
   trainDoe: (id: string) => request<TrainDoe>("GET", `/train-does/${id}`),
   trainRuns: (doeId: string, q: { state?: string; limit?: number; cursor?: string | null } = {}) =>

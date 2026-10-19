@@ -165,13 +165,18 @@ describe("④ native 세트 상세(§8)", () => {
 describe("3S 쉘 두께 PROP(§11.1)", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("미지원·요소별 두께는 선택 불가, 공유 PART 경고, 선택 저장 → 파라미터 표에 _SHELL_T", async () => {
+  it("스캔 전 → PROP 스캔(202 작업) → 목록: 미지원·요소별 두께 선택 불가, 공유 PART 경고 → 선택 저장(이름·min·max) → source prop 행", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, nativeCurrent);
-    const calls = record(server, /\/props$/);
+    const calls = record(server, /\/props(\/scan)?$/);
     const card = await openManage();
     const box = await within(card).findByTestId("shell-props");
+    expect(box.querySelector("summary")!.textContent).toBe("쉘 두께(PROP) — 스캔 전");
+    fireEvent.click(within(box).getByRole("button", { name: "PROP 스캔" }));
+    await waitFor(() => expect(calls[0]).toMatchObject({ m: "POST", p: "/param-sets/ps-n1/props/scan" }));
+    expect(server.jobs.some((j) => j.job_type === "PARAM_SET_NATIVE" && j.params.mode === "props_scan")).toBe(true);
+    act(() => server.finishAll());
+    const t = await within(box).findByRole("table", { name: "쉘 두께 PROP" });
     expect(box.querySelector("summary")!.textContent).toBe("쉘 두께(PROP) — 선택 0 / 후보 2");
-    const t = within(box).getByRole("table", { name: "쉘 두께 PROP" });
     expect((within(t).getByLabelText("PROP 201 선택") as HTMLInputElement).disabled).toBe(true);
     expect(within(t).getByLabelText("PROP 201 선택").closest("tr")!.textContent).toContain("미지원");
     expect((within(t).getByLabelText("PROP 103 선택") as HTMLInputElement).disabled).toBe(true);
@@ -181,9 +186,26 @@ describe("3S 쉘 두께 PROP(§11.1)", () => {
     fireEvent.click(within(t).getByLabelText("PROP 101 선택"));
     fireEvent.change(within(t).getByLabelText("PROP 101 상한"), { target: { value: "1.5" } });
     fireEvent.click(within(box).getByRole("button", { name: "선택 저장" }));
-    await waitFor(() => expect(calls[0]?.b).toEqual({ selected: [{ prop_id: 101, name: "BOX_SHELL_SHELL_T", min: 1.14, max: 1.5 }] }));
-    await waitFor(() => expect(server.paramSets.find((p) => p.id === "ps-n1")!.parameters.some((p) => p.name === "BOX_SHELL_SHELL_T")).toBe(true));
-    expect(box.querySelector("summary")!.textContent).toBe("쉘 두께(PROP) — 선택 1 / 후보 2");
+    await waitFor(() => expect(calls[1]?.b).toEqual({ selected: [{ name: "BOX_SHELL_SHELL_T", min: 1.14, max: 1.5 }], include_geometry: true }));
+    await waitFor(() => expect(box.querySelector("summary")!.textContent).toBe("쉘 두께(PROP) — 선택 1 / 후보 2"));
+    const row = server.paramSets.find((p) => p.id === "ps-n1")!.parameters.find((p) => p.name === "BOX_SHELL_SHELL_T");
+    expect(row).toMatchObject({ source: "prop", prop_id: 101, nominal: 1.2, min: 1.14, max: 1.5 });
+  });
+
+  it("범위가 공칭을 벗어나면 422 PROP_SELECTION_INVALID — 행 사유 표시, 저장 안 됨", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, (s) => {
+      nativeCurrent(s);
+      s.geom.get("ps-n1")!.propsScanned = true;
+    });
+    const card = await openManage();
+    const box = await within(card).findByTestId("shell-props");
+    const t = await within(box).findByRole("table", { name: "쉘 두께 PROP" });
+    fireEvent.click(within(t).getByLabelText("PROP 102 선택"));
+    fireEvent.change(within(t).getByLabelText("PROP 102 하한"), { target: { value: "0.9" } });
+    fireEvent.click(within(box).getByRole("button", { name: "선택 저장" }));
+    expect((await within(box).findByRole("alert")).textContent).toBe("쉘 두께 선택이 올바르지 않습니다");
+    expect(within(t).getByLabelText("PROP 102 선택").closest("tr")!.textContent).toContain("0 < min ≤ 공칭(0.8) ≤ max");
+    expect(server.paramSets.find((p) => p.id === "ps-n1")!.parameters.some((p) => p.source === "prop")).toBe(false);
   });
 });
 
@@ -200,11 +222,30 @@ describe("4B 다중 baseline(§11.4)", () => {
     fireEvent.change(within(box).getByLabelText("baseline 폴더 경로"), { target: { value: `${ROOT}/rib5_project` } });
     fireEvent.click(within(box).getByRole("button", { name: "찾기" }));
     await within(box).findByLabelText("baseline CAD");
+    fireEvent.change(within(box).getByLabelText("baseline 용도"), { target: { value: "range" } });
+    const calls = record(server, /\/baselines$/);
     fireEvent.click(within(box).getByRole("button", { name: "baseline 추가" }));
     await waitFor(() => expect(server.jobs.some((j) => j.job_type === "PARAM_SET_NATIVE" && j.params.mode === "add_baseline")).toBe(true));
+    expect(calls[0].b).toEqual({ id: "B2", path: `${ROOT}/rib5_project`, choice: { cad: "01_CAD/cushion_base.step", radioss_assem: "RADIOSS_ASSEM" }, usage: "range" });
     act(() => server.finishAll());
     expect(await within(box).findByRole("table", { name: "공통 변수 매칭표" })).toBeTruthy();
     expect(within(box).getByTestId("map-status").textContent).toBe("초안");
+    expect(within(box).getByText(/범위 분할/).textContent).toContain("B1 12.5 · B2 15");
+    expect(server.paramSets.find((p) => p.id === "ps-n1")!.param_map_status).toBe("draft");
+  });
+
+  it("baseline 2개: 삭제 대신 '단일로 되돌리기'(POST disable) → 단일 baseline", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "multi" }, nativeCurrent);
+    const calls = record(server, /\/baselines/);
+    const card = await openManage();
+    const box = await within(card).findByTestId("multi-baseline");
+    const list = await within(box).findByRole("list", { name: "baseline 목록" });
+    expect(within(list).getByText("B1").closest("li")!.textContent).toContain("기준");
+    expect(within(list).queryByRole("button", { name: "삭제" })).toBeNull();
+    fireEvent.click(within(list).getByRole("button", { name: "단일로 되돌리기" }));
+    await waitFor(() => expect(calls[0]).toMatchObject({ m: "POST", p: "/param-sets/ps-n1/baselines/disable" }));
+    expect(await within(box).findByText(/단일 baseline\(기본\)/)).toBeTruthy();
+    expect(server.paramSets.find((p) => p.id === "ps-n1")!.baselines).toBeNull();
   });
 
   it("매칭표: 등급 색·점수, 확인 필요 행 결정 전 [확정] 불가 → 수락 → 확정(사용자·시각)", async () => {
@@ -224,11 +265,12 @@ describe("4B 다중 baseline(§11.4)", () => {
     expect(confirm.disabled).toBe(true);
     expect(within(box).getByText(/결정하지 않은 행 1개/)).toBeTruthy();
     fireEvent.click(within(within(t).getByTestId("map-row-r2")).getByRole("button", { name: "수락" }));
-    await waitFor(() => expect(calls[0]?.b).toEqual({ decisions: [{ row_id: "r2", decision: { action: "accept", name: "CUSH_POCKET_D", map: { base: "CUSH_L_POCKET_D_1", B2: "CUSH_L_POCKET_D_2" } } }] }));
+    await waitFor(() => expect(calls[0]?.b).toEqual({ decisions: [{ row_id: "r2", decision: { action: "accept" } }] }));
     await waitFor(() => expect(confirm.disabled).toBe(false));
     fireEvent.click(confirm);
     await waitFor(() => expect(within(box).getByTestId("map-status").textContent).toMatch(/^확정\(김연구 · /));
     expect(calls[1]).toMatchObject({ m: "POST", p: "/param-sets/ps-n1/param-map/confirm" });
+    await waitFor(() => expect(server.paramSets.find((p) => p.id === "ps-n1")!.param_map_status).toBe("confirmed"));
   });
 
   it("분리 = baseline별 행, 변경(이름·N/A) 충돌은 PARAM_NAME_CONFLICT 문구, 재확인 배지", async () => {
@@ -240,20 +282,22 @@ describe("4B 다중 baseline(§11.4)", () => {
     const box = await within(card).findByTestId("multi-baseline");
     const t = await within(box).findByRole("table", { name: "공통 변수 매칭표" });
     expect(within(within(t).getByTestId("map-row-r4")).getByText("재확인")).toBeTruthy();
+    const calls = record(server, /\/param-map$/);
     fireEvent.click(within(within(t).getByTestId("map-row-r1")).getByRole("button", { name: "분리" }));
-    expect(await within(t).findByTestId("map-row-r1_base")).toBeTruthy();
-    expect(within(t).getByTestId("map-row-r1_B2").textContent).toContain("CUSH_THK_B2");
+    await waitFor(() => expect(within(t).getByTestId("map-row-r1").textContent).toContain("CUSH_THK_B1 / CUSH_THK_B2"));
+    expect(calls[0].b).toEqual({ decisions: [{ row_id: "r1", decision: { action: "split", parts: [{ name: "CUSH_THK_B1", map: { B1: "CUSH_L_THK_1", B2: null } }, { name: "CUSH_THK_B2", map: { B1: null, B2: "CUSH_L_THK_1" } }] } }] });
     const r2 = within(t).getByTestId("map-row-r2");
     fireEvent.click(within(r2).getByRole("button", { name: "변경" }));
     fireEvent.change(within(t).getByLabelText("r2 공통 이름"), { target: { value: "baseline" } });
     fireEvent.change(within(t).getByLabelText("r2 B2 대응"), { target: { value: "__na__" } });
     fireEvent.click(within(t).getByRole("button", { name: "적용" }));
-    expect((await within(box).findByRole("alert")).textContent).toBe("공통 변수 이름이 겹칩니다: baseline");
+    expect((await within(box).findByRole("alert")).textContent).toContain("공통 이름 'baseline'은 규칙에 맞지 않거나 예약어입니다");
+    expect(within(t).getByTestId("map-row-r2").textContent).toContain("예약어");
     expect(server.geom.get("ps-n1")!.map!.common.find((r) => r.row_id === "r2")!.decision).toBeNull();
     fireEvent.change(within(t).getByLabelText("r2 공통 이름"), { target: { value: "POCKET_D" } });
     fireEvent.click(within(t).getByRole("button", { name: "적용" }));
     await waitFor(() => expect(within(t).getByTestId("map-row-r2").textContent).toContain("POCKET_D"));
-    expect(server.geom.get("ps-n1")!.map!.common.find((r) => r.row_id === "r2")!.decision).toEqual({ action: "change", name: "POCKET_D", map: { base: "CUSH_L_POCKET_D_1", B2: null } });
+    expect(server.geom.get("ps-n1")!.map!.common.find((r) => r.row_id === "r2")!.decision).toEqual({ action: "change", name: "POCKET_D", map: { B1: "CUSH_L_POCKET_D_1", B2: null } });
   });
 });
 
@@ -266,8 +310,13 @@ describe("① native 파라미터 표·엔진 혼용(§8·§7.7)", () => {
     });
     const calls = record(server, /\/train\//);
     const table = await screen.findByRole("table", { name: "파라미터 표" });
-    expect(within(table).getByText("CUSH_L_HOLE_U_1").closest("tr")!.textContent).toContain("구멍 위치 U · mm 범위");
-    expect(within(table).getByText("BOX_SHELL_T").closest("tr")!.textContent).toContain("쉘 두께");
+    // 종류·PNG는 GET /studies/{id}/train/features(이름 약어 추정 없음)
+    await waitFor(() => expect(within(table).getByText("CUSH_L_HOLE_U_1").closest("tr")!.textContent).toContain("구멍 위치 U · mm 범위"));
+    expect(within(table).getByText("CUSH_L_THK_1").closest("tr")!.textContent).toContain("두께");
+    expect(within(table).getByText("BOX_SHELL_T").closest("tr")!.textContent).not.toContain("쉘 두께");
+    expect(within(table).queryByLabelText("CUSH_L_FILLET_R_1 하이라이트")).toBeNull();
+    fireEvent.click(within(table).getByLabelText("CUSH_L_THK_1 하이라이트"));
+    expect((await screen.findByTestId("feature-png")).textContent).toContain("CUSH_L_THK_1");
     expect(screen.queryByRole("button", { name: "tpl 생성" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
     await waitFor(() => expect(calls.length).toBe(1));

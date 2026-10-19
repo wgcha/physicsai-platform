@@ -2,22 +2,15 @@
 import { describe, expect, it } from "vitest";
 import { ApiError, errorMessage, type ParamMap } from "../api";
 import {
-  exceedsFeasible, featureTypeFromName, geomErrorText, getOpt, isSplit, nameConflicts, optProblems, parseOpt, pendingRows, rangeText, setOpt, toggleSplit, GEOM_OPT_FIELDS,
+  effectiveMap, effectiveName, exceedsFeasible, genCategoryText, geomErrorText, getOpt, isSplit, nameConflicts, optProblems, originalNames, parseOpt, pendingRows, rangeText, setOpt,
+  splitParts, toggleSplit, GEOM_OPT_FIELDS,
 } from "../lib/geometry";
+import { stepLabel, currentStepText } from "../lib/steps";
 import { validateGeomOptions } from "../mock/geometry";
 
 const field = (k: string) => GEOM_OPT_FIELDS.flatMap((g) => g.fields).find((f) => f.path.join(".") === k)!;
 
 describe("피처 이름·범위(§4.3)", () => {
-  it("이름 약어 → 종류(해시 접미·3S 쉘 두께 포함)", () => {
-    expect(featureTypeFromName("CUSH_L_THK_1")).toBe("THICKNESS");
-    expect(featureTypeFromName("CUSH_L_POCKET_W_2")).toBe("POCKET_WIDTH");
-    expect(featureTypeFromName("CUSH_L_HOLE_U_1")).toBe("HOLE_POS_U");
-    expect(featureTypeFromName("VERY_LONG_COMP_RIB_H_3_a1b2")).toBe("RIB_HEIGHT");
-    expect(featureTypeFromName("BOX_SHELL_T")).toBe("SHELL_T");
-    expect(featureTypeFromName("THK_TOP")).toBeNull();
-  });
-
   it("위치형은 공칭 ∓ mm, 치수형은 ±%", () => {
     expect(rangeText(30, 25, 35, "HOLE_POS_U")).toBe("25 ~ 35 (∓5 mm)");
     expect(rangeText(12.5, 11.875, 13.125, "THICKNESS")).toBe("11.875 ~ 13.125 (±5%)");
@@ -65,19 +58,23 @@ describe("geom_options 편집(§4.9)", () => {
 });
 
 describe("다중 baseline 매칭표(§4.10)", () => {
+  const P = (name: string, score: number, grade: "recommend" | "check" | "unmatched", map: Record<string, string | null>) => ({ name, score, grade, map, nominal: {}, candidates: [] });
   const map = (): ParamMap => ({
-    schema_version: 1, status: "draft", confirmed_by: null, confirmed_at: null, usage: "topology",
+    status: "draft", confirmed_by: null, confirmed_at: null, usage: "topology", unresolved_rows: ["r2", "r3"], undecided_count: 3, variables: ["A", "B", "C"],
     baselines: [{ id: "B1", rel: "." }, { id: "B2", rel: "baselines/B2" }],
     common: [
-      { row_id: "r1", type: "thickness", unit: "mm", needs_review: false, proposed: { name: "A", score: 0.9, grade: "recommend", map: { B1: "a1", B2: "a2" } }, decision: null },
-      { row_id: "r2", type: "height", unit: "mm", needs_review: false, proposed: { name: "B", score: 0.6, grade: "check", map: { B1: "b1", B2: "b2" } }, decision: null },
-      { row_id: "r3", type: "height", unit: "mm", needs_review: true, proposed: { name: "C", score: 0.3, grade: "unmatched", map: { B1: "c1", B2: null } }, decision: null },
+      { row_id: "r1", type: "thickness", unit: "mm", signature: "", needs_review: false, requires_decision: false, proposed: P("A", 0.9, "recommend", { B1: "a1", B2: "a2" }), decision: null },
+      { row_id: "r2", type: "height", unit: "mm", signature: "", needs_review: false, requires_decision: true, proposed: { ...P("B", 0.6, "check", { B1: "b1", B2: "b2" }), candidates: [{ map: { B1: "b1", B2: "b9" }, score: 0.5 }] }, decision: null },
+      { row_id: "r3", type: "height", unit: "mm", signature: "", needs_review: true, requires_decision: true, proposed: P("C", 0.3, "unmatched", { B1: "c1", B2: null }), decision: null },
     ],
     warnings: [],
   });
 
-  it("확정 전 결정 필요 행 = 재확인·확인 필요 중 미결정", () => {
+  it("확정 전 결정 필요 행 = 재확인·확인 필요 중 미결정(requires_decision)", () => {
     expect(pendingRows(map()).map((r) => r.row_id)).toEqual(["r2", "r3"]);
+    const m = map();
+    m.common[1].decision = { action: "accept" };
+    expect(pendingRows(m).map((r) => r.row_id)).toEqual(["r3"]);
   });
 
   it("이름 충돌: 중복 이름·예약어 baseline·같은 원 파라미터 중복", () => {
@@ -86,6 +83,40 @@ describe("다중 baseline 매칭표(§4.10)", () => {
     expect([...nameConflicts(m)].sort()).toEqual(["r1", "r2"]);
     m.common[1].decision = { action: "change", name: "baseline", map: { B1: "b1", B2: "a2" } };
     expect([...nameConflicts(m)].sort()).toEqual(["r1", "r2"]);
+  });
+
+  it("분리 = baseline별 parts(이름_baseline, 나머지 N/A), 표시는 부분 이름·대응을 합친다", () => {
+    const m = map();
+    const parts = splitParts(m.common[0], ["B1", "B2"]);
+    expect(parts).toEqual([{ name: "A_B1", map: { B1: "a1", B2: null } }, { name: "A_B2", map: { B1: null, B2: "a2" } }]);
+    expect(splitParts(m.common[2], ["B1", "B2"])).toHaveLength(1);
+    m.common[0].decision = { action: "split", name: "A_B1", map: { B1: null, B2: null }, parts };
+    expect(effectiveName(m.common[0])).toBe("A_B1 / A_B2");
+    expect(effectiveMap(m.common[0])).toEqual({ B1: "a1", B2: "a2" });
+    expect(nameConflicts(m).size).toBe(0);
+  });
+
+  it("변경 칸 후보 = 제안·후보·결정의 원 이름", () => {
+    expect(originalNames(map(), "B2")).toEqual(["a2", "b2", "b9"]);
+  });
+});
+
+describe("category·step 표시명(§6.5·§7.3)", () => {
+  it("gen_category → 한국어(모르는 값은 그대로)", () => {
+    expect(genCategoryText("INTERFERENCE")).toBe("간섭");
+    expect(genCategoryText("CAD_FAILED")).toBe("CAD 생성 불가");
+    expect(genCategoryText("NEW_CAT")).toBe("NEW_CAT");
+    expect(genCategoryText(null)).toBeNull();
+  });
+  it("native step 이름: NP_*·BL_MAP, native 작업은 HST_GEN_RADIOSS 등 덮어쓰기, 서버 값 우선", () => {
+    expect(stepLabel("BL_MAP")).toBe("baseline 변수 매칭");
+    expect(stepLabel("NP_TAG", "native")).toBe("경계 노드 분류");
+    expect(stepLabel("HST_GEN_RADIOSS")).toBe("입력 생성(run별)");
+    expect(stepLabel("HST_GEN_RADIOSS", "native")).toBe("형상 모핑 입력 생성");
+    expect(stepLabel("UNKNOWN_STEP")).toBe("UNKNOWN_STEP");
+    expect(currentStepText({ job_type: "PARAM_SET_NATIVE", current_step_key: "NP_EXTRACT", current_step_label: null })).toBe("형상 피처 추출");
+    expect(currentStepText({ job_type: "TD_DOE_GEN", current_step_key: "MESH", current_step_label: null, params: { engine: "native" } })).toBe("메시 모핑·검사");
+    expect(currentStepText({ job_type: "TD_DOE_GEN", current_step_key: "MESH", current_step_label: "서버 표시" })).toBe("서버 표시");
   });
 });
 

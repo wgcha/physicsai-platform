@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import type { Job, JobState } from "../api";
 import { JOB_STATE_LABEL, attentionText, hpcSummaryText, isTerminal } from "../lib/format";
+import { currentStepText } from "../lib/steps";
 import { JobLogViewer } from "./JobLogViewer";
 import { ErrorBundleButton } from "./ErrorBundleButton";
 import { JobRetryButton } from "./JobRetryButton";
@@ -103,7 +104,7 @@ export function JobInline({ job }: { job: Job }) {
             {attentionText(job.attention_code)}
           </span>
         )}
-        {job.state === "RUNNING" && job.current_step_label && !job.progress_label && <span className="muted small">{job.current_step_label}</span>}
+        {job.state === "RUNNING" && currentStepText(job) && !job.progress_label && <span className="muted small">{currentStepText(job)}</span>}
         <button type="button" className="link small" onClick={() => setShowLog((v) => !v)}>
           {showLog ? "로그 닫기" : "로그"}
         </button>

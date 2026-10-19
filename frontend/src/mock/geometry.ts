@@ -1,8 +1,9 @@
 // native 형상 엔진 목(geometry-engine.md §7.3.4·§7.4·§7.6·§11.1·§11.4).
-// 단계 4 API(openapi 반영됨): native discover·등록 202·native-prepare·features·PATCH geom_options·/status.geometry.
-// 3S(GET·PUT /param-sets/{id}/props)·4B(baselines·param-map)는 백엔드 병합 전 계약 모양 목 라우트.
+// openapi 모양: native discover·등록 202·native-prepare·features·PATCH geom_options·/status.geometry,
+// 3S(POST props/scan 202·GET props·PUT props → ParamSet), 4B(baselines 추가 202·삭제·disable, remap 202, param-map GET·PUT·confirm),
+// ① GET /studies/{id}/train/features. 응답 모양은 backend physicsai_api(services/param_set_props_api·param_set_baselines_api)를 따른다.
 import type {
-  GeomOptions, Job, MapDecision, MapRow, NativeFeature, NativeFeatures, ParamMap, ParamSet, ParamSetDiscover, ShellPropsDoc, StatusGeometry, Study, TrainParam,
+  GeomOptions, Job, MapDecision, MapRow, NativeFeature, NativeFeatures, ParamMap, ParamSet, ParamSetDiscover, ParamSetParameter, ShellProp, ShellProps, StatusGeometry, Study, TrainParam,
 } from "../api/types";
 import { getOpt } from "../lib/geometry";
 import { encodePng } from "./png";
@@ -92,20 +93,48 @@ export function nativeTrainParams(): TrainParam[] {
   ];
 }
 
-function seedProps(): ShellPropsDoc {
+/** props.json(paicad props scan) 행 — 플랫폼은 읽기만, 선택은 파라미터 표의 source:"prop" 행 */
+type RawProp = Omit<ShellProp, "selected" | "min" | "max" | "reason_code">;
+function seedProps(): { props: RawProp[]; warnings: ShellProps["warnings"] } {
+  const P = (id: number, title: string, keyword: string, supported: boolean, parameter: string | null, thickness: number | null, parts: [number, string][], file: string, extra: Partial<RawProp> = {}): RawProp => ({
+    id, title, type: supported ? "SHELL" : "COMPOSITE", keyword, supported, parameter, thickness,
+    range: thickness ? { min: Number((thickness * 0.95).toFixed(4)), max: Number((thickness * 1.05).toFixed(4)), ratio: 0.05 } : null,
+    parts: parts.map(([pid, t]) => ({ id: pid, title: t, thickness: null })), part_overrides: [], element_overrides: 0, file, selectable: supported && !!thickness, ...extra,
+  });
   return {
     props: [
-      { id: 101, title: "BOX_SHELL", type: "SHELL", keyword: "/PROP/TYPE1", supported: true, parameter: "BOX_SHELL_SHELL_T", thickness: 1.2, unit: "mm", range: { min: 1.14, max: 1.26, ratio: 0.05 }, parts: [{ id: 1, title: "BOX_TOP" }, { id: 2, title: "BOX_SIDE" }], file: "cushion_0000.rad", element_overrides: 0, selectable: true },
-      { id: 102, title: "TRAY", type: "SHELL", keyword: "/PROP/TYPE1", supported: true, parameter: "TRAY_SHELL_T", thickness: 0.8, unit: "mm", range: { min: 0.76, max: 0.84, ratio: 0.05 }, parts: [{ id: 3, title: "TRAY" }], file: "cushion_0000.rad", element_overrides: 0, selectable: true },
-      { id: 103, title: "LABEL", type: "SHELL", keyword: "/PROP/TYPE1", supported: true, parameter: "LABEL_SHELL_T", thickness: 0.3, unit: "mm", range: { min: 0.285, max: 0.315, ratio: 0.05 }, parts: [{ id: 4, title: "LABEL" }], file: "label.inc", element_overrides: 12, selectable: false },
-      { id: 201, title: "FILM_COMP", type: "COMPOSITE", keyword: "/PROP/TYPE10", supported: false, parameter: null, thickness: null, unit: "mm", range: null, parts: [{ id: 5, title: "FILM" }], file: "cushion_0000.rad", element_overrides: 0, selectable: false },
+      P(101, "BOX_SHELL", "/PROP/TYPE1", true, "BOX_SHELL_SHELL_T", 1.2, [[1, "BOX_TOP"], [2, "BOX_SIDE"]], "cushion_0000.rad"),
+      P(102, "TRAY", "/PROP/TYPE1", true, "TRAY_SHELL_T", 0.8, [[3, "TRAY"]], "cushion_0000.rad"),
+      P(103, "LABEL", "/PROP/TYPE1", true, "LABEL_SHELL_T", 0.3, [[4, "LABEL"]], "label.inc", { element_overrides: 12, selectable: false }),
+      P(201, "FILM_COMP", "/PROP/TYPE10", false, null, null, [[5, "FILM"]], "cushion_0000.rad"),
     ],
-    selected: [],
     warnings: [
       { code: "PROP_SHARED_BY_PARTS", prop: 101, parts: [1, 2], message: "PROP 101 is shared by 2 parts: 1, 2" },
-      { code: "PROP_OVERRIDDEN_BY_ELEMENT", prop: 103, message: "PROP 103: 12 shell elements carry their own thickness" },
-      { code: "PROP_UNSUPPORTED_TYPE", prop: 201, message: "PROP 201 (/PROP/TYPE10, COMPOSITE) is not supported: listed only" },
+      { code: "PROP_OVERRIDDEN_BY_ELEMENT", prop: 103, parts: [], message: "PROP 103: 12 shell elements carry their own thickness" },
+      { code: "PROP_UNSUPPORTED_TYPE", prop: 201, parts: [], message: "PROP 201 (/PROP/TYPE10, COMPOSITE) is not supported: listed only" },
     ],
+  };
+}
+
+function reasonCode(r: RawProp): string | null {
+  if (r.selectable) return null;
+  if (!r.supported) return "PROP_UNSUPPORTED_TYPE";
+  if (r.element_overrides) return "PROP_OVERRIDDEN_BY_ELEMENT";
+  if (r.part_overrides.length) return "PROP_OVERRIDDEN_BY_PART";
+  return "PROP_THICKNESS_INVALID";
+}
+
+/** GET /param-sets/{id}/props 응답(shell.summary) */
+function propsOut(ps: ParamSet, rec: GeomRec): ShellProps {
+  const chosen = new Map(ps.parameters.filter((p) => p.source === "prop").map((p) => [p.name, p]));
+  const base = { scanned: rec.propsScanned, shell_only: !!ps.native?.shell_only, include_geometry: ps.parameters.some((p) => p.source !== "prop") };
+  if (!rec.propsScanned) return { ...base, engine_version: null, props: [], warnings: [] };
+  return {
+    ...base, engine_version: ps.engine_version ?? null, warnings: rec.props.warnings,
+    props: rec.props.props.map((r) => {
+      const c = r.parameter ? chosen.get(r.parameter) : undefined;
+      return { ...r, reason_code: reasonCode(r), selected: !!c, min: c?.min ?? null, max: c?.max ?? null };
+    }),
   };
 }
 
@@ -113,9 +142,13 @@ export interface GeomRec {
   features: NativeFeature[];
   groups: NativeFeatures["groups"];
   warnings: NativeFeatures["warnings"];
-  props: ShellPropsDoc;
-  map: ParamMap | null;
+  props: { props: RawProp[]; warnings: ShellProps["warnings"] };
+  propsScanned: boolean;
+  /** param_map.json(서버 저장 모양 — 응답은 mapOut이 requires_decision·unresolved_rows 등을 붙인다) */
+  map: StoredMap | null;
 }
+
+type StoredMap = Omit<ParamMap, "unresolved_rows" | "undecided_count" | "variables" | "common"> & { common: Omit<MapRow, "requires_decision">[] };
 
 function featurePng(name: string): () => Uint8Array {
   const hue = [...name].reduce((a, c) => a + c.charCodeAt(0), 0) % 3;
@@ -143,6 +176,7 @@ function newRec(srv: MockServer, studyId: string, jobId: string): GeomRec {
       { code: "PNG_RENDER_FAILED", feature: "CUSH_L_FILLET_R_1", message: "offscreen render failed" },
     ],
     props: seedProps(),
+    propsScanned: false,
     map: null,
   };
 }
@@ -156,6 +190,7 @@ function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, lab
     input_kind: "assembly", assem_rel: "radioss_assem", tpl_params: [], origin: "FOLDER", label, is_current: true, train_doe_id: null,
     registered_by_name: srv.me?.display_name ?? "김연구", registered_at: new Date().toISOString(), display: null, warnings: [],
     geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false },
+    param_map_status: null,
   } as ParamSet;
 }
 
@@ -167,70 +202,113 @@ export function seedNative(srv: MockServer, multi = false) {
   ps.registered_at = iso(60 * 2);
   srv.paramSets.push(ps);
   srv.geom.set(ps.id, newRec(srv, s.id, "j-seed-native"));
-  if (multi) addBaselineDone(srv, ps, { id: "B2", label: "리브 5개" });
+  if (multi) addBaselineDone(srv, ps, { id: "B2", label: "리브 5개" }, "topology");
 }
 
-// ---------------------------------------------------------------- 4B 매칭표
+// ---------------------------------------------------------------- 4B 매칭표(param_set_baselines_api 모양)
 
-function draftMap(ps: ParamSet, bids: string[], prev: ParamMap | null): ParamMap {
-  const row = (row_id: string, type: string, name: string, score: number, grade: MapRow["proposed"]["grade"], map: Record<string, string | null>): MapRow => {
+const BASE_ID = "B1";
+const RESERVED = new Set(["baseline"]);
+const NAME_RE = /^[A-Za-z_][A-Za-z0-9_]{0,63}$/;
+
+function draftMap(ps: ParamSet, bids: string[], prev: StoredMap | null, usage: "topology" | "range"): StoredMap {
+  const row = (row_id: string, type: string, name: string, score: number, grade: MapRow["proposed"]["grade"], map: Record<string, string | null>, nominal: number) => {
     const old = prev?.common.find((r) => r.row_id === row_id);
     return {
-      row_id, type, unit: "mm", signature: `sha256:${row_id}`, needs_review: !!prev && !old,
-      proposed: { name, score, grade, map, candidates: [] }, decision: old?.decision ?? null,
+      row_id, type, feature_type: null, unit: "mm", signature: `sha256:${row_id}`, needs_review: !!prev && !old,
+      proposed: { name, score, grade, map, nominal: Object.fromEntries(bids.map((b, i) => [b, map[b] ? nominal + i * 2 : null])), candidates: [], group_size: null },
+      decision: old?.decision ?? null,
     };
   };
   const two = (a: string, b: string | null) => Object.fromEntries(bids.map((id, i) => [id, i === 0 ? a : b]));
   return {
-    schema_version: 1, status: "draft", confirmed_by: null, confirmed_at: null, usage: "topology",
-    baselines: bids.map((id) => ({ id, rel: id === "base" ? "." : `baselines/${id}` })),
-    range_split: null,
+    status: "draft", confirmed_by: null, confirmed_at: null, usage, engine_version: ps.engine_version ?? null, discrete: null, map_options: null,
+    baselines: bids.map((id) => ({ id, rel: id === BASE_ID ? "." : `baselines/${id}` })),
+    range_split: usage === "range" ? { param: "CUSH_THK", intervals: bids.map((b, i) => ({ baseline: b, nominal: 12.5 + i * 2.5 })) } : null,
     common: [
-      row("r1", "thickness", "CUSH_THK", 0.93, "recommend", two("CUSH_L_THK_1", "CUSH_L_THK_1")),
-      row("r2", "height", "CUSH_POCKET_D", 0.58, "check", two("CUSH_L_POCKET_D_1", "CUSH_L_POCKET_D_2")),
-      row("r3", "thickness", "CUSH_RIB_T", 0.41, "unmatched", two("CUSH_L_RIB_T_2", null)),
-      row("r4", "position", "CUSH_HOLE_U", 0.88, "recommend", two("CUSH_L_HOLE_U_1", "CUSH_L_HOLE_U_1")),
+      row("r1", "thickness", "CUSH_THK", 0.93, "recommend", two("CUSH_L_THK_1", "CUSH_L_THK_1"), 12.5),
+      row("r2", "height", "CUSH_POCKET_D", 0.58, "check", two("CUSH_L_POCKET_D_1", "CUSH_L_POCKET_D_2"), 8),
+      row("r3", "thickness", "CUSH_RIB_T", 0.41, "unmatched", two("CUSH_L_RIB_T_2", null), 3),
+      row("r4", "position", "CUSH_HOLE_U", 0.88, "recommend", two("CUSH_L_HOLE_U_1", "CUSH_L_HOLE_U_1"), 30),
     ],
-    warnings: [{ code: "MAP_LOW_SCORE", row_id: "r2" }],
-    params: Object.fromEntries(bids.map((id, i) => [id, i === 0 ? ps.parameters.map((p) => p.name) : ["CUSH_L_THK_1", "CUSH_L_POCKET_D_2", "CUSH_L_HOLE_U_1", "CUSH_L_RIB_T_5"]])),
+    warnings: [{ code: "MAP_LOW_SCORE", row_id: "r2", message: "r2: score 0.58 below 0.7" }],
   };
 }
 
-function addBaselineDone(srv: MockServer, ps: ParamSet, b: { id: string; label?: string | null; path?: string }) {
-  const list = ps.baselines?.length ? ps.baselines : [{ id: "base", rel: ".", label: "기준", source_path: ps.source_path, prep_status: "READY" as const }];
-  ps.baselines = [...list.filter((x) => x.id !== b.id), { id: b.id, rel: `baselines/${b.id}`, label: b.label ?? null, source_path: b.path ?? null, prep_status: "READY" }];
+const unresolved = (m: StoredMap) => m.common.filter((r) => !r.decision && (r.needs_review || r.proposed.grade === "check")).map((r) => r.row_id);
+
+function decisionNames(r: StoredMap["common"][number]): string[] {
+  const d = r.decision;
+  if (!d) return [];
+  return d.action === "split" ? (d.parts ?? []).map((p) => p.name) : [d.name ?? r.proposed.name];
+}
+
+/** GET·PUT·confirm 응답(map_out) */
+export function mapOut(m: StoredMap): ParamMap {
+  const left = new Set(unresolved(m));
+  return {
+    ...m,
+    common: m.common.map((r) => ({ ...r, requires_decision: left.has(r.row_id) })),
+    unresolved_rows: [...left],
+    undecided_count: m.common.filter((r) => !r.decision).length,
+    variables: m.common.flatMap((r) => (r.decision ? decisionNames(r) : [r.proposed.name])),
+  };
+}
+
+function addBaselineDone(srv: MockServer, ps: ParamSet, b: { id: string; label?: string | null }, usage: "topology" | "range") {
+  const base = { id: BASE_ID, rel: ".", label: ps.label ?? null, prep_status: "READY" as const, prep_reason: null, feature_count: ps.native?.feature_count ?? 0 };
+  const list = ps.baselines?.length ? ps.baselines : [base];
+  ps.baselines = [...list.filter((x) => x.id !== b.id), { id: b.id, rel: `baselines/${b.id}`, label: b.label ?? null, prep_status: "READY", prep_reason: null, feature_count: 5 }];
   const rec = srv.geom.get(ps.id)!;
-  rec.map = draftMap(ps, ps.baselines.map((x) => x.id), rec.map);
+  rec.map = draftMap(ps, ps.baselines.map((x) => x.id), rec.map, usage);
+  ps.param_map_status = "draft";
 }
 
-function applyDecision(m: ParamMap, row_id: string, d: MapDecision | null): MockResp | null {
-  const i = m.common.findIndex((r) => r.row_id === row_id);
-  if (i < 0) return err(422, "GEOM_INPUT_INVALID", `없는 행입니다: ${row_id}`);
-  const r = m.common[i];
-  if (d?.action === "split") {
-    // 한 행 → baseline별 별도 변수 행(분리된 행마다 decision 1개)
-    const rows = m.baselines
-      .filter((b) => r.proposed.map[b.id])
-      .map((b): MapRow => {
-        const map = Object.fromEntries(m.baselines.map((x) => [x.id, x.id === b.id ? r.proposed.map[b.id] : null]));
-        const name = `${d.name}_${b.id}`;
-        return { ...r, row_id: `${r.row_id}_${b.id}`, needs_review: false, proposed: { ...r.proposed, map }, decision: { action: "split", name, map } };
-      });
-    m.common.splice(i, 1, ...rows);
-  } else {
-    m.common[i] = { ...r, decision: d, needs_review: d ? false : r.needs_review };
+/** normalize_decision: accept = 제안 채움, map 키 = 모든 baseline, split = parts */
+function normalize(r: StoredMap["common"][number], d: MapDecision | null, bids: string[]): MapDecision | null {
+  if (!d) return null;
+  if (d.action === "accept") return { action: "accept", name: r.proposed.name, map: { ...r.proposed.map } };
+  if (d.action === "split") {
+    const parts = (d.parts ?? []).map((p) => ({ name: p.name, map: Object.fromEntries(bids.map((b) => [b, p.map?.[b] ?? null])) }));
+    return { action: "split", name: parts[0]?.name ?? null, map: Object.fromEntries(bids.map((b) => [b, null])), parts };
   }
-  return null;
+  return { action: d.action, name: d.name ?? null, map: Object.fromEntries(bids.map((b) => [b, d.map?.[b] ?? null])) };
 }
 
-function conflict(m: ParamMap): string | null {
-  const seen = new Set<string>();
+/** decision_problems(이름 규칙·예약어·중복, 한 baseline 안 원 파라미터 중복, split parts) */
+function decisionProblems(m: StoredMap): { code: string; row_id: string; message: string }[] {
+  const bids = m.baselines.map((b) => b.id);
+  const out: { code: string; row_id: string; message: string }[] = [];
+  const seen = new Map<string, string>();
+  const used = new Map<string, string>();
   for (const r of m.common) {
-    const n = r.decision?.name ?? r.proposed.name;
-    if (n === "baseline" || seen.has(n)) return n;
-    seen.add(n);
+    const d = r.decision;
+    if (!d) continue;
+    const parts = d.action === "split" ? (d.parts ?? []).map((p) => [p.name, p.map] as const) : [[d.name ?? "", d.map ?? {}] as const];
+    if (!parts.length) out.push({ code: "GEOM_INPUT_INVALID", row_id: r.row_id, message: `${r.row_id}: 분리(split)에는 parts가 필요합니다` });
+    for (const [name, mp] of parts) {
+      if (!NAME_RE.test(name) || RESERVED.has(name)) {
+        out.push({ code: "PARAM_NAME_CONFLICT", row_id: r.row_id, message: `${r.row_id}: 공통 이름 '${name}'은 규칙에 맞지 않거나 예약어입니다(baseline·…__na·baseline__…)` });
+        continue;
+      }
+      const prev = seen.get(name);
+      if (prev) {
+        out.push({ code: "PARAM_NAME_CONFLICT", row_id: r.row_id, message: `${r.row_id}: 공통 이름 '${name}'이 다른 행(${prev})과 겹칩니다` });
+        continue;
+      }
+      seen.set(name, r.row_id);
+      if (!bids.some((b) => mp[b])) out.push({ code: "GEOM_INPUT_INVALID", row_id: r.row_id, message: `${r.row_id}: '${name}'이 모든 baseline에서 N/A입니다` });
+      for (const b of bids) {
+        const o = mp[b];
+        if (!o) continue;
+        const k = `${b}\u0000${o}`;
+        const u = used.get(k);
+        if (u && u !== name) out.push({ code: "PARAM_NAME_CONFLICT", row_id: r.row_id, message: `${r.row_id}: baseline ${b}의 ${o}을(를) 서로 다른 공통 이름(${u}, ${name})이 가리킵니다` });
+        used.set(k, name);
+      }
+    }
   }
-  return null;
+  return out;
 }
 
 // ---------------------------------------------------------------- 상태·discover
@@ -288,9 +366,16 @@ export function finishGeometry(srv: MockServer, j: Job) {
   } else {
     const ps = srv.paramSets.find((x) => x.id === p.param_set_id);
     if (!ps) return;
+    const rec = srv.geom.get(ps.id);
     if (p.mode === "add_baseline") {
-      const b = p.baseline as { id: string; label?: string | null; path?: string };
-      addBaselineDone(srv, ps, b);
+      const b = p.baseline as { id: string; label?: string | null };
+      addBaselineDone(srv, ps, b, (p.usage as "topology" | "range" | null) ?? rec?.map?.usage ?? "topology");
+    } else if (p.mode === "remap" && rec?.map) {
+      rec.map = draftMap(ps, rec.map.baselines.map((b) => b.id), rec.map, (p.usage as "topology" | "range" | null) ?? rec.map.usage);
+      ps.param_map_status = "draft";
+    } else if (p.mode === "props_scan" && rec) {
+      rec.propsScanned = true;
+      ps.native = { ...(ps.native ?? { prep_status: "READY", feature_count: 0, shell_only: false }), props_scanned: true };
     } else {
       ps.native = { ...(ps.native ?? { feature_count: 0, props_scanned: false, shell_only: false }), prep_status: "READY", prep_reason: null };
     }
@@ -325,6 +410,17 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     }
     return null;
   }
+  // ① GET /studies/{id}/train/features(§7.3.1): native 추출 피처 + 하이라이트 PNG artifact
+  if (seg[0] === "studies" && seg[2] === "train" && seg[3] === "features" && method === "GET") {
+    const s = srv.studies.find((x) => x.id === seg[1]);
+    if (!s) return null;
+    const setup = srv.p2.setups[s.id];
+    if (!setup || setup.engine !== "native") return err(409, "NATIVE_PREP_MISSING", "① native 형상 피처가 없습니다 — 파라미터 추출을 native로 먼저 하세요");
+    const key = `train:${s.id}:${setup.extract_job_id ?? ""}`;
+    if (!srv.geom.has(key)) srv.geom.set(key, newRec(srv, s.id, setup.extract_job_id ?? "j-train-native"));
+    const r = srv.geom.get(key)!;
+    return ok({ engine_version: "0.6.0", features: r.features, groups: r.groups, warnings: r.warnings });
+  }
   if (seg[0] !== "param-sets" || !seg[1]) return null;
   const ps = findPs(srv, seg[1]);
   if (!ps) return null;
@@ -343,82 +439,131 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     return ok(ps);
   }
   if (ps.engine !== "native") {
-    if (sub === "features" || sub === "native-prepare" || sub === "props" || sub === "baselines" || sub === "param-map")
-      return err(409, "ENGINE_NATIVE_UNSUPPORTED", "native 세트에서만 쓸 수 있습니다");
+    if (sub === "baselines" || sub === "param-map" || sub === "remap") return err(409, "ENGINE_MISMATCH", "다중 baseline은 native 형상 엔진 세트에서만 씁니다");
+    if (sub === "features" || sub === "native-prepare" || sub === "props") return err(409, "ENGINE_NATIVE_UNSUPPORTED", "native 세트에서만 쓸 수 있습니다");
     return null;
   }
   if (method === "POST" && sub === "native-prepare") return nativeJob(srv, studyOf(srv, ps), { mode: "reprep", param_set_id: ps.id });
   if (method === "GET" && sub === "features" && rec) return ok({ engine_version: ps.engine_version, features: rec.features, groups: rec.groups, warnings: rec.warnings });
-  // 3S 쉘 두께
+  // 3S 쉘 두께(§11.1)
   if (sub === "props" && rec) {
-    if (method === "GET") return ok(rec.props);
+    if (method === "POST" && seg[3] === "scan") return nativeJob(srv, studyOf(srv, ps), { mode: "props_scan", param_set_id: ps.id });
+    if (seg[3]) return null;
+    if (method === "GET") return ok(propsOut(ps, rec));
     if (method === "PUT") {
-      const sel = (body?.selected ?? []) as { prop_id: number; name?: string; min: number; max: number }[];
-      for (const x of sel) {
-        const pr = rec.props.props.find((p) => p.id === x.prop_id);
-        if (!pr || !pr.selectable) return err(422, "PROP_UNSUPPORTED_TYPE", `선택할 수 없는 PROP입니다: ${x.prop_id}`);
-        if (!(x.min > 0) || !(x.min < x.max)) return err(422, "PROP_THICKNESS_INVALID", `PROP ${x.prop_id}: 두께 범위는 0 < 하한 < 상한`);
+      const deny = needPower(srv, studyOf(srv, ps).project_id);
+      if (deny) return deny;
+      if (!rec.propsScanned) return err(409, "PROPS_NOT_SCANNED", "쉘 두께 PROP 스캔을 먼저 하세요");
+      const sel = (body?.selected ?? []) as { name: string; min?: number | null; max?: number | null }[];
+      let include = body?.include_geometry !== false;
+      if (ps.native?.shell_only) include = false;
+      else if (!include && rec.map) return err(422, "PROP_SELECTION_INVALID", "다중 baseline 세트는 형상 파라미터를 뺄 수 없습니다", { problems: [{ code: "MULTI_BASELINE", message: "다중 baseline 세트는 형상 파라미터를 뺄 수 없습니다" }] });
+      const geo = ps.parameters.filter((p) => p.source !== "prop");
+      const problems: { code: string; parameter: string; message: string }[] = [];
+      const rows: ParamSetParameter[] = [];
+      const seen = new Set<string>();
+      for (const it of sel) {
+        if (seen.has(it.name)) {
+          problems.push({ code: "PROP_SELECTION_DUPLICATE", parameter: it.name, message: `${it.name}: 중복 선택입니다` });
+          continue;
+        }
+        seen.add(it.name);
+        const r = rec.props.props.find((x) => x.parameter === it.name);
+        if (!r || !r.selectable || r.thickness == null) {
+          problems.push({ code: r ? reasonCode(r)! : "PROP_NOT_FOUND", parameter: it.name, message: `${it.name}: ${r ? "선택할 수 없는 PROP입니다" : "PROP 목록에 없습니다(스캔을 다시 하세요)"}` });
+          continue;
+        }
+        const rg = (r.range ?? {}) as { min?: number; max?: number };
+        const min = it.min ?? rg.min ?? r.thickness;
+        const max = it.max ?? rg.max ?? r.thickness;
+        if (!(0 < min && min <= r.thickness && r.thickness <= max)) {
+          problems.push({ code: "PROP_THICKNESS_INVALID", parameter: it.name, message: `${it.name}: 0 < min ≤ 공칭(${r.thickness}) ≤ max 이어야 합니다` });
+          continue;
+        }
+        rows.push({ name: it.name, nominal: r.thickness, min, max, unit: "mm", source: "prop", prop_id: r.id ?? null });
       }
-      rec.props = { ...rec.props, selected: sel.map((x) => ({ prop_id: x.prop_id, name: rec.props.props.find((p) => p.id === x.prop_id)!.parameter!, min: x.min, max: x.max })) };
-      const shell = new Set(rec.props.props.map((p) => p.parameter));
-      ps.parameters = [
-        ...ps.parameters.filter((p) => !shell.has(p.name)),
-        ...rec.props.selected.map((x) => ({ name: x.name, nominal: rec.props.props.find((p) => p.id === x.prop_id)!.thickness!, min: x.min, max: x.max, unit: "mm" })),
-      ];
-      return ok(rec.props);
+      if (problems.length) return err(422, "PROP_SELECTION_INVALID", "쉘 두께 선택이 올바르지 않습니다", { problems });
+      const next = [...(include ? geo : []), ...rows];
+      if (!next.length) return err(422, "PROP_SELECTION_INVALID", "파라미터가 1개 이상 필요합니다", { problems: [{ code: "PARAMETERS_EMPTY", message: "형상 또는 쉘 두께 파라미터를 하나 이상 고르세요" }] });
+      ps.parameters = next;
+      return ok(ps);
     }
   }
-  // 4B 다중 baseline
+  // 4B 다중 baseline(§7.3.8)
   if (sub === "baselines") {
     if (method === "POST" && !seg[3]) {
-      const b = (body?.baseline ?? {}) as { id?: string; path?: string; choice?: unknown; label?: string | null };
-      if (!b.id || !/^[A-Za-z0-9_-]{1,32}$/.test(b.id) || b.id === "base" || ps.baselines?.some((x) => x.id === b.id))
+      const b = (body ?? {}) as { id?: string; path?: string; choice?: unknown; label?: string | null; usage?: "topology" | "range" | null; split_param?: string | null };
+      if (!b.id || !/^[A-Za-z0-9_-]{1,32}$/.test(b.id) || b.id === BASE_ID || ps.baselines?.some((x) => x.id === b.id))
         return err(422, "GEOM_INPUT_INVALID", "baseline id는 영문·숫자·_-(32자 이내)이고 세트 안에서 유일해야 합니다");
       const d = discoverNative(String(b.path ?? ""));
       if (d.status !== 200) return d;
       if ((d.body as ParamSetDiscover).problems.length) return err(422, "PARAM_SET_INVALID", (d.body as ParamSetDiscover).problems[0].message);
-      return nativeJob(srv, studyOf(srv, ps), { mode: "add_baseline", param_set_id: ps.id, baseline: b });
+      return nativeJob(srv, studyOf(srv, ps), { mode: "add_baseline", param_set_id: ps.id, baseline: { id: b.id, path: b.path, choice: b.choice ?? {}, label: b.label ?? null }, usage: b.usage ?? null, split_param: b.split_param ?? null });
+    }
+    if (method === "POST" && seg[3] === "disable") {
+      if (!rec?.map) return err(409, "NOT_MULTI_BASELINE", "다중 baseline 세트가 아닙니다 — baseline을 먼저 추가하세요");
+      rec.map = null;
+      ps.baselines = null;
+      ps.param_map_status = null;
+      return ok(ps);
     }
     if (method === "DELETE" && seg[3]) {
-      if (!ps.baselines?.some((x) => x.id === seg[3]) || seg[3] === "base") return err(422, "GEOM_INPUT_INVALID", "삭제할 수 없는 baseline입니다");
-      const left = ps.baselines.filter((x) => x.id !== seg[3]);
-      if (left.length <= 1) {
-        delete ps.baselines;
-        if (rec) rec.map = null;
-      } else {
-        ps.baselines = left;
-        if (rec) rec.map = draftMap(ps, left.map((x) => x.id), rec.map);
-      }
+      if (!rec?.map) return err(409, "NOT_MULTI_BASELINE", "다중 baseline 세트가 아닙니다 — baseline을 먼저 추가하세요");
+      const bl = rec.map.baselines;
+      const target = bl.find((x) => x.id === seg[3]);
+      if (!target) return err(404, "NOT_FOUND", `baseline ${seg[3]}이(가) 없습니다`);
+      if (target.rel === ".") return err(409, "BASELINE_BASE", "첫 baseline(세트 자신)은 삭제할 수 없습니다 — 단일로 되돌리려면 disable을 쓰세요");
+      if (bl.length <= 2) return err(409, "BASELINE_LAST", "baseline이 2개뿐이라 삭제할 수 없습니다 — 단일로 되돌리려면 disable을 쓰세요");
+      const left = bl.filter((x) => x.id !== seg[3]).map((x) => x.id);
+      rec.map = { ...draftMap(ps, left, rec.map, rec.map.usage) };
+      ps.baselines = (ps.baselines ?? []).filter((x) => x.id !== seg[3]);
+      ps.param_map_status = "draft";
       return ok(ps);
     }
   }
+  if (sub === "remap" && method === "POST") {
+    if (!rec?.map) return err(409, "NOT_MULTI_BASELINE", "다중 baseline 세트가 아닙니다 — baseline을 먼저 추가하세요");
+    return nativeJob(srv, studyOf(srv, ps), { mode: "remap", param_set_id: ps.id, usage: body?.usage ?? null, split_param: body?.split_param ?? null });
+  }
   if (sub === "param-map" && rec) {
-    if (!rec.map) return err(404, "NOT_FOUND", "다중 baseline 매칭표가 없습니다");
-    if (method === "GET" && !seg[3]) return ok(rec.map);
+    if (!rec.map) return err(409, "NOT_MULTI_BASELINE", "다중 baseline 세트가 아닙니다 — baseline을 먼저 추가하세요");
+    if (method === "GET" && !seg[3]) return ok(mapOut(rec.map));
     if (method === "PUT" && !seg[3]) {
-      const next: ParamMap = JSON.parse(JSON.stringify(rec.map));
+      const next: StoredMap = JSON.parse(JSON.stringify(rec.map));
+      const bids = next.baselines.map((b) => b.id);
       for (const d of (body?.decisions ?? []) as { row_id: string; decision: MapDecision | null }[]) {
-        const e = applyDecision(next, d.row_id, d.decision);
-        if (e) return e;
+        const r = next.common.find((x) => x.row_id === d.row_id);
+        if (!r) return err(422, "GEOM_INPUT_INVALID", `없는 행입니다: ${d.row_id}`, { problems: [{ code: "GEOM_INPUT_INVALID", row_id: d.row_id, message: `없는 행입니다: ${d.row_id}` }] });
+        r.decision = normalize(r, d.decision, bids);
       }
-      const c = conflict(next);
-      if (c) return err(422, "PARAM_NAME_CONFLICT", `공통 변수 이름이 겹칩니다: ${c}`);
-      next.status = "draft";
-      next.confirmed_by = null;
-      next.confirmed_at = null;
+      const probs = decisionProblems(next);
+      if (probs.length) return err(422, probs[0].code, probs[0].message, { problems: probs });
+      Object.assign(next, { status: "draft", confirmed_by: null, confirmed_at: null });
       rec.map = next;
-      return ok(next);
+      ps.param_map_status = "draft";
+      return ok(mapOut(next));
     }
     if (method === "POST" && seg[3] === "confirm") {
-      const pend = rec.map.common.filter((r) => !r.decision && (r.needs_review || r.proposed.grade === "check"));
-      if (pend.length) return err(422, "GEOM_INPUT_INVALID", `결정하지 않은 행이 ${pend.length}개 있습니다(재확인·확인 필요)`);
+      const left = unresolved(rec.map);
+      if (left.length)
+        return err(422, "GEOM_INPUT_INVALID", `결정하지 않은 행이 ${left.length}개 있습니다(재확인·확인 필요)`, { problems: left.map((id) => ({ code: "GEOM_INPUT_INVALID", row_id: id, message: `${id}: 결정이 필요합니다` })) });
       rec.map = {
         ...rec.map, status: "confirmed", confirmed_by: srv.me?.display_name ?? null, confirmed_at: new Date().toISOString(),
-        common: rec.map.common.map((r) => (r.decision ? r : { ...r, decision: { action: "accept", name: r.proposed.name, map: r.proposed.map } })),
+        common: rec.map.common.map((r) => (r.decision ? r : { ...r, decision: { action: "accept", name: r.proposed.name, map: { ...r.proposed.map } } })),
       };
-      return ok(rec.map);
+      ps.param_map_status = "confirmed";
+      return ok(mapOut(rec.map));
     }
   }
   return null;
 };
 
+/** ①-3 세트 기준 native DOE 게이트(§7.3.8): 다중 baseline 미확정 → 409 PARAM_MAP_UNCONFIRMED */
+export function mapGate(srv: MockServer, psId: string): MockResp | null {
+  const rec = srv.geom.get(psId);
+  if (rec?.map && rec.map.status !== "confirmed") {
+    const n = rec.map.common.filter((r) => !r.decision).length;
+    return err(409, "PARAM_MAP_UNCONFIRMED", `다중 baseline 매칭표가 확정되지 않았습니다(미결정 행 ${n}개) — 매칭표를 확인해 확정하세요`, { param_set_id: psId, undecided_rows: n, unresolved_rows: unresolved(rec.map) });
+  }
+  return null;
+}

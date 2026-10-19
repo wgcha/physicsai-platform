@@ -190,6 +190,72 @@ describe("목 서버 ↔ openapi.json", () => {
     expect((rt.body as { sampling: { desc_id: string } }).sampling.desc_id).toMatch(/^td_/);
   });
 
+  it("native 3S·4B·① 피처(geometry-engine.md §7.6): props scan 202·GET·PUT → ParamSet, baselines·remap 202·delete·disable, param-map GET·PUT·confirm, train/features, 배치 gen_category", () => {
+    const s = new MockServer({ user: "power", geometry: "multi" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    const call = (m: string, url: string, body: Record<string, unknown> | null = null) => s.handle(m, url, q, body, h);
+    const check = (r: { status: number; body?: unknown }, p: string, m: string, status = 200) => {
+      expect(r.status).toBe(status);
+      expect(problems(r.body, responseSchema(p, m), p)).toEqual([]);
+    };
+    const reqOk = (p: string, m: string, body: unknown) => {
+      const sch = spec.paths[`/physicsai/api${p}`][m].requestBody.content["application/json"].schema;
+      expect(problems(body, sch, `${p} body`)).toEqual([]);
+    };
+    // 3S
+    const before = call("GET", "/param-sets/ps-n1/props");
+    check(before, "/param-sets/{ps_id}/props", "get");
+    expect((before.body as { scanned: boolean }).scanned).toBe(false);
+    check(call("POST", "/param-sets/ps-n1/props/scan"), "/param-sets/{ps_id}/props/scan", "post", 202);
+    s.finishAll();
+    const after = call("GET", "/param-sets/ps-n1/props");
+    check(after, "/param-sets/{ps_id}/props", "get");
+    expect((after.body as { props: unknown[] }).props.length).toBe(4);
+    const putBody = { selected: [{ name: "TRAY_SHELL_T", min: 0.76, max: 0.84 }], include_geometry: true };
+    reqOk("/param-sets/{ps_id}/props", "put", putBody);
+    const put = call("PUT", "/param-sets/ps-n1/props", putBody);
+    check(put, "/param-sets/{ps_id}/props", "put");
+    expect((put.body as { parameters: { name: string; source?: string; prop_id?: number }[] }).parameters.find((p) => p.source === "prop")).toMatchObject({ name: "TRAY_SHELL_T", prop_id: 102 });
+    expect(call("PUT", "/param-sets/ps-n1/props", { selected: [{ name: "LABEL_SHELL_T" }] }).status).toBe(422);
+    // 4B 매칭표
+    check(call("GET", "/param-sets/ps-n1/param-map"), "/param-sets/{ps_id}/param-map", "get");
+    const dec = { decisions: [{ row_id: "r2", decision: { action: "accept" } }, { row_id: "r1", decision: { action: "split", parts: [{ name: "T_B1", map: { B1: "CUSH_L_THK_1" } }, { name: "T_B2", map: { B2: "CUSH_L_THK_1" } }] } }] };
+    reqOk("/param-sets/{ps_id}/param-map", "put", dec);
+    const pm = call("PUT", "/param-sets/ps-n1/param-map", dec);
+    check(pm, "/param-sets/{ps_id}/param-map", "put");
+    expect((pm.body as { variables: string[] }).variables).toEqual(["T_B1", "T_B2", "CUSH_POCKET_D", "CUSH_RIB_T", "CUSH_HOLE_U"]);
+    const conflict = call("PUT", "/param-sets/ps-n1/param-map", { decisions: [{ row_id: "r3", decision: { action: "rename", name: "CUSH_HOLE_U", map: { B1: "CUSH_L_RIB_T_2" } } }, { row_id: "r4", decision: { action: "accept" } }] });
+    expect(`${conflict.status} ${(conflict.body as { detail: { code: string } }).detail.code}`).toBe("422 PARAM_NAME_CONFLICT");
+    const cf = call("POST", "/param-sets/ps-n1/param-map/confirm");
+    check(cf, "/param-sets/{ps_id}/param-map/confirm", "post");
+    expect((cf.body as { status: string; undecided_count: number }).status).toBe("confirmed");
+    const ps = call("GET", "/param-sets/ps-n1");
+    check(ps, "/param-sets/{ps_id}", "get");
+    expect((ps.body as { param_map_status: string; baselines: { rel: string }[] }).param_map_status).toBe("confirmed");
+    // baseline 추가·다시 매칭(202), 2개면 삭제 409 → disable
+    const add = { id: "B3", path: "E:/shared/AI_WORK/cushion/00_inbox/rib7_project", choice: { cad: null, radioss_assem: null }, usage: "topology" };
+    reqOk("/param-sets/{ps_id}/baselines", "post", add);
+    expect(`${call("DELETE", "/param-sets/ps-n1/baselines/B2").status}`).toBe("409");
+    expect(`${call("DELETE", "/param-sets/ps-n1/baselines/B1").status}`).toBe("409");
+    check(call("POST", "/param-sets/ps-n1/remap", {}), "/param-sets/{ps_id}/remap", "post", 202);
+    s.finishAll();
+    check(call("POST", "/param-sets/ps-n1/baselines", add), "/param-sets/{ps_id}/baselines", "post", 202);
+    s.finishAll();
+    check(call("DELETE", "/param-sets/ps-n1/baselines/B3"), "/param-sets/{ps_id}/baselines/{baseline_id}", "delete");
+    check(call("POST", "/param-sets/ps-n1/baselines/disable"), "/param-sets/{ps_id}/baselines/disable", "post");
+    expect(call("GET", "/param-sets/ps-n1/param-map").status).toBe(409);
+    // ① train/features: native 추출 전 409, 후 NativeFeatures
+    expect(call("GET", "/studies/s-cushion/train/features").status).toBe(409);
+    s.p2.setups["s-cushion"].engine = "native";
+    check(call("GET", "/studies/s-cushion/train/features"), "/studies/{study_id}/train/features", "get");
+    // 배치 행 gen_category
+    Object.assign(s.batches.find((b) => b.id === "pb-2")!.runs[11], { gen_code: "GEOM_TIE_PROJECTION", gen_message: "tie 투영 실패" });
+    const pb = call("GET", "/predict-batches/pb-2");
+    check(pb, "/predict-batches/{batch_id}", "get");
+    expect((pb.body as { rows: { doe_no: number; gen_category: string | null }[] }).rows.find((r) => r.doe_no === 12)!.gen_category).toBe("TIE");
+  });
+
   it("3차 쓰기 응답(V3-S1-5): PATCH study, archive, unarchive, retry", () => {
     const power = new MockServer({ user: "power" });
     const h = new Headers({ "X-PhysicsAI-Request": "1" });
