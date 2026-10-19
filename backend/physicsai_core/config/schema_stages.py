@@ -156,6 +156,16 @@ class SurrogateOptCfg(_M):
     de_popsize: int = 15
     fit_timeout_s: int = 600
     blas_threads: int = 4  # 워커 안 numpy BLAS 스레드 상한(worker.max_logical_cores와 작은 쪽, 공유 워커 보호)
+    # S17 다목적(phase3 §22.11)
+    max_objectives: int = 3
+    max_observe: int = 10
+    max_extra_points: int = 10
+    mo_lattice_h2: int = 10  # 2목적 Das–Dennis 격자 H(→ 11점)
+    mo_lattice_h3: int = 6  # 3목적 격자 H(→ 28점)
+    mo_de_maxiter: int = 100
+    mo_rho: float = 0.05  # 증강 Chebyshev ρ
+    mo_ref_offset: float = 0.1  # HV 기준점 = (1 + offset)·1
+    mo_gp_restarts: int = 4  # ParEGO 스칼라화 GP 재시작
 
 
 class OptimizeCfg(_M):

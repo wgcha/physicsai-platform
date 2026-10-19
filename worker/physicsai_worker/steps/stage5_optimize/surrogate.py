@@ -28,12 +28,13 @@ from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json_atomic, write_text
 from physicsai_core.stage4_predict import contour_capture as cc
-from physicsai_core.stage4_predict import run_metrics
+from physicsai_core.stage4_predict import performance, run_metrics
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 from physicsai_core.stage5_optimize.surrogate import limit_threads
 
 from ...signals import StepSkipped
+from . import surrogate_mo as mo
 
 STOP_TEXT = {ds.STOP_CONVERGED: "수렴", ds.STOP_MAX_ITER: "최대 반복", ds.STOP_NO_NEW: "새 후보 없음"}
 
@@ -110,15 +111,42 @@ class _Clock:
 # ---- SO_COLLECT -----------------------------------------------------------------------------------
 
 
+def point_values(m: run_metrics.RunMetrics, problem: ds.Problem, table: Any, perfs: dict[str, Any]
+                 ) -> tuple[list[float | None], list[float | None], dict[str, float | None], dict[str, str]]:
+    """성공 run 1개 → (목적들, 제약들, 관찰 {key: 값}, 사유 {key: 사유}) — `perf:`는 performance.perf_value(사유 포함)."""
+    reasons: dict[str, str] = {}
+
+    def val(metric: str, series: str | None, key: str) -> float | None:
+        if metric.startswith("perf:") and metric[5:] in perfs:
+            v, why = performance.perf_value(perfs[metric[5:]], m)
+            if v is None:
+                reasons[key] = why or "NO_VALUE"
+            return v
+        v = _metric(m, metric, series, table)
+        if v is None:
+            reasons[key] = "NO_VALUE"
+        return v
+
+    objs = [val(o.metric, o.series, o.key) for o in problem.objectives]
+    cons = [val(c.metric, c.series, c.key) for c in problem.constraints]
+    obs = {o.key: val(o.metric, o.series, o.key) for o in problem.observe}
+    return objs, cons, obs, reasons
+
+
+def snapshot_perfs(problem: ds.Problem) -> dict[str, Any]:
+    """settings.performances 스냅샷 → PerfDef(진행 중 정의 변경과 무관하게 같은 정의, §22.4.2)."""
+    return performance.perf_defs([{"name": k, "unit": (v or {}).get("unit", ""), "spec": (v or {}).get("spec")}
+                                  for k, v in problem.performances.items()])
+
+
 def collect_points(ctx: Any, opt: dict[str, Any], problem: ds.Problem, upto: int) -> list[ds.Point]:
-    """반복 0..upto 배치의 run 전부 → Point(성공 run만 지표 계산, 값 = 반영값)."""
-    s = opt["settings"]
-    obj = s["objective"]
+    """반복 0..upto 배치(탐색·재사용·검증 — 마무리 FINAL·추가 검증 EXTRA 제외)의 run 전부 → Point(성공 run만 지표 계산)."""
     out: list[ds.Point] = []
     max_bytes = ctx.settings.ui.max_artifact_bytes
+    perfs = snapshot_perfs(problem)
     with ctx.ex.engine.connect() as conn:
         for it in so_repo.iters(conn, opt["id"]):
-            if it["iter_no"] > upto:
+            if it["iter_no"] > upto or it["kind"] in ("FINAL", "EXTRA"):
                 continue
             b = pb_repo.get(conn, it["batch_id"])
             if b is None:
@@ -128,14 +156,17 @@ def collect_points(ctx: Any, opt: dict[str, Any], problem: ds.Problem, upto: int
                 ctx.checkpoint()
                 state = pb_repo.row_state(r, r["job_state"])
                 vals = {k: float(v) for k, v in (r["applied_values"] or {}).items()}
-                objective, cons = None, [None] * len(problem.constraints)
+                objs: list[float | None] = [None] * problem.m
+                cons: list[float | None] = [None] * len(problem.constraints)
+                obs: dict[str, float | None] = {o.key: None for o in problem.observe}
+                reasons: dict[str, str] = {}
                 if state == "SUCCEEDED":
                     job = jobs_repo.get_job(conn, r["predict_job_id"])
                     m = run_metrics.load_run_metrics(run_metrics.locate_run_files(conn, ctx.root, job), max_bytes=max_bytes)
-                    objective = _metric(m, obj["metric"], obj.get("series"), r["responses"])
-                    cons = [_metric(m, c.metric, c.series, r["responses"]) for c in problem.constraints]
-                out.append(ds.Point(it["iter_no"], label, r["doe_no"], r["run_key"], vals, objective, cons, state,
-                                    r["predict_job_id"], b["id"]))
+                    objs, cons, obs, reasons = point_values(m, problem, r["responses"], perfs)
+                out.append(ds.Point(it["iter_no"], label, r["doe_no"], r["run_key"], vals, objs[0], cons, state,
+                                    r["predict_job_id"], b["id"], objectives=objs, observed=obs, reasons=reasons,
+                                    kind=it["kind"]))
     return out
 
 
@@ -161,32 +192,47 @@ def so_collect(ctx: Any) -> None:
     write_text(os.path.join(d, "dataset.csv"), ds.dataset_csv(points, problem))
     ctx.add_output(os.path.join(d, "dataset.csv"))
     # 반복 t 기록: 지금까지 최선·개선율, 검증 후보의 실제 값·상태, 직전 적합의 예측-검증 MAE
-    cur = ds.best_point(points, problem)
-    prev = ds.best_point([p for p in points if p.iter_no < t], problem) if t >= 1 else None
-    imp = ds.improvement_rel((prev[0].objective, prev[1]) if prev else None,  # type: ignore[arg-type]
-                             (cur[0].objective, cur[1]) if cur else None, problem.sense) if t >= 1 else None
     with ctx.ex.engine.connect() as conn:
         it = so_repo.get_iter(conn, opt["id"], t)
-    upd: dict[str, Any] = {"best_value": cur[0].objective if cur else None, "best_feasible": cur[1] if cur else None,
-                           "improvement_rel": imp}
     mine = [p for p in points if p.iter_no == t]
+    if problem.multi:  # S17 §22.5.6: HV(고정 틀)·전선 크기·HV 개선율, best = 가중 추천점
+        upd, best, imp = mo.collect_multi(ctx, opt, problem, points, t)
+    else:
+        cur = ds.best_point(points, problem)
+        prev = ds.best_point([p for p in points if p.iter_no < t], problem) if t >= 1 else None
+        imp = ds.improvement_rel((prev[0].objective, prev[1]) if prev else None,  # type: ignore[arg-type]
+                                 (cur[0].objective, cur[1]) if cur else None, problem.sense) if t >= 1 else None
+        upd = {"best_value": cur[0].objective if cur else None, "best_feasible": cur[1] if cur else None,
+               "improvement_rel": imp}
+        best = _best_dict(cur[0], cur[1], problem) if cur is not None else None
     if it is not None and it.get("candidates"):
         by_no = {p.doe_no: p for p in mine}
         cands, errs = [], []
+        errs_i: list[list[float]] = [[] for _ in range(problem.m)]
         for c in it["candidates"]:
             p = by_no.get(c.get("doe_no"))
             c = {**c, "verified": p.objective if p else None, "state": p.state if p else None}
+            if problem.multi:
+                c["verified_objectives"] = list(p.objectives or []) if p else None
+                for i, pv in enumerate(c.get("predicted_objectives") or []):
+                    vv = (p.objectives or [])[i] if p else None
+                    if vv is not None and isinstance(pv, (int, float)):
+                        errs_i[i].append(abs(float(pv) - vv))
             if p is not None and p.objective is not None and isinstance(c.get("predicted"), (int, float)):
                 errs.append(abs(float(c["predicted"]) - p.objective))
             cands.append(c)
         upd["candidates"] = cands
         if it.get("fit"):
-            upd["fit"] = {**it["fit"], "pred_vs_verified_mae": (sum(errs) / len(errs)) if errs else None}
+            fit_q = {**it["fit"], "pred_vs_verified_mae": (sum(errs) / len(errs)) if errs else None}
+            if problem.multi and isinstance(fit_q.get("per_objective"), list):
+                fit_q["per_objective"] = [{**po, "pred_vs_verified_mae": (sum(e) / len(e)) if e else None}
+                                          for po, e in zip(fit_q["per_objective"], errs_i)]
+            upd["fit"] = fit_q
     ctx.ex.db(lambda c: so_repo.set_iter(c, opt["id"], t, **upd))
-    if cur is not None:
-        best = _best_dict(cur[0], cur[1], problem)
+    if best is not None:
         ctx.ex.db(lambda c: so_repo.set_opt(c, opt["id"], best=best))
-    ctx.log(f"반복 {t} 자료: run {len(points)}개, 유효 {sum(p.valid for p in points)}개, 최선 {upd['best_value']}")
+    ctx.log(f"반복 {t} 자료: run {len(points)}개, 유효 {sum(p.valid for p in points)}개, "
+            + (f"HV {upd.get('hv')} · 전선 {upd.get('front_size')}" if problem.multi else f"최선 {upd['best_value']}"))
     # 판정
     if t >= 1 and it is not None and it["kind"] == "VERIFY" and mine and not any(p.valid for p in mine):
         raise StepFailure(ds.FAIL_VERIFY_ALL, f"반복 {t}의 검증 run {len(mine)}개가 모두 실패했습니다(값 없음 포함)")
@@ -222,6 +268,7 @@ def _write_opt_json(ctx: Any, opt: dict[str, Any], O: str) -> None:
         "model": {"id": opt["model_id"], "name": (m or {}).get("name"), "version": (m or {}).get("version"),
                   "psmdl_sha256": (m or {}).get("psmdl_sha256")},
         "seed": opt["settings"].get("seed"),
+        "hv_frame": opt.get("hv_frame"), "used_weights": mo.last_used_weights(its),
         "batches": [{"iter_no": it["iter_no"], "kind": it["kind"], "batch_id": it["batch_id"],
                      "label": batch_label(labels[it["iter_no"]]) if labels.get(it["iter_no"]) else None} for it in its],
     })
@@ -249,6 +296,9 @@ def so_fit(ctx: Any) -> None:
     os.makedirs(d, exist_ok=True)
     clock = _Clock(ctx)
     seed = int(s["seed"]) * 1000 + r
+    if problem.multi:  # S17 §22.5.2 목적별 GP
+        mo.fit_multi(ctx, problem, designs, d, kind=s["surrogate"], restarts=cfg.gp_restarts, seed=seed, clock=clock)
+        return
     try:
         fit = infill.fit_all(designs, problem, kind=s["surrogate"], restarts=cfg.gp_restarts, seed=seed,
                              progress=lambda lbl: ctx.progress(None, lbl), checkpoint=clock)
@@ -294,6 +344,9 @@ def so_propose(ctx: Any) -> None:
         fit = infill.FitResult.from_json(json.load(fh))
     designs, failed = ds.merge(_read_points(ctx, O, problem, r - 1), problem)
     clock = _Clock(ctx)
+    if problem.multi:  # S17 §22.5.3·§22.5.4 예측 전선 + HVI·ParEGO
+        mo.propose_multi(ctx, opt, problem, fit, designs, failed, _iter_dir(O, r), r, clock)
+        return
     try:
         cands, optimum = infill.propose(fit, problem, designs, failed, k=int(s["candidates"]), seed=int(s["seed"]),
                                         round_no=r, de_maxiter=cfg.de_maxiter, de_popsize=cfg.de_popsize,
@@ -362,7 +415,7 @@ def so_next(ctx: Any) -> None:
             c, opt=o, iter_no=r, kind="VERIFY", matrix=matrix, source_meta=matrix.source_meta,
             batch_dir_name=cfg.predict_batch.dir_name, simlab_mesh_name=cfg.predict.simlab_mesh_name,
             round_job_id=ctx.ex.job_id, candidates=cands)
-        so_repo.set_iter(c, o["id"], r, fit=fit)
+        so_repo.set_iter(c, o["id"], r, fit=fit, predicted_front=res.get("predicted_front"))
         so_repo.set_opt(c, o["id"], status="VERIFYING", iter_no=r)
         return {"job_id": job["id"], "batch_id": batch["id"], "batch_label": batch_label(batch["batch_no"])}
 
@@ -397,13 +450,18 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
              "summary.json": None}
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(["iter", "kind", "batch", "runs", "valid", "best_value", "best_feasible", "improvement_rel"])
+    w.writerow(["iter", "kind", "batch", "runs", "valid", "best_value", "best_feasible", "improvement_rel",
+                *(["hv", "front_size"] if problem.multi else [])])
     for it in its:
+        if it["kind"] in ("FINAL", "EXTRA"):
+            continue
         mine = [p for p in points if p.iter_no == it["iter_no"]]
         w.writerow([it["iter_no"], it["kind"], mine[0].batch_label if mine else "", len(mine), sum(p.valid for p in mine),
                     "" if it["best_value"] is None else repr(it["best_value"]),
                     "" if it["best_feasible"] is None else str(it["best_feasible"]).lower(),
-                    "" if it["improvement_rel"] is None else repr(it["improvement_rel"])])
+                    "" if it["improvement_rel"] is None else repr(it["improvement_rel"]),
+                    *([("" if it.get("hv") is None else repr(it["hv"])),
+                       ("" if it.get("front_size") is None else it["front_size"])] if problem.multi else [])])
     files["convergence.csv"] = buf.getvalue()
     best = ds.best_point(points, problem)
     # SO_COLLECT가 저장한 최선(작업·배치 id 포함)을 우선 — CSV에서 다시 읽은 점에는 id가 없다
@@ -432,6 +490,8 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
     obj = s["objective"]
     title = (f"내장 최적화 {so_repo.opt_label(opt['opt_no'])} 완료 — 최적 {ds.metric_label(obj['metric'], obj.get('series'))} "
              f"{_fmt(best_d['objective'] if best_d else None)} (반복 {t} · 검증 {n_verify} run)")
+    if problem.multi:  # §22.7 다목적 알림 문구
+        title = mo.notice_title(so_repo.opt_label(opt["opt_no"]), problem, its, best_d, t, n_verify)
     body = summary["stop_text"] + ("" if not best_d or best_d["feasible"] else " · 제약을 만족하는 설계 없음(위반 최소 설계)")
 
     final_plan = _final_plan(ctx, opt, r, best_d, problem)
@@ -526,7 +586,12 @@ def shared_legend(capture_cfg: Any, ps: dict[str, Any], metric: str, values: lis
     field = str(disp.get("field") or "")
     names = {field} | {str(r.get("name")) for r in ps.get("responses") or []
                        if isinstance(r, dict) and isinstance(r.get("spec"), dict) and r["spec"].get("datatype") == field}
-    if not any(metric in (f"resp:{n}_MAX", f"resp:{n}_MIN") for n in names if n):
+    # S17 §22.7: perf:<NAME>도 H3D·datatype = 컨투어 field·stat MAX·ABSMAX면 같은 범례 대상
+    perf_ok = {f"perf:{r.get('name')}" for r in ps.get("responses") or []
+               if isinstance(r, dict) and isinstance(r.get("spec"), dict)
+               and str(r["spec"].get("source") or "H3D").upper() == "H3D" and r["spec"].get("datatype") == field
+               and str(r["spec"].get("stat") or "").upper() in ("MAX", "ABSMAX")}
+    if not any(metric in (f"resp:{n}_MAX", f"resp:{n}_MIN") for n in names if n) and metric not in perf_ok:
         return None, f"목적 지표가 컨투어 결과 종류({field})의 값이 아니라 이미지마다 자동 범례"
     nums = [float(v) for v in values if isinstance(v, (int, float)) and math.isfinite(v)]
     top = max(nums) * LEGEND_HEADROOM if nums else 0.0
