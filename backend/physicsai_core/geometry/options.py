@@ -24,12 +24,14 @@ DEFAULT_OPTIONS: dict[str, Any] = {
     "interference": {"body_mm": 0.01, "product_mm": 0.05},
     "tie": {"default_dsearch_mm": None, "required": True},
     "extract": {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "position_range_mm": 5.0, "sample_grid": 12},
+    # 단계 4B 매칭 점수(§11.4, paicad 0.6.0 `map` 절): 가중치·σ·표시 등급 경계(accept·warn)·주축 각도
+    "map": {"weights": {"pos": 0.35, "dim": 0.30, "ori": 0.15, "nbr": 0.20}, "sigma": 0.1, "accept": 0.7, "warn": 0.5, "axis_deg": 10.0},
     "thickness_ref": "contact_fixed",
     "position_ref": "nearest_fixed",
     "thickness_ref_overrides": {},
     "symmetry_split": [],
 }
-OPTION_SECTIONS = ("tag", "morph", "quality", "deviation", "interference", "tie", "extract")
+OPTION_SECTIONS = ("tag", "morph", "quality", "deviation", "interference", "tie", "extract", "map")
 OPTION_SCALARS = ("thickness_ref", "position_ref", "thickness_ref_overrides", "symmetry_split")
 FREE_SECTIONS = ("thickness_ref_overrides",)
 META_KEYS = ("schema_version", "engine", "engine_version")
@@ -151,6 +153,19 @@ def validate_options(opts: dict[str, Any]) -> list[dict[str, str]]:
         add("extract.position_range_mm", "0보다 큰 유한한 숫자여야 합니다")
     if not (_is_int(e.get("sample_grid")) and 4 <= e["sample_grid"] <= 64):
         add("extract.sample_grid", "4~64 정수여야 합니다")
+    mp = opts.get("map") or {}
+    w = mp.get("weights")
+    if not isinstance(w, dict) or set(w) != {"pos", "dim", "ori", "nbr"}:
+        add("map.weights", "pos·dim·ori·nbr 네 키의 객체여야 합니다")
+    elif not all(isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x >= 0 for x in w.values()) \
+            or sum(w.values()) <= 0:
+        add("map.weights", "0 이상 유한한 숫자이고 합이 0보다 커야 합니다")
+    if not _pos(mp.get("sigma")):
+        add("map.sigma", "0보다 큰 유한한 숫자여야 합니다")
+    if not (_pos(mp.get("warn")) and _pos(mp.get("accept")) and mp["warn"] <= mp["accept"] <= 1):
+        add("map.accept", "0 < warn ≤ accept ≤ 1 이어야 합니다")
+    if not (_pos(mp.get("axis_deg")) and mp["axis_deg"] < 90):
+        add("map.axis_deg", "0 초과 90 미만이어야 합니다")
     if opts.get("thickness_ref") not in ("contact_fixed", "larger_area_fixed"):
         add("thickness_ref", "contact_fixed | larger_area_fixed")
     if opts.get("position_ref") not in ("nearest_fixed", "proportional"):

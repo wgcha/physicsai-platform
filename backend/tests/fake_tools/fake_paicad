@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """가짜 paicad(geometry-engine.md §5, §7.8): 하위 명령별로 보고 JSON·성공 파일을 쓴다. OCP·numpy 없이 표준 라이브러리만.
 
-- version --json | --version | extract | tag | update | morph | check | run  (인자는 `--name value` 두 토큰)
+- version --json | --version | extract | tag | update | morph | check | run | props scan | props apply | map
+  (인자는 `--name value` 두 토큰)
 - 출력 파일이 이미 있으면 덮어쓰지 않고 종료코드 3(GEOM_OUTPUT_EXISTS) — 보고는 건드리지 않는다.
 - stdout: `PAICAD PROGRESS <pct> <msg>` 줄들, 마지막 `PAICAD RESULT <status> <code|-> <보고 파일 이름>`.
 환경변수
@@ -12,6 +13,10 @@
   FAKE_PAICAD_EXIT_AFTER_OK      `<cmd>:<rc>` 정상 출력을 쓰고 그 종료코드로 끝남(EXIT_NONZERO_IGNORED 시험)
   FAKE_PAICAD_FEATURES           extract가 낼 features JSON 배열(기본: A_THK_1·A_THK_2(대칭 그룹 G1)·B_RIB_H_1·C_HOLE_R_1)
   FAKE_PAICAD_SLEEP_S            명령마다 대기(겹침 관측용)
+  FAKE_PAICAD_PROPS              props scan이 낼 PROP 행 배열(기본: 조립 폴더 material.inc에 BRACKET(선택 가능)·PANEL(요소 두께)·LAM(TYPE9))
+  FAKE_PAICAD_MAP_GRADE          map 행 등급 덮어쓰기 `<이름>:<grade>[,…]`(check|unmatched 시험)
+  props apply는 PROP 정의 파일 사본 끝에 `#FAKE_PROP <id> <값>` 줄을 덧붙여 --out-dir에 쓴다(실제는 두께 필드만 교체).
+  props_apply 실패: FAKE_PAICAD_FAIL=props_apply:<code>, FAKE_PAICAD_FAIL_WHEN=props_apply:<code>:<이름><op><값>
   FAKE_TOOL_RECORD / FAKE_TOOL_TRACE  호출 기록(jsonl) / 시작·끝 시각 기록
 """
 import atexit, contextlib, hashlib, json, os, shutil, sys, time
@@ -40,7 +45,11 @@ cmd, rest = argv[0], argv[1:]
 if cmd == "version":
     print(json.dumps({"paicad": VERSION, "ocp": "7.8.1.1.post1", "numpy": "2.0", "scipy": "1.13", "python": sys.version.split()[0]}))
     sys.exit(0)
-if cmd not in ("extract", "tag", "update", "morph", "check", "run"):
+if cmd == "props":
+    if not rest or rest[0] not in ("scan", "apply"):
+        sys.exit(2)
+    cmd, rest = f"props_{rest[0]}", rest[1:]
+if cmd not in ("extract", "tag", "update", "morph", "check", "run", "props_scan", "props_apply", "map"):
     sys.exit(2)
 args, flags, i = {}, set(), 0
 while i < len(rest):
@@ -54,13 +63,15 @@ while i < len(rest):
         flags.add(a[2:])
         i += 1
 
-EXIT = {"CAD_FAILED": 10, "INTERFERENCE": 11, "QUALITY": 11, "DEVIATION": 11, "TIE": 11, "PREP": 12, "INPUT": 3, "INTERNAL": 20}
+EXIT = {"CAD_FAILED": 10, "INTERFERENCE": 11, "QUALITY": 11, "DEVIATION": 11, "TIE": 11, "PREP": 12, "INPUT": 3, "INTERNAL": 20,
+        "PROP": 11}
 CATEGORY = {"GEOM_CAD_FAILED": "CAD_FAILED", "GEOM_TOPOLOGY_CHANGED": "CAD_FAILED", "GEOM_FEATURE_COLLISION": "CAD_FAILED",
             "GEOM_INTERFERENCE": "INTERFERENCE", "GEOM_QUALITY": "QUALITY", "GEOM_MORPH_FAILED": "QUALITY", "GEOM_DEVIATION": "DEVIATION",
             "GEOM_PARAM_MISMATCH": "DEVIATION", "GEOM_TIE_PROJECTION": "TIE", "GEOM_BODY_MAP_FAILED": "PREP",
             "GEOM_BASELINE_MISMATCH": "PREP", "GEOM_UNSUPPORTED_ELEMENT": "PREP", "GEOM_TAG_FAILED": "PREP",
             "GEOM_EXTRACT_EMPTY": "PREP", "GEOM_INPUT_INVALID": "INPUT", "GEOM_OUTPUT_EXISTS": "INPUT", "RENUM_CSV_MISSING": "INPUT",
-            "GEOM_INTERNAL": "INTERNAL"}
+            "GEOM_INTERNAL": "INTERNAL", "PROP_OVERRIDDEN_BY_ELEMENT": "PROP", "PROP_OVERRIDDEN_BY_PART": "PROP",
+            "PROP_THICKNESS_INVALID": "PROP", "PROP_NOT_FOUND": "INPUT", "PARAM_NAME_CONFLICT": "INPUT"}
 ENGLISH = {"GEOM_TOPOLOGY_CHANGED": "topology changed: faces 42 -> 44", "GEOM_DEVIATION": "boundary deviation 0.083 mm > 0.05 mm",
            "GEOM_QUALITY": "min stretch 0.04 < 0.1"}
 BASE = {"schema_version": 1, "engine": "native", "engine_version": VERSION}
@@ -300,7 +311,181 @@ def step_check(out, update_dir, morph_dir):
     return 0, None
 
 
-if cmd == "extract":
+DEFAULT_PROPS = [
+    {"id": 1, "title": "Bracket", "type": "SHELL", "keyword": "/PROP/TYPE1", "supported": True, "parameter": "BRACKET_SHELL_T",
+     "thickness": 1.2, "unit": "mm", "range": {"min": 1.14, "max": 1.26, "ratio": 0.05}, "parts": [{"id": 10, "title": "BRACKET"}],
+     "file": "material.inc", "line": 1, "element_overrides": 0, "part_overrides": [], "selectable": True},
+    {"id": 2, "title": "Cover", "type": "SHELL", "keyword": "/PROP/TYPE1", "supported": True, "parameter": "COVER_SHELL_T",
+     "thickness": 0.8, "unit": "mm", "range": {"min": 0.76, "max": 0.84, "ratio": 0.05},
+     "parts": [{"id": 11, "title": "COVER_A"}, {"id": 12, "title": "COVER_B"}], "file": "material.inc", "line": 9,
+     "element_overrides": 0, "part_overrides": [], "selectable": True},
+    {"id": 3, "title": "Panel", "type": "SHELL", "keyword": "/PROP/TYPE1", "supported": True, "parameter": "PANEL_SHELL_T",
+     "thickness": 2.0, "unit": "mm", "range": {"min": 1.9, "max": 2.1, "ratio": 0.05}, "parts": [{"id": 13, "title": "PANEL"}],
+     "file": "material.inc", "line": 17, "element_overrides": 2, "part_overrides": [], "selectable": False},
+    {"id": 4, "title": "Laminate", "type": "SH_ORTH", "keyword": "/PROP/TYPE9", "supported": False, "parameter": None,
+     "thickness": None, "unit": "mm", "range": None, "parts": [], "file": "material.inc", "line": 25, "element_overrides": 0,
+     "part_overrides": [], "selectable": False},
+]
+
+
+def do_props_scan():
+    assem = need("assem-dir")
+    out = args.get("out-dir") or sys.exit(2)
+    os.makedirs(out, exist_ok=True)
+    pj = os.path.join(out, "props.json")
+    exists_exit([pj])
+    progress(10, "scanning assembly folder for shell properties")
+    code = fails("props_scan")
+    if code:
+        print("PAICAD RESULT FAIL %s -" % code, flush=True)
+        sys.exit(EXIT.get(CATEGORY.get(code, "INTERNAL"), 20))
+    rows = json.loads(os.environ["FAKE_PAICAD_PROPS"]) if os.environ.get("FAKE_PAICAD_PROPS") else DEFAULT_PROPS
+    warnings = []
+    for r in rows:
+        if not r.get("supported"):
+            warnings.append({"code": "PROP_UNSUPPORTED_TYPE", "prop": r["id"], "message": "not supported"})
+        if r.get("element_overrides"):
+            warnings.append({"code": "PROP_OVERRIDDEN_BY_ELEMENT", "prop": r["id"], "message": "element thickness"})
+        if len(r.get("parts") or []) > 1:
+            warnings.append({"code": "PROP_SHARED_BY_PARTS", "prop": r["id"], "parts": [x["id"] for x in r["parts"]], "message": "shared"})
+    files = sorted({r["file"] for r in rows if os.path.isfile(os.path.join(assem, r["file"]))})
+    write_json(pj, dict(BASE, status="OK", kind="props", files=[{"rel": f, "sha256": "0" * 64} for f in files], props=rows,
+                        warnings=warnings, options={"range_ratio": 0.05}, elapsed_s=0.01))
+    progress(100, "props scan done")
+    finish("props.json", "OK", None, maybe_nonzero("props_scan"))
+
+
+def do_props_apply():
+    assem, vals_p, props_p = need("assem-dir"), need("values"), need("props")
+    out = args.get("out-dir") or sys.exit(2)
+    os.makedirs(out, exist_ok=True)
+    aj = os.path.join(out, "props_apply.json")
+    exists_exit([aj])
+    values = read_json(vals_p).get("values") or {}
+    by_name = {r["parameter"]: r for r in read_json(props_p).get("props", []) if r.get("parameter")}
+    unknown = sorted(set(values) - set(by_name))
+    if unknown:
+        print("unknown names: " + ", ".join(unknown), file=sys.stderr, flush=True)
+        print("PAICAD RESULT FAIL GEOM_INPUT_INVALID -", flush=True)
+        sys.exit(3)
+    code = fails("props_apply") or fail_when("props_apply", values)
+    if not code and any(v <= 0 for v in values.values()):
+        code = "PROP_THICKNESS_INVALID"
+    if not code and any(not os.path.isfile(os.path.join(assem, by_name[n]["file"])) for n in values):
+        code = "PROP_NOT_FOUND"
+    if code:
+        rc = fail_report("props apply", aj, code, {"applied": [], "files": []})
+        finish("props_apply.json", "FAIL", code, rc)
+    edits = {}
+    applied = []
+    for n, v in sorted(values.items()):
+        r = by_name[n]
+        edits.setdefault(r["file"], []).append((r["id"], v))
+        applied.append({"parameter": n, "prop": r["id"], "file": r["file"], "line": r.get("line"), "old": r.get("thickness"),
+                        "new": v, "changed": v != r.get("thickness")})
+    files = []
+    for rel, items in sorted(edits.items()):
+        with open(os.path.join(assem, rel), "rb") as fh:
+            data = fh.read()
+        data += "".join(f"#FAKE_PROP {pid} {v!r}\n" for pid, v in items).encode()
+        dst = os.path.join(out, rel)
+        os.makedirs(os.path.dirname(dst), exist_ok=True)
+        with open(dst, "wb") as fh:
+            fh.write(data)
+        files.append({"rel": rel, "sha256": hashlib.sha256(data).hexdigest(), "changed": True})
+    write_json(aj, dict(BASE, status="OK", code=None, category=None, message=None, applied=applied, files=files, elapsed_s=0.01))
+    progress(100, "props apply done")
+    finish("props_apply.json", "OK", None, maybe_nonzero("props_apply"))
+
+
+def _reps(doc):
+    groups = doc.get("groups") or []
+    members = {m for g in groups for m in g.get("members", [])}
+    reps = {g.get("parameter") for g in groups}
+    return [f for f in doc.get("features", []) if f["name"] in reps or f["name"] not in members]
+
+
+def do_map():
+    bl_path = need("baselines")
+    out = args.get("out-dir") or sys.exit(2)
+    usage = args.get("usage") or "topology"
+    split = args.get("split-param")
+    os.makedirs(out, exist_ok=True)
+    mj = os.path.join(out, "param_map.json")
+    exists_exit([mj])
+    if usage == "topology" and split:
+        print("PAICAD RESULT FAIL GEOM_INPUT_INVALID -", flush=True)
+        sys.exit(3)
+    code = fails("map")
+    if code:
+        print("PAICAD RESULT FAIL %s -" % code, flush=True)
+        sys.exit(3)
+    bl = read_json(bl_path)
+    order = [b["id"] for b in bl]
+    feats = {b["id"]: {f["name"]: f for f in _reps(read_json(b["features"]))} for b in bl}
+    names = []
+    for b in order:
+        for n in feats[b]:
+            if n not in names:
+                names.append(n)
+    grades = {}
+    for item in (os.environ.get("FAKE_PAICAD_MAP_GRADE") or "").split(","):
+        if ":" in item:
+            k, _, g = item.partition(":")
+            grades[k] = g
+    prev = {}
+    user = args.get("user-map")
+    if user:
+        for r in read_json(user).get("common") or []:
+            prev.setdefault(r.get("signature"), r.get("decision"))
+    common, warnings = [], []
+    for k, n in enumerate(names, 1):
+        m = {b: (n if n in feats[b] else None) for b in order}
+        complete = all(v is not None for v in m.values())
+        grade = grades.get(n) or ("recommend" if complete else "unmatched")
+        score = {"recommend": 0.93, "check": 0.58, "unmatched": 0.3}[grade]
+        ref = next(feats[b][n] for b in order if n in feats[b])
+        sig = "sha256:" + hashlib.sha256(json.dumps([n, sorted(b for b in order if m[b])]).encode()).hexdigest()
+        row = {"row_id": f"r{k}", "type": "thickness", "feature_type": ref.get("type"), "unit": "mm", "signature": sig,
+               "needs_review": False,
+               "proposed": {"name": n, "score": score, "grade": grade, "map": m,
+                            "nominal": {b: (feats[b][n]["nominal"] if n in feats[b] else None) for b in order},
+                            "group_size": 1, "candidates": []},
+               "decision": None}
+        if user is not None:
+            if sig in prev:
+                row["decision"] = prev[sig]
+            else:
+                row["needs_review"] = True
+        if grade == "check":
+            warnings.append({"code": "MAP_LOW_SCORE", "row_id": row["row_id"], "message": "low score"})
+        common.append(row)
+    range_split = None
+    if usage == "range" and split:
+        row = next((c for c in common if c["proposed"]["name"] == split), None)
+        if row is None or any(v is None for v in row["proposed"]["map"].values()):
+            print("PAICAD RESULT FAIL GEOM_INPUT_INVALID -", flush=True)
+            sys.exit(3)
+        range_split = {"param": split, "intervals": sorted(({"baseline": b, "nominal": row["proposed"]["nominal"][b]} for b in order),
+                                                            key=lambda d: (d["nominal"], d["baseline"]))}
+    write_json(mj, dict(BASE, map_status="OK", status="draft", confirmed_by=None, confirmed_at=None, usage=usage,
+                        baselines=[{"id": b["id"], "rel": b.get("rel")} for b in bl],
+                        discrete={"name": "baseline", "values": order} if usage == "topology" else None,
+                        range_split=range_split, common=common,
+                        map_options={"weights": {"pos": 0.35, "dim": 0.3, "ori": 0.15, "nbr": 0.2}, "sigma": 0.1, "accept": 0.7,
+                                     "warn": 0.5, "axis_deg": 10.0},
+                        warnings=warnings, elapsed_s=0.01))
+    progress(100, "map done")
+    finish("param_map.json", "OK", None, maybe_nonzero("map"))
+
+
+if cmd == "props_scan":
+    do_props_scan()
+elif cmd == "props_apply":
+    do_props_apply()
+elif cmd == "map":
+    do_map()
+elif cmd == "extract":
     do_extract()
 elif cmd == "tag":
     do_tag()

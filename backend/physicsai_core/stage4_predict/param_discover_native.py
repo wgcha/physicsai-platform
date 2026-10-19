@@ -110,7 +110,7 @@ def resolve_choice_native(d: Discovery, choice: dict[str, str | None]) -> tuple[
     for key, val, cands in (("cad", cad, d.cad), ("radioss_assem", assem, d.assem)):
         given = choice.get(key)
         if val is None and (cands or given is not None):
-            probs.append({"code": "CHOICE_INVALID" if given is not None else "CHOICE_REQUIRED",
+            probs.append({"code": "CHOICE_INVALID" if given is not None else "CHOICE_REQUIRED", "key": key,
                           "message": f"{key} 후보 {len(cands)}개 중 하나를 고르세요" if given is None
                           else f"고른 {key}({given})가 찾은 목록에 없습니다"})
     if assem is not None and not assem["has_renum_csv"]:
@@ -160,6 +160,26 @@ def copy_sources_native(d: Discovery, cad_rel: str, assem: dict[str, Any], dst: 
     for src, rel in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel) \
             + provided_parameters(root, cad_rel):
         total += _copy_src(root, root_real, src, os.path.join(dst, *rel.split("/")))
+    arel = assem["rel"]
+    adir = _recheck(root, root_real, arel)
+    for n in assem_files(adir, settings.predict.renum_csv_name):
+        total += _copy_src(root, root_real, _rel(arel, n), os.path.join(dst, "radioss_assem", n))
+    return total
+
+
+SHELL_ONLY_IGNORED = ("CAD_NOT_FOUND", "RENUM_CSV_MISSING")  # 쉘 두께 전용 세트(§11.1): STEP·번호 표 불필요
+
+
+def shell_only_problems(problems: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """쉘 두께 전용 등록에서 무시할 문제(STEP 없음·번호 표 없음·CAD 선택)를 뺀 목록."""
+    return [q for q in problems if q["code"] not in SHELL_ONLY_IGNORED and q.get("key") != "cad"]
+
+
+def copy_assem_native(d: Discovery, assem: dict[str, Any], dst: str, settings: Any) -> int:
+    """쉘 두께 전용 세트(§11.1): 조립 폴더만 dst/radioss_assem으로(재검사·핸들 복사, copy_sources_native와 같은 규칙)."""
+    root = d.root
+    root_real = real(root)
+    total = 0
     arel = assem["rel"]
     adir = _recheck(root, root_real, arel)
     for n in assem_files(adir, settings.predict.renum_csv_name):

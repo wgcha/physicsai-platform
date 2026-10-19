@@ -229,6 +229,10 @@ commands:
   paicad_check: ["{paicad}", "check", "--baseline-inc", "{baseline_inc}", "--morph-dir", "{morph_dir}", "--update-dir", "{update_dir}", "--tag-dir", "{tag_dir}", "--features", "{features_json}", "--values", "{values_json}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}", "--options", "{options_json}", "--out-dir", "{check_dir}", "--out-inc", "{out_inc}"]
   paicad_run: ["{paicad}", "run", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--baseline-inc", "{baseline_inc}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}", "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}", "--out-inc", "{out_inc}"]
   paicad_version: ["{paicad}", "version", "--json"]
+  # 단계 3S 쉘 두께(§11.1)·4B 다중 baseline(§7.3.8). --user-map·--split-param은 값이 없으면 인자 쌍째 생략
+  paicad_props_scan: ["{paicad}", "props", "scan", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
+  paicad_props_apply: ["{paicad}", "props", "apply", "--assem-dir", "{assem_dir}", "--values", "{values_json}", "--props", "{props_json}", "--out-dir", "{out_dir}"]
+  paicad_map: ["{paicad}", "map", "--baselines", "{baselines_json}", "--out-dir", "{map_out_dir}", "--user-map", "{user_map}", "--usage", "{usage}", "--split-param", "{split_param}", "--options", "{options_json}"]
 
 commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원본 2_run_hst_gen_rad_input.py:65-67)
   - '^\s*\d+\s+Error\s*:'

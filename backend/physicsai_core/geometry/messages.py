@@ -27,6 +27,7 @@ CODE_TABLE: dict[str, tuple[str, str]] = {
     "GEOM_OUTPUT_EXISTS": ("INPUT", "입력 오류(출력이 이미 있음)"),
     "RENUM_CSV_MISSING": ("INPUT", "입력 오류(번호 재지정 표 RENUM csv 없음)"),
     "PROP_OVERRIDDEN_BY_ELEMENT": ("PROP", "쉘 두께 무효(요소별 두께가 PROP을 덮어씀)"),
+    "PROP_OVERRIDDEN_BY_PART": ("PROP", "쉘 두께 무효(/PART 카드 두께가 PROP을 덮어씀)"),
     "PROP_THICKNESS_INVALID": ("PROP", "쉘 두께 ≤ 0 또는 범위 밖"),
     "PROP_NOT_FOUND": ("PROP", "지정한 PROP ID·필드를 찾지 못함"),
     "PARAM_NAME_CONFLICT": ("INPUT", "공통 변수 이름 충돌"),

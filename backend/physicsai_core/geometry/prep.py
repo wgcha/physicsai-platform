@@ -11,6 +11,7 @@ from typing import Any
 from ..fileutil import sha256_file as _sha256_file
 from .options import tag_options_sha256
 from .reports import same_major_minor
+from .shell import PROPS_JSON, SHELL_ONLY_KEY
 
 _SHA_CACHE: dict[tuple[str, int, int], str] = {}
 _SHA_CACHE_MAX = 512
@@ -77,10 +78,19 @@ def input_hashes(S: str, step_exts: list[str], mesh_include_name: str, renum_csv
 
 def prep_document(S: str, *, step_exts: list[str], mesh_include_name: str, renum_csv_name: str, opts: dict[str, Any],
                   engine_version: str | None, ocp_version: str | None, job_id: str | None, created_at: str,
-                  assem_dir: str | None = None) -> dict[str, Any]:
-    return {"schema_version": 1, "engine": "native", "engine_version": engine_version, "ocp_version": ocp_version,
-            "inputs": input_hashes(S, step_exts, mesh_include_name, renum_csv_name, assem_dir),
-            "tag_options_sha256": tag_options_sha256(opts), "created_at": created_at, "job_id": job_id}
+                  assem_dir: str | None = None, shell_only: bool = False) -> dict[str, Any]:
+    doc = {"schema_version": 1, "engine": "native", "engine_version": engine_version, "ocp_version": ocp_version,
+           "inputs": input_hashes(S, step_exts, mesh_include_name, renum_csv_name, assem_dir),
+           "tag_options_sha256": tag_options_sha256(opts), "created_at": created_at, "job_id": job_id}
+    if shell_only:  # 단계 3S 쉘 두께 전용 세트(§11.1): cad·extract·tag 없음, props.json만
+        doc[SHELL_ONLY_KEY] = True
+    return doc
+
+
+def is_shell_only(S: str) -> bool:
+    """쉘 두께 전용 세트(prep.json `shell_only: true`) — tag·update·morph·check를 생략한다(§11.1)."""
+    prep = _read_prep(S)
+    return bool(prep and prep.get(SHELL_ONLY_KEY))
 
 
 def _read_prep(S: str) -> dict[str, Any] | None:
@@ -97,14 +107,14 @@ def prep_state(S: str, *, step_exts: list[str], mesh_include_name: str, renum_cs
     """준비본 유효성(§4.2·§17.3): prep.json·features·tag.json 있음 + 입력 sha256 일치 + tag 옵션 sha256 일치 +
     engine_version MAJOR.MINOR 일치(현재 paicad 버전을 알 때만). 없음 → MISSING, 불일치 → STALE."""
     prep = _read_prep(S)
-    need = (FEATURES_JSON, TAG_JSON)
+    need = (PROPS_JSON,) if (prep and prep.get(SHELL_ONLY_KEY)) else (FEATURES_JSON, TAG_JSON)
     if prep is None or any(not os.path.isfile(os.path.join(S, n)) for n in need):
         return PrepState(MISSING, "형상 준비 파일(native/)이 없습니다 — 형상 준비를 다시 실행하세요")
     ver = prep.get("engine_version") if isinstance(prep.get("engine_version"), str) else None
     now = input_hashes(S, step_exts, mesh_include_name, renum_csv_name, assem_dir)
     if prep.get("inputs") != now:
         return PrepState(STALE, "형상 준비 이후 입력(STEP·기준 메시·번호 표)이 바뀌었습니다 — 형상 준비를 다시 하세요", ver)
-    if prep.get("tag_options_sha256") != tag_options_sha256(opts):
+    if not prep.get(SHELL_ONLY_KEY) and prep.get("tag_options_sha256") != tag_options_sha256(opts):
         return PrepState(STALE, STALE_MESSAGE_TAG, ver)
     if not same_major_minor(ver, current_engine_version):
         return PrepState(STALE, f"형상 엔진 버전이 바뀌었습니다({ver} → {current_engine_version}) — 형상 준비를 다시 하세요", ver)

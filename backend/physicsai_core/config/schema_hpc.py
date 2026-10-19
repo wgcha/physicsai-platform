@@ -52,6 +52,16 @@ class CommandsCfg(_M):
         "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}",
         "--out-inc", "{out_inc}"])
     paicad_version: list[str] | None = Field(default_factory=lambda: ["{paicad}", "version", "--json"])
+    # 단계 3S 쉘 두께(§11.1) — null이면 쉘 두께 파라미터 기능만 꺼짐
+    paicad_props_scan: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "props", "scan", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"])
+    paicad_props_apply: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "props", "apply", "--assem-dir", "{assem_dir}", "--values", "{values_json}", "--props", "{props_json}",
+        "--out-dir", "{out_dir}"])
+    # 단계 4B 다중 baseline 매칭 초안(§7.3.8) — null이면 baseline 추가·재매핑만 꺼짐
+    paicad_map: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "map", "--baselines", "{baselines_json}", "--out-dir", "{map_out_dir}", "--user-map", "{user_map}",
+        "--usage", "{usage}", "--split-param", "{split_param}", "--options", "{options_json}"])
 
 
 class HpcDefaultsCfg(_M):

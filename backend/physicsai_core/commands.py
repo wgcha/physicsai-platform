@@ -30,7 +30,8 @@ EXECUTABLE_PLACEHOLDERS: dict[str, str] = {
 }
 # 실행 파일 설정 키의 사용자 표시 이름(오류 문구용). 목록에 없으면 altair.<키>
 EXECUTABLE_CONFIG_NAME: dict[str, str] = {"paicad_path": "geometry.paicad_path"}
-PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version")
+PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version",
+               "paicad_props_scan", "paicad_props_apply", "paicad_map")
 
 
 def executable_config_name(exe_key: str) -> str:
@@ -104,7 +105,12 @@ _NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "paicad_check": _P({"paicad"} | _CHECK),
     "paicad_run": _P({"paicad"} | _UPD | _MORPH | _CHECK),
     "paicad_version": _P({"paicad"}),
+    # 단계 3S 쉘 두께(§11.1)·4B 다중 baseline(§7.3.8). {usage}·{split_param}은 경로가 아닌 값(map --usage·--split-param)
+    "paicad_props_scan": _P({"paicad", "assem_dir", "options_json", "out_dir"}),
+    "paicad_props_apply": _P({"paicad", "assem_dir", "values_json", "props_json", "out_dir"}),
+    "paicad_map": _P({"paicad", "baselines_json", "map_out_dir", "user_map", "usage", "split_param", "options_json"}),
 }
+_NON_PATH = {("paicad_map", "usage"), ("paicad_map", "split_param")}
 for _k, _ph in _NATIVE_PLACEHOLDERS.items():
     TEMPLATE_SPECS[_k] = TemplateSpec(_ph, frozenset(), False)
 
@@ -138,10 +144,13 @@ PATH_STYLE: dict[tuple[str, str], str] = {
 
 for _k, _ph in _NATIVE_PLACEHOLDERS.items():
     for _n in _ph - {"paicad"}:
-        PATH_STYLE[(_k, _n)] = "os"  # 모든 paicad 경로 인자는 OS 표기(§7.1)
+        if (_k, _n) not in _NON_PATH:
+            PATH_STYLE[(_k, _n)] = "os"  # 모든 paicad 경로 인자는 OS 표기(§7.1)
 
 # {renum_csv}가 없을 때 인자 쌍째 생략하는 (키, placeholder) → 옵션 이름(§7.3.1, 이 키·이 쌍 한정)
-OPTIONAL_PAIRS: dict[tuple[str, str], str] = {("paicad_extract", "renum_csv"): "--renum-csv"}
+OPTIONAL_PAIRS: dict[tuple[str, str], str] = {("paicad_extract", "renum_csv"): "--renum-csv",
+                                              # 4B map: 기존 param_map.json이 없으면 --user-map, range가 아니면 --split-param 생략(§7.3.8)
+                                              ("paicad_map", "user_map"): "--user-map", ("paicad_map", "split_param"): "--split-param"}
 
 # phase3 §14.6: commands.response_extract가 이 placeholder를 쓰면 원본 ⑤ m_4 방식(H3D_REQUESTS.txt → RESPONSES.txt)
 RESPONSE_EXTRACT_TCL_PLACEHOLDER = "extract_tcl"

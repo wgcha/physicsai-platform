@@ -101,7 +101,9 @@ def test_null_optional_templates_ok():
                                    "t01_curve_export", "hst_optimization",
                                    "contour_capture"} | {  # 3차(phase3 §15 S10)
         # native 형상 엔진(geometry-engine §7.1)
-        "paicad_version", "paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run"}
+        "paicad_version", "paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run",
+        # 단계 3S·4B(geometry-engine §11.1·§7.3.8)
+        "paicad_props_scan", "paicad_props_apply", "paicad_map"}
 
 
 def test_null_template_render_is_not_configured():

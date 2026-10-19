@@ -52,3 +52,24 @@ def skipped_document(code: str, english: str | None, step: str | None, report: s
     message = 한국어 표준 문구(§6.5, 영문 기술 메시지 덧붙임)."""
     return {"schema_version": 1, "engine": "native", "engine_version": engine_version, "code": code,
             "category": category_of(code, category), "message": korean_message(code, english), "step": step, "report": report}
+
+
+def doe_matrix_csv_multi(names: list[str], rows: list[tuple[int, str, str | None, dict[str, float | None]]]) -> str:
+    """다중 baseline DOE `D/doe_matrix.csv`(§7.3.8): `doe_no,run_key,baseline_id,<공통 이름…>`. N/A 칸·배정 없음은 빈 값."""
+    buf = io.StringIO()
+    w = csv.writer(buf, lineterminator="\n")
+    w.writerow(["doe_no", "run_key", "baseline_id", *names])
+    for doe_no, run_key, bid, vals in rows:
+        w.writerow([doe_no, run_key, bid or "", *["" if vals.get(n) is None else repr(float(vals[n])) for n in names]])  # type: ignore[arg-type]
+    return buf.getvalue()
+
+
+def read_doe_matrix(text: str) -> list[tuple[int, str, str | None, dict[str, float | None]]]:
+    """doe_matrix.csv(단일·다중 공용) → [(doe_no, run_key, baseline_id|None, {이름: 값|None})]."""
+    rd = csv.DictReader(io.StringIO(text))
+    names = [h for h in (rd.fieldnames or []) if h not in ("doe_no", "run_key", "baseline_id")]
+    out = []
+    for r in rd:
+        out.append((int(r["doe_no"]), r["run_key"], (r.get("baseline_id") or None),
+                    {n: (float(r[n]) if (r.get(n) or "").strip() else None) for n in names}))
+    return out
