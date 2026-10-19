@@ -62,6 +62,10 @@ def _feature_checks(ctx: AppContext) -> str:
 
 def _rebuild_checks(ctx: AppContext, r: Resolved) -> None:
     s = ctx.settings
+    if r.mesh_native or (r.companion is not None and (r.param_set or {}).get("engine") == "native"):
+        if r.companion is None and not r.mesh_available:  # native: 모핑 include를 그대로 쓰므로 메시 변환 명령 불필요
+            r.problem("MESH_MISSING", "예측 폴더에 모핑한 형상 include가 없습니다(정리됨 또는 준비된 입력)")
+        return
     if s.commands.mesh is None:
         raise DomainError("TEMPLATE_NOT_CONFIGURED", "메시 변환 명령 템플릿(mesh)이 설정되지 않았습니다", status=409,
                           template="mesh")
@@ -172,6 +176,8 @@ def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[s
         assem_out = {"kind": "CUSTOM", "label": "직접 지정", "path": path}
     if input_mode == "rebuild":
         _rebuild_checks(ctx, r)
+        if ((r.predict_job or {}).get("result") or {}).get("shell_values"):  # 3S: 재조립은 조립 원본 그대로(두께 미적용)
+            r.warn("SHELL_NOT_APPLIED", "이 예측의 쉘 두께 값은 재조립 입력에 적용되지 않습니다 — 예측 입력 그대로(reuse)를 쓰세요")
         if assem_path and assem_out is not None:
             pl = fem_assembly.plan_assembly(assem_path, s)
             r.problems.extend(pl["problems"])

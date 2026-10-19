@@ -128,7 +128,7 @@ def media_file(ctx: AppContext, artifact_id: str) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         rows = media_repo.artifacts_by_ids(conn, [artifact_id])
         a = rows.get(artifact_id)
-        if a is None or a["kind"] not in cc.MEDIA_KINDS:
+        if a is None or a["kind"] not in cc.MEDIA_KINDS + ("FEATURE_PNG",):  # geometry-engine.md §7.6: 피처 하이라이트 PNG도 이 경로
             raise DomainError("NOT_FOUND", "컨투어 파일을 찾을 수 없습니다", status=404)
         s = studies_repo.require(conn, a["study_id"])
     if a["content_type"] not in MEDIA_TYPES:

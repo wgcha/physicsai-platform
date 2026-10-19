@@ -46,6 +46,7 @@ class Resolved:
     out_of_range: list[str] = field(default_factory=list)
     mesh_rel: str | None = None  # 메시 원천(Study 기준). 동반 예측이면 생성 뒤에 정해진다
     mesh_available: bool = False
+    mesh_native: bool = False  # native 세트: 메시 원천 = 모핑 include(재조립에 HyperMesh 변환 불필요, geometry-engine.md §7.3.5)
     input_rel: str | None = None  # P/INPUT(predict_input 원본)
     starter: str | None = None  # P의 starter
     problems: list[dict[str, str]] = field(default_factory=list)
@@ -95,7 +96,8 @@ def _fill_from_predict(ctx: AppContext, conn: Any, study: dict[str, Any], r: Res
             r.template_kind = b["input_kind"]
     elif p.get("input_mode") != "prepared":
         r.template_kind = res.get("template_kind") or p.get("template_kind") or (template_kind(r.param_set) if r.param_set else None)
-    r.mesh_rel = fem_assembly.mesh_source_rel(j, root, ctx.settings, batch_dir_rel=batch_dir, run_key=run_key)
+    r.mesh_native = (r.param_set or {}).get("engine") == "native"
+    r.mesh_rel = fem_assembly.mesh_source_rel(j, root, ctx.settings, batch_dir_rel=batch_dir, run_key=run_key, native=r.mesh_native)
     r.mesh_available = bool(r.mesh_rel) and os.path.isfile(resolve_in_study(sroot, r.mesh_rel))  # type: ignore[arg-type]
     inp = f"04_predict/{root}/INPUT"
     r.input_rel = inp if os.path.isdir(resolve_in_study(sroot, inp)) else None

@@ -188,13 +188,15 @@ def check_custom_path(raw: object, settings: Any) -> tuple[str, str]:
 
 
 def mesh_source_rel(predict_job: dict[str, Any], root_id: str, settings: Any, *, batch_dir_rel: str | None = None,
-                    run_key: str | None = None) -> str | None:
+                    run_key: str | None = None, native: bool = False) -> str | None:
     """재조립용 메시 원천(Study 기준 '/' 상대경로, §21.3.2 표). parametric: `04_predict/<root>/geom/{simlab_mesh_name}`,
-    일괄 하위(prepared + batch_run): `B/run__N/m_1/{simlab_mesh_name}`, 그 밖 prepared: None."""
-    mesh = settings.predict.simlab_mesh_name
+    일괄 하위(prepared + batch_run): `B/run__N/m_1/{simlab_mesh_name}`, 그 밖 prepared: None.
+    native 세트(geometry-engine.md §7.3.5·§7.3.6): 모핑·검사를 통과한 include 자체 — `geom/{mesh_include_name}`·
+    `B/run__N/m_2/{mesh_include_name}`(HyperMesh 변환 불필요)."""
+    mesh = settings.predict.mesh_include_name if native else settings.predict.simlab_mesh_name
     p = predict_job.get("params") or {}
     if p.get("input_mode") != "prepared":
         return f"04_predict/{root_id}/geom/{mesh}"
     if isinstance(p.get("batch_run"), dict) and batch_dir_rel and run_key:
-        return f"{batch_dir_rel}/{run_key}/m_1/{mesh}"
+        return f"{batch_dir_rel}/{run_key}/{'m_2' if native else 'm_1'}/{mesh}"
     return None

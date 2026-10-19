@@ -142,6 +142,17 @@ def _weights(body: Any, m: int, problems: list[dict[str, Any]]) -> list[float]:
     return [x / tot for x in w]
 
 
+def _no_multi_baseline(ctx: AppContext, ps: dict[str, Any]) -> None:
+    """내장 최적화는 표(table) 조합 배치로 형상을 만들므로 다중 baseline 세트(baseline별 층화·배정, §7.3.8)는 지원하지 않는다."""
+    from physicsai_core.geometry import baselines as bl
+
+    from .param_set_native_api import set_path
+
+    if bl.is_multi(set_path(ctx, ps)):
+        raise DomainError("MULTI_BASELINE_UNSUPPORTED", "다중 baseline 세트는 내장 최적화를 지원하지 않습니다 — 단일 baseline 세트를 쓰세요",
+                          status=409, param_set_id=ps["id"])
+
+
 def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[str, Any]:
     """사전조건(409)과 설정 정규화. 반환: {ps, model, kind, settings, problems, free, integer, fixed, explore_count,
     reuse, valid_points, performances}."""
@@ -154,6 +165,7 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     check_engine_match(ps, m)  # geometry-engine.md §7.7: 세트·모델 엔진 일치(409 ENGINE_MISMATCH)
     if engine_of(ps) == "native":
         native_set_gate(ctx, ps)
+        _no_multi_baseline(ctx, ps)
     else:
         require_template_features(cfg, kind)
     problems: list[dict[str, Any]] = []

@@ -67,7 +67,18 @@ def _sha256(path: str) -> str:
     return h.hexdigest()
 
 
-def _mesh_source(ctx: Any, pj: dict[str, Any], root: str) -> str | None:
+def _is_native(ctx: Any, pj: dict[str, Any]) -> bool:
+    psid = (pj.get("params") or {}).get("param_set_id")
+    if not psid:
+        return False
+    from physicsai_core.db.repositories import param_sets as ps_repo
+
+    with ctx.ex.engine.connect() as conn:
+        ps = ps_repo.get(conn, psid)
+    return (ps or {}).get("engine") == "native"
+
+
+def _mesh_source(ctx: Any, pj: dict[str, Any], root: str, native: bool = False) -> str | None:
     batch_dir = run_key = None
     ref = pb_repo.batch_run_ref(pj)
     if ref is not None:
@@ -76,7 +87,7 @@ def _mesh_source(ctx: Any, pj: dict[str, Any], root: str) -> str | None:
             run = next((x for x in pb_repo.runs(conn, ref[0]) if x["doe_no"] == ref[1]), None)
         if b is not None and run is not None:
             batch_dir, run_key = b["dir_rel"], run["run_key"]
-    rel = fem_assembly.mesh_source_rel(pj, root, ctx.settings, batch_dir_rel=batch_dir, run_key=run_key)
+    rel = fem_assembly.mesh_source_rel(pj, root, ctx.settings, batch_dir_rel=batch_dir, run_key=run_key, native=native)
     return ctx.abs(rel) if rel else None
 
 
@@ -113,8 +124,10 @@ def fv_prep(ctx: Any) -> None:
     res: dict[str, Any] = {"fv_rel": ctx.rel(A), "attempt": n, "input_mode": r["input_mode"], "assem_files": []}
     assem_info: dict[str, Any] = {"kind": r["assem_kind"], "path": None, "files": []}
     if r["input_mode"] == "rebuild":
-        src = _mesh_source(ctx, pj, root)
-        mesh_name = s.predict.simlab_mesh_name
+        native = _is_native(ctx, pj)  # native: 모핑 include를 A/mesh/<include>로(FV_MESH 생략, geometry-engine.md §7.3.5)
+        src = _mesh_source(ctx, pj, root, native)
+        mesh_name = s.predict.mesh_include_name if native else s.predict.simlab_mesh_name
+        res["mesh_native"] = native
         if not src or not os.path.isfile(src):
             raise StepFailure("INPUT_MISSING", "예측 폴더에 형상 메시가 없습니다(정리됨 또는 준비된 입력)")
         copy_file(src, os.path.join(A, "mesh", mesh_name), checkpoint=ctx.checkpoint)
@@ -178,6 +191,8 @@ def fv_mesh(ctx: Any) -> None:
     res = ctx.result()
     if res.get("input_mode") != "rebuild":
         raise StepSkipped(REUSE_SKIP)
+    if res.get("mesh_native"):
+        raise StepSkipped("native 모핑 include 재사용")
     s = ctx.settings
     if s.commands.mesh is None:
         raise StepFailure("TEMPLATE_NOT_CONFIGURED", "메시 변환 명령 템플릿(mesh)이 설정되지 않았습니다")
