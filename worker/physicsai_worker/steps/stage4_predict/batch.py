@@ -31,17 +31,11 @@ from physicsai_core.stage4_predict.batch_matrix import (
 from physicsai_core.tpl_render import render_tpl
 
 from ...signals import StepSkipped
+from .. import run_chain
 from ..common import hst_run_label, load_model, verify_model_integrity
-from .predict_inputs import (
-    LOG_BATCH,
-    MESH_ONLY,
-    assemble_into,
-    judge_output,
-    mesh_log_warning,
-    mesh_preflight,
-)
+from .predict_inputs import MESH_ONLY
 
-M1, M2, M3 = "m_1", "m_2", "m_3"
+M1 = "m_1"  # run 폴더 하위 이름(run_chain.M1과 같음)
 
 
 # ---- 공용 ----------------------------------------------------------------------------------------
@@ -139,57 +133,17 @@ def bp_prep(ctx: Any) -> None:
 
 
 def _gen_one(ctx: Any, b: dict[str, Any], ps: dict[str, Any], S: str, B: str) -> Callable[[Any, dict[str, Any]], None]:
-    """run 1개 입력 생성(작업 스레드에서 실행). 실패는 StepFailure로 — run_parallel이 그 run만 실패로 기록."""
+    """run 1개 입력 생성(작업 스레드에서 실행). 실패는 StepFailure로 — run_parallel이 그 run만 실패로 기록.
+    체인(m_1 → m_2 → m_3)은 공용 `run_chain.build_run_inputs`(phase3 §23.6, ① 플랫폼 DOE와 같은 함수)."""
     s = ctx.settings
-    pr = s.predict
     assembly = b["input_kind"] != MESH_ONLY
     assem = os.path.join(S, "radioss_assem")
 
     def gen(runner: Any, r: dict[str, Any]) -> None:
         run_dir = os.path.join(B, r["run_key"])
-        m1, m2, m3 = (os.path.join(run_dir, x) for x in (M1, M2, M3))
         _set_run(ctx, b, r["doe_no"], gen_state="RUNNING", gen_code=None, gen_message=None)
-        simlab_mesh = os.path.join(m1, pr.simlab_mesh_name)
-        v = {"rendered_script": os.path.join(m1, pr.rendered_script_name), "cad_file": os.path.join(m1, ps["cad_file_name"]),
-             "work_dir": m1, "include_tcl": s.resources.hypermesh_include_tcl, "simlab_mesh": simlab_mesh,
-             "mesh_inc": os.path.join(m2, pr.mesh_include_name), "renum_csv": os.path.join(assem, pr.renum_csv_name)}
-        # m_1: SimLab 형상 갱신·메싱(cwd m_1) — 성공 = EPS_mesh_0000.rad(§11.4)
-        rc = runner.run("geom_update", v, cwd=m1, outputs_to_backup=[simlab_mesh])
-        w = judge_output(rc, simlab_mesh, "형상 갱신", runner.last_line)
-        if w:
-            runner.warn(*w)
-        if not assembly:
-            input_path = simlab_mesh  # mesh_only: m_1 메시가 곧 예측 입력(§14.3 input_rel)
-        else:
-            if s.commands.mesh is not None:  # m_2: HyperMesh include 변환(cwd m_2)
-                os.makedirs(m2, exist_ok=True)
-                for w in mesh_preflight(s, v["renum_csv"]):
-                    runner.warn(*w)
-                v2 = {**v, "work_dir": m2}
-                log_batch = os.path.join(m2, LOG_BATCH)
-                rc = runner.run("mesh", v2, cwd=m2, outputs_to_backup=[v["mesh_inc"], log_batch])
-                text = ""
-                if os.path.isfile(log_batch):
-                    with open(log_batch, encoding="utf-8", errors="replace") as fh:
-                        text = fh.read()
-                w = mesh_log_warning(s, text)
-                if w:
-                    runner.warn(*w)
-                w = judge_output(rc, v["mesh_inc"], "메시 변환", runner.last_line)
-                if w:
-                    runner.warn(*w)
-                new_inc = v["mesh_inc"]
-            else:  # MESH null: SimLab이 include를 직접 작성(cwd m_1)
-                new_inc = os.path.join(m1, pr.mesh_include_name)
-            # m_3: 조립 폴더 사본 + 새 include(RAD_ASSEMBLE ①~④). 재시도로 남은 이전 내용은 _backup(D3-36과 같은 이유)
-            if os.path.isdir(m3) and os.listdir(m3):
-                with runner.pool.fs_lock:
-                    ctx.backup([m3])
-            os.makedirs(m3, exist_ok=True)
-            _starter, warns = assemble_into(s, assem, new_inc, m3, checkpoint=runner.check)
-            for w in warns:
-                runner.warn(*w)
-            input_path = m3
+        input_path = run_chain.build_run_inputs(runner, s, run_dir=run_dir, cad_file_name=ps["cad_file_name"],
+                                                assem_dir=assem, assembly=assembly, param_set=ps)
         # 하위 PREDICT(prepared)가 PR_PREP에서 다시 하는 검사를 여기서 먼저(실패면 생성 실패로)
         try:
             cp = prepared_input.check_path(input_path, s)
@@ -202,17 +156,6 @@ def _gen_one(ctx: Any, b: dict[str, Any], ps: dict[str, Any], S: str, B: str) ->
         _set_run(ctx, b, r["doe_no"], gen_state="DONE", gen_code=None, gen_message=None)
 
     return gen
-
-
-def _aggregate_warnings(ctx: Any, outcomes: list[Any]) -> None:
-    """run별 경고를 코드마다 1건으로(200 run이 같은 경고를 반복하지 않게)."""
-    by_code: dict[str, list[tuple[str, str]]] = {}
-    for o in outcomes:
-        for code, msg in o.warnings:
-            by_code.setdefault(code, []).append((o.item_id, msg))
-    for code, items in by_code.items():
-        keys = sorted({k for k, _ in items})
-        ctx.add_warning(code, f"run {len(keys)}개({', '.join(keys[:5])}{' …' if len(keys) > 5 else ''}): {items[0][1]}"[:480])
 
 
 def bp_gen(ctx: Any) -> None:
@@ -248,7 +191,7 @@ def bp_gen(ctx: Any) -> None:
     failed = [o for o in outcomes if not o.ok]
     for o in failed:
         _set_run(ctx, b, by_key[o.item_id]["doe_no"], gen_state="FAILED", gen_code=o.code, gen_message=o.message)
-    _aggregate_warnings(ctx, outcomes)
+    run_chain.aggregate_warnings(ctx, outcomes)
     ctx.patch_result({"gen_done": n - len(failed), "gen_failed": [{"run_key": o.item_id, "code": o.code, "message": o.message}
                                                                     for o in failed][:200],
                       "multi_execution": m})

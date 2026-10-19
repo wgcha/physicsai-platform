@@ -1,4 +1,4 @@
-"""① 학습데이터 생성 테이블: train_setups·train_does·train_runs(phase2 §5)."""
+"""① 학습데이터 생성 테이블: train_setups·train_does·train_runs(phase2 §5)·train_doe_points(phase3 §23.7)."""
 
 from __future__ import annotations
 
@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    PrimaryKeyConstraint,
     String,
     Table,
     UniqueConstraint,
@@ -64,9 +65,32 @@ train_does = Table(
     Column("created_by", String, nullable=False),
     Column("created_by_name", String, nullable=False),
     Column("created_at", TS, nullable=False, server_default=func.now()),
+    # phase3 §23.7 S18(0015): 생성 방식(HYPERSTUDY = 원본 hstbatch, PLATFORM = run_parallel)·플랫폼 표본 {kind, input, meta}
+    Column("generator", String(16), nullable=False, server_default="HYPERSTUDY"),
+    Column("sampling", JSONB, nullable=True),
     CheckConstraint("sample_status IN ('PARSED','PARTIAL','MISSING','PENDING')", name="ck_train_does_sample_status"),
     CheckConstraint("status IN ('BUILDING','READY','FAILED')", name="ck_train_does_status"),
+    CheckConstraint("generator IN ('HYPERSTUDY','PLATFORM')", name="ck_train_does_generator"),
 )
+
+# phase3 §23.7 S18(0015): 플랫폼 DOE run별 표본 값·입력 생성 상태(수치·상태만, 파일 본문 없음)
+train_doe_points = Table(
+    "train_doe_points",
+    metadata,
+    Column("doe_id", ID, ForeignKey("train_does.id"), nullable=False),
+    Column("doe_no", Integer, nullable=False),
+    Column("run_key", String(64), nullable=False),
+    Column("values", JSONB, nullable=False),
+    Column("applied_values", JSONB, nullable=False),
+    Column("gen_state", String(16), nullable=False, server_default="PENDING"),
+    Column("gen_code", String(64), nullable=True),
+    Column("gen_message", String(480), nullable=True),
+    Column("updated_at", TS, nullable=False, server_default=func.now()),
+    PrimaryKeyConstraint("doe_id", "doe_no", name="pk_train_doe_points"),
+    UniqueConstraint("doe_id", "run_key", name="uq_train_doe_points_run"),
+    CheckConstraint("gen_state IN ('PENDING','RUNNING','DONE','FAILED')", name="ck_train_doe_points_gen_state"),
+)
+Index("ix_train_doe_points_state", train_doe_points.c.doe_id, train_doe_points.c.gen_state)
 
 train_runs = Table(
     "train_runs",

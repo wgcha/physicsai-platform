@@ -57,7 +57,12 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
         "limits": {
             "configured": {"cores": s.worker.max_logical_cores, "memory_gb": s.worker.max_memory_gb,
                            "priority": s.worker.priority, "auto_detect": s.worker.auto_detect,
-                           "max_multi_execution": s.train_data.max_multi_execution},
+                           "max_multi_execution": s.train_data.max_multi_execution,
+                           # S18 §23.4: ①-3 생성 방식 화면 기본·플랫폼 동시 수 기본(실제 = min(값, max_multi_execution))·run 상한
+                           "doe_generator_default": s.train_data.doe_generator_default,
+                           "doe_platform_parallel_default": min(s.train_data.platform_parallel_default,
+                                                                s.train_data.max_multi_execution),
+                           "doe_platform_max_runs": s.train_data.platform_max_runs},
             "detected": {"cores": eff.get("detected_cores"), "memory_gb": eff.get("detected_memory_gb")} if eff else None,
             "effective": {k: eff.get(k) for k in ("cores", "cpu_rate", "memory_gb", "priority", "cpu_cap_enforced")} if eff else None,
         },

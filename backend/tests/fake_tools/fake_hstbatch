@@ -5,6 +5,8 @@ cwd의 INPUT_HST_RUN.json 필수 키 확인(없으면 5), 런처·pyd 확인, DO
 approaches/doe_1/run__0000k/m_3/<starter>, m_1/simlab_parametered_mesh.py(paramitem 렌더)로 생성하고
 'Finished run (k), model (m_3)'을 출력한다.
 모드(FAKE_TOOL_MODE_HSTBATCH > FAKE_TOOL_MODE): ok | fail | error_log | no_runs | partial_samples | hang
+FAKE_HST_LAYOUT=server(이슈 #7, 실제 서버 출력 구조): run 상위 = HST_GEN_RADIOSS_INPUT/approaches/doe_1, m_1·m_2에 EPS_mesh_0000.rad,
+공칭 run HST_GEN_RADIOSS_INPUT/approaches/setup_1-def/run__00001(m_3 starter 포함 — 제외되어야 함)·reports/doe_1도 만든다.
 """
 import glob, json, os, re, subprocess, sys, time
 
@@ -45,10 +47,23 @@ decl = re.findall(r'\{parameter\((var_\d+), "([^"]+)", ([^,]+), ([^,]+), ([^)]+)
 fmts = dict(re.findall(r'NewValue="\{(var_\d+), (%[^}]+)\}"', tpl))
 starters = [n for n in os.listdir(cfg["RADIOSS_ASSEM_DIR"]) if n.endswith("_0000.rad") and not n.lower().startswith("eps_mesh")]
 n = 0 if m == "no_runs" else int(cfg["DOE_NUM_RUNS"])
+server = os.environ.get("FAKE_HST_LAYOUT") == "server"
+base = os.path.join("HST_GEN_RADIOSS_INPUT", "approaches") if server else "approaches"
+if server:
+    nom = os.path.join(base, "setup_1-def", "run__00001")
+    for sub in ("m_1", "m_2", "m_3"):
+        os.makedirs(os.path.join(nom, sub), exist_ok=True)
+    for s in starters:
+        open(os.path.join(nom, "m_3", s), "w").write("#nominal\n")
+    os.makedirs(os.path.join("HST_GEN_RADIOSS_INPUT", "reports", "doe_1"), exist_ok=True)
 for k in range(1, n + 1):
-    rd = os.path.join("approaches", "doe_1", f"run__{k:05d}")
+    rd = os.path.join(base, "doe_1", f"run__{k:05d}")
     os.makedirs(os.path.join(rd, "m_3"), exist_ok=True)
     os.makedirs(os.path.join(rd, "m_1"), exist_ok=True)
+    if server:
+        os.makedirs(os.path.join(rd, "m_2"), exist_ok=True)
+        for sub in ("m_1", "m_2"):
+            open(os.path.join(rd, sub, "EPS_mesh_0000.rad"), "w").write("#RADIOSS STARTER\n")
     for s in starters:
         with open(os.path.join(rd, "m_3", s), "w") as fh:
             fh.write("#include eps_mesh_1.inc\n")

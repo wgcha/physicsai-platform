@@ -2,12 +2,50 @@
 
 from __future__ import annotations
 
+import fnmatch
 import re
+from collections.abc import Callable
+from typing import Any
 
 from .rules import _compile
 from .schema import ConfigIssue, Settings
 from .schema_capture import validate_capture
 from .schema_ops import ENV_PROBE_TOOLS
+
+
+def _glob_parts_match(parts: list[str], pattern: list[str]) -> bool:
+    """폴더 단위 glob 일치(glob.glob과 같게 `*`가 '/'를 넘지 않음, `**` 미지원)."""
+    return len(parts) == len(pattern) and all(fnmatch.fnmatchcase(p, q) for p, q in zip(parts, pattern))
+
+
+def _validate_doe_platform(td: Any, add: Callable[[str, str], None]) -> None:
+    """S18 ① 플랫폼 DOE 생성 설정(phase3 §23.8): 방식 이름, 동시 수·run 상한 범위, run 폴더 상위가 run_dir_glob과 맞는지."""
+    if td.doe_generator_default not in ("platform", "hyperstudy"):
+        add("train_data.doe_generator_default", "platform | hyperstudy")
+    if not 1 <= td.platform_parallel_default <= 64:
+        add("train_data.platform_parallel_default", "1~64")
+    if not 2 <= td.platform_max_runs <= td.max_runs:
+        add("train_data.platform_max_runs", f"2~train_data.max_runs({td.max_runs})")
+    root = str(td.platform_run_root)
+    parts = root.replace("\\", "/").split("/")
+    if (not root or root.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", root)
+            or not all(re.fullmatch(r"[A-Za-z0-9_\-.]{1,64}", x) and x not in (".", "..") and not x.endswith(".")
+                       for x in parts)):
+        add("train_data.platform_run_root", "DOE 폴더 기준 상대 폴더여야 합니다(절대경로·'..'·공백 불가)")
+    elif not any(_glob_parts_match(parts + ["run__00001"], g.replace("\\", "/").split("/")) for g in td.run_dir_globs()):
+        add("train_data.platform_run_root",
+            f"'{root}/run__00001'이 train_data.run_dir_glob({', '.join(td.run_dir_globs())}) 중 어느 것과도 맞지 않습니다")
+
+
+def _validate_run_dir_globs(td: Any, add: Callable[[str, str], None]) -> None:
+    """run_dir_glob(문자열 또는 목록, 이슈 #7): 1개 이상, 각 패턴은 D 기준 상대(절대·'..'·빈 조각 불가)."""
+    globs = td.run_dir_globs()
+    if not globs:
+        add("train_data.run_dir_glob", "패턴이 1개 이상 필요합니다")
+    for g in globs:
+        parts = g.replace("\\", "/").split("/")
+        if not g or g.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", g) or any(x in ("", ".", "..") for x in parts):
+            add("train_data.run_dir_glob", f"DOE 폴더 기준 상대 패턴이어야 합니다: {g!r}")
 
 
 def _validate_phase2(s: Settings, issues: list[ConfigIssue]) -> None:
@@ -44,6 +82,8 @@ def _validate_phase2(s: Settings, issues: list[ConfigIssue]) -> None:
         add("train_data.result_match_depth", "1 이상")
     if td.max_runs_per_submit < 1:
         add("train_data.max_runs_per_submit", "1 이상")
+    _validate_run_dir_globs(td, add)
+    _validate_doe_platform(td, add)
     if not re.fullmatch(r"[A-Za-z0-9_\-]{1,64}", s.optimize.default_study_folder):
         add("optimize.default_study_folder", "^[A-Za-z0-9_-]{1,64}$")
     for i, sp in enumerate(s.optimize.summary_parsers):

@@ -48,6 +48,9 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
     jt = job["job_type"]
     if jt == "TD_DOE_GEN":
         train_repo.fail_building_doe(conn, job["id"])
+        did = (job.get("params") or {}).get("doe_id")
+        if isinstance(did, str) and did:  # phase3 §23.5: 플랫폼 run RUNNING → PENDING(워커가 못 쓴 lease 상실·리퍼 경로)
+            train_repo.reset_running_points(conn, did)
     elif jt in ("CU_H3D_CURATE", "CU_T01_CURVES"):
         cur_repo.fail_building_curation(conn, job["id"])
     elif jt == "SPDM_IMPORT":

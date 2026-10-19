@@ -22,6 +22,7 @@ from physicsai_core.stage4_predict import prepared_input
 from physicsai_core.stage4_predict.prepared_input import CopyPlan, is_mesh_file
 
 from ...signals import StepSkipped
+from .. import run_chain  # 모듈 참조(호출 시점 속성 조회) — run_chain이 이 모듈을 import하므로 순환을 피한다
 
 PREPARED_SKIP = "준비된 입력 — 해당 없음"
 MESH_ONLY_SKIP = "쿠션 단독 템플릿 — 메시 연결 불필요"
@@ -126,8 +127,10 @@ def geom_update(ctx: Any) -> None:
         raise StepFailure("TEMPLATE_NOT_CONFIGURED", "형상 갱신 명령 템플릿(geom_update)이 설정되지 않았습니다")
     ps, S = require_param_set(ctx)
     v = _geom_values(ctx, ps, S)
-    rc = ctx.run_local("geom_update", v, cwd=v["work_dir"], outputs_to_backup=[v["simlab_mesh"]], allow_nonzero_exit=True)
-    _judge_output(ctx, rc, v["simlab_mesh"], "형상 갱신")
+    # 형상 생성 경계는 run_chain.geometry_update 한 곳(phase3 §23.6) — ctx 어댑터로 같은 판정(§11.4)
+    out = run_chain.geometry_update(run_chain.CtxRunner(ctx), ctx.settings, work_dir=v["work_dir"],
+                                    rendered_script=v["rendered_script"], cad_file=v["cad_file"])
+    ctx.add_output(out)
 
 
 def _append_log_batch(ctx: Any, path: str) -> str:

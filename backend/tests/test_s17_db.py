@@ -68,7 +68,7 @@ def _fixture(c) -> dict:
 def test_v3_s17_1_migration_0014_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0014_multiobj"
+    assert MIGRATION_HEAD == "0015_doe_platform_gen"
     name = f"physicsai_m14_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -86,9 +86,9 @@ def test_v3_s17_1_migration_0014_roundtrip(pg_server):
         with pytest.raises(IntegrityError), eng.begin() as c:  # 0014 전에는 EXTRA 거부
             c.execute(text("insert into surrogate_opt_iters(opt_id, iter_no, kind, batch_id) values (:o,1,'EXTRA',:b)"),
                       {"o": fx["o"], "b": fx["b"]})
-        _up(url, "head")
+        _up(url, mod.revision)  # S18부터 head ≠ 0014 — 0014까지만 올려 왕복 확인
         with eng.begin() as c:
-            assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
+            assert c.execute(text("select version_num from alembic_version")).scalar() == mod.revision
             row = c.execute(text("select kind, best_value, hv, front_size, predicted_front from surrogate_opt_iters"
                                  " where opt_id=:o"), {"o": fx["o"]}).one()
             assert tuple(row) == ("EXPLORE", 1.5, None, None, None)  # 기존 행 보존, 새 열 NULL
@@ -104,7 +104,7 @@ def test_v3_s17_1_migration_0014_roundtrip(pg_server):
         with pytest.raises(RuntimeError, match="EXTRA"):  # 데이터 보존
             _down(url, "-1")
         with eng.begin() as c:
-            assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
+            assert c.execute(text("select version_num from alembic_version")).scalar() == mod.revision
             c.execute(text("delete from surrogate_opt_iters where kind='EXTRA'"))
         _down(url, "-1")
         with eng.begin() as c:

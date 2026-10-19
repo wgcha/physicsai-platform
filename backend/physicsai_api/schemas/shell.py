@@ -69,6 +69,7 @@ class StatusFeatures(Resp):
     train_extract: FeatureState
     train_tpl: FeatureState
     train_doe: FeatureState
+    train_doe_platform: FeatureState | None = None  # S18 §23.8 ① 플랫폼 DOE 생성(geom_update + simlab)
     train_solve: FeatureState
     train_import: FeatureState
     train_resp: FeatureState

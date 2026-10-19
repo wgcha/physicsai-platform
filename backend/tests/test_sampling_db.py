@@ -69,7 +69,7 @@ def test_v3_s15_9_check_allows_ten_kinds_rejects_foo(engine):
 def test_v3_s15_9_migration_0012_keeps_existing_rows(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0014_multiobj"
+    assert MIGRATION_HEAD == "0015_doe_platform_gen"
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

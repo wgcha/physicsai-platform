@@ -11433,6 +11433,16 @@
           "train_doe": {
             "$ref": "#/components/schemas/FeatureState"
           },
+          "train_doe_platform": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "train_extract": {
             "$ref": "#/components/schemas/FeatureState"
           },
@@ -13099,6 +13109,25 @@
             "title": "Doe Type",
             "type": "string"
           },
+          "gen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainDoeGenCounts"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "generator": {
+            "default": "hyperstudy",
+            "enum": [
+              "platform",
+              "hyperstudy"
+            ],
+            "title": "Generator",
+            "type": "string"
+          },
           "has_run_responses": {
             "title": "Has Run Responses",
             "type": "boolean"
@@ -13164,6 +13193,16 @@
             "title": "Sample Status",
             "type": "string"
           },
+          "sampling": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainDoeSampling"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "solve_failed_count": {
             "title": "Solve Failed Count",
             "type": "integer"
@@ -13196,6 +13235,76 @@
           "run_state_counts"
         ],
         "title": "TrainDoe",
+        "type": "object"
+      },
+      "TrainDoeGenCounts": {
+        "description": "플랫폼 DOE run별 입력 생성 상태 집계(train_doe_points).",
+        "properties": {
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "pending": {
+            "title": "Pending",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "pending",
+          "running",
+          "done",
+          "failed"
+        ],
+        "title": "TrainDoeGenCounts",
+        "type": "object"
+      },
+      "TrainDoeSampling": {
+        "description": "플랫폼 DOE 표본 방식(§23.4): kind·표시 이름·설명 id(td_<kind>)·meta(DG_PREP 전 null).",
+        "properties": {
+          "desc_id": {
+            "title": "Desc Id",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "meta": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Meta"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "desc_id"
+        ],
+        "title": "TrainDoeSampling",
         "type": "object"
       },
       "TrainParamOut": {

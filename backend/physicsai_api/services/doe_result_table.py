@@ -76,6 +76,17 @@ def _type_label(ctx: AppContext, value: str) -> str:
     return next((t["label"] for t in types if t["value"] == value), value)
 
 
+def _sampling(ctx: AppContext, d: dict[str, Any], options: dict[str, Any]) -> dict[str, Any]:
+    """S15 §20.6 표본 방식. 플랫폼 DOE(§23.4)는 {method: doe_type, label: §20.4 이름, desc_id: td_<kind>, options}."""
+    if d.get("generator") == "PLATFORM":
+        kind = str((d.get("sampling") or {}).get("kind") or sampling_registry.kind_of_source(d["doe_type"]) or "")
+        label = sampling_registry.METHODS[kind][1] if kind in sampling_registry.METHODS else d["doe_label"]
+        return {"method": d["doe_type"], "label": label, "desc_id": sampling_registry.platform_desc_id(kind),
+                "options": options}
+    return {"method": d["doe_type"], "label": _type_label(ctx, d["doe_type"]),
+            "desc_id": sampling_registry.DOE_DESC_IDS.get(d["doe_type"]), "options": options}
+
+
 def result_table(ctx: AppContext, doe_id: str) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         d = train_repo.get_doe(conn, doe_id)
@@ -154,6 +165,5 @@ def result_table(ctx: AppContext, doe_id: str) -> dict[str, Any]:
             "parameters": params, "responses": [{"name": n, "unit": None} for n in resp_names],
             "meta": {"engine_version": None, "baseline_id": None, "scene": None}, "rows": out_rows,
             "counts": {"total": total, "usable": usable, "no_response": total - usable},
-            "sampling": {"method": d["doe_type"], "label": _type_label(ctx, d["doe_type"]),
-                         "desc_id": sampling_registry.DOE_DESC_IDS.get(d["doe_type"]), "options": options},
+            "sampling": _sampling(ctx, d, options),
             "influence_class": cls, "influence_note": note, "influence_ok": cls != sampling_registry.OFF, "notes": notes}

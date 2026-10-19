@@ -297,7 +297,9 @@ train_data:                       # ① 학습데이터(phase2 §6.2~§6.6). 기
     - 'Traceback \(most recent call last\):'
     - '^\s*\[ERROR\]'
     - '^\s*(?:FileNotFoundError|RuntimeError|ValueError|OSError|PermissionError|ImportError|TypeError|AttributeError|NameError|SyntaxError)\s*:'
-  run_dir_glob: "approaches/*/run__*"       # 사내 확인 후 교체(U17)
+  run_dir_glob:                              # run 폴더 패턴 목록(DOE 폴더 기준, 문자열 1개도 허용). 실제 HyperStudy 출력 = HST_GEN_RADIOSS_INPUT/approaches/doe_1/run__N(이슈 #7)
+    - "approaches/doe_*/run__*"
+    - "*/approaches/doe_*/run__*"
   samples_extractor: paramitem              # paramitem | csv | none (U18)
   rendered_tpl_glob: "**/*"
   rendered_tpl_exts: [".py", ".tcl", ".txt", ".xml", ""]
@@ -308,6 +310,10 @@ train_data:                       # ① 학습데이터(phase2 §6.2~§6.6). 기
   max_runs_per_submit: 500
   result_run_dir_regex: '^(?P<run_key>run__\d+)$'   # 사내 확인 후 교체(U25)
   result_match_depth: 3
+  doe_generator_default: platform            # ①-3 화면 기본 생성 방식: platform(동시 실행) | hyperstudy(원본 hstbatch 호환)
+  platform_parallel_default: 4               # 플랫폼 생성 동시 실행 수 화면 기본(실제 = min(값, max_multi_execution)) — Altair 라이선스 한도 안에서
+  platform_max_runs: 500                     # 플랫폼 표본 run 상한(≤ max_runs)
+  platform_run_root: approaches/doe_1        # 플랫폼 run 폴더 상위(DOE 폴더 기준). <값>/run__00001이 run_dir_glob 패턴 중 하나와 맞아야 함
 
 curation:
   max_files: 20000

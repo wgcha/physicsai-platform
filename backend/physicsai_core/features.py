@@ -23,6 +23,8 @@ FEATURES: dict[str, FeatureReq] = {
     "train_tpl": FeatureReq((), (), ("simlab_tpl_template",)),
     "train_doe": FeatureReq(("hst_gen_radioss",), ("hyperstudy_path",),
                             ("doe_design_type_json", "hypermesh_include_tcl", "batchrun_dir", "pyd_dir"), ("gen_radioss",)),
+    # phase3 §23.8 S18: ① 플랫폼 DOE 생성 = geom_update + SimLab. mesh가 {include_tcl}·{hw}를 쓰면 자원·hw도(train_doe_platform_missing)
+    "train_doe_platform": FeatureReq(("geom_update",), ("simlab_path",)),
     "train_solve": FeatureReq(needs_hpc=True),
     "train_import": FeatureReq(),
     "train_resp": FeatureReq(("response_extract",), ("hw_exe_path",)),
@@ -53,7 +55,7 @@ FEATURES: dict[str, FeatureReq] = {
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
 JOB_FEATURE: dict[str, FeatureReq] = {
     "TD_EXTRACT_PARAMS": FEATURES["train_extract"],
-    "TD_DOE_GEN": FEATURES["train_doe"],
+    "TD_DOE_GEN": FeatureReq(),  # phase3 §23.8: 생성 방식별(train_doe | train_doe_platform)로 prepare()가 확인
     "TD_SOLVE": FeatureReq(),
     "TD_RESULT_IMPORT": FeatureReq(),
     "TD_RESP_EXTRACT": FEATURES["train_resp"],
@@ -107,6 +109,18 @@ def predict_parametric_missing(s: Settings) -> tuple[list[str], list[str]]:
     return tmpl, res
 
 
+def train_doe_platform_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """① 플랫폼 DOE 생성에 빠진 (템플릿, 자원) 키(phase3 §23.8). HyperStudy 자원은 필요 없다."""
+    from .commands import template_uses
+
+    tmpl, res = missing_for(s, FEATURES["train_doe_platform"], None)
+    if mesh_uses_include_tcl(s) and not s.resources.hypermesh_include_tcl:
+        res.append("resources.hypermesh_include_tcl")
+    if template_uses(s.commands.mesh, "hw") and not effective_altair(s).get("hw_exe_path"):
+        res.append("altair.hw_exe_path")
+    return tmpl, res
+
+
 def predict_mesh_only_missing(s: Settings) -> tuple[list[str], list[str]]:
     """④ mesh_only 템플릿 예측에 빠진 (템플릿, 자원) 키(phase3 §14.4) — commands.mesh·include TCL과 무관."""
     return missing_for(s, FEATURES["predict_mesh_only"], None)
@@ -157,6 +171,7 @@ _SPECIAL_MISSING = {
     "predict_parametric": predict_parametric_missing,
     "predict_mesh_only": predict_mesh_only_missing,
     "predict_responses": predict_responses_missing,
+    "train_doe_platform": train_doe_platform_missing,
 }
 
 

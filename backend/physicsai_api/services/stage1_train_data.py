@@ -154,7 +154,21 @@ def doe_out(ctx: AppContext, conn: Any, study: dict[str, Any], d: dict[str, Any]
         "dir_display_path": display_path(_ai(ctx), study["folder_name"], d["dir_rel"]),
         "results_display_path": display_path(_ai(ctx), study["folder_name"], f"01_train/results/{d['id']}"),
         "created_by_name": d["created_by_name"], "created_at": d["created_at"], "run_state_counts": counts,
+        **_platform_out(conn, d),
     }
+
+
+def _platform_out(conn: Any, d: dict[str, Any]) -> dict[str, Any]:
+    """S18 §23.4: generator·sampling{kind, label, desc_id, meta}·gen(run별 생성 집계) — 플랫폼 DOE만 sampling·gen."""
+    if d.get("generator") != "PLATFORM":
+        return {"generator": "hyperstudy", "sampling": None, "gen": None}
+    sp = d.get("sampling") or {}
+    kind = str(sp.get("kind") or sampling_registry.kind_of_source(d["doe_type"]) or "")
+    label = sampling_registry.METHODS[kind][1] if kind in sampling_registry.METHODS else d["doe_label"]
+    return {"generator": "platform",
+            "sampling": {"kind": kind, "label": label, "desc_id": sampling_registry.platform_desc_id(kind),
+                         "meta": sp.get("meta")},
+            "gen": train_repo.point_counts(conn, d["id"])}
 
 
 def list_does(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:

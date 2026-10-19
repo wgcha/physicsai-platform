@@ -48,6 +48,11 @@ def check_feature(ctx: AppContext, job_type: str) -> None:
     if req is None:
         return
     tmpl, res = missing_for(ctx.settings, req, None)
+    raise_feature_missing(tmpl, res)
+
+
+def raise_feature_missing(tmpl: list[str], res: list[str]) -> None:
+    """기능 판정 결과 → 409 TEMPLATE_NOT_CONFIGURED(템플릿 우선) / RESOURCE_NOT_CONFIGURED. 빠진 것이 없으면 그대로."""
     if tmpl:
         raise DomainError("TEMPLATE_NOT_CONFIGURED", f"명령 템플릿이 설정되지 않았습니다: {', '.join(tmpl)}", status=409,
                           template=tmpl[0].split(".", 1)[1], missing=tmpl)

@@ -24,6 +24,9 @@ METHODS: dict[str, tuple[str, str, str]] = {
 SOURCE_KINDS: dict[str, str] = {k: v[0] for k, v in METHODS.items()}  # API kind → DB source_kind
 KIND_OF_SOURCE: dict[str, str] = {v: k for k, v in SOURCE_KINDS.items()}  # DB source_kind → API kind
 NEW_KINDS = ("lhs_opt", "sobol", "fullfact", "fracfact", "pb", "bbd", "ccd")
+# ① 플랫폼 DOE 생성 방식(phase3 §23.4·§23.9, S18) — §20.4 순서에서 table·train_doe를 뺀 8개. desc_id = "td_<kind>"
+PLATFORM_KINDS = tuple(k for k in METHODS if k not in ("table", "train_doe"))
+PLATFORM_DOE_TYPES = tuple(METHODS[k][0] for k in PLATFORM_KINDS)  # train_does.doe_type(플랫폼) = ④ source_kind와 같은 글자
 
 # ① value → desc_id (그 밖 → None = 일반 문구)
 DOE_DESC_IDS = {"TYPE_LATINHYPERCUBE": "hs_lhs", "TYPE_SOBOL": "hs_sobol", "TYPE_FULLFACT": "hs_fullfact",
@@ -88,8 +91,16 @@ def _as_int(v: Any) -> int | None:
         return None
 
 
+def platform_desc_id(kind: str) -> str:
+    """① 플랫폼 DOE 설명 id(§23.10): td_<kind>."""
+    return f"td_{kind}"
+
+
 def doe_influence(doe_type: str | None, options: Mapping[str, Any] | None) -> tuple[str, str | None]:
-    """① DOE 유형(+옵션) → (class, note). off는 호출부가 응답·n 조건으로 정한다."""
+    """① DOE 유형(+옵션) → (class, note). off는 호출부가 응답·n 조건으로 정한다.
+    플랫폼 생성 DOE(doe_type = LHS_OPT 등 ④ source_kind 글자, §23.4)는 ④ 배치와 같은 규칙(batch_influence)."""
+    if doe_type in PLATFORM_DOE_TYPES:
+        return batch_influence(doe_type, options)
     if doe_type in DOE_FORMAL_TYPES:
         return FORMAL, None
     if doe_type == "TYPE_FRACFACT":

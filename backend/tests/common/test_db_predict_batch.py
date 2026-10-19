@@ -63,7 +63,7 @@ def _job(c, sid, job_type="PREDICT", params="{}", seq=1) -> str:
 def test_upgrade_keeps_rows_assembly_and_allows_mesh_only(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0014_multiobj"
+    assert MIGRATION_HEAD == "0015_doe_platform_gen"
     name = f"physicsai_m7_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

@@ -246,7 +246,7 @@ STEP_LABELS: dict[str, str] = {
     "PV_PREP": "검증 입력 준비", "HPC_SUBMIT": "PBS 제출", "HPC_WAIT": "PBS 대기", "COLLECT": "결과 회수",
     "PV_EXTRACT": "검증 응답 추출", "PV_TABLE": "검증 표 작성",
     "TX_PREP": "CAD 준비", "SIMLAB_EXTRACT": "SimLab 파라미터 추출", "TX_PARSE": "파라미터 해석",
-    "DG_PREP": "DOE 입력 준비", "HST_GEN_RADIOSS": "HyperStudy 입력 생성", "DG_SCAN": "run 폴더 확인",
+    "DG_PREP": "DOE 입력 준비", "HST_GEN_RADIOSS": "입력 생성(run별)", "DG_SCAN": "run 폴더 확인",
     "TS_PREP": "제출 대상 확정", "TS_REGISTER": "회수 결과 등록",
     "RI_SCAN": "결과 폴더 매칭", "RI_COPY": "결과 복사", "RI_REGISTER": "결과 등록",
     "RX_PREP": "응답 추출 준비", "RESPONSE_EXTRACT_RUNS": "run 응답 추출", "RX_TABLE": "응답 표 작성",
