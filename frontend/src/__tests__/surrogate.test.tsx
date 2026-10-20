@@ -29,9 +29,9 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     renderApp(`${STUDY}/5`, { user: "power" }, (s) => {
       s.paramSets.forEach((p) => (p.is_current = p.id === "ps-2")); // 쿠션 단독(mesh_only)
     });
-    expect((await screen.findByRole("radio", { name: "플랫폼 내장(쿠션만 가능)" })).getAttribute("aria-checked")).toBe("true");
+    expect((await screen.findByRole("radio", { name: "플랫폼 내장" })).getAttribute("aria-checked")).toBe("true");
     expect(await screen.findByRole("tab", { name: /실행 목록/ })).toBeTruthy();
-    fireEvent.click(radio("최적화 방식", "원본 최적화(조립 필요)"));
+    fireEvent.click(radio("최적화 방식", "원본 최적화(HyperStudy·레거시)"));
     expect(localStorage.getItem(SO_MODE_KEY)).toBe("original");
     expect((await screen.findByTestId("assembly-required")).textContent).toBe(ASSEMBLY_REQUIRED_TEXT);
     const run = screen.getByRole("region", { name: "실행" });
@@ -49,12 +49,13 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     expect((await screen.findByTestId("assembly-required")).textContent).toBe(ASSEMBLY_REQUIRED_TEXT);
   });
 
-  it("optimize_builtin 꺼짐 → 내장 버튼 비활성·사유, 원본 모드로 시작", async () => {
+  it("optimize_builtin 꺼짐 → 내장 탭에 사유(opt-native §4.4: 원본으로 떨어지지 않음)", async () => {
     renderApp(`${STUDY}/5`, { user: "power", disabledFeatures: ["optimize_builtin"] });
-    const b = await screen.findByRole("radio", { name: "플랫폼 내장(쿠션만 가능)" });
-    expect((b as HTMLButtonElement).disabled).toBe(true);
+    const b = await screen.findByRole("radio", { name: "플랫폼 내장" });
+    expect(b.getAttribute("aria-checked")).toBe("true");
     expect(screen.getByTestId("opt-mode-hint").textContent).toContain("python.numpy");
-    expect(screen.getByRole("radio", { name: "원본 최적화(조립 필요)" }).getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("feature-off-optimize_builtin")).toBeTruthy();
+    expect(screen.getByRole("radio", { name: "원본 최적화(HyperStudy·레거시)" }).getAttribute("aria-checked")).toBe("false");
   });
 
   it("새 최적화: 변수 표(정수·고정·범위 검증)·미리보기 문구·시작 요청 본문 → 결과 화면", async () => {

@@ -118,6 +118,25 @@ def detail_extra(ctx: AppContext, conn: Any, o: dict[str, Any], ps: dict[str, An
 # ---- 추가 검증(EXTRA) -------------------------------------------------------------------------------
 
 
+def _multi_matrix(ctx: AppContext, ps: dict[str, Any], st: dict[str, Any], rows: list[dict[str, float]]) -> Any:
+    from physicsai_core.geometry import baselines as bl
+    from physicsai_core.stage4_predict.batch_multi import build_multi_table
+
+    from .param_set_native_api import set_path
+
+    pm = bl.load(set_path(ctx, ps), ctx.settings.ui.max_artifact_bytes)
+    if pm is None or pm.get("status") != "confirmed":
+        raise DomainError("PARAM_MAP_UNCONFIRMED", "매칭표가 확정되지 않았습니다 — 확정한 뒤 다시 검증하세요", status=409)
+    levels = (st.get("levels") or {}).get("baseline") or []
+    pts = []
+    for v in rows:
+        p: dict[str, Any] = dict(v)
+        if levels and "baseline" in v:
+            p["baseline"] = levels[int(round(v["baseline"]))]
+        pts.append(p)
+    return build_multi_table(pts, ps, pm)
+
+
 def _table_text(names: list[str], rows: list[dict[str, float]]) -> str:
     return "\n".join([",".join(names), *[",".join(repr(float(v[n])) for n in names) for v in rows]]) + "\n"
 
@@ -174,7 +193,10 @@ def verify(ctx: AppContext, principal: Principal, opt_id: str, body: Any, rid: s
         ps = ps_repo.get(conn, o["param_set_id"])
         if ps is None:
             raise DomainError("PARAM_SET_NOT_FOUND", "템플릿(파라미터 세트)을 찾을 수 없습니다", status=409)
-        matrix = build_matrix_for({"kind": "table", "text": _table_text(names, rows)}, ps, cfg)  # 정수는 batch_matrix 반영 규칙
+        if st.get("multi_baseline"):  # opt-native §7: 다중 baseline 세트 = baseline 열 표(배정 메타 포함)
+            matrix = _multi_matrix(ctx, ps, st, rows)
+        else:
+            matrix = build_matrix_for({"kind": "table", "text": _table_text(names, rows)}, ps, cfg)  # 정수는 batch_matrix 반영 규칙
         if matrix.problems or len(matrix.rows) != len(rows):
             raise DomainError("SURROGATE_OPT_INVALID", "추가 검증 조합을 만들 수 없습니다", status=422,
                               problems=[{"code": "BOUNDS_OUT_OF_RANGE", "field": "points", "message": str(matrix.problems[:3])}])

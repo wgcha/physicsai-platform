@@ -9,6 +9,7 @@ from physicsai_core.commands import TEMPLATE_SPECS
 from physicsai_core.config.schema_capture import effective_video_ext, transcode_enabled
 from physicsai_core.config import RESOURCE_DIR_KEYS, RESOURCE_FILE_KEYS, effective_altair, redacted_settings
 from physicsai_core.features import feature_status, geometry_status
+from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.db.repositories import notifications as notif_repo
 from physicsai_core.db.repositories import workers as workers_repo
 from physicsai_core.errors import DomainError
@@ -84,7 +85,12 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                           "max_variables": s.surrogate_opt.max_variables, "max_iterations": s.surrogate_opt.max_iterations,
                           "max_candidates": s.surrogate_opt.max_candidates,
                           "max_objectives": s.surrogate_opt.max_objectives, "max_observe": s.surrogate_opt.max_observe,
-                          "max_extra_points": s.surrogate_opt.max_extra_points},
+                          "max_extra_points": s.surrogate_opt.max_extra_points,
+                          # opt-native §4.2·§9: 알고리즘·검증 방식 목록·기본값
+                          "algorithms": list(so_algo.ALGORITHMS), "default_algorithm": s.surrogate_opt.default_algorithm,
+                          "algo_defaults": so_algo.config_defaults(s.surrogate_opt),
+                          "ga_max_evals": s.surrogate_opt.ga_max_evals, "verifications": list(so_algo.VERIFICATIONS),
+                          "max_levels": s.surrogate_opt.max_levels},
         "geometry": geometry_status(s),  # geometry-engine.md §7.1
         "demo": bool(s.demo.enabled),
     }

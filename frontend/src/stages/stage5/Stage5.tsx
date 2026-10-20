@@ -2,13 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { api, type Optimization, type OptResponse, type ResponseCandidates } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { useFeature } from "../../components/FeatureGate";
+import { FeatureOffNote, useFeature } from "../../components/FeatureGate";
 import { Card } from "../../components/ui";
 import { ResponseAddRow, ResponseTable } from "./ResponseTable";
 import { OptInputCard } from "./OptInputCard";
 import { OptResult } from "./OptResult";
 import { OptRunCard } from "./OptRunCard";
-import { OptModeTabs } from "./OptModeTabs";
+import { OptModeTabs, useOriginalVisible } from "./OptModeTabs";
 import { SurrogateMode } from "./surrogate/SurrogateMode";
 import { readMode, writeMode, type OptMode } from "./surrogate/soRules";
 import { type RunSettings } from "./rules";
@@ -17,18 +17,29 @@ import { type RunSettings } from "./rules";
 export const ASSEMBLY_REQUIRED_TEXT =
   "이 템플릿은 조립 폴더가 없는 쿠션 단독(메시 단독) 템플릿이라 원본 최적화를 실행할 수 없습니다 — '플랫폼 내장(쿠션만 가능)' 모드를 쓰세요";
 
-/** ⑤ 최적화(phase2.md §14.5 + phase3.md §18.10 모드 선택) */
+/** ⑤ 최적화(phase2.md §14.5 + phase3.md §18.10 모드 선택 + opt-native §4.4 레거시 숨김) */
 export function Stage5() {
   const builtin = useFeature("optimize_builtin");
-  const [mode, setMode] = useState<OptMode>(() => (builtin.enabled ? readMode() : "original"));
+  const showOriginal = useOriginalVisible();
+  const [picked, setPicked] = useState<OptMode>(() => readMode());
+  // 원본 탭이 숨겨졌는데 저장 값이 original이면 builtin으로 바꾼다(내장이 꺼져도 원본으로 떨어지지 않는다)
+  const mode: OptMode = picked === "original" && !showOriginal ? "builtin" : picked;
+  useEffect(() => {
+    if (picked === "original" && !showOriginal) writeMode("builtin");
+  }, [picked, showOriginal]);
   const choose = (m: OptMode) => {
-    setMode(m);
+    setPicked(m);
     writeMode(m);
   };
   return (
     <>
       <OptModeTabs mode={mode} onChange={choose} />
-      {mode === "builtin" && builtin.enabled ? <SurrogateMode /> : <OriginalOptimize onUseBuiltin={() => choose("builtin")} />}
+      {mode === "original" ? <OriginalOptimize onUseBuiltin={() => choose("builtin")} /> : builtin.enabled ? <SurrogateMode /> : (
+        <Card span={9} title="플랫폼 내장 최적화">
+          <p className="muted small">플랫폼 내장 최적화를 쓸 수 없습니다.</p>
+          <FeatureOffNote feature="optimize_builtin" f={builtin} />
+        </Card>
+      )}
     </>
   );
 }

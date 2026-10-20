@@ -31,6 +31,7 @@ interface SoRec {
     performances: Record<string, { unit: string; spec: unknown }>;
     surrogate: string; iterations: number; candidates: number; tol_rel: number; seed: number; multi_execution: number; capture: boolean;
     explore: { kind: "new"; count: number; seed: number } | { kind: "reuse"; batch_id: string };
+    algorithm?: string; verification?: string; algo_options?: Record<string, number | null>;
   };
   status: string;
   iter_no: number;
@@ -213,6 +214,7 @@ export function advance(o: SoRec, srv?: MockServer) {
     const nTrain = o.runs.filter((x) => x.objective != null).length;
     const fr = multi ? frontRuns(o, o.iter_no) : [];
     const best = multi ? (fr.length ? fr[Math.floor(rnd() * fr.length)] : null) : bestRun(o, o.iter_no);
+    const alg = s.algorithm ?? "ego";
     const cands = Array.from({ length: s.candidates }, (_, i) => {
       const near = multi && fr.length ? fr[Math.floor(rnd() * fr.length)] : best;
       const v = sample(o, rnd, near?.values as Record<string, number> | undefined, 1 / r);
@@ -222,15 +224,35 @@ export function advance(o: SoRec, srv?: MockServer) {
       return {
         doe_no: i + 1, values: v, predicted: objs[0], ei: i === 0 ? null : Number((rnd() * 3).toFixed(3)), constraints_pred: s.constraints.map((c) => metricValue(c.metric, v)),
         ...(multi ? { predicted_objectives: objs, predicted_std: objs.map((x) => Number((Math.abs(x) * 0.03).toPrecision(3))), role: i === 0 ? "HVI" : "ParEGO", weight: i === 0 ? null : w.map((x) => Number((x / wsum).toFixed(3))) } : {}),
+        ...(alg === "ga" ? { role: i === 0 ? "ga" : "ga_ei", predicted_objectives: [objs[0]], predicted_std: [Number((Math.abs(objs[0]) * 0.03).toPrecision(3))] } : {}),
+        ...(alg === "nsga2" ? { role: "nsga2", weight: null } : {}),
       };
     });
+    const ao = s.algo_options ?? {};
+    const gens = Number(ao.generations ?? (alg === "ga" ? 150 : 200));
+    const algo = alg === "ego" ? { name: "ego" } : {
+      name: alg, pop_size: Number(ao.pop_size ?? (alg === "ga" ? 40 : 100)), generations: gens, generations_run: alg === "nsga2" ? Math.min(gens, 142) : gens,
+      evals: 0, stop: alg === "nsga2" && gens > 142 ? "STALL" : "MAX_GEN", seed: s.seed * 100000 + r * 1000 + 900, best_pred: multi ? null : cands[0]?.predicted ?? null, hv_pred: multi ? 0.71 : null,
+    };
     const q2 = Math.min(0.98, 0.72 + 0.08 * r + rnd() * 0.04);
     const kind = s.surrogate;
+    if (s.verification === "none") {
+      // opt-native ON-4: 검증 배치 없이 마무리 — 후보는 반복 0 행에 UNVERIFIED
+      const it0 = o.iters[0];
+      it0.candidates = cands.map((c) => ({ ...c, state: "UNVERIFIED", verified: null }));
+      it0.fit = { kind, n_train: nTrain, d_free: s.names.length, loo_rmse: 6, loo_nrmse: 0.4, q2: multi ? null : Number(q2.toFixed(3)), pred_vs_verified_mae: null, algo } as never;
+      o.status = "DONE";
+      o.stop_reason = "SURROGATE_ONLY";
+      o.finished_at = new Date().toISOString();
+      o.final = { status: "SKIPPED", reason: "대리모델만(검증 없음) 모드는 마무리 캡처를 하지 않습니다" };
+      return;
+    }
     o.iters.push({
       iter_no: r, kind: "VERIFY", batch: batchRef(o, r, s.candidates, false),
       fit: {
         kind, n_train: nTrain, d_free: s.names.length, loo_rmse: Number((6 / r).toFixed(3)), loo_nrmse: Number((0.4 / r).toFixed(3)), q2: multi ? null : Number(q2.toFixed(3)), pred_vs_verified_mae: null,
         per_objective: multi ? s.objectives.map((x, i) => ({ metric: x.metric, kind, n_train: nTrain, loo_rmse: Number(((5 + i) / r).toFixed(3)), loo_nrmse: Number(((0.3 + 0.05 * i) / r).toFixed(3)) })) : null,
+        algo,
       },
       candidates: cands, best_value: null, best_feasible: null, improvement_rel: null,
     });
@@ -300,6 +322,7 @@ function progressText(o: SoRec): string {
   if (o.status === "VERIFYING") return `반복 ${o.iter_no}/${T} · 검증 ${it?.batch?.label} 예측 0/${o.settings.candidates}`;
   if (o.status === "DONE") {
     const imp = [...o.iters].reverse().find((x) => x.improvement_rel != null)?.improvement_rel;
+    if (o.stop_reason === "SURROGATE_ONLY") return "완료 — 대리모델만(검증 없음) — 미검증 후보";
     return o.stop_reason === "CONVERGED" && imp != null ? `완료 — 수렴(개선 ${(imp * 100).toFixed(1)}% < ${o.settings.tol_rel * 100}%)` : `완료 — ${o.stop_reason === "MAX_ITER" ? "최대 반복" : "새 후보 없음"}`;
   }
   if (o.status === "FAILED") return "실패 — 반복 작업이 실패했습니다";
@@ -356,6 +379,7 @@ function detail(srv: MockServer, o: SoRec): SurrogateOpt {
     settings: o.settings, iter_no: o.iter_no, progress_text: progressText(o),
     iterations: o.iters.map((it) => ({
       ...it, candidates: it.candidates?.map((c) => {
+        if (c.state === "UNVERIFIED") return c;
         const run = o.runs.find((q) => q.iter_no === it.iter_no && q.doe_no === c.doe_no);
         return { ...c, verified: run?.objective ?? null, verified_objectives: run?.objectives ?? null, state: run ? run.state : "QUEUED" };
       }) ?? null,
@@ -453,16 +477,34 @@ function normalize(srv: MockServer, sid: string, body: Record<string, unknown>) 
   const candidates = Number(body.candidates ?? 4);
   if (iterations < 1 || iterations > 10) problems.push({ code: "ITERATIONS_RANGE", field: "iterations", message: "반복은 1~10회입니다" });
   if (candidates < 1 || candidates > 10) problems.push({ code: "CANDIDATES_RANGE", field: "candidates", message: "후보는 1~10개입니다" });
+  // opt-native §6.1·§6.7·§8(목은 핵심만)
+  const algorithm = String(body.algorithm ?? "ego");
+  const verification = String(body.verification ?? "loop");
+  const ao = (body.algo_options ?? null) as Record<string, number | null> | null;
+  if (!["ego", "ga", "nsga2"].includes(algorithm)) problems.push({ code: "ALGORITHM_INVALID", field: "algorithm", message: "알고리즘은 ego · ga · nsga2 중 하나입니다" });
+  else if ((algorithm === "ga" && objectives.length > 1) || (algorithm === "nsga2" && objectives.length < 2)) problems.push({ code: "ALGORITHM_MISMATCH", field: "algorithm", message: "GA는 단일 목적, NSGA-II는 다목적 전용입니다" });
+  if (!["loop", "none"].includes(verification)) problems.push({ code: "VERIFICATION_INVALID", field: "verification", message: "검증 방식은 loop · none 중 하나입니다" });
+  const ps0 = ao?.pop_size;
+  if (ps0 != null && (ps0 < 8 || ps0 > 1000 || ps0 % (algorithm === "nsga2" ? 4 : 2))) problems.push({ code: "ALGO_OPTIONS_INVALID", field: "algo_options.pop_size", message: `집단 크기는 8~1000의 ${algorithm === "nsga2" ? "4의 배수" : "짝수"}입니다` });
+  if (algorithm === "ego" && ao && Object.values(ao).some((v) => v != null)) problems.push({ code: "ALGO_OPTIONS_INVALID", field: "algo_options", message: "EGO는 고급 옵션(집단 크기·세대 등)을 쓰지 않습니다" });
   const sum = (w ?? []).reduce((a, b) => a + b, 0);
   const weights = w && sum > 0 ? w.map((x) => x / sum) : objectives.map(() => 1 / Math.max(1, objectives.length));
   const settings: SoRec["settings"] = {
     names: ps.parameters.map((p) => p.name), integer, bounds,
     objective: objectives[0] ?? { metric: "", series: null, sense: "min" }, objectives, constraints, observe, weights, mode: objectives.length > 1 ? "multi" : "single", performances,
-    surrogate: String(body.surrogate ?? "gp"), iterations, candidates, tol_rel: Number(body.tol_rel ?? 0.01), seed: Number(body.seed ?? 1),
+    surrogate: String(body.surrogate ?? "gp"), iterations: verification === "none" ? 1 : iterations, candidates, tol_rel: Number(body.tol_rel ?? 0.01), seed: Number(body.seed ?? 1),
+    algorithm, verification, algo_options: algorithm === "ego" ? {} : { pop_size: null, generations: null, crossover_prob: null, mutation_prob: null, eta_c: null, eta_m: null, ...(ao ?? {}) },
     multi_execution: Number(body.multi_execution ?? 1), capture: !!body.capture,
     explore: ex.kind === "new" ? { kind: "new", count, seed: ex.seed ?? 1 } : { kind: "reuse", batch_id: ex.batch_id },
   };
-  return { ps, settings, problems, free, fixed, integer: integer.filter((n) => free.includes(n)), count, info };
+  // opt-native §7(목): 다중 baseline 세트 = 위상 변형 범주 baseline(수준 = body.levels 또는 전부)
+  const bids = (ps.baselines ?? []).map((b) => b.id);
+  const levels = bids.length > 1 ? ((body.levels as { baseline?: string[] } | undefined)?.baseline ?? bids) : null;
+  if (levels) {
+    if (!levels.length || levels.some((b) => !bids.includes(b))) problems.push({ code: "LEVELS_INVALID", field: "levels.baseline", message: "매칭표에 없는 baseline이거나 빈 목록입니다" });
+    settings.levels = { baseline: levels };
+  }
+  return { ps, settings, problems, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
 }
 
 function newRec(id: string, studyId: string, no: number, psId: string, settings: SoRec["settings"], by: { id: string; name: string }, createdAt: string, batchNo: number, status = "EXPLORING"): SoRec {
@@ -555,9 +597,14 @@ export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {
       const n = normalize(srv, s.id, body ?? {});
       if ("error" in n) return n.error!;
       const st = n.settings;
+      const none = st.verification === "none";
+      const total = n.count + (none ? 0 : st.iterations * st.candidates);
       return ok({ free_variables: n.free, integer_variables: n.integer, fixed: n.fixed, explore_count: n.count,
-        max_total_runs: n.count + st.iterations * st.candidates, estimate_min: Math.round((n.count + st.iterations * st.candidates) * 2.2),
-        objective_available: true, problems: n.problems, mode: st.mode, performances: n.info });
+        max_total_runs: total, estimate_min: Math.round(total * 2.2),
+        objective_available: true, problems: n.problems, mode: st.mode, performances: n.info,
+        algorithm: st.algorithm, algo_options: st.algo_options, verification: st.verification,
+        variables_kind: Object.fromEntries(n.free.map((v) => [v, v === "baseline" ? "categorical" : n.integer.includes(v) ? "integer" : "continuous"])),
+        levels: n.levels ? { baseline: n.levels } : null });
     }
     if (method === "POST" && !seg[3]) {
       const deny = needPower(srv, s.project_id);

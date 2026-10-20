@@ -239,7 +239,8 @@ def test_setup_config_program_files_from_inputs_not_env(tmp_path, monkeypatch):
     monkeypatch.delenv("ProgramW6432", raising=False)
     monkeypatch.setenv("PROGRAMFILES", str(t["pf"]))                                  # Windows os.environ 키 표기(대문자)
     assert m.program_files_dirs(None) == [str(t["pf"])]
-    alt = m.detect_altair("", m.altair_layout(yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))))
+    ex_text = (REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8")
+    alt = m.detect_altair("", m.altair_layout(yaml.safe_load(ex_text), ex_text))  # opt-native §4.3: HyperStudy 배치는 주석에서
     assert alt["version_label"] == "2026.1" and alt["found"] == len(ALTAIR_REL)
 
 
@@ -335,8 +336,10 @@ def test_setup_yaml_editing_keeps_comments_crlf_and_detects_unsupported_layout()
     table = m.resource_table(DEPLOY / "RESOURCES.txt")
     assert table["batchrun_dir"] == "CONFIG/BATCHRUN" and table["preview_pred_h3d_tcl"] == "CONFIG/BATCHRUN/BATCHRUN_preview_pred_h3d.tcl"
     assert len(table) == 10
-    example = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
-    assert m.altair_layout(example) == ALTAIR_REL
+    ex_text = (REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8")
+    example = yaml.safe_load(ex_text)
+    assert m.altair_layout(example, ex_text) == ALTAIR_REL  # opt-native §4.3: HyperStudy는 주석 배치
+    assert "hyperstudy_path" not in m.altair_layout(example)  # 예시 값은 빈 값(레거시 선택)
 
 
 def test_setup_config_flow_style_section_is_left_untouched(tmp_path):
@@ -937,3 +940,15 @@ def test_v3_s16_23_setup_config_adds_capture_ffmpeg_once(tmp_path):
                         encoding="utf-8")
     res = _run(tmp_path, t, _inputs(t))
     assert res["config_changed_keys"] == [] and _cfg(t)["capture"]["ffmpeg"]["exe"] == "C:/ffmpeg/bin/ffmpeg.exe"
+
+
+def test_v_on_setup_hyperstudy_missing_is_note_not_warning(tmp_path):
+    """opt-native §4.3(V-ON-3): hstbatch만 없으면 경고 없이 정보 줄, 찾으면 정보 줄 없음(자동 탐지 유지)."""
+    t = _fake_tree(tmp_path)
+    (t["pf"] / "Altair" / "2026.1" / ALTAIR_REL["hyperstudy_path"]).unlink()
+    res = _run(tmp_path, t, _inputs(t), action="plan")
+    assert res["warnings"] == [] and res["altair"]["paths"]["hyperstudy_path"] == "", res
+    assert res["notes"] == ["HyperStudy 없음 — 레거시 기능만 꺼집니다(①-3 HyperStudy 생성·⑥ 원본 최적화)"]
+    t2 = _fake_tree(tmp_path / "b")
+    res2 = _run(tmp_path / "b", t2, _inputs(t2), action="plan")
+    assert res2["notes"] == [] and res2["altair"]["paths"]["hyperstudy_path"].endswith("hstbatch.exe")

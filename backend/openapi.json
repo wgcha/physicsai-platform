@@ -3504,6 +3504,12 @@
             "title": "Enabled",
             "type": "boolean"
           },
+          "legacy": {
+            "default": false,
+            "description": "opt-native §4.2: HyperStudy 레거시 기능(train_doe·optimize) — 미설정이면 화면에서 숨김",
+            "title": "Legacy",
+            "type": "boolean"
+          },
           "missing": {
             "items": {
               "type": "string"
@@ -11847,12 +11853,34 @@
             ],
             "title": "Acq"
           },
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
           "constraints_pred": {
             "items": {
               "type": "number"
             },
             "title": "Constraints Pred",
             "type": "array"
+          },
+          "cv": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cv"
           },
           "doe_no": {
             "title": "Doe No",
@@ -11868,6 +11896,17 @@
               }
             ],
             "title": "Ei"
+          },
+          "pof": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pof"
           },
           "predicted": {
             "anyOf": [
@@ -12361,6 +12400,18 @@
       },
       "SoFit": {
         "properties": {
+          "algo": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algo"
+          },
           "d_free": {
             "title": "D Free",
             "type": "integer"
@@ -13065,6 +13116,17 @@
       "SoPredictedPoint": {
         "description": "대리모델 예측 전선 점(미검증).",
         "properties": {
+          "baseline": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Baseline"
+          },
           "mean": {
             "items": {
               "type": "number"
@@ -13471,6 +13533,57 @@
           "created_at"
         ],
         "title": "SpdmImport",
+        "type": "object"
+      },
+      "StatusAlgoDefaults": {
+        "description": "GA·NSGA-II 고급 옵션 기본값(opt-native §6.7). pop_size·mutation_prob null = 변수 수로 정하는 식.",
+        "properties": {
+          "crossover_prob": {
+            "title": "Crossover Prob",
+            "type": "number"
+          },
+          "eta_c": {
+            "title": "Eta C",
+            "type": "number"
+          },
+          "eta_m": {
+            "title": "Eta M",
+            "type": "number"
+          },
+          "generations": {
+            "title": "Generations",
+            "type": "integer"
+          },
+          "mutation_prob": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Prob"
+          },
+          "pop_size": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pop Size"
+          }
+        },
+        "required": [
+          "generations",
+          "crossover_prob",
+          "eta_c",
+          "eta_m"
+        ],
+        "title": "StatusAlgoDefaults",
         "type": "object"
       },
       "StatusCapture": {
@@ -14123,8 +14236,32 @@
       "StatusSurrogateOpt": {
         "description": "⑤ 내장 최적화 화면 기본값·상한(config `surrogate_opt`, phase3 §18.6).",
         "properties": {
+          "algo_defaults": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StatusAlgoDefaults"
+            },
+            "title": "Algo Defaults",
+            "type": "object"
+          },
+          "algorithms": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Algorithms",
+            "type": "array"
+          },
+          "default_algorithm": {
+            "default": "ego",
+            "title": "Default Algorithm",
+            "type": "string"
+          },
           "defaults": {
             "$ref": "#/components/schemas/StatusSurrogateDefaults"
+          },
+          "ga_max_evals": {
+            "default": 100000,
+            "title": "Ga Max Evals",
+            "type": "integer"
           },
           "max_candidates": {
             "title": "Max Candidates",
@@ -14137,6 +14274,11 @@
           },
           "max_iterations": {
             "title": "Max Iterations",
+            "type": "integer"
+          },
+          "max_levels": {
+            "default": 8,
+            "title": "Max Levels",
             "type": "integer"
           },
           "max_objectives": {
@@ -14152,6 +14294,13 @@
           "max_variables": {
             "title": "Max Variables",
             "type": "integer"
+          },
+          "verifications": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Verifications",
+            "type": "array"
           }
         },
         "required": [
@@ -15021,6 +15170,32 @@
         "additionalProperties": false,
         "description": "생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.\n목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.",
         "properties": {
+          "algo_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "GA·NSGA-II 고급 옵션 {pop_size, generations, crossover_prob, mutation_prob, eta_c, eta_m}(null·생략 = 기본). ego면 비워야 한다",
+            "title": "Algo Options"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "ego(기본) | ga(단일 목적) | nsga2(다목적)",
+            "title": "Algorithm"
+          },
           "bounds": {
             "anyOf": [
               {
@@ -15090,6 +15265,24 @@
               }
             ],
             "title": "Iterations"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "범주 수준 제한 {\"baseline\": [id…]}(다중 baseline 위상 세트만)",
+            "title": "Levels"
           },
           "model_id": {
             "anyOf": [
@@ -15184,6 +15377,19 @@
             ],
             "title": "Tol Rel"
           },
+          "verification": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "loop(기본, 반복 검증) | none(대리모델만)",
+            "title": "Verification"
+          },
           "weights": {
             "anyOf": [
               {
@@ -15208,6 +15414,16 @@
       },
       "SurrogateOptPreview": {
         "properties": {
+          "algo_options": {
+            "additionalProperties": true,
+            "title": "Algo Options",
+            "type": "object"
+          },
+          "algorithm": {
+            "default": "ego",
+            "title": "Algorithm",
+            "type": "string"
+          },
           "estimate_min": {
             "anyOf": [
               {
@@ -15244,6 +15460,23 @@
             "title": "Integer Variables",
             "type": "array"
           },
+          "levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Levels"
+          },
           "max_total_runs": {
             "title": "Max Total Runs",
             "type": "integer"
@@ -15270,6 +15503,18 @@
             },
             "title": "Problems",
             "type": "array"
+          },
+          "variables_kind": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Variables Kind",
+            "type": "object"
+          },
+          "verification": {
+            "default": "loop",
+            "title": "Verification",
+            "type": "string"
           }
         },
         "required": [

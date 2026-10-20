@@ -38,7 +38,7 @@ describe("①-3 native DOE 생성(§8)", () => {
     const { card } = await openCard({}, nativeSetup);
     await waitNative(card);
     expect(seg(card, "플랫폼 생성 · LHS(native)").getAttribute("aria-pressed")).toBe("true");
-    const hs = seg(card, "원본 HyperStudy(호환)");
+    const hs = seg(card, "HyperStudy(레거시)");
     expect(hs.disabled).toBe(true);
     expect(hs.title).toBe("native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다");
     const kind = within(card).getByLabelText("표본 방식") as HTMLSelectElement;
@@ -78,7 +78,7 @@ describe("①-3 native DOE 생성(§8)", () => {
     expect([...basis.options].map((o) => o.textContent)).toEqual(["①-1 추출 피처(조립 폴더 지정)", "템플릿 쿠션 native v1 · baseline 2개"]);
     fireEvent.change(basis, { target: { value: "ps-n1" } });
     expect(within(card).queryByLabelText("Radioss 조립 폴더")).toBeNull();
-    expect(seg(card, "원본 HyperStudy(호환)").disabled).toBe(true);
+    expect(seg(card, "HyperStudy(레거시)").disabled).toBe(true);
     expect(within(card).getByTestId("native-strata").textContent).toContain("다중 baseline 2개 — 층화 LHS로 baseline마다 나눠 뽑습니다 (B1 10개 · B2 10개)");
     expect(within(card).getByTestId("native-strata").textContent).toContain("매칭표 확정 필요");
     expect(runBtn(card).disabled).toBe(true);

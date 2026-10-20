@@ -8,7 +8,7 @@ import { DOE_TYPES } from "../mock/catalog";
 import { DESCRIPTIONS, HS_NOTE } from "../lib/sampling";
 
 /** S18: ①-3 화면 기본은 플랫폼 생성 — 기존 HyperStudy 시험은 호환 모드로 먼저 전환한다 */
-const openHyperstudy = (card: HTMLElement) => fireEvent.click(within(card).getByRole("button", { name: "원본 HyperStudy(호환)" }));
+const openHyperstudy = (card: HTMLElement) => fireEvent.click(within(card).getByRole("button", { name: "HyperStudy(레거시)" }));
 
 describe("V2-FE-2 ① 학습데이터 생성", () => {
   it("카드 6개, 권한 없으면 조회 전용", async () => {

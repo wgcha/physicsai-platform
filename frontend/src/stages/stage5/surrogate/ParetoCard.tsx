@@ -8,7 +8,7 @@ import { ParetoLegend, ParetoPlot } from "./ParetoPlot";
 import { ParetoTable } from "./ParetoTable";
 import { WeightSliders } from "./WeightSliders";
 import { buildParetoModel, initialSliders, readWeights, writeWeights } from "./paretoView";
-import { objectiveDefs } from "./soRules";
+import { UNVERIFIED_BADGE, isSurrogateOnly, objectiveDefs } from "./soRules";
 
 export const NO_FRONT_TEXT = "검증된 파레토 해가 생기면 전선이 표시됩니다";
 
@@ -49,9 +49,12 @@ export function ParetoSection({ o, base, onChanged, downloadCsv }: { o: Surrogat
   return (
     <>
       <Card span={6} title="파레토 전선" className="so-pareto-card" aside={
-        <label className="check small">
-          <input type="checkbox" checked={showPred} onChange={(e) => setShowPred(e.target.checked)} /> 대리모델 예측 전선
-        </label>
+        <span className="run-action-row">
+          {isSurrogateOnly(o) && <span className="pill warn" data-testid="unverified-badge">{UNVERIFIED_BADGE}</span>}
+          <label className="check small">
+            <input type="checkbox" checked={showPred} onChange={(e) => setShowPred(e.target.checked)} /> 대리모델 예측 전선
+          </label>
+        </span>
       }>
         {model.defs.length >= 3 ? (
           <PairPlots model={model} sel={sel} onToggle={toggle} showPred={showPred} recKey={model.rec.key} />

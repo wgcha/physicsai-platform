@@ -17,6 +17,7 @@ from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for, lhs_values
+from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 
 from ..auth import Principal
@@ -39,7 +40,8 @@ FAIL_TEXT = {
     ds.FAIL_TIMEOUT: "대리모델 학습 시간을 넘었습니다", "SURROGATE_FIT_FAILED": "대리모델을 적합할 수 없습니다",
     "NO_FREE_VARIABLE": "자료에서 바뀌는 자유 변수가 없습니다",
 }
-STOP_TEXT = {ds.STOP_CONVERGED: "수렴", ds.STOP_MAX_ITER: "최대 반복", ds.STOP_NO_NEW: "새 후보 없음"}
+STOP_TEXT = {ds.STOP_CONVERGED: "수렴", ds.STOP_MAX_ITER: "최대 반복", ds.STOP_NO_NEW: "새 후보 없음",
+             so_algo.STOP_SURROGATE_ONLY: "대리모델만(검증 없음) — 미검증 후보"}
 
 
 def _require_opt(conn: Any, opt_id: str, *, for_update: bool = False) -> dict[str, Any]:
@@ -58,12 +60,15 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
         s = studies_repo.require(conn, study_id)
         n = _normalize(ctx, conn, s, body)
         st = n["settings"]
-        total = n["explore_count"] + st["iterations"] * st["candidates"]
+        none = st.get("verification") == "none"  # opt-native §8: 대리모델만 = 탐색 수만(재사용 0)
+        total = n["explore_count"] + (0 if none else st["iterations"] * st["candidates"])
         est = _estimate_min(conn, study_id, total) if total else None
     return {"free_variables": n["free"], "integer_variables": [x for x in n["integer"] if x in n["free"]],
             "fixed": n["fixed"], "explore_count": n["explore_count"], "max_total_runs": total, "estimate_min": est,
             "objective_available": n["valid_points"] is None or n["valid_points"] > 0, "problems": n["problems"],
-            "mode": st["mode"], "performances": n["performances"]}
+            "mode": st["mode"], "performances": n["performances"], "algorithm": st["algorithm"],
+            "algo_options": st["algo_options"], "verification": st["verification"], "variables_kind": n["variables_kind"],
+            "levels": st.get("levels")}
 
 
 def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
@@ -100,7 +105,21 @@ def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str,
     """탐색 배치(새 DOE LHS): 범위(고정 변수는 lo = hi)로 batch_matrix와 같은 층화 LHS 값을 만들어 표 조합으로 검증·반영."""
     st = n["settings"]
     ex = st["explore"]
-    names = st["names"]
+    if n.get("multi") is not None:  # opt-native §7: 다중 baseline = §7.3.8 층화 LHS(④ 다중 baseline 배치와 같은 경로)
+        from physicsai_core.stage4_predict.batch_multi import build_multi_matrix, restrict
+
+        levels = (st.get("levels") or {}).get("baseline")
+        pm2, rows2 = restrict(n["multi"]["pm"], list(n["ps"]["parameters"]), levels, st["bounds"])
+        mx = build_multi_matrix({"kind": "lhs", "count": ex["count"], "seed": ex["seed"]}, {**n["ps"], "parameters": rows2}, pm2,
+                                ctx.settings)
+        if mx.problems or not mx.rows:
+            raise _invalid([{"code": "EXPLORE_TOO_FEW", "field": "explore", "message": str(mx.problems[:3])}])
+        meta_m = {**mx.source_meta, "ranges": st["bounds"]}
+        mx.source_meta = meta_m
+        return so_repo.create_opt_batch(conn, opt=opt, iter_no=0, kind="EXPLORE", matrix=mx, source_meta=meta_m,
+                                        batch_dir_name=ctx.settings.predict_batch.dir_name,
+                                        simlab_mesh_name=ctx.settings.predict.simlab_mesh_name)
+    names = [x for x in st["names"] if x in {str(p["name"]) for p in n["ps"]["parameters"]}]
     vals = lhs_values(names, {k: (v[0], v[1]) for k, v in st["bounds"].items()}, ex["count"], ex["seed"])
     text = "\n".join([",".join(names), *[",".join(repr(float(v[k])) for k in names) for v in vals]]) + "\n"
     matrix = build_matrix_for({"kind": "table", "text": text}, n["ps"], ctx.settings)
@@ -135,9 +154,10 @@ def collect_runs(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str,
     out = []
     for it in its:
         b = pb_repo.get(conn, it["batch_id"])
+        meta = (b or {}).get("source_meta")
         if b is None:
             continue
-        preds = {c.get("doe_no"): c.get("predicted") for c in it.get("candidates") or []}
+        preds = {c.get("doe_no"): c.get("predicted") for c in it.get("candidates") or [] if c.get("state") != "UNVERIFIED"}
         for r, mm in _run_metric_rows(ctx, conn, study, b["id"]):
             state = pb_repo.row_state(r, r["job_state"])
             reasons: dict[str, str] = {}
@@ -155,7 +175,8 @@ def collect_runs(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str,
             valid = state == "SUCCEEDED" and all(v is not None for v in objs) and all(v is not None for v in cons)
             out.append({"iter_no": it["iter_no"], "batch_id": b["id"], "batch_label": batch_label(b["batch_no"]),
                         "doe_no": r["doe_no"], "run_key": r["run_key"], "job_id": r["predict_job_id"],
-                        "values": r["applied_values"], "objective": objs[0], "constraints": cons,
+                        "values": ds.run_values(r["applied_values"], meta, r["doe_no"], problem.cat_spec),
+                        "objective": objs[0], "constraints": cons,
                         "predicted": preds.get(r["doe_no"]),
                         "feasible": ds.is_feasible(cons, problem.constraints) if valid else None, "state": state,
                         "objectives": objs, "observed": obs, "reason": next(iter(reasons.values()), None),
@@ -172,7 +193,8 @@ def _stop_text(o: dict[str, Any], its: list[dict[str, Any]]) -> str:
     return STOP_TEXT.get(reason, reason)
 
 
-def progress_text(o: dict[str, Any], its: list[dict[str, Any]], batches: dict[str, dict[str, Any]], fail_msg: str | None) -> str:
+def progress_text(o: dict[str, Any], its: list[dict[str, Any]], batches: dict[str, dict[str, Any]], fail_msg: str | None,
+                  job_label: str | None = None) -> str:
     st = o["status"]
     T = o["settings"]["iterations"]
     cur = next((it for it in its if it["iter_no"] == o["iter_no"]), None)
@@ -182,6 +204,9 @@ def progress_text(o: dict[str, Any], its: list[dict[str, Any]], batches: dict[st
             return f"탐색 {b['label']} · 입력 생성 {b['gen']['done']}/{b['gen']['total']}"
         return f"탐색 {b['label']} · 예측 완료 {b['predict']['succeeded']}/{b['gen']['total']}"
     if st == "FITTING":
+        lbl = (job_label or "")
+        if lbl.startswith("후보 탐색("):  # opt-native §8: "반복 2/3 · 후보 탐색(NSGA-II 세대 80/200)"
+            return f"반복 {o['iter_no'] + 1}/{T} · {lbl}"
         return f"반복 {o['iter_no'] + 1}/{T} · 대리모델 학습"
     if st == "VERIFYING" and b:
         return f"반복 {o['iter_no']}/{T} · 검증 {b['label']} 예측 {b['predict']['succeeded']}/{b['gen']['total']}"
@@ -218,7 +243,8 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
     for it in its:
         cands = None
         if it.get("candidates"):
-            cands = [{**c, "verified": (by.get((it["iter_no"], c.get("doe_no"))) or {}).get("objective"),
+            cands = [c if c.get("state") == "UNVERIFIED" else  # opt-native ON-4: 대리모델만 후보(반복 0 행)는 run과 짝짓지 않음
+                     {**c, "verified": (by.get((it["iter_no"], c.get("doe_no"))) or {}).get("objective"),
                       "state": (by.get((it["iter_no"], c.get("doe_no"))) or {}).get("state")} for c in it["candidates"]]
         iterations.append({"iter_no": it["iter_no"], "kind": it["kind"], "batch": batches.get(it["batch_id"]), "fit": it["fit"],
                            "candidates": cands, "best_value": it["best_value"], "best_feasible": it["best_feasible"],
@@ -237,7 +263,8 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
         "dir": display_path(ctx.settings.storage.ai_root, s["folder_name"], o["dir_rel"]),
         "param_set": {"id": o["param_set_id"], "label": ps.get("label"), "input_kind": o["input_kind"]},
         "model": {"id": o["model_id"], "name": f"{m['name']} v{m['version']}" if m else o["model_id"]},
-        "settings": o["settings"], "iter_no": o["iter_no"], "progress_text": progress_text(o, its, batches, fail_msg),
+        "settings": o["settings"], "iter_no": o["iter_no"],
+        "progress_text": progress_text(o, its, batches, fail_msg, (job or {}).get("progress_label")),
         "iterations": iterations, "runs": runs, "best": o["best"], "stop_reason": o["stop_reason"],
         "can_cancel": o["status"] in so_repo.ACTIVE and can_exec and (principal.is_global_admin or o["created_by"] == principal.user_id),
         "can_resume": o["status"] == "FAILED" and can_exec,

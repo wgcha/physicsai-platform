@@ -14,6 +14,7 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.features import optimize_builtin_missing, predict_responses_missing
 from physicsai_core.stage4_predict import nearest, performance, run_metrics
+from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 
 from ..context import AppContext
@@ -142,15 +143,73 @@ def _weights(body: Any, m: int, problems: list[dict[str, Any]]) -> list[float]:
     return [x / tot for x in w]
 
 
-def _no_multi_baseline(ctx: AppContext, ps: dict[str, Any]) -> None:
-    """내장 최적화는 표(table) 조합 배치로 형상을 만들므로 다중 baseline 세트(baseline별 층화·배정, §7.3.8)는 지원하지 않는다."""
+def multi_baseline(ctx: AppContext, ps: dict[str, Any]) -> dict[str, Any] | None:
+    """다중 baseline 세트면 확정 매칭표 {usage, baselines, pm}(opt-native §7 — 409 MULTI_BASELINE_UNSUPPORTED 조건부 해제).
+    미확정이면 409 PARAM_MAP_UNCONFIRMED. 단일 세트면 None."""
     from physicsai_core.geometry import baselines as bl
 
     from .param_set_native_api import set_path
 
-    if bl.is_multi(set_path(ctx, ps)):
-        raise DomainError("MULTI_BASELINE_UNSUPPORTED", "다중 baseline 세트는 내장 최적화를 지원하지 않습니다 — 단일 baseline 세트를 쓰세요",
+    S = set_path(ctx, ps)
+    if not bl.is_multi(S):
+        return None
+    try:
+        pm = bl.load(S, ctx.settings.ui.max_artifact_bytes)
+    except bl.MapError as exc:
+        raise DomainError(exc.code, exc.message, status=409, param_set_id=ps["id"]) from None
+    if not pm or pm.get("status") != "confirmed":
+        raise DomainError("PARAM_MAP_UNCONFIRMED", "매칭표가 확정되지 않았습니다 — ③ 매칭표를 확정한 뒤 최적화하세요",
                           status=409, param_set_id=ps["id"])
+    return {"usage": pm.get("usage"), "baselines": bl.baseline_ids(pm), "pm": pm}
+
+
+def _multi_settings(multi: dict[str, Any], ps: dict[str, Any], levels: list[str] | None) -> dict[str, Any]:
+    """settings.multi_baseline(opt-native §7): 위상 변형 = 선택 수준별 활성 표·N/A 가능 이름(학습 열 순서), 범위 분할 = baseline별 feasible."""
+    rows = [r for r in ps["parameters"] if isinstance(r.get("baselines"), dict)]
+    out: dict[str, Any] = {"usage": multi["usage"], "baselines": list(multi["baselines"])}
+    if multi["usage"] == "topology":
+        lv = list(levels or multi["baselines"])
+        act = {str(r["name"]): [r["baselines"].get(b) is not None for b in lv] for r in rows}
+        out["active"] = {n: a for n, a in act.items() if not all(a)}
+        out["na"] = [n for n in act if not all(act[n])]
+    else:
+        cover: dict[str, dict[str, list[float] | None]] = {}
+        for r in rows:
+            per: dict[str, list[float] | None] = {}
+            for b in multi["baselines"]:
+                info = r["baselines"].get(b)
+                fe = (info.get("feasible") or {"min": info["min"], "max": info["max"]}) if isinstance(info, dict) else None
+                per[b] = [float(fe["min"]), float(fe["max"])] if fe else None
+            cover[str(r["name"])] = per
+        out["cover"] = cover
+    return out
+
+
+def _levels(multi: dict[str, Any] | None, body: Any, so: Any, problems: list[dict[str, Any]]) -> list[str] | None:
+    """범주 baseline 수준(위상 변형 세트만, 매칭표 baseline 순서). 요청 levels로 줄일 수 있고 1개면 고정."""
+    given = body.levels
+    if multi is None or multi["usage"] != "topology":
+        if given:
+            _p(problems, "LEVELS_INVALID", "수준(levels)은 다중 baseline 위상 변형 세트에서만 쓸 수 있습니다", "levels")
+        return None
+    ids = list(multi["baselines"])
+    lv = ids
+    if given is not None:
+        bad = [k for k in given if k != "baseline"]
+        if bad:
+            _p(problems, "LEVELS_INVALID", f"수준은 baseline 변수만 줄 수 있습니다: {', '.join(bad)}", "levels")
+        sel = given.get("baseline")
+        if sel is not None:
+            unknown = [x for x in sel if x not in ids]
+            if not sel:
+                _p(problems, "LEVELS_INVALID", "baseline 수준 목록이 비어 있습니다", "levels.baseline")
+            elif unknown:
+                _p(problems, "LEVELS_INVALID", f"매칭표에 없는 baseline입니다: {', '.join(unknown)}", "levels.baseline")
+            else:
+                lv = [b for b in ids if b in sel]
+    if len(lv) > so.max_levels and not any(p["code"] == "LEVELS_INVALID" for p in problems):
+        _p(problems, "TOO_MANY_LEVELS", f"baseline 수준은 최대 {so.max_levels}개입니다(현재 {len(lv)}개)", "levels.baseline")
+    return lv
 
 
 def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[str, Any]:
@@ -163,17 +222,29 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     kind = template_kind(ps)
     m = model_for(conn, study, body.model_id)
     check_engine_match(ps, m)  # geometry-engine.md §7.7: 세트·모델 엔진 일치(409 ENGINE_MISMATCH)
+    multi = None
     if engine_of(ps) == "native":
         native_set_gate(ctx, ps)
-        _no_multi_baseline(ctx, ps)
+        multi = multi_baseline(ctx, ps)  # opt-native §7: 확정 세트만(미확정 409 PARAM_MAP_UNCONFIRMED)
     else:
         require_template_features(cfg, kind)
     problems: list[dict[str, Any]] = []
     names, integer, bounds, fixed = _bounds(ps, body, so, problems)
+    cat_levels = _levels(multi, body, so, problems)
+    mb_settings = _multi_settings(multi, ps, cat_levels) if multi is not None else None
+    if cat_levels is not None:  # 위상 변형: 범주 변수 baseline = 수준 인덱스 0..L−1(정수 표현, 인코딩은 원-핫)
+        names = [*names, "baseline"]
+        integer = sorted(set(integer) | {"baseline"})
+        bounds["baseline"] = [0.0, float(len(cat_levels) - 1)]
+        if len(cat_levels) == 1:
+            fixed["baseline"] = 0.0
     free = [n for n in names if n in bounds and n not in fixed]
+    verification = body.verification if body.verification is not None else "loop"
     iterations = body.iterations if body.iterations is not None else so.default_iterations
     candidates = body.candidates if body.candidates is not None else so.default_candidates
     tol = body.tol_rel if body.tol_rel is not None else so.default_tol_rel
+    if verification == "none":  # opt-native §8: 반복·개선 기준은 무시하고 반복 1로 저장
+        iterations, tol = 1, so.default_tol_rel
     if not 1 <= iterations <= so.max_iterations:
         _p(problems, "ITERATIONS_RANGE", f"반복은 1~{so.max_iterations}회입니다", "iterations")
     if not 1 <= candidates <= so.max_candidates:
@@ -199,8 +270,10 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         rows = run_metric_rows(ctx, conn, study, reuse["id"])
         explore_count = 0
     else:
+        n_lv = len(cat_levels) if cat_levels else 1  # R-3: 범주 수준 수를 곱한 값을 기본(권장)으로
         explore_count = body.explore.count if body.explore.count is not None else \
-            ds.default_explore_count(len(free), cfg.predict_batch.max_runs)
+            min(ds.default_explore_count(len([n for n in free if n != "baseline"]), cfg.predict_batch.max_runs) * n_lv,
+                cfg.predict_batch.max_runs)
         if explore_count < need:
             _p(problems, "EXPLORE_TOO_FEW", f"탐색 run은 최소 {need}개입니다(자유 변수 {len(free)}개)", "explore.count")
         elif explore_count > cfg.predict_batch.max_runs:
@@ -262,6 +335,14 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
             _p(problems, "OBJECTIVE_DUPLICATE", f"지표 '{k[0]}'가 목적·제약·관찰에 겹칩니다", grp)
         seen.setdefault(k, grp)
     weights = _weights(body, len(objs), problems) if objs else []
+    # 알고리즘·고급 옵션·검증 방식(opt-native §6.1·§6.7·§8)
+    algorithm = body.algorithm if body.algorithm is not None else "ego"
+    n_g = len(free)
+    problems += so_algo.algorithm_problems(algorithm, verification, max(len(objs), 1))
+    if algorithm in so_algo.ALGORITHMS:
+        problems += so_algo.option_problems(algorithm, body.algo_options, n_g, so)
+    algo_options = (so_algo.resolve_options(algorithm, body.algo_options, n_g, so)
+                    if algorithm in ("ga", "nsga2") and not any(p["code"] == "ALGO_OPTIONS_INVALID" for p in problems) else {})
     # 성능 사용 조건
     used_perf = [x for x in dict.fromkeys(mm for mm, _s in [k for _g, k in keys]) if x.startswith(PERF_PREFIX) and x[5:] in perfs]
     if reuse is None and any(perfs[x[5:]].source == "H3D" for x in used_perf):
@@ -296,11 +377,18 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         "performances": {x[5:]: {"unit": perfs[x[5:]].unit, "spec": dict(perfs[x[5:]].spec)} for x in used_perf},
         "surrogate": body.surrogate or so.default_surrogate, "iterations": iterations, "candidates": candidates,
         "tol_rel": tol, "seed": body.seed, "multi_execution": body.multi_execution, "capture": bool(body.capture),
-        "explore": explore,
+        "explore": explore, "algorithm": algorithm, "algo_options": algo_options, "verification": verification,
     }
+    if cat_levels is not None:  # opt-native §7: 다중 baseline 위상 세트 범주 변수
+        settings["levels"] = {"baseline": list(cat_levels)}
+    if mb_settings is not None:
+        settings["multi_baseline"] = mb_settings
+    kinds = {n: ("integer" if n in integer else "continuous") for n in free}
+    if cat_levels is not None and len(cat_levels) > 1:
+        kinds["baseline"] = "categorical"
     return {"ps": ps, "model": m, "kind": kind, "settings": settings, "problems": problems, "free": free,
             "integer": integer, "fixed": fixed, "explore_count": explore_count, "reuse": reuse, "valid_points": valid_points,
-            "performances": perf_info}
+            "performances": perf_info, "variables_kind": kinds, "multi": multi}
 
 
 def _constraint_row(c: Any) -> dict[str, Any]:

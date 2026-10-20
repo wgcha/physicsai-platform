@@ -15,11 +15,11 @@ import { ROW_STATE_LABEL, rowTone } from "../../stage4/batch/batchTable";
 import { ConvergenceChart } from "./ConvergenceChart";
 import { HvChart } from "./HvChart";
 import { ParetoSection } from "./ParetoCard";
-import { ContourCompareCard, OptimumCompareCard, ResultSummaryCard } from "./ResultCards";
+import { ContourCompareCard, OptimumCompareCard, ResultSummaryCard, UnverifiedCard } from "./ResultCards";
 import { FemEntryButton } from "../../stage4/verify/useFemVerifyButton";
 import "../../../styles/surrogateOpt.css";
 import "../../../styles/surrogateMulti.css";
-import { SO_STATUS_LABEL, metricLabel, objectiveDefs, qualityGrade, soTone } from "./soRules";
+import { SO_STATUS_LABEL, algoStatusText, fmtVar, isSurrogateOnly, levelsOf, metricLabel, objectiveDefs, qualityGrade, searcherText, soTone, type AlgoRecord } from "./soRules";
 import { KIND_LABEL } from "./ParetoTable";
 
 const BATCH_ACTIVE = ["GENERATING", "PREDICTING"];
@@ -74,6 +74,9 @@ export function SurrogateResult({ optId }: { optId: string }) {
   const objLabel = multi ? defs.map((d) => d.label).join(" · ") : defs[0]?.label ?? metricLabel(s.objective.metric, s.objective.series);
   const b = o.best;
   const runs = (o.runs ?? []) as SoRun[];
+  const algoText = algoStatusText(o);
+  const algoName = (o.settings as { algorithm?: string }).algorithm;
+  const none = isSurrogateOnly(o);
 
   return (
     <>
@@ -83,6 +86,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
           <span data-testid="so-progress">{o.progress_text}</span>
           <span className="muted small">{multi ? `다목적(${defs.length}개) ${objLabel}` : `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`} · 반복 {o.iter_no}/{s.iterations} · {(o.param_set as { label?: string }).label ?? "템플릿"} · {(o.model as { name?: string }).name}</span>
         </div>
+        {algoText && <div className="run-action-row"><span className="small" data-testid="so-algo">{algoText}</span></div>}
         <div className="run-action-row">
           {o.can_cancel && <button type="button" className="btn small danger" onClick={() => setConfirm(true)}>일괄 취소</button>}
           {o.can_resume && <button type="button" className="btn small primary" onClick={() => void act(() => surrogateApi.resume(o.id))}>이어서 실행</button>}
@@ -91,6 +95,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
         {actionError && <p className="error-text small" role="alert">{actionError}</p>}
       </Card>
       {multi && <ParetoSection o={o} base={base} onChanged={() => void load()} downloadCsv={() => void downloadCsv()} />}
+      {!multi && none && <UnverifiedCard o={o} onChanged={() => void load()} />}
       {multi && (
         <Card span={9} title="HV 그래프" aside={<span className="muted small">검증된 전선의 하이퍼볼륨 — 기준점은 탐색 자료로 고정</span>}>
           <HvChart opt={o} />
@@ -115,6 +120,9 @@ export function SurrogateResult({ optId }: { optId: string }) {
           <span className="mono small" data-testid="so-dir">{o.dir}</span>
           <CopyButton text={o.dir} label="경로 복사" />
         </div>
+        {algoName && algoName !== "ego" && (
+          <p className="muted small" data-testid="so-algo-files">반복 폴더 iter_NN/algo_history.csv(세대 기록) · final_population.csv(최종 집단){multi ? " · predicted_front.csv(예측 전선 전체)" : ""}</p>
+        )}
       </Card>
       {confirm && (
         <ConfirmDialog
@@ -140,7 +148,7 @@ function QualityTable({ iterations }: { iterations: SoIteration[] }) {
     <div className="table-wrap">
       <table className="table compact" aria-label="대리모델 품질">
         <thead>
-          <tr><th className="num">반복</th><th>종류</th><th className="num">n</th><th className="num">LOO RMSE</th><th className="num">NRMSE</th><th className="num">Q²</th><th className="num">예측-검증 MAE</th><th>등급</th></tr>
+          <tr><th className="num">반복</th><th>종류</th><th className="num">n</th><th className="num">LOO RMSE</th><th className="num">NRMSE</th><th className="num">Q²</th><th className="num">예측-검증 MAE</th><th>등급</th><th>탐색기</th></tr>
         </thead>
         <tbody>
           {rows.map((it) => {
@@ -156,6 +164,7 @@ function QualityTable({ iterations }: { iterations: SoIteration[] }) {
                 <td className="num mono">{fmtNum(f.q2, 3)}</td>
                 <td className="num mono">{fmtNum(f.pred_vs_verified_mae)}</td>
                 <td className="small"><span className={`pill ${g.tone}`}>{g.label}</span>{g.hint && <span className="muted"> {g.hint}</span>}</td>
+                <td className="small" data-testid={`searcher-${it.iter_no}`}>{searcherText((f as { algo?: AlgoRecord }).algo)}</td>
               </tr>
             );
           })}
@@ -174,7 +183,7 @@ function QualityTableMulti({ o }: { o: SurrogateOpt }) {
     <div className="table-wrap">
       <table className="table compact" aria-label="대리모델 품질">
         <thead>
-          <tr><th className="num">반복</th><th>목적</th><th>종류</th><th className="num">n</th><th className="num">LOO RMSE</th><th className="num">NRMSE</th><th className="num">예측-검증 MAE</th></tr>
+          <tr><th className="num">반복</th><th>목적</th><th>종류</th><th className="num">n</th><th className="num">LOO RMSE</th><th className="num">NRMSE</th><th className="num">예측-검증 MAE</th><th>탐색기</th></tr>
         </thead>
         <tbody>
           {rows.map(({ it, f, i }) => (
@@ -186,6 +195,7 @@ function QualityTableMulti({ o }: { o: SurrogateOpt }) {
               <td className="num mono">{fmtNum(f.loo_rmse)}</td>
               <td className="num mono">{fmtNum(f.loo_nrmse, 3)}</td>
               <td className="num mono">{i === 0 ? fmtNum(it.fit?.pred_vs_verified_mae) : ""}</td>
+              <td className="small" data-testid={`searcher-${it.iter_no}-${i + 1}`}>{i === 0 ? searcherText((it.fit as { algo?: AlgoRecord } | null)?.algo) : ""}</td>
             </tr>
           ))}
         </tbody>
@@ -222,7 +232,7 @@ function RunsTable({ o, optId, runs, names, best }: { o: SurrogateOpt; optId: st
                 <td className="num">{r.kind === "EXTRA" ? KIND_LABEL.EXTRA : r.iter_no}</td>
                 <td>{r.batch_label}</td>
                 <td className="num">{r.doe_no}</td>
-                {names.map((n) => <td key={n} className="num mono">{fmtNum((r.values as Record<string, number>)[n])}</td>)}
+                {names.map((n) => <td key={n} className="num mono">{fmtVar(n, (r.values as Record<string, number>)[n], levelsOf(o))}</td>)}
                 {multi ? defs.map((d, i) => <td key={d.metric} className="num mono">{fmtNum(r.objectives?.[i] ?? null)}</td>) : <td className="num mono">{fmtNum(r.objective)}</td>}
                 {cons.map((_, i) => <td key={i} className="num mono">{fmtNum(r.constraints?.[i] ?? null)}</td>)}
                 {obs.map((c) => <td key={c.metric} className="num mono">{fmtNum(r.observed?.[c.metric] ?? null)}</td>)}

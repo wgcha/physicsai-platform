@@ -2,6 +2,8 @@
 
 > 이 문서는 phase3.md §23과 변경 메모 D3-66입니다. s15~s17과 같은 사정으로 별도 파일로 두며, 다음 Plan 커밋에서 phase3.md 본문과 변경 메모 목록으로 옮깁니다. 절 번호·용어·원칙은 phase2.md §6.4(TD_DOE_GEN), phase3.md §11.4(GEOM_UPDATE·MESH·RAD_ASSEMBLE 판정), §14.5(④ BP_GEN·`run_parallel`), [s15_sampling.md](s15_sampling.md) §20(표본 방식·설명문)을 따릅니다.
 >
+> 후속(2026-10-20): 생성 방식 `hyperstudy`(`features.train_doe`)는 레거시 선택 기능이 되었습니다(미설정 시 화면에서 숨김) — [opt-native.md](opt-native.md) §4.
+>
 > 기준선은 `claude/phase3` a5c6696(S17, migration head `0014_multiobj`)입니다. 이 문서의 migration은 `0015_doe_platform_gen`(Revises `0014_multiobj`)입니다.
 
 ## 23. S18 ① 학습 DOE 플랫폼 동시 생성 (사용자 VOC·결정 2026-10-19, D3-66)

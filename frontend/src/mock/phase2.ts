@@ -56,7 +56,8 @@ export class Phase2Mock {
 
   feature(k: FeatureKey): FeatureState {
     if ((k === "train_solve" || k === "fem_verify" || k === "fem_verify_rebuild") && !this.s.hpcConfigured) return { enabled: false, missing: ["hpc.mode"] };
-    return this.disabled.has(k) ? { enabled: false, missing: FEATURE_MISSING[k] } : { enabled: true, missing: [] };
+    const f: FeatureState = this.disabled.has(k) ? { enabled: false, missing: FEATURE_MISSING[k] } : { enabled: true, missing: [] };
+    return k === "train_doe" || k === "optimize" ? { ...f, legacy: true } : f; // opt-native §4.2 HyperStudy 레거시
   }
 
   // ---------------- seed(원래 순서: ① → SPDM·② → ⑤ → 환경 점검) ----------------
@@ -98,6 +99,16 @@ export class Phase2Mock {
     const latest = this.envChecks[0];
     return {
       features: Object.fromEntries(ALL_FEATURES.map((k) => [k, this.feature(k)])),
+      // phase3 §18.6 + opt-native §4.2·§9: 내장 최적화 기본값·알고리즘
+      surrogate_opt: {
+        defaults: { iterations: 3, candidates: 4, tol_rel: 0.01, surrogate: "gp" }, max_variables: 20, max_iterations: 10, max_candidates: 10,
+        max_objectives: 3, max_observe: 10, max_extra_points: 10, algorithms: ["ego", "ga", "nsga2"], default_algorithm: "ego",
+        algo_defaults: {
+          ga: { pop_size: null, generations: 150, crossover_prob: 0.9, mutation_prob: null, eta_c: 15, eta_m: 20 },
+          nsga2: { pop_size: null, generations: 200, crossover_prob: 0.9, mutation_prob: null, eta_c: 20, eta_m: 20 },
+        },
+        ga_max_evals: 100000, verifications: ["loop", "none"], max_levels: 8,
+      },
       resources: [
         { key: "batchrun_dir", configured: true, ok: true },
         { key: "pyd_dir", configured: !this.disabled.has("train_extract"), ok: !this.disabled.has("train_extract") },

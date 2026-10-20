@@ -53,3 +53,64 @@ def build_multi_matrix(source: Mapping[str, Any], param_set: Mapping[str, Any], 
     if n_nc:
         notes.append({"code": bl.NO_COVER, "message": f"{n_nc}개 조합은 덮는 baseline이 없어 생성 때 스킵됩니다"})
     return BatchMatrix("LHS", rows, [], meta, notes)
+
+
+# ---- opt-native §7: 내장 최적화 소유 배치(탐색 LHS·검증·추가 검증 표) ---------------------------------------------
+
+
+def restrict(pm: Mapping[str, Any], params: list[dict[str, Any]], levels: list[str] | None,
+             bounds: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """매칭표·파라미터 행 사본: baseline을 levels로 줄이고(위상 변형), baseline별 범위를 최적화 범위와 겹치게 자른다(겹침이 없으면 원래 범위)."""
+    import copy
+
+    pm2 = copy.deepcopy(dict(pm))
+    if levels is not None:
+        pm2["baselines"] = [b for b in pm2.get("baselines") or [] if isinstance(b, dict) and b.get("id") in levels]
+    rows = copy.deepcopy(list(params))
+    for r in rows:
+        bd = (bounds or {}).get(str(r.get("name")))
+        if not bd:
+            continue
+        lo, hi = float(bd[0]), float(bd[1])
+        if isinstance(r.get("baselines"), dict):
+            for info in r["baselines"].values():
+                if isinstance(info, dict) and max(lo, float(info["min"])) <= min(hi, float(info["max"])):
+                    info["min"], info["max"] = max(lo, float(info["min"])), min(hi, float(info["max"]))
+        elif max(lo, float(r["min"])) <= min(hi, float(r["max"])):
+            r["min"], r["max"] = max(lo, float(r["min"])), min(hi, float(r["max"]))
+    return pm2, rows
+
+
+def build_multi_table(points: list[Mapping[str, Any]], param_set: Mapping[str, Any], pm: Mapping[str, Any]) -> BatchMatrix:
+    """표 조합(내장 최적화 검증·추가 검증 — opt-native §7): 점 = {공통 이름: 값, (위상 변형) "baseline": id}.
+    배정: topology = 점의 baseline, range = `assign_baseline`(없으면 None → 생성 때 BASELINE_NO_COVER). 행 값 N/A = 0."""
+    params = list(param_set["parameters"])
+    per = {str(r["name"]): r for r in params if isinstance(r.get("baselines"), dict)}
+    names = [str(r["name"]) for r in params]
+    bids = bl.baseline_ids(pm)
+    topo = pm.get("usage") == "topology"
+    rows, stratum, assign, problems = [], {}, {}, []
+    for k, p in enumerate(points, 1):
+        b = p.get("baseline") if topo else None
+        if topo and b not in bids:
+            problems.append({"code": "BASELINE_INVALID", "message": f"{k}행: baseline '{b}'이 매칭표에 없습니다"})
+            continue
+        vals: dict[str, float | None] = {}
+        for n in names:
+            v = p.get(n)
+            act = n not in per or (per[n]["baselines"].get(b) is not None if topo else True)
+            vals[n] = float(v) if (act and isinstance(v, (int, float))) else None
+        target = b if topo else bl.assign_baseline(pm, params, {n: v for n, v in vals.items() if v is not None})
+        if not topo and target is not None:  # 범위 분할: 배정 baseline에서 비활성인 변수는 N/A
+            vals = {n: (None if n in per and per[n]["baselines"].get(target) is None else v) for n, v in vals.items()}
+        stratum[str(k)], assign[str(k)] = target, target
+        values = {n: (0.0 if v is None else float(v)) for n, v in vals.items()}
+        present = {n: float(v) for n, v in vals.items() if v is not None}
+        oor = [o["name"] for o in nearest.out_of_range(params, present)]  # type: ignore[arg-type]
+        rows.append(BatchRow(k, run_key_for(k), values, dict(values), oor))
+    meta = {"multi_baseline": {"usage": pm.get("usage"), "baselines": bids, "stratum": stratum, "assign": assign}}
+    notes = []
+    n_nc = sum(1 for v in assign.values() if v is None)
+    if n_nc:
+        notes.append({"code": bl.NO_COVER, "message": f"{n_nc}개 조합은 덮는 baseline이 없어 생성 때 스킵됩니다"})
+    return BatchMatrix("TABLE", rows, problems, meta, notes)

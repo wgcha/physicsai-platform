@@ -3069,6 +3069,12 @@ export interface components {
         FeatureState: {
             /** Enabled */
             enabled: boolean;
+            /**
+             * Legacy
+             * @description opt-native §4.2: HyperStudy 레거시 기능(train_doe·optimize) — 미설정이면 화면에서 숨김
+             * @default false
+             */
+            legacy: boolean;
             /** Missing */
             missing: string[];
         };
@@ -5633,12 +5639,18 @@ export interface components {
         SoCandidate: {
             /** Acq */
             acq?: number | null;
+            /** Baseline */
+            baseline?: string | null;
             /** Constraints Pred */
             constraints_pred?: number[];
+            /** Cv */
+            cv?: number | null;
             /** Doe No */
             doe_no: number;
             /** Ei */
             ei?: number | null;
+            /** Pof */
+            pof?: number | null;
             /** Predicted */
             predicted?: number | null;
             /** Predicted Objectives */
@@ -5778,6 +5790,10 @@ export interface components {
         };
         /** SoFit */
         SoFit: {
+            /** Algo */
+            algo?: {
+                [key: string]: unknown;
+            } | null;
             /** D Free */
             d_free: number;
             /** Kind */
@@ -5994,6 +6010,8 @@ export interface components {
          * @description 대리모델 예측 전선 점(미검증).
          */
         SoPredictedPoint: {
+            /** Baseline */
+            baseline?: string | null;
             /** Mean */
             mean: number[];
             /** Pof */
@@ -6112,6 +6130,24 @@ export interface components {
             study_id: string;
             /** Total Bytes */
             total_bytes?: number | null;
+        };
+        /**
+         * StatusAlgoDefaults
+         * @description GA·NSGA-II 고급 옵션 기본값(opt-native §6.7). pop_size·mutation_prob null = 변수 수로 정하는 식.
+         */
+        StatusAlgoDefaults: {
+            /** Crossover Prob */
+            crossover_prob: number;
+            /** Eta C */
+            eta_c: number;
+            /** Eta M */
+            eta_m: number;
+            /** Generations */
+            generations: number;
+            /** Mutation Prob */
+            mutation_prob?: number | null;
+            /** Pop Size */
+            pop_size?: number | null;
         };
         /**
          * StatusCapture
@@ -6304,7 +6340,23 @@ export interface components {
          * @description ⑤ 내장 최적화 화면 기본값·상한(config `surrogate_opt`, phase3 §18.6).
          */
         StatusSurrogateOpt: {
+            /** Algo Defaults */
+            algo_defaults?: {
+                [key: string]: components["schemas"]["StatusAlgoDefaults"];
+            };
+            /** Algorithms */
+            algorithms?: string[];
+            /**
+             * Default Algorithm
+             * @default ego
+             */
+            default_algorithm: string;
             defaults: components["schemas"]["StatusSurrogateDefaults"];
+            /**
+             * Ga Max Evals
+             * @default 100000
+             */
+            ga_max_evals: number;
             /** Max Candidates */
             max_candidates: number;
             /**
@@ -6314,6 +6366,11 @@ export interface components {
             max_extra_points: number;
             /** Max Iterations */
             max_iterations: number;
+            /**
+             * Max Levels
+             * @default 8
+             */
+            max_levels: number;
             /**
              * Max Objectives
              * @default 3
@@ -6326,6 +6383,8 @@ export interface components {
             max_observe: number;
             /** Max Variables */
             max_variables: number;
+            /** Verifications */
+            verifications?: string[];
         };
         /** StatusWorker */
         StatusWorker: {
@@ -6626,6 +6685,18 @@ export interface components {
          *     목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.
          */
         SurrogateOptCreate: {
+            /**
+             * Algo Options
+             * @description GA·NSGA-II 고급 옵션 {pop_size, generations, crossover_prob, mutation_prob, eta_c, eta_m}(null·생략 = 기본). ego면 비워야 한다
+             */
+            algo_options?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Algorithm
+             * @description ego(기본) | ga(단일 목적) | nsga2(다목적)
+             */
+            algorithm?: string | null;
             /** Bounds */
             bounds?: {
                 [key: string]: number[];
@@ -6643,6 +6714,13 @@ export interface components {
             explore: components["schemas"]["SoExploreNew"] | components["schemas"]["SoExploreReuse"];
             /** Iterations */
             iterations?: number | null;
+            /**
+             * Levels
+             * @description 범주 수준 제한 {"baseline": [id…]}(다중 baseline 위상 세트만)
+             */
+            levels?: {
+                [key: string]: string[];
+            } | null;
             /** Model Id */
             model_id?: string | null;
             /**
@@ -6666,11 +6744,25 @@ export interface components {
             surrogate?: ("gp" | "rbf") | null;
             /** Tol Rel */
             tol_rel?: number | null;
+            /**
+             * Verification
+             * @description loop(기본, 반복 검증) | none(대리모델만)
+             */
+            verification?: string | null;
             /** Weights */
             weights?: number[] | null;
         };
         /** SurrogateOptPreview */
         SurrogateOptPreview: {
+            /** Algo Options */
+            algo_options?: {
+                [key: string]: unknown;
+            };
+            /**
+             * Algorithm
+             * @default ego
+             */
+            algorithm: string;
             /** Estimate Min */
             estimate_min?: number | null;
             /** Explore Count */
@@ -6683,6 +6775,10 @@ export interface components {
             free_variables: string[];
             /** Integer Variables */
             integer_variables: string[];
+            /** Levels */
+            levels?: {
+                [key: string]: string[];
+            } | null;
             /** Max Total Runs */
             max_total_runs: number;
             /**
@@ -6696,6 +6792,15 @@ export interface components {
             performances?: components["schemas"]["SoPerformance"][];
             /** Problems */
             problems: components["schemas"]["SoProblem"][];
+            /** Variables Kind */
+            variables_kind?: {
+                [key: string]: string;
+            };
+            /**
+             * Verification
+             * @default loop
+             */
+            verification: string;
         };
         /** SurrogateOptResume */
         SurrogateOptResume: {

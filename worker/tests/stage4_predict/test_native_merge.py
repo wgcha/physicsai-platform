@@ -1,6 +1,6 @@
 """phase3 S16·S17 × native 세트 병합 위험 보완(geometry-engine.md §7.3.5·§7.3.7·§11.1): native 예측의 조립 FEM 검증(reuse·rebuild —
 모핑 include 재사용, FV_MESH 생략), native 일괄 예측의 성능 다시 추출(PB_RESP_EXTRACT), 내장 다목적 최적화(native 세트 흐름·
-다중 baseline 세트는 409). 가짜 paicad·hw·edspy·PBS."""
+다중 baseline 미확정 세트는 409). 가짜 paicad·hw·edspy·PBS."""
 
 from __future__ import annotations
 
@@ -115,8 +115,8 @@ def test_multiobjective_surrogate_on_native_set_and_multi_baseline_blocked(nativ
     d = env.c.get(f"{API}/surrogate-opts/{opt['id']}", headers=P).json()
     assert d["status"] == "DONE" and d["mode"] == "multi", (d["status"], d.get("progress_text"))
     assert d["iterations"] and d["iterations"][0]["kind"] == "EXPLORE"
-    # 다중 baseline 세트는 내장 최적화 409(표 조합 배치는 baseline 배정을 할 수 없음)
+    # 다중 baseline 세트: 매칭표 미확정이면 409 PARAM_MAP_UNCONFIRMED(opt-native §7 — MULTI_BASELINE_UNSUPPORTED는 조건부 해제)
     _add(env, ps["id"], "B2", B2_TOPO, monkeypatch)
     r = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts/preview", headers=PW, json=body)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "MULTI_BASELINE_UNSUPPORTED", r.text
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "PARAM_MAP_UNCONFIRMED", r.text
     assert os.path.isfile(env.sroot / "04_params" / ps["id"] / "param_map.json")

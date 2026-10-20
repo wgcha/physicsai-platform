@@ -864,7 +864,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 | **4B 다중 baseline**(고급 옵션, **단계 2 envelope 결과 확인 후 착수**, 4 이후) | `paicad map`, `param_map.json`(§4.10), `PARAM_SET_NATIVE` `BL_MAP` 단계(§7.3.8)·`assign_baseline`·층화 LHS, `baseline_id` run 메타·범주형 입력, 합성 세트 2종(리브 개수 다른 2 baseline = 위상 변형 / 같은 위상·공칭 다른 3 baseline = 범위 분할), UI 접힘, fake_paicad `map` | 합성 세트로: 자동 매칭률(정답 매핑 대비)·N/A 처리, 이름 충돌 `PARAM_NAME_CONFLICT`, 범위 분할 경계·겹침·틈(`BASELINE_NO_COVER`) 배정 표, 층화 LHS baseline별 샘플 수 차 ≤ 1·같은 seed 같은 행렬, 데이터셋 1개에 `baseline_id`. **단일 baseline 세트의 기존 시험 무수정 통과** |
 | **4C 쉘 형상 모핑**(판금 비드) | → [shell-morph.md](shell-morph.md) | shell-morph.md §9 |
 | **3S 쉘 두께**(단계 3과 병행 가능, CAD 불필요) | `paicad props scan/apply`, 파라미터 표 병합(extract 결과 + PROP), 두께만 있는 param_set 허용, UI 표 행, 합성 시험 | 합성 조립 rad(공유 PROP·요소별 두께·TYPE9 포함)로 `PROP_OVERRIDDEN_BY_ELEMENT`·`PROP_THICKNESS_INVALID`·공유 경고·'미지원' 표시 확인, 출력 diff = 해당 PROP 두께 필드만, 원본·SPDM 불변 |
-| **5 (선택) 쉘 형상** | 쉘 형상 모핑 | 별도 계약. 단계 5(hstpy 대체)는 phase3 S17 내장 다목적 최적화(§22)로 대체 검토 |
+| **5 (선택) 쉘 형상** | 쉘 형상 모핑 | 별도 계약. 단계 5(hstpy 대체)는 phase3 S17 내장 다목적 최적화(§22)로 대체 검토 — 확정(2026-10-20): HyperStudy 독립·GA·NSGA-II·범주 `baseline`은 [opt-native.md](opt-native.md) |
 | (비범위) 재메시 | 비범위 — 모핑 한계 측정 결과를 본 뒤 재검토 | 근거 = 단계 2 envelope 보고서(§11.2) |
 
 ---

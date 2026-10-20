@@ -30,6 +30,7 @@ from physicsai_core.fileutil import write_json_atomic, write_text
 from physicsai_core.stage4_predict import contour_capture as cc
 from physicsai_core.stage4_predict import performance, run_metrics
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for
+from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 from physicsai_core.stage5_optimize.surrogate import limit_threads
 
@@ -155,7 +156,7 @@ def collect_points(ctx: Any, opt: dict[str, Any], problem: ds.Problem, upto: int
             for r in pb_repo.runs_with_jobs(conn, b["id"]):
                 ctx.checkpoint()
                 state = pb_repo.row_state(r, r["job_state"])
-                vals = {k: float(v) for k, v in (r["applied_values"] or {}).items()}
+                vals = ds.run_values(r["applied_values"], b.get("source_meta"), r["doe_no"], problem.cat_spec)  # opt-native §7
                 objs: list[float | None] = [None] * problem.m
                 cons: list[float | None] = [None] * len(problem.constraints)
                 obs: dict[str, float | None] = {o.key: None for o in problem.observe}
@@ -267,7 +268,7 @@ def _write_opt_json(ctx: Any, opt: dict[str, Any], O: str) -> None:
         "param_set": {"id": opt["param_set_id"], "label": ps.get("label"), "input_kind": opt["input_kind"]},
         "model": {"id": opt["model_id"], "name": (m or {}).get("name"), "version": (m or {}).get("version"),
                   "psmdl_sha256": (m or {}).get("psmdl_sha256")},
-        "seed": opt["settings"].get("seed"),
+        "seed": opt["settings"].get("seed"), **_algo_meta(opt["settings"]),
         "hv_frame": opt.get("hv_frame"), "used_weights": mo.last_used_weights(its),
         "batches": [{"iter_no": it["iter_no"], "kind": it["kind"], "batch_id": it["batch_id"],
                      "label": batch_label(labels[it["iter_no"]]) if labels.get(it["iter_no"]) else None} for it in its],
@@ -344,6 +345,11 @@ def so_propose(ctx: Any) -> None:
         fit = infill.FitResult.from_json(json.load(fh))
     designs, failed = ds.merge(_read_points(ctx, O, problem, r - 1), problem)
     clock = _Clock(ctx)
+    if so_algo.settings_algorithm(s) != "ego":  # opt-native §6: GA·NSGA-II 내부 탐색기
+        from .surrogate_evo import propose_evo
+
+        propose_evo(ctx, opt, problem, fit, designs, failed, _iter_dir(O, r), r, clock)
+        return
     if problem.multi:  # S17 §22.5.3·§22.5.4 예측 전선 + HVI·ParEGO
         mo.propose_multi(ctx, opt, problem, fit, designs, failed, _iter_dir(O, r), r, clock)
         return
@@ -353,7 +359,7 @@ def so_propose(ctx: Any) -> None:
                                         progress=lambda i, n: ctx.progress(i / n * 100.0, f"후보 {i}/{n}"), checkpoint=clock)
     except infill.SurrogateError as exc:
         raise StepFailure(exc.code, exc.message) from None
-    rows = [c.as_dict(i) for i, c in enumerate(cands, 1)]
+    rows = ds.tag_baseline([c.as_dict(i) for i, c in enumerate(cands, 1)], problem)
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     cons = [c.key for c in problem.constraints]
@@ -362,7 +368,8 @@ def so_propose(ctx: Any) -> None:
         w.writerow([row["doe_no"], *[repr(float(row["values"][n])) for n in problem.names], repr(row["predicted"]),
                     "" if row["ei"] is None else repr(row["ei"]), *[repr(v) for v in row["constraints_pred"]]])
     write_text(os.path.join(_iter_dir(O, r), "candidates.csv"), buf.getvalue())
-    patch: dict[str, Any] = {"candidates": rows, "surrogate_optimum": optimum.as_dict() if optimum else None}
+    patch: dict[str, Any] = {"candidates": rows, "surrogate_optimum": optimum.as_dict() if optimum else None,
+                             "fit": {**(ctx.result().get("fit") or {}), "algo": {"name": "ego"}}}  # opt-native §6.6
     if not rows:
         patch["stop"] = ds.STOP_NO_NEW
         ctx.log("새 후보 없음 — 기존 설계와 모두 같습니다")
@@ -370,6 +377,26 @@ def so_propose(ctx: Any) -> None:
 
 
 # ---- SO_NEXT --------------------------------------------------------------------------------------
+
+
+def _multi_matrix(ctx: Any, ps: dict[str, Any], st: dict[str, Any], rows: list[dict[str, Any]]) -> Any:
+    from physicsai_core.geometry import baselines as bl
+    from physicsai_core.stage4_predict.batch_multi import build_multi_table
+
+    try:
+        pm = bl.load(ctx.abs(ps["stored_rel"]), ctx.settings.geometry.max_report_bytes)
+    except bl.MapError as exc:
+        raise StepFailure(exc.code, exc.message) from None
+    if pm is None or pm.get("status") != "confirmed":
+        raise StepFailure("INPUT_CHANGED", "최적화를 시작한 뒤 다중 baseline 매칭표가 바뀌었습니다(미확정) — 확정 후 다시 실행하세요")
+    levels = (st.get("levels") or {}).get("baseline") or []
+    pts = []
+    for v in rows:
+        p = dict(v)
+        if levels and isinstance(v.get("baseline"), (int, float)):
+            p["baseline"] = levels[int(round(v["baseline"]))]
+        pts.append(p)
+    return build_multi_table(pts, ps, pm)
 
 
 def _table_text(names: list[str], cands: list[dict[str, Any]]) -> str:
@@ -385,6 +412,9 @@ def so_next(ctx: Any) -> None:
     opt = _opt(ctx)
     r = _round(ctx)
     res = ctx.result()
+    if so_algo.settings_verification(opt["settings"]) == "none" and (not res.get("stop") or res.get("stop") == ds.STOP_NO_NEW):
+        _finalize_surrogate_only(ctx, opt, r, res)  # opt-native §5 ON-4: 검증 배치 없이 마무리
+        return
     if res.get("stop"):
         _finalize(ctx, opt, r, res)
         return
@@ -394,7 +424,10 @@ def so_next(ctx: Any) -> None:
     if ps is None:
         raise StepFailure("INPUT_INVALID", "템플릿(파라미터 세트)을 찾을 수 없습니다")
     names = [str(p["name"]) for p in ps["parameters"]]
-    matrix = build_matrix_for({"kind": "table", "text": _table_text(names, cands)}, ps, ctx.settings)
+    if opt["settings"].get("multi_baseline"):  # opt-native §7: baseline 열 표 + 배정 메타(batch_native가 배정 준비본으로 생성)
+        matrix = _multi_matrix(ctx, ps, opt["settings"], [c["values"] for c in cands])
+    else:
+        matrix = build_matrix_for({"kind": "table", "text": _table_text(names, cands)}, ps, ctx.settings)
     if matrix.problems or not matrix.rows:
         raise StepFailure("INPUT_INVALID", f"검증 조합을 만들 수 없습니다: {matrix.problems[:3]}")
     cfg = ctx.settings
@@ -475,7 +508,7 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
     summary = {"label": so_repo.opt_label(opt["opt_no"]), "stop_reason": reason,
                "stop_text": stop_text(reason, res.get("improvement_rel"), float(s["tol_rel"])),
                "best": best_d, "iterations": t, "final_fit": res.get("fit"),
-               "surrogate_optimum": res.get("surrogate_optimum") or last_opt,
+               "surrogate_optimum": res.get("surrogate_optimum") or last_opt, **_algo_meta(s),
                "note": "best는 실제 예측 체인으로 검증된 설계만, surrogate_optimum은 대리모델 예측(참고)"}
     for name in files:
         p = os.path.join(O, name)
@@ -523,6 +556,64 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
     ctx.patch_result({"finished": True, "stop_text": summary["stop_text"], "final": outcome})
 
 
+SURROGATE_ONLY_TEXT = "대리모델만(검증 없음)"
+
+
+def _algo_meta(s: dict[str, Any]) -> dict[str, Any]:
+    """summary.json·opt.json 기록(§6.6): algorithm·algo_options(기본 채운 사용값)·verification."""
+    return {"algorithm": so_algo.settings_algorithm(s), "algo_options": s.get("algo_options") or {},
+            "verification": so_algo.settings_verification(s)}
+
+
+def _finalize_surrogate_only(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> None:
+    """verification none(ON-4): 검증 배치 없이 DONE·SURROGATE_ONLY. 후보는 반복 0 행 candidates에 UNVERIFIED로, 다목적이면
+    predicted_front도 반복 0 행에. best = 탐색·재사용 run의 검증된 최선(SO_COLLECT가 저장). FINAL 캡처는 건너뛴다."""
+    problem = _problem(opt)
+    s = opt["settings"]
+    O = _O(ctx, opt)
+    points = _read_points(ctx, O, problem, r - 1)
+    cands = [{**c, "state": "UNVERIFIED", "verified": None} for c in (res.get("candidates") or [])]
+    reason = so_algo.STOP_SURROGATE_ONLY
+    best_d = opt.get("best")
+    if best_d is None:
+        bp = ds.best_point(points, problem)
+        best_d = _best_dict(bp[0], bp[1], problem) if bp else None
+    fit = res.get("fit")
+    summary = {"label": so_repo.opt_label(opt["opt_no"]), "stop_reason": reason, "stop_text": SURROGATE_ONLY_TEXT,
+               "best": best_d, "iterations": 0, "final_fit": fit,
+               "surrogate_optimum": res.get("surrogate_optimum"), "candidates": cands,
+               "predicted_front_size": len(res.get("predicted_front") or []), **_algo_meta(s),
+               "note": "best는 탐색(재사용) run 중 검증된 최선, 후보·surrogate_optimum은 대리모델 예측(미검증)"}
+    files = {"verified_runs.csv": ds.dataset_csv(points, problem, with_feasible=True)}
+    for name in (*files, "summary.json"):
+        p = os.path.join(O, name)
+        if os.path.lexists(p):
+            ctx.backup([p])
+    for name, text in files.items():
+        write_text(os.path.join(O, name), text)
+    write_json_atomic(os.path.join(O, "summary.json"), summary)
+    for name in (*files, "summary.json"):
+        ctx.add_output(os.path.join(O, name))
+    title = (f"내장 최적화 {so_repo.opt_label(opt['opt_no'])} 완료(대리모델만) — 미검증 후보 {len(cands)}개, "
+             "결과 화면에서 예측 검증하세요")
+    body = SURROGATE_ONLY_TEXT
+    final = {"status": "SKIPPED", "reason": "대리모델만(검증 없음) 모드는 마무리 캡처를 하지 않습니다", "stop_reason": reason,
+             "notice": {"title": title, "body": body}}
+
+    def tx(c: Any) -> str | None:
+        o = so_repo.get(c, opt["id"], for_update=True)
+        if o is None or o["status"] not in so_repo.ACTIVE or o["current_job_id"] != ctx.ex.job_id:
+            return None
+        so_repo.set_iter(c, o["id"], 0, fit=fit, candidates=cands, predicted_front=res.get("predicted_front"))
+        so_repo.set_opt(c, o["id"], status="DONE", best=best_d, stop_reason=reason, finished_at=_now(), final=final)
+        notif_repo.notify_opt_done(c, o, ctx.ex.job_id, title, body)
+        return "done"
+
+    outcome = ctx.ex.db(tx)
+    ctx.log(f"마무리(대리모델만): {outcome} — 미검증 후보 {len(cands)}개")
+    ctx.patch_result({"finished": True, "stop_text": SURROGATE_ONLY_TEXT, "final": outcome})
+
+
 def _final_json(plan: dict[str, Any]) -> dict[str, Any]:
     return {k: v for k, v in plan.items() if k not in ("matrix", "display")}
 
@@ -536,6 +627,8 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         ps = ps_repo.get(conn, opt["param_set_id"])
     if ps is None or not best_d:
         return {"status": "SKIPPED", "reason": "최적안이 없어 캡처하지 않았습니다"}
+    if opt["settings"].get("multi_baseline"):  # opt-native §7: 기준안·최적안의 baseline이 다를 수 있어 같은 범례 비교를 하지 않는다
+        return {"status": "SKIPPED", "reason": "다중 baseline 세트는 마무리 캡처를 하지 않습니다(최적안은 ④에서 캡처하세요)"}
     names = [str(p["name"]) for p in ps["parameters"]]
     base = {str(p["name"]): float(p.get("nominal", p["min"])) for p in ps["parameters"]}
     plan: dict[str, Any] = {"status": "PENDING", "reason": None, "baseline_values": base, "legend": None,
