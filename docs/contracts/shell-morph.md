@@ -655,3 +655,8 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
   - 면내 해(경계 변경 면, §6.5): **직접 희소 LU**(sweep 단계 간 인수분해 재사용, 미수렴 시 GE §6.4-2 CG 대체). 면내 평활화는 좌표가 아닌 **변위장 이완**(`relax_iters`, 강체 이동 보존). 품질 보고 선택 키 `failed_elements`·`margins`.
   - 기본 대상 component `chassis_rear`(§12)는 **플랫폼 설정**이다. paicad는 기본 대상을 갖지 않고 `--parts`/`--features`로만 받는다(없으면 fixed-scan 목록 모드).
   - 종료코드(§5.3 구체화): update FAIL 10(`SHELL_FIXED_REGION_VIOLATION` 사전 검사 포함), morph·check FAIL 11(morph의 고정 노드 목표 초과 `SHELL_FIXED_REGION_VIOLATION`도 11), 준비 실패 12(tag·fixed-scan — `SHELL_FIXED_PARSE_FAILED`·`SHELL_UNSUPPORTED_ELEMENT`·`SHELL_BODY_NOT_SHEET`), `SHELL_PART_NOT_FOUND` 3.
+- **SM-C2(2026-10-20, paicad 0.10.0 구현 — 본문 §4.8·§4.10·§6.5 대신 이 해석이 기준)**: 경계 변경 면(비드 위치·폭 변경 시 기준면) 면내 해를 **국부 영역 해**로 바꾼다.
+  - 영역: 움직이는 입구 루프(접선 목표 ≠ 0인 디리클레 노드) 폴리라인까지 면내 거리 d < **B = max(40 mm, 5 × 루프 최대 변위)**이고 루프와 영역 안으로 연결된 own 노드. 영역에 닿는 요소에서 면내 해(루프·고정·불변 면 경계 디리클레, 바깥 경계 자유)를 풀고, 띠 전체에 **감쇠 s(1 − d/B)**(s(r) = 3r² − 2r³)를 곱해 영역 경계에서 변위 0·기울기 0. 영역 밖 노드는 변위 0(좌표 줄 바이트 불변). 고정 노드 전이 감쇠(§6.5-3)는 그 뒤에 그대로 적용.
+  - 옵션(쉘 options `morph`): **`region`** = `local`(기본) | `face`(0.9.0과 같은 면 전체 해), **`region_band_mm`**(기본 40, > 0), **`region_band_factor`**(기본 5, ≥ 0). 범위 밖이면 옵션 검사 실패.
+  - 보고: `shell_morph.json` **`parts[].region`** `{mode, faces, nodes, band_mm}` 선택 키 추가.
+  - 근거(SM1 위치·폭 127단계): 이동 노드 약 24,000 → 1,500~4,400, 품질 FAIL 29 → 23, 경계 편차 ≤ 0.05 mm·재측정 오차 기준 유지. 기본 띠를 전이 폭 6 mm로 두면 FAIL 47 이상이라 40 mm·5×변위로 정함.

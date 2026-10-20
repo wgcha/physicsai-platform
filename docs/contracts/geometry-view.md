@@ -696,3 +696,13 @@ Radioss 해석 입력에 `/ANIM` 출력을 추가해 애니메이션 파일(`A00
   - FE GLB(`preview_fe.glb`) 크기 상한 초과(`fe_edges` 제외 재시도 후): 최상위 `status: FAIL`·`VIEW_TOO_LARGE`·**종료코드 14**. 단 check FAIL이면 check 코드(11)가 우선.
   - `view preview`의 `update/`에는 update 단독과 같은 `update.json`과 함께 **`sample.brep`·`face_map.json`**도 쓴다(solver include `morphed.inc`·`files/`는 쓰지 않음).
   - update FAIL manifest: `bodies: []`, 피처 `dimension: null`(GLB 없음).
+- **GV-C2(2026-10-20, paicad 0.10.0 `shell view`·플랫폼 연동 구현 — 본문 §4·§5·§6·§13 대신 이 해석이 기준)**:
+  - 쉘 GLB 고정 영역 마커: `--fixed-dir`이면 GLB에 **`<body>.fixed`**(mode POINTS, 인덱스 없음, 정점 속성 **`_CLUSTER_ID`·`_NODE_ID`**)를 넣고, manifest **`fixed_clusters[]`**에 shell_scan 클러스터 + **`body`·`node`·`faces`**(클러스터 노드 아래 B-rep 면)를 쓴다. 미리보기도 공칭 시트 기준 마커. ①-1 TX_VIEW는 `--fixed-dir` 쌍을 생략(`fixed_clusters: []`).
+  - 쉘 GLB 재질은 **`doubleSided: true`**(중립면·FE 모두). 쉘 FE GLB(`preview_fe.glb`): `/SHELL` n1–n3 대각선 2분할, n3 = n4·`/SH3N`은 삼각형 1개, `_ELEM_ID` = 노드의 최소 요소 ID.
+  - 쉘 미리보기 manifest **`fe.quality`** 키 = warpage·skew·aspect·Jacobian·edge·dt 비(쉘 품질 키, 솔리드 키와 다름).
+  - 플랫폼 명령: `commands.paicad_shell_view_export`·`paicad_shell_view_preview` 기본값 = §6.1 템플릿(0.10.0 CLI). 미리보기는 3S 두께가 없으면 `--thickness`, 공칭 뷰가 없으면 `--nominal-manifest` 쌍 생략.
+  - migration **0017**: downgrade는 해당 테이블에 데이터가 없을 때만(있으면 거부). `cache_key`는 **VARCHAR(64)**(sha256 hex). 캐시 artifact id는 **FK가 아님** — 캐시 정리 후 `GET /artifacts/{id}/media`는 **410** `ARTIFACT_EXPIRED`.
+  - 설정: 쉘 기본 대상 component는 최상위 키 **`shell.default_component`**(기본 `chassis_rear`, geometry 절 아님).
+  - 결과 3D 컨투어 원본 `SOLVER_H3D`의 `source_ref` = `{fem_verification_id}` 또는 **`{study_id, h3d_rel}`**(Study 기준 .h3d 상대 경로). `contour_extract.tcl`은 외부 면 조회가 안 되면 요소 연결 전체를 **`elements.csv`**로 쓰고, 그때 **외부 면은 플랫폼 변환기(C3_CONVERT, `contour3d/convert.py`)가 계산**한다(쉘 = 요소 그대로, 솔리드 = 한 번만 나온 면).
+  - 미리보기 캐시 키의 paicad 버전 = **워커 하트비트가 보고한 `resources.paicad_version`**(API 프로세스에서 paicad를 실행하지 않음).
+  - 쉘 세트(kind=shell)의 ④ 조립 FEM 검증 **rebuild(재조립)는 미지원**(후속) — 예측 입력 그대로(reuse)를 쓴다. 3S 쉘 두께가 있는 예측을 rebuild로 고르면 `SHELL_NOT_APPLIED` 경고.
