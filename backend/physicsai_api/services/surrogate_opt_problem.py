@@ -24,7 +24,6 @@ from .job_params.stage4_batch import resolve_param_set
 from .job_params.stage4_predict import model_for, require_template_features, template_kind
 
 MAX_CONSTRAINTS = 5
-MULTI_BASELINE_READY = False  # opt-native §7 범주 baseline·범위 분할 경로(B3) 완성 전에는 확정 세트도 409
 PERF_PREFIX = "perf:"
 
 
@@ -164,6 +163,28 @@ def multi_baseline(ctx: AppContext, ps: dict[str, Any]) -> dict[str, Any] | None
     return {"usage": pm.get("usage"), "baselines": bl.baseline_ids(pm), "pm": pm}
 
 
+def _multi_settings(multi: dict[str, Any], ps: dict[str, Any], levels: list[str] | None) -> dict[str, Any]:
+    """settings.multi_baseline(opt-native §7): 위상 변형 = 선택 수준별 활성 표·N/A 가능 이름(학습 열 순서), 범위 분할 = baseline별 feasible."""
+    rows = [r for r in ps["parameters"] if isinstance(r.get("baselines"), dict)]
+    out: dict[str, Any] = {"usage": multi["usage"], "baselines": list(multi["baselines"])}
+    if multi["usage"] == "topology":
+        lv = list(levels or multi["baselines"])
+        act = {str(r["name"]): [r["baselines"].get(b) is not None for b in lv] for r in rows}
+        out["active"] = {n: a for n, a in act.items() if not all(a)}
+        out["na"] = [n for n in act if not all(act[n])]
+    else:
+        cover: dict[str, dict[str, list[float] | None]] = {}
+        for r in rows:
+            per: dict[str, list[float] | None] = {}
+            for b in multi["baselines"]:
+                info = r["baselines"].get(b)
+                fe = (info.get("feasible") or {"min": info["min"], "max": info["max"]}) if isinstance(info, dict) else None
+                per[b] = [float(fe["min"]), float(fe["max"])] if fe else None
+            cover[str(r["name"])] = per
+        out["cover"] = cover
+    return out
+
+
 def _levels(multi: dict[str, Any] | None, body: Any, so: Any, problems: list[dict[str, Any]]) -> list[str] | None:
     """범주 baseline 수준(위상 변형 세트만, 매칭표 baseline 순서). 요청 levels로 줄일 수 있고 1개면 고정."""
     given = body.levels
@@ -186,7 +207,7 @@ def _levels(multi: dict[str, Any] | None, body: Any, so: Any, problems: list[dic
                 _p(problems, "LEVELS_INVALID", f"매칭표에 없는 baseline입니다: {', '.join(unknown)}", "levels.baseline")
             else:
                 lv = [b for b in ids if b in sel]
-    if len(lv) > so.max_levels:
+    if len(lv) > so.max_levels and not any(p["code"] == "LEVELS_INVALID" for p in problems):
         _p(problems, "TOO_MANY_LEVELS", f"baseline 수준은 최대 {so.max_levels}개입니다(현재 {len(lv)}개)", "levels.baseline")
     return lv
 
@@ -205,14 +226,18 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     if engine_of(ps) == "native":
         native_set_gate(ctx, ps)
         multi = multi_baseline(ctx, ps)  # opt-native §7: 확정 세트만(미확정 409 PARAM_MAP_UNCONFIRMED)
-        if multi is not None and not MULTI_BASELINE_READY:
-            raise DomainError("MULTI_BASELINE_UNSUPPORTED", "다중 baseline 세트는 아직 내장 최적화를 지원하지 않습니다 — 단일 baseline 세트를 쓰세요",
-                              status=409, param_set_id=ps["id"])
     else:
         require_template_features(cfg, kind)
     problems: list[dict[str, Any]] = []
     names, integer, bounds, fixed = _bounds(ps, body, so, problems)
     cat_levels = _levels(multi, body, so, problems)
+    mb_settings = _multi_settings(multi, ps, cat_levels) if multi is not None else None
+    if cat_levels is not None:  # 위상 변형: 범주 변수 baseline = 수준 인덱스 0..L−1(정수 표현, 인코딩은 원-핫)
+        names = [*names, "baseline"]
+        integer = sorted(set(integer) | {"baseline"})
+        bounds["baseline"] = [0.0, float(len(cat_levels) - 1)]
+        if len(cat_levels) == 1:
+            fixed["baseline"] = 0.0
     free = [n for n in names if n in bounds and n not in fixed]
     verification = body.verification if body.verification is not None else "loop"
     iterations = body.iterations if body.iterations is not None else so.default_iterations
@@ -245,8 +270,10 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         rows = run_metric_rows(ctx, conn, study, reuse["id"])
         explore_count = 0
     else:
+        n_lv = len(cat_levels) if cat_levels else 1  # R-3: 범주 수준 수를 곱한 값을 기본(권장)으로
         explore_count = body.explore.count if body.explore.count is not None else \
-            ds.default_explore_count(len(free), cfg.predict_batch.max_runs)
+            min(ds.default_explore_count(len([n for n in free if n != "baseline"]), cfg.predict_batch.max_runs) * n_lv,
+                cfg.predict_batch.max_runs)
         if explore_count < need:
             _p(problems, "EXPLORE_TOO_FEW", f"탐색 run은 최소 {need}개입니다(자유 변수 {len(free)}개)", "explore.count")
         elif explore_count > cfg.predict_batch.max_runs:
@@ -310,7 +337,7 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     weights = _weights(body, len(objs), problems) if objs else []
     # 알고리즘·고급 옵션·검증 방식(opt-native §6.1·§6.7·§8)
     algorithm = body.algorithm if body.algorithm is not None else "ego"
-    n_g = len(free) + (1 if cat_levels is not None and len(cat_levels) > 1 else 0)
+    n_g = len(free)
     problems += so_algo.algorithm_problems(algorithm, verification, max(len(objs), 1))
     if algorithm in so_algo.ALGORITHMS:
         problems += so_algo.option_problems(algorithm, body.algo_options, n_g, so)
@@ -354,6 +381,8 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     }
     if cat_levels is not None:  # opt-native §7: 다중 baseline 위상 세트 범주 변수
         settings["levels"] = {"baseline": list(cat_levels)}
+    if mb_settings is not None:
+        settings["multi_baseline"] = mb_settings
     kinds = {n: ("integer" if n in integer else "continuous") for n in free}
     if cat_levels is not None and len(cat_levels) > 1:
         kinds["baseline"] = "categorical"

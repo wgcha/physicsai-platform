@@ -14,7 +14,7 @@ import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/Te
 import { ModelLine, useModelChoice } from "../../stage4/predictRun";
 import { maxMultiExecution } from "../../stage4/batch/BatchSetup";
 import {
-  ALGO_REVERT_NOTE, EMPTY_ALGO, algoIssues, algoTip, buildBody, previewText, rowIssue, varRows,
+  ALGO_REVERT_NOTE, EMPTY_ALGO, algoIssues, algoTip, baselineIds, buildBody, previewText, rowIssue, varRows,
   type AlgoDefaults, type Algorithm, type SoForm, type VarRow,
 } from "./soRules";
 import { AlgoOptions, AlgorithmField, NoneNote, VerificationField } from "./AlgoOptions";
@@ -54,7 +54,14 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const extract = useLatestJob(study.id, "PB_RESP_EXTRACT", () => setTick((n) => n + 1));
   const extractActive = !!extract.job && !isTerminal(extract.job.state);
 
-  useEffect(() => set({ paramSetId: ps?.id ?? null, rows: varRows(ps), batchId: "", sels: {}, weights: {} }), [ps?.id]);
+  useEffect(() => set({ paramSetId: ps?.id ?? null, rows: varRows(ps), batchId: "", sels: {}, weights: {}, levels: null }), [ps?.id]);
+  const bids = baselineIds(ps);
+  const topo = !!preview?.levels?.baseline; // 위상 변형 세트만 범주 baseline(서버 미리보기 levels)
+  const chosenLv = f.levels ?? bids;
+  const toggleLevel = (b: string) => {
+    const next = chosenLv.includes(b) ? chosenLv.filter((x) => x !== b) : bids.filter((x) => x === b || chosenLv.includes(x));
+    set({ levels: next.length === bids.length ? null : next });
+  };
   const perfs = useMemo(() => perfRows(ps?.responses), [ps?.responses]);
   // 템플릿 정의가 바뀌어 사라진 성능의 역할은 버린다
   useEffect(() => setF((x) => ({ ...x, sels: pruneSels(x.sels, perfs) })), [perfs]);
@@ -193,9 +200,23 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
                   <td className="num">{r.fixed ? <span className="muted">고정</span> : <input className="num" value={r.hi} onChange={(e) => setRow(i, { hi: e.target.value })} aria-label={`${r.name} 상한`} />}</td>
                   <td className="small">{r.integer ? "정수" : ""}</td>
                   <td><input type="checkbox" checked={r.fixed} onChange={(e) => setRow(i, { fixed: e.target.checked })} aria-label={`${r.name} 고정`} /></td>
-                  <td className="small error-text">{rowProblems[i] ?? ""}</td>
+                  <td className="small error-text">{rowProblems[i] ?? ""}{r.na?.length ? <span className="muted" data-testid={`na-${r.name}`}> N/A: {r.na.join(", ")}</span> : null}</td>
                 </tr>
               ))}
+              {topo && (
+                <tr data-testid="var-baseline">
+                  <td className="mono">baseline</td>
+                  <td className="muted small">범주(위상 변형)</td>
+                  <td colSpan={4}>
+                    {bids.map((b) => (
+                      <label key={b} className="check small">
+                        <input type="checkbox" checked={chosenLv.includes(b)} onChange={() => toggleLevel(b)} aria-label={`baseline ${b}`} /> {b}
+                      </label>
+                    ))}
+                  </td>
+                  <td className="small error-text">{chosenLv.length ? (chosenLv.length === 1 ? <span className="muted">1개 = 고정</span> : "") : "1개 이상 고르세요"}</td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

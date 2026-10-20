@@ -8,7 +8,7 @@ import type { MockServer } from "../mock/server";
 import type { SoRec } from "../mock/surrogateOpt";
 import {
   ALGO_REVERT_NOTE, EMPTY_ALGO, NONE_NOTE, SO_MODE_KEY, UNVERIFIED_BADGE, algoIssues, algoStatusText, algoTip, buildBody,
-  defaultPopSize, previewText, searcherText, type SoForm,
+  defaultPopSize, fmtVar, previewText, searcherText, varRows, type SoForm,
 } from "../stages/stage5/surrogate/soRules";
 
 const radio = (group: string, name: string) => within(screen.getByRole("radiogroup", { name: group })).getByRole("radio", { name }) as HTMLButtonElement;
@@ -158,6 +158,26 @@ describe("V-ON-13 ⑥ 알고리즘·검증 방식·고급 옵션", () => {
     expect(screen.getByTestId("pareto-verify").className).not.toContain("small");
   });
 
+  it("다중 baseline 위상 세트: baseline 행(수준 체크박스)·N/A 표시·levels 본문", async () => {
+    const { server } = renderApp(`${STUDY}/5`, { user: "power" }, (s) => {
+      s.paramSets.forEach((p) => (p.is_current = p.id === "ps-2"));
+      const ps = s.paramSets.find((p) => p.id === "ps-2")!;
+      ps.baselines = [{ id: "base", rel: "." }, { id: "B2", rel: "baselines/B2" }] as never;
+      const p0 = ps.parameters[0] as { name: string; baselines?: Record<string, unknown> | null };
+      p0.baselines = { base: { param: p0.name }, B2: null };
+    });
+    const posts = bodyOf(server, "/studies/s-cushion/surrogate-opts/preview");
+    fireEvent.click(await screen.findByRole("tab", { name: /새 최적화/ }));
+    await screen.findByRole("table", { name: "성능" });
+    fireEvent.change(screen.getByLabelText("MaxStress 역할"), { target: { value: "min" } });
+    const row = await screen.findByTestId("var-baseline");
+    const vars = screen.getByRole("table", { name: "변수 범위" });
+    expect(within(vars).getAllByText(/N\/A: B2/).length).toBe(1);
+    fireEvent.click(within(row).getByLabelText("baseline B2"));
+    await waitFor(() => expect(posts.some((b) => JSON.stringify(b.levels) === JSON.stringify({ baseline: ["base"] }))).toBe(true));
+    await waitFor(() => expect(screen.getByTestId("var-baseline").textContent).toContain("1개 = 고정"));
+  });
+
   it("순수 규칙: 툴팁·기본 집단 크기·범위 문구·본문·탐색기·상태 문구·미리보기", () => {
     expect(algoTip("ga", 2)).toBe("GA는 단일 목적 전용");
     expect(algoTip("nsga2", 1)).toBe("NSGA-II는 목적 2개 이상");
@@ -179,5 +199,8 @@ describe("V-ON-13 ⑥ 알고리즘·검증 방식·고급 옵션", () => {
     expect(algoStatusText({ iterations: [], settings: { algorithm: "ego", verification: "none" } } as never)).toBe("알고리즘: EGO · 대리모델만(검증 없음)");
     expect(previewText({ explore_count: 12, max_total_runs: 12, verification: "none" }, 3, 4)).toBe("예측 최대 12 run(탐색 12 · 대리모델만)");
     expect(previewText({ explore_count: 12, max_total_runs: 24 }, 3, 4)).toBe("예측 최대 24 run(탐색 12 + 3 × 4)");
+    expect(fmtVar("baseline", 1, ["base", "B2"])).toBe("B2");
+    expect(fmtVar("THK", 1.5, ["base"])).toBe("1.5");
+    expect(varRows({ parameters: [{ name: "D", min: 0, max: 1, baselines: { base: null, B2: {} } }], tpl_params: [] } as never)[0].na).toEqual(["base"]);
   });
 });

@@ -127,7 +127,7 @@ def propose_multi(ctx: Any, opt: dict[str, Any], problem: ds.Problem, fit: Any, 
         raise StepFailure(exc.code, exc.message) from None
     for w in prop.warnings:
         ctx.add_warning(w["code"], w["message"][:480])
-    rows = [c.as_dict(i) for i, c in enumerate(prop.candidates, 1)]
+    rows = ds.tag_baseline([c.as_dict(i) for i, c in enumerate(prop.candidates, 1)], problem)
     m = problem.m
     cons = [c.key for c in problem.constraints]
     buf = io.StringIO()
@@ -140,7 +140,7 @@ def propose_multi(ctx: Any, opt: dict[str, Any], problem: ds.Problem, fit: Any, 
                     *[repr(v) for v in row["predicted_objectives"]], *[repr(v) for v in row["predicted_std"]],
                     "" if row["acq"] is None else repr(row["acq"]), *[repr(v) for v in row["constraints_pred"]]])
     write_text(os.path.join(idir, "candidates.csv"), buf.getvalue())
-    front = prop.predicted_front[:MAX_PREDICTED_FRONT]
+    front = ds.tag_baseline(prop.predicted_front[:MAX_PREDICTED_FRONT], problem)
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     w.writerow([*problem.names, *[f"mean_{i}" for i in range(1, m + 1)], *[f"std_{i}" for i in range(1, m + 1)], "pof"])

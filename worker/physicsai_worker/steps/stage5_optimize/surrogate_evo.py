@@ -61,7 +61,9 @@ def propose_evo(ctx: Any, opt: dict[str, Any], problem: ds.Problem, fit: Any, de
     except infill.SurrogateError as exc:
         raise StepFailure(exc.code, exc.message) from None
     multi = problem.multi
-    rows = [{"doe_no": i, **c} for i, c in enumerate(prop.candidates, 1)]
+    rows = ds.tag_baseline([{"doe_no": i, **c} for i, c in enumerate(prop.candidates, 1)], problem)
+    if prop.optimum is not None:
+        ds.tag_baseline([prop.optimum], problem)
     m = problem.m
     cons = [c.key for c in problem.constraints]
     extra = ["baseline"] if any("baseline" in (c.get("values") or {}) for c in rows) and "baseline" not in problem.names else []
@@ -77,7 +79,7 @@ def propose_evo(ctx: Any, opt: dict[str, Any], problem: ds.Problem, fit: Any, de
     write_text(os.path.join(idir, "final_population.csv"), _csv(prop.population_head, prop.population_rows))
     front_db: list[dict[str, Any]] | None = None
     if multi:
-        front = prop.predicted_front
+        front = ds.tag_baseline(prop.predicted_front, problem)
         fh = [*names, *[f"mean_{i}" for i in range(1, m + 1)], *[f"std_{i}" for i in range(1, m + 1)], "pof"]
         fr = [[*[_num(p["values"].get(n)) for n in names], *[repr(v) for v in p["mean"]], *[repr(v) for v in p["std"]],
                repr(p["pof"])] for p in front]

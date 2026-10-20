@@ -19,7 +19,7 @@ import { ContourCompareCard, OptimumCompareCard, ResultSummaryCard, UnverifiedCa
 import { FemEntryButton } from "../../stage4/verify/useFemVerifyButton";
 import "../../../styles/surrogateOpt.css";
 import "../../../styles/surrogateMulti.css";
-import { SO_STATUS_LABEL, algoStatusText, isSurrogateOnly, metricLabel, objectiveDefs, qualityGrade, searcherText, soTone, type AlgoRecord } from "./soRules";
+import { SO_STATUS_LABEL, algoStatusText, fmtVar, isSurrogateOnly, levelsOf, metricLabel, objectiveDefs, qualityGrade, searcherText, soTone, type AlgoRecord } from "./soRules";
 import { KIND_LABEL } from "./ParetoTable";
 
 const BATCH_ACTIVE = ["GENERATING", "PREDICTING"];
@@ -232,7 +232,7 @@ function RunsTable({ o, optId, runs, names, best }: { o: SurrogateOpt; optId: st
                 <td className="num">{r.kind === "EXTRA" ? KIND_LABEL.EXTRA : r.iter_no}</td>
                 <td>{r.batch_label}</td>
                 <td className="num">{r.doe_no}</td>
-                {names.map((n) => <td key={n} className="num mono">{fmtNum((r.values as Record<string, number>)[n])}</td>)}
+                {names.map((n) => <td key={n} className="num mono">{fmtVar(n, (r.values as Record<string, number>)[n], levelsOf(o))}</td>)}
                 {multi ? defs.map((d, i) => <td key={d.metric} className="num mono">{fmtNum(r.objectives?.[i] ?? null)}</td>) : <td className="num mono">{fmtNum(r.objective)}</td>}
                 {cons.map((_, i) => <td key={i} className="num mono">{fmtNum(r.constraints?.[i] ?? null)}</td>)}
                 {obs.map((c) => <td key={c.metric} className="num mono">{fmtNum(r.observed?.[c.metric] ?? null)}</td>)}

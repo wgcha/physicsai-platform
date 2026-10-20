@@ -21,7 +21,7 @@ import numpy as np
 from scipy.optimize import differential_evolution
 from scipy.stats import norm
 
-from .dataset import Constraint, Design, Problem, free_variables, same_design
+from .dataset import Constraint, Design, Problem, canonical_values, free_variables, same_design
 from .gp import GPFitError, GPModel, fit_gp
 from .rbf import RBFFitError, RBFModel, fit_rbf
 
@@ -68,8 +68,13 @@ class FitResult:
     seed: int = 1
     objectives: list[Scaled] = field(default_factory=list)  # S17 다목적: 목적별 모델(부호 통일 값), objective = [0]
     signs: list[float] = field(default_factory=list)
+    encoding: dict[str, Any] | None = None  # opt-native §7: 범주 baseline 인코딩 spec(학습 입력 규칙과 같은 열)
 
     def normalize(self, X: np.ndarray) -> np.ndarray:
+        if self.encoding is not None:
+            from .encoding import transform
+
+            return transform(X, self.free, self.lo, self.hi, self.encoding, int(round(self.fill.get(self.encoding["cat"], 0.0))))
         return (np.atleast_2d(X) - self.lo) / (self.hi - self.lo)
 
     def full_values(self, x: np.ndarray) -> dict[str, float]:
@@ -93,6 +98,8 @@ class FitResult:
         if self.objectives:
             d["objectives"] = [one(o) for o in self.objectives]
             d["signs"] = list(self.signs)
+        if self.encoding is not None:
+            d["encoding"] = self.encoding
         return d
 
     @classmethod
@@ -107,7 +114,56 @@ class FitResult:
                    {k: float(v) for k, v in d["fill"].items()}, float(d["sign"]), one(d["objective"]),
                    [one(c) for c in d["constraints"]], list(d.get("warnings") or []), dict(d.get("quality") or {}),
                    int(d.get("seed", 1)), [one(o) for o in d.get("objectives") or []],
-                   [float(x) for x in d.get("signs") or []])
+                   [float(x) for x in d.get("signs") or []], d.get("encoding"))
+
+
+def design_matrix(designs: Sequence[Design], free: list[str], lo: np.ndarray, hi: np.ndarray, fill: dict[str, float],
+                  problem: Problem) -> np.ndarray:
+    """학습 입력 행렬: 자유 변수 [0,1] 정규화(기존), 범주 baseline 세트면 학습 입력 규칙 인코딩(opt-native §7)."""
+    raw = np.array([[d.values[n] for n in free] for d in designs])
+    if problem.cat_spec is None:
+        return (raw - lo) / (hi - lo)
+    from .encoding import transform
+
+    return transform(raw, free, lo, hi, problem.cat_spec, int(round(fill.get(problem.cat_spec["cat"], 0.0))))
+
+
+def cat_index(fit: FitResult) -> tuple[int | None, int]:
+    """(자유 변수 중 범주 baseline 위치 | None, 수준 수)."""
+    enc = fit.encoding
+    if enc is None or enc["cat"] not in fit.free:
+        return None, 0
+    return fit.free.index(enc["cat"]), len(enc["levels"])
+
+
+def de_levels(de: Callable[..., Any], func: Callable[[np.ndarray], np.ndarray], bounds: list[tuple[float, float]],
+              integrality: np.ndarray, cat_j: int, n_levels: int, seeds: Sequence[int], pick: str = "best", **kw: Any) -> Any:
+    """opt-native §7 `ego` + 범주: 수준마다 범주를 고정하고 나머지 변수로 DE를 따로 돌려 합친다. pick="best" → 함수 값 최소
+    해(동률 = 앞 수준), "all" → 수준별 해 목록(다목적 예측 전선용). de = `_de`(해 1개) — 결과는 원래 차원으로 되돌린다."""
+    red_b = [b for j, b in enumerate(bounds) if j != cat_j]
+    red_i = np.array([v for j, v in enumerate(integrality) if j != cat_j], dtype=bool)
+    outs: list[np.ndarray] = []
+    for lv in range(n_levels):
+        def f_red(xT: np.ndarray, lv: int = lv) -> np.ndarray:
+            xT = np.atleast_2d(xT)
+            full = np.insert(xT, cat_j, float(lv), axis=0)
+            return func(full)
+
+        if red_b:
+            xr = de(f_red, red_b, red_i, seed=seeds[lv], **kw)
+            x = np.insert(np.asarray(xr, dtype=float), cat_j, float(lv))
+        else:
+            x = np.array([float(lv)])
+        outs.append(x)
+    if pick == "all":
+        return outs
+    vals = [float(func(x.reshape(-1, 1))[0]) for x in outs]
+    return outs[int(np.argmin(vals))]
+
+
+def level_seeds(seed: int, round_no: int, j: int, n_levels: int) -> list[int]:
+    """수준별 DE 시드(§6.2): seed·100000 + r·1000 + 800 + level(+ 10·j — 같은 반복 안 j번째 탐색)."""
+    return [seed * 100000 + round_no * 1000 + 800 + lv + 10 * j for lv in range(n_levels)]
 
 
 def _standardize(v: np.ndarray) -> tuple[np.ndarray, float, float]:
@@ -149,7 +205,7 @@ def fit_all(designs: Sequence[Design], problem: Problem, *, kind: str, restarts:
             for n in problem.names if n not in free}
     lo = np.array([problem.bounds[n][0] for n in free])
     hi = np.array([problem.bounds[n][1] for n in free])
-    X = (np.array([[d.values[n] for n in free] for d in designs]) - lo) / (hi - lo)
+    X = design_matrix(designs, free, lo, hi, fill, problem)
     sign = problem.sign()
     warnings: list[dict[str, str]] = []
     n_models = 1 + len(problem.constraints)
@@ -184,7 +240,7 @@ def fit_all(designs: Sequence[Design], problem: Problem, *, kind: str, restarts:
         warnings.append({"code": "GP_FALLBACK_RBF", "message": f"GP 적합에 실패해 RBF로 바꿨습니다({exc})"})
         used = "rbf"
         obj, cons = build("rbf")
-    fit = FitResult(used, free, lo, hi, fill, sign, obj, cons, warnings, seed=seed)
+    fit = FitResult(used, free, lo, hi, fill, sign, obj, cons, warnings, seed=seed, encoding=problem.cat_spec)
     q = quality(obj)
     # 목적 단위 보고: sign이 -1이면 LOO 예측 부호도 되돌린다
     q["loo_pred"] = [sign * v for v in q["loo_pred"]]
@@ -298,6 +354,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
         for n in problem.integer:
             if n in vals:
                 vals[n] = float(round(vals[n]))
+        vals = canonical_values(vals, problem.cat_spec)
         return Candidate(vals, float(fit.sign * m[0]), ei, [float(c[0][0]) for c in cr])
 
     def is_dup(vals: dict[str, float]) -> bool:
@@ -319,8 +376,15 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
             return m
         return m + PENALTY * penalty(cons_raw(cmods, Xn), cmods)
 
-    x_opt = round_x(_de(f_exploit, bounds, ints, seed=base_seed, maxiter=de_maxiter, popsize=de_popsize,
-                        checkpoint=checkpoint))
+    cj, nl = cat_index(fit)
+
+    def run_de(func: Callable[[np.ndarray], np.ndarray], seed_: int, j_: int) -> np.ndarray:
+        if cj is None:
+            return _de(func, bounds, ints, seed=seed_, maxiter=de_maxiter, popsize=de_popsize, checkpoint=checkpoint)
+        return de_levels(_de, func, bounds, ints, cj, nl, level_seeds(seed, round_no, j_, nl), maxiter=de_maxiter,
+                         popsize=de_popsize, checkpoint=checkpoint)
+
+    x_opt = round_x(run_de(f_exploit, base_seed, 0))
     optimum = make(x_opt, obj, cmods, None)
     if not is_dup(optimum.values):
         picked.append(optimum)
@@ -360,8 +424,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
                 a = pof if fmin_ is None else _ei(m, s, fmin_) * pof
                 return -a
 
-            x = round_x(_de(acq, bounds, ints, seed=base_seed + 100 * j, maxiter=de_maxiter, popsize=de_popsize,
-                            checkpoint=checkpoint))
+            x = round_x(run_de(acq, base_seed + 100 * j, j))
             j += 1
             ei_val = float(-acq(x.reshape(-1, 1))[0])
             cand = make(x, om, cms, ei_val * obj.std if fmin_ is not None else ei_val)
@@ -373,7 +436,8 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
         while len(picked) < k and dmin >= RBF_MIN_DIST_FLOOR and attempts < 4 * k + 8:
             attempts += 1
             step(j)
-            ref = np.array([fit.normalize(np.array([e[n] for n in free]))[0] for e in existing + [c.values for c in picked]])
+            ref = np.array([fit.normalize(np.array([e[n] for n in free]))[0] for e in existing + [c.values for c in picked]
+                            if all(n in e for n in free)])
 
             def f_rbf(xT: np.ndarray, ref: np.ndarray = ref, dmin: float = dmin) -> np.ndarray:
                 Xn = fit.normalize(np.atleast_2d(xT.T))
@@ -383,8 +447,7 @@ def propose(fit: FitResult, problem: Problem, designs: Sequence[Design], failed:
                 dist = np.sqrt(((Xn[:, None, :] - ref[None, :, :]) ** 2).sum(axis=2)).min(axis=1) / math.sqrt(d)
                 return m + 1e6 * np.maximum(0.0, dmin - dist)
 
-            x = round_x(_de(f_rbf, bounds, ints, seed=base_seed + 100 * j, maxiter=de_maxiter, popsize=de_popsize,
-                            checkpoint=checkpoint))
+            x = round_x(run_de(f_rbf, base_seed + 100 * j, j))
             j += 1
             xn = fit.normalize(x)[0]
             dist = float(np.sqrt(((ref - xn) ** 2).sum(axis=1)).min() / math.sqrt(d)) if len(ref) else math.inf

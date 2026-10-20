@@ -156,7 +156,7 @@ def collect_points(ctx: Any, opt: dict[str, Any], problem: ds.Problem, upto: int
             for r in pb_repo.runs_with_jobs(conn, b["id"]):
                 ctx.checkpoint()
                 state = pb_repo.row_state(r, r["job_state"])
-                vals = {k: float(v) for k, v in (r["applied_values"] or {}).items()}
+                vals = ds.run_values(r["applied_values"], b.get("source_meta"), r["doe_no"], problem.cat_spec)  # opt-native §7
                 objs: list[float | None] = [None] * problem.m
                 cons: list[float | None] = [None] * len(problem.constraints)
                 obs: dict[str, float | None] = {o.key: None for o in problem.observe}
@@ -359,7 +359,7 @@ def so_propose(ctx: Any) -> None:
                                         progress=lambda i, n: ctx.progress(i / n * 100.0, f"후보 {i}/{n}"), checkpoint=clock)
     except infill.SurrogateError as exc:
         raise StepFailure(exc.code, exc.message) from None
-    rows = [c.as_dict(i) for i, c in enumerate(cands, 1)]
+    rows = ds.tag_baseline([c.as_dict(i) for i, c in enumerate(cands, 1)], problem)
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
     cons = [c.key for c in problem.constraints]
@@ -377,6 +377,26 @@ def so_propose(ctx: Any) -> None:
 
 
 # ---- SO_NEXT --------------------------------------------------------------------------------------
+
+
+def _multi_matrix(ctx: Any, ps: dict[str, Any], st: dict[str, Any], rows: list[dict[str, Any]]) -> Any:
+    from physicsai_core.geometry import baselines as bl
+    from physicsai_core.stage4_predict.batch_multi import build_multi_table
+
+    try:
+        pm = bl.load(ctx.abs(ps["stored_rel"]), ctx.settings.geometry.max_report_bytes)
+    except bl.MapError as exc:
+        raise StepFailure(exc.code, exc.message) from None
+    if pm is None or pm.get("status") != "confirmed":
+        raise StepFailure("INPUT_CHANGED", "최적화를 시작한 뒤 다중 baseline 매칭표가 바뀌었습니다(미확정) — 확정 후 다시 실행하세요")
+    levels = (st.get("levels") or {}).get("baseline") or []
+    pts = []
+    for v in rows:
+        p = dict(v)
+        if levels and isinstance(v.get("baseline"), (int, float)):
+            p["baseline"] = levels[int(round(v["baseline"]))]
+        pts.append(p)
+    return build_multi_table(pts, ps, pm)
 
 
 def _table_text(names: list[str], cands: list[dict[str, Any]]) -> str:
@@ -404,7 +424,10 @@ def so_next(ctx: Any) -> None:
     if ps is None:
         raise StepFailure("INPUT_INVALID", "템플릿(파라미터 세트)을 찾을 수 없습니다")
     names = [str(p["name"]) for p in ps["parameters"]]
-    matrix = build_matrix_for({"kind": "table", "text": _table_text(names, cands)}, ps, ctx.settings)
+    if opt["settings"].get("multi_baseline"):  # opt-native §7: baseline 열 표 + 배정 메타(batch_native가 배정 준비본으로 생성)
+        matrix = _multi_matrix(ctx, ps, opt["settings"], [c["values"] for c in cands])
+    else:
+        matrix = build_matrix_for({"kind": "table", "text": _table_text(names, cands)}, ps, ctx.settings)
     if matrix.problems or not matrix.rows:
         raise StepFailure("INPUT_INVALID", f"검증 조합을 만들 수 없습니다: {matrix.problems[:3]}")
     cfg = ctx.settings
@@ -604,6 +627,8 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         ps = ps_repo.get(conn, opt["param_set_id"])
     if ps is None or not best_d:
         return {"status": "SKIPPED", "reason": "최적안이 없어 캡처하지 않았습니다"}
+    if opt["settings"].get("multi_baseline"):  # opt-native §7: 기준안·최적안의 baseline이 다를 수 있어 같은 범례 비교를 하지 않는다
+        return {"status": "SKIPPED", "reason": "다중 baseline 세트는 마무리 캡처를 하지 않습니다(최적안은 ④에서 캡처하세요)"}
     names = [str(p["name"]) for p in ps["parameters"]]
     base = {str(p["name"]): float(p.get("nominal", p["min"])) for p in ps["parameters"]}
     plan: dict[str, Any] = {"status": "PENDING", "reason": None, "baseline_values": base, "legend": None,

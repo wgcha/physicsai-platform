@@ -13,7 +13,7 @@ import { FEM_BUTTON_LABEL } from "../../stage4/verify/verifyRules";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
 import type { ParetoModel, ParetoPt } from "./paretoView";
 import { PRED_NOTE, SCORE_TIP, VERIFY_FIRST_TEXT } from "./paretoView";
-import { isSurrogateOnly } from "./soRules";
+import { fmtVar, isSurrogateOnly, levelsOf } from "./soRules";
 
 export const KIND_LABEL: Record<string, string> = { EXPLORE: "탐색", REUSE: "재사용", VERIFY: "검증", EXTRA: "추가" };
 export const EXTRA_DONE_NOTE = "검증이 끝나면 이 표에 반영됩니다";
@@ -104,7 +104,7 @@ export function ParetoTable({ o, model, sel, onToggle, showPred, base, onChanged
                     <td><input type="checkbox" checked={sel.has(r.key)} onChange={() => onToggle(r.key)} aria-label={`${pred ? "예측 점" : `${r.batch_label} DOE #${r.doe_no}`} 선택`} /></td>
                     <td className="small">{pred ? PRED_NOTE : KIND_LABEL[r.run_kind ?? ""] ?? "검증"}{rec && <span className="pill ok"> 추천</span>}</td>
                     <td className="small">{pred ? <span className="muted">—</span> : <>{r.iter_no} · {r.batch_label} · #{r.doe_no}</>}</td>
-                    {names.map((n) => <td key={n} className="num mono">{fmtNum(r.values[n])}</td>)}
+                    {names.map((n) => <td key={n} className="num mono">{fmtVar(n, r.values[n], levelsOf(o))}</td>)}
                     {r.f.map((v, i) => (
                       <td key={i} className="num mono">{fmtNum(v)}{pred && r.std?.[i] != null ? <span className="muted small"> ±{fmtNum(r.std[i])}</span> : null}</td>
                     ))}

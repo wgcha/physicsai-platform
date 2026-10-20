@@ -19,7 +19,7 @@ import numpy as np
 from scipy.optimize import differential_evolution
 
 from . import pareto
-from .dataset import Design, Point, Problem, free_variables, is_feasible, merge, same_design
+from .dataset import Design, Point, Problem, canonical_values, free_variables, is_feasible, merge, same_design
 from .gp import GPFitError, fit_gp, lhs_unit
 from .infill import (
     _DE_PARAMS,
@@ -29,9 +29,14 @@ from .infill import (
     FitResult,
     Scaled,
     SurrogateError,
+    _de,
     _ei,
     _standardize,
+    cat_index,
     cons_pof,
+    de_levels,
+    design_matrix,
+    level_seeds,
     cons_violation,
     quality,
 )
@@ -123,7 +128,7 @@ def fit_mo(designs: Sequence[Design], problem: Problem, *, kind: str, restarts: 
             for n in problem.names if n not in free}
     lo = np.array([problem.bounds[n][0] for n in free])
     hi = np.array([problem.bounds[n][1] for n in free])
-    X = (np.array([[d.values[n] for n in free] for d in designs]) - lo) / (hi - lo)
+    X = design_matrix(designs, free, lo, hi, fill, problem)
     signs = problem.signs()
     m = problem.m
     warnings: list[dict[str, str]] = []
@@ -147,7 +152,8 @@ def fit_mo(designs: Sequence[Design], problem: Problem, *, kind: str, restarts: 
         cons.append(_one("gp" if kind == "gp" else "rbf", X, y, restarts=restarts, seed=seed + 31 * (j + 1),
                          label=f"제약 {j + 1}({c.metric})", warnings=warnings,
                          progress=prog(f"제약 {j + 1}/{nc}"), checkpoint=checkpoint))
-    fit = FitResult(kind, free, lo, hi, fill, signs[0], objs[0], cons, warnings, seed=seed, objectives=objs, signs=signs)
+    fit = FitResult(kind, free, lo, hi, fill, signs[0], objs[0], cons, warnings, seed=seed, objectives=objs, signs=signs,
+                    encoding=problem.cat_spec)
     per = []
     loo_rows: list[list[Any]] = []
     for i, (o, s) in enumerate(zip(problem.objectives, objs)):
@@ -284,7 +290,7 @@ class _Ctx:
         for n in self.problem.integer:
             if n in vals:
                 vals[n] = float(round(vals[n]))
-        return vals
+        return canonical_values(vals, self.problem.cat_spec)
 
     def is_dup(self, vals: dict[str, float]) -> bool:
         return any(same_design(vals, e, self.problem) for e in self.existing) or \
@@ -336,6 +342,7 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
         return (st.mu(Xn)[0] - ideal) / delta
 
     # ① 예측 전선
+    cj, nl = cat_index(fit)
     pool: list[np.ndarray] = []
     for j, w in enumerate(W):
         if progress is not None:
@@ -346,10 +353,16 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
             v = chebyshev(mu_tilde(Xn), w, cfg.rho)
             return v + PENALTY * st.penalty(Xn) if st.cons else v
 
-        x = st.round_x(_de_full(f_w, st.bounds, st.ints, seed=base + j, maxiter=cfg.de_maxiter, popsize=cfg.de_popsize,
-                                checkpoint=checkpoint)[0])
-        if not any(same_design(st.values(x), st.values(q), problem) for q in pool):
-            pool.append(x)
+        if cj is None:
+            xs = [st.round_x(_de_full(f_w, st.bounds, st.ints, seed=base + j, maxiter=cfg.de_maxiter, popsize=cfg.de_popsize,
+                                      checkpoint=checkpoint)[0])]
+        else:  # opt-native §7: 수준별로 돌린 뒤 합쳐 비지배를 거른다(아래 nd)
+            xs = [st.round_x(x) for x in de_levels(_de, f_w, st.bounds, st.ints, cj, nl, level_seeds(seed, round_no, j, nl),
+                                                   pick="all", maxiter=cfg.de_maxiter, popsize=cfg.de_popsize,
+                                                   checkpoint=checkpoint)]
+        for x in xs:
+            if not any(same_design(st.values(x), st.values(q), problem) for q in pool):
+                pool.append(x)
     Xp = fit.normalize(np.array(pool))
     mu_p, sd_p = st.mu(Xp)
     pof_each = st.pof(Xp, each=True)
@@ -418,8 +431,13 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
                     a = a * np.exp(-prox * dist / math.sqrt(Xn.shape[1]))
                 return -a
 
-            pop = _de_full(acq, st.bounds, st.ints, seed=base + 700 + j, maxiter=cfg.de_maxiter, popsize=cfg.de_popsize,
-                           checkpoint=checkpoint)
+            if cj is None:
+                pop = _de_full(acq, st.bounds, st.ints, seed=base + 700 + j, maxiter=cfg.de_maxiter, popsize=cfg.de_popsize,
+                               checkpoint=checkpoint)
+            else:
+                lv_x = de_levels(_de, acq, st.bounds, st.ints, cj, nl, level_seeds(seed, round_no, 30 + j, nl), pick="all",
+                                 maxiter=cfg.de_maxiter, popsize=cfg.de_popsize, checkpoint=checkpoint)
+                pop = sorted(lv_x, key=lambda x: float(acq(x.reshape(-1, 1))[0]))
             for x in pop:
                 x = st.round_x(x)
                 c = st.make(x, "parego", list(w), float(-acq(x.reshape(-1, 1))[0] * ysd))
@@ -429,7 +447,7 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
         else:
             while dmin >= RBF_MIN_DIST_FLOOR:
                 ref = np.array([fit.normalize(np.array([e[n] for n in fit.free]))[0]
-                                for e in st.existing + [c.values for c in st.picked]])
+                                for e in st.existing + [c.values for c in st.picked] if all(n in e for n in fit.free)])
                 dd = len(fit.free)
 
                 def f_rbf(xT: np.ndarray, ref: np.ndarray = ref, dmin: float = dmin, w: tuple[float, ...] = w) -> np.ndarray:
@@ -440,8 +458,12 @@ def propose_mo(fit: FitResult, problem: Problem, designs: Sequence[Design], fail
                     dist = np.sqrt(((Xn[:, None, :] - ref[None, :, :]) ** 2).sum(axis=2)).min(axis=1) / math.sqrt(dd)
                     return v + 1e6 * np.maximum(0.0, dmin - dist)
 
-                x = st.round_x(_de_full(f_rbf, st.bounds, st.ints, seed=base + 700 + j, maxiter=cfg.de_maxiter,
-                                        popsize=cfg.de_popsize, checkpoint=checkpoint)[0])
+                if cj is None:
+                    x = st.round_x(_de_full(f_rbf, st.bounds, st.ints, seed=base + 700 + j, maxiter=cfg.de_maxiter,
+                                            popsize=cfg.de_popsize, checkpoint=checkpoint)[0])
+                else:
+                    x = st.round_x(de_levels(_de, f_rbf, st.bounds, st.ints, cj, nl, level_seeds(seed, round_no, 30 + j, nl),
+                                             maxiter=cfg.de_maxiter, popsize=cfg.de_popsize, checkpoint=checkpoint))
                 xn = fit.normalize(x)[0]
                 dist = float(np.sqrt(((ref - xn) ** 2).sum(axis=1)).min() / math.sqrt(dd)) if len(ref) else math.inf
                 c = st.make(x, "rbf", list(w), None)

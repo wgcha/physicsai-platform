@@ -105,7 +105,21 @@ def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str,
     """탐색 배치(새 DOE LHS): 범위(고정 변수는 lo = hi)로 batch_matrix와 같은 층화 LHS 값을 만들어 표 조합으로 검증·반영."""
     st = n["settings"]
     ex = st["explore"]
-    names = st["names"]
+    if n.get("multi") is not None:  # opt-native §7: 다중 baseline = §7.3.8 층화 LHS(④ 다중 baseline 배치와 같은 경로)
+        from physicsai_core.stage4_predict.batch_multi import build_multi_matrix, restrict
+
+        levels = (st.get("levels") or {}).get("baseline")
+        pm2, rows2 = restrict(n["multi"]["pm"], list(n["ps"]["parameters"]), levels, st["bounds"])
+        mx = build_multi_matrix({"kind": "lhs", "count": ex["count"], "seed": ex["seed"]}, {**n["ps"], "parameters": rows2}, pm2,
+                                ctx.settings)
+        if mx.problems or not mx.rows:
+            raise _invalid([{"code": "EXPLORE_TOO_FEW", "field": "explore", "message": str(mx.problems[:3])}])
+        meta_m = {**mx.source_meta, "ranges": st["bounds"]}
+        mx.source_meta = meta_m
+        return so_repo.create_opt_batch(conn, opt=opt, iter_no=0, kind="EXPLORE", matrix=mx, source_meta=meta_m,
+                                        batch_dir_name=ctx.settings.predict_batch.dir_name,
+                                        simlab_mesh_name=ctx.settings.predict.simlab_mesh_name)
+    names = [x for x in st["names"] if x in {str(p["name"]) for p in n["ps"]["parameters"]}]
     vals = lhs_values(names, {k: (v[0], v[1]) for k, v in st["bounds"].items()}, ex["count"], ex["seed"])
     text = "\n".join([",".join(names), *[",".join(repr(float(v[k])) for k in names) for v in vals]]) + "\n"
     matrix = build_matrix_for({"kind": "table", "text": text}, n["ps"], ctx.settings)
@@ -140,6 +154,7 @@ def collect_runs(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str,
     out = []
     for it in its:
         b = pb_repo.get(conn, it["batch_id"])
+        meta = (b or {}).get("source_meta")
         if b is None:
             continue
         preds = {c.get("doe_no"): c.get("predicted") for c in it.get("candidates") or [] if c.get("state") != "UNVERIFIED"}
@@ -160,7 +175,8 @@ def collect_runs(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str,
             valid = state == "SUCCEEDED" and all(v is not None for v in objs) and all(v is not None for v in cons)
             out.append({"iter_no": it["iter_no"], "batch_id": b["id"], "batch_label": batch_label(b["batch_no"]),
                         "doe_no": r["doe_no"], "run_key": r["run_key"], "job_id": r["predict_job_id"],
-                        "values": r["applied_values"], "objective": objs[0], "constraints": cons,
+                        "values": ds.run_values(r["applied_values"], meta, r["doe_no"], problem.cat_spec),
+                        "objective": objs[0], "constraints": cons,
                         "predicted": preds.get(r["doe_no"]),
                         "feasible": ds.is_feasible(cons, problem.constraints) if valid else None, "state": state,
                         "objectives": objs, "observed": obs, "reason": next(iter(reasons.values()), None),

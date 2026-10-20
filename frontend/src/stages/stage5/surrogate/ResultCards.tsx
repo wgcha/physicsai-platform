@@ -9,7 +9,7 @@ import { Card } from "../../../components/ui";
 import { fmtNum } from "../../../lib/format";
 import { ContourMedia } from "../../stage4/ContourMedia";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
-import { UNVERIFIED_BADGE, boundNote, compareRows, kpis, objectiveDefs } from "./soRules";
+import { UNVERIFIED_BADGE, boundNote, compareRows, fmtVar, kpis, levelsOf, objectiveDefs } from "./soRules";
 
 export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — FEM 검증 버튼으로 조립 상태 해석과 비교할 수 있습니다";
 export const FINAL_TEXT: Record<string, string> = {
@@ -177,7 +177,7 @@ export function UnverifiedCard({ o, onChanged }: { o: SurrogateOpt; onChanged: (
                     onChange={() => setSel((x) => { const n = new Set(x); if (n.has(c.doe_no)) n.delete(c.doe_no); else n.add(c.doe_no); return n; })} /></td>
                   <td className="num">{c.doe_no}</td>
                   <td className="small">{c.role ?? ""}</td>
-                  {names.map((n) => <td key={n} className="num mono">{fmtNum(c.values[n])}</td>)}
+                  {names.map((n) => <td key={n} className="num mono">{fmtVar(n, c.values[n], levelsOf(o))}</td>)}
                   <td className="num mono">{fmtNum(c.predicted ?? null)}</td>
                   <td className="num mono muted">{fmtNum(c.predicted_std?.[0] ?? null)}</td>
                 </tr>

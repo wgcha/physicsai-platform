@@ -19,7 +19,7 @@ import numpy as np
 
 from . import evo, pareto
 from .algo import ALGO_LABEL
-from .dataset import Design, Problem, is_feasible, same_design
+from .dataset import Design, Problem, canonical_values, covered, is_feasible, same_design
 from .infill import RBF_MIN_DIST, RBF_MIN_DIST_FLOOR, FitResult, SurrogateError, _ei, cons_pof, cons_violation
 from .mo_infill import MoCandidate, c1_order, signed, work_frame
 
@@ -49,14 +49,31 @@ class Space:
     @classmethod
     def basic(cls, fit: FitResult, problem: Problem) -> Space:
         genes = []
+        spec = problem.cat_spec
         for n, lo, hi in zip(fit.free, fit.lo, fit.hi):
+            if spec is not None and n == spec["cat"]:  # opt-native §7 범주: 수준 인덱스 유전자
+                genes.append(evo.Gene(n, "cat", 0.0, float(len(spec["levels"]) - 1), len(spec["levels"])))
+                continue
             kind = "int" if n in problem.integer else "real"
             if kind == "int" and math.ceil(lo - 1e-9) > math.floor(hi + 1e-9):
                 raise SurrogateError("BOUNDS_INVALID", f"'{n}' 정수 범위가 비어 있습니다")
             genes.append(evo.Gene(n, kind, float(lo), float(hi)))
         if not genes:
             raise SurrogateError("NO_FREE_VARIABLE", "탐색할 변수가 없습니다")
-        return cls(fit, problem, genes, list(fit.free))
+        sp = cls(fit, problem, genes, list(fit.free))
+        if spec is not None:
+            from . import encoding
+
+            fixed = int(round(fit.fill.get(spec["cat"], 0.0)))
+            free = list(fit.free)
+            sp.effective = lambda X: encoding.effective(X, free, spec, fixed)
+        cov = problem.cover_spec
+        if cov is not None:  # 범위 분할: 덮는 baseline이 없는 점은 CV += 1(§6.2)
+            def extra(X: np.ndarray, sp: Space = sp, cov: dict[str, Any] = cov) -> np.ndarray:
+                return np.array([0.0 if covered(sp.values(x), cov) else 1.0 for x in np.atleast_2d(X)])
+
+            sp.extra_cv = extra
+        return sp
 
     def model_input(self, X: np.ndarray) -> np.ndarray:
         return self.to_model(X) if self.to_model is not None else self.fit.normalize(X)
@@ -68,7 +85,7 @@ class Space:
         for n in self.problem.integer:
             if n in vals:
                 vals[n] = float(round(vals[n]))
-        return vals
+        return canonical_values(vals, self.problem.cat_spec)
 
     def row_of(self, vals: dict[str, Any]) -> np.ndarray | None:
         if self.from_values is not None:

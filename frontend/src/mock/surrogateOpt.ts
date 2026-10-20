@@ -497,7 +497,14 @@ function normalize(srv: MockServer, sid: string, body: Record<string, unknown>) 
     multi_execution: Number(body.multi_execution ?? 1), capture: !!body.capture,
     explore: ex.kind === "new" ? { kind: "new", count, seed: ex.seed ?? 1 } : { kind: "reuse", batch_id: ex.batch_id },
   };
-  return { ps, settings, problems, free, fixed, integer: integer.filter((n) => free.includes(n)), count, info };
+  // opt-native §7(목): 다중 baseline 세트 = 위상 변형 범주 baseline(수준 = body.levels 또는 전부)
+  const bids = (ps.baselines ?? []).map((b) => b.id);
+  const levels = bids.length > 1 ? ((body.levels as { baseline?: string[] } | undefined)?.baseline ?? bids) : null;
+  if (levels) {
+    if (!levels.length || levels.some((b) => !bids.includes(b))) problems.push({ code: "LEVELS_INVALID", field: "levels.baseline", message: "매칭표에 없는 baseline이거나 빈 목록입니다" });
+    settings.levels = { baseline: levels };
+  }
+  return { ps, settings, problems, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
 }
 
 function newRec(id: string, studyId: string, no: number, psId: string, settings: SoRec["settings"], by: { id: string; name: string }, createdAt: string, batchNo: number, status = "EXPLORING"): SoRec {
@@ -596,7 +603,8 @@ export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {
         max_total_runs: total, estimate_min: Math.round(total * 2.2),
         objective_available: true, problems: n.problems, mode: st.mode, performances: n.info,
         algorithm: st.algorithm, algo_options: st.algo_options, verification: st.verification,
-        variables_kind: Object.fromEntries(n.free.map((v) => [v, n.integer.includes(v) ? "integer" : "continuous"])) });
+        variables_kind: Object.fromEntries(n.free.map((v) => [v, v === "baseline" ? "categorical" : n.integer.includes(v) ? "integer" : "continuous"])),
+        levels: n.levels ? { baseline: n.levels } : null });
     }
     if (method === "POST" && !seg[3]) {
       const deny = needPower(srv, s.project_id);

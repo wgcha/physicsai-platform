@@ -48,12 +48,30 @@ export interface VarRow {
   hi: string;
   fixed: boolean;
   integer: boolean;
+  /** opt-native §7: 다중 baseline 세트에서 이 변수가 N/A인 baseline id */
+  na?: string[];
 }
 
 export function varRows(ps: ParamSet | null): VarRow[] {
   const ints = integerVars(ps);
-  return (ps?.parameters ?? []).map((p) => ({ name: p.name, min: p.min, max: p.max, lo: String(p.min), hi: String(p.max), fixed: p.min === p.max, integer: ints.has(p.name) }));
+  return (ps?.parameters ?? []).map((p) => {
+    const per = (p as { baselines?: Record<string, unknown> | null }).baselines;
+    const na = per ? Object.entries(per).filter(([, v]) => v == null).map(([k]) => k) : [];
+    return { name: p.name, min: p.min, max: p.max, lo: String(p.min), hi: String(p.max), fixed: p.min === p.max, integer: ints.has(p.name), ...(na.length ? { na } : {}) };
+  });
 }
+
+/** 다중 baseline 세트의 baseline id 목록(4B, 없으면 []) */
+export function baselineIds(ps: ParamSet | null): string[] {
+  return ((ps as { baselines?: { id: string }[] } | null)?.baselines ?? []).map((b) => b.id);
+}
+
+/** 변수 칸 표시: 범주 baseline은 수준 인덱스 → id(settings.levels.baseline) */
+export function fmtVar(name: string, v: number | null | undefined, levels?: string[] | null): string {
+  if (name === "baseline" && levels?.length && v != null && Number.isFinite(v)) return levels[Math.round(v)] ?? fmtNum(v);
+  return fmtNum(v ?? null);
+}
+export const levelsOf = (o: Pick<SurrogateOpt, "settings">): string[] | null => ((o.settings as { levels?: { baseline?: string[] } }).levels?.baseline ?? null);
 
 /** 행 검증 문구(화면 회색 줄). 서버도 같은 규칙(BOUNDS_*) */
 export function rowIssue(r: VarRow): string | null {
@@ -205,6 +223,8 @@ export interface SoForm {
   algorithm?: Algorithm;
   verification?: Verification;
   algo?: AlgoForm;
+  /** opt-native §7: 위상 변형 세트의 baseline 수준(null = 전부) */
+  levels?: string[] | null;
 }
 
 const int = (s: string, d: number) => (s.trim() === "" || !Number.isFinite(Number(s)) ? d : Math.trunc(Number(s)));
@@ -240,6 +260,7 @@ export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
     ...(f.algorithm ? { algorithm: f.algorithm } : {}),
     ...(f.verification ? { verification: f.verification } : {}),
     ...(f.algorithm && f.algorithm !== "ego" ? { algo_options: algoOptionsBody(f.algo ?? EMPTY_ALGO) } : {}),
+    ...(f.levels ? { levels: { baseline: f.levels } } : {}),
   };
 }
 
