@@ -242,4 +242,9 @@ localStorage `physicsai.analysis.equiv.recipe`(마지막 선택). 문구 전부 
 
 ## 변경 메모(EQ-Cn)
 
-(없음)
+- **EQ-C1**(2026-10-21, 구현 f589d87·d95446f·⑤ 화면 — 사용자 확정 반영 + 구현 차이):
+  1. **실행 가능한 레시피(확정)**: 시스템 기본(`sys:default`)은 읽기 전용 제안값이며 **그대로 실행할 수 없다** — `recipe:{key:"sys:default"}` 또는 `recipe_inline.base = sys:default`는 422 `EQ_CHECK_INVALID`(problem `RECIPE_NOT_CONFIRMED`, "복제해 확인한 레시피로 실행"). 판정은 사용자가 복제·확인한 레시피(`user`, 그 레시피를 base로 한 1회용 수정 포함)와 base 없는 1회용 정의(`adhoc`)만. 화면은 시스템 기본 선택 시 실행·`이번만 사용` 비활성 + 안내. 이로써 `eq_checks.recipe_source = system`은 새 행에서 생기지 않는다(값·CHECK는 호환 위해 유지).
+  2. **응답 연결(확정)**: 필수/참고 구분·허용오차는 사용자가 레시피에서 정하고, **사용 중인 지표는 필수·참고 모두** 응답(source)이 연결돼야 실행된다(null이면 422 `METRIC_UNBOUND`, §3.2 "참고는 미연결이어도 실행" 대체). `mesh_volume`은 예외(아래 3의 기본 원천).
+  3. **부피 원천(Q3 확정)**: `source.origin` = `mesh`(기본, include 직접 적분) \| `starter_mass`(starter 출력 TOTAL MASS) \| `paicad`(check 보고값) — 레시피에서 선택.
+  4. **표본표 재사용(Q1 확정)**: ①-3에 `sampling.kind = train_doe`(같은 Study READY DOE의 표본표, 파라미터 이름 집합 같을 때만, run 이름 유지 → `by_name` 쌍 키). 불일치·미준비 422 `DOE_SAMPLING_INVALID`.
+  5. 구현 차이: (a) `by_name`에서 양쪽 run이 1개씩이면 이름이 달라도 그 둘을 쌍으로 본다(fem_verify·단일 폴더), (b) `curve_corr`·`curve_nrmse`도 `perf`(CURVE 성능 정의) 원천 허용, (c) 설정 `equiv_check.snapshot_max_bytes`(64 KiB, V-EQ-9) 추가, (d) problems 코드 추가 `RECIPE_REQUIRED`·`RECIPE_NOT_CONFIRMED`·`LABEL_INVALID`·`RULE_INVALID`·`SNAPSHOT_TOO_LARGE`, 경고 `EQ_CURVE_DEFS_MISSING`·`FOLDER_FILES`, (e) 화면: ⑤ 머리에 탭 `결과 표·그래프`(기존 4탭 묶음) \| `등가성 판정`, 메모는 실행 시 입력 + 결과 화면에서 작성자·관리자만 수정(PATCH note).
