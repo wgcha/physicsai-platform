@@ -871,6 +871,8 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 ## 10. 검증 계획
 
+> 2026-10-20: (2) Radioss 응답 동등과 native-rollout 현장 검증 (c)는 ⑤ 등가성 판정 [equiv-check.md](equiv-check.md)으로 수행한다(허용오차 = 레시피, 아래 (2)의 제안 기준은 그 기본 레시피로 대체, 회신은 판정 번호·수치만).
+
 1. **골든 형상 비교**(단계 2·3, **(a) 개발 환경 = 가상 쿠션 정답 비교(6)가 1차**, 실물 의존 항목은 **현장 인수(키트 (b))**로 표시): 현장 인수 시 실물 G1 샘플마다 (a) native 샘플 B-rep ↔ NX STEP 면별 Hausdorff, (b) native 모핑 메시 경계 ↔ NX STEP 거리, (c) 바디 부피·표면적 차, (d) native 메시 ↔ SimLab 메시(위상 다름) 외피 Hausdorff ≤ 메시 크기 0.25배 — **`paicad selftest`가 수치 요약(`report_native.csv`, CAD·메시 본문 없음)만 생성**하고 사용자가 수치만 전달. 실물 NX 변경 샘플 비교도 키트에서 현장 실행.
 2. **Radioss 응답 동등**(단계 3, **현장 인수**): 같은 조립 rad로 (i) SimLab 메시(m_2 include) (ii) native include를 각각 Radioss 해석(사용자 PBS/SCX). 비교 지표: 쿠션 최대 von Mises·최대 변형률, 제품 최대 가속도(T01), 내부 에너지 최대, 시간 이력 NRMSE. 기준(제안): 피크 차 ≤ 5%, NRMSE ≤ 5%, 시간 간격 비(dt) 차 ≤ 10%. 기준 밖이면 원인(메시 품질·형상 차) 분석 후 허용오차 조정 제안. 사용자는 지표 수치만 회신(결과 파일 반출 없음).
 3. **PhysicsAI 예측 동등**(단계 4, **현장 인수**): 실물 학습 모델로 (i)·(ii) 입력 예측 비교 — 응답 차가 학습 오차 수준인지 확인(정보, 수치만 회신).
