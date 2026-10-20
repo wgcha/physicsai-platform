@@ -222,6 +222,156 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/equiv-checks/{eq_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Equiv Check
+         * @description 행 + 스냅숏 + metrics.csv 요약 표(파일 읽기, no-store).
+         */
+        get: operations["get_equiv_check_physicsai_api_equiv_checks__eq_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Patch Equiv Check
+         * @description 메모(note)만 사후 수정 가능(작성자·관리자).
+         */
+        patch: operations["patch_equiv_check_physicsai_api_equiv_checks__eq_id__patch"];
+        trace?: never;
+    };
+    "/physicsai/api/equiv-checks/{eq_id}/curves": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Equiv Check Curves */
+        get: operations["equiv_check_curves_physicsai_api_equiv_checks__eq_id__curves_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/equiv-checks/{eq_id}/table.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Equiv Check Table Csv
+         * @description 원표(UTF-8 BOM): pair_no,a_run,b_run,metric_id,a,b,diff,rel_pct,corr,status,reason.
+         */
+        get: operations["equiv_check_table_csv_physicsai_api_equiv_checks__eq_id__table_csv_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/equiv/recipes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Equiv Recipes
+         * @description 시스템 기본(`sys:default`, 읽기 전용 제안값) + 전역 + 그 Study 레시피의 최신 활성 버전.
+         */
+        get: operations["list_equiv_recipes_physicsai_api_equiv_recipes_get"];
+        put?: never;
+        /**
+         * Create Equiv Recipe
+         * @description 생성(power): definition | clone_from{key, version} | from_check(이력 스냅숏 복제) → version 1.
+         */
+        post: operations["create_equiv_recipe_physicsai_api_equiv_recipes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/equiv/recipes/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Equiv Recipe
+         * @description 정의(삭제된 key도 이력용으로 조회 가능 — deleted: true).
+         */
+        get: operations["get_equiv_recipe_physicsai_api_equiv_recipes__key__get"];
+        /**
+         * Update Equiv Recipe
+         * @description 편집 = 새 버전(base_version이 최신과 다르면 409 EQ_RECIPE_VERSION_CONFLICT). 시스템 기본은 409 EQ_RECIPE_READONLY.
+         */
+        put: operations["update_equiv_recipe_physicsai_api_equiv_recipes__key__put"];
+        post?: never;
+        /**
+         * Delete Equiv Recipe
+         * @description 소프트 삭제(key 단위, 멱등). 이력 스냅숏·참조는 그대로.
+         */
+        delete: operations["delete_equiv_recipe_physicsai_api_equiv_recipes__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/equiv/recipes/{key}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore Equiv Recipe
+         * @description 되살리기(관리자, 멱등).
+         */
+        post: operations["restore_equiv_recipe_physicsai_api_equiv_recipes__key__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/equiv/recipes/{key}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Equiv Recipe Versions */
+        get: operations["equiv_recipe_versions_physicsai_api_equiv_recipes__key__versions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/fem-verifications/{fid}": {
         parameters: {
             query?: never;
@@ -1420,6 +1570,50 @@ export interface paths {
         get: operations["list_datasets_physicsai_api_studies__study_id__datasets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/equiv-checks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Equiv Checks
+         * @description 이력 목록(최신순). 다음 페이지가 있으면 헤더 X-Next-Cursor.
+         */
+        get: operations["list_equiv_checks_physicsai_api_studies__study_id__equiv_checks_get"];
+        put?: never;
+        /**
+         * Create Equiv Check
+         * @description 실행(power): 이력 행 + EQ_CHECK 작업. 필수 지표 미연결 422 METRIC_UNBOUND, 활성 상한 409 EQ_CHECK_LIMIT.
+         */
+        post: operations["create_equiv_check_physicsai_api_studies__study_id__equiv_checks_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/equiv-checks/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Preview Equiv Check
+         * @description 미리보기(DB 쓰기 없음): 쌍 매칭·binding 해석·추출 필요 수·사본 예상 바이트·problems.
+         */
+        post: operations["preview_equiv_check_physicsai_api_studies__study_id__equiv_checks_preview_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3329,6 +3523,483 @@ export interface components {
             /** State */
             state: string;
             summary: components["schemas"]["EnvCheckCounts"];
+        };
+        /** EqCheck */
+        EqCheck: {
+            /**
+             * Can Cancel
+             * @default false
+             */
+            can_cancel: boolean;
+            /**
+             * Can Edit Note
+             * @default false
+             */
+            can_edit_note: boolean;
+            /**
+             * Can Retry
+             * @default false
+             */
+            can_retry: boolean;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Dir */
+            dir?: string | null;
+            /** Eq No */
+            eq_no: number;
+            failure?: components["schemas"]["EqProblem"] | null;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            job?: components["schemas"]["JobSummary"] | null;
+            /** Job Id */
+            job_id?: string | null;
+            /** Label */
+            label: string;
+            /** Metrics */
+            metrics: {
+                [key: string]: unknown;
+            }[];
+            /** Note */
+            note?: string | null;
+            /** Pairing */
+            pairing: {
+                [key: string]: unknown;
+            };
+            /** Pairs */
+            pairs: {
+                [key: string]: unknown;
+            }[];
+            /** Recipe */
+            recipe: {
+                [key: string]: unknown;
+            };
+            /** Recipe Snapshot */
+            recipe_snapshot: {
+                [key: string]: unknown;
+            };
+            /** Rows */
+            rows: {
+                [key: string]: unknown;
+            }[];
+            /** Side A */
+            side_a: {
+                [key: string]: unknown;
+            };
+            /** Side B */
+            side_b: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Status Text */
+            status_text: string;
+            /** Summary */
+            summary?: {
+                [key: string]: unknown;
+            } | null;
+            /** Summary Line */
+            summary_line?: string | null;
+            /** Unmatched A */
+            unmatched_a?: string[];
+            /** Unmatched B */
+            unmatched_b?: string[];
+            /** Verdict */
+            verdict?: string | null;
+            /** Verdict Text */
+            verdict_text?: string | null;
+            /** Warnings */
+            warnings?: components["schemas"]["EqProblem"][];
+        };
+        /**
+         * EqCheckCreate
+         * @description 실행(202). recipe(저장된 레시피·시스템 기본 `sys:default`) 또는 recipe_inline(불러온 뒤 수정한 1회용) 중 하나 필수.
+         *     bindings = {metric_id: source} — 레시피의 빈 원천(연결 필요)을 채운다. 필수 지표가 비어 있으면 422 METRIC_UNBOUND.
+         */
+        EqCheckCreate: {
+            /** Bindings */
+            bindings?: {
+                [key: string]: {
+                    [key: string]: unknown;
+                } | null;
+            } | null;
+            /** Note */
+            note?: string | null;
+            pairing?: components["schemas"]["EqPairing"];
+            recipe?: components["schemas"]["EqRecipeRef"] | null;
+            recipe_inline?: components["schemas"]["EqRecipeInline"] | null;
+            /** Side A */
+            side_a: components["schemas"]["EqSideTrainDoe"] | components["schemas"]["EqSidePredictBatch"] | components["schemas"]["EqSideFemVerify"] | components["schemas"]["EqSideFolder"];
+            /** Side B */
+            side_b: components["schemas"]["EqSideTrainDoe"] | components["schemas"]["EqSidePredictBatch"] | components["schemas"]["EqSideFemVerify"] | components["schemas"]["EqSideFolder"];
+        };
+        /** EqCheckCreated */
+        EqCheckCreated: {
+            /** Eq Id */
+            eq_id: string;
+            /** Eq No */
+            eq_no: number;
+            /** Job Id */
+            job_id: string;
+            /** Label */
+            label: string;
+        };
+        /** EqCheckListItem */
+        EqCheckListItem: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Created By Name */
+            created_by_name: string;
+            /** Eq No */
+            eq_no: number;
+            /** Finished At */
+            finished_at?: string | null;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Label */
+            label: string;
+            /** Note */
+            note?: string | null;
+            /** Pairing */
+            pairing: {
+                [key: string]: unknown;
+            };
+            /** Recipe */
+            recipe: {
+                [key: string]: unknown;
+            };
+            /** Side A */
+            side_a: {
+                [key: string]: unknown;
+            };
+            /** Side B */
+            side_b: {
+                [key: string]: unknown;
+            };
+            /** Status */
+            status: string;
+            /** Status Text */
+            status_text: string;
+            /** Summary Line */
+            summary_line?: string | null;
+            /** Verdict */
+            verdict?: string | null;
+            /** Verdict Text */
+            verdict_text?: string | null;
+        };
+        /** EqCurves */
+        EqCurves: {
+            /** A */
+            a: number[];
+            /** A Run */
+            a_run: string;
+            /** B */
+            b: number[];
+            /** B Run */
+            b_run: string;
+            /** Corr */
+            corr?: number | null;
+            /**
+             * Downsampled
+             * @default false
+             */
+            downsampled: boolean;
+            /** Metric Id */
+            metric_id: string;
+            /** Nrmse Pct */
+            nrmse_pct?: number | null;
+            /** Overlap Ratio */
+            overlap_ratio?: number | null;
+            /** Pair No */
+            pair_no: number;
+            /** T */
+            t: number[];
+        };
+        /** EqNotePatch */
+        EqNotePatch: {
+            /** Note */
+            note?: string | null;
+        };
+        /** EqPairItem */
+        EqPairItem: {
+            /** A */
+            a: string;
+            /** B */
+            b: string;
+        };
+        /** EqPairing */
+        EqPairing: {
+            /**
+             * Mode
+             * @default by_name
+             * @enum {string}
+             */
+            mode: "by_name" | "by_params" | "manual";
+            /** Pairs */
+            pairs?: components["schemas"]["EqPairItem"][] | null;
+        };
+        /** EqPreview */
+        EqPreview: {
+            /** Can Run */
+            can_run: boolean;
+            /** Extract */
+            extract: {
+                [key: string]: unknown;
+            };
+            /** Metrics */
+            metrics: {
+                [key: string]: unknown;
+            }[];
+            /** Pairing */
+            pairing: {
+                [key: string]: unknown;
+            };
+            /** Pairs */
+            pairs: {
+                [key: string]: unknown;
+            }[];
+            /** Problems */
+            problems: components["schemas"]["EqProblem"][];
+            /** Side A */
+            side_a: {
+                [key: string]: unknown;
+            };
+            /** Side B */
+            side_b: {
+                [key: string]: unknown;
+            };
+            /** Unmatched A */
+            unmatched_a: string[];
+            /** Unmatched B */
+            unmatched_b: string[];
+            /** Warnings */
+            warnings: components["schemas"]["EqProblem"][];
+        };
+        /** EqProblem */
+        EqProblem: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Metric Id */
+            metric_id?: string | null;
+            /** Only A */
+            only_a?: string[] | null;
+            /** Only B */
+            only_b?: string[] | null;
+            /** Side */
+            side?: string | null;
+        };
+        /** EqRecipe */
+        EqRecipe: {
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Key */
+            key: string;
+            /** Metrics Count */
+            metrics_count: number;
+            /** Name */
+            name: string;
+            /** Parent */
+            parent?: {
+                [key: string]: unknown;
+            } | null;
+            /** Readonly */
+            readonly: boolean;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "study" | "global";
+            /** Study Id */
+            study_id?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By Name */
+            updated_by_name?: string | null;
+            /** Version */
+            version: number;
+            /** Versions */
+            versions?: {
+                [key: string]: unknown;
+            }[] | null;
+        };
+        /**
+         * EqRecipeCreate
+         * @description 생성: definition 직접 | clone_from(레시피 key·version) | from_check(이력 스냅숏 복제) 중 하나.
+         */
+        EqRecipeCreate: {
+            clone_from?: components["schemas"]["EqRecipeRef"] | null;
+            /** Definition */
+            definition?: {
+                [key: string]: unknown;
+            } | null;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** From Check */
+            from_check?: string | null;
+            /** Name */
+            name: string;
+            /**
+             * Scope
+             * @default study
+             * @enum {string}
+             */
+            scope: "study" | "global";
+            /** Study Id */
+            study_id?: string | null;
+        };
+        /** EqRecipeInline */
+        EqRecipeInline: {
+            base?: components["schemas"]["EqRecipeRef"] | null;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+        };
+        /** EqRecipeListItem */
+        EqRecipeListItem: {
+            /**
+             * Can Edit
+             * @default false
+             */
+            can_edit: boolean;
+            /**
+             * Deleted
+             * @default false
+             */
+            deleted: boolean;
+            /**
+             * Description
+             * @default
+             */
+            description: string;
+            /** Key */
+            key: string;
+            /** Metrics Count */
+            metrics_count: number;
+            /** Name */
+            name: string;
+            /** Readonly */
+            readonly: boolean;
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "system" | "study" | "global";
+            /** Study Id */
+            study_id?: string | null;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Updated By Name */
+            updated_by_name?: string | null;
+            /** Version */
+            version: number;
+        };
+        /** EqRecipeRef */
+        EqRecipeRef: {
+            /** Key */
+            key: string;
+            /** Version */
+            version?: number | null;
+        };
+        /** EqRecipeUpdate */
+        EqRecipeUpdate: {
+            /** Base Version */
+            base_version: number;
+            /** Definition */
+            definition: {
+                [key: string]: unknown;
+            };
+            /** Description */
+            description?: string | null;
+            /** Name */
+            name?: string | null;
+        };
+        /** EqSideFemVerify */
+        EqSideFemVerify: {
+            /** Attempt */
+            attempt?: number | null;
+            /** Fv Id */
+            fv_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fem_verify";
+            /** Label */
+            label?: string | null;
+        };
+        /** EqSideFolder */
+        EqSideFolder: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "folder";
+            /** Label */
+            label?: string | null;
+            /** Paths */
+            paths: string[];
+        };
+        /** EqSidePredictBatch */
+        EqSidePredictBatch: {
+            /** Batch Id */
+            batch_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "predict_batch";
+            /** Label */
+            label?: string | null;
+        };
+        /** EqSideTrainDoe */
+        EqSideTrainDoe: {
+            /** Doe Id */
+            doe_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "train_doe";
+            /** Label */
+            label?: string | null;
         };
         /** ErrorBody */
         ErrorBody: {
@@ -6657,6 +7328,8 @@ export interface components {
             curation_h3d: components["schemas"]["FeatureState"];
             curation_t01: components["schemas"]["FeatureState"];
             dataset_create?: components["schemas"]["FeatureState"] | null;
+            equiv_check?: components["schemas"]["FeatureState"] | null;
+            equiv_check_extract?: components["schemas"]["FeatureState"] | null;
             evaluate?: components["schemas"]["FeatureState"] | null;
             fem_verify?: components["schemas"]["FeatureState"] | null;
             fem_verify_rebuild?: components["schemas"]["FeatureState"] | null;
@@ -8330,6 +9003,658 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_equiv_check_physicsai_api_equiv_checks__eq_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eq_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqCheck"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    patch_equiv_check_physicsai_api_equiv_checks__eq_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eq_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EqNotePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqCheckListItem"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    equiv_check_curves_physicsai_api_equiv_checks__eq_id__curves_get: {
+        parameters: {
+            query: {
+                pair: number;
+                metric: string;
+                max_points?: number;
+            };
+            header?: never;
+            path: {
+                eq_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqCurves"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    equiv_check_table_csv_physicsai_api_equiv_checks__eq_id__table_csv_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eq_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_equiv_recipes_physicsai_api_equiv_recipes_get: {
+        parameters: {
+            query?: {
+                study_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqRecipeListItem"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_equiv_recipe_physicsai_api_equiv_recipes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EqRecipeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqRecipe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_equiv_recipe_physicsai_api_equiv_recipes__key__get: {
+        parameters: {
+            query?: {
+                version?: number | null;
+            };
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqRecipe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    update_equiv_recipe_physicsai_api_equiv_recipes__key__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EqRecipeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqRecipe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_equiv_recipe_physicsai_api_equiv_recipes__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    restore_equiv_recipe_physicsai_api_equiv_recipes__key__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqRecipe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    equiv_recipe_versions_physicsai_api_equiv_recipes__key__versions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqRecipe"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -11878,6 +13203,195 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_equiv_checks_physicsai_api_studies__study_id__equiv_checks_get: {
+        parameters: {
+            query?: {
+                side_kind?: string | null;
+                side_ref?: string | null;
+                verdict?: string | null;
+                recipe_key?: string | null;
+                limit?: number | null;
+                cursor?: string | null;
+            };
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqCheckListItem"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_equiv_check_physicsai_api_studies__study_id__equiv_checks_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EqCheckCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqCheckCreated"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    preview_equiv_check_physicsai_api_studies__study_id__equiv_checks_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EqCheckCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EqPreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

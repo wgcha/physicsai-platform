@@ -155,6 +155,13 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
     { key: "RESPONSE_EXTRACT_RUNS", kind: "LOCAL" },
     { key: "PX_TABLE", kind: "INTERNAL" },
   ],
+  // equiv-check.md §4.5 ⑤ 해석 등가성 판정
+  EQ_CHECK: [
+    { key: "EQ_PREP", kind: "INTERNAL" },
+    { key: "EQ_EXTRACT", kind: "LOCAL" },
+    { key: "EQ_COMPUTE", kind: "INTERNAL" },
+    { key: "EQ_REPORT", kind: "INTERNAL" },
+  ],
 };
 
 /** step_key → 한국어 표시(백엔드 current_step_label 흉내) */
@@ -179,6 +186,7 @@ export const STEP_LABEL: Record<string, string> = {
   BP_PREP: "입력 준비", BP_GEN: "입력 생성", BP_ENQUEUE: "예측 등록",
   CONTOUR_CAPTURE: "컨투어 캡처",
   FV_PREP: "조립 입력 준비", FV_MESH: "메시 교체", FV_ASSEMBLE: "입력 조립", FV_EXTRACT: "응답 추출", FV_CURVE: "커브 추출", FV_CAPTURE: "컨투어 캡처", FV_COMPARE: "비교 정리",
+  EQ_PREP: "판정 준비(쌍·레시피 확정)", EQ_EXTRACT: "응답·곡선 추출(없는 값만)", EQ_COMPUTE: "지표 계산", EQ_REPORT: "집계·종합 판정",
   PX_PREP: "준비", PX_TABLE: "배치 표 갱신",
   NP_PREP: "준비 파일 모으기", NP_EXTRACT: "형상 피처 추출", NP_TAG: "경계 노드 분류", BL_MAP: "baseline 변수 매칭", NP_REGISTER: "템플릿 등록",
   SO_COLLECT: "검증 결과 수집", SO_FIT: "대리모델 학습", SO_PROPOSE: "후보 탐색", SO_NEXT: "검증 배치 등록·마무리",

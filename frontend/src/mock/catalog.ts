@@ -27,6 +27,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   FEM_VERIFY: "④",
   PB_RESP_EXTRACT: "④",
   PARAM_SET_NATIVE: "④",
+  EQ_CHECK: "⑤",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -65,6 +66,9 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   contour3d: ["contour3d.enabled", "commands.contour_extract", "resources.contour_extract_tcl"],
   // S18(phase3.md §23.8): ① 플랫폼 생성 — geom_update 템플릿 + SimLab 경로(HyperStudy 자원은 필요 없음)
   train_doe_platform: ["commands.geom_update", "altair.simlab_path"],
+  // equiv-check.md §5.3: 등가성 판정(항상 사용 가능 — enabled)·판정 중 추출(hw·응답 TCL·T01 곡선)
+  equiv_check: ["equiv_check.enabled"],
+  equiv_check_extract: ["commands.response_extract", "commands.t01_curve_export", "altair.hw_exe_path"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

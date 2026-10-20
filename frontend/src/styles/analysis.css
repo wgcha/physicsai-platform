@@ -120,3 +120,103 @@
   display: grid;
   gap: var(--space-2);
 }
+
+/* ⑤ 등가성 판정 탭(equiv-check.md §7) */
+.eq-tab {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.eq-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.eq-h {
+  margin: 0;
+  font: var(--font-r-strong);
+}
+.eq-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.eq-spacer {
+  flex: 1;
+}
+.eq-side {
+  display: grid;
+  grid-template-columns: 6rem 12rem 1fr;
+  gap: var(--space-2);
+  align-items: start;
+}
+.eq-side-slot {
+  font: var(--font-r-strong);
+  padding-top: 0.3rem;
+}
+.eq-side-paths {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+.eq-side-paths textarea {
+  flex: 1;
+  font: var(--font-r-mono);
+}
+.eq-src {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+}
+.eq-src.unbound,
+.eq-row-unbound td:first-child {
+  background: var(--color-warning-surface);
+}
+.eq-src-text {
+  min-width: 8rem;
+}
+.eq-unbound {
+  color: var(--color-text-strong);
+  background: var(--color-warning-surface);
+  border: 1px solid var(--color-warning-border);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+}
+.eq-editor-foot,
+.eq-recipe-actions,
+.eq-saveas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.eq-result-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+.eq-metric.pass td:first-child {
+  border-left: 3px solid var(--color-success);
+}
+.eq-metric.fail td:first-child {
+  border-left: 3px solid var(--color-danger);
+}
+.eq-pair-row td {
+  background: var(--color-surface-2);
+}
+.eq-curve-pick {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.eq-hist-actions {
+  white-space: nowrap;
+}
+.eq-problems,
+.eq-warnings {
+  margin: 0;
+  padding-left: 1.2em;
+}

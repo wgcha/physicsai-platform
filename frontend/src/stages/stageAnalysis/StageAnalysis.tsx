@@ -8,6 +8,7 @@ import { useStudy } from "../../app/StudyContext";
 import { Card } from "../../components/ui";
 import { commonResponses, META_DIFF_TEXT, metaChips, metaDiffers, mismatchText, nameSetDiff, NO_COMMON_RESP_TEXT } from "../../analysis/compare";
 import { isOkState, type ResultTable } from "../../analysis/resultTable";
+import { EquivTab } from "../../analysis/equiv/EquivTab";
 import { AnalysisTable, sortRtRows } from "./AnalysisTable";
 import { AnalysisTabs } from "./AnalysisTabs";
 import { CompareSlot } from "./CompareSlot";
@@ -82,11 +83,44 @@ export function StageAnalysis() {
   const message = diff && !diff.same ? mismatchText(diff) : table && cmpTable && !commonResp.length ? NO_COMMON_RESP_TEXT : null;
   const other = table && cmpTable && diff?.same && commonResp.length ? cmpTable : null;
   const metaDiff = table && cmpTable ? metaDiffers(table.meta, cmpTable.meta) : false;
+  // equiv-check.md §7: ?tab=equiv → 등가성 판정 탭(기본 출처 = A, 비교 출처 = B). 기존 탭은 ?tab 없음
+  const equiv = sp.get("tab") === "equiv";
+  const setTab = (t: "table" | "equiv") => {
+    const next = new URLSearchParams(sp);
+    if (t === "equiv") next.set("tab", "equiv");
+    else {
+      next.delete("tab");
+      next.delete("eq");
+    }
+    setSp(next, { replace: true });
+  };
+  const tabs = (
+    <div className="tabs graph-tabs" role="tablist" aria-label="결과분석 탭">
+      <button type="button" role="tab" aria-selected={!equiv} onClick={() => setTab("table")}>
+        결과 표·그래프
+      </button>
+      <button type="button" role="tab" aria-selected={equiv} onClick={() => setTab("equiv")}>
+        등가성 판정
+      </button>
+    </div>
+  );
 
   if (!batches || !does) return <Card span={9} title="결과분석"><p className="muted small">불러오는 중…</p></Card>;
+  if (equiv) {
+    return (
+      <>
+        <Card span={9} title="결과분석" className="analysis-head" aside={tabs}>
+          <p className="muted small">⑤ 등가성 판정 — 두 결과 집합(A 기준·B 비교)을 쌍으로 맞춰 지표별 허용오차(레시피)로 판정하고 이력을 남깁니다.</p>
+        </Card>
+        <Card span={9} title="등가성 판정" className="analysis-equiv">
+          <EquivTab initialA={base && base.id ? { kind: base.kind, id: base.id } : null} initialB={cmp && cmp.id ? { kind: cmp.kind, id: cmp.id } : null} initialEq={sp.get("eq")} />
+        </Card>
+      </>
+    );
+  }
   return (
     <>
-      <Card span={9} title="결과분석" className="analysis-head" aside={<span className="muted small">⑤ — 결과 표(run마다 파라미터 + 응답)를 분석합니다</span>}>
+      <Card span={9} title="결과분석" className="analysis-head" aside={tabs}>
         <div className="head-row">
           <SourcePicker slot="기본" sel={base ?? { kind: "batch", id: "" }} batches={batches} does={does} onChange={pickBase} />
         </div>

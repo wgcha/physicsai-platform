@@ -9,6 +9,7 @@ import { batchAfterChild, batchOnProgress, isBatchChild } from "./predictBatch";
 import { tickScx } from "./scx";
 import { tickSurrogate } from "./surrogateOpt";
 import { syncFem } from "./femVerify";
+import { syncEquiv } from "./equivCheck";
 import { finishGeometry } from "./geometry";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
@@ -77,6 +78,7 @@ export function tickJobs(srv: MockServer) {
   tickSurrogate(srv); // S13 ⑤ 내장 최적화 한 단계
   srv.p2.tick();
   syncFem(srv); // S16 V2 종료 훅 흉내
+  syncEquiv(srv); // ⑤ 등가성 판정 종료 훅 흉내
   refreshPositions(srv);
 }
 
