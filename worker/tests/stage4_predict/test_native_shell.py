@@ -103,7 +103,7 @@ def test_props_apply_failure_is_korean_and_thickness_only_skips_geometry(native_
 
 
 def test_shell_only_registration_and_set_doe(native_env, fake_record):
-    """STEP 없는 조립 폴더만으로 쉘 두께 전용 세트(tag 생략) → 세트 기준 DOE: m_3에 두께 적용, 샘플 표에 두께 값."""
+    """STEP 없는 조립 폴더만으로 쉘 두께 전용 세트(tag 생략) → 세트 기준 DOE: run 직계 조립 사본에 두께 적용, 샘플 표에 두께 값."""
     env = native_env()
     proj = env.imports / "shell_proj"
     make_assem_files(proj / "assem", renum_csv=False)
@@ -133,10 +133,11 @@ def test_shell_only_registration_and_set_doe(native_env, fake_record):
     assert len(rows) == 3 and set(rows[0]) == {"doe_no", "run_key", "BRACKET_SHELL_T", "COVER_SHELL_T"}
     for row in rows:
         R = D / "approaches" / "doe_1" / row["run_key"]
-        assert not (R / "m_1" / "update").exists()                                  # 형상 단계 생략
-        assert f"#FAKE_PROP 1 {float(row['BRACKET_SHELL_T'])!r}" in (R / "m_3" / "material.inc").read_text()
+        assert not (R / "_paicad" / "update").exists()                              # 형상 단계 생략
+        assert f"#FAKE_PROP 1 {float(row['BRACKET_SHELL_T'])!r}" in (R / "material.inc").read_text()
+        assert not (R / "m_3").exists() and list((R / "_paicad" / "assembly").iterdir()) == []
         assert 1.14 <= float(row["BRACKET_SHELL_T"]) <= 1.26
-        assert "BRACKET_SHELL_T" in (R / "m_1" / "native_params.xml").read_text()
+        assert "BRACKET_SHELL_T" in (R / "_paicad" / "native_params.xml").read_text()
     assert jd["result"]["run_count"] == 3
 
 
@@ -157,7 +158,8 @@ def test_set_doe_props_failure_is_skipped_run(native_env, monkeypatch):
     assert set(sk) == set(hi) and all(s["reason"] == "PROP_THICKNESS_INVALID" and s["category"] == "PROP" for s in sk.values())
     for rk in hi:
         R = D / "approaches" / "doe_1" / rk
-        assert not (R / "m_3").exists() and json.loads((R / "SKIPPED.json").read_text())["step"] == "props"
+        assert not list(R.glob("*.rad")) and not list(R.glob("*.inc")) and not (R / "_paicad" / "assembly").exists()  # 실패 조립본은 _backup
+        assert json.loads((R / "SKIPPED.json").read_text())["step"] == "props"
 
 
 def test_props_api_guards(native_env, predict_env):

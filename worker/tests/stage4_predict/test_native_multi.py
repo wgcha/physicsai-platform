@@ -139,17 +139,17 @@ def test_topology_add_confirm_gate_doe_remap(native_env, monkeypatch, fake_recor
     assert all(r["POCKET_D"] == "" for r in rows_m[:3]) and all(r["C_HOLE_R_1"] == "" for r in rows_m[3:])
     for r in rows_m:
         R = D / "approaches" / "doe_1" / r["run_key"]
-        v = json.loads((R / "m_1" / "values.json").read_text())
+        v = json.loads((R / "_paicad" / "values.json").read_text())
         assert v["baseline_id"] == r["baseline_id"]
         if r["baseline_id"] == "B2":
             assert set(v["values"]) == {"A_THK_1", "B_RIB_H_1", "D_POCKET_D_1"} and v["common_values"]["C_HOLE_R_1"] is None
             assert v["values"]["D_POCKET_D_1"] == float(r["POCKET_D"])
         else:
             assert set(v["values"]) == {"A_THK_1", "B_RIB_H_1", "C_HOLE_R_1"} and v["common_values"]["POCKET_D"] is None
-        xml = (R / "m_1" / "native_params.xml").read_text()
+        xml = (R / "_paicad" / "native_params.xml").read_text()
         na = "1.0" if r["baseline_id"] == "B2" else "0.0"
         assert f'Name="C_HOLE_R_1__na" NewValue="{na}"' in xml and 'Name="baseline__B2"' in xml
-        assert (R / "m_3" / "model0_0000.rad").is_file()
+        assert (R / "model0_0000.rad").is_file() and not (R / "m_3").exists()
     upd = [x for x in read_record(fake_record) if x["tool"] == "paicad" and x["argv"][1] in ("update", "run")]
     assert any(str(S / "baselines" / "B2" / "cad") in a for x in upd for a in x["argv"])     # B2 run은 B2 준비본으로
     assert jd["result"]["run_count"] == 5 and jd["result"]["sample_status"] == "PARSED"

@@ -130,21 +130,21 @@ def shell_steps(settings: Any, inp: NativeInputs, *, values_json: str, options_j
                ("paicad_shell_check", "check", os.path.join(chk, CHECK_JSON), [], [chk, files_dir], chk)]
 
 
-STEP_REPORT_REL = {"update": f"m_1/update/{UPDATE_JSON}", "morph": f"m_2/morph/{MORPH_JSON}", "check": f"m_2/check/{CHECK_JSON}"}
-
-
-def run_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, thickness_doc: dict[str, Any] | None
+def run_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, thickness_doc: dict[str, Any] | None, layout: Any = None
                ) -> tuple[Verdict | None, str | None, list[str]]:
-    """R/m_1/values.json·R/options.json이 준비된 상태에서 쉘 update→morph→check. (실패 Verdict|None, 실패 단계, PASS 사본 rel 목록)."""
-    m1, m2 = os.path.join(R, "m_1"), os.path.join(R, "m_2")
+    """values.json·options.json이 준비된 상태에서 쉘 update→morph→check. (실패 Verdict|None, 실패 단계, PASS 사본 rel 목록).
+    layout = geometry_sample.RunLayout(None = LEGACY: R/m_1/values.json·R/options.json, FLAT: R/_paicad/…, GE-C13)."""
+    if layout is None:
+        from .geometry_sample import LEGACY as layout
+    m1, m2, meta = layout.at(R, "m1"), layout.at(R, "m2"), layout.at(R, "meta")
     upd, mor, chk = os.path.join(m1, "update"), os.path.join(m2, "morph"), os.path.join(m2, "check")
     files_dir = os.path.join(m2, SHELL_FILES_DIR)
     tj = write_thickness(os.path.join(m2, THICKNESS_JSON), thickness_doc)
-    values, steps = shell_steps(settings, inp, values_json=os.path.join(m1, "values.json"), options_json=os.path.join(R, "options.json"),
+    values, steps = shell_steps(settings, inp, values_json=os.path.join(m1, "values.json"), options_json=os.path.join(meta, "options.json"),
                                 upd=upd, mor=mor, chk=chk, files_dir=files_dir, thickness_json=tj)
     report: dict[str, Any] | None = None
     for key, step, rep, success, backup, cwd in steps:
-        v = run_paicad(x, settings, key, values, cwd=cwd or R, report=rep, success=success, backup=backup, body_map=inp.body_map,
+        v = run_paicad(x, settings, key, values, cwd=cwd or meta, report=rep, success=success, backup=backup, body_map=inp.body_map,
                        log_dir=os.path.dirname(rep))
         if not v.ok:
             return v, (v.step or step if step != "run" else v.step or "update"), []

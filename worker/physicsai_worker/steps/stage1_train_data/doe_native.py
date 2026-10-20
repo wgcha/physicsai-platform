@@ -2,6 +2,8 @@
 
 DG_PREP: 조립 폴더·STEP·①-1 산출 복사, 옵션 사용값, `D/doe_matrix.csv`. HST_GEN_RADIOSS: tag + `run_parallel`.
 DG_SCAN의 SKIPPED.json 해석은 `skipped_entry`(doe_gen.dg_scan이 호출).
+run 폴더 레이아웃(GE-C13): `run__N/` 직계 = 해석 입력(조립 사본), 보조 산출물 = `run__N/_paicad/`(geometry_sample.FLAT).
+이전에 m_1~m_3로 만든 native run 폴더는 DG_SCAN(starter 재귀 탐색)·paramitem(재귀)·TD_SOLVE(DB input_rel)가 그대로 읽는다.
 """
 
 from __future__ import annotations
@@ -25,7 +27,7 @@ from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
 
 from ..common import hst_run_label, path_failure
 from ..geometry_native import LocalRunner, engine_version, read_json, run_paicad, write_native_options
-from ..geometry_sample import SKIPPED_JSON, backup_path, generate_sample, native_inputs, write_sample_inputs
+from ..geometry_sample import FLAT, SKIPPED_JSON, backup_path, generate_sample, native_inputs, write_sample_inputs
 from ._shared import _D, _doe
 from .doe_platform_gen import run_root
 
@@ -170,8 +172,8 @@ def hst_gen(ctx: Any) -> None:
         R = os.path.join(run_root(ctx), run_key)  # S18 platform_run_root(run_dir_glob과 맞음이 설정 검증됨)
         if os.path.lexists(R):
             backup_path(runner, R)
-        write_sample_inputs(R, vals, {"kind": "doe", "id": doe["id"], "doe_no": doe_no}, opts, nominals, ver)
-        generate_sample(runner, s, inp, R, engine_version=ver)
+        write_sample_inputs(R, vals, {"kind": "doe", "id": doe["id"], "doe_no": doe_no}, opts, nominals, ver, layout=FLAT)
+        generate_sample(runner, s, inp, R, engine_version=ver, layout=FLAT)  # run__N 직계 = 해석 입력(GE-C13)
 
     def label(running: int, done: int, failed: int, total: int, mm: int) -> str:
         return f"run {done + failed}/{total} 완료 · 스킵 {failed} · " + hst_run_label(running, None, done, total, mm)

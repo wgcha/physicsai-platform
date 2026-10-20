@@ -25,6 +25,7 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories.job_lease import LeaseLost
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import sha256_file
+from physicsai_core.geometry.native_files import RUN_AUX_DIR
 from physicsai_core.hpc.gateway import HpcGatewayError
 from physicsai_core.paths import is_link_or_reparse
 from simdash_adapters.hpc.scx_naming import file_name_problem, forbidden_reason, join_rel, rel_problem, sanitize_project
@@ -100,6 +101,8 @@ def scan_inputs(ctx: Any, gw: Any, plan: RunStage, health: dict[str, Any]) -> No
         if name.casefold() == "_backup" or is_link_or_reparse(p):
             continue
         if os.path.isdir(p):
+            if name == RUN_AUX_DIR:  # native DOE run 보조 산출물(GE-C13) — 해석 입력 아님, 경고 없이 건너뜀
+                continue
             if not sub_warned and _subdir_has_pattern(p, gw.matches_stage_pattern):
                 ctx.add_warning("SCX_SUBDIR_SKIPPED", f"{plan.run_key}: 하위 폴더의 입력 파일은 올리지 않습니다({name})")
                 sub_warned = True
