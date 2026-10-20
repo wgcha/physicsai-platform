@@ -23,6 +23,10 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
         from . import fem_verifications as fv_repo
 
         fv_repo.on_job_end(conn, job, state)
+    if job["job_type"] in ("GEOM_PREVIEW", "CONTOUR_3D"):  # geometry-view.md §6.4·§13.5: 캐시 행 FAILED·CANCELED
+        from . import geom_view as gv_repo
+
+        gv_repo.on_job_end(conn, job, state)
     if state == SUCCEEDED:
         return
     res = job.get("result") or {}

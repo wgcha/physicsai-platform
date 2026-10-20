@@ -38,12 +38,17 @@ def artifact_file(ctx: AppContext, artifact_id: str) -> tuple[str, str, str]:
     with ctx.engine.connect() as conn:
         a = artifacts_repo.get(conn, artifact_id)
         if a is None:
+            from .contour_capture import raise_if_expired
+
+            raise_if_expired(conn, artifact_id)  # geometry-view.md §6.5: 정리된 캐시 manifest → 410
             raise DomainError("NOT_FOUND", "산출물을 찾을 수 없습니다", status=404)
         s = studies_repo.require(conn, a["study_id"])
     if a["content_type"] not in artifacts_repo.ALLOWED_CONTENT_TYPES:
         raise DomainError("NOT_FOUND", "내려받을 수 없는 형식입니다", status=404)
     path = resolve_in_study(study_root(ctx, s), a["rel_path"])
     if not os.path.isfile(path):
+        if a["rel_path"].startswith("_cache/"):
+            raise DomainError("ARTIFACT_EXPIRED", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요", status=410)
         raise DomainError("NOT_FOUND", "산출물 파일이 없습니다", status=404)
     if os.path.getsize(path) > ctx.settings.ui.max_artifact_bytes:
         raise DomainError("NOT_FOUND", "산출물이 크기 상한을 넘습니다", status=404)

@@ -62,7 +62,9 @@ def test_no_hardcoded_altair_paths():
 
 
 def test_no_user_output_delete_calls():
-    allowed: set[str] = set()  # 플랫폼 코드에는 삭제 호출이 없다(임시 파일은 tempfile이 정리)
+    # 플랫폼 코드에는 삭제 호출이 없다(임시 파일은 tempfile이 정리). 예외 1곳: 서버측 임시 캐시 `<study>/_cache/` 삭제 지점
+    # (geometry-view.md GV-8·§6.6 — 재생성 가능한 플랫폼 임시 산출물, 경로 확인 후에만 삭제)
+    allowed: set[str] = {"cache_store.py"}
     pat = re.compile(r"\b(os\.remove|os\.unlink|\.unlink\(|shutil\.rmtree|os\.rmdir|\.rmdir\()")
     for f in _py_files():
         if pat.search(f.read_text(encoding="utf-8")):

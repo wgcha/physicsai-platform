@@ -170,6 +170,18 @@ class Worker(HpcPollerMixin):
 
         return run_env_check(self, chk)
 
+    def run_once_preview(self) -> str | None:
+        """PREVIEW 레인 1건 claim·실행(geometry-view.md §6.2): 전역 슬롯과 무관 — DOE·일괄 예측 실행 중에도 돈다."""
+        self.check_config_change()
+        if self.claims_paused:
+            return None
+        ttl = self.settings.worker.lease_ttl_s
+        mc = self.settings.geometry.view.max_concurrent
+        job = self._claim(lambda c: lease_repo.claim_preview(c, self.worker_id, ttl, mc, self.env_snapshot()))
+        if job is None:
+            return None
+        return Executor(self, job).run()
+
     def run_once_collect(self) -> str | None:
         ttl = self.settings.worker.lease_ttl_s
         job = self._claim(lambda c: lease_repo.claim_collecting(c, self.worker_id, ttl))
@@ -198,6 +210,7 @@ class Worker(HpcPollerMixin):
                     job_acc = {"job_id": ex.job_id}
             self._last_resources = resources.sample(self.settings.worker.gpu_query, job_acc, self.child_env(),
                                                      self.settings.resources.gpu_query_candidates)
+            self._last_resources["paicad_version"] = resources.paicad_version(self.settings, self.child_env())  # GV §6.4 캐시 키
             if not self.config.ok:
                 self._last_resources["worker_config_errors"] = self.config.error_keys()
         eff = {**self.limits.as_dict(), "cpu_cap_enforced": bool(self.limiter.cpu_cap_enforced)}
@@ -212,6 +225,9 @@ class Worker(HpcPollerMixin):
         if force_purge or now - self._last_purge >= self.settings.notifications.purge_interval_h * 3600:
             self._last_purge = now
             housekeeping.purge_notifications(self.engine, self.settings.notifications.retention_days)
+        if force_purge or now - getattr(self, "_last_cache_purge", 0.0) >= self.settings.geometry.view.cache.purge_interval_h * 3600:
+            self._last_cache_purge = now  # geometry-view.md §6.6: 서버측 <study>/_cache/ 임시 캐시(기간·총량)
+            housekeeping.purge_view_cache(self.engine, self.settings)
 
     # ---- 스레드 ----
     def _loop(self, name: str, fn: Any, interval_fn: Any) -> None:
@@ -232,6 +248,8 @@ class Worker(HpcPollerMixin):
         housekeeping.reap(self.engine)
         self._loop("slot", self.run_once_slot, lambda: self.settings.worker.claim_interval_s)
         self._loop("light", self.run_light_tick, lambda: self.settings.worker.claim_interval_s)
+        for i in range(max(1, int(self.settings.geometry.view.max_concurrent))):  # PREVIEW 레인(§6.2, 동시 수 = 스레드 수 상한)
+            self._loop(f"preview{i}", self.run_once_preview, lambda: min(0.5, self.settings.worker.claim_interval_s))
         self._loop("hpc", self._hpc_tick, lambda: min(5.0, self.settings.worker.claim_interval_s))
         self._loop("heartbeat", self._heartbeat_tick, lambda: self.settings.worker.heartbeat_interval_s)
         self._loop("housekeeping", self.housekeeping_once, lambda: self.settings.worker.claim_interval_s)

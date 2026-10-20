@@ -16,6 +16,7 @@ from .ops import audit_events, env_checks
 from .predict_batch import predict_batch_runs, predict_batches
 from .surrogate_opt import surrogate_opt_iters, surrogate_opts
 from .fem_verify import fem_verifications
+from .geom_view import contour3d_cache, geom_previews
 
 __all__ = [
     "metadata",
@@ -45,5 +46,7 @@ __all__ = [
     "surrogate_opts",
     "surrogate_opt_iters",
     "fem_verifications",
+    "geom_previews",
+    "contour3d_cache",
     "TERMINAL_STATES",
 ]

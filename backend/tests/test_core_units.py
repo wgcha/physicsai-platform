@@ -103,7 +103,11 @@ def test_null_optional_templates_ok():
         # native 형상 엔진(geometry-engine §7.1)
         "paicad_version", "paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run",
         # 단계 3S·4B(geometry-engine §11.1·§7.3.8)
-        "paicad_props_scan", "paicad_props_apply", "paicad_map"}
+        "paicad_props_scan", "paicad_props_apply", "paicad_map",
+        # 단계 4C 쉘 판금(shell-morph §8.1)·3D 가시화(geometry-view §6.1)·결과 3D 컨투어(§13.3)
+        "paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
+        "paicad_shell_check", "paicad_shell_run", "paicad_view_export", "paicad_view_preview", "paicad_shell_view_export",
+        "paicad_shell_view_preview", "contour_extract"}
 
 
 def test_null_template_render_is_not_configured():

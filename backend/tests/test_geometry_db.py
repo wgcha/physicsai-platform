@@ -36,7 +36,7 @@ def _ps(c, sid: str, *, tpl: bool = True, engine: str | None = None, input_kind:
 def test_migration_0016_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0016_geometry_engine"
+    assert MIGRATION_HEAD == "0017_geom_view"  # geometry-view.md §6.7: 0017이 0016 다음 — 0016까지만 올려 확인
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -50,9 +50,9 @@ def test_migration_0016_roundtrip(pg_server):
             c.execute(text("insert into studies(id, project_id, folder_name, title, ai_root_snapshot, created_by, created_by_name)"
                            " values (:i,'p-1','M12','t','/x','u','u')"), {"i": sid})
             _ps(c, sid)  # 0015 시점 세트(altair 템플릿)
-        _alembic(url, "head")
+        _alembic(url, "0016_geometry_engine")
         with eng.begin() as c:
-            assert c.execute(text("select version_num from alembic_version")).scalar() == MIGRATION_HEAD
+            assert c.execute(text("select version_num from alembic_version")).scalar() == "0016_geometry_engine"
             row = c.execute(text("select engine, geom_options, engine_version, tpl_rel from param_sets")).one()
             assert tuple(row) == ("altair", None, None, "t.tpl")  # 기존 행 보존
             _ps(c, sid, tpl=False, engine="native")  # native: tpl_rel NULL 허용

@@ -24,7 +24,7 @@ from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.prep import is_shell_only
 
-from ..geometry_native import effective_opts, engine_version, ensure_prep_ready, native_inputs, read_json
+from ..geometry_native import effective_opts, set_opts, engine_version, ensure_prep_ready, native_inputs, read_json
 from ..geometry_sample import backup_path, generate_sample, write_no_cover, write_sample_inputs
 
 M1 = "m_1"
@@ -43,7 +43,7 @@ def check_child_input(settings: Any, input_path: str) -> None:
 
 
 def _features(settings: Any, S: str) -> dict[str, Any]:
-    p = os.path.join(S, "native", "extract", "parameter_features.json")
+    p = bl.features_path(S)
     return read_json(p, settings.geometry.max_report_bytes) if os.path.isfile(p) else {"features": []}
 
 
@@ -81,7 +81,7 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
     s = ctx.settings
     if not ps.get("starter_name") or not os.path.isfile(os.path.join(S, "radioss_assem", ps["starter_name"])):
         raise StepFailure("INPUT_CHANGED", f"템플릿 파일이 없습니다: radioss_assem/{ps.get('starter_name')}")
-    opts = effective_opts(s, ps.get("geom_options"))
+    opts = set_opts(s, S, ps.get("geom_options"))
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     ensure_prep_ready(s, S, opts, ver)
@@ -112,7 +112,7 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
     write_json(bj, {
         "batch_id": b["id"], "label": batch_label(b["batch_no"]), "input_kind": b["input_kind"], "engine": "native",
         "engine_version": ver, "param_set": {"id": ps["id"], "label": ps.get("label"),
-                                              "features_sha256": sha256_file(os.path.join(S, "native", "extract", "parameter_features.json"))},
+                                              "features_sha256": sha256_file(bl.features_path(S))},
         "model": {"id": m["id"], "name": m.get("name"), "version": m.get("version"), "psmdl_sha256": m.get("psmdl_sha256")},
         "source": {"kind": b["source_kind"], "meta": b["source_meta"]}, "multi_execution": b["multi_execution"], "parameters": names,
         "rows": [{"doe_no": r["doe_no"], "run_key": r["run_key"], "values": r["values"], "applied_values": r["applied_values"],

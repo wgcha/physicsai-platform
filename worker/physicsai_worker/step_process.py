@@ -31,6 +31,9 @@ from physicsai_core.parsers.log_errors import ErrorDetector
 
 from .signals import Cancelled
 
+# geometry-view.md §6.2: PREVIEW 레인(형상 미리보기)에서 실행할 수 있는 외부 명령은 이 둘뿐
+PREVIEW_LANE_COMMANDS = frozenset({"paicad_view_preview", "paicad_shell_view_preview"})
+
 # 로거 이름은 분리 전과 같게 유지(로그 출력 불변)
 log = logging.getLogger("physicsai_worker.executor")
 
@@ -96,6 +99,8 @@ class StepProcessMixin:
         (phase3 §11.4 GEOM_UPDATE·MESH, 원본 SimLab rc 무시). 메모리 한도 종료는 그대로 RESOURCE_LIMIT.
         """
         s = self.settings
+        if getattr(getattr(self.ex, "jt", None), "lane", None) == "PREVIEW" and template_key not in PREVIEW_LANE_COMMANDS:  # geometry-view.md §6.2 허용 명령
+            raise StepFailure("INTERNAL_ERROR", f"PREVIEW 레인에서 허용되지 않은 명령입니다: {template_key}")
         argv, _exe_key = self.render(template_key, values, extra_args)
         if outputs_to_backup:
             self.backup(outputs_to_backup)

@@ -131,7 +131,9 @@ class Executor:
         slot = bool(self.job.get("holds_slot"))
         ws = self.settings.worker
         self.keeper = LeaseKeeper(self.engine, self.job_id, self.token, ws.lease_ttl_s, ws.heartbeat_interval_s, slot, self._on_lost)
-        self.w.current_executor = self
+        track = self.jt.lane != "PREVIEW"  # 미리보기 레인은 슬롯 작업 자원 회계(current_executor)를 건드리지 않는다(§6.2)
+        if track:
+            self.w.current_executor = self
         self.keeper.start()
         try:
             return self._run_steps()
@@ -140,7 +142,8 @@ class Executor:
             return None
         finally:
             self.keeper.stop()
-            self.w.current_executor = None
+            if track:
+                self.w.current_executor = None
 
     def _release(self, state: str, code: str | None = None, msg: str | None = None) -> str:
         self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg))

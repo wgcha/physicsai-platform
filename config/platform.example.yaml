@@ -63,6 +63,7 @@ resources:                        # 원본 반입본 위치(deploy/RESOURCES.txt
   curate_hg_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_curate_hg.tcl"
   extract_minmax_tcl: "D:/physicsai/resources/BATCHRUN/H3D_StaticMinMax_to_CSV_FAST.tcl"   # 업로드본에 없음(U8·U19)
   contour_capture_tcl: ""          # ④ 컨투어 캡처 TCL(phase3 §15, 사용자 제공 이슈 #2). 빈 값 = 저장소 resources/hyperview/contour_capture.tcl(setup.ps1이 채움)
+  contour_extract_tcl: ""          # 결과 3D 컨투어 추출 TCL(geometry-view.md §13.3). 빈 값 = 저장소 resources/hyperview/contour_extract.tcl
   launchers:                      # 런처 파일 이름(경로 구분자 없이)·pyd 코어 이름
     extract_params: {script: BATCHRUN_get_parameter_from_cad.py, core: get_parameter_from_cad_core}
     gen_radioss:    {script: BATCHRUN_hst_gen_radioss_input.py,   core: hst_gen_radioss_core}
@@ -201,6 +202,29 @@ geometry:                          # native 형상 엔진(docs/contracts/geometr
     OPENBLAS_NUM_THREADS: "4"
     PAICAD_THREADS: "4"
   defaults: {}                     # options.json 기본값 덮어쓰기(§4.9, 예: {quality: {max_aspect: 8.0}}). 비우면 코드 기본값
+  shell_defaults: {}               # 쉘 판금 options.json 기본값 덮어쓰기(shell-morph.md §4.10, 예: {fixed: {transition_mm: 8.0}})
+  # timeout_s에 shell_fixed_scan·shell_extract·shell_tag·shell_update·shell_morph·shell_check·shell_run 키를 둘 수 있다(없으면 같은 이름 솔리드 값)
+  view:                            # 형상 3D 보기·파라미터 미리보기(geometry-view.md §6.1). 절이 없으면 아래 기본값
+    enabled: true
+    tess: {linear_mm: 0.1, angular_deg: 20.0}
+    max_triangles: 500000
+    max_glb_bytes: 16777216        # ≤ ui.max_artifact_bytes(넘으면 경고 + 그 값으로 자름)
+    max_concurrent: 1              # PREVIEW 레인 동시 실행 수(DOE·일괄 예측 중에도 실행)
+    max_queued_per_user: 2         # 사용자별 대기+실행 미리보기 상한(넘으면 429 PREVIEW_BUSY)
+    threads: 2                     # 미리보기 paicad --threads
+    timeout_s: {export: 300, preview: 60, preview_fe: 300}
+    cache: {retention_days: 7, max_total_bytes: 2147483648, purge_interval_h: 6}   # 서버측 AI 루트 <study>/_cache/ 임시 캐시(브라우저 캐시 아님). 컨투어 3D와 합산
+
+# 쉘 판금(비드) 모핑(shell-morph.md §12 Q1): 기본 대상 component = Radioss /PART 제목(대소문자 무시). 바디 이름이 다르면 cad/body_map.json
+shell: {default_component: chassis_rear}
+
+contour3d:                         # 결과 3D 컨투어 뷰어(geometry-view.md §13). enabled=false면 기능 숨김
+  enabled: false                   # hw·contour_extract 명령이 설정된 현장만 true
+  max_frames: 50
+  max_nodes: 300000
+  max_bin_bytes: 268435456
+  include_disp: true
+  timeout_s: 1800
 
 commands:
   # argv 템플릿. 허용 placeholder는 계약 §9.2. 펼침 토큰: @cmd_c, @write_files, @hooks_arg
@@ -233,6 +257,21 @@ commands:
   paicad_props_scan: ["{paicad}", "props", "scan", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
   paicad_props_apply: ["{paicad}", "props", "apply", "--assem-dir", "{assem_dir}", "--values", "{values_json}", "--props", "{props_json}", "--out-dir", "{out_dir}"]
   paicad_map: ["{paicad}", "map", "--baselines", "{baselines_json}", "--out-dir", "{map_out_dir}", "--user-map", "{user_map}", "--usage", "{usage}", "--split-param", "{split_param}", "--options", "{options_json}"]
+  # 쉘 판금 모핑(shell-morph.md §8.1, paicad 0.8.0+). --assem-dir(extract)·--thickness는 값이 없으면 인자 쌍째 생략
+  paicad_shell_fixed_scan: ["{paicad}", "shell", "fixed-scan", "--assem-dir", "{assem_dir}", "--features", "{features_json}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
+  paicad_shell_extract: ["{paicad}", "shell", "extract", "--cad", "{cad_input}", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
+  paicad_shell_tag: ["{paicad}", "shell", "tag", "--cad", "{cad_input}", "--features", "{features_json}", "--assem-dir", "{assem_dir}", "--fixed-dir", "{fixed_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
+  paicad_shell_update: ["{paicad}", "shell", "update", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--fixed-dir", "{fixed_dir}", "--options", "{options_json}", "--out-dir", "{update_dir}"]
+  paicad_shell_morph: ["{paicad}", "shell", "morph", "--assem-dir", "{assem_dir}", "--tag-dir", "{tag_dir}", "--fixed-dir", "{fixed_dir}", "--features", "{features_json}", "--update-dir", "{update_dir}", "--options", "{options_json}", "--out-dir", "{morph_dir}"]
+  paicad_shell_check: ["{paicad}", "shell", "check", "--assem-dir", "{assem_dir}", "--morph-dir", "{morph_dir}", "--update-dir", "{update_dir}", "--tag-dir", "{tag_dir}", "--fixed-dir", "{fixed_dir}", "--features", "{features_json}", "--values", "{values_json}", "--thickness", "{thickness_json}", "--options", "{options_json}", "--out-dir", "{check_dir}", "--out-files-dir", "{out_files_dir}"]
+  paicad_shell_run: ["{paicad}", "shell", "run", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--assem-dir", "{assem_dir}", "--tag-dir", "{tag_dir}", "--fixed-dir", "{fixed_dir}", "--thickness", "{thickness_json}", "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}", "--out-files-dir", "{out_files_dir}"]
+  # 3D 가시화(geometry-view.md §6.1, paicad 0.9.0+). --nominal-manifest는 공칭 뷰가 없으면 생략
+  paicad_view_export: ["{paicad}", "view", "export", "--cad", "{cad_input}", "--features", "{features_json}", "--view-options", "{view_options_json}", "--out-dir", "{out_dir}"]
+  paicad_view_preview: ["{paicad}", "view", "preview", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}", "--baseline-inc", "{baseline_inc}", "--renum-csv", "{renum_csv}", "--assem-dir", "{assem_dir}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
+  # 쉘 뷰는 `paicad shell view`를 지원하는 paicad에서만 켠다(0.9.0에는 없음 — 기본 null)
+  paicad_shell_view_export: null    # 예: ["{paicad}", "shell", "view", "export", "--cad", "{cad_input}", "--features", "{features_json}", "--fixed-dir", "{fixed_dir}", "--view-options", "{view_options_json}", "--out-dir", "{out_dir}"]
+  paicad_shell_view_preview: null   # 예: ["{paicad}", "shell", "view", "preview", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
+  contour_extract: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"]   # 결과 3D 컨투어(geometry-view.md §13.3): {contour_extract_tcl} = 캐시 폴더에 복사한 TCL(옆에 extract_settings.tcl)
 
 commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원본 2_run_hst_gen_rad_input.py:65-67)
   - '^\s*\d+\s+Error\s*:'

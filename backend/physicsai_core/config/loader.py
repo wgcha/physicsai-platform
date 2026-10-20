@@ -109,6 +109,9 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     if s.geometry.engine == "native" and not geometry_status(s)["native_available"]:
         w.append(ConfigIssue("geometry.engine", "기본 엔진 native를 쓸 수 없습니다 — paicad 설치 확인"))
 
+    if s.geometry.view.max_glb_bytes > s.ui.max_artifact_bytes:  # geometry-view.md §6.1: 넘으면 ui 상한으로 자른다
+        w.append(ConfigIssue("geometry.view.max_glb_bytes",
+                             f"ui.max_artifact_bytes({s.ui.max_artifact_bytes})보다 커서 그 값으로 줄여 씁니다"))
     tmpl, res = predict_parametric_missing(s)
     if not tmpl and res:
         w.append(ConfigIssue(res[0], "commands.mesh가 {include_tcl}을 쓰는데 이 자원이 비어 있어 ④ 파라미터 예측(형상 생성)이 비활성입니다"))

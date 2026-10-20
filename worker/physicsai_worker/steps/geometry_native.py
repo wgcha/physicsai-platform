@@ -23,7 +23,12 @@ from physicsai_core.geometry.reports import ReportError, parse_version_json
 LOG_TAIL_BYTES = 4096  # 각 단계 로그에 덧붙이는 paicad.log 꼬리(§7.2)
 PAICAD_LOG = "paicad.log"
 TIMEOUT_KEY = {"paicad_extract": "extract", "paicad_tag": "tag", "paicad_update": "update", "paicad_morph": "morph",
-               "paicad_check": "check", "paicad_run": "run"}
+               "paicad_check": "check", "paicad_run": "run",
+               # 쉘(SM §8.1): `shell_*` 키가 없으면 같은 이름 솔리드 값(fixed-scan은 tag 값)
+               "paicad_shell_fixed_scan": "shell_fixed_scan", "paicad_shell_extract": "shell_extract", "paicad_shell_tag": "shell_tag",
+               "paicad_shell_update": "shell_update", "paicad_shell_morph": "shell_morph", "paicad_shell_check": "shell_check",
+               "paicad_shell_run": "shell_run"}
+SHELL_TIMEOUT_FALLBACK = {"shell_fixed_scan": "tag"}
 
 
 @dataclass
@@ -37,8 +42,13 @@ class NativeInputs:
     assem_dir: str
     renum_csv: str
     body_map: str | None = None
+    kind: str = "solid"  # solid | shell(shell-morph.md §8.2 — 준비본 prep.json kind)
+    fixed_dir: str = ""  # 쉘: native/fixed(shell_scan.json·fixed_nodes.npz)
 
     def base_values(self, settings: Any) -> dict[str, str]:
+        if self.kind == "shell":
+            return {"cad_input": self.cad_input, "features_json": self.features, "tag_dir": self.tag_dir,
+                    "assem_dir": self.assem_dir, "fixed_dir": self.fixed_dir}
         return {"cad_input": self.cad_input, "features_json": self.features, "tag_dir": self.tag_dir,
                 "baseline_inc": self.baseline_inc, "assem_dir": self.assem_dir, "renum_csv": self.renum_csv}
 
@@ -57,17 +67,22 @@ def find_cad_input(base: str, step_exts: list[str]) -> str:
     raise StepFailure("INPUT_CHANGED", "공칭 STEP 파일이 없습니다 — 형상 준비를 다시 하세요")
 
 
-def native_inputs(settings: Any, base: str, assem_dir: str, *, need_cad: bool = True) -> NativeInputs:
-    """need_cad=False: 쉘 두께 전용 세트(§11.1) — STEP 없음(cad_input 빈 값, paicad 형상 단계를 부르지 않는다)."""
+def native_inputs(settings: Any, base: str, assem_dir: str, *, need_cad: bool = True, kind: str | None = None) -> NativeInputs:
+    """need_cad=False: 쉘 두께 전용 세트(§11.1) — STEP 없음(cad_input 빈 값, paicad 형상 단계를 부르지 않는다).
+    kind: 생략 = 준비본 prep.json kind(없으면 features 파일로 판단, shell-morph.md §4.2)."""
+    from physicsai_core.geometry.shell_native import SHELL, features_name, read_kind
+
     pr = settings.predict
     bm = os.path.join(base, "cad", "body_map.json")
+    k = kind or read_kind(base)
     return NativeInputs(
         cad_input=find_cad_input(base, settings.geometry.step_extensions) if need_cad else "",
-        features=os.path.join(base, "native", "extract", "parameter_features.json"),
+        features=os.path.join(base, "native", "extract", features_name(k)),
         tag_dir=os.path.join(base, "native", "tag"),
         baseline_inc=os.path.join(assem_dir, pr.mesh_include_name),
         assem_dir=assem_dir, renum_csv=os.path.join(assem_dir, pr.renum_csv_name),
-        body_map=bm if os.path.isfile(bm) else None)
+        body_map=bm if os.path.isfile(bm) else None, kind=k,
+        fixed_dir=os.path.join(base, "native", "fixed") if k == SHELL else "")
 
 
 def tail_text(path: str, n: int = LOG_TAIL_BYTES) -> str:
@@ -145,11 +160,15 @@ class LocalRunner:
 
 
 def run_paicad(x: Any, settings: Any, key: str, values: dict[str, str], *, cwd: str, report: str, success: list[str],
-               backup: list[str], body_map: str | None = None, log_dir: str | None = None) -> Verdict:
+               backup: list[str], body_map: str | None = None, log_dir: str | None = None,
+               timeout_s: float | None | bool = False) -> Verdict:
     """paicad 명령 1회 실행 + 판정. x = LocalRunner | ParallelRunner. 실패해도 예외를 던지지 않고 Verdict를 돌려준다
     (호출자가 step 실패·run 실패·SKIPPED로 처리). 플랫폼 오류(실행 파일 없음·시간 초과 등)만 StepFailure."""
     g = settings.geometry
-    timeout = g.timeout_s.get(TIMEOUT_KEY.get(key, ""), None)
+    tk = TIMEOUT_KEY.get(key, "")
+    if tk.startswith("shell_") and tk not in g.timeout_s:
+        tk = SHELL_TIMEOUT_FALLBACK.get(tk, tk[len("shell_"):])
+    timeout = g.timeout_s.get(tk, None) if timeout_s is False else timeout_s  # 뷰 명령은 geometry.view.timeout_s(호출자가 넘김)
     # 같은 이름 출력이 있으면 paicad가 종료코드 3으로 거부하므로 먼저 `_backup`으로 옮긴다(삭제 없음, §5.2)
     rc = x.run(key, values, cwd=cwd, outputs_to_backup=backup, env_add=child_env_add(settings),
                extra_args=extra_args_for(settings, key, body_map), timeout_s=timeout)
@@ -181,14 +200,26 @@ def engine_version(ctx: Any) -> tuple[str | None, str | None, str | None]:
     return doc.get("paicad"), doc.get("ocp"), version_display(doc)
 
 
-def effective_opts(settings: Any, geom_options: dict[str, Any] | None) -> dict[str, Any]:
-    """유효 옵션 = 코드 기본값 ← geometry.defaults ← 세트 geom_options(§4.9). 범위 위반은 CONFIG_INVALID(저장 때 API가 먼저 막음)."""
+def effective_opts(settings: Any, geom_options: dict[str, Any] | None, kind: str = "solid") -> dict[str, Any]:
+    """유효 옵션 = 코드 기본값 ← geometry.defaults ← 세트 geom_options(§4.9). 범위 위반은 CONFIG_INVALID(저장 때 API가 먼저 막음).
+    kind=shell: 쉘 스키마(shell-morph.md §4.10, geometry.shell_defaults)."""
     from physicsai_core.geometry.options import effective_options
+    from physicsai_core.geometry.shell_options import effective_shell_options
 
-    opts, probs = effective_options(settings.geometry.defaults, geom_options)
+    if kind == "shell":
+        opts, probs = effective_shell_options(settings.geometry.shell_defaults, geom_options)
+    else:
+        opts, probs = effective_options(settings.geometry.defaults, geom_options)
     if probs:
         raise StepFailure("CONFIG_INVALID", "형상 옵션이 범위를 벗어납니다: " + "; ".join(f"{p['key']}" for p in probs[:5]))
     return opts
+
+
+def set_opts(settings: Any, base: str, geom_options: dict[str, Any] | None) -> dict[str, Any]:
+    """준비본 폴더 kind(prep.json)에 맞는 유효 옵션(솔리드 §4.9 | 쉘 SM §4.10)."""
+    from physicsai_core.geometry.shell_native import read_kind
+
+    return effective_opts(settings, geom_options, read_kind(base))
 
 
 def ensure_prep_ready(settings: Any, S: str, opts: dict[str, Any], current_version: str | None) -> None:
@@ -202,11 +233,18 @@ def ensure_prep_ready(settings: Any, S: str, opts: dict[str, Any], current_versi
         raise StepFailure("INPUT_CHANGED", st.reason or "형상 준비본이 유효하지 않습니다")
 
 
-def write_native_options(native_dir: str, opts: dict[str, Any], ver: str | None) -> str:
-    """`<native_dir>/options.json`(tag 절만, 준비본 기록) + `options_run.json`(사용값 문서, paicad 인자). options_run 경로를 돌려준다."""
+def write_native_options(native_dir: str, opts: dict[str, Any], ver: str | None, kind: str = "solid") -> str:
+    """`<native_dir>/options.json`(tag 절만, 준비본 기록) + `options_run.json`(사용값 문서, paicad 인자). options_run 경로를 돌려준다.
+    kind=shell: options.json = tag·fixed 절(SM §4.2), options_run.json에 `kind:"shell"`."""
     from physicsai_core.fileutil import write_json
     from physicsai_core.geometry.options import usage_document
 
+    if kind == "shell":
+        write_json(os.path.join(native_dir, "options.json"), {"schema_version": 1, "kind": "shell", "tag": opts["tag"],
+                                                              "fixed": opts["fixed"]})
+        run = os.path.join(native_dir, "options_run.json")
+        write_json(run, {**usage_document(opts, ver), "kind": "shell"})
+        return run
     write_json(os.path.join(native_dir, "options.json"), {"schema_version": 1, "tag": opts["tag"]})
     run = os.path.join(native_dir, "options_run.json")
     write_json(run, usage_document(opts, ver))

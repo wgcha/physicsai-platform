@@ -162,6 +162,44 @@ def claim_light(
     return get_job(conn, target.id)
 
 
+PREVIEW_CLAIM_LOCK = 7_317_017  # pg_advisory_xact_lock 키(PREVIEW 레인 claim 직렬화 — 동시 수 검사와 claim 사이 경합 차단)
+
+
+def claim_preview(
+    conn: Connection, worker_id: str, ttl_s: float, max_concurrent: int, env_snapshot: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    """PREVIEW 레인 claim(geometry-view.md §6.2): 실행 중 PREVIEW < max_concurrent일 때 최소 queue_seq. 전역 worker_slot 미사용,
+    lease 규칙은 LIGHT와 같다(holds_slot=false). DOE·일괄 예측이 슬롯을 쥐고 있어도 실행한다."""
+    conn.execute(select(func.pg_advisory_xact_lock(PREVIEW_CLAIM_LOCK)))
+    running = conn.execute(
+        select(func.count()).select_from(jobs).where(and_(jobs.c.state == RUNNING, jobs.c.lane == "PREVIEW"))
+    ).scalar() or 0
+    if running >= max(1, int(max_concurrent)):
+        return None
+    target = conn.execute(
+        select(jobs.c.id, jobs.c.version, jobs.c.started_at, jobs.c.lease_generation)
+        .where(and_(jobs.c.state == QUEUED, jobs.c.lane == "PREVIEW", jobs.c.cancel_requested_at.is_(None)))
+        .order_by(jobs.c.queue_seq)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    ).first()
+    if target is None:
+        return None
+    check_transition(QUEUED, RUNNING)
+    token = secrets.token_urlsafe(32)
+    lv = _lease_values(worker_id, token, int(target.lease_generation) + 1, ttl_s)
+    r = conn.execute(
+        update(jobs)
+        .where(and_(jobs.c.id == target.id, jobs.c.state == QUEUED, jobs.c.version == target.version))
+        .values(state=RUNNING, holds_slot=False, queue_seq=None, started_at=func.coalesce(jobs.c.started_at, func.now()),
+                updated_at=func.now(), version=jobs.c.version + 1, **lv)
+    )
+    if r.rowcount != 1:
+        raise ClaimRace()
+    _mark_started(conn, target.id, env_snapshot)  # 알림 없음(notify_success=False·미리보기는 화면이 폴링)
+    return get_job(conn, target.id)
+
+
 def claim_collecting(conn: Connection, worker_id: str, ttl_s: float) -> dict[str, Any] | None:
     """회수기: lease 없는 COLLECTING 작업에 lease 부여."""
     target = conn.execute(

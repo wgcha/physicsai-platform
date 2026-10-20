@@ -137,9 +137,11 @@ def queue_positions(conn: Connection, lane: str) -> dict[str, int]:
 
 
 def list_with_study_title(conn: Connection, *, study_id: str | None, states: list[str] | None, created_by: str | None,
-                          job_type: str | None, limit: int, offset: int) -> list[dict[str, Any]]:
-    """작업 목록(§10.2) + study_title. 최신순, limit·offset 그대로."""
+                          job_type: str | None, limit: int, offset: int, exclude_types: tuple[str, ...] = ()) -> list[dict[str, Any]]:
+    """작업 목록(§10.2) + study_title. 최신순, limit·offset 그대로. exclude_types = 기본 숨김 유형(형상 미리보기)."""
     q = select(jobs, studies.c.title.label("study_title")).select_from(jobs.join(studies, studies.c.id == jobs.c.study_id))
+    if exclude_types:
+        q = q.where(jobs.c.job_type.not_in(list(exclude_types)))
     if study_id:
         q = q.where(jobs.c.study_id == study_id)
     if states:

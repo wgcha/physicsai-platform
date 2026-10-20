@@ -28,6 +28,7 @@ from .param_discover import (
 from ..paths import real
 
 FEATURES_NAME = "parameter_features.json"
+SHELL_FEATURES_NAME = "shell_features.json"
 EXTRACTED_NAME = "parameter_extracted.xml"
 PARTS_DIR = "parts"
 
@@ -36,7 +37,10 @@ def _is_step(name: str, exts: tuple[str, ...]) -> bool:
     return name.casefold().endswith(exts)
 
 
-def discover_native(root: str, settings: Any) -> Discovery:
+def discover_native(root: str, settings: Any, kind: str = "solid") -> Discovery:
+    """kind=shell(shell-morph.md §8.2): 조립 폴더 후보에 기준 메시·RENUM csv가 필요 없다. 이미 추출한 쉘 피처 = shell_features.json."""
+    shell = kind == "shell"
+    features_name = SHELL_FEATURES_NAME if shell else FEATURES_NAME
     ps, pr, td, geo = settings.param_set, settings.predict, settings.train_data, settings.geometry
     run_re = re.compile(td.result_run_dir_regex) if td.result_run_dir_regex else None
     st = settings.storage
@@ -63,7 +67,7 @@ def discover_native(root: str, settings: Any) -> Discovery:
             continue
         cad.extend(_rel(d, n) for n in steps)
         low = {n.casefold() for n in files}
-        if FEATURES_NAME.casefold() in low and EXTRACTED_NAME.casefold() in low:
+        if features_name.casefold() in low and EXTRACTED_NAME.casefold() in low:
             companions.append(d)
     cad.sort(key=lambda r: (len(r.split("/")), r.casefold()))
     if not cad:
@@ -73,8 +77,9 @@ def discover_native(root: str, settings: Any) -> Discovery:
     inc = pr.mesh_include_name.casefold()
     assem = []
     for a in assem_all:
-        if any(n.casefold() == inc for n in sc.dirs.get(a["rel"], [])):
-            assem.append({**a, "has_baseline_inc": True})
+        has_inc = any(n.casefold() == inc for n in sc.dirs.get(a["rel"], []))
+        if has_inc or shell:
+            assem.append({**a, "has_baseline_inc": has_inc})
     if assem_all and not assem:
         problems.append({"code": "BASELINE_INC_MISSING",
                          "message": f"조립 폴더 후보에 기준 메시({pr.mesh_include_name})가 없습니다 — native 형상 엔진은 기준 메시가 필요합니다"})
@@ -82,7 +87,7 @@ def discover_native(root: str, settings: Any) -> Discovery:
         problems.append({"code": "ASSEM_NOT_FOUND",
                          "message": f"starter({pr.starter_glob})가 1개 있는 조립 폴더를 찾지 못했습니다"
                                     + (f" (여러 개인 폴더: {', '.join(multi[:5])})" if multi else "")})
-    if assem and not any(a["has_renum_csv"] for a in assem):
+    if assem and not shell and not any(a["has_renum_csv"] for a in assem):
         problems.append({"code": "RENUM_CSV_MISSING",
                          "message": f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — native 형상 엔진은 필수입니다"})
     if companions:
@@ -101,7 +106,8 @@ def discover_native(root: str, settings: Any) -> Discovery:
 PARAM_NOTE = "이미 추출한 형상 피처 파일(parameter_features.json·parameter_extracted.xml)이 있어 형상 추출을 건너뜁니다"
 
 
-def resolve_choice_native(d: Discovery, choice: dict[str, str | None]) -> tuple[str | None, dict[str, Any] | None, list[dict[str, Any]]]:
+def resolve_choice_native(d: Discovery, choice: dict[str, str | None], kind: str = "solid"
+                          ) -> tuple[str | None, dict[str, Any] | None, list[dict[str, Any]]]:
     """(CAD 상대경로, 조립 폴더, problems). CAD는 후보 1개면 자동, 아니면 고름. 조립 폴더도 같다."""
     probs: list[dict[str, Any]] = []
     cad = _pick(d.cad, choice.get("cad"))
@@ -113,7 +119,7 @@ def resolve_choice_native(d: Discovery, choice: dict[str, str | None]) -> tuple[
             probs.append({"code": "CHOICE_INVALID" if given is not None else "CHOICE_REQUIRED", "key": key,
                           "message": f"{key} 후보 {len(cands)}개 중 하나를 고르세요" if given is None
                           else f"고른 {key}({given})가 찾은 목록에 없습니다"})
-    if assem is not None and not assem["has_renum_csv"]:
+    if assem is not None and not assem["has_renum_csv"] and kind != "shell":
         probs.append({"code": "RENUM_CSV_MISSING", "message": "고른 조립 폴더에 번호 재지정 표가 없습니다"})
     return cad, assem, probs
 
@@ -136,12 +142,14 @@ def cad_files(root: str, cad_rel: str, settings: Any) -> list[tuple[str, str]]:
     return out
 
 
-def companion_files(root: str, cad_rel: str) -> list[tuple[str, str]]:
-    """CAD와 같은 폴더(parts는 그 부모)에 features·xml이 둘 다 있으면 `native/extract/`로 복사할 (원본 상대경로, 세트 안 경로)."""
+def companion_files(root: str, cad_rel: str, kind: str = "solid") -> list[tuple[str, str]]:
+    """CAD와 같은 폴더(parts는 그 부모)에 features·xml이 둘 다 있으면 `native/extract/`로 복사할 (원본 상대경로, 세트 안 경로).
+    kind=shell은 shell_features.json(솔리드 features는 가져오지 않는다 — 한 세트는 한 종류)."""
     parent = os.path.dirname(cad_rel) or ROOT_REL
     pdir = _abs(root, parent)
-    if os.path.isfile(os.path.join(pdir, FEATURES_NAME)) and os.path.isfile(os.path.join(pdir, EXTRACTED_NAME)):
-        return [(_rel(parent, n), f"native/extract/{n}") for n in (FEATURES_NAME, EXTRACTED_NAME)]
+    fname = SHELL_FEATURES_NAME if kind == "shell" else FEATURES_NAME
+    if os.path.isfile(os.path.join(pdir, fname)) and os.path.isfile(os.path.join(pdir, EXTRACTED_NAME)):
+        return [(_rel(parent, n), f"native/extract/{n}") for n in (fname, EXTRACTED_NAME)]
     return []
 
 
@@ -152,12 +160,12 @@ def provided_parameters(root: str, cad_rel: str) -> list[tuple[str, str]]:
     return [(_rel(parent, "parameters.json"), "original/parameters.json")] if os.path.isfile(p) else []
 
 
-def copy_sources_native(d: Discovery, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any) -> int:
+def copy_sources_native(d: Discovery, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any, kind: str = "solid") -> int:
     """고른 후보를 세트 폴더 구조(cad/, radioss_assem/, native/extract/)로 dst에 모은다. 원본마다 복사 직전 재검사·핸들 복사."""
     root = d.root
     root_real = real(root)
     total = 0
-    for src, rel in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel) \
+    for src, rel in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel, kind) \
             + provided_parameters(root, cad_rel):
         total += _copy_src(root, root_real, src, os.path.join(dst, *rel.split("/")))
     arel = assem["rel"]
@@ -187,9 +195,9 @@ def copy_assem_native(d: Discovery, assem: dict[str, Any], dst: str, settings: A
     return total
 
 
-def planned_bytes_native(d: Discovery, cad_rel: str, assem: dict[str, Any], settings: Any) -> int:
+def planned_bytes_native(d: Discovery, cad_rel: str, assem: dict[str, Any], settings: Any, kind: str = "solid") -> int:
     root = d.root
-    files = [_abs(root, s) for s, _r in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel)
+    files = [_abs(root, s) for s, _r in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel, kind)
                               + provided_parameters(root, cad_rel)]
     adir = _abs(root, assem["rel"])
     files += [os.path.join(adir, n) for n in assem_files(adir, settings.predict.renum_csv_name)]

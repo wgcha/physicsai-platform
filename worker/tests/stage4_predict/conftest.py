@@ -122,12 +122,12 @@ def predict_env(settings_dict, engine, fake_dashboard, fake_record):
     def make(*, commands: dict[str, Any] | None = None, predict: dict[str, Any] | None = None,
              resources: dict[str, Any] | None = None, hpc: dict[str, Any] | None = None, folder: str = "pred",
              final_model: bool = True, model_pscfg: int = 1, train_data: dict[str, Any] | None = None,
-             geometry: dict[str, Any] | None = None) -> PredictEnv:
+             geometry: dict[str, Any] | None = None, extra: dict[str, Any] | None = None) -> PredictEnv:
         d = dict(settings_dict)
         if hpc:
             d["hpc"] = hpc
         for k, v in (("commands", commands), ("predict", predict), ("resources", resources), ("train_data", train_data),
-                     ("geometry", geometry)):
+                     ("geometry", geometry), *((extra or {}).items())):
             if v:
                 d[k] = {**(d.get(k) or {}), **v}
         lc = load_config_dict(d, environ={})

@@ -13,7 +13,7 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.job_types import JOB_TYPES, MANAGE_JOB_TYPES, stage_label, step_label
+from physicsai_core.job_types import JOB_TYPES, MANAGE_JOB_TYPES, NO_RETRY_JOB_TYPES, stage_label, step_label
 from physicsai_core.paths import display_path, study_dir  # noqa: F401 - display_path 재노출
 from physicsai_core.state_machine import TERMINAL
 
@@ -193,7 +193,7 @@ def can_download_error_bundle(j: dict[str, Any], principal: Principal) -> bool:
 
 
 def can_retry(j: dict[str, Any], principal: Principal) -> bool:
-    if j["state"] not in TERMINAL or j["state"] == "SUCCEEDED" or j["job_type"] in MANAGE_JOB_TYPES:
+    if j["state"] not in TERMINAL or j["state"] == "SUCCEEDED" or j["job_type"] in MANAGE_JOB_TYPES | NO_RETRY_JOB_TYPES:
         return False
     if principal.is_global_admin:
         return True

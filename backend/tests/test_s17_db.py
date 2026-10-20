@@ -68,7 +68,7 @@ def _fixture(c) -> dict:
 def test_v3_s17_1_migration_0014_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0016_geometry_engine"  # S18 0015 → native 0016
+    assert MIGRATION_HEAD == "0017_geom_view"  # S18 0015 → native 0016
     name = f"physicsai_m14_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

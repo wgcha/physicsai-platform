@@ -9,7 +9,7 @@ from pydantic import Field
 from ._model import _M
 from .schema_capture import CaptureCfg
 from .schema_fem_verify import FemVerifyCfg
-from .schema_geometry import GeometryCfg
+from .schema_geometry import Contour3dCfg, GeometryCfg, ShellCfg
 from .schema_hpc import CommandsCfg, HpcCfg
 from .schema_ops import (
     DEFAULT_LOG_ERROR_PATTERNS,
@@ -132,6 +132,7 @@ class ResourcesCfg(_M):
     curate_hg_tcl: str = ""
     extract_minmax_tcl: str = ""
     contour_capture_tcl: str = ""  # phase3 §15 S10: 비면 저장소 resources/hyperview/contour_capture.tcl
+    contour_extract_tcl: str = ""  # geometry-view.md §13.3: 비면 저장소 resources/hyperview/contour_extract.tcl
     launchers: dict[str, LauncherCfg] = Field(default_factory=_default_launchers)
     # GPU 조회 실행 파일 자동 탐색 후보(phase3 D3-45): worker.gpu_query 첫 인자가 없거나 못 찾으면 순서대로. 이름만 = PATH, %VAR% 확장
     gpu_query_candidates: list[str] = Field(default_factory=lambda: list(GPU_QUERY_CANDIDATES))
@@ -174,6 +175,8 @@ class Settings(_M):
     predict_batch: PredictBatchCfg = Field(default_factory=PredictBatchCfg)
     capture: CaptureCfg = Field(default_factory=CaptureCfg)
     geometry: GeometryCfg = Field(default_factory=GeometryCfg)  # native 형상 엔진(geometry-engine.md §7.1)
+    shell: ShellCfg = Field(default_factory=ShellCfg)  # 쉘 판금 모핑 기본 대상(shell-morph.md §12 Q1)
+    contour3d: Contour3dCfg = Field(default_factory=Contour3dCfg)  # 결과 3D 컨투어(geometry-view.md §13)
     commands: CommandsCfg = Field(default_factory=CommandsCfg)
     train_data: TrainDataCfg = Field(default_factory=TrainDataCfg)
     curation: CurationCfg = Field(default_factory=CurationCfg)

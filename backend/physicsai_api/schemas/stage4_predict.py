@@ -52,6 +52,8 @@ class ParamSetCreate(Req):
     geom_options: dict[str, Any] | None = None
     # geometry-engine.md §11.1 단계 3S: native 쉘 두께 전용 세트(STEP 불필요, tag·update·morph·check 생략). choice.cad 무시
     shell_only: bool = False
+    # shell-morph.md §8.2: native 형상 종류 — solid(쿠션 솔리드, 기본) | shell(판금 비드, 중립면 STEP + 쉘 메시). 한 세트에 혼합 불가
+    kind: Literal["solid", "shell"] | None = None
 
 
 class ParamSetPatch(Req):
@@ -63,6 +65,7 @@ class ParamSetDiscoverRequest(Req):
     path: str = Field(max_length=400)
     tpl: str | None = Field(default=None, max_length=400)
     engine: Literal["altair", "native"] | None = None  # 생략 = geometry.engine 기본값
+    kind: Literal["solid", "shell"] | None = None  # shell-morph.md §8.2: native 쉘 판금(기준 메시·RENUM csv 불필요). 생략 = solid
 
 
 class DiscoverTpl(Resp):
@@ -112,7 +115,7 @@ class ParamSetParameter(Parameter):
     """세트 파라미터 표 행. geometry-engine.md §11.1(3S): 쉘 두께 행 source="prop"·prop_id(형상 행은 null),
     §7.3.8(4B): 확정 공통 변수의 baseline별 대응 {id: {param, nominal, min, max, feasible}|null}."""
 
-    source: Literal["prop"] | None = None
+    source: Literal["prop", "shell"] | None = None  # shell-morph.md §8.4: 쉘 비드 행 source="shell"
     prop_id: int | None = None
     baselines: dict[str, Any] | None = None
 
@@ -223,6 +226,7 @@ class ParamSetFromTrain(Req):
 class ParamSetDiscoverResponse(Resp):
     path: str
     engine: Literal["altair", "native"] = "altair"
+    kind: Literal["solid", "shell"] = "solid"  # native 형상 종류(shell-morph.md §8.2) — 요청 kind 그대로
     tpl: list[DiscoverTpl]
     selected_tpl: str | None = None
     cad: list[DiscoverCad]

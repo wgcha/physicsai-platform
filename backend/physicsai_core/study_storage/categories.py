@@ -39,7 +39,10 @@ CATEGORY_IMPACTS: Final[dict[str, str]] = {
 FOLDER_KEYS: Final = (
     "00_inbox", "01_train", "02_import", "02_preview", "02_curated", "03_dataset", "03_package", "03_model",
     "04_params", "04_predict", "05_opt", "logs", "_backup",
+    "_cache",  # geometry-view.md §6.6: 플랫폼 임시(자동 정리) — 서버측 미리보기·3D 컨투어 캐시, 총량에 1줄로만(정리 범주 아님)
 )
+CACHE_KEY: Final = "_cache"
+CACHE_LABEL: Final = "플랫폼 임시(자동 정리)"
 OTHER_KEY: Final = "(기타)"
 BACKUP_KEY: Final = "_backup"
 
@@ -56,6 +59,7 @@ ITEM_PATTERNS: Final[dict[str, tuple[tuple[str, ...], ...]]] = {
 # 항상 보호(§5.5): 이 접두 아래 항목은 어떤 범주에도 들어가지 않는다.
 PROTECTED_PREFIXES: Final = (
     ("03_model", "models"), ("03_dataset",), ("04_params",), ("00_inbox",), ("study.json",), ("_backup",), ("_platform",),
+    ("_cache",),  # 서버측 임시 캐시는 housekeeping이 삭제(정리 범주 6개 불변, geometry-view.md §6.6)
 )
 
 

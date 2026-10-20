@@ -17,6 +17,8 @@ from physicsai_core.fileutil import copy_file, copy_tree, write_json, write_text
 from physicsai_core.geometry.native_files import doe_matrix_csv
 from physicsai_core.geometry.options import effective_options
 from physicsai_core.geometry.prep import prep_document
+from physicsai_core.geometry.shell_native import features_name, kind_of_features_rel
+from physicsai_core.geometry.shell_options import effective_shell_options
 from physicsai_core.paths import PathError, allowed_roots, check_user_path, is_link_or_reparse
 from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
@@ -49,15 +51,16 @@ def dg_prep(ctx: Any) -> None:
     s, p = ctx.settings, ctx.params
     doe_id = p["doe_id"]
     setup = _setup(ctx)
+    kind = kind_of_features_rel(setup.get("features_rel"))  # shell-morph.md §8.2: ①-1 쉘 추출 → 쉘 DOE
     try:
         cp = check_user_path(p["radioss_assem_path"], allowed_roots(s, imports=True))
     except PathError as exc:
         raise path_failure(exc) from None
     pr = s.predict
     names_in = sorted(os.listdir(cp.path))
-    if pr.mesh_include_name.lower() not in [n.lower() for n in names_in]:
+    if kind != "shell" and pr.mesh_include_name.lower() not in [n.lower() for n in names_in]:
         raise StepFailure("INPUT_INVALID", f"조립 폴더에 기준 메시({pr.mesh_include_name})가 없습니다")
-    if pr.renum_csv_name.lower() not in [n.lower() for n in names_in]:
+    if kind != "shell" and pr.renum_csv_name.lower() not in [n.lower() for n in names_in]:
         raise StepFailure("INPUT_INVALID", f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — RENUM_CSV_MISSING")
     D, A = _D(ctx), _A(ctx)
     os.makedirs(D, exist_ok=True)
@@ -79,19 +82,25 @@ def dg_prep(ctx: Any) -> None:
         copy_file(src, dst, checkpoint=ctx.checkpoint)
     ex_src = os.path.dirname(ctx.abs(setup["features_rel"]))
     copy_tree(ex_src, os.path.join(D, "native", "extract"), checkpoint=ctx.checkpoint)
+    vsrc = os.path.join(D, "native", "extract", "view")
+    if os.path.isdir(vsrc):  # geometry-view.md §6.9: ①-1 공칭 뷰 X/view → D/native/view(from-train이 세트로 복사)
+        os.replace(vsrc, os.path.join(D, "native", "view"))
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
-    opts, probs = effective_options(s.geometry.defaults, None)
+    if kind == "shell":
+        opts, probs = effective_shell_options(s.geometry.shell_defaults, None)
+    else:
+        opts, probs = effective_options(s.geometry.defaults, None)
     if probs:
-        raise StepFailure("CONFIG_INVALID", "geometry.defaults 값이 범위를 벗어납니다: " + "; ".join(q["key"] for q in probs[:5]))
-    write_native_options(os.path.join(D, "native"), opts, ver)
+        raise StepFailure("CONFIG_INVALID", "geometry 기본 옵션 값이 범위를 벗어납니다: " + "; ".join(q["key"] for q in probs[:5]))
+    write_native_options(os.path.join(D, "native"), opts, ver, kind)
     # ③ LHS 조합(use 파라미터, 표 순서) → doe_matrix.csv. INPUT_HST_RUN.json·런처 없음
     used = tp.used(setup["parameters"])
     doe = _doe(ctx)
     num_runs = doe["num_runs_requested"] if doe["num_runs_requested"] is not None else int(p.get("num_runs") or 2)
     seed = int(p.get("seed") or (doe["options"] or {}).get("seed") or 1)
     names = [q["name"] for q in used]
-    feat = read_json(os.path.join(D, "native", "extract", "parameter_features.json"), s.geometry.max_report_bytes)
+    feat = read_json(os.path.join(D, "native", "extract", features_name(kind)), s.geometry.max_report_bytes)
     known = {f.get("name") for f in feat.get("features", []) if isinstance(f, dict)}
     if not names or not set(names) <= known:
         raise StepFailure("INPUT_CHANGED", "파라미터 표 이름이 형상 피처와 다릅니다 — ①-1을 다시 실행하세요")
@@ -102,7 +111,7 @@ def dg_prep(ctx: Any) -> None:
              "unit": q.get("unit", "")} for q in used]
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver,
                                            geom_options=opts))
-    ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp})
+    ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp, "kind": kind})
 
 
 def _matrix(D: str) -> list[tuple[int, str, dict[str, float]]]:
@@ -121,19 +130,34 @@ def hst_gen(ctx: Any) -> None:
     r = ctx.result()
     D, A = _D(ctx), _A(ctx)
     doe = _doe(ctx)
-    inp = native_inputs(s, D, A)
+    kind = "shell" if r.get("kind") == "shell" else "solid"
+    inp = native_inputs(s, D, A, kind=kind)
     ver = r.get("engine_version")
     opts_run = os.path.join(D, "native", "options_run.json")
     T = os.path.join(D, "native", "tag")
-    v = run_paicad(LocalRunner(ctx), s, "paicad_tag", {**inp.base_values(s), "options_json": opts_run, "out_dir": T}, cwd=T,
-                   report=os.path.join(T, "tag.json"), success=[os.path.join(T, "tag_nodes.npz")], backup=[T], body_map=inp.body_map)
-    v.raise_if_failed()
+    if kind == "shell":  # SM §8.2: tag 자리에서 fixed-scan → tag(조립 폴더 사본 A 기준)
+        from ..geometry_shell import fixed_scan_and_tag
+
+        scan, tag = fixed_scan_and_tag(LocalRunner(ctx), s, inp, opts_run, D)
+        scan.raise_if_failed()
+        tag.raise_if_failed()  # type: ignore[union-attr]
+    else:
+        v = run_paicad(LocalRunner(ctx), s, "paicad_tag", {**inp.base_values(s), "options_json": opts_run, "out_dir": T}, cwd=T,
+                       report=os.path.join(T, "tag.json"), success=[os.path.join(T, "tag_nodes.npz")], backup=[T], body_map=inp.body_map)
+        v.raise_if_failed()
     opts = doe["geom_options"] or {}
     now = datetime.now(timezone.utc).isoformat()
-    write_json(os.path.join(D, "native", "prep.json"), prep_document(
+    pdoc = prep_document(
         D, step_exts=s.geometry.step_extensions, mesh_include_name=s.predict.mesh_include_name,
         renum_csv_name=s.predict.renum_csv_name, opts=opts, engine_version=ver, ocp_version=r.get("ocp_version"),
-        job_id=ctx.ex.job_id, created_at=now, assem_dir=A))
+        job_id=ctx.ex.job_id, created_at=now, assem_dir=A, kind=kind,
+        component=s.shell.default_component if kind == "shell" else None)
+    from physicsai_core.geometry.view import view_result
+
+    vr = view_result(os.path.join(D, "native", "view"), ver)
+    if vr is not None:
+        pdoc["view"] = vr
+    write_json(os.path.join(D, "native", "prep.json"), pdoc)
     feats = read_json(inp.features, s.geometry.max_report_bytes)
     nominals = {f["name"]: float(f["nominal"]) for f in feats.get("features", []) if isinstance(f, dict) and "nominal" in f}
     rows = _matrix(D)

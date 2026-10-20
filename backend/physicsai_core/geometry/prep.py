@@ -76,15 +76,40 @@ def input_hashes(S: str, step_exts: list[str], mesh_include_name: str, renum_csv
             "body_map": {"rel": "cad/body_map.json", "sha256": sha256_file(bm)} if os.path.isfile(bm) else None}
 
 
+def shell_input_hashes(S: str, step_exts: list[str], assem_dir: str | None = None) -> dict[str, Any]:
+    """쉘 세트 prep.json `inputs`(shell-morph.md §4.2): step·body_map + assem_digest, baseline_inc·renum_csv = null."""
+    from .shell_native import assem_digest
+
+    bm = os.path.join(S, "cad", "body_map.json")
+    return {"step": cad_inputs(S, step_exts), "baseline_inc": None, "renum_csv": None,
+            "body_map": {"rel": "cad/body_map.json", "sha256": sha256_file(bm)} if os.path.isfile(bm) else None,
+            "assem_digest": assem_digest(assem_dir or os.path.join(S, "radioss_assem"))}
+
+
 def prep_document(S: str, *, step_exts: list[str], mesh_include_name: str, renum_csv_name: str, opts: dict[str, Any],
                   engine_version: str | None, ocp_version: str | None, job_id: str | None, created_at: str,
-                  assem_dir: str | None = None, shell_only: bool = False) -> dict[str, Any]:
+                  assem_dir: str | None = None, shell_only: bool = False, kind: str = "solid",
+                  component: str | None = None) -> dict[str, Any]:
+    if kind == "shell":  # 쉘 판금(SM §4.2): opts = 유효 쉘 옵션, tag_options_sha256 = tag + fixed(전이 폭 제외) 절
+        from .shell_native import fixed_digest
+        from .shell_options import prep_options_sha256
+
+        return {"schema_version": 1, "engine": "native", "engine_version": engine_version, "ocp_version": ocp_version,
+                "kind": "shell", "inputs": shell_input_hashes(S, step_exts, assem_dir),
+                "tag_options_sha256": prep_options_sha256(opts), "fixed_digest": fixed_digest(S), "component": component,
+                "created_at": created_at, "job_id": job_id}
     doc = {"schema_version": 1, "engine": "native", "engine_version": engine_version, "ocp_version": ocp_version,
            "inputs": input_hashes(S, step_exts, mesh_include_name, renum_csv_name, assem_dir),
            "tag_options_sha256": tag_options_sha256(opts), "created_at": created_at, "job_id": job_id}
     if shell_only:  # 단계 3S 쉘 두께 전용 세트(§11.1): cad·extract·tag 없음, props.json만
         doc[SHELL_ONLY_KEY] = True
     return doc
+
+
+def prep_kind(S: str) -> str:
+    """prep.json `kind`(없으면 solid — 기존 준비본 호환, SM §4.2)."""
+    prep = _read_prep(S)
+    return "shell" if prep and prep.get("kind") == "shell" else "solid"
 
 
 def is_shell_only(S: str) -> bool:
@@ -107,6 +132,8 @@ def prep_state(S: str, *, step_exts: list[str], mesh_include_name: str, renum_cs
     """준비본 유효성(§4.2·§17.3): prep.json·features·tag.json 있음 + 입력 sha256 일치 + tag 옵션 sha256 일치 +
     engine_version MAJOR.MINOR 일치(현재 paicad 버전을 알 때만). 없음 → MISSING, 불일치 → STALE."""
     prep = _read_prep(S)
+    if prep is not None and prep.get("kind") == "shell":
+        return _shell_prep_state(S, prep, step_exts, opts, current_engine_version, assem_dir)
     need = (PROPS_JSON,) if (prep and prep.get(SHELL_ONLY_KEY)) else (FEATURES_JSON, TAG_JSON)
     if prep is None or any(not os.path.isfile(os.path.join(S, n)) for n in need):
         return PrepState(MISSING, "형상 준비 파일(native/)이 없습니다 — 형상 준비를 다시 실행하세요")
@@ -123,3 +150,21 @@ def prep_state(S: str, *, step_exts: list[str], mesh_include_name: str, renum_cs
 
 def sha256_text(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _shell_prep_state(S: str, prep: dict[str, Any], step_exts: list[str], opts: dict[str, Any], current: str | None,
+                      assem_dir: str | None) -> PrepState:
+    """쉘 준비본 유효성(SM §4.2): 파일 존재 + inputs(step·body_map·assem_digest) 일치 + tag·fixed 절 sha256 일치 + 버전."""
+    from .shell_native import SHELL_FEATURES_JSON, SHELL_SCAN_JSON, SHELL_TAG_JSON
+    from .shell_options import prep_options_sha256
+
+    if any(not os.path.isfile(os.path.join(S, *n.split("/"))) for n in (SHELL_FEATURES_JSON, SHELL_TAG_JSON, SHELL_SCAN_JSON)):
+        return PrepState(MISSING, "쉘 형상 준비 파일(native/)이 없습니다 — 형상 준비를 다시 실행하세요")
+    ver = prep.get("engine_version") if isinstance(prep.get("engine_version"), str) else None
+    if prep.get("inputs") != shell_input_hashes(S, step_exts, assem_dir):
+        return PrepState(STALE, "형상 준비 이후 입력(중립면 STEP·조립 폴더)이 바뀌었습니다 — 형상 준비를 다시 하세요", ver)
+    if "fixed" in opts and prep.get("tag_options_sha256") != prep_options_sha256(opts):
+        return PrepState(STALE, "경계 분류·고정 영역 기준이 바뀌어 형상 준비를 다시 해야 합니다", ver)
+    if not same_major_minor(ver, current):
+        return PrepState(STALE, f"형상 엔진 버전이 바뀌었습니다({ver} → {current}) — 형상 준비를 다시 하세요", ver)
+    return PrepState(READY, None, ver)

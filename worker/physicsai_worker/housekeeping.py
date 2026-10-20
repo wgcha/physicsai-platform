@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import Any
 
 from sqlalchemy.engine import Engine
 
@@ -40,3 +41,65 @@ def expire_env_checks(engine: Engine) -> list[str]:
 def purge_notifications(engine: Engine, retention_days: int) -> int:
     with engine.begin() as conn:
         return notif_repo.purge_older_than(conn, retention_days)
+
+
+def purge_view_cache(engine: Engine, settings: Any) -> dict[str, int]:
+    """서버측 미리보기·3D 컨투어 캐시 정리(geometry-view.md §6.6 — `<study>/_cache/`, 플랫폼 임시 산출물이라 `_backup` 이동 대신 삭제).
+
+    ① 마지막 접근이 `retention_days`보다 오래된 DONE·FAILED·CANCELED 행 ② AI 루트 전체 캐시 합계가 `max_total_bytes`를 넘으면
+    마지막 접근 오래된 순. QUEUED·RUNNING 행과 그 폴더는 건너뛴다. 삭제 = 실경로가 `<study>/_cache/<종류>/` 아래이고 링크·reparse
+    point가 없을 때만 폴더 제거 + artifacts 행 삭제 + 행 status EXPIRED(요약은 남김). `_cache/` 밖은 이 규칙을 쓰지 않는다."""
+    import os
+
+    from sqlalchemy import delete, select
+
+    from physicsai_core.cache_store import remove_cache_dir
+    from physicsai_core.db.repositories import geom_view as gv_repo
+    from physicsai_core.db.tables import artifacts, contour3d_cache, geom_previews, studies
+    from physicsai_core.geometry.view import CACHE_DIR, CONTOUR_CACHE, PREVIEW_CACHE, cache_rel, dir_bytes
+    from physicsai_core.paths import study_dir
+
+    cfg = settings.geometry.view.cache
+    prefixes = {geom_previews.name: PREVIEW_CACHE, contour3d_cache.name: CONTOUR_CACHE}
+    roots: dict[str, str] = {}
+    with engine.connect() as conn:
+        for r in conn.execute(select(studies.c.id, studies.c.folder_name)):
+            roots[r.id] = study_dir(settings.storage.ai_root, r.folder_name)
+    out = {"expired": 0, "lru": 0, "skipped": 0}
+
+    def drop(t: Any, row: dict[str, Any], why: str) -> int:
+        root = roots.get(row["study_id"])
+        if root is None:
+            return 0
+        prefix = prefixes[t.name]
+        path = os.path.join(root, *cache_rel(prefix, row["cache_key"]).split("/"))
+        size = dir_bytes(path) if os.path.isdir(path) and not os.path.islink(path) else 0
+        if not remove_cache_dir(root, path, prefix):  # 삭제 지점은 cache_store 하나(경로 탈출·링크면 False)
+            log.warning("캐시 폴더 확인 실패(경로 탈출·링크) — 건너뜀: %s", path)
+            out["skipped"] += 1
+            return 0
+        ids = [row[c] for c in gv_repo.ART_COLS[t.name] if row.get(c)]
+        with engine.begin() as conn:
+            if ids:
+                conn.execute(delete(artifacts).where(artifacts.c.id.in_(ids)))
+            gv_repo.set_values(conn, t, row["id"], status="EXPIRED")
+        out[why] += 1
+        return size
+
+    for t in (geom_previews, contour3d_cache):
+        with engine.connect() as conn:
+            rows = gv_repo.purge_candidates(conn, t, older_than_days=cfg.retention_days)
+        for row in rows:
+            drop(t, row, "expired")
+    total = sum(dir_bytes(os.path.join(r, CACHE_DIR)) for r in roots.values() if os.path.isdir(os.path.join(r, CACHE_DIR)))
+    if total > cfg.max_total_bytes:
+        with engine.connect() as conn:
+            merged = sorted([(row["last_access_at"], t, row) for t in (geom_previews, contour3d_cache) for row in gv_repo.lru_rows(conn, t)],
+                            key=lambda x: x[0])
+        for _ts, t, row in merged:
+            if total <= cfg.max_total_bytes:
+                break
+            total -= drop(t, row, "lru")
+    if out["expired"] or out["lru"]:
+        log.info("서버측 캐시 정리: 기간 초과 %d · 총량 초과 %d", out["expired"], out["lru"])
+    return out

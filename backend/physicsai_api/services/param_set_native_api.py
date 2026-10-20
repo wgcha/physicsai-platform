@@ -23,7 +23,7 @@ from ..auth import Principal
 from ..context import AppContext
 from . import jobs as jobs_svc
 from .common import audit, study_root
-from .geometry_gate import require_native_available, validate_geom_options
+from .geometry_gate import require_native_available, require_shell_available, validate_geom_options
 
 
 def wants_native(ctx: AppContext, body: Any, *, discover: bool = False) -> bool:
@@ -34,11 +34,12 @@ def wants_native(ctx: AppContext, body: Any, *, discover: bool = False) -> bool:
     return (discover or getattr(body, "mode", None) == "discover") and ctx.settings.geometry.engine == "native"
 
 
-def discover_native_out(ctx: AppContext, path: str) -> dict[str, Any]:
+def discover_native_out(ctx: AppContext, path: str, kind: str = "solid") -> dict[str, Any]:
     cp = check_user_path(path, allowed_roots(ctx.settings, imports=True))
-    d = dn.discover_native(cp.path, ctx.settings)
+    d = dn.discover_native(cp.path, ctx.settings, kind=kind)
     out = d.out()
     out["engine"] = "native"
+    out["kind"] = kind
     out["cad"] = [{**c, "kind": "parts" if c["name"].casefold() == dn.PARTS_DIR else "file"} for c in out["cad"]]
     return out
 
@@ -49,14 +50,20 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
     if getattr(body, "mode", None) != "discover":
         raise DomainError("INVALID_PARAMS", "native 형상 엔진은 mode=discover로만 등록합니다", status=422)
     require_native_available(ctx.settings)
-    over = validate_geom_options(ctx.settings, body.geom_options)
+    kind = getattr(body, "kind", None) or "solid"  # shell-morph.md §8.2: 세트 형상 종류(prep.json kind, DB 열 없음)
+    shell_only = bool(getattr(body, "shell_only", False))  # §11.1 쉘 두께 전용: STEP·번호 표 불필요
+    if kind == "shell":
+        if shell_only:
+            raise DomainError("INVALID_PARAMS", "쉘 두께 전용(shell_only)과 쉘 판금 형상(kind=shell)은 함께 쓸 수 없습니다", status=422,
+                              errors=[{"loc": ["body", "kind"], "msg": "shell_only와 함께 쓸 수 없음"}])
+        require_shell_available(ctx.settings)
+    over = validate_geom_options(ctx.settings, body.geom_options, kind)
     cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
     choice = body.choice.model_dump(exclude_unset=True) if body.choice is not None else {}
-    shell_only = bool(getattr(body, "shell_only", False))  # §11.1 쉘 두께 전용: STEP·번호 표 불필요
     if shell_only:
         choice.pop("cad", None)
-    d = dn.discover_native(cp.path, ctx.settings)
-    cad, assem, probs = dn.resolve_choice_native(d, choice)
+    d = dn.discover_native(cp.path, ctx.settings, kind=kind)
+    cad, assem, probs = dn.resolve_choice_native(d, choice, kind=kind)
     problems = dn.shell_only_problems(d.problems + probs) if shell_only else d.problems + probs
     if problems or assem is None or (cad is None and not shell_only):
         raise DomainError("PARAM_SET_INVALID", "프로젝트 폴더에서 파라미터 세트를 구성할 수 없습니다", status=422,
@@ -65,6 +72,8 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
               "label": label, "geom_options": over or None}
     if shell_only:
         params["shell_only"] = True
+    if kind == "shell":
+        params["kind"] = "shell"
     job = jobs_svc.create_job(ctx, principal, study_id, "PARAM_SET_NATIVE", params, rid, ip)
     return {"job_id": job["id"]}
 
@@ -84,20 +93,38 @@ def _S(ctx: AppContext, conn: Any, p: dict[str, Any]) -> str:
 
 
 def _features_doc(ctx: AppContext, S: str) -> dict[str, Any] | None:
+    from physicsai_core.geometry.shell_native import features_name, read_kind
+
     try:
-        return read_report(os.path.join(S, "native", "extract", "parameter_features.json"), ctx.settings.geometry.max_report_bytes)
+        return read_report(os.path.join(S, "native", "extract", features_name(read_kind(S))), ctx.settings.geometry.max_report_bytes)
     except ReportError:
         return None
 
 
 def _state(ctx: AppContext, p: dict[str, Any]) -> tuple[Any, dict[str, Any], str]:
     s = ctx.settings
-    opts, _ = effective_options(s.geometry.defaults, p.get("geom_options"))
     with ctx.engine.connect() as conn:
         S = _S(ctx, conn, p)
+    opts = kind_options(ctx, S, p.get("geom_options"))
     st = prep_state(S, step_exts=s.geometry.step_extensions, mesh_include_name=s.predict.mesh_include_name,
                     renum_csv_name=s.predict.renum_csv_name, opts=opts)
     return st, opts, S
+
+
+def kind_options(ctx: AppContext, S: str, geom_options: dict[str, Any] | None) -> dict[str, Any]:
+    """준비본 kind에 맞는 유효 옵션(솔리드 §4.9 | 쉘 SM §4.10)."""
+    from physicsai_core.geometry.shell_native import read_kind
+    from physicsai_core.geometry.shell_options import effective_shell_options
+
+    if read_kind(S) == "shell":
+        return effective_shell_options(ctx.settings.geometry.shell_defaults, geom_options)[0]
+    return effective_options(ctx.settings.geometry.defaults, geom_options)[0]
+
+
+def set_kind(ctx: AppContext, p: dict[str, Any]) -> str:
+    from physicsai_core.geometry.shell_native import read_kind
+
+    return read_kind(set_path(ctx, p)) if (p.get("engine") or "altair") == "native" else "solid"
 
 
 def set_path(ctx: AppContext, p: dict[str, Any]) -> str:
@@ -125,10 +152,14 @@ def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str,
     if (p.get("engine") or "altair") != "native":
         return out
     st, opts, S = _state(ctx, p)
+    from physicsai_core.geometry.shell_native import read_kind
+    from physicsai_core.geometry.view import prep_view
+
     doc = _features_doc(ctx, S) or {}
     out["geom_options_effective"] = opts
     out["native"] = {"prep_status": st.status, "prep_reason": st.reason, "feature_count": len(doc.get("features", [])),
-                     "shell_only": is_shell_only(S), "props_scanned": os.path.isfile(os.path.join(S, *PROPS_JSON.split("/")))}
+                     "shell_only": is_shell_only(S), "props_scanned": os.path.isfile(os.path.join(S, *PROPS_JSON.split("/"))),
+                     "kind": read_kind(S), "view_status": prep_view(S).get("status") or "MISSING"}
     from .param_set_baselines_api import baselines_info  # 4B(§7.3.8): 다중 baseline 세트만
 
     info = baselines_info(ctx, p, S, opts)
@@ -160,7 +191,7 @@ def patch_geom_options(ctx: AppContext, conn: Any, principal: Principal, p: dict
     """PATCH geom_options(전체 덮어쓰기). altair 세트는 422. tag 절이 바뀌면 prep_status가 STALE로 보인다(준비본 해시 비교)."""
     if (p.get("engine") or "altair") != "native":
         raise DomainError("ENGINE_MISMATCH", "geom_options는 native 형상 엔진 세트에서만 바꿀 수 있습니다", status=422)
-    over = validate_geom_options(ctx.settings, raw)
+    over = validate_geom_options(ctx.settings, raw, set_kind(ctx, p))
     ps_repo.set_values(conn, p["id"], geom_options=over or None)
     audit(conn, principal, "PARAM_SET_UPDATE", "param_set", p["id"],
           {"geom_options": over, "tag_changed": tag_section_changed(p.get("geom_options"), over)}, rid, ip)
@@ -202,20 +233,34 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
     except (OSError, ValueError):
         pass
     snap = d.get("parameters_snapshot") or []
+    kind = "shell" if old.get("kind") == "shell" else "solid"  # shell-morph.md §8.2: DOE 준비본 kind 승계
     write_json(os.path.join(T, "parameters.json"), {
         "schema_version": 1, "unit_system": body.unit_system or "mm-ton-s",
         "parameters": [{"name": p["name"], "nominal": p["nominal"], "min": p["min"], "max": p["max"], "unit": p.get("unit", "")}
                        for p in snap]})
-    opts, _ = effective_options(s.geometry.defaults, d.get("geom_options"))
-    write_json(os.path.join(T, PREP_JSON), prep_document(
+    if kind == "shell":
+        from physicsai_core.geometry.shell_options import effective_shell_options
+
+        opts, _ = effective_shell_options(s.geometry.shell_defaults, d.get("geom_options"))
+    else:
+        opts, _ = effective_options(s.geometry.defaults, d.get("geom_options"))
+    pdoc = prep_document(
         T, step_exts=s.geometry.step_extensions, mesh_include_name=s.predict.mesh_include_name,
         renum_csv_name=s.predict.renum_csv_name, opts=opts, engine_version=d.get("engine_version") or old.get("engine_version"),
-        ocp_version=old.get("ocp_version"), job_id=old.get("job_id"), created_at=datetime.now(timezone.utc).isoformat()))
+        ocp_version=old.get("ocp_version"), job_id=old.get("job_id"), created_at=datetime.now(timezone.utc).isoformat(),
+        kind=kind, component=old.get("component"))
+    from physicsai_core.geometry.view import view_result
+
+    view = view_result(os.path.join(T, "native", "view"), pdoc.get("engine_version"))  # geometry-view.md §6.9: DOE 공칭 뷰 복사
+    if view is not None:
+        pdoc["view"] = view
+    write_json(os.path.join(T, PREP_JSON), pdoc)
     f = validate_native_folder(T, max_total_bytes=s.param_set.max_total_bytes, starter_glob=s.predict.starter_glob,
                                renum_csv_name=s.predict.renum_csv_name, baseline_inc_name=s.predict.mesh_include_name,
-                               step_extensions=s.geometry.step_extensions)
+                               step_extensions=s.geometry.step_extensions, kind=kind)
     if not f.ok:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
+    rows = [{**x, "source": "shell"} for x in f.parameters] if kind == "shell" else f.parameters
     psid = str(uuid.uuid4())
     src_label = f"① DOE {d['id'][:8]}"
     write_json(os.path.join(T, "source.json"), {"source_path": src_label, "registered_at": datetime.now(timezone.utc).isoformat(),
@@ -228,22 +273,37 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
         with ctx.engine.begin() as conn:
             ps_repo.insert_current(conn, {
                 "id": psid, "study_id": study["id"], "source_path": src_label, "stored_rel": stored_rel + "/",
-                "unit_system": f.unit_system, "parameters": f.parameters, "responses": [], "sample_count": 0,
+                "unit_system": f.unit_system, "parameters": rows, "responses": [], "sample_count": 0,
                 "sample_has_measured": False, "cad_file_name": f.cad_file or "parts/", "tpl_rel": None,
                 "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "input_kind": "assembly",
                 "tpl_params": [], "registered_by": principal.user_id, "registered_by_name": principal.display_name,
                 "label": label, "origin": "TRAIN_DOE", "train_doe_id": d["id"], "engine": "native",
                 "geom_options": d.get("geom_options"), "engine_version": d.get("engine_version")})
             audit(conn, principal, "PARAM_SET_FROM_TRAIN", "param_set", psid,
-                  {"doe_id": d["id"], "runs": body.runs, "engine": "native"}, rid, ip)
+                  {"doe_id": d["id"], "runs": body.runs, "engine": "native", "kind": kind}, rid, ip)
             os.replace(T, dst)
             moved = True
+            if view is not None:
+                _register_view(conn, study["id"], dst, f"{stored_rel}/native/view")
             row = ps_repo.get(conn, psid)
     except BaseException:
         if moved and os.path.isdir(dst) and not os.path.lexists(T):
             os.replace(dst, T)  # 04_params에 DB 행 없는 고아 폴더를 남기지 않는다(삭제 없음)
         raise
     return enrich(ctx, row, {**param_set_out(row), "warnings": []})  # type: ignore[arg-type]
+
+
+def _register_view(conn: Any, study_id: str, S: str, rel_dir: str) -> dict[str, str | None]:
+    """공칭 뷰 artifacts(GEOM_VIEW_GLB·GEOM_VIEW_MANIFEST) 등록 — from-train(동기, paicad 없음) 복사본(geometry-view.md §6.3)."""
+    from physicsai_core.fileutil import sha256_file
+    from physicsai_core.geometry.view import GLB_CONTENT_TYPE, JSON_CONTENT_TYPE, VIEW_GLB, VIEW_MANIFEST
+
+    out: dict[str, str | None] = {}
+    for kind, name, ctype in (("GEOM_VIEW_GLB", VIEW_GLB, GLB_CONTENT_TYPE), ("GEOM_VIEW_MANIFEST", VIEW_MANIFEST, JSON_CONTENT_TYPE)):
+        p = os.path.join(S, "native", "view", name)
+        out[kind] = art_repo.insert(conn, study_id=study_id, job_id=None, kind=kind, rel_path=f"{rel_dir}/{name}",
+                                    size=os.path.getsize(p), sha256=sha256_file(p), content_type=ctype) if os.path.isfile(p) else None
+    return out
 
 
 def train_features(ctx: AppContext, study_id: str) -> dict[str, Any]:

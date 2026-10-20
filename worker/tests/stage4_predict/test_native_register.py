@@ -62,7 +62,7 @@ def test_register_new_runs_chain_and_creates_set(native_env, fake_record):
         assert (S / rel).is_file(), rel
     assert not (env.sroot / "logs" / "_paramset_tmp" / out["job_id"]).exists()
     cmds = [r["argv"][1] for r in read_record(fake_record) if r["tool"] == "paicad"]
-    assert cmds == ["version", "extract", "tag"]
+    assert cmds == ["version", "extract", "tag", "view"]  # NP_VIEW(geometry-view.md §6.3)
     f = env.c.get(f"{API}/param-sets/{psid}/features", headers=P).json()
     assert [x["name"] for x in f["features"]] == ["A_THK_1", "A_THK_2", "B_RIB_H_1", "C_HOLE_R_1"]
     assert all(x["png_artifact_id"] for x in f["features"]) and f["groups"][0]["members"] == ["A_THK_1", "A_THK_2"]
@@ -90,7 +90,7 @@ def test_register_reuses_provided_features_and_parameters(native_env, fake_recor
     second = _register(env, proj)
     assert env.w.run_once_slot() == "SUCCEEDED", env.job(second["job_id"])
     assert env.steps(second["job_id"])["NP_EXTRACT"]["state"] == "SKIPPED"
-    assert [r["argv"][1] for r in read_record(fake_record) if r["tool"] == "paicad"][-2:] == ["version", "tag"]
+    assert [r["argv"][1] for r in read_record(fake_record) if r["tool"] == "paicad"][-3:] == ["version", "tag", "view"]
 
 
 def test_register_feature_mismatch_fails_without_set(native_env):

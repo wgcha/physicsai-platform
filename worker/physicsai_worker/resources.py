@@ -141,3 +141,34 @@ def sample(gpu_argv: list[str] | None, job: dict[str, Any] | None = None, env: d
         "gpu_message": g.message,
         "job": job,
     }
+
+
+_PAICAD_CACHE: dict[tuple[str, int, int], str | None] = {}
+
+
+def paicad_version(settings: Any, env: dict[str, str] | None = None) -> str | None:
+    """설치된 paicad 버전(geometry-view.md §6.4 미리보기 캐시 키 `engine_version` — 하트비트 resources.paicad_version).
+    `commands.paicad_version` 템플릿(shell=False, 제한기 밖, 30초)으로 실행하고 실행 파일(경로·크기·mtime)이 같으면 캐시. 모르면 None."""
+    from physicsai_core.commands import render_argv
+    from physicsai_core.config import effective_executables
+    from physicsai_core.geometry.reports import ReportError, parse_version_json
+
+    tpl = settings.commands.paicad_version
+    exe = effective_executables(settings).get("paicad_path") or ""
+    if tpl is None or not exe or not os.path.isfile(exe):
+        return None
+    st = os.stat(exe)
+    key = (exe, st.st_size, st.st_mtime_ns)
+    if key in _PAICAD_CACHE:
+        return _PAICAD_CACHE[key]
+    ver = None
+    try:
+        argv = render_argv("paicad_version", tpl, {}, executables=effective_executables(settings))
+        cp = subprocess.run(argv, capture_output=True, text=True, timeout=30, shell=False, env=env, check=False)
+        ver = parse_version_json(cp.stdout).get("paicad") if cp.returncode == 0 else None
+    except (OSError, subprocess.SubprocessError, ReportError, Exception):  # noqa: BLE001 - 하트비트는 실패해도 계속
+        ver = None
+    if len(_PAICAD_CACHE) > 16:
+        _PAICAD_CACHE.clear()
+    _PAICAD_CACHE[key] = ver
+    return ver

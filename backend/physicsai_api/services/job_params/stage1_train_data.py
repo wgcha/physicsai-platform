@@ -29,6 +29,7 @@ from .stage1_native import native_doe_from_set, native_doe_gen, native_extract_p
 class TdExtractParams(_P):
     cad_path: str = Field(max_length=400)
     engine: Literal["altair", "native"] | None = None  # geometry-engine.md §7.3.1: 생략 = geometry.engine 기본값, 서버가 params.engine에 기록
+    kind: Literal["solid", "shell"] | None = None  # shell-morph.md §8.2: native 형상 종류(생략 = solid). shell = 중립면 STEP 비드 추출
 
 
 class TdDoeGenParams(_P):

@@ -58,6 +58,11 @@ def native_extract_params(ctx: AppContext, p: Any) -> tuple[dict[str, Any], dict
     cp = check_user_path(p.cad_path, allowed_roots(cfg, imports=True), expect="file")
     if os.path.splitext(cp.path)[1].lower() not in [e.lower() for e in cfg.geometry.step_extensions]:
         raise invalid_at("cad_path", f"STEP 확장자는 {', '.join(cfg.geometry.step_extensions)} 중 하나여야 합니다")
+    if getattr(p, "kind", None) == "shell":
+        from ..geometry_gate import require_shell_available
+
+        require_shell_available(cfg)
+        return {"cad_path": cp.path, "engine": "native", "kind": "shell"}, None, []
     return {"cad_path": cp.path, "engine": "native"}, None, []
 
 
@@ -76,9 +81,16 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any) -> tuple[dict
     missing = []
     if len(st) != 1:
         missing.append("RADIOSS_STARTER")
-    if cfg.predict.mesh_include_name.lower() not in names:
+    from physicsai_core.geometry.shell_native import kind_of_features_rel
+
+    shell = kind_of_features_rel(setup.get("features_rel")) == "shell"  # shell-morph.md §8.2: 쉘은 기준 메시·RENUM 불필요
+    if shell:
+        from ..geometry_gate import require_shell_available
+
+        require_shell_available(cfg)
+    if cfg.predict.mesh_include_name.lower() not in names and not shell:
         missing.append("BASELINE_INC")
-    if cfg.predict.renum_csv_name.lower() not in names:
+    if cfg.predict.renum_csv_name.lower() not in names and not shell:
         missing.append("RENUM_CSV")
     if missing:
         raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개·기준 메시·번호 재지정 표가 모두 있어야 합니다", status=409,

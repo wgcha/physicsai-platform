@@ -18,7 +18,9 @@ def test_status_extensions(p2_env):
                                    "curation_h3d", "curation_t01", "spdm_import", "optimize", "dataset_create", "evaluate", "predict",
                                    "predict_parametric", "predict_mesh_only", "predict_responses", "contour_capture",
                                    "optimize_builtin", "fem_verify", "fem_verify_rebuild", "train_doe_platform",  # S16 §21.3.8, S18 §23.8
-                                   "geometry_native"}  # geometry-engine.md §7.1
+                                   "geometry_native",  # geometry-engine.md §7.1
+                                   # shell-morph.md §8.1, geometry-view.md §6.1·§13
+                                   "geometry_native_shell", "geometry_view", "geometry_view_shell", "contour3d"}
     assert st["features"]["train_doe"]["enabled"] and st["features"]["train_resp"] == {"enabled": False, "missing": ["commands.response_extract"]}
     assert st["hpc"]["collect_mode"] == "in_place" and st["env_check"] is None
     assert st["limits"]["configured"]["max_multi_execution"] == 8  # ①-3 동시 실행 수 입력 상한(화면 힌트)

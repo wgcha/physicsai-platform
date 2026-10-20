@@ -62,14 +62,19 @@ def create_job(ctx: AppContext, principal: Principal, study_id: str, job_type: s
 
 
 def list_jobs(ctx: AppContext, principal: Principal, *, study_id: str | None, state: str | None, mine: bool,
-              job_type: str | None, limit: int | None, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
+              job_type: str | None, limit: int | None, cursor: str | None,
+              include_preview: bool = False) -> tuple[list[dict[str, Any]], str | None]:
+    from physicsai_core.job_types import HIDDEN_BY_DEFAULT
+
     lim, off = clamp_limit(limit), decode_cursor(cursor)
+    hide = () if include_preview or job_type else tuple(HIDDEN_BY_DEFAULT)  # geometry-view.md §6.4: 미리보기는 기본 숨김
     with ctx.engine.connect() as conn:
         rows = jobs_repo.list_with_study_title(
             conn, study_id=study_id or None, states=state.split(",") if state else None,
             created_by=principal.user_id if mine else None, job_type=job_type or None, limit=lim + 1, offset=off,
+            exclude_types=hide,
         )
-        pos = {"SLOT": jobs_repo.queue_positions(conn, "SLOT"), "LIGHT": jobs_repo.queue_positions(conn, "LIGHT")}
+        pos = {lane: jobs_repo.queue_positions(conn, lane) for lane in ("SLOT", "LIGHT", "PREVIEW")}
         hs = hpc_repo.summary_for_jobs(conn, [r["id"] for r in rows[:lim]])
     out = [job_summary(r, r["study_title"], pos[r["lane"]].get(r["id"]), hs.get(r["id"])) for r in rows[:lim]]
     return out, (encode_cursor(off + lim) if len(rows) > lim else None)
@@ -208,6 +213,8 @@ def queue_view(ctx: AppContext) -> dict[str, Any]:
     }
     slot_pos = light_pos = 0
     for r in rows:
+        if r["lane"] == "PREVIEW":  # geometry-view.md §6.2: 미리보기 레인은 대기열 화면(SLOT·LIGHT)에 넣지 않는다
+            continue
         if r["state"] == "QUEUED":
             if r["lane"] == "SLOT":
                 slot_pos += 1

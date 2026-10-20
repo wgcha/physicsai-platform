@@ -82,7 +82,7 @@ jobs = Table(
     Column("created_at", TS, nullable=False, server_default=func.now()),
     Column("updated_at", TS, nullable=False, server_default=func.now()),
     Column("version", BigInteger, nullable=False, server_default="1"),
-    CheckConstraint("lane IN ('SLOT','LIGHT')", name="ck_jobs_lane"),
+    CheckConstraint("lane IN ('SLOT','LIGHT','PREVIEW')", name="ck_jobs_lane"),  # PREVIEW: geometry-view.md §6.2(0017_geom_view)
     CheckConstraint("stage BETWEEN 0 AND 5", name="ck_jobs_stage"),
     CheckConstraint(
         "state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING','SUCCEEDED','FAILED','CANCELED','INTERRUPTED')",
@@ -117,5 +117,7 @@ Index(
                           " AND NOT (job_type = 'PREDICT_BATCH' AND (params -> 'surrogate_opt') IS NOT NULL)"
                           # phase3 §21.3.4 S16: FEM_VERIFY·동반 PREDICT(params.fem_verify_id) 제외(0013_fem_verify)
                           " AND job_type <> 'FEM_VERIFY'"
-                          " AND NOT (job_type = 'PREDICT' AND (params -> 'fem_verify_id') IS NOT NULL)"),
+                          " AND NOT (job_type = 'PREDICT' AND (params -> 'fem_verify_id') IS NOT NULL)"
+                          # geometry-view.md §6.7: 미리보기·결과 3D 컨투어는 캐시 행·서비스 규칙이 동시 제한(0017_geom_view)
+                          " AND job_type NOT IN ('GEOM_PREVIEW','CONTOUR_3D')"),
 )

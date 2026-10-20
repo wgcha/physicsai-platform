@@ -21,11 +21,12 @@ from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.native_files import doe_matrix_csv, doe_matrix_csv_multi, read_doe_matrix
 from physicsai_core.geometry.prep import is_shell_only
+from physicsai_core.geometry.shell_native import read_kind
 from physicsai_core.paths import is_link_or_reparse
 from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
 
 from ..common import hst_run_label
-from ..geometry_native import effective_opts, engine_version, ensure_prep_ready, native_inputs, read_json, write_native_options
+from ..geometry_native import effective_opts, set_opts, engine_version, ensure_prep_ready, native_inputs, read_json, write_native_options
 from ..geometry_sample import backup_path, generate_sample, write_no_cover, write_sample_inputs
 from . import doe_native
 from ._shared import _D, _doe
@@ -59,7 +60,7 @@ def dg_prep(ctx: Any) -> None:
     s, p = ctx.settings, ctx.params
     doe_id = p["doe_id"]
     ps, S = _set(ctx)
-    opts = effective_opts(s, ps.get("geom_options"))
+    opts = set_opts(s, S, ps.get("geom_options"))
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     ensure_prep_ready(s, S, opts, ver)
@@ -77,7 +78,7 @@ def dg_prep(ctx: Any) -> None:
     for sub in ("cad", "native"):
         if os.path.isdir(os.path.join(S, sub)):
             copy_tree(os.path.join(S, sub), os.path.join(D, sub), checkpoint=ctx.checkpoint)
-    write_native_options(os.path.join(D, "native"), opts, ver)
+    write_native_options(os.path.join(D, "native"), opts, ver, read_kind(S))
     doe = _doe(ctx)
     num_runs = doe["num_runs_requested"] if doe["num_runs_requested"] is not None else int(p.get("num_runs") or 2)
     seed = int(p.get("seed") if p.get("seed") is not None else 1)
@@ -110,7 +111,7 @@ def hst_gen(ctx: Any) -> None:
     pm = _map(ctx, S)
     D, doe = _D(ctx), _doe(ctx)
     ver = r.get("engine_version")
-    opts = doe["geom_options"] or effective_opts(s, ps.get("geom_options"))
+    opts = doe["geom_options"] or set_opts(s, S, ps.get("geom_options"))
     params = list(ps["parameters"])
     shell_only = is_shell_only(S)
     roots = {b: bl.baseline_root(S, pm, b) for b in bl.baseline_ids(pm)} if pm else {}

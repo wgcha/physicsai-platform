@@ -121,8 +121,19 @@ def tx_parse(ctx: Any) -> None:
         extract_native.after_parse(ctx, params)
 
 
+def tx_view(ctx: Any) -> None:
+    """TX_VIEW(geometry-view.md §6.9): native만 공칭 3D 뷰, altair는 SKIPPED."""
+    from ...signals import StepSkipped
+
+    if not is_native(ctx.params):
+        raise StepSkipped("altair 엔진 — 3D 보기 없음")
+    extract_native.tx_view(ctx)
+
+
 HANDLERS = {
     ("TD_EXTRACT_PARAMS", "TX_PREP"): tx_prep,
     ("TD_EXTRACT_PARAMS", "SIMLAB_EXTRACT"): simlab_extract,
     ("TD_EXTRACT_PARAMS", "TX_PARSE"): tx_parse,
+    ("TD_EXTRACT_PARAMS", "TX_VIEW"): tx_view,
 }
+

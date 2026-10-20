@@ -62,6 +62,46 @@ class CommandsCfg(_M):
     paicad_map: list[str] | None = Field(default_factory=lambda: [
         "{paicad}", "map", "--baselines", "{baselines_json}", "--out-dir", "{map_out_dir}", "--user-map", "{user_map}",
         "--usage", "{usage}", "--split-param", "{split_param}", "--options", "{options_json}"])
+    # 쉘 판금 모핑(shell-morph.md §8.1, paicad 0.8.0+) — null이면 쉘(kind=shell) 세트 기능만 꺼짐
+    paicad_shell_fixed_scan: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "fixed-scan", "--assem-dir", "{assem_dir}", "--features", "{features_json}", "--options", "{options_json}",
+        "--out-dir", "{out_dir}"])
+    paicad_shell_extract: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "extract", "--cad", "{cad_input}", "--assem-dir", "{assem_dir}", "--options", "{options_json}",
+        "--out-dir", "{out_dir}"])
+    paicad_shell_tag: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "tag", "--cad", "{cad_input}", "--features", "{features_json}", "--assem-dir", "{assem_dir}",
+        "--fixed-dir", "{fixed_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"])
+    paicad_shell_update: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "update", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
+        "--fixed-dir", "{fixed_dir}", "--options", "{options_json}", "--out-dir", "{update_dir}"])
+    paicad_shell_morph: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "morph", "--assem-dir", "{assem_dir}", "--tag-dir", "{tag_dir}", "--fixed-dir", "{fixed_dir}",
+        "--features", "{features_json}", "--update-dir", "{update_dir}", "--options", "{options_json}", "--out-dir", "{morph_dir}"])
+    paicad_shell_check: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "check", "--assem-dir", "{assem_dir}", "--morph-dir", "{morph_dir}", "--update-dir", "{update_dir}",
+        "--tag-dir", "{tag_dir}", "--fixed-dir", "{fixed_dir}", "--features", "{features_json}", "--values", "{values_json}",
+        "--thickness", "{thickness_json}", "--options", "{options_json}", "--out-dir", "{check_dir}", "--out-files-dir", "{out_files_dir}"])
+    paicad_shell_run: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "run", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
+        "--assem-dir", "{assem_dir}", "--tag-dir", "{tag_dir}", "--fixed-dir", "{fixed_dir}", "--thickness", "{thickness_json}",
+        "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}",
+        "--out-files-dir", "{out_files_dir}"])
+    # 3D 가시화(geometry-view.md §6.1, paicad 0.9.0+) — null이면 공칭 뷰·미리보기만 꺼짐(PNG 그림은 그대로)
+    paicad_view_export: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "view", "export", "--cad", "{cad_input}", "--features", "{features_json}", "--view-options", "{view_options_json}",
+        "--out-dir", "{out_dir}"])
+    paicad_view_preview: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "view", "preview", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
+        "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}",
+        "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}", "--baseline-inc", "{baseline_inc}", "--renum-csv", "{renum_csv}",
+        "--assem-dir", "{assem_dir}", "--threads", "{threads}", "--out-dir", "{out_dir}"])
+    # 쉘 뷰(`paicad shell view`)는 paicad 0.9.0에 없다 — 지원 버전 설치 후 설정에서 켠다(기본 null)
+    paicad_shell_view_export: list[str] | None = None
+    paicad_shell_view_preview: list[str] | None = None
+    # 결과 3D 컨투어 추출(geometry-view.md §13.3) — contour3d.enabled=true일 때만 쓴다
+    contour_extract: list[str] | None = Field(
+        default_factory=lambda: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"])
 
 
 class HpcDefaultsCfg(_M):

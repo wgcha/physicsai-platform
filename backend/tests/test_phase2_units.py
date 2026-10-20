@@ -211,6 +211,8 @@ def test_no_new_delete_calls_and_no_hardcoded_paths_in_deploy():
     """V2-SEC-1·V2-SEC-3: 삭제 호출 0(1차 정적 시험과 같은 규칙) + deploy/에 Program Files·평문 비밀번호 인자 없음."""
     pat = re.compile(r"\b(os\.remove|os\.unlink|\.unlink\(|shutil\.rmtree|os\.rmdir|\.rmdir\()")
     for f in _py():
+        if f.name == "cache_store.py":  # 유일한 예외: 서버측 임시 캐시 삭제 지점(geometry-view.md GV-8·§6.6, 1차 정적 시험과 같은 허용)
+            continue
         assert not pat.search(f.read_text(encoding="utf-8")), f
     for f in (REPO / "deploy").rglob("*"):
         if f.is_file():

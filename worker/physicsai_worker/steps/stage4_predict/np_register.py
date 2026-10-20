@@ -30,9 +30,21 @@ from physicsai_core.stage4_predict.param_set_native import PARTS_NAME, validate_
 from ..geometry_native import read_json
 
 
-def _params_from_features(base: str, max_bytes: int) -> list[dict[str, Any]]:
-    doc = read_json(os.path.join(base, "native", "extract", "parameter_features.json"), max_bytes)
-    rows = representative_params(doc)
+def _params_from_features(base: str, max_bytes: int, kind: str = "solid", component: str | None = None,
+                          ctx: Any = None) -> list[dict[str, Any]]:
+    if kind == "shell":  # SM §8.4: 쉘 피처 행(source=shell), 기본 대상 component만
+        from physicsai_core.geometry.shell_native import SHELL_FEATURES_JSON, shell_rows
+
+        doc = read_json(os.path.join(base, *SHELL_FEATURES_JSON.split("/")), max_bytes)
+        rows, warns = shell_rows(doc, component or "")
+        rows = [{k: v for k, v in r.items() if k != "use"} for r in rows]  # ④ 세트 표에는 use 열이 없다(①-1 표 전용)
+        if not rows:
+            raise StepFailure("SHELL_PART_NOT_FOUND", f"지정한 쉘 PART를 찾지 못함 — 기본 대상 component({component})의 비드 피처가 없습니다")
+        for w in warns if ctx is not None else []:
+            ctx.add_warning("SHELL_COMPONENT_FILTERED", w[:300])
+    else:
+        doc = read_json(os.path.join(base, "native", "extract", "parameter_features.json"), max_bytes)
+        rows = representative_params(doc)
     if not rows or any(r["min"] is None or r["max"] is None or r["nominal"] is None for r in rows):
         raise StepFailure("INPUT_INVALID", "형상 피처에서 파라미터 표를 만들 수 없습니다(피처 없음 또는 범위 누락)")
     prov = os.path.join(base, "original", "parameters.json")
@@ -51,18 +63,32 @@ def _params_from_features(base: str, max_bytes: int) -> list[dict[str, Any]]:
 
 def _prep_json(ctx: Any, base: str, *, shell_only: bool = False) -> None:
     s, r = ctx.settings, ctx.result()
-    write_json(os.path.join(base, "native", "prep.json"), prep_document(
+    doc = prep_document(
         base, step_exts=s.geometry.step_extensions, mesh_include_name=s.predict.mesh_include_name,
         renum_csv_name=s.predict.renum_csv_name, opts=r["opts"], engine_version=r.get("engine_version"),
         ocp_version=r.get("ocp_version"), job_id=ctx.ex.job_id, created_at=datetime.now(timezone.utc).isoformat(),
-        shell_only=shell_only))
+        shell_only=shell_only, kind=_kind(r), component=r.get("component"))
+    if isinstance(r.get("view"), dict):  # geometry-view.md §2.3: 선택 키 view(준비본 유효성 판정에는 넣지 않음)
+        doc["view"] = r["view"]
+    write_json(os.path.join(base, "native", "prep.json"), doc)
+
+
+def _kind(r: dict[str, Any]) -> str:
+    return "shell" if r.get("kind") == "shell" else "solid"
+
+
+def _view_artifacts(ctx: Any, base: str) -> None:
+    if (ctx.result().get("view") or {}).get("status") == "READY":
+        from ..geometry_view import register_view_artifacts
+
+        register_view_artifacts(ctx, os.path.join(base, "native", "view"))
 
 
 def _validate(ctx: Any, base: str, *, shell_only: bool = False) -> Any:
     s = ctx.settings
     f = validate_native_folder(base, max_total_bytes=s.param_set.max_total_bytes, starter_glob=s.predict.starter_glob,
                                renum_csv_name=s.predict.renum_csv_name, baseline_inc_name=s.predict.mesh_include_name,
-                               step_extensions=s.geometry.step_extensions, shell_only=shell_only)
+                               step_extensions=s.geometry.step_extensions, shell_only=shell_only, kind=_kind(ctx.result()))
     if not f.ok:
         code = f.problems[0]["code"] if f.problems[0]["code"] == "PARAM_FEATURE_MISMATCH" else "INPUT_INVALID"
         raise StepFailure(code, "파라미터 세트 검증 실패: " + "; ".join(f"{q['code']} {q['message']}" for q in f.problems[:3]))
@@ -111,7 +137,7 @@ def _register_reprep(ctx: Any) -> None:
     s, r = ctx.settings, ctx.result()
     base = ctx.abs(r["target_rel"])
     ps = _ps(ctx)
-    names = {x["name"] for x in _params_from_features(base, s.geometry.max_report_bytes)}
+    names = {x["name"] for x in _params_from_features(base, s.geometry.max_report_bytes, _kind(r), r.get("component"))}
     multi_confirmed = (bl.load(base, s.geometry.max_report_bytes) or {}).get("status") == "confirmed" if bl.is_multi(base) else False
     if not multi_confirmed and names != {x["name"] for x in sh.geometry_rows(ps["parameters"])}:
         raise StepFailure("PARAM_FEATURE_MISMATCH", "다시 준비한 형상 피처의 이름 집합이 기존 파라미터 표와 다릅니다(세트는 바뀌지 않았습니다)")
@@ -120,6 +146,7 @@ def _register_reprep(ctx: Any) -> None:
     ctx.ex.db(lambda c: (ps_repo.set_values(c, ps["id"], engine_version=r.get("engine_version")),
                          _audit(ctx, c, "PARAM_SET_NATIVE_PREPARE", ps["id"], {"engine_version": r.get("engine_version")})))
     n = _png(ctx, base)
+    _view_artifacts(ctx, base)
     ctx.patch_result({"param_set_id": ps["id"], "feature_png_count": n})
 
 
@@ -171,7 +198,7 @@ def _register_map(ctx: Any) -> None:
         raise StepFailure(code, "매칭표 결정 검사 실패(세트는 바뀌지 않았습니다): " + "; ".join(q["message"] for q in probs[:3]))
     if p["mode"] == "add_baseline":
         bid = p["baseline"]["id"]
-        rows = _params_from_features(T, s.geometry.max_report_bytes)  # type: ignore[arg-type]
+        rows = _params_from_features(T, s.geometry.max_report_bytes, _kind(r), r.get("component"))  # type: ignore[arg-type]
         write_json(os.path.join(T, "parameters.json"), {"schema_version": 1, "unit_system": ps.get("unit_system") or "mm-ton-s",
                                                         "parameters": rows})
         _prep_json(ctx, T)  # type: ignore[arg-type]
@@ -213,7 +240,7 @@ def _register_new(ctx: Any) -> None:
         if not rows:
             raise StepFailure("PROP_NOT_FOUND", "조립 폴더에서 선택할 수 있는 쉘 PROP(/PROP/TYPE1)을 찾지 못했습니다")
     else:
-        rows = _params_from_features(base, s.geometry.max_report_bytes)
+        rows = _params_from_features(base, s.geometry.max_report_bytes, _kind(r), r.get("component"), ctx)
     write_json(os.path.join(base, "parameters.json"), {"schema_version": 1, "unit_system": "mm-ton-s", "parameters": rows})
     _prep_json(ctx, base, shell_only=shell_only)
     f = _validate(ctx, base, shell_only=shell_only)
@@ -226,6 +253,8 @@ def _register_new(ctx: Any) -> None:
     os.makedirs(os.path.dirname(dst), exist_ok=True)
     moved = False
     params = rows if shell_only else f.parameters
+    if _kind(r) == "shell":  # 쉘 행 표시(source=shell)는 폴더 검증(이름·범위)을 거친 값에 덧붙인다(SM §8.4)
+        params = [{**x, "source": "shell"} for x in f.parameters]
 
     def tx(c: Any) -> None:
         nonlocal moved
@@ -248,4 +277,5 @@ def _register_new(ctx: Any) -> None:
                 os.replace(dst, base)
         raise
     n = _png(ctx, dst)
+    _view_artifacts(ctx, dst)
     ctx.patch_result({"param_set_id": psid, "feature_png_count": n, "target_rel": stored_rel})

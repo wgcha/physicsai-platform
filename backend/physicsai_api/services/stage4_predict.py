@@ -93,6 +93,9 @@ def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: 
 
 
 def register_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
+    if getattr(body, "kind", None) == "shell" and not native_api.wants_native(ctx, body):  # shell-morph.md §8.2: native 전용
+        raise DomainError("INVALID_PARAMS", "쉘 판금 형상(kind=shell)은 native 형상 엔진(mode=discover)에서만 씁니다", status=422,
+                          errors=[{"loc": ["body", "kind"], "msg": "engine=native·mode=discover 필요"}])
     if native_api.wants_native(ctx, body):  # geometry-engine.md §7.3.4: 202 {job_id}
         _require_active_power(ctx, principal, study_id)
         return native_api.register_native(ctx, principal, study_id, body, _label(body.label), rid, ip)
@@ -124,7 +127,7 @@ def discover_param_set(ctx: AppContext, principal: Principal, study_id: str, bod
         s = studies_repo.require(conn, study_id)
     require_power(principal, s["project_id"])
     if native_api.wants_native(ctx, body, discover=True):
-        return native_api.discover_native_out(ctx, body.path)
+        return native_api.discover_native_out(ctx, body.path, getattr(body, "kind", None) or "solid")
     cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
     return {**disc_mod.discover(cp.path, ctx.settings, tpl=body.tpl).out(), "engine": "altair"}
 

@@ -23,6 +23,8 @@ class JobTypeDef:
     notify_success: bool = True  # False면 시작·성공·차례 알림 생략(phase3 R3-3)
 
     def needs_slot(self, step: StepDef) -> bool:
+        if self.lane == "PREVIEW":  # geometry-view.md §6.2: 전역 슬롯을 잡지 않는 미리보기 레인
+            return False
         if step.kind in ("LOCAL", "HPC_SUBMIT"):
             return True
         if step.kind in ("HPC_WAIT", "COLLECT"):
@@ -142,8 +144,22 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     "PARAM_SET_NATIVE": JobTypeDef(
         "PARAM_SET_NATIVE", 4, "SLOT", "형상 준비(native)",
         (StepDef("NP_PREP", "INTERNAL", 5), StepDef("NP_EXTRACT", "LOCAL", 30), StepDef("NP_TAG", "LOCAL", 55),
+         StepDef("NP_VIEW", "LOCAL", 5),  # geometry-view.md §6.3: 공칭 3D 뷰(실패는 경고 VIEW_EXPORT_FAILED, 작업 계속)
          StepDef("BL_MAP", "LOCAL", 5), StepDef("NP_REGISTER", "INTERNAL", 5)),
         "④", notify_success=True,
+    ),
+    # ---- 형상 미리보기(geometry-view.md §6.4): 전용 레인 PREVIEW(전역 슬롯 미사용, DOE 중에도 실행, 동시 geometry.view.max_concurrent) ----
+    "GEOM_PREVIEW": JobTypeDef(
+        "GEOM_PREVIEW", 4, "PREVIEW", "형상 미리보기",
+        (StepDef("GV_PREP", "INTERNAL", 5), StepDef("GV_RUN", "LOCAL", 90), StepDef("GV_REGISTER", "INTERNAL", 5)),
+        "④", notify_success=False,
+    ),
+    # ---- 결과 3D 컨투어(geometry-view.md §13.5): 열 때 생성(사용자 요청 때만), CONTOUR_RECAPTURE와 같은 LIGHT 레인 ----
+    "CONTOUR_3D": JobTypeDef(
+        "CONTOUR_3D", 4, "LIGHT", "결과 3D 컨투어",
+        (StepDef("C3_PREP", "INTERNAL", 5), StepDef("C3_EXTRACT", "LOCAL", 70), StepDef("C3_CONVERT", "LOCAL", 20),
+         StepDef("C3_REGISTER", "INTERNAL", 5)),
+        "④⑤", notify_success=False,
     ),
     # ---- 3차 S17(phase3 §22.3.5): 끝난 배치의 H3D 성능 다시 추출(①-6 TD_RESP_EXTRACT와 같은 HyperView 슬롯) ----
     "PB_RESP_EXTRACT": JobTypeDef(
@@ -159,7 +175,8 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     # ---- 2차(phase2 §6.1) ----
     "TD_EXTRACT_PARAMS": JobTypeDef(
         "TD_EXTRACT_PARAMS", 1, "SLOT", "파라미터 추출",
-        (StepDef("TX_PREP", "INTERNAL", 5), StepDef("SIMLAB_EXTRACT", "LOCAL", 85), StepDef("TX_PARSE", "INTERNAL", 10)),
+        (StepDef("TX_PREP", "INTERNAL", 5), StepDef("SIMLAB_EXTRACT", "LOCAL", 85), StepDef("TX_PARSE", "INTERNAL", 10),
+         StepDef("TX_VIEW", "LOCAL", 5)),  # geometry-view.md §6.9: native 공칭 3D 뷰(altair는 SKIPPED, 실패는 경고)
         "①-1",
     ),
     "TD_DOE_GEN": JobTypeDef(
@@ -240,6 +257,8 @@ JOB_TYPES: dict[str, JobTypeDef] = {
 
 # Study 관리 작업(phase3 R3-2·R3-4): 재시도 불가, 보관 Study에서도 생성 가능
 MANAGE_JOB_TYPES = frozenset({"STUDY_STORAGE_SCAN", "STUDY_CLEANUP"})
+# 캐시 행이 딸린 작업(geometry-view.md §6.4·§13.5): 재시도 대신 새로 요청(can_retry=false)
+NO_RETRY_JOB_TYPES = frozenset({"GEOM_PREVIEW", "CONTOUR_3D"})
 
 # step 표시명(phase2 §12.9 current_step_label, 한국어)
 STEP_LABELS: dict[str, str] = {
@@ -273,7 +292,13 @@ STEP_LABELS: dict[str, str] = {
     "SO_COLLECT": "검증 결과 수집", "SO_FIT": "대리모델 학습", "SO_PROPOSE": "후보 탐색", "SO_NEXT": "검증 배치 등록·마무리",
     "NP_PREP": "준비 파일 모으기", "NP_EXTRACT": "형상 피처 추출", "NP_TAG": "경계 노드 분류",
     "BL_MAP": "baseline 변수 매칭", "NP_REGISTER": "템플릿 등록",
+    "NP_VIEW": "3D 보기 만들기", "TX_VIEW": "3D 보기 만들기",
+    "GV_PREP": "미리보기 준비", "GV_RUN": "형상 미리보기 실행", "GV_REGISTER": "미리보기 결과 등록",
+    "C3_PREP": "대기·H3D 확인", "C3_EXTRACT": "H3D 읽기(결과 추출)", "C3_CONVERT": "형상·프레임 변환", "C3_REGISTER": "결과 등록",
 }
+
+# 미리보기·3D 컨투어는 작업 목록 화면에서 기본 숨김(geometry-view.md §6.4 — 필터 "미리보기 포함")
+HIDDEN_BY_DEFAULT = frozenset({"GEOM_PREVIEW"})
 
 # native 엔진 작업의 화면 step 이름(geometry-engine.md §7.3 — 작업 params의 engine이 native일 때 덮어쓴다)
 STEP_LABELS_NATIVE: dict[str, str] = {

@@ -40,7 +40,7 @@ def _fv(c, sid: str, no: int, **over) -> None:
 def test_v3_s16_4_migration_0013(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0016_geometry_engine"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
+    assert MIGRATION_HEAD == "0017_geom_view"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
     name = f"physicsai_m13_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

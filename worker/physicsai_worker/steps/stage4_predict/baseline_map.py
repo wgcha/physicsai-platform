@@ -62,13 +62,13 @@ def run_map(ctx: Any) -> None:
     if len(entries) < 2:
         raise StepFailure("INPUT_INVALID", "다중 baseline 매칭에는 baseline이 2개 이상 필요합니다")
     for bid, root, _rel in entries:
-        if not os.path.isfile(os.path.join(root, *FEATURES_REL.split("/"))):
+        if not os.path.isfile(bl.features_path(root)):
             raise StepFailure("NATIVE_PREP_MISSING", f"baseline {bid}의 형상 피처 파일이 없습니다 — 형상 준비를 다시 하세요")
     out = map_out_dir(ctx)
     ctx.backup([out])
     os.makedirs(out, exist_ok=True)
     bj, oj, pm_out = os.path.join(out, "baselines.json"), os.path.join(out, "options_run.json"), os.path.join(out, bl.PARAM_MAP)
-    write_json(bj, [{"id": bid, "features": os.path.join(root, *FEATURES_REL.split("/")), "rel": rel} for bid, root, rel in entries])
+    write_json(bj, [{"id": bid, "features": bl.features_path(root), "rel": rel} for bid, root, rel in entries])
     write_json(oj, usage_document(r["opts"], r.get("engine_version")))
     user_map = ""
     if old is not None:  # 이전 결정 보존(서명 같은 행 승계) — 세트 파일을 그대로 넘긴다(paicad는 읽기만)

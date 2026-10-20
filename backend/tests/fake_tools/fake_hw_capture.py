@@ -124,3 +124,79 @@ def main(argv: list[str]) -> int:
                 fh.write("VIEW=" + "|".join(r) + "\n")
     print(f"hw (fake) capture {status} views={len(rows)}", flush=True)
     return 0
+
+
+def main_extract(argv: list[str]) -> int:
+    """결과 3D 컨투어 추출 모드(geometry-view.md §13.5 시험) — fake_hw가 `-tcl .../contour_extract.tcl`일 때 부른다.
+
+    TCL 옆 extract_settings.tcl(H3D_PATH OUTDIR FIELD DCOMP AVGMODE MAX_FRAMES INCLUDE_DISP)을 읽어 합성 nodes·faces·frame_*.csv와
+    extract_result.txt를 쓴다. 모드 FAKE_TOOL_MODE_CONTOUR3D: ok(쿼드 쉘 2개, faces.csv) | elements(육면체 1 + 쿼드 쉘 1 → elements.csv,
+    플랫폼이 외부 면 계산) | open_error | field_error | invalid(프레임 행 수 불일치) | nan(값 전부 빈 칸 → FIELD_EMPTY) |
+    hang(FAKE_CAPTURE_HANG_S초 대기) | fail(종료코드 1, 출력 없음). FAKE_CONTOUR3D_FRAMES = h3d 전체 프레임 수(기본 5)."""
+    mode = os.environ.get("FAKE_TOOL_MODE_CONTOUR3D") or "ok"
+    tcl = argv[argv.index("-tcl") + 1]
+    sp = os.path.join(os.path.dirname(os.path.abspath(tcl)), "extract_settings.tcl")
+    if not os.path.isfile(tcl) or not os.path.isfile(sp):
+        print(f"hw (fake) contour3d: tcl/settings not found: {tcl}", flush=True)
+        return 2
+    with open(sp, encoding="ascii") as fh:
+        st = parse_settings(fh.read())
+    rec = os.environ.get("FAKE_TOOL_RECORD")
+    if rec:
+        with open(rec, "a", encoding="utf-8") as fh:
+            fh.write(json.dumps({"tool": "hw_contour3d", "argv": argv, "cwd": os.getcwd(), "settings": st}, ensure_ascii=False) + "\n")
+    if mode == "fail":
+        return 1
+    if mode == "hang":
+        time.sleep(float(os.environ.get("FAKE_CAPTURE_HANG_S") or "60"))
+        return 0
+    out = st["OUTDIR"]
+
+    def result(status, msg="", nodes=0, faces=0, total=0, frames=()):
+        with open(os.path.join(out, "extract_result.txt"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("# contour_extract 1\n")
+            fh.write(f"STATUS={status}\n")
+            if msg:
+                fh.write(f"MESSAGE={msg}\n")
+            fh.write(f"UNIT=MPa\nFIELD={st['FIELD']}\nDCOMP={st['DCOMP']}\nAVGMODE={st['AVGMODE']}\n")
+            fh.write(f"NODES={nodes}\nFACES={faces}\nFRAMES_TOTAL={total}\n")
+            for f in frames:
+                fh.write("FRAME=" + "|".join(str(x) for x in f) + "\n")
+
+    if mode == "open_error" or not os.path.isfile(st["H3D_PATH"]):
+        result("OPEN_ERROR", f"cannot open {st['H3D_PATH']}")
+        return 0
+    if mode == "field_error":
+        result("FIELD_ERROR", "no such result type")
+        return 0
+    if mode == "elements":
+        coords = [(0, 0, 0), (1, 0, 0), (1, 1, 0), (0, 1, 0), (0, 0, 1), (1, 0, 1), (1, 1, 1), (0, 1, 1), (2, 0, 0), (2, 1, 0)]
+        with open(os.path.join(out, "elements.csv"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("elem_id,config,n1,n2,n3,n4,n5,n6,n7,n8\n")
+            fh.write("1,208,101,102,103,104,105,106,107,108\n")
+            fh.write("2,104,102,109,110,103,,,,\n")
+    else:
+        coords = [(0, 0, 0), (1, 0, 0), (2, 0, 0), (0, 1, 0), (1, 1, 0), (2, 1, 0)]
+        with open(os.path.join(out, "faces.csv"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("elem_id,n1,n2,n3,n4\n1,101,102,105,104\n2,102,103,106,105\n")
+    ids = [101 + i for i in range(len(coords))]
+    with open(os.path.join(out, "nodes.csv"), "w", encoding="utf-8", newline="\n") as fh:
+        fh.write("node_id,x,y,z\n")
+        for nid, c in zip(ids, coords):
+            fh.write(f"{nid},{c[0]},{c[1]},{c[2]}\n")
+    total = int(os.environ.get("FAKE_CONTOUR3D_FRAMES") or "5")
+    mf = int(st["MAX_FRAMES"])
+    picks = list(range(total)) if total <= mf else sorted({int(round(k * (total - 1) / (mf - 1))) for k in range(mf)})
+    disp = st["INCLUDE_DISP"] == "1"
+    frames = []
+    for oi, src in enumerate(picks):
+        with open(os.path.join(out, f"frame_{oi:05d}.csv"), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write("value,dx,dy,dz\n" if disp else "value\n")
+            n = len(ids) - (1 if mode == "invalid" else 0)
+            for j in range(n):
+                v = "" if mode == "nan" else repr(float(j * src))
+                fh.write(f"{v},0.0,0.0,{0.01 * src}\n" if disp else f"{v}\n")
+        frames.append((oi, src, f"Time = {0.001 * src:g}"))
+    result("OK", nodes=len(ids), faces=2, total=total, frames=frames)
+    print(f"hw (fake) contour3d OK frames={len(frames)}", flush=True)
+    return 0

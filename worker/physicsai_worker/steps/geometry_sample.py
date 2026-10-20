@@ -61,13 +61,17 @@ def write_sample_inputs(R: str, values: dict[str, float], source: dict[str, Any]
 
 def generate_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_version: str | None, assemble: bool = True,
                     geometry: bool = True, shell: dict[str, float] | None = None, props_json: str | None = None,
-                    props_work: str | None = None, baseline_id: str | None = None) -> dict[str, Any]:
+                    props_work: str | None = None, baseline_id: str | None = None,
+                    thickness_doc: dict[str, Any] | None = None) -> dict[str, Any]:
     """R/m_1 입력이 준비된 상태에서 paicad를 실행하고 m_3 조립까지 한다. 반환 {"starter","elapsed"} (assemble=False면 starter 없음).
     geometry=False: 형상 값 없음(쉘 두께 전용) — paicad 형상 단계 생략, 기준 메시 그대로 조립. shell: 쉘 두께 값(m_3에 props apply,
     props_json = 세트 props.json, props_work = R 밖 작업 폴더)."""
     if not geometry:
         return _shell_only_sample(x, settings, inp, R, engine_version=engine_version, assemble=assemble, shell=shell,
                                   props_json=props_json, props_work=props_work, baseline_id=baseline_id)
+    if inp.kind == "shell":  # 쉘 판금 비드(shell-morph.md §8.2·§8.3)
+        return _shell_bead_sample(x, settings, inp, R, engine_version=engine_version, assemble=assemble, shell=shell,
+                                  props_json=props_json, props_work=props_work, baseline_id=baseline_id, thickness_doc=thickness_doc)
     m1, m2, m3 = (os.path.join(R, d) for d in (M1, M2, M3))
     upd, mor, chk = os.path.join(m1, "update"), os.path.join(m2, "morph"), os.path.join(m2, "check")
     inc = settings.predict.mesh_include_name
@@ -142,6 +146,40 @@ def _shell_only_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, engi
         x.warn(*w)
     _apply_shell(x, settings, R, m3, shell, props_json, props_work, engine_version, baseline_id)
     return {"starter": starter}
+
+
+def _shell_bead_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_version: str | None, assemble: bool,
+                       shell: dict[str, float] | None, props_json: str | None, props_work: str | None, baseline_id: str | None,
+                       thickness_doc: dict[str, Any] | None) -> dict[str, Any]:
+    """쉘 비드 샘플(SM §8.2): shell update→morph→check(또는 shell run) → m_3 = 조립 사본 + PASS 사본 덮어쓰기 → 3S props apply.
+    쉘 형상 check FAIL이면 props apply를 하지 않는다(실패 우선 = 쉘 코드, §8.4)."""
+    from .geometry_shell import STEP_REPORT_REL as SHELL_REPORT_REL
+    from .geometry_shell import assemble_copy, overlay, run_sample
+
+    from .geometry_shell import thickness_for
+
+    if os.path.lexists(os.path.join(R, SKIPPED_JSON)):
+        raise StepFailure("INTERNAL_ERROR", "이전 시도의 SKIPPED.json이 남아 있습니다")
+    if thickness_doc is None:
+        thickness_doc = thickness_for(settings, inp, props_json, shell)
+    v, step, rels = run_sample(x, settings, inp, R, thickness_doc=thickness_doc)
+    if v is not None:
+        st = step or "update"
+        doc = skipped_document(v.code or "GEOM_INTERNAL", v.english, st, SHELL_REPORT_REL.get(st), engine_version, v.category)
+        if baseline_id is not None:
+            doc["baseline_id"] = baseline_id
+        write_json(os.path.join(R, SKIPPED_JSON), doc)
+        raise StepFailure(v.code or "GEOM_INTERNAL", v.message or "쉘 형상 생성 실패")
+    if not assemble:
+        return {"starter": None}
+    m3 = os.path.join(R, M3)
+    if os.path.isdir(m3) and os.listdir(m3):
+        backup_path(x, m3)
+    os.makedirs(m3, exist_ok=True)
+    starter = assemble_copy(settings, inp.assem_dir, m3, checkpoint=x.check)
+    overlay(os.path.join(R, M2, "shell_files"), rels, m3, checkpoint=x.check)
+    _apply_shell(x, settings, R, m3, shell, props_json, props_work, engine_version, baseline_id)
+    return {"starter": starter, "shell_files": rels}
 
 
 def backup_path(x: Any, path: str) -> None:

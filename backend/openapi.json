@@ -1567,6 +1567,372 @@
         "title": "CleanupSummary",
         "type": "object"
       },
+      "Contour3d": {
+        "properties": {
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          },
+          "cache_hit": {
+            "default": false,
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "created_at": {
+            "title": "Created At"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display"
+          },
+          "finished_at": {
+            "title": "Finished At"
+          },
+          "frames": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frames"
+          },
+          "frames_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frames Artifact Id"
+          },
+          "glb_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glb Artifact Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "manifest_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Artifact Id"
+          },
+          "message_ko": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Ko"
+          },
+          "nodes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodes"
+          },
+          "progress": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contour3dProgress"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "result_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "OK",
+                  "FAIL"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Status"
+          },
+          "source_kind": {
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_ref": {
+            "additionalProperties": true,
+            "title": "Source Ref",
+            "type": "object"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "DONE",
+              "FAILED",
+              "CANCELED",
+              "EXPIRED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timing": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timing"
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "source_kind",
+          "source_ref"
+        ],
+        "title": "Contour3d",
+        "type": "object"
+      },
+      "Contour3dCreate": {
+        "additionalProperties": false,
+        "description": "`POST /contour3d` — 열 때 생성(해석·예측 완료 시 자동 생성 안 함).\nsource_ref: PREDICT_H3D = {job_id}(성공한 PREDICT), SOLVER_H3D = {fem_verification_id} 또는 {study_id, h3d_rel}(Study 기준 .h3d\n상대 경로 — ① run 결과 등).",
+        "properties": {
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contour3dDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_kind": {
+            "enum": [
+              "SOLVER_H3D",
+              "PREDICT_H3D"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_ref": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Source Ref",
+            "type": "object"
+          }
+        },
+        "required": [
+          "source_kind",
+          "source_ref"
+        ],
+        "title": "Contour3dCreate",
+        "type": "object"
+      },
+      "Contour3dDisplay": {
+        "additionalProperties": false,
+        "description": "표시 값(생략 = 기존 컨투어 표시 설정 결정 순서 결과). 범례는 뷰어가 manifest min·max로 정한다.",
+        "properties": {
+          "avgmode": {
+            "anyOf": [
+              {
+                "maxLength": 40,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avgmode"
+          },
+          "component": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Component"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          }
+        },
+        "title": "Contour3dDisplay",
+        "type": "object"
+      },
+      "Contour3dProgress": {
+        "description": "대기 안내 화면용 진행 단계(§13.6): phase = waiting(대기) | reading_h3d(H3D 읽기) | geometry(형상) | frames(프레임 변환) |\ndone(완료) | failed(실패) | canceled(취소). estimate_s = 같은 원본 종류 최근 소요 평균(없으면 null → 화면 \"수 분\").",
+        "properties": {
+          "can_cancel": {
+            "default": false,
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "elapsed_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Elapsed S"
+          },
+          "estimate_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate S"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Percent"
+          },
+          "phase": {
+            "enum": [
+              "waiting",
+              "reading_h3d",
+              "geometry",
+              "frames",
+              "done",
+              "failed",
+              "canceled",
+              "expired"
+            ],
+            "title": "Phase",
+            "type": "string"
+          },
+          "phase_label": {
+            "title": "Phase Label",
+            "type": "string"
+          },
+          "step_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step Key"
+          }
+        },
+        "required": [
+          "phase",
+          "phase_label"
+        ],
+        "title": "Contour3dProgress",
+        "type": "object"
+      },
       "Curation": {
         "properties": {
           "created_at": {
@@ -4987,6 +5353,385 @@
         "title": "FvSourceValues",
         "type": "object"
       },
+      "GeomPreview": {
+        "description": "미리보기 1건(§6.5). 200 = 캐시 적중(cache_hit), 202 = QUEUED·RUNNING(job_id) — 화면은 `GET /previews/{id}`를 0.5초 간격으로.",
+        "properties": {
+          "cache_hit": {
+            "default": false,
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "created_at": {
+            "title": "Created At"
+          },
+          "fe": {
+            "default": "off",
+            "title": "Fe",
+            "type": "string"
+          },
+          "fe_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fe Code"
+          },
+          "fe_glb_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fe Glb Artifact Id"
+          },
+          "fe_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fe Status"
+          },
+          "finished_at": {
+            "title": "Finished At"
+          },
+          "glb_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glb Artifact Id"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "manifest_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Artifact Id"
+          },
+          "message_ko": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Ko"
+          },
+          "param_set_id": {
+            "title": "Param Set Id",
+            "type": "string"
+          },
+          "result_status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "OK",
+                  "FAIL"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Status"
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "DONE",
+              "FAILED",
+              "CANCELED",
+              "EXPIRED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "timing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/GeomPreviewTiming"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "id",
+          "param_set_id",
+          "status",
+          "values"
+        ],
+        "title": "GeomPreview",
+        "type": "object"
+      },
+      "GeomPreviewCreate": {
+        "additionalProperties": false,
+        "description": "`POST /param-sets/{id}/previews`: 대표 파라미터 이름 → 값(빠진 이름은 공칭). fe 생략 = off(화면은 off·check만).",
+        "properties": {
+          "fe": {
+            "default": "off",
+            "enum": [
+              "off",
+              "check"
+            ],
+            "title": "Fe",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "title": "GeomPreviewCreate",
+        "type": "object"
+      },
+      "GeomPreviewTiming": {
+        "properties": {
+          "check_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check S"
+          },
+          "morph_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Morph S"
+          },
+          "tess_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tess S"
+          },
+          "total_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total S"
+          },
+          "update_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Update S"
+          }
+        },
+        "title": "GeomPreviewTiming",
+        "type": "object"
+      },
+      "GeomView": {
+        "description": "공칭 3D 뷰(④ 세트 `GET /param-sets/{id}/view`, ① `GET /studies/{id}/train/view`). GLB·manifest는 artifacts로 받는다\n(`/artifacts/{glb_artifact_id}/media` model/gltf-binary, `/artifacts/{manifest_artifact_id}/content` JSON).",
+        "properties": {
+          "available": {
+            "default": false,
+            "title": "Available",
+            "type": "boolean"
+          },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
+          "glb_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glb Artifact Id"
+          },
+          "kind": {
+            "default": "solid",
+            "enum": [
+              "solid",
+              "shell"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "manifest_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Artifact Id"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Set Id"
+          },
+          "preview_available": {
+            "default": false,
+            "title": "Preview Available",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "status": {
+            "enum": [
+              "READY",
+              "MISSING",
+              "FAILED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tess": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ViewTess"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "train_setup_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Setup Id"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "GeomView",
+        "type": "object"
+      },
       "GpuInfo": {
         "properties": {
           "mem_total_mb": {
@@ -6767,6 +7512,15 @@
             "title": "Feature Count",
             "type": "integer"
           },
+          "kind": {
+            "default": "solid",
+            "enum": [
+              "solid",
+              "shell"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
           "prep_reason": {
             "anyOf": [
               {
@@ -6796,6 +7550,16 @@
             "default": false,
             "title": "Shell Only",
             "type": "boolean"
+          },
+          "view_status": {
+            "default": "MISSING",
+            "enum": [
+              "READY",
+              "MISSING",
+              "FAILED"
+            ],
+            "title": "View Status",
+            "type": "string"
           }
         },
         "required": [
@@ -7986,6 +8750,21 @@
             ],
             "title": "Geom Options"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "solid",
+                  "shell"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "label": {
             "anyOf": [
               {
@@ -8092,6 +8871,21 @@
             ],
             "title": "Engine"
           },
+          "kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "solid",
+                  "shell"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
           "path": {
             "maxLength": 400,
             "title": "Path",
@@ -8132,6 +8926,15 @@
               "native"
             ],
             "title": "Engine",
+            "type": "string"
+          },
+          "kind": {
+            "default": "solid",
+            "enum": [
+              "solid",
+              "shell"
+            ],
+            "title": "Kind",
             "type": "string"
           },
           "notes": {
@@ -8364,7 +9167,10 @@
           "source": {
             "anyOf": [
               {
-                "const": "prop",
+                "enum": [
+                  "prop",
+                  "shell"
+                ],
                 "type": "string"
               },
               {
@@ -12863,6 +13669,16 @@
       },
       "StatusFeatures": {
         "properties": {
+          "contour3d": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "contour_capture": {
             "anyOf": [
               {
@@ -12920,6 +13736,36 @@
             ]
           },
           "geometry_native": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry_native_shell": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry_view": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "geometry_view_shell": {
             "anyOf": [
               {
                 "$ref": "#/components/schemas/FeatureState"
@@ -15436,6 +16282,34 @@
         ],
         "title": "VersionBody",
         "type": "object"
+      },
+      "ViewTess": {
+        "properties": {
+          "angular_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Angular Deg"
+          },
+          "linear_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Linear Mm"
+          }
+        },
+        "title": "ViewTess",
+        "type": "object"
       }
     }
   },
@@ -15780,6 +16654,16 @@
             },
             "description": "Not Found"
           },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -15799,7 +16683,7 @@
     },
     "/physicsai/api/artifacts/{artifact_id}/media": {
       "get": {
-        "description": "컨투어 이미지·동영상 파일. HTTP Range(단일 범위) → 206 + Content-Range(브라우저 <video> 탐색), 범위 밖 416.",
+        "description": "컨투어 이미지·동영상·형상/컨투어 3D GLB·프레임 파일. HTTP Range(단일 범위) → 206 + Content-Range, 범위 밖 416.\n정리된 서버측 캐시(미리보기·3D 컨투어)는 410 ARTIFACT_EXPIRED.",
         "operationId": "media_content_physicsai_api_artifacts__artifact_id__media_get",
         "parameters": [
           {
@@ -15825,8 +16709,10 @@
         "responses": {
           "200": {
             "content": {
+              "application/octet-stream": {},
               "image/gif": {},
               "image/png": {},
+              "model/gltf-binary": {},
               "video/mp4": {},
               "video/x-msvideo": {}
             },
@@ -15834,8 +16720,10 @@
           },
           "206": {
             "content": {
+              "application/octet-stream": {},
               "image/gif": {},
               "image/png": {},
+              "model/gltf-binary": {},
               "video/mp4": {},
               "video/x-msvideo": {}
             },
@@ -15871,6 +16759,16 @@
             },
             "description": "Conflict"
           },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Gone"
+          },
           "413": {
             "content": {
               "application/json": {
@@ -15898,6 +16796,264 @@
         "summary": "Media Content",
         "tags": [
           "contour-capture"
+        ]
+      }
+    },
+    "/physicsai/api/contour3d": {
+      "post": {
+        "description": "결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(LIGHT). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.",
+        "operationId": "create_contour3d_physicsai_api_contour3d_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Contour3dCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contour3d"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contour3d"
+                }
+              }
+            },
+            "description": "생성 중 — progress(대기 안내)·GET /contour3d/{id} 폴링"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Contour3D",
+        "tags": [
+          "geom-view"
+        ]
+      }
+    },
+    "/physicsai/api/contour3d/{contour_id}": {
+      "get": {
+        "description": "3D 컨투어 상태·진행 단계(대기·H3D 읽기·형상·프레임 변환·완료·실패)·예상 시간·결과 산출물 id.",
+        "operationId": "get_contour3d_physicsai_api_contour3d__contour_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contour_id",
+            "required": true,
+            "schema": {
+              "title": "Contour Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contour3d"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Contour3D",
+        "tags": [
+          "geom-view"
+        ]
+      }
+    },
+    "/physicsai/api/contour3d/{contour_id}/cancel": {
+      "post": {
+        "description": "대기 안내 화면 [취소](power): 작업 취소 → CANCELED(캐시 안 함). 끝난 생성은 409 JOB_TERMINAL.",
+        "operationId": "cancel_contour3d_physicsai_api_contour3d__contour_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "contour_id",
+            "required": true,
+            "schema": {
+              "title": "Contour Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Contour3d"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Cancel Contour3D",
+        "tags": [
+          "geom-view"
         ]
       }
     },
@@ -16807,6 +17963,18 @@
                 }
               ],
               "title": "Cursor"
+            }
+          },
+          {
+            "description": "형상 미리보기(GEOM_PREVIEW) 포함",
+            "in": "query",
+            "name": "include_preview",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "형상 미리보기(GEOM_PREVIEW) 포함",
+              "title": "Include Preview",
+              "type": "boolean"
             }
           }
         ],
@@ -18956,6 +20124,109 @@
         ]
       }
     },
+    "/physicsai/api/param-sets/{ps_id}/previews": {
+      "post": {
+        "description": "형상 미리보기(power): 캐시 적중 200(cache_hit) | 202 GEOM_PREVIEW(레인 PREVIEW, DOE 중에도 실행). 429 PREVIEW_BUSY.",
+        "operationId": "create_preview_physicsai_api_param_sets__ps_id__previews_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GeomPreviewCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeomPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeomPreview"
+                }
+              }
+            },
+            "description": "QUEUED·RUNNING — GET /previews/{id}로 폴링"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Preview",
+        "tags": [
+          "geom-view"
+        ]
+      }
+    },
     "/physicsai/api/param-sets/{ps_id}/props": {
       "get": {
         "description": "PROP 스캔 결과 + 현재 선택(스캔 전이면 scanned=false).",
@@ -19412,6 +20683,89 @@
         "summary": "Samples",
         "tags": [
           "param-sets"
+        ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/view": {
+      "get": {
+        "description": "공칭 3D 뷰(NP_VIEW 결과): status READY면 GLB(`/artifacts/{glb_artifact_id}/media`)·manifest(`/content`). altair 세트 409 VIEW_NATIVE_ONLY.",
+        "operationId": "param_set_view_physicsai_api_param_sets__ps_id__view_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeomView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Param Set View",
+        "tags": [
+          "geom-view"
         ]
       }
     },
@@ -20021,6 +21375,89 @@
         "summary": "Get Predict Run",
         "tags": [
           "jobs"
+        ]
+      }
+    },
+    "/physicsai/api/previews/{preview_id}": {
+      "get": {
+        "description": "미리보기 상태·결과(화면은 실행 중 0.5초 간격 폴링, 종료 상태에서 멈춤).",
+        "operationId": "get_preview_physicsai_api_previews__preview_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "preview_id",
+            "required": true,
+            "schema": {
+              "title": "Preview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeomPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Preview",
+        "tags": [
+          "geom-view"
         ]
       }
     },
@@ -23045,6 +24482,89 @@
         "summary": "Generate Tpl",
         "tags": [
           "train"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/train/view": {
+      "get": {
+        "description": "①-1·①-2 공칭 3D 뷰(TX_VIEW 결과, 미리보기 없음 — preview_available=false). 학습 설정 없음 404.",
+        "operationId": "train_view_physicsai_api_studies__study_id__train_view_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GeomView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Train View",
+        "tags": [
+          "geom-view"
         ]
       }
     },

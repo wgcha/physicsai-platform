@@ -27,9 +27,10 @@ def create_job(study_id: str, body: S.JobCreate, request: Request, principal: Pr
 @router.get("/jobs", response_model=list[S.JobSummary])
 def list_jobs(request: Request, response: Response, study_id: str | None = None, state: str | None = None,
               mine: bool = False, job_type: str | None = None, limit: int | None = Query(default=None, ge=1, le=200),
-              cursor: str | None = None, principal: Principal = Depends(get_principal)) -> list:
+              cursor: str | None = None, include_preview: bool = Query(default=False, description="형상 미리보기(GEOM_PREVIEW) 포함"),
+              principal: Principal = Depends(get_principal)) -> list:
     items, nxt = svc.list_jobs(get_ctx(request), principal, study_id=study_id, state=state, mine=mine,
-                               job_type=job_type, limit=limit, cursor=cursor)
+                               job_type=job_type, limit=limit, cursor=cursor, include_preview=include_preview)
     if nxt:
         response.headers["X-Next-Cursor"] = nxt
     return items

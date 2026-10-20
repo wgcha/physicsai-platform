@@ -13,6 +13,7 @@ from typing import Any
 
 from ..paths import file_name_problem_message, is_link_or_reparse, name_unsafe_chars
 from .param_set_files import ParamSetFolder, _load_parameters, _p
+from ..geometry.shell_native import features_kind_problems
 from .prepared_input import is_mesh_file
 
 PARTS_NAME = "parts"
@@ -20,6 +21,9 @@ FEATURES_REL = "native/extract/parameter_features.json"
 TAG_REL = "native/tag/tag.json"
 PREP_REL = "native/prep.json"
 PROPS_REL = "native/props/props.json"
+SHELL_FEATURES_REL = "native/extract/shell_features.json"
+SHELL_SCAN_REL = "native/fixed/shell_scan.json"
+SHELL_TAG_REL = "native/tag/shell_tag.json"
 
 
 def representative_names(features_doc: dict[str, Any]) -> list[str]:
@@ -60,8 +64,11 @@ def extra_known_names(folder: str) -> set[str]:
 
 
 def validate_native_folder(folder: str, *, max_total_bytes: int, starter_glob: str, renum_csv_name: str, baseline_inc_name: str,
-                           step_extensions: list[str], shell_only: bool = False) -> ParamSetFolder:
-    """shell_only: 쉘 두께 전용 세트(§11.1) — cad·extract·tag 대신 native/props/props.json 필수."""
+                           step_extensions: list[str], shell_only: bool = False, kind: str = "solid") -> ParamSetFolder:
+    """shell_only: 쉘 두께 전용 세트(§11.1) — cad·extract·tag 대신 native/props/props.json 필수.
+    kind=shell: 쉘 판금 비드 세트(shell-morph.md §8.2) — RENUM csv·기준 메시 검사 없음, native/{extract/shell_features.json,
+    fixed/shell_scan.json, tag/shell_tag.json} 필수, 솔리드·쉘 피처 혼합 금지."""
+    shell_kind = kind == "shell"
     f = ParamSetFolder()
     total = 0
     for dirpath, dirnames, filenames in os.walk(folder, followlinks=False):
@@ -116,9 +123,9 @@ def validate_native_folder(folder: str, *, max_total_bytes: int, starter_glob: s
             if why:
                 _p(f, "PATH_UNSAFE", file_name_problem_message(why), "radioss_assem/" + x)
         f.renum_csv = next((x for x in names if x.lower() == renum_csv_name.lower() and os.path.isfile(os.path.join(assem, x))), None)
-        if f.renum_csv is None and not shell_only:
+        if f.renum_csv is None and not shell_only and not shell_kind:
             _p(f, "RENUM_CSV_MISSING", f"radioss_assem에 번호 재지정 표({renum_csv_name})가 필요합니다", "radioss_assem")
-        if not any(x.lower() == baseline_inc_name.lower() for x in files):
+        if not shell_kind and not any(x.lower() == baseline_inc_name.lower() for x in files):
             _p(f, "BASELINE_INC_MISSING", f"radioss_assem에 기준 메시({baseline_inc_name})가 필요합니다", "radioss_assem")
         starters = [x for x in files if fnmatch.fnmatch(x, starter_glob)]
         if len(starters) != 1:
@@ -126,19 +133,23 @@ def validate_native_folder(folder: str, *, max_total_bytes: int, starter_glob: s
         else:
             f.starter_name = starters[0]
     f.input_kind = "assembly"
-    need = (PREP_REL, PROPS_REL) if shell_only else (PREP_REL, FEATURES_REL, TAG_REL)
+    need = (PREP_REL, PROPS_REL) if shell_only else (PREP_REL, SHELL_FEATURES_REL, SHELL_SCAN_REL, SHELL_TAG_REL) if shell_kind \
+        else (PREP_REL, FEATURES_REL, TAG_REL)
     missing = [rel for rel in need if not os.path.isfile(os.path.join(folder, *rel.split("/")))]
+    for q in features_kind_problems(folder):
+        _p(f, q["code"], q["message"], "native/extract")
+    feats_rel = SHELL_FEATURES_REL if shell_kind else FEATURES_REL
     for rel in missing:
         _p(f, "NATIVE_PREP_MISSING", f"형상 준비 파일({rel})이 없습니다 — 형상 준비를 다시 하세요", rel)
     if shell_only and PROPS_REL not in missing and f.parameters:
         if not {p["name"] for p in f.parameters} <= extra_known_names(folder):
             _p(f, "PARAM_FEATURE_MISMATCH", "파라미터 이름이 쉘 두께 PROP 목록에 없습니다", "parameters.json")
-    elif FEATURES_REL not in missing and f.parameters:
+    elif feats_rel not in missing and f.parameters:
         try:
-            with open(os.path.join(folder, *FEATURES_REL.split("/")), encoding="utf-8") as fh:
+            with open(os.path.join(folder, *feats_rel.split("/")), encoding="utf-8") as fh:
                 doc = json.load(fh)
         except (OSError, ValueError):
-            _p(f, "NATIVE_PREP_MISSING", f"{FEATURES_REL}을 읽을 수 없습니다", FEATURES_REL)
+            _p(f, "NATIVE_PREP_MISSING", f"{feats_rel}을 읽을 수 없습니다", feats_rel)
         else:
             known = set(representative_names(doc if isinstance(doc, dict) else {})) | extra_known_names(folder)
             if not {p["name"] for p in f.parameters} <= known:  # 등록 세트는 전부, ①→④ 세트는 DOE에서 쓴 부분집합

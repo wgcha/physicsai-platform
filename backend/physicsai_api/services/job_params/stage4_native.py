@@ -39,6 +39,7 @@ class NativeSetParams(_P):
     geom_options: dict[str, Any] | None = None
     param_set_id: str | None = None
     shell_only: bool = False  # 3S: 형상 파라미터 없는 쉘 두께 전용 세트(tag·update·morph·check 생략, §11.1)
+    kind: Literal["solid", "shell"] | None = None  # shell-morph.md §8.2: new 세트 형상 종류(생략 = solid)
     baseline: NativeBaselineParams | None = None  # 4B add_baseline
     usage: Literal["topology", "range"] | None = None  # 4B: 생략 = 기존 매칭표 usage(없으면 topology)
     split_param: str | None = Field(default=None, max_length=64)  # 4B range 분할 변수(공통 이름 제안)
@@ -81,10 +82,19 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise invalid_at("path", "path가 필요합니다")
         if p.shell_only:
             _require_command(ctx, "paicad_props_scan", "쉘 두께 PROP 스캔")
-        over = validate_geom_options(ctx.settings, p.geom_options)
+        kind = p.kind or "solid"
+        if kind == "shell" and p.shell_only:
+            raise invalid_at("kind", "쉘 두께 전용(shell_only)과 쉘 판금 형상(kind=shell)은 함께 쓸 수 없습니다")
+        if kind == "shell":
+            from ..geometry_gate import require_shell_available
+
+            require_shell_available(ctx.settings)
+        over = validate_geom_options(ctx.settings, p.geom_options, kind)
         out = {"engine": "native", "mode": "new", "path": p.path, "choice": p.choice or {}, "label": p.label, "geom_options": over or None}
         if p.shell_only:
             out["shell_only"] = True
+        if kind == "shell":
+            out["kind"] = "shell"
         return out, None, []
     ps = _native_set(conn, study, p.param_set_id)
     S = set_dir(ctx, conn, ps)

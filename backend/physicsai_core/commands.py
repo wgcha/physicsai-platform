@@ -30,8 +30,11 @@ EXECUTABLE_PLACEHOLDERS: dict[str, str] = {
 }
 # 실행 파일 설정 키의 사용자 표시 이름(오류 문구용). 목록에 없으면 altair.<키>
 EXECUTABLE_CONFIG_NAME: dict[str, str] = {"paicad_path": "geometry.paicad_path"}
+PAICAD_SHELL_KEYS = ("paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
+                     "paicad_shell_check", "paicad_shell_run")
+PAICAD_VIEW_KEYS = ("paicad_view_export", "paicad_view_preview", "paicad_shell_view_export", "paicad_shell_view_preview")
 PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version",
-               "paicad_props_scan", "paicad_props_apply", "paicad_map")
+               "paicad_props_scan", "paicad_props_apply", "paicad_map") + PAICAD_SHELL_KEYS + PAICAD_VIEW_KEYS
 
 
 def executable_config_name(exe_key: str) -> str:
@@ -89,6 +92,8 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
     "t01_preview": TemplateSpec(frozenset({"hw", "preview_tcl", "t01", "result_json"}), frozenset(), False),
     "t01_curve_export": TemplateSpec(frozenset({"hw", "curate_tcl", "config_json"}), frozenset(), False),
     "hst_optimization": TemplateSpec(frozenset({"hstpy", "launcher"}), frozenset({"@cmd_c"}), False),
+    # geometry-view.md §13.3: 결과 3D 컨투어 추출. {contour_extract_tcl} = 캐시 작업 폴더에 복사한 contour_extract.tcl
+    "contour_extract": TemplateSpec(frozenset({"hw", "contour_extract_tcl"}), frozenset(), False),
 }
 
 # ---- native 형상 엔진(geometry-engine.md §7.1). 모두 required=False, 토큰 없음, 경로 표기 os ----
@@ -97,6 +102,10 @@ _UPD = {"cad_input", "features_json", "values_json", "tag_dir", "options_json", 
 _MORPH = {"baseline_inc", "tag_dir", "features_json", "update_dir", "options_json", "morph_dir"}
 _CHECK = {"baseline_inc", "morph_dir", "update_dir", "tag_dir", "features_json", "values_json", "assem_dir", "renum_csv",
           "options_json", "check_dir", "out_inc"}
+_SHELL_UPD = {"cad_input", "features_json", "values_json", "fixed_dir", "options_json", "update_dir"}
+_SHELL_MORPH = {"assem_dir", "tag_dir", "fixed_dir", "features_json", "update_dir", "options_json", "morph_dir"}
+_SHELL_CHECK = {"assem_dir", "morph_dir", "update_dir", "tag_dir", "fixed_dir", "features_json", "values_json", "check_dir",
+                "out_files_dir", "thickness_json", "options_json"}
 _NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "paicad_extract": _P({"paicad", "cad_input", "renum_csv", "options_json", "out_dir"}),
     "paicad_tag": _P({"paicad", "cad_input", "features_json", "baseline_inc", "renum_csv", "assem_dir", "options_json", "out_dir"}),
@@ -109,8 +118,25 @@ _NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "paicad_props_scan": _P({"paicad", "assem_dir", "options_json", "out_dir"}),
     "paicad_props_apply": _P({"paicad", "assem_dir", "values_json", "props_json", "out_dir"}),
     "paicad_map": _P({"paicad", "baselines_json", "map_out_dir", "user_map", "usage", "split_param", "options_json"}),
+    # 쉘 판금 모핑(shell-morph.md §8.1): `paicad shell <verb>`. {fixed_dir}·{out_files_dir}·{thickness_json}(선택 쌍) 추가
+    "paicad_shell_fixed_scan": _P({"paicad", "assem_dir", "features_json", "options_json", "out_dir"}),
+    "paicad_shell_extract": _P({"paicad", "cad_input", "assem_dir", "options_json", "out_dir"}),
+    "paicad_shell_tag": _P({"paicad", "cad_input", "features_json", "assem_dir", "fixed_dir", "options_json", "out_dir"}),
+    "paicad_shell_update": _P({"paicad"} | _SHELL_UPD),
+    "paicad_shell_morph": _P({"paicad"} | _SHELL_MORPH),
+    "paicad_shell_check": _P({"paicad"} | _SHELL_CHECK),
+    "paicad_shell_run": _P({"paicad"} | _SHELL_UPD | _SHELL_MORPH | _SHELL_CHECK),
+    # 3D 가시화(geometry-view.md §6.1). {fe_mode}·{threads}는 경로가 아닌 값
+    "paicad_view_export": _P({"paicad", "cad_input", "features_json", "view_options_json", "out_dir"}),
+    "paicad_view_preview": _P({"paicad", "cad_input", "features_json", "values_json", "tag_dir", "options_json", "view_options_json",
+                               "nominal_manifest", "fe_mode", "baseline_inc", "renum_csv", "assem_dir", "threads", "out_dir"}),
+    "paicad_shell_view_export": _P({"paicad", "cad_input", "features_json", "fixed_dir", "view_options_json", "out_dir"}),
+    "paicad_shell_view_preview": _P({"paicad", "cad_input", "features_json", "values_json", "fixed_dir", "tag_dir", "assem_dir",
+                                     "options_json", "view_options_json", "nominal_manifest", "fe_mode", "threads", "thickness_json",
+                                     "out_dir"}),
 }
-_NON_PATH = {("paicad_map", "usage"), ("paicad_map", "split_param")}
+_NON_PATH = {("paicad_map", "usage"), ("paicad_map", "split_param"), ("paicad_view_preview", "fe_mode"), ("paicad_view_preview", "threads"),
+             ("paicad_shell_view_preview", "fe_mode"), ("paicad_shell_view_preview", "threads")}
 for _k, _ph in _NATIVE_PLACEHOLDERS.items():
     TEMPLATE_SPECS[_k] = TemplateSpec(_ph, frozenset(), False)
 
@@ -139,7 +165,8 @@ PATH_STYLE: dict[tuple[str, str], str] = {
     ("t01_curve_export", "config_json"): "fwd",
     ("hst_optimization", "launcher"): "os",
     ("response_extract", "extract_tcl"): "fwd",
-    ("contour_capture", "capture_tcl"): "fwd",  # phase3 §15: HyperView -tcl 인자('/' 표기)  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
+    ("contour_capture", "capture_tcl"): "fwd",
+    ("contour_extract", "contour_extract_tcl"): "fwd",  # geometry-view.md §6.1: {capture_tcl}과 같은 '/' 표기  # phase3 §15: HyperView -tcl 인자('/' 표기)  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
 }
 
 for _k, _ph in _NATIVE_PLACEHOLDERS.items():
@@ -150,7 +177,16 @@ for _k, _ph in _NATIVE_PLACEHOLDERS.items():
 # {renum_csv}가 없을 때 인자 쌍째 생략하는 (키, placeholder) → 옵션 이름(§7.3.1, 이 키·이 쌍 한정)
 OPTIONAL_PAIRS: dict[tuple[str, str], str] = {("paicad_extract", "renum_csv"): "--renum-csv",
                                               # 4B map: 기존 param_map.json이 없으면 --user-map, range가 아니면 --split-param 생략(§7.3.8)
-                                              ("paicad_map", "user_map"): "--user-map", ("paicad_map", "split_param"): "--split-param"}
+                                              ("paicad_map", "user_map"): "--user-map", ("paicad_map", "split_param"): "--split-param",
+                                              # 쉘(SM §8.1): ①-1 extract는 조립 폴더 없음, 3S 두께가 없으면 --thickness 생략
+                                              ("paicad_shell_extract", "assem_dir"): "--assem-dir",
+                                              ("paicad_shell_check", "thickness_json"): "--thickness",
+                                              ("paicad_shell_run", "thickness_json"): "--thickness",
+                                              # 가시화(GV §6.1): 공칭 뷰가 없으면 --nominal-manifest, ①-1 쉘 뷰는 --fixed-dir 생략
+                                              ("paicad_view_preview", "nominal_manifest"): "--nominal-manifest",
+                                              ("paicad_shell_view_preview", "nominal_manifest"): "--nominal-manifest",
+                                              ("paicad_shell_view_preview", "thickness_json"): "--thickness",
+                                              ("paicad_shell_view_export", "fixed_dir"): "--fixed-dir"}
 
 # phase3 §14.6: commands.response_extract가 이 placeholder를 쓰면 원본 ⑤ m_4 방식(H3D_REQUESTS.txt → RESPONSES.txt)
 RESPONSE_EXTRACT_TCL_PLACEHOLDER = "extract_tcl"

@@ -69,5 +69,8 @@ def test_all_routes_prefixed():
         "/param-sets/{ps_id}/props/scan", "/param-sets/{ps_id}/props", "/param-sets/{ps_id}/baselines",
         "/param-sets/{ps_id}/baselines/disable", "/param-sets/{ps_id}/baselines/{baseline_id}", "/param-sets/{ps_id}/remap",
         "/param-sets/{ps_id}/param-map", "/param-sets/{ps_id}/param-map/confirm", "/studies/{study_id}/train/features",
+        # geometry-view.md §6.5·§6.9·§13.5: 형상 3D 보기·미리보기·결과 3D 컨투어
+        "/param-sets/{ps_id}/view", "/param-sets/{ps_id}/previews", "/previews/{preview_id}", "/studies/{study_id}/train/view",
+        "/contour3d", "/contour3d/{contour_id}", "/contour3d/{contour_id}/cancel",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

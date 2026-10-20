@@ -580,6 +580,13 @@ def stratified_lhs(pm: Mapping[str, Any], rows: Sequence[Mapping[str, Any]], n: 
 FEATURES_REL = "native/extract/parameter_features.json"
 
 
+def features_path(root: str) -> str:
+    """준비본 features 파일(솔리드 parameter_features.json | 쉘 shell_features.json — prep.json kind, shell-morph.md §7.2)."""
+    from .shell_native import features_name, read_kind
+
+    return os.path.join(root, "native", "extract", features_name(read_kind(root)))
+
+
 def _read_json(path: str, max_bytes: int) -> dict[str, Any] | None:
     try:
         if os.path.getsize(path) > max_bytes:
@@ -610,7 +617,7 @@ def read_baselines(S: str, pm: Mapping[str, Any], max_bytes: int) -> tuple[dict[
     rows: dict[str, dict[str, dict[str, Any]]] = {}
     for b in baseline_ids(pm):
         root = baseline_root(S, pm, b)
-        feats[b] = _rep_features(_read_json(os.path.join(root, *FEATURES_REL.split("/")), max_bytes))
+        feats[b] = _rep_features(_read_json(features_path(root), max_bytes))
         pj = os.path.join(S, *SINGLE_PARAMS.split("/")) if root == S and os.path.isfile(os.path.join(S, *SINGLE_PARAMS.split("/"))) \
             else os.path.join(root, "parameters.json")
         doc = _read_json(pj, max_bytes) or {}
@@ -621,7 +628,7 @@ def read_baselines(S: str, pm: Mapping[str, Any], max_bytes: int) -> tuple[dict[
 
 
 def rep_features_at(root: str, max_bytes: int) -> dict[str, dict[str, Any]]:
-    return _rep_features(_read_json(os.path.join(root, *FEATURES_REL.split("/")), max_bytes))
+    return _rep_features(_read_json(features_path(root), max_bytes))
 
 
 def known_names(feats: Mapping[str, Mapping[str, Any]]) -> dict[str, set[str]]:

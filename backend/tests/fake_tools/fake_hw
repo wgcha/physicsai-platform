@@ -18,6 +18,8 @@
 모드(FAKE_TOOL_MODE_HW > FAKE_TOOL_MODE): ok | fail | skip_one(곡선 첫 job 출력 없음) | no_output | error_log
 """
 import base64, json, os, sys
+if any(os.path.basename(x) == "contour_extract.tcl" for x in sys.argv[1:]):  # geometry-view.md §13 결과 3D 컨투어 추출
+    sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0]))); import fake_hw_capture; sys.exit(fake_hw_capture.main_extract(sys.argv))  # noqa: E401,E702
 if any(os.path.basename(x) == "contour_capture.tcl" for x in sys.argv[1:]):  # phase3 §15 S10 컨투어 캡처 → fake_hw_capture.py
     sys.path.insert(0, os.path.dirname(os.path.abspath(sys.argv[0]))); import fake_hw_capture; sys.exit(fake_hw_capture.main(sys.argv))  # noqa: E401,E702
 

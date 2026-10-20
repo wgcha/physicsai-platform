@@ -18,6 +18,7 @@
   props apply는 PROP 정의 파일 사본 끝에 `#FAKE_PROP <id> <값>` 줄을 덧붙여 --out-dir에 쓴다(실제는 두께 필드만 교체).
   props_apply 실패: FAKE_PAICAD_FAIL=props_apply:<code>, FAKE_PAICAD_FAIL_WHEN=props_apply:<code>:<이름><op><값>
   FAKE_TOOL_RECORD / FAKE_TOOL_TRACE  호출 기록(jsonl) / 시작·끝 시각 기록
+  shell <verb> · view export|preview · shell view export|preview → fake_paicad_shell_view.py(환경변수는 그 파일 머리말)
 """
 import atexit, contextlib, hashlib, json, os, shutil, sys, time
 
@@ -49,7 +50,20 @@ if cmd == "props":
     if not rest or rest[0] not in ("scan", "apply"):
         sys.exit(2)
     cmd, rest = f"props_{rest[0]}", rest[1:]
-if cmd not in ("extract", "tag", "update", "morph", "check", "run", "props_scan", "props_apply", "map"):
+elif cmd == "shell" and rest[:1] == ["view"]:
+    if len(rest) < 2 or rest[1] not in ("export", "preview"):
+        sys.exit(2)
+    cmd, rest = f"shell_view_{rest[1]}", rest[2:]
+elif cmd == "shell":
+    if not rest or rest[0] not in ("fixed-scan", "extract", "tag", "update", "morph", "check", "run"):
+        sys.exit(2)
+    cmd, rest = "shell_" + rest[0].replace("-", "_"), rest[1:]
+elif cmd == "view":
+    if not rest or rest[0] not in ("export", "preview"):
+        sys.exit(2)
+    cmd, rest = f"view_{rest[0]}", rest[1:]
+if cmd not in ("extract", "tag", "update", "morph", "check", "run", "props_scan", "props_apply", "map") and \
+        not cmd.startswith(("shell_", "view_")):
     sys.exit(2)
 args, flags, i = {}, set(), 0
 while i < len(rest):
@@ -64,14 +78,16 @@ while i < len(rest):
         i += 1
 
 EXIT = {"CAD_FAILED": 10, "INTERFERENCE": 11, "QUALITY": 11, "DEVIATION": 11, "TIE": 11, "PREP": 12, "INPUT": 3, "INTERNAL": 20,
-        "PROP": 11}
+        "PROP": 11, "FIXED": 11, "VIEW": 14}
 CATEGORY = {"GEOM_CAD_FAILED": "CAD_FAILED", "GEOM_TOPOLOGY_CHANGED": "CAD_FAILED", "GEOM_FEATURE_COLLISION": "CAD_FAILED",
             "GEOM_INTERFERENCE": "INTERFERENCE", "GEOM_QUALITY": "QUALITY", "GEOM_MORPH_FAILED": "QUALITY", "GEOM_DEVIATION": "DEVIATION",
             "GEOM_PARAM_MISMATCH": "DEVIATION", "GEOM_TIE_PROJECTION": "TIE", "GEOM_BODY_MAP_FAILED": "PREP",
             "GEOM_BASELINE_MISMATCH": "PREP", "GEOM_UNSUPPORTED_ELEMENT": "PREP", "GEOM_TAG_FAILED": "PREP",
             "GEOM_EXTRACT_EMPTY": "PREP", "GEOM_INPUT_INVALID": "INPUT", "GEOM_OUTPUT_EXISTS": "INPUT", "RENUM_CSV_MISSING": "INPUT",
             "GEOM_INTERNAL": "INTERNAL", "PROP_OVERRIDDEN_BY_ELEMENT": "PROP", "PROP_OVERRIDDEN_BY_PART": "PROP",
-            "PROP_THICKNESS_INVALID": "PROP", "PROP_NOT_FOUND": "INPUT", "PARAM_NAME_CONFLICT": "INPUT"}
+            "PROP_THICKNESS_INVALID": "PROP", "PROP_NOT_FOUND": "INPUT", "PARAM_NAME_CONFLICT": "INPUT",
+            "SHELL_FIXED_REGION_VIOLATION": "FIXED", "SHELL_FIXED_PARSE_FAILED": "PREP", "SHELL_UNSUPPORTED_ELEMENT": "PREP",
+            "SHELL_BODY_NOT_SHEET": "PREP", "SHELL_PART_NOT_FOUND": "INPUT", "VIEW_TESSELLATION_FAILED": "VIEW", "VIEW_TOO_LARGE": "VIEW"}
 ENGLISH = {"GEOM_TOPOLOGY_CHANGED": "topology changed: faces 42 -> 44", "GEOM_DEVIATION": "boundary deviation 0.083 mm > 0.05 mm",
            "GEOM_QUALITY": "min stretch 0.04 < 0.1"}
 BASE = {"schema_version": 1, "engine": "native", "engine_version": VERSION}
@@ -479,7 +495,12 @@ def do_map():
     finish("param_map.json", "OK", None, maybe_nonzero("map"))
 
 
-if cmd == "props_scan":
+if cmd.startswith(("shell_", "view_")):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import fake_paicad_shell_view  # noqa: E402 - 쉘(shell-morph.md §5)·뷰(geometry-view.md §5) 가짜 명령
+
+    fake_paicad_shell_view.main(cmd, args, flags, globals())
+elif cmd == "props_scan":
     do_props_scan()
 elif cmd == "props_apply":
     do_props_apply()

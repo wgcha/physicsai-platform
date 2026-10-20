@@ -13,7 +13,8 @@ from ..services import contour_capture as svc
 router = APIRouter(tags=["contour-capture"])
 ERR = {403: {"model": S.ErrorResponse}, 404: {"model": S.ErrorResponse}, 409: {"model": S.ErrorResponse},
        422: {"model": S.ErrorResponse}}
-MEDIA_CONTENT = {"image/png": {}, "video/mp4": {}, "video/x-msvideo": {}, "image/gif": {}}
+MEDIA_CONTENT = {"image/png": {}, "video/mp4": {}, "video/x-msvideo": {}, "image/gif": {}, "model/gltf-binary": {},
+                 "application/octet-stream": {}}
 
 
 @router.get("/jobs/{job_id}/media", response_model=S.JobMedia, responses=ERR)
@@ -25,12 +26,14 @@ def job_media(job_id: str, request: Request, principal: Principal = Depends(get_
 @router.get(
     "/artifacts/{artifact_id}/media",
     response_class=StreamingResponse,
-    responses={**ERR, 413: {"model": S.ErrorResponse}, 200: {"content": MEDIA_CONTENT}, 206: {"content": MEDIA_CONTENT},
+    responses={**ERR, 410: {"model": S.ErrorResponse}, 413: {"model": S.ErrorResponse}, 200: {"content": MEDIA_CONTENT},
+               206: {"content": MEDIA_CONTENT},
                416: {"description": "Range 범위 밖"}},
 )
 def media_content(artifact_id: str, request: Request, download: bool = Query(default=False),
                   _p: Principal = Depends(get_principal)) -> Response:
-    """컨투어 이미지·동영상 파일. HTTP Range(단일 범위) → 206 + Content-Range(브라우저 <video> 탐색), 범위 밖 416."""
+    """컨투어 이미지·동영상·형상/컨투어 3D GLB·프레임 파일. HTTP Range(단일 범위) → 206 + Content-Range, 범위 밖 416.
+    정리된 서버측 캐시(미리보기·3D 컨투어)는 410 ARTIFACT_EXPIRED."""
     f = svc.media_file(get_ctx(request), artifact_id)
     size = f["size"]
     disp = "attachment" if download else "inline"

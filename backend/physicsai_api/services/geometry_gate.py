@@ -17,8 +17,29 @@ def require_native_available(settings: Any) -> None:
                           missing=tmpl + res)
 
 
-def validate_geom_options(settings: Any, raw: dict[str, Any] | None) -> dict[str, Any]:
-    """세트별 덮어쓰기 검증 → 정규화된 덮어쓰기. 범위·형식 위반은 422 GEOM_OPTIONS_INVALID(problems)."""
+def require_shell_available(settings: Any) -> None:
+    """409 GEOM_NATIVE_UNAVAILABLE: 쉘 판금 명령(paicad_shell_*)이 비었거나 paicad 실행 파일이 없다(shell-morph.md §8.1)."""
+    from physicsai_core.features import geometry_native_shell_missing
+
+    tmpl, res = geometry_native_shell_missing(settings)
+    if tmpl or res:
+        raise DomainError("GEOM_NATIVE_UNAVAILABLE", "쉘 판금(비드) 형상 엔진을 쓸 수 없습니다 — 관리자 설정이 필요합니다", status=409,
+                          missing=tmpl + res)
+
+
+def validate_geom_options(settings: Any, raw: dict[str, Any] | None, kind: str = "solid") -> dict[str, Any]:
+    """세트별 덮어쓰기 검증 → 정규화된 덮어쓰기. 범위·형식 위반은 422 GEOM_OPTIONS_INVALID(problems).
+    kind=shell: 쉘 options 스키마(shell-morph.md §4.10) — 솔리드 키는 모르는 키로 거부."""
+    if kind == "shell":
+        from physicsai_core.geometry.shell_options import effective_shell_options
+        from physicsai_core.geometry.shell_options import normalize_override as shell_normalize
+
+        over, probs = shell_normalize(raw)
+        _opts, p2 = effective_shell_options(settings.geometry.shell_defaults, over)
+        probs = probs + [p for p in p2 if p not in probs]
+        if probs:
+            raise DomainError("GEOM_OPTIONS_INVALID", "형상 옵션 값이 올바르지 않습니다", status=422, problems=probs)
+        return over
     over, probs = normalize_override(raw)
     _opts, p2 = effective_options(settings.geometry.defaults, over)
     probs = probs + [p for p in p2 if p not in probs]
@@ -47,6 +68,8 @@ def native_set_gate(ctx: Any, ps: dict[str, Any]) -> None:
     from . import param_set_native_api as nat
 
     require_native_available(ctx.settings)
+    if nat.set_kind(ctx, ps) == "shell":  # shell-morph.md §8.1: 쉘 세트는 paicad_shell_* 명령도 필요
+        require_shell_available(ctx.settings)
     state = nat.prep_state_of(ctx, ps)
     if state is not None and state.status != "READY":
         raise DomainError("GEOM_PREP_STALE", state.reason or "형상 준비본이 유효하지 않습니다 — 형상 준비를 다시 하세요", status=409,

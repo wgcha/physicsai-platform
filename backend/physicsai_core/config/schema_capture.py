@@ -145,6 +145,24 @@ def repo_capture_tcl() -> str:
     return ""
 
 
+def repo_resource_file(*rel: str) -> str:
+    """저장소 리소스 파일('/' 표기). 패키지 위치에서 위로 찾고 없으면 ''(wheel 설치)."""
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        cand = parent.joinpath(*rel)
+        if cand.is_file():
+            return str(cand).replace("\\", "/")
+    return ""
+
+
+EXTRACT_TCL_REPO_REL = ("resources", "hyperview", "contour_extract.tcl")
+
+
+def effective_extract_tcl(s: Settings) -> str:
+    """결과 3D 컨투어 추출 TCL(geometry-view.md §13.3): resources.contour_extract_tcl, 비었으면 저장소 리소스."""
+    return s.resources.contour_extract_tcl or repo_resource_file(*EXTRACT_TCL_REPO_REL)
+
+
 def effective_capture_tcl(s: Settings) -> str:
     """캡처 TCL 원본 경로: resources.contour_capture_tcl, 비었으면 저장소 리소스."""
     return s.resources.contour_capture_tcl or repo_capture_tcl()

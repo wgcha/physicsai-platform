@@ -20,11 +20,13 @@ from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.prep import is_shell_only
 from physicsai_core.geometry.native_files import values_document
 from physicsai_core.geometry.options import usage_document
+from physicsai_core.geometry.shell_native import SHELL_FILES_DIR, THICKNESS_JSON
 from physicsai_core.stage4_predict import nearest as nearest_mod
 
 from ..geometry_native import (
     LocalRunner,
     effective_opts,
+    set_opts,
     engine_version,
     ensure_prep_ready,
     native_inputs,
@@ -48,7 +50,7 @@ def pr_prep(ctx: Any, m: dict[str, Any], ps: dict[str, Any], S: str) -> None:
     s = ctx.settings
     if not ps.get("starter_name") or not os.path.isfile(os.path.join(S, "radioss_assem", ps["starter_name"])):
         raise StepFailure("INPUT_CHANGED", "파라미터 세트 파일이 없습니다: radioss_assem/" + str(ps.get("starter_name")))
-    opts = effective_opts(s, ps.get("geom_options"))
+    opts = set_opts(s, S, ps.get("geom_options"))
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     values = {k: float(v) for k, v in ctx.params["values"].items()}
@@ -123,6 +125,8 @@ def geom_update(ctx: Any, S: str) -> None:
     _skip_if_no_geometry(ctx)
     s, G = ctx.settings, _G(ctx)
     inp = _inputs(ctx, S)
+    if inp.kind == "shell":
+        return _shell_update(ctx, inp, G)
     U = os.path.join(G, "update")
     v = run_paicad(LocalRunner(ctx), s, "paicad_update",
                    {**inp.base_values(s), "values_json": os.path.join(G, "values.json"), "options_json": os.path.join(G, "options.json"),
@@ -138,6 +142,8 @@ def mesh(ctx: Any, S: str) -> None:
     _skip_if_no_geometry(ctx)
     s, G = ctx.settings, _G(ctx)
     inp = _inputs(ctx, S)
+    if inp.kind == "shell":
+        return _shell_mesh(ctx, inp, G, S)
     U, Mo, C = (os.path.join(G, d) for d in ("update", "morph", "check"))
     out_inc = os.path.join(G, s.predict.mesh_include_name)
     base = {**inp.base_values(s), "values_json": os.path.join(G, "values.json"), "options_json": os.path.join(G, "options.json"),
@@ -166,10 +172,16 @@ def rad_assemble(ctx: Any, S: str, inp_dir: str) -> str:
     starter 이름을 돌려준다(이후 commands.rad_assemble·결과 기록은 기존 체인)."""
     s, r = ctx.settings, ctx.result()
     inp = _inputs(ctx, S)
-    new_inc = inp.baseline_inc if r.get("geometry_skipped") else os.path.join(_G(ctx), s.predict.mesh_include_name)
-    starter, warnings = assemble_into(s, inp.assem_dir, new_inc, inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)
-    for w in warnings:
-        ctx.add_warning(*w)
+    if inp.kind == "shell" and not r.get("geometry_skipped"):  # SM §8.3: 조립 사본 + PASS 쉘 사본 덮어쓰기(기준 메시 교체 없음)
+        from ..geometry_shell import assemble_copy, overlay
+
+        starter = assemble_copy(s, inp.assem_dir, inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)
+        overlay(os.path.join(_G(ctx), SHELL_FILES_DIR), list(r.get("shell_files") or []), inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)
+    else:
+        new_inc = inp.baseline_inc if r.get("geometry_skipped") else os.path.join(_G(ctx), s.predict.mesh_include_name)
+        starter, warnings = assemble_into(s, inp.assem_dir, new_inc, inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)
+        for w in warnings:
+            ctx.add_warning(*w)
     shell = r.get("shell_values") or {}
     if shell:
         from ..geometry_props import apply
@@ -179,3 +191,56 @@ def rad_assemble(ctx: Any, S: str, inp_dir: str) -> str:
         v.raise_if_failed()
         ctx.log(f"쉘 두께 적용: {', '.join(f'{k}={v:g}' for k, v in shell.items())}")
     return starter
+
+
+# ---- 쉘 판금 비드(shell-morph.md §8.2): GEOM_UPDATE = shell update(--fixed-dir), MESH = shell morph → check ----------------
+
+
+def _shell_update(ctx: Any, inp: Any, G: str) -> None:
+    from ..geometry_shell import UPDATE_JSON, require_shell_commands
+
+    s = ctx.settings
+    require_shell_commands(s, "paicad_shell_update")
+    U = os.path.join(G, "update")
+    v = run_paicad(LocalRunner(ctx), s, "paicad_shell_update",
+                   {**inp.base_values(s), "values_json": os.path.join(G, "values.json"), "options_json": os.path.join(G, "options.json"),
+                    "update_dir": U}, cwd=U, report=os.path.join(U, UPDATE_JSON), success=[os.path.join(U, "sample.brep")],
+                   backup=[U], body_map=inp.body_map)
+    v.raise_if_failed()
+    ctx.add_output(os.path.join(U, UPDATE_JSON))
+    ctx.patch_result({"geometry": {"kind": "shell", "update_elapsed_s": (v.report or {}).get("elapsed_s")}})
+
+
+def _shell_mesh(ctx: Any, inp: Any, G: str, S: str) -> None:
+    """MESH(쉘) = `paicad_shell_morph` → `paicad_shell_check`(PASS일 때만 `P/geom/shell_files/<rel>`). 3S 두께가 모핑 대상 part에
+    있으면 `--thickness`(check (d) 간섭, SM §8.4)."""
+    from ..geometry_shell import CHECK_JSON, MORPH_JSON, out_files, require_shell_commands, thickness_for, write_thickness
+
+    s, r = ctx.settings, ctx.result()
+    require_shell_commands(s, "paicad_shell_morph", "paicad_shell_check")
+    U, Mo, C, F = (os.path.join(G, d) for d in ("update", "morph", "check", SHELL_FILES_DIR))
+    tdoc = thickness_for(s, inp, os.path.join(S, *sh.PROPS_JSON.split("/")), r.get("shell_values") or None)
+    tj = os.path.join(G, THICKNESS_JSON)
+    if os.path.lexists(tj):
+        ctx.backup([tj])
+    base = {**inp.base_values(s), "values_json": os.path.join(G, "values.json"), "options_json": os.path.join(G, "options.json"),
+            "update_dir": U, "morph_dir": Mo, "check_dir": C, "out_files_dir": F, "thickness_json": write_thickness(tj, tdoc)}
+    x = LocalRunner(ctx)
+    v = run_paicad(x, s, "paicad_shell_morph", base, cwd=Mo, report=os.path.join(Mo, MORPH_JSON), success=[], backup=[Mo],
+                   body_map=inp.body_map)
+    v.raise_if_failed()
+    mj = v.report or {}
+    v = run_paicad(x, s, "paicad_shell_check", base, cwd=C, report=os.path.join(C, CHECK_JSON), success=[], backup=[C, F],
+                   body_map=inp.body_map)
+    v.raise_if_failed()
+    cj = v.report or {}
+    rels = out_files(cj)
+    checks = cj.get("checks") if isinstance(cj.get("checks"), dict) else {}
+    q = checks.get("quality") if isinstance(checks.get("quality"), dict) else {}
+    fx = checks.get("fixed") if isinstance(checks.get("fixed"), dict) else {}
+    ctx.add_output(os.path.join(C, CHECK_JSON))
+    prev = dict(r.get("geometry") or {})
+    prev.update({"morph_max_disp_mm": mj.get("max_disp_mm"), "max_warpage_deg": q.get("max_warpage_deg"),
+                 "min_jacobian": q.get("min_jacobian"), "moved_fixed_nodes": fx.get("moved_fixed_nodes"),
+                 "check_elapsed_s": cj.get("elapsed_s"), "check_status": cj.get("status"), "shell_file_count": len(rels)})
+    ctx.patch_result({"geometry": prev, "shell_files": rels})

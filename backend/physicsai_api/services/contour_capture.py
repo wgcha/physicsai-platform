@@ -25,7 +25,7 @@ from .common import MOVED_HINT, audit, param_set_out, require_job, require_power
 
 API_PREFIX = "/physicsai/api"  # main.API_PREFIX와 같은 값(브라우저 <video src>가 쓰는 절대 경로)
 CHUNK = 1024 * 1024
-MEDIA_TYPES = frozenset({cc.IMAGE_CONTENT_TYPE, *cc.VIDEO_CONTENT_TYPES.values()})
+MEDIA_TYPES = frozenset({cc.IMAGE_CONTENT_TYPE, *cc.VIDEO_CONTENT_TYPES.values(), "model/gltf-binary", "application/octet-stream"})
 _RANGE = re.compile(r"bytes=([0-9]*)-([0-9]*)")  # fullmatch 전용, ASCII 숫자만(D3-53)
 
 
@@ -125,25 +125,42 @@ def parse_range(header: str | None, size: int) -> tuple[int, int] | None | str:
 def media_file(ctx: AppContext, artifact_id: str) -> dict[str, Any]:
     """컨투어 이미지·동영상 산출물 → {path, content_type, size, filename, etag}. 크기 상한: 이미지 ui.max_artifact_bytes,
     동영상 capture.max_video_bytes(넘으면 413)."""
+    from physicsai_core.geometry.view import MEDIA_KINDS as VIEW_MEDIA_KINDS
+
     with ctx.engine.connect() as conn:
         rows = media_repo.artifacts_by_ids(conn, [artifact_id])
         a = rows.get(artifact_id)
-        if a is None or a["kind"] not in cc.MEDIA_KINDS + ("FEATURE_PNG",):  # geometry-engine.md §7.6: 피처 하이라이트 PNG도 이 경로
+        if a is None:
+            raise_if_expired(conn, artifact_id)
+        # geometry-engine.md §7.6: 피처 PNG, geometry-view.md §2.3: 형상·컨투어 3D GLB·프레임도 이 경로(Range 규칙 동일)
+        if a is None or a["kind"] not in cc.MEDIA_KINDS + ("FEATURE_PNG",) + VIEW_MEDIA_KINDS:
             raise DomainError("NOT_FOUND", "컨투어 파일을 찾을 수 없습니다", status=404)
         s = studies_repo.require(conn, a["study_id"])
     if a["content_type"] not in MEDIA_TYPES:
         raise DomainError("NOT_FOUND", "내려받을 수 없는 형식입니다", status=404)
     path = resolve_in_study(study_root(ctx, s), a["rel_path"])
     if not os.path.isfile(path):
+        if a["rel_path"].startswith("_cache/"):
+            raise DomainError("ARTIFACT_EXPIRED", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요", status=410)
         raise DomainError("NOT_FOUND", f"컨투어 파일이 없습니다. {MOVED_HINT}", status=404)
     size = os.path.getsize(path)
-    cap = ctx.settings.capture.max_video_bytes if a["kind"] == "CONTOUR_VIDEO" else ctx.settings.ui.max_artifact_bytes
+    cap = ctx.settings.capture.max_video_bytes if a["kind"] == "CONTOUR_VIDEO" else \
+        ctx.settings.contour3d.max_bin_bytes if a["kind"] == "CONTOUR3D_FRAMES" else ctx.settings.ui.max_artifact_bytes
     if size > cap:
         raise DomainError("ARTIFACT_TOO_LARGE", "파일이 제공 크기 상한을 넘습니다", status=413, size=size, limit=cap)
     view = (a.get("meta") or {}).get("view") or "media"
     ext = os.path.splitext(a["rel_path"])[1] or ""
     return {"path": path, "content_type": a["content_type"], "size": size, "etag": f'"{a["id"]}-{size}"',
             "filename": f"{(a['job_id'] or 'job')[:8]}_{view}{ext}"}
+
+
+def raise_if_expired(conn: Any, artifact_id: str) -> None:
+    """housekeeping이 지운 캐시 산출물(미리보기·3D 컨투어)이면 410 ARTIFACT_EXPIRED(geometry-view.md §6.5·§6.6)."""
+    from physicsai_core.db.repositories import geom_view as gv_repo
+
+    hit = gv_repo.by_artifact(conn, artifact_id)
+    if hit is not None and hit[1].get("status") == "EXPIRED":
+        raise DomainError("ARTIFACT_EXPIRED", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요", status=410)
 
 
 def read_range(path: str, start: int, end: int) -> Iterator[bytes]:

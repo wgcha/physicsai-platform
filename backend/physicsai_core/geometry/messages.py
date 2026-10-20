@@ -36,10 +36,27 @@ CODE_TABLE: dict[str, tuple[str, str]] = {
     "GEOM_INC_FORMAT": ("INTERNAL", "include 고정폭 형식 보존 불가"),
     "GEOM_INTERNAL": ("INTERNAL", "내부 오류"),
     "GEOM_TIMEOUT": ("INTERNAL", "시간 초과"),  # 플랫폼 시간 제한(geometry.timeout_s) — paicad 코드 아님
+    # ---- 쉘 판금 모핑(shell-morph.md §6.7) ----
+    "SHELL_FIXED_REGION_VIOLATION": ("FIXED", "고정 영역(tie·RBE2) 침범"),
+    "SHELL_FIXED_PARSE_FAILED": ("PREP", "고정 정의(tie·RBE2) 해석 실패"),
+    "SHELL_UNSUPPORTED_ELEMENT": ("PREP", "쉘(/SHELL·/SH3N)이 아닌 요소"),
+    "SHELL_BODY_NOT_SHEET": ("PREP", "중립면(시트) STEP이 아님 — 판재 솔리드는 후속 지원"),
+    "SHELL_PART_NOT_FOUND": ("INPUT", "지정한 쉘 PART를 찾지 못함"),
+    "GEOM_KIND_MIXED": ("INPUT", "솔리드(쿠션)와 쉘(판금) 형상 파라미터는 한 세트에 함께 쓸 수 없습니다"),
+    # ---- 3D 가시화(geometry-view.md §5.5) ----
+    "VIEW_TESSELLATION_FAILED": ("VIEW", "3D 형상 변환 실패"),
+    "VIEW_TOO_LARGE": ("VIEW", "3D 형상이 너무 큼(표시 허용오차를 키우세요)"),
+    "VIEW_EXPORT_FAILED": ("VIEW", "3D 보기를 만들지 못함(그림으로 표시)"),
+    "VIEW_NATIVE_ONLY": ("INPUT", "3D 미리보기는 native 템플릿에서만 쓸 수 있습니다"),
+    "VIEW_UNAVAILABLE": ("INPUT", "3D 미리보기를 쓸 수 없습니다 — paicad 뷰 명령 설정 확인"),
+    "PREVIEW_BUSY": ("INPUT", "미리보기가 많이 대기 중입니다 — 잠시 후 다시 시도하세요"),
+    "ARTIFACT_EXPIRED": ("INPUT", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요"),
+    "VIEW_PREVIEW_TIMEOUT": ("VIEW", "미리보기 시간 초과"),
 }
 CATEGORY_LABELS: dict[str, str] = {
     "CAD_FAILED": "CAD 생성 불가", "INTERFERENCE": "간섭", "QUALITY": "품질 미달", "DEVIATION": "편차 초과", "TIE": "tie 투영 실패",
     "PREP": "형상 준비 실패", "INPUT": "입력 오류", "PROP": "쉘 두께 적용 실패", "BASELINE": "baseline 범위 밖", "INTERNAL": "내부 오류",
+    "FIXED": "고정 영역 침범", "VIEW": "3D 보기 실패",
 }
 MAX_MESSAGE = 500  # job_steps.failure_message / predict_batch_runs.gen_message 한도
 _MM_RE = re.compile(r"boundary deviation\s+([0-9]+(?:\.[0-9]+)?)\s*mm")

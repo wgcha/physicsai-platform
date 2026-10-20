@@ -31,7 +31,7 @@ def input_zip(job_id: str, request: Request, _p: Principal = Depends(get_princip
 @router.get(
     "/artifacts/{artifact_id}/content",
     response_class=FileResponse,
-    responses={404: {"model": S.ErrorResponse}, 200: {"content": {"application/octet-stream": {}}}},
+    responses={404: {"model": S.ErrorResponse}, 410: {"model": S.ErrorResponse}, 200: {"content": {"application/octet-stream": {}}}},
 )
 def content(artifact_id: str, request: Request, _p: Principal = Depends(get_principal)) -> FileResponse:
     path, ctype, name = svc.artifact_file(get_ctx(request), artifact_id)

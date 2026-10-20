@@ -62,7 +62,9 @@ def study_gate(conn: Any, study: dict[str, Any], job_type: str) -> None:
 
 
 def require_retryable_type(job_type: str) -> None:
-    if job_type in MANAGE_JOB_TYPES:
+    from physicsai_core.job_types import NO_RETRY_JOB_TYPES
+
+    if job_type in MANAGE_JOB_TYPES or job_type in NO_RETRY_JOB_TYPES:
         raise DomainError("JOB_NOT_RETRYABLE", "이 작업은 재시도 대신 새로 실행하세요", status=409)
 
 

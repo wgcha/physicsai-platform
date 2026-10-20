@@ -50,6 +50,13 @@ FEATURES: dict[str, FeatureReq] = {
     "optimize_builtin": FeatureReq(),
     # geometry-engine.md §7.1: native 형상 엔진 — paicad_update·paicad_morph·paicad_check(또는 paicad_run) 비null + 실행 파일 존재
     "geometry_native": FeatureReq(),
+    # shell-morph.md §8.1: 쉘 판금 비드 — paicad_shell_update·_morph·_check(또는 _run) 비null + 실행 파일 존재(geometry_native_shell_missing)
+    "geometry_native_shell": FeatureReq(),
+    # geometry-view.md §6.1: 3D 보기·미리보기 — geometry.view.enabled + 뷰 명령 2개 비null + 실행 파일(geometry_view_missing)
+    "geometry_view": FeatureReq(),
+    "geometry_view_shell": FeatureReq(),
+    # geometry-view.md §13: 결과 3D 컨투어 — contour3d.enabled + contour_extract 비null + hw 실행 파일·TCL 존재(contour3d_missing)
+    "contour3d": FeatureReq(("contour_extract",), ("hw_exe_path",)),
     # phase3 §21.3.8 S16: 조립 FEM 검증 = fem_verify.enabled + HPC 연결. rebuild는 + mesh 템플릿·include TCL(fem_verify_missing)
     "fem_verify": FeatureReq(needs_hpc=True),
     "fem_verify_rebuild": FeatureReq(needs_hpc=True),
@@ -182,6 +189,45 @@ def geometry_native_missing(s: Settings) -> tuple[list[str], list[str]]:
     return tmpl, res
 
 
+def _paicad_missing(s: Settings) -> list[str]:
+    exe = derived_paicad_path(s)
+    return [] if exe and os.path.isfile(exe) else ["geometry.paicad_path"]
+
+
+def geometry_native_shell_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """쉘 판금 비드(shell-morph.md §8.1): 준비 체인(extract·fixed-scan·tag) + update·morph·check(또는 run)."""
+    run = s.commands.paicad_shell_run is not None
+    keys = ("paicad_shell_extract", "paicad_shell_fixed_scan", "paicad_shell_tag") + \
+        (() if run else ("paicad_shell_update", "paicad_shell_morph", "paicad_shell_check"))
+    return [f"commands.{k}" for k in keys if getattr(s.commands, k) is None], _paicad_missing(s)
+
+
+def _view_missing(s: Settings, keys: tuple[str, ...]) -> tuple[list[str], list[str]]:
+    tmpl = [] if s.geometry.view.enabled else ["geometry.view.enabled"]
+    tmpl += [f"commands.{k}" for k in keys if getattr(s.commands, k) is None]
+    return tmpl, _paicad_missing(s)
+
+
+def geometry_view_missing(s: Settings) -> tuple[list[str], list[str]]:
+    return _view_missing(s, ("paicad_view_export", "paicad_view_preview"))
+
+
+def geometry_view_shell_missing(s: Settings) -> tuple[list[str], list[str]]:
+    return _view_missing(s, ("paicad_shell_view_export", "paicad_shell_view_preview"))
+
+
+def contour3d_missing(s: Settings) -> tuple[list[str], list[str]]:
+    from .config.schema_capture import effective_extract_tcl
+
+    tmpl, res = missing_for(s, FEATURES["contour3d"], None)
+    if not s.contour3d.enabled:
+        res.insert(0, "contour3d.enabled")
+    tcl = effective_extract_tcl(s)
+    if not tcl or not os.path.isfile(tcl):
+        res.append("resources.contour_extract_tcl")
+    return tmpl, res
+
+
 def geometry_status(s: Settings) -> dict[str, Any]:
     """`/status.geometry`: {engine_default, native_available, reason|null}(§7.1). reason은 한국어."""
     t, r = geometry_native_missing(s)
@@ -195,6 +241,10 @@ def geometry_status(s: Settings) -> dict[str, Any]:
 
 _SPECIAL_MISSING = {
     "geometry_native": geometry_native_missing,
+    "geometry_native_shell": geometry_native_shell_missing,
+    "geometry_view": geometry_view_missing,
+    "geometry_view_shell": geometry_view_shell_missing,
+    "contour3d": contour3d_missing,
     "optimize_builtin": optimize_builtin_missing,
     "contour_capture": contour_capture_missing,
     "predict_parametric": predict_parametric_missing,

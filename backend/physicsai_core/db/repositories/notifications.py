@@ -78,6 +78,9 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
 SUCCESS_EVENTS = frozenset({"JOB_STARTED", "JOB_SUCCEEDED", "MY_TURN_NEXT"})
 
 
+SILENT_JOB_TYPES = frozenset({"GEOM_PREVIEW"})
+
+
 def notify_job(conn: Connection, job_id: str, event: str, *, body: str | None = None) -> int | None:
     """작업 등록자에게 알림 1건. 생성된 seq를 돌려준다(알림을 만들지 않는 유형·이벤트면 None). `body`는 본문 덮어쓰기."""
     assert event in EVENTS
@@ -100,6 +103,8 @@ def notify_job(conn: Connection, job_id: str, event: str, *, body: str | None = 
     if jt is not None and not jt.notify_success and event in SUCCESS_EVENTS:
         return None
     if is_batch_child(row.params):  # phase3 §14.5: 일괄 예측 하위는 알림 없음(배치 완료 1건만)
+        return None
+    if row.job_type in SILENT_JOB_TYPES:  # geometry-view.md §6.4: 미리보기는 실패 포함 알림 없음(화면이 폴링)
         return None
     if event in SUCCESS_EVENTS and is_fem_companion(row.job_type, row.params):  # phase3 §21.3.2: 동반 예측은 실패 알림만
         return None

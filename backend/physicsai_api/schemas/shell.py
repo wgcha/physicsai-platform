@@ -86,6 +86,10 @@ class StatusFeatures(Resp):
     contour_capture: FeatureState | None = None  # phase3 §15.5 예측 컨투어 캡처
     optimize_builtin: FeatureState | None = None  # phase3 §18.2 ⑤ 플랫폼 내장 최적화(numpy·scipy)
     geometry_native: FeatureState | None = None  # geometry-engine.md §7.1 native 형상 엔진(paicad)
+    geometry_native_shell: FeatureState | None = None  # shell-morph.md §8.1 쉘 판금 비드 모핑(paicad shell)
+    geometry_view: FeatureState | None = None  # geometry-view.md §6.1 형상 3D 보기·미리보기(솔리드)
+    geometry_view_shell: FeatureState | None = None  # geometry-view.md §6.1 형상 3D 보기·미리보기(쉘)
+    contour3d: FeatureState | None = None  # geometry-view.md §13 결과 3D 컨투어
     fem_verify: FeatureState | None = None  # phase3 §21.3.8 S16 조립 FEM 검증(fem_verify.enabled + HPC)
     fem_verify_rebuild: FeatureState | None = None  # + 메시 교체(commands.mesh·include TCL)
 
