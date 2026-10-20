@@ -124,7 +124,7 @@ export const trainRoutes: Route = (srv, { method, path, seg, query, body }) => {
       const limit = Number(query.get("limit") ?? 200);
       const start = Number(query.get("cursor") ?? 0);
       const next = start + limit < runs.length ? String(start + limit) : null;
-      return { status: 200, body: runs.slice(start, start + limit).map(({ _job: _j, ...r }) => r), headers: next ? { "X-Next-Cursor": next } : {} };
+      return { status: 200, body: runs.slice(start, start + limit).map(({ _job: _j, ...r }) => ({ ...r, h3d_rel: r.state === "COLLECTED" && (r.result?.h3d ?? 0) > 0 ? `01_train/results/${d.id}/${r.run_key}/cushion_0000.h3d` : null })), headers: next ? { "X-Next-Cursor": next } : {} };
     }
     if (method === "GET" && seg[2] === "result-table") return doeResultTable(p2, d); // S14 §19.5
     if (method === "GET" && seg[2] === "samples") {

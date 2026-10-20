@@ -158,6 +158,30 @@ describe("④ 예측 결과 — 결과 3D 컨투어", () => {
     expect(gvRecords(server).contours[0]).toMatchObject({ source_kind: "SOLVER_H3D", source_ref: { fem_verification_id: "fv-1" } });
   });
 
+  it("GV-C3 ① 해석 run 결과: h3d_rel 있는 run만 [3D 컨투어] → SOLVER_H3D {study_id, h3d_rel}로 생성", async () => {
+    const { server } = renderApp(`${STUDY}/1`, { user: "power", hpcConfigured: true });
+    const table = await screen.findByRole("table", { name: "PBS 제출 표" });
+    await waitFor(() => expect(within(table).getAllByRole("row").length).toBe(31));
+    const row = (k: string) => within(table).getAllByRole("row").find((r) => r.textContent?.includes(k))!;
+    expect(within(row("run__00027")).queryByRole("button", { name: "3D 컨투어" })).toBeNull(); // 해석 실패 = h3d 없음
+    fireEvent.click(within(row("run__00001")).getByRole("button", { name: "3D 컨투어" }));
+    const panel = await screen.findByTestId("contour3d-panel");
+    await within(panel).findByTestId("contour-viewer"); // 열린 채로 시작(바로 생성 요청)
+    const rec = gvRecords(server).contours[0];
+    expect(rec.source_kind).toBe("SOLVER_H3D");
+    expect(rec.source_ref).toEqual({ study_id: "s-cushion", h3d_rel: expect.stringMatching(/^01_train\/results\/.+\/run__00001\/.+\.h3d$/) });
+    fireEvent.click(within(row("run__00001")).getByRole("button", { name: "3D 컨투어" }));
+    await waitFor(() => expect(screen.queryByTestId("run-contour3d")).toBeNull());
+  });
+
+  it("GV-C3 ① run 표: features.contour3d=false → 결과 열·버튼 없음", async () => {
+    renderApp(`${STUDY}/1`, { user: "power", hpcConfigured: true, disabledFeatures: ["contour3d"] });
+    const table = await screen.findByRole("table", { name: "PBS 제출 표" });
+    await waitFor(() => expect(within(table).getAllByRole("row").length).toBe(31));
+    expect(within(table).queryByRole("button", { name: "3D 컨투어" })).toBeNull();
+    expect(within(table).queryByRole("columnheader", { name: "결과" })).toBeNull();
+  });
+
   it("features.contour3d=false → 숨김", async () => {
     renderApp(`${STUDY}/4`, { user: "power", disabledFeatures: ["contour3d"] });
     await screen.findByTestId("contour-media");

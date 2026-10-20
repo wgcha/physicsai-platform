@@ -3,6 +3,10 @@ import { type HpcJob, type TrainRun, type TrainRunState } from "../../api";
 import { useApp } from "../../app/AppContext";
 import { CheckPill, FolderCell, HpcResolvePanel, hpcPhaseText, isScxRow, needsCheck } from "../../components/HpcScx";
 import { fmtElapsed } from "../../lib/format";
+import { useFeature } from "../../components/FeatureGate";
+import { useCanExecute } from "../../hooks/useJobRunner";
+import { ContourPanel } from "../stage4/geomview/contour/ContourPanel";
+import { webglAvailable } from "../stage4/geomview/webgl";
 
 const RUN_STATE_LABEL: Record<TrainRunState, string> = {
   GENERATED: "생성됨",
@@ -31,6 +35,7 @@ export function RunTable({
   canCancel,
   cancelFailed = false,
   scx,
+  studyId,
 }: {
   runs: TrainRun[];
   onResubmit?: (key: string) => void;
@@ -40,10 +45,19 @@ export function RunTable({
   cancelFailed?: boolean;
   /** hpc.mode=scx일 때만 */
   scx?: ScxRows;
+  /** geometry-view GV-C3: 있으면 결과 h3d가 있는 run에 [3D 컨투어](SOLVER_H3D {study_id, h3d_rel}) */
+  studyId?: string;
 }) {
   const { me } = useApp();
   const admin = me.is_global_admin;
   const [confirm, setConfirm] = useState(false);
+  const c3 = useFeature("contour3d");
+  const canExec = useCanExecute();
+  const want3d = !!studyId && c3.enabled;
+  const [gl] = useState(() => want3d && webglAvailable());
+  const [c3Key, setC3Key] = useState<string | null>(null);
+  const c3On = want3d && gl;
+  const cols = 4 + (scx ? 1 : 0) + (c3On ? 1 : 0) + (admin ? 1 : 0);
   return (
     <div className="table-wrap runtable">
       <table className="table compact" aria-label="PBS 제출 표">
@@ -54,6 +68,7 @@ export function RunTable({
             {scx && <th>드라이브 폴더</th>}
             <th>상태</th>
             <th className="num">경과</th>
+            {c3On && <th>결과</th>}
             {admin && <th />}
           </tr>
         </thead>
@@ -89,6 +104,19 @@ export function RunTable({
                   )}
                 </td>
                 <td className="num small">{r.state === "SUBMITTED" ? fmtElapsed(r.updated_at) : "–"}</td>
+                {c3On && (
+                  <td>
+                    {r.h3d_rel ? (
+                      <button type="button" className={`btn small ghost${c3Key === r.run_key ? " on" : ""}`} aria-expanded={c3Key === r.run_key}
+                        disabled={!canExec && c3Key !== r.run_key} title={canExec ? "이 run의 해석 결과 컨투어를 3D로 봅니다" : "실행 권한(power 이상)이 필요합니다"}
+                        onClick={() => setC3Key((k) => (k === r.run_key ? null : r.run_key))}>
+                        3D 컨투어
+                      </button>
+                    ) : (
+                      <span className="muted small">–</span>
+                    )}
+                  </td>
+                )}
                 {admin && (
                   <td className="row-actions">
                     {failed && onResubmit && (
@@ -110,6 +138,13 @@ export function RunTable({
                   </td>
                 )}
               </tr>
+              {c3On && studyId && r.h3d_rel && c3Key === r.run_key && (
+                <tr className="run-detail" data-testid="run-contour3d">
+                  <td colSpan={cols}>
+                    <ContourPanel key={r.run_key} source={{ source_kind: "SOLVER_H3D", source_ref: { study_id: studyId, h3d_rel: r.h3d_rel } }} label={`3D 컨투어(해석 ${r.run_key})`} defaultOpen />
+                  </td>
+                </tr>
+              )}
               {check && scx && scxRow && (
                 <tr className="run-detail">
                   <td colSpan={admin ? 6 : 5}>

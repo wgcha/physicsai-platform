@@ -16306,6 +16306,17 @@
       },
       "TrainRun": {
         "properties": {
+          "h3d_rel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "H3D Rel"
+          },
           "hpc": {
             "anyOf": [
               {

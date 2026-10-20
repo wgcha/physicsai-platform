@@ -32,6 +32,7 @@ from ...signals import StepSkipped
 from .. import run_chain
 from ..common import hst_run_label, load_model, verify_model_integrity
 from . import batch_native
+from .child_input import check_child_input
 from .predict_inputs import MESH_ONLY
 
 M1 = "m_1"  # run 폴더 하위 이름(run_chain.M1과 같음)
@@ -147,7 +148,7 @@ def _gen_one(ctx: Any, b: dict[str, Any], ps: dict[str, Any], S: str, B: str) ->
         _set_run(ctx, b, r["doe_no"], gen_state="RUNNING", gen_code=None, gen_message=None)
         input_path = run_chain.build_run_inputs(runner, s, run_dir=run_dir, cad_file_name=ps["cad_file_name"],
                                                 assem_dir=assem, assembly=assembly, param_set=ps)
-        batch_native.check_child_input(s, input_path)  # 하위 PREDICT(prepared)가 PR_PREP에서 다시 하는 검사를 먼저(native와 공용)
+        check_child_input(s, input_path)  # 하위 PREDICT(prepared)가 PR_PREP에서 다시 하는 검사를 먼저(native와 공용, child_input.py)
         _set_run(ctx, b, r["doe_no"], gen_state="DONE", gen_code=None, gen_message=None)
 
     return gen

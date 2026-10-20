@@ -542,3 +542,86 @@ def test_worker_starts_from_runtime_without_env(tmp_path, monkeypatch, settings_
     (rt / "secrets" / "database_url").unlink()
     assert main(["--runtime", str(rt)]) == 2
     assert "DB 접속 정보가 없습니다" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# geometry-view GV-C3: frontend-dist 외부 URL 0건(오프라인 서버 — 빌드본이 외부에서 아무것도 불러오지 않음)
+# 로딩 컨텍스트(src/href/import/fetch/url()/importScripts/new Worker)의 http(s)만 센다. 주석·라이선스·오류 문구 속 URL과
+# w3.org 네임스페이스(createElementNS 등)는 로딩이 아니라 허용. 클릭 이동 앵커(plotly 로고 링크)는 아래 허용 목록으로만.
+# ---------------------------------------------------------------------------------------------------------------
+
+_EXT_URL_RE = re.compile(
+    r"""(?ix)
+    (?: \b(?:src|href|srcset|poster|data)\s*[=:]\s*\(?\s*["'`]?      # HTML 속성·JS 대입·객체 키
+      | \bimport\s*\(\s*["'`]                                       # 동적 import()
+      | \bimport\b[^;"'`]{0,200}?\bfrom\s*["'`]                     # 정적 import ... from
+      | \bimport\s*["'`]                                            # 부수효과 import / CSS @import "..."
+      | \bfetch\s*\(\s*["'`]
+      | \bimportScripts\s*\(\s*["'`]
+      | \bnew\s+(?:Shared)?Worker\s*\(\s*["'`]
+      | \burl\(\s*["']?                                             # CSS url(
+    )
+    (https?:)?//(?P<host>[^/"'`\s)]+)
+    """
+)
+# 클릭 이동만 하는 앵커(로딩 아님) — plotly 모드바 로고 링크.
+_EXT_URL_ALLOW = {("plotly.com", "href")}
+
+
+def _external_loads(text: str) -> list[str]:
+    out = []
+    for m in _EXT_URL_RE.finditer(text):
+        host = m.group("host").lower()
+        if host == "www.w3.org" or host.endswith(".w3.org"):
+            continue
+        ctx = m.group(0).lower()
+        if any(h == host and k in ctx for h, k in _EXT_URL_ALLOW):
+            continue
+        out.append(m.group(0)[:120])
+    return out
+
+
+def test_external_url_scanner_detects_loads_and_ignores_comments():
+    bad = [
+        '<script src="https://cdn.example.com/a.js"></script>',
+        '<link href="http://fonts.example.com/x.css">',
+        'import("https://esm.example.com/m.js")',
+        'import x from "https://esm.example.com/m.js";',
+        'fetch("https://api.example.com/v1")',
+        "a{background:url(https://img.example.com/b.png)}",
+        '@import "https://fonts.example.com/f.css";',
+        "e.src='//cdn.example.com/c.js'",
+    ]
+    for t in bad:
+        assert _external_loads(t), t
+    ok = [
+        "// https://jcgt.org/published/0007/04/01/",
+        "/*! three.js MIT — https://threejs.org/license */",
+        'document.createElementNS("http://www.w3.org/2000/svg","g")',
+        'url(%27http://www.w3.org/2000/svg%27)',
+        'throw Error("see https://reactjs.org/docs/error-decoder.html")',
+        'f.href="https://plotly.com/"',
+        'url(/physicsai/assets/x.woff2)',
+    ]
+    for t in ok:
+        assert not _external_loads(t), t
+
+
+def test_frontend_dist_has_no_external_loads():
+    dist = REPO / "frontend-dist"
+    files = [dist / "index.html", *sorted((dist / "assets").glob("*.js")), *sorted((dist / "assets").glob("*.css"))]
+    assert len(files) >= 3
+    hits = {f.name: h for f in files if (h := _external_loads(f.read_text(encoding="utf-8", errors="replace")))}
+    assert not hits, f"frontend-dist가 외부 URL을 불러옵니다(오프라인 서버에서 실패): {hits}"
+
+
+def test_frontend_third_party_notices_cover_runtime_deps_and_ship_in_dist():
+    """GV-C3 잔여: 프런트 제3자 고지 — 운영(비 dev) 의존 전부가 이름·버전으로 표에 있고, 빌드본에 같은 내용으로 포함."""
+    src = (REPO / "frontend" / "public" / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8")
+    lock = json.loads((REPO / "frontend" / "package-lock.json").read_text(encoding="utf-8"))
+    prod = {k.split("node_modules/")[-1]: v["version"] for k, v in lock["packages"].items() if k and not v.get("dev") and "version" in v}
+    assert "three" in prod and len(prod) >= 5
+    for name, ver in prod.items():
+        assert re.search(rf"(?m)^\| {re.escape(name)}( \([^)]*\))? \| {re.escape(ver)} \| ", src), f"제3자 고지에 {name} {ver}이 없습니다"
+    assert "## MIT License" in src and "Open Font License" in src
+    assert (REPO / "frontend-dist" / "THIRD_PARTY_NOTICES.md").read_text(encoding="utf-8") == src
