@@ -29,7 +29,14 @@ from physicsai_core.config import (
     paths_overlap,
 )
 from physicsai_core.db.repositories import env_checks as env_repo
-from physicsai_core.env_check import ALTAIR_CHECK_KEYS, item, report_rel
+from physicsai_core.env_check import (
+    ALTAIR_CHECK_KEYS,
+    LEGACY_ALTAIR_KEYS,
+    LEGACY_PROBE_TOOLS,
+    LEGACY_SKIP_MESSAGE,
+    item,
+    report_rel,
+)
 from physicsai_core.fileutil import write_json
 from physicsai_core.masking import bundle_masker
 from physicsai_core.stage2_curation import spdm
@@ -46,6 +53,8 @@ COLLECT_CAP = 65536  # 프로브 출력 수집 상한(문자) — 꼬리만 유�
 def _exec_item(key: str, path: str) -> dict[str, Any]:
     k = f"altair.{key}"
     if not path:
+        if key in LEGACY_ALTAIR_KEYS:  # opt-native §4.3: HyperStudy는 선택(레거시)
+            return item(k, "EXECUTABLE", "SKIP", LEGACY_SKIP_MESSAGE, "WORKER")
         return item(k, "EXECUTABLE", "WARN", "미설정", "WORKER")
     if not os.path.isfile(path):
         return item(k, "EXECUTABLE", "FAIL", f"실행 파일이 없습니다: {path}", "WORKER", {"path": path})
@@ -67,6 +76,8 @@ def _probe(w: Any, tool: str, exe: str, masker: Any, tails: dict[str, str]) -> d
     argv_t = getattr(s.env_check.probes, tool)
     if argv_t is None:
         return item(key, "EXECUTABLE", "SKIP", "존재 확인만(인자 미확인)", "WORKER")
+    if not exe and tool in LEGACY_PROBE_TOOLS:  # opt-native §4.3: 경로 미설정이면 SKIP(경로가 있는데 파일이 없으면 FAIL)
+        return item(key, "EXECUTABLE", "SKIP", LEGACY_SKIP_MESSAGE, "WORKER")
     if not exe or not os.path.isfile(exe):
         return item(key, "EXECUTABLE", "FAIL", "실행 파일이 없어 프로브를 실행하지 못했습니다", "WORKER")
     argv = [exe, *argv_t[1:]]

@@ -235,6 +235,7 @@ if ($detail.Count) {
     Write-Host '설정 파일 값(관리 대상 키):'
     Write-Host ($detail | Select-Object @{ n = '키'; e = { $_.key } }, @{ n = '처리'; e = { $_.action } }, @{ n = '값'; e = { if ("$($_.value)" -eq '') { '(빈 값)' } else { $_.value } } } | Format-Table -AutoSize -Wrap | Out-String -Width 240)
 }
+foreach ($n in @($plan.notes)) { if ($n) { Write-Host "안내: $n" } }
 foreach ($w in @($plan.warnings)) { if ($w) { Write-Warning $w } }
 if (-not $NonInteractive) {
     $ans = "$(Read-Host '이대로 설치할까요? (Y/N)')".Trim()

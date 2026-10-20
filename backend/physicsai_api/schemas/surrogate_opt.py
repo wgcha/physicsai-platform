@@ -83,6 +83,13 @@ class SurrogateOptCreate(Req):
     seed: int = 1
     multi_execution: int = Field(default=1, ge=1, le=64)
     capture: bool = False
+    # opt-native §8: 알고리즘·고급 옵션·검증 방식·범주 수준(모두 선택 — 생략 = ego·기본·loop)
+    algorithm: str | None = Field(default=None, max_length=16, description="ego(기본) | ga(단일 목적) | nsga2(다목적)")
+    algo_options: dict[str, Any] | None = Field(
+        default=None, description="GA·NSGA-II 고급 옵션 {pop_size, generations, crossover_prob, mutation_prob, eta_c, eta_m}"
+                                  "(null·생략 = 기본). ego면 비워야 한다")
+    verification: str | None = Field(default=None, max_length=16, description="loop(기본, 반복 검증) | none(대리모델만)")
+    levels: dict[str, list[str]] | None = Field(default=None, description="범주 수준 제한 {\"baseline\": [id…]}(다중 baseline 위상 세트만)")
 
 
 class SoProblem(Resp):
@@ -119,6 +126,12 @@ class SurrogateOptPreview(Resp):
     estimate_min: float | None = None
     objective_available: bool
     problems: list[SoProblem]
+    # opt-native §8
+    algorithm: str = "ego"
+    algo_options: dict[str, Any] = Field(default_factory=dict)
+    verification: str = "loop"
+    variables_kind: dict[str, str] = Field(default_factory=dict)
+    levels: dict[str, list[str]] | None = None
 
 
 class SurrogateOptSummary(Resp):
@@ -160,22 +173,26 @@ class SoFit(Resp):
     q2: float | None = None
     pred_vs_verified_mae: float | None = None
     per_objective: list[SoFitObjective] | None = None  # S17 다목적: 목적별 품질
+    algo: dict[str, Any] | None = None  # opt-native §6.6 {name, pop_size, generations, generations_run, evals, stop, seed, …}
 
 
 class SoCandidate(Resp):
     doe_no: int
     values: dict[str, float]
+    baseline: str | None = None  # opt-native §7: 다중 baseline 위상 세트의 범주 수준(baseline id), N/A 변수는 values에서 빠짐
     predicted: float | None = None
     ei: float | None = None
     constraints_pred: list[float] = Field(default_factory=list)
     verified: float | None = None
     state: str | None = None
-    role: str | None = None  # S17: hvi | parego | rbf
+    role: str | None = None  # S17: hvi | parego | rbf, opt-native: ga | ga_ei | ga_div | nsga2
     weight: list[float] | None = None
     predicted_objectives: list[float] | None = None
     predicted_std: list[float] | None = None
     acq: float | None = None
     verified_objectives: list[float | None] | None = None
+    pof: float | None = None  # opt-native V-ON-8: GA·NSGA-II 후보 예측 만족 확률·위반량(정규화)
+    cv: float | None = None
 
 
 class SoIteration(Resp):
@@ -305,6 +322,7 @@ class SoPredictedPoint(Resp):
     """대리모델 예측 전선 점(미검증)."""
 
     values: dict[str, float]
+    baseline: str | None = None  # opt-native §7
     mean: list[float]
     std: list[float]
     pof: float

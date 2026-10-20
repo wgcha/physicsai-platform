@@ -30,6 +30,7 @@ from physicsai_core.fileutil import write_json_atomic, write_text
 from physicsai_core.stage4_predict import contour_capture as cc
 from physicsai_core.stage4_predict import performance, run_metrics
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for
+from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 from physicsai_core.stage5_optimize.surrogate import limit_threads
 
@@ -267,7 +268,7 @@ def _write_opt_json(ctx: Any, opt: dict[str, Any], O: str) -> None:
         "param_set": {"id": opt["param_set_id"], "label": ps.get("label"), "input_kind": opt["input_kind"]},
         "model": {"id": opt["model_id"], "name": (m or {}).get("name"), "version": (m or {}).get("version"),
                   "psmdl_sha256": (m or {}).get("psmdl_sha256")},
-        "seed": opt["settings"].get("seed"),
+        "seed": opt["settings"].get("seed"), **_algo_meta(opt["settings"]),
         "hv_frame": opt.get("hv_frame"), "used_weights": mo.last_used_weights(its),
         "batches": [{"iter_no": it["iter_no"], "kind": it["kind"], "batch_id": it["batch_id"],
                      "label": batch_label(labels[it["iter_no"]]) if labels.get(it["iter_no"]) else None} for it in its],
@@ -344,6 +345,11 @@ def so_propose(ctx: Any) -> None:
         fit = infill.FitResult.from_json(json.load(fh))
     designs, failed = ds.merge(_read_points(ctx, O, problem, r - 1), problem)
     clock = _Clock(ctx)
+    if so_algo.settings_algorithm(s) != "ego":  # opt-native §6: GA·NSGA-II 내부 탐색기
+        from .surrogate_evo import propose_evo
+
+        propose_evo(ctx, opt, problem, fit, designs, failed, _iter_dir(O, r), r, clock)
+        return
     if problem.multi:  # S17 §22.5.3·§22.5.4 예측 전선 + HVI·ParEGO
         mo.propose_multi(ctx, opt, problem, fit, designs, failed, _iter_dir(O, r), r, clock)
         return
@@ -362,7 +368,8 @@ def so_propose(ctx: Any) -> None:
         w.writerow([row["doe_no"], *[repr(float(row["values"][n])) for n in problem.names], repr(row["predicted"]),
                     "" if row["ei"] is None else repr(row["ei"]), *[repr(v) for v in row["constraints_pred"]]])
     write_text(os.path.join(_iter_dir(O, r), "candidates.csv"), buf.getvalue())
-    patch: dict[str, Any] = {"candidates": rows, "surrogate_optimum": optimum.as_dict() if optimum else None}
+    patch: dict[str, Any] = {"candidates": rows, "surrogate_optimum": optimum.as_dict() if optimum else None,
+                             "fit": {**(ctx.result().get("fit") or {}), "algo": {"name": "ego"}}}  # opt-native §6.6
     if not rows:
         patch["stop"] = ds.STOP_NO_NEW
         ctx.log("새 후보 없음 — 기존 설계와 모두 같습니다")
@@ -385,6 +392,9 @@ def so_next(ctx: Any) -> None:
     opt = _opt(ctx)
     r = _round(ctx)
     res = ctx.result()
+    if so_algo.settings_verification(opt["settings"]) == "none" and (not res.get("stop") or res.get("stop") == ds.STOP_NO_NEW):
+        _finalize_surrogate_only(ctx, opt, r, res)  # opt-native §5 ON-4: 검증 배치 없이 마무리
+        return
     if res.get("stop"):
         _finalize(ctx, opt, r, res)
         return
@@ -475,7 +485,7 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
     summary = {"label": so_repo.opt_label(opt["opt_no"]), "stop_reason": reason,
                "stop_text": stop_text(reason, res.get("improvement_rel"), float(s["tol_rel"])),
                "best": best_d, "iterations": t, "final_fit": res.get("fit"),
-               "surrogate_optimum": res.get("surrogate_optimum") or last_opt,
+               "surrogate_optimum": res.get("surrogate_optimum") or last_opt, **_algo_meta(s),
                "note": "best는 실제 예측 체인으로 검증된 설계만, surrogate_optimum은 대리모델 예측(참고)"}
     for name in files:
         p = os.path.join(O, name)
@@ -521,6 +531,64 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
     outcome = ctx.ex.db(tx)
     ctx.log(f"마무리: {outcome} — 캡처 {final_plan['status']}{(' · ' + final_plan['reason']) if final_plan.get('reason') else ''}")
     ctx.patch_result({"finished": True, "stop_text": summary["stop_text"], "final": outcome})
+
+
+SURROGATE_ONLY_TEXT = "대리모델만(검증 없음)"
+
+
+def _algo_meta(s: dict[str, Any]) -> dict[str, Any]:
+    """summary.json·opt.json 기록(§6.6): algorithm·algo_options(기본 채운 사용값)·verification."""
+    return {"algorithm": so_algo.settings_algorithm(s), "algo_options": s.get("algo_options") or {},
+            "verification": so_algo.settings_verification(s)}
+
+
+def _finalize_surrogate_only(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> None:
+    """verification none(ON-4): 검증 배치 없이 DONE·SURROGATE_ONLY. 후보는 반복 0 행 candidates에 UNVERIFIED로, 다목적이면
+    predicted_front도 반복 0 행에. best = 탐색·재사용 run의 검증된 최선(SO_COLLECT가 저장). FINAL 캡처는 건너뛴다."""
+    problem = _problem(opt)
+    s = opt["settings"]
+    O = _O(ctx, opt)
+    points = _read_points(ctx, O, problem, r - 1)
+    cands = [{**c, "state": "UNVERIFIED", "verified": None} for c in (res.get("candidates") or [])]
+    reason = so_algo.STOP_SURROGATE_ONLY
+    best_d = opt.get("best")
+    if best_d is None:
+        bp = ds.best_point(points, problem)
+        best_d = _best_dict(bp[0], bp[1], problem) if bp else None
+    fit = res.get("fit")
+    summary = {"label": so_repo.opt_label(opt["opt_no"]), "stop_reason": reason, "stop_text": SURROGATE_ONLY_TEXT,
+               "best": best_d, "iterations": 0, "final_fit": fit,
+               "surrogate_optimum": res.get("surrogate_optimum"), "candidates": cands,
+               "predicted_front_size": len(res.get("predicted_front") or []), **_algo_meta(s),
+               "note": "best는 탐색(재사용) run 중 검증된 최선, 후보·surrogate_optimum은 대리모델 예측(미검증)"}
+    files = {"verified_runs.csv": ds.dataset_csv(points, problem, with_feasible=True)}
+    for name in (*files, "summary.json"):
+        p = os.path.join(O, name)
+        if os.path.lexists(p):
+            ctx.backup([p])
+    for name, text in files.items():
+        write_text(os.path.join(O, name), text)
+    write_json_atomic(os.path.join(O, "summary.json"), summary)
+    for name in (*files, "summary.json"):
+        ctx.add_output(os.path.join(O, name))
+    title = (f"내장 최적화 {so_repo.opt_label(opt['opt_no'])} 완료(대리모델만) — 미검증 후보 {len(cands)}개, "
+             "결과 화면에서 예측 검증하세요")
+    body = SURROGATE_ONLY_TEXT
+    final = {"status": "SKIPPED", "reason": "대리모델만(검증 없음) 모드는 마무리 캡처를 하지 않습니다", "stop_reason": reason,
+             "notice": {"title": title, "body": body}}
+
+    def tx(c: Any) -> str | None:
+        o = so_repo.get(c, opt["id"], for_update=True)
+        if o is None or o["status"] not in so_repo.ACTIVE or o["current_job_id"] != ctx.ex.job_id:
+            return None
+        so_repo.set_iter(c, o["id"], 0, fit=fit, candidates=cands, predicted_front=res.get("predicted_front"))
+        so_repo.set_opt(c, o["id"], status="DONE", best=best_d, stop_reason=reason, finished_at=_now(), final=final)
+        notif_repo.notify_opt_done(c, o, ctx.ex.job_id, title, body)
+        return "done"
+
+    outcome = ctx.ex.db(tx)
+    ctx.log(f"마무리(대리모델만): {outcome} — 미검증 후보 {len(cands)}개")
+    ctx.patch_result({"finished": True, "stop_text": SURROGATE_ONLY_TEXT, "final": outcome})
 
 
 def _final_json(plan: dict[str, Any]) -> dict[str, Any]:

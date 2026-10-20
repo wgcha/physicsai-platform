@@ -66,6 +66,122 @@ export function rowIssue(r: VarRow): string | null {
   return null;
 }
 
+// ---- opt-native §6·§10: 알고리즘·검증 방식·고급 옵션 ------------------------------------------------------
+
+export type Algorithm = "ego" | "ga" | "nsga2";
+export type Verification = "loop" | "none";
+export const ALGO_LABEL: Record<Algorithm, string> = { ego: "대리모델 EGO(기본)", ga: "유전 알고리즘 GA", nsga2: "NSGA-II" };
+export const ALGO_SHORT: Record<string, string> = { ego: "EGO", ga: "GA", nsga2: "NSGA-II" };
+export const ALGO_REVERT_NOTE = "목적 수가 바뀌어 알고리즘을 대리모델 EGO로 되돌렸습니다";
+export const NONE_NOTE = "예측 run 없이 대리모델로만 탐색합니다. 결과의 후보는 미검증이며 '선택 해 예측 검증'으로 확인하세요";
+export const UNVERIFIED_BADGE = "대리모델 예측(미검증)";
+
+/** 목적 수에 맞는 알고리즘인지(§6.1) — 아니면 툴팁 문구 */
+export function algoTip(a: Algorithm, nObj: number): string | null {
+  if (a === "ga" && nObj > 1) return "GA는 단일 목적 전용";
+  if (a === "nsga2" && nObj < 2) return "NSGA-II는 목적 2개 이상";
+  return null;
+}
+
+/** 고급 옵션 입력(빈칸 = 기본) */
+export interface AlgoForm {
+  pop_size: string;
+  generations: string;
+  crossover_prob: string;
+  mutation_prob: string;
+  eta_c: string;
+  eta_m: string;
+}
+export const EMPTY_ALGO: AlgoForm = { pop_size: "", generations: "", crossover_prob: "", mutation_prob: "", eta_c: "", eta_m: "" };
+export interface AlgoDefaults {
+  pop_size?: number | null;
+  generations: number;
+  crossover_prob: number;
+  mutation_prob?: number | null;
+  eta_c: number;
+  eta_m: number;
+}
+
+/** §6.7 기본 집단 크기(서버 algo.default_pop_size와 같은 식) */
+export function defaultPopSize(a: Algorithm, nG: number): number {
+  if (a === "ga") {
+    const p = Math.min(Math.max(10 * nG, 40), 200);
+    return p + (p % 2);
+  }
+  const p = Math.ceil(Math.max(100, 10 * nG) / 4) * 4;
+  return Math.min(Math.max(p, 100), 400);
+}
+
+/** 클라이언트 범위 검사(§6.7) — 서버 ALGO_OPTIONS_INVALID와 같은 문구 */
+export function algoIssues(a: Algorithm, f: AlgoForm, nG: number, defs: AlgoDefaults | undefined, maxEvals: number): string[] {
+  if (a === "ego") return [];
+  const out: string[] = [];
+  const num = (s: string) => (s.trim() === "" ? null : Number(s));
+  const ps = num(f.pop_size);
+  const step = a === "nsga2" ? 4 : 2;
+  if (ps != null && (!Number.isInteger(ps) || ps < 8 || ps > 1000 || ps % step)) out.push(`집단 크기는 8~1000의 ${step === 4 ? "4의 배수" : "짝수"}입니다`);
+  const g = num(f.generations);
+  if (g != null && (!Number.isInteger(g) || g < 1 || g > 2000)) out.push("세대 수는 1~2000입니다");
+  const pc = num(f.crossover_prob);
+  if (pc != null && (!Number.isFinite(pc) || pc < 0 || pc > 1)) out.push("교차 확률은 0~1입니다");
+  const pm = num(f.mutation_prob);
+  if (pm != null && (!Number.isFinite(pm) || pm < 0 || pm > 1)) out.push("변이 확률은 0~1입니다");
+  const ec = num(f.eta_c);
+  if (ec != null && (!Number.isFinite(ec) || ec < 1 || ec > 100)) out.push("η_c는 1~100입니다");
+  const em = num(f.eta_m);
+  if (em != null && (!Number.isFinite(em) || em < 1 || em > 100)) out.push("η_m는 1~100입니다");
+  if (!out.length) {
+    const pop = ps ?? defs?.pop_size ?? defaultPopSize(a, Math.max(nG, 1));
+    const gens = g ?? defs?.generations ?? (a === "ga" ? 150 : 200);
+    if (pop * gens > maxEvals) out.push(`집단 크기 × 세대 수(${pop} × ${gens} = ${pop * gens})가 상한 ${maxEvals}을 넘습니다`);
+  }
+  return out;
+}
+
+/** 요청 algo_options(빈칸 = null). ego는 보내지 않는다 */
+export function algoOptionsBody(f: AlgoForm): Record<string, number | null> {
+  const n = (s: string) => (s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
+  return { pop_size: n(f.pop_size), generations: n(f.generations), crossover_prob: n(f.crossover_prob), mutation_prob: n(f.mutation_prob), eta_c: n(f.eta_c), eta_m: n(f.eta_m) };
+}
+
+/** fit.algo(§6.6) */
+export interface AlgoRecord {
+  name: string;
+  pop_size?: number;
+  generations?: number;
+  generations_run?: number;
+  evals?: number;
+  stop?: string;
+  seed?: number;
+  best_pred?: number | null;
+  hv_pred?: number | null;
+}
+
+/** 품질 표 "탐색기" 칸: "GA 150/150 최대 세대" · "NSGA-II 142/200 정체 종료" · "EGO" */
+export function searcherText(a: AlgoRecord | null | undefined): string {
+  if (!a?.name) return "—";
+  const label = ALGO_SHORT[a.name] ?? a.name;
+  if (a.name === "ego" || a.generations == null) return label;
+  return `${label} ${a.generations_run ?? "?"}/${a.generations} ${a.stop === "STALL" ? "정체 종료" : "최대 세대"}`;
+}
+
+/** 상태 칸: "알고리즘: NSGA-II · 세대 200(정체 종료 142)" — 마지막 반복의 fit.algo(없으면 settings.algorithm) */
+export function algoStatusText(o: Pick<SurrogateOpt, "iterations" | "settings">): string | null {
+  const st = o.settings as { algorithm?: string; verification?: string };
+  const last = [...((o.iterations ?? []) as SoIteration[])].reverse().map((it) => (it.fit as { algo?: AlgoRecord } | null | undefined)?.algo).find((a) => a?.name);
+  const name = last?.name ?? st.algorithm;
+  if (!name) return null;
+  let txt = `알고리즘: ${ALGO_SHORT[name] ?? name}`;
+  if (last && last.name !== "ego" && last.generations != null) {
+    txt += ` · 세대 ${last.generations}`;
+    if (last.stop === "STALL") txt += `(정체 종료 ${last.generations_run})`;
+  }
+  if (st.verification === "none") txt += " · 대리모델만(검증 없음)";
+  return txt;
+}
+
+export const isSurrogateOnly = (o: Pick<SurrogateOpt, "settings">) => (o.settings as { verification?: string }).verification === "none";
+
 export interface SoForm {
   paramSetId: string | null;
   modelId: string | null;
@@ -85,6 +201,10 @@ export interface SoForm {
   seed: string;
   multi: string;
   capture: boolean;
+  /** opt-native §8 */
+  algorithm?: Algorithm;
+  verification?: Verification;
+  algo?: AlgoForm;
 }
 
 const int = (s: string, d: number) => (s.trim() === "" || !Number.isFinite(Number(s)) ? d : Math.trunc(Number(s)));
@@ -116,12 +236,18 @@ export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
     seed: int(f.seed, 1),
     multi_execution: int(f.multi, 1),
     capture: f.capture,
+    // opt-native §8: 알고리즘·검증 방식(기본 ego·loop도 명시), GA·NSGA-II만 고급 옵션
+    ...(f.algorithm ? { algorithm: f.algorithm } : {}),
+    ...(f.verification ? { verification: f.verification } : {}),
+    ...(f.algorithm && f.algorithm !== "ego" ? { algo_options: algoOptionsBody(f.algo ?? EMPTY_ALGO) } : {}),
   };
 }
 
 /** 미리보기 한 줄: "예측 최대 32 run(탐색 20 + 3 × 4) · 예상 70분" */
-export function previewText(p: { explore_count: number; max_total_runs: number; estimate_min?: number | null }, it: number, k: number, objectives = 1): string {
-  const parts = p.explore_count ? `탐색 ${p.explore_count} + ${it} × ${k}` : `재사용 + ${it} × ${k}`;
+export function previewText(p: { explore_count: number; max_total_runs: number; estimate_min?: number | null; verification?: string }, it: number, k: number, objectives = 1): string {
+  const none = p.verification === "none";
+  const parts = none ? (p.explore_count ? `탐색 ${p.explore_count} · 대리모델만` : "재사용 · 대리모델만")
+    : p.explore_count ? `탐색 ${p.explore_count} + ${it} × ${k}` : `재사용 + ${it} × ${k}`;
   const est = p.estimate_min != null ? ` · 예상 ${Math.round(p.estimate_min)}분` : "";
   const multi = objectives > 1 ? ` · 목적 ${objectives}개(다목적)` : "";
   return `예측 최대 ${p.max_total_runs} run(${parts})${est}${multi}`;

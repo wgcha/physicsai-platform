@@ -192,6 +192,20 @@ class SurrogateOptCfg(_M):
     mo_gp_restarts: int = 4  # ParEGO 스칼라화 GP 재시작
     mo_hvi_share_m3: float = 0.5  # 3목적 HVI 활용 후보 비율(⌈k·share⌉, 0 = 1개 — 계약 §22.5.4 원안)
     mo_front_prox_m3: float = 6.0  # 3목적 ParEGO 획득값 × exp(−prox·예측 전선까지 정규화 거리)(0 = 끔)
+    # opt-native §9: 알고리즘(ego | ga | nsga2)·GA·NSGA-II 기본값(pop_size null = §6.7 식, 변이 확률 = 1/유전자 수)
+    default_algorithm: str = "ego"
+    ga_pop_size: int | None = None
+    ga_generations: int = 150
+    nsga2_pop_size: int | None = None
+    nsga2_generations: int = 200
+    ga_crossover_prob: float = 0.9
+    ga_eta_c: float = 15.0
+    nsga2_eta_c: float = 20.0
+    ga_eta_m: float = 20.0
+    ga_stall_generations: int = 30
+    ga_archive_max: int = 5000
+    ga_max_evals: int = 100000
+    max_levels: int = 8  # 범주 변수(다중 baseline 위상 baseline) 수준 상한
 
 
 class OptimizeCfg(_M):

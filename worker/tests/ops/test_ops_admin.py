@@ -107,8 +107,10 @@ def test_env_check_probes_and_failures(tmp_path, fake_tools, engine, fake_dashbo
         wi = {i["key"]: i for i in c.get(f"{API}/admin/env-checks/{chk['id']}", headers=A).json()["items"]}
         assert wi["probe.edspy"]["status"] == "FAIL" and "종료코드" in wi["probe.edspy"]["message"]  # fake_edspy unknown → 4
         assert wi["probe.simlab"]["status"] == "FAIL" and wi["probe.simlab"]["message"] == "시간 초과"
-        assert wi["altair.hw_exe_path"]["status"] == "FAIL" and wi["altair.hyperstudy_path"]["status"] == "WARN"
-        assert wi["altair.hstpy_path"]["status"] == "WARN"  # hyperstudy 비어 파생도 비어 있음
+        # opt-native §4.3: HyperStudy(레거시) 키는 비어 있으면 SKIP(다른 빈 키는 WARN 그대로)
+        assert wi["altair.hw_exe_path"]["status"] == "FAIL" and wi["altair.hyperstudy_path"]["status"] == "SKIP"
+        assert wi["altair.hstpy_path"]["status"] == "SKIP"  # hyperstudy 비어 파생도 비어 있음
+        assert wi["altair.hvtrans_exe_path"]["status"] == "WARN"
         assert wi["resource.launchers.gen_radioss"]["status"] == "FAIL" and "2개" in wi["resource.launchers.gen_radioss"]["message"]
         assert wi["gpu.detect"]["status"] == "WARN" and "nvidia-smi 종료코드 1" in wi["gpu.detect"]["message"]   # D3-45 ERROR
         rep = json.loads((ai / "_platform" / "env_checks" / chk["id"] / "report.json").read_text())

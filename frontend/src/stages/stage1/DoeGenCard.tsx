@@ -5,7 +5,7 @@ import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Card, CodeLine, Field, RunAction } from "../../components/ui";
 import { useApp } from "../../app/AppContext";
 import { PathInput } from "../../components/PathInput";
-import { FeatureGate } from "../../components/FeatureGate";
+import { FeatureGate, useFeature } from "../../components/FeatureGate";
 import { SamplingDescription } from "../../components/SamplingDescription";
 import { HS_COMPAT_NOTE, HS_NOTE, descIdOf, hsCalcNote } from "../../lib/sampling";
 import { useTrain } from "./TrainContext";
@@ -60,7 +60,9 @@ export function DoeGenCard() {
   const [typesError, setTypesError] = useState<string | null>(null);
   // S18 §23.9: 생성 방식 기본 = /status 설정값(저장하지 않는다). 사용자가 고르기 전에는 status 값을 따라간다
   const [pickedGen, setPickedGen] = useState<DoeGenerator | null>(null);
-  const generator = pickedGen ?? lim.generatorDefault;
+  // opt-native §4.4: HyperStudy(레거시) 생성은 features.train_doe가 꺼져 있으면 숨긴다(플랫폼만)
+  const hstOn = useFeature("train_doe").enabled;
+  const generator = !hstOn ? "platform" : pickedGen ?? lim.generatorDefault;
   const [plat, setPlat] = useState<PlatformState>(initialPlatform);
   const [platMulti, setPlatMulti] = useState<number | null>(null); // null = 설정 기본(4)을 따른다
   const [continueOnFail, setContinueOnFail] = useState(false);
@@ -138,7 +140,7 @@ export function DoeGenCard() {
           disabled={!canExec}
           options={[
             { key: "platform", label: "플랫폼 생성(동시 실행)" },
-            { key: "hyperstudy", label: "원본 HyperStudy(호환)" },
+            ...(hstOn ? [{ key: "hyperstudy" as const, label: "HyperStudy(레거시)" }] : []),
           ]}
           onChange={setPickedGen}
         />

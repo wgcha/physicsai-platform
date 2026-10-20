@@ -13,6 +13,7 @@ import { FEM_BUTTON_LABEL } from "../../stage4/verify/verifyRules";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
 import type { ParetoModel, ParetoPt } from "./paretoView";
 import { PRED_NOTE, SCORE_TIP, VERIFY_FIRST_TEXT } from "./paretoView";
+import { isSurrogateOnly } from "./soRules";
 
 export const KIND_LABEL: Record<string, string> = { EXPLORE: "탐색", REUSE: "재사용", VERIFY: "검증", EXTRA: "추가" };
 export const EXTRA_DONE_NOTE = "검증이 끝나면 이 표에 반영됩니다";
@@ -125,7 +126,7 @@ export function ParetoTable({ o, model, sel, onToggle, showPred, base, onChanged
         </button>
         {canExec && (
           <>
-            <button type="button" className="btn small primary" disabled={!!verifyReason || busy} title={verifyReason ?? undefined} onClick={() => void verify()}>
+            <button type="button" className={`btn primary${isSurrogateOnly(o) ? "" : " small"}`} data-testid="pareto-verify" disabled={!!verifyReason || busy} title={verifyReason ?? undefined} onClick={() => void verify()}>
               선택 해 예측 검증{chosen.length ? ` (${chosen.length})` : ""}
             </button>
             <label className="check small">
@@ -144,6 +145,7 @@ export function ParetoTable({ o, model, sel, onToggle, showPred, base, onChanged
       )}
       {!last && extraActive && <p className="muted small" data-testid="extra-note">추가 검증이 진행 중입니다 — {EXTRA_DONE_NOTE}</p>}
       {error && <p className="error-text small" role="alert">{error}</p>}
+      {isSurrogateOnly(o) && <p className="small" data-testid="none-verify-hint">대리모델만(검증 없음) 결과입니다 — 예측 점을 골라 '선택 해 예측 검증'으로 확인하세요.</p>}
       <p className="muted small">가중합은 전선의 오목한 부분의 해를 고를 수 없어, 표에서 직접 고르는 것이 기본입니다. 예측(미검증) 점은 예측 검증을 거친 뒤에만 FEM 검증 대상이 됩니다.</p>
     </Card>
   );

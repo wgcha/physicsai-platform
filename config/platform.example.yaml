@@ -43,7 +43,7 @@ storage:
 
 altair:                           # 하드코딩 금지 — 실행 파일 경로는 여기서만 (원본 common.py:25-37 키)
   version_label: "2026.1"
-  hyperstudy_path: "C:/Program Files/Altair/2026.1/hwdesktop/hst/bin/win64/hstbatch.exe"
+  hyperstudy_path: ""             # 선택(레거시). 비우면 ①-3 HyperStudy 생성·⑥ 원본 최적화만 꺼짐. 설치 탐지 배치: hwdesktop/hst/bin/win64/hstbatch.exe
   simlab_path:     "C:/Program Files/Altair/2026.1/SimLab/bin/win64/SimLab.bat"
   edspy_path:      "C:/Program Files/Altair/2026.1/common/eds/win64/bin/win64/edspy.bat"
   hw_exe_path:     "C:/Program Files/Altair/2026.1/hwdesktop/hw/bin/win64/hw.exe"
@@ -383,6 +383,19 @@ surrogate_opt:                      # ⑤ 플랫폼 내장 최적화(phase3 §18
   mo_gp_restarts: 4                 # ParEGO 스칼라화 GP 재시작 수
   mo_hvi_share_m3: 0.5              # 3목적: HVI 활용 후보 ⌈k·비율⌉개(0 = 1개)
   mo_front_prox_m3: 6.0             # 3목적: ParEGO 후보를 예측 전선 가까이(0 = 끔)
+  default_algorithm: ego            # 화면 기본 알고리즘: ego(대리모델 EGO) | ga(단일 목적) | nsga2(다목적) — opt-native §9
+  ga_pop_size: null                 # GA 집단 크기(null = clamp(10·변수 수, 40, 200), 짝수 8~1000)
+  ga_generations: 150               # GA 세대 수(1~2000)
+  nsga2_pop_size: null              # NSGA-II 집단 크기(null = clamp(⌈max(100, 10·변수 수)/4⌉·4, 100, 400), 4의 배수)
+  nsga2_generations: 200            # NSGA-II 세대 수(1~2000)
+  ga_crossover_prob: 0.9            # GA·NSGA-II 교차 확률(0~1). 변이 확률 기본 = 1/변수 수
+  ga_eta_c: 15                      # GA SBX 분포 지수 η_c(1~100)
+  nsga2_eta_c: 20                   # NSGA-II SBX 분포 지수 η_c(1~100)
+  ga_eta_m: 20                      # GA·NSGA-II 다항 변이 분포 지수 η_m(1~100)
+  ga_stall_generations: 30          # 정체 종료: 개선 없는 세대가 이 수만큼 이어지면 멈춤
+  ga_archive_max: 5000              # GA 후보 보관 집합 상한(늦은 세대 우선)
+  ga_max_evals: 100000              # 집단 크기 × 세대 수 상한(반복당 대리모델 평가 수)
+  max_levels: 8                     # 범주 변수(다중 baseline 위상 baseline) 수준 상한
 
 env_check:
   probe_timeout_s: 60               # 점검용 짧은 실행만의 상한(작업 step 시간 한도 아님)

@@ -13,7 +13,11 @@ import { fmtNum, fmtTime, isTerminal } from "../../../lib/format";
 import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/TemplatePicker";
 import { ModelLine, useModelChoice } from "../../stage4/predictRun";
 import { maxMultiExecution } from "../../stage4/batch/BatchSetup";
-import { buildBody, previewText, rowIssue, varRows, type SoForm, type VarRow } from "./soRules";
+import {
+  ALGO_REVERT_NOTE, EMPTY_ALGO, algoIssues, algoTip, buildBody, previewText, rowIssue, varRows,
+  type AlgoDefaults, type Algorithm, type SoForm, type VarRow,
+} from "./soRules";
+import { AlgoOptions, AlgorithmField, NoneNote, VerificationField } from "./AlgoOptions";
 import { PerfTable } from "./PerfTable";
 import { DEFAULT_MAX_OBJECTIVES, DEFAULT_MAX_OBSERVE, perfRows, pruneSels, rolesIssue, roleCounts, type RoleSel } from "./perfRules";
 import "../../../styles/surrogateMulti.css";
@@ -25,7 +29,8 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const canExec = useCanExecute();
   const { list, ps, setPicked } = useTemplateChoice();
   const choice = useModelChoice();
-  const soStatus = (status as { surrogate_opt?: { defaults?: { iterations: number; candidates: number; tol_rel: number; surrogate: string }; max_objectives?: number; max_observe?: number } } | null)?.surrogate_opt;
+  const soStatus = (status as { surrogate_opt?: { defaults?: { iterations: number; candidates: number; tol_rel: number; surrogate: string }; max_objectives?: number; max_observe?: number;
+    default_algorithm?: string; algo_defaults?: Record<string, AlgoDefaults>; ga_max_evals?: number } } | null)?.surrogate_opt;
   const defs = soStatus?.defaults;
   const limits = { maxObjectives: soStatus?.max_objectives ?? DEFAULT_MAX_OBJECTIVES, maxObserve: soStatus?.max_observe ?? DEFAULT_MAX_OBSERVE };
   const maxMulti = maxMultiExecution(status);
@@ -34,7 +39,9 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
     sels: {}, weights: {}, rows: varRows(ps),
     surrogate: defs?.surrogate === "rbf" ? "rbf" : "gp", iterations: String(defs?.iterations ?? 3), candidates: String(defs?.candidates ?? 4),
     tolPct: String((defs?.tol_rel ?? 0.01) * 100), seed: "1", multi: String(Math.min(4, maxMulti)), capture: false,
+    algorithm: soStatus?.default_algorithm === "ga" ? "ga" : "ego", verification: "loop", algo: { ...EMPTY_ALGO },
   }));
+  const [algoNote, setAlgoNote] = useState<string | null>(null);
   const set = (p: Partial<SoForm>) => setF((x) => ({ ...x, ...p }));
   const [batches, setBatches] = useState<PredictBatchSummary[]>([]);
   const [dm, setDm] = useState<DesignMap | null>(null);
@@ -98,8 +105,19 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   };
   const extractNote = extractErr ?? (extractActive ? `성능 다시 추출 진행 중${extract.job?.progress_pct != null ? ` ${Math.round(extract.job.progress_pct)}%` : ""} — 작업 대기열에서 확인하세요` : null);
   const nObj = roleCounts(f.sels, perfs.map((p) => p.name)).objectives;
+  const algorithm: Algorithm = f.algorithm ?? "ego";
+  // opt-native §10: 목적 수가 바뀌어 선택이 무효가 되면 EGO로 되돌리고 회색 한 줄로 알린다
+  useEffect(() => {
+    if (nObj > 0 && algoTip(algorithm, nObj)) {
+      set({ algorithm: "ego" });
+      setAlgoNote(ALGO_REVERT_NOTE);
+    }
+  }, [nObj, algorithm]);
+  const nG = f.rows.filter((r) => !r.fixed).length;
+  const algoProblems = algoIssues(algorithm, f.algo ?? EMPTY_ALGO, nG, soStatus?.algo_defaults?.[algorithm], soStatus?.ga_max_evals ?? 100000);
+  const none = f.verification === "none";
   const reason = !ps ? "템플릿이 필요합니다" : !choice.chosenModel ? "Final 모델을 먼저 지정하세요" : active ? "진행 중인 내장 최적화가 있습니다" :
-    roleProblem ? roleProblem : !ready ? "입력값을 확인하세요" : preview?.problems.length ? "문제를 해결하세요" : null;
+    roleProblem ? roleProblem : !ready ? "입력값을 확인하세요" : algoProblems.length ? "고급 옵션을 확인하세요" : preview?.problems.length ? "문제를 해결하세요" : null;
   const start = async () => {
     setBusy(true);
     setError(null);
@@ -208,12 +226,16 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
               ))}
             </div>
           </Field>
-          <Field label="반복"><input className="num" value={f.iterations} onChange={(e) => set({ iterations: e.target.value.replace(/[^0-9]/g, "") })} aria-label="반복" /></Field>
+          <AlgorithmField value={algorithm} nObj={nObj} note={algoNote} onChange={(a) => { set({ algorithm: a }); setAlgoNote(null); }} />
+          <VerificationField value={f.verification ?? "loop"} onChange={(v) => set({ verification: v })} />
+          {!none && <Field label="반복"><input className="num" value={f.iterations} onChange={(e) => set({ iterations: e.target.value.replace(/[^0-9]/g, "") })} aria-label="반복" /></Field>}
           <Field label="후보"><input className="num" value={f.candidates} onChange={(e) => set({ candidates: e.target.value.replace(/[^0-9]/g, "") })} aria-label="후보" /></Field>
-          <Field label="개선 기준(%)"><input className="num" value={f.tolPct} onChange={(e) => set({ tolPct: e.target.value })} aria-label="개선 기준" /></Field>
+          {!none && <Field label="개선 기준(%)"><input className="num" value={f.tolPct} onChange={(e) => set({ tolPct: e.target.value })} aria-label="개선 기준" /></Field>}
           <Field label="시드"><input className="num" value={f.seed} onChange={(e) => set({ seed: e.target.value.replace(/[^0-9]/g, "") })} aria-label="시드" /></Field>
           <Field label={`동시 실행 수(1~${maxMulti})`}><input className="num" value={f.multi} onChange={(e) => set({ multi: e.target.value.replace(/[^0-9]/g, "") })} aria-label="동시 실행 수" /></Field>
         </div>
+        {none && <NoneNote />}
+        <AlgoOptions algorithm={algorithm} value={f.algo ?? EMPTY_ALGO} onChange={(a) => set({ algo: a })} defs={soStatus?.algo_defaults?.[algorithm]} nG={nG} issues={algoProblems} />
         <label className="check">
           <input type="checkbox" checked={f.capture} onChange={(e) => set({ capture: e.target.checked })} /> 검증 run 컨투어 캡처
         </label>

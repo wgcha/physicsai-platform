@@ -307,6 +307,10 @@ def _validate_surrogate_opt(s: Settings, issues: list[ConfigIssue]) -> None:
         issues.append(ConfigIssue("surrogate_opt.mo_front_prox_m3", "0~50"))
     if not 0.01 <= so.mo_ref_offset <= 1.0:
         issues.append(ConfigIssue("surrogate_opt.mo_ref_offset", "0.01~1"))
+    from ..stage5_optimize.surrogate.algo import config_issues  # opt-native §9
+
+    for k, rng in config_issues(so):
+        issues.append(ConfigIssue(f"surrogate_opt.{k}", rng))
     if not _SO_DIR_RE.fullmatch(so.dir_name) or so.dir_name.split("/")[0].casefold() in ("_platform", "_backup"):
         issues.append(ConfigIssue("surrogate_opt.dir_name", "Study 기준 상대 폴더(영숫자·_·-, '/' 구분, 4단계 이내)"))
 

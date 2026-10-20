@@ -9,6 +9,10 @@ from .config import ENV_PROBE_TOOLS, LAUNCHER_KEYS, RESOURCE_DIR_KEYS, RESOURCE_
 CATEGORIES = ("CONFIG", "DATABASE", "AUTH", "HPC", "WORKER", "EXECUTABLE", "RESOURCE", "STORAGE", "GPU")
 STATUSES = ("OK", "WARN", "FAIL", "SKIP", "PENDING")
 ALTAIR_CHECK_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path", "hstpy_path")
+# opt-native §4.3: HyperStudy 레거시 키·프로브 — 비어 있으면 WARN 대신 SKIP(경로가 있는데 파일이 없으면 기존대로 FAIL)
+LEGACY_ALTAIR_KEYS = ("hyperstudy_path", "hstpy_path")
+LEGACY_PROBE_TOOLS = ("hstbatch", "hstpy")
+LEGACY_SKIP_MESSAGE = "선택(레거시 HyperStudy) — 미설정"
 
 LABELS = {
     "config.valid": "설정 검증", "server.frontend_root": "프런트 정적 서빙",

@@ -158,7 +158,8 @@ def propose_multi(ctx: Any, opt: dict[str, Any], problem: ds.Problem, fit: Any, 
         ctx.log("[WARN] surrogate.json에 ParEGO 가중치·시드를 기록하지 못했습니다")
     res_fit = ctx.result().get("fit") or {}
     patch: dict[str, Any] = {"candidates": rows, "predicted_front": front, "used_weights": prop.used_weights,
-                             "mo_seeds": prop.seeds, "fit": {**res_fit, "used_weights": prop.used_weights},
+                             "mo_seeds": prop.seeds,
+                             "fit": {**res_fit, "used_weights": prop.used_weights, "algo": {"name": "ego"}},  # opt-native §6.6
                              "surrogate_optimum": None}
     ctx.log(f"예측 전선 {len(front)}점 · 후보 {len(rows)}개({', '.join(r_['role'] for r_ in rows)})")
     if not rows:

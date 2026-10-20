@@ -55,6 +55,14 @@ FEATURES: dict[str, FeatureReq] = {
     "fem_verify_rebuild": FeatureReq(needs_hpc=True),
 }
 
+# opt-native §4.1(ON-1): HyperStudy(hstbatch·hstpy) 레거시 기능 — 설정했을 때만 켜지고, 미설정이면 화면에서 숨기며 점검은 SKIP.
+# 이 밖의 기능 판정(FEATURES·JOB_FEATURE·_SPECIAL_MISSING)은 HyperStudy 키를 참조하지 않는다(정적 시험 V-ON-1).
+LEGACY_FEATURES = frozenset({"train_doe", "optimize"})
+LEGACY_JOBS = frozenset({"OPTIMIZE"})
+HYPERSTUDY_ALTAIR_KEYS = ("hyperstudy_path", "hstpy_path", "altair_home")
+HYPERSTUDY_TEMPLATES = ("hst_gen_radioss", "hst_optimization")
+HYPERSTUDY_LAUNCHERS = ("gen_radioss", "optimization")
+
 # 작업 유형 → 기능(생성 시 사전조건 확인용). 템플릿/자원은 그 작업 step이 실제로 쓰는 것만.
 JOB_FEATURE: dict[str, FeatureReq] = {
     "TD_EXTRACT_PARAMS": FEATURES["train_extract"],
@@ -226,4 +234,6 @@ def feature_status(s: Settings, hpc_configured: bool) -> dict[str, dict[str, Any
         else:
             t, r = fn(s) if fn else missing_for(s, req, hpc_configured)
         out[name] = {"enabled": not t and not r, "missing": t + r}
+        if name in LEGACY_FEATURES:  # opt-native §4.2 — 그 밖은 기본 false(생략)
+            out[name]["legacy"] = True
     return out

@@ -2,13 +2,14 @@
 // 컨투어 비교(기준안·최적안 마무리 캡처 — 같은 범례, 방향 공유, 이미지·영상 받기는 ContourMedia).
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import type { ViewKey } from "../../../api";
-import type { SurrogateOpt } from "../../../api/surrogateOpt";
+import { errorMessage, type ViewKey } from "../../../api";
+import { surrogateApi, type SoCandidate, type SoIteration, type SurrogateOpt } from "../../../api/surrogateOpt";
+import { useCanExecute } from "../../../hooks/useJobRunner";
 import { Card } from "../../../components/ui";
 import { fmtNum } from "../../../lib/format";
 import { ContourMedia } from "../../stage4/ContourMedia";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
-import { boundNote, compareRows, kpis, objectiveDefs } from "./soRules";
+import { UNVERIFIED_BADGE, boundNote, compareRows, kpis, objectiveDefs } from "./soRules";
 
 export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — FEM 검증 버튼으로 조립 상태 해석과 비교할 수 있습니다";
 export const FINAL_TEXT: Record<string, string> = {
@@ -130,6 +131,71 @@ export function ContourCompareCard({ o }: { o: SurrogateOpt }) {
           ))}
         </div>
       )}
+    </Card>
+  );
+}
+
+/** opt-native ON-4 단일 목적 `대리모델만` 결과: 미검증 후보(반복 0 행 candidates) 표 + 선택 해 예측 검증(§22.7 EXTRA, 강조) */
+export function UnverifiedCard({ o, onChanged }: { o: SurrogateOpt; onChanged: () => void }) {
+  const canExec = useCanExecute();
+  const cands = ((o.iterations ?? []) as SoIteration[]).flatMap((it) => (it.candidates ?? []).filter((c) => c.state === "UNVERIFIED")) as SoCandidate[];
+  const [sel, setSel] = useState<Set<number>>(new Set());
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [done, setDone] = useState<string | null>(null);
+  const names = (o.settings as { names?: string[] }).names ?? [];
+  const label = objectiveDefs(o)[0]?.label ?? "목적";
+  const chosen = cands.filter((c) => sel.has(c.doe_no));
+  const reason = !o.can_verify_more ? "지금은 추가 검증을 시작할 수 없습니다" : !chosen.length ? "검증할 후보를 고르세요" : null;
+  const verify = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await surrogateApi.verify(o.id, { points: chosen.map((c) => ({ values: c.values })), capture: false });
+      setDone(r.batch_label);
+      onChanged();
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Card span={9} title="대리모델 최적 후보" className="so-unverified" aside={<span className="pill warn" data-testid="unverified-badge">{UNVERIFIED_BADGE}</span>}>
+      {!cands.length ? (
+        <p className="muted small">미검증 후보가 없습니다.</p>
+      ) : (
+        <div className="table-wrap">
+          <table className="table compact" aria-label="미검증 후보">
+            <thead>
+              <tr><th /><th className="num">#</th><th>역할</th>{names.map((n) => <th key={n} className="num mono">{n}</th>)}<th className="num">{label} 예측</th><th className="num">±</th></tr>
+            </thead>
+            <tbody>
+              {cands.map((c) => (
+                <tr key={c.doe_no} data-testid={`ucand-${c.doe_no}`} className={sel.has(c.doe_no) ? "selected" : ""}>
+                  <td><input type="checkbox" checked={sel.has(c.doe_no)} aria-label={`후보 ${c.doe_no} 선택`}
+                    onChange={() => setSel((x) => { const n = new Set(x); if (n.has(c.doe_no)) n.delete(c.doe_no); else n.add(c.doe_no); return n; })} /></td>
+                  <td className="num">{c.doe_no}</td>
+                  <td className="small">{c.role ?? ""}</td>
+                  {names.map((n) => <td key={n} className="num mono">{fmtNum(c.values[n])}</td>)}
+                  <td className="num mono">{fmtNum(c.predicted ?? null)}</td>
+                  <td className="num mono muted">{fmtNum(c.predicted_std?.[0] ?? null)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {canExec && (
+        <div className="run-action-row so-actions">
+          <button type="button" className="btn primary" disabled={!!reason || busy} title={reason ?? undefined} onClick={() => void verify()} data-testid="unverified-verify">
+            선택 해 예측 검증{chosen.length ? ` (${chosen.length})` : ""}
+          </button>
+        </div>
+      )}
+      <p className="small" data-testid="unverified-hint">대리모델만으로 고른 후보입니다 — 예측 체인으로 확인하려면 후보를 골라 '선택 해 예측 검증'을 누르세요.</p>
+      {done && <p className="small" data-testid="unverified-done">추가 검증 {done} 시작 — 끝나면 검증 run 표에 나타납니다</p>}
+      {error && <p className="error-text small" role="alert">{error}</p>}
     </Card>
   );
 }

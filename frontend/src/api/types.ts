@@ -81,7 +81,8 @@ export interface UiPoll {
 /** phase2.md §12.1 `/status.features` 키 */
 // S16 V2(phase3 §21.3.8): /status.features.fem_verify·fem_verify_rebuild — BE-V2 openapi 반영 전에도 같은 키로 읽는다
 export type FeatureKey = keyof S["StatusFeatures"] | "fem_verify" | "fem_verify_rebuild";
-export type FeatureState = S["FeatureState"];
+// opt-native §4.2: legacy는 true일 때만 온다(HyperStudy 레거시 기능 train_doe·optimize)
+export type FeatureState = Override<S["FeatureState"], { legacy?: boolean }>;
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
 export type EnvCheckBrief = Override<S["StatusEnvCheck"], { latest_state?: EnvCheckState | null }>;
 export type StatusInfo = Override<
@@ -90,7 +91,7 @@ export type StatusInfo = Override<
     ui: UiPoll & Record<string, number>;
     auth: { mode?: string; login_url?: string } & Record<string, string>;
     hpc: Override<S["StatusHpc"], { collect_mode: "in_place" | "shared_folder" | "drive" | string }>;
-    features?: Partial<Record<FeatureKey, S["FeatureState"] | null>> | null;
+    features?: Partial<Record<FeatureKey, FeatureState | null>> | null;
     env_check?: EnvCheckBrief | null;
   }
 >;

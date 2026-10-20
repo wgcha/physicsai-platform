@@ -12,7 +12,7 @@ from .jobs import JobSummary
 
 __all__ = [
     "StatusConfig", "StatusWorker", "StatusHpc", "KeyOk", "TemplateConfigured", "StatusLimits", "ResourceStatus",
-    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusSurrogateOpt", "StatusResponse", "QueueSlot", "QueueLight",
+    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusAlgoDefaults", "StatusSurrogateOpt", "StatusResponse", "QueueSlot", "QueueLight",
     "QueueResponse", "MoveRequest", "GpuInfo", "ResourceJob", "ResourceLimits", "ResourcesResponse",
     "Notification", "NotificationList", "UnreadCount", "ReadRequest", "ReadResponse", "AdminConfig",
 ]
@@ -63,6 +63,9 @@ class ResourceStatus(Resp):
 class FeatureState(Resp):
     enabled: bool
     missing: list[str]
+    # opt-native §4.2: HyperStudy 레거시 기능(train_doe·optimize). true일 때만 내보낸다(기존 응답 모양 {enabled, missing} 유지)
+    legacy: bool = Field(default=False, exclude_if=lambda v: not v,
+                         description="opt-native §4.2: HyperStudy 레거시 기능(train_doe·optimize) — 미설정이면 화면에서 숨김")
 
 
 class StatusFeatures(Resp):
@@ -129,6 +132,17 @@ class StatusSurrogateDefaults(Resp):
     surrogate: str
 
 
+class StatusAlgoDefaults(Resp):
+    """GA·NSGA-II 고급 옵션 기본값(opt-native §6.7). pop_size·mutation_prob null = 변수 수로 정하는 식."""
+
+    pop_size: int | None = None
+    generations: int
+    crossover_prob: float
+    mutation_prob: float | None = None
+    eta_c: float
+    eta_m: float
+
+
 class StatusSurrogateOpt(Resp):
     """⑤ 내장 최적화 화면 기본값·상한(config `surrogate_opt`, phase3 §18.6)."""
 
@@ -139,6 +153,13 @@ class StatusSurrogateOpt(Resp):
     max_objectives: int = 3  # S17 §22.10
     max_observe: int = 10
     max_extra_points: int = 10
+    # opt-native §4.2·§9
+    algorithms: list[str] = Field(default_factory=lambda: ["ego", "ga", "nsga2"])
+    default_algorithm: str = "ego"
+    algo_defaults: dict[str, StatusAlgoDefaults] = Field(default_factory=dict)
+    ga_max_evals: int = 100000
+    verifications: list[str] = Field(default_factory=lambda: ["loop", "none"])
+    max_levels: int = 8
 
 
 class StatusGeometry(Resp):

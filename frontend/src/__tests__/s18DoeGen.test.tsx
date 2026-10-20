@@ -45,16 +45,16 @@ describe("V3-S18-10 ①-3 생성 방식 세그먼트·FeatureGate", () => {
   it("기본 = /status.limits.configured.doe_generator_default(플랫폼). 설정이 hyperstudy면 호환 모드로 열린다. 저장하지 않는다", async () => {
     const a = await openCard();
     expect(seg(a.card, "생성 방식", "플랫폼 생성(동시 실행)").getAttribute("aria-pressed")).toBe("true");
-    expect(seg(a.card, "생성 방식", "원본 HyperStudy(호환)").getAttribute("aria-pressed")).toBe("false");
+    expect(seg(a.card, "생성 방식", "HyperStudy(레거시)").getAttribute("aria-pressed")).toBe("false");
     expect(within(a.card).getByTestId("doe-platform")).toBeTruthy();
     expect(within(a.card).queryByLabelText("DOE 유형")).toBeNull();
-    fireEvent.click(seg(a.card, "생성 방식", "원본 HyperStudy(호환)"));
+    fireEvent.click(seg(a.card, "생성 방식", "HyperStudy(레거시)"));
     expect(await within(a.card).findByLabelText("DOE 유형")).toBeTruthy();
     expect(within(a.card).queryByTestId("doe-platform")).toBeNull();
     a.unmount();
 
     const b = await openCard({ doeGenerator: "hyperstudy" });
-    expect(seg(b.card, "생성 방식", "원본 HyperStudy(호환)").getAttribute("aria-pressed")).toBe("true");
+    expect(seg(b.card, "생성 방식", "HyperStudy(레거시)").getAttribute("aria-pressed")).toBe("true");
     expect(await within(b.card).findByLabelText("DOE 유형")).toBeTruthy();
     expect(Object.keys(localStorage).filter((k) => /doe|generator/i.test(k))).toEqual([]); // 방식 선택은 저장하지 않는다
   });
@@ -64,7 +64,7 @@ describe("V3-S18-10 ①-3 생성 방식 세그먼트·FeatureGate", () => {
     await confirmPath(a.card);
     expect(within(a.card).getByTestId("feature-off-train_doe_platform")).toBeTruthy();
     expect(runBtn(a.card).disabled).toBe(true);
-    fireEvent.click(seg(a.card, "생성 방식", "원본 HyperStudy(호환)"));
+    fireEvent.click(seg(a.card, "생성 방식", "HyperStudy(레거시)"));
     await within(a.card).findByLabelText("Random Seed");
     expect(within(a.card).queryByTestId("feature-off-train_doe_platform")).toBeNull();
     expect(within(a.card).queryByTestId("feature-off-train_doe")).toBeNull();
@@ -75,9 +75,9 @@ describe("V3-S18-10 ①-3 생성 방식 세그먼트·FeatureGate", () => {
     await confirmPath(b.card);
     expect(within(b.card).queryByTestId("feature-off-train_doe")).toBeNull();
     expect(runBtn(b.card).disabled).toBe(false);
-    fireEvent.click(seg(b.card, "생성 방식", "원본 HyperStudy(호환)"));
-    expect(await within(b.card).findByTestId("feature-off-train_doe")).toBeTruthy();
-    expect(runBtn(b.card).disabled).toBe(true);
+    // opt-native §4.4: train_doe(HyperStudy 레거시)가 꺼져 있으면 생성 방식에서 숨긴다(플랫폼만)
+    const group = within(b.card).getByRole("group", { name: "생성 방식" });
+    expect(within(group).queryByRole("button", { name: "HyperStudy(레거시)" })).toBeNull();
   });
 });
 
@@ -185,10 +185,10 @@ describe("V3-S18-10 요청 body", () => {
     expect(bodies[1].params).toMatchObject({ generator: "platform", sampling: { kind: "lhs_opt", count: 40, seed: 7, criterion: "corr" }, on_run_failure: "continue" });
   });
 
-  it("원본 HyperStudy(호환): body는 기존과 같다(generator·sampling·on_run_failure 없음), 동시 수 기본 1, 회색 줄 2개", async () => {
+  it("HyperStudy(레거시): body는 기존과 같다(generator·sampling·on_run_failure 없음), 동시 수 기본 1, 회색 줄 2개", async () => {
     const { card, server } = await openCard();
     const bodies = recordDoeBodies(server);
-    fireEvent.click(seg(card, "생성 방식", "원본 HyperStudy(호환)"));
+    fireEvent.click(seg(card, "생성 방식", "HyperStudy(레거시)"));
     await within(card).findByLabelText("Random Seed");
     await confirmPath(card);
     expect(within(card).getByTestId("hs-note").textContent).toBe(HS_NOTE);
