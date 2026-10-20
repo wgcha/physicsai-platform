@@ -26,6 +26,7 @@ import { isIntegerFormat } from "../lib/format";
 import { PREVIEW_JSON, baseJob, contourSvg, curveJson, iso, makeSteps, responseFn, rng } from "./data";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import { captureMedia } from "./capture";
+import { addMockPerf } from "./designMapPerf";
 import { isNewKind, mockBrief, mockDesign, mockSampling } from "./sampling";
 import { isSamplingKind, recommendedCount } from "../lib/sampling";
 import type { MockServer } from "./server";
@@ -562,10 +563,11 @@ function designMapOut(srv: MockServer, b: PredictBatch): DesignMap {
   if (!runs.some((x) => x.resp))
     for (const r of ps.responses)
       if (runs.some((x) => fin(x.tbl?.[r.name]))) metrics.push({ id: `tbl:${r.name}`, label: `${r.name}(결과 표)`, unit: r.unit || null, needs_series: false });
+  const perf = addMockPerf(runs, ps.responses as TemplateResponse[]); // S19 §24.5: curve → resp → tbl → perf(끝)
   return {
     batch_id: b.id, label: b.label, status: b.status,
     parameters: ps.parameters.map((p) => ({ name: p.name, integer: ints.has(p.name), min: p.min, max: p.max })),
-    series, metrics, runs, counts,
+    series, metrics: [...metrics, ...perf.metrics], runs, counts: (perf.metrics.length || perf.specChanged ? { ...counts, spec_changed: perf.specChanged } : counts) as DesignMap["counts"], reason_text: perf.reasonText, // 서버: spec_changed는 perf 지표가 있거나 > 0일 때만 응답에 있다
   };
 }
 

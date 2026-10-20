@@ -6,7 +6,8 @@ import { renderApp, STUDY } from "../test/render";
 import { recordCalls } from "../test/recordCalls";
 import type { MockServer } from "../mock/server";
 import { fromBatch } from "../analysis/adapters/fromBatch";
-import { curveColumns, curveValue, NO_RESP_HINT, perfValue, withPerfMetrics } from "../analysis/perfColumns";
+import * as perfColumns from "../analysis/perfColumns";
+import { curveColumns, curveValue, NO_RESP_HINT } from "../analysis/perfColumns";
 import { perfRows, rolesIssue, rolesToBody, roleValueIssue, SAVE_FIRST_TEXT } from "../stages/stage5/surrogate/perfRules";
 import { fitLabel, stairPath } from "../stages/stage5/surrogate/ParetoPlot";
 import { recommend } from "../stages/stage5/surrogate/pareto";
@@ -225,15 +226,23 @@ describe("V3-S17-12 ④ 템플릿 CURVE 응답", () => {
   });
 });
 
-describe("V3-S17-12 ⑤ 결과분석 curve:/perf: 지표 확장", () => {
+describe("V3-S17-12 ⑤ 결과분석 curve:/perf: 지표 확장 (S19: 성능 값은 서버 design-map)", () => {
+  // resp(S_MAX)를 일부러 서버 perf와 다르게 둔다 — 프런트가 다시 계산하면 값이 달라진다
   const dm = {
     parameters: [{ name: "T", min: 0, max: 1, integer: false }],
     series: ["Node 100 / X"],
-    metrics: [{ id: "resp:S_MAX", label: "S", unit: null, needs_series: false }],
+    metrics: [
+      { id: "resp:S_MAX", label: "S", unit: null, needs_series: false },
+      { id: "perf:AccelPeak", label: "AccelPeak (커브 |최대|, Node 100 / X)", unit: "g", needs_series: false, spec_changed: 0 },
+      { id: "perf:S", label: "S (MAX)", unit: "MPa", needs_series: false, spec_changed: 0 },
+    ],
     runs: [1, 2, 3, 4, 5, 6].map((n) => ({
       doe_no: n, run_key: `r${n}`, state: "SUCCEEDED", values: { T: n / 10 },
-      curve: { "Node 100 / X": { max: n * 2, min: -n, absmax: n * 2 } }, resp: { S_MAX: n }, tbl: {},
+      curve: { "Node 100 / X": { max: n * 2, min: -n, absmax: n * 2 } }, resp: { S_MAX: n * 100 }, tbl: {},
+      perf: { AccelPeak: n * 2, S: n }, perf_reason: {},
     })),
+    counts: { total: 6, succeeded: 6, no_curve: 0, no_resp: 0, spec_changed: 0 },
+    reason_text: {},
   } as unknown as DesignMap;
   const batch = {
     id: "b1", parameters: ["T"], responses: [], status: "DONE", predict: { succeeded: 6 },
@@ -241,7 +250,7 @@ describe("V3-S17-12 ⑤ 결과분석 curve:/perf: 지표 확장", () => {
   } as unknown as PredictBatch;
   const perfs = [{ name: "AccelPeak", unit: "g", spec: { source: "CURVE", series: "Node 100 / X", stat: "ABSMAX" } }, { name: "S", unit: "MPa", spec: { source: "H3D", stat: "MAX" } }] as unknown as TemplateResponse[];
 
-  it("응답이 없는 배치 → 커브 대표값 열(≤12 계열 × 3)과 성능 열이 생기고 영향도가 켜진다", () => {
+  it("응답이 없는 배치 → 커브 대표값 열(≤12 계열 × 3)과 서버 perf 열이 생기고 영향도가 켜진다", () => {
     const rt = fromBatch(batch, dm, undefined, perfs);
     const names = rt.responses.map((r) => r.name);
     expect(names).toContain("curve:max|Node 100 / X");
@@ -249,26 +258,97 @@ describe("V3-S17-12 ⑤ 결과분석 curve:/perf: 지표 확장", () => {
     expect(names).toContain("AccelPeak");
     expect(rt.responses.find((r) => r.name === "curve:min|Node 100 / X")?.kind).toBe("curve");
     expect(rt.responses.find((r) => r.name === "AccelPeak")?.kind).toBe("perf");
+    expect(rt.responses.find((r) => r.name === "S")).toMatchObject({ unit: "MPa", kind: "perf" });
     expect(rt.rows[2].responses.AccelPeak).toBe(6);
-    expect(rt.rows[2].responses.S).toBe(3);
+    expect(rt.rows[2].responses.S).toBe(3); // 서버 perf(3) — resp S_MAX(300)로 다시 계산하지 않는다
     expect(rt.influence.ok).toBe(true);
-    // design-map에 perf: 지표가 더해진다
-    const ids = rt.designMap!.metrics.map((m) => m.id);
-    expect(ids).toContain("perf:AccelPeak");
-    expect(ids).toContain("perf:S");
+    // design-map은 합성 없이 서버 원본 그대로, perf: 지표도 서버가 준 것
+    expect(rt.designMap).toBe(dm);
+    expect(rt.designMap!.metrics.map((m) => m.id)).toEqual(["resp:S_MAX", "perf:AccelPeak", "perf:S"]);
+    expect(rt.notes).toEqual([]);
+    expect(rt.rows.every((r) => r.why === undefined)).toBe(true);
+  });
+
+  it("배치 표에 있는 성능 열: 서버 perf가 표 값보다 우선, perf 키가 없으면 표 값, design-map 없음(null)이면 표 값", () => {
+    const tb = { ...batch, responses: [{ name: "S", unit: "MPa" }], rows: batch.rows.map((r) => ({ ...r, responses: { S: 9 } })) } as unknown as PredictBatch;
+    const a = fromBatch(tb, dm, undefined, perfs);
+    expect(a.responses.map((r) => r.name).filter((n) => n === "S" || n === "AccelPeak")).toEqual(["S", "AccelPeak"]); // 표 열 + 서버 추가 성능 열(중복 없음)
+    expect(a.rows[0].responses.S).toBe(1);
+    const noKey = { ...dm, runs: dm.runs.map((r) => ({ ...r, perf: { AccelPeak: 1 } })) } as unknown as DesignMap;
+    expect(fromBatch(tb, noKey, undefined, perfs).rows[0].responses.S).toBe(9);
+    const none = fromBatch(tb, null, undefined, perfs);
+    expect(none.rows[0].responses.S).toBe(9);
+    expect(none.designMap).toBeNull();
+    expect(none.responses.map((r) => r.name)).toEqual(["S"]);
+  });
+
+  it("SPEC_CHANGED: null 값 + why·reasonText, 표 값으로 되돌리지 않고, notes에 다시 추출 안내", () => {
+    const tb = { ...batch, responses: [{ name: "S", unit: "MPa" }], rows: batch.rows.map((r) => ({ ...r, responses: { S: 9 } })) } as unknown as PredictBatch;
+    const chg = {
+      ...dm,
+      runs: dm.runs.map((r) => (r.doe_no <= 2 ? { ...r, perf: { AccelPeak: r.doe_no * 2, S: null }, perf_reason: { S: "SPEC_CHANGED" } } : r)),
+      counts: { ...dm.counts, spec_changed: 2 },
+      reason_text: { SPEC_CHANGED: "정의가 바뀐 뒤 추출하지 않음 — 다시 추출 필요" },
+    } as unknown as DesignMap;
+    const rt = fromBatch(tb, chg, undefined, perfs);
+    expect(rt.rows[0].responses.S).toBeNull();
+    expect(rt.rows[0].why).toEqual({ S: "SPEC_CHANGED" });
+    expect(rt.rows[2].why).toBeUndefined();
+    expect(rt.reasonText?.SPEC_CHANGED).toContain("다시 추출");
+    expect(rt.notes).toEqual(["성능 정의가 바뀐 뒤 다시 추출하지 않은 run 2개는 성능 값이 비어 있습니다 — ⑥ 최적화 설정의 성능 표에서 '다시 추출'"]);
   });
 
   it("템플릿 성능도 커브도 없으면 off 사유에 ④ 안내를 덧붙인다", () => {
-    const empty = { ...dm, series: [], runs: dm.runs.map((r) => ({ ...r, curve: null, resp: {} })) } as unknown as DesignMap;
+    const empty = { ...dm, series: [], metrics: [], runs: dm.runs.map((r) => ({ ...r, curve: null, resp: {}, perf: {}, perf_reason: {} })) } as unknown as DesignMap;
     const rt = fromBatch(batch, empty, undefined, null);
     expect(rt.influence.ok).toBe(false);
     expect(rt.influence.reason).toContain(NO_RESP_HINT);
   });
 
-  it("성능 없음 → design-map 원본 그대로(같은 참조)", () => {
-    expect(withPerfMetrics(dm, [], () => null)).toBe(dm);
+  it("프런트 성능 계산 제거: perfColumns는 커브 열 규칙만 export한다(정적)", () => {
+    expect(Object.keys(perfColumns).sort()).toEqual(["CURVE_STATS", "MAX_CURVE_SERIES", "NO_RESP_HINT", "curveColumn", "curveColumns", "curveValue"]);
+    expect("perfValue" in perfColumns).toBe(false);
+    expect("withPerfMetrics" in perfColumns).toBe(false);
     expect(curveColumns(null)).toEqual([]);
     expect(curveValue("curve:max|Node 100 / X", dm.runs[0])).toBe(2);
-    expect(perfValue(perfRows(perfs)[0], undefined, dm.runs[0])).toBe(2);
+  });
+
+  it("목 design-map(§24.5): 지표 순서 curve → resp → perf(끝), 성공 run perf = 서버 값, 성공 아닌 run perf 없음", () => {
+    const { server } = renderApp(`${STUDY}/analysis?source=batch&id=pb-2`, { user: "power" });
+    const d = server.handle("GET", "/predict-batches/pb-2/design-map", new URLSearchParams(), null, new Headers()).body as DesignMap;
+    const kinds = d.metrics.map((m) => m.id.split(":")[0]);
+    expect(kinds).toEqual([...kinds].sort((x, y) => ["curve", "resp", "tbl", "perf"].indexOf(x) - ["curve", "resp", "tbl", "perf"].indexOf(y)));
+    expect(d.metrics[d.metrics.length - 1]).toMatchObject({ id: expect.stringMatching(/^perf:/), needs_series: false });
+    const ok = d.runs.find((r) => r.state === "SUCCEEDED")!;
+    expect(Object.keys(ok.perf ?? {})).toContain("MaxStress");
+    expect(ok.perf!.MaxStress).toBe(ok.resp!.MaxStress_MAX);
+    expect(d.runs.filter((r) => r.state !== "SUCCEEDED").every((r) => r.perf === undefined || r.perf === null)).toBe(true);
+    expect(d.counts.spec_changed).toBe(0);
+  });
+
+  it("화면: SPEC_CHANGED 칸은 — 옆 '정의 변경' + title 사유, 안내 줄 표시", async () => {
+    let firstNo = 0;
+    renderApp(`${STUDY}/analysis?source=batch&id=pb-2`, { user: "power" }, (server) => {
+      const orig = server.handle.bind(server);
+      server.handle = (m, p, q, b, h) => {
+        const r = orig(m, p, q, b, h);
+        if (m === "GET" && p === "/predict-batches/pb-2/design-map" && r.status === 200) {
+          const d = r.body as DesignMap;
+          const first = d.runs.find((x) => x.state === "SUCCEEDED" && x.perf)!;
+          first.perf = { ...first.perf!, MaxStress: null };
+          first.perf_reason = { ...(first.perf_reason ?? {}), MaxStress: "SPEC_CHANGED" };
+          d.counts = { ...d.counts, spec_changed: 1 };
+          d.reason_text = { ...d.reason_text, SPEC_CHANGED: "정의가 바뀐 뒤 추출하지 않음 — 다시 추출 필요" };
+          firstNo = first.doe_no;
+        }
+        return r;
+      };
+    });
+    await screen.findByRole("region", { name: "결과 표 — B-002" });
+    const tag = await screen.findByTestId(/^spec-changed-\d+-MaxStress$/);
+    expect(tag.getAttribute("data-testid")).toBe(`spec-changed-${firstNo}-MaxStress`);
+    expect(tag.textContent).toContain("정의 변경");
+    expect(tag.closest("td")!.getAttribute("title")).toContain("다시 추출 필요");
+    expect((await screen.findAllByTestId("table-note")).some((n) => n.textContent!.includes("다시 추출"))).toBe(true);
   });
 });

@@ -30,6 +30,7 @@ from physicsai_core.paths import register_protected_roots
 
 from . import housekeeping, resources
 from .executor import Executor
+from .gpu_monitor import GpuMonitor
 from .hpc_poller import RUN_STATE_BY_HPC, HpcPollerMixin  # noqa: F401 - RUN_STATE_BY_HPC 기존 경로 재노출
 from .limiter import ProcessLimiter, select_limiter
 
@@ -64,6 +65,8 @@ class Worker(HpcPollerMixin):
         self._last_purge = 0.0
         self._last_resources: dict[str, Any] | None = None
         self._last_hpc_poll = 0.0
+        # GPU 조회는 GpuMonitor 스레드만(phase3 §24.3) — 하트비트는 캐시를 읽는다
+        self.gpu_monitor = GpuMonitor(lambda: self.settings, self.child_env)
         register_protected_roots(self.settings.storage.spdm_roots)
 
     @property
@@ -196,8 +199,10 @@ class Worker(HpcPollerMixin):
                                "peak_memory_gb": round(acc.peak_memory_bytes / 2**30, 3) if acc.peak_memory_bytes else None}
                 except Exception:
                     job_acc = {"job_id": ex.job_id}
-            self._last_resources = resources.sample(self.settings.worker.gpu_query, job_acc, self.child_env(),
-                                                     self.settings.resources.gpu_query_candidates)
+            mon = self.gpu_monitor
+            if not mon.running:  # 스레드 없이 하트비트만 구동(시험·start 전)일 때만 직접 조회 — 기존 동작
+                mon.poll_once()
+            self._last_resources = resources.sample(None, job_acc, gpu=mon.snapshot())
             if not self.config.ok:
                 self._last_resources["worker_config_errors"] = self.config.error_keys()
         eff = {**self.limits.as_dict(), "cpu_cap_enforced": bool(self.limiter.cpu_cap_enforced)}
@@ -228,6 +233,7 @@ class Worker(HpcPollerMixin):
         self._threads.append(t)
 
     def start(self) -> None:
+        self.gpu_monitor.start()
         self.heartbeat_once()
         housekeeping.reap(self.engine)
         self._loop("slot", self.run_once_slot, lambda: self.settings.worker.claim_interval_s)
@@ -254,6 +260,7 @@ class Worker(HpcPollerMixin):
     def stop(self) -> None:
         """새 claim 중지. 실행 중 step은 그대로 두고 lease 갱신을 멈춘다(→ 만료 후 INTERRUPTED)."""
         self._stop.set()
+        self.gpu_monitor.stop()
         ex = self.current_executor
         if ex is not None and ex.keeper is not None:
             ex.keeper.paused.set()

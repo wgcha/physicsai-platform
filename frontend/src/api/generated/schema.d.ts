@@ -2408,6 +2408,13 @@ export interface components {
             metrics: components["schemas"]["DesignMapMetric"][];
             /** Parameters */
             parameters: components["schemas"]["DesignMapParameter"][];
+            /**
+             * Reason Text
+             * @default {}
+             */
+            reason_text: {
+                [key: string]: string;
+            };
             /** Runs */
             runs: components["schemas"]["DesignMapRun"][];
             /** Series */
@@ -2421,6 +2428,11 @@ export interface components {
             no_curve: number;
             /** No Resp */
             no_resp: number;
+            /**
+             * Spec Changed
+             * @default 0
+             */
+            spec_changed: number;
             /** Succeeded */
             succeeded: number;
             /** Total */
@@ -2449,6 +2461,8 @@ export interface components {
             label: string;
             /** Needs Series */
             needs_series: boolean;
+            /** Spec Changed */
+            spec_changed?: number | null;
             /** Unit */
             unit?: string | null;
         };
@@ -2471,6 +2485,14 @@ export interface components {
             } | null;
             /** Doe No */
             doe_no: number;
+            /** Perf */
+            perf?: {
+                [key: string]: number | null;
+            } | null;
+            /** Perf Reason */
+            perf_reason?: {
+                [key: string]: string;
+            } | null;
             /** Resp */
             resp?: {
                 [key: string]: number;
@@ -4618,8 +4640,14 @@ export interface components {
             cpu_pct?: number | null;
             /** Gpu */
             gpu: components["schemas"]["GpuInfo"][];
+            /** Gpu Fail Streak */
+            gpu_fail_streak?: number | null;
             /** Gpu Message */
             gpu_message?: string | null;
+            /** Gpu Next Query At */
+            gpu_next_query_at?: string | null;
+            /** Gpu Sampled At */
+            gpu_sampled_at?: string | null;
             /** Gpu Status */
             gpu_status?: ("OK" | "NOT_FOUND" | "ERROR") | null;
             job?: components["schemas"]["ResourceJob"] | null;

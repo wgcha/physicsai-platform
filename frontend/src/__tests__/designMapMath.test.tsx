@@ -101,7 +101,7 @@ function dm(runs: DesignMapRun[], params = PARAMS): DesignMap {
   return {
     batch_id: "b", label: "B-001", status: "DONE", parameters: params, series: ["S"],
     metrics: [{ id: "curve:max", label: "커브 최대값", unit: null, needs_series: true }, { id: "tbl:MaxStress", label: "MaxStress(결과 표)", unit: "MPa", needs_series: false }],
-    runs, counts: { total: runs.length, succeeded: runs.filter((r) => r.state === "SUCCEEDED").length, no_curve: 0, no_resp: 0 },
+    runs, counts: { total: runs.length, succeeded: runs.filter((r) => r.state === "SUCCEEDED").length, no_curve: 0, no_resp: 0, spec_changed: 0 }, reason_text: {},
   };
 }
 

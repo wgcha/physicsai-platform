@@ -272,7 +272,7 @@ describe("목 계약: GET /predict-batches/{bid}/design-map", () => {
     const d = r.body as DesignMap;
     expect(d.series).toEqual([S1, S2]);
     expect(d.parameters.map((p) => [p.name, p.integer])).toEqual([["THK_TOP", false], ["THK_FOAM", false], ["E_FOAM", false], ["RIB_N", true]]);
-    expect(d.counts).toEqual({ total: 20, succeeded: 18, no_curve: 0, no_resp: 0 });
+    expect(d.counts).toEqual({ total: 20, succeeded: 18, no_curve: 0, no_resp: 0, spec_changed: 0 });
     for (const x of d.runs.filter((x) => x.state !== "SUCCEEDED")) expect([x.curve, x.resp, x.tbl]).toEqual([null, null, null]);
     expect(d.metrics.filter((m) => m.id.startsWith("tbl:"))).toEqual([]);
     expect(server.handle("GET", "/predict-batches/nope/design-map", new URLSearchParams(), null, new Headers()).status).toBe(404);

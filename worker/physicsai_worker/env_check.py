@@ -207,8 +207,10 @@ def collect_items(w: Any, masker: Any, tails: dict[str, str]) -> list[dict[str, 
 
 
 def gpu_item(s: Any, child_env: dict[str, str] | None, lookup_env: Any = None) -> dict[str, Any]:
-    """`gpu.detect`: 자원 스냅샷과 같은 nvidia-smi 탐색(phase3 D3-45, 제한기 밖·5초·shell=False)."""
-    g = resources.query_gpu_status(s.worker.gpu_query, s.resources.gpu_query_candidates, child_env, lookup_env)
+    """`gpu.detect`: 자원 스냅샷과 같은 nvidia-smi 탐색(phase3 D3-45, 제한기 밖·shell=False). 제한 시간 = 설정
+    worker.gpu_query_timeout_s(phase3 §24.3 — GpuMonitor와 같은 값, 직접 조회)."""
+    g = resources.query_gpu_status(s.worker.gpu_query, s.resources.gpu_query_candidates, child_env, lookup_env,
+                                   timeout_s=getattr(s.worker, "gpu_query_timeout_s", None))
     if g.gpus:
         return item("gpu.detect", "GPU", "OK", f"GPU {len(g.gpus)}개", "WORKER",
                     {"gpus": [{"name": x["name"], "memory_total_mb": x.get("mem_total_mb")} for x in g.gpus],

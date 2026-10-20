@@ -86,9 +86,12 @@ worker:
   resource_sample_interval_s: 10
   env_passthrough: []             # Altair 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch). DB URL·비밀은 항상 제외
   state_dir: "./state"            # 단일 인스턴스 잠금 파일 위치
-  # GPU 조회 argv(제한기 밖, 5초). 첫 인자를 못 찾으면 resources.gpu_query_candidates로 자동 탐색(D3-45)
+  # GPU 조회 argv(제한기 밖, gpu_query_timeout_s). 첫 인자를 못 찾으면 resources.gpu_query_candidates로 자동 탐색(D3-45)
   gpu_query: ["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"]
-  # 실행 시간 한도 없음(의도적으로 timeout 키를 두지 않는다)
+  gpu_query_timeout_s: 15         # nvidia-smi 조회 제한 시간(1~120초, 워커 GPU 조회·환경 점검 gpu.detect 공통)
+  gpu_backoff_after: 3            # GPU 조회가 이 횟수만큼 연속 실패하면 조회 간격을 두 배씩 늘림(1~100)
+  gpu_backoff_max_s: 300          # 늘린 간격 상한(0 = 늘리지 않음, 아니면 resource_sample_interval_s~3600초)
+  # 작업 실행 시간 한도 없음(의도적으로 작업 timeout 키를 두지 않는다 — gpu_query_timeout_s는 GPU 조회 전용)
 
 dataset:
   holdout_ratio: 0.1

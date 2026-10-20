@@ -32,6 +32,8 @@ export interface RtRow {
   responses: Record<string, number | null>;
   /** predict 출처만(design-map 요약), solver는 null */
   curve: Record<string, DesignMapCurveStats> | null;
+  /** S19 §24.5: 값이 null인 성능 열의 사유 코드(서버 design-map `perf_reason`, 예: SPEC_CHANGED). 없으면 키 자체가 없다 */
+  why?: Record<string, string>;
 }
 export interface RtMeta {
   engine_version: string | null;
@@ -58,6 +60,8 @@ export interface ResultTable {
   notes: string[];
   /** predict 출처만: GET …/design-map 원본(§17.2 지표 전체 보존 — 단독 보기의 색 값 목록) */
   designMap?: DesignMap | null;
+  /** predict 출처만: 사유 코드 → 한국어 문구(서버 design-map `reason_text`) */
+  reasonText?: Record<string, string>;
 }
 
 export const NO_META: RtMeta = { engine_version: null, baseline_id: null, scene: null };

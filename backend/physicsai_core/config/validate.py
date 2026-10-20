@@ -14,6 +14,7 @@ from .schema import (
     ConfigIssue,
     Settings,
 )
+from .validate_gpu import check as check_gpu
 from .validate_stages import _validate_phase2, _validate_phase3
 
 
@@ -265,6 +266,7 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
     _validate_phase2(s, issues)
     _validate_phase3(s, issues)
     _validate_surrogate_opt(s, issues)
+    check_gpu(s, add)  # phase3 §24.6 S19: GPU 조회
 
     if s.notifications.retention_days < 1:
         add("notifications.retention_days", "1 이상")

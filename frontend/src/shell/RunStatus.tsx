@@ -6,6 +6,7 @@ import { api, errorMessage, type QueueInfo, type Resources } from "../api";
 import { useApp } from "../app/AppContext";
 import { usePolling } from "../hooks/usePolling";
 import { POLL } from "../lib/poll";
+import { gpuFailTip } from "./gpuText";
 import { QueuePanel } from "../panels/QueuePanel";
 import { WorkerResourcePanel } from "../panels/WorkerResourcePanel";
 
@@ -118,7 +119,7 @@ export function StatusChips() {
         aria-expanded={open !== null}
         aria-controls="run-status-drawer"
         data-testid="chip-resources"
-        title="워커 자원 열기"
+        title={(resources && gpuFailTip(resources)) || "워커 자원 열기"}
         onClick={() => show("resources", resBtn.current)}
       >
         {resText}

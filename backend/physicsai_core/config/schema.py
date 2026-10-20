@@ -151,6 +151,10 @@ class WorkerCfg(_M):
     resource_sample_interval_s: float = 10
     state_dir: str = "./state"
     gpu_query: list[str] | None = None
+    # GPU 조회 실패 대응(phase3 §24.3 S19): 제한 시간(요약·프로세스별·환경 점검 공통), 연속 실패 시 간격 늘리기
+    gpu_query_timeout_s: float = 15
+    gpu_backoff_after: int = 3
+    gpu_backoff_max_s: float = 300
     env_passthrough: list[str] = Field(default_factory=list)  # 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch)
 
 

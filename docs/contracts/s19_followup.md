@@ -439,3 +439,6 @@ while ($true) {
   - ⑦ migration 없음(head 0015 유지), 새 job_type·step·라우트 없음. 새 설정 11개, 실패 코드 `GPU_OOM`.
   - ⑧ 시험 V3-S19-1~13(가짜 edspy barrier·GPU 상태 폴더·OOM 1회, 시각 비율 단언 없음), 서버 확인 E0-8-1~3·E4-19-1~6.
   - ⑨ 계약 없는 승인 항목(S16 minor 4건·문구·시험·그림 = M0 진행 중, 300줄 분할·batch_matrix sampling 이동 = R-B·R-F, 문서 이관 = D)은 §24.11 순서에 둡니다. 분할은 기능 변경과 Verifier 뒤 마지막입니다.
+- 2026-10-20 구현 반영 변경:
+  - ⑩ **④ GPU 동시 예측(B-LANE·F-LANE) 철회** — 사용자 결정. §24.4(레인)·§24.6 predict_batch 8키·V3-S19-5~10·E4-19는 무효입니다. ④는 S18과 같이 SLOT 단일 FIFO로 1개씩 예측합니다. 구현 중 Verifier가 동시 OOM 교착(High)과 free/프로세스별 조회 시차로 인한 과입장(Medium)을 찾았고, 난도 대비 효용이 낮아 걷어냈습니다. 유지 범위는 ① GPU 조회 제한 시간·원인 표시(B-GPU·F-GPU)와 ⑥ perf 서버 계산(B-PERF·F-PERF)입니다.
+  - ⑪ V3-S19-11 예외 1건: V-SM-6 `test_no_timeout_key_in_schema`는 `worker.gpu_query_timeout_s`를 제외합니다(작업 실행 시간 한도 없음이라는 취지는 유지). V3-S9 시험은 무수정입니다.
