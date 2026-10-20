@@ -1,16 +1,10 @@
-phase3 기준선 — origin/claude/phase3 db5fb68 (S18 93ebf34 + S19 후속 계약 4d93738 + S16 후속 수정 db5fb68, migration head 0015_doe_platform_gen)
+phase3 기준선 — origin/claude/phase3 6d969eb (S19 GPU 조회·⑤ perf 서버 계산 01eece1 + 계약 이관 5d33ab5 + 300줄 분할 1990768 + 이슈 #8 6d969eb, migration head 0015_doe_platform_gen)
 detached worktree /home/claude/.wt_phase3_baseline(0755, 시험만 실행·파일 변경 없음, frontend/node_modules는 본 저장소 심볼릭 링크 — package*.json 동일), 시험 후 제거
-명령: PYTHON=python3.12 bash scripts/test-all.sh --junitxml=<scratch>/baseline.xml   (2026-10-20, PostgreSQL 16 임시 클러스터) → exit=0
+명령: PYTHON=python3.12 bash scripts/test-all.sh -p no:cacheprovider --junitxml=<scratch>/base_junit.xml   (2026-10-20, PostgreSQL 16 임시 클러스터) → exit=0
+결과: pytest 1170 passed·34 skipped·5 deselected(slow), vitest 444 passed(43 files), tsc·openapi·frontend-dist(49f11090560c) 통과
+(1차 시도는 worktree를 scratch(/tmp/claude-0, postgres 사용자 접근 불가)에 두어 test_demo 1건이 Permission denied — 위치만 바꿔 재실행)
 
-[frontend-dist 최신 여부] 통과 (source_hash 752b65ea887f)
-[backend/worker pytest]  1148 passed, 34 skipped, 5 deselected(slow 마커, addopts -m 'not slow'), 0 failed  (780 s)
-[openapi.json 최신 여부] 통과
-[frontend vitest] 42 files / 435 tests passed
-[frontend tsc]    통과
-paicad 단독 시험: phase3에는 없음(native 전용)
-참고: 같은 방식으로 93ebf34에서도 측정 — 1141 passed / 34 skipped / 0 failed, vitest 432(병합 커밋 e41ee22 대조 시 기준선 통과 전부 통과·신규 skip 0·실패 0)
-
-## 통과 시험 이름(junit xml, classname::name) — 1148건
+[기준선 통과 시험 1170건 — junit classname::name]
 backend.tests.common.test_adapters_compat::test_collect_offline_dry_run_builds_adapter_wheel_first
 backend.tests.common.test_adapters_compat::test_compat_layer_reexports_same_objects
 backend.tests.common.test_adapters_compat::test_dev_paths_and_ci_include_package
@@ -563,6 +557,16 @@ backend.tests.test_s18_core::test_v3_s18_1_setup_conversion_integer_applied_and_
 backend.tests.test_s18_db::test_v3_s18_3_migration_0015_roundtrip
 backend.tests.test_s18_db::test_v3_s18_3_table_constants_match_migration
 backend.tests.test_s18_db::test_v3_s18_7_job_end_hook_resets_running_points
+backend.tests.test_s19_design_map_perf::test_v3_s19_12_design_map_no_perf_keeps_shape
+backend.tests.test_s19_design_map_perf::test_v3_s19_12_design_map_perf
+backend.tests.test_s19_resources_api::test_v3_s19_1_backoff_max
+backend.tests.test_s19_resources_api::test_v3_s19_1_defaults
+backend.tests.test_s19_resources_api::test_v3_s19_1_example_yaml
+backend.tests.test_s19_resources_api::test_v3_s19_1_ranges
+backend.tests.test_s19_resources_api::test_v3_s19_4_heartbeat_ok_message_is_exe
+backend.tests.test_s19_resources_api::test_v3_s19_4_no_lane_fields
+backend.tests.test_s19_resources_api::test_v3_s19_4_openapi_fields
+backend.tests.test_s19_resources_api::test_v3_s19_4_resources_new_fields
 backend.tests.test_sampling_api::test_v3_s15_10_doe_types_decoration
 backend.tests.test_sampling_api::test_v3_s15_10_result_table_influence_class
 backend.tests.test_sampling_api::test_v3_s15_8_detail_influence_owned_and_train_doe
@@ -856,13 +860,18 @@ worker.tests.e2e.test_e2e_chain::test_predict_with_response_extract
 worker.tests.e2e.test_fem_verify_e2e::test_v3_s16_19_mesh_only_values_companion_to_done
 worker.tests.e2e.test_fem_verify_e2e::test_v3_s16_19_scx_once_and_unknown
 worker.tests.ops.test_gpu_query::test_configured_first_arg_wins_and_default_args
+worker.tests.ops.test_gpu_query::test_current_session_id_non_windows
 worker.tests.ops.test_gpu_query::test_env_check_gpu_detect_uses_same_search
 worker.tests.ops.test_gpu_query::test_env_expansion_and_undefined_variable
 worker.tests.ops.test_gpu_query::test_error_not_executable_and_timeout
 worker.tests.ops.test_gpu_query::test_error_status[print('garbage')-\ucd9c\ub825\uc5d0\uc11c GPU \uc815\ubcf4\ub97c \uc77d\uc9c0 \ubabb\ud588\uc2b5\ub2c8\ub2e4]
 worker.tests.ops.test_gpu_query::test_error_status[sys.stderr.write('NVIDIA-SMI has failed\\n'); sys.exit(9)-nvidia-smi \uc885\ub8cc\ucf54\ub4dc 9: NVIDIA-SMI has failed]
+worker.tests.ops.test_gpu_query::test_non_session0_keeps_original_message[1]
+worker.tests.ops.test_gpu_query::test_non_session0_keeps_original_message[None]
 worker.tests.ops.test_gpu_query::test_sample_has_status_keys
 worker.tests.ops.test_gpu_query::test_search_order_path_then_systemroot_then_programfiles
+worker.tests.ops.test_gpu_query::test_session0_error_message_and_detail
+worker.tests.ops.test_gpu_query::test_session0_ok_or_not_found_unchanged
 worker.tests.ops.test_ops_admin::test_bundle_masker_rules
 worker.tests.ops.test_ops_admin::test_env_check_api_item_failures
 worker.tests.ops.test_ops_admin::test_env_check_flow
@@ -870,6 +879,13 @@ worker.tests.ops.test_ops_admin::test_env_check_probe_config_validation
 worker.tests.ops.test_ops_admin::test_env_check_probes_and_failures
 worker.tests.ops.test_ops_admin::test_error_bundle
 worker.tests.ops.test_ops_admin::test_fanout_cancel_stops_remaining
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_2_monitor_and_heartbeat_pass_setting
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_2_timeout_from_settings
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_3_due_uses_injected_clock
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_3_heartbeat_uses_cache_while_hang
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_3_interval_sequence_and_next_query
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_3_not_found_then_error_and_repeats
+worker.tests.ops.test_s19_gpu_monitor::test_v3_s19_3_transition_logs_and_backoff
 worker.tests.runtime.test_group_memory_verdict::test_runner_concurrent_overlap_is_uncertain
 worker.tests.runtime.test_group_memory_verdict::test_runner_exact_resource_limit
 worker.tests.runtime.test_group_memory_verdict::test_runner_hit_before_this_run_is_plain_exit

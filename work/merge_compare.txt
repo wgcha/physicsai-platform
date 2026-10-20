@@ -1,3 +1,66 @@
+병합본(feat/native-geom-r1 5c19181 + docs 62b29b2) = 7a64018 + feat/r1-geom2 af0faf8(paicad 0.10.0) + feat/r1-front2 bf21a4a + feat/r1-opt 3694fc9 + origin/claude/phase3 6d969eb
+vs phase3 기준선 6d969eb — 2026-10-20
+명령: PYTHON=python3.12 bash scripts/test-all.sh -p no:cacheprovider --junitxml=... (exit=0, 작업 트리 = 커밋 5c19181과 동일, 62b29b2는 docs만)
+
+| 항목 | phase3 기준선(6d969eb) | 병합본 | 증감 |
+|---|---|---|---|
+| pytest passed | 1170 | 1386 | +216 (native·쉘·view·컨투어3D·opt-native 시험) |
+| pytest skipped | 34 | 34 | 0 (신규 skip 0) |
+| pytest failed | 0 | 0 | 0 |
+| pytest deselected(slow) | 5 | 8 | +3 (opt-native 벤치마크 slow 마커 — skip 아님, `--slow`로 실행) |
+| paicad 단독 | 없음 | 288 passed(0.10.0) | +288 |
+| vitest | 444 passed (43 files) | 496 passed (48 files) | +52 |
+| tsc | 통과 | 통과 | - |
+| openapi.json 최신 | 통과 | 통과 | - |
+| frontend-dist 최신 | 통과(49f11090560c) | 통과(4cdee64a393d) | 재생성 |
+| paicad 정적 검사 | - | 통과(__version__ 0.10.0, 루트·lock 고정 0.10.0) | - |
+
+## 이름 대조(junit xml, classname::name)
+base {'passed': 1170, 'skipped': 34} merge {'passed': 1386, 'skipped': 34}
+기준선 통과 중 병합본 비통과: []
+기준선 시험 중 병합본에 없음: []
+병합본 신규 skip: []
+병합본 실패: []
+병합본에만: 216 {'passed': 216}
+  backend.tests.common.test_geometry_config: 19
+  backend.tests.common.test_geometry_core: 11
+  backend.tests.common.test_geometry_multi_shell: 17
+  backend.tests.common.test_paicad_checks: 33
+  backend.tests.test_geom_view_core: 15
+  backend.tests.test_geom_view_db: 3
+  backend.tests.test_geometry_db: 1
+  backend.tests.test_on_baseline: 6
+  backend.tests.test_on_evo: 15
+  backend.tests.test_on_legacy: 5
+  backend.tests.test_on_loop: 13
+  backend.tests.test_setup_repo: 1
+  worker.tests.e2e.test_on_e2e: 1
+  worker.tests.stage1_train_data.test_native_doe: 7
+  worker.tests.stage1_train_data.test_native_train_features: 1
+  worker.tests.stage4_predict.test_contour3d: 4
+  worker.tests.stage4_predict.test_geom_preview: 12
+  worker.tests.stage4_predict.test_native_batch: 4
+  worker.tests.stage4_predict.test_native_failures: 5
+  worker.tests.stage4_predict.test_native_merge: 3
+  worker.tests.stage4_predict.test_native_multi: 3
+  worker.tests.stage4_predict.test_native_predict: 7
+  worker.tests.stage4_predict.test_native_register: 8
+  worker.tests.stage4_predict.test_native_shell: 5
+  worker.tests.stage4_predict.test_on_multi_baseline: 2
+  worker.tests.stage4_predict.test_shell_bead: 10
+  worker.tests.test_on_flow: 5
+
+판정: phase3 기준선(6d969eb) 통과 시험 1170건 전부 병합본 통과, 신규 skip 0, 실패 0, paicad 288·vitest 496·tsc 통과
+
+## 병합 중 수정(시험 의미 유지)
+- 쉘 뷰 기본 템플릿(0.10.0): test_shell_bead NP_VIEW·TX_VIEW argv·view READY, test_geom_preview /status geometry_view_shell 켜짐,
+  test_geom_view_core 기본 템플릿 펼침(선택 쌍 생략) + 신규 test_shell_view_and_preview_default_templates
+- r1-opt V-ON-2 설정에 contour3d 켬(기본 꺼짐 기능 — '레거시만 꺼짐' 의도 유지), s18NativeDoe 라벨 HyperStudy(레거시)
+- phase3 분할 후 test_on_baseline 수준별 DE spy 위치 infill_propose._de(propose가 옮겨짐)
+- gen:api 재생성으로 NativeInfo kind·view_status, ParamSetDiscover kind, FeatureKey 4개 추가 → 목·FEATURE_MISSING 보강
+
+---
+(이전 병합 기록)
 병합본(feat/native-geom-r1 942a7cf+d1aa8da = 4c03804 + feat/r1-shell-docs b051619(paicad 0.8.0 쉘) + feat/r1-view-docs dadebb1(paicad 0.9.0 view)) vs phase3 기준선 db5fb68 — 2026-10-20
 명령: PYTHON=python3.12 bash scripts/test-all.sh --junitxml=... (exit=0, 작업 트리 = 커밋 d1aa8da와 동일)
 
