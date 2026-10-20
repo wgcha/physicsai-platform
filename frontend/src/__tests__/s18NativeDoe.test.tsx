@@ -43,7 +43,7 @@ describe("①-3 native DOE 생성(§8)", () => {
     expect(hs.title).toBe("native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다");
     const kind = within(card).getByLabelText("표본 방식") as HTMLSelectElement;
     expect(kind.value).toBe("lhs");
-    expect([...kind.options].filter((o) => !o.disabled).map((o) => o.textContent)).toEqual(["LHS(native)"]);
+    expect([...kind.options].filter((o) => !o.disabled).map((o) => o.textContent)).toEqual(["LHS(native)", "다른 DOE 표본표 재사용"]);
     expect([...kind.options].filter((o) => o.disabled).length).toBeGreaterThan(3);
     expect(within(card).getByTestId("native-only-note").textContent).toContain("HyperStudy·다른 표본 방식");
     expect(within(card).queryByText(/tpl을 먼저 생성/)).toBeNull();

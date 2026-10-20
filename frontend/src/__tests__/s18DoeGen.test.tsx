@@ -82,13 +82,13 @@ describe("V3-S18-10 ①-3 생성 방식 세그먼트·FeatureGate", () => {
 });
 
 describe("V3-S18-10 표본 방식 드롭다운·설명 상자", () => {
-  it("8개(묶음 3), 기본 lhs_opt + 추천 배지, 고를 때마다 td_* 설명문 4줄이 픽스처와 같다", async () => {
+  it("8개(묶음 3) + 다른 DOE 표본표 재사용 항목(묶음 1), 기본 lhs_opt + 추천 배지, 고를 때마다 td_* 설명문 4줄이 픽스처와 같다", async () => {
     const { card } = await openCard();
     const sel = within(card).getByLabelText("표본 방식") as HTMLSelectElement;
     expect(sel.value).toBe("lhs_opt");
-    expect([...sel.options].map((o) => o.value)).toEqual(PLATFORM_KINDS);
-    expect([...sel.options].map((o) => o.textContent)).toEqual(PLATFORM_KINDS.map((k) => SAMPLING_LABEL[k] + (k === "lhs_opt" ? " · 추천" : "")));
-    expect([...sel.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(["공간 채움(AI 학습·대리모델)", "요인 설계(경향·선별)", "2차 응답면"]);
+    expect([...sel.options].map((o) => o.value)).toEqual([...PLATFORM_KINDS, "train_doe"]);
+    expect([...sel.options].map((o) => o.textContent)).toEqual([...PLATFORM_KINDS.map((k) => SAMPLING_LABEL[k] + (k === "lhs_opt" ? " · 추천" : "")), "다른 DOE 표본표 재사용"]);
+    expect([...sel.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(["공간 채움(AI 학습·대리모델)", "요인 설계(경향·선별)", "2차 응답면", "기존 DOE"]);
     expect(within(card).getByTestId("samp-desc").getAttribute("data-desc-id")).toBe("td_lhs_opt");
     expect(within(card).getByTestId("samp-badge").textContent).toBe("추천");
     expect(within(card).getByTestId("samp-calc").textContent!.trim()).toBe("현재 변수 4개 → 권장 40");

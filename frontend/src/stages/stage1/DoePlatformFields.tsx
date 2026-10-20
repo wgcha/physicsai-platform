@@ -1,7 +1,9 @@
 // S18 ①-3 플랫폼 생성 입력(phase3 §23.9): 표본 방식 드롭다운(8종) + 설명 상자(td_*) + 방식별 입력 + "실제 run N개".
 // 상태는 DoeGenCard가 들고(PlatformState) 값이 바뀌면 onChange로 알린다. ④ SamplingPicker와 같은 마크업·클래스를 쓴다(S15 재사용).
+import type { ReactNode } from "react";
 import { SamplingDescription } from "../../components/SamplingDescription";
 import { PLATFORM_GROUPS, RECOMMENDED_KIND, SAMPLING_LABEL, calcNote, isPlatformKind, sobolCounts, tdDescId } from "../../lib/sampling";
+import { REUSE_LABEL } from "./ReuseDoePicker";
 import { countText, fullfactLevels, isFreeCount, levelOf, minCount, platformRuns, type PlatformState } from "./doeGenParams";
 
 export function Seg<T extends string | number>({ label, value, options, onChange, disabled }: { label: string; value: T; options: { key: T; label: string; disabled?: boolean; title?: string }[]; onChange: (v: T) => void; disabled?: boolean }) {
@@ -24,9 +26,11 @@ export interface DoePlatformFieldsProps {
   /** 플랫폼 run 상한 R(`/status.limits.configured.doe_platform_max_runs`) */
   maxRuns: number;
   disabled: boolean;
+  /** "다른 DOE 표본표 재사용" 선택지(켜면 방식별 입력 대신 panel을 보인다) */
+  reuse?: { on: boolean; setOn: (on: boolean) => void; panel: ReactNode };
 }
 
-export function DoePlatformFields({ state, onChange, names, maxRuns, disabled }: DoePlatformFieldsProps) {
+export function DoePlatformFields({ state, onChange, names, maxRuns, disabled, reuse }: DoePlatformFieldsProps) {
   const set = (patch: Partial<PlatformState>) => onChange({ ...state, ...patch });
   const kind = state.kind;
   const k = names.length;
@@ -40,7 +44,17 @@ export function DoePlatformFields({ state, onChange, names, maxRuns, disabled }:
     <div className="samp-pick" data-testid="doe-platform">
       <label className="field">
         <span className="field-label">표본 방식</span>
-        <select value={kind} aria-label="표본 방식" disabled={disabled} onChange={(e) => isPlatformKind(e.target.value) && onChange({ ...state, kind: e.target.value, count: null })}>
+        <select
+          value={reuse?.on ? "train_doe" : kind}
+          aria-label="표본 방식"
+          disabled={disabled}
+          onChange={(e) => {
+            if (e.target.value === "train_doe") return reuse?.setOn(true);
+            if (!isPlatformKind(e.target.value)) return;
+            reuse?.setOn(false);
+            onChange({ ...state, kind: e.target.value, count: null });
+          }}
+        >
           {PLATFORM_GROUPS.map((g) => (
             <optgroup key={g.label} label={g.label}>
               {g.kinds.map((m) => (
@@ -51,8 +65,17 @@ export function DoePlatformFields({ state, onChange, names, maxRuns, disabled }:
               ))}
             </optgroup>
           ))}
+          {reuse && (
+            <optgroup label="기존 DOE">
+              <option value="train_doe">{REUSE_LABEL}</option>
+            </optgroup>
+          )}
         </select>
       </label>
+      {reuse?.on ? (
+        reuse.panel
+      ) : (
+        <>
       <SamplingDescription id={tdDescId(kind)} recommended={kind === RECOMMENDED_KIND} calc={calc} />
 
       <div className="fill-row">
@@ -147,6 +170,8 @@ export function DoePlatformFields({ state, onChange, names, maxRuns, disabled }:
           <span className="muted">변수 수가 이 방식의 지원 범위 밖입니다</span>
         )}
       </p>
+        </>
+      )}
     </div>
   );
 }
