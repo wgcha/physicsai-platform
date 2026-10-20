@@ -172,7 +172,7 @@ def test_reuse_batch_and_rules(so_env):
     _drain(env)
     # 지표 없음·범위 밖·정수 범위 비어 있음·변수 상한 → problems
     r = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(
-        explore={"kind": "reuse", "batch_id": bid}, objective={"metric": "resp:Nope_MAX"},
+        explore={"kind": "reuse", "batch_id": bid}, objective={"metric": "resp:Nope_MAX", "sense": "min"},
         bounds={"THK_1": [1.0, 4.0], "N_RIB": [3.2, 3.8]}, iterations=99, candidates=0,
         constraints=[{"metric": "curve:bad", "op": "<=", "value": 1}]))
     assert r.status_code == 422 and r.json()["detail"]["code"] == "SURROGATE_OPT_INVALID"
@@ -202,6 +202,31 @@ def test_reuse_batch_and_rules(so_env):
     r = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW,
                    json=_body(param_set_id=ps2["id"], explore={"kind": "reuse", "batch_id": bid}))
     assert r.status_code == 409 and r.json()["detail"]["reason"] == "TEMPLATE_MISMATCH"
+
+
+def test_on_c3_criteria_required(so_env):
+    """opt-native ON-C4: 방향·임계값을 비우면 미리보기 problems·생성 422 OPT_CRITERIA_REQUIRED(+missing), 저장 없음."""
+    env = so_env
+    url = f"{API}/studies/{env.sid}/surrogate-opts"
+    body = _body(objective={"metric": "resp:MaxStress_MAX"}, constraints=[{"metric": "curve:max", "op": "<="}])
+    r = env.c.post(f"{url}/preview", headers=PW, json=body)
+    assert r.status_code == 200
+    crit = [p for p in r.json()["problems"] if p["code"] == "OPT_CRITERIA_REQUIRED"]
+    assert [p["field"] for p in crit] == ["objective.sense", "constraints.0.value"] and all(p["message"] for p in crit)
+    assert "CONSTRAINT_INVALID" not in {p["code"] for p in r.json()["problems"]}
+    r = env.c.post(url, headers=PW, json=body)
+    assert r.status_code == 422, r.text
+    d = r.json()["detail"]
+    assert d["code"] == "OPT_CRITERIA_REQUIRED" and d["missing"] == ["objective.sense", "constraints.0.value"]
+    r = env.c.post(url, headers=PW, json=_body(objective=None, objectives=[]))
+    assert r.status_code == 422 and r.json()["detail"]["missing"] == ["objectives"]
+    assert env.c.get(url, headers=PW).json() == []
+    # 사용자가 고르면(sense·value) 그대로 생성된다 — 시스템이 바꾸지 않음
+    r = env.c.post(url, headers=PW, json=_body(objective={"metric": "resp:MaxStress_MAX", "sense": "max"},
+                                                constraints=[{"metric": "curve:max", "op": "<=", "value": 7.5}]))
+    assert r.status_code == 201, r.text
+    st = r.json()["settings"]
+    assert st["objective"]["sense"] == "max" and st["constraints"][0]["value"] == 7.5 and st["weights"] == [1.0]
 
 
 def test_cancel_resume_and_owned_batch_guard(so_env, monkeypatch):

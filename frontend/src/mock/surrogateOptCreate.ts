@@ -30,8 +30,8 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
 
   // 목적: objectives 또는 단수 objective(S17 §22.4.1)
   if (body.objective && body.objectives) problems.push({ code: "OBJECTIVES_CONFLICT", field: "objectives", message: "objective와 objectives는 함께 보낼 수 없습니다" });
-  const objectives = ((body.objectives as Obj[] | undefined) ?? (body.objective ? [body.objective as Obj] : [])).map((x) => ({ metric: x.metric, series: x.series ?? null, sense: x.sense ?? "min" }));
-  if (objectives.length < 1 || objectives.length > 3) problems.push({ code: "OBJECTIVES_RANGE", field: "objectives", message: "목적은 1~3개여야 합니다" });
+  const objectives = ((body.objectives as Obj[] | undefined) ?? (body.objective ? [body.objective as Obj] : [])).map((x) => ({ metric: x.metric, series: x.series ?? null, sense: x.sense }));
+  if (objectives.length > 3) problems.push({ code: "OBJECTIVES_RANGE", field: "objectives", message: "목적은 1~3개여야 합니다" });
   const constraints = ((body.constraints ?? []) as Cons[]).map((c) => ({ ...c, series: c.series ?? null }));
   const observe = ((body.observe ?? []) as Obs[]).map((c) => ({ metric: c.metric, series: c.series ?? null }));
   const seen = new Set<string>();
@@ -40,9 +40,12 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
     if (seen.has(key)) problems.push({ code: "OBJECTIVE_DUPLICATE", field: "objectives", message: `'${x.metric.replace(/^perf:/, "")}'이(가) 목적·제약·관찰에 겹칩니다` });
     seen.add(key);
   }
-  for (const c of constraints) if (c.op === "range" ? !(fin(c.lo) && fin(c.hi) && c.lo < c.hi) : !fin(c.value)) problems.push({ code: "CONSTRAINT_INVALID", field: "constraints", message: "제약 값이 올바르지 않습니다" });
-  if (observe.length > 10) problems.push({ code: "OBSERVE_INVALID", field: "observe", message: "관찰은 10개까지입니다" });
+  // opt-native ON-C4: 응답·방향·임계값·가중치는 사용자가 정한다 — 빈 항목 = OPT_CRITERIA_REQUIRED(자동 채움 없음)
   const w = (body.weights ?? null) as number[] | null;
+  const missing = criteriaMissing(objectives, constraints, w, body.objectives == null && body.objective != null);
+  for (const f of missing) problems.push({ code: "OPT_CRITERIA_REQUIRED", field: f, message: `기준이 비어 있습니다: ${f}` });
+  for (const c of constraints) if (c.op === "range" ? c.lo != null && c.hi != null && !(fin(c.lo) && fin(c.hi) && c.lo < c.hi) : c.value != null && !fin(c.value)) problems.push({ code: "CONSTRAINT_INVALID", field: "constraints", message: "제약 값이 올바르지 않습니다" });
+  if (observe.length > 10) problems.push({ code: "OBSERVE_INVALID", field: "observe", message: "관찰은 10개까지입니다" });
   if (w && (w.length !== objectives.length || w.some((x) => !fin(x) || x < 0) || w.reduce((a, b) => a + b, 0) <= 0)) problems.push({ code: "WEIGHTS_INVALID", field: "weights", message: "가중치는 목적 수와 같은 길이, 0 이상, 합 > 0이어야 합니다" });
 
   // 성능 스냅샷·재사용 배치의 값 있는 run 수
@@ -84,10 +87,10 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
   if (ps0 != null && (ps0 < 8 || ps0 > 1000 || ps0 % (algorithm === "nsga2" ? 4 : 2))) problems.push({ code: "ALGO_OPTIONS_INVALID", field: "algo_options.pop_size", message: `집단 크기는 8~1000의 ${algorithm === "nsga2" ? "4의 배수" : "짝수"}입니다` });
   if (algorithm === "ego" && ao && Object.values(ao).some((v) => v != null)) problems.push({ code: "ALGO_OPTIONS_INVALID", field: "algo_options", message: "EGO는 고급 옵션(집단 크기·세대 등)을 쓰지 않습니다" });
   const sum = (w ?? []).reduce((a, b) => a + b, 0);
-  const weights = w && sum > 0 ? w.map((x) => x / sum) : objectives.map(() => 1 / Math.max(1, objectives.length));
+  const weights = w && sum > 0 ? w.map((x) => x / sum) : objectives.length === 1 ? [1] : [];
   const settings: SoRec["settings"] = {
     names: ps.parameters.map((p) => p.name), integer, bounds,
-    objective: objectives[0] ?? { metric: "", series: null, sense: "min" }, objectives, constraints, observe, weights, mode: objectives.length > 1 ? "multi" : "single", performances,
+    objective: (objectives[0] ?? { metric: "", series: null, sense: null }) as Obj, objectives, constraints, observe, weights, mode: objectives.length > 1 ? "multi" : "single", performances,
     surrogate: String(body.surrogate ?? "gp"), iterations: verification === "none" ? 1 : iterations, candidates, tol_rel: Number(body.tol_rel ?? 0.01), seed: Number(body.seed ?? 1),
     algorithm, verification, algo_options: algorithm === "ego" ? {} : { pop_size: null, generations: null, crossover_prob: null, mutation_prob: null, eta_c: null, eta_m: null, ...(ao ?? {}) },
     multi_execution: Number(body.multi_execution ?? 1), capture: !!body.capture,
@@ -100,7 +103,20 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
     if (!levels.length || levels.some((b) => !bids.includes(b))) problems.push({ code: "LEVELS_INVALID", field: "levels.baseline", message: "매칭표에 없는 baseline이거나 빈 목록입니다" });
     settings.levels = { baseline: levels };
   }
-  return { ps, settings, problems, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
+  return { ps, settings, problems, missing, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
+}
+
+/** 서버 criteria.missing과 같은 규칙(목적 없음·방향·제약 임계값·다목적 가중치) */
+export function criteriaMissing(objs: { sense?: string | null }[], cons: Partial<Cons>[], w: number[] | null, single: boolean): string[] {
+  const out: string[] = [];
+  if (!objs.length) out.push("objectives");
+  objs.forEach((o, i) => { if (o.sense !== "min" && o.sense !== "max") out.push(single ? "objective.sense" : `objectives.${i}.sense`); });
+  cons.forEach((c, i) => {
+    if (c.op === "range") (["lo", "hi"] as const).forEach((k) => { if (c[k] == null) out.push(`constraints.${i}.${k}`); });
+    else if (c.value == null) out.push(`constraints.${i}.value`);
+  });
+  if (objs.length >= 2 && objs.length <= 3 && w == null) out.push("weights");
+  return out;
 }
 
 export function newRec(id: string, studyId: string, no: number, psId: string, settings: SoRec["settings"], by: { id: string; name: string }, createdAt: string, batchNo: number, status = "EXPLORING"): SoRec {

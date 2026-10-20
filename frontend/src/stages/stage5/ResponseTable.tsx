@@ -66,7 +66,8 @@ export function ResponseTable({ rows, onChange, readOnly }: { rows: OptResponse[
                   </select>
                 </td>
                 <td>
-                  <select value={r.bound ?? "<="} disabled={readOnly || !cons} aria-label={`${r.name} Bound`} onChange={(e) => set(i, { bound: e.target.value as OptResponse["bound"] })}>
+                  <select value={r.bound ?? ""} disabled={readOnly || !cons} aria-label={`${r.name} Bound`} onChange={(e) => set(i, { bound: (e.target.value || undefined) as OptResponse["bound"] })}>
+                    <option value="">{cons ? "선택" : ""}</option>
                     {BOUNDS.map((b) => (
                       <option key={b}>{b}</option>
                     ))}

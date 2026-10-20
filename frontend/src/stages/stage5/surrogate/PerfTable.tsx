@@ -7,7 +7,7 @@ import type { SoProblem, SurrogateOptPreview } from "../../../api/surrogateOpt";
 import { useStudy } from "../../../app/StudyContext";
 import { ResponseAdd } from "../../stage4/ResponseDefs";
 import {
-  DEFAULT_WEIGHT, isDraftDirty, isObjectiveRole, MULTI_NOTE, NO_ROLE, perfId, perfLabel, perfRows, ROLE_LABEL, ROLES, roleBlocked, roleCounts,
+  CRITERIA_HELP, isDraftDirty, parseWeight, WEIGHT_HELP, weightsIssue, isObjectiveRole, MULTI_NOTE, NO_ROLE, perfId, perfLabel, perfRows, ROLE_LABEL, ROLES, roleBlocked, roleCounts,
   roleValueIssue, SAVE_FIRST_TEXT, specCells, SRC_LABEL, type Limits, type PerfRow, type Role, type RoleSel, type SaveState,
 } from "./perfRules";
 
@@ -22,7 +22,7 @@ export function PerfTable({ ps, canEdit, sels, onSel, weights, onWeight, limits,
   sels: Record<string, RoleSel>;
   onSel: (name: string, s: RoleSel) => void;
   weights: Record<string, number>;
-  onWeight: (name: string, v: number) => void;
+  onWeight: (name: string, v: number | undefined) => void;
   limits: Limits;
   preview: SurrogateOptPreview | null;
   reuse: boolean;
@@ -163,6 +163,7 @@ export function PerfTable({ ps, canEdit, sels, onSel, weights, onWeight, limits,
           </tbody>
         </table>
       </div>
+      <p className="muted small" data-testid="criteria-help">{CRITERIA_HELP}</p>
       {extractNote && <p className="muted small" data-testid="extract-note">{extractNote}</p>}
       {canEdit && (
         <>
@@ -181,10 +182,12 @@ export function PerfTable({ ps, canEdit, sels, onSel, weights, onWeight, limits,
           {objNames.map((n) => (
             <label key={n} className="so-weight-input small">
               <span className="mono">{n}</span>
-              <input type="range" min={0} max={100} step={5} value={weights[n] ?? DEFAULT_WEIGHT} aria-label={`${n} 가중치`} onChange={(e) => onWeight(n, Number(e.target.value))} />
-              <span className="mono">{weights[n] ?? DEFAULT_WEIGHT}</span>
+              <input className="num narrow" inputMode="decimal" value={weights[n] === undefined ? "" : String(weights[n])} aria-label={`${n} 가중치`}
+                onChange={(e) => onWeight(n, parseWeight(e.target.value))} />
             </label>
           ))}
+          {weightsIssue(objNames, weights) && <p className="muted small" data-testid="weight-issue">{weightsIssue(objNames, weights)}</p>}
+          <p className="muted small" data-testid="weight-help">{WEIGHT_HELP}</p>
           <p className="muted small" data-testid="multi-note">{MULTI_NOTE}</p>
         </div>
       )}

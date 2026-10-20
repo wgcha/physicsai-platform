@@ -12,6 +12,7 @@ from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.stage4_predict import run_metrics
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
+from physicsai_core.stage5_optimize.surrogate import criteria
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 from physicsai_core.stage5_optimize.surrogate import limit_threads
 
@@ -48,6 +49,10 @@ def _iter_dir(O: str, n: int) -> str:
 
 
 def _problem(opt: dict[str, Any]) -> ds.Problem:
+    """opt-native ON-C4: 사용자가 정하지 않은 기준(방향·임계값·가중치·목적)은 채우지 않고 작업을 실패시킨다."""
+    miss = criteria.settings_missing(opt["settings"])
+    if miss:
+        raise StepFailure(criteria.CODE, f"{criteria.MESSAGE}: {', '.join(miss)}")
     return ds.Problem.from_settings(opt["settings"])
 
 

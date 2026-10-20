@@ -82,7 +82,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const rowProblems = f.rows.map(rowIssue);
   const body = useMemo(() => buildBody(f, perfs), [f, perfs]);
   const bodyKey = JSON.stringify(body);
-  const roleProblem = rolesIssue(perfs, f.sels);
+  const roleProblem = rolesIssue(perfs, f.sels, f.weights);
   const ready = !!ps && !roleProblem && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
   useEffect(() => {
     if (!ready) {
@@ -101,7 +101,12 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
 
   const setRow = (i: number, p: Partial<VarRow>) => set({ rows: f.rows.map((r, j) => (j === i ? { ...r, ...p } : r)) });
   const setSel = (name: string, s: RoleSel) => setF((x) => ({ ...x, sels: { ...x.sels, [name]: s } }));
-  const setWeight = (name: string, v: number) => setF((x) => ({ ...x, weights: { ...x.weights, [name]: v } }));
+  const setWeight = (name: string, v: number | undefined) => setF((x) => {
+    const w = { ...x.weights };
+    if (v === undefined) delete w[name];
+    else w[name] = v;
+    return { ...x, weights: w };
+  });
   const startExtract = async (batchId: string) => {
     setExtractErr(null);
     try {

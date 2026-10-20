@@ -41,7 +41,7 @@ export function seedSurrogate(srv: MockServer) {
   const three = normalize(srv, "s-cushion", {
     param_set_id: "ps-2", explore: { kind: "new", count: 20, seed: 3 },
     objectives: [{ metric: "perf:MaxStress", series: null, sense: "min" }, { metric: "perf:MaxDisp", series: null, sense: "min" }, { metric: "perf:AccelPeak", series: null, sense: "min" }],
-    iterations: 3, candidates: 4, tol_rel: 0.001, multi_execution: 4,
+    iterations: 3, candidates: 4, tol_rel: 0.001, multi_execution: 4, weights: [1, 1, 1],
   });
   if (!("error" in three)) {
     three.settings.performances.AccelPeak = { unit: "g", spec: { source: "CURVE", series: "Node 100 / X", stat: "ABSMAX" } };
@@ -114,6 +114,7 @@ export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {
       if (deny) return deny;
       const n = normalize(srv, s.id, body ?? {});
       if ("error" in n) return n.error!;
+      if (n.missing.length) return err(422, "OPT_CRITERIA_REQUIRED", "최적화 기준이 비어 있습니다 — 목적 응답·방향(최소/최대)·제약 임계값·다목적 가중치를 직접 정하세요", { missing: n.missing, problems: n.problems.filter((p) => p.code === "OPT_CRITERIA_REQUIRED") });
       if (n.problems.length) return err(422, "SURROGATE_OPT_INVALID", "내장 최적화 설정이 올바르지 않습니다", { problems: n.problems });
       if (srv.surrogate.some((o) => o.study_id === s.id && ACTIVE.includes(o.status))) return err(409, "SURROGATE_OPT_ACTIVE", "이 Study에 진행 중인 내장 최적화가 있습니다 — 끝나거나 취소한 뒤 시작하세요");
       const no = Math.max(0, ...srv.surrogate.filter((o) => o.study_id === s.id).map((o) => o.opt_no)) + 1;

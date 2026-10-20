@@ -6328,10 +6328,9 @@ export interface components {
             metric: string;
             /**
              * Sense
-             * @default min
-             * @enum {string}
+             * @description min | max — 필수(생략 시 422 OPT_CRITERIA_REQUIRED)
              */
-            sense: "min" | "max";
+            sense?: ("min" | "max") | null;
             /** Series */
             series?: string | null;
         };
@@ -7185,7 +7184,10 @@ export interface components {
              * @description loop(기본, 반복 검증) | none(대리모델만)
              */
             verification?: string | null;
-            /** Weights */
+            /**
+             * Weights
+             * @description 목적 2개 이상이면 필수(사용자 입력, 생략 시 422 OPT_CRITERIA_REQUIRED)
+             */
             weights?: number[] | null;
         };
         /** SurrogateOptPreview */

@@ -15,6 +15,7 @@ from physicsai_core.errors import DomainError
 from physicsai_core.features import optimize_builtin_missing, predict_responses_missing
 from physicsai_core.stage4_predict import performance, run_metrics
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
+from physicsai_core.stage5_optimize.surrogate import criteria
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 
 from ..context import AppContext
@@ -130,7 +131,10 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     if body.objective is not None and body.objectives is not None:
         _p(problems, "OBJECTIVES_CONFLICT", "objective와 objectives를 함께 보낼 수 없습니다", "objectives")
     objs = list(body.objectives) if body.objectives is not None else ([body.objective] if body.objective is not None else [])
-    if not 1 <= len(objs) <= so.max_objectives:
+    # ON-C4: 응답·방향·임계값·가중치는 사용자가 정한다 — 비면 OPT_CRITERIA_REQUIRED(자동 지정·기본값 없음)
+    crit = criteria.missing(objs, body.constraints, body.weights, max_objectives=so.max_objectives,
+                            obj_prefix="objective" if body.objectives is None and body.objective is not None else "objectives")
+    if len(objs) > so.max_objectives:
         _p(problems, "OBJECTIVES_RANGE", f"목적은 1~{so.max_objectives}개입니다", "objectives")
     for i, o in enumerate(objs):
         metric_ok(o.metric, "METRIC_UNKNOWN", "목적" if len(objs) == 1 else f"목적 {i + 1}",
@@ -143,9 +147,11 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         if not ok:
             continue
         if c.op == "range":
-            if c.lo is None or c.hi is None or not (math.isfinite(c.lo) and math.isfinite(c.hi)) or c.lo >= c.hi:
+            if c.lo is None or c.hi is None:
+                continue  # 빈 하한·상한 = OPT_CRITERIA_REQUIRED
+            if not (math.isfinite(c.lo) and math.isfinite(c.hi)) or c.lo >= c.hi:
                 _p(problems, "CONSTRAINT_INVALID", f"제약 {i + 1}: 범위는 유한한 하한 < 상한이어야 합니다", f"constraints.{i}")
-        elif c.value is None or not math.isfinite(c.value):
+        elif c.value is not None and not math.isfinite(c.value):
             _p(problems, "CONSTRAINT_INVALID", f"제약 {i + 1}: 값(유한 수)이 필요합니다", f"constraints.{i}")
     # 관찰
     if len(body.observe) > so.max_observe:
@@ -162,6 +168,7 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
             _p(problems, "OBJECTIVE_DUPLICATE", f"지표 '{k[0]}'가 목적·제약·관찰에 겹칩니다", grp)
         seen.setdefault(k, grp)
     weights = _weights(body, len(objs), problems) if objs else []
+    problems += criteria.problems_of(crit)
     # 알고리즘·고급 옵션·검증 방식(opt-native §6.1·§6.7·§8)
     algorithm = body.algorithm if body.algorithm is not None else "ego"
     n_g = len(free)
@@ -215,4 +222,4 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         kinds["baseline"] = "categorical"
     return {"ps": ps, "model": m, "kind": kind, "settings": settings, "problems": problems, "free": free,
             "integer": integer, "fixed": fixed, "explore_count": explore_count, "reuse": reuse, "valid_points": valid_points,
-            "performances": perf_info, "variables_kind": kinds, "multi": multi}
+            "performances": perf_info, "variables_kind": kinds, "multi": multi, "criteria_missing": crit}

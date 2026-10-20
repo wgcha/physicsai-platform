@@ -60,6 +60,15 @@ PARAM_MODELS: dict[str, type[BaseModel]] = {
 }
 
 
+def legacy_criteria_missing(responses: list[dict[str, Any]]) -> list[str]:
+    """원본(레거시) 최적화: CONSTRAINT 행의 빈 bound·value 경로(ON-C4). 목적 없음은 기존 422 OBJECTIVE_REQUIRED."""
+    out: list[str] = []
+    for i, r in enumerate(responses):
+        if isinstance(r, dict) and r.get("goal") == "CONSTRAINT":
+            out += [f"responses.{i}.{k}" for k in ("bound", "value") if r.get(k) in (None, "")]
+    return out
+
+
 def assembly_required() -> DomainError:
     return DomainError("TEMPLATE_ASSEMBLY_REQUIRED", opt.TEMPLATE_ASSEMBLY_REQUIRED_MSG, status=409)
 
@@ -109,6 +118,10 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             m = models_repo.get(conn, study["final_model_id"]) if study["final_model_id"] else None
             if m is None or m["status"] != "ACTIVE":
                 raise DomainError("FINAL_MODEL_REQUIRED", "Final 모델을 먼저 지정하세요", status=409)
+        crit = legacy_criteria_missing(p.responses)
+        if crit:  # opt-native ON-C4: 제약 조건(bound)·임계값(value)은 사용자가 정한다(기본 "<=" 등으로 채우지 않음)
+            raise DomainError("OPT_CRITERIA_REQUIRED", "최적화 기준이 비어 있습니다 — 제약의 조건(≤·≥·=)과 임계값을 직접 입력하세요",
+                              status=422, missing=crit)
         rows, probs = opt.validate_responses(p.responses, p.approach)
         if probs == [{"row": "", "message": "OBJECTIVE_REQUIRED"}]:
             raise DomainError("OBJECTIVE_REQUIRED", "최적화에는 목적함수(MINIMIZE / MAXIMIZE)가 1개 이상 필요합니다", status=422)

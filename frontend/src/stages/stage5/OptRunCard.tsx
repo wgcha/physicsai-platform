@@ -24,6 +24,8 @@ export function OptRunCard({
   const act = activeRules(s);
   const hasModel = !!modelId || models.some((m) => m.is_final && m.status === "ACTIVE");
   const hasObjective = responses.some((r) => r.goal === "MINIMIZE" || r.goal === "MAXIMIZE");
+  // opt-native ON-C4: 제약 조건(Bound)·임계값(Value)은 사용자가 직접 정한다(기본값 없음)
+  const boundOk = responses.every((r) => r.goal !== "CONSTRAINT" || !!r.bound);
   const consOk = responses.every((r) => r.goal !== "CONSTRAINT" || (r.value !== undefined && Number.isFinite(r.value)));
   const maxOk = Number(s.maxDesigns) >= 1 && Number(s.maxDesigns) <= 100000;
   const reason = !ps
@@ -34,7 +36,9 @@ export function OptRunCard({
         ? "응답을 1개 이상 추가하세요"
         : s.approach === "OPT" && !hasObjective
           ? "MINIMIZE 또는 MAXIMIZE 응답이 필요합니다"
-          : !consOk
+          : !boundOk
+            ? "CONSTRAINT 응답의 Bound를 고르세요"
+            : !consOk
             ? "CONSTRAINT 응답의 Value를 입력하세요"
             : !maxOk
               ? "평가 수는 1~100000"
