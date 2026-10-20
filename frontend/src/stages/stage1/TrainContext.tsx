@@ -10,6 +10,8 @@ export interface TrainData {
   doe: TrainDoe | null;
   selectDoe: (id: string) => void;
   runs: TrainRun[];
+  /** run 목록 조회 실패 메시지(성공하면 null) — 삼키지 않고 ①-4가 한 줄로 보여준다 */
+  runsError: string | null;
   reloadSetup: () => Promise<void>;
   reloadDoes: () => Promise<void>;
   reloadRuns: () => Promise<void>;
@@ -31,6 +33,7 @@ export function TrainProvider({ children }: { children: ReactNode }) {
   const [does, setDoes] = useState<TrainDoe[]>([]);
   const [doeId, setDoeId] = useState<string | null>(null);
   const [runs, setRuns] = useState<TrainRun[]>([]);
+  const [runsError, setRunsError] = useState<string | null>(null);
 
   const reloadSetup = useCallback(async () => {
     try {
@@ -56,6 +59,7 @@ export function TrainProvider({ children }: { children: ReactNode }) {
   const reloadRuns = useCallback(async () => {
     if (!doeId) {
       setRuns([]);
+      setRunsError(null);
       return;
     }
     try {
@@ -67,9 +71,10 @@ export function TrainProvider({ children }: { children: ReactNode }) {
         cursor = page.nextCursor;
       } while (cursor && all.length < 5000);
       setRuns(all);
+      setRunsError(null);
       setDoes(await api.trainDoes(study.id));
-    } catch {
-      /* 다음 갱신에서 */
+    } catch (e) {
+      setRunsError(errorMessage(e));
     }
   }, [doeId, study.id]);
 
@@ -83,7 +88,7 @@ export function TrainProvider({ children }: { children: ReactNode }) {
   }, [reloadRuns]);
 
   return (
-    <Ctx.Provider value={{ setup, setupError, does, doe, selectDoe: setDoeId, runs, reloadSetup, reloadDoes, reloadRuns, setSetup }}>
+    <Ctx.Provider value={{ setup, setupError, does, doe, selectDoe: setDoeId, runs, runsError, reloadSetup, reloadDoes, reloadRuns, setSetup }}>
       {children}
     </Ctx.Provider>
   );

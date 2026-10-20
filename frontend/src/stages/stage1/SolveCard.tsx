@@ -17,7 +17,7 @@ export const PBS_NONE_TEXT = "PBS 연결 안 됨 — DOE 입력 폴더를 직접
 // ---------------------------------------------------------------- ①-4
 export function SolveCard() {
   const { status } = useApp();
-  const { doe, runs, reloadRuns } = useTrain();
+  const { doe, runs, runsError, reloadRuns } = useTrain();
   const canExec = useCanExecute();
   const solve = useJobRunner("TD_SOLVE", () => void reloadRuns());
   const [hpc, setHpc] = useState({ queue: "", ncpus: "", walltime: "" });
@@ -47,6 +47,7 @@ export function SolveCard() {
       },
       on_run_failure: onFail,
     });
+  const runsErrorText = runsError ? `run 목록을 불러오지 못했습니다 — ${runsError}` : null;
   const pending = runs.filter((r) => r.state === "GENERATED" || r.state === "SOLVE_FAILED" || r.state === "COLLECT_FAILED").length;
   const cancel = async () => {
     if (!job) return;
@@ -95,7 +96,9 @@ export function SolveCard() {
               onRun={() => submit(null)}
               job={job}
               disabled={!enabled || !doe || pending === 0 || !!ver.error}
-              disabledReason={enabled ? (!doe ? "준비된 DOE가 필요합니다" : pending === 0 ? "제출할 run이 없습니다" : (ver.error ?? undefined)) : undefined}
+              disabledReason={
+                enabled ? (runsErrorText ?? (!doe ? "준비된 DOE가 필요합니다" : pending === 0 ? "제출할 run이 없습니다" : (ver.error ?? undefined))) : undefined
+              }
               error={solve.error}
               extra={doe && pending > 0 ? <span className="muted small">대상 {pending}개</span> : undefined}
             />
@@ -117,6 +120,11 @@ export function SolveCard() {
         </div>
       )}
       {actionError && <div className="error-text small">{actionError}</div>}
+      {runsErrorText && (
+        <div className="error-text small" role="alert" data-testid="runs-error">
+          {runsErrorText}
+        </div>
+      )}
       {doe && <RunStateBar doe={doe} />}
       {doe && runs.length > 0 && (
         <details className="advanced" open={hpcOn}>
