@@ -937,3 +937,24 @@ def test_v3_s16_23_setup_config_adds_capture_ffmpeg_once(tmp_path):
                         encoding="utf-8")
     res = _run(tmp_path, t, _inputs(t))
     assert res["config_changed_keys"] == [] and _cfg(t)["capture"]["ffmpeg"]["exe"] == "C:/ffmpeg/bin/ffmpeg.exe"
+
+
+def test_restart_script_static():
+    """deploy/restart.ps1·restart.bat: 공용 함수 재사용, 워커→백엔드 중지·백엔드→워커 시작, -Stop/-Start, 비밀값·경로 하드코딩·삭제 없음.
+    Windows CI 잡의 "모든 .ps1 파서 검사"가 구문을 확인한다(pwsh 없는 Linux는 정적 검사만)."""
+    t = (DEPLOY / "restart.ps1").read_text(encoding="utf-8-sig")
+    param = t[t.index("param("): t.index(")\n$ErrorActionPreference")]
+    assert "$PSScriptRoot" not in param and "[switch]$Stop" in param and "[switch]$Start" in param    # PS 5.1 -File 규칙
+    assert "install-common.ps1" in t and "Stop-PhysicsAITasks -TaskNames" in t and "$PhysicsAITaskNames" in t
+    assert "Get-PhysicsAITaskAdminMessage" in t and "Test-PhysicsAIAccessDenied" in t
+    assert "Sort-Object -Descending" in t and t.index("Stop-PhysicsAITasks") < t.index("Start-ScheduledTask")    # 워커 → 백엔드 중지 뒤 시작
+    assert "'PhysicsAI-Backend', 'PhysicsAI-Worker'" not in t                                  # 작업 이름은 공용 목록 한 곳
+    for bad in ("Remove-Item", "Program Files", "Unregister-ScheduledTask", "Register-ScheduledTask", "Read-Host", "PASSWORD", "database_url"):
+        assert bad not in t, bad
+    assert not re.search(r"[A-Za-z]:\\", t.replace("<git 폴더>", ""))                           # 드라이브 경로 하드코딩 없음
+    common = (DEPLOY / "install-common.ps1").read_text(encoding="utf-8-sig")
+    assert "param([string[]]$TaskNames = $PhysicsAITaskNames)" in common                       # 기존 호출(인자 없음)은 그대로
+    bat = (DEPLOY / "restart.bat").read_bytes()
+    assert not bat.startswith(b"\xef\xbb\xbf") and b"\r\n" in bat and b"\n" not in bat.replace(b"\r\n", b"")
+    assert b'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0restart.ps1" %*' in bat and b"pause" in bat
+    assert "*.bat text eol=crlf" in (REPO / ".gitattributes").read_text(encoding="utf-8")

@@ -100,6 +100,10 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     if _has(data, "predict", "mesh_output_glob"):
         w.append(ConfigIssue("predict.mesh_output_glob",
                              "폐지된 키입니다 — 값이 적용되지 않습니다(새 메시는 predict.mesh_include_name, 지워도 됩니다)"))
+    from .schema_hpc import SCX_MPI_KNOWN
+
+    if s.hpc.scx.mpi not in SCX_MPI_KNOWN:  # 오류 아님 — 어댑터가 허용 값을 늘릴 수 있다(S20 보강 1)
+        w.append(ConfigIssue("hpc.scx.mpi", f"hpc.scx.mpi가 알려진 값이 아닙니다: {s.hpc.scx.mpi}"))
     from .schema_capture import capture_warnings
 
     for key, msg in capture_warnings(s):  # phase3 §21.4.4 S16: avi 대체·ffmpeg 파일 없음

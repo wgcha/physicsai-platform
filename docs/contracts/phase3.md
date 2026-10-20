@@ -1009,7 +1009,7 @@ step 정의·작업 유형·재시도 시작 지점은 그대로다(`TS_PREP →
 | `memory_gb` | `null` | null 또는 1~65536 |
 | `queue_type` | `implicit` | 1~64자 |
 | `run_type` | `both - use starter and engine files` | 1~128자 |
-| `mpi` | `SMP (default)` | 1~128자 |
+| `mpi` | `Pure MPI`(S20 보강 1) | 1~128자 |
 | `single_precision` | `false` | bool |
 | `poll_interval_s` | `null`(= `hpc.poll_interval_s`) | null 또는 10~3600 |
 | `max_download_bytes` | `21474836480` | 1 MiB~2^40 |

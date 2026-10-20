@@ -142,3 +142,27 @@ describe("V3-S20-6 ④ VerifyNew", () => {
     expect(within(a.card).queryByLabelText("Radioss 버전")).toBeNull();
   });
 });
+
+// ---------------------------------------------------------------- V3-S20-8 보강 1: scx면 queue·walltime 칸 없음
+describe("V3-S20-8 ①-4 queue·walltime 칸", () => {
+  it("scx: 칸 없음(ncpus·Radioss 버전만), queue·walltime null 전송", async () => {
+    const { card, btn, bodies } = await solveCard(SCX1);
+    expect(within(card).queryByLabelText("queue")).toBeNull();
+    expect(within(card).queryByLabelText("walltime")).toBeNull();
+    expect(within(card).getByLabelText("ncpus")).toBeTruthy();
+    expect(within(card).getByLabelText("Radioss 버전")).toBeTruthy();
+    fireEvent.change(within(card).getByLabelText("ncpus"), { target: { value: "8" } });
+    fireEvent.click(btn);
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(solveHpc(bodies)).toMatchObject({ queue: null, walltime: null, ncpus: 8 });
+  });
+
+  it("command(PBS): queue·walltime 칸 있음, 값 전송", async () => {
+    const { card, btn, bodies } = await solveCard(PBS1);
+    fireEvent.change(within(card).getByLabelText("queue"), { target: { value: "gpuq" } });
+    fireEvent.change(within(card).getByLabelText("walltime"), { target: { value: "24:00:00" } });
+    fireEvent.click(btn);
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect(solveHpc(bodies)).toMatchObject({ queue: "gpuq", walltime: "24:00:00" });
+  });
+});

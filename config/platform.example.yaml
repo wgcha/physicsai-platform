@@ -264,7 +264,7 @@ hpc:
     memory_gb: null
     queue_type: implicit
     run_type: "both - use starter and engine files"
-    mpi: "SMP (default)"
+    mpi: "Pure MPI"               # Radioss -np. 허용: "SMP (default)" | "Pure MPI" | "Hybrid 2 Threads" | "Hybrid 4 Threads" | "Hybrid 8 Threads" | "auto"(밖 값은 설정 경고)
     single_precision: false
     poll_interval_s: null         # null = hpc.poll_interval_s
     max_download_bytes: 21474836480

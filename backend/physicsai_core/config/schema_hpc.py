@@ -71,6 +71,9 @@ class HpcTransferCfg(_M):
     max_collect_bytes: int = 21474836480
 
 
+SCX_MPI_KNOWN = ("SMP (default)", "Pure MPI", "Hybrid 2 Threads", "Hybrid 4 Threads", "Hybrid 8 Threads", "auto")
+
+
 class HpcScxCfg(_M):
     """scx 모드(phase3 §16.8) — 대시보드 SCX relay 경유 Radioss 제출. 기본값의 단일 출처(환경별 값은 설정 파일에서만)."""
 
@@ -84,7 +87,7 @@ class HpcScxCfg(_M):
     memory_gb: int | None = None
     queue_type: str = "implicit"
     run_type: str = "both - use starter and engine files"
-    mpi: str = "SMP (default)"
+    mpi: str = "Pure MPI"                   # 허용 값은 SCX_MPI_KNOWN(밖 값은 설정 경고 — 어댑터가 값을 늘릴 수 있음)
     single_precision: bool = False
     poll_interval_s: float | None = None    # null = hpc.poll_interval_s
     max_download_bytes: int = 21474836480

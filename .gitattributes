@@ -1,2 +1,5 @@
 # 저장소에 포함한 프런트 빌드본(phase3 D3-40): 생성물 — diff·언어 통계 제외, 줄바꿈 변환 없음(서버에 빌드 그대로)
 frontend-dist/** -text -diff linguist-generated=true
+
+# Windows 배치 파일은 CRLF(cmd 호환)
+*.bat text eol=crlf

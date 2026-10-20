@@ -435,8 +435,10 @@ function Update-PhysicsAITaskRegistration {
 }
 
 function Stop-PhysicsAITasks {
-    <# 두 작업 중지(없으면 건너뜀). 이전 설치가 관리자 권한으로 만든 작업이라 거부되면 안내와 함께 중단(Get-PhysicsAITaskAdminMessage). #>
-    foreach ($t in $PhysicsAITaskNames) {
+    <# 두 작업 중지(없으면 건너뜀). 이전 설치가 관리자 권한으로 만든 작업이라 거부되면 안내와 함께 중단(Get-PhysicsAITaskAdminMessage).
+       -TaskNames로 중지 순서를 바꿀 수 있다(restart.ps1: 워커 → 백엔드). #>
+    param([string[]]$TaskNames = $PhysicsAITaskNames)
+    foreach ($t in $TaskNames) {
         if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
         try { Stop-ScheduledTask -TaskName $t -ErrorAction Stop }
         catch {

@@ -206,6 +206,7 @@ NSSM·pywin32를 쓰지 않고 작업 스케줄러로 상시 실행한다(phase2
 | 실행 인자 | `-m physicsai_api.serve --runtime <런타임>`(`--config <설정>`은 설정이 `<런타임>\config\platform.yaml`이 아닐 때만) | 설정·DB 접속 정보 파일 위치만(비밀값 없음) |
 
 - 수동 조작: `Start-ScheduledTask PhysicsAI-Worker`, `Stop-ScheduledTask PhysicsAI-Worker`(백엔드도 같음). 워커를 멈추면 Job Object `KILL_ON_JOB_CLOSE`로 실행 중인 Altair 프로세스 트리도 함께 끝나고, 그 작업은 약 1분(lease) 뒤 `INTERRUPTED`가 된다.
+- **재시작**(설정 파일을 고친 뒤 등): 일반 PowerShell에서 `powershell -NoProfile -ExecutionPolicy Bypass -File <git 폴더>\deploy\restart.ps1`, 또는 `deploy\restart.bat` 더블클릭(같은 스크립트 호출). 워커 중지 → 백엔드 중지 → 백엔드 시작 → 워커 시작 후 두 작업의 State 표를 출력한다. `-Stop`(중지만)·`-Start`(시작만) 옵션. 실행 중 작업이 있으면 워커 중지로 약 1분 뒤 `INTERRUPTED`가 되므로 대기·실행 중 작업이 없을 때 쓴다.
 - **세션 0 주의**: `Background`는 데스크톱이 없는 세션 0에서 돈다. HyperWorks·SimLab 배치(특히 `hw -b`로 그림을 만드는 TCL)가 세션 0에서 동작하는지는 미확인(U11·U31). 안 되면 `-RunMode Interactive`로 다시 등록하고 실행 계정을 자동 로그온해 둔다(§13 FAQ).
 
 ### 2.6 접속 연결
@@ -1289,7 +1290,7 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `home_display` | `/Users/vd.dashboard` | 화면·로그 표시 전용 |
 | `appliance` / `version` | `""`(필수) / `"26.1"` | SCX Radioss appliance·버전 문자열(E4-11-1·2). 버전은 작업별 입력(`hpc.version`)이 있으면 덮어씀(D3-68) |
 | `ncpu` / `memory_gb` | `16` / `null` | 작업 params `hpc.ncpus`가 있으면 ncpu를 덮어씀(`queue`·`walltime`은 무시) |
-| `queue_type` / `run_type` / `mpi` / `single_precision` | `implicit` / `both - use starter and engine files` / `SMP (default)` / `false` | E4-11-10 |
+| `queue_type` / `run_type` / `mpi` / `single_precision` | `implicit` / `both - use starter and engine files` / `Pure MPI` / `false` | E4-11-10. `mpi` 허용 값: `SMP (default)`·`Pure MPI`(Radioss `-np`)·`Hybrid 2 Threads`·`Hybrid 4 Threads`·`Hybrid 8 Threads`·`auto` — 밖 값은 설정 경고(오류 아님) |
 | `poll_interval_s` | `null` | 상태 조회 주기(null = `hpc.poll_interval_s`) |
 | `stage_patterns` | `["*.rad","*.inc","*.csv"]` | 올릴 파일(입력 폴더 직속, 대소문자 무시) |
 | `list_additional_paths` | `true` | include를 `additional_paths`에 나열(E4-11-4) |

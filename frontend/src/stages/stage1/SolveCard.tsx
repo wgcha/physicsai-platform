@@ -39,7 +39,12 @@ export function SolveCard() {
     void solve.run({
       doe_id: doe.id,
       run_keys: runKeys,
-      hpc: { queue: hpc.queue || null, ncpus: hpc.ncpus ? Number(hpc.ncpus) : null, walltime: hpc.walltime || null, version: ver.payload },
+      hpc: {
+        queue: scx ? null : hpc.queue || null,
+        ncpus: hpc.ncpus ? Number(hpc.ncpus) : null,
+        walltime: scx ? null : hpc.walltime || null,
+        version: ver.payload,
+      },
       on_run_failure: onFail,
     });
   const pending = runs.filter((r) => r.state === "GENERATED" || r.state === "SOLVE_FAILED" || r.state === "COLLECT_FAILED").length;
@@ -59,15 +64,19 @@ export function SolveCard() {
       <DoePicker />
       <Advanced>
         <div className="form-grid">
-          <Field label="queue">
-            <input value={hpc.queue} onChange={(e) => setHpc({ ...hpc, queue: e.target.value })} aria-label="queue" />
-          </Field>
+          {!scx && (
+            <Field label="queue">
+              <input value={hpc.queue} onChange={(e) => setHpc({ ...hpc, queue: e.target.value })} aria-label="queue" />
+            </Field>
+          )}
           <Field label="ncpus">
             <input className="num" inputMode="numeric" value={hpc.ncpus} onChange={(e) => setHpc({ ...hpc, ncpus: e.target.value.replace(/[^0-9]/g, "") })} aria-label="ncpus" />
           </Field>
-          <Field label="walltime" hint="예 24:00:00">
-            <input value={hpc.walltime} onChange={(e) => setHpc({ ...hpc, walltime: e.target.value })} aria-label="walltime" />
-          </Field>
+          {!scx && (
+            <Field label="walltime" hint="예 24:00:00">
+              <input value={hpc.walltime} onChange={(e) => setHpc({ ...hpc, walltime: e.target.value })} aria-label="walltime" />
+            </Field>
+          )}
           <RadiossVersionField state={ver} />
           <Field label="일부 run 실패 시">
             <select value={onFail} onChange={(e) => setOnFail(e.target.value as "fail")} aria-label="일부 run 실패 시">

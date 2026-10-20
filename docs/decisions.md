@@ -122,3 +122,4 @@
 - 2026-10-20: S19 R-B·R-F 300줄 분할·batch_matrix→sampling 이동(재노출, 동작 불변) 반영 (근거: s19_followup.md §24.11, Verifier AST 대조 Pass)
 - 2026-10-20: 워커 세션 0(작업 스케줄러 Background)에서 NVML 조회 실패는 원인 문구로 표시하고 Background 유지(옵션 A), hpc none 경고 문구를 'HPC 제출 미설정'으로 (근거: 이슈 #8, 사용자 결정)
 - 2026-10-20: S20 SCX Radioss 버전 작업별 입력(기본 hpc.scx.version 26.1), appliance는 설정 필수 유지 (근거: 사용자 결정, s20_scx_version.md D3-68)
+- 2026-10-20: SCX Radioss 병렬 기본 Pure MPI(-np), mpi 허용 값 6개 밖이면 설정 경고, scx 모드에서 queue·walltime 칸 숨김 (근거: 사용자 요청, 이슈 #8 코멘트 4, s20_scx_version.md 보강 1)

@@ -98,3 +98,31 @@ def test_v3_s20_5_openapi_shape():
     assert "scx_version" not in sch["StatusHpc"].get("required", [])
     fv = sch["FvHpc"]["properties"]["version"]
     assert {"type": "string", "pattern": r"^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,63}$"} in fv["anyOf"]
+
+
+# ---- V3-S20-8 보강 1: mpi 기본 Pure MPI·목록 밖 값 설정 경고 ----------------------------------------------------------
+
+
+def test_v3_s20_8_mpi_default_and_warning(settings_dict, fake_relay, tmp_path):
+    from physicsai_core.config.schema_hpc import SCX_MPI_KNOWN, HpcScxCfg
+
+    assert HpcScxCfg().mpi == "Pure MPI"
+    assert SCX_MPI_KNOWN == ("SMP (default)", "Pure MPI", "Hybrid 2 Threads", "Hybrid 4 Threads", "Hybrid 8 Threads", "auto")
+    ex = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert ex["hpc"]["scx"]["mpi"] == "Pure MPI"
+    row = next(ln for ln in (REPO / "docs" / "manual" / "admin.md").read_text(encoding="utf-8").splitlines()
+               if ln.startswith("| `queue_type` / `run_type` / `mpi`"))
+    assert "/ `Pure MPI` /" in row and "SMP (default)" in row and "`auto`" in row
+    hpc = scx_hpc_cfg(fake_relay, tmp_path)
+    hpc["scx"].pop("mpi")
+    assert _cfg(settings_dict, hpc).settings.hpc.scx.mpi == "Pure MPI"
+
+    def mpi_warns(value):
+        lc = _cfg(settings_dict, scx_hpc_cfg(fake_relay, tmp_path, mpi=value))
+        assert lc.ok, lc.issues  # 경고일 뿐 오류 아님
+        return [w for w in lc.warnings if w.key == "hpc.scx.mpi"]
+
+    for ok in SCX_MPI_KNOWN:
+        assert mpi_warns(ok) == [], ok
+    got = mpi_warns("Hybrid 16 Threads")
+    assert len(got) == 1 and got[0].message == "hpc.scx.mpi가 알려진 값이 아닙니다: Hybrid 16 Threads"
