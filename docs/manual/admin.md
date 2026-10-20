@@ -1332,6 +1332,7 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `SCX_PATH_NOT_ALLOWED` | 잡 폴더가 SPDM 루트 안이거나 형식 위반 | Study 폴더 이름·`drive_base` |
 | `SCX_REMOTE_DIR_EXISTS` | 같은 이름 폴더가 `_9`까지 있음 | 잠시 뒤 다시(시각이 바뀜) |
 | `INPUT_INVALID` | 올릴 파일 이름·크기 상한 위반, starter 없음 | 입력 폴더 확인 |
+| relay HTTP 404(경로 없음) | `hpc.scx.relay_url`이 대시보드 화면 포트(Vite·Caddy)를 가리킴 — 화면 서버는 `/internal`을 넘기지 않음 | relay_url을 대시보드 백엔드 포트로(화면 포트·Vite는 /internal을 넘기지 않음). curl 확인 시 `--noproxy "*"` 필요(사내 프록시가 127.0.0.1도 가로챔) |
 | `HPC_UNREACHABLE` | 상태 조회 실패가 `hpc.max_unreachable_minutes`를 넘음(문구 "대시보드 SCX 연결 확인") | 대시보드 재로그인·relay 확인 |
 | 경고 `SCX_SUBDIR_SKIPPED`·`SCX_NOT_SUBMITTED`·`SCX_UNKNOWN_CANCELED` | 하위 폴더 입력 무시·결과 모름으로 남은 run 미제출·결과 모름 행 취소(SCX에서 직접 확인) | 해당 run 다시 제출 |
 

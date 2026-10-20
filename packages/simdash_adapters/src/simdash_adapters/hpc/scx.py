@@ -18,7 +18,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field, fields
 from typing import Any, Literal
 
-from .scx_client import ScxRelayClient, parse_relay_url
+from .scx_client import MSG_RELAY_DISABLED, MSG_RELAY_NO_ROUTE, ScxRelayClient, parse_relay_url
 from .scx_naming import MAX_SUFFIX, display_path, drive_base_rel, rel_problem, with_suffix
 from .types import HpcAvailability, HpcGatewayError, HpcStatus, HpcSubmitResult, HpcSubmitSpec
 
@@ -315,6 +315,8 @@ class ScxHpcGateway:
             self._health = cached
         _ts, h, err = cached
         if h is None:
+            if err in (MSG_RELAY_NO_ROUTE, MSG_RELAY_DISABLED):  # 설정 원인이 분명한 두 경우는 조치 문구를 그대로 보인다
+                return HpcAvailability(True, "scx", f"{_MSG_OK} — {err}")
             return HpcAvailability(True, "scx", f"{_MSG_OK} — {_MSG_HEALTH_FAIL}")
         if h.get("job_api") is False:
             return HpcAvailability(False, "scx", _MSG_NO_JOB_API)
