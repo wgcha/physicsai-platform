@@ -77,6 +77,9 @@
 | E0-5 | 로그아웃 상태에서 접속 → "대시보드에서 로그인" 안내 | | |
 | E0-6 | general 계정: 조회만 가능, 실행 버튼 비활성. power 계정: 실행 가능, 대기열 취소 버튼 없음. 전역 관리자: 순서 이동·취소 가능 | | |
 | E0-7 | `ai_root`를 매핑 드라이브(예 `E:` → `\\서버\share`) 또는 `subst`로 만든 드라이브로 두고: 드라이브 문자 경로와 UNC·실경로 형태 입력이 모두 "확인" 통과, 데이터셋 생성·산출물 내려받기·`_backup` 이동 정상, 화면 표시 경로(`*_display_path`)를 탐색기에 붙여넣어 열림. dedup 볼륨이면 일반 파일이 링크로 거부되지 않음 | | |
+| E0-8-1 | (3차 S19, phase3 §24) 평소 상태: 상단 자원 칩 툴팁 = `워커 자원 열기`, 서랍 GPU 막대 정상, 워커 로그에 GPU 조회 줄 없음 | | |
+| E0-8-2 | `worker.gpu_query`를 없는 경로(`["C:/nope/nvidia-smi.exe"]`)로, `resources.gpu_query_candidates`를 `[]`로 임시 변경 → 칩 툴팁 `GPU 없음 — nvidia-smi를 찾지 못했습니다(…)`, 서랍에 같은 원인 회색 줄, 워커 로그에 전이 1줄. 연속 3회째에 "조회 간격을 늘립니다" 1줄이 나오고 툴팁의 `다음 조회` 시각이 점점 멀어짐(10·10·20·40·80… 최대 `gpu_backoff_max_s`). 원복하면 "GPU 조회 회복" 1줄, 툴팁이 평소로 돌아옴. **끝나면 두 설정을 반드시 원복** | | |
+| E0-8-3 | 이전에 보던 "GPU 조회 실패"가 다시 나면 칩 툴팁 문구·연속 횟수와 워커 로그 시각을 기록한다. 응답이 15초를 넘겼는지(`응답 시간 초과(15초)`) 종료코드/실행 파일 문제인지 구분 → 시간 초과면 `worker.gpu_query_timeout_s`를 올려 재확인 | | |
 
 ## E1. 워커 자원 제한(Job Object)
 
@@ -146,3 +149,85 @@
 | # | 확인 | 결과 | 메모 |
 |---|---|---|---|
 | E6-1 | 사내 PBS 제출·상태·취소 명령, job id 출력 형식, 상태 문자, 종료코드 표기, 이 PC 경로 ↔ 노드 경로 대응을 메모(U1) | | |
+
+# 3차 항목 (S12~S19, 2026-10-20 문서 이관)
+
+- 계약: [phase3.md](contracts/phase3.md) §17~§24. 아래는 S14~S19의 서버 확인 항목이다. S9~S13의 서버 확인(E4-9~E4-12-*)은 각 계약 원문([s12_s13.md](contracts/s12_s13.md) 등)에 있고 1차 E4-9·E4-10과 번호가 겹친다 — 위 표와 혼동하지 않도록 이 표에는 옮기지 않았다. GPU 조회(E0-8)는 위 E0 표에 있다.
+- ④ 일괄 예측의 GPU 동시 예측(원 계약 S19 §24.4, 서버 확인 `E4-19-1~5`)은 **철회**되어 이 체크리스트에 항목이 없다. 그 블록의 ⑤ 성능 확인 1건만 E5A-6으로 남겼다.
+- ID 규칙: 기존 E4·E5 번호는 유지하고 3차 신규는 계약 ID를 그대로 쓴다. 결과 칸 기록 방식은 위와 같다.
+
+## E5A. ⑤ 결과분석 (S14 §19, S19 §24)
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E5A-1 | 메뉴 ①~⑥ 순서·라벨(④ 예측 · ⑤ 결과분석 · ⑥ 최적화), ④ 예측·⑥ 최적화 기존 흐름 회귀, 작업 대기열·알림에서 최적화가 "⑥"으로 표시 | | |
+| E5A-2 | 완료된 일괄 예측 배치를 ⑤에서 열어 설계공간 지도·변수–응답·커브 겹쳐보기가 ④에서 보던 것과 같은 값 | | |
+| E5A-3 | 실제 해석 DOE(LHS, 응답 있음)를 ⑤에서 열어 결과 표 값이 ① samples/responses와 일치, 영향도(PRCC·SRC)가 표시되고 부호·순위가 상식과 맞음, 200 run 첫 로드 시간 기록 | | |
+| E5A-4 | 같은 템플릿의 해석 DOE + 예측 배치를 겹쳐 보기(해석 대 예측), 파라미터 이름이 다른 쌍은 비활성 + 안내 | | |
+| E5A-5 | 표본 방식별 영향도 등급: 비 LHS DOE는 비활성이 아니라 "정식/참고" 표시(S15), 응답 없는 DOE에서 안내 | | |
+| E5A-6 | (S19) 기존 배치의 성능(`perf:`) 열 값이 이전과 같은지 확인. 템플릿 성능 정의(subcase 등)를 바꾼 뒤 그 배치를 ⑤에서 열면 해당 칸이 `—` + 회색 "정의 변경", 표 위 안내 줄. ⑥ 최적화 설정의 성능 표에서 "성능 다시 추출" 실행 후 값이 돌아옴 | | |
+
+## E4-13. ④ 표본 방식 (S15 §20) · E1-8. ① 기본 유형
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E4-13-1 | ④ 최적화 LHS 20개(기본 선택 확인) → 생성·예측 완료 → ⑤ 영향도 정식 표시 | | |
+| E4-13-2 | ④ Sobol 16개 → 같은 템플릿에서 이어서 추가 16개 → 두 배치 값이 겹치지 않고 미리보기 notes "합치면 32개". ⑤에서 두 배치 겹쳐 보기 | | |
+| E4-13-3 | ④ Box–Behnken(변수 3) 13 run, 부분 요인 IV → ⑤ 영향도 "참고용" 문구 | | |
+| E4-13-4 | 미리보기 응답 시간: 최적화 LHS 200개·Sobol 128개(서버 PC에서 첫 호출 포함 2초 안 목표), 서버 scipy 버전 = lock(1.17.1) | | |
+| E1-8-1 | ① DOE 생성 화면 기본 = LatinHyperCube·설명문 표시(S18 이후에는 E1-9의 "플랫폼 생성"이 화면 기본), Sobol DOE를 ⑤에서 열면 영향도 정식 | | |
+| E1-8-2 | (취소) HyperStudy 정의 파일 밖 유형 value 확인은 S18 결정(① 플랫폼 생성 채택)으로 취소 | 취소 | |
+
+## E4-14. ④ 실행 목록·FEM 검증·영상 (S16 §21)
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E4-14-H1 | 실행 목록에 과거 단일 예측(옛 작업 포함)이 나오고 일괄 하위는 없음. 행을 고르면 컨투어·커브·응답·입력값·경로가 보임 | | |
+| E4-14-F1 | mesh_only 예측 → ① DOE 조립으로 FEM 검증: `04_verify\FV-001\a1\input`에 starter + 새 include, `EPS_mesh*` 없음, starter가 include를 참조(경고 없음) | | |
+| E4-14-F2 | FEM h3d 결과 이름(예측 `CornerStress`에 해당하는 이름)·성분을 HyperView에서 확인 → 다르면 `fem_verify.field_map` | | |
+| E4-14-F3 | 캡처 TCL이 /PART id로 부품을 격리하는지(이름이어야 하는지) — FEM 쪽 이미지. 안 되면 `auto_isolate_cushion=false` 또는 부품 이름 입력 | | |
+| E4-14-F4 | 범례 min·max: FEM h3d에서 `__FV_LEGEND` subcase 1이 값을 내는지(`F/a1/result/RESPONSES.txt`), 아니면 `fem_verify.legend_subcase` | | |
+| E4-14-F5 | FEM T01 커브 이름이 예측 curve.json 계열 이름과 맞는지(상세 커브 탭 unmatched 목록) | | |
+| E4-14-F6 | SCX: 잡 폴더 `04_FV-001_<ts>`, 업로드 파일(rad·inc·csv), 회수 h3d·T01 | | |
+| E4-14-F7 | custom 조립을 SPDM 경로로 지정: 원본 폴더 mtime·파일 수 불변, 스냅숏만 생김 | | |
+| E4-14-F8 | 응답 MIN·MAX 비교값이 상식 범위(mesh_only이면 조립 전체 값인지 확인) | | |
+| E4-14-V1 | 작업 로그에서 방향마다 `SUCCESS: 동영상 저장 완료` / `ERROR: 동영상 저장 실패` / `ERROR: 동영상 파일 없음` 중 무엇이 찍히는지, `capture_result.txt` VIEW 줄 video 값 | | |
+| E4-14-V2 | `RESULT\media\iso.mp4`(또는 설정 확장자) 존재·크기 | | |
+| E4-14-V3 | `ffprobe -v error -select_streams v:0 -show_entries stream=codec_name,pix_fmt,width,height -of default=nw=1 iso.mp4` → h264·yuv420p인지 | | |
+| E4-14-V4 | 설정값 `capture.video`·`video_ext`·`max_video_bytes`·`video_target_bytes` 확인(`/status`·platform.yaml) | | |
+| E4-14-V5 | 브라우저: 네트워크 `/artifacts/<id>/media` 206·Content-Type, 콘솔 media error(code 4 = 형식 미지원) | | |
+| E4-14-V6 | ffmpeg 가용성: `ffmpeg -hide_banner -encoders`에 libx264(없으면 `h264_mf`·`libopenh264`로 `capture.ffmpeg.args` 교체), 수동 변환 1회 크기 ≤ 1 MB 여부 | | |
+| E4-14-V7 | `hwc save animation window` 대 `page` — 배치에서 어느 쪽이 파일을 만드는지 → `capture.video_scope` | | |
+
+## E4-17. ⑥ 성능 정의·다목적 내장 최적화 (S17 §22)
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E4-17-1 | ⑥ 내장 모드에서 쿠션 템플릿에 성능 2개 정의: H3D `CornerStress` MAX, 커브 `AccelPeak` ABSMAX. 저장 → ④ 단일 예측 1회 → 결과 표에 두 값이 나오고 커브 값이 HyperGraph 최대와 같은지 | | |
+| E4-17-2 | 기존 완료 배치(정의 전 예측)를 재사용 → `PERF_MISSING_IN_BATCH` → `성능 다시 추출` → 값 채워짐. 하위 run 폴더 `_backup`에 옛 RESPONSES가 남는지 | | |
+| E4-17-3 | 2목적(CornerStress 최소 · AccelPeak 최소) + 제약 1개(범위), 새 DOE 12 + 3×4 실행. 파레토 산점도·예측 전선·HV 그래프, 가중치 슬라이더 3가지(50/50·80/20·20/80)에서 추천 이동, 마무리 컨투어(기준안 대 추천점), 총 소요 기록 | | |
+| E4-17-4 | 반복당 SO_FIT + SO_PROPOSE 시간 기록(목표 < 60 s). 3목적 1회(관찰 1개 포함)도 실행 | | |
+| E4-17-5 | 파레토 표에서 예측 전선 점 2개 → `선택 해 예측 검증`(캡처 포함) → 결과가 표에 반영되고 컨투어가 받아지는지 | | |
+| E4-17-6 | 검증 해 1개 → `FEM 검증`(S16 구성 시) → FEM 검증 작업이 생성되는지 | | |
+| E4-17-7 | 진행 중 최적화가 쓰는 성능의 정의 변경 시도 → 409 문구("내장 최적화 SO-00n이 이 성능을 쓰고 있어 정의를 바꿀 수 없습니다") 확인 | | |
+
+## E1-9. ① 학습 DOE 플랫폼 동시 생성 (S18 §23)
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E1-9-1 | 플랫폼 생성, run 8·동시 4. 실행 중 아래 감시 명령으로 SimLab·HyperMesh 동시 수가 4 근처로 유지되는지 확인. 작업 상세 step 라벨 "실행 중 4 · …"와 `parallel.peak_processes` = 4 | | |
+| E1-9-2 | 결과: DOE READY 8 run, ①-4 PBS/SCX 제출 2 run → 결과 회수 → ② 큐레이션 1 run 성공. ④ "① 학습 DOE 재사용" 미리보기 행 = 8 | | |
+| E1-9-3 | 자원: 동시 4에서 라이선스 오류 없음(step 로그에서 `licens` 검색), 작업 회계 최대 메모리, 총 소요(같은 run 수의 hstbatch 기록이 있으면 비교). 오류가 나면 동시 수를 낮추고 `worker.max_memory_gb`·라이선스를 확인 | | |
+| E1-9-4 | 취소: 생성 중 취소 → 30초 안에 감시 출력 0, 재시도 → 남은 run만 생성 | | |
+| E1-9-5 | (선택, VOC 원인 기록용) 원본 HyperStudy(호환) 모드 run 8·multiexec 4를 같은 감시 명령으로 관찰해 실제 동시 수를 기록. 결과와 무관하게 동작은 바뀌지 않음 | | |
+
+E1-9 감시 명령(PowerShell, 2초 간격, `Ctrl+C`로 종료):
+
+```powershell
+$log = "$env:TEMP\doe_conc.csv"; "time,simlab,hypermesh" | Out-File $log -Encoding utf8
+while ($true) {
+  $p  = Get-CimInstance Win32_Process | Where-Object { $_.Name -ne 'cmd.exe' -and $_.CommandLine }
+  $sl = ($p | Where-Object { $_.CommandLine -match '-auto' -and $_.CommandLine -match 'simlab_parametered_mesh' }).Count
+  $hm = ($p | Where-Object { $_.CommandLine -match 'BATCHRUN_create_include_node_elem' }).Count
+  "{0},{1},{2}" -f (Get-Date -Format HH:mm:ss), $sl, $hm | Add-Content $log; Start-Sleep 2 }
+```

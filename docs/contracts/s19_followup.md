@@ -1,3 +1,5 @@
+> **phase3.md §24(변경 메모 D3-67, ④ GPU 동시 예측은 철회)로 이관됨(2026-10-20).** 기준은 phase3.md이고, 이 파일은 상세 원문(알고리즘·표·시험 목록·파일 소유)으로 남긴다.
+
 # 계약: S19 후속 — GPU 조회 실패 대응·일괄 예측 GPU 동시 예측·⑤ perf 서버 계산 — phase3 §24
 
 > 이 문서는 phase3.md §24와 변경 메모 D3-67입니다. s15~s18과 같은 사정으로 별도 파일(`docs/contracts/s19_followup.md`)로 두며, 이번 순서의 문서 이관(D)에서 phase3.md 본문과 변경 메모 목록으로 옮깁니다. 절 번호·용어·원칙은 phase3.md §11.5(prepared)·§14.5(④ B·`run_parallel`·종료 훅)·D3-37(예측 성공 = h3d)·D3-45(GPU 조회 탐색)·D3-53(그룹 메모리 판정), [s16_voc.md](s16_voc.md) §21(실행 목록 V1·FEM 검증), [s17_multiobj.md](s17_multiobj.md) §22(성능 `perf:`·`performance.perf_value`)를 따릅니다.

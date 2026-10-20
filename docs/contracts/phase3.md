@@ -46,6 +46,7 @@
 | R3-6 | B16 input.zip 폴더 없음 409 `INPUT_NOT_READY` "입력 파일 폴더가 없습니다" | 코드 그대로, `RAD_ASSEMBLE` 성공 후 폴더가 없으면 문구 "입력 파일 폴더가 없습니다. Study 정리로 `_backup` 폴더에 옮겨졌을 수 있습니다", `Job.input_display_path`는 폴더가 있을 때만 값 |
 | R3-7 | 1차 §6.3 `datasets.package_rel`은 내보내기 후 유지 | S3 정리로 `03_package/<dataset_id>/`를 옮기면 `package_rel=NULL`(→ `package_ready=false`, ③-2 다시 실행 가능) |
 | R3-8 | 1차 §12.2 프로토콜 위치 `backend/physicsai_core/hpc/gateway.py` | 정의는 `packages/simdash_adapters/src/simdash_adapters/hpc/`, `physicsai_core.hpc.*`는 재노출 호환층(§6). 모양·동작 불변 |
+| R3-9 | 3차 §24 원안(S19 ④ GPU 동시 예측 — 대기열 1번과 같은 배치의 하위 PREDICT를 슬롯 점유 중에도 동반 실행하는 단일 슬롯 FIFO 예외) | **철회(2026-10-20, 사용자 결정, D3-67)**. 예외를 두지 않고 1·2차 단일 슬롯 FIFO 원칙을 그대로 유지한다(④ 일괄 예측 하위 PREDICT는 SLOT 대기열에서 1개씩 실행) |
 
 ---
 
@@ -1089,6 +1090,299 @@ step 정의·작업 유형·재시도 시작 지점은 그대로다(`TS_PREP →
 - 공용 계정 홈 바로 아래에 프로젝트 폴더를 만들므로 같은 이름의 다른 용도 폴더가 있으면 그 안에 잡 폴더가 생긴다(덮어쓰기는 없음). 필요하면 `drive_base: "~/physicsai"`로 바꿀 수 있다.
 - 비밀 교체는 두 앱 재시작이 필요하다. 대시보드 migration 번호(0044)는 다른 브랜치와 충돌할 수 있어 구현 때 다음 번호로.
 
+---
+
+## 17~24. S12~S19 (2026-10-17~20) — 별도 계약 파일에서 이관
+
+S12~S19 계약은 phase3.md에 다른 작업의 미커밋 변경이 있어 `s12_s13.md`·`s14_analysis.md`·`s15_sampling.md`·`s16_voc.md`·`s17_multiobj.md`·`s18_doe_parallel.md`·`s19_followup.md`로 따로 두었다. 2026-10-20 문서 이관(D)으로 **본문 요지와 변경 메모(D3-59~D3-67)를 이 문서로 옮겼다.** 이 문서가 기준이고, 알고리즘 상세·표·시험 전체 목록·파일 소유 표는 각 계약 파일 원문(각 절 머리 링크)에 남긴다(파일은 지우지 않음, 맨 위에 이관 안내 한 줄). 번호·용어는 위 절과 같다(§14 일괄 예측, §15 캡처, D3-51·D3-53·D3-54 규칙). 화면 번호는 S14 이후 ④ 예측 · ⑤ 결과분석 · ⑥ 최적화이고, S12·S13 원문의 "⑤ 최적화"는 구 번호다(내부 코드 경로·URL `/stage/5`·`jobs.stage`는 그대로).
+
+migration 순서: 0010 `surrogate_opt`(S13) → 0011 `surrogate_final`(S13 D3-61) → 0012 `sampling_kinds`(S15) → 0013 `fem_verify`(S16) → 0014 `multiobj`(S17) → 0015 `doe_platform_gen`(S18). S14·S19는 migration 없음(`MIGRATION_HEAD` = `0015_doe_platform_gen`).
+
+## 17. S12 DOE 설계공간 지도 (사용자 결정 2026-10-17, D3-59)
+
+원문: [s12_s13.md](s12_s13.md) §17. 새 DB·새 작업·새 의존성 없음.
+
+목표: 일괄 예측 결과의 그래프 카드에 탭 `변수–응답` · `설계공간 지도`(S14 이후 ⑤ 결과분석으로 이동, §19). run마다 변수 벡터(반영값)를 PLS(기본)·PCA 2차원 투영 또는 평행 좌표로 펼치고 점·선 색 = 고른 값(기본 `curve:max`). 표·커브 겹쳐보기와 같은 선택 모델(`selected` = doe_no).
+
+| # | 결정 | 근거 |
+|---|---|---|
+| M1 | run별 대표값은 **백엔드** `GET /predict-batches/{bid}/design-map`(프로세스 LRU)에서 계산. 완료 run의 `curve.json`(≤ 20000점)·`RESPONSES.txt`를 한 번 읽어 모든 계열의 max·min·\|max\|와 모든 RESP 키를 run당 수십 숫자로 요약 | 프런트 `curves` API는 계열 1개·run 상한·2000점 다운샘플이고 RESP 원값이 없다. 값 선택 변경은 왕복 없음. S13 목적함수도 같은 요약 재사용 |
+| M2 | PCA(Jacobi)·PLS(NIPALS PLS1 2성분)·평행 좌표는 **프런트 TS** (n ≤ 200, p ≲ 20) | 색 값을 바꿀 때마다 즉시 재적합. 백엔드에 numpy를 더하지 않음 |
+| M3 | 변수 = 템플릿 파라미터 전부, 값 = 반영값(`applied_values`), 유효 run 기준 z-점수(ddof=1) | 단위가 다른 변수를 같은 무게로 |
+| M4 | 기본 색 값 `curve:max`(첫 계열). 그 밖 `curve:min`·`curve:absmax`·`resp:<NAME>_MIN\|_MAX`, `RESPONSES.txt`가 없는 옛 run은 `tbl:<name>` | 사용자 결정 |
+
+**지표 id 문법(S12·S13 공용, ASCII fullmatch)**: `curve:max\|min\|absmax`(+별도 `series`, 생략 = 첫 계열), `resp:<NAME>_MIN\|_MAX`(`P/RESULT/RESPONSES.txt`), `tbl:<name>`(RESPONSES.txt 성공 run이 하나도 없을 때만). 정규식 `run_metrics.METRIC_RE`. S17에서 `perf:<NAME>` 추가(§22).
+
+**공용 모듈** `physicsai_core/stage4_predict/run_metrics.py`: `RunFiles`·`RunMetrics`(`curve`: 계열별 max/min/absmax/x_at_max/x_at_min/n, `resp`), `locate_run_files(conn, study_root, job)`(Study 밖·링크 거부), `load_run_metrics`(파일별 LRU 2048개, 키 = 경로·mtime_ns·크기), `metric_value`, `curve_stats`(NaN·길이 불일치 계열 제외, 계열 ≤ 50). `curve.json` > `ui.max_artifact_bytes`면 커브 없음.
+
+**API** `GET /predict-batches/{bid}/design-map`(member 이상, 404 `BATCH_NOT_FOUND`, `no-store`): `parameters`(템플릿 순서·min·max·integer), `series`, `metrics`(curve는 계열 ≥ 1일 때만, resp는 성공 run에 키가 있을 때만 사전순), `runs`(doe_no 순, 성공 아닌 run은 `curve`·`resp`·`tbl` null), `counts{total,succeeded,no_curve,no_resp}`. 프런트는 `succeeded`·`status`가 바뀔 때만 다시 받는다.
+
+**계산 규칙(요지)**: 유효 run = SUCCEEDED + 값 유한. 유효 변수 = 표준편차 > 1e-12·max(1,\|평균\|)(상수 변수는 PCA·PLS에서 제외, 평행 좌표엔 평평한 축). PCA 축 `PC1 (X 분산 41.2%)`, PLS 축 `PLS1 (X 28% · 값 63%)`(X % = 설명한 표준화 변수 분산, 값 % = 설명한 색 값 분산), 부호 규칙 고정(PLS: corr(t, y) ≥ 0). 바이플롯 화살표 = 구조 상관. 평행 좌표는 값 축 브러싱(범위 밖 불투명 0.12). 경계 6종(유효 run < 3, 유효 변수 0·1, y 상수 → PCA로, 2성분 없음, 값 전부 같음)은 회색 안내 문구.
+
+**화면**: 탭 선택 `physicsai.stage4.batchGraphTab`, 지도 설정 `physicsai.stage4.designMap`(method·metric·series·arrows)을 localStorage에(try/catch). 자체 SVG, viridis 연속 색 + 세로 색 막대, 점 클릭 = `setSelected(doe_no)`. 커브 지표를 고르면 커브 겹쳐보기 계열도 연동.
+
+시험 V3-S12-1~5(run_metrics 골든·API·`linalg.ts` numpy 참조 골든 1e-6·경계 표·화면). 서버 확인 E4-12-4(PLS·PCA 축 %·점↔표·커브 최대 일치)·E4-12-5(200 run 첫 로드 < 5 s, 재로드 캐시).
+
+## 18. S13 쿠션만 최적화 — 플랫폼 내장 대리모델 최적화 (사용자 결정 2026-10-17, D3-60·D3-61)
+
+원문: [s12_s13.md](s12_s13.md) §18. 화면 번호는 S14 이후 ⑥ 최적화.
+
+목표: 최적화에 모드 `플랫폼 내장(쿠션만 가능)`(기본) | `원본 최적화(조립 필요)`. 내장 모드는 HyperStudy 대신 **④ 일괄 예측 체인(§14)**으로 설계를 평가하므로 mesh_only·assembly 템플릿 모두 동작한다. 흐름: 탐색(새 DOE 배치 N개 또는 완료 배치 재사용) → 대리모델 적합(GP/Kriging 기본, RBF 선택) → 범위·제약 안에서 후보 k개 → **실제 예측 체인(PREDICT_BATCH + 하위 PREDICT)으로 검증** → 개선 < tol 또는 최대 반복까지 반복. 기본 3회 × 4후보. 원본 모드는 mesh_only 템플릿이면 명확한 문구로 막는다(이슈 #4).
+
+| # | 결정 |
+|---|---|
+| O1 | 검증 = PREDICT_BATCH 재사용(후보 k개를 `source.kind:"table"`로 만든 배치). 새 예측 경로 없음 |
+| O2 | 반복 제어 = **종료 훅 연쇄**: 배치 DONE → `job_end`가 다음 `SURROGATE_OPT` 반복 작업(SLOT, INTERNAL step만)을 대기열에 넣음. 기다리는 동안 슬롯 미점유(부모 대기 점유는 1슬롯에서 자식과 교착) |
+| O3 | 목적·제약 값 = §17 지표 id, 계산은 `run_metrics` |
+| O4 | 계산은 워커 INTERNAL step의 **numpy·scipy**(새 런타임 의존성, 사용자 확인 대상). scikit-learn 미사용 |
+| O5 | 범위는 템플릿 학습 범위 안만(lo = hi는 고정 변수) |
+| O6 | 탐색·검증 배치의 컨투어 캡처 기본 끔(체크 "검증 run 컨투어 캡처"), 최적점은 끝난 뒤 재캡처(§15) |
+| O7 | Study당 진행 중 내장 최적화 1개(부분 유일 인덱스) |
+
+**의존성**: `numpy>=2.0,<3`·`scipy>=1.13,<2`를 `pyproject.toml`·`deploy/requirements.lock`(구현: numpy 2.4.6·scipy 1.17.1)에 추가. import는 `stage5_optimize/surrogate/*` 안 지연 import, API 프로세스는 numpy를 불러오지 않는다(S15 Sobol 미리보기만 예외, §20). `features.optimize_builtin` = numpy·scipy 있음 + `surrogate_opt.enabled` + 예측 기능. 없으면 그 기능만 꺼짐(`missing`에 사유).
+
+**DB** migration `0010_surrogate_opt`: `surrogate_opts`(`SO-001` 번호, `settings` JSONB, `status` EXPLORING→FITTING→VERIFYING→DONE\|FAILED\|CANCELED, `best`, `stop_reason`, `dir_rel`), `surrogate_opt_iters`(PK(opt_id, iter_no), `kind` EXPLORE\|REUSE\|VERIFY, `batch_id`, `fit`·`candidates` JSONB, `best_value`·`improvement_rel`). 알림 이벤트 `SURROGATE_OPT_DONE`. `ux_jobs_study_type_active` WHERE에 "최적화 소유 PREDICT_BATCH 제외" 추가(수동 배치와 동시 대기 허용). 폴더 `05_opt/surrogate/SO-001/`(`opt.json`·`iter_NN/{dataset.csv,surrogate.json,loo.csv,candidates.csv}`·`convergence.csv`·`verified_runs.csv`·`summary.json`).
+
+**작업** job_type `SURROGATE_OPT`(stage 5, SLOT, `notify_success=False`, `POST /jobs`로 생성 불가 422):
+
+| step | kind(무게) | 처리 |
+|---|---|---|
+| SO_COLLECT | INTERNAL 10 | 반복 0..r−1 배치의 성공 run에서 목적·제약 값 수집·같은 설계 평균·실패 설계 목록·`dataset.csv`·정지 판정 |
+| SO_FIT | INTERNAL 45 | 대리모델 적합 + LOO(제약마다 모델 1개) |
+| SO_PROPOSE | INTERNAL 35 | 후보 k개 |
+| SO_NEXT | INTERNAL 10 | 계속이면 한 트랜잭션(Study FOR UPDATE)에서 검증 PREDICT_BATCH 부모 + run 행 + iters 행 등록, 마무리면 파일 3개·best·알림 |
+
+**알고리즘(요지)**: 입력 [0,1] 정규화, max는 부호 반전. GP = 상수 평균 + Matérn 5/2 ARD + nugget, 집중 로그우도 L-BFGS-B(시작점 `gp_restarts` 8), Cholesky 실패 시 jitter 3회 뒤 RBF(경고 `GP_FALLBACK_RBF`), LOO 닫힌 식. RBF = cubic + 1차 다항, Rippa LOO. 품질 `loo_rmse`·`loo_nrmse`·`q2`(≥ 0.9 좋음 · 0.7~0.9 보통 · < 0.7 낮음)·`pred_vs_verified_mae`. 후보: ① 활용(예측 평균 최소, 제약 위반 벌점) ② 나머지 k−1 = EI × PoF 최대 + kriging believer(RBF는 평균 최소 + 거리 ≥ 0.1). 탐색기 `differential_evolution(seed = seed·1000 + r, integrality)`. 정지: `CONVERGED`(improvement_rel < tol_rel, r ≥ 2)·`MAX_ITER`·`NO_NEW_CANDIDATE`, 실패 `VERIFY_ALL_FAILED`·`TOO_FEW_POINTS`(max(5, d_free+2))·`SURROGATE_TIMEOUT`(`fit_timeout_s` 600). 같은 자료·설정·시드 → 같은 후보.
+
+**API**: `POST /studies/{id}/surrogate-opts/preview`(동기), `POST /studies/{id}/surrogate-opts`(power), `GET /studies/{id}/surrogate-opts`, `GET /surrogate-opts/{oid}`, `GET …/runs.csv`, `POST …/cancel`(멱등), `POST …/resume`(FAILED만). 검증 422 `SURROGATE_OPT_INVALID` + problems(`BOUNDS_INVALID`·`BOUNDS_OUT_OF_RANGE`·`TOO_MANY_VARIABLES`·`NO_FREE_VARIABLE`·`EXPLORE_TOO_FEW`·`EXPLORE_TOO_MANY`·`METRIC_UNKNOWN`·`CONSTRAINT_INVALID`·`ITERATIONS_RANGE`·`CANDIDATES_RANGE`). 409 `SURROGATE_OPT_ACTIVE`·`BATCH_NOT_REUSABLE`(reason NOT_DONE\|TEMPLATE_MISMATCH\|MODEL_MISMATCH)·`FINAL_MODEL_REQUIRED`·`FEATURE_NOT_AVAILABLE`·`TEMPLATE_NOT_CONFIGURED`·`SURROGATE_OPT_NOT_RESUMABLE`, 404 `SURROGATE_OPT_NOT_FOUND`. 최적화 소유 배치에 일괄 취소·`retry-failed` → 409 `BATCH_OWNED_BY_OPT`. `/status`에 `features.optimize_builtin`·`surrogate_opt{defaults,max_*}`.
+
+**훅·알림**: 배치 DONE + 진행 중 opt → `PREDICT_BATCH_DONE` 생략, 반복 작업 r+1 투입. 소유 배치 부모 실패 → opt FAILED `BATCH_FAILED`, 반복 작업 실패 → `ROUND_FAILED`, 취소는 opt를 먼저 CANCELED로 둔 뒤 같은 트랜잭션에서 반복 작업·배치 취소. 완료 알림 `SURROGATE_OPT_DONE` 1건. `best`는 **검증된**(실제 예측 체인) 설계만, 대리모델 최적값은 `summary.json` 참고용.
+
+**이슈 #4**: 원본 OPTIMIZE를 mesh_only(또는 `assem_rel`·`starter_name` 없음) 템플릿으로 생성·재시도하면 409 `TEMPLATE_ASSEMBLY_REQUIRED`, 워커 `op_prep`도 경로 조합 전에 같은 코드로 실패(TypeError 제거).
+
+**설정** `surrogate_opt`: `enabled`·`dir_name`·`max_variables` 20·`max_iterations` 10·`max_candidates` 10·`default_iterations` 3·`default_candidates` 4·`default_tol_rel` 0.01·`default_surrogate` gp·`gp_restarts` 8·`de_maxiter` 200·`de_popsize` 15·`fit_timeout_s` 600, 구현에서 `blas_threads` 4 추가(D3-60 구현 메모).
+
+**화면(⑥)**: 모드 세그먼트(`physicsai.stage5.mode`), 서브 탭 `실행 목록`|`새 최적화`, 결과 `/p/:projectId/s/:studyId/stage/5/surrogate/:optId`(POLL 5초): 최적 설계 카드·수렴 그래프·대리모델 품질 표·검증 run 표(CSV)·파일 위치. 
+
+**D3-61 결과 보강(migration `0011_surrogate_final`)**: 정지 시 컨투어 캡처가 구성돼 있으면 opt를 바로 DONE으로 두지 않고 `FINALIZING` — 최적화 소유 PREDICT_BATCH 1개(source table 2행: doe 1 = 기준안 nominal, doe 2 = 최적안, 캡처 켬, 같은 범례)를 iters `kind FINAL`로 등록. 배치 DONE → 훅이 DONE + 알림. `surrogate_opts.final` JSONB(`status` PENDING\|DONE\|SKIPPED\|FAILED\|CANCELED, `legend`, `baseline_values`, `notice` …). 화면: 최적안 대 기준안 카드·결과 요약 타일·컨투어 비교(같은 범례)·수렴 그래프에 기준안 수평선.
+
+시험 V3-S13-1~9(0010·수학 골든·SO_COLLECT/NEXT·훅·API·이슈 #4·가짜 도구 e2e·화면). 서버 확인 E4-12-1~6(numpy·scipy 설치, 이슈 #4 재현 안 됨, 새 DOE 12 + 3×4, 재사용, 취소, §17 E4-12-4·5).
+
+리스크: numpy·scipy wheel ~55 MB(없으면 기능만 꺼짐); 대리모델의 대리모델 → 최적 설계는 FEM 검증(§21) 권장; 예측 잡음·적은 탐색 run이면 품질 낮음(기본 탐색 수 max(10, 4·d_free)); 소요 = 검증 run 수 × 수 분; BLAS가 순간 여러 코어를 씀.
+
+## 19. S14 ⑤ 결과분석 (사용자 결정 2026-10-17, D3-62)
+
+원문: [s14_analysis.md](s14_analysis.md) §19. migration·새 의존성·새 job_type 없음.
+
+목표: 화면 단계를 ④ 예측 · **⑤ 결과분석(신설)** · ⑥ 최적화(기존 ⑤)로 재편(①~③ 불변). ⑤는 "결과 표"(run마다 파라미터 + 응답)를 받아 설계공간 지도·영향도·변수–응답 그래프·커브 겹쳐보기를 보여 준다.
+
+| # | 결정 |
+|---|---|
+| A1 | 표시 번호·라벨·메뉴 순서만 변경. **URL 숫자·`jobs.stage`·`stage_label` 값·job_type·내부 코드 경로·e2e 기존 번호 유지**. 사용자에게 보이는 `stage_label`(대기열·알림)은 프런트가 job_type → 새 표시 번호로 매핑 |
+| A2 | 공통 입력 = 프런트 `ResultTable` 1종(source `solver`\|`predict`, parameters, responses, 선택 meta `engine_version`·`baseline_id`·`scene`, rows[run_id·no·state·params·responses·curve], counts). 두 출처를 같은 모양으로 변환해 같은 분석 컴포넌트에 넣음 |
+| A3 | 출처 (a) 일괄 예측 배치는 **API 신설 없음** — 기존 `GET /predict-batches/{bid}`·`design-map`·`curves`를 `analysis/adapters/fromBatch.ts`가 변환 |
+| A4 | 출처 (b) 해석 DOE는 새 읽기 전용 API `GET /train-does/{doe_id}/result-table`(`samples_rel`·`responses_rel` CSV 읽기, DB 쓰기 없음, LRU, `no-store`, 행 상한 `train_data.max_runs`). 오류 404 `DOE_NOT_FOUND`·`SAMPLES_MISSING`, 409 `DOE_NOT_READY` |
+| A5 | 영향도는 프런트 TS 순수 함수: **PRCC**(순위 기반 편상관, 동순위 평균 순위, 역행렬 특이면 "계산 불가")·**표준화 회귀계수(SRC)** + R²(< 0.7이면 회색 안내) |
+| A6 | solver vs predict 겹쳐 보기는 **파라미터 이름 집합이 같을 때만**(다르면 비활성 + 차이 이름 안내). 공통 응답만 선택 가능, 색 막대는 합집합 범위 |
+| A7 | ④ 배치 결과의 분석 탭은 "⑤ 결과분석에서 열기" 링크 카드로 대체(표·선택 run·경로 복사·단일 예측으로 열기는 ④에 유지) |
+
+**메뉴**: ① 학습데이터 생성 · ② 데이터 정리 · ③ 데이터셋·모델 · ④ 예측(구 "단일 예측": 단일·일괄·준비된 입력) · **⑤ 결과분석(신규 라우트 `/stage/analysis`, 쿼리 `?source=batch&id=` \| `?source=doe&id=`)** · ⑥ 최적화(`/stage/5` 유지). 스텝퍼 표시 순서 `[1,2,3,4,analysis,5]`, 배지 1~6. 알림 링크: `PREDICT_BATCH_DONE` → ④ 배치, `SURROGATE_OPT_DONE` → ⑥ 결과.
+
+**화면**: 머리 출처 세그먼트 `일괄 예측 결과(예측)` | `해석 DOE 결과(해석)` + 드롭다운 + `비교 추가`(`physicsai.analysis.source`). 탭 `변수–응답` · `설계공간 지도` · `영향도` · `커브`(출처 a만). 분석 컴포넌트는 `stages/stage4/batch/*` → `analysis/viz/*`로 이동(계산 규칙·`linalg.ts` 무수정).
+
+시험 V3-S14-1~7(result-table API·`influence.ts` 골든 1e-6·메뉴 6버튼·어댑터·화면·겹쳐 보기·회귀). 서버 확인은 신규 **`E5A-*`**(기존 E4·E5 번호 유지): E5A-1~5(메뉴 순서·배치 출처 값 일치·해석 DOE 영향도·겹쳐 보기·비 LHS/응답 없음 안내).
+
+리스크: 번호 이중 체계(표시 ⑤ 결과분석·⑥ 최적화 대 URL/코드 5 = 최적화), 6버튼 스텝퍼 폭, 분석 컴포넌트 이동 시 시험·스크린샷 경로, 비 LHS·작은 n의 PRCC 신뢰. 미결(권고 채택): `/stage/analysis`로 한 것, `engine_version`·`baseline_id`·`scene` 실제 출처(현재 null 허용), 영향도 허용 범위(S15에서 등급화), 대리모델 Sobol 후속.
+
+## 20. S15 표본 방식 추가 (사용자 결정 2026-10-18, D3-63)
+
+원문: [s15_sampling.md](s15_sampling.md) §20. migration `0012_sampling_kinds`(CHECK 확장만). 새 작업·새 라우트·새 의존성 없음(scipy는 S13에서 이미 의존성).
+
+목표: ④ 일괄 예측에 표본 방식 7개(최적화 LHS, Sobol, 전체 요인, 부분 요인 2수준, Plackett–Burman, Box–Behnken, CCD)를 추가한다. ①·④ 선택창에 방식 설명문과 추천 기본값을 두고, 배치·DOE에 표본 방식을 기록해 ⑤ 영향도를 **정식·참고·비활성**으로 나눈다.
+
+| # | 결정 |
+|---|---|
+| S1 | ①은 HyperStudy `doe_type` 정의 파일의 4개(FullFact·FracFact·LatinHyperCube·Sobol)를 그대로 보여 준다. pyd가 그 밖의 value를 받는지 확인할 수 없어 새 방식은 ①에 넣지 않음(→ S18에서 플랫폼 생성으로 해결, §23) |
+| S2 | ④ 새 kind 7개 `lhs_opt`·`sobol`·`fullfact`·`fracfact`·`pb`·`bbd`·`ccd`. 기존 `lhs`·`table`·`train_doe` 무변경 |
+| S3 | **④ 기본 = 최적화 LHS(maximin)** — run 수 자유, 1차원 층화 유지, 상관 작음, AI 학습·대리모델 겸용 |
+| S4 | **① 기본 = LatinHyperCube**(설정 `train_data.recommended_doe_type`, 기본 `TYPE_LATINHYPERCUBE`) |
+| S5 | 알고리즘은 결정적. Sobol 외는 순수 Python(`random.Random(seed)`), Sobol만 `scipy.stats.qmc.Sobol`을 `physicsai_core/sampling/qmc.py`에서 지연 import(S13의 "API는 numpy 미적재"의 **유일한 예외**) |
+| S6 | DB는 `predict_batches.source_kind` CHECK만 확장, 방식 인자는 기존 `source_meta` JSONB. ① DB 변경 없음 |
+| S7 | 영향도 등급 `influence_class` = `formal`\|`reference`\|`off`는 **서버가 정함**(n 조건은 s14 그대로: ①은 서버, ④는 프런트) |
+| S8·S9 | BBD·CCD 중심점 1개 고정(AI 예측은 같은 입력이면 같은 값). CCD는 면중심(기본)·내접만(외접은 범위 밖) |
+| S10 | 설명문은 계약에 고정한 한국어 문구, 프런트 `lib/sampling.ts` 한 곳(서버는 `desc_id`만) |
+
+**방식 목록**(드롭다운 묶음): 공간 채움 — `lhs_opt`(최적화 LHS, 추천)·`sobol`·`lhs`("LHS(무작위 층화)"로 개명); 요인 설계 — `fullfact`·`fracfact`·`pb`; 2차 응답면 — `bbd`·`ccd`; 직접 지정 — `table`·`train_doe`. 설명 상자 4줄(용도 / 장단점 / 영향도·AI 학습 / run 수·제약)과 권장 run 수는 프런트가 계산.
+
+**알고리즘(요지)**: 활성 변수 = lo < hi(고정 변수는 설계에서 빼고 note `FIXED_EXCLUDED`). 코드값 −1/0/+1 → lo/(lo+hi)/2/hi. 품질 `source_meta.quality`(`min_dist`·`max_abs_corr`)는 lhs 계열·sobol만.
+
+| kind | 요약 |
+|---|---|
+| `lhs_opt` | 후보 5개 LHS 중 점수 최소 + 열 내 교환 2000회(`maximin`: Σd^−15 / `corr`: Σr²), 층 유지, n ≤ 200·k = 20이 수 초 |
+| `sobol` | run 수 2^m(4~128), 스크램블, `fast_forward(offset)`, 이어서 추가 `continue_from`(같은 Study·SOBOL·템플릿·활성 변수 일치, 이전 구간 재생성 대조 → 어긋나면 `SEQUENCE_MISMATCH`), 이어서 추가 개수는 `offset`을 나누어떨어지게 |
+| `fullfact` | 변수별 수준 2~10(기본 2), 사전식(마지막 변수가 가장 빠름), 정수 변수는 서로 다른 정수 수준, run = ΠL ≤ R |
+| `fracfact` | 2수준 해상도 IV·V, 변수 2~11, Montgomery 표 기반 생성자 표(해상도 계산으로 검증), "전체" 칸은 `FULL_FACTORIAL_USED` |
+| `pb` | 크기 N = {q+1 (q 소수, q ≡ 3 mod 4)} ∪ {2^m} 중 N ≥ k+1 최소, Paley 순환/Sylvester |
+| `bbd` | 변수 ≥ 3, 쌍 방식(활성 쌍마다 4행) + 중심 1행, run = 2k(k−1)+1, k ≥ 6이면 `BBD_PAIRWISE` |
+| `ccd` | 변수 2~11, 요인부(k ≤ 4 전체, ≥ 5 해상도 V) + 축점 + 중심 1, `face`(α=1)\|`inscribed`(α=F^(1/4)) |
+
+run 수 표(R = 200, k = 활성 변수): fracfact IV/V = k3: 8/8, k4: 8/16, k5: 16/16, k6: 16/32, k7: 16/64, k8: 16/64, k9: 32/128, k10: 32/128, k11: 32/128; pb = 8(k ≤ 7)·12(k 8~11); bbd = 13·25·41·61·85·113·145·181(k 3~10, k = 11은 221 > R); ccd = 15·25·27·45·79·81·147·149·151(k 3~11); lhs 권장 10×k, sobol 권장 10×k 이상 최소 2^m(최대 128).
+
+**API(새 라우트 없음)**: `BatchSource` union에 7개 추가, 미리보기 응답에 `notes[]`·`sampling{kind,method,desc_id,label,influence_class,influence_note,recommended_count,meta}`, 배치 상세·목록에 `sampling`, `GET /train/doe-types`에 `desc_id`·`recommended`·`influence_class`, `result-table`에 `sampling`·`influence_class`·`influence_note`(`influence_ok` = class ≠ off). problems 추가: `COUNT_NOT_POW2`·`CONTINUE_INVALID`·`SEQUENCE_MISMATCH`·`LEVELS_INVALID`·`DESIGN_UNSUPPORTED`·`GENERATOR_UNAVAILABLE`. notes: `FIXED_EXCLUDED`·`FULL_FACTORIAL_USED`·`BBD_PAIRWISE`·`DUPLICATE_ROWS`·`SEQUENCE_CONTINUED`·`INFLUENCE_TOO_FEW`.
+
+**영향도 등급(s14 규칙 대체)**: ④ `LHS`·`LHS_OPT`·`SOBOL`·`FULLFACT` = formal. `FRACFACT`(해상도 IV·V 문구)·`PB`·`BBD`·`CCD`·`TABLE` = reference(교락·곡률·표본 분포 불명 사유 문구 회색 한 줄). `TRAIN_DOE` = ① 유형 규칙. 최적화 소유 `EXPLORE` = kind대로, `VERIFY`·`FINAL` = reference(최적점 근처 표본). ① `TYPE_LATINHYPERCUBE`·`TYPE_SOBOL`·`TYPE_FULLFACT` = formal, `TYPE_FRACFACT` = reference(RESOLUTION 3 문구 별도), 그 밖 reference. off = 응답 없음·유효 run < max(5, p+2). 계산 `sampling/registry.py` `batch_influence`·`doe_influence`(순수 함수). s14의 "LHS가 아닌 해석 DOE는 영향도 비활성"·`NOT_LHS_TEXT`는 폐지.
+
+**화면**: ④ B 설정 = 방식 드롭다운 1개 + 설명 상자(추천 배지) + 방식별 입력(LHS 계열 범위·개수·시드·기준, Sobol run 수 2^m·이전 Sobol 배치에 이어서 추가, 전체 요인 수준 열, 해상도·α 세그먼트), 미리보기 위 `실제 run N개 · <방식>` + quality + notes. ④ 배치 결과 머리 `표본: <label> · <요약>`. ① DoeGenCard 기본 = `recommended`, 설명 상자. ⑤ 출처 드롭다운 라벨에 방식.
+
+시험 V3-S15-1~15(골든·성질·0012·API·프런트 `lib/sampling.ts` 문구 픽스처 글자 단위 일치). 서버 확인 E4-13-1~4(최적화 LHS 20·Sobol 이어서 추가·BBD/부분 요인 참고 문구·미리보기 2초 안), E1-8-1(① 기본 LatinHyperCube), E1-8-2(선택: pyd가 정의 파일 밖 value를 받는지 — S18 결정으로 취소).
+
+리스크: scipy 버전 차이(Sobol — 만든 값은 DB에 있고 이어서 추가만 대조, 시험은 성질로), API 프로세스의 scipy 적재(0.3~1초·수십 MB), 정수 변수 중복 행(`DUPLICATE_ROWS`), 2수준 설계의 PRCC는 거칠어 참고용. 미결 처리(사용자 2026-10-18 "일단 가보자고"): ①은 4개 유형 유지(후속 → S18), API Sobol 지연 import 허용, ④ 기본 최적화 LHS, 부분 요인 V 참고용, BBD k ≥ 6 쌍 방식.
+
+## 21. S16 VOC 반영 — 단일 예측 실행 목록·조립 FEM 검증·영상 (사용자 VOC 2026-10-19, D3-64)
+
+원문: [s16_voc.md](s16_voc.md) §21. migration `0013_fem_verify`(V2만).
+
+| 묶음 | 요지 |
+|---|---|
+| V1 | ④ 단일 예측 **실행 목록**(새 DB 없음): jobs 행(params·result)으로 `GET /studies/{id}/predict-runs`(mode·state 필터, 커서 `X-Next-Cursor`)·`GET /predict-runs/{job_id}`(`routers/jobs.py`). 일괄 하위 제외, 재시도 묶음은 최신 1행(`attempts`). 화면 하위 탭 `새 예측`\|`실행 목록`(`physicsai.stage4.singleTab`), 행 선택 = `?job=` 확장 `PredictRunView`(입력·경로 카드 + 기존 결과 카드). 404 `NOT_PREDICT_RUN` |
+| V2 | **조립 상태 FEM 검증**: 새 job_type `FEM_VERIFY`(SLOT, stage 4). 예측 결과와 조립 전체 Radioss 해석을 비교 |
+| V3 | **영상 저장·표시**: 저장 실패 원인 노출, 선택적 ffmpeg 변환(≤ 1 MiB 목표), 재생 실패 대체 표시 |
+
+**V2 결정**: F1 `PREDICT_VERIFY`는 작업 유형·API·기록을 유지하고 화면 버튼만 "FEM 검증"으로 대체. F2 메시 교체 = 기존 m_2(`commands.mesh`)·`assemble_into` 재사용. F3 제출 = 기존 `HpcJobGateway`(PBS command / scx) — step 키·폴러·상태 매핑·SUBMISSION_UNKNOWN 규칙(§16) 그대로, SCX 잡 폴더 `04_FV-NNN_<ts>`(`scx_naming.fem_verify_job_name`). F4 DB `fem_verifications`. F5 같은 설계점의 성공한 예측이 없으면 **동반 PREDICT**를 같은 트랜잭션에서 만들고 성공 시 `job_end` 훅이 FEM_VERIFY를 넣음(슬롯 미점유 대기). F6 조립 원본 3종 `predict_input`(예측 입력이 조립 상태일 때만)·`train_doe`(① DOE `assem_rel`)·`custom`(허용 루트 + `storage.spdm_roots` 읽기만) — `F/a<n>/assem/`에 **스냅숏 복사**(하드링크 금지). F7 컨투어 두 쪽 같은 범례(요청 fixed, 아니면 `__FV_LEGEND` 요청 줄로 두 h3d의 min·max 합집합). F8 FEM 결과 필드 이름은 `fem_verify.field_map`·요청 `fem.field`로 매핑. F9 활성 유일 인덱스에서 FEM_VERIFY·동반 PREDICT 제외(Study당 동시 `max_active` 4, 같은 예측 + 같은 조립 원본 중복은 409 `FEM_VERIFY_ACTIVE`). F10 재시도: 실패 step ≤ COLLECT면 1단계부터(새 시도 `a<n+1>`·새 원격 폴더), 이후면 그 step부터.
+
+**출처 4종**: `predict_job`·`batch_run`·`values`(템플릿 값; 같은 세트·모델·`applied_values` 일치 성공 예측 재사용, 없으면 동반 PREDICT)·`opt_design`(`best`\|`final_optimum`\|`surrogate_optimum`\|`run`). 폴더 `04_verify/FV-003/a<n>/{mesh,assem,input,result,extract,curves,media,compare.json,responses_fem.csv}` + `verify.json`.
+
+| step | kind(무게) | 처리 |
+|---|---|---|
+| FV_PREP | INTERNAL 3 | 검증 행·예측 확인, 시도 폴더, 메시 원천·조립 원본 재검사(`INPUT_CHANGED`)·스냅숏 |
+| FV_MESH | LOCAL 5 | reuse면 SKIPPED, rebuild면 m_2(§11.4 판정 그대로) |
+| FV_ASSEMBLE | INTERNAL 2 | `assemble_into` → starter(eps_mesh면 `INPUT_INVALID`) |
+| HPC_SUBMIT·HPC_WAIT·COLLECT | 5·55·10 | PREDICT_VERIFY와 공통 헬퍼 `_verify_hpc.py`(동작·골든 불변) |
+| FV_EXTRACT | LOCAL 6 | 응답 MIN·MAX·판정값·`diff_pct`(\|fem\| ≤ `zero_tol`이면 null). mesh_only면 경고 `FEM_RESPONSE_WHOLE_MODEL` |
+| FV_CURVE | LOCAL 5 | 모델 데이터셋 큐레이션 → 최신 `CU_T01_CURVES` → SKIPPED, 예측 `curve.json` 계열과 이름 짝(정확 → 대소문자·공백 무시) |
+| FV_CAPTURE | LOCAL 8 | §15 `run_capture(extra_meta)` 재사용, **실패는 경고 `CAPTURE_FAILED`만** |
+| FV_COMPARE | INTERNAL 1 | `compare.json`·`responses_fem.csv`·`summary`(수치만) |
+
+**DB 0013**: `fem_verifications`(`fv_no`·`source_kind`·`source_ref`·`predict_job_id`·`companion`·`assem_kind`·`input_mode` reuse\|rebuild·`status` WAITING_PREDICT\|RUNNING\|DONE\|FAILED\|CANCELED·`summary` JSONB·`failure_*`·`dir_rel`), 활성 인덱스 제외 조건, 알림 `FEM_VERIFY_DONE`.
+
+**API**(`routers/fem_verify.py`): `POST /studies/{id}/fem-verifications[/preview]`(power), 목록(`predict_job_id`·`batch_id`·`opt_id`·`status` 필터)·상세·`/media`·`/curves`·`/table.csv`, `POST …/cancel`(멱등)·`/rerun`(FAILED·CANCELED만, 409 `FEM_VERIFY_NOT_RERUNNABLE`). `paths/inspect` `purpose:"FEM_ASSEMBLY"`, `GET /fs/roots?include_spdm=true`(SPDM 루트 읽기 전용). 422 `FEM_VERIFY_INVALID` + problems(`SOURCE_NOT_FOUND`·`PREDICT_NOT_SUCCEEDED`·`MESH_MISSING`·`INPUT_MESH_ONLY`·`ASSEMBLY_REQUIRED`·`ASSEM_STARTER_COUNT`·`ASSEM_TOO_LARGE`·`FILE_NAME_UNSAFE` …), 409 `HPC_NOT_CONFIGURED`·`TEMPLATE_NOT_CONFIGURED`·`FEATURE_NOT_AVAILABLE`·`FEM_VERIFY_ACTIVE`·`FEM_VERIFY_LIMIT`. `/status.features.fem_verify`(·`fem_verify_rebuild`). 종료 훅 `fem_verify_on_job_end`(동반 예측 성공 → FEM_VERIFY 생성, 실패 → `PREDICT_FAILED`, 멱등), 감사 `FEM_VERIFY_CREATE`·`CANCEL`·`RERUN`.
+
+**설정** `fem_verify`: `enabled`·`dir_name` `04_verify`·`max_active` 4·`field_map` {}·`legend_subcase` 1·`auto_isolate_cushion` true·`zero_tol` 1e-12·`max_assem_files` 500·`max_assem_bytes` 2 GiB·`include_scan_max_bytes` 16 MiB·`max_pred_h3d_copy_bytes` 4 GiB.
+
+**화면**: 진입 버튼 "FEM 검증" 5곳(④ 단일 결과·④ 일괄 선택 run·⑤ 예측 출처 행·⑥ 최적 설계/마무리/대리 최적/검증 run). 라우트 `/stage/4/verify`(목록, `?new=1`)·`/stage/4/verify/:fvId`(상세: 진행 4단·`ScxJobStatus`·탭 `응답`\|`커브`\|`컨투어`\|`입력·경로`).
+
+**V3 영상**: TCL이 저장 뒤 파일 존재·크기 확인(`VID_SCOPE` page\|window), 방향별 실패는 작업당 경고 1건 `CAPTURE_VIDEO_FAILED` + media `video_error`. 선택적 ffmpeg 변환 `capture.ffmpeg.{exe,probe_exe,args,probe_args,ladder,timeout_s}`(비어 있으면 건너뜀, H.264·yuv420p·`+faststart`, 목표 `capture.video_target_bytes` 1 MiB까지 `ladder` 단계 재인코딩, 원본 `media/raw/` 보존, 초과 시 `CAPTURE_VIDEO_OVER_TARGET`, 변환 실패 `CAPTURE_VIDEO_TRANSCODE_FAILED`, 재생 불가 코덱 `CAPTURE_VIDEO_NOT_PLAYABLE`). avi는 `allow_avi: false`면 설정 경고 + 실제 mp4 저장. 프런트 `components/MediaVideo.tsx`: gif → `<img>`, avi·`playable=false`·재생 오류 → "브라우저가 이 형식을 재생하지 못합니다 — 받기". `/status.capture`에 `video_target_bytes`·`transcode`·`video_ext_effective`.
+
+시험 V3-S16-1~26. 서버 확인 E4-14-H1, F1~F8(조립 입력·FEM 필드 이름·부품 격리·범례·커브 이름·SCX·SPDM 읽기만·응답 상식 범위), V1~V7(영상 로그·크기·ffprobe 코덱·설정·브라우저 오류·libx264·page 대 window).
+
+리스크: 예측 h3d 대 Radioss h3d 필드 이름 불일치(`field_map`), mesh_only 비교는 조립 전체 값(경고 + 컨투어 부품 격리), 커브 이름 대응 끊김(unmatched 표시), FEM 1건이 수 시간(슬롯 미점유), 예측 h3d 사본 수백 MB, ffmpeg 번들 안 함(경로만 설정), 원격 `04_V-NNN`(PV)과 `04_FV-NNN`(FV) 공존. 미결 9(응답 쿠션 한정 TCL, `field_map` 기본값, 커브 수동 매핑, 일괄 FEM 검증, PREDICT_VERIFY 폐지 시점, ffmpeg 표준화, `video_scope` 기본, SPDM 조립 원본 정책, `04_verify` 정리 범주).
+
+## 22. S17 성능 정의·다목적 내장 최적화 (사용자 VOC·결정 2026-10-19, D3-65)
+
+원문: [s17_multiobj.md](s17_multiobj.md) §22. migration `0014_multiobj`(Revises 0013). 새 런타임 의존성 없음(numpy·scipy는 §18에서 추가).
+
+VOC: "쿠션 최적화(내장)에서 원본처럼 성능 정의하고 성능을 목적 또는 제약에 넣을 수 있게. 멀티목적 기능도." 결정: 멀티목적은 **파레토 전선을 보여 주고 사용자가 고르는 것이 기본**, 화면 가중치 슬라이더로 가중합 추천점을 강조, 고른 해는 예측 검증과 FEM 검증(§21)으로 보낼 수 있어야 한다.
+
+| # | 결정 |
+|---|---|
+| P1 | **성능 = 템플릿 응답 정의(`param_sets.responses`) 확장**(새 테이블 없음). 행 `{name, unit, spec}`의 `spec.source`에 `CURVE`를 추가(H3D는 원본 NAME\|SUBCASE\|DATATYPE\|COMPONENT\|LAYER + stat). ⑥에서 편집하면 기존 `PUT /param-sets/{id}/responses`. 화면 이름만 "성능" |
+| P2 | **역할(목적·제약·관찰)은 `surrogate_opts.settings`에만**(템플릿에 넣지 않음) |
+| P3 | 지표 id **`perf:<NAME>`**(stat 적용 값, `METRIC_RE`·프런트 `METRIC_PATTERN` 확장). `curve:`·`resp:`·`tbl:`은 계속 받고 화면은 `perf:`만 씀 |
+| P4 | 값 계산 순수 함수 `stage4_predict/performance.py`(`PerfDef`·`perf_defs`·`perf_value`·`perf_label`)를 API·워커가 공용 |
+| P5 | H3D 성능은 run 폴더 `H3D_REQUESTS.txt` 줄과 정의를 비교, 다르면 null + 사유 `SPEC_CHANGED`. 진행 중 최적화가 쓰는 성능의 정의 변경·삭제는 409 `PERF_IN_USE_BY_OPT`(단위만 바꾸기는 허용). `RunMetrics.requests` 추가 |
+| P6 | 다목적은 **`SURROGATE_OPT` 확장**(같은 4 step, `settings.objectives` 길이로 분기). 새 job_type은 `PB_RESP_EXTRACT` 1개뿐 |
+| P7 | 다목적 후보 = 예측 전선(Das–Dennis 격자 + 증강 Chebyshev + DE) + HVI 활용 1개 + ParEGO(EI×PoF) k−1개. numpy·scipy만 |
+| P8 | 비지배·HV·가중 추천은 표준 라이브러리 전용 `surrogate/pareto.py`(API 프로세스 numpy 미적재 원칙) |
+| P9 | **검증된 해(실제 예측 체인 값)와 대리모델 예측 전선을 엄격히 구분**. 추천·`best`·FINAL은 검증된 해에서만 |
+| P10 | 고른 해의 예측 검증 = 최적화 소유 추가 검증 배치(iters kind `EXTRA`). FEM 검증은 §21 API |
+
+**성능 정의·추출**: CURVE spec은 `{source, series, stat}`(series null = 첫 계열, stat `MAX\|MIN\|ABSMAX`). 사유 코드 `SPEC_CHANGED`·`NOT_EXTRACTED`·`NO_VALUE`·`NO_CURVE`·`SERIES_MISSING`(`REASON_TEXT` 한국어). ④ RESPONSE_EXTRACT는 H3D(TCL) 추출 뒤 CURVE 값을 `curve.json`에서 채워 `responses_pred.csv`에 모두 씀(CURVE만이면 TCL 미실행). ①-6·PV는 CURVE를 조용히 건너뜀(`SILENT_REASONS`). 끝난 배치의 H3D 성능 다시 추출 = 새 job `PB_RESP_EXTRACT`(stage 4, SLOT, `notify_success=True`): `PX_PREP`(INTERNAL 5) → `RESPONSE_EXTRACT_RUNS`(LOCAL 90, run마다 `_backup` 후 재추출) → `PX_TABLE`(INTERNAL 5, `predict_batch_runs.responses` 갱신). `POST /predict-batches/{bid}/extract-responses`(power). 409 `BATCH_NOT_DONE`·`BATCH_OWNED_BY_OPT`·`FEATURE_NOT_AVAILABLE`·`STUDY_JOB_BUSY`, 422 `NO_H3D_PERFORMANCE`. 하위 PREDICT의 `result.response_table`은 갱신하지 않음(미결 3).
+
+**최적화 문제 정의**: 요청 `objectives`(1~3, min\|max)·`constraints`(≤ 5, `<=`·`>=`·`range`, `==` 없음)·`observe`(≤ 10)·`weights`(선택). 단수 `objective`도 받음(`settings.objective = objectives[0]` 계속 기록). `settings`에 `mode`(single\|multi)·`performances`(참조 성능 정의 스냅숏) 추가. problems 신규: `OBJECTIVES_RANGE`·`OBJECTIVE_DUPLICATE`·`OBJECTIVES_CONFLICT`·`OBSERVE_INVALID`·`WEIGHTS_INVALID`·`PERF_UNDEFINED`·`PERF_MISSING_IN_BATCH`(action `extract`)·`PERF_EXTRACT_UNAVAILABLE`, `CONSTRAINT_INVALID` 확장. 재사용 최소 점 판정은 모든 목적·제약 값이 있는 성공 run 수로 계산.
+
+**다목적 알고리즘(m = 2·3, m = 1은 §18 그대로)**:
+- 내부는 모두 최소화(sign 통일). **HV 정규화 틀**은 r = 1의 SO_COLLECT에서 탐색 자료로 1회 확정(`surrogate_opts.hv_frame`, 이후 불변), 기준점 R = 1 + `mo_ref_offset` = 1.1.
+- SO_FIT: 목적마다·제약마다 GP 1개(실패하면 그 모델만 RBF + `GP_FALLBACK_RBF`). `fit.per_objective`로 목적별 품질.
+- SO_PROPOSE 1단계 예측 전선: 가중 격자 W(m = 2 → 11개, m = 3 → 28개, 사전순)마다 증강 Chebyshev(ρ `mo_rho` 0.05) + 제약 위반 벌점을 `_de`로 최소화 → 예측 만족(PoF ≥ 0.5)이고 μ 기준 비지배인 점. `iter_NN/predicted_front.csv`, DB `predicted_front`(≤ 28점).
+- 2단계 후보: c₁ = 예측 전선 점 중 HVI 최대(모두 0이면 목적 공간 최대 최소거리). c₂… = ParEGO(가중치 순열 `default_rng(seed·1000 + r)`, 반복 간 비중복, y_w 위에 GP 적합 후 EI×PoF를 DE로 최대화, `range` PoF = Φ((hi−μ)/σ) − Φ((lo−μ)/σ)). RBF면 ParEGO 대신 s_w 최소 + 거리 규칙. 후보 기록에 `role`(hvi\|parego\|rbf)·`weight`·`predicted_objectives`·`predicted_std`.
+- 구현 보강(D3-65 보강 3): 3목적은 HVI 후보 ⌈k·`mo_hvi_share_m3`⌉개(0.5, 하나씩 전선에 더하며 재순위), 나머지는 ParEGO 획득값 × exp(−`mo_front_prox_m3`(6.0)·예측 전선 정규화 거리).
+- `pareto.py`: `dominates`·`nondominated`·`hypervolume`(m = 2 스윕, m = 3 슬라이스, 정확)·`hv_improvement`·`normalize`·`recommend`. 골든 HV 2D 0.37, 3D 0.256.
+- 수렴: HV_t(검증 만족 설계, 고정 틀) 개선율 < `tol_rel`이면 `CONVERGED`(r ≥ 2). `iters`에 `hv`·`front_size`·`improvement_rel`. 정지·실패 코드는 §18과 같음(`TOO_FEW_POINTS`는 목적·제약 모두 있는 점 기준). 시드 식(예측 전선 DE `seed·100000 + r·1000 + j`, ParEGO 재시작 +500+j, DE +700+j)은 원문 §22.5.7. 반복당 GP ≤ 17개·DE ≤ 37회, 기본 규모 1분 이내 목표.
+
+**가중 추천점(§22.6, 화면 슬라이더·FINAL·알림 공용)**: w̄ = u/Σu(Σu = 0이면 균등), 검증 파레토 해 안에서 목적별 0(최선)~1(최악)로 정규화한 g의 가중합 S의 최소가 추천. 동점은 g₁ 작은 쪽 → (iter_no, doe_no). 예측 전선 점은 점수만 표시하고 추천 대상 아님. 골든 표는 `backend/tests/data/s17_recommend.json`(D3-65 보강 3 ②: f₂ max 행 정정 S_A 0.0·S_B 0.4236·S_C 0.7153·S_D 1.0, 추천 A). `best`·FINAL·알림은 생성 시 `settings.weights`, 슬라이더는 localStorage만.
+
+**결과·추가 검증·FINAL**: 검증 파레토 해 = 최적화의 모든 검증 run(EXPLORE·REUSE·VERIFY·EXTRA, FINAL 제외) 중 만족 유효 설계의 비지배 집합(API가 `pareto.py`로 매번 계산, 같은 설계 평균, 키 `"<iter_no>:<doe_no>"`). 예측 전선 = 마지막 반복의 `predicted_front`("대리모델 예측(미검증)"). `POST /surrogate-opts/{oid}/verify`(power, 등록자 또는 관리자): 1 ≤ 점 ≤ `max_extra_points`(10), DONE만(409 `SURROGATE_OPT_NOT_DONE`), 진행 중 EXTRA가 있으면 409 `SURROGATE_OPT_EXTRA_ACTIVE`, 범위 밖 422(`BOUNDS_OUT_OF_RANGE`)·점 수 초과 422 `EXTRA_POINTS_RANGE` → 최적화 소유 PREDICT_BATCH(source table) + iters kind `EXTRA`를 한 트랜잭션에서 생성. 종료 훅은 EXTRA면 반복 작업을 넣지 않고 기존 `PREDICT_BATCH_DONE` 알림이 나감(`BATCH_OWNED_BY_OPT` 가드 대상 아님). FINAL 2행 = 기준안 + 가중 추천점. 다목적 알림: "내장 최적화 SO-002 완료 — 파레토 해 6개 · HV 0.712 · 추천 … (반복 3 · 검증 12 run)". FEM 검증 연동: `POST /studies/{id}/fem-verifications` + `source:{kind:"opt_design", opt_id, pick:"run", iter_no, doe_no}`(검증된 해만, `features.fem_verify`, 예측 전선 점은 비활성 "먼저 예측 검증").
+
+**DB(0014)**: `surrogate_opt_iters`의 kind CHECK에 `EXTRA`, 열 `hv`·`front_size`·`predicted_front`(JSONB ≤ 28점), `surrogate_opts.hv_frame` JSONB. downgrade는 EXTRA 행이 있으면 실패(데이터 보존). `PB_RESP_EXTRACT`는 코드만 추가(jobs에 job_type CHECK 없음).
+
+**API 요약**: 상세 `GET /surrogate-opts/{oid}`에 `mode`·`objectives`·`constraints_def`·`observe`·`weights`·`pareto{hv, frame, front, recommended_key, predicted_iter, predicted}`·`hv_history`·`runs[].{objectives, observed, reason, on_front, kind}`·`can_verify_more` 추가(단일 목적은 `pareto`·`hv_history` null, 기존 키 유지). 미리보기에 `mode`·`performances[]`. `runs.csv`는 `objective_1..m`·제약·`obs:<label>`·`reason` 열. `/status.surrogate_opt`에 `max_objectives`·`max_observe`·`max_extra_points`. 설정 `surrogate_opt.{max_objectives 3, max_observe 10, max_extra_points 10, mo_lattice_h2 10, mo_lattice_h3 6, mo_de_maxiter 100, mo_rho 0.05, mo_ref_offset 0.1, mo_gp_restarts 4}` + 구현 추가 `mo_hvi_share_m3`·`mo_front_prox_m3`.
+
+**화면(⑥ 내장 모드)**: 새 최적화 카드의 목적·제약 입력을 **"성능" 표 1개**(이름·출처 H3D\|커브·Subcase·DataType·Component·Layer·Stat·단위·역할·값·재사용 시 `값 있는 run n/N`)로 교체. 역할 = 사용 안 함 / 목적 최소·최대 / 제약 ≤·≥·범위 / 관찰. 정의 편집 + `성능 정의 저장(템플릿)`(저장 전에는 역할 지정 불가), `PERF_MISSING_IN_BATCH`면 행에 `성능 다시 추출` 버튼. 목적 ≥ 2이면 가중치 슬라이더(생성 시 값). 결과(`/stage/5/surrogate/:optId`): 단일 목적은 기존 화면(관찰 열 추가), 다목적은 파레토 카드(2목적 산점도, 3목적 쌍 그림 3개 — 지배 점 흐림·위반 ×·예측 전선 속 빈 점 토글·가중 추천 링) → 가중치 카드(슬라이더 `physicsai.stage6.weights.<optId>`) → 파레토 표(단일 예측으로 열기 / 선택 해 예측 검증 / FEM 검증 / CSV) → HV 그래프 → 목적별 품질 표 → 최적안 대 기준안 → 검증 run 표(EXTRA는 반복 "추가") → 파일 위치. 기준안 ◇는 생략(API에 다목적 기준안 값 없음).
+
+시험 V3-S17-1~13(0014·성능 정의 검증·`perf_value` 골든·추출 경로·`pareto.py` 골든·해석 전선 HV 근사(ZDT1 0.87667·DTLZ2 0.80740, 허용 0.04)·다목적 수학(ZDT1 0.80·ZDT2 0.70·DTLZ2 0.70, 루프는 `slow` 마커)·SO_COLLECT·가중 추천 골든(Python·TS 공용 픽스처)·API·화면·e2e). 서버 확인 E4-17-1~7(성능 2개 정의·재사용 다시 추출·2목적 12 + 3×4·반복당 < 60 s·예측 전선 점 검증·FEM 검증·409 문구).
+
+리스크·미결: 목적별 GP는 n < 4·d이면 전선 품질 낮음(탐색 run 늘리기 안내), HV 틀 고정으로 개선율 과장 가능, 가중합은 오목 전선 해를 못 고름(표에서 직접 선택이 기본), 템플릿 성능 추가 시 ④ 예측마다 HyperView 추출 증가, 다시 추출은 하위 PREDICT 결과 표 미갱신(미결 3), 병합 순서 S16 → S17 고정. 미결: 3목적 평행 좌표 추가 여부, 실패·취소 최적화의 EXTRA 허용, 수렴 "1회 대 연속 2회".
+
+## 23. S18 ① 학습 DOE 플랫폼 동시 생성 (사용자 VOC·결정 2026-10-19, D3-66)
+
+원문: [s18_doe_parallel.md](s18_doe_parallel.md) §23. migration `0015_doe_platform_gen`(Revises 0014). 새 의존성·라우트·job_type 없음.
+
+VOC: "① DOE 생성할 때 웹에선 동시 실행이라 표시되는데 실제로는 순차로 돈다. 4개 정도는 동시로 실행하게 해 줘." 결정: S15 §20.3 안 B 채택 — ① 학습 DOE 생성을 플랫폼 실행기로 옮긴다. "어차피 native(자체 형상 엔진, 프로젝트 문서 `contracts/geometry-engine.md`)로 바꿀 거니 HyperStudy에 힘쓰지 말자" → hstbatch 모드는 코드 무변경 **호환 모드로 표시만**, 플랫폼 모드는 ④ BP_GEN 체인·`run_parallel`·S15 sampling을 재사용해 **최소 변경으로 동시 생성**, 원본 출력 일치는 DG_SCAN·TD_SOLVE·큐레이션이 동작하는 파일·폴더 규칙만, 형상 생성은 나중에 native로 바꿔 끼울 **경계 한 곳**.
+
+원인 추정(서버 확인 전): 원본 앱도 `hstbatch -multiexec M`을 쓰며, pyd 안의 입력 생성(SimLab m_1·HyperMesh m_2)은 run마다 순차로 도는 것으로 보인다. 화면의 "실행 중 4"는 `HstRunTracker`가 run 폴더 수로 계산한 값이라 실제 프로세스 수가 아니다.
+
+| # | 결정 |
+|---|---|
+| G1 | job_type `TD_DOE_GEN`과 step 키 3개(DG_PREP·HST_GEN_RADIOSS·DG_SCAN)·가중 유지. `HST_GEN_RADIOSS`가 `train_does.generator`로 분기(HYPERSTUDY = 기존 hstbatch, PLATFORM = `run_parallel`). 표시 라벨만 "입력 생성(run별)" |
+| G2 | run별 체인 m_1 GEOM_UPDATE → m_2 MESH → m_3 조립을 ④ `batch._gen_one`에서 공용 `worker/physicsai_worker/steps/run_chain.py`로 추출(④ 동작 불변, V3-S9-7 무수정 통과) |
+| G3 | 형상 생성 경계 = `run_chain.geometry_update(...)` 한 함수(출력 = `{predict.simlab_mesh_name}` 경로). D3-66 보강: 교체 단위는 `build_run_inputs` 수준도 가능(엔진 선택은 `run_chain.select_engine`, 이번엔 altair만) |
+| G4 | 표본 = S15 `build_matrix`(8 kind, `ranges`·`continue_from`·`table`·`train_doe` 제외). 범위는 ①-2 표, 상한 `train_data.platform_max_runs` |
+| G5 | API는 검증·run 수만(`lhs_opt`는 같은 count·seed의 `lhs`로 대신 검증). 실제 행은 워커 DG_PREP이 계산해 `train_doe_points`에 저장 |
+| G6 | migration 0015: `train_does.generator`(HYPERSTUDY\|PLATFORM)·`sampling` JSONB, 새 `train_doe_points`(run별 `gen_state` PENDING\|RUNNING\|DONE\|FAILED, `values`·`applied_values`, 수치·상태만). 플랫폼 DOE의 `doe_type` = 방식 이름(`LHS_OPT` 등), `options` = 표본 입력값 → `doe_influence`가 `batch_influence`로 등급 계산 |
+| G7 | run 폴더 규칙은 다운스트림에 필요한 것만: `D/{train_data.platform_run_root}/run__{n:05d}/{m_1,m_2,m_3}`, `input_rel` = m_3, starter = m_3 직계 `starter_glob` 일치·eps_mesh 아님 정확히 1개 |
+| G8 | 동시 수 M = 사용자 입력(1~`max_multi_execution`, 화면 기본 `platform_parallel_default` 4). 자식 전부가 제한기 그룹 1개(Windows Job Object 1개)를 나눠 씀. 라이선스는 자동 감지하지 않고 안내만 |
+| G9 | `on_run_failure` = `fail`(기본: 모든 run 시도 후 실패가 있으면 `GEN_PARTIAL_FAILED`, 재시도는 실패·미완료 run만) \| `continue`(성공 run만 등록, 경고 `PARTIAL_OUTPUT`) |
+| G10 | API 기본은 하위호환: `generator` 생략 시 `sampling`이 있으면 platform, 없으면 hyperstudy. 화면 기본 = `train_data.doe_generator_default`(platform) |
+
+**다운스트림 규칙(코드에서 역으로 확정)**: DG_SCAN은 `D/{run_dir_glob}`(이름 = run_key)와 starter 1개로 `input_rel`을 정하고, TD_SOLVE·SCX는 input_rel 직계 파일을 쓰며, RI_SCAN은 폴더 이름 `^run__\d+$`, ④ `train_doe`는 `D/samples.csv`(`run_key,<파라미터…>`, PARSED)를 본다. 플랫폼 모드는 samples.csv를 DB `applied_values`로 직접 쓰고, HyperStudy 전용 파일(유형 json·include TCL·런처·`INPUT_HST_RUN.json`)은 만들지 않는다. `D/doe.json`을 새로 기록. 구현 메모(이슈 #7): `train_data.run_dir_glob`은 목록(기본 `["approaches/doe_*/run__*","*/approaches/doe_*/run__*"]`, 옛 문자열 기본은 자동 정규화), 0건이면 `*/` 재탐색, 같은 run_key 중복 폴더는 제외 + 경고.
+
+**API**: `POST /studies/{id}/jobs`(`TD_DOE_GEN`) params 확장 — platform `{generator, sampling{kind,count,seed,criterion…}, multi_execution, on_run_failure, radioss_assem_path}`, hyperstudy는 기존 그대로. 금지 조합 422, 플랫폼 조합 오류는 422 `DOE_SAMPLING_INVALID` + problems(S15 코드, 상한은 `platform_max_runs`), notes는 작업 생성 `warnings`. 응답: `TrainDoe.generator`·`sampling{kind,label,desc_id,meta}`·`gen{total,pending,running,done,failed}`, result-table `sampling`(`td_<kind>`), `/status.limits.configured`에 `doe_generator_default`·`doe_platform_parallel_default`(= min(설정, max_multi_execution))·`doe_platform_max_runs`, `features.train_doe_platform`(템플릿 `geom_update` + altair `simlab_path`, HyperStudy 자원 불필요).
+
+**step 처리(키·가중 불변)**: DG_PREP은 platform이면 표본을 계산해 `train_doe_points`에 삽입하고 `doe.json`을 쓴다(tpl sha가 바뀌면 전부 PENDING + `TPL_CHANGED_REGEN`). `gen_platform`(`steps/stage1_train_data/doe_platform_gen.py`)은 DONE이 아닌 행을 `run_parallel`로 M개 동시 실행해 run마다 `run_chain.build_run_inputs`를 호출, 진행 라벨 "입력 생성 실행 n · 대기 …". DG_SCAN은 DONE 행만 검사해 `samples.csv`·runs.json·`train_runs`·READY. 취소는 그룹 종료 + RUNNING 행 PENDING(워커 + `job_end` 훅 `reset_running_points`). 재시도는 같은 tpl이면 DONE run 유지.
+
+**설정**: `train_data.doe_generator_default` platform · `platform_parallel_default` 4 · `platform_max_runs` 500 · `platform_run_root` `approaches/doe_1`(`run_dir_glob`과 일치 검증, 검증은 `validate_stages.py`).
+
+**화면(①-3 `DoeGenCard`)**: 생성 방식 세그먼트 `플랫폼 생성(동시 실행)` | `원본 HyperStudy(호환)`(저장하지 않음). 플랫폼은 방식 드롭다운 8개(추천 `lhs_opt`)·방식별 입력·`실제 run N개`·설명 상자(`td_<kind>`)·동시 실행 수·체크 `실패한 run이 있어도 성공한 run으로 DOE 완료`. HyperStudy 모드는 기존 UI + 회색 줄(`HS_NOTE` 새 문구, "호환 모드 — hstbatch -multiexec로 실행합니다. 실제 동시 실행 수는 HyperStudy가 정하며 입력 생성이 run마다 순차로 될 수 있습니다."). 결과 줄에 `생성 완료 d · 실패 f / 전체 t`. 지원 범위 밖이어도 실행을 막지 않고 서버 422 problems를 표시.
+
+시험 V3-S18-1~10(동시 실행 하한은 가짜 SimLab barrier로 결정적으로 증명, 상한은 trace 구간, **시각 비율 단언 없음**). 서버 확인 E1-9-1~5(동시 수 감시·결과 회수·자원·취소·선택으로 hstbatch 관찰).
+
+리스크: 라이선스(동시 4가 한도를 넘으면 run 실패 → 동시 수를 낮춰 재시도), 그룹 Job Object의 공유 메모리 한도, 같은 CAD 동시 실행 시 SimLab 프로필 충돌(④ E4-9-2와 같은 조건), 플랫폼 표본 값은 HyperStudy와 다름, 정수 형식 중복 행, lhs_opt 큰 n(워커에서 수십 초), native 출력이 단일 rad가 아니면 경계 재정의. 미결: 화면 기본 platform, 실패 기본 `fail`, ① mesh_only 비범위, 상한 500, hstbatch 숨길 시점, 레거시 4종 자동 매핑 생략.
+
+## 24. S19 후속 — GPU 조회 실패 대응·⑤ perf 서버 계산 (사용자 승인 2026-10-19, D3-67)
+
+원문: [s19_followup.md](s19_followup.md) §24. **migration 없음**(head `0015_doe_platform_gen` 유지), 새 job_type·step·라우트 없음.
+
+> **철회(2026-10-20, 사용자 결정)**: 원 계약의 "④ 일괄 예측 하위 PREDICT의 GPU 동시 실행(GPU 동시 예측)"은 구현 중 철회됐다. 이 문서는 그 내용을 옮기지 않는다. ④ 일괄 예측은 S18과 같이 SLOT 단일 FIFO로 1개씩 예측한다. §2.3 R3-9 참고.
+
+유지된 범위 두 가지:
+
+**(1) GPU 조회 실패 대응(B-GPU·F-GPU)**
+- 조회는 새 워커 스레드 `worker/physicsai_worker/gpu_monitor.py` `GpuMonitor`가 맡고, 하트비트(`heartbeat_once`)는 nvidia-smi를 직접 실행하지 않고 **캐시**를 읽는다(조회가 막혀도 온라인 판정이 흔들리지 않음). 환경 점검 `gpu.detect`는 직접 조회하되 같은 제한 시간을 쓴다.
+- 설정(`WorkerCfg`, 검증 `config/validate_gpu.py`, 예시 yaml은 주석): `worker.gpu_query_timeout_s` 15(1~120, 요약·환경 점검 공통) · `worker.gpu_backoff_after` 3(1~100) · `worker.gpu_backoff_max_s` 300(0 또는 `resource_sample_interval_s`~3600, 0 = 늘리지 않음). 시간 초과 문구 `nvidia-smi 응답 시간 초과({n}초): {exe}`.
+- 간격: 연속 실패 k회 < `gpu_backoff_after`면 base(`resource_sample_interval_s`), 아니면 `min(gpu_backoff_max_s, base × 2^(k − after + 1))`. base 10·after 3이면 10·10·20·40·80·160·300…, 성공하면 k = 0.
+- 진단 로그(워커 로그 `physicsai_worker`, **상태 전이 때만 1줄**, 작업 로그·DB에는 쓰지 않음): OK → ERROR WARNING `GPU 조회 실패(ERROR): … — 회복될 때까지 같은 실패는 기록하지 않습니다` / 시작 → NOT_FOUND INFO / 실패 종류 변경 WARNING / k = after 순간 WARNING `GPU 조회 연속 k회 실패 — 조회 간격을 늘립니다(최대 N초)` / 회복 INFO `GPU 조회 회복: <GPU 이름> n개(실패 k회, 경과)`.
+- API(`/resources`, 모두 선택): 기존 `gpu_status`·`gpu_message` 재사용 + `gpu_fail_streak`·`gpu_sampled_at`·`gpu_next_query_at`(지연 중일 때만). 옛 워커 표본은 null.
+- 화면: 자원 칩의 `title`이 ERROR·NOT_FOUND이면 `GPU 조회 실패 — <gpu_message>`(NOT_FOUND는 `GPU 없음 — `), 연속 2회 이상이면 `(연속 N회 · 다음 조회 HH:mm:ss)` 추가(순수 함수 `shell/gpuText.ts` `gpuFailTip`·`gpuStreakText`). 서랍 `WorkerResourcePanel`에 회색 줄(`gpu-message`, 연속 실패 줄)을 보이게 둔다.
+
+**(2) ⑤ `perf:` 지표 서버 계산(B-PERF·F-PERF)** — D3-65 보강 3 ⑤ 해소
+- `GET /predict-batches/{bid}/design-map`이 `performance.perf_value`로 `perf:` 값을 계산한다. 성공 run마다 `runs[].perf{name: 값\|null}`·`perf_reason{name: 사유 코드}`. 옛 추출 run(H3D `NOT_EXTRACTED`)만 결과 표 값으로 대체(CURVE는 대체 없음). 성공이 아닌 run은 null.
+- 스키마(기본값 있음, 기존 응답 하위호환): `metrics[].spec_changed`(perf 지표, 성공 run 중 SPEC_CHANGED 수), `counts.spec_changed`(SPEC_CHANGED 성능이 있는 성공 run 수), `reason_text{코드: 한국어}`. 지표 순서는 curve → resp → tbl → **perf(끝)**, 값이 있는 run이 1개 이상인 성능만 목록에 둔다(저장된 선택·기본 지표 불변). 파일 추가 읽기 없음(`load_run_metrics` LRU 재사용).
+- 프런트: `perfColumns.ts`의 `perfValue`·`withPerfMetrics`를 삭제하고 `fromBatch.ts`가 서버 값을 사용(design-map 실패 시 결과 표 값). 결과 표 칸 `title`에 사유, SPEC_CHANGED 칸은 `—` 옆 회색 "정의 변경", `counts.spec_changed > 0`이면 안내 줄("성능 정의가 바뀐 뒤 다시 추출하지 않은 run N개는 성능 값이 비어 있습니다 — ⑥ 최적화 설정의 성능 표에서 '다시 추출'").
+
+시험 V3-S19-1(설정)·2(제한 시간, 가짜 nvidia-smi hang)·3(`GpuMonitor` 로그 전이·간격 수열)·4(`/resources`)·12(design-map perf)·13(프런트). V3-S19-5~10(동시 예측 시험)은 철회로 무효. V3-S19-11 예외 1건: V-SM-6 `test_no_timeout_key_in_schema`는 `worker.gpu_query_timeout_s`를 제외(작업 실행 시간 한도 없음이라는 취지는 유지, V3-S9 시험 무수정). 서버 확인 E0-8-1~3(GPU 조회, e2e-checklist). E4-19 블록은 철회되고 perf 확인만 E5A-6으로 남긴다.
+
+다음 계약 없이 처리한 항목: S16 minor 4건(M0), 문구·시험·그림 정리, 300줄 초과 파일 분할과 `batch_matrix`의 sampling 이동(R-B·R-F, `docs/refactor-plan.md` §8), 문서 이관(이 절).
+
 ## 변경 메모(D3-n) — 구현 중 계약과 다르게/구체화한 곳(Plan 확인 요청)
 
 - **D3-1 (S1, §3.4 재시도 시작 지점 표시명)**: `JobStep`에는 표시명(label)이 없다(API 모양 불변 유지). 시작 지점 문구는 `{step_no}. {표시명}`에서 표시명을 해당 step이 `Job.current_step_key`와 같으면 `current_step_label`(실패 작업은 실패한 step이 current), 아니면 `step_key`로 쓴다. 첫 재개 step이 1이면 "처음(1단계)". 구현 `frontend/src/components/JobRetryButton.tsx` `retryStartText`. (Plan 승인)
@@ -1152,3 +1446,24 @@ step 정의·작업 유형·재시도 시작 지점은 그대로다(`TS_PREP →
 - **D3-57 (사용자 결정 2026-10-17, S11 SCX 잡 제출 — Plan)**: §16, 대시보드 쪽 계약 `docs/contracts/scx_relay.md`. ① 토큰 공유: PhysicsAI는 어댑터를 실행하지 않고 대시보드 loopback relay(`/internal/scx-relay/v1`, 헤더 `X-SCX-Relay-Key` 공유 비밀 파일·`hmac.compare_digest`·프록시 헤더 거부, 기본 꺼짐 `SIMDASH_SCX_RELAY_ENABLED`)를 부른다. ② 드라이브 `~`(= `/Users/vd.dashboard`, `hpc.scx.drive_base`) `/<Study 폴더 이름 정규화>/<01_D-NNN_<run>_<ts> | 04_V-NNN_<ts>>`, 항상 새 폴더(`_2`…`_9`), SPDM 루트(`SIMDASH_SCX_DRIVE_ROOT`) 안 쓰기 금지(예외 설정 없음), 삭제·이동·덮어쓰기 없음. ③ step 키 불변 — HPC_SUBMIT 안에서 단계 A STAGE_IN(모든 run 업로드 완료 후) → 단계 B 제출, COLLECT는 relay list·스트리밍 다운로드(`.part`→`os.replace`, sha256 확인). 업로드는 대시보드 업로드 대기열 경유(비동기 묶음 폴링). ④ `SUBMISSION_UNKNOWN` → `hpc_jobs.state=UNKNOWN`·`submission_unknown`, 자동 재제출·형제 자동 취소 없음, 남은 run 미제출, attention·알림 `HPC_SUBMISSION_UNKNOWN`, 사용자 조치 `POST /jobs/{id}/hpc-jobs/{hid}/resolve` recheck·attach·mark_not_submitted(워커가 처리). 같은 `request_id`(`pai-<hpc_jobs.id>`) replay만 자동(relay가 어댑터를 다시 부르지 않음). 확정 실패는 기존 형제 취소 유지. ⑤ 게이트웨이 확장: mode `scx`, 오류 코드 `SUBMISSION_UNKNOWN`, `HpcStatus.outcome·output_path·output_rel·error_message`(선택), 범용 `submit()`은 scx에서 `NOT_CONFIGURED`. migration `0009_scx_gateway`(hpc_jobs 9열 + 알림 이벤트). ⑥ Plan 가정(확인 요청): include는 `additional_paths`에 모두 나열(`list_additional_paths: true`), engine = `<base>_0001.rad` 있으면 `engine_paths`, 경로 표기 `rel`, output_path는 드라이브 경로 — E4-11-3~6에서 확인. D-/V- 번호는 DB 순번 계산(새 열 없음), 시각은 워커 현지 시각. 프런트 "확인 필요" 화면은 후속 작업.
 - **D3-57 구현 메모(Impl-SCX, 2026-10-17 — Plan 확인 요청)**: ① §16.4 단계 A가 모든 run 행을 업로드 전에 넣으므로 결과 모름·확정 실패 뒤 "남은 run"은 행을 만들지 않는 대신 이미 있는 행을 `CANCELED`·`staged.phase=not_submitted`(문구 "제출하지 않음(앞 run …)")로 둔다 — 종료 판정(T10·T10b·T13)에서 실패로 세지 않고, `submitted` 수·T10b 총수에서 뺀다. ② 업로드 `X-Request-Id`는 `<request_id>:f:<순번>`(올릴 파일 이름순 1부터) — 파일 이름(비ASCII·공백·괄호·긴 이름)은 relay 헤더 규칙 `^[A-Za-z0-9_.:\-]{1,128}$`에 맞지 않을 수 있어 이름은 쿼리 `name`(UTF-8 퍼센트 인코딩)에만 둔다. ③ resolve 권한 = 재시도 규칙(작업 등록자는 power 이상, 그 밖은 전역 관리자). 작업이 `WAITING_HPC`가 아니면 `mark_not_submitted`만(그 밖 409 `HPC_RESOLVE_NOT_ALLOWED`). ④ 회수: Windows 예약 이름(CON·NUL…)·`?*<>"|:`·끝 마침표/공백·대소문자만 다른 경로·폴더/파일 이름 충돌은 그 run 회수 실패(`PATH_UNSAFE`), 로컬 쓰기 오류도 run 단위 실패. `.part`는 `<이름>.<임의>.part`(tempfile — 실패·취소 시 자동 정리). ⑤ 워커 중단으로 남은 `SUBMITTING` 행은 제출 단계였으면 `UNKNOWN`+submission_unknown, 업로드 단계(`phase=stage_in`)였으면 `FAILED`. ⑥ 금지 접두는 상대·`~/`·절대(`home_display` 기준) 표기를 모두 인식하고, 드라이브 목록 조회 전에 먼저 검사한다.
 - **D3-58 (Impl-Frontend 2026-10-17, S11 SCX 화면 — §16.5 "후속 프런트", 필수 요소만)**: ① `npm run gen:api`(openapi = D3-57 구현 커밋) — `HpcJob` scx 필드·`HpcResolveRequest`, `api.hpcJobs`·`api.resolveHpcJob`(version = 행 version). ② 표시 조건: `/status.hpc.mode == "scx"`일 때만 `GET /jobs/{id}/hpc-jobs`를 읽고(작업 version이 바뀔 때 + 작업이 끝나지 않았으면 `poll_job_waiting_hpc_ms` 주기), 행 `gateway_mode == "scx"`만 scx로 표시 — PBS(command)·none 화면 불변. ③ ①-4 run 표(최신 TD_SOLVE 작업의 행을 run_key·최신 attempt로 연결): 열 "잡 ID"·"드라이브 폴더"(잡 폴더 마지막 구간, 전체 표시 경로는 title, 복사 버튼 — 입력 칸 없음), 상태 괄호에 게이트웨이 중립 단계(SUBMITTING=업로드 중 → 대기 → 실행 → 완료 → 결과 회수 중·결과 회수됨). `UNKNOWN`+`submission_unknown` 행은 상태 칸 "확인 필요" 배지(warning pill) + 바로 아래 줄에 "제출 응답이 끊겨 제출 여부를 모릅니다. 드라이브/SCX에서 확인 후 선택하세요" + 조치 3개(다시 확인=recheck / "SCX 잡 ID" 입력 + 잡 ID 연결=attach(빈 값이면 비활성) / 제출 안 됨으로 처리=mark_not_submitted, 확인 대화상자에 §16.5 주의 문구). 202 응답 행으로 바꿔 "조치 요청됨 — 다음 확인 때 처리합니다"(버튼 숨김), 409(VERSION_CONFLICT·HPC_RESOLVE_PENDING·HPC_NOT_UNKNOWN·HPC_RESOLVE_NOT_ALLOWED)는 문구 + 행 다시 읽기. 조치 버튼은 실행 권한(power) 화면에만, 최종 권한은 API. ④ ④ "PBS 검증 해석" 버튼은 mode scx면 "검증 해석(SCX)", 검증 작업 아래 SCX 잡 ID·단계·잡 폴더(복사)·결과 위치(output_path가 잡 폴더와 다를 때만), 결과 모름이면 배지·잡 폴더·같은 조치. ⑤ 주의 코드 `HPC_SUBMISSION_UNKNOWN` 문구 "SCX 제출 확인 필요". ⑥ 목 `?hpc=scx[&scx=unknown]`(MockOptions `hpcMode`·`scxUnknown`, hpc-jobs·resolve 라우트, 다음 tick에 조치 처리), 스크린샷 `node scripts/screenshots.mjs scx`. 시험: scx.test(단계 글자·배지·폴더·조치 3개·409·PBS 불변·④), mockContract(hpc-jobs·resolve 응답). **Plan 확인 요청**: ①-4 카드 제목·"PBS 제출"·작업 상태 "PBS 대기"·요약 "PBS n/m 완료"는 범위 밖이라 그대로. D3-57 구현 메모 ①의 미제출 행(`CANCELED`·`staged.phase=not_submitted`)은 응답에 phase가 없어 "취소됨"으로 보인다 — `HpcJob`에 phase(또는 not_submitted 표시)를 내주면 "제출 안 함"으로 구분 가능.
+- **D3-59 (사용자 결정 2026-10-17, S12 DOE 설계공간 지도 — Plan)**: §17. ④ 일괄 예측 결과 그래프 카드에 탭 [변수–응답] [설계공간 지도](S14 이후 ⑤ 결과분석). ① run별 대표값(커브 max·min·\|max\|, RESP `_MIN`·`_MAX`, 옛 방식 표 값)은 **백엔드** `GET /predict-batches/{bid}/design-map`에서 계산(파일별 LRU, 새 DB·설정 없음) — 프런트 `curves` 응답은 계열 1개·다운샘플·run 상한이라 계열 전환마다 재요청이 필요하고 RESP 원값이 없기 때문. ② PCA·PLS(NIPALS PLS1 2성분)·평행 좌표는 **프런트 TS**(n ≤ 200, p ≲ 20, 색 값 변경 시 즉시 재적합). ③ 변수 = 반영값, 유효 run 기준 z-점수(ddof=1), 상수 변수 제외, 축 % 정의(PCA = X 분산, PLS = X 분산 %·값 분산 %), 구조 상관 바이플롯, viridis. ④ 지표 id 문법과 공용 모듈 `stage4_predict/run_metrics.py`는 S13 목적함수와 공용. ⑤ 커브 지표 계열을 커브 겹쳐보기와 연동. 새 의존성 없음.
+- **D3-59 구현 메모 (2026-10-17)**: 생성 파일(`backend/openapi.json`·`schema.d.ts`·`frontend-dist/**`)은 먼저 병합한 쪽 기준으로 재생성(S13은 그 위로 rebase 후 재생성). 목록 밖 수정: `test_openapi.py`(라우트 목록)·`operation_ids.txt`·`screenshots.mjs`(`designmap` 모드). `BatchResult.tsx` 352줄(300줄 규칙 초과) → 후속 분할(R-F). 평행 좌표 브러싱은 마우스 이벤트, `metric_value`는 문법 밖 id에 ValueError, `tbl:*`는 값이 하나라도 있는 템플릿 응답만.
+- **D3-60 (사용자 결정 2026-10-17, S13 쿠션만 최적화 + 이슈 #4 — Plan)**: §18. 모드 `플랫폼 내장(쿠션만 가능)`(기본) | `원본 최적화(조립 필요)`. ① 내장 = 탐색(새 DOE 배치 또는 재사용) → GP(Matérn 5/2 ARD)·RBF(cubic) 적합·LOO → 후보 k개(활용 1 + EI×PoF kriging believer, 정수 변수 `integrality`) → **PREDICT_BATCH(source table)로 실제 예측 체인 검증** → 개선 < tol_rel(1%) 또는 반복 3까지(기본 3 × 4). ② 반복 제어는 종료 훅 연쇄: 배치 DONE → `job_end`가 `SURROGATE_OPT`(SLOT, SO_COLLECT·SO_FIT·SO_PROPOSE·SO_NEXT, INTERNAL) 투입 — 기다리는 동안 슬롯 미점유. ③ migration `0010_surrogate_opt`(Study당 진행 중 1개, 알림 `SURROGATE_OPT_DONE`, 활성 인덱스에서 최적화 소유 PREDICT_BATCH 제외). ④ **새 런타임 의존성 numpy·scipy**(지연 import, 없으면 `features.optimize_builtin=false`) — 사용자 확인 대상. ⑤ 범위는 학습 범위 안만, 검증 배치 캡처 기본 끔, 소유 배치의 배치 단위 취소·실패만 다시는 409 `BATCH_OWNED_BY_OPT`. ⑥ 이슈 #4: 원본 OPTIMIZE를 mesh_only 템플릿으로 생성·재시도하면 409 `TEMPLATE_ASSEMBLY_REQUIRED`, 워커 `op_prep`도 같은 코드로 실패(TypeError 제거).
+- **D3-60 구현 메모 (2026-10-17)**: ① 설치 판정은 `sys.path` 패키지 폴더 확인(`surrogate.missing_modules`, V2-LCH-1 정적 시험이 importlib 금지). 고정 numpy 2.4.6·scipy 1.17.1. ② 설정 `surrogate_opt.blas_threads`(4, 바꾸면 워커 재시작 뒤 적용), problems `TOL_RANGE`·`MULTI_EXECUTION_RANGE`, 상세 `runs`, 경고 `OBJECTIVE_CONSTANT`. ③ `resume`은 반복 작업을 step 1부터 재시도(검증 배치가 이미 등록돼 있으면 VERIFYING으로 복원), SO_NEXT는 같은 반복 행 재사용(멱등), 반복 작업의 `/jobs/{id}/retry`는 409, 훅 실패는 로그만, 소유 배치 부모 취소 시 opt `FAILED BATCH_FAILED`(이어서 실행 가능), 소유 작업은 `JOB_CANCELED` 알림 없음, `opt.json`은 `_backup` 후 다시 씀.
+- **D3-61 (사용자 요청 2026-10-17, S13 결과 화면 보강)**: 내장 최적화 결과에 최적안 대 기준안 카드·결과 요약 타일·컨투어 비교(같은 범례)·수렴 그래프 기준안 수평선. **마무리 캡처 배치**: 정지 시 캡처가 구성돼 있으면 opt를 `FINALIZING`으로 두고 최적화 소유 PREDICT_BATCH 1개(table 2행: 기준안 nominal + 최적안, 캡처 켬)를 iters `kind FINAL`로 등록, 배치 DONE → 훅이 DONE + 알림. 캡처 미구성이면 바로 DONE + `final.status SKIPPED`, 마무리 부모 실패·취소면 DONE 유지 + `final.status FAILED|CANCELED`, 캡처 도구 실패는 DONE. migration **`0011_surrogate_final`**(`surrogate_opts.final` JSONB, 상태 `FINALIZING`, iters kind `FINAL`). 상세 `final{…}`·`parameters[]`·`progress_text`; `runs`·`iterations`·runs.csv는 FINAL 제외.
+- **D3-61 보강 (Verifier 2026-10-17)**: 같은 범례는 목적이 컨투어 결과 종류(템플릿 display field)의 RESP 값일 때만(범위 0 ~ max(기준안 예측, 최적값) × 1.05). 그 밖이면 범례 없이 이미지마다 자동 + `final.legend_note`. `complete_final`은 savepoint로 실패는 로그만.
+- **D3-62 (사용자 결정 2026-10-17, S14 화면 단계 재편·⑤ 결과분석 — Plan)**: §19. ① 화면 단계 ④ 예측 · ⑤ 결과분석(신설) · ⑥ 최적화(기존 ⑤). 내부 코드 경로·job 이름·DB·URL 숫자·e2e 기존 번호는 유지하고 메뉴 순서·표시 번호·라벨만 프런트에서 변경(신규 라우트 `/stage/analysis`). ② 입력 = `ResultTable`(source solver\|predict). 출처 (a) 일괄 예측 배치(기존 API), (b) 해석 DOE(새 읽기 전용 `GET /train-does/{doe_id}/result-table`). ③ 분석 = PLS·PCA·커브 강조 재사용 + 영향도(PRCC·SRC), 대리모델 Sobol 비범위. ④ solver vs predict 겹쳐 보기는 파라미터 이름 집합이 같을 때만. ⑤ 시험 V3-S14-*, 서버 확인 E5A-*.
+- **D3-62 구현 메모 (2026-10-18, 사용자 승인 "추천대로")**: `rows[].state`는 `train_runs.state` 원값(프런트가 정규화), `type`은 doe_type 원값, 행 상한 `train_data.max_runs`, 단위는 DOE `parameters_snapshot`, samples 없음·Study 밖·링크면 404 `SAMPLES_MISSING`. 겹쳐 보기 응답 선택은 두 표 공통 응답만. 영향도 행렬 특이 시 전체 "계산 불가". 해석 결과 폴더 직접 지정은 보류.
+- **D3-63 (사용자 결정 2026-10-18, S15 표본 방식 추가 — Plan)**: §20. ① ④ `source.kind`에 `lhs_opt`·`sobol`(scipy 지연 import)·`fullfact`·`fracfact`·`pb`·`bbd`·`ccd` 추가, 미리보기·생성·워커가 같은 행. ② ④ 기본 = 최적화 LHS, ① 기본 = LatinHyperCube(`train_data.recommended_doe_type`), 선택창 설명문. ③ ①은 정의 파일 4개 유형 유지(새 방식은 ④ 전용 → S18에서 ① 플랫폼 생성으로 해소). ④ migration `0012_sampling_kinds`(CHECK 확장), 방식 인자는 `source_meta`. ⑤ 영향도 등급 formal/reference/off를 서버가 정함(`influence_ok` = class ≠ off, s14 "LHS가 아닌 해석 DOE 비활성" 폐지). ⑥ 새 라우트 없음. ⑦ S13 "API 프로세스 numpy 미적재"는 Sobol(`sampling/qmc.py`)만 예외. ⑧ 시험 V3-S15-1~15, 서버 확인 E4-13·E1-8. 미결 처리(사용자 "일단 가보자고"): ①은 4개 유형 유지, 나머지 계약 기본안 채택.
+- **D3-63 구현 메모 (2026-10-18)**: 기존 `lhs`는 V3-S9-5 골든 유지를 위해 `quality`를 저장하지 않고 응답에서 계산. `FIXED_EXCLUDED`·`DUPLICATE_ROWS`·`INFLUENCE_TOO_FEW`는 새 7종에만. `CONTINUE_INVALID` 사유 추가. 이어서 추가 권장 run·문구 = `offset & -offset`. `lhs_opt` seed ≥ 0. influence 모양 `{ok, cls, note, reason}`. fracfact k = 2·3에서 IV 요청 시 IV 문구(확인 대기).
+- **D3-64 (사용자 VOC 2026-10-19, S16 — Plan)**: §21. ① V1 ④ 단일 예측 실행 목록(새 DB 없이 jobs로 `GET /studies/{id}/predict-runs`·`/predict-runs/{job_id}`, 일괄 하위 제외, 재시도 묶음은 최신 1행). ② V2 조립 FEM 검증: 새 job_type `FEM_VERIFY`(FV_PREP·FV_MESH·FV_ASSEMBLE·HPC_SUBMIT·HPC_WAIT·COLLECT·FV_EXTRACT·FV_CURVE·FV_CAPTURE·FV_COMPARE). 메시 교체는 기존 m_2·`assemble_into` 재사용, 제출은 기존 게이트웨이(PBS·SCX, SUBMISSION_UNKNOWN 규칙 그대로, 잡 폴더 `04_FV-NNN_<ts>`). 출처 4종, 같은 설계점 예측이 없으면 동반 PREDICT + 종료 훅 연쇄, 조립 원본 3종(스냅숏 복사), 비교 = 응답 MIN/MAX·오차%·T01 커브·컨투어 같은 범례, `fem_verify.field_map`. 재시도는 해석 전 실패면 처음부터(새 시도), 후처리 실패면 그 step부터. ③ migration `0013_fem_verify`(`fem_verifications`, 활성 인덱스에서 FEM_VERIFY·동반 PREDICT 제외, Study당 `max_active` 4, 알림 `FEM_VERIFY_DONE`). ④ PREDICT_VERIFY는 유형·API·기록 유지 + 화면 버튼만 "FEM 검증"으로 대체, HPC 헬퍼는 `_verify_hpc.py`로 공유(동작 불변). ⑤ V3 영상: TCL이 저장 뒤 존재·크기 확인(`VID_SCOPE`), 경고 `CAPTURE_VIDEO_FAILED`·`video_error`, 선택적 ffmpeg 변환(목표 1 MiB, 원본 `media/raw/` 보존), 프런트 `MediaVideo`. ⑥ 시험 V3-S16-1~26, 서버 확인 E4-14-H1·F1~F8·V1~V7.
+- **D3-64 구현 메모 (2026-10-19)**: TCL은 VID_SCOPE 값이 있을 때만 page/window 분기(기존 골든 유지). 영상 상한 초과는 `video_error` + 기존 `CAPTURE_VIDEO_TOO_LARGE`로만. `FvCompareRow`에 min/max_diff(_pct), 커브 짝은 `compare.curve.pairs`. 목록 밖 수정: `core/fs_browse.py`(SPDM 목록)·`schemas/studies.py`(FEM_ASSEMBLY)·`step_process.py`(파생 영상 템플릿)·`config/loader.py`·`schemas/jobs.py`·`study_job.py`(활성 인덱스). 후속 minor 4건(Windows 예약어 검사, reuse verify.json sha256, 동반 예측 출처 중복·retry 시 max_active 재검사, 옛 PREDICT_VERIFY SCX 확인 필요 조치 UI)은 S19 M0에서 처리.
+- **D3-65 (사용자 VOC·결정 2026-10-19, S17 성능 정의·다목적 내장 최적화 — Plan)**: §22. ① 성능 = 템플릿 응답 정의 확장(새 테이블 없음): H3D + 새 `source:"CURVE"`(계열·stat), 진행 중 최적화가 쓰는 성능의 정의 변경·삭제는 409 `PERF_IN_USE_BY_OPT`. ② 지표 `perf:<NAME>`과 공용 순수 함수 `performance.py`, H3D는 `H3D_REQUESTS.txt` 줄과 비교해 다르면 `SPEC_CHANGED`(null), `RunMetrics.requests` 추가. ③ ④ RESPONSE_EXTRACT가 CURVE 값을 채움(CURVE만이면 TCL 미실행), ①-6·PV는 CURVE를 조용히 건너뜀, 끝난 배치의 H3D 성능 다시 추출은 새 job `PB_RESP_EXTRACT`(`POST /predict-batches/{bid}/extract-responses`). ④ 역할: 목적 1~3·제약 ≤ 5(≤·≥·range, `==` 없음)·관찰 ≤ 10을 `settings`에만, 성능 정의는 스냅숏, 단수 `objective` 호환. ⑤ 다목적은 `SURROGATE_OPT` 확장(목적별 GP, 예측 전선 = 격자 증강 Chebyshev + DE, 후보 = HVI + ParEGO, HV 고정 틀(기준점 1.1) 정확 HV 수렴). ⑥ 결과: 검증 파레토 해와 예측 전선을 구분, 가중 추천(0~1 정규화 가중합 최소, 골든 §22.6), 해 선택 → 단일 예측 / 추가 검증 배치(`POST /surrogate-opts/{oid}/verify`, iters `EXTRA`) / FEM 검증, FINAL 2행 = 기준안 + 가중 추천점. ⑦ migration `0014_multiobj`. ⑧ 설정 `surrogate_opt.{max_objectives, max_observe, max_extra_points, mo_*}`. ⑨ 시험 V3-S17-1~13, 서버 확인 E4-17. 파일 소유는 Impl-Backend / Impl-Frontend로 나누고 `services/surrogate_opts.py`는 300줄 규칙에 맞춰 problem·pareto 서비스로 분리.
+- **D3-65 보강 (메인, 2026-10-19)**: FEM 검증 연동 placeholder를 S16 확정 API로 교체 — `POST /studies/{id}/fem-verifications` + `source:{kind:"opt_design", opt_id, pick:"run", iter_no, doe_no}`, 가용 여부 `/status.features.fem_verify`. 병합 순서 S16 → S17 고정.
+- **D3-65 보강 2 (사용자 2026-10-19 "추천대로")**: ⑤ 결과분석 영향도·변수–응답·설계공간 지도의 응답 선택지에 커브 대표값(`curve:max\|min\|absmax` + 계열)과 성능(`perf:<NAME>`)을 포함. 출처 (a)는 design-map 지표 값을 결과 표 열로 싣고(`fromBatch`), 출처 (b)는 기존 응답만. 응답 열이 모두 비면 off 사유에 "④ 템플릿에 성능을 정의하거나 커브 대표값을 고르세요"를 덧붙임. 서버 변경 없음.
+- **D3-65 보강 3 (구현·Verifier 판정, 2026-10-19)**: ① 3목적 후보 배분 변경 — HVI 후보 ⌈k·`mo_hvi_share_m3`⌉개(0.5), 나머지 ParEGO 획득값 × exp(−`mo_front_prox_m3`(6.0)·예측 전선 정규화 거리)(원안 DTLZ2 0.666 미달 → 변경 후 시드1 0.734). ② §22.6 골든 5행(f₂ max) 정정(정답 `backend/tests/data/s17_recommend.json`). ③ V3-S17-6 DTLZ2 231점 HV는 이산 점 정확 HV 0.76909 → 허용오차 0.04. ④ 동시 생성 409는 `STUDY_JOB_BUSY`, `PB_RESP_EXTRACT`는 TCL 추출 방식에서만, 추가 검증 점 수 초과 422 `EXTRA_POINTS_RANGE`, EXTRA 배치는 최적화 소유 아님. ⑤ ⑤ 결과분석 `perf:` 클라이언트 계산의 SPEC_CHANGED 미감지 한계 → S19에서 서버 계산으로 해소(§24). ⑥ V3-S13-9 설정 화면 시험은 성능 표 교체로 수정(결과 화면 시험 무수정). ⑦ 기준안 ◇ 생략, ⑤ 커브 열 12계열 × 3 상한. ⑧ V3-S17-7 루프는 `slow` 마커(기본 test-all은 ZDT1 시드1). 후속: 300줄 초과 파일 분할(R-B·R-F).
+- **D3-66 (사용자 VOC·결정 2026-10-19, S18 ① 학습 DOE 플랫폼 동시 생성 — Plan)**: §23. ① S15 §20.3 안 B 채택 — `TD_DOE_GEN`에 생성 방식 `platform`(화면 기본)·`hyperstudy`(호환, 코드 무변경). job_type·step 키 3개·가중 유지, `HST_GEN_RADIOSS`가 `train_does.generator`로 분기하고 라벨만 "입력 생성(run별)". API 기본: `generator` 생략 → `sampling` 유무로 판단. ② 플랫폼 표본 = S15 `build_matrix` 8 kind, 범위 = ①-2 표, 상한 `train_data.platform_max_runs`(500), API는 검증·run 수만(422 `DOE_SAMPLING_INVALID`), 워커 DG_PREP이 행을 `train_doe_points`에 저장하고 `doe.json` 기록. ③ run마다 m_1→m_2→m_3을 `run_parallel`로 최대 M개 동시 실행(기본 4, 상한 `max_multi_execution`, Job Object 1개). 체인은 ④ `_gen_one`에서 공용 `steps/run_chain.py`로 추출(④ 동작 불변), 형상 생성 경계 = `run_chain.geometry_update` 한 함수(native 교체 지점). ④ 원본 일치는 다운스트림 규칙만(`D/{platform_run_root}/run__NNNNN/{m_1,m_2,m_3}`, input_rel = m_3, samples.csv = 반영값 PARSED). ⑤ 실패 `on_run_failure` = `fail`(기본, `GEN_PARTIAL_FAILED`, 재시도 = 실패 run만) \| `continue`(`PARTIAL_OUTPUT`), 취소 = 그룹 종료 + RUNNING 행 PENDING. ⑥ migration `0015_doe_platform_gen`(`train_does.generator`·`sampling`, 새 `train_doe_points`). ⑦ API: `TrainDoe.generator`·`sampling`·`gen`, result-table `sampling`, `/status` 설정 3개·`features.train_doe_platform`. ⑧ 화면: 방식 세그먼트·8개 드롭다운·`td_*` 설명·동시 수·실패 처리 체크, HyperStudy 모드는 기존 UI + 호환 회색 줄. ⑨ 사용자 추가 결정(native 전환 예정)으로 hstbatch 개선·HyperStudy 식별자 조사(S15 E1-8-2)·레거시 4종 매핑·① mesh_only는 비범위. ⑩ 시험 V3-S18-1~10(가짜 SimLab barrier로 동시 실행 하한을 결정적으로 증명, 시각 비율 단언 없음), 서버 확인 E1-9-1~5.
+- **D3-66 보강 (메인, 2026-10-19)**: 프로젝트 문서 `contracts/geometry-engine.md`(native = paicad, 공칭 메시 모핑, TD_DOE_GEN native 모드)와 대조 — native 엔진은 SimLab 메시를 거치지 않을 수 있어 교체 경계를 `geometry_update`뿐 아니라 `run_chain.build_run_inputs`(m_1 → m_2 → m_3) 단위로도 바꿔 끼울 수 있게 둔다(엔진 선택은 `run_chain.select_engine`, 이번엔 altair만). R-8 해소 방향.
+- **D3-66 구현 메모 (2026-10-19, Verifier 판정)**: 이슈 #7 포함 — `train_data.run_dir_glob`은 목록(기본 `["approaches/doe_*/run__*","*/approaches/doe_*/run__*"]`, 옛 문자열 기본은 자동 정규화), 0건이면 `*/` 재탐색(상위 `setup_*` 공칭 run 제외), 같은 run_key 중복 폴더는 제외 + 경고. 층 규칙상 `sampling/matrix.py`(batch_matrix 재노출)·`run_chain.mesh_preflight` 추가(후속: batch_matrix를 sampling으로 이동 → R-B). 설정 검증은 `validate_stages.py`, `build_run_inputs(param_set=)`, `limits.configured.doe_platform_parallel_default` = min(설정, max_multi_execution). 프런트: 지원 범위 밖이어도 실행 허용·서버 422 problems 표시. 후속(Low): td_sobol 2줄 최대값, lhs 대체 검증 notes 차이, `TPL_CHANGED_REGEN` 시 표본 값 유지, TrainDoe 목록 N+1 조회.
+- **D3-67 (사용자 승인 2026-10-19, S19 후속 — Plan)**: §24. ① GPU 조회: `worker.gpu_query_timeout_s`(15)·`gpu_backoff_after`(3)·`gpu_backoff_max_s`(300). 조회는 `GpuMonitor` 스레드가 하고 하트비트는 캐시를 쓴다. 워커 로그는 상태 전이 때만 1줄. `/resources`는 `gpu_status`·`gpu_message`를 재사용하고 `gpu_fail_streak`·`gpu_sampled_at`·`gpu_next_query_at`를 추가. 칩 툴팁·서랍에 실패 원인을 표시. ② ⑤ `perf:`는 design-map이 서버에서 `performance.perf_value`로 계산(`runs[].perf`·`perf_reason`, `metrics[].spec_changed`, `counts.spec_changed`, `reason_text`), 옛 추출 run(H3D `NOT_EXTRACTED`)만 결과 표 값으로 대체, 지표 순서는 기존 뒤에 perf. 프런트 `perfValue`·`withPerfMetrics` 제거 + 칸 사유 표시(D3-65 보강 3 ⑤ 해소). ③ migration 없음(head 0015 유지), 새 job_type·step·라우트 없음. ④ 시험 V3-S19, 서버 확인 E0-8-1~3. ⑤ 계약 없는 승인 항목(S16 minor 4건·문구·시험·그림 = M0, 300줄 분할·`batch_matrix` sampling 이동 = R-B·R-F, 문서 이관 = D)은 §24.11 순서에 둔다. 분할은 기능 변경과 Verifier 뒤 마지막.
+- **D3-67 구현 반영 (2026-10-20)**: ⑥ **④ GPU 동시 예측 철회** — 사용자 결정. 원 계약의 동시 예측 설계·관련 설정·시험·서버 확인(E4-19)은 무효이고 이 문서에 옮기지 않는다. ④는 S18과 같이 SLOT 단일 FIFO로 1개씩 예측한다(§2.3 R3-9). 구현 중 Verifier가 동시 OOM 교착(High)과 free/프로세스별 조회 시차로 인한 과입장(Medium)을 찾았고 난도 대비 효용이 낮아 걷어냈다. 유지 범위는 GPU 조회 제한 시간·원인 표시(B-GPU·F-GPU)와 perf 서버 계산(B-PERF·F-PERF). ⑦ V3-S19-11 예외 1건: V-SM-6 `test_no_timeout_key_in_schema`는 `worker.gpu_query_timeout_s`를 제외(작업 실행 시간 한도 없음이라는 취지는 유지, V3-S9 시험 무수정).

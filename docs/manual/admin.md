@@ -535,6 +535,9 @@ $env:PGPASSWORD = $null
 | `worker.env_passthrough` | Altair 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch). DB URL·`PHYSICSAI_*`·`*PASSWORD*`·`*SECRET*`·`*TOKEN*`·`PG*`는 항상 제외 | `[]` | `[]` | W |
 | `worker.state_dir` | 단일 인스턴스 잠금 파일 폴더(상대경로면 작업 폴더 = `install_root` 기준) | `./state` | `./state` | W↻ |
 | `worker.gpu_query` | GPU 조회 argv(`nvidia-smi --query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits` 형식). 첫 인자가 비었거나(null 포함) 못 찾으면 `resources.gpu_query_candidates`로 자동 탐색(phase3 D3-45) | `null` | `["nvidia-smi", …]` | W |
+| `worker.gpu_query_timeout_s` | nvidia-smi 조회 제한 시간(초, 1~120). 요약 조회와 환경 점검 `gpu.detect`가 같은 값을 쓴다. 넘으면 `nvidia-smi 응답 시간 초과(N초)` (phase3 §24) | `15` | `15` | W |
+| `worker.gpu_backoff_after` | 연속 조회 실패가 이 횟수부터 조회 간격을 두 배씩 늘린다(1~100) | `3` | `3` | W |
+| `worker.gpu_backoff_max_s` | 늘린 조회 간격의 상한(초). `0` = 늘리지 않음. 0이 아니면 `resource_sample_interval_s` 이상~3600 | `300` | `300` | W |
 | `resources.gpu_query_candidates` | GPU 조회 실행 파일 자동 탐색 후보(순서대로, 이름만 = PATH, `%VAR%` 확장) | `["nvidia-smi", "%SystemRoot%\\System32\\nvidia-smi.exe", "%ProgramFiles%\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe"]` | 같음 | W |
 
 실행 시간 한도 키는 의도적으로 없다(오래 걸리면 관리자가 취소).
@@ -635,10 +638,10 @@ $env:PGPASSWORD = $null
 | `train_data.tpl_parameter_line_regex` | 기존 `{parameter(...)}` 줄 제거 | `(?m)^[^\n]*\{parameter\(.*?\)\}[^\n]*\n?` | B |
 | `train_data.tpl_paramitem_line_regex` | 기존 `<paramitem …/>` 줄 제거 | `(?m)^[^\n]*<paramitem[^>]*/>[^\n]*\n?` | B |
 | `train_data.max_runs` | DOE run 수 상한 | `2000` | B |
-| `train_data.max_multi_execution` | hstbatch 동시 실행 수 상한(1~64, U21) | `8` | B |
+| `train_data.max_multi_execution` | 동시 실행 수 상한(1~64, U21). hstbatch(호환 모드)와 ① 플랫폼 생성 모두에 적용 | `8` | B |
 | `train_data.hst_progress_regex` | ①-3 진행 줄(그룹 `run`) | `Finished run\s*\(\s*(?P<run>\d+)\s*\),\s*model\s*\(\s*m_?3\s*\)` | W |
 | `train_data.hst_log_error_patterns` | ①-3 오류 정규식(⑤는 줄 수만 셈) | 원본 4개 | W |
-| `train_data.run_dir_glob` | DOE 폴더 안 run 폴더 패턴(U17) | `approaches/*/run__*` | W |
+| `train_data.run_dir_glob` | DOE 폴더 안 run 폴더 패턴(U17). 문자열 또는 목록. 옛 기본 문자열은 새 기본 목록으로 자동 정규화되고, 0건이면 `*/` 아래를 다시 찾는다(상위 `setup_*` 공칭 run 제외) | `["approaches/doe_*/run__*", "*/approaches/doe_*/run__*"]` | W |
 | `train_data.samples_extractor` | DOE 샘플 값 추출기 `paramitem`\|`csv`\|`none`(U18) | `paramitem` | W |
 | `train_data.rendered_tpl_glob` | paramitem: run 폴더에서 찾을 파일 패턴 | `**/*` | W |
 | `train_data.rendered_tpl_exts` | 〃 확장자(빈 문자열 = 확장자 없음) | `[".py", ".tcl", ".txt", ".xml", ""]` | W |
@@ -649,6 +652,10 @@ $env:PGPASSWORD = $null
 | `train_data.max_runs_per_submit` | ①-4 한 번에 제출할 run 상한 | `500` | B |
 | `train_data.result_run_dir_regex` | ①-5 결과 폴더의 run 폴더 이름(그룹 `run_key`, U25) | `^(?P<run_key>run__\d+)$` | B |
 | `train_data.result_match_depth` | ①-5 run 폴더 탐색 깊이 | `3` | B |
+| `train_data.doe_generator_default` | ①-3 화면 기본 생성 방식 `platform`\|`hyperstudy`(phase3 §23). API는 `generator`를 생략하면 `sampling`이 있을 때 platform | `platform` | B |
+| `train_data.platform_parallel_default` | ① 플랫폼 생성 동시 실행 수 화면 기본(실제 = min(값, `max_multi_execution`)) | `4` | B |
+| `train_data.platform_max_runs` | ① 플랫폼 생성 표본 run 수 상한(≤ `max_runs`, 아니면 설정 오류) | `500` | B |
+| `train_data.platform_run_root` | ① 플랫폼 생성 run 폴더 상위(상대, `..`·절대 금지). `<값>/run__00001`이 `run_dir_glob`과 맞아야 한다(아니면 설정 오류) | `approaches/doe_1` | B |
 
 #### curation·spdm_import·optimize(②⑤)
 
@@ -924,6 +931,7 @@ cpu_rate = clamp(floor(유효 코어 / 감지 코어 × 10000), 100, 10000)    #
 | `TEMPLATE_NOT_CONFIGURED` / `RESOURCE_NOT_CONFIGURED` / `RESOURCE_MISSING` | 템플릿 null / 자원 키 비어 있음 / pyd 0개·2개 | §2.7, §5 |
 | `INPUT_INVALID` / `INPUT_CHANGED` | 입력 경로·형식 위반 / 등록 후 파일 변경(sha256 불일치) | 실패 메시지의 파일 목록 |
 | `HPC_SUBMIT_FAILED` / `HPC_RUN_FAILED` / `HPC_UNREACHABLE` / `COLLECT_FAILED` | PBS 제출 실패 / run 실패 / 장시간 PBS 명령 실패 / 회수 실패 | §5.5, `hpc_jobs.json` |
+| `GEN_PARTIAL_FAILED` | ① 플랫폼 생성에서 일부 run 입력 생성 실패(기본 `fail`). 재시도하면 실패한 run만 다시 만든다 | step 로그의 첫 실패 run, 라이선스·동시 수(§19) |
 | `WORKER_LOST` | 워커 중단으로 lease 만료(`INTERRUPTED`) | 워커 작업 상태, 재부팅·업데이트 여부 |
 | `CONFIG_INVALID` / `INTERNAL_ERROR` | 설정 오류 / 예상 못 한 오류 | `/status`, 오류 묶음 |
 
@@ -1321,7 +1329,7 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `HPC_UNREACHABLE` | 상태 조회 실패가 `hpc.max_unreachable_minutes`를 넘음(문구 "대시보드 SCX 연결 확인") | 대시보드 재로그인·relay 확인 |
 | 경고 `SCX_SUBDIR_SKIPPED`·`SCX_NOT_SUBMITTED`·`SCX_UNKNOWN_CANCELED` | 하위 폴더 입력 무시·결과 모름으로 남은 run 미제출·결과 모름 행 취소(SCX에서 직접 확인) | 해당 run 다시 제출 |
 
-## 17. ⑤ 플랫폼 내장 최적화(phase3 §18, D3-60)
+## 17. ⑥ 플랫폼 내장 최적화(phase3 §18·§22, D3-60·D3-65 — S14 이후 화면 번호는 ⑥, 내부 URL `/stage/5`)
 
 ⑤ "플랫폼 내장(쿠션만 가능)" 모드는 HyperStudy 대신 ④ 일괄 예측 체인으로 설계를 검증하며 대리모델(GP·RBF)로 다음 후보를 고른다. mesh_only(쿠션 단독) 템플릿도 동작한다. 원본 최적화 모드는 조립 폴더가 있는 템플릿만(쿠션 단독 템플릿이면 `TEMPLATE_ASSEMBLY_REQUIRED`로 막힘).
 
@@ -1353,6 +1361,61 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `SURROGATE_TIMEOUT` | 학습·후보 탐색이 `fit_timeout_s` 초과 | `de_maxiter`·`gp_restarts` 낮춤 또는 `fit_timeout_s` 늘림 |
 | `BATCH_FAILED`·`ROUND_FAILED` | 검증·탐색 배치 입력 생성 또는 반복 작업 실패 | 원인 해결 후 ⑤ "이어서 실행" |
 | `BATCH_OWNED_BY_OPT`(409) | 최적화 소유 배치를 ④에서 일괄 취소·실패만 다시 | ⑤에서 취소·이어서 실행 |
+
+### 17.4 성능 정의·다목적(S17, phase3 §22)
+
+- **성능**은 템플릿 응답 정의(H3D 또는 커브 대표값)이고, ⑥ 설정 화면의 "성능" 표에서 편집해 저장한다. 역할(목적·제약·관찰)은 최적화 설정에만 들어간다. 진행 중 내장 최적화가 쓰는 성능의 정의 변경·삭제는 409 `PERF_IN_USE_BY_OPT`이므로 끝난 뒤 바꾼다(단위만 바꾸기는 허용).
+- 다목적(목적 2~3개)은 파레토 전선을 찾는다. 새 설정 키(`surrogate_opt`, 기본값은 스키마 한 곳): `max_objectives` 3 · `max_observe` 10 · `max_extra_points` 10(결과 화면 "선택 해 예측 검증"에 한 번에 보낼 점 수) · `mo_lattice_h2` 10 · `mo_lattice_h3` 6(예측 전선 가중 격자) · `mo_de_maxiter` 100 · `mo_rho` 0.05 · `mo_ref_offset` 0.1(HV 기준점) · `mo_gp_restarts` 4 · `mo_hvi_share_m3` 0.5 · `mo_front_prox_m3` 6.0(3목적 후보 배분). 반복당 시간이 길면 `mo_de_maxiter`·`mo_gp_restarts`를 낮추거나 `fit_timeout_s`를 늘린다.
+- 끝난 배치의 H3D 성능은 새 작업 "일괄 예측 성능 다시 추출"(`PB_RESP_EXTRACT`, 대기열 1슬롯)로 채운다. 실행 전 run 폴더의 기존 `H3D_REQUESTS.txt`·`RESPONSES.*`·`responses_pred.csv`는 `_backup`으로 옮겨진다. 해당 run의 h3d가 0개 또는 2개 이상이면 그 run만 건너뛴다(경고).
+- 추가 실패 코드: `PERF_UNDEFINED`·`PERF_MISSING_IN_BATCH`(성능 다시 추출 안내)·`BATCH_NOT_DONE`·`NO_H3D_PERFORMANCE`(422)·`SURROGATE_OPT_NOT_DONE`·`SURROGATE_OPT_EXTRA_ACTIVE`(409).
+
+## 18. GPU 조회 진단(phase3 §24, D3-67)
+
+워커의 `GpuMonitor` 스레드가 nvidia-smi를 따로 실행하고 결과를 캐시에 두며, 하트비트와 `/resources`는 그 캐시를 읽는다. nvidia-smi가 느리거나 멈춰도 워커 온라인 판정은 흔들리지 않는다. GPU 줄은 상단 자원 칩 툴팁(`GPU 조회 실패 — …` 또는 `GPU 없음 — …`, 연속 2회 이상이면 `(연속 N회 · 다음 조회 HH:mm:ss)`)과 우측 서랍 "워커 자원"의 회색 줄에도 같은 원인이 나온다.
+
+### 18.1 설정 3개와 조회 간격
+
+`worker.gpu_query_timeout_s`(15) · `worker.gpu_backoff_after`(3) · `worker.gpu_backoff_max_s`(300) — 키 표는 §4.3 worker. 기본 조회 간격은 `worker.resource_sample_interval_s`(base, 10초)이다. 연속 실패 k회 때의 다음 조회 간격은 k < `gpu_backoff_after`이면 base, 그 이상이면 `min(gpu_backoff_max_s, base × 2^(k − after + 1))`이다(`gpu_backoff_max_s: 0`이면 늘리지 않음). 기본값이면 실패가 이어질 때 간격이 10 → 10 → 20 → 40 → 80 → 160 → 300초(이후 300초 유지)로 늘고, 조회가 한 번 성공하면 곧바로 base로 돌아간다.
+
+### 18.2 워커 로그 해석(`<install_root>\logs\worker.log`, 로거 `physicsai_worker`)
+
+상태가 바뀔 때만 1줄을 남긴다. 같은 실패가 이어져도 반복해서 쓰지 않는다(작업 로그·DB에도 쓰지 않음).
+
+| 로그 줄 | 수준 | 뜻 |
+|---|---|---|
+| `GPU 조회 실패(ERROR): <사유> — 회복될 때까지 같은 실패는 기록하지 않습니다` | WARNING | 정상이던 조회가 처음 실패. `<사유>`는 아래 §18.3 |
+| `GPU 조회 불가(NOT_FOUND): nvidia-smi를 찾지 못했습니다(시도: …)` | INFO | 시작부터 실행 파일을 못 찾음(GPU 없는 PC면 정상) |
+| `GPU 조회 상태 변경(NOT_FOUND → ERROR): …` | WARNING | 실패 종류가 바뀜(예: 파일을 찾은 뒤 실행 오류) |
+| `GPU 조회 연속 3회 실패 — 조회 간격을 늘립니다(최대 300초)` | WARNING | `gpu_backoff_after`에 도달. 이후 자원 서랍의 `다음 조회` 시각이 점점 멀어짐 |
+| `GPU 조회 회복: <GPU 이름> n개(실패 k회, <경과>)` | INFO | 조회 성공, 간격이 base로 복귀 |
+
+### 18.3 `gpu_message` 사유와 nvidia-smi 실패 확인 순서
+
+| 사유 문구 | 의미 |
+|---|---|
+| `nvidia-smi를 찾지 못했습니다(시도: …)` | `worker.gpu_query` 첫 인자와 `resources.gpu_query_candidates` 후보 모두 없음 |
+| `nvidia-smi를 실행하지 못했습니다: <경로> (…)` | 파일은 있으나 실행 불가(권한·손상) |
+| `nvidia-smi 응답 시간 초과(N초): <경로>` | `gpu_query_timeout_s` 안에 끝나지 않음(드라이버 정지·GPU 초기화 중·과부하) |
+| `nvidia-smi 종료코드 N: …` | 실행은 됐으나 오류 종료(드라이버·GPU 통신 문제) |
+| `nvidia-smi 출력에서 GPU 정보를 읽지 못했습니다` | 출력 형식이 `worker.gpu_query` 인자와 맞지 않음 |
+
+확인 순서(워커 실행 계정으로, 일반 PowerShell):
+1. 같은 계정에서 `nvidia-smi`를 직접 실행해 정상 출력되는지 본다(작업 스케줄러 계정과 로그인 계정이 다르면 PATH가 다를 수 있다). 못 찾으면 `worker.gpu_query`에 전체 경로를 넣거나 `resources.gpu_query_candidates`를 고친다.
+2. 직접 실행이 15초 넘게 걸리면(느린 PC·드라이버 대기) `worker.gpu_query_timeout_s`를 올린다(화면에 바로 반영되지 않으므로 다음 조회까지 기다린다). 직접 실행은 빠른데 시간 초과가 나면 워커 계정 환경 차이를 의심한다.
+3. 종료코드가 나오면 `nvidia-smi -q`로 드라이버·GPU 상태를 보고, 다른 프로세스(원격 데스크톱 세션·다른 서비스)가 GPU를 점유하는지 확인한다.
+4. 출력 형식 사유면 `worker.gpu_query`가 `--query-gpu=name,utilization.gpu,memory.used,memory.total --format=csv,noheader,nounits` 형식인지 확인한다.
+5. 고친 뒤에는 워커 재시작 없이도 다음 조회에서 회복 로그 1줄(`GPU 조회 회복`)이 남는다. 확인 후 임시로 바꾼 설정은 원복한다.
+
+GPU가 없는 서버라면 `NOT_FOUND`가 정상이다(칩은 `GPU —`). 조회가 실패해도 예측·학습 작업은 막히지 않는다(자원 표시와 환경 점검 `gpu.detect`에만 영향).
+
+## 19. ① 플랫폼 DOE 생성(phase3 §23, D3-66)
+
+①-3 학습 DOE 생성의 기본 방식은 `platform`(플랫폼 생성: run마다 SimLab·HyperMesh 입력 생성을 최대 M개 동시에 실행)이고, `원본 HyperStudy(호환)`는 기존 hstbatch 동작 그대로이다. 설정 4개는 §4.3 train_data(`doe_generator_default`·`platform_parallel_default`·`platform_max_runs`·`platform_run_root`).
+
+- 동시 실행 수는 화면 입력(1~`train_data.max_multi_execution`)이며 라이선스 동시 수는 자동 감지하지 않는다. 동시 실행 중 라이선스 오류가 나면(step 로그에서 `licens` 검색) 동시 수를 낮춰 재시도한다 — 실패한 run만 다시 만든다. 메모리 한도에 닿으면 `RESOURCE_LIMIT`(`worker.max_memory_gb`, 모든 자식이 작업 1개분 한도를 나눠 쓴다).
+- 실패 처리: 기본은 일부 run 실패 시 작업 실패 `GEN_PARTIAL_FAILED`(재시도 = 실패·미완료 run만), 화면 체크 "실패한 run이 있어도 성공한 run으로 DOE 완료"를 켜면 성공 run만 등록하고 경고 `PARTIAL_OUTPUT`.
+- 생성 폴더는 `<DOE>/{platform_run_root}/run__NNNNN/{m_1,m_2,m_3}`이고 `train_data.run_dir_glob`과 맞아야 한다. HyperStudy 전용 파일(유형 json·include TCL·런처·`INPUT_HST_RUN.json`)은 만들지 않는다.
+- 기능 판정 `features.train_doe_platform` = 템플릿 `geom_update` + `altair.simlab_path`(`commands.mesh`가 `{include_tcl}`·`{hw}`를 쓰면 `resources.hypermesh_include_tcl`·`altair.hw_exe_path`도). HyperStudy 자원은 필요 없다.
 
 ## 부록 C. 코드와 문서의 차이(2026-10-09 확인, HEAD 56801e1 기준 갱신)
 
