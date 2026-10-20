@@ -529,7 +529,7 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
 - `PARAM_SET_NATIVE`(kind=shell): NP_PREP(조립 폴더·CAD 복사, `BASELINE_INC_MISSING`·`RENUM_CSV_MISSING` 검사 생략) → NP_EXTRACT(`paicad_shell_extract --assem-dir`) → NP_TAG(`paicad_shell_fixed_scan --features` → `paicad_shell_tag`) → BL_MAP(다중일 때만) → NP_REGISTER. 등록 검증(`validate_folder` native shell): §4.2 파일 존재(`NATIVE_PREP_MISSING`), 파라미터 이름 집합 = features 대표 이름 집합.
 - ①-1 `TD_EXTRACT_PARAMS`(params `kind:"shell"`): `paicad_shell_extract`(조립 폴더 없음 → `fixed_overlap: unknown`). ①-3 DG_PREP·HST_GEN_RADIOSS: tag 자리에서 fixed-scan → tag(조립 폴더 사본 `A` 기준), 이때 extract 경고를 다시 계산할 필요는 없음(DOE 결과 run 표에 `FIXED` category로 드러남).
 - PREDICT(A): TPL_RENDER(values.json) → GEOM_UPDATE(`paicad_shell_update --fixed-dir S/native/fixed`) → MESH(`paicad_shell_morph` → `paicad_shell_check`, `{out_files_dir}`=`P/geom/shell_files`) → RAD_ASSEMBLE(아래 8.3).
-- 일괄·DOE run(GE §7.3.6): `R/m_1/{values.json, native_params.xml, update/}`, `R/m_2/{morph/, check/, shell_files/<rel>}`, `R/m_3`(8.3), 실패 `R/SKIPPED.json`(`step` 동일, `report:"m_2/check/shell_check.json"`). `paicad_shell_run`이 있으면 1회, 없으면 순차.
+- 일괄·DOE run(GE §7.3.6, ①-3 DOE run은 GE-C13 평탄 레이아웃 — 아래 `m_1`·`m_2` 내용은 `R/_paicad/`, `m_3` 내용은 R 직계): `R/m_1/{values.json, native_params.xml, update/}`, `R/m_2/{morph/, check/, shell_files/<rel>}`, `R/m_3`(8.3), 실패 `R/SKIPPED.json`(`step` 동일, `report:"m_2/check/shell_check.json"`). `paicad_shell_run`이 있으면 1회, 없으면 순차.
 
 ### 8.3 m_3 조립 재사용
 

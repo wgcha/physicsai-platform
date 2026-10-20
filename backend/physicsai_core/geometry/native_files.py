@@ -1,4 +1,5 @@
-"""플랫폼이 쓰는 native 파일들(geometry-engine.md §4.4·§7.3.3·§7.3.6): values.json·native_params.xml·doe_matrix.csv·SKIPPED.json.
+"""플랫폼이 쓰는 native 파일들(geometry-engine.md §4.4·§7.3.3·§7.3.6): values.json·native_params.xml·doe_matrix.csv·SKIPPED.json·
+run 폴더 보조 하위 폴더 이름(RUN_AUX_DIR).
 
 모두 순수 함수(문자열·dict 반환) — 파일 쓰기는 호출자가 fileutil로 한다."""
 
@@ -10,6 +11,11 @@ from typing import Any
 from xml.sax.saxutils import quoteattr
 
 from .messages import category_of, korean_message
+
+# ①-3 native DOE run 폴더의 보조 산출물 하위 폴더(geometry-engine.md §7.3.3·§7.3.6, GE-C13). `run__N/` 직계 = 해석 입력(조립 사본),
+# 이 폴더 = paicad 작업·보고(options·values·native_params.xml·update/morph/check·메시 include·쉘 사본)와 조립 임시 폴더.
+# DG_SCAN starter 탐색·SCX 입력 업로드는 이 폴더를 보지 않는다. ④ 일괄 run·altair run은 기존 m_1~m_3 그대로.
+RUN_AUX_DIR = "_paicad"
 
 
 def values_document(values: dict[str, float], kind: str, source_id: str | None, engine_version: str | None,

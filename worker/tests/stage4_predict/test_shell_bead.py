@@ -164,17 +164,18 @@ def test_shell_doe_from_set_run_and_fixed_skip(native_env, fake_record, monkeypa
     jd = env.job(j["id"])
     ok, skipped = jd["result"]["gen_ok"], jd["result"]["gen_skipped"]
     assert ok + skipped == 6 and ok >= 1 and skipped >= 1 and "PARTIAL_OUTPUT" in [w["code"] for w in jd["warnings"]]
-    runs = sorted(p for p in (env.sroot / "01_train").rglob("run__*") if p.is_dir() and (p / "m_1").is_dir())
+    runs = sorted(p for p in (env.sroot / "01_train").rglob("run__*") if p.is_dir() and (p / "_paicad").is_dir())
     seen_skip = seen_ok = False
     for R in runs:
         if (R / "SKIPPED.json").is_file():
             sk = json.loads((R / "SKIPPED.json").read_text())
             assert sk["code"] == "SHELL_FIXED_REGION_VIOLATION" and sk["category"] == "FIXED" and "고정 영역" in sk["message"]
-            assert not (R / "m_3").exists()
+            assert not (R / "chassis.inc").exists() and sk["report"] in ("_paicad/update/shell_update.json", None)
             seen_skip = True
         else:
-            m3 = (R / "m_3" / "chassis.inc").read_text()
-            assert "#FAKE_SHELL_NODE" in m3 and (R / "m_2" / "check" / "shell_run.json").is_file()
+            m3 = (R / "chassis.inc").read_text()
+            assert "#FAKE_SHELL_NODE" in m3 and (R / "_paicad" / "check" / "shell_run.json").is_file()
+            assert (R / "_paicad" / "shell_files" / "chassis.inc").is_file() and not (R / "m_3").exists()
             seen_ok = True
     assert seen_skip and seen_ok
     cmds = {tuple(r["argv"][1:3]) for r in read_record(fake_record) if r["tool"] == "paicad"}
@@ -213,8 +214,8 @@ def test_train_extract_and_doe_shell(native_env, fake_record):
     assert cmds[i + 1] == ("shell", "tag")  # DOE 준비: tag 자리에서 fixed-scan → tag
     preps = [json.loads(p.read_text()) for p in (env.sroot / "01_train").rglob("native/prep.json")]
     assert preps and all(x["kind"] == "shell" and x["inputs"]["renum_csv"] is None for x in preps)  # D 준비본(쉘)
-    runs = [p for p in (env.sroot / "01_train").rglob("run__*") if (p / "m_3").is_dir()]
-    assert len(runs) == 2 and all("#FAKE_SHELL_NODE" in (r / "m_3" / "chassis.inc").read_text() for r in runs)
+    runs = [p for p in (env.sroot / "01_train").rglob("run__*") if (p / "_paicad").is_dir()]
+    assert len(runs) == 2 and all("#FAKE_SHELL_NODE" in (r / "chassis.inc").read_text() for r in runs)
 
 
 def test_shell_batch_generation_overlay(native_env, fake_record):

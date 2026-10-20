@@ -19,6 +19,7 @@ from physicsai_core.config import effective_altair
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
+from physicsai_core.geometry.native_files import RUN_AUX_DIR
 from physicsai_core.naming import RUN_KEY_RE
 from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_reparse, PathError
 from physicsai_core.stage1_train_data import doe_samples
@@ -200,10 +201,11 @@ def _scan_dirs(D: str, td: Any) -> list[str]:
     return dirs
 
 
-def _find_starter(run_dir: str, starter_glob: str) -> list[str]:
+def _find_starter(run_dir: str, starter_glob: str, skip_dirs: tuple[str, ...] = ()) -> list[str]:
+    """run 폴더 아래 starter(재귀, eps_mesh 제외). skip_dirs = 보지 않을 하위 폴더 이름(native: `_paicad`, GE-C13)."""
     out = []
     for dirpath, dirnames, filenames in os.walk(run_dir, followlinks=False):
-        dirnames.sort()
+        dirnames[:] = sorted(d for d in dirnames if d not in skip_dirs)
         for f in sorted(filenames):
             if fnmatch.fnmatch(f, starter_glob) and not f.lower().startswith("eps_mesh"):
                 out.append(os.path.join(dirpath, f))
@@ -237,8 +239,9 @@ def dg_scan(ctx: Any) -> None:
                 skipped.append({"run_key": rk, "reason": "같은 이름의 run 폴더가 여러 개입니다("
                                 + ", ".join(ctx.rel(x) for x in by_key[rk][:3]) + ")"})
             continue
-        st = _find_starter(d, s.predict.starter_glob)
-        sk = doe_native.skipped_entry(d, s.geometry.max_report_bytes) if is_native(ctx.params) and not st else None
+        native = is_native(ctx.params)
+        st = _find_starter(d, s.predict.starter_glob, (RUN_AUX_DIR,) if native else ())  # native: run 직계(새) 또는 m_3(이전)
+        sk = doe_native.skipped_entry(d, s.geometry.max_report_bytes) if native and not st else None
         if sk is not None:  # native: 생성 실패 run — 사유 코드·범주·문구를 그대로(기존 RUN_INPUT_INVALID 대신)
             skipped.append({"run_key": rk, **sk})
             continue

@@ -1,5 +1,5 @@
 """①-1 native 추출 → ①-3 native DOE(geometry-engine.md §7.3.1·§7.3.3·§7.3.6, V-GE-5·6·8·10):
-LHS 행렬·run__N/{m_1,m_2,m_3} 레이아웃·paramitem 호환 샘플 추출·스킵 사유 기록·엔진 분리·from-train."""
+LHS 행렬·run__N 레이아웃(직계 = 해석 입력, 보조 = _paicad/, GE-C13)·paramitem 호환 샘플 추출·스킵 사유 기록·엔진 분리·from-train."""
 
 from __future__ import annotations
 
@@ -64,16 +64,21 @@ def test_native_doe_layout_matrix_and_samples(p2_native, fake_record):
     assert "B_RIB_H_1" not in rows[0]                                            # use=false 파라미터는 행렬에 없음
     for r in rows:
         R = D / "approaches" / "doe_1" / r["run_key"]
-        for rel in ("options.json", "m_1/values.json", "m_1/native_params.xml", "m_1/update/update.json", "m_2/morph/morph.json",
-                    "m_2/check/check.json", f"m_2/{MESH_INC}", "m_3/model0_0000.rad"):
+        for rel in ("_paicad/options.json", "_paicad/values.json", "_paicad/native_params.xml", "_paicad/update/update.json",
+                    "_paicad/morph/morph.json", "_paicad/check/check.json", f"_paicad/{MESH_INC}", "model0_0000.rad", MESH_INC):
             assert (R / rel).is_file(), (r["run_key"], rel)
+        assert not any((R / m).exists() for m in ("m_1", "m_2", "m_3", "options.json"))
+        assert list((R / "_paicad" / "assembly").iterdir()) == []                 # 조립 임시 폴더는 비어 있음(내용은 R 직계로 이동)
         assert 9.5 <= float(r["A_THK_1"]) <= 10.5
-        assert f'Name="A_THK_1" NewValue="{float(r["A_THK_1"])!r}"' in (R / "m_1" / "native_params.xml").read_text()
+        assert f'Name="A_THK_1" NewValue="{float(r["A_THK_1"])!r}"' in (R / "_paicad" / "native_params.xml").read_text()
+    runs = json.loads((D / "runs.json").read_text())                             # TD_SOLVE 입력 = run__N 직계 starter
+    assert runs[0] == {"run_key": "run__00001", "input_rel": f"01_train/doe/{doe_id}/approaches/doe_1/run__00001",
+                       "starter_name": "model0_0000.rad"}
     # 같은 seed → 같은 행렬(결정적)
     jd2 = _doe(c, w, sid, proj)
     D2 = ai / "nd1" / "01_train" / "doe" / jd2["result"]["doe_id"]
     assert (D2 / "doe_matrix.csv").read_text() == (D / "doe_matrix.csv").read_text()
-    # 샘플 표(paramitem 호환): m_1/native_params.xml에서 추출 — 행 4개, A_THK_1 값 = 행렬 값
+    # 샘플 표(paramitem 호환): _paicad/native_params.xml에서 추출 — 행 4개, A_THK_1 값 = 행렬 값
     d = c.get(f"{API}/train-does/{doe_id}", headers=P).json()
     assert d["engine"] == "native" and d["engine_version"] == "0.5.0" and d["sample_status"] == "PARSED" and d["run_count"] == 4
     sm = c.get(f"{API}/train-does/{doe_id}/samples", headers=P).json()
@@ -97,7 +102,8 @@ def test_native_doe_skips_failed_runs_with_reason(p2_native, monkeypatch):
     D = ai / "nd2" / "01_train" / "doe" / jd["result"]["doe_id"]
     R = D / "approaches" / "doe_1" / sk[0]["run_key"]
     d = json.loads((R / "SKIPPED.json").read_text())
-    assert d["code"] == "GEOM_QUALITY" and d["step"] == "check" and not (R / "m_3").exists() and (R / "m_1" / "values.json").is_file()
+    assert d["code"] == "GEOM_QUALITY" and d["step"] == "check" and d["report"] == "_paicad/check/check.json"
+    assert not list(R.glob("*.rad")) and not (R / "m_3").exists() and (R / "_paicad" / "values.json").is_file()
 
 
 def test_native_doe_all_fail_and_option_rules(p2_native, monkeypatch):
@@ -204,7 +210,7 @@ def test_native_doe_as_s18_platform_path(p2_native, engine, monkeypatch):
         npts = conn.execute(text("select count(*) from train_doe_points where doe_id=:i"), {"i": doe_id}).scalar()
     assert tuple(row) == ("PLATFORM", "native", None, "NATIVE_LHS") and npts == 0
     D = ai / "nd6" / "01_train" / "doe" / doe_id
-    assert (D / "doe_matrix.csv").is_file() and (D / "approaches" / "doe_1" / "run__00004" / "m_3").is_dir()
+    assert (D / "doe_matrix.csv").is_file() and (D / "approaches" / "doe_1" / "run__00004" / "model0_0000.rad").is_file()
     d = c.get(f"{API}/train-does/{doe_id}", headers=P).json()
     assert d["generator"] == "platform" and d["gen"] is None and d["sampling"] is None and d["run_count"] == 4
     # 같은 seed·run 수면 계약 §7.3.3 모양과 같은 행렬
