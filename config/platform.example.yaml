@@ -193,6 +193,20 @@ fem_verify:                       # ④ 조립 FEM 검증(phase3 §21 S16): 예�
   include_scan_max_bytes: 16777216   # #include 참조 검사 대상 파일 크기 상한(16 MiB)
   max_pred_h3d_copy_bytes: 4294967296  # 예측 응답 재추출용 h3d 사본 상한(4 GiB)
 
+equiv_check:                      # ⑤ 해석 등가성 판정(docs/contracts/equiv-check.md §5.3). 절이 없으면 아래 기본값(제안값) — 키 추가만, 기본 동작 불변
+  enabled: true
+  dir_name: "05_equiv"            # Study 직계 판정 폴더(EQ-001/…)
+  max_pairs: 200                  # 쌍 수 상한
+  max_metrics: 20                 # 레시피 지표 수 상한
+  max_active: 2                   # Study당 동시 실행 판정 수(409 EQ_CHECK_LIMIT)
+  curve_points: 1000              # 곡선 상관·NRMSE 보간 격자 점 수
+  curve_min_overlap: 0.9          # 공통 시간 구간이 짧은 쪽의 이 비율 미만이면 경고 EQ_CURVE_SHORT_OVERLAP
+  zero_tol: 1.0e-12               # |기준값| 이하이면 상대차 없음("기준값 0")
+  param_match_rel_tol: 1.0e-6     # by_params 쌍 매칭 연속 값 상대 허용(0이면 절대 1e-12)
+  max_extract_copy_bytes: 21474836480  # 추출용 h3d 사본 합계 상한(20 GiB) — 초과면 EQ_EXTRACT_TOO_LARGE
+  system_version: 1               # 시스템 기본 레시피(제안값, 읽기 전용) 버전 — 아래 system_recipe를 바꾸면 올린다
+  # system_recipe: {…}            # 생략 = 설정 스키마의 기본 레시피(§3.2: 가속도·변형·IE·KE 필수 5%, 응력·접촉력 참고 10%, 곡선 r≥0.95, 부피 0.1%)
+
 geometry:                          # native 형상 엔진(docs/contracts/geometry-engine.md). 절이 없으면 아래 기본값
   engine: altair                   # altair | native — 새 파라미터 세트·①-1 추출·①-3 DOE의 기본 엔진(화면 기본 선택)
   paicad_path: ""                  # 빈 값 = 워커 Python 폴더의 Scripts\\paicad.exe(Windows)·bin/paicad(그 외)

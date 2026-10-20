@@ -146,6 +146,9 @@ def _validate_phase3(s: Settings, issues: list[ConfigIssue]) -> None:
     from .schema_fem_verify import validate_fem_verify
 
     validate_fem_verify(s, issues)
+    from .schema_equiv import validate_equiv_check
+
+    validate_equiv_check(s, issues)
     for k, (lo, hi) in STUDY_STORAGE_RANGES.items():
         if not lo <= getattr(s.study_storage, k) <= hi:
             issues.append(ConfigIssue(f"study_storage.{k}", f"{lo}~{hi}"))

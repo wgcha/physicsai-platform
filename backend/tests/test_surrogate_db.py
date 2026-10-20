@@ -34,7 +34,7 @@ def _job(c, sid: str, params: dict, seq: int) -> str:
 def test_migration_0010_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0017_geom_view"
+    assert MIGRATION_HEAD == "0018_equiv_check"
     name = f"physicsai_m10_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

@@ -134,6 +134,13 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         ),
         "④", notify_success=False,
     ),
+    # ---- ⑤ 해석 등가성 판정(equiv-check.md §4.5): 판정 API·종료 훅만 만든다(POST /jobs 불가). 추출 라이선스(HyperView·T01)라 SLOT ----
+    "EQ_CHECK": JobTypeDef(
+        "EQ_CHECK", 4, "SLOT", "등가성 판정",
+        (StepDef("EQ_PREP", "INTERNAL", 5), StepDef("EQ_EXTRACT", "LOCAL", 60), StepDef("EQ_COMPUTE", "INTERNAL", 30),
+         StepDef("EQ_REPORT", "INTERNAL", 5)),
+        "⑤", notify_success=False,
+    ),
     # ---- 3차 일괄 예측(phase3 §14.5 S9): 입력 생성만 슬롯 점유, run별 하위 PREDICT(prepared)는 BP_ENQUEUE가 대기열에 넣는다 ----
     "PREDICT_BATCH": JobTypeDef(
         "PREDICT_BATCH", 4, "SLOT", "일괄 예측 입력 생성",
@@ -294,6 +301,7 @@ STEP_LABELS: dict[str, str] = {
     "BL_MAP": "baseline 변수 매칭", "NP_REGISTER": "템플릿 등록",
     "NP_VIEW": "3D 보기 만들기", "TX_VIEW": "3D 보기 만들기",
     "GV_PREP": "미리보기 준비", "GV_RUN": "형상 미리보기 실행", "GV_REGISTER": "미리보기 결과 등록",
+    "EQ_PREP": "판정 준비(쌍·레시피 확정)", "EQ_EXTRACT": "응답·곡선 추출(없는 값만)", "EQ_COMPUTE": "지표 계산", "EQ_REPORT": "집계·종합 판정",
     "C3_PREP": "대기·H3D 확인", "C3_EXTRACT": "H3D 읽기(결과 추출)", "C3_CONVERT": "형상·프레임 변환", "C3_REGISTER": "결과 등록",
 }
 
