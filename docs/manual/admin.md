@@ -4,6 +4,7 @@
 - 기준: 저장소 `claude/ops` 브랜치(2026-10-09), 패키지 버전 `0.1.0`, DB migration head `0003_hpc_cancel_failed`
 - 근거 문서: 계약 [platform.md](../contracts/platform.md)(1차), [phase2.md](../contracts/phase2.md)(2차, 우선), [결정 기록](../decisions.md), [E2E 체크리스트](../e2e-checklist.md). 이 매뉴얼과 계약이 다르면 계약이 우선이고, 계약과 코드가 다르면 부록 C에 적었다.
 - 사용자용 설명은 [사용자 매뉴얼](user.md)을 본다.
+- native 형상 엔진 브랜치의 병행 설치·현장 검증·전환·롤백은 [native-rollout.md](native-rollout.md)를 본다.
 
 > 배포 스크립트(`deploy/`)는 **실제 Windows에서 실행 검증되지 않았다**(phase2 §11). 첫 설치는 E2E 체크리스트 E2-0-3~E2-0-6을 함께 기록하면서 진행한다.
 
