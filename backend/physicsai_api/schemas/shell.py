@@ -36,6 +36,7 @@ class StatusHpc(Resp):
     configured: bool
     message: str
     collect_mode: str = "in_place"
+    scx_version: str | None = None  # D3-68: gateway scx일 때 hpc.scx.version(화면 기본값), 아니면 null
 
 
 class KeyOk(Resp):

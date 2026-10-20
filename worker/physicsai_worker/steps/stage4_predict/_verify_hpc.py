@@ -33,6 +33,8 @@ def submit(ctx: Any, *, input_dir: str, result_dir: str, starter: str, job_name:
         return _submit_scx(ctx, gw, input_dir=input_dir, starter=starter, attempt=attempt, scx_job_name=scx_job_name)
     hcfg = ctx.settings.hpc
     over = ctx.params.get("hpc") or {}
+    if over.get("version"):
+        ctx.log("command 모드는 hpc.version을 쓰지 않습니다(무시)")
     spec = HpcSubmitSpec(
         job_name=job_name, run_key=RUN_KEY, study=ctx.study["folder_name"],
         input_file=map_path(os.path.join(input_dir, starter), hcfg.transfer.path_map),

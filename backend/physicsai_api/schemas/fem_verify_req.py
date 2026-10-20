@@ -9,7 +9,7 @@ from pydantic import Field, field_validator, model_validator
 
 from physicsai_core.stage4_predict.contour_capture import MAX_COMPS, text_problem
 
-from .common import Req
+from .common import HpcVersion, Req
 from .contour_capture import CaptureDisplay
 
 
@@ -103,6 +103,7 @@ class FvHpc(Req):
     queue: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.\-@]{1,64}$")
     ncpus: int | None = Field(default=None, ge=1, le=4096)
     walltime: str | None = Field(default=None, pattern=r"^\d{1,4}:\d{2}:\d{2}$")
+    version: HpcVersion = None  # D3-68: SCX Radioss 버전(null = hpc.scx.version, command 모드는 무시)
 
 
 class FemVerifyCreate(Req):

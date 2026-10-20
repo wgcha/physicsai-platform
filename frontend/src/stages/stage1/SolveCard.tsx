@@ -5,6 +5,7 @@ import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, Field, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { latestByRun, useHpcRows, useScxMode } from "../../components/HpcScx";
+import { RadiossVersionField, useRadiossVersion } from "../../components/RadiossVersion";
 import { isTerminal } from "../../lib/format";
 import { useTrain } from "./TrainContext";
 import { DoePicker } from "./DoePicker";
@@ -26,6 +27,7 @@ export function SolveCard() {
   const job = solve.job;
   const scx = useScxMode();
   const hpcRows = useHpcRows(job, scx);
+  const ver = useRadiossVersion();
 
   useEffect(() => {
     void reloadRuns();
@@ -33,10 +35,11 @@ export function SolveCard() {
 
   const submit = (runKeys: string[] | null) =>
     doe &&
+    !ver.error &&
     void solve.run({
       doe_id: doe.id,
       run_keys: runKeys,
-      hpc: { queue: hpc.queue || null, ncpus: hpc.ncpus ? Number(hpc.ncpus) : null, walltime: hpc.walltime || null },
+      hpc: { queue: hpc.queue || null, ncpus: hpc.ncpus ? Number(hpc.ncpus) : null, walltime: hpc.walltime || null, version: ver.payload },
       on_run_failure: onFail,
     });
   const pending = runs.filter((r) => r.state === "GENERATED" || r.state === "SOLVE_FAILED" || r.state === "COLLECT_FAILED").length;
@@ -65,6 +68,7 @@ export function SolveCard() {
           <Field label="walltime" hint="예 24:00:00">
             <input value={hpc.walltime} onChange={(e) => setHpc({ ...hpc, walltime: e.target.value })} aria-label="walltime" />
           </Field>
+          <RadiossVersionField state={ver} />
           <Field label="일부 run 실패 시">
             <select value={onFail} onChange={(e) => setOnFail(e.target.value as "fail")} aria-label="일부 run 실패 시">
               <option value="collect_partial">성공한 run 회수</option>
@@ -81,8 +85,8 @@ export function SolveCard() {
               label="PBS 제출"
               onRun={() => submit(null)}
               job={job}
-              disabled={!enabled || !doe || pending === 0}
-              disabledReason={enabled ? (!doe ? "준비된 DOE가 필요합니다" : "제출할 run이 없습니다") : undefined}
+              disabled={!enabled || !doe || pending === 0 || !!ver.error}
+              disabledReason={enabled ? (!doe ? "준비된 DOE가 필요합니다" : pending === 0 ? "제출할 run이 없습니다" : (ver.error ?? undefined)) : undefined}
               error={solve.error}
               extra={doe && pending > 0 ? <span className="muted small">대상 {pending}개</span> : undefined}
             />

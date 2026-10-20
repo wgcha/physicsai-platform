@@ -7,6 +7,7 @@ import type { FemRec } from "./femVerifyRec";
 import { assemblyPlanFor, checkCustomPath, plan, resolveSource } from "./femVerifySource";
 import type { Problem, Resolved } from "./femVerifySource";
 import { detailOf } from "./femVerifyOut";
+import { normHpc } from "./jobs";
 
 // ------------------------------------------------------------------ 미리보기·생성
 type Body = Record<string, unknown>;
@@ -99,6 +100,8 @@ export function createRec(srv: MockServer, s: Study, body: Body, by: { id: strin
   if (s.status !== "ACTIVE") return err(409, "STUDY_ARCHIVED", "보관된 Study입니다.");
   const p = previewOf(srv, s, body);
   if ("error" in p) return p.error;
+  const hpc = normHpc(body.hpc);
+  if ("error" in hpc) return hpc.error;
   const problems = p.out.problems as Problem[];
   if (problems.length) return err(422, "FEM_VERIFY_INVALID", "검증 요청을 확인하세요.", { problems });
   const act = srv.fems.filter((r) => r.study_id === s.id && activeOf(r));
@@ -119,7 +122,7 @@ export function createRec(srv: MockServer, s: Study, body: Body, by: { id: strin
     rec.predict_job_id = newJob(srv, s, "PREDICT", pp, by).id;
     rec.status = "WAITING_PREDICT";
   } else {
-    rec.job_id = newJob(srv, s, "FEM_VERIFY", { fem_verify_id: rec.id, fv_no: no, hpc: null }, by).id;
+    rec.job_id = newJob(srv, s, "FEM_VERIFY", { fem_verify_id: rec.id, fv_no: no, hpc: hpc.hpc }, by).id;
   }
   return { status: 201, body: detailOf(srv, rec) };
 }

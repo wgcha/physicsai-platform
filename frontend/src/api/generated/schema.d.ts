@@ -3139,6 +3139,8 @@ export interface components {
             ncpus?: number | null;
             /** Queue */
             queue?: string | null;
+            /** Version */
+            version?: string | null;
             /** Walltime */
             walltime?: string | null;
         };
@@ -5438,6 +5440,8 @@ export interface components {
             message: string;
             /** Mode */
             mode: string;
+            /** Scx Version */
+            scx_version?: string | null;
         };
         /** StatusLimits */
         StatusLimits: {

@@ -4,6 +4,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { ApiError, errorMessage, type ViewKey } from "../../../api";
 import { femVerifyApi, type FemAssemblyReq, type FemPreview, type FemSourceReq, type FemVerifyCreate } from "../../../api/femVerify";
 import { useStudy } from "../../../app/StudyContext";
+import { RadiossVersionField, useRadiossVersion } from "../../../components/RadiossVersion";
 import { Advanced, Card } from "../../../components/ui";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { fmtNum } from "../../../lib/format";
@@ -33,6 +34,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
   const [viewsTouched, setViewsTouched] = useState(false);
   const [legend, setLegend] = useState<{ mode: "auto" | "fixed"; min: string; max: string }>({ mode: "auto", min: "", max: "" });
   const [ncpus, setNcpus] = useState("");
+  const ver = useRadiossVersion();
 
   const sourceKey = JSON.stringify(source);
   const assembly = touched ? bodyOf(choice) : null;
@@ -48,7 +50,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
     assembly: asm,
     fem: { field: field.trim() || null, component: null, comps: compsP.list },
     display: viewsTouched || legend.mode === "fixed" ? { views, legend: legend.mode === "fixed" ? { mode: "fixed", min: Number(legend.min), max: Number(legend.max) } : { mode: "auto", min: null, max: null } } : null,
-    hpc: ncpus.trim() ? { queue: null, ncpus: Number(ncpus), walltime: null } : null,
+    hpc: ncpus.trim() || ver.payload ? { queue: null, ncpus: ncpus.trim() ? Number(ncpus) : null, walltime: null, version: ver.payload } : null,
   });
   const optsRef = useRef(makeBody);
   optsRef.current = makeBody;
@@ -89,7 +91,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
   const effective: AssemblyChoice = touched ? choice : { ...choice, kind: baseP?.assembly?.kind === "train_doe" ? "train_doe" : "predict_input" };
   const problems = prev?.problems ?? [];
   const localErr = compsP.error ?? fieldErr ?? legendErr ?? cpuErr;
-  const ok = !!prev && !problems.length && !waitingPath && !localErr && canExec;
+  const ok = !!prev && !problems.length && !waitingPath && !localErr && !ver.error && canExec;
   const mode = prev?.hpc_mode === "scx" ? "SCX" : prev?.hpc_mode === "command" ? "PBS" : "";
 
   const run = async () => {
@@ -215,6 +217,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
               <span className="field-label">CPU 수</span>
               <input type="text" inputMode="numeric" aria-label="CPU 수" value={ncpus} placeholder="기본" onChange={(e) => setNcpus(e.target.value)} />
             </label>
+            <RadiossVersionField state={ver} />
           </div>
           {localErr && <p className="error-text small" role="alert">{localErr}</p>}
         </Advanced>
@@ -241,7 +244,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
           )}
           <div className="run-action-row">
             {canExec ? (
-              <button type="button" className="btn primary" disabled={!ok || busy} onClick={() => void run()} title={!prev ? "검증 대상을 불러오는 중입니다" : problems.length ? "아래 문제를 먼저 해결하세요" : waitingPath ? "조립 원본 경로를 확인하세요" : undefined}>
+              <button type="button" className="btn primary" disabled={!ok || busy} onClick={() => void run()} title={!prev ? "검증 대상을 불러오는 중입니다" : problems.length ? "아래 문제를 먼저 해결하세요" : waitingPath ? "조립 원본 경로를 확인하세요" : (ver.error ?? undefined)}>
                 {busy ? "요청 중…" : `FEM 검증 실행${mode ? `(${mode})` : ""}`}
               </button>
             ) : (

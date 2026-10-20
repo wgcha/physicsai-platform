@@ -68,6 +68,8 @@ def ts_submit(ctx: Any) -> None:
     doe = _doe(ctx)
     hcfg = ctx.settings.hpc
     over = ctx.params.get("hpc") or {}
+    if over.get("version"):
+        ctx.log("command 모드는 hpc.version을 쓰지 않습니다(무시)")
     with ctx.ex.engine.connect() as conn:
         by_key = {x["run_key"]: x for x in train_repo.runs_for_doe(conn, doe["id"])}
     submitted: list[tuple[str, str]] = []  # (hpc row id, external id)

@@ -21,7 +21,7 @@ export interface FemVerifyCreate {
   assembly: FemAssemblyReq | null;
   fem?: { field: string | null; component: string | null; comps: string[] | null };
   display?: Partial<ContourDisplay> | null;
-  hpc?: { queue: string | null; ncpus: number | null; walltime: string | null } | null;
+  hpc?: { queue: string | null; ncpus: number | null; walltime: string | null; version?: string | null } | null;
 }
 
 export interface FemProblem {
