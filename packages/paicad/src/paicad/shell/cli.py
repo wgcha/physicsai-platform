@@ -11,6 +11,8 @@ REPORTS = {
     "morph": "shell_morph.json",
     "check": "shell_check.json",
     "run": "shell_run.json",
+    "view export": "view_manifest.json",
+    "view preview": "preview_manifest.json",
 }
 
 
@@ -20,7 +22,7 @@ def _req(p: argparse.ArgumentParser, *names: str) -> None:
 
 
 def add_parser(sub) -> None:
-    sh = sub.add_parser("shell", help="shell (sheet-metal bead) morphing: fixed-scan | extract | tag | update | morph | check | run | selftest", allow_abbrev=False)
+    sh = sub.add_parser("shell", help="shell (sheet-metal bead) morphing: fixed-scan | extract | tag | update | morph | check | run | selftest | view", allow_abbrev=False)
     ss = sh.add_subparsers(dest="shell_cmd", metavar="verb", required=True)
 
     f = ss.add_parser("fixed-scan", help="fixed node set (tie / rigid / BC / shared nodes) of the shell parts -> shell_scan.json", allow_abbrev=False)
@@ -91,6 +93,32 @@ def add_parser(sub) -> None:
     st.add_argument("--no-envelope", action="store_true")
     st.add_argument("--threads", type=int)
 
+    add_view_parser(ss)
+
+
+def add_view_parser(ss) -> None:
+    """``paicad shell view export|preview`` (geometry-view.md section 5.1)."""
+    vw = ss.add_parser("view", help="3D view (GLB) of the mid-surface sheet | bead preview", allow_abbrev=False)
+    vs = vw.add_subparsers(dest="view_cmd", metavar="action", required=True)
+    ve = vs.add_parser("export", help="nominal sheet -> view.glb + view_manifest.json (kind shell)", allow_abbrev=False)
+    _req(ve, "--cad", "--features", "--out-dir")
+    ve.add_argument("--fixed-dir", help="fixed-scan output: fixed node markers and clusters")
+    ve.add_argument("--body-map")
+    ve.add_argument("--view-options", help="view_options.json (tessellation tolerances, size limits)")
+    ve.add_argument("--threads", type=int)
+    vp = vs.add_parser("preview", help="values -> changed sheet preview.glb (+ morphed shell mesh) + preview_manifest.json", allow_abbrev=False)
+    _req(vp, "--cad", "--features", "--values", "--out-dir")
+    vp.add_argument("--fixed-dir", help="fixed-scan output: fixed-region pre-check and markers (required with --fe morph|check)")
+    vp.add_argument("--body-map")
+    vp.add_argument("--options", help="shell options.json (update / morph / check)")
+    vp.add_argument("--view-options")
+    vp.add_argument("--nominal-manifest", help="nominal view_manifest.json (nominal_ref and tessellation tolerances)")
+    vp.add_argument("--fe", default="off", choices=["off", "morph", "check"])
+    vp.add_argument("--assem-dir", help="assembly folder (required with --fe morph|check)")
+    vp.add_argument("--tag-dir", help="shell tag output (required with --fe morph|check)")
+    vp.add_argument("--thickness")
+    vp.add_argument("--threads", type=int)
+
 
 def dispatch(args, rep) -> int:
     v = args.shell_cmd
@@ -126,6 +154,10 @@ def dispatch(args, rep) -> int:
         from . import runner
 
         return runner.run(args, rep)
+    if v == "view":
+        from . import view
+
+        return view.run(args, rep)
     if v == "selftest":
         from . import selftest
 

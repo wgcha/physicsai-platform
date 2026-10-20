@@ -74,6 +74,9 @@ def test_shell_options():
         ({"bead": {"depth_mode": "free"}}, "depth_mode"),
         ({"kind": "solid"}, "kind"),
         ({"morph": {"relax_iters": 51}}, "relax_iters"),
+        ({"morph": {"region": "global"}}, "morph.region"),
+        ({"morph": {"region_band_mm": 0}}, "region_band_mm"),
+        ({"morph": {"region_band_factor": -1}}, "region_band_factor"),
     ],
 )
 def test_shell_options_rejected(tmp_path, over, needle):
@@ -468,6 +471,72 @@ def test_transition_zone_attenuation(ctx, tmp_path):
     assert keep.sum() > 10
     assert np.allclose(d6[keep], (s * d0)[keep], atol=1e-6)
     assert c6.checks["fixed"]["moved_fixed_nodes"] == 0 and c6.checks["deviation"]["max_mm"] <= 0.05
+
+
+# ------------------------------------------------------------------ local region solve of the base face (0.10.0)
+LOCAL_CASES = [("B1", "BEAD_POS_U", 3.0), ("B1", "BEAD_POS_U", 10.0), ("B1", "BEAD_WIDTH", 1.2), ("B3", "BEAD_POS_V", 3.0), ("B3", "BEAD_WIDTH", 3.0)]
+
+
+@pytest.mark.parametrize("bead,ptype,delta", LOCAL_CASES, ids=[f"{b}-{t}-{d:+g}" for b, t, d in LOCAL_CASES])
+def test_local_region_limits_moved_nodes(ctx, tmp_path, bead, ptype, delta):
+    """Position / width change: only base-face nodes within the band around the moving entry loop move (all
+    others keep their coordinates exactly), accuracy as before, far fewer moved nodes than the face solve."""
+    from scipy.spatial import cKDTree
+
+    g = ctx["g"]
+    name = g["names"][bead][ptype]
+    feat = next(f for f in ctx["doc"]["features"] if f["name"] == name)
+    bj = next(b for b in ctx["doc"]["beads"] if b["id"] == feat["bead"])
+    vals = {name: feat["nominal"] + delta}
+    res, m, chk = _cores(ctx, vals)
+    o_face = shopts.load(_write(tmp_path, "of.json", {"schema_version": 1, "morph": {"region": "face"}}))
+    _, mf, chkf = _cores(ctx, vals, o_face)
+    mesh = ctx["meshes"][0]
+    info = m.parts[0]["region"]
+    loop_disp = abs(delta) if ptype != "BEAD_WIDTH" else 0.5 * abs(delta)
+    assert info["mode"] == "local" and info["faces"] == 1 and info["band_mm"] == pytest.approx(max(40.0, 5.0 * loop_disp), abs=1e-6)
+    assert mf.parts[0]["region"] == {"mode": "face", "faces": 0, "nodes": 0, "band_mm": 0.0}
+    moved = np.any(m.disp[0] != 0.0, axis=1)
+    moved_face = np.any(mf.disp[0] != 0.0, axis=1)
+    base = (mesh.kind == 1) & (mesh.ent == int(bj["base_face"][1:]))
+    loop = (mesh.kind == 2) & np.isin(mesh.ent, [int(e[1:]) for e in bj["loop"]])
+    dist, _ = cKDTree(mesh.xyz[loop]).query(mesh.xyz)
+    band = info["band_mm"]
+    assert dist[moved & base].max() < band + 3.0  # inside the region (3 mm = mesh size slack: distance to loop nodes)
+    far = base & (dist > band + 3.0)
+    assert far.sum() > 1000 and not moved[far].any() and np.array_equal(m.xyz[0][far], mesh.xyz[far])
+    assert 0 < info["nodes"] and (moved & base).sum() <= info["nodes"]
+    assert moved.sum() <= 0.25 * moved_face.sum(), (int(moved.sum()), int(moved_face.sum()))
+    # accuracy unchanged: boundary deviation <= 0.05 mm, re-measure within max(0.05 mm, 1 %), fixed nodes untouched
+    for c in (chk, chkf):
+        assert c.checks["deviation"]["max_mm"] <= 0.05 and c.checks["fixed"]["moved_fixed_nodes"] == 0
+        for it in c.checks["param"]["items"]:
+            assert it["err"] is not None and it["err"] <= it["tol"]
+    assert chk.status == "PASS"
+
+
+# bead position steps where the 0.9.0 face solve failed the quality check (relative Jacobian of baseline-poor
+# elements next to the moving loop, tie-band transition) - B1 V +10 is the one step the local solve loses
+QUALITY_CASES = [("B2", "BEAD_POS_U", 8.0), ("B2", "BEAD_POS_U", 10.0), ("B2", "BEAD_POS_V", -8.0), ("B2", "BEAD_POS_V", -10.0), ("B2", "BEAD_POS_V", 10.0),
+                 ("B1", "BEAD_POS_V", -10.0), ("B1", "BEAD_POS_V", 10.0), ("B4", "BEAD_POS_U", -2.0)]
+
+
+def test_local_region_reduces_quality_failures(ctx, tmp_path):
+    g = ctx["g"]
+    o_face = shopts.load(_write(tmp_path, "of.json", {"schema_version": 1, "morph": {"region": "face"}}))
+    fails = {"local": [], "face": []}
+    for bead, ptype, delta in QUALITY_CASES:
+        name = g["names"][bead][ptype]
+        feat = next(f for f in ctx["doc"]["features"] if f["name"] == name)
+        vals = {name: feat["nominal"] + delta}
+        for mode, o in (("local", None), ("face", o_face)):
+            _, _, chk = _cores(ctx, vals, o)
+            if chk.status != "PASS":
+                assert chk.code == "GEOM_QUALITY"
+                fails[mode].append((bead, ptype, delta))
+    # SM1 numbers (all 127 position / width steps of the default envelope: face 29 FAIL -> local 23 FAIL)
+    assert len(fails["face"]) == 7 and len(fails["local"]) == 1, fails
+    assert fails["local"] == [("B1", "BEAD_POS_V", 10.0)]
 
 
 # ------------------------------------------------------------------ run: R1 output, determinism

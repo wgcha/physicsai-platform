@@ -20,7 +20,7 @@ CHUNK_JSON = 0x4E4F534A
 CHUNK_BIN = 0x004E4942
 FLOAT, UNSIGNED_SHORT, UNSIGNED_INT = 5126, 5123, 5125
 ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
-MODE_LINES, MODE_TRIANGLES = 1, 4
+MODE_POINTS, MODE_LINES, MODE_TRIANGLES = 0, 1, 4
 GRAY = [0.7, 0.7, 0.7, 1.0]
 
 
@@ -44,6 +44,15 @@ class LineSet:
     name: str
     positions: np.ndarray
     segments: np.ndarray
+    attributes: dict[str, np.ndarray] = field(default_factory=dict)
+
+
+@dataclass
+class PointSet:
+    """Point node (mode POINTS, no indices): positions[n,3], per-vertex attributes (marker nodes)."""
+
+    name: str
+    positions: np.ndarray
     attributes: dict[str, np.ndarray] = field(default_factory=dict)
 
 
@@ -140,7 +149,7 @@ class _Builder:
         return len(self.accessors) - 1
 
 
-def write_glb(items: list[TriMesh | LineSet], generator: str, root_name: str = "paicad_view", root_extras: dict | None = None) -> bytes:
+def write_glb(items: list[TriMesh | LineSet | PointSet], generator: str, root_name: str = "paicad_view", root_extras: dict | None = None) -> bytes:
     """GLB bytes: root node ``root_name`` with one child node per item (item order kept)."""
     b = _Builder()
     nodes: list[dict] = [{}]
@@ -163,6 +172,13 @@ def write_glb(items: list[TriMesh | LineSet], generator: str, root_name: str = "
                 }
             )
             prim = {"attributes": attrs, "indices": b.indices(it.triangles, len(it.positions)), "material": len(materials) - 1, "mode": MODE_TRIANGLES}
+        elif isinstance(it, PointSet):
+            if len(it.positions) == 0:
+                raise ValueError(f"{it.name}: no points")
+            attrs = {"POSITION": b.attribute(np.asarray(it.positions, dtype=np.float32))}
+            for k, v in it.attributes.items():
+                attrs[k] = b.attribute(v)
+            prim = {"attributes": attrs, "mode": MODE_POINTS}
         else:
             if len(it.segments) == 0:
                 raise ValueError(f"{it.name}: no line segments")

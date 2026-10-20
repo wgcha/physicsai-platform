@@ -96,9 +96,15 @@ class CommandsCfg(_M):
         "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}",
         "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}", "--baseline-inc", "{baseline_inc}", "--renum-csv", "{renum_csv}",
         "--assem-dir", "{assem_dir}", "--threads", "{threads}", "--out-dir", "{out_dir}"])
-    # 쉘 뷰(`paicad shell view`)는 paicad 0.9.0에 없다 — 지원 버전 설치 후 설정에서 켠다(기본 null)
-    paicad_shell_view_export: list[str] | None = None
-    paicad_shell_view_preview: list[str] | None = None
+    # 쉘 뷰(`paicad shell view`, paicad 0.10.0+, geometry-view.md §6.1) — null이면 쉘 세트 공칭 뷰·미리보기만 꺼짐
+    paicad_shell_view_export: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "view", "export", "--cad", "{cad_input}", "--features", "{features_json}", "--fixed-dir", "{fixed_dir}",
+        "--view-options", "{view_options_json}", "--out-dir", "{out_dir}"])
+    paicad_shell_view_preview: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "view", "preview", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
+        "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--options", "{options_json}",
+        "--view-options", "{view_options_json}", "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}",
+        "--thickness", "{thickness_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"])
     # 결과 3D 컨투어 추출(geometry-view.md §13.3) — contour3d.enabled=true일 때만 쓴다
     contour_extract: list[str] | None = Field(
         default_factory=lambda: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"])

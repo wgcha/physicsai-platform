@@ -120,9 +120,23 @@ def test_shell_and_view_templates_render_optional_pairs():
     s = Settings()
     exe = {"paicad_path": "/opt/paicad"}
     for k in ("paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
-              "paicad_shell_check", "paicad_shell_run", "paicad_view_export", "paicad_view_preview", "contour_extract"):
+              "paicad_shell_check", "paicad_shell_run", "paicad_view_export", "paicad_view_preview", "paicad_shell_view_export",
+              "paicad_shell_view_preview", "contour_extract"):
         assert validate_template(k, getattr(s.commands, k)) == [], k
-    assert s.commands.paicad_shell_view_export is None  # paicad 0.9.0에는 shell view가 없다(기본 꺼짐)
+    # paicad 0.10.0 `paicad shell view` 기본 템플릿(GV §6.1): ①-1 TX_VIEW는 --fixed-dir, 3S 두께가 없으면 --thickness 생략
+    sv = {"cad_input": "/s/m.step", "features_json": "/s/f.json", "fixed_dir": "", "view_options_json": "/s/vo.json", "out_dir": "/s/v"}
+    argv = render_argv("paicad_shell_view_export", s.commands.paicad_shell_view_export, sv, executables=exe, is_windows=False)
+    assert argv[1:4] == ["shell", "view", "export"] and "--fixed-dir" not in argv
+    argv = render_argv("paicad_shell_view_export", s.commands.paicad_shell_view_export, {**sv, "fixed_dir": "/s/fx"}, executables=exe,
+                       is_windows=False)
+    assert argv[argv.index("--fixed-dir") + 1] == "/s/fx"
+    sp = {k: f"/s/{k}" for k in ("cad_input", "features_json", "values_json", "fixed_dir", "tag_dir", "assem_dir", "options_json",
+                                 "view_options_json", "out_dir")}
+    argv = render_argv("paicad_shell_view_preview", s.commands.paicad_shell_view_preview,
+                       {**sp, "nominal_manifest": "", "thickness_json": "", "fe_mode": "morph", "threads": "2"}, executables=exe,
+                       is_windows=False)
+    assert argv[1:4] == ["shell", "view", "preview"] and "--thickness" not in argv and "--nominal-manifest" not in argv
+    assert argv[argv.index("--fe") + 1] == "morph" and argv[argv.index("--fixed-dir") + 1] == "/s/fixed_dir"
     v = {"cad_input": "/s/cad/m.step", "assem_dir": "", "options_json": "/s/o.json", "out_dir": "/s/x"}
     argv = render_argv("paicad_shell_extract", s.commands.paicad_shell_extract, v, executables=exe, is_windows=False)
     assert "--assem-dir" not in argv and argv[1:3] == ["shell", "extract"]  # ①-1: 조립 폴더 없음 → 쌍 생략

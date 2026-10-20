@@ -4,7 +4,10 @@ Per node (tag classification): fixed -> 0 (target checked against ``fixed.tol_mm
 sample vertex / same normalized arc length on the sample edge (unchanged entities: 0); curved faces with a
 changed surface -> same normalized (u,v) on the sample face; planar faces with a changed surface (normal
 kept) and boundary-changed faces -> normal offset + in-surface solve (``fem2d``) with the face boundary,
-fixed nodes (boundary-changed faces) and unchanged edges as Dirichlet; unchanged faces -> 0. Transition
+fixed nodes (boundary-changed faces) and unchanged edges as Dirichlet; unchanged faces -> 0. Boundary-changed
+faces (bead position / width: the base face) are solved locally by default (``morph.region = local``, see
+:func:`local_region_solve`): only nodes within the band around the moving entry loops move, every other node
+keeps its coordinates byte for byte (``region = face``: the whole face patch, 0.9.0 behaviour). Transition
 zone (0 < geodesic distance to F < ``transition_mm``) on boundary-changed / unchanged faces: displacement
 times ``3r^2 - 2r^3``. Tangential Laplacian relaxation of changed-face nodes (``relax_iters``).
 Outputs are copies of the assembly files holding moved shell nodes, only ``/NODE`` coordinate fields changed.
@@ -38,10 +41,11 @@ ZERO_MM = 1.0e-6
 
 
 class MorphFailed(Exception):
-    def __init__(self, code: str, message: str):
+    def __init__(self, code: str, message: str, nodes: list[int] | None = None):
         super().__init__(message)
         self.code = code
         self.message = message
+        self.nodes = nodes or []  # fixed node ids that would move (SHELL_FIXED_REGION_VIOLATION)
 
 
 @dataclass
@@ -135,6 +139,75 @@ def _smoothstep(r: np.ndarray) -> np.ndarray:
     return 3 * r * r - 2 * r**3
 
 
+def _segment_distance(P: np.ndarray, A: np.ndarray, B: np.ndarray) -> np.ndarray:
+    """In-plane distance of points P[n,2] to the nearest segment A[k,2]-B[k,2]."""
+    out = np.full(len(P), np.inf)
+    for a, b in zip(A, B):
+        ab = b - a
+        L2 = float(ab @ ab)
+        t = np.clip(((P - a) @ ab) / L2, 0.0, 1.0) if L2 > 0 else np.zeros(len(P))
+        out = np.minimum(out, np.linalg.norm(P - (a + t[:, None] * ab), axis=1))
+    return out
+
+
+def local_region_solve(part_id: int, f: int, xy: np.ndarray, conn_l: np.ndarray, tl: np.ndarray, own: np.ndarray, dirn: np.ndarray, dir_val: np.ndarray, mo: dict):
+    """Local in-surface solve of a boundary-changed (base) face around its moving entry loops.
+
+    Region = own nodes whose in-plane distance to the moving loop polyline (Dirichlet nodes with a non-zero
+    tangential target) is < ``B = max(region_band_mm, region_band_factor * max loop displacement)`` and that are
+    connected to the loop through the region. The in-surface problem (``smoother``) is solved on the elements
+    touching the region with the moving loop, fixed nodes and unchanged face-boundary nodes as Dirichlet (free
+    outer boundary), then tapered to 0 across the band by ``s(1 - dist/B)`` (``s = 3r^2 - 2r^3``: value and slope
+    0 at the region boundary = displacement 0 Dirichlet there). Nodes outside the region keep displacement 0.
+    Returns (local node indices, u[k,2], solve info, region node count, B) or None when nothing moves."""
+    import hashlib
+
+    from scipy.sparse import coo_matrix
+    from scipy.sparse.csgraph import connected_components
+
+    from .tag import mesh_edges
+
+    moving = np.linalg.norm(dir_val, axis=1) > ZERO_MM
+    if not moving.any():
+        return None
+    src = dirn[moving]
+    band = max(float(mo["region_band_mm"]), float(mo["region_band_factor"]) * float(np.linalg.norm(dir_val[moving], axis=1).max()))
+    le = mesh_edges(conn_l, tl)
+    is_src = np.zeros(len(xy), dtype=bool)
+    is_src[src] = True
+    seg = le[is_src[le[:, 0]] & is_src[le[:, 1]]]
+    A, Bp = (xy[seg[:, 0]], xy[seg[:, 1]]) if len(seg) else (xy[src], xy[src])
+    lo, hi = np.minimum(A.min(0), Bp.min(0)) - band, np.maximum(A.max(0), Bp.max(0)) + band
+    near = np.flatnonzero(np.all((xy >= lo) & (xy <= hi), axis=1))
+    dist = np.full(len(xy), np.inf)
+    dist[near] = _segment_distance(xy[near], A, Bp)
+    inreg = own & (dist < band)
+    # keep the region parts connected to the moving loop (through region nodes and loop nodes)
+    keep = inreg | is_src
+    e = le[keep[le[:, 0]] & keep[le[:, 1]]]
+    g = coo_matrix((np.ones(len(e)), (e[:, 0], e[:, 1])), shape=(len(xy), len(xy)))
+    _, lab = connected_components(g, directed=False)
+    inreg &= np.isin(lab, np.unique(lab[src]))
+    if not inreg.any():
+        return None
+    rel = np.flatnonzero(inreg[conn_l].any(axis=1))
+    sub = np.unique(conn_l[rel])
+    sl = np.full(len(xy), -1, dtype=np.int64)
+    sl[sub] = np.arange(len(sub))
+    cs = sl[conn_l[rel]]
+    ts = tl[rel]
+    dmask = ~own[sub]
+    dsub = np.flatnonzero(dmask)
+    dv = np.zeros((len(xy), 2))
+    dv[dirn] = dir_val
+    key = (part_id, f, "local", float(mo["poisson"]), hashlib.sha1(sub.tobytes() + b"|" + dsub.tobytes() + b"|" + xy[sub].tobytes()).hexdigest())
+    u, info = solve_patch(xy[sub], cs[ts][:, :3], cs[~ts], dsub, dv[sub[dsub]], mo["smoother"], float(mo["poisson"]), float(mo["solver_rtol"]), int(mo["solver_maxiter"]), key)
+    fr = np.flatnonzero(~dmask)
+    w = _smoothstep(1.0 - dist[sub[fr]] / band)
+    w[~inreg[sub[fr]]] = 0.0
+    return sub[fr], u[fr] * w[:, None], info, int(inreg.sum()), band
+
+
 def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] | None = None) -> tuple[np.ndarray, dict]:
     topo = body.topology()
     mo = o["morph"]
@@ -162,6 +235,7 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
     if elem_face is None:  # depends on the tag and the (nominal = sample) topology only
         elem_face = m._elem_face = _element_faces(m, topo)
     faces_stat = {"uv_map": 0, "in_surface": 0, "unchanged": 0}
+    region = {"mode": mo["region"], "faces": 0, "nodes": 0, "band_mm": 0.0}
     solver = {"method": "none", "iterations": 0, "rel_residual": 0.0}
     face_nodes = {}
     ifc = np.flatnonzero(kind == KIND_FACE)
@@ -230,6 +304,25 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
         tl = m.tri[els]
         import hashlib
 
+        if f in Bf and mo["region"] == "local":
+            # local region: only the base-face nodes near the moving entry loops move, all others stay 0
+            done[pn[own]] = True
+            done[idx[m.fixed[idx]]] = True
+            try:
+                lr = local_region_solve(m.part_id, f, xy, conn_l, tl, own, dirn, dir_val, mo)
+            except SolveFailed as ex:
+                raise MorphFailed("GEOM_MORPH_FAILED", f"face F{f}: {ex}") from None
+            if lr is None:
+                continue
+            nodes_l, u, info, nreg, band = lr
+            if info.method != "none":
+                solver = {"method": info.method, "iterations": solver["iterations"] + info.iterations, "rel_residual": max(solver["rel_residual"], info.rel_residual)}
+            d[pn[nodes_l]] = np.outer(u[:, 0], e1) + np.outer(u[:, 1], e2)
+            region["faces"] += 1
+            region["nodes"] += nreg
+            region["band_mm"] = max(region["band_mm"], band)
+            continue
+
         key = (m.part_id, f, float(mo["poisson"]), hashlib.sha1(pn.tobytes() + b"|" + dirn.tobytes() + b"|" + x[pn].tobytes()).hexdigest())
         try:
             u, info = solve_patch(xy, conn_l[tl][:, :3], conn_l[~tl], dirn, dir_val, mo["smoother"], float(mo["poisson"]), float(mo["solver_rtol"]), int(mo["solver_maxiter"]), key)
@@ -293,7 +386,8 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
     fixed_max = float(np.linalg.norm(d[m.fixed], axis=1).max()) if m.fixed.any() else 0.0
     if fixed_max > float(o["fixed"]["tol_mm"]):
         bad = np.flatnonzero(m.fixed & (np.linalg.norm(d, axis=1) > float(o["fixed"]["tol_mm"])))
-        raise MorphFailed("SHELL_FIXED_REGION_VIOLATION", f"part {m.part_id}: {len(bad)} fixed nodes would move (max {fixed_max:.4f} mm, e.g. node {int(m.node_ids[bad[0]])})")
+        raise MorphFailed("SHELL_FIXED_REGION_VIOLATION", f"part {m.part_id}: {len(bad)} fixed nodes would move (max {fixed_max:.4f} mm, e.g. node {int(m.node_ids[bad[0]])})",
+                          [int(x) for x in m.node_ids[bad]])
     d[m.fixed] = 0.0
     d[np.linalg.norm(d, axis=1) <= ZERO_MM] = 0.0
     dn = np.linalg.norm(d, axis=1)
@@ -304,6 +398,7 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
         "fixed_max_disp_mm": 0.0,
         "faces": faces_stat,
         "solver": {"method": solver["method"], "iterations": int(solver["iterations"]), "rel_residual": rnd(solver["rel_residual"], 12)},
+        "region": {"mode": region["mode"], "faces": region["faces"], "nodes": region["nodes"], "band_mm": rnd(region["band_mm"])},
     }
 
 
@@ -346,15 +441,21 @@ def write_files(asm: Assembly, moved: dict[int, tuple], solver: str | None) -> l
     return out
 
 
-def load_inputs(args, o: dict):
-    doc = load_shell_features(args.features)
-    tag_doc, tag = load_shell_tag(args.tag_dir)
-    fixed = load_fixed(args.fixed_dir)
+def load_mesh_inputs(tag_dir, fixed_dir, assem_dir):
+    """(tag doc, tag arrays, fixed set, assembly, shell meshes) with the digest consistency checks."""
+    tag_doc, tag = load_shell_tag(tag_dir)
+    fixed = load_fixed(fixed_dir)
     if tag_doc.get("fixed_digest") != fixed.digest:
         raise PaicadError("GEOM_INPUT_INVALID", "shell tag and fixed-scan outputs differ (fixed_digest) - re-run shell tag")
-    asm = read_assembly(args.assem_dir)
+    asm = read_assembly(assem_dir)
     if tag_doc.get("assem_digest") and tag_doc["assem_digest"] != asm.digest():
         raise PaicadError("GEOM_INPUT_INVALID", "the assembly folder differs from the one used by shell tag (assem_digest)")
+    return tag_doc, tag, fixed, asm, load_meshes(asm, tag_doc, tag)
+
+
+def load_inputs(args, o: dict):
+    doc = load_shell_features(args.features)
+    tag_doc, tag, fixed, asm, meshes = load_mesh_inputs(args.tag_dir, args.fixed_dir, args.assem_dir)
     from ..update import read_json
     from .update import SAMPLE_BREP, UPDATE_JSON
 
@@ -364,8 +465,21 @@ def load_inputs(args, o: dict):
         raise PaicadError("GEOM_INPUT_INVALID", "shell_update.json status is not OK")
     names = [p["body"] for p in doc["parts"]]
     samples = {b.name: b for b in load_sample(ud / SAMPLE_BREP, names)}
-    meshes = load_meshes(asm, tag_doc, tag)
     return doc, tag_doc, fixed, asm, u, samples, meshes
+
+
+def fail_report(e: MorphFailed, t0: float) -> dict:
+    """``shell_morph.json`` of a failed morph (also written by ``shell view preview``)."""
+    return shell_envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, max_disp_mm=None, files=[], parts=[], elapsed_s=rnd(time.monotonic() - t0, 3))
+
+
+def ok_report(res: MorphResult, files: list[tuple], t0: float) -> dict:
+    """``shell_morph.json`` of a successful morph; ``files`` = :func:`write_files` result."""
+    return shell_envelope(
+        status="OK", code=None, category=None, message=None, max_disp_mm=rnd(res.max_disp),
+        files=[{"rel": r, "sha256_in": a, "sha256_out": b, "moved_nodes": k} for r, _, a, b, k in files],
+        parts=res.parts, elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
 
 
 def run(args, rep: Reporter) -> int:
@@ -381,8 +495,7 @@ def run(args, rep: Reporter) -> int:
         res = morph_core(meshes, samples, u, o)
     except MorphFailed as e:
         code_exit = EXIT_CHECK
-        d = shell_envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, max_disp_mm=None, files=[], parts=[], elapsed_s=rnd(time.monotonic() - t0, 3))
-        out.write_text(MORPH_JSON, dumps(d))
+        out.write_text(MORPH_JSON, dumps(fail_report(e, t0)))
         out.commit([MORPH_JSON])
         rep.warn(f"{e.code}: {e.message}")
         rep.result("FAIL", e.code, MORPH_JSON)
@@ -394,11 +507,7 @@ def run(args, rep: Reporter) -> int:
         p = out.tmp_path(f"{FILES_DIR}/{rel}")
         p.write_bytes(data)
         rels.append(f"{FILES_DIR}/{rel}")
-    d = shell_envelope(
-        status="OK", code=None, category=None, message=None, max_disp_mm=rnd(res.max_disp),
-        files=[{"rel": r, "sha256_in": a, "sha256_out": b, "moved_nodes": k} for r, _, a, b, k in files],
-        parts=res.parts, elapsed_s=rnd(time.monotonic() - t0, 3),
-    )
+    d = ok_report(res, files, t0)
     out.write_text(MORPH_JSON, dumps(d))
     out.commit(rels + [MORPH_JSON])
     rep.progress(100, f"shell morph done: {len(res.moved)} nodes moved in {len(files)} files")

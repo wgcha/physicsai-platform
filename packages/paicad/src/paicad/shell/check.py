@@ -421,6 +421,20 @@ def morphed_coords(meshes: list[ShellMesh], asm: Assembly, files: list[tuple[str
     return new
 
 
+def tag_distances(meshes: list[ShellMesh], tag: dict) -> dict[int, np.ndarray]:
+    """Tag distance of every shell node (part index -> dist[n]), for check (b)."""
+    look = {int(n): i for i, n in enumerate(tag["node_id"])}
+    return {m.index: np.array([tag["dist"][look[int(n)]] for n in m.node_ids]) for m in meshes}
+
+
+def report(res: CheckResult, o: dict, out_files: list[str], t0: float) -> dict:
+    """``shell_check.json`` (also written by ``shell view preview`` with ``out_files: []``)."""
+    return shell_envelope(
+        status=res.status, code=res.code, category=CODE_CATEGORY.get(res.code) if res.code else None, message=res.message,
+        checks=res.checks, warnings=res.warnings, options=shopts.used(o), out_files=out_files, elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
+
+
 def run(args, rep: Reporter) -> int:
     t0 = time.monotonic()
     o = shopts.load(args.options)
@@ -447,10 +461,7 @@ def run(args, rep: Reporter) -> int:
     from .tag import load_shell_tag
 
     _, tag = load_shell_tag(args.tag_dir)
-    tag_dist = {}
-    look = {int(n): i for i, n in enumerate(tag["node_id"])}
-    for m in meshes:
-        tag_dist[m.index] = np.array([tag["dist"][look[int(n)]] for n in m.node_ids])
+    tag_dist = tag_distances(meshes, tag)
     rep.progress(20, "checking the morphed shell mesh")
     morphed = morphed_coords(meshes, asm, files)
     res = check_core(meshes, morphed, samples, doc, vals, u.get("expected_measured") or {}, u.get("changed") or {}, o, asm, thick, {"dist_of": tag_dist}, files)
@@ -463,11 +474,7 @@ def run(args, rep: Reporter) -> int:
             tmp.write_bytes(data)
             os.replace(tmp, dst)
             out_files.append(rel)
-    d = shell_envelope(
-        status=res.status, code=res.code, category=CODE_CATEGORY.get(res.code) if res.code else None, message=res.message,
-        checks=res.checks, warnings=res.warnings, options=shopts.used(o), out_files=out_files, elapsed_s=rnd(time.monotonic() - t0, 3),
-    )
-    out.write_text(CHECK_JSON, dumps(d))
+    out.write_text(CHECK_JSON, dumps(report(res, o, out_files, t0)))
     out.commit([CHECK_JSON])
     rep.progress(100, f"shell check {res.status}")
     rep.result(res.status, res.code, CHECK_JSON)

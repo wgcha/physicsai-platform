@@ -44,17 +44,20 @@ def test_shell_set_register_chain_prep_and_rows(native_env, fake_record):
     assert [st[k]["state"] for k in ("NP_PREP", "NP_EXTRACT", "NP_TAG", "NP_VIEW", "BL_MAP", "NP_REGISTER")] == \
         ["SUCCEEDED", "SUCCEEDED", "SUCCEEDED", "SUCCEEDED", "SKIPPED", "SUCCEEDED"]
     rec = [r for r in read_record(fake_record) if r["tool"] == "paicad"]
-    assert [r["argv"][1:3] for r in rec[-4:]] == [["version", "--json"], ["shell", "extract"], ["shell", "fixed-scan"], ["shell", "tag"]]
-    ext = rec[-3]["argv"]
+    assert [r["argv"][1:3] for r in rec[-5:]] == [["version", "--json"], ["shell", "extract"], ["shell", "fixed-scan"], ["shell", "tag"],
+                                                  ["shell", "view"]]
+    ext = rec[-4]["argv"]
     assert ext[ext.index("--assem-dir") + 1].endswith("radioss_assem")  # 세트 준비는 조립 폴더로 대응·고정 겹침 경고
-    fs = rec[-2]["argv"]
+    vw = rec[-1]["argv"]  # NP_VIEW 쉘: paicad 0.10.0 `shell view export`, {fixed_dir}=T/native/fixed(GV §6.3)
+    assert vw[3] == "export" and vw[vw.index("--fixed-dir") + 1].endswith("fixed")
+    fs = rec[-3]["argv"]
     assert fs[fs.index("--features") + 1].endswith("shell_features.json") and "--parts" not in fs
     jd = env.job(jid)
     codes = [w["code"] for w in jd["warnings"]]
-    assert "BEAD_FIXED_OVERLAP" in codes and "VIEW_EXPORT_FAILED" in codes  # 쉘 뷰 명령 기본 null → 경고만(작업 계속)
+    assert "BEAD_FIXED_OVERLAP" in codes and "VIEW_EXPORT_FAILED" not in codes  # 쉘 뷰 기본 템플릿(0.10.0) → 공칭 뷰 READY
     psid = jd["result"]["param_set_id"]
     ps = env.c.get(f"{API}/param-sets/{psid}", headers=P).json()
-    assert ps["native"]["kind"] == "shell" and ps["native"]["prep_status"] == "READY" and ps["native"]["view_status"] == "MISSING"
+    assert ps["native"]["kind"] == "shell" and ps["native"]["prep_status"] == "READY" and ps["native"]["view_status"] == "READY"
     assert [(p["name"], p["source"]) for p in ps["parameters"]] == [(n, "shell") for n in BEAD]
     assert ps["geom_options_effective"]["fixed"]["kinds"][:2] == ["INTER_TYPE2", "RBE2"]  # 쉘 options 스키마
     S = env.sroot / "04_params" / psid
@@ -195,7 +198,9 @@ def test_train_extract_and_doe_shell(native_env, fake_record):
     ext = [r["argv"] for r in read_record(fake_record) if r["tool"] == "paicad" and r["argv"][1:3] == ["shell", "extract"]][-1]
     assert "--assem-dir" not in ext  # ①-1: 조립 폴더 없음 → fixed_overlap unknown
     st = env.steps(j["id"])
-    assert st["TX_VIEW"]["state"] == "SUCCEEDED"  # 쉘 뷰 명령 null → 경고(MISSING)
+    assert st["TX_VIEW"]["state"] == "SUCCEEDED"
+    tv = [r["argv"] for r in read_record(fake_record) if r["tool"] == "paicad" and r["argv"][1:4] == ["shell", "view", "export"]][-1]
+    assert "--fixed-dir" not in tv  # ①-1 쉘 뷰: 고정 정보 없음 → 쌍 생략(GV §6.4)
     setup = env.c.get(f"{API}/studies/{env.sid}/train", headers=P).json()
     use = {p["name"]: p["use"] for p in setup["parameters"]}
     assert use["CHASSIS_REAR_BEAD_D_1"] is True and use["CHASSIS_REAR_BEAD_D_2"] is False  # 체결 영역 겹침 → 기본 use=false
@@ -241,3 +246,22 @@ def test_shell_discover_without_baseline_inc_and_altair_rejected(native_env):
     assert "BASELINE_INC_MISSING" in {p["code"] for p in solid["problems"]}  # 솔리드는 기준 메시 필수(기존 규칙 불변)
     r = env.c.post(f"{API}/studies/{env.sid}/param-sets", headers=PW, json={"path": str(proj), "engine": "altair", "kind": "shell"})
     assert r.status_code == 422, r.text
+
+
+def test_shell_view_and_preview_default_templates(native_env, fake_record):
+    """paicad 0.10.0 `shell view` 기본 템플릿: 쉘 세트 GET /view READY, 미리보기 202 → PREVIEW 레인 → DONE(fe check: --fixed-dir·
+    --tag-dir·--assem-dir 전달, 3S 두께 없음 → --thickness 생략)."""
+    env = native_env()
+    psid = _ready_shell(env)
+    env.w.heartbeat_once()
+    v = env.c.get(f"{API}/param-sets/{psid}/view", headers=P).json()
+    assert v["status"] == "READY" and v["kind"] == "shell" and v["available"] and v["preview_available"], v
+    r = env.c.post(f"{API}/param-sets/{psid}/previews", headers=PW, json={"values": {"CHASSIS_REAR_BEAD_D_1": 4.5}, "fe": "check"})
+    assert r.status_code == 202, r.text
+    pid = r.json()["id"]
+    assert env.w.run_once_preview() == "SUCCEEDED"
+    assert env.c.get(f"{API}/previews/{pid}", headers=P).json()["status"] == "DONE"
+    pv = [r["argv"] for r in read_record(fake_record) if r["tool"] == "paicad" and r["argv"][1:4] == ["shell", "view", "preview"]][-1]
+    assert pv[pv.index("--fe") + 1] == "check" and "--thickness" not in pv
+    for flag, tail in (("--fixed-dir", "fixed"), ("--tag-dir", "tag"), ("--assem-dir", "radioss_assem")):
+        assert pv[pv.index(flag) + 1].endswith(tail), (flag, pv)

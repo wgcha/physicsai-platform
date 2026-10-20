@@ -281,5 +281,5 @@ def test_preview_lane_static_rules_and_status(native_env):
     env = native_env()
     f = env.c.get(f"{API}/status", headers=P).json()["features"]
     assert f["geometry_view"]["enabled"] and f["geometry_native_shell"]["enabled"]
-    assert f["geometry_view_shell"]["enabled"] is False and "commands.paicad_shell_view_export" in f["geometry_view_shell"]["missing"]
+    assert f["geometry_view_shell"]["enabled"]  # paicad 0.10.0 `shell view` 기본 템플릿(GV §6.1)
     assert f["contour3d"]["enabled"] is False and "contour3d.enabled" in f["contour3d"]["missing"]
