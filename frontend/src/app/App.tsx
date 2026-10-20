@@ -9,6 +9,7 @@ import { StudyManage } from "../pages/StudyManage";
 import { AdminEnvCheck } from "../pages/AdminEnvCheck";
 import { useThemeSync } from "../design/theme";
 import { ImportLanding } from "../pages/ImportLanding";
+import { ReleaseBoard } from "../pages/ReleaseBoard";
 
 const FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
 
@@ -39,6 +40,8 @@ export function AppRoutes() {
           <Route path="/p/:projectId/s/:studyId/manage" element={<StudyManage />} />
           <Route path="/admin/env-check" element={<AdminEnvCheck />} />
           <Route path="/import" element={<ImportLanding />} />
+          {/* 버전 게시판(읽기 전용 — 배포 RELEASES.md로만 기록) */}
+          <Route path="/releases" element={<ReleaseBoard />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         <ToastHost />

@@ -356,6 +356,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File E:\VD_SIMULATION_WEB\physics
 - `.runtime\_backup`은 자동으로 지우지 않는다. 확인 후 관리자가 정리한다.
 - 업데이트 전 DB 백업(§3.3)을 먼저 한다.
 
+### 3.0.1 릴리스 기록(버전 표시·버전 게시판)
+
+웹 화면 상단의 버전 배지(`v0.2.0`)와 버전 게시판(배지 클릭)은 **배포로만** 기록한다 — 화면·API(`GET /physicsai/api/version`·`/releases`)에는 작성·수정·삭제 수단이 없다. 릴리스할 때 개발 쪽이 같은 커밋에서 ① 저장소 루트 `RELEASES.md` 맨 위에 `## <버전> — YYYY-MM-DD` + `- 주요 기능`(한국어) 항목을 추가하고 ② 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다(셋이 다르면 `scripts/test-all` 실패). 설치·업데이트(§3.0 ⑤ 프런트 배치, 묶음 `collect-offline`)가 `RELEASES.md`를 프런트 배치 폴더(`server.frontend_root`)에 함께 두고 백엔드는 그 파일을 읽기만 한다(빌드 정보는 같은 폴더의 `BUILD_INFO.json`). 사용자가 마지막으로 본 버전은 브라우저 저장소에만 남는다.
+
 ### 3.1 업데이트(폐쇄망 서버용 묶음)
 
 ```powershell

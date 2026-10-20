@@ -595,14 +595,17 @@ function Install-PhysicsAIRepoPackages {
 }
 
 function Publish-PhysicsAIFrontend {
-    <# 프런트 빌드 결과를 배치 위치로. 기존 배치는 지우지 않고 $BackupDir\frontend로 이동한다. #>
-    param([Parameter(Mandatory = $true)][string]$Dist, [Parameter(Mandatory = $true)][string]$Dest, [Parameter(Mandatory = $true)][string]$BackupDir)
+    <# 프런트 빌드 결과를 배치 위치로. 기존 배치는 지우지 않고 $BackupDir\frontend로 이동한다.
+       $Releases(저장소 RELEASES.md)가 있으면 함께 둔다 — 버전 게시판, 백엔드는 읽기만. #>
+    param([Parameter(Mandatory = $true)][string]$Dist, [Parameter(Mandatory = $true)][string]$Dest, [Parameter(Mandatory = $true)][string]$BackupDir,
+          [string]$Releases = '')
     if (Test-Path -LiteralPath $Dest) {
         New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null
         Move-Item -LiteralPath $Dest -Destination (Join-Path $BackupDir 'frontend')
     }
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
     Copy-Item -Recurse -Force (Join-Path $Dist '*') $Dest
+    if ($Releases -and (Test-Path -LiteralPath $Releases)) { Copy-Item -Force -LiteralPath $Releases -Destination (Join-Path $Dest 'RELEASES.md') }
     Write-PhysicsAIStep "프런트 배치: $Dest"
 }
 
@@ -617,7 +620,7 @@ function Install-PhysicsAIFrontendFromRepo {
     $st = Test-PhysicsAIFrontendDist -RepoRoot $RepoRoot
     if ($st.Fresh) {
         Write-PhysicsAIStep "프런트: 저장소 빌드본 frontend-dist 사용(소스와 일치 $($st.Current.Substring(0, 12)) — Node·npm 불필요)"
-        Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend-dist') -Dest $Dest -BackupDir $BackupDir
+        Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend-dist') -Dest $Dest -BackupDir $BackupDir -Releases (Join-Path $RepoRoot 'RELEASES.md')
     } else {
         Write-PhysicsAIStep "프런트: $($st.Reason) — Node 22로 직접 빌드합니다"
         try { $node = Select-PhysicsAINode -DashboardNode $DashboardNode -RepoRoot $RepoRoot -Tag $script:PhysicsAITag }
@@ -627,7 +630,7 @@ function Install-PhysicsAIFrontendFromRepo {
                 "($($_.Exception.Message))")
         }
         Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $RepoRoot -StampFile $StampFile
-        Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend\dist') -Dest $Dest -BackupDir $BackupDir
+        Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend\dist') -Dest $Dest -BackupDir $BackupDir -Releases (Join-Path $RepoRoot 'RELEASES.md')
     }
 }
 

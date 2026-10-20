@@ -5,6 +5,7 @@ Push-Location $RepoRoot
 try {
   & $Python scripts/frontend_source_hash.py --check $RepoRoot; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # frontend-dist 최신 여부(phase3 D3-40)
   & $Python scripts/check_paicad.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # paicad 버전·import 금지 검사(geometry-engine.md §17.5·§18.6)
+  & $Python scripts/check_releases.py; if ($LASTEXITCODE) { exit $LASTEXITCODE }   # RELEASES.md·플랫폼 버전 일치(버전 게시판)
   $pyArgs = @($args)
   if ($pyArgs.Count -gt 0 -and $pyArgs[0] -eq "--slow") { $pyArgs = @("-m", "") + @($pyArgs | Select-Object -Skip 1) }   # slow 마커 포함 전체
   & $Python -m pytest -q -rs @pyArgs; if ($LASTEXITCODE) { exit $LASTEXITCODE }

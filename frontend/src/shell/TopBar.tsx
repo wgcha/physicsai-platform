@@ -4,6 +4,7 @@ import { useApp, roleIn } from "../app/AppContext";
 import { loginUrl } from "../app/AuthGate";
 import { ROLE_LABEL } from "../lib/format";
 import { NotificationBell } from "./NotificationBell";
+import { VersionBadge } from "./VersionBadge";
 
 export interface Crumb {
   label: string;
@@ -23,7 +24,7 @@ export function PathBar({ crumbs }: { crumbs: Crumb[] }) {
   );
 }
 
-/** 상단 바: 브랜드 · 경로 · (Study 화면) 상태 칩 · 관리 · 대시보드로 · 알림 벨 · 사용자 */
+/** 상단 바: 브랜드 · 경로 · 버전 배지(→ 버전 게시판) · (Study 화면) 상태 칩 · 관리 · 대시보드로 · 알림 벨 · 사용자 */
 export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; projectId?: string; status?: ReactNode }) {
   const { me, status } = useApp();
   const role = roleIn(me, projectId);
@@ -38,6 +39,7 @@ export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; 
           시연 모드
         </span>
       )}
+      <VersionBadge />
       <div className="topbar-right">
         {chips && <div className="status-chips">{chips}</div>}
         {me.is_global_admin && <AdminMenu />}

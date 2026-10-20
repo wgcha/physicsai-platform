@@ -9,6 +9,8 @@ echo "== frontend-dist 최신 여부(빌드본 = 현재 프런트 소스, phase3
 "$PYTHON" scripts/frontend_source_hash.py --check "$REPO_ROOT"
 echo "== paicad 정적 검사(버전·CHANGELOG·고정, 플랫폼↔paicad import 금지, kernel/ 밖 OCP 금지 — geometry-engine.md §17.5·§18.6) =="
 "$PYTHON" scripts/check_paicad.py
+echo "== 버전 기록 검사(RELEASES.md 최상단 = pyproject version = physicsai_core.__version__, 배포 묶음 포함) =="
+"$PYTHON" scripts/check_releases.py
 echo "== backend/worker pytest =="
 # --slow: slow 마커 시험까지 전체(nightly 등 별도 명령). 기본은 pyproject addopts의 -m 'not slow'
 if [ "${1:-}" = "--slow" ]; then shift; set -- -m "" "$@"; fi

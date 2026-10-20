@@ -38,6 +38,7 @@ else
   run "cp -r frontend/dist/. dist/frontend/"
 fi
 run "cp -r migrations dist/migrations"
+run "cp RELEASES.md dist/frontend/RELEASES.md"   # 버전 게시판(백엔드가 server.frontend_root에서 읽기만)
 run "cp config/platform.example.yaml dist/config/platform.example.yaml"
 run "cp config/platform.demo.yaml dist/config/platform.demo.yaml"
 run "cp -r deploy dist/deploy"

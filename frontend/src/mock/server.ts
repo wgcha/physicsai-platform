@@ -27,6 +27,8 @@ import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { geomViewRoutes } from "./geomView";
+import { mockReleases, releaseRoutes } from "./releases";
+import type { ReleasesResponse } from "../api/types";
 import { DEFAULT_UI, MOCK_AI_ROOT } from "./serverOptions";
 import type { MockOptions } from "./serverOptions";
 export { MOCK_AI_ROOT, DEFAULT_UI } from "./serverOptions";
@@ -47,6 +49,7 @@ const JOB_LABEL = JOB_TYPE_LABEL;
 /** 라우터 등록(한 곳). 순서가 곧 우선순위 — 원래 handle의 if 순서 그대로 */
 const ROUTES: Route[] = [
   opsRoutes, // §10.2 me·프로젝트·상태·대기열·자원
+  releaseRoutes, // 버전 표시·버전 게시판(GET만)
   (srv, c) => srv.manage.handle(c.method, c.seg, c.body, c.me), // 3차(phase3.md §3): Study 관리·재시도·용량
   envCheckRoutes, // 2차(phase2.md §12): 환경 점검
   trainRoutes, // ①
@@ -78,6 +81,9 @@ export class MockServer {
   demo: boolean;
   configWarnings: string[];
   loginUrl: string;
+  /** 버전 게시판 목 데이터(시험이 바꿀 수 있음), versionFails면 /version·/releases 500 */
+  releases: ReleasesResponse = mockReleases();
+  versionFails = false;
   ui: Record<string, number>;
   speed: number;
   studies: Study[] = seedStudies();

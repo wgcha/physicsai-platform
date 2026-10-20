@@ -1288,6 +1288,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Releases */
+        get: operations["releases_physicsai_api_releases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/resources": {
         parameters: {
             query?: never;
@@ -2096,6 +2113,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/version": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Version */
+        get: operations["version_physicsai_api_version_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2546,6 +2580,13 @@ export interface components {
              * @enum {string}
              */
             kind: "train_doe";
+        };
+        /** BuildInfo */
+        BuildInfo: {
+            /** Built At */
+            built_at?: string | null;
+            /** Source Hash */
+            source_hash?: string | null;
         };
         /** CandidateDatatype */
         CandidateDatatype: {
@@ -5668,6 +5709,22 @@ export interface components {
             /** Views */
             views?: ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right")[] | null;
         };
+        /** ReleaseEntry */
+        ReleaseEntry: {
+            /** Date */
+            date: string;
+            /** Items */
+            items: string[];
+            /** Version */
+            version: string;
+        };
+        /** ReleasesResponse */
+        ReleasesResponse: {
+            /** Current Version */
+            current_version: string;
+            /** Releases */
+            releases: components["schemas"]["ReleaseEntry"][];
+        };
         /** ResourceJob */
         ResourceJob: {
             /** Cpu Time S */
@@ -7588,6 +7645,16 @@ export interface components {
         VersionBody: {
             /** Version */
             version: number;
+        };
+        /** VersionInfo */
+        VersionInfo: {
+            build?: components["schemas"]["BuildInfo"] | null;
+            /** Git Commit */
+            git_commit?: string | null;
+            /** Paicad Version */
+            paicad_version?: string | null;
+            /** Platform Version */
+            platform_version: string;
         };
         /** ViewTess */
         ViewTess: {
@@ -11472,6 +11539,26 @@ export interface operations {
             };
         };
     };
+    releases_physicsai_api_releases_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReleasesResponse"];
+                };
+            };
+        };
+    };
     resources_physicsai_api_resources_get: {
         parameters: {
             query?: never;
@@ -14181,6 +14268,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    version_physicsai_api_version_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VersionInfo"];
                 };
             };
         };

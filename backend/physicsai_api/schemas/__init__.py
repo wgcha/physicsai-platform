@@ -19,3 +19,4 @@ from .surrogate_opt import *  # noqa: F401,F403
 from .ops import *  # noqa: F401,F403
 from .study_storage import *  # noqa: F401,F403
 from .fs import *  # noqa: F401,F403
+from .releases import *  # noqa: F401,F403
