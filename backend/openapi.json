@@ -15331,6 +15331,26 @@
               }
             ]
           },
+          "equiv_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "equiv_check_extract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evaluate": {
             "anyOf": [
               {

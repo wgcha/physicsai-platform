@@ -72,5 +72,9 @@ def test_all_routes_prefixed():
         # geometry-view.md §6.5·§6.9·§13.5: 형상 3D 보기·미리보기·결과 3D 컨투어
         "/param-sets/{ps_id}/view", "/param-sets/{ps_id}/previews", "/previews/{preview_id}", "/studies/{study_id}/train/view",
         "/contour3d", "/contour3d/{contour_id}", "/contour3d/{contour_id}/cancel",
+        # equiv-check.md §6: ⑤ 등가성 판정 레시피·판정 이력
+        "/equiv/recipes", "/equiv/recipes/{key}", "/equiv/recipes/{key}/versions", "/equiv/recipes/{key}/restore",
+        "/studies/{study_id}/equiv-checks/preview", "/studies/{study_id}/equiv-checks", "/equiv-checks/{eq_id}",
+        "/equiv-checks/{eq_id}/curves", "/equiv-checks/{eq_id}/table.csv",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

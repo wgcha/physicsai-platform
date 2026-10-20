@@ -29,9 +29,9 @@ def _codes(items: list[dict]) -> list[str]:
     return [x["code"] for x in items]
 
 
-@pytest.mark.parametrize("kind", doe_platform.KINDS)
+@pytest.mark.parametrize("kind", registry.PLATFORM_KINDS)  # train_doe(표본표 재사용)는 samples 입력이 필요해 test_doe_reuse에서
 def test_v3_s18_1_check_runs_equal_build_rows(kind):
-    assert doe_platform.KINDS == ("lhs_opt", "sobol", "lhs", "fullfact", "fracfact", "pb", "bbd", "ccd")
+    assert doe_platform.KINDS == ("lhs_opt", "sobol", "lhs", "fullfact", "fracfact", "pb", "bbd", "ccd", "train_doe")  # equiv-check.md Q1: 표본표 재사용
     for k in range(2, 12):
         s = {"kind": kind, **INPUTS[kind]}
         chk = doe_platform.check(s, _setup(k), SETTINGS)
