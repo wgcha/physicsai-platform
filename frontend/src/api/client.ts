@@ -137,6 +137,23 @@ export async function fetchBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+/** 산출물 바이너리(ArrayBuffer). range = [시작, 끝](포함) → `Range: bytes=a-b`. partial = 206(서버가 범위를 지원)
+ * 410 ARTIFACT_EXPIRED(서버측 캐시 정리됨)는 ApiError(410)로 던진다 — 호출부가 다시 요청한다(geometry-view.md §6.6) */
+export async function fetchBuffer(path: string, range?: [number, number]): Promise<{ buffer: ArrayBuffer; partial: boolean }> {
+  const url = buildUrl(path);
+  let res: Response;
+  try {
+    res = await fetch(url, { credentials: "same-origin", headers: range ? { Range: `bytes=${range[0]}-${range[1]}` } : undefined });
+  } catch {
+    throw new ApiError(0, { code: "NETWORK_ERROR", message: "서버에 연결할 수 없습니다." });
+  }
+  if (!res.ok) {
+    signal401(res.status);
+    throw await toError(res);
+  }
+  return { buffer: await res.arrayBuffer(), partial: res.status === 206 };
+}
+
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
     const missing = (e.detail as { missing?: unknown }).missing;

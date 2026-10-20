@@ -13,6 +13,7 @@ import { POLL } from "../../../lib/poll";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { mdHm } from "../history/runListText";
 import { ContourCompare } from "./ContourCompare";
+import { ContourPanel } from "../geomview/contour/ContourPanel";
 import { CurveCompare } from "./CurveCompare";
 import { ResponseCompareTable } from "./ResponseCompareTable";
 import { FV_STATE_TEXT, FV_STATUS_LABEL, fvStages, fvTone, pctText } from "./verifyRules";
@@ -135,7 +136,10 @@ export function VerifyDetail({ fid }: { fid: string }) {
         ) : tab === "curves" ? (
           <CurveCompare fid={fv.id} curve={fv.compare!.curve} />
         ) : (
-          <ContourCompare fid={fv.id} label={fv.label} legend={fv.compare!.legend} />
+          <>
+            <ContourCompare fid={fv.id} label={fv.label} legend={fv.compare!.legend} />
+            <ContourPanel key={fv.id} source={{ source_kind: "SOLVER_H3D", source_ref: { fem_verification_id: fv.id } }} label="3D 컨투어(FEM 해석)" />
+          </>
         )}
       </Card>
 

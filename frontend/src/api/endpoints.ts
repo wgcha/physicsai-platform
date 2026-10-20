@@ -1,5 +1,5 @@
 // 계약 §10 엔드포인트 함수. 화면 코드는 fetch를 직접 쓰지 않고 이 객체만 쓴다.
-import { API_PREFIX, fetchBlob, request, requestPage } from "./client";
+import { API_PREFIX, fetchBlob, fetchBuffer, request, requestPage } from "./client";
 import type {
   Artifact,
   BatchCurves,
@@ -59,6 +59,11 @@ import type {
   StorageReport,
   Study,
   StudyDetail,
+  GeomView,
+  GeomPreview,
+  GeomPreviewCreate,
+  Contour3d,
+  Contour3dCreate,
 } from "./types";
 
 export const api = {
@@ -124,6 +129,17 @@ export const api = {
   paramMap: (id: string) => request<ParamMap>("GET", `/param-sets/${id}/param-map`),
   putParamMap: (id: string, decisions: MapRowDecision[]) => request<ParamMap>("PUT", `/param-sets/${id}/param-map`, { body: { decisions } }),
   confirmParamMap: (id: string) => request<ParamMap>("POST", `/param-sets/${id}/param-map/confirm`),
+  /** geometry-view.md §6.5: 공칭 3D 뷰(GLB·manifest artifact id) · 미리보기(200 캐시 적중 | 202) · 미리보기 상태 */
+  paramSetView: (id: string) => request<GeomView>("GET", `/param-sets/${id}/view`),
+  createPreview: (id: string, body: GeomPreviewCreate) => request<GeomPreview>("POST", `/param-sets/${id}/previews`, { body }),
+  preview: (id: string) => request<GeomPreview>("GET", `/previews/${id}`),
+  /** §13.5 결과 3D 컨투어(열 때 생성): 200 적중 | 202 생성 중(progress) · 상태 · 취소 */
+  createContour3d: (body: Contour3dCreate) => request<Contour3d>("POST", "/contour3d", { body }),
+  contour3d: (id: string) => request<Contour3d>("GET", `/contour3d/${id}`),
+  cancelContour3d: (id: string) => request<Contour3d>("POST", `/contour3d/${id}/cancel`),
+  /** GLB·프레임 바이너리(`/artifacts/{id}/media`, Range 지원 — 410 = 캐시 정리됨) · manifest JSON(`/content`) */
+  artifactBuffer: (id: string, range?: [number, number]) => fetchBuffer(`/artifacts/${id}/media`, range),
+  artifactJson: <T,>(id: string) => request<T>("GET", `/artifacts/${id}/content`),
   paramSets: (studyId: string) => request<ParamSet[]>("GET", `/studies/${studyId}/param-sets`),
   paramSet: (id: string) => request<ParamSet>("GET", `/param-sets/${id}`),
   samples: (id: string, limit = 200, cursor?: string | null) =>
@@ -193,6 +209,8 @@ export const api = {
   generateTpl: (studyId: string, version: number) => request<TrainSetup>("POST", `/studies/${studyId}/train/tpl`, { body: { version } }),
   doeTypes: () => request<DoeType[]>("GET", "/train/doe-types"),
   /** geometry-engine.md §7.3.1: ① native 추출 피처(종류·범위·그룹·하이라이트 PNG artifact id) */
+  /** geometry-view.md §6.9: ①-1·①-2 공칭 3D 뷰(preview_available=false) */
+  trainView: (studyId: string) => request<GeomView>("GET", `/studies/${studyId}/train/view`),
   trainFeatures: (studyId: string) => request<NativeFeatures>("GET", `/studies/${studyId}/train/features`),
   trainDoes: (studyId: string) => request<TrainDoe[]>("GET", `/studies/${studyId}/train/does`),
   trainDoe: (id: string) => request<TrainDoe>("GET", `/train-does/${id}`),

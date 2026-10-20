@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { api, ApiError, errorMessage, type NativeFeature, type TrainParam } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute } from "../../hooks/useJobRunner";
@@ -8,6 +8,7 @@ import { fmtTime } from "../../lib/format";
 import { useTrain } from "./TrainContext";
 import { isPositionType, typeLabel } from "../../lib/geometry";
 import { FeaturePng } from "../stage4/geometry/NativeDetail";
+import { GeomView3DLazy as GeomView3D } from "../stage4/geomview/GeomView3DLazy";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -66,6 +67,8 @@ export function ParamTableCard() {
     };
   }, [native, study.id, setup?.extract_job_id]);
   const pngF = png ? features.get(png) : undefined;
+  // geometry-view.md §6.9: ①-2 공칭 3D 뷰(같은 뷰어, 미리보기 없음) — 선택 행 = png
+  const loadView = useCallback(() => api.trainView(study.id), [study.id]);
 
   useEffect(() => {
     setRows((setup?.parameters ?? []).map(toRow));
@@ -167,7 +170,13 @@ export function ParamTableCard() {
               {rows.map((r, i) => {
                 const note = serverProblems[r.name] ?? issues[i] ?? (!r.valid ? r.problems.join(" · ") || "사용 불가" : null);
                 return (
-                  <tr key={r.name} className={r.use ? "" : "unused"}>
+                  <tr
+                    key={r.name}
+                    data-row={r.name}
+                    className={`${r.use ? "" : "unused"}${native && png === r.name ? " picked" : ""}`}
+                    aria-selected={native ? png === r.name : undefined}
+                    onClick={native ? (e) => !(e.target as HTMLElement).closest("input,button,select") && setPng(png === r.name ? null : r.name) : undefined}
+                  >
                     <td>
                       <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !r.valid || r.nominal === null} onChange={(e) => set(i, { use: e.target.checked })} />
                     </td>
@@ -209,7 +218,17 @@ export function ParamTableCard() {
           </table>
         </div>
       )}
-      {pngF?.png_artifact_id && <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} />}
+      {native && rows.length > 0 ? (
+        <GeomView3D
+          loadKey={`${study.id}:${setup?.extract_job_id ?? ""}`}
+          load={loadView}
+          row={png}
+          onRow={setPng}
+          picture={pngF?.png_artifact_id ? <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} /> : null}
+        />
+      ) : (
+        pngF?.png_artifact_id && <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} />
+      )}
       {tpl && !native && (
         <div className="tpl-state small" data-testid="tpl-state">
           <div>

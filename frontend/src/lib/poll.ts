@@ -11,6 +11,7 @@ export const POLL = {
   checkDebounce: 300,
   batch: 5000, // ④ 일괄 예측 결과(진행 중 5초, phase3.md §14.8)
   surrogate: 5000, // ⑤ 내장 최적화 결과(진행 중 5초, phase3.md §18.10)
+  preview: 500, // 형상 미리보기·결과 3D 컨투어 생성(0.5초, geometry-view.md §6.5·§13.6)
 };
 
 /** B1: /status.ui 값(ms)을 반영 */

@@ -7,6 +7,7 @@ import { JsonTree } from "../../components/JsonTree";
 import { useArtifactJson } from "../../hooks/useArtifact";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { ContourMedia } from "./ContourMedia";
+import { ContourPanel } from "./geomview/contour/ContourPanel";
 import { fmtNum, fmtPct } from "../../lib/format";
 
 /** 실행 체인 4단계: 형상 → 메싱 → 입력파일 → 예측 */
@@ -221,6 +222,7 @@ export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null
           <div className="result-grid">
             <div className="result-contour">
               <ContourMedia jobId={pjob.id} canCapture={canCapture} captureViews={captureViews} />
+              <ContourPanel key={pjob.id} source={{ source_kind: "PREDICT_H3D", source_ref: { job_id: pjob.id } }} />
               <ResultListTree artifactId={result.preview_json_artifact_id} />
             </div>
             <div className="result-side">

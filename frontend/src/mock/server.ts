@@ -26,6 +26,7 @@ import { predictRunsRoutes, seedPredictRuns } from "./predictRuns";
 import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
+import { geomViewRoutes } from "./geomView";
 import { DEFAULT_UI, MOCK_AI_ROOT } from "./serverOptions";
 import type { MockOptions } from "./serverOptions";
 export { MOCK_AI_ROOT, DEFAULT_UI } from "./serverOptions";
@@ -54,6 +55,7 @@ const ROUTES: Route[] = [
   preparedRoutes, // S6 ④ 준비된 입력 inspect(PREDICT_INPUT)
   surrogateRoutes, // S13 ⑤ 내장 최적화(phase3.md §18.6)
   predictBatchRoutes, // S9 ④ 일괄 예측·템플릿 응답(phase3.md §14.7)
+  geomViewRoutes, // geometry-view.md §6.5·§13.5 형상 3D 뷰·미리보기·결과 3D 컨투어(GEOM_*·CONTOUR3D_* media Range·410)
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
   femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)

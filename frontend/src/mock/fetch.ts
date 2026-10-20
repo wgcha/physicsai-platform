@@ -11,7 +11,11 @@ export function createMockFetch(server: MockServer, realFetch?: typeof fetch): t
       return new Response("not found", { status: 404 });
     }
     const method = (init?.method ?? "GET").toUpperCase();
-    const headers = new Headers(init?.headers);
+    const headers0 = new Headers(init?.headers);
+    // jsdom Headers는 Range를 버린다 — 일반 객체로 온 Range는 직접 넘긴다(브라우저 Headers는 그대로 보존)
+    const raw = init?.headers && !(init.headers instanceof Headers) && !Array.isArray(init.headers) ? (init.headers as Record<string, string>) : {};
+    const range = raw.Range ?? raw.range ?? headers0.get("Range");
+    const headers = { get: (k: string) => (k.toLowerCase() === "range" ? range : headers0.get(k)), has: (k: string) => (k.toLowerCase() === "range" ? range != null : headers0.has(k)) } as Headers;
     let body: Record<string, unknown> | null = null;
     if (typeof init?.body === "string") body = JSON.parse(init.body);
     const r = server.handle(method, url.pathname.slice(prefix.length) || "/", url.searchParams, body, headers);

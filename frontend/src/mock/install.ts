@@ -2,7 +2,11 @@
 // ?mockUser=admin|power|general|anon 으로 사용자 전환(localStorage에 기억), ?hpc=1 이면 PBS 구성됨, ?demo=1 이면 시연 모드,
 // ?batch=running 이면 진행 중 일괄 예측 B-003 시드(S9). ?hpc=scx 이면 SCX 게이트웨이(D3-58), &scx=unknown 이면 결과 모름 run 1개.
 // ?geom=native|multi 이면 native 세트 ps-n1 시드(multi = baseline B2·매칭표 초안, geometry-engine.md §8).
+// ?train=native 이면 ① 학습 설정을 native 추출 결과로(①-2 공칭 3D 뷰 시연, geometry-view.md §6.9).
+// ?c3d=hold|fail|expire 이면 결과 3D 컨투어 생성 시연(대기 안내에서 멈춤·결과 실패·첫 프레임 410, geometry-view.md §13.6).
 import { MockServer, createMockFetch } from "./server";
+import { setGvMode } from "./geomView";
+import { nativeTrainParams } from "./geometry";
 import type { MockUserKey } from "./data";
 
 const KEY = "physicsai.mockUser";
@@ -22,6 +26,9 @@ export function installMockFetch() {
     const [view, ct] = kv.split(":");
     if (view && ct) server.videoTypes[view] = ct;
   }
+  if (params.get("train") === "native" && server.p2.setups["s-cushion"]) Object.assign(server.p2.setups["s-cushion"], { engine: "native", parameters: nativeTrainParams(), tpl: null });
+  const c3d = params.get("c3d");
+  if (c3d === "hold" || c3d === "fail" || c3d === "expire") setGvMode(server, { c3d });
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

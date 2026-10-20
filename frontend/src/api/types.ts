@@ -58,7 +58,16 @@ export type ArtifactKind =
   | "CONTOUR_IMAGE"
   | "CONTOUR_VIDEO"
   // geometry-engine.md §7.5 피처 하이라이트 PNG
-  | "FEATURE_PNG";
+  | "FEATURE_PNG"
+  // geometry-view.md §2.3: 형상 3D 뷰·미리보기·결과 3D 컨투어(GLB·manifest·프레임)
+  | "GEOM_VIEW_GLB"
+  | "GEOM_VIEW_MANIFEST"
+  | "GEOM_PREVIEW_GLB"
+  | "GEOM_PREVIEW_FE_GLB"
+  | "GEOM_PREVIEW_MANIFEST"
+  | "CONTOUR3D_GLB"
+  | "CONTOUR3D_FRAMES"
+  | "CONTOUR3D_MANIFEST";
 
 export const TERMINAL_STATES: JobState[] = ["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"];
 
@@ -146,3 +155,4 @@ export * from "./typesPredict";
 export * from "./typesPhase2";
 export * from "./typesBatch";
 export * from "./typesMedia";
+export * from "./typesGeomView";
