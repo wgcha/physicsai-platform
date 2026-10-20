@@ -10,7 +10,9 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from ..db.repositories import train as train_repo
-from ..stage4_predict.run_metrics import safe_study_path
+from ..errors import DomainError
+from ..path_links import is_link_or_reparse
+from ..paths import resolve_in_study
 from .doe_samples import read_samples_csv
 
 Samples = tuple[list[str], list[dict[str, Any]]]
@@ -23,8 +25,11 @@ def load_reuse_samples(conn: Any, study_id: str, study_root: str, doe_id: str) -
         return None, {"code": "SOURCE_DOE_NOT_FOUND", "message": "표본표를 재사용할 DOE를 이 Study에서 찾을 수 없습니다"}
     if d["status"] != "READY" or d["sample_status"] not in ("PARSED", "PARTIAL"):
         return None, {"code": "SOURCE_DOE_NOT_READY", "message": f"DOE {d['doe_label']}의 표본표가 준비되지 않았습니다(READY·PARSED/PARTIAL 필요)"}
-    p = safe_study_path(study_root, d.get("samples_rel")) if d.get("samples_rel") else None
-    if not p or not os.path.isfile(p):
+    try:
+        p = resolve_in_study(study_root, d["samples_rel"]) if d.get("samples_rel") else None
+    except DomainError:
+        p = None
+    if not p or not os.path.isfile(p) or is_link_or_reparse(p):
         return None, {"code": "SOURCE_SAMPLES_MISSING", "message": f"DOE {d['doe_label']}의 samples.csv가 없습니다"}
     header, rows = read_samples_csv(p)
     if not rows:
