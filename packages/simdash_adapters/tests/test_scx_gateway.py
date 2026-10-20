@@ -20,6 +20,8 @@ from simdash_adapters.hpc import (
     validate_scx_config,
 )
 
+from simdash_adapters.hpc.scx_client import MSG_RELAY_DISABLED, MSG_RELAY_NO_ROUTE
+
 SRC = Path(__file__).resolve().parents[1] / "src" / "simdash_adapters" / "hpc"
 
 
@@ -125,6 +127,47 @@ def test_wrong_secret_is_unavailable(fake_relay, tmp_path):
         gw.health()
     assert ei.value.relay_code == "RELAY_UNAUTHORIZED" and ei.value.code == "UNAVAILABLE"
     assert "B" * 43 not in str(ei.value)
+
+
+def _serve(handler_cls):
+    import threading
+    from http.server import HTTPServer
+    srv = HTTPServer(("127.0.0.1", 0), handler_cls)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    return srv
+
+
+@pytest.mark.parametrize("ctype, body, want, relay_code", [
+    ("text/plain", b"The server is configured with a public base URL of /home/secret/x", MSG_RELAY_NO_ROUTE, None),
+    ("application/json", b'{"code":"RELAY_DISABLED","message":"secret detail","retryable":false}', MSG_RELAY_DISABLED, "RELAY_DISABLED"),
+])
+def test_relay_404_messages(fake_relay, tmp_path, ctype, body, want, relay_code):
+    from http.server import BaseHTTPRequestHandler
+
+    class H(BaseHTTPRequestHandler):
+        def log_message(self, *a):
+            pass
+
+        def do_GET(self):  # noqa: N802
+            self.send_response(404)
+            self.send_header("Content-Type", ctype)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+    srv = _serve(H)
+    try:
+        url = f"http://127.0.0.1:{srv.server_address[1]}"
+        gw = _gw(fake_relay, tmp_path, relay_url=url, health_ttl_s=0)
+        with pytest.raises(HpcGatewayError) as ei:
+            gw.health()
+        assert str(ei.value) == want and ei.value.http_status == 404 and ei.value.relay_code == relay_code
+        assert "secret" not in str(ei.value) and "/home/" not in str(ei.value)
+        av = gw.availability()  # 환경 점검(health) 경로도 같은 문구, 작업 생성은 막지 않음
+        assert av.configured and av.message.endswith(want)
+    finally:
+        srv.shutdown()
+        srv.server_close()
 
 
 def test_upload_batch_and_new_dir(fake_relay, tmp_path):

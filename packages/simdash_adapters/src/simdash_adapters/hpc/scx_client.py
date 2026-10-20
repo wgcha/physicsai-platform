@@ -31,6 +31,9 @@ _UNAVAILABLE_CODES = frozenset({
     "DRIVE_TIMEOUT", "DRIVE_UNAVAILABLE", "DRIVE_STAGING_FULL", "DRIVE_INTERNAL", "LOCKED", "JOB_API_UNAVAILABLE",
 })
 _NOT_FOUND_CODES = frozenset({"NOT_FOUND", "JOB_NOT_FOUND", "SCX_JOB_NOT_FOUND"})
+MSG_RELAY_NO_ROUTE = ("relay HTTP 404 — relay 경로가 없습니다. relay_url이 대시보드 화면(Vite·Caddy) 포트가 아니라 백엔드(uvicorn) 포트인지, "
+                      "대시보드가 relay 포함 버전인지 확인하세요")
+MSG_RELAY_DISABLED = "대시보드 relay가 꺼져 있습니다(SIMDASH_SCX_RELAY_ENABLED=true 후 대시보드 재시작)"
 
 
 def parse_relay_url(url: str) -> tuple[str, int]:
@@ -128,6 +131,11 @@ class ScxRelayClient:
             retryable = bool(body.get("retryable"))
         if 300 <= status < 400:
             return HpcGatewayError("UNAVAILABLE", f"relay 리다이렉트 응답(HTTP {status})은 따르지 않습니다", http_status=status)
+        if code == "RELAY_DISABLED":  # 본문(message)은 문구에 넣지 않는다
+            return HpcGatewayError(_gateway_code(status, code), MSG_RELAY_DISABLED, relay_code=code, http_status=status,
+                                   retryable=retryable or status >= 500)
+        if status == 404 and code is None:  # relay 오류 JSON이 아님 = relay 라우트 자체가 없음(화면 포트·구버전 대시보드)
+            return HpcGatewayError(_gateway_code(status, None), MSG_RELAY_NO_ROUTE, http_status=status)
         text = f"relay {code or 'HTTP ' + str(status)}" + (f": {message}" if message else "")
         return HpcGatewayError(_gateway_code(status, code), text[:300], relay_code=code, http_status=status,
                                retryable=retryable or status >= 500)
