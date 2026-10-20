@@ -32,6 +32,7 @@
 ## 커밋 규칙
 
 - 작은 단위로, 제목 한 줄(한국어 또는 영어, 72자 이내) + 필요 시 본문에 계약 절 번호(`platform.md §8.4`).
+- 릴리스 시 `RELEASES.md` 최상단 항목과 루트 `pyproject.toml` `version`(= `physicsai_core.__version__`)을 같은 커밋에서 함께 올린다(`scripts/test-all`이 검사).
 - 커밋 전 `scripts/test-all` 통과. 실패한 채로 커밋하지 않는다.
 - 비밀값·`config/platform.yaml`·대용량 산출물(`*.psdata`, `*.psmdl`, `*.h3d`)을 커밋하지 않는다.
 - 메인 에이전트가 지시하지 않으면 push하지 않는다.

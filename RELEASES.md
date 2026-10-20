@@ -1,0 +1,28 @@
+# PhysicsAI 플랫폼 버전 기록
+
+배포로만 기록한다(웹 화면·API에는 작성·수정·삭제 수단이 없다). 릴리스할 때 맨 위에 새 항목을 추가하고
+루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
+(`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
+
+## 0.2.0 — 2026-10-20
+
+- native 형상 엔진(paicad): 형상 파라미터 자동 정의·모핑으로 NX·SimLab 없이 형상·메시 생성(기존 Altair 경로와 선택)
+- 쉘 비드 모핑(chassis_rear) 지원
+- 쉘 두께 파라미터(3S) 지원
+- 다중 baseline 등록과 파라미터 매칭표(행별 결정·다시 매칭)
+- 형상 3D 보기·미리보기
+- 결과 3D 컨투어 보기
+- ⑥ 최적화 HyperStudy 독립 실행 — GA·NSGA-II 내장
+- native DOE run 폴더 평탄화(run__N 직계 = 해석 입력, 보조 산출물은 _paicad/)
+- 병행 설치 옵션(작업 이름 접두사·포트 분리, 선택)
+- phase3 기존 기능 포함: ⑤ 결과분석(S14), 표본 방식 추가(S15), 단일 예측 실행 목록·조립 FEM 검증·영상(S16), 성능 정의·다목적 내장 최적화(S17),
+  ① 학습 DOE 플랫폼 동시 생성(S18), GPU 조회 실패 대응·⑤ 성능 서버 계산(S19), SCX Radioss 버전 작업별 입력(S20)
+- 웹 화면 상단 버전 표시와 버전 게시판(읽기 전용)
+- ⑥ 최적화 응답·기준(방향·임계값·가중치) 사용자 결정 — 자동 지정·기본값 제거, 비면 시작 차단(OPT_CRITERIA_REQUIRED)
+- S20 보강: SCX Radioss 병렬 기본 Pure MPI, scx 모드 queue·walltime 칸 숨김
+- 서비스 재시작 스크립트(deploy/restart.ps1)
+- ① run 목록 페이지 크기 200
+
+## 0.1.0 — 2026-10-20
+
+- phase3 기준(6d969eb + S20) 운영 배포 — ①~⑥ 단계, 대시보드 연동, 오프라인 설치 묶음

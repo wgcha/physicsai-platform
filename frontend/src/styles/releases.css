@@ -1,0 +1,75 @@
+/* 버전 배지(상단 바)·버전 게시판(읽기 전용) */
+.version-badge {
+  position: relative;
+  flex: none;
+  padding: 2px var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  text-decoration: none;
+}
+.version-badge:hover {
+  color: var(--color-accent);
+  border-color: var(--color-accent);
+}
+.version-new {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--color-danger);
+}
+.release-page {
+  max-width: 880px;
+}
+.release-list {
+  list-style: none;
+  margin: var(--space-4) 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.release-item {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+}
+.release-item.latest {
+  border-color: var(--color-accent);
+}
+.release-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-3);
+}
+.release-version {
+  font: var(--font-b-strong);
+}
+.release-tag {
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-pill);
+  font: var(--font-r-strong);
+}
+.release-tag.latest {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+.release-tag.new {
+  border-color: var(--color-danger-border);
+  background: var(--color-danger-surface);
+  color: var(--color-danger);
+}
+.release-items {
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-5);
+}
+.release-items li + li {
+  margin-top: var(--space-1);
+}

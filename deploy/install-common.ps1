@@ -648,6 +648,8 @@ function Install-PhysicsAIFrontendFromRepo {
         Invoke-PhysicsAIFrontendBuild -Node $node -RepoRoot $RepoRoot -StampFile $StampFile
         Publish-PhysicsAIFrontend -Dist (Join-Path $RepoRoot 'frontend\dist') -Dest $Dest -BackupDir $BackupDir
     }
+    $releases = Join-Path $RepoRoot 'RELEASES.md'   # 버전 게시판(백엔드가 server.frontend_root에서 읽기만)
+    if (Test-Path -LiteralPath $releases) { Copy-Item -Force -LiteralPath $releases -Destination (Join-Path $Dest 'RELEASES.md') }
 }
 
 function Restore-PhysicsAIAfterFailedUpdate {

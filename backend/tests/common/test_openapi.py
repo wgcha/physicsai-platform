@@ -17,6 +17,7 @@ def test_all_routes_prefixed():
     assert paths and all(p.startswith("/physicsai/api/") for p in paths)
     expected = {
         "/health", "/me", "/projects", "/status", "/queue", "/queue/{job_id}/move", "/resources", "/studies",
+        "/version", "/releases",  # 버전 표시·버전 게시판(읽기 전용)
         "/studies/{study_id}", "/studies/{study_id}/archive", "/studies/{study_id}/paths/inspect",
         "/studies/{study_id}/datasets", "/datasets/{dataset_id}", "/studies/{study_id}/models", "/models/{model_id}",
         "/studies/{study_id}/final-model", "/studies/{study_id}/param-sets", "/param-sets/{ps_id}",

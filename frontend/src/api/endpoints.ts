@@ -64,6 +64,8 @@ import type {
   GeomPreviewCreate,
   Contour3d,
   Contour3dCreate,
+  VersionInfo,
+  ReleasesResponse,
 } from "./types";
 
 export const api = {
@@ -75,6 +77,9 @@ export const api = {
   moveQueue: (jobId: string, position: number) =>
     request<QueueInfo>("POST", `/queue/${jobId}/move`, { body: { position } }),
   resources: () => request<Resources>("GET", "/resources"),
+  // 버전 표시·버전 게시판: 조회만(작성·수정·삭제 없음 — 배포로만 기록)
+  version: () => request<VersionInfo>("GET", "/version"),
+  releases: () => request<ReleasesResponse>("GET", "/releases"),
 
   // §10.3 Study·경로
   studies: (projectId: string, status?: string) =>

@@ -37,6 +37,8 @@ const cases: [string, string, string, ("power" | "admin")?, ConstructorParameter
   ["/projects", "/projects", "get"],
   ["/queue", "/queue", "get"],
   ["/resources", "/resources", "get"],
+  ["/version", "/version", "get"],
+  ["/releases", "/releases", "get"],
   ["/studies?project_id=p-cushion", "/studies", "get"],
   ["/studies/s-cushion", "/studies/{study_id}", "get"],
   ["/studies/s-cushion/datasets", "/studies/{study_id}/datasets", "get"],

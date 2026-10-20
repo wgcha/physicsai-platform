@@ -115,6 +115,7 @@ try {
     Invoke-Step "copy $feSrc, migrations, config(+demo), deploy(+demo fake_tools)" {
         # 폴더 안으로 내용만 복사(다시 실행해도 dist\deploy\deploy처럼 겹치지 않게)
         Copy-Item -Recurse -Force "$feSrc\*" 'dist\frontend\'
+        Copy-Item -Force 'RELEASES.md' 'dist\frontend\RELEASES.md'   # 버전 게시판(백엔드가 server.frontend_root에서 읽기만)
         Copy-Item -Recurse -Force 'migrations\*' 'dist\migrations\'
         Copy-Item -Force 'config\platform.example.yaml' 'dist\config\platform.example.yaml'
         Copy-Item -Force 'config\platform.demo.yaml' 'dist\config\platform.demo.yaml'
