@@ -19,7 +19,7 @@ DOE_TYPE_NATIVE = "NATIVE_LHS"
 DOE_LABEL_NATIVE = "LHS(native)"
 
 
-def _native_doe_common(cfg: Any, p: Any) -> tuple[str, int, int, int, str]:
+def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] | None = None) -> tuple[str, int, int, int, str]:
     """native DOE 공통 입력(geometry-engine.md §7.3.3 + phase3 §23.4 S18 통합) → (doe_label, num_runs, seed, 동시 수, 실패 처리).
 
     native는 S18 생성 방식 `platform`의 한 경로(LHS + paicad)다. `generator`는 생략 또는 platform만.
@@ -31,6 +31,25 @@ def _native_doe_common(cfg: Any, p: Any) -> tuple[str, int, int, int, str]:
     if p.options:
         raise invalid_at("options", "native DOE는 options를 쓸 수 없습니다(seed 사용)", "DOE_OPTIONS_INVALID")
     given = p.model_fields_set
+    if p.sampling is not None and p.sampling.model_dump().get("kind") == "train_doe":  # equiv-check.md Q1: 표본표 재사용(run 이름 유지)
+        from physicsai_core.stage1_train_data import doe_reuse
+
+        for k in ("num_runs", "seed"):
+            if k in given:
+                raise invalid_at(k, f"표본표 재사용(sampling.kind=train_doe)에서는 {k}를 쓸 수 없습니다")
+        mism = doe_reuse.name_mismatch(samples, names or []) if samples else {"code": "SOURCE_DOE_NOT_FOUND", "message": "원본 DOE 표본표가 없습니다"}
+        if mism is not None:
+            raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422, problems=[mism])
+        rows, _skipped = doe_reuse.matrix_rows(samples, names or [])
+        if not 2 <= len(rows) <= cfg.train_data.max_runs:
+            raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                              problems=[{"code": "TOO_FEW_ROWS" if len(rows) < 2 else "TOO_MANY_ROWS",
+                                         "message": f"재사용할 run이 {len(rows)}개입니다(2~{cfg.train_data.max_runs})"}])
+        cap = cfg.train_data.max_multi_execution
+        multi = min(cfg.train_data.platform_parallel_default, cap) if p.multi_execution is None else p.multi_execution
+        if multi > cap:
+            raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
+        return p.doe_label or "표본표 재사용(native)", len(rows), 1, multi, p.on_run_failure or "continue"
     if p.sampling is not None:
         sp = p.sampling.model_dump()
         if sp.get("kind") != "lhs":
@@ -66,13 +85,19 @@ def native_extract_params(ctx: AppContext, p: Any) -> tuple[dict[str, Any], dict
     return {"cad_path": cp.path, "engine": "native"}, None, []
 
 
-def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
+def _sampling_param(p: Any) -> dict[str, Any]:
+    sp = p.sampling.model_dump() if p.sampling is not None else None
+    return {"sampling": sp} if sp and sp.get("kind") == "train_doe" else {}
+
+
+def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any = None
+                   ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     cfg = ctx.settings
     require_native_available(cfg)
     if not setup.get("features_rel") or not setup.get("cad_file_name") or not tp.used(setup.get("parameters") or []):
         raise DomainError("PREREQUISITE_MISSING", "형상 피처와 사용 파라미터가 필요합니다(①-1을 native로 먼저)", status=409,
                           missing=["GEOM_FEATURES"])
-    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p)
+    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [q["name"] for q in tp.used(setup.get("parameters") or [])])
     if p.radioss_assem_path is None:
         raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     cp = check_user_path(p.radioss_assem_path, allowed_roots(cfg, imports=True))
@@ -98,11 +123,11 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any) -> tuple[dict
     doe_id = str(uuid.uuid4())
     params = {"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
               "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
-              "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id}
+              "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id, **_sampling_param(p)}
     return params, {"doe_id": doe_id}, []
 
 
-def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: Any
+def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: Any, samples: Any = None
                         ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     """세트 기준 native DOE(§7.3.6·§7.3.8·§11.1): 준비본 READY(baseline별) + 다중 baseline이면 매칭표 확정(409 PARAM_MAP_UNCONFIRMED)."""
     from physicsai_core.db.repositories import param_sets as ps_repo
@@ -121,10 +146,13 @@ def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: An
     require_map_confirmed(ctx, ps)
     if p.radioss_assem_path is not None:
         raise invalid_at("radioss_assem_path", "세트 기준 DOE는 세트의 조립 폴더를 씁니다(radioss_assem_path 생략)")
-    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p)
+    if samples is not None and os.path.isfile(os.path.join(set_path(ctx, ps), "param_map.json")):
+        raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                          problems=[{"code": "DESIGN_UNSUPPORTED", "message": "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다"}])
+    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [str(r["name"]) for r in ps["parameters"]])
     doe_id = str(uuid.uuid4())
     params = {"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
               "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
               "on_run_failure": on_fail, "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"),
-              "doe_id": doe_id, "param_set_id": ps["id"]}
+              "doe_id": doe_id, "param_set_id": ps["id"], **_sampling_param(p)}
     return params, {"doe_id": doe_id, "param_set_id": ps["id"]}, []

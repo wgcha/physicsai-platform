@@ -155,9 +155,17 @@ class TrainSamplingCcd(Req):
     alpha: Literal["face", "inscribed"] = "face"
 
 
+class TrainSamplingTrainDoe(Req):
+    """equiv-check.md Q1(2026-10-20): 같은 Study의 다른 DOE(READY, 표본표 PARSED/PARTIAL) samples.csv 행 그대로 — run 이름을 유지해
+    등가성 판정의 쌍 매칭 키로 쓴다. 파라미터 이름 집합이 같을 때만(native·altair 모두)."""
+
+    kind: Literal["train_doe"]
+    doe_id: str = Field(max_length=64)
+
+
 TrainSampling = Annotated[
     Union[TrainSamplingLhs, TrainSamplingLhsOpt, TrainSamplingSobol, TrainSamplingFullfact, TrainSamplingFracfact,
-          TrainSamplingPb, TrainSamplingBbd, TrainSamplingCcd],
+          TrainSamplingPb, TrainSamplingBbd, TrainSamplingCcd, TrainSamplingTrainDoe],
     Field(discriminator="kind")]
 
 

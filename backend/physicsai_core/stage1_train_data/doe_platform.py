@@ -19,7 +19,8 @@ from ..sampling.matrix import BatchRow, BatchShapeError, build_matrix
 from . import train_params as tp
 from .train_tpl import tpl_params_snapshot
 
-KINDS = registry.PLATFORM_KINDS  # lhs_opt, sobol, lhs, fullfact, fracfact, pb, bbd, ccd
+REUSE_KIND = "train_doe"  # equiv-check.md Q1: 다른 DOE의 표본표 재사용(run 이름 유지) — 호출부가 samples를 넘긴다
+KINDS = registry.PLATFORM_KINDS + (REUSE_KIND,)  # lhs_opt, sobol, lhs, fullfact, fracfact, pb, bbd, ccd, train_doe
 # kind별 허용 입력 키(정규화 순서)와 기본값 — API 스키마(TrainSampling)와 같은 규칙
 _DEFAULTS: dict[str, dict[str, Any]] = {
     "lhs": {"count": None, "seed": 1},
@@ -30,6 +31,7 @@ _DEFAULTS: dict[str, dict[str, Any]] = {
     "pb": {},
     "bbd": {},
     "ccd": {"alpha": "face"},
+    "train_doe": {"doe_id": None},
 }
 
 
@@ -77,6 +79,8 @@ def normalize(sampling: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
         out[k] = (dict(dv) if isinstance(dv, dict) else dv) if v is None else (dict(v) if isinstance(v, Mapping) else v)
     if kind in ("lhs", "lhs_opt", "sobol") and out["count"] is None:
         raise BatchShapeError("sampling.count는 정수여야 합니다")
+    if kind == REUSE_KIND and not isinstance(out["doe_id"], str):
+        raise BatchShapeError("sampling.doe_id(표본표를 재사용할 DOE)가 필요합니다")
     return kind, out
 
 
@@ -96,25 +100,37 @@ def _plan(kind: str, inp: dict[str, Any], matrix: Any) -> PlatformPlan:
                         list(matrix.notes), dict(matrix.source_meta))
 
 
-def _matrix(source: dict[str, Any], setup: Mapping[str, Any], settings: Any) -> Any:
+Samples = tuple[list[str], list[dict[str, Any]]]  # (samples.csv 헤더, 행) — `doe_samples.read_samples_csv` 결과
+
+
+def _matrix(source: dict[str, Any], setup: Mapping[str, Any], settings: Any, samples: Samples | None = None) -> Any:
     params, tpl_params = design_inputs(setup)
     return build_matrix(source, parameters=params, tpl_params=tpl_params, max_runs=int(settings.train_data.platform_max_runs),
                         table_max_bytes=int(settings.predict_batch.table_max_bytes),
-                        integer_rounding=settings.predict.integer_rounding)
+                        integer_rounding=settings.predict.integer_rounding,
+                        samples_header=samples[0] if samples else None, samples=samples[1] if samples else None)
 
 
-def check(sampling: Mapping[str, Any], setup: Mapping[str, Any], settings: Any) -> PlatformPlan:
-    """API 검증(동기): lhs_opt는 {kind: lhs, count, seed}로 대신(같은 run 수·같은 count·seed 오류). rows는 run 수 계산용."""
+def check(sampling: Mapping[str, Any], setup: Mapping[str, Any], settings: Any, *, samples: Samples | None = None) -> PlatformPlan:
+    """API 검증(동기): lhs_opt는 {kind: lhs, count, seed}로 대신(같은 run 수·같은 count·seed 오류). rows는 run 수 계산용.
+    train_doe(표본표 재사용)는 호출부가 원본 DOE samples.csv를 읽어 `samples`로 넘긴다."""
     kind, inp = normalize(sampling)
     source: dict[str, Any] = {"kind": "lhs", "count": inp["count"], "seed": inp["seed"]} if kind == "lhs_opt" \
         else {"kind": kind, **inp}
-    plan = _plan(kind, inp, _matrix(source, setup, settings))
+    plan = _plan(kind, inp, _matrix(source, setup, settings, samples))
     if kind == "lhs_opt":  # 대체 검증이라 meta·안내 중 lhs 고유 내용은 버리고 run 수·문제만 남긴다
         plan.meta = {}
     return plan
 
 
-def build(sampling: Mapping[str, Any], setup: Mapping[str, Any], settings: Any) -> PlatformPlan:
-    """워커 DG_PREP: 실제 표본 행(doe_no 1.., run_key run__00001..). meta = §20.5 각 방식 meta(+ quality)."""
+def build(sampling: Mapping[str, Any], setup: Mapping[str, Any], settings: Any, *, samples: Samples | None = None) -> PlatformPlan:
+    """워커 DG_PREP: 실제 표본 행(doe_no 1.., run_key run__00001.. — train_doe는 원본 run 이름 그대로). meta = §20.5 각 방식 meta(+ quality)."""
     kind, inp = normalize(sampling)
-    return _plan(kind, inp, _matrix({"kind": kind, **inp}, setup, settings))
+    return _plan(kind, inp, _matrix({"kind": kind, **inp}, setup, settings, samples))
+
+
+def design_inputs_from_params(params: list[Mapping[str, Any]]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """native 세트 파라미터 표(param_sets.parameters) → design_inputs와 같은 모양(세트 기준 DOE의 표본표 재사용용)."""
+    out = [{"name": str(p["name"]), "min": float(p["min"]), "max": float(p["max"]), "nominal": p.get("nominal"), "format": p.get("format")}
+           for p in params if p.get("min") is not None and p.get("max") is not None]
+    return out, [{"var": f"var_{i + 1}", "name": p["name"], "format": p.get("format")} for i, p in enumerate(out)]

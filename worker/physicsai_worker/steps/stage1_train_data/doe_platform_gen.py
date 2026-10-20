@@ -64,6 +64,19 @@ def _sampling_source(doe: dict[str, Any]) -> dict[str, Any]:
 # ---- DG_PREP --------------------------------------------------------------------------------------
 
 
+def reuse_samples(ctx: Any, source: dict[str, Any]) -> Any:
+    """①-3 표본표 재사용(equiv-check.md Q1): source.kind == train_doe면 원본 DOE samples.csv(헤더, 행), 아니면 None."""
+    from physicsai_core.stage1_train_data import doe_reuse
+
+    if not doe_reuse.is_reuse(source):
+        return None
+    with ctx.ex.engine.connect() as conn:
+        samples, prob = doe_reuse.load_reuse_samples(conn, ctx.study["id"], ctx.root, str(source.get("doe_id")))
+    if prob is not None:
+        raise StepFailure("INPUT_CHANGED", f"표본표를 재사용할 수 없습니다: {prob['message']}")
+    return samples
+
+
 def dg_prep(ctx: Any) -> None:
     s = ctx.settings
     p = ctx.params
@@ -103,7 +116,7 @@ def dg_prep(ctx: Any) -> None:
     pts = _points(ctx, doe_id)
     if not pts:
         ctx.progress(None, "표본 계산", force=True)
-        plan = doe_platform.build(source, setup, s)
+        plan = doe_platform.build(source, setup, s, samples=reuse_samples(ctx, source))
         if plan.problems or not plan.rows:
             p0 = (plan.problems or [{"message": "표본이 없습니다"}])[0]
             raise StepFailure("INPUT_INVALID", f"표본을 만들 수 없습니다: {p0['message']}")

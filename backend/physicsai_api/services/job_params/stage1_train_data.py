@@ -112,7 +112,23 @@ def doe_generator(p: TdDoeGenParams) -> str:
     return gen
 
 
-def _prepare_platform(cfg: Any, setup: dict[str, Any], p: TdDoeGenParams, assem_path: str
+def reuse_samples(ctx: AppContext, conn: Any, study: dict[str, Any], sampling: Any) -> Any:
+    """①-3 표본표 재사용(equiv-check.md Q1): sampling.kind == train_doe면 원본 DOE samples.csv를 읽어 (헤더, 행)으로, 아니면 None.
+    원본이 없거나 준비 안 됨 → 422 DOE_SAMPLING_INVALID(problems)."""
+    from physicsai_core.stage1_train_data import doe_reuse
+
+    sp = sampling.model_dump() if hasattr(sampling, "model_dump") else sampling
+    if not doe_reuse.is_reuse(sp):
+        return None
+    from ..common import study_root
+
+    samples, prob = doe_reuse.load_reuse_samples(conn, study["id"], study_root(ctx, study), str(sp["doe_id"]))
+    if prob is not None:
+        raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422, problems=[prob])
+    return samples
+
+
+def _prepare_platform(cfg: Any, setup: dict[str, Any], p: TdDoeGenParams, assem_path: str, samples: Any = None
                       ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     """플랫폼 DOE(§23.4): 동시 수(기본 min(platform_parallel_default, max_multi_execution)) → 표본 검증(lhs_opt는 lhs로 대신)."""
     td = cfg.train_data
@@ -122,7 +138,7 @@ def _prepare_platform(cfg: Any, setup: dict[str, Any], p: TdDoeGenParams, assem_
         raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
     assert p.sampling is not None
     try:
-        plan = doe_platform.check(p.sampling.model_dump(), setup, cfg)
+        plan = doe_platform.check(p.sampling.model_dump(), setup, cfg, samples=samples)
     except BatchShapeError as exc:
         raise invalid_at("sampling", str(exc)) from None
     if plan.problems or not plan.rows:
@@ -150,13 +166,13 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise invalid_at("cad_path", f"CAD 확장자는 {', '.join(cfg.train_data.cad_extensions)} 중 하나여야 합니다")
         return {"cad_path": cp.path}, None, []
     if job_type == "TD_DOE_GEN" and p.param_set_id is not None:
-        return native_doe_from_set(ctx, conn, study, p)
+        return native_doe_from_set(ctx, conn, study, p, reuse_samples(ctx, conn, study, p.sampling))
     if job_type == "TD_DOE_GEN" and p.radioss_assem_path is None:
         raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     if job_type == "TD_DOE_GEN":
         setup = train_repo.get_setup(conn, sid)
         if setup is not None and setup.get("engine") == "native":  # native = 플랫폼 생성의 한 경로(자체 게이트, §7.3.3)
-            return native_doe_gen(ctx, setup, p)
+            return native_doe_gen(ctx, setup, p, reuse_samples(ctx, conn, study, p.sampling))
         gen = doe_generator(p)
         if gen == "hyperstudy":
             raise_feature_missing(*missing_for(cfg, FEATURES["train_doe"], None))
@@ -174,7 +190,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise DomainError("PREREQUISITE_MISSING", f"Radioss 조립 폴더에 starter({cfg.predict.starter_glob})가 정확히 1개 있어야 합니다(현재 {len(st)}개)",
                               status=409, missing=["RADIOSS_STARTER"])
         if gen == "platform":
-            return _prepare_platform(cfg, setup, p, cp.path)
+            return _prepare_platform(cfg, setup, p, cp.path, reuse_samples(ctx, conn, study, p.sampling))
         if p.doe_label is None:
             raise invalid_errors([{"loc": ["params", "doe_label"], "msg": "Field required"}])
         types = dt_mod.load_doe_types(cfg.resources.doe_design_type_json, cfg.ui.max_artifact_bytes)
@@ -247,9 +263,11 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
         did = params["doe_id"]
         platform = params.get("generator") == "platform"
         native = {"engine": "native"} if params.get("engine") == "native" else {}
-        if native:  # geometry-engine.md §7.3.3: native = 플랫폼 생성(LHS) + paicad. options = {seed(, param_set_id)}, sampling 없음
+        if native:  # geometry-engine.md §7.3.3: native = 플랫폼 생성(LHS) + paicad. options = {seed(, param_set_id)}, sampling 없음(표본표 재사용이면 기록)
             opts = {"seed": params["seed"], **({"param_set_id": params["param_set_id"]} if params.get("param_set_id") else {})}
-            extra = {"options": opts, "generator": "PLATFORM", "sampling": None}
+            sp = params.get("sampling")
+            extra = {"options": opts, "generator": "PLATFORM",
+                     "sampling": {"kind": sp["kind"], "input": {k: v for k, v in sp.items() if k != "kind"}, "meta": None} if sp else None}
         elif platform:  # §23.4: options = 정규화 표본 입력(kind 제외), sampling = {kind, input, meta: null}(DG_PREP이 meta)
             inp = {k: v for k, v in params["sampling"].items() if k != "kind"}
             extra = {"options": inp, "generator": "PLATFORM",
