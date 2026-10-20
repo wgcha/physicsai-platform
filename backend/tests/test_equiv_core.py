@@ -36,11 +36,14 @@ def codes(problems):
 # ---- V-EQ-2 ------------------------------------------------------------------------------------------------
 
 
-def test_v_eq_2_system_recipe_valid_and_unbound_required():
+def test_v_eq_2_system_recipe_valid_and_unbound_metrics():
     d = default_system_recipe()
     assert rc.validate_definition(d, max_metrics=20) == []
-    assert rc.unbound_required(d) == ["accel_peak", "cushion_deform", "ie_max", "ke_max"]  # 참고(응력·접촉력)는 미연결이어도 실행 가능
-    assert codes(rc.validate_definition(d, max_metrics=20, allow_unbound=False)) == ["METRIC_UNBOUND"] * 4
+    # EQ-C1: 응답 연결은 사용자가 고른다 — 참고(응력·접촉력)도 미연결이면 실행 불가, mesh_volume은 기본 원천(include 적분)
+    assert rc.unbound_metrics(d) == ["accel_peak", "cushion_deform", "ie_max", "ke_max", "stress_peak", "contact_peak"]
+    assert codes(rc.validate_definition(d, max_metrics=20, allow_unbound=False)) == ["METRIC_UNBOUND"] * 6
+    vol = [m for m in d["metrics"] if m["kind"] == "mesh_volume"][0]
+    assert rc.unbound_metrics({"metrics": [{**vol, "source": None}]}) == []
     n = rc.normalize_definition(d)
     assert n["metrics"][4]["required"] is False and n["metrics"][6]["tol"] == {"corr_min": 0.95}
 

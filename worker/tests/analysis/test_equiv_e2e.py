@@ -9,6 +9,7 @@ import os
 import pytest
 from sqlalchemy import text
 
+from physicsai_core.config.schema_equiv import default_system_recipe
 from physicsai_test_support import API, read_record
 
 from ..stage4_predict.conftest import predict_env  # noqa: F401 - fixture 재사용
@@ -163,21 +164,38 @@ def test_v_eq_8_run_not_succeeded_unbound_and_incomplete(predict_env, fake_tools
     r1 = [r for r in out["rows"] if r["a_run"] == "run__00001"]
     assert all(r["status"] == "NA" and r["reason"] == "RUN_NOT_SUCCEEDED" and r["reason_text"] == "run이 성공 상태가 아님" for r in r1)
     assert out["verdict"] == "PASS" and any(w["code"] == "EQ_PARTIAL_PAIRS" for w in out["warnings"])
-    # 시스템 기본 레시피 그대로(필수 미연결) → 422 METRIC_UNBOUND, bindings로 연결하면 실행(연결 안 된 참고는 NA)
-    sysb = body({"kind": "train_doe", "doe_id": did}, {"kind": "train_doe", "doe_id": did}, recipe={"key": "sys:default"})
+    # EQ-C1: 시스템 기본(제안값)은 그대로 실행 불가 — 응답을 모두 연결해도 422 RECIPE_NOT_CONFIRMED(복제·확인한 레시피만)
+    sides = ({"kind": "train_doe", "doe_id": did}, {"kind": "train_doe", "doe_id": did})
+    sysb = body(*sides, recipe={"key": "sys:default"})
     r = env.c.post(f"{API}/studies/{env.sid}/equiv-checks", headers=PW, json=sysb)
     assert r.status_code == 422 and r.json()["detail"]["code"] == "EQ_CHECK_INVALID"
     codes = [p["code"] for p in r.json()["detail"]["problems"]]
-    assert codes.count("METRIC_UNBOUND") == 4 and "성능 정의를 연결하거나 참고로 바꾸세요" in r.json()["detail"]["problems"][0]["message"]
+    assert codes.count("RECIPE_NOT_CONFIRMED") == 1 and codes.count("METRIC_UNBOUND") == 6  # 참고(응력·접촉력)도 연결 필요
+    assert "복제" in next(p["message"] for p in r.json()["detail"]["problems"] if p["code"] == "RECIPE_NOT_CONFIRMED")
     perf = {"type": "perf", "perf": "MaxStress"}
-    sysb["bindings"] = {"accel_peak": perf, "cushion_deform": {"type": "perf", "perf": "MinDisp"}, "ie_max": perf, "ke_max": perf}
-    out = run_check(env, sysb)
-    assert out["recipe"]["source"] == "system" and out["recipe"]["name"] == "시스템 기본(제안값)"
+    all6 = {k: perf for k in ("accel_peak", "ie_max", "ke_max", "stress_peak", "contact_peak")} | {"cushion_deform": {"type": "perf", "perf": "MinDisp"}}
+    sysb["bindings"] = all6
+    r = env.c.post(f"{API}/studies/{env.sid}/equiv-checks", headers=PW, json=sysb)
+    assert r.status_code == 422 and [p["code"] for p in r.json()["detail"]["problems"]] == ["RECIPE_NOT_CONFIRMED"]
+    inl = body(*sides)
+    inl["recipe_inline"] = {"definition": default_system_recipe(), "base": {"key": "sys:default"}}
+    assert "RECIPE_NOT_CONFIRMED" in [p["code"] for p in preview(env, inl)["problems"]]
+    # 복제(사용자 레시피) → 필수만 연결하면 참고 미연결로 422, 모두 연결하면 실행
+    cl = env.c.post(f"{API}/equiv/recipes", headers=PW, json={"name": "현장 복제", "scope": "study", "study_id": env.sid, "clone_from": {"key": "sys:default"}})
+    assert cl.status_code == 201, cl.text
+    ub = body(*sides, recipe={"key": cl.json()["key"], "version": 1},
+              bindings={k: v for k, v in all6.items() if k not in ("stress_peak", "contact_peak")})
+    r = env.c.post(f"{API}/studies/{env.sid}/equiv-checks", headers=PW, json=ub)
+    assert r.status_code == 422 and sorted(p["metric_id"] for p in r.json()["detail"]["problems"]) == ["contact_peak", "stress_peak"]
+    assert "레시피에서 지표를 빼세요" in r.json()["detail"]["problems"][0]["message"]
+    ub["bindings"] = all6
+    out = run_check(env, ub)
+    assert out["recipe"]["source"] == "user" and out["recipe"]["name"] == "현장 복제" and out["recipe"]["version"] == 1
     mets = {m["id"]: m for m in out["metrics"]}
-    assert mets["stress_peak"]["status"] == "NA" and mets["accel_corr"]["status"] == "NA"  # T01 요청 없음(②-4 곡선 정의 없음) → NA
+    assert mets["accel_corr"]["status"] == "NA"  # T01 요청 없음(②-4 곡선 정의 없음) → NA
     assert out["verdict"] == "INCOMPLETE" and out["verdict_text"] == "판정 불가"
     assert any(w["code"] == "EQ_CURVE_DEFS_MISSING" for w in out["warnings"])
-    assert out["recipe_snapshot"]["system_version"] == 1 and out["recipe_snapshot"]["metrics"][0]["source"] == perf
+    assert "system_version" not in out["recipe_snapshot"] and out["recipe_snapshot"]["metrics"][0]["source"] == perf
 
 
 def test_v_eq_10_active_limit_cancel_retry_and_note(predict_env, fake_tools, fake_record, tmp_path, engine):  # noqa: F811

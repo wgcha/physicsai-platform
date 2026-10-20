@@ -1,6 +1,6 @@
 """레시피 binding 해석·run별 값 읽기·추출 계획(equiv-check.md §4.3·§4.5) — API 미리보기·워커 공용.
 
-- `bind(defn, bindings)`: 레시피의 빈 원천(null)에 실행 요청 bindings를 채운다(필수 미연결 → METRIC_UNBOUND).
+- `bind(defn, bindings)`: 레시피의 빈 원천(null)에 실행 요청 bindings를 채운다(필수·참고 미연결 → METRIC_UNBOUND, EQ-C1).
 - `resolve(defn, side_a, side_b)`: `perf` 원천을 양쪽 템플릿 성능 정의로 해석(spec·단위 비교 경고), 지표마다 쪽별 응답 정의.
 - `run_values(...)`: run 1개의 지표 값 읽기(기존 RESPONSES.txt·curve.json 또는 판정 폴더 추출본 overlay) + 추출 필요 판단.
 - `extraction_plan(...)`: 쌍 전체에서 추출이 필요한 (side, run) 목록·사본 바이트.
@@ -16,7 +16,7 @@ from typing import Any
 
 from ..stage4_predict import performance
 from ..stage4_predict.run_metrics import RunFiles, RunMetrics, load_run_metrics
-from .recipes import unbound_required
+from .recipes import unbound_message, unbound_metrics
 from .sides import Run, Side
 
 CURVE_JSON = "curve.json"
@@ -24,15 +24,15 @@ RESPONSE_SPEC_KEYS = ("subcase", "datatype", "component", "layer", "stat", "seri
 
 
 def bind(defn: Mapping[str, Any], bindings: Mapping[str, Any] | None) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    """빈 원천에 bindings[metric_id]를 채운 정의 사본 + problems(METRIC_UNBOUND). bindings 값은 §3.1 source 모양."""
+    """빈 원천에 bindings[metric_id]를 채운 정의 사본 + problems(METRIC_UNBOUND — 필수·참고 모두). bindings 값은 §3.1 source 모양."""
     out = json.loads(json.dumps(defn))
     for m in out["metrics"]:
         b = (bindings or {}).get(m["id"])
         if m.get("source") is None and isinstance(b, Mapping):
             m["source"] = dict(b)
     probs = [{"code": "METRIC_UNBOUND", "metric_id": mid,
-              "message": f"필수 지표 '{next((x['label'] for x in out['metrics'] if x['id'] == mid), mid)}'의 원천이 연결되지 않았습니다 — 성능 정의를 연결하거나 참고로 바꾸세요"}
-             for mid in unbound_required(out)]
+              "message": unbound_message(next((x["label"] for x in out["metrics"] if x["id"] == mid), mid))}
+             for mid in unbound_metrics(out)]
     return out, probs
 
 

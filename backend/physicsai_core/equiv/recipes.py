@@ -1,7 +1,8 @@
 """레시피 정의(equiv-check.md §3.1) 검증·정규화 — 순수 함수.
 
 problems 코드(422 EQ_RECIPE_INVALID): METRIC_ID_INVALID · METRIC_DUPLICATE · METRICS_RANGE · TOL_INVALID · SOURCE_INVALID ·
-KIND_SOURCE_MISMATCH · LABEL_INVALID · RULE_INVALID. 실행 시 필수 지표의 source null은 METRIC_UNBOUND(EQ_CHECK_INVALID)."""
+KIND_SOURCE_MISMATCH · LABEL_INVALID · RULE_INVALID. 실행 시 지표(필수·참고 모두, mesh_volume 제외)의 source null은
+METRIC_UNBOUND(EQ_CHECK_INVALID) — 응답 연결은 사용자가 고른다(EQ-C1)."""
 
 from __future__ import annotations
 
@@ -134,8 +135,8 @@ def validate_definition(defn: Any, *, max_metrics: int, allow_unbound: bool = Tr
             out.append(_problem("RULE_INVALID", "required는 true/false여야 합니다", mid))
         out += _source_problems(mid, kind, m.get("source"))
         out += _tol_problems(mid, kind, m.get("tol"))
-        if not allow_unbound and m.get("source") is None and m.get("required", True) is True:
-            out.append(_problem("METRIC_UNBOUND", f"필수 지표 '{label if isinstance(label, str) else mid}'의 원천이 연결되지 않았습니다 — 성능 정의를 연결하거나 참고로 바꾸세요", mid))
+        if not allow_unbound and m.get("source") is None and kind != "mesh_volume":
+            out.append(_problem("METRIC_UNBOUND", unbound_message(label if isinstance(label, str) else mid), mid))
     pr = defn.get("pair_rule", {"mode": "all"})
     if not isinstance(pr, Mapping) or pr.get("mode", "all") not in PAIR_MODES:
         out.append(_problem("RULE_INVALID", "쌍 집계 규칙(pair_rule.mode)은 all | min_ratio 중 하나여야 합니다"))
@@ -185,9 +186,14 @@ def normalize_definition(defn: Mapping[str, Any]) -> dict[str, Any]:
             "verdict_rule": defn.get("verdict_rule", "required_all")}
 
 
-def unbound_required(defn: Mapping[str, Any]) -> list[str]:
-    """source가 null인 필수 지표 id(실행 전 연결 필요 — 422 METRIC_UNBOUND)."""
-    return [m["id"] for m in defn.get("metrics", []) if m.get("source") is None and m.get("required", True)]
+def unbound_metrics(defn: Mapping[str, Any]) -> list[str]:
+    """source가 null인 지표 id — 필수·참고 모두(실행 전 사용자가 응답 연결 필요 — 422 METRIC_UNBOUND, EQ-C1).
+    mesh_volume은 원천 기본값(include 적분)이 있어 제외."""
+    return [m["id"] for m in defn.get("metrics", []) if m.get("source") is None and m.get("kind") != "mesh_volume"]
+
+
+def unbound_message(label: str) -> str:
+    return f"지표 '{label}'의 응답이 연결되지 않았습니다 — 성능 정의(응답)를 선택하거나 레시피에서 지표를 빼세요"
 
 
 def tol_text(m: Mapping[str, Any]) -> str:

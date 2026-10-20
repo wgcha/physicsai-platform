@@ -33,6 +33,8 @@ from . import equiv_recipes as rec_svc
 from .common import audit, can_retry, clamp_limit, job_summary, require_config_ok, require_power, study_root
 from .job_params.study_manage import study_gate
 
+SYSTEM_RUN_MESSAGE = ("시스템 기본 레시피는 제안값입니다 — 복제(다른 이름으로 저장)해 지표·허용오차·필수/참고를 확인한 "
+                      "레시피로 실행하세요")
 STATUS_TEXT = {"RUNNING": "실행 중", "DONE": "완료", "FAILED": "실패", "CANCELED": "취소"}
 _CACHE = _Lru(128)
 MAX_CURVE_POINTS = 5000
@@ -82,6 +84,8 @@ def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[s
     problems = [{**p, "side": "a"} for p in a.problems] + [{**p, "side": "b"} for p in b.problems]
     warnings = list(a.warnings) + list(b.warnings)
     rec = _recipe_for(ctx, conn, body)
+    if rec["source"] == "system":  # EQ-C1: 시스템 기본은 제안값(읽기 전용) — 복제·확인한 레시피만 실행
+        problems.append({"code": "RECIPE_NOT_CONFIRMED", "message": SYSTEM_RUN_MESSAGE})
     bound, probs = plan_mod.bind(rec["definition"], body.bindings)
     problems += probs
     pairs: list[tuple[str, str]] = []
