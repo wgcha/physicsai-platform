@@ -1,0 +1,176 @@
+// API 타입(R-F 분할) — S6 준비된 입력 예측·모델·스터디·파라미터 세트·표본. 화면 코드는 `api/types`만 import한다(거기서 재노출).
+import type { S, Override } from "./typesBase";
+import type { ArtifactKind, ContourDisplay, InputKind, JobState, JobSummary, JobType, NotificationEvent, TemplateResponse } from "./types";
+
+// ---------------------------------------------------------------------------
+// S6 ④ 준비된 입력 예측(phase3.md §11.5)
+// openapi에서 Job params·inspect summary는 자유 형식(dict)이라 아래 타입은 수동 유지(백엔드 구현과 일치 확인)
+// ---------------------------------------------------------------------------
+export type PredictInputMode = "parametric" | "prepared";
+
+/** PREDICT 요청 params — parametric(기본, input_mode 생략 = parametric) */
+export interface PredictParamsParametric {
+  input_mode?: "parametric";
+  param_set_id: string | null;
+  model_id: string | null;
+  values: Record<string, number>;
+  value_source: "nominal" | "run" | "manual";
+  source_run_key: string | null;
+  input_path?: null;
+}
+/** PREDICT 요청 params — prepared */
+export interface PredictParamsPrepared {
+  input_mode: "prepared";
+  input_path: string;
+  model_id?: string | null;
+  param_set_id?: string | null;
+}
+export type PredictParams = PredictParamsParametric | PredictParamsPrepared;
+
+/** 저장된 PREDICT `Job.params`(prepared는 정규화 경로·종류·starter 이름이 붙는다) */
+export interface PredictJobParams {
+  input_mode?: PredictInputMode;
+  input_path?: string | null;
+  /** prepared 입력 종류(§11.5) */
+  input_kind?: "file" | "dir";
+  /** S9 템플릿 종류(§14.4, 서버 확정 기록, D3-51: 키 이름 template_kind) — params는 자유 형식이라 수동 유지 */
+  template_kind?: InputKind | null;
+  starter_name?: string | null;
+  model_id?: string | null;
+  /** S9 일괄 예측 하위(워커만 기록) */
+  batch_run?: { batch_id: string; doe_no: number } | null;
+  param_set_id?: string | null;
+  values?: Record<string, number>;
+}
+
+export type PredictInputProblemCode = "INPUT_EXT" | "STARTER_COUNT" | "FILE_NAME_UNSAFE" | "TOO_MANY_FILES" | "TOO_LARGE";
+export interface PredictInputProblem {
+  code: PredictInputProblemCode | string;
+  message: string;
+}
+
+/** paths/inspect `purpose:"PREDICT_INPUT"` 결과 — problems 외 키는 `summary` 안, problems는 응답 최상위(phase3 D3-30) */
+export interface PredictInputInspect {
+  kind: "file" | "dir";
+  starter: string[];
+  starter_ok: boolean;
+  /** 최대 50개 */
+  rad: string[];
+  inc_count: number;
+  file_count: number;
+  total_bytes: number;
+  /** 복사 대상 폴더의 직계 하위 폴더 수(복사 안 함), .hm이면 0 — phase3 D3-43 */
+  subdir_count?: number;
+  /** 폴더 직계에 starter가 0개일 때 1단계 하위 폴더의 starter 후보(상대경로, 최대 10) — 안내 전용, 실행에 안 씀(D3-44) */
+  starter_hints?: string[];
+  problems: PredictInputProblem[];
+}
+
+/** 422 `PREDICT_INPUT_INVALID` 오류 본문 */
+export interface PredictInputInvalidDetail extends ApiErrorDetail {
+  code: "PREDICT_INPUT_INVALID";
+  problems: PredictInputProblem[];
+}
+
+export type QueueInfo = Override<
+  S["QueueResponse"],
+  {
+    running?: JobSummary | null;
+    queued: JobSummary[];
+    light: { running?: JobSummary | null; queued: JobSummary[] };
+    waiting_hpc: JobSummary[];
+    collecting: JobSummary[];
+  }
+>;
+export type Resources = S["ResourcesResponse"];
+
+/** B4: stage_status["3"|"4"] */
+export interface StageStatus {
+  latest_job_id: string | null;
+  latest_job_type: JobType | null;
+  latest_state: JobState | null;
+}
+
+export type Model = Override<
+  S["Model"],
+  {
+    log_status: "PARSED" | "UNRECOGNIZED" | "MISSING";
+    eval_status: "NONE" | "RUNNING" | "DONE" | "FAILED";
+    eval_score?: EvalScore | null;
+    status: "ACTIVE" | "ARCHIVED" | "INVALID";
+    loss_curve?: [number, number][] | null;
+  }
+>;
+export interface EvalScore {
+  status: "PARSED" | "UNRECOGNIZED";
+  metrics: Record<string, number>;
+  score_rel: string;
+}
+
+export type Study = Override<S["Study"], { status: "ACTIVE" | "ARCHIVED" }>;
+export type StudyDetail = Override<
+  S["StudyDetail"],
+  { status: "ACTIVE" | "ARCHIVED"; final_model?: Model | null; stage_status: Record<string, StageStatus> }
+>;
+
+export type PathInspectResult = Override<
+  S["PathInspectResponse"],
+  {
+    summary: {
+      h3d_count?: number;
+      sample_files?: string[];
+      expected_train?: number;
+      expected_eval?: number;
+      psmdl?: string[];
+      pscfg?: string[];
+      logs?: string[];
+      [k: string]: unknown;
+    };
+  }
+>;
+
+export type Dataset = Override<
+  S["Dataset"],
+  {
+    status: "BUILDING" | "READY" | "FAILED";
+    split_group: "file" | "parent_dir";
+    options: { extract_faces: boolean; extract_mdi: boolean; extract_time_history_vectors: boolean };
+  }
+>;
+
+export type ParamDef = S["Parameter"];
+// responses[].spec(§14.6)·display(§15.3)는 백엔드 스키마가 dict라 계약 형식으로 좁힌다
+export type ParamSet = Override<
+  S["ParamSet"],
+  {
+    origin: "FOLDER" | "TRAIN_DOE";
+    starter_name: string | null;
+    /** 등록 응답에만(SIMLAB_EXPORT_NAME 등), 조회는 [] */
+    warnings?: S["ParamSet"]["warnings"];
+    responses: TemplateResponse[];
+    /** S10 컨투어 표시 설정(없으면 서버 기본) */
+    display?: ContourDisplay | null;
+  }
+>;
+export type ParamSetCreate = S["ParamSetCreate"];
+export type ParamSetDiscover = S["ParamSetDiscoverResponse"];
+export type SampleRow = S["SampleRow"];
+export type SamplePage = S["SamplesPage"];
+export type PredictCheck = S["PredictCheckResponse"];
+export type Artifact = Override<S["Artifact"], { kind: ArtifactKind }>;
+
+export interface CurveJson {
+  file: string;
+  series: { name: string; x: number[]; y: number[] }[];
+  note?: string | null;
+}
+
+export type NotificationItem = Override<S["Notification"], { event: NotificationEvent }>;
+export type NotificationList = Override<S["NotificationList"], { items: NotificationItem[] }>;
+export type LogChunk = S["LogChunk"];
+
+export interface ApiErrorDetail {
+  code: string;
+  message: string;
+  [k: string]: unknown;
+}

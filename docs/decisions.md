@@ -119,3 +119,4 @@
 - 2026-10-19: S18 ① 학습 DOE 플랫폼 동시 생성(기본, run_parallel 4) + hstbatch 호환 모드 무변경, 형상 경계 run_chain(native 교체 지점), migration 0015 (근거: 사용자 VOC·결정 'HST에 힘쓰지 말자', s18_doe_parallel.md §23, D3-66)
 - 2026-10-19: S19 후속 — GPU 조회 제한 시간·원인 표시, ④ 일괄 예측 GPU 레인 동시 예측(같은 배치만, 기본 2), ⑤ perf 서버 계산, migration 없음 (근거: 사용자 승인 '예약시간때 다 해바', s19_followup.md §24, D3-67)
 - 2026-10-20: S19 ④ GPU 동시 예측(레인) 철회 — ④는 1개씩 순차 유지, GPU 조회 제한 시간·원인 표시와 ⑤ perf 서버 계산만 반영 (근거: 사용자 결정 'gpu그만해', Verifier High·Medium, s19_followup.md 변경 메모 ⑩)
+- 2026-10-20: S19 R-B·R-F 300줄 분할·batch_matrix→sampling 이동(재노출, 동작 불변) 반영 (근거: s19_followup.md §24.11, Verifier AST 대조 Pass)

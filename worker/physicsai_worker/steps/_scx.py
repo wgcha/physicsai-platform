@@ -10,79 +10,44 @@ COLLECT
   SUCCEEDED 행마다 output_rel 아래를 깊이 collect_max_depth까지 목록 → collect_patterns 일치 파일을 relay 스트리밍으로
   `<result_dir>/<상대 경로>.part`에 받고 sha256 확인 → os.replace. 쓰기는 AI 루트(허용 루트) 안만, 링크·`..`·절대 거부.
 드라이브는 지우거나 옮기지 않는다(클라이언트에 그런 메서드 없음). 사용자 표시 문구는 한국어, relay 문구는 마스킹 후 500자.
+300줄 분할(R-B): 공용 모양·마스킹은 `_scx_common`, 단계 B 제출은 `_scx_submit`, COLLECT는 `_scx_collect`(여기서 재노출).
+단계 A STAGE_IN(대기열 폴링 — `_scx.time` 시계)은 이 파일.
 """
 
 from __future__ import annotations
 
-import fnmatch
 import os
-import tempfile
 import time
-import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass, field
-from datetime import datetime
 from typing import Any
 
 from physicsai_core.db.repositories import hpc as hpc_repo
-from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories.job_lease import LeaseLost
-from physicsai_core.db.repositories import notifications as notif_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import sha256_file
 from physicsai_core.hpc.gateway import HpcGatewayError
-from physicsai_core.masking import bundle_masker
-from physicsai_core.paths import (
-    PathError,
-    allowed_roots,
-    assert_writable,
-    check_user_path,
-    is_link_or_reparse,
-    is_under,
-    windows_reserved_name,
-)
-from simdash_adapters.hpc.scx import ScxRadiossRequest
+from physicsai_core.paths import is_link_or_reparse
 from simdash_adapters.hpc.scx_naming import file_name_problem, forbidden_reason, join_rel, rel_problem, sanitize_project
-
-MAX_LIST_ENTRIES = 20000
-BATCH_FAIL = ("CONFLICT", "FAILED", "CANCELLED", "PARTIAL")
-UNKNOWN_MESSAGE = "SCX 제출 결과를 알 수 없습니다 — SCX에서 확인 필요"
-NOT_SUBMITTED_MESSAGE = "제출하지 않음(앞 run의 SCX 제출 결과 모름)"
-
-
-def mask(ctx_or_settings: Any, text: str) -> str:
-    """relay 오류·JobInfo.error_message 마스킹(오류 묶음 규칙 — Bearer·DB 자격·비밀 값) 후 500자."""
-    s = getattr(ctx_or_settings, "settings", ctx_or_settings)
-    return bundle_masker(s)(str(text))[:500]
-
-
-def timestamp() -> str:
-    """잡 폴더 시각: HPC_SUBMIT step 시작 시 워커 현지 시각(§16.3)."""
-    return datetime.now().strftime("%Y%m%dT%H%M%S")
-
-
-@dataclass
-class RunStage:
-    """run 1개의 STAGE_IN·제출 계획."""
-
-    run_key: str
-    input_dir: str
-    starter: str
-    job_name: str                       # 접미 전 잡 폴더 이름(01_D-…·04_V-…)
-    client_ref: dict[str, str]
-    files: list[dict[str, Any]] = field(default_factory=list)  # {name, size, sha256}
-    remote_dir: str = ""
-    hid: str = ""
-    request_id: str = ""
-    batches: list[str] = field(default_factory=list)
-    bytes_total: int = 0
-
-
-@dataclass
-class SubmitResult:
-    submitted: list[tuple[RunStage, str]] = field(default_factory=list)  # (계획, 외부 잡 ID)
-    unknown: RunStage | None = None
-    not_submitted: list[str] = field(default_factory=list)
+from ._scx_common import (  # noqa: F401 - 기존 경로 재노출
+    MAX_LIST_ENTRIES,
+    BATCH_FAIL,
+    UNKNOWN_MESSAGE,
+    NOT_SUBMITTED_MESSAGE,
+    mask,
+    timestamp,
+    RunStage,
+    SubmitResult,
+    _mark_rows,
+)
+from ._scx_submit import build_request, submit_all, cancel_submitted, flag_unknown  # noqa: F401 - 기존 경로 재노출
+from ._scx_collect import (  # noqa: F401 - 기존 경로 재노출
+    CollectFail,
+    _walk,
+    WINDOWS_BAD_CHARS,
+    _safe_target,
+    _collisions,
+    collect_run,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -184,23 +149,6 @@ def plan_remote_dirs(ctx: Any, gw: Any, plans: list[RunStage], health: dict[str,
         plan.remote_dir = rel
 
 
-def _mark_rows(ctx: Any, plans: list[RunStage], state: str, message: str, phase: str | None = None) -> None:
-    def fn(c: Any) -> None:
-        for p in plans:
-            if not p.hid:
-                continue
-            row = hpc_repo.get(c, p.hid)
-            if row is None or row["state"] != "SUBMITTING":
-                continue
-            staged = dict(row["staged"] or {})
-            if phase:
-                staged["phase"] = phase
-            hpc_repo.set_fields(c, p.hid, state=state, error_message=message[:500], staged=staged,
-                                finished_at=datetime.now().astimezone())
-
-    ctx.ex.db(fn)
-
-
 def stage_in(ctx: Any, gw: Any, plans: list[RunStage], attempt_no: int) -> None:
     """행 삽입 → mkdirs·업로드 → 묶음 DONE까지 폴링. 실패면 이 step의 행을 FAILED로 두고 SCX_STAGE_IN_FAILED(제출 0건)."""
     for p in plans:
@@ -280,250 +228,3 @@ def _sleep_checked(ctx: Any, seconds: float) -> None:
         if left <= 0:
             return
         time.sleep(min(0.5, left))
-
-
-# ---------------------------------------------------------------------------
-# 단계 B: 제출
-# ---------------------------------------------------------------------------
-
-def build_request(ctx: Any, gw: Any, p: RunStage) -> ScxRadiossRequest:
-    cfg = gw.cfg
-    names = [f["name"] for f in p.files]
-    engine: list[str] = []
-    if p.starter.casefold().endswith("_0000.rad"):
-        want = (p.starter[: -len("_0000.rad")] + "_0001.rad").casefold()
-        engine = [n for n in names if n.casefold() == want][:1]
-    rest = sorted(n for n in names if n != p.starter and n not in engine) if cfg.list_additional_paths else []
-    over = ctx.params.get("hpc") or {}
-    ncpu = int(over.get("ncpus") or cfg.ncpu)
-    return ScxRadiossRequest(
-        request_id=p.request_id, input_path=f"{p.remote_dir}/{p.starter}",
-        engine_paths=tuple(f"{p.remote_dir}/{n}" for n in engine), additional_paths=tuple(f"{p.remote_dir}/{n}" for n in rest),
-        version=cfg.version, appliance=cfg.appliance, ncpu=ncpu, memory_gb=cfg.memory_gb, queue_type=cfg.queue_type,
-        run_type=cfg.run_type, mpi=cfg.mpi, single_precision=cfg.single_precision,
-        client_ref=dict(p.client_ref, hpc_job_id=p.hid),
-    )
-
-
-def submit_all(ctx: Any, gw: Any, plans: list[RunStage], on_row: Callable[[Any, RunStage, str], None]) -> SubmitResult:
-    """run 순서대로 제출. `on_row(conn, plan, state)`는 행 상태가 QUEUED·UNKNOWN이 된 같은 트랜잭션에서 불린다(① run 연결).
-    확정 실패면 형제 terminate 후 StepFailure(HPC_SUBMIT_FAILED)."""
-    over = ctx.params.get("hpc") or {}
-    if over.get("queue") or over.get("walltime"):
-        ctx.log("scx 모드는 hpc.queue·walltime을 쓰지 않습니다(무시)")
-    res = SubmitResult()
-    n = len(plans)
-    for k, p in enumerate(plans, 1):
-        req = build_request(ctx, gw, p)
-
-        def mark_submit(c: Any, p: RunStage = p, req: ScxRadiossRequest = req) -> None:
-            row = hpc_repo.get(c, p.hid)
-            staged = dict(row["staged"] or {})
-            staged.update(phase="submit", request=req.to_json())
-            hpc_repo.set_fields(c, p.hid, staged=staged)
-
-        ctx.ex.db(mark_submit)
-        out = gw.submit_radioss(req)
-        if out.replays:
-            ctx.log(f"SCX 제출 replay {out.replays}회(같은 request_id {p.request_id})")
-        if out.state == "SUBMITTED":
-            def ok(c: Any, p: RunStage = p, out: Any = out) -> None:
-                hpc_repo.set_fields(c, p.hid, state="QUEUED", external_job_id=out.job_id, submitted_at=datetime.now().astimezone(),
-                                    output_path=out.output_path, output_rel=out.output_rel)
-                on_row(c, p, "QUEUED")
-
-            ctx.ex.db(ok)
-            res.submitted.append((p, str(out.job_id)))
-            ctx.log(f"SCX 제출 [{k}/{n}] {p.run_key}: {out.job_id} ({gw.display(p.remote_dir)})")
-            ctx.progress(k / n * 100.0, f"제출 {k}/{n}")
-            continue
-        if out.state == "UNKNOWN":
-            def unk(c: Any, p: RunStage = p) -> None:
-                hpc_repo.set_fields(c, p.hid, state="UNKNOWN", submission_unknown=True, external_job_id=None,
-                                    submitted_at=datetime.now().astimezone(), error_message=UNKNOWN_MESSAGE)
-                on_row(c, p, "UNKNOWN")
-
-            ctx.ex.db(unk)
-            res.unknown = p
-            rest = plans[k:]
-            res.not_submitted = [x.run_key for x in rest]
-            _mark_rows(ctx, rest, "CANCELED", NOT_SUBMITTED_MESSAGE, phase="not_submitted")
-            ctx.log(f"[SUBMISSION_UNKNOWN] {p.run_key}: {mask(ctx, out.message)} — 자동 재제출·자동 취소 없음, "
-                    f"남은 run {len(rest)}개 제출 안 함")
-            return res
-        # 확정 실패: 행 FAILED → 이미 제출한 run terminate(phase2 §6.5) → 남은 행 정리 → 실패
-        msg = mask(ctx, f"{p.run_key} SCX 제출 실패({out.code}): {out.message}")
-        _mark_rows(ctx, [p], "FAILED", msg, phase="submit_failed")
-        ctx.log(f"[FAIL] {msg} — 이미 제출한 {len(res.submitted)}개를 취소합니다")
-        cancel_submitted(ctx, gw, res.submitted)
-        _mark_rows(ctx, plans[k:], "CANCELED", "제출하지 않음(앞 run 제출 실패)", phase="not_submitted")
-        raise StepFailure("HPC_SUBMIT_FAILED", msg)
-    return res
-
-
-def cancel_submitted(ctx: Any, gw: Any, submitted: list[tuple[RunStage, str]]) -> None:
-    from physicsai_core.db.repositories import train as train_repo
-
-    for p, ext in submitted:
-        try:
-            gw.cancel(ext)
-        except HpcGatewayError as cexc:
-            ctx.add_warning("HPC_CANCEL_FAILED", mask(ctx, f"{ext} 취소 실패: {cexc}"))
-
-        def cancel_row(c: Any, hid: str = p.hid) -> None:
-            hpc_repo.set_fields(c, hid, state="CANCELED", finished_at=datetime.now().astimezone())
-            train_repo.set_run_state_by_hpc(c, hid, "SOLVE_FAILED")
-
-        ctx.ex.db(cancel_row)
-
-
-def flag_unknown(ctx: Any, res: SubmitResult) -> None:
-    """결과 모름: result not_submitted·경고·attention·알림(등록자). 그 뒤 호출자가 EnterWaitingHpc."""
-    if res.not_submitted:
-        ctx.add_warning("SCX_NOT_SUBMITTED", f"SCX 제출 결과 모름으로 run {len(res.not_submitted)}개를 제출하지 않았습니다: "
-                                             + ", ".join(res.not_submitted[:20]))
-    ctx.patch_result({"not_submitted": res.not_submitted, "submission_unknown": True})
-
-    def fn(c: Any) -> None:
-        lease_repo.job_update(c, ctx.ex.job_id, ctx.ex.token, attention_code="HPC_SUBMISSION_UNKNOWN")
-        notif_repo.notify_job(c, ctx.ex.job_id, "HPC_SUBMISSION_UNKNOWN")
-
-    ctx.ex.db(fn)
-
-
-# ---------------------------------------------------------------------------
-# COLLECT
-# ---------------------------------------------------------------------------
-
-class CollectFail(Exception):
-    def __init__(self, code: str, message: str) -> None:
-        super().__init__(message)
-        self.code = code
-        self.message = message
-
-
-def _walk(gw: Any, root: str, max_depth: int) -> list[tuple[str, int]]:
-    """output_rel 아래 파일 (root 기준 상대 경로, 크기). 깊이 0 = 직속만, 항목 합계 ≤ 20000."""
-    out: list[tuple[str, int]] = []
-    count = 0
-    stack: list[tuple[str, str, int]] = [(root, "", 0)]
-    while stack:
-        rel, sub, depth = stack.pop()
-        for e in gw.list(rel, MAX_LIST_ENTRIES):
-            count += 1
-            if count > MAX_LIST_ENTRIES:
-                raise CollectFail("COLLECT_FAILED", f"결과 폴더 항목이 {MAX_LIST_ENTRIES}개를 넘습니다")
-            name = str(e.get("name") or "")
-            if file_name_problem(name):
-                continue
-            child_sub = f"{sub}/{name}" if sub else name
-            if e.get("kind") == "dir":
-                if depth < max_depth:
-                    stack.append((f"{rel}/{name}", child_sub, depth + 1))
-            elif e.get("kind") == "file":
-                out.append((child_sub, int(e.get("size") or 0)))
-    return sorted(out)
-
-
-WINDOWS_BAD_CHARS = frozenset('?*<>"|:')
-
-
-def _safe_target(ctx: Any, result_dir: str, rel: str) -> str:
-    """원격 상대 경로 → 결과 폴더 안 로컬 경로. Windows에서 쓸 수 없는 이름(예약어 CON·NUL…, `?*<>"|:`, 끝 마침표·공백)·`..`·
-    링크·AI 루트 밖·이미 있는 폴더 이름이면 PATH_UNSAFE."""
-    parts = rel.split("/")
-    for p in parts:
-        if p in ("", ".", "..") or file_name_problem(p) or windows_reserved_name(p) or WINDOWS_BAD_CHARS.intersection(p):
-            raise CollectFail("PATH_UNSAFE", f"결과 파일 경로를 쓸 수 없습니다(Windows 예약 이름·금지 문자 포함): {rel[:200]}")
-    dst = os.path.join(result_dir, *parts)
-    try:
-        check_user_path(dst, allowed_roots(ctx.settings, imports=False), expect="file", must_exist=False)
-        assert_writable(dst)
-    except PathError as exc:
-        raise CollectFail("PATH_UNSAFE", f"결과 파일을 AI 루트에 쓸 수 없습니다({exc.message}): {rel[:200]}") from None
-    except StepFailure as exc:
-        raise CollectFail("PATH_UNSAFE", f"{exc.message}: {rel[:200]}") from None
-    if not is_under(os.path.realpath(dst), os.path.realpath(result_dir)):
-        raise CollectFail("PATH_UNSAFE", f"결과 폴더 밖 경로입니다: {rel[:200]}")
-    if os.path.isdir(dst):
-        raise CollectFail("PATH_UNSAFE", f"같은 이름의 폴더가 이미 있습니다: {rel[:200]}")
-    return dst
-
-
-def _collisions(rels: list[str]) -> str | None:
-    """대소문자만 다른 경로(A.h3d·a.h3d) 또는 파일 이름이 다른 파일의 상위 폴더 이름과 같은 경우(Windows에서 덮어씀·충돌)."""
-    seen: dict[str, str] = {}
-    for r in rels:
-        k = unicodedata.normalize("NFC", r).casefold()
-        if k in seen:
-            return f"{seen[k]} · {r}"
-        seen[k] = r
-    for r in rels:
-        parts = unicodedata.normalize("NFC", r).casefold().split("/")
-        for i in range(1, len(parts)):
-            d = "/".join(parts[:i])
-            if d in seen:
-                return f"{seen[d]} · {r}"
-    return None
-
-
-def collect_run(ctx: Any, gw: Any, row: dict[str, Any], result_dir: str, health_max: int | None) -> list[str]:
-    """SUCCEEDED 행 1개 회수. 받은 상대 경로 목록. 실패면 CollectFail(그 run만 회수 실패)."""
-    s = ctx.settings
-    out_rel = row.get("output_rel")
-    if not out_rel and row.get("external_job_id"):
-        try:
-            st = gw.status(row["external_job_id"])
-            out_rel = st.output_rel
-            if out_rel:
-                ctx.ex.db(lambda c: hpc_repo.set_fields(c, row["id"], output_rel=out_rel, output_path=st.output_path))
-        except HpcGatewayError as exc:
-            raise CollectFail("COLLECT_FAILED", mask(ctx, f"SCX 잡 상태를 다시 받지 못했습니다: {exc}")) from None
-    if not out_rel:
-        raise CollectFail("SCX_OUTPUT_MISSING", "SCX 결과 위치 없음")
-    if rel_problem(out_rel):
-        raise CollectFail("SCX_OUTPUT_MISSING", f"SCX 결과 위치 형식 오류: {out_rel[:200]}")
-    pats = s.hpc.transfer.collect_patterns
-    limit = min(int(gw.cfg.max_download_bytes), int(s.hpc.transfer.max_collect_bytes),
-                int(health_max) if health_max else int(gw.cfg.max_download_bytes))
-    try:
-        files = [(r, sz) for r, sz in _walk(gw, out_rel, int(gw.cfg.collect_max_depth))
-                 if any(fnmatch.fnmatch(r.rsplit("/", 1)[-1], pat) for pat in pats)]
-    except HpcGatewayError as exc:
-        raise CollectFail("COLLECT_FAILED", mask(ctx, f"SCX 결과 목록 실패: {exc}")) from None
-    if not files:
-        raise CollectFail("COLLECT_FAILED", "결과 파일 없음")
-    big = [r for r, sz in files if sz > limit]
-    if big:
-        raise CollectFail("COLLECT_FAILED", f"회수 파일이 상한을 넘습니다: {big[0]}")
-    clash = _collisions([r for r, _sz in files])
-    if clash:
-        raise CollectFail("PATH_UNSAFE", f"대소문자·폴더 이름만 다른 결과 파일이 겹칩니다: {clash[:200]}")
-    targets = [(r, _safe_target(ctx, result_dir, r)) for r, _sz in files]  # 하나라도 안 되면 내려받기 전에 그 run 실패
-    got: list[str] = []
-    for r, dst in targets:
-        try:
-            got.append(_download_one(ctx, gw, f"{out_rel}/{r}", r, dst, limit))
-        except OSError as exc:
-            raise CollectFail("COLLECT_FAILED", f"결과 파일을 쓸 수 없습니다({type(exc).__name__}): {r[:200]}") from None
-    return got
-
-
-def _download_one(ctx: Any, gw: Any, remote: str, r: str, dst: str, limit: int) -> str:
-    os.makedirs(os.path.dirname(dst), exist_ok=True)
-    for attempt in (1, 2):
-        ctx.checkpoint()
-        # `<이름>.<임의>.part`(같은 폴더) — 성공하면 os.replace, 실패·취소면 tempfile이 지운다(.part를 남기지 않음, §16.4 9)
-        with tempfile.NamedTemporaryFile(dir=os.path.dirname(dst), prefix=os.path.basename(dst) + ".", suffix=".part",
-                                         delete=True, delete_on_close=False) as tf:
-            tf.close()
-            try:
-                gw.download(remote, tf.name, limit, on_chunk=lambda _n: ctx.checkpoint())
-            except HpcGatewayError as exc:
-                if exc.relay_code == "HASH_MISMATCH" and attempt == 1:
-                    ctx.log(f"SCX 다운로드 해시 불일치 — 1회 다시 받습니다: {r}")
-                    continue
-                raise CollectFail("COLLECT_FAILED", f"SCX 다운로드 실패({r}): {mask(ctx, str(exc))}") from None
-            os.replace(tf.name, dst)
-        return r
-    raise CollectFail("COLLECT_FAILED", f"SCX 다운로드 실패({r})")

@@ -279,7 +279,7 @@ Impl-Frontend, 브랜치 `claude/phase3`(기준 `ae0985a`). 대상: `frontend/sr
 
 ## 8. R-B·R-F (2026-10-20) S19 후 300줄 분할과 `batch_matrix`의 sampling 이동
 
-계약: [phase3.md](contracts/phase3.md) §24 / [s19_followup.md](contracts/s19_followup.md) §24.11 5단계. 브랜치 `claude/phase3`, 기능 변경(S12~S19)과 Verifier가 끝난 **뒤** 마지막에 한다. R-B(백엔드·워커)와 R-F(프런트)는 서로 파일이 겹치지 않아 병렬로 진행하고, 문서 이관(D)과도 병렬이다(docs만). 이 절은 진행 중 작성되어 **최종 파일 구성·줄 수는 두 작업 완료 후 갱신한다.**
+계약: [phase3.md](contracts/phase3.md) §24 / [s19_followup.md](contracts/s19_followup.md) §24.11 5단계. 브랜치 `claude/phase3`, 기능 변경(S12~S19)과 Verifier가 끝난 **뒤** 마지막에 한다. R-B(백엔드·워커)와 R-F(프런트)는 서로 파일이 겹치지 않아 병렬로 진행하고, 문서 이관(D)과도 병렬이다(docs만). 결과(2026-10-20, Verifier 통과): batch_matrix → `physicsai_core/sampling/{matrix,matrix_rows,matrix_basic,matrix_designs,matrix_sobol}.py`(옛 경로 재노출), 백엔드·워커 25파일 → 새 모듈 46개, 프런트 8파일 → 새 파일 31개. 운영 .py·.ts/.tsx 300줄 초과 0(예외: db/schema_0001.py, CSS 3개, deploy/setup_config.py·packages/simdash_adapters hpc/scx.py는 범위 밖). openapi 바이트 동일, 시험 무수정.
 
 **불변 조건(§0·§6·§7과 같음)**: 동작 불변 · 공개 import 경로는 원래 모듈의 재노출로 유지(호출부 무수정) · `backend/openapi.json`·`operation_ids.txt` 바이트 동일 · DB·migration 무변경 · **기존 시험 무수정**(시험 파일 자체를 분할하는 경우만 예외이고 기대값·검사 범위는 그대로). 순환 방지: 재노출하는 쪽이 항상 위(분할된 하위 모듈은 원래 모듈을 import하지 않음).
 

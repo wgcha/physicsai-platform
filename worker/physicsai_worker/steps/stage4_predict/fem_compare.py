@@ -5,24 +5,21 @@ FV_COMPARE(compare.json·responses_fem.csv·검증 행 요약).
   요청 fem.field > fem_verify.field_map > 원래. 예측 쪽은 P의 RESPONSES.txt를 재사용(요청 같을 때)하거나 사본 h3d로 추출 —
   예측 폴더에는 쓰지 않는다.
 - 도구 실패는 경고(RESPONSE_EXTRACT_FAILED·FEM_CURVE_FAILED·CAPTURE_FAILED)이고 값은 비운다. 작업은 성공 유지.
+300줄 분할(R-B): 공용 계산(순수)은 `fem_compare_calc`, FV_EXTRACT는 `fem_compare_extract`(여기서 재노출).
 """
 
 from __future__ import annotations
 
 import json
-import math
 import os
-import re
-from dataclasses import replace
 from typing import Any
 
 from physicsai_core.db.repositories import curations as cur_repo
 from physicsai_core.db.repositories import fem_verifications as fv_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
-from physicsai_core.db.repositories import param_sets as ps_repo
-from physicsai_core.errors import DomainError, StepFailure
-from physicsai_core.fileutil import copy_file, write_json, write_text
+from physicsai_core.errors import StepFailure
+from physicsai_core.fileutil import write_json, write_text
 from physicsai_core.stage2_curation import curation as cu
 from physicsai_core.stage4_predict import responses as resp_mod
 from physicsai_core.stage4_predict.xydata import parse_xydata
@@ -30,228 +27,12 @@ from physicsai_core.stage4_predict.xydata import parse_xydata
 from ...limiter.base import LimiterError
 from ...signals import StepSkipped
 from . import capture as cap
-from .fem_verify import attempt_dir, predict_job, row
-from ..response_tcl import extract_requests, single_h3d
-
-LEGEND = "__FV_LEGEND"
-MAX_SUMMARY_NAMES = 20
-_CATCH = (StepFailure, DomainError, LimiterError, OSError)
-_WS = re.compile(r"\s+")
-
-
-# ---- 공용 계산(순수) ----------------------------------------------------------------------------------
-
-
-def legend_name(responses: list[dict[str, Any]]) -> str:
-    """예약 이름 `__FV_LEGEND`, 같은 이름의 사용자 응답이 있으면 `__FV_LEGEND2`(…3)."""
-    names = {str(r.get("name") or "") for r in responses}
-    if LEGEND not in names:
-        return LEGEND
-    i = 2
-    while f"{LEGEND}{i}" in names:
-        i += 1
-    return f"{LEGEND}{i}"
-
-
-def fem_datatype(settings: Any, datatype: str, fem: dict[str, Any] | None) -> str:
-    f = (fem or {}).get("field")
-    if f:
-        return str(f)
-    return settings.fem_verify.field_map.get(datatype, datatype)
-
-
-def _diff(pred: float | None, fem: float | None, zero_tol: float) -> tuple[float | None, float | None, str | None]:
-    if pred is None or fem is None:
-        return None, None, None
-    d = pred - fem
-    if abs(fem) <= zero_tol:
-        return d, None, "기준값 0"
-    return d, d / abs(fem) * 100.0, None
-
-
-def compare_rows(reqs: list[resp_mod.H3dRequest], units: dict[str, str], pred: resp_mod.ParsedResponses | None,
-                 fem: resp_mod.ParsedResponses | None, zero_tol: float) -> list[dict[str, Any]]:
-    """응답마다 MIN·MAX·판정값(stat) 비교 행 1개(MIN·MAX 차이도 같은 식)."""
-    out = []
-    empty = resp_mod.ParsedResponses()
-    for q in reqs:
-        p, f = pred or empty, fem or empty
-        pmin, pmax = p.values.get(f"{q.name}_MIN"), p.values.get(f"{q.name}_MAX")
-        fmin, fmax = f.values.get(f"{q.name}_MIN"), f.values.get(f"{q.name}_MAX")
-        pv, _ = resp_mod.apply_stat(q, p)
-        fv, _ = resp_mod.apply_stat(q, f)
-        d, dp, note = _diff(pv, fv, zero_tol)
-        dmin, dpmin, _n1 = _diff(pmin, fmin, zero_tol)
-        dmax, dpmax, _n2 = _diff(pmax, fmax, zero_tol)
-        out.append({"name": q.name, "unit": units.get(q.name, ""), "stat": q.stat, "pred_min": pmin, "pred_max": pmax,
-                    "fem_min": fmin, "fem_max": fmax, "pred_value": pv, "fem_value": fv, "diff": d, "diff_pct": dp,
-                    "min_diff": dmin, "min_diff_pct": dpmin, "max_diff": dmax, "max_diff_pct": dpmax, "note": note})
-    return out
-
-
-def worst_of(rows: list[dict[str, Any]]) -> tuple[float | None, str | None]:
-    best: tuple[float | None, str | None] = (None, None)
-    for r in rows:
-        v = r.get("diff_pct")
-        if isinstance(v, (int, float)) and math.isfinite(v) and (best[0] is None or abs(v) > best[0]):
-            best = (abs(v), r["name"])
-    return best
-
-
-def legend_union(pred: tuple[float | None, float | None], fem: tuple[float | None, float | None]) -> tuple[float, float] | None:
-    vals = [*pred, *fem]
-    if any(v is None or not math.isfinite(v) for v in vals):
-        return None
-    lo, hi = min(pred[0], fem[0]), max(pred[1], fem[1])  # type: ignore[type-var]
-    return (lo, hi) if lo < hi else None
-
-
-def _norm(name: str) -> str:
-    return _WS.sub("", name).casefold()
-
-
-def pair_curves(pred_names: list[str], fem_names: list[str]) -> tuple[list[dict[str, str]], list[str], list[str]]:
-    """이름 짝(정확히 같음 → 대소문자·공백 무시). (짝, 짝 없는 예측, 짝 없는 FEM)."""
-    pairs: list[dict[str, str]] = []
-    left_f = list(fem_names)
-    left_p = []
-    for p in pred_names:
-        if p in left_f:
-            pairs.append({"pred": p, "fem": p})
-            left_f.remove(p)
-        else:
-            left_p.append(p)
-    still = []
-    for p in left_p:
-        m = next((f for f in left_f if _norm(f) == _norm(p)), None)
-        if m is not None:
-            pairs.append({"pred": p, "fem": m})
-            left_f.remove(m)
-        else:
-            still.append(p)
-    return pairs, still, left_f
-
-
-# ---- 공용(작업) ---------------------------------------------------------------------------------------
-
-
-def _ctx_objs(ctx: Any) -> tuple[dict[str, Any], dict[str, Any], str, dict[str, Any] | None]:
-    r = row(ctx)
-    pj, root = predict_job(ctx, r)
-    psid = (pj.get("result") or {}).get("param_set_id") or (pj.get("params") or {}).get("param_set_id")
-    with ctx.ex.engine.connect() as conn:
-        ps = ps_repo.get(conn, psid) if psid else None
-    return r, pj, root, ps
-
-
-def _display(ctx: Any, r: dict[str, Any], pj: dict[str, Any]) -> dict[str, Any]:
-    disp, _src = cap.display_for(ctx, pj, (r.get("options") or {}).get("display"))
-    return disp
-
-
-# ---- 7 FV_EXTRACT ------------------------------------------------------------------------------------
-
-
-def _pred_reuse(ctx: Any, root: str, reqs: list[resp_mod.H3dRequest]) -> resp_mod.ParsedResponses | None:
-    """P/RESULT의 RESPONSES.txt + 같은 요청의 H3D_REQUESTS.txt면 그 값(읽기만)."""
-    d = ctx.abs(f"04_predict/{root}/RESULT")
-    try:
-        with open(os.path.join(d, resp_mod.REQUESTS_FILE), encoding="utf-8") as fh:
-            old = [ln.strip() for ln in fh if ln.strip() and not ln.strip().startswith("#")]
-    except OSError:
-        return None
-    if old != [q.line() for q in reqs]:
-        return None
-    return resp_mod.read_responses(d)
-
-
-def _merge(a: resp_mod.ParsedResponses | None, b: resp_mod.ParsedResponses | None) -> resp_mod.ParsedResponses | None:
-    if a is None and b is None:
-        return None
-    out = resp_mod.ParsedResponses()
-    for x in (a, b):
-        if x is not None:
-            out.values.update(x.values)
-            out.failures.update(x.failures)
-    return out
-
-
-def _extract_pred(ctx: Any, A: str, pj: dict[str, Any], root: str, reqs: list[resp_mod.H3dRequest],
-                  legend_req: resp_mod.H3dRequest | None) -> resp_mod.ParsedResponses | None:
-    reused = _pred_reuse(ctx, root, reqs) if reqs else None
-    todo = ([legend_req] if legend_req else []) if reused is not None else [*reqs, *([legend_req] if legend_req else [])]
-    if not todo:
-        return reused
-    rel = (pj.get("result") or {}).get("pred_h3d_rel")
-    src = ctx.abs(rel) if rel else None
-    if not src or not os.path.isfile(src):
-        ctx.add_warning("RESPONSE_EXTRACT_FAILED", "예측 h3d가 없어 예측 쪽 응답을 다시 추출하지 못했습니다")
-        return reused
-    limit = ctx.settings.fem_verify.max_pred_h3d_copy_bytes
-    if os.path.getsize(src) > limit:
-        ctx.add_warning("PRED_H3D_TOO_LARGE", f"예측 h3d가 사본 상한(fem_verify.max_pred_h3d_copy_bytes)을 넘어 추출하지 않았습니다: "
-                                              f"{os.path.getsize(src)} B")
-        return reused
-    d = os.path.join(A, "extract", "pred")
-    dst = os.path.join(d, os.path.basename(src))
-    if os.path.lexists(dst):
-        ctx.backup([dst])
-    copy_file(src, dst, checkpoint=ctx.checkpoint)
-    try:
-        got = extract_requests(ctx, todo, d, dst)
-    except (StepFailure, LimiterError) as exc:
-        ctx.add_warning("RESPONSE_EXTRACT_FAILED", f"예측 응답 추출 실패({exc.code}): {exc.message}"[:480])
-        return reused
-    return _merge(reused, got)
-
-
-def fv_extract(ctx: Any) -> None:
-    r, pj, root, ps = _ctx_objs(ctx)
-    A = attempt_dir(ctx)
-    s = ctx.settings
-    opts = r.get("options") or {}
-    fem = opts.get("fem")
-    responses = list((ps or {}).get("responses") or [])
-    disp = _display(ctx, r, pj)
-    fixed = (disp.get("legend") or {}).get("mode") == "fixed"
-    reqs, _skipped = resp_mod.build_requests(responses)
-    if not reqs and fixed:
-        ctx.patch_result({"fv_extract": {"rows": [], "legend_pred": [None, None], "legend_fem": [None, None]}})
-        raise StepSkipped("응답 정의 없음·범례 고정")
-    res_dir = os.path.join(A, "result")
-    h3d, names = single_h3d(res_dir)
-    if not names:
-        raise StepFailure("OUTPUT_MISSING", "회수한 FEM h3d가 없습니다")
-    lname = legend_name(responses)
-    legend_pred = legend_fem = None
-    if not fixed:
-        legend_pred = resp_mod.H3dRequest(lname, s.fem_verify.legend_subcase, str(disp.get("field") or ""),
-                                          str(disp.get("component") or ""), "", "MAX")
-        legend_fem = replace(legend_pred, datatype=fem_datatype(s, legend_pred.datatype, fem),
-                             component=str((fem or {}).get("component") if (fem or {}).get("component") is not None
-                                           else legend_pred.component))
-    fem_reqs = [replace(q, datatype=fem_datatype(s, q.datatype, fem)) for q in reqs]
-    fem_parsed = None
-    if h3d is None:
-        ctx.add_warning("RESP_H3D_AMBIGUOUS", f"FEM 응답 추출: 회수 폴더 h3d가 정확히 1개가 아닙니다({len(names)}개) — FEM 값을 비웁니다")
-    else:
-        try:
-            fem_parsed = extract_requests(ctx, [*fem_reqs, *([legend_fem] if legend_fem else [])], res_dir, h3d)
-        except (StepFailure, LimiterError) as exc:
-            ctx.add_warning("RESPONSE_EXTRACT_FAILED", f"FEM 응답 추출 실패({exc.code}): {exc.message}"[:480])
-    pred_parsed = _extract_pred(ctx, A, pj, root, reqs, legend_pred)
-    units = {str(x.get("name")): str(x.get("unit") or "") for x in responses}
-    rows = compare_rows(reqs, units, pred_parsed, fem_parsed, s.fem_verify.zero_tol)
-    if reqs and r.get("template_kind") == "mesh_only":
-        ctx.add_warning("FEM_RESPONSE_WHOLE_MODEL", "FEM 응답은 조립 전체 모델의 최솟값·최댓값입니다(쿠션만 한정 불가) — 컨투어를 함께 보세요")
-
-    def mm(p: resp_mod.ParsedResponses | None) -> list[float | None]:
-        if p is None or legend_pred is None:
-            return [None, None]
-        return [p.values.get(f"{lname}_MIN"), p.values.get(f"{lname}_MAX")]
-
-    ctx.patch_result({"fv_extract": {"rows": rows, "legend_pred": mm(pred_parsed), "legend_fem": mm(fem_parsed),
-                                     "legend_name": lname if legend_pred else None}})
+from .fem_verify import attempt_dir, row
+from ..response_tcl import single_h3d
+from .fem_compare_calc import (  # noqa: F401 - 기존 경로 재노출
+    LEGEND, MAX_SUMMARY_NAMES, _CATCH, legend_name, fem_datatype, compare_rows, worst_of, legend_union, pair_curves,
+)
+from .fem_compare_extract import _ctx_objs, _display, fv_extract  # noqa: F401 - 기존 경로 재노출
 
 
 # ---- 8 FV_CURVE --------------------------------------------------------------------------------------

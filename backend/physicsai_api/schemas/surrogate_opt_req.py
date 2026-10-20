@@ -1,0 +1,87 @@
+"""API 스키마 — ⑤ 플랫폼 내장 최적화 요청(생성·탐색·목적·제약·관찰·검증 요청) — surrogate_opt에서 재노출."""
+
+from __future__ import annotations
+
+from typing import Annotated, Literal, Union
+
+from pydantic import Field
+
+from .common import Req
+
+METRIC_PATTERN = (r"^(curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63}"
+                  r"|perf:[A-Za-z][A-Za-z0-9_]{0,63})$")
+
+
+class SoExploreNew(Req):
+    """새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs)."""
+
+    kind: Literal["new"]
+    count: int | None = None
+    seed: int = 1
+
+
+class SoExploreReuse(Req):
+    """완료된 배치 재사용(같은 Study·같은 템플릿·같은 모델·DONE)."""
+
+    kind: Literal["reuse"]
+    batch_id: str = Field(max_length=64)
+
+
+SoExplore = Annotated[Union[SoExploreNew, SoExploreReuse], Field(discriminator="kind")]
+
+
+class SoObjective(Req):
+    metric: str = Field(max_length=200)
+    series: str | None = Field(default=None, max_length=400)
+    sense: Literal["min", "max"] = "min"
+
+
+class SoConstraint(Req):
+    """제약: `<=`·`>=`는 value, `range`(S17 §22.4.1)는 lo < hi(유한)."""
+
+    metric: str = Field(max_length=200)
+    series: str | None = Field(default=None, max_length=400)
+    op: Literal["<=", ">=", "range"]
+    value: float | None = None
+    lo: float | None = None
+    hi: float | None = None
+
+
+class SoObserve(Req):
+    """관찰 지표(값만 기록·표시, S17)."""
+
+    metric: str = Field(max_length=200)
+    series: str | None = Field(default=None, max_length=400)
+
+
+class SurrogateOptCreate(Req):
+    """생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.
+    목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나."""
+
+    param_set_id: str | None = None
+    model_id: str | None = None
+    explore: SoExplore
+    objective: SoObjective | None = None
+    objectives: list[SoObjective] | None = Field(default=None, max_length=10)
+    constraints: list[SoConstraint] = Field(default_factory=list, max_length=20)
+    observe: list[SoObserve] = Field(default_factory=list, max_length=50)
+    weights: list[float] | None = Field(default=None, max_length=10)
+    bounds: dict[str, list[float]] | None = None
+    surrogate: Literal["gp", "rbf"] | None = None
+    iterations: int | None = None
+    candidates: int | None = None
+    tol_rel: float | None = None
+    seed: int = 1
+    multi_execution: int = Field(default=1, ge=1, le=64)
+    capture: bool = False
+
+
+class SoVerifyPoint(Req):
+    values: dict[str, float]
+
+
+class SurrogateOptVerify(Req):
+    """추가 검증(S17 §22.7): 고른 해(검증·예측 전선 점) 1~max_extra_points개를 최적화 소유 배치(iters EXTRA)로 예측 검증."""
+
+    points: list[SoVerifyPoint] = Field(min_length=1, max_length=50)
+    capture: bool = False
