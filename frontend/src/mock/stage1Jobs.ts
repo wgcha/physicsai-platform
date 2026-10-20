@@ -28,14 +28,36 @@ export function hpcSummary(p2: Phase2Mock, j: Job): HpcSummary | null {
   return h;
 }
 
+/** ①-3 표본표 재사용(EQ-C1 4): 같은 Study READY DOE·파라미터 이름 집합 같음. 오류는 422 DOE_SAMPLING_INVALID(problems) */
+function reuseCheck(p2: Phase2Mock, s: Study, sp: { doe_id?: string }, names: string[]): MockResp | null {
+  const bad = (code: string, message: string) => err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems: [{ code, message }] });
+  const src = p2.does.find((x) => x.id === sp.doe_id && x.study_id === s.id);
+  if (!src) return bad("SOURCE_DOE_NOT_FOUND", "표본표를 재사용할 DOE를 이 Study에서 찾을 수 없습니다");
+  const rows = p2.doeSamples[src.id] ?? [];
+  if (src.status !== "READY" || !rows.length) return bad("SOURCE_DOE_NOT_READY", `DOE ${src.doe_label}의 표본표가 준비되지 않았습니다(READY·PARSED/PARTIAL 필요)`);
+  const cols = Object.keys(rows[0].values);
+  const extra = cols.filter((c) => !names.includes(c));
+  const miss = names.filter((n) => !cols.includes(n));
+  if (extra.length || miss.length) {
+    const detail = [extra.length ? `원본 DOE에만: ${extra.join(", ")}` : "", miss.length ? `원본 DOE에 없음: ${miss.join(", ")}` : ""].filter(Boolean).join("; ");
+    return bad("DOE_PARAM_MISMATCH", `파라미터 이름이 다릅니다(${detail})`);
+  }
+  return null;
+}
+
 /** native DOE(geometry-engine.md §7.3.3·§7.3.8 + S18 통합): LHS만, options 금지, 세트 기준이면 매칭표 확정 게이트 */
 function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unknown>): MockResp | null {
   if (params.generator === "hyperstudy") return err(422, "INVALID_PARAMS", "native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다");
   if (params.options && Object.keys(params.options as object).length) return err(422, "DOE_OPTIONS_INVALID", "native DOE는 options를 쓸 수 없습니다(seed 사용)");
-  const sp = params.sampling as { kind?: string; count?: number } | undefined;
-  if (sp && sp.kind !== "lhs")
+  const sp = params.sampling as { kind?: string; count?: number; doe_id?: string } | undefined;
+  if (sp?.kind === "train_doe") {
+    const ps0 = params.param_set_id ? p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id) : null;
+    const names = ps0 ? (ps0.parameters ?? []).map((x) => x.name) : (p2.setups[s.id]?.parameters ?? []).filter((x) => x.use).map((x) => x.name);
+    const e = reuseCheck(p2, s, sp, names);
+    if (e) return e;
+  } else if (sp && sp.kind !== "lhs")
     return err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems: [{ code: "DESIGN_UNSUPPORTED", message: "native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다" }] });
-  const n = Number(sp ? sp.count : params.num_runs);
+  const n = sp?.kind === "train_doe" ? 2 : Number(sp ? sp.count : params.num_runs);
   if (!(n >= 2 && n <= 5000)) return err(422, "DOE_OPTIONS_INVALID", "run 수는 2~5000");
   if (params.param_set_id) {
     const ps = p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id);
@@ -58,7 +80,10 @@ export function precheckTrain(p2: Phase2Mock, s: Study, type: JobType, params: R
     if (!t) return err(409, "TPL_REQUIRED", "tpl을 먼저 생성하세요.");
     if (t.stale) return err(409, "TPL_STALE", "파라미터 표가 바뀌었습니다 — tpl을 다시 생성하세요.");
     // S18 §23.4: 플랫폼 표본 조합 검증(422 DOE_SAMPLING_INVALID + problems)
-    if (generatorOf(params) === "platform") {
+    if (generatorOf(params) === "platform" && (params.sampling as { kind?: string } | undefined)?.kind === "train_doe") {
+      const e = reuseCheck(p2, s, params.sampling as { doe_id?: string }, (p2.setups[s.id]?.parameters ?? []).filter((x) => x.use).map((x) => x.name));
+      if (e) return e;
+    } else if (generatorOf(params) === "platform") {
       const c = checkSampling(p2.setups[s.id], (params.sampling ?? {}) as Record<string, unknown>);
       if (c.problems.length) return err(422, "DOE_SAMPLING_INVALID", "표본 설정을 확인하세요.", { problems: c.problems });
     }
@@ -85,13 +110,26 @@ export function onCreateTrain(p2: Phase2Mock, j: Job, me: { display_name: string
     };
     if (common.engine === "native" || p.param_set_id) {
       // native(§7.3.3): 서버가 확정 기록하는 params(doe_type NATIVE_LHS·options {}·seed)
-      const sp = p.sampling as { count?: number; seed?: number } | undefined;
-      const n = Number(sp?.count ?? p.num_runs);
-      Object.assign(p, { engine: "native", generator: "platform", doe_label: "LHS(native)", doe_type: "NATIVE_LHS", num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
+      const sp = p.sampling as { kind?: string; doe_id?: string; count?: number; seed?: number } | undefined;
+      const reuseSrc = sp?.kind === "train_doe" ? p2.does.find((x) => x.id === sp.doe_id) : undefined;
+      if (reuseSrc) p.reuse_doe_id = reuseSrc.id;
+      const n = reuseSrc ? Number(reuseSrc.run_count ?? 0) : Number(sp?.count ?? p.num_runs);
+      Object.assign(p, { engine: "native", generator: "platform", doe_label: reuseSrc ? "표본표 재사용(native)" : "LHS(native)", doe_type: "NATIVE_LHS", num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
       delete p.sampling;
       p2.does.unshift({
-        ...common, engine: "native", doe_label: "LHS(native)", doe_type: "NATIVE_LHS", num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
+        ...common, engine: "native", doe_label: reuseSrc ? "표본표 재사용(native)" : "LHS(native)", doe_type: "NATIVE_LHS", num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
         multi_execution: Number(p.multi_execution), generator: "platform", sampling: null, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
+      });
+      return;
+    }
+    if (generatorOf(p) === "platform" && (p.sampling as { kind?: string } | undefined)?.kind === "train_doe") {
+      // EQ-C1 4: 표본표 재사용 — 원본 run 이름·값 그대로(워커 DG_PREP이 samples를 복사)
+      const src = p2.does.find((x) => x.id === (p.sampling as { doe_id?: string }).doe_id)!;
+      const n = Number(src.run_count ?? 0);
+      Object.assign(p, { generator: "platform", doe_label: "표본표 재사용", doe_type: "TRAIN_DOE", num_runs: n, multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "fail", reuse_doe_id: src.id });
+      p2.does.unshift({
+        ...common, doe_label: "표본표 재사용", doe_type: "TRAIN_DOE", num_runs_requested: n, options: { doe_id: src.id },
+        multi_execution: Number(p.multi_execution), generator: "platform", sampling: { kind: "train_doe", label: "표본표 재사용", desc_id: "td_train_doe", meta: { source_label: src.doe_label } }, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
       });
       return;
     }
@@ -149,10 +187,11 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
       d.sample_status = "PARSED";
       const r = rng(n);
       p2.runs[d.id] = Array.from({ length: n }, (_, i) => ({ run_key: runKey(i + 1), state: "GENERATED" as TrainRunState, starter_name: "cushion_0000.rad", input_display_path: p2.s.disp(sid, `01_train/doe/${d.id}/approaches/doe_1/${runKey(i + 1)}/m_3`), hpc: null, result: null, updated_at: new Date().toISOString() }));
-      p2.doeSamples[d.id] = p2.runs[d.id].map((x) => ({ run_key: x.run_key, values: { THK_TOP: Number((0.3 + r() * 0.9).toFixed(4)), THK_FOAM: Number((1 + r() * 2).toFixed(4)), RIB_H: 12, RIB_N: 2 + Math.floor(r() * 7) }, measured: {} }));
+      const reuseRows = p.reuse_doe_id ? p2.doeSamples[String(p.reuse_doe_id)] : undefined;
+      p2.doeSamples[d.id] = reuseRows ? reuseRows.map((x) => ({ ...x, values: { ...x.values }, measured: {} })) : p2.runs[d.id].map((x) => ({ run_key: x.run_key, values: { THK_TOP: Number((0.3 + r() * 0.9).toFixed(4)), THK_FOAM: Number((1 + r() * 2).toFixed(4)), RIB_H: 12, RIB_N: 2 + Math.floor(r() * 7) }, measured: {} }));
       if (d.engine === "native") {
         // native: 형상 생성 실패 run은 SKIPPED.json → skipped_runs[{run_key, reason, category, message}], run 목록에서 빠진다
-        const skipped = n >= 6 ? [{ run_key: runKey(n), reason: "GEOM_QUALITY", category: "QUALITY", message: "min stretch 0.06 < 기준 0.1" }] : [];
+        const skipped = !p.reuse_doe_id && n >= 6 ? [{ run_key: runKey(n), reason: "GEOM_QUALITY", category: "QUALITY", message: "min stretch 0.06 < 기준 0.1" }] : [];
         p2.runs[d.id] = p2.runs[d.id].filter((x) => !skipped.some((k) => k.run_key === x.run_key));
         d.run_count = p2.runs[d.id].length;
         d.gen = { total: n, pending: 0, running: 0, done: n - skipped.length, failed: skipped.length };

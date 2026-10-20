@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { api, errorMessage, type DoeField, type DoeGenerator, type DoeType, type ParamSet } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
@@ -11,8 +11,9 @@ import { HS_COMPAT_NOTE, HS_NOTE, PLATFORM_GROUPS, SAMPLING_LABEL, descIdOf, hsC
 import { genCategoryText } from "../../lib/geometry";
 import { useTrain } from "./TrainContext";
 import { DoePlatformFields, Seg } from "./DoePlatformFields";
+import { REUSE_LABEL, ReuseDoePicker } from "./ReuseDoePicker";
 import {
-  NATIVE_DOE_LABEL, buildHyperstudyParams, buildNativeParams, buildPlatformParams, doeLimits, genText, initialNative, initialPlatform, skippedRuns, stratumCounts,
+  NATIVE_DOE_LABEL, buildHyperstudyParams, buildReuseParams, buildNativeParams, buildPlatformParams, doeLimits, genText, initialNative, initialPlatform, skippedRuns, stratumCounts,
   type NativeDoeState, type PlatformState,
 } from "./doeGenParams";
 
@@ -55,10 +56,11 @@ const SAMPLE_TEXT: Record<string, string> = {
 const GEN_LABEL: Record<DoeGenerator, string> = { platform: "플랫폼", hyperstudy: "HyperStudy" };
 
 /** native에서 쓸 수 없는 것의 사유(§7.3.3: 플랫폼 LHS만) */
+const REUSE_MULTI_BASELINE = "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다";
 const NATIVE_ONLY_LHS = "native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다";
 
 /** ①-3 native 입력(geometry-engine.md §8 ①-3): 생성 방식 PLATFORM·표본 LHS(native) 고정, run 수·시드·동시 수·실패 처리, 세트 기준이면 층화 안내 */
-function NativeFields({ state, onChange, set, disabled }: { state: NativeDoeState; onChange: (s: NativeDoeState) => void; set: ParamSet | null; disabled: boolean }) {
+function NativeFields({ state, onChange, set, disabled, reuse }: { state: NativeDoeState; onChange: (s: NativeDoeState) => void; set: ParamSet | null; disabled: boolean; reuse: { on: boolean; setOn: (on: boolean) => void; panel: ReactNode } }) {
   const nb = set?.baselines?.length ?? 0;
   const n = Number(state.count);
   const strata = nb > 1 && Number.isInteger(n) && n >= 2 ? stratumCounts(n, nb) : [];
@@ -66,8 +68,12 @@ function NativeFields({ state, onChange, set, disabled }: { state: NativeDoeStat
     <div className="samp-pick" data-testid="doe-native">
       <label className="field">
         <span className="field-label">표본 방식</span>
-        <select aria-label="표본 방식" value="lhs" disabled={disabled} onChange={() => undefined}>
+        <select aria-label="표본 방식" value={reuse.on ? "train_doe" : "lhs"} disabled={disabled} onChange={(e) => reuse.setOn(e.target.value === "train_doe")}>
           <option value="lhs">{NATIVE_DOE_LABEL}</option>
+          <option value="train_doe" disabled={nb > 1} title={nb > 1 ? REUSE_MULTI_BASELINE : undefined}>
+            {REUSE_LABEL}
+            {nb > 1 ? " — 사용 불가" : ""}
+          </option>
           {PLATFORM_GROUPS.flatMap((g) => g.kinds)
             .filter((k) => k !== "lhs")
             .map((k) => (
@@ -80,6 +86,7 @@ function NativeFields({ state, onChange, set, disabled }: { state: NativeDoeStat
       <p className="muted small" data-testid="native-only-note">
         {NATIVE_ONLY_LHS} — HyperStudy·다른 표본 방식은 SimLab(①-1 SimLab 추출)에서 씁니다.
       </p>
+      {reuse.on ? reuse.panel : <>
       <div className="fill-row">
         <label className="inline-field">
           run 수
@@ -96,6 +103,7 @@ function NativeFields({ state, onChange, set, disabled }: { state: NativeDoeStat
           {set?.param_map_status !== "confirmed" && <span className="warn-text"> 매칭표 확정 필요 — ④ 템플릿 상세의 '다중 baseline(고급)'에서 확정하세요.</span>}
         </p>
       )}
+      </>}
     </div>
   );
 }
@@ -143,6 +151,8 @@ export function DoeGenCard() {
   // native(geometry-engine.md §7.3.3): ①-1 native 추출 또는 native 템플릿 기준이면 템플릿(tpl) 대기 없이 활성
   const [nat, setNat] = useState<NativeDoeState>(initialNative);
   const [setId, setSetId] = useState("");
+  const [reuseOn, setReuseOn] = useState(false);
+  const [reuseDoe, setReuseDoe] = useState("");
   const nativeSets = paramSets.filter((p) => p.engine === "native");
   const nset = nativeSets.find((p) => p.id === setId) ?? null;
 
@@ -177,8 +187,23 @@ export function DoeGenCard() {
   const platMultiShown = platMulti ?? lim.parallelDefault;
 
   const platformParams = () => buildPlatformParams(plat, names, { multi: platMultiShown, assemPath: path.trim(), maxRuns: lim.maxRuns, continueOnFailure: continueOnFail });
+  // 재사용 대상의 파라미터 이름: 세트 기준 native는 세트 표, 아니면 ①-2 사용 행
+  const targetNames = nset ? (nset.parameters ?? []).map((p) => p.name) : names;
+  const reuseBlocked = nset && (nset.baselines?.length ?? 0) > 1 ? REUSE_MULTI_BASELINE : null;
+  const reuseActive = reuseOn && !reuseBlocked && (native || isPlatform);
+  const reuse = {
+    on: reuseActive,
+    setOn: setReuseOn,
+    panel: <ReuseDoePicker does={does} names={targetNames} doeId={reuseDoe} onChange={setReuseDoe} disabled={!canExec} blocked={reuseBlocked} />,
+  };
+  const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath: path.trim(), paramSetId: nset?.id ?? null, continueOnFailure: native ? nat.continueOnFailure : continueOnFail });
   const nativeParams = () => buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.maxRuns, assemPath: path.trim(), paramSetId: nset?.id ?? null });
   const submit = () => {
+    if (reuseActive) {
+      const params = reuseParams();
+      if (params) void run(params);
+      return;
+    }
     if (native) {
       const params = nativeParams();
       if (params) void run(params);
@@ -191,7 +216,7 @@ export function DoeGenCard() {
     }
     void run(buildHyperstudyParams({ label, options: opts, multi, assemPath: path.trim(), runsEditable: !!t?.runs_editable, runs }));
   };
-  const inputBad = native ? nativeParams() === null : isPlatform ? platformParams() === null : !t || (t.runs_editable && !(Number(runs) >= 2));
+  const inputBad = reuseActive ? !reuseDoe : native ? nativeParams() === null : isPlatform ? platformParams() === null : !t || (t.runs_editable && !(Number(runs) >= 2));
   // 세트 기준 native: 조립 폴더는 세트 것(입력 없음), 준비본 READY·다중 baseline 매칭표 확정이 필요(409 GEOM_PREP_STALE·PARAM_MAP_UNCONFIRMED)
   const assemOk = nset ? true : ok;
   const setGate = !nset ? null : nset.native?.prep_status !== "READY" ? "템플릿 형상 준비를 다시 하세요(④)" : (nset.baselines?.length ?? 0) > 1 && nset.param_map_status !== "confirmed" ? "매칭표 확정 필요(④ 다중 baseline)" : null;
@@ -210,7 +235,7 @@ export function DoeGenCard() {
                 job={job}
                 disabled={!enabled || !assemOk || !tplReady || inputBad || !!setGate}
                 disabledReason={
-                  !enabled ? undefined : !tplReady ? (setup?.tpl ? "tpl을 다시 생성하세요(①-2)" : "①-2에서 tpl을 먼저 생성하세요") : setGate ?? (!assemOk ? "조립 폴더를 입력하고 확인하세요" : native ? `run 수(2~${lim.maxRuns})·시드를 확인하세요` : isPlatform ? "run 수·시드를 확인하세요" : "run 수는 2 이상")
+                  !enabled ? undefined : !tplReady ? (setup?.tpl ? "tpl을 다시 생성하세요(①-2)" : "①-2에서 tpl을 먼저 생성하세요") : setGate ?? (!assemOk ? "조립 폴더를 입력하고 확인하세요" : native ? reuseActive ? "재사용할 DOE를 고르세요" : `run 수(2~${lim.maxRuns})·시드를 확인하세요` : isPlatform ? (reuseActive ? "재사용할 DOE를 고르세요" : "run 수·시드를 확인하세요") : "run 수는 2 이상")
                 }
                 error={error}
               />
@@ -255,7 +280,7 @@ export function DoeGenCard() {
       />}
       {native ? (
         <>
-          <NativeFields state={nat} onChange={setNat} set={nset} disabled={!canExec} />
+          <NativeFields state={nat} onChange={setNat} set={nset} disabled={!canExec} reuse={reuse} />
           <div className="form-grid">
             <Field label="동시 실행 수" hint={`1~${lim.maxMulti} · run마다 형상 모핑·검사를 동시에 실행합니다`}>
               <input className="num" inputMode="numeric" value={platMultiShown} disabled={!canExec} onChange={(e) => setPlatMulti(Math.max(1, Math.min(lim.maxMulti, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />
@@ -274,7 +299,7 @@ export function DoeGenCard() {
         </>
       ) : isPlatform ? (
         <>
-          <DoePlatformFields state={plat} onChange={setPlat} names={names} maxRuns={lim.maxRuns} disabled={!canExec} />
+          <DoePlatformFields state={plat} onChange={setPlat} names={names} maxRuns={lim.maxRuns} disabled={!canExec} reuse={reuse} />
           <div className="form-grid">
             <Field label="동시 실행 수" hint={`1~${lim.maxMulti} · run마다 SimLab·HyperMesh를 동시에 실행합니다 — Altair 라이선스와 메모리 한도 안에서 정하세요`}>
               <input className="num" inputMode="numeric" value={platMultiShown} disabled={!canExec} onChange={(e) => setPlatMulti(Math.max(1, Math.min(lim.maxMulti, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />

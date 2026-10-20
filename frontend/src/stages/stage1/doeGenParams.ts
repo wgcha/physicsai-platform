@@ -175,3 +175,32 @@ export function skippedRuns(result: unknown, doeId: string | null | undefined): 
   if (!r || !doeId || r.doe_id !== doeId || !Array.isArray(r.skipped_runs)) return [];
   return r.skipped_runs.filter((x): x is SkippedRun => !!x && typeof (x as SkippedRun).run_key === "string");
 }
+
+// ---------------------------------------------------------------- 다른 DOE 표본표 재사용(equiv-check.md EQ-C1 4: sampling.kind = train_doe)
+
+/** 샘플 표 columns → 파라미터 이름(run_key·resp: 응답 열 제외) */
+export const reuseParamNames = (columns: readonly string[]): string[] => columns.filter((c) => c !== "run_key" && !c.startsWith("resp:"));
+
+/** 두 이름 집합이 같은가(백엔드 doe_reuse.name_mismatch와 같은 규칙: 순서 무관) */
+export function sameNameSet(a: readonly string[], b: readonly string[]): boolean {
+  const sa = new Set(a);
+  const sb = new Set(b);
+  return sa.size === sb.size && [...sa].every((x) => sb.has(x));
+}
+
+/** 후보 DOE 한 줄의 선택 가능 여부와 사유. cols = 샘플 표 파라미터 이름(undefined = 아직 못 읽음, null = 샘플 표 없음) */
+export function reuseState(d: { status: string; sample_status: string }, cols: string[] | null | undefined, names: readonly string[]): { ok: boolean; reason: string | null } {
+  if (d.status !== "READY" || !(d.sample_status === "PARSED" || d.sample_status === "PARTIAL")) return { ok: false, reason: "표본표가 준비되지 않았습니다" };
+  if (cols === undefined) return { ok: false, reason: "표본표를 확인하는 중입니다" };
+  if (cols === null) return { ok: false, reason: "표본표를 읽을 수 없습니다" };
+  if (!sameNameSet(cols, names)) return { ok: false, reason: "파라미터 이름이 다릅니다" };
+  return { ok: true, reason: null };
+}
+
+/** 재사용 params: sampling {kind:"train_doe", doe_id}. run 수·시드는 보내지 않는다(원본 표본표 그대로, run 이름 유지).
+ * 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path */
+export function buildReuseParams(o: { doeId: string; multi: number; assemPath: string; paramSetId: string | null; continueOnFailure: boolean }): Record<string, unknown> | null {
+  if (!o.doeId) return null;
+  const base = { generator: "platform", sampling: { kind: "train_doe", doe_id: o.doeId }, multi_execution: o.multi, on_run_failure: o.continueOnFailure ? "continue" : "fail" };
+  return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath };
+}

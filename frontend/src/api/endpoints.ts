@@ -219,6 +219,8 @@ export const api = {
   trainFeatures: (studyId: string) => request<NativeFeatures>("GET", `/studies/${studyId}/train/features`),
   trainDoes: (studyId: string) => request<TrainDoe[]>("GET", `/studies/${studyId}/train/does`),
   trainDoe: (id: string) => request<TrainDoe>("GET", `/train-does/${id}`),
+  /** ①-3 표본표 재사용: DOE 샘플 표(columns = run_key + 파라미터 이름 + 응답) */
+  doeSamples: (id: string, limit = 1) => request<SamplePage>("GET", `/train-does/${id}/samples`, { query: { limit } }),
   trainRuns: (doeId: string, q: { state?: string; limit?: number; cursor?: string | null } = {}) =>
     requestPage<TrainRun[]>(`/train-does/${doeId}/runs`, { limit: q.limit ?? 200, state: q.state, cursor: q.cursor }),
   paramSetFromTrain: (studyId: string, body: { doe_id: string; runs?: "collected" | "all"; unit_system?: string; label?: string | null }) =>
