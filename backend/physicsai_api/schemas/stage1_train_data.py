@@ -228,6 +228,7 @@ class TrainRun(Resp):
     input_display_path: str | None = None
     hpc: TrainRunHpc | None = None
     result: TrainRunResult | None = None
+    h3d_rel: str | None = None  # 결과 .h3d의 Study 기준 상대 경로(③ 3D 컨투어 SOLVER_H3D {study_id, h3d_rel}), 없으면 null — geometry-view GV-C3
     updated_at: datetime
 
 

@@ -7472,6 +7472,8 @@ export interface components {
         };
         /** TrainRun */
         TrainRun: {
+            /** H3D Rel */
+            h3d_rel?: string | null;
             hpc?: components["schemas"]["TrainRunHpc"] | null;
             /** Input Display Path */
             input_display_path?: string | null;

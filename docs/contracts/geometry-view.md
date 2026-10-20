@@ -706,3 +706,9 @@ Radioss 해석 입력에 `/ANIM` 출력을 추가해 애니메이션 파일(`A00
   - 결과 3D 컨투어 원본 `SOLVER_H3D`의 `source_ref` = `{fem_verification_id}` 또는 **`{study_id, h3d_rel}`**(Study 기준 .h3d 상대 경로). `contour_extract.tcl`은 외부 면 조회가 안 되면 요소 연결 전체를 **`elements.csv`**로 쓰고, 그때 **외부 면은 플랫폼 변환기(C3_CONVERT, `contour3d/convert.py`)가 계산**한다(쉘 = 요소 그대로, 솔리드 = 한 번만 나온 면).
   - 미리보기 캐시 키의 paicad 버전 = **워커 하트비트가 보고한 `resources.paicad_version`**(API 프로세스에서 paicad를 실행하지 않음).
   - 쉘 세트(kind=shell)의 ④ 조립 FEM 검증 **rebuild(재조립)는 미지원**(후속) — 예측 입력 그대로(reuse)를 쓴다. 3S 쉘 두께가 있는 예측을 rebuild로 고르면 `SHELL_NOT_APPLIED` 경고.
+- **GV-C3(2026-10-20, 프런트 3D 의존·빌드본 측정 — 본문 §7·§13 대신 이 해석이 기준)**:
+  - three **0.186.1**(MIT, 정확 버전 고정). three는 지연 청크 `threeScene-*.js`에만 들어간다: **656,231 B / gzip 166,173 B**(gzip 기본 수준 측정). 첫 화면 청크(`index-*.js`) 증가는 three 도입분 **+3,502 B**(WebGL 확인·패널 버튼·lazy 진입점만).
+  - 지연 청크 구조: `GeomView3D-*`(형상 뷰어)·`ContourBody-*`(컨투어 대기 안내·뷰어)는 열 때 적재하고, 둘 다 `threeScene-*`·`viewerCore-*`·`colormap-*`을 공유한다. WebGL 불가·기능 꺼짐이면 three 청크를 받지 않는다.
+  - 빌드본 외부 URL 0건(오프라인 서버): `backend/tests/test_runtime_install.py`가 `frontend-dist/`의 index.html·JS·CSS에서 **로딩 컨텍스트(src/href/import/fetch/url(/importScripts/Worker)의 http(s)**를 세어 0건이어야 통과한다. 주석·라이선스·오류 문구 속 URL과 w3.org 네임스페이스는 허용, 클릭 이동 앵커는 허용 목록(plotly 로고 링크)만.
+  - ① 해석 run 결과 3D 컨투어: `TrainRun.h3d_rel`(결과 .h3d의 Study 기준 상대 경로, 수집됨·h3d ≥ 1일 때 결과 폴더에서 `_backup`·링크 제외 경로 정렬 첫 번째, 없으면 **null**, DB 비저장)을 추가했다. ①-4 run 표의 `결과` 열 [3D 컨투어] → `SOLVER_H3D {study_id, h3d_rel}`(GV-C2)로 생성(행 아래 패널, 열린 채 시작). 기능 꺼짐·WebGL 불가·h3d_rel null이면 버튼 없음.
+  - 프런트 제3자 고지: `frontend/public/THIRD_PARTY_NOTICES.md`(three·react·react-router·plotly MIT, Pretendard OFL 1.1 등 운영 의존 전부) → 빌드본 `frontend-dist/THIRD_PARTY_NOTICES.md`. 시험이 package-lock 운영 의존 이름·버전 누락과 빌드본 일치를 검사한다.

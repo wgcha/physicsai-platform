@@ -15,8 +15,6 @@ from typing import Any
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import sha256_file, write_json, write_text
-from physicsai_core.paths import PathError
-from physicsai_core.stage4_predict import prepared_input
 from physicsai_core.stage4_predict.batch_matrix import BatchRow, batch_label, samples_csv_text
 
 from physicsai_core.geometry import baselines as bl
@@ -26,20 +24,9 @@ from physicsai_core.geometry.prep import is_shell_only
 
 from ..geometry_native import effective_opts, set_opts, engine_version, ensure_prep_ready, native_inputs, read_json
 from ..geometry_sample import backup_path, generate_sample, write_no_cover, write_sample_inputs
+from .child_input import check_child_input
 
 M1 = "m_1"
-
-
-def check_child_input(settings: Any, input_path: str) -> None:
-    """하위 PREDICT(prepared)가 PR_PREP에서 다시 하는 검사를 먼저(실패면 생성 실패로)."""
-    try:
-        cp = prepared_input.check_path(input_path, settings)
-    except PathError as exc:
-        raise StepFailure("INPUT_INVALID", f"생성된 입력을 예측 입력으로 쓸 수 없습니다: {exc.message}") from None
-    plan = prepared_input.plan_copy(cp.path, settings)
-    if plan.problems:
-        p0 = plan.problems[0]
-        raise StepFailure(p0["code"] if p0["code"] == "STARTER_COUNT" else "INPUT_INVALID", p0["message"])
 
 
 def _features(settings: Any, S: str) -> dict[str, Any]:

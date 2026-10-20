@@ -9,6 +9,7 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.path_links import is_link_or_reparse
 from physicsai_core.fileutil import copy_file, sha256_file, write_json, write_text
 from physicsai_core.paths import backup_existing, backup_stamp, display_path, resolve_in_study
 from physicsai_core.sampling import registry as sampling_registry
@@ -210,12 +211,38 @@ def list_runs(ctx: AppContext, doe_id: str, state: str | None, limit: int | None
             for h in hpc_repo.get_many(conn, hids):
                 hmap[h["id"]] = {"external_job_id": h["external_job_id"], "state": h["state"], "attempt_no": h["attempt_no"]}
     out = []
+    root = study_root(ctx, st)
     for r in rows[:lim]:
         out.append({"run_key": r["run_key"], "state": r["state"], "starter_name": r["starter_name"],
                     "input_display_path": display_path(_ai(ctx), st["folder_name"], r["input_rel"]),
                     "hpc": hmap.get(r["hpc_job_id"]) if r["hpc_job_id"] else None, "result": r["result_summary"],
-                    "updated_at": r["updated_at"]})
+                    "h3d_rel": run_h3d_rel(root, r), "updated_at": r["updated_at"]})
     return out, (encode_cursor(off + lim) if len(rows) > lim else None)
+
+
+def run_h3d_rel(root: str, r: dict[str, Any]) -> str | None:
+    """run 결과 .h3d의 Study 기준 상대 경로(geometry-view GV-C3) — 3D 컨투어 SOLVER_H3D `{study_id, h3d_rel}`용.
+
+    수집된 run(`result_rel` 있음, 요약 h3d ≥ 1)만 결과 폴더를 훑는다(`_backup`·링크 제외). 여러 개면 경로 정렬 첫 번째.
+    없거나 Study 밖이면 None(읽기 전용, DB 비저장)."""
+    summ = r.get("result_summary") or {}
+    rel = r.get("result_rel")
+    if not rel or not int(summ.get("h3d") or 0):
+        return None
+    try:
+        base = resolve_in_study(root, rel)
+    except DomainError:
+        return None
+    found: list[str] = []
+    for dirpath, dirnames, filenames in os.walk(base, followlinks=False):
+        dirnames[:] = sorted(d for d in dirnames if d != "_backup" and not is_link_or_reparse(os.path.join(dirpath, d)))
+        for f in sorted(filenames):
+            p = os.path.join(dirpath, f)
+            if f.lower().endswith(".h3d") and not is_link_or_reparse(p) and os.path.isfile(p):
+                found.append(os.path.relpath(p, base).replace(os.sep, "/"))
+    if not found:
+        return None
+    return f"{rel.replace(os.sep, '/').rstrip('/')}/{sorted(found)[0]}"
 
 
 def doe_samples_page(ctx: AppContext, doe_id: str, limit: int | None, cursor: str | None) -> dict[str, Any]:

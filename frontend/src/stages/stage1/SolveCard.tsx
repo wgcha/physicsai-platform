@@ -114,6 +114,7 @@ export function SolveCard() {
           <summary>run 목록 ({runs.length})</summary>
           <RunTable
             runs={runs}
+            studyId={doe.study_id}
             canCancel={!!job && !isTerminal(job.state)}
             cancelFailed={!!job && !isTerminal(job.state) && job.attention_code === "HPC_CANCEL_FAILED"}
             onCancel={cancel}

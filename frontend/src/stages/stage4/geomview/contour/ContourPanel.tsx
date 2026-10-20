@@ -9,11 +9,11 @@ import { webglAvailable } from "../webgl";
 // 대기 안내·뷰어는 열 때만 적재(별도 청크)
 const ContourBody = lazy(() => import("./ContourBody").then((m) => ({ default: m.ContourBody })));
 
-export function ContourPanel({ source, label = "3D 컨투어" }: { source: Contour3dCreate; label?: string }) {
+export function ContourPanel({ source, label = "3D 컨투어", defaultOpen = false }: { source: Contour3dCreate; label?: string; defaultOpen?: boolean }) {
   const f = useFeature("contour3d");
   const canExec = useCanExecute();
   const [gl] = useState(webglAvailable);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen && canExec);
   if (!f.enabled || !gl) return null;
   return (
     <div className="c3-panel" data-testid="contour3d-panel">

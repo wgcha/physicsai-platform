@@ -148,10 +148,9 @@ AI 루트 산출물:
 
 | # | 내용 | 담당 |
 |---|---|---|
-| O1 | 병행 설치 옵션 `task_prefix`·`inherit_existing` 추가(부록 A, 기본값 = 기존 동작) — 반영 전에는 병행 설치 금지 | Impl-Backend |
 | O3 | §3.1 (c) 응답 허용오차·(b) 부피차·(e) 스킵률·(h) 시간 기준 — **사용자 확정 대기**(제안값 유지) | 사용자 |
 
-(O2 별도 포트 로그인 링크·O4 `/physicsai-native/` 경로 분리는 병행 설치 폐기로 삭제.)
+(O1 병행 설치 옵션 `task_prefix`·`inherit_existing`은 **해결** — 부록 A. O2 별도 포트 로그인 링크·O4 `/physicsai-native/` 경로 분리는 병행 설치 폐기로 삭제.)
 
 ---
 
@@ -159,6 +158,11 @@ AI 루트 산출물:
 
 기본은 §1 제자리 교체다. 별도 서버·DB로 먼저 보고 싶을 때만 쓴다.
 
-- 옵션(Impl-Backend 추가 중, 이름·위치는 반영 후 확정): `task_prefix`(작업 이름 접두 — 지금은 `PhysicsAI-Backend`·`PhysicsAI-Worker` 고정이라 같은 서버에 설치하면 운영 작업을 중지·삭제·재등록한다), `inherit_existing`(기존 설치 설정·DB 이어받기, **기본값은 기존 동작**이라 병행 설치에서는 끄기). 옵션이 반영되기 전에는 같은 서버에 병행 설치하지 않는다.
+- 옵션(`deploy.json`, 기본값 = 기존 동작):
+  - `task_prefix`(기본 `"PhysicsAI"`): 작업 스케줄러 이름 `<task_prefix>-Backend`·`<task_prefix>-Worker`. 영문자로 시작, 영숫자·`_`·`.`·`-`, 40자 이하. 병행 설치는 설치마다 다른 값(예: `"PhysicsAI-Dev"`).
+  - `inherit_existing`(기본 `true`): 이전 설치의 머신 환경변수(`PHYSICSAI_DATABASE_URL`·`PHYSICSAI_CONFIG`)·작업 정의를 이어받는다. 병행 설치는 `false`.
+  - `setup.ps1 -TaskPrefix PhysicsAI-Dev -NoInherit`로 주면 deploy.json에 `task_prefix`·`inherit_existing=false`로 저장된다. 해제는 `uninstall-tasks.ps1 -TaskPrefix PhysicsAI-Dev`(또는 이 설치의 deploy.json을 `-ConfigFile`로) — **기본값으로 실행하면 운영 작업(`PhysicsAI-*`)이 해제**된다.
+  - `inherit_existing=false`에서 같은 이름의 작업이 다른 설치(실행 파일이 이 런타임 밖)에 등록되어 있으면 setup·install은 아무것도 바꾸기 전에 **중단**하고 "deploy.json의 task_prefix를 이 설치 전용 값으로 바꾸세요"를 안내한다. 이때 `task_prefix`를 바꿔 다시 실행한다.
+  - 머신 환경변수 `PHYSICSAI_DATABASE_URL`이 있으면 setup·install이 **경고**한다(값은 출력하지 않음 — 다른 설치의 DB를 가리킬 수 있음). 작업은 `--runtime` 인자로 자기 런타임 파일(`<런타임>\secrets\database_url`)을 우선 쓴다. 지우려면(선택) 관리자 PowerShell에서 `[Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', $null, 'Machine')`.
 - 분리할 값: `install_root`·`db_name`·`db_role`·`config_path`·`caddy_frontend_root`를 운영과 다르게, `storage.ai_root`를 운영과 다른 폴더(SPDM master·운영 AI 루트와 겹침 금지), `worker.state_dir` 기본 유지(운영 폴더를 가리키면 `physicsai-worker.lock`이 겹침).
 - **포트 분리**: 병행 백엔드는 `server.port: 8101`(운영 8100), `host: 127.0.0.1`. 서버 PC 브라우저에서 대시보드 로그인 후 `http://127.0.0.1:8101/physicsai/`로 접속(호스트 이름을 `127.0.0.1`로 통일). 다른 PC용은 Caddy에 별도 포트 사이트(`:8180 { reverse_proxy 127.0.0.1:8101 }`)를 두되 로그인 링크는 어긋날 수 있어 대시보드는 원래 주소로 연다.
