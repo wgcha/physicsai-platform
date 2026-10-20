@@ -43,10 +43,8 @@ sys.dont_write_bytecode = True
 
 HERE = Path(__file__).resolve().parent
 ALTAIR_TOOL_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path")
-# opt-native §4.3: HyperStudy는 선택(레거시) — 예시 값은 빈 값이고, 탐지 배치는 예시 주석 "설치 탐지 배치: <상대 경로>"에서 읽는다.
-# 못 찾아도 경고 없이 정보 줄만 낸다.
+# opt-native §4.3: HyperStudy는 선택(레거시) — 못 찾아도 경고 없이 정보 줄만 낸다(탐지 배치는 다른 키와 같이 예시 값에서 읽음).
 LEGACY_ALTAIR_KEYS = ("hyperstudy_path",)
-LAYOUT_HINT = "설치 탐지 배치:"
 LEGACY_NOTE = "HyperStudy 없음 — 레거시 기능만 꺼집니다(①-3 HyperStudy 생성·⑥ 원본 최적화)"
 WORKER_KEYS = ("limiter", "max_logical_cores", "max_memory_gb", "priority")
 DEPLOY_KEY_ORDER = ("install_mode", "repo_root", "install_root", "dashboard_root", "python_exe", "pg_bin", "pg_host", "pg_port",
@@ -90,9 +88,8 @@ def resource_table(resources_txt: Path) -> dict[str, str]:
     return out
 
 
-def altair_layout(example: dict[str, Any], example_text: str = "") -> dict[str, str]:
-    """예시 설정의 altair.* 값에서 '<버전>/' 뒤 상대 배치를 읽는다(예 hwdesktop/hw/bin/win64/hw.exe).
-    값이 빈 키(레거시 HyperStudy)는 예시 주석 '설치 탐지 배치: <상대 경로>'에서 읽는다(opt-native §4.3)."""
+def altair_layout(example: dict[str, Any]) -> dict[str, str]:
+    """예시 설정의 altair.* 값에서 '<버전>/' 뒤 상대 배치를 읽는다(예 hwdesktop/hw/bin/win64/hw.exe)."""
     alt = example.get("altair") or {}
     ver = str(alt.get("version_label") or "")
     out = {}
@@ -101,26 +98,6 @@ def altair_layout(example: dict[str, Any], example_text: str = "") -> dict[str, 
         i = v.find(f"/{ver}/") if ver else -1
         if i >= 0:
             out[k] = v[i + len(ver) + 2:]
-    hints = layout_hints(example_text)
-    for k, rel in hints.items():
-        out.setdefault(k, rel)
-    return out
-
-
-def layout_hints(example_text: str) -> dict[str, str]:
-    """altair 절에서 `<키>: ... # ... 설치 탐지 배치: <상대 경로>` 주석(빈 예시 값 키의 탐지 배치)."""
-    out: dict[str, str] = {}
-    section = ""
-    for line in example_text.replace("\r\n", "\n").split("\n"):
-        if line and not line[0].isspace() and not line.startswith("#"):
-            section = line.split(":", 1)[0].strip()
-            continue
-        if section != "altair" or LAYOUT_HINT not in line:
-            continue
-        key = line.strip().split(":", 1)[0].strip()
-        rel = line.split(LAYOUT_HINT, 1)[1].strip().split()[0] if line.split(LAYOUT_HINT, 1)[1].strip() else ""
-        if key in ALTAIR_TOOL_KEYS and rel:
-            out[key] = fwd(rel)
     return out
 
 
@@ -637,7 +614,7 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     ai_root = fwd(str(deploy.get("ai_root") or ""))
     if ai_root and unsafe(ai_root):
         warnings.append(f"AI 루트 경로에 공백·특수문자가 있습니다(쓸 수 없음): {ai_root}")
-    alt = detect_altair(str(deploy.get("altair_root") or ""), altair_layout(example, example_text), program_files_dirs(inputs.get("program_files_dirs")))
+    alt = detect_altair(str(deploy.get("altair_root") or ""), altair_layout(example), program_files_dirs(inputs.get("program_files_dirs")))
     res = map_resources(str(deploy.get("original_app_root") or ""), resource_table(HERE / "RESOURCES.txt"))
 
     desired: dict[tuple[str, ...], Any] = {("profile",): "prod"}
@@ -798,11 +775,10 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     config_changed = source != "existing" or bool(changed)
 
     notes: list[str] = []
-    core = [k for k in ALTAIR_TOOL_KEYS if k not in LEGACY_ALTAIR_KEYS]
-    if not any(alt["paths"].get(k) for k in core):
+    if not alt["found"]:
         warnings.append("Altair 실행 파일을 찾지 못했습니다(altair.* 빈 값 — Altair 기능 비활성). 설치 위치가 다르면 -AltairRoot로 지정하거나 설정 파일에서 직접 고치세요")
-    else:
-        miss = [k for k in core if not alt["paths"].get(k)]
+    elif alt["found"] < len(ALTAIR_TOOL_KEYS):
+        miss = [k for k, v in alt["paths"].items() if not v and k not in LEGACY_ALTAIR_KEYS]   # 레거시(HyperStudy)는 아래 정보 줄
         if miss:
             warnings.append(f"Altair {alt['version_label']}에서 일부 실행 파일을 찾지 못했습니다: {', '.join(miss)}")
     if not all(alt["paths"].get(k) for k in LEGACY_ALTAIR_KEYS):

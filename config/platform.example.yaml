@@ -43,7 +43,8 @@ storage:
 
 altair:                           # 하드코딩 금지 — 실행 파일 경로는 여기서만 (원본 common.py:25-37 키)
   version_label: "2026.1"
-  hyperstudy_path: ""             # 선택(레거시). 비우면 ①-3 HyperStudy 생성·⑥ 원본 최적화만 꺼짐. 설치 탐지 배치: hwdesktop/hst/bin/win64/hstbatch.exe
+  # hyperstudy_path는 선택(레거시). 비우면 ①-3 HyperStudy 생성·⑥ 원본 최적화만 꺼짐(opt-native §4.3 — 예시 값은 phase3 배포 설정 그대로)
+  hyperstudy_path: "C:/Program Files/Altair/2026.1/hwdesktop/hst/bin/win64/hstbatch.exe"
   simlab_path:     "C:/Program Files/Altair/2026.1/SimLab/bin/win64/SimLab.bat"
   edspy_path:      "C:/Program Files/Altair/2026.1/common/eds/win64/bin/win64/edspy.bat"
   hw_exe_path:     "C:/Program Files/Altair/2026.1/hwdesktop/hw/bin/win64/hw.exe"
@@ -328,7 +329,7 @@ hpc:
     memory_gb: null
     queue_type: implicit
     run_type: "both - use starter and engine files"
-    mpi: "SMP (default)"
+    mpi: "Pure MPI"               # Radioss -np. 허용: "SMP (default)" | "Pure MPI" | "Hybrid 2 Threads" | "Hybrid 4 Threads" | "Hybrid 8 Threads" | "auto"(밖 값은 설정 경고)
     single_precision: false
     poll_interval_s: null         # null = hpc.poll_interval_s
     max_download_bytes: 21474836480

@@ -239,8 +239,7 @@ def test_setup_config_program_files_from_inputs_not_env(tmp_path, monkeypatch):
     monkeypatch.delenv("ProgramW6432", raising=False)
     monkeypatch.setenv("PROGRAMFILES", str(t["pf"]))                                  # Windows os.environ 키 표기(대문자)
     assert m.program_files_dirs(None) == [str(t["pf"])]
-    ex_text = (REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8")
-    alt = m.detect_altair("", m.altair_layout(yaml.safe_load(ex_text), ex_text))  # opt-native §4.3: HyperStudy 배치는 주석에서
+    alt = m.detect_altair("", m.altair_layout(yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))))
     assert alt["version_label"] == "2026.1" and alt["found"] == len(ALTAIR_REL)
 
 
@@ -336,10 +335,8 @@ def test_setup_yaml_editing_keeps_comments_crlf_and_detects_unsupported_layout()
     table = m.resource_table(DEPLOY / "RESOURCES.txt")
     assert table["batchrun_dir"] == "CONFIG/BATCHRUN" and table["preview_pred_h3d_tcl"] == "CONFIG/BATCHRUN/BATCHRUN_preview_pred_h3d.tcl"
     assert len(table) == 10
-    ex_text = (REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8")
-    example = yaml.safe_load(ex_text)
-    assert m.altair_layout(example, ex_text) == ALTAIR_REL  # opt-native §4.3: HyperStudy는 주석 배치
-    assert "hyperstudy_path" not in m.altair_layout(example)  # 예시 값은 빈 값(레거시 선택)
+    example = yaml.safe_load((REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert m.altair_layout(example) == ALTAIR_REL
 
 
 def test_setup_config_flow_style_section_is_left_untouched(tmp_path):
@@ -952,3 +949,32 @@ def test_v_on_setup_hyperstudy_missing_is_note_not_warning(tmp_path):
     t2 = _fake_tree(tmp_path / "b")
     res2 = _run(tmp_path / "b", t2, _inputs(t2), action="plan")
     assert res2["notes"] == [] and res2["altair"]["paths"]["hyperstudy_path"].endswith("hstbatch.exe")
+
+
+def test_restart_script_static():
+    """deploy/restart.ps1·restart.bat: 공용 함수 재사용, 워커→백엔드 중지·백엔드→워커 시작, -Stop/-Start, 비밀값·경로 하드코딩·삭제 없음.
+    병행 설치(task_prefix): 작업 이름은 Get-PhysicsAITaskNames(-TaskPrefix > deploy.json task_prefix > PhysicsAI, uninstall-tasks.ps1과 같은 공용 함수).
+    Windows CI 잡의 "모든 .ps1 파서 검사"가 구문을 확인한다(pwsh 없는 Linux는 정적 검사만)."""
+    t = (DEPLOY / "restart.ps1").read_text(encoding="utf-8-sig")
+    param = t[t.index("param("): t.index(")\n$ErrorActionPreference")]
+    assert "$PSScriptRoot" not in param and "[switch]$Stop" in param and "[switch]$Start" in param    # PS 5.1 -File 규칙
+    assert "install-common.ps1" in t and "Stop-PhysicsAITasks -TaskNames" in t and "$PhysicsAITaskNames = @(Get-PhysicsAITaskNames)" in t
+    assert "[string]$TaskPrefix" in param and "[string]$ConfigFile" in param
+    assert t.index("Set-PhysicsAITaskPrefixFromDeployJson -TaskPrefix $TaskPrefix -ConfigFile $ConfigFile") < t.index("Get-PhysicsAITaskNames)")
+    assert "Get-PhysicsAITaskAdminMessage" in t and "Test-PhysicsAIAccessDenied" in t
+    assert "$order = @($PhysicsAITaskNames[1], $PhysicsAITaskNames[0])" in t                     # 워커 → 백엔드 중지([Backend, Worker] 순서 목록)
+    assert "foreach ($t in $PhysicsAITaskNames)" in t and t.index("Stop-PhysicsAITasks") < t.index("Start-ScheduledTask")    # 중지 뒤 백엔드 → 워커 시작
+    assert not re.search(r"""['"]PhysicsAI-(Backend|Worker)['"]""", t)                         # 접두사를 따르지 않는 이름 비교 없음
+    assert "'PhysicsAI-Backend', 'PhysicsAI-Worker'" not in t                                  # 작업 이름은 공용 목록 한 곳
+    for bad in ("Remove-Item", "Program Files", "Unregister-ScheduledTask", "Register-ScheduledTask", "Read-Host", "PASSWORD", "database_url"):
+        assert bad not in t, bad
+    assert not re.search(r"[A-Za-z]:\\", t.replace("<git 폴더>", ""))                           # 드라이브 경로 하드코딩 없음
+    common = (DEPLOY / "install-common.ps1").read_text(encoding="utf-8-sig")
+    assert "param([string[]]$TaskNames = (Get-PhysicsAITaskNames))" in common                  # 기존 호출(인자 없음)은 그대로(접두사 반영)
+    resolver = common[common.index("function Set-PhysicsAITaskPrefixFromDeployJson"):common.index("function Set-PhysicsAIDeployOptions")]
+    assert "'.runtime\\deploy.json'" in resolver and "Set-PhysicsAITaskPrefix $TaskPrefix" in resolver
+    assert "Set-PhysicsAITaskPrefixFromDeployJson -TaskPrefix $TaskPrefix -ConfigFile $ConfigFile" in (DEPLOY / "uninstall-tasks.ps1").read_text(encoding="utf-8-sig")
+    bat = (DEPLOY / "restart.bat").read_bytes()
+    assert not bat.startswith(b"\xef\xbb\xbf") and b"\r\n" in bat and b"\n" not in bat.replace(b"\r\n", b"")
+    assert b'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0restart.ps1" %*' in bat and b"pause" in bat
+    assert "*.bat text eol=crlf" in (REPO / ".gitattributes").read_text(encoding="utf-8")

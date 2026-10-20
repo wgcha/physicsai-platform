@@ -1,6 +1,7 @@
 // 계약 §10을 흉내 내는 메모리 목 서버. fetch를 가로채 /physicsai/api/* 에 응답한다.
 // F5: 1차 공유 상태·알림·라우터 등록(ROUTES, 한 곳)만 여기 두고, 경로 처리는 단계별 라우트 모듈(ops·stage1~5·studies·jobs·manage)에 있다.
 // R-F 분할(동작 불변): 생성 옵션·기본값 serverOptions · fetch 가로채기 fetch. 옛 import 경로(MockOptions·MOCK_AI_ROOT·DEFAULT_UI·createMockFetch)는 아래에서 재노출한다.
+import { checkLimit } from "./pageLimits";
 import type { Artifact, Dataset, Job, JobType, Me, Model, NotificationItem, ParamSet, SampleRow, Study } from "../api/types";
 import { COMMANDS_TXT, USERS, baseJob, iso, makeSamples, makeSteps, seedDatasets, seedModels, seedNotifications, seedMeshOnlyParamSet, seedParamSet, seedStudies, STEP_LABEL, type MockUserKey } from "./data";
 import { Phase2Mock } from "./phase2";
@@ -247,6 +248,8 @@ export class MockServer {
     const me = this.me;
     if (!me) return err(401, "AUTHENTICATION_REQUIRED", "로그인이 필요합니다.");
     if (method !== "GET" && headers.get("X-PhysicsAI-Request") !== "1") return err(403, "CSRF_HEADER_REQUIRED", "요청 헤더가 없습니다.");
+    const bad = checkLimit(method, path, query); // 서버 le=… 상한 초과는 목에서도 422
+    if (bad) return bad;
     const seg = path.split("/").filter(Boolean);
     const c: RouteCtx = { method, path, seg, query, body, headers, me };
     for (const route of ROUTES) {

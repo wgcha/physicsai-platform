@@ -17,7 +17,7 @@ export const PBS_NONE_TEXT = "PBS 연결 안 됨 — DOE 입력 폴더를 직접
 // ---------------------------------------------------------------- ①-4
 export function SolveCard() {
   const { status } = useApp();
-  const { doe, runs, reloadRuns } = useTrain();
+  const { doe, runs, runsError, reloadRuns } = useTrain();
   const canExec = useCanExecute();
   const solve = useJobRunner("TD_SOLVE", () => void reloadRuns());
   const [hpc, setHpc] = useState({ queue: "", ncpus: "", walltime: "" });
@@ -39,9 +39,15 @@ export function SolveCard() {
     void solve.run({
       doe_id: doe.id,
       run_keys: runKeys,
-      hpc: { queue: hpc.queue || null, ncpus: hpc.ncpus ? Number(hpc.ncpus) : null, walltime: hpc.walltime || null, version: ver.payload },
+      hpc: {
+        queue: scx ? null : hpc.queue || null,
+        ncpus: hpc.ncpus ? Number(hpc.ncpus) : null,
+        walltime: scx ? null : hpc.walltime || null,
+        version: ver.payload,
+      },
       on_run_failure: onFail,
     });
+  const runsErrorText = runsError ? `run 목록을 불러오지 못했습니다 — ${runsError}` : null;
   const pending = runs.filter((r) => r.state === "GENERATED" || r.state === "SOLVE_FAILED" || r.state === "COLLECT_FAILED").length;
   const cancel = async () => {
     if (!job) return;
@@ -59,15 +65,19 @@ export function SolveCard() {
       <DoePicker />
       <Advanced>
         <div className="form-grid">
-          <Field label="queue">
-            <input value={hpc.queue} onChange={(e) => setHpc({ ...hpc, queue: e.target.value })} aria-label="queue" />
-          </Field>
+          {!scx && (
+            <Field label="queue">
+              <input value={hpc.queue} onChange={(e) => setHpc({ ...hpc, queue: e.target.value })} aria-label="queue" />
+            </Field>
+          )}
           <Field label="ncpus">
             <input className="num" inputMode="numeric" value={hpc.ncpus} onChange={(e) => setHpc({ ...hpc, ncpus: e.target.value.replace(/[^0-9]/g, "") })} aria-label="ncpus" />
           </Field>
-          <Field label="walltime" hint="예 24:00:00">
-            <input value={hpc.walltime} onChange={(e) => setHpc({ ...hpc, walltime: e.target.value })} aria-label="walltime" />
-          </Field>
+          {!scx && (
+            <Field label="walltime" hint="예 24:00:00">
+              <input value={hpc.walltime} onChange={(e) => setHpc({ ...hpc, walltime: e.target.value })} aria-label="walltime" />
+            </Field>
+          )}
           <RadiossVersionField state={ver} />
           <Field label="일부 run 실패 시">
             <select value={onFail} onChange={(e) => setOnFail(e.target.value as "fail")} aria-label="일부 run 실패 시">
@@ -86,7 +96,9 @@ export function SolveCard() {
               onRun={() => submit(null)}
               job={job}
               disabled={!enabled || !doe || pending === 0 || !!ver.error}
-              disabledReason={enabled ? (!doe ? "준비된 DOE가 필요합니다" : pending === 0 ? "제출할 run이 없습니다" : (ver.error ?? undefined)) : undefined}
+              disabledReason={
+                enabled ? (runsErrorText ?? (!doe ? "준비된 DOE가 필요합니다" : pending === 0 ? "제출할 run이 없습니다" : (ver.error ?? undefined))) : undefined
+              }
               error={solve.error}
               extra={doe && pending > 0 ? <span className="muted small">대상 {pending}개</span> : undefined}
             />
@@ -108,6 +120,11 @@ export function SolveCard() {
         </div>
       )}
       {actionError && <div className="error-text small">{actionError}</div>}
+      {runsErrorText && (
+        <div className="error-text small" role="alert" data-testid="runs-error">
+          {runsErrorText}
+        </div>
+      )}
       {doe && <RunStateBar doe={doe} />}
       {doe && runs.length > 0 && (
         <details className="advanced" open={hpcOn}>

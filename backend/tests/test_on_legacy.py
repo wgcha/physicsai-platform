@@ -127,12 +127,14 @@ def test_v_on_3_env_check_legacy_skip_warn_fail(tmp_path):
     assert ec._probe(w, "simlab", "", None, {})["status"] == "FAIL"
 
 
-def test_v_on_3_example_config_hyperstudy_blank_with_comment():
+def test_v_on_3_example_config_hyperstudy_legacy_comment():
+    """예시 값은 phase3 배포 설정 그대로(사용자 확정: phase3 설정이 배포 설정 — 추가만), 레거시 안내는 바로 위 주석 줄."""
     text = (REPO / "config" / "platform.example.yaml").read_text(encoding="utf-8")
     ex = yaml.safe_load(text)
-    assert ex["altair"]["hyperstudy_path"] == ""
-    line = next(ln for ln in text.splitlines() if ln.strip().startswith("hyperstudy_path:"))
-    assert "선택(레거시). 비우면 ①-3 HyperStudy 생성·⑥ 원본 최적화만 꺼짐" in line
+    assert ex["altair"]["hyperstudy_path"].endswith("/hwdesktop/hst/bin/win64/hstbatch.exe")
+    lines = text.splitlines()
+    i = next(n for n, ln in enumerate(lines) if ln.strip().startswith("hyperstudy_path:"))
+    assert "선택(레거시). 비우면 ①-3 HyperStudy 생성·⑥ 원본 최적화만 꺼짐" in lines[i - 1] and lines[i - 1].strip().startswith("#")
     assert ex["commands"]["hst_optimization"] and ex["commands"]["hst_gen_radioss"]  # 명령 템플릿은 유지
     so = ex["surrogate_opt"]
     assert so["default_algorithm"] == "ego" and so["ga_max_evals"] == 100000 and so["max_levels"] == 8

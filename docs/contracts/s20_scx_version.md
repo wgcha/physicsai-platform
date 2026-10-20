@@ -42,3 +42,10 @@
 
 - D3-68(2026-10-20): SCX Radioss 버전을 작업별 입력으로(기본 `hpc.scx.version` = "26.1"). appliance는 설정 필수 유지.
 - 구현 반영(2026-10-20): 프런트는 빈 칸을 오류로 본다(서버는 ""→null 유지). ①-4에서는 칸이 접힌 "고급" 절(queue·ncpus·walltime 옆)에 있고, 값이 틀리면 제출 버튼 옆에도 사유를 보인다.
+
+## 보강 1(2026-10-20, 사용자 결정 — 이슈 #8 코멘트 4·5)
+
+- `hpc.scx.mpi` 기본값 `"SMP (default)"` → **`"Pure MPI"`**(Radioss `-np`). 스키마 한 곳·예시 yaml·admin.md §16.3 동기화.
+- 어댑터 허용 값 6개: `"SMP (default)"`, `"Pure MPI"`, `"Hybrid 2 Threads"`, `"Hybrid 4 Threads"`, `"Hybrid 8 Threads"`, `"auto"`. 목록 밖 값은 **설정 경고**(오류 아님 — 어댑터가 값을 늘릴 수 있음) "hpc.scx.mpi가 알려진 값이 아닙니다: <값>".
+- 화면: gateway가 `scx`면 ①-4 "고급"의 queue·walltime 칸을 숨긴다(ncpus·Radioss 버전만). 숨긴 칸 값은 보내지 않는다(null).
+- 시험 V3-S20-8: mpi 기본값, 목록 밖 값 경고 1건·목록 안 값 경고 없음, scx일 때 queue·walltime 칸 없음·PBS일 때 있음.

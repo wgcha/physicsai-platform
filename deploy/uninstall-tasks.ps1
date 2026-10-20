@@ -16,18 +16,8 @@ param(
     [string]$ConfigFile = ''
 )
 $ErrorActionPreference = 'Stop'
-. (Join-Path $PSScriptRoot 'install-common.ps1')   # Set-PhysicsAITaskPrefix·Get-PhysicsAITaskNames(이름 규칙 한 곳)
-if (-not $TaskPrefix) {
-    $cands = @($ConfigFile, (Join-Path $PSScriptRoot 'deploy.json'), (Join-Path (Split-Path -Parent $PSScriptRoot) '.runtime\deploy.json')) | Where-Object { $_ }
-    foreach ($c in $cands) {
-        if (Test-Path -LiteralPath $c -PathType Leaf) {
-            $j = Get-Content -Raw -Encoding UTF8 -LiteralPath $c | ConvertFrom-Json
-            if ($j.PSObject.Properties['task_prefix'] -and "$($j.task_prefix)".Trim()) { $TaskPrefix = "$($j.task_prefix)".Trim() }
-            break
-        }
-    }
-}
-Set-PhysicsAITaskPrefix $TaskPrefix
+. (Join-Path $PSScriptRoot 'install-common.ps1')   # Set-PhysicsAITaskPrefixFromDeployJson·Get-PhysicsAITaskNames(이름 규칙 한 곳)
+Set-PhysicsAITaskPrefixFromDeployJson -TaskPrefix $TaskPrefix -ConfigFile $ConfigFile   # -TaskPrefix > deploy.json task_prefix > PhysicsAI
 foreach ($t in (Get-PhysicsAITaskNames)) {
     if (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue) {
         Stop-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue

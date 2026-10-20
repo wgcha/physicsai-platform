@@ -32,6 +32,23 @@ function Get-PhysicsAITaskNames {
     return @("$($script:PhysicsAITaskPrefix)-Backend", "$($script:PhysicsAITaskPrefix)-Worker")
 }
 
+function Set-PhysicsAITaskPrefixFromDeployJson {
+    <# 작업 이름 접두사 = -TaskPrefix > deploy.json task_prefix > 'PhysicsAI'(기본). deploy.json은 -ConfigFile > deploy 폴더의 deploy.json >
+       git 폴더 설치의 <저장소>\.runtime\deploy.json 순서로 찾는다(없으면 기본 접두사). uninstall-tasks.ps1·restart.ps1 공용(설치 정보를 묻지 않는 스크립트). #>
+    param([string]$TaskPrefix = '', [string]$ConfigFile = '')
+    if (-not $TaskPrefix) {
+        $cands = @($ConfigFile, (Join-Path $PSScriptRoot 'deploy.json'), (Join-Path (Split-Path -Parent $PSScriptRoot) '.runtime\deploy.json')) | Where-Object { $_ }
+        foreach ($c in $cands) {
+            if (Test-Path -LiteralPath $c -PathType Leaf) {
+                $j = Get-Content -Raw -Encoding UTF8 -LiteralPath $c | ConvertFrom-Json
+                if ($j.PSObject.Properties['task_prefix'] -and "$($j.task_prefix)".Trim()) { $TaskPrefix = "$($j.task_prefix)".Trim() }
+                break
+            }
+        }
+    }
+    Set-PhysicsAITaskPrefix $TaskPrefix
+}
+
 function Set-PhysicsAIDeployOptions {
     <# deploy.json 객체의 task_prefix(기본 PhysicsAI)·inherit_existing(기본 true — false면 이전 설치의 머신 환경변수·작업 정의를 이어받지 않음). #>
     param([Parameter(Mandatory = $true)]$Config)
@@ -499,8 +516,10 @@ function Update-PhysicsAITaskRegistration {
 }
 
 function Stop-PhysicsAITasks {
-    <# 두 작업 중지(없으면 건너뜀). 이전 설치가 관리자 권한으로 만든 작업이라 거부되면 안내와 함께 중단(Get-PhysicsAITaskAdminMessage). #>
-    foreach ($t in (Get-PhysicsAITaskNames)) {
+    <# 두 작업 중지(없으면 건너뜀). 이전 설치가 관리자 권한으로 만든 작업이라 거부되면 안내와 함께 중단(Get-PhysicsAITaskAdminMessage).
+       -TaskNames로 중지 순서를 바꿀 수 있다(restart.ps1: 워커 → 백엔드). 생략하면 Get-PhysicsAITaskNames(task_prefix 반영). #>
+    param([string[]]$TaskNames = (Get-PhysicsAITaskNames))
+    foreach ($t in $TaskNames) {
         if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
         try { Stop-ScheduledTask -TaskName $t -ErrorAction Stop }
         catch {

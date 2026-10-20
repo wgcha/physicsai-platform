@@ -1,10 +1,11 @@
-phase3 기준선 — origin/claude/phase3 6d969eb (S19 GPU 조회·⑤ perf 서버 계산 01eece1 + 계약 이관 5d33ab5 + 300줄 분할 1990768 + 이슈 #8 6d969eb, migration head 0015_doe_platform_gen)
-detached worktree /home/claude/.wt_phase3_baseline(0755, 시험만 실행·파일 변경 없음, frontend/node_modules는 본 저장소 심볼릭 링크 — package*.json 동일), 시험 후 제거
-명령: PYTHON=python3.12 bash scripts/test-all.sh -p no:cacheprovider --junitxml=<scratch>/base_junit.xml   (2026-10-20, PostgreSQL 16 임시 클러스터) → exit=0
-결과: pytest 1170 passed·34 skipped·5 deselected(slow), vitest 444 passed(43 files), tsc·openapi·frontend-dist(49f11090560c) 통과
-(1차 시도는 worktree를 scratch(/tmp/claude-0, postgres 사용자 접근 불가)에 두어 test_demo 1건이 Permission denied — 위치만 바꿔 재실행)
+phase3 기준선 — origin/claude/phase3 d9566ee (e56dcd5..d9566ee: S20 보강 SCX Pure MPI·scx queue/walltime 숨김·재시작 스크립트 ddc5f31, .bat eol 정규화 a144be4, ① run 목록 페이지 200 d69b558, 화면 limit ≤ openapi 상한 정적 검사 d9566ee)
+detached worktree /home/claude/.wt_base(0755, 시험만 실행·파일 변경 없음, frontend/node_modules는 본 저장소 심볼릭 링크), 시험 후 제거
+명령: PYTHON=python3.12 bash scripts/test-all.sh -p no:cacheprovider --junitxml=<scratch>/base_junit.xml   (2026-10-20)
+결과: frontend-dist 최신(8490ef9cf7bf), pytest 1206 passed·34 skipped·5 deselected(slow)·0 failed, openapi 최신, vitest 460 passed(46 files)
+      스크립트는 vitest 통과 직후 tsc 단계에서 외부 종료(exit 144, 시그널) → 같은 트리에서 `npm run lint`(tsc --noEmit) 따로 실행 exit=0
+표면(기능 차집합 기준): features 21 · JOB_FEATURE 16 · job_types 24(step 92) · openapi 라우트 102 · 화면 라우트(App.tsx) 13
 
-[기준선 통과 시험 1170건 — junit classname::name]
+[기준선 통과 시험 — junit classname::name]
 backend.tests.common.test_adapters_compat::test_collect_offline_dry_run_builds_adapter_wheel_first
 backend.tests.common.test_adapters_compat::test_compat_layer_reexports_same_objects
 backend.tests.common.test_adapters_compat::test_dev_paths_and_ci_include_package
@@ -567,6 +568,31 @@ backend.tests.test_s19_resources_api::test_v3_s19_4_heartbeat_ok_message_is_exe
 backend.tests.test_s19_resources_api::test_v3_s19_4_no_lane_fields
 backend.tests.test_s19_resources_api::test_v3_s19_4_openapi_fields
 backend.tests.test_s19_resources_api::test_v3_s19_4_resources_new_fields
+backend.tests.test_s20_scx_version::test_v3_s20_1_default_version
+backend.tests.test_s20_scx_version::test_v3_s20_2_missing_is_null_and_dumped
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[   -None]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[  26.1  -26.1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[-None]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[2026 R1-2026 R1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[2026.1-2026.1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[26.1-26.1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA-AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[None-None]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_accept[v26_1-hf.2-v26_1-hf.2]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[ _x]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[-26]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[.1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[26$1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[26.1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[26/1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[26;1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[26\\1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[26\t1]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[5]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]
+backend.tests.test_s20_scx_version::test_v3_s20_2_version_reject[\ubc84\uc804]
+backend.tests.test_s20_scx_version::test_v3_s20_5_openapi_shape
+backend.tests.test_s20_scx_version::test_v3_s20_8_mpi_default_and_warning
 backend.tests.test_sampling_api::test_v3_s15_10_doe_types_decoration
 backend.tests.test_sampling_api::test_v3_s15_10_result_table_influence_class
 backend.tests.test_sampling_api::test_v3_s15_8_detail_influence_owned_and_train_doe
@@ -686,6 +712,7 @@ backend.tests.test_scx_backend::test_registered_secret_is_masked
 backend.tests.test_scx_backend::test_scx_config_validation
 backend.tests.test_scx_backend::test_scx_secret_default_runtime_path
 backend.tests.test_scx_backend::test_scx_secret_missing_is_not_configured
+backend.tests.test_setup_repo::test_restart_script_static
 backend.tests.test_setup_repo::test_setup_config_adds_capture_default_component_once
 backend.tests.test_setup_repo::test_setup_config_adds_scx_block_once
 backend.tests.test_setup_repo::test_setup_config_altair_names_case_insensitive
@@ -966,6 +993,16 @@ worker.tests.stage1_train_data.test_s18_platform_gen::test_v3_s18_6_partial_fail
 worker.tests.stage1_train_data.test_s18_platform_gen::test_v3_s18_7_cancel_kills_group_and_resets_running
 worker.tests.stage1_train_data.test_s18_platform_gen::test_v3_s18_9_downstream_samples_result_table_from_train
 worker.tests.stage1_train_data.test_s18_platform_gen::test_v3_s18_9_td_solve_argv_uses_m3
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_3_build_request_version[params0-26.1]
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_3_build_request_version[params1-26.1]
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_3_build_request_version[params2-26.1]
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_3_build_request_version[params3-2026 R2]
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_3_td_solve_scx_uses_params_version
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_4_command_mode_ignores_version
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_4_verify_submit_spec_unchanged
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_5_status_command
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_5_status_none
+worker.tests.stage1_train_data.test_s20_scx_version::test_v3_s20_5_status_scx
 worker.tests.stage1_train_data.test_scx_solve::test_scx_build_request_engine_casefold
 worker.tests.stage1_train_data.test_scx_solve::test_scx_collect_collisions_and_local_errors
 worker.tests.stage1_train_data.test_scx_solve::test_scx_collect_failures
