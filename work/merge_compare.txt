@@ -1,3 +1,81 @@
+병합본(feat/native-geom-r1 6940f5e + feat/r1-optaudit a66952d + feat/r1-ver c04400e + feat/r1-equivimpl b158e96) vs phase3 기준선 d9566ee — 2026-10-21
+명령: PYTHON=python3.12 bash scripts/test-all.sh -p no:cacheprovider --junitxml=... (exit=0, 작업 트리 = 최종 병합 커밋 내용과 동일)
+
+| 항목 | phase3 기준선(d9566ee) | 병합본 | 증감 |
+|---|---|---|---|
+| pytest passed | 1206 | 1505 | +299 (native·쉘·view·컨투어3D·opt-native·기준 결정·버전·등가성 시험) |
+| pytest skipped | 34 | 34 | 0 (신규 skip 0) |
+| pytest failed | 0 | 0 | 0 |
+| pytest deselected(slow) | 5 | 8 | +3 (opt-native 벤치마크 slow 마커) |
+| paicad 단독 | 없음 | 288 passed(0.10.0) | +288 |
+| vitest | 460 passed (46 files) | 575 passed (57 files) | +115 |
+| tsc | 통과(별도 실행) | 통과 | - |
+| openapi.json 최신 | 통과 | 통과 | - |
+| frontend-dist 최신 | 통과(8490ef9cf7bf) | 통과(e9ac3f72de12) | 재생성 |
+| paicad 정적 검사·버전 기록 검사 | - | 통과 | - |
+
+## 이름 대조(junit xml, classname::name)
+base {'passed': 1206} merge {'pass': 1505, 'skip': 34}
+기준선 통과 중 병합본 비통과: []
+기준선 시험 중 병합본에 없음: []
+병합본 실패: []
+병합본에만(passed): 299
+  backend.tests.common.test_geometry_config: 19
+  backend.tests.common.test_geometry_core: 11
+  backend.tests.common.test_geometry_multi_shell: 17
+  backend.tests.common.test_paicad_checks: 33
+  backend.tests.test_deploy_parallel: 11
+  backend.tests.test_equiv_core: 25
+  backend.tests.test_equiv_db: 3
+  backend.tests.test_geom_view_core: 15
+  backend.tests.test_geom_view_db: 3
+  backend.tests.test_geometry_db: 1
+  backend.tests.test_on_baseline: 6
+  backend.tests.test_on_criteria: 7
+  backend.tests.test_on_evo: 15
+  backend.tests.test_on_legacy: 5
+  backend.tests.test_on_loop: 13
+  backend.tests.test_releases: 16
+  backend.tests.test_runtime_install: 3
+  backend.tests.test_setup_repo: 1
+  backend.tests.test_train_runs_h3d_rel: 1
+  worker.tests.analysis.test_equiv_e2e: 6
+  worker.tests.analysis.test_equiv_recipes_api: 3
+  worker.tests.e2e.test_on_e2e: 1
+  worker.tests.stage1_train_data.test_doe_reuse: 2
+  worker.tests.stage1_train_data.test_native_doe: 7
+  worker.tests.stage1_train_data.test_native_run_layout: 5
+  worker.tests.stage1_train_data.test_native_train_features: 1
+  worker.tests.stage4_predict.test_contour3d: 4
+  worker.tests.stage4_predict.test_geom_preview: 12
+  worker.tests.stage4_predict.test_native_batch: 4
+  worker.tests.stage4_predict.test_native_failures: 5
+  worker.tests.stage4_predict.test_native_merge: 3
+  worker.tests.stage4_predict.test_native_multi: 3
+  worker.tests.stage4_predict.test_native_predict: 7
+  worker.tests.stage4_predict.test_native_register: 8
+  worker.tests.stage4_predict.test_native_shell: 5
+  worker.tests.stage4_predict.test_on_multi_baseline: 2
+  worker.tests.stage4_predict.test_shell_bead: 10
+  worker.tests.test_on_flow: 5
+  worker.tests.test_surrogate_flow: 1
+
+## 기능 표면 차집합(openapi 라우트·JOB_TYPES 키·features·화면 라우트 App.tsx — 정규식 집계, 6940f5e 기록과 집계 방식 다름)
+  routes: 기준선 102 / 직전 6940f5e 122 / 병합본 138 / 차집합(기준선−병합본) [] / 이번 추가 equiv 14개 + GET /version·/releases
+  job_types: 기준선 52 / 직전 62 / 병합본 64 / 차집합 [] / 이번 추가 EQ_CHECK·EQ_PREP
+  features: 기준선 21 / 직전 26 / 병합본 28 / 차집합 [] / 이번 추가 equiv_check·equiv_check_extract
+  screen_routes: 기준선 13 / 직전 13 / 병합본 14 / 차집합 [] / 이번 추가 /releases
+
+판정: phase3 기준선(d9566ee) 통과 시험 1206건 전부 병합본 통과, 신규 skip 0, 실패 0, 표면 차집합 전부 ∅, paicad 288·vitest 575·tsc 통과
+
+## 병합 충돌 해소·병합 중 수정
+- feat/r1-optaudit: opt-native.md·decisions.md 양쪽 보존. 변경 메모 번호 ON-C3 중복 → optaudit 쪽(⑥ 기준 사용자 결정)을 ON-C4로, 코드·시험·phase3.md 주석 참조도 ON-C4
+- feat/r1-ver: decisions.md 양쪽 보존. 배포 파일은 phase3 기준 + RELEASES.md 복사 줄만 추가 — collect-offline.ps1 단계 이름 변경 되돌림, install-common.ps1은 Publish-PhysicsAIFrontend 매개변수 추가 대신 Install-PhysicsAIFrontendFromRepo 배치 직후 복사 2줄(test_deploy_bundles_include_releases 단언 갱신). RELEASES.md 0.2.0에 ⑥ 기준 사용자 결정·S20 보강·재시작 스크립트·① run 페이지 200·⑤ 등가성 레시피/①-3 표본표 재사용 줄 추가
+- feat/r1-equivimpl: main.py 라우터 목록(releases, equiv_check 둘 다), decisions.md 양쪽 보존. migration 0018_equiv_check(down 0017) 번호 충돌 없음, platform.example.yaml equiv_check 절은 추가만
+- 매 병합 후 openapi 재생성(변경 없음)·gen:api·tsc, frontend-dist는 scripts/build-frontend-dist.sh로 재생성
+
+---
+(이전 병합 기록)
 병합본(feat/native-geom-r1 baaafed + origin/claude/phase3 d9566ee) vs phase3 기준선 d9566ee — 2026-10-20
 명령: PYTHON=python3.12 bash scripts/test-all.sh -p no:cacheprovider --junitxml=... (exit=0, 작업 트리 = 병합 커밋 내용과 동일)
 

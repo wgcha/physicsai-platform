@@ -22,6 +22,7 @@
 - S20 보강: SCX Radioss 병렬 기본 Pure MPI, scx 모드 queue·walltime 칸 숨김
 - 서비스 재시작 스크립트(deploy/restart.ps1)
 - ① run 목록 페이지 크기 200
+- ⑤ 등가성 판정 레시피(사용자 정의·저장·이력)·①-3 다른 DOE 표본표 재사용
 
 ## 0.1.0 — 2026-10-20
 

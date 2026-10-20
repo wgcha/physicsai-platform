@@ -119,5 +119,7 @@ Index(
                           " AND job_type <> 'FEM_VERIFY'"
                           " AND NOT (job_type = 'PREDICT' AND (params -> 'fem_verify_id') IS NOT NULL)"
                           # geometry-view.md §6.7: 미리보기·결과 3D 컨투어는 캐시 행·서비스 규칙이 동시 제한(0017_geom_view)
-                          " AND job_type NOT IN ('GEOM_PREVIEW','CONTOUR_3D')"),
+                          " AND job_type NOT IN ('GEOM_PREVIEW','CONTOUR_3D')"
+                          # equiv-check.md §4.5: 등가성 판정은 Study당 equiv_check.max_active(서비스 규칙)로 동시 제한(0018_equiv_check)
+                          " AND job_type <> 'EQ_CHECK'"),
 )

@@ -1178,6 +1178,8 @@ migration 순서: 0010 `surrogate_opt`(S13) → 0011 `surrogate_final`(S13 D3-61
 
 원문: [s14_analysis.md](s14_analysis.md) §19. migration·새 의존성·새 job_type 없음.
 
+> 후속(2026-10-20): ⑤ 탭 "등가성 판정"(두 결과 집합 비교, 허용오차 레시피·판정 이력, job `EQ_CHECK`)은 [equiv-check.md](equiv-check.md)를 따른다.
+
 목표: 화면 단계를 ④ 예측 · **⑤ 결과분석(신설)** · ⑥ 최적화(기존 ⑤)로 재편(①~③ 불변). ⑤는 "결과 표"(run마다 파라미터 + 응답)를 받아 설계공간 지도·영향도·변수–응답 그래프·커브 겹쳐보기를 보여 준다.
 
 | # | 결정 |

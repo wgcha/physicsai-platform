@@ -32,6 +32,8 @@ export interface MockOptions {
   predictRuns?: "history";
   /** S16 V2: "demo"면 FEM 검증 시드(FV-001 완료·FV-002 실패·FV-003 동반 예측 대기) */
   femVerify?: "demo";
+  /** equiv-check.md: "demo"면 레시피 1개(v2)·완료 이력 2건 시드 */
+  equiv?: "demo";
   /** geometry-engine.md §7.1 /status.geometry.engine_default(기본 altair) */
   geometryDefault?: "altair" | "native";
   /** "native" = native 세트 ps-n1 시드, "multi" = ps-n1에 baseline B2 추가(4B 매칭표 초안) */

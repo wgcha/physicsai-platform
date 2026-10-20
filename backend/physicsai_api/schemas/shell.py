@@ -96,6 +96,8 @@ class StatusFeatures(Resp):
     contour3d: FeatureState | None = None  # geometry-view.md §13 결과 3D 컨투어
     fem_verify: FeatureState | None = None  # phase3 §21.3.8 S16 조립 FEM 검증(fem_verify.enabled + HPC)
     fem_verify_rebuild: FeatureState | None = None  # + 메시 교체(commands.mesh·include TCL)
+    equiv_check: FeatureState | None = None  # equiv-check.md §5.3 ⑤ 등가성 판정(항상 사용 가능 — equiv_check.enabled)
+    equiv_check_extract: FeatureState | None = None  # equiv-check.md §5.3 판정 중 응답·곡선 추출(hw·응답 TCL·T01)
 
 
 class StatusEnvCheck(Resp):

@@ -12,7 +12,8 @@ export type Role = "general" | "power" | "admin";
 // S13: 내장 최적화 반복 SURROGATE_OPT는 종료 훅·서비스만 만든다(phase3.md §18.4)
 // S16 V2: FEM_VERIFY는 FEM 검증 API·종료 훅만 만든다(POST /jobs 불가, phase3 §21.3.5)
 // native 세트 등록·다시 준비 PARAM_SET_NATIVE는 param-sets API 전용(geometry-engine.md §7.3.4)
-export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE";
+// ⑤ 등가성 판정 EQ_CHECK는 /studies/{id}/equiv-checks API 전용(equiv-check.md §4.5)
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE" | "EQ_CHECK";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -39,7 +40,9 @@ export type NotificationEvent =
   // S9(phase3.md §14.3) — 알림 event는 백엔드 스키마가 string이라 계약 값으로 좁힌다
   | "PREDICT_BATCH_DONE"
   // S16 V2(phase3.md §21.3.9)
-  | "FEM_VERIFY_DONE";
+  | "FEM_VERIFY_DONE"
+  // equiv-check.md §4.5
+  | "EQ_CHECK_DONE";
 export type ArtifactKind =
   | "PREVIEW_JSON"
   | "PREVIEW_IMAGE"

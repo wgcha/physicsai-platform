@@ -3555,6 +3555,1407 @@
         "title": "EnvCheckSummary",
         "type": "object"
       },
+      "EqCheck": {
+        "properties": {
+          "can_cancel": {
+            "default": false,
+            "title": "Can Cancel",
+            "type": "boolean"
+          },
+          "can_edit_note": {
+            "default": false,
+            "title": "Can Edit Note",
+            "type": "boolean"
+          },
+          "can_retry": {
+            "default": false,
+            "title": "Can Retry",
+            "type": "boolean"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dir"
+          },
+          "eq_no": {
+            "title": "Eq No",
+            "type": "integer"
+          },
+          "failure": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EqProblem"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "metrics": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pairing": {
+            "additionalProperties": true,
+            "title": "Pairing",
+            "type": "object"
+          },
+          "pairs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "recipe": {
+            "additionalProperties": true,
+            "title": "Recipe",
+            "type": "object"
+          },
+          "recipe_snapshot": {
+            "additionalProperties": true,
+            "title": "Recipe Snapshot",
+            "type": "object"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "side_a": {
+            "additionalProperties": true,
+            "title": "Side A",
+            "type": "object"
+          },
+          "side_b": {
+            "additionalProperties": true,
+            "title": "Side B",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
+          "summary_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Line"
+          },
+          "unmatched_a": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched A",
+            "type": "array"
+          },
+          "unmatched_b": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched B",
+            "type": "array"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "verdict_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict Text"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/EqProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "eq_no",
+          "status",
+          "status_text",
+          "side_a",
+          "side_b",
+          "pairing",
+          "recipe",
+          "created_at",
+          "created_by",
+          "created_by_name",
+          "recipe_snapshot",
+          "metrics",
+          "rows",
+          "pairs"
+        ],
+        "title": "EqCheck",
+        "type": "object"
+      },
+      "EqCheckCreate": {
+        "additionalProperties": false,
+        "description": "실행(202). recipe(저장된 레시피·시스템 기본 `sys:default`) 또는 recipe_inline(불러온 뒤 수정한 1회용) 중 하나 필수.\nbindings = {metric_id: source} — 레시피의 빈 원천(연결 필요)을 채운다. 필수 지표가 비어 있으면 422 METRIC_UNBOUND.",
+        "properties": {
+          "bindings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bindings"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pairing": {
+            "$ref": "#/components/schemas/EqPairing"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EqRecipeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "recipe_inline": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EqRecipeInline"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "side_a": {
+            "discriminator": {
+              "mapping": {
+                "fem_verify": "#/components/schemas/EqSideFemVerify",
+                "folder": "#/components/schemas/EqSideFolder",
+                "predict_batch": "#/components/schemas/EqSidePredictBatch",
+                "train_doe": "#/components/schemas/EqSideTrainDoe"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EqSideTrainDoe"
+              },
+              {
+                "$ref": "#/components/schemas/EqSidePredictBatch"
+              },
+              {
+                "$ref": "#/components/schemas/EqSideFemVerify"
+              },
+              {
+                "$ref": "#/components/schemas/EqSideFolder"
+              }
+            ],
+            "title": "Side A"
+          },
+          "side_b": {
+            "discriminator": {
+              "mapping": {
+                "fem_verify": "#/components/schemas/EqSideFemVerify",
+                "folder": "#/components/schemas/EqSideFolder",
+                "predict_batch": "#/components/schemas/EqSidePredictBatch",
+                "train_doe": "#/components/schemas/EqSideTrainDoe"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/EqSideTrainDoe"
+              },
+              {
+                "$ref": "#/components/schemas/EqSidePredictBatch"
+              },
+              {
+                "$ref": "#/components/schemas/EqSideFemVerify"
+              },
+              {
+                "$ref": "#/components/schemas/EqSideFolder"
+              }
+            ],
+            "title": "Side B"
+          }
+        },
+        "required": [
+          "side_a",
+          "side_b"
+        ],
+        "title": "EqCheckCreate",
+        "type": "object"
+      },
+      "EqCheckCreated": {
+        "properties": {
+          "eq_id": {
+            "title": "Eq Id",
+            "type": "string"
+          },
+          "eq_no": {
+            "title": "Eq No",
+            "type": "integer"
+          },
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "eq_id",
+          "eq_no",
+          "label",
+          "job_id"
+        ],
+        "title": "EqCheckCreated",
+        "type": "object"
+      },
+      "EqCheckListItem": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "title": "Created By",
+            "type": "string"
+          },
+          "created_by_name": {
+            "title": "Created By Name",
+            "type": "string"
+          },
+          "eq_no": {
+            "title": "Eq No",
+            "type": "integer"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "pairing": {
+            "additionalProperties": true,
+            "title": "Pairing",
+            "type": "object"
+          },
+          "recipe": {
+            "additionalProperties": true,
+            "title": "Recipe",
+            "type": "object"
+          },
+          "side_a": {
+            "additionalProperties": true,
+            "title": "Side A",
+            "type": "object"
+          },
+          "side_b": {
+            "additionalProperties": true,
+            "title": "Side B",
+            "type": "object"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "status_text": {
+            "title": "Status Text",
+            "type": "string"
+          },
+          "summary_line": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary Line"
+          },
+          "verdict": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict"
+          },
+          "verdict_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Verdict Text"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "eq_no",
+          "status",
+          "status_text",
+          "side_a",
+          "side_b",
+          "pairing",
+          "recipe",
+          "created_at",
+          "created_by",
+          "created_by_name"
+        ],
+        "title": "EqCheckListItem",
+        "type": "object"
+      },
+      "EqCurves": {
+        "properties": {
+          "a": {
+            "items": {
+              "type": "number"
+            },
+            "title": "A",
+            "type": "array"
+          },
+          "a_run": {
+            "title": "A Run",
+            "type": "string"
+          },
+          "b": {
+            "items": {
+              "type": "number"
+            },
+            "title": "B",
+            "type": "array"
+          },
+          "b_run": {
+            "title": "B Run",
+            "type": "string"
+          },
+          "corr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Corr"
+          },
+          "downsampled": {
+            "default": false,
+            "title": "Downsampled",
+            "type": "boolean"
+          },
+          "metric_id": {
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "nrmse_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nrmse Pct"
+          },
+          "overlap_ratio": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overlap Ratio"
+          },
+          "pair_no": {
+            "title": "Pair No",
+            "type": "integer"
+          },
+          "t": {
+            "items": {
+              "type": "number"
+            },
+            "title": "T",
+            "type": "array"
+          }
+        },
+        "required": [
+          "pair_no",
+          "metric_id",
+          "a_run",
+          "b_run",
+          "t",
+          "a",
+          "b"
+        ],
+        "title": "EqCurves",
+        "type": "object"
+      },
+      "EqNotePatch": {
+        "additionalProperties": false,
+        "properties": {
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "title": "EqNotePatch",
+        "type": "object"
+      },
+      "EqPairItem": {
+        "additionalProperties": false,
+        "properties": {
+          "a": {
+            "maxLength": 200,
+            "title": "A",
+            "type": "string"
+          },
+          "b": {
+            "maxLength": 200,
+            "title": "B",
+            "type": "string"
+          }
+        },
+        "required": [
+          "a",
+          "b"
+        ],
+        "title": "EqPairItem",
+        "type": "object"
+      },
+      "EqPairing": {
+        "additionalProperties": false,
+        "properties": {
+          "mode": {
+            "default": "by_name",
+            "enum": [
+              "by_name",
+              "by_params",
+              "manual"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "pairs": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/EqPairItem"
+                },
+                "maxItems": 5000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pairs"
+          }
+        },
+        "title": "EqPairing",
+        "type": "object"
+      },
+      "EqPreview": {
+        "properties": {
+          "can_run": {
+            "title": "Can Run",
+            "type": "boolean"
+          },
+          "extract": {
+            "additionalProperties": true,
+            "title": "Extract",
+            "type": "object"
+          },
+          "metrics": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "pairing": {
+            "additionalProperties": true,
+            "title": "Pairing",
+            "type": "object"
+          },
+          "pairs": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Pairs",
+            "type": "array"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/EqProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "side_a": {
+            "additionalProperties": true,
+            "title": "Side A",
+            "type": "object"
+          },
+          "side_b": {
+            "additionalProperties": true,
+            "title": "Side B",
+            "type": "object"
+          },
+          "unmatched_a": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched A",
+            "type": "array"
+          },
+          "unmatched_b": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Unmatched B",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/EqProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "side_a",
+          "side_b",
+          "pairing",
+          "pairs",
+          "unmatched_a",
+          "unmatched_b",
+          "metrics",
+          "extract",
+          "problems",
+          "warnings",
+          "can_run"
+        ],
+        "title": "EqPreview",
+        "type": "object"
+      },
+      "EqProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "metric_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric Id"
+          },
+          "only_a": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Only A"
+          },
+          "only_b": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Only B"
+          },
+          "side": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Side"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "EqProblem",
+        "type": "object"
+      },
+      "EqRecipe": {
+        "properties": {
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "definition": {
+            "additionalProperties": true,
+            "title": "Definition",
+            "type": "object"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "metrics_count": {
+            "title": "Metrics Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "parent": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parent"
+          },
+          "readonly": {
+            "title": "Readonly",
+            "type": "boolean"
+          },
+          "scope": {
+            "enum": [
+              "system",
+              "study",
+              "global"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "study_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Id"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "versions": {
+            "anyOf": [
+              {
+                "items": {
+                  "additionalProperties": true,
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Versions"
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "name",
+          "scope",
+          "metrics_count",
+          "readonly",
+          "definition"
+        ],
+        "title": "EqRecipe",
+        "type": "object"
+      },
+      "EqRecipeCreate": {
+        "additionalProperties": false,
+        "description": "생성: definition 직접 | clone_from(레시피 key·version) | from_check(이력 스냅숏 복제) 중 하나.",
+        "properties": {
+          "clone_from": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EqRecipeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "definition": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Definition"
+          },
+          "description": {
+            "default": "",
+            "maxLength": 500,
+            "title": "Description",
+            "type": "string"
+          },
+          "from_check": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Check"
+          },
+          "name": {
+            "maxLength": 60,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "default": "study",
+            "enum": [
+              "study",
+              "global"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "study_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Id"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "EqRecipeCreate",
+        "type": "object"
+      },
+      "EqRecipeInline": {
+        "additionalProperties": false,
+        "properties": {
+          "base": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EqRecipeRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "definition": {
+            "additionalProperties": true,
+            "title": "Definition",
+            "type": "object"
+          }
+        },
+        "required": [
+          "definition"
+        ],
+        "title": "EqRecipeInline",
+        "type": "object"
+      },
+      "EqRecipeListItem": {
+        "properties": {
+          "can_edit": {
+            "default": false,
+            "title": "Can Edit",
+            "type": "boolean"
+          },
+          "deleted": {
+            "default": false,
+            "title": "Deleted",
+            "type": "boolean"
+          },
+          "description": {
+            "default": "",
+            "title": "Description",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "metrics_count": {
+            "title": "Metrics Count",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "readonly": {
+            "title": "Readonly",
+            "type": "boolean"
+          },
+          "scope": {
+            "enum": [
+              "system",
+              "study",
+              "global"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "study_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Id"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "key",
+          "version",
+          "name",
+          "scope",
+          "metrics_count",
+          "readonly"
+        ],
+        "title": "EqRecipeListItem",
+        "type": "object"
+      },
+      "EqRecipeRef": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "maxLength": 64,
+            "title": "Key",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "key"
+        ],
+        "title": "EqRecipeRef",
+        "type": "object"
+      },
+      "EqRecipeUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "base_version": {
+            "minimum": 1.0,
+            "title": "Base Version",
+            "type": "integer"
+          },
+          "definition": {
+            "additionalProperties": true,
+            "title": "Definition",
+            "type": "object"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 60,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "base_version",
+          "definition"
+        ],
+        "title": "EqRecipeUpdate",
+        "type": "object"
+      },
+      "EqSideFemVerify": {
+        "additionalProperties": false,
+        "properties": {
+          "attempt": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attempt"
+          },
+          "fv_id": {
+            "maxLength": 64,
+            "title": "Fv Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "fem_verify",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "kind",
+          "fv_id"
+        ],
+        "title": "EqSideFemVerify",
+        "type": "object"
+      },
+      "EqSideFolder": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "folder",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "paths": {
+            "items": {
+              "maxLength": 400,
+              "minLength": 1,
+              "type": "string"
+            },
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Paths",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "paths"
+        ],
+        "title": "EqSideFolder",
+        "type": "object"
+      },
+      "EqSidePredictBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "batch_id": {
+            "maxLength": 64,
+            "title": "Batch Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "predict_batch",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "kind",
+          "batch_id"
+        ],
+        "title": "EqSidePredictBatch",
+        "type": "object"
+      },
+      "EqSideTrainDoe": {
+        "additionalProperties": false,
+        "properties": {
+          "doe_id": {
+            "maxLength": 64,
+            "title": "Doe Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "train_doe",
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "required": [
+          "kind",
+          "doe_id"
+        ],
+        "title": "EqSideTrainDoe",
+        "type": "object"
+      },
       "ErrorBody": {
         "properties": {
           "code": {
@@ -14012,6 +15413,26 @@
               }
             ]
           },
+          "equiv_check": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "equiv_check_extract": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "evaluate": {
             "anyOf": [
               {
@@ -17767,6 +19188,868 @@
         "summary": "Get Dataset",
         "tags": [
           "datasets"
+        ]
+      }
+    },
+    "/physicsai/api/equiv-checks/{eq_id}": {
+      "get": {
+        "description": "행 + 스냅숏 + metrics.csv 요약 표(파일 읽기, no-store).",
+        "operationId": "get_equiv_check_physicsai_api_equiv_checks__eq_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eq_id",
+            "required": true,
+            "schema": {
+              "title": "Eq Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqCheck"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Equiv Check",
+        "tags": [
+          "equiv_check"
+        ]
+      },
+      "patch": {
+        "description": "메모(note)만 사후 수정 가능(작성자·관리자).",
+        "operationId": "patch_equiv_check_physicsai_api_equiv_checks__eq_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eq_id",
+            "required": true,
+            "schema": {
+              "title": "Eq Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EqNotePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqCheckListItem"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Patch Equiv Check",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/equiv-checks/{eq_id}/curves": {
+      "get": {
+        "operationId": "equiv_check_curves_physicsai_api_equiv_checks__eq_id__curves_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eq_id",
+            "required": true,
+            "schema": {
+              "title": "Eq Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "pair",
+            "required": true,
+            "schema": {
+              "minimum": 1,
+              "title": "Pair",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "metric",
+            "required": true,
+            "schema": {
+              "maxLength": 32,
+              "title": "Metric",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "max_points",
+            "required": false,
+            "schema": {
+              "default": 1000,
+              "maximum": 5000,
+              "minimum": 2,
+              "title": "Max Points",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqCurves"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Equiv Check Curves",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/equiv-checks/{eq_id}/table.csv": {
+      "get": {
+        "description": "원표(UTF-8 BOM): pair_no,a_run,b_run,metric_id,a,b,diff,rel_pct,corr,status,reason.",
+        "operationId": "equiv_check_table_csv_physicsai_api_equiv_checks__eq_id__table_csv_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "eq_id",
+            "required": true,
+            "schema": {
+              "title": "Eq Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/csv": {}
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Equiv Check Table Csv",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/equiv/recipes": {
+      "get": {
+        "description": "시스템 기본(`sys:default`, 읽기 전용 제안값) + 전역 + 그 Study 레시피의 최신 활성 버전.",
+        "operationId": "list_equiv_recipes_physicsai_api_equiv_recipes_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "study_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Study Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EqRecipeListItem"
+                  },
+                  "title": "Response List Equiv Recipes Physicsai Api Equiv Recipes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Equiv Recipes",
+        "tags": [
+          "equiv_check"
+        ]
+      },
+      "post": {
+        "description": "생성(power): definition | clone_from{key, version} | from_check(이력 스냅숏 복제) → version 1.",
+        "operationId": "create_equiv_recipe_physicsai_api_equiv_recipes_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EqRecipeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Equiv Recipe",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/equiv/recipes/{key}": {
+      "delete": {
+        "description": "소프트 삭제(key 단위, 멱등). 이력 스냅숏·참조는 그대로.",
+        "operationId": "delete_equiv_recipe_physicsai_api_equiv_recipes__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Delete Equiv Recipe",
+        "tags": [
+          "equiv_check"
+        ]
+      },
+      "get": {
+        "description": "정의(삭제된 key도 이력용으로 조회 가능 — deleted: true).",
+        "operationId": "get_equiv_recipe_physicsai_api_equiv_recipes__key__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Get Equiv Recipe",
+        "tags": [
+          "equiv_check"
+        ]
+      },
+      "put": {
+        "description": "편집 = 새 버전(base_version이 최신과 다르면 409 EQ_RECIPE_VERSION_CONFLICT). 시스템 기본은 409 EQ_RECIPE_READONLY.",
+        "operationId": "update_equiv_recipe_physicsai_api_equiv_recipes__key__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EqRecipeUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Update Equiv Recipe",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/equiv/recipes/{key}/restore": {
+      "post": {
+        "description": "되살리기(관리자, 멱등).",
+        "operationId": "restore_equiv_recipe_physicsai_api_equiv_recipes__key__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Restore Equiv Recipe",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/equiv/recipes/{key}/versions": {
+      "get": {
+        "operationId": "equiv_recipe_versions_physicsai_api_equiv_recipes__key__versions_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqRecipe"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Equiv Recipe Versions",
+        "tags": [
+          "equiv_check"
         ]
       }
     },
@@ -22721,6 +25004,349 @@
         "summary": "List Datasets",
         "tags": [
           "datasets"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/equiv-checks": {
+      "get": {
+        "description": "이력 목록(최신순). 다음 페이지가 있으면 헤더 X-Next-Cursor.",
+        "operationId": "list_equiv_checks_physicsai_api_studies__study_id__equiv_checks_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "side_kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 16,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Side Kind"
+            }
+          },
+          {
+            "in": "query",
+            "name": "side_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Side Ref"
+            }
+          },
+          {
+            "in": "query",
+            "name": "verdict",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 12,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Verdict"
+            }
+          },
+          {
+            "in": "query",
+            "name": "recipe_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Recipe Key"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Limit"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/EqCheckListItem"
+                  },
+                  "title": "Response List Equiv Checks Physicsai Api Studies  Study Id  Equiv Checks Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List Equiv Checks",
+        "tags": [
+          "equiv_check"
+        ]
+      },
+      "post": {
+        "description": "실행(power): 이력 행 + EQ_CHECK 작업. 필수 지표 미연결 422 METRIC_UNBOUND, 활성 상한 409 EQ_CHECK_LIMIT.",
+        "operationId": "create_equiv_check_physicsai_api_studies__study_id__equiv_checks_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EqCheckCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqCheckCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create Equiv Check",
+        "tags": [
+          "equiv_check"
+        ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/equiv-checks/preview": {
+      "post": {
+        "description": "미리보기(DB 쓰기 없음): 쌍 매칭·binding 해석·추출 필요 수·사본 예상 바이트·problems.",
+        "operationId": "preview_equiv_check_physicsai_api_studies__study_id__equiv_checks_preview_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EqCheckCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EqPreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Preview Equiv Check",
+        "tags": [
+          "equiv_check"
         ]
       }
     },

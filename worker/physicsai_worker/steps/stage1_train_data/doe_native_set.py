@@ -84,6 +84,10 @@ def dg_prep(ctx: Any) -> None:
     seed = int(p.get("seed") if p.get("seed") is not None else 1)
     params = list(ps["parameters"])
     if pm is not None:
+        from physicsai_core.stage1_train_data import doe_reuse
+
+        if doe_reuse.is_reuse(p.get("sampling")):
+            raise StepFailure("INPUT_INVALID", "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다")
         extra = {str(r["name"]): (float(r["min"]), float(r["max"])) for r in sh.prop_rows(params)}
         raw = bl.stratified_lhs(pm, params, num_runs, seed, lhs_values, run_key_for, extra)
         rows = [(no, rk, (b if pm.get("usage") == "topology" else bl.assign_baseline(pm, params, vals)), vals) for no, rk, b, vals in raw]
@@ -96,9 +100,15 @@ def dg_prep(ctx: Any) -> None:
         per = {b: sum(1 for r in raw if r[2] == b) for b in bl.baseline_ids(pm)}
         ctx.log("baseline별 샘플 수(층화): " + ", ".join(f"{b} {n}" for b, n in per.items()))
     else:
+        from .doe_native import reuse_matrix
+
         names = [str(r["name"]) for r in params]
-        vals = lhs_values(names, {str(r["name"]): (float(r["min"]), float(r["max"])) for r in params}, num_runs, seed)
-        write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv(names, [(i, run_key_for(i), v) for i, v in enumerate(vals, 1)]))
+        matrix = reuse_matrix(ctx, p, names)
+        if matrix is None:
+            vals = lhs_values(names, {str(r["name"]): (float(r["min"]), float(r["max"])) for r in params}, num_runs, seed)
+            matrix = [(i, run_key_for(i), v) for i, v in enumerate(vals, 1)]
+        num_runs = len(matrix)
+        write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv(names, matrix))
         snap = [_row_meta(r) for r in params]
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver, geom_options=opts))
     ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp,

@@ -17,6 +17,7 @@ from .predict_batch import predict_batch_runs, predict_batches
 from .surrogate_opt import surrogate_opt_iters, surrogate_opts
 from .fem_verify import fem_verifications
 from .geom_view import contour3d_cache, geom_previews
+from .equiv_check import eq_checks, eq_recipes
 
 __all__ = [
     "metadata",
@@ -48,5 +49,7 @@ __all__ = [
     "fem_verifications",
     "geom_previews",
     "contour3d_cache",
+    "eq_recipes",
+    "eq_checks",
     "TERMINAL_STATES",
 ]

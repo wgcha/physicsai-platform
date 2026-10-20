@@ -60,6 +60,9 @@ FEATURES: dict[str, FeatureReq] = {
     # phase3 §21.3.8 S16: 조립 FEM 검증 = fem_verify.enabled + HPC 연결. rebuild는 + mesh 템플릿·include TCL(fem_verify_missing)
     "fem_verify": FeatureReq(needs_hpc=True),
     "fem_verify_rebuild": FeatureReq(needs_hpc=True),
+    # equiv-check.md §5.3: 등가성 판정은 항상 사용 가능(equiv_check.enabled), 추출은 hw·응답 TCL·T01 곡선 자원이 있을 때(equiv_check_extract_missing)
+    "equiv_check": FeatureReq(),
+    "equiv_check_extract": FeatureReq(("response_extract", "t01_curve_export"), ("hw_exe_path",), ("extract_minmax_tcl", "curate_hg_tcl")),
 }
 
 # opt-native §4.1(ON-1): HyperStudy(hstbatch·hstpy) 레거시 기능 — 설정했을 때만 켜지고, 미설정이면 화면에서 숨기며 점검은 SKIP.
@@ -247,7 +250,22 @@ def geometry_status(s: Settings) -> dict[str, Any]:
     return {"engine_default": s.geometry.engine, "native_available": not t and not r, "reason": reason}
 
 
+def equiv_check_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """⑤ 등가성 판정(equiv-check.md §5.3): enabled만 본다(값이 모두 있으면 추출 없이 판정)."""
+    return [], ([] if s.equiv_check.enabled else ["equiv_check.enabled"])
+
+
+def equiv_check_extract_missing(s: Settings) -> tuple[list[str], list[str]]:
+    """추출이 필요한 지표용(H3D minmax TCL·T01 곡선 추출). 없으면 그 지표만 NA + 경고 EQ_EXTRACT_UNAVAILABLE."""
+    tmpl, res = missing_for(s, FEATURES["equiv_check_extract"], None)
+    if not s.equiv_check.enabled:
+        res.insert(0, "equiv_check.enabled")
+    return tmpl, res
+
+
 _SPECIAL_MISSING = {
+    "equiv_check": equiv_check_missing,
+    "equiv_check_extract": equiv_check_extract_missing,
     "geometry_native": geometry_native_missing,
     "geometry_native_shell": geometry_native_shell_missing,
     "geometry_view": geometry_view_missing,

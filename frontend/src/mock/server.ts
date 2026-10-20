@@ -25,6 +25,7 @@ import { captureRoutes, type CaptureMode } from "./capture";
 import { scxRoutes } from "./scx";
 import { predictRunsRoutes, seedPredictRuns } from "./predictRuns";
 import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
+import { equivRoutes, seedEquiv, type EqRec, type RecipeRec } from "./equivCheck";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { geomViewRoutes } from "./geomView";
@@ -63,6 +64,7 @@ const ROUTES: Route[] = [
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
   femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)
+  equivRoutes, // ⑤ 등가성 판정(equiv-check.md §6)
   geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B·① train/features(openapi 모양)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
@@ -109,6 +111,9 @@ export class MockServer {
   doeGenerator: "platform" | "hyperstudy" = "platform";
   /** S16 V2 FEM 검증 */
   fems: FemRec[] = [];
+  /** ⑤ 등가성 판정 레시피·이력(equiv-check.md) */
+  eqRecipes: RecipeRec[] = [];
+  eqChecks: EqRec[] = [];
   /** S16 V3: 방향별 영상 content_type 덮어쓰기(avi·gif 흉내) */
   videoTypes: Record<string, string> = {};
   mediaInfo = new Map<string, { status: Exclude<CaptureMode, "NONE">; message: string | null }>();
@@ -137,6 +142,7 @@ export class MockServer {
     seedSurrogate(this);
     if (opts.predictRuns === "history") seedPredictRuns(this);
     if (opts.femVerify === "demo") seedFemVerify(this);
+    if (opts.equiv === "demo") seedEquiv(this);
     this.geometryDefault = opts.geometryDefault ?? "altair";
     if (opts.geometry) seedNative(this, opts.geometry === "multi");
   }

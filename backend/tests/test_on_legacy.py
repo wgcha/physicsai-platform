@@ -88,7 +88,7 @@ def test_v_on_2_hyperstudy_unset_only_legacy_disabled(tmp_path, fake_tools):
     for k in ("train_extract", "train_doe_platform", "train_resp", "curation_h3d", "curation_t01", "dataset_create", "evaluate",
               "predict", "predict_parametric", "predict_mesh_only", "predict_responses", "contour_capture", "optimize_builtin",
               "geometry_native", "fem_verify", "fem_verify_rebuild", "train_solve", "spdm_import", "geometry_native_shell",
-              "geometry_view", "geometry_view_shell", "contour3d"):
+              "geometry_view", "geometry_view_shell", "contour3d", "equiv_check", "equiv_check_extract"):
         assert st[k] == {"enabled": True, "missing": []}, (k, st[k])
 
 

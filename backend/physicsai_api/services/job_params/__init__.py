@@ -92,3 +92,7 @@ def on_retry(conn: Any, old: dict[str, Any], new_id: str) -> None:
         from physicsai_core.db.repositories import fem_verifications as fv_repo
 
         fv_repo.on_retry(conn, old, new_id)
+    if old["job_type"] == "EQ_CHECK":  # equiv-check.md §4.5: 이력 행의 작업 id 갱신(같은 스냅숏으로 다시)
+        from physicsai_core.db.repositories import equiv_check as eq_repo
+
+        eq_repo.on_retry(conn, old, new_id)

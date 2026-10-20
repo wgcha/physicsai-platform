@@ -65,6 +65,8 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   PB_RESP_EXTRACT: "일괄 예측 성능 다시 추출",
   // geometry-engine.md §7.3.4 native 세트 등록·다시 준비·baseline 추가
   PARAM_SET_NATIVE: "형상 준비(native)",
+  // equiv-check.md §4.5
+  EQ_CHECK: "등가성 판정",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -94,6 +96,7 @@ export const JOB_STAGE: Record<JobType, number> = {
   FEM_VERIFY: 4,
   PB_RESP_EXTRACT: 4,
   PARAM_SET_NATIVE: 4,
+  EQ_CHECK: 4,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

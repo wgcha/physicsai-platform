@@ -106,14 +106,40 @@ def dg_prep(ctx: Any) -> None:
     known = {f.get("name") for f in feat.get("features", []) if isinstance(f, dict)}
     if not names or not set(names) <= known:
         raise StepFailure("INPUT_CHANGED", "파라미터 표 이름이 형상 피처와 다릅니다 — ①-1을 다시 실행하세요")
-    rows = lhs_values(names, {q["name"]: (float(q["min"]), float(q["max"])) for q in used}, num_runs, seed)
-    write_text(os.path.join(D, "doe_matrix.csv"),
-               doe_matrix_csv(names, [(i, run_key_for(i), v) for i, v in enumerate(rows, 1)]))
+    matrix = reuse_matrix(ctx, p, names)
+    if matrix is None:
+        rows = lhs_values(names, {q["name"]: (float(q["min"]), float(q["max"])) for q in used}, num_runs, seed)
+        matrix = [(i, run_key_for(i), v) for i, v in enumerate(rows, 1)]
+    num_runs = len(matrix)
+    write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv(names, matrix))
     snap = [{"name": q["name"], "nominal": q["nominal"], "min": q["min"], "max": q["max"], "format": q.get("format"),
              "unit": q.get("unit", "")} for q in used]
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver,
                                            geom_options=opts))
     ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp, "kind": kind})
+
+
+def reuse_matrix(ctx: Any, p: dict[str, Any], names: list[str]) -> list[tuple[int, str, dict[str, float]]] | None:
+    """①-3 표본표 재사용(equiv-check.md Q1): params.sampling.kind == train_doe면 원본 DOE samples.csv 행(run 이름 유지), 아니면 None."""
+    from physicsai_core.stage1_train_data import doe_reuse
+
+    sp = p.get("sampling")
+    if not doe_reuse.is_reuse(sp):
+        return None
+    with ctx.ex.engine.connect() as conn:
+        samples, prob = doe_reuse.load_reuse_samples(conn, ctx.study["id"], ctx.root, str(sp.get("doe_id")))
+    if prob is not None:
+        raise StepFailure("INPUT_CHANGED", f"표본표를 재사용할 수 없습니다: {prob['message']}")
+    mism = doe_reuse.name_mismatch(samples, names)
+    if mism is not None:
+        raise StepFailure("INPUT_CHANGED", f"표본표를 재사용할 수 없습니다: {mism['message']}")
+    rows, skipped = doe_reuse.matrix_rows(samples, names)
+    if skipped:
+        ctx.add_warning("REUSE_RUN_SKIPPED", f"표본표 run {len(skipped)}개를 건너뜀(run__N 형식 아님·중복·값 없음): {', '.join(skipped[:10])}")
+    if not rows:
+        raise StepFailure("INPUT_INVALID", "재사용할 표본표 행이 없습니다")
+    ctx.log(f"표본표 재사용: DOE {sp.get('doe_id')} run {len(rows)}개(run 이름 유지)")
+    return rows
 
 
 def _matrix(D: str) -> list[tuple[int, str, dict[str, float]]]:

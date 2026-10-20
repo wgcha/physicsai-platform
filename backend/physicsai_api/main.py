@@ -25,6 +25,7 @@ from .routers import (
     curations,
     datasets,
     env_checks,
+    equiv_check,
     fem_verify,
     fs,
     geom_view,
@@ -107,7 +108,7 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
 
     for r in (status, queue, studies, datasets, models, param_sets, predict_batches, jobs, artifacts, notifications, admin,
               env_checks, train, curations, spdm, optimize, surrogate_opts, study_storage, fs, contour_capture, fem_verify, geom_view,
-              releases):
+              releases, equiv_check):
         app.include_router(r.router, prefix=API_PREFIX)
     if ctx.settings.demo.enabled:  # 시연 모드(check_startup이 dev·127.0.0.1을 보장)
         from . import demo
