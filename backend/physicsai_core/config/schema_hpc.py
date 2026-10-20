@@ -158,7 +158,7 @@ class HpcScxCfg(_M):
     drive_base: str = "~"                   # "~"(공용 계정 홈) | "~/<상대>"
     home_display: str = "/Users/vd.dashboard"  # 표시 전용(계산에 쓰지 않음)
     appliance: str = ""                     # 필수(E4-11-1)
-    version: str = ""                       # 필수(E4-11-2)
+    version: str = "26.1"                   # 필수(E4-11-2). 작업 params hpc.version이 있으면 덮어씀(D3-68)
     ncpu: int = 16
     memory_gb: int | None = None
     queue_type: str = "implicit"

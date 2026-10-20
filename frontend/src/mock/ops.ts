@@ -100,7 +100,7 @@ export const opsRoutes: Route = (srv, { method, path, seg, query, body, headers,
       body: {
         config: { ok: true, errors: [], warnings: srv.configWarnings },
         worker: { online: true, worker_id: "PHYSICS-PC:4412:mock", last_seen_at: new Date().toISOString(), limiter: "windows_job" },
-        hpc: srv.hpcMode === "scx" ? { mode: "scx", configured: true, message: "SCX(대시보드 연결)", collect_mode: "in_place" } : srv.hpcConfigured ? { mode: "command", configured: true, message: "PBS command 모드", collect_mode: "in_place" } : { mode: "none", configured: false, message: "PBS 연결 안 됨", collect_mode: "in_place" },
+        hpc: srv.hpcMode === "scx" ? { mode: "scx", configured: true, message: "SCX(대시보드 연결)", collect_mode: "in_place", scx_version: "26.1" } : srv.hpcConfigured ? { mode: "command", configured: true, message: "PBS command 모드", collect_mode: "in_place", scx_version: null } : { mode: "none", configured: false, message: "PBS 연결 안 됨", collect_mode: "in_place", scx_version: null },
         altair: [{ key: "edspy_path", ok: true }, { key: "simlab_path", ok: true }, { key: "hw_exe_path", ok: true }],
         templates: [{ key: "geom_update", configured: true }, { key: "mesh", configured: false }, { key: "response_extract", configured: false }],
         limits: { configured: { max_multi_execution: 8, doe_generator_default: srv.doeGenerator, doe_platform_parallel_default: 4, doe_platform_max_runs: 500 }, detected: {}, effective: {} },

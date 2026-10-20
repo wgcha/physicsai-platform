@@ -4699,6 +4699,18 @@
             ],
             "title": "Queue"
           },
+          "version": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._\\-]{0,63}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          },
           "walltime": {
             "anyOf": [
               {
@@ -14138,6 +14150,17 @@
           "mode": {
             "title": "Mode",
             "type": "string"
+          },
+          "scx_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scx Version"
           }
         },
         "required": [

@@ -182,7 +182,7 @@ def test_v3_s16_7_create_rules(predict_env, fake_tools, tmp_path, engine):
     d2 = create(env, {"source": {"kind": "predict_job", "job_id": pj}, "hpc": {"ncpus": 16}})
     assert (d2["label"], d2["status"], d2["job"]["job_type"], d2["job"]["state"]) == ("FV-002", "RUNNING", "FEM_VERIFY", "QUEUED")
     fj = env.job(d2["job"]["id"])
-    assert fj["params"] == {"fem_verify_id": d2["id"], "fv_no": 2, "hpc": {"queue": None, "ncpus": 16, "walltime": None}}
+    assert fj["params"] == {"fem_verify_id": d2["id"], "fv_no": 2, "hpc": {"queue": None, "ncpus": 16, "walltime": None, "version": None}}
     assert fj["stage_label"] == "④"
     # 같은 예측·같은 조립 원본 → 409
     r = env.c.post(f"{API}/studies/{env.sid}/fem-verifications", headers=PW, json={"source": {"kind": "predict_job", "job_id": pj}})

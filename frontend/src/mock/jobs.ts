@@ -6,6 +6,17 @@ import type { MockServer } from "./server";
 import { refreshPositions } from "./engine";
 import { predictParams } from "./stage4Prepared";
 import { batchLabel, isBatchChild, onBatchJobCreated, predictBatchCreate, type BatchRec } from "./predictBatch";
+import { HPC_VERSION_RE } from "../lib/hpcVersion";
+
+/** S20(D3-68): params.hpc.version — 앞뒤 공백 자름, 빈 값 null, pattern 위반 422(백엔드 HpcOverrides·FvHpc와 같음) */
+export function normHpc(hpc: unknown): { hpc: Record<string, unknown> | null } | { error: MockResp } {
+  if (!hpc || typeof hpc !== "object") return { hpc: null };
+  const h = { ...(hpc as Record<string, unknown>) };
+  const v = typeof h.version === "string" ? h.version.trim() || null : (h.version ?? null);
+  if (v !== null && !(typeof v === "string" && HPC_VERSION_RE.test(v)))
+    return { error: err(422, "INVALID_PARAMS", "요청 값이 올바르지 않습니다", { errors: [{ loc: ["params", "hpc", "version"], msg: "pattern" }] }) };
+  return { hpc: { ...h, version: v } };
+}
 
 /** S9 §14.5 JobSummary.batch(params에서 계산) */
 function batchRef(srv: MockServer, j: Job) {
@@ -57,6 +68,11 @@ export function createJobFor(srv: MockServer, s: Study, type: JobType, params: R
   }
   if (type === "PREDICT" && !params.model_id && !s.final_model_id) return err(409, "FINAL_MODEL_REQUIRED", "Final 모델을 먼저 지정하세요.");
   if (type === "PREDICT_VERIFY" && !srv.hpcConfigured) return err(409, "HPC_NOT_CONFIGURED", "PBS 연결이 설정되지 않았습니다.");
+  if ((type === "TD_SOLVE" || type === "PREDICT_VERIFY") && params.hpc) {
+    const h = normHpc(params.hpc);
+    if ("error" in h) return h.error;
+    params = { ...params, hpc: h.hpc };
+  }
   const pre = srv.p2.precheck(s, type, params);
   if (pre) return pre;
   if (type === "DATASET_CREATE" && params.curation_id && params.input_path) return err(422, "INVALID_PARAMS", "curation_id와 input_path는 함께 쓸 수 없습니다.");

@@ -323,7 +323,7 @@ hpc:
     drive_base: "~"               # "~"(= 공용 계정 홈 /Users/vd.dashboard) 또는 "~/<상대>"(예 "~/physicsai")
     home_display: "/Users/vd.dashboard"   # 표시 전용
     appliance: ""                 # 필수 — SCX Radioss appliance 이름(서버 확인 E4-11-1)
-    version: ""                   # 필수 — Radioss 버전 문자열(E4-11-2)
+    version: "26.1"               # 필수 — Radioss 버전 문자열(E4-11-2). 작업별 입력(hpc.version)이 있으면 덮어씀(D3-68)
     ncpu: 16                      # 작업 params hpc.ncpus가 있으면 덮어씀
     memory_gb: null
     queue_type: implicit

@@ -32,7 +32,7 @@ def build_request(ctx: Any, gw: Any, p: RunStage) -> ScxRadiossRequest:
     return ScxRadiossRequest(
         request_id=p.request_id, input_path=f"{p.remote_dir}/{p.starter}",
         engine_paths=tuple(f"{p.remote_dir}/{n}" for n in engine), additional_paths=tuple(f"{p.remote_dir}/{n}" for n in rest),
-        version=cfg.version, appliance=cfg.appliance, ncpu=ncpu, memory_gb=cfg.memory_gb, queue_type=cfg.queue_type,
+        version=str(over.get("version") or cfg.version), appliance=cfg.appliance, ncpu=ncpu, memory_gb=cfg.memory_gb, queue_type=cfg.queue_type,
         run_type=cfg.run_type, mpi=cfg.mpi, single_precision=cfg.single_precision,
         client_ref=dict(p.client_ref, hpc_job_id=p.hid),
     )

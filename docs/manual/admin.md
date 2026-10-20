@@ -1288,7 +1288,7 @@ SCX 화면에서 그 잡 폴더(작업 HPC 행의 `remote_dir`)의 잡을 확인
 | `secret_file` | `""` | 비밀 파일 절대 경로(빈 값 = `<런타임>/secrets/scx_relay_key`) |
 | `drive_base` | `"~"` | `"~"` 또는 `"~/<상대>"` |
 | `home_display` | `/Users/vd.dashboard` | 화면·로그 표시 전용 |
-| `appliance` / `version` | `""`(필수) | SCX Radioss appliance·버전 문자열(E4-11-1·2) |
+| `appliance` / `version` | `""`(필수) / `"26.1"` | SCX Radioss appliance·버전 문자열(E4-11-1·2). 버전은 작업별 입력(`hpc.version`)이 있으면 덮어씀(D3-68) |
 | `ncpu` / `memory_gb` | `16` / `null` | 작업 params `hpc.ncpus`가 있으면 ncpu를 덮어씀(`queue`·`walltime`은 무시) |
 | `queue_type` / `run_type` / `mpi` / `single_precision` | `implicit` / `both - use starter and engine files` / `SMP (default)` / `false` | E4-11-10 |
 | `poll_interval_s` | `null` | 상태 조회 주기(null = `hpc.poll_interval_s`) |

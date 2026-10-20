@@ -11,6 +11,7 @@ from physicsai_core.errors import DomainError
 from physicsai_core.features import JOB_FEATURE, missing_for
 
 from ...context import AppContext
+from ...schemas.common import HpcVersion
 
 
 class _P(BaseModel):
@@ -21,6 +22,7 @@ class HpcOverrides(_P):
     queue: str | None = Field(default=None, pattern=r"^[A-Za-z0-9_.\-@]{1,64}$")
     ncpus: int | None = Field(default=None, ge=1, le=4096)
     walltime: str | None = Field(default=None, pattern=r"^\d{1,4}:\d{2}:\d{2}$")
+    version: HpcVersion = None  # D3-68: SCX Radioss 버전(null = hpc.scx.version, command 모드는 무시)
 
 
 def prerequisite_missing(*items: str) -> DomainError:

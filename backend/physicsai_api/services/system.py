@@ -52,7 +52,8 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
             "limiter": hb["limiter"] if hb else None,
         },
         "hpc": {"mode": av.mode, "configured": av.configured, "message": av.message,
-                "collect_mode": s.hpc.transfer.collect_mode},
+                "collect_mode": s.hpc.transfer.collect_mode,
+                "scx_version": (s.hpc.scx.version or None) if av.mode == "scx" else None},
         "altair": [{"key": k, "ok": bool(alt.get(k)) and os.path.isfile(alt.get(k, ""))} for k in ALTAIR_KEYS],
         "templates": [{"key": k, "configured": getattr(s.commands, k) is not None} for k in TEMPLATE_SPECS],
         "limits": {
