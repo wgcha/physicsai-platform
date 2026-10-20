@@ -169,7 +169,7 @@ export const api = {
   trainDoes: (studyId: string) => request<TrainDoe[]>("GET", `/studies/${studyId}/train/does`),
   trainDoe: (id: string) => request<TrainDoe>("GET", `/train-does/${id}`),
   trainRuns: (doeId: string, q: { state?: string; limit?: number; cursor?: string | null } = {}) =>
-    requestPage<TrainRun[]>(`/train-does/${doeId}/runs`, { limit: q.limit ?? 500, state: q.state, cursor: q.cursor }),
+    requestPage<TrainRun[]>(`/train-does/${doeId}/runs`, { limit: q.limit ?? 200, state: q.state, cursor: q.cursor }),
   paramSetFromTrain: (studyId: string, body: { doe_id: string; runs?: "collected" | "all"; unit_system?: string; label?: string | null }) =>
     request<ParamSet>("POST", `/studies/${studyId}/param-sets/from-train`, { body }),
 

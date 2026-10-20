@@ -62,7 +62,7 @@ export function TrainProvider({ children }: { children: ReactNode }) {
       const all: TrainRun[] = [];
       let cursor: string | null = null;
       do {
-        const page: { items: TrainRun[]; nextCursor: string | null } = await api.trainRuns(doeId, { cursor, limit: 500 });
+        const page: { items: TrainRun[]; nextCursor: string | null } = await api.trainRuns(doeId, { cursor, limit: 200 });
         all.push(...page.items);
         cursor = page.nextCursor;
       } while (cursor && all.length < 5000);
