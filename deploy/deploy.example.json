@@ -10,5 +10,7 @@
   "config_path": "D:\\physicsai\\config\\platform.yaml",
   "service_user": "CORP\\svc_physicsai",
   "run_mode": "Background",
-  "caddy_frontend_root": "D:\\physicsai\\frontend\\dist"
+  "caddy_frontend_root": "D:\\physicsai\\frontend\\dist",
+  "task_prefix": "PhysicsAI",
+  "inherit_existing": true
 }

@@ -42,7 +42,7 @@ def propose_evo(ctx: Any, opt: dict[str, Any], problem: ds.Problem, fit: Any, de
     try:
         space = space_factory(fit, problem) if space_factory is not None else evo_infill.Space.basic(fit, problem)
         n_g_space = len(space.genes)
-        options = so_algo.resolve_options(algorithm, s.get("algo_options"), n_g_space, cfg)
+        options = so_algo.resolve_options(algorithm, s.get("algo_options"), n_g_space, cfg, problem.m)
         total = int(options["generations"])
 
         def prog(gen: int, n: int) -> None:

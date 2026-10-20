@@ -51,7 +51,8 @@ LEGACY_NOTE = "HyperStudy 없음 — 레거시 기능만 꺼집니다(①-3 Hype
 WORKER_KEYS = ("limiter", "max_logical_cores", "max_memory_gb", "priority")
 DEPLOY_KEY_ORDER = ("install_mode", "repo_root", "install_root", "dashboard_root", "python_exe", "pg_bin", "pg_host", "pg_port",
                     "db_name", "db_role", "config_path", "service_user", "run_mode", "caddy_frontend_root", "ai_root",
-                    "original_app_root", "altair_root")
+                    "original_app_root", "altair_root", "task_prefix", "inherit_existing")
+TASK_PREFIX_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,39}$")  # install-common.ps1 $PhysicsAITaskPrefixPattern과 같은 규칙
 _UNSAFE = re.compile(r'[\s\x00-\x1f\x7f&|<>^%!"]')
 _VERSION_DIR = re.compile(r"^\d{2,4}(?:\.\d+){0,3}$")
 SEARCH_DEPTH = 4
@@ -606,13 +607,20 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     ordered.update({k: v for k, v in deploy.items() if k not in ordered})
     deploy = ordered
     deploy_changed = existing is None or deploy != existing
+    # 병행 설치(deploy.json task_prefix·inherit_existing): 작업 이름 접두사 검증, inherit_existing=false면 이전 설치(묶음) 설정을 이어받지 않는다
+    prefix = deploy.get("task_prefix")
+    if prefix is not None and not (isinstance(prefix, str) and (prefix == "" or TASK_PREFIX_RE.fullmatch(prefix))):
+        raise SystemExit(f"deploy.json task_prefix가 올바르지 않습니다: {prefix!r} — 영문자로 시작하고 영숫자·_·.·-만 쓴 40자 이하(예: PhysicsAI-Dev)")
+    if deploy.get("inherit_existing") is not None and not isinstance(deploy["inherit_existing"], bool):
+        raise SystemExit(f"deploy.json inherit_existing은 true/false여야 합니다: {deploy['inherit_existing']!r}")
+    inherit = deploy.get("inherit_existing") is not False
 
     # ---- platform.yaml ----------------------------------------------------------------------------
     example_path = repo / "config" / "platform.example.yaml"
     example_text = example_path.read_text(encoding="utf-8")
     example = yaml.safe_load(example_text) or {}
     config_path = Path(deploy.get("config_path") or (runtime / "config" / "platform.yaml"))
-    legacy = str(inputs.get("legacy_config") or "")
+    legacy = str(inputs.get("legacy_config") or "") if inherit else ""
     if config_path.is_file():
         source, base_text = "existing", config_path.read_text(encoding="utf-8-sig")
     elif legacy and Path(legacy).is_file():
