@@ -280,6 +280,25 @@ def face_map(bodies: list) -> dict:
     return out
 
 
+def fail_report(e: PaicadError, vals: dict, with_fixed: bool, t0: float) -> dict:
+    """``shell_update.json`` of a failed update (also written by ``shell view preview``)."""
+    body = dict(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, values=vals)
+    body.update(e.detail or {})
+    if "fixed_precheck" not in body:
+        body["fixed_precheck"] = {"status": "PASS" if with_fixed else "NOT_EVALUATED", "violations": 0}
+    body["elapsed_s"] = rnd(time.monotonic() - t0, 3)
+    return shell_envelope(**body)
+
+
+def ok_report(res: UpdateResult, vals: dict, o: dict, t0: float) -> dict:
+    """``shell_update.json`` of a successful update (also written by ``shell view preview``)."""
+    return shell_envelope(
+        status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, positions=res.positions,
+        expected_measured=res.expected, changed=res.changed, beads=res.beads, fixed_precheck=res.fixed_precheck, collisions=res.collisions,
+        topology=res.topology, options={"bead": o["bead"], "extract": o["extract"]}, warnings=res.warnings, elapsed_s=rnd(time.monotonic() - t0, 3),
+    )
+
+
 def run(args, rep: Reporter) -> int:
     t0 = time.monotonic()
     o = shopts.load(args.options)
@@ -300,12 +319,7 @@ def run(args, rep: Reporter) -> int:
     except PaicadError as e:
         if e.exit_code != EXIT_CAD:
             raise
-        body = dict(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message, values=vals)
-        body.update(e.detail or {})
-        if "fixed_precheck" not in body:
-            body["fixed_precheck"] = {"status": "NOT_EVALUATED" if fixed is None else "PASS", "violations": 0}
-        body["elapsed_s"] = rnd(time.monotonic() - t0, 3)
-        out.write_text(UPDATE_JSON, dumps(shell_envelope(**body)))
+        out.write_text(UPDATE_JSON, dumps(fail_report(e, vals, fixed is not None, t0)))
         out.commit([UPDATE_JSON])
         rep.warn(f"{e.code}: {e.message}")
         rep.result("FAIL", e.code, UPDATE_JSON)
@@ -316,12 +330,7 @@ def run(args, rep: Reporter) -> int:
     except CadInputError as e:
         raise PaicadError(e.code, e.message) from None
     out.write_text(FACE_MAP_JSON, dumps(face_map(res.bodies)))
-    docu = shell_envelope(
-        status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, positions=res.positions,
-        expected_measured=res.expected, changed=res.changed, beads=res.beads, fixed_precheck=res.fixed_precheck, collisions=res.collisions,
-        topology=res.topology, options={"bead": o["bead"], "extract": o["extract"]}, warnings=res.warnings, elapsed_s=rnd(time.monotonic() - t0, 3),
-    )
-    out.write_text(UPDATE_JSON, dumps(docu))
+    out.write_text(UPDATE_JSON, dumps(ok_report(res, vals, o, t0)))
     out.commit([SAMPLE_BREP, FACE_MAP_JSON, UPDATE_JSON])
     rep.progress(100, f"update done: {len(res.applied)} parameters changed")
     rep.result("OK", None, UPDATE_JSON)

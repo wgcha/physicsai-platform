@@ -108,7 +108,8 @@ def validate(doc: dict, bin_: bytes) -> None:
             if "NORMAL" in attrs:
                 nrm = read_accessor(doc, bin_, attrs["NORMAL"])
                 check(np.allclose(np.linalg.norm(nrm, axis=1), 1.0, atol=1e-4), "NORMAL not unit length")
-            check(p.get("mode", 4) in (1, 4), "mode")
+            check(p.get("mode", 4) in (0, 1, 4), "mode")
+            check("indices" in p or p.get("mode", 4) == 0, "indices missing (only POINTS may omit them)")
             if "indices" in p:
                 ia = doc["accessors"][p["indices"]]
                 check(ia["componentType"] in (5121, 5123, 5125) and ia["type"] == "SCALAR", "indices type")
@@ -144,6 +145,7 @@ def node_mesh(doc: dict, bin_: bytes, name: str) -> dict[str, np.ndarray]:
     prim = doc["meshes"][node["mesh"]]["primitives"][0]
     out = {k: read_accessor(doc, bin_, a) for k, a in prim["attributes"].items()}
     w = 3 if prim.get("mode", 4) == 4 else 2
-    out["indices"] = read_accessor(doc, bin_, prim["indices"]).astype(np.int64).reshape(-1, w)
+    if "indices" in prim:
+        out["indices"] = read_accessor(doc, bin_, prim["indices"]).astype(np.int64).reshape(-1, w)
     out["_mode"] = prim.get("mode", 4)
     return out

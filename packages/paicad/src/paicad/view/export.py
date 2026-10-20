@@ -43,10 +43,11 @@ def glb_info(name: str, data: bytes, tbs: list[BodyTess] | None) -> dict:
     return d
 
 
-def manifest_doc(mode: str, status: str, code: str | None, message: str | None, source: dict, glb: dict | None, tess: dict, bbox: list, bodies: list, features: list, warnings: list) -> dict:
+def manifest_doc(mode: str, status: str, code: str | None, message: str | None, source: dict, glb: dict | None, tess: dict, bbox: list, bodies: list, features: list, warnings: list,
+                 kind: str = "solid", fixed_clusters: list | None = None) -> dict:
     """Section 4.2 key order (envelope keys first: schema_version, engine, engine_version)."""
-    d = envelope(kind="solid", mode=mode, status=status, code=code, category=CODE_CATEGORY.get(code) if code else None, message=message, unit="mm", up_axis="Z")
-    d.update(source=source, glb=glb, tess=tess, bbox=bbox, bodies=bodies, features=features, fixed_clusters=[], warnings=warnings)
+    d = envelope(kind=kind, mode=mode, status=status, code=code, category=CODE_CATEGORY.get(code) if code else None, message=message, unit="mm", up_axis="Z")
+    d.update(source=source, glb=glb, tess=tess, bbox=bbox, bodies=bodies, features=features, fixed_clusters=list(fixed_clusters or []), warnings=warnings)
     return d
 
 

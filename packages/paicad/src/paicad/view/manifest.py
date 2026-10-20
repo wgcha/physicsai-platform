@@ -123,7 +123,14 @@ def dimension(ftype: str, topo: Topology, bbox: np.ndarray, moving: list[int], f
     pts = dimension_points(ftype, topo, bbox, moving, fixed, measure, axis)
     if pts is None:
         return None, None
-    kind, p0, p1 = pts
+    return dimension_from_points(*pts, bbox, value, tol)
+
+
+def dimension_from_points(kind: str, p0: np.ndarray, p1: np.ndarray, bbox: np.ndarray, value: float, tol: float) -> tuple[dict, dict | None]:
+    """Dimension annotation from its two points: label = mid point moved ``0.05 * L_body`` away from the bbox
+    center, ``value`` unchanged (the feature value), ``geom_len`` = |p1 - p0| (VIEW_DIM_APPROX beyond ``tol``)."""
+    p0 = np.asarray(p0, dtype=float)
+    p1 = np.asarray(p1, dtype=float)
     bb = np.asarray(bbox, dtype=float)
     L = float(np.max(bb[3:] - bb[:3]))
     mid = 0.5 * (p0 + p1)

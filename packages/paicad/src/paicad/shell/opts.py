@@ -17,7 +17,8 @@ DEFAULTS: dict = {
     "kind": "shell",
     "tag": {"tol_abs_mm": 0.05, "tol_rel": 1.0e-4, "min_match_ratio": 0.98},
     "fixed": {"kinds": list(FIXED_KINDS), "required": True, "transition_mm": 6.0, "tol_mm": 0.001},
-    "morph": {"smoother": "elastic", "poisson": 0.3, "relax_iters": 3, "solver_rtol": 1.0e-8, "solver_maxiter": 5000},
+    "morph": {"smoother": "elastic", "poisson": 0.3, "relax_iters": 3, "solver_rtol": 1.0e-8, "solver_maxiter": 5000,
+              "region": "local", "region_band_mm": 40.0, "region_band_factor": 5.0},
     "quality": {
         "max_warpage_deg": 15.0,
         "max_skew_deg": 60.0,
@@ -108,6 +109,12 @@ def validate(o: dict) -> list[str]:
         p.append("morph.relax_iters must be an integer in [0, 50]")
     if not (_pos(m.get("solver_rtol")) and m["solver_rtol"] < 1):
         p.append("morph.solver_rtol must be in (0, 1)")
+    if m.get("region") not in ("local", "face"):
+        p.append("morph.region must be local or face")
+    if not _pos(m.get("region_band_mm")):
+        p.append("morph.region_band_mm must be a finite number > 0")
+    if not (_num(m.get("region_band_factor")) and m["region_band_factor"] >= 0):
+        p.append("morph.region_band_factor must be a finite number >= 0")
     mi = m.get("solver_maxiter")
     if not (isinstance(mi, int) and not isinstance(mi, bool) and mi >= 1):
         p.append("morph.solver_maxiter must be an integer >= 1")
