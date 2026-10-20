@@ -150,7 +150,7 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 - git 폴더 설치(GitHub #1): `deploy/setup.ps1`(설치·재실행 안전)·`deploy/update-repo.ps1`(git pull 뒤 갱신) → 런타임 `<git>/.runtime/`(git 제외: venv·frontend·config/platform.yaml·deploy.json·logs·_backup). 설정 계획·작성은 `deploy/setup_config.py`(기존 값 보존·빠진 키 보충, Altair 상대 배치는 `config/platform.example.yaml`, 자원 상대경로는 `deploy/RESOURCES.txt`에서 읽음). DB·런타임 DB 접속 파일·alembic·작업 스케줄러·health·대기열 확인은 `deploy/install-common.ps1` 공용 함수(묶음 `install.ps1`·`update.ps1`도 사용), Node 22 선택·프런트 빌드는 `deploy/node-select.ps1`(`collect-offline.ps1`도 사용). 시험 `backend/tests/test_setup_repo.py` + CI windows "git 폴더 설치" 단계.
 - 원클릭·관리자 권한 없음(2026-10-15, phase3 D3-40·D3-41): 저장소 루트 `frontend-dist/` = 프런트 빌드본(커밋, `.gitattributes` `-text -diff linguist-generated`) + `BUILD_INFO.json`(`source_hash`·`built_at`·`vite_version`·`node_version`). 해시 규칙은 `scripts/frontend_source_hash.py`(Python)와 `deploy/node-select.ps1` `Get-PhysicsAIFrontendSourceHash`(PowerShell) 두 곳 — 시험 `backend/tests/test_runtime_install.py`가 같은 값인지 대조. 생성 `scripts/build-frontend-dist.{sh,ps1}`(npm ci → build → 교체), 최신 여부 `scripts/test-all`. 배치 `deploy/install-common.ps1` `Install-PhysicsAIFrontendFromRepo`(최신이면 복사·Node 없음, 아니면 `Invoke-PhysicsAIFrontendBuild`). 설정·DB URL은 런타임 파일(`<런타임>/config/platform.yaml`, `<런타임>/secrets/database_url`) — `physicsai_core/config/runtime.py` `apply_runtime`(우선순위 env > `--config` > 런타임 파일 > 이전 머신 환경변수)을 `physicsai_api.serve`·`physicsai_worker`의 `--runtime` 인자가 부른다. 작업 등록·접근 거부 안내·머신 환경변수 이전은 `install-common.ps1`(`Register-PhysicsAITasks -RuntimeDir`, `Update-PhysicsAITaskRegistration`, `Move-PhysicsAIMachineEnvToRuntime`, `Write-PhysicsAIRuntimeSecret`). `update-repo.ps1`은 스스로 `git pull --ff-only`(`Sync-UpdateRepo`).
 - `deploy/`: Windows 배포 ps1·bat + `demo/demo_setup.py`(227: CLI 진입점·`up`/`down`, `physicsai_*`를 최상위 import하지 않음) + R12 분할 `demo_common.py`(경로·상수·공용 함수), `demo_init.py`(`init`: 가짜 도구·자원·설정), `demo_seed.py`(`seed`), `demo_db.py`(`db-up`/`db-down`). 같은 폴더 모듈을 import하므로 `sys.dont_write_bytecode = True`(deploy/ 아래 `__pycache__` 금지 — 정적 시험이 deploy/ 파일을 텍스트로 읽는다). 시험 `test_demo.py`·`test_phase2_units.py`가 내용 검사(`demo_setup.py`의 `"packages" / "simdash_adapters" / "src"` 포함).
-- `migrations/versions/`: `0001_initial`(1차 동결본)·`0002_phase2`·`0003_hpc_cancel_failed`·`0004_study_manage`(3차 S3: `jobs.stage` 0 허용, phase3.md §5.10)·`0005_pscfg_optional`(`models.pscfg_*` NULL 허용, phase3.md D3-43)·`0006_param_set_label`(`param_sets.label`, phase3.md §13). `MIGRATION_HEAD = "0006_param_set_label"`(`physicsai_core/db/__init__.py`), downgrade는 RuntimeError.
+- `migrations/versions/`: `0001_initial`(1차 동결본)·`0002_phase2`·`0003_hpc_cancel_failed`·`0004_study_manage`(3차 S3: `jobs.stage` 0 허용, phase3.md §5.10)·`0005_pscfg_optional`(`models.pscfg_*` NULL 허용, phase3.md D3-43)·`0006_param_set_label`(`param_sets.label`, phase3.md §13)·`0007_predict_batch`~`0015_doe_platform_gen`(S9~S18, §1.8 표). `MIGRATION_HEAD = "0015_doe_platform_gen"`(`physicsai_core/db/__init__.py`), downgrade는 RuntimeError(S17·S18 migration은 새 데이터가 있으면 거부).
 - `config/`: `platform.example.yaml`(271), `platform.demo.yaml`(118, `demo_setup.py`가 채우는 템플릿). 스키마의 **단일 출처는 `physicsai_core/config/schema.py`**(리팩터링 전 `config.py`)(코어 안 다른 설정 `BaseModel` 없음). 프런트 `mock/catalog.ts` `FEATURE_MISSING`은 `features.py`의 목 사본(목 계약 시험 대상, 의도된 중복).
 
 ### 1.7 `packages/simdash_adapters` (3차 S4, 공통 어댑터 패키지)
@@ -167,6 +167,38 @@ steps는 `executor`·`runtime`을 import하지 않는다(`test_layering` 규칙 
 | `hpc/none.py`, `hpc/adapter.py`, `hpc/factory.py` | | `NoneHpcGateway`, `AdapterHpcGateway`(자리), `make_gateway(mode, …)`(알 수 없는 값 → none) |
 | `transfer/config.py`, `transfer/paths.py` | | `PathMapEntry`·`TransferConfig`, `map_path`, `resolve_collect_dirs`(①-4 PBS result_dir·회수 로컬 경로) |
 | `tests/` | | 패키지 단독 시험(§1.4) |
+
+### 1.8 3차 S12~S19에서 추가된 모듈(2026-10-20 문서 이관, phase3.md §17~§24)
+
+줄 수는 적지 않는다(R-B·R-F 분할 진행 중, `docs/refactor-plan.md` §8). 위 §1.1~§1.3 표에 없는 것만 모았다. 경로는 모두 이 저장소 기준 상대 경로.
+
+| 위치 | 단계·계약 | 책임 |
+|---|---|---|
+| `backend/physicsai_core/stage4_predict/run_metrics.py` | S12 §17 | run 폴더(`curve.json`·`RESPONSES.txt`·`H3D_REQUESTS.txt`) 요약 `RunMetrics`(파일별 LRU), 지표 id 문법 `METRIC_RE`(`curve:`·`resp:`·`tbl:`·`perf:`), `metric_value`. design-map·SO_COLLECT·미리보기가 공용 |
+| `stage4_predict/performance.py` | S17 §22 | 템플릿 성능 정의(H3D + CURVE) 값 계산 순수 함수 `perf_defs`·`perf_value`·`perf_label`, 사유 코드(`SPEC_CHANGED` 등). API·워커 공용 |
+| `stage4_predict/{response_defs,responses}.py` | S17 | 성능 정의 검증(CURVE spec 추가)·추출 stat. CURVE 성능은 ①-6·PV에서 조용히 건너뜀 |
+| `stage4_predict/batch_matrix.py` | S9·S15 | 일괄 예측 표본 행렬. **R-B에서 `physicsai_core/sampling/` 하위로 이동하고 이 경로는 재노출로 유지**(동작 불변) |
+| `physicsai_core/sampling/` (`registry`·`matrix*`·`designs`·`fractional`·`qmc`) | S15 §20 | 표본 방식 7종(`lhs_opt`·`sobol`·`fullfact`·`fracfact`·`pb`·`bbd`·`ccd`) 생성·설명 id·권장 run 수, 영향도 등급 `batch_influence`·`doe_influence`(formal/reference/off). Sobol만 scipy 지연 import(`qmc.py`) |
+| `stage1_train_data/doe_platform.py` | S18 §23 | ① 플랫폼 생성 표본 검증·행 계산(`check`·`build`, `lhs_opt`는 검증 때 `lhs`로 대신). API와 워커가 공용 |
+| `stage5_optimize/surrogate/{dataset,gp,rbf,infill}.py` | S13 §18 | 내장 최적화 자료 모델(`Problem`·`Point`·`Design`)·GP(Matérn 5/2 ARD)·RBF·EI×PoF 후보. numpy·scipy는 이 패키지 안에서만 지연 import |
+| `stage5_optimize/surrogate/{mo_infill,pareto}.py` | S17 §22 | 다목적 후보(예측 전선·HVI·ParEGO), 비지배·HV·가중 추천(`pareto.py`는 표준 라이브러리 전용, API 프로세스 numpy 미적재) |
+| `stage4_predict/{contour_capture,fem_assembly}.py` | S10·S16 | 컨투어 캡처 설정·FEM 검증 조립 원본 스냅숏/검사 |
+| `backend/physicsai_core/config/validate_gpu.py` | S19 §24 | `worker.gpu_query_timeout_s`·`gpu_backoff_after`·`gpu_backoff_max_s` 검증(`validate.py`가 1줄로 호출) |
+| `backend/physicsai_api/services/design_map.py` | S12·S19 | `GET /predict-batches/{bid}/design-map`. 지표 곡선·RESP·표 값에 더해 **`perf:`를 서버가 `performance.perf_value`로 계산**(`runs[].perf`·`perf_reason`, `metrics[].spec_changed`, `counts.spec_changed`, `reason_text`). 옛 추출 run(H3D `NOT_EXTRACTED`)만 결과 표 값 대체 |
+| `services/{surrogate_opts,surrogate_opt_problem,surrogate_opt_pareto}.py` | S13·S17 | 내장 최적화 생성·미리보기·상세. 문제 정의 정규화/검증은 `*_problem`, 검증 파레토 해·추천·HV 이력은 `*_pareto`(요청 때마다 계산) |
+| `services/{fem_verify,fem_verify_sources,hpc_resolve,predict_runs,doe_result_table,param_set_responses}.py` | S11·S14·S16 | FEM 검증 생성/출처 해석, SUBMISSION_UNKNOWN 조치, ④ 실행 목록(V1), ⑤ 해석 DOE 결과 표(`result-table`), 템플릿 성능 저장·`PERF_IN_USE_BY_OPT` |
+| `routers/{fem_verify,surrogate_opts,contour_capture,fs}.py` | S10~S16 | FEM 검증, 내장 최적화(생성·취소·이어서·`verify`), 컨투어 캡처, 서버 경로 탐색 |
+| `worker/physicsai_worker/gpu_monitor.py` | S19 §24 | `GpuMonitor` 스레드(`gpu`). **nvidia-smi 조회를 하트비트 밖으로 분리**하고 결과를 잠금 보호 캐시로 보관. 연속 실패 k회부터 조회 간격을 `min(gpu_backoff_max_s, base × 2^(k − after + 1))`로 늘리고(성공하면 즉시 base), 상태가 바뀔 때만 워커 로그 1줄(`physicsai_worker`). 하트비트(`heartbeat_once`)·`/resources`는 캐시를 읽는다 |
+| `worker/physicsai_worker/resources.py` | S19 | `query_gpu_status(timeout_s=)` 제한 시간 인자(기본 `worker.gpu_query_timeout_s`), 시간 초과/실행 파일 없음/종료코드 사유를 `gpu_message`로 반환. 환경 점검 `env_check.gpu_item`도 같은 설정 |
+| `worker/physicsai_worker/steps/run_chain.py` | S18 §23 | run별 입력 체인 m_1 형상 → m_2 메시 → m_3 조립 공용(`geometry_update`·`build_run_inputs`·`mesh_preflight`·`aggregate_warnings`). ④ `batch._gen_one`과 ① `doe_platform_gen`이 공유. **형상 생성의 native 교체 경계** |
+| `steps/stage1_train_data/doe_platform_gen.py` | S18 | ① 플랫폼 모드 `HST_GEN_RADIOSS` 처리: `run_parallel`로 최대 M개 run 동시 생성, `train_doe_points` 상태 갱신, `GEN_PARTIAL_FAILED` |
+| `steps/stage4_predict/{batch_resp,fem_verify,fem_compare,_verify_hpc,video_transcode}.py` | S16·S17 | `PB_RESP_EXTRACT`(끝난 배치의 H3D 성능 다시 추출), `FEM_VERIFY` 10 step, 응답/커브 비교, PBS·SCX 제출 공용 헬퍼, 선택적 ffmpeg 영상 변환 |
+| `steps/stage5_optimize/{surrogate,surrogate_mo}.py`, `steps/_scx.py` | S13·S17·S11 | `SURROGATE_OPT` 4 step(단일/다목적 분기), SCX 잡 제출·폴링 |
+| `worker/physicsai_worker/step_parallel.py` | S9 | `run_parallel`(제한기 그룹 1개를 나눠 쓰는 동시 실행) — ④ BP_GEN·① 플랫폼 생성이 사용 |
+| `frontend/src/analysis/` (`adapters/fromBatch.ts`·`influence.ts`·`resultTable.ts`·`perfColumns.ts`·`viz/designMap/`) | S12·S14·S19 | ⑤ 결과분석(`/stage/analysis`) 공통 `ResultTable`, PRCC·SRC, 설계공간 지도. 성능 값은 서버 design-map을 쓰고 `perfColumns.ts`에는 커브 열 규칙만 남김 |
+| `frontend/src/shell/gpuText.ts` | S19 | `gpuFailTip`·`gpuStreakText`: 자원 칩 툴팁·서랍의 GPU 조회 실패 문구(원인·연속 N회·다음 조회 시각) |
+
+migration 요약: `0007_predict_batch`(S9) · `0008_contour_capture`(S10) · `0009_scx_gateway`(S11) · `0010_surrogate_opt`·`0011_surrogate_final`(S13) · `0012_sampling_kinds`(S15) · `0013_fem_verify`(S16) · `0014_multiobj`(S17) · `0015_doe_platform_gen`(S18). S14·S19는 migration 없음.
 
 ---
 

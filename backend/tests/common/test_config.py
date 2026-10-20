@@ -97,10 +97,10 @@ def test_missing_file_and_bad_yaml(tmp_path):
 
 
 def test_no_timeout_key_in_schema():
-    """V-SM-6: 실행 시간 한도 설정 없음."""
+    """V-SM-6: 실행 시간 한도 설정 없음. gpu_query_timeout_s는 nvidia-smi 조회 제한 시간(phase3 §24.6 S19)이라 작업 한도가 아니다."""
     from physicsai_core.config import WorkerCfg
 
-    assert not [k for k in WorkerCfg.model_fields if "timeout" in k]
+    assert not [k for k in WorkerCfg.model_fields if "timeout" in k and k != "gpu_query_timeout_s"]
 
 
 def test_study_storage_defaults_and_ranges(settings_dict):

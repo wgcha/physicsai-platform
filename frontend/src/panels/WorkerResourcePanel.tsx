@@ -1,6 +1,7 @@
 import type { Resources } from "../api";
 import { useApp } from "../app/AppContext";
 import { useRunStatus } from "../shell/RunStatus";
+import { gpuStreakText } from "../shell/gpuText";
 import { DrawerSection } from "./DrawerSection";
 
 const PRIORITY_LABEL: Record<string, string> = { below_normal: "낮은 우선순위", normal: "보통 우선순위", idle: "유휴 우선순위" };
@@ -54,9 +55,21 @@ export function WorkerResourcePanel() {
             />
           ))}
           {r.gpu.length === 0 && (
-            <div className="muted small gpu-none" data-testid="gpu-none" title={r.gpu_message ?? undefined}>
-              {gpuNoneText(r)}
-            </div>
+            <>
+              <div className="muted small gpu-none" data-testid="gpu-none" title={r.gpu_message ?? undefined}>
+                {gpuNoneText(r)}
+              </div>
+              {r.gpu_message && (
+                <div className="muted small gpu-note" data-testid="gpu-message">
+                  {r.gpu_message}
+                </div>
+              )}
+              {gpuStreakText(r) && (
+                <div className="muted small gpu-note" data-testid="gpu-streak">
+                  {gpuStreakText(r)}
+                </div>
+              )}
+            </>
           )}
           <div className="limits small">
             유효 한도 {r.limits.cores ?? "–"}코어 · {r.limits.memory_gb ?? "–"}GB · {r.limits.priority ? PRIORITY_LABEL[r.limits.priority] ?? r.limits.priority : "–"}

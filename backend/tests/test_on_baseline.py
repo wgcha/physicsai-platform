@@ -135,19 +135,21 @@ def test_v_on_11_ga_categorical_genes_and_na_mask():
 def test_v_on_11_ego_per_level_de():
     problem, designs, failed = _cat_designs(seed=3)
     fit = infill.fit_all(designs, problem, kind="gp", restarts=2, seed=1)
+    from physicsai_core.stage5_optimize.surrogate import infill_propose  # propose·_de 위치(S19 R-B 분할)
+
     seen: list[int] = []
-    orig = infill._de
+    orig = infill_propose._de
 
     def spy(func, bounds, integrality, *, seed, **kw):
         seen.append(seed)
         assert len(bounds) == 2  # 범주를 뺀 차원
         return orig(func, bounds, integrality, seed=seed, **kw)
 
-    infill._de = spy
+    infill_propose._de = spy
     try:
         cands, opt = infill.propose(fit, problem, designs, failed, k=2, seed=1, round_no=1, de_maxiter=20, de_popsize=8)
     finally:
-        infill._de = orig
+        infill_propose._de = orig
     assert seen[:3] == [100000 + 1000 + 800, 100000 + 1000 + 801, 100000 + 1000 + 802]  # 수준별 시드(§6.2)
     assert opt is not None and opt.values["baseline"] == 1.0
     assert all(c.values["baseline"] in (0.0, 1.0, 2.0) for c in cands)

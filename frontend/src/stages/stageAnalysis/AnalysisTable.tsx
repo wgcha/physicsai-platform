@@ -132,11 +132,21 @@ export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pick
                       {fmtNum(r.params[p.name])}
                     </td>
                   ))}
-                  {table.responses.map((x) => (
-                    <td key={x.name} className={on ? "num strong" : "num"}>
-                      {isFin(r.responses[x.name]) ? fmtNum(r.responses[x.name]) : <span className="muted">—</span>}
-                    </td>
-                  ))}
+                  {table.responses.map((x) => {
+                    const why = r.why?.[x.name];
+                    const empty = !isFin(r.responses[x.name]);
+                    return (
+                      <td key={x.name} className={on ? "num strong" : "num"} title={empty && why ? (table.reasonText?.[why] ?? why) : undefined}>
+                        {empty ? <span className="muted">—</span> : fmtNum(r.responses[x.name])}
+                        {empty && why === "SPEC_CHANGED" && (
+                          <span className="muted small" data-testid={`spec-changed-${r.no}-${x.name}`}>
+                            {" "}
+                            정의 변경
+                          </span>
+                        )}
+                      </td>
+                    );
+                  })}
                   <td className={`num row-state ${r.state.toLowerCase()}`}>
                     <span className={`pill ${stateTone(r.state)}`}>{stateLabel(r.state)}</span>
                   </td>

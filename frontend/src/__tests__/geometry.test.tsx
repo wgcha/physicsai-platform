@@ -117,7 +117,7 @@ describe("④ native 세트 상세(§8)", () => {
   it("STALE이면 '형상 준비 다시' → 작업 → READY", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, (s) => {
       nativeCurrent(s);
-      s.paramSets.find((p) => p.id === "ps-n1")!.native = { prep_status: "STALE", prep_reason: "엔진 버전이 바뀌었습니다", feature_count: 5, props_scanned: false, shell_only: false };
+      s.paramSets.find((p) => p.id === "ps-n1")!.native = { prep_status: "STALE", prep_reason: "엔진 버전이 바뀌었습니다", feature_count: 5, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING" };
     });
     const card = await openManage();
     expect(within(card).getByTestId("prep-status").textContent).toBe("형상 다시 준비 필요");

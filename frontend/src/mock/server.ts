@@ -1,22 +1,8 @@
 // 계약 §10을 흉내 내는 메모리 목 서버. fetch를 가로채 /physicsai/api/* 에 응답한다.
 // F5: 1차 공유 상태·알림·라우터 등록(ROUTES, 한 곳)만 여기 두고, 경로 처리는 단계별 라우트 모듈(ops·stage1~5·studies·jobs·manage)에 있다.
-import type { Artifact, Dataset, FeatureKey, Job, JobType, Me, Model, NotificationItem, ParamSet, SampleRow, Study } from "../api/types";
-import {
-  COMMANDS_TXT,
-  USERS,
-  baseJob,
-  iso,
-  makeSamples,
-  makeSteps,
-  seedDatasets,
-  seedModels,
-  seedNotifications,
-  seedMeshOnlyParamSet,
-  seedParamSet,
-  seedStudies,
-  STEP_LABEL,
-  type MockUserKey,
-} from "./data";
+// R-F 분할(동작 불변): 생성 옵션·기본값 serverOptions · fetch 가로채기 fetch. 옛 import 경로(MockOptions·MOCK_AI_ROOT·DEFAULT_UI·createMockFetch)는 아래에서 재노출한다.
+import type { Artifact, Dataset, Job, JobType, Me, Model, NotificationItem, ParamSet, SampleRow, Study } from "../api/types";
+import { COMMANDS_TXT, USERS, baseJob, iso, makeSamples, makeSteps, seedDatasets, seedModels, seedNotifications, seedMeshOnlyParamSet, seedParamSet, seedStudies, STEP_LABEL, type MockUserKey } from "./data";
 import { Phase2Mock } from "./phase2";
 import { STEP_LABELS_NATIVE } from "../lib/steps";
 import { ManageMock } from "./manage";
@@ -40,6 +26,11 @@ import { predictRunsRoutes, seedPredictRuns } from "./predictRuns";
 import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
+import { DEFAULT_UI, MOCK_AI_ROOT } from "./serverOptions";
+import type { MockOptions } from "./serverOptions";
+export { MOCK_AI_ROOT, DEFAULT_UI } from "./serverOptions";
+export type { MockOptions } from "./serverOptions";
+export { createMockFetch } from "./fetch";
 
 export type { MockResp } from "./route";
 
@@ -49,56 +40,6 @@ interface ArtifactRec extends Artifact {
   /** S10: 바이너리 산출물(요청 때 그린다) */
   render?: () => Uint8Array;
 }
-
-export interface MockOptions {
-  user?: MockUserKey;
-  hpcConfigured?: boolean;
-  /** phase3 §16 SCX(D3-58): hpcConfigured일 때 게이트웨이 모드(기본 command) */
-  hpcMode?: "command" | "scx";
-  /** SCX 시드: 진행 중 ① 제출의 한 run을 결과 모름(SUBMISSION_UNKNOWN)으로 */
-  scxUnknown?: boolean;
-  /** 실행 중 작업이 tick마다 진행되는 정도(%) */
-  speed?: number;
-  /** /status.ui 값(B1). 시험에서 짧은 주기를 주입 */
-  ui?: Record<string, number>;
-  /** 2차: 비활성 기능(/status.features enabled=false). 기본 ["train_resp"](response_extract 템플릿 null) */
-  disabledFeatures?: FeatureKey[];
-  /** C18: PBS 취소 명령 실패 흉내 */
-  hpcCancelFails?: boolean;
-  /** /status.demo(시연 모드) */
-  demo?: boolean;
-  /** /status.config.warnings */
-  configWarnings?: string[];
-  /** /status.auth.login_url(auth.dashboard_public_login_url, 운영 대시보드 기본 "/home/" — phase3 D3-38) */
-  loginUrl?: string;
-  /** S9: "running"이면 진행 중 일괄 예측 B-003 시드(하위 PREDICT 12개가 대기열에 들어간다) */
-  batchDemo?: "running" | "sobol" | "bbd";
-  /** S10: 예측 끝 컨투어 캡처 결과(기본 OK) */
-  capture?: CaptureMode;
-  /** S16 V1: "history"면 단일 예측 이력 시드(템플릿·준비된 입력·재시도·실패·진행 중) */
-  predictRuns?: "history";
-  /** S16 V2: "demo"면 FEM 검증 시드(FV-001 완료·FV-002 실패·FV-003 동반 예측 대기) */
-  femVerify?: "demo";
-  /** geometry-engine.md §7.1 /status.geometry.engine_default(기본 altair) */
-  geometryDefault?: "altair" | "native";
-  /** "native" = native 세트 ps-n1 시드, "multi" = ps-n1에 baseline B2 추가(4B 매칭표 초안) */
-  geometry?: "native" | "multi";
-  /** S18: /status.limits.configured.doe_generator_default(기본 platform — 설정 train_data.doe_generator_default) */
-  doeGenerator?: "platform" | "hyperstudy";
-}
-
-export const MOCK_AI_ROOT = "E:\\shared\\AI_WORK";
-export const DEFAULT_UI = {
-  max_artifact_bytes: 20971520,
-  poll_job_running_ms: 2000,
-  poll_job_queued_ms: 5000,
-  poll_job_waiting_hpc_ms: 15000,
-  poll_log_ms: 2000,
-  poll_queue_ms: 5000,
-  poll_resources_ms: 10000,
-  poll_notifications_ms: 10000,
-  poll_status_ms: 30000,
-};
 
 const JOB_LABEL = JOB_TYPE_LABEL;
 
@@ -316,33 +257,4 @@ export class MockServer {
   createJob(s: Study, type: JobType, params: Record<string, unknown>): MockResp {
     return createJobFor(this, s, type, params);
   }
-}
-
-/** fetch 대체 함수 생성 */
-export function createMockFetch(server: MockServer, realFetch?: typeof fetch): typeof fetch {
-  return async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://mock.local");
-    const prefix = "/physicsai/api";
-    if (!url.pathname.startsWith(prefix)) {
-      if (realFetch) return realFetch(input, init);
-      return new Response("not found", { status: 404 });
-    }
-    const method = (init?.method ?? "GET").toUpperCase();
-    const headers = new Headers(init?.headers);
-    let body: Record<string, unknown> | null = null;
-    if (typeof init?.body === "string") body = JSON.parse(init.body);
-    const r = server.handle(method, url.pathname.slice(prefix.length) || "/", url.searchParams, body, headers);
-    const h = new Headers(r.headers);
-    if (r.status === 304) return new Response(null, { status: 304, headers: h });
-    if (r.bytes !== undefined) {
-      h.set("Content-Type", r.contentType ?? "application/octet-stream");
-      return new Response(r.bytes.slice().buffer as ArrayBuffer, { status: r.status, headers: h });
-    }
-    if (r.text !== undefined) {
-      h.set("Content-Type", r.contentType ?? "text/plain");
-      return new Response(r.text, { status: r.status, headers: h });
-    }
-    h.set("Content-Type", "application/json");
-    return new Response(JSON.stringify(r.body ?? null), { status: r.status, headers: h });
-  };
 }

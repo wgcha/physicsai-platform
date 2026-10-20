@@ -245,6 +245,10 @@ class ResourcesResponse(Resp):
     # GPU 조회 상태(phase3 D3-45): OK | NOT_FOUND(nvidia-smi 못 찾음) | ERROR(실행 실패). 이전 워커 표본은 null
     gpu_status: Literal["OK", "NOT_FOUND", "ERROR"] | None = None
     gpu_message: str | None = None
+    # GPU 조회 실패 대응(phase3 §24.3 S19): 연속 실패 수·마지막 조회 시각·다음 조회 시각(간격을 늘린 중일 때만). 옛 표본은 null
+    gpu_fail_streak: int | None = None
+    gpu_sampled_at: datetime | str | None = None
+    gpu_next_query_at: datetime | str | None = None
     job: ResourceJob | None = None
     limits: ResourceLimits
 

@@ -118,6 +118,9 @@
 - 2026-10-19: S17 성능 정의(템플릿 응답 확장 H3D+CURVE, perf:<NAME>)·다목적 내장 최적화(파레토 전선 기본+가중 추천 슬라이더, ParEGO+HVI, HV 수렴), migration 0014, S16 뒤 병합 (근거: 사용자 VOC·결정, s17_multiobj.md §22, D3-65)
 - 2026-10-19: S18 ① 학습 DOE 플랫폼 동시 생성(기본, run_parallel 4) + hstbatch 호환 모드 무변경, 형상 경계 run_chain(native 교체 지점), migration 0015 (근거: 사용자 VOC·결정 'HST에 힘쓰지 말자', s18_doe_parallel.md §23, D3-66)
 - 2026-10-19: S19 후속 — GPU 조회 제한 시간·원인 표시, ④ 일괄 예측 GPU 레인 동시 예측(같은 배치만, 기본 2), ⑤ perf 서버 계산, migration 없음 (근거: 사용자 승인 '예약시간때 다 해바', s19_followup.md §24, D3-67)
+- 2026-10-20: S19 ④ GPU 동시 예측(레인) 철회 — ④는 1개씩 순차 유지, GPU 조회 제한 시간·원인 표시와 ⑤ perf 서버 계산만 반영 (근거: 사용자 결정 'gpu그만해', Verifier High·Medium, s19_followup.md 변경 메모 ⑩)
+- 2026-10-20: S19 R-B·R-F 300줄 분할·batch_matrix→sampling 이동(재노출, 동작 불변) 반영 (근거: s19_followup.md §24.11, Verifier AST 대조 Pass)
+- 2026-10-20: 워커 세션 0(작업 스케줄러 Background)에서 NVML 조회 실패는 원인 문구로 표시하고 Background 유지(옵션 A), hpc none 경고 문구를 'HPC 제출 미설정'으로 (근거: 이슈 #8, 사용자 결정)
 
 ## 2026-10-17 (native 형상 엔진 R1 모핑 — Plan 계약, contracts/geometry-engine.md)
 

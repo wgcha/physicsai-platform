@@ -36,7 +36,7 @@ export function synthDesignMap(rt: ResultTable): DesignMap {
     tbl: isOkState(x.state) ? x.responses : null,
   }));
   const succ = runs.filter((r) => r.state === "SUCCEEDED").length;
-  return { batch_id: rt.origin.id, label: rt.origin.label, status: "DONE", parameters, series, metrics, runs, counts: { total: runs.length, succeeded: succ, no_curve: 0, no_resp: 0 } };
+  return { batch_id: rt.origin.id, label: rt.origin.label, status: "DONE", parameters, series, metrics, runs, counts: { total: runs.length, succeeded: succ, no_curve: 0, no_resp: 0, spec_changed: 0 }, reason_text: {} };
 }
 
 /** 단독 보기용 DesignMap */

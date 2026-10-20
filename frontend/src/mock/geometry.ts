@@ -189,7 +189,7 @@ function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, lab
     responses: [], sample_count: 0, sample_has_measured: false, cad_file_name: "cushion_base.step", starter_name: "cushion_0000.rad",
     input_kind: "assembly", assem_rel: "radioss_assem", tpl_params: [], origin: "FOLDER", label, is_current: true, train_doe_id: null,
     registered_by_name: srv.me?.display_name ?? "김연구", registered_at: new Date().toISOString(), display: null, warnings: [],
-    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false },
+    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING" },
     param_map_status: null,
   } as ParamSet;
 }
@@ -325,7 +325,7 @@ export function discoverNative(path: string): MockResp {
   const chk = inspectPath("PARAM_SET", path);
   if (chk.status !== 200) return chk;
   const out: ParamSetDiscover = {
-    path, engine: "native", tpl: [], selected_tpl: null, cad: [], radioss_assem: [], parameters_source: null, parameters_file: null,
+    path, engine: "native", kind: "solid", tpl: [], selected_tpl: null, cad: [], radioss_assem: [], parameters_source: null, parameters_file: null,
     parameters: [], samples: null, responses: null, problems: [], notes: [], truncated: false, scanned: 38,
   };
   if (/noinc/i.test(path)) {
@@ -375,9 +375,9 @@ export function finishGeometry(srv: MockServer, j: Job) {
       ps.param_map_status = "draft";
     } else if (p.mode === "props_scan" && rec) {
       rec.propsScanned = true;
-      ps.native = { ...(ps.native ?? { prep_status: "READY", feature_count: 0, shell_only: false }), props_scanned: true };
+      ps.native = { ...(ps.native ?? { prep_status: "READY", feature_count: 0, shell_only: false, kind: "solid", view_status: "MISSING" }), props_scanned: true };
     } else {
-      ps.native = { ...(ps.native ?? { feature_count: 0, props_scanned: false, shell_only: false }), prep_status: "READY", prep_reason: null };
+      ps.native = { ...(ps.native ?? { feature_count: 0, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING" }), prep_status: "READY", prep_reason: null };
     }
     j.result = { param_set_id: ps.id };
   }

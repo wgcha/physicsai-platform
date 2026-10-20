@@ -99,11 +99,72 @@ export interface paths {
         };
         /**
          * Media Content
-         * @description 컨투어 이미지·동영상 파일. HTTP Range(단일 범위) → 206 + Content-Range(브라우저 <video> 탐색), 범위 밖 416.
+         * @description 컨투어 이미지·동영상·형상/컨투어 3D GLB·프레임 파일. HTTP Range(단일 범위) → 206 + Content-Range, 범위 밖 416.
+         *     정리된 서버측 캐시(미리보기·3D 컨투어)는 410 ARTIFACT_EXPIRED.
          */
         get: operations["media_content_physicsai_api_artifacts__artifact_id__media_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/contour3d": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Contour3D
+         * @description 결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(LIGHT). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.
+         */
+        post: operations["create_contour3d_physicsai_api_contour3d_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/contour3d/{contour_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Contour3D
+         * @description 3D 컨투어 상태·진행 단계(대기·H3D 읽기·형상·프레임 변환·완료·실패)·예상 시간·결과 산출물 id.
+         */
+        get: operations["get_contour3d_physicsai_api_contour3d__contour_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/contour3d/{contour_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Contour3D
+         * @description 대기 안내 화면 [취소](power): 작업 취소 → CANCELED(캐시 안 함). 끝난 생성은 409 JOB_TERMINAL.
+         */
+        post: operations["cancel_contour3d_physicsai_api_contour3d__contour_id__cancel_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -855,6 +916,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/param-sets/{ps_id}/previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Preview
+         * @description 형상 미리보기(power): 캐시 적중 200(cache_hit) | 202 GEOM_PREVIEW(레인 PREVIEW, DOE 중에도 실행). 429 PREVIEW_BUSY.
+         */
+        post: operations["create_preview_physicsai_api_param_sets__ps_id__previews_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/param-sets/{ps_id}/props": {
         parameters: {
             query?: never;
@@ -948,6 +1029,26 @@ export interface paths {
         };
         /** Samples */
         get: operations["samples_physicsai_api_param_sets__ps_id__samples_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/param-sets/{ps_id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Param Set View
+         * @description 공칭 3D 뷰(NP_VIEW 결과): status READY면 GLB(`/artifacts/{glb_artifact_id}/media`)·manifest(`/content`). altair 세트 409 VIEW_NATIVE_ONLY.
+         */
+        get: operations["param_set_view_physicsai_api_param_sets__ps_id__view_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1108,6 +1209,26 @@ export interface paths {
          * @description 단일 예측 상세: 목록 행 + 최근접·응답 표·경로(없으면 null)·표시 설정. 일괄 하위·다른 유형은 404 NOT_PREDICT_RUN.
          */
         get: operations["get_predict_run_physicsai_api_predict_runs__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/previews/{preview_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Preview
+         * @description 미리보기 상태·결과(화면은 실행 중 0.5초 간격 폴링, 종료 상태에서 멈춤).
+         */
+        get: operations["get_preview_physicsai_api_previews__preview_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1744,6 +1865,26 @@ export interface paths {
         put?: never;
         /** Generate Tpl */
         post: operations["generate_tpl_physicsai_api_studies__study_id__train_tpl_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/train/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Train View
+         * @description ①-1·①-2 공칭 3D 뷰(TX_VIEW 결과, 미리보기 없음 — preview_available=false). 학습 설정 없음 404.
+         */
+        get: operations["train_view_physicsai_api_studies__study_id__train_view_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2536,6 +2677,119 @@ export interface components {
             /** State */
             state: string;
         };
+        /** Contour3d */
+        Contour3d: {
+            /** Bytes */
+            bytes?: number | null;
+            /**
+             * Cache Hit
+             * @default false
+             */
+            cache_hit: boolean;
+            /** Code */
+            code?: string | null;
+            /** Created At */
+            created_at?: unknown;
+            /** Display */
+            display?: {
+                [key: string]: unknown;
+            } | null;
+            /** Finished At */
+            finished_at?: unknown;
+            /** Frames */
+            frames?: number | null;
+            /** Frames Artifact Id */
+            frames_artifact_id?: string | null;
+            /** Glb Artifact Id */
+            glb_artifact_id?: string | null;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Manifest Artifact Id */
+            manifest_artifact_id?: string | null;
+            /** Message Ko */
+            message_ko?: string | null;
+            /** Nodes */
+            nodes?: number | null;
+            progress?: components["schemas"]["Contour3dProgress"] | null;
+            /** Result Status */
+            result_status?: ("OK" | "FAIL") | null;
+            /** Source Kind */
+            source_kind: string;
+            /** Source Ref */
+            source_ref: {
+                [key: string]: unknown;
+            };
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "CANCELED" | "EXPIRED";
+            /** Timing */
+            timing?: {
+                [key: string]: unknown;
+            } | null;
+        };
+        /**
+         * Contour3dCreate
+         * @description `POST /contour3d` — 열 때 생성(해석·예측 완료 시 자동 생성 안 함).
+         *     source_ref: PREDICT_H3D = {job_id}(성공한 PREDICT), SOLVER_H3D = {fem_verification_id} 또는 {study_id, h3d_rel}(Study 기준 .h3d
+         *     상대 경로 — ① run 결과 등).
+         */
+        Contour3dCreate: {
+            display?: components["schemas"]["Contour3dDisplay"] | null;
+            /**
+             * Source Kind
+             * @enum {string}
+             */
+            source_kind: "SOLVER_H3D" | "PREDICT_H3D";
+            /** Source Ref */
+            source_ref: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * Contour3dDisplay
+         * @description 표시 값(생략 = 기존 컨투어 표시 설정 결정 순서 결과). 범례는 뷰어가 manifest min·max로 정한다.
+         */
+        Contour3dDisplay: {
+            /** Avgmode */
+            avgmode?: string | null;
+            /** Component */
+            component?: string | null;
+            /** Field */
+            field?: string | null;
+        };
+        /**
+         * Contour3dProgress
+         * @description 대기 안내 화면용 진행 단계(§13.6): phase = waiting(대기) | reading_h3d(H3D 읽기) | geometry(형상) | frames(프레임 변환) |
+         *     done(완료) | failed(실패) | canceled(취소). estimate_s = 같은 원본 종류 최근 소요 평균(없으면 null → 화면 "수 분").
+         */
+        Contour3dProgress: {
+            /**
+             * Can Cancel
+             * @default false
+             */
+            can_cancel: boolean;
+            /** Elapsed S */
+            elapsed_s?: number | null;
+            /** Estimate S */
+            estimate_s?: number | null;
+            /** Label */
+            label?: string | null;
+            /** Percent */
+            percent?: number | null;
+            /**
+             * Phase
+             * @enum {string}
+             */
+            phase: "waiting" | "reading_h3d" | "geometry" | "frames" | "done" | "failed" | "canceled" | "expired";
+            /** Phase Label */
+            phase_label: string;
+            /** Step Key */
+            step_key?: string | null;
+        };
         /** Curation */
         Curation: {
             /**
@@ -2684,6 +2938,13 @@ export interface components {
             metrics: components["schemas"]["DesignMapMetric"][];
             /** Parameters */
             parameters: components["schemas"]["DesignMapParameter"][];
+            /**
+             * Reason Text
+             * @default {}
+             */
+            reason_text: {
+                [key: string]: string;
+            };
             /** Runs */
             runs: components["schemas"]["DesignMapRun"][];
             /** Series */
@@ -2697,6 +2958,11 @@ export interface components {
             no_curve: number;
             /** No Resp */
             no_resp: number;
+            /**
+             * Spec Changed
+             * @default 0
+             */
+            spec_changed: number;
             /** Succeeded */
             succeeded: number;
             /** Total */
@@ -2725,6 +2991,8 @@ export interface components {
             label: string;
             /** Needs Series */
             needs_series: boolean;
+            /** Spec Changed */
+            spec_changed?: number | null;
             /** Unit */
             unit?: string | null;
         };
@@ -2747,6 +3015,14 @@ export interface components {
             } | null;
             /** Doe No */
             doe_no: number;
+            /** Perf */
+            perf?: {
+                [key: string]: number | null;
+            } | null;
+            /** Perf Reason */
+            perf_reason?: {
+                [key: string]: string;
+            } | null;
             /** Resp */
             resp?: {
                 [key: string]: number;
@@ -3638,6 +3914,130 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * GeomPreview
+         * @description 미리보기 1건(§6.5). 200 = 캐시 적중(cache_hit), 202 = QUEUED·RUNNING(job_id) — 화면은 `GET /previews/{id}`를 0.5초 간격으로.
+         */
+        GeomPreview: {
+            /**
+             * Cache Hit
+             * @default false
+             */
+            cache_hit: boolean;
+            /** Category */
+            category?: string | null;
+            /** Code */
+            code?: string | null;
+            /** Created At */
+            created_at?: unknown;
+            /**
+             * Fe
+             * @default off
+             */
+            fe: string;
+            /** Fe Code */
+            fe_code?: string | null;
+            /** Fe Glb Artifact Id */
+            fe_glb_artifact_id?: string | null;
+            /** Fe Status */
+            fe_status?: string | null;
+            /** Finished At */
+            finished_at?: unknown;
+            /** Glb Artifact Id */
+            glb_artifact_id?: string | null;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Manifest Artifact Id */
+            manifest_artifact_id?: string | null;
+            /** Message Ko */
+            message_ko?: string | null;
+            /** Param Set Id */
+            param_set_id: string;
+            /** Result Status */
+            result_status?: ("OK" | "FAIL") | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "CANCELED" | "EXPIRED";
+            timing?: components["schemas"]["GeomPreviewTiming"] | null;
+            /** Values */
+            values: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * GeomPreviewCreate
+         * @description `POST /param-sets/{id}/previews`: 대표 파라미터 이름 → 값(빠진 이름은 공칭). fe 생략 = off(화면은 off·check만).
+         */
+        GeomPreviewCreate: {
+            /**
+             * Fe
+             * @default off
+             * @enum {string}
+             */
+            fe: "off" | "check";
+            /** Values */
+            values?: {
+                [key: string]: number;
+            };
+        };
+        /** GeomPreviewTiming */
+        GeomPreviewTiming: {
+            /** Check S */
+            check_s?: number | null;
+            /** Morph S */
+            morph_s?: number | null;
+            /** Tess S */
+            tess_s?: number | null;
+            /** Total S */
+            total_s?: number | null;
+            /** Update S */
+            update_s?: number | null;
+        };
+        /**
+         * GeomView
+         * @description 공칭 3D 뷰(④ 세트 `GET /param-sets/{id}/view`, ① `GET /studies/{id}/train/view`). GLB·manifest는 artifacts로 받는다
+         *     (`/artifacts/{glb_artifact_id}/media` model/gltf-binary, `/artifacts/{manifest_artifact_id}/content` JSON).
+         */
+        GeomView: {
+            /**
+             * Available
+             * @default false
+             */
+            available: boolean;
+            /** Engine Version */
+            engine_version?: string | null;
+            /** Glb Artifact Id */
+            glb_artifact_id?: string | null;
+            /**
+             * Kind
+             * @default solid
+             * @enum {string}
+             */
+            kind: "solid" | "shell";
+            /** Manifest Artifact Id */
+            manifest_artifact_id?: string | null;
+            /** Param Set Id */
+            param_set_id?: string | null;
+            /**
+             * Preview Available
+             * @default false
+             */
+            preview_available: boolean;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "READY" | "MISSING" | "FAILED";
+            tess?: components["schemas"]["ViewTess"] | null;
+            /** Train Setup Id */
+            train_setup_id?: string | null;
+        };
         /** GpuInfo */
         GpuInfo: {
             /** Mem Total Mb */
@@ -4189,6 +4589,12 @@ export interface components {
              * @default 0
              */
             feature_count: number;
+            /**
+             * Kind
+             * @default solid
+             * @enum {string}
+             */
+            kind: "solid" | "shell";
             /** Prep Reason */
             prep_reason?: string | null;
             /**
@@ -4206,6 +4612,12 @@ export interface components {
              * @default false
              */
             shell_only: boolean;
+            /**
+             * View Status
+             * @default MISSING
+             * @enum {string}
+             */
+            view_status: "READY" | "MISSING" | "FAILED";
         };
         /** NativeWarning */
         NativeWarning: {
@@ -4618,6 +5030,8 @@ export interface components {
             geom_options?: {
                 [key: string]: unknown;
             } | null;
+            /** Kind */
+            kind?: ("solid" | "shell") | null;
             /** Label */
             label?: string | null;
             /** Mode */
@@ -4647,6 +5061,8 @@ export interface components {
         ParamSetDiscoverRequest: {
             /** Engine */
             engine?: ("altair" | "native") | null;
+            /** Kind */
+            kind?: ("solid" | "shell") | null;
             /** Path */
             path: string;
             /** Tpl */
@@ -4662,6 +5078,12 @@ export interface components {
              * @enum {string}
              */
             engine: "altair" | "native";
+            /**
+             * Kind
+             * @default solid
+             * @enum {string}
+             */
+            kind: "solid" | "shell";
             /** Notes */
             notes: components["schemas"]["DiscoverProblem"][];
             /** Parameters */
@@ -4729,7 +5151,7 @@ export interface components {
             /** Prop Id */
             prop_id?: number | null;
             /** Source */
-            source?: "prop" | null;
+            source?: ("prop" | "shell") | null;
             /**
              * Unit
              * @default
@@ -5284,8 +5706,14 @@ export interface components {
             cpu_pct?: number | null;
             /** Gpu */
             gpu: components["schemas"]["GpuInfo"][];
+            /** Gpu Fail Streak */
+            gpu_fail_streak?: number | null;
             /** Gpu Message */
             gpu_message?: string | null;
+            /** Gpu Next Query At */
+            gpu_next_query_at?: string | null;
+            /** Gpu Sampled At */
+            gpu_sampled_at?: string | null;
             /** Gpu Status */
             gpu_status?: ("OK" | "NOT_FOUND" | "ERROR") | null;
             job?: components["schemas"]["ResourceJob"] | null;
@@ -6222,6 +6650,7 @@ export interface components {
         };
         /** StatusFeatures */
         StatusFeatures: {
+            contour3d?: components["schemas"]["FeatureState"] | null;
             contour_capture?: components["schemas"]["FeatureState"] | null;
             curation_h3d: components["schemas"]["FeatureState"];
             curation_t01: components["schemas"]["FeatureState"];
@@ -6230,6 +6659,9 @@ export interface components {
             fem_verify?: components["schemas"]["FeatureState"] | null;
             fem_verify_rebuild?: components["schemas"]["FeatureState"] | null;
             geometry_native?: components["schemas"]["FeatureState"] | null;
+            geometry_native_shell?: components["schemas"]["FeatureState"] | null;
+            geometry_view?: components["schemas"]["FeatureState"] | null;
+            geometry_view_shell?: components["schemas"]["FeatureState"] | null;
             optimize: components["schemas"]["FeatureState"];
             optimize_builtin?: components["schemas"]["FeatureState"] | null;
             predict?: components["schemas"]["FeatureState"] | null;
@@ -7151,6 +7583,13 @@ export interface components {
             /** Version */
             version: number;
         };
+        /** ViewTess */
+        ViewTess: {
+            /** Angular Deg */
+            angular_deg?: number | null;
+            /** Linear Mm */
+            linear_mm?: number | null;
+        };
     };
     responses: never;
     parameters: never;
@@ -7429,6 +7868,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -7459,8 +7907,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/octet-stream": unknown;
                     "image/gif": unknown;
                     "image/png": unknown;
+                    "model/gltf-binary": unknown;
                     "video/mp4": unknown;
                     "video/x-msvideo": unknown;
                 };
@@ -7471,8 +7921,10 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/octet-stream": unknown;
                     "image/gif": unknown;
                     "image/png": unknown;
+                    "model/gltf-binary": unknown;
                     "video/mp4": unknown;
                     "video/x-msvideo": unknown;
                 };
@@ -7504,6 +7956,15 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
+            /** @description Gone */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
             /** @description Request Entity Too Large */
             413: {
                 headers: {
@@ -7522,6 +7983,218 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_contour3d_physicsai_api_contour3d_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Contour3dCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Contour3d"];
+                };
+            };
+            /** @description 생성 중 — progress(대기 안내)·GET /contour3d/{id} 폴링 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Contour3d"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_contour3d_physicsai_api_contour3d__contour_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contour_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Contour3d"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_contour3d_physicsai_api_contour3d__contour_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                contour_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Contour3d"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8116,6 +8789,8 @@ export interface operations {
                 job_type?: string | null;
                 limit?: number | null;
                 cursor?: string | null;
+                /** @description 형상 미리보기(GEOM_PREVIEW) 포함 */
+                include_preview?: boolean;
             };
             header?: never;
             path?: never;
@@ -9699,6 +10374,86 @@ export interface operations {
             };
         };
     };
+    create_preview_physicsai_api_param_sets__ps_id__previews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeomPreviewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeomPreview"];
+                };
+            };
+            /** @description QUEUED·RUNNING — GET /previews/{id}로 폴링 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeomPreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     props_get_physicsai_api_param_sets__ps_id__props_get: {
         parameters: {
             query?: never;
@@ -10017,6 +10772,73 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    param_set_view_physicsai_api_param_sets__ps_id__view_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeomView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10484,6 +11306,73 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_preview_physicsai_api_previews__preview_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeomPreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12531,6 +13420,73 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    train_view_physicsai_api_studies__study_id__train_view_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GeomView"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

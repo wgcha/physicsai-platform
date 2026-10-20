@@ -37,7 +37,7 @@ export function runValue(run: DesignMapRun, metricId: string, series: string | n
   if (kind === "curve") v = series ? (run.curve?.[series] as Record<string, unknown> | undefined)?.[key] : null;
   else if (kind === "resp") v = run.resp?.[key];
   else if (kind === "tbl") v = run.tbl?.[key];
-  else if (kind === "perf") v = (run as { perf?: Record<string, unknown> }).perf?.[key]; // S17 D3-65 보강 2: 성능(프런트 합성)
+  else if (kind === "perf") v = run.perf?.[key]; // S19 §24.5: 성능(서버 design-map이 runs[].perf로 준다)
   return finite(v) ? v : null;
 }
 

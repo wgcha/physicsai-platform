@@ -1,3 +1,5 @@
+> **phase3.md §24(변경 메모 D3-67, ④ GPU 동시 예측은 철회)로 이관됨(2026-10-20).** 기준은 phase3.md이고, 이 파일은 상세 원문(알고리즘·표·시험 목록·파일 소유)으로 남긴다.
+
 # 계약: S19 후속 — GPU 조회 실패 대응·일괄 예측 GPU 동시 예측·⑤ perf 서버 계산 — phase3 §24
 
 > 이 문서는 phase3.md §24와 변경 메모 D3-67입니다. s15~s18과 같은 사정으로 별도 파일(`docs/contracts/s19_followup.md`)로 두며, 이번 순서의 문서 이관(D)에서 phase3.md 본문과 변경 메모 목록으로 옮깁니다. 절 번호·용어·원칙은 phase3.md §11.5(prepared)·§14.5(④ B·`run_parallel`·종료 훅)·D3-37(예측 성공 = h3d)·D3-45(GPU 조회 탐색)·D3-53(그룹 메모리 판정), [s16_voc.md](s16_voc.md) §21(실행 목록 V1·FEM 검증), [s17_multiobj.md](s17_multiobj.md) §22(성능 `perf:`·`performance.perf_value`)를 따릅니다.
@@ -439,3 +441,6 @@ while ($true) {
   - ⑦ migration 없음(head 0015 유지), 새 job_type·step·라우트 없음. 새 설정 11개, 실패 코드 `GPU_OOM`.
   - ⑧ 시험 V3-S19-1~13(가짜 edspy barrier·GPU 상태 폴더·OOM 1회, 시각 비율 단언 없음), 서버 확인 E0-8-1~3·E4-19-1~6.
   - ⑨ 계약 없는 승인 항목(S16 minor 4건·문구·시험·그림 = M0 진행 중, 300줄 분할·batch_matrix sampling 이동 = R-B·R-F, 문서 이관 = D)은 §24.11 순서에 둡니다. 분할은 기능 변경과 Verifier 뒤 마지막입니다.
+- 2026-10-20 구현 반영 변경:
+  - ⑩ **④ GPU 동시 예측(B-LANE·F-LANE) 철회** — 사용자 결정. §24.4(레인)·§24.6 predict_batch 8키·V3-S19-5~10·E4-19는 무효입니다. ④는 S18과 같이 SLOT 단일 FIFO로 1개씩 예측합니다. 구현 중 Verifier가 동시 OOM 교착(High)과 free/프로세스별 조회 시차로 인한 과입장(Medium)을 찾았고, 난도 대비 효용이 낮아 걷어냈습니다. 유지 범위는 ① GPU 조회 제한 시간·원인 표시(B-GPU·F-GPU)와 ⑥ perf 서버 계산(B-PERF·F-PERF)입니다.
+  - ⑪ V3-S19-11 예외 1건: V-SM-6 `test_no_timeout_key_in_schema`는 `worker.gpu_query_timeout_s`를 제외합니다(작업 실행 시간 한도 없음이라는 취지는 유지). V3-S9 시험은 무수정입니다.

@@ -276,3 +276,30 @@ Impl-Frontend, 브랜치 `claude/phase3`(기준 `ae0985a`). 대상: `frontend/sr
 
 - 예외: 없음(`frontend/src` 300줄 초과 = 0, `schema.d.ts` 생성물 제외). `Phase2Mock.handle`은 없앰(라우트가 `ROUTES`로 이동, 호출부 없음). `manage.ts`·`manageStorage.ts`는 머리 주석만 갱신.
 - 검증: `scripts/test-all.sh` 통과(프런트 vitest 139·tsc), `npm run build`·`build:mock` 성공. **차등 추적**: 시각 고정(fake Date)으로 6개 구성(admin·power+PBS·PBS 취소 실패·general·anon·기능 비활성+demo)에서 요청 약 2,100개(GET 전 경로·쓰기·작업 19종 생성·tick 30회·finishAll·전 산출물 본문)와 최종 상태(작업·산출물·알림·`p2` 전 필드·`idn`·`seq`)를 JSON으로 덤프 → 분할 전후 **바이트 동일**(6.6 MB, 임시 시험 파일은 삭제). 스크린샷(phase2·phase3·1차) 재생성 픽셀 비교: 전후 차이는 같은 코드 두 번 실행 간 차이(현재 시각·자원 게이지·상대 시각) 이하 — 화면 변화 없음. 저장소의 `screenshots/`는 갱신하지 않음.
+
+## 8. R-B·R-F (2026-10-20) S19 후 300줄 분할과 `batch_matrix`의 sampling 이동
+
+계약: [phase3.md](contracts/phase3.md) §24 / [s19_followup.md](contracts/s19_followup.md) §24.11 5단계. 브랜치 `claude/phase3`, 기능 변경(S12~S19)과 Verifier가 끝난 **뒤** 마지막에 한다. R-B(백엔드·워커)와 R-F(프런트)는 서로 파일이 겹치지 않아 병렬로 진행하고, 문서 이관(D)과도 병렬이다(docs만). 결과(2026-10-20, Verifier 통과): batch_matrix → `physicsai_core/sampling/{matrix,matrix_rows,matrix_basic,matrix_designs,matrix_sobol}.py`(옛 경로 재노출), 백엔드·워커 25파일 → 새 모듈 46개, 프런트 8파일 → 새 파일 31개. 운영 .py·.ts/.tsx 300줄 초과 0(예외: db/schema_0001.py, CSS 3개, deploy/setup_config.py·packages/simdash_adapters hpc/scx.py는 범위 밖). openapi 바이트 동일, 시험 무수정.
+
+**불변 조건(§0·§6·§7과 같음)**: 동작 불변 · 공개 import 경로는 원래 모듈의 재노출로 유지(호출부 무수정) · `backend/openapi.json`·`operation_ids.txt` 바이트 동일 · DB·migration 무변경 · **기존 시험 무수정**(시험 파일 자체를 분할하는 경우만 예외이고 기대값·검사 범위는 그대로). 순환 방지: 재노출하는 쪽이 항상 위(분할된 하위 모듈은 원래 모듈을 import하지 않음).
+
+### R-B 백엔드·워커
+
+| 대상(전 줄 수) | 처리 |
+|---|---|
+| `stage4_predict/batch_matrix.py`(759) | **`physicsai_core/sampling/` 하위로 이동**(표본 행렬 생성 — 이미 있는 `sampling/matrix.py`가 재노출하던 것을 본체로 옮기고 의미 단위로 나눔). `stage4_predict/batch_matrix.py`는 옛 import 경로(`batch_matrix.build_matrix`·`run_key_for` 등)를 재노출하는 얇은 파일로 남긴다. 표본 방식 골든(V3-S9-5, V3-S15-*)은 무수정 통과해야 한다 |
+| 300줄 초과 파일(S19 시점 약 25개) | `services/fem_verify.py`(649), `steps/stage5_optimize/surrogate.py`(614), `stage4_predict/param_discover.py`(592), `steps/_scx.py`(529), `surrogate/mo_infill.py`(503), `steps/stage4_predict/fem_compare.py`(455), `surrogate/dataset.py`(441), `services/predict_batches.py`(419), `surrogate/infill.py`(396), `schemas/surrogate_opt.py`(383), `commands.py`(367), `schemas/predict_batch.py`, `services/surrogate_opts.py`, `paths.py`, `services/stage4_predict.py`, `step_parallel.py`, `capture.py`, `repositories/surrogate_opts.py`, `limiter/windows_job.py`, `schemas/fem_verify.py`, `sampling/designs.py`, `config/validate.py`, `services/surrogate_opt_problem.py`, `steps/stage4_predict/predict.py`와 S19로 300줄을 넘긴 파일. 분할 방식은 §6과 같다(재노출, 클래스 메서드 묶음은 mixin) |
+| 제외 | `db/schema_0001.py`(migration 0001 스냅숏, §6 예외) |
+
+### R-F 프런트
+
+| 대상 | 처리 |
+|---|---|
+| 300줄 초과 `.ts/.tsx` | `stages/stage4/batch/BatchResult.tsx`, `lib/sampling.ts`, `api/types.ts`, `mock/{predictBatch,femVerify,surrogateOpt,sampling,server}.ts`(§7 F5 규칙: 상태는 옮기지 않고 라우트 등록만 분배)와 S19로 300줄을 넘긴 파일. 생성물 `api/generated/schema.d.ts`는 제외 |
+
+### 검증
+
+- `scripts/test-all.sh` 통과(백엔드·워커 pytest 수집 개수 동일, 프런트 vitest·tsc), `npm run build`·`build:mock` 성공.
+- `git diff --stat backend/openapi.json backend/tests/data/operation_ids.txt` 0, 프런트 `npm run gen:api` 후 `schema.d.ts` 변경 없음.
+- 이동 전후 줄 대조(원래 파일의 코드 줄이 새 파일들에 빠짐없이 존재), 재노출 경로 import 시험(`batch_matrix`, `sampling`) 통과.
+- 프런트는 §7처럼 시각 고정 요청 차등 추적으로 모의 서버 응답 동일 확인.

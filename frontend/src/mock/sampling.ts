@@ -1,8 +1,11 @@
 // S15 목(phase3.md §20): 표본 방식 7개 조합 계산(backend/physicsai_core/sampling 흉내 — 같은 run 수·같은 meta 모양, 값은 목용 간이 알고리즘)과
 // 미리보기·상세·목록 `sampling`·영향도 등급(§20.7 문구). Sobol은 스크램블 Halton(서버는 scipy)이고 "이어서 추가 = 앞 2n개의 뒤 n개"는 같다.
-import type { BatchNote, BatchProblem, BatchSampling, BatchSamplingBrief, BatchSource, ParamSet } from "../api/types";
-import { SAMPLING_LABEL, expectedRuns, isSamplingKind, recommendedCount, sobolCounts } from "../lib/sampling";
+// R-F 분할(동작 불변): 설계 코드값(LHS·Halton·요인·PB·BBD·CCD) samplingCodes · sampling 응답·영향도 등급 samplingInfo. 옛 import 경로는 아래에서 재노출한다.
+import type { BatchNote, BatchProblem, BatchSource, ParamSet } from "../api/types";
+import { expectedRuns, recommendedCount, sobolCounts } from "../lib/sampling";
 import { rng } from "./base";
+import { LETTERS, batchLabel, bbdCode, ccdCode, fractional, isPaley, lhsUnit, pbCode, quality, round6, score, sobolUnit } from "./samplingCodes";
+export { REF_NOTES, doeInfluence, mockSampling, mockBrief } from "./samplingInfo";
 
 export const NEW_KINDS = ["lhs_opt", "sobol", "fullfact", "fracfact", "pb", "bbd", "ccd"] as const;
 export type NewKind = (typeof NEW_KINDS)[number];
@@ -22,136 +25,6 @@ export interface MockDesign {
   problems: BatchProblem[];
   notes: BatchNote[];
   meta: Record<string, unknown>;
-}
-
-const round6 = (v: number) => Number(v.toPrecision(6));
-const batchLabel = (no: number) => `B-${String(no).padStart(3, "0")}`;
-const LETTERS = "ABCDEFGHJKL";
-
-// ------------------------------------------------------------------ 품질·LHS 계열
-function quality(U: number[][]): { min_dist: number; max_abs_corr: number } {
-  const n = U.length;
-  const k = U[0]?.length ?? 0;
-  let md = Infinity;
-  for (let i = 0; i < n; i++)
-    for (let l = i + 1; l < n; l++) {
-      let d = 0;
-      for (let j = 0; j < k; j++) d += (U[i][j] - U[l][j]) ** 2;
-      md = Math.min(md, Math.sqrt(d));
-    }
-  let mc = 0;
-  for (let a = 0; a < k; a++)
-    for (let b = a + 1; b < k; b++) {
-      const ma = U.reduce((s, r) => s + r[a], 0) / n;
-      const mb = U.reduce((s, r) => s + r[b], 0) / n;
-      let sab = 0, saa = 0, sbb = 0;
-      for (const r of U) (sab += (r[a] - ma) * (r[b] - mb)), (saa += (r[a] - ma) ** 2), (sbb += (r[b] - mb) ** 2);
-      mc = Math.max(mc, saa > 0 && sbb > 0 ? Math.abs(sab / Math.sqrt(saa * sbb)) : 0);
-    }
-  return { min_dist: Number((isFinite(md) ? md / Math.sqrt(Math.max(1, k)) : 0).toFixed(4)), max_abs_corr: Number(mc.toFixed(4)) };
-}
-
-function lhsUnit(n: number, k: number, r: () => number): number[][] {
-  const U = Array.from({ length: n }, () => new Array<number>(k).fill(0));
-  for (let j = 0; j < k; j++) {
-    const perm = Array.from({ length: n }, (_, i) => i);
-    for (let i = n - 1; i > 0; i--) {
-      const t = Math.floor(r() * (i + 1));
-      [perm[i], perm[t]] = [perm[t], perm[i]];
-    }
-    for (let i = 0; i < n; i++) U[i][j] = (perm[i] + r()) / n;
-  }
-  return U;
-}
-function score(U: number[][], criterion: "maximin" | "corr"): number {
-  if (criterion === "corr") {
-    const q = quality(U);
-    return q.max_abs_corr;
-  }
-  let s = 0;
-  for (let i = 0; i < U.length; i++)
-    for (let l = i + 1; l < U.length; l++) {
-      let d = 0;
-      for (let j = 0; j < U[0].length; j++) d += (U[i][j] - U[l][j]) ** 2;
-      s += Math.sqrt(d) ** -15;
-    }
-  return s;
-}
-
-// ------------------------------------------------------------------ Sobol 대용(스크램블 Halton)
-const PRIMES = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31];
-function radical(i: number, b: number): number {
-  let f = 1, r = 0;
-  for (let n = i; n > 0; n = Math.floor(n / b)) (f /= b), (r += f * (n % b));
-  return r;
-}
-function sobolUnit(n: number, k: number, seed: number, offset: number): number[][] {
-  const shift = Array.from({ length: k }, (_, j) => rng(seed * 101 + j * 7 + 3)());
-  return Array.from({ length: n }, (_, i) => Array.from({ length: k }, (_, j) => (radical(offset + i + 1, PRIMES[j % PRIMES.length]) + shift[j]) % 1));
-}
-
-// ------------------------------------------------------------------ 요인 설계 (코드값 -1/0/+1)
-const GEN_IV: Record<number, string> = {
-  4: "D=ABC", 5: "E=ABCD", 6: "E=ABC F=BCD", 7: "E=ABC F=BCD G=ACD", 8: "E=BCD F=ACD G=ABC H=ABD",
-  9: "F=BCDE G=ACDE H=ABDE J=ABCE", 10: "F=ABCD G=ABCE H=ABDE J=ACDE K=BCDE", 11: "F=ABC G=BCD H=CDE J=ACD K=ADE L=BDE",
-};
-const GEN_V: Record<number, string> = {
-  5: "E=ABCD", 6: "F=ABCDE", 7: "G=ABCDEF", 8: "G=ABCD H=ABEF", 9: "H=ACDFG J=BCEFG", 10: "H=ABCG J=BCDE K=ACDF", 11: "H=ABCG J=BCDE K=ACDF L=ABCDEFG",
-};
-function yates(r: number): number[][] {
-  return Array.from({ length: 2 ** r }, (_, i) => Array.from({ length: r }, (_, b) => ((i >> b) & 1 ? 1 : -1)));
-}
-function fractional(k: number, res: 4 | 5): { code: number[][]; generators: string[]; full: boolean } {
-  const g = (res === 4 ? GEN_IV : GEN_V)[k];
-  if (!g) return { code: yates(k), generators: [], full: true };
-  const gens = g.split(" ");
-  const r = k - gens.length;
-  const base = yates(r);
-  const code = base.map((row) => [...row, ...gens.map((gg) => [...gg.split("=")[1]].reduce((p, ch) => p * row[LETTERS.indexOf(ch)], 1))]);
-  return { code, generators: gens, full: false };
-}
-const isPrime = (n: number) => n > 1 && Array.from({ length: Math.floor(Math.sqrt(n)) - 1 }, (_, i) => i + 2).every((d) => n % d !== 0);
-/** N−1이 q ≡ 3 (mod 4)인 소수(q ≥ 7)이면 Paley 순환 */
-const isPaley = (N: number) => N - 1 >= 7 && isPrime(N - 1) && (N - 1) % 4 === 3;
-function pbCode(k: number, N: number): number[][] {
-  const q = N - 1;
-  if (isPaley(N)) {
-    const resid = new Set<number>();
-    for (let x = 1; x < q; x++) resid.add((x * x) % q);
-    const g = Array.from({ length: q }, (_, j) => (j === 0 ? 1 : resid.has(j) ? 1 : -1));
-    const rows = Array.from({ length: q }, (_, i) => Array.from({ length: q }, (_, j) => g[(((j - i) % q) + q) % q]));
-    rows.push(new Array(q).fill(-1));
-    return rows.map((r) => r.slice(0, k));
-  }
-  let H = [[1]];
-  while (H.length < N) H = [...H.map((r) => [...r, ...r]), ...H.map((r) => [...r, ...r.map((v) => -v)])];
-  return H.map((r) => r.slice(1, 1 + k));
-}
-function bbdCode(k: number): number[][] {
-  const out: number[][] = [];
-  for (let i = 0; i < k; i++)
-    for (let j = i + 1; j < k; j++)
-      for (const [a, b] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
-        const row = new Array<number>(k).fill(0);
-        row[i] = a;
-        row[j] = b;
-        out.push(row);
-      }
-  out.push(new Array<number>(k).fill(0));
-  return out;
-}
-function ccdCode(k: number, alpha: "face" | "inscribed"): { code: number[][]; F: number; a: number } {
-  const F = k <= 4 ? yates(k) : fractional(k, 5).code;
-  const a = alpha === "face" ? 1 : F.length ** 0.25;
-  const code = F.map((r) => r.map((v) => (alpha === "face" ? v : v / a)));
-  for (let j = 0; j < k; j++)
-    for (const s of [-1, 1]) {
-      const row = new Array<number>(k).fill(0);
-      row[j] = s;
-      code.push(row);
-    }
-  code.push(new Array<number>(k).fill(0));
-  return { code, F: F.length, a };
 }
 
 // ------------------------------------------------------------------ 조합 계산
@@ -308,59 +181,6 @@ export function mockDesign(ps: ParamSet, source: BatchSource, maxRuns: number, p
     default:
       return none();
   }
-}
-
-// ------------------------------------------------------------------ sampling(미리보기·상세·목록)·영향도 등급(§20.7)
-const REF_TEXT = {
-  table: "직접 만든 표 — 표본 분포를 알 수 없어 영향도는 참고용입니다",
-  pb: "Plackett–Burman — 주효과가 2인자 교호작용과 부분적으로 교락되어 영향도는 참고용입니다",
-  quad: "2차 응답면 설계 — 점이 중심·모서리에 몰려 곡률 효과가 선형 영향도에 작게 보일 수 있어 참고용입니다. 변수–응답 그래프로 확인하세요",
-  fracIV: "부분 요인(해상도 IV) — 2인자 교호작용끼리 교락되어 영향도는 참고용입니다(주효과는 2인자 교호작용과 교락 없음)",
-  fracV: "부분 요인(해상도 V) — 3인자 이상 교호작용과 교락되어 영향도는 참고용입니다",
-  fracIII: "부분 요인(해상도 III) — 주효과가 2인자 교호작용과 교락되어 영향도는 참고용입니다",
-  unknown: "표본 방식을 알 수 없어 영향도는 참고용입니다",
-  noDoe: "원본 ① DOE 정보를 찾을 수 없어 영향도는 참고용입니다",
-};
-export const REF_NOTES = REF_TEXT;
-
-/** ① doe_type(+options) → 등급·문구 */
-export function doeInfluence(type: string, options: Record<string, unknown> = {}): { cls: "formal" | "reference"; note: string | null } {
-  // S18 §23.4: 플랫폼 DOE의 doe_type = 방식 이름(LHS_OPT 등) → ④ 배치와 같은 등급(fracfact 해상도는 options.resolution)
-  if (isSamplingKind(type.toLowerCase())) {
-    const m = mockSampling(type, { resolution: options.resolution ?? 5 });
-    return { cls: m.influence_class as "formal" | "reference", note: m.influence_note ?? null };
-  }
-  if (["TYPE_LATINHYPERCUBE", "TYPE_SOBOL", "TYPE_FULLFACT"].includes(type)) return { cls: "formal", note: null };
-  if (type === "TYPE_FRACFACT") {
-    const r = String(options.RESOLUTION ?? "3");
-    return { cls: "reference", note: r === "4" ? REF_TEXT.fracIV : r === "5" ? REF_TEXT.fracV : REF_TEXT.fracIII };
-  }
-  return { cls: "reference", note: REF_TEXT.unknown };
-}
-
-/** 배치 DB source_kind(+meta) → sampling. doeType = TRAIN_DOE가 따르는 ① 유형(없으면 DOE 없음) */
-export function mockSampling(sourceKind: string, meta: Record<string, unknown>, opts: { doeType?: string | null; doeOptions?: Record<string, unknown>; recommended?: number | null; label?: string } = {}): BatchSampling {
-  const kind = sourceKind.toLowerCase();
-  const label = isSamplingKind(kind) ? SAMPLING_LABEL[kind] : (opts.label ?? sourceKind);
-  let cls: "formal" | "reference" = "formal";
-  let note: string | null = null;
-  if (kind === "table") ((cls = "reference"), (note = REF_TEXT.table));
-  else if (kind === "pb") ((cls = "reference"), (note = REF_TEXT.pb));
-  else if (kind === "bbd" || kind === "ccd") ((cls = "reference"), (note = REF_TEXT.quad));
-  else if (kind === "fracfact") ((cls = "reference"), (note = (meta.resolution as number) === 4 ? REF_TEXT.fracIV : REF_TEXT.fracV));
-  else if (kind === "train_doe") {
-    if (!opts.doeType) ((cls = "reference"), (note = REF_TEXT.noDoe));
-    else ({ cls, note } = doeInfluence(opts.doeType, opts.doeOptions));
-  }
-  return { kind, method: sourceKind.toUpperCase(), desc_id: kind, label, influence_class: cls, influence_note: note, recommended_count: opts.recommended ?? null, meta };
-}
-
-export function mockBrief(b: PriorBatch): BatchSamplingBrief {
-  const kind = b.source_kind.toLowerCase();
-  return {
-    kind, method: b.source_kind, label: isSamplingKind(kind) ? SAMPLING_LABEL[kind] : b.source_kind, count: Number(b.meta.count ?? b.runs.length),
-    seed: typeof b.meta.seed === "number" ? b.meta.seed : null, offset: typeof b.meta.offset === "number" ? b.meta.offset : null,
-  };
 }
 
 export { recommendedCount };
