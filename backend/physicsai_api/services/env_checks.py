@@ -62,7 +62,7 @@ def _api_items(ctx: AppContext, token: str | None, rid: str) -> list[dict[str, A
             out.append(item("auth.projects", "AUTH", "FAIL", f"{exc.code}: {exc.message}", "API", {"code": exc.code}))
     av = ctx.hpc.availability()
     if av.mode == "none":
-        out.append(item("hpc.gateway", "HPC", "WARN", "PBS 연결 안 됨", "API", {"mode": av.mode}))
+        out.append(item("hpc.gateway", "HPC", "WARN", "HPC 제출 미설정(hpc.gateway: none) — SCX를 쓰려면 관리자 매뉴얼 §16", "API", {"mode": av.mode}))
     elif av.configured:
         out.append(item("hpc.gateway", "HPC", "OK", av.message, "API", {"mode": av.mode}))
     else:

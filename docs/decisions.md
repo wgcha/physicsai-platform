@@ -120,3 +120,4 @@
 - 2026-10-19: S19 후속 — GPU 조회 제한 시간·원인 표시, ④ 일괄 예측 GPU 레인 동시 예측(같은 배치만, 기본 2), ⑤ perf 서버 계산, migration 없음 (근거: 사용자 승인 '예약시간때 다 해바', s19_followup.md §24, D3-67)
 - 2026-10-20: S19 ④ GPU 동시 예측(레인) 철회 — ④는 1개씩 순차 유지, GPU 조회 제한 시간·원인 표시와 ⑤ perf 서버 계산만 반영 (근거: 사용자 결정 'gpu그만해', Verifier High·Medium, s19_followup.md 변경 메모 ⑩)
 - 2026-10-20: S19 R-B·R-F 300줄 분할·batch_matrix→sampling 이동(재노출, 동작 불변) 반영 (근거: s19_followup.md §24.11, Verifier AST 대조 Pass)
+- 2026-10-20: 워커 세션 0(작업 스케줄러 Background)에서 NVML 조회 실패는 원인 문구로 표시하고 Background 유지(옵션 A), hpc none 경고 문구를 'HPC 제출 미설정'으로 (근거: 이슈 #8, 사용자 결정)

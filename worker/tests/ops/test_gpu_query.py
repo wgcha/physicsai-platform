@@ -127,3 +127,55 @@ def test_env_check_gpu_detect_uses_same_search(tree):
     it = env_check.gpu_item(s, None, tree.env)
     assert it["status"] == "WARN" and it["detail"]["gpu_status"] == "NOT_FOUND"
     assert it["message"].startswith("GPU를 찾지 못했습니다 — nvidia-smi를 찾지 못했습니다(시도: C:/missing/nvidia-smi.exe, nvidia-smi")
+
+
+# ---- 이슈 #8: 작업 스케줄러 Background(세션 0)에서 nvidia-smi NVML 초기화 실패 ----
+SESSION0_MSG = ("GPU 정보 조회 불가 — 워커가 백그라운드 세션(세션 0)에서 실행 중이라 nvidia-smi가 GPU 드라이버에 "
+                "접근하지 못합니다(예측 계산에는 영향 없음)")
+
+
+def _failing_smi(tree):
+    return fake_exe(tree.tmp / "fail" / "smi",
+                    "sys.stderr.write('Failed to initialize NVML: Unknown Error\\n'); sys.exit(255)")
+
+
+def test_session0_error_message_and_detail(tree, monkeypatch):
+    smi = _failing_smi(tree)
+    monkeypatch.setattr(resources, "current_session_id", lambda: 0)
+    g = resources.query_gpu_status([str(smi)], (), tree.env)
+    assert g.status == "ERROR" and g.message == SESSION0_MSG
+    assert g.detail["session_id"] == 0 and "종료코드 255" in g.detail["raw"] and "Failed to initialize NVML" in g.detail["raw"]
+    s = SimpleNamespace(worker=SimpleNamespace(gpu_query=[str(smi)]), resources=SimpleNamespace(gpu_query_candidates=[]))
+    it = env_check.gpu_item(s, None, tree.env)
+    assert it["status"] == "WARN" and it["message"] == SESSION0_MSG
+    assert it["detail"]["session_id"] == 0 and "NVML" in it["detail"]["raw"] and it["detail"]["gpu_status"] == "ERROR"
+    # GpuMonitor 경로(/resources gpu_message)와 전이 로그 1회
+    from physicsai_worker.gpu_monitor import GpuMonitor
+    s2 = SimpleNamespace(worker=SimpleNamespace(gpu_query=[str(smi)], gpu_query_timeout_s=5, resource_sample_interval_s=5,
+                                                gpu_backoff_after=3, gpu_backoff_max_s=60),
+                         resources=SimpleNamespace(gpu_query_candidates=[]))
+    snap = GpuMonitor(lambda: s2, lambda: tree.env).poll_once()
+    assert snap["status"] == "ERROR" and snap["message"] == SESSION0_MSG
+
+
+@pytest.mark.parametrize("sid", [1, None])
+def test_non_session0_keeps_original_message(tree, monkeypatch, sid):
+    smi = _failing_smi(tree)
+    monkeypatch.setattr(resources, "current_session_id", lambda: sid)
+    g = resources.query_gpu_status([str(smi)], (), tree.env)
+    assert g.status == "ERROR" and g.message.startswith("nvidia-smi 종료코드 255") and g.detail is None
+    s = SimpleNamespace(worker=SimpleNamespace(gpu_query=[str(smi)]), resources=SimpleNamespace(gpu_query_candidates=[]))
+    it = env_check.gpu_item(s, None, tree.env)
+    assert it["message"].startswith("GPU를 찾지 못했습니다 — nvidia-smi 종료코드 255") and "session_id" not in it["detail"]
+
+
+def test_session0_ok_or_not_found_unchanged(tree, monkeypatch):
+    monkeypatch.setattr(resources, "current_session_id", lambda: 0)
+    assert resources.query_gpu_status([str(tree.exes["path"])], (), tree.env).status == "OK"
+    g = resources.query_gpu_status(["C:/none/nvidia-smi.exe"], (), {"PATH": ""}, {"PATH": ""})
+    assert g.status == "NOT_FOUND" and g.detail is None
+
+
+def test_current_session_id_non_windows():
+    if os.name != "nt":
+        assert resources.current_session_id() is None

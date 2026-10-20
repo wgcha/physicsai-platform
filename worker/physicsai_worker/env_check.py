@@ -215,7 +215,9 @@ def gpu_item(s: Any, child_env: dict[str, str] | None, lookup_env: Any = None) -
         return item("gpu.detect", "GPU", "OK", f"GPU {len(g.gpus)}개", "WORKER",
                     {"gpus": [{"name": x["name"], "memory_total_mb": x.get("mem_total_mb")} for x in g.gpus],
                      "gpu_status": g.status, "exe": g.exe})
-    return item("gpu.detect", "GPU", "WARN", f"GPU를 찾지 못했습니다 — {g.message}", "WORKER", {"gpu_status": g.status, "exe": g.exe})
+    msg = g.message if g.detail else f"GPU를 찾지 못했습니다 — {g.message}"  # 세션 0 문구는 그 자체로 완결
+    return item("gpu.detect", "GPU", "WARN", msg, "WORKER",
+                {"gpu_status": g.status, "exe": g.exe, **(g.detail or {})})
 
 
 def run_env_check(w: Any, chk: dict[str, Any]) -> str:

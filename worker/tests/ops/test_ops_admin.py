@@ -33,6 +33,7 @@ def test_env_check_flow(p2_env, fake_dashboard, engine, monkeypatch):
     assert items["db.migration_head"]["detail"] == {"current": "0015_doe_platform_gen", "head": "0015_doe_platform_gen"}
     assert items["auth.dashboard"]["status"] == "OK" and items["auth.projects"]["detail"] == {"count": 2}
     assert items["hpc.gateway"]["status"] == "WARN" and items["worker.heartbeat"]["status"] == "FAIL"
+    assert items["hpc.gateway"]["message"] == "HPC 제출 미설정(hpc.gateway: none) — SCX를 쓰려면 관리자 매뉴얼 §16"
     assert items["altair.edspy_path"]["status"] == "PENDING" and items["altair.edspy_path"]["source"] == "WORKER"
     assert c.post(f"{API}/admin/env-checks", headers=AW).json()["detail"]["code"] == "ENV_CHECK_BUSY"
     # 워커 claim → DONE

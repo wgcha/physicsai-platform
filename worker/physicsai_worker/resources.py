@@ -33,6 +33,7 @@ class GpuResult(NamedTuple):
     status: str          # "OK" | "NOT_FOUND" | "ERROR"
     message: str
     exe: str | None      # 실행한(찾은) 파일
+    detail: dict[str, Any] | None = None  # 진단 보강(세션 0 판정 시 session_id·raw)
 
 
 def expand_env(text: str, env: Mapping[str, str]) -> str | None:
@@ -109,8 +110,36 @@ def _secs(v: float) -> str:
     return f"{v:g}"
 
 
+SESSION0_GPU_MESSAGE = ("GPU 정보 조회 불가 — 워커가 백그라운드 세션(세션 0)에서 실행 중이라 nvidia-smi가 GPU 드라이버에 "
+                        "접근하지 못합니다(예측 계산에는 영향 없음)")
+
+
+def current_session_id() -> int | None:
+    """현재 프로세스의 Windows 세션 ID(ProcessIdToSessionId). 비Windows·실패는 None."""
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        sid = ctypes.c_ulong()
+        k32 = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        if not k32.ProcessIdToSessionId(k32.GetCurrentProcessId(), ctypes.byref(sid)):
+            return None
+        return int(sid.value)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def query_gpu_status(gpu_query: Sequence[str] | None, candidates: Sequence[str] = (), env: dict[str, str] | None = None,
                      lookup_env: Mapping[str, str] | None = None, *, timeout_s: float | None = None) -> GpuResult:
+    """GPU 조회 + 세션 0(작업 스케줄러 Background)이면 ERROR 원인을 명시(상태는 ERROR 유지, 원문은 detail.raw)."""
+    g = _query_gpu_status(gpu_query, candidates, env, lookup_env, timeout_s=timeout_s)
+    if g.status == "ERROR" and current_session_id() == 0:
+        return g._replace(message=SESSION0_GPU_MESSAGE, detail={"session_id": 0, "raw": g.message})
+    return g
+
+
+def _query_gpu_status(gpu_query: Sequence[str] | None, candidates: Sequence[str] = (), env: dict[str, str] | None = None,
+                      lookup_env: Mapping[str, str] | None = None, *, timeout_s: float | None = None) -> GpuResult:
     """GPU 조회(제한기 밖, shell=False). env = 자식 프로세스 환경, lookup_env = 실행 파일 탐색 환경(기본 os.environ).
     timeout_s = 제한 시간(초) — 호출자는 설정 worker.gpu_query_timeout_s를 넘기고, 없으면 GPU_TIMEOUT_S(스키마 기본값)."""
     argv, tried = resolve_gpu_argv(gpu_query, candidates, lookup_env)

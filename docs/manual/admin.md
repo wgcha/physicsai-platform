@@ -948,7 +948,7 @@ cpu_rate = clamp(floor(유효 코어 / 감지 코어 × 10000), 100, 10000)    #
 | 설정 | `config.valid` | API | 설정 오류 0 → 정상, 아니면 실패(오류 키 목록) |
 | 데이터베이스 | `db.connection`, `db.migration_head` | API | `SELECT 1`, head = `0003_hpc_cancel_failed` |
 | 인증 | `auth.dashboard`, `auth.projects` | API | 대시보드 세션 확인·프로젝트 목록 200(dev_static이면 건너뜀) |
-| PBS | `hpc.gateway` | API | `none` → 경고 "PBS 연결 안 됨", 설정 오류 → 실패 |
+| HPC | `hpc.gateway` | API | `none` → 경고 "HPC 제출 미설정(hpc.gateway: none)", 설정 오류 → 실패 |
 | 워커 | `worker.heartbeat` | API | 최근 하트비트 ≤ 3×주기. 오프라인이면 실패이고 워커 항목은 실행되지 않음 → 결과가 만료(EXPIRED) |
 | 실행 파일 | `altair.<key>` 6개, `probe.<tool>` | 워커 | 존재·실행 가능. 프로브는 `env_check.probes` 설정 시에만 실제 실행(제한기 안, `probe_timeout_s`) |
 | 원본 자원 | `resource.<key>` | 워커 | 비었으면 경고(기능 비활성), 없으면 실패, 런처는 pyd 정확히 1개 |
