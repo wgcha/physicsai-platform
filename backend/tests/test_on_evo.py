@@ -4,8 +4,8 @@
 측정(2026-10-20, numpy 2.x, 시드 1~5):
 - ZDT1(d=30, N=100, G=250) HV 비 0.9912·0.9918·0.9916·0.9915·0.9916 — 계약 ≥ 0.97 충족 5/5.
 - ZDT2(d=30) 0.9864·0.9863·0.9866·0.9858·0.9860 — 계약 ≥ 0.95 충족 5/5.
-- DTLZ2(m=3, d=12, N=100, G=250) 0.8720·0.8520·0.8689·0.8619·0.8721 — 계약 ≥ 0.88 **미달 0/5**(NSGA-II crowding의 3목적 분포
-  한계). 시험은 실측 기준 0.84(4/5)로 두고 계약 변경 메모(ON-Cn) 요청.
+- DTLZ2(m=3, d=12, N=100, G=250) 0.8720·0.8520·0.8689·0.8619·0.8721 — 계약 ≥ 0.88 미달 0/5(NSGA-II crowding의 3목적 분포
+  한계). 3목적 기본 집단 = max(§6.7 식, 200)(ON-C2)이라 시험은 기본 집단 N=200(G=250)으로 ≥ 0.88(4/5)을 확인한다.
 - SRN(제약 2, N=100, G=200) rank-1 전부 실행 가능, HV 비 0.9957·0.9962·0.9966·0.9955·0.9963 — 충족 5/5.
 - Rastrigin d=2(N=50, G=200) ‖x‖∞ ≤ 6e-4 5/5, d=5(N=100, G=300) f ≤ 4e-4 5/5 — 충족.
 - G06(N=100, G=300) 실행 가능 5/5, f/f* 0.9706·0.9788·0.9558·0.9901·0.9823 — 계약 ≥ 0.99(4/5) **미달 1/5**(좁은 실행 가능
@@ -115,6 +115,10 @@ def test_v_on_4_default_pop_sizes():
     assert algo.default_pop_size("ga", 2) == 40 and algo.default_pop_size("ga", 7) == 70 and algo.default_pop_size("ga", 30) == 200
     assert algo.default_pop_size("nsga2", 3) == 100 and algo.default_pop_size("nsga2", 13) == 132
     assert algo.default_pop_size("nsga2", 50) == 400 and algo.default_pop_size("nsga2", 13) % 4 == 0
+    # 목적 수 ≥ 3 = max(식, 200)(ON-C2), 2목적·GA는 그대로
+    assert algo.default_pop_size("nsga2", 12, 3) == 200 and algo.default_pop_size("nsga2", 3, 4) == 200
+    assert algo.default_pop_size("nsga2", 50, 3) == 400 and algo.default_pop_size("nsga2", 12, 2) == 120
+    assert algo.default_pop_size("ga", 3, 3) == 40
 
 
 # ---- V-ON-5 다목적 벤치마크 -------------------------------------------------------------------------
@@ -152,7 +156,7 @@ def _mo(name, seed):
             true = 1.21 - (1 / 3 if name == "zdt1" else 2 / 3)
             _MO[key] = pareto.hypervolume(r.F[r.rank == 1].tolist(), [1.1, 1.1]) / true
         elif name == "dtlz2":
-            r = evo.run(dtlz2, reals(12), m=3, options=evo.EvoOptions(100, 250, **NSGA2), seed=seed)
+            r = evo.run(dtlz2, reals(12), m=3, options=evo.EvoOptions(algo.default_pop_size("nsga2", 12, 3), 250, **NSGA2), seed=seed)
             _MO[key] = pareto.hypervolume(r.F[r.rank == 1].tolist(), [1.1] * 3) / (1.331 - math.pi / 6)
         else:
             r = evo.run(srn, reals(2, -20, 20), m=2, options=evo.EvoOptions(100, 200, **NSGA2), seed=seed)
@@ -168,9 +172,9 @@ def _mo(name, seed):
     return _MO[key]
 
 
-@pytest.mark.parametrize("name,crit", [("zdt1", 0.97), ("zdt2", 0.95), ("dtlz2", 0.84)])
+@pytest.mark.parametrize("name,crit", [("zdt1", 0.97), ("zdt2", 0.95), ("dtlz2", 0.88)])
 def test_v_on_5_hv_ratio(name, crit):
-    """ZDT1·ZDT2 = 계약 기준. DTLZ2 = 실측 기준 0.84(계약 0.88 미달 — 모듈 설명·ON-Cn 요청)."""
+    """ZDT1·ZDT2 = 계약 기준. DTLZ2 = 계약 기준(3목적 기본 집단 N=200, ON-C2)."""
     vals = [_mo(name, s) for s in range(1, 6)]
     assert sum(v >= crit for v in vals) >= 4, vals
 

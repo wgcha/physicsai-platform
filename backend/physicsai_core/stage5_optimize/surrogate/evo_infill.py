@@ -10,7 +10,6 @@
 
 from __future__ import annotations
 
-import math
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from typing import Any
@@ -19,8 +18,10 @@ import numpy as np
 
 from . import evo, pareto
 from .algo import ALGO_LABEL
-from .dataset import Design, Problem, canonical_values, covered, is_feasible, same_design
-from .infill import RBF_MIN_DIST, RBF_MIN_DIST_FLOOR, FitResult, SurrogateError, _ei, cons_pof, cons_violation
+from .dataset import Design, is_feasible
+from .infill import RBF_MIN_DIST, RBF_MIN_DIST_FLOOR, _ei
+from .evo_eval import _Eval, _existing_rows, _inject, _options, _pick_by_distance, _population_rows
+from .evo_space import Space  # noqa: F401 - 300줄 분할(R-B): 탐색 공간, 기존 경로 재노출
 from .mo_infill import MoCandidate, c1_order, signed, work_frame
 
 SEED_OFFSET = 900
@@ -29,96 +30,6 @@ MAX_PREDICTED_FRONT = 28
 
 def algo_seed(seed: int, round_no: int) -> int:
     return seed * 100000 + round_no * 1000 + SEED_OFFSET
-
-
-@dataclass
-class Space:
-    """탐색 공간: 유전자(자유 변수 순서) ↔ 설계 값·대리모델 입력. 범주(baseline)는 B3 확장이 채운다."""
-
-    fit: FitResult
-    problem: Problem
-    genes: list[evo.Gene]
-    names: list[str]  # 유전자 이름(= fit.free, 범주가 있으면 + "baseline")
-    to_model: Callable[[np.ndarray], np.ndarray] | None = None  # 원 단위 X → 대리모델 입력(None = fit.normalize)
-    to_values: Callable[[np.ndarray], dict[str, Any]] | None = None  # 원 단위 행 → 설계 값(None = 기본)
-    from_values: Callable[[dict[str, Any]], np.ndarray | None] | None = None  # 설계 값 → 원 단위 행
-    effective: Callable[[np.ndarray], np.ndarray] | None = None  # N/A 마스크(중복·거리)
-    extra_cv: Callable[[np.ndarray], np.ndarray] | None = None  # 범위 분할 NO_COVER 벌점
-    same: Callable[[dict[str, Any], dict[str, Any]], bool] | None = None  # 같은 설계 판정
-
-    @classmethod
-    def basic(cls, fit: FitResult, problem: Problem) -> Space:
-        genes = []
-        spec = problem.cat_spec
-        for n, lo, hi in zip(fit.free, fit.lo, fit.hi):
-            if spec is not None and n == spec["cat"]:  # opt-native §7 범주: 수준 인덱스 유전자
-                genes.append(evo.Gene(n, "cat", 0.0, float(len(spec["levels"]) - 1), len(spec["levels"])))
-                continue
-            kind = "int" if n in problem.integer else "real"
-            if kind == "int" and math.ceil(lo - 1e-9) > math.floor(hi + 1e-9):
-                raise SurrogateError("BOUNDS_INVALID", f"'{n}' 정수 범위가 비어 있습니다")
-            genes.append(evo.Gene(n, kind, float(lo), float(hi)))
-        if not genes:
-            raise SurrogateError("NO_FREE_VARIABLE", "탐색할 변수가 없습니다")
-        sp = cls(fit, problem, genes, list(fit.free))
-        if spec is not None:
-            from . import encoding
-
-            fixed = int(round(fit.fill.get(spec["cat"], 0.0)))
-            free = list(fit.free)
-            sp.effective = lambda X: encoding.effective(X, free, spec, fixed)
-        cov = problem.cover_spec
-        if cov is not None:  # 범위 분할: 덮는 baseline이 없는 점은 CV += 1(§6.2)
-            def extra(X: np.ndarray, sp: Space = sp, cov: dict[str, Any] = cov) -> np.ndarray:
-                return np.array([0.0 if covered(sp.values(x), cov) else 1.0 for x in np.atleast_2d(X)])
-
-            sp.extra_cv = extra
-        return sp
-
-    def model_input(self, X: np.ndarray) -> np.ndarray:
-        return self.to_model(X) if self.to_model is not None else self.fit.normalize(X)
-
-    def values(self, x: np.ndarray) -> dict[str, Any]:
-        if self.to_values is not None:
-            return self.to_values(x)
-        vals: dict[str, Any] = self.fit.full_values(x)
-        for n in self.problem.integer:
-            if n in vals:
-                vals[n] = float(round(vals[n]))
-        return canonical_values(vals, self.problem.cat_spec)
-
-    def row_of(self, vals: dict[str, Any]) -> np.ndarray | None:
-        if self.from_values is not None:
-            return self.from_values(vals)
-        try:
-            return np.array([float(vals[n]) for n in self.names])
-        except (KeyError, TypeError, ValueError):
-            return None
-
-    def is_same(self, a: dict[str, Any], b: dict[str, Any]) -> bool:
-        return self.same(a, b) if self.same is not None else same_design(a, b, self.problem)
-
-    def unit(self, X: np.ndarray) -> np.ndarray:
-        """거리용: 연속·정수 = 범위 정규화, 범주 = 수준 인덱스(불일치 1은 dist가 처리). N/A는 nan."""
-        X = np.atleast_2d(np.asarray(X, dtype=float))
-        E = self.effective(X) if self.effective is not None else X
-        U = np.array(E, dtype=float, copy=True)
-        for j, g in enumerate(self.genes):
-            if g.kind != "cat":
-                U[:, j] = (E[:, j] - g.lo) / g.span if g.span > 0 else 0.0
-        return U
-
-    def dist(self, X: np.ndarray, R: np.ndarray) -> np.ndarray:
-        """정규화 거리(§6.5): 연속·정수 차 + 범주 불일치 1, √n_g로 나눔 — X 각 행에서 R 행들까지의 최소."""
-        if len(R) == 0:
-            return np.full(len(np.atleast_2d(X)), np.inf)
-        U, V = self.unit(X), self.unit(R)
-        cat = np.array([g.kind == "cat" for g in self.genes])
-        D = U[:, None, :] - V[None, :, :]
-        both_na = np.isnan(U)[:, None, :] & np.isnan(V)[None, :, :]
-        D = np.where(both_na, 0.0, np.where(np.isnan(D), 1.0, D))  # 한쪽만 N/A = 차 1
-        D = np.where(cat[None, None, :], (np.abs(D) > 0.5).astype(float), D)
-        return np.sqrt((D * D).sum(axis=2)).min(axis=1) / math.sqrt(len(self.genes))
 
 
 @dataclass
@@ -131,128 +42,6 @@ class EvoProposal:
     population_rows: list[list[Any]] = field(default_factory=list)
     population_head: list[str] = field(default_factory=list)
     warnings: list[dict[str, str]] = field(default_factory=list)
-
-
-class _Eval:
-    """대리모델 평가기(원 단위 X → F, CV)."""
-
-    def __init__(self, space: Space) -> None:
-        self.space = space
-        self.fit = space.fit
-        self.problem = space.problem
-        self.cons = space.problem.constraints
-        self.s = [max(cm.std, 1e-12 * max([1.0, *[abs(b) for b in c.bounds()]])) for c, cm in zip(self.cons, self.fit.constraints)]
-        self.objs = self.fit.objectives or [self.fit.objective]
-        self.signs = np.asarray(self.fit.signs or [self.fit.sign])
-
-    def cv_raw(self, Xn: np.ndarray, X: np.ndarray) -> np.ndarray:
-        cv = np.zeros(Xn.shape[0])
-        for c, cm, s in zip(self.cons, self.fit.constraints, self.s):
-            m, _sd = cm.raw(Xn)
-            cv = cv + cons_violation(c, m) / s
-        if self.space.extra_cv is not None:
-            cv = cv + self.space.extra_cv(X)
-        return cv
-
-    def mu(self, Xn: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """부호 통일 원 단위 (평균, 표준편차) n×m."""
-        ms, ss = zip(*[o.raw(Xn) for o in self.objs])
-        return np.stack(ms, axis=1), np.stack(ss, axis=1)
-
-    def pof(self, Xn: np.ndarray) -> np.ndarray:
-        p = np.ones(Xn.shape[0])
-        for c, cm in zip(self.cons, self.fit.constraints):
-            m, s = cm.raw(Xn)
-            p = p * cons_pof(c, m, s)
-        return p
-
-    def cons_pred(self, Xn: np.ndarray) -> list[float]:
-        return [float(cm.raw(Xn)[0][0]) for cm in self.fit.constraints]
-
-
-def _verified(designs: Sequence[Design], problem: Problem, ev: _Eval, multi: bool) -> tuple[np.ndarray, np.ndarray]:
-    """검증 설계의 (부호 통일 목적, 정규화 위반량 CV) — 시드 주입 순서용."""
-    F = signed(designs, list(ev.signs)) if multi else np.array([[problem.sign() * d.objective] for d in designs])
-    CV = np.array([sum(c.violation(v) / s for v, c, s in zip(d.constraints, problem.constraints, ev.s)) for d in designs])
-    return F.reshape(len(designs), -1), CV
-
-
-def _inject(space: Space, designs: Sequence[Design], problem: Problem, ev: _Eval, multi: bool) -> np.ndarray | None:
-    rows, keep = [], []
-    for i, d in enumerate(designs):
-        x = space.row_of(dict(d.values))
-        if x is not None:
-            rows.append(x)
-            keep.append(i)
-    if not rows:
-        return None
-    F, CV = _verified([designs[i] for i in keep], problem, ev, multi)
-    order = evo.rank_order(F, np.where(CV <= evo.FEAS_CV, 0.0, CV))
-    return np.array(rows)[order]
-
-
-def _options(options: dict[str, Any], stall: int, archive_max: int) -> evo.EvoOptions:
-    return evo.EvoOptions(int(options["pop_size"]), int(options["generations"]), float(options["crossover_prob"]),
-                          None if options.get("mutation_prob") is None else float(options["mutation_prob"]),
-                          float(options["eta_c"]), float(options["eta_m"]), int(stall), int(archive_max))
-
-
-def _population_rows(space: Space, ev: _Eval, res: evo.EvoResult, m: int) -> tuple[list[str], list[list[Any]]]:
-    names = space.problem.names + (["baseline"] if "baseline" in space.names and "baseline" not in space.problem.names else [])
-    head = [*names, *[f"mu_{i}" for i in range(1, m + 1)], *[f"sd_{i}" for i in range(1, m + 1)], "cv", "rank", "crowding"]
-    Xn = space.model_input(res.X)
-    mu, sd = ev.mu(Xn)
-    rows = []
-    for i, x in enumerate(res.X):
-        vals = space.values(x)
-        rows.append([*[_cell(vals.get(n)) for n in names], *[repr(float(s * v)) for s, v in zip(ev.signs, mu[i])],
-                     *[repr(float(v)) for v in sd[i]], repr(float(res.CV[i])),
-                     "" if res.rank is None else str(int(res.rank[i])),
-                     "" if res.crowding is None else ("inf" if math.isinf(res.crowding[i]) else repr(float(res.crowding[i])))])
-    return head, rows
-
-
-def _cell(v: Any) -> str:
-    if v is None:
-        return ""
-    if isinstance(v, str):
-        return v
-    return repr(float(v))
-
-
-def _pick_by_distance(space: Space, X: np.ndarray, order: Sequence[int], ref: list[np.ndarray], picked_vals: list[dict[str, Any]],
-                      existing: list[dict[str, Any]], k: int, on_pick: Callable[[int], None]) -> None:
-    """order 순서로 거리 규칙(≥ 0.1, 못 채우면 반씩 0.0125까지)·중복 제외를 지키며 k개가 될 때까지 on_pick."""
-    dmin = RBF_MIN_DIST
-    used: set[int] = set()
-    while len(picked_vals) < k and dmin >= RBF_MIN_DIST_FLOOR - 1e-15:
-        for i in order:
-            if len(picked_vals) >= k:
-                break
-            if i in used:
-                continue
-            vals = space.values(X[i])
-            if any(space.is_same(vals, e) for e in existing) or any(space.is_same(vals, c) for c in picked_vals):
-                used.add(i)
-                continue
-            R = np.array(ref) if ref else np.zeros((0, len(space.genes)))
-            if float(space.dist(X[i:i + 1], R)[0]) + 1e-12 < dmin:
-                continue
-            used.add(i)
-            ref.append(X[i])
-            on_pick(i)
-        if len(picked_vals) >= k:
-            break
-        dmin /= 2.0
-
-
-def _existing_rows(space: Space, existing: list[dict[str, Any]]) -> list[np.ndarray]:
-    out = []
-    for e in existing:
-        x = space.row_of(e)
-        if x is not None:
-            out.append(x)
-    return out
 
 
 def propose_ga(space: Space, designs: Sequence[Design], failed: Sequence[dict[str, float]], *, k: int, seed: int, round_no: int,

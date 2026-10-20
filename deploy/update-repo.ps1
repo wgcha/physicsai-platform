@@ -126,6 +126,7 @@ try {
         throw "git 폴더 설치 정보가 없습니다: $deployPath — 먼저 설치하세요: powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'setup.ps1')"
     }
     $cfg = Get-Content -Raw -Encoding UTF8 -LiteralPath $deployPath | ConvertFrom-Json
+    Set-PhysicsAIDeployOptions -Config $cfg     # task_prefix(기본 PhysicsAI)·inherit_existing(기본 true)
     $dash = $null
     if ($cfg.dashboard_root -and (Test-Path -LiteralPath $cfg.dashboard_root)) { $dash = Get-DashboardRuntimeDefaults -DashboardRoot $cfg.dashboard_root }
     $accessUrl = Get-PhysicsAIAccessUrl -Dash $dash
@@ -212,7 +213,7 @@ try {
     $stage = '작업 시작'
     $port = Get-PhysicsAIBackendPort $cfg.config_path $venvPy
     if ($NoStart) {
-        Write-Step '-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName PhysicsAI-Backend, PhysicsAI-Worker로 시작)'
+        Write-Step "-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName $((Get-PhysicsAITaskNames) -join ', ')로 시작)"
     } else {
         Start-PhysicsAITasksAndWait -Port $port -LogDir (Join-Path $rt 'logs') | Out-Null
     }

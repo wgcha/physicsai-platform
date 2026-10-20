@@ -42,6 +42,11 @@
   비밀번호를 화면 입력 대신 프로세스 환경변수에서(PHYSICSAI_INSTALL_PG_ADMIN_PASSWORD, PHYSICSAI_INSTALL_DB_PASSWORD, Background면 PHYSICSAI_INSTALL_SERVICE_PASSWORD)
 .PARAMETER NoStart
   작업 등록까지만(시작·health 확인 생략)
+.PARAMETER TaskPrefix
+  병행 설치용 작업 스케줄러 이름 접두사(작업 이름 <접두사>-Backend·<접두사>-Worker). 기본: deploy.json task_prefix → "PhysicsAI"(기존 동작).
+  같은 서버에 두 번째 설치를 할 때 운영 작업을 건드리지 않도록 설치마다 다르게 준다(deploy.json에 저장).
+.PARAMETER NoInherit
+  이전 설치의 머신 환경변수(DB·설정)·작업 정의를 이어받지 않는다(deploy.json inherit_existing=false로 저장). 같은 이름 작업이 다른 설치에 있으면 중단.
 .PARAMETER Force
   재실행 때 대기·실행 중 작업이 있어도 진행(실행 중 작업은 INTERRUPTED)
 #>
@@ -57,7 +62,9 @@ param(
     [switch]$NonInteractive,
     [switch]$PasswordsFromEnv,
     [switch]$NoStart,
-    [switch]$Force
+    [switch]$Force,
+    [string]$TaskPrefix = '',
+    [switch]$NoInherit
 )
 $ErrorActionPreference = 'Stop'
 # 경로 기본값은 본문에서 만든다(Windows PowerShell 5.1은 param 기본값에서 $PSScriptRoot가 빔)
@@ -92,9 +99,15 @@ function Get-Prev([string]$Key) {
     return ''
 }
 
+# 병행 설치: 작업 이름 접두사·이어받기 끄기(명시 인자 > deploy.json > 기본 PhysicsAI·true). 아래 감지·작업 확인보다 먼저 반영한다
+$taskPrefixV = if ($TaskPrefix) { $TaskPrefix.Trim() } else { Get-Prev 'task_prefix' }
+$inheritV = if ($NoInherit) { $false } else { -not ((Get-Prev 'inherit_existing') -match '^(?i:false|0|no)$') }
+Set-PhysicsAIDeployOptions -Config ([pscustomobject]@{ task_prefix = $taskPrefixV; inherit_existing = $inheritV })
+Write-PhysicsAIMachineEnvWarning | Out-Null   # 머신 환경변수 PHYSICSAI_DATABASE_URL — 병행 설치에서 운영 DB 오접속 방지 경고
+
 # ---- 기존 묶음 설치(install.ps1) 감지: 머신 환경변수·작업 스케줄러가 .runtime 밖을 가리키면 ------------------------
 $legacyConfig = ''
-$mCfg = Get-PhysicsAIMachineEnv 'PHYSICSAI_CONFIG'
+$mCfg = if (Test-PhysicsAIInheritExisting) { Get-PhysicsAIMachineEnv 'PHYSICSAI_CONFIG' } else { '' }   # inherit_existing=false면 이어받지 않음
 if ($mCfg -and -not (Test-PhysicsAIUnderPath $mCfg $rt)) {
     if (Test-Path -LiteralPath $mCfg) {
         $legacyConfig = $mCfg
@@ -104,13 +117,15 @@ if ($mCfg -and -not (Test-PhysicsAIUnderPath $mCfg $rt)) {
     }
 }
 $taskExe = Get-PhysicsAITaskExecute
-$legacyTasks = [bool]($taskExe -and -not (Test-PhysicsAIUnderPath $taskExe $rt))
+$legacyTasks = [bool]($taskExe -and -not (Test-PhysicsAIUnderPath $taskExe $rt) -and (Test-PhysicsAIInheritExisting))
 if ($legacyTasks) { Write-Step "기존 작업 스케줄러 등록 감지: $taskExe — 정의를 _backup에 남기고 이 git 폴더의 venv로 다시 등록합니다" }
 $existingUrl = Get-PhysicsAIDbUrl -RuntimeDir $rt   # 런타임 파일 → 이전 설치의 머신 환경변수(읽기만)
 $legacyDb = ConvertFrom-PhysicsAIDbUrl $existingUrl
 
 # ---- 입력 값(명시 인자 > deploy.json > 파생 기본값). -NonInteractive가 아니면 Enter로 기본값 -------------------------
 $explicit = [ordered]@{}
+if ($TaskPrefix) { $explicit['task_prefix'] = $taskPrefixV }
+if ($NoInherit) { $explicit['inherit_existing'] = $false }
 function Resolve-FullPath([string]$p) {
     # 상대경로는 현재 PowerShell 위치($PWD) 기준(프로세스 작업 폴더가 아니라)
     return $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($p.Trim().Trim('"')).TrimEnd('\')
@@ -197,6 +212,7 @@ $defaults = [ordered]@{
     pg_bin = $pgBin; pg_host = $pgHost; pg_port = [int]$pgPort; db_name = $dbName; db_role = $dbRole
     config_path = (Join-Path $rt 'config\platform.yaml'); service_user = $svcUser; run_mode = $runModeV
     caddy_frontend_root = (Join-Path $rt 'frontend'); ai_root = $aiRootV; original_app_root = $origRoot; altair_root = $altRoot
+    task_prefix = $(if ($taskPrefixV) { $taskPrefixV } else { 'PhysicsAI' }); inherit_existing = $inheritV
 }
 $inputs = [ordered]@{ repo_root = $repo; runtime_dir = $rt; stamp = $stamp; deploy_defaults = $defaults; deploy_explicit = $explicit; legacy_config = $legacyConfig; program_files_dirs = @(@($env:ProgramFiles, $env:ProgramW6432) | Where-Object { $_ } | Select-Object -Unique) }
 # 대시보드 웹 경로(WINDOWS_WEB_BASE_PATH) → auth.dashboard_public_login_url(없으면 setup_config.py가 .env를 직접 읽거나 기본 /home/, phase3 D3-38)
@@ -243,7 +259,8 @@ if (-not $NonInteractive) {
 }
 
 # ---- ⑥ 기존 설치 갱신이면 대기열 확인 → 작업 중지(venv 파일 교체 전에) ------------------------------------------
-$tasksExist = [bool](Get-ScheduledTask -TaskName 'PhysicsAI-Backend' -ErrorAction SilentlyContinue)
+Assert-PhysicsAITaskNamesFree -RuntimeDir $rt   # inherit_existing=false: 다른 설치의 같은 이름 작업이 있으면 건드리지 않고 중단
+$tasksExist = [bool](Get-ScheduledTask -TaskName ((Get-PhysicsAITaskNames)[0]) -ErrorAction SilentlyContinue)
 if ($tasksExist) {
     if ($existingUrl -and (Test-Path -LiteralPath (Join-Path $d.pg_bin 'psql.exe'))) {
         $cfgForPort = if ($legacyConfig -and -not (Test-Path -LiteralPath $d.config_path)) { $legacyConfig } else { $d.config_path }
@@ -282,7 +299,7 @@ Register-PhysicsAITasks -VenvPy $venvPy -WorkDir $rt -ServiceUser $d.service_use
     -PasswordsFromEnv:$PasswordsFromEnv -NonInteractive:$NonInteractive
 $port = Get-PhysicsAIBackendPort $d.config_path $venvPy
 if ($NoStart) {
-    Write-Step '-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName PhysicsAI-Backend, PhysicsAI-Worker로 시작)'
+    Write-Step "-NoStart: 작업 시작·health 확인을 건너뜁니다(Start-ScheduledTask -TaskName $((Get-PhysicsAITaskNames) -join ', ')로 시작)"
 } else {
     Start-PhysicsAITasksAndWait -Port $port -LogDir (Join-Path $rt 'logs') | Out-Null
 }
@@ -292,7 +309,7 @@ Write-Host ''
 Write-Step '설치 완료. 남은 연결 작업:'
 Write-PhysicsAIConnectGuide -Port $port -DashboardRoot "$($d.dashboard_root)" -FrontendRoot "$($d.caddy_frontend_root)" -RepoRoot $repo
 Write-Step '  3) 관리 > 환경 점검으로 Altair·자원·AI 루트를 확인하세요. 설정은 이 파일에서 고칩니다:'
-Write-Step "     $($d.config_path)  (고친 뒤 Stop/Start-ScheduledTask PhysicsAI-Worker, PhysicsAI-Backend)"
+Write-Step "     $($d.config_path)  (고친 뒤 Stop/Start-ScheduledTask $((Get-PhysicsAITaskNames)[1]), $((Get-PhysicsAITaskNames)[0]))"
 Write-Step "업데이트(일반 PowerShell, git pull 포함):  powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'update-repo.ps1')"
 if ($legacyConfig -or $legacyTasks) {
     Write-Step '기존 묶음 설치 폴더는 지우지 않았습니다 — 새 설치를 확인한 뒤 필요 없으면 직접 정리하세요(Caddy를 쓰면 PHYSICSAI_FRONTEND_ROOT도 위 값으로 바꿀 것)'

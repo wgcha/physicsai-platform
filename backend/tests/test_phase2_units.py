@@ -236,7 +236,8 @@ def test_deploy_files_and_keys():
         assert (DEPLOY / n).is_file(), n
     cfg = json.loads((DEPLOY / "deploy.example.json").read_text(encoding="utf-8"))
     keys = {"install_root", "python_exe", "pg_bin", "pg_host", "pg_port", "db_name", "db_role", "config_path", "service_user",
-            "run_mode", "caddy_frontend_root", "dashboard_root"}  # 포트는 platform.yaml server.port 한 곳(deploy.json에 없음)
+            "run_mode", "caddy_frontend_root", "dashboard_root",
+                "task_prefix", "inherit_existing"}  # 포트는 platform.yaml server.port 한 곳(deploy.json에 없음). 병행 설치 키(기본 PhysicsAI·true)
     assert set(cfg) == keys and cfg["db_name"] == "physicsai" and cfg["db_role"] == "physicsai_app"
     used = set()
     for n in ("install.ps1", "update.ps1", "uninstall-tasks.ps1"):

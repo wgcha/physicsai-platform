@@ -22,6 +22,7 @@ function Write-Step([string]$m) { Write-PhysicsAIStep $m }
 function Assert-Ok([string]$what) { Assert-PhysicsAIExit $what }
 
 $cfg = Get-Content -Raw -Encoding UTF8 $ConfigFile | ConvertFrom-Json
+Set-PhysicsAIDeployOptions -Config $cfg     # task_prefix(기본 PhysicsAI)·inherit_existing(기본 true)
 if ($cfg.dashboard_root) {
     # install.ps1과 같은 규칙: 비어 있는 pg_bin·pg_host·pg_port·python_exe만 대시보드 환경으로 채운다(dashboard-env.ps1)
     . (Join-Path $PSScriptRoot 'dashboard-env.ps1')

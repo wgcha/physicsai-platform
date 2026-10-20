@@ -12,7 +12,39 @@
 
 . (Join-Path $PSScriptRoot 'loopback-http.ps1')
 
-$PhysicsAITaskNames = @('PhysicsAI-Backend', 'PhysicsAI-Worker')
+# 병행 설치(같은 서버에 두 번째 이상 설치): 작업 이름 = <task_prefix>-Backend·<task_prefix>-Worker. 기본 prefix 'PhysicsAI'(기존 동작 불변).
+# deploy.json의 task_prefix·inherit_existing은 각 스크립트가 deploy.json을 읽은 직후 Set-PhysicsAIDeployOptions로 반영한다.
+$script:PhysicsAITaskPrefix = 'PhysicsAI'
+$script:PhysicsAIInheritExisting = $true
+$PhysicsAITaskPrefixPattern = '^[A-Za-z][A-Za-z0-9_.-]{0,39}$'
+
+function Set-PhysicsAITaskPrefix([string]$Prefix) {
+    <# 비어 있으면 기본 'PhysicsAI'. 작업 스케줄러 이름에 쓰므로 영문자로 시작하는 영숫자·_.- 40자 이하만 허용. #>
+    if (-not $Prefix) { $Prefix = 'PhysicsAI' }
+    if ($Prefix -notmatch $PhysicsAITaskPrefixPattern) {
+        throw "deploy.json task_prefix가 올바르지 않습니다: '$Prefix' — 영문자로 시작하고 영숫자·_·.·-만 쓴 40자 이하여야 합니다(예: PhysicsAI-Dev)"
+    }
+    $script:PhysicsAITaskPrefix = $Prefix
+}
+
+function Get-PhysicsAITaskNames {
+    <# 작업 스케줄러 작업 이름 2개 [Backend, Worker] — 접두사는 Set-PhysicsAITaskPrefix(기본 PhysicsAI). #>
+    return @("$($script:PhysicsAITaskPrefix)-Backend", "$($script:PhysicsAITaskPrefix)-Worker")
+}
+
+function Set-PhysicsAIDeployOptions {
+    <# deploy.json 객체의 task_prefix(기본 PhysicsAI)·inherit_existing(기본 true — false면 이전 설치의 머신 환경변수·작업 정의를 이어받지 않음). #>
+    param([Parameter(Mandatory = $true)]$Config)
+    $p = $Config.PSObject.Properties['task_prefix']
+    Set-PhysicsAITaskPrefix $(if ($p -and $null -ne $p.Value) { "$($p.Value)".Trim() } else { '' })
+    $i = $Config.PSObject.Properties['inherit_existing']
+    $script:PhysicsAIInheritExisting = -not ($i -and $null -ne $i.Value -and "$($i.Value)".Trim() -match '^(?i:false|0|no)$')
+    if (-not $script:PhysicsAIInheritExisting) {
+        Write-PhysicsAIStep "inherit_existing=false: 이전 설치의 머신 환경변수(DB·설정)·작업 정의를 이어받지 않습니다(작업 이름 $((Get-PhysicsAITaskNames) -join '·'))"
+    }
+}
+
+function Test-PhysicsAIInheritExisting { return [bool]$script:PhysicsAIInheritExisting }
 
 function Write-PhysicsAIStep([string]$Message) {
     $t = if ($script:PhysicsAITag) { $script:PhysicsAITag } else { 'PhysicsAI' }
@@ -39,7 +71,7 @@ function Test-PhysicsAIAccessDenied {
 function Get-PhysicsAITaskAdminMessage {
     <# 이전 설치가 관리자 권한으로 등록한 작업을 일반 PowerShell에서 바꿀 수 없을 때(처음 한 번만 관리자 실행). #>
     $cmd = "powershell -NoProfile -ExecutionPolicy Bypass -File $(Join-Path $PSScriptRoot 'update-repo.ps1')"
-    return ("작업 스케줄러 작업(PhysicsAI-Backend·PhysicsAI-Worker)을 바꿀 권한이 없습니다(이전 설치가 관리자 권한으로 등록한 작업).`n" +
+    return ("작업 스케줄러 작업($((Get-PhysicsAITaskNames) -join '·'))을 바꿀 권한이 없습니다(이전 설치가 관리자 권한으로 등록한 작업).`n" +
         "다음 행동: 처음 한 번만 지금과 같은 사용자 계정으로 PowerShell을 '관리자 권한으로 실행'해 update-repo.ps1을 실행하세요(그 뒤로는 일반 PowerShell로 됩니다).`n" +
         "  다른 관리자 계정으로 로그인해 실행하지 마세요 — DB 접속 정보 폴더(.runtime\secrets)는 지금 사용자만 읽을 수 있고 작업도 지금 사용자로 등록됩니다:`n  $cmd")
 }
@@ -214,6 +246,7 @@ function Get-PhysicsAIDbUrl {
             if ($v) { return $v }
         }
     }
+    if (-not (Test-PhysicsAIInheritExisting)) { return '' }   # inherit_existing=false: 머신 환경변수(다른 설치의 DB)를 이어받지 않는다
     $m = Get-PhysicsAIMachineEnv 'PHYSICSAI_DATABASE_URL'
     if ($m) { return $m }
     return ''
@@ -278,6 +311,7 @@ function Move-PhysicsAIMachineEnvToRuntime {
       머신 환경변수는 지우지 않는다(관리자 필요) — 이후에는 런타임 파일이 우선(--runtime). 옮겼으면 $true.
     #>
     param([Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ServiceUser = '')
+    if (-not (Test-PhysicsAIInheritExisting)) { return $false }
     $f = Get-PhysicsAIRuntimeSecretPath $RuntimeDir
     $m = Get-PhysicsAIMachineEnv 'PHYSICSAI_DATABASE_URL'
     if ((Test-Path -LiteralPath $f -PathType Leaf) -or -not $m) { return $false }
@@ -285,6 +319,36 @@ function Move-PhysicsAIMachineEnvToRuntime {
     Write-PhysicsAIStep '이전 설치의 머신 환경변수 DB URL을 런타임 파일로 옮겼습니다 — 이제 런타임 파일이 우선입니다(머신 환경변수는 그대로 둠)'
     Write-PhysicsAIStep "  머신 환경변수를 지우려면(선택, 관리자 PowerShell): [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', `$null, 'Machine'); [Environment]::SetEnvironmentVariable('PHYSICSAI_CONFIG', `$null, 'Machine')"
     return $true
+}
+
+function Write-PhysicsAIMachineEnvWarning {
+    <#
+      설치 시 머신 환경변수 PHYSICSAI_DATABASE_URL이 있으면 경고(값은 출력하지 않음). 이 설치는 <런타임>\secrets\database_url(--runtime)이 우선이지만,
+      병행 설치에서 --runtime 없이 띄운 프로세스·시험·수동 실행이 운영 DB에 붙을 수 있다. 읽기만 한다(지우려면 관리자 필요).
+    #>
+    if (-not (Get-PhysicsAIMachineEnv 'PHYSICSAI_DATABASE_URL')) { return $false }
+    Write-Warning ("머신 환경변수 PHYSICSAI_DATABASE_URL이 설정되어 있습니다(다른 설치의 DB를 가리킬 수 있음, 값은 출력하지 않음). 이 설치의 작업은 --runtime 인자로 자기 런타임 파일을 쓰지만, " +
+        "--runtime 없이 실행한 백엔드·워커·alembic은 이 값으로 운영 DB에 접속합니다 — 병행 설치라면 지우거나 사용하지 마세요.")
+    Write-PhysicsAIStep "  지우려면(선택, 관리자 PowerShell): [Environment]::SetEnvironmentVariable('PHYSICSAI_DATABASE_URL', `$null, 'Machine')"
+    return $true
+}
+
+function Assert-PhysicsAITaskNamesFree {
+    <#
+      inherit_existing=false(병행 설치)일 때 같은 이름의 작업이 다른 설치(실행 파일이 이 런타임 밖)에 등록되어 있으면 중지·삭제·재등록하지 않고 중단한다.
+      다음 행동 = deploy.json task_prefix를 바꾸기. 기본(inherit_existing=true)은 기존처럼 같은 이름 작업을 이어받아 다시 등록한다.
+    #>
+    param([Parameter(Mandatory = $true)][string]$RuntimeDir)
+    if (Test-PhysicsAIInheritExisting) { return }
+    foreach ($name in (Get-PhysicsAITaskNames)) {
+        $t = Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue
+        if (-not $t -or -not $t.Actions.Count) { continue }
+        $exe = "$($t.Actions[0].Execute)"
+        if (-not (Test-PhysicsAIUnderPath $exe $RuntimeDir)) {
+            throw ("같은 이름의 작업($name)이 다른 설치($exe)에 등록되어 있습니다 — 건드리지 않고 중단합니다(운영 작업 보호).`n" +
+                "다음 행동: deploy.json의 task_prefix를 이 설치 전용 값으로 바꾸세요(예: `"task_prefix`": `"PhysicsAI-Dev`").")
+        }
+    }
 }
 
 function Invoke-PhysicsAIMigration {
@@ -296,7 +360,7 @@ function Export-PhysicsAITasks {
     <# 기존 작업 정의를 XML로 남긴다(덮어쓰기 전 _backup). 없으면 아무것도 하지 않는다. 남긴 개수를 돌려준다. #>
     param([Parameter(Mandatory = $true)][string]$Dest)
     $n = 0
-    foreach ($name in $PhysicsAITaskNames) {
+    foreach ($name in (Get-PhysicsAITaskNames)) {
         if (Get-ScheduledTask -TaskName $name -ErrorAction SilentlyContinue) {
             New-Item -ItemType Directory -Force -Path $Dest | Out-Null
             Export-ScheduledTask -TaskName $name | Set-Content -LiteralPath (Join-Path $Dest "$name.xml") -Encoding Unicode
@@ -307,8 +371,8 @@ function Export-PhysicsAITasks {
 }
 
 function Get-PhysicsAITaskExecute {
-    <# 등록된 PhysicsAI-Backend 작업의 실행 파일 경로(없으면 빈 문자열). #>
-    $t = Get-ScheduledTask -TaskName $PhysicsAITaskNames[0] -ErrorAction SilentlyContinue
+    <# 등록된 Backend 작업(<task_prefix>-Backend)의 실행 파일 경로(없으면 빈 문자열). #>
+    $t = Get-ScheduledTask -TaskName ((Get-PhysicsAITaskNames)[0]) -ErrorAction SilentlyContinue
     if ($t -and $t.Actions.Count) { return "$($t.Actions[0].Execute)" }
     return ''
 }
@@ -325,8 +389,8 @@ function Get-PhysicsAITaskArguments {
 function Get-PhysicsAITaskSpecs {
     param([Parameter(Mandatory = $true)][string]$RuntimeDir, [string]$ConfigPath = '')
     return @(
-        @{ Name = 'PhysicsAI-Backend'; Args = (Get-PhysicsAITaskArguments -Module 'physicsai_api.serve' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) },
-        @{ Name = 'PhysicsAI-Worker'; Args = (Get-PhysicsAITaskArguments -Module 'physicsai_worker' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) }
+        @{ Name = (Get-PhysicsAITaskNames)[0]; Args = (Get-PhysicsAITaskArguments -Module 'physicsai_api.serve' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) },
+        @{ Name = (Get-PhysicsAITaskNames)[1]; Args = (Get-PhysicsAITaskArguments -Module 'physicsai_worker' -RuntimeDir $RuntimeDir -ConfigPath $ConfigPath) }
     )
 }
 
@@ -348,7 +412,7 @@ function Grant-PhysicsAITaskAccess {
 
 function Register-PhysicsAITasks {
     <#
-      작업 스케줄러 등록 PhysicsAI-Backend(-m physicsai_api.serve)·PhysicsAI-Worker(-m physicsai_worker) — 인자 --runtime <런타임>(Get-PhysicsAITaskArguments).
+      작업 스케줄러 등록 <task_prefix>-Backend(-m physicsai_api.serve)·<task_prefix>-Worker(-m physicsai_worker), 기본 PhysicsAI-Backend·PhysicsAI-Worker — 인자 --runtime <런타임>(Get-PhysicsAITaskArguments).
       이미 있으면 다시 등록(같은 이름). ExecutionTimeLimit = 0(무제한) 필수 — 기본 72시간이면 장시간 작업 중 워커가 종료된다(phase2 §11.1).
       Interactive(기본): 실행 계정(기본 현재 사용자) 로그온 시, LogonType Interactive·RunLevel Limited — 관리자 권한 불필요.
       Background: 부팅 시(AtStartup)·비밀번호 저장 — 이 모드만 관리자 권한이 필요할 수 있다(거부되면 안내).
@@ -436,7 +500,7 @@ function Update-PhysicsAITaskRegistration {
 
 function Stop-PhysicsAITasks {
     <# 두 작업 중지(없으면 건너뜀). 이전 설치가 관리자 권한으로 만든 작업이라 거부되면 안내와 함께 중단(Get-PhysicsAITaskAdminMessage). #>
-    foreach ($t in $PhysicsAITaskNames) {
+    foreach ($t in (Get-PhysicsAITaskNames)) {
         if (-not (Get-ScheduledTask -TaskName $t -ErrorAction SilentlyContinue)) { continue }
         try { Stop-ScheduledTask -TaskName $t -ErrorAction Stop }
         catch {
@@ -461,7 +525,7 @@ function Wait-PhysicsAIHealth {
 function Start-PhysicsAITasksAndWait {
     <# 두 작업 시작 → health 확인. 실패하면 원인 확인 위치와 함께 중단. health 주소를 돌려준다. #>
     param([Parameter(Mandatory = $true)][int]$Port, [string]$LogDir = '')
-    foreach ($t in $PhysicsAITaskNames) {
+    foreach ($t in (Get-PhysicsAITaskNames)) {
         try { Start-ScheduledTask -TaskName $t -ErrorAction Stop }
         catch { if (Test-PhysicsAIAccessDenied $_) { throw (Get-PhysicsAITaskAdminMessage) }; throw }
     }
@@ -571,7 +635,7 @@ function Restore-PhysicsAIAfterFailedUpdate {
     <#
       update-repo.ps1이 migration 전에 실패했을 때(phase3 D3-39) 서비스가 멈춘 채 남지 않게:
       ① 이번에 $BackupDir\frontend로 옮긴 이전 프런트가 있으면 원위치($FrontendDest)로(새로 배치하던 것은 $BackupDir\frontend-failed로 — 삭제 없음)
-      ② 작업 2개(PhysicsAI-Backend·Worker) 다시 시작(-NoStart면 생략). 스스로는 던지지 않는다(원래 실패를 가리지 않게).
+      ② 작업 2개(<task_prefix>-Backend·Worker) 다시 시작(-NoStart면 생략). 스스로는 던지지 않는다(원래 실패를 가리지 않게).
     #>
     param([Parameter(Mandatory = $true)][string]$FrontendDest, [Parameter(Mandatory = $true)][string]$BackupDir, [switch]$NoStart)
     $prev = Join-Path $BackupDir 'frontend'
@@ -583,7 +647,7 @@ function Restore-PhysicsAIAfterFailedUpdate {
         }
     } catch { Write-Warning "이전 프런트 되돌리기 실패: $($_.Exception.Message) — $prev 를 $FrontendDest 로 옮기세요" }
     if ($NoStart) { return }
-    foreach ($t in $PhysicsAITaskNames) {
+    foreach ($t in (Get-PhysicsAITaskNames)) {
         try { Start-ScheduledTask -TaskName $t -ErrorAction Stop; Write-PhysicsAIStep "작업 다시 시작: $t" }
         catch { Write-Warning "작업 다시 시작 실패: $t — $($_.Exception.Message)" }
     }
@@ -641,7 +705,7 @@ function Write-PhysicsAIConfigValidation {
     foreach ($w in @($v.warnings)) { if ($w) { Write-PhysicsAIStep "설정 안내: $w" } }
     if ($v.ok -eq $false) {
         foreach ($i in @($v.issues)) { if ($i) { Write-Warning "설정 검증: $i" } }
-        Write-Warning "설정 검증 오류가 있습니다 — 워커가 시작되지 않습니다(백엔드는 뜨지만 쓰기 API는 503). 설정 파일을 고친 뒤 Start-ScheduledTask PhysicsAI-Worker"
+        Write-Warning "설정 검증 오류가 있습니다 — 워커가 시작되지 않습니다(백엔드는 뜨지만 쓰기 API는 503). 설정 파일을 고친 뒤 Start-ScheduledTask $((Get-PhysicsAITaskNames)[1])"
         return $false
     }
     Write-PhysicsAIStep '설정 검증 통과'
