@@ -1,6 +1,6 @@
 // ④ native 세트 "다중 baseline(고급)"(geometry-engine.md §8·§4.10·§7.3.8·§11.4): 접힘 1개, 기본 닫힘 — 켜지 않으면 화면 변경 없음.
 // baseline 추가(경로 고르기 = 기존 discover 후보 재사용)·삭제, 자동 매칭표(등급 색·점수, 행별 수락/변경/분리·N/A, 재확인 배지),
-// 상단 [확정] 1개 + 상태 배지 초안/확정(사용자·시각). API는 백엔드 병합 전 목 라우트(계약 §7.3.8 모양).
+// 상단 [확정] 1개 + 상태 배지 초안/확정(사용자·시각). 첫 baseline(rel ".")·2개 남은 baseline은 삭제 대신 "단일로 되돌리기"(disable).
 import { useEffect, useState } from "react";
 import { api, errorMessage, type MapDecision, type MapRow, type ParamMap, type ParamSet, type ParamSetDiscover } from "../../../api";
 import { useStudy } from "../../../app/StudyContext";
@@ -8,7 +8,7 @@ import { Advanced, JobInline } from "../../../components/ui";
 import { BrowseButton } from "../../../components/BrowseButton";
 import { useLatestJob } from "../../../hooks/useLatestJob";
 import { fmtTime, isTerminal } from "../../../lib/format";
-import { GEOM_ERROR_TEXT, GRADE_LABEL, GRADE_TONE, effectiveMap, effectiveName, fmtScore, nameConflicts, pendingRows } from "../../../lib/geometry";
+import { GEOM_ERROR_TEXT, GRADE_LABEL, GRADE_TONE, effectiveMap, effectiveName, fmtScore, nameConflicts, originalNames, pendingRows, splitParts } from "../../../lib/geometry";
 
 const ACTION_LABEL: Record<MapDecision["action"], string> = { accept: "수락", rename: "변경", change: "변경", split: "분리" };
 const NA = "__na__";
@@ -33,6 +33,7 @@ function BaselineList({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const [found, setFound] = useState<ParamSetDiscover | null>(null);
   const [cad, setCad] = useState("");
   const [assem, setAssem] = useState("");
+  const [usage, setUsage] = useState<"topology" | "range">("topology");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const running = !!job.job && !isTerminal(job.job.state);
@@ -57,7 +58,8 @@ function BaselineList({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
     setError(null);
     setBusy(true);
     try {
-      const r = await api.addBaseline(ps.id, { id: bid.trim(), path: found.path, choice: { cad, radioss_assem: assem } });
+      const multi = (ps.baselines?.length ?? 0) > 1;
+      const r = await api.addBaseline(ps.id, { id: bid.trim(), path: found.path, choice: { cad, radioss_assem: assem }, ...(multi ? {} : { usage }) });
       job.track(await api.job(r.job_id));
       setFound(null);
       setPath("");
@@ -77,25 +79,43 @@ function BaselineList({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       setError(errorMessage(e));
     }
   };
+  const disable = async () => {
+    setError(null);
+    try {
+      await api.disableBaselines(ps.id);
+      await reloadParamSets();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
+  const bls = ps.baselines ?? [];
   const ready = !!found && !found.problems.length && !!cad && !!assem && /^[A-Za-z0-9_-]{1,32}$/.test(bid.trim()) && !running;
 
   return (
     <div className="bl-list">
-      {ps.baselines?.length ? (
+      {bls.length ? (
         <ul className="plain small" aria-label="baseline 목록">
-          {ps.baselines.map((b) => (
+          {bls.map((b) => (
             <li key={b.id} className="run-action-row">
               <span className="mono">{b.id}</span>
               {b.label && <span>{b.label}</span>}
-              {b.prep_status && b.prep_status !== "READY" && <span className="pill warn">다시 준비 필요</span>}
-              {b.source_path && <span className="muted mono ellipsis">{b.source_path}</span>}
-              {canEdit && b.id !== "base" && (
+              {b.rel === "." && <span className="muted">기준</span>}
+              {b.prep_status !== "READY" && <span className="pill warn" title={b.prep_reason ?? undefined}>다시 준비 필요</span>}
+              {b.prep_reason && b.prep_status !== "READY" && <span className="muted">{b.prep_reason}</span>}
+              {canEdit && b.rel !== "." && bls.length > 2 && (
                 <button type="button" className="btn small ghost" onClick={() => void remove(b.id)}>
                   삭제
                 </button>
               )}
             </li>
           ))}
+          {canEdit && bls.length > 1 && (
+            <li>
+              <button type="button" className="btn small ghost" onClick={() => void disable()}>
+                단일로 되돌리기
+              </button>
+            </li>
+          )}
         </ul>
       ) : null}
       {canEdit && (
@@ -146,6 +166,12 @@ function BaselineList({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
             </div>
           )}
           <div className="run-action-row">
+            {bls.length <= 1 && (
+              <select aria-label="baseline 용도" value={usage} onChange={(e) => setUsage(e.target.value as "topology" | "range")}>
+                <option value="topology">위상 변형(리브 수 등이 다름)</option>
+                <option value="range">범위 분할(같은 위상·공칭 다름)</option>
+              </select>
+            )}
             <button type="button" className="btn small" disabled={!ready || busy} onClick={() => void add()}>
               baseline 추가
             </button>
@@ -163,8 +189,10 @@ function BaselineList({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
 }
 
 function MatchTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
+  const { reloadParamSets } = useStudy();
   const [map, setMap] = useState<ParamMap | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [rowErr, setRowErr] = useState<Record<string, string>>({});
   const [edit, setEdit] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
@@ -178,21 +206,29 @@ function MatchTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   }, [ps.id]);
   if (!map) return error ? <p className="error-text small">{error}</p> : <p className="muted small">매칭표 불러오는 중…</p>;
 
+  const fail = (e: unknown) => {
+    setError(errorMessage(e));
+    const d = (e as { detail?: { problems?: { row_id?: string; message?: string }[] } }).detail;
+    setRowErr(Object.fromEntries((Array.isArray(d?.problems) ? d.problems : []).filter((p) => p.row_id).map((p) => [p.row_id as string, p.message ?? ""])));
+  };
   const decide = async (row_id: string, decision: MapDecision | null) => {
     setError(null);
+    setRowErr({});
     try {
       setMap(await api.putParamMap(ps.id, [{ row_id, decision }]));
       setEdit(null);
     } catch (e) {
-      setError(errorMessage(e));
+      fail(e);
     }
   };
   const confirm = async () => {
     setError(null);
+    setRowErr({});
     try {
       setMap(await api.confirmParamMap(ps.id));
+      await reloadParamSets();
     } catch (e) {
-      setError(errorMessage(e));
+      fail(e);
     }
   };
   const pend = pendingRows(map);
@@ -221,7 +257,7 @@ function MatchTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       {map.range_split && (
         <div className="small muted">
           범위 분할 <span className="mono">{map.range_split.param}</span>:{" "}
-          {map.range_split.intervals.map((iv) => `${iv.baseline} ${iv.nominal}`).join(" · ")}
+          {(map.range_split.intervals ?? []).map((iv) => `${iv.baseline} ${iv.nominal ?? "–"}`).join(" · ")}
         </div>
       )}
       <div className="table-wrap">
@@ -241,7 +277,7 @@ function MatchTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
           </thead>
           <tbody>
             {map.common.map((r) => (
-              <Row key={r.row_id} r={r} bl={bl} params={map.params ?? {}} conflict={conflicts.has(r.row_id)} canEdit={canEdit} editing={edit === r.row_id} onEdit={setEdit} onDecide={decide} />
+              <Row key={r.row_id} r={r} bl={bl} params={Object.fromEntries(bl.map((b) => [b, originalNames(map, b)]))} conflict={conflicts.has(r.row_id)} problem={rowErr[r.row_id] ?? null} canEdit={canEdit} editing={edit === r.row_id} onEdit={setEdit} onDecide={decide} />
             ))}
           </tbody>
         </table>
@@ -256,21 +292,24 @@ function MatchTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
 }
 
 function Row({
-  r, bl, params, conflict, canEdit, editing, onEdit, onDecide,
+  r, bl, params, conflict, problem, canEdit, editing, onEdit, onDecide,
 }: {
   r: MapRow;
   bl: string[];
   params: Record<string, string[]>;
   conflict: boolean;
+  problem: string | null;
   canEdit: boolean;
   editing: boolean;
   onEdit: (id: string | null) => void;
   onDecide: (id: string, d: MapDecision | null) => Promise<void>;
 }) {
   const eff = effectiveMap(r);
-  const [name, setName] = useState(effectiveName(r));
-  const [m, setM] = useState<Record<string, string>>(() => Object.fromEntries(bl.map((b) => [b, eff[b] ?? NA])));
-  const g = r.proposed.grade;
+  const base = r.decision?.action === "split" ? r.proposed.map : eff;
+  const [name, setName] = useState(r.decision?.action === "split" ? r.proposed.name : effectiveName(r));
+  const [m, setM] = useState<Record<string, string>>(() => Object.fromEntries(bl.map((b) => [b, base[b] ?? NA])));
+  const g = r.proposed.grade ?? "unmatched";
+  const splitList = splitParts(r, bl);
   return (
     <>
       <tr data-testid={`map-row-${r.row_id}`}>
@@ -278,6 +317,7 @@ function Row({
           <span className="mono">{effectiveName(r)}</span>
           {r.needs_review && <span className="pill warn">재확인</span>}
           {conflict && <span className="error-text small"> 이름 충돌</span>}
+          {problem && <div className="error-text small">{problem}</div>}
         </td>
         {bl.map((b) => (
           <td key={b} className="mono small">
@@ -293,13 +333,13 @@ function Row({
         <td>
           {canEdit && (
             <span className="run-action-row">
-              <button type="button" className="btn small ghost" onClick={() => void onDecide(r.row_id, { action: "accept", name: r.proposed.name, map: r.proposed.map })}>
+              <button type="button" className="btn small ghost" onClick={() => void onDecide(r.row_id, { action: "accept" })}>
                 수락
               </button>
               <button type="button" className="btn small ghost" aria-expanded={editing} onClick={() => onEdit(editing ? null : r.row_id)}>
                 변경
               </button>
-              <button type="button" className="btn small ghost" disabled={Object.values(eff).filter(Boolean).length < 2} onClick={() => void onDecide(r.row_id, { action: "split", name: effectiveName(r), map: eff })}>
+              <button type="button" className="btn small ghost" disabled={splitList.length < 2 || r.decision?.action === "split"} onClick={() => void onDecide(r.row_id, { action: "split", parts: splitList })}>
                 분리
               </button>
             </span>
@@ -315,7 +355,7 @@ function Row({
             <td key={b}>
               <select aria-label={`${r.row_id} ${b} 대응`} value={m[b]} onChange={(e) => setM((x) => ({ ...x, [b]: e.target.value }))}>
                 <option value={NA}>N/A</option>
-                {[...new Set([...(params[b] ?? []), ...(eff[b] ? [eff[b] as string] : [])])].map((p) => (
+                {[...new Set([...(params[b] ?? []), ...(base[b] ? [base[b] as string] : [])])].map((p) => (
                   <option key={p} value={p}>
                     {p}
                   </option>

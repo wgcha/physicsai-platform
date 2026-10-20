@@ -88,7 +88,7 @@ export class Phase2Mock {
     return {
       stage_label: STAGE_LABEL[j.job_type],
       current_step_key: cur?.step_key ?? null,
-      current_step_label: cur ? this.s.stepLabel(cur.step_key) : null,
+      current_step_label: cur ? this.s.stepLabel(cur.step_key, j.job_type === "PARAM_SET_NATIVE" ? "native" : (j.params as { engine?: string } | null)?.engine) : null,
       hpc_summary: this.hpcSummary(j),
       attention_code: j.attention_code ?? null,
     };

@@ -235,6 +235,13 @@ export function samplingOf(srv: MockServer, b: BatchRec): BatchSampling {
   return mockSampling(b.source_kind, b.meta, { doeType: doe?.doe_type ?? null, doeOptions: doe?.options, });
 }
 
+/** geometry-engine.md §6.5·§7.6: gen_code가 GEOM_*·PROP_*·BASELINE_*면 category(백엔드 geometry/messages.CODE_TABLE 일부) */
+const GEN_CATEGORY: Record<string, string> = {
+  GEOM_CAD_FAILED: "CAD_FAILED", GEOM_TOPOLOGY_CHANGED: "CAD_FAILED", GEOM_FEATURE_COLLISION: "CAD_FAILED", GEOM_INTERFERENCE: "INTERFERENCE",
+  GEOM_QUALITY: "QUALITY", GEOM_MORPH_FAILED: "QUALITY", GEOM_DEVIATION: "DEVIATION", GEOM_PARAM_MISMATCH: "DEVIATION", GEOM_TIE_PROJECTION: "TIE",
+  GEOM_TIMEOUT: "INTERNAL", GEOM_INTERNAL: "INTERNAL", PROP_THICKNESS_INVALID: "PROP", PROP_OVERRIDDEN_BY_ELEMENT: "PROP", BASELINE_NO_COVER: "BASELINE",
+};
+
 export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
   const ps = srv.paramSets.find((p) => p.id === b.param_set_id)!;
   const model = srv.models.find((m) => m.id === b.model_id);
@@ -245,6 +252,7 @@ export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
       doe_no: r.doe_no, run_key: r.run_key, folder: `${dir}\\${r.run_key}`, values: r.values, applied_values: r.applied_values, out_of_range: r.out_of_range,
       state, code: state === "GEN_FAILED" ? r.gen_code : state === "FAILED" ? job?.failure_code ?? null : null,
       message: state === "GEN_FAILED" ? r.gen_message : state === "FAILED" ? job?.failure_message ?? null : null,
+      gen_category: state === "GEN_FAILED" && r.gen_code ? GEN_CATEGORY[r.gen_code] ?? null : null,
       job_id: job?.id ?? null, responses: responsesOf(job),
       media_views: job?.state === "SUCCEEDED" ? ((job.result as { media?: { view: string }[] | null } | null)?.media ?? []).map((m) => m.view) : [], // S10
     };

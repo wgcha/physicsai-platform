@@ -17,25 +17,6 @@ export const FEATURE_TYPE_LABEL: Record<string, string> = {
   SHELL_T: "쉘 두께",
 };
 
-/** §4.3 이름 약어(GE-C4) → 종류. 이름 = `<COMP>_<약어>_<k>`(64자 초과 시 `_<4자 해시>`), 3S = `<PROP>_SHELL_T` */
-const ABBR: [string, string][] = [
-  ["POCKET_D", "POCKET_DEPTH"],
-  ["POCKET_W", "POCKET_WIDTH"],
-  ["FILLET_R", "FILLET_RADIUS"],
-  ["HOLE_R", "HOLE_RADIUS"],
-  ["HOLE_U", "HOLE_POS_U"],
-  ["HOLE_V", "HOLE_POS_V"],
-  ["RIB_T", "RIB_THICKNESS"],
-  ["RIB_H", "RIB_HEIGHT"],
-  ["THK", "THICKNESS"],
-];
-
-export function featureTypeFromName(name: string): string | null {
-  if (/_SHELL_T(_\d+)?$/.test(name)) return "SHELL_T";
-  for (const [a, t] of ABBR) if (new RegExp(`(^|_)${a}_\\d+(_[0-9a-f]{4})?$`).test(name)) return t;
-  return null;
-}
-
 export const isPositionType = (type: string | null | undefined) => type === "HOLE_POS_U" || type === "HOLE_POS_V";
 
 export function typeLabel(type: string | null | undefined): string {
@@ -85,6 +66,13 @@ export const GEOM_ERROR_TEXT: Record<string, string> = {
   PROP_UNSUPPORTED_TYPE: "미지원 PROP 형식(TYPE9·10·11)",
   PROP_OVERRIDDEN_BY_ELEMENT: "요소별 두께가 PROP 두께를 덮어써 변경이 적용되지 않습니다",
   PROP_THICKNESS_INVALID: "쉘 두께가 0 이하이거나 범위 밖입니다",
+  PROP_OVERRIDDEN_BY_PART: "/PART 카드 두께가 PROP 두께를 덮어써 변경이 적용되지 않습니다",
+  PROP_NOT_FOUND: "PROP 목록에 없습니다(스캔을 다시 하세요)",
+  PROPS_NOT_SCANNED: "쉘 두께 PROP 스캔을 먼저 하세요",
+  BASELINE_BASE: "첫 baseline(세트 자신)은 삭제할 수 없습니다",
+  BASELINE_LAST: "baseline이 2개뿐이라 삭제할 수 없습니다 — '단일로 되돌리기'를 쓰세요",
+  NOT_MULTI_BASELINE: "다중 baseline 세트가 아닙니다",
+  NATIVE_PREP_MISSING: "① native 형상 피처가 없습니다 — 파라미터 추출을 native로 먼저 하세요",
   REF_BOTH_CONTACT: "양면 접촉 — 두께 변경 불가(기본 제외)",
   PNG_RENDER_FAILED: "하이라이트 그림을 만들지 못했습니다",
   MAP_LOW_SCORE: "매칭 점수가 낮습니다 — 확인하세요",
@@ -96,16 +84,23 @@ export function geomErrorText(code: string | null | undefined, message: string |
   return (code && GEOM_ERROR_TEXT[code]) || message || code || "";
 }
 
-/** §6.5 category → 표시(일괄 예측·DOE 스킵 행 배지) */
+/** §6.5 category → 표시(일괄 예측 gen_category·DOE skipped_runs[].category 배지) — 백엔드 messages.CATEGORY_LABELS와 같은 키 */
 export const GEN_CATEGORY_LABEL: Record<string, string> = {
-  CAD: "CAD 생성 불가",
-  COLLISION: "간섭",
+  CAD_FAILED: "CAD 생성 불가",
+  INTERFERENCE: "간섭",
   QUALITY: "품질 미달",
   DEVIATION: "편차 초과",
   TIE: "tie 투영 실패",
+  PREP: "형상 준비 실패",
+  INPUT: "입력 오류",
   PROP: "쉘 두께 적용 실패",
   BASELINE: "baseline 범위 밖",
+  INTERNAL: "내부 오류",
 };
+
+export function genCategoryText(category: string | null | undefined): string | null {
+  return category ? GEN_CATEGORY_LABEL[category] ?? category : null;
+}
 
 // ---------------------------------------------------------------- 고급 옵션(§4.9, §8 "검사 기준(고급)")
 
@@ -229,12 +224,49 @@ export const GRADE_LABEL: Record<MapGrade, string> = { recommend: "추천", chec
 /** 등급 색: 추천 녹(pill ok)·확인 필요 황(pill warn)·미매칭 제안 회(기본 pill) */
 export const GRADE_TONE: Record<MapGrade, string> = { recommend: "ok", check: "warn", unmatched: "" };
 
-export const effectiveMap = (r: MapRow) => r.decision?.map ?? r.proposed.map;
-export const effectiveName = (r: MapRow) => r.decision?.name ?? r.proposed.name;
+type Map0 = Record<string, string | null>;
 
-/** 확정 전에 사용자가 반드시 결정해야 하는 행(재확인·확인 필요 등급 중 미결정) — 서버 confirm 422 조건과 같음 */
+/** 행의 현재 대응(결정 > 제안). split은 부분 map을 baseline별로 합쳐 보인다 */
+export function effectiveMap(r: MapRow): Map0 {
+  const d = r.decision;
+  if (d?.action === "split" && d.parts?.length) {
+    const out: Map0 = {};
+    for (const p of d.parts) for (const [b, v] of Object.entries(p.map)) if (v) out[b] = out[b] ? `${out[b]} / ${v}` : v;
+    return out;
+  }
+  return d?.map ?? r.proposed.map;
+}
+/** 행의 현재 공통 이름(split = 부분 이름들) */
+export function effectiveNames(r: MapRow): string[] {
+  const d = r.decision;
+  if (d?.action === "split" && d.parts?.length) return d.parts.map((p) => p.name);
+  return [d?.name ?? r.proposed.name];
+}
+export const effectiveName = (r: MapRow) => effectiveNames(r).join(" / ");
+
+/** 확정 전에 사용자가 반드시 결정해야 하는 행 — 서버 requires_decision(재확인·확인 필요 등급 중 미결정)과 같은 규칙 */
 export function pendingRows(m: ParamMap): MapRow[] {
-  return m.common.filter((r) => !r.decision && (r.needs_review || r.proposed.grade === "check"));
+  return m.common.filter((r) => !r.decision && (r.requires_decision || r.needs_review || r.proposed.grade === "check"));
+}
+
+/** 분리(split): baseline마다 원 파라미터 1개씩 별도 공통 변수(`<이름>_<baseline>`, 나머지 N/A) — 서버 decision.parts */
+export function splitParts(r: MapRow, bids: string[]): { name: string; map: Map0 }[] {
+  const name = r.decision?.action === "split" ? r.proposed.name : r.decision?.name ?? r.proposed.name;
+  const m = r.decision?.action === "split" ? r.proposed.map : r.decision?.map ?? r.proposed.map;
+  return bids.filter((b) => m[b]).map((b) => ({ name: `${name}_${b}`, map: Object.fromEntries(bids.map((x) => [x, x === b ? m[b] : null])) }));
+}
+
+/** 변경 칸 후보: 매칭표에 나온 그 baseline의 원 파라미터 이름(제안·후보·결정) */
+export function originalNames(m: ParamMap, bid: string): string[] {
+  const out = new Set<string>();
+  const add = (v: unknown) => typeof v === "string" && v && out.add(v);
+  for (const r of m.common) {
+    add(r.proposed.map[bid]);
+    for (const c of r.proposed.candidates ?? []) add((c.map as Map0 | undefined)?.[bid]);
+    add(r.decision?.map?.[bid]);
+    for (const p of r.decision?.parts ?? []) add(p.map[bid]);
+  }
+  return [...out].sort();
 }
 
 /** 이름 충돌(클라이언트 사전 표시): 같은 공통 이름 중복·예약어 baseline·한 baseline에서 같은 원 파라미터 중복 */
@@ -242,24 +274,28 @@ export function nameConflicts(m: ParamMap): Set<string> {
   const bad = new Set<string>();
   const seen = new Map<string, string>();
   for (const r of m.common) {
-    const n = effectiveName(r);
-    if (n === "baseline") bad.add(r.row_id);
-    const prev = seen.get(n);
-    if (prev) {
-      bad.add(prev);
-      bad.add(r.row_id);
-    } else seen.set(n, r.row_id);
+    for (const n of effectiveNames(r)) {
+      if (n === "baseline") bad.add(r.row_id);
+      const prev = seen.get(n);
+      if (prev && prev !== r.row_id) {
+        bad.add(prev);
+        bad.add(r.row_id);
+      } else seen.set(n, r.row_id);
+    }
   }
   for (const b of m.baselines) {
     const used = new Map<string, string>();
     for (const r of m.common) {
-      const v = effectiveMap(r)[b.id];
-      if (!v) continue;
-      const prev = used.get(v);
-      if (prev) {
-        bad.add(prev);
-        bad.add(r.row_id);
-      } else used.set(v, r.row_id);
+      const d = r.decision;
+      const vals = d?.action === "split" && d.parts?.length ? d.parts.map((p) => p.map[b.id]) : [effectiveMap(r)[b.id]];
+      for (const v of vals) {
+        if (!v) continue;
+        const prev = used.get(v);
+        if (prev && prev !== r.row_id) {
+          bad.add(prev);
+          bad.add(r.row_id);
+        } else used.set(v, r.row_id);
+      }
     }
   }
   return bad;

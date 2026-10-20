@@ -2,6 +2,7 @@ import { useState } from "react";
 import { api, errorMessage, type Job } from "../api";
 import { useStudyOptional } from "../app/StudyContext";
 import { JOB_TYPE_LABEL } from "../lib/format";
+import { jobEngine, stepLabel } from "../lib/steps";
 import { emitJobRetried } from "../hooks/jobRetried";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -14,8 +15,8 @@ export function retryStartText(job: Job): string {
   if (ALWAYS_FROM_START.has(job.job_type)) return "처음(1단계)";
   const st = job.steps.find((s) => RESUME_STATES.has(s.state));
   if (!st || st.step_no <= 1) return "처음(1단계)";
-  // JobStep에는 표시명이 없다: 현재 step이면 서버 current_step_label, 아니면 step_key (변경 메모 D3-1)
-  const label = st.step_key === job.current_step_key && job.current_step_label ? job.current_step_label : st.step_key;
+  // JobStep에는 표시명이 없다: 현재 step이면 서버 current_step_label, 아니면 표시명 표(lib/steps, native 덮어쓰기 포함) (변경 메모 D3-1)
+  const label = st.step_key === job.current_step_key && job.current_step_label ? job.current_step_label : stepLabel(st.step_key, jobEngine(job));
   return `${st.step_no}. ${label}`;
 }
 

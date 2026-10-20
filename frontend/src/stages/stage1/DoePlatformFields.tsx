@@ -4,11 +4,11 @@ import { SamplingDescription } from "../../components/SamplingDescription";
 import { PLATFORM_GROUPS, RECOMMENDED_KIND, SAMPLING_LABEL, calcNote, isPlatformKind, sobolCounts, tdDescId } from "../../lib/sampling";
 import { countText, fullfactLevels, isFreeCount, levelOf, minCount, platformRuns, type PlatformState } from "./doeGenParams";
 
-export function Seg<T extends string | number>({ label, value, options, onChange, disabled }: { label: string; value: T; options: { key: T; label: string }[]; onChange: (v: T) => void; disabled?: boolean }) {
+export function Seg<T extends string | number>({ label, value, options, onChange, disabled }: { label: string; value: T; options: { key: T; label: string; disabled?: boolean; title?: string }[]; onChange: (v: T) => void; disabled?: boolean }) {
   return (
     <div className="seg" role="group" aria-label={label}>
       {options.map((o) => (
-        <button key={String(o.key)} type="button" className={value === o.key ? "on" : ""} aria-pressed={value === o.key} disabled={disabled} onClick={() => value !== o.key && onChange(o.key)}>
+        <button key={String(o.key)} type="button" className={value === o.key ? "on" : ""} aria-pressed={value === o.key} disabled={disabled || o.disabled} title={o.title} onClick={() => value !== o.key && onChange(o.key)}>
           {o.label}
         </button>
       ))}

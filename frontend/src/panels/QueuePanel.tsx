@@ -6,6 +6,7 @@ import { ProgressBar, StateDot } from "../components/ui";
 import { useOpenJob } from "../hooks/useOpenJob";
 import { useRunStatus } from "../shell/RunStatus";
 import { DrawerSection } from "./DrawerSection";
+import { currentStepText } from "../lib/steps";
 
 /** 실행 대기열(§16.2 ①) — 상태 서랍 안. 순서 이동·취소는 전역 관리자만(§5.3). 데이터는 RunStatusProvider 폴링 */
 export function QueuePanel() {
@@ -80,7 +81,7 @@ export function QueuePanel() {
               )}
             </span>
             <span className="muted small ellipsis">
-              {fmtElapsed(j.started_at)} 경과{j.current_step_label ? ` · ${j.current_step_label}` : ""}
+              {fmtElapsed(j.started_at)} 경과{currentStepText(j) ? ` · ${currentStepText(j)}` : ""}
             </span>
           </div>
         ) : opts.running && (
@@ -89,7 +90,7 @@ export function QueuePanel() {
             <span className="muted small ellipsis">
               {j.progress_pct != null ? `${Math.round(j.progress_pct)}% · ` : ""}
               {fmtElapsed(j.started_at)} 경과
-              {j.current_step_label ? ` · ${j.current_step_label}` : ""}
+              {currentStepText(j) ? ` · ${currentStepText(j)}` : ""}
               {j.progress_label ? ` · ${j.progress_label}` : ""}
             </span>
           </div>

@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, ApiError, errorMessage, type TrainParam } from "../../api";
+import { api, ApiError, errorMessage, type NativeFeature, type TrainParam } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
 import { useTrain } from "./TrainContext";
-import { featureTypeFromName, isPositionType, typeLabel } from "../../lib/geometry";
+import { isPositionType, typeLabel } from "../../lib/geometry";
+import { FeaturePng } from "../stage4/geometry/NativeDetail";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -49,8 +50,22 @@ export function ParamTableCard() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [serverProblems, setServerProblems] = useState<Record<string, string>>({});
-  // geometry-engine.md §8 ①-2: native는 tpl 없음 — 표 저장만, 피처 종류 열(이름 약어 §4.3)
+  // geometry-engine.md §8 ①-2: native는 tpl 없음 — 표 저장만, 피처 종류·하이라이트 PNG = GET /studies/{id}/train/features(§7.3.1)
   const native = setup?.engine === "native";
+  const [features, setFeatures] = useState<Map<string, NativeFeature>>(new Map());
+  const [png, setPng] = useState<string | null>(null);
+  useEffect(() => {
+    if (!native) return;
+    let alive = true;
+    api
+      .trainFeatures(study.id)
+      .then((d) => alive && setFeatures(new Map(d.features.map((f) => [f.name, f]))))
+      .catch(() => alive && setFeatures(new Map()));
+    return () => {
+      alive = false;
+    };
+  }, [native, study.id, setup?.extract_job_id]);
+  const pngF = png ? features.get(png) : undefined;
 
   useEffect(() => {
     setRows((setup?.parameters ?? []).map(toRow));
@@ -159,8 +174,14 @@ export function ParamTableCard() {
                     <td className="mono">{r.name}</td>
                     {native && (
                       <td className="small">
-                        {typeLabel(featureTypeFromName(r.name))}
-                        {isPositionType(featureTypeFromName(r.name)) && <span className="muted"> · mm 범위</span>}
+                        {typeLabel(features.get(r.name)?.type)}
+                        {isPositionType(features.get(r.name)?.type) && <span className="muted"> · mm 범위</span>}
+                        {features.get(r.name)?.png_artifact_id && (
+                          <button type="button" className="link small" aria-pressed={png === r.name} aria-label={`${r.name} 하이라이트`} onClick={() => setPng(png === r.name ? null : r.name)}>
+                            {" "}
+                            그림
+                          </button>
+                        )}
                       </td>
                     )}
                     <td className="num mono">{r.raw}</td>
@@ -188,6 +209,7 @@ export function ParamTableCard() {
           </table>
         </div>
       )}
+      {pngF?.png_artifact_id && <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} />}
       {tpl && !native && (
         <div className="tpl-state small" data-testid="tpl-state">
           <div>

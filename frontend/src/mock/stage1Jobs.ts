@@ -5,7 +5,7 @@ import { DOE_TYPES } from "./catalog";
 import { err, type MockResp } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
-import { nativeTrainParams } from "./geometry";
+import { mapGate, nativeTrainParams } from "./geometry";
 import { checkSampling, generatorOf, platformLabel } from "./doePlatform";
 import { isPlatformKind } from "../lib/sampling";
 
@@ -28,8 +28,32 @@ export function hpcSummary(p2: Phase2Mock, j: Job): HpcSummary | null {
   return h;
 }
 
+/** native DOE(geometry-engine.md §7.3.3·§7.3.8 + S18 통합): LHS만, options 금지, 세트 기준이면 매칭표 확정 게이트 */
+function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unknown>): MockResp | null {
+  if (params.generator === "hyperstudy") return err(422, "INVALID_PARAMS", "native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다");
+  if (params.options && Object.keys(params.options as object).length) return err(422, "DOE_OPTIONS_INVALID", "native DOE는 options를 쓸 수 없습니다(seed 사용)");
+  const sp = params.sampling as { kind?: string; count?: number } | undefined;
+  if (sp && sp.kind !== "lhs")
+    return err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems: [{ code: "DESIGN_UNSUPPORTED", message: "native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다" }] });
+  const n = Number(sp ? sp.count : params.num_runs);
+  if (!(n >= 2 && n <= 5000)) return err(422, "DOE_OPTIONS_INVALID", "run 수는 2~5000");
+  if (params.param_set_id) {
+    const ps = p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id);
+    if (!ps) return err(409, "PREREQUISITE_MISSING", "파라미터 세트를 찾을 수 없습니다", { missing: ["PARAM_SET"] });
+    if (ps.engine !== "native") return err(409, "ENGINE_MISMATCH", "세트 기준 DOE는 native 형상 엔진 세트에서만 만듭니다");
+    if (ps.native?.prep_status !== "READY") return err(409, "GEOM_PREP_STALE", "형상 준비본이 오래되었습니다 — '형상 준비 다시'를 실행하세요");
+    if (params.radioss_assem_path != null) return err(422, "INVALID_PARAMS", "세트 기준 DOE는 세트의 조립 폴더를 씁니다(radioss_assem_path 생략)");
+    return mapGate(p2.s, ps.id);
+  }
+  if (!params.radioss_assem_path) return err(422, "INVALID_PARAMS", "조립 폴더 경로가 필요합니다");
+  return null;
+}
+
 export function precheckTrain(p2: Phase2Mock, s: Study, type: JobType, params: Record<string, unknown>): MockResp | null {
-  if (type === "TD_DOE_GEN" && p2.setups[s.id]?.engine !== "native") {
+  if (type === "TD_DOE_GEN" && (params.param_set_id || p2.setups[s.id]?.engine === "native")) {
+    const e = precheckNativeDoe(p2, s, params);
+    if (e) return e;
+  } else if (type === "TD_DOE_GEN") {
     const t = p2.setups[s.id]?.tpl;
     if (!t) return err(409, "TPL_REQUIRED", "tpl을 먼저 생성하세요.");
     if (t.stale) return err(409, "TPL_STALE", "파라미터 표가 바뀌었습니다 — tpl을 다시 생성하세요.");
@@ -59,6 +83,18 @@ export function onCreateTrain(p2: Phase2Mock, j: Job, me: { display_name: string
       dir_display_path: p2.s.disp(sid, `01_train/doe/${id}`), results_display_path: p2.s.disp(sid, `01_train/results/${id}`), created_by_name: me.display_name, created_at: now,
       run_state_counts: { GENERATED: 0, SUBMITTED: 0, SOLVED: 0, SOLVE_FAILED: 0, COLLECTED: 0, COLLECT_FAILED: 0 },
     };
+    if (common.engine === "native" || p.param_set_id) {
+      // native(§7.3.3): 서버가 확정 기록하는 params(doe_type NATIVE_LHS·options {}·seed)
+      const sp = p.sampling as { count?: number; seed?: number } | undefined;
+      const n = Number(sp?.count ?? p.num_runs);
+      Object.assign(p, { engine: "native", generator: "platform", doe_label: "LHS(native)", doe_type: "NATIVE_LHS", num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
+      delete p.sampling;
+      p2.does.unshift({
+        ...common, engine: "native", doe_label: "LHS(native)", doe_type: "NATIVE_LHS", num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
+        multi_execution: Number(p.multi_execution), generator: "platform", sampling: null, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
+      });
+      return;
+    }
     if (generatorOf(p) === "platform") {
       // S18 §23.4 B8: 서버가 확정 기록하는 params + train_does 행(generator·doe_type = 방식 이름·options = kind를 뺀 입력·sampling·gen)
       const { kind: k0, ...input } = (p.sampling ?? {}) as Record<string, unknown>;
@@ -114,6 +150,15 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
       const r = rng(n);
       p2.runs[d.id] = Array.from({ length: n }, (_, i) => ({ run_key: runKey(i + 1), state: "GENERATED" as TrainRunState, starter_name: "cushion_0000.rad", input_display_path: p2.s.disp(sid, `01_train/doe/${d.id}/approaches/doe_1/${runKey(i + 1)}/m_3`), hpc: null, result: null, updated_at: new Date().toISOString() }));
       p2.doeSamples[d.id] = p2.runs[d.id].map((x) => ({ run_key: x.run_key, values: { THK_TOP: Number((0.3 + r() * 0.9).toFixed(4)), THK_FOAM: Number((1 + r() * 2).toFixed(4)), RIB_H: 12, RIB_N: 2 + Math.floor(r() * 7) }, measured: {} }));
+      if (d.engine === "native") {
+        // native: 형상 생성 실패 run은 SKIPPED.json → skipped_runs[{run_key, reason, category, message}], run 목록에서 빠진다
+        const skipped = n >= 6 ? [{ run_key: runKey(n), reason: "GEOM_QUALITY", category: "QUALITY", message: "min stretch 0.06 < 기준 0.1" }] : [];
+        p2.runs[d.id] = p2.runs[d.id].filter((x) => !skipped.some((k) => k.run_key === x.run_key));
+        d.run_count = p2.runs[d.id].length;
+        d.gen = { total: n, pending: 0, running: 0, done: n - skipped.length, failed: skipped.length };
+        j.result = { doe_id: d.id, run_count: d.run_count, sample_status: "PARSED", skipped_runs: skipped, gen_ok: n - skipped.length, gen_skipped: skipped.length };
+        return "done";
+      }
       if (d.generator === "platform") {
         // S18: run별 생성 상태 집계(전부 완료)·표본 meta(§20.5 — 목은 run 수만)
         d.gen = { total: n, pending: 0, running: 0, done: n, failed: 0 };

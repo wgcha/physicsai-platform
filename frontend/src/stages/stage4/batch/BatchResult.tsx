@@ -14,6 +14,7 @@ import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { POLL } from "../../../lib/poll";
 import { fmtNum } from "../../../lib/format";
 import { samplingSummary } from "../../../lib/sampling";
+import { genCategoryText } from "../../../lib/geometry";
 import { useFemVerifyButton } from "../verify/useFemVerifyButton";
 
 import { ContourMedia } from "../ContourMedia";
@@ -274,11 +275,15 @@ function ResultRow({ r, b, showResp, selected, onSelect, canRetry, onRetry }: { 
         ))}
       <td className={`num row-state ${r.state.toLowerCase()}`}>
         <span className={`pill ${rowTone(r.state)}`}>{ROW_STATE_LABEL[r.state]}</span>
+        {failed && r.gen_category && (
+          <span className="pill bad" data-testid={`gen-category-${r.doe_no}`} title={r.code ?? undefined}>
+            {genCategoryText(r.gen_category)}
+          </span>
+        )}
         {failed && (r.code || r.message) && (
           <span className="muted small row-reason" title={r.message ?? ""}>
             {" "}
-            {r.code ?? ""}
-            {r.message ? ` — ${r.message}` : ""}
+            {r.gen_category ? r.message ?? "" : `${r.code ?? ""}${r.message ? ` — ${r.message}` : ""}`}
           </span>
         )}
         {canRetry && (
