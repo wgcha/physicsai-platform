@@ -12921,13 +12921,20 @@
             "type": "string"
           },
           "sense": {
-            "default": "min",
-            "enum": [
-              "min",
-              "max"
+            "anyOf": [
+              {
+                "enum": [
+                  "min",
+                  "max"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ],
-            "title": "Sense",
-            "type": "string"
+            "description": "min | max — 필수(생략 시 422 OPT_CRITERIA_REQUIRED)",
+            "title": "Sense"
           },
           "series": {
             "anyOf": [
@@ -15526,6 +15533,7 @@
                 "type": "null"
               }
             ],
+            "description": "목적 2개 이상이면 필수(사용자 입력, 생략 시 422 OPT_CRITERIA_REQUIRED)",
             "title": "Weights"
           }
         },

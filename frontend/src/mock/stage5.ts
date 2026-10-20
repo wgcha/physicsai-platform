@@ -62,6 +62,8 @@ export function precheckOptimize(s: Study, type: JobType, params: Record<string,
     if (!rs.length) return err(422, "RESPONSES_INVALID", "응답을 1개 이상 추가하세요.", { problems: [] });
     if (params.approach === "OPT" && !rs.some((r) => r.goal === "MINIMIZE" || r.goal === "MAXIMIZE"))
       return err(422, "OBJECTIVE_REQUIRED", "최적화에는 MINIMIZE 또는 MAXIMIZE 응답이 1개 이상 필요합니다.");
+    const missing = rs.flatMap((r, i) => (r.goal === "CONSTRAINT" ? (["bound", "value"] as const).filter((k) => r[k] == null).map((k) => `responses.${i}.${k}`) : []));
+    if (missing.length) return err(422, "OPT_CRITERIA_REQUIRED", "최적화 기준이 비어 있습니다 — 제약의 조건(≤·≥·=)과 임계값을 직접 입력하세요", { missing });
   }
   return null;
 }

@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import { recordCalls } from "../test/recordCalls";
-import type { MockServer } from "../mock/server";
+import { MockServer } from "../mock/server";
 import { fromBatch } from "../analysis/adapters/fromBatch";
 import * as perfColumns from "../analysis/perfColumns";
 import { curveColumns, curveValue, NO_RESP_HINT } from "../analysis/perfColumns";
@@ -58,7 +58,14 @@ describe("V3-S17-12 ⑥ 성능 표", () => {
     fireEvent.change(screen.getByLabelText("MaxDisp 역할"), { target: { value: "max" } });
     const w = await screen.findByTestId("weight-inputs");
     expect(within(w).getByTestId("multi-note").textContent).toMatch(/다목적|파레토/);
+    // ON-C3: 가중치는 빈 칸(기본값 없음) — 모두 입력하기 전엔 시작 비활성
+    expect((within(w).getByLabelText("MaxStress 가중치") as HTMLInputElement).value).toBe("");
+    expect((within(w).getByLabelText("MaxDisp 가중치") as HTMLInputElement).value).toBe("");
+    expect(within(w).getByTestId("weight-help").textContent).toMatch(/0~100/);
     fireEvent.change(within(w).getByLabelText("MaxStress 가중치"), { target: { value: "80" } });
+    expect(within(w).getByTestId("weight-issue").textContent).toMatch(/MaxDisp/);
+    expect((screen.getByRole("button", { name: "최적화 시작" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(within(w).getByLabelText("MaxDisp 가중치"), { target: { value: "50" } });
     await waitFor(() => expect((screen.getByRole("button", { name: "최적화 시작" }) as HTMLButtonElement).disabled).toBe(false));
     fireEvent.click(screen.getByRole("button", { name: "최적화 시작" }));
     await screen.findByTestId("so-status");
@@ -79,6 +86,31 @@ describe("V3-S17-12 ⑥ 성능 표", () => {
     expect(rolesToBody(rows, sels, {})).toMatchObject({ objectives: [{ metric: "perf:A", sense: "min" }], constraints: [{ metric: "perf:B", op: "range", lo: 1, hi: 3 }] });
     expect(roleValueIssue({ role: "range", a: "5", b: "2" })).toBeTruthy();
     expect(roleValueIssue({ role: "le", a: "", b: "" })).toBeTruthy();
+    // ON-C3: 다목적 가중치는 자동으로 채우지 않는다
+    const two = { A: { role: "min", a: "", b: "" }, B: { role: "max", a: "", b: "" } } as never;
+    expect(rolesIssue(rows, two, {})).toMatch(/가중치/);
+    expect(rolesIssue(rows, two, { A: 1 })).toMatch(/B/);
+    expect(rolesIssue(rows, two, { A: 0, B: 0 })).toMatch(/합/);
+    expect(rolesIssue(rows, two, { A: 1, B: 3 })).toBeNull();
+    expect(rolesToBody(rows, two, {}).weights).toBeNull();
+    expect(rolesToBody(rows, two, { A: 1 }).weights).toBeNull();
+    expect(rolesToBody(rows, two, { A: 1, B: 3 }).weights).toEqual([1, 3]);
+  });
+
+  it("ON-C3 목: 방향·임계값·가중치가 비면 생성 422 OPT_CRITERIA_REQUIRED(+missing), 미리보기 problems", () => {
+    const srv = new MockServer({ user: "power" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const q = new URLSearchParams();
+    const base = { param_set_id: "ps-2", explore: { kind: "new", count: 16, seed: 1 } };
+    const r = srv.handle("POST", "/studies/s-cushion/surrogate-opts", q, { ...base,
+      objectives: [{ metric: "perf:MaxStress", series: null }, { metric: "perf:MaxDisp", series: null, sense: "max" }],
+      constraints: [{ metric: "perf:AccelPeak", series: null, op: "<=" }] }, h);
+    expect(r.status).toBe(422);
+    const d = (r.body as { detail: { code: string; missing: string[] } }).detail;
+    expect(d.code).toBe("OPT_CRITERIA_REQUIRED");
+    expect(d.missing).toEqual(["objectives.0.sense", "constraints.0.value", "weights"]);
+    const p = srv.handle("POST", "/studies/s-cushion/surrogate-opts/preview", q, { ...base, objectives: [] }, h);
+    expect((p.body as { problems: { code: string; field: string }[] }).problems).toContainEqual(expect.objectContaining({ code: "OPT_CRITERIA_REQUIRED", field: "objectives" }));
   });
 
   it("ParetoPlot 계단선: y 최소면 가로→세로, 최대면 세로→가로", () => {

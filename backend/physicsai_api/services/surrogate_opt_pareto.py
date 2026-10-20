@@ -40,7 +40,7 @@ def role_defs(settings: dict[str, Any]) -> dict[str, Any]:
     objs = []
     for o in ds.settings_objectives(settings):
         label, unit = _label_unit(o["metric"], o.get("series"), perfs)
-        objs.append({"metric": o["metric"], "series": o.get("series"), "sense": o.get("sense") or "min", "label": label,
+        objs.append({"metric": o["metric"], "series": o.get("series"), "sense": o.get("sense"), "label": label,
                      "unit": unit})
     cons = []
     for c in settings.get("constraints") or []:
@@ -52,7 +52,7 @@ def role_defs(settings: dict[str, Any]) -> dict[str, Any]:
         label, unit = _label_unit(o["metric"], o.get("series"), perfs)
         obs.append({"metric": o["metric"], "series": o.get("series"), "label": label, "unit": unit})
     m = len(objs)
-    w = [float(x) for x in settings.get("weights") or []] or [1.0 / m] * m
+    w = [float(x) for x in settings.get("weights") or []] or ([1.0] if m == 1 else [])  # ON-C3: 저장된 사용자 값만
     return {"mode": "multi" if m >= 2 else "single", "objectives": objs, "constraints_def": cons, "observe": obs, "weights": w}
 
 

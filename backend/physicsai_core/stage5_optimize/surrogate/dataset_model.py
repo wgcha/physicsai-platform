@@ -106,9 +106,10 @@ class Problem:
     def from_settings(cls, settings: Mapping[str, Any]) -> Problem:
         b = {k: (float(v[0]), float(v[1])) for k, v in settings["bounds"].items()}
         cons = [Constraint.from_dict(c) for c in settings.get("constraints") or []]
-        objs = [Objective(o["metric"], o.get("series"), o.get("sense") or "min") for o in settings_objectives(settings)]
+        # ON-C3: 방향·가중치는 저장된 사용자 값만 쓴다(기본 min·균등 가중치로 채우지 않음 — 실행 전 criteria가 막는다)
+        objs = [Objective(o["metric"], o.get("series"), o.get("sense")) for o in settings_objectives(settings)]
         obs = [Metric(o["metric"], o.get("series")) for o in settings.get("observe") or []]
-        w = [float(x) for x in settings.get("weights") or []] or [1.0 / len(objs)] * len(objs)
+        w = [float(x) for x in settings.get("weights") or []] or ([1.0] if len(objs) == 1 else [])
         return cls(list(settings["names"]), set(settings.get("integer") or []), b, objs[0].sense, cons, objs, obs, w,
                    dict(settings.get("performances") or {}), cat_spec(settings), cover_spec(settings))
 

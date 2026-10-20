@@ -148,7 +148,8 @@ def test_v_on_12_full_chain_without_hyperstudy(on_e2e, engine, fake_record, monk
     nps = native_set(env)
     assert c.put(f"{API}/param-sets/{nps['id']}/responses", headers=PW, json={"responses": RESP}).status_code == 200
     d3 = opt({**base, "param_set_id": nps["id"], "iterations": 1, "algorithm": "nsga2", "algo_options": {"generations": 20},
-              "objectives": [{"metric": "resp:MaxStress_MAX", "sense": "min"}, {"metric": "resp:Disp_MAX", "sense": "min"}]})
+              "objectives": [{"metric": "resp:MaxStress_MAX", "sense": "min"}, {"metric": "resp:Disp_MAX", "sense": "min"}],
+              "weights": [1, 1]})  # ON-C3: 다목적 가중치는 사용자 입력(자동 균등 없음)
     assert d3["mode"] == "multi" and next(it for it in d3["iterations"] if it["kind"] == "VERIFY")["fit"]["algo"]["name"] == "nsga2"
     assert d3["pareto"]["predicted"]
 

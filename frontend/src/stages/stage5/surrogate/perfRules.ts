@@ -129,8 +129,28 @@ export function roleValueIssue(s: RoleSel): string | null {
   return null;
 }
 
-/** 이름 → 가중치 슬라이더(0~100) 기본 50 */
-export const DEFAULT_WEIGHT = 50;
+/** opt-native ON-C3: 다목적 가중치는 사용자가 목적마다 직접 입력한다(기본값·자동 채움 없음, 빈 칸 = 미입력) */
+export const WEIGHT_HELP = "가중치 = 목적마다 0~100(상대값, 합 > 0). 마무리 추천점(가중합 최소)에만 쓰입니다";
+export const CRITERIA_HELP = "목적 응답·방향(최소/최대)·제약 임계값·가중치는 직접 정합니다 — 시스템이 대신 채우지 않습니다";
+
+/** 가중치 입력 문자열 → 값(빈 칸·숫자 아님 = undefined) */
+export function parseWeight(s: string): number | undefined {
+  const t = s.trim();
+  if (t === "") return undefined;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : undefined;
+}
+
+/** 목적 가중치 미입력·범위 오류 문구(다목적만). 값 제안 없음 */
+export function weightsIssue(objNames: string[], weights: Record<string, number>): string | null {
+  if (objNames.length < 2) return null;
+  const missing = objNames.filter((n) => weights[n] === undefined);
+  if (missing.length) return `가중치를 입력하세요: ${missing.join(", ")}`;
+  const w = objNames.map((n) => weights[n]);
+  if (w.some((x) => x < 0 || x > 100)) return "가중치는 0~100입니다";
+  if (w.reduce((a, b) => a + b, 0) <= 0) return "가중치 합은 0보다 커야 합니다";
+  return null;
+}
 
 export interface RoleBody {
   objectives: SoObjective[];
@@ -156,19 +176,20 @@ export function rolesToBody(rows: PerfRow[], sels: Record<string, RoleSel>, weig
       else constraints.push({ metric, series: null, op: s.role === "le" ? "<=" : ">=", value: Number(s.a) });
     } else if (s.role === "observe") observe.push({ metric, series: null });
   }
-  const w = objNames.map((n) => weights[n] ?? DEFAULT_WEIGHT);
-  return { objectives, constraints, observe, weights: objectives.length > 1 && w.some((x) => x > 0) ? w : null };
+  // ON-C3: 다목적이면 사용자가 모두 입력했을 때만 보낸다(빈 칸을 기본값으로 채우지 않음 — 서버가 422로 막는다)
+  const w = objNames.map((n) => weights[n]);
+  return { objectives, constraints, observe, weights: objectives.length > 1 && w.every((x) => x !== undefined) ? (w as number[]) : null };
 }
 
-/** 역할 오류(시작 막기): 목적 없음·제약 값 부족 */
-export function rolesIssue(rows: PerfRow[], sels: Record<string, RoleSel>): string | null {
+/** 역할 오류(시작 막기): 목적 없음·제약 값 부족·다목적 가중치 미입력(ON-C3) */
+export function rolesIssue(rows: PerfRow[], sels: Record<string, RoleSel>, weights: Record<string, number> = {}): string | null {
   const names = rows.map((r) => r.name);
   if (!roleCounts(sels, names).objectives) return "목적을 1개 이상 지정하세요";
   for (const r of rows) {
     const msg = roleValueIssue(sels[r.name] ?? NO_ROLE);
     if (msg) return `${r.name}: ${msg}`;
   }
-  return null;
+  return weightsIssue(rows.filter((r) => isObjectiveRole(sels[r.name]?.role ?? "none")).map((r) => r.name), weights);
 }
 
 /** 기본 역할 선택(저장된 성능이 바뀌어 사라진 이름은 버린다) */

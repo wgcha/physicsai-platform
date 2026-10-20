@@ -33,7 +33,8 @@ SoExplore = Annotated[Union[SoExploreNew, SoExploreReuse], Field(discriminator="
 class SoObjective(Req):
     metric: str = Field(max_length=200)
     series: str | None = Field(default=None, max_length=400)
-    sense: Literal["min", "max"] = "min"
+    # opt-native ON-C3: 방향은 사용자가 고른다(기본값 없음 — 비면 422 OPT_CRITERIA_REQUIRED)
+    sense: Literal["min", "max"] | None = Field(default=None, description="min | max — 필수(생략 시 422 OPT_CRITERIA_REQUIRED)")
 
 
 class SoConstraint(Req):
@@ -65,7 +66,8 @@ class SurrogateOptCreate(Req):
     objectives: list[SoObjective] | None = Field(default=None, max_length=10)
     constraints: list[SoConstraint] = Field(default_factory=list, max_length=20)
     observe: list[SoObserve] = Field(default_factory=list, max_length=50)
-    weights: list[float] | None = Field(default=None, max_length=10)
+    weights: list[float] | None = Field(default=None, max_length=10,
+                                        description="목적 2개 이상이면 필수(사용자 입력, 생략 시 422 OPT_CRITERIA_REQUIRED)")
     bounds: dict[str, list[float]] | None = None
     surrogate: Literal["gp", "rbf"] | None = None
     iterations: int | None = None

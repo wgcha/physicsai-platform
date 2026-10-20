@@ -51,8 +51,8 @@ def _bounds(ps: dict[str, Any], body: Any, so: Any, problems: list[dict[str, Any
 
 
 def _weights(body: Any, m: int, problems: list[dict[str, Any]]) -> list[float]:
-    if body.weights is None:
-        return [1.0 / m] * m if m else []
+    if body.weights is None:  # ON-C3: 다목적 가중치는 자동으로 채우지 않는다(빈 항목은 criteria가 422로 막음)
+        return [1.0] if m == 1 else []
     w = list(body.weights)
     if len(w) != m or any(not math.isfinite(x) or x < 0 for x in w) or sum(w) <= 0:
         _p(problems, "WEIGHTS_INVALID", "가중치는 목적 수와 같은 개수의 0 이상 유한 수이고 합이 0보다 커야 합니다", "weights")

@@ -230,20 +230,26 @@ def test_v3_s17_11_problems_and_single_compat(mo_env, monkeypatch):
         assert r.status_code == 200, r.text
         return {p["code"] for p in r.json()["problems"]}
 
-    assert codes(objective={"metric": "perf:CornerStress"}) == {"OBJECTIVES_CONFLICT"}
-    assert codes(objectives=[{"metric": f"perf:{n}"} for n in ("CornerStress", "AccelPeak", "MaxStress")] +
-                 [{"metric": "curve:max"}], weights=None, observe=[]) == {"OBJECTIVES_RANGE"}
-    assert codes(objectives=[{"metric": "perf:CornerStress"}, {"metric": "perf:CornerStress", "sense": "max"}]) == \
+    assert codes(objective={"metric": "perf:CornerStress", "sense": "min"}) == {"OBJECTIVES_CONFLICT"}
+    assert codes(objectives=[{"metric": f"perf:{n}", "sense": "min"} for n in ("CornerStress", "AccelPeak", "MaxStress")] +
+                 [{"metric": "curve:max", "sense": "min"}], weights=None, observe=[]) == {"OBJECTIVES_RANGE"}
+    assert codes(objectives=[{"metric": "perf:CornerStress", "sense": "min"}, {"metric": "perf:CornerStress", "sense": "max"}]) == \
         {"OBJECTIVE_DUPLICATE"}
     assert codes(constraints=[{"metric": "perf:CornerStress", "op": "<=", "value": 1}]) == {"OBJECTIVE_DUPLICATE"}
     assert codes(constraints=[{"metric": "perf:MaxStress", "op": "range", "lo": 5, "hi": 5}], observe=[]) == \
         {"CONSTRAINT_INVALID"}
-    assert codes(constraints=[{"metric": "perf:MaxStress", "op": "<="}], observe=[]) == {"CONSTRAINT_INVALID"}
+    # ON-C3: 값 없는 제약·방향 없는 목적·다목적 가중치 생략 = OPT_CRITERIA_REQUIRED(기본값으로 채우지 않음)
+    assert codes(constraints=[{"metric": "perf:MaxStress", "op": "<="}], observe=[]) == {"OPT_CRITERIA_REQUIRED"}
+    assert codes(objectives=[{"metric": "perf:CornerStress"}, {"metric": "perf:AccelPeak", "sense": "max"}]) == \
+        {"OPT_CRITERIA_REQUIRED"}
+    assert codes(weights=None) == {"OPT_CRITERIA_REQUIRED"}
+    assert codes(objectives=[]) == {"OPT_CRITERIA_REQUIRED"}
     assert codes(observe=[{"metric": "curve:min", "series": f"S{i}"} for i in range(11)]) == {"OBSERVE_INVALID"}
     assert codes(observe=[{"metric": "resp:Nope_MAX"}]) == {"OBSERVE_INVALID"}
     assert codes(weights=[1, 2, 3]) == {"WEIGHTS_INVALID"} and codes(weights=[0, 0]) == {"WEIGHTS_INVALID"}
     assert codes(weights=[-1, 2]) == {"WEIGHTS_INVALID"}
-    assert codes(objectives=[{"metric": "perf:Nope"}, {"metric": "perf:AccelPeak"}]) == {"PERF_UNDEFINED"}
+    assert codes(objectives=[{"metric": "perf:Nope", "sense": "min"}, {"metric": "perf:AccelPeak", "sense": "min"}]) == \
+        {"PERF_UNDEFINED"}
     assert codes(constraints=[{"metric": "perf:MaxStress", "op": "range", "lo": 1, "hi": 900}], observe=[]) == set()
     # 재사용 배치에 성능 값 없음 → PERF_MISSING_IN_BATCH(action extract) — CURVE는 다시 추출 없이 값 있음
     r = env.c.post(url, headers=PW, json=_body(explore={"kind": "reuse", "batch_id": old_bid}))

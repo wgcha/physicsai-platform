@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
-import { METHOD_DEFAULTS, activeRules } from "../stages/stage5/rules";
+import { METHOD_DEFAULTS, activeRules, cleanResponses } from "../stages/stage5/rules";
 
 describe("V2-FE-4 ⑤ 최적화", () => {
   // phase3.md §18.10: 기본 모드가 "플랫폼 내장"이 되어, 원본 최적화 시험은 원본 모드를 고른 상태에서 그대로 확인한다
@@ -36,6 +36,9 @@ describe("V2-FE-4 ⑤ 최적화", () => {
     fireEvent.change(within(table).getByLabelText("STRESS Goal"), { target: { value: "CONSTRAINT" } });
     expect((within(table).getByLabelText("STRESS Value") as HTMLInputElement).disabled).toBe(false);
     expect((within(table).getByLabelText("STRESS Bound") as HTMLSelectElement).disabled).toBe(false);
+    // ON-C3: Bound는 미선택(기본 "<=" 없음)
+    expect((within(table).getByLabelText("STRESS Bound") as HTMLSelectElement).value).toBe("");
+    expect(cleanResponses([{ name: "A", source: "H3D", subcase: 1, datatype: "S", component: "c", layer: "", stat: "MAX", goal: "CONSTRAINT", value: 1 }])[0].bound).toBeUndefined();
     fireEvent.change(within(table).getByLabelText("STRESS Goal"), { target: { value: "MINIMIZE" } });
     await waitFor(() => expect(btn.disabled).toBe(false));
     fireEvent.click(btn);
@@ -43,6 +46,27 @@ describe("V2-FE-4 ⑤ 최적화", () => {
     const j = server.jobs.find((x) => x.job_type === "OPTIMIZE" && x.state === "QUEUED")!;
     expect(j.params).toMatchObject({ approach: "OPT", opt_method: "ARSM", max_designs: 25, responses: [{ name: "STRESS", source: "H3D", subcase: 1, datatype: "Stress", component: "vonMises", goal: "MINIMIZE" }] });
     expect((j.params.responses as Record<string, unknown>[])[0]).not.toHaveProperty("bound");
+  });
+
+  it("ON-C3 레거시: CONSTRAINT Bound·Value를 직접 고르기 전엔 실행 비활성", async () => {
+    renderApp(`${STUDY}/5`, { user: "power" });
+    const card = await screen.findByRole("region", { name: "응답" });
+    const table = within(card).getByRole("table", { name: "응답 표" });
+    const add = within(card).getByRole("group", { name: "응답 추가" });
+    await waitFor(() => expect((within(add).getByLabelText("DataType") as HTMLSelectElement).tagName).toBe("SELECT"));
+    fireEvent.click(within(add).getByRole("button", { name: "추가" }));
+    fireEvent.change(within(table).getByLabelText("STRESS Goal"), { target: { value: "MINIMIZE" } });
+    fireEvent.change(within(add).getByLabelText("Name"), { target: { value: "LIMIT" } });
+    fireEvent.click(within(add).getByRole("button", { name: "추가" }));
+    fireEvent.change(within(table).getByLabelText("LIMIT Goal"), { target: { value: "CONSTRAINT" } });
+    const run = screen.getByRole("region", { name: "실행" });
+    const btn = within(run).getByRole("button", { name: "최적화 실행" }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(within(run).getByText("CONSTRAINT 응답의 Bound를 고르세요")).toBeTruthy();
+    fireEvent.change(within(table).getByLabelText("LIMIT Bound"), { target: { value: ">=" } });
+    expect(within(run).getByText("CONSTRAINT 응답의 Value를 입력하세요")).toBeTruthy();
+    fireEvent.change(within(table).getByLabelText("LIMIT Value"), { target: { value: "3" } });
+    await waitFor(() => expect(btn.disabled).toBe(false));
   });
 
   it("메서드 변경 시 기본값·SQP 라벨, DOE면 메서드·고급 비활성 + 버튼 문구", async () => {

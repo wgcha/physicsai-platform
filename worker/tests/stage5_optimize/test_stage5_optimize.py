@@ -63,6 +63,11 @@ def test_optimize_chain(p2_env, fake_record, monkeypatch, engine):
     sid, mid, psid = _setup_opt(c, w, ai, "op1")
     r = submit(c, sid, "OPTIMIZE", {"responses": [RESP[2]]}, expect=422)
     assert r["detail"]["code"] == "OBJECTIVE_REQUIRED"
+    # opt-native ON-C3: 제약 Bound·Value는 사용자가 정한다(기본 "<=" 없음) → 422 OPT_CRITERIA_REQUIRED + missing
+    nob = {k: v for k, v in RESP[1].items() if k != "bound"}
+    r = submit(c, sid, "OPTIMIZE", {"responses": [RESP[0], nob, {**RESP[1], "name": "D2", "value": None}]}, expect=422)
+    assert r["detail"]["code"] == "OPT_CRITERIA_REQUIRED"
+    assert r["detail"]["missing"] == ["responses.1.bound", "responses.2.value"]
     r = submit(c, sid, "OPTIMIZE", {"responses": [{**RESP[0], "name": "bad name"}]}, expect=422)
     assert r["detail"]["code"] == "RESPONSES_INVALID" and r["detail"]["problems"]
     j = submit(c, sid, "OPTIMIZE", {"responses": RESP, "max_designs": 4})

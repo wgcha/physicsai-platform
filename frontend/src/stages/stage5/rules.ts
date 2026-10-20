@@ -31,7 +31,8 @@ export function cleanResponses(rows: OptResponse[]): OptResponse[] {
   return rows.map((r) => {
     const base = { name: r.name, source: r.source, component: r.component, stat: r.stat, goal: r.goal };
     const src = r.source === "H3D" ? { subcase: r.subcase, datatype: r.datatype, layer: r.layer ?? "" } : { request: r.request };
-    const cons = r.goal === "CONSTRAINT" ? { bound: r.bound ?? "<=", value: r.value } : {};
+    // opt-native ON-C3: 조건(bound)은 사용자가 고른다 — 기본 "<="로 채우지 않는다
+    const cons = r.goal === "CONSTRAINT" ? { bound: r.bound, value: r.value } : {};
     return { ...base, ...src, ...cons } as OptResponse;
   });
 }

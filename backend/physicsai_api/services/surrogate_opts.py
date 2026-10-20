@@ -16,6 +16,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.stage4_predict.batch_matrix import build_matrix_for, lhs_values
+from physicsai_core.stage5_optimize.surrogate import criteria
 
 from ..auth import Principal
 from ..context import AppContext
@@ -58,6 +59,9 @@ def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid:
         require_config_ok(ctx)
         study_gate(conn, study, "SURROGATE_OPT")
         n = _normalize(ctx, conn, study, body)
+        if n["criteria_missing"]:  # opt-native ON-C3: 사용자가 정하지 않은 기준은 채우지 않고 막는다
+            raise DomainError(criteria.CODE, criteria.MESSAGE, status=422, missing=n["criteria_missing"],
+                              problems=criteria.problems_of(n["criteria_missing"]))
         if n["problems"]:
             raise _invalid(n["problems"])
         if so_repo.active_for_study(conn, study_id) is not None:
