@@ -40,12 +40,33 @@ def extract_token(request: Request, cookie_name: str) -> str | None:
 
 def get_principal(request: Request) -> Principal:
     ctx = get_ctx(request)
+    auth_header = request.headers.get("authorization", "")
+    if is_token_header(auth_header):  # mcp.md §4.2: `pai_` Bearer = API 토큰 경로(쿠키 무시, 대시보드 미호출, CSRF 면제)
+        from .auth_tokens import authenticate_token
+
+        principal = authenticate_token(ctx, request, auth_header)
+        request.state.principal = principal
+        return principal
     token = extract_token(request, ctx.settings.auth.cookie_name)
     principal = ctx.auth.authenticate(token, request_id(request))
     if request.method not in SAFE_METHODS and request.headers.get("x-physicsai-request") != "1":
         raise DomainError("CSRF_HEADER_REQUIRED", "요청 헤더 X-PhysicsAI-Request가 필요합니다", status=403)
     request.state.principal = principal
+    if ctx.settings.mcp.enabled:  # §4.3: 세션 인증 성공 → 그 사용자의 API 토큰 역할 스냅숏 갱신
+        from .auth_tokens import refresh_from_session
+
+        refresh_from_session(ctx, request, principal)
     return principal
+
+
+def is_token_header(auth_header: str | None) -> bool:
+    scheme, _, value = (auth_header or "").partition(" ")
+    return scheme.lower() == "bearer" and value.strip().startswith("pai_")
+
+
+def api_token_id(request: Request) -> str | None:
+    """토큰 요청이면 그 토큰 id(세션 요청은 None)."""
+    return getattr(request.state, "api_token_id", None)
 
 
 def get_token(request: Request) -> str | None:

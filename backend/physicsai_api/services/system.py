@@ -71,7 +71,11 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
         "ui": s.ui.model_dump(),
         "auth": {"mode": s.auth.mode, "login_url": s.auth.dashboard_public_login_url},
         "resources": _resource_status(s),
-        "features": feature_status(s, av.configured),
+        "features": {**feature_status(s, av.configured),  # mcp.md §13·§20.5 features.mcp·mcp_http
+                     "mcp": {"enabled": bool(s.mcp.enabled), "missing": [] if s.mcp.enabled else ["mcp.enabled"]},
+                     "mcp_http": {"enabled": bool(s.mcp.enabled and s.mcp.server.http_enabled),
+                                  "missing": [] if s.mcp.enabled and s.mcp.server.http_enabled else
+                                  ["mcp.enabled" if not s.mcp.enabled else "mcp.server.http_enabled"]}},
         "env_check": env_status(ctx, principal) if principal is not None else None,
         "capture": {"views": list(s.capture.views), "video": bool(s.capture.video), "video_ext": s.capture.video_ext,
                     "default_field": s.capture.default_field, "default_component": s.capture.default_component,

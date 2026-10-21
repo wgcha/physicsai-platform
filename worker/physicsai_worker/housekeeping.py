@@ -43,6 +43,20 @@ def purge_notifications(engine: Engine, retention_days: int) -> int:
         return notif_repo.purge_older_than(conn, retention_days)
 
 
+def purge_mcp(engine: Engine, settings: Any, now: Any = None) -> dict[str, int]:
+    """mcp.md §6.2: api_audit 보존 기간 초과 행·만료 후 하루 지난 확인 계획 삭제(플랫폼 내부 기록 — 사용자 산출물 아님)."""
+    from datetime import datetime, timedelta, timezone
+
+    from physicsai_core.db.repositories import api_audit as audit_repo
+    from physicsai_core.db.repositories import mcp_plans as plans_repo
+
+    now = now or datetime.now(timezone.utc)
+    with engine.begin() as conn:
+        audit = audit_repo.purge_older_than(conn, now - timedelta(days=settings.mcp.audit.retention_days))
+        plans = plans_repo.purge_expired(conn, now - timedelta(days=1))
+    return {"api_audit": audit, "mcp_plans": plans}
+
+
 def purge_view_cache(engine: Engine, settings: Any) -> dict[str, int]:
     """서버측 미리보기·3D 컨투어 캐시 정리(geometry-view.md §6.6 — `<study>/_cache/`, 플랫폼 임시 산출물이라 `_backup` 이동 대신 삭제).
 

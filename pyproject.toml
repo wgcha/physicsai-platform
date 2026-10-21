@@ -20,15 +20,22 @@ dependencies = [
   "numpy>=2.0,<3",  # S13 내장 최적화 대리모델(워커 계산 모듈 stage5_optimize/surrogate에서만 지연 import, phase3 §18.2)
   "scipy>=1.13,<2",
   "simdash-adapters==0.1.0",  # 저장소 안 packages/simdash_adapters(같은 저장소라 정확 고정, phase3.md §6.5)
+  "mcp==2.3.0",  # 공식 MCP Python SDK(docs/contracts/mcp.md MR-14·MR-18) — 정확 고정, SDK 사용은 physicsai_mcp/sdk_adapter.py 한 파일. 전이 의존은 deploy/requirements.lock
   "paicad==0.11.0",  # 저장소 안 packages/paicad(native 형상 엔진, 별도 프로세스로만 실행 — geometry-engine.md §7.8·§17.1). 버전은 scripts/check_paicad.py가 __version__과 대조
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8", "pytest-timeout>=2.2"]
 
+[project.scripts]
+physicsai-mcp = "physicsai_mcp.stdio:main"  # MCP stdio 실행기(mcp.md §20.1·§20.4)
+
 [tool.setuptools.packages.find]
 where = ["backend", "worker"]
-include = ["physicsai_core*", "physicsai_api*", "physicsai_worker*"]
+include = ["physicsai_core*", "physicsai_api*", "physicsai_worker*", "physicsai_mcp*"]
+
+[tool.setuptools.package-data]
+physicsai_api = ["mcp/generated/*.json", "mcp/glossary_terms.yaml"]  # mcp.md §9·§10: /mcp/tools·/mcp/glossary가 서빙
 
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "worker/tests", "packages/simdash_adapters/tests"]

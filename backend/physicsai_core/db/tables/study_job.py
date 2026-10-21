@@ -82,6 +82,7 @@ jobs = Table(
     Column("created_at", TS, nullable=False, server_default=func.now()),
     Column("updated_at", TS, nullable=False, server_default=func.now()),
     Column("version", BigInteger, nullable=False, server_default="1"),
+    Column("api_token_id", ID, nullable=True),  # mcp.md §14: 토큰 요청으로 만든 작업(FK 없음, 0020_mcp)
     CheckConstraint("lane IN ('SLOT','LIGHT','PREVIEW')", name="ck_jobs_lane"),  # PREVIEW: geometry-view.md §6.2(0017_geom_view)
     CheckConstraint("stage BETWEEN 0 AND 5", name="ck_jobs_stage"),
     CheckConstraint(

@@ -24,6 +24,8 @@ PAICAD_DESELECT=()
 echo "== openapi.json 최신 여부 =="
 "$PYTHON" -c "import sys; from physicsai_api.export_openapi import render; sys.exit(0 if open('backend/openapi.json', encoding='utf-8').read() == render() else 1)" \
   || { echo "backend/openapi.json이 최신이 아닙니다: python -m physicsai_api.export_openapi"; exit 1; }
+echo "== MCP 도구 스펙·용어집 최신·호환 여부(mcp.md §9: x-mcp 누락·이식 가능 스키마·용어집 ko 누락·깨지는 변경 포함) =="
+"$PYTHON" scripts/gen_tool_specs.py --check
 if [ -f frontend/package.json ] && command -v npm >/dev/null 2>&1; then
   echo "== frontend vitest + tsc =="
   (cd frontend && { [ -d node_modules ] || npm ci; } && npm test && npm run lint)

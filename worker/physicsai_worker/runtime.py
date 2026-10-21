@@ -233,6 +233,7 @@ class Worker(HpcPollerMixin):
         if force_purge or now - getattr(self, "_last_cache_purge", 0.0) >= self.settings.geometry.view.cache.purge_interval_h * 3600:
             self._last_cache_purge = now  # geometry-view.md §6.6: 서버측 <study>/_cache/ 임시 캐시(기간·총량)
             housekeeping.purge_view_cache(self.engine, self.settings)
+            housekeeping.purge_mcp(self.engine, self.settings)  # mcp.md §6.2: 미리보기 캐시 정리와 같은 주기
 
     # ---- 스레드 ----
     def _loop(self, name: str, fn: Any, interval_fn: Any) -> None:

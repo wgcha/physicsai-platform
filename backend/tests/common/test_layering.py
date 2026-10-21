@@ -10,6 +10,8 @@
 규칙 7: 공통 어댑터 패키지 simdash_adapters는 physicsai_*를 import하지 않는다(phase3.md §6, V3-S4-5).
         physicsai_api는 command 게이트웨이 모듈(simdash_adapters.hpc.command·physicsai_core.hpc.command)을 import하지 않는다
         (API는 availability()만 — platform.md §12.2).
+규칙 8: MCP 서버 패키지 physicsai_mcp는 physicsai_api·physicsai_core·physicsai_worker를 import하지 않는다(필요한 것은 주입 — mcp.md §20.1, V-MCP-18).
+        공식 SDK(`mcp`) import는 sdk_adapter.py 한 파일, 권한·범위 판정 코드 없음, python-multipart 직접 import 0(SDK 전이 의존으로만 설치).
 """
 
 from __future__ import annotations
@@ -24,6 +26,7 @@ PKG_ROOTS = {
     "physicsai_api": REPO / "backend" / "physicsai_api",
     "physicsai_worker": REPO / "worker" / "physicsai_worker",
     "simdash_adapters": REPO / "packages" / "simdash_adapters" / "src" / "simdash_adapters",
+    "physicsai_mcp": REPO / "backend" / "physicsai_mcp",
 }
 
 # 규칙 4: 예외 없음(서비스 SQL은 저장소 함수로 옮김, refactor-plan R5).
@@ -185,3 +188,75 @@ def test_import_resolver_sees_relative_and_local_imports():
     assert {"physicsai_worker.executor", "physicsai_worker.executor.X", "physicsai_worker.steps.y", "physicsai_worker.runtime"} <= names
     names = {m for _, m in _resolve("from .b import c\n", "physicsai_worker.steps", True)}
     assert "physicsai_worker.steps.b.c" in names
+
+
+# ---- 규칙 8: physicsai_mcp(V-MCP-18) ------------------------------------------------------------------
+
+PLATFORM_PKGS = ("physicsai_api", "physicsai_core", "physicsai_worker")
+FORBIDDEN_DECISION_NAMES = ("scope_allows", "RISK_RANK", "is_global_admin", "Principal", "PERMISSION_DENIED", "API_TOKEN_SCOPE",
+                            "API_TOKEN_OPERATION_NOT_ALLOWED", "SESSION_REQUIRED", "CONFIRM_REQUIRED")
+
+
+def test_rule8_mcp_package_does_not_import_platform():
+    v = _violations(_files("physicsai_mcp"), lambda m: any(_starts(m, p) for p in PLATFORM_PKGS))
+    assert v == [], v
+
+
+def test_rule8_only_api_mount_imports_mcp_package():
+    """physicsai_mcp를 import하는 플랫폼 코드는 `physicsai_api/mcp/http_mount.py`(주입 마운트) 하나."""
+    importers = set()
+    for top in ("physicsai_core", "physicsai_api", "physicsai_worker"):
+        for f in _files(top):
+            if _violations([f], lambda m: _starts(m, "physicsai_mcp")):
+                importers.add(f.relative_to(REPO).as_posix())
+    assert importers == {"backend/physicsai_api/mcp/http_mount.py"}, importers
+
+
+def test_rule8_sdk_import_only_in_sdk_adapter():
+    v = [x for f in _files("physicsai_mcp") if f.name != "sdk_adapter.py"
+         for x in _violations([f], lambda m: _starts(m, "mcp") or _starts(m, "mcp_types"))]
+    assert v == [], v
+    assert _violations([PKG_ROOTS["physicsai_mcp"] / "sdk_adapter.py"], lambda m: _starts(m, "mcp")), "SDK import가 sdk_adapter.py에 있어야 한다"
+
+
+def test_rule8_mcp_package_has_no_permission_decisions():
+    """MCP 계층은 범위·역할·confirm을 판정하지 않는다 — 판정 이름·오류 코드를 식별자·문자열로 만들지 않는다(주석·docstring 제외)."""
+    import ast
+
+    hits = []
+    for f in _files("physicsai_mcp"):
+        tree = ast.parse(f.read_text(encoding="utf-8"))
+        docstrings = {id(n.body[0].value) for n in ast.walk(tree)
+                      if isinstance(n, (ast.Module, ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body
+                      and isinstance(n.body[0], ast.Expr) and isinstance(n.body[0].value, ast.Constant)}
+        for n in ast.walk(tree):
+            name = n.id if isinstance(n, ast.Name) else n.attr if isinstance(n, ast.Attribute) else None
+            if name in FORBIDDEN_DECISION_NAMES:
+                hits.append(f"{f.name}:{n.lineno} {name}")
+            if isinstance(n, ast.Constant) and isinstance(n.value, str) and id(n) not in docstrings and n.value in FORBIDDEN_DECISION_NAMES:
+                hits.append(f"{f.name}:{n.lineno} {n.value!r}")
+    assert hits == [], hits
+
+
+def test_python_multipart_is_transitive_only():
+    """UR-C1·MR-18: python-multipart는 SDK 전이 의존으로만 — 플랫폼 코드 import 0, multipart 라우트 0."""
+    import json
+
+    bad = []
+    for root in (REPO / "backend", REPO / "worker"):
+        for f in sorted(root.rglob("*.py")):
+            rel = f.relative_to(REPO).as_posix()
+            if "/tests/" in rel or "/.venv/" in rel:
+                continue
+            try:
+                tree = ast.parse(f.read_text(encoding="utf-8"))
+            except SyntaxError:
+                continue
+            for n in ast.walk(tree):
+                mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""] if isinstance(n, ast.ImportFrom) else []
+                bad += [f"{rel}:{n.lineno} {m}" for m in mods if m.split(".")[0] in ("multipart", "python_multipart")]
+                if isinstance(n, ast.Name) and n.id in ("UploadFile", "Form"):
+                    bad.append(f"{rel}:{n.lineno} {n.id}")
+    assert bad == [], bad
+    spec = json.loads((REPO / "backend" / "openapi.json").read_text(encoding="utf-8"))
+    assert "multipart/form-data" not in json.dumps(spec) and "application/x-www-form-urlencoded" not in json.dumps(spec)

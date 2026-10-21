@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..schemas import mcp as M
 from ..services import native_vars_api as vars_svc
 from ..services import param_set_baselines_api as bl_svc
 from ..services import param_set_native_api as native_svc
@@ -72,8 +75,13 @@ def samples(ps_id: str, request: Request, limit: int | None = Query(default=None
     return svc.get_samples(get_ctx(request), ps_id, limit, cursor)
 
 
-@router.post("/studies/{study_id}/predict/check", response_model=S.PredictCheckResponse, responses=ERR)
-def predict_check(study_id: str, body: S.PredictCheckRequest, request: Request, _p: Principal = Depends(get_principal)) -> dict:
+@router.post("/studies/{study_id}/predict/check", response_model=S.PredictCheckResponse, summary="예측 입력 범위 검사",
+             responses={**ERR, **M.errors(e404="NOT_FOUND · PARAM_SET_REQUIRED", e422="INVALID_PARAMS")},
+             openapi_extra=M.xmcp_tool("check_prediction_input", "read", "Check parameter values against the set range (no job created)",
+                                       "파라미터 값이 세트 범위 안인지·반올림·최근접 학습 run 확인"))
+def predict_check(study_id: Annotated[str, Path(description="Study id")], body: S.PredictCheckRequest, request: Request,
+                  _p: Principal = Depends(get_principal)) -> dict:
+    """파라미터 값이 세트 범위(min~max) 안인지, 정수 반올림, 가장 가까운 학습 run을 확인한다(저장·작업 없음). 예측 전에 쓴다."""
     return svc.predict_check(get_ctx(request), study_id, body.param_set_id, body.values)
 
 
@@ -165,7 +173,7 @@ def native_vars_get(
         request: Request, ps_id: str = Path(description="Native 파라미터 세트(템플릿) id", examples=["0b9f6f3e-2d3a-4c5e-9a41-5b1c2d3e4f50"]),
         model_id: str | None = Query(default=None, description="학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음)",
                                      examples=["7c1e0d52-8a3b-4f6d-b2c9-1e4a5f6b7c80"]),
-        revision: int | None = Query(default=None, ge=0, le=100000, description="특정 리비전의 변수 목록만 보려면 리비전 번호(0 = 등록 정의, 생략 = 현재)",
+        revision: int | None = Query(default=None, ge=0, le=100000, description="특정 리비전의 변수 목록만 보려면 리비전 번호[번](0 = 등록 정의, 생략 = 현재)",
                                      examples=[2]),
         _p: Principal = Depends(get_principal)) -> dict:
     """Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:

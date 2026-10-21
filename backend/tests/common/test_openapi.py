@@ -77,6 +77,11 @@ def test_all_routes_prefixed():
         "/equiv/recipes", "/equiv/recipes/{key}", "/equiv/recipes/{key}/versions", "/equiv/recipes/{key}/restore",
         "/studies/{study_id}/equiv-checks/preview", "/studies/{study_id}/equiv-checks", "/equiv-checks/{eq_id}",
         "/equiv-checks/{eq_id}/curves", "/equiv-checks/{eq_id}/table.csv",
+        # mcp.md §4.4·§5.2·§6.2·§7·§9·§10: API 토큰 관리(세션 전용)·공통 작업 계약·요약·감사·용어집·도구 스펙·ping
+        "/me/api-tokens", "/me/api-tokens/{token_id}", "/admin/api-tokens", "/admin/api-tokens/{token_id}/revoke",
+        "/mcp/ping", "/mcp/job-kinds", "/mcp/job-kinds/{kind}", "/mcp/jobs/plan", "/mcp/jobs", "/mcp/jobs/{job_id}",
+        "/mcp/jobs/{job_id}/summary", "/mcp/jobs/{job_id}/cancel", "/mcp/summary/{entity}/{id}", "/mcp/system", "/mcp/audit",
+        "/mcp/glossary", "/mcp/tools",
         # native-vars.md §6.1: Native 템플릿 변수 정의(선택·범위)
         "/param-sets/{ps_id}/variables",
     }

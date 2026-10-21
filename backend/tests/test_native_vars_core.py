@@ -228,6 +228,9 @@ ALLOWED = {
     "worker/physicsai_worker/steps/stage4_predict/np_register.py": 5,    # 등록·reprep·props 스캔(세트 정의)
     "worker/physicsai_worker/steps/stage4_predict/predict_native.py": 4,  # 단건 PREDICT(세트 정의)
     "worker/physicsai_worker/steps/stage4_predict/predict.py": 2,
+    # --- MCP(mcp.md): 읽기 전용 요약·스펙 생성기 ---
+    "backend/physicsai_api/mcp/summaries.py": 1,                         # param_set 요약 = 세트 정의 표(실행 경로 아님, vars_revision은 facts에 함께)
+    "backend/physicsai_api/mcp/toolspec.py": 1,                          # openapi operation의 `parameters`(경로·쿼리 인자) — 세트 정의와 무관
 }
 PATTERN = re.compile(r"\[\"parameters\"\]|\.get\(\"parameters\"\)")
 

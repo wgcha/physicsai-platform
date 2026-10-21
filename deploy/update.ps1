@@ -61,6 +61,7 @@ try {
     # ---- ④ 새 설치 ---------------------------------------------------------------------------
     & $basePy.Exe -m venv (Join-Path $root 'venv'); Assert-Ok 'venv 생성'
     & $venvPy -m pip install --no-index --find-links (Join-Path $pkg 'wheels') physicsai-platform; Assert-Ok 'wheel 설치'
+    & $venvPy -m physicsai_mcp.stdio --version; Assert-Ok 'MCP 실행기 확인(physicsai-mcp --version, mcp.md §20.5)'
     Copy-Item -Recurse -Force (Join-Path $pkg 'migrations') (Join-Path $root 'migrations')
     New-Item -ItemType Directory -Force -Path $cfg.caddy_frontend_root | Out-Null
     Copy-Item -Recurse -Force (Join-Path $pkg 'frontend\*') $cfg.caddy_frontend_root

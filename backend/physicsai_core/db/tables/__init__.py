@@ -18,6 +18,7 @@ from .surrogate_opt import surrogate_opt_iters, surrogate_opts
 from .fem_verify import fem_verifications
 from .geom_view import contour3d_cache, geom_previews
 from .equiv_check import eq_checks, eq_recipes
+from .mcp import api_audit, api_tokens, mcp_plans
 
 __all__ = [
     "metadata",
@@ -51,5 +52,8 @@ __all__ = [
     "contour3d_cache",
     "eq_recipes",
     "eq_checks",
+    "api_tokens",
+    "mcp_plans",
+    "api_audit",
     "TERMINAL_STATES",
 ]

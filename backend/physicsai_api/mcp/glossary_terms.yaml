@@ -1,0 +1,151 @@
+# 도메인 용어집 — 사람이 쓰는 부분(mcp.md §10). 자동 추출 키를 참조만 한다(없는 키면 시험 실패).
+# 필수: 피처 약어(feature:*)·작업 종류(job_kind:*)·엔티티(entity:*) 전부에 ko 한 줄. 코드 엔티티가 없는 용어는 unmapped:.
+schema_version: 1
+terms:
+  # ---- 피처 약어(paicad TYPE_ABBR) ----
+  - key: feature:THK
+    ko: 두께
+    synonyms: [두께, 쿠션 두께, 벽 두께, thickness]
+    unit: mm
+  - key: feature:POCKET_D
+    ko: 포켓 깊이
+    synonyms: [포켓 깊이, 홈 깊이, pocket depth]
+    unit: mm
+  - key: feature:POCKET_W
+    ko: 포켓 폭
+    synonyms: [포켓 폭, 홈 폭, pocket width]
+    unit: mm
+  - key: feature:RIB_T
+    ko: 리브 두께
+    synonyms: [리브, 리브 두께, rib thickness]
+    unit: mm
+  - key: feature:RIB_H
+    ko: 리브 높이
+    synonyms: [리브 높이, rib height]
+    unit: mm
+  - key: feature:RIB_U
+    ko: 리브 위치(U)
+    synonyms: [리브 가로 위치, rib position u]
+    unit: mm
+  - key: feature:RIB_V
+    ko: 리브 위치(V)
+    synonyms: [리브 세로 위치, rib position v]
+    unit: mm
+  - key: feature:HOLE_R
+    ko: 구멍 반지름
+    synonyms: [구멍 크기, 홀 반경, hole radius]
+    unit: mm
+  - key: feature:HOLE_U
+    ko: 구멍 위치(U)
+    synonyms: [구멍 가로 위치, hole position u]
+    unit: mm
+  - key: feature:HOLE_V
+    ko: 구멍 위치(V)
+    synonyms: [구멍 세로 위치, hole position v]
+    unit: mm
+  - key: feature:FILLET_R
+    ko: 필렛 반지름
+    synonyms: [필렛, 라운드, fillet radius]
+    unit: mm
+  - key: feature:BEAD_D
+    ko: 비드 깊이
+    synonyms: [비드, 판금 비드, bead depth]
+    unit: mm
+  - key: feature:BEAD_W
+    ko: 비드 폭
+    synonyms: [비드 폭, bead width]
+    unit: mm
+  - key: feature:BEAD_U
+    ko: 비드 위치(U)
+    synonyms: [비드 가로 위치, bead position u]
+    unit: mm
+  - key: feature:BEAD_V
+    ko: 비드 위치(V)
+    synonyms: [비드 세로 위치, bead position v]
+    unit: mm
+  # ---- 엔티티 ----
+  - key: entity:study
+    ko: Study(해석 과제)
+    synonyms: [스터디, 과제, 프로젝트 폴더]
+  - key: entity:param_set
+    ko: 파라미터 세트
+    synonyms: [세트, 템플릿, 파라미터 템플릿]
+  - key: entity:train_doe
+    ko: 학습 데이터 DOE
+    synonyms: [DOE, 학습 DOE, 실험계획]
+  - key: entity:predict_run
+    ko: 단일 예측
+    synonyms: [예측, 예측 실행]
+  - key: entity:predict_batch
+    ko: 일괄 예측
+    synonyms: [배치 예측, 일괄 예측 배치]
+  - key: entity:surrogate_opt
+    ko: 내장 최적화
+    synonyms: [최적화, 대리모델 최적화]
+  - key: entity:equiv_check
+    ko: 해석 등가성 판정
+    synonyms: [등가성 판정, 등가 검증]
+  - key: entity:fem_verify
+    ko: 조립 FEM 검증
+    synonyms: [FEM 검증, 해석 검증]
+  - key: entity:geom_preview
+    ko: 형상 미리보기
+    synonyms: [형상 보기, 미리보기]
+  - key: entity:job
+    ko: 작업
+    synonyms: [잡, 실행]
+  # ---- 작업 종류 ----
+  - key: job_kind:doe_generate
+    ko: 학습 데이터 DOE 생성
+    synonyms: [DOE 생성, 학습 데이터 만들기]
+  - key: job_kind:solve_pbs
+    ko: 학습 데이터 PBS 해석 제출
+    synonyms: [해석 제출, PBS 제출, 클러스터 해석]
+  - key: job_kind:predict
+    ko: 단일 예측 실행
+    synonyms: [예측 실행]
+  - key: job_kind:predict_batch
+    ko: 일괄 예측 실행
+    synonyms: [배치 예측 실행]
+  - key: job_kind:surrogate_opt
+    ko: 내장 최적화 실행
+    synonyms: [최적화 실행]
+  - key: job_kind:surrogate_opt_verify
+    ko: 최적화 추가 검증
+    synonyms: [최적 해 검증, 추가 검증]
+  - key: job_kind:equiv_check
+    ko: 등가성 판정 실행
+    synonyms: [등가성 검사]
+  - key: job_kind:fem_verify
+    ko: 조립 FEM 검증 실행
+    synonyms: [FEM 검증 실행]
+  - key: job_kind:geom_preview
+    ko: 형상 미리보기 실행
+    synonyms: [형상 미리보기]
+  # ---- 단계 번호(화면) ----
+  - key: stage:①-3
+    ko: 학습 데이터 DOE 생성
+  - key: stage:①-4
+    ko: 학습 데이터 해석 제출
+  - key: stage:④
+    ko: 예측
+  - key: stage:⑤
+    ko: 결과분석·등가성 판정(내부 stage_label ⑤는 화면 ⑥ 최적화도 포함)
+  - key: stage:⑥
+    ko: 최적화
+  # ---- 코드 엔티티 없음(설명만) ----
+  - key: unmapped:낙하씬
+    ko: 낙하 해석 조건(방향·높이)
+error_hints:
+  CONFIRM_REQUIRED: plan_job을 먼저 호출해 confirm_token을 받으세요
+  CONFIRM_INVALID: params를 바꿨거나 확인 토큰이 만료·재사용되었습니다 — plan_job을 다시 호출하세요
+  API_TOKEN_STALE: 토큰 소유자가 웹 화면에 한 번 로그인해야 합니다
+  JOB_KIND_DENIED: 이 작업 종류는 웹 화면에서만 실행할 수 있습니다
+  RATE_LIMITED: Retry-After 초만큼 기다린 뒤 다시 시도하세요
+  TOKEN_ACTIVE_JOB_LIMIT: 진행 중 작업이 끝나거나 cancel_job으로 취소한 뒤 다시 시도하세요
+  INVALID_ARGUMENTS: 도구 인자 이름·필수·JSON 형식을 입력 스키마(tools/list)와 맞추세요(params_json은 JSON 객체 텍스트)
+  PARAMS_JSON_INVALID: params_json은 JSON 객체 텍스트(64 KiB 이하)여야 합니다 — describe_job_kind의 params_schema·example을 보고 만드세요
+  UNKNOWN_TOOL: tools/list에 있는 도구 이름만 부를 수 있습니다
+  SERVER_UNREACHABLE: PHYSICSAI_MCP_URL·사내망 접속을 확인하세요(서버가 내려갔을 수 있음)
+  BACKEND_TIMEOUT: 잠시 뒤 다시 시도하거나 조회 범위(top_n·limit)를 줄이세요
+  RESULT_TOO_LARGE: top_n·limit을 줄이거나 section으로 나눠 조회하세요

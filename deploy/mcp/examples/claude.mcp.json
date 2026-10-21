@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "physicsai": {
+      "type": "http",
+      "url": "http://<대시보드 주소>/physicsai/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PHYSICSAI_MCP_TOKEN}"
+      }
+    }
+  }
+}

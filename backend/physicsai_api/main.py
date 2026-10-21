@@ -20,6 +20,7 @@ from physicsai_core.errors import DomainError
 from .context import AppContext, build_context
 from .routers import (
     admin,
+    api_tokens,
     artifacts,
     contour_capture,
     curations,
@@ -30,6 +31,7 @@ from .routers import (
     fs,
     geom_view,
     jobs,
+    mcp,
     models,
     notifications,
     optimize,
@@ -86,7 +88,7 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
 
     @app.exception_handler(DomainError)
     async def _domain(_req: Request, exc: DomainError) -> JSONResponse:
-        return JSONResponse(status_code=exc.status, content={"detail": exc.detail()})
+        return JSONResponse(status_code=exc.status, content={"detail": exc.detail()}, headers=getattr(exc, "headers", None))
 
     @app.exception_handler(RequestValidationError)
     async def _validation(_req: Request, exc: RequestValidationError) -> JSONResponse:
@@ -108,8 +110,17 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
 
     for r in (status, queue, studies, datasets, models, param_sets, predict_batches, jobs, artifacts, notifications, admin,
               env_checks, train, curations, spdm, optimize, surrogate_opts, study_storage, fs, contour_capture, fem_verify, geom_view,
-              releases, equiv_check):
+              releases, equiv_check, api_tokens, mcp):
         app.include_router(r.router, prefix=API_PREFIX)
+    # mcp.md §6.1·§11: 토큰 요청 감사(응답 후 별도 트랜잭션)·호출 제한 상태. mcp.enabled=false면 미들웨어는 통과만 한다
+    from .auth_tokens import McpRuntime
+    from .mcp.audit_mw import ApiAuditMiddleware
+
+    app.state.mcp_runtime = McpRuntime()
+    app.add_middleware(ApiAuditMiddleware, ctx=ctx)
+    from .mcp.http_mount import mount_mcp
+
+    mount_mcp(app, ctx)  # §20.1: /physicsai/mcp — 프런트 정적 서빙보다 먼저. 꺼져 있으면 핸들러가 404
     if ctx.settings.demo.enabled:  # 시연 모드(check_startup이 dev·127.0.0.1을 보장)
         from . import demo
 

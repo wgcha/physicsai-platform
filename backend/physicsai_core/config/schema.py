@@ -12,6 +12,7 @@ from .schema_equiv import EquivCheckCfg
 from .schema_fem_verify import FemVerifyCfg
 from .schema_geometry import Contour3dCfg, GeometryCfg, ShellCfg
 from .schema_hpc import CommandsCfg, HpcCfg
+from .schema_mcp import McpCfg
 from .schema_ops import (
     DEFAULT_LOG_ERROR_PATTERNS,
     DemoCfg,
@@ -199,6 +200,7 @@ class Settings(_M):
     ui: UiCfg = Field(default_factory=UiCfg)
     logging: LoggingCfg = Field(default_factory=LoggingCfg)
     demo: DemoCfg = Field(default_factory=DemoCfg)
+    mcp: McpCfg = Field(default_factory=McpCfg)  # mcp.md §13 MCP 기능(API 토큰·/mcp/*·MCP 서버, 기본 꺼짐)
 
 
 @dataclass(frozen=True)

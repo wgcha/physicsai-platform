@@ -7,6 +7,7 @@ from physicsai_core import __version__
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import get_ctx, get_principal, get_token, request_id
+from ..schemas import mcp as M
 from ..services import system
 
 router = APIRouter(tags=["shell"])
@@ -17,8 +18,11 @@ def health() -> dict:
     return {"status": "ok", "version": __version__}
 
 
-@router.get("/me", response_model=S.Me)
+@router.get("/me", response_model=S.Me, summary="내 정보(사용자·역할)", responses=M.errors(),
+            openapi_extra=M.xmcp_tool("whoami", "read", "Current user, global-admin flag and per-project roles",
+                                      "현재 사용자·전역 관리자 여부·프로젝트별 역할"))
 def me(principal: Principal = Depends(get_principal)) -> dict:
+    """현재 사용자(토큰 요청이면 토큰 소유자)와 전역 관리자 여부·프로젝트별 역할(general·power·admin). 실행 권한 확인에 쓴다. 부작용 없음."""
     return {"user_id": principal.user_id, "username": principal.username, "display_name": principal.display_name,
             "is_global_admin": principal.is_global_admin, "roles": dict(principal.roles)}
 
