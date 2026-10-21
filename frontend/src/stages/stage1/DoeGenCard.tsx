@@ -57,7 +57,7 @@ const GEN_LABEL: Record<DoeGenerator, string> = { platform: "플랫폼", hyperst
 
 /** native에서 쓸 수 없는 것의 사유(§7.3.3: 플랫폼 LHS만) */
 const REUSE_MULTI_BASELINE = "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다";
-const NATIVE_ONLY_LHS = "native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다";
+const NATIVE_ONLY_LHS = "Native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다";
 
 /** ①-3 native 입력(geometry-engine.md §8 ①-3): 생성 방식 PLATFORM·표본 LHS(native) 고정, run 수·시드·동시 수·실패 처리, 세트 기준이면 층화 안내 */
 function NativeFields({ state, onChange, set, disabled, reuse }: { state: NativeDoeState; onChange: (s: NativeDoeState) => void; set: ParamSet | null; disabled: boolean; reuse: { on: boolean; setOn: (on: boolean) => void; panel: ReactNode } }) {
@@ -84,7 +84,7 @@ function NativeFields({ state, onChange, set, disabled, reuse }: { state: Native
         </select>
       </label>
       <p className="muted small" data-testid="native-only-note">
-        {NATIVE_ONLY_LHS} — HyperStudy·다른 표본 방식은 SimLab(①-1 SimLab 추출)에서 씁니다.
+        {NATIVE_ONLY_LHS} — HyperStudy·다른 표본 방식은 Altair(①-1 Altair 추출)에서 씁니다.
       </p>
       {reuse.on ? reuse.panel : <>
       <div className="fill-row">

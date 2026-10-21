@@ -64,7 +64,7 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   // phase3.md §22.3.5 S17
   PB_RESP_EXTRACT: "일괄 예측 성능 다시 추출",
   // geometry-engine.md §7.3.4 native 세트 등록·다시 준비·baseline 추가
-  PARAM_SET_NATIVE: "형상 준비(native)",
+  PARAM_SET_NATIVE: "형상 준비(Native)",
   // equiv-check.md §4.5
   EQ_CHECK: "등가성 판정",
 };

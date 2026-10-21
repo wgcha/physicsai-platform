@@ -125,7 +125,7 @@ export function ParamTableCard() {
         <>
           <p className="muted small">
             {native
-              ? `native · 피처 ${rows.length}개. 사용하지 않는 피처는 공칭값이 유지됩니다(위치형은 mm 범위).`
+              ? `Native · 피처 ${rows.length}개. 사용하지 않는 피처는 공칭값이 유지됩니다(위치형은 mm 범위).`
               : "단위계 mm-ton-s. 사용하지 않는 파라미터는 tpl에서 빠지고 CAD 공칭값이 유지됩니다."}
           </p>
           <FeatureGate feature={native ? "geometry_native" : "train_tpl"}>

@@ -40,7 +40,7 @@ describe("작업 목록 native step 이름(§7.3)", () => {
     Object.assign(nj, { state: "RUNNING", started_at: new Date().toISOString() });
     nj.steps[3].state = "RUNNING";
     const drawer = await openStatusDrawer();
-    await waitFor(() => expect(drawer.textContent).toContain("형상 준비(native)"));
+    await waitFor(() => expect(drawer.textContent).toContain("형상 준비(Native)"));
     await waitFor(() => expect(drawer.textContent).toContain("baseline 변수 매칭"));
   });
 
