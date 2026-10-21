@@ -47,7 +47,9 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
   const [edit, setEdit] = useState<FilterForm | null>(null);
   const form = importing ? fromFilter(trainFilter) : edit ?? fromFilter(trainFilter);
   const [srvProblems, setSrvProblems] = useState<ExtractProblem[]>([]);
-  const formProblems = native ? validateForm(form) : [];
+  // 기본 해제 = 기존 동작(폴더의 피처 파일·parameters.json 사용, extract_filter 안 보냄). 체크하면 새로 추출하며 조건을 보낸다
+  const [useFilter, setUseFilter] = useState(false);
+  const formProblems = native && useFilter ? validateForm(form) : [];
   // native 등록 = 202 작업 = 202 작업(PARAM_SET_NATIVE) — 기존 작업 진행 표시(JobInline)로 보이고 성공하면 목록을 다시 읽는다
   const nativeJob = useLatestJob(studyId, "PARAM_SET_NATIVE", (j) => j.state === "SUCCEEDED" && void onDone());
   const changePath = (v: string) => {
@@ -105,7 +107,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
         engine: "native",
         choice: { cad: choice.cad, radioss_assem: choice.radioss_assem },
         label: label.trim() || null,
-        extract_filter: toFilter(form),
+        ...(useFilter ? { extract_filter: toFilter(form) } : {}),
       });
       if ("job_id" in r) nativeJob.track(await api.job(r.job_id));
       else await onDone();
@@ -238,6 +240,12 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
         </div>
       )}
       {native && (
+        <label className="check" data-testid="ps-use-filter">
+          <input type="checkbox" checked={useFilter} disabled={busy} onChange={(e) => setUseFilter(e.target.checked)} />
+          추출 조건 적용(새로 추출)
+        </label>
+      )}
+      {native && useFilter && (
         <div data-testid="ps-extract-filter">
           <label className="check">
             <input type="checkbox" checked={importing} disabled={!trainFilter || busy} onChange={(e) => setImportOn(e.target.checked)} />

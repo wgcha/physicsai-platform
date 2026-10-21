@@ -444,8 +444,25 @@ describe("④ native 세트 등록 — 추출 조건", () => {
     const { form, toNative } = await openNativeForm();
     expect(within(form).queryByTestId("ps-extract-filter")).toBeNull();
     toNative();
+    expect(within(form).queryByTestId("ps-extract-filter")).toBeNull(); // 기본 해제 = 블록·안내 숨김(기존 동작)
+    fireEvent.click(within(form).getByRole("checkbox", { name: "추출 조건 적용(새로 추출)" }));
     expect(within(form).getByTestId("ps-extract-filter")).toBeTruthy();
     expect(within(form).getByTestId("ps-extract-note").textContent).toBe("폴더의 기존 피처 파일 대신 새로 추출 · 등록 후 조건 변경 불가(새 세트로 등록)");
+  });
+
+  it("기본 해제: 요청에 extract_filter 없음(폴더의 피처 파일·parameters.json 사용) — 체크하면 포함은 아래 시험들", async () => {
+    const { server, form, toNative, find } = await openNativeForm();
+    const bodies: Record<string, unknown>[] = [];
+    const orig = server.handle.bind(server);
+    server.handle = (m, p, q, b, h) => (m === "POST" && /\/param-sets$/.test(p) && bodies.push(b as Record<string, unknown>), orig(m, p, q, b, h));
+    toNative();
+    const use = within(form).getByRole("checkbox", { name: "추출 조건 적용(새로 추출)" }) as HTMLInputElement;
+    expect(use.checked).toBe(false);
+    await find(`${ROOT}/native_project`);
+    fireEvent.click(within(form).getByRole("button", { name: "등록" }));
+    await waitFor(() => expect(bodies.length).toBe(1));
+    expect("extract_filter" in bodies[0]).toBe(false);
+    expect(server.jobs.filter((j) => j.job_type === "PARAM_SET_NATIVE").slice(-1)[0].params.extract_filter).toBeUndefined();
   });
 
   it("①-1 조건이 없으면 가져오기 비활성·프리셋(모두 체크) → 등록 요청에 extract_filter", async () => {
@@ -454,6 +471,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
     const orig = server.handle.bind(server);
     server.handle = (m, p, q, b, h) => (m === "POST" && /\/param-sets$/.test(p) && bodies.push(b as Record<string, unknown>), orig(m, p, q, b, h));
     toNative();
+    fireEvent.click(within(form).getByRole("checkbox", { name: "추출 조건 적용(새로 추출)" }));
     const imp = within(form).getByRole("checkbox", { name: /①-1 조건 가져오기/ }) as HTMLInputElement;
     expect(imp.disabled).toBe(true);
     expect(imp.checked).toBe(false);
@@ -472,6 +490,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
     const orig = server.handle.bind(server);
     server.handle = (m, p, q, b, h) => (m === "POST" && /\/param-sets$/.test(p) && bodies.push(b as Record<string, unknown>), orig(m, p, q, b, h));
     toNative();
+    fireEvent.click(within(form).getByRole("checkbox", { name: "추출 조건 적용(새로 추출)" }));
     const imp = (await within(form).findByRole("checkbox", { name: /①-1 조건 가져오기/ })) as HTMLInputElement;
     await waitFor(() => expect(imp.disabled).toBe(false));
     expect(imp.checked).toBe(true);
@@ -503,6 +522,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
   it("서버 422 problems → 조건 칸 아래 표시, 0개 선택은 등록 비활성", async () => {
     const { server, form, toNative, find, nativeBox } = await openNativeForm();
     toNative();
+    fireEvent.click(within(form).getByRole("checkbox", { name: "추출 조건 적용(새로 추출)" }));
     await find(`${ROOT}/native_project`);
     const orig = server.handle.bind(server);
     server.handle = (m, p, q, b, h) =>
@@ -519,6 +539,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
   it("작업 경고 PARAMS_JSON_IGNORED(등록 뒤)·실패 GEOM_EXTRACT_EMPTY 문구 표시", async () => {
     const { server, form, toNative, find } = await openNativeForm();
     toNative();
+    fireEvent.click(within(form).getByRole("checkbox", { name: "추출 조건 적용(새로 추출)" }));
     await find(`${ROOT}/native_params`);
     fireEvent.click(within(form).getByRole("button", { name: "등록" }));
     await waitFor(() => expect(server.jobs.some((j) => j.job_type === "PARAM_SET_NATIVE")).toBe(true));
