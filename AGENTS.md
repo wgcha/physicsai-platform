@@ -28,6 +28,7 @@
 - 사용자 표시 문구·오류 메시지는 한국어.
 - **프런트 빌드본 함께 커밋**: `frontend/`(src·public·index.html·package*.json·vite.config·tsconfig)를 고치면 `scripts/build-frontend-dist` 실행 후 `frontend-dist/`를 함께 커밋한다(서버는 Node 없이 이 빌드본을 배치 — phase3 D3-40). `scripts/test-all`이 최신 여부를 검사한다. Impl-Frontend가 프런트 커밋에 함께 넣는다.
 - **빌드본 도구 소유**: `scripts/build-frontend-dist`·`scripts/frontend_source_hash.py` 변경은 Impl-Frontend와 협의한다(규칙이 바뀌면 빌드본 판정이 바뀜). `frontend-dist/` 재생성·커밋은 프런트 변경과 같은 커밋에서(Impl-Frontend 소유).
+- **MCP 대응(mcp-ready.md M1 병합 후)**: 새 API는 `x-mcp`(도구 또는 제외 사유), 새 job_type은 `JOB_KINDS` 등록 또는 제외 사유, 새 결과 엔티티는 `SUMMARIES` 등록, 새 피처 약어·엔티티는 용어집 `ko` 한 줄 — 정적 시험이 검사(mcp-ready.md §15).
 - **설치 스크립트는 관리자 권한 없이**: 머신 환경변수·관리자 확인을 쓰지 않는다. 비밀값은 런타임 파일(`<런타임>\secrets\`)에만, 작업 실행 인자에는 경로만(phase3 D3-41).
 
 ## 커밋 규칙
