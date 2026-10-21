@@ -21,6 +21,7 @@ from physicsai_core.paths import allowed_roots, check_user_path, resolve_in_stud
 from ...context import AppContext
 from ..common import study_root
 from ..geometry_gate import require_native_available, validate_geom_options
+from ...schemas.extract_filter import ExtractFilter
 from .base import _P, invalid_at
 
 
@@ -43,6 +44,7 @@ class NativeSetParams(_P):
     baseline: NativeBaselineParams | None = None  # 4B add_baseline
     usage: Literal["topology", "range"] | None = None  # 4B: 생략 = 기존 매칭표 usage(없으면 topology)
     split_param: str | None = Field(default=None, max_length=64)  # 4B range 분할 변수(공통 이름 제안)
+    extract_filter: ExtractFilter | None = None  # extract-filter.md §6.7: new(solid)만 — 서버가 정규화해 기록
 
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {"PARAM_SET_NATIVE": NativeSetParams}
@@ -77,6 +79,10 @@ def load_map(S: str, ctx: AppContext) -> dict[str, Any] | None:
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
             ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     require_native_available(ctx.settings)
+    if p.extract_filter is not None and p.mode != "new":  # 등록된 세트의 조건은 바꾸지 않는다(reprep·baseline·remap·props_scan)
+        from ..param_set_native_api import raise_filter_fixed
+
+        raise_filter_fixed()
     if p.mode == "new":
         if not p.path:
             raise invalid_at("path", "path가 필요합니다")
@@ -89,12 +95,21 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             from ..geometry_gate import require_shell_available
 
             require_shell_available(ctx.settings)
+        if p.extract_filter is not None and (kind == "shell" or p.shell_only):
+            from .stage1_native import raise_filter_unsupported
+
+            raise_filter_unsupported()
         over = validate_geom_options(ctx.settings, p.geom_options, kind)
         out = {"engine": "native", "mode": "new", "path": p.path, "choice": p.choice or {}, "label": p.label, "geom_options": over or None}
         if p.shell_only:
             out["shell_only"] = True
         if kind == "shell":
             out["kind"] = "shell"
+        from .stage1_native import normalized_filter
+
+        norm = normalized_filter(p.extract_filter)
+        if norm is not None:
+            out["extract_filter"] = norm
         return out, None, []
     ps = _native_set(conn, study, p.param_set_id)
     S = set_dir(ctx, conn, ps)

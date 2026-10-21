@@ -23,6 +23,7 @@ from . import (
     stage5_optimize,
     study_manage,
 )
+from . import stage1_native
 from .base import check_feature, invalid_errors
 
 _STAGES: tuple[ModuleType, ...] = (stage3_model, stage4_predict, stage4_batch, stage1_train_data, stage2_curation,
@@ -61,6 +62,8 @@ def _feature_type(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: s
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
             ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     """사전조건 확인(§8.2) → (저장할 params, 초기 result, warnings). 템플릿·자원 기능 확인이 먼저(409)."""
+    if job_type == "TD_EXTRACT_PARAMS":  # extract-filter.md §6.1: altair·shell 요청의 extract_filter 거부(요청 검증 분기, altair는 그 밖 무변경)
+        stage1_native.guard_extract_filter(ctx, p)
     ft = _feature_type(ctx, conn, study, job_type, p)
     if ft is not None:
         check_feature(ctx, ft)

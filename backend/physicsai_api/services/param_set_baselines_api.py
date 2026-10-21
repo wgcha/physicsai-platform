@@ -108,6 +108,10 @@ def prep_problems(ctx: AppContext, p: dict[str, Any], S: str, opts: dict[str, An
 
 # ------------------------------------------------------------------ baseline 추가·삭제·끄기
 def add_baseline(ctx: AppContext, principal: Principal, ps_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
+    if getattr(body, "extract_filter", None) is not None:
+        from .param_set_native_api import raise_filter_fixed
+
+        raise_filter_fixed()  # extract-filter.md §6.7: 새 baseline은 기준 baseline 조건을 승계(요청으로 받지 않음)
     with ctx.engine.connect() as conn:
         p, _S, _root = _ctx_set(ctx, conn, ps_id)
     params = {"mode": "add_baseline", "param_set_id": ps_id,

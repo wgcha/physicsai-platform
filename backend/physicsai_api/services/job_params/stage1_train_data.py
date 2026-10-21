@@ -20,6 +20,7 @@ from physicsai_core.stage1_train_data.train_tpl import tpl_params_snapshot
 from physicsai_core.stage4_predict.batch_matrix import BatchShapeError
 
 from ...context import AppContext
+from ...schemas.extract_filter import ExtractFilter
 from ...schemas.stage1_train_data import TrainSampling
 from ..path_inspect import starters_in
 from .base import HpcOverrides, _P, invalid_at, invalid_errors, prerequisite_missing, raise_feature_missing
@@ -30,6 +31,7 @@ class TdExtractParams(_P):
     cad_path: str = Field(max_length=400)
     engine: Literal["altair", "native"] | None = None  # geometry-engine.md §7.3.1: 생략 = geometry.engine 기본값, 서버가 params.engine에 기록
     kind: Literal["solid", "shell"] | None = None  # shell-morph.md §8.2: native 형상 종류(생략 = solid). shell = 중립면 STEP 비드 추출
+    extract_filter: ExtractFilter | None = None  # extract-filter.md §6.1: native 솔리드만(altair·shell은 422 EXTRACT_FILTER_UNSUPPORTED). 생략 = 현행
 
 
 class TdDoeGenParams(_P):

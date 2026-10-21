@@ -10,6 +10,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.geometry import features_view
+from physicsai_core.geometry.extract_filter import from_paicad
 from physicsai_core.geometry.options import effective_options, tag_section_changed
 from physicsai_core.geometry.prep import is_shell_only, prep_state
 from physicsai_core.geometry.shell import PROPS_JSON
@@ -43,6 +44,12 @@ def discover_native_out(ctx: AppContext, path: str, kind: str = "solid") -> dict
     return out
 
 
+def raise_filter_unsupported() -> None:
+    from .job_params.stage1_native import raise_filter_unsupported as _raise
+
+    _raise()
+
+
 def register_native(ctx: AppContext, principal: Principal, study_id: str, body: Any, label: str | None, rid: str,
                     ip: str | None) -> dict[str, Any]:
     """POST /studies/{id}/param-sets {engine:native} → 후보를 읽기만 확인하고 PARAM_SET_NATIVE 작업을 만든다(202)."""
@@ -51,6 +58,8 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
     require_native_available(ctx.settings)
     kind = getattr(body, "kind", None) or "solid"  # shell-morph.md §8.2: 세트 형상 종류(prep.json kind, DB 열 없음)
     shell_only = bool(getattr(body, "shell_only", False))  # §11.1 쉘 두께 전용: STEP·번호 표 불필요
+    if shell_only and getattr(body, "extract_filter", None) is not None:  # 쉘 두께 전용은 형상 추출 없음 — 조건 거부
+        raise_filter_unsupported()
     if kind == "shell":
         if shell_only:
             raise DomainError("INVALID_PARAMS", "쉘 두께 전용(shell_only)과 쉘 판금 형상(kind=shell)은 함께 쓸 수 없습니다", status=422,
@@ -73,12 +82,26 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
         params["shell_only"] = True
     if kind == "shell":
         params["kind"] = "shell"
+    from .job_params.stage1_native import normalized_filter
+
+    norm = normalized_filter(getattr(body, "extract_filter", None))  # extract-filter.md §6.7: 정규화본을 params에 기록(쉘·altair는 앞에서 422)
+    if norm is not None:
+        params["extract_filter"] = norm
     job = jobs_svc.create_job(ctx, principal, study_id, "PARAM_SET_NATIVE", params, rid, ip)
     return {"job_id": job["id"]}
 
 
-def prepare_native(ctx: AppContext, principal: Principal, ps_id: str, rid: str, ip: str | None) -> dict[str, Any]:
+def raise_filter_fixed() -> None:
+    """extract-filter.md §6.7: 등록된 세트(reprep·baseline 추가)는 추출 조건을 받지 않는다 → 422 EXTRACT_FILTER_INVALID."""
+    from physicsai_core.geometry.extract_filter import CANT_CHANGE_MESSAGE
+
+    raise DomainError("EXTRACT_FILTER_INVALID", CANT_CHANGE_MESSAGE, status=422, problems=[{"key": "extract_filter", "message": CANT_CHANGE_MESSAGE}])
+
+
+def prepare_native(ctx: AppContext, principal: Principal, ps_id: str, rid: str, ip: str | None, body: Any = None) -> dict[str, Any]:
     """POST /param-sets/{id}/native-prepare → reprep 작업(202)."""
+    if getattr(body, "extract_filter", None) is not None:
+        raise_filter_fixed()
     with ctx.engine.connect() as conn:
         p = ps_repo.get(conn, ps_id)
     if p is None:
@@ -158,7 +181,8 @@ def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str,
     out["geom_options_effective"] = opts
     out["native"] = {"prep_status": st.status, "prep_reason": st.reason, "feature_count": len(doc.get("features", [])),
                      "shell_only": is_shell_only(S), "props_scanned": os.path.isfile(os.path.join(S, *PROPS_JSON.split("/"))),
-                     "kind": read_kind(S), "view_status": prep_view(S).get("status") or "MISSING"}
+                     "kind": read_kind(S), "view_status": prep_view(S).get("status") or "MISSING",
+                     "extract_filter": from_paicad(doc.get("filter"))}  # extract-filter.md §6.7
     from .param_set_baselines_api import baselines_info  # 4B(§7.3.8): 다중 baseline 세트만
 
     info = baselines_info(ctx, p, S, opts)

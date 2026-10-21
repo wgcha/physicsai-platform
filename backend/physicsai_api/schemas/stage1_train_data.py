@@ -8,6 +8,7 @@ from typing import Annotated, Any, Literal, Union
 from pydantic import Field
 
 from .common import Req, Resp
+from .extract_filter import ExtractFilter
 from .stage4_predict import TplParam
 
 __all__ = [
@@ -74,6 +75,10 @@ class TrainSetup(Resp):
     tpl: TrainTpl | None = None
     version: int
     engine: Literal["altair", "native"] = "altair"  # geometry-engine.md §7.3.1
+    # extract-filter.md §6.4: 마지막 추출에 쓴 조건(정규화본, null = 조건 없음·altair) — ①-1 폼 기본값·①-2 "적용 조건"
+    extract_filter: ExtractFilter | None = None
+    # §7.2: 마지막 추출 작업의 종류별 채택·제외 요약(수치만, 없으면 null). 모양 = {types:{<type>:{selected,kept,excluded,…}},png_rendered,elapsed_s,rib_rejects,…}
+    extract_summary: dict[str, Any] | None = None
     updated_by_name: str | None = None
     updated_at: datetime | None = None
 

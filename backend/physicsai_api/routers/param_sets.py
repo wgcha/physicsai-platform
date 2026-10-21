@@ -77,9 +77,11 @@ def predict_check(study_id: str, body: S.PredictCheckRequest, request: Request, 
 
 
 @router.post("/param-sets/{ps_id}/native-prepare", response_model=S.NativeAccepted, status_code=202, responses=ERR)
-def native_prepare(ps_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
-    """geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후)."""
-    return native_svc.prepare_native(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))
+def native_prepare(ps_id: str, request: Request, body: S.NativePrepareRequest | None = None,
+                   principal: Principal = Depends(get_principal)) -> dict:
+    """geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).
+    본문은 없어도 된다(extract_filter가 오면 422 — 등록된 세트의 추출 조건은 바꿀 수 없음)."""
+    return native_svc.prepare_native(get_ctx(request), principal, ps_id, request_id(request), client_ip(request), body)
 
 
 @router.get("/param-sets/{ps_id}/features", response_model=S.NativeFeatures, responses=ERR)

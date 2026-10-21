@@ -10,6 +10,7 @@ from pydantic import AfterValidator, Field, model_serializer
 from physicsai_core.naming import label_problem
 
 from .common import Req, Resp
+from .extract_filter import ExtractFilter
 from .geometry import BaselineInfo, NativeInfo
 
 
@@ -54,6 +55,9 @@ class ParamSetCreate(Req):
     shell_only: bool = False
     # shell-morph.md §8.2: native 형상 종류 — solid(쿠션 솔리드, 기본) | shell(판금 비드, 중립면 STEP + 쉘 메시). 한 세트에 혼합 불가
     kind: Literal["solid", "shell"] | None = None
+    # extract-filter.md §6.7: native 솔리드 신규 등록의 찾을 종류·조건(생략 = 현행). altair·shell 요청에 오면 422 EXTRACT_FILTER_UNSUPPORTED.
+    # 등록 후 변경 불가(조건은 세트의 native/extract/parameter_features.json `filter`에 기록)
+    extract_filter: ExtractFilter | None = None
 
 
 class ParamSetPatch(Req):

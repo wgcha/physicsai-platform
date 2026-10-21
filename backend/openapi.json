@@ -150,6 +150,18 @@
             ],
             "title": "Choice"
           },
+          "extract_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extract Filter"
+          },
           "id": {
             "maxLength": 32,
             "title": "Id",
@@ -4986,6 +4998,147 @@
         "title": "ErrorResponse",
         "type": "object"
       },
+      "ExtractConditions": {
+        "additionalProperties": false,
+        "description": "조건 키(§4.2) 전부 선택. null·생략 = 미사용.",
+        "properties": {
+          "face_area_min_mm2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Face Area Min Mm2"
+          },
+          "fillet_radius_min_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fillet Radius Min Mm"
+          },
+          "height_mm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "hole_radius_min_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hole Radius Min Mm"
+          },
+          "position_min_size_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position Min Size Mm"
+          },
+          "thickness_mm": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "title": "ExtractConditions",
+        "type": "object"
+      },
+      "ExtractFilter": {
+        "additionalProperties": false,
+        "description": "찾을 종류(그룹)와 조건. `groups`: thickness·height·position·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).\n`draft_max_deg`: null 또는 0 초과 45 미만(null = 설정·paicad 기본). 응답에 나올 때는 서버 정규화본(선택 안 한 그룹의 조건 제거).",
+        "properties": {
+          "conditions": {
+            "$ref": "#/components/schemas/ExtractConditions",
+            "default": {}
+          },
+          "draft_max_deg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Draft Max Deg"
+          },
+          "groups": {
+            "items": {
+              "enum": [
+                "thickness",
+                "height",
+                "position",
+                "hole_radius",
+                "fillet"
+              ],
+              "type": "string"
+            },
+            "title": "Groups",
+            "type": "array"
+          }
+        },
+        "required": [
+          "groups"
+        ],
+        "title": "ExtractFilter",
+        "type": "object"
+      },
+      "ExtractRange": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          }
+        },
+        "title": "ExtractRange",
+        "type": "object"
+      },
       "FeatureState": {
         "properties": {
           "enabled": {
@@ -8941,6 +9094,16 @@
             "title": "Features",
             "type": "array"
           },
+          "filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "groups": {
             "items": {
               "$ref": "#/components/schemas/NativeGroup"
@@ -9013,6 +9176,16 @@
       },
       "NativeInfo": {
         "properties": {
+          "extract_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "feature_count": {
             "default": 0,
             "title": "Feature Count",
@@ -9072,6 +9245,26 @@
           "prep_status"
         ],
         "title": "NativeInfo",
+        "type": "object"
+      },
+      "NativePrepareRequest": {
+        "additionalProperties": false,
+        "description": "`POST /param-sets/{id}/native-prepare` 선택 본문(없어도 됨). extract_filter가 오면 항상 422 EXTRACT_FILTER_INVALID\n(등록된 세트의 추출 조건은 바꿀 수 없음 — extract-filter.md §6.7).",
+        "properties": {
+          "extract_filter": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extract Filter"
+          }
+        },
+        "title": "NativePrepareRequest",
         "type": "object"
       },
       "NativeWarning": {
@@ -10243,6 +10436,16 @@
               }
             ],
             "title": "Engine"
+          },
+          "extract_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "geom_options": {
             "anyOf": [
@@ -17970,6 +18173,16 @@
             "title": "Engine",
             "type": "string"
           },
+          "extract_filter": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ExtractFilter"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "extract_job_id": {
             "anyOf": [
               {
@@ -17980,6 +18193,18 @@
               }
             ],
             "title": "Extract Job Id"
+          },
+          "extract_summary": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extract Summary"
           },
           "parameters": {
             "items": {
@@ -22651,7 +22876,7 @@
     },
     "/physicsai/api/param-sets/{ps_id}/native-prepare": {
       "post": {
-        "description": "geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).",
+        "description": "geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).\n본문은 없어도 된다(extract_filter가 오면 422 — 등록된 세트의 추출 조건은 바꿀 수 없음).",
         "operationId": "native_prepare_physicsai_api_param_sets__ps_id__native_prepare_post",
         "parameters": [
           {
@@ -22664,6 +22889,23 @@
             }
           }
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/NativePrepareRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "202": {
             "content": {

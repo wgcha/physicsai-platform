@@ -9,10 +9,11 @@ from typing import Any, Literal
 from pydantic import Field
 
 from .common import Req, Resp
+from .extract_filter import ExtractFilter
 
 __all__ = ["NativeAccepted", "NativeInfo", "NativeFeature", "NativeGroup", "NativeWarning", "NativeFeatures",
            "ShellPropPart", "ShellProp", "ShellPropWarning", "ShellProps", "ShellPropSelect", "ShellPropsUpdate",
-           "BaselineAddRequest", "ParamMapRemapRequest", "BaselineInfo", "ParamMapDecisionPart", "ParamMapDecision", "ParamMapRowDecision",
+           "BaselineAddRequest", "NativePrepareRequest", "ParamMapRemapRequest", "BaselineInfo", "ParamMapDecisionPart", "ParamMapDecision", "ParamMapRowDecision",
            "ParamMapUpdate", "ParamMapProposed", "ParamMapRow", "ParamMapBaseline", "ParamMapWarning", "ParamMap",
            "ViewTess", "GeomView", "GeomPreviewCreate", "GeomPreviewTiming", "GeomPreview", "Contour3dDisplay", "Contour3dCreate",
            "Contour3dProgress", "Contour3d"]
@@ -32,6 +33,9 @@ class NativeInfo(Resp):
     props_scanned: bool = False  # §11.1 native/props/props.json 있음
     kind: Literal["solid", "shell"] = "solid"  # shell-morph.md §8.2: 세트 형상 종류(native/prep.json kind, 없으면 solid)
     view_status: Literal["READY", "MISSING", "FAILED"] = "MISSING"  # geometry-view.md §6.5: 공칭 3D 뷰 상태
+    # extract-filter.md §6.7: 세트 등록 때 쓴 추출 조건(S/native/extract/parameter_features.json `filter`에서 읽은 정규화본, 없으면 null).
+    # draft_max_deg는 추출에 쓴 유효값(기본이어도 값이 있음)
+    extract_filter: ExtractFilter | None = None
 
 
 class NativeFeature(Resp):
@@ -64,6 +68,7 @@ class NativeWarning(Resp):
 
 class NativeFeatures(Resp):
     engine_version: str | None = None
+    filter: ExtractFilter | None = None  # extract-filter.md §6.7: 추출에 쓴 조건(features JSON `filter`의 정규화본, 조건 없음 = null)
     features: list[NativeFeature]
     groups: list[NativeGroup]
     warnings: list[NativeWarning]
@@ -144,6 +149,15 @@ class BaselineAddRequest(Req):
     label: str | None = Field(default=None, max_length=120)
     usage: Literal["topology", "range"] | None = None  # 생략 = 기존 매칭표 usage(없으면 topology)
     split_param: str | None = Field(default=None, max_length=64)  # range 분할 변수(제안 공통 이름)
+    # extract-filter.md §6.7: 새 baseline은 기준 baseline의 추출 조건을 그대로 쓴다 — 이 키가 오면 항상 422 EXTRACT_FILTER_INVALID
+    extract_filter: dict[str, Any] | None = None
+
+
+class NativePrepareRequest(Req):
+    """`POST /param-sets/{id}/native-prepare` 선택 본문(없어도 됨). extract_filter가 오면 항상 422 EXTRACT_FILTER_INVALID
+    (등록된 세트의 추출 조건은 바꿀 수 없음 — extract-filter.md §6.7)."""
+
+    extract_filter: dict[str, Any] | None = None
 
 
 class ParamMapRemapRequest(Req):

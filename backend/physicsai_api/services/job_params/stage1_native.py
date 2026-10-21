@@ -71,6 +71,33 @@ def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] |
     return p.doe_label or DOE_LABEL_NATIVE, int(num_runs), int(seed if seed is not None else 1), multi, p.on_run_failure or "continue"
 
 
+def normalized_filter(raw: Any) -> dict[str, Any] | None:
+    """요청 extract_filter(스키마 객체|dict|None) → 정규화본. 값 오류는 422 EXTRACT_FILTER_INVALID(problems[{key, message}])."""
+    from physicsai_core.geometry.extract_filter import normalize
+
+    if raw is None:
+        return None
+    norm, probs = normalize(raw.model_dump() if hasattr(raw, "model_dump") else raw)
+    if probs:
+        raise DomainError("EXTRACT_FILTER_INVALID", "추출 조건이 올바르지 않습니다", status=422, problems=probs)
+    return norm
+
+
+def raise_filter_unsupported() -> None:
+    from physicsai_core.geometry.extract_filter import UNSUPPORTED_MESSAGE
+
+    raise DomainError("EXTRACT_FILTER_UNSUPPORTED", UNSUPPORTED_MESSAGE, status=422)
+
+
+def guard_extract_filter(ctx: AppContext, p: Any) -> None:
+    """①-1 요청 검증 분기 1곳(V-EF-12): extract_filter가 왔는데 엔진이 altair이거나 kind=shell이면 422 EXTRACT_FILTER_UNSUPPORTED.
+    엔진 = 요청 engine, 생략 시 geometry.engine. 그 밖 altair 처리는 건드리지 않는다."""
+    if getattr(p, "extract_filter", None) is None:
+        return
+    if (p.engine or ctx.settings.geometry.engine) != "native" or getattr(p, "kind", None) == "shell":
+        raise_filter_unsupported()
+
+
 def native_extract_params(ctx: AppContext, p: Any) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     cfg = ctx.settings
     require_native_available(cfg)
@@ -82,7 +109,11 @@ def native_extract_params(ctx: AppContext, p: Any) -> tuple[dict[str, Any], dict
 
         require_shell_available(cfg)
         return {"cad_path": cp.path, "engine": "native", "kind": "shell"}, None, []
-    return {"cad_path": cp.path, "engine": "native"}, None, []
+    out: dict[str, Any] = {"cad_path": cp.path, "engine": "native"}
+    norm = normalized_filter(getattr(p, "extract_filter", None))  # extract-filter.md §6.1: 서버 정규화본을 params에 기록
+    if norm is not None:
+        out["extract_filter"] = norm
+    return out, None, []
 
 
 def _sampling_param(p: Any) -> dict[str, Any]:

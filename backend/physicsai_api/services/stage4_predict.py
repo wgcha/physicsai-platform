@@ -27,6 +27,8 @@ from .stage4_predict_train import register_param_set_from_train  # noqa: F401 - 
 
 
 def register_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
+    if getattr(body, "extract_filter", None) is not None and (not native_api.wants_native(ctx, body) or getattr(body, "kind", None) == "shell"):
+        native_api.raise_filter_unsupported()  # extract-filter.md §6.7: altair·shell 요청의 extract_filter 거부(요청 검증 분기, altair 처리 전)
     if getattr(body, "kind", None) == "shell" and not native_api.wants_native(ctx, body):  # shell-morph.md §8.2: native 전용
         raise DomainError("INVALID_PARAMS", "쉘 판금 형상(kind=shell)은 Native 형상 엔진(mode=discover)에서만 씁니다", status=422,
                           errors=[{"loc": ["body", "kind"], "msg": "engine=native·mode=discover 필요"}])

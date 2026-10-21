@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from physicsai_core.db.repositories import hpc as hpc_repo
+from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
@@ -34,7 +35,7 @@ def _ai(ctx: AppContext) -> str:
 def setup_out(ctx: AppContext, study: dict[str, Any], s: dict[str, Any] | None) -> dict[str, Any]:
     if s is None:
         return {"study_id": study["id"], "cad": None, "extract_job_id": None, "parameters": [], "used_count": 0, "tpl": None,
-                "version": 0, "updated_by_name": None, "updated_at": None}
+                "version": 0, "updated_by_name": None, "updated_at": None, "extract_filter": None, "extract_summary": None}
     params = [tp.with_validity(p) for p in (s["parameters"] or [])]
     cad = None
     if s.get("cad_file_name"):
@@ -47,7 +48,19 @@ def setup_out(ctx: AppContext, study: dict[str, Any], s: dict[str, Any] | None) 
                "params": s["tpl_params"] or [], "warnings": s["tpl_warnings"] or [], "stale": tpl_is_stale(s)}
     return {"study_id": study["id"], "cad": cad, "extract_job_id": s["extract_job_id"], "parameters": params,
             "used_count": sum(1 for p in params if p.get("use")), "tpl": tpl, "version": s["version"], "engine": s.get("engine") or "altair",
-            "updated_by_name": s["updated_by_name"], "updated_at": s["updated_at"]}
+            **_extract_info(ctx, s), "updated_by_name": s["updated_by_name"], "updated_at": s["updated_at"]}
+
+
+def _extract_info(ctx: AppContext, s: dict[str, Any]) -> dict[str, Any]:
+    """extract-filter.md §6.1: 마지막 native 추출의 조건(train_setups.extract_filter)·통계 요약(그 추출 작업 result). altair 설정은 둘 다 null."""
+    if (s.get("engine") or "altair") != "native":
+        return {"extract_filter": None, "extract_summary": None}
+    summary = None
+    if s.get("extract_job_id"):
+        with ctx.engine.connect() as conn:
+            job = jobs_repo.get_job(conn, s["extract_job_id"])
+        summary = ((job or {}).get("result") or {}).get("extract_summary")
+    return {"extract_filter": s.get("extract_filter"), "extract_summary": summary}
 
 
 def get_setup(ctx: AppContext, study_id: str) -> dict[str, Any]:
