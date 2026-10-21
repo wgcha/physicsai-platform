@@ -8,7 +8,7 @@
 | 버전 | 범위 | 계약 | migration | 설정 키 | 상태 |
 |---|---|---|---|---|---|
 | v0.2.3 | Native 추출 조건(EF)·리브 위치·다중 사용 체크 | [extract-filter.md](contracts/extract-filter.md) | `0019_extract_filter` | – | 릴리스 완료 |
-| **v0.2.4** | ① Native 템플릿 변수 선택·범위(④ 세트 정의·⑥·④ 일괄 그 자리 편집·실행 스냅숏) ② **MCP 기능 전체**(API 토큰 30일·공통 작업 계약 plan→confirm→run·감사·요약·x-mcp 생성기·용어집·호출 제한·**MCP 서버**(Streamable HTTP `/physicsai/mcp` + stdio `physicsai-mcp`)·연결 가이드, 클라이언트 Claude·Codex CLI·Gemini CLI) | [native-vars.md](contracts/native-vars.md), [mcp.md](contracts/mcp.md), [manual/mcp-clients.md](manual/mcp-clients.md) | `0020_mcp`(NV는 DB 무변경) | `mcp.*`(기본 `enabled: false`) | 계약 확정 |
+| **v0.2.4** | ① Native 템플릿 변수 선택·범위(④ 세트 정의·⑥·④ 일괄 그 자리 편집·실행 스냅숏) ② **MCP 기능 전체**(API 토큰 30일·공통 작업 계약 plan→confirm→run·감사·요약·x-mcp 생성기·용어집·호출 제한·**MCP 서버**(Streamable HTTP `/physicsai/mcp` + stdio `physicsai-mcp`)·연결 가이드, 클라이언트 Claude·Codex CLI·Gemini CLI) | [native-vars.md](contracts/native-vars.md), [mcp.md](contracts/mcp.md), [manual/mcp-clients.md](manual/mcp-clients.md) | `0020_mcp`(NV는 DB 무변경) | `mcp.*`(기본 `enabled: false`) | **구현 완료·검증 대기**(통합본 `feat/r1-v024` 8206870, 구현 차이는 mcp MR-C2·native-vars NV-C1에 반영) |
 | **v0.2.5** | ⑤·⑥ 업로드(브라우저 분할 업로드·경로 칸 두 탭) + HTML 결과 요약 보고서(⑤ 결과분석·등가성, ⑥ 내장·레거시) | [upload-report.md](contracts/upload-report.md) | `0021_uploads` | `storage.upload_root`, `upload.*`, `report.*` | 계약 확정, v0.2.4 배포 후 착수 |
 | v0.2.6 이후 | 직접 최적화(`feat/r1-directopt` opt-direct, 계약만), 보고서 2차(④·①), PC 도구(h3d 축소 업로드, U3), ChatGPT 앱 커넥터용 OAuth(mcp §21.2), 유사 설계 검색(mcp Q2) | 각 계약 | HEAD 다음 번호 | – | 후속 |
 
@@ -57,7 +57,14 @@ EF(v0.2.3, 완료) ──▶ NV ─┐
 | v0.2.4 | V-NV-1~10, V-MCP-1~20, V-SEC-1, 기존 전체 `scripts/test-all`(mcp 키 없는 설정 = 기존 동작, V-MCP-1) | E7-1~8(Claude Code·Codex CLI·Gemini CLI × HTTP·stdio, Vite·Caddy 경로), Native 변수 정의 편집 → ⑥·④ 일괄 실행 1회 |
 | v0.2.5 | V-UP-1~15, V-RP-1~8, V-MCP-1·6(새 operation x-mcp exclude)·V-MCP-15 회귀 | V-UP-14(Caddy 16 MB 청크·30 GB h3d), V-RP-8(오프라인 브라우저 열기) |
 
-## 6. 사용자 확인 대기
+## 6. 후속 항목(v0.2.4 구현 중 나온 것 — 버전 미배정)
+
+| 항목 | 내용 | 근거 |
+|---|---|---|
+| ⑥ ResultCards 학습 범위 막대 | 결과 카드 "범위(학습)" 막대를 현재 세트 범위 대신 `settings.vars.variables[].train` 기준으로(학습 범위 모름이면 막대 생략). 프런트만 | native-vars §7.2·NV-C1 ⑥ |
+| MCP 활성 관리자 안내 링크(제안) | `features.mcp`가 꺼져 있을 때 전역 관리자에게 관리 메뉴에서 켜는 방법 안내 링크(관리자 매뉴얼·[mcp-clients.md](manual/mcp-clients.md) §8) 표시 — 현재는 메뉴 자체가 숨겨져 켜는 경로를 화면에서 알 수 없음. 사용자 확인 후 계약 | mcp §4.5·MR-C2 ⑧ |
+
+## 7. 사용자 확인 대기
 
 | # | 질문 | 차단 여부 | 회신 없을 때 |
 |---|---|---|---|

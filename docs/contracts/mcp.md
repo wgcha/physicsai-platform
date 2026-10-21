@@ -1,6 +1,6 @@
 # 계약: MCP 기능(LLM 클라이언트 조작 — 플랫폼 준비 + MCP 서버) — mcp
 
-작성: Plan, 2026-10-21(초안 `mcp-ready.md`, 같은 날 MCP 기능 전체로 확장·이름 변경). 초안 기준: 브랜치 `feat/r1-mcpready` 18dc408(migration HEAD `0018_equiv_check`). **구현 기준: v0.2.3(b05d34d, HEAD `0019_extract_filter`)** — 릴리스 v0.2.4([roadmap.md](../roadmap.md)).
+작성: Plan, 2026-10-21(초안 `mcp-ready.md`, 같은 날 MCP 기능 전체로 확장·이름 변경). 초안 기준: 브랜치 `feat/r1-mcpready` 18dc408(migration HEAD `0018_equiv_check`). **구현 기준: v0.2.3(b05d34d, HEAD `0019_extract_filter`)** — 릴리스 v0.2.4([roadmap.md](../roadmap.md)). **구현 반영: v0.2.4 통합본 `feat/r1-v024` 8206870**(변경 메모 MR-C2).
 우선순위: **이 문서 > [platform.md](platform.md) §5(인증)·§10.1(API 공통)·§17.6(감사)** — 이 문서가 바꾸는 것은 §2 "기존 규칙 예외" 표에만 있다. 배포 설정은 [phase3.md](phase3.md) 기준(decisions 2026-10-20 "phase3 설정이 배포 설정").
 ID 규칙: 결정 `MR-n`, 시험 `V-MCP-n`, 변경 메모 `MR-Cn`.
 
@@ -17,7 +17,7 @@ ID 규칙: 결정 `MR-n`, 시험 `V-MCP-n`, 변경 메모 `MR-Cn`.
 |---|---|
 | 사용자별 API 토큰(발급·폐기·만료 ≤ 30일·범위), Bearer 인증 경로 | ChatGPT 웹·데스크톱 앱 커넥터(OAuth 2.1 인가 서버 + 외부 접근 필요, §21.2) |
 | **MCP 서버**: 백엔드 마운트 Streamable HTTP `/physicsai/mcp` + stdio 실행기 `physicsai-mcp`(같은 도구 정의, §20) | MCP OAuth 인가·동적 클라이언트 등록 |
-| 클라이언트 연결 가이드·설정 예시 3종(Claude Code·Codex CLI·Gemini CLI, §21) | MCP prompts·sampling·elicitation 기능 |
+| 클라이언트 연결 가이드·설정 예시 5파일(Claude Code·Claude Desktop·Codex CLI·Gemini CLI HTTP·stdio, §21.1) | MCP prompts·sampling·elicitation 기능 |
 | 공통 작업 계약 `/mcp/jobs*`(plan → confirm → run → status → summary → cancel) | 기존 생성 API(`POST /studies/{id}/jobs` 등)의 dry-run 개조 — 웹 흐름은 손대지 않음 |
 | 토큰 요청 감사 로그·조회·보존 | 임베딩 기반 문서 RAG·run 메타 의미 검색(§12.2, 사내 임베딩 모델 있을 때만) |
 | 요약 API 레지스트리 `/mcp/summary/*` | 대시보드 코드 변경 |
@@ -126,9 +126,10 @@ else:                                                  # 기존 세션 경로 �
 
 ### 4.5 화면(최소, Impl-Frontend)
 
-- 사용자 메뉴 "내 API 토큰"(`/status` `features.mcp`가 true일 때만): 표(이름·범위·접두·만료·마지막 사용·상태) + "발급"(이름·범위 라디오·만료일 수) + "폐기"(확인 대화).
-- 발급 직후 평문을 한 번 보여 주는 대화: 복사 버튼·"이 창을 닫으면 다시 볼 수 없습니다" 경고. 평문을 localStorage·상태 저장소·로그에 남기지 않는다(정적 시험: 토큰 문자열을 저장하는 코드 없음).
-- 관리자 토큰 목록·감사 조회 화면은 이번 비범위(API만).
+- 메뉴는 `/status` `features.mcp`가 true일 때만 보인다(false면 메뉴·화면 없음): 상단 바 "내 API 토큰"(전원), 관리 메뉴 "API 토큰 관리"(전역 관리자).
+- "내 API 토큰"(`frontend/src/pages/ApiTokens.tsx`): 표(이름·범위·접두·만료(남은 일수)·마지막 사용·상태) + "발급"(이름·범위 라디오 — 권한 없는 범위는 비활성+사유·만료일 수 최대 30) + "폐기"(확인 대화) + 연결 안내(접힘). 오류 문구 한국어.
+- 발급 직후 평문은 **1회 표시**: 복사 버튼·"이 창을 닫으면 다시 볼 수 없습니다" 경고, 대화를 닫으면 컴포넌트 상태에서 지운다. localStorage·sessionStorage·전역 상태 저장소·로그에 쓰지 않는다(정적 시험: 토큰 문자열을 저장하는 코드 없음).
+- "API 토큰 관리"(전역 관리자, 구현 반영 MR-C2): `GET /admin/api-tokens`의 `user_id`·`active`(전체/유효/무효) 필터 + 행별 폐기(`POST /admin/api-tokens/{id}/revoke`, 확인 대화). 감사 조회 화면은 비범위(API `list_audit`만).
 
 ## 5. 공통 작업 계약(dry-run + 확인 토큰)
 
@@ -225,7 +226,7 @@ else:                                                  # 기존 세션 경로 �
 | entity | 내용(요지) |
 |---|---|
 | `study` | 제목·프로젝트·Final 모델·현재 세트·단계별 상태(①~⑥)·최근 작업 5·하위 엔티티 개수와 최근 id |
-| `param_set` | 엔진(native/altair)·kind(solid/shell)·파라미터(이름·종류 약어·단위·공칭·range·envelope 요약)·응답·perf 정의 이름·baseline 수·준비 상태 |
+| `param_set` | 엔진(native/altair)·kind(solid/shell)·파라미터(이름·종류 약어·단위·공칭·range·envelope 요약)·응답·perf 정의 이름·baseline 수·준비 상태. Native는 `facts.vars_revision`(0 = 등록 정의)·`facts.vars_count`(형상 행 수) — native-vars §6.6, Altair는 둘 다 null |
 | `train_doe` | 생성 방식·표본 수·run 상태 집계·결과 표 상위 N·응답 통계 |
 | `predict_run` | 입력 값·응답 값·경고 |
 | `predict_batch` | run 상태 집계·응답 상위 N·통계·범위 밖 개수 |
@@ -256,9 +257,11 @@ else:                                                  # 기존 세션 경로 �
   - `tools.openai.json` — `[{type:"function", function:{name, description, parameters, strict:false}}]`. 경로·쿼리·본문 인자를 한 객체로 평탄화(이름 충돌은 생성 실패). `parameters` = MCP `inputSchema`와 **같은 이식 가능 스키마**(§9.2).
   - 자유 객체(작업 종류별 `params` 등 properties 없는 object)는 도구 입력에서 `params_json`(문자열, JSON 객체 텍스트 ≤ 64 KiB, 설명 "describe_job_kind로 스키마 확인")으로 바꾸고 `x-http.json_string_fields`에 기록 — MCP 계층이 파싱해 HTTP 본문 객체로 넣는다(파싱 실패 = 도구 오류 `PARAMS_JSON_INVALID`, HTTP 호출 안 함).
   - `glossary.json` — §10.
+  - `job_kinds.json` — `JOB_KINDS` 스냅숏(kind·version·cost·`params_schema`·예시). `describe_job_kind` 리소스 텍스트와 작업 종류 호환 검사(`--check`)의 비교 기준. 도구 입력 스키마가 아니다(§9.2 화이트리스트 대상 아님 — V-MCP-14).
 - 결정적: 키 정렬·`ensure_ascii=False`·indent 2·끝 줄바꿈, 시각·경로 미포함. `--check`는 디스크 파일과 다르면 실패(test-all).
 - 호환 검사(`--check`): 직전 커밋된 `tools.mcp.json`과 비교해 같은 이름 도구에서 **인자 제거·이름 변경·타입 변경·새 필수 인자**가 있으면 실패 — 새 이름(`<tool>_v2`)을 쓰고 옛 도구는 `deprecated:true`로 1 릴리스 유지. 작업 종류 params도 같은 규칙(`kind` 이름·`kind_version`).
-- 서빙: `GET /mcp/tools?format=mcp|openai` → tool `—`(x-mcp exclude "MCP 서버 부팅용"; 세션·토큰 read 허용, 생성 파일 그대로). MCP 서버(§20)는 이 응답(HTTP 마운트는 같은 파일을 주입받음)으로 도구를 동적 노출하고 HTTP로 위임하는 얇은 계층.
+- 서빙: `GET /mcp/tools?format=mcp|openai[&visible=true]` → operationId `mcp_tool_specs`, tool `—`(x-mcp exclude "MCP 서버 부팅용"; 세션·토큰 read 허용, 생성 파일 그대로). MCP 서버(§20)는 이 응답(HTTP 마운트는 같은 파일을 주입받음)으로 도구를 동적 노출하고 HTTP로 위임하는 얇은 계층.
+  - `visible=true`(기본 false, `format=mcp`에서만 의미 — openai 형식은 무시): 응답 최상위에 `visible: [도구 이름]`을 더한다 = 이 요청의 토큰 범위로 부를 수 있는 도구(판정 = 백엔드 `scope_allows(scope, annotations.x-risk)`, 세션 요청은 전체). stdio 실행기가 시작 시 이 값으로 `tools/list`를 거른다(§20.1). 그 밖 키·`tools` 배열은 생성 파일과 바이트 단위로 같은 내용.
 
 ### 9.2 이식 가능 스키마(MR-16 — Claude·Codex·Gemini 공통)
 
@@ -273,10 +276,10 @@ else:                                                  # 기존 세션 경로 �
 | 이름 | 도구 `^[a-zA-Z0-9_-]{1,64}$`, 인자 `^[a-zA-Z_][a-zA-Z0-9_]{0,63}$`, 도구 수 ≤ 40(굵은 도구 소수 원칙) |
 | 설명 길이 | 도구 ≤ 300자(영어 / 한국어), 인자 ≤ 200자. 수치 인자 단위는 description의 `[mm]` 표기 |
 
-- 정적 검사(V-MCP-14): 생성 파일 전체를 같은 화이트리스트 검사기로 다시 확인(생성기와 별도 구현 — `backend/tests/common/test_mcp_portable_schema.py`).
+- 정적 검사(V-MCP-14): **도구 입력 스키마**(`tools.mcp.json` `inputSchema`·`tools.openai.json` `parameters`)를 같은 화이트리스트 검사기로 다시 확인(생성기와 별도 구현 — `backend/tests/common/test_mcp_portable_schema.py`). `job_kinds.json`의 `params_schema`(리소스·`describe_job_kind` 텍스트용, `params_json` 안 내용)는 화이트리스트 대상이 아니고 모양만 검사(`type: object`·kind·version·cost), `glossary.json`은 필수 섹션 존재만.
 - 응답(도구 결과)은 JSON 텍스트 + `structuredContent`(§20.3) — 응답 스키마(`outputSchema`)는 내보내지 않는다(클라이언트별 지원 차이).
 
-### 9.1 도구 후보(18개, 굵은 도구 소수 원칙)
+### 9.1 도구 목록(구현 17개 — 아래 18행 중 `find_similar_designs`는 Q2 미확정으로 미구현)
 
 | tool | risk | 경로 | 비고 |
 |---|---|---|---|
@@ -297,12 +300,12 @@ else:                                                  # 기존 세션 경로 �
 | `list_audit` | admin | `GET /mcp/audit` | |
 | `find_similar_designs` | read | `POST /mcp/similar` | **Q2 확정 시에만** |
 | `ping` | read | `GET /mcp/ping` | 연결 점검(MR-17) — `{ok, server_version, mcp_enabled, token:{prefix, scope, expires_at, days_left, snapshot_age_days}, tools_count}`, `days_left ≤ 5`이면 `warnings`에 "토큰 만료 임박 — 웹에서 새 토큰 발급" |
-| `get_native_vars` | read | `GET /param-sets/{id}/variables` | native-vars §6.6(v0.2.4 함께) |
+| `get_native_vars` | read | `GET /param-sets/{id}/variables` | native-vars §6.6(v0.2.4 함께) — 조회만. `PUT …/variables`는 x-mcp exclude "웹 전용 편집"(도구 아님) |
 
 ## 10. 도메인 용어집·스키마 사전(경량 온톨로지)
 
 - `GET /mcp/glossary?section=` → tool `get_glossary`(read). 생성 `glossary.json` + 사람 파일 병합 결과(응답 상한 64 KiB, `section`으로 부분 조회).
-- **자동 추출**(생성기, 손 유지보수 없음): `entities`(SUMMARIES 키 + 관계 표), `job_types`(JOB_TYPES: lane·stage_label·label), `job_kinds`(JOB_KINDS), `feature_abbr`(paicad `features.py`·`shell/common.py`의 `TYPE_ABBR`를 **AST로 읽음** — 플랫폼은 paicad를 import하지 않는다), `enums`(openapi 스키마의 enum: 작업 상태·레인·범위 등), `error_codes`(backend·worker 소스 AST에서 `DomainError("CODE", "메시지", status=…)`·`_err(status, "CODE", …)`·`StepFailure("CODE", …)`의 문자열 리터럴 → `{code, status, message_ko(첫 출처), sources:[파일]}`, 파일 경로순 결정적).
+- **자동 추출**(생성기, 손 유지보수 없음): `entities`(SUMMARIES 키 + 관계 표), `job_types`(JOB_TYPES: lane·stage_label·label), `job_kinds`(JOB_KINDS), `feature_abbr`(paicad `features.py`·`shell/common.py`의 `TYPE_ABBR`를 **AST로 읽음** — 플랫폼은 paicad를 import하지 않는다), `enums`(openapi 스키마의 enum: 작업 상태·레인·범위 등), `error_codes`(backend·worker·`physicsai_mcp` 소스 AST에서 `DomainError("CODE", "메시지", status=…)`·`_err(status, "CODE", …)`·`_error(status|None, "CODE", …)`(MCP 계층 로컬 오류 — status null)·`StepFailure("CODE", …)`의 문자열 리터럴 → `{code, status, message_ko(첫 출처), sources:[파일]}`, 파일 경로순 결정적).
 - **사람이 쓰는 부분**: `backend/physicsai_api/mcp/glossary_terms.yaml`(Impl-Backend 소유, 패키지 포함) — 키는 자동 추출 키를 참조만:
 
 ```yaml
@@ -327,6 +330,8 @@ terms:
     ko: 낙하 해석 조건(방향·높이)
 error_hints:
   CONFIRM_REQUIRED: plan_job을 먼저 호출해 confirm_token을 받으세요
+  PARAMS_JSON_INVALID: params_json은 JSON 객체 텍스트(64 KiB 이하)여야 합니다 — describe_job_kind의 params_schema·example을 보고 만드세요
+  # INVALID_ARGUMENTS·UNKNOWN_TOOL·SERVER_UNREACHABLE·BACKEND_TIMEOUT·RESULT_TOO_LARGE도 힌트 한 줄씩(§20.3 표)
 ```
 
 - 단계 번호: 화면 번호(①-1~⑥)와 내부 `stage_label`이 다른 경우(예: SURROGATE_OPT 내부 "⑤" = 화면 ⑥ 최적화, decisions 2026-10-17 화면 재편)를 `stages` 표에 둘 다 싣는다.
@@ -406,8 +411,8 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 | M1 | 설정 `mcp`·migration·`api_tokens` 인증 경로·토큰 API·`api_audit` 미들웨어·호출 제한·`route_policy.py` 동결 목록 | Impl-Backend: `config/schema_mcp.py`, `physicsai_api/{deps.py, auth_tokens.py, mcp/route_policy.py, mcp/audit_mw.py, mcp/ratelimit.py, routers/api_tokens.py}`, `migrations/versions/0020_mcp.py`, `db/repositories/{api_tokens,api_audit,mcp_plans}.py`, `config/platform.example.yaml`·`platform.demo.yaml`(추가만) |
 | M2 | `JOB_KINDS`·`/mcp/jobs*`·doe_generate·solve_pbs plan 신규, `SUMMARIES`·`/mcp/summary`·`/mcp/system`·`/mcp/audit` | Impl-Backend: `physicsai_api/mcp/{job_kinds.py, summaries.py}`, `routers/mcp.py`, `schemas/mcp.py` |
 | M3 | `x-mcp` 표시·설명 보강(`summary_en`·`summary_ko`), §9.2 이식 가능 스키마 변환·검사기, `scripts/gen_tool_specs.py`·생성 파일·`/mcp/tools`·용어집(`glossary_terms.yaml`, `/mcp/glossary`), test-all 연결, `backend/openapi.json` 갱신 | Impl-Backend |
-| M4 | "내 API 토큰" 화면 + `frontend-dist/` | Impl-Frontend: `frontend/src/account/apiTokens/*` |
-| M5 | MCP 서버(§20): 공통 도구 실행기·HTTP 마운트·stdio 실행기·리소스·`/mcp/ping`, 의존 고정(`pyproject.toml`·`deploy/requirements.lock`·오프라인 수집), Caddy 스니펫 `handle /physicsai/mcp*`, 클라이언트 설정 예시 파일 3종, E2E | Impl-Backend: `backend/physicsai_mcp/**`(신규), `physicsai_api/main.py`(마운트 1곳), `deploy/{requirements.lock, collect-offline.*, caddy/physicsai.caddy}`, `deploy/mcp/examples/*`, `pyproject.toml`(`[project.scripts] physicsai-mcp`), 시험 `backend/tests/test_mcp_server*.py` |
+| M4 | "내 API 토큰"·"API 토큰 관리" 화면 + `frontend-dist/` | Impl-Frontend: `frontend/src/pages/ApiTokens.tsx`·`shell/TopBar.tsx`·`api/typesTokens.ts`·`mock/apiTokens.ts`(구현 위치, MR-C2) |
+| M5 | MCP 서버(§20): 공통 도구 실행기·HTTP 마운트·stdio 실행기·리소스·`/mcp/ping`, 의존 고정(`pyproject.toml`·`deploy/requirements.lock`·오프라인 수집), Caddy 스니펫 `handle /physicsai/mcp*`, 클라이언트 설정 예시 5파일(§21.1), E2E | Impl-Backend: `backend/physicsai_mcp/**`(신규), `physicsai_api/main.py`(마운트 1곳), `deploy/{requirements.lock, collect-offline.*, caddy/physicsai.caddy}`, `deploy/mcp/examples/*`, `pyproject.toml`(`[project.scripts] physicsai-mcp`), 시험 `backend/tests/test_mcp_server*.py` |
 | M6 | 연결 가이드·관리자 매뉴얼 반영(설정 키·Caddy·폐기 절차) | Plan: `docs/manual/mcp-clients.md`(초안 작성됨)·`admin.md` |
 | (Q2) | `/mcp/similar` | Impl-Backend |
 
@@ -429,13 +434,13 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 | V-MCP-10 | 용어집 | 자동 추출 키(피처 약어 = paicad TYPE_ABBR 전체, job_types, job_kinds, entities, error_codes)와 실제 코드 일치, 사람 파일 키 ⊂ 자동 키, 필수 `ko` 누락 0, paicad import 없음 |
 | V-MCP-11 | 호출 제한 | 분당 61번째 429 + Retry-After, plan 11번째 429, 동시 작업 4번째 429, 세션 무제한 |
 | V-MCP-12 | 토큰 취소 예외 | 같은 토큰 작업만 `cancel_job` 성공, 다른 사용자·다른 토큰 작업 403, 기존 `POST /jobs/{id}/cancel` 권한 불변 |
-| V-MCP-13 | 화면 | features.mcp false면 메뉴 숨김, 평문 1회 표시·저장 코드 없음(정적), 폐기 확인 대화, 만료일 입력 최대 30 |
-| V-MCP-14 | 이식 가능 스키마 | 생성 파일 전체가 §9.2 화이트리스트 통과(별도 검사기), 도구·인자 이름 정규식, enum 문자열만, 빈 properties object 0, 도구 수 ≤ 40, 설명 en/ko 병기·길이 |
+| V-MCP-13 | 화면 | features.mcp false면 두 메뉴 숨김, 평문 1회 표시·복사·닫으면 상태에서 삭제·저장 코드 없음(정적), 폐기 확인 대화, 만료일 입력 최대 30, 관리자 목록 user_id·active 필터 |
+| V-MCP-14 | 이식 가능 스키마 | 도구 입력 스키마(`tools.*.json`)가 §9.2 화이트리스트 통과(별도 검사기), `job_kinds.json` params_schema는 모양 검사만, 도구·인자 이름 정규식, enum 문자열만, 빈 properties object 0, 도구 수 ≤ 40, 설명 en/ko 병기·길이 |
 | V-MCP-15 | HTTP E2E(SDK 클라이언트 `streamable_http`) | 시험 uvicorn(127.0.0.1 임시 포트)+PostgreSQL: initialize → `tools/list`(read 토큰은 read 도구만, run 토큰은 run 포함) = 생성 파일과 이름·스키마 일치 → `ping`·`whoami`·`get_summary` 호출 → `resources/list`·`resources/read`(용어집) → run 토큰 `plan_job`→`run_job`(confirm)→`job_status`; Bearer 없음·`pai_` 아님·폐기 토큰 401 + `WWW-Authenticate: Bearer`, `mcp.enabled=false` 404 |
 | V-MCP-16 | stdio E2E(SDK 클라이언트 `stdio_client`) | `python -m physicsai_mcp.stdio`를 환경변수(URL·토큰 또는 토큰 파일)로 띄워 V-MCP-15와 같은 시나리오·같은 도구 목록, 토큰 없음 → 시작 실패 문구(종료 코드 2), 서버 다운 → 도구 오류 `SERVER_UNREACHABLE` |
 | V-MCP-17 | 거부·감사 | MCP 경유 read 토큰 `run_job` → 도구 결과 `isError` + `API_TOKEN_SCOPE`(HTTP 403 그대로 전달), confirm 없음 428 → `isError` + 힌트 "plan_job을 먼저", 호출 제한 429 전달; 각 호출이 `api_audit`에 1행(MCP 계층은 감사 직접 기록 없음 — 백엔드 미들웨어만), MCP 계층 로그에 토큰·인자 값 없음 |
 | V-MCP-18 | 얇은 래퍼 정적 | `physicsai_mcp`가 `physicsai_api`·`physicsai_core`·`physicsai_worker`를 import하지 않음(`test_layering` 규칙 8), 권한·범위 판정 코드 없음(도구 목록 필터는 주입된 백엔드 함수만), python-multipart import 0(플랫폼 코드 전체) |
-| V-MCP-19 | 클라이언트 설정 예시 | `deploy/mcp/examples/`의 Claude Code `.mcp.json`·Codex `config.toml`·Gemini `settings.json`이 json/tomllib 파싱 통과·필수 키(HTTP: url/httpUrl·Authorization 또는 bearer_token_env_var, stdio: command·env)·토큰 평문 없음(`pai_` 문자열 0), 가이드 문서의 같은 블록과 내용 일치 |
+| V-MCP-19 | 클라이언트 설정 예시 | `deploy/mcp/examples/`의 5파일(§21.1 표 — 목록이 정확히 5개 + `README.txt`)이 json/tomllib 파싱 통과·필수 키(HTTP: url/httpUrl·Authorization 또는 bearer_token_env_var, stdio: command·env)·토큰 평문 없음(`pai_` 문자열 0), 가이드 문서의 같은 블록과 내용 일치 |
 | V-MCP-20 | 오프라인 설치 | `deploy/requirements.lock`에 `mcp`·전이 의존 고정, `collect-offline`이 wheel 수집, 빈 venv에 `--no-index` 설치 후 `physicsai-mcp --version`(CI Linux) + Windows 묶음 수동(e2e-checklist) |
 
 ## 18. 리스크
@@ -445,7 +450,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 | 토큰 유출(설정 파일·대화 기록·LLM 로그) | 소유자 권한으로 작업 생성 | 해시 저장·1회 표시·만료 필수(≤ 30일)·클라이언트 설정에 평문 대신 환경변수·토큰 파일(§21)·범위 최소(read 기본 권장)·허용 목록·호출 제한·감사·즉시 폐기, `pai_` 접두로 비밀 검사 도구 탐지 가능 |
 | 사내 LLM 오조작(잘못된 범위·대량 run) | 슬롯·HPC 점유 | heavy confirm(요청 해시 결합 — plan 후 값 바꿔치기 불가)·동시 작업 상한·`denied_job_kinds`·자기 작업 취소·plan에 대기열·예상 시간 표시 |
 | 역할 스냅숏이 대시보드보다 늦음 | 권한 회수 지연(최대 30일 = 토큰 기한) | 웹 로그인 시 즉시 갱신·관리자 폐기(즉시 차단 경로, 관리자 매뉴얼)·admin 자동 폐기 |
-| MCP SDK 버전 변화(2.x 빠른 개정, 2026-10-21 PyPI 최신 `mcp` 2.3.0) | API 깨짐·전이 의존 증가 | lock 정확 버전 고정, SDK 사용은 `physicsai_mcp/sdk_adapter.py` 한 파일에 모음, E2E V-MCP-15·16 |
+| MCP SDK 버전 변화(2.x 빠른 개정, 2026-10-21 PyPI 최신 `mcp` 2.3.0) | API 깨짐·전이 의존 증가 | `mcp==2.3.0` 고정(pyproject·lock 같은 값, 구현 반영), SDK 사용은 `physicsai_mcp/sdk_adapter.py` 한 파일에 모음, E2E V-MCP-15·16 |
 | SDK 전이 의존(2.3.0 기준 python-multipart·pyjwt[crypto]·sse-starlette·opentelemetry-api·httpx2·mcp-types·jsonschema·pywin32(Windows)) | 오프라인 묶음·보안 검토 증가, upload-report "python-multipart 의존 금지"와 충돌 | MR-18·UR-C1(전이 의존만 허용, 코드 import·multipart 라우트 0 유지), 구현 시 lock 해석으로 목록 확정·라이선스 확인 |
 | Streamable HTTP가 프록시에서 끊김(SSE 버퍼링) | 도구 호출 실패 | stateless + JSON 응답 모드(SSE 미사용), Caddy `handle /physicsai/mcp*`, Vite 프록시는 `/physicsai` 전체 전달이라 무변경 |
 | HTTP(비 TLS) 대시보드에서 Bearer 전송 | 사내망 도청 시 토큰 노출 | 대시보드가 HTTPS면 HTTPS 주소 권장(가이드), 짧은 기한·범위 최소·즉시 폐기 |
@@ -470,16 +475,17 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 |---|---|
 | `toolset.py` | 생성 스펙(`tools.mcp.json`)·리소스 목록을 받아 SDK `Server`에 `list_tools`·`call_tool`·`list_resources`·`list_resource_templates`·`read_resource` 등록. 도구 호출 = `x-http`(method·path·operationId·`json_string_fields`)로 HTTP 요청 조립 → 응답을 도구 결과로 변환(§20.3). **두 전송 공용** |
 | `backend_client.py` | 위임 HTTP 클라이언트 인터페이스: `request(method, path, query, json, bearer) -> (status, body)`. 구현 2개 — 네트워크(httpx, stdio용)·ASGI(같은 프로세스 앱, HTTP 마운트용) |
-| `http_app.py` | `build_mcp_asgi(app, verify_token, load_specs) -> ASGI`. SDK Streamable HTTP 세션 관리자를 **stateless + JSON 응답**으로 생성. 요청마다 `Authorization: Bearer pai_…` 확인 → 주입된 `verify_token`(= 백엔드 `auth_tokens` 검증 함수, §4.2와 같은 401 코드)로 검증, 실패 401 + `WWW-Authenticate: Bearer` + `{code}` JSON. 검증된 Bearer를 그 요청의 도구 호출에 그대로 실어 ASGI 클라이언트로 `/physicsai/api/...` 호출 |
-| `stdio.py` | 진입점 `physicsai-mcp`(`[project.scripts]`)·`python -m physicsai_mcp.stdio`. 환경변수 §20.4 → 네트워크 클라이언트. 시작 시 `GET /mcp/tools?format=mcp` 1회로 도구 로드(실패 시 표준오류에 한국어 원인 + 종료 코드 2), `--version`·`--check`(ping 1회 후 종료) |
+| `http_app.py` | `build_mcp_asgi(app, verify_token, load_specs) -> ASGI`. SDK `StreamableHTTPSessionManager`(`json_response=True, stateless=True`)를 **요청마다 새로 만들어** `run()` 안에서 그 요청 하나를 처리하고 닫는다(`run()`은 인스턴스당 1회라서 — 앱 lifespan에 매달지 않음, 마운트 앱의 시작·종료 훅과 무관). 요청마다 `Authorization: Bearer pai_…` 확인 → 주입된 `verify_token`(= 백엔드 `auth_tokens` 검증 함수, §4.2와 같은 401 코드)로 검증, 실패 401 + `WWW-Authenticate: Bearer` + 오류 본문(아래). POST 외 메서드(GET·DELETE — stateless·JSON이라 독립 SSE 스트림·세션 종료 없음)는 405 `METHOD_NOT_ALLOWED` + `Allow: POST`. 검증된 Bearer를 그 요청의 도구 호출에 그대로 실어 ASGI 클라이언트로 `/physicsai/api/...` 호출 |
+| `stdio.py` | 진입점 `physicsai-mcp`(`[project.scripts]`)·`python -m physicsai_mcp.stdio`. 환경변수 §20.4 → 네트워크 클라이언트. 시작 시 `GET /mcp/tools?format=mcp&visible=true` 1회로 도구 로드(최상위 `visible`로 `tools/list` 표시 필터, §9)(실패 시 표준오류에 한국어 원인 + 종료 코드 2), `--version`·`--check`(ping 1회 후 종료) |
 | `sdk_adapter.py` | 공식 SDK(`mcp`) import를 이 파일에만 둔다(버전 변화 흡수) |
 | `resources.py` | 리소스 URI ↔ API 경로 표(§20.2) |
 
 - 레이어(`test_layering` 규칙 8): `physicsai_mcp`는 `physicsai_api`·`physicsai_core`·`physicsai_worker`를 import하지 않는다. HTTP 마운트에 필요한 앱·토큰 검증 함수·스펙 로더는 `physicsai_api/main.py`가 **주입**한다(마운트 1곳: `/physicsai/mcp`, 프런트 정적 서빙보다 먼저 등록). stdio는 `mcp`·httpx·표준 라이브러리만 — 나중에 별도 경량 wheel로 떼어 낼 수 있게.
-- 권한 판단 없음: 범위·허용 목록·역할·confirm·호출 제한·감사는 전부 백엔드(MR-1~12). 예외는 `tools/list` 표시 필터 하나 — 토큰 범위 미만 도구를 숨기되, 판정은 주입된 백엔드 함수(`scope_allows(scope, risk)`)가 한다(stdio는 `ping`의 scope로 같은 함수의 HTTP 결과를 씀 — 숨김은 편의일 뿐, 호출은 어차피 백엔드가 거부).
+- 권한 판단 없음: 범위·허용 목록·역할·confirm·호출 제한·감사는 전부 백엔드(MR-1~12). 예외는 `tools/list` 표시 필터 하나 — 토큰 범위 미만 도구를 숨기되, 판정은 주입된 백엔드 함수(`scope_allows(scope, risk)`)가 한다(HTTP 마운트는 `load_specs(scope)`가 같은 함수로 `visible`을 채운 문서를 주입, stdio는 `GET /mcp/tools?format=mcp&visible=true` 응답의 `visible`을 씀 — `toolset`은 문서에 `visible`이 있으면 그 이름만 `tools/list`에 보이고, 없으면 전체. 숨김은 편의일 뿐, 숨긴 도구 호출도 백엔드가 거부).
 - 감사: MCP 계층은 따로 기록하지 않는다. 모든 도구 호출이 백엔드 API 요청이므로 `api_audit`가 남는다(HTTP 마운트의 ASGI 호출도 미들웨어를 탄다). `initialize`·`tools/list`는 API 호출이 아니므로 감사 대상 아님(토큰 검증 실패 401은 `api_audit` 거부 행으로 기록 — `verify_token`이 감사 함수 호출).
 - 로그: 메서드·도구 이름·상태·소요 시간만. 인자 값·결과 본문·Authorization 없음(V-MCP-17).
-- `mcp.enabled=false` 또는 `mcp.server.http_enabled=false` → `/physicsai/mcp` 404(마운트는 하되 핸들러가 404 — openapi에는 나타나지 않음).
+- `mcp.enabled=false` 또는 `mcp.server.http_enabled=false` → `/physicsai/mcp` 404 `MCP_DISABLED`(마운트는 하되 핸들러가 404 — openapi에는 나타나지 않음).
+- 마운트 오류 본문(401·404·405 공통, 구현 반영 MR-C2): `{"code": C, "message": M, "detail": {"code": C, "message": M}}` — 최상위는 MCP 클라이언트용, `detail`은 기존 API 오류 형식(platform §10.1)과 같은 키라 같은 파서로 읽힌다. 401만 `WWW-Authenticate: Bearer`, 405는 `Allow: POST`.
 
 ### 20.2 리소스(§10 용어집·스키마 사전)
 
@@ -497,6 +503,18 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 - 2xx: `content=[{type:"text", text: <JSON 직렬화, ensure_ascii=False>}]` + `structuredContent`(JSON 객체일 때). `mcp.server.max_result_bytes`(64 KiB) 초과 시 잘라 내지 말고 도구 오류 `RESULT_TOO_LARGE`("top_n·limit을 줄이세요").
 - 4xx·5xx: `isError: true`, 본문 `{status, code, message, hint?}` — `hint` = 용어집 `error_hints[code]`(예 428 `CONFIRM_REQUIRED` → "plan_job을 먼저 호출해 confirm_token을 받으세요"). 429는 `retry_after_s` 포함.
 - 연결 실패·시간 초과(`call_timeout_s` 60): `isError` + `SERVER_UNREACHABLE`·`BACKEND_TIMEOUT`.
+- **MCP 계층 로컬 오류**(HTTP 호출 전·후 MCP 계층이 판정, 본문 `status: null` — `toolset._error(None, CODE, 메시지, hint?)`, 용어집 `error_codes` 자동 추출·`error_hints` 한 줄씩):
+
+| code | 언제 | HTTP 호출 |
+|---|---|---|
+| `PARAMS_JSON_INVALID` | `params_json` 등 `json_string_fields`가 문자열 아님·64 KiB 초과·JSON 파싱 실패·객체 아님 | 안 함 |
+| `INVALID_ARGUMENTS` | 입력 스키마에 없는 인자·필수 인자 누락·스칼라 타입 불일치·경로 인자 미충족 | 안 함 |
+| `UNKNOWN_TOOL` | 스펙에 없는 도구 이름 | 안 함 |
+| `SERVER_UNREACHABLE` | 백엔드 연결 실패 | 시도 |
+| `BACKEND_TIMEOUT` | `call_timeout_s` 초과 | 시도 |
+| `RESULT_TOO_LARGE` | 2xx 결과가 `max_result_bytes` 초과(잘라 내지 않음) | 함 |
+
+- 리소스 읽기 실패는 SDK 오류(`INTERNAL_ERROR`) + 메시지에 위 코드(`SERVER_UNREACHABLE`·`BACKEND_TIMEOUT`·`RESULT_TOO_LARGE`).
 
 ### 20.4 stdio 환경변수
 
@@ -510,7 +528,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 
 ### 20.5 배포
 
-- 의존: `pyproject.toml`에 `mcp==<고정>`(구현 시 최신 안정판, lock과 같은 값), `deploy/requirements.lock`에 전이 의존 포함 정확 버전(MR-18), `collect-offline.{sh,ps1}`가 wheel 수집(폐쇄망). Windows 전용 `pywin32`도 묶음에 포함.
+- 의존(구현 반영): `pyproject.toml`에 **`mcp==2.3.0`** 정확 고정, `deploy/requirements.lock`에 `mcp==2.3.0`·`mcp-types==2.3.0`과 전이 의존(attrs·cffi·cryptography·httpcore2·httpx2·jsonschema*·pycparser·PyJWT·python-multipart·pywin32(Windows 전용)·referencing·rpds-py·sse-starlette·truststore) 정확 버전 추가(MR-18), `collect-offline.{sh,ps1}`가 wheel 수집(폐쇄망). SDK import는 `physicsai_mcp/sdk_adapter.py` 한 파일.
 - 설치: `setup.ps1`·`update-repo.ps1`·묶음 `install.ps1`·`update.ps1`이 기존 플랫폼 설치 단계에서 함께 설치(별도 단계 없음). HTTP 전송은 **백엔드 프로세스 안 마운트라 새 작업 스케줄러 작업·포트 불필요**.
 - 프록시: 대시보드 Vite 프록시는 `/physicsai` 전체를 전달하므로 무변경. Caddy 설치는 `deploy/caddy/physicsai.caddy`에 `handle /physicsai/mcp* { reverse_proxy 127.0.0.1:{$PHYSICSAI_PORT:8100} }`를 `/physicsai/*` 앞에 추가(관리자 매뉴얼 §2.6.2 갱신).
 - stdio: 사용자 PC 설치는 **선택**(가이드 §21) — 서버 PC에서 클라이언트를 쓰면 설치된 venv의 `physicsai-mcp` 그대로. 사용자 PC는 묶음 wheels로 venv 설치(`pip install --no-index --find-links <묶음>\wheels physicsai-platform`, 전체 의존이 함께 설치됨 — 경량 wheel 분리는 후속).
@@ -522,14 +540,16 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 
 | 클라이언트 | 전송 | 설정 위치(예시 파일 `deploy/mcp/examples/`) | 토큰 전달 |
 |---|---|---|---|
-| Claude Code CLI | HTTP(`claude mcp add --transport http … --header "Authorization: Bearer …"` 또는 `.mcp.json` `type:"http"`·`headers`) / stdio | `claude.mcp.json` | `.mcp.json`의 `${PHYSICSAI_MCP_TOKEN}` 환경변수 확장, stdio는 `PHYSICSAI_MCP_TOKEN_FILE` |
-| Claude Desktop | stdio | `claude_desktop_config.json` | `env.PHYSICSAI_MCP_TOKEN_FILE` |
-| OpenAI Codex CLI[^2] | `config.toml` `[mcp_servers.physicsai]` — HTTP(`url`·`bearer_token_env_var`·`http_headers`) / stdio(`command`·`args`·`env`) | `codex.config.toml` | `bearer_token_env_var = "PHYSICSAI_MCP_TOKEN"`, stdio는 TOKEN_FILE |
-| Gemini CLI[^3] | `~/.gemini/settings.json` `mcpServers` — HTTP(`httpUrl` + `headers.Authorization`) / stdio(`command`·`args`·`env`) | `gemini.settings.json` | `headers`의 `$PHYSICSAI_MCP_TOKEN` 확장, stdio는 TOKEN_FILE |
+| Claude Code CLI | HTTP(`.mcp.json` `type:"http"`·`url`·`headers`, 또는 `claude mcp add --transport http …`) / stdio(`claude mcp add … -- physicsai-mcp` 명령, 예시 파일 없음) | `claude.mcp.json`(HTTP, 서버 이름 `physicsai`) | `headers.Authorization: "Bearer ${PHYSICSAI_MCP_TOKEN}"` 환경변수 확장, stdio는 `--env PHYSICSAI_MCP_TOKEN_FILE` |
+| Claude Desktop | stdio | `claude_desktop_config.json`(`mcpServers.physicsai.command`·`env`) | `env.PHYSICSAI_MCP_URL`·`env.PHYSICSAI_MCP_TOKEN_FILE` |
+| OpenAI Codex CLI[^2] | `~/.codex/config.toml` — HTTP `[mcp_servers.physicsai]`(`url`·`bearer_token_env_var`) + stdio `[mcp_servers.physicsai_stdio]`(`command`·`args`·`[…env]`) 한 파일 | `codex.config.toml`(두 서버) | `bearer_token_env_var = "PHYSICSAI_MCP_TOKEN"`, stdio는 `env.PHYSICSAI_MCP_TOKEN_FILE` |
+| Gemini CLI[^3] — HTTP | `~/.gemini/settings.json` `mcpServers.physicsai`(`httpUrl`·`headers.Authorization`·`timeout` 60000·`trust` false) | `gemini.settings.json` | `headers`의 `$PHYSICSAI_MCP_TOKEN` 확장 |
+| Gemini CLI — stdio | 같은 파일 `mcpServers.physicsai`(`command`·`env`·`timeout`·`trust`) — HTTP와 같은 서버 이름이라 **파일을 나눔**(둘 중 하나만 쓴다) | `gemini.settings.stdio.json` | `env.PHYSICSAI_MCP_TOKEN_FILE`(Gemini CLI가 상속 환경변수의 토큰류를 지울 수 있음) |
 | 사내 LLM 클라이언트(MCP 지원) | 지원하는 쪽(Q4) | – | 같은 규칙 |
 | MCP 미지원 클라이언트 | – | `GET /mcp/tools?format=openai` 함수 정의 + 사용자 측 HTTP 호출 | Bearer |
 
 - "chatgpt" 요구는 **Codex CLI로 충족**. 모델 엔드포인트(사내 on-premise 배포) 설정은 각 사내 배포 안내를 따른다(플랫폼 범위 밖).
+- 예시 파일 = `deploy/mcp/examples/` 5파일 + `README.txt`(파일별 용도). 가이드 [mcp-clients.md](../manual/mcp-clients.md) §4의 json 블록 = json 예시 4파일(파싱 결과 일치), toml 블록들을 합친 것 = `codex.config.toml`(V-MCP-19, `backend/tests/common/test_mcp_examples.py`).
 - 설정 파일에 토큰 평문 금지 권고(가이드·V-MCP-19 예시에 `pai_` 0건). 클라이언트별 키 이름은 구현 시점 각 클라이언트 문서로 다시 확인(키 이름 변경 시 예시 파일·가이드만 고침 — 서버 무변경).
 
 ### 21.2 범위 밖: ChatGPT 웹·데스크톱 앱(developer mode 커넥터)
@@ -547,3 +567,4 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 ## 변경 메모(MR-Cn)
 
 - **MR-C1**(2026-10-21, 사용자 결정 — Plan): 범위를 "MCP 준비"에서 **MCP 기능 전체**로 확장하고 파일 이름을 `mcp-ready.md` → `mcp.md`로 변경(ID 접두 MR·V-MCP 유지). 추가: MR-13(토큰·스냅숏 30일 — 초안 90일·14일 대체), MR-14~18(SDK 서버·두 전송·이식 가능 스키마·ping·오프라인 의존), §9.2·§20·§21, V-MCP-14~20, M5·M6. 지원 클라이언트 Claude·Codex CLI·Gemini CLI(사내 on-premise 모델 전제), ChatGPT 웹 앱 범위 밖. migration `0020_mcp` 확정. Q1 종결, Q2·Q3 기본 진행값 명시, Q4 추가. 릴리스 v0.2.4.
+- **MR-C2**(2026-10-21, Plan — v0.2.4 구현 반영, 기준 `feat/r1-v024` 8206870): 구현과 계약 차이를 계약에 맞춤. ① `GET /mcp/tools?format=mcp&visible=true` — 최상위 `visible`(토큰 범위로 부를 수 있는 도구, 판정 백엔드 `scope_allows`), stdio가 `tools/list` 필터에 사용(§9·§20.1). ② 마운트 401·404·405 본문 `{code, message, detail:{code, message}}`, 비POST 405 `METHOD_NOT_ALLOWED`(§20.1). ③ MCP 계층 로컬 오류 6종(status null)·용어집 `error_hints`(§20.3·§10). ④ V-MCP-14 화이트리스트는 도구 입력 스키마(`tools.*.json`)만, `job_kinds.json`(생성 파일 추가) params_schema는 모양 검사(§9·§9.2). ⑤ 클라이언트 예시 5파일 — Gemini는 HTTP·stdio 분리(§21.1, 가이드 갱신). ⑥ 도구 17개(`find_similar_designs` 제외, `get_native_vars` 포함 — PUT은 exclude), `param_set` 요약 facts `vars_revision`·`vars_count`(§7·§9.1). ⑦ `mcp==2.3.0` 고정·lock 전이 의존 추가, 세션 관리자 요청마다 생성(lifespan 무관), 용어집 `error_codes` 추출에 `_error(...)` 포함(§10·§20.1·§20.5). ⑧ 토큰 화면: 메뉴는 `features.mcp`일 때만, 평문 1회 표시·복사·저장소 미사용, 관리자 "API 토큰 관리"(user_id·active 필터·폐기) 구현 — 초안의 "관리자 화면 비범위"를 대체(§4.5·§16 M4·V-MCP-13).

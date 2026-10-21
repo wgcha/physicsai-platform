@@ -1,6 +1,6 @@
 # 계약: Native 템플릿 변수 정의(선택·범위) — 학습 변수와 독립
 
-> 상태: 확정(2026-10-21, 사용자 결정 D1~D5 반영). 상위 계약 [geometry-engine.md](geometry-engine.md)(GE, 변경 메모 GE-C18), ⑥ 규칙은 [opt-native.md](opt-native.md)·phase3 §18(O5), ④ 일괄은 phase3 §14·§20(S15). 충돌 시 이 문서 우선(Native 경로 한정). 기준 커밋 4c0192c(`feat/r1-v023`).
+> 상태: 확정(2026-10-21, 사용자 결정 D1~D5 반영). 상위 계약 [geometry-engine.md](geometry-engine.md)(GE, 변경 메모 GE-C18), ⑥ 규칙은 [opt-native.md](opt-native.md)·phase3 §18(O5), ④ 일괄은 phase3 §14·§20(S15). 충돌 시 이 문서 우선(Native 경로 한정). 기준 커밋 4c0192c(`feat/r1-v023`). **구현 반영: v0.2.4 통합본 `feat/r1-v024` 8206870**(변경 메모 NV-C1).
 > ID 규칙: 결정 `NV-n`, 시험 `V-NV-n`, 변경 메모 `NV-Cn`.
 
 ## 0. 한 줄 요약
@@ -35,7 +35,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 |---|---|
 | Native 단일 baseline 세트(solid·shell)의 형상 변수 정의 편집·리비전 | 다중 baseline 세트(`param_map.json`)의 추가·제외·정의 편집(NV-9) |
 | ⑥ `SURROGATE_OPT`(+opt-direct가 같은 `normalize`를 쓰면 그대로 적용) 변수 추가·제외·범위, 경고 전환 | ④ 단건 예측(PREDICT A) 화면 변경 — 세트 정의를 그대로 따름(§7.4) |
-| ④ `PREDICT_BATCH`(표본 방식 전부) 변수 추가·제외·범위 | 쉘 두께 PROP 행 선택(기존 `PUT /props` 소관 — 여기선 범위·제외만) |
+| ④ `PREDICT_BATCH`(표본 방식 전부) 변수 추가·제외·범위 | 쉘 두께 PROP 행 선택(기존 `PUT /props` 소관 — 여기선 범위·제외만. PROP 행은 `ps.parameters`의 `source:"prop"` 행으로 ⑥·④ 일괄 표에 실행 변수로 나온다, §7.2·§7.3) |
 | ①-3 DOE(세트 기준, `doe_native_set`)가 세트 정의를 스냅숏으로 사용 | 학습 범위 강제 제약, 외삽 정도 정량화(거리 지표) |
 | 학습 범위 출처 해석(모델 → 데이터셋 → ① DOE) | paicad 변경(불필요 — §9) |
 
@@ -78,7 +78,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 
 - `variables` = 형상 행만(쉘 두께 PROP 행 `source: "prop"`은 `PUT /props` 소관 — 저장 시 기존 PROP 행을 그대로 뒤에 붙임). 순서 = 풀 순서(피처 파일 순, 결정적).
 - 첫 저장 때 `history/rev_0000.json`을 현재 `parameters.json` 형상 행으로 먼저 쓴다(`parent_revision: null`, `saved_by_name: "등록"`) → 등록 정의도 되살릴 수 있다.
-- 저장 순서(API 한 요청, `PUT /props`와 같은 패턴): ① `history/rev_<n>.json` 새 파일(덮어쓰기 금지 — 있으면 409) ② `parameters.json`·`vars.json` 원자 쓰기 ③ 같은 트랜잭션에서 `ps_repo.set_values(parameters=rows)` + 감사 `PARAM_SET_UPDATE`(detail `{vars_revision, names, count}`). ③ 실패 시 ②를 이전 내용으로 되씀(①은 남겨도 무해 — 다음 저장은 `max(history)+1`).
+- 저장 순서(API 한 요청, `PUT /props`와 같은 패턴): ① `history/rev_<n>.json` 새 파일(덮어쓰기 금지 — 있으면 409) ② `parameters.json`·`vars.json` 원자 쓰기 ③ 같은 트랜잭션에서 `ps_repo.set_values(parameters=rows)` + 감사 `PARAM_SET_UPDATE`(detail `{vars_revision, names, count}`). ③ 실패 시 ②를 이전 내용으로 되씀(①은 남겨도 무해 — 다음 저장은 `max(history)+1`). 원래 `vars.json`이 없었으면 지우지 않고(삭제 금지) **리비전 0 스텁** `{"schema_version": 1, "revision": 0, "parent_revision": null}`으로 되쓴다(파일 없음과 같은 뜻 = 리비전 0). `parameters.json`은 이전 바이트로 되씀.
 - `parameters.json` 행 = `{name, nominal, min, max, unit}`(형식 불변, `nominal`·`unit`은 피처에서). 기존 행에 다른 키(`source`·`baselines`)가 있으면 보존.
 - `features_sha256` = 저장 시 피처 파일 해시. 조회 때 다르면 응답 `stale_names`(풀에 없는 정의 이름)를 계산해 보여 주고, 저장 시 그 이름은 422 `VAR_UNKNOWN`.
 - 삭제 API 없음. 리비전 파일은 사용자 산출물 규칙(삭제 금지)을 따른다.
@@ -201,9 +201,9 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 - `PredictBatchParams.vars?`(§6.2와 같은 스키마). Native:
   - 유효 변수 계산·오류는 §6.2와 같음(problem 코드 `RANGE_INVALID` field `vars.*` — 일괄 기존 코드 체계). `source.ranges` 키 ∈ 유효 변수, 생략 = 기준 범위. `ranges`의 기존 규칙(lo < hi) 그대로, 고정은 기준 범위 min = max일 때(기존).
   - `table`: 헤더 = 유효 변수 이름 전부(기존 "템플릿 이름 전부" 규칙을 유효 변수로).
-  - `train_doe`: ① DOE 재생이므로 `vars`를 받지 않는다(오면 `RANGE_INVALID` "① 학습 DOE 재사용에는 변수 추가·제외를 쓸 수 없습니다"). 유효 변수 = DOE 헤더 이름(⊆ 풀이어야, 아니면 `RANGE_INVALID`) — 세트 정의와 달라도 됨. note `VARS_FROM_DOE` "① DOE의 변수 구성을 그대로 씁니다".
+  - `train_doe`: ① DOE 재생이므로 `vars`를 받지 않는다(오면 problem `RANGE_INVALID` "① 학습 DOE 재사용에는 변수 추가·제외를 쓸 수 없습니다"). 유효 변수 = DOE 헤더 이름(⊆ 풀이어야 — 풀 밖 이름이 있으면 problem `RANGE_INVALID`) — 세트 정의와 달라도 됨. note `VARS_FROM_DOE` "① DOE의 변수 구성을 그대로 씁니다". 다중 baseline 세트에 `vars`가 오면 표본 방식과 무관하게 problem `RANGE_INVALID`(NV-9, 일괄 코드 체계 — ⑥의 `NATIVE_VARS_MULTI_UNSUPPORTED`와 다름).
   - `sobol continue_from`: 이전 배치 `source_meta.vars`의 이름과 유효 변수가 다르면 기존 이어 붙이기 불가 problem(같은 규칙).
-  - 미리보기 `PredictBatchPreview`에 `var_rows`·`excluded` 추가, 경고는 기존 `notes`(`{code,message}`)에 §6.2 코드로. 행 `out_of_range`는 §5.3.
+  - 미리보기 `PredictBatchPreview`에 `var_rows`·`excluded` 추가, 경고는 기존 `notes`에 §6.2 코드로 — **notes 항목은 `{code, message}`만**(기존 모양 유지, `name` 키 없음 — 변수 이름은 message 문구 안. ⑥ `var_notes`의 `{code, name, message}`와 다름). 행 `out_of_range`는 §5.3.
   - 생성 시 `source_meta.vars`(§4.1).
 - 다중 baseline: `vars` → `RANGE_INVALID`(NV-9), 경고 전환은 적용. Altair: `vars` → 422 `NATIVE_VARS_UNSUPPORTED`, 그 밖 무변경.
 - 배치 상세 응답에 `vars`(스냅숏, Native만, 없으면 null).
@@ -237,7 +237,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 | `GET /param-sets/{id}/variables` | `{"tool":"get_native_vars","risk":"read","confirm":"never","version":1,"summary_en":"Native template variable definition (used vars, ranges, pool, training range)","summary_ko":"Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)"}` | 요청 인자 `id`·`model_id`·`revision` 설명·예시 필수(V-MCP-6), 응답이 커지면 `history`는 최근 20개 그대로(64 KiB 이하) |
 | `PUT /param-sets/{id}/variables` | `{"exclude":"웹 전용 편집"}` | 세트 정의 변경은 사람이 ④ 상세에서만(D4) |
 | `SurrogateOptCreate.vars`·`PredictBatchParams.vars` | 별도 표기 없음 | mcp `JOB_KINDS` `surrogate_opt`·`predict_batch`의 `params_model`이 기존 요청 모델을 그대로 쓰므로 자동 포함(새 선택 인자 = 호환 변경, `kind_version` 불변). 도구 입력에서는 `params_json` 안(mcp §9.2) |
-| 요약 `param_set` | – | mcp `SUMMARIES` `param_set`의 파라미터 목록은 스냅숏/세트 정의(`vars_revision`) 기준, `facts.vars_revision` 추가 |
+| 요약 `param_set` | – | mcp `SUMMARIES` `param_set`의 파라미터 목록은 스냅숏/세트 정의(`vars_revision`) 기준, `facts.vars_revision`·`facts.vars_count` 추가(구현 반영) |
 
 - 병합 순서와 무관하게 위 표기를 이 계약 구현 커밋에 넣는다(`openapi_extra` — MCP 병합 전에는 무해한 확장 키). MCP가 먼저 병합됐다면 V-MCP-6 정적 시험이 누락을 잡는다. 두 operation은 mcp 동결 목록 `LEGACY_UNMARKED`에 넣지 않는다.
 
@@ -245,7 +245,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 
 ### 7.1 ④ Native 세트 상세 `FeatureTable`(`NativeDetail.tsx`)
 
-- 기존 `ViewSplit`(표 왼쪽·3D 오른쪽, 표 높이 = 3D 높이) 그대로. 열: **사용(체크)** · 이름 · 종류 · 바디 · 공칭 · **하한** · **상한** · 모핑 가능 범위 · 대칭 그룹 · 기준면. 기존 "범위" 문자열 열은 하한·상한 입력으로 대체.
+- 기존 `ViewSplit`(표 왼쪽·3D 오른쪽, 표 높이 = 3D 높이) 그대로. 표는 공용 `NativeVarsTable`(§7.2, 학습 범위 열 숨김). 열(구현 순서): **사용(체크)** · 이름 · 종류 · 바디 · 공칭 · 모핑 가능 범위 · **하한** · **상한** · 대칭 그룹 · 기준면 · 경고 — 모핑 가능 범위가 하한·상한 **앞**(입력 전에 한계를 보게). 기존 "범위" 문자열 열은 하한·상한 입력으로 대체.
 - 편집 권한(`canEdit`)·`editable`일 때만 입력, 아니면 읽기 표시 + `reason`. 체크 해제 행은 회색(`unused`), 입력 비활성(값은 유지 — 다시 켜면 그 값, 처음 켜면 피처 기본 `range`).
 - 위치형(`isPositionType`, RIB_POS 포함): 하한·상한 = 절대 좌표 mm 입력, 옆에 공칭 대비 Δ(작은 회색 "−5.0 / +5.0"). 치수형: mm 값.
 - 행 경고 pill: feasible 밖 "모핑 실패 가능"(기존 `exceedsFeasible` 재사용), `ref_locked` 사용 "양면 접촉", 공칭 범위 밖 "공칭 밖".
@@ -255,11 +255,11 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 
 ### 7.2 ⑥ `SurrogateSetup` "④ 변수 범위" 카드(Native 템플릿일 때만)
 
-- 공용 표 `NativeVarsTable`(신규, `stages/stage4/geometry/`)을 쓴다: 열 **사용** · 변수 · 종류 · 공칭 · **학습 범위** · **모핑 가능 범위** · 하한 · 상한 · 고정 · 경고. 초기값 = 미리보기 `var_rows`(세트 정의).
+- 공용 표 `NativeVarsTable`(신규, `stages/stage4/geometry/`)을 쓴다: 열(구현 순서) **사용** · 변수 · 종류 · 공칭 · **학습 범위** · **모핑 가능 범위** · 하한 · 상한 · 고정 · 경고(학습 범위·모핑 가능 범위가 하한·상한 앞, ④ 일괄도 같은 순서 — 일괄은 머리 "파라미터·최소·최대", 완전요인은 "수준" 열 추가). 초기값 = 미리보기 `var_rows`(세트 정의) + 쉘 세트는 PROP 행(`ps.parameters`의 `source:"prop"` — 풀에 없지만 실행 변수, 범위·제외만, `vars.exclude`로 제외)을 뒤에 붙인다(④ 일괄 표도 같음).
 - 표 아래 "변수 추가" 선택 상자(풀 − 현재, 종류·바디 표시) → 행 추가(`origin: added`, 하한·상한 = 피처 기본 범위). 추가 행은 [빼기], 세트 행은 사용 체크 해제 = 제외. 고정 체크는 기존 의미(하한 = 상한).
 - 카드 aside: Native "범위 자유 · 학습 범위·모핑 가능 범위 밖은 경고 · 하한 = 상한이면 고정"(Altair는 기존 "학습 범위 안만 …" 그대로).
 - 프런트 `soRules.ts`의 "학습 범위 {a}~{b} 안" 행 오류는 Native에서 끄고 경고 문구로(서버 `var_notes`를 그대로 표시). 학습 범위 모름이면 열 값 "모름" + 카드 아래 안내 1줄.
-- 결과 카드(`ResultCards` 변수별 학습 범위 막대)는 `settings.vars.variables[].train` 기준(없으면 막대 생략).
+- 결과 카드(`ResultCards` "범위(학습)" 열 막대): **v0.2.4 구현은 현재 세트 범위(`min`·`max`) 기준**이다. `settings.vars.variables[].train` 기준(없으면 막대 생략)으로 바꾸는 것은 **후속**(roadmap 후속 항목 — NV-C1).
 
 ### 7.3 ④ 일괄 `BatchSetup`·`SamplingPicker`(Native일 때만)
 
@@ -297,7 +297,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 |---|---|---|
 | R1 | 학습 범위 추적 실패(데이터셋을 ① 밖 폴더로 만든 모델)로 외삽 경고가 안 나옴 | `TRAIN_RANGE_UNKNOWN` 안내를 표·미리보기에 항상 표시, "모름" 열 값 |
 | R2 | 추출 조건이 다른 세트·DOE 사이 이름 충돌(`k` 재번호)로 엉뚱한 학습 범위 | §5.2-4 동일 피처 확인(type·body·공칭) |
-| R3 | `ps["parameters"]`를 직접 읽는 소비자 누락 → 스냅숏과 다른 변수로 재시도·조회 | §9 파일 목록 + V-NV-3(정의 편집 후 재시도·재개·조회 비교) + 정적 검사(Native 경로의 `ps["parameters"]` 직접 사용 grep 시험) |
+| R3 | `ps["parameters"]`를 직접 읽는 소비자 누락 → 스냅숏과 다른 변수로 재시도·조회 | §9 파일 목록 + V-NV-3(정의 편집 후 재시도·재개·조회 비교) + 정적 검사(구현: `backend/tests/test_native_vars_core.py` — `backend/physicsai_api`·`physicsai_core`·`worker/physicsai_worker`의 `ps["parameters"]` 직접 읽기 **개수를 파일별로 고정**(`ALLOWED` = {파일: 개수}, 늘거나 줄면 실패 → 검토 후 갱신) + Native 실행 경로 8파일이 `nv.apply(ps, nv.vars_of(…))`를 쓰는지 문자열 검사) |
 | R4 | 넓은 범위 → 모핑 실패 스킵 급증, ⑥ 탐색 run 낭비 | feasible 경고·스킵 수 표시(기존), envelope 측정 권장 문구 |
 | R5 | ④ 단건 예측의 "학습 범위 밖"은 여전히 세트 범위 기준(이름과 의미 불일치) | 후속(단건도 모델 학습 범위 기준으로) — 이번 비범위 |
 | R6 | 공칭이 범위 밖인 정의(NV-10)에서 ⑥ 기준안(공칭)·LHS 범위 해석 혼동 | `VAR_NOMINAL_OUTSIDE` 경고, 기준안 "범위 밖" 표시 |
@@ -329,3 +329,4 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 (구현 중 계약과 달라지면 `NV-C1~`로 기록하고 Plan 확인.)
 
 - **NV-C0**(2026-10-21, Plan — 릴리스 배정): v0.2.4에 MCP 기능([mcp.md](mcp.md))과 함께 포함([roadmap.md](../roadmap.md)). §6.6 MCP 표기 추가. migration 없음 유지(v0.2.4의 migration은 `0020_mcp`뿐).
+- **NV-C1**(2026-10-21, Plan — v0.2.4 구현 반영, 기준 `feat/r1-v024` 8206870): ① ④ 일괄 미리보기 `notes`는 `{code, message}`만(이름은 문구 안, §6.3). ② ④ `train_doe`에 `vars`·DOE 헤더의 풀 밖 이름·다중 baseline 세트의 `vars` → problem `RANGE_INVALID`(§6.3). ③ R3 정적 시험은 `ps["parameters"]` 직접 읽기 개수를 파일별로 고정(`test_native_vars_core.py` `ALLOWED`, §11). ④ 정의 저장 ③단계 실패 롤백 시 원래 없던 `vars.json`은 리비전 0 스텁으로 되씀(삭제 금지, §3.2). ⑤ 프런트 열 순서: 모핑 가능 범위(⑥·일괄은 학습 범위 포함)가 하한·상한 앞(§7.1·§7.2). ⑥ `ResultCards` "범위(학습)" 막대는 현재 세트 범위 기준 — 학습 범위 기준 전환은 후속(§7.2, roadmap). ⑦ 쉘 PROP 행(`ps.parameters` `source:"prop"`)은 ⑥·④ 일괄 표에 실행 변수로 포함(범위·제외만, §1.3·§7.2).
