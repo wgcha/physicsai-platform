@@ -1,12 +1,12 @@
 # 계약: 브라우저 입력 업로드(A) + HTML 결과 요약 보고서 받기(B)
 
-> 상태: 초안(2026-10-21, 사용자 결정 반영 — 업로드 허용). 미결 U1~U3(§12)은 제안값으로 적고 사용자 확정 대기.
+> 상태: 확정(2026-10-21, 사용자 결정 반영 — 업로드 허용, U1~U3 확정 §12).
 > 상위 계약: [platform.md](platform.md)(§3.3·§17.5·V-SEC-1을 이 문서가 바꾼다 — 변경 메모 연결), [phase3.md](phase3.md) §12·D3-46(공유 inbox 흐름을 이 문서가 대체).
 > 참고 구현(읽기 전용 이식 원본): `wgcha/esl-platform` 계약 `esl_p3_ux.md` §1.1·§2·§8·§9, `backend/esl_platform/core/uploads.py`·`api/services/uploads.py`·`api/routers/uploads.py`, `frontend/src/lib/uploader.ts`·`pages/newcase/UploadPanel.tsx`, `esl/report/html.py`·`api/html_report.py`, `backend/tests/test_p3_ux.py`·`test_p3_ux_hardening.py`. **동작·보호 규칙은 esl을 그대로 따르고, 다른 점만 이 문서에 적는다**(§2.3 차이표).
 
 ## 0. 한 줄 요약
 
-입력(CAD·모델 폴더·학습 결과 폴더·Radioss 조립 폴더·템플릿 폴더 등)을 받는 모든 경로 칸에 **"내 PC에서 올리기 | 서버 경로" 두 탭**을 두고, PC 탭은 esl과 같은 **분할 업로드 세션**(청크 PUT·이어 올리기·청크 sha256·`.part`→최종 이름·덮어쓰기 금지·취소/낡음은 `_backup`)으로 `<ai_root>/uploads/<사용자>/<UTC>_<이름>/`에 저장한 뒤, **그 폴더 경로를 기존 경로 칸에 채워 기존 `paths/inspect`·작업 생성 흐름을 그대로 탄다**. 결과는 ④ 예측(단건·일괄)부터 **서버가 만드는 단일 파일 HTML 보고서**(외부 자원 0, CSP 차단)를 받는다.
+입력(CAD·모델 폴더·학습 결과 폴더·Radioss 조립 폴더·템플릿 폴더 등)을 받는 모든 경로 칸에 **"내 PC에서 올리기 | 서버 경로" 두 탭**을 두고, PC 탭은 esl과 같은 **분할 업로드 세션**(청크 PUT·이어 올리기·청크 sha256·`.part`→최종 이름·덮어쓰기 금지·취소/낡음은 `_backup`)으로 `<ai_root>/uploads/<사용자>/<UTC>_<이름>/`에 저장한 뒤, **그 폴더 경로를 기존 경로 칸에 채워 기존 `paths/inspect`·작업 생성 흐름을 그대로 탄다**. 결과는 **⑤ 결과분석·⑥ 최적화부터**(U2) **서버가 만드는 단일 파일 HTML 보고서**(외부 자원 0, CSP 차단)를 받는다.
 
 ## 1. 배경·범위
 
@@ -19,11 +19,12 @@
 ### 1.2 범위
 
 - (A) 업로드: 세션 API·DB(migration **0020**)·설정·파일 보호 규칙·프런트 업로더(esl 이식)·경로 칸 두 탭·`/fs/roots`에 업로드 루트 표시·환경 점검·감사 기록.
-- (B) 보고서: 서버 생성 단일 HTML, 1차 대상 ④ 예측 단건·일괄(§9.1 순서), 다운로드 API 1개, 파일명 규칙.
+- (B) 보고서: 서버 생성 단일 HTML, 1차 대상 ⑤ 결과분석(결과 표 분석·등가성 판정 탭)·⑥ 최적화(내장·HyperStudy 레거시) — §9.1, 다운로드 API 1개, 파일명 규칙. ④ 예측·① DOE 보고서는 2차.
 
 ### 1.3 비범위
 
-- esl §9 PC 도구(연결 코드·토큰·`*_extract.bat` 자동 올리기) — 별도 계약으로 분리 제안(U3).
+- esl §9 PC 도구(연결 코드·토큰·`*_extract.bat` 자동 올리기) — 이번 범위 제외(U3 확정). 후속 메모: physicsai는 학습에 **h3d 자체**가 필요하므로(esl처럼 추출 CSV로 대체 불가) 대안은 "PC에서 hvtrans로 h3d 축소(결과 종류·시점 선별) 후 자동 업로드". 실제 h3d 압축률(축소 전후 크기·학습 영향) 확인 후 별도 계약.
+- ④ 예측(단건·일괄)·① DOE 요약 보고서 — 2차(U2).
 - 업로드 폴더 자동 정리(COMPLETED 세션은 입력 원본이므로 보존) — 용량 표시만(§6.8), 정리 기능은 후속.
 - SPDM 가져오기(`SPDM_IMPORT`) 칸 — 서버에서 SPDM을 읽는 기능이라 업로드 탭 없음.
 - 보고서 PDF·PPTX, 3D 인터랙티브 뷰(GLB·three.js 내장) — 정적 이미지만.
@@ -194,15 +195,21 @@ upload:
 
 ## 9. (B) HTML 결과 요약 보고서
 
-### 9.1 대상과 순서(제안 — U2)
+### 9.1 대상과 순서(U2 확정 — "결과분석 및 최적화 위주")
 
-| 순서 | 대상(target) | 원천 | 이유 |
+화면 이름은 플랫폼 표기 그대로: **⑤ 결과분석**(`/stage/analysis`, `stages/stageAnalysis/`, s14_analysis.md §19 — 탭 `변수–응답`·`설계공간 지도`·`영향도`·`커브` + equiv-check.md §7 `등가성 판정` 탭), **⑥ 최적화**(`/stage/5`, `stages/stage5/` — 내장 `SURROGATE_OPT` 결과 `SurrogateResult`, 레거시 HyperStudy 결과 `OptResult`).
+
+| 차수 | 대상(target) | 화면 | 원천(기존 API·파일, 읽기만) |
 |---|---|---|---|
-| 1 | `predict`(④ 단건 PREDICT 작업) | job result·`responses_pred.csv`·`curve.json`·컨투어 PNG | 가장 자주 보고하는 결과, 원천 파일 이미 있음 |
-| 1 | `predict-batch`(④ 일괄) | `GET /predict-batches/{id}`·`table.csv`·`curves`·`design-map` 같은 서비스 | 같은 화면 묶음 |
-| 2 | `surrogate-opt`(⑥ 내장 최적화) | `GET /surrogate-opts/{id}`·`runs.csv`·검증 결과 | 의사결정 보고 |
-| 3 | `equiv-check`(⑤ 등가성 판정) | `eq_checks` 레시피 스냅숏·판정·지표 파일 | |
-| 4 | `train-doe`(① DOE 요약) | `train-does/{id}`·`result-table`·run 상태 | |
+| 1차 | `analysis` | ⑤ 결과분석 — 결과 표 탭들 | 출처 `?source=batch\|doe&id=`(+ 선택 비교 `compare_source`·`compare_id`, 변수 `vars`·응답 `resp` 선택): 배치 = `GET /predict-batches/{id}`·`design-map`·`curves` 서비스, DOE = `GET /train-does/{id}/result-table` 서비스 |
+| 1차 | `equiv-check` | ⑤ 결과분석 — `등가성 판정` 탭 | `eq_checks` 행(레시피 스냅숏·대상·판정·집계) + `recipe.json`·`pairs.json`·`metrics.csv`·`curves/*` |
+| 1차 | `surrogate-opt` | ⑥ 최적화 — 내장(ego·ga·nsga2) | `GET /surrogate-opts/{id}`·`runs.csv`·검증(`verify`) 결과 |
+| 1차 | `optimization` | ⑥ 최적화 — HyperStudy 레거시 결과(설정 시에만 존재) | `GET /optimizations/{id}` 서비스(결과 표·최적점) |
+| 2차 | `predict`·`predict-batch` | ④ 예측 단건·일괄 | job result·`responses_pred.csv`·`curve.json`·컨투어 PNG / `predict-batches` |
+| 2차 | `train-doe` | ① DOE 요약 | `train-does/{id}`·run 상태 |
+
+- 1차 순서: RP1 = `surrogate-opt`·`optimization`(⑥) → RP2 = `analysis` → RP3 = `equiv-check`. (⑥ 원천은 서버에 이미 결과 모양이 있고, ⑤ `analysis`는 영향도 계산을 서버로 옮겨야 함 — §9.3.1.)
+- ⑤ `analysis` 영향도(PRCC·표준화 회귀계수)는 지금 **프런트 TS 순수 함수**(`analysis/influence.ts`, s14 A5)다. 보고서용으로 서버에 같은 계산을 numpy로 둔다(`report_html/influence.py`) — 기준은 프런트 골든 `frontend/src/__tests__/fixtures/influenceGolden.json`과 **같은 값**(V-RP-4). 화면 계산은 그대로 둔다.
 
 ### 9.2 생성 위치 — 서버 생성, 저장 없이 스트리밍
 
@@ -211,22 +218,37 @@ upload:
 - 브라우저 생성(React → Blob)은 채택하지 않음: 오프라인·결정성·시험(Linux)·후속 MCP 요약 도구 재사용에 서버 쪽이 유리.
 - 렌더러: esl `esl/report/html.py` 방식 이식 — `string.Template` + 고정 레시피, 모든 텍스트 `esc`, CSS 변수 라이트/다크, 그림은 **inline SVG**(선 그래프·산점·막대), 데이터는 inline JSON(작게), JS는 테마 전환·표 접기 정도의 소량 inline. 새 의존 없음(numpy만).
 
-### 9.3 내용(공통 틀)
+### 9.3 내용
 
-1. 머리: 제목("④ 예측 결과 요약" 등), Study·프로젝트, 대상 id(짧게)·생성 시각·생성자·플랫폼 버전(`/version`)·엔진(+paicad 버전).
-2. 입력 요약: 모델(이름·라벨·Final 여부·평가 점수), 파라미터 세트(라벨·engine·kind), 입력 경로 표시값(출처 "내 PC에서 올림" 문구 포함), 템플릿.
-3. 파라미터: 이름·값·단위·범위(학습 범위 밖이면 기존 참고 문구 "학습 범위 밖 · 최근접 run_xxxx").
-4. 응답: 응답 정의·예측값 표, 곡선(SVG), 일괄은 통계(min·max·평균)·상위 N행 표(`report.max_table_rows` 기본 500, 넘으면 "전체는 table.csv 받기" 안내)·산점(design-map)·곡선 겹침(≤20개).
-5. 그림: 기존 컨투어 캡처 PNG·형상 미리보기 PNG를 `data:image/png;base64`로 삽입(이미지당 ≤ `report.max_image_bytes` 2 MiB, 총 ≤ `report.max_images` 24장 — 넘는 것은 "생략(n장)" 표기). **3D는 정적 이미지만**(GLB·three.js 미포함).
-6. 상태·경고: 실패 단계·경고 코드(일괄 실패 점 목록), 검증(⑥ verify) 결과.
-7. 꼬리: "이 파일은 외부 연결 없이 열립니다", 원천 id 목록.
+공통 틀: ① 머리(제목 "⑥ 최적화 결과 요약" 등, Study·프로젝트, 대상 id 짧게·생성 시각·생성자·플랫폼 버전(`/version`)·엔진(+paicad 버전)) ② 입력 요약(모델 이름·라벨·Final·평가 점수, 파라미터 세트 라벨·engine·kind, 입력 경로 표시값 — 출처 "내 PC에서 올림" 문구 포함) ③ 대상별 본문(아래) ④ 상태·경고(실패·경고 코드) ⑤ 꼬리("이 파일은 외부 연결 없이 열립니다", 원천 id 목록). 그림은 inline SVG, 기존 PNG(컨투어 캡처·형상 미리보기)는 `data:image/png;base64`(이미지당 ≤ `report.max_image_bytes` 2 MiB, 총 ≤ `report.max_images` 24장 — 넘으면 "생략(n장)"). **3D는 정적 이미지만**(GLB·three.js 미포함). 표는 `report.max_table_rows`(500행) 상한, 넘으면 "전체는 화면의 CSV 받기" 안내.
+
+#### 9.3.1 ⑤ `analysis`(결과 표)
+
+- 출처 요약: 종류(일괄 예측·해석 DOE)·라벨·표본 방식(LHS 여부)·run 수(전체·유효)·비교 출처(같은 파라미터 이름 집합일 때만, s14 A6).
+- 결과 표(파라미터 + 응답, 상한 행) + 응답별 통계(min·max·평균·표준편차).
+- 변수–응답: 선택 변수(최대 4)×선택 응답 2D 산점 SVG(비교 출처는 속 빈 원 — 화면 규칙과 같음).
+- 설계공간 지도: 화면 기본 축 2개 산점(색 = 응답, 색 막대) SVG.
+- 영향도: 응답별 PRCC·표준화 회귀계수 표 + 막대 SVG, `influence_ok=false`면 사유 문구만(LHS 아님은 "참고용" 안내 — 화면 문구 그대로).
+- 커브(출처 batch만): 겹쳐 그림(≤20개, 선택 run 강조).
+- 보고서 요청 쿼리 = 화면 상태(출처·비교·`vars`·`resp`) — 프런트가 현재 선택을 그대로 넘긴다. 서버는 화면과 같은 기본값 규칙으로 빈 값을 채운다.
+
+#### 9.3.2 ⑤ `equiv-check`(등가성 판정)
+
+- 레시피 스냅숏(이름·버전·지표·허용오차·필수/참고), 대상(A·B 출처·쌍 수·미매칭), 종합 판정 배지, 지표별 표(차이·상대 %·상관·판정), 불합격 쌍 상위 목록, 대표 곡선 겹침 SVG(지표당 ≤3쌍).
+
+#### 9.3.3 ⑥ `surrogate-opt`·`optimization`
+
+- 설정: 목적(방향)·제약(임계값)·다목적 가중치·알고리즘·하이퍼파라미터·변수 범위(native-vars 스냅숏이 있으면 그 값, 없으면 세트 parameters).
+- 결과: 최적점(단일) 또는 파레토 표(nsga2) + 파레토 산점 SVG, 수렴 이력·HV(있으면) SVG, 변수 쌍 산점(화면 `PairPlots`와 같은 쌍, ≤6), 성능 표.
+- 검증: `verify` 결과(예측 vs 해석, 차이), 검증 안 함이면 "검증 없음".
+- 레거시 `optimization`: HyperStudy 결과 표·최적점·반복 이력(있는 것만), 머리에 "HyperStudy(레거시)" 표지.
 
 ### 9.4 API·파일명
 
-- `GET /reports/{target}/{target_id}?download=1` — target ∈ §9.1(구현된 것만, 나머지 404 `REPORT_TARGET_UNKNOWN`), 로그인 사용자(해당 Study 조회 권한). 대상이 끝나지 않았으면 409 `REPORT_NOT_READY`(진행 중 일괄은 허용하되 머리에 "진행 중 — n/N 완료" 표시 — 구현 선택, 시험 고정).
+- `GET /reports/{target}/{target_id}?download=1` — target ∈ §9.1(구현된 것만, 나머지 404 `REPORT_TARGET_UNKNOWN`), 로그인 사용자(해당 Study 조회 권한). 대상이 끝나지 않았으면 409 `REPORT_NOT_READY`(⑥ 진행 중 최적화·⑤ 진행 중 배치 출처도 409 — 끝난 뒤 받기). `analysis`는 `target_id` 대신 쿼리 `source`·`id`(+`compare_source`·`compare_id`·`vars`·`resp`)를 받는다: `GET /reports/analysis?source=batch&id=…`.
 - 응답 헤더(esl `html_report`와 같음): `Content-Type: text/html; charset=utf-8`, `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `download=1`이면 `Content-Disposition: attachment; filename*=UTF-8''…`. 크기 상한 `report.max_bytes`(기본 30 MiB) 초과 시 그림부터 줄이고, 그래도 넘으면 413 `REPORT_TOO_LARGE`.
-- 파일명: `PAI_<Study 이름>_<target>_<id 앞 8자>_<YYYYMMDD-HHMM>.html`(예 `PAI_cushion55_predict-batch_3f2a91c0_20261021-1530.html`). Study 이름은 `name_unsafe_chars` 문자·경로 구분자를 `_`로, ≤40자. 시각 = 서버 표준 시간대.
-- 화면: 대상 결과 카드 머리에 보조 버튼 "보고서 받기(HTML)"(주 버튼 아님), 옆 링크 "새 탭에서 보기"(`download` 없이).
+- 파일명: `PAI_<Study 이름>_<target>_<id 앞 8자>_<YYYYMMDD-HHMM>.html`(예 `PAI_cushion55_surrogate-opt_3f2a91c0_20261021-1530.html`, `analysis`는 `analysis-batch`·`analysis-doe`). Study 이름은 `name_unsafe_chars` 문자·경로 구분자를 `_`로, ≤40자. 시각 = 서버 표준 시간대.
+- 화면: ⑤ 결과분석 머리 카드(`결과분석`·`등가성 판정` 탭 각각)와 ⑥ 결과 카드(`SurrogateResult`·`OptResult`) 머리에 보조 버튼 "보고서 받기(HTML)"(주 버튼 아님), 옆 링크 "새 탭에서 보기"(`download` 없이).
 
 ### 9.5 설정
 
@@ -240,7 +262,7 @@ report:
 
 ### 9.6 후속(이번 비범위)
 
-- 화면 3D 뷰어 캡처(PNG)를 요청 본문(JSON base64, ≤ 5 MiB)으로 넘겨 보고서에 넣기, 서버 저장 옵션(`<study>/06_report/`), 여러 대상 묶음 보고서.
+- 2차 대상(④ 예측·① DOE), 화면 3D 뷰어 캡처(PNG)를 요청 본문(JSON base64, ≤ 5 MiB)으로 넘겨 보고서에 넣기, 서버 저장 옵션(`<study>/06_report/`), 여러 대상 묶음 보고서.
 
 ## 10. 구현 분해(파일 소유 비중첩)
 
@@ -254,7 +276,7 @@ report:
 | 신규 `backend/physicsai_api/{routers,services,schemas}/uploads.py` | §4. complete는 `services/path_inspect.py`의 purpose별 함수 호출(그 파일은 함수 노출만, 로직 무변경) |
 | `backend/physicsai_core/fs_browse.py`·`services/fs_browse.py` | `upload` 루트, `.part` 숨김 |
 | `backend/physicsai_core/env_check.py`(해당 항목 파일) | `upload.root` 점검 |
-| 신규 `backend/physicsai_core/report_html/`(`page.py` 공통 틀·SVG, `predict.py`, `predict_batch.py`, 이후 대상별) + 신규 `physicsai_api/{routers,services}/reports.py` | §9 |
+| 신규 `backend/physicsai_core/report_html/`(`page.py` 공통 틀·SVG, `opt.py`(⑥ 내장·레거시), `analysis.py`, `influence.py`(numpy PRCC·SRC — 프런트 골든 공유), `equiv.py`, 2차 `predict*.py`) + 신규 `physicsai_api/{routers,services}/reports.py`(원천은 기존 서비스 함수 호출만) | §9 |
 | `backend/physicsai_api/main.py`(라우터 등록), `backend/openapi.json` | API 모양 먼저 |
 | `config/platform.example.yaml`·`platform.demo.yaml`, `deploy/setup_config.py`(upload 폴더 생성), `deploy/caddy/physicsai.caddy`(주석·선택 `request_body`) | 배포 파일은 추가만(phase3 기준 유지) |
 | 시험 `backend/tests/test_uploads*.py`·`test_reports*.py` | esl `test_p3_ux.py`·`test_p3_ux_hardening.py` 항목 이식 + §13 |
@@ -268,29 +290,31 @@ report:
 | `components/PathInput.tsx` | 탭 래퍼 적용(purpose별 mode는 `BROWSE_OF` 확장) |
 | `stages/stage4/PreparedPredictCard.tsx`·`ParamSetDiscoverForm.tsx` | `PathSourceTabs`로 감쌈 |
 | `api/*`·`schema.d.ts`·`mock/*` | 업로드·보고서 목 |
-| `stages/stage4/PredictResult.tsx`·`batch/*` | "보고서 받기" 버튼(1차) |
-| 이후 `stages/stage5/OptResult.tsx`·`analysis/equiv/*`·`stages/stage1/*` | 2~4차 대상 |
+| `stages/stage5/surrogate/SurrogateResult.tsx`·`stages/stage5/OptResult.tsx` | "보고서 받기" 버튼(1차 RP1) |
+| `stages/stageAnalysis/StageAnalysis.tsx`(현재 출처·비교·변수·응답을 쿼리로)·`analysis/equiv/*`(결과 카드) | 1차 RP2·RP3 |
+| 2차 `stages/stage4/PredictResult.tsx`·`batch/*`·`stages/stage1/*` | ④·① |
 | `frontend-dist/` | 같은 커밋에서 재생성 |
 
 ### 10.3 묶음 순서
 
-1. BE-UP1: core 규칙·설정·migration 0020·세션 API·시험(Linux). 2. FE-UP1: uploader·탭(①-1 CAD·③-4 모델·③-1 데이터셋·①-5 결과 먼저). 3. FE-UP2: 나머지 purpose(①-3 조립·② 원천·④ 템플릿·준비 입력·native 세트). 4. BE-RP1+FE-RP1: 보고서 ④. 5. RP2~4: ⑥·⑤·①. 6. `FEM_ASSEMBLY`(⑤ SidePicker) 업로드 탭·MultiBaseline은 마지막(선택).
+1. BE-UP1: core 규칙·설정·migration 0020·세션 API·시험(Linux). 2. FE-UP1: uploader·탭(①-1 CAD·③-4 모델·③-1 데이터셋·①-5 결과 먼저). 3. FE-UP2: 나머지 purpose(①-3 조립·② 원천·④ 템플릿·준비 입력·native 세트). 4. RP1: 보고서 ⑥(`surrogate-opt`·`optimization`). 5. RP2: ⑤ `analysis`(서버 영향도 + 골든 일치). 6. RP3: ⑤ `equiv-check`. 7. 2차: ④ 예측·① DOE. 8. `FEM_ASSEMBLY`(⑤ SidePicker) 업로드 탭·MultiBaseline은 마지막(선택).
 
 ## 11. 진행 중 작업과 충돌 지점
 
 | 작업 | 겹치는 파일 | 처리 |
 |---|---|---|
 | extract-filter 구현(`feat/r1-v023`) | `migrations`(0019 → 이 계약 0020 down_revision), `db/tables.py`, `config/schema.py`, `openapi.json`·`schema.d.ts`, `CadExtractCard.tsx`(EF 필터 UI vs 업로드 탭 — 탭은 `PathInput` 안이라 카드 수정 최소), `ParamSetDiscoverForm.tsx`(EF native 필터 vs `PathSourceTabs` 래핑 — 직접 충돌) | **extract-filter 먼저 병합**, 업로드는 그 위로 rebase. 두 폼 파일은 업로드 쪽이 래핑만(필터 블록 미접촉) |
-| native-vars(`docs/native-vars`, 계약 단계) | `openapi.json`·`schema.d.ts` 재생성, ⑥ 보고서가 `settings.vars` 스냅숏을 읽음 | 보고서 ⑥(RP2)은 native-vars 병합 후 착수. migration 없음이라 번호 충돌 없음 |
-| equiv-check(⑤) | `eq_checks` 읽기만 | RP3에서 읽기 전용 |
+| native-vars(`docs/native-vars`, 계약 단계) | `openapi.json`·`schema.d.ts` 재생성, ⑥ 보고서가 `settings.vars` 스냅숏을 읽음, `SurrogateSetup.tsx`·`ResultCards.tsx`(NV) vs `SurrogateResult.tsx`(보고서 버튼) 인접 | RP1은 스냅숏 있으면 우선·없으면 세트 parameters로 읽어 NV 병합 전후 모두 동작. NV가 먼저 병합되면 그 위로 rebase. migration 없음 |
+| equiv-check(⑤ 등가성 판정 탭) | `eq_checks`·결과 파일 읽기만, `analysis/equiv/*` 결과 카드에 버튼 | RP3. equiv 구현 병합 후 착수 |
+| S14 ⑤ 결과분석 | `analysis/influence.ts` 골든 공유 | 화면 계산 무변경, 서버는 골든으로 일치 검사 |
 
-## 12. 미결(사용자 결정)
+## 12. 사용자 결정(2026-10-21 확정)
 
-| # | 질문 | 제안값 |
+| # | 질문 | 결정 |
 |---|---|---|
-| U1 | 업로드 저장 위치 | `<ai_root>/uploads`(AI 루트 하위 — 기존 경로 검사 그대로, 용량은 AI 루트 드라이브 공유). 별도 드라이브가 필요하면 AI 루트 전용 검사 6곳 수정이 추가됨 |
-| U2 | 보고서 첫 대상 | ④ 예측 단건·일괄 → ⑥ → ⑤ → ① DOE |
-| U3 | esl §9 PC 도구(추출+자동 올리기·연결 코드 토큰) 이식 | 이번 범위 제외, 브라우저 업로드 현장 사용 후 별도 계약(필요 시 h3d 대신 PC 추출 결과만 올리는 흐름) |
+| U1 | 업로드 저장 위치 | `<ai_root>/uploads`(AI 루트 하위 — 기존 경로 검사 그대로, 용량은 AI 루트 드라이브 공유) |
+| U2 | 보고서 범위 | "결과분석 및 최적화 위주": 1차 = ⑤ 결과분석(결과 표 분석·등가성 판정 탭) + ⑥ 최적화(내장·HyperStudy 레거시), ④ 예측·① DOE는 2차 |
+| U3 | esl §9 PC 도구 이식 | 이번 범위 제외. 후속: h3d가 학습에 필요하므로 "PC에서 hvtrans로 h3d 축소(결과·시점 선별) 후 자동 업로드" — 실제 압축률 확인 후 별도 계약 |
 
 ## 13. 검증 기준
 
@@ -320,12 +344,13 @@ report:
 |---|---|---|
 | V-RP-1 | 응답 HTML에 외부 URL 0건(`http(s)://`·`//` 로딩 컨텍스트 — `<script src>`·`<link href>`·`url(`·`@import`·`<img src>`가 `data:` 아님), CSP·nosniff·no-store 헤더 | API·정적 |
 | V-RP-2 | `download=1` 첨부·파일명 규칙(한글 Study 이름·금지 문자 치환·`filename*`) | API |
-| V-RP-3 | ④ 단건: 모델·세트·파라미터·응답·곡선 SVG·컨투어 PNG(data URI)가 들어감, 이미지 상한 초과 시 "생략" 표기 | API(fake 산출물) |
-| V-RP-4 | ④ 일괄: 표 상한(500행)·통계·산점·실패 점 목록, 진행 중 처리 규칙 | API |
+| V-RP-3 | ⑥ `surrogate-opt`: 설정(목적·제약·가중치·알고리즘)·최적점 또는 파레토 표·수렴/HV·쌍 산점 SVG·검증 결과가 들어감(ego·ga·nsga2 각 1건), `optimization`(레거시) 결과 표·표지, 레거시 미설정이면 404 | API(fake 결과) |
+| V-RP-4 | ⑤ `analysis`: 출처 batch·doe 각각 결과 표(500행 상한)·통계·변수–응답·설계공간 지도·커브(batch만), 비교 출처(이름 집합 다르면 비교 생략 문구), **서버 영향도 값 = 프런트 골든 `influenceGolden.json`**(허용오차 1e-9), `influence_ok=false` 사유 문구 | API·단위 |
+| V-RP-4b | ⑤ `equiv-check`: 레시피 스냅숏·판정 배지·지표 표·불합격 쌍·곡선 SVG, 삭제된 레시피 이력도 스냅숏으로 표시 | API |
 | V-RP-5 | 모든 사용자 문자열 이스케이프(라벨에 `<script>` 넣어 그대로 표시), 결정성(시각 고정 시 바이트 동일) | 단위 |
 | V-RP-6 | 크기 상한 초과 413, 없는 target 404, 끝나지 않은 대상 409, 권한 | API |
 | V-RP-7 | API 프로세스 외부 프로그램 실행 없음(V-SEC-3 유지) | 정적 |
-| V-RP-8 | UI 보조 버튼·새 탭 보기(주 버튼 아님), 오프라인 브라우저에서 파일을 열어 그림·표 표시(수동) | UI·수동 |
+| V-RP-8 | UI: ⑤(두 탭)·⑥(내장·레거시) 보조 버튼·새 탭 보기(주 버튼 아님), ⑤는 현재 선택이 쿼리로 넘어감, 오프라인 브라우저에서 파일을 열어 그림·표 표시(수동) | UI·수동 |
 
 ## 14. 리스크
 
