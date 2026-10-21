@@ -330,3 +330,5 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 
 - **NV-C0**(2026-10-21, Plan — 릴리스 배정): v0.2.4에 MCP 기능([mcp.md](mcp.md))과 함께 포함([roadmap.md](../roadmap.md)). §6.6 MCP 표기 추가. migration 없음 유지(v0.2.4의 migration은 `0020_mcp`뿐).
 - **NV-C1**(2026-10-21, Plan — v0.2.4 구현 반영, 기준 `feat/r1-v024` 8206870): ① ④ 일괄 미리보기 `notes`는 `{code, message}`만(이름은 문구 안, §6.3). ② ④ `train_doe`에 `vars`·DOE 헤더의 풀 밖 이름·다중 baseline 세트의 `vars` → problem `RANGE_INVALID`(§6.3). ③ R3 정적 시험은 `ps["parameters"]` 직접 읽기 개수를 파일별로 고정(`test_native_vars_core.py` `ALLOWED`, §11). ④ 정의 저장 ③단계 실패 롤백 시 원래 없던 `vars.json`은 리비전 0 스텁으로 되씀(삭제 금지, §3.2). ⑤ 프런트 열 순서: 모핑 가능 범위(⑥·일괄은 학습 범위 포함)가 하한·상한 앞(§7.1·§7.2). ⑥ `ResultCards` "범위(학습)" 막대는 현재 세트 범위 기준 — 학습 범위 기준 전환은 후속(§7.2, roadmap). ⑦ 쉘 PROP 행(`ps.parameters` `source:"prop"`)은 ⑥·④ 일괄 표에 실행 변수로 포함(범위·제외만, §1.3·§7.2).
+
+- **NV-C2**(2026-10-22, v0.2.5 프런트 반영): ⑥ ResultCards 범위 막대 — Native 결과는 실행 스냅숏 `settings.vars.variables[].train` 기준(없는 행은 "(템플릿)" 표시), 스냅숏 없음·Altair는 기존 범위. 머리글 문구 "범위(학습)" → "학습 범위"/"템플릿 범위", 범위 끝 도달 문구도 이에 맞춤(Altair 화면은 문구만 변경, 값 불변).
