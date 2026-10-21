@@ -12,6 +12,8 @@
   --color-border: #213549;
   --color-text: #e9f3fc;
   --color-text-muted: #8198ad;
+  --color-text-secondary: #a9bccd;
+  --color-row-selected: #102c3f;
   --color-accent: #51d3ff;
   --color-danger: #ff5d73;
   --color-success: #4fd6a0;
@@ -54,6 +56,8 @@
   --color-border: #d7e0ea;
   --color-text: #142033;
   --color-text-muted: #536276;
+  --color-text-secondary: #3a4a5f;
+  --color-row-selected: #c6dcf8;
   --color-accent: #034ea2;
   --color-danger: #b42318;
   --color-success: #13734f;

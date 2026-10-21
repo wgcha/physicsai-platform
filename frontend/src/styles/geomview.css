@@ -288,7 +288,13 @@
 .param-table tr.picked td,
 .prop-table tr.picked td,
 .feature-table tr.picked td {
-  background: var(--color-info-surface);
+  background: var(--color-row-selected);
+}
+/* 비활성 하한·상한 칸: 라이트에서도 글자 대비 AA(4.5:1) 이상 — 기본 비활성 투명도(0.8)를 쓰지 않는다 */
+.param-table input:disabled,
+.prop-table input:disabled {
+  opacity: 1;
+  color: var(--color-text-secondary);
 }
 .param-table tr.picked td:first-child,
 .prop-table tr.picked td:first-child,

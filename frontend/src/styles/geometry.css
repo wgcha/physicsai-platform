@@ -106,3 +106,12 @@
   gap: var(--space-2);
   padding-bottom: var(--space-2);
 }
+.applied-filter,
+.extract-sum,
+.bulk-bar .muted {
+  font: var(--font-r);
+  color: var(--color-text-secondary);
+}
+.applied-filter b {
+  color: var(--color-text);
+}

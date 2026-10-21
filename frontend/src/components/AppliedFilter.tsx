@@ -14,7 +14,7 @@ export function AppliedFilter({ filter, summary, note }: { filter: ExtractFilter
         <span>
           <b>적용 조건:</b> <span data-testid="applied-filter-text">{filterText(filter)}</span>
         </span>
-        {note && <span className="muted">{note}</span>}
+        {note && <span>{note}</span>}
         {hasSummary && (
           <button type="button" className={`btn small ghost ${open ? "on" : ""}`} aria-expanded={open} onClick={() => setOpen((v) => !v)}>
             추출 요약 {open ? "▾" : "▸"}
