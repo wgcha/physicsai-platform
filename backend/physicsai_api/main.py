@@ -39,6 +39,7 @@ from .routers import (
     predict_batches,
     queue,
     releases,
+    reports,
     spdm,
     status,
     studies,
@@ -110,7 +111,7 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
 
     for r in (status, queue, studies, datasets, models, param_sets, predict_batches, jobs, artifacts, notifications, admin,
               env_checks, train, curations, spdm, optimize, surrogate_opts, study_storage, fs, contour_capture, fem_verify, geom_view,
-              releases, equiv_check, api_tokens, mcp):
+              releases, equiv_check, api_tokens, mcp, reports):
         app.include_router(r.router, prefix=API_PREFIX)
     # mcp.md §6.1·§11: 토큰 요청 감사(응답 후 별도 트랜잭션)·호출 제한 상태. mcp.enabled=false면 미들웨어는 통과만 한다
     from .auth_tokens import McpRuntime
