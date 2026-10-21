@@ -9,6 +9,8 @@ import { useTrain } from "./TrainContext";
 import { isPositionType, typeLabel } from "../../lib/geometry";
 import { FeaturePng } from "../stage4/geometry/NativeDetail";
 import { GeomView3DLazy as GeomView3D } from "../stage4/geomview/GeomView3DLazy";
+import { ViewSplit } from "../stage4/geomview/ViewSplit";
+import { useRowSelection } from "../stage4/geomview/selection";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -54,7 +56,9 @@ export function ParamTableCard() {
   // geometry-engine.md §8 ①-2: native는 tpl 없음 — 표 저장만, 피처 종류·하이라이트 PNG = GET /studies/{id}/train/features(§7.3.1)
   const native = setup?.engine === "native";
   const [features, setFeatures] = useState<Map<string, NativeFeature>>(new Map());
-  const [png, setPng] = useState<string | null>(null);
+  const sel = useRowSelection(useMemo(() => rows.map((r) => r.name), [rows]));
+  const rp = sel.rowProps;
+  const png = sel.rows.length === 1 ? sel.rows[0] : null; // 그림 탭 = 선택 1개일 때 그 PNG
   useEffect(() => {
     if (!native) return;
     let alive = true;
@@ -67,7 +71,7 @@ export function ParamTableCard() {
     };
   }, [native, study.id, setup?.extract_job_id]);
   const pngF = png ? features.get(png) : undefined;
-  // geometry-view.md §6.9: ①-2 공칭 3D 뷰(같은 뷰어, 미리보기 없음) — 선택 행 = png
+  // geometry-view.md §6.9: ①-2 공칭 3D 뷰(같은 뷰어, 미리보기 없음) — 항상 떠 있는 단일 창, 선택 행(다중) = 하이라이트
   const loadView = useCallback(() => api.trainView(study.id), [study.id]);
 
   useEffect(() => {
@@ -117,7 +121,7 @@ export function ParamTableCard() {
   }, [rows, setup?.parameters]);
 
   return (
-    <Card span={6} foot={
+    <Card span={native ? 12 : 6} foot={
         <>
           <p className="muted small">
             {native
@@ -142,16 +146,37 @@ export function ParamTableCard() {
       title="파라미터 표"
       aside={
         rows.length > 0 ? (
-          <button type="button" className={`btn small ghost ${showAdv ? "on" : ""}`} aria-pressed={showAdv} onClick={() => setShowAdv((v) => !v)}>
-            고급 {showAdv ? "▾" : "▸"}
-          </button>
+          <>
+            {native && sel.rows.length > 0 && (
+              <button type="button" className="btn small ghost" onClick={sel.clear}>
+                선택 해제
+              </button>
+            )}
+            <button type="button" className={`btn small ghost ${showAdv ? "on" : ""}`} aria-pressed={showAdv} onClick={() => setShowAdv((v) => !v)}>
+              고급 {showAdv ? "▾" : "▸"}
+            </button>
+          </>
         ) : undefined
       }
     >
       {!rows.length ? (
         <p className="muted">①-1에서 CAD 파라미터를 먼저 추출하세요.</p>
       ) : (
-        <div className="table-wrap">
+        <ViewSplit
+          view={
+            native ? (
+              <GeomView3D
+                loadKey={`${study.id}:${setup?.extract_job_id ?? ""}`}
+                load={loadView}
+                rows={sel.rows}
+                hover={sel.hover}
+                onRows={sel.from3d}
+                picture={pngF?.png_artifact_id ? <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} /> : null}
+              />
+            ) : null
+          }
+          table={
+        <div className="table-wrap" ref={sel.tableRef}>
           <table className="table compact param-table" aria-label="파라미터 표">
             <thead>
               <tr>
@@ -170,13 +195,7 @@ export function ParamTableCard() {
               {rows.map((r, i) => {
                 const note = serverProblems[r.name] ?? issues[i] ?? (!r.valid ? r.problems.join(" · ") || "사용 불가" : null);
                 return (
-                  <tr
-                    key={r.name}
-                    data-row={r.name}
-                    className={`${r.use ? "" : "unused"}${native && png === r.name ? " picked" : ""}`}
-                    aria-selected={native ? png === r.name : undefined}
-                    onClick={native ? (e) => !(e.target as HTMLElement).closest("input,button,select") && setPng(png === r.name ? null : r.name) : undefined}
-                  >
+                  <tr key={r.name} {...(native ? rp(r.name) : { "data-row": r.name })} className={`${r.use ? "" : "unused"}${native ? ` ${rp(r.name).className}` : ""}`}>
                     <td>
                       <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !r.valid || r.nominal === null} onChange={(e) => set(i, { use: e.target.checked })} />
                     </td>
@@ -185,12 +204,6 @@ export function ParamTableCard() {
                       <td className="small">
                         {typeLabel(features.get(r.name)?.type)}
                         {isPositionType(features.get(r.name)?.type) && <span className="muted"> · mm 범위</span>}
-                        {features.get(r.name)?.png_artifact_id && (
-                          <button type="button" className="link small" aria-pressed={png === r.name} aria-label={`${r.name} 하이라이트`} onClick={() => setPng(png === r.name ? null : r.name)}>
-                            {" "}
-                            그림
-                          </button>
-                        )}
                       </td>
                     )}
                     <td className="num mono">{r.raw}</td>
@@ -217,17 +230,8 @@ export function ParamTableCard() {
             </tbody>
           </table>
         </div>
-      )}
-      {native && rows.length > 0 ? (
-        <GeomView3D
-          loadKey={`${study.id}:${setup?.extract_job_id ?? ""}`}
-          load={loadView}
-          row={png}
-          onRow={setPng}
-          picture={pngF?.png_artifact_id ? <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} /> : null}
+          }
         />
-      ) : (
-        pngF?.png_artifact_id && <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} />
       )}
       {tpl && !native && (
         <div className="tpl-state small" data-testid="tpl-state">

@@ -26,7 +26,13 @@ export function installMockFetch() {
     const [view, ct] = kv.split(":");
     if (view && ct) server.videoTypes[view] = ct;
   }
-  if (params.get("train") === "native" && server.p2.setups["s-cushion"]) Object.assign(server.p2.setups["s-cushion"], { engine: "native", parameters: nativeTrainParams(), tpl: null });
+  if (params.get("train") === "native" && server.p2.setups["s-cushion"]) {
+    // ?trainRows=248: 실물 규모(수백 행) 표 시연 — 3D 대응이 없는 가짜 행을 덧붙인다
+    const extra = Math.max(0, Math.min(1000, Number(params.get("trainRows")) || 0));
+    const parameters = nativeTrainParams();
+    for (let i = 0; i < extra; i++) parameters.push({ name: `MOCK_FEAT_${String(i + 1).padStart(3, "0")}`, raw_nominal: "1 mm", nominal: 1, min: 0.9, max: 1.1, use: false, format: "%.4f", unit: "mm", valid: true, problems: [] });
+    Object.assign(server.p2.setups["s-cushion"], { engine: "native", parameters, tpl: null });
+  }
   const c3d = params.get("c3d");
   if (c3d === "hold" || c3d === "fail" || c3d === "expire") setGvMode(server, { c3d });
   const real = window.fetch.bind(window);

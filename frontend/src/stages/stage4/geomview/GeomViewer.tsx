@@ -29,7 +29,7 @@ export function GeomViewer({
   overlay: Overlay | null;
   redClusters: Set<string>;
   points: { xyz: Vec3; label: string }[];
-  onPick: (hit: { body: string; face: number } | null) => void;
+  onPick: (hit: { body: string; face: number } | null, additive?: boolean) => void;
   onLost: () => void;
   children?: ReactNode;
 }) {
@@ -55,7 +55,7 @@ export function GeomViewer({
     (async () => {
       const [m, data] = await Promise.all([loadThree(), api.artifactBuffer(glbId)]);
       if (!alive) return;
-      made = m.createGeomScene(el, { onPick: (h) => pick.current(h), onLost: () => lost.current() });
+      made = m.createGeomScene(el, { onPick: (h, additive) => pick.current(h, additive), onLost: () => lost.current() });
       await made.setNominal(data.buffer, manifest);
       if (!alive) return;
       scene.current = made;
@@ -113,7 +113,7 @@ export function GeomViewer({
             고정 영역({clusters.length})
           </label>
         )}
-        <span className="muted small gv-hint">끌기 회전 · 휠 확대 · 오른쪽 끌기 이동 · 면 클릭 = 행 선택</span>
+        <span className="muted small gv-hint">끌기 회전 · 휠 확대 · 오른쪽 끌기 이동 · 면 클릭 = 변수 선택(Ctrl = 추가)</span>
       </div>
       <div className="gv-stage" ref={box}>
         {!ready && !error && <div className="gv-msg muted small">3D 불러오는 중…</div>}

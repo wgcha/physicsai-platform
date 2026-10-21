@@ -9,7 +9,7 @@ import { nativeTrainParams } from "../mock/geometry";
 import { expireArtifacts, gvRecords, setGvMode } from "../mock/geomView";
 import { resetWebGLCache } from "../stages/stage4/geomview/webgl";
 import { POLL } from "../lib/poll";
-import type { Highlight } from "../stages/stage4/geomview/viewerCore";
+import { paintFixedMat, paintMovingMat, selectionColor, type Highlight } from "../stages/stage4/geomview/viewerCore";
 
 type Fn = ReturnType<typeof vi.fn>;
 const lastCall = (f: Fn) => f.mock.calls[f.mock.calls.length - 1] as unknown[];
@@ -22,7 +22,7 @@ interface FakeGeom {
   setPoints: Fn;
   fit: Fn;
   dispose: Fn;
-  opts: { onPick: (h: { body: string; face: number } | null) => void; onLost: () => void };
+  opts: { onPick: (h: { body: string; face: number } | null, additive?: boolean) => void; onLost: () => void };
 }
 const fake = vi.hoisted(() => ({ geom: null as FakeGeom | null }));
 vi.mock("../stages/stage4/geomview/threeScene", () => ({
@@ -218,5 +218,163 @@ describe("①-2 파라미터 표 — 공칭 3D 뷰(§6.9)", () => {
     await waitFor(() => expect(rowSel(table, "CUSH_L_HOLE_U_1")).toBe("true"));
     fireEvent.click(within(table).getByText("BOX_SHELL_T"));
     expect(await within(panel).findByText("3D 대응 없음(쉘 두께 등 — 표에서만)")).toBeTruthy();
+  });
+});
+
+describe("항상 떠 있는 3D 창 + 변수 클릭·다중 선택 하이라이트", () => {
+  const native1 = (extra = 0) => (s: MockServer) => {
+    const params = nativeTrainParams();
+    for (let i = 0; i < extra; i++) params.push({ name: `EXTRA_${i}`, raw_nominal: "1 mm", nominal: 1, min: 0.9, max: 1.1, use: false, format: "%.4f", unit: "mm", valid: true, problems: [] });
+    Object.assign(s.p2.setups["s-cushion"], { engine: "native", parameters: params, tpl: null, extract_job_id: "j-x" });
+    setGvMode(s, {});
+  };
+  const isSel = (table: HTMLElement, name: string) => rowSel(table, name) === "true";
+  const selected = (table: HTMLElement) => within(table).queryAllByRole("row").filter((r) => r.getAttribute("aria-selected") === "true").map((r) => r.getAttribute("data-row"));
+  const open12 = async () => {
+    const { server } = renderApp(`${STUDY}/1`, { user: "power" }, native1());
+    await screen.findByTestId("gv-panel");
+    await waitFor(() => expect(fake.geom?.setNominal).toHaveBeenCalled()); // 선택 없이도 공칭 형상이 바로 보임
+    return { server, table: screen.getByRole("table", { name: "파라미터 표" }) };
+  };
+
+  it("공칭 형상은 선택 없이 표시, 행 클릭 = 단일 선택(다시 클릭 = 해제), Ctrl/⌘ = 토글 추가, Shift = 범위, [선택 해제] 1개", async () => {
+    const { table } = await open12();
+    expect(lastHl().moving.size).toBe(0);
+    expect(screen.queryByRole("button", { name: "선택 해제" })).toBeNull();
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    expect(selected(table)).toEqual(["CUSH_L_THK_1"]);
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    expect(selected(table)).toEqual([]);
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { ctrlKey: true });
+    fireEvent.click(within(table).getByText("CUSH_L_RIB_T_2"), { metaKey: true });
+    expect(selected(table)).toEqual(["CUSH_L_THK_1", "CUSH_L_RIB_T_2", "CUSH_L_HOLE_U_1"]); // 표 순서
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { ctrlKey: true });
+    expect(selected(table)).toEqual(["CUSH_L_THK_1", "CUSH_L_RIB_T_2"]);
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { shiftKey: true });
+    expect(selected(table)).toEqual(["CUSH_L_THK_1", "CUSH_L_POCKET_D_1", "CUSH_L_RIB_T_2", "CUSH_L_HOLE_U_1"]);
+    // 사용 체크박스 클릭은 선택을 바꾸지 않는다
+    fireEvent.click(within(table).getByLabelText("BOX_SHELL_T 사용"));
+    expect(isSel(table, "BOX_SHELL_T")).toBe(false);
+    fireEvent.click(screen.getByRole("button", { name: "선택 해제" }));
+    expect(selected(table)).toEqual([]);
+    await waitFor(() => expect(lastHl().moving.size).toBe(0));
+    expect(screen.queryByRole("button", { name: "선택 해제" })).toBeNull();
+  });
+
+  it("다중 선택: 변수마다 다른 색(이동 = 색, 고정 = 옅은 색)·범례, 치수선은 1개일 때만, 선택 행 색 띠", async () => {
+    const { table } = await open12();
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    await waitFor(() => expect(lastHl().dims).toHaveLength(2));
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { ctrlKey: true });
+    await waitFor(() => expect(lastHl().dims).toEqual([])); // 다중 = 치수선 생략
+    const h = lastHl();
+    expect(h.paint!.get("CUSH_L#2")).toBe(paintMovingMat(0));
+    expect(h.paint!.get("CUSH_L#1")).toBe(paintFixedMat(0));
+    expect(h.paint!.get("CUSH_L#12")).toBe(paintMovingMat(1));
+    const legend = screen.getByTestId("sel-legend");
+    expect(within(legend).getAllByRole("listitem").map((li) => li.textContent)).toEqual(["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"]);
+    const sw = within(legend).getAllByRole("listitem").map((li) => (li.firstElementChild as HTMLElement).style.background);
+    expect(new Set(sw).size).toBe(2);
+    expect((within(table).getByText("CUSH_L_THK_1").closest("tr") as HTMLElement).style.getPropertyValue("--sel-color")).toBe(selectionColor(0));
+    expect((within(table).getByText("CUSH_L_HOLE_U_1").closest("tr") as HTMLElement).style.getPropertyValue("--sel-color")).toBe(selectionColor(1));
+    // 선택 1개로 줄면 치수선 복귀
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { ctrlKey: true });
+    await waitFor(() => expect(lastHl().dims).toHaveLength(2));
+    // 3D 대응 없는 행은 범례에서 빠지고 안내
+    fireEvent.click(within(table).getByText("BOX_SHELL_T"), { ctrlKey: true });
+    expect(await screen.findByText("3D 대응 없음(쉘 두께 등 — 표에서만)")).toBeTruthy();
+    expect(within(screen.getByTestId("sel-legend")).getAllByRole("listitem")).toHaveLength(1);
+  });
+
+  it("호버: 행에 올리면 임시 하이라이트(선택은 그대로), 떠나면 원복", async () => {
+    const { table } = await open12();
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    const tr = within(table).getByText("CUSH_L_POCKET_D_1").closest("tr")!;
+    fireEvent.mouseEnter(tr);
+    await waitFor(() => expect(lastHl().moving.has("CUSH_L#7")).toBe(true));
+    expect(selected(table)).toEqual(["CUSH_L_THK_1"]);
+    expect(lastHl().dims).toHaveLength(2); // 선택 1개의 치수선 유지
+    fireEvent.mouseLeave(tr);
+    await waitFor(() => expect(lastHl().moving.has("CUSH_L#7")).toBe(false));
+  });
+
+  it("3D 면 클릭 → 행 선택, Ctrl+면 클릭 = 추가·다시 = 해제, 면 목록에서 Ctrl로 열면 추가", async () => {
+    const { table } = await open12();
+    act(() => fake.geom!.opts.onPick({ body: "CUSH_L", face: 12 }, false));
+    await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_HOLE_U_1"]));
+    act(() => fake.geom!.opts.onPick({ body: "CUSH_L", face: 7 }, true));
+    await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_POCKET_D_1", "CUSH_L_HOLE_U_1"]));
+    act(() => fake.geom!.opts.onPick({ body: "CUSH_L", face: 7 }, true));
+    await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_HOLE_U_1"]));
+    act(() => fake.geom!.opts.onPick({ body: "CUSH_L", face: 2 }, true));
+    const lb = await screen.findByRole("listbox", { name: "이 면을 쓰는 피처" });
+    fireEvent.click(within(lb).getByRole("option", { name: "CUSH_L_THK_1" }));
+    await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"]));
+  });
+
+  it("그림 탭 = 선택 1개일 때 그 PNG, 0·다중이면 안내", async () => {
+    const { table } = await open12();
+    const panel = screen.getByTestId("gv-panel");
+    fireEvent.click(within(panel).getByRole("tab", { name: "그림" }));
+    expect(within(panel).getByText(/변수를 1개 고르면/)).toBeTruthy();
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"));
+    const fig = await screen.findByTestId("feature-png");
+    expect(fig.textContent).toContain("CUSH_L_HOLE_U_1");
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"), { ctrlKey: true });
+    await waitFor(() => expect(screen.queryByTestId("feature-png")).toBeNull());
+  });
+
+  it("④: 다중 선택은 하이라이트 전용 — 미리보기 입력은 단일 선택일 때만, 편집값은 유지", async () => {
+    renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, nativeCurrent);
+    const { card, table } = await openDetail();
+    await waitFor(() => expect(fake.geom?.setNominal).toHaveBeenCalled());
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    fireEvent.change(await within(card).findByLabelText("CUSH_L_THK_1 미리보기 값"), { target: { value: "14" } });
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { ctrlKey: true });
+    await waitFor(() => expect(within(card).queryByLabelText("CUSH_L_THK_1 미리보기 값")).toBeNull());
+    expect(within(card).getByText("행을 고르면 값을 바꿔 미리볼 수 있습니다")).toBeTruthy();
+    expect(within(card).getByRole("button", { name: "선택 해제" })).toBeTruthy();
+    fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"), { ctrlKey: true });
+    expect((await within(card).findByLabelText("CUSH_L_THK_1 미리보기 값") as HTMLInputElement).value).toBe("14");
+  });
+
+  it("300행: 표는 고정 높이 상자 안에서 내부 스크롤(페이지는 행 수와 무관), 3D 창 나란히, 3D 면 클릭 → 표 상자만 스크롤", async () => {
+    renderApp(`${STUDY}/1`, { user: "power" }, native1(300));
+    await screen.findByTestId("gv-panel");
+    await waitFor(() => expect(fake.geom?.setNominal).toHaveBeenCalled());
+    const table = screen.getByRole("table", { name: "파라미터 표" });
+    expect(within(table).getAllByRole("row")).toHaveLength(1 + 305);
+    const split = screen.getByTestId("gv-split");
+    const box = screen.getByTestId("gv-split-table").querySelector(".table-wrap") as HTMLElement;
+    expect(box.contains(table)).toBe(true); // 표 상자(스크롤) ⊂ 분할 영역(고정 높이)
+    expect(split.contains(screen.getByTestId("gv-panel"))).toBe(true); // 3D 창은 같은 분할 영역의 옆 칸
+    expect(split.parentElement!.querySelectorAll(".table-wrap")).toHaveLength(1);
+    // 표 상자 안에서만 스크롤: 상자 scrollTop을 바꾸고 window 스크롤은 건드리지 않는다
+    const winScroll = vi.spyOn(window, "scrollTo").mockImplementation(() => undefined);
+    const rowEl = within(table).getByText("EXTRA_250").closest("tr") as HTMLElement;
+    const rect = (top: number, h: number) => ({ top, bottom: top + h, height: h, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+    vi.spyOn(box, "getBoundingClientRect").mockReturnValue(rect(100, 500));
+    vi.spyOn(box.querySelector("thead")!, "getBoundingClientRect").mockReturnValue(rect(100, 30));
+    vi.spyOn(rowEl, "getBoundingClientRect").mockReturnValue(rect(900, 40));
+    const into = vi.fn();
+    rowEl.scrollIntoView = into;
+    act(() => fake.geom!.opts.onPick({ body: "CUSH_L", face: 12 }, false)); // 3D 면 클릭 → 그 행 선택·표 상자 스크롤
+    await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_HOLE_U_1"]));
+    expect(into).not.toHaveBeenCalled(); // scrollIntoView(페이지 스크롤 유발) 대신 상자 scrollTop 조정
+    expect(winScroll).not.toHaveBeenCalled();
+    const hole = within(table).getByText("CUSH_L_HOLE_U_1").closest("tr") as HTMLElement;
+    vi.spyOn(hole, "getBoundingClientRect").mockReturnValue(rect(900, 40));
+    box.scrollTop = 0;
+    const { scrollRowIntoView } = await import("../stages/stage4/geomview/selection");
+    scrollRowIntoView(box, "CUSH_L_HOLE_U_1");
+    expect(box.scrollTop).toBe(340); // 900+40-(100+500)
+    // 305행 일괄(Shift 범위) 선택도 한 번의 렌더로 끝난다
+    const t0 = performance.now();
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    fireEvent.click(within(table).getByText("EXTRA_299"), { shiftKey: true });
+    expect(selected(table).length).toBe(305);
+    expect(performance.now() - t0).toBeLessThan(3000);
   });
 });

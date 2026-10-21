@@ -33,7 +33,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { faceGroups, type FixedCluster, type Highlight, type ViewManifest, type DimDraw, type Vec3 } from "./viewerCore";
+import { faceGroups, lightColor, SELECTION_COLORS, type FixedCluster, type Highlight, type ViewManifest, type DimDraw, type Vec3 } from "./viewerCore";
 import { fillColors } from "./contour/colormap";
 
 // PNG 하이라이트와 같은 색(이동 주황·고정 파랑) + 실패 빨강
@@ -141,14 +141,14 @@ class Stage {
   }
 
   /** 클릭(이동 4px 미만) 좌표 → NDC */
-  onClick(cb: (ndc: Vector2) => void) {
+  onClick(cb: (ndc: Vector2, additive: boolean) => void) {
     const el = this.renderer.domElement;
     let down: [number, number] | null = null;
     el.addEventListener("pointerdown", (e) => (down = [e.clientX, e.clientY]));
     el.addEventListener("pointerup", (e) => {
       if (!down || Math.hypot(e.clientX - down[0], e.clientY - down[1]) > 4) return;
       const r = el.getBoundingClientRect();
-      cb(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1));
+      cb(new Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), e.ctrlKey || e.metaKey);
     });
   }
 
@@ -192,6 +192,7 @@ function byName(root: Object3D): Map<string, Object3D> {
   return out;
 }
 
+const hexNum = (hex: string) => parseInt(hex.slice(1), 16);
 const lambert = (color: number, side: typeof FrontSide | typeof DoubleSide, opacity = 1) =>
   new MeshLambertMaterial({ color, side, transparent: opacity < 1, opacity, depthWrite: opacity >= 1 });
 
@@ -239,7 +240,7 @@ export interface GeomSceneApi {
   dispose(): void;
 }
 
-export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { body: string; face: number } | null) => void; onLost: () => void }): GeomSceneApi {
+export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { body: string; face: number } | null, additive?: boolean) => void; onLost: () => void }): GeomSceneApi {
   const st = new Stage(container, opts.onLost);
   const root = new Group();
   const overlayRoot = new Group();
@@ -279,27 +280,27 @@ export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { 
     st.request();
   };
 
-  st.onClick((ndc) => {
+  st.onClick((ndc, additive) => {
     if (overlayKind === "fe") return;
     ray.setFromCamera(ndc, st.camera);
     const targets: Object3D[] = [];
     if (overlayKind === "shape") overlayBodies.forEach((l, n) => !hidden.has(n) && l.forEach((o) => o instanceof Mesh && targets.push(o)));
     else bodies.forEach((b, n) => b.mesh && !hidden.has(n) && targets.push(b.mesh));
     const hit = ray.intersectObjects(targets, false)[0];
-    if (!hit || hit.faceIndex == null) return opts.onPick(null);
+    if (!hit || hit.faceIndex == null) return opts.onPick(null, additive);
     const mesh = hit.object as Mesh;
     const g = mesh.geometry as BufferGeometry;
     const fid = g.getAttribute("_face_id");
-    if (!fid) return opts.onPick(null);
+    if (!fid) return opts.onPick(null, additive);
     const v = g.index ? g.index.getX(hit.faceIndex * 3) : hit.faceIndex * 3;
-    opts.onPick({ body: String(mesh.userData?.name ?? mesh.name), face: fid.getX(v) });
+    opts.onPick({ body: String(mesh.userData?.name ?? mesh.name), face: fid.getX(v) }, additive);
   });
 
   return {
     async setNominal(buf, m) {
       manifest = m;
       side = m.kind === "shell" ? DoubleSide : FrontSide;
-      mats = [lambert(COLORS.base, side), lambert(COLORS.moving, side), lambert(COLORS.fixed, side), lambert(COLORS.red, side), lambert(COLORS.ghost, side, 0.25)];
+      mats = [lambert(COLORS.base, side), lambert(COLORS.moving, side), lambert(COLORS.fixed, side), lambert(COLORS.red, side), lambert(COLORS.ghost, side, 0.25), ...SELECTION_COLORS.map((c) => lambert(hexNum(c), side)), ...SELECTION_COLORS.map((c) => lambert(hexNum(lightColor(c)), side))];
       ghost = mats.map(() => {
         const g = lambert(COLORS.ghost, side, 0.25);
         g.polygonOffset = true; // 겹치는 면은 변경 형상이 보이도록 공칭을 뒤로

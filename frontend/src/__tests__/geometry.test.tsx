@@ -315,7 +315,7 @@ describe("① native 파라미터 표·엔진 혼용(§8·§7.7)", () => {
     expect(within(table).getByText("CUSH_L_THK_1").closest("tr")!.textContent).toContain("두께");
     expect(within(table).getByText("BOX_SHELL_T").closest("tr")!.textContent).not.toContain("쉘 두께");
     expect(within(table).queryByLabelText("CUSH_L_FILLET_R_1 하이라이트")).toBeNull();
-    fireEvent.click(within(table).getByLabelText("CUSH_L_THK_1 하이라이트"));
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1")); // 행 클릭 = 선택 → 그림 탭이 없으면 3D(폴백이면 PNG)
     expect((await screen.findByTestId("feature-png")).textContent).toContain("CUSH_L_THK_1");
     expect(screen.queryByRole("button", { name: "tpl 생성" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "표 저장" }));

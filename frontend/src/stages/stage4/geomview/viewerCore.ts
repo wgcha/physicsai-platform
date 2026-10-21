@@ -107,24 +107,65 @@ export interface Highlight {
   fixed: Set<string>;
   red: Set<string>;
   dims: DimDraw[];
+  /** 다중 선택 색칠: 면 키 → 재질 번호(PAINT_BASE 이상). 없으면 moving(주황)·fixed(파랑) 단색 */
+  paint?: Map<string, number>;
 }
 export const EMPTY_HIGHLIGHT: Highlight = { moving: new Set(), fixed: new Set(), red: new Set(), dims: [] };
 
-/** 행 선택 → parameter가 같은 피처 전부(대칭 그룹 구성원 포함)의 이동 면(주황)·고정 면(파랑)·치수선. 이동이 고정보다 우선 */
-export function rowHighlight(m: ViewManifest, row: string | null): Highlight {
-  if (!row) return EMPTY_HIGHLIGHT;
+/** 선택 색 팔레트(최대 8색 순환) — 라이트·다크 배경 모두에서 회색 모델과 구분되도록 중간 채도·명도 */
+export const SELECTION_COLORS = ["#f08c28", "#3c8cf0", "#1fa971", "#d6409f", "#8a5cf5", "#c9a400", "#17a2b8", "#8c6d46"] as const;
+export const selectionColor = (i: number): string => SELECTION_COLORS[((i % SELECTION_COLORS.length) + SELECTION_COLORS.length) % SELECTION_COLORS.length];
+/** 고정 면 = 같은 색을 흰색 쪽으로 옅게 */
+export function lightColor(hex: string, mix = 0.5): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((c) => Math.round(c + (255 - c) * mix));
+  return `#${ch.map((c) => c.toString(16).padStart(2, "0")).join("")}`;
+}
+/** 재질 번호: 기본 0·이동 1·고정 2·빨강 3·흐림 4, 이어서 팔레트 이동색 8개(5~12)·고정 옅은색 8개(13~20) */
+export const PAINT_BASE = 5;
+export const PAINT_COUNT = SELECTION_COLORS.length;
+export const paintMovingMat = (i: number) => PAINT_BASE + (((i % PAINT_COUNT) + PAINT_COUNT) % PAINT_COUNT);
+export const paintFixedMat = (i: number) => paintMovingMat(i) + PAINT_COUNT;
+
+const matches = (f: ManifestFeature, row: string) => (f.parameter || f.name) === row || f.name === row;
+
+/** 행 선택 → parameter가 같은 피처 전부(대칭 그룹 구성원 포함)의 이동 면·고정 면·치수선. 이동이 고정보다 우선.
+ *  row가 문자열|null이면 단색(이동 주황·고정 파랑, 기존 동작), 배열이면 행마다 팔레트 색(이동 = 그 색, 고정 = 같은 색 옅게).
+ *  배열의 `extra`(호버)는 선택 뒤 다음 색으로 임시 표시. 치수선은 선택이 정확히 1개일 때만(다중·호버만이면 생략) */
+export function rowHighlight(m: ViewManifest, row: string | string[] | null, extra?: string | null): Highlight {
+  if (row == null) return EMPTY_HIGHLIGHT;
+  const sel = Array.isArray(row) ? row : null;
+  const list = sel ? (extra && !sel.includes(extra) ? [...sel, extra] : sel) : [row as string];
+  if (!list.length) return EMPTY_HIGHLIGHT;
   const moving = new Set<string>();
   const fixed = new Set<string>();
+  const paint = new Map<string, number>();
   const dims: DimDraw[] = [];
-  for (const f of m.features) {
-    if ((f.parameter || f.name) !== row && f.name !== row) continue;
-    f.faces.moving.forEach((id) => moving.add(faceKey(f.body, id)));
-    f.faces.fixed.forEach((id) => fixed.add(faceKey(f.body, id)));
-    const d = dimDraw(f.dimension);
-    if (d) dims.push(d);
-  }
+  const dimRow = sel ? (sel.length === 1 ? sel[0] : null) : (row as string);
+  list.forEach((r, i) => {
+    for (const f of m.features) {
+      if (!matches(f, r)) continue;
+      f.faces.moving.forEach((id) => {
+        const k = faceKey(f.body, id);
+        moving.add(k);
+        if (!paint.has(k)) paint.set(k, paintMovingMat(i));
+      });
+    }
+  });
+  list.forEach((r, i) => {
+    for (const f of m.features) {
+      if (!matches(f, r)) continue;
+      f.faces.fixed.forEach((id) => {
+        const k = faceKey(f.body, id);
+        fixed.add(k);
+        if (!paint.has(k)) paint.set(k, paintFixedMat(i));
+      });
+      const d = dimRow != null && r === dimRow ? dimDraw(f.dimension) : null;
+      if (d) dims.push(d);
+    }
+  });
   moving.forEach((k) => fixed.delete(k));
-  return { moving, fixed, red: new Set(), dims };
+  return sel ? { moving, fixed, red: new Set(), dims, paint } : { moving, fixed, red: new Set(), dims };
 }
 
 /** 그 행이 3D에 대응하는가(manifest에 피처가 있고 면 또는 치수가 있음). 쉘 두께(PROP) 행은 false → "3D 대응 없음" */
@@ -267,16 +308,16 @@ export function dispMax(pm: PreviewManifest | null, fe: boolean): number | null 
 
 // ---------------------------------------------------------------- 면 그룹(하이라이트 = 삼각형 구간)
 
-export type FaceMat = 0 | 1 | 2 | 3 | 4; // 0 기본 · 1 이동(주황) · 2 고정(파랑) · 3 빨강 · 4 흐림(선택 밖 회색 반투명)
+export type FaceMat = number; // 0 기본 · 1 이동(주황) · 2 고정(파랑) · 3 빨강 · 4 흐림(선택 밖 회색 반투명) · 5~20 선택 팔레트(PAINT_BASE)
 
 /** 바디의 faces[].tri → 연속 구간 그룹(start·count는 정점 인덱스 단위 = 삼각형 × 3). 같은 재질 연속 면은 합친다 */
 export function faceGroups(body: ManifestBody, h: Highlight): { start: number; count: number; mat: FaceMat }[] {
-  const any = h.moving.size + h.fixed.size + h.red.size > 0;
+  const any = h.moving.size + h.fixed.size + h.red.size + (h.paint?.size ?? 0) > 0;
   const out: { start: number; count: number; mat: FaceMat }[] = [];
   const faces = [...body.faces].sort((a, b) => a.tri[0] - b.tri[0]);
   for (const f of faces) {
     const k = faceKey(body.body, f.id);
-    const mat: FaceMat = h.red.has(k) ? 3 : h.moving.has(k) ? 1 : h.fixed.has(k) ? 2 : any ? 4 : 0;
+    const mat: FaceMat = h.red.has(k) ? 3 : h.paint?.get(k) ?? (h.moving.has(k) ? 1 : h.fixed.has(k) ? 2 : any ? 4 : 0);
     const start = f.tri[0] * 3;
     const count = f.tri[1] * 3;
     if (count <= 0) continue;
