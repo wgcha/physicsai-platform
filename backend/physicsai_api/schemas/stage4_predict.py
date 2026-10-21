@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from pydantic import AfterValidator, Field, model_serializer
+from pydantic import AfterValidator, ConfigDict, Field, model_serializer
 
 from physicsai_core.naming import label_problem
 
@@ -190,8 +190,10 @@ class SamplesPage(Resp):
 
 
 class PredictCheckRequest(Req):
-    param_set_id: str | None = None
-    values: dict[str, float]
+    model_config = ConfigDict(extra="forbid", json_schema_extra={"examples": [{"param_set_id": None, "values": {"THK_1": 3.2}}]})
+
+    param_set_id: str | None = Field(default=None, description="파라미터 세트 id(생략 = 현재 세트)")
+    values: dict[str, float] = Field(description="파라미터 이름 → 값[세트 단위]")
 
 
 class OutOfRange(Resp):

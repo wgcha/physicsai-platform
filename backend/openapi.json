@@ -59,6 +59,525 @@
         "title": "AdminConfig",
         "type": "object"
       },
+      "ApiAudit": {
+        "properties": {
+          "api_token_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Api Token Id"
+          },
+          "client_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Ip"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "method": {
+            "title": "Method",
+            "type": "string"
+          },
+          "occurred_at": {
+            "format": "date-time",
+            "title": "Occurred At",
+            "type": "string"
+          },
+          "operation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Operation Id"
+          },
+          "params_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Params Sha256"
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Id"
+          },
+          "request_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Request Id"
+          },
+          "result_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Code"
+          },
+          "route": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Route"
+          },
+          "status_code": {
+            "title": "Status Code",
+            "type": "integer"
+          },
+          "study_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Study Id"
+          },
+          "target_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Id"
+          },
+          "target_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Type"
+          },
+          "token_prefix": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token Prefix"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tool"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          }
+        },
+        "required": [
+          "id",
+          "occurred_at",
+          "method",
+          "status_code"
+        ],
+        "title": "ApiAudit",
+        "type": "object"
+      },
+      "ApiAuditPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ApiAudit"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "ApiAuditPage",
+        "type": "object"
+      },
+      "ApiToken": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By"
+          },
+          "scope": {
+            "enum": [
+              "read",
+              "run",
+              "admin"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "snapshot_at": {
+            "format": "date-time",
+            "title": "Snapshot At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "expired",
+              "revoked",
+              "stale"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "token_prefix": {
+            "title": "Token Prefix",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "token_prefix",
+          "created_at",
+          "expires_at",
+          "snapshot_at",
+          "status"
+        ],
+        "title": "ApiToken",
+        "type": "object"
+      },
+      "ApiTokenAdmin": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "last_used_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Used At"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "revoked_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked By"
+          },
+          "scope": {
+            "enum": [
+              "read",
+              "run",
+              "admin"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "snapshot_at": {
+            "format": "date-time",
+            "title": "Snapshot At",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "expired",
+              "revoked",
+              "stale"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "token_prefix": {
+            "title": "Token Prefix",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          },
+          "username": {
+            "title": "Username",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "scope",
+          "token_prefix",
+          "created_at",
+          "expires_at",
+          "snapshot_at",
+          "status",
+          "user_id",
+          "username"
+        ],
+        "title": "ApiTokenAdmin",
+        "type": "object"
+      },
+      "ApiTokenCreate": {
+        "additionalProperties": false,
+        "properties": {
+          "expires_in_days": {
+            "anyOf": [
+              {
+                "maximum": 3650.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "만료까지 일수[일] — 생략 = mcp.token.default_expiry_days(30), 최대 max_expiry_days(30)",
+            "title": "Expires In Days"
+          },
+          "name": {
+            "description": "토큰 이름(1~64자, 영숫자·한글·공백·_.-) — 사용자 안에서 유효 토큰끼리 유일",
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": "^[0-9A-Za-z가-힣 _.\\-]+$",
+            "title": "Name",
+            "type": "string"
+          },
+          "scope": {
+            "description": "범위 read < run < admin(run은 어느 프로젝트든 power 이상, admin은 전역 관리자)",
+            "enum": [
+              "read",
+              "run",
+              "admin"
+            ],
+            "title": "Scope",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "scope"
+        ],
+        "title": "ApiTokenCreate",
+        "type": "object"
+      },
+      "ApiTokenCreated": {
+        "properties": {
+          "api_token": {
+            "$ref": "#/components/schemas/ApiToken"
+          },
+          "token": {
+            "description": "평문 토큰 — 이 응답에서 한 번만 돌려준다(다시 볼 수 없음)",
+            "title": "Token",
+            "type": "string"
+          }
+        },
+        "required": [
+          "token",
+          "api_token"
+        ],
+        "title": "ApiTokenCreated",
+        "type": "object"
+      },
       "Artifact": {
         "properties": {
           "content_type": {
@@ -3327,6 +3846,30 @@
           "fields"
         ],
         "title": "DoeType",
+        "type": "object"
+      },
+      "EntityRef": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type"
+        ],
+        "title": "EntityRef",
         "type": "object"
       },
       "EnvCheck": {
@@ -8077,6 +8620,166 @@
         "title": "JobCreate",
         "type": "object"
       },
+      "JobError": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "title": "JobError",
+        "type": "object"
+      },
+      "JobKindDetail": {
+        "properties": {
+          "allowed": {
+            "description": "mcp.allowed_job_kinds·denied_job_kinds 기준 생성 가능 여부",
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "confirm_required": {
+            "title": "Confirm Required",
+            "type": "boolean"
+          },
+          "cost": {
+            "enum": [
+              "heavy",
+              "light"
+            ],
+            "title": "Cost",
+            "type": "string"
+          },
+          "example": {
+            "additionalProperties": true,
+            "title": "Example",
+            "type": "object"
+          },
+          "job_types": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Job Types",
+            "type": "array"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_ko": {
+            "title": "Label Ko",
+            "type": "string"
+          },
+          "limits": {
+            "additionalProperties": true,
+            "title": "Limits",
+            "type": "object"
+          },
+          "params_schema": {
+            "additionalProperties": true,
+            "title": "Params Schema",
+            "type": "object"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "summary_entity": {
+            "title": "Summary Entity",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "version",
+          "label_ko",
+          "stage",
+          "cost",
+          "confirm_required",
+          "summary_entity",
+          "allowed",
+          "job_types",
+          "params_schema",
+          "example",
+          "limits"
+        ],
+        "title": "JobKindDetail",
+        "type": "object"
+      },
+      "JobKindItem": {
+        "properties": {
+          "allowed": {
+            "description": "mcp.allowed_job_kinds·denied_job_kinds 기준 생성 가능 여부",
+            "title": "Allowed",
+            "type": "boolean"
+          },
+          "confirm_required": {
+            "title": "Confirm Required",
+            "type": "boolean"
+          },
+          "cost": {
+            "enum": [
+              "heavy",
+              "light"
+            ],
+            "title": "Cost",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label_ko": {
+            "title": "Label Ko",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "string"
+          },
+          "summary_entity": {
+            "title": "Summary Entity",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "version",
+          "label_ko",
+          "stage",
+          "cost",
+          "confirm_required",
+          "summary_entity",
+          "allowed"
+        ],
+        "title": "JobKindItem",
+        "type": "object"
+      },
       "JobMedia": {
         "properties": {
           "can_recapture": {
@@ -8164,6 +8867,439 @@
           "can_recapture"
         ],
         "title": "JobMedia",
+        "type": "object"
+      },
+      "JobPlan": {
+        "properties": {
+          "confirm_required": {
+            "title": "Confirm Required",
+            "type": "boolean"
+          },
+          "confirm_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm Token"
+          },
+          "disk_bytes_est": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Bytes Est"
+          },
+          "estimate_basis": {
+            "default": "none",
+            "enum": [
+              "recent_median",
+              "none"
+            ],
+            "title": "Estimate Basis",
+            "type": "string"
+          },
+          "estimate_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimate Min"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "hpc_jobs": {
+            "default": 0,
+            "title": "Hpc Jobs",
+            "type": "integer"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "kind_version": {
+            "title": "Kind Version",
+            "type": "integer"
+          },
+          "lane": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lane"
+          },
+          "parallel": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Parallel"
+          },
+          "plan_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plan Id"
+          },
+          "problems": {
+            "items": {
+              "$ref": "#/components/schemas/PlanProblem"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "queue_ahead": {
+            "default": 0,
+            "title": "Queue Ahead",
+            "type": "integer"
+          },
+          "runs": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runs"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "targets": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Targets",
+            "type": "object"
+          },
+          "uses_global_slot": {
+            "default": false,
+            "title": "Uses Global Slot",
+            "type": "boolean"
+          },
+          "valid": {
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/PlanProblem"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "kind",
+          "kind_version",
+          "study_id",
+          "valid",
+          "confirm_required"
+        ],
+        "title": "JobPlan",
+        "type": "object"
+      },
+      "JobPlanRequest": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "kind": "predict_batch",
+            "params": {
+              "multi_execution": 4,
+              "source": {
+                "count": 20,
+                "kind": "lhs",
+                "seed": 1
+              }
+            },
+            "study_id": "3f2b0c1e-0000-4000-8000-000000000001"
+          }
+        ],
+        "properties": {
+          "kind": {
+            "description": "작업 종류(list_job_kinds의 kind)",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "종류별 파라미터 — describe_job_kind로 스키마 확인",
+            "title": "Params",
+            "type": "object"
+          },
+          "study_id": {
+            "description": "대상 Study id",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Study Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "study_id"
+        ],
+        "title": "JobPlanRequest",
+        "type": "object"
+      },
+      "JobRunRequest": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "confirm_token": "pcf_…",
+            "kind": "predict_batch",
+            "params": {
+              "multi_execution": 4,
+              "source": {
+                "count": 20,
+                "kind": "lhs",
+                "seed": 1
+              }
+            },
+            "study_id": "3f2b0c1e-0000-4000-8000-000000000001"
+          }
+        ],
+        "properties": {
+          "confirm_token": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "plan_job이 준 1회용 확인 토큰(토큰 요청 + 비용 큰 종류에서 필수)",
+            "title": "Confirm Token"
+          },
+          "kind": {
+            "description": "작업 종류(list_job_kinds의 kind)",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Kind",
+            "type": "string"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "종류별 파라미터 — describe_job_kind로 스키마 확인",
+            "title": "Params",
+            "type": "object"
+          },
+          "study_id": {
+            "description": "대상 Study id",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Study Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "study_id"
+        ],
+        "title": "JobRunRequest",
+        "type": "object"
+      },
+      "JobStatus": {
+        "properties": {
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "created_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By Name"
+          },
+          "entity": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/EntityRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/JobError"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "job_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Type"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          },
+          "progress_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Label"
+          },
+          "progress_pct": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Pct"
+          },
+          "queue_position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Queue Position"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "via_token": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Via Token"
+          }
+        },
+        "required": [
+          "study_id",
+          "state"
+        ],
+        "title": "JobStatus",
         "type": "object"
       },
       "JobStep": {
@@ -11111,6 +12247,120 @@
         "title": "PathProblem",
         "type": "object"
       },
+      "Ping": {
+        "properties": {
+          "mcp_enabled": {
+            "title": "Mcp Enabled",
+            "type": "boolean"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "server_version": {
+            "title": "Server Version",
+            "type": "string"
+          },
+          "token": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PingToken"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "세션 요청이면 null"
+          },
+          "tools_count": {
+            "title": "Tools Count",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ok",
+          "server_version",
+          "mcp_enabled",
+          "tools_count"
+        ],
+        "title": "Ping",
+        "type": "object"
+      },
+      "PingToken": {
+        "properties": {
+          "days_left": {
+            "title": "Days Left",
+            "type": "integer"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "prefix": {
+            "title": "Prefix",
+            "type": "string"
+          },
+          "scope": {
+            "enum": [
+              "read",
+              "run",
+              "admin"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "snapshot_age_days": {
+            "title": "Snapshot Age Days",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "prefix",
+          "scope",
+          "expires_at",
+          "days_left",
+          "snapshot_age_days"
+        ],
+        "title": "PingToken",
+        "type": "object"
+      },
+      "PlanProblem": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PlanProblem",
+        "type": "object"
+      },
       "PredictBatch": {
         "properties": {
           "can_cancel": {
@@ -11475,6 +12725,13 @@
       },
       "PredictCheckRequest": {
         "additionalProperties": false,
+        "examples": [
+          {
+            "values": {
+              "THK_1": 3.2
+            }
+          }
+        ],
         "properties": {
           "param_set_id": {
             "anyOf": [
@@ -11485,12 +12742,14 @@
                 "type": "null"
               }
             ],
+            "description": "파라미터 세트 id(생략 = 현재 세트)",
             "title": "Param Set Id"
           },
           "values": {
             "additionalProperties": {
               "type": "number"
             },
+            "description": "파라미터 이름 → 값[세트 단위]",
             "title": "Values",
             "type": "object"
           }
@@ -15721,6 +16980,26 @@
               }
             ]
           },
+          "mcp": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "mcp_http": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "optimize": {
             "$ref": "#/components/schemas/FeatureState"
           },
@@ -16785,6 +18064,143 @@
         "title": "StudyPatch",
         "type": "object"
       },
+      "Summary": {
+        "properties": {
+          "as_of": {
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "bytes": {
+            "default": 0,
+            "title": "Bytes",
+            "type": "integer"
+          },
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "facts": {
+            "additionalProperties": true,
+            "title": "Facts",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/SummaryLink"
+            },
+            "title": "Links",
+            "type": "array"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/SummaryTable"
+            },
+            "title": "Tables",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "entity",
+          "id",
+          "title",
+          "as_of"
+        ],
+        "title": "Summary",
+        "type": "object"
+      },
+      "SummaryLink": {
+        "properties": {
+          "entity": {
+            "title": "Entity",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "entity",
+          "id",
+          "rel"
+        ],
+        "title": "SummaryLink",
+        "type": "object"
+      },
+      "SummaryTable": {
+        "properties": {
+          "columns": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Columns",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "items": {
+              "items": {},
+              "type": "array"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "stats": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            },
+            "title": "Stats",
+            "type": "object"
+          },
+          "total_rows": {
+            "title": "Total Rows",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "name",
+          "columns",
+          "rows",
+          "total_rows"
+        ],
+        "title": "SummaryTable",
+        "type": "object"
+      },
       "SurrogateOpt": {
         "properties": {
           "best": {
@@ -17515,6 +18931,61 @@
           "iter_no"
         ],
         "title": "SurrogateOptVerifyResult",
+        "type": "object"
+      },
+      "SystemStatus": {
+        "properties": {
+          "config_ok": {
+            "title": "Config Ok",
+            "type": "boolean"
+          },
+          "features": {
+            "additionalProperties": true,
+            "title": "Features",
+            "type": "object"
+          },
+          "hpc_mode": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hpc Mode"
+          },
+          "queue_head": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Queue Head",
+            "type": "array"
+          },
+          "slot_holder_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slot Holder Job Id"
+          },
+          "worker_online": {
+            "title": "Worker Online",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "queue_head",
+          "worker_online",
+          "config_ok",
+          "features"
+        ],
+        "title": "SystemStatus",
         "type": "object"
       },
       "TemplateConfigured": {
@@ -18487,6 +19958,188 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/physicsai/api/admin/api-tokens": {
+      "get": {
+        "description": "전역 관리자: 전체 API 토큰 목록(사용자·유효 여부 거르기).",
+        "operationId": "admin_list_api_tokens_physicsai_api_admin_api_tokens_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "User Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "active",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Active"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiTokenAdmin"
+                  },
+                  "title": "Response Admin List Api Tokens Physicsai Api Admin Api Tokens Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin List Api Tokens",
+        "tags": [
+          "api-tokens"
+        ],
+        "x-mcp": {
+          "exclude": "토큰 관리(세션 전용)",
+          "session_only": true
+        }
+      }
+    },
+    "/physicsai/api/admin/api-tokens/{token_id}/revoke": {
+      "post": {
+        "description": "전역 관리자: 토큰 즉시 폐기(계정 정지 등).",
+        "operationId": "admin_revoke_api_token_physicsai_api_admin_api_tokens__token_id__revoke_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "title": "Token Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTokenAdmin"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Admin Revoke Api Token",
+        "tags": [
+          "api-tokens"
+        ],
+        "x-mcp": {
+          "exclude": "토큰 관리(세션 전용)",
+          "session_only": true
+        }
+      }
+    },
     "/physicsai/api/admin/config": {
       "get": {
         "operationId": "admin_config_physicsai_api_admin_config_get",
@@ -22016,8 +23669,1588 @@
         ]
       }
     },
+    "/physicsai/api/mcp/audit": {
+      "get": {
+        "description": "토큰 요청 감사 기록(최신순, 본문·값 없음). 전역 관리자(세션) 또는 admin 범위 토큰만. 부작용 없음.",
+        "operationId": "list_audit",
+        "parameters": [
+          {
+            "description": "사용자 id",
+            "in": "query",
+            "name": "user_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "사용자 id",
+              "title": "User Id"
+            }
+          },
+          {
+            "description": "API 토큰 id",
+            "in": "query",
+            "name": "token_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "API 토큰 id",
+              "title": "Token Id"
+            }
+          },
+          {
+            "description": "operationId",
+            "in": "query",
+            "name": "operation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "operationId",
+              "title": "Operation Id"
+            }
+          },
+          {
+            "description": "HTTP 상태 코드[-](100~599)",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 599,
+                  "minimum": 100,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "HTTP 상태 코드[-](100~599)",
+              "title": "Status"
+            }
+          },
+          {
+            "description": "이 시각 이후(ISO 8601)",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "이 시각 이후(ISO 8601)",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "이 시각 이전(ISO 8601)",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "이 시각 이전(ISO 8601)",
+              "title": "Until"
+            }
+          },
+          {
+            "description": "최대 개수[개](1~200, 기본 50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 200,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "최대 개수[개](1~200, 기본 50)",
+              "title": "Limit"
+            }
+          },
+          {
+            "description": "다음 페이지 커서(next_cursor)",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "다음 페이지 커서(next_cursor)",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiAuditPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_PARAMS"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "토큰 요청 감사 조회",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "admin",
+          "summary_en": "API token request audit log (admin only)",
+          "summary_ko": "API 토큰 요청 감사 기록(관리자 전용)",
+          "tool": "list_audit",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/glossary": {
+      "get": {
+        "description": "도메인 용어집: 피처 약어(THK=두께 등)·엔티티 관계·작업 종류·화면 단계 번호·오류 코드와 사람이 쓴 한국어 이름·동의어.\n사용자 말을 파라미터·엔티티 이름으로 바꿀 때 쓴다. 부작용 없음.",
+        "operationId": "get_glossary",
+        "parameters": [
+          {
+            "description": "부분 조회할 절(생략 = 전체, 64 KiB 상한)",
+            "in": "query",
+            "name": "section",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "entities",
+                    "job_types",
+                    "job_kinds",
+                    "stages",
+                    "feature_abbr",
+                    "enums",
+                    "error_codes",
+                    "terms",
+                    "error_hints"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "부분 조회할 절(생략 = 전체, 64 KiB 상한)",
+              "title": "Section"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Get Glossary",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "INVALID_PARAMS"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "도메인 용어집",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Domain glossary: feature abbreviations, entities, job kinds, stages, error codes",
+          "summary_ko": "피처 약어·엔티티·작업 종류·단계 번호·오류 코드·동의어",
+          "tool": "get_glossary",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/job-kinds": {
+      "get": {
+        "description": "API로 만들 수 있는 작업 종류(①-3 DOE 생성·④ 예측·⑥ 최적화 등)와 비용(heavy·light)·확인 필요 여부를 본다.\n작업을 만들기 전에 먼저 호출해 kind 이름을 고른다. 부작용 없음.",
+        "operationId": "list_job_kinds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobKindItem"
+                  },
+                  "title": "Response List Job Kinds",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 종류 목록",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "List job kinds with cost and confirm requirement",
+          "summary_ko": "작업 종류 목록(비용·확인 필요 여부)",
+          "tool": "list_job_kinds",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/job-kinds/{kind}": {
+      "get": {
+        "description": "작업 종류 하나의 params JSON Schema(필드 설명·단위·범위)·예시·한도를 본다. plan_job·run_job의 params를 만들 때 쓴다. 부작용 없음.",
+        "operationId": "describe_job_kind",
+        "parameters": [
+          {
+            "description": "작업 종류(list_job_kinds의 kind)",
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "description": "작업 종류(list_job_kinds의 kind)",
+              "maxLength": 64,
+              "title": "Kind",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobKindDetail"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "JOB_KIND_UNKNOWN"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 종류 설명(params 스키마)",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Describe a job kind: params JSON Schema, example, limits",
+          "summary_ko": "작업 종류의 params 스키마·예시·한도",
+          "tool": "describe_job_kind",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/jobs": {
+      "get": {
+        "description": "작업 목록(최신순, 종류 무관 공통 JobStatus 짧은 형태). 진행 상황 확인용. 부작용 없음.",
+        "operationId": "list_jobs",
+        "parameters": [
+          {
+            "description": "Study id로 거르기",
+            "in": "query",
+            "name": "study_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Study id로 거르기",
+              "title": "Study Id"
+            }
+          },
+          {
+            "description": "작업 상태(쉼표 구분, 예 QUEUED,RUNNING)",
+            "in": "query",
+            "name": "state",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "작업 상태(쉼표 구분, 예 QUEUED,RUNNING)",
+              "title": "State"
+            }
+          },
+          {
+            "description": "작업 종류(list_job_kinds의 kind)",
+            "in": "query",
+            "name": "kind",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "작업 종류(list_job_kinds의 kind)",
+              "title": "Kind"
+            }
+          },
+          {
+            "description": "내가 만든 작업만",
+            "in": "query",
+            "name": "mine",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "내가 만든 작업만",
+              "title": "Mine",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "최대 개수[개](1~50)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "최대 개수[개](1~50)",
+              "maximum": 50,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/JobStatus"
+                  },
+                  "title": "Response List Jobs",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "JOB_KIND_UNKNOWN"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 목록(짧은 형태)",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "List jobs by study, state, kind (newest first)",
+          "summary_ko": "Study·상태·종류로 작업 목록(최신순)",
+          "tool": "list_jobs",
+          "version": 1
+        }
+      },
+      "post": {
+        "description": "작업을 만든다(부작용: 대기열에 작업 등록·슬롯·HPC 자원 사용). 기존 웹 생성 API와 같은 서비스·검증을 거친다.\n토큰 요청에서 비용 큰 종류(cost heavy)는 plan_job이 준 confirm_token이 필요하다 — 없으면 428, params가 바뀌었거나 만료·재사용이면 409.",
+        "operationId": "run_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobRunRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · JOB_KIND_DENIED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false) · NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "CONFIRM_INVALID(reason: mismatch·expired·used·unknown) · STUDY_JOB_BUSY 등 기존 생성 오류"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "JOB_KIND_UNKNOWN · INVALID_PARAMS"
+          },
+          "428": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "CONFIRM_REQUIRED(plan_with: plan_job)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 생성",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "by_kind",
+          "deprecated": false,
+          "risk": "run",
+          "summary_en": "Create a job; heavy kinds need the confirm_token from plan_job",
+          "summary_ko": "작업 생성(비용 큰 종류는 plan_job의 confirm_token 필요)",
+          "tool": "run_job",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/jobs/plan": {
+      "post": {
+        "description": "작업을 만들지 않고(저장 없음) run 수·동시 수·레인·예상 시간[분]·대기열 앞 작업 수·문제(problems)를 계산한다.\n비용 큰 종류를 run 범위 토큰으로 부르면 1회용 confirm_token(기본 600초)을 함께 준다 — 사용자에게 계획을 보여 준 뒤 run_job에 넣는다.\nproblems가 있으면 valid=false, confirm_token=null.",
+        "operationId": "plan_job",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/JobPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPlan"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · JOB_KIND_DENIED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false) · NOT_FOUND"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "JOB_KIND_UNKNOWN · INVALID_PARAMS"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 계획(dry-run)",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Dry-run a job: runs, time estimate, queue, problems; issues confirm_token",
+          "summary_ko": "작업을 만들지 않고 계획 계산, 확인 토큰 발급",
+          "tool": "plan_job",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/jobs/{job_id}": {
+      "get": {
+        "description": "작업 하나의 상태·진행률[%]·대기 순번·엔티티·오류. 폴링은 수십 초 간격으로. 부작용 없음.",
+        "operationId": "job_status",
+        "parameters": [
+          {
+            "description": "작업 id(run_job·list_jobs의 job_id)",
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "작업 id(run_job·list_jobs의 job_id)",
+              "maxLength": 64,
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false) · NOT_FOUND"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 상태",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Status, progress and error of one job",
+          "summary_ko": "작업 하나의 상태·진행률·오류",
+          "tool": "job_status",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/jobs/{job_id}/cancel": {
+      "post": {
+        "description": "작업 취소(부작용: 대기 작업 취소·실행 중 작업 중단 요청). API 토큰은 그 토큰이 만든 작업만 취소할 수 있다. 이미 끝났으면 상태만 돌려준다.",
+        "operationId": "cancel_job",
+        "parameters": [
+          {
+            "description": "작업 id(run_job·list_jobs의 job_id)",
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "작업 id(run_job·list_jobs의 job_id)",
+              "maxLength": 64,
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false) · NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "JOB_TERMINAL"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 취소",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "run",
+          "summary_en": "Cancel a job (tokens: only jobs created by the same token; idempotent)",
+          "summary_ko": "작업 취소(토큰은 그 토큰이 만든 작업만, 멱등)",
+          "tool": "cancel_job",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/jobs/{job_id}/summary": {
+      "get": {
+        "description": "작업이 만든 결과(DOE·배치·최적화·판정 등)의 요약 봉투(사실·표 상위 N행·통계, 8 KiB 이하). 부작용 없음.",
+        "operationId": "job_summary",
+        "parameters": [
+          {
+            "description": "작업 id(run_job·list_jobs의 job_id)",
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "description": "작업 id(run_job·list_jobs의 job_id)",
+              "maxLength": 64,
+              "title": "Job Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "표 행 수[행](1~500, 기본 10, 최대 mcp.summary.top_n_max)",
+            "in": "query",
+            "name": "top_n",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "표 행 수[행](1~500, 기본 10, 최대 mcp.summary.top_n_max)",
+              "title": "Top N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false) · NOT_FOUND · SUMMARY_ENTITY_UNKNOWN"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "작업 결과 요약",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Summary of the result entity a job produced (top-N rows, stats)",
+          "summary_ko": "작업이 만든 결과 엔티티 요약(표 상위 N행·통계)",
+          "tool": "job_summary",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/ping": {
+      "get": {
+        "description": "연결 점검. 서버 버전·토큰 접두(pai_xxxxxxxx)·범위·남은 일수·도구 수를 돌려주고, 만료 5일 이하면 warnings에 안내한다. 세션 요청이면 token은 null. 부작용 없음.",
+        "operationId": "ping",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Ping"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "연결 점검",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Connection check: server version, token prefix, scope, days left",
+          "summary_ko": "연결 점검: 서버 버전·토큰 접두·범위·남은 일수",
+          "tool": "ping",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/summary/{entity}/{id}": {
+      "get": {
+        "description": "엔티티(study·param_set·train_doe·predict_run·predict_batch·surrogate_opt·equiv_check·fem_verify·geom_preview·job) 요약 봉투.\n절대경로 없이 표시 이름·id만, 8 KiB 이하(넘으면 truncated). 부작용 없음.",
+        "operationId": "get_summary",
+        "parameters": [
+          {
+            "description": "엔티티 종류(study·param_set·train_doe·predict_run·predict_batch·surrogate_opt·equiv_check·fem_verify·geom_preview·job)",
+            "in": "path",
+            "name": "entity",
+            "required": true,
+            "schema": {
+              "description": "엔티티 종류(study·param_set·train_doe·predict_run·predict_batch·surrogate_opt·equiv_check·fem_verify·geom_preview·job)",
+              "maxLength": 32,
+              "title": "Entity",
+              "type": "string"
+            }
+          },
+          {
+            "description": "엔티티 id",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "description": "엔티티 id",
+              "maxLength": 64,
+              "title": "Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "표 행 수[행](1~500, 기본 10, 최대 mcp.summary.top_n_max)",
+            "in": "query",
+            "name": "top_n",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 500,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "표 행 수[행](1~500, 기본 10, 최대 mcp.summary.top_n_max)",
+              "title": "Top N"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Summary"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false) · NOT_FOUND · SUMMARY_ENTITY_UNKNOWN"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "엔티티 요약",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Summary of a study, param set, DOE, batch, optimization, check ...",
+          "summary_ko": "study·param_set·train_doe·predict_batch 등 엔티티 요약",
+          "tool": "get_summary",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/system": {
+      "get": {
+        "description": "대기열 앞 5개·전역 슬롯 보유 작업·워커 온라인·설정 정상 여부·HPC 모드·기능 사용 가능 여부. 작업 전에 확인. 부작용 없음.",
+        "operationId": "system_status",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "시스템 상태",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Queue head, slot holder, worker online, config, HPC mode, features",
+          "summary_ko": "대기열 앞 5개·슬롯·워커·설정·HPC 모드·기능",
+          "tool": "system_status",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/tools": {
+      "get": {
+        "description": "생성된 도구 스펙 파일을 그대로 돌려준다(MCP 서버가 부팅 때 읽어 도구를 동적으로 노출).",
+        "operationId": "mcp_tool_specs",
+        "parameters": [
+          {
+            "description": "mcp(tools.mcp.json) | openai(tools.openai.json)",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "mcp",
+              "description": "mcp(tools.mcp.json) | openai(tools.openai.json)",
+              "enum": [
+                "mcp",
+                "openai"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "items": {},
+                      "type": "array"
+                    }
+                  ],
+                  "title": "Response Mcp Tool Specs"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "도구 스펙(MCP 서버 부팅용)",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "exclude": "MCP 서버 부팅용",
+          "token_risk": "read"
+        }
+      }
+    },
     "/physicsai/api/me": {
       "get": {
+        "description": "현재 사용자(토큰 요청이면 토큰 소유자)와 전역 관리자 여부·프로젝트별 역할(general·power·admin). 실행 권한 확인에 쓴다. 부작용 없음.",
         "operationId": "me_physicsai_api_me_get",
         "responses": {
           "200": {
@@ -22029,12 +25262,265 @@
               }
             },
             "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
           }
         },
-        "summary": "Me",
+        "summary": "내 정보(사용자·역할)",
         "tags": [
           "shell"
-        ]
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Current user, global-admin flag and per-project roles",
+          "summary_ko": "현재 사용자·전역 관리자 여부·프로젝트별 역할",
+          "tool": "whoami",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/me/api-tokens": {
+      "get": {
+        "description": "내 API 토큰(최신순, 폐기 포함 최근 90일). 평문·해시는 돌려주지 않는다.",
+        "operationId": "list_my_api_tokens_physicsai_api_me_api_tokens_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ApiToken"
+                  },
+                  "title": "Response List My Api Tokens Physicsai Api Me Api Tokens Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "List My Api Tokens",
+        "tags": [
+          "api-tokens"
+        ],
+        "x-mcp": {
+          "exclude": "토큰 관리(세션 전용)",
+          "session_only": true
+        }
+      },
+      "post": {
+        "description": "API 토큰 발급. 평문 `token`은 이 응답에서 한 번만 — 다시 볼 수 없다. 403 API_TOKEN_SCOPE, 409 API_TOKEN_LIMIT·API_TOKEN_NAME_EXISTS,\n422 API_TOKEN_EXPIRY_TOO_LONG.",
+        "operationId": "create_my_api_token_physicsai_api_me_api_tokens_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiTokenCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiTokenCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Create My Api Token",
+        "tags": [
+          "api-tokens"
+        ],
+        "x-mcp": {
+          "exclude": "토큰 관리(세션 전용)",
+          "session_only": true
+        }
+      }
+    },
+    "/physicsai/api/me/api-tokens/{token_id}": {
+      "delete": {
+        "description": "내 토큰 폐기(멱등, 행은 남기고 revoked_at 기록).",
+        "operationId": "revoke_my_api_token_physicsai_api_me_api_tokens__token_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "token_id",
+            "required": true,
+            "schema": {
+              "title": "Token Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Revoke My Api Token",
+        "tags": [
+          "api-tokens"
+        ],
+        "x-mcp": {
+          "exclude": "토큰 관리(세션 전용)",
+          "session_only": true
+        }
       }
     },
     "/physicsai/api/models/{model_id}": {
@@ -24691,9 +28177,11 @@
     },
     "/physicsai/api/studies": {
       "get": {
+        "description": "Study 목록(최신순). study_id를 찾을 때 먼저 호출한다. 다음 페이지가 있으면 헤더 X-Next-Cursor. 부작용 없음.",
         "operationId": "list_studies_physicsai_api_studies_get",
         "parameters": [
           {
+            "description": "대시보드 프로젝트 id로 거르기",
             "in": "query",
             "name": "project_id",
             "required": false,
@@ -24706,10 +28194,12 @@
                   "type": "null"
                 }
               ],
+              "description": "대시보드 프로젝트 id로 거르기",
               "title": "Project Id"
             }
           },
           {
+            "description": "ACTIVE | ARCHIVED",
             "in": "query",
             "name": "status",
             "required": false,
@@ -24722,10 +28212,12 @@
                   "type": "null"
                 }
               ],
+              "description": "ACTIVE | ARCHIVED",
               "title": "Status"
             }
           },
           {
+            "description": "최대 개수[개](1~200, 기본 50)",
             "in": "query",
             "name": "limit",
             "required": false,
@@ -24740,10 +28232,12 @@
                   "type": "null"
                 }
               ],
+              "description": "최대 개수[개](1~200, 기본 50)",
               "title": "Limit"
             }
           },
           {
+            "description": "다음 페이지 커서(응답 헤더 X-Next-Cursor)",
             "in": "query",
             "name": "cursor",
             "required": false,
@@ -24756,6 +28250,7 @@
                   "type": "null"
                 }
               ],
+              "description": "다음 페이지 커서(응답 헤더 X-Next-Cursor)",
               "title": "Cursor"
             }
           }
@@ -24775,21 +28270,60 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             },
-            "description": "Validation Error"
+            "description": "INVALID_PARAMS"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
           }
         },
-        "summary": "List Studies",
+        "summary": "Study 목록",
         "tags": [
           "studies"
-        ]
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "List studies (filter by project or status)",
+          "summary_ko": "Study 목록(프로젝트·상태로 거르기)",
+          "tool": "list_studies",
+          "version": 1
+        }
       },
       "post": {
         "operationId": "create_study_physicsai_api_studies_post",
@@ -27043,13 +30577,16 @@
     },
     "/physicsai/api/studies/{study_id}/predict/check": {
       "post": {
+        "description": "파라미터 값이 세트 범위(min~max) 안인지, 정수 반올림, 가장 가까운 학습 run을 확인한다(저장·작업 없음). 예측 전에 쓴다.",
         "operationId": "predict_check_physicsai_api_studies__study_id__predict_check_post",
         "parameters": [
           {
+            "description": "Study id",
             "in": "path",
             "name": "study_id",
             "required": true,
             "schema": {
+              "description": "Study id",
               "title": "Study Id",
               "type": "string"
             }
@@ -27076,6 +30613,26 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
           "404": {
             "content": {
               "application/json": {
@@ -27084,7 +30641,7 @@
                 }
               }
             },
-            "description": "Not Found"
+            "description": "NOT_FOUND · PARAM_SET_REQUIRED"
           },
           "409": {
             "content": {
@@ -27104,13 +30661,32 @@
                 }
               }
             },
-            "description": "Unprocessable Entity"
+            "description": "INVALID_PARAMS"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
           }
         },
-        "summary": "Predict Check",
+        "summary": "예측 입력 범위 검사",
         "tags": [
           "param-sets"
-        ]
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Check parameter values against the set range (no job created)",
+          "summary_ko": "파라미터 값이 세트 범위 안인지·반올림·최근접 학습 run 확인",
+          "tool": "check_prediction_input",
+          "version": 1
+        }
       }
     },
     "/physicsai/api/studies/{study_id}/spdm-imports": {

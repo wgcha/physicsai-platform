@@ -1,0 +1,2592 @@
+{
+  "entities": {
+    "items": {
+      "equiv_check": {
+        "id_label": "eq_id",
+        "label_ko": "해석 등가성 판정"
+      },
+      "fem_verify": {
+        "id_label": "fem_verify_id",
+        "label_ko": "조립 FEM 검증"
+      },
+      "geom_preview": {
+        "id_label": "preview_id",
+        "label_ko": "형상 미리보기"
+      },
+      "job": {
+        "id_label": "job_id",
+        "label_ko": "작업"
+      },
+      "param_set": {
+        "id_label": "param_set_id",
+        "label_ko": "파라미터 세트"
+      },
+      "predict_batch": {
+        "id_label": "batch_id",
+        "label_ko": "일괄 예측"
+      },
+      "predict_run": {
+        "id_label": "job_id",
+        "label_ko": "단일 예측"
+      },
+      "study": {
+        "id_label": "study_id",
+        "label_ko": "Study"
+      },
+      "surrogate_opt": {
+        "id_label": "opt_id",
+        "label_ko": "내장 최적화"
+      },
+      "train_doe": {
+        "id_label": "doe_id",
+        "label_ko": "학습 데이터 DOE"
+      }
+    },
+    "relations": [
+      {
+        "card": "1-N",
+        "from": "study",
+        "to": "param_set"
+      },
+      {
+        "card": "1-N",
+        "from": "study",
+        "to": "train_doe"
+      },
+      {
+        "card": "1-N",
+        "from": "study",
+        "to": "predict_batch"
+      },
+      {
+        "card": "1-N",
+        "from": "study",
+        "to": "surrogate_opt"
+      },
+      {
+        "card": "1-N",
+        "from": "study",
+        "to": "equiv_check"
+      },
+      {
+        "card": "1-N",
+        "from": "study",
+        "to": "model"
+      },
+      {
+        "card": "1-N",
+        "from": "param_set",
+        "to": "baseline"
+      },
+      {
+        "card": "1-N",
+        "from": "param_set",
+        "to": "parameter"
+      },
+      {
+        "card": "1-N",
+        "from": "train_doe",
+        "to": "run"
+      },
+      {
+        "card": "N-N",
+        "from": "run",
+        "to": "response"
+      },
+      {
+        "card": "1-N",
+        "from": "perf_def",
+        "to": "response"
+      },
+      {
+        "card": "N-1",
+        "from": "equiv_check",
+        "to": "recipe"
+      },
+      {
+        "card": "1-N",
+        "from": "predict_batch",
+        "to": "predict_run"
+      },
+      {
+        "card": "N-1",
+        "from": "fem_verify",
+        "to": "predict_run"
+      }
+    ]
+  },
+  "enums": {
+    "ApiToken.scope": [
+      "read",
+      "run",
+      "admin"
+    ],
+    "ApiToken.status": [
+      "active",
+      "expired",
+      "revoked",
+      "stale"
+    ],
+    "ApiTokenAdmin.scope": [
+      "read",
+      "run",
+      "admin"
+    ],
+    "ApiTokenAdmin.status": [
+      "active",
+      "expired",
+      "revoked",
+      "stale"
+    ],
+    "ApiTokenCreate.scope": [
+      "read",
+      "run",
+      "admin"
+    ],
+    "BaselineAddRequest.usage": [
+      "topology",
+      "range"
+    ],
+    "BaselineInfo.prep_status": [
+      "READY",
+      "STALE",
+      "MISSING"
+    ],
+    "BatchSourceCcd.alpha": [
+      "face",
+      "inscribed"
+    ],
+    "BatchSourceFracfact.resolution": [
+      4,
+      5
+    ],
+    "BatchSourceLhsOpt.criterion": [
+      "maximin",
+      "corr"
+    ],
+    "CaptureDisplay.avgmode": [
+      "",
+      "simple",
+      "maximum",
+      "minimum",
+      "difference"
+    ],
+    "CaptureLegend.mode": [
+      "auto",
+      "fixed"
+    ],
+    "CaptureLegendOut.mode": [
+      "auto",
+      "fixed"
+    ],
+    "Contour3d.result_status": [
+      "OK",
+      "FAIL"
+    ],
+    "Contour3d.status": [
+      "QUEUED",
+      "RUNNING",
+      "DONE",
+      "FAILED",
+      "CANCELED",
+      "EXPIRED"
+    ],
+    "Contour3dCreate.source_kind": [
+      "SOLVER_H3D",
+      "PREDICT_H3D"
+    ],
+    "Contour3dProgress.phase": [
+      "waiting",
+      "reading_h3d",
+      "geometry",
+      "frames",
+      "done",
+      "failed",
+      "canceled",
+      "expired"
+    ],
+    "Dataset.engine": [
+      "altair",
+      "native"
+    ],
+    "DoeField.type": [
+      "combo",
+      "int",
+      "bool"
+    ],
+    "DoeResultTable.influence_class": [
+      "formal",
+      "reference",
+      "off"
+    ],
+    "DoeType.influence_class": [
+      "formal",
+      "reference"
+    ],
+    "EnvCheckItem.category": [
+      "CONFIG",
+      "DATABASE",
+      "AUTH",
+      "HPC",
+      "WORKER",
+      "EXECUTABLE",
+      "RESOURCE",
+      "STORAGE",
+      "GPU"
+    ],
+    "EnvCheckItem.source": [
+      "API",
+      "WORKER"
+    ],
+    "EnvCheckItem.status": [
+      "OK",
+      "WARN",
+      "FAIL",
+      "SKIP",
+      "PENDING"
+    ],
+    "EqPairing.mode": [
+      "by_name",
+      "by_params",
+      "manual"
+    ],
+    "EqRecipe.scope": [
+      "system",
+      "study",
+      "global"
+    ],
+    "EqRecipeCreate.scope": [
+      "study",
+      "global"
+    ],
+    "EqRecipeListItem.scope": [
+      "system",
+      "study",
+      "global"
+    ],
+    "FsEntry.type": [
+      "dir",
+      "file"
+    ],
+    "FvAssembly.kind": [
+      "predict_input",
+      "train_doe",
+      "custom"
+    ],
+    "FvPreview.input_mode": [
+      "reuse",
+      "rebuild"
+    ],
+    "FvSourceOptDesign.pick": [
+      "best",
+      "final_optimum",
+      "surrogate_optimum",
+      "run"
+    ],
+    "GeomPreview.result_status": [
+      "OK",
+      "FAIL"
+    ],
+    "GeomPreview.status": [
+      "QUEUED",
+      "RUNNING",
+      "DONE",
+      "FAILED",
+      "CANCELED",
+      "EXPIRED"
+    ],
+    "GeomPreviewCreate.fe": [
+      "off",
+      "check"
+    ],
+    "GeomView.kind": [
+      "solid",
+      "shell"
+    ],
+    "GeomView.status": [
+      "READY",
+      "MISSING",
+      "FAILED"
+    ],
+    "HpcResolveRequest.action": [
+      "recheck",
+      "attach",
+      "mark_not_submitted"
+    ],
+    "JobCreate.job_type": [
+      "DATASET_CREATE",
+      "PACKAGE_EXPORT",
+      "MODEL_REGISTER",
+      "EVALUATE",
+      "PREDICT",
+      "PREDICT_VERIFY",
+      "TD_EXTRACT_PARAMS",
+      "TD_DOE_GEN",
+      "TD_SOLVE",
+      "TD_RESULT_IMPORT",
+      "TD_RESP_EXTRACT",
+      "CU_H3D_PREVIEW",
+      "CU_H3D_CURATE",
+      "CU_T01_PREVIEW",
+      "CU_T01_CURVES",
+      "SPDM_IMPORT",
+      "OPTIMIZE",
+      "STUDY_STORAGE_SCAN",
+      "STUDY_CLEANUP",
+      "PREDICT_BATCH",
+      "PB_RESP_EXTRACT"
+    ],
+    "JobKindDetail.cost": [
+      "heavy",
+      "light"
+    ],
+    "JobKindItem.cost": [
+      "heavy",
+      "light"
+    ],
+    "JobPlan.estimate_basis": [
+      "recent_median",
+      "none"
+    ],
+    "Model.engine": [
+      "altair",
+      "native"
+    ],
+    "ModelPatch.status": [
+      "ACTIVE",
+      "ARCHIVED"
+    ],
+    "NativeInfo.kind": [
+      "solid",
+      "shell"
+    ],
+    "NativeInfo.prep_status": [
+      "READY",
+      "STALE",
+      "MISSING"
+    ],
+    "NativeInfo.view_status": [
+      "READY",
+      "MISSING",
+      "FAILED"
+    ],
+    "ParamMap.status": [
+      "draft",
+      "confirmed"
+    ],
+    "ParamMap.usage": [
+      "topology",
+      "range"
+    ],
+    "ParamMapDecision.action": [
+      "accept",
+      "rename",
+      "change",
+      "split"
+    ],
+    "ParamMapProposed.grade": [
+      "recommend",
+      "check",
+      "unmatched"
+    ],
+    "ParamMapRemapRequest.usage": [
+      "topology",
+      "range"
+    ],
+    "ParamSet.engine": [
+      "altair",
+      "native"
+    ],
+    "ParamSet.input_kind": [
+      "assembly",
+      "mesh_only"
+    ],
+    "ParamSet.param_map_status": [
+      "draft",
+      "confirmed"
+    ],
+    "ParamSetCreate.engine": [
+      "altair",
+      "native"
+    ],
+    "ParamSetCreate.kind": [
+      "solid",
+      "shell"
+    ],
+    "ParamSetCreate.mode": [
+      "folder",
+      "discover"
+    ],
+    "ParamSetDiscoverRequest.engine": [
+      "altair",
+      "native"
+    ],
+    "ParamSetDiscoverRequest.kind": [
+      "solid",
+      "shell"
+    ],
+    "ParamSetDiscoverResponse.engine": [
+      "altair",
+      "native"
+    ],
+    "ParamSetDiscoverResponse.kind": [
+      "solid",
+      "shell"
+    ],
+    "ParamSetDiscoverResponse.parameters_source": [
+      "file",
+      "tpl"
+    ],
+    "ParamSetFromTrain.runs": [
+      "collected",
+      "all"
+    ],
+    "ParamSetParameter.source": [
+      "prop",
+      "shell"
+    ],
+    "PathInspectRequest.engine": [
+      "altair",
+      "native"
+    ],
+    "PathInspectRequest.purpose": [
+      "DATASET_INPUT",
+      "MODEL_FOLDER",
+      "PARAM_SET",
+      "CAD_FILE",
+      "RADIOSS_ASSEM",
+      "RESULT_FOLDER",
+      "CURATION_INPUT",
+      "SPDM_IMPORT",
+      "PREDICT_INPUT",
+      "FEM_ASSEMBLY"
+    ],
+    "PingToken.scope": [
+      "read",
+      "run",
+      "admin"
+    ],
+    "PredictBatch.input_kind": [
+      "assembly",
+      "mesh_only"
+    ],
+    "PredictBatchPreview.input_kind": [
+      "assembly",
+      "mesh_only"
+    ],
+    "PredictRunDetail.input_mode": [
+      "template",
+      "prepared"
+    ],
+    "PredictRunDetail.origin": [
+      "manual",
+      "fem_verify"
+    ],
+    "PredictRunSummary.input_mode": [
+      "template",
+      "prepared"
+    ],
+    "PredictRunSummary.origin": [
+      "manual",
+      "fem_verify"
+    ],
+    "ResourcesResponse.gpu_status": [
+      "OK",
+      "NOT_FOUND",
+      "ERROR"
+    ],
+    "SamplingInfo.influence_class": [
+      "formal",
+      "reference"
+    ],
+    "SoConstraint.op": [
+      "<=",
+      ">=",
+      "range"
+    ],
+    "SoObjective.sense": [
+      "min",
+      "max"
+    ],
+    "StorageCategory.key": [
+      "PACKAGE_PSDATA",
+      "SCORE_PREDICTIONS",
+      "CURATED_H3D",
+      "PREDICT_INPUT",
+      "PREVIEW_OUTPUT",
+      "JOB_LOGS"
+    ],
+    "SurrogateOptCreate.surrogate": [
+      "gp",
+      "rbf"
+    ],
+    "TrainDoe.engine": [
+      "altair",
+      "native"
+    ],
+    "TrainDoe.generator": [
+      "platform",
+      "hyperstudy"
+    ],
+    "TrainSetup.engine": [
+      "altair",
+      "native"
+    ]
+  },
+  "error_codes": {
+    "ACCOUNT_NOT_ACTIVE": {
+      "code": "ACCOUNT_NOT_ACTIVE",
+      "message_ko": "대시보드 계정이 활성 상태가 아닙니다",
+      "sources": [
+        "backend/physicsai_api/auth.py"
+      ],
+      "status": 403
+    },
+    "API_TOKEN_EXPIRED": {
+      "code": "API_TOKEN_EXPIRED",
+      "message_ko": "만료된 API 토큰입니다",
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py"
+      ],
+      "status": 401
+    },
+    "API_TOKEN_EXPIRY_TOO_LONG": {
+      "code": "API_TOKEN_EXPIRY_TOO_LONG",
+      "message_ko": "토큰 만료는 최대 {…}일입니다 — 만료 전에 새 토큰을 발급해 교체하세요",
+      "sources": [
+        "backend/physicsai_api/services/api_tokens.py"
+      ],
+      "status": 422
+    },
+    "API_TOKEN_INVALID": {
+      "code": "API_TOKEN_INVALID",
+      "message_ko": "API 토큰이 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py"
+      ],
+      "status": 401
+    },
+    "API_TOKEN_LIMIT": {
+      "code": "API_TOKEN_LIMIT",
+      "message_ko": "유효한 토큰은 사용자당 {…}개까지입니다 — 쓰지 않는 토큰을 폐기하세요",
+      "sources": [
+        "backend/physicsai_api/services/api_tokens.py"
+      ],
+      "status": 409
+    },
+    "API_TOKEN_NAME_EXISTS": {
+      "code": "API_TOKEN_NAME_EXISTS",
+      "message_ko": "같은 이름의 토큰이 이미 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/api_tokens.py"
+      ],
+      "status": 409
+    },
+    "API_TOKEN_OPERATION_NOT_ALLOWED": {
+      "code": "API_TOKEN_OPERATION_NOT_ALLOWED",
+      "message_ko": "API 토큰으로 호출할 수 없는 기능입니다",
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py"
+      ],
+      "status": 403
+    },
+    "API_TOKEN_REVOKED": {
+      "code": "API_TOKEN_REVOKED",
+      "message_ko": "폐기된 API 토큰입니다",
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py"
+      ],
+      "status": 401
+    },
+    "API_TOKEN_SCOPE": {
+      "code": "API_TOKEN_SCOPE",
+      "message_ko": "토큰 범위가 부족합니다(필요: {…})",
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py",
+        "backend/physicsai_api/services/api_tokens.py"
+      ],
+      "status": 403
+    },
+    "API_TOKEN_STALE": {
+      "code": "API_TOKEN_STALE",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py"
+      ],
+      "status": 401
+    },
+    "ARTIFACT_EXPIRED": {
+      "code": "ARTIFACT_EXPIRED",
+      "message_ko": "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요",
+      "sources": [
+        "backend/physicsai_api/services/contour_capture.py",
+        "backend/physicsai_api/services/job_files.py"
+      ],
+      "status": 410
+    },
+    "ARTIFACT_TOO_LARGE": {
+      "code": "ARTIFACT_TOO_LARGE",
+      "message_ko": "파일이 제공 크기 상한을 넘습니다",
+      "sources": [
+        "backend/physicsai_api/services/contour_capture.py"
+      ],
+      "status": 413
+    },
+    "AUTHENTICATION_REQUIRED": {
+      "code": "AUTHENTICATION_REQUIRED",
+      "message_ko": "대시보드에서 로그인하세요",
+      "sources": [
+        "backend/physicsai_api/auth.py"
+      ],
+      "status": 401
+    },
+    "BASELINE_BASE": {
+      "code": "BASELINE_BASE",
+      "message_ko": "첫 baseline(세트 자신)은 삭제할 수 없습니다 — 단일로 되돌리려면 disable을 쓰세요",
+      "sources": [
+        "backend/physicsai_api/services/param_set_baselines_api.py"
+      ],
+      "status": 409
+    },
+    "BASELINE_EXISTS": {
+      "code": "BASELINE_EXISTS",
+      "message_ko": "baseline id {…}이(가) 이미 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_native.py"
+      ],
+      "status": 409
+    },
+    "BASELINE_LAST": {
+      "code": "BASELINE_LAST",
+      "message_ko": "baseline이 2개뿐이라 삭제할 수 없습니다 — 단일로 되돌리려면 disable을 쓰세요",
+      "sources": [
+        "backend/physicsai_api/services/param_set_baselines_api.py"
+      ],
+      "status": 409
+    },
+    "BATCH_ACTIVE": {
+      "code": "BATCH_ACTIVE",
+      "message_ko": "입력 생성이 진행 중입니다 — 끝난 뒤 다시 실행하세요",
+      "sources": [
+        "backend/physicsai_api/services/predict_batches.py"
+      ],
+      "status": 409
+    },
+    "BATCH_NOT_DONE": {
+      "code": "BATCH_NOT_DONE",
+      "message_ko": "완료(DONE)된 배치만 성능을 다시 추출할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_resp.py"
+      ],
+      "status": 409
+    },
+    "BATCH_NOT_FOUND": {
+      "code": "BATCH_NOT_FOUND",
+      "message_ko": "일괄 예측을 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_resp.py",
+        "backend/physicsai_api/services/predict_batches_info.py",
+        "backend/physicsai_api/services/surrogate_opt_problem.py"
+      ],
+      "status": 404
+    },
+    "BATCH_NOT_REUSABLE": {
+      "code": "BATCH_NOT_REUSABLE",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/surrogate_opt_problem.py"
+      ],
+      "status": 409
+    },
+    "BATCH_OWNED_BY_OPT": {
+      "code": "BATCH_OWNED_BY_OPT",
+      "message_ko": "진행 중인 내장 최적화 {…}의 배치입니다 — 끝난 뒤 다시 추출하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_resp.py",
+        "backend/physicsai_api/services/predict_batches_info.py"
+      ],
+      "status": 409
+    },
+    "BATCH_SOURCE_INVALID": {
+      "code": "BATCH_SOURCE_INVALID",
+      "message_ko": "조합을 만들 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_batch.py"
+      ],
+      "status": 422
+    },
+    "CAPTURE_FAILED": {
+      "code": "CAPTURE_FAILED",
+      "message_ko": "컨투어 캡처 실패: {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/capture.py"
+      ],
+      "status": null
+    },
+    "CAPTURE_NOT_CONFIGURED": {
+      "code": "CAPTURE_NOT_CONFIGURED",
+      "message_ko": "컨투어 캡처 설정 필요(관리자): {…}",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_capture.py"
+      ],
+      "status": 409
+    },
+    "COLLECT_FAILED": {
+      "code": "COLLECT_FAILED",
+      "message_ko": "PBS 결과 회수 실패: {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/stage1_train_data/solve.py",
+        "worker/physicsai_worker/steps/stage4_predict/_verify_hpc.py"
+      ],
+      "status": null
+    },
+    "CONFIG_INVALID": {
+      "code": "CONFIG_INVALID",
+      "message_ko": "플랫폼 설정이 올바르지 않아 실행할 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/common.py",
+        "backend/physicsai_core/commands.py",
+        "backend/physicsai_core/commands_render.py",
+        "backend/physicsai_core/stage1_train_data/doe_types.py",
+        "worker/physicsai_worker/steps/geometry_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/extract_native.py"
+      ],
+      "status": 503
+    },
+    "CONFIRM_INVALID": {
+      "code": "CONFIRM_INVALID",
+      "message_ko": "이미 사용한 확인 토큰입니다(1회용) — plan_job을 다시 호출하세요",
+      "sources": [
+        "backend/physicsai_api/services/mcp.py"
+      ],
+      "status": 409
+    },
+    "CONFIRM_REQUIRED": {
+      "code": "CONFIRM_REQUIRED",
+      "message_ko": "비용 큰 작업은 확인이 필요합니다 — plan_job으로 계획을 보고 confirm_token을 받아 다시 보내세요",
+      "sources": [
+        "backend/physicsai_api/services/mcp.py"
+      ],
+      "status": 428
+    },
+    "CONTOUR3D_EXTRACT_INVALID": {
+      "code": "CONTOUR3D_EXTRACT_INVALID",
+      "message_ko": "{…} — {…} 없음",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/contour3d.py"
+      ],
+      "status": null
+    },
+    "CONTOUR3D_NOT_CONFIGURED": {
+      "code": "CONTOUR3D_NOT_CONFIGURED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/contour3d_api.py",
+        "worker/physicsai_worker/steps/stage4_predict/contour3d.py"
+      ],
+      "status": 409
+    },
+    "CONTOUR3D_TIMEOUT": {
+      "code": "CONTOUR3D_TIMEOUT",
+      "message_ko": "{…}(contour3d.timeout_s = {…}초)",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/contour3d.py"
+      ],
+      "status": null
+    },
+    "CSRF_HEADER_REQUIRED": {
+      "code": "CSRF_HEADER_REQUIRED",
+      "message_ko": "요청 헤더 X-PhysicsAI-Request가 필요합니다",
+      "sources": [
+        "backend/physicsai_api/deps.py"
+      ],
+      "status": 403
+    },
+    "CURATION_PREVIEW_REQUIRED": {
+      "code": "CURATION_PREVIEW_REQUIRED",
+      "message_ko": "같은 Study의 완료된 h3d 미리보기가 필요합니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage2_curation.py"
+      ],
+      "status": 409
+    },
+    "DASHBOARD_AUTH_UNAVAILABLE": {
+      "code": "DASHBOARD_AUTH_UNAVAILABLE",
+      "message_ko": "대시보드 인증 설정이 완료되지 않았습니다",
+      "sources": [
+        "backend/physicsai_api/auth.py"
+      ],
+      "status": 503
+    },
+    "DASHBOARD_UNREACHABLE": {
+      "code": "DASHBOARD_UNREACHABLE",
+      "message_ko": "대시보드 응답 오류({…})",
+      "sources": [
+        "backend/physicsai_api/auth.py"
+      ],
+      "status": 503
+    },
+    "DOE_NOT_FOUND": {
+      "code": "DOE_NOT_FOUND",
+      "message_ko": "DOE를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/doe_result_table.py"
+      ],
+      "status": 404
+    },
+    "DOE_NOT_READY": {
+      "code": "DOE_NOT_READY",
+      "message_ko": "아직 샘플 표가 준비되지 않았습니다",
+      "sources": [
+        "backend/physicsai_api/services/doe_result_table.py",
+        "backend/physicsai_api/services/job_params/stage1_train_data.py",
+        "backend/physicsai_api/services/job_params/stage2_curation.py",
+        "backend/physicsai_api/services/job_params/stage4_batch.py",
+        "backend/physicsai_api/services/stage4_predict_train.py"
+      ],
+      "status": 409
+    },
+    "DOE_OPTIONS_INVALID": {
+      "code": "DOE_OPTIONS_INVALID",
+      "message_ko": "DOE 옵션이 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage1_train_data.py"
+      ],
+      "status": 422
+    },
+    "DOE_SAMPLING_INVALID": {
+      "code": "DOE_SAMPLING_INVALID",
+      "message_ko": "표본을 만들 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage1_native.py",
+        "backend/physicsai_api/services/job_params/stage1_train_data.py"
+      ],
+      "status": 422
+    },
+    "ENGINE_MISMATCH": {
+      "code": "ENGINE_MISMATCH",
+      "message_ko": "모델의 학습 데이터 형상 엔진({…})과 파라미터 세트({…})가 다릅니다 — 같은 엔진으로 맞춰 주세요",
+      "sources": [
+        "backend/physicsai_api/services/geometry_gate.py",
+        "backend/physicsai_api/services/job_params/stage1_native.py",
+        "backend/physicsai_api/services/job_params/stage4_native.py",
+        "backend/physicsai_api/services/param_set_baselines_api.py",
+        "backend/physicsai_api/services/param_set_native_api.py",
+        "backend/physicsai_api/services/param_set_props_api.py"
+      ],
+      "status": 409
+    },
+    "ENGINE_MIXED": {
+      "code": "ENGINE_MIXED",
+      "message_ko": "Altair·Native 학습데이터를 한 데이터셋에 섞을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/dataset_engine.py"
+      ],
+      "status": 422
+    },
+    "ENGINE_NATIVE_NO_TPL": {
+      "code": "ENGINE_NATIVE_NO_TPL",
+      "message_ko": "Native 형상 엔진에는 tpl이 없습니다 — 파라미터 표만 확정하고 DOE를 만드세요",
+      "sources": [
+        "backend/physicsai_api/services/stage1_train_data.py"
+      ],
+      "status": 409
+    },
+    "ENGINE_NATIVE_UNSUPPORTED": {
+      "code": "ENGINE_NATIVE_UNSUPPORTED",
+      "message_ko": "Native 형상 엔진 세트는 원본 최적화를 지원하지 않습니다 — 내장 최적화를 쓰세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py"
+      ],
+      "status": 409
+    },
+    "ENV_CHECK_BUSY": {
+      "code": "ENV_CHECK_BUSY",
+      "message_ko": "진행 중인 환경 점검이 있습니다",
+      "sources": [
+        "backend/physicsai_core/db/repositories/env_checks.py"
+      ],
+      "status": 409
+    },
+    "EQ_CHECK_INVALID": {
+      "code": "EQ_CHECK_INVALID",
+      "message_ko": "레시피를 선택하세요(recipe 또는 recipe_inline 중 하나)",
+      "sources": [
+        "backend/physicsai_api/services/equiv_check.py"
+      ],
+      "status": 422
+    },
+    "EQ_CHECK_LIMIT": {
+      "code": "EQ_CHECK_LIMIT",
+      "message_ko": "이 Study에서 동시에 실행할 수 있는 판정은 {…}개입니다",
+      "sources": [
+        "backend/physicsai_api/services/equiv_check.py"
+      ],
+      "status": 409
+    },
+    "EQ_CHECK_NOT_FOUND": {
+      "code": "EQ_CHECK_NOT_FOUND",
+      "message_ko": "판정 이력을 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/equiv_check.py",
+        "backend/physicsai_api/services/equiv_recipes.py"
+      ],
+      "status": 404
+    },
+    "EQ_EXTRACT_TOO_LARGE": {
+      "code": "EQ_EXTRACT_TOO_LARGE",
+      "message_ko": "추출용 h3d 사본 합계 {…} B가 상한을 넘습니다 — ①-6 run 응답 추출 또는 ④ 성능 다시 추출을 먼저 실행하면 사본 없이 재사용합니다",
+      "sources": [
+        "worker/physicsai_worker/steps/analysis/equiv_check.py"
+      ],
+      "status": null
+    },
+    "EQ_RECIPE_INVALID": {
+      "code": "EQ_RECIPE_INVALID",
+      "message_ko": "레시피 정의가 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/equiv_check.py",
+        "backend/physicsai_api/services/equiv_recipes.py"
+      ],
+      "status": 422
+    },
+    "EQ_RECIPE_NAME_TAKEN": {
+      "code": "EQ_RECIPE_NAME_TAKEN",
+      "message_ko": "같은 범위에 같은 이름의 레시피가 있습니다: {…}",
+      "sources": [
+        "backend/physicsai_api/services/equiv_recipes.py"
+      ],
+      "status": 409
+    },
+    "EQ_RECIPE_NOT_FOUND": {
+      "code": "EQ_RECIPE_NOT_FOUND",
+      "message_ko": "레시피를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/equiv_recipes.py"
+      ],
+      "status": 404
+    },
+    "EQ_RECIPE_READONLY": {
+      "code": "EQ_RECIPE_READONLY",
+      "message_ko": "시스템 기본 레시피는 수정·삭제할 수 없습니다 — 복제해서 사용하세요",
+      "sources": [
+        "backend/physicsai_api/services/equiv_recipes.py"
+      ],
+      "status": 409
+    },
+    "EQ_RECIPE_VERSION_CONFLICT": {
+      "code": "EQ_RECIPE_VERSION_CONFLICT",
+      "message_ko": "레시피가 다른 곳에서 바뀌었습니다(현재 v{…}, 요청 v{…})",
+      "sources": [
+        "backend/physicsai_api/services/equiv_recipes.py"
+      ],
+      "status": 409
+    },
+    "ERROR_BUNDLE_NOT_AVAILABLE": {
+      "code": "ERROR_BUNDLE_NOT_AVAILABLE",
+      "message_ko": "실패·취소·중단되었거나 주의가 필요한 작업만 받을 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/error_bundle.py"
+      ],
+      "status": 409
+    },
+    "EXECUTABLE_MISSING": {
+      "code": "EXECUTABLE_MISSING",
+      "message_ko": "실행 파일 설정 capture.ffmpeg.{…}이 비어 있습니다",
+      "sources": [
+        "backend/physicsai_core/commands.py",
+        "backend/physicsai_core/commands_render.py",
+        "worker/physicsai_worker/step_process.py"
+      ],
+      "status": null
+    },
+    "EXIT_NONZERO": {
+      "code": "EXIT_NONZERO",
+      "message_ko": "종료코드 {…}: {…}",
+      "sources": [
+        "worker/physicsai_worker/step_process.py",
+        "worker/physicsai_worker/steps/response_tcl.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py"
+      ],
+      "status": null
+    },
+    "EXTRACT_FILTER_INVALID": {
+      "code": "EXTRACT_FILTER_INVALID",
+      "message_ko": "추출 조건이 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage1_native.py",
+        "backend/physicsai_api/services/param_set_native_api.py"
+      ],
+      "status": 422
+    },
+    "EXTRACT_FILTER_UNSUPPORTED": {
+      "code": "EXTRACT_FILTER_UNSUPPORTED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage1_native.py"
+      ],
+      "status": 422
+    },
+    "FEATURE_NOT_AVAILABLE": {
+      "code": "FEATURE_NOT_AVAILABLE",
+      "message_ko": "등가성 판정 기능이 꺼져 있습니다(equiv_check.enabled)",
+      "sources": [
+        "backend/physicsai_api/services/equiv_check.py",
+        "backend/physicsai_api/services/fem_verify_plan.py",
+        "backend/physicsai_api/services/job_params/stage4_resp.py",
+        "backend/physicsai_api/services/surrogate_opt_problem.py"
+      ],
+      "status": 409
+    },
+    "FEM_VERIFY_ACTIVE": {
+      "code": "FEM_VERIFY_ACTIVE",
+      "message_ko": "같은 예측·같은 조립 원본의 검증이 진행 중입니다",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify_plan.py"
+      ],
+      "status": 409
+    },
+    "FEM_VERIFY_INVALID": {
+      "code": "FEM_VERIFY_INVALID",
+      "message_ko": "FEM 검증을 만들 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify.py"
+      ],
+      "status": 422
+    },
+    "FEM_VERIFY_LIMIT": {
+      "code": "FEM_VERIFY_LIMIT",
+      "message_ko": "진행 중인 FEM 검증이 {…}건입니다(상한 {…})",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify_plan.py"
+      ],
+      "status": 409
+    },
+    "FEM_VERIFY_NOT_FOUND": {
+      "code": "FEM_VERIFY_NOT_FOUND",
+      "message_ko": "FEM 검증을 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify.py",
+        "backend/physicsai_api/services/fem_verify_view.py"
+      ],
+      "status": 404
+    },
+    "FEM_VERIFY_NOT_RERUNNABLE": {
+      "code": "FEM_VERIFY_NOT_RERUNNABLE",
+      "message_ko": "실패·취소된 FEM 검증만 다시 실행할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify.py"
+      ],
+      "status": 409
+    },
+    "FINAL_MODEL_REQUIRED": {
+      "code": "FINAL_MODEL_REQUIRED",
+      "message_ko": "Final 모델을 먼저 지정하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_predict.py",
+        "backend/physicsai_api/services/job_params/stage5_optimize.py"
+      ],
+      "status": 409
+    },
+    "FOLDER_EXISTS": {
+      "code": "FOLDER_EXISTS",
+      "message_ko": "AI 루트에 같은 이름의 폴더가 이미 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/studies.py"
+      ],
+      "status": 409
+    },
+    "FORBIDDEN": {
+      "code": "FORBIDDEN",
+      "message_ko": "시연 로그인은 이 PC(127.0.0.1)에서만 할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/demo.py"
+      ],
+      "status": 403
+    },
+    "GEN_PARTIAL_FAILED": {
+      "code": "GEN_PARTIAL_FAILED",
+      "message_ko": "run {…}개 중 {…}개 입력 생성 실패(첫 실패 {…}: {…}) — 사유는 run 폴더의 {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py"
+      ],
+      "status": null
+    },
+    "GEOM_EXTRACT_EMPTY": {
+      "code": "GEOM_EXTRACT_EMPTY",
+      "message_ko": null,
+      "sources": [
+        "worker/physicsai_worker/steps/geometry_native.py"
+      ],
+      "status": null
+    },
+    "GEOM_NATIVE_UNAVAILABLE": {
+      "code": "GEOM_NATIVE_UNAVAILABLE",
+      "message_ko": "Native 형상 엔진을 쓸 수 없습니다 — 관리자 설정이 필요합니다",
+      "sources": [
+        "backend/physicsai_api/services/geometry_gate.py",
+        "backend/physicsai_api/services/job_params/stage4_native.py"
+      ],
+      "status": 409
+    },
+    "GEOM_OPTIONS_INVALID": {
+      "code": "GEOM_OPTIONS_INVALID",
+      "message_ko": "형상 옵션 값이 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/geometry_gate.py"
+      ],
+      "status": 422
+    },
+    "GEOM_PREP_STALE": {
+      "code": "GEOM_PREP_STALE",
+      "message_ko": "baseline {…}: {…}",
+      "sources": [
+        "backend/physicsai_api/services/geom_view_api.py",
+        "backend/physicsai_api/services/geometry_gate.py"
+      ],
+      "status": 409
+    },
+    "GEOM_TIMEOUT": {
+      "code": "GEOM_TIMEOUT",
+      "message_ko": "실행 시간 제한({…}초)을 넘어 중단했습니다",
+      "sources": [
+        "worker/physicsai_worker/step_parallel_runner.py",
+        "worker/physicsai_worker/steps/geometry_native.py"
+      ],
+      "status": null
+    },
+    "HPC_NOT_CONFIGURED": {
+      "code": "HPC_NOT_CONFIGURED",
+      "message_ko": "해석 연결 안 됨(관리자 설정 필요)",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify_plan.py",
+        "backend/physicsai_api/services/job_params/stage1_train_data.py",
+        "backend/physicsai_api/services/job_params/stage4_predict.py"
+      ],
+      "status": 409
+    },
+    "HPC_NOT_UNKNOWN": {
+      "code": "HPC_NOT_UNKNOWN",
+      "message_ko": "SCX 제출 결과 모름 상태인 행이 아닙니다",
+      "sources": [
+        "backend/physicsai_api/services/hpc_resolve.py"
+      ],
+      "status": 409
+    },
+    "HPC_RESOLVE_NOT_ALLOWED": {
+      "code": "HPC_RESOLVE_NOT_ALLOWED",
+      "message_ko": "대기 중(WAITING_HPC)이 아닌 작업은 '제출 안 됨' 조치만 할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/hpc_resolve.py"
+      ],
+      "status": 409
+    },
+    "HPC_RESOLVE_PENDING": {
+      "code": "HPC_RESOLVE_PENDING",
+      "message_ko": "이미 요청한 조치를 워커가 처리하는 중입니다",
+      "sources": [
+        "backend/physicsai_api/services/hpc_resolve.py"
+      ],
+      "status": 409
+    },
+    "HPC_SUBMIT_FAILED": {
+      "code": "HPC_SUBMIT_FAILED",
+      "message_ko": "대시보드 어댑터에 잡 API 없음(v0.3.0 이상 필요)",
+      "sources": [
+        "worker/physicsai_worker/steps/_scx.py",
+        "worker/physicsai_worker/steps/_scx_submit.py",
+        "worker/physicsai_worker/steps/stage1_train_data/solve.py",
+        "worker/physicsai_worker/steps/stage4_predict/_verify_hpc.py"
+      ],
+      "status": null
+    },
+    "INPUT_CHANGED": {
+      "code": "INPUT_CHANGED",
+      "message_ko": "스캔 후 SPDM 파일이 바뀌었습니다({…}): {…}",
+      "sources": [
+        "backend/physicsai_core/stage2_curation/spdm.py",
+        "worker/physicsai_worker/steps/analysis/equiv_check.py",
+        "worker/physicsai_worker/steps/common.py",
+        "worker/physicsai_worker/steps/geometry_native.py",
+        "worker/physicsai_worker/steps/geometry_props.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
+        "worker/physicsai_worker/steps/stage4_predict/batch.py",
+        "worker/physicsai_worker/steps/stage4_predict/batch_native.py",
+        "worker/physicsai_worker/steps/stage4_predict/fem_verify.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_native.py",
+        "worker/physicsai_worker/steps/stage5_optimize/optimize.py",
+        "worker/physicsai_worker/steps/stage5_optimize/surrogate_common.py"
+      ],
+      "status": null
+    },
+    "INPUT_INVALID": {
+      "code": "INPUT_INVALID",
+      "message_ko": "source_ref는 fem_verification_id 또는 {study_id, h3d_rel}(.h3d)이어야 합니다",
+      "sources": [
+        "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/geom_view_api.py",
+        "backend/physicsai_api/services/param_set_props_api.py",
+        "backend/physicsai_core/commands_render.py",
+        "backend/physicsai_core/stage1_train_data/train_params.py",
+        "backend/physicsai_core/stage2_curation/curation.py",
+        "backend/physicsai_core/tpl_render.py",
+        "worker/physicsai_worker/steps/_scx.py",
+        "worker/physicsai_worker/steps/analysis/equiv_check.py",
+        "worker/physicsai_worker/steps/common.py",
+        "worker/physicsai_worker/steps/geometry_native.py",
+        "worker/physicsai_worker/steps/geometry_props.py",
+        "worker/physicsai_worker/steps/geometry_shell.py",
+        "worker/physicsai_worker/steps/stage0_manage/cleanup.py",
+        "worker/physicsai_worker/steps/stage0_manage/storage_scan.py",
+        "worker/physicsai_worker/steps/stage1_train_data/_shared.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native_set.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
+        "worker/physicsai_worker/steps/stage1_train_data/extract.py",
+        "worker/physicsai_worker/steps/stage1_train_data/extract_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/resp_extract.py",
+        "worker/physicsai_worker/steps/stage1_train_data/result_import.py",
+        "worker/physicsai_worker/steps/stage1_train_data/solve.py",
+        "worker/physicsai_worker/steps/stage2_curation/h3d_curate.py",
+        "worker/physicsai_worker/steps/stage2_curation/preview.py",
+        "worker/physicsai_worker/steps/stage2_curation/source.py",
+        "worker/physicsai_worker/steps/stage2_curation/spdm_import.py",
+        "worker/physicsai_worker/steps/stage2_curation/t01_curves.py",
+        "worker/physicsai_worker/steps/stage3_model/dataset.py",
+        "worker/physicsai_worker/steps/stage3_model/evaluate.py",
+        "worker/physicsai_worker/steps/stage3_model/model_register.py",
+        "worker/physicsai_worker/steps/stage3_model/package.py",
+        "worker/physicsai_worker/steps/stage4_predict/baseline_map.py",
+        "worker/physicsai_worker/steps/stage4_predict/batch.py",
+        "worker/physicsai_worker/steps/stage4_predict/batch_resp.py",
+        "worker/physicsai_worker/steps/stage4_predict/capture.py",
+        "worker/physicsai_worker/steps/stage4_predict/capture_run.py",
+        "worker/physicsai_worker/steps/stage4_predict/child_input.py",
+        "worker/physicsai_worker/steps/stage4_predict/fem_verify.py",
+        "worker/physicsai_worker/steps/stage4_predict/geom_preview.py",
+        "worker/physicsai_worker/steps/stage4_predict/np_register.py",
+        "worker/physicsai_worker/steps/stage4_predict/np_shell.py",
+        "worker/physicsai_worker/steps/stage4_predict/param_set_native.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_prep.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_response.py",
+        "worker/physicsai_worker/steps/stage4_predict/verify.py",
+        "worker/physicsai_worker/steps/stage5_optimize/optimize.py",
+        "worker/physicsai_worker/steps/stage5_optimize/surrogate.py",
+        "worker/physicsai_worker/steps/stage5_optimize/surrogate_common.py"
+      ],
+      "status": 422
+    },
+    "INPUT_MISSING": {
+      "code": "INPUT_MISSING",
+      "message_ko": "원래 예측 작업에 결과 h3d가 없습니다",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/capture.py",
+        "worker/physicsai_worker/steps/stage4_predict/capture_run.py",
+        "worker/physicsai_worker/steps/stage4_predict/contour3d.py",
+        "worker/physicsai_worker/steps/stage4_predict/fem_verify.py"
+      ],
+      "status": null
+    },
+    "INPUT_NOT_READY": {
+      "code": "INPUT_NOT_READY",
+      "message_ko": "입력 파일 폴더가 없습니다. {…}",
+      "sources": [
+        "backend/physicsai_api/services/job_files.py"
+      ],
+      "status": 409
+    },
+    "INTERNAL_ERROR": {
+      "code": "INTERNAL_ERROR",
+      "message_ko": "placeholder '{{…}}' 값이 준비되지 않았습니다",
+      "sources": [
+        "backend/physicsai_core/commands.py",
+        "backend/physicsai_core/commands_render.py",
+        "backend/physicsai_core/paths.py",
+        "worker/physicsai_worker/executor.py",
+        "worker/physicsai_worker/step_process.py",
+        "worker/physicsai_worker/steps/geometry_sample.py",
+        "worker/physicsai_worker/steps/stage2_curation/source.py",
+        "worker/physicsai_worker/steps/stage3_model/dataset.py",
+        "worker/physicsai_worker/steps/stage4_predict/geom_preview.py"
+      ],
+      "status": null
+    },
+    "INVALID_PARAMS": {
+      "code": "INVALID_PARAMS",
+      "message_ko": "role은 admin | power | general 중 하나입니다",
+      "sources": [
+        "backend/physicsai_api/demo.py",
+        "backend/physicsai_api/services/api_tokens.py",
+        "backend/physicsai_api/services/common.py",
+        "backend/physicsai_api/services/equiv_check.py",
+        "backend/physicsai_api/services/fem_verify_view.py",
+        "backend/physicsai_api/services/job_params/base.py",
+        "backend/physicsai_api/services/mcp.py",
+        "backend/physicsai_api/services/param_set_native_api.py",
+        "backend/physicsai_api/services/predict_runs.py",
+        "backend/physicsai_api/services/stage4_predict.py",
+        "backend/physicsai_api/services/system.py",
+        "backend/physicsai_core/fs_browse.py"
+      ],
+      "status": 422
+    },
+    "JOB_KIND_DENIED": {
+      "code": "JOB_KIND_DENIED",
+      "message_ko": "이 작업 종류는 API로 만들 수 없습니다({…}) — 웹 화면에서 실행하세요",
+      "sources": [
+        "backend/physicsai_api/services/mcp.py"
+      ],
+      "status": 403
+    },
+    "JOB_KIND_UNKNOWN": {
+      "code": "JOB_KIND_UNKNOWN",
+      "message_ko": "알 수 없는 작업 종류: {…}",
+      "sources": [
+        "backend/physicsai_api/services/mcp.py"
+      ],
+      "status": 422
+    },
+    "JOB_NOT_FOUND": {
+      "code": "JOB_NOT_FOUND",
+      "message_ko": "작업을 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/predict_runs.py"
+      ],
+      "status": 404
+    },
+    "JOB_NOT_QUEUED": {
+      "code": "JOB_NOT_QUEUED",
+      "message_ko": "대기 중인 SLOT 작업만 순서를 바꿀 수 있습니다",
+      "sources": [
+        "backend/physicsai_core/db/repositories/jobs.py"
+      ],
+      "status": 409
+    },
+    "JOB_NOT_RETRYABLE": {
+      "code": "JOB_NOT_RETRYABLE",
+      "message_ko": "이 작업은 재시도 대신 새로 실행하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/study_manage.py",
+        "backend/physicsai_api/services/jobs.py",
+        "backend/physicsai_api/services/predict_batches.py"
+      ],
+      "status": 409
+    },
+    "JOB_TERMINAL": {
+      "code": "JOB_TERMINAL",
+      "message_ko": "이미 끝난 3D 컨투어 생성입니다",
+      "sources": [
+        "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_core/db/repositories/jobs.py"
+      ],
+      "status": 409
+    },
+    "LABEL_INVALID": {
+      "code": "LABEL_INVALID",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/stage4_predict_common.py"
+      ],
+      "status": 422
+    },
+    "LOG_ERROR_DETECTED": {
+      "code": "LOG_ERROR_DETECTED",
+      "message_ko": "로그에서 오류를 감지했습니다: {…}",
+      "sources": [
+        "worker/physicsai_worker/step_process.py"
+      ],
+      "status": null
+    },
+    "LOG_NOT_FOUND": {
+      "code": "LOG_NOT_FOUND",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/jobs.py"
+      ],
+      "status": 404
+    },
+    "MCP_DISABLED": {
+      "code": "MCP_DISABLED",
+      "message_ko": "MCP 기능이 꺼져 있습니다(mcp.enabled: false)",
+      "sources": [
+        "backend/physicsai_api/services/api_tokens.py"
+      ],
+      "status": 404
+    },
+    "MODEL_IN_USE": {
+      "code": "MODEL_IN_USE",
+      "message_ko": "진행 중인 작업이 이 모델을 사용하고 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/stage3_model.py"
+      ],
+      "status": 409
+    },
+    "MODEL_IS_FINAL": {
+      "code": "MODEL_IS_FINAL",
+      "message_ko": "Final 모델은 보관할 수 없습니다. Final을 먼저 해제하세요",
+      "sources": [
+        "backend/physicsai_api/services/stage3_model.py"
+      ],
+      "status": 409
+    },
+    "MODEL_NOT_ACTIVE": {
+      "code": "MODEL_NOT_ACTIVE",
+      "message_ko": "ACTIVE 모델만 Final로 지정할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/stage3_model.py"
+      ],
+      "status": 409
+    },
+    "NATIVE_PREP_MISSING": {
+      "code": "NATIVE_PREP_MISSING",
+      "message_ko": "형상 피처 파일이 없습니다 — 형상 준비를 다시 하세요",
+      "sources": [
+        "backend/physicsai_api/services/param_set_native_api.py",
+        "backend/physicsai_api/services/param_set_native_train.py",
+        "worker/physicsai_worker/steps/stage4_predict/baseline_map.py"
+      ],
+      "status": 409
+    },
+    "NOT_FOUND": {
+      "code": "NOT_FOUND",
+      "message_ko": "찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/frontend_static.py",
+        "backend/physicsai_api/mcp/job_kinds.py",
+        "backend/physicsai_api/services/api_tokens.py",
+        "backend/physicsai_api/services/common.py",
+        "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/contour_capture.py",
+        "backend/physicsai_api/services/env_checks.py",
+        "backend/physicsai_api/services/error_bundle.py",
+        "backend/physicsai_api/services/geom_view_api.py",
+        "backend/physicsai_api/services/hpc_resolve.py",
+        "backend/physicsai_api/services/job_files.py",
+        "backend/physicsai_api/services/job_params/stage4_native.py",
+        "backend/physicsai_api/services/jobs.py",
+        "backend/physicsai_api/services/mcp.py",
+        "backend/physicsai_api/services/param_set_baselines_api.py",
+        "backend/physicsai_api/services/param_set_native_api.py",
+        "backend/physicsai_api/services/param_set_props_api.py",
+        "backend/physicsai_api/services/param_set_responses.py",
+        "backend/physicsai_api/services/stage1_train_data.py",
+        "backend/physicsai_api/services/stage2_curation.py",
+        "backend/physicsai_api/services/stage3_model.py",
+        "backend/physicsai_api/services/stage4_predict.py",
+        "backend/physicsai_api/services/stage5_optimize.py",
+        "backend/physicsai_core/db/repositories/jobs.py",
+        "backend/physicsai_core/db/repositories/models.py",
+        "backend/physicsai_core/db/repositories/studies.py",
+        "backend/physicsai_core/paths.py"
+      ],
+      "status": 404
+    },
+    "NOT_MULTI_BASELINE": {
+      "code": "NOT_MULTI_BASELINE",
+      "message_ko": "다중 baseline 세트가 아닙니다 — baseline을 먼저 추가하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_native.py",
+        "backend/physicsai_api/services/param_set_baselines_api.py"
+      ],
+      "status": 409
+    },
+    "NOT_PREDICT_RUN": {
+      "code": "NOT_PREDICT_RUN",
+      "message_ko": "단일 예측 작업이 아닙니다",
+      "sources": [
+        "backend/physicsai_api/services/predict_runs.py"
+      ],
+      "status": 404
+    },
+    "NO_H3D_PERFORMANCE": {
+      "code": "NO_H3D_PERFORMANCE",
+      "message_ko": "템플릿에 H3D 성능이 없습니다 — 커브 성능은 다시 추출하지 않아도 됩니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_resp.py"
+      ],
+      "status": 422
+    },
+    "NO_SAMPLE": {
+      "code": "NO_SAMPLE",
+      "message_ko": "워커 자원 표본이 아직 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/system.py"
+      ],
+      "status": 404
+    },
+    "OBJECTIVE_REQUIRED": {
+      "code": "OBJECTIVE_REQUIRED",
+      "message_ko": "최적화에는 목적함수(MINIMIZE / MAXIMIZE)가 1개 이상 필요합니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py"
+      ],
+      "status": 422
+    },
+    "OPT_CRITERIA_REQUIRED": {
+      "code": "OPT_CRITERIA_REQUIRED",
+      "message_ko": "최적화 기준이 비어 있습니다 — 제약의 조건(≤·≥·=)과 임계값을 직접 입력하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py"
+      ],
+      "status": 422
+    },
+    "OUTPUT_LOCKED": {
+      "code": "OUTPUT_LOCKED",
+      "message_ko": "기존 산출물을 백업 폴더로 옮기지 못했습니다: {…} ({…})",
+      "sources": [
+        "backend/physicsai_core/paths.py",
+        "worker/physicsai_worker/steps/stage0_manage/cleanup.py"
+      ],
+      "status": null
+    },
+    "OUTPUT_MISSING": {
+      "code": "OUTPUT_MISSING",
+      "message_ko": "쉘 두께 적용 사본이 없습니다: {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/geometry_props.py",
+        "worker/physicsai_worker/steps/geometry_shell.py",
+        "worker/physicsai_worker/steps/response_tcl.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
+        "worker/physicsai_worker/steps/stage1_train_data/extract.py",
+        "worker/physicsai_worker/steps/stage2_curation/preview.py",
+        "worker/physicsai_worker/steps/stage2_curation/source.py",
+        "worker/physicsai_worker/steps/stage2_curation/t01_curves.py",
+        "worker/physicsai_worker/steps/stage3_model/dataset.py",
+        "worker/physicsai_worker/steps/stage3_model/evaluate.py",
+        "worker/physicsai_worker/steps/stage4_predict/fem_compare_extract.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_response.py",
+        "worker/physicsai_worker/steps/stage4_predict/verify.py"
+      ],
+      "status": null
+    },
+    "OUTPUT_TOO_SMALL": {
+      "code": "OUTPUT_TOO_SMALL",
+      "message_ko": "{…}/dataset.psdata 크기가 {…} bytes로 너무 작습니다",
+      "sources": [
+        "worker/physicsai_worker/steps/stage3_model/dataset.py"
+      ],
+      "status": null
+    },
+    "PARAM_FEATURE_MISMATCH": {
+      "code": "PARAM_FEATURE_MISMATCH",
+      "message_ko": "다시 준비한 형상 피처의 이름 집합이 기존 파라미터 표와 다릅니다(세트는 바뀌지 않았습니다)",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/np_register.py"
+      ],
+      "status": null
+    },
+    "PARAM_MAP_UNCONFIRMED": {
+      "code": "PARAM_MAP_UNCONFIRMED",
+      "message_ko": "다중 baseline 매칭표가 확정되지 않았습니다(미결정 행 {…}개) — 매칭표를 확인해 확정하세요",
+      "sources": [
+        "backend/physicsai_api/services/geometry_gate.py",
+        "backend/physicsai_api/services/surrogate_opt_pareto.py",
+        "backend/physicsai_api/services/surrogate_opt_space.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native_set.py"
+      ],
+      "status": 409
+    },
+    "PARAM_SET_BUSY": {
+      "code": "PARAM_SET_BUSY",
+      "message_ko": "형상 준비 작업이 진행 중입니다 — 끝난 뒤 다시 시도하세요",
+      "sources": [
+        "backend/physicsai_api/services/param_set_baselines_api.py"
+      ],
+      "status": 409
+    },
+    "PARAM_SET_FILES_MISSING": {
+      "code": "PARAM_SET_FILES_MISSING",
+      "message_ko": "파라미터 세트 폴더(04_params)가 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/param_set_responses.py"
+      ],
+      "status": 409
+    },
+    "PARAM_SET_INVALID": {
+      "code": "PARAM_SET_INVALID",
+      "message_ko": "프로젝트 폴더에서 파라미터 세트를 구성할 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/param_set_native_api.py",
+        "backend/physicsai_api/services/param_set_native_train.py",
+        "backend/physicsai_api/services/stage4_predict.py",
+        "backend/physicsai_api/services/stage4_predict_train.py"
+      ],
+      "status": 422
+    },
+    "PARAM_SET_NOT_FOUND": {
+      "code": "PARAM_SET_NOT_FOUND",
+      "message_ko": "템플릿(파라미터 세트)을 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/surrogate_opt_pareto.py"
+      ],
+      "status": 409
+    },
+    "PATH_OUTSIDE_ROOT": {
+      "code": "PATH_OUTSIDE_ROOT",
+      "message_ko": "Study 폴더 밖 경로입니다",
+      "sources": [
+        "backend/physicsai_core/paths.py"
+      ],
+      "status": 422
+    },
+    "PATH_UNREADABLE": {
+      "code": "PATH_UNREADABLE",
+      "message_ko": "폴더를 읽을 권한이 없습니다",
+      "sources": [
+        "backend/physicsai_core/fs_browse.py"
+      ],
+      "status": 422
+    },
+    "PATH_UNSAFE": {
+      "code": "PATH_UNSAFE",
+      "message_ko": "링크 폴더에는 쓸 수 없습니다: {…}",
+      "sources": [
+        "backend/physicsai_core/fileutil.py",
+        "backend/physicsai_core/paths.py",
+        "worker/physicsai_worker/steps/stage4_predict/contour3d.py",
+        "worker/physicsai_worker/steps/stage4_predict/geom_preview.py"
+      ],
+      "status": null
+    },
+    "PERF_IN_USE_BY_OPT": {
+      "code": "PERF_IN_USE_BY_OPT",
+      "message_ko": "내장 최적화 {…}이 이 성능을 쓰고 있어 정의를 바꿀 수 없습니다 — 끝난 뒤 바꾸세요",
+      "sources": [
+        "backend/physicsai_api/services/param_set_responses.py"
+      ],
+      "status": 409
+    },
+    "PERMISSION_DENIED": {
+      "code": "PERMISSION_DENIED",
+      "message_ko": "실행 권한(power 이상)이 필요합니다",
+      "sources": [
+        "backend/physicsai_api/services/common.py",
+        "backend/physicsai_api/services/equiv_check.py",
+        "backend/physicsai_api/services/equiv_recipes.py",
+        "backend/physicsai_api/services/error_bundle.py",
+        "backend/physicsai_api/services/fem_verify.py",
+        "backend/physicsai_api/services/fs_browse.py",
+        "backend/physicsai_api/services/mcp.py",
+        "backend/physicsai_api/services/predict_batches.py",
+        "backend/physicsai_api/services/surrogate_opt_pareto.py",
+        "backend/physicsai_api/services/surrogate_opts.py"
+      ],
+      "status": 403
+    },
+    "PREDICT_INPUT_INVALID": {
+      "code": "PREDICT_INPUT_INVALID",
+      "message_ko": "준비된 입력을 쓸 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_predict.py"
+      ],
+      "status": 422
+    },
+    "PREREQUISITE_MISSING": {
+      "code": "PREREQUISITE_MISSING",
+      "message_ko": "결과 h3d를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/job_params/base.py",
+        "backend/physicsai_api/services/job_params/stage1_native.py",
+        "backend/physicsai_api/services/job_params/stage1_train_data.py",
+        "worker/physicsai_worker/steps/stage0_manage/cleanup.py"
+      ],
+      "status": 409
+    },
+    "PREVIEW_BUSY": {
+      "code": "PREVIEW_BUSY",
+      "message_ko": "3D 컨투어 생성이 많이 대기 중입니다 — 잠시 후 다시 시도하세요",
+      "sources": [
+        "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/geom_view_api.py"
+      ],
+      "status": 429
+    },
+    "PROJECT_NOT_FOUND": {
+      "code": "PROJECT_NOT_FOUND",
+      "message_ko": "대시보드 프로젝트를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/studies.py"
+      ],
+      "status": 404
+    },
+    "PROPS_NOT_SCANNED": {
+      "code": "PROPS_NOT_SCANNED",
+      "message_ko": "쉘 두께 PROP 스캔을 먼저 하세요",
+      "sources": [
+        "backend/physicsai_api/services/param_set_props_api.py"
+      ],
+      "status": 409
+    },
+    "PROP_NOT_FOUND": {
+      "code": "PROP_NOT_FOUND",
+      "message_ko": "조립 폴더에서 선택할 수 있는 쉘 PROP(/PROP/TYPE1)을 찾지 못했습니다",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/np_register.py"
+      ],
+      "status": null
+    },
+    "PROP_SELECTION_INVALID": {
+      "code": "PROP_SELECTION_INVALID",
+      "message_ko": "파라미터가 1개 이상 필요합니다",
+      "sources": [
+        "backend/physicsai_api/services/param_set_props_api.py"
+      ],
+      "status": 422
+    },
+    "PSCFG_REQUIRED": {
+      "code": "PSCFG_REQUIRED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/job_params/base.py"
+      ],
+      "status": 409
+    },
+    "RATE_LIMITED": {
+      "code": "RATE_LIMITED",
+      "message_ko": "토큰의 분당 {…} 상한({…})을 넘었습니다 — {…}초 뒤 다시 시도하세요",
+      "sources": [
+        "backend/physicsai_api/mcp/ratelimit.py"
+      ],
+      "status": 429
+    },
+    "RECAPTURE_ACTIVE": {
+      "code": "RECAPTURE_ACTIVE",
+      "message_ko": "이 예측의 컨투어 재캡처가 이미 진행 중입니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_capture.py"
+      ],
+      "status": 409
+    },
+    "RESOURCE_LIMIT": {
+      "code": "RESOURCE_LIMIT",
+      "message_ko": "작업 메모리 한도({…} GB)에 도달해 종료되었습니다",
+      "sources": [
+        "worker/physicsai_worker/step_parallel_runner.py",
+        "worker/physicsai_worker/step_process.py"
+      ],
+      "status": null
+    },
+    "RESOURCE_MISSING": {
+      "code": "RESOURCE_MISSING",
+      "message_ko": "resources.extract_minmax_tcl 파일이 없습니다: {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/launcher.py",
+        "worker/physicsai_worker/steps/response_tcl.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
+        "worker/physicsai_worker/steps/stage4_predict/capture_run.py",
+        "worker/physicsai_worker/steps/stage4_predict/contour3d.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py",
+        "worker/physicsai_worker/steps/stage5_optimize/optimize.py"
+      ],
+      "status": null
+    },
+    "RESOURCE_NOT_CONFIGURED": {
+      "code": "RESOURCE_NOT_CONFIGURED",
+      "message_ko": "관리자 설정 필요: {…}",
+      "sources": [
+        "backend/physicsai_api/services/job_params/base.py",
+        "backend/physicsai_api/services/stage1_train_data.py",
+        "backend/physicsai_core/stage1_train_data/doe_types.py"
+      ],
+      "status": 409
+    },
+    "RESPONSES_INVALID": {
+      "code": "RESPONSES_INVALID",
+      "message_ko": "응답 정의가 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py"
+      ],
+      "status": 422
+    },
+    "SAMPLES_MISSING": {
+      "code": "SAMPLES_MISSING",
+      "message_ko": "DOE 샘플 표가 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/doe_result_table.py",
+        "backend/physicsai_api/services/job_params/stage4_batch.py",
+        "backend/physicsai_api/services/stage1_train_data.py",
+        "backend/physicsai_api/services/stage4_predict_train.py"
+      ],
+      "status": 404
+    },
+    "SCX_PATH_NOT_ALLOWED": {
+      "code": "SCX_PATH_NOT_ALLOWED",
+      "message_ko": "SCX 잡 폴더를 쓸 수 없습니다({…}): {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/_scx.py"
+      ],
+      "status": null
+    },
+    "SCX_REMOTE_DIR_EXISTS": {
+      "code": "SCX_REMOTE_DIR_EXISTS",
+      "message_ko": "{…}: {…}",
+      "sources": [
+        "worker/physicsai_worker/steps/_scx.py"
+      ],
+      "status": null
+    },
+    "SCX_STAGE_IN_FAILED": {
+      "code": "SCX_STAGE_IN_FAILED",
+      "message_ko": "SCX 업로드가 {…}초 안에 끝나지 않았습니다",
+      "sources": [
+        "worker/physicsai_worker/steps/_scx.py"
+      ],
+      "status": null
+    },
+    "SELECTION_INVALID": {
+      "code": "SELECTION_INVALID",
+      "message_ko": "선택 항목이 미리보기와 맞지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage2_curation.py"
+      ],
+      "status": 422
+    },
+    "SESSION_REQUIRED": {
+      "code": "SESSION_REQUIRED",
+      "message_ko": "이 기능은 웹 화면(로그인 세션)에서만 쓸 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/auth_tokens.py"
+      ],
+      "status": 403
+    },
+    "SHELL_ONLY_SET": {
+      "code": "SHELL_ONLY_SET",
+      "message_ko": "쉘 두께 전용 세트에는 baseline을 추가할 수 없습니다(형상 피처 없음)",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_native.py"
+      ],
+      "status": 409
+    },
+    "SHELL_PART_NOT_FOUND": {
+      "code": "SHELL_PART_NOT_FOUND",
+      "message_ko": "지정한 쉘 PART를 찾지 못함 — 기본 대상 component({…})의 비드 피처가 없습니다",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/np_register.py",
+        "worker/physicsai_worker/steps/stage4_predict/np_shell.py"
+      ],
+      "status": null
+    },
+    "SOURCE_CHANGED": {
+      "code": "SOURCE_CHANGED",
+      "message_ko": "복사하는 동안 원본이 바뀌었습니다(링크 교체 등) — 다시 시도하세요: {…}",
+      "sources": [
+        "backend/physicsai_core/stage4_predict/param_discover.py"
+      ],
+      "status": 409
+    },
+    "SPDM_IMPORT_DISABLED": {
+      "code": "SPDM_IMPORT_DISABLED",
+      "message_ko": "SPDM 가져오기가 설정되지 않았습니다(storage.spdm_roots)",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage2_curation.py",
+        "backend/physicsai_api/services/path_inspect.py"
+      ],
+      "status": 409
+    },
+    "STORAGE_SCAN_PARTIAL": {
+      "code": "STORAGE_SCAN_PARTIAL",
+      "message_ko": "{…} (부분 스캔)",
+      "sources": [
+        "backend/physicsai_api/services/job_params/study_manage.py"
+      ],
+      "status": 409
+    },
+    "STORAGE_SCAN_STALE": {
+      "code": "STORAGE_SCAN_STALE",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/job_params/study_manage.py"
+      ],
+      "status": 409
+    },
+    "STUDY_ARCHIVED": {
+      "code": "STUDY_ARCHIVED",
+      "message_ko": "보관된 Study입니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/study_manage.py",
+        "backend/physicsai_api/services/param_set_baselines_api.py",
+        "backend/physicsai_api/services/stage4_predict.py",
+        "backend/physicsai_api/services/stage4_predict_common.py",
+        "backend/physicsai_api/services/stage4_predict_train.py"
+      ],
+      "status": 409
+    },
+    "STUDY_CLEANUP_RUNNING": {
+      "code": "STUDY_CLEANUP_RUNNING",
+      "message_ko": "Study 정리가 진행 중입니다. 정리가 끝난 뒤 다시 실행하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/study_manage.py"
+      ],
+      "status": 409
+    },
+    "STUDY_FOLDER_MISSING": {
+      "code": "STUDY_FOLDER_MISSING",
+      "message_ko": "AI 루트에서 Study 폴더를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/studies.py"
+      ],
+      "status": 409
+    },
+    "STUDY_HAS_ACTIVE_JOB": {
+      "code": "STUDY_HAS_ACTIVE_JOB",
+      "message_ko": "대기 중이거나 실행 중인 작업이 있어 정리할 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/study_manage.py",
+        "backend/physicsai_api/services/studies.py"
+      ],
+      "status": 409
+    },
+    "STUDY_JOB_BUSY": {
+      "code": "STUDY_JOB_BUSY",
+      "message_ko": "이 Study에서 같은 종류의 작업이 이미 대기 중이거나 실행 중입니다",
+      "sources": [
+        "backend/physicsai_core/db/repositories/jobs.py"
+      ],
+      "status": 409
+    },
+    "STUDY_NAME_EXISTS": {
+      "code": "STUDY_NAME_EXISTS",
+      "message_ko": "같은 폴더 이름의 Study가 이미 있습니다",
+      "sources": [
+        "backend/physicsai_core/db/repositories/studies.py"
+      ],
+      "status": 409
+    },
+    "SUMMARY_ENTITY_UNKNOWN": {
+      "code": "SUMMARY_ENTITY_UNKNOWN",
+      "message_ko": "알 수 없는 요약 엔티티: {…}",
+      "sources": [
+        "backend/physicsai_api/mcp/summaries.py"
+      ],
+      "status": 404
+    },
+    "SURROGATE_OPT_ACTIVE": {
+      "code": "SURROGATE_OPT_ACTIVE",
+      "message_ko": "이 Study에 진행 중인 내장 최적화가 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py",
+        "backend/physicsai_api/services/surrogate_opts.py"
+      ],
+      "status": 409
+    },
+    "SURROGATE_OPT_EXTRA_ACTIVE": {
+      "code": "SURROGATE_OPT_EXTRA_ACTIVE",
+      "message_ko": "진행 중인 추가 검증 배치가 있습니다 — 끝난 뒤 다시 보내세요",
+      "sources": [
+        "backend/physicsai_api/services/surrogate_opt_pareto.py"
+      ],
+      "status": 409
+    },
+    "SURROGATE_OPT_INACTIVE": {
+      "code": "SURROGATE_OPT_INACTIVE",
+      "message_ko": "이 반복 작업은 진행 중인 내장 최적화의 최신 작업이 아닙니다(취소·종료됨)",
+      "sources": [
+        "worker/physicsai_worker/steps/stage5_optimize/surrogate_common.py"
+      ],
+      "status": null
+    },
+    "SURROGATE_OPT_INVALID": {
+      "code": "SURROGATE_OPT_INVALID",
+      "message_ko": "추가 검증 요청이 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/surrogate_opt_pareto.py",
+        "backend/physicsai_api/services/surrogate_opts.py"
+      ],
+      "status": 422
+    },
+    "SURROGATE_OPT_NOT_DONE": {
+      "code": "SURROGATE_OPT_NOT_DONE",
+      "message_ko": "완료(DONE)된 내장 최적화만 추가 검증할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/surrogate_opt_pareto.py"
+      ],
+      "status": 409
+    },
+    "SURROGATE_OPT_NOT_FOUND": {
+      "code": "SURROGATE_OPT_NOT_FOUND",
+      "message_ko": "이 Study의 내장 최적화를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/mcp/job_kinds.py",
+        "backend/physicsai_api/services/surrogate_opt_pareto.py",
+        "backend/physicsai_api/services/surrogate_opts_view.py"
+      ],
+      "status": 404
+    },
+    "SURROGATE_OPT_NOT_RESUMABLE": {
+      "code": "SURROGATE_OPT_NOT_RESUMABLE",
+      "message_ko": "실패한 내장 최적화의 마지막 반복 작업만 다시 실행할 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py",
+        "backend/physicsai_api/services/surrogate_opts.py"
+      ],
+      "status": 409
+    },
+    "TEMPLATE_ASSEMBLY_REQUIRED": {
+      "code": "TEMPLATE_ASSEMBLY_REQUIRED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage5_optimize.py",
+        "worker/physicsai_worker/steps/stage5_optimize/optimize.py"
+      ],
+      "status": 409
+    },
+    "TEMPLATE_NOT_CONFIGURED": {
+      "code": "TEMPLATE_NOT_CONFIGURED",
+      "message_ko": "메시 변환 명령 템플릿(mesh)이 설정되지 않았습니다",
+      "sources": [
+        "backend/physicsai_api/services/fem_verify_plan.py",
+        "backend/physicsai_api/services/job_params/base.py",
+        "backend/physicsai_api/services/job_params/stage4_predict.py",
+        "backend/physicsai_core/commands.py",
+        "backend/physicsai_core/commands_render.py",
+        "worker/physicsai_worker/steps/geometry_props.py",
+        "worker/physicsai_worker/steps/geometry_shell.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
+        "worker/physicsai_worker/steps/stage4_predict/baseline_map.py",
+        "worker/physicsai_worker/steps/stage4_predict/batch.py",
+        "worker/physicsai_worker/steps/stage4_predict/capture.py",
+        "worker/physicsai_worker/steps/stage4_predict/fem_verify.py",
+        "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py"
+      ],
+      "status": 409
+    },
+    "TOKEN_ACTIVE_JOB_LIMIT": {
+      "code": "TOKEN_ACTIVE_JOB_LIMIT",
+      "message_ko": "이 토큰이 만든 진행 중 작업이 상한({…})입니다 — 끝나거나 취소한 뒤 다시 시도하세요",
+      "sources": [
+        "backend/physicsai_api/services/mcp.py"
+      ],
+      "status": 429
+    },
+    "TPL_REQUIRED": {
+      "code": "TPL_REQUIRED",
+      "message_ko": "tpl을 먼저 생성하세요(①-2)",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage1_train_data.py"
+      ],
+      "status": 409
+    },
+    "TPL_STALE": {
+      "code": "TPL_STALE",
+      "message_ko": "파라미터 표가 바뀌었습니다 — tpl을 다시 생성하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage1_train_data.py"
+      ],
+      "status": 409
+    },
+    "TPL_TEMPLATE_INVALID": {
+      "code": "TPL_TEMPLATE_INVALID",
+      "message_ko": "생성된 tpl이 검증을 통과하지 못했습니다",
+      "sources": [
+        "backend/physicsai_api/services/stage1_train_data.py"
+      ],
+      "status": 422
+    },
+    "TRAIN_PARAMS_INVALID": {
+      "code": "TRAIN_PARAMS_INVALID",
+      "message_ko": "파라미터 표 검증에 실패했습니다",
+      "sources": [
+        "backend/physicsai_api/services/stage1_train_data.py"
+      ],
+      "status": 422
+    },
+    "TRAIN_PARAMS_REQUIRED": {
+      "code": "TRAIN_PARAMS_REQUIRED",
+      "message_ko": "파라미터를 먼저 추출하세요(①-1)",
+      "sources": [
+        "backend/physicsai_api/services/stage1_train_data.py"
+      ],
+      "status": 409
+    },
+    "VERSION_CONFLICT": {
+      "code": "VERSION_CONFLICT",
+      "message_ko": "행이 그 사이 바뀌었습니다. 새로 고친 뒤 다시 시도하세요",
+      "sources": [
+        "backend/physicsai_api/services/hpc_resolve.py",
+        "backend/physicsai_api/services/stage1_train_data.py",
+        "backend/physicsai_api/services/stage3_model.py",
+        "backend/physicsai_core/db/repositories/models.py",
+        "backend/physicsai_core/db/repositories/studies.py",
+        "backend/physicsai_core/db/repositories/train.py"
+      ],
+      "status": 409
+    },
+    "VIEW_NATIVE_ONLY": {
+      "code": "VIEW_NATIVE_ONLY",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/geom_view_api.py"
+      ],
+      "status": 409
+    },
+    "VIEW_PREVIEW_TIMEOUT": {
+      "code": "VIEW_PREVIEW_TIMEOUT",
+      "message_ko": "미리보기 시간 초과({…}초)",
+      "sources": [
+        "worker/physicsai_worker/steps/stage4_predict/geom_preview.py"
+      ],
+      "status": null
+    },
+    "VIEW_UNAVAILABLE": {
+      "code": "VIEW_UNAVAILABLE",
+      "message_ko": "3D 미리보기를 쓸 수 없습니다 — commands.{…} 설정 확인",
+      "sources": [
+        "backend/physicsai_api/services/geom_view_api.py",
+        "worker/physicsai_worker/steps/stage4_predict/geom_preview.py"
+      ],
+      "status": 409
+    }
+  },
+  "feature_abbr": {
+    "BEAD_D": {
+      "source": "packages/paicad/src/paicad/shell/common.py",
+      "type": "BEAD_DEPTH"
+    },
+    "BEAD_U": {
+      "source": "packages/paicad/src/paicad/shell/common.py",
+      "type": "BEAD_POS_U"
+    },
+    "BEAD_V": {
+      "source": "packages/paicad/src/paicad/shell/common.py",
+      "type": "BEAD_POS_V"
+    },
+    "BEAD_W": {
+      "source": "packages/paicad/src/paicad/shell/common.py",
+      "type": "BEAD_WIDTH"
+    },
+    "FILLET_R": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "FILLET_RADIUS"
+    },
+    "HOLE_R": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "HOLE_RADIUS"
+    },
+    "HOLE_U": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "HOLE_POS_U"
+    },
+    "HOLE_V": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "HOLE_POS_V"
+    },
+    "POCKET_D": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "POCKET_DEPTH"
+    },
+    "POCKET_W": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "POCKET_WIDTH"
+    },
+    "RIB_H": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "RIB_HEIGHT"
+    },
+    "RIB_T": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "RIB_THICKNESS"
+    },
+    "RIB_U": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "RIB_POS_U"
+    },
+    "RIB_V": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "RIB_POS_V"
+    },
+    "THK": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "THICKNESS"
+    }
+  },
+  "job_kinds": {
+    "doe_generate": {
+      "cost": "heavy",
+      "job_types": [
+        "TD_DOE_GEN"
+      ],
+      "label_ko": "학습 데이터 DOE 생성",
+      "stage": "①-3",
+      "summary_entity": "train_doe",
+      "version": 1
+    },
+    "equiv_check": {
+      "cost": "heavy",
+      "job_types": [
+        "EQ_CHECK"
+      ],
+      "label_ko": "해석 등가성 판정",
+      "stage": "⑤",
+      "summary_entity": "equiv_check",
+      "version": 1
+    },
+    "fem_verify": {
+      "cost": "heavy",
+      "job_types": [
+        "FEM_VERIFY"
+      ],
+      "label_ko": "조립 FEM 검증",
+      "stage": "④",
+      "summary_entity": "fem_verify",
+      "version": 1
+    },
+    "geom_preview": {
+      "cost": "light",
+      "job_types": [
+        "GEOM_PREVIEW"
+      ],
+      "label_ko": "형상 미리보기",
+      "stage": "④",
+      "summary_entity": "geom_preview",
+      "version": 1
+    },
+    "predict": {
+      "cost": "light",
+      "job_types": [
+        "PREDICT"
+      ],
+      "label_ko": "단일 예측",
+      "stage": "④",
+      "summary_entity": "predict_run",
+      "version": 1
+    },
+    "predict_batch": {
+      "cost": "heavy",
+      "job_types": [
+        "PREDICT_BATCH"
+      ],
+      "label_ko": "일괄 예측",
+      "stage": "④",
+      "summary_entity": "predict_batch",
+      "version": 1
+    },
+    "solve_pbs": {
+      "cost": "heavy",
+      "job_types": [
+        "TD_SOLVE"
+      ],
+      "label_ko": "학습 데이터 PBS 해석 제출",
+      "stage": "①-4",
+      "summary_entity": "train_doe",
+      "version": 1
+    },
+    "surrogate_opt": {
+      "cost": "heavy",
+      "job_types": [
+        "SURROGATE_OPT"
+      ],
+      "label_ko": "내장 최적화",
+      "stage": "⑥",
+      "summary_entity": "surrogate_opt",
+      "version": 1
+    },
+    "surrogate_opt_verify": {
+      "cost": "heavy",
+      "job_types": [
+        "PREDICT_BATCH"
+      ],
+      "label_ko": "최적화 추가 검증",
+      "stage": "⑥",
+      "summary_entity": "surrogate_opt",
+      "version": 1
+    }
+  },
+  "job_types": {
+    "CONTOUR_3D": {
+      "label": "결과 3D 컨투어",
+      "lane": "LIGHT",
+      "stage_label": "④⑤"
+    },
+    "CONTOUR_RECAPTURE": {
+      "label": "컨투어 다시 캡처",
+      "lane": "LIGHT",
+      "stage_label": "④"
+    },
+    "CU_H3D_CURATE": {
+      "label": "큐레이션",
+      "lane": "SLOT",
+      "stage_label": "②-2"
+    },
+    "CU_H3D_PREVIEW": {
+      "label": "h3d 미리보기",
+      "lane": "SLOT",
+      "stage_label": "②-1"
+    },
+    "CU_T01_CURVES": {
+      "label": "곡선 추출",
+      "lane": "SLOT",
+      "stage_label": "②-4"
+    },
+    "CU_T01_PREVIEW": {
+      "label": "T01 미리보기",
+      "lane": "SLOT",
+      "stage_label": "②-3"
+    },
+    "DATASET_CREATE": {
+      "label": "데이터셋 생성",
+      "lane": "SLOT",
+      "stage_label": "③-1"
+    },
+    "EQ_CHECK": {
+      "label": "등가성 판정",
+      "lane": "SLOT",
+      "stage_label": "⑤"
+    },
+    "EVALUATE": {
+      "label": "평가",
+      "lane": "SLOT",
+      "stage_label": "③-5"
+    },
+    "FEM_VERIFY": {
+      "label": "조립 FEM 검증",
+      "lane": "SLOT",
+      "stage_label": "④"
+    },
+    "GEOM_PREVIEW": {
+      "label": "형상 미리보기",
+      "lane": "PREVIEW",
+      "stage_label": "④"
+    },
+    "MODEL_REGISTER": {
+      "label": "모델 등록",
+      "lane": "LIGHT",
+      "stage_label": "③-4"
+    },
+    "OPTIMIZE": {
+      "label": "최적화",
+      "lane": "SLOT",
+      "stage_label": "⑤"
+    },
+    "PACKAGE_EXPORT": {
+      "label": "학습 패키지 내보내기",
+      "lane": "LIGHT",
+      "stage_label": "③-2"
+    },
+    "PARAM_SET_NATIVE": {
+      "label": "형상 준비(Native)",
+      "lane": "SLOT",
+      "stage_label": "④"
+    },
+    "PB_RESP_EXTRACT": {
+      "label": "일괄 예측 성능 다시 추출",
+      "lane": "SLOT",
+      "stage_label": "④"
+    },
+    "PREDICT": {
+      "label": "예측",
+      "lane": "SLOT",
+      "stage_label": "④"
+    },
+    "PREDICT_BATCH": {
+      "label": "일괄 예측 입력 생성",
+      "lane": "SLOT",
+      "stage_label": "④"
+    },
+    "PREDICT_VERIFY": {
+      "label": "PBS 검증 해석",
+      "lane": "SLOT",
+      "stage_label": "④"
+    },
+    "SPDM_IMPORT": {
+      "label": "SPDM 가져오기",
+      "lane": "LIGHT",
+      "stage_label": "②-0"
+    },
+    "STUDY_CLEANUP": {
+      "label": "Study 정리",
+      "lane": "LIGHT",
+      "stage_label": "관리"
+    },
+    "STUDY_STORAGE_SCAN": {
+      "label": "용량 계산",
+      "lane": "LIGHT",
+      "stage_label": "관리"
+    },
+    "SURROGATE_OPT": {
+      "label": "내장 최적화 반복",
+      "lane": "SLOT",
+      "stage_label": "⑤"
+    },
+    "TD_DOE_GEN": {
+      "label": "DOE·Radioss 입력 생성",
+      "lane": "SLOT",
+      "stage_label": "①-3"
+    },
+    "TD_EXTRACT_PARAMS": {
+      "label": "파라미터 추출",
+      "lane": "SLOT",
+      "stage_label": "①-1"
+    },
+    "TD_RESP_EXTRACT": {
+      "label": "run 응답 추출",
+      "lane": "SLOT",
+      "stage_label": "①-6"
+    },
+    "TD_RESULT_IMPORT": {
+      "label": "결과 가져오기",
+      "lane": "LIGHT",
+      "stage_label": "①-5"
+    },
+    "TD_SOLVE": {
+      "label": "PBS 해석",
+      "lane": "SLOT",
+      "stage_label": "①-4"
+    }
+  },
+  "schema_version": 1,
+  "stages": [
+    {
+      "internal": "④⑤",
+      "job_type": "CONTOUR_3D",
+      "screen": "④⑤"
+    },
+    {
+      "internal": "④",
+      "job_type": "CONTOUR_RECAPTURE",
+      "screen": "④"
+    },
+    {
+      "internal": "②-2",
+      "job_type": "CU_H3D_CURATE",
+      "screen": "②-2"
+    },
+    {
+      "internal": "②-1",
+      "job_type": "CU_H3D_PREVIEW",
+      "screen": "②-1"
+    },
+    {
+      "internal": "②-4",
+      "job_type": "CU_T01_CURVES",
+      "screen": "②-4"
+    },
+    {
+      "internal": "②-3",
+      "job_type": "CU_T01_PREVIEW",
+      "screen": "②-3"
+    },
+    {
+      "internal": "③-1",
+      "job_type": "DATASET_CREATE",
+      "screen": "③-1"
+    },
+    {
+      "internal": "⑤",
+      "job_type": "EQ_CHECK",
+      "screen": "⑤"
+    },
+    {
+      "internal": "③-5",
+      "job_type": "EVALUATE",
+      "screen": "③-5"
+    },
+    {
+      "internal": "④",
+      "job_type": "FEM_VERIFY",
+      "screen": "④"
+    },
+    {
+      "internal": "④",
+      "job_type": "GEOM_PREVIEW",
+      "screen": "④"
+    },
+    {
+      "internal": "③-4",
+      "job_type": "MODEL_REGISTER",
+      "screen": "③-4"
+    },
+    {
+      "internal": "⑤",
+      "job_type": "OPTIMIZE",
+      "screen": "⑤"
+    },
+    {
+      "internal": "③-2",
+      "job_type": "PACKAGE_EXPORT",
+      "screen": "③-2"
+    },
+    {
+      "internal": "④",
+      "job_type": "PARAM_SET_NATIVE",
+      "screen": "④"
+    },
+    {
+      "internal": "④",
+      "job_type": "PB_RESP_EXTRACT",
+      "screen": "④"
+    },
+    {
+      "internal": "④",
+      "job_type": "PREDICT",
+      "screen": "④"
+    },
+    {
+      "internal": "④",
+      "job_type": "PREDICT_BATCH",
+      "screen": "④"
+    },
+    {
+      "internal": "④",
+      "job_type": "PREDICT_VERIFY",
+      "screen": "④"
+    },
+    {
+      "internal": "②-0",
+      "job_type": "SPDM_IMPORT",
+      "screen": "②-0"
+    },
+    {
+      "internal": "관리",
+      "job_type": "STUDY_CLEANUP",
+      "screen": "관리"
+    },
+    {
+      "internal": "관리",
+      "job_type": "STUDY_STORAGE_SCAN",
+      "screen": "관리"
+    },
+    {
+      "internal": "⑤",
+      "job_type": "SURROGATE_OPT",
+      "screen": "⑥"
+    },
+    {
+      "internal": "①-3",
+      "job_type": "TD_DOE_GEN",
+      "screen": "①-3"
+    },
+    {
+      "internal": "①-1",
+      "job_type": "TD_EXTRACT_PARAMS",
+      "screen": "①-1"
+    },
+    {
+      "internal": "①-6",
+      "job_type": "TD_RESP_EXTRACT",
+      "screen": "①-6"
+    },
+    {
+      "internal": "①-5",
+      "job_type": "TD_RESULT_IMPORT",
+      "screen": "①-5"
+    },
+    {
+      "internal": "①-4",
+      "job_type": "TD_SOLVE",
+      "screen": "①-4"
+    }
+  ]
+}

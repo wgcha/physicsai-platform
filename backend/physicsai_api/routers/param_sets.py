@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Request, Response
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Path, Query, Request, Response
 from fastapi.responses import JSONResponse
 
 from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
+from ..schemas import mcp as M
 from ..services import param_set_baselines_api as bl_svc
 from ..services import param_set_native_api as native_svc
 from ..services import param_set_props_api as props_svc
@@ -71,8 +74,13 @@ def samples(ps_id: str, request: Request, limit: int | None = Query(default=None
     return svc.get_samples(get_ctx(request), ps_id, limit, cursor)
 
 
-@router.post("/studies/{study_id}/predict/check", response_model=S.PredictCheckResponse, responses=ERR)
-def predict_check(study_id: str, body: S.PredictCheckRequest, request: Request, _p: Principal = Depends(get_principal)) -> dict:
+@router.post("/studies/{study_id}/predict/check", response_model=S.PredictCheckResponse, summary="예측 입력 범위 검사",
+             responses={**ERR, **M.errors(e404="NOT_FOUND · PARAM_SET_REQUIRED", e422="INVALID_PARAMS")},
+             openapi_extra=M.xmcp_tool("check_prediction_input", "read", "Check parameter values against the set range (no job created)",
+                                       "파라미터 값이 세트 범위 안인지·반올림·최근접 학습 run 확인"))
+def predict_check(study_id: Annotated[str, Path(description="Study id")], body: S.PredictCheckRequest, request: Request,
+                  _p: Principal = Depends(get_principal)) -> dict:
+    """파라미터 값이 세트 범위(min~max) 안인지, 정수 반올림, 가장 가까운 학습 run을 확인한다(저장·작업 없음). 예측 전에 쓴다."""
     return svc.predict_check(get_ctx(request), study_id, body.param_set_id, body.values)
 
 

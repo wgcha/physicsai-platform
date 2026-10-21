@@ -98,6 +98,8 @@ class StatusFeatures(Resp):
     fem_verify_rebuild: FeatureState | None = None  # + 메시 교체(commands.mesh·include TCL)
     equiv_check: FeatureState | None = None  # equiv-check.md §5.3 ⑤ 등가성 판정(항상 사용 가능 — equiv_check.enabled)
     equiv_check_extract: FeatureState | None = None  # equiv-check.md §5.3 판정 중 응답·곡선 추출(hw·응답 TCL·T01)
+    mcp: FeatureState | None = None  # mcp.md §13: API 토큰·/mcp/*·"내 API 토큰" 화면 사용 여부(enabled = mcp.enabled)
+    mcp_http: FeatureState | None = None  # mcp.md §20.5: /physicsai/mcp 마운트 활성(mcp.enabled AND mcp.server.http_enabled)
 
 
 class StatusEnvCheck(Resp):

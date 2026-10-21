@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ...errors import DomainError
 from ...job_types import JOB_TYPES
+from ...request_context import current_api_token_id, note_created_job
 from ...state_machine import (
     CANCELED,
     QUEUED,
@@ -74,6 +75,7 @@ def insert_job(
                 resume_from_step=resume_from_step,
                 created_by=user_id,
                 created_by_name=user_name,
+                api_token_id=current_api_token_id(),  # mcp.md §14: 토큰 요청 문맥(그 밖은 None)
             )
         )
         sp.commit()
@@ -84,6 +86,7 @@ def insert_job(
                 "STUDY_JOB_BUSY", "이 Study에서 같은 종류의 작업이 이미 대기 중이거나 실행 중입니다", status=409
             ) from None
         raise
+    note_created_job(job_id)
     for no, sd in enumerate(jt.steps, start=1):
         state = "PENDING"
         if resume_from_step is not None and no < resume_from_step:

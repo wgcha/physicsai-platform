@@ -1,0 +1,3102 @@
+{
+  "kinds": {
+    "doe_generate": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "TrainSamplingBbd": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "bbd",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "TrainSamplingBbd",
+            "type": "object"
+          },
+          "TrainSamplingCcd": {
+            "additionalProperties": false,
+            "properties": {
+              "alpha": {
+                "default": "face",
+                "enum": [
+                  "face",
+                  "inscribed"
+                ],
+                "title": "Alpha",
+                "type": "string"
+              },
+              "kind": {
+                "const": "ccd",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "TrainSamplingCcd",
+            "type": "object"
+          },
+          "TrainSamplingFracfact": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "fracfact",
+                "title": "Kind",
+                "type": "string"
+              },
+              "resolution": {
+                "default": 5,
+                "enum": [
+                  4,
+                  5
+                ],
+                "title": "Resolution",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "TrainSamplingFracfact",
+            "type": "object"
+          },
+          "TrainSamplingFullfact": {
+            "additionalProperties": false,
+            "description": "levels {변수: 수준 수 1~10}(생략한 변수 = 2).",
+            "properties": {
+              "kind": {
+                "const": "fullfact",
+                "title": "Kind",
+                "type": "string"
+              },
+              "levels": {
+                "additionalProperties": {
+                  "maximum": 10,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "title": "Levels",
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "TrainSamplingFullfact",
+            "type": "object"
+          },
+          "TrainSamplingLhs": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {
+                "minimum": 2,
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "lhs",
+                "title": "Kind",
+                "type": "string"
+              },
+              "seed": {
+                "default": 1,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "TrainSamplingLhs",
+            "type": "object"
+          },
+          "TrainSamplingLhsOpt": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {
+                "minimum": 2,
+                "title": "Count",
+                "type": "integer"
+              },
+              "criterion": {
+                "default": "maximin",
+                "enum": [
+                  "maximin",
+                  "corr"
+                ],
+                "title": "Criterion",
+                "type": "string"
+              },
+              "kind": {
+                "const": "lhs_opt",
+                "title": "Kind",
+                "type": "string"
+              },
+              "seed": {
+                "default": 1,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "TrainSamplingLhsOpt",
+            "type": "object"
+          },
+          "TrainSamplingPb": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "pb",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "TrainSamplingPb",
+            "type": "object"
+          },
+          "TrainSamplingSobol": {
+            "additionalProperties": false,
+            "properties": {
+              "count": {
+                "minimum": 4,
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "sobol",
+                "title": "Kind",
+                "type": "string"
+              },
+              "seed": {
+                "default": 1,
+                "maximum": 4294967295,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "TrainSamplingSobol",
+            "type": "object"
+          },
+          "TrainSamplingTrainDoe": {
+            "additionalProperties": false,
+            "description": "equiv-check.md Q1(2026-10-20): 같은 Study의 다른 DOE(READY, 표본표 PARSED/PARTIAL) samples.csv 행 그대로 — run 이름을 유지해\n등가성 판정의 쌍 매칭 키로 쓴다. 파라미터 이름 집합이 같을 때만(native·altair 모두).",
+            "properties": {
+              "doe_id": {
+                "maxLength": 64,
+                "title": "Doe Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "train_doe",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "doe_id"
+            ],
+            "title": "TrainSamplingTrainDoe",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "①-3 DOE 생성(phase2 §6.4 + phase3 §23.4 S18). generator 생략 → sampling이 있으면 platform, 없으면 hyperstudy(G10).\nplatform: sampling 필수, doe_label·num_runs·options 금지. hyperstudy: 기존 키(doe_label 필수), sampling·on_run_failure 금지.",
+        "properties": {
+          "doe_label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "HyperStudy DOE 유형 이름(hyperstudy만, ①-3 유형 목록)",
+            "title": "Doe Label"
+          },
+          "generator": {
+            "anyOf": [
+              {
+                "enum": [
+                  "platform",
+                  "hyperstudy"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "생성 방식 platform(표본 sampling) | hyperstudy(원본 doe_label) — 생략 = sampling 있으면 platform",
+            "title": "Generator"
+          },
+          "multi_execution": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "동시 실행 수[개](1~train_data.max_multi_execution, 생략 = platform_parallel_default)",
+            "title": "Multi Execution"
+          },
+          "num_runs": {
+            "anyOf": [
+              {
+                "minimum": 2,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "run 수[개](2~train_data.max_runs, hyperstudy만)",
+            "title": "Num Runs"
+          },
+          "on_run_failure": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fail",
+                  "continue"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "run 실패 시 fail(작업 실패) | continue(계속, platform만)",
+            "title": "On Run Failure"
+          },
+          "options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "HyperStudy DOE 옵션(유형별, hyperstudy만)",
+            "title": "Options"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "native 파라미터 세트 기준 DOE면 세트 id",
+            "title": "Param Set Id"
+          },
+          "radioss_assem_path": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Radioss 조립 폴더 경로(허용 루트 안, 세트 기준 native DOE면 생략)",
+            "title": "Radioss Assem Path"
+          },
+          "sampling": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbd": "#/$defs/TrainSamplingBbd",
+                    "ccd": "#/$defs/TrainSamplingCcd",
+                    "fracfact": "#/$defs/TrainSamplingFracfact",
+                    "fullfact": "#/$defs/TrainSamplingFullfact",
+                    "lhs": "#/$defs/TrainSamplingLhs",
+                    "lhs_opt": "#/$defs/TrainSamplingLhsOpt",
+                    "pb": "#/$defs/TrainSamplingPb",
+                    "sobol": "#/$defs/TrainSamplingSobol",
+                    "train_doe": "#/$defs/TrainSamplingTrainDoe"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/TrainSamplingLhs"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingLhsOpt"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingSobol"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingFullfact"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingFracfact"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingPb"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingBbd"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingCcd"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingTrainDoe"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "플랫폼 표본 방식 {kind: lhs|sobol|…, count[개], seed} — platform 필수",
+            "title": "Sampling"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "native LHS 난수 시드[-](0 이상, native 형상 엔진 전용)",
+            "title": "Seed"
+          }
+        },
+        "title": "DoeGenerateParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "equiv_check": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "EqPairItem": {
+            "additionalProperties": false,
+            "properties": {
+              "a": {
+                "maxLength": 200,
+                "title": "A",
+                "type": "string"
+              },
+              "b": {
+                "maxLength": 200,
+                "title": "B",
+                "type": "string"
+              }
+            },
+            "required": [
+              "a",
+              "b"
+            ],
+            "title": "EqPairItem",
+            "type": "object"
+          },
+          "EqPairing": {
+            "additionalProperties": false,
+            "properties": {
+              "mode": {
+                "default": "by_name",
+                "enum": [
+                  "by_name",
+                  "by_params",
+                  "manual"
+                ],
+                "title": "Mode",
+                "type": "string"
+              },
+              "pairs": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "$ref": "#/$defs/EqPairItem"
+                    },
+                    "maxItems": 5000,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Pairs"
+              }
+            },
+            "title": "EqPairing",
+            "type": "object"
+          },
+          "EqRecipeInline": {
+            "additionalProperties": false,
+            "properties": {
+              "base": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/EqRecipeRef"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "definition": {
+                "additionalProperties": true,
+                "title": "Definition",
+                "type": "object"
+              }
+            },
+            "required": [
+              "definition"
+            ],
+            "title": "EqRecipeInline",
+            "type": "object"
+          },
+          "EqRecipeRef": {
+            "additionalProperties": false,
+            "properties": {
+              "key": {
+                "maxLength": 64,
+                "title": "Key",
+                "type": "string"
+              },
+              "version": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Version"
+              }
+            },
+            "required": [
+              "key"
+            ],
+            "title": "EqRecipeRef",
+            "type": "object"
+          },
+          "EqSideFemVerify": {
+            "additionalProperties": false,
+            "properties": {
+              "attempt": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Attempt"
+              },
+              "fv_id": {
+                "maxLength": 64,
+                "title": "Fv Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "fem_verify",
+                "title": "Kind",
+                "type": "string"
+              },
+              "label": {
+                "anyOf": [
+                  {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Label"
+              }
+            },
+            "required": [
+              "kind",
+              "fv_id"
+            ],
+            "title": "EqSideFemVerify",
+            "type": "object"
+          },
+          "EqSideFolder": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "folder",
+                "title": "Kind",
+                "type": "string"
+              },
+              "label": {
+                "anyOf": [
+                  {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Label"
+              },
+              "paths": {
+                "items": {
+                  "maxLength": 400,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "maxItems": 500,
+                "minItems": 1,
+                "title": "Paths",
+                "type": "array"
+              }
+            },
+            "required": [
+              "kind",
+              "paths"
+            ],
+            "title": "EqSideFolder",
+            "type": "object"
+          },
+          "EqSidePredictBatch": {
+            "additionalProperties": false,
+            "properties": {
+              "batch_id": {
+                "maxLength": 64,
+                "title": "Batch Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "predict_batch",
+                "title": "Kind",
+                "type": "string"
+              },
+              "label": {
+                "anyOf": [
+                  {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Label"
+              }
+            },
+            "required": [
+              "kind",
+              "batch_id"
+            ],
+            "title": "EqSidePredictBatch",
+            "type": "object"
+          },
+          "EqSideTrainDoe": {
+            "additionalProperties": false,
+            "properties": {
+              "doe_id": {
+                "maxLength": 64,
+                "title": "Doe Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "train_doe",
+                "title": "Kind",
+                "type": "string"
+              },
+              "label": {
+                "anyOf": [
+                  {
+                    "maxLength": 120,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Label"
+              }
+            },
+            "required": [
+              "kind",
+              "doe_id"
+            ],
+            "title": "EqSideTrainDoe",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "실행(202). recipe(저장된 레시피·시스템 기본 `sys:default`) 또는 recipe_inline(불러온 뒤 수정한 1회용) 중 하나 필수.\nbindings = {metric_id: source} — 레시피의 빈 원천(연결 필요)을 채운다. 필수 지표가 비어 있으면 422 METRIC_UNBOUND.",
+        "properties": {
+          "bindings": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "additionalProperties": true,
+                      "type": "object"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "지표 id → 원천(레시피의 빈 원천 채우기)",
+            "title": "Bindings"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "메모(500자 이내)",
+            "title": "Note"
+          },
+          "pairing": {
+            "$ref": "#/$defs/EqPairing",
+            "description": "쌍 규칙 {mode: by_name|by_params|manual|all, pairs?}"
+          },
+          "recipe": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EqRecipeRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "저장된 레시피 {key, version?}(recipe_inline과 택1)"
+          },
+          "recipe_inline": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/EqRecipeInline"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "1회용 레시피 정의"
+          },
+          "side_a": {
+            "description": "기준 쪽 {kind: train_doe|predict_batch|fem_verify|folder, ref…}",
+            "discriminator": {
+              "mapping": {
+                "fem_verify": "#/$defs/EqSideFemVerify",
+                "folder": "#/$defs/EqSideFolder",
+                "predict_batch": "#/$defs/EqSidePredictBatch",
+                "train_doe": "#/$defs/EqSideTrainDoe"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/EqSideTrainDoe"
+              },
+              {
+                "$ref": "#/$defs/EqSidePredictBatch"
+              },
+              {
+                "$ref": "#/$defs/EqSideFemVerify"
+              },
+              {
+                "$ref": "#/$defs/EqSideFolder"
+              }
+            ],
+            "title": "Side A"
+          },
+          "side_b": {
+            "description": "비교 쪽(side_a와 같은 모양)",
+            "discriminator": {
+              "mapping": {
+                "fem_verify": "#/$defs/EqSideFemVerify",
+                "folder": "#/$defs/EqSideFolder",
+                "predict_batch": "#/$defs/EqSidePredictBatch",
+                "train_doe": "#/$defs/EqSideTrainDoe"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/EqSideTrainDoe"
+              },
+              {
+                "$ref": "#/$defs/EqSidePredictBatch"
+              },
+              {
+                "$ref": "#/$defs/EqSideFemVerify"
+              },
+              {
+                "$ref": "#/$defs/EqSideFolder"
+              }
+            ],
+            "title": "Side B"
+          }
+        },
+        "required": [
+          "side_a",
+          "side_b"
+        ],
+        "title": "EquivCheckKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "fem_verify": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "CaptureDisplay": {
+            "additionalProperties": false,
+            "description": "표시 설정(모든 키 선택 — null = 상위 설정을 따름: config → 응답 정의 첫 항목 → 템플릿 → 작업).",
+            "properties": {
+              "avgmode": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "",
+                      "simple",
+                      "maximum",
+                      "minimum",
+                      "difference"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Avgmode"
+              },
+              "component": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Component"
+              },
+              "comps": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Comps"
+              },
+              "field": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Field"
+              },
+              "legend": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CaptureLegend"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "views": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "iso",
+                        "front",
+                        "back",
+                        "top",
+                        "bottom",
+                        "left",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Views"
+              }
+            },
+            "title": "CaptureDisplay",
+            "type": "object"
+          },
+          "CaptureLegend": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "min": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "mode": {
+                "default": "auto",
+                "enum": [
+                  "auto",
+                  "fixed"
+                ],
+                "title": "Mode",
+                "type": "string"
+              }
+            },
+            "title": "CaptureLegend",
+            "type": "object"
+          },
+          "FvAssembly": {
+            "additionalProperties": false,
+            "properties": {
+              "doe_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Doe Id"
+              },
+              "kind": {
+                "enum": [
+                  "predict_input",
+                  "train_doe",
+                  "custom"
+                ],
+                "title": "Kind",
+                "type": "string"
+              },
+              "path": {
+                "anyOf": [
+                  {
+                    "maxLength": 400,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Path"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "FvAssembly",
+            "type": "object"
+          },
+          "FvFem": {
+            "additionalProperties": false,
+            "properties": {
+              "component": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Component"
+              },
+              "comps": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Comps"
+              },
+              "field": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Field"
+              }
+            },
+            "title": "FvFem",
+            "type": "object"
+          },
+          "FvHpc": {
+            "additionalProperties": false,
+            "properties": {
+              "ncpus": {
+                "anyOf": [
+                  {
+                    "maximum": 4096,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ncpus"
+              },
+              "queue": {
+                "anyOf": [
+                  {
+                    "pattern": "^[A-Za-z0-9_.\\-@]{1,64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Queue"
+              },
+              "version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._\\-]{0,63}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Version"
+              },
+              "walltime": {
+                "anyOf": [
+                  {
+                    "pattern": "^\\d{1,4}:\\d{2}:\\d{2}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Walltime"
+              }
+            },
+            "title": "FvHpc",
+            "type": "object"
+          },
+          "FvOrigin": {
+            "additionalProperties": false,
+            "properties": {
+              "job_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Job Id"
+              },
+              "kind": {
+                "const": "optimize",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "FvOrigin",
+            "type": "object"
+          },
+          "FvSourceBatchRun": {
+            "additionalProperties": false,
+            "properties": {
+              "batch_id": {
+                "title": "Batch Id",
+                "type": "string"
+              },
+              "doe_no": {
+                "minimum": 1,
+                "title": "Doe No",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "batch_run",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "batch_id",
+              "doe_no"
+            ],
+            "title": "FvSourceBatchRun",
+            "type": "object"
+          },
+          "FvSourceOptDesign": {
+            "additionalProperties": false,
+            "properties": {
+              "doe_no": {
+                "anyOf": [
+                  {
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Doe No"
+              },
+              "iter_no": {
+                "anyOf": [
+                  {
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Iter No"
+              },
+              "kind": {
+                "const": "opt_design",
+                "title": "Kind",
+                "type": "string"
+              },
+              "opt_id": {
+                "title": "Opt Id",
+                "type": "string"
+              },
+              "pick": {
+                "enum": [
+                  "best",
+                  "final_optimum",
+                  "surrogate_optimum",
+                  "run"
+                ],
+                "title": "Pick",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "opt_id",
+              "pick"
+            ],
+            "title": "FvSourceOptDesign",
+            "type": "object"
+          },
+          "FvSourcePredictJob": {
+            "additionalProperties": false,
+            "properties": {
+              "job_id": {
+                "title": "Job Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "predict_job",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "job_id"
+            ],
+            "title": "FvSourcePredictJob",
+            "type": "object"
+          },
+          "FvSourceValues": {
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "const": "values",
+                "title": "Kind",
+                "type": "string"
+              },
+              "model_id": {
+                "anyOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Model Id"
+              },
+              "origin": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/FvOrigin"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "param_set_id": {
+                "title": "Param Set Id",
+                "type": "string"
+              },
+              "reuse_existing": {
+                "default": true,
+                "title": "Reuse Existing",
+                "type": "boolean"
+              },
+              "values": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "title": "Values",
+                "type": "object"
+              }
+            },
+            "required": [
+              "kind",
+              "param_set_id",
+              "values"
+            ],
+            "title": "FvSourceValues",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "assembly": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FvAssembly"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "조립 입력(생략 = 예측 입력이 조립 상태면 그것, 아니면 최신 READY DOE)"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "컨투어 표시 설정(선택)"
+          },
+          "fem": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FvFem"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "FEM 비교 옵션(선택)"
+          },
+          "hpc": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/FvHpc"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "HPC 덮어쓰기(선택)"
+          },
+          "source": {
+            "description": "검증 대상 {kind: predict_job, job_id} | {kind: batch_run, batch_id, doe_no} | {kind: values, param_set_id, values} | {kind: opt_design, opt_id, pick}",
+            "discriminator": {
+              "mapping": {
+                "batch_run": "#/$defs/FvSourceBatchRun",
+                "opt_design": "#/$defs/FvSourceOptDesign",
+                "predict_job": "#/$defs/FvSourcePredictJob",
+                "values": "#/$defs/FvSourceValues"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/FvSourcePredictJob"
+              },
+              {
+                "$ref": "#/$defs/FvSourceBatchRun"
+              },
+              {
+                "$ref": "#/$defs/FvSourceValues"
+              },
+              {
+                "$ref": "#/$defs/FvSourceOptDesign"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "FemVerifyKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "geom_preview": {
+      "cost": "light",
+      "params_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "fe": {
+            "default": "off",
+            "description": "FE 품질 검사 off | check",
+            "pattern": "^(off|check)$",
+            "title": "Fe",
+            "type": "string"
+          },
+          "param_set_id": {
+            "description": "native 파라미터 세트 id(이 Study)",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Param Set Id",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "description": "대표 파라미터 이름 → 값[세트 단위](빠진 이름은 공칭)",
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "param_set_id"
+        ],
+        "title": "GeomPreviewParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "predict": {
+      "cost": "light",
+      "params_schema": {
+        "$defs": {
+          "CaptureDisplay": {
+            "additionalProperties": false,
+            "description": "표시 설정(모든 키 선택 — null = 상위 설정을 따름: config → 응답 정의 첫 항목 → 템플릿 → 작업).",
+            "properties": {
+              "avgmode": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "",
+                      "simple",
+                      "maximum",
+                      "minimum",
+                      "difference"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Avgmode"
+              },
+              "component": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Component"
+              },
+              "comps": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Comps"
+              },
+              "field": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Field"
+              },
+              "legend": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CaptureLegend"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "views": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "iso",
+                        "front",
+                        "back",
+                        "top",
+                        "bottom",
+                        "left",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Views"
+              }
+            },
+            "title": "CaptureDisplay",
+            "type": "object"
+          },
+          "CaptureLegend": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "min": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "mode": {
+                "default": "auto",
+                "enum": [
+                  "auto",
+                  "fixed"
+                ],
+                "title": "Mode",
+                "type": "string"
+              }
+            },
+            "title": "CaptureLegend",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "§10.6 PREDICT + phase3 §11.5 `input_mode`(생략 = parametric, 기존 호환).",
+        "properties": {
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "컨투어 표시 설정(선택)"
+          },
+          "input_mode": {
+            "default": "parametric",
+            "description": "parametric(파라미터 값으로 형상 갱신) | prepared(준비된 입력 폴더)",
+            "enum": [
+              "parametric",
+              "prepared"
+            ],
+            "title": "Input Mode",
+            "type": "string"
+          },
+          "input_path": {
+            "anyOf": [
+              {
+                "maxLength": 400,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "prepared일 때 준비된 입력 폴더 경로(허용 루트 안)",
+            "title": "Input Path"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "모델 id(생략 = Final 모델)",
+            "title": "Model Id"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "파라미터 세트 id(생략 = 현재 세트)",
+            "title": "Param Set Id"
+          },
+          "source_run_key": {
+            "anyOf": [
+              {
+                "pattern": "^[A-Za-z0-9_\\-]{1,64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "value_source=run일 때 학습 run 키",
+            "title": "Source Run Key"
+          },
+          "value_source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "nominal",
+                  "run",
+                  "manual"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "값 출처 nominal | run | manual",
+            "title": "Value Source"
+          },
+          "values": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "파라미터 이름 → 값[세트 단위](범위는 세트 min~max, check_prediction_input으로 확인)",
+            "title": "Values"
+          }
+        },
+        "title": "PredictKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "predict_batch": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "BatchCaptureOptions": {
+            "additionalProperties": false,
+            "description": "일괄 예측 캡처 옵션(D3-53) — 하위 PREDICT의 CONTOUR_CAPTURE가 따른다(enabled false → SKIPPED).",
+            "properties": {
+              "enabled": {
+                "default": true,
+                "title": "Enabled",
+                "type": "boolean"
+              },
+              "video": {
+                "anyOf": [
+                  {
+                    "type": "boolean"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Video"
+              },
+              "views": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "iso",
+                        "front",
+                        "back",
+                        "top",
+                        "bottom",
+                        "left",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Views"
+              }
+            },
+            "title": "BatchCaptureOptions",
+            "type": "object"
+          },
+          "BatchSourceBbd": {
+            "additionalProperties": false,
+            "description": "Box–Behnken(변수 3개 이상, 중심점 1개).",
+            "properties": {
+              "kind": {
+                "const": "bbd",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "BatchSourceBbd",
+            "type": "object"
+          },
+          "BatchSourceCcd": {
+            "additionalProperties": false,
+            "description": "중심 합성: alpha face(면중심, 기본) | inscribed(내접). 중심점 1개.",
+            "properties": {
+              "alpha": {
+                "default": "face",
+                "enum": [
+                  "face",
+                  "inscribed"
+                ],
+                "title": "Alpha",
+                "type": "string"
+              },
+              "kind": {
+                "const": "ccd",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "BatchSourceCcd",
+            "type": "object"
+          },
+          "BatchSourceFracfact": {
+            "additionalProperties": false,
+            "description": "부분 요인 2수준: resolution 4 | 5(기본 5).",
+            "properties": {
+              "kind": {
+                "const": "fracfact",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              },
+              "resolution": {
+                "default": 5,
+                "enum": [
+                  4,
+                  5
+                ],
+                "title": "Resolution",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "BatchSourceFracfact",
+            "type": "object"
+          },
+          "BatchSourceFullfact": {
+            "additionalProperties": false,
+            "description": "전체 요인: levels {변수: 수준 수 1~10}(생략한 활성 변수 = 2; 2~10 검사와 정수 변수 검사는 problems).",
+            "properties": {
+              "kind": {
+                "const": "fullfact",
+                "title": "Kind",
+                "type": "string"
+              },
+              "levels": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "maximum": 10,
+                      "minimum": 1,
+                      "type": "integer"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Levels"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "BatchSourceFullfact",
+            "type": "object"
+          },
+          "BatchSourceLhs": {
+            "additionalProperties": false,
+            "description": "범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).",
+            "properties": {
+              "count": {
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "lhs",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              },
+              "seed": {
+                "default": 1,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "BatchSourceLhs",
+            "type": "object"
+          },
+          "BatchSourceLhsOpt": {
+            "additionalProperties": false,
+            "description": "최적화 LHS: count 2~predict_batch.max_runs, seed 0 이상(기본 1), criterion maximin(최소 거리, 기본) | corr(상관 최소).",
+            "properties": {
+              "count": {
+                "title": "Count",
+                "type": "integer"
+              },
+              "criterion": {
+                "default": "maximin",
+                "enum": [
+                  "maximin",
+                  "corr"
+                ],
+                "title": "Criterion",
+                "type": "string"
+              },
+              "kind": {
+                "const": "lhs_opt",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              },
+              "seed": {
+                "default": 1,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "BatchSourceLhsOpt",
+            "type": "object"
+          },
+          "BatchSourcePb": {
+            "additionalProperties": false,
+            "description": "Plackett–Burman(2수준 선별).",
+            "properties": {
+              "kind": {
+                "const": "pb",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "BatchSourcePb",
+            "type": "object"
+          },
+          "BatchSourceSobol": {
+            "additionalProperties": false,
+            "description": "Sobol(스크램블): count = 2^m(4~max_runs), seed 0~4294967295(생략 = 1), continue_from = 이전 Sobol 배치 id(이어서 추가 —\nseed·ranges는 생략하고 이전 값을 쓴다).",
+            "properties": {
+              "continue_from": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Continue From"
+              },
+              "count": {
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "sobol",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              },
+              "seed": {
+                "anyOf": [
+                  {
+                    "maximum": 4294967295,
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Seed"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "BatchSourceSobol",
+            "type": "object"
+          },
+          "BatchSourceTable": {
+            "additionalProperties": false,
+            "description": "표 붙여넣기·CSV 내용(탭/쉼표 자동, BOM 허용, 첫 줄 헤더 = 파라미터 이름 전부, 선택 열 doe 무시).",
+            "properties": {
+              "kind": {
+                "const": "table",
+                "title": "Kind",
+                "type": "string"
+              },
+              "text": {
+                "maxLength": 16777216,
+                "title": "Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ],
+            "title": "BatchSourceTable",
+            "type": "object"
+          },
+          "BatchSourceTrainDoe": {
+            "additionalProperties": false,
+            "description": "① 학습 DOE(같은 Study, READY, sample_status PARSED/PARTIAL)의 samples.csv 행 전부.",
+            "properties": {
+              "doe_id": {
+                "maxLength": 64,
+                "title": "Doe Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "train_doe",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "doe_id"
+            ],
+            "title": "BatchSourceTrainDoe",
+            "type": "object"
+          },
+          "CaptureDisplay": {
+            "additionalProperties": false,
+            "description": "표시 설정(모든 키 선택 — null = 상위 설정을 따름: config → 응답 정의 첫 항목 → 템플릿 → 작업).",
+            "properties": {
+              "avgmode": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "",
+                      "simple",
+                      "maximum",
+                      "minimum",
+                      "difference"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Avgmode"
+              },
+              "component": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Component"
+              },
+              "comps": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 50,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Comps"
+              },
+              "field": {
+                "anyOf": [
+                  {
+                    "maxLength": 64,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Field"
+              },
+              "legend": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/CaptureLegend"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null
+              },
+              "views": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "enum": [
+                        "iso",
+                        "front",
+                        "back",
+                        "top",
+                        "bottom",
+                        "left",
+                        "right"
+                      ],
+                      "type": "string"
+                    },
+                    "maxItems": 7,
+                    "minItems": 1,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Views"
+              }
+            },
+            "title": "CaptureDisplay",
+            "type": "object"
+          },
+          "CaptureLegend": {
+            "additionalProperties": false,
+            "properties": {
+              "max": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Max"
+              },
+              "min": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Min"
+              },
+              "mode": {
+                "default": "auto",
+                "enum": [
+                  "auto",
+                  "fixed"
+                ],
+                "title": "Mode",
+                "type": "string"
+              }
+            },
+            "title": "CaptureLegend",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "§14.7 생성 body params. multi_execution = 사용자 입력 동시 실행 수(1~train_data.max_multi_execution).",
+        "properties": {
+          "capture": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/BatchCaptureOptions"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "하위 예측 컨투어 캡처 옵션(선택)"
+          },
+          "display": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/CaptureDisplay"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "배치 단위 컨투어 표시(선택)"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "모델 id(생략 = Final 모델)",
+            "title": "Model Id"
+          },
+          "multi_execution": {
+            "description": "입력 생성 동시 실행 수[개](1~64, 상한 train_data.max_multi_execution)",
+            "maximum": 64,
+            "minimum": 1,
+            "title": "Multi Execution",
+            "type": "integer"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "파라미터 세트 id(생략 = 현재 세트)",
+            "title": "Param Set Id"
+          },
+          "source": {
+            "description": "조합 원천 {kind: lhs|sobol|fullfact|table|train_doe…, count[개], seed, …}",
+            "discriminator": {
+              "mapping": {
+                "bbd": "#/$defs/BatchSourceBbd",
+                "ccd": "#/$defs/BatchSourceCcd",
+                "fracfact": "#/$defs/BatchSourceFracfact",
+                "fullfact": "#/$defs/BatchSourceFullfact",
+                "lhs": "#/$defs/BatchSourceLhs",
+                "lhs_opt": "#/$defs/BatchSourceLhsOpt",
+                "pb": "#/$defs/BatchSourcePb",
+                "sobol": "#/$defs/BatchSourceSobol",
+                "table": "#/$defs/BatchSourceTable",
+                "train_doe": "#/$defs/BatchSourceTrainDoe"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/BatchSourceLhs"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceLhsOpt"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceSobol"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceFullfact"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceFracfact"
+              },
+              {
+                "$ref": "#/$defs/BatchSourcePb"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceBbd"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceCcd"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceTable"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceTrainDoe"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "multi_execution",
+          "source"
+        ],
+        "title": "PredictBatchKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "solve_pbs": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "HpcOverrides": {
+            "additionalProperties": false,
+            "properties": {
+              "ncpus": {
+                "anyOf": [
+                  {
+                    "maximum": 4096,
+                    "minimum": 1,
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ncpus"
+              },
+              "queue": {
+                "anyOf": [
+                  {
+                    "pattern": "^[A-Za-z0-9_.\\-@]{1,64}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Queue"
+              },
+              "version": {
+                "anyOf": [
+                  {
+                    "pattern": "^[A-Za-z0-9][A-Za-z0-9 ._\\-]{0,63}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Version"
+              },
+              "walltime": {
+                "anyOf": [
+                  {
+                    "pattern": "^\\d{1,4}:\\d{2}:\\d{2}$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Walltime"
+              }
+            },
+            "title": "HpcOverrides",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "doe_id": {
+            "description": "READY 상태 DOE id(①-3 결과)",
+            "title": "Doe Id",
+            "type": "string"
+          },
+          "hpc": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/HpcOverrides"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "PBS 덮어쓰기 {queue, ncpus[코어](1~4096), walltime(HH:MM:SS), version}"
+          },
+          "on_run_failure": {
+            "default": "collect_partial",
+            "description": "run 실패 시 collect_partial(성공분 회수) | fail",
+            "enum": [
+              "collect_partial",
+              "fail"
+            ],
+            "title": "On Run Failure",
+            "type": "string"
+          },
+          "run_keys": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^[A-Za-z0-9_\\-]{1,64}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "제출할 run 키 목록(생략 = 제출 가능한 run 전부, 최대 train_data.max_runs_per_submit)",
+            "title": "Run Keys"
+          }
+        },
+        "required": [
+          "doe_id"
+        ],
+        "title": "SolvePbsParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "surrogate_opt": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "SoConstraint": {
+            "additionalProperties": false,
+            "description": "제약: `<=`·`>=`는 value, `range`(S17 §22.4.1)는 lo < hi(유한).",
+            "properties": {
+              "hi": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Hi"
+              },
+              "lo": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Lo"
+              },
+              "metric": {
+                "maxLength": 200,
+                "title": "Metric",
+                "type": "string"
+              },
+              "op": {
+                "enum": [
+                  "<=",
+                  ">=",
+                  "range"
+                ],
+                "title": "Op",
+                "type": "string"
+              },
+              "series": {
+                "anyOf": [
+                  {
+                    "maxLength": 400,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Series"
+              },
+              "value": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Value"
+              }
+            },
+            "required": [
+              "metric",
+              "op"
+            ],
+            "title": "SoConstraint",
+            "type": "object"
+          },
+          "SoExploreNew": {
+            "additionalProperties": false,
+            "description": "새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs).",
+            "properties": {
+              "count": {
+                "anyOf": [
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Count"
+              },
+              "kind": {
+                "const": "new",
+                "title": "Kind",
+                "type": "string"
+              },
+              "seed": {
+                "default": 1,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "title": "SoExploreNew",
+            "type": "object"
+          },
+          "SoExploreReuse": {
+            "additionalProperties": false,
+            "description": "완료된 배치 재사용(같은 Study·같은 템플릿·같은 모델·DONE).",
+            "properties": {
+              "batch_id": {
+                "maxLength": 64,
+                "title": "Batch Id",
+                "type": "string"
+              },
+              "kind": {
+                "const": "reuse",
+                "title": "Kind",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "batch_id"
+            ],
+            "title": "SoExploreReuse",
+            "type": "object"
+          },
+          "SoObjective": {
+            "additionalProperties": false,
+            "properties": {
+              "metric": {
+                "maxLength": 200,
+                "title": "Metric",
+                "type": "string"
+              },
+              "sense": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "min",
+                      "max"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "min | max — 필수(생략 시 422 OPT_CRITERIA_REQUIRED)",
+                "title": "Sense"
+              },
+              "series": {
+                "anyOf": [
+                  {
+                    "maxLength": 400,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Series"
+              }
+            },
+            "required": [
+              "metric"
+            ],
+            "title": "SoObjective",
+            "type": "object"
+          },
+          "SoObserve": {
+            "additionalProperties": false,
+            "description": "관찰 지표(값만 기록·표시, S17).",
+            "properties": {
+              "metric": {
+                "maxLength": 200,
+                "title": "Metric",
+                "type": "string"
+              },
+              "series": {
+                "anyOf": [
+                  {
+                    "maxLength": 400,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Series"
+              }
+            },
+            "required": [
+              "metric"
+            ],
+            "title": "SoObserve",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "description": "생성·미리보기 공용 본문(phase3 §18.6 + S17 §22.4.1). bounds 생략 = 템플릿 min·max, lo = hi는 고정.\n목적은 `objectives`(1~3개) 또는 단수 `objective`(호환) 중 하나.",
+        "properties": {
+          "algo_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "GA·NSGA-II 고급 옵션(선택)",
+            "title": "Algo Options"
+          },
+          "algorithm": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ego(기본) | ga(단일 목적) | nsga2(다목적)",
+            "title": "Algorithm"
+          },
+          "bounds": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "변수 범위 {이름: [lo, hi]}[세트 단위](생략 = 템플릿 min~max, lo=hi는 고정)",
+            "title": "Bounds"
+          },
+          "candidates": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "반복당 검증 후보 수[개](1~surrogate_opt.max_candidates)",
+            "title": "Candidates"
+          },
+          "capture": {
+            "default": false,
+            "description": "검증 예측 컨투어 캡처 여부",
+            "title": "Capture",
+            "type": "boolean"
+          },
+          "constraints": {
+            "description": "제약 [{metric, op: <=|>=|range, value | lo·hi}]",
+            "items": {
+              "$ref": "#/$defs/SoConstraint"
+            },
+            "maxItems": 20,
+            "title": "Constraints",
+            "type": "array"
+          },
+          "explore": {
+            "description": "탐색 DOE {kind: new, count[개], seed} | {kind: reuse, batch_id}",
+            "discriminator": {
+              "mapping": {
+                "new": "#/$defs/SoExploreNew",
+                "reuse": "#/$defs/SoExploreReuse"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/SoExploreNew"
+              },
+              {
+                "$ref": "#/$defs/SoExploreReuse"
+              }
+            ],
+            "title": "Explore"
+          },
+          "iterations": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "반복 수[회](1~surrogate_opt.max_iterations, 생략 = 기본)",
+            "title": "Iterations"
+          },
+          "levels": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "범주 수준 제한(다중 baseline 세트만)",
+            "title": "Levels"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "모델 id(생략 = Final 모델)",
+            "title": "Model Id"
+          },
+          "multi_execution": {
+            "default": 1,
+            "description": "입력 생성 동시 실행 수[개](1~64)",
+            "maximum": 64,
+            "minimum": 1,
+            "title": "Multi Execution",
+            "type": "integer"
+          },
+          "objective": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SoObjective"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "단일 목적 {metric, series?, sense: min|max}(objectives와 택1)"
+          },
+          "objectives": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/$defs/SoObjective"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "목적 1~3개 [{metric, series?, sense}]",
+            "title": "Objectives"
+          },
+          "observe": {
+            "description": "관찰만 할 응답 목록",
+            "items": {
+              "$ref": "#/$defs/SoObserve"
+            },
+            "maxItems": 50,
+            "title": "Observe",
+            "type": "array"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "파라미터 세트 id(생략 = 현재 세트)",
+            "title": "Param Set Id"
+          },
+          "seed": {
+            "default": 1,
+            "description": "난수 시드[-](0~2^31)",
+            "title": "Seed",
+            "type": "integer"
+          },
+          "surrogate": {
+            "anyOf": [
+              {
+                "enum": [
+                  "gp",
+                  "rbf"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "대리모델 gp | rbf(생략 = 설정 기본)",
+            "title": "Surrogate"
+          },
+          "tol_rel": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "수렴 상대 허용[-](0~1)",
+            "title": "Tol Rel"
+          },
+          "verification": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "loop(반복 검증, 기본) | none(대리모델만)",
+            "title": "Verification"
+          },
+          "weights": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 10,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "목적 2개 이상이면 가중치 목록[-](사용자 입력 필수)",
+            "title": "Weights"
+          }
+        },
+        "required": [
+          "explore"
+        ],
+        "title": "SurrogateOptKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
+    "surrogate_opt_verify": {
+      "cost": "heavy",
+      "params_schema": {
+        "$defs": {
+          "SoVerifyPoint": {
+            "additionalProperties": false,
+            "properties": {
+              "values": {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "title": "Values",
+                "type": "object"
+              }
+            },
+            "required": [
+              "values"
+            ],
+            "title": "SoVerifyPoint",
+            "type": "object"
+          }
+        },
+        "additionalProperties": false,
+        "properties": {
+          "capture": {
+            "default": false,
+            "description": "검증 예측 컨투어 캡처 여부",
+            "title": "Capture",
+            "type": "boolean"
+          },
+          "opt_id": {
+            "description": "완료(DONE)된 내장 최적화 id",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Opt Id",
+            "type": "string"
+          },
+          "points": {
+            "description": "검증할 해 [{values: {이름: 값[세트 단위]}}](1~surrogate_opt.max_extra_points개)",
+            "items": {
+              "$ref": "#/$defs/SoVerifyPoint"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Points",
+            "type": "array"
+          }
+        },
+        "required": [
+          "opt_id",
+          "points"
+        ],
+        "title": "OptVerifyParams",
+        "type": "object"
+      },
+      "version": 1
+    }
+  },
+  "schema_version": 1
+}

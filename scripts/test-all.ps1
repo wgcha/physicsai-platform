@@ -20,6 +20,8 @@ try {
   } finally { $env:PYTHONPATH = $savedPyPath; Pop-Location }
   & $Python -c "import sys; from physicsai_api.export_openapi import render; sys.exit(0 if open('backend/openapi.json', encoding='utf-8').read() == render() else 1)"
   if ($LASTEXITCODE) { Write-Error "backend/openapi.json이 최신이 아닙니다"; exit 1 }
+  & $Python scripts/gen_tool_specs.py --check   # MCP 도구 스펙·용어집 최신·이식 가능 스키마·호환 여부(mcp.md §9)
+  if ($LASTEXITCODE) { Write-Error "MCP 도구 스펙이 최신이 아니거나 깨지는 변경입니다: python scripts/gen_tool_specs.py"; exit 1 }
   if ((Test-Path frontend/package.json) -and (Get-Command npm -ErrorAction SilentlyContinue)) {
     Push-Location frontend
     try { if (-not (Test-Path node_modules)) { npm ci }; npm test; if ($LASTEXITCODE) { exit $LASTEXITCODE }; npm run lint; if ($LASTEXITCODE) { exit $LASTEXITCODE } } finally { Pop-Location }

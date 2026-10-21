@@ -143,10 +143,13 @@ def read_log(ctx: AppContext, job_id: str, step_no: int | None, cursor: int, lim
 # ---- 취소·재시도·대기열 ---------------------------------------------------------
 
 
-def cancel_job(ctx: AppContext, principal: Principal, job_id: str, rid: str, ip: str | None) -> dict[str, Any]:
+def cancel_job(ctx: AppContext, principal: Principal, job_id: str, rid: str, ip: str | None, *,
+               token_owner_ok: bool = False) -> dict[str, Any]:
+    """token_owner_ok = MCP 공통 작업 계약이 "같은 토큰이 만든 작업"을 확인한 뒤에만 True(mcp.md §2.1 예외)."""
     with ctx.engine.begin() as conn:
         require_job(conn, job_id)
-        require_global_admin(principal)
+        if not token_owner_ok:
+            require_global_admin(principal)
         j = jobs_repo.request_cancel(conn, job_id, principal.user_id)
         audit(conn, principal, "JOB_CANCEL", "job", job_id, {"state": j["state"]}, rid, ip)
         return job_detail(conn, j, principal, include_commands=False, ai_root=ctx.settings.storage.ai_root)

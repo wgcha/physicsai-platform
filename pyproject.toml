@@ -30,6 +30,9 @@ test = ["pytest>=8", "pytest-timeout>=2.2"]
 where = ["backend", "worker"]
 include = ["physicsai_core*", "physicsai_api*", "physicsai_worker*"]
 
+[tool.setuptools.package-data]
+physicsai_api = ["mcp/generated/*.json", "mcp/glossary_terms.yaml"]  # mcp.md §9·§10: /mcp/tools·/mcp/glossary가 서빙
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "worker/tests", "packages/simdash_adapters/tests"]
 pythonpath = ["backend", "worker", "packages/simdash_adapters/src", "packages/paicad/src"]

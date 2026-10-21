@@ -120,3 +120,33 @@ logging:
   dir: "{{DEMO_ROOT}}/logs"       # backend.log·worker.log(회전·마스킹). 표준 출력은 *.out.log
   max_mb: 5
   backups: 3
+
+mcp:                              # MCP 기능(docs/contracts/mcp.md §13). 절이 없으면 아래 기본값 — 키 추가만, 기본 꺼짐
+  enabled: false                  # false면 API 토큰 인증·/mcp/*·/physicsai/mcp·"내 API 토큰" 화면 모두 꺼짐(404 MCP_DISABLED, 기존 동작 불변)
+  require_confirm_for_token: true # 토큰 요청의 비용 큰 작업(cost heavy)은 plan_job → confirm_token → run_job
+  confirm_ttl_s: 600              # confirm_token 유효 시간(60~3600초, 1회용)
+  allowed_job_kinds: null         # null = 작업 종류 레지스트리 전체
+  denied_job_kinds: [solve_pbs]   # 토큰·MCP로 만들 수 없는 작업 종류(기본: PBS 제출은 웹에서만 — 미결 Q3, 빈 목록 [] 가능)
+  token:
+    default_expiry_days: 30       # 만료일 생략 시(1~30)
+    max_expiry_days: 30           # 발급 상한 — 설정으로도 30을 넘길 수 없다(무기한·연장 없음, MR-13)
+    max_per_user: 5               # 사용자당 유효 토큰 수
+    snapshot_max_age_days: 30     # 역할 스냅숏 최대 경과일(1~30) — 넘으면 웹 화면에 한 번 로그인해야 토큰이 다시 동작
+    last_used_update_s: 60        # 마지막 사용 시각 갱신 간격
+  server:
+    http_enabled: true            # false면 /physicsai/mcp(Streamable HTTP) 404 — stdio 실행기(physicsai-mcp)는 API만 쓰므로 영향 없음
+    call_timeout_s: 60            # MCP 도구 호출 → 백엔드 API 시간 제한(초)
+    max_result_bytes: 65536       # 도구 결과 최대 바이트(넘으면 RESULT_TOO_LARGE)
+  rate_limit:
+    requests_per_min: 60          # 토큰별 분당 요청(초과 429 RATE_LIMITED)
+    plans_per_min: 10             # 토큰별 분당 plan_job
+    max_active_jobs_per_token: 3  # 토큰이 만든 진행 중 작업 수(초과 429 TOKEN_ACTIVE_JOB_LIMIT)
+  audit:
+    retention_days: 180           # api_audit 보존(30~3650일)
+    record_reads: false           # 토큰 GET 요청도 기록할지
+  summary:
+    max_bytes: 8192               # 요약 응답 상한(바이트)
+    top_n_default: 10
+    top_n_max: 50
+  similar:
+    max_rows: 20000               # (유사 설계 검색 — 미결 Q2, 현재 미사용)
