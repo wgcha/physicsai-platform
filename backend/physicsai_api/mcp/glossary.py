@@ -59,7 +59,7 @@ def _status_kw(call: ast.Call) -> int | None:
 
 
 def error_codes(repo: Path = REPO) -> dict[str, dict[str, Any]]:
-    """`DomainError("CODE", "메시지", status=…)`·`_err(status, "CODE", "메시지")`·`StepFailure("CODE", "메시지")` 리터럴 → 코드표."""
+    """`DomainError("CODE", "메시지", status=…)`·`_err(status, "CODE", "메시지")`·`_error(status|None, "CODE", "메시지")`·`StepFailure("CODE", "메시지")` 리터럴 → 코드표."""
     out: dict[str, dict[str, Any]] = {}
     files: list[Path] = []
     for d in ERROR_SCAN_DIRS:
@@ -85,8 +85,10 @@ def error_codes(repo: Path = REPO) -> dict[str, dict[str, Any]]:
                 status = _status_kw(n) if fn != "RateLimited" else 429
                 if fn == "DomainError" and status is None and len(n.args) > 2 and isinstance(n.args[2], ast.Constant):
                     status = n.args[2].value if isinstance(n.args[2].value, int) else None
-            elif fn == "_err" and len(n.args) >= 2 and isinstance(n.args[0], ast.Constant) and isinstance(n.args[0].value, int):
-                status, code = int(n.args[0].value), _lit(n.args[1])
+            elif (fn in ("_err", "_error") and len(n.args) >= 2 and isinstance(n.args[0], ast.Constant)
+                  and (isinstance(n.args[0].value, int) or n.args[0].value is None)):  # `_error(None, "CODE", …)`: MCP 계층의 로컬 오류(상태 없음)
+                status = int(n.args[0].value) if n.args[0].value is not None else None
+                code = _lit(n.args[1])
                 msg = _lit(n.args[2]) if len(n.args) > 2 else None
             if not code or not code.replace("_", "").isalnum() or not code.isupper():
                 continue

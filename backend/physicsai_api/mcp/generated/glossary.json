@@ -640,6 +640,14 @@
       ],
       "status": 401
     },
+    "BACKEND_TIMEOUT": {
+      "code": "BACKEND_TIMEOUT",
+      "message_ko": "백엔드 응답이 {…}초 안에 오지 않았습니다",
+      "sources": [
+        "backend/physicsai_mcp/toolset.py"
+      ],
+      "status": null
+    },
     "BASELINE_BASE": {
       "code": "BASELINE_BASE",
       "message_ko": "첫 baseline(세트 자신)은 삭제할 수 없습니다 — 단일로 되돌리려면 disable을 쓰세요",
@@ -1306,8 +1314,9 @@
     },
     "INTERNAL_ERROR": {
       "code": "INTERNAL_ERROR",
-      "message_ko": "placeholder '{{…}}' 값이 준비되지 않았습니다",
+      "message_ko": "서버 내부 오류가 발생했습니다",
       "sources": [
+        "backend/physicsai_api/main.py",
         "backend/physicsai_core/commands.py",
         "backend/physicsai_core/commands_render.py",
         "backend/physicsai_core/paths.py",
@@ -1318,6 +1327,14 @@
         "worker/physicsai_worker/steps/stage3_model/dataset.py",
         "worker/physicsai_worker/steps/stage4_predict/geom_preview.py"
       ],
+      "status": 500
+    },
+    "INVALID_ARGUMENTS": {
+      "code": "INVALID_ARGUMENTS",
+      "message_ko": "알 수 없는 인자: {…}",
+      "sources": [
+        "backend/physicsai_mcp/toolset.py"
+      ],
       "status": null
     },
     "INVALID_PARAMS": {
@@ -1325,6 +1342,7 @@
       "message_ko": "role은 admin | power | general 중 하나입니다",
       "sources": [
         "backend/physicsai_api/demo.py",
+        "backend/physicsai_api/main.py",
         "backend/physicsai_api/services/api_tokens.py",
         "backend/physicsai_api/services/common.py",
         "backend/physicsai_api/services/equiv_check.py",
@@ -1422,6 +1440,14 @@
       ],
       "status": 404
     },
+    "METHOD_NOT_ALLOWED": {
+      "code": "METHOD_NOT_ALLOWED",
+      "message_ko": "허용되지 않는 메서드입니다",
+      "sources": [
+        "backend/physicsai_api/main.py"
+      ],
+      "status": 405
+    },
     "MODEL_IN_USE": {
       "code": "MODEL_IN_USE",
       "message_ko": "진행 중인 작업이 이 모델을 사용하고 있습니다",
@@ -1461,6 +1487,7 @@
       "message_ko": "찾을 수 없습니다",
       "sources": [
         "backend/physicsai_api/frontend_static.py",
+        "backend/physicsai_api/main.py",
         "backend/physicsai_api/mcp/job_kinds.py",
         "backend/physicsai_api/services/api_tokens.py",
         "backend/physicsai_api/services/common.py",
@@ -1576,6 +1603,14 @@
       "message_ko": "{…}/dataset.psdata 크기가 {…} bytes로 너무 작습니다",
       "sources": [
         "worker/physicsai_worker/steps/stage3_model/dataset.py"
+      ],
+      "status": null
+    },
+    "PARAMS_JSON_INVALID": {
+      "code": "PARAMS_JSON_INVALID",
+      "message_ko": "인자 {…}은 JSON 객체 텍스트(문자열)여야 합니다",
+      "sources": [
+        "backend/physicsai_mcp/toolset.py"
       ],
       "status": null
     },
@@ -1811,6 +1846,14 @@
       ],
       "status": 422
     },
+    "RESULT_TOO_LARGE": {
+      "code": "RESULT_TOO_LARGE",
+      "message_ko": "결과가 {…} 바이트를 넘습니다",
+      "sources": [
+        "backend/physicsai_mcp/toolset.py"
+      ],
+      "status": null
+    },
     "SAMPLES_MISSING": {
       "code": "SAMPLES_MISSING",
       "message_ko": "DOE 샘플 표가 없습니다",
@@ -1853,6 +1896,14 @@
         "backend/physicsai_api/services/job_params/stage2_curation.py"
       ],
       "status": 422
+    },
+    "SERVER_UNREACHABLE": {
+      "code": "SERVER_UNREACHABLE",
+      "message_ko": "백엔드 서버에 연결할 수 없습니다",
+      "sources": [
+        "backend/physicsai_mcp/toolset.py"
+      ],
+      "status": null
     },
     "SESSION_REQUIRED": {
       "code": "SESSION_REQUIRED",
@@ -2110,6 +2161,14 @@
         "backend/physicsai_api/services/stage1_train_data.py"
       ],
       "status": 409
+    },
+    "UNKNOWN_TOOL": {
+      "code": "UNKNOWN_TOOL",
+      "message_ko": "알 수 없는 도구입니다: {…}",
+      "sources": [
+        "backend/physicsai_mcp/toolset.py"
+      ],
+      "status": null
     },
     "VERSION_CONFLICT": {
       "code": "VERSION_CONFLICT",

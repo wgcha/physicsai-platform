@@ -143,3 +143,9 @@ error_hints:
   JOB_KIND_DENIED: 이 작업 종류는 웹 화면에서만 실행할 수 있습니다
   RATE_LIMITED: Retry-After 초만큼 기다린 뒤 다시 시도하세요
   TOKEN_ACTIVE_JOB_LIMIT: 진행 중 작업이 끝나거나 cancel_job으로 취소한 뒤 다시 시도하세요
+  INVALID_ARGUMENTS: 도구 인자 이름·필수·JSON 형식을 입력 스키마(tools/list)와 맞추세요(params_json은 JSON 객체 텍스트)
+  PARAMS_JSON_INVALID: params_json은 JSON 객체 텍스트(64 KiB 이하)여야 합니다 — describe_job_kind의 params_schema·example을 보고 만드세요
+  UNKNOWN_TOOL: tools/list에 있는 도구 이름만 부를 수 있습니다
+  SERVER_UNREACHABLE: PHYSICSAI_MCP_URL·사내망 접속을 확인하세요(서버가 내려갔을 수 있음)
+  BACKEND_TIMEOUT: 잠시 뒤 다시 시도하거나 조회 범위(top_n·limit)를 줄이세요
+  RESULT_TOO_LARGE: top_n·limit을 줄이거나 section으로 나눠 조회하세요

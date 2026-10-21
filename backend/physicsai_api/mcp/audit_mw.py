@@ -25,6 +25,7 @@ log = logging.getLogger("physicsai_api.audit")
 DENIED = (401, 403, 428, 429)
 ALWAYS_TOOLS = ("plan_job", "run_job")
 ERROR_BODY_CAP = 8192
+MCP_MOUNT = "/physicsai/mcp"
 
 
 def _auth_header(scope: Scope) -> str:
@@ -57,7 +58,9 @@ class ApiAuditMiddleware:
         self.ctx = ctx
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or not self.ctx.settings.mcp.enabled or not _is_token(scope):
+        path = scope.get("path", "")
+        if (scope["type"] != "http" or not self.ctx.settings.mcp.enabled or not _is_token(scope)
+                or path == MCP_MOUNT or path.startswith(MCP_MOUNT + "/")):  # 마운트 자체는 API 호출이 아니다(도구 호출의 내부 API 요청이 1행씩 남는다)
             await self.app(scope, receive, send)
             return
         t0 = time.monotonic()

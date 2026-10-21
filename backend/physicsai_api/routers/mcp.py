@@ -177,6 +177,8 @@ def get_glossary(request: Request,
             openapi_extra=M.xmcp_exclude("MCP 서버 부팅용", token_risk="read"))
 def mcp_tool_specs(request: Request,
                    format: Literal["mcp", "openai"] = Query(default="mcp", description="mcp(tools.mcp.json) | openai(tools.openai.json)"),  # noqa: A002
+                   visible: bool = Query(default=False, description="true면(mcp 형식만) 최상위 visible에 이 토큰 범위로 부를 수 있는 도구 이름을 더한다"),
                    _p: Principal = Depends(get_principal)) -> dict | list:
-    """생성된 도구 스펙 파일을 그대로 돌려준다(MCP 서버가 부팅 때 읽어 도구를 동적으로 노출)."""
-    return svc.tools(get_ctx(request), format)
+    """생성된 도구 스펙 파일을 그대로 돌려준다(MCP 서버가 부팅 때 읽어 도구를 동적으로 노출). visible=true는 stdio 실행기의 tools/list 표시용."""
+    tok = getattr(request.state, "api_token", None) or {}
+    return svc.tools(get_ctx(request), format, with_visible=visible, scope=tok.get("scope"))

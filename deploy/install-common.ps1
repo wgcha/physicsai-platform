@@ -610,7 +610,10 @@ function Install-PhysicsAIRepoPackages {
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\simdash_adapters')) -What '공통 어댑터 패키지(simdash-adapters) 설치'
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\paicad')) -What 'native 형상 엔진(paicad) 설치'
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', $RepoRoot) -What '플랫폼 패키지(physicsai-platform) 설치'
-    Invoke-PhysicsAINative '설치 확인(import)' $VenvPy @('-c', 'import physicsai_api, physicsai_worker, simdash_adapters, fastapi, psycopg, alembic, yaml') '위 오류를 확인하세요(venv 패키지 설치가 끝나지 않음)'
+    Invoke-PhysicsAINative '설치 확인(import)' $VenvPy @('-c', 'import physicsai_api, physicsai_worker, physicsai_mcp, simdash_adapters, fastapi, psycopg, alembic, yaml, mcp') '위 오류를 확인하세요(venv 패키지 설치가 끝나지 않음)'
+    # MCP stdio 실행기(mcp.md §20.5): 플랫폼 패키지의 console script physicsai-mcp.exe가 venv\Scripts에 설치됐는지 --version으로 확인(별도 설치 단계 없음)
+    $mcpExe = Join-Path (Split-Path -Parent $VenvPy) 'physicsai-mcp.exe'
+    Invoke-PhysicsAINative 'MCP 실행기 확인(physicsai-mcp --version)' $mcpExe @('--version') 'venv\Scripts\physicsai-mcp.exe가 없거나 실행되지 않습니다(플랫폼 패키지 설치가 끝나지 않음)'
 }
 
 function Publish-PhysicsAIFrontend {

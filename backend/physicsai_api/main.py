@@ -118,6 +118,9 @@ def create_app(ctx: AppContext, *, bind_host: str | None = None) -> FastAPI:
 
     app.state.mcp_runtime = McpRuntime()
     app.add_middleware(ApiAuditMiddleware, ctx=ctx)
+    from .mcp.http_mount import mount_mcp
+
+    mount_mcp(app, ctx)  # §20.1: /physicsai/mcp — 프런트 정적 서빙보다 먼저. 꺼져 있으면 핸들러가 404
     if ctx.settings.demo.enabled:  # 시연 모드(check_startup이 dev·127.0.0.1을 보장)
         from . import demo
 

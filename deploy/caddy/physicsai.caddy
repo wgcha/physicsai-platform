@@ -7,6 +7,12 @@ handle /physicsai/api/* {
 	reverse_proxy 127.0.0.1:{$PHYSICSAI_PORT:8100}
 }
 
+# v0.2.4: MCP(Streamable HTTP, docs/contracts/mcp.md §20.5) — 백엔드 프로세스 안 마운트라 같은 포트. `mcp.enabled: true`일 때만 열린다(꺼져 있으면 백엔드가 404).
+# JSON 응답이라 별도 스트리밍 설정은 필요 없다. 더 구체적인 handle이므로 아래 `handle /physicsai/*`보다 앞에 둔다.
+handle /physicsai/mcp* {
+	reverse_proxy 127.0.0.1:{$PHYSICSAI_PORT:8100}
+}
+
 # v0.2.1: 해시 자산은 SPA fallback 없이 서빙(없으면 404 — index.html(text/html)이 JS 자리에 오지 않게).
 # 더 구체적인 handle이므로 아래 `handle /physicsai/*`보다 앞에 둔다.
 handle /physicsai/assets/* {

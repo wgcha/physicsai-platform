@@ -345,10 +345,20 @@ def glossary(ctx: AppContext, section: str | None) -> dict[str, Any]:
     return glossary_mod.merged(section)
 
 
-def tools(ctx: AppContext, fmt: str) -> Any:
+def tools(ctx: AppContext, fmt: str, *, with_visible: bool = False, scope: str | None = None) -> Any:
+    """생성 도구 스펙 파일 그대로. `with_visible`(mcp 형식만)이면 최상위 `visible` = 이 범위(`scope`, None=세션=전체)의 호출자가 부를 수 있는 도구 이름 —
+    MCP 서버의 `tools/list` 표시 필터 판정을 백엔드가 한다(MCP 계층에는 권한 판단 없음, mcp.md §20.1)."""
     require_enabled(ctx)
+    return tool_specs(fmt, with_visible=with_visible, scope=scope)
+
+
+def tool_specs(fmt: str, *, with_visible: bool = False, scope: str | None = None) -> Any:
     name = "tools.openai.json" if fmt == "openai" else "tools.mcp.json"
-    return json.loads((glossary_mod.GENERATED_DIR / name).read_text(encoding="utf-8"))
+    doc = json.loads((glossary_mod.GENERATED_DIR / name).read_text(encoding="utf-8"))
+    if with_visible and fmt != "openai":
+        doc["visible"] = [t["name"] for t in doc["tools"]
+                          if scope is None or scope_allows(scope, (t.get("annotations") or {}).get("x-risk", "read"))]
+    return doc
 
 
 def ping(ctx: AppContext, state: Any) -> dict[str, Any]:

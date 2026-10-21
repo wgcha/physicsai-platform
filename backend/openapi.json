@@ -25146,7 +25146,7 @@
     },
     "/physicsai/api/mcp/tools": {
       "get": {
-        "description": "생성된 도구 스펙 파일을 그대로 돌려준다(MCP 서버가 부팅 때 읽어 도구를 동적으로 노출).",
+        "description": "생성된 도구 스펙 파일을 그대로 돌려준다(MCP 서버가 부팅 때 읽어 도구를 동적으로 노출). visible=true는 stdio 실행기의 tools/list 표시용.",
         "operationId": "mcp_tool_specs",
         "parameters": [
           {
@@ -25163,6 +25163,18 @@
               ],
               "title": "Format",
               "type": "string"
+            }
+          },
+          {
+            "description": "true면(mcp 형식만) 최상위 visible에 이 토큰 범위로 부를 수 있는 도구 이름을 더한다",
+            "in": "query",
+            "name": "visible",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true면(mcp 형식만) 최상위 visible에 이 토큰 범위로 부를 수 있는 도구 이름을 더한다",
+              "title": "Visible",
+              "type": "boolean"
             }
           }
         ],
