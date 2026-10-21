@@ -231,6 +231,10 @@ ALLOWED = {
     # --- MCP(mcp.md): 읽기 전용 요약·스펙 생성기 ---
     "backend/physicsai_api/mcp/summaries.py": 1,                         # param_set 요약 = 세트 정의 표(실행 경로 아님, vars_revision은 facts에 함께)
     "backend/physicsai_api/mcp/toolspec.py": 1,                          # openapi operation의 `parameters`(경로·쿼리 인자) — 세트 정의와 무관
+    # --- 보고서(upload-report.md §9): 결과 표·최적화 입력 dict의 `parameters`(변수 목록) 읽기 — 세트 정의 실행 경로 아님 ---
+    "backend/physicsai_api/services/reports_analysis.py": 4,
+    "backend/physicsai_core/report_html/analysis.py": 7,
+    "backend/physicsai_core/report_html/opt.py": 4,
 }
 PATTERN = re.compile(r"\[\"parameters\"\]|\.get\(\"parameters\"\)")
 

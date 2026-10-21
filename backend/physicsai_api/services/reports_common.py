@@ -8,6 +8,7 @@ from typing import Any
 
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
+from physicsai_core.db.repositories import report_sources
 from physicsai_core.db.repositories import studies as studies_repo
 
 from ..context import AppContext
@@ -62,17 +63,8 @@ def require_study(conn: Any, study_id: str) -> dict[str, Any]:
 
 
 def uploads_lookup(ctx: AppContext, conn: Any, study_id: str) -> list[dict[str, Any]]:
-    """완료된 업로드 세션 행(`uploads` — 업로드 브랜치 migration 0021 이후에만 존재). 테이블이 없거나 열이 다르면 빈 목록(보고서는 계속)."""
-    try:
-        from sqlalchemy import inspect, text
-
-        if not inspect(conn).has_table("uploads"):
-            return []
-        rows = conn.execute(text("select dir_rel, username, created_at from uploads where study_id = :s and state = 'COMPLETED'"), {"s": study_id}).all()
-        return [{"dir_rel": r[0], "username": r[1], "at": r[2]} for r in rows]
-    except Exception:  # noqa: BLE001
-        log.debug("업로드 출처 조회 실패(무시)", exc_info=True)
-        return []
+    """완료된 업로드 세션 행(표가 없으면 빈 목록 — 업로드 브랜치 migration 0021 이후에만 존재)."""
+    return report_sources.completed_uploads(conn, study_id)
 
 
 def origin_text(ctx: AppContext, rows: list[dict[str, Any]], path: str | None) -> str | None:

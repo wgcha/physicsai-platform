@@ -839,7 +839,8 @@
       "code": "DOE_NOT_FOUND",
       "message_ko": "DOE를 찾을 수 없습니다",
       "sources": [
-        "backend/physicsai_api/services/doe_result_table.py"
+        "backend/physicsai_api/services/doe_result_table.py",
+        "backend/physicsai_api/services/reports_analysis.py"
       ],
       "status": 404
     },
@@ -1351,6 +1352,7 @@
         "backend/physicsai_api/services/mcp.py",
         "backend/physicsai_api/services/param_set_native_api.py",
         "backend/physicsai_api/services/predict_runs.py",
+        "backend/physicsai_api/services/reports_analysis.py",
         "backend/physicsai_api/services/stage4_predict.py",
         "backend/physicsai_api/services/system.py",
         "backend/physicsai_core/fs_browse.py"
@@ -1855,6 +1857,34 @@
         "backend/physicsai_api/services/job_params/stage4_capture.py"
       ],
       "status": 409
+    },
+    "REPORT_NOT_READY": {
+      "code": "REPORT_NOT_READY",
+      "message_ko": "{…}이(가) 아직 끝나지 않았습니다 — 끝난 뒤 받으세요",
+      "sources": [
+        "backend/physicsai_api/services/reports.py",
+        "backend/physicsai_api/services/reports_analysis.py",
+        "backend/physicsai_api/services/reports_equiv.py",
+        "backend/physicsai_api/services/reports_opt.py"
+      ],
+      "status": 409
+    },
+    "REPORT_TARGET_UNKNOWN": {
+      "code": "REPORT_TARGET_UNKNOWN",
+      "message_ko": "보고서를 만들 수 없는 대상입니다: {…}",
+      "sources": [
+        "backend/physicsai_api/services/reports.py",
+        "backend/physicsai_api/services/reports_opt.py"
+      ],
+      "status": 404
+    },
+    "REPORT_TOO_LARGE": {
+      "code": "REPORT_TOO_LARGE",
+      "message_ko": "보고서가 크기 상한({…} MiB)을 넘습니다 — 선택 범위를 줄이세요",
+      "sources": [
+        "backend/physicsai_core/report_html/page.py"
+      ],
+      "status": 413
     },
     "RESOURCE_LIMIT": {
       "code": "RESOURCE_LIMIT",

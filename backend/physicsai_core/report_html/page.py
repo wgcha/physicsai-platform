@@ -336,7 +336,7 @@ def scatter_chart(points: Sequence[dict[str, Any]], *, xlabel: str = "", ylabel:
     for p in pts:
         cls = esc(p.get("cls", "pt")) + (" hollow" if p.get("hollow") else "")
         col = p.get("color")
-        fill = f' fill="{esc(col)}"' if col and not p.get("hollow") else ""
+        fill = f' style="fill:{esc(col)}"' if col and not p.get("hollow") else ""  # CSS 클래스 규칙이 fill 속성을 이기므로 style로
         parts.append(f'<circle class="{cls}"{fill} cx="{X(p["x"]):.1f}" cy="{Y(p["y"]):.1f}" r="{p.get("r", 3.6)}">'
                      f'<title>{esc(p.get("label", ""))}</title></circle>')
     for v, lab in vlines:
