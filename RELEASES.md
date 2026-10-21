@@ -4,6 +4,10 @@
 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
 (`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
 
+## 0.2.1 — 2026-10-21
+
+- native 형상 엔진에서 ①-1 CAD 경로 확인이 STEP(.step·.stp)을 받도록 수정(이전에는 .prt만 허용해 실행 버튼이 막힘)
+
 ## 0.2.0 — 2026-10-20
 
 - native 형상 엔진(paicad): 형상 파라미터 자동 정의·모핑으로 NX·SimLab 없이 형상·메시 생성(기존 Altair 경로와 선택)

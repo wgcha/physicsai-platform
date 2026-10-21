@@ -53,6 +53,9 @@ class PathInspectRequest(Req):
                      "CURATION_INPUT", "SPDM_IMPORT", "PREDICT_INPUT", "FEM_ASSEMBLY"]
     path: str = Field(max_length=400)
     doe_id: str | None = None
+    # geometry-engine.md 변경 메모(2026-10-21): purpose=CAD_FILE의 확장자 검사 기준. native=geometry.step_extensions(STEP),
+    # 생략·altair=train_data.cad_extensions(.prt). 다른 purpose는 무시.
+    engine: Literal["altair", "native"] | None = None
 
 
 class PathProblem(Resp):

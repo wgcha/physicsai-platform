@@ -133,10 +133,15 @@ def inspect_phase2(ctx: AppContext, study: dict[str, Any], body: Any) -> dict[st
     if body.purpose == "CAD_FILE":
         cp = check_user_path(body.path, allowed_roots(s, imports=True), expect="file")
         name = os.path.basename(cp.path)
-        ok_ext = os.path.splitext(name)[1].lower() in [e.lower() for e in s.train_data.cad_extensions]
+        native = getattr(body, "engine", None) == "native"  # native는 STEP(geometry.step_extensions), 그 외는 기존 CAD 확장자
+        exts = s.geometry.step_extensions if native else s.train_data.cad_extensions
+        ok_ext = os.path.splitext(name)[1].lower() in [e.lower() for e in exts]
         summary = {"file_name": name, "size": os.path.getsize(cp.path), "extension_ok": ok_ext}
         if not ok_ext:
-            problems.append({"code": "CAD_EXTENSION", "message": f"CAD 확장자는 {', '.join(s.train_data.cad_extensions)} 중 하나여야 합니다"})
+            if native:
+                problems.append({"code": "STEP_EXTENSION", "message": f"STEP 확장자는 {', '.join(exts)} 중 하나여야 합니다"})
+            else:
+                problems.append({"code": "CAD_EXTENSION", "message": f"CAD 확장자는 {', '.join(exts)} 중 하나여야 합니다"})
     elif body.purpose == "RADIOSS_ASSEM":
         cp = check_user_path(body.path, allowed_roots(s, imports=True))
         names = sorted(n for n in os.listdir(cp.path) if os.path.isfile(os.path.join(cp.path, n)))

@@ -10797,6 +10797,21 @@
             ],
             "title": "Doe Id"
           },
+          "engine": {
+            "anyOf": [
+              {
+                "enum": [
+                  "altair",
+                  "native"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
           "path": {
             "maxLength": 400,
             "title": "Path",
@@ -18243,7 +18258,7 @@
   },
   "info": {
     "title": "PhysicsAI Platform API",
-    "version": "0.2.0"
+    "version": "0.2.1"
   },
   "openapi": "3.1.0",
   "paths": {
