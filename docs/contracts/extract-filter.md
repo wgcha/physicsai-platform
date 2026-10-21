@@ -310,7 +310,7 @@ native 파라미터 추출(①-1 `TD_EXTRACT_PARAMS`·④ native 세트 등록 `
 | Impl-Geom | `packages/paicad/**`: `features.py`(필터·조기 제외·지연 탐색·RIB_POS 인식·`POSITION_TYPES` 단일화·`rib_rejects`), `extract.py`(필터 사본·`extract_stats.json`·PNG 범위), `options.py`(스키마·검증), `update.py`(RIB_POS `AXIS_SHIFT`·`positions[]`), `measure.py`(`rib_center`), `collision.py`(발자국 이동 반영 확인), `sweep.py`·`view/manifest.py`·`render.py`(치수선)·`paramap.py`·`selftest.py`(`rib_rejects` 합계)·`cli.py`(도움말), 시험(가상 쿠션 RIB_POS 변형형·부하 합성·동률 합성), `__version__`·CHANGELOG | **features.py 성능 작업 병합 뒤** 착수. G1(필터·조기 제외·stats) → G2(RIB_POS 인식~check·sweep) 를 한 MINOR로 배포 |
 | Impl-Backend | `backend/physicsai_core/geometry/extract_filter.py`(신규: `GROUP_TYPES`·정규화·검증), `geometry/options.py`(`geom_options.extract.filter` 거부·defaults 경고), `services/job_params/stage1_train_data.py`(`TdExtractParams.extract_filter`·422 코드), **④: param-sets 생성 요청 스키마·서비스(`extract_filter`, altair·shell 422, reprep·baselines 422), 워커 `stage4_predict/param_set_native.py`(NP_PREP 준비 파일·parameters.json 생략 규칙·options `filter`·NP_EXTRACT 백업·요약, add_baseline 조건 승계), `ParamSet`·features 응답 `extract_filter`/`filter`(features JSON에서 읽음)**, `schemas/stage1_train_data.py`(`TrainSetup.extract_filter`·`extract_summary`), `worker/.../stage1_train_data/extract_native.py`·`extract.py`(options 작성·백업·TX_PARSE 기록·요약 로그), `migrations/versions/0019_extract_filter.py`(HEAD 다음)·`db/tables`, `backend/openapi.json`, `backend/tests/fake_tools/fake_paicad`(filter·stats), 시험 | Geom과 병행(fake로), API 모양 먼저 openapi 갱신 |
 | Impl-Frontend | `frontend/src/stages/stage1/CadExtractCard.tsx`, 신규 공용 `ExtractFilterFields.tsx`, ④ `ParamSetDiscoverForm`(native일 때만)·세트 상세 피처 표 머리줄, ①-2 표 머리줄(파라미터 표 카드), `lib/geometry.ts`(RIB_POS 문구·`isPositionType`), API 타입·mock·시험, `frontend-dist` | openapi 갱신 뒤 |
-| Plan | U1~U3 확정 반영 완료(2026-10-21), 구현 차이는 EF-C* | — |
+| Plan | U1~U3 확정 반영 완료(2026-10-21), 구현 차이는 EF-C*(EF-C1 = paicad 0.11.0 해석) | — |
 
 ## 12. 사용자 결정(2026-10-21 확정)
 
@@ -323,3 +323,17 @@ native 파라미터 추출(①-1 `TD_EXTRACT_PARAMS`·④ native 세트 등록 `
 ## 변경 메모
 
 (구현 중 계약과 달라지면 `EF-C1~`로 기록하고 Plan 확인.)
+
+- **EF-C1**(2026-10-21, paicad 0.11.0 구현 bef0b30 `feat/r1-efgeom` — 구현 해석 확정, Plan 확인):
+  1. **동률 창(§5.2·§5.1·R2)**: THICKNESS 지연 탐색에서 `d` 차이 1e-9 mm 이내는 동률로 보고 **낮은 면 index(현행 열거 순) 우선**. 상대 간격이 1e-9~2e-9 mm로 이어진 **연쇄 동률**에서만 전수 탐색(R_all 무필터 알고리즘)과 최근접 선택이 다를 수 있으며 이는 EF-INV의 **허용 예외**다(실물 CAD 좌표 정밀도에서 사실상 발생 없음). V-EF-2 동률 합성은 단일 동률(같은 거리 상대 2개)로 판정.
+  2. **RIB_THICKNESS+RIB_POS 동시 변경(§3.2 update·check)**: 리브 중심 기대값(`positions[].expected_measured`) = 공칭 + RIB_THICKNESS 측면 이동에 따른 중심 평면 변위 + Δ(벡터 합). check (a) `rib_center`는 이 값과 비교.
+  3. **RIB_POS `feasible.limited_by`(§3.2)**: ±a 두 방향 중 **여유가 더 좁은 쪽**을 제한한 면의 소유 피처(없으면 null).
+  4. **L자 리브(V-EF-4)**: 꺾인 L자 리브는 기존 인식기(`_find_protrusions`)에서 리브가 아니므로 RIB_POS 시험 대상이 아니다. "한 방향 측면이 2개 이상이면 그 축 미생성(통계 `shape`)" 규칙은 **한쪽 측면을 소각(0.6°, `draft_max_deg` 이내)으로 꺾은 리브**로 시험한다(V-EF-4 "측면 여러 개(L자)"를 이것으로 대체).
+  5. **산출물(§6.2-5·§6.4·§7.1·R7)** — CLI 인자 변화 없음:
+     - `extract_stats.json`은 필터 유무와 무관하게 **항상 새로 쓴다** → 워커 출력 보호(백업 목록) 대상(§6.2-5·§6.7 NP_EXTRACT, fake_paicad 동일).
+     - `parameter_features.json` 최상위 `filter` = 입력 `extract.filter` 사본 + `draft_max_deg`(유효값). 필터 없음이면 키 없음(V-EF-1).
+     - 통계 종류별 계수: THICKNESS = `initiators`·`pair_tests`, RIB_THICKNESS·POCKET_WIDTH = `candidates`·`pair_tests`, 그 밖 종류 = `candidates`. 공통 `selected`·`kept`·`excluded{사유:수}`·`elapsed_s`.
+     - `excluded` 사유 키: `face_area`·`thickness_range`·`not_mutual`·`no_overlap`·`not_thinner_than_height`(RIB_THICKNESS)·`height_range`·`hole_radius_min`·`fillet_radius_min`·`position_min_size`·`shape`·`base_axis`(위치형 밑면 축 비정렬).
+     - `rib_rejects` 7키: `cap_inner_wire`·`cap_not_convex`·`lateral_not_plane`·`lateral_draft`·`lateral_count`·`base_mismatch`·`height_not_positive`(키 정렬 출력). §7.2 한국어 표기 제안: 윗면 내부 구멍·윗면 볼록 아님·측면 곡면·측면 구배·측면 3개 미만·밑면 불일치·높이 0 이하. `excluded` 추가 키 표기: 겹침 없음·높이보다 두꺼움·최소 크기·측면 형상·축 비정렬. 모르는 키는 원문 키로 표시(플랫폼은 키 집합에 의존하지 않음, §7.1).
+     - stdout `PAICAD PROGRESS`는 **바디별** 종류 단계 줄(§7.1 예 형식). `selftest_report.json`에 `extract.rib_rejects`(바디 합계).
+  6. **측정(V-EF-5 참고, 시간은 기록만)**: 부하 쿠션 1,662면에서 §4.1 예시 필터로 두께 겹침 판정 5,331→221회(≈4%), 전체 extract 251~377 s → 140~145 s, THICKNESS 미선택 81~95 s.
