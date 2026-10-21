@@ -3,4 +3,4 @@
 # 버전을 올리면 packages/simdash_adapters/pyproject.toml·루트 pyproject.toml 의존 고정과 함께 바꾼다(시험이 대조).
 # paicad(packages/paicad, geometry-engine.md §17.5)는 __version__·CHANGELOG·루트 pyproject 고정과 같아야 한다(scripts/check_paicad.py).
 simdash-adapters==0.1.0
-paicad==0.10.1
+paicad==0.11.0
