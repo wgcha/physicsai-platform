@@ -63,12 +63,12 @@ describe("① CAD 경로 확인 — 엔진별 확장자", () => {
     await check();
     expect(within(card).getByText("CAD_EXTENSION")).toBeTruthy();
     const calls = recordCalls(server);
-    pick("native");
+    pick("Native");
     await waitFor(() => expect(within(card).queryByText("CAD_EXTENSION")).toBeNull());
     await waitFor(() => expect(run().disabled).toBe(false));
     expect(calls.filter((c) => c.endsWith("/paths/inspect"))).toHaveLength(1);
     // 되돌리면 다시 altair 기준 불가
-    pick("SimLab");
+    pick("Altair");
     await waitFor(() => expect(within(card).getByText("CAD_EXTENSION")).toBeTruthy());
     expect(run().disabled).toBe(true);
   });
@@ -77,7 +77,7 @@ describe("① CAD 경로 확인 — 엔진별 확장자", () => {
     const { pick, server, type } = await openCard({ geometryDefault: "altair" });
     type(STEP);
     const calls = recordCalls(server);
-    pick("native");
+    pick("Native");
     await new Promise((r) => setTimeout(r, 50));
     expect(calls.filter((c) => c.endsWith("/paths/inspect"))).toHaveLength(0);
   });

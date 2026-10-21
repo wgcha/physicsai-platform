@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage } from "../../../api";
 import { loadThree } from "./loadThree";
+import { errCode, type GvFailure } from "./webgl";
 import type { GeomSceneApi } from "./threeScene";
 import type { FixedCluster, Highlight, Vec3, ViewManifest } from "./viewerCore";
 
@@ -21,6 +22,7 @@ export function GeomViewer({
   points,
   onPick,
   onLost,
+  onFail,
   children,
 }: {
   glbId: string;
@@ -29,8 +31,10 @@ export function GeomViewer({
   overlay: Overlay | null;
   redClusters: Set<string>;
   points: { xyz: Vec3; label: string }[];
-  onPick: (hit: { body: string; face: number } | null) => void;
+  onPick: (hit: { body: string; face: number } | null, additive?: boolean) => void;
   onLost: () => void;
+  /** three 적재·GLB 받기·장면 초기화 실패(원인 구분) — 부모가 그림 폴백 + 다시 시도로 바꾼다 */
+  onFail?: (f: GvFailure) => void;
   children?: ReactNode;
 }) {
   const box = useRef<HTMLDivElement>(null);
@@ -43,6 +47,8 @@ export function GeomViewer({
   pick.current = onPick;
   const lost = useRef(onLost);
   lost.current = onLost;
+  const failCb = useRef(onFail);
+  failCb.current = onFail;
   const clusters: FixedCluster[] = manifest.fixed_clusters ?? [];
 
   useEffect(() => {
@@ -53,14 +59,27 @@ export function GeomViewer({
     setReady(false);
     setError(null);
     (async () => {
-      const [m, data] = await Promise.all([loadThree(), api.artifactBuffer(glbId)]);
+      // 원인을 구분해 보고한다: chunk(three 모듈) · glb(형상 파일) · init(그래픽 초기화)
+      const tag = <T,>(kind: GvFailure["kind"], p: Promise<T>) => p.catch((e) => Promise.reject({ gvKind: kind, e }));
+      const [m, data] = await Promise.all([tag("chunk", loadThree()), tag("glb", api.artifactBuffer(glbId))]);
       if (!alive) return;
-      made = m.createGeomScene(el, { onPick: (h) => pick.current(h), onLost: () => lost.current() });
-      await made.setNominal(data.buffer, manifest);
+      try {
+        made = m.createGeomScene(el, { onPick: (h, additive) => pick.current(h, additive), onLost: () => lost.current() });
+        await made.setNominal(data.buffer, manifest);
+      } catch (e) {
+        throw { gvKind: "init", e };
+      }
       if (!alive) return;
       scene.current = made;
       setReady(true);
-    })().catch((e) => alive && setError(errorMessage(e)));
+    })().catch((x: { gvKind?: GvFailure["kind"]; e?: unknown }) => {
+      if (!alive) return;
+      const kind = x?.gvKind ?? "init";
+      const raw = x?.gvKind ? x.e : x;
+      const code = errCode(raw);
+      if (failCb.current) failCb.current({ kind, code });
+      else setError(errorMessage(raw));
+    });
     return () => {
       alive = false;
       scene.current = null;
@@ -113,7 +132,7 @@ export function GeomViewer({
             고정 영역({clusters.length})
           </label>
         )}
-        <span className="muted small gv-hint">끌기 회전 · 휠 확대 · 오른쪽 끌기 이동 · 면 클릭 = 행 선택</span>
+        <span className="muted small gv-hint">끌기 회전 · 휠 확대 · 오른쪽 끌기 이동 · 면 클릭 = 변수 선택(Ctrl = 추가)</span>
       </div>
       <div className="gv-stage" ref={box}>
         {!ready && !error && <div className="gv-msg muted small">3D 불러오는 중…</div>}

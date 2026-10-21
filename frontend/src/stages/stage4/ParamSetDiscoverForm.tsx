@@ -177,7 +177,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
               )}
             </dd>
             <dt>입력 종류</dt>
-            <dd data-testid="ps-discover-kind">{native ? "조립 포함(assembly) — native 형상 준비(피처 추출·경계 노드 분류) 후 등록" : found.selected_tpl ? (meshOnly ? "메시 단독(mesh_only) — 형상 생성 → 예측" : "조립 포함(assembly) — 형상 생성 → 메시 연결 → 조립 → 예측") : "—"}</dd>
+            <dd data-testid="ps-discover-kind">{native ? "조립 포함(assembly) — Native 형상 준비(피처 추출·경계 노드 분류) 후 등록" : found.selected_tpl ? (meshOnly ? "메시 단독(mesh_only) — 형상 생성 → 예측" : "조립 포함(assembly) — 형상 생성 → 메시 연결 → 조립 → 예측") : "—"}</dd>
             <dt>파라미터</dt>
             <dd data-testid="ps-discover-params">
               {native

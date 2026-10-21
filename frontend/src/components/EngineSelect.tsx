@@ -7,7 +7,7 @@ export function useGeometryStatus(): { engineDefault: Engine; nativeAvailable: b
   const g = useApp().status?.geometry;
   const nativeAvailable = g ? !!g.native_available : false;
   const def: Engine = g?.engine_default === "native" && nativeAvailable ? "native" : "altair";
-  return { engineDefault: def, nativeAvailable, reason: g?.reason ?? (g ? null : "서버가 native 형상 엔진을 지원하지 않습니다") };
+  return { engineDefault: def, nativeAvailable, reason: g?.reason ?? (g ? null : "서버가 Native 형상 엔진을 지원하지 않습니다") };
 }
 
 export function EngineSelect({ value, onChange, disabled }: { value: Engine; onChange: (e: Engine) => void; disabled?: boolean }) {
@@ -32,7 +32,7 @@ export function EngineSelect({ value, onChange, disabled }: { value: Engine; onC
             </button>
           ))}
         </div>
-        {!nativeAvailable && reason && <span className="muted small" data-testid="native-off-reason">native 불가: {reason}</span>}
+        {!nativeAvailable && reason && <span className="muted small" data-testid="native-off-reason">Native 불가: {reason}</span>}
       </div>
     </div>
   );

@@ -122,9 +122,9 @@ describe("category·step 표시명(§6.5·§7.3)", () => {
 
 describe("오류 코드 한국어(§7.6·§7.7)", () => {
   it("서버 문구가 한국어가 아니면 코드 표 문구", () => {
-    expect(errorMessage(new ApiError(409, { code: "ENGINE_MISMATCH", message: "engine mismatch" }))).toBe("모델과 템플릿의 형상 엔진이 다릅니다(SimLab·native 혼용 불가)");
+    expect(errorMessage(new ApiError(409, { code: "ENGINE_MISMATCH", message: "engine mismatch" }))).toBe("모델과 템플릿의 형상 엔진이 다릅니다(Altair·Native 혼용 불가)");
     expect(errorMessage(new ApiError(409, { code: "GEOM_PREP_STALE", message: "준비본이 STALE입니다(B2)" }))).toBe("준비본이 STALE입니다(B2)");
-    expect(geomErrorText("ENGINE_MIXED", "")).toBe("SimLab·native 학습데이터를 한 데이터셋에 섞을 수 없습니다");
+    expect(geomErrorText("ENGINE_MIXED", "")).toBe("Altair·Native 학습데이터를 한 데이터셋에 섞을 수 없습니다");
     expect(geomErrorText("SOMETHING", "plain")).toBe("plain");
   });
 });

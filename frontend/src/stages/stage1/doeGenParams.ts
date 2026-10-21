@@ -136,14 +136,14 @@ export function genText(gen: { total: number; done: number; failed: number } | n
 
 // ---------------------------------------------------------------- native(geometry-engine.md §7.3.3·§7.3.8, S18 플랫폼 생성의 한 경로)
 
-/** native 입력 상태 — 표본 방식은 LHS 고정(doe_type NATIVE_LHS, 표시 "LHS(native)") */
+/** native 입력 상태 — 표본 방식은 LHS 고정(doe_type NATIVE_LHS, 표시 "LHS(Native)") */
 export interface NativeDoeState {
   count: string;
   seed: string;
   /** 실패한 run(형상 생성 스킵)이 있어도 계속(서버 기본 continue) */
   continueOnFailure: boolean;
 }
-export const NATIVE_DOE_LABEL = "LHS(native)";
+export const NATIVE_DOE_LABEL = "LHS(Native)";
 export const initialNative = (): NativeDoeState => ({ count: "20", seed: "1", continueOnFailure: true });
 
 /** native params: generator platform + sampling {kind:"lhs", count, seed}. 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path */

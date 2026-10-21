@@ -121,7 +121,7 @@ describe("①-3 native: 다른 DOE 표본표 재사용", () => {
     const bodies = recordDoeBodies(server);
     await within(card).findByTestId("doe-native");
     const kind = within(card).getByLabelText("표본 방식") as HTMLSelectElement;
-    expect([...kind.options].filter((o) => !o.disabled).map((o) => o.textContent)).toEqual(["LHS(native)", "다른 DOE 표본표 재사용"]);
+    expect([...kind.options].filter((o) => !o.disabled).map((o) => o.textContent)).toEqual(["LHS(Native)", "다른 DOE 표본표 재사용"]);
     pickReuse(card);
     expect(within(card).queryByLabelText("run 수")).toBeNull();
     expect(within(card).getByTestId("reuse-help").textContent).toContain("등가성 판정");

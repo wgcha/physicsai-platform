@@ -2,8 +2,8 @@
 // 면 그룹(하이라이트 = tri 구간), WebGL 확인, 410 재요청. three 미적재. 목 GLB(_FACE_ID ↔ faces[].tri) 정합도 확인.
 import { describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api";
-import { buildFaceRows, detectWebGL, dimDraw, dimText, dispMax, failureBadge, failureHighlight, faceGroups, faceKey, faceNo, hasRow3d, outsideFeasible, parameterRows, previewPhase, previewValues, rowHighlight, sliderSpec, type PreviewManifest, type ViewManifest } from "../stages/stage4/geomview/viewerCore";
-import { chooseRow, NO_SELECTION, pickFace, pickRow } from "../stages/stage4/geomview/selection";
+import { buildFaceRows, detectWebGL, dimDraw, dimText, dispMax, failureBadge, failureHighlight, faceGroups, faceKey, faceNo, hasRow3d, outsideFeasible, parameterRows, previewPhase, previewValues, paintFixedMat, paintMovingMat, rowHighlight, SELECTION_COLORS, selectionColor, lightColor, sliderSpec, type PreviewManifest, type ViewManifest } from "../stages/stage4/geomview/viewerCore";
+import { chooseRow, clickRow, NO_SELECTION, pickFace } from "../stages/stage4/geomview/selection";
 import { isExpired, withReRequest } from "../stages/stage4/geomview/expire";
 import { cushionFeatures, cushionGlb, NOMINAL, previewManifest, previewOutcome, viewManifest } from "../mock/geomViewData";
 import { readGlb } from "../mock/glb";
@@ -50,20 +50,84 @@ describe("면 ↔ 행 매핑", () => {
   });
 });
 
-describe("선택 전이(표 ↔ 3D)", () => {
+describe("선택 전이(표 ↔ 3D, 다중)", () => {
   const rows = buildFaceRows(nominal());
-  it("행 클릭 토글", () => {
-    const s = pickRow(NO_SELECTION, "A");
-    expect(s).toEqual({ row: "A", choices: null });
-    expect(pickRow(s, "A").row).toBeNull();
+  const order = ["A", "B", "C", "D", "E"];
+  it("행 클릭: 단일 선택, 같은 행 다시 = 해제, 다른 행 = 교체", () => {
+    const s = clickRow(NO_SELECTION, order, "A");
+    expect(s).toEqual({ rows: ["A"], anchor: "A" });
+    expect(clickRow(s, order, "A")).toEqual(NO_SELECTION);
+    expect(clickRow(s, order, "C").rows).toEqual(["C"]);
   });
-  it("면 클릭: 1개 → 그 행, 여럿 → 선택 목록(현재 행 유지), 피처 없는 면·빈 곳 → 해제", () => {
-    expect(pickFace(NO_SELECTION, rows, { body: "CUSH_L", face: 12 })).toEqual({ row: "CUSH_L_HOLE_U_1", choices: null });
-    expect(pickFace(NO_SELECTION, rows, { body: "CUSH_L", face: 2 })).toEqual({ row: null, choices: ["CUSH_L_THK_1", "CUSH_L_POCKET_D_1"] });
-    expect(pickFace({ row: "CUSH_L_THK_1", choices: null }, rows, { body: "CUSH_L", face: 2 }).row).toBe("CUSH_L_THK_1");
-    expect(pickFace({ row: "CUSH_L_THK_1", choices: null }, rows, { body: "CUSH_L", face: 4 })).toEqual(NO_SELECTION);
-    expect(pickFace({ row: "CUSH_L_THK_1", choices: null }, rows, null)).toEqual(NO_SELECTION);
-    expect(chooseRow({ row: null, choices: ["a", "b"] }, "b")).toEqual({ row: "b", choices: null });
+  it("Ctrl/⌘+클릭: 토글 추가(선택 순서 유지), 다중 중 한 행 일반 클릭 = 그 행만", () => {
+    let s = clickRow(NO_SELECTION, order, "A");
+    s = clickRow(s, order, "C", { ctrl: true });
+    s = clickRow(s, order, "B", { ctrl: true });
+    expect(s.rows).toEqual(["A", "C", "B"]);
+    expect(clickRow(s, order, "C", { ctrl: true }).rows).toEqual(["A", "B"]);
+    expect(clickRow(s, order, "C").rows).toEqual(["C"]);
+  });
+  it("Shift+클릭: 기준 행~클릭 행 범위(역방향 포함), Ctrl+Shift = 기존에 합침, 기준 없으면 추가", () => {
+    const s = clickRow(NO_SELECTION, order, "B");
+    expect(clickRow(s, order, "D", { shift: true }).rows).toEqual(["B", "C", "D"]);
+    expect(clickRow(s, order, "A", { shift: true }).rows).toEqual(["B", "A"]);
+    const t = clickRow(clickRow(s, order, "E", { ctrl: true }), order, "C", { shift: true });
+    expect(t.rows).toEqual(["E", "D", "C"]); // Ctrl로 추가한 E가 새 기준 → E~C 범위
+    expect(clickRow(clickRow(s, order, "D", { shift: true }), order, "A", { shift: true, ctrl: true }).rows).toEqual(["B", "C", "D", "A"]);
+    expect(clickRow(NO_SELECTION, order, "C", { shift: true }).rows).toEqual(["C"]);
+  });
+  it("면 클릭: 1개 → 그 행, Ctrl → 토글 추가, 여럿 → 선택 목록(이미 선택된 행이 있으면 그 행 유지), 피처 없는 면 → 해제(Ctrl이면 유지)", () => {
+    expect(pickFace([], rows, { body: "CUSH_L", face: 12 })).toEqual({ kind: "set", rows: ["CUSH_L_HOLE_U_1"], focus: "CUSH_L_HOLE_U_1" });
+    expect(pickFace(["CUSH_L_THK_1"], rows, { body: "CUSH_L", face: 12 }, true)).toEqual({ kind: "set", rows: ["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"], focus: "CUSH_L_HOLE_U_1" });
+    expect(pickFace(["CUSH_L_HOLE_U_1"], rows, { body: "CUSH_L", face: 12 }, true)).toEqual({ kind: "set", rows: [], focus: null });
+    expect(pickFace([], rows, { body: "CUSH_L", face: 2 })).toEqual({ kind: "choices", choices: ["CUSH_L_THK_1", "CUSH_L_POCKET_D_1"] });
+    expect(pickFace(["CUSH_L_THK_1", "X"], rows, { body: "CUSH_L", face: 2 })).toEqual({ kind: "set", rows: ["CUSH_L_THK_1"], focus: "CUSH_L_THK_1" });
+    expect(pickFace(["X"], rows, { body: "CUSH_L", face: 4 })).toEqual({ kind: "set", rows: [], focus: null });
+    expect(pickFace(["X"], rows, { body: "CUSH_L", face: 4 }, true)).toEqual({ kind: "set", rows: ["X"], focus: null });
+    expect(pickFace(["X"], rows, null)).toEqual({ kind: "set", rows: [], focus: null });
+    expect(chooseRow(["a"], "b")).toEqual(["b"]);
+    expect(chooseRow(["a"], "b", true)).toEqual(["a", "b"]);
+  });
+});
+
+describe("다중 선택 하이라이트(색 팔레트·치수선)", () => {
+  it("팔레트 8색 순환, 고정색 = 같은 색을 옅게", () => {
+    expect(SELECTION_COLORS).toHaveLength(8);
+    expect(new Set(SELECTION_COLORS).size).toBe(8);
+    expect(selectionColor(0)).toBe(selectionColor(8));
+    expect(selectionColor(9)).toBe(SELECTION_COLORS[1]);
+    expect(paintMovingMat(8)).toBe(paintMovingMat(0));
+    expect(paintFixedMat(0)).toBe(paintMovingMat(0) + 8);
+    expect(lightColor("#000000", 0.5)).toBe("#808080");
+    expect(lightColor("#f08c28")).not.toBe("#f08c28");
+  });
+  it("행마다 다른 색: 이동 면 = 그 색, 고정 면 = 옅은 색, 이동 우선·먼저 선택한 행 우선", () => {
+    const m = nominal();
+    const h = rowHighlight(m, ["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"]);
+    expect(h.paint!.get("CUSH_L#2")).toBe(paintMovingMat(0));
+    expect(h.paint!.get("CUSH_R#2")).toBe(paintMovingMat(0));
+    expect(h.paint!.get("CUSH_L#1")).toBe(paintFixedMat(0));
+    const hole = m.features.find((f) => f.parameter === "CUSH_L_HOLE_U_1")!;
+    for (const id of hole.faces.moving) expect(h.paint!.get(faceKey(hole.body, id))).toBe(paintMovingMat(1));
+    // 같은 면을 한 행은 이동·다른 행은 고정으로 쓰면 이동 색
+    const m2 = nominal();
+    m2.features.push({ ...m2.features[2], name: "X", parameter: "X", faces: { moving: ["F1"], fixed: [] } });
+    const x = rowHighlight(m2, ["CUSH_L_THK_1", "X"]);
+    expect(x.paint!.get("CUSH_L#1")).toBe(paintMovingMat(1));
+    expect(x.moving.has("CUSH_L#1") && !x.fixed.has("CUSH_L#1")).toBe(true);
+  });
+  it("치수선: 선택 1개일 때만(다중·호버만 = 생략), 호버 행은 다음 색으로 임시 표시", () => {
+    const m = nominal();
+    expect(rowHighlight(m, ["CUSH_L_THK_1"]).dims.map((d) => d.text)).toEqual(["12.5 mm", "12.5 mm"]);
+    expect(rowHighlight(m, ["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"]).dims).toEqual([]);
+    expect(rowHighlight(m, [], "CUSH_L_THK_1").dims).toEqual([]);
+    const hv = rowHighlight(m, ["CUSH_L_THK_1"], "CUSH_L_HOLE_U_1");
+    expect(hv.dims).toHaveLength(2); // 선택 1개의 치수선은 유지
+    expect([...hv.paint!.values()]).toContain(paintMovingMat(1));
+    expect(rowHighlight(m, [], null)).toBe(rowHighlight(m, null));
+    const h = rowHighlight(m, ["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"]);
+    const g = faceGroups(m.bodies[0], h);
+    expect(g.some((x) => x.mat === paintMovingMat(1))).toBe(true);
   });
 });
 

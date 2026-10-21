@@ -273,10 +273,133 @@
 .c3-frame {
   min-width: 120px;
 }
-/* ①-2 native: 행 클릭 = 3D 하이라이트 선택 */
-.param-table tr[aria-selected] {
+/* native 표 ↔ 3D: 행 클릭 = 선택(Ctrl/⌘ 추가·Shift 범위), 선택 행 = 강조 + 왼쪽 색 띠(3D 범례 색과 같음) */
+.param-table tr[aria-selected],
+.feature-table tbody tr {
   cursor: pointer;
+  user-select: none;
 }
-.param-table tr.picked td {
+.param-table input,
+.feature-table input {
+  user-select: text;
+}
+.param-table tr.picked td,
+.feature-table tr.picked td {
   background: var(--color-info-surface);
+}
+.param-table tr.picked td:first-child,
+.feature-table tr.picked td:first-child {
+  box-shadow: inset 4px 0 0 var(--sel-color, var(--color-border));
+}
+
+/* 표(좌) | 3D 창(우): 높이 고정(뷰포트 기준) — 행 수와 무관하게 페이지 길이 일정, 표는 내부 스크롤(머리글 sticky) */
+.gv-split {
+  --gv-h: clamp(420px, calc(100vh - 260px), 1100px);
+  display: grid;
+  grid-template-columns: minmax(0, 52fr) minmax(320px, 48fr);
+  grid-template-areas: "table view";
+  gap: var(--space-3);
+  height: var(--gv-h);
+}
+.gv-split-table {
+  grid-area: table;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gv-split-table > .table-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.gv-split-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-surface-raised);
+}
+.gv-split-view {
+  grid-area: view;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+}
+.gv-split-view > .gv-wrap,
+.gv-split-view > .gv-wrap > .gv {
+  min-height: 100%;
+}
+.gv-split-view > .gv-wrap > .gv {
+  flex: 1;
+}
+.gv-split .gv-stage {
+  flex: 1;
+  height: auto;
+  min-height: 260px;
+}
+@media (min-width: 2000px) {
+  .gv-split {
+    grid-template-columns: minmax(0, 45fr) minmax(320px, 55fr);
+  }
+}
+@media (max-width: 1200px) {
+  .gv-split {
+    --gv-view-h: clamp(280px, 42vh, 460px);
+    --gv-table-h: clamp(300px, 52vh, 640px);
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "view" "table";
+    grid-template-rows: var(--gv-view-h) var(--gv-table-h);
+    height: auto;
+  }
+}
+.gv-sel-legend {
+  position: absolute;
+  right: var(--space-2);
+  bottom: var(--space-2);
+  max-height: 60%;
+  overflow: auto;
+  margin: 0;
+  padding: var(--space-1) var(--space-2);
+  list-style: none;
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.gv-sel-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+.gv-sel-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+  flex: none;
+}
+
+/* 그림 폴백·그림 탭: 선택 변수 PNG(여럿 = 격자, 범례 색 테두리) */
+.gv-png-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--space-2);
+}
+.gv-png-grid .feature-png {
+  border: 3px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-1);
+}
+.gv-png-grid .feature-png img {
+  max-width: 100%;
+  border: 0;
+}
+.gv-png-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+.gv-diag {
+  overflow-wrap: anywhere;
 }

@@ -1,7 +1,7 @@
 // ④ native 세트 상세(geometry-engine.md §8): 준비 상태 배지 + "형상 준비 다시", 피처 표(행 클릭 = 하이라이트 PNG),
 // 대칭 그룹 분리·묶기(§6.2 symmetry_split), 고급 접힘 2개(검사 기준·다중 baseline) + 쉘 두께 PROP(3S).
-import { useCallback, useEffect, useRef, useState } from "react";
-import { API_PREFIX, api, errorMessage, type NativeFeatures, type ParamSet } from "../../../api";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { api, errorMessage, type NativeFeatures, type ParamSet } from "../../../api";
 import { useStudy } from "../../../app/StudyContext";
 import { JobInline } from "../../../components/ui";
 import { useLatestJob } from "../../../hooks/useLatestJob";
@@ -10,8 +10,9 @@ import { PREP_LABEL, PREP_TONE, exceedsFeasible, geomErrorText, isSplit, rangeTe
 import { GeomOptionsForm } from "./GeomOptionsForm";
 import { ShellProps } from "./ShellProps";
 import { MultiBaseline } from "./MultiBaseline";
-import { useMediaImage } from "../ContourMedia";
 import { GeomView3DLazy as GeomView3D } from "../geomview/GeomView3DLazy";
+import { ViewSplit } from "../geomview/ViewSplit";
+import { useRowSelection } from "../geomview/selection";
 
 export function NativeDetail({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { study, reloadParamSets } = useStudy();
@@ -59,15 +60,10 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { reloadParamSets } = useStudy();
   const [data, setData] = useState<NativeFeatures | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [picked, setPicked] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const tableRef = useRef<HTMLDivElement>(null);
+  const order = useMemo(() => data?.features.map((f) => f.name) ?? [], [data]);
+  const sel = useRowSelection(order); // 행 클릭 = 단일, Ctrl/⌘ = 추가, Shift = 범위 · 3D 면 클릭 → 행 선택·표 내부 스크롤(geometry-view.md §7.2)
   const loadView = useCallback(() => api.paramSetView(ps.id), [ps.id]);
-  /** 3D 면 클릭 → 행 선택·표 스크롤(geometry-view.md §7.2) */
-  const pickFrom3d = (row: string | null) => {
-    setPicked(row);
-    if (row) requestAnimationFrame(() => tableRef.current?.querySelector(`tr[data-row="${row}"]`)?.scrollIntoView?.({ block: "nearest" }));
-  };
   useEffect(() => {
     let alive = true;
     api
@@ -92,13 +88,33 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       setError(errorMessage(e));
     }
   };
-  const pickedF = data.features.find((f) => f.name === picked) ?? null;
   return (
     <div className="feature-block">
       <div className="small muted">
-        자동 후보 피처 <b>{data.features.length}</b>개{data.engine_version ? ` · paicad ${data.engine_version}` : ""} — 행을 누르면 하이라이트(이동 면 주황·고정 면 파랑)를 봅니다
+        자동 후보 피처 <b>{data.features.length}</b>개{data.engine_version ? ` · paicad ${data.engine_version}` : ""} — 행을 누르면 3D에 표시(Ctrl/⌘ = 추가, Shift = 범위)
+        {sel.rows.length > 0 && (
+          <button type="button" className="btn small ghost" onClick={sel.clear}>
+            선택 해제
+          </button>
+        )}
       </div>
-      <div className="table-wrap" ref={tableRef}>
+      <ViewSplit
+        view={
+          <GeomView3D
+            loadKey={ps.id}
+            load={loadView}
+            rows={sel.rows}
+            hover={sel.hover}
+            onRows={sel.from3d}
+            pngOf={(r) => data.features.find((f) => f.name === r)?.png_artifact_id ?? null}
+            firstRow={data.features[0]?.name ?? null}
+            paramSetId={ps.id}
+            userRanges={Object.fromEntries(ps.parameters.map((p) => [p.name, { min: p.min, max: p.max }]))}
+            canPreview={canEdit}
+          />
+        }
+        table={
+      <div className="table-wrap" ref={sel.tableRef}>
         <table className="table compact feature-table" aria-label="형상 피처 표">
           <thead>
             <tr>
@@ -122,7 +138,7 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
               const g = f.group ? groups.get(f.group) : undefined;
               const gSplit = isSplit(ps.geom_options, f.group);
               return (
-                <tr key={f.name} data-row={f.name} className={`${picked === f.name ? "picked" : ""}${f.ref_locked ? " unused" : ""}`} onClick={() => setPicked(f.name === picked ? null : f.name)} aria-selected={picked === f.name}>
+                <tr key={f.name} {...sel.rowProps(f.name)} className={`${sel.rowProps(f.name).className}${f.ref_locked ? " unused" : ""}`}>
                   <td>{f.ref_locked ? <span className="muted small">제외(기본)</span> : "사용"}</td>
                   <td className="mono">{f.name}</td>
                   <td>{typeLabel(f.type)}</td>
@@ -146,10 +162,7 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
                           <button
                             type="button"
                             className="btn small ghost"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              void split(f.group!);
-                            }}
+                            onClick={() => void split(f.group!)}
                           >
                             {gSplit ? "묶기" : "분리"}
                           </button>
@@ -166,21 +179,13 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
           </tbody>
         </table>
       </div>
+        }
+      />
       {error && (
         <div className="error-text small" role="alert">
           {error}
         </div>
       )}
-      <GeomView3D
-        loadKey={ps.id}
-        load={loadView}
-        row={picked}
-        onRow={pickFrom3d}
-        picture={pickedF?.png_artifact_id ? <FeaturePng name={pickedF.name} artifactId={pickedF.png_artifact_id} /> : null}
-        paramSetId={ps.id}
-        userRanges={Object.fromEntries(ps.parameters.map((p) => [p.name, { min: p.min, max: p.max }]))}
-        canPreview={canEdit}
-      />
       {data.warnings.length > 0 && (
         <ul className="problems small muted" aria-label="피처 경고">
           {data.warnings.map((w, i) => (
@@ -191,16 +196,5 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
         </ul>
       )}
     </div>
-  );
-}
-
-/** 하이라이트 PNG(§4.3 features/<NAME>.png → FEATURE_PNG artifact). 이미지는 fetch → blob URL(목·쿠키 인증 같은 길) */
-export function FeaturePng({ name, artifactId }: { name: string; artifactId: string }) {
-  const src = useMediaImage(`${API_PREFIX}/artifacts/${artifactId}/media`);
-  return (
-    <figure className="feature-png" data-testid="feature-png">
-      {src && <img src={src} alt={`${name} 하이라이트`} />}
-      <figcaption className="small muted mono">{name}</figcaption>
-    </figure>
   );
 }

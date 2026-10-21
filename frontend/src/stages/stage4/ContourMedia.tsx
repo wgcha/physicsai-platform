@@ -7,6 +7,7 @@ import { MediaVideo, VIDEO_UNPLAYABLE, mediaHref } from "../../components/MediaV
 import { usePolling } from "../../hooks/usePolling";
 import { POLL } from "../../lib/poll";
 import { DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../../lib/views";
+import { errCode, noteGvError } from "./geomview/webgl";
 
 export const MEDIA_TEXT = {
   NONE: "저장된 컨투어 스크린샷·영상이 없습니다",
@@ -20,11 +21,14 @@ export const MEDIA_TEXT = {
 
 export { mediaHref };
 
-/** 이미지는 fetch → blob URL(목 서버·쿠키 인증 모두 같은 길) */
-export function useMediaImage(url: string | null): string | null {
+/** 이미지는 fetch → blob URL(목 서버·쿠키 인증 모두 같은 길). 실패는 error(짧은 코드)로 돌려주고 retry로 다시 받는다 */
+export function useMediaImageState(url: string | null): { src: string | null; error: string | null; retry: () => void } {
   const [obj, setObj] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     setObj(null);
+    setError(null);
     if (!url) return;
     let alive = true;
     let made: string | null = null;
@@ -35,13 +39,23 @@ export function useMediaImage(url: string | null): string | null {
         made = URL.createObjectURL(b);
         setObj(made);
       })
-      .catch(() => undefined);
+      .catch((e) => {
+        if (!alive) return;
+        const c = errCode(e);
+        noteGvError("png", c);
+        setError(c);
+      });
     return () => {
       alive = false;
       if (made) URL.revokeObjectURL(made);
     };
-  }, [url]);
-  return obj;
+  }, [url, attempt]);
+  return { src: obj, error, retry: () => setAttempt((n) => n + 1) };
+}
+
+/** 오류를 화면에 보이지 않는 사용처(컨투어 미디어 등)용 */
+export function useMediaImage(url: string | null): string | null {
+  return useMediaImageState(url).src;
 }
 
 export function ContourMedia({

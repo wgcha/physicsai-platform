@@ -1,7 +1,7 @@
 // native 형상 엔진 화면 공용(geometry-engine.md §4.3·§4.9·§6.2·§8·§11.4) — 순수 함수만(시험 대상).
 import type { Engine, GeomOptions, MapGrade, MapRow, NativeFeature, NativeInfo, ParamMap } from "../api/types";
 
-export const ENGINE_LABEL: Record<Engine, string> = { altair: "SimLab", native: "native" };
+export const ENGINE_LABEL: Record<Engine, string> = { altair: "Altair", native: "Native" };
 
 /** §6.2 피처 종류(+ 3S 쉘 두께) 한국어 */
 export const FEATURE_TYPE_LABEL: Record<string, string> = {
@@ -49,13 +49,13 @@ export const PREP_TONE: Record<NativeInfo["prep_status"], string> = { READY: "ok
 
 /** 형상 엔진 오류 코드 한국어(§6 표·§7.6·§7.7·§11.4). 서버 문구가 한국어면 그대로 쓴다 */
 export const GEOM_ERROR_TEXT: Record<string, string> = {
-  GEOM_NATIVE_UNAVAILABLE: "native 형상 엔진을 쓸 수 없습니다(관리자 설정 확인)",
+  GEOM_NATIVE_UNAVAILABLE: "Native 형상 엔진을 쓸 수 없습니다(관리자 설정 확인)",
   GEOM_PREP_STALE: "형상 준비본이 오래되었습니다 — '형상 준비 다시'를 실행하세요",
   GEOM_OPTIONS_INVALID: "검사 기준 값이 허용 범위를 벗어났습니다",
-  ENGINE_MISMATCH: "모델과 템플릿의 형상 엔진이 다릅니다(SimLab·native 혼용 불가)",
-  ENGINE_MIXED: "SimLab·native 학습데이터를 한 데이터셋에 섞을 수 없습니다",
-  ENGINE_NATIVE_NO_TPL: "native 엔진은 tpl을 만들지 않습니다",
-  ENGINE_NATIVE_UNSUPPORTED: "원본 최적화는 SimLab 템플릿에서만 — 플랫폼 내장 최적화를 쓰세요",
+  ENGINE_MISMATCH: "모델과 템플릿의 형상 엔진이 다릅니다(Altair·Native 혼용 불가)",
+  ENGINE_MIXED: "Altair·Native 학습데이터를 한 데이터셋에 섞을 수 없습니다",
+  ENGINE_NATIVE_NO_TPL: "Native 엔진은 tpl을 만들지 않습니다",
+  ENGINE_NATIVE_UNSUPPORTED: "원본 최적화는 Altair 템플릿에서만 — 플랫폼 내장 최적화를 쓰세요",
   ENGINE_UNKNOWN: "모델의 형상 엔진을 알 수 없습니다(확인 후 사용)",
   PARAM_FEATURE_MISMATCH: "파라미터 이름이 형상 피처와 맞지 않습니다",
   PARAM_NAME_CONFLICT: "공통 변수 이름이 겹칩니다(타입·단위가 다르거나 중복, 예약어 baseline)",
@@ -72,7 +72,7 @@ export const GEOM_ERROR_TEXT: Record<string, string> = {
   BASELINE_BASE: "첫 baseline(세트 자신)은 삭제할 수 없습니다",
   BASELINE_LAST: "baseline이 2개뿐이라 삭제할 수 없습니다 — '단일로 되돌리기'를 쓰세요",
   NOT_MULTI_BASELINE: "다중 baseline 세트가 아닙니다",
-  NATIVE_PREP_MISSING: "① native 형상 피처가 없습니다 — 파라미터 추출을 native로 먼저 하세요",
+  NATIVE_PREP_MISSING: "① Native 형상 피처가 없습니다 — 파라미터 추출을 Native로 먼저 하세요",
   REF_BOTH_CONTACT: "양면 접촉 — 두께 변경 불가(기본 제외)",
   PNG_RENDER_FAILED: "하이라이트 그림을 만들지 못했습니다",
   MAP_LOW_SCORE: "매칭 점수가 낮습니다 — 확인하세요",

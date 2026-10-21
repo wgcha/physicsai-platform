@@ -36,8 +36,8 @@ describe("④ 등록: 형상 엔진 선택(§8)", () => {
     fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
     const form = within(card).getByTestId("ps-discover");
     const group = within(form).getByRole("radiogroup", { name: "형상 엔진" });
-    expect(within(group).getByRole("radio", { name: "SimLab" }).getAttribute("aria-checked")).toBe("true"); // 기본 = engine_default
-    fireEvent.click(within(group).getByRole("radio", { name: "native" }));
+    expect(within(group).getByRole("radio", { name: "Altair" }).getAttribute("aria-checked")).toBe("true"); // 기본 = engine_default
+    fireEvent.click(within(group).getByRole("radio", { name: "Native" }));
     expect(within(form).getByText(/104_replace_node_elem\.inc 필요/)).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("프로젝트 폴더 경로"), { target: { value: `${ROOT}/native_project` } });
     fireEvent.click(within(form).getByRole("button", { name: "찾기" }));
@@ -61,7 +61,7 @@ describe("④ 등록: 형상 엔진 선택(§8)", () => {
     const card = await openManage();
     fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
     const form = within(card).getByTestId("ps-discover");
-    fireEvent.click(within(form).getByRole("radio", { name: "native" }));
+    fireEvent.click(within(form).getByRole("radio", { name: "Native" }));
     fireEvent.change(within(form).getByLabelText("프로젝트 폴더 경로"), { target: { value: `${ROOT}/noinc` } });
     fireEvent.click(within(form).getByRole("button", { name: "찾기" }));
     expect(await within(form).findByText(/104_replace_node_elem\.inc가 없습니다/)).toBeTruthy();
@@ -72,7 +72,7 @@ describe("④ 등록: 형상 엔진 선택(§8)", () => {
     renderApp(`${STUDY}/4`, { user: "power", disabledFeatures: ["train_resp", "geometry_native"] });
     const card = await openManage();
     fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
-    await waitFor(() => expect((within(card).getByRole("radio", { name: "native" }) as HTMLButtonElement).disabled).toBe(true));
+    await waitFor(() => expect((within(card).getByRole("radio", { name: "Native" }) as HTMLButtonElement).disabled).toBe(true));
     expect(within(card).getByTestId("native-off-reason").textContent).toMatch(/paicad/);
   });
 });
@@ -83,7 +83,7 @@ describe("④ native 세트 상세(§8)", () => {
   it("엔진 배지·준비 상태, 피처 표(종류·위치형 mm·가능 범위 초과·기준면 자동), 행 클릭 = PNG(없으면 생략)", async () => {
     renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, nativeCurrent);
     const card = await openManage();
-    expect(within(card).getByTestId("engine-badge").textContent).toBe("native");
+    expect(within(card).getByTestId("engine-badge").textContent).toBe("Native");
     expect(within(card).getByTestId("prep-status").textContent).toBe("형상 준비됨");
     const table = await within(card).findByRole("table", { name: "형상 피처 표" });
     const hole = within(table).getByText("CUSH_L_HOLE_U_1").closest("tr")!;
@@ -315,7 +315,7 @@ describe("① native 파라미터 표·엔진 혼용(§8·§7.7)", () => {
     expect(within(table).getByText("CUSH_L_THK_1").closest("tr")!.textContent).toContain("두께");
     expect(within(table).getByText("BOX_SHELL_T").closest("tr")!.textContent).not.toContain("쉘 두께");
     expect(within(table).queryByLabelText("CUSH_L_FILLET_R_1 하이라이트")).toBeNull();
-    fireEvent.click(within(table).getByLabelText("CUSH_L_THK_1 하이라이트"));
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1")); // 행 클릭 = 선택 → 그림 탭이 없으면 3D(폴백이면 PNG)
     expect((await screen.findByTestId("feature-png")).textContent).toContain("CUSH_L_THK_1");
     expect(screen.queryByRole("button", { name: "tpl 생성" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
@@ -325,6 +325,6 @@ describe("① native 파라미터 표·엔진 혼용(§8·§7.7)", () => {
 
   it("④ 모델 엔진 ≠ 템플릿 엔진이면 안내, 데이터셋·모델 엔진 배지", async () => {
     renderApp(`${STUDY}/4`, { user: "power" }, (s) => s.models.forEach((m) => (m.engine = "native")));
-    expect((await screen.findByTestId("engine-mismatch")).textContent).toBe("모델(native)과 템플릿(SimLab)의 형상 엔진이 다릅니다 — 같은 엔진의 모델·템플릿을 고르세요.");
+    expect((await screen.findByTestId("engine-mismatch")).textContent).toBe("모델(Native)과 템플릿(Altair)의 형상 엔진이 다릅니다 — 같은 엔진의 모델·템플릿을 고르세요.");
   });
 });
