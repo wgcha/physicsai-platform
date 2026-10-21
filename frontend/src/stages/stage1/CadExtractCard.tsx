@@ -50,6 +50,7 @@ export function CadExtractCard() {
         value={path}
         onChange={setPath}
         canExecute={canExec}
+        extra={{ engine }}
         onInspected={(r) => setOk(!!r?.ok)}
         renderSummary={(r) => (
           <div className="summary-line">

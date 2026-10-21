@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { api, errorMessage, type PathInspectResult, type PathPurpose } from "../api";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { api, errorMessage, type Engine, type PathInspectResult, type PathPurpose } from "../api";
 import { BrowseButton } from "./BrowseButton";
 import type { PickMode } from "./PathPickerDialog";
 
@@ -37,12 +37,13 @@ export function PathInput({
   onInspected?: (r: PathInspectResult | null) => void;
   canExecute: boolean;
   renderSummary?: (r: PathInspectResult) => ReactNode;
-  /** phase2.md §12.4 RESULT_FOLDER의 doe_id 등 */
-  extra?: { doe_id?: string };
+  /** 확인 요청 body에 덧붙는 선택 키: RESULT_FOLDER의 doe_id(phase2.md §12.4), CAD_FILE의 engine(확장자 검사 기준). 값이 바뀌면 이미 확인한 경로를 다시 확인한다 */
+  extra?: { doe_id?: string; engine?: Engine };
 }) {
   const [result, setResult] = useState<PathInspectResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const seq = useRef(0); // 늦게 도착한 이전 응답이 최신 확인 결과를 덮지 않게 한다
 
   const browse = BROWSE_OF[purpose];
   const setPath = (v: string) => {
@@ -54,20 +55,39 @@ export function PathInput({
   };
 
   const inspect = async () => {
+    const my = ++seq.current;
     setBusy(true);
     setError(null);
     try {
       const r = await api.inspectPath(studyId, purpose, value.trim(), extra);
+      if (my !== seq.current) return;
       setResult(r);
       onInspected?.(r);
     } catch (e) {
+      if (my !== seq.current) return;
       setResult(null);
       onInspected?.(null);
       setError(errorMessage(e));
     } finally {
-      setBusy(false);
+      if (my === seq.current) setBusy(false);
     }
   };
+
+  // extra(엔진 등)가 바뀌면 이전 확인 결과는 무효: 초기화하고, 확인했던 경로면 새 값으로 재확인
+  const extraKey = JSON.stringify(extra ?? null);
+  const prevKey = useRef(extraKey);
+  useEffect(() => {
+    if (prevKey.current === extraKey) return;
+    prevKey.current = extraKey;
+    if (!result && !error) return;
+    const had = !!result || !!error;
+    seq.current++;
+    setResult(null);
+    setError(null);
+    onInspected?.(null);
+    if (had && value.trim()) void inspect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extraKey]);
 
   return (
     <div className="pathinput">

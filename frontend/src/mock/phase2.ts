@@ -156,7 +156,7 @@ export class Phase2Mock {
     tickEnvChecks(this);
   }
 
-  inspect(purpose: string, path: string, doeId?: string): MockResp | null {
+  inspect(purpose: string, path: string, doeId?: string, engine?: string): MockResp | null {
     if (purpose === "SPDM_IMPORT") {
       if (this.disabled.has("spdm_import")) return err(409, "SPDM_IMPORT_DISABLED", "SPDM 가져오기가 설정되지 않았습니다.");
       if (!/^\\\\spdm\\master\\/i.test(path)) return err(422, "PATH_OUTSIDE_ROOT", "SPDM 루트(\\\\spdm\\master) 하위 경로만 지정할 수 있습니다.");
@@ -167,8 +167,11 @@ export class Phase2Mock {
     if (!/AI_WORK/i.test(path)) return err(422, "PATH_OUTSIDE_ROOT", "AI 루트 하위 경로만 지정할 수 있습니다.");
     const last = path.split(/[\\/]/).filter(Boolean).pop() ?? "";
     if (purpose === "CAD_FILE") {
-      const extOk = /\.prt$/i.test(last);
-      return ok({ normalized_path: path, ok: extOk, problems: extOk ? [] : [{ code: "EXTENSION_NOT_ALLOWED", message: "허용 확장자: .prt" }], summary: { file_name: last, size: 4_812_000, extension_ok: extOk } });
+      // 백엔드(v0.2.1): engine=native면 geometry.step_extensions(STEP_EXTENSION), 생략/altair면 .prt(CAD_EXTENSION)
+      const native = engine === "native";
+      const extOk = native ? /\.(step|stp)$/i.test(last) : /\.prt$/i.test(last);
+      const bad = native ? { code: "STEP_EXTENSION", message: "STEP 확장자는 .step, .stp 중 하나여야 합니다" } : { code: "CAD_EXTENSION", message: "허용 확장자: .prt" };
+      return ok({ normalized_path: path, ok: extOk, problems: extOk ? [] : [bad], summary: { file_name: last, size: 4_812_000, extension_ok: extOk } });
     }
     if (purpose === "RADIOSS_ASSEM") {
       const many = /multi/i.test(path);

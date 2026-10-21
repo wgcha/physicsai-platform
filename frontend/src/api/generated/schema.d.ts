@@ -5911,6 +5911,8 @@ export interface components {
         PathInspectRequest: {
             /** Doe Id */
             doe_id?: string | null;
+            /** Engine */
+            engine?: ("altair" | "native") | null;
             /** Path */
             path: string;
             /**

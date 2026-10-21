@@ -87,7 +87,7 @@ export const studyRoutes: Route = (srv, { method, path, seg, query, body, me }) 
       return { status: 200, body: srv.studyOut(s) };
     }
     if (method === "POST" && sub === "paths" && seg[3] === "inspect")
-      return srv.p2.inspect(String(body?.purpose), String(body?.path ?? ""), body?.doe_id as string | undefined) ?? inspectPath(String(body?.purpose), String(body?.path ?? ""));
+      return srv.p2.inspect(String(body?.purpose), String(body?.path ?? ""), body?.doe_id as string | undefined, body?.engine as string | undefined) ?? inspectPath(String(body?.purpose), String(body?.path ?? ""));
     if (method === "POST" && sub === "param-sets" && seg[3] === "discover") return discover(String(body?.path ?? ""), body?.tpl as string | undefined);
     if (method === "POST" && sub === "param-sets" && !seg[3]) {
       let extra: Partial<ParamSet> = {};

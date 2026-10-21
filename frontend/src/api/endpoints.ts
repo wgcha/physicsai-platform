@@ -94,7 +94,7 @@ export const api = {
   /** phase3.md §5.6: 용량·정리 보고서(계산·정리 실행은 createJob STUDY_STORAGE_SCAN·STUDY_CLEANUP) */
   studyStorage: (id: string) => request<StorageReport>("GET", `/studies/${id}/storage`),
   /** phase2.md §12.4: RESULT_FOLDER는 doe_id 선택 키 */
-  inspectPath: (studyId: string, purpose: PathPurpose, path: string, extra?: { doe_id?: string }) =>
+  inspectPath: (studyId: string, purpose: PathPurpose, path: string, extra?: { doe_id?: string; engine?: Engine }) =>
     request<PathInspectResult>("POST", `/studies/${studyId}/paths/inspect`, { body: { purpose, path, ...(extra ?? {}) } }),
 
   /** phase3.md §12 S7: 서버 경로 탐색(이름·크기·mtime만, 실행 권한) */
