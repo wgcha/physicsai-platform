@@ -3,7 +3,7 @@
 For every parameter (values.json key; others nominal) and each direction, the steps run
 update -> morph -> check (a)(b)(c) in memory, stopping a direction after ``--stop-after-fail``
 consecutive failures. Dimension parameters step in % of the nominal value (``--steps``, default
-5,10,20,30,40,50); position parameters (HOLE_POS_U/V) step in absolute mm (``--pos-steps``, default
+5,10,20,30,40,50); position parameters (HOLE_POS_U/V, RIB_POS_U/V) step in absolute mm (``--pos-steps``, default
 1,2,3,5,8,10). Every row / summary carries its ``unit`` ("%" or "mm"). The nominal geometry is the
 ``sample.brep`` of ``--update-dir``, which must be an update run with all values nominal.
 

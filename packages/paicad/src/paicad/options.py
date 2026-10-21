@@ -24,7 +24,8 @@ DEFAULTS: dict = {
     # hole position parameters keep their distance to the nearest fixed face (or scale with the body length)
     "position_ref": "nearest_fixed",
     # extract tuning (section 6.2 defaults; optional section, absent in platform-written files is fine)
-    # position_range_mm: default value range of position parameters (HOLE_POS_U/V) = nominal +- this many mm
+    # position_range_mm: default value range of position parameters (HOLE_POS_U/V, RIB_POS_U/V) = nominal +- this many mm
+    # extract.filter (optional, not a default - extract-filter.md section 4): types to find + conditions, see validate_filter
     "extract": {"draft_max_deg": 3.0, "overlap_min": 0.5, "range_ratio": 0.05, "position_range_mm": 5.0, "sample_grid": 12},
     # paicad map (multi-baseline matching, section 11.4): score weights, position sigma, grade bounds, axis gate
     "map": {"weights": {"pos": 0.35, "dim": 0.30, "ori": 0.15, "nbr": 0.20}, "sigma": 0.1, "accept": 0.7, "warn": 0.5, "axis_deg": 10.0},
@@ -129,11 +130,87 @@ def unknown_keys(over: dict) -> list[str]:
         if k not in DEFAULTS:
             bad.append(k)
         elif isinstance(DEFAULTS[k], dict) and k not in _FREE_SECTIONS and isinstance(v, dict):
-            bad += [f"{k}.{s}" for s in v if s not in DEFAULTS[k]]
+            bad += [f"{k}.{s}" for s in v if s not in DEFAULTS[k] and (k, s) not in _OPTIONAL_KEYS]
     return bad
 
 
-def load(path: str | Path | None) -> dict:
+# optional keys outside DEFAULTS (absent = feature off; not merged into the options so outputs that hash or copy
+# the options stay byte-identical when the key is absent)
+_OPTIONAL_KEYS = {("extract", "filter")}
+
+# extract.filter (extract-filter.md section 4): feature types paicad knows (TYPE_ORDER of features.py, kept here so
+# options does not import the recognizer) and the condition keys
+FILTER_TYPES = (
+    "THICKNESS",
+    "POCKET_DEPTH",
+    "POCKET_WIDTH",
+    "RIB_THICKNESS",
+    "RIB_HEIGHT",
+    "HOLE_RADIUS",
+    "HOLE_POS_U",
+    "HOLE_POS_V",
+    "FILLET_RADIUS",
+    "RIB_POS_U",
+    "RIB_POS_V",
+)
+FILTER_RANGE_KEYS = ("thickness_mm", "height_mm")
+FILTER_MIN_KEYS = ("face_area_min_mm2", "position_min_size_mm", "hole_radius_min_mm", "fillet_radius_min_mm")
+FILTER_KEYS = ("types",) + FILTER_RANGE_KEYS + FILTER_MIN_KEYS
+
+
+def _num(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def validate_filter(flt) -> list[str]:
+    """Problems of an ``extract.filter`` object (section 4.4); None = no filter (valid)."""
+    if flt is None:
+        return []
+    if not isinstance(flt, dict):
+        return ["extract.filter must be an object or null"]
+    p: list[str] = []
+    bad = [k for k in flt if k not in FILTER_KEYS]
+    if bad:
+        p.append("extract.filter: unknown keys: " + ", ".join(f"extract.filter.{k}" for k in bad))
+    types = flt.get("types")
+    if not isinstance(types, list) or not types:
+        p.append("extract.filter.types must be a non-empty list of feature types")
+    else:
+        unknown = [str(t) for t in types if t not in FILTER_TYPES]
+        if unknown:
+            p.append("extract.filter.types: unknown feature types: " + ", ".join(unknown))
+        if len(set(map(str, types))) != len(types):
+            p.append("extract.filter.types must not contain duplicates")
+    for k in FILTER_RANGE_KEYS:
+        r = flt.get(k)
+        if r is None:
+            continue
+        if not isinstance(r, dict):
+            p.append(f"extract.filter.{k} must be an object {{min, max}} or null")
+            continue
+        badr = [s for s in r if s not in ("min", "max")]
+        if badr:
+            p.append(f"extract.filter.{k}: unknown keys: " + ", ".join(f"extract.filter.{k}.{s}" for s in badr))
+        lo, hi = r.get("min"), r.get("max")
+        if lo is not None and not (_num(lo) and lo >= 0):
+            p.append(f"extract.filter.{k}.min must be null or a finite number >= 0")
+            lo = None
+        if hi is not None and not (_num(hi) and hi > 0):
+            p.append(f"extract.filter.{k}.max must be null or a finite number > 0")
+            hi = None
+        if lo is not None and hi is not None and lo > hi:
+            p.append(f"extract.filter.{k}: min > max")
+    for k in FILTER_MIN_KEYS:
+        v = flt.get(k)
+        if v is not None and not _pos(v):
+            p.append(f"extract.filter.{k} must be null or a finite number > 0")
+    return p
+
+
+def load(path: str | Path | None, keep_filter: bool = False) -> dict:
+    """Options with defaults. ``extract.filter`` is validated for every command; it stays in the result
+    (``opts["extract"]["filter"]``, absent when not given or null) only with ``keep_filter`` (extract) - the other
+    commands read the same file and ignore it (extract-filter.md section 4.4)."""
     over: dict = {}
     if path:
         try:
@@ -159,10 +236,16 @@ def load(path: str | Path | None) -> dict:
     probs = [f"{k} must be an object" for k, v in over.items() if isinstance(DEFAULTS.get(k), dict) and k not in _FREE_SECTIONS and not isinstance(v, dict)]
     if probs:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))
+    flt = None
+    if isinstance(over.get("extract"), dict) and "filter" in over["extract"]:
+        flt = copy.deepcopy(over["extract"]["filter"])
+        over = dict(over, extract={k: v for k, v in over["extract"].items() if k != "filter"})
     opts = _merge(DEFAULTS, over)
-    probs = validate(opts)
+    probs = validate(opts) + validate_filter(flt)
     if probs:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))
+    if keep_filter and flt is not None:
+        opts["extract"]["filter"] = flt
     return opts
 
 

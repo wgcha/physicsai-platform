@@ -26,6 +26,8 @@ TYPE_ORDER = (
     "HOLE_POS_U",
     "HOLE_POS_V",
     "FILLET_RADIUS",
+    "RIB_POS_U",  # extract-filter.md EF-5: appended so the other types keep order, names and group ids
+    "RIB_POS_V",
 )
 TYPE_ABBR = {
     "THICKNESS": "THK",
@@ -37,6 +39,8 @@ TYPE_ABBR = {
     "HOLE_POS_U": "HOLE_U",
     "HOLE_POS_V": "HOLE_V",
     "FILLET_RADIUS": "FILLET_R",
+    "RIB_POS_U": "RIB_U",
+    "RIB_POS_V": "RIB_V",
 }
 MEASURE = {
     "THICKNESS": "face_distance",
@@ -48,9 +52,17 @@ MEASURE = {
     "HOLE_POS_U": "hole_center",
     "HOLE_POS_V": "hole_center",
     "FILLET_RADIUS": "fillet_radius",
+    "RIB_POS_U": "rib_center",
+    "RIB_POS_V": "rib_center",
 }
 PAIR_TYPES = ("THICKNESS", "POCKET_WIDTH", "RIB_THICKNESS")  # reference-face rule applies
-POSITION_TYPES = ("HOLE_POS_U", "HOLE_POS_V")  # position parameters: absolute mm range / sweep steps
+# position parameters: absolute mm range / sweep steps (single definition - update, sweep, view, paramap import it)
+POSITION_TYPES = ("HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V")
+HOLE_POS_TYPES = ("HOLE_POS_U", "HOLE_POS_V")
+RIB_POS_TYPES = ("RIB_POS_U", "RIB_POS_V")
+LEGACY_TYPES = TYPE_ORDER[:9]  # types recognized without extract.filter (RIB_POS only with a filter, EF-5)
+FILTER_TOL = 1.0e-9  # extract.filter boundary tolerance (mm / mm^2), values compared before rounding
+TIE_TOL = 1.0e-9  # thickness nearest-partner tie window (same as the mutual-nearest rule)
 WALL_MIN_MM = 0.5
 NAME_MAX = 64
 
@@ -73,6 +85,88 @@ class Feature:
     name: str = ""
     group: str | None = None
     order_key: tuple = ()
+
+
+# ---------------------------------------------------------------- extract.filter (extract-filter.md sections 4-5)
+@dataclass(frozen=True)
+class Filter:
+    """Feature types to find and conditions. ``active=False`` = no ``extract.filter`` (legacy types, no conditions,
+    legacy algorithms - output byte-identical to 0.10.1)."""
+
+    active: bool
+    types: frozenset
+    thickness: tuple = (None, None)  # (min, max) mm
+    height: tuple = (None, None)
+    face_area_min: float | None = None
+    position_min_size: float | None = None
+    hole_radius_min: float | None = None
+    fillet_radius_min: float | None = None
+
+    @classmethod
+    def from_opts(cls, opts: dict) -> "Filter":
+        f = (opts.get("extract") or {}).get("filter")
+        if f is None:
+            return cls(False, frozenset(LEGACY_TYPES))
+
+        def rng(k):
+            r = f.get(k) or {}
+            return (r.get("min"), r.get("max"))
+
+        return cls(
+            True,
+            frozenset(f["types"]),
+            rng("thickness_mm"),
+            rng("height_mm"),
+            f.get("face_area_min_mm2"),
+            f.get("position_min_size_mm"),
+            f.get("hole_radius_min_mm"),
+            f.get("fillet_radius_min_mm"),
+        )
+
+    def sel(self, *types: str) -> bool:
+        return any(t in self.types for t in types)
+
+    @staticmethod
+    def at_least(x: float, lo: float | None) -> bool:
+        return lo is None or x >= lo - FILTER_TOL
+
+    @staticmethod
+    def within(x: float, r: tuple) -> bool:
+        lo, hi = r
+        return (lo is None or x >= lo - FILTER_TOL) and (hi is None or x <= hi + FILTER_TOL)
+
+    def thickness_max(self) -> float | None:
+        return None if self.thickness[1] is None else self.thickness[1] + FILTER_TOL
+
+
+class _Stats:
+    """Per-body counters of ``extract_stats.json`` (section 7.1). Unselected types only carry ``selected: false``."""
+
+    def __init__(self, flt: Filter):
+        self.types: dict[str, dict] = {}
+        for t in TYPE_ORDER:
+            self.types[t] = {"selected": True, "candidates": 0, "kept": 0, "excluded": {}} if flt.sel(t) else {"selected": False}
+        if flt.sel("THICKNESS"):
+            self.types["THICKNESS"] ={"selected": True, "initiators": 0, "pair_tests": 0, "kept": 0, "excluded": {}}
+        for t in ("RIB_THICKNESS", "POCKET_WIDTH"):
+            if flt.sel(t):
+                self.types[t] = {"selected": True, "candidates": 0, "pair_tests": 0, "kept": 0, "excluded": {}}
+        self.rib_rejects: dict[str, int] = {}
+
+    def add(self, t: str, key: str, n: int = 1) -> None:
+        self.types[t][key] += n
+
+    def excl(self, t: str, why: str, n: int = 1) -> None:
+        e = self.types[t]["excluded"]
+        e[why] = e.get(why, 0) + n
+
+    def elapsed(self, types, sec: float) -> None:
+        for t in types:
+            if self.types[t]["selected"]:
+                self.types[t]["elapsed_s"] = sec
+
+    def as_dict(self) -> dict:
+        return {"types": self.types, "rib_rejects": dict(sorted(self.rib_rejects.items()))}
 
 
 # ---------------------------------------------------------------- geometry helpers
@@ -191,18 +285,26 @@ class _Ctx:
         return self.topo.face(fid)
 
 
-def _find_protrusions(ctx: _Ctx, sign: int) -> list[tuple[int, list[int], int, float]]:
+def _find_protrusions(ctx: _Ctx, sign: int, rejects: dict | None = None) -> list[tuple[int, list[int], int, float]]:
     """sign=+1: ribs (convex top, concave base); sign=-1: pockets (concave floor, convex entry).
 
-    Returns [(cap face, lateral faces, base/entry face, height/depth)].
+    Returns [(cap face, lateral faces, base/entry face, height/depth)]. ``rejects``: first reason per rejected cap
+    candidate plane is counted there (``extract_stats.json`` ``rib_rejects``, section 7.1).
     """
     want_cap = "CONVEX" if sign > 0 else "CONCAVE"
     want_base = "CONCAVE" if sign > 0 else "CONVEX"
     found = []
+
+    def reject(why: str) -> None:
+        if rejects is not None:
+            rejects[why] = rejects.get(why, 0) + 1
+
     for cap in ctx.planes:
         if cap.inner_wires or not cap.outer_edges:
+            reject("cap_inner_wire")
             continue
         if any(ctx.edge_conv[e] != want_cap for e in cap.outer_edges):
+            reject("cap_not_convex")
             continue
         lat_ids = []
         ok = True
@@ -213,9 +315,14 @@ def _find_protrusions(ctx: _Ctx, sign: int) -> list[tuple[int, list[int], int, f
             if others[0] not in lat_ids:
                 lat_ids.append(others[0])
         if not ok or len(lat_ids) < 3:
+            reject("lateral_count")
             continue
         lats = [ctx.face(g) for g in lat_ids]
-        if any(l.surface != "PLANE" or abs(float(np.dot(l.normal, cap.normal))) > ctx.sin_perp for l in lats):
+        if any(l.surface != "PLANE" for l in lats):
+            reject("lateral_not_plane")
+            continue
+        if any(abs(float(np.dot(l.normal, cap.normal))) > ctx.sin_perp for l in lats):
+            reject("lateral_draft")
             continue
         base_id = None
         for l in lats:
@@ -234,12 +341,15 @@ def _find_protrusions(ctx: _Ctx, sign: int) -> list[tuple[int, list[int], int, f
                     elif base_id != g:
                         ok = False
         if not ok or base_id is None:
+            reject("base_mismatch")
             continue
         base = ctx.face(base_id)
         if base.surface != "PLANE" or float(np.dot(base.normal, cap.normal)) < ctx.cos_par:
+            reject("base_mismatch")
             continue
         h = float(np.dot(cap.centroid - base.centroid, cap.normal)) * sign
         if h <= 0:
+            reject("height_not_positive")
             continue
         found.append((cap.id, sorted(lat_ids), base_id, h))
     return found
@@ -280,6 +390,11 @@ def _pair_candidates(faces: list[FaceData], cos_par: float, material: bool):
 
 def _pairs_across(ctx: _Ctx, faces: list[FaceData], material: bool) -> list[tuple[FaceData, FaceData, float, float]]:
     """Antiparallel plane pairs. material=True: material between (faces look away from each other)."""
+    return [(faces[i], faces[j], d, dr) for i, j, d, dr in _pairs_across_idx(ctx, faces, material)]
+
+
+def _pairs_across_idx(ctx: _Ctx, faces: list[FaceData], material: bool) -> list[tuple[int, int, float, float]]:
+    """``_pairs_across`` as (i, j > i, d, draft) index tuples, same order."""
     out = []
     for i, j in _pair_candidates(faces, ctx.cos_par, material):
         a, b = faces[i], faces[j]
@@ -296,7 +411,7 @@ def _pairs_across(ctx: _Ctx, faces: list[FaceData], material: bool) -> list[tupl
         if d <= 1e-9:
             continue
         draft = 0.5 * (180.0 - _angle_deg(a.normal, b.normal))
-        out.append((a, b, d, draft))
+        out.append((i, j, d, draft))
     return out
 
 
@@ -366,10 +481,145 @@ def _quiet(_msg: str) -> None:
     pass
 
 
-def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = None) -> list[Feature]:
-    """``log(msg)``: optional progress lines (stderr in extract); ``timing``: filled with stage seconds/counts."""
+def _thickness_lazy(ctx: _Ctx, free: list[FaceData], flt: Filter, st: _Stats) -> list[tuple[FaceData, FaceData, float, float]]:
+    """THICKNESS pairs with a filter (section 5.2): same mutual-nearest rule as the full scan, but each initiator
+    face (area >= face_area_min) walks its cheap-test partners in ascending distance (ties: enumeration order) and
+    asks the overlap test only until the first pass (or ``d > thickness max``). Overlap answers are cached per pair
+    (lower index first, like the full scan). Ties: the full scan keeps the first partner (ascending index) within
+    ``TIE_TOL`` of the nearest one, so after the first pass the lower-index partners within the window are tried too.
+    Returns pairs in the full scan's (i, j) order."""
+    n = len(free)
+    adj: list[list[tuple[float, int, int, int, float]]] = [[] for _ in range(n)]
+    for i, j, d, dr in _pairs_across_idx(ctx, free, material=True):
+        adj[i].append((d, j, i, j, dr))
+        adj[j].append((d, i, i, j, dr))
+    for lst in adj:
+        lst.sort(key=lambda x: (x[0], x[1]))
+    cache: dict[tuple[int, int], bool] = {}
+    ts = st.types["THICKNESS"]
+
+    def passes(i: int, j: int) -> bool:
+        key = (i, j)
+        if key not in cache:
+            ts["pair_tests"] += 1
+            cache[key] = _overlap_ok(ctx, free[i], free[j], check_material=True)
+        return cache[key]
+
+    dmax = flt.thickness_max()
+    memo: dict[int, tuple | None] = {}
+
+    def nearest(p: int) -> tuple | None:
+        """(partner, d, i, j, draft) of the mutual-nearest rule for face p, None = no partner within dmax."""
+        if p in memo:
+            return memo[p]
+        lst = adj[p]
+        res = None
+        for k, (d, q, i, j, dr) in enumerate(lst):
+            if dmax is not None and d > dmax:
+                break
+            if not passes(i, j):
+                continue
+            res = (q, d, i, j, dr)
+            for d2, q2, i2, j2, dr2 in lst[k + 1 :]:
+                if d2 > d + TIE_TOL:
+                    break
+                if q2 < res[0] and passes(i2, j2):
+                    res = (q2, d2, i2, j2, dr2)
+            break
+        memo[p] = res
+        return res
+
+    found: dict[tuple[int, int], tuple[float, float]] = {}
+    amin = flt.face_area_min
+    for p in range(n):
+        if not Filter.at_least(free[p].area, amin):
+            st.excl("THICKNESS", "face_area")
+            continue
+        ts["initiators"] += 1
+        r = nearest(p)
+        if r is None:
+            st.excl("THICKNESS", "thickness_range" if dmax is not None and adj[p] else "no_partner")
+            continue
+        q, d, i, j, dr = r
+        if (i, j) in found:
+            continue
+        if not Filter.within(d, flt.thickness):
+            st.excl("THICKNESS", "thickness_range")
+            continue
+        if not Filter.at_least(free[q].area, amin):
+            st.excl("THICKNESS", "face_area")
+            continue
+        r2 = nearest(q)
+        if r2 is None or r2[0] != p:
+            st.excl("THICKNESS", "not_mutual")
+            continue
+        found[(i, j)] = (d, dr)
+    return [(free[i], free[j], d, dr) for (i, j), (d, dr) in sorted(found.items())]
+
+
+def _rib_pos(ctx: _Ctx, name: str, cap: int, lats: list[int], base: int, flt: Filter, st: _Stats, feats: list[Feature]) -> None:
+    """RIB_POS_U/V of one recognized rib (section 3.2): base normal within 1 deg of a global axis, per in-plane axis
+    exactly one lateral face looking +a and one looking -a (within the draft angle)."""
+    want = [t for t in RIB_POS_TYPES if flt.sel(t)]
+    if not want:
+        return
+    B = ctx.face(base)
+    k = _dominant_axis(np.asarray(B.normal, dtype=float), math.cos(math.radians(1.0)))
+    if k is None:
+        for t in want:
+            st.add(t, "candidates")
+            st.excl(t, "base_axis")
+        return
+    others = [a for a in range(3) if a != k]
+    C = ctx.face(cap)
+    ext = C.bbox[3:] - C.bbox[:3]
+    size = float(min(ext[others[0]], ext[others[1]]))
+    bb = ctx.summary.bbox
+    L = [ctx.face(g) for g in lats]
+    for t, a in zip(RIB_POS_TYPES, others):
+        if t not in want:
+            continue
+        st.add(t, "candidates")
+        plus = [f for f in L if float(f.normal[a]) >= ctx.cos_par]
+        minus = [f for f in L if -float(f.normal[a]) >= ctx.cos_par]
+        if len(plus) != 1 or len(minus) != 1:
+            st.excl(t, "shape")
+            continue
+        if not Filter.at_least(size, flt.position_min_size):
+            st.excl(t, "position_min_size")
+            continue
+        nom = 0.5 * (float(plus[0].centroid[a]) + float(minus[0].centroid[a])) - float(bb[a])
+        feats.append(Feature(t, name, nom, [cap, *lats, base], [cap, *lats], [base], axis=a))
+
+
+def rib_sides(topo: Topology, faces: list[int], axis: int) -> tuple[int, int] | None:
+    """(lateral face looking -axis, lateral face looking +axis) among a RIB_POS feature's faces (the faces looking
+    most along -axis / +axis; None when either side is missing)."""
+    best_m = best_p = None
+    for g in faces:
+        f = topo.face(g)
+        if f.surface != "PLANE" or f.normal is None:
+            continue
+        c = float(f.normal[axis])
+        if c > 0.5 and (best_p is None or c > best_p[0]):
+            best_p = (c, g)
+        if c < -0.5 and (best_m is None or c < best_m[0]):
+            best_m = (c, g)
+    if best_m is None or best_p is None:
+        return None
+    return best_m[1], best_p[1]
+
+
+def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = None, stats: dict | None = None, progress=None) -> list[Feature]:
+    """``log(msg)``: optional progress lines (stderr in extract); ``timing``: filled with stage seconds/counts;
+    ``stats``: filled with the ``extract_stats.json`` body entry (section 7.1); ``progress(msg)``: one line per
+    recognition stage (stdout PROGRESS in extract). ``opts["extract"]["filter"]`` (extract-filter.md) selects the
+    types and conditions; the excluded candidates are dropped before the expensive steps (section 5.2)."""
     log = log or _quiet
+    progress = progress or _quiet
     timing = {} if timing is None else timing
+    flt = Filter.from_opts(opts)
+    st = _Stats(flt)
     t0 = time.perf_counter()
     ctx = _Ctx(body, opts)
     t1 = time.perf_counter()
@@ -380,93 +630,192 @@ def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = N
     claimed: set[int] = set()
     cos1 = math.cos(math.radians(1.0))
 
+    def kept(t: str, ft: Feature) -> None:
+        feats.append(ft)
+        st.add(t, "kept")
+
     # holes and fillets (revolved faces)
-    for f in ctx.topo.faces:
-        if f.surface != "CYLINDER" or f.span_deg is None:
-            continue
-        if f.span_deg >= 359.9 and f.concave:
-            # through: every non-seam boundary edge borders a plane perpendicular to the axis
-            caps = []
-            for e in f.edges:
-                if ctx.edge_conv[e] == "SEAM":
-                    continue
-                for g in ctx.edge_faces[e]:
-                    if g != f.id:
-                        caps.append(ctx.face(g))
-            if len(caps) < 2 or any(c.surface != "PLANE" or abs(float(np.dot(c.normal, f.axis_dir))) < ctx.cos_par for c in caps):
+    sel_hr, sel_hp, sel_fr = flt.sel("HOLE_RADIUS"), flt.sel(*HOLE_POS_TYPES), flt.sel("FILLET_RADIUS")
+    if sel_hr or sel_hp or sel_fr:
+        for f in ctx.topo.faces:
+            if f.surface != "CYLINDER" or f.span_deg is None:
                 continue
-            if max(float(np.dot(c.normal, f.axis_dir)) for c in caps) < ctx.cos_par or min(float(np.dot(c.normal, f.axis_dir)) for c in caps) > -ctx.cos_par:
-                continue  # entry and exit must face opposite ways
-            claimed.add(f.id)
-            feats.append(Feature("HOLE_RADIUS", name, f.radius, [f.id], [f.id], []))
-            k = _dominant_axis(f.axis_dir, cos1)
-            if k is not None:
-                bb = ctx.summary.bbox
-                others = [a for a in range(3) if a != k]
-                for t, a in zip(("HOLE_POS_U", "HOLE_POS_V"), others):
-                    feats.append(Feature(t, name, float(f.axis_point[a] - bb[a]), [f.id], [f.id], [], axis=a))
-        elif f.span_deg < 180.0 - 1e-6:
-            smooth = sum(1 for e in f.edges if ctx.edge_conv[e] == "SMOOTH")
-            if smooth >= 2:
+            if f.span_deg >= 359.9 and f.concave:
+                # through: every non-seam boundary edge borders a plane perpendicular to the axis
+                caps = []
+                for e in f.edges:
+                    if ctx.edge_conv[e] == "SEAM":
+                        continue
+                    for g in ctx.edge_faces[e]:
+                        if g != f.id:
+                            caps.append(ctx.face(g))
+                if len(caps) < 2 or any(c.surface != "PLANE" or abs(float(np.dot(c.normal, f.axis_dir))) < ctx.cos_par for c in caps):
+                    continue
+                if max(float(np.dot(c.normal, f.axis_dir)) for c in caps) < ctx.cos_par or min(float(np.dot(c.normal, f.axis_dir)) for c in caps) > -ctx.cos_par:
+                    continue  # entry and exit must face opposite ways
                 claimed.add(f.id)
-                feats.append(Feature("FILLET_RADIUS", name, f.radius, [f.id], [f.id], []))
-    for f in ctx.topo.faces:
-        if f.surface == "TORUS" and f.id not in claimed:
-            smooth = sum(1 for e in f.edges if ctx.edge_conv[e] == "SMOOTH")
-            if smooth >= 2:
-                claimed.add(f.id)
-                feats.append(Feature("FILLET_RADIUS", name, f.minor_radius, [f.id], [f.id], []))
+                if sel_hr:
+                    st.add("HOLE_RADIUS", "candidates")
+                    if Filter.at_least(f.radius, flt.hole_radius_min):
+                        kept("HOLE_RADIUS", Feature("HOLE_RADIUS", name, f.radius, [f.id], [f.id], []))
+                    else:
+                        st.excl("HOLE_RADIUS", "hole_radius_min")
+                k = _dominant_axis(f.axis_dir, cos1)
+                if k is not None and sel_hp:
+                    bb = ctx.summary.bbox
+                    others = [a for a in range(3) if a != k]
+                    for t, a in zip(HOLE_POS_TYPES, others):
+                        if not flt.sel(t):
+                            continue
+                        st.add(t, "candidates")
+                        if Filter.at_least(2.0 * f.radius, flt.position_min_size):
+                            kept(t, Feature(t, name, float(f.axis_point[a] - bb[a]), [f.id], [f.id], [], axis=a))
+                        else:
+                            st.excl(t, "position_min_size")
+            elif f.span_deg < 180.0 - 1e-6:
+                smooth = sum(1 for e in f.edges if ctx.edge_conv[e] == "SMOOTH")
+                if smooth >= 2:
+                    claimed.add(f.id)
+                    if sel_fr:
+                        st.add("FILLET_RADIUS", "candidates")
+                        if Filter.at_least(f.radius, flt.fillet_radius_min):
+                            kept("FILLET_RADIUS", Feature("FILLET_RADIUS", name, f.radius, [f.id], [f.id], []))
+                        else:
+                            st.excl("FILLET_RADIUS", "fillet_radius_min")
+        if sel_fr:
+            for f in ctx.topo.faces:
+                if f.surface == "TORUS" and f.id not in claimed:
+                    smooth = sum(1 for e in f.edges if ctx.edge_conv[e] == "SMOOTH")
+                    if smooth >= 2:
+                        claimed.add(f.id)
+                        st.add("FILLET_RADIUS", "candidates")
+                        if Filter.at_least(f.minor_radius, flt.fillet_radius_min):
+                            kept("FILLET_RADIUS", Feature("FILLET_RADIUS", name, f.minor_radius, [f.id], [f.id], []))
+                        else:
+                            st.excl("FILLET_RADIUS", "fillet_radius_min")
+        n_rev = sum(1 for ft in feats)
+        progress(f"holes/fillets: {n_rev} kept")
     t2 = time.perf_counter()
     timing["revolved_s"] = t2 - t1
+    st.elapsed(("HOLE_RADIUS", "HOLE_POS_U", "HOLE_POS_V", "FILLET_RADIUS"), t2 - t1)
 
-    # ribs
-    for cap, lats, base, h in _find_protrusions(ctx, +1):
-        claimed.update([cap, *lats])
-        feats.append(Feature("RIB_HEIGHT", name, h, [cap, base], [cap], [base], draft_deg=0.0))
-        for a, b, d, dr in _pairs_across(ctx, [ctx.face(g) for g in lats], material=True):
-            if d < h and _overlap_ok(ctx, a, b, check_material=True):
-                feats.append(Feature("RIB_THICKNESS", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
+    # ribs (always recognized when a type depends on them: rib faces are not thickness candidates, EF-INV)
+    n_ribs = n_pockets = 0
+    if flt.sel("THICKNESS", "RIB_THICKNESS", "RIB_HEIGHT", *RIB_POS_TYPES):
+        for cap, lats, base, h in _find_protrusions(ctx, +1, st.rib_rejects):
+            n_ribs += 1
+            claimed.update([cap, *lats])
+            if flt.sel("RIB_HEIGHT"):
+                st.add("RIB_HEIGHT", "candidates")
+                if Filter.within(h, flt.height):
+                    kept("RIB_HEIGHT", Feature("RIB_HEIGHT", name, h, [cap, base], [cap], [base], draft_deg=0.0))
+                else:
+                    st.excl("RIB_HEIGHT", "height_range")
+            if flt.sel("RIB_THICKNESS"):
+                for a, b, d, dr in _pairs_across(ctx, [ctx.face(g) for g in lats], material=True):
+                    st.add("RIB_THICKNESS", "candidates")
+                    if not d < h:
+                        st.excl("RIB_THICKNESS", "not_thinner_than_height")
+                        continue
+                    if not Filter.within(d, flt.thickness):
+                        st.excl("RIB_THICKNESS", "thickness_range")
+                        continue
+                    if not (Filter.at_least(a.area, flt.face_area_min) and Filter.at_least(b.area, flt.face_area_min)):
+                        st.excl("RIB_THICKNESS", "face_area")
+                        continue
+                    st.add("RIB_THICKNESS", "pair_tests")
+                    if _overlap_ok(ctx, a, b, check_material=True):
+                        kept("RIB_THICKNESS", Feature("RIB_THICKNESS", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
+                    else:
+                        st.excl("RIB_THICKNESS", "no_overlap")
+            if flt.sel(*RIB_POS_TYPES):
+                n0 = len(feats)
+                _rib_pos(ctx, name, cap, lats, base, flt, st, feats)
+                for ft in feats[n0:]:
+                    st.add(ft.type, "kept")
+        rt = st.types["RIB_THICKNESS"]
+        progress(f"ribs: {n_ribs} ribs" + (f", rib thickness: {rt['pair_tests']} tests, {rt['kept']} kept" if rt["selected"] else ""))
+    t2b = time.perf_counter()
+    st.elapsed(("RIB_HEIGHT", "RIB_THICKNESS", "RIB_POS_U", "RIB_POS_V"), t2b - t2)
 
     # pockets
-    for floor, walls, entry, depth in _find_protrusions(ctx, -1):
-        claimed.update([floor, *walls])
-        feats.append(Feature("POCKET_DEPTH", name, depth, [floor, entry], [floor], [entry]))
-        for a, b, d, dr in _pairs_across(ctx, [ctx.face(g) for g in walls], material=False):
-            if _overlap_ok(ctx, a, b, check_material=False):
-                feats.append(Feature("POCKET_WIDTH", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
+    if flt.sel("THICKNESS", "POCKET_DEPTH", "POCKET_WIDTH"):
+        for floor, walls, entry, depth in _find_protrusions(ctx, -1):
+            n_pockets += 1
+            claimed.update([floor, *walls])
+            if flt.sel("POCKET_DEPTH"):
+                st.add("POCKET_DEPTH", "candidates")
+                if Filter.within(depth, flt.height):
+                    kept("POCKET_DEPTH", Feature("POCKET_DEPTH", name, depth, [floor, entry], [floor], [entry]))
+                else:
+                    st.excl("POCKET_DEPTH", "height_range")
+            if flt.sel("POCKET_WIDTH"):
+                for a, b, d, dr in _pairs_across(ctx, [ctx.face(g) for g in walls], material=False):
+                    st.add("POCKET_WIDTH", "candidates")
+                    if not Filter.within(d, flt.thickness):
+                        st.excl("POCKET_WIDTH", "thickness_range")
+                        continue
+                    if not (Filter.at_least(a.area, flt.face_area_min) and Filter.at_least(b.area, flt.face_area_min)):
+                        st.excl("POCKET_WIDTH", "face_area")
+                        continue
+                    st.add("POCKET_WIDTH", "pair_tests")
+                    if _overlap_ok(ctx, a, b, check_material=False):
+                        kept("POCKET_WIDTH", Feature("POCKET_WIDTH", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
+                    else:
+                        st.excl("POCKET_WIDTH", "no_overlap")
+        pw = st.types["POCKET_WIDTH"]
+        progress(f"pockets: {n_pockets} pockets" + (f", pocket width: {pw['pair_tests']} tests, {pw['kept']} kept" if pw["selected"] else ""))
 
     t3 = time.perf_counter()
+    st.elapsed(("POCKET_DEPTH", "POCKET_WIDTH"), t3 - t2b)
     timing["ribs_pockets_s"] = t3 - t2
     log(f"holes/fillets {t2 - t1:.1f}s, ribs/pockets {t3 - t2:.1f}s")
 
     # thickness: remaining planes, mutual nearest antiparallel pair with material between
-    free = [f for f in ctx.planes if f.id not in claimed]
-    pairs = _pairs_across(ctx, free, material=True)
-    t4 = time.perf_counter()
-    timing["thickness_free_planes"] = len(free)
-    timing["thickness_pairs"] = len(pairs)
-    timing["thickness_pairs_s"] = t4 - t3
-    log(f"thickness candidate pairs: {len(pairs)} (free planes {len(free)}) {t4 - t3:.1f}s")
-    cands = []
-    step = max(1, len(pairs) // 10)
-    last = t4
-    for k, (a, b, d, dr) in enumerate(pairs, 1):
-        if _overlap_ok(ctx, a, b, check_material=True):
-            cands.append((a, b, d, dr))
-        now = time.perf_counter()
-        if k == len(pairs) or (k % step == 0 and now - last >= 1.0):
-            log(f"thickness pairs checked {k}/{len(pairs)} {now - t4:.1f}s")
-            last = now
-    t5 = time.perf_counter()
-    timing["thickness_overlap_s"] = t5 - t4
-    best: dict[int, tuple[float, int]] = {}
-    for a, b, d, _ in cands:
-        for x, y in ((a.id, b.id), (b.id, a.id)):
-            if x not in best or d < best[x][0] - 1e-9:
-                best[x] = (d, y)
-    for a, b, d, dr in cands:
-        if best.get(a.id, (0, -1))[1] == b.id and best.get(b.id, (0, -1))[1] == a.id:
-            feats.append(Feature("THICKNESS", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
+    if flt.sel("THICKNESS"):
+        free = [f for f in ctx.planes if f.id not in claimed]
+        ts = st.types["THICKNESS"]
+        if flt.active:
+            t4 = t3
+            timing["thickness_free_planes"] = len(free)
+            log(f"thickness (filtered): free planes {len(free)}")
+            mutual = _thickness_lazy(ctx, free, flt, st)
+            t5 = time.perf_counter()
+        else:
+            pairs = _pairs_across(ctx, free, material=True)
+            t4 = time.perf_counter()
+            timing["thickness_free_planes"] = len(free)
+            timing["thickness_pairs"] = len(pairs)
+            timing["thickness_pairs_s"] = t4 - t3
+            log(f"thickness candidate pairs: {len(pairs)} (free planes {len(free)}) {t4 - t3:.1f}s")
+            cands = []
+            step = max(1, len(pairs) // 10)
+            last = t4
+            for k, (a, b, d, dr) in enumerate(pairs, 1):
+                if _overlap_ok(ctx, a, b, check_material=True):
+                    cands.append((a, b, d, dr))
+                now = time.perf_counter()
+                if k == len(pairs) or (k % step == 0 and now - last >= 1.0):
+                    log(f"thickness pairs checked {k}/{len(pairs)} {now - t4:.1f}s")
+                    last = now
+            t5 = time.perf_counter()
+            best: dict[int, tuple[float, int]] = {}
+            for a, b, d, _ in cands:
+                for x, y in ((a.id, b.id), (b.id, a.id)):
+                    if x not in best or d < best[x][0] - 1e-9:
+                        best[x] = (d, y)
+            mutual = [(a, b, d, dr) for a, b, d, dr in cands if best.get(a.id, (0, -1))[1] == b.id and best.get(b.id, (0, -1))[1] == a.id]
+            ts["initiators"] = len(free)
+            ts["pair_tests"] = len(pairs)
+            if len(pairs) - len(cands):
+                st.excl("THICKNESS", "no_overlap", len(pairs) - len(cands))
+            if len(cands) - len(mutual):
+                st.excl("THICKNESS", "not_mutual", len(cands) - len(mutual))
+        timing["thickness_overlap_s"] = t5 - t4
+        for a, b, d, dr in mutual:
+            kept("THICKNESS", Feature("THICKNESS", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
+        st.elapsed(("THICKNESS",), time.perf_counter() - t3)
+        progress(f"thickness: {ts['pair_tests']} tests, {ts['kept']} kept")
     for ft in feats:
         ft.nominal = rnd(ft.nominal)
         ft.draft_deg = rnd(ft.draft_deg, 4)
@@ -474,6 +823,8 @@ def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = N
     timing["overlap_prefiltered"] = ctx.stats["overlap_prefiltered"]
     timing["features"] = len(feats)
     timing["recognize_s"] = time.perf_counter() - t0
+    if stats is not None:
+        stats.update(faces=len(ctx.topo.faces), planes=len(ctx.planes), **st.as_dict())
     return feats
 
 
@@ -618,10 +969,44 @@ def _feasible(ctx_faces: list[FaceData], topo: Topology, ft: Feature, face_owner
             if "plus" in best:
                 hi = nom + (best["plus"][0] - r - WALL_MIN_MM)
                 lim = lim if lim is not None else best["plus"][1]
+    elif t in RIB_POS_TYPES:
+        lo, hi, lim = _rib_pos_feasible(planes, topo, ft, bbox, cos_par)
     elif t == "FILLET_RADIUS":
         lo, hi = max(0.1, 0.25 * nom), 2.0 * nom
     hi = max(hi, lo)
     return {"min": rnd(lo), "max": rnd(hi), "limited_by": face_owner.get(lim) if lim is not None else None}
+
+
+def _rib_pos_feasible(planes: list[FaceData], topo: Topology, ft: Feature, bbox: np.ndarray, cos_par: float) -> tuple[float, float, int | None]:
+    """RIB_POS feasible (section 3.2): from the rib foot print (lateral faces' bbox interval along the axis) towards
+    -a / +a, the smaller of (i) the nearest plane normal to a whose region overlaps the rib (wall, other rib side)
+    minus WALL_MIN_MM and (ii) the base face bbox boundary minus WALL_MIN_MM. Returns (lo, hi, limiting face)."""
+    a = int(ft.axis)
+    nom = ft.nominal
+    own = set(ft.faces)
+    lats = [topo.face(g) for g in ft.faces[1:-1]]
+    box = np.concatenate([np.min([f.bbox[:3] for f in lats], axis=0), np.max([f.bbox[3:] for f in lats], axis=0)])
+    lo_a, hi_a = float(box[a]), float(box[3 + a])
+    base = topo.face(ft.fixed[0])
+    room = {"minus": (lo_a - float(base.bbox[a]) - WALL_MIN_MM, base.id), "plus": (float(base.bbox[3 + a]) - hi_a - WALL_MIN_MM, base.id)}
+    for q in planes:
+        if q.id in own or q.normal is None or abs(float(q.normal[a])) < cos_par:
+            continue
+        if not _bbox_overlap_2d(box, q.bbox, a):
+            continue
+        c = float(q.centroid[a])
+        if c - hi_a > 1e-6:
+            side, s = "plus", c - hi_a - WALL_MIN_MM
+        elif lo_a - c > 1e-6:
+            side, s = "minus", lo_a - c - WALL_MIN_MM
+        else:
+            continue
+        if s < room[side][0]:
+            room[side] = (s, q.id)
+    lo = nom - max(0.0, room["minus"][0])
+    hi = nom + max(0.0, room["plus"][0])
+    lim = room["minus"][1] if room["minus"][0] <= room["plus"][0] else room["plus"][1]
+    return lo, hi, lim
 
 
 # ---------------------------------------------------------------- naming / ordering / groups

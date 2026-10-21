@@ -6,7 +6,10 @@ Every sample starts from the nominal geometry. Feature values are turned into fa
   section 6.2, re-evaluated with ``--tag-dir`` contacts) is offset along its normal;
 * RIB_HEIGHT / POCKET_DEPTH: cap / floor offset; the whole rib / pocket (cap or floor + adjacent
   side faces) follows its base / entry face rigidly so that the other parameters keep their values;
-* HOLE_RADIUS: new cylinder radius; HOLE_POS_U/V: cylinder shifted along the axis of the coordinate.
+* HOLE_RADIUS: new cylinder radius; HOLE_POS_U/V: cylinder shifted along the axis of the coordinate;
+  RIB_POS_U/V (extract-filter.md section 3.2): rib cap + lateral faces shifted along the axis (added to the
+  rib thickness / height moves of the same sample), base face unchanged (its inner wire follows), same
+  reference and iteration rules as HOLE_POS with the rib center (mid plane of the -a / +a lateral faces).
   Reference (``position_ref``): ``nearest_fixed`` (default) keeps the distance to the nearest planar
   face normal to that axis that does not move in this sample (tie: larger area, then lower id), the
   value change moving the hole along +axis; ``proportional`` keeps the position as a fraction of the
@@ -45,7 +48,7 @@ from .common import (
     rnd,
     vec,
 )
-from .features import choose_ref
+from .features import RIB_POS_TYPES, choose_ref, rib_sides
 from .kernel import BodyGeom, CadInputError, FaceMove, move_faces, save_brep
 from .kernel.base import FaceData, Topology
 
@@ -63,6 +66,8 @@ OP = {
     "HOLE_POS_U": "AXIS_SHIFT",
     "HOLE_POS_V": "AXIS_SHIFT",
     "FILLET_RADIUS": "REBLEND",
+    "RIB_POS_U": "AXIS_SHIFT",
+    "RIB_POS_V": "AXIS_SHIFT",
 }
 SIG_ANGLE_DEG = 1.0
 HOLE_POS_ITER = 3
@@ -235,11 +240,23 @@ class HolePos:
     offset: float  # nearest_fixed: target axis coordinate - reference plane coordinate
     frac: float  # proportional: target position from the bbox minimum / body length
 
+    sides: tuple[int, int] | None = None  # RIB_POS: (-a, +a) lateral faces; None = hole (cylinder axis point)
+    moving: tuple[int, ...] = ()  # RIB_POS: faces shifted together (cap + laterals)
+
     def target(self, topo: Topology, bbox: np.ndarray) -> float:
         a = self.axis
         if self.mode == "nearest_fixed" and self.ref is not None:
             return float(topo.face(self.ref).centroid[a]) + self.offset
         return float(bbox[a]) + self.frac * float(bbox[3 + a] - bbox[a])
+
+    def current(self, topo: Topology) -> float:
+        """Coordinate of the hole axis / rib center plane along the axis."""
+        if self.sides is None:
+            return float(topo.face(self.face).axis_point[self.axis])
+        return 0.5 * (float(topo.face(self.sides[0]).centroid[self.axis]) + float(topo.face(self.sides[1]).centroid[self.axis]))
+
+    def faces_moved(self) -> tuple[int, ...]:
+        return self.moving if self.sides is not None else (self.face,)
 
 
 @dataclass
@@ -296,11 +313,14 @@ AXIS_COS = 0.999  # planar face counts as normal to an axis (about 2.6 deg: draf
 TIE_MM = 1.0e-6
 
 
-def nearest_fixed_face(topo: Topology, axis: int, coord: float, T: dict[int, np.ndarray]) -> int | None:
-    """Nearest planar face normal to ``axis`` that does not move along it in this sample (tie: larger area, lower id)."""
+def nearest_fixed_face(topo: Topology, axis: int, coord: float, T: dict[int, np.ndarray], exclude: set[int] | frozenset = frozenset()) -> int | None:
+    """Nearest planar face normal to ``axis`` that does not move along it in this sample (tie: larger area, lower id).
+    ``exclude``: faces that cannot be the reference (the rib's own faces, faces a rib position move will shift)."""
     best = None
     for f in topo.faces:
         if f.surface != "PLANE" or f.normal is None or abs(float(f.normal[axis])) < AXIS_COS:
+            continue
+        if f.id in exclude:
             continue
         if f.id in T and abs(float(T[f.id][axis])) > 0:
             continue
@@ -308,6 +328,13 @@ def nearest_fixed_face(topo: Topology, axis: int, coord: float, T: dict[int, np.
         if best is None or key < best[0]:
             best = (key, f.id)
     return None if best is None else best[1]
+
+
+def _rib_moving(f: dict, mf: list[int]) -> list[int]:
+    """Resolved moving faces (cap + laterals) of a RIB_POS feature: ``faces.moving`` mapped through the resolved
+    ``measure.faces`` (same face ids, possibly re-found by signature)."""
+    idmap = {_fid(x): g for x, g in zip(f["measure"]["faces"], mf)}
+    return [idmap[_fid(x)] for x in (f.get("faces") or {}).get("moving") or [] if _fid(x) in idmap]
 
 
 def plan_body(
@@ -414,17 +441,49 @@ def plan_body(
     lo_shift, hi_shift = _bbox_shift(topo, s.bbox, T)
     pos_mode = opts.get("position_ref", "nearest_fixed")
     hole_pos: list[HolePos] = []
+    # faces a rib position move of this sample shifts along each axis: never a position reference on that axis
+    rib_shifted: list[set[int]] = [set(), set(), set()]
+    for f, mf in others:
+        if f["type"] in RIB_POS_TYPES and fvalues[f["name"]] - float(f["nominal"]) != 0:
+            rib_shifted["xyz".index(f["measure"].get("axis", "x"))].update(_rib_moving(f, mf))
     for f, mf in others:
         d = fvalues[f["name"]] - float(f["nominal"])
         t = f["type"]
         c = mf[0]
+        if t in RIB_POS_TYPES:
+            ax = "xyz".index(f["measure"].get("axis", "x"))
+            sides = rib_sides(topo, mf, ax)
+            if sides is None:
+                raise PaicadError("GEOM_INPUT_INVALID", f"{f['name']}: rib lateral faces along {'xyz'[ax]} not found (re-run extract)")
+            moving = tuple(_rib_moving(f, mf))
+            c0 = 0.5 * (float(topo.face(sides[0]).centroid[ax]) + float(topo.face(sides[1]).centroid[ax]))
+            pre = 0.5 * sum(float(T[g][ax]) for g in sides if g in T)  # center shift by this sample's rib thickness moves
+            ref = nearest_fixed_face(topo, ax, c0, T, exclude=set(mf) | rib_shifted[ax]) if pos_mode == "nearest_fixed" else None
+            if pos_mode == "nearest_fixed" and ref is None:
+                warnings.append({"code": "POS_REF_NO_FIXED_FACE", "feature": f["name"], "message": "no fixed face normal to the axis: position kept proportional to the body length"})
+            L0 = float(s.bbox[3 + ax] - s.bbox[ax])
+            # the center shift of this sample's rib thickness move is kept (vector sum: the rib moves by delta on top)
+            if ref is not None:
+                hp = HolePos(f["name"], f["body"], sides[0], ax, "nearest_fixed", ref, c0 + pre - float(topo.face(ref).centroid[ax]) + d, 0.0, sides, moving)
+                est = c0 + pre + d
+            else:
+                hp = HolePos(f["name"], f["body"], sides[0], ax, "proportional", None, 0.0, (c0 + pre - float(s.bbox[ax]) + d) / L0, sides, moving)
+                est = float(s.bbox[ax]) + lo_shift[ax] + hp.frac * (L0 + hi_shift[ax] - lo_shift[ax])
+            hole_pos.append(hp)
+            if abs(est - (c0 + pre)) > 0:
+                e = np.zeros(3)
+                e[ax] = est - (c0 + pre)
+                for g in moving:
+                    add(g, e)
+            record(f, list(moving), [g for g in mf if g not in moving], "feature_default")
+            continue
         if t == "HOLE_RADIUS":
             if d:
                 R[c] = fvalues[f["name"]]
         elif t in ("HOLE_POS_U", "HOLE_POS_V"):
             ax = "xyz".index(f["measure"].get("axis", "x"))
             h0 = float(topo.face(c).axis_point[ax])
-            ref = nearest_fixed_face(topo, ax, h0, T) if pos_mode == "nearest_fixed" else None
+            ref = nearest_fixed_face(topo, ax, h0, T, exclude=rib_shifted[ax]) if pos_mode == "nearest_fixed" else None
             if pos_mode == "nearest_fixed" and ref is None:
                 warnings.append({"code": "POS_REF_NO_FIXED_FACE", "feature": f["name"], "message": "no fixed face normal to the axis: position kept proportional to the body length"})
             L0 = float(s.bbox[3 + ax] - s.bbox[ax])
@@ -518,10 +577,11 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
             topo = new.topology()
             fix = {}
             for hp in plan.hole_pos:
-                got = float(topo.face(hp.face).axis_point[hp.axis])
+                got = hp.current(topo)
                 target = hp.target(topo, bb)
                 if abs(got - target) > 1e-9:
-                    fix.setdefault(hp.face, np.zeros(3))[hp.axis] += target - got
+                    for g in hp.faces_moved():
+                        fix.setdefault(g, np.zeros(3))[hp.axis] += target - got
             if not fix:
                 break
             for c, v in fix.items():

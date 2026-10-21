@@ -52,6 +52,8 @@ TYPE_KIND = {
     "HOLE_POS_U": "position",
     "HOLE_POS_V": "position",
     "FILLET_RADIUS": "radius",
+    "RIB_POS_U": "position",
+    "RIB_POS_V": "position",
 }
 
 
