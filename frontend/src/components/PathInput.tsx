@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import { api, errorMessage, type Engine, type PathInspectResult, type PathPurpose } from "../api";
 import { BrowseButton } from "./BrowseButton";
 import type { PickMode } from "./PathPickerDialog";
+import { PathSourceTabs } from "./upload/PathSourceTabs";
 
 /** 용도별 "찾아보기" 설정(phase3 §12 S7). aiOnly = 백엔드가 AI 루트만 허용하는 용도. SPDM은 탐색 루트 밖이라 없음 */
 export const BROWSE_OF: Partial<Record<PathPurpose, { mode: PickMode; exts?: string[]; aiOnly?: boolean }>> = {
@@ -58,13 +59,13 @@ export function PathInput({
     }
   };
 
-  const inspect = async () => {
+  const inspect = async (pathArg?: string) => {
     const my = ++seq.current;
     asked.current = true;
     setBusy(true);
     setError(null);
     try {
-      const r = await api.inspectPath(studyId, purpose, value.trim(), extra);
+      const r = await api.inspectPath(studyId, purpose, (pathArg ?? value).trim(), extra);
       if (my !== seq.current) return;
       setResult(r);
       onInspected?.(r);
@@ -75,6 +76,25 @@ export function PathInput({
       setError(errorMessage(e));
     } finally {
       if (my === seq.current) setBusy(false);
+    }
+  };
+
+  // 업로드 완료(upload-report.md §2.1·§7): complete 응답 path 를 경로 칸에 채우고, 서버가 본 inspect 를 기존 확인 표시와 같게 보인다.
+  // RESULT_FOLDER 처럼 doe_id 가 필요한 확인은 complete 에서 형식만 보므로 기존대로 doe_id 를 넣어 한 번 더 확인한다
+  const uploaded = (path: string, insp: PathInspectResult | null) => {
+    onChange(path);
+    seq.current++;
+    setError(null);
+    setBusy(false);
+    if (insp && !extra?.doe_id) {
+      asked.current = true;
+      setResult(insp);
+      onInspected?.(insp);
+    } else {
+      asked.current = false;
+      setResult(null);
+      onInspected?.(null);
+      if (extra?.doe_id) void inspect(path);
     }
   };
 
@@ -97,39 +117,41 @@ export function PathInput({
   return (
     <div className="pathinput">
       <span className="field-label">{label}</span>
-      <div className="pathinput-row">
-        <input
-          type="text"
-          className="mono"
-          value={value}
-          placeholder={placeholder}
-          aria-label={label}
-          spellCheck={false}
-          onChange={(e) => setPath(e.target.value)}
-          disabled={!canExecute}
-        />
-        {browse && (
-          <BrowseButton mode={browse.mode} exts={browse.exts} aiOnly={browse.aiOnly} value={value} onPick={setPath} disabled={!canExecute} />
-        )}
-        <button type="button" className="btn" onClick={inspect} disabled={!canExecute || busy || !value.trim()}>
-          {busy ? "확인 중…" : "확인"}
-        </button>
-      </div>
-      {error && <div className="error-text small" role="alert">{error}</div>}
-      {result && (
-        <div className={result.ok ? "inspect ok" : "inspect bad"}>
-          {renderSummary?.(result)}
-          {result.problems.length > 0 && (
-            <ul className="problems">
-              {result.problems.map((p, i) => (
-                <li key={i}>
-                  <code>{p.code}</code> {p.message ?? ""} {p.file && <span className="mono small">{p.file}</span>}
-                </li>
-              ))}
-            </ul>
+      <PathSourceTabs studyId={studyId} purpose={purpose} engine={extra?.engine as "native" | "altair" | undefined} canExecute={canExecute} onUploaded={uploaded}>
+        <div className="pathinput-row">
+          <input
+            type="text"
+            className="mono"
+            value={value}
+            placeholder={placeholder}
+            aria-label={label}
+            spellCheck={false}
+            onChange={(e) => setPath(e.target.value)}
+            disabled={!canExecute}
+          />
+          {browse && (
+            <BrowseButton mode={browse.mode} exts={browse.exts} aiOnly={browse.aiOnly} value={value} onPick={setPath} disabled={!canExecute} />
           )}
+          <button type="button" className="btn" onClick={() => void inspect()} disabled={!canExecute || busy || !value.trim()}>
+            {busy ? "확인 중…" : "확인"}
+          </button>
         </div>
-      )}
+        {error && <div className="error-text small" role="alert">{error}</div>}
+        {result && (
+          <div className={result.ok ? "inspect ok" : "inspect bad"}>
+            {renderSummary?.(result)}
+            {result.problems.length > 0 && (
+              <ul className="problems">
+                {result.problems.map((p, i) => (
+                  <li key={i}>
+                    <code>{p.code}</code> {p.message ?? ""} {p.file && <span className="mono small">{p.file}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </PathSourceTabs>
     </div>
   );
 }

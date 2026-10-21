@@ -17,8 +17,10 @@ export function createMockFetch(server: MockServer, realFetch?: typeof fetch): t
     const range = raw.Range ?? raw.range ?? headers0.get("Range");
     const headers = { get: (k: string) => (k.toLowerCase() === "range" ? range : headers0.get(k)), has: (k: string) => (k.toLowerCase() === "range" ? range != null : headers0.has(k)) } as Headers;
     let body: Record<string, unknown> | null = null;
+    let rawBody: Blob | null = null;
     if (typeof init?.body === "string") body = JSON.parse(init.body);
-    const r = server.handle(method, url.pathname.slice(prefix.length) || "/", url.searchParams, body, headers);
+    else if (init?.body instanceof Blob) rawBody = init.body;
+    const r = server.handle(method, url.pathname.slice(prefix.length) || "/", url.searchParams, body, headers, rawBody);
     const h = new Headers(r.headers);
     if (r.status === 304 || r.status === 204) return new Response(null, { status: r.status, headers: h });
     if (r.bytes !== undefined) {

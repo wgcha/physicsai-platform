@@ -1,6 +1,6 @@
 // ⑤ 결과 표 카드(phase3.md §19.7; ④ BatchResult의 결과 표에서 이동): 정렬·행 선택·열 이름의 체크(변수)·동그라미(응답)로 그래프 고르기.
 // 선택 모델 selected = run 번호(표·그래프·지도·커브 공유). 파일 위치·경로 복사·단일 예측으로 열기·FEM 검증은 선택한 행으로 시작한다(§19.2 A7).
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Card } from "../../components/ui";
 import { fmtNum } from "../../lib/format";
@@ -45,7 +45,7 @@ export function sortRtRows(rows: RtRow[], key: SortKey): RtRow[] {
   });
 }
 
-export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pickResp, onPickResp, selectable, selected, onSelect, openHref }: { table: ResultTable; sort: SortKey; onSort: (k: SortKey) => void; pickVars: string[]; onToggleVar: (n: string) => void; pickResp: string | null; onPickResp: (n: string) => void; selectable?: string[]; selected: number | null; onSelect: (no: number) => void; openHref: string | null }) {
+export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pickResp, onPickResp, selectable, selected, onSelect, openHref, report }: { table: ResultTable; sort: SortKey; onSort: (k: SortKey) => void; pickVars: string[]; onToggleVar: (n: string) => void; pickResp: string | null; onPickResp: (n: string) => void; selectable?: string[]; selected: number | null; onSelect: (no: number) => void; openHref: string | null; report?: ReactNode }) {
   const respNames = table.responses.map((r) => r.name);
   const labelMap = Object.fromEntries(table.responses.filter((r) => r.label).map((r) => [r.name, r.label as string]));
   // §21.3.10: 예측 배치 표에서 고른 행(예측 출처)만 FEM 검증 진입. 해석(DOE) 출처 표는 이미 해석 값이라 대상이 아니다.
@@ -60,6 +60,7 @@ export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pick
       aside={
         <span className="run-action-row">
           {selRow && fem.button}
+          {report}
           {openHref && (
             <Link to={openHref} className="small">
               ④에서 열기

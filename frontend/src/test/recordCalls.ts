@@ -4,9 +4,9 @@ import type { MockServer } from "../mock/server";
 export function recordCalls(server: MockServer) {
   const calls: string[] = [];
   const orig = server.handle.bind(server);
-  server.handle = (m, p, q, b, h) => {
+  server.handle = (m, p, q, b, h, r) => {
     calls.push(`${m} ${p}`);
-    return orig(m, p, q, b, h);
+    return orig(m, p, q, b, h, r);
   };
   return calls;
 }

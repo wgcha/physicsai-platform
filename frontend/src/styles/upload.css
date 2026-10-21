@@ -1,0 +1,26 @@
+/* 내 PC에서 올리기 탭(upload-report.md §3.2) */
+.path-source { display: grid; gap: var(--space-2); }
+.path-source-pane { display: grid; gap: var(--space-1); }
+.path-source-pane[hidden] { display: none; }
+.upload-panel { display: grid; gap: var(--space-2); }
+.dropzone {
+  display: grid;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+}
+.dropzone.over { border-color: var(--color-accent, var(--color-border)); background: var(--color-app-bg); }
+.dropzone .actions, .upload-panel .actions { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.upload-summary { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.upload-summary .spacer { flex: 1; }
+.upload-progress { display: grid; gap: var(--space-1); }
+.upload-bad {
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-surface);
+}
+.upload-bad ul, .upload-excluded ul { margin: var(--space-1) 0; padding-left: var(--space-4); }
+.upload-files .table-wrap { max-height: 220px; overflow: auto; }
+.pathsrc-note { margin: 0; }

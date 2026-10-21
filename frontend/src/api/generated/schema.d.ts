@@ -113,6 +113,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/admin/uploads/cleanup-stale": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cleanup Stale Uploads
+         * @description 전역 관리자: 낡은 OPEN 세션(upload.stale_hours 초과)을 _backup으로 옮기고 STALE로 — 즉시 실행.
+         */
+        post: operations["cleanup_stale_uploads_physicsai_api_admin_uploads_cleanup_stale_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/artifacts/{artifact_id}/content": {
         parameters: {
             query?: never;
@@ -1843,6 +1863,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/reports/analysis": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report Analysis
+         * @description ⑤ 결과분석 보고서(`?source=batch|doe&id=` + 비교 `compare_source`·`compare_id`, 선택 변수 `vars`(반복·쉼표)·응답 `resp`). 영향도는 서버 numpy 재계산.
+         */
+        get: operations["report_analysis_physicsai_api_reports_analysis_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/reports/{target}/{target_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Report By Target
+         * @description 대상 보고서: target = `surrogate-opt`(⑥ 내장)·`optimization`(⑥ HyperStudy 레거시)·`equiv-check`(⑤ 등가성 판정). 그 밖은 404 REPORT_TARGET_UNKNOWN.
+         */
+        get: operations["report_by_target_physicsai_api_reports__target___target_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/resources": {
         parameters: {
             query?: never;
@@ -2513,6 +2573,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/uploads": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Uploads
+         * @description Study의 업로드 최근 50개(이어 올리기·출처 보기). mine=false(남의 세션 포함)는 전역 관리자만.
+         */
+        get: operations["list_uploads_physicsai_api_studies__study_id__uploads_get"];
+        put?: never;
+        /**
+         * Create Upload
+         * @description 업로드 세션 생성(이름·패턴·크기·디스크 사전 검사, 폴더 <upload_root>/<사용자>/<UTC>_<이름>/ 생성). 해당 Study 프로젝트 power 이상.
+         */
+        post: operations["create_upload_physicsai_api_studies__study_id__uploads_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/surrogate-opts/{opt_id}": {
         parameters: {
             query?: never;
@@ -2694,6 +2778,111 @@ export interface paths {
         /** Doe Types */
         get: operations["doe_types_physicsai_api_train_doe_types_get"];
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/uploads/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Upload Config
+         * @description 업로드 설정: 청크 크기·상한·purpose별 허용 패턴·항상 거부 목록·여유 공간. 프런트가 미리 검사에 쓴다.
+         */
+        get: operations["upload_config_physicsai_api_uploads_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/uploads/{upload_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Upload
+         * @description 파일별 received(서버가 받은 크기 — 이어 올리기 offset)·done·sha256. 본인 또는 전역 관리자.
+         */
+        get: operations["get_upload_physicsai_api_uploads__upload_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Cancel Upload
+         * @description OPEN 세션 취소 — 폴더를 <upload_root>/_backup/<사용자>/<폴더명>으로 이동(삭제 없음). COMPLETED는 409 UPLOAD_CLOSED.
+         */
+        delete: operations["cancel_upload_physicsai_api_uploads__upload_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/uploads/{upload_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Upload
+         * @description 모든 파일이 done이면 해당 purpose의 기존 paths/inspect를 서버가 호출. ok=true면 COMPLETED, ok=false면 OPEN 유지.
+         */
+        post: operations["complete_upload_physicsai_api_uploads__upload_id__complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/uploads/{upload_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Files
+         * @description OPEN 세션에 파일 추가(complete가 알려 준 누락분). 새 파일 index는 기존 뒤에 붙는다. 같은 검사.
+         */
+        post: operations["add_files_physicsai_api_uploads__upload_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/uploads/{upload_id}/files/{index}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Chunk
+         * @description 청크(application/octet-stream, ≤ chunk_size). offset은 서버가 받은 크기와 같아야 한다(409 + received).
+         *     헤더 X-Chunk-Sha256(청크 sha256)이 있으면 검증(다르면 422, 쓰지 않음). 파일 전체 sha256은 서버가 받으며 계산해 기록.
+         */
+        put: operations["put_chunk_physicsai_api_uploads__upload_id__files__index__put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -8536,6 +8725,7 @@ export interface components {
             ui: {
                 [key: string]: number;
             };
+            upload?: components["schemas"]["StatusUpload"] | null;
             worker: components["schemas"]["StatusWorker"];
         };
         /** StatusSurrogateDefaults */
@@ -8599,6 +8789,19 @@ export interface components {
             max_variables: number;
             /** Verifications */
             verifications?: string[];
+        };
+        /** StatusUpload */
+        StatusUpload: {
+            /**
+             * Enabled
+             * @description 브라우저 업로드 사용 가능(upload_root 설정·설정 검사 통과) — false면 PC 탭을 숨긴다(upload-report.md §6.4)
+             */
+            enabled: boolean;
+            /**
+             * Free Bytes
+             * @description 업로드 위치 드라이브의 여유 공간[B](읽지 못하면 null)
+             */
+            free_bytes?: number | null;
         };
         /** StatusWorker */
         StatusWorker: {
@@ -9446,6 +9649,194 @@ export interface components {
             /** Unread Count */
             unread_count: number;
         };
+        /** UploadAddFiles */
+        UploadAddFiles: {
+            /** Files */
+            files: components["schemas"]["UploadItemIn"][];
+        };
+        /** UploadChunkOut */
+        UploadChunkOut: {
+            /** Done */
+            done: boolean;
+            /** Index */
+            index: number;
+            /** Received */
+            received: number;
+            /** Sha256 */
+            sha256?: string | null;
+        };
+        /** UploadCleanupOut */
+        UploadCleanupOut: {
+            /** Moved */
+            moved: string[];
+        };
+        /** UploadCompleteOut */
+        UploadCompleteOut: {
+            /** Display Path */
+            display_path?: string | null;
+            inspect?: components["schemas"]["PathInspectResponse"] | null;
+            /** Path */
+            path?: string | null;
+            /** Problems */
+            problems: components["schemas"]["PathProblem"][];
+            /** Purpose */
+            purpose: string;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "OPEN" | "COMPLETED" | "CANCELED" | "STALE";
+            /** Upload Id */
+            upload_id: string;
+        };
+        /** UploadConfig */
+        UploadConfig: {
+            /** Always Denied */
+            always_denied: string[];
+            /** Chunk Size */
+            chunk_size: number;
+            /** Enabled */
+            enabled: boolean;
+            /** Free Bytes */
+            free_bytes?: number | null;
+            /** Max Concurrent Per User */
+            max_concurrent_per_user: number;
+            /** Max File Bytes */
+            max_file_bytes: number;
+            /** Max Files */
+            max_files: number;
+            /** Max Upload Bytes */
+            max_upload_bytes: number;
+            /** Purposes */
+            purposes: {
+                [key: string]: components["schemas"]["UploadPurposeInfo"];
+            };
+        };
+        /** UploadCreate */
+        UploadCreate: {
+            /**
+             * Engine
+             * @description CAD_FILE 허용 확장자 기준(생략 = altair)
+             */
+            engine?: ("altair" | "native") | null;
+            /** Files */
+            files: components["schemas"]["UploadItemIn"][];
+            /**
+             * Name
+             * @description 폴더 이름에 쓸 표시 이름(경로 구분자·'..' 불가)
+             */
+            name: string;
+            /**
+             * Purpose
+             * @description paths/inspect purpose(SPDM_IMPORT 제외) 또는 업로드 전용 DISCOVER
+             */
+            purpose: string;
+        };
+        /** UploadEntryOut */
+        UploadEntryOut: {
+            /** Done */
+            done: boolean;
+            /** Index */
+            index: number;
+            /**
+             * Received
+             * @description 서버가 받은 바이트 — 이어 올리기 offset
+             */
+            received: number;
+            /** Rel */
+            rel: string;
+            /** Sha256 */
+            sha256?: string | null;
+            /** Sha256 Expected */
+            sha256_expected?: string | null;
+            /** Size */
+            size: number;
+        };
+        /** UploadItemIn */
+        UploadItemIn: {
+            /**
+             * Rel
+             * @description 선택 폴더 기준 상대경로('/' 구분, 파일 이름 포함)
+             */
+            rel: string;
+            /**
+             * Sha256
+             * @description 파일 전체 sha256(선택 — 마지막 청크에서 서버가 확인)
+             */
+            sha256?: string | null;
+            /**
+             * Size
+             * @description 파일 크기[B]
+             */
+            size: number;
+        };
+        /** UploadOut */
+        UploadOut: {
+            /** Backup Display Path */
+            backup_display_path?: string | null;
+            /** Chunk Size */
+            chunk_size: number;
+            /** Completed At */
+            completed_at?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Created By */
+            created_by: string;
+            /** Display Path */
+            display_path?: string | null;
+            /** Engine */
+            engine?: ("altair" | "native") | null;
+            /** Files */
+            files: components["schemas"]["UploadEntryOut"][];
+            inspect?: components["schemas"]["PathInspectResponse"] | null;
+            /** Name */
+            name: string;
+            /**
+             * Path
+             * @description 경로 칸에 채울 값(폴더 또는 CAD 파일 1개 — 취소·낡음이면 null)
+             */
+            path?: string | null;
+            /** Purpose */
+            purpose: string;
+            /** Received Bytes */
+            received_bytes: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "OPEN" | "COMPLETED" | "CANCELED" | "STALE";
+            /** Study Id */
+            study_id: string;
+            /** Total Bytes */
+            total_bytes: number;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /** Upload Id */
+            upload_id: string;
+        };
+        /** UploadPurposeInfo */
+        UploadPurposeInfo: {
+            /**
+             * Engine Patterns
+             * @description CAD_FILE만: engine(native|altair)별 패턴
+             */
+            engine_patterns?: {
+                [key: string]: string[];
+            } | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "file" | "dir" | "dir_or_file";
+            /** Patterns */
+            patterns: string[];
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -9913,6 +10304,98 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cleanup_stale_uploads_physicsai_api_admin_uploads_cleanup_stale_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadCleanupOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -15517,6 +16000,149 @@ export interface operations {
             };
         };
     };
+    report_analysis_physicsai_api_reports_analysis_get: {
+        parameters: {
+            query: {
+                source: string;
+                id: string;
+                compare_source?: string | null;
+                compare_id?: string | null;
+                vars?: string[] | null;
+                resp?: string | null;
+                download?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 단일 파일 HTML(외부 자원 0) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    report_by_target_physicsai_api_reports__target___target_id__get: {
+        parameters: {
+            query?: {
+                download?: boolean;
+            };
+            header?: never;
+            path: {
+                target: string;
+                target_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 단일 파일 HTML(외부 자원 0) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": unknown;
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     resources_physicsai_api_resources_get: {
         parameters: {
             query?: never;
@@ -17844,6 +18470,201 @@ export interface operations {
             };
         };
     };
+    list_uploads_physicsai_api_studies__study_id__uploads_get: {
+        parameters: {
+            query?: {
+                state?: ("OPEN" | "COMPLETED" | "CANCELED" | "STALE") | null;
+                mine?: boolean;
+            };
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"][];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_upload_physicsai_api_studies__study_id__uploads_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_surrogate_opt_physicsai_api_surrogate_opts__opt_id__get: {
         parameters: {
             query?: never;
@@ -18469,6 +19290,581 @@ export interface operations {
             };
             /** @description Service Unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    upload_config_physicsai_api_uploads_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadConfig"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_upload_physicsai_api_uploads__upload_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_upload_physicsai_api_uploads__upload_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    complete_upload_physicsai_api_uploads__upload_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadCompleteOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    add_files_physicsai_api_uploads__upload_id__files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                upload_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UploadAddFiles"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_chunk_physicsai_api_uploads__upload_id__files__index__put: {
+        parameters: {
+            query: {
+                offset: number;
+            };
+            header?: {
+                "x-chunk-sha256"?: string | null;
+            };
+            path: {
+                upload_id: string;
+                index: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/octet-stream": string;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadChunkOut"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Request Entity Too Large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Insufficient Storage */
+            507: {
                 headers: {
                     [name: string]: unknown;
                 };

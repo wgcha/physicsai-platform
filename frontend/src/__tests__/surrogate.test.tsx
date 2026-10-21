@@ -112,7 +112,7 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     expect(within(best).getByText(/FEM 검증 버튼으로 조립 상태 해석/)).toBeTruthy();
     // D3-61: 변수마다 학습 범위·기준안(nominal)·최적안·변화
     const cmp = within(best).getByRole("table", { name: "기준안 대비" });
-    expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "범위(학습)", "기준안", "최적안", "변화"]);
+    expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "학습 범위", "기준안", "최적안", "변화"]);
     const o = server.surrogate[0];
     const top = within(cmp).getByTestId("cmp-THK_TOP");
     expect(top.textContent).toContain("0.6"); // nominal

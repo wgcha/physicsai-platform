@@ -6,6 +6,8 @@ import { useSearchParams } from "react-router-dom";
 import { api, type PredictBatchSummary, type TrainDoe } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { Card } from "../../components/ui";
+import { ReportButton } from "../../components/ReportButton";
+import { reportApi, type AnalysisReportQuery } from "../../api/reports";
 import { commonResponses, META_DIFF_TEXT, metaChips, metaDiffers, mismatchText, nameSetDiff, NO_COMMON_RESP_TEXT } from "../../analysis/compare";
 import { isOkState, type ResultTable } from "../../analysis/resultTable";
 import { EquivTab } from "../../analysis/equiv/EquivTab";
@@ -164,7 +166,10 @@ function MetaChips({ table }: { table: ResultTable }) {
   );
 }
 
+const srcOf = (t: ResultTable): "batch" | "doe" => (t.origin.kind === "predict_batch" ? "batch" : "doe");
+
 function AnalysisBody({ table, other, studyBase }: { table: ResultTable; other: ResultTable | null; studyBase: string }) {
+  const { study } = useStudy();
   const respNames = table.responses.map((r) => r.name);
   const [sort, setSort] = useState<string | null>(null);
   const [vars, setVars] = useState<string[] | null>(null);
@@ -182,6 +187,8 @@ function AnalysisBody({ table, other, studyBase }: { table: ResultTable; other: 
     if (selected === null && rows.length) setSelected((rows.find((r) => isOkState(r.state)) ?? rows[0]).no);
   }, [rows, selected]);
   const toggleVar = (n: string) => setVars((v) => ((v ?? pickVars).includes(n) ? (v ?? pickVars).filter((x) => x !== n) : [...(v ?? pickVars), n]));
+  // 현재 화면 선택 상태(출처·비교·변수·응답)를 그대로 보고서 쿼리로 — 빈 값은 서버가 같은 기본값 규칙으로 채운다
+  const reportQuery: AnalysisReportQuery = { source: srcOf(table), id: table.origin.id, compare_source: other ? srcOf(other) : null, compare_id: other ? other.origin.id : null, vars: pickVars, resp: pickResp };
   return (
     <>
       <AnalysisTable
@@ -196,6 +203,13 @@ function AnalysisBody({ table, other, studyBase }: { table: ResultTable; other: 
         selected={selected}
         onSelect={setSelected}
         openHref={table.origin.kind === "predict_batch" ? `${studyBase}/stage/4/batch/${table.origin.id}` : null}
+        report={
+          <ReportButton
+            load={() => reportApi.analysis(reportQuery)}
+            fallbackName={`PAI_${study.folder_name}_analysis-${reportQuery.source}_${table.origin.id.slice(0, 8)}.html`}
+            resetKey={JSON.stringify(reportQuery)}
+          />
+        }
       />
       <AnalysisTabs table={table} other={other} pickVars={pickVars} pickResp={pickResp} selected={selected} onSelect={setSelected} series={series} onSeries={setSeries} />
     </>

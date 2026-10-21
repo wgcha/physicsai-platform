@@ -9,7 +9,7 @@ import { Card } from "../../../components/ui";
 import { fmtNum } from "../../../lib/format";
 import { ContourMedia } from "../../stage4/ContourMedia";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
-import { UNVERIFIED_BADGE, boundNote, compareRows, fmtVar, kpis, levelsOf, objectiveDefs } from "./soRules";
+import { UNVERIFIED_BADGE, boundNote, compareRows, fmtVar, kpis, levelsOf, objectiveDefs, rangeBasis, rangeHeader } from "./soRules";
 
 export const VERIFY_HINT = "목적 값도 PhysicsAI 예측입니다 — FEM 검증 버튼으로 조립 상태 해석과 비교할 수 있습니다";
 export const FINAL_TEXT: Record<string, string> = {
@@ -27,7 +27,7 @@ function signed(v: number | null): string {
 export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string }) {
   const b = o.best;
   const fin = o.final;
-  const rows = compareRows(o.parameters ?? [], fin?.baseline_values ?? null, b?.values ?? null);
+  const rows = compareRows(o.parameters ?? [], fin?.baseline_values ?? null, b?.values ?? null, rangeBasis(o.settings));
   const note = boundNote(rows);
   const fem = useFemVerifyButton(b ? { kind: "opt_design", opt_id: o.id, pick: "best" } : null, !!b);
   const noun = o.mode === "multi" ? "추천점" : "최적안";
@@ -41,7 +41,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
           <div className="table-wrap">
             <table className="table compact" aria-label="기준안 대비">
               <thead>
-                <tr><th>변수</th><th>범위(학습)</th><th className="num">기준안</th><th className="num">{noun === "추천점" ? "추천점" : "최적안"}</th><th className="num">변화</th></tr>
+                <tr><th>변수</th><th>{rangeHeader(rows)}</th><th className="num">기준안</th><th className="num">{noun === "추천점" ? "추천점" : "최적안"}</th><th className="num">변화</th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => (
@@ -56,7 +56,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
                         {r.basePos != null && <span className="mk base" style={{ left: `${r.basePos * 100}%` }} />}
                         {r.optPos != null && <span className={`mk opt${r.bound ? " at-bound" : ""}`} style={{ left: `${r.optPos * 100}%` }} />}
                       </div>
-                      <span className="muted small mono">{fmtNum(r.min)} – {fmtNum(r.max)}</span>
+                      <span className="muted small mono">{fmtNum(r.min)} – {fmtNum(r.max)}{r.rangeLabel === "템플릿 범위" && rangeHeader(rows) === "학습 범위" ? " (템플릿)" : ""}</span>
                     </td>
                     <td className="num mono">{fmtNum(r.base)}</td>
                     <td className="num mono"><b>{fmtNum(r.opt)}</b></td>
@@ -74,7 +74,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
             <span><span className="mk-key opt" />{noun}</span>
             <span>{b.feasible ? "제약 만족" : "제약 만족 설계 없음 — 위반 최소"}</span>
           </p>
-          {note && <p className="small bound-flag" data-testid="bound-note">학습 범위 상한/하한 도달 — {note}</p>}
+          {note && <p className="small bound-flag" data-testid="bound-note">범위 상한/하한 도달 — {note}</p>}
           <p className="muted small">{VERIFY_HINT}</p>
           <div className="run-action-row">{fem.button}</div>
           {fem.notes}

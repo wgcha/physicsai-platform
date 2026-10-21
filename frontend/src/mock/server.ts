@@ -28,6 +28,7 @@ import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { equivRoutes, seedEquiv, type EqRec, type RecipeRec } from "./equivCheck";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { nativeVarsRoutes } from "./nativeVars";
+import { newUploadState, reportRoutes, uploadRoutes, type UploadMockState } from "./uploads";
 import { apiTokenRoutes } from "./apiTokens";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { geomViewRoutes } from "./geomView";
@@ -68,6 +69,8 @@ const ROUTES: Route[] = [
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
   femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)
   equivRoutes, // ⑤ 등가성 판정(equiv-check.md §6)
+  uploadRoutes, // upload-report.md §4 업로드 세션
+  reportRoutes, // upload-report.md §9.4 HTML 보고서
   nativeVarsRoutes, // native-vars.md §6.1 세트 변수 정의 GET·PUT(리비전·409)
   geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B·① train/features(openapi 모양)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
@@ -124,6 +127,8 @@ export class MockServer {
   /** native 세트별 피처·쉘 PROP·매칭표 */
   geom = new Map<string, GeomRec>();
   geometryDefault: "altair" | "native" = "altair";
+  /** upload-report.md 업로드 세션·보고서 목 상태(기본 꺼짐 — 기존 시험의 경로 칸은 탭 없이 그대로) */
+  up: UploadMockState;
 
   constructor(opts: MockOptions = {}) {
     this.user = opts.user ?? "admin";
@@ -148,6 +153,7 @@ export class MockServer {
     if (opts.femVerify === "demo") seedFemVerify(this);
     if (opts.equiv === "demo") seedEquiv(this);
     this.geometryDefault = opts.geometryDefault ?? "altair";
+    this.up = newUploadState(opts.upload ?? false);
     if (opts.geometry) seedNative(this, opts.geometry === "multi");
   }
 
@@ -259,7 +265,7 @@ export class MockServer {
   }
 
   // ---------- 라우팅 ----------
-  handle(method: string, path: string, query: URLSearchParams, body: Record<string, unknown> | null, headers: Headers): MockResp {
+  handle(method: string, path: string, query: URLSearchParams, body: Record<string, unknown> | null, headers: Headers, raw?: Blob | null): MockResp {
     if (path === "/health") return { status: 200, body: { status: "ok", version: "mock" } };
     const me = this.me;
     if (!me) return err(401, "AUTHENTICATION_REQUIRED", "로그인이 필요합니다.");
@@ -267,7 +273,7 @@ export class MockServer {
     const bad = checkLimit(method, path, query); // 서버 le=… 상한 초과는 목에서도 422
     if (bad) return bad;
     const seg = path.split("/").filter(Boolean);
-    const c: RouteCtx = { method, path, seg, query, body, headers, me };
+    const c: RouteCtx = { method, path, seg, query, body, headers, me, raw };
     for (const route of ROUTES) {
       const r = route(this, c);
       if (r) return r;

@@ -4,6 +4,8 @@ import { type MockUserKey } from "./data";
 import { type CaptureMode } from "./capture";
 
 export interface MockOptions {
+  /** upload-report.md: true 면 GET /uploads/config enabled(경로 칸에 "내 PC에서 올리기" 탭). 기본 false */
+  upload?: boolean;
   user?: MockUserKey;
   hpcConfigured?: boolean;
   /** phase3 §16 SCX(D3-58): hpcConfigured일 때 게이트웨이 모드(기본 command) */

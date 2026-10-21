@@ -14,6 +14,7 @@ import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { BrowseButton } from "../../components/BrowseButton";
+import { PathSourceTabs } from "../../components/upload/PathSourceTabs";
 import { PredictChain, PredictResultCard } from "./PredictResult";
 import { ModelLine, useModelChoice } from "./predictRun";
 import { useFemVerifyButton } from "./verify/useFemVerifyButton";
@@ -130,60 +131,62 @@ export function PreparedPredictCard() {
         <div className="prepared-input">
           <div className="pathinput">
             <span className="field-label">입력 파일(.rad·.hm) 또는 폴더 경로</span>
-            <div className="pathinput-row">
-              <input
-                type="text"
-                className="mono"
-                value={path}
-                placeholder="E:/shared/AI_WORK/cushion/00_inbox/case_A/Face_Drop_0000.rad"
-                aria-label="준비된 입력 경로"
-                spellCheck={false}
-                disabled={!canExec}
-                onChange={(e) => {
-                  setPath(e.target.value);
-                  setInfo(null);
-                }}
-              />
-              <BrowseButton mode="dir_or_file" exts={[".rad", ".hm"]} value={path} disabled={!canExec} onPick={(p) => (setPath(p), setInfo(null))} />
-              <button type="button" className="btn" onClick={inspect} disabled={!canExec || busy || !path.trim()}>
-                {busy ? "확인 중…" : "확인"}
-              </button>
-            </div>
-            {inspectError && <div className="error-text small" role="alert">{inspectError}</div>}
-            {info && (
-              <p className={`small prepared-summary${info.ok ? " ok" : ""}`} data-testid="prepared-summary">
-                {inputSummaryLine(info)}
-              </p>
-            )}
-            {info && <ProblemNotes problems={info.problems} testId="prepared-problems" />}
-            {info && info.kind === "dir" && info.starter.length === 0 && (info.starter_hints?.length ?? 0) > 0 && (
-              <p className="muted small" data-testid="prepared-starter-hints">
-                {STARTER_HINT_HEAD}
-                {info.starter_hints!.map((h, i) => (
-                  <span key={h}>
-                    {i > 0 && ", "}
-                    <button
-                      type="button"
-                      className="link mono"
-                      disabled={!canExec}
-                      title="이 파일 경로를 입력란에 채웁니다"
-                      onClick={() => {
-                        setPath(joinHint(info.normalized_path || path.trim(), h));
-                        setInfo(null);
-                      }}
-                    >
-                      {h}
-                    </button>
-                  </span>
-                ))}
-                {STARTER_HINT_TAIL}
-              </p>
-            )}
-            {info && (info.subdir_count ?? 0) > 0 && (
-              <p className="muted small" data-testid="prepared-subdir-note">
-                {subdirNote(info.subdir_count ?? 0)}
-              </p>
-            )}
+            <PathSourceTabs studyId={study.id} purpose="PREDICT_INPUT" canExecute={canExec} onUploaded={(p, insp) => (setPath(p), setInspectError(null), setInfo(insp ? predictInputInfo(insp) : null))}>
+              <div className="pathinput-row">
+                <input
+                  type="text"
+                  className="mono"
+                  value={path}
+                  placeholder="E:/shared/AI_WORK/cushion/00_inbox/case_A/Face_Drop_0000.rad"
+                  aria-label="준비된 입력 경로"
+                  spellCheck={false}
+                  disabled={!canExec}
+                  onChange={(e) => {
+                    setPath(e.target.value);
+                    setInfo(null);
+                  }}
+                />
+                <BrowseButton mode="dir_or_file" exts={[".rad", ".hm"]} value={path} disabled={!canExec} onPick={(p) => (setPath(p), setInfo(null))} />
+                <button type="button" className="btn" onClick={inspect} disabled={!canExec || busy || !path.trim()}>
+                  {busy ? "확인 중…" : "확인"}
+                </button>
+              </div>
+              {inspectError && <div className="error-text small" role="alert">{inspectError}</div>}
+              {info && (
+                <p className={`small prepared-summary${info.ok ? " ok" : ""}`} data-testid="prepared-summary">
+                  {inputSummaryLine(info)}
+                </p>
+              )}
+              {info && <ProblemNotes problems={info.problems} testId="prepared-problems" />}
+              {info && info.kind === "dir" && info.starter.length === 0 && (info.starter_hints?.length ?? 0) > 0 && (
+                <p className="muted small" data-testid="prepared-starter-hints">
+                  {STARTER_HINT_HEAD}
+                  {info.starter_hints!.map((h, i) => (
+                    <span key={h}>
+                      {i > 0 && ", "}
+                      <button
+                        type="button"
+                        className="link mono"
+                        disabled={!canExec}
+                        title="이 파일 경로를 입력란에 채웁니다"
+                        onClick={() => {
+                          setPath(joinHint(info.normalized_path || path.trim(), h));
+                          setInfo(null);
+                        }}
+                      >
+                        {h}
+                      </button>
+                    </span>
+                  ))}
+                  {STARTER_HINT_TAIL}
+                </p>
+              )}
+              {info && (info.subdir_count ?? 0) > 0 && (
+                <p className="muted small" data-testid="prepared-subdir-note">
+                  {subdirNote(info.subdir_count ?? 0)}
+                </p>
+              )}
+            </PathSourceTabs>
           </div>
         </div>
         <div className="run-block">

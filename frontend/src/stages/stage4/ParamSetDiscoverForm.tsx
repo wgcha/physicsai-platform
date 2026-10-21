@@ -3,6 +3,7 @@ import { ApiError, api, errorMessage, type Engine, type ExtractFilter, type Extr
 import { ExtractFilterFields } from "../../components/ExtractFilterFields";
 import { extractProblems, fromFilter, toFilter, validateForm, type FilterForm } from "../../lib/extractFilter";
 import { BrowseButton } from "../../components/BrowseButton";
+import { PathSourceTabs } from "../../components/upload/PathSourceTabs";
 import { EngineSelect, useGeometryStatus } from "../../components/EngineSelect";
 import { JobInline } from "../../components/ui";
 import { useLatestJob } from "../../hooks/useLatestJob";
@@ -131,27 +132,29 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
       <EngineSelect value={engine} onChange={changeEngine} disabled={busy} />
       <div className="pathinput">
         <span className="field-label">프로젝트 폴더</span>
-        <div className="pathinput-row">
-          <input
-            type="text"
-            className="mono"
-            value={path}
-            placeholder="E:/shared/AI_WORK/cushion/00_inbox/project"
-            aria-label="프로젝트 폴더 경로"
-            spellCheck={false}
-            onChange={(e) => changePath(e.target.value)}
-          />
-          {/* 찾아보기(phase3 §12 S7): discover는 allowed_roots(imports=True)라 추가 허용 폴더도 보인다(aiOnly 아님) */}
-          <BrowseButton mode="dir" value={path} onPick={changePath} disabled={busy} title="프로젝트 폴더 선택" />
-          <button type="button" className="btn" onClick={() => find()} disabled={busy || !path.trim()}>
-            {busy && !found ? "찾는 중…" : "찾기"}
-          </button>
-        </div>
-        <span className="small muted">
-          {native
-            ? `하위 폴더에서 STEP·Radioss 조립 폴더(${NATIVE_ASSEM_TEXT})를 찾습니다. 원본은 읽기만 합니다.`
-            : "하위 폴더에서 tpl·CAD·Radioss 조립 폴더·파라미터를 찾습니다. 원본은 읽기만 합니다."}
-        </span>
+        <PathSourceTabs studyId={studyId} purpose="DISCOVER" engine={engine} canExecute onUploaded={(p) => changePath(p)}>
+          <div className="pathinput-row">
+            <input
+              type="text"
+              className="mono"
+              value={path}
+              placeholder="E:/shared/AI_WORK/cushion/00_inbox/project"
+              aria-label="프로젝트 폴더 경로"
+              spellCheck={false}
+              onChange={(e) => changePath(e.target.value)}
+            />
+            {/* 찾아보기(phase3 §12 S7): discover는 allowed_roots(imports=True)라 추가 허용 폴더도 보인다(aiOnly 아님) */}
+            <BrowseButton mode="dir" value={path} onPick={changePath} disabled={busy} title="프로젝트 폴더 선택" />
+            <button type="button" className="btn" onClick={() => find()} disabled={busy || !path.trim()}>
+              {busy && !found ? "찾는 중…" : "찾기"}
+            </button>
+          </div>
+          <span className="small muted">
+            {native
+              ? `하위 폴더에서 STEP·Radioss 조립 폴더(${NATIVE_ASSEM_TEXT})를 찾습니다. 원본은 읽기만 합니다.`
+              : "하위 폴더에서 tpl·CAD·Radioss 조립 폴더·파라미터를 찾습니다. 원본은 읽기만 합니다."}
+          </span>
+        </PathSourceTabs>
       </div>
       {found && (
         <div className={found.problems.length ? "inspect bad" : "inspect ok"} data-testid="ps-discover-result">

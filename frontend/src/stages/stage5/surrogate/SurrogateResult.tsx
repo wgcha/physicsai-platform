@@ -9,6 +9,8 @@ import { isSoActive, surrogateApi, type SoIteration, type SoRun, type SurrogateO
 import { useStudy } from "../../../app/StudyContext";
 import { usePolling } from "../../../hooks/usePolling";
 import { Card, CopyButton } from "../../../components/ui";
+import { NOT_READY_TEXT, ReportButton } from "../../../components/ReportButton";
+import { reportApi } from "../../../api/reports";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { fmtNum } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
@@ -82,7 +84,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
 
   return (
     <>
-      <Card span={9} title={`내장 최적화 ${o.label}`} className="so-head" aside={<Link className="small" to={`${base}/stage/5`}>⑥ 실행 목록</Link>}>
+      <Card span={9} title={`내장 최적화 ${o.label}`} className="so-head" aside={<span className="run-action-row"><ReportButton load={() => reportApi.byTarget("surrogate-opt", o.id)} fallbackName={`PAI_${study.folder_name}_surrogate-opt_${o.id.slice(0, 8)}.html`} notReady={isSoActive(o.status) ? `진행 중 — ${NOT_READY_TEXT}` : null} resetKey={`${o.id}:${o.status}`} /><Link className="small" to={`${base}/stage/5`}>⑥ 실행 목록</Link></span>}>
         <div className="run-action-row">
           <span className={`pill ${soTone(o.status)}`} data-testid="so-status">{SO_STATUS_LABEL[o.status] ?? o.status}</span>
           <span data-testid="so-progress">{o.progress_text}</span>

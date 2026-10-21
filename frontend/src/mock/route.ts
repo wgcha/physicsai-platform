@@ -27,6 +27,8 @@ export interface RouteCtx {
   body: Record<string, unknown> | null;
   headers: Headers;
   me: Me;
+  /** 업로드 청크 PUT 본문(Blob) — JSON 이 아닌 본문 */
+  raw?: Blob | null;
 }
 
 /** 라우트 모듈 함수: 맡은 경로면 응답, 아니면 null(다음 라우트로). 등록 순서는 server.ts ROUTES 한 곳 */

@@ -137,6 +137,57 @@ export async function fetchBlob(path: string): Promise<Blob> {
   return res.blob();
 }
 
+/** 업로드 청크 PUT(application/octet-stream, upload-report.md §4) — 본문은 Blob 그대로(multipart 아님), 오류는 {detail:{code,message,received?}} */
+export async function putBinary<T>(path: string, query: Query, body: Blob, extraHeaders: Record<string, string> = {}): Promise<T> {
+  const url = buildUrl(path, query);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "PUT",
+      headers: { Accept: "application/json", "Content-Type": "application/octet-stream", "X-PhysicsAI-Request": "1", ...extraHeaders },
+      credentials: "same-origin",
+      body,
+    });
+  } catch {
+    throw new ApiError(0, { code: "NETWORK_ERROR", message: "서버에 연결할 수 없습니다." });
+  }
+  if (!res.ok) {
+    signal401(res.status);
+    throw await toError(res);
+  }
+  return (await res.json()) as T;
+}
+
+/** 파일 응답 + 서버가 준 파일 이름(Content-Disposition filename* 우선) — 보고서 내려받기(upload-report.md §9.4) */
+export async function fetchFile(path: string, query?: Query | URLSearchParams): Promise<{ blob: Blob; filename: string | null }> {
+  const url = query instanceof URLSearchParams ? API_PREFIX + path + (query.toString() ? `?${query.toString()}` : "") : buildUrl(path, query);
+  let res: Response;
+  try {
+    res = await fetch(url, { credentials: "same-origin" });
+  } catch {
+    throw new ApiError(0, { code: "NETWORK_ERROR", message: "서버에 연결할 수 없습니다." });
+  }
+  if (!res.ok) {
+    signal401(res.status);
+    throw await toError(res);
+  }
+  return { blob: await res.blob(), filename: dispositionName(res.headers.get("Content-Disposition")) };
+}
+
+export function dispositionName(h: string | null): string | null {
+  if (!h) return null;
+  const star = /filename\*\s*=\s*([^']*)'[^']*'([^;]+)/i.exec(h);
+  if (star) {
+    try {
+      return decodeURIComponent(star[2].trim());
+    } catch {
+      /* 아래 filename= 으로 */
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(h);
+  return plain ? plain[1].trim() : null;
+}
+
 /** 산출물 바이너리(ArrayBuffer). range = [시작, 끝](포함) → `Range: bytes=a-b`. partial = 206(서버가 범위를 지원)
  * 410 ARTIFACT_EXPIRED(서버측 캐시 정리됨)는 ApiError(410)로 던진다 — 호출부가 다시 요청한다(geometry-view.md §6.6) */
 export async function fetchBuffer(path: string, range?: [number, number]): Promise<{ buffer: ArrayBuffer; partial: boolean }> {

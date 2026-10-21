@@ -10,6 +10,8 @@ import { useStudy } from "../../app/StudyContext";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { usePolling } from "../../hooks/usePolling";
 import { JobInline } from "../../components/ui";
+import { NOT_READY_TEXT, ReportButton } from "../../components/ReportButton";
+import { reportApi } from "../../api/reports";
 import { isTerminal } from "../../lib/format";
 import { POLL } from "../../lib/poll";
 import { HistoryList } from "./HistoryList";
@@ -400,6 +402,11 @@ export function EquivTab({ initialA, initialB, initialEq }: { initialA: { kind: 
 
       <section className="eq-section" aria-label="결과">
         <h4 className="eq-h">4. 결과</h4>
+        {current && (
+          <div className="run-action-row">
+            <ReportButton load={() => reportApi.byTarget("equiv-check", current.id)} fallbackName={`PAI_${study.folder_name}_equiv-check_${current.id.slice(0, 8)}.html`} notReady={current.status === "RUNNING" ? `진행 중 — ${NOT_READY_TEXT}` : null} resetKey={`${current.id}:${current.status}`} />
+          </div>
+        )}
         {current ? <ResultView check={current} onNoteSaved={(n) => (setCurrent({ ...current, note: n }), void loadHistory(false))} /> : <p className="muted small">판정을 실행하거나 이력에서 열면 여기 보입니다.</p>}
       </section>
 

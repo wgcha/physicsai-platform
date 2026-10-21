@@ -340,28 +340,56 @@ export const SO_TAB_KEY = "physicsai.stage5.surrogateTab";
 export interface CompareRow {
   name: string;
   unit: string;
+  /** 막대 범위(rangeLabel 기준) */
   min: number;
   max: number;
+  rangeLabel: RangeLabel;
   base: number | null;
   opt: number | null;
   delta: number | null;
-  /** 최적안이 학습 범위 끝에 닿음 */
+  /** 최적안이 막대 범위 끝에 닿음 */
   bound: "upper" | "lower" | null;
   /** 트랙 위 위치(0~1) */
   basePos: number | null;
   optPos: number | null;
 }
 
-/** 변수마다 학습 범위·기준안(템플릿 nominal)·최적안·변화·범위 끝 도달 */
-export function compareRows(params: SoParameter[], base: Record<string, number> | null | undefined, opt: Record<string, number> | null | undefined): CompareRow[] {
+export type RangeLabel = "학습 범위" | "템플릿 범위";
+
+/** 결과 카드의 범위 막대 기준(v0.2.5, native-vars.md §7.2 후속): Native 결과는 실행 스냅숏 `settings.vars.variables[].train` 이 학습 범위,
+ *  그 값이 없는 변수는 이 실행의 템플릿 범위(min·max). 스냅숏이 없으면(Altair·옛 결과) 기존대로 세트 범위 = 학습 범위 */
+export interface RangeBasis {
+  native: boolean;
+  train: Record<string, { min: number; max: number } | null> | null;
+}
+
+export function rangeBasis(settings: unknown): RangeBasis {
+  const v = (settings as { vars?: { variables?: { name: string; train?: { min: number; max: number } | null }[] } | null } | null | undefined)?.vars;
+  if (!v || !Array.isArray(v.variables)) return { native: false, train: null };
+  const train: Record<string, { min: number; max: number } | null> = {};
+  for (const x of v.variables) train[x.name] = x.train && Number.isFinite(x.train.min) && Number.isFinite(x.train.max) ? { min: x.train.min, max: x.train.max } : null;
+  return { native: true, train };
+}
+
+/** 표 머리글: Native 에서 학습 범위가 하나도 없으면 "템플릿 범위", 그 밖에는 "학습 범위" */
+export function rangeHeader(rows: CompareRow[]): RangeLabel {
+  return rows.length > 0 && rows.every((r) => r.rangeLabel === "템플릿 범위") ? "템플릿 범위" : "학습 범위";
+}
+
+/** 변수마다 범위(학습·템플릿)·기준안(템플릿 nominal)·최적안·변화·범위 끝 도달 */
+export function compareRows(params: SoParameter[], base: Record<string, number> | null | undefined, opt: Record<string, number> | null | undefined, basis: RangeBasis = { native: false, train: null }): CompareRow[] {
   return params.map((p) => {
     const b = base?.[p.name] ?? p.nominal ?? null;
     const o = opt?.[p.name] ?? null;
-    const span = p.max - p.min;
-    const pos = (v: number | null) => (v == null || span <= 0 ? null : Math.min(1, Math.max(0, (v - p.min) / span)));
+    const tr = basis.train?.[p.name] ?? null;
+    const lo = tr ? tr.min : p.min;
+    const hi = tr ? tr.max : p.max;
+    const rangeLabel: RangeLabel = tr || !basis.native ? "학습 범위" : "템플릿 범위";
+    const span = hi - lo;
+    const pos = (v: number | null) => (v == null || span <= 0 ? null : Math.min(1, Math.max(0, (v - lo) / span)));
     const tol = 1e-9 * Math.max(1, Math.abs(span));
-    const bound = o == null || span <= 0 ? null : o >= p.max - tol ? "upper" : o <= p.min + tol ? "lower" : null;
-    return { name: p.name, unit: p.unit ?? "", min: p.min, max: p.max, base: b, opt: o, delta: b != null && o != null ? o - b : null, bound, basePos: pos(b), optPos: pos(o) };
+    const bound = o == null || span <= 0 ? null : o >= hi - tol ? "upper" : o <= lo + tol ? "lower" : null;
+    return { name: p.name, unit: p.unit ?? "", min: lo, max: hi, rangeLabel, base: b, opt: o, delta: b != null && o != null ? o - b : null, bound, basePos: pos(b), optPos: pos(o) };
   });
 }
 
@@ -369,8 +397,13 @@ export function compareRows(params: SoParameter[], base: Record<string, number> 
 export function boundNote(rows: CompareRow[]): string | null {
   const hit = rows.filter((r) => r.bound);
   if (!hit.length) return null;
-  const names = hit.map((r) => `${r.name}(${r.bound === "upper" ? "상한" : "하한"})`).join(", ");
-  return `${names}이(가) 학습 범위 끝에 닿았습니다 — 범위를 넓혀 학습하면 추가 개선 여지가 있습니다`;
+  const sentence = (label: RangeLabel) => {
+    const h = hit.filter((r) => r.rangeLabel === label);
+    if (!h.length) return null;
+    const names = h.map((r) => `${r.name}(${r.bound === "upper" ? "상한" : "하한"})`).join(", ");
+    return label === "학습 범위" ? `${names}이(가) 학습 범위 끝에 닿았습니다 — 범위를 넓혀 학습하면 추가 개선 여지가 있습니다` : `${names}이(가) 템플릿 범위 끝에 닿았습니다 — 범위를 넓혀 다시 실행하면 추가 개선 여지가 있습니다`;
+  };
+  return [sentence("학습 범위"), sentence("템플릿 범위")].filter(Boolean).join(" · ");
 }
 
 export interface Kpi {

@@ -2,6 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { api, type Artifact, type Job, type Optimization, type OptResponse } from "../../api";
 import { useArtifactJson } from "../../hooks/useArtifact";
 import { CodeLine } from "../../components/ui";
+import { NOT_READY_TEXT, ReportButton } from "../../components/ReportButton";
+import { reportApi } from "../../api/reports";
+import { useStudy } from "../../app/StudyContext";
 import { Chart } from "../../components/Chart";
 import { CsvView } from "../../components/CsvView";
 import { JsonTree } from "../../components/JsonTree";
@@ -86,6 +89,7 @@ function HistoryChart({ table, responses }: { table: SummaryTable; responses: Op
 }
 
 export function OptResult({ opt, job }: { opt: Optimization | null; job: Job | null }) {
+  const { study } = useStudy();
   const summary = useArtifactJson<unknown>(opt?.summary_status === "PARSED" ? opt.summary_artifact_id : null);
   const fileList = useArtifactJson<unknown>(opt?.file_list_artifact_id);
   const [viewable, setViewable] = useState<Artifact[]>([]);
@@ -121,6 +125,9 @@ export function OptResult({ opt, job }: { opt: Optimization | null; job: Job | n
     <div className="opt-result">
       <div className="result-head small" data-testid="opt-progress">
         {opt.approach} {opt.approach === "OPT" ? `· ${opt.opt_method}` : ""} · {opt.model_name} · {fmtTime(opt.created_at)} · {running ? progress : opt.status === "DONE" ? `완료 · ${progress.replace(" 시작", "")}` : "실패"}
+      </div>
+      <div className="run-action-row">
+        <ReportButton load={() => reportApi.byTarget("optimization", opt.id)} fallbackName={`PAI_${study.folder_name}_optimization_${opt.id.slice(0, 8)}.html`} notReady={running ? `진행 중 — ${NOT_READY_TEXT}` : null} resetKey={`${opt.id}:${opt.status}`} />
       </div>
       {opt.status === "DONE" &&
         (table ? (
