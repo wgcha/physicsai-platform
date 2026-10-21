@@ -173,7 +173,7 @@ def run(args, rep: Reporter) -> int:
             "renum_sha256": sha256_file(args.renum_csv) if Path(args.renum_csv).is_file() else None,
         },
         stages=stages,
-        extract=_extract_summary(fdoc),
+        extract=_extract_summary(fdoc, _read(ex / "extract_stats.json")),
         tag=_tag_summary(tdoc),
         roundtrip=roundtrip,
         nominal_check=_check_summary(cdoc),
@@ -314,7 +314,9 @@ def _nx_samples(args, work: Path, feats: Path, tg: Path, common: dict, stage, re
     }
 
 
-def _extract_summary(d: dict | None) -> dict | None:
+def _extract_summary(d: dict | None, stats: dict | None = None) -> dict | None:
+    """``rib_rejects``: per body, first reason counts of rejected rib cap candidates (extract_stats.json,
+    extract-filter.md section 7.1 - field diagnosis of 'no rib parameter')."""
     if not d:
         return None
     by_type: dict[str, int] = {}
@@ -323,7 +325,10 @@ def _extract_summary(d: dict | None) -> dict | None:
     grouped = {m for g in d.get("groups") or [] for m in g["members"]}
     reps = {g["parameter"] for g in d.get("groups") or []}
     params = sum(1 for f in d.get("features") or [] if f["name"] in reps or f["name"] not in grouped)
-    return {"bodies": len(d.get("bodies") or []), "features": len(d.get("features") or []), "parameters": params, "groups": len(d.get("groups") or []), "by_type": dict(sorted(by_type.items()))}
+    out = {"bodies": len(d.get("bodies") or []), "features": len(d.get("features") or []), "parameters": params, "groups": len(d.get("groups") or []), "by_type": dict(sorted(by_type.items()))}
+    if stats and isinstance(stats.get("bodies"), list):
+        out["rib_rejects"] = {str(b.get("body")): dict(b.get("rib_rejects") or {}) for b in stats["bodies"]}
+    return out
 
 
 def _tag_summary(d: dict | None) -> dict | None:
@@ -430,6 +435,9 @@ def render_md(r: dict) -> str:
     if e:
         L += ["", "## Extract", "", f"- bodies {e['bodies']}, features {e['features']}, parameters {e['parameters']}, groups {e['groups']}"]
         L.append("- by type: " + ", ".join(f"{k} {v}" for k, v in e["by_type"].items()))
+        for b, rr in (e.get("rib_rejects") or {}).items():
+            if rr:
+                L.append(f"- rib candidates rejected ({b}): " + ", ".join(f"{k} {v}" for k, v in rr.items()))
     t = r.get("tag")
     if t:
         L += ["", "## Tag", "", f"- match_ratio {t['match_ratio']}, unclassified boundary nodes {t['unclassified_total']}, contact faces {t['contacts']}", ""]

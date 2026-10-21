@@ -259,6 +259,8 @@ def test_selftest_numeric_report(golden, tmp_path):
     c = r["nominal_check"]
     assert c["status"] == "PASS" and c["quality"]["baseline_status"] == "PASS" and c["quality"]["inverted"] == 0
     assert r["extract"]["parameters"] == golden["truth"]["parameters"]
+    rr = r["extract"]["rib_rejects"]  # extract-filter.md section 7.1: per-body rib candidate rejection counters
+    assert set(rr) == {"CUSH_L", "CUSH_R"} and rr["CUSH_L"]["cap_not_convex"] > 0
     assert [p["param"] for p in r["envelope"]["params"]] == ["CUSH_L_RIB_H_1", "CUSH_L_THK_2"]
     # numbers only: no coordinates, ids or geometry arrays
     forbidden = {"xyz", "bbox", "centroid", "worst_node", "node_ids", "face_signatures", "pairs", "items", "rows", "applied"}
@@ -267,4 +269,5 @@ def test_selftest_numeric_report(golden, tmp_path):
     assert "/NODE" not in text_all and "TETRA" not in text_all and str(golden["root"]) not in text_all
     md = (out / "selftest_report.md").read_text(encoding="utf-8")
     assert md.startswith("# paicad selftest report") and "match_ratio" in md
+    assert "rib candidates rejected (CUSH_L): " in md
     assert json.loads(json.dumps(r)) == r

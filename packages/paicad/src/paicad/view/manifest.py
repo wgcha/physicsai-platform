@@ -10,6 +10,7 @@ import math
 import numpy as np
 
 from ..common import rnd, vec
+from ..features import POSITION_TYPES, RIB_POS_TYPES, rib_sides
 from ..kernel.base import FaceData, Topology
 
 DISP_ZERO_MM = 1.0e-6  # |displacement| at or below this is 0 (GE-C7)
@@ -17,7 +18,6 @@ LABEL_OFFSET = 0.05  # label = mid point moved 0.05 * L_body away from the body 
 LINEAR_TYPES = ("THICKNESS", "POCKET_DEPTH", "POCKET_WIDTH", "RIB_THICKNESS", "RIB_HEIGHT")
 HOSTED_TYPES = ("POCKET_DEPTH", "RIB_HEIGHT")  # moving cap/floor + fixed host face
 RADIUS_TYPES = ("HOLE_RADIUS", "FILLET_RADIUS")
-POSITION_TYPES = ("HOLE_POS_U", "HOLE_POS_V")
 
 
 def fid(s: str) -> int:
@@ -103,6 +103,18 @@ def dimension_points(ftype: str, topo: Topology, bbox: np.ndarray, moving: list[
         if d is None:  # full cylinder: centroid on the axis -> fixed perpendicular direction
             d = _unit(np.cross(ax, [0.0, 0.0, 1.0] if abs(ax[2]) < 0.9 else [1.0, 0.0, 0.0]))
         return "radius", p0, p0 + float(f.radius) * d
+    if ftype in RIB_POS_TYPES:
+        # rib position: center plane of the -a / +a lateral faces -> bbox-minimum plane (``rib_center`` reference)
+        if axis not in ("x", "y", "z"):
+            return None
+        a = "xyz".index(axis)
+        sides = rib_sides(topo, list(measure or moving), a)
+        if sides is None:
+            return None
+        p1 = 0.5 * (np.asarray(topo.face(sides[0]).centroid, dtype=float) + np.asarray(topo.face(sides[1]).centroid, dtype=float))
+        p0 = p1.copy()
+        p0[a] = float(bbox[a])
+        return "position", p0, p1
     if ftype in POSITION_TYPES:
         c = (measure or moving or [None])[0]
         if c is None or axis not in ("x", "y", "z"):

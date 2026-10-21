@@ -13,6 +13,7 @@ import math
 
 import numpy as np
 
+from .features import rib_sides
 from .kernel.base import Topology
 from .meshdata import KIND_EDGE, KIND_FACE, KIND_VERTEX, Comp
 
@@ -126,6 +127,17 @@ def measure_feature(feat: dict, fi: FaceIndex, fmapF: dict, P: np.ndarray) -> fl
         if meth == "rib_height":
             return float(np.dot(ca - cb, na))
         return float(np.dot(cb - ca, na))  # pocket_depth: entry - floor along the floor normal
+    if meth == "rib_center":
+        # rib position (extract-filter.md section 3.2): mid plane of the -a / +a lateral faces fitted on the mesh
+        # (area-weighted triangle centroids, like the extract centroids) - morphed component bbox minimum
+        ax = "xyz".index(feat["measure"].get("axis", "x"))
+        sides = rib_sides(fi.topo, faces, ax)
+        if sides is None:
+            return None
+        pm, pp = fi.plane(sides[0], P), fi.plane(sides[1], P)
+        if pm is None or pp is None:
+            return None
+        return 0.5 * (float(pm[0][ax]) + float(pp[0][ax])) - float(P[:, ax].min())
     if meth in ("hole_radius", "fillet_radius", "hole_center"):
         f = faces[0]
         fd = fi.topo.face(f)

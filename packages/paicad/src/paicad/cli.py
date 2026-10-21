@@ -29,7 +29,7 @@ def _parser() -> argparse.ArgumentParser:
     e.add_argument("--out-dir", required=True)
     e.add_argument("--body-map")
     e.add_argument("--renum-csv")
-    e.add_argument("--options")
+    e.add_argument("--options", help="options.json; optional extract.filter = feature types to find + conditions (types, thickness_mm, height_mm, face_area_min_mm2, position_min_size_mm, hole_radius_min_mm, fillet_radius_min_mm) - also enables RIB_POS_U/V; extract_stats.json is always written")
     e.add_argument("--no-png", action="store_true")
     e.add_argument("--threads", type=int)
 
@@ -55,7 +55,7 @@ def _parser() -> argparse.ArgumentParser:
     m.add_argument("--solver", default=None, help="solver writer for the morphed file (default radioss)")
     m.add_argument("--sweep", action="store_true", help="1D parameter sweep -> envelope.json/csv")
     m.add_argument("--steps", default="5,10,20,30,40,50", help="sweep steps in percent of the nominal value")
-    m.add_argument("--pos-steps", default="1,2,3,5,8,10", help="sweep steps of position parameters (HOLE_POS_U/V) in mm from the nominal value")
+    m.add_argument("--pos-steps", default="1,2,3,5,8,10", help="sweep steps of position parameters (HOLE_POS_U/V, RIB_POS_U/V) in mm from the nominal value")
     m.add_argument("--params", help="comma-separated parameter names (default: all values.json keys)")
     m.add_argument("--stop-after-fail", type=int, default=2, help="stop a direction after this many consecutive failures")
     m.add_argument("--check", default="on", choices=["on", "off"], help="evaluate quality/deviation/re-measurement per step")

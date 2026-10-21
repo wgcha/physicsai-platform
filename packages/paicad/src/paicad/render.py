@@ -304,9 +304,25 @@ def render_feature(mesh: BodyMesh, moving: list[int], fixed: list[int], dim: tup
     return img
 
 
-def dimension_points(feature: dict) -> tuple[np.ndarray, np.ndarray] | None:
-    """End points of the dimension line from the feature's face signatures (parameter_features.json entry)."""
+def dimension_points(feature: dict, bbox=None) -> tuple[np.ndarray, np.ndarray] | None:
+    """End points of the dimension line from the feature's face signatures (parameter_features.json entry).
+    RIB_POS_U/V (``bbox`` = body bbox): center plane of the two lateral faces -> body bbox minimum along the axis
+    (the ``rib_center`` measure reference, extract-filter.md section 3.2)."""
     sig = feature.get("face_signatures") or {}
+    if feature.get("type") in ("RIB_POS_U", "RIB_POS_V"):
+        ax = (feature.get("measure") or {}).get("axis")
+        if bbox is None or ax not in ("x", "y", "z"):
+            return None
+        a = "xyz".index(ax)
+        lat = [s for s in sig.values() if s.get("normal") is not None]
+        plus = max(lat, key=lambda s: s["normal"][a], default=None)
+        minus = min(lat, key=lambda s: s["normal"][a], default=None)
+        if plus is None or minus is None or plus["normal"][a] <= 0.5 or minus["normal"][a] >= -0.5:
+            return None
+        p1 = 0.5 * (np.asarray(plus["centroid"], dtype=float) + np.asarray(minus["centroid"], dtype=float))
+        p0 = p1.copy()
+        p0[a] = float(bbox[a])
+        return p1, p0
     mv = [sig[f] for f in (feature.get("faces") or {}).get("moving", []) if f in sig]
     fx = [sig[f] for f in (feature.get("faces") or {}).get("fixed", []) if f in sig]
     if not mv:

@@ -22,6 +22,7 @@ from .mesh.radioss import read_renum_csv
 
 XML_NAME = "parameter_extracted.xml"
 JSON_NAME = "parameter_features.json"
+STATS_NAME = "extract_stats.json"  # extract-filter.md section 7.1 (always written, not a success marker)
 PNG_DIR = "features"
 
 
@@ -33,7 +34,7 @@ def render_xml(model_name: str, params: list[tuple[str, float]]) -> str:
     return "\n".join(lines)
 
 
-def _render_pngs(feat_json: list[dict], bodies: dict, out: OutDir, warnings: list[dict], log=None, timing: dict | None = None) -> list[str]:
+def _render_pngs(feat_json: list[dict], bodies: dict, out: OutDir, warnings: list[dict], log=None, timing: dict | None = None, bbox_of: dict | None = None) -> list[str]:
     """features/<NAME>.png per feature (section 4.3); a failure only drops that PNG (PNG_RENDER_FAILED)."""
     from . import render
 
@@ -60,7 +61,7 @@ def _render_pngs(feat_json: list[dict], bodies: dict, out: OutDir, warnings: lis
                 timing["png_tessellate_s"] += time.perf_counter() - ta
             moving, fixed = ([int(x[1:]) for x in f["faces"][key]] for key in ("moving", "fixed"))
             ta = time.perf_counter()
-            img = render.render_feature(mesh, moving, fixed, render.dimension_points(f))
+            img = render.render_feature(mesh, moving, fixed, render.dimension_points(f, (bbox_of or {}).get(f["body"])))
             tb = time.perf_counter()
             render.write_png(out.tmp_path(rel), img)
             timing["png_render_s"] += tb - ta
@@ -74,6 +75,27 @@ def _render_pngs(feat_json: list[dict], bodies: dict, out: OutDir, warnings: lis
     if log is not None and total:
         log(f"PNG {total}/{total} {time.perf_counter() - t0:.1f}s")
     return written
+
+
+def _stats_doc(filter_applied: bool, bodies: list[dict], pngs: list[str], timing: dict, t_start: float) -> dict:
+    """``extract_stats.json`` (extract-filter.md section 7.1). Only the ``elapsed_s`` fields are non-deterministic."""
+    r2 = lambda x: round(float(x), 2)  # noqa: E731
+    for b in bodies:
+        for t in b.get("types", {}).values():
+            if "elapsed_s" in t:
+                t["elapsed_s"] = r2(t["elapsed_s"])
+    return envelope(
+        filter_applied=filter_applied,
+        bodies=bodies,
+        png={"rendered": len(pngs), "elapsed_s": r2(timing.get("png_s", 0.0))},
+        elapsed_s={
+            "load": r2(timing.get("load_s", 0.0)),
+            "recognize": r2(timing.get("recognize_s", 0.0)),
+            "finalize": r2(timing.get("finalize_s", 0.0)),
+            "png": r2(timing.get("png_s", 0.0)),
+            "total": r2(time.perf_counter() - t_start),
+        },
+    )
 
 
 def _timing_summary(timing: dict) -> dict:
@@ -105,8 +127,9 @@ def run(args, rep: Reporter) -> int:
     def info(msg: str) -> None:
         rep.info(f"[extract] {msg}")
 
-    opts = options.load(args.options)
-    out = OutDir(args.out_dir, [XML_NAME, JSON_NAME] + ([] if args.no_png else [PNG_DIR]))
+    opts = options.load(args.options, keep_filter=True)
+    flt = opts["extract"].get("filter")
+    out = OutDir(args.out_dir, [XML_NAME, JSON_NAME, STATS_NAME] + ([] if args.no_png else [PNG_DIR]))
     out.prepare()
     rep.progress(5, "loading CAD")
     cad = cadload.load(args.cad)
@@ -117,8 +140,10 @@ def run(args, rep: Reporter) -> int:
     bodies_json = []
     per_body = []
     tol_of = {}
+    stats_bodies = []
     for k, (body, part, row) in enumerate(pairs):
-        rep.progress(10 + int(70 * k / max(1, len(pairs))), f"recognizing features: {body.name}")
+        pct = 10 + int(70 * k / max(1, len(pairs)))
+        rep.progress(pct, f"recognizing features: {body.name}")
         s = body.summary()
         tol_of[body.name] = options.body_tol(opts, s.bbox)
         bodies_json.append(
@@ -135,7 +160,12 @@ def run(args, rep: Reporter) -> int:
         )
         bt: dict = {}
         timing["bodies"][body.name or f"#{k + 1}"] = bt
-        per_body.append((body.name, part, body, features.recognize_body(body, opts, log=lambda m, b=body.name: info(f"{b}: {m}"), timing=bt)))
+        bs: dict = {}
+        found = features.recognize_body(
+            body, opts, log=lambda m, b=body.name: info(f"{b}: {m}"), timing=bt, stats=bs, progress=lambda m, b=body.name, p=pct: rep.progress(p, f"{b} {m}")
+        )
+        per_body.append((body.name, part, body, found))
+        stats_bodies.append({"body": body.name, **bs})
         info(f"{body.name}: {bt['features']} features {bt['recognize_s']:.1f}s")
     timing["recognize_s"] = time.perf_counter() - t_start - timing["load_s"]
     rep.progress(85, "naming features and symmetry groups")
@@ -176,7 +206,8 @@ def run(args, rep: Reporter) -> int:
     if feats and not args.no_png:
         rep.progress(90, "rendering feature highlights")
         t_png = time.perf_counter()
-        pngs = _render_pngs(feat_json, {b.name: b for b, _, _ in pairs}, out, warnings, log=info, timing=timing)
+        bbox_of = {b["body"]: b["bbox"] for b in bodies_json}
+        pngs = _render_pngs(feat_json, {b.name: b for b, _, _ in pairs}, out, warnings, log=info, timing=timing, bbox_of=bbox_of)
         timing["png_s"] = time.perf_counter() - t_png
         timing["pngs"] = len(pngs)
         info(f"feature PNGs: {len(pngs)} {timing['png_s']:.1f}s")
@@ -184,14 +215,17 @@ def run(args, rep: Reporter) -> int:
     doc = envelope(
         unit_system="mm-ton-s",
         cad={"mode": cad.mode, "files": cad.files, "body_map": body_map_mode},
+        **({"filter": dict(flt, draft_max_deg=opts["extract"]["draft_max_deg"])} if flt is not None else {}),
         bodies=bodies_json,
         features=feat_json,
         groups=groups,
         warnings=warnings,
     )
+    stats_doc = _stats_doc(flt is not None, stats_bodies, pngs, timing, t_start)
     if not feats:
         out.write_text(JSON_NAME, dumps(doc))
-        out.commit([JSON_NAME])
+        out.write_text(STATS_NAME, dumps(stats_doc))
+        out.commit([JSON_NAME, STATS_NAME])
         _log_timing(rep, timing, t_start)
         rep.result("FAIL", "GEOM_EXTRACT_EMPTY", JSON_NAME)
         return EXIT_EXTRACT_EMPTY
@@ -201,7 +235,8 @@ def run(args, rep: Reporter) -> int:
     model_name = Path(args.cad).name
     out.write_text(JSON_NAME, dumps(doc))
     out.write_text(XML_NAME, render_xml(model_name, params))
-    out.commit([JSON_NAME, XML_NAME] + pngs)
+    out.write_text(STATS_NAME, dumps(stats_doc))
+    out.commit([JSON_NAME, XML_NAME, STATS_NAME] + pngs)
     _log_timing(rep, timing, t_start)
     rep.progress(100, f"extract done: {len(feats)} features, {len(params)} parameters")
     rep.result("OK", None, JSON_NAME)
