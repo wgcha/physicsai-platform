@@ -1,10 +1,10 @@
 # 계약: native ①-1 추출 조건(찾을 종류·조건) + 리브 위치 파라미터(RIB_POS)
 
-> 상태: 초안(2026-10-21, Plan). 상위 계약 [geometry-engine.md](geometry-engine.md)(GE) — 이 문서가 바꾸는 GE 규칙은 §2.3에 모았고 GE 변경 메모 GE-C16에 연결한다. 충돌 시 이 문서 우선.
+> 상태: 확정(2026-10-21, U1~U3 사용자 결정 반영). 상위 계약 [geometry-engine.md](geometry-engine.md)(GE) — 이 문서가 바꾸는 GE 규칙은 §2.3에 모았고 GE 변경 메모 GE-C16에 연결한다. 충돌 시 이 문서 우선.
 
 ## 0. 한 줄 요약
 
-①-1 native 파라미터 추출 전에 사용자가 **찾을 종류(그룹 체크)와 조건(mm 하한·범위)**을 정하면, paicad `extract`가 그 조건을 **탐색 단계에서 먼저 적용해 계산 자체를 건너뛰고**(결과 후처리 필터 아님) 선택 종류만 PNG를 그린다. 위치 그룹에는 새 자동 종류 **리브 위치 `RIB_POS_U`/`RIB_POS_V`**(인식된 리브의 측면+윗면 평행 이동)를 추가한다. 조건을 주지 않으면(필터 없음) 현재 동작·출력과 바이트 단위로 같다.
+native 파라미터 추출(①-1 `TD_EXTRACT_PARAMS`·④ native 세트 등록 `PARAM_SET_NATIVE`) 전에 사용자가 **찾을 종류(그룹 체크)와 조건(mm 하한·범위)**을 정하면, paicad `extract`가 그 조건을 **탐색 단계에서 먼저 적용해 계산 자체를 건너뛰고**(결과 후처리 필터 아님) 선택 종류만 PNG를 그린다. 위치 그룹에는 새 자동 종류 **리브 위치 `RIB_POS_U`/`RIB_POS_V`**(인식된 리브의 측면+윗면 평행 이동)를 추가한다. 조건을 주지 않으면(필터 없음) 현재 동작·출력과 바이트 단위로 같다.
 
 ## 1. 목적·범위
 
@@ -17,13 +17,14 @@
 ### 1.2 범위
 
 - paicad `extract`: `options.json` `extract.filter`(§4) 해석, 조기 제외(§5), 통계 파일 `extract_stats.json`(§7), 새 종류 `RIB_POS_U`/`RIB_POS_V`의 인식·update·morph·check·sweep·view·map(§3).
-- 플랫폼: ①-1 `TD_EXTRACT_PARAMS`(native·solid) job params `extract_filter`, API·openapi, 사용 조건 기록(`train_setups.extract_filter`), ①-2 "적용 조건" 표시, 진행 로그 요약(§6·§7).
-- UI: ①-1 `CadExtractCard` "찾을 종류" 체크 + "조건(선택)" 접힘(§8).
+- 플랫폼: ①-1 `TD_EXTRACT_PARAMS`(native·solid) job params `extract_filter`, API·openapi, 사용 조건 기록(`train_setups.extract_filter`), ①-2 "적용 조건" 표시, 진행 로그 요약(§6·§7). **④ native 세트 등록 `PARAM_SET_NATIVE`**(신규 등록·baseline 추가·from-train 승계, §6.7).
+- UI: ①-1 `CadExtractCard`·④ `ParamSetDiscoverForm`(native일 때만) "찾을 종류" 체크 + "조건(선택)" 접힘(§8).
 
 ### 1.3 비범위
 
-- ④ 세트 등록 `PARAM_SET_NATIVE`의 `NP_EXTRACT`에 필터 적용(①→④ from-train은 ①-1 필터 결과를 그대로 복사하므로 승계됨) — 사용자 결정 U3.
-- altair(SimLab) 추출, 쉘(`kind=shell`) 비드 추출 — 필터 거부(§6.3).
+- **altair(SimLab·NX) 경로 전부 — 변경 금지(U3, 사용자 원문 "내가 요청하는건 native 한정이야. simlab은 건들지마")**: altair 추출·세트 등록 핸들러·워커·설정·화면 무변경. 유일한 접점은 요청 검증에서 `extract_filter`가 오면 422 `EXTRACT_FILTER_UNSUPPORTED`로 거부하는 것뿐이며 altair 화면에는 체크박스를 노출하지 않는다.
+- 쉘(`kind=shell`) 비드 추출·쉘 세트 — 필터 거부(§6.3).
+- 기존 native 세트의 추출 조건 변경(제자리 재추출) — 새 세트로 등록(§6.7).
 - 블렌드(필렛) 붙은 리브·포켓 인식, 구배 큰 리브 전용 인식 규칙 — 후속 계약(§9 R1, 진단 카운터만 이번에 추가).
 - PNG 래스터 자체의 속도 개선, 무필터 경로 성능 최적화 — 별도 진행 중인 features.py 성능 작업 소관.
 
@@ -58,16 +59,19 @@
 | EF-7 | 구배 허용각 `draft_max_deg`는 ①-1 "조건 > 고급"에 노출(기본 접힘, placeholder = 유효 기본값). 바꾸면 모든 종류 인식이 달라질 수 있다는 안내 문구 |
 | EF-8 | 사용 조건은 `parameter_features.json` `filter`(정규화 사본)·`train_setups.extract_filter`(DB)·job params에 기록, ①-2 "적용 조건" 표시 |
 | EF-9 | 통계 `extract_stats.json`은 필터 유무와 관계없이 항상 씀(새 파일 — 기존 파일 바이트 불변). 시간 필드만 비결정 |
-| EF-10 | 재추출 시 기존 표 처리 = 확인 창 후 덮어쓰기(이전 표 백업, 기존 TX_PARSE 동작) — 제안, 사용자 결정 U2 |
+| EF-10 | 재추출 시 기존 표 처리 = 확인 창 후 덮어쓰기(이전 표 백업, 기존 TX_PARSE 동작) — 사용자 확정 U2 |
+| EF-11 | 적용 범위 = native 경로 전체(①-1 + ④ `PARAM_SET_NATIVE`), altair 경로 무변경(U3) |
+| EF-12 | ④ 세트의 추출 조건은 세트 등록 때 1회 정하고 바꾸지 않음(파라미터 이름 집합·DOE·모델 일관성). 기록은 세트의 `native/extract/parameter_features.json` `filter`(DB 열 없음), baseline 추가는 같은 조건 강제 |
 
 ### 2.3 GE에서 바뀌거나 더해지는 규칙(이 문서 우선)
 
 - GE §4.3: 피처 종류 약어에 `RIB_U`·`RIB_V` 추가. `parameter_features.json` 최상위 선택 키 `filter`(필터 있을 때만), `measure.method`에 `rib_center` 추가. `schema_version` 1 유지(선택 키 추가).
 - GE §4.2·§5.3: `paicad extract` 출력에 `extract_stats.json` 추가(성공 판정 파일 아님).
-- GE §4.9: `extract.filter` 선택 절(§4). `param_sets.geom_options`에 `extract.filter`가 오면 422 `GEOM_OPTIONS_INVALID`("추출 조건은 ①-1에서 정합니다", 1차).
+- GE §4.9: `extract.filter` 선택 절(§4). `param_sets.geom_options`에 `extract.filter`가 오면 422 `GEOM_OPTIONS_INVALID`("추출 조건은 geom_options가 아니라 등록 요청의 extract_filter로 정합니다") — 조건은 검사 옵션이 아니라 등록 입력이다.
 - GE §6.2: 종류 표에 `RIB_POS_U/V` 행(§3.2). 위치형(`POSITION_TYPES`) = HOLE_POS_U/V + RIB_POS_U/V(범위 mm·sweep mm 단계·`positions[]`).
 - GE §6.3 단계 4: 리브 위치 이동은 `AXIS_SHIFT`와 같은 평면 내 이동으로 충돌 사전 검사 대상(리브 발자국 와이어 = 기존 `BOUNDARY_OVERLAP` 범위).
 - GE §7.3.1: params `{cad_path, engine:"native", kind?, extract_filter?}`.
+- GE §7.3.4: `POST /studies/{id}/param-sets`(native) 요청·params에 `extract_filter?`, NP_PREP 준비 피처 파일 생략 규칙·NP_EXTRACT·`add_baseline` 조건 승계(§6.7).
 
 ## 3. 종류 그룹·RIB_POS
 
@@ -177,7 +181,7 @@
 
 ### 6.1 job params·API
 
-- `POST /jobs` `TD_EXTRACT_PARAMS`: `TdExtractParams`에 선택 필드 `extract_filter`(생략 = 현행). 서버가 정규화한 값을 params에 기록.
+- `POST /jobs` `TD_EXTRACT_PARAMS`(④는 §6.7): `TdExtractParams`에 선택 필드 `extract_filter`(생략 = 현행). 서버가 정규화한 값을 params에 기록.
 
 ```json
 {"cad_path": "...", "engine": "native", "extract_filter": {
@@ -201,7 +205,7 @@
 
 ### 6.3 우선순위
 
-`extract_filter.draft_max_deg` > `geometry.defaults.extract.draft_max_deg` > paicad 기본(3.0). `extract.filter`는 job params에서만 온다: `geometry.defaults.extract.filter`가 설정에 있으면 무시하고 `config.warnings` "geometry.defaults.extract.filter는 쓰지 않습니다 — 추출 조건은 ①-1에서 사용자가 정합니다". `param_sets.geom_options.extract.filter`는 422 `GEOM_OPTIONS_INVALID`(1차, U3).
+`extract_filter.draft_max_deg` > `geometry.defaults.extract.draft_max_deg` > paicad 기본(3.0). `extract.filter`는 job params(①-1 `TD_EXTRACT_PARAMS`·④ `PARAM_SET_NATIVE`)에서만 온다: `geometry.defaults.extract.filter`가 설정에 있으면 무시하고 `config.warnings` "geometry.defaults.extract.filter는 쓰지 않습니다 — 추출 조건은 추출·세트 등록 때 사용자가 정합니다". `param_sets.geom_options.extract.filter`는 422 `GEOM_OPTIONS_INVALID`.
 
 ### 6.4 기록·표시
 
@@ -214,6 +218,19 @@
 
 - 서버 동작은 현행 그대로: TX_PARSE가 표를 새로 쓰고 이전 `01_train/params.json`은 백업(phase2 TX_PARSE).
 - UI: 파라미터 표가 있으면 실행 전 확인 창 "기존 파라미터 표(n개, 적용 조건: …)를 새 추출 결과로 바꿉니다. 직접 고친 범위·사용 여부는 새 표에 옮겨지지 않으며 이전 표는 백업됩니다. 계속할까요?" [바꾸기]/[취소]. (대안 = 이름·종류·공칭이 같은 행의 min·max·use 승계 — U2)
+
+### 6.7 ④ native 세트 등록(`PARAM_SET_NATIVE`, U3)
+
+| 경로 | 규칙 |
+|---|---|
+| 신규 `POST /studies/{id}/param-sets`(`engine:"native"`, solid) | 요청 선택 필드 `extract_filter`(§6.1과 같은 `ExtractFilter` 스키마·검증·422 코드). 서버가 정규화해 job params `{mode:"new", …, extract_filter}`에 기록. altair 요청에 오면 422 `EXTRACT_FILTER_UNSUPPORTED`(altair 처리 경로에 들어가기 전, 그 밖 altair 동작 불변). 쉘 세트도 같은 422 |
+| NP_PREP | `extract_filter`가 있으면 프로젝트 폴더의 `parameter_features.json`·`parameter_extracted.xml`을 복사하지 않아 NP_EXTRACT를 **항상 실행**(로그 "추출 조건이 지정되어 준비된 피처 파일을 쓰지 않습니다"). 프로젝트 폴더 `parameters.json`도 쓰지 않고 features `range`로 표를 만든다(경고 `PARAMS_JSON_IGNORED` "추출 조건이 지정되어 폴더의 parameters.json 범위를 쓰지 않았습니다" — 조건으로 이름 집합이 달라져 `PARAM_FEATURE_MISMATCH`가 나는 것을 피함). `T/native/options.json`(유효 옵션)에 `extract.filter`·`draft_max_deg`를 §6.2와 같은 방식으로 씀(`tag` 절 sha256은 영향 없음 → STALE 판정 불변). 없으면 현행 |
+| NP_EXTRACT | 위 options로 `paicad_extract`(out `T/native/extract`), 백업 목록에 `extract_stats.json`. 진행 요약은 §7.2와 같은 한국어 로그(작업 result `extract_summary`) |
+| 기록 | 세트 조건의 단일 출처 = `S/native/extract/parameter_features.json` `filter`(paicad 사용값 사본). DB 열·migration 없음. `ParamSet` 응답 `native.extract_filter`(features JSON에서 읽은 정규화본 \| null), `GET /param-sets/{id}/features` 응답에도 `filter` |
+| 조건 변경·재등록 | 기존 세트는 조건을 바꾸지 않는다: `native-prepare`(reprep)는 기존 extract를 재사용하므로 `extract_filter`를 받지 않음(오면 422 `EXTRACT_FILTER_INVALID` "등록된 세트의 추출 조건은 바꿀 수 없습니다 — 새 세트로 등록하세요"). 조건을 바꾸려면 새 세트로 등록(기존 세트·DOE·모델 불변, 사용자 산출물 삭제 없음) |
+| baseline 추가(4B `add_baseline`) | 새 baseline의 NP_EXTRACT는 **세트 기준 baseline의 `filter`를 그대로** 쓴다(매칭 대상 종류 집합 일치). 요청에 `extract_filter`를 받지 않음(오면 422 `EXTRACT_FILTER_INVALID`). 기준 baseline에 `filter`가 없으면 새 baseline도 필터 없음 |
+| ①→④ from-train | `D/native/extract/` 복사로 ①-1 조건이 그대로 승계(paicad 실행 없음, 변경 없음) |
+| discover 화면 | `POST …/param-sets/discover`는 변경 없음(조건은 등록 요청에만) |
 
 ## 7. 진행 로그·리포트
 
@@ -242,9 +259,10 @@
 - 작업 로그(한국어, 종류별 1줄): "두께: 판정 180 · 채택 12 · 제외 210(면적 180, 범위 9, 비상호 21) · 41.3초", "구멍 반경: 건너뜀(선택 안 함)", "하이라이트 PNG 20장 · 8.2초 · 전체 72.5초", 리브 후보 탈락이 있으면 "리브 후보 탈락 25(윗면 볼록 아님 14, 측면 곡면 6, 측면 구배 3, 밑면 불일치 2)".
 - `extract_summary` = `{types:{<type>:{selected, kept, excluded}}, png_rendered, elapsed_s, rib_rejects}`(수치만, DB 규칙). `extract_stats.json` 없음(구버전 paicad·fake)이면 null, 경고 없음.
 
-## 8. UI(①-1 `CadExtractCard`, 후보 A — 필수 요소만)
+## 8. UI(①-1 `CadExtractCard`·④ `ParamSetDiscoverForm`, 후보 A — 필수 요소만)
 
-- 표시 조건: 엔진 native이고 형상 종류 solid일 때만. altair·쉘이면 기존 화면 그대로.
+- 표시 조건: 엔진 native이고 형상 종류 solid일 때만. altair·쉘이면 기존 화면 그대로(altair 화면·컴포넌트 무변경, U3).
+- 공용 컴포넌트 `ExtractFilterFields`를 ①-1·④ 등록 폼이 같이 쓴다(아래 칸·문구 동일).
 - "찾을 종류" 체크박스 한 줄: 두께 · 높이·깊이 · 위치(구멍·리브) · 구멍 반경 · 필렛. 0개면 실행 버튼 비활성 + "찾을 종류를 하나 이상 고르세요".
 - "조건(선택)" 접힘 1개(기본 닫힘), 체크한 그룹 칸만 보임, placeholder "비우면 조건 없음":
   - 두께: "두께 범위 (mm)" [최소]~[최대], "최소 면 면적 (mm²)"
@@ -253,8 +271,9 @@
   - 구멍 반경: "반경 하한 r ≥ (mm)"
   - 필렛: "반경 하한 r ≥ (mm)"
   - "고급" 소접힘: "구배 허용각 (°)" placeholder = 유효 기본값, §4.3 안내 문구
-- 초기값: 그 Study의 `train_setups.extract_filter`(마지막 사용 조건)가 있으면 그것, 없으면 프리셋(U1, 사용자 확정 전 제안 = 다섯 그룹 모두 체크·조건 빈칸). native solid에서는 항상 `extract_filter`를 보낸다(모두 체크·빈칸 = R_all = 현행 + 리브 위치).
-- 입력 검사는 §6.1 문구를 그대로 화면에서도 보여 준다. 재추출 확인 창 §6.5. ①-2 "적용 조건" 줄 §6.4.
+- 초기값(U1 확정): 그 Study의 `train_setups.extract_filter`(마지막 사용 조건)가 있으면 그것, 없으면 프리셋 = 다섯 그룹 모두 체크·조건 빈칸. ①-1·④ 모두 같은 규칙. native solid에서는 항상 `extract_filter`를 보낸다(모두 체크·빈칸 = R_all = 현행 + 리브 위치).
+- ④ 세트 상세 피처 표 머리줄: "적용 조건: …"(§6.4 문구, `native.extract_filter`) + "조건을 바꾸려면 새 세트로 등록하세요". ④ 등록 폼에서 준비된 피처 파일이 있는 폴더를 고르면 안내 "추출 조건을 쓰면 준비된 피처 파일 대신 다시 추출합니다".
+- 입력 검사는 §6.1 문구를 그대로 화면에서도 보여 준다. 재추출 확인 창 §6.5(U2 확정, ①-1만 — ④ 신규 등록은 기존 표를 덮지 않음). ①-2 "적용 조건" 줄 §6.4.
 - 새 화면·시안 없음. `frontend-dist` 재생성 함께 커밋(AGENTS.md).
 
 ## 9. 리스크
@@ -280,6 +299,8 @@
 - **V-EF-7 기록·표시**: 정규화(미선택 그룹 조건 제거) 후 params·`X/options.json`·features `filter`·`train_setups.extract_filter` 일치, `GET /train/setup` `extract_filter`·`extract_summary`, ①-2 "적용 조건" 문구, 재추출 확인 창, 로그 한국어 요약, fake_paicad가 `filter`를 반영(types 밖 피처 미출력)·`extract_stats.json` 작성.
 - **V-EF-8 UI**: native solid에서만 체크·접힘 표시, 문구 한국어, 0개 선택 시 버튼 비활성, `frontend-dist` 최신.
 - **V-EF-9 위치형 통합**: `POSITION_TYPES` 단일 정의, `paramap` 범주 position, view 치수선, 범위 절대 mm.
+- **V-EF-11 ④ native**: 등록 요청 `extract_filter` → NP_PREP가 준비 피처 파일·`parameters.json` 미사용(`PARAMS_JSON_IGNORED`)·NP_EXTRACT 실행, `S/native/extract/parameter_features.json` `filter` = 정규화본, `ParamSet.native.extract_filter`·features 응답 `filter`, reprep·baselines 요청의 `extract_filter` 422, `add_baseline` NP_EXTRACT options의 `filter` = 기준 baseline 값, from-train 승계, `tag_options_sha256`·STALE 판정 불변, 필터 없는 등록은 현행과 같음.
+- **V-EF-12 altair 무변경(U3)**: altair 기존 시험 무수정 통과, altair 요청의 `extract_filter`는 422 `EXTRACT_FILTER_UNSUPPORTED`, 분기 지점(요청 검증 1곳) 밖 altair 코드·설정·화면 diff 없음(GE V-GE-12와 같은 방식).
 - **V-EF-10 버전**: paicad MINOR 올림 + CHANGELOG(영향: 필터 없음은 결과 불변, 필터·RIB_POS 신규), `scripts/test-all` 통과.
 
 ## 11. 구현 분해(파일 소유 비중첩)
@@ -287,17 +308,17 @@
 | 담당 | 범위·파일 | 순서 |
 |---|---|---|
 | Impl-Geom | `packages/paicad/**`: `features.py`(필터·조기 제외·지연 탐색·RIB_POS 인식·`POSITION_TYPES` 단일화·`rib_rejects`), `extract.py`(필터 사본·`extract_stats.json`·PNG 범위), `options.py`(스키마·검증), `update.py`(RIB_POS `AXIS_SHIFT`·`positions[]`), `measure.py`(`rib_center`), `collision.py`(발자국 이동 반영 확인), `sweep.py`·`view/manifest.py`·`render.py`(치수선)·`paramap.py`·`selftest.py`(`rib_rejects` 합계)·`cli.py`(도움말), 시험(가상 쿠션 RIB_POS 변형형·부하 합성·동률 합성), `__version__`·CHANGELOG | **features.py 성능 작업 병합 뒤** 착수. G1(필터·조기 제외·stats) → G2(RIB_POS 인식~check·sweep) 를 한 MINOR로 배포 |
-| Impl-Backend | `backend/physicsai_core/geometry/extract_filter.py`(신규: `GROUP_TYPES`·정규화·검증), `geometry/options.py`(`geom_options.extract.filter` 거부·defaults 경고), `services/job_params/stage1_train_data.py`(`TdExtractParams.extract_filter`·422 코드), `schemas/stage1_train_data.py`(`TrainSetup.extract_filter`·`extract_summary`), `worker/.../stage1_train_data/extract_native.py`·`extract.py`(options 작성·백업·TX_PARSE 기록·요약 로그), `migrations/versions/0019_extract_filter.py`(HEAD 다음)·`db/tables`, `backend/openapi.json`, `backend/tests/fake_tools/fake_paicad`(filter·stats), 시험 | Geom과 병행(fake로), API 모양 먼저 openapi 갱신 |
-| Impl-Frontend | `frontend/src/stages/stage1/CadExtractCard.tsx`, 신규 `ExtractFilterFields.tsx`, ①-2 표 머리줄(파라미터 표 카드), `lib/geometry.ts`(RIB_POS 문구·`isPositionType`), API 타입·mock·시험, `frontend-dist` | openapi 갱신 뒤 |
-| Plan | U1~U3 확정 반영, GE 변경 메모 갱신 | 사용자 회신 뒤 |
+| Impl-Backend | `backend/physicsai_core/geometry/extract_filter.py`(신규: `GROUP_TYPES`·정규화·검증), `geometry/options.py`(`geom_options.extract.filter` 거부·defaults 경고), `services/job_params/stage1_train_data.py`(`TdExtractParams.extract_filter`·422 코드), **④: param-sets 생성 요청 스키마·서비스(`extract_filter`, altair·shell 422, reprep·baselines 422), 워커 `stage4_predict/param_set_native.py`(NP_PREP 준비 파일·parameters.json 생략 규칙·options `filter`·NP_EXTRACT 백업·요약, add_baseline 조건 승계), `ParamSet`·features 응답 `extract_filter`/`filter`(features JSON에서 읽음)**, `schemas/stage1_train_data.py`(`TrainSetup.extract_filter`·`extract_summary`), `worker/.../stage1_train_data/extract_native.py`·`extract.py`(options 작성·백업·TX_PARSE 기록·요약 로그), `migrations/versions/0019_extract_filter.py`(HEAD 다음)·`db/tables`, `backend/openapi.json`, `backend/tests/fake_tools/fake_paicad`(filter·stats), 시험 | Geom과 병행(fake로), API 모양 먼저 openapi 갱신 |
+| Impl-Frontend | `frontend/src/stages/stage1/CadExtractCard.tsx`, 신규 공용 `ExtractFilterFields.tsx`, ④ `ParamSetDiscoverForm`(native일 때만)·세트 상세 피처 표 머리줄, ①-2 표 머리줄(파라미터 표 카드), `lib/geometry.ts`(RIB_POS 문구·`isPositionType`), API 타입·mock·시험, `frontend-dist` | openapi 갱신 뒤 |
+| Plan | U1~U3 확정 반영 완료(2026-10-21), 구현 차이는 EF-C* | — |
 
-## 12. 사용자 결정 필요(제안값)
+## 12. 사용자 결정(2026-10-21 확정)
 
-| # | 질문 | 제안 |
+| # | 질문 | 결정 |
 |---|---|---|
-| U1 | ①-1 "찾을 종류" 처음 기본 체크와 조건 | 다섯 그룹 모두 체크·조건 빈칸(= 현행 결과 + 리브 위치), 이후는 Study의 마지막 사용 조건을 미리 채움 |
-| U2 | 다른 조건으로 재추출할 때 기존 파라미터 표 | 확인 창 후 덮어쓰기(이전 표 백업, 현행 서버 동작). 대안: 이름·종류·공칭 같은 행의 min·max·use 승계 |
-| U3 | ④ 세트 등록(NP_EXTRACT)에도 추출 조건을 받을지 | 1차는 ①-1만(①→④는 필터 결과 복사로 승계), ④는 후속 |
+| U1 | "찾을 종류" 처음 기본 체크와 조건 | 다섯 그룹 모두 체크·조건 빈칸(= 현행 결과 + 리브 위치), 이후는 Study의 마지막 사용 조건을 미리 채움(①-1·④ 공통) |
+| U2 | 다른 조건으로 재추출할 때 기존 파라미터 표 | 확인 창 후 덮어쓰기(이전 표 백업, 현행 서버 동작) |
+| U3 | 적용 범위 | 원문 "내가 요청하는건 native 한정이야. simlab은 건들지마" → native 경로 전체(①-1 + ④ `PARAM_SET_NATIVE`, §6.7), altair(SimLab·NX) 코드·UI·설정 변경 금지(필터 요청은 422만) |
 
 ## 변경 메모
 
