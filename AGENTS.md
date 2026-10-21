@@ -21,7 +21,8 @@
 - **테스트 필수**: 기능 변경마다 자동 시험을 함께 넣는다. `scripts/test-all`이 Linux(Altair 없음, PostgreSQL 있음)에서 통과해야 완료. 실제 Altair가 필요한 동작은 가짜 도구(`backend/tests/fake_tools/`)로 시험하고, Windows 전용 시험의 skip은 통과로 치지 않는다.
 - **하드코딩 금지**: Altair·PBS 실행 파일 경로, 명령 인자, AI 루트, 포트, 정규식은 `config`에서만 읽는다. 코드에 `Program Files` 경로 금지.
 - **SPDM 보호**: SPDM master에 쓰지 않는다(2차 가져오기도 읽기·복사만, 하드링크 금지). 산출물은 AI 루트에만. 사용자 산출물은 삭제하지 않고 `_backup`으로 이동한다.
-- **보안**: 외부 명령은 워커에서만, `shell=False` 인자 배열로. pickle(`.pscfg`)을 열지 않는다. 원본 pyd 코어를 플랫폼 프로세스에서 import하지 않는다(런처를 Altair 도구가 실행). 업로드 엔드포인트를 만들지 않는다. 대시보드 세션 토큰을 로그·DB에 남기지 않는다.
+- **보안**: 외부 명령은 워커에서만, `shell=False` 인자 배열로. pickle(`.pscfg`)을 열지 않는다. 원본 pyd 코어를 플랫폼 프로세스에서 import하지 않는다(런처를 Altair 도구가 실행). 대시보드 세션 토큰을 로그·DB에 남기지 않는다.
+- **업로드**(2026-10-21, [docs/contracts/upload-report.md](docs/contracts/upload-report.md)): 브라우저 분할 업로드 세션(`/uploads*`)만 허용하고 다른 업로드 경로는 만들지 않는다. 저장은 설정된 업로드 루트(`<ai_root>/<storage.upload_root>`) 아래 본인 세션 폴더로만, SPDM master 쓰기 금지 유지. multipart 금지(청크 PUT `application/octet-stream`). purpose별 허용 패턴 + 항상 거부(`*.pscfg` pickle·`*.psdata`·실행/스크립트·`*.part`), 파일·세션·파일 수 크기 상한, 디스크 여유 검사, 청크 sha256·파일 sha256 확인, `.part`로 받은 뒤 최종 이름으로 바꾸고 기존 파일 덮어쓰기 금지, 이름 규칙은 경로 규칙과 같게(공백·cmd 메타문자·`..`·링크 거부, realpath가 세션 폴더 안). 삭제 대신 `_backup` 이동(취소·낡음·불일치), 완료된 업로드는 옮기지 않는다. 쓰기는 해당 Study 프로젝트 power 이상 + CSRF 헤더. 업로드·청크 로그에 쿠키·세션 토큰·파일 내용을 남기지 않는다.
 - **paicad 버전**: `packages/paicad`를 바꾸는 커밋마다 `__version__`(`packages/paicad/src/paicad/__init__.py`, 단일 출처)을 올리고 `packages/paicad/CHANGELOG.md` 최상단에 항목을 추가한다(geometry-engine.md §17, `scripts/test-all`이 검사).
 - DB에는 경로·상태·수치 요약만. 파일 본문 저장 금지.
 - 사용자 표시 문구·오류 메시지는 한국어.
