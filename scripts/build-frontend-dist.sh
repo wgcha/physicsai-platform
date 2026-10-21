@@ -6,7 +6,9 @@ set -euo pipefail
 source "$(dirname "$0")/_env.sh"
 cd "$REPO_ROOT"
 # npm ci: package-lock.json 그대로 설치(남아 있던 node_modules와 무관하게 같은 빌드)
-(cd frontend && npm ci && npm run build)
+# 번들에 자기 소스 해시를 심는다(VITE_BUILD_HASH): 옛 index.html을 캐시한 브라우저를 /version의 build.source_hash와 비교해 알리려고
+build_hash="$("$PYTHON" scripts/frontend_source_hash.py frontend)"
+(cd frontend && npm ci && VITE_BUILD_HASH="$build_hash" npm run build)
 [ -f frontend/dist/index.html ] || { echo "빌드 결과 없음: frontend/dist/index.html"; exit 1; }
 rm -rf frontend-dist
 cp -r frontend/dist frontend-dist

@@ -2,6 +2,7 @@
 // plotly.js-gl3d-dist-min@2.35.2를 동적 import(별도 청크, frontend-dist 포함 — CDN 없음). WebGL이 없으면 안내 한 줄.
 import { useEffect, useRef, useState } from "react";
 import { useCurrentTheme } from "../../design/theme";
+import { importWithReload } from "../../lib/lazyWithReload";
 
 export const NO_WEBGL_TEXT = "3D 그래프를 표시할 수 없습니다(WebGL 없음)";
 
@@ -43,7 +44,7 @@ export function ResponsePlot3D({ pts, labels, selected, onSelect }: { pts: Pt3[]
     const el = ref.current;
     if (!gl || !el) return;
     let alive = true;
-    import("plotly.js-gl3d-dist-min")
+    importWithReload(() => import("plotly.js-gl3d-dist-min"))
       .then(async (mod) => {
         if (!alive) return;
         const Plotly = mod.default;

@@ -1,5 +1,5 @@
 // v0.2.1 핫픽스: ①-1 CAD 경로 확인은 선택한 엔진(engine)으로 확장자를 검사한다 — native는 .step/.stp, altair는 .prt.
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
 import { recordCalls } from "../test/recordCalls";
@@ -80,5 +80,30 @@ describe("① CAD 경로 확인 — 엔진별 확장자", () => {
     pick("native");
     await new Promise((r) => setTimeout(r, 50));
     expect(calls.filter((c) => c.endsWith("/paths/inspect"))).toHaveLength(0);
+  });
+
+  it("확인 진행 중 엔진 전환 → 이전 엔진 기준 늦은 응답은 무시하고 새 엔진으로 재확인", async () => {
+    const { card, type, run, pick } = await openCard({ geometryDefault: "altair" });
+    // 첫 inspect(altair) 응답만 붙잡아 둔다
+    const realFetch = globalThis.fetch;
+    let release: () => void = () => undefined;
+    let held = false;
+    vi.stubGlobal("fetch", (input: RequestInfo | URL, init?: RequestInit) => {
+      if (!held && String(input).endsWith("/paths/inspect")) {
+        held = true;
+        return new Promise<Response>((res) => { release = () => res(realFetch(input, init)); });
+      }
+      return realFetch(input, init);
+    });
+    type(PRT); // altair라면 통과하는 경로
+    fireEvent.click(within(card).getByRole("button", { name: "확인" }));
+    await waitFor(() => expect(held).toBe(true));
+    pick("native"); // 진행 중 전환 → native로 재확인(.prt는 불가)
+    await waitFor(() => expect(within(card).getByText("STEP_EXTENSION")).toBeTruthy());
+    release(); // 늦게 도착한 altair 응답(ok=true)
+    await new Promise((r) => setTimeout(r, 50));
+    expect(within(card).getByText("STEP_EXTENSION")).toBeTruthy();
+    expect(within(card).queryByText(/CAD_EXTENSION/)).toBeNull();
+    expect(run().disabled).toBe(true);
   });
 });

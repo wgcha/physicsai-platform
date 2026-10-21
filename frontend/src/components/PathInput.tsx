@@ -44,10 +44,14 @@ export function PathInput({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const seq = useRef(0); // 늦게 도착한 이전 응답이 최신 확인 결과를 덮지 않게 한다
+  const asked = useRef(false); // 현재 경로에 확인 요청을 보낸 적이 있는가(경로를 고치면 false)
 
   const browse = BROWSE_OF[purpose];
   const setPath = (v: string) => {
     onChange(v);
+    asked.current = false;
+    seq.current++; // 진행 중이던 이전 경로의 응답은 버린다
+    setBusy(false);
     if (result) {
       setResult(null);
       onInspected?.(null);
@@ -56,6 +60,7 @@ export function PathInput({
 
   const inspect = async () => {
     const my = ++seq.current;
+    asked.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -73,19 +78,19 @@ export function PathInput({
     }
   };
 
-  // extra(엔진 등)가 바뀌면 이전 확인 결과는 무효: 초기화하고, 확인했던 경로면 새 값으로 재확인
+  // extra(엔진 등)가 바뀌면 이전 확인 결과·진행 중 요청은 무효: 초기화하고, 확인을 요청했던 경로면 새 값으로 재확인
   const extraKey = JSON.stringify(extra ?? null);
   const prevKey = useRef(extraKey);
   useEffect(() => {
     if (prevKey.current === extraKey) return;
     prevKey.current = extraKey;
-    if (!result && !error) return;
-    const had = !!result || !!error;
+    if (!asked.current) return;
     seq.current++;
+    setBusy(false);
     setResult(null);
     setError(null);
     onInspected?.(null);
-    if (had && value.trim()) void inspect();
+    if (value.trim()) void inspect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extraKey]);
 
