@@ -232,6 +232,9 @@ class OccBody:
         self._summary: BodySummary | None = None
         self._surf_cache: dict[int, tuple] = {}
         self._curve_cache: dict[int, tuple] = {}
+        self._sample_cache: dict[tuple[int, int], np.ndarray] = {}
+        self._unclamped: dict[int, bool] = {}
+        self._classifier3d = None  # one BRepClass3d_SolidClassifier per body (construction is O(faces))
         self.uv_changed: set[int] = set()  # faces whose (u,v) parametrization differs from the nominal (push/pull)
 
     # ---------------- summary / topology ----------------
@@ -464,6 +467,15 @@ class OccBody:
                 tt[i] = float(GCPnts_AbscissaPoint.Length_s(ad, u1, best_u)) / total if best_u != u1 else 0.0
         return dist, np.clip(tt, 0.0, 1.0), foot
 
+    def face_projection_unclamped(self, face_id: int) -> bool:
+        """True if ``project_to_face(face_id)`` is the plain orthogonal projection onto an unbounded plane
+        (``Geom_Plane``): no clamping to a parameter domain, so a point classified on the face lies at its
+        projection. Bounded surfaces (e.g. planar B-splines) may clamp far points onto the face boundary."""
+        c = self._unclamped.get(face_id)
+        if c is None:
+            c = self._unclamped[face_id] = BRep_Tool.Surface_s(self._faces[face_id - 1]).DynamicType().Name() == "Geom_Plane"
+        return c
+
     def project_to_face(self, face_id: int, pts: np.ndarray):
         f, sad, sas, (umin, umax, vmin, vmax) = self._surf(face_id)
         pts = np.asarray(pts, dtype=float).reshape(-1, 3)
@@ -503,6 +515,14 @@ class OccBody:
         return pts, nrm
 
     def sample_face(self, face_id: int, n: int) -> np.ndarray:
+        """Interior grid samples (cached per (face, n); the caller gets its own copy)."""
+        key = (int(face_id), int(n))
+        c = self._sample_cache.get(key)
+        if c is None:
+            c = self._sample_cache[key] = self._sample_face(face_id, n)
+        return c.copy()
+
+    def _sample_face(self, face_id: int, n: int) -> np.ndarray:
         f, sad, _, (umin, umax, vmin, vmax) = self._surf(face_id)
         out = []
         g = (np.arange(n) + 0.5) / n
@@ -517,7 +537,9 @@ class OccBody:
     def points_inside(self, pts: np.ndarray) -> np.ndarray:
         pts = np.asarray(pts, dtype=float).reshape(-1, 3)
         res = np.zeros(len(pts), dtype=bool)
-        cls = BRepClass3d_SolidClassifier(self._solid)
+        cls = self._classifier3d
+        if cls is None:  # built once per body: Perform() reloads nothing, so reuse gives the same states
+            cls = self._classifier3d = BRepClass3d_SolidClassifier(self._solid)
         for i, q in enumerate(pts):
             cls.Perform(gp_Pnt(*q), 1e-7)
             res[i] = cls.State() == TopAbs_IN
