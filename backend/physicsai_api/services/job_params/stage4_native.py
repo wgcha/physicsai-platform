@@ -59,7 +59,7 @@ def _native_set(conn: Any, study: dict[str, Any], psid: str | None) -> dict[str,
     if ps is None or ps["study_id"] != study["id"]:
         raise DomainError("NOT_FOUND", "파라미터 세트를 찾을 수 없습니다", status=404)
     if ps.get("engine") != "native":
-        raise DomainError("ENGINE_MISMATCH", "native 형상 엔진 세트가 아닙니다", status=409)
+        raise DomainError("ENGINE_MISMATCH", "Native 형상 엔진 세트가 아닙니다", status=409)
     return ps
 
 

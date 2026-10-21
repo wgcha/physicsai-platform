@@ -39,7 +39,7 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
     root = study_root(ctx, study)
     A = resolve_in_study(root, f"01_train/radioss_assem/{d['id']}")
     if not os.path.isdir(os.path.join(D, "cad")) or not os.path.isdir(os.path.join(D, "native")) or not os.path.isdir(A):
-        raise DomainError("PARAM_SET_INVALID", "DOE 준비본(cad·native·조립 폴더)이 없습니다", status=422,
+        raise DomainError("PARAM_SET_INVALID", "DOE 준비본(cad·Native·조립 폴더)이 없습니다", status=422,
                           problems=[{"code": "NATIVE_PREP_MISSING", "message": "DOE의 형상 준비 폴더를 찾을 수 없습니다"}])
     T = resolve_in_study(root, f"logs/_paramset_tmp/{uuid.uuid4()}")
     os.makedirs(T)
@@ -141,7 +141,7 @@ def train_features(ctx: AppContext, study_id: str) -> dict[str, Any]:
         setup = train_repo.get_setup(conn, study_id)
         rel = (setup or {}).get("features_rel")
         if not setup or setup.get("engine") != "native" or not rel:
-            raise DomainError("NATIVE_PREP_MISSING", "① native 형상 피처가 없습니다 — 파라미터 추출을 native로 먼저 하세요", status=409)
+            raise DomainError("NATIVE_PREP_MISSING", "① Native 형상 피처가 없습니다 — 파라미터 추출을 Native로 먼저 하세요", status=409)
         root = study_root(ctx, st)
         prefix = os.path.dirname(rel).rstrip("/") + "/features/"
         arts = art_repo.list_by_prefix(conn, study_id, "FEATURE_PNG", prefix)

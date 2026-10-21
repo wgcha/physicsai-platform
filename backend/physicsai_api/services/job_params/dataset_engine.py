@@ -37,7 +37,7 @@ def detect(ctx: AppContext, conn: Any, study: dict[str, Any], input_path: str
     does = [d for d in train_repo.list_does(conn, study["id"]) if d["status"] == "READY" and (not ids or d["id"] in ids)]
     engines = {d["engine"] for d in does}
     if len(engines) > 1:
-        raise DomainError("ENGINE_MIXED", "altair·native 학습데이터를 한 데이터셋에 섞을 수 없습니다", status=422)
+        raise DomainError("ENGINE_MIXED", "Altair·Native 학습데이터를 한 데이터셋에 섞을 수 없습니다", status=422)
     if not engines:
         return None, None, []
     engine = engines.pop()

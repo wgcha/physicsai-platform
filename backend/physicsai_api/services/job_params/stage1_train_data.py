@@ -179,7 +179,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         else:
             raise_feature_missing(*train_doe_platform_missing(cfg))
         if p.seed is not None:
-            raise invalid_at("seed", "seed는 native 형상 엔진 DOE에서만 쓸 수 있습니다")
+            raise invalid_at("seed", "seed는 Native 형상 엔진 DOE에서만 쓸 수 있습니다")
         if setup is None or not setup.get("tpl_rel"):
             raise DomainError("TPL_REQUIRED", "tpl을 먼저 생성하세요(①-2)", status=409)
         if tpl_is_stale(setup):

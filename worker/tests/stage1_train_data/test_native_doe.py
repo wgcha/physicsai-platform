@@ -202,7 +202,7 @@ def test_native_doe_as_s18_platform_path(p2_native, engine, monkeypatch):
     assert r.status_code == 201, r.text
     p = r.json()["params"]
     assert p["engine"] == "native" and p["generator"] == "platform" and p["num_runs"] == 4 and p["seed"] == 7
-    assert p["doe_label"] == "LHS(native)" and p["on_run_failure"] == "continue"
+    assert p["doe_label"] == "LHS(Native)" and p["on_run_failure"] == "continue"
     assert w.run_once_slot() == "SUCCEEDED", job(c, r.json()["id"])
     doe_id = job(c, r.json()["id"])["result"]["doe_id"]
     with engine.connect() as conn:

@@ -149,7 +149,7 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     ),
     # ---- native 형상 엔진 세트 등록(geometry-engine.md §7.3.4): paicad extract·tag 후 세트 등록. 사용자 선택 job_type이 아니라 등록 API가 만든다 ----
     "PARAM_SET_NATIVE": JobTypeDef(
-        "PARAM_SET_NATIVE", 4, "SLOT", "형상 준비(native)",
+        "PARAM_SET_NATIVE", 4, "SLOT", "형상 준비(Native)",
         (StepDef("NP_PREP", "INTERNAL", 5), StepDef("NP_EXTRACT", "LOCAL", 30), StepDef("NP_TAG", "LOCAL", 55),
          StepDef("NP_VIEW", "LOCAL", 5),  # geometry-view.md §6.3: 공칭 3D 뷰(실패는 경고 VIEW_EXPORT_FAILED, 작업 계속)
          StepDef("BL_MAP", "LOCAL", 5), StepDef("NP_REGISTER", "INTERNAL", 5)),
@@ -278,7 +278,7 @@ STEP_LABELS: dict[str, str] = {
     "CURVE_PICK": "커브 추출", "RESPONSE_EXTRACT": "응답값 추출", "RESPONSE_TABLE": "응답 표 작성",
     "PV_PREP": "검증 입력 준비", "HPC_SUBMIT": "PBS 제출", "HPC_WAIT": "PBS 대기", "COLLECT": "결과 회수",
     "PV_EXTRACT": "검증 응답 추출", "PV_TABLE": "검증 표 작성",
-    "TX_PREP": "CAD 준비", "SIMLAB_EXTRACT": "SimLab 파라미터 추출", "TX_PARSE": "파라미터 해석",
+    "TX_PREP": "CAD 준비", "SIMLAB_EXTRACT": "Altair 파라미터 추출", "TX_PARSE": "파라미터 해석",
     "DG_PREP": "DOE 입력 준비", "HST_GEN_RADIOSS": "입력 생성(run별)", "DG_SCAN": "run 폴더 확인",
     "TS_PREP": "제출 대상 확정", "TS_REGISTER": "회수 결과 등록",
     "RI_SCAN": "결과 폴더 매칭", "RI_COPY": "결과 복사", "RI_REGISTER": "결과 등록",

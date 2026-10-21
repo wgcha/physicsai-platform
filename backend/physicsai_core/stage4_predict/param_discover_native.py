@@ -82,14 +82,14 @@ def discover_native(root: str, settings: Any, kind: str = "solid") -> Discovery:
             assem.append({**a, "has_baseline_inc": has_inc})
     if assem_all and not assem:
         problems.append({"code": "BASELINE_INC_MISSING",
-                         "message": f"조립 폴더 후보에 기준 메시({pr.mesh_include_name})가 없습니다 — native 형상 엔진은 기준 메시가 필요합니다"})
+                         "message": f"조립 폴더 후보에 기준 메시({pr.mesh_include_name})가 없습니다 — Native 형상 엔진은 기준 메시가 필요합니다"})
     elif not assem_all:
         problems.append({"code": "ASSEM_NOT_FOUND",
                          "message": f"starter({pr.starter_glob})가 1개 있는 조립 폴더를 찾지 못했습니다"
                                     + (f" (여러 개인 폴더: {', '.join(multi[:5])})" if multi else "")})
     if assem and not shell and not any(a["has_renum_csv"] for a in assem):
         problems.append({"code": "RENUM_CSV_MISSING",
-                         "message": f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — native 형상 엔진은 필수입니다"})
+                         "message": f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — Native 형상 엔진은 필수입니다"})
     if companions:
         notes.append({"code": "FEATURES_FOUND",
                       "message": f"{PARAM_NOTE}: " + ", ".join(c if c != ROOT_REL else "(프로젝트 폴더)" for c in companions[:5])})

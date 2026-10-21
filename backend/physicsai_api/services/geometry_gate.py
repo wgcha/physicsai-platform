@@ -13,7 +13,7 @@ def require_native_available(settings: Any) -> None:
     """409 GEOM_NATIVE_UNAVAILABLE: 명령 템플릿이 비었거나 paicad 실행 파일이 없다(missing 목록 포함)."""
     tmpl, res = geometry_native_missing(settings)
     if tmpl or res:
-        raise DomainError("GEOM_NATIVE_UNAVAILABLE", "native 형상 엔진을 쓸 수 없습니다 — 관리자 설정이 필요합니다", status=409,
+        raise DomainError("GEOM_NATIVE_UNAVAILABLE", "Native 형상 엔진을 쓸 수 없습니다 — 관리자 설정이 필요합니다", status=409,
                           missing=tmpl + res)
 
 

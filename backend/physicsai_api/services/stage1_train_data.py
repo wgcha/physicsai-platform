@@ -90,7 +90,7 @@ def generate_tpl(ctx: AppContext, principal: Principal, study_id: str, version: 
         require_config_ok(ctx)
         s = train_repo.get_setup(conn, study_id, for_update=True)
         if s is not None and s.get("engine") == "native":  # geometry-engine.md §7.3.2: tpl은 altair 전용
-            raise DomainError("ENGINE_NATIVE_NO_TPL", "native 형상 엔진에는 tpl이 없습니다 — 파라미터 표만 확정하고 DOE를 만드세요",
+            raise DomainError("ENGINE_NATIVE_NO_TPL", "Native 형상 엔진에는 tpl이 없습니다 — 파라미터 표만 확정하고 DOE를 만드세요",
                               status=409)
         if s is None or not s["parameters"] or not s.get("cad_file_name"):
             raise DomainError("TRAIN_PARAMS_REQUIRED", "파라미터를 먼저 추출하세요(①-1)", status=409)

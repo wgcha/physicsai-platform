@@ -69,7 +69,7 @@ def test_q1_native_reuse_matrix_and_name_mismatch(p2_native, engine):
         "sampling": {"kind": "train_doe", "doe_id": src}, "num_runs": 3, "radioss_assem_path": assem}})
     assert r.status_code == 422  # 표본표 재사용과 num_runs 동시 금지
     j2 = submit(c, sid, "TD_DOE_GEN", {"sampling": {"kind": "train_doe", "doe_id": src}, "multi_execution": 1, "radioss_assem_path": assem})
-    assert j2["params"]["num_runs"] == 3 and j2["params"]["engine"] == "native" and j2["params"]["doe_label"] == "표본표 재사용(native)"
+    assert j2["params"]["num_runs"] == 3 and j2["params"]["engine"] == "native" and j2["params"]["doe_label"] == "표본표 재사용(Native)"
     assert w.run_once_slot() == "SUCCEEDED", job(c, j2["id"])
     new = job(c, j2["id"])["result"]["doe_id"]
     D0, D1 = (ai / "ru2" / "01_train" / "doe" / src), (ai / "ru2" / "01_train" / "doe" / new)

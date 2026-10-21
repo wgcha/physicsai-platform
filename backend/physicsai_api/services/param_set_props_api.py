@@ -34,7 +34,7 @@ def _native(conn: Any, ps_id: str) -> dict[str, Any]:
     if p is None:
         raise DomainError("NOT_FOUND", "파라미터 세트를 찾을 수 없습니다", status=404)
     if (p.get("engine") or "altair") != "native":
-        raise DomainError("ENGINE_MISMATCH", "쉘 두께 파라미터는 native 형상 엔진 세트에서만 씁니다(altair 경로 미적용, §15 Q13)", status=409)
+        raise DomainError("ENGINE_MISMATCH", "쉘 두께 파라미터는 Native 형상 엔진 세트에서만 씁니다(Altair 경로 미적용, §15 Q13)", status=409)
     return p
 
 

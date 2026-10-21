@@ -58,7 +58,7 @@ def _ps(ctx: Any) -> dict[str, Any]:
     with ctx.ex.engine.connect() as conn:
         ps = ps_repo.get(conn, ctx.params["param_set_id"])
     if ps is None or ps["study_id"] != ctx.study["id"] or ps.get("engine") != "native":
-        raise StepFailure("INPUT_INVALID", "native 파라미터 세트를 찾을 수 없습니다")
+        raise StepFailure("INPUT_INVALID", "Native 파라미터 세트를 찾을 수 없습니다")
     return ps
 
 

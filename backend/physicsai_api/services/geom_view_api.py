@@ -102,7 +102,7 @@ def train_view(ctx: AppContext, study_id: str) -> dict[str, Any]:
         setup = train_repo.get_setup(conn, study_id)
         rel = (setup or {}).get("features_rel")
         if not setup or setup.get("engine") != "native" or not rel:
-            raise DomainError("NOT_FOUND", "① native 학습 설정이 없습니다 — 파라미터 추출을 native로 먼저 하세요", status=404)
+            raise DomainError("NOT_FOUND", "① Native 학습 설정이 없습니다 — 파라미터 추출을 Native로 먼저 하세요", status=404)
         prefix = os.path.dirname(rel).rstrip("/") + "/view/"
         glb = _latest_art(conn, study_id, "GEOM_VIEW_GLB", prefix)
         man = _latest_art(conn, study_id, "GEOM_VIEW_MANIFEST", prefix)
