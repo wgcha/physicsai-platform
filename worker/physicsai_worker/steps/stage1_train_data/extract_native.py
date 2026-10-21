@@ -12,12 +12,13 @@ from typing import Any
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json
+from physicsai_core.geometry.extract_filter import STATS_JSON, apply_to_options
 from physicsai_core.geometry.options import effective_options, usage_document
 from physicsai_core.geometry.shell_options import effective_shell_options
 from physicsai_core.paths import PathError, allowed_roots, check_user_path
 
 from ..common import path_failure
-from ..geometry_native import LocalRunner, engine_version, run_paicad
+from ..geometry_native import LocalRunner, engine_version, finish_extract, run_paicad
 
 FEATURES_JSON = "parameter_features.json"
 SHELL_FEATURES_JSON = "shell_features.json"
@@ -57,6 +58,8 @@ def tx_prep(ctx: Any) -> None:
     os.makedirs(X, exist_ok=True)
     oj = os.path.join(X, "options.json")
     ctx.backup([oj])
+    if kind != "shell":  # extract-filter.md §6.2: extract.filter(types+조건)·draft_max_deg(job > defaults > paicad 기본). 없으면 현행 파일과 같음
+        opts = apply_to_options(opts, ctx.params.get("extract_filter"))
     write_json(oj, usage_document(opts, ver))
     ctx.patch_result({"cad_file_name": name, "cad_sha256": sha, "engine": "native", "engine_version": ver, "ocp_version": ocp,
                       "kind": kind})
@@ -83,8 +86,8 @@ def extract(ctx: Any) -> None:
     values = {"cad_input": ctx.abs(f"01_train/cad/{r['cad_file_name']}"), "options_json": os.path.join(X, "options.json"),
               "out_dir": X}  # renum_csv 없음 → 인자 쌍째 생략(§7.3.1)
     v = run_paicad(LocalRunner(ctx), s, "paicad_extract", values, cwd=X, report=fj, success=[xml],
-                   backup=[xml, fj, os.path.join(X, "features"), os.path.join(X, "paicad.log")])
-    v.raise_if_failed()
+                   backup=[xml, fj, os.path.join(X, STATS_JSON), os.path.join(X, "features"), os.path.join(X, "paicad.log")])
+    finish_extract(ctx, v, os.path.join(X, STATS_JSON), bool(ctx.params.get("extract_filter")))
     ctx.add_output(xml)
     ctx.add_output(fj)
 

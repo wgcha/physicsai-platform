@@ -12,6 +12,10 @@
   FAKE_PAICAD_NOREPORT           `<cmd>` 보고 파일을 쓰지 않고 종료코드 1
   FAKE_PAICAD_EXIT_AFTER_OK      `<cmd>:<rc>` 정상 출력을 쓰고 그 종료코드로 끝남(EXIT_NONZERO_IGNORED 시험)
   FAKE_PAICAD_FEATURES           extract가 낼 features JSON 배열(기본: A_THK_1·A_THK_2(대칭 그룹 G1)·B_RIB_H_1·C_HOLE_R_1)
+  extract.filter(options.json, extract-filter.md §4)  types 밖 피처는 내지 않고(PNG 포함), 조건(두께·높이·구멍·필렛 mm)을 공칭값에 적용,
+                                 RIB_POS_U/V를 types에 넣으면 기본 피처에 B_RIB_U_1·B_RIB_V_1을 더한다. features JSON 최상위 `filter`(+draft_max_deg),
+                                 `extract_stats.json`(항상 작성)
+  FAKE_PAICAD_RIB_REJECTS        extract_stats.json 첫 바디 rib_rejects(JSON 객체, 기본 {})
   FAKE_PAICAD_SLEEP_S            명령마다 대기(겹침 관측용)
   FAKE_PAICAD_PROPS              props scan이 낼 PROP 행 배열(기본: 조립 폴더 material.inc에 BRACKET(선택 가능)·PANEL(요소 두께)·LAM(TYPE9))
   FAKE_PAICAD_MAP_GRADE          map 행 등급 덮어쓰기 `<이름>:<grade>[,…]`(check|unmatched 시험)
@@ -188,12 +192,65 @@ DEFAULT_FEATURES = [
 ]
 
 
+RIB_POS_FEATURES = [
+    {"name": "B_RIB_U_1", "type": "RIB_POS_U", "body": "B", "nominal": 30.0, "unit": "mm", "range": {"min": 25.0, "max": 35.0, "ratio": None},
+     "group": None, "ref": {"rule": "nearest_fixed", "provisional": True, "locked": False}},
+    {"name": "B_RIB_V_1", "type": "RIB_POS_V", "body": "B", "nominal": 12.0, "unit": "mm", "range": {"min": 7.0, "max": 17.0, "ratio": None},
+     "group": None, "ref": {"rule": "nearest_fixed", "provisional": True, "locked": False}},
+]
+TYPE_ORDER = ["THICKNESS", "POCKET_DEPTH", "POCKET_WIDTH", "RIB_THICKNESS", "RIB_HEIGHT", "HOLE_RADIUS", "HOLE_POS_U", "HOLE_POS_V",
+              "FILLET_RADIUS", "RIB_POS_U", "RIB_POS_V"]
+THK_TYPES, HEIGHT_TYPES = ("THICKNESS", "RIB_THICKNESS", "POCKET_WIDTH"), ("RIB_HEIGHT", "POCKET_DEPTH")
+
+
+def filter_reason(f, flt):
+    """조건 미달 사유(없으면 None). 공칭값 기준(가짜는 면 면적·위치 최소 크기를 판정하지 않는다)."""
+    t, v = f["type"], float(f["nominal"])
+    for key, types, why in (("thickness_mm", THK_TYPES, "thickness_range"), ("height_mm", HEIGHT_TYPES, "height_range")):
+        r = flt.get(key)
+        if r and t in types and ((r.get("min") is not None and v < r["min"]) or (r.get("max") is not None and v > r["max"])):
+            return why
+    for key, typ, why in (("hole_radius_min_mm", "HOLE_RADIUS", "hole_radius_min"), ("fillet_radius_min_mm", "FILLET_RADIUS", "fillet_radius_min")):
+        if flt.get(key) is not None and t == typ and v < flt[key]:
+            return why
+    return None
+
+
+def stats_doc(all_feats, kept, flt, why_of, pngs):
+    """extract_stats.json(extract-filter.md §7.1 모양): 바디별 종류 통계 + rib_rejects, png, elapsed_s."""
+    bodies = []
+    for body in sorted({f["body"] for f in all_feats}):
+        types = {}
+        for t in TYPE_ORDER:
+            sel = (t in flt["types"]) if flt else not t.startswith("RIB_POS")
+            if not sel:
+                types[t] = {"selected": False}
+                continue
+            mine = [f for f in all_feats if f["body"] == body and f["type"] == t]
+            e = {"selected": True, "candidates": len(mine), "kept": sum(1 for f in mine if f["name"] in kept), "excluded": {}, "elapsed_s": 0.01}
+            if t == "THICKNESS":
+                e = {"selected": True, "initiators": len(mine), "pair_tests": len(mine), **{k: v for k, v in e.items() if k not in ("selected", "candidates")}}
+            for f in mine:
+                if f["name"] not in kept:
+                    e["excluded"][why_of[f["name"]]] = e["excluded"].get(why_of[f["name"]], 0) + 1
+            types[t] = e
+        bodies.append({"body": body, "faces": 100, "planes": 60, "types": types, "rib_rejects": {}})
+    if bodies and os.environ.get("FAKE_PAICAD_RIB_REJECTS"):
+        bodies[0]["rib_rejects"] = json.loads(os.environ["FAKE_PAICAD_RIB_REJECTS"])
+    return dict(BASE, filter_applied=flt is not None, bodies=bodies, png={"rendered": len(pngs), "elapsed_s": 0.01},
+                elapsed_s={"load": 0.01, "recognize": 0.02, "finalize": 0.01, "png": 0.01, "total": 0.05})
+
+
 def do_extract():
     cad = need("cad")
     out = args.get("out-dir") or sys.exit(2)
     os.makedirs(out, exist_ok=True)
     xml, fj = os.path.join(out, "parameter_extracted.xml"), os.path.join(out, "parameter_features.json")
-    exists_exit([xml, fj])
+    sj = os.path.join(out, "extract_stats.json")
+    exists_exit([xml, fj, sj])
+    ext = read_json(args["options"]).get("extract", {}) if args.get("options") and os.path.exists(args["options"]) else {}
+    flt = ext.get("filter")
+    draft = ext.get("draft_max_deg", 3.0)
     progress(10, "reading CAD")
     code = fails("extract")
     if os.environ.get("FAKE_PAICAD_NOREPORT") == "extract":
@@ -201,6 +258,25 @@ def do_extract():
     if code:
         sys.exit(fail_report("extract", fj, code))
     feats = json.loads(os.environ["FAKE_PAICAD_FEATURES"]) if os.environ.get("FAKE_PAICAD_FEATURES") else DEFAULT_FEATURES
+    all_feats = [dict(f) for f in feats]
+    if flt and not os.environ.get("FAKE_PAICAD_FEATURES"):
+        all_feats += [dict(f) for f in RIB_POS_FEATURES]
+    why_of = {}
+    if flt:  # extract-filter.md §5: 조기 제외 — types 밖·조건 미달 피처는 만들지 않는다(PNG 포함)
+        feats = []
+        for f in all_feats:
+            why = None if f["type"] in flt["types"] else "not_selected"
+            why = why or filter_reason(f, flt)
+            if why is None:
+                feats.append(f)
+            else:
+                why_of[f["name"]] = why
+        # 그룹 id는 남은 피처끼리만(대칭 그룹은 구성원이 1개만 남으면 해제)
+        left = {g: [f for f in feats if f.get("group") == g] for g in {f.get("group") for f in feats if f.get("group")}}
+        for f in feats:
+            if f.get("group") and len(left[f["group"]]) < 2:
+                f["group"] = None
+    kept = {f["name"] for f in feats}
     progress(60, "recognizing features")
     groups = []
     for f in feats:
@@ -214,8 +290,11 @@ def do_extract():
                bodies=[], features=feats, groups=groups,
                warnings=[{"code": "REF_BOTH_CONTACT", "feature": "B_RIB_H_1", "message": "both faces are in contact"}] if any(
                    (f.get("ref") or {}).get("locked") for f in feats) else [])
+    if flt:
+        doc["filter"] = dict(flt, draft_max_deg=draft)
     if not feats:
         write_json(fj, doc)
+        write_json(sj, stats_doc(all_feats, kept, flt, why_of, []))
         finish("parameter_features.json", "FAIL", "GEOM_EXTRACT_EMPTY", 13)
     reps = {g["parameter"] for g in groups}
     members = {m for g in groups for m in g["members"]}
@@ -230,6 +309,7 @@ def do_extract():
         with open(os.path.join(out, f["png"]), "wb") as fh:
             fh.write(b"\x89PNG\r\n\x1a\nfake")
     write_json(fj, doc)
+    write_json(sj, stats_doc(all_feats, kept, flt, why_of, [f["png"] for f in feats]))
     with open(os.path.join(out, "paicad.log"), "w", encoding="utf-8") as fh:
         fh.write("fake paicad extract ok\n")
     progress(100, "done")

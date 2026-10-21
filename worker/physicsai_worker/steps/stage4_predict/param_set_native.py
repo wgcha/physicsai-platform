@@ -22,6 +22,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_tree, write_json
 from physicsai_core.geometry import baselines as bl
+from physicsai_core.geometry.extract_filter import STATS_JSON, apply_to_options, options_inherit_features_filter
 from physicsai_core.geometry.options import check_against_features
 from physicsai_core.geometry.prep import is_shell_only
 from physicsai_core.geometry.shell import PROPS_DIR
@@ -35,6 +36,7 @@ from ..geometry_native import (
     LocalRunner,
     effective_opts,
     engine_version,
+    finish_extract,
     native_inputs,
     read_json,
     run_paicad,
@@ -94,11 +96,17 @@ def _discover(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool, kin
     return d, cad, assem, cp.path
 
 
-def _collect(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool = False, kind: str = "solid") -> str:
-    """후보를 T(`logs/_paramset_tmp/<job_id>`)에 모은다(new·add_baseline 공통, 원본 재검사·핸들 복사)."""
+def _collect(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool = False, kind: str = "solid",
+             prepared: bool = True) -> str:
+    """후보를 T(`logs/_paramset_tmp/<job_id>`)에 모은다(new·add_baseline 공통, 원본 재검사·핸들 복사).
+    prepared=False(추출 조건 지정·승계, extract-filter.md §6.7)면 폴더의 준비된 피처 파일·parameters.json을 쓰지 않아 NP_EXTRACT가 항상 실행된다."""
     s = ctx.settings
     d, cad, assem, src = _discover(ctx, path, choice, shell_only, kind)
-    if not shell_only and dn.planned_bytes_native(d, cad, assem, s, kind=kind) > s.param_set.max_total_bytes:
+    if not prepared and not shell_only:
+        ctx.log("추출 조건이 지정되어 준비된 피처 파일을 쓰지 않습니다")
+        if dn.provided_parameters(d.root, cad):
+            ctx.add_warning("PARAMS_JSON_IGNORED", "추출 조건이 지정되어 폴더의 parameters.json 범위를 쓰지 않았습니다")
+    if not shell_only and dn.planned_bytes_native(d, cad, assem, s, kind=kind, prepared=prepared) > s.param_set.max_total_bytes:
         raise StepFailure("INPUT_INVALID", f"복사할 총량이 상한({s.param_set.max_total_bytes} bytes)을 넘습니다 — PARAM_SET_TOO_LARGE")
     T = ctx.abs(f"logs/_paramset_tmp/{ctx.ex.job_id}")
     ctx.backup([T])
@@ -106,7 +114,7 @@ def _collect(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool = Fal
     if shell_only:
         dn.copy_assem_native(d, assem, T, s)
     else:
-        dn.copy_sources_native(d, cad, assem, T, s, kind=kind)
+        dn.copy_sources_native(d, cad, assem, T, s, kind=kind, prepared=prepared)
     ctx.patch_result({"picked": {"cad": cad, "radioss_assem": assem["rel"], "source_path": src}})
     return T
 
@@ -133,8 +141,15 @@ def np_prep(ctx: Any) -> None:
     kind = "shell" if p.get("kind") == "shell" else "solid"
     if mode != "new":
         kind = read_kind(ctx.abs(_ps(ctx)["stored_rel"]))
+    flt = p.get("extract_filter") if mode == "new" else None  # extract-filter.md §6.7: 정규화본(없으면 현행)
+    inherit: Any = None
+    if mode == "add_baseline" and kind == "solid":  # 새 baseline은 기준 baseline의 filter를 그대로(매칭 대상 종류 집합 일치)
+        feats = os.path.join(ctx.abs(_ps(ctx)["stored_rel"]), "native", "extract", FEATURES)
+        if os.path.isfile(feats):
+            inherit = read_json(feats, s.geometry.max_report_bytes).get("filter")
+        inherit = inherit if isinstance(inherit, dict) else None
     if mode == "new":
-        base, geom = _collect(ctx, p["path"], p.get("choice") or {}, bool(p.get("shell_only")), kind), p.get("geom_options")
+        base, geom = _collect(ctx, p["path"], p.get("choice") or {}, bool(p.get("shell_only")), kind, prepared=flt is None), p.get("geom_options")
     elif mode == "reprep":
         ps = _ps(ctx)
         if is_shell_only(ctx.abs(ps["stored_rel"])):
@@ -143,7 +158,7 @@ def np_prep(ctx: Any) -> None:
     elif mode == "add_baseline":
         ps = _ps(ctx)
         b = p["baseline"]
-        base, geom = _collect(ctx, b["path"], b.get("choice") or {}, kind=kind), ps.get("geom_options")
+        base, geom = _collect(ctx, b["path"], b.get("choice") or {}, kind=kind, prepared=inherit is None), ps.get("geom_options")
         extra = {"baseline_id": b["id"], "param_set_rel": ps["stored_rel"].rstrip("/")}
     else:  # props_scan · remap: 대상 = S(복사 없음)
         ps = _ps(ctx)
@@ -152,9 +167,12 @@ def np_prep(ctx: Any) -> None:
     opts = effective_opts(s, geom, kind)
     os.makedirs(os.path.join(base, "native"), exist_ok=True)
     if mode in ("new", "reprep", "add_baseline"):
-        write_native_options(os.path.join(base, "native"), opts, ver, kind)
+        run_opts = apply_to_options(opts, flt) if flt is not None else options_inherit_features_filter(opts, inherit)
+        write_native_options(os.path.join(base, "native"), run_opts, ver, kind)  # options.json = tag 절만(해시 불변), options_run.json에 extract.filter
     if kind == "shell":
         extra["component"] = s.shell.default_component
+    if inherit is not None:
+        extra["inherit_filter"] = True
     ctx.patch_result({"mode": mode, "target_rel": ctx.rel(base), "engine_version": ver, "ocp_version": ocp, "kind": kind,
                       "have_features": _have_features(base, kind), "opts": opts, "shell_only": bool(p.get("shell_only")), **extra})
 
@@ -191,8 +209,10 @@ def np_extract(ctx: Any) -> None:
     values = {"cad_input": inp.cad_input, "renum_csv": inp.renum_csv,
               "options_json": os.path.join(base, "native", "options_run.json"), "out_dir": X}
     v = run_paicad(LocalRunner(ctx), s, "paicad_extract", values, cwd=base, report=fj, success=[xml],
-                   backup=[xml, fj, os.path.join(X, "features"), os.path.join(X, "paicad.log")], body_map=inp.body_map, log_dir=X)
-    v.raise_if_failed()
+                   backup=[xml, fj, os.path.join(X, STATS_JSON), os.path.join(X, "features"), os.path.join(X, "paicad.log")],
+                   body_map=inp.body_map, log_dir=X)
+    filtered = bool(ctx.params.get("extract_filter")) or (p["mode"] == "add_baseline" and bool(r.get("inherit_filter")))
+    finish_extract(ctx, v, os.path.join(X, STATS_JSON), filtered)
     ctx.add_output(xml)
     ctx.add_output(fj)
 

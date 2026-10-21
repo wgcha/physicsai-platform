@@ -181,6 +181,27 @@ def run_paicad(x: Any, settings: Any, key: str, values: dict[str, str], *, cwd: 
     return verdict
 
 
+def finish_extract(ctx: Any, v: Verdict, stats_path: str, filtered: bool) -> None:
+    """솔리드 추출 마무리(extract-filter.md §7.2): `extract_stats.json`이 있으면 작업 로그에 한국어 요약 + result `extract_summary`
+    (실패·빈 결과에도 원인 진단용으로 남김, 없거나 읽을 수 없으면 조용히 건너뜀) → 판정. 조건이 있는데 피처가 0개면 조건 안내 문구."""
+    from physicsai_core.geometry.extract_filter import EMPTY_MESSAGE, summarize_stats, summary_lines
+    from physicsai_core.geometry.reports import read_report
+
+    summary = None
+    if os.path.isfile(stats_path):
+        try:
+            summary = summarize_stats(read_report(stats_path, ctx.settings.geometry.max_report_bytes))
+        except ReportError:
+            summary = None
+    if summary is not None:
+        for line in summary_lines(summary):
+            ctx.log(line)
+        ctx.patch_result({"extract_summary": summary})
+    if filtered and not v.ok and v.code == "GEOM_EXTRACT_EMPTY":
+        raise StepFailure("GEOM_EXTRACT_EMPTY", EMPTY_MESSAGE)
+    v.raise_if_failed()
+
+
 def engine_version(ctx: Any) -> tuple[str | None, str | None, str | None]:
     """`paicad version --json` → (paicad 버전, OCP 버전, 표시 문구). 실행 파일이 없거나 형식 오류면 StepFailure."""
     from physicsai_core.geometry.reports import version_display

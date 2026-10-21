@@ -110,7 +110,8 @@ def tx_parse(ctx: Any) -> None:
             c, ctx.study["id"], None, parameters=params, cad_source_path=ctx.params["cad_path"],
             cad_file_name=r["cad_file_name"], cad_sha256=r["cad_sha256"], extract_job_id=ctx.ex.job_id,
             tpl_params=None, updated_by=ctx.job["created_by"], updated_by_name=ctx.job["created_by_name"],
-            **({} if native else {"engine": "altair", "features_rel": None}),
+            **({"extract_filter": ctx.params.get("extract_filter")} if native  # extract-filter.md §6.4: 필터 없으면 null로 덮어씀
+               else {"engine": "altair", "features_rel": None}),
         )
 
     ctx.ex.db(upd)
