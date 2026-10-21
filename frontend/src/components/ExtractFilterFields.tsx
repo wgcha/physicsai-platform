@@ -12,6 +12,7 @@ export function ExtractFilterFields({
   serverProblems = [],
   disabled,
   readOnly,
+  wide,
   testId = "extract-filter",
 }: {
   value: FilterForm;
@@ -21,6 +22,8 @@ export function ExtractFilterFields({
   disabled?: boolean;
   /** 값을 보이되 바꿀 수 없음(①-1 조건 가져오기) */
   readOnly?: boolean;
+  /** ①-1 가로 배치: 체크 한 줄 + 오른쪽 끝 [조건], 펼치면 조건 칸 전부 한 줄(구배 포함·고급 접힘 없음, 좁으면 줄바꿈) */
+  wide?: boolean;
   testId?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -50,7 +53,7 @@ export function ExtractFilterFields({
     ));
 
   return (
-    <div className="extract-filter" data-testid={testId}>
+    <div className={`extract-filter${wide ? " wide" : ""}`} data-testid={testId}>
       <div className="field">
         <span className="field-label">찾을 종류</span>
         <div className="checks extract-groups" role="group" aria-label="찾을 종류">
@@ -70,15 +73,15 @@ export function ExtractFilterFields({
         {!shown && count > 0 && <span className="muted small">조건 {count}개 지정됨</span>}
       </div>
       {shown && (
-        <div className="extract-cond" data-testid={`${testId}-cond`}>
+        <div className={`extract-cond${wide ? " wide" : ""}`} data-testid={`${testId}-cond`}>
           {COND_FIELDS.filter((f) => value.groups.includes(f.group)).map((f) => (
             <div key={f.id} className="field">
               <span className="field-label">{f.label}</span>
               {f.kind === "range" ? (
                 <span className="run-action-row">
-                  <input className="num-input" aria-label={`${f.label} 최소`} placeholder={`최소 · ${PLACEHOLDER}`} inputMode="decimal" disabled={locked} value={value.v[`${f.id}.min`] ?? ""} onChange={(e) => setCell(`${f.id}.min`, e.target.value)} />
+                  <input className="num-input" aria-label={`${f.label} 최소`} placeholder={wide ? "최소" : `최소 · ${PLACEHOLDER}`} inputMode="decimal" disabled={locked} value={value.v[`${f.id}.min`] ?? ""} onChange={(e) => setCell(`${f.id}.min`, e.target.value)} />
                   <span className="muted">~</span>
-                  <input className="num-input" aria-label={`${f.label} 최대`} placeholder={`최대 · ${PLACEHOLDER}`} inputMode="decimal" disabled={locked} value={value.v[`${f.id}.max`] ?? ""} onChange={(e) => setCell(`${f.id}.max`, e.target.value)} />
+                  <input className="num-input" aria-label={`${f.label} 최대`} placeholder={wide ? "최대" : `최대 · ${PLACEHOLDER}`} inputMode="decimal" disabled={locked} value={value.v[`${f.id}.max`] ?? ""} onChange={(e) => setCell(`${f.id}.max`, e.target.value)} />
                 </span>
               ) : (
                 <input className="num-input" aria-label={f.label} placeholder={PLACEHOLDER} inputMode="decimal" disabled={locked} value={value.v[f.id] ?? ""} onChange={(e) => setCell(f.id, e.target.value)} />
@@ -86,19 +89,29 @@ export function ExtractFilterFields({
               {err(f.id)}
             </div>
           ))}
-          <div className="field extract-adv">
-            <button type="button" className="btn small ghost" aria-expanded={adv} onClick={() => setAdv((v) => !v)}>
-              고급 {adv ? "▾" : "▸"}
-            </button>
-            {adv && (
-              <>
-                <span className="field-label">{DRAFT_LABEL}</span>
-                <input className="num-input" aria-label={DRAFT_LABEL} placeholder="기본값 3" inputMode="decimal" disabled={locked} value={value.v.draft_max_deg ?? ""} onChange={(e) => setCell("draft_max_deg", e.target.value)} />
-                <span className="field-hint">{DRAFT_NOTE}</span>
-                {err("draft_max_deg")}
-              </>
-            )}
-          </div>
+          {wide ? (
+            <div className="field">
+              <span className="field-label">
+                {DRAFT_LABEL} <span className="extract-help" title={DRAFT_NOTE} aria-label={DRAFT_NOTE}>ⓘ</span>
+              </span>
+              <input className="num-input" aria-label={DRAFT_LABEL} placeholder="기본값 3" inputMode="decimal" disabled={locked} value={value.v.draft_max_deg ?? ""} onChange={(e) => setCell("draft_max_deg", e.target.value)} />
+              {err("draft_max_deg")}
+            </div>
+          ) : (
+            <div className="field extract-adv">
+              <button type="button" className="btn small ghost" aria-expanded={adv} onClick={() => setAdv((v) => !v)}>
+                고급 {adv ? "▾" : "▸"}
+              </button>
+              {adv && (
+                <>
+                  <span className="field-label">{DRAFT_LABEL}</span>
+                  <input className="num-input" aria-label={DRAFT_LABEL} placeholder="기본값 3" inputMode="decimal" disabled={locked} value={value.v.draft_max_deg ?? ""} onChange={(e) => setCell("draft_max_deg", e.target.value)} />
+                  <span className="field-hint">{DRAFT_NOTE}</span>
+                  {err("draft_max_deg")}
+                </>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

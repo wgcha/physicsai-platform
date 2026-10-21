@@ -182,9 +182,10 @@ describe("①-1 찾을 종류·조건 블록", () => {
     expect(within(cond).getByText("필렛 반경 하한 r ≥ (mm)")).toBeTruthy();
     fireEvent.click(box("높이·깊이")); // 해제 → 그 그룹 칸 숨김
     expect(within(cond).queryByText("높이·깊이 범위 (mm)")).toBeNull();
-    fireEvent.click(within(cond).getByRole("button", { name: /고급/ }));
+    // ①-1 가로 배치: 구배 칸은 고급 접힘 없이 같은 줄 끝, 도움말은 ⓘ(title)
+    expect(within(cond).queryByRole("button", { name: /고급/ })).toBeNull();
     expect(within(cond).getByLabelText("구배 허용각 (°)")).toBeTruthy();
-    expect(within(cond).getByText(/리브로 인식되지 않습니다/)).toBeTruthy();
+    expect(within(cond).getByTitle(/리브로 인식되지 않습니다/)).toBeTruthy();
   });
 
   it("altair: 블록 숨김(화면 무변경), 요청에 extract_filter 없음 · native로 바꾸면 나타남", async () => {

@@ -115,3 +115,68 @@
 .applied-filter b {
   color: var(--color-text);
 }
+
+/* ①-1 CAD 추출 카드 가로 배치: 1줄 엔진+경로, 2줄 찾을 종류+[조건], 3줄 조건 칸 한 줄(좁으면 줄바꿈), 4줄 요약·상태·실행 */
+.cad-row1 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-3) var(--space-5);
+}
+.cad-row1 > .pathinput {
+  flex: 1 1 420px;
+  min-width: 0;
+}
+.extract-filter.wide {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+}
+.extract-filter.wide .extract-cond-head {
+  justify-self: end;
+}
+.extract-filter.wide .extract-cond {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--space-3) var(--space-5);
+}
+.extract-filter.wide .extract-cond .field {
+  flex: 0 0 auto;
+}
+.extract-filter.wide .extract-cond .num-input {
+  width: 96px;
+}
+.extract-help {
+  cursor: help;
+  color: var(--color-text-secondary);
+}
+.cad-row4 {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-5);
+  border-top: 1px solid var(--color-border);
+}
+.cad-row4 .result-line {
+  flex: 1 1 360px;
+  border-top: 0;
+}
+/* 상태(성공·로그)는 버튼 왼쪽, [파라미터 추출]은 오른쪽 끝 */
+.cad-row4 .run-action-row {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+.cad-row4 .run-action-row {
+  flex-wrap: nowrap;
+  align-items: center;
+}
+.cad-row4 .job-inline {
+  min-width: 0;
+}
+.extract-filter.wide .checks {
+  margin-top: 0;
+}
+.cad-row4 .run-action-row > .muted {
+  white-space: nowrap;
+}
