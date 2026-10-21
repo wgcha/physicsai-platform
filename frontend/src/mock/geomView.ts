@@ -182,7 +182,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
   if (method === "GET" && seg[0] === "studies" && seg[2] === "train" && seg[3] === "view") {
     const setup = srv.p2.setups[seg[1]];
     if (!setup) return err(404, "NOT_FOUND", "학습 설정이 없습니다");
-    if (setup.engine !== "native") return ok({ status: "MISSING", kind: "solid", reason: "native 추출이 아닙니다", available: false, preview_available: false, param_set_id: null, train_setup_id: seg[1] } satisfies GeomView);
+    if (setup.engine !== "native") return ok({ status: "MISSING", kind: "solid", reason: "Native 추출이 아닙니다", available: false, preview_available: false, param_set_id: null, train_setup_id: seg[1] } satisfies GeomView);
     const v = nominalView(srv, `train:${seg[1]}:${setup.extract_job_id ?? ""}`, seg[1], `01_train/extract/${setup.extract_job_id ?? "x"}/view`);
     return ok(viewOut(srv, v, { train_setup_id: seg[1], preview_available: false }));
   }
@@ -190,7 +190,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
   if (seg[0] === "param-sets" && seg[1] && (seg[2] === "view" || seg[2] === "previews")) {
     const ps = srv.paramSets.find((p) => p.id === seg[1]);
     if (!ps) return err(404, "NOT_FOUND", "파라미터 세트를 찾을 수 없습니다.");
-    if (ps.engine !== "native") return err(409, "VIEW_NATIVE_ONLY", "3D 미리보기는 native 템플릿에서만 쓸 수 있습니다");
+    if (ps.engine !== "native") return err(409, "VIEW_NATIVE_ONLY", "3D 미리보기는 Native 템플릿에서만 쓸 수 있습니다");
     if (method === "GET" && seg[2] === "view") return ok(viewOut(srv, nominalView(srv, ps.id, ps.study_id, `04_params/${ps.id}/native/view`), { param_set_id: ps.id }));
     if (method === "POST" && seg[2] === "previews") {
       const study = srv.studies.find((x) => x.id === ps.study_id)!;

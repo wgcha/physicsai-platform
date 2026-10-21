@@ -7424,7 +7424,7 @@ export interface components {
             native_available: boolean;
             /**
              * Reason
-             * @description native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null
+             * @description Native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null
              */
             reason?: string | null;
         };

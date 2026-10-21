@@ -59,7 +59,7 @@ const GEN_LABEL: Record<DoeGenerator, string> = { platform: "플랫폼", hyperst
 const REUSE_MULTI_BASELINE = "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다";
 const NATIVE_ONLY_LHS = "Native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다";
 
-/** ①-3 native 입력(geometry-engine.md §8 ①-3): 생성 방식 PLATFORM·표본 LHS(native) 고정, run 수·시드·동시 수·실패 처리, 세트 기준이면 층화 안내 */
+/** ①-3 native 입력(geometry-engine.md §8 ①-3): 생성 방식 PLATFORM·표본 LHS(Native) 고정, run 수·시드·동시 수·실패 처리, 세트 기준이면 층화 안내 */
 function NativeFields({ state, onChange, set, disabled, reuse }: { state: NativeDoeState; onChange: (s: NativeDoeState) => void; set: ParamSet | null; disabled: boolean; reuse: { on: boolean; setOn: (on: boolean) => void; panel: ReactNode } }) {
   const nb = set?.baselines?.length ?? 0;
   const n = Number(state.count);

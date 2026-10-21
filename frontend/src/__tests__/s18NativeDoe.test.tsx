@@ -1,5 +1,5 @@
 // geometry-engine.md §8 ①-3 native DOE(§7.3.3·§7.3.8, phase3 §23.4 S18 통합): native 학습 설정이면 tpl 대기 없이 활성,
-// 생성 방식 PLATFORM·표본 LHS(native) 고정(HyperStudy·다른 방식은 비활성+사유), run 수·시드·동시 수·실패 처리, 스킵 run category 배지,
+// 생성 방식 PLATFORM·표본 LHS(Native) 고정(HyperStudy·다른 방식은 비활성+사유), run 수·시드·동시 수·실패 처리, 스킵 run category 배지,
 // 세트 기준 다중 baseline = 층화 안내 + 매칭표 확정 게이트(409 PARAM_MAP_UNCONFIRMED 안내).
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
@@ -34,7 +34,7 @@ const waitNative = (card: HTMLElement) => within(card).findByTestId("doe-native"
 describe("①-3 native DOE 생성(§8)", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("native 학습 설정: tpl 없이 활성, PLATFORM·LHS(native) 고정 — HyperStudy·다른 표본 방식 비활성+사유", async () => {
+  it("native 학습 설정: tpl 없이 활성, PLATFORM·LHS(Native) 고정 — HyperStudy·다른 표본 방식 비활성+사유", async () => {
     const { card } = await openCard({}, nativeSetup);
     await waitNative(card);
     expect(seg(card, "플랫폼 생성 · LHS(Native)").getAttribute("aria-pressed")).toBe("true");
@@ -50,7 +50,7 @@ describe("①-3 native DOE 생성(§8)", () => {
     expect(within(card).getByText("조립 폴더를 입력하고 확인하세요")).toBeTruthy();
   });
 
-  it("요청 params: generator platform + sampling lhs(count·seed)·multi_execution·on_run_failure·조립 폴더 → 결과 줄 LHS(native)·스킵 run category 배지", async () => {
+  it("요청 params: generator platform + sampling lhs(count·seed)·multi_execution·on_run_failure·조립 폴더 → 결과 줄 LHS(Native)·스킵 run category 배지", async () => {
     const { server, card } = await openCard({}, nativeSetup);
     const bodies = recordDoeBodies(server);
     await waitNative(card);
@@ -66,7 +66,7 @@ describe("①-3 native DOE 생성(§8)", () => {
     await waitFor(() => expect(bodies.length).toBe(1));
     expect(bodies[0]).toEqual({ generator: "platform", sampling: { kind: "lhs", count: 12, seed: 7 }, multi_execution: 3, on_run_failure: "fail", radioss_assem_path: ASSEM });
     act(() => server.finishAll());
-    await waitFor(() => expect(within(card).getByTestId("doe-result-line").textContent).toContain("LHS(native) · 플랫폼 · run 11개"));
+    await waitFor(() => expect(within(card).getByTestId("doe-result-line").textContent).toContain("LHS(Native) · 플랫폼 · run 11개"));
     const sk = await within(card).findByTestId("doe-skipped");
     expect(sk.textContent).toContain("run__00012");
     expect(within(sk).getByText("품질 미달").className).toBe("pill bad");

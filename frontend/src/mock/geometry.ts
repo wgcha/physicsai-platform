@@ -344,7 +344,7 @@ export function discoverNative(path: string): MockResp {
 // ---------------------------------------------------------------- 작업
 
 function nativeJob(srv: MockServer, s: Study, params: Record<string, unknown>): MockResp {
-  if (srv.p2.disabled.has("geometry_native")) return err(409, "GEOM_NATIVE_UNAVAILABLE", "native 형상 엔진을 쓸 수 없습니다(paicad 미설정)");
+  if (srv.p2.disabled.has("geometry_native")) return err(409, "GEOM_NATIVE_UNAVAILABLE", "Native 형상 엔진을 쓸 수 없습니다(paicad 미설정)");
   const r = createJobFor(srv, s, "PARAM_SET_NATIVE", params);
   if (r.status !== 201) return r;
   return { status: 202, body: { job_id: (r.body as Job).id } };
@@ -415,7 +415,7 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     const s = srv.studies.find((x) => x.id === seg[1]);
     if (!s) return null;
     const setup = srv.p2.setups[s.id];
-    if (!setup || setup.engine !== "native") return err(409, "NATIVE_PREP_MISSING", "① native 형상 피처가 없습니다 — 파라미터 추출을 native로 먼저 하세요");
+    if (!setup || setup.engine !== "native") return err(409, "NATIVE_PREP_MISSING", "① Native 형상 피처가 없습니다 — 파라미터 추출을 Native로 먼저 하세요");
     const key = `train:${s.id}:${setup.extract_job_id ?? ""}`;
     if (!srv.geom.has(key)) srv.geom.set(key, newRec(srv, s.id, setup.extract_job_id ?? "j-train-native"));
     const r = srv.geom.get(key)!;
@@ -439,8 +439,8 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     return ok(ps);
   }
   if (ps.engine !== "native") {
-    if (sub === "baselines" || sub === "param-map" || sub === "remap") return err(409, "ENGINE_MISMATCH", "다중 baseline은 native 형상 엔진 세트에서만 씁니다");
-    if (sub === "features" || sub === "native-prepare" || sub === "props") return err(409, "ENGINE_NATIVE_UNSUPPORTED", "native 세트에서만 쓸 수 있습니다");
+    if (sub === "baselines" || sub === "param-map" || sub === "remap") return err(409, "ENGINE_MISMATCH", "다중 baseline은 Native 형상 엔진 세트에서만 씁니다");
+    if (sub === "features" || sub === "native-prepare" || sub === "props") return err(409, "ENGINE_NATIVE_UNSUPPORTED", "Native 세트에서만 쓸 수 있습니다");
     return null;
   }
   if (method === "POST" && sub === "native-prepare") return nativeJob(srv, studyOf(srv, ps), { mode: "reprep", param_set_id: ps.id });

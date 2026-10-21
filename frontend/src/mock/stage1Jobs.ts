@@ -47,8 +47,8 @@ function reuseCheck(p2: Phase2Mock, s: Study, sp: { doe_id?: string }, names: st
 
 /** native DOE(geometry-engine.md §7.3.3·§7.3.8 + S18 통합): LHS만, options 금지, 세트 기준이면 매칭표 확정 게이트 */
 function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unknown>): MockResp | null {
-  if (params.generator === "hyperstudy") return err(422, "INVALID_PARAMS", "native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다");
-  if (params.options && Object.keys(params.options as object).length) return err(422, "DOE_OPTIONS_INVALID", "native DOE는 options를 쓸 수 없습니다(seed 사용)");
+  if (params.generator === "hyperstudy") return err(422, "INVALID_PARAMS", "Native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다");
+  if (params.options && Object.keys(params.options as object).length) return err(422, "DOE_OPTIONS_INVALID", "Native DOE는 options를 쓸 수 없습니다(seed 사용)");
   const sp = params.sampling as { kind?: string; count?: number; doe_id?: string } | undefined;
   if (sp?.kind === "train_doe") {
     const ps0 = params.param_set_id ? p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id) : null;
@@ -56,13 +56,13 @@ function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unkn
     const e = reuseCheck(p2, s, sp, names);
     if (e) return e;
   } else if (sp && sp.kind !== "lhs")
-    return err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems: [{ code: "DESIGN_UNSUPPORTED", message: "native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다" }] });
+    return err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems: [{ code: "DESIGN_UNSUPPORTED", message: "Native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다" }] });
   const n = sp?.kind === "train_doe" ? 2 : Number(sp ? sp.count : params.num_runs);
   if (!(n >= 2 && n <= 5000)) return err(422, "DOE_OPTIONS_INVALID", "run 수는 2~5000");
   if (params.param_set_id) {
     const ps = p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id);
     if (!ps) return err(409, "PREREQUISITE_MISSING", "파라미터 세트를 찾을 수 없습니다", { missing: ["PARAM_SET"] });
-    if (ps.engine !== "native") return err(409, "ENGINE_MISMATCH", "세트 기준 DOE는 native 형상 엔진 세트에서만 만듭니다");
+    if (ps.engine !== "native") return err(409, "ENGINE_MISMATCH", "세트 기준 DOE는 Native 형상 엔진 세트에서만 만듭니다");
     if (ps.native?.prep_status !== "READY") return err(409, "GEOM_PREP_STALE", "형상 준비본이 오래되었습니다 — '형상 준비 다시'를 실행하세요");
     if (params.radioss_assem_path != null) return err(422, "INVALID_PARAMS", "세트 기준 DOE는 세트의 조립 폴더를 씁니다(radioss_assem_path 생략)");
     return mapGate(p2.s, ps.id);
@@ -114,10 +114,10 @@ export function onCreateTrain(p2: Phase2Mock, j: Job, me: { display_name: string
       const reuseSrc = sp?.kind === "train_doe" ? p2.does.find((x) => x.id === sp.doe_id) : undefined;
       if (reuseSrc) p.reuse_doe_id = reuseSrc.id;
       const n = reuseSrc ? Number(reuseSrc.run_count ?? 0) : Number(sp?.count ?? p.num_runs);
-      Object.assign(p, { engine: "native", generator: "platform", doe_label: reuseSrc ? "표본표 재사용(native)" : "LHS(native)", doe_type: "NATIVE_LHS", num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
+      Object.assign(p, { engine: "native", generator: "platform", doe_label: reuseSrc ? "표본표 재사용(Native)" : "LHS(Native)", doe_type: "NATIVE_LHS", num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
       delete p.sampling;
       p2.does.unshift({
-        ...common, engine: "native", doe_label: reuseSrc ? "표본표 재사용(native)" : "LHS(native)", doe_type: "NATIVE_LHS", num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
+        ...common, engine: "native", doe_label: reuseSrc ? "표본표 재사용(Native)" : "LHS(Native)", doe_type: "NATIVE_LHS", num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
         multi_execution: Number(p.multi_execution), generator: "platform", sampling: null, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
       });
       return;

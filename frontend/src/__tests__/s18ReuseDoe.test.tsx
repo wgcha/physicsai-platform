@@ -116,7 +116,7 @@ describe("①-3 플랫폼: 다른 DOE 표본표 재사용", () => {
 describe("①-3 native: 다른 DOE 표본표 재사용", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("native도 같은 항목(LHS(native) 옆) — 이름 같은 DOE만 활성, 요청 sampling train_doe(run 수·시드 없음)·조립 폴더", async () => {
+  it("native도 같은 항목(LHS(Native) 옆) — 이름 같은 DOE만 활성, 요청 sampling train_doe(run 수·시드 없음)·조립 폴더", async () => {
     const { server, card } = await openCard({}, nativeSetup);
     const bodies = recordDoeBodies(server);
     await within(card).findByTestId("doe-native");
@@ -138,6 +138,6 @@ describe("①-3 native: 다른 DOE 표본표 재사용", () => {
     expect(bodies[0]).toMatchObject({ generator: "platform", sampling: { kind: "train_doe", doe_id: "doe-n" }, radioss_assem_path: ASSEM, on_run_failure: "continue" });
     expect(bodies[0].sampling).toEqual({ kind: "train_doe", doe_id: "doe-n" });
     act(() => server.finishAll());
-    await waitFor(() => expect(within(card).getByTestId("doe-result-line").textContent).toContain("표본표 재사용(native) · 플랫폼 · run 2개"), { timeout: 4000 });
+    await waitFor(() => expect(within(card).getByTestId("doe-result-line").textContent).toContain("표본표 재사용(Native) · 플랫폼 · run 2개"), { timeout: 4000 });
   });
 });

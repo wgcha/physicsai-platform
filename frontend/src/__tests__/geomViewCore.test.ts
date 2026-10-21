@@ -116,6 +116,20 @@ describe("다중 선택 하이라이트(색 팔레트·치수선)", () => {
     expect(x.paint!.get("CUSH_L#1")).toBe(paintMovingMat(1));
     expect(x.moving.has("CUSH_L#1") && !x.fixed.has("CUSH_L#1")).toBe(true);
   });
+  it("한 바디 피처 선택 시 다른 바디 면 비강조(같은 면 번호라도 바디가 다르면 칠하지 않음); 대칭 그룹은 구성원 피처가 있을 때만 양쪽", () => {
+    const m = nominal();
+    // 한 바디(CUSH_L)에만 있는 피처 → CUSH_R 면은 어느 칠 집합에도 없다
+    const rib = rowHighlight(m, ["CUSH_L_RIB_T_2"]);
+    expect([...rib.paint!.keys()].some((k) => k.startsWith("CUSH_R#"))).toBe(false);
+    expect([...rib.paint!.keys()].some((k) => k.startsWith("CUSH_L#"))).toBe(true);
+    // 대칭 그룹(CUSH_L_THK_1 = CUSH_R_THK_1 대표 행): manifest에 CUSH_R 구성원 피처가 있어야 오른쪽도 칠해진다(목 데이터는 있음)
+    expect(rowHighlight(m, ["CUSH_L_THK_1"]).paint!.has("CUSH_R#2")).toBe(true);
+    const lOnly = nominal();
+    lOnly.features = lOnly.features.filter((f) => f.name !== "CUSH_R_THK_1");
+    const l = rowHighlight(lOnly, ["CUSH_L_THK_1"]);
+    expect([...l.paint!.keys()].some((k) => k.startsWith("CUSH_R#"))).toBe(false);
+    expect([...l.moving, ...l.fixed].some((k) => k.startsWith("CUSH_R#"))).toBe(false);
+  });
   it("치수선: 선택 1개일 때만(다중·호버만 = 생략), 호버 행은 다음 색으로 임시 표시", () => {
     const m = nominal();
     expect(rowHighlight(m, ["CUSH_L_THK_1"]).dims.map((d) => d.text)).toEqual(["12.5 mm", "12.5 mm"]);

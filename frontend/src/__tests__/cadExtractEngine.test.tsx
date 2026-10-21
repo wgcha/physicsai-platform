@@ -98,7 +98,7 @@ describe("① CAD 경로 확인 — 엔진별 확장자", () => {
     type(PRT); // altair라면 통과하는 경로
     fireEvent.click(within(card).getByRole("button", { name: "확인" }));
     await waitFor(() => expect(held).toBe(true));
-    pick("native"); // 진행 중 전환 → native로 재확인(.prt는 불가)
+    pick("Native"); // 진행 중 전환 → native로 재확인(.prt는 불가)
     await waitFor(() => expect(within(card).getByText("STEP_EXTENSION")).toBeTruthy());
     release(); // 늦게 도착한 altair 응답(ok=true)
     await new Promise((r) => setTimeout(r, 50));
