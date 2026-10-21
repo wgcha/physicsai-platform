@@ -7,6 +7,7 @@ import type { MockServer } from "./server";
 import { MAX_MULTI, batchLabel, inputKindOf } from "./predictBatchRec";
 import type { BatchRec } from "./predictBatchRec";
 import { batchMatrix, isResp } from "./predictBatchMatrix";
+import { runVars, snapshotOf } from "./nativeVars";
 import { batchOut } from "./predictBatchOut";
 
 // ------------------------------------------------------------------ 작업 생성·진행
@@ -34,7 +35,9 @@ export function predictBatchCreate(srv: MockServer, s: Study, params: Record<str
   const cap = params.capture as { enabled?: unknown; views?: unknown; video?: unknown } | null | undefined;
   if (cap != null && (typeof cap.enabled !== "boolean" || (cap.views !== undefined && (!Array.isArray(cap.views) || !cap.views.length || new Set(cap.views).size !== cap.views.length)) || (cap.video !== undefined && typeof cap.video !== "boolean")))
     return { error: err(422, "INVALID_PARAMS", "capture를 확인하세요.") };
-  const m = batchMatrix(srv, ps, params.source as BatchSource);
+  const rv = runVars(srv, ps, params.vars as { add?: string[]; exclude?: string[] } | null | undefined, modelId);
+  if (rv.error === "NATIVE_VARS_UNSUPPORTED") return { error: err(422, "NATIVE_VARS_UNSUPPORTED", "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다") };
+  const m = batchMatrix(srv, rv.out.ps, params.source as BatchSource);
   if (isResp(m)) return { error: m };
   if (m.problems.length || !m.rows.length) return { error: err(422, "BATCH_SOURCE_INVALID", "조합을 만들 수 없습니다", { problems: m.problems }) };
   const no = Math.max(0, ...srv.batches.filter((b) => b.study_id === s.id).map((b) => b.batch_no)) + 1;
@@ -45,6 +48,7 @@ export function predictBatchCreate(srv: MockServer, s: Study, params: Record<str
     source_kind: src.kind.toUpperCase(), meta: m.meta ?? {}, multi_execution: multi,
     created_by: me.user_id, created_by_name: me.display_name, created_at: new Date().toISOString(), canceled: false, done_notified: false,
     runs: m.rows.map((r) => ({ ...r, gen_state: "PENDING", gen_code: null, gen_message: null, predict_job_id: null })),
+    ...(ps.engine === "native" ? { vars: snapshotOf(ps, rv.out) } : {}), // §4.1 스냅숏(Native만)
   };
   return { params: { ...params, model_id: params.model_id ?? null, batch_id: rec.id, batch_no: no }, rec };
 }

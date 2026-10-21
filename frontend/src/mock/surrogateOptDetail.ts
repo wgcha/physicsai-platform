@@ -84,7 +84,7 @@ export function detail(srv: MockServer, o: SoRec): SurrogateOpt {
     can_cancel: ACTIVE.includes(o.status) && canExec && (me.is_global_admin || o.created_by === me.user_id), can_resume: o.status === "FAILED" && canExec,
     warnings: [], current_job_id: null, created_at: o.created_at, created_by_name: o.created_by_name, finished_at: o.finished_at,
     final: o.final ?? null,
-    parameters: (ps?.parameters ?? []).map((p) => ({ name: p.name, nominal: p.nominal ?? null, min: p.min, max: p.max, unit: p.unit ?? "" })),
+    parameters: ((o.settings.vars as { variables?: { name: string; nominal: number | null; min: number; max: number; unit: string }[] } | undefined)?.variables ?? ps?.parameters ?? []).map((p) => ({ name: p.name, nominal: p.nominal ?? null, min: p.min, max: p.max, unit: p.unit ?? "" })),
     mode: st.mode,
     objectives: st.objectives.map((q) => ({ metric: q.metric, series: q.series, sense: q.sense, label: objLabel(o, q), unit: unitOf(o, q.metric) })),
     constraints_def: st.constraints.map((c) => ({ metric: c.metric, series: c.series, op: c.op, value: c.value ?? null, lo: c.lo ?? null, hi: c.hi ?? null, label: objLabel(o, c), unit: unitOf(o, c.metric) })),

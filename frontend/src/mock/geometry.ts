@@ -192,7 +192,7 @@ function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, lab
     responses: [], sample_count: 0, sample_has_measured: false, cad_file_name: "cushion_base.step", starter_name: "cushion_0000.rad",
     input_kind: "assembly", assem_rel: "radioss_assem", tpl_params: [], origin: "FOLDER", label, is_current: true, train_doe_id: null,
     registered_by_name: srv.me?.display_name ?? "김연구", registered_at: new Date().toISOString(), display: null, warnings: [],
-    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING", extract_filter: filter },
+    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING", extract_filter: filter, vars_revision: 0, vars_count: feats.length },
     param_map_status: null,
   } as ParamSet;
 }
@@ -381,9 +381,9 @@ export function finishGeometry(srv: MockServer, j: Job) {
       ps.param_map_status = "draft";
     } else if (p.mode === "props_scan" && rec) {
       rec.propsScanned = true;
-      ps.native = { ...(ps.native ?? { prep_status: "READY", feature_count: 0, shell_only: false, kind: "solid", view_status: "MISSING" }), props_scanned: true };
+      ps.native = { ...(ps.native ?? { prep_status: "READY", feature_count: 0, shell_only: false, kind: "solid", view_status: "MISSING", vars_revision: 0, vars_count: 0 }), props_scanned: true };
     } else {
-      ps.native = { ...(ps.native ?? { feature_count: 0, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING" }), prep_status: "READY", prep_reason: null };
+      ps.native = { ...(ps.native ?? { feature_count: 0, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING", vars_revision: 0, vars_count: 0 }), prep_status: "READY", prep_reason: null };
     }
     j.result = { param_set_id: ps.id };
   }

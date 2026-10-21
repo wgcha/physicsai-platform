@@ -11,6 +11,7 @@ import { isSamplingKind, recommendedCount } from "../lib/sampling";
 import type { MockServer } from "./server";
 import { BATCH_MAX_RUNS, CURVE_MAX_RUNS, TERMINAL, batchLabel, inputKindOf } from "./predictBatchRec";
 import { batchMatrix, isResp } from "./predictBatchMatrix";
+import { runNotes, runVars } from "./nativeVars";
 import { batchOut, batchStatus } from "./predictBatchOut";
 import { designMapOut } from "./predictBatchDesign";
 export { BATCH_MAX_RUNS, BATCH_TABLE_MAX_BYTES, CURVE_MAX_RUNS, batchLabel, batchRunKey, inputKindOf } from "./predictBatchRec";
@@ -102,14 +103,24 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
     if (method === "POST" && seg[3] === "preview") {
       const ps = srv.paramSets.find((p) => p.id === body?.param_set_id && p.study_id === s.id);
       if (!ps) return err(409, "PREREQUISITE_MISSING", "템플릿을 먼저 등록하세요.", { missing: ["PARAM_SET"] });
-      const m = batchMatrix(srv, ps, body?.source as BatchSource);
-      if (isResp(m)) return m;
+      // native-vars.md §6.3: Native는 vars{add,exclude}로 유효 변수를 정한다(Altair는 422 NATIVE_VARS_UNSUPPORTED)
       const src = body?.source as BatchSource;
-      const out: Record<string, unknown> = { input_kind: inputKindOf(ps), count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: m.problems };
-      const need = Math.max(5, ps.parameters.length + 2);
+      const rv = runVars(srv, ps, body?.vars as { add?: string[]; exclude?: string[] } | null | undefined, body?.model_id as string | null | undefined);
+      if (rv.error === "NATIVE_VARS_UNSUPPORTED") return err(422, "NATIVE_VARS_UNSUPPORTED", "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다");
+      const eps = rv.out.ps;
+      const m = batchMatrix(srv, eps, src);
+      if (isResp(m)) return m;
+      const out: Record<string, unknown> = { input_kind: inputKindOf(ps), count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: [...m.problems, ...(rv.error ? [{ code: "RANGE_INVALID", message: `vars 이름이 올바르지 않습니다(${rv.error})` }] : [])] };
+      const need = Math.max(5, eps.parameters.length + 2);
       const notes = [...(m.notes ?? [])];
+      if (ps.engine === "native") {
+        const rg = (src as { ranges?: Record<string, number[]> | null }).ranges ?? null;
+        out.var_rows = rv.out.rows;
+        out.excluded = rv.out.excluded;
+        notes.push(...runNotes(srv, rv.out, rg, body?.model_id as string | null | undefined));
+      }
       if (m.rows.length && m.rows.length < need) notes.push({ code: "INFLUENCE_TOO_FEW", message: `run이 ${need}개보다 적어 ⑤ 영향도는 계산되지 않습니다` });
-      const act = (m.meta?.active as string[] | undefined)?.length ?? ps.parameters.length;
+      const act = (m.meta?.active as string[] | undefined)?.length ?? eps.parameters.length;
       const doe = src.kind === "train_doe" ? srv.p2.does.find((d) => d.id === src.doe_id) : undefined;
       out.notes = notes;
       out.sampling = mockSampling(src.kind.toUpperCase(), m.meta ?? {}, { recommended: isSamplingKind(src.kind) ? recommendedCount(src.kind, act, BATCH_MAX_RUNS) : null, doeType: doe?.doe_type ?? null, doeOptions: doe?.options });

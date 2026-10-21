@@ -33,6 +33,8 @@ export interface BatchRec {
   canceled: boolean;
   done_notified: boolean;
   runs: BatchRunRec[];
+  /** native-vars.md §4.1 사용 변수 스냅숏(Native만) */
+  vars?: Record<string, unknown> | null;
 }
 
 export const batchLabel = (no: number) => `B-${String(no).padStart(3, "0")}`;

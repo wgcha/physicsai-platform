@@ -2,6 +2,7 @@
 import type { ParamSet } from "../../../api";
 import type { SoIteration, SoParameter, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
 import { fmtNum } from "../../../lib/format";
+import { editOf, rowBounds, type NativeRow } from "../../../lib/nativeVars";
 import { rolesToBody, type PerfRow, type RoleSel } from "./perfRules";
 
 export const SO_STATUS_LABEL: Record<string, string> = {
@@ -73,13 +74,13 @@ export function fmtVar(name: string, v: number | null | undefined, levels?: stri
 }
 export const levelsOf = (o: Pick<SurrogateOpt, "settings">): string[] | null => ((o.settings as { levels?: { baseline?: string[] } }).levels?.baseline ?? null);
 
-/** 행 검증 문구(화면 회색 줄). 서버도 같은 규칙(BOUNDS_*) */
-export function rowIssue(r: VarRow): string | null {
+/** 행 검증 문구(화면 회색 줄). 서버도 같은 규칙(BOUNDS_*). native = Native 템플릿 — 학습 범위 밖은 막지 않고 경고만(native-vars.md NV-7) */
+export function rowIssue(r: VarRow, native = false): string | null {
   const lo = Number(r.lo);
   const hi = r.fixed ? lo : Number(r.hi);
   if (r.lo.trim() === "" || !Number.isFinite(lo) || (!r.fixed && (r.hi.trim() === "" || !Number.isFinite(hi)))) return "숫자를 입력하세요";
   if (lo > hi) return "하한 ≤ 상한";
-  if (lo < r.min || hi > r.max) return `학습 범위 ${fmtNum(r.min)}~${fmtNum(r.max)} 안`;
+  if (!native && (lo < r.min || hi > r.max)) return `학습 범위 ${fmtNum(r.min)}~${fmtNum(r.max)} 안`;
   if (r.integer && !r.fixed && Math.ceil(lo) > Math.floor(hi)) return "정수가 없습니다";
   return null;
 }
@@ -212,6 +213,8 @@ export interface SoForm {
   /** 성능 이름 → 가중치 슬라이더 0~100(목적일 때만 쓴다) */
   weights: Record<string, number>;
   rows: VarRow[];
+  /** native-vars.md §7.2: Native 템플릿(단일 baseline) — 세트 정의 행 + 그 자리 추가·제외. null/없음 = 기존 표(rows) */
+  nrows?: NativeRow[] | null;
   surrogate: "gp" | "rbf";
   iterations: string;
   candidates: string;
@@ -232,11 +235,20 @@ const int = (s: string, d: number) => (s.trim() === "" || !Number.isFinite(Numbe
 /** 화면 상태 → 생성·미리보기 본문(§22.4.1). 범위는 바뀐 변수·고정 변수만 보낸다(생략 = 템플릿 min·max). 목적은 항상 `objectives` 배열 */
 export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
   const bounds: Record<string, number[]> = {};
-  for (const r of f.rows) {
-    const lo = Number(r.lo);
-    const hi = r.fixed ? lo : Number(r.hi);
-    if (r.fixed || lo !== r.min || hi !== r.max) bounds[r.name] = [lo, hi];
+  if (f.nrows) {
+    // Native: 사용 행만, 기준 범위(세트 정의·추가 변수는 피처 기본 범위)와 다르거나 고정이면 보낸다. 제외 ≠ 고정(NV-6)
+    for (const r of f.nrows.filter((x) => x.use)) {
+      const b = rowBounds(r) ?? [Number(r.lo), Number(r.hi)];
+      if (r.fixed || b[0] !== r.base.min || b[1] !== r.base.max) bounds[r.name] = [b[0], b[1]];
+    }
+  } else {
+    for (const r of f.rows) {
+      const lo = Number(r.lo);
+      const hi = r.fixed ? lo : Number(r.hi);
+      if (r.fixed || lo !== r.min || hi !== r.max) bounds[r.name] = [lo, hi];
+    }
   }
+  const vars = f.nrows ? editOf(f.nrows) : null;
   const roles = rolesToBody(perfs, f.sels, f.weights);
   return {
     param_set_id: f.paramSetId,
@@ -249,6 +261,7 @@ export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
     observe: roles.observe,
     ...(roles.weights ? { weights: roles.weights } : {}),
     bounds: Object.keys(bounds).length ? bounds : null,
+    ...(vars ? { vars } : {}),
     surrogate: f.surrogate,
     iterations: int(f.iterations, 3),
     candidates: int(f.candidates, 4),

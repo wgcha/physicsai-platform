@@ -27,6 +27,7 @@ import { predictRunsRoutes, seedPredictRuns } from "./predictRuns";
 import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { equivRoutes, seedEquiv, type EqRec, type RecipeRec } from "./equivCheck";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
+import { nativeVarsRoutes } from "./nativeVars";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { geomViewRoutes } from "./geomView";
 import { mockReleases, releaseRoutes } from "./releases";
@@ -65,6 +66,7 @@ const ROUTES: Route[] = [
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)
   femVerifyRoutes, // S16 V2 조립 FEM 검증(phase3.md §21.3)
   equivRoutes, // ⑤ 등가성 판정(equiv-check.md §6)
+  nativeVarsRoutes, // native-vars.md §6.1 세트 변수 정의 GET·PUT(리비전·409)
   geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B·① train/features(openapi 모양)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③

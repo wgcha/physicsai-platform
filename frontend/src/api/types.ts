@@ -159,6 +159,7 @@ export * from "./typesPhase2";
 export * from "./typesBatch";
 export * from "./typesMedia";
 export * from "./typesGeomView";
+export * from "./typesVars";
 
 /** 플랫폼 버전·버전 게시판(읽기 전용 — 배포 RELEASES.md로만 기록) */
 export type VersionInfo = S["VersionInfo"];

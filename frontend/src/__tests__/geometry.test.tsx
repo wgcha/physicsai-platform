@@ -88,11 +88,14 @@ describe("④ native 세트 상세(§8)", () => {
     const table = await within(card).findByRole("table", { name: "형상 피처 표" });
     const hole = within(table).getByText("CUSH_L_HOLE_U_1").closest("tr")!;
     expect(hole.textContent).toContain("구멍 위치 U");
-    expect(hole.textContent).toContain("25 ~ 35 (∓5 mm)");
-    expect(within(hole).getByText("가능 범위 초과")).toBeTruthy();
+    expect((within(hole).getByLabelText("CUSH_L_HOLE_U_1 하한") as HTMLInputElement).value).toBe("25");
+    expect((within(hole).getByLabelText("CUSH_L_HOLE_U_1 상한") as HTMLInputElement).value).toBe("35");
+    expect(hole.textContent).toContain("Δ −5 / +5"); // 위치형 = 절대 mm + 공칭 대비 Δ
+    expect(within(hole).getByRole("img", { name: /모핑 실패 가능/ })).toBeTruthy(); // 가능 범위 27~40 밖(25) = 경고 아이콘
     const rib = within(table).getByText("CUSH_L_RIB_T_2").closest("tr")!;
     expect(rib.textContent).toContain("변경 불가(양면 접촉)");
-    expect(rib.textContent).toContain("제외(기본)");
+    expect((within(rib).getByLabelText("CUSH_L_RIB_T_2 사용") as HTMLInputElement).checked).toBe(true); // 세트 정의에 있으면 사용(양면 접촉 = 경고)
+    expect(within(rib).getByRole("img", { name: /양면 접촉/ })).toBeTruthy();
     expect(within(table).getByText("CUSH_L_THK_1").closest("tr")!.textContent).toContain("자동");
     fireEvent.click(hole);
     const fig = await within(card).findByTestId("feature-png");
@@ -117,7 +120,7 @@ describe("④ native 세트 상세(§8)", () => {
   it("STALE이면 '형상 준비 다시' → 작업 → READY", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, (s) => {
       nativeCurrent(s);
-      s.paramSets.find((p) => p.id === "ps-n1")!.native = { prep_status: "STALE", prep_reason: "엔진 버전이 바뀌었습니다", feature_count: 5, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING" };
+      s.paramSets.find((p) => p.id === "ps-n1")!.native = { prep_status: "STALE", prep_reason: "엔진 버전이 바뀌었습니다", feature_count: 5, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING", vars_revision: 0, vars_count: 5 };
     });
     const card = await openManage();
     expect(within(card).getByTestId("prep-status").textContent).toBe("형상 다시 준비 필요");

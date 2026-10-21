@@ -107,7 +107,7 @@ export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {
         objective_available: true, problems: n.problems, mode: st.mode, performances: n.info,
         algorithm: st.algorithm, algo_options: st.algo_options, verification: st.verification,
         variables_kind: Object.fromEntries(n.free.map((v) => [v, v === "baseline" ? "categorical" : n.integer.includes(v) ? "integer" : "continuous"])),
-        levels: n.levels ? { baseline: n.levels } : null });
+        levels: n.levels ? { baseline: n.levels } : null, var_notes: n.varNotes, var_rows: n.varRows, excluded: n.excluded });
     }
     if (method === "POST" && !seg[3]) {
       const deny = needPower(srv, s.project_id);

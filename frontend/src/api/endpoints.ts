@@ -42,6 +42,8 @@ import type {
   Engine,
   GeomOptions,
   NativeFeatures,
+  NativeVars,
+  NativeVarsUpdate,
   ShellProps,
   ShellPropsUpdate,
   BaselineAddRequest,
@@ -122,6 +124,9 @@ export const api = {
   /** §7.6 native: 형상 준비 다시(202 job), 피처 요약 */
   nativePrepare: (id: string) => request<{ job_id: string }>("POST", `/param-sets/${id}/native-prepare`),
   paramSetFeatures: (id: string) => request<NativeFeatures>("GET", `/param-sets/${id}/features`),
+  /** native-vars.md §6.1: 세트 변수 정의(풀·범위·리비전). model_id = 학습 범위, revision = 특정 리비전(읽기) */
+  nativeVars: (id: string, q: { model_id?: string | null; revision?: number | null } = {}) => request<NativeVars>("GET", `/param-sets/${id}/variables`, { query: q }),
+  putNativeVars: (id: string, body: NativeVarsUpdate) => request<NativeVars>("PUT", `/param-sets/${id}/variables`, { body }),
   /** 3S 쉘 두께(§11.1): 스캔(202 job PARAM_SET_NATIVE props_scan) → GET 목록·선택 → PUT 선택 전체 교체(응답 = 갱신된 ParamSet) */
   scanShellProps: (id: string) => request<{ job_id: string }>("POST", `/param-sets/${id}/props/scan`),
   shellProps: (id: string) => request<ShellProps>("GET", `/param-sets/${id}/props`),

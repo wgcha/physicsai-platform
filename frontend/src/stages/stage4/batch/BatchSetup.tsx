@@ -17,6 +17,8 @@ import { BatchCaptureOptions, captureAssume, captureParam, type CaptureChoice } 
 import { DEFAULT_VIEWS } from "../../../lib/views";
 import { DEFAULT_MAX_RUNS } from "../../../lib/sampling";
 import { SamplingPicker } from "./SamplingPicker";
+import { addRow, editOf, effectiveParamSet, type NativeRow } from "../../../lib/nativeVars";
+import { useNativeRunRows } from "../geometry/useNativeRunRows";
 import { buildSource, initialSampling, resetForTemplate, type ContinueCand, type Ranges, type SamplingState } from "./samplingSource";
 
 export const RUN_LABEL = "입력 생성 + 일괄 예측 실행";
@@ -67,6 +69,10 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   useEffect(() => setCap((c) => ({ ...c, video: defVideo })), [defVideo]);
   const choice = useModelChoice();
   const runner = useJobRunner("PREDICT_BATCH");
+  // native-vars.md §7.3: Native 템플릿 — 범위 표 = 세트 정의로 초기화한 공용 변수 표(그 자리 추가·제외, 이 실행에만 적용). eps = 유효 변수 기준 템플릿
+  const nat = useNativeRunRows(ps, choice.chosenModel?.id ?? null);
+  const eps = useMemo(() => (ps && nat.rows ? effectiveParamSet(ps, nat.rows) : ps), [ps, nat.rows]);
+  const natVars = nat.rows && samp.kind !== "train_doe" ? editOf(nat.rows) : null; // ① DOE 재사용은 변수 구성을 DOE 헤더에서 가져온다 — vars를 보내지 않는다
 
   useEffect(() => {
     api.trainDoes(study.id).then((l) => {
@@ -121,15 +127,15 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   const source = useMemo((): BatchSource | null => {
     if (method === "table") return text.trim() ? { kind: "table", text } : null;
     if (method === "train_doe") return doeId ? { kind: "train_doe", doe_id: doeId } : null;
-    return buildSource(samp, ps, cand, DEFAULT_MAX_RUNS);
-  }, [method, samp, ps, cand, text, doeId]);
+    return buildSource(samp, eps, cand, DEFAULT_MAX_RUNS);
+  }, [method, samp, eps, cand, text, doeId]);
 
   const make = async () => {
     if (!ps || !source) return;
     setBusy(true);
     clear();
     try {
-      const p = await api.batchPreview(study.id, { param_set_id: ps.id, source });
+      const p = await api.batchPreview(study.id, { param_set_id: ps.id, source, ...(nat.rows ? { model_id: choice.chosenModel?.id ?? null, ...(natVars ? { vars: natVars } : {}) } : {}) });
       setPreview(p);
       setProblems(p.problems);
       if (!p.problems.length && p.count > 0) setPreviewSource(source);
@@ -152,6 +158,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   const run = async () => {
     if (!ps || !previewSource) return;
     const params: PredictBatchParams = { param_set_id: ps.id, model_id: choice.modelId || null, multi_execution: multiN, source: previewSource };
+    if (natVars) params.vars = natVars;
     if (legendFixed) params.display = { legend: { mode: "fixed", min: lgLo ?? null, max: lgHi ?? null } };
     const capture = captureParam(cap, defViews, defVideo);
     if (capture) params.capture = capture;
@@ -167,7 +174,21 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     setText(await f.text()); // 브라우저 안에서 읽기만(업로드 없음)
     clear();
   };
-  const names = ps?.parameters.map((p) => p.name) ?? [];
+  const names = eps?.parameters.map((p) => p.name) ?? [];
+  // 사용·추가·제외 → 표 행 + 범위 상태(추가 행은 피처 기본 범위, 빠진 행은 지운다 — lhs는 ranges 전부를 보내므로)
+  const editRows = (fn: (rs: NativeRow[]) => NativeRow[]) => {
+    if (!nat.rows) return;
+    const next = fn(nat.rows);
+    nat.setRows(() => next);
+    setSamp((x) => ({ ...x, ranges: Object.fromEntries(next.filter((r) => r.use).map((r) => [r.name, x.ranges[r.name] ?? [String(r.base.min), String(r.base.max)]])) }));
+    clear();
+  };
+  const nativeBatch = nat.rows ? {
+    rows: nat.rows, nv: nat.nv, canEdit: canExec,
+    onBulkUse: (ns: string[], use: boolean) => editRows((rs) => rs.map((r) => (ns.includes(r.name) ? { ...r, use } : r))),
+    onRemove: (n: string) => editRows((rs) => rs.filter((r) => r.name !== n)),
+    onAdd: (n: string) => nat.nv && editRows((rs) => addRow(nat.nv!, n, rs)),
+  } : null;
   const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
 
   return (
@@ -175,7 +196,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
       <Card span={3} title="1 템플릿·조합" className="batch-setup" aside={ps ? <span className="muted small">{templateName(ps)}</span> : undefined}>
         <TemplatePicker list={list} value={ps?.id ?? ""} onChange={setPicked} compact />
         {!ps && <p className="muted small">등록된 템플릿이 없습니다 — "템플릿 값 입력"의 템플릿 관리에서 등록하세요.</p>}
-        <SamplingPicker ps={ps} state={samp} onChange={changeSamp} maxRuns={DEFAULT_MAX_RUNS} cands={cands} contRanges={contRanges && contRanges.id === samp.contId ? contRanges.ranges : null} />
+        <SamplingPicker ps={eps} native={nativeBatch} nativePending={nat.pending} state={samp} onChange={changeSamp} maxRuns={DEFAULT_MAX_RUNS} cands={cands} contRanges={contRanges && contRanges.id === samp.contId ? contRanges.ranges : null} />
         {method === "table" && (
           <>
             <label className="field">

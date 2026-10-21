@@ -81,7 +81,7 @@ export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
     param_set: { id: ps.id, label: ps.label ?? null }, model: { id: b.model_id, name: model ? `${model.name} v${model.version}` : b.model_id },
     job_id: parentJob(srv, b)?.id ?? b.job_id, multi_execution: b.multi_execution, gen,
     predict: { running: cnt("RUNNING"), queued: cnt("QUEUED"), succeeded: cnt("SUCCEEDED"), failed: cnt("FAILED"), canceled: cnt("CANCELED") },
-    parameters: ps.parameters.map((p) => p.name), responses: ps.responses.map((r) => ({ name: r.name, unit: r.unit })), rows,
+    parameters: ((b.vars as { variables?: { name: string }[] } | null | undefined)?.variables ?? ps.parameters).map((p) => p.name), vars: b.vars ?? null, responses: ps.responses.map((r) => ({ name: r.name, unit: r.unit })), rows,
     source_kind: b.source_kind, sampling: samplingOf(srv, b), created_at: b.created_at, created_by_name: b.created_by_name, finished_at: null,
     can_cancel: ["GENERATING", "PREDICTING"].includes(batchStatus(srv, b)),
     can_retry_failed: rows.some((r) => r.state === "GEN_FAILED" || r.state === "FAILED" || r.state === "CANCELED"),

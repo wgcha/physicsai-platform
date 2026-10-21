@@ -67,6 +67,8 @@ export interface PredictBatchParams {
   display?: { legend: ContourLegend } | null;
   /** D3-53: 하위 예측 컨투어 캡처 옵션(없으면 기본 — 템플릿 display.views·config capture) */
   capture?: PredictBatchCapture | null;
+  /** native-vars.md §6.3: Native 템플릿 변수 그 자리 편집(이 실행에만 적용) */
+  vars?: { add?: string[]; exclude?: string[] } | null;
 }
 /** D3-53: enabled false → 하위 CONTOUR_CAPTURE SKIPPED. views·video 생략 = 기본 */
 export interface PredictBatchCapture {

@@ -1188,6 +1188,35 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/param-sets/{ps_id}/variables": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Native Vars Get
+         * @description Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:
+         *     종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부), 리비전 이력을 돌려준다. `model_id`를 주면 그 모델의 학습 형상 범위(`train`)와
+         *     범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. 읽기 전용이며 부작용이 없다. 오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND,
+         *     422 NATIVE_VARS_UNSUPPORTED(Altair 템플릿).
+         */
+        get: operations["native_vars_get_physicsai_api_param_sets__ps_id__variables_get"];
+        /**
+         * Native Vars Put
+         * @description 세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.
+         *     422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.
+         *     경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨).
+         */
+        put: operations["native_vars_put_physicsai_api_param_sets__ps_id__variables_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/param-sets/{ps_id}/view": {
         parameters: {
             query?: never;
@@ -5370,6 +5399,16 @@ export interface components {
              */
             shell_only: boolean;
             /**
+             * Vars Count
+             * @default 0
+             */
+            vars_count: number;
+            /**
+             * Vars Revision
+             * @default 0
+             */
+            vars_revision: number;
+            /**
              * View Status
              * @default MISSING
              * @enum {string}
@@ -5386,6 +5425,106 @@ export interface components {
             extract_filter?: {
                 [key: string]: unknown;
             } | null;
+        };
+        /** NativeVarHistory */
+        NativeVarHistory: {
+            /**
+             * Count
+             * @default 0
+             */
+            count: number;
+            /** Revision */
+            revision: number;
+            /** Saved At */
+            saved_at?: string | null;
+            /** Saved By Name */
+            saved_by_name?: string | null;
+        };
+        /** NativeVarItem */
+        NativeVarItem: {
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+            /** Name */
+            name: string;
+        };
+        /** NativeVarPoolRow */
+        NativeVarPoolRow: {
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            default_range: components["schemas"]["VarRange"];
+            feasible?: components["schemas"]["VarFeasible"] | null;
+            /** Group */
+            group?: string | null;
+            /** Name */
+            name: string;
+            /** Nominal */
+            nominal: number;
+            /**
+             * Position
+             * @default false
+             */
+            position: boolean;
+            /**
+             * Ref Locked
+             * @default false
+             */
+            ref_locked: boolean;
+            train?: components["schemas"]["VarRange"] | null;
+            /**
+             * Type
+             * @default
+             */
+            type: string;
+            /**
+             * Unit
+             * @default mm
+             */
+            unit: string;
+        };
+        /**
+         * NativeVars
+         * @description 세트 변수 정의(현재 리비전). `variables` = 선택한 형상 행(풀 순서), `pool` = 고를 수 있는 전체 변수. PUT 응답은 `warnings`가 채워진다.
+         */
+        NativeVars: {
+            /** Editable */
+            editable: boolean;
+            /** Features Sha256 */
+            features_sha256?: string | null;
+            /** History */
+            history?: components["schemas"]["NativeVarHistory"][];
+            /** Notes */
+            notes?: components["schemas"]["VarNote"][];
+            /** Pool */
+            pool: components["schemas"]["NativeVarPoolRow"][];
+            /** Reason */
+            reason?: string | null;
+            /** Revision */
+            revision: number;
+            /** Stale Names */
+            stale_names?: string[];
+            /** Train Source */
+            train_source?: {
+                [key: string]: unknown;
+            } | null;
+            /** Variables */
+            variables: components["schemas"]["NativeVarItem"][];
+            /** Warnings */
+            warnings?: components["schemas"]["VarNote"][];
+        };
+        /**
+         * NativeVarsUpdate
+         * @description PUT /param-sets/{id}/variables: 형상 행 전체 교체. base_revision = 불러온 시점의 리비전(다르면 409).
+         */
+        NativeVarsUpdate: {
+            /** Base Revision */
+            base_revision: number;
+            /** Variables */
+            variables: components["schemas"]["NativeVarItem"][];
         };
         /** NativeWarning */
         NativeWarning: {
@@ -6049,6 +6188,10 @@ export interface components {
             source_kind: string;
             /** Status */
             status: string;
+            /** Vars */
+            vars?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** PredictBatchPreview */
         PredictBatchPreview: {
@@ -6056,6 +6199,11 @@ export interface components {
             count: number;
             /** Estimate Min */
             estimate_min?: number | null;
+            /**
+             * Excluded
+             * @default []
+             */
+            excluded: string[];
             /**
              * Input Kind
              * @enum {string}
@@ -6071,13 +6219,21 @@ export interface components {
             /** Rows */
             rows: components["schemas"]["BatchPreviewRow"][];
             sampling?: components["schemas"]["SamplingInfo"] | null;
+            /**
+             * Var Rows
+             * @default []
+             */
+            var_rows: components["schemas"]["VarRow"][];
         };
         /** PredictBatchPreviewRequest */
         PredictBatchPreviewRequest: {
+            /** Model Id */
+            model_id?: string | null;
             /** Param Set Id */
             param_set_id?: string | null;
             /** Source */
             source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceLhsOpt"] | components["schemas"]["BatchSourceSobol"] | components["schemas"]["BatchSourceFullfact"] | components["schemas"]["BatchSourceFracfact"] | components["schemas"]["BatchSourcePb"] | components["schemas"]["BatchSourceBbd"] | components["schemas"]["BatchSourceCcd"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
+            vars?: components["schemas"]["VarsEdit"] | null;
         };
         /** PredictBatchSummary */
         PredictBatchSummary: {
@@ -7966,6 +8122,8 @@ export interface components {
             surrogate?: ("gp" | "rbf") | null;
             /** Tol Rel */
             tol_rel?: number | null;
+            /** @description Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED */
+            vars?: components["schemas"]["VarsEdit"] | null;
             /**
              * Verification
              * @description loop(기본, 반복 검증) | none(대리모델만)
@@ -7990,6 +8148,8 @@ export interface components {
             algorithm: string;
             /** Estimate Min */
             estimate_min?: number | null;
+            /** Excluded */
+            excluded?: string[];
             /** Explore Count */
             explore_count: number;
             /** Fixed */
@@ -8017,6 +8177,10 @@ export interface components {
             performances?: components["schemas"]["SoPerformance"][];
             /** Problems */
             problems: components["schemas"]["SoProblem"][];
+            /** Var Notes */
+            var_notes?: components["schemas"]["VarNote"][];
+            /** Var Rows */
+            var_rows?: components["schemas"]["VarRow"][];
             /** Variables Kind */
             variables_kind?: {
                 [key: string]: string;
@@ -8085,6 +8249,8 @@ export interface components {
             iter_no: number;
             /** Job Id */
             job_id: string;
+            /** Warnings */
+            warnings?: components["schemas"]["VarNote"][];
         };
         /** TemplateConfigured */
         TemplateConfigured: {
@@ -8377,6 +8543,76 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VarFeasible */
+        VarFeasible: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Source */
+            source?: string | null;
+        };
+        /**
+         * VarNote
+         * @description 경고·안내: 경고는 name 있음(VAR_*), 안내(TRAIN_RANGE_*·VARS_FROM_DOE)는 name 없음.
+         */
+        VarNote: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+            /** Name */
+            name?: string | null;
+        };
+        /** VarRange */
+        VarRange: {
+            /** Max */
+            max: number;
+            /** Min */
+            min: number;
+        };
+        /**
+         * VarRow
+         * @description 미리보기 표 초기화 행(⑥ `var_rows`·④ 일괄 `var_rows`): 유효 변수 1개의 기준 범위·학습 범위·모핑 가능 범위.
+         */
+        VarRow: {
+            base: components["schemas"]["VarRange"];
+            feasible?: components["schemas"]["VarFeasible"] | null;
+            /** Name */
+            name: string;
+            /** Nominal */
+            nominal?: number | null;
+            /** Origin */
+            origin: string;
+            /**
+             * Position
+             * @default false
+             */
+            position: boolean;
+            train?: components["schemas"]["VarRange"] | null;
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
+        };
+        /**
+         * VarsEdit
+         * @description ⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).
+         *     유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED.
+         */
+        VarsEdit: {
+            /**
+             * Add
+             * @description 세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)
+             */
+            add?: string[] | null;
+            /**
+             * Exclude
+             * @description 세트 정의 변수를 이 실행에서 제외(공칭 유지, 결과 표에 없음)
+             */
+            exclude?: string[] | null;
         };
         /** VersionBody */
         VersionBody: {
@@ -12216,6 +12452,123 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SamplesPage"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    native_vars_get_physicsai_api_param_sets__ps_id__variables_get: {
+        parameters: {
+            query?: {
+                /** @description 학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음) */
+                model_id?: string | null;
+                /** @description 특정 리비전의 변수 목록만 보려면 리비전 번호(0 = 등록 정의, 생략 = 현재) */
+                revision?: number | null;
+            };
+            header?: never;
+            path: {
+                /** @description Native 파라미터 세트(템플릿) id */
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeVars"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    native_vars_put_physicsai_api_param_sets__ps_id__variables_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                ps_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NativeVarsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NativeVars"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description Not Found */

@@ -3,6 +3,7 @@
 import type { ParamSet } from "../../../api";
 import { SamplingDescription } from "../../../components/SamplingDescription";
 import { DEFAULT_MAX_RUNS, RECOMMENDED_KIND, SAMPLING_GROUPS, SAMPLING_LABEL, calcNote, isSamplingKind, sobolCounts } from "../../../lib/sampling";
+import { NativeBatchVars, type NativeBatch } from "./NativeBatchVars";
 import { activeNames, contTotal, countText, fullfactRuns, levelOf, sobolDefaultCont, type ContinueCand, type Ranges, type SamplingState } from "./samplingSource";
 
 function Seg<T extends string | number>({ label, value, options, onChange }: { label: string; value: T; options: { key: T; label: string }[]; onChange: (v: T) => void }) {
@@ -26,9 +27,13 @@ export interface SamplingPickerProps {
   cands: ContinueCand[];
   /** 고른 후보의 이전 범위(상세 sampling.meta.ranges) — 비활성 입력에 보여 준다 */
   contRanges?: Ranges | null;
+  /** Native 템플릿(단일 baseline): 범위 표를 공용 변수 표로 바꾼다(native-vars.md §7.3). 없으면 기존 표. ps는 유효 변수 기준 템플릿 */
+  native?: NativeBatch | null;
+  /** Native 변수 정의를 불러오는 중 — 기존 표를 잠깐도 보이지 않는다 */
+  nativePending?: boolean;
 }
 
-export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS, cands, contRanges }: SamplingPickerProps) {
+export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS, cands, contRanges, native, nativePending }: SamplingPickerProps) {
   const set = (patch: Partial<SamplingState>) => onChange({ ...state, ...patch });
   const kind = state.kind;
   const names = activeNames(ps, state.ranges);
@@ -72,50 +77,69 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
       </label>
       <SamplingDescription id={kind} recommended={kind === RECOMMENDED_KIND} calc={calc} />
 
+      {native && ps && kind === "table" && (
+        <div className="samp-sub">
+          <NativeBatchVars native={native} ranges={shown} locked onRange={setRange} note={<p className="muted small samp-note">표의 첫 줄은 사용 중인 변수 이름 전부여야 합니다(최소·최대는 쓰지 않음).</p>} />
+        </div>
+      )}
+      {native && ps && kind === "train_doe" && (
+        <p className="muted small samp-note" data-testid="vars-from-doe">① DOE의 변수 구성을 그대로 씁니다</p>
+      )}
       {isDesign && ps && (
         <div className="samp-sub">
-          <table className="table compact" aria-label="파라미터 범위">
-            <thead>
-              <tr>
-                <th>파라미터</th>
-                <th className="num">최소</th>
-                <th className="num">최대</th>
-                {kind === "fullfact" && <th className="num">수준</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {ps.parameters.map((p) => (
-                <tr key={p.name}>
-                  <td>
-                    {p.name} <span className="muted small">{p.unit}</span>
-                  </td>
-                  <td className="num">
-                    <input className="num-input" inputMode="decimal" aria-label={`${p.name} 최소`} value={shown[p.name]?.[0] ?? ""} disabled={locked} onChange={(e) => setRange(p.name, 0, e.target.value)} />
-                  </td>
-                  <td className="num">
-                    <input className="num-input" inputMode="decimal" aria-label={`${p.name} 최대`} value={shown[p.name]?.[1] ?? ""} disabled={locked} onChange={(e) => setRange(p.name, 1, e.target.value)} />
-                  </td>
-                  {kind === "fullfact" && (
-                    <td className="num">
-                      {names.includes(p.name) ? (
-                        <input
-                          className="num-input"
-                          type="number"
-                          min={2}
-                          max={10}
-                          aria-label={`${p.name} 수준`}
-                          value={state.levels[p.name] ?? String(levelOf(state, p.name, k, maxRuns))}
-                          onChange={(e) => set({ levels: { ...state.levels, [p.name]: e.target.value } })}
-                        />
-                      ) : (
-                        <span className="muted small">고정</span>
-                      )}
-                    </td>
-                  )}
+          {nativePending ? (
+            <p className="muted small">변수 정의를 불러오는 중…</p>
+          ) : native ? (
+            <NativeBatchVars
+              native={native} ranges={shown} locked={locked} onRange={setRange}
+              extra={kind === "fullfact" ? [{ head: "수준", cell: (r) => (names.includes(r.name) ? (
+                <input className="num-input" type="number" min={2} max={10} aria-label={`${r.name} 수준`} value={state.levels[r.name] ?? String(levelOf(state, r.name, k, maxRuns))} onChange={(e) => set({ levels: { ...state.levels, [r.name]: e.target.value } })} />
+              ) : <span className="muted small">고정</span>) }] : undefined}
+            />
+          ) : (
+            <table className="table compact" aria-label="파라미터 범위">
+              <thead>
+                <tr>
+                  <th>파라미터</th>
+                  <th className="num">최소</th>
+                  <th className="num">최대</th>
+                  {kind === "fullfact" && <th className="num">수준</th>}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {ps.parameters.map((p) => (
+                  <tr key={p.name}>
+                    <td>
+                      {p.name} <span className="muted small">{p.unit}</span>
+                    </td>
+                    <td className="num">
+                      <input className="num-input" inputMode="decimal" aria-label={`${p.name} 최소`} value={shown[p.name]?.[0] ?? ""} disabled={locked} onChange={(e) => setRange(p.name, 0, e.target.value)} />
+                    </td>
+                    <td className="num">
+                      <input className="num-input" inputMode="decimal" aria-label={`${p.name} 최대`} value={shown[p.name]?.[1] ?? ""} disabled={locked} onChange={(e) => setRange(p.name, 1, e.target.value)} />
+                    </td>
+                    {kind === "fullfact" && (
+                      <td className="num">
+                        {names.includes(p.name) ? (
+                          <input
+                            className="num-input"
+                            type="number"
+                            min={2}
+                            max={10}
+                            aria-label={`${p.name} 수준`}
+                            value={state.levels[p.name] ?? String(levelOf(state, p.name, k, maxRuns))}
+                            onChange={(e) => set({ levels: { ...state.levels, [p.name]: e.target.value } })}
+                          />
+                        ) : (
+                          <span className="muted small">고정</span>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
 
           {kind === "fullfact" && ff && (
             <p className="small samp-note" data-testid="fullfact-runs">

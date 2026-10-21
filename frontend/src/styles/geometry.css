@@ -180,3 +180,31 @@
 .cad-row4 .run-action-row > .muted {
   white-space: nowrap;
 }
+
+/* Native 변수 표(native-vars.md §7): ④ 세트 상세·⑥·④ 일괄 공용 — 경고 아이콘(툴팁)·위치형 Δ·비활성 입력 대비 */
+.nv-table .num-input,
+.nv-table input.num {
+  width: 84px;
+}
+.nv-table td.num,
+.nv-warn-cell {
+  white-space: nowrap;
+}
+.nv-table input:disabled {
+  opacity: 1;
+  color: var(--color-text-secondary);
+}
+.nv-warn {
+  cursor: help;
+  margin-right: var(--space-1);
+  font-weight: 700;
+}
+.nv-warn.warn {
+  color: var(--color-warning);
+}
+.nv-warn.bad {
+  color: var(--color-danger);
+}
+.nv-delta {
+  margin-left: var(--space-1);
+}

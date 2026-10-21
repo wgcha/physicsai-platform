@@ -1,6 +1,7 @@
 // ⑥ 내장 최적화 결과(phase3.md §18.10·§22.12, 라우트 …/stage/5/surrogate/:optId, 진행 중 POLL.surrogate):
 // 상태·진행 문구·일괄 취소·이어서 실행 / [다목적: 파레토 전선·가중치·파레토 표·HV 그래프] / 최적안(추천점) — 기준안 대비 · 결과 요약 / 컨투어 비교(D3-61) /
 // [단일 목적: 수렴 그래프] / 대리모델 품질 / 검증 run 표(CSV) / 파일 위치.
+import { snapshotText } from "../../../lib/nativeVars";
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { errorMessage } from "../../../api";
@@ -77,6 +78,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
   const algoText = algoStatusText(o);
   const algoName = (o.settings as { algorithm?: string }).algorithm;
   const none = isSurrogateOnly(o);
+  const varsLine = snapshotText((o.settings as { vars?: unknown }).vars); // native-vars.md §4.1 스냅숏 요약(Native만)
 
   return (
     <>
@@ -87,6 +89,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
           <span className="muted small">{multi ? `다목적(${defs.length}개) ${objLabel}` : `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`} · 반복 {o.iter_no}/{s.iterations} · {(o.param_set as { label?: string }).label ?? "템플릿"} · {(o.model as { name?: string }).name}</span>
         </div>
         {algoText && <div className="run-action-row"><span className="small" data-testid="so-algo">{algoText}</span></div>}
+        {varsLine && <div className="run-action-row"><span className="small muted" data-testid="so-vars">사용 변수 — {varsLine}</span></div>}
         <div className="run-action-row">
           {o.can_cancel && <button type="button" className="btn small danger" onClick={() => setConfirm(true)}>일괄 취소</button>}
           {o.can_resume && <button type="button" className="btn small primary" onClick={() => void act(() => surrogateApi.resume(o.id))}>이어서 실행</button>}

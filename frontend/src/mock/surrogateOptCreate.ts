@@ -4,6 +4,7 @@ import { err } from "./route";
 import type { MockServer } from "./server";
 import { perfId, perfLabel, perfRows } from "../stages/stage5/surrogate/perfRules";
 import { fin } from "./surrogateOptRec";
+import { runNotes, runVars, snapshotOf } from "./nativeVars";
 import type { Cons, Obj, Obs, SoRec } from "./surrogateOptRec";
 
 /** 요청 정규화 + problems(§22.4.2). 목은 서버 규칙의 핵심만 흉내 */
@@ -11,17 +12,22 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
   const ps = (body.param_set_id ? srv.paramSets.find((p) => p.id === body.param_set_id) : srv.paramSets.find((p) => p.study_id === sid && p.is_current)) as ParamSet | undefined;
   const problems: { code: string; field: string | null; message: string; action?: string; batch_id?: string; performance?: string }[] = [];
   if (!ps) return { error: err(409, "PREREQUISITE_MISSING", "사전 조건이 충족되지 않았습니다", { missing: ["PARAM_SET"] }) };
+  // native-vars.md §6.2: Native는 vars{add,exclude}로 유효 변수를 정하고 범위 밖은 경고만(BOUNDS_OUT_OF_RANGE 미발행). Altair는 vars → NATIVE_VARS_UNSUPPORTED
+  const native = ps.engine === "native";
+  const rv = runVars(srv, ps, body.vars as { add?: string[]; exclude?: string[] } | null | undefined, body.model_id as string | null | undefined);
+  if (rv.error) problems.push({ code: rv.error === "NATIVE_VARS_UNSUPPORTED" ? "NATIVE_VARS_UNSUPPORTED" : "BOUNDS_INVALID", field: rv.error === "NATIVE_VARS_UNSUPPORTED" ? "vars" : rv.error, message: rv.error === "NATIVE_VARS_UNSUPPORTED" ? "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다" : `vars 이름이 올바르지 않습니다(${rv.error})` });
+  const params = rv.out.ps.parameters;
   const integer = ps.tpl_params.filter((t) => /[id]$/.test(t.format)).map((t) => t.name);
   const given = (body.bounds ?? {}) as Record<string, [number, number]>;
   const bounds: Record<string, [number, number]> = {};
-  for (const p of ps.parameters) {
+  for (const p of params) {
     const b = given[p.name] ?? [p.min, p.max];
     if (b[0] > b[1]) problems.push({ code: "BOUNDS_INVALID", field: `bounds.${p.name}`, message: `'${p.name}' 범위는 하한 ≤ 상한이어야 합니다` });
-    else if (b[0] < p.min || b[1] > p.max) problems.push({ code: "BOUNDS_OUT_OF_RANGE", field: `bounds.${p.name}`, message: `'${p.name}' 범위는 학습 범위 ${p.min}~${p.max} 안이어야 합니다` });
+    else if (!native && (b[0] < p.min || b[1] > p.max)) problems.push({ code: "BOUNDS_OUT_OF_RANGE", field: `bounds.${p.name}`, message: `'${p.name}' 범위는 학습 범위 ${p.min}~${p.max} 안이어야 합니다` });
     bounds[p.name] = [b[0], b[1]];
   }
-  const free = ps.parameters.filter((p) => bounds[p.name][0] < bounds[p.name][1]).map((p) => p.name);
-  const fixed = Object.fromEntries(ps.parameters.filter((p) => bounds[p.name][0] === bounds[p.name][1]).map((p) => [p.name, bounds[p.name][0]]));
+  const free = params.filter((p) => bounds[p.name][0] < bounds[p.name][1]).map((p) => p.name);
+  const fixed = Object.fromEntries(params.filter((p) => bounds[p.name][0] === bounds[p.name][1]).map((p) => [p.name, bounds[p.name][0]]));
   if (!free.length) problems.push({ code: "NO_FREE_VARIABLE", field: "bounds", message: "범위가 있는 자유 변수가 1개 이상 필요합니다" });
   const need = Math.max(5, free.length + 2);
   const ex = body.explore as { kind: "new"; count?: number | null; seed?: number } | { kind: "reuse"; batch_id: string };
@@ -89,7 +95,7 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
   const sum = (w ?? []).reduce((a, b) => a + b, 0);
   const weights = w && sum > 0 ? w.map((x) => x / sum) : objectives.length === 1 ? [1] : [];
   const settings: SoRec["settings"] = {
-    names: ps.parameters.map((p) => p.name), integer, bounds,
+    names: params.map((p) => p.name), integer, bounds, ...(native ? { vars: snapshotOf(ps, rv.out) } : {}),
     objective: (objectives[0] ?? { metric: "", series: null, sense: null }) as Obj, objectives, constraints, observe, weights, mode: objectives.length > 1 ? "multi" : "single", performances,
     surrogate: String(body.surrogate ?? "gp"), iterations: verification === "none" ? 1 : iterations, candidates, tol_rel: Number(body.tol_rel ?? 0.01), seed: Number(body.seed ?? 1),
     algorithm, verification, algo_options: algorithm === "ego" ? {} : { pop_size: null, generations: null, crossover_prob: null, mutation_prob: null, eta_c: null, eta_m: null, ...(ao ?? {}) },
@@ -103,7 +109,8 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
     if (!levels.length || levels.some((b) => !bids.includes(b))) problems.push({ code: "LEVELS_INVALID", field: "levels.baseline", message: "매칭표에 없는 baseline이거나 빈 목록입니다" });
     settings.levels = { baseline: levels };
   }
-  return { ps, settings, problems, missing, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
+  const varNotes = native ? runNotes(srv, rv.out, bounds, body.model_id as string | null | undefined) : [];
+  return { ps, settings, problems, missing, varNotes, varRows: native ? rv.out.rows : [], excluded: rv.out.excluded, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
 }
 
 /** 서버 criteria.missing과 같은 규칙(목적 없음·방향·제약 임계값·다목적 가중치) */

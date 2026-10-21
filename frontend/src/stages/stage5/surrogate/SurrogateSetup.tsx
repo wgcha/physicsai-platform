@@ -10,6 +10,9 @@ import { useCanExecute } from "../../../hooks/useJobRunner";
 import { useLatestJob } from "../../../hooks/useLatestJob";
 import { Card, Field, NO_PERMISSION_TIP } from "../../../components/ui";
 import { fmtNum, fmtTime, isTerminal } from "../../../lib/format";
+import { addRow, rowError, type NativeRow } from "../../../lib/nativeVars";
+import { useNativeRunRows } from "../../stage4/geometry/useNativeRunRows";
+import { NativeVarsCard } from "./NativeVarsCard";
 import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/TemplatePicker";
 import { ModelLine, useModelChoice } from "../../stage4/predictRun";
 import { maxMultiExecution } from "../../stage4/batch/BatchSetup";
@@ -55,6 +58,8 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const extractActive = !!extract.job && !isTerminal(extract.job.state);
 
   useEffect(() => set({ paramSetId: ps?.id ?? null, rows: varRows(ps), batchId: "", sels: {}, weights: {}, levels: null }), [ps?.id]);
+  // native-vars.md §7.2: Native 템플릿은 세트 정의로 표를 초기화하고 풀에서 추가·제외한다(단일 baseline만 — 아니면 기존 표). 학습 범위는 고른 모델 기준
+  const { native, pending, nv, rows: nrows, setRows: setN } = useNativeRunRows(ps, choice.chosenModel?.id ?? null);
   const bids = baselineIds(ps);
   const topo = !!preview?.levels?.baseline; // 위상 변형 세트만 범주 baseline(서버 미리보기 levels)
   const chosenLv = f.levels ?? bids;
@@ -79,8 +84,8 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
     designMapApi.get(f.batchId).then(setDm).catch(() => setDm(null));
   }, [f.explore, f.batchId]);
 
-  const rowProblems = f.rows.map(rowIssue);
-  const body = useMemo(() => buildBody(f, perfs), [f, perfs]);
+  const rowProblems = nrows ? nrows.map(rowError) : f.rows.map((r) => rowIssue(r, native));
+  const body = useMemo(() => buildBody({ ...f, nrows }, perfs), [f, perfs, nrows]);
   const bodyKey = JSON.stringify(body);
   const roleProblem = rolesIssue(perfs, f.sels, f.weights);
   const ready = !!ps && !roleProblem && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
@@ -100,6 +105,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   }, [bodyKey, ready, study.id, tick]);
 
   const setRow = (i: number, p: Partial<VarRow>) => set({ rows: f.rows.map((r, j) => (j === i ? { ...r, ...p } : r)) });
+  const patchN = (name: string, p: Partial<Pick<NativeRow, "use" | "lo" | "hi" | "fixed">>) => setN((rs) => rs.map((r) => (r.name === name ? { ...r, ...p } : r)));
   const setSel = (name: string, s: RoleSel) => setF((x) => ({ ...x, sels: { ...x.sels, [name]: s } }));
   const setWeight = (name: string, v: number | undefined) => setF((x) => {
     const w = { ...x.weights };
@@ -125,7 +131,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
       setAlgoNote(ALGO_REVERT_NOTE);
     }
   }, [nObj, algorithm]);
-  const nG = f.rows.filter((r) => !r.fixed).length;
+  const nG = nrows ? nrows.filter((r) => r.use && !r.fixed).length : f.rows.filter((r) => !r.fixed).length;
   const algoProblems = algoIssues(algorithm, f.algo ?? EMPTY_ALGO, nG, soStatus?.algo_defaults?.[algorithm], soStatus?.ga_max_evals ?? 100000);
   const none = f.verification === "none";
   const reason = !ps ? "템플릿이 필요합니다" : !choice.chosenModel ? "Final 모델을 먼저 지정하세요" : active ? "진행 중인 내장 최적화가 있습니다" :
@@ -190,6 +196,17 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
           <p className="muted small">템플릿이 없습니다</p>
         )}
       </Card>
+      {nrows && (
+        <NativeVarsCard
+          rows={nrows} nv={nv} canEdit={canExec} notes={preview?.var_notes}
+          onPatch={patchN} onBulkUse={(names, use) => setN((rs) => rs.map((r) => (names.includes(r.name) ? { ...r, use } : r)))}
+          onRemove={(name) => setN((rs) => rs.filter((r) => r.name !== name))} onAdd={(name) => nv && setN((rs) => addRow(nv, name, rs))}
+        />
+      )}
+      {pending && (
+        <Card span={9} step="④" title="변수 범위"><p className="muted small">변수 정의를 불러오는 중…</p></Card>
+      )}
+      {!nrows && !pending && (
       <Card span={9} step="④" title="변수 범위" aside={<span className="muted small">학습 범위 안만 · 하한 = 상한이면 고정</span>}>
         <div className="table-wrap">
           <table className="table compact" aria-label="변수 범위">
@@ -226,6 +243,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
           </table>
         </div>
       </Card>
+      )}
       <Card span={9} step="⑤" title="설정" foot={
         <div className="run-action">
           <div className="run-action-row">

@@ -2,6 +2,7 @@
 // 위 3칸(입력 생성 x/N · 예측 실행 중·대기·완료 · 파일 위치) + 결과 표(정렬·CSV·행 선택·실패만 다시·일괄 취소)
 // + 오른쪽: 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증) · "⑤ 결과분석에서 열기" 링크 카드.
 // S14(D3-62, §19.7): 변수–응답 그래프·설계공간 지도·커브 겹쳐보기(분석)는 ⑤ 결과분석(/stage/analysis?source=batch&id=<batchId>)으로 이동했다.
+import { snapshotText } from "../../../lib/nativeVars";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api, errorMessage, type Job, type PredictBatch, type ViewKey } from "../../../api";
@@ -71,6 +72,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
   const genElapsed = parent?.started_at && parent?.finished_at ? fmtDuration(Date.parse(parent.finished_at) - Date.parse(parent.started_at)) : null;
   const base = `/p/${study.project_id}/s/${study.id}/stage/4`;
   const sampleLine = samplingSummary(b.sampling, b.rows.length); // S15 §20.10
+  const varsLine = snapshotText(b.vars); // native-vars.md §4.1 사용 변수 스냅숏 요약(Native만)
 
   const act = async (f: () => Promise<unknown>) => {
     setActionError(null);
@@ -126,6 +128,11 @@ export function BatchResult({ batchId }: { batchId: string }) {
         <p className="muted small">
           {FILE_NOTE}. 표의 DOE # = 폴더 번호. 템플릿 {b.param_set.label ?? b.param_set.id} · 모델 {b.model.name}
         </p>
+        {varsLine && (
+          <p className="muted small" data-testid="batch-vars">
+            사용 변수 — {varsLine}
+          </p>
+        )}
       </Card>
 
       <Card
