@@ -7,7 +7,6 @@ import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
 import { useTrain } from "./TrainContext";
 import { isPositionType, typeLabel } from "../../lib/geometry";
-import { FeaturePng } from "../stage4/geometry/NativeDetail";
 import { GeomView3DLazy as GeomView3D } from "../stage4/geomview/GeomView3DLazy";
 import { ViewSplit } from "../stage4/geomview/ViewSplit";
 import { useRowSelection } from "../stage4/geomview/selection";
@@ -58,7 +57,6 @@ export function ParamTableCard() {
   const [features, setFeatures] = useState<Map<string, NativeFeature>>(new Map());
   const sel = useRowSelection(useMemo(() => rows.map((r) => r.name), [rows]));
   const rp = sel.rowProps;
-  const png = sel.rows.length === 1 ? sel.rows[0] : null; // 그림 탭 = 선택 1개일 때 그 PNG
   useEffect(() => {
     if (!native) return;
     let alive = true;
@@ -70,7 +68,6 @@ export function ParamTableCard() {
       alive = false;
     };
   }, [native, study.id, setup?.extract_job_id]);
-  const pngF = png ? features.get(png) : undefined;
   // geometry-view.md §6.9: ①-2 공칭 3D 뷰(같은 뷰어, 미리보기 없음) — 항상 떠 있는 단일 창, 선택 행(다중) = 하이라이트
   const loadView = useCallback(() => api.trainView(study.id), [study.id]);
 
@@ -171,7 +168,8 @@ export function ParamTableCard() {
                 rows={sel.rows}
                 hover={sel.hover}
                 onRows={sel.from3d}
-                picture={pngF?.png_artifact_id ? <FeaturePng name={pngF.name} artifactId={pngF.png_artifact_id} /> : null}
+                pngOf={(r) => features.get(r)?.png_artifact_id ?? null}
+                firstRow={rows[0]?.name ?? null}
               />
             ) : null
           }

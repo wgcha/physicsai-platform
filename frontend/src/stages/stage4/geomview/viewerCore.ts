@@ -331,6 +331,3 @@ export function faceGroups(body: ManifestBody, h: Highlight): { start: number; c
 // ---------------------------------------------------------------- WebGL(§7.4)
 
 export { detectWebGL } from "./webgl";
-
-export const NO_WEBGL_3D = "이 환경에서는 3D 보기를 쓸 수 없습니다(WebGL 미지원) — 그림으로 표시합니다";
-export const LOST_WEBGL_3D = "3D 표시가 중단되었습니다(그래픽 컨텍스트 손실) — 그림으로 표시합니다";

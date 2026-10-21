@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
+import { err } from "../mock/route";
 import type { MockServer } from "../mock/server";
 import { nativeTrainParams } from "../mock/geometry";
 import { expireArtifacts, gvRecords, setGvMode } from "../mock/geomView";
@@ -24,10 +25,11 @@ interface FakeGeom {
   dispose: Fn;
   opts: { onPick: (h: { body: string; face: number } | null, additive?: boolean) => void; onLost: () => void };
 }
-const fake = vi.hoisted(() => ({ geom: null as FakeGeom | null }));
+const fake = vi.hoisted(() => ({ geom: null as FakeGeom | null, failCreate: null as Error | null, hlThrow: null as Error | null }));
 vi.mock("../stages/stage4/geomview/threeScene", () => ({
   createGeomScene: (_el: HTMLElement, opts: FakeGeom["opts"]) => {
-    fake.geom = { setNominal: vi.fn(async () => undefined), setOverlay: vi.fn(async () => undefined), setHighlight: vi.fn(), setBodyVisible: vi.fn(), setFixed: vi.fn(), setPoints: vi.fn(), fit: vi.fn(), dispose: vi.fn(), opts };
+    if (fake.failCreate) throw fake.failCreate;
+    fake.geom = { setNominal: vi.fn(async () => undefined), setOverlay: vi.fn(async () => undefined), setHighlight: vi.fn(() => { if (fake.hlThrow) throw fake.hlThrow; }), setBodyVisible: vi.fn(), setFixed: vi.fn(), setPoints: vi.fn(), fit: vi.fn(), dispose: vi.fn(), opts };
     return fake.geom;
   },
   createContourScene: vi.fn(),
@@ -57,6 +59,8 @@ async function openDetail() {
 beforeEach(() => {
   resetWebGLCache();
   fake.geom = null;
+  fake.failCreate = null;
+  fake.hlThrow = null;
   POLL.preview = 20;
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({} as never);
 });
@@ -185,7 +189,7 @@ describe("④ native 세트 상세 — 형상 3D 뷰", () => {
     resetWebGLCache();
     renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, nativeCurrent);
     const { card, table } = await openDetail();
-    expect((await within(card).findByTestId("gv-fallback")).textContent).toBe("이 환경에서는 3D 보기를 쓸 수 없습니다(WebGL 미지원) — 그림으로 표시합니다");
+    expect((await within(card).findByTestId("gv-fallback")).textContent).toBe("이 PC는 WebGL을 쓸 수 없어 그림으로 표시합니다(하드웨어 가속 꺼짐·원격 데스크톱·GPU 없음 추정)");
     expect(within(card).queryByRole("tablist", { name: "형상 보기" })).toBeNull();
     fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"));
     expect(await within(card).findByTestId("feature-png")).toBeTruthy();
@@ -314,16 +318,20 @@ describe("항상 떠 있는 3D 창 + 변수 클릭·다중 선택 하이라이�
     await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_THK_1", "CUSH_L_HOLE_U_1"]));
   });
 
-  it("그림 탭 = 선택 1개일 때 그 PNG, 0·다중이면 안내", async () => {
+  it("그림 탭 = 0개 안내(+첫 변수 보기)·1개 그 PNG·다중 격자", async () => {
     const { table } = await open12();
     const panel = screen.getByTestId("gv-panel");
     fireEvent.click(within(panel).getByRole("tab", { name: "그림" }));
-    expect(within(panel).getByText(/변수를 1개 고르면/)).toBeTruthy();
+    expect(within(panel).getByTestId("png-empty").textContent).toContain("표에서 변수를 클릭하면");
+    fireEvent.click(within(panel).getByRole("button", { name: "첫 변수 보기" }));
+    await waitFor(() => expect(selected(table)).toEqual(["CUSH_L_THK_1"]));
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1")); // 해제 → 다시 안내
+    await waitFor(() => expect(within(panel).getByTestId("png-empty")).toBeTruthy());
     fireEvent.click(within(table).getByText("CUSH_L_HOLE_U_1"));
     const fig = await screen.findByTestId("feature-png");
     expect(fig.textContent).toContain("CUSH_L_HOLE_U_1");
     fireEvent.click(within(table).getByText("CUSH_L_THK_1"), { ctrlKey: true });
-    await waitFor(() => expect(screen.queryByTestId("feature-png")).toBeNull());
+    await waitFor(() => expect(within(screen.getByTestId("png-grid")).getAllByTestId("feature-png")).toHaveLength(2));
   });
 
   it("④: 다중 선택은 하이라이트 전용 — 미리보기 입력은 단일 선택일 때만, 편집값은 유지", async () => {
@@ -378,3 +386,126 @@ describe("항상 떠 있는 3D 창 + 변수 클릭·다중 선택 하이라이�
     expect(performance.now() - t0).toBeLessThan(3000);
   });
 });
+
+describe("폴백 — 어떤 PC에서도 빈 패널 없음(이유 한 줄 + 그림 + 다시 시도 + 진단)", () => {
+  const native12 = (extra = 0) => (s: MockServer) => {
+    const params = nativeTrainParams();
+    for (let i = 0; i < extra; i++) params.push({ name: `EXTRA_${i}`, raw_nominal: "1 mm", nominal: 1, min: 0.9, max: 1.1, use: false, format: "%.4f", unit: "mm", valid: true, problems: [] });
+    Object.assign(s.p2.setups["s-cushion"], { engine: "native", parameters: params, tpl: null, extract_job_id: "j-x" });
+    setGvMode(s, {});
+  };
+  const sel = (table: HTMLElement) => within(table).queryAllByRole("row").filter((r) => r.getAttribute("aria-selected") === "true").map((r) => r.getAttribute("data-row"));
+  /** 지연 적재 중의 '불러오는 중…'이 아니라 실제 사유 줄 */
+  const reasonNote = async () => {
+    await waitFor(() => expect(screen.getByTestId("gv-fallback").textContent).not.toContain("불러오는 중"));
+    return screen.getByTestId("gv-fallback");
+  };
+  const noGl = () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
+    resetWebGLCache();
+  };
+
+  it("WebGL 없음: 이유 한 줄 + 선택 없음 안내·[첫 변수 보기] + 접힌 진단(브라우저·WebGL 단계·마지막 오류)", async () => {
+    noGl();
+    renderApp(`${STUDY}/1`, { user: "power" }, native12());
+    const note = await reasonNote();
+    expect(note.textContent).toBe("이 PC는 WebGL을 쓸 수 없어 그림으로 표시합니다(하드웨어 가속 꺼짐·원격 데스크톱·GPU 없음 추정)");
+    expect(screen.queryByRole("button", { name: "다시 시도" })).toBeNull(); // 환경 문제는 재시도 대상 아님
+    const table = screen.getByRole("table", { name: "파라미터 표" });
+    expect(screen.getByTestId("png-empty")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "첫 변수 보기" }));
+    await waitFor(() => expect(sel(table)).toEqual(["CUSH_L_THK_1"]));
+    expect(await screen.findByTestId("feature-png")).toBeTruthy();
+    const diag = screen.getByTestId("gv-diag");
+    expect(diag.tagName).toBe("DETAILS");
+    expect(diag.textContent).toContain("브라우저:");
+    expect(diag.textContent).toContain("WebGL: none [CONTEXT_NULL]");
+    expect(diag.textContent).toContain("마지막 오류: no-webgl");
+    expect(fake.geom).toBeNull();
+  });
+
+  it("WebGL1만 가능(구버전·드라이버): three는 WebGL2가 필요 → 그림 + WebGL 2 안내", async () => {
+    vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockImplementation(((id: string) => (id === "webgl" ? {} : null)) as never);
+    resetWebGLCache();
+    renderApp(`${STUDY}/1`, { user: "power" }, native12());
+    expect((await reasonNote()).textContent).toContain("WebGL 2를 지원하지 않아 그림으로 표시합니다");
+    expect(screen.getByTestId("gv-diag").textContent).toContain("WebGL: webgl [WEBGL2_UNSUPPORTED]");
+  });
+
+  it("three 초기화 예외(컨텍스트 생성 실패) → 그림 폴백 + 원인 코드 + [다시 시도]로 복구", async () => {
+    fake.failCreate = new Error("Error creating WebGL context.");
+    renderApp(`${STUDY}/1`, { user: "power" }, native12());
+    const note = await reasonNote();
+    expect(note.textContent).toContain("3D 화면을 시작하지 못해 그림으로 표시합니다(그래픽 초기화 오류: Error: Error creating WebGL context.)");
+    fake.failCreate = null;
+    fireEvent.click(within(note).getByRole("button", { name: "다시 시도" }));
+    await screen.findByTestId("gv-panel");
+    await waitFor(() => expect(fake.geom?.setNominal).toHaveBeenCalled());
+  });
+
+  it("3D 패널 렌더 중 예외 → ErrorBoundary가 그림 폴백으로 대체, 다시 시도 = 패널 복구", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => undefined);
+    fake.hlThrow = new Error("boom");
+    renderApp(`${STUDY}/1`, { user: "power" }, native12());
+    const note = await reasonNote();
+    expect(note.textContent).toContain("그래픽 초기화 오류: Error: boom");
+    expect(screen.queryByTestId("gv-panel")).toBeNull();
+    fake.hlThrow = null;
+    fireEvent.click(within(note).getByRole("button", { name: "다시 시도" }));
+    await screen.findByTestId("gv-panel");
+  });
+
+  it("GLB 받기 실패(410) → 원인 코드 + 그림, 다시 시도", async () => {
+    const { server } = renderApp(`${STUDY}/1`, { user: "power" }, native12());
+    const orig = server.handle.bind(server);
+    let fail = true;
+    server.handle = (m, p, q, b, h) => (fail && m === "GET" && /\/artifacts\/[^/]+\/media$/.test(p) && server.artifacts.find((a) => p.includes(a.id))?.kind === "GEOM_VIEW_GLB" ? err(410, "ARTIFACT_EXPIRED", "정리됨") : orig(m, p, q, b, h));
+    const note = await reasonNote();
+    expect(note.textContent).toContain("3D 형상 파일을 불러오지 못해 그림으로 표시합니다(HTTP 410 ARTIFACT_EXPIRED)");
+    fail = false;
+    fireEvent.click(within(note).getByRole("button", { name: "다시 시도" }));
+    await screen.findByTestId("gv-panel");
+  });
+
+  it("PNG 410 → 조용히 삼키지 않고 원인 + [다시 시도], 재시도하면 그림 표시", async () => {
+    noGl();
+    const { server } = renderApp(`${STUDY}/1`, { user: "power" }, native12());
+    const orig = server.handle.bind(server);
+    let fail = true;
+    server.handle = (m, p, q, b, h) => (fail && m === "GET" && /\/artifacts\/[^/]+\/media$/.test(p) && server.artifacts.find((a) => p.includes(a.id))?.kind === "FEATURE_PNG" ? err(410, "ARTIFACT_EXPIRED", "정리됨") : orig(m, p, q, b, h));
+    const table = await screen.findByRole("table", { name: "파라미터 표" });
+    await reasonNote();
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    const alert = await screen.findByTestId("png-error");
+    expect(alert.textContent).toContain("그림을 불러오지 못했습니다(HTTP 410 ARTIFACT_EXPIRED)");
+    fail = false;
+    fireEvent.click(within(alert).getByRole("button", { name: "다시 시도" }));
+    await waitFor(() => expect(screen.getByTestId("feature-png").querySelector("img")).toBeTruthy());
+    expect(screen.queryByTestId("png-error")).toBeNull();
+  });
+
+  it("다중 선택: 선택 변수 PNG를 격자로(범례 색 테두리), 최대 8개 + '외 N개', PNG 없는 변수는 자리 표시", async () => {
+    noGl();
+    renderApp(`${STUDY}/1`, { user: "power" }, native12(10));
+    const table = await screen.findByRole("table", { name: "파라미터 표" });
+    await reasonNote();
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    fireEvent.click(within(table).getByText("CUSH_L_POCKET_D_1"), { ctrlKey: true });
+    const grid = await screen.findByTestId("png-grid");
+    const figs = within(grid).getAllByTestId("feature-png");
+    expect(figs.map((f) => f.querySelector("figcaption")!.textContent)).toEqual(["CUSH_L_THK_1", "CUSH_L_POCKET_D_1"]);
+    expect(figs.map((f) => f.style.borderColor)).toEqual([hexToRgb(selectionColor(0)), hexToRgb(selectionColor(1))]);
+    fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
+    fireEvent.click(within(table).getByText("EXTRA_9"), { shiftKey: true });
+    await waitFor(() => expect(sel(table).length).toBe(15)); // THK~EXTRA_9 = 5 + 10 행
+    const g2 = screen.getByTestId("png-grid");
+    expect(g2.children).toHaveLength(8);
+    expect(screen.getByText("외 7개는 표시하지 않습니다(최대 8개)")).toBeTruthy();
+    expect(within(g2).getByText("EXTRA_0").closest("figure")!.textContent).toContain("그림 없음");
+  });
+});
+
+const hexToRgb = (h: string) => {
+  const n = parseInt(h.slice(1), 16);
+  return `rgb(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255})`;
+};

@@ -2,14 +2,16 @@
 // 기본 3D(공칭 형상은 선택 없이도 보임) — WebGL 불가·컨텍스트 손실·view.status ≠ READY·available=false면 그림만.
 // 표 행 ↔ 3D 면 양방향 다중 선택은 부모의 rows로 공유(행마다 팔레트 색, 호버 = 임시 하이라이트, 치수선은 선택 1개일 때만).
 // 미리보기(§7.3)는 preview_available && paramSetId일 때만(④). 겹쳐 보기: 공칭 반투명 + 변경 형상(변위 색) / FE 메시.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, type GeomView } from "../../../api";
 import { GeomViewer, type Overlay } from "./GeomViewer";
 import { PreviewPanel } from "./PreviewPanel";
 import { useGeomPreview } from "./useGeomPreview";
 import { chooseRow, pickFace } from "./selection";
-import { webglAvailable } from "./webgl";
-import { buildFaceRows, dispMax, failureHighlight, hasRow3d, LOST_WEBGL_3D, NO_WEBGL_3D, previewValues, rowHighlight, selectionColor, type ViewManifest } from "./viewerCore";
+import { errCode, webglInfo, type GvFailure } from "./webgl";
+import { PngGrid } from "./PngGrid";
+import { ViewFallback } from "./ViewFallback";
+import { buildFaceRows, dispMax, failureHighlight, hasRow3d, previewValues, rowHighlight, selectionColor, type ViewManifest } from "./viewerCore";
 import { fmtLegend, legendGradient, legendTicks } from "./contour/colormap";
 
 export type GeomView3DProps = Parameters<typeof GeomView3D>[0];
@@ -20,7 +22,8 @@ export function GeomView3D({
   rows,
   hover = null,
   onRows,
-  picture,
+  pngOf,
+  firstRow,
   paramSetId,
   userRanges,
   canPreview = false,
@@ -34,16 +37,22 @@ export function GeomView3D({
   hover?: string | null;
   /** 3D 면 클릭으로 선택이 바뀜(focus = 표에서 스크롤할 행) */
   onRows: (rows: string[], focus?: string | null) => void;
-  /** 그림 탭(선택 1개일 때 그 PNG) */
-  picture: ReactNode;
+  /** 그림 탭·폴백: 행 → 하이라이트 PNG artifact id(선택 1개 = 그 PNG, 여럿 = 격자) */
+  pngOf: (row: string) => string | null;
+  /** 선택이 없을 때 그림 탭의 [첫 변수 보기]로 고를 행 */
+  firstRow?: string | null;
   paramSetId?: string | null;
   userRanges?: Record<string, { min?: number | null; max?: number | null }>;
   canPreview?: boolean;
 }) {
   const [view, setView] = useState<GeomView | null>(null);
   const [manifest, setManifest] = useState<ViewManifest | null>(null);
-  const [gl] = useState(webglAvailable);
-  const [lost, setLost] = useState(false);
+  const [info] = useState(webglInfo);
+  const gl = info.level === "webgl2"; // three는 WebGL2 필요
+  // 3D를 못 쓰는 이유(없으면 3D 표시): lost·init·glb·chunk(GeomViewer) · view(뷰·manifest 읽기) · noview(변환본 없음)
+  const [failure, setFailure] = useState<GvFailure | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [tab, setTab] = useState<"3d" | "png">("3d");
   const [choices, setChoices] = useState<{ list: string[]; additive: boolean } | null>(null);
   const [edits, setEdits] = useState<Record<string, number>>({});
@@ -51,24 +60,39 @@ export function GeomView3D({
   const [feTab, setFeTab] = useState(false);
 
   useEffect(() => {
+    if (!gl) return;
     let alive = true;
     setView(null);
     setManifest(null);
-    load()
-      .then(async (v) => {
-        if (!alive) return;
-        setView(v);
-        if (v.status === "READY" && v.available && v.manifest_artifact_id && gl) {
+    setFailure(null);
+    setLoaded(false);
+    (async () => {
+      let v: GeomView;
+      try {
+        v = await load();
+      } catch (e) {
+        // 뷰 없음(404·409) = 변환본 없음(그림만), 그 밖(401·네트워크 등)은 원인 표시
+        const st = (e as { status?: number }).status;
+        if (alive) setFailure({ kind: st === 404 || st === 409 ? "noview" : "view", code: errCode(e) });
+        return;
+      }
+      if (!alive) return;
+      setView(v);
+      if (v.status === "READY" && v.available && v.manifest_artifact_id) {
+        try {
           const m = await api.artifactJson<ViewManifest>(v.manifest_artifact_id);
           if (alive) setManifest(m);
+        } catch (e) {
+          if (alive) setFailure({ kind: "view", code: errCode(e) });
         }
-      })
-      .catch(() => alive && setView(null)); // 뷰 없음(404·409) = 그림만
+      } else if (alive) setFailure({ kind: "noview", code: v.status === "READY" ? "UNAVAILABLE" : v.status });
+    })().finally(() => alive && setLoaded(true));
     return () => {
       alive = false;
     };
     // load는 loadKey로 바뀐다
-  }, [loadKey, gl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadKey, gl, attempt]);
 
   const previewOn = !!view?.preview_available && !!paramSetId;
   const pv = useGeomPreview(previewOn ? paramSetId! : null);
@@ -77,7 +101,7 @@ export function GeomView3D({
   const row = rows.length === 1 ? rows[0] : null; // ④ 미리보기 입력은 단일 선택일 때만(다중 = 하이라이트 전용)
 
   const ready = view?.status === "READY" && !!view.available && !!view.glb_artifact_id;
-  const usable = ready && gl && !lost && !!manifest;
+  const usable = ready && gl && !failure && !!manifest;
   // update OK면 형상 GLB가 있다(FE 실패여도 형상은 표시), update FAIL이면 GLB 없음 → 공칭 + 빨강 표시
   const okPreview = pv.preview?.status === "DONE" && !!pv.glb;
   const failPreview = pv.preview?.status === "DONE" && pv.preview.result_status === "FAIL" ? pv.manifest : null;
@@ -97,18 +121,11 @@ export function GeomView3D({
     return showFe ? { buf: pv.feGlb!, kind: "fe", dispMax: dispMax(pv.manifest, true) } : { buf: pv.glb!, kind: "shape", dispMax: dispMax(pv.manifest, false) };
   }, [okPreview, showFe, pv.glb, pv.feGlb, pv.manifest]);
 
-  const note = ready && (!gl || lost) ? (lost ? LOST_WEBGL_3D : NO_WEBGL_3D) : null;
+  const png = { rows, pngOf, firstRow, onRows };
   if (!usable) {
-    return (
-      <div className="gv-wrap">
-        {note && (
-          <p className="muted small" data-testid="gv-fallback">
-            {note}
-          </p>
-        )}
-        {picture}
-      </div>
-    );
+    // 빈 패널 없음: 이유 한 줄(+ 다시 시도) + 선택 변수 그림
+    const reason: GvFailure = !gl ? { kind: info.level === "webgl" ? "webgl1" : "no-webgl" } : failure ?? (loaded ? { kind: "noview" } : { kind: "loading" });
+    return <ViewFallback reason={reason} onRetry={() => setAttempt((n) => n + 1)} {...png} />;
   }
 
   const max = overlay?.dispMax ?? null;
@@ -133,7 +150,7 @@ export function GeomView3D({
         )}
       </div>
       {tab === "png" ? (
-        picture ?? <p className="muted small">변수를 1개 고르면 하이라이트 그림(이동 면 주황·고정 면 파랑)을 봅니다</p>
+        <PngGrid {...png} />
       ) : (
         <>
           <GeomViewer
@@ -143,7 +160,9 @@ export function GeomView3D({
             overlay={overlay}
             redClusters={fail.clusters}
             points={fail.points}
-            onLost={() => setLost(true)}
+            key={attempt}
+            onLost={() => setFailure({ kind: "lost" })}
+            onFail={setFailure}
             onPick={(hit, additive = false) => {
               const next = pickFace(rows, faceRows, hit, additive);
               if (next.kind === "choices") return setChoices({ list: next.choices, additive });

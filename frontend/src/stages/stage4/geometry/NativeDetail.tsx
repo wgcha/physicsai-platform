@@ -1,7 +1,7 @@
 // ④ native 세트 상세(geometry-engine.md §8): 준비 상태 배지 + "형상 준비 다시", 피처 표(행 클릭 = 하이라이트 PNG),
 // 대칭 그룹 분리·묶기(§6.2 symmetry_split), 고급 접힘 2개(검사 기준·다중 baseline) + 쉘 두께 PROP(3S).
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { API_PREFIX, api, errorMessage, type NativeFeatures, type ParamSet } from "../../../api";
+import { api, errorMessage, type NativeFeatures, type ParamSet } from "../../../api";
 import { useStudy } from "../../../app/StudyContext";
 import { JobInline } from "../../../components/ui";
 import { useLatestJob } from "../../../hooks/useLatestJob";
@@ -10,7 +10,6 @@ import { PREP_LABEL, PREP_TONE, exceedsFeasible, geomErrorText, isSplit, rangeTe
 import { GeomOptionsForm } from "./GeomOptionsForm";
 import { ShellProps } from "./ShellProps";
 import { MultiBaseline } from "./MultiBaseline";
-import { useMediaImage } from "../ContourMedia";
 import { GeomView3DLazy as GeomView3D } from "../geomview/GeomView3DLazy";
 import { ViewSplit } from "../geomview/ViewSplit";
 import { useRowSelection } from "../geomview/selection";
@@ -89,7 +88,6 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       setError(errorMessage(e));
     }
   };
-  const pickedF = sel.rows.length === 1 ? data.features.find((f) => f.name === sel.rows[0]) ?? null : null;
   return (
     <div className="feature-block">
       <div className="small muted">
@@ -108,7 +106,8 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
             rows={sel.rows}
             hover={sel.hover}
             onRows={sel.from3d}
-            picture={pickedF?.png_artifact_id ? <FeaturePng name={pickedF.name} artifactId={pickedF.png_artifact_id} /> : null}
+            pngOf={(r) => data.features.find((f) => f.name === r)?.png_artifact_id ?? null}
+            firstRow={data.features[0]?.name ?? null}
             paramSetId={ps.id}
             userRanges={Object.fromEntries(ps.parameters.map((p) => [p.name, { min: p.min, max: p.max }]))}
             canPreview={canEdit}
@@ -197,16 +196,5 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
         </ul>
       )}
     </div>
-  );
-}
-
-/** 하이라이트 PNG(§4.3 features/<NAME>.png → FEATURE_PNG artifact). 이미지는 fetch → blob URL(목·쿠키 인증 같은 길) */
-export function FeaturePng({ name, artifactId }: { name: string; artifactId: string }) {
-  const src = useMediaImage(`${API_PREFIX}/artifacts/${artifactId}/media`);
-  return (
-    <figure className="feature-png" data-testid="feature-png">
-      {src && <img src={src} alt={`${name} 하이라이트`} />}
-      <figcaption className="small muted mono">{name}</figcaption>
-    </figure>
   );
 }
