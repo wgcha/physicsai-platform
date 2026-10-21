@@ -33,11 +33,11 @@ def now() -> datetime:
 
 
 def study_name_part(title: str | None, fallback: str = "study") -> str:
-    """파일 이름 속 Study 이름: `name_unsafe_chars` 문자·경로 구분자(`/ \\ : * ?`)를 `_`로, ≤ 40자, 앞뒤 점·공백 제거."""
+    """파일 이름 속 Study 이름: `name_unsafe_chars` 문자·경로 구분자(`/ \\ : * ?`)를 `_`로, ≤ 40자, 앞뒤 점·밑줄·공백 제거."""
     out = []
     for c in title or "":
         out.append("_" if (c in _BAD_NAME_CHARS or name_unsafe_chars(c)) else c)
-    s = "".join(out)[:NAME_MAX].strip(". ")
+    s = "".join(out)[:NAME_MAX].strip("._ ")
     return s or fallback
 
 
