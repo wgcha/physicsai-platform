@@ -64,7 +64,8 @@ class McpHttpMount:
         if scope["type"] != "http":
             return
         if not self.enabled():  # SDK를 import하지 않고 404(openapi에는 나타나지 않는다)
-            body = {"detail": {"code": "MCP_DISABLED", "message": "MCP HTTP 전송이 꺼져 있습니다(mcp.enabled·mcp.server.http_enabled)"}}
+            code, msg = "MCP_DISABLED", "MCP HTTP 전송이 꺼져 있습니다(mcp.enabled·mcp.server.http_enabled)"
+            body = {"code": code, "message": msg, "detail": {"code": code, "message": msg}}  # mcp.md MR-C2 ②: 최상위 code·message + detail
             await JSONResponse(body, status_code=404)(scope, receive, send)
             return
         if self._inner is None:

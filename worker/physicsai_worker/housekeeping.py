@@ -43,6 +43,13 @@ def purge_notifications(engine: Engine, retention_days: int) -> int:
         return notif_repo.purge_older_than(conn, retention_days)
 
 
+def purge_stale_uploads(engine: Engine, settings: Any) -> list[str]:
+    """upload-report.md §4: updated_at이 upload.stale_hours보다 오래된 OPEN 업로드 세션 → 폴더를 `_backup`으로 옮기고 STALE(삭제 없음)."""
+    from physicsai_core.uploads_retire import cleanup_stale
+
+    return cleanup_stale(settings, engine)
+
+
 def purge_mcp(engine: Engine, settings: Any, now: Any = None) -> dict[str, int]:
     """mcp.md §6.2: api_audit 보존 기간 초과 행·만료 후 하루 지난 확인 계획 삭제(플랫폼 내부 기록 — 사용자 산출물 아님)."""
     from datetime import datetime, timedelta, timezone

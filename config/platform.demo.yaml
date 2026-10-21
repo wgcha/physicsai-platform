@@ -34,6 +34,7 @@ storage:
   ai_root: "{{DEMO_ROOT}}/ai_root"
   allowed_import_roots: ["{{DEMO_ROOT}}/import"]
   spdm_roots: ["{{DEMO_ROOT}}/spdm"]
+  upload_root: "uploads"          # 브라우저 업로드(upload-report.md) — <ai_root>/uploads
 
 altair:
   version_label: "fake-demo"
@@ -150,3 +151,6 @@ mcp:                              # MCP 기능(docs/contracts/mcp.md §13). 절�
     top_n_max: 50
   similar:
     max_rows: 20000               # (유사 설계 검색 — 미결 Q2, 현재 미사용)
+
+upload:
+  min_free_gb: 1                  # 시연 PC는 여유 공간이 작을 수 있음(운영 기본 50)

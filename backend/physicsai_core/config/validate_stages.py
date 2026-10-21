@@ -152,6 +152,9 @@ def _validate_phase3(s: Settings, issues: list[ConfigIssue]) -> None:
     from .schema_mcp import validate_mcp
 
     validate_mcp(s, issues)
+    from .schema_upload import validate_upload
+
+    validate_upload(s, issues)
     for k, (lo, hi) in STUDY_STORAGE_RANGES.items():
         if not lo <= getattr(s.study_storage, k) <= hi:
             issues.append(ConfigIssue(f"study_storage.{k}", f"{lo}~{hi}"))

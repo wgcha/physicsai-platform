@@ -84,5 +84,8 @@ def test_all_routes_prefixed():
         "/mcp/glossary", "/mcp/tools",
         # native-vars.md §6.1: Native 템플릿 변수 정의(선택·범위)
         "/param-sets/{ps_id}/variables",
+        # upload-report.md §4: 브라우저 분할 업로드(청크 PUT octet-stream, x-mcp exclude)
+        "/uploads/config", "/studies/{study_id}/uploads", "/uploads/{upload_id}", "/uploads/{upload_id}/files",
+        "/uploads/{upload_id}/files/{index}", "/uploads/{upload_id}/complete", "/admin/uploads/cleanup-stale",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

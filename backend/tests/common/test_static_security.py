@@ -71,7 +71,8 @@ def test_no_user_output_delete_calls():
             assert f.name in allowed, f
 
 
-def test_no_upload_routes():
+def test_no_multipart_upload_routes():
+    """upload-report.md V-UP-9: 업로드는 `/uploads*` 청크 PUT(octet-stream)만 — 폼 파트(UploadFile·File·Form)·multipart 0(V-SEC-1 유지)."""
     src = "\n".join(f.read_text() for f in _py_files([REPO / "backend" / "physicsai_api"]))
     assert "UploadFile" not in src and not re.search(r"(?<![A-Za-z_])File\(", src) and "multipart" not in src
 

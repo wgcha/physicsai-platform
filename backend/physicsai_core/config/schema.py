@@ -37,6 +37,7 @@ from .schema_stages import (
     TrainDataCfg,
     TrainingLogCfg,
 )
+from .schema_upload import ReportCfg, UploadCfg
 
 
 class ServerCfg(_M):
@@ -83,6 +84,8 @@ class StorageCfg(_M):
     # phase3 §12 S7(D3-46): 다른 PC가 네트워크 공유로 파일을 넣는 받은 파일 폴더(AI 루트 기준 상대). 없으면 탐색 루트에서 생략.
     inbox_dir: str = "inbox"
     inbox_share_hint: str | None = None  # 화면 안내 문구용 공유 경로(예 "\\\\<서버>\\physicsai-inbox"). 서버는 쓰지 않는다
+    # upload-report.md §2.2·§6.1: 브라우저 업로드 저장 위치 — AI 루트 기준 상대(또는 AI 루트 하위 절대). null = 업로드 끔(PC 탭 숨김)
+    upload_root: str | None = "uploads"
 
 
 class AltairCfg(_M):
@@ -201,6 +204,8 @@ class Settings(_M):
     logging: LoggingCfg = Field(default_factory=LoggingCfg)
     demo: DemoCfg = Field(default_factory=DemoCfg)
     mcp: McpCfg = Field(default_factory=McpCfg)  # mcp.md §13 MCP 기능(API 토큰·/mcp/*·MCP 서버, 기본 꺼짐)
+    upload: UploadCfg = Field(default_factory=UploadCfg)  # upload-report.md §6.1 브라우저 분할 업로드(저장 위치는 storage.upload_root)
+    report: ReportCfg = Field(default_factory=ReportCfg)  # upload-report.md §9.5 HTML 결과 요약 보고서 상한
 
 
 @dataclass(frozen=True)

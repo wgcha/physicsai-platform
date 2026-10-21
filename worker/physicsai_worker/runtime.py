@@ -230,6 +230,7 @@ class Worker(HpcPollerMixin):
         if force_purge or now - self._last_purge >= self.settings.notifications.purge_interval_h * 3600:
             self._last_purge = now
             housekeeping.purge_notifications(self.engine, self.settings.notifications.retention_days)
+            housekeeping.purge_stale_uploads(self.engine, self.settings)  # upload-report.md §4: 낡은 업로드 세션 → _backup
         if force_purge or now - getattr(self, "_last_cache_purge", 0.0) >= self.settings.geometry.view.cache.purge_interval_h * 3600:
             self._last_cache_purge = now  # geometry-view.md §6.6: 서버측 <study>/_cache/ 임시 캐시(기간·총량)
             housekeeping.purge_view_cache(self.engine, self.settings)

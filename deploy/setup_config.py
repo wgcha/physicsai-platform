@@ -518,18 +518,35 @@ INBOX_HINT_PATH = ("storage", "inbox_share_hint")
 INBOX_DIR_DEFAULT = "inbox"
 
 
-def inbox_folder(ai_root: str, inbox_dir: Any) -> str:
+UPLOAD_DIR_DEFAULT = "uploads"
+
+
+def inbox_folder(ai_root: str, inbox_dir: Any, default: str = INBOX_DIR_DEFAULT) -> str:
     """`<ai_root>/<inbox_dir>`('/' 구분). 상대 이름 규칙(공백·메타문자·'..'·절대경로 없음)을 어기면 빈 값(폴더를 만들지 않음).
 
     D3-50: `_backup`·`_platform`(대소문자 무시, 끝 마침표·공백 무시)·요소 안 ':'·끝 마침표/공백도 mkdir 전에 거부.
     """
-    rel = str(inbox_dir or INBOX_DIR_DEFAULT)
+    rel = str(inbox_dir or default)
     parts = rel.replace("\\", "/").split("/")
     if not ai_root or unsafe(rel) or rel.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", rel) or any(x in ("", ".", "..") for x in parts):
         return ""
     if any(":" in x or x[-1] in ". " or x.rstrip(" .").casefold() in ("_backup", "_platform") for x in parts):
         return ""
     return fwd(ai_root).rstrip("/") + "/" + "/".join(parts)
+
+
+def upload_folder(ai_root: str, has: bool, upload_root: Any) -> str:
+    """업로드 폴더(upload-report.md §2.2·§6.1) `<ai_root>/<storage.upload_root>`. 키가 없으면 기본 `uploads`, 명시적 null이면 업로드 끔(빈 값).
+    상대 이름은 받은 파일 폴더와 같은 규칙, 절대경로는 AI 루트 하위일 때만(그 밖·규칙 위반은 폴더를 만들지 않음 — 설정 검사가 오류로 알린다)."""
+    if has and upload_root is None:
+        return ""
+    raw = str(upload_root if has else UPLOAD_DIR_DEFAULT)
+    if raw.startswith(("/", "\\")) or re.match(r"^[A-Za-z]:", raw):
+        base = fwd(ai_root).rstrip("/")
+        p = fwd(raw).rstrip("/")
+        parts = p[len(base) + 1:].split("/") if base and p.casefold().startswith(base.casefold() + "/") else []
+        return inbox_folder(ai_root, "/".join(parts), UPLOAD_DIR_DEFAULT) if parts and not unsafe(raw) else ""
+    return inbox_folder(ai_root, raw, UPLOAD_DIR_DEFAULT)
 
 
 def _norm_share_path(p: str) -> str:
@@ -738,6 +755,7 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
                      "유지(설정 파일 값 — 바꾸려면 파일을 직접 수정)"})
     # 받은 파일 공유 안내(D3-46): 키가 없거나 비어 있을 때만 SMB 공유 경로로, 사용자 값 보존
     inbox = inbox_folder(ai_root, _get(base, ("storage", "inbox_dir"))[1])
+    upload = upload_folder(ai_root, *_get(base, ("storage", "upload_root")))
     hint_want = inbox_share_hint(inputs, inbox)
     has, cur = _get(base, INBOX_HINT_PATH)
     if hint_want and (not has or cur in (None, "")):
@@ -793,7 +811,7 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
         "deploy_added": added if existing is not None else [], "deploy_overridden": overridden, "deploy_changed": deploy_changed,
         "config_path": str(config_path), "config_source": source, "config_changed": config_changed,
         "config_rows": rows, "config_changed_keys": changed, "config_text": text,
-        "altair": alt, "resources": res, "ai_root": ai_root, "inbox_path": inbox, "warnings": warnings, "notes": notes,
+        "altair": alt, "resources": res, "ai_root": ai_root, "inbox_path": inbox, "upload_path": upload, "warnings": warnings, "notes": notes,
     }
 
 
@@ -833,6 +851,8 @@ def write(inputs: dict[str, Any], pl: dict[str, Any]) -> dict[str, Any]:
         Path(ai_root).mkdir(parents=True, exist_ok=True)
         if pl.get("inbox_path") and not os.path.lexists(pl["inbox_path"]):
             Path(pl["inbox_path"]).mkdir(parents=True, exist_ok=True)  # 받은 파일 폴더(D3-46) — 공유는 관리자가 따로 만든다
+        if pl.get("upload_path") and not os.path.lexists(pl["upload_path"]):
+            Path(pl["upload_path"]).mkdir(parents=True, exist_ok=True)  # 브라우저 업로드 폴더(upload-report.md §6.1) — 업로드 API가 쓴다
     out["validation"] = validate(str(cfg))
     return out
 

@@ -19,6 +19,7 @@ from .fem_verify import fem_verifications
 from .geom_view import contour3d_cache, geom_previews
 from .equiv_check import eq_checks, eq_recipes
 from .mcp import api_audit, api_tokens, mcp_plans
+from .uploads import uploads
 
 __all__ = [
     "metadata",
@@ -55,5 +56,6 @@ __all__ = [
     "api_tokens",
     "mcp_plans",
     "api_audit",
+    "uploads",
     "TERMINAL_STATES",
 ]

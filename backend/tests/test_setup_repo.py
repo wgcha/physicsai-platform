@@ -595,6 +595,23 @@ def test_setup_config_inbox_helpers():
     assert m.inbox_share_hint({"computer_name": "S"}, "E:/d/inbox") is None
 
 
+def test_setup_config_upload_folder(tmp_path):
+    """upload-report.md §6.1: write가 <ai_root>/uploads(키 없음 = 기본)를 만든다. 명시적 null이면 만들지 않는다."""
+    t = _fake_tree(tmp_path)
+    res = _run(tmp_path, t, _inputs(t, computer_name="AISRV", smb_shares=[]))
+    assert (t["data"] / "uploads").is_dir() and res["write"]["validation"]["ok"]
+    assert not any(i.startswith("storage.upload_root") for i in res["write"]["validation"].get("issues", []))
+
+
+def test_setup_config_upload_helpers():
+    m = _module()
+    assert m.upload_folder("E:/d", False, None) == "E:/d/uploads" and m.upload_folder("E:\\d\\", True, "up\\x") == "E:/d/up/x"
+    assert m.upload_folder("E:/d", True, None) == ""  # null = 업로드 끔
+    assert m.upload_folder("E:/d", True, "E:/d/inside/up") == "E:/d/inside/up"
+    for bad in ("../x", "a b", "C:/other", "E:/d", "E:/dx/up", "_Backup", "x/_platform", "in:x", "up."):
+        assert m.upload_folder("E:/d", True, bad) == "", bad
+
+
 def test_setup_config_web_base_helpers():
     m = _module()
     assert m.normalize_web_base(None) == ("/home/", None) and m.normalize_web_base("") == ("/home/", None)

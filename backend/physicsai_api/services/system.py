@@ -16,6 +16,7 @@ from physicsai_core.errors import DomainError
 
 from ..auth import Principal
 from ..context import AppContext
+from . import uploads as upload_svc
 from .common import clamp_limit, decode_cursor, encode_cursor
 
 ALTAIR_KEYS = ("hyperstudy_path", "simlab_path", "edspy_path", "hw_exe_path", "hvtrans_exe_path", "hstpy_path")
@@ -98,6 +99,7 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                           "max_levels": s.surrogate_opt.max_levels},
         "geometry": geometry_status(s),  # geometry-engine.md §7.1
         "demo": bool(s.demo.enabled),
+        "upload": upload_svc.status_block(ctx),  # upload-report.md §6.4
     }
 
 

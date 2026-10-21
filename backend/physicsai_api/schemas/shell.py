@@ -12,7 +12,7 @@ from .jobs import JobSummary
 
 __all__ = [
     "StatusConfig", "StatusWorker", "StatusHpc", "KeyOk", "TemplateConfigured", "StatusLimits", "ResourceStatus",
-    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusAlgoDefaults", "StatusSurrogateOpt", "StatusResponse", "QueueSlot", "QueueLight",
+    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusAlgoDefaults", "StatusSurrogateOpt", "StatusUpload", "StatusResponse", "QueueSlot", "QueueLight",
     "QueueResponse", "MoveRequest", "GpuInfo", "ResourceJob", "ResourceLimits", "ResourcesResponse",
     "Notification", "NotificationList", "UnreadCount", "ReadRequest", "ReadResponse", "AdminConfig",
 ]
@@ -179,6 +179,11 @@ class StatusGeometry(Resp):
     reason: str | None = Field(None, description="Native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null")
 
 
+class StatusUpload(Resp):
+    enabled: bool = Field(description="브라우저 업로드 사용 가능(upload_root 설정·설정 검사 통과) — false면 PC 탭을 숨긴다(upload-report.md §6.4)")
+    free_bytes: int | None = Field(None, description="업로드 위치 드라이브의 여유 공간[B](읽지 못하면 null)")
+
+
 class StatusResponse(Resp):
     config: StatusConfig
     worker: StatusWorker
@@ -195,6 +200,7 @@ class StatusResponse(Resp):
     surrogate_opt: StatusSurrogateOpt | None = None
     geometry: StatusGeometry | None = None
     demo: bool = Field(False, description="시연 모드(fake tools 배포판) 여부 — true면 화면 상단에 '시연 모드' 배지")
+    upload: StatusUpload | None = None
 
 
 class QueueSlot(Resp):
