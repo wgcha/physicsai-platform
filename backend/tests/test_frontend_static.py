@@ -60,6 +60,13 @@ def test_static_serving_rules(settings_dict, tmp_path, engine, fake_dashboard):
         assert r.status_code == 200 and r.text == "console.log(1)" and "immutable" in r.headers["cache-control"]
         r = c.get("/physicsai/favicon.svg")
         assert r.status_code == 200 and r.text == "<svg/>" and r.headers["cache-control"] == "no-cache"
+        # 없는 해시 자산(이전 빌드 lazy chunk)은 index.html이 아니라 404, 없는 일반 경로는 계속 index.html 200
+        for p in ("/physicsai/assets/old-chunk-9f8e7d.js", "/physicsai/assets/sub/x.css", "/physicsai/assets/sub"):
+            r = c.get(p)
+            assert _is_not_found_json(r) and "<p>app</p>" not in r.text, (p, r.status_code)
+        assert c.head("/physicsai/assets/old-chunk-9f8e7d.js").status_code == 404
+        r = c.get("/physicsai/not-an-asset/old-chunk.js")
+        assert r.status_code == 200 and r.text == INDEX and r.headers["cache-control"] == "no-cache"
         # /physicsai → 308 /physicsai/(쿼리 유지)
         r = c.get("/physicsai", follow_redirects=False)
         assert r.status_code == 308 and r.headers["location"] == "/physicsai/"

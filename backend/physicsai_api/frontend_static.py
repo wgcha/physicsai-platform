@@ -4,6 +4,8 @@
 - `/physicsai` → 308 `/physicsai/`(쿼리 유지).
 - `/physicsai/api`·`/physicsai/api/...`는 이 라우트에 아예 걸리지 않는다(기존 API 404·405 JSON 그대로).
 - 빌드 폴더 안의 파일은 그대로, 없는 경로는 index.html(SPA fallback).
+  단 해시 자산 폴더(`assets/…`) 아래 없는 파일은 index.html 대신 404(업데이트 직후 이전 빌드의 lazy chunk 요청이
+  text/html 200으로 돌아가 동적 import가 MIME 오류로 실패하는 것을 막는다).
 - `..`·드라이브·절대경로·NUL 등 경로 탈출과, 심볼릭 링크·junction으로 빌드 폴더 밖을 가리키는 경로는 404.
 - index.html·일반 파일은 `Cache-Control: no-cache`, Vite 해시 자산(`assets/`)은 1년 immutable.
 - 인증 없음(SPA가 `/physicsai/api/me`로 로그인 여부를 판단). API 인증은 바뀌지 않는다.
@@ -107,6 +109,8 @@ def mount_frontend(app: FastAPI, frontend_root: str, *, root_redirect: str | Non
             if real.is_file():
                 cache = IMMUTABLE if parts[0] == HASHED_DIR and len(parts) > 1 else NO_CACHE
                 return FileResponse(real, headers={"Cache-Control": cache})
+            if parts[0] == HASHED_DIR and len(parts) > 1:  # 없는 해시 자산: SPA fallback 금지
+                raise DomainError("NOT_FOUND", "자산을 찾을 수 없습니다", status=404)
         index = root / "index.html"
         if not index.is_file():
             raise DomainError("NOT_FOUND", "프런트 빌드가 없습니다(관리자: server.frontend_root 확인)", status=404)
