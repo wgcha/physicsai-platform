@@ -26,6 +26,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import write_json_atomic, write_text
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
@@ -167,11 +168,14 @@ def so_next(ctx: Any) -> None:
         ps = ps_repo.get(conn, opt["param_set_id"])
     if ps is None:
         raise StepFailure("INPUT_INVALID", "템플릿(파라미터 세트)을 찾을 수 없습니다")
+    ps = nv.apply(ps, nv.vars_of(opt["settings"]))  # native-vars.md §4.2: 이 최적화 생성 때의 변수 정의 스냅숏 우선(세트를 고쳐도 재현)
     names = [str(p["name"]) for p in ps["parameters"]]
     if opt["settings"].get("multi_baseline"):  # opt-native §7: baseline 열 표 + 배정 메타(batch_native가 배정 준비본으로 생성)
         matrix = _multi_matrix(ctx, ps, opt["settings"], [c["values"] for c in cands])
     else:
-        matrix = build_matrix_for({"kind": "table", "text": _table_text(names, cands)}, ps, ctx.settings)
+        vd = nv.vars_of(opt["settings"])
+        matrix = build_matrix_for({"kind": "table", "text": _table_text(names, cands)}, ps, ctx.settings,
+                                  oor_parameters=nv.out_of_range_parameters(vd) if vd is not None else None)
     if matrix.problems or not matrix.rows:
         raise StepFailure("INPUT_INVALID", f"검증 조합을 만들 수 없습니다: {matrix.problems[:3]}")
     cfg = ctx.settings

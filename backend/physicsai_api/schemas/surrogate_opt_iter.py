@@ -8,6 +8,7 @@ from typing import Any
 from pydantic import Field
 
 from .common import Resp
+from .native_vars import VarNote, VarRow
 
 
 class SoProblem(Resp):
@@ -50,6 +51,10 @@ class SurrogateOptPreview(Resp):
     verification: str = "loop"
     variables_kind: dict[str, str] = Field(default_factory=dict)
     levels: dict[str, list[str]] | None = None
+    # native-vars.md §6.2: Native 템플릿만 채워진다(Altair는 빈 목록). var_notes = 경고({code,name,message})·안내(name 없음)
+    var_notes: list[VarNote] = Field(default_factory=list)
+    var_rows: list[VarRow] = Field(default_factory=list)
+    excluded: list[str] = Field(default_factory=list)
 
 
 class SurrogateOptSummary(Resp):

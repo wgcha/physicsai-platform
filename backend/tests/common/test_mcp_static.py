@@ -113,7 +113,7 @@ def test_v_mcp_6_contract_tool_list(spec):
     tools = sorted(o["x-mcp"]["tool"] for _, _, o in _ops(spec) if "tool" in (o.get("x-mcp") or {}))
     assert tools == sorted(["whoami", "system_status", "list_studies", "get_summary", "get_glossary", "check_prediction_input",
                             "list_job_kinds", "describe_job_kind", "plan_job", "run_job", "list_jobs", "job_status", "job_summary",
-                            "cancel_job", "list_audit", "ping"])
+                            "cancel_job", "list_audit", "ping", "get_native_vars"])
     by = {o["x-mcp"]["tool"]: o for _, _, o in _ops(spec) if "tool" in (o.get("x-mcp") or {})}
     assert by["run_job"]["x-mcp"]["risk"] == "run" and by["cancel_job"]["x-mcp"]["risk"] == "run"
     assert by["list_audit"]["x-mcp"]["risk"] == "admin" and by["plan_job"]["x-mcp"]["risk"] == "read"
@@ -254,7 +254,7 @@ def test_v_mcp_9_generator_deterministic_and_fresh():
     assert {f: disk[f] for f in ts.FILES} == a, "python scripts/gen_tool_specs.py 로 다시 생성하세요"
     oai = json.loads(a["tools.openai.json"])
     names = [f["function"]["name"] for f in oai]
-    assert names == sorted(names) and len(names) == 16
+    assert names == sorted(names) and len(names) == 17
     for f in oai:
         params = f["function"]["parameters"]
         assert not ({"oneOf", "anyOf", "allOf"} & set(params)) and params["type"] == "object" and f["function"]["strict"] is False

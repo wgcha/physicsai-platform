@@ -9,6 +9,7 @@ from .. import schemas as S
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
 from ..schemas import mcp as M
+from ..services import native_vars_api as vars_svc
 from ..services import param_set_baselines_api as bl_svc
 from ..services import param_set_native_api as native_svc
 from ..services import param_set_props_api as props_svc
@@ -159,3 +160,33 @@ def param_map_put(ps_id: str, body: S.ParamMapUpdate, request: Request, principa
 def param_map_confirm(ps_id: str, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     """매칭표 확정: 추천 등의 미결정 행은 accept로 기록, check 등급·needs_review 행은 명시 결정 필수(없으면 422 GEOM_INPUT_INVALID)."""
     return bl_svc.confirm_map(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))
+
+
+# ---- Native 템플릿 변수 정의(native-vars.md §6.1, MCP 표기 §6.6) ----
+_VARS_GET_MCP = {"tool": "get_native_vars", "risk": "read", "confirm": "never", "version": 1,
+                 "summary_en": "Native template variable definition (used vars, ranges, pool, training range)",
+                 "summary_ko": "Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)"}
+
+
+@router.get("/param-sets/{ps_id}/variables", response_model=S.NativeVars, responses=ERR, openapi_extra={"x-mcp": _VARS_GET_MCP})
+def native_vars_get(
+        request: Request, ps_id: str = Path(description="Native 파라미터 세트(템플릿) id", examples=["0b9f6f3e-2d3a-4c5e-9a41-5b1c2d3e4f50"]),
+        model_id: str | None = Query(default=None, description="학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음)",
+                                     examples=["7c1e0d52-8a3b-4f6d-b2c9-1e4a5f6b7c80"]),
+        revision: int | None = Query(default=None, ge=0, le=100000, description="특정 리비전의 변수 목록만 보려면 리비전 번호[번](0 = 등록 정의, 생략 = 현재)",
+                                     examples=[2]),
+        _p: Principal = Depends(get_principal)) -> dict:
+    """Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:
+    종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부), 리비전 이력을 돌려준다. `model_id`를 주면 그 모델의 학습 형상 범위(`train`)와
+    범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. 읽기 전용이며 부작용이 없다. 오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND,
+    422 NATIVE_VARS_UNSUPPORTED(Altair 템플릿)."""
+    return vars_svc.get_variables(get_ctx(request), ps_id, model_id, revision)
+
+
+@router.put("/param-sets/{ps_id}/variables", response_model=S.NativeVars, responses={**ERR, 403: {"model": S.ErrorResponse}},
+            openapi_extra={"x-mcp": {"exclude": "웹 전용 편집"}})
+def native_vars_put(ps_id: str, body: S.NativeVarsUpdate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
+    """세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.
+    422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.
+    경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨)."""
+    return vars_svc.put_variables(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))

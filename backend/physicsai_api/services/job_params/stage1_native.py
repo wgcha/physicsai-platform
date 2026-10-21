@@ -186,4 +186,9 @@ def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: An
               "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
               "on_run_failure": on_fail, "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"),
               "doe_id": doe_id, "param_set_id": ps["id"], **_sampling_param(p)}
+    from .. import native_vars_run  # 지연 import(순환: native_vars_api → param_set_native_api → jobs → job_params)
+
+    res = native_vars_run.resolve(ctx, conn, study, ps, None, None)  # native-vars.md §4.2: 세트 정의를 스냅숏으로 기록(그 자리 편집 없음)
+    if res.vars is not None:
+        params["vars"] = res.vars
     return params, {"doe_id": doe_id, "param_set_id": ps["id"]}, []

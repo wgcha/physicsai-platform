@@ -18,6 +18,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo  # noqa: F401 - 재노출(module.attr 유지)
 from physicsai_core.db.repositories import train as train_repo  # noqa: F401 - 재노출(module.attr 유지)
 from physicsai_core.errors import DomainError
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.sampling import registry as sampling_registry
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.state_machine import TERMINAL
@@ -25,7 +26,8 @@ from physicsai_core.state_machine import TERMINAL
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, require_config_ok, require_power
-from .job_params.stage4_batch import build_matrix, resolve_param_set
+from .job_params.stage4_batch import build_matrix_vars, resolve_param_set
+from .job_params.stage4_predict import model_for
 from .job_params.study_manage import study_gate
 from .jobs import retry_locked
 from .predict_batches_info import (  # noqa: F401 - 기존 경로 재노출
@@ -55,14 +57,19 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         s = studies_repo.require(conn, study_id)
         ps = resolve_param_set(conn, s, body.param_set_id)
-        matrix = build_matrix(ctx, conn, s, ps, body.source.model_dump())
+        try:  # native-vars.md §6.3: 학습 범위·out_of_range는 고른 모델 기준(Final·지정 모델이 없으면 학습 범위 없이 미리보기)
+            model = model_for(conn, s, body.model_id)
+        except DomainError:
+            model = None
+        matrix, res = build_matrix_vars(ctx, conn, s, ps, body.source.model_dump(), body.vars, model)
         est = _estimate_min(conn, study_id, len(matrix.rows)) if matrix.rows else None
         rows = [{"values": r.values} for r in matrix.rows]
         sampling = _sampling_info(conn, matrix.source_kind, matrix.source_meta, None, rows,
-                                  _recommended(ctx, body.source.kind, matrix.source_meta, ps))
+                                  _recommended(ctx, body.source.kind, matrix.source_meta, res.ps))
     return {"input_kind": ps.get("input_kind") or "assembly", "count": len(matrix.rows), "estimate_min": est,
             "rows": [r.as_dict() for r in matrix.rows], "problems": matrix.problems, "notes": matrix.notes,
-            "sampling": sampling}
+            "sampling": sampling, "var_rows": nv.var_rows(res.vars, res.pool) if res.vars is not None else [],
+            "excluded": list((res.vars or {}).get("excluded") or [])}
 
 
 def _recommended(ctx: AppContext, kind: str, meta: dict[str, Any], ps: dict[str, Any]) -> int | None:

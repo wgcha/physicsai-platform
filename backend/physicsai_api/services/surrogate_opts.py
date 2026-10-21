@@ -15,6 +15,7 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.stage4_predict.batch_matrix import build_matrix_for, lhs_values
 from physicsai_core.stage5_optimize.surrogate import criteria
 
@@ -48,7 +49,7 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
             "objective_available": n["valid_points"] is None or n["valid_points"] > 0, "problems": n["problems"],
             "mode": st["mode"], "performances": n["performances"], "algorithm": st["algorithm"],
             "algo_options": st["algo_options"], "verification": st["verification"], "variables_kind": n["variables_kind"],
-            "levels": st.get("levels")}
+            "levels": st.get("levels"), "var_notes": n["var_notes"], "var_rows": n["var_rows"], "excluded": n["excluded"]}
 
 
 def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
@@ -105,7 +106,8 @@ def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str,
     names = [x for x in st["names"] if x in {str(p["name"]) for p in n["ps"]["parameters"]}]
     vals = lhs_values(names, {k: (v[0], v[1]) for k, v in st["bounds"].items()}, ex["count"], ex["seed"])
     text = "\n".join([",".join(names), *[",".join(repr(float(v[k])) for k in names) for v in vals]]) + "\n"
-    matrix = build_matrix_for({"kind": "table", "text": text}, n["ps"], ctx.settings)
+    oor = nv.out_of_range_parameters(st["vars"]) if st.get("vars") else None  # native-vars.md §5.3: Native out_of_range = 학습 범위
+    matrix = build_matrix_for({"kind": "table", "text": text}, n["ps"], ctx.settings, oor_parameters=oor)
     if matrix.problems or not matrix.rows:
         raise _invalid([{"code": "EXPLORE_TOO_FEW", "field": "explore", "message": str(matrix.problems[:3])}])
     matrix.source_kind = "LHS"

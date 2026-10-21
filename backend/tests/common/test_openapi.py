@@ -82,5 +82,7 @@ def test_all_routes_prefixed():
         "/mcp/ping", "/mcp/job-kinds", "/mcp/job-kinds/{kind}", "/mcp/jobs/plan", "/mcp/jobs", "/mcp/jobs/{job_id}",
         "/mcp/jobs/{job_id}/summary", "/mcp/jobs/{job_id}/cancel", "/mcp/summary/{entity}/{id}", "/mcp/system", "/mcp/audit",
         "/mcp/glossary", "/mcp/tools",
+        # native-vars.md §6.1: Native 템플릿 변수 정의(선택·범위)
+        "/param-sets/{ps_id}/variables",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

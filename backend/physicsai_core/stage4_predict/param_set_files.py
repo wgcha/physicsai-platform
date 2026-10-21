@@ -16,6 +16,7 @@ from ..naming import NAME_RE, RUN_KEY_RE
 @dataclass
 class ParamSetFolder:
     problems: list[dict[str, Any]] = field(default_factory=list)
+    warnings: list[dict[str, Any]] = field(default_factory=list)  # 막지 않는 안내(Native 공칭 범위 밖 VAR_NOMINAL_OUTSIDE)
     unit_system: str = "mm-ton-s"
     parameters: list[dict[str, Any]] = field(default_factory=list)
     responses: list[dict[str, Any]] = field(default_factory=list)
@@ -74,7 +75,8 @@ def _read_text(path: str) -> str:
         return fh.read()
 
 
-def _load_parameters(f: ParamSetFolder, folder: str) -> None:
+def _load_parameters(f: ParamSetFolder, folder: str, *, require_nominal_inside: bool = True) -> None:
+    """`require_nominal_inside=False`(Native 폴더 검증만, native-vars.md NV-10): `min ≤ nominal ≤ max` 검사를 `min ≤ max`로 완화한다."""
     pj, pc = os.path.join(folder, "parameters.json"), os.path.join(folder, "parameters.csv")
     rows: list[dict[str, Any]] = []
     if os.path.isfile(pj):
@@ -123,9 +125,15 @@ def _load_parameters(f: ParamSetFolder, folder: str) -> None:
         if nom is None or lo is None or hi is None:
             _p(f, "PARAMETER_VALUE_INVALID", f"'{name}'의 nominal/min/max는 유한한 숫자여야 합니다", f.param_source)
             continue
-        if not lo <= nom <= hi:
+        if require_nominal_inside and not lo <= nom <= hi:
             _p(f, "PARAMETER_RANGE_INVALID", f"'{name}': min ≤ nominal ≤ max 이어야 합니다", f.param_source)
             continue
+        if not require_nominal_inside and not lo <= hi:
+            _p(f, "PARAMETER_RANGE_INVALID", f"'{name}': min ≤ max 이어야 합니다", f.param_source)
+            continue
+        if not require_nominal_inside and not lo <= nom <= hi:
+            f.warnings.append({"code": "VAR_NOMINAL_OUTSIDE", "message": f"'{name}' 공칭 {nom:g}이 범위 {lo:g}~{hi:g} 밖입니다(기준안은 범위 밖 점으로 표시)",
+                               "file": f.param_source})
         unit = str(r.get("unit") or "").strip()[:40]
         f.parameters.append({"name": name, "nominal": nom, "min": lo, "max": hi, "unit": unit})
     if not f.parameters and not f.problems:

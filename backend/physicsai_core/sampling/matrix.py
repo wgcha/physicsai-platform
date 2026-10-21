@@ -124,6 +124,7 @@ def build_matrix(
     samples: Sequence[Mapping[str, Any]] | None = None,
     continue_batch: Mapping[str, Any] | None = None,
     param_set_id: str | None = None,
+    oor_parameters: Sequence[Mapping[str, Any]] | None = None,
 ) -> BatchMatrix:
     """템플릿(param_sets.parameters·tpl_params) + source → 조합 행(doe_no 순). train_doe는 samples(header, rows)를 넘긴다.
 
@@ -148,7 +149,7 @@ def build_matrix(
     else:
         raw, meta, notes, dsn = _new_kind(kind, source, parameters, tpl_params, max_runs, integer_rounding, problems,
                                           continue_batch, param_set_id)
-    rows = [_make_row(no, rk, v, parameters, tpl_params, integer_rounding) for no, rk, v in raw]
+    rows = [_make_row(no, rk, v, parameters, tpl_params, integer_rounding, oor_parameters) for no, rk, v in raw]
     if dsn is not None:
         notes = _all_notes(dsn, notes, rows, names)
     return BatchMatrix(SOURCE_KINDS[kind], rows, problems, meta, notes)
@@ -157,13 +158,14 @@ def build_matrix(
 def build_matrix_for(source: Mapping[str, Any], param_set: Mapping[str, Any], settings: Any, *,
                      samples_header: Sequence[str] | None = None,
                      samples: Sequence[Mapping[str, Any]] | None = None,
-                     continue_batch: Mapping[str, Any] | None = None) -> BatchMatrix:
+                     continue_batch: Mapping[str, Any] | None = None,
+                     oor_parameters: Sequence[Mapping[str, Any]] | None = None) -> BatchMatrix:
     """param_sets 행 + 설정(predict_batch·predict.integer_rounding)으로 build_matrix(미리보기·작업 생성·워커 공용)."""
     return build_matrix(
         source, parameters=param_set["parameters"], tpl_params=param_set.get("tpl_params") or [],
         max_runs=settings.predict_batch.max_runs, table_max_bytes=settings.predict_batch.table_max_bytes,
         integer_rounding=settings.predict.integer_rounding, samples_header=samples_header, samples=samples,
-        continue_batch=continue_batch, param_set_id=param_set.get("id"),
+        continue_batch=continue_batch, param_set_id=param_set.get("id"), oor_parameters=oor_parameters,
     )
 
 

@@ -14,6 +14,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.geometry.messages import MAX_MESSAGE, category_of
 from physicsai_core.paths import display_path
 from physicsai_core.sampling import designs as sampling_designs
@@ -53,7 +54,7 @@ def _sampling_info(conn: Any, source_kind: str, meta: dict[str, Any] | None, own
     kind = sampling_registry.kind_of_source(source_kind)
     if kind is None:
         return None
-    meta = dict(meta or {})
+    meta = {k: v for k, v in (meta or {}).items() if k != "vars"}  # native-vars.md §4.2: 변수 스냅숏은 `vars`로 따로 내보낸다
     doe_type = doe_opts = None
     if source_kind == "TRAIN_DOE":
         d = train_repo.get_doe(conn, str(meta.get("doe_id") or ""))
@@ -143,7 +144,8 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
         "param_set": {"id": b["param_set_id"], "label": ps.get("label")},
         "model": {"id": b["model_id"], "name": f"{m['name']} v{m['version']}" if m else b["model_id"]},
         "job_id": b["job_id"], "multi_execution": b["multi_execution"], **pb_repo.counts(conn, b["id"]),
-        "parameters": [p["name"] for p in ps.get("parameters") or []],
+        "parameters": [p["name"] for p in nv.apply(ps, nv.vars_of(b.get("source_meta")))["parameters"] or []],  # 스냅숏 우선(native-vars §4.2)
+        "vars": nv.vars_of(b.get("source_meta")),
         "responses": [{"name": x["name"], "unit": x.get("unit") or ""} for x in ps.get("responses") or []],
         "rows": out_rows, "created_at": b["created_at"], "created_by_name": b["created_by_name"],
         "finished_at": b["finished_at"], "can_cancel": not owned and _can_cancel(b, principal, s["project_id"]),

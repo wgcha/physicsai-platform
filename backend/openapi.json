@@ -10366,6 +10366,16 @@
             "title": "Shell Only",
             "type": "boolean"
           },
+          "vars_count": {
+            "default": 0,
+            "title": "Vars Count",
+            "type": "integer"
+          },
+          "vars_revision": {
+            "default": 0,
+            "title": "Vars Revision",
+            "type": "integer"
+          },
           "view_status": {
             "default": "MISSING",
             "enum": [
@@ -10401,6 +10411,271 @@
           }
         },
         "title": "NativePrepareRequest",
+        "type": "object"
+      },
+      "NativeVarHistory": {
+        "properties": {
+          "count": {
+            "default": 0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "saved_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved At"
+          },
+          "saved_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved By Name"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "NativeVarHistory",
+        "type": "object"
+      },
+      "NativeVarItem": {
+        "additionalProperties": false,
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          },
+          "name": {
+            "maxLength": 64,
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "min",
+          "max"
+        ],
+        "title": "NativeVarItem",
+        "type": "object"
+      },
+      "NativeVarPoolRow": {
+        "properties": {
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "default_range": {
+            "$ref": "#/components/schemas/VarRange"
+          },
+          "feasible": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarFeasible"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "group": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Group"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "title": "Nominal",
+            "type": "number"
+          },
+          "position": {
+            "default": false,
+            "title": "Position",
+            "type": "boolean"
+          },
+          "ref_locked": {
+            "default": false,
+            "title": "Ref Locked",
+            "type": "boolean"
+          },
+          "train": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "type": {
+            "default": "",
+            "title": "Type",
+            "type": "string"
+          },
+          "unit": {
+            "default": "mm",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "nominal",
+          "default_range"
+        ],
+        "title": "NativeVarPoolRow",
+        "type": "object"
+      },
+      "NativeVars": {
+        "description": "세트 변수 정의(현재 리비전). `variables` = 선택한 형상 행(풀 순서), `pool` = 고를 수 있는 전체 변수. PUT 응답은 `warnings`가 채워진다.",
+        "properties": {
+          "editable": {
+            "title": "Editable",
+            "type": "boolean"
+          },
+          "features_sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Features Sha256"
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/NativeVarHistory"
+            },
+            "title": "History",
+            "type": "array"
+          },
+          "notes": {
+            "items": {
+              "$ref": "#/components/schemas/VarNote"
+            },
+            "title": "Notes",
+            "type": "array"
+          },
+          "pool": {
+            "items": {
+              "$ref": "#/components/schemas/NativeVarPoolRow"
+            },
+            "title": "Pool",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "revision": {
+            "title": "Revision",
+            "type": "integer"
+          },
+          "stale_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Stale Names",
+            "type": "array"
+          },
+          "train_source": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Train Source"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/NativeVarItem"
+            },
+            "title": "Variables",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/VarNote"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "revision",
+          "editable",
+          "variables",
+          "pool"
+        ],
+        "title": "NativeVars",
+        "type": "object"
+      },
+      "NativeVarsUpdate": {
+        "additionalProperties": false,
+        "description": "PUT /param-sets/{id}/variables: 형상 행 전체 교체. base_revision = 불러온 시점의 리비전(다르면 409).",
+        "properties": {
+          "base_revision": {
+            "minimum": 0.0,
+            "title": "Base Revision",
+            "type": "integer"
+          },
+          "variables": {
+            "items": {
+              "$ref": "#/components/schemas/NativeVarItem"
+            },
+            "maxItems": 300,
+            "title": "Variables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "base_revision",
+          "variables"
+        ],
+        "title": "NativeVarsUpdate",
         "type": "object"
       },
       "NativeWarning": {
@@ -12472,6 +12747,18 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "vars": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vars"
           }
         },
         "required": [
@@ -12513,6 +12800,14 @@
             ],
             "title": "Estimate Min"
           },
+          "excluded": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded",
+            "type": "array"
+          },
           "input_kind": {
             "enum": [
               "assembly",
@@ -12552,6 +12847,14 @@
                 "type": "null"
               }
             ]
+          },
+          "var_rows": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/VarRow"
+            },
+            "title": "Var Rows",
+            "type": "array"
           }
         },
         "required": [
@@ -12566,6 +12869,18 @@
       "PredictBatchPreviewRequest": {
         "additionalProperties": false,
         "properties": {
+          "model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "학습 범위를 볼 같은 Study의 모델 id(생략 = Final 모델)",
+            "title": "Model Id"
+          },
           "param_set_id": {
             "anyOf": [
               {
@@ -12626,6 +12941,17 @@
               }
             ],
             "title": "Source"
+          },
+          "vars": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarsEdit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED"
           }
         },
         "required": [
@@ -18637,6 +18963,17 @@
             ],
             "title": "Tol Rel"
           },
+          "vars": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarsEdit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED"
+          },
           "verification": {
             "anyOf": [
               {
@@ -18695,6 +19032,13 @@
               }
             ],
             "title": "Estimate Min"
+          },
+          "excluded": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded",
+            "type": "array"
           },
           "explore_count": {
             "title": "Explore Count",
@@ -18763,6 +19107,20 @@
               "$ref": "#/components/schemas/SoProblem"
             },
             "title": "Problems",
+            "type": "array"
+          },
+          "var_notes": {
+            "items": {
+              "$ref": "#/components/schemas/VarNote"
+            },
+            "title": "Var Notes",
+            "type": "array"
+          },
+          "var_rows": {
+            "items": {
+              "$ref": "#/components/schemas/VarRow"
+            },
+            "title": "Var Rows",
             "type": "array"
           },
           "variables_kind": {
@@ -18922,6 +19280,13 @@
           "job_id": {
             "title": "Job Id",
             "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/VarNote"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -19861,6 +20226,197 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "VarFeasible": {
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "title": "VarFeasible",
+        "type": "object"
+      },
+      "VarNote": {
+        "description": "경고·안내: 경고는 name 있음(VAR_*), 안내(TRAIN_RANGE_*·VARS_FROM_DOE)는 name 없음.",
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "VarNote",
+        "type": "object"
+      },
+      "VarRange": {
+        "properties": {
+          "max": {
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "title": "Min",
+            "type": "number"
+          }
+        },
+        "required": [
+          "min",
+          "max"
+        ],
+        "title": "VarRange",
+        "type": "object"
+      },
+      "VarRow": {
+        "description": "미리보기 표 초기화 행(⑥ `var_rows`·④ 일괄 `var_rows`): 유효 변수 1개의 기준 범위·학습 범위·모핑 가능 범위.",
+        "properties": {
+          "base": {
+            "$ref": "#/components/schemas/VarRange"
+          },
+          "feasible": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarFeasible"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nominal": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nominal"
+          },
+          "origin": {
+            "title": "Origin",
+            "type": "string"
+          },
+          "position": {
+            "default": false,
+            "title": "Position",
+            "type": "boolean"
+          },
+          "train": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarRange"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "origin",
+          "base"
+        ],
+        "title": "VarRow",
+        "type": "object"
+      },
+      "VarsEdit": {
+        "additionalProperties": false,
+        "description": "⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).\n유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED.",
+        "properties": {
+          "add": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 300,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)",
+            "title": "Add"
+          },
+          "exclude": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 300,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "세트 정의 변수를 이 실행에서 제외(공칭 유지, 결과 표에 없음)",
+            "title": "Exclude"
+          }
+        },
+        "title": "VarsEdit",
         "type": "object"
       },
       "VersionBody": {
@@ -27229,6 +27785,210 @@
         "tags": [
           "param-sets"
         ]
+      }
+    },
+    "/physicsai/api/param-sets/{ps_id}/variables": {
+      "get": {
+        "description": "Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:\n종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부), 리비전 이력을 돌려준다. `model_id`를 주면 그 모델의 학습 형상 범위(`train`)와\n범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. 읽기 전용이며 부작용이 없다. 오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND,\n422 NATIVE_VARS_UNSUPPORTED(Altair 템플릿).",
+        "operationId": "native_vars_get_physicsai_api_param_sets__ps_id__variables_get",
+        "parameters": [
+          {
+            "description": "Native 파라미터 세트(템플릿) id",
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "description": "Native 파라미터 세트(템플릿) id",
+              "examples": [
+                "0b9f6f3e-2d3a-4c5e-9a41-5b1c2d3e4f50"
+              ],
+              "title": "Ps Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음)",
+            "in": "query",
+            "name": "model_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음)",
+              "examples": [
+                "7c1e0d52-8a3b-4f6d-b2c9-1e4a5f6b7c80"
+              ],
+              "title": "Model Id"
+            }
+          },
+          {
+            "description": "특정 리비전의 변수 목록만 보려면 리비전 번호[번](0 = 등록 정의, 생략 = 현재)",
+            "in": "query",
+            "name": "revision",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 100000,
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "특정 리비전의 변수 목록만 보려면 리비전 번호[번](0 = 등록 정의, 생략 = 현재)",
+              "examples": [
+                2
+              ],
+              "title": "Revision"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeVars"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Native Vars Get",
+        "tags": [
+          "param-sets"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "risk": "read",
+          "summary_en": "Native template variable definition (used vars, ranges, pool, training range)",
+          "summary_ko": "Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)",
+          "tool": "get_native_vars",
+          "version": 1
+        }
+      },
+      "put": {
+        "description": "세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.\n422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.\n경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨).",
+        "operationId": "native_vars_put_physicsai_api_param_sets__ps_id__variables_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "ps_id",
+            "required": true,
+            "schema": {
+              "title": "Ps Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NativeVarsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NativeVars"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          }
+        },
+        "summary": "Native Vars Put",
+        "tags": [
+          "param-sets"
+        ],
+        "x-mcp": {
+          "exclude": "웹 전용 편집"
+        }
       }
     },
     "/physicsai/api/param-sets/{ps_id}/view": {

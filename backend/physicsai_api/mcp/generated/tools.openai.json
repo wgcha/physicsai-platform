@@ -102,6 +102,38 @@
   },
   {
     "function": {
+      "description": "Native template variable definition (used vars, ranges, pool, training range) / Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)",
+      "name": "get_native_vars",
+      "parameters": {
+        "properties": {
+          "model_id": {
+            "description": "학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음)",
+            "nullable": true,
+            "type": "string"
+          },
+          "ps_id": {
+            "description": "Native 파라미터 세트(템플릿) id",
+            "type": "string"
+          },
+          "revision": {
+            "description": "특정 리비전의 변수 목록만 보려면 리비전 번호[번](0 = 등록 정의, 생략 = 현재)",
+            "maximum": 100000,
+            "minimum": 0,
+            "nullable": true,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "ps_id"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
       "description": "Summary of a study, param set, DOE, batch, optimization, check ... / study·param_set·train_doe·predict_batch 등 엔티티 요약",
       "name": "get_summary",
       "parameters": {

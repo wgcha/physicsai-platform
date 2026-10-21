@@ -2311,6 +2311,48 @@
             },
             "title": "CaptureLegend",
             "type": "object"
+          },
+          "VarsEdit": {
+            "additionalProperties": false,
+            "description": "⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).\n유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED.",
+            "properties": {
+              "add": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 300,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)",
+                "title": "Add"
+              },
+              "exclude": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 300,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "세트 정의 변수를 이 실행에서 제외(공칭 유지, 결과 표에 없음)",
+                "title": "Exclude"
+              }
+            },
+            "title": "VarsEdit",
+            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -2423,6 +2465,18 @@
               }
             ],
             "title": "Source"
+          },
+          "vars": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VarsEdit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜) — get_native_vars로 변수 풀 확인"
           }
         },
         "required": [
@@ -2761,6 +2815,48 @@
             ],
             "title": "SoObserve",
             "type": "object"
+          },
+          "VarsEdit": {
+            "additionalProperties": false,
+            "description": "⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).\n유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED.",
+            "properties": {
+              "add": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 300,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)",
+                "title": "Add"
+              },
+              "exclude": {
+                "anyOf": [
+                  {
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 300,
+                    "type": "array"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "세트 정의 변수를 이 실행에서 제외(공칭 유지, 결과 표에 없음)",
+                "title": "Exclude"
+              }
+            },
+            "title": "VarsEdit",
+            "type": "object"
           }
         },
         "additionalProperties": false,
@@ -2999,6 +3095,18 @@
             "default": null,
             "description": "수렴 상대 허용[-](0~1)",
             "title": "Tol Rel"
+          },
+          "vars": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/VarsEdit"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED"
           },
           "verification": {
             "anyOf": [

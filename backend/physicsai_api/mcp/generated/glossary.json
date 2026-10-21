@@ -1476,11 +1476,61 @@
       "code": "NATIVE_PREP_MISSING",
       "message_ko": "형상 피처 파일이 없습니다 — 형상 준비를 다시 하세요",
       "sources": [
+        "backend/physicsai_api/services/native_vars_api.py",
         "backend/physicsai_api/services/param_set_native_api.py",
         "backend/physicsai_api/services/param_set_native_train.py",
         "worker/physicsai_worker/steps/stage4_predict/baseline_map.py"
       ],
       "status": 409
+    },
+    "NATIVE_VARS_CONFLICT": {
+      "code": "NATIVE_VARS_CONFLICT",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/native_vars_api.py"
+      ],
+      "status": 409
+    },
+    "NATIVE_VARS_GEOMETRY_OFF": {
+      "code": "NATIVE_VARS_GEOMETRY_OFF",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/native_vars_api.py"
+      ],
+      "status": 409
+    },
+    "NATIVE_VARS_INVALID": {
+      "code": "NATIVE_VARS_INVALID",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/native_vars_api.py"
+      ],
+      "status": 422
+    },
+    "NATIVE_VARS_MULTI_UNSUPPORTED": {
+      "code": "NATIVE_VARS_MULTI_UNSUPPORTED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/native_vars_api.py"
+      ],
+      "status": 409
+    },
+    "NATIVE_VARS_REVISION_NOT_FOUND": {
+      "code": "NATIVE_VARS_REVISION_NOT_FOUND",
+      "message_ko": "변수 정의 리비전 {…}을 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/native_vars_api.py"
+      ],
+      "status": 404
+    },
+    "NATIVE_VARS_UNSUPPORTED": {
+      "code": "NATIVE_VARS_UNSUPPORTED",
+      "message_ko": "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_batch.py",
+        "backend/physicsai_api/services/native_vars_api.py"
+      ],
+      "status": 422
     },
     "NOT_FOUND": {
       "code": "NOT_FOUND",
@@ -1501,6 +1551,7 @@
         "backend/physicsai_api/services/job_params/stage4_native.py",
         "backend/physicsai_api/services/jobs.py",
         "backend/physicsai_api/services/mcp.py",
+        "backend/physicsai_api/services/native_vars_api.py",
         "backend/physicsai_api/services/param_set_baselines_api.py",
         "backend/physicsai_api/services/param_set_native_api.py",
         "backend/physicsai_api/services/param_set_props_api.py",
@@ -1616,7 +1667,7 @@
     },
     "PARAM_FEATURE_MISMATCH": {
       "code": "PARAM_FEATURE_MISMATCH",
-      "message_ko": "다시 준비한 형상 피처의 이름 집합이 기존 파라미터 표와 다릅니다(세트는 바뀌지 않았습니다)",
+      "message_ko": "parameters.json의 이름 집합이 형상 피처(그룹 대표)와 다릅니다",
       "sources": [
         "worker/physicsai_worker/steps/stage4_predict/np_register.py"
       ],

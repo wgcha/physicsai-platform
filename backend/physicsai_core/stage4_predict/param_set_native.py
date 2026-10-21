@@ -88,7 +88,7 @@ def validate_native_folder(folder: str, *, max_total_bytes: int, starter_glob: s
     f.total_bytes = total
     if total > max_total_bytes:
         _p(f, "PARAM_SET_TOO_LARGE", f"폴더 총량이 상한({max_total_bytes} bytes)을 넘습니다")
-    _load_parameters(f, folder)
+    _load_parameters(f, folder, require_nominal_inside=False)  # native-vars.md NV-10: 공칭이 범위 밖인 정의 허용(Altair 검증은 기본값 True)
     exts = tuple(e.lower() for e in step_extensions)
     cad = os.path.join(folder, "cad")
     if shell_only:

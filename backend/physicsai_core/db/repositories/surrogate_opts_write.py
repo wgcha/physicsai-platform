@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 from collections.abc import Mapping
 from typing import Any
 
@@ -70,6 +71,10 @@ def create_opt_batch(conn: Connection, *, opt: Mapping[str, Any], iter_no: int, 
     }
     if display:  # D3-61 마무리 캡처: 기준안·최적안 같은 범례(fixed)
         params["display"] = dict(display)
+    sv = s.get("vars") if isinstance(s.get("vars"), dict) else None
+    if sv:  # native-vars.md §4.2: 소유 배치도 이 최적화의 변수 스냅숏을 기록(워커 bp_prep·조회는 스냅숏 우선)
+        params["vars"] = sv
+        matrix = dataclasses.replace(matrix, source_meta={**matrix.source_meta, "vars": sv})
     from .param_sets import get as _get_ps
 
     if (_get_ps(conn, opt["param_set_id"]) or {}).get("engine") == "native":  # geometry-engine.md §7.7: 워커가 엔진으로 분기

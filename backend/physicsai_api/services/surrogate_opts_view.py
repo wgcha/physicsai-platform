@@ -10,6 +10,7 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.paths import display_path
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
@@ -165,7 +166,7 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
         **s17,
         "final": _final_out(ctx, conn, s, o, final_it, batches),
         "parameters": [{"name": p["name"], "nominal": p.get("nominal"), "min": p["min"], "max": p["max"], "unit": p.get("unit") or ""}
-                       for p in ps.get("parameters") or []],
+                       for p in nv.apply(ps, nv.vars_of(o["settings"]))["parameters"] or []],  # native-vars.md §4.2: 스냅숏 우선
         "id": o["id"], "label": so_repo.opt_label(o["opt_no"]), "status": o["status"],
         "dir": display_path(ctx.settings.storage.ai_root, s["folder_name"], o["dir_rel"]),
         "param_set": {"id": o["param_set_id"], "label": ps.get("label"), "input_kind": o["input_kind"]},
@@ -175,9 +176,15 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
         "iterations": iterations, "runs": runs, "best": o["best"], "stop_reason": o["stop_reason"],
         "can_cancel": o["status"] in so_repo.ACTIVE and can_exec and (principal.is_global_admin or o["created_by"] == principal.user_id),
         "can_resume": o["status"] == "FAILED" and can_exec,
-        "warnings": list((job or {}).get("warnings") or []), "current_job_id": o["current_job_id"],
+        "warnings": [*list((job or {}).get("warnings") or []), *_var_warnings(o["settings"])], "current_job_id": o["current_job_id"],
         "created_at": o["created_at"], "created_by_name": o["created_by_name"], "finished_at": o["finished_at"],
     }
+
+
+def _var_warnings(settings: dict[str, Any]) -> list[dict[str, str]]:
+    """스냅숏(`settings.vars`)과 `settings.bounds`로 범위 경고를 다시 만든다(native-vars.md §6.2 — 생성 응답·조회 공통)."""
+    v = nv.vars_of(settings)
+    return nv.warn_rows(v, settings.get("bounds")) if v is not None else []
 
 
 def _final_out(ctx: AppContext, conn: Any, study: dict[str, Any], o: dict[str, Any], it: dict[str, Any] | None,

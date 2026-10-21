@@ -108,7 +108,10 @@ def _finite(v: Any) -> float | None:
 
 
 def _make_row(doe_no: int, run_key: str, values: dict[str, float], parameters: Sequence[Mapping[str, Any]],
-              tpl_params: Sequence[Mapping[str, Any]], rounding: str) -> BatchRow:
+              tpl_params: Sequence[Mapping[str, Any]], rounding: str,
+              oor_parameters: Sequence[Mapping[str, Any]] | None = None) -> BatchRow:
+    """oor_parameters: `out_of_range` 판정 기준 `[{name, min, max}]`(None = 세트 범위, Native 일괄은 학습 범위 — native-vars.md §5.3)."""
     applied = nearest.applied_values(list(tpl_params), values, rounding)  # type: ignore[arg-type]
-    oor = [o["name"] for o in nearest.out_of_range(list(parameters), values)]  # type: ignore[arg-type]
+    basis = parameters if oor_parameters is None else oor_parameters
+    oor = [o["name"] for o in nearest.out_of_range(list(basis), values)]  # type: ignore[arg-type]
     return BatchRow(doe_no, run_key, dict(values), applied, oor)

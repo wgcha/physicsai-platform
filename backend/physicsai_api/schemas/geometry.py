@@ -36,6 +36,9 @@ class NativeInfo(Resp):
     # extract-filter.md §6.7: 세트 등록 때 쓴 추출 조건(S/native/extract/parameter_features.json `filter`에서 읽은 정규화본, 없으면 null).
     # draft_max_deg는 추출에 쓴 유효값(기본이어도 값이 있음)
     extract_filter: ExtractFilter | None = None
+    # native-vars.md §6.1: 변수 정의 리비전(0 = 등록 정의)·형상 행 수
+    vars_revision: int = 0
+    vars_count: int = 0
 
 
 class NativeFeature(Resp):

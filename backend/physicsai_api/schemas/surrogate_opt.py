@@ -9,6 +9,7 @@ from typing import Any
 from pydantic import Field
 
 from .common import Resp
+from .native_vars import VarNote
 from .surrogate_opt_req import (  # noqa: F401 - 기존 경로 재노출
     METRIC_PATTERN, SoExploreNew, SoExploreReuse, SoExplore, SoObjective, SoConstraint, SoObserve, SurrogateOptCreate,
     SoVerifyPoint, SurrogateOptVerify,
@@ -146,3 +147,4 @@ class SurrogateOptVerifyResult(Resp):
     batch_label: str
     job_id: str
     iter_no: int
+    warnings: list[VarNote] = Field(default_factory=list)  # native-vars.md §6.2: VAR_OUT_OF_BOUNDS·VAR_OUT_OF_TRAIN·VAR_OUT_OF_FEASIBLE

@@ -7,6 +7,7 @@ from typing import Annotated, Literal, Union
 from pydantic import Field
 
 from .common import Req
+from .native_vars import VarsEdit
 
 TABLE_TEXT_MAX_CHARS = 16_777_216  # 모양 상한(요청 크기 방어). 실제 상한은 predict_batch.table_max_bytes(TEXT_TOO_LARGE)
 
@@ -105,3 +106,6 @@ BatchSource = Annotated[
 class PredictBatchPreviewRequest(Req):
     param_set_id: str | None = None  # 생략 = 현재 세트
     source: BatchSource
+    # native-vars.md §6.3: 학습 범위(경고·out_of_range)는 이 모델 기준(생략 = Final 모델), vars = Native 변수 그 자리 편집
+    model_id: str | None = Field(default=None, description="학습 범위를 볼 같은 Study의 모델 id(생략 = Final 모델)")
+    vars: VarsEdit | None = Field(default=None, description="Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED")

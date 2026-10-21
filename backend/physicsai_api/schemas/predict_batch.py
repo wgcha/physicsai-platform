@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Literal
 
 from .common import Resp
+from .native_vars import VarRow
 from .predict_batch_source import (  # noqa: F401 - 기존 경로 재노출
     TABLE_TEXT_MAX_CHARS, BatchSourceLhs, BatchSourceTable, BatchSourceTrainDoe, BatchSourceLhsOpt, BatchSourceSobol,
     BatchSourceFullfact, BatchSourceFracfact, BatchSourcePb, BatchSourceBbd, BatchSourceCcd, BatchSource,
@@ -79,8 +80,10 @@ class PredictBatchPreview(Resp):
     estimate_min: float | None = None  # 최근 성공 PREDICT 5개 소요 중앙값 × N(분), 없으면 null
     rows: list[BatchPreviewRow]
     problems: list[BatchProblem]
-    notes: list[BatchNote] = []  # S15: 막지 않는 안내
+    notes: list[BatchNote] = []  # S15: 막지 않는 안내 + native-vars.md §6.3 경고(VAR_*)·학습 범위 안내
     sampling: SamplingInfo | None = None
+    var_rows: list[VarRow] = []  # native-vars.md §6.3: Native 변수 표 초기화(유효 변수, Altair는 빈 목록)
+    excluded: list[str] = []
 
 
 class BatchRef(Resp):
@@ -176,6 +179,7 @@ class PredictBatch(Resp):
     finished_at: datetime | None = None
     can_cancel: bool = False
     can_retry_failed: bool = False
+    vars: dict[str, Any] | None = None  # native-vars.md §6.3: 이 배치가 쓴 Native 변수 정의 스냅숏(없으면 null)
 
 
 class BatchRetryFailed(Resp):

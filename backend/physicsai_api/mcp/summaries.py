@@ -174,7 +174,9 @@ def _param_set(ctx: Any, principal: Any, pid: str, top_n: int) -> dict[str, Any]
     facts = facts_of(p, ("label", "engine", "input_kind", "unit_system", "sample_count", "is_current", "origin", "train_doe_id",
                          "registered_by_name", "registered_at"), kind=native.get("kind") if isinstance(native, dict) else None,
                      prep_status=native.get("status") if isinstance(native, dict) else None,
-                     baseline_count=len(p.get("baselines") or []), parameter_count=len(params), response_count=len(resp))
+                     baseline_count=len(p.get("baselines") or []), parameter_count=len(params), response_count=len(resp),
+                     vars_revision=native.get("vars_revision") if isinstance(native, dict) else None,  # native-vars.md §6.6: 변수 정의 리비전(0 = 등록 정의)
+                     vars_count=native.get("vars_count") if isinstance(native, dict) else None)
     tabs = [table("parameters", params, top_n), table("responses", resp, top_n)]
     links = [{"entity": "study", "id": p["study_id"], "rel": "study"}]
     return envelope("param_set", pid, p.get("label") or pid, None, facts, tabs, links)
