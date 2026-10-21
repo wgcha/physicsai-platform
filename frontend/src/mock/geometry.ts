@@ -3,7 +3,7 @@
 // 3S(POST props/scan 202·GET props·PUT props → ParamSet), 4B(baselines 추가 202·삭제·disable, remap 202, param-map GET·PUT·confirm),
 // ① GET /studies/{id}/train/features. 응답 모양은 backend physicsai_api(services/param_set_props_api·param_set_baselines_api)를 따른다.
 import type {
-  GeomOptions, Job, MapDecision, MapRow, NativeFeature, NativeFeatures, ParamMap, ParamSet, ParamSetDiscover, ParamSetParameter, ShellProp, ShellProps, StatusGeometry, Study, TrainParam,
+  ExtractFilter, GeomOptions, Job, MapDecision, MapRow, NativeFeature, NativeFeatures, ParamMap, ParamSet, ParamSetDiscover, ParamSetParameter, ShellProp, ShellProps, StatusGeometry, Study, TrainParam,
 } from "../api/types";
 import { getOpt } from "../lib/geometry";
 import { encodePng } from "./png";
@@ -12,6 +12,7 @@ import { err, needPower, ok, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { createJobFor } from "./jobs";
 import { iso } from "./base";
+import { checkFilter, normalizeFilter, typeSelected } from "./extractFilter";
 
 /** 설정 geometry.defaults(§4.9) */
 export const GEOM_DEFAULTS: GeomOptions = {
@@ -76,6 +77,7 @@ export function seedFeatures(): NativeFeature[] {
     F("CUSH_L_POCKET_D_1", "POCKET_DEPTH", 8, 7.6, 8.4, [4, 11]),
     F("CUSH_L_RIB_T_2", "RIB_THICKNESS", 3, 2.85, 3.15, [2.9, 4], { ref_locked: true }),
     F("CUSH_L_HOLE_U_1", "HOLE_POS_U", 30, 25, 35, [27, 40]),
+    F("CUSH_L_RIB_U_1", "RIB_POS_U", 51.5, 46.5, 56.5, [47, 60], { ref_provisional: false }),
     F("CUSH_L_FILLET_R_1", "FILLET_RADIUS", 2, 1.9, 2.1, null),
   ];
 }
@@ -89,6 +91,7 @@ export function nativeTrainParams(): TrainParam[] {
     p("CUSH_L_POCKET_D_1", 8, 7.6, 8.4),
     p("CUSH_L_RIB_T_2", 3, 2.85, 3.15, false),
     p("CUSH_L_HOLE_U_1", 30, 25, 35),
+    p("CUSH_L_RIB_U_1", 51.5, 46.5, 56.5, false),
     p("BOX_SHELL_T", 1.2, 1.14, 1.26, false),
   ];
 }
@@ -163,8 +166,8 @@ function featurePng(name: string): () => Uint8Array {
   });
 }
 
-function newRec(srv: MockServer, studyId: string, jobId: string): GeomRec {
-  const features = seedFeatures().map((f) => ({
+function newRec(srv: MockServer, studyId: string, jobId: string, filter: ExtractFilter | null = null): GeomRec {
+  const features = seedFeatures().filter((f) => typeSelected(f.type, filter)).map((f) => ({
     ...f,
     png_artifact_id: f.name === "CUSH_L_FILLET_R_1" ? null : srv.addPngArtifact(jobId, studyId, "FEATURE_PNG", `04_params/features/${f.name}.png`, featurePng(f.name)),
   }));
@@ -181,15 +184,15 @@ function newRec(srv: MockServer, studyId: string, jobId: string): GeomRec {
   };
 }
 
-function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, label: string | null, geom: GeomOptions | null): ParamSet {
-  const feats = seedFeatures();
+function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, label: string | null, geom: GeomOptions | null, filter: ExtractFilter | null = null): ParamSet {
+  const feats = seedFeatures().filter((f) => typeSelected(f.type, filter));
   return {
     id, study_id: s.id, source_path: path, engine: "native", engine_version: "0.6.0", unit_system: "mm-ton-s",
     parameters: feats.map((f) => ({ name: f.name, nominal: f.nominal!, min: f.min!, max: f.max!, unit: "mm" })),
     responses: [], sample_count: 0, sample_has_measured: false, cad_file_name: "cushion_base.step", starter_name: "cushion_0000.rad",
     input_kind: "assembly", assem_rel: "radioss_assem", tpl_params: [], origin: "FOLDER", label, is_current: true, train_doe_id: null,
     registered_by_name: srv.me?.display_name ?? "김연구", registered_at: new Date().toISOString(), display: null, warnings: [],
-    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING" },
+    geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING", extract_filter: filter },
     param_map_status: null,
   } as ParamSet;
 }
@@ -358,9 +361,12 @@ export function finishGeometry(srv: MockServer, j: Job) {
   if (p.mode === "new") {
     srv.paramSets.forEach((x) => x.study_id === s.id && (x.is_current = false));
     const id = srv.nid("ps");
-    const ps = nativeParamSet(srv, s, id, String(p.path ?? ""), (p.label as string | null) ?? null, (p.geom_options as GeomOptions | null) ?? null);
+    // extract-filter.md §6.7: 조건이 있으면 폴더의 parameters.json 범위를 쓰지 않는다(경고 PARAMS_JSON_IGNORED, 목은 경로에 "params"가 있을 때)
+    const filter = p.extract_filter != null ? normalizeFilter(p.extract_filter).norm : null;
+    if (filter && /params/i.test(String(p.path ?? ""))) j.warnings.push({ code: "PARAMS_JSON_IGNORED", message: "추출 조건이 지정되어 폴더의 parameters.json 범위를 쓰지 않았습니다" });
+    const ps = nativeParamSet(srv, s, id, String(p.path ?? ""), (p.label as string | null) ?? null, (p.geom_options as GeomOptions | null) ?? null, filter);
     srv.paramSets.unshift(ps);
-    srv.geom.set(id, newRec(srv, s.id, j.id));
+    srv.geom.set(id, newRec(srv, s.id, j.id, filter));
     j.result = { param_set_id: id, feature_count: ps.native!.feature_count };
     j.steps.forEach((st) => st.step_key === "BL_MAP" && (st.state = "SKIPPED"));
   } else {
@@ -391,6 +397,7 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
   // POST /studies/{id}/param-sets/discover {engine:"native"}
   if (seg[0] === "studies" && seg[2] === "param-sets" && method === "POST") {
     const s = srv.studies.find((x) => x.id === seg[1]);
+    if (s && body?.engine !== "native" && body?.extract_filter != null) return checkFilter(body.extract_filter, { native: false }) as MockResp; // altair 요청의 extract_filter = 422(그 밖 altair 동작 불변)
     if (!s || body?.engine !== "native") return null;
     if (seg[3] === "discover") return discoverNative(String(body?.path ?? ""));
     if (!seg[3]) {
@@ -406,7 +413,9 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
         const probs = validateGeomOptions(body.geom_options as GeomOptions, []);
         if (probs.length) return err(422, "GEOM_OPTIONS_INVALID", "검사 기준 값이 허용 범위를 벗어났습니다", { problems: probs });
       }
-      return nativeJob(srv, s, { mode: "new", path: body?.path, choice, label: body?.label ?? null, geom_options: body?.geom_options ?? null });
+      const chk = checkFilter(body?.extract_filter, { native: true });
+      if ("status" in chk) return chk;
+      return nativeJob(srv, s, { mode: "new", path: body?.path, choice, label: body?.label ?? null, geom_options: body?.geom_options ?? null, ...(chk.norm ? { extract_filter: chk.norm } : {}) });
     }
     return null;
   }
@@ -417,9 +426,9 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     const setup = srv.p2.setups[s.id];
     if (!setup || setup.engine !== "native") return err(409, "NATIVE_PREP_MISSING", "① Native 형상 피처가 없습니다 — 파라미터 추출을 Native로 먼저 하세요");
     const key = `train:${s.id}:${setup.extract_job_id ?? ""}`;
-    if (!srv.geom.has(key)) srv.geom.set(key, newRec(srv, s.id, setup.extract_job_id ?? "j-train-native"));
+    if (!srv.geom.has(key)) srv.geom.set(key, newRec(srv, s.id, setup.extract_job_id ?? "j-train-native", setup.extract_filter ?? null));
     const r = srv.geom.get(key)!;
-    return ok({ engine_version: "0.6.0", features: r.features, groups: r.groups, warnings: r.warnings });
+    return ok({ engine_version: "0.6.0", features: r.features, groups: r.groups, warnings: r.warnings, filter: setup.extract_filter ?? null });
   }
   if (seg[0] !== "param-sets" || !seg[1]) return null;
   const ps = findPs(srv, seg[1]);
@@ -443,8 +452,12 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     if (sub === "features" || sub === "native-prepare" || sub === "props") return err(409, "ENGINE_NATIVE_UNSUPPORTED", "Native 세트에서만 쓸 수 있습니다");
     return null;
   }
+  if (method === "POST" && sub === "native-prepare") {
+    // 등록된 세트의 추출 조건은 바꿀 수 없다(§6.7)
+    if (body?.extract_filter != null) return err(422, "EXTRACT_FILTER_INVALID", "등록된 세트의 추출 조건은 바꿀 수 없습니다 — 새 세트로 등록하세요", { problems: [{ key: "extract_filter", message: "등록된 세트의 추출 조건은 바꿀 수 없습니다 — 새 세트로 등록하세요" }] });
+  }
   if (method === "POST" && sub === "native-prepare") return nativeJob(srv, studyOf(srv, ps), { mode: "reprep", param_set_id: ps.id });
-  if (method === "GET" && sub === "features" && rec) return ok({ engine_version: ps.engine_version, features: rec.features, groups: rec.groups, warnings: rec.warnings });
+  if (method === "GET" && sub === "features" && rec) return ok({ engine_version: ps.engine_version, features: rec.features, groups: rec.groups, warnings: rec.warnings, filter: ps.native?.extract_filter ?? null });
   // 3S 쉘 두께(§11.1)
   if (sub === "props" && rec) {
     if (method === "POST" && seg[3] === "scan") return nativeJob(srv, studyOf(srv, ps), { mode: "props_scan", param_set_id: ps.id });

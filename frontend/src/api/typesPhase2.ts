@@ -9,6 +9,14 @@ type EntityStatus = "BUILDING" | "READY" | "FAILED";
 
 export type TrainParam = S["TrainParamOut"];
 export type TrainSetup = Override<S["TrainSetup"], { parameters: TrainParam[]; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string }[] }>) | null }>;
+/** extract-filter.md §6.1: native ①-1·④ 추출 조건(찾을 종류 그룹 + 조건 mm·mm²·°). 응답에서는 서버 정규화본 */
+export type ExtractFilter = S["ExtractFilter"];
+export type ExtractGroup = ExtractFilter["groups"][number];
+/** 422 EXTRACT_FILTER_INVALID problems[] — key = groups | conditions.<키>[.min|.max] | draft_max_deg */
+export interface ExtractProblem {
+  key: string;
+  message: string;
+}
 export type DoeField = S["DoeField"];
 /** S15(§20.6): desc_id = 설명문 id(없으면 null), recommended = 설정 train_data.recommended_doe_type 항목 하나, influence_class = 영향도 등급 */
 export type DoeType = S["DoeType"];

@@ -13,11 +13,15 @@ export const FEATURE_TYPE_LABEL: Record<string, string> = {
   HOLE_RADIUS: "구멍 반경",
   HOLE_POS_U: "구멍 위치 U",
   HOLE_POS_V: "구멍 위치 V",
+  RIB_POS_U: "리브 위치 U",
+  RIB_POS_V: "리브 위치 V",
   FILLET_RADIUS: "필렛 반경",
   SHELL_T: "쉘 두께",
 };
 
-export const isPositionType = (type: string | null | undefined) => type === "HOLE_POS_U" || type === "HOLE_POS_V";
+/** 위치형(mm 범위·sweep mm 단계) — 구멍 위치 + 리브 위치(extract-filter.md §3.2, 서버 POSITION_TYPES) */
+const POSITION_TYPES = new Set(["HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V"]);
+export const isPositionType = (type: string | null | undefined) => !!type && POSITION_TYPES.has(type);
 
 export function typeLabel(type: string | null | undefined): string {
   return type ? FEATURE_TYPE_LABEL[type] ?? type : "–";
@@ -76,6 +80,9 @@ export const GEOM_ERROR_TEXT: Record<string, string> = {
   REF_BOTH_CONTACT: "양면 접촉 — 두께 변경 불가(기본 제외)",
   PNG_RENDER_FAILED: "하이라이트 그림을 만들지 못했습니다",
   MAP_LOW_SCORE: "매칭 점수가 낮습니다 — 확인하세요",
+  GEOM_EXTRACT_EMPTY: "조건에 맞는 피처가 없습니다 — 찾을 종류·조건을 넓혀 보세요",
+  PARAMS_JSON_IGNORED: "추출 조건이 지정되어 폴더의 parameters.json 범위를 쓰지 않았습니다",
+  EXTRACT_FILTER_UNSUPPORTED: "찾을 종류 선택은 native 솔리드 추출에서만 쓸 수 있습니다",
 };
 
 const HANGUL = /[가-힣]/;

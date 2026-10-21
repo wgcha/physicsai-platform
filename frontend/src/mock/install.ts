@@ -7,6 +7,7 @@
 import { MockServer, createMockFetch } from "./server";
 import { setGvMode } from "./geomView";
 import { nativeTrainParams } from "./geometry";
+import { mockSummary, normalizeFilter } from "./extractFilter";
 import type { MockUserKey } from "./data";
 
 const KEY = "physicsai.mockUser";
@@ -31,7 +32,9 @@ export function installMockFetch() {
     const extra = Math.max(0, Math.min(1000, Number(params.get("trainRows")) || 0));
     const parameters = nativeTrainParams();
     for (let i = 0; i < extra; i++) parameters.push({ name: `MOCK_FEAT_${String(i + 1).padStart(3, "0")}`, raw_nominal: "1 mm", nominal: 1, min: 0.9, max: 1.1, use: false, format: "%.4f", unit: "mm", valid: true, problems: [] });
-    Object.assign(server.p2.setups["s-cushion"], { engine: "native", parameters, tpl: null });
+    // ?filter=1: 마지막 사용 추출 조건 + 추출 요약 시연(①-1 미리 채움·①-2 적용 조건 줄)
+    const filter = params.get("filter") === "1" ? normalizeFilter({ groups: ["thickness", "position", "fillet"], conditions: { thickness_mm: { min: 2, max: 30 }, face_area_min_mm2: 50, position_min_size_mm: 3, fillet_radius_min_mm: 1 } }).norm : null;
+    Object.assign(server.p2.setups["s-cushion"], { engine: "native", parameters, tpl: null, extract_filter: filter, extract_summary: filter ? mockSummary([{ type: "THICKNESS" }, { type: "HOLE_POS_U" }, { type: "FILLET_RADIUS" }], filter) : null });
   }
   const c3d = params.get("c3d");
   if (c3d === "hold" || c3d === "fail" || c3d === "expire") setGvMode(server, { c3d });

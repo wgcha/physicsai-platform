@@ -275,19 +275,23 @@
 }
 /* native 표 ↔ 3D: 행 클릭 = 선택(Ctrl/⌘ 추가·Shift 범위), 선택 행 = 강조 + 왼쪽 색 띠(3D 범례 색과 같음) */
 .param-table tr[aria-selected],
+.prop-table tbody tr,
 .feature-table tbody tr {
   cursor: pointer;
   user-select: none;
 }
 .param-table input,
+.prop-table input,
 .feature-table input {
   user-select: text;
 }
 .param-table tr.picked td,
+.prop-table tr.picked td,
 .feature-table tr.picked td {
   background: var(--color-info-surface);
 }
 .param-table tr.picked td:first-child,
+.prop-table tr.picked td:first-child,
 .feature-table tr.picked td:first-child {
   box-shadow: inset 4px 0 0 var(--sel-color, var(--color-border));
 }

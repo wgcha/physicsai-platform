@@ -141,3 +141,8 @@ export function useRowSelection(order: string[]): RowSelection {
   };
   return { rows: valid, hover, setHover, clear: () => setSel(NO_SELECTION), from3d, tableRef, rowProps };
 }
+
+/** 엑셀식 사용 토글: 선택 행 중 하나의 '사용' 체크박스를 누르면 선택 행 전체, 선택 밖 행이면 그 행만 */
+export function bulkTargets(selected: string[], row: string): string[] {
+  return selected.includes(row) ? selected : [row];
+}

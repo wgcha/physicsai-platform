@@ -353,7 +353,7 @@ describe("항상 떠 있는 3D 창 + 변수 클릭·다중 선택 하이라이�
     await screen.findByTestId("gv-panel");
     await waitFor(() => expect(fake.geom?.setNominal).toHaveBeenCalled());
     const table = screen.getByRole("table", { name: "파라미터 표" });
-    expect(within(table).getAllByRole("row")).toHaveLength(1 + 305);
+    expect(within(table).getAllByRole("row")).toHaveLength(1 + 306);
     const split = screen.getByTestId("gv-split");
     const box = screen.getByTestId("gv-split-table").querySelector(".table-wrap") as HTMLElement;
     expect(box.contains(table)).toBe(true); // 표 상자(스크롤) ⊂ 분할 영역(고정 높이)
@@ -378,11 +378,11 @@ describe("항상 떠 있는 3D 창 + 변수 클릭·다중 선택 하이라이�
     const { scrollRowIntoView } = await import("../stages/stage4/geomview/selection");
     scrollRowIntoView(box, "CUSH_L_HOLE_U_1");
     expect(box.scrollTop).toBe(340); // 900+40-(100+500)
-    // 305행 일괄(Shift 범위) 선택도 한 번의 렌더로 끝난다
+    // 306행 일괄(Shift 범위) 선택도 한 번의 렌더로 끝난다
     const t0 = performance.now();
     fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
     fireEvent.click(within(table).getByText("EXTRA_299"), { shiftKey: true });
-    expect(selected(table).length).toBe(305);
+    expect(selected(table).length).toBe(306);
     expect(performance.now() - t0).toBeLessThan(3000);
   });
 });
@@ -497,10 +497,10 @@ describe("폴백 — 어떤 PC에서도 빈 패널 없음(이유 한 줄 + 그�
     expect(figs.map((f) => f.style.borderColor)).toEqual([hexToRgb(selectionColor(0)), hexToRgb(selectionColor(1))]);
     fireEvent.click(within(table).getByText("CUSH_L_THK_1"));
     fireEvent.click(within(table).getByText("EXTRA_9"), { shiftKey: true });
-    await waitFor(() => expect(sel(table).length).toBe(15)); // THK~EXTRA_9 = 5 + 10 행
+    await waitFor(() => expect(sel(table).length).toBe(16)); // THK~EXTRA_9 = 6 + 10 행(리브 위치 CUSH_L_RIB_U_1 포함)
     const g2 = screen.getByTestId("png-grid");
     expect(g2.children).toHaveLength(8);
-    expect(screen.getByText("외 7개는 표시하지 않습니다(최대 8개)")).toBeTruthy();
+    expect(screen.getByText("외 8개는 표시하지 않습니다(최대 8개)")).toBeTruthy();
     expect(within(g2).getByText("EXTRA_0").closest("figure")!.textContent).toContain("그림 없음");
   });
 });

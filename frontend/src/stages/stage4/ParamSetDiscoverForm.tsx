@@ -1,5 +1,7 @@
-import { useState, type ChangeEvent } from "react";
-import { api, errorMessage, type Engine, type ParamSetDiscover } from "../../api";
+import { useEffect, useState, type ChangeEvent } from "react";
+import { ApiError, api, errorMessage, type Engine, type ExtractFilter, type ExtractProblem, type ParamSetDiscover } from "../../api";
+import { ExtractFilterFields } from "../../components/ExtractFilterFields";
+import { extractProblems, fromFilter, toFilter, validateForm, type FilterForm } from "../../lib/extractFilter";
 import { BrowseButton } from "../../components/BrowseButton";
 import { EngineSelect, useGeometryStatus } from "../../components/EngineSelect";
 import { JobInline } from "../../components/ui";
@@ -13,6 +15,8 @@ export const ASSEM_NONE_LABEL = "없음(쿠션만 — 메시로 바로 예측)";
 export const ASSEM_ZERO_TEXT = "조립 폴더 없음 — 메시 단독 템플릿으로 등록됩니다";
 /** geometry-engine.md §8: native는 조립 폴더(기준 메시) 필수 */
 export const NATIVE_ASSEM_TEXT = "기준 메시 104_replace_node_elem.inc 필요";
+/** extract-filter.md §6.7·§8: 조건을 보내면 폴더의 준비된 피처 파일을 쓰지 않고 새로 추출, 세트의 조건은 등록 후 바꿀 수 없다 */
+export const EXTRACT_FILTER_NOTE = "폴더의 기존 피처 파일 대신 새로 추출 · 등록 후 조건 변경 불가(새 세트로 등록)";
 
 /** phase3 §13 S8: 프로젝트 폴더 1개 → 플랫폼이 tpl·CAD·조립 폴더·파라미터를 찾아 구성(읽기만). 후보가 여러 개면 드롭다운.
  *  S9 §14.4: 조립 폴더는 선택 항목 — 드롭다운 끝 "없음" 또는 후보 0개면 메시 단독(mesh_only) 템플릿 */
@@ -25,7 +29,26 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
   const { engineDefault } = useGeometryStatus();
   const [engine, setEngine] = useState<Engine>(engineDefault);
   const native = engine === "native";
-  // native 등록 = 202 작업(PARAM_SET_NATIVE) — 기존 작업 진행 표시(JobInline)로 보이고 성공하면 목록을 다시 읽는다
+  // 추출 조건(§8 U1): ①-1 마지막 사용 조건(train_setups.extract_filter)이 있으면 미리 채우고 "①-1 조건 가져오기" 체크 = 복사본(수정 불가), 풀면 직접 고친다. 없으면 모두 체크·빈칸
+  const [trainFilter, setTrainFilter] = useState<ExtractFilter | null>(null);
+  useEffect(() => {
+    if (!native) return;
+    let alive = true;
+    api
+      .train(studyId)
+      .then((t) => alive && setTrainFilter(t.extract_filter ?? null))
+      .catch(() => alive && setTrainFilter(null));
+    return () => {
+      alive = false;
+    };
+  }, [native, studyId]);
+  const [importOn, setImportOn] = useState<boolean | null>(null);
+  const importing = !!trainFilter && (importOn ?? true);
+  const [edit, setEdit] = useState<FilterForm | null>(null);
+  const form = importing ? fromFilter(trainFilter) : edit ?? fromFilter(trainFilter);
+  const [srvProblems, setSrvProblems] = useState<ExtractProblem[]>([]);
+  const formProblems = native ? validateForm(form) : [];
+  // native 등록 = 202 작업 = 202 작업(PARAM_SET_NATIVE) — 기존 작업 진행 표시(JobInline)로 보이고 성공하면 목록을 다시 읽는다
   const nativeJob = useLatestJob(studyId, "PARAM_SET_NATIVE", (j) => j.state === "SUCCEEDED" && void onDone());
   const changePath = (v: string) => {
     setPath(v);
@@ -75,16 +98,19 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
     if (!found) return;
     setBusy(true);
     setError(null);
+    setSrvProblems([]);
     try {
       const r = await api.registerParamSet(studyId, found.path, {
         mode: "discover",
         engine: "native",
         choice: { cad: choice.cad, radioss_assem: choice.radioss_assem },
         label: label.trim() || null,
+        extract_filter: toFilter(form),
       });
       if ("job_id" in r) nativeJob.track(await api.job(r.job_id));
       else await onDone();
     } catch (e) {
+      if (e instanceof ApiError) setSrvProblems(extractProblems(e.detail));
       setError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -94,7 +120,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
   const meshOnly = !native && !!found && (found.radioss_assem.length === 0 || choice.radioss_assem === ASSEM_NONE);
   const nativeBusy = !!nativeJob.job && !isTerminal(nativeJob.job.state);
   const ready = native
-    ? !!found && !!choice.cad && !!choice.radioss_assem && found.problems.length === 0 && !nativeBusy
+    ? !!found && !!choice.cad && !!choice.radioss_assem && found.problems.length === 0 && !nativeBusy && formProblems.length === 0
     : !!found && !!found.selected_tpl && !!choice.cad && (meshOnly || !!choice.radioss_assem) && found.problems.length === 0;
   const pick = (key: keyof Choice) => (e: ChangeEvent<HTMLSelectElement>) => setChoice((c) => ({ ...c, [key]: e.target.value }));
 
@@ -211,11 +237,41 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
           )}
         </div>
       )}
+      {native && (
+        <div data-testid="ps-extract-filter">
+          <label className="check">
+            <input type="checkbox" checked={importing} disabled={!trainFilter || busy} onChange={(e) => setImportOn(e.target.checked)} />
+            ①-1 조건 가져오기
+          </label>
+          {!trainFilter && <span className="muted small"> ①-1에 저장된 조건이 없습니다</span>}
+          <ExtractFilterFields
+            value={form}
+            readOnly={importing}
+            disabled={busy}
+            serverProblems={srvProblems}
+            testId="ps-extract-fields"
+            onChange={(f) => {
+              setEdit(f);
+              setSrvProblems([]);
+            }}
+          />
+          <p className="muted small extract-note" data-testid="ps-extract-note">
+            {EXTRACT_FILTER_NOTE}
+          </p>
+        </div>
+      )}
       <div className="run-action-row">
         <button type="button" className="btn primary" disabled={!ready || busy} onClick={register}>
           {busy && found ? "등록 중…" : "등록"}
         </button>
         {native && nativeJob.job && <JobInline job={nativeJob.job} />}
+        {native && (nativeJob.job?.warnings ?? []).length > 0 && (
+          <ul className="problems small muted" aria-label="등록 경고">
+            {nativeJob.job!.warnings.map((w, i) => (
+              <li key={i}>{w.message ?? w.code}</li>
+            ))}
+          </ul>
+        )}
         {error && (
           <span className="error-text small" role="alert">
             {error}

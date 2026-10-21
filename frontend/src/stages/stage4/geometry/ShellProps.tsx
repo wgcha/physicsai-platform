@@ -1,13 +1,15 @@
 // 단계 3S 쉘 두께 PROP 선택(geometry-engine.md §11.1): 스캔(POST props/scan → 작업) → 목록(GET props) → 선택 저장(PUT props → ParamSet).
 // /PROP/TYPE1만 선택 가능, TYPE9·10·11은 '미지원'(목록만), 요소별·PART 두께가 덮어쓰는 PROP은 선택 불가(reason_code),
 // 여러 PART가 공유하면 경고(전부 바뀜). 범위 기본 ±5%(props.json range), 하한·상한 편집. 선택 행은 파라미터 표에 source "prop"으로 합쳐진다.
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage, type ParamSet, type ShellProps as ShellPropsDoc } from "../../../api";
 import { useStudy } from "../../../app/StudyContext";
 import { JobInline } from "../../../components/ui";
 import { useLatestJob } from "../../../hooks/useLatestJob";
 import { isTerminal } from "../../../lib/format";
 import { GEOM_ERROR_TEXT, geomErrorText } from "../../../lib/geometry";
+import { BulkUseBar } from "../../../components/BulkUseBar";
+import { useRowSelection, bulkTargets } from "../geomview/selection";
 
 type Sel = Record<string, { on: boolean; min: string; max: string }>;
 type Problem = { code?: string; parameter?: string; message?: string };
@@ -22,6 +24,9 @@ export function ShellProps({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) 
   const [problems, setProblems] = useState<Problem[]>([]);
   const [busy, setBusy] = useState(false);
   const [tick, setTick] = useState(0);
+  // 행 선택(클릭·Ctrl/⌘·Shift) → 표 위 [사용 체크|사용 해제|선택 해제] 일괄 적용 · 선택 행의 체크박스 = 엑셀식 전체 토글
+  const rowIds = useMemo(() => (doc?.props ?? []).map((p, i) => `${p.id}-${i}`), [doc]);
+  const rs = useRowSelection(rowIds);
   const job = useLatestJob(study.id, "PARAM_SET_NATIVE", (j) => {
     if (j.state === "SUCCEEDED" && (j.params as { mode?: string } | null)?.mode === "props_scan") {
       setTick((t) => t + 1);
@@ -82,6 +87,15 @@ export function ShellProps({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) 
     }
   };
   const patch = (name: string, p: Partial<Sel[string]>) => setSel((s) => ({ ...s, [name]: { ...s[name], ...p } }));
+  /** 대상 행의 선택을 한꺼번에 — 선택할 수 없는 PROP(미지원·덮어쓰기·파라미터 없음)은 건너뛴다 */
+  const setOn = (ids: string[], on: boolean) =>
+    setSel((s) => {
+      const next = { ...s };
+      doc.props.forEach((p, i) => {
+        if (ids.includes(`${p.id}-${i}`) && p.selectable && p.parameter && next[p.parameter]) next[p.parameter] = { ...next[p.parameter], on };
+      });
+      return next;
+    });
   const probOf = (name: string | null | undefined) => problems.find((p) => p.parameter === name)?.message ?? null;
 
   return (
@@ -101,8 +115,10 @@ export function ShellProps({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) 
         ) : !doc.props.length ? (
           <p className="muted small">조립 폴더에 쉘 PROP이 없습니다.</p>
         ) : (
-          <div className="table-wrap">
-            <table className="table compact" aria-label="쉘 두께 PROP">
+          <>
+          <BulkUseBar count={rs.rows.length} disabled={!canEdit} onCheck={() => setOn(rs.rows, true)} onUncheck={() => setOn(rs.rows, false)} onClear={rs.clear} />
+          <div className="table-wrap" ref={rs.tableRef}>
+            <table className="table compact prop-table" aria-label="쉘 두께 PROP">
               <thead>
                 <tr>
                   <th>선택</th>
@@ -122,10 +138,12 @@ export function ShellProps({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) 
                   const shared = p.parts.length > 1;
                   const why = p.reason_code ? GEOM_ERROR_TEXT[p.reason_code] ?? p.reason_code : null;
                   const label = `PROP ${p.id ?? i}`;
+                  const rid = `${p.id}-${i}`;
+                  const rp = rs.rowProps(rid);
                   return (
-                    <tr key={`${p.id}-${i}`} className={p.selectable ? "" : "unused"}>
+                    <tr key={rid} {...rp} className={`${p.selectable ? "" : "unused"} ${rp.className}`}>
                       <td>
-                        <input type="checkbox" aria-label={`${label} 선택`} checked={!!s?.on} disabled={!canEdit || !p.selectable || !p.parameter} onChange={(e) => patch(key, { on: e.target.checked })} />
+                        <input type="checkbox" aria-label={`${label} 선택`} checked={!!s?.on} disabled={!canEdit || !p.selectable || !p.parameter} onChange={(e) => (rs.rows.includes(rid) ? setOn(bulkTargets(rs.rows, rid), e.target.checked) : patch(key, { on: e.target.checked }))} />
                       </td>
                       <td className="small">
                         <span className="mono">{p.id ?? "–"}</span> {p.title} <span className="muted">{p.keyword || p.type}</span>
@@ -150,6 +168,7 @@ export function ShellProps({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) 
               </tbody>
             </table>
           </div>
+          </>
         )}
         {doc.scanned && doc.warnings.some((w) => w.prop == null) && (
           <ul className="problems small muted" aria-label="PROP 경고">

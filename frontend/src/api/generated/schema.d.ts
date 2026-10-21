@@ -1014,6 +1014,7 @@ export interface paths {
         /**
          * Native Prepare
          * @description geometry-engine.md §7.4: native 세트의 형상 준비를 다시 한다(tag 옵션 변경·입력 교체·엔진 버전 변경 후).
+         *     본문은 없어도 된다(extract_filter가 오면 422 — 등록된 세트의 추출 조건은 바꿀 수 없음).
          */
         post: operations["native_prepare_physicsai_api_param_sets__ps_id__native_prepare_post"];
         delete?: never;
@@ -2381,6 +2382,10 @@ export interface components {
             /** Choice */
             choice?: {
                 [key: string]: string | null;
+            } | null;
+            /** Extract Filter */
+            extract_filter?: {
+                [key: string]: unknown;
             } | null;
             /** Id */
             id: string;
@@ -4053,6 +4058,42 @@ export interface components {
         ErrorResponse: {
             detail: components["schemas"]["ErrorBody"];
         };
+        /**
+         * ExtractConditions
+         * @description 조건 키(§4.2) 전부 선택. null·생략 = 미사용.
+         */
+        ExtractConditions: {
+            /** Face Area Min Mm2 */
+            face_area_min_mm2?: number | null;
+            /** Fillet Radius Min Mm */
+            fillet_radius_min_mm?: number | null;
+            height_mm?: components["schemas"]["ExtractRange"] | null;
+            /** Hole Radius Min Mm */
+            hole_radius_min_mm?: number | null;
+            /** Position Min Size Mm */
+            position_min_size_mm?: number | null;
+            thickness_mm?: components["schemas"]["ExtractRange"] | null;
+        };
+        /**
+         * ExtractFilter
+         * @description 찾을 종류(그룹)와 조건. `groups`: thickness·height·position·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).
+         *     `draft_max_deg`: null 또는 0 초과 45 미만(null = 설정·paicad 기본). 응답에 나올 때는 서버 정규화본(선택 안 한 그룹의 조건 제거).
+         */
+        ExtractFilter: {
+            /** @default {} */
+            conditions: components["schemas"]["ExtractConditions"];
+            /** Draft Max Deg */
+            draft_max_deg?: number | null;
+            /** Groups */
+            groups: ("thickness" | "height" | "position" | "hole_radius" | "fillet")[];
+        };
+        /** ExtractRange */
+        ExtractRange: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+        };
         /** FeatureState */
         FeatureState: {
             /** Enabled */
@@ -5277,6 +5318,7 @@ export interface components {
             engine_version?: string | null;
             /** Features */
             features: components["schemas"]["NativeFeature"][];
+            filter?: components["schemas"]["ExtractFilter"] | null;
             /** Groups */
             groups: components["schemas"]["NativeGroup"][];
             /** Warnings */
@@ -5298,6 +5340,7 @@ export interface components {
         };
         /** NativeInfo */
         NativeInfo: {
+            extract_filter?: components["schemas"]["ExtractFilter"] | null;
             /**
              * Feature Count
              * @default 0
@@ -5332,6 +5375,17 @@ export interface components {
              * @enum {string}
              */
             view_status: "READY" | "MISSING" | "FAILED";
+        };
+        /**
+         * NativePrepareRequest
+         * @description `POST /param-sets/{id}/native-prepare` 선택 본문(없어도 됨). extract_filter가 오면 항상 422 EXTRACT_FILTER_INVALID
+         *     (등록된 세트의 추출 조건은 바꿀 수 없음 — extract-filter.md §6.7).
+         */
+        NativePrepareRequest: {
+            /** Extract Filter */
+            extract_filter?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** NativeWarning */
         NativeWarning: {
@@ -5740,6 +5794,7 @@ export interface components {
             choice?: components["schemas"]["ParamSetDiscoverChoice"] | null;
             /** Engine */
             engine?: ("altair" | "native") | null;
+            extract_filter?: components["schemas"]["ExtractFilter"] | null;
             /** Geom Options */
             geom_options?: {
                 [key: string]: unknown;
@@ -8265,8 +8320,13 @@ export interface components {
              * @enum {string}
              */
             engine: "altair" | "native";
+            extract_filter?: components["schemas"]["ExtractFilter"] | null;
             /** Extract Job Id */
             extract_job_id?: string | null;
+            /** Extract Summary */
+            extract_summary?: {
+                [key: string]: unknown;
+            } | null;
             /** Parameters */
             parameters: components["schemas"]["TrainParamOut"][];
             /** Study Id */
@@ -11567,7 +11627,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["NativePrepareRequest"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             202: {

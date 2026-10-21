@@ -52,3 +52,57 @@
   flex-direction: column;
   gap: var(--space-2);
 }
+
+/* native 추출 조건(extract-filter.md §8): ①-1·④ 공용 블록 — 체크 한 줄 + 조건 접힘 */
+.extract-filter {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2) 0;
+}
+.extract-cond-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.extract-cond {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: var(--space-3) var(--space-5);
+  padding: var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+}
+.extract-cond .num-input {
+  width: 120px;
+}
+.extract-adv {
+  align-content: start;
+  justify-items: start;
+}
+.extract-note {
+  margin: 0;
+}
+/* ①-2 머리줄·④ 상세 "적용 조건" 한 줄 + 추출 요약 접힘 */
+.applied-filter {
+  display: grid;
+  gap: var(--space-1);
+  padding-bottom: var(--space-2);
+}
+.applied-filter-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+}
+.extract-sum {
+  margin: 0;
+  padding-left: var(--space-4);
+}
+/* 표 위 다중 선택 일괄 사용 체크·해제 */
+.bulk-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+}

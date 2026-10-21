@@ -13,6 +13,7 @@ import { MultiBaseline } from "./MultiBaseline";
 import { GeomView3DLazy as GeomView3D } from "../geomview/GeomView3DLazy";
 import { ViewSplit } from "../geomview/ViewSplit";
 import { useRowSelection } from "../geomview/selection";
+import { AppliedFilter } from "../../../components/AppliedFilter";
 
 export function NativeDetail({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { study, reloadParamSets } = useStudy();
@@ -90,6 +91,7 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   };
   return (
     <div className="feature-block">
+      <AppliedFilter filter={ps.native?.extract_filter ?? data.filter} note="조건을 바꾸려면 새 세트로 등록하세요" />
       <div className="small muted">
         자동 후보 피처 <b>{data.features.length}</b>개{data.engine_version ? ` · paicad ${data.engine_version}` : ""} — 행을 누르면 3D에 표시(Ctrl/⌘ = 추가, Shift = 범위)
         {sel.rows.length > 0 && (

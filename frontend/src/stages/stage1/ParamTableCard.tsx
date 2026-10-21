@@ -9,7 +9,9 @@ import { useTrain } from "./TrainContext";
 import { isPositionType, typeLabel } from "../../lib/geometry";
 import { GeomView3DLazy as GeomView3D } from "../stage4/geomview/GeomView3DLazy";
 import { ViewSplit } from "../stage4/geomview/ViewSplit";
-import { useRowSelection } from "../stage4/geomview/selection";
+import { useRowSelection, bulkTargets } from "../stage4/geomview/selection";
+import { AppliedFilter } from "../../components/AppliedFilter";
+import { BulkUseBar } from "../../components/BulkUseBar";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -77,6 +79,11 @@ export function ParamTableCard() {
   }, [setup?.version, setup?.parameters]);
 
   const set = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+  const canUse = (r: Row) => r.valid && r.nominal !== null;
+  /** 대상 행(이름)의 '사용'을 한꺼번에 — 체크는 사용할 수 없는 행(무효·공칭 없음)을 건너뛴다 */
+  const setUse = (names: string[], use: boolean) => setRows((rs) => rs.map((r) => (names.includes(r.name) && (!use || canUse(r)) ? { ...r, use } : r)));
+  /** 엑셀식: 선택된 행의 체크박스를 누르면 선택 행 전체가 같은 상태로, 선택 밖 행은 그 행만 */
+  const toggleUse = (name: string, use: boolean) => setUse(bulkTargets(sel.rows, name), use);
   const used = rows.filter((r) => r.use);
   const issues = rows.map(rowIssue);
   const hasIssue = issues.some(Boolean) || used.length === 0;
@@ -144,11 +151,6 @@ export function ParamTableCard() {
       aside={
         rows.length > 0 ? (
           <>
-            {native && sel.rows.length > 0 && (
-              <button type="button" className="btn small ghost" onClick={sel.clear}>
-                선택 해제
-              </button>
-            )}
             <button type="button" className={`btn small ghost ${showAdv ? "on" : ""}`} aria-pressed={showAdv} onClick={() => setShowAdv((v) => !v)}>
               고급 {showAdv ? "▾" : "▸"}
             </button>
@@ -159,6 +161,9 @@ export function ParamTableCard() {
       {!rows.length ? (
         <p className="muted">①-1에서 CAD 파라미터를 먼저 추출하세요.</p>
       ) : (
+        <>
+        {native && <AppliedFilter filter={setup?.extract_filter} summary={setup?.extract_summary} />}
+        {native && <BulkUseBar count={sel.rows.length} disabled={!canExec} onCheck={() => setUse(sel.rows, true)} onUncheck={() => setUse(sel.rows, false)} onClear={sel.clear} />}
         <ViewSplit
           view={
             native ? (
@@ -195,7 +200,7 @@ export function ParamTableCard() {
                 return (
                   <tr key={r.name} {...(native ? rp(r.name) : { "data-row": r.name })} className={`${r.use ? "" : "unused"}${native ? ` ${rp(r.name).className}` : ""}`}>
                     <td>
-                      <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !r.valid || r.nominal === null} onChange={(e) => set(i, { use: e.target.checked })} />
+                      <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !r.valid || r.nominal === null} onChange={(e) => (native ? toggleUse(r.name, e.target.checked) : set(i, { use: e.target.checked }))} />
                     </td>
                     <td className="mono">{r.name}</td>
                     {native && (
@@ -230,6 +235,7 @@ export function ParamTableCard() {
         </div>
           }
         />
+        </>
       )}
       {tpl && !native && (
         <div className="tpl-state small" data-testid="tpl-state">

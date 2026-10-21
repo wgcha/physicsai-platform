@@ -5,7 +5,8 @@ import { DOE_TYPES } from "./catalog";
 import { err, type MockResp } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
-import { mapGate, nativeTrainParams } from "./geometry";
+import { mapGate, nativeTrainParams, seedFeatures } from "./geometry";
+import { checkFilter, mockSummary, normalizeFilter, typeSelected } from "./extractFilter";
 import { checkSampling, generatorOf, platformLabel } from "./doePlatform";
 import { isPlatformKind } from "../lib/sampling";
 
@@ -88,6 +89,11 @@ export function precheckTrain(p2: Phase2Mock, s: Study, type: JobType, params: R
       if (c.problems.length) return err(422, "DOE_SAMPLING_INVALID", "표본 설정을 확인하세요.", { problems: c.problems });
     }
   }
+  if (type === "TD_EXTRACT_PARAMS" && params.extract_filter !== undefined) {
+    // extract-filter.md §6.1: altair → 422 EXTRACT_FILTER_UNSUPPORTED, 잘못된 값 → 422 EXTRACT_FILTER_INVALID problems[{key,message}]
+    const c = checkFilter(params.extract_filter, { native: params.engine === "native" });
+    if ("status" in c) return c;
+  }
   if (type === "TD_SOLVE" || type === "TD_RESULT_IMPORT") {
     const d = p2.does.find((x) => x.id === params.doe_id && x.study_id === s.id);
     if (!d || d.status !== "READY") return err(409, "DOE_NOT_READY", "준비된 DOE가 필요합니다.");
@@ -168,13 +174,17 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
   switch (j.job_type) {
     case "TD_EXTRACT_PARAMS": {
       const native = p.engine === "native";
-      const params = native ? nativeTrainParams() : trainParams().map((x) => ({ ...x }));
+      // native: 선택한 그룹의 종류만(extract-filter.md §5) — 정규화본을 train_setups.extract_filter로 기록하고 요약을 붙인다
+      const norm = native && p.extract_filter != null ? normalizeFilter(p.extract_filter).norm : null;
+      const kinds = new Map(seedFeatures().map((f) => [f.name, f.type]));
+      const params = native ? nativeTrainParams().filter((x) => typeSelected(kinds.get(x.name), norm)) : trainParams().map((x) => ({ ...x }));
       const old = p2.setups[sid];
       const file = String(p.cad_path ?? "").split(/[\\/]/).pop() ?? "model.prt";
       p2.setups[sid] = {
         study_id: sid, engine: native ? "native" : "altair", cad: { source_path: String(p.cad_path), file_name: file, sha256: "…", display_path: p2.s.disp(sid, `01_train/cad/${file}`) },
         extract_job_id: j.id, parameters: params, used_count: params.filter((x) => x.use).length,
         tpl: old?.tpl ? { ...old.tpl, stale: true } : null, version: (old?.version ?? 0) + 1, updated_by_name: j.created_by_name, updated_at: new Date().toISOString(),
+        extract_filter: norm, extract_summary: native ? mockSummary(params.map((x) => ({ type: kinds.get(x.name) ?? "" })), norm) : null,
       };
       j.result = { param_count: params.length, valid_count: params.filter((x) => x.valid).length, cad_file_name: file };
       return "done";

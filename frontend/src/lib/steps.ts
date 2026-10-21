@@ -10,7 +10,7 @@ export const STEP_LABELS: Record<string, string> = {
   BL_MAP: "baseline 변수 매칭",
   NP_REGISTER: "템플릿 등록",
   TX_PREP: "CAD 준비",
-  SIMLAB_EXTRACT: "SimLab 파라미터 추출",
+  SIMLAB_EXTRACT: "Altair 파라미터 추출",
   TX_PARSE: "파라미터 해석",
   DG_PREP: "DOE 입력 준비",
   HST_GEN_RADIOSS: "입력 생성(run별)",
