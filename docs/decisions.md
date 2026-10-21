@@ -32,7 +32,7 @@
 - 2026-10-08 · DB에는 경로·상태·수치 요약(점수, loss 배열 등)만, 파일 본문 금지. 산출물은 AI 루트에만, SPDM master 쓰기 금지, AI 루트에 공백·cmd 메타문자 금지 · 데이터 위치 단일화, `.bat` 인자 안전 · platform.md §6.1, §17
 - 2026-10-08 · 알림: 작업 시작/완료/실패/내 차례 도래/PBS 회수 완료 시 우하단 토스트, 벨 아이콘 미읽음 수, 30일 이력·읽음 처리, 폴링 기반 · 장시간 작업 인지 · platform.md §13
 - 2026-10-08 · 단위계 mm-ton-s 고정, 변환 없음 · 해석 모델 단위계와 일치 · platform.md §2
-- 2026-10-08 · 업로드 기능 없음, 모든 입력은 AI 루트(또는 허용 루트) 폴더 경로 지정 · 대용량 파일·pickle 위험 · platform.md §3.3, §17.3
+- 2026-10-08 · (대체됨 → 2026-10-21 업로드 허용) 업로드 기능 없음, 모든 입력은 AI 루트(또는 허용 루트) 폴더 경로 지정 · 대용량 파일·pickle 위험 · platform.md §3.3, §17.3
 - 2026-10-08 · 자동 시험은 Altair 없는 Linux에서: fake tools(edspy/SimLab/hw/qsub) + Job Object 비Windows 대체(PosixLimiter). 실제 E2E는 사용자가 Altair PC에서 체크리스트로 수행 · 개발 환경에 Altair 없음 · platform.md §18, e2e-checklist.md
 - 2026-10-08 · 대기열 취소·순서 변경은 전역 관리자만, 본인 작업 취소도 불가(재시도만 본인 power 허용) · 대기열은 프로젝트를 가로지르는 전역 자원, U10 · platform.md §5.3, §19 U10
 - 2026-10-08 · ④ "입력파일 받기" `GET /jobs/{id}/artifacts/input.zip`(INPUT 폴더 zip 스트리밍, 로그인 사용자 전원, .rad 조립 완료 전 409) · 사용자가 HPC·로컬에서 Radioss 입력을 직접 확인·실행 · 변경 메모 B16
@@ -99,7 +99,7 @@
 - 2026-10-15 · 빌드된 화면(`frontend-dist/`, `BUILD_INFO.json` source_hash)을 저장소에 포함 — 서버 설치·업데이트는 해시가 맞으면 Node·npm 없이 배치, `update-repo.ps1`이 스스로 `git pull --ff-only`(원클릭) — 사용자 결정("호환성 높게, 원클릭, 경로 지정 없음")·사내 보안 정책(`.bat` 차단, esbuild spawn EPERM) · phase3.md D3-40
 - 2026-10-15 · 설치·업데이트에서 관리자 권한 제거 — 머신 환경변수 대신 런타임 파일(`.runtime\secrets\database_url`, ACL 현재 사용자·SYSTEM), 작업은 현재 사용자 Interactive·Limited + `--runtime` 인자, 이전 설치는 첫 한 번만 관리자 실행 — 사용자 결정·사내 보안 정책(대시보드도 일반 권한) · phase3.md D3-41
 - 2026-10-16 · 모델 등록 시 `.pscfg`는 선택(0~1개, 2개 이상은 오류), `models.pscfg_*` NULL 허용(migration 0005), `{model_pscfg}` 템플릿 + pscfg 없는 모델은 작업 생성 409 `PSCFG_REQUIRED` — 사용자 결정 · 원본 예측·평가·최적화 명령에 pscfg 인자 없음(U7) · phase3.md D3-43
-- 2026-10-16 · 다른 PC의 입력은 서버 공유 `physicsai-inbox`(쓰기)에 복사하고 `physicsai-data`(AI 루트, 읽기 전용)로 결과를 본다, 화면은 서버 경로 "찾아보기"로 고름(업로드 없음) — 사용자 결정 · phase3.md §12, D3-46
+- 2026-10-16 · (대체됨 → 2026-10-21 업로드 허용, inbox 루트는 호환용 유지) 다른 PC의 입력은 서버 공유 `physicsai-inbox`(쓰기)에 복사하고 `physicsai-data`(AI 루트, 읽기 전용)로 결과를 본다, 화면은 서버 경로 "찾아보기"로 고름(업로드 없음) — 사용자 결정 · phase3.md §12, D3-46
 - 2026-10-16 · 파라미터 세트는 프로젝트 폴더 1개에서 자동 구성(tpl·CAD·조립 폴더, 등록 사본만 CAD 경로 `./<CAD>`), 세트 이름(label, migration 0006) — 사용자 요청 · phase3.md §13, D3-47
 - 2026-10-16 · ④ 입력 방식 3개(템플릿 값 입력·일괄 예측(DOE)·준비된 입력): 템플릿 종류 mesh_only|assembly, 일괄 예측 = 부모 `PREDICT_BATCH`(플랫폼 동시 실행기로 m_1~m_3) + run별 하위 `PREDICT`(prepared), 응답 추출은 원본 ⑤ m_4 TCL(실패는 경고), 배치 갱신은 종료 훅 `job_end.batch_on_job_end` 하나로(migration 0007) — 사용자 결정 · phase3.md §14, D3-49·D3-51
 - 2026-10-16 · 예측 끝에 HyperView 배치로 방향별 컨투어 PNG·동영상 저장(실패는 경고만), 재캡처는 별도 `CONTOUR_RECAPTURE`(원래 result 불변·조회 때 덮어쓰기), 파일 제공은 `/artifacts/{id}/media`(Range)(migration 0008) — 사용자 결정 · phase3.md §15, D3-52
@@ -188,3 +188,7 @@
 - 2026-10-21 설치 도우미(setup_config.py)는 HyperStudy(hstbatch) 미탐지 시 경고 대신 정보 줄만 표시(phase3와 유일한 배포 동작 차이) — HyperStudy 독립 원칙, 사용자 확정
 - 2026-10-21 native ①-1 추출 조건 계약 신설: 사용자가 찾을 종류(두께·높이깊이·위치·구멍 반경·필렛 그룹)와 조건(두께·높이 범위, 최소 면 면적, 위치 최소 크기, 구멍·필렛 반경 하한, 고급 구배각)을 정하면 paicad가 탐색 단계에서 조기 제외(결과 = 전 종류 결과의 부분집합, 제외 PNG 없음), 필터 없음 = 현행 바이트 동일, 위치 그룹에 리브 위치 RIB_POS_U/V(HOLE_POS 규칙 재사용, 필터 있을 때만) 추가, 서버 기본 필터 없음·UI 프리셋·재추출 표 처리·④ 적용은 사용자 결정 대기 — 근거: 사용자 요청(실물 extract 5분+, 리브 위치 변수 없음) · extract-filter.md · geometry-engine.md GE-C16
 - 2026-10-21 추출 조건 U1~U3 확정: 기본 = 다섯 그룹 전부 체크·조건 빈칸(이후 Study 마지막 사용 조건 미리 채움), 재추출 = 확인 창 후 덮어쓰기(이전 표 백업), 적용 범위 = native 경로 전체(①-1 + ④ PARAM_SET_NATIVE — 등록 요청 extract_filter, 조건은 세트 features `filter`에 기록·등록 후 변경 불가(새 세트로)·add_baseline 승계), altair(SimLab·NX) 코드·UI·설정 변경 금지(필터 요청 422만) — 근거: 사용자 결정("내가 요청하는건 native 한정이야. simlab은 건들지마") · extract-filter.md §6.7·§12
+- 2026-10-21 브라우저 분할 업로드 허용(2026-10-08 "업로드 기능 없음"·D3-46 공유 inbox 대체): esl-platform P3-UX 업로드(세션·청크 PUT·이어 올리기·청크 sha256·`.part`→최종·덮어쓰기 금지·`_backup`)를 이식, 모든 경로 칸에 "내 PC에서 올리기 | 서버 경로" 두 탭, complete가 기존 `paths/inspect`를 호출하고 반환 경로로 기존 흐름을 그대로 탄다, pscfg·실행 파일 항상 거부·multipart 0 유지 — 근거: 사용자 결정("esl-platform 깃에서 참고해서 업로드 기능 가져오면 돼", "공유폴더 안돼") · upload-report.md §1·§2·§4
+- 2026-10-21 업로드 저장 위치는 AI 루트 하위 `storage.upload_root`(기본 `uploads`, null = 끔)로 두어 기존 `allowed_roots`·`check_user_path`를 무변경 재사용, migration `0020_uploads`(0019는 extract-filter 몫, EF 먼저 병합) — 근거: AI 루트 전용 용도 검사 수정 회피(별도 드라이브는 U1 미결) · upload-report.md §2.2·§6.2
+- 2026-10-21 업로드 파일 이름은 physicsai 경로 규칙(공백·cmd 메타문자·`; , = ( ) '` 거부)과 같게 하고 자동 이름 바꾸기는 하지 않는다(미리 검사로 목록 표시) — 근거: 이후 작업 경로 검사 통과 보장·include/tpl 참조 파손 방지 · upload-report.md §3.2·§5
+- 2026-10-21 HTML 결과 요약 보고서는 서버가 요청 시 DB·기존 산출 파일로 만들어 저장 없이 응답(단일 파일·inline SVG·PNG data URI·외부 자원 0·esl CSP 헤더), `GET /reports/{target}/{id}?download=1`, 파일명 `PAI_<Study>_<target>_<id8>_<YYYYMMDD-HHMM>.html`, 3D는 정적 이미지만, 첫 대상 ④ 예측 단건·일괄(U2 제안) — 근거: 사용자 요청·esl html_report 방식(폐쇄망·결정성·Linux 시험) · upload-report.md §9

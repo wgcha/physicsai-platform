@@ -1382,3 +1382,7 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 - 시험 파일(`test_phase2_db.py`, `phase2_helpers.py`, 워커 `test_*` 루트 파일) → `backend/tests/common/`·`helpers_stage1.py`·`worker/tests/{runtime,stage*,ops,e2e}/` — architecture.md §1.4
 - §21.2 프런트 파일 표(`DatasetCreateCard`, `ModelTable`, `LossChart` 등 계획 이름) → 실제 파일은 architecture.md §1.5(`stages/stage3/{DatasetCards,ModelRegisterCard,EvaluateCard}.tsx`, `components/Chart.tsx` 등)
 - **2026-10-13 환경 버전 변경**(decisions.md 2026-10-13, 사용자 결정): 실행 환경은 대시보드와 동일하게 Python 3.12.13·PostgreSQL 18(대시보드와 같은 인스턴스, 별도 DB `physicsai`)·Node 22.23.2. 본문 §(의존성) "Python 3.11+(개발 확인 3.13)" → 개발·배포 확인 3.12.13, §(DB) "PostgreSQL 16 기준" → PostgreSQL 18 기준으로 읽는다 — admin.md §2.1·§2.3·§14
+
+## 변경 메모 (Plan, 2026-10-21 — 업로드 허용)
+
+- §3.3 "`.pscfg`·`.psmdl`·`.psdata` 업로드 비범위"와 §17.5 "업로드 엔드포인트 없음"은 [upload-report.md](upload-report.md)로 대체: 브라우저 분할 업로드 세션(`/uploads*`)만 허용, `.psmdl`은 모델 폴더 업로드로 허용, `.pscfg`·`.psdata`는 계속 거부. V-SEC-1의 "multipart 라우트 0개"는 유지(청크 PUT octet-stream), "업로드 엔드포인트 없음" 부분은 V-UP-*로 대체. §17.3 경로 검사·허용 루트는 그대로(업로드 루트는 AI 루트 하위).
