@@ -191,7 +191,7 @@ def fv_mesh(ctx: Any) -> None:
     if res.get("input_mode") != "rebuild":
         raise StepSkipped(REUSE_SKIP)
     if res.get("mesh_native"):
-        raise StepSkipped("native 모핑 include 재사용")
+        raise StepSkipped("Native 모핑 include 재사용")
     s = ctx.settings
     if s.commands.mesh is None:
         raise StepFailure("TEMPLATE_NOT_CONFIGURED", "메시 변환 명령 템플릿(mesh)이 설정되지 않았습니다")

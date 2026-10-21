@@ -126,7 +126,7 @@ def tx_view(ctx: Any) -> None:
     from ...signals import StepSkipped
 
     if not is_native(ctx.params):
-        raise StepSkipped("altair 엔진 — 3D 보기 없음")
+        raise StepSkipped("Altair 엔진 — 3D 보기 없음")
     extract_native.tx_view(ctx)
 
 

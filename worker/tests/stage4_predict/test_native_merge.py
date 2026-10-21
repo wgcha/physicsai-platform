@@ -64,7 +64,7 @@ def test_s16_fem_verify_native_reuse_keeps_shell_and_rebuild_uses_morphed_includ
     d2 = run_until_hpc(env, d2["id"])
     A2 = attempt_dir(env, d2)
     jid = d2["job"]["id"]
-    assert env.steps(jid)["FV_MESH"]["state"] == "SKIPPED" and env.steps(jid)["FV_MESH"]["progress_label"] == "native 모핑 include 재사용"
+    assert env.steps(jid)["FV_MESH"]["state"] == "SKIPPED" and env.steps(jid)["FV_MESH"]["progress_label"] == "Native 모핑 include 재사용"
     inc = env.lc.settings.predict.mesh_include_name
     assert (A2 / "input" / inc).read_bytes() == (env.predict_dir(pj) / "geom" / inc).read_bytes()
     assert not [x for x in read_record(fake_record) if x["tool"] == "hw" and "-tcl" in x["argv"] and "mesh" in " ".join(x["argv"]).lower()

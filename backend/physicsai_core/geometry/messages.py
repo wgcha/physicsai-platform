@@ -47,7 +47,7 @@ CODE_TABLE: dict[str, tuple[str, str]] = {
     "VIEW_TESSELLATION_FAILED": ("VIEW", "3D 형상 변환 실패"),
     "VIEW_TOO_LARGE": ("VIEW", "3D 형상이 너무 큼(표시 허용오차를 키우세요)"),
     "VIEW_EXPORT_FAILED": ("VIEW", "3D 보기를 만들지 못함(그림으로 표시)"),
-    "VIEW_NATIVE_ONLY": ("INPUT", "3D 미리보기는 native 템플릿에서만 쓸 수 있습니다"),
+    "VIEW_NATIVE_ONLY": ("INPUT", "3D 미리보기는 Native 템플릿에서만 쓸 수 있습니다"),
     "VIEW_UNAVAILABLE": ("INPUT", "3D 미리보기를 쓸 수 없습니다 — paicad 뷰 명령 설정 확인"),
     "PREVIEW_BUSY": ("INPUT", "미리보기가 많이 대기 중입니다 — 잠시 후 다시 시도하세요"),
     "ARTIFACT_EXPIRED": ("INPUT", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요"),

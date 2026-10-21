@@ -37,7 +37,7 @@ def _setup(ctx: Any) -> dict[str, Any]:
     with ctx.ex.engine.connect() as conn:
         s = train_repo.get_setup(conn, ctx.study["id"])
     if s is None or not s.get("features_rel") or not s.get("cad_file_name"):
-        raise StepFailure("INPUT_INVALID", "형상 피처가 없습니다(①-1 파라미터 추출을 native로 먼저)")
+        raise StepFailure("INPUT_INVALID", "형상 피처가 없습니다(①-1 파라미터 추출을 Native로 먼저)")
     return s
 
 

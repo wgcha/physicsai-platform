@@ -16,7 +16,7 @@ from ..path_inspect import starters_in
 from .base import invalid_at
 
 DOE_TYPE_NATIVE = "NATIVE_LHS"
-DOE_LABEL_NATIVE = "LHS(native)"
+DOE_LABEL_NATIVE = "LHS(Native)"
 
 
 def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] | None = None) -> tuple[str, int, int, int, str]:
@@ -27,9 +27,9 @@ def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] |
     동시 수 생략 = S18 플랫폼 기본(min(platform_parallel_default, max_multi_execution)). 실패 처리 생략 = continue(스킵 후 경고).
     """
     if p.generator == "hyperstudy":
-        raise invalid_at("generator", "native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다")
+        raise invalid_at("generator", "Native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다")
     if p.options:
-        raise invalid_at("options", "native DOE는 options를 쓸 수 없습니다(seed 사용)", "DOE_OPTIONS_INVALID")
+        raise invalid_at("options", "Native DOE는 options를 쓸 수 없습니다(seed 사용)", "DOE_OPTIONS_INVALID")
     given = p.model_fields_set
     if p.sampling is not None and p.sampling.model_dump().get("kind") == "train_doe":  # equiv-check.md Q1: 표본표 재사용(run 이름 유지)
         from physicsai_core.stage1_train_data import doe_reuse
@@ -49,13 +49,13 @@ def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] |
         multi = min(cfg.train_data.platform_parallel_default, cap) if p.multi_execution is None else p.multi_execution
         if multi > cap:
             raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
-        return p.doe_label or "표본표 재사용(native)", len(rows), 1, multi, p.on_run_failure or "continue"
+        return p.doe_label or "표본표 재사용(Native)", len(rows), 1, multi, p.on_run_failure or "continue"
     if p.sampling is not None:
         sp = p.sampling.model_dump()
         if sp.get("kind") != "lhs":
             raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
                               problems=[{"code": "DESIGN_UNSUPPORTED",
-                                         "message": "native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다"}])
+                                         "message": "Native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다"}])
         for k in ("num_runs", "seed"):
             if k in given:
                 raise invalid_at(k, f"표본 방식(sampling)을 쓰면 {k}를 함께 쓸 수 없습니다")
@@ -95,7 +95,7 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any 
     cfg = ctx.settings
     require_native_available(cfg)
     if not setup.get("features_rel") or not setup.get("cad_file_name") or not tp.used(setup.get("parameters") or []):
-        raise DomainError("PREREQUISITE_MISSING", "형상 피처와 사용 파라미터가 필요합니다(①-1을 native로 먼저)", status=409,
+        raise DomainError("PREREQUISITE_MISSING", "형상 피처와 사용 파라미터가 필요합니다(①-1을 Native로 먼저)", status=409,
                           missing=["GEOM_FEATURES"])
     label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [q["name"] for q in tp.used(setup.get("parameters") or [])])
     if p.radioss_assem_path is None:
@@ -141,7 +141,7 @@ def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: An
     if ps is None or ps["study_id"] != study["id"]:
         raise DomainError("PREREQUISITE_MISSING", "파라미터 세트를 찾을 수 없습니다", status=409, missing=["PARAM_SET"])
     if ps.get("engine") != "native":
-        raise DomainError("ENGINE_MISMATCH", "세트 기준 DOE는 native 형상 엔진 세트에서만 만듭니다", status=409)
+        raise DomainError("ENGINE_MISMATCH", "세트 기준 DOE는 Native 형상 엔진 세트에서만 만듭니다", status=409)
     native_set_gate(ctx, ps)
     require_map_confirmed(ctx, ps)
     if p.radioss_assem_path is not None:

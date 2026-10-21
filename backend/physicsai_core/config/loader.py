@@ -111,7 +111,7 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     from ..features import geometry_status, predict_parametric_missing  # features가 config를 import하므로 지역 import
 
     if s.geometry.engine == "native" and not geometry_status(s)["native_available"]:
-        w.append(ConfigIssue("geometry.engine", "기본 엔진 native를 쓸 수 없습니다 — paicad 설치 확인"))
+        w.append(ConfigIssue("geometry.engine", "기본 엔진 Native를 쓸 수 없습니다 — paicad 설치 확인"))
 
     if s.geometry.view.max_glb_bytes > s.ui.max_artifact_bytes:  # geometry-view.md §6.1: 넘으면 ui 상한으로 자른다
         w.append(ConfigIssue("geometry.view.max_glb_bytes",

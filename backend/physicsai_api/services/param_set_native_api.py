@@ -47,7 +47,7 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
                     ip: str | None) -> dict[str, Any]:
     """POST /studies/{id}/param-sets {engine:native} → 후보를 읽기만 확인하고 PARAM_SET_NATIVE 작업을 만든다(202)."""
     if getattr(body, "mode", None) != "discover":
-        raise DomainError("INVALID_PARAMS", "native 형상 엔진은 mode=discover로만 등록합니다", status=422)
+        raise DomainError("INVALID_PARAMS", "Native 형상 엔진은 mode=discover로만 등록합니다", status=422)
     require_native_available(ctx.settings)
     kind = getattr(body, "kind", None) or "solid"  # shell-morph.md §8.2: 세트 형상 종류(prep.json kind, DB 열 없음)
     shell_only = bool(getattr(body, "shell_only", False))  # §11.1 쉘 두께 전용: STEP·번호 표 불필요
@@ -173,7 +173,7 @@ def features(ctx: AppContext, ps_id: str) -> dict[str, Any]:
         if p is None:
             raise DomainError("NOT_FOUND", "파라미터 세트를 찾을 수 없습니다", status=404)
         if (p.get("engine") or "altair") != "native":
-            raise DomainError("ENGINE_MISMATCH", "native 형상 엔진 세트가 아닙니다", status=409)
+            raise DomainError("ENGINE_MISMATCH", "Native 형상 엔진 세트가 아닙니다", status=409)
         S = _S(ctx, conn, p)
         arts = art_repo.list_by_prefix(conn, p["study_id"], "FEATURE_PNG", p["stored_rel"].rstrip("/") + "/native/extract/features/")
     doc = _features_doc(ctx, S)
@@ -189,7 +189,7 @@ def patch_geom_options(ctx: AppContext, conn: Any, principal: Principal, p: dict
                        rid: str, ip: str | None) -> None:
     """PATCH geom_options(전체 덮어쓰기). altair 세트는 422. tag 절이 바뀌면 prep_status가 STALE로 보인다(준비본 해시 비교)."""
     if (p.get("engine") or "altair") != "native":
-        raise DomainError("ENGINE_MISMATCH", "geom_options는 native 형상 엔진 세트에서만 바꿀 수 있습니다", status=422)
+        raise DomainError("ENGINE_MISMATCH", "geom_options는 Native 형상 엔진 세트에서만 바꿀 수 있습니다", status=422)
     over = validate_geom_options(ctx.settings, raw, set_kind(ctx, p))
     ps_repo.set_values(conn, p["id"], geom_options=over or None)
     audit(conn, principal, "PARAM_SET_UPDATE", "param_set", p["id"],

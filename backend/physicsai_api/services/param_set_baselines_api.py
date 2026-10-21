@@ -35,7 +35,7 @@ def _ctx_set(ctx: AppContext, conn: Any, ps_id: str) -> tuple[dict[str, Any], st
     if p is None:
         raise DomainError("NOT_FOUND", "파라미터 세트를 찾을 수 없습니다", status=404)
     if (p.get("engine") or "altair") != "native":
-        raise DomainError("ENGINE_MISMATCH", "다중 baseline은 native 형상 엔진 세트에서만 씁니다", status=409)
+        raise DomainError("ENGINE_MISMATCH", "다중 baseline은 Native 형상 엔진 세트에서만 씁니다", status=409)
     root = study_root(ctx, studies_repo.require(conn, p["study_id"]))
     return p, resolve_in_study(root, p["stored_rel"]), root
 

@@ -174,7 +174,7 @@ class StatusGeometry(Resp):
 
     engine_default: str = Field(description="새 파라미터 세트·추출·DOE의 기본 엔진: altair | native")
     native_available: bool
-    reason: str | None = Field(None, description="native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null")
+    reason: str | None = Field(None, description="Native를 쓸 수 없는 이유(한국어), 쓸 수 있으면 null")
 
 
 class StatusResponse(Resp):

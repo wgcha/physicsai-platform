@@ -28,7 +28,7 @@ from .stage4_predict_train import register_param_set_from_train  # noqa: F401 - 
 
 def register_param_set(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
     if getattr(body, "kind", None) == "shell" and not native_api.wants_native(ctx, body):  # shell-morph.md §8.2: native 전용
-        raise DomainError("INVALID_PARAMS", "쉘 판금 형상(kind=shell)은 native 형상 엔진(mode=discover)에서만 씁니다", status=422,
+        raise DomainError("INVALID_PARAMS", "쉘 판금 형상(kind=shell)은 Native 형상 엔진(mode=discover)에서만 씁니다", status=422,
                           errors=[{"loc": ["body", "kind"], "msg": "engine=native·mode=discover 필요"}])
     if native_api.wants_native(ctx, body):  # geometry-engine.md §7.3.4: 202 {job_id}
         _require_active_power(ctx, principal, study_id)
