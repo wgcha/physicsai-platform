@@ -215,6 +215,11 @@ class Reporter:
         print(msg, file=self.stderr, flush=True)
         self.log("WARN " + msg)
 
+    def info(self, msg: str) -> None:
+        """Progress detail for people watching a long run (stderr + log); never parsed by the platform."""
+        print(msg, file=self.stderr, flush=True)
+        self.log("INFO " + msg)
+
     def result(self, status: str, code: str | None, report: str | None) -> None:
         line = f"PAICAD RESULT {status} {code or '-'} {report or '-'}"
         print(line, file=self.stdout, flush=True)

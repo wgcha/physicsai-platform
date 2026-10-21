@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import math
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -102,6 +103,44 @@ def _overlap(body: BodyGeom, fa: FaceData, fb: FaceData, grid: int) -> tuple[flo
     return float(inside.mean()), pts[inside], feet[inside]
 
 
+_SCAN_CHUNK = 12  # points per kernel call in the early-exit scan (per-point answers do not depend on it)
+
+
+def _overlap_at_least(
+    body: BodyGeom, fa: FaceData, fb: FaceData, grid: int, ratio_min: float, margin: float | None, full: bool
+) -> tuple[bool, np.ndarray, np.ndarray]:
+    """``_overlap(...)[0] >= ratio_min`` with the same per-point answers, but cheaper.
+
+    Feet farther than ``margin`` outside fb's bbox are 'not on fb' without asking the kernel (valid only for an
+    unclamped projection: a foot classified on fb then lies in fb.bbox up to the projection residual, far below
+    ``margin``; ``margin=None`` asks the kernel for every point). Points are classified in small chunks
+    and the scan stops once the comparison is decided; ``full=True`` keeps scanning a passing face so the
+    returned (pts_a, feet_on_b) equal ``_overlap``'s."""
+    pts = body.sample_face(fa.id, grid)
+    m = len(pts)
+    if m == 0:
+        return 0.0 >= ratio_min, pts, pts
+    n = fb.normal
+    feet = pts - np.outer((pts - fb.centroid) @ n, n)
+    if margin is None:
+        near = np.arange(m)
+    else:
+        near = np.nonzero(np.all((feet >= fb.bbox[:3] - margin) & (feet <= fb.bbox[3:] + margin), axis=1))[0]
+    inside = np.zeros(m, dtype=bool)
+    k_in, left = 0, len(near)
+    for c0 in range(0, len(near), _SCAN_CHUNK):
+        if (k_in + left) / m < ratio_min:
+            return False, pts[:0], feet[:0]  # cannot reach ratio_min any more
+        if not full and k_in / m >= ratio_min:
+            return True, pts[:0], feet[:0]
+        idx = near[c0 : c0 + _SCAN_CHUNK]
+        _, _, ins, _ = body.project_to_face(fb.id, feet[idx])
+        inside[idx] = ins
+        left -= len(idx)
+        k_in += int(np.count_nonzero(ins))
+    return k_in / m >= ratio_min, pts[inside], feet[inside]
+
+
 def _bbox_overlap_2d(a: np.ndarray, b: np.ndarray, skip_axis: int | None, margin: float = 1e-6) -> bool:
     for k in range(3):
         if k == skip_axis:
@@ -137,6 +176,9 @@ class _Ctx:
         self.planes = [f for f in self.topo.faces if f.surface == "PLANE"]
         self.edge_faces = {e.id: e.faces for e in self.topo.edges}
         self.edge_conv = {e.id: e.convexity for e in self.topo.edges}
+        bb = self.summary.bbox
+        self.bbox_margin = 1e-2 + 1e-5 * float(np.linalg.norm(bb[3:] - bb[:3]))  # pre-filter slack (mm)
+        self.stats = {"overlap_checks": 0, "overlap_prefiltered": 0}
 
     def neighbours(self, f: FaceData, edges) -> dict[int, list[int]]:
         """edge id -> other face ids across that edge."""
@@ -203,45 +245,136 @@ def _find_protrusions(ctx: _Ctx, sign: int) -> list[tuple[int, list[int], int, f
     return found
 
 
+_PAIR_BLOCK = 512  # rows per vectorized pre-filter block (memory ~ block x n doubles)
+
+
+def _pair_candidates(faces: list[FaceData], cos_par: float, material: bool):
+    """(i, j>i) index pairs in row-major order that may pass the exact tests of ``_pairs_across``.
+
+    Conservative vectorized pre-filter (margins wider than float rounding): every pair it drops would fail
+    the exact antiparallel or side test, so the exact loop sees the same survivors in the same order."""
+    n = len(faces)
+    if n < 2:
+        return
+    N = np.array([f.normal for f in faces], dtype=float)
+    C = np.array([f.centroid for f in faces], dtype=float)
+    tol_dot = 1e-9
+    tol_s = 1e-9 * (1.0 + float(np.abs(C).max()))  # |s| rounding bound is far below this
+    nc = np.einsum("ij,ij->i", N, C)
+    for i0 in range(0, n, _PAIR_BLOCK):
+        i1 = min(n, i0 + _PAIR_BLOCK)
+        Nb = N[i0:i1]
+        dot = -(Nb @ N.T)  # dot(a.n, -b.n)
+        s_a = Nb @ C.T - nc[i0:i1, None]  # a.n . (b.c - a.c)
+        s_b = (N @ C[i0:i1].T).T - nc[None, :]  # b.n . (a.c - b.c)
+        m = dot >= cos_par - tol_dot
+        if material:
+            m &= (s_a < tol_s) & (s_b < tol_s)
+        else:
+            m &= (s_a > -tol_s) & (s_b > -tol_s)
+        m &= np.arange(n)[None, :] > np.arange(i0, i1)[:, None]
+        ii, jj = np.nonzero(m)
+        for i, j in zip((ii + i0).tolist(), jj.tolist()):
+            yield i, j
+
+
 def _pairs_across(ctx: _Ctx, faces: list[FaceData], material: bool) -> list[tuple[FaceData, FaceData, float, float]]:
     """Antiparallel plane pairs. material=True: material between (faces look away from each other)."""
     out = []
-    for i, a in enumerate(faces):
-        for b in faces[i + 1 :]:
-            if float(np.dot(a.normal, -b.normal)) < ctx.cos_par:
-                continue
-            ab = b.centroid - a.centroid
-            s_a = float(np.dot(a.normal, ab))
-            s_b = float(np.dot(b.normal, -ab))
-            if material and not (s_a < 0 and s_b < 0):
-                continue
-            if not material and not (s_a > 0 and s_b > 0):
-                continue
-            d = _plane_distance(a, b)
-            if d <= 1e-9:
-                continue
-            draft = 0.5 * (180.0 - _angle_deg(a.normal, b.normal))
-            out.append((a, b, d, draft))
+    for i, j in _pair_candidates(faces, ctx.cos_par, material):
+        a, b = faces[i], faces[j]
+        if float(np.dot(a.normal, -b.normal)) < ctx.cos_par:
+            continue
+        ab = b.centroid - a.centroid
+        s_a = float(np.dot(a.normal, ab))
+        s_b = float(np.dot(b.normal, -ab))
+        if material and not (s_a < 0 and s_b < 0):
+            continue
+        if not material and not (s_a > 0 and s_b > 0):
+            continue
+        d = _plane_distance(a, b)
+        if d <= 1e-9:
+            continue
+        draft = 0.5 * (180.0 - _angle_deg(a.normal, b.normal))
+        out.append((a, b, d, draft))
     return out
 
 
+def _projection_misses(fa: FaceData, fb: FaceData, margin: float) -> bool:
+    """True if no point of fa's bbox, projected along fb.normal onto fb's plane, can land in fb's bbox.
+
+    fa samples lie in fa.bbox, their feet in the hull of the projected bbox corners, and (unclamped projection
+    only, see ``_bbox_margin_for``) a foot classified on fb lies (to the projection residual, << margin) in
+    fb.bbox - so True means ``_overlap`` ratio 0."""
+    lo, hi = fa.bbox[:3], fa.bbox[3:]
+    corners = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])])
+    n = fb.normal
+    feet = corners - np.outer((corners - fb.centroid) @ n, n)
+    flo, fhi = feet.min(axis=0), feet.max(axis=0)
+    return bool(np.any(flo > fb.bbox[3:] + margin) or np.any(fhi < fb.bbox[:3] - margin))
+
+
+def _bbox_margin_for(ctx: _Ctx, target: FaceData) -> float | None:
+    """bbox shortcut slack for projections onto ``target``; None when the kernel may clamp far points onto the
+    face boundary (then only the kernel can answer, see ``face_projection_unclamped``)."""
+    fn = getattr(ctx.body, "face_projection_unclamped", None)
+    return ctx.bbox_margin if fn is not None and fn(target.id) else None
+
+
 def _overlap_ok(ctx: _Ctx, a: FaceData, b: FaceData, check_material: bool) -> bool:
-    r1, pa, fb = _overlap(ctx.body, a, b, ctx.grid)
-    if r1 < ctx.overlap_min:
+    ctx.stats["overlap_checks"] += 1
+    mb = _bbox_margin_for(ctx, b)
+    if ctx.overlap_min > 0 and mb is not None and _projection_misses(a, b, mb):
+        ctx.stats["overlap_prefiltered"] += 1
+        return False  # r1 would be 0
+    ok1, pa, fb = _overlap_at_least(ctx.body, a, b, ctx.grid, ctx.overlap_min, mb, full=check_material)
+    if not ok1:
         return False
-    r2, _, _ = _overlap(ctx.body, b, a, ctx.grid)
-    if r2 < ctx.overlap_min:
+    ma = _bbox_margin_for(ctx, a)
+    if ctx.overlap_min > 0 and ma is not None and _projection_misses(b, a, ma):
+        ctx.stats["overlap_prefiltered"] += 1
+        return False  # r2 would be 0
+    ok2, _, _ = _overlap_at_least(ctx.body, b, a, ctx.grid, ctx.overlap_min, ma, full=False)
+    if not ok2:
         return False
     if check_material and len(pa):
         idx = np.linspace(0, len(pa) - 1, min(len(pa), 16)).astype(int)
         mid = 0.5 * (pa[idx] + fb[idx])
-        if ctx.body.points_inside(mid).mean() < 0.5:
+        if not _mostly_inside(ctx.body, mid):
             return False
     return True
 
 
-def recognize_body(body: BodyGeom, opts: dict) -> list[Feature]:
+def _mostly_inside(body: BodyGeom, pts: np.ndarray) -> bool:
+    """``points_inside(pts).mean() >= 0.5``, classifying one point at a time and stopping once decided."""
+    m = len(pts)
+    need = math.ceil(0.5 * m)  # inside count k passes iff k / m >= 0.5
+    k_in = k_out = 0
+    for q in pts:
+        if bool(body.points_inside(q[None, :])[0]):
+            k_in += 1
+            if k_in >= need:
+                return True
+        else:
+            k_out += 1
+            if m - k_out < need:
+                return False
+    return k_in >= need
+
+
+def _quiet(_msg: str) -> None:
+    pass
+
+
+def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = None) -> list[Feature]:
+    """``log(msg)``: optional progress lines (stderr in extract); ``timing``: filled with stage seconds/counts."""
+    log = log or _quiet
+    timing = {} if timing is None else timing
+    t0 = time.perf_counter()
     ctx = _Ctx(body, opts)
+    t1 = time.perf_counter()
+    timing["topology_s"] = t1 - t0
+    log(f"topology: {len(ctx.topo.faces)} faces, {len(ctx.topo.edges)} edges {t1 - t0:.1f}s")
     name = body.name or ""
     feats: list[Feature] = []
     claimed: set[int] = set()
@@ -283,6 +416,8 @@ def recognize_body(body: BodyGeom, opts: dict) -> list[Feature]:
             if smooth >= 2:
                 claimed.add(f.id)
                 feats.append(Feature("FILLET_RADIUS", name, f.minor_radius, [f.id], [f.id], []))
+    t2 = time.perf_counter()
+    timing["revolved_s"] = t2 - t1
 
     # ribs
     for cap, lats, base, h in _find_protrusions(ctx, +1):
@@ -300,9 +435,30 @@ def recognize_body(body: BodyGeom, opts: dict) -> list[Feature]:
             if _overlap_ok(ctx, a, b, check_material=False):
                 feats.append(Feature("POCKET_WIDTH", name, d, [a.id, b.id], [], [], pair=(a.id, b.id), draft_deg=dr))
 
+    t3 = time.perf_counter()
+    timing["ribs_pockets_s"] = t3 - t2
+    log(f"holes/fillets {t2 - t1:.1f}s, ribs/pockets {t3 - t2:.1f}s")
+
     # thickness: remaining planes, mutual nearest antiparallel pair with material between
     free = [f for f in ctx.planes if f.id not in claimed]
-    cands = [(a, b, d, dr) for a, b, d, dr in _pairs_across(ctx, free, material=True) if _overlap_ok(ctx, a, b, check_material=True)]
+    pairs = _pairs_across(ctx, free, material=True)
+    t4 = time.perf_counter()
+    timing["thickness_free_planes"] = len(free)
+    timing["thickness_pairs"] = len(pairs)
+    timing["thickness_pairs_s"] = t4 - t3
+    log(f"thickness candidate pairs: {len(pairs)} (free planes {len(free)}) {t4 - t3:.1f}s")
+    cands = []
+    step = max(1, len(pairs) // 10)
+    last = t4
+    for k, (a, b, d, dr) in enumerate(pairs, 1):
+        if _overlap_ok(ctx, a, b, check_material=True):
+            cands.append((a, b, d, dr))
+        now = time.perf_counter()
+        if k == len(pairs) or (k % step == 0 and now - last >= 1.0):
+            log(f"thickness pairs checked {k}/{len(pairs)} {now - t4:.1f}s")
+            last = now
+    t5 = time.perf_counter()
+    timing["thickness_overlap_s"] = t5 - t4
     best: dict[int, tuple[float, int]] = {}
     for a, b, d, _ in cands:
         for x, y in ((a.id, b.id), (b.id, a.id)):
@@ -314,6 +470,10 @@ def recognize_body(body: BodyGeom, opts: dict) -> list[Feature]:
     for ft in feats:
         ft.nominal = rnd(ft.nominal)
         ft.draft_deg = rnd(ft.draft_deg, 4)
+    timing["overlap_checks"] = ctx.stats["overlap_checks"]
+    timing["overlap_prefiltered"] = ctx.stats["overlap_prefiltered"]
+    timing["features"] = len(feats)
+    timing["recognize_s"] = time.perf_counter() - t0
     return feats
 
 
@@ -518,6 +678,27 @@ def _is_mirror(ta: Topology, fa: Feature, tb: Topology, fb: Feature, plane, tol:
     return True
 
 
+def _mirror_candidates(feats: list[Feature], tol_of: dict[str, float]):
+    """(i, j>i) pairs in row-major order that ``_is_mirror`` could accept: same type and signature-face count,
+    nominal within the largest body tolerance (every dropped pair fails ``_is_mirror``'s first checks)."""
+    import bisect
+
+    tmax = max(tol_of.values(), default=0.0)
+    win = tmax * (1.0 + 1e-9) + 1e-12
+    buckets: dict[tuple, list[tuple[float, int]]] = {}
+    for k, ft in enumerate(feats):
+        buckets.setdefault((ft.type, len(ft.faces)), []).append((ft.nominal, k))
+    sorted_b = {key: sorted(v) for key, v in buckets.items()}
+    noms = {key: [x for x, _ in v] for key, v in sorted_b.items()}
+    for i, ft in enumerate(feats):
+        key = (ft.type, len(ft.faces))
+        vals, lst = noms[key], sorted_b[key]
+        lo = bisect.bisect_left(vals, ft.nominal - win)
+        hi = bisect.bisect_right(vals, ft.nominal + win)
+        for j in sorted(k for _, k in lst[lo:hi] if k > i):
+            yield i, j
+
+
 def symmetry_groups(feats: list[Feature], topo_of: dict[str, Topology], bbox_of: dict[str, np.ndarray], tol_of: dict[str, float]) -> list[dict]:
     """MIRROR groups via union-find over mirror relations (bbox-center planes, common inter-body planes)."""
     n = len(feats)
@@ -535,31 +716,30 @@ def symmetry_groups(feats: list[Feature], topo_of: dict[str, Topology], bbox_of:
         return 0.5 * (bb[:3] + bb[3:])
 
     eye = np.eye(3)
-    for i in range(n):
-        for j in range(i + 1, n):
-            a, b = feats[i], feats[j]
-            if a.type != b.type:
-                continue
-            tol = max(tol_of[a.body], tol_of[b.body])
-            planes = []
-            if a.body == b.body:
-                c = center(a.body)
-                planes = [(c, eye[k]) for k in range(3)]
-            else:
-                ca, cb = center(a.body), center(b.body)
-                d = cb - ca
-                for k in range(3):
-                    others = [x for x in range(3) if x != k]
-                    if abs(d[k]) > tol and all(abs(d[x]) <= tol for x in others):
-                        planes.append((0.5 * (ca + cb), eye[k]))
-            for pl in planes:
-                if _is_mirror(topo_of[a.body], a, topo_of[b.body], b, pl, tol, same_body=a.body == b.body):
-                    ri, rj = find(i), find(j)
-                    if ri != rj:
-                        parent[rj] = ri
-                        plane_of.setdefault(ri, pl)
-                        plane_of.setdefault(rj, pl)
-                    break
+    for i, j in _mirror_candidates(feats, tol_of):
+        a, b = feats[i], feats[j]
+        if a.type != b.type:
+            continue
+        tol = max(tol_of[a.body], tol_of[b.body])
+        planes = []
+        if a.body == b.body:
+            c = center(a.body)
+            planes = [(c, eye[k]) for k in range(3)]
+        else:
+            ca, cb = center(a.body), center(b.body)
+            d = cb - ca
+            for k in range(3):
+                others = [x for x in range(3) if x != k]
+                if abs(d[k]) > tol and all(abs(d[x]) <= tol for x in others):
+                    planes.append((0.5 * (ca + cb), eye[k]))
+        for pl in planes:
+            if _is_mirror(topo_of[a.body], a, topo_of[b.body], b, pl, tol, same_body=a.body == b.body):
+                ri, rj = find(i), find(j)
+                if ri != rj:
+                    parent[rj] = ri
+                    plane_of.setdefault(ri, pl)
+                    plane_of.setdefault(rj, pl)
+                break
     clusters: dict[int, list[int]] = {}
     for i in range(n):
         clusters.setdefault(find(i), []).append(i)
@@ -598,6 +778,7 @@ def finalize(
     per_body: list[tuple[str, str, BodyGeom, list[Feature]]],
     opts: dict,
     tol_of: dict[str, float],
+    timing: dict | None = None,
 ) -> tuple[list[Feature], list[dict], list[dict]]:
     """Order, name, reference rule (provisional), feasible/range, groups.
 
@@ -650,10 +831,15 @@ def finalize(
         d = owner.setdefault(ft.body, {})
         for f in ft.moving + [g for g in ft.faces if g not in ft.fixed]:
             d.setdefault(f, ft.name)
+    timing = {} if timing is None else timing
+    t0 = time.perf_counter()
     for ft in ordered:
         topo = topo_of[ft.body]
         ft.feasible = _feasible(list(topo.faces), topo, ft, owner.get(ft.body, {}), bbox_of[ft.body], cos_par)
+    t1 = time.perf_counter()
     groups = symmetry_groups(ordered, topo_of, bbox_of, tol_of)
+    timing["feasible_s"] = t1 - t0
+    timing["symmetry_s"] = time.perf_counter() - t1
     for ft in ordered:
         ft.range = _range_mm(ft.nominal, pos_mm, ft.feasible) if ft.type in POSITION_TYPES else _range(ft.nominal, ratio, ft.feasible)
     return ordered, groups, warnings

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -31,30 +33,78 @@ def render_xml(model_name: str, params: list[tuple[str, float]]) -> str:
     return "\n".join(lines)
 
 
-def _render_pngs(feat_json: list[dict], bodies: dict, out: OutDir, warnings: list[dict]) -> list[str]:
+def _render_pngs(feat_json: list[dict], bodies: dict, out: OutDir, warnings: list[dict], log=None, timing: dict | None = None) -> list[str]:
     """features/<NAME>.png per feature (section 4.3); a failure only drops that PNG (PNG_RENDER_FAILED)."""
     from . import render
 
     meshes: dict[str, object] = {}
     written: list[str] = []
-    for f in feat_json:
+    timing = {} if timing is None else timing
+    timing.setdefault("png_tessellate_s", 0.0)
+    timing.setdefault("png_render_s", 0.0)
+    timing.setdefault("png_write_s", 0.0)
+    total = len(feat_json)
+    step = max(1, total // 10)
+    t0 = last = time.perf_counter()
+    for k, f in enumerate(feat_json, 1):
+        now = time.perf_counter()
+        if log is not None and k > 1 and ((k - 1) % step == 0 and now - last >= 1.0):
+            log(f"PNG {k - 1}/{total} {now - t0:.1f}s")
+            last = now
         rel = f"{PNG_DIR}/{f['name']}.png"
         try:
             mesh = meshes.get(f["body"])
             if mesh is None:
+                ta = time.perf_counter()
                 mesh = meshes[f["body"]] = render.BodyMesh(bodies[f["body"]].triangulate())
+                timing["png_tessellate_s"] += time.perf_counter() - ta
             moving, fixed = ([int(x[1:]) for x in f["faces"][key]] for key in ("moving", "fixed"))
+            ta = time.perf_counter()
             img = render.render_feature(mesh, moving, fixed, render.dimension_points(f))
+            tb = time.perf_counter()
             render.write_png(out.tmp_path(rel), img)
+            timing["png_render_s"] += tb - ta
+            timing["png_write_s"] += time.perf_counter() - tb
         except Exception as ex:  # noqa: BLE001 - rendering never fails extract (section 4.3)
             warnings.append({"code": "PNG_RENDER_FAILED", "feature": f["name"], "message": f"feature highlight rendering failed: {ex.__class__.__name__}: {ex}"})
             continue
         f["png"] = rel
         written.append(rel)
+    timing["png_triangles"] = int(sum(len(m.tris) for m in meshes.values()))
+    if log is not None and total:
+        log(f"PNG {total}/{total} {time.perf_counter() - t0:.1f}s")
     return written
 
 
+def _timing_summary(timing: dict) -> dict:
+    """Numbers only (seconds rounded to 0.01 s, counts as int)."""
+    out = {}
+    for k, v in timing.items():
+        if isinstance(v, dict):
+            out[k] = _timing_summary(v)
+        elif isinstance(v, float):
+            out[k] = round(v, 2)
+        else:
+            out[k] = v
+    return out
+
+
+def _log_timing(rep: Reporter, timing: dict, t_start: float) -> None:
+    """Stage timing summary: one ``EXTRACT_TIMING <json>`` line in paicad.log + a stderr line. Kept out of
+    parameter_features.json so that file stays byte-deterministic (section 5.2)."""
+    timing["total_s"] = time.perf_counter() - t_start
+    summary = _timing_summary(timing)
+    rep.log("EXTRACT_TIMING " + json.dumps(summary, ensure_ascii=False, sort_keys=True))
+    rep.info(f"[extract] total {summary['total_s']}s")
+
+
 def run(args, rep: Reporter) -> int:
+    t_start = time.perf_counter()
+    timing: dict = {"bodies": {}}
+
+    def info(msg: str) -> None:
+        rep.info(f"[extract] {msg}")
+
     opts = options.load(args.options)
     out = OutDir(args.out_dir, [XML_NAME, JSON_NAME] + ([] if args.no_png else [PNG_DIR]))
     out.prepare()
@@ -62,6 +112,8 @@ def run(args, rep: Reporter) -> int:
     cad = cadload.load(args.cad)
     renum = read_renum_csv(args.renum_csv) if args.renum_csv else None
     pairs = cadload.correspond(cad, renum, args.body_map)
+    timing["load_s"] = time.perf_counter() - t_start
+    info(f"CAD loaded: {len(pairs)} bodies {timing['load_s']:.1f}s")
     bodies_json = []
     per_body = []
     tol_of = {}
@@ -81,9 +133,18 @@ def run(args, rep: Reporter) -> int:
                 "vertices": s.n_vertices,
             }
         )
-        per_body.append((body.name, part, body, features.recognize_body(body, opts)))
+        bt: dict = {}
+        timing["bodies"][body.name or f"#{k + 1}"] = bt
+        per_body.append((body.name, part, body, features.recognize_body(body, opts, log=lambda m, b=body.name: info(f"{b}: {m}"), timing=bt)))
+        info(f"{body.name}: {bt['features']} features {bt['recognize_s']:.1f}s")
+    timing["recognize_s"] = time.perf_counter() - t_start - timing["load_s"]
     rep.progress(85, "naming features and symmetry groups")
-    feats, groups, warnings = features.finalize(per_body, opts, tol_of)
+    t_fin = time.perf_counter()
+    fin: dict = {}
+    feats, groups, warnings = features.finalize(per_body, opts, tol_of, timing=fin)
+    timing["finalize_s"] = time.perf_counter() - t_fin
+    timing.update(fin)
+    info(f"naming/feasible/symmetry: {len(feats)} features, {len(groups)} groups {timing['finalize_s']:.1f}s")
     topo_of = {b.name: b.topology() for b, _, _ in pairs}
     feat_json = []
     for ft in feats:
@@ -114,7 +175,11 @@ def run(args, rep: Reporter) -> int:
     pngs: list[str] = []
     if feats and not args.no_png:
         rep.progress(90, "rendering feature highlights")
-        pngs = _render_pngs(feat_json, {b.name: b for b, _, _ in pairs}, out, warnings)
+        t_png = time.perf_counter()
+        pngs = _render_pngs(feat_json, {b.name: b for b, _, _ in pairs}, out, warnings, log=info, timing=timing)
+        timing["png_s"] = time.perf_counter() - t_png
+        timing["pngs"] = len(pngs)
+        info(f"feature PNGs: {len(pngs)} {timing['png_s']:.1f}s")
     body_map_mode = "body_map" if args.body_map else ("xde" if cad.mode == "single" else "file_stem")
     doc = envelope(
         unit_system="mm-ton-s",
@@ -127,6 +192,7 @@ def run(args, rep: Reporter) -> int:
     if not feats:
         out.write_text(JSON_NAME, dumps(doc))
         out.commit([JSON_NAME])
+        _log_timing(rep, timing, t_start)
         rep.result("FAIL", "GEOM_EXTRACT_EMPTY", JSON_NAME)
         return EXIT_EXTRACT_EMPTY
     grouped = {g["parameter"] for g in groups}
@@ -136,6 +202,7 @@ def run(args, rep: Reporter) -> int:
     out.write_text(JSON_NAME, dumps(doc))
     out.write_text(XML_NAME, render_xml(model_name, params))
     out.commit([JSON_NAME, XML_NAME] + pngs)
+    _log_timing(rep, timing, t_start)
     rep.progress(100, f"extract done: {len(feats)} features, {len(params)} parameters")
     rep.result("OK", None, JSON_NAME)
     return EXIT_OK
