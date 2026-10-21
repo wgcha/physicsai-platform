@@ -194,7 +194,7 @@ component의 요소·노드 집합:
 
 - 파라미터 = 대칭 그룹 대표만(구성원은 같은 값을 따름). 순서 = component(RENUM 행 순) → 피처 종류(§6.2 표 순) → 면 서명 centroid(x,y,z 사전순).
 - 이름 = `<COMP>_<TYPE>_<k>`(정규화 component 이름, k는 같은 component·종류 안 1부터). 64자 넘으면 component 부분을 줄이고 `_<4자 해시>`(NAME_RE 준수, `~` 아님, GE-C1). 규칙 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`(`NAME_RE`) 위반이 없게 만든다.
-- 피처 종류 약어(GE-C4): THK(두께)·POCKET_D·POCKET_W·RIB_T·RIB_H·HOLE_R·HOLE_U·HOLE_V·FILLET_R. 이름 예 `CUSH_L_POCKET_W_1`.
+- 피처 종류 약어(GE-C4): THK(두께)·POCKET_D·POCKET_W·RIB_T·RIB_H·HOLE_R·HOLE_U·HOLE_V·FILLET_R. 이름 예 `CUSH_L_POCKET_W_1`. 추출 조건(`extract.filter`)이 있을 때만 리브 위치 RIB_U·RIB_V 추가(GE-C16, [extract-filter.md](extract-filter.md) §3.2).
 - 값은 `repr(float)` 최단 표기 + `" mm"`(각도 피처는 없음 — 필렛은 반경 mm).
 - DOCTYPE·ENTITY 없음.
 
@@ -359,6 +359,7 @@ component의 요소·노드 집합:
 }
 ```
 
+- `extract.filter`(선택, GE-C16): ①-1 추출 조건(찾을 종류·조건) — 스키마·조기 제외·하위호환은 [extract-filter.md](extract-filter.md) §4·§5. 없으면 현행 동작.
 - `extract` 절(선택, GE-C5): `draft_max_deg` 구배 허용각(기본 3°, 이 이하 면은 평면 취급)·`overlap_min` 대향 면 겹침 최소 비율(0.5)·`range_ratio` 값 범위 비율(0.05)·`sample_grid` 겹침 판정 샘플 격자(12)·`position_range_mm`(위치형 기본 범위, GE-C10). 0.1.0 구현 기본값과 일치.
 - **모르는 키 거부(GE-C10)**: `options.json`의 최상위·절 안 알 수 없는 키는 무시하지 않고 `GEOM_INPUT_INVALID`로 거부(구현 예정). 플랫폼은 API 단계에서 `GEOM_OPTIONS_INVALID`.
 - 유효 옵션 = `geometry.defaults`(설정) ← `param_sets.geom_options`(세트 덮어쓰기, 부분 객체) 깊은 병합. 범위: 허용오차 > 0 유한, `0 < min_stretch ≤ 1`, `max_aspect ≥ 1`, `min_edge_mm`(null 또는 > 0, null = 미사용), `0 < min_edge_ratio ≤ 1`, `0 < dt_ratio_min ≤ 1`, `position_ref ∈ {nearest_fixed, proportional}`, `0 ≤ poisson < 0.5`, `thickness_ref ∈ {contact_fixed, larger_area_fixed}`, `thickness_ref_overrides` = {파라미터 이름: 고정할 면 `F<k>`(그 피처 쌍의 면이어야 함)}, `symmetry_split` = 존재하는 그룹 id 목록. 위반은 API 422 `GEOM_OPTIONS_INVALID`(problems 목록).
@@ -522,6 +523,7 @@ component의 요소·노드 집합:
 - **위치형 파라미터 기준(확정 2026-10-19)**: `HOLE_POS_U`/`HOLE_POS_V`(약어 HOLE_U·HOLE_V)의 값 = 그 축 방향으로 구멍 축에서 **가장 가까운 고정 면**(이번 샘플에서 움직이지 않는 면)까지의 거리. 바디 길이·두께 파라미터가 바뀌어도 구멍은 그 고정 면과의 거리를 유지(구멍이 이동 면과 함께 밀리지 않음). 기준 면 선택이 동률이면 면적 큰 면. 대안 = 고급 옵션 `position_ref: proportional`(바디 길이 비례 위치), 기본 `nearest_fixed`(§4.9).
 - `feasible`: 이동 면이 다른 면과 만나기 전 최대 Δ(인접 면 거리, 벽 두께 > 0.5 mm)를 보수적으로 추정.
 - 인식 실패한 면은 무시(피처 없음). 피처가 0개면 `GEOM_EXTRACT_EMPTY`.
+- **추출 조건·리브 위치(GE-C16)**: `extract.filter`가 있으면 선택 종류·조건을 탐색 단계에서 먼저 적용(결과 = 전 종류 결과의 부분집합)하고, 위치형에 `RIB_POS_U`/`RIB_POS_V`(인식된 리브의 측면+윗면 평행 이동, HOLE_POS와 같은 기준·범위·sweep)를 더한다 — [extract-filter.md](extract-filter.md) §3·§5.
 
 ### 6.3 update
 
@@ -671,7 +673,7 @@ commands:
 
 #### 7.3.1 ①-1 `TD_EXTRACT_PARAMS`(native)
 
-params `{cad_path, engine:"native"}`. `X` 동일.
+params `{cad_path, engine:"native", extract_filter?}`(추출 조건, GE-C16 — [extract-filter.md](extract-filter.md) §6). `X` 동일.
 
 | step | native 처리 | 성공 판정 |
 |---|---|---|
@@ -701,7 +703,7 @@ params `{doe_label, num_runs(2~train_data.max_runs), seed?(정수, 기본 1), mu
 
 생성 경로:
 
-1. 신규: `POST /studies/{id}/param-sets {mode:"discover", path, choice:{cad, radioss_assem}, label, engine:"native", geom_options?}` → **202 `{job_id}`**(altair는 기존 201 그대로). params `{mode:"new", path, choice, label, geom_options}`.
+1. 신규: `POST /studies/{id}/param-sets {mode:"discover", path, choice:{cad, radioss_assem}, label, engine:"native", geom_options?, extract_filter?}`(추출 조건, GE-C16 — [extract-filter.md](extract-filter.md) §6.7) → **202 `{job_id}`**(altair는 기존 201 그대로). params `{mode:"new", path, choice, label, geom_options}`.
 2. 다시 준비: `POST /param-sets/{id}/native-prepare` → 202(params `{mode:"reprep", param_set_id}`) — tag 옵션 변경·입력 교체 후.
 
 | step | 처리 |
@@ -1160,6 +1162,7 @@ paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 
 | GE-C13 | ①-3 native DOE run 폴더 평탄화(2026-10-20 사용자 요청): `run__N/` 직계 = 해석 입력(starter·include·조립 사본), m_1~m_3 없음. 보조 산출물은 `run__N/_paicad/` 1개로 모음(생략하지 않은 근거: paicad update/morph/check가 이 폴더를 작업·보고 폴더로 써야 하고, `native_params.xml`은 DG_SCAN paramitem 샘플 표의 출처, `values.json`은 다중 baseline run 메타(`baseline_id`·`common_values`), check 보고는 `SKIPPED.json.report`가 가리킴). 조립 임시 폴더 `_paicad/assembly` → 성공 후 R 직계로 이동(`props apply` 재귀 스캔 분리). 소비자: DG_SCAN starter 탐색이 native에서 `_paicad` 제외, SCX `scan_inputs`가 `_paicad` 하위 폴더를 경고 없이 제외, TD_SOLVE·②③·⑤ 결과표·컨투어·FEM 검증은 DB `input_rel`·`01_train/results` 기준이라 무변경. ④ 일괄 run·altair run 레이아웃 불변, 이전 m_* native DOE 폴더는 읽기 호환(§7.3.3 DG_SCAN) |
 | GE-C12 | 단계 4 플랫폼 구현 차이(GE-C12, 2026-10-19): ① geometry_native 기능은 `commands.paicad_extract`·`paicad_tag`·`paicad_update`·`paicad_morph`·`paicad_check` 모두 필요(단건 예측이 단계별 명령 사용) ② 플랫폼 실패 코드 `GEOM_TIMEOUT` ③ 데이터셋 엔진 판별 경로 `01_train/results/<id>`(doe 경로도 인식) ④ native 세트 ①→④ 파라미터 이름 검증은 부분집합 검사 ⑤ 스킵 정보는 `TD_DOE_GEN` 작업 `result.skipped_runs` ⑥ migration `0016_geometry_engine`(down `0015_doe_platform_gen`, S18 병합 재번호)으로 확정, 문서 내 0012 표기는 재번호 이력뿐 ⑦ ⑥ 최적화 입력의 엔진 검사는 `surrogate_opt_problem.normalize`에 위치 |
 | GE-C14 | altair 공용 코드 이동(2026-10-20, 동작 불변 — 기존 기준선 시험 무수정 통과): ① ④ 일괄 예측 하위 입력 검사(`batch.py` 하위 `prepared_input.check_path`·`plan_copy` 검사)를 중립 모듈 `worker/.../steps/stage4_predict/child_input.py`의 `check_child_input`으로 옮기고 `batch.py`(altair)·`batch_native.py`(native)가 이것을 import ② `predict.py`의 `_pr_prep_prepared`(prepared 입력 PR_PREP)를 `predict_prep.py`(`pr_prep_prepared`)로 이동, `predict.py`는 위임만. 문구·코드·파일 배치 불변 |
+| GE-C16 | ①-1 추출 조건·리브 위치(2026-10-21 사용자 요청, 계약 [extract-filter.md](extract-filter.md)): `options.json` `extract.filter`(types·조건, 없으면 현행 바이트 동일), 조기 제외(선택 안 한 종류의 비싼 단계 0회·제외 PNG 0장, 결과 = 전 종류 결과의 부분집합), 새 위치형 `RIB_POS_U/V`(약어 RIB_U/V, `TYPE_ORDER` 맨 뒤, 필터 있을 때만), `measure.method` `rib_center`, 출력 `extract_stats.json`(항상), `parameter_features.json` 선택 키 `filter`, job params `extract_filter`·422 `EXTRACT_FILTER_INVALID`/`EXTRACT_FILTER_UNSUPPORTED`, `train_setups.extract_filter`(migration HEAD 다음), `geom_options.extract.filter` 422. ④ native 세트 등록도 `extract_filter`(NP_PREP 준비 파일 생략·NP_EXTRACT 실행, 기록 = 세트 features `filter`, 등록 후 변경 불가·새 세트로, add_baseline 조건 승계), altair 경로 무변경(U3). 검증 V-EF-1~12 |
 | GE-C15 | 경로 확인 엔진별 확장자(2026-10-21, v0.2.1 핫픽스): `POST /studies/{id}/paths/inspect` 요청에 선택 필드 `engine`(altair\|native, 기본 null) 추가(추가적·하위호환). `purpose=CAD_FILE`에서 native면 `geometry.step_extensions`로 검사하고 위반 시 problems code `STEP_EXTENSION`("STEP 확장자는 .step, .stp 중 하나여야 합니다"), 생략·altair는 기존(`train_data.cad_extensions`, code `CAD_EXTENSION`). 다른 purpose는 engine 무시. 작업 생성(`TD_EXTRACT_PARAMS`)의 확장자 검사는 기존 그대로 엔진별 |
 | GE-C17 | extract 진행·시간 기록(2026-10-21, paicad 0.10.1, 결과 불변 최적화): stderr에 영문 진행 줄 `[extract] ...`, `paicad.log`에 `EXTRACT_TIMING <json>` 한 줄(단계별 경과 초). 결정성(§5.2) 유지를 위해 `parameter_features.json`·xml에는 시간 정보를 넣지 않는다. 플랫폼은 두 줄을 파싱하지 않는다(사람 확인용) |
 
