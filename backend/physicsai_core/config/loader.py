@@ -113,6 +113,10 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
     if s.geometry.engine == "native" and not geometry_status(s)["native_available"]:
         w.append(ConfigIssue("geometry.engine", "기본 엔진 Native를 쓸 수 없습니다 — paicad 설치 확인"))
 
+    from ..geometry.extract_filter import DEFAULTS_IGNORED_MESSAGE, has_defaults_filter
+
+    if has_defaults_filter(s.geometry.defaults):  # extract-filter.md §6.3: 추출 조건은 설정이 아니라 사용자가 정한다
+        w.append(ConfigIssue("geometry.defaults.extract.filter", DEFAULTS_IGNORED_MESSAGE))
     if s.geometry.view.max_glb_bytes > s.ui.max_artifact_bytes:  # geometry-view.md §6.1: 넘으면 ui 상한으로 자른다
         w.append(ConfigIssue("geometry.view.max_glb_bytes",
                              f"ui.max_artifact_bytes({s.ui.max_artifact_bytes})보다 커서 그 값으로 줄여 씁니다"))

@@ -13,6 +13,9 @@ import math
 import re
 from typing import Any
 
+from .extract_filter import GEOM_OPTIONS_MESSAGE as GEOM_OPTIONS_FILTER_MESSAGE
+from .extract_filter import strip_defaults_filter
+
 # 코드 기본값 = 계약 §7.1 예시 + paicad 0.5.0이 받는 나머지 키(extract·position_ref·thickness_ref_overrides·symmetry_split).
 # 설정 `geometry.defaults`는 이 위에 깊은 병합된다.
 DEFAULT_OPTIONS: dict[str, Any] = {
@@ -86,6 +89,9 @@ def normalize_override(over: Any) -> tuple[dict[str, Any], list[dict[str, str]]]
             if not isinstance(v, dict):
                 probs.append(_problem(k, f"'{k}'는 객체여야 합니다"))
                 continue
+            if k == "extract" and "filter" in v:  # extract-filter.md §2.3: 조건은 검사 옵션이 아니라 등록 입력(요청 extract_filter)
+                probs.append(_problem("extract.filter", GEOM_OPTIONS_FILTER_MESSAGE))
+                v = {s: x for s, x in v.items() if s != "filter"}
             bad = [s for s in v if s not in DEFAULT_OPTIONS[k]]
             probs += [_problem(f"{k}.{s}", "알 수 없는 옵션 키입니다") for s in bad]
             out[k] = {**out.get(k, {}), **v}
@@ -182,7 +188,7 @@ def validate_options(opts: dict[str, Any]) -> list[dict[str, str]]:
 def effective_options(defaults: dict[str, Any] | None, geom_options: dict[str, Any] | None = None
                       ) -> tuple[dict[str, Any], list[dict[str, str]]]:
     """(유효 옵션, problems). 코드 기본값 ← 설정 defaults ← 세트 덮어쓰기. problems가 있으면 옵션은 신뢰하지 않는다."""
-    base, probs = normalize_override(defaults)
+    base, probs = normalize_override(strip_defaults_filter(defaults))  # extract-filter.md §6.3: defaults의 extract.filter는 무시(설정 경고)
     over, p2 = normalize_override(geom_options)
     probs = probs + p2
     opts = deep_merge(deep_merge(DEFAULT_OPTIONS, base), over)

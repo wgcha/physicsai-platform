@@ -41,6 +41,7 @@ train_setups = Table(
     Column("version", BigInteger, nullable=False, server_default="1"),
     Column("engine", String(16), nullable=False, server_default="altair"),  # geometry-engine.md §7.5 (0016)
     Column("features_rel", String, nullable=True),  # native: parameter_features.json 상대 경로
+    Column("extract_filter", JSONB, nullable=True),  # extract-filter.md §6.4: 마지막 native 추출 조건(정규화본, NULL = 조건 없음) (0019)
     CheckConstraint("engine IN ('altair','native')", name="ck_train_setups_engine"),
 )
 

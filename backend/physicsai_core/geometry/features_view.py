@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .extract_filter import from_paicad
+
 
 def _num(v: Any) -> float | None:
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else None
@@ -53,4 +55,5 @@ def summary(doc: dict[str, Any], png_ids: dict[str, str] | None = None) -> dict[
     warns = [{"code": str(w.get("code")), "message": str(w.get("message") or ""), "feature": w.get("feature")}
              for w in doc.get("warnings", []) if isinstance(w, dict) and w.get("code")]
     return {"engine_version": doc.get("engine_version") if isinstance(doc.get("engine_version"), str) else None,
+            "filter": from_paicad(doc.get("filter")),
             "features": feature_rows(doc, png_ids), "groups": groups, "warnings": warns}

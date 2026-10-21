@@ -67,7 +67,9 @@ def judge_paicad(rc: int | None, report_path: str, success_paths: list[str], *, 
                        exit_code=rc_)
     if status == "FAIL" or (status not in OK_STATUSES and status is not None):
         skip = report.get("skip") if isinstance(report.get("skip"), dict) else {}
-        code = report.get("code") or skip.get("code") or "GEOM_INTERNAL"
+        # 보고에 코드가 없으면(추출 결과 0개 보고 등) stdout `PAICAD RESULT FAIL <code>`의 코드를 쓴다
+        line_code = result_line[1] if result_line is not None and result_line[0] == "FAIL" else None
+        code = report.get("code") or skip.get("code") or line_code or "GEOM_INTERNAL"
         eng = report.get("message") or skip.get("message")
         return _fail(str(code), eng if isinstance(eng, str) else None, rc_, category=report.get("category") or skip.get("category"),
                      step=skip.get("step") if isinstance(skip.get("step"), str) else None,

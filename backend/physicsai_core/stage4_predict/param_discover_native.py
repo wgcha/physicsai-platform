@@ -160,13 +160,19 @@ def provided_parameters(root: str, cad_rel: str) -> list[tuple[str, str]]:
     return [(_rel(parent, "parameters.json"), "original/parameters.json")] if os.path.isfile(p) else []
 
 
-def copy_sources_native(d: Discovery, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any, kind: str = "solid") -> int:
-    """고른 후보를 세트 폴더 구조(cad/, radioss_assem/, native/extract/)로 dst에 모은다. 원본마다 복사 직전 재검사·핸들 복사."""
+def prepared_files(root: str, cad_rel: str, kind: str = "solid") -> list[tuple[str, str]]:
+    """폴더가 미리 준비해 둔 파일 — 형상 피처 파일(native/extract/)과 parameters.json(original/). 추출 조건을 쓰면 복사하지 않는다."""
+    return companion_files(root, cad_rel, kind) + provided_parameters(root, cad_rel)
+
+
+def copy_sources_native(d: Discovery, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any, kind: str = "solid",
+                        prepared: bool = True) -> int:
+    """고른 후보를 세트 폴더 구조(cad/, radioss_assem/, native/extract/)로 dst에 모은다. 원본마다 복사 직전 재검사·핸들 복사.
+    prepared=False(추출 조건 지정, extract-filter.md §6.7)면 준비된 피처 파일·parameters.json은 복사하지 않는다."""
     root = d.root
     root_real = real(root)
     total = 0
-    for src, rel in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel, kind) \
-            + provided_parameters(root, cad_rel):
+    for src, rel in cad_files(root, cad_rel, settings) + (prepared_files(root, cad_rel, kind) if prepared else []):
         total += _copy_src(root, root_real, src, os.path.join(dst, *rel.split("/")))
     arel = assem["rel"]
     adir = _recheck(root, root_real, arel)
@@ -195,10 +201,10 @@ def copy_assem_native(d: Discovery, assem: dict[str, Any], dst: str, settings: A
     return total
 
 
-def planned_bytes_native(d: Discovery, cad_rel: str, assem: dict[str, Any], settings: Any, kind: str = "solid") -> int:
+def planned_bytes_native(d: Discovery, cad_rel: str, assem: dict[str, Any], settings: Any, kind: str = "solid",
+                         prepared: bool = True) -> int:
     root = d.root
-    files = [_abs(root, s) for s, _r in cad_files(root, cad_rel, settings) + companion_files(root, cad_rel, kind)
-                              + provided_parameters(root, cad_rel)]
+    files = [_abs(root, s) for s, _r in cad_files(root, cad_rel, settings) + (prepared_files(root, cad_rel, kind) if prepared else [])]
     adir = _abs(root, assem["rel"])
     files += [os.path.join(adir, n) for n in assem_files(adir, settings.predict.renum_csv_name)]
     total = 0
