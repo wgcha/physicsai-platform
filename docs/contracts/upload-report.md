@@ -374,3 +374,5 @@ report:
 ## 변경 메모(UR-Cn)
 
 - **UR-C1**(2026-10-21, Plan — 사용자 릴리스 배정): v0.2.5로 배정(v0.2.4 native-vars + MCP 다음, 순차). migration `0020_uploads` → **`0021_uploads`**(down_revision `0020_mcp`). 업로드·보고서 API x-mcp exclude(§4.1·§9.4). "python-multipart 의존 추가 금지" → 플랫폼 코드 import 금지 + MCP SDK 전이 의존만 허용(공식 SDK `mcp`가 python-multipart를 필수 의존으로 가짐 — 2.3.0 METADATA 확인). multipart 라우트 0개(V-SEC-1)는 그대로.
+
+- **UR-C2**(2026-10-22, v0.2.5 구현 반영): ① 보고서 API는 HTML 파일 응답이라 `x-mcp.exclude`("HTML 파일 응답") — LLM은 기존 요약 조회 도구로 같은 정보 조회. ② 버튼 문구 "HTML 보고서"(§9.4 "보고서 받기(HTML)" 대체), "새 탭에서 보기" 링크(V-RP-8)는 생략(UI 최소). ③ 업로드 후 "출처: 내 PC에서 올림" 문구(§7.4) 미구현(후속). ④ Study 이름 정리 시 앞뒤 점·밑줄·공백 제거. ⑤ 누적 sha256 상태는 프로세스 메모리, 재시작·불일치 시 `.part`를 다시 읽어 복원. ⑥ V-UP-13(1 GiB 스트리밍 slow 시험) 미작성 — 현장 확인 항목. ⑦ MCP 꺼짐 404 본문에 최상위 code·message 추가(MR-C2 ② 충족), 실행 실패 시 confirm 토큰 되돌림(재사용 가능)은 의도된 동작으로 확정.
