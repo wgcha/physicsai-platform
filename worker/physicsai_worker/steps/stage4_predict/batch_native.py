@@ -18,6 +18,7 @@ from physicsai_core.fileutil import sha256_file, write_json, write_text
 from physicsai_core.stage4_predict.batch_matrix import BatchRow, batch_label, samples_csv_text
 
 from physicsai_core.geometry import baselines as bl
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.prep import is_shell_only
@@ -121,6 +122,7 @@ def gen_one(ctx: Any, b: dict[str, Any], S: str, B: str) -> Callable[[Any, dict[
         from physicsai_core.db.repositories import param_sets as ps_repo
 
         ps = ps_repo.get(conn, b["param_set_id"])
+    ps = nv.apply(ps, nv.vars_of(b.get("source_meta")))  # native-vars.md §4.2: 스냅숏 우선
     pm, meta = multi_of(ctx, b, S)
     shell_only = is_shell_only(S)
     roots = {bid: bl.baseline_root(S, pm, bid) for bid in bl.baseline_ids(pm)} if pm else {}

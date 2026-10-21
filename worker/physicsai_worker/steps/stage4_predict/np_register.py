@@ -2,7 +2,7 @@
 
 - new: parameters.json·prep.json 작성 → 검증 → 행 등록 → T를 `04_params/<id>`로 이동. shell_only(3S)면 선택 가능한 PROP 전부를
   쉘 두께 행(`source: prop`, 범위 ±range_ratio)으로 등록(사용자가 PUT …/props로 고쳐 고름).
-- reprep: 파라미터 이름 집합(형상 행만)이 같을 때만 prep.json을 갱신하고 세트 행의 engine_version을 바꾼다(세트 불변 원칙).
+- reprep: 세트 정의 형상 행 이름이 다시 만든 풀에 모두 들어 있을 때만(⊆, native-vars.md §3.3) prep.json을 갱신하고 세트 행의 engine_version을 바꾼다(세트 불변 원칙).
 - props_scan(3S): props.json 갱신 기록. 지금 선택한 PROP 중 더 이상 고를 수 없는 것은 표에서 빼고 경고.
 - add_baseline·remap(4B): 매칭 초안 검사(PARAM_NAME_CONFLICT면 실패·세트 불변) → (add) T를 `S/baselines/<id>`로 이동 →
   `S/param_map.json` 저장(항상 draft, 이전 결정은 signature 같은 행만 승계). 확정 전이라 파라미터 표는 바꾸지 않는다.
@@ -139,8 +139,11 @@ def _register_reprep(ctx: Any) -> None:
     ps = _ps(ctx)
     names = {x["name"] for x in _params_from_features(base, s.geometry.max_report_bytes, _kind(r), r.get("component"))}
     multi_confirmed = (bl.load(base, s.geometry.max_report_bytes) or {}).get("status") == "confirmed" if bl.is_multi(base) else False
-    if not multi_confirmed and names != {x["name"] for x in sh.geometry_rows(ps["parameters"])}:
-        raise StepFailure("PARAM_FEATURE_MISMATCH", "다시 준비한 형상 피처의 이름 집합이 기존 파라미터 표와 다릅니다(세트는 바뀌지 않았습니다)")
+    # native-vars.md §3.3: 세트 정의 형상 이름 ⊆ 다시 만든 풀이면 통과(같음 → 포함 — 변수 정의 편집·①→④ 부분집합 세트도 다시 준비할 수 있다)
+    missing = sorted({x["name"] for x in sh.geometry_rows(ps["parameters"])} - names)
+    if not multi_confirmed and missing:
+        raise StepFailure("PARAM_FEATURE_MISMATCH", "다시 준비한 형상 피처에 기존 파라미터 표의 변수가 없습니다(세트는 바뀌지 않았습니다): "
+                          + ", ".join(missing[:5]))
     _prep_json(ctx, base)
     _validate(ctx, base)
     ctx.ex.db(lambda c: (ps_repo.set_values(c, ps["id"], engine_version=r.get("engine_version")),

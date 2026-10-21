@@ -77,5 +77,7 @@ def test_all_routes_prefixed():
         "/equiv/recipes", "/equiv/recipes/{key}", "/equiv/recipes/{key}/versions", "/equiv/recipes/{key}/restore",
         "/studies/{study_id}/equiv-checks/preview", "/studies/{study_id}/equiv-checks", "/equiv-checks/{eq_id}",
         "/equiv-checks/{eq_id}/curves", "/equiv-checks/{eq_id}/table.csv",
+        # native-vars.md §6.1: Native 템플릿 변수 정의(선택·범위)
+        "/param-sets/{ps_id}/variables",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

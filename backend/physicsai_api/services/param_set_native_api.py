@@ -183,6 +183,10 @@ def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str,
                      "shell_only": is_shell_only(S), "props_scanned": os.path.isfile(os.path.join(S, *PROPS_JSON.split("/"))),
                      "kind": read_kind(S), "view_status": prep_view(S).get("status") or "MISSING",
                      "extract_filter": from_paicad(doc.get("filter"))}  # extract-filter.md §6.7
+    from .native_vars_api import read_revision
+
+    out["native"]["vars_revision"] = read_revision(S)  # native-vars.md §6.1: 변수 정의 리비전(0 = 등록 정의)·형상 행 수
+    out["native"]["vars_count"] = sum(1 for r in p.get("parameters") or [] if r.get("source") != "prop")
     from .param_set_baselines_api import baselines_info  # 4B(§7.3.8): 다중 baseline 세트만
 
     info = baselines_info(ctx, p, S, opts)

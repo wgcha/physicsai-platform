@@ -14,6 +14,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.fileutil import write_json_atomic, write_text
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.stage4_predict import contour_capture as cc
 from physicsai_core.stage4_predict.batch_matrix import build_matrix_for
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
@@ -187,6 +188,7 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         return {"status": "SKIPPED", "reason": "최적안이 없어 캡처하지 않았습니다"}
     if opt["settings"].get("multi_baseline"):  # opt-native §7: 기준안·최적안의 baseline이 다를 수 있어 같은 범례 비교를 하지 않는다
         return {"status": "SKIPPED", "reason": "다중 baseline 세트는 마무리 캡처를 하지 않습니다(최적안은 ④에서 캡처하세요)"}
+    ps = nv.apply(ps, nv.vars_of(opt["settings"]))  # native-vars.md §4.2: 스냅숏 변수(기준안 공칭·names)
     names = [str(p["name"]) for p in ps["parameters"]]
     base = {str(p["name"]): float(p.get("nominal", p["min"])) for p in ps["parameters"]}
     plan: dict[str, Any] = {"status": "PENDING", "reason": None, "baseline_values": base, "legend": None,
@@ -213,7 +215,9 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         plan.update(status="SKIPPED", reason=f"컨투어 캡처가 구성되지 않았습니다({', '.join((tmpl + res)[:3])})")
         return plan
     vals = [base, {n: float((best_d.get("values") or {}).get(n, base[n])) for n in names}]
-    matrix = build_matrix_for({"kind": "table", "text": _table_text(names, [{"values": v} for v in vals])}, ps, ctx.settings)
+    vd = nv.vars_of(opt["settings"])
+    matrix = build_matrix_for({"kind": "table", "text": _table_text(names, [{"values": v} for v in vals])}, ps, ctx.settings,
+                              oor_parameters=nv.out_of_range_parameters(vd) if vd is not None else None)
     if matrix.problems or len(matrix.rows) != 2:
         plan.update(status="SKIPPED", reason=f"캡처 조합을 만들 수 없습니다: {matrix.problems[:2]}")
         return plan

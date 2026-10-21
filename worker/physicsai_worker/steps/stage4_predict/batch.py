@@ -20,6 +20,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, sha256_file, write_json, write_text
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.naming import TPL_NAME
 from physicsai_core.stage4_predict.batch_matrix import (
     BatchRow,
@@ -55,6 +56,7 @@ def _param_set(ctx: Any, b: dict[str, Any]) -> tuple[dict[str, Any], str]:
         ps = ps_repo.get(conn, b["param_set_id"])
     if ps is None or ps["study_id"] != ctx.study["id"]:
         raise StepFailure("INPUT_INVALID", "템플릿(파라미터 세트)을 찾을 수 없습니다")
+    ps = nv.apply(ps, nv.vars_of(b.get("source_meta")))  # native-vars.md §4.2: 배치 생성 때의 변수 정의 스냅숏 우선(재시도·재개 재현)
     return ps, ctx.abs(ps["stored_rel"])
 
 

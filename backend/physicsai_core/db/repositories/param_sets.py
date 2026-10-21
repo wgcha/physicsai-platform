@@ -11,8 +11,9 @@ from ..tables import param_sets
 from .jobs import row_dict
 
 
-def get(conn: Connection, ps_id: str) -> dict[str, Any] | None:
-    return row_dict(conn.execute(select(param_sets).where(param_sets.c.id == ps_id)).first())
+def get(conn: Connection, ps_id: str, *, for_update: bool = False) -> dict[str, Any] | None:
+    q = select(param_sets).where(param_sets.c.id == ps_id)
+    return row_dict(conn.execute(q.with_for_update() if for_update else q).first())
 
 
 def current(conn: Connection, study_id: str) -> dict[str, Any] | None:

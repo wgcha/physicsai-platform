@@ -17,6 +17,7 @@ from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file, copy_tree, write_text
 from physicsai_core.geometry import baselines as bl
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.native_files import doe_matrix_csv, doe_matrix_csv_multi, read_doe_matrix
@@ -39,6 +40,7 @@ def _set(ctx: Any) -> tuple[dict[str, Any], str]:
         ps = ps_repo.get(conn, ctx.params["param_set_id"])
     if ps is None or ps["study_id"] != ctx.study["id"] or ps.get("engine") != "native":
         raise StepFailure("INPUT_INVALID", "Native 파라미터 세트를 찾을 수 없습니다")
+    ps = nv.apply(ps, nv.vars_of(ctx.params))  # native-vars.md §4.2: DOE 생성 때의 세트 정의 스냅숏 우선(생성 후 정의를 고쳐도 같은 범위)
     return ps, ctx.abs(ps["stored_rel"])
 
 

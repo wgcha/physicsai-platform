@@ -16,6 +16,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.paths import resolve_in_study
 from physicsai_core.stage1_train_data import doe_samples
 from physicsai_core.stage4_predict.batch_matrix import (
@@ -29,6 +30,7 @@ from physicsai_core.stage4_predict.batch_multi import build_multi_matrix
 
 from ...context import AppContext
 from ...schemas.contour_capture import BatchCaptureOptions, CaptureDisplay
+from ...schemas.native_vars import VarsEdit
 from ...schemas.predict_batch import BatchSource
 from ..common import study_root
 from .base import _P, invalid_at, prerequisite_missing, require_model_pscfg
@@ -45,6 +47,7 @@ class PredictBatchParams(_P):
     source: BatchSource
     display: CaptureDisplay | None = None  # phase3 §15 S10: 배치 단위 컨투어 표시(범례 fixed로 run끼리 비교)
     capture: BatchCaptureOptions | None = None  # D3-53: 하위 예측 컨투어 캡처 켜기·방향·동영상(null = 기본)
+    vars: VarsEdit | None = None  # native-vars.md §6.3: Native 변수 그 자리 편집(이 실행에만 적용). train_doe·Altair는 불가
 
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {
@@ -62,31 +65,85 @@ def resolve_param_set(conn: Any, study: dict[str, Any], param_set_id: str | None
     return ps
 
 
-def build_matrix(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str, Any], source: dict[str, Any]
-                 ) -> BatchMatrix:
-    """source(모양 검사 끝난 dict) → 조합. train_doe는 DOE 상태 확인(409) 후 samples.csv를 읽는다. 모양 오류 → 422."""
+def build_matrix(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str, Any], source: dict[str, Any]) -> BatchMatrix:
+    """source(모양 검사 끝난 dict) → 조합(세트 정의 그대로). `vars`·모델이 필요한 Native 경로는 `build_matrix_vars`."""
+    return build_matrix_vars(ctx, conn, study, ps, source, None, None)[0]
+
+
+def _samples(ctx: AppContext, conn: Any, study: dict[str, Any], source: dict[str, Any]) -> tuple[list[str], list[dict[str, Any]]]:
+    """train_doe: DOE 상태 확인(409) 후 samples.csv를 읽는다."""
+    d = train_repo.get_doe(conn, source.get("doe_id") or "")
+    if d is None or d["study_id"] != study["id"] or d["status"] != "READY":
+        raise DomainError("DOE_NOT_READY", "READY 상태의 DOE가 필요합니다", status=409)
+    if d["sample_status"] not in ("PARSED", "PARTIAL") or not d["samples_rel"]:
+        raise DomainError("SAMPLES_MISSING", "DOE 샘플 표가 없습니다(샘플 추출기 설정 확인)", status=409)
+    path = resolve_in_study(study_root(ctx, study), d["samples_rel"])
+    if not os.path.isfile(path):
+        raise DomainError("SAMPLES_MISSING", "DOE 샘플 표 파일이 없습니다(Study 정리로 옮겨졌을 수 있습니다)", status=409)
+    return doe_samples.read_samples_csv(path)
+
+
+def build_matrix_vars(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str, Any], source: dict[str, Any],
+                      vars_req: Any, model: dict[str, Any] | None) -> tuple[BatchMatrix, Any]:
+    """조합 + 변수 확정(native-vars.md §6.3). 유효 변수(세트 − exclude + add)로 조합을 만들고, 오류·경고는 `matrix.problems`·`notes`에 합친다.
+    Altair: `vars`가 오면 problem NATIVE_VARS_UNSUPPORTED(그 밖 무변경). train_doe: `vars` 거부, 유효 변수 = DOE 헤더."""
+    from .. import native_vars_run  # 지연 import(순환: native_vars_api → param_set_native_api → jobs → job_params)
+
     pm = multi_map(ctx, ps)
+    cont = _continue_batch(conn, study, source)
+    header = rows = None
+    train_doe = source.get("kind") == "train_doe"
+    if train_doe and pm is None:
+        header, rows = _samples(ctx, conn, study, source)
+    doe_names = [h for h in (header or [])[1:] if not h.startswith("resp:")] if train_doe and engine_of(ps) == "native" and pm is None else None
+    res = native_vars_run.resolve(ctx, conn, study, ps, model, vars_req, doe_names=doe_names)
+    extra: list[dict[str, Any]] = []
+    for x in res.problems:
+        code = x.get("code") or "RANGE_INVALID"
+        if code == "NATIVE_VARS_MULTI_UNSUPPORTED":
+            code = "RANGE_INVALID"
+        extra.append({"code": code, "message": x["message"]})
+    if train_doe and doe_names is not None and (res.vars is not None) and edit_of_nonempty(vars_req):
+        extra.append({"code": "RANGE_INVALID", "message": "① 학습 DOE 재사용에는 변수 추가·제외를 쓸 수 없습니다"})
     if pm is not None:  # geometry-engine.md §7.3.8: 확정 다중 baseline 세트 = baseline별 층화 LHS(lhs만)
         try:
-            return build_multi_matrix(source, ps, pm, ctx.settings)
+            mx = build_multi_matrix(source, ps, pm, ctx.settings)
         except BatchShapeError as exc:
             raise invalid_at("source", str(exc)) from None
-    header = rows = None
-    cont = _continue_batch(conn, study, source)
-    if source.get("kind") == "train_doe":
-        d = train_repo.get_doe(conn, source.get("doe_id") or "")
-        if d is None or d["study_id"] != study["id"] or d["status"] != "READY":
-            raise DomainError("DOE_NOT_READY", "READY 상태의 DOE가 필요합니다", status=409)
-        if d["sample_status"] not in ("PARSED", "PARTIAL") or not d["samples_rel"]:
-            raise DomainError("SAMPLES_MISSING", "DOE 샘플 표가 없습니다(샘플 추출기 설정 확인)", status=409)
-        path = resolve_in_study(study_root(ctx, study), d["samples_rel"])
-        if not os.path.isfile(path):
-            raise DomainError("SAMPLES_MISSING", "DOE 샘플 표 파일이 없습니다(Study 정리로 옮겨졌을 수 있습니다)", status=409)
-        header, rows = doe_samples.read_samples_csv(path)
+        mx.problems = [*extra, *mx.problems]
+        mx.notes = [*mx.notes, *res.notes]
+        return mx, res
+    oor = nv.out_of_range_parameters(res.vars) if res.vars is not None else None  # Native 일괄 out_of_range = 학습 범위(§5.3)
     try:
-        return build_matrix_for(source, ps, ctx.settings, samples_header=header, samples=rows, continue_batch=cont)
+        mx = build_matrix_for(source, res.ps, ctx.settings, samples_header=header, samples=rows, continue_batch=cont, oor_parameters=oor)
     except BatchShapeError as exc:
         raise invalid_at("source", str(exc)) from None
+    mx.problems = [*extra, *mx.problems]
+    if res.vars is not None:
+        mx.notes = [*mx.notes, *_var_notes(res, mx), *res.notes]
+    return mx, res
+
+
+def edit_of_nonempty(vars_req: Any) -> bool:
+    from .. import native_vars_run
+
+    add, exclude = native_vars_run.edit_of(vars_req)
+    return bool(add or exclude)
+
+
+def _var_notes(res: Any, mx: BatchMatrix) -> list[dict[str, str]]:
+    """범위 경고(§6.3): 요청 범위(없으면 표본 값의 범위) 기준 VAR_OUT_OF_TRAIN·VAR_OUT_OF_FEASIBLE·… + 모핑 가능 범위 밖 run 요약."""
+    ranges = mx.source_meta.get("ranges") if isinstance(mx.source_meta.get("ranges"), dict) else None
+    if ranges is None and mx.rows:
+        ranges = {n: [min(r.values[n] for r in mx.rows), max(r.values[n] for r in mx.rows)] for n in mx.rows[0].values}
+    notes = [{"code": w["code"], "message": w["message"]} for w in nv.warn_rows(res.vars or {}, ranges)]  # ④ notes = {code, message}
+    feas = {str(v["name"]): v.get("feasible") for v in (res.vars or {}).get("variables") or [] if v.get("feasible")}
+    bad = sum(1 for r in mx.rows if any(
+        (f.get("min") is not None and r.values.get(n, f["min"]) < f["min"] - 1e-9) or (f.get("max") is not None and r.values.get(n, f["max"]) > f["max"] + 1e-9)
+        for n, f in feas.items()))
+    if bad:
+        notes.append({"code": "RUNS_OUT_OF_FEASIBLE", "message": f"모핑 가능 범위 밖 값이 있는 run {bad}개 — 형상 생성 실패(스킵) 가능"})
+    return notes
 
 
 def multi_map(ctx: AppContext, ps: dict[str, Any]) -> dict[str, Any] | None:
@@ -143,7 +200,9 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     if p.multi_execution > cap:
         raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
     source = p.source.model_dump()
-    matrix = build_matrix(ctx, conn, study, ps, source)
+    matrix, res = build_matrix_vars(ctx, conn, study, ps, source, p.vars, m)
+    if any(x["code"] == "NATIVE_VARS_UNSUPPORTED" for x in matrix.problems):  # native-vars.md §6.3: Altair에 vars → 422
+        raise DomainError("NATIVE_VARS_UNSUPPORTED", "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다", status=422)
     if matrix.problems or not matrix.rows:
         raise source_invalid(matrix.problems or [{"code": "TOO_FEW_ROWS", "message": "조합이 없습니다"}])
     batch_no = pb_repo.next_batch_no(conn, study["id"])  # create_job이 Study 행을 잠근 트랜잭션(D3-25)
@@ -154,6 +213,9 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         "multi_execution": p.multi_execution, "template_kind": kind,
         "source": {"kind": source["kind"], **matrix.source_meta},  # 표 본문 저장 안 함(§14.3)
     }
+    if res.vars is not None:  # native-vars.md §4.2: 사용한 변수 정의 전체를 job params + source_meta에 기록(워커·조회는 스냅숏 우선)
+        params["vars"] = res.vars
+        matrix.source_meta = {**matrix.source_meta, "vars": res.vars}
     _PENDING.set({"batch_id": batch_id, "matrix": matrix, "dir_rel": dir_rel,
                   "simlab_mesh_name": cfg.predict.simlab_mesh_name})
     if native:

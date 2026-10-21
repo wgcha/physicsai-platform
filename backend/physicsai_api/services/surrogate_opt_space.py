@@ -15,7 +15,10 @@ from .surrogate_opt_metrics import PERF_PREFIX, _p
 # ---- 정규화(미리보기·생성 공용) --------------------------------------------------------------------------
 
 
-def _bounds(ps: dict[str, Any], body: Any, so: Any, problems: list[dict[str, Any]]) -> tuple[list[str], list[str], dict, dict]:
+def _bounds(ps: dict[str, Any], body: Any, so: Any, problems: list[dict[str, Any]], *, native: bool = False
+            ) -> tuple[list[str], list[str], dict, dict]:
+    """변수 범위 정규화. native=True(native-vars.md NV-7): 유한·하한 ≤ 상한만 검사하고 `BOUNDS_OUT_OF_RANGE`는 내지 않는다
+    (학습·모핑 가능 범위 밖은 호출부가 경고로). Altair는 기존 그대로(세트 min·max 안만)."""
     params = list(ps["parameters"])
     names = [str(p["name"]) for p in params]
     integer = sorted(set(nearest.integer_vars(list(ps.get("tpl_params") or []))) & set(names))
@@ -34,7 +37,7 @@ def _bounds(ps: dict[str, Any], body: Any, so: Any, problems: list[dict[str, Any
             _p(problems, "BOUNDS_INVALID", f"'{n}' 범위는 유한한 [하한, 상한]이고 하한 ≤ 상한이어야 합니다", f"bounds.{n}")
             continue
         lo, hi = float(b[0]), float(b[1])
-        if lo < tlo - 1e-12 * max(1.0, abs(tlo)) or hi > thi + 1e-12 * max(1.0, abs(thi)):
+        if not native and (lo < tlo - 1e-12 * max(1.0, abs(tlo)) or hi > thi + 1e-12 * max(1.0, abs(thi))):
             _p(problems, "BOUNDS_OUT_OF_RANGE", f"'{n}' 범위는 학습 범위 {tlo:g}~{thi:g} 안이어야 합니다", f"bounds.{n}")
             continue
         if n in integer and lo < hi and math.ceil(lo - 1e-9) > math.floor(hi + 1e-9):

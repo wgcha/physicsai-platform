@@ -15,6 +15,7 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.stage4_predict import performance
 from physicsai_core.stage4_predict.batch_matrix import batch_label, build_matrix_for
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
@@ -22,6 +23,7 @@ from physicsai_core.stage5_optimize.surrogate import dataset as ds
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, require_config_ok, require_power
+from .geometry_gate import engine_of
 from .surrogate_opt_problem import snapshot_perfs
 
 ACTIVE_BATCH = ("GENERATING", "PREDICTING")
@@ -165,6 +167,11 @@ def verify(ctx: AppContext, principal: Principal, opt_id: str, body: Any, rid: s
         if not 1 <= len(body.points) <= n_max:
             problems.append({"code": "EXTRA_POINTS_RANGE", "field": "points", "message": f"추가 검증 점은 1~{n_max}개입니다"})
         st = o["settings"]
+        ps = ps_repo.get(conn, o["param_set_id"])
+        if ps is None:
+            raise DomainError("PARAM_SET_NOT_FOUND", "템플릿(파라미터 세트)을 찾을 수 없습니다", status=409)
+        native = engine_of(ps) == "native"  # native-vars.md §6.2: Native는 범위 밖 점을 막지 않고 경고
+        vdoc = nv.vars_of(st)
         names = list(st["names"])
         bounds = {k: (float(v[0]), float(v[1])) for k, v in st["bounds"].items()}
         rows: list[dict[str, float]] = []
@@ -179,7 +186,7 @@ def verify(ctx: AppContext, principal: Principal, opt_id: str, body: Any, rid: s
                 if v is None or not math.isfinite(v):
                     problems.append({"code": "BOUNDS_OUT_OF_RANGE", "field": f"points.{i}.{n}", "message": f"'{n}' 값이 필요합니다"})
                     continue
-                if v < lo - 1e-9 * max(1.0, abs(lo)) or v > hi + 1e-9 * max(1.0, abs(hi)):
+                if not native and (v < lo - 1e-9 * max(1.0, abs(lo)) or v > hi + 1e-9 * max(1.0, abs(hi))):
                     problems.append({"code": "BOUNDS_OUT_OF_RANGE", "field": f"points.{i}.{n}",
                                      "message": f"'{n}' 값 {v:g}이 최적화 범위 {lo:g}~{hi:g} 밖입니다"})
                     continue
@@ -190,13 +197,14 @@ def verify(ctx: AppContext, principal: Principal, opt_id: str, body: Any, rid: s
             rows.append(vals)
         if problems:
             raise DomainError("SURROGATE_OPT_INVALID", "추가 검증 요청이 올바르지 않습니다", status=422, problems=problems)
-        ps = ps_repo.get(conn, o["param_set_id"])
-        if ps is None:
-            raise DomainError("PARAM_SET_NOT_FOUND", "템플릿(파라미터 세트)을 찾을 수 없습니다", status=409)
+        warnings = nv.warn_points(vdoc if vdoc is not None else nv.effective(list(ps["parameters"]), [])[0], rows, st["bounds"]) \
+            if native else []
+        ps = nv.apply(ps, vdoc)  # 스냅숏 우선: 이 최적화의 유효 변수로 조합 검증
         if st.get("multi_baseline"):  # opt-native §7: 다중 baseline 세트 = baseline 열 표(배정 메타 포함)
             matrix = _multi_matrix(ctx, ps, st, rows)
         else:
-            matrix = build_matrix_for({"kind": "table", "text": _table_text(names, rows)}, ps, cfg)  # 정수는 batch_matrix 반영 규칙
+            matrix = build_matrix_for({"kind": "table", "text": _table_text(names, rows)}, ps, cfg,  # 정수는 batch_matrix 반영 규칙
+                                      oor_parameters=nv.out_of_range_parameters(vdoc) if vdoc is not None else None)
         if matrix.problems or len(matrix.rows) != len(rows):
             raise DomainError("SURROGATE_OPT_INVALID", "추가 검증 조합을 만들 수 없습니다", status=422,
                               problems=[{"code": "BOUNDS_OUT_OF_RANGE", "field": "points", "message": str(matrix.problems[:3])}])
@@ -207,4 +215,5 @@ def verify(ctx: AppContext, principal: Principal, opt_id: str, body: Any, rid: s
             capture=bool(body.capture), extra=True)
         audit(conn, principal, "SURROGATE_OPT_VERIFY", "surrogate_opt", o["id"],
               {"batch_id": batch["id"], "job_id": job["id"], "points": len(rows)}, rid, ip)
-        return {"batch_id": batch["id"], "batch_label": batch_label(batch["batch_no"]), "job_id": job["id"], "iter_no": iter_no}
+        return {"batch_id": batch["id"], "batch_label": batch_label(batch["batch_no"]), "job_id": job["id"], "iter_no": iter_no,
+                "warnings": warnings}

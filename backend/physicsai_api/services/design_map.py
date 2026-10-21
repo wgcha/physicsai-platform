@@ -15,6 +15,7 @@ from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.db.repositories import studies as studies_repo
+from physicsai_core.geometry import native_vars as nv
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.stage4_predict.nearest import integer_vars
 from physicsai_core.stage4_predict.performance import PerfDef, perf_defs, perf_id, perf_label, perf_value
@@ -68,6 +69,7 @@ def design_map(ctx: AppContext, batch_id: str) -> dict[str, Any]:
                 located[r["doe_no"]] = locate_run_files(conn, root, jobs_repo.get_job(conn, r["predict_job_id"]))
 
     ints = integer_vars(list(ps.get("tpl_params") or []))
+    ps = nv.apply(ps, nv.vars_of(b.get("source_meta")))  # native-vars.md §4.2: 스냅숏 우선
     params = [p for p in ps.get("parameters") or [] if isinstance(p, dict) and p.get("name")]
     units = {str(x.get("name")): (x.get("unit") or None) for x in ps.get("responses") or [] if isinstance(x, dict)}
     perfs = perf_defs(ps.get("responses"))

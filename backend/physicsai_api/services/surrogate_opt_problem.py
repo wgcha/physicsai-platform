@@ -18,7 +18,10 @@ from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import criteria
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
 
+from physicsai_core.geometry import native_vars as nv
+
 from ..context import AppContext
+from . import native_vars_run
 from .geometry_gate import check_engine_match, engine_of, native_set_gate
 from .job_params.stage4_batch import resolve_param_set
 from .job_params.stage4_predict import model_for, require_template_features, template_kind
@@ -30,6 +33,11 @@ from .surrogate_opt_space import (  # noqa: F401 - 300줄 분할(R-B): 범위·�
 )
 
 MAX_CONSTRAINTS = 5
+
+
+def _vars_problem(x: dict[str, Any], default: str) -> dict[str, Any]:
+    """`native_vars_run` 문제 → 이 모듈의 problem 모양(`code`·`field`·`message`)."""
+    return {"code": x.get("code") or default, "field": x.get("field") or "vars", "message": x["message"]}
 
 
 def require_feature(ctx: AppContext) -> None:
@@ -57,9 +65,13 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     else:
         require_template_features(cfg, kind)
     problems: list[dict[str, Any]] = []
-    names, integer, bounds, fixed = _bounds(ps, body, so, problems)
+    native = engine_of(ps) == "native"
+    vr = native_vars_run.resolve(ctx, conn, study, ps, m, body.vars)  # native-vars.md §6.2: 유효 변수 = (세트 − exclude) + add
+    problems += [_vars_problem(x, "BOUNDS_INVALID") for x in vr.problems]
+    ps0, ps = ps, vr.ps  # ps = 이 실행의 유효 변수 행을 가진 사본(Native 단일 baseline), 그 밖은 ps0 그대로
+    names, integer, bounds, fixed = _bounds(ps, body, so, problems, native=native)
     cat_levels = _levels(multi, body, so, problems)
-    mb_settings = _multi_settings(multi, ps, cat_levels) if multi is not None else None
+    mb_settings = _multi_settings(multi, ps0, cat_levels) if multi is not None else None
     if cat_levels is not None:  # 위상 변형: 범주 변수 baseline = 수준 인덱스 0..L−1(정수 표현, 인코딩은 원-핫)
         names = [*names, "baseline"]
         integer = sorted(set(integer) | {"baseline"})
@@ -213,6 +225,9 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         "tol_rel": tol, "seed": body.seed, "multi_execution": body.multi_execution, "capture": bool(body.capture),
         "explore": explore, "algorithm": algorithm, "algo_options": algo_options, "verification": verification,
     }
+    if vr.vars is not None:  # native-vars.md §4.2: 이 실행의 변수 정의 스냅숏(워커·조회는 스냅숏 우선)
+        settings["vars"] = vr.vars
+    var_notes = [*(nv.warn_rows(vr.warn_vars, bounds) if vr.warn_vars is not None else []), *vr.notes]
     if cat_levels is not None:  # opt-native §7: 다중 baseline 위상 세트 범주 변수
         settings["levels"] = {"baseline": list(cat_levels)}
     if mb_settings is not None:
@@ -222,4 +237,6 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         kinds["baseline"] = "categorical"
     return {"ps": ps, "model": m, "kind": kind, "settings": settings, "problems": problems, "free": free,
             "integer": integer, "fixed": fixed, "explore_count": explore_count, "reuse": reuse, "valid_points": valid_points,
-            "performances": perf_info, "variables_kind": kinds, "multi": multi, "criteria_missing": crit}
+            "performances": perf_info, "variables_kind": kinds, "multi": multi, "criteria_missing": crit,
+            "var_notes": var_notes, "var_rows": nv.var_rows(vr.vars, vr.pool) if vr.vars is not None else [],
+            "excluded": list((vr.vars or {}).get("excluded") or [])}
