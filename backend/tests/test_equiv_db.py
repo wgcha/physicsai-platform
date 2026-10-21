@@ -47,7 +47,7 @@ def _check(c, sid: str, no: int, **over) -> None:
 def test_v_eq_1_migration_0018(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0020_mcp"
+    assert MIGRATION_HEAD == "0021_uploads"
     name = f"physicsai_m18_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

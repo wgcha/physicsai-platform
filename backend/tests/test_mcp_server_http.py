@@ -134,7 +134,11 @@ async def test_v_mcp_15_http_transport_disabled_404(app_ctx, settings_dict, tmp_
         ctx = build_context(lc, app_ctx.engine)
         with TestClient(create_app(ctx), base_url="http://127.0.0.1") as c:
             r = c.post(MCP_PATH, json={})
-            assert r.status_code == 404 and r.json()["detail"]["code"] == "MCP_DISABLED"
+            body = r.json()
+            assert r.status_code == 404 and body["detail"]["code"] == "MCP_DISABLED"
+            # mcp.md MR-C2 ②: 마운트 오류 본문 = {code, message, detail:{code, message}}(최상위는 MCP 클라이언트용)
+            assert body["code"] == "MCP_DISABLED" and body["message"] and body["message"] == body["detail"]["message"]
+            assert set(body) == {"code", "message", "detail"} and set(body["detail"]) == {"code", "message"}
             assert MCP_PATH not in c.get("/physicsai/api/openapi.json").json()["paths"]
 
 

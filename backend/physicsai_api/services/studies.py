@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+from physicsai_core import uploads as uploads_core
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
@@ -75,6 +76,9 @@ def create_study(ctx: AppContext, principal: Principal, token: str | None, body:
         raise DomainError("PROJECT_NOT_FOUND", "대시보드 프로젝트를 찾을 수 없습니다", status=404)
     require_power(principal, body.project_id)
     require_config_ok(ctx)
+    up_root = uploads_core.upload_root_path(ctx.settings)
+    if up_root and uploads_core.dir_rel_of(ctx.settings, up_root).split("/")[0].casefold() == body.folder_name.casefold():
+        raise DomainError("FOLDER_RESERVED", "업로드 폴더(storage.upload_root)와 같은 이름은 Study 폴더로 쓸 수 없습니다", status=409)
     sid = str(uuid.uuid4())
     ai_root = os.path.normpath(ctx.settings.storage.ai_root)
     folder = os.path.join(ai_root, body.folder_name)

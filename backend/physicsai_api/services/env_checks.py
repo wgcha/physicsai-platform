@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
 import time
 from typing import Any
 
+from physicsai_core import uploads as U
 from physicsai_core.db import MIGRATION_HEAD
 from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.db.repositories import system as system_repo
@@ -16,6 +19,32 @@ from ..auth import Principal
 from ..context import AppContext
 from ..frontend_static import effective_root, root_status
 from .common import audit, clamp_limit, decode_cursor, encode_cursor, require_global_admin
+
+
+def _upload_item(ctx: AppContext) -> dict[str, Any]:
+    """upload-report.md §6.3 upload.root: 폴더 존재(없으면 만들기)·쓰기 시험(tempfile 자동 삭제만)·여유 공간(min_free_gb 미만 WARN).
+    업로드 쓰기는 API 프로세스가 하므로 API 쪽에서 점검한다."""
+    s = ctx.settings
+    root = U.upload_root_path(s)
+    if not root:
+        return item("upload.root", "STORAGE", "SKIP", "업로드 꺼짐(storage.upload_root: null)", "API", label="업로드 폴더")
+    try:
+        os.makedirs(root, exist_ok=True)
+        U.check_root(s.storage.ai_root, root)
+        with tempfile.NamedTemporaryFile(dir=root, prefix=".env_check_", delete=True) as fh:
+            fh.write(b"\0" * 1024)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except (OSError, DomainError) as exc:
+        msg = exc.message if isinstance(exc, DomainError) else str(exc)
+        return item("upload.root", "STORAGE", "FAIL", f"업로드 폴더를 쓸 수 없습니다: {msg}", "API", {"path": root}, label="업로드 폴더")
+    free = U.free_bytes(root)
+    if free is None:
+        return item("upload.root", "STORAGE", "WARN", "쓰기 가능 — 여유 공간을 읽지 못했습니다", "API", {"path": root}, label="업로드 폴더")
+    free_gb = free / 2**30
+    st = "OK" if free_gb >= s.upload.min_free_gb else "WARN"
+    return item("upload.root", "STORAGE", st, f"쓰기 가능 · 여유 {free_gb:.1f} GB", "API",
+                {"path": root, "free_gb": round(free_gb, 2), "min_free_gb": s.upload.min_free_gb}, label="업로드 폴더")
 
 
 def _api_items(ctx: AppContext, token: str | None, rid: str) -> list[dict[str, Any]]:
@@ -60,6 +89,7 @@ def _api_items(ctx: AppContext, token: str | None, rid: str) -> list[dict[str, A
             out.append(item("auth.projects", "AUTH", "OK", f"프로젝트 {n}개", "API", {"count": n}))
         except DomainError as exc:
             out.append(item("auth.projects", "AUTH", "FAIL", f"{exc.code}: {exc.message}", "API", {"code": exc.code}))
+    out.append(_upload_item(ctx))
     av = ctx.hpc.availability()
     if av.mode == "none":
         out.append(item("hpc.gateway", "HPC", "WARN", "HPC 제출 미설정(hpc.gateway: none) — SCX를 쓰려면 관리자 매뉴얼 §16", "API", {"mode": av.mode}))

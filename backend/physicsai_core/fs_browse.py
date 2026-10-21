@@ -16,6 +16,7 @@ from typing import Any
 from .errors import DomainError
 from .paths import BACKUP_DIR, PLATFORM_DIR, PathError, allowed_roots, check_user_path
 from .path_links import _cmp, is_link_or_reparse, real
+from .uploads import PART_SUFFIX, upload_root_path
 
 MAX_ENTRIES = 500
 MAX_EXTS = 20
@@ -33,6 +34,11 @@ def inbox_path(settings: Any) -> str | None:
     return os.path.normpath(os.path.join(st.ai_root, *st.inbox_dir.replace("\\", "/").split("/")))
 
 
+def upload_path(settings: Any) -> str | None:
+    """업로드 폴더 절대경로(`<ai_root>/<storage.upload_root>`). 설정이 null이면 None. 위치 규칙의 단일 출처는 `uploads.upload_root_path`."""
+    return upload_root_path(settings) if settings.storage.ai_root else None
+
+
 def roots(settings: Any, *, include_spdm: bool = False) -> list[dict[str, str]]:
     """탐색 시작점: AI 루트, 받은 파일 폴더(있고 경로 규칙을 통과할 때만), 추가 허용 폴더.
     include_spdm(phase3 §21.3.8 S16 조립 원본 직접 지정)이면 `storage.spdm_roots`도 `SPDM <i>(읽기 전용)`로 덧붙인다."""
@@ -46,6 +52,12 @@ def roots(settings: Any, *, include_spdm: bool = False) -> list[dict[str, str]]:
             out.append({"key": "inbox", "label": "받은 파일(공유 폴더)", "path": check_user_path(inbox, [st.ai_root]).path})
         except PathError:
             pass  # 링크·금지 문자 등 — 바로가기를 보이지 않는다
+    up = upload_path(settings)
+    if up and os.path.isdir(up):  # upload-report.md §6.4: 내가 올린 파일(AI 루트 하위 — inbox와 같은 바로가기)
+        try:
+            out.append({"key": "upload", "label": "내가 올린 파일", "path": check_user_path(up, [st.ai_root]).path})
+        except PathError:
+            pass
     for i, r in enumerate(st.allowed_import_roots):
         if r:
             out.append({"key": f"import_{i}", "label": "추가 허용 폴더", "path": os.path.normpath(r)})
@@ -131,6 +143,8 @@ def list_dir(settings: Any, raw: object, exts: frozenset[str] | None = None) -> 
                 if stat.S_ISDIR(st.st_mode):
                     kind = "dir"
                 elif stat.S_ISREG(st.st_mode):
+                    if e.name.lower().endswith(PART_SUFFIX):  # 업로드 진행 중 임시 파일(upload-report.md §6.4)
+                        continue
                     if exts is not None and os.path.splitext(e.name)[1].lower() not in exts:
                         continue
                     kind = "file"

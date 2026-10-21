@@ -85,6 +85,14 @@ from .schema_stages import (  # noqa: F401
     TrainDataCfg,
     TrainingLogCfg,
 )
+from .schema_upload import (  # noqa: F401
+    ALWAYS_DENIED,
+    PURPOSE_MODES,
+    UPLOAD_PURPOSES,
+    ReportCfg,
+    UploadCfg,
+    UploadPurposeCfg,
+)
 from .validate import (  # noqa: F401
     validate_settings,
 )

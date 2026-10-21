@@ -174,3 +174,31 @@ def test_v_rp_6_too_large_413_via_api(p2_env, engine, monkeypatch):
     monkeypatch.setattr(svc, "limits_resolved", lambda ctx: Limits(max_bytes=4000))     # report.max_bytes를 작게
     r = _get(c, source="doe", id=doe_id)
     assert r.status_code == 413 and r.json()["detail"]["code"] == "REPORT_TOO_LARGE"
+
+
+def test_v_rp_limits_from_reads_real_report_cfg(settings_dict):
+    from physicsai_core.config import load_config_dict
+    from physicsai_core.report_html.page import Limits, limits_from
+
+    lc = load_config_dict({**settings_dict, "report": {"max_bytes": 1048576, "max_images": 3, "max_image_bytes": 65536, "max_table_rows": 77}}, environ={})
+    assert lc.ok, lc.issues
+    assert limits_from(lc.settings) == Limits(1048576, 3, 65536, 77)
+    assert limits_from(load_config_dict(settings_dict, environ={}).settings) == Limits()      # 기본값 = ReportCfg 기본값 = 계약 §9.5
+
+
+def test_v_rp_upload_origin_reads_uploads_table_columns(engine):
+    """uploads 표(dir_rel·username·created_at·state) — 업로드 구현과 열 이름이 같아야 한다. COMPLETED 세션만."""
+    import uuid
+
+    from physicsai_core.db.repositories import report_sources
+
+    sid = str(uuid.uuid4())
+    with engine.begin() as c:
+        c.execute(text("insert into studies(id, project_id, folder_name, title, ai_root_snapshot, created_by, created_by_name)"
+                       " values (:i,'p-1',:f,'t','/x','u','u')"), {"i": sid, "f": "S" + sid[:8]})
+        for st, d in (("COMPLETED", "uploads/u/done"), ("OPEN", "uploads/u/open"), ("CANCELED", "uploads/u/gone")):
+            c.execute(text("insert into uploads(id, study_id, project_id, user_id, username, purpose, name, dir_rel, state)"
+                           " values (:i,:s,'p-1','u','홍길동','MODEL_FOLDER','n',:d,:st)"), {"i": str(uuid.uuid4()), "s": sid, "d": d, "st": st})
+    with engine.connect() as c:
+        rows = report_sources.completed_uploads(c, sid)
+    assert [(r["dir_rel"], r["username"]) for r in rows] == [("uploads/u/done", "홍길동")] and rows[0]["at"] is not None

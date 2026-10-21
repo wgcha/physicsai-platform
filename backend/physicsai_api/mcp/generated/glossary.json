@@ -531,6 +531,31 @@
     "TrainSetup.engine": [
       "altair",
       "native"
+    ],
+    "UploadCompleteOut.state": [
+      "OPEN",
+      "COMPLETED",
+      "CANCELED",
+      "STALE"
+    ],
+    "UploadCreate.engine": [
+      "altair",
+      "native"
+    ],
+    "UploadOut.engine": [
+      "altair",
+      "native"
+    ],
+    "UploadOut.state": [
+      "OPEN",
+      "COMPLETED",
+      "CANCELED",
+      "STALE"
+    ],
+    "UploadPurposeInfo.mode": [
+      "file",
+      "dir",
+      "dir_or_file"
     ]
   },
   "error_codes": {
@@ -738,6 +763,31 @@
         "backend/physicsai_api/services/job_params/stage4_capture.py"
       ],
       "status": 409
+    },
+    "CHUNK_OVERFLOW": {
+      "code": "CHUNK_OVERFLOW",
+      "message_ko": "선언한 파일 크기를 넘는 청크입니다",
+      "sources": [
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 422
+    },
+    "CHUNK_SHA256_MISMATCH": {
+      "code": "CHUNK_SHA256_MISMATCH",
+      "message_ko": "청크 sha256이 다릅니다(쓰지 않음) — 같은 offset으로 다시 보내세요",
+      "sources": [
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 422
+    },
+    "CHUNK_TOO_LARGE": {
+      "code": "CHUNK_TOO_LARGE",
+      "message_ko": "청크가 chunk_size({…} B)보다 큽니다",
+      "sources": [
+        "backend/physicsai_api/routers/uploads.py",
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 413
     },
     "COLLECT_FAILED": {
       "code": "COLLECT_FAILED",
@@ -1101,6 +1151,14 @@
     "FOLDER_EXISTS": {
       "code": "FOLDER_EXISTS",
       "message_ko": "AI 루트에 같은 이름의 폴더가 이미 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/studies.py"
+      ],
+      "status": 409
+    },
+    "FOLDER_RESERVED": {
+      "code": "FOLDER_RESERVED",
+      "message_ko": "업로드 폴더(storage.upload_root)와 같은 이름은 Study 폴더로 쓸 수 없습니다",
       "sources": [
         "backend/physicsai_api/services/studies.py"
       ],
@@ -1994,6 +2052,15 @@
       ],
       "status": 403
     },
+    "SHA256_MISMATCH": {
+      "code": "SHA256_MISMATCH",
+      "message_ko": "sha256이 다릅니다: {…}",
+      "sources": [
+        "backend/physicsai_api/services/upload_checks.py",
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 422
+    },
     "SHELL_ONLY_SET": {
       "code": "SHELL_ONLY_SET",
       "message_ko": "쉘 두께 전용 세트에는 baseline을 추가할 수 없습니다(형상 피처 없음)",
@@ -2250,6 +2317,120 @@
         "backend/physicsai_mcp/toolset.py"
       ],
       "status": null
+    },
+    "UNSUPPORTED_MEDIA_TYPE": {
+      "code": "UNSUPPORTED_MEDIA_TYPE",
+      "message_ko": "Content-Type은 {…} 이어야 합니다",
+      "sources": [
+        "backend/physicsai_api/routers/uploads.py"
+      ],
+      "status": 415
+    },
+    "UPLOAD_CLOSED": {
+      "code": "UPLOAD_CLOSED",
+      "message_ko": "이미 끝난 업로드입니다({…})",
+      "sources": [
+        "backend/physicsai_api/services/uploads.py"
+      ],
+      "status": 409
+    },
+    "UPLOAD_DISABLED": {
+      "code": "UPLOAD_DISABLED",
+      "message_ko": "업로드 저장 위치(storage.upload_root)가 설정되지 않았습니다",
+      "sources": [
+        "backend/physicsai_api/services/uploads.py"
+      ],
+      "status": 503
+    },
+    "UPLOAD_FILE_DONE": {
+      "code": "UPLOAD_FILE_DONE",
+      "message_ko": "이미 다 받은 파일입니다: {…}",
+      "sources": [
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 409
+    },
+    "UPLOAD_FILE_DUPLICATE": {
+      "code": "UPLOAD_FILE_DUPLICATE",
+      "message_ko": "같은 경로의 파일이 이미 있습니다(대소문자 무시): {…}",
+      "sources": [
+        "backend/physicsai_core/uploads.py"
+      ],
+      "status": 409
+    },
+    "UPLOAD_FILE_EXISTS": {
+      "code": "UPLOAD_FILE_EXISTS",
+      "message_ko": "이미 있는 파일입니다(덮어쓰지 않음): {…}",
+      "sources": [
+        "backend/physicsai_api/services/upload_checks.py",
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 409
+    },
+    "UPLOAD_FILE_NOT_FOUND": {
+      "code": "UPLOAD_FILE_NOT_FOUND",
+      "message_ko": "업로드 파일 번호가 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 404
+    },
+    "UPLOAD_INCOMPLETE": {
+      "code": "UPLOAD_INCOMPLETE",
+      "message_ko": "아직 다 받지 못한 파일이 {…}개 있습니다",
+      "sources": [
+        "backend/physicsai_api/services/upload_complete.py"
+      ],
+      "status": 409
+    },
+    "UPLOAD_LIMIT": {
+      "code": "UPLOAD_LIMIT",
+      "message_ko": "진행 중인 업로드가 {…}개입니다(사용자당 최대 {…}개) — 끝내거나 취소한 뒤 다시 시도하세요",
+      "sources": [
+        "backend/physicsai_api/services/uploads.py"
+      ],
+      "status": 429
+    },
+    "UPLOAD_NOT_FOUND": {
+      "code": "UPLOAD_NOT_FOUND",
+      "message_ko": "업로드를 찾을 수 없습니다",
+      "sources": [
+        "backend/physicsai_api/services/uploads.py"
+      ],
+      "status": 404
+    },
+    "UPLOAD_OFFSET_MISMATCH": {
+      "code": "UPLOAD_OFFSET_MISMATCH",
+      "message_ko": "offset {…}이 받은 크기 {…}와 다릅니다(이어 올리기는 received부터)",
+      "sources": [
+        "backend/physicsai_api/services/upload_chunks.py"
+      ],
+      "status": 409
+    },
+    "UPLOAD_PURPOSE_INVALID": {
+      "code": "UPLOAD_PURPOSE_INVALID",
+      "message_ko": "업로드할 수 없는 용도입니다: {…}",
+      "sources": [
+        "backend/physicsai_api/services/uploads.py",
+        "backend/physicsai_core/uploads.py"
+      ],
+      "status": 422
+    },
+    "UPLOAD_TOO_LARGE": {
+      "code": "UPLOAD_TOO_LARGE",
+      "message_ko": "업로드 전체 크기가 상한({…} B)을 넘습니다",
+      "sources": [
+        "backend/physicsai_api/services/upload_checks.py"
+      ],
+      "status": 413
+    },
+    "UPLOAD_TOO_MANY_FILES": {
+      "code": "UPLOAD_TOO_MANY_FILES",
+      "message_ko": "파일이 너무 많습니다(최대 {…}개)",
+      "sources": [
+        "backend/physicsai_api/services/upload_checks.py"
+      ],
+      "status": 413
     },
     "VERSION_CONFLICT": {
       "code": "VERSION_CONFLICT",

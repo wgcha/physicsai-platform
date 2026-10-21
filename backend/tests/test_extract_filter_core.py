@@ -191,7 +191,7 @@ EF_FILES = {
     "backend/physicsai_api/services/job_params/stage1_train_data.py", "backend/physicsai_api/services/job_params/stage4_native.py",
     "backend/physicsai_api/services/param_set_baselines_api.py", "backend/physicsai_api/services/param_set_native_api.py",
     "backend/physicsai_api/services/stage1_train_data.py", "backend/physicsai_api/services/stage4_predict.py",
-    "backend/physicsai_core/config/loader.py", "backend/physicsai_core/db/__init__.py", "backend/physicsai_core/db/tables/stage1_train_data.py",
+    "backend/physicsai_core/config/loader.py", "backend/physicsai_core/db/tables/stage1_train_data.py",
     "backend/physicsai_core/geometry/extract_filter.py", "backend/physicsai_core/geometry/features_view.py", "backend/physicsai_core/geometry/native_vars.py",
     "backend/physicsai_core/geometry/options.py",
     "backend/physicsai_core/stage4_predict/param_discover_native.py", "worker/physicsai_worker/steps/geometry_native.py",

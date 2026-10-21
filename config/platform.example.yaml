@@ -40,6 +40,7 @@ storage:
   spdm_roots: []                  # SPDM master 루트. 2차부터 이 하위가 SPDM 가져오기 허용 범위(읽기 전용, 쓰기 0)
   inbox_dir: "inbox"              # 받은 파일 폴더(AI 루트 기준 상대). 다른 PC는 이 폴더의 네트워크 공유에 복사한 뒤 화면 "찾아보기"로 고른다
   inbox_share_hint: null          # 화면 안내용 공유 경로(표시만). 예: "\\\\SERVER\\physicsai-inbox"
+  upload_root: "uploads"          # 브라우저 업로드 저장 위치(docs/contracts/upload-report.md §2.2). AI 루트 기준 상대(또는 AI 루트 하위 절대). null = 업로드 끔(PC 탭 숨김)
 
 altair:                           # 하드코딩 금지 — 실행 파일 경로는 여기서만 (원본 common.py:25-37 키)
   version_label: "2026.1"
@@ -534,3 +535,20 @@ mcp:                              # MCP 기능(docs/contracts/mcp.md §13). 절�
     top_n_max: 50
   similar:
     max_rows: 20000               # (유사 설계 검색 — 미결 Q2, 현재 미사용)
+
+upload:                           # 브라우저 분할 업로드(upload-report.md §6.1). 절이 없으면 아래 기본값 — 키 추가만
+  chunk_mb: 16                    # 청크 크기(1~64). 리버스 프록시 요청 크기 제한보다 작게(deploy/caddy/physicsai.caddy 주석 참고)
+  max_file_bytes: 68719476736     # 파일 1개 상한 64 GiB(h3d 30 GB급 수용)
+  max_upload_bytes: 214748364800  # 세션 1개 상한 200 GiB(학습 결과 폴더)
+  max_files: 20000                # 세션당 파일 수 상한
+  max_concurrent_per_user: 2      # 사용자당 진행 중(OPEN) 세션 수
+  min_free_gb: 50                 # 업로드 뒤에도 AI 루트 드라이브에 남길 여유[GB](진행 중 세션의 남은 양도 예약으로 계산)
+  stale_hours: 72                 # 이 시간 동안 갱신이 없는 OPEN 세션은 _backup으로 옮기고 STALE(삭제 없음)
+  extra_patterns: []              # 모든 용도에 더할 파일 이름 glob(항상 거부 *.pscfg·*.psdata·실행/스크립트·*.part는 풀 수 없음 — 넣어도 무시)
+  purposes: {}                    # 용도별 허용 패턴 덮어쓰기. 예: purposes: { DATASET_INPUT: { patterns: ["*.h3d", "*.csv"] } } (생략 = 계약 §3.1 기본)
+
+report:                           # HTML 결과 요약 보고서 상한(upload-report.md §9.5). 절이 없으면 아래 기본값
+  max_bytes: 31457280             # 30 MiB(넘으면 그림부터 줄이고, 그래도 넘으면 413)
+  max_images: 24
+  max_image_bytes: 2097152        # 2 MiB
+  max_table_rows: 500

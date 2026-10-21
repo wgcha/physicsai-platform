@@ -3,6 +3,11 @@
 # 환경변수: PHYSICSAI_PORT(기본 8100), PHYSICSAI_FRONTEND_ROOT(= deploy.json caddy_frontend_root)
 redir /physicsai /physicsai/ 308
 
+# v0.2.5: 브라우저 업로드(docs/contracts/upload-report.md §6.5) — 청크 PUT(`/physicsai/api/uploads/{id}/files/{i}`, 최대 upload.chunk_mb = 16 MB)가 이 handle을 지난다.
+# 이 handle은 요청 본문 상한을 두지 않는다(Caddy 기본 무제한, 본문은 버퍼링 없이 스트리밍).
+# 확인: 대시보드 Caddyfile의 사이트 블록에 `request_body { max_size … }`가 있으면 chunk_mb + 1 MB 이상이어야 한다.
+#       필요하면 아래 handle 안에 `request_body { max_size 80MB }`를 넣는다(값은 upload.chunk_mb와 함께 관리).
+#       서버 전역 `timeouts { read_body … }`가 짧으면 느린 망에서 청크가 끊긴다(16 MB를 10 Mbps로 약 13초) — 끊기면 클라이언트가 같은 offset으로 다시 보낸다.
 handle /physicsai/api/* {
 	reverse_proxy 127.0.0.1:{$PHYSICSAI_PORT:8100}
 }
