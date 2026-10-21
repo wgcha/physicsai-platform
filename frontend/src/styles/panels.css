@@ -296,3 +296,36 @@ tr.env-fail td:not(.env-cat) {
   padding-top: var(--space-2);
   border-top: 1px solid var(--color-border);
 }
+
+/* MCP API 토큰(mcp.md §4.5): 발급 직후 평문 1회 표시 */
+.token-page .token-form {
+  display: grid;
+  gap: var(--space-2);
+  max-width: 640px;
+}
+.token-scopes {
+  display: grid;
+  gap: var(--space-1);
+}
+.token-once {
+  margin-bottom: var(--space-3);
+  padding: var(--space-3);
+  border: 1px solid var(--color-warning);
+  border-radius: var(--radius-md);
+  background: var(--color-warning-surface);
+}
+.token-once-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin: var(--space-2) 0;
+}
+.token-value {
+  flex: 1;
+  padding: var(--space-1) var(--space-2);
+  overflow-wrap: anywhere;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+  user-select: all;
+}

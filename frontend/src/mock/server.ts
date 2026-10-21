@@ -28,6 +28,7 @@ import { femVerifyRoutes, seedFemVerify, type FemRec } from "./femVerify";
 import { equivRoutes, seedEquiv, type EqRec, type RecipeRec } from "./equivCheck";
 import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { nativeVarsRoutes } from "./nativeVars";
+import { apiTokenRoutes } from "./apiTokens";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { geomViewRoutes } from "./geomView";
 import { mockReleases, releaseRoutes } from "./releases";
@@ -52,6 +53,7 @@ const JOB_LABEL = JOB_TYPE_LABEL;
 /** 라우터 등록(한 곳). 순서가 곧 우선순위 — 원래 handle의 if 순서 그대로 */
 const ROUTES: Route[] = [
   opsRoutes, // §10.2 me·프로젝트·상태·대기열·자원
+  apiTokenRoutes, // mcp.md §4.4 API 토큰 발급·목록·폐기(+관리자)
   releaseRoutes, // 버전 표시·버전 게시판(GET만)
   (srv, c) => srv.manage.handle(c.method, c.seg, c.body, c.me), // 3차(phase3.md §3): Study 관리·재시도·용량
   envCheckRoutes, // 2차(phase2.md §12): 환경 점검

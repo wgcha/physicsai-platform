@@ -20,7 +20,7 @@ export function createMockFetch(server: MockServer, realFetch?: typeof fetch): t
     if (typeof init?.body === "string") body = JSON.parse(init.body);
     const r = server.handle(method, url.pathname.slice(prefix.length) || "/", url.searchParams, body, headers);
     const h = new Headers(r.headers);
-    if (r.status === 304) return new Response(null, { status: 304, headers: h });
+    if (r.status === 304 || r.status === 204) return new Response(null, { status: r.status, headers: h });
     if (r.bytes !== undefined) {
       h.set("Content-Type", r.contentType ?? "application/octet-stream");
       return new Response(r.bytes.slice().buffer as ArrayBuffer, { status: r.status, headers: h });

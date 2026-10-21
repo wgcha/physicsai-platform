@@ -69,6 +69,9 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   // equiv-check.md §5.3: 등가성 판정(항상 사용 가능 — enabled)·판정 중 추출(hw·응답 TCL·T01 곡선)
   equiv_check: ["equiv_check.enabled"],
   equiv_check_extract: ["commands.response_extract", "commands.t01_curve_export", "altair.hw_exe_path"],
+  // mcp.md §4.5: API 토큰·MCP(mcp.enabled)
+  mcp: ["mcp.enabled"],
+  mcp_http: ["mcp.enabled"],
 };
 export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 

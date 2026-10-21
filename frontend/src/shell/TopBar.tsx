@@ -28,6 +28,7 @@ export function PathBar({ crumbs }: { crumbs: Crumb[] }) {
 export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; projectId?: string; status?: ReactNode }) {
   const { me, status } = useApp();
   const role = roleIn(me, projectId);
+  const mcpOn = status?.features?.mcp?.enabled === true;
   return (
     <header className="topbar">
       <Link to="/" className="brand T" aria-label="PhysicsAI 처음으로">
@@ -42,7 +43,12 @@ export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; 
       <VersionBadge />
       <div className="topbar-right">
         {chips && <div className="status-chips">{chips}</div>}
-        {me.is_global_admin && <AdminMenu />}
+        {me.is_global_admin && <AdminMenu mcpOn={mcpOn} />}
+        {mcpOn && (
+          <Link className="topbar-link" to="/me/api-tokens">
+            내 API 토큰
+          </Link>
+        )}
         <a className="topbar-link" href={status?.auth?.login_url || loginUrl()}>대시보드로</a>
         <NotificationBell />
         <span className="user" title={me.username}>
@@ -61,7 +67,7 @@ export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; 
 }
 
 /** phase2.md §14.1: 전역 관리자에게만 "관리 > 환경 점검", 최근 점검 실패가 있으면 빨간 점 */
-function AdminMenu() {
+function AdminMenu({ mcpOn }: { mcpOn: boolean }) {
   const { status } = useApp();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -88,6 +94,11 @@ function AdminMenu() {
             {fail > 0 && <span className="muted small"> · 실패 {fail}</span>}
             {warnings > 0 && <span className="muted small"> · 설정 경고 {warnings}</span>}
           </Link>
+          {mcpOn && (
+            <Link role="menuitem" to="/admin/api-tokens" onClick={() => setOpen(false)}>
+              API 토큰 관리
+            </Link>
+          )}
         </div>
       )}
     </div>

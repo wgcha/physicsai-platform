@@ -10,6 +10,7 @@ import { AdminEnvCheck } from "../pages/AdminEnvCheck";
 import { useThemeSync } from "../design/theme";
 import { ImportLanding } from "../pages/ImportLanding";
 import { ReleaseBoard } from "../pages/ReleaseBoard";
+import { AdminApiTokens, MyApiTokens } from "../pages/ApiTokens";
 
 const FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
 
@@ -39,6 +40,8 @@ export function AppRoutes() {
           <Route path="/p/:projectId/s/:studyId/stage/:n/surrogate/:optId" element={<StudyPage />} />
           <Route path="/p/:projectId/s/:studyId/manage" element={<StudyManage />} />
           <Route path="/admin/env-check" element={<AdminEnvCheck />} />
+          <Route path="/me/api-tokens" element={<MyApiTokens />} />
+          <Route path="/admin/api-tokens" element={<AdminApiTokens />} />
           <Route path="/import" element={<ImportLanding />} />
           {/* 버전 게시판(읽기 전용 — 배포 RELEASES.md로만 기록) */}
           <Route path="/releases" element={<ReleaseBoard />} />

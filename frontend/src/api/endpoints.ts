@@ -43,6 +43,10 @@ import type {
   GeomOptions,
   NativeFeatures,
   NativeVars,
+  ApiToken,
+  ApiTokenAdmin,
+  ApiTokenCreate,
+  ApiTokenCreated,
   NativeVarsUpdate,
   ShellProps,
   ShellPropsUpdate,
@@ -73,6 +77,12 @@ import type {
 export const api = {
   // §10.2 셸·상태
   me: () => request<Me>("GET", "/me"),
+  /** mcp.md §4.4 API 토큰(세션 전용). 평문 token은 발급 응답에서 한 번만 온다 */
+  myApiTokens: () => request<ApiToken[]>("GET", "/me/api-tokens"),
+  createApiToken: (body: ApiTokenCreate) => request<ApiTokenCreated>("POST", "/me/api-tokens", { body }),
+  revokeMyApiToken: (id: string) => request<void>("DELETE", `/me/api-tokens/${encodeURIComponent(id)}`),
+  adminApiTokens: (q: { user_id?: string | null; active?: boolean | null } = {}) => request<ApiTokenAdmin[]>("GET", "/admin/api-tokens", { query: q }),
+  adminRevokeApiToken: (id: string) => request<ApiTokenAdmin>("POST", `/admin/api-tokens/${encodeURIComponent(id)}/revoke`),
   projects: () => request<Project[]>("GET", "/projects"),
   status: () => request<StatusInfo>("GET", "/status"),
   queue: () => request<QueueInfo>("GET", "/queue"),
