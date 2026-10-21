@@ -4,6 +4,12 @@
 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
 (`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
 
+## 0.2.2 — 2026-10-21
+
+- Native 파라미터 표: 3D 창 상시 표시(표 옆), 표 높이 = 3D 창 높이·내부 스크롤, 변수 클릭·Ctrl/Shift 다중 선택 하이라이트(변수별 색·범례), 3D 면 클릭 → 해당 행
+- 형상 엔진 표시 이름 통일: Altair | Native
+- WebGL을 쓸 수 없는 PC에서도 빈 패널 없음: 이유 표시 + 그림 표시(다중 선택 격자), 불러오기 실패 원인·다시 시도
+
 ## 0.2.1 — 2026-10-21
 
 - native 형상 엔진에서 ①-1 CAD 경로 확인이 STEP(.step·.stp)을 받도록 수정(이전에는 .prt만 허용해 실행 버튼이 막힘)
