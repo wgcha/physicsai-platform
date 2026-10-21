@@ -1,6 +1,6 @@
 # 계약: 브라우저 입력 업로드(A) + HTML 결과 요약 보고서 받기(B)
 
-> 상태: 확정(2026-10-21, 사용자 결정 반영 — 업로드 허용, U1~U3 확정 §12).
+> 상태: 확정(2026-10-21, 사용자 결정 반영 — 업로드 허용, U1~U3 확정 §12). **릴리스 v0.2.5**(v0.2.4 = native-vars + MCP 다음, 순차 — [roadmap.md](../roadmap.md)). migration `0021_uploads`(UR-C1).
 > 상위 계약: [platform.md](platform.md)(§3.3·§17.5·V-SEC-1을 이 문서가 바꾼다 — 변경 메모 연결), [phase3.md](phase3.md) §12·D3-46(공유 inbox 흐름을 이 문서가 대체).
 > 참고 구현(읽기 전용 이식 원본): `wgcha/esl-platform` 계약 `esl_p3_ux.md` §1.1·§2·§8·§9, `backend/esl_platform/core/uploads.py`·`api/services/uploads.py`·`api/routers/uploads.py`, `frontend/src/lib/uploader.ts`·`pages/newcase/UploadPanel.tsx`, `esl/report/html.py`·`api/html_report.py`, `backend/tests/test_p3_ux.py`·`test_p3_ux_hardening.py`. **동작·보호 규칙은 esl을 그대로 따르고, 다른 점만 이 문서에 적는다**(§2.3 차이표).
 
@@ -18,7 +18,7 @@
 
 ### 1.2 범위
 
-- (A) 업로드: 세션 API·DB(migration **0020**)·설정·파일 보호 규칙·프런트 업로더(esl 이식)·경로 칸 두 탭·`/fs/roots`에 업로드 루트 표시·환경 점검·감사 기록.
+- (A) 업로드: 세션 API·DB(migration **0021**)·설정·파일 보호 규칙·프런트 업로더(esl 이식)·경로 칸 두 탭·`/fs/roots`에 업로드 루트 표시·환경 점검·감사 기록.
 - (B) 보고서: 서버 생성 단일 HTML, 1차 대상 ⑤ 결과분석(결과 표 분석·등가성 판정 탭)·⑥ 최적화(내장·HyperStudy 레거시) — §9.1, 다운로드 API 1개, 파일명 규칙. ④ 예측·① DOE 보고서는 2차.
 
 ### 1.3 비범위
@@ -110,7 +110,12 @@
 - complete의 inspect는 `paths/inspect` 서비스 함수를 같은 인자(`purpose`, `path`, `engine`, `doe_id` 없음)로 직접 호출한다(HTTP 재호출 아님). `RESULT_FOLDER`처럼 `doe_id`가 필요한 확인은 complete에서 `doe_id` 없이 형식만 보고, 프런트가 기존대로 `doe_id`를 넣어 `paths/inspect`를 한 번 더 부른다.
 - 낡음(STALE): `updated_at`이 `upload.stale_hours`(기본 72)보다 오래된 OPEN 세션 → `_backup` 이동. 세션 생성 때마다 + 관리자 API + 워커 하우스키핑(있으면)에서 실행. 파일 삭제 0.
 - 감사(platform §17.6 `audit_events`): `UPLOAD_CREATE`·`UPLOAD_COMPLETE`·`UPLOAD_CANCEL`·`UPLOAD_STALE`(detail = purpose·파일 수·바이트·폴더 상대경로. 파일 이름 목록·내용·토큰 없음).
-- `backend/openapi.json`에 청크 body를 `application/octet-stream` binary로 명시(esl `CHUNK_BODY`와 같음). multipart·`UploadFile`·`Form` 사용 금지(V-SEC-1 유지, python-multipart 의존 추가 금지).
+- `backend/openapi.json`에 청크 body를 `application/octet-stream` binary로 명시(esl `CHUNK_BODY`와 같음). multipart·`UploadFile`·`Form` 사용 금지(V-SEC-1 유지). python-multipart는 플랫폼 코드에서 import 금지 — MCP SDK(`mcp`)의 전이 의존으로 설치되는 것만 허용(UR-C1, mcp.md MR-18).
+
+### 4.1 MCP 표기(mcp.md §15)
+
+- §4 업로드 API 전부(`/uploads/config`·`/studies/{id}/uploads`(GET·POST)·`/uploads/{id}`·`/uploads/{id}/files`(POST·PUT)·`/uploads/{id}/complete`·`DELETE /uploads/{id}`·`/admin/uploads/cleanup-stale`)는 `x-mcp: {"exclude":"웹 파일 업로드"}` — LLM 클라이언트는 파일을 올리지 않는다. 따라서 API 토큰 요청은 403 `API_TOKEN_OPERATION_NOT_ALLOWED`(mcp MR-3), 업로드 인증은 대시보드 쿠키만(§2.3) 그대로.
+- 동결 목록 `LEGACY_UNMARKED`에 넣지 않는다(새 operation 규칙).
 
 ## 5. 파일·폴더 보호 규칙(esl `core/uploads.py` 이식)
 
@@ -145,9 +150,9 @@ upload:
 - 설정 검사(`CONFIG_INVALID`): upload_root가 AI 루트 밖·`..`·공백·메타문자·`_backup`/`_platform`으로 시작·SPDM 루트와 겹침이면 오류. `extra_patterns`·`purposes`에 항상 거부 패턴이 들어오면 경고 후 무시.
 - 기본값이 켜짐(`"uploads"`)인 이유: 사용자 요청 기능. 서버 경로 흐름은 그대로라 기존 동작은 바뀌지 않는다(2026-10-20 "새 키 기본값은 기존 배포 동작 불변"에 어긋나지 않음 — 화면에 탭이 추가될 뿐).
 
-### 6.2 DB — migration `0020_uploads`
+### 6.2 DB — migration `0021_uploads`
 
-- down_revision = `0019_extract_filter`(extract-filter 계약 예정). 업로드가 먼저 병합되면 "구현 시 HEAD 다음 번호" 원칙에 따라 번호를 맞추되, **0019는 extract-filter 몫으로 비워 두고 extract-filter 병합 후 0020으로 rebase**한다(§11). `MIGRATION_HEAD` = 0020.
+- down_revision = `0020_mcp`(v0.2.4 MCP, [mcp.md](mcp.md) §14). `MIGRATION_HEAD` = `0021_uploads`. 체인 `0019_extract_filter`(v0.2.3) → `0020_mcp`(v0.2.4) → `0021_uploads`(v0.2.5) 확정(UR-C1) — v0.2.4 배포 후 착수·병합하므로 번호 경쟁 없음.
 - 테이블 `uploads`: `id UUID PK, study_id FK, project_id, user_id, username, purpose, engine NULL, name(≤200), dir_rel(AI 루트 기준), state CHECK(OPEN|COMPLETED|CANCELED|STALE), files JSONB array([{rel,size,sha256_expected,sha256,done}]), total_bytes BIGINT ≥0, inspect JSONB NULL(마지막 complete 요약 — 수치·이름 요약만), backup_rel NULL, created_at, updated_at, completed_at`. 인덱스 `(user_id, state)`, `(state, updated_at)`, `(study_id, created_at DESC)`.
 - 경로는 AI 루트 기준 상대로 저장(platform §6.1 "경로·상태·수치 요약만"). 파일 본문 저장 금지. downgrade: 행이 있으면 거부(0017과 같은 정책).
 
@@ -248,6 +253,7 @@ upload:
 - `GET /reports/{target}/{target_id}?download=1` — target ∈ §9.1(구현된 것만, 나머지 404 `REPORT_TARGET_UNKNOWN`), 로그인 사용자(해당 Study 조회 권한). 대상이 끝나지 않았으면 409 `REPORT_NOT_READY`(⑥ 진행 중 최적화·⑤ 진행 중 배치 출처도 409 — 끝난 뒤 받기). `analysis`는 `target_id` 대신 쿼리 `source`·`id`(+`compare_source`·`compare_id`·`vars`·`resp`)를 받는다: `GET /reports/analysis?source=batch&id=…`.
 - 응답 헤더(esl `html_report`와 같음): `Content-Type: text/html; charset=utf-8`, `Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Cache-Control: no-store`, `download=1`이면 `Content-Disposition: attachment; filename*=UTF-8''…`. 크기 상한 `report.max_bytes`(기본 30 MiB) 초과 시 그림부터 줄이고, 그래도 넘으면 413 `REPORT_TOO_LARGE`.
 - 파일명: `PAI_<Study 이름>_<target>_<id 앞 8자>_<YYYYMMDD-HHMM>.html`(예 `PAI_cushion55_surrogate-opt_3f2a91c0_20261021-1530.html`, `analysis`는 `analysis-batch`·`analysis-doe`). Study 이름은 `name_unsafe_chars` 문자·경로 구분자를 `_`로, ≤40자. 시각 = 서버 표준 시간대.
+- MCP 표기(mcp.md §15): `GET /reports/{target}/{target_id}`·`GET /reports/analysis`는 `x-mcp: {"exclude":"HTML 파일 응답"}` — 단일 HTML(최대 30 MiB)은 도구 결과 상한(64 KiB)·텍스트 모델에 맞지 않는다. LLM은 같은 대상의 `get_summary`(`surrogate_opt`·`equiv_check`)를 쓰고, 사람에게는 화면의 "보고서 받기"를 안내한다. 보고서 링크를 돌려주는 도구는 후속 후보(§9.6).
 - 화면: ⑤ 결과분석 머리 카드(`결과분석`·`등가성 판정` 탭 각각)와 ⑥ 결과 카드(`SurrogateResult`·`OptResult`) 머리에 보조 버튼 "보고서 받기(HTML)"(주 버튼 아님), 옆 링크 "새 탭에서 보기"(`download` 없이).
 
 ### 9.5 설정
@@ -272,7 +278,7 @@ report:
 |---|---|
 | 신규 `backend/physicsai_core/uploads.py` | esl `core/uploads.py` 이식: 이름 규칙(physicsai `path_names` 재사용)·패턴 대조·폴더 생성·`target_path`·`append_chunk`·`_backup` 이동. DB·HTTP 없음 |
 | `backend/physicsai_core/config/schema.py`·`rules.py` | `StorageCfg.upload_root`, `UploadCfg`, `ReportCfg`, 설정 검사(§6.1) |
-| `backend/physicsai_core/db/tables.py` + 신규 `migrations/versions/0020_uploads.py` | §6.2, `MIGRATION_HEAD` |
+| `backend/physicsai_core/db/tables.py` + 신규 `migrations/versions/0021_uploads.py` | §6.2, `MIGRATION_HEAD` |
 | 신규 `backend/physicsai_api/{routers,services,schemas}/uploads.py` | §4. complete는 `services/path_inspect.py`의 purpose별 함수 호출(그 파일은 함수 노출만, 로직 무변경) |
 | `backend/physicsai_core/fs_browse.py`·`services/fs_browse.py` | `upload` 루트, `.part` 숨김 |
 | `backend/physicsai_core/env_check.py`(해당 항목 파일) | `upload.root` 점검 |
@@ -297,14 +303,15 @@ report:
 
 ### 10.3 묶음 순서
 
-1. BE-UP1: core 규칙·설정·migration 0020·세션 API·시험(Linux). 2. FE-UP1: uploader·탭(①-1 CAD·③-4 모델·③-1 데이터셋·①-5 결과 먼저). 3. FE-UP2: 나머지 purpose(①-3 조립·② 원천·④ 템플릿·준비 입력·native 세트). 4. RP1: 보고서 ⑥(`surrogate-opt`·`optimization`). 5. RP2: ⑤ `analysis`(서버 영향도 + 골든 일치). 6. RP3: ⑤ `equiv-check`. 7. 2차: ④ 예측·① DOE. 8. `FEM_ASSEMBLY`(⑤ SidePicker) 업로드 탭·MultiBaseline은 마지막(선택).
+1. BE-UP1: core 규칙·설정·migration 0021·세션 API·x-mcp exclude 표기·시험(Linux). 2. FE-UP1: uploader·탭(①-1 CAD·③-4 모델·③-1 데이터셋·①-5 결과 먼저). 3. FE-UP2: 나머지 purpose(①-3 조립·② 원천·④ 템플릿·준비 입력·native 세트). 4. RP1: 보고서 ⑥(`surrogate-opt`·`optimization`). 5. RP2: ⑤ `analysis`(서버 영향도 + 골든 일치). 6. RP3: ⑤ `equiv-check`. 7. 2차: ④ 예측·① DOE. 8. `FEM_ASSEMBLY`(⑤ SidePicker) 업로드 탭·MultiBaseline은 마지막(선택).
 
 ## 11. 진행 중 작업과 충돌 지점
 
 | 작업 | 겹치는 파일 | 처리 |
 |---|---|---|
-| extract-filter 구현(`feat/r1-v023`) | `migrations`(0019 → 이 계약 0020 down_revision), `db/tables.py`, `config/schema.py`, `openapi.json`·`schema.d.ts`, `CadExtractCard.tsx`(EF 필터 UI vs 업로드 탭 — 탭은 `PathInput` 안이라 카드 수정 최소), `ParamSetDiscoverForm.tsx`(EF native 필터 vs `PathSourceTabs` 래핑 — 직접 충돌) | **extract-filter 먼저 병합**, 업로드는 그 위로 rebase. 두 폼 파일은 업로드 쪽이 래핑만(필터 블록 미접촉) |
+| extract-filter 구현(`feat/r1-v023`, **v0.2.3 병합 완료**) | `migrations`(0019 — 이 계약 체인의 시작), `db/tables.py`, `config/schema.py`, `openapi.json`·`schema.d.ts`, `CadExtractCard.tsx`(EF 필터 UI vs 업로드 탭 — 탭은 `PathInput` 안이라 카드 수정 최소), `ParamSetDiscoverForm.tsx`(EF native 필터 vs `PathSourceTabs` 래핑 — 직접 충돌) | **extract-filter 먼저 병합**, 업로드는 그 위로 rebase. 두 폼 파일은 업로드 쪽이 래핑만(필터 블록 미접촉) |
 | native-vars(`docs/native-vars`, 계약 단계) | `openapi.json`·`schema.d.ts` 재생성, ⑥ 보고서가 `settings.vars` 스냅숏을 읽음, `SurrogateSetup.tsx`·`ResultCards.tsx`(NV) vs `SurrogateResult.tsx`(보고서 버튼) 인접 | RP1은 스냅숏 있으면 우선·없으면 세트 parameters로 읽어 NV 병합 전후 모두 동작. NV가 먼저 병합되면 그 위로 rebase. migration 없음 |
+| MCP(v0.2.4, [mcp.md](mcp.md)) | `migrations`(0020_mcp → 이 계약 0021 down_revision), `db/tables`, `config/schema.py`, `main.py`(라우터 등록·MCP 마운트), `openapi.json`·`operation_ids.txt`, `deploy/caddy/physicsai.caddy`(MCP `handle` vs 업로드 `request_body` 주석), `deploy/requirements.lock` | **v0.2.4 배포 후 착수**(순차). 새 operation은 x-mcp exclude(§4.1·§9.4) — V-MCP-6이 검사 |
 | equiv-check(⑤ 등가성 판정 탭) | `eq_checks`·결과 파일 읽기만, `analysis/equiv/*` 결과 카드에 버튼 | RP3. equiv 구현 병합 후 착수 |
 | S14 ⑤ 결과분석 | `analysis/influence.ts` 골든 공유 | 화면 계산 무변경, 서버는 골든으로 일치 검사 |
 
@@ -330,13 +337,13 @@ report:
 | V-UP-6 | 권한(viewer 403·남의 세션 404·관리자 조회/취소), CSRF 헤더 없으면 403, 사용자당 동시 2 초과 429 | API |
 | V-UP-7 | 취소·낡음 → `_backup` 이동·삭제 호출 0(정적: 업로드 모듈에 `os.remove`·`unlink`·`rmtree` 없음), COMPLETED DELETE 409 | API·정적 |
 | V-UP-8 | complete inspect 실패 시 OPEN 유지 → 파일 추가 → 재complete 성공(모델 폴더 psmdl 누락 예) | API |
-| V-UP-9 | multipart 라우트 0개 유지(V-SEC-1), python-multipart 의존 없음, 업로드 로그에 쿠키·토큰 없음 | 정적·로그 |
+| V-UP-9 | multipart 라우트 0개 유지(V-SEC-1), 플랫폼 코드 python-multipart import 0(MCP SDK 전이 의존 설치는 허용 — UR-C1), 업로드 API에 `pai_` 토큰 403, 업로드 로그에 쿠키·토큰 없음 | 정적·로그 |
 | V-UP-10 | 설정 검사(upload_root가 AI 루트 밖·SPDM 겹침·`_platform` 오류), null이면 503·PC 탭 숨김, env_check 항목 | 단위·UI |
 | V-UP-11 | `/fs/roots`의 upload 루트, `/fs/list`에서 `.part`·`_backup` 숨김 | API |
 | V-UP-12 | UI: 두 탭·미리 검사(제외·이름 위반 시 올리기 비활성)·진행률·멈춤/이어 올리기(탭 재시작)·완료 후 경로 채움 — mock + 실서버 Playwright, 주 버튼 1개 규칙 | UI |
 | V-UP-13 | 대용량: 1 GiB 이상 파일 스트리밍(메모리 = 청크 1개 수준), 64 GiB 상한 경계값 | API(희소 파일) |
 | V-UP-14 | 현장(e2e-checklist): Caddy 경유 16 MB 청크 PUT 성공, 30 GB h3d 업로드·이어 올리기·③-1 데이터셋 생성까지 | 수동 |
-| V-UP-15 | migration 0020 up/down(행 있으면 down 거부), `MIGRATION_HEAD`=0020, `scripts/test-all` 통과 | 시험 |
+| V-UP-15 | migration 0021 up/down(행 있으면 down 거부), down_revision `0020_mcp`, `MIGRATION_HEAD`=`0021_uploads`, 모든 업로드·보고서 operation에 x-mcp exclude(V-MCP-6), `scripts/test-all` 통과 | 시험 |
 
 ### 13.2 보고서(V-RP)
 
@@ -362,4 +369,8 @@ report:
 | R4 | API 프로세스가 대용량 쓰기로 응답성 저하 | 청크 쓰기는 threadpool, 사용자당 동시 2, 청크 16 MB |
 | R5 | 다른 사용자가 남의 업로드 폴더를 입력으로 지정 | AI 루트와 같은 공용 정책(의도). 쓰기는 본인 세션만, 출처 문구로 누가 올렸는지 표시 |
 | R6 | `.psmdl` 내부 형식 미상(pickle 계열 가능성) | 플랫폼은 열지 않음(기존과 같음 — edspy만 연다). 경로 지정 흐름과 위험 동일 |
-| R7 | extract-filter와 migration·폼 파일 충돌 | §11 순서(EF 먼저) |
+| R7 | extract-filter·MCP와 migration·폼 파일 충돌 | §11 순서(EF v0.2.3 완료 → MCP v0.2.4 → 업로드 v0.2.5) |
+
+## 변경 메모(UR-Cn)
+
+- **UR-C1**(2026-10-21, Plan — 사용자 릴리스 배정): v0.2.5로 배정(v0.2.4 native-vars + MCP 다음, 순차). migration `0020_uploads` → **`0021_uploads`**(down_revision `0020_mcp`). 업로드·보고서 API x-mcp exclude(§4.1·§9.4). "python-multipart 의존 추가 금지" → 플랫폼 코드 import 금지 + MCP SDK 전이 의존만 허용(공식 SDK `mcp`가 python-multipart를 필수 의존으로 가짐 — 2.3.0 METADATA 확인). multipart 라우트 0개(V-SEC-1)는 그대로.

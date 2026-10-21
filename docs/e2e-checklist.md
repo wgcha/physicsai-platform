@@ -231,3 +231,18 @@ while ($true) {
   $hm = ($p | Where-Object { $_.CommandLine -match 'BATCHRUN_create_include_node_elem' }).Count
   "{0},{1},{2}" -f (Get-Date -Format HH:mm:ss), $sl, $hm | Add-Content $log; Start-Sleep 2 }
 ```
+
+# v0.2.4 항목 (MCP, 2026-10-21 — [mcp.md](contracts/mcp.md) §17·§21)
+
+## E7. MCP 클라이언트 연결 (V-MCP-15·16·19·20 현장)
+
+| # | 확인 | 결과 | 메모 |
+|---|---|---|---|
+| E7-1 | 묶음 설치·`update-repo` 후 서버 venv `physicsai-mcp --version`, `mcp.enabled: true`에서 `/status` `features.mcp`·`mcp_http` true, 끄면 `/physicsai/mcp` 404 | | |
+| E7-2 | 웹 "내 API 토큰" 발급(read·run, 만료 입력 최대 30), 평문 1회 표시, 폐기 후 401 | | |
+| E7-3 | 대시보드 Vite 경유(그리고 Caddy 설치면 Caddy 경유) HTTP `ping`·`whoami` 성공 | | |
+| E7-4 | Claude Code: HTTP(`.mcp.json`)·stdio 각각 `ping` → `get_summary`(Study 1개) | | |
+| E7-5 | Codex CLI: HTTP(`bearer_token_env_var`)·stdio 각각 `ping` → `list_studies` | | |
+| E7-6 | Gemini CLI: HTTP(`httpUrl`+`headers`)·stdio(토큰 파일) 각각 `ping`, 도구 목록 로딩 시 스키마 거부 0 | | |
+| E7-7 | run 토큰으로 `plan_job`(predict_batch 작은 run 수) → 사람 확인 → `run_job` → `job_status` → `cancel_job`, 관리자 `list_audit`에 행 | | |
+| E7-8 | 사용자 PC stdio 설치(묶음 wheels, `--no-index`) 후 `physicsai-mcp --check` | | |

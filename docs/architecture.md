@@ -270,6 +270,7 @@ frontend ──HTTP──▶ physicsai_api ──▶ physicsai_core ◀── ph
 5. 단계 패키지(`stageN_*`)는 공통과 자기 단계만 import한다. 단계 간 공유가 필요하면 공통으로 올린다(3차 S3부터 `test_layering` 규칙 5로 강제: core `stageN_*`·`study_storage`, 워커 `steps/stageN_*`·`stage0_manage`). 예외: `stage4_predict` 가 `stage1_train_data` 결과(DOE)로 파라미터 세트를 만드는 F 흐름은 **core 저장소/공통 모듈**을 통해서만.
 6. 워커 `steps/**`는 `executor`·`runtime`을 import하지 않는다(제어 예외는 `signals`, 상수는 `steps/_collect.py`).
 7. 공통 어댑터 패키지 `simdash_adapters`(`packages/simdash_adapters/src`)는 `physicsai_*`를 import하지 않고 표준 라이브러리만 쓴다. `physicsai_api`는 command 게이트웨이 모듈(`simdash_adapters.hpc.command`·`physicsai_core.hpc.command`)을 import하지 않는다(3차 S4부터 `test_layering` 규칙 7, 패키지 쪽은 `tests/test_static.py`).
+8. (v0.2.4, mcp.md §20.1) MCP 서버 `backend/physicsai_mcp`는 `physicsai_api`·`physicsai_core`·`physicsai_worker`를 import하지 않는다(앱·토큰 검증 함수·스펙 로더는 `physicsai_api.main`이 주입). 공식 SDK `mcp` import는 `physicsai_mcp/sdk_adapter.py`에만.
 
 ---
 

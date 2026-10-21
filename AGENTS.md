@@ -1,6 +1,6 @@
 # AGENTS.md — 저장소 작업 규칙
 
-구조 지도: [docs/architecture.md](docs/architecture.md) (파일 위치는 이 문서 우선). 계약: 1차 [docs/contracts/platform.md](docs/contracts/platform.md), 2차 [docs/contracts/phase2.md](docs/contracts/phase2.md)(2차가 바꾸는 1차 규칙은 phase2.md §2.3, 2차 문서 우선). 계약과 다르게 구현해야 하면 먼저 Plan에 계약 수정을 요청한다(해당 문서 끝 "변경 메모"에 기록).
+구조 지도: [docs/architecture.md](docs/architecture.md) (파일 위치는 이 문서 우선). 계약: 1차 [docs/contracts/platform.md](docs/contracts/platform.md), 2차 [docs/contracts/phase2.md](docs/contracts/phase2.md)(2차가 바꾸는 1차 규칙은 phase2.md §2.3, 2차 문서 우선). 계약과 다르게 구현해야 하면 먼저 Plan에 계약 수정을 요청한다(해당 문서 끝 "변경 메모"에 기록). 릴리스 범위·병합 순서·migration 번호: [docs/roadmap.md](docs/roadmap.md)(v0.2.4 → v0.2.5 순차).
 
 ## 역할 분리
 
@@ -21,14 +21,15 @@
 - **테스트 필수**: 기능 변경마다 자동 시험을 함께 넣는다. `scripts/test-all`이 Linux(Altair 없음, PostgreSQL 있음)에서 통과해야 완료. 실제 Altair가 필요한 동작은 가짜 도구(`backend/tests/fake_tools/`)로 시험하고, Windows 전용 시험의 skip은 통과로 치지 않는다.
 - **하드코딩 금지**: Altair·PBS 실행 파일 경로, 명령 인자, AI 루트, 포트, 정규식은 `config`에서만 읽는다. 코드에 `Program Files` 경로 금지.
 - **SPDM 보호**: SPDM master에 쓰지 않는다(2차 가져오기도 읽기·복사만, 하드링크 금지). 산출물은 AI 루트에만. 사용자 산출물은 삭제하지 않고 `_backup`으로 이동한다.
-- **보안**: 외부 명령은 워커에서만, `shell=False` 인자 배열로. pickle(`.pscfg`)을 열지 않는다. 원본 pyd 코어를 플랫폼 프로세스에서 import하지 않는다(런처를 Altair 도구가 실행). 대시보드 세션 토큰을 로그·DB에 남기지 않는다.
-- **업로드**(2026-10-21, [docs/contracts/upload-report.md](docs/contracts/upload-report.md)): 브라우저 분할 업로드 세션(`/uploads*`)만 허용하고 다른 업로드 경로는 만들지 않는다. 저장은 설정된 업로드 루트(`<ai_root>/<storage.upload_root>`) 아래 본인 세션 폴더로만, SPDM master 쓰기 금지 유지. multipart 금지(청크 PUT `application/octet-stream`). purpose별 허용 패턴 + 항상 거부(`*.pscfg` pickle·`*.psdata`·실행/스크립트·`*.part`), 파일·세션·파일 수 크기 상한, 디스크 여유 검사, 청크 sha256·파일 sha256 확인, `.part`로 받은 뒤 최종 이름으로 바꾸고 기존 파일 덮어쓰기 금지, 이름 규칙은 경로 규칙과 같게(공백·cmd 메타문자·`..`·링크 거부, realpath가 세션 폴더 안). 삭제 대신 `_backup` 이동(취소·낡음·불일치), 완료된 업로드는 옮기지 않는다. 쓰기는 해당 Study 프로젝트 power 이상 + CSRF 헤더. 업로드·청크 로그에 쿠키·세션 토큰·파일 내용을 남기지 않는다.
+- **보안**: 외부 명령은 워커에서만, `shell=False` 인자 배열로. pickle(`.pscfg`)을 열지 않는다. 원본 pyd 코어를 플랫폼 프로세스에서 import하지 않는다(런처를 Altair 도구가 실행). 대시보드 세션 토큰·API 토큰(`pai_…`)·확인 토큰(`pcf_…`) 평문을 로그·DB·감사·오류 메시지에 남기지 않는다(API 토큰은 sha256과 접두 `pai_<id8>`만).
+- **업로드**(2026-10-21, [docs/contracts/upload-report.md](docs/contracts/upload-report.md)): 브라우저 분할 업로드 세션(`/uploads*`)만 허용하고 다른 업로드 경로는 만들지 않는다. 저장은 설정된 업로드 루트(`<ai_root>/<storage.upload_root>`) 아래 본인 세션 폴더로만, SPDM master 쓰기 금지 유지. multipart 금지(청크 PUT `application/octet-stream`, multipart 라우트 0개 — python-multipart는 MCP SDK 전이 의존으로만 설치되고 플랫폼 코드는 import 금지, upload-report UR-C1). purpose별 허용 패턴 + 항상 거부(`*.pscfg` pickle·`*.psdata`·실행/스크립트·`*.part`), 파일·세션·파일 수 크기 상한, 디스크 여유 검사, 청크 sha256·파일 sha256 확인, `.part`로 받은 뒤 최종 이름으로 바꾸고 기존 파일 덮어쓰기 금지, 이름 규칙은 경로 규칙과 같게(공백·cmd 메타문자·`..`·링크 거부, realpath가 세션 폴더 안). 삭제 대신 `_backup` 이동(취소·낡음·불일치), 완료된 업로드는 옮기지 않는다. 쓰기는 해당 Study 프로젝트 power 이상 + CSRF 헤더, 대시보드 쿠키 인증만(업로드 API는 `x-mcp.exclude` — API 토큰 403). 업로드·청크 로그에 쿠키·세션 토큰·파일 내용을 남기지 않는다.
 - **paicad 버전**: `packages/paicad`를 바꾸는 커밋마다 `__version__`(`packages/paicad/src/paicad/__init__.py`, 단일 출처)을 올리고 `packages/paicad/CHANGELOG.md` 최상단에 항목을 추가한다(geometry-engine.md §17, `scripts/test-all`이 검사).
 - DB에는 경로·상태·수치 요약만. 파일 본문 저장 금지.
 - 사용자 표시 문구·오류 메시지는 한국어.
 - **프런트 빌드본 함께 커밋**: `frontend/`(src·public·index.html·package*.json·vite.config·tsconfig)를 고치면 `scripts/build-frontend-dist` 실행 후 `frontend-dist/`를 함께 커밋한다(서버는 Node 없이 이 빌드본을 배치 — phase3 D3-40). `scripts/test-all`이 최신 여부를 검사한다. Impl-Frontend가 프런트 커밋에 함께 넣는다.
 - **빌드본 도구 소유**: `scripts/build-frontend-dist`·`scripts/frontend_source_hash.py` 변경은 Impl-Frontend와 협의한다(규칙이 바뀌면 빌드본 판정이 바뀜). `frontend-dist/` 재생성·커밋은 프런트 변경과 같은 커밋에서(Impl-Frontend 소유).
-- **MCP 대응(mcp-ready.md M1 병합 후)**: 새 API는 `x-mcp`(도구 또는 제외 사유), 새 job_type은 `JOB_KINDS` 등록 또는 제외 사유, 새 결과 엔티티는 `SUMMARIES` 등록, 새 피처 약어·엔티티는 용어집 `ko` 한 줄 — 정적 시험이 검사(mcp-ready.md §15).
+- **MCP 토큰·Bearer**(v0.2.4, [docs/contracts/mcp.md](docs/contracts/mcp.md)): 기계 인증은 사용자별 API 토큰 `Bearer pai_…`만 — 대시보드로 introspect하지 않고 토큰 테이블로 검증, 기한 최대 30일(설정 상한도 30, 무기한·연장 없음), 역할 스냅숏 최대 30일, 즉시 차단은 관리자 폐기. 토큰은 `x-mcp.tool` operation만 허용(그 밖 403), 토큰 관리 API는 세션 전용, 토큰 요청은 CSRF 면제·`api_audit` 기록(본문 저장 금지). 비용 큰 작업은 plan → confirm → run. MCP 서버(`backend/physicsai_mcp/**`)는 권한 판단 없이 같은 Bearer로 백엔드 HTTP API만 부르는 얇은 래퍼(`physicsai_api`·`core`·`worker` import 금지), `/physicsai/mcp`는 `pai_` Bearer 필수·`mcp.enabled=false`면 404. 클라이언트 설정 예시·문서에 토큰 평문 금지(환경변수·토큰 파일).
+- **MCP 대응(mcp.md M1 병합 후)**: 새 API는 `x-mcp`(도구 또는 제외 사유), 새 job_type은 `JOB_KINDS` 등록 또는 제외 사유, 새 결과 엔티티는 `SUMMARIES` 등록, 새 피처 약어·엔티티는 용어집 `ko` 한 줄, 도구 입력 스키마는 이식 가능 부분집합(mcp.md §9.2, Claude·Codex·Gemini 공통) — 정적 시험이 검사(mcp.md §15).
 - **설치 스크립트는 관리자 권한 없이**: 머신 환경변수·관리자 확인을 쓰지 않는다. 비밀값은 런타임 파일(`<런타임>\secrets\`)에만, 작업 실행 인자에는 경로만(phase3 D3-41).
 
 ## 커밋 규칙

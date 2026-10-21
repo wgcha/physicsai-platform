@@ -230,6 +230,17 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 | `VAR_NOMINAL_OUTSIDE` | 경고 | 공칭이 범위 밖입니다(기준안은 범위 밖 점으로 표시) |
 | `TRAIN_RANGE_UNKNOWN` / `TRAIN_RANGE_UNMATCHED` / `VARS_FROM_DOE` | 안내 | §5.2·§6.3 |
 
+### 6.6 MCP 표기(mcp.md §8·§15 확장 규칙 — 릴리스 v0.2.4 동반)
+
+| 대상 | `x-mcp` | 비고 |
+|---|---|---|
+| `GET /param-sets/{id}/variables` | `{"tool":"get_native_vars","risk":"read","confirm":"never","version":1,"summary_en":"Native template variable definition (used vars, ranges, pool, training range)","summary_ko":"Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)"}` | 요청 인자 `id`·`model_id`·`revision` 설명·예시 필수(V-MCP-6), 응답이 커지면 `history`는 최근 20개 그대로(64 KiB 이하) |
+| `PUT /param-sets/{id}/variables` | `{"exclude":"웹 전용 편집"}` | 세트 정의 변경은 사람이 ④ 상세에서만(D4) |
+| `SurrogateOptCreate.vars`·`PredictBatchParams.vars` | 별도 표기 없음 | mcp `JOB_KINDS` `surrogate_opt`·`predict_batch`의 `params_model`이 기존 요청 모델을 그대로 쓰므로 자동 포함(새 선택 인자 = 호환 변경, `kind_version` 불변). 도구 입력에서는 `params_json` 안(mcp §9.2) |
+| 요약 `param_set` | – | mcp `SUMMARIES` `param_set`의 파라미터 목록은 스냅숏/세트 정의(`vars_revision`) 기준, `facts.vars_revision` 추가 |
+
+- 병합 순서와 무관하게 위 표기를 이 계약 구현 커밋에 넣는다(`openapi_extra` — MCP 병합 전에는 무해한 확장 키). MCP가 먼저 병합됐다면 V-MCP-6 정적 시험이 누락을 잡는다. 두 operation은 mcp 동결 목록 `LEGACY_UNMARKED`에 넣지 않는다.
+
 ## 7. UI(후보 A — 필수 요소만, v0.2.2 표 + 3D 창 레이아웃 재사용)
 
 ### 7.1 ④ Native 세트 상세 `FeatureTable`(`NativeDetail.tsx`)
@@ -316,3 +327,5 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 ## 변경 메모
 
 (구현 중 계약과 달라지면 `NV-C1~`로 기록하고 Plan 확인.)
+
+- **NV-C0**(2026-10-21, Plan — 릴리스 배정): v0.2.4에 MCP 기능([mcp.md](mcp.md))과 함께 포함([roadmap.md](../roadmap.md)). §6.6 MCP 표기 추가. migration 없음 유지(v0.2.4의 migration은 `0020_mcp`뿐).
