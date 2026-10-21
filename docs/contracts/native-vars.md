@@ -1,6 +1,6 @@
 # 계약: Native 템플릿 변수 정의(선택·범위) — 학습 변수와 독립
 
-> 상태: 초안(2026-10-21, 사용자 결정 D1·D2 반영, Q1·Q2 사용자 확인 대기). 상위 계약 [geometry-engine.md](geometry-engine.md)(GE, 변경 메모 GE-C18), ⑥ 규칙은 [opt-native.md](opt-native.md)·phase3 §18(O5), ④ 일괄은 phase3 §14·§20(S15). 충돌 시 이 문서 우선(Native 경로 한정). 기준 커밋 4c0192c(`feat/r1-v023`).
+> 상태: 확정(2026-10-21, 사용자 결정 D1~D5 반영). 상위 계약 [geometry-engine.md](geometry-engine.md)(GE, 변경 메모 GE-C18), ⑥ 규칙은 [opt-native.md](opt-native.md)·phase3 §18(O5), ④ 일괄은 phase3 §14·§20(S15). 충돌 시 이 문서 우선(Native 경로 한정). 기준 커밋 4c0192c(`feat/r1-v023`).
 > ID 규칙: 결정 `NV-n`, 시험 `V-NV-n`, 변경 메모 `NV-Cn`.
 
 ## 0. 한 줄 요약
@@ -26,6 +26,8 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 | D1 | 편집 위치: ④ Native 세트 상세 변수 표(사용·하한·상한, 위치형 mm)로 기본 정의 + ⑥ 내장 최적화·④ 일괄 예측에서 그 자리에서 변수 추가·제외·범위 변경 |
 | D2 | 범위 규칙(Native만): 학습 데이터 범위 밖 = 경고 "학습 형상 분포 밖 — 외삽 주의", envelope(feasible) 밖 = 경고 "모핑 실패 가능", 실패 run은 기존대로 스킵. 차단 없음 |
 | D3 | 범위: Native 한정. Altair(SimLab·NX·HyperStudy) 경로는 코드·UI·동작 무변경(경계 시험 포함) |
+| D4(Q1) | ⑥·④ 일괄에서 고친 내용은 그 실행에만 적용(스냅숏 기록), 세트 정의는 ④ 상세에서만 변경 |
+| D5(Q2) | 공칭을 포함하지 않는 범위 허용 + 경고 `VAR_NOMINAL_OUTSIDE`, Native 폴더 검증에서만 `min ≤ nominal ≤ max` 검사 해제 |
 
 ### 1.3 범위 / 비범위
 
@@ -45,12 +47,12 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 | NV-2 | **세트 정의(현재값)** = 기존 `S/parameters.json` + DB `param_sets.parameters`(선택된 행만, 형식 불변). 기존 소비자(일괄 조합·⑥·단건·①-3)가 고치지 않고 새 정의를 따른다. 제외 변수는 행이 없으므로 `values.json`에서 빠져 **공칭**(GE §4.4 "빠진 이름은 공칭") |
 | NV-3 | **리비전** = `S/vars/vars.json`(현재 리비전 메타) + `S/vars/history/rev_<NNNN>.json`(불변). `S/native/` 밖에 둔다(`native-prepare`가 `S/native/`를 `_backup`으로 옮기므로). 파일 없음 = 리비전 0(등록 정의) |
 | NV-4 | **실행 스냅숏**: Native 실행(④ 일괄·⑥·①-3 세트 DOE)은 생성 시 쓴 변수 정의 전체를 기존 JSONB 열/작업 params에 기록하고, 워커·조회는 스냅숏이 있으면 `ps["parameters"]` 대신 그것을 쓴다(재시도·재개·조회 재현). migration 없음 |
-| NV-5 | ⑥·④ 그 자리 편집 = 요청 선택 필드 `vars: {add?: [이름], exclude?: [이름]}` + 기존 `bounds`/`source.ranges`. 유효 변수 = (세트 정의 − exclude) + add. 세트 정의는 바꾸지 않는다(Q1 제안값) |
+| NV-5 | ⑥·④ 그 자리 편집 = 요청 선택 필드 `vars: {add?: [이름], exclude?: [이름]}` + 기존 `bounds`/`source.ranges`. 유효 변수 = (세트 정의 − exclude) + add. 세트 정의는 바꾸지 않는다(D4 확정) |
 | NV-6 | **제외 ≠ 고정**: 고정 = 하한 = 상한(값 지정, 변수 목록·결과 표에 남음), 제외 = 변수 목록에서 빠지고 공칭 유지(결과 표에 없음) |
 | NV-7 | 범위 규칙(Native): 유한·하한 ≤ 상한만 검사. 학습 범위·feasible 밖은 경고(`VAR_OUT_OF_TRAIN`·`VAR_OUT_OF_FEASIBLE`), `BOUNDS_OUT_OF_RANGE`는 Native에서 내지 않음(서버·프런트) |
 | NV-8 | **학습 범위 출처**(§5) = 모델 → `dataset_id` → 데이터셋 `source_path`의 ① DOE(`dataset_engine._doe_ids`) → `train_does.parameters_snapshot`. 모델·데이터셋에는 파라미터 범위 메타가 없음(코드 확인). 추적 불가면 외삽 경고 생략 + 안내 1줄 |
 | NV-9 | 다중 baseline 세트: 정의 편집 409, `vars` 422(선례: `PUT /props` "다중 baseline 세트는 형상 파라미터를 뺄 수 없습니다"). 범위 경고 전환(NV-7)은 적용 |
-| NV-10 | 공칭이 범위 밖인 정의 허용(Q2 제안값). Native 폴더 검증만 `min ≤ nominal ≤ max` 검사를 끈다(Altair 검증 불변) |
+| NV-10 | 공칭이 범위 밖인 정의 허용(D5 확정). Native 폴더 검증만 `min ≤ nominal ≤ max` 검사를 끈다(Altair 검증 불변) |
 | NV-11 | Altair 세트에 `vars`가 오면 422 `NATIVE_VARS_UNSUPPORTED`(요청 검증 1곳), 정의 API는 422. 그 밖 Altair 코드·화면 diff 없음 |
 | NV-12 | paicad·DB 스키마 변경 없음. 파일(`S/vars/`) + 기존 JSONB 열(`param_sets.parameters`, `predict_batches.source_meta`, `surrogate_opts.settings`, `jobs.params`)만 |
 
@@ -269,7 +271,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 | Impl-Geom | **불필요**(paicad 변경 없음 — 빠진 이름 = 공칭은 GE §4.4 기존 동작, feasible은 피처 파일 기존 키) | — |
 | Impl-Backend | 신규 `physicsai_core/geometry/native_vars.py`(pool·effective·apply·warn_rows·train_ranges 순수부, 시험), `stage4_predict/param_set_files.py`(`_load_parameters` 인자 `require_nominal_inside`)·`param_set_native.py`(Native 검증에서 False), 신규 `physicsai_api/services/native_vars_api.py`(GET·PUT, 리비전 파일, 감사)·`routers/param_sets.py`(2 경로)·`param_set_native_api.enrich`(`vars_revision`·`vars_count`), `services/surrogate_opt_space._bounds`·`surrogate_opt_problem.normalize`(Native 분기·`settings.vars`)·`surrogate_opt_pareto`(추가 검증 경고), `services/job_params/stage4_batch.py`(`vars`·`source_meta.vars`·`train_doe` 규칙)·`sampling/matrix_rows`(out_of_range 기준 주입 인자), `job_params/stage1_native.py`(세트 DOE `vars`), 조회(`predict_batches_info`·`predict_batches_curves`·`surrogate_opts_view`·`design_map`의 변수 열 = 스냅숏 우선), 워커 `stage4_predict/batch_native.py`·`stage5_optimize/surrogate.py`·`surrogate_final.py`·`stage1_train_data/doe_native_set.py`(`apply`), `stage4_predict/np_register._register_reprep`(⊆ 검사)·`_params_from_features` 풀 규칙을 core로 이동, schemas·`backend/openapi.json`, 시험 | extract-filter Backend 병합 **뒤** 착수(§10) |
 | Impl-Frontend | `stages/stage4/geometry/NativeDetail.tsx`(FeatureTable 편집·저장), 신규 `stages/stage4/geometry/NativeVarsTable.tsx`·`lib/nativeVars.ts`(경고 계산 = 서버와 같은 허용오차), `stages/stage5/surrogate/SurrogateSetup.tsx`·`soRules.ts`·`ResultCards.tsx`, `stages/stage4/batch/SamplingPicker.tsx`·`BatchSetup.tsx`, `api`(schema.d.ts 재생성)·`mock/surrogateOptCreate.ts`·일괄 mock, 시험, `frontend-dist` | openapi 갱신 뒤 |
-| Plan | Q1·Q2 확정 반영, 구현 차이는 NV-C* | — |
+| Plan | D4·D5(Q1·Q2) 확정 반영 완료(2026-10-21), 구현 차이는 NV-C* | — |
 
 ## 10. 진행 중 작업과의 충돌 지점
 
@@ -294,7 +296,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 ## 12. 검증 기준(V-NV-*)
 
 - **V-NV-1 정의 저장·리비전**: PUT → `S/vars/vars.json`·`history/rev_0000`(첫 저장)·`rev_<n>` 생성, `parameters.json` = DB `param_sets.parameters` = 선택 형상 행(+ 기존 PROP 행 보존, 풀 순서), 감사 `PARAM_SET_UPDATE`. `base_revision` 불일치 409, 오류 problems 4종, `?revision=n` 조회, `ParamSet.native.vars_revision`. `native-prepare` 후 `S/vars/` 유지, 부분집합 세트 reprep 통과·풀 밖 이름이면 `PARAM_FEATURE_MISMATCH`.
-- **V-NV-2 공칭 밖 허용**(Q2 확정 시): Native 폴더 검증 통과·경고, Altair `_load_parameters` 기존 시험 무수정 통과.
+- **V-NV-2 공칭 밖 허용**(D5): Native 폴더 검증 통과·경고, Altair `_load_parameters` 기존 시험 무수정 통과.
 - **V-NV-3 재현**: ④ 일괄·⑥ 생성 → 세트 정의 편집(이름·범위 변경) → 배치 재시도·⑥ 재개·추가 검증·조회(배치 상세 열·CSV·⑤ 분석)가 스냅숏 이름·범위를 씀. run `values.json` 키 = 스냅숏 변수(제외 변수 없음 → 공칭). 스냅숏 없는 이전 기록은 기존 동작.
 - **V-NV-4 ⑥ Native**: `vars.add`·`exclude`·`bounds`(학습·feasible 밖 포함) → `BOUNDS_OUT_OF_RANGE` 없음, `var_notes` 코드·문구, `settings.vars`, 고정(하한 = 상한)과 제외 구분(names·결과 표), 추가 검증 범위 밖 경고. 다중 baseline에 `vars` → problem.
 - **V-NV-5 ④ 일괄 Native**: `vars` 없음·정의 미편집이면 lhs·S15 7종 조합이 변경 전과 같은 seed에서 행 값 동일(out_of_range 제외), add·exclude·ranges 반영, `table` 헤더 = 유효 변수, `train_doe` = DOE 헤더(`vars` 거부·`VARS_FROM_DOE`), `out_of_range` = 학습 범위 기준, notes 경고.
@@ -304,12 +306,12 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 - **V-NV-9 UI**: 세트 상세 사용·하한·상한 편집·저장·되돌리기·충돌 안내, 위치형 Δ 표시, 3D 치수선이 편집 값 반영, ⑥·일괄 표 추가·제외·학습 범위·모핑 가능 범위 열·경고, Altair 화면 그대로, 문구 한국어, `frontend-dist` 최신.
 - **V-NV-10**: `scripts/test-all` 통과, migration 없음(`MIGRATION_HEAD` 불변).
 
-## 13. 사용자 확인 필요(제안값)
+## 13. 사용자 결정(2026-10-21 확정)
 
-| # | 질문 | 제안값 |
+| # | 질문 | 결정 |
 |---|---|---|
-| Q1 | ⑥·④ 그 자리 편집을 세트 정의에도 저장하나? | **그 실행에만 적용**(스냅숏 기록), 세트 정의는 ④ 상세에서만 바꿈. 같은 구성을 반복해 쓰면 ④ 상세에서 저장 |
-| Q2 | 공칭을 포함하지 않는 범위(예: 공칭 12.5, 14~18) 허용? | **허용**(경고 `VAR_NOMINAL_OUTSIDE`) — 형상 입력 모델이라 공칭 포함이 필수 아님, D2 "차단 없음"과 일관 |
+| Q1 → D4 | ⑥·④ 그 자리 편집을 세트 정의에도 저장하나? | 그 실행에만 적용(스냅숏 기록), 세트 정의는 ④ 상세에서만 바꿈 |
+| Q2 → D5 | 공칭을 포함하지 않는 범위(예: 공칭 12.5, 14~18) 허용? | 허용 + 경고 `VAR_NOMINAL_OUTSIDE`, Native 폴더 검증에서만 `min ≤ nominal ≤ max` 해제(Altair 검증 불변) |
 
 ## 변경 메모
 
