@@ -24,6 +24,7 @@ from ..common import CODE_CATEGORY, EXIT_ARGS, EXIT_CAD, EXIT_CHECK, EXIT_OK, EX
 from ..kernel import CadInputError, distance_to_face, save_brep
 from ..mesh.radioss import _TET_FACES, read_renum_csv
 from ..meshdata import components_from_tag, load_tag
+from ..meshsrc import mesh_args, open_source
 from ..morph import MORPH_JSON, MorphFailed, load_sample, morph_core, read_baseline
 from ..morph import fail_report as morph_fail_report
 from ..morph import ok_report as morph_ok_report
@@ -138,8 +139,10 @@ def _faces_of(f: dict, applied: dict[str, dict]) -> tuple[list[str], list[str]]:
 def run(args, rep: Reporter) -> int:
     t_start = time.monotonic()
     fe = args.fe
+    asm = bool(getattr(args, "asm_match", None))
     if fe != "off":
-        missing = [n for n, v in (("--baseline-inc", args.baseline_inc), ("--renum-csv", args.renum_csv), ("--assem-dir", args.assem_dir), ("--tag-dir", args.tag_dir)) if not v]
+        need = (("--asm-match", args.asm_match),) if asm else (("--baseline-inc", args.baseline_inc), ("--renum-csv", args.renum_csv))
+        missing = [n for n, v in (*need, ("--assem-dir", args.assem_dir), ("--tag-dir", args.tag_dir)) if not v]
         if missing:
             rep.warn(f"--fe {fe} requires {', '.join(missing)}")
             return EXIT_ARGS
@@ -151,12 +154,20 @@ def run(args, rep: Reporter) -> int:
     doc = load_features(args.features)
     values = load_values(args.values, doc, gopts)
     contacts = contacts_from_tag(args.tag_dir, doc)
+    src = None
     if fe != "off":  # every FE input is read before any work (input errors -> exit 3)
-        _, mesh = read_baseline(args.baseline_inc)
-        comps = components_from_tag(mesh, load_tag(args.tag_dir))
-        renum = read_renum_csv(args.renum_csv)
-        if sorted(r.part for r in renum) != sorted(c.part for c in comps):
-            raise PaicadError("GEOM_INPUT_INVALID", "renumber table parts do not match the tag parts")
+        if mesh_args(args, ("baseline_inc", "renum_csv")) == "M":
+            src = open_source(args)
+            mesh = src.mesh
+            comps = components_from_tag(mesh, load_tag(args.tag_dir))
+            if sorted(r["body"] for r in src.match.rows) != sorted(c.part for c in comps):
+                raise PaicadError("GEOM_INPUT_INVALID", "assembly match rows do not match the tag parts")
+        else:
+            _, mesh = read_baseline(args.baseline_inc)
+            comps = components_from_tag(mesh, load_tag(args.tag_dir))
+            renum = read_renum_csv(args.renum_csv)
+            if sorted(r.part for r in renum) != sorted(c.part for c in comps):
+                raise PaicadError("GEOM_INPUT_INVALID", "renumber table parts do not match the tag parts")
     rep.progress(10, "loading nominal CAD")
     cad, nominal = nominal_cad(args.cad, doc, args.body_map)
     names = [b["body"] for b in doc["bodies"]]
@@ -301,7 +312,9 @@ def run(args, rep: Reporter) -> int:
     if fe == "check":
         rep.progress(80, "checking the morphed mesh")
         t0 = time.monotonic()
-        cres = check_core(mesh, mres.xyz, comps, sample, doc, values, gopts, args.assem_dir, Path(args.baseline_inc), expected=expected_measures(out.tmp / "update"))
+        cres = check_core(
+            mesh, mres.xyz, comps, sample, doc, values, gopts, args.assem_dir, None if src is not None else Path(args.baseline_inc), expected=expected_measures(out.tmp / "update"), src=src
+        )
         out.write_text(f"check/{CHECK_JSON}", dumps(check_report(cres, gopts, None, t0)))
         rels.append(f"check/{CHECK_JSON}")
         reports["check"] = f"check/{CHECK_JSON}"

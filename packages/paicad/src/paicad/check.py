@@ -23,6 +23,7 @@ from .measure import FaceIndex, measure_feature
 from .mesh.radioss import RadMesh, collect_assembly_surface, parse_text, read_mesh, read_renum_csv
 from .meshdata import KIND_EDGE, KIND_FACE, KIND_VERTEX, Comp, components_from_tag, load_tag
 from .meshgeom import TriangleSet
+from .meshsrc import NODE_XYZ, load_xyz, mesh_args, open_source, save_xyz
 from .morph import MORPHED_INC, SampleSet, load_sample, read_baseline
 from .update import UPDATE_JSON, feature_values, load_features, load_values, read_json
 
@@ -168,7 +169,7 @@ def _vertex_normals(X: np.ndarray, skin_g: np.ndarray, flip: bool) -> dict[int, 
     return {g: v / (np.linalg.norm(v) or 1.0) for g, v in acc.items()}
 
 
-def check_interference(comps: list[Comp], Xb: np.ndarray, Xm: np.ndarray, assem_dir: str | None, baseline: Path, opts: dict) -> tuple[dict, str | None]:
+def check_interference(comps: list[Comp], Xb: np.ndarray, Xm: np.ndarray, assem_dir: str | None, baseline: Path | None, opts: dict, src=None) -> tuple[dict, str | None]:
     io = opts["interference"]
     body_mm, prod_mm = float(io["body_mm"]), float(io["product_mm"])
     pairs = []
@@ -199,7 +200,8 @@ def check_interference(comps: list[Comp], Xb: np.ndarray, Xm: np.ndarray, assem_
     if assem_dir:
         allg = np.unique(np.concatenate([c.gidx for c in comps]))
         lo, hi = Xm[allg].min(axis=0), Xm[allg].max(axis=0)
-        tris = collect_assembly_surface(assem_dir, [baseline], np.concatenate([lo, hi]), margin=10.0)
+        bbox = np.concatenate([lo, hi])
+        tris = src.product_surface(bbox, margin=10.0) if src is not None else collect_assembly_surface(assem_dir, [baseline], bbox, margin=10.0)
         if len(tris):
             ts = TriangleSet(tris)
             nrm_t = np.cross(tris[:, 1] - tris[:, 0], tris[:, 2] - tris[:, 0])
@@ -281,17 +283,23 @@ def check_core(
     values: dict[str, float],
     opts: dict,
     assem_dir: str | None,
-    baseline_path: Path,
+    baseline_path: Path | None,
     full: bool = True,
     expected: dict[str, float] | None = None,
+    src=None,
+    skip_bodies: set[str] | None = None,
 ) -> CheckResult:
-    """``full=False`` (sweep): (a)(b)(c) only, (d)(e) NOT_EVALUATED. ``expected``: see check_params."""
+    """``full=False`` (sweep): (a)(b)(c) only, (d)(e) NOT_EVALUATED. ``expected``: see check_params.
+    ``src``: assembly-match mesh source (asm-match.md section 5.2): product = include tree minus the matched
+    PART elements, ties from the tree files; features of excluded bodies are not re-measured."""
     Xb = mesh.xyz
     fvalues = feature_values(doc, opts, values)
     fis = {c.body: FaceIndex(c, sample.bodies[c.body].topology(), sample.face_map[c.body], Xb) for c in comps}
     fails: dict[str, str] = {}
     warnings: list[dict] = []
-    p_rep, p_msg, p_err = check_params(doc, fvalues, comps, fis, sample, Xm, opts["deviation"], expected)
+    skip = set(skip_bodies or ()) | (set(src.match.excluded) if src is not None else set())
+    pdoc = dict(doc, features=[f for f in doc["features"] if f["body"] not in skip]) if skip else doc
+    p_rep, p_msg, p_err = check_params(pdoc, fvalues, comps, fis, sample, Xm, opts["deviation"], expected)
     if p_msg:
         fails["GEOM_PARAM_MISMATCH"] = p_msg
     d_rep, d_msg = check_deviation(comps, sample, Xm, mesh, float(opts["deviation"]["boundary_max_mm"]))
@@ -323,10 +331,13 @@ def check_core(
             }
         )
     if full:
-        i_rep, i_msg = check_interference(comps, Xb, Xm, assem_dir, baseline_path, opts)
+        i_rep, i_msg = check_interference(comps, Xb, Xm, assem_dir, baseline_path, opts, src)
         if i_msg:
             fails["GEOM_INTERFERENCE"] = i_msg
-        t_rep, t_msg, t_warn = check_tie(comps, mesh, Xm, assem_dir, opts) if assem_dir else ({"status": "NOT_EVALUATED", "interfaces": []}, None, [])
+        if src is not None:
+            t_rep, t_msg, t_warn = src.tie_check(comps, mesh, Xm, opts)
+        else:
+            t_rep, t_msg, t_warn = check_tie(comps, mesh, Xm, assem_dir, opts) if assem_dir else ({"status": "NOT_EVALUATED", "interfaces": []}, None, [])
         warnings += t_warn
         if t_msg:
             fails["GEOM_TIE_PROJECTION"] = t_msg
@@ -367,8 +378,10 @@ def expected_measures(update_dir: str | Path) -> dict[str, float]:
     return out
 
 
-def report(res: CheckResult, opts: dict, out_inc_name: str | None, t0: float) -> dict:
-    """``check.json`` (also written by ``paicad view preview``, where ``out_inc`` is always null)."""
+def report(res: CheckResult, opts: dict, out_inc_name: str | None, t0: float, out_patch: str | None | bool = False) -> dict:
+    """``check.json`` (also written by ``paicad view preview``, where ``out_inc`` is always null).
+    ``out_patch``: assembly-match runs add the ``out_patch`` key (node patch file name on PASS, else null)."""
+    extra = {} if out_patch is False else {"out_patch": out_patch}
     return envelope(
         status=res.status,
         code=res.code,
@@ -378,6 +391,7 @@ def report(res: CheckResult, opts: dict, out_inc_name: str | None, t0: float) ->
         warnings=res.warnings,
         options={k: v for k, v in opts.items() if k != "schema_version"},
         out_inc=out_inc_name,
+        **extra,
         elapsed_s=rnd(time.monotonic() - t0, 3),
     )
 
@@ -386,6 +400,8 @@ def report(res: CheckResult, opts: dict, out_inc_name: str | None, t0: float) ->
 def run(args, rep: Reporter) -> int:
     t0 = time.monotonic()
     opts = options.load(args.options)
+    if mesh_args(args, ("baseline_inc", "renum_csv", "out_inc"), ("out_patch",)) == "M":
+        return _run_asm(args, rep, opts, t0)
     out_inc = Path(args.out_inc)
     if out_inc.exists():
         raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {out_inc.name}")
@@ -418,6 +434,42 @@ def run(args, rep: Reporter) -> int:
         with open(tmp, "wb") as f:
             f.write(mdata)
         os.replace(tmp, out_inc)
+    out.commit([CHECK_JSON])
+    rep.progress(100, f"check {res.status}")
+    rep.result(res.status, res.code, CHECK_JSON)
+    return EXIT_OK if res.status == "PASS" else EXIT_CHECK
+
+
+def _run_asm(args, rep: Reporter, opts: dict, t0: float) -> int:
+    """Method M (asm-match.md sections 5.4, 6.1): morph ``node_xyz.npz`` vs the include-tree baseline mesh;
+    PASS -> ``--out-patch`` node patch (``node_id``, ``xyz`` of every matched node)."""
+    out_patch = Path(args.out_patch)
+    if out_patch.exists():
+        raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {out_patch.name}")
+    out = OutDir(args.out_dir, [CHECK_JSON])
+    out.prepare()
+    doc = load_features(args.features)
+    values = load_values(args.values, doc, opts)
+    rep.progress(5, "reading the assembly include tree and the morphed coordinates")
+    src = open_source(args)
+    mesh = src.mesh
+    ids, Xm = load_xyz(Path(args.morph_dir) / NODE_XYZ, "morph node coordinates")
+    if not np.array_equal(ids, mesh.node_ids):
+        raise PaicadError("GEOM_INPUT_INVALID", "morph node coordinates do not match the baseline mesh of the assembly match (node ids)")
+    tag = load_tag(args.tag_dir)
+    comps = components_from_tag(mesh, tag)
+    if sorted(r["body"] for r in src.match.rows) != sorted(c.part for c in comps):
+        raise PaicadError("GEOM_INPUT_INVALID", "assembly match rows do not match the tag parts")
+    sample = load_sample(args.update_dir, doc)
+    expected = expected_measures(args.update_dir)
+    rep.progress(20, "checking")
+    res = check_core(mesh, Xm, comps, sample, doc, values, opts, args.assem_dir, None, expected=expected, src=src)
+    out.write_text(CHECK_JSON, dumps(report(res, opts, None, t0, out_patch.name if res.status == "PASS" else None)))
+    if res.status == "PASS":
+        out_patch.parent.mkdir(parents=True, exist_ok=True)
+        tmp = out_patch.with_name(f".{out_patch.name}.tmp{os.getpid()}")
+        save_xyz(tmp, mesh.node_ids, Xm)
+        os.replace(tmp, out_patch)
     out.commit([CHECK_JSON])
     rep.progress(100, f"check {res.status}")
     rep.result(res.status, res.code, CHECK_JSON)

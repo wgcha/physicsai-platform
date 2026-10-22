@@ -13,7 +13,16 @@ from pathlib import Path
 
 from . import __version__
 
-EPILOG = "Exit codes: 0 ok, 2 arguments, 3 input, 10 CAD, 11 check/morph/props apply, 12 tag, 13 extract empty, 14 view output, 20 internal, 130 interrupted."
+EPILOG = "Exit codes: 0 ok, 2 arguments, 3 input, 10 CAD, 11 check/morph/props apply, 12 tag, 13 extract empty, 14 view output, 15 asm check FAIL, 20 internal, 130 interrupted."
+MESH_HELP = "mesh source: --baseline-inc + --renum-csv (baseline include) or --asm-match + --assem-dir (assembly match, asm-match.md)"
+
+
+def _asm_source_args(sp, assem: bool = False) -> None:
+    """Method M arguments of the solid commands (asm-match.md section 6.1)."""
+    sp.add_argument("--asm-match", help="confirmed asm_match.json (assembly match: replaces --baseline-inc/--renum-csv)")
+    if assem:
+        sp.add_argument("--assem-dir", help="assembly folder (include tree root)")
+    sp.add_argument("--cache-dir", help="include tree parse cache folder (<sha256>.idx.npz)")
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -29,13 +38,17 @@ def _parser() -> argparse.ArgumentParser:
     e.add_argument("--out-dir", required=True)
     e.add_argument("--body-map")
     e.add_argument("--renum-csv")
+    e.add_argument("--asm-match", help="confirmed asm_match.json: body / component correspondence check (instead of --renum-csv)")
     e.add_argument("--options", help="options.json; optional extract.filter = feature types to find + conditions (types, thickness_mm, height_mm, face_area_min_mm2, position_min_size_mm, hole_radius_min_mm, fillet_radius_min_mm) - also enables RIB_POS_U/V; extract_stats.json is always written")
     e.add_argument("--no-png", action="store_true")
     e.add_argument("--threads", type=int)
 
-    t = sub.add_parser("tag", help="classify baseline mesh nodes onto the nominal B-rep", allow_abbrev=False)
-    for a in ("--cad", "--features", "--baseline-inc", "--renum-csv", "--assem-dir", "--out-dir"):
+    t = sub.add_parser("tag", help="classify baseline mesh nodes onto the nominal B-rep", allow_abbrev=False, epilog=MESH_HELP)
+    for a in ("--cad", "--features", "--assem-dir", "--out-dir"):
         t.add_argument(a, required=True)
+    t.add_argument("--baseline-inc")
+    t.add_argument("--renum-csv")
+    _asm_source_args(t)
     t.add_argument("--body-map")
     t.add_argument("--options")
     t.add_argument("--threads", type=int)
@@ -47,9 +60,11 @@ def _parser() -> argparse.ArgumentParser:
     u.add_argument("--options")
     u.add_argument("--threads", type=int)
 
-    m = sub.add_parser("morph", help="move baseline node coordinates onto the sample B-rep (or --sweep: morphing envelope)", allow_abbrev=False)
-    for a in ("--baseline-inc", "--tag-dir", "--features", "--update-dir", "--out-dir"):
+    m = sub.add_parser("morph", help="move baseline node coordinates onto the sample B-rep (or --sweep: morphing envelope)", allow_abbrev=False, epilog=MESH_HELP)
+    for a in ("--tag-dir", "--features", "--update-dir", "--out-dir"):
         m.add_argument(a, required=True)
+    m.add_argument("--baseline-inc")
+    _asm_source_args(m, assem=True)
     m.add_argument("--options")
     m.add_argument("--threads", type=int)
     m.add_argument("--solver", default=None, help="solver writer for the morphed file (default radioss)")
@@ -61,15 +76,23 @@ def _parser() -> argparse.ArgumentParser:
     m.add_argument("--check", default="on", choices=["on", "off"], help="evaluate quality/deviation/re-measurement per step")
     m.add_argument("--keep-steps", action="store_true", help="keep per-step outputs under sweep/<param>/<+-pct>/")
 
-    c = sub.add_parser("check", help="check the morphed mesh and write the include on PASS", allow_abbrev=False)
-    for a in ("--baseline-inc", "--morph-dir", "--update-dir", "--tag-dir", "--features", "--values", "--assem-dir", "--renum-csv", "--out-dir", "--out-inc"):
+    c = sub.add_parser("check", help="check the morphed mesh and write the include (node patch) on PASS", allow_abbrev=False, epilog=MESH_HELP)
+    for a in ("--morph-dir", "--update-dir", "--tag-dir", "--features", "--values", "--assem-dir", "--out-dir"):
         c.add_argument(a, required=True)
+    for a in ("--baseline-inc", "--renum-csv", "--out-inc"):
+        c.add_argument(a)
+    c.add_argument("--out-patch", help="assembly match: node_patch.npz written on PASS (instead of --out-inc)")
+    _asm_source_args(c)
     c.add_argument("--options")
     c.add_argument("--threads", type=int)
 
-    r = sub.add_parser("run", help="update -> morph -> check in one call (stops at the first failing stage)", allow_abbrev=False)
-    for a in ("--cad", "--features", "--values", "--baseline-inc", "--tag-dir", "--assem-dir", "--renum-csv", "--update-dir", "--morph-dir", "--check-dir", "--out-inc"):
+    r = sub.add_parser("run", help="update -> morph -> check in one call (stops at the first failing stage)", allow_abbrev=False, epilog=MESH_HELP)
+    for a in ("--cad", "--features", "--values", "--tag-dir", "--assem-dir", "--update-dir", "--morph-dir", "--check-dir"):
         r.add_argument(a, required=True)
+    for a in ("--baseline-inc", "--renum-csv", "--out-inc"):
+        r.add_argument(a)
+    r.add_argument("--out-patch", help="assembly match: node_patch.npz written on PASS (instead of --out-inc)")
+    _asm_source_args(r)
     r.add_argument("--body-map")
     r.add_argument("--options")
     r.add_argument("--solver", default=None, help="solver writer (default radioss)")
@@ -116,11 +139,15 @@ def _parser() -> argparse.ArgumentParser:
     vp.add_argument("--baseline-inc")
     vp.add_argument("--renum-csv")
     vp.add_argument("--assem-dir")
+    _asm_source_args(vp)
     vp.add_argument("--threads", type=int)
 
-    st = sub.add_parser("selftest", help="site acceptance kit: numeric summary report only (no CAD/mesh content)", allow_abbrev=False)
-    for a in ("--cad", "--baseline-inc", "--renum-csv", "--assem-dir", "--out-dir"):
+    st = sub.add_parser("selftest", help="site acceptance kit: numeric summary report only (no CAD/mesh content)", allow_abbrev=False, epilog=MESH_HELP)
+    for a in ("--cad", "--assem-dir", "--out-dir"):
         st.add_argument(a, required=True)
+    st.add_argument("--baseline-inc")
+    st.add_argument("--renum-csv")
+    _asm_source_args(st)
     st.add_argument("--body-map")
     st.add_argument("--options")
     st.add_argument("--envelope-steps", default="5,10", help="short envelope steps in percent (default 5,10)")
@@ -133,12 +160,43 @@ def _parser() -> argparse.ArgumentParser:
 
     cu = sub.add_parser("cushion", help="cushion-only solver input for prediction: write", allow_abbrev=False)
     csub = cu.add_subparsers(dest="cushion_cmd", metavar="action", required=True)
-    cw = csub.add_parser("write", help="morphed cushion include -> single cushion starter rad + cushion.json", allow_abbrev=False)
-    for a in ("--inc", "--renum-csv", "--assem-dir", "--out-dir", "--out-rad"):
+    cw = csub.add_parser("write", help="morphed cushion include (or assembly match + node patch) -> single cushion starter rad + cushion.json", allow_abbrev=False)
+    for a in ("--assem-dir", "--out-dir", "--out-rad"):
         cw.add_argument(a, required=True)
+    cw.add_argument("--inc")
+    cw.add_argument("--renum-csv")
+    cw.add_argument("--patch", help="assembly match: node_patch.npz (absent = nominal coordinates)")
+    _asm_source_args(cw)
     cw.add_argument("--solver", default=None, help="solver writer (default radioss)")
     cw.add_argument("--options")
     cw.add_argument("--threads", type=int)
+
+    am = sub.add_parser("asm", help="assembly match: parts | check | write (asm-match.md)", allow_abbrev=False)
+    asub = am.add_subparsers(dest="asm_cmd", metavar="action", required=True)
+    ap = asub.add_parser("parts", help="include tree -> PART list + body recommendation -> asm_parts.json", allow_abbrev=False)
+    ap.add_argument("--assem-dir", required=True)
+    ap.add_argument("--out-dir", required=True)
+    g = ap.add_mutually_exclusive_group(required=True)
+    g.add_argument("--features", help="parameter_features.json (bodies; no OCP)")
+    g.add_argument("--cad", help="STEP file or folder (bodies read from the CAD)")
+    ap.add_argument("--renum-csv", help="renumber table: RENUM ranges recommended first")
+    ap.add_argument("--cache-dir")
+    ap.add_argument("--options")
+    ap.add_argument("--threads", type=int)
+    ac = asub.add_parser("check", help="match rows -> skin node / CAD boundary distance check -> asm_check.json (+ match_fe.glb)", allow_abbrev=False)
+    for a in ("--cad", "--assem-dir", "--match", "--out-dir"):
+        ac.add_argument(a, required=True)
+    ac.add_argument("--features")
+    ac.add_argument("--cache-dir")
+    ac.add_argument("--options")
+    ac.add_argument("--no-glb", action="store_true")
+    ac.add_argument("--threads", type=int)
+    aw = asub.add_parser("write", help="include tree copy with the patch node coordinates -> asm_write.json", allow_abbrev=False)
+    for a in ("--assem-dir", "--asm-match", "--out-dir"):
+        aw.add_argument(a, required=True)
+    aw.add_argument("--patch", help="node_patch.npz (absent = byte-identical copy)")
+    aw.add_argument("--cache-dir")
+    aw.add_argument("--threads", type=int)
 
     from .shell.cli import add_parser as add_shell_parser
 
@@ -173,7 +231,36 @@ REPORTS = {
     "view export": "view_manifest.json",
     "view preview": "preview_manifest.json",
     "cushion write": "cushion.json",
+    "asm parts": "asm_parts.json",
+    "asm check": "asm_check.json",
+    "asm write": "asm_write.json",
 }
+
+# solid commands with two mesh sources (asm-match.md AM-9): (method L arguments, extra method M arguments)
+MESH_SOURCES = {
+    "tag": (("baseline_inc", "renum_csv"), ()),
+    "morph": (("baseline_inc",), ()),
+    "check": (("baseline_inc", "renum_csv", "out_inc"), ("out_patch",)),
+    "run": (("baseline_inc", "renum_csv", "out_inc"), ("out_patch",)),
+    "selftest": (("baseline_inc", "renum_csv"), ()),
+    "cushion": (("inc", "renum_csv"), ()),
+}
+
+
+def _mesh_source_missing(args) -> list[str]:
+    """Missing arguments of the chosen mesh source (argparse-like exit 2); mixing both sources is left to the
+    command (GEOM_INPUT_INVALID with a report)."""
+    spec = MESH_SOURCES.get(args.cmd)
+    if spec is None:
+        return []
+    l_keys, m_keys = spec
+    if getattr(args, "asm_match", None):
+        if any(getattr(args, k, None) for k in l_keys):
+            return []
+        need = ("asm_match", "assem_dir") + m_keys
+    else:
+        need = l_keys
+    return ["--" + k.replace("_", "-") for k in need if not getattr(args, k, None)]
 
 
 def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
@@ -199,6 +286,9 @@ def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
         "tag": dict(parts=[], contacts=[], files={}, warnings=[]),
         "view export": dict(kind="solid", mode="nominal", glb=None, warnings=[]),
         "view preview": dict(kind="solid", mode="preview", glb=None, warnings=[]),
+        "asm parts": dict(assem=None, bodies=[], parts=[], recommend=[], warnings=[]),
+        "asm check": dict(rows=[], file_checks=None, glb=None, warnings=[]),
+        "asm write": dict(files=[], nodes_written=0),
         "shell view export": dict(kind="shell", mode="nominal", glb=None, warnings=[]),
         "shell view preview": dict(kind="shell", mode="preview", glb=None, warnings=[]),
         "cushion write": dict(out_rad=None, warnings=[]),
@@ -256,6 +346,10 @@ def dispatch(args, rep) -> int:
         from . import cushion
 
         return cushion.run(args, rep)
+    if args.cmd == "asm":
+        from . import asm
+
+        return asm.run(args, rep)
     if args.cmd == "shell":
         from .shell.cli import dispatch as shell_dispatch
 
@@ -278,6 +372,7 @@ def guarded(args, rep) -> tuple[int, str | None, str | None]:
                 "shell": f"shell {getattr(args, 'shell_cmd', '')}" + (f" {getattr(args, 'view_cmd', '')}" if getattr(args, "shell_cmd", "") == "view" else ""),
                 "view": f"view {getattr(args, 'view_cmd', '')}",
                 "cushion": f"cushion {getattr(args, 'cushion_cmd', '')}",
+                "asm": f"asm {getattr(args, 'asm_cmd', '')}",
             }.get(args.cmd, args.cmd)
             report = _fail_report(cmd, args.out_dir, e.code, e.message)
         rep.result("FAIL", e.code, report)
@@ -296,10 +391,14 @@ def guarded(args, rep) -> tuple[int, str | None, str | None]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    parser = _parser()
+    args = parser.parse_args(argv)
     if args.cmd is None:
-        _parser().print_help()
+        parser.print_help()
         return 2
+    missing = _mesh_source_missing(args)
+    if missing:
+        parser.error(f"the following arguments are required: {', '.join(missing)} ({MESH_HELP})")
     if args.cmd == "version":
         v = versions()
         print(json.dumps(v) if args.json else " ".join(f"{k} {val}" for k, val in v.items()))

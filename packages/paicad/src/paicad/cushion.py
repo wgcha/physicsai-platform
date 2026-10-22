@@ -10,9 +10,12 @@ import os
 import time
 from pathlib import Path
 
+import numpy as np
+
 from . import options
 from .common import EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd
 from .mesh.radioss import read_renum_csv
+from .meshsrc import load_xyz, mesh_args, open_source
 from .writers import get_writer
 
 CUSHION_JSON = "cushion.json"
@@ -46,17 +49,32 @@ def run(args, rep: Reporter) -> int:
     out_rad = Path(args.out_rad)
     if out_rad.exists():
         raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {out_rad.name}")
+    asm = mesh_args(args, ("inc", "renum_csv"), ("patch",)) == "M"
     out = OutDir(args.out_dir, [CUSHION_JSON])
     out.prepare()
-    inc = Path(args.inc)
-    if not inc.is_file():
-        raise PaicadError("GEOM_INPUT_INVALID", f"cushion include not found: {inc.name}")
-    assem = Path(args.assem_dir)
-    if not assem.is_dir():
-        raise PaicadError("GEOM_INPUT_INVALID", f"assembly folder not found: {assem.name}")
-    renum = read_renum_csv(args.renum_csv)
-    rep.progress(10, "reading cushion include")
-    res = writer.write_cushion(inc, renum, assem, out_rad.name)
+    if asm:  # assembly match (asm-match.md section 5.5): include tree collection + optional node patch
+        if not hasattr(writer, "write_cushion_asm"):
+            raise PaicadError("GEOM_INPUT_INVALID", f"solver writer {writer.name!r} cannot write a cushion input file from an assembly match")
+        rep.progress(10, "reading the assembly include tree")
+        src = open_source(args)
+        patch = None
+        if args.patch:
+            ids, xyz = load_xyz(args.patch, "node patch")
+            extra = np.setdiff1d(ids, src.mesh.node_ids)
+            if extra.size:
+                raise PaicadError("ASM_MATCH_INVALID", f"node patch has {extra.size} nodes outside the matched PARTs (first {int(extra[0])})")
+            patch = {int(n): (float(a), float(b), float(c)) for n, (a, b, c) in zip(ids, xyz)}
+        res = writer.write_cushion_asm(src, patch, out_rad.name)
+    else:
+        inc = Path(args.inc)
+        if not inc.is_file():
+            raise PaicadError("GEOM_INPUT_INVALID", f"cushion include not found: {inc.name}")
+        assem = Path(args.assem_dir)
+        if not assem.is_dir():
+            raise PaicadError("GEOM_INPUT_INVALID", f"assembly folder not found: {assem.name}")
+        renum = read_renum_csv(args.renum_csv)
+        rep.progress(10, "reading cushion include")
+        res = writer.write_cushion(inc, renum, assem, out_rad.name)
     rep.progress(80, f"writing {res.node_count} nodes, {res.elem_count} elements")
     for w in res.warnings:
         rep.warn(f"{w['code']}: {w['message']}")
