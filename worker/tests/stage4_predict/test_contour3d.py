@@ -11,6 +11,7 @@ from physicsai_test_support import API, H, read_record
 
 PW = H("tok-power", write=True)
 P = H("tok-power")
+M = H("tok-general", write=True)  # member(general) — 읽기 사용자
 VALUES = {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"}
 
 
@@ -121,3 +122,39 @@ def test_contour3d_elements_fallback_and_h3d_rel(predict_env, monkeypatch):
     r = env.c.post(f"{API}/contour3d", headers=PW, json={"source_kind": "PREDICT_H3D", "source_ref": {"job_id": "nope"}})
     assert r.status_code == 422
     assert json.loads(json.dumps(g))["frames_artifact_id"]
+
+
+def test_contour3d_member_cache_hit_ok_new_generation_needs_power(predict_env):
+    """V-C3D-7 / C3D-6: member는 캐시 적중 200·진행 중 202(작업 추가 0)만 허용, 미적중 새 생성은 403(작업·행 0건), power 미적중은 202."""
+    env, jid = _env(predict_env)
+    body = {"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}}
+
+    def counts():
+        return (env.sql("select count(*) from jobs where job_type='CONTOUR_3D'")[0][0],
+                env.sql("select count(*) from contour3d_cache")[0][0])
+
+    def member(b):
+        return env.c.post(f"{API}/contour3d", headers=M, json=b)
+
+    r = member(body)  # 미적중 + 진행 중 행 없음 → 403, 아무것도 만들지 않음
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "PERMISSION_DENIED" and r.json()["detail"]["required"] == "power"
+    assert counts() == (0, 0)
+    c = _open(env, body, expect=202).json()  # power 새 생성
+    assert counts() == (1, 1)
+    r = member(body)  # 진행 중 → member도 같은 행(202), 새 작업 없음
+    assert r.status_code == 202 and r.json()["id"] == c["id"] and r.json()["cache_hit"] is False
+    assert counts() == (1, 1)
+    assert env.w.run_once_light() == "SUCCEEDED", env.job(c["job_id"])
+    r = member(body)  # 적중 → 200, 작업 추가 0
+    assert r.status_code == 200 and r.json()["cache_hit"] is True and r.json()["id"] == c["id"] and r.json()["status"] == "DONE"
+    assert counts() == (1, 1)
+    r = member({**body, "display": {"field": "Displacement"}})  # 다른 표시 = 미적중 → 403, 작업·행 0건 추가
+    assert r.status_code == 403 and r.json()["detail"]["code"] == "PERMISSION_DENIED"
+    assert counts() == (1, 1)
+    assert _open(env, {**body, "display": {"field": "Displacement"}}, expect=202).json()["id"] != c["id"]  # power는 202
+    assert counts() == (2, 2)
+    # 설정 확인(409)·원본 확인(404/409/422)은 권한보다 앞선다
+    r = env.c.post(f"{API}/contour3d", headers=M, json={"source_kind": "PREDICT_H3D", "source_ref": {"job_id": "nope"}})
+    assert r.status_code == 422
+    # 취소는 power 그대로
+    assert env.c.post(f"{API}/contour3d/{c['id']}/cancel", headers=M).status_code == 403

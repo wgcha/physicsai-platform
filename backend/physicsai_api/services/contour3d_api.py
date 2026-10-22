@@ -1,4 +1,5 @@
-"""결과 3D 컨투어 API(geometry-view.md §13.5·§13.6): 열 때 생성 — 캐시 적중 200 즉시, 아니면 202 + CONTOUR_3D(LIGHT) 작업.
+"""결과 3D 컨투어 API(geometry-view.md §13.5·§13.6): 열 때 생성 — 캐시 적중 200 즉시, 아니면 202 + CONTOUR_3D 작업.
+권한(contour3d-default C3D-6): 캐시 적중(200)·진행 중 공유(202)는 로그인 사용자(member 이상), 새로 생성할 때만 power 이상.
 
 원본: PREDICT_H3D = 성공한 PREDICT(`source_ref.job_id`, result.pred_h3d_rel), SOLVER_H3D = 조립 FEM 검증 결과(`fem_verification_id`,
 최신 시도 `a<n>/result`의 h3d 1개) 또는 Study 기준 `.h3d` 상대 경로(`h3d_rel`, ① run 결과 등). 표시 값 생략 = 기존 컨투어 표시 설정
@@ -143,7 +144,6 @@ def create(ctx: AppContext, principal: Principal, body: Any, rid: str, ip: str |
         raise DomainError("CONTOUR3D_NOT_CONFIGURED", message_ko("CONTOUR3D_NOT_CONFIGURED") or "", status=409, missing=t + r)
     with ctx.engine.connect() as conn:
         st0, h3d, source_id, ps, jdisp = _resolve(ctx, conn, body.source_kind, dict(body.source_ref))
-    require_power(principal, st0["project_id"])
     root = study_root(ctx, st0)
     if not os.path.isfile(h3d) or is_link_or_reparse(h3d):
         raise DomainError("PREREQUISITE_MISSING", "결과 h3d 파일이 없습니다", status=409, missing=["H3D"])
@@ -159,8 +159,9 @@ def create(ctx: AppContext, principal: Principal, body: Any, rid: str, ip: str |
         if row is not None and row["status"] == "DONE":
             gv_repo.touch(conn, gv_repo.CONTOURS, row["id"])
             return out(conn, row, cache_hit=True), 200
-        if row is not None:
+        if row is not None:  # 진행 중(QUEUED·RUNNING) — 새 작업 없이 같은 행 공유(member도 허용)
             return out(conn, row), 202
+        require_power(principal, st0["project_id"])  # 새 생성만 power(C3D-6, 403 시 작업·행 0건)
         if gv_repo.active_count(conn, gv_repo.CONTOURS, principal.user_id) >= s.geometry.view.max_queued_per_user:
             raise DomainError("PREVIEW_BUSY", "3D 컨투어 생성이 많이 대기 중입니다 — 잠시 후 다시 시도하세요", status=429,
                               limit=s.geometry.view.max_queued_per_user)

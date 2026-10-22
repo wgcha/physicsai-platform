@@ -41,13 +41,23 @@ def objective_of(v: dict[str, float]) -> float:
 
 @pytest.fixture()
 def so_env(predict_env, tmp_path, monkeypatch):
+    return _make_so_env(predict_env, tmp_path, monkeypatch)
+
+
+@pytest.fixture()
+def so_env_c3d(predict_env, tmp_path, monkeypatch):
+    """so_env + 결과 3D 컨투어 기능 켬(contour3d-default C3D-11 시험용)."""
+    return _make_so_env(predict_env, tmp_path, monkeypatch, extra={"contour3d": {"enabled": True}})
+
+
+def _make_so_env(predict_env, tmp_path, monkeypatch, extra=None):
     from physicsai_core.stage4_predict import run_metrics
 
     tcl = tmp_path / "res" / TCL_NAME
     tcl.parent.mkdir(parents=True)
     tcl.write_text("# fake\n")
     env = predict_env(commands={"response_extract": ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{extract_tcl}"]},
-                      resources={"extract_minmax_tcl": str(tcl)})
+                      resources={"extract_minmax_tcl": str(tcl)}, extra=extra)
     orig = run_metrics.load_run_metrics
 
     def load(files: Any, *, max_bytes: int) -> Any:
@@ -436,6 +446,58 @@ def test_final_capture_not_configured_skips_and_done(so_env, monkeypatch):
     assert d["status"] == "DONE" and d["final"]["status"] == "SKIPPED" and "컨투어 캡처가 구성되지 않았습니다" in d["final"]["reason"]
     assert d["final"]["batch"] is None and d["final"]["baseline_values"] == {"THK_1": 3.0, "N_RIB": 4}
     assert _done_notes(env) == 1
+
+
+def test_final_no_capture_with_contour3d_registers_batch(so_env_c3d, monkeypatch):
+    """V-C3D-12 / C3D-11: 캡처 미구성이어도 3D 컨투어를 쓸 수 있으면 FINAL 배치(기준안·최적안 2행)를 캡처 없이 등록 →
+    final DONE(캡처 없음 문구용 legend 없음), 하위 PREDICT job_id로 3D 원본(PREDICT_H3D)을 열 수 있다."""
+    import physicsai_core.features as features
+
+    monkeypatch.setattr(features, "contour_capture_missing", lambda s: (["commands.contour_capture"], []))
+    env = so_env_c3d
+    o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
+    _run_until_finalizing(env, o["id"])
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    assert d["status"] == "FINALIZING" and d["final"]["status"] == "PENDING" and d["final"]["reason"] is None
+    assert d["final"]["legend"] is None and d["final"]["legend_note"] == "컨투어 캡처 미구성 — 3D로만 비교"
+    assert set(d["final"]) == {"status", "reason", "legend", "legend_note", "baseline_values", "baseline_predicted", "batch",
+                               "baseline", "best"}  # 응답 모양 불변
+    assert "capture" not in env.sql("select final from surrogate_opts where id=:i", i=o["id"])[0][0]  # final JSONB 키 불변
+    _drain(env)
+    d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
+    f = d["final"]
+    assert d["status"] == "DONE" and f["status"] == "DONE" and f["batch"]["status"] == "DONE" and _done_notes(env) == 1
+    assert f["baseline"]["doe_no"] == 1 and f["best"]["doe_no"] == 2 and f["baseline"]["job_id"] and f["best"]["job_id"]
+    assert f["baseline"]["values"] == {"THK_1": 3.0, "N_RIB": 4}
+    fp = env.sql("select params from jobs where job_type='PREDICT_BATCH' and params->>'batch_id'=:b", b=f["batch"]["id"])[0][0]
+    assert fp["capture"] == {"enabled": False} and "display" not in fp
+    assert env.c.get(f"{API}/jobs/{f['best']['job_id']}/media", headers=P).json()["status"] != "OK"  # 캡처 없음
+    for jid in (f["baseline"]["job_id"], f["best"]["job_id"]):  # 3D 원본 = 하위 PREDICT의 h3d
+        r = env.c.post(f"{API}/contour3d", headers=PW, json={"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}})
+        assert r.status_code == 202, r.text
+
+
+def test_final_multi_baseline_still_skipped_even_with_contour3d(monkeypatch):
+    """C3D-11 경계: 다중 baseline은 3D가 가능해도 SKIPPED(사유 그대로). 캡처·3D 모두 미구성 SKIPPED는 위 시험이 확인."""
+    from types import SimpleNamespace
+
+    import physicsai_core.features as features
+    from physicsai_worker.steps.stage5_optimize import surrogate_final as sf
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+    monkeypatch.setattr(features, "contour_capture_missing", lambda s: (["commands.contour_capture"], []))
+    monkeypatch.setattr(features, "contour3d_missing", lambda s: ([], []))
+    monkeypatch.setattr(sf.ps_repo, "get", lambda conn, i: {"parameters": []})
+    ctx = SimpleNamespace(ex=SimpleNamespace(engine=SimpleNamespace(connect=_Conn)), settings=None)
+    opt = {"param_set_id": "x", "settings": {"multi_baseline": {"usage": "topology"}}}
+    r = sf._final_plan(ctx, opt, 1, {"objective": 1.0}, None)  # type: ignore[arg-type]
+    assert r["status"] == "SKIPPED" and "다중 baseline" in r["reason"]
 
 
 def test_final_capture_batch_failure_still_done(so_env, monkeypatch):
