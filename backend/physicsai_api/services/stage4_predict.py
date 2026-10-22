@@ -63,7 +63,7 @@ def discover_param_set(ctx: AppContext, principal: Principal, study_id: str, bod
         s = studies_repo.require(conn, study_id)
     require_power(principal, s["project_id"])
     if native_api.wants_native(ctx, body, discover=True):
-        return native_api.discover_native_out(ctx, body.path, getattr(body, "kind", None) or "solid")
+        return native_api.discover_native_out(ctx, body.path, getattr(body, "kind", None) or "solid", bool(getattr(body, "asm_match", False)))
     cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
     return {**disc_mod.discover(cp.path, ctx.settings, tpl=body.tpl).out(), "engine": "altair"}
 

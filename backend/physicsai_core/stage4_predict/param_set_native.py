@@ -13,6 +13,7 @@ from typing import Any
 
 from ..paths import file_name_problem_message, is_link_or_reparse, name_unsafe_chars
 from .param_set_files import ParamSetFolder, _load_parameters, _p
+from ..geometry.asm_match import is_matched
 from ..geometry.shell_native import features_kind_problems
 from .prepared_input import is_mesh_file
 
@@ -123,9 +124,10 @@ def validate_native_folder(folder: str, *, max_total_bytes: int, starter_glob: s
             if why:
                 _p(f, "PATH_UNSAFE", file_name_problem_message(why), "radioss_assem/" + x)
         f.renum_csv = next((x for x in names if x.lower() == renum_csv_name.lower() and os.path.isfile(os.path.join(assem, x))), None)
-        if f.renum_csv is None and not shell_only and not shell_kind:
+        matched = not shell_only and not shell_kind and is_matched(folder)  # 조립 매칭 세트(asm-match.md §6.4): 번호 표·기준 메시 파일을 요구하지 않는다
+        if f.renum_csv is None and not shell_only and not shell_kind and not matched:
             _p(f, "RENUM_CSV_MISSING", f"radioss_assem에 번호 재지정 표({renum_csv_name})가 필요합니다", "radioss_assem")
-        if not shell_kind and not any(x.lower() == baseline_inc_name.lower() for x in files):
+        if not shell_kind and not matched and not any(x.lower() == baseline_inc_name.lower() for x in files):
             _p(f, "BASELINE_INC_MISSING", f"radioss_assem에 기준 메시({baseline_inc_name})가 필요합니다", "radioss_assem")
         starters = [x for x in files if fnmatch.fnmatch(x, starter_glob)]
         if len(starters) != 1:

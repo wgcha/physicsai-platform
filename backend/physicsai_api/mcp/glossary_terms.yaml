@@ -91,6 +91,9 @@ terms:
   - key: entity:geom_preview
     ko: 형상 미리보기
     synonyms: [형상 보기, 미리보기]
+  - key: entity:asm_match
+    ko: 조립 매칭(STEP 바디 ↔ 조립 component)
+    synonyms: [조립 매칭, 바디 매칭, component 매칭, 컴포넌트 매칭, asm match]
   - key: entity:job
     ko: 작업
     synonyms: [잡, 실행]
@@ -122,6 +125,9 @@ terms:
   - key: job_kind:geom_preview
     ko: 형상 미리보기 실행
     synonyms: [형상 미리보기]
+  - key: job_kind:asm_match
+    ko: 조립 매칭 검사 실행
+    synonyms: [조립 매칭 검사, 외곽 노드 검사, 경계 검사]
   # ---- 단계 번호(화면) ----
   - key: stage:①-3
     ko: 학습 데이터 DOE 생성
@@ -142,6 +148,12 @@ terms:
   - key: unmapped:cushion
     ko: 쿠션 입력 — 쿠션 메시 rad 하나로 예측(조립 없음, 서버 GPU 메모리 적음)
     synonyms: [쿠션 입력, 쿠션만, 쿠션 rad, mesh_only, 메시 단독]
+  - key: unmapped:ASM_UNIT_SUSPECT
+    ko: 조립 매칭 검사에서 CAD와 조립의 단위가 다른 것으로 보이는 진단(차단, CAD를 mm로 다시 내보내기)
+    synonyms: [단위 의심, 단위 불일치]
+  - key: unmapped:ASM_OFFSET_SUSPECT
+    ko: 조립 매칭 검사에서 CAD가 조립과 원점이 어긋난 것으로 보이는 진단(차단, 같은 원점으로 다시 내보내기)
+    synonyms: [원점 의심, 좌표 어긋남]
 error_hints:
   CONFIRM_REQUIRED: plan_job을 먼저 호출해 confirm_token을 받으세요
   CONFIRM_INVALID: params를 바꿨거나 확인 토큰이 만료·재사용되었습니다 — plan_job을 다시 호출하세요

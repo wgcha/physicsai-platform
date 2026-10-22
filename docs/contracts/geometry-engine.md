@@ -478,6 +478,7 @@ component의 요소·노드 집합:
 | 12 | tag 실패 | `tag.json` |
 | 13 | extract 결과 없음 `GEOM_EXTRACT_EMPTY` | `parameter_features.json`(features 빈 배열) |
 | 14 | 3D 보기 출력 실패 `VIEW_TESSELLATION_FAILED`·`VIEW_TOO_LARGE`(`paicad view`, geometry-view.md §5.4·GV-C1) | `view_manifest.json`/`preview_manifest.json`(FAIL) |
+| 15 | 조립 매칭 검사 실패 `ASM_BOUNDARY_MISMATCH`·`ASM_SHARED_NODES`·`ASM_INCLUDE_OUTSIDE`·`ASM_INCLUDE_MISSING`·`ASM_NO_SOLID_PART`·`ASM_TOO_MANY_PARTS`·`ASM_MATCH_INVALID`(`paicad asm parts|check|write`, 카테고리 `ASM`, [asm-match.md](asm-match.md) §6.1·AM-C2) | `asm_parts.json`/`asm_check.json`(FAIL — `asm check` FAIL 보고는 `rows`가 있다)/`asm_write.json` |
 | 20 | 내부 오류 `GEOM_INTERNAL`(예외 traceback은 stderr·로그) | 가능하면 있음 |
 | 130 | 중단 | 없음 |
 

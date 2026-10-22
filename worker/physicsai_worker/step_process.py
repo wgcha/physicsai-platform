@@ -31,8 +31,9 @@ from physicsai_core.parsers.log_errors import ErrorDetector
 
 from .signals import Cancelled
 
-# geometry-view.md §6.2: PREVIEW 레인(형상 미리보기)에서 실행할 수 있는 외부 명령은 이 둘뿐
-PREVIEW_LANE_COMMANDS = frozenset({"paicad_view_preview", "paicad_shell_view_preview"})
+# geometry-view.md §6.2: PREVIEW 레인(형상 미리보기·조립 매칭)에서 실행할 수 있는 외부 명령은 이 키들뿐
+PREVIEW_LANE_COMMANDS = frozenset({"paicad_view_preview", "paicad_shell_view_preview",
+                                   "paicad_asm_parts", "paicad_asm_check"})  # asm-match.md §2.3(GV §2.3에 추가)
 
 # 로거 이름은 분리 전과 같게 유지(로그 출력 불변)
 log = logging.getLogger("physicsai_worker.executor")

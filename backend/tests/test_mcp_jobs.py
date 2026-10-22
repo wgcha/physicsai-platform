@@ -208,9 +208,9 @@ def test_v_mcp_8_summary_and_read_tools(client, monkeypatch, import_root, tmp_pa
     assert len(full.content) <= 65536 and any(t["key"] == "feature:THK" for t in full.json()["terms"])
     assert client.get(f"{API}/mcp/glossary?section=bogus", headers=T(read)).status_code == 422
     tools = client.get(f"{API}/mcp/tools", headers=T(read)).json()
-    assert len(tools["tools"]) == 17
+    assert len(tools["tools"]) == 23  # 기존 17 + 조립 매칭 6(asm-match.md AM-C2)
     pg = client.get(f"{API}/mcp/ping", headers=T(read)).json()
-    assert pg["ok"] is True and pg["mcp_enabled"] is True and pg["tools_count"] == 17 and pg["warnings"] == []
+    assert pg["ok"] is True and pg["mcp_enabled"] is True and pg["tools_count"] == 23 and pg["warnings"] == []
     assert pg["token"]["scope"] == "read" and pg["token"]["prefix"] == read[:12] and pg["token"]["days_left"] in (29, 30)
     assert client.get(f"{API}/mcp/ping", headers=H("tok-power")).json()["token"] is None  # 세션 요청
     assert client.get(f"{API}/status", headers=H("tok-power")).json()["features"]["mcp"]["enabled"] is True

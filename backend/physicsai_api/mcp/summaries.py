@@ -279,6 +279,24 @@ def _geom_preview(ctx: Any, principal: Any, pid: str, top_n: int) -> dict[str, A
                     [{"entity": "param_set", "id": g["param_set_id"], "rel": "param_set"}])
 
 
+def _asm_match(ctx: Any, principal: Any, mid: str, top_n: int) -> dict[str, Any]:
+    from physicsai_core.geometry.asm_match import check_summary
+
+    m = _svc("asm_match_api").get(ctx, mid)
+    c = m.get("check") or {}
+    cs = check_summary({"status": c.get("status"), "rows": c.get("rows")}) if c else {}
+    facts = facts_of(m, ("state", "stale_reason", "rows_complete", "created_at", "updated_at"),
+                     source=(m.get("source") or {}).get("kind"), assem_files=(m.get("assem") or {}).get("files"),
+                     body_count=len(m.get("bodies") or []), part_count=len(m.get("parts") or []), row_count=len(m.get("rows") or []),
+                     excluded_count=len(m.get("excluded_bodies") or []), check_status=c.get("status"), check_current=c.get("current"),
+                     match_ratio_min=cs.get("match_ratio_min"), dist_max_mm=cs.get("dist_max_mm"), shared_nodes=cs.get("shared_nodes"))
+    rows = [{"body": r.get("body"), "pids": ",".join(str(x) for x in r.get("pids") or [])} for r in m.get("rows") or []]
+    chk = [{"body": r.get("body"), "status": r.get("status"), "code": r.get("code"), "match_ratio": r.get("match_ratio"),
+            "dist_max_mm": (r.get("dist_mm") or {}).get("max")} for r in c.get("rows") or []]
+    tabs = [table("rows", rows, top_n), table("check_rows", chk, top_n, units={"dist_max_mm": "mm"})]
+    return envelope("asm_match", mid, f"조립 매칭 {mid[:8]}", m.get("state"), facts, tabs, [{"entity": "study", "id": m["study_id"], "rel": "study"}])
+
+
 def _job(ctx: Any, principal: Any, jid: str, top_n: int) -> dict[str, Any]:
     from .job_kinds import entity_of_job, kind_of_job
 
@@ -312,6 +330,7 @@ SUMMARIES: dict[str, SummaryDef] = {
     "equiv_check": SummaryDef(_equiv_check, "eq_id", "해석 등가성 판정"),
     "fem_verify": SummaryDef(_fem_verify, "fem_verify_id", "조립 FEM 검증"),
     "geom_preview": SummaryDef(_geom_preview, "preview_id", "형상 미리보기"),
+    "asm_match": SummaryDef(_asm_match, "match_id", "조립 매칭"),
     "job": SummaryDef(_job, "job_id", "작업"),
 }
 

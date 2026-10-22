@@ -644,6 +644,384 @@
         "title": "Artifact",
         "type": "object"
       },
+      "AsmCad": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "description": "STEP 출처 — train(①-1 Native 추출 결과, 피처 파일 사용) | path(④ 새 템플릿의 STEP 파일 경로)",
+            "enum": [
+              "train",
+              "path"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "kind=path일 때 STEP 파일 경로(허용 루트 안, 확장자는 geometry.step_extensions)",
+            "title": "Path"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "AsmCad",
+        "type": "object"
+      },
+      "AsmCheckStarted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "match_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match Id"
+          },
+          "seq": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq"
+          }
+        },
+        "required": [
+          "job_id"
+        ],
+        "title": "AsmCheckStarted",
+        "type": "object"
+      },
+      "AsmMatch": {
+        "description": "조립 매칭 묶음 상태. state = SCANNING|DRAFT|CHECKING|CHECKED|CONFIRMED|FAILED|STALE.\nbodies·parts·recommend는 `paicad asm parts` 보고(asm_parts.json) 그대로(§4.2), check는 최신 검사 요약(§4.3).",
+        "properties": {
+          "assem": {
+            "additionalProperties": true,
+            "title": "Assem",
+            "type": "object"
+          },
+          "bodies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Bodies",
+            "type": "array"
+          },
+          "check": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Check"
+          },
+          "confirmed": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmed"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "excluded_bodies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Excluded Bodies",
+            "type": "array"
+          },
+          "last_job": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Job"
+          },
+          "match_id": {
+            "title": "Match Id",
+            "type": "string"
+          },
+          "parts": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Parts",
+            "type": "array"
+          },
+          "recommend": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Recommend",
+            "type": "array"
+          },
+          "rows": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Rows",
+            "type": "array"
+          },
+          "rows_complete": {
+            "default": false,
+            "title": "Rows Complete",
+            "type": "boolean"
+          },
+          "source": {
+            "additionalProperties": true,
+            "title": "Source",
+            "type": "object"
+          },
+          "stale_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stale Reason"
+          },
+          "state": {
+            "enum": [
+              "SCANNING",
+              "DRAFT",
+              "CHECKING",
+              "CHECKED",
+              "CONFIRMED",
+              "FAILED",
+              "STALE"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "study_id": {
+            "title": "Study Id",
+            "type": "string"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "use_bodies": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Use Bodies",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "match_id",
+          "study_id",
+          "state"
+        ],
+        "title": "AsmMatch",
+        "type": "object"
+      },
+      "AsmMatchCreate": {
+        "additionalProperties": false,
+        "description": "`POST /studies/{id}/asm-matches` — 조립 폴더와 STEP 출처를 정하고 component 목록 작업(mode parts)을 시작.",
+        "examples": [
+          {
+            "cad": {
+              "kind": "train"
+            },
+            "radioss_assem_path": "D:/AI/assem"
+          }
+        ],
+        "properties": {
+          "cad": {
+            "$ref": "#/components/schemas/AsmCad",
+            "description": "STEP 출처 {kind: train | path, path?}"
+          },
+          "radioss_assem_path": {
+            "description": "Radioss 조립 폴더 경로(허용 루트 안, starter 정확히 1개)",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Radioss Assem Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "radioss_assem_path",
+          "cad"
+        ],
+        "title": "AsmMatchCreate",
+        "type": "object"
+      },
+      "AsmMatchCreated": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "match_id": {
+            "title": "Match Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_id",
+          "job_id"
+        ],
+        "title": "AsmMatchCreated",
+        "type": "object"
+      },
+      "AsmMatchList": {
+        "description": "`GET /studies/{id}/asm-matches` — 최신순, 항목은 단건 조회(AsmMatch)와 같은 모양.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AsmMatch"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "title": "AsmMatchList",
+        "type": "object"
+      },
+      "AsmRowIn": {
+        "additionalProperties": false,
+        "properties": {
+          "body": {
+            "description": "STEP 바디 이름(asm_match_get의 bodies[].body)",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Body",
+            "type": "string"
+          },
+          "pids": {
+            "description": "이 바디에 대응하는 조립 /PART id 목록(1:N 허용, 1 이상 정수, 다른 행과 겹치지 않음)",
+            "items": {
+              "type": "integer"
+            },
+            "maxItems": 64,
+            "minItems": 1,
+            "title": "Pids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "body",
+          "pids"
+        ],
+        "title": "AsmRowIn",
+        "type": "object"
+      },
+      "AsmRowsPut": {
+        "additionalProperties": false,
+        "description": "`PUT /asm-matches/{id}/rows` — 초안 저장(검사 결과는 무효가 됨).",
+        "examples": [
+          {
+            "excluded_bodies": [],
+            "rows": [
+              {
+                "body": "CUSH_L",
+                "pids": [
+                  3000001
+                ]
+              },
+              {
+                "body": "CUSH_R",
+                "pids": [
+                  3000002,
+                  3000003
+                ]
+              }
+            ]
+          }
+        ],
+        "properties": {
+          "excluded_bodies": {
+            "description": "매칭 안 함으로 둔 바디 이름(use=true 파라미터가 있는 바디는 제외 불가)",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2000,
+            "title": "Excluded Bodies",
+            "type": "array"
+          },
+          "rows": {
+            "description": "매칭 행 — 바디마다 최대 1행(매칭할 바디만)",
+            "items": {
+              "$ref": "#/components/schemas/AsmRowIn"
+            },
+            "maxItems": 2000,
+            "title": "Rows",
+            "type": "array"
+          }
+        },
+        "required": [
+          "rows"
+        ],
+        "title": "AsmRowsPut",
+        "type": "object"
+      },
       "BaselineAddRequest": {
         "additionalProperties": false,
         "description": "`POST /param-sets/{id}/baselines` → 202 {job_id}(PARAM_SET_NATIVE mode add_baseline). path = 그 baseline 프로젝트 폴더.",
@@ -12086,6 +12464,18 @@
       "ParamSetCreate": {
         "additionalProperties": false,
         "properties": {
+          "asm_match_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asm Match Id"
+          },
           "choice": {
             "anyOf": [
               {
@@ -12239,6 +12629,11 @@
       "ParamSetDiscoverRequest": {
         "additionalProperties": false,
         "properties": {
+          "asm_match": {
+            "default": false,
+            "title": "Asm Match",
+            "type": "boolean"
+          },
           "engine": {
             "anyOf": [
               {
@@ -22567,6 +22962,426 @@
         ]
       }
     },
+    "/physicsai/api/asm-matches/{match_id}": {
+      "get": {
+        "description": "상태(SCANNING·DRAFT·CHECKING·CHECKED·CONFIRMED·FAILED·STALE)와 바디·component(PART) 목록·추천·저장된 행·마지막 검사 결과\n(행별 판정·거리·공유 노드·원점/단위 진단)를 돌려준다. 진행 중이면 수 초 간격으로 다시 조회. 부작용 없음.",
+        "operationId": "get_asm_match_physicsai_api_asm_matches__match_id__get",
+        "parameters": [
+          {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+              "maxLength": 64,
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsmMatch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_FOUND"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "조립 매칭 조회",
+        "tags": [
+          "asm-match"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "Get an assembly match: state, bodies, components, recommendations, rows, last check",
+          "summary_ko": "조립 매칭 조회: 상태·바디·component 목록·추천·행·마지막 검사",
+          "tool": "asm_match_get",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/asm-matches/{match_id}/check": {
+      "post": {
+        "description": "저장된 행으로 검사 작업(ASM_MATCH, mode check)을 시작한다. 끝나면 asm_match_get의 check에서 행별 판정을 본다.\n원점·단위가 다르면 FAIL(suggest)이며 자동 보정은 없다. 부작용: 대기열 작업 1개·check/<seq> 폴더.",
+        "operationId": "check_asm_match_physicsai_api_asm_matches__match_id__check_post",
+        "parameters": [
+          {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+              "maxLength": 64,
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsmCheckStarted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "ASM_ROWS_INCOMPLETE · ASM_MATCH_CONFIRMED · ASM_MATCH_BUSY · ASM_MATCH_STALE · STUDY_JOB_BUSY · TEMPLATE_NOT_CONFIGURED"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "조립 매칭 검사",
+        "tags": [
+          "asm-match"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "run",
+          "summary_en": "Check the saved rows: outer nodes vs CAD faces, shared nodes (job ASM_MATCH)",
+          "summary_ko": "저장한 행 검사: component 외곽 노드 ↔ CAD 경계면 거리·공유 노드(작업 ASM_MATCH)",
+          "tool": "asm_match_check",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/asm-matches/{match_id}/confirm": {
+      "post": {
+        "description": "마지막 검사가 PASS이고 그 뒤 행·입력이 바뀌지 않았을 때만 확정본(asm_match.json)을 만든다. 확정본은 바꿀 수 없고 DOE·세트가\n자기 폴더로 복사해 쓴다. 이미 확정이면 그대로 돌려준다(멱등). 부작용: asm_match.json 작성.",
+        "operationId": "confirm_asm_match_physicsai_api_asm_matches__match_id__confirm_post",
+        "parameters": [
+          {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+              "maxLength": 64,
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsmMatch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "ASM_CHECK_REQUIRED(마지막 검사 없음·FAIL·행이 달라짐) · ASM_MATCH_STALE(조립 트리·STEP·피처 변경) · ASM_MATCH_BUSY"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "조립 매칭 확정(저장)",
+        "tags": [
+          "asm-match"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "run",
+          "summary_en": "Confirm (save) a passed assembly match; consumers (DOE, template registration) use it",
+          "summary_ko": "통과한 조립 매칭 확정(저장) — DOE·템플릿 등록이 사용",
+          "tool": "asm_match_confirm",
+          "version": 1
+        }
+      }
+    },
+    "/physicsai/api/asm-matches/{match_id}/rows": {
+      "put": {
+        "description": "바디마다 component(PART id) 1개 이상을 정하거나 매칭 안 함(excluded_bodies)으로 둔다(모든 바디가 둘 중 하나, 매칭 행 1개 이상).\npid는 한 행에만, TETRA4만 가진 component만. 확정된 매칭은 바꿀 수 없다(새로 만들기). 부작용: match.json 갱신.",
+        "operationId": "put_asm_match_rows_physicsai_api_asm_matches__match_id__rows_put",
+        "parameters": [
+          {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "in": "path",
+            "name": "match_id",
+            "required": true,
+            "schema": {
+              "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+              "maxLength": 64,
+              "title": "Match Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsmRowsPut"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsmMatch"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "ASM_MATCH_CONFIRMED · ASM_MATCH_BUSY · ASM_MATCH_STALE · PREREQUISITE_MISSING(component 목록 없음)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "ASM_ROW_INVALID(problems[].code: UNKNOWN_BODY·BODY_DUPLICATE·UNKNOWN_PID·PID_DUPLICATE·NOT_SOLID·BODY_MISSING·USE_PARAM·ROWS_EMPTY)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "조립 매칭 행 저장",
+        "tags": [
+          "asm-match"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "run",
+          "summary_en": "Save the body-to-component rows of an assembly match (draft; invalidates the last check)",
+          "summary_ko": "조립 매칭 행 저장(초안, 마지막 검사는 무효가 됨)",
+          "tool": "asm_match_set_rows",
+          "version": 1
+        }
+      }
+    },
     "/physicsai/api/contour3d": {
       "post": {
         "description": "결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(LIGHT). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.",
@@ -31072,6 +31887,262 @@
         "tags": [
           "studies"
         ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/asm-matches": {
+      "get": {
+        "description": "Study 안 조립 매칭(match.json) 목록을 최신순으로 돌려준다. 항목은 asm_match_get과 같은 모양. 화면이 ①의 마지막 매칭을 다시 찾을 때\nsource=train&latest=true. 부작용 없음.",
+        "operationId": "list_asm_matches_physicsai_api_studies__study_id__asm_matches_get",
+        "parameters": [
+          {
+            "description": "Study id(list_studies)",
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "description": "Study id(list_studies)",
+              "maxLength": 64,
+              "title": "Study Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "STEP 출처로 거르기 — train(①-1 추출 결과) | path(④ 새 템플릿 STEP 경로)",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "train",
+                    "path"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "STEP 출처로 거르기 — train(①-1 추출 결과) | path(④ 새 템플릿 STEP 경로)",
+              "title": "Source"
+            }
+          },
+          {
+            "description": "true면 가장 최근 1개만",
+            "in": "query",
+            "name": "latest",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "true면 가장 최근 1개만",
+              "title": "Latest",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "최대 개수 [개](1~100, 기본 20)",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "description": "최대 개수 [개](1~100, 기본 20)",
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsmMatchList"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_FOUND"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "조립 매칭 목록",
+        "tags": [
+          "asm-match"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "read",
+          "summary_en": "List assembly matches of a study, newest first (filter by source; latest=true for one)",
+          "summary_ko": "Study의 조립 매칭 목록(최신순, source로 거르고 latest=true면 1개)",
+          "tool": "asm_match_list",
+          "version": 1
+        }
+      },
+      "post": {
+        "description": "Native 솔리드의 STEP 바디와 조립(Radioss) component를 매칭하기 위한 묶음을 만들고 component 목록 수집 작업(ASM_MATCH, mode parts)을\n대기열에 올린다. renum.csv·기준본 파일은 필요 없다. 응답의 job_id는 job_status로, 끝나면 asm_match_get으로 목록·추천을 본다.\n부작용: 대기열 작업 1개·Study 안 asm_match 폴더 생성.",
+        "operationId": "create_asm_match_physicsai_api_studies__study_id__asm_matches_post",
+        "parameters": [
+          {
+            "description": "Study id(list_studies)",
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "description": "Study id(list_studies)",
+              "maxLength": 64,
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AsmMatchCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AsmMatchCreated"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "NOT_FOUND"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PREREQUISITE_MISSING(① Native 추출 없음, missing GEOM_FEATURES) · TEMPLATE_NOT_CONFIGURED · STUDY_JOB_BUSY · STUDY_ARCHIVED"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "PATH_OUTSIDE_ROOT · PATH_UNSAFE · PATH_NOT_FOUND · INPUT_INVALID · ASM_MATCH_UNSUPPORTED(쉘 판금 세트)"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT"
+          }
+        },
+        "summary": "조립 매칭 시작",
+        "tags": [
+          "asm-match"
+        ],
+        "x-mcp": {
+          "confirm": "never",
+          "deprecated": false,
+          "risk": "run",
+          "summary_en": "Start assembly matching: scan the assembly include tree for components (job ASM_MATCH)",
+          "summary_ko": "조립 매칭 시작: 조립 폴더 include 트리의 component 목록 수집(작업 ASM_MATCH)",
+          "tool": "asm_match_create",
+          "version": 1
+        }
       }
     },
     "/physicsai/api/studies/{study_id}/curation-sources": {

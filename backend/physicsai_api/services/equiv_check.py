@@ -125,7 +125,7 @@ def _side_out(side: Side) -> dict[str, Any]:
     return {**side.ref_dict(), "run_count": len(side.runs), "ok_count": sum(1 for r in side.runs if r.ok),
             "responses": [str(r.get("name")) for r in side.responses if isinstance(r.get("spec"), dict)],
             "runs": [{"name": r.name, "no": r.no, "ok": r.ok, "state": r.state, "has_h3d": r.h3d is not None,
-                      "has_t01": r.t01 is not None, "has_curve": r.curve_json is not None, "has_mesh": r.mesh_inc is not None}
+                      "has_t01": r.t01 is not None, "has_curve": r.curve_json is not None, "has_mesh": r.mesh_inc is not None or r.mesh_tree is not None}
                      for r in side.runs[:500]]}
 
 

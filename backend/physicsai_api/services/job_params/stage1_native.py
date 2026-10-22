@@ -203,7 +203,7 @@ def _sampling_param(p: Any) -> dict[str, Any]:
     return {"sampling": sp} if sp and sp.get("kind") == "train_doe" else {}
 
 
-def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any = None
+def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any = None, study: dict[str, Any] | None = None
                    ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     cfg = ctx.settings
     require_native_available(cfg)
@@ -229,17 +229,31 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any 
         from ..geometry_gate import require_shell_available
 
         require_shell_available(cfg)
-    if cfg.predict.mesh_include_name.lower() not in names and not shell:
-        missing.append("BASELINE_INC")
-    if cfg.predict.renum_csv_name.lower() not in names and not shell:
-        missing.append("RENUM_CSV")
-    if missing:
-        raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개·기준 메시·번호 재지정 표가 모두 있어야 합니다", status=409,
-                          missing=missing)
+    asm = None
+    if getattr(p, "asm_match_id", None) is not None:  # asm-match.md §6.4: 조립 매칭 확정본이 기준 메시·RENUM 파일을 대신한다(AM-1)
+        if shell:
+            raise DomainError("ASM_MATCH_UNSUPPORTED", "쉘 판금 세트는 조립 매칭을 쓰지 않습니다", status=422)
+        if study is None:
+            raise DomainError("INTERNAL_ERROR", "조립 매칭 확인에 Study가 필요합니다", status=500)
+        if missing:
+            raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개가 있어야 합니다", status=409, missing=missing)
+        from ..asm_match_gate import require_confirmed
+
+        asm = require_confirmed(ctx, study, p.asm_match_id, assem_path=cp.path, source_kind="train")
+    elif not shell and not (cfg.predict.mesh_include_name.lower() in names and cfg.predict.renum_csv_name.lower() in names):
+        # asm_match_id가 없고 기존 두 파일도 없으면 조립 매칭부터(문구에 renum·기준본을 말하지 않는다 — 옛 방식은 두 파일이 모두 있을 때만 통과)
+        from ..asm_match_gate import NO_MATCH_MESSAGE
+
+        raise DomainError("PREREQUISITE_MISSING", NO_MATCH_MESSAGE if not missing else "조립 폴더에 starter 1개가 있어야 하고 " + NO_MATCH_MESSAGE,
+                          status=409, missing=[*missing, "ASM_MATCH"])
+    elif missing:
+        raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개가 있어야 합니다", status=409, missing=missing)
     doe_id = str(uuid.uuid4())
     params = _native_params({"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
                              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
                              "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id}, p, plan)
+    if asm is not None:  # jobs.params: 소비자 기록(§6.3 — 확정본 sha256으로 DG_PREP이 복사본을 확인)
+        params.update(asm_match_id=p.asm_match_id, asm_match_sha256=asm["sha256"])
     return params, {"doe_id": doe_id}, [{"code": n["code"], "message": n["message"]} for n in plan.notes] if plan else []
 
 

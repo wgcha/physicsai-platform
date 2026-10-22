@@ -105,6 +105,29 @@ def read_include(path: str, *, max_bytes: int) -> IncludeMesh | None:
         return None
 
 
+def read_tree(folder: str, *, max_bytes: int) -> IncludeMesh | None:
+    """조립 매칭 run의 조립 폴더(starter + include 트리, asm-match.md §6.4)를 한 메시로 합쳐 읽는다 — 기준본 include 파일이 없으므로
+    노드·요소·PART를 트리 파일 전부에서 모은다. 트리 오류·크기 합 상한 초과·없음 → None."""
+    from ..geometry.asm_tree import AsmTreeError, build
+
+    try:
+        tree = build(folder)
+        if sum(os.path.getsize(f.path) for f in tree.files) > max_bytes:
+            return None
+        out = IncludeMesh()
+        for f in tree.files:
+            with open(f.path, encoding="utf-8", errors="replace") as fh:
+                m = parse_include(fh)
+            out.nodes.update(m.nodes)
+            for pid, els in m.elems.items():
+                out.elems.setdefault(pid, []).extend(els)
+            out.skipped_kinds |= m.skipped_kinds
+            out.part_titles.update(m.part_titles)
+        return out
+    except (AsmTreeError, OSError):
+        return None
+
+
 def tet_volume(p0: Point, p1: Point, p2: Point, p3: Point) -> float:
     a = (p1[0] - p0[0], p1[1] - p0[1], p1[2] - p0[2])
     b = (p2[0] - p0[0], p2[1] - p0[1], p2[2] - p0[2])

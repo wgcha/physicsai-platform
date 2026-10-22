@@ -2,6 +2,7 @@
 """가짜 paicad(geometry-engine.md §5, §7.8): 하위 명령별로 보고 JSON·성공 파일을 쓴다. OCP·numpy 없이 표준 라이브러리만.
 
 - version --json | --version | extract | tag | update | morph | check | run | cushion write | props scan | props apply | map
+  | asm parts|check|write (조립 매칭 → fake_paicad_asm.py) — tag·morph·check·run·cushion write는 `--asm-match` 인자가 있으면 방식 M(--out-patch·node_xyz.npz·--patch)
   (인자는 `--name value` 두 토큰)
 - 출력 파일이 이미 있으면 덮어쓰지 않고 종료코드 3(GEOM_OUTPUT_EXISTS) — 보고는 건드리지 않는다.
 - stdout: `PAICAD PROGRESS <pct> <msg>` 줄들, 마지막 `PAICAD RESULT <status> <code|-> <보고 파일 이름>`.
@@ -72,8 +73,12 @@ elif cmd == "view":
     if not rest or rest[0] not in ("export", "preview"):
         sys.exit(2)
     cmd, rest = f"view_{rest[0]}", rest[1:]
+elif cmd == "asm":
+    if not rest or rest[0] not in ("parts", "check", "write"):
+        sys.exit(2)
+    cmd, rest = f"asm_{rest[0]}", rest[1:]
 if cmd not in ("extract", "tag", "update", "morph", "check", "run", "cushion_write", "props_scan", "props_apply", "map") and \
-        not cmd.startswith(("shell_", "view_")):
+        not cmd.startswith(("shell_", "view_", "asm_")):
     sys.exit(2)
 args, flags, i = {}, set(), 0
 while i < len(rest):
@@ -324,7 +329,12 @@ def do_extract():
 
 
 def do_tag():
-    need("cad"); need("features"); need("baseline-inc"); need("renum-csv"); need("assem-dir")
+    matched = "asm-match" in args  # 방식 M(asm-match.md §6.2): --renum-csv·--baseline-inc 대신 --asm-match·--assem-dir
+    need("cad"); need("features"); need("assem-dir")
+    if matched:
+        need("asm-match")
+    else:
+        need("baseline-inc"); need("renum-csv")
     out = args.get("out-dir") or sys.exit(2)
     os.makedirs(out, exist_ok=True)
     tj, npz = os.path.join(out, "tag.json"), os.path.join(out, "tag_nodes.npz")
@@ -337,9 +347,10 @@ def do_tag():
         sys.exit(fail_report("tag", tj, code))
     with open(npz, "wb") as fh:
         fh.write(b"fake-npz")
-    with open(args["baseline-inc"], "rb") as fh:
+    with open(args["asm-match"] if matched else args["baseline-inc"], "rb") as fh:
         sha = hashlib.sha256(fh.read()).hexdigest()
-    write_json(tj, dict(BASE, status="OK", code=None, message=None, baseline_inc={"name": os.path.basename(args["baseline-inc"]), "sha256": sha},
+    write_json(tj, dict(BASE, status="OK", code=None, message=None,
+                        baseline_inc={"name": os.path.basename(args["asm-match"] if matched else args["baseline-inc"]), "sha256": sha},
                         tolerance={"abs_mm": 0.05, "rel": 1e-4}, match_ratio=0.9993, parts=[], contacts=[], files={"nodes": "tag_nodes.npz"},
                         warnings=[]))
     progress(100, "done")
@@ -371,9 +382,10 @@ def step_update(out, values_path, step="update"):
 
 
 def step_morph(out, update_dir, step="morph"):
-    need("baseline-inc"); need("tag-dir"); need("features")
+    matched = "asm-match" in args
+    need("asm-match" if matched else "baseline-inc"); need("tag-dir"); need("features")
     os.makedirs(out, exist_ok=True)
-    mj, inc = os.path.join(out, "morph.json"), os.path.join(out, "morphed.inc")
+    mj, inc = os.path.join(out, "morph.json"), os.path.join(out, "node_xyz.npz" if matched else "morphed.inc")
     exists_exit([mj, inc])
     vals = {}
     try:
@@ -383,18 +395,23 @@ def step_morph(out, update_dir, step="morph"):
     code = fails("morph") or fail_when("morph", vals)
     if code:
         return fail_report("morph", mj, code), code
-    with open(args["baseline-inc"], "rb") as fh:
+    with open(args["asm-match"] if matched else args["baseline-inc"], "rb") as fh:
         data = fh.read()
     with open(inc, "wb") as fh:
-        fh.write(data)
+        fh.write(b"fake-node-xyz:" + json.dumps(vals, sort_keys=True).encode() if matched else data)
     write_json(mj, dict(BASE, status="OK", code=None, category=None, message=None, max_disp_mm=0.4, parts=[], elapsed_s=0.2))
     return 0, None
 
 
 def step_check(out, update_dir, morph_dir):
-    need("tag-dir"); need("assem-dir"); need("renum-csv")
+    matched = "asm-match" in args
+    need("tag-dir"); need("assem-dir")
+    if matched:
+        need("asm-match")
+    else:
+        need("renum-csv")
     os.makedirs(out, exist_ok=True)
-    cj, out_inc = os.path.join(out, "check.json"), args["out-inc"]
+    cj, out_inc = os.path.join(out, "check.json"), args["out-patch" if matched else "out-inc"]
     exists_exit([cj, out_inc])
     vals = {}
     try:
@@ -405,7 +422,10 @@ def step_check(out, update_dir, morph_dir):
     if code:
         rc = fail_report("check", cj, code, {"checks": {}, "warnings": [], "elapsed_s": 0.3})
         return rc, code
-    shutil.copyfile(os.path.join(morph_dir, "morphed.inc"), out_inc)
+    if matched:  # 노드 패치(node_patch.npz) — 값이 다르면 바이트도 다르다
+        shutil.copyfile(os.path.join(morph_dir, "node_xyz.npz"), out_inc)
+    else:
+        shutil.copyfile(os.path.join(morph_dir, "morphed.inc"), out_inc)
     write_json(cj, dict(BASE, status="PASS", code=None, category=None, message=None,
                         checks={"quality": {"status": "PASS", "min_stretch": 0.31, "baseline_min_stretch": 0.33, "max_aspect": 6.2},
                                 "deviation": {"status": "PASS", "max_mm": 0.012, "tol_mm": 0.05}},
@@ -415,8 +435,16 @@ def step_check(out, update_dir, morph_dir):
 
 def do_cushion_write():
     """cushion write(input-kind.md §5.2 흉내): --inc 줄을 그대로 옮긴 단일 starter rad. 노드·요소 ID·좌표는 --inc와 같다."""
-    inc, assem = need("inc"), need("assem-dir")
-    need("renum-csv")
+    matched = "asm-match" in args  # 방식 M: --inc 대신 선택 --patch(node_patch.npz, 없으면 공칭), --renum-csv 대신 --asm-match
+    assem = need("assem-dir")
+    if matched:
+        need("asm-match")
+        inc = None
+        if args.get("patch"):
+            need("patch")
+    else:
+        inc = need("inc")
+        need("renum-csv")
     out = args.get("out-dir") or sys.exit(2)
     out_rad = args.get("out-rad") or sys.exit(2)
     os.makedirs(out, exist_ok=True)
@@ -436,8 +464,11 @@ def do_cushion_write():
     if len(starters) != 1:  # 조립 폴더 직계 *.rad 중 /BEGIN 있는 것 정확히 1개(아니면 GEOM_INPUT_INVALID)
         sys.exit(fail_report("cushion write", cj, "GEOM_INPUT_INVALID",
                              {"message": f"exactly one starter with /BEGIN required in --assem-dir (found {len(starters)})", "out_rad": None}))
-    with open(inc, encoding="utf-8") as fh:
-        body = [ln.rstrip("\n") for ln in fh if not ln.lstrip().startswith("#include")]
+    if matched:
+        body = [f"#FAKE_MATCHED_CUSHION patch={'1' if args.get('patch') else '0'}"]
+    else:
+        with open(inc, encoding="utf-8") as fh:
+            body = [ln.rstrip("\n") for ln in fh if not ln.lstrip().startswith("#include")]
     stem = os.path.splitext(os.path.basename(out_rad))[0]
     text = "\n".join(["#RADIOSS STARTER", "/BEGIN", stem] + body + ["/END"]) + "\n"
     tmp = out_rad + ".tmp"
@@ -621,7 +652,12 @@ def do_map():
     finish("param_map.json", "OK", None, maybe_nonzero("map"))
 
 
-if cmd.startswith(("shell_", "view_")):
+if cmd.startswith("asm_"):
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import fake_paicad_asm  # noqa: E402 - 조립 매칭(asm-match.md §4) 가짜 명령
+
+    fake_paicad_asm.main(cmd, args)
+elif cmd.startswith(("shell_", "view_")):
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     import fake_paicad_shell_view  # noqa: E402 - 쉘(shell-morph.md §5)·뷰(geometry-view.md §5) 가짜 명령
 

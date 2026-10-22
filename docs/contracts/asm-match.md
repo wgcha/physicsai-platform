@@ -377,3 +377,39 @@ commands:
 (구현 중 계약과 달라지면 `AM-C2~`로 기록하고 Plan 확인.)
 
 - **AM-C1**(2026-10-22, 사용자 답변 Q1~Q3): 기준본 = 매칭 PART id 노드·요소 집합(파일 이름 의존 전부 제거), include 트리 전체 수집(쿠션이 여러 파일·다른 PART와 같은 파일이어도 허용), `ASM_SPLIT_FILES`·`ASM_FILE_NOT_INCLUDED` 폐지 → `ASM_INCLUDE_OUTSIDE`·`ASM_INCLUDE_MISSING`·`ASM_FILE_UNUSED`, 출력 = 노드 패치 + 새 명령 `paicad asm write`(조립 사본의 해당 `/NODE` 줄 좌표만 갱신, include 통째 교체 폐지), 쿠션 rad도 트리 수집 결과로, 공유 노드 FAIL 유지 + 수·상대 PART 보고, 스트리밍·sha 캐시, 원점·단위는 안내 후 차단 확정, 릴리스 v0.2.9(대기열 분리·DOE 방식과 함께), `mesh_include_name` 의존 전수 점검을 구현 항목으로.
+- **AM-C2**(2026-10-22, Impl-Backend 구현 중 확정 — 계약 §6.3·§6.4 보완, Plan 확인 요청): 계약과 달라지거나 계약이 비워 둔 부분을 구현대로 기록한다.
+  1. **쓰기 주체(§4.1)**: `match.json`·`check/<seq>/match_rows.json`(= `--match` 입력)·`asm_match.json`은 **API만** 쓴다. 워커(ASM_MATCH)는 `parts/`·`check/<seq>/`의 paicad 산출물만 쓰고 `options_run.json`(paicad `--options`)을 쓴다 — 경쟁 없음. `last_check`는 `match.json`에 저장하지 않고 `check/<seq>/asm_check.json`에서 계산한다. 쓰기 직렬화 = Study 행 잠금(`for update`).
+  2. **`rows_sha256`**: `match_rows.json`(= API가 쓴 정규 JSON `{"rows":[{body,pids}],"excluded_bodies":[…]}` UTF-8, 키 정렬·공백 없음 — 저장 때 서버가 정규화: 행·제외 = 바디 순서, `pids` 정렬·중복 제거) **바이트 전체**의 sha256 hex(접두사 없음). paicad `asm check`가 보고에 적는 값과 같다. 행을 순서만 바꿔 저장해도 같은 값이면 검사는 유효(`check.current=true`).
+  3. **종료코드·카테고리**: `asm check` FAIL(rows 있는 `asm_check.json`) = **15 `EXIT_ASM`**, 카테고리 `ASM`(GE §5.4 표에 추가, 한국어 문구 `geometry/messages.py`). 행이 있는 FAIL은 **데이터**라 작업은 SUCCEEDED·결과 status FAIL(확정 불가 `ASM_CHECK_REQUIRED`). 보고 없음·행 없는 FAIL(조립 트리 오류 `ASM_INCLUDE_*`·STEP 읽기 실패)은 작업 FAILED(failure_code = paicad 코드). `asm_parts.json`이 FAIL이면 목록 없음 = 상태 `FAILED`.
+  4. **같은 파일 두 번 include = `GEOM_INPUT_INVALID`**(순환과 같은 코드, 문구 "두 번 include"). 플랫폼 `geometry/asm_tree.py`와 paicad `mesh/asmtree.py`의 digest는 시험(`test_tree_digest_matches_paicad`)으로 동일성을 고정한다(starter 판별·`#include` 규칙·링크·밖·누락 코드 포함).
+  5. **`asm_write.json` 위치**: `paicad asm write --out-dir <임시>`의 **out-dir 직계**(조립 사본 파일들과 같은 폴더). 플랫폼은 임시 폴더에 쓰게 하고 보고 `files[].rel`만 목적지(DOE run 직계·④ `P/INPUT`·일괄 `m_3`)로 옮긴다(트리 밖·보고 파일은 옮기지 않음). 성공 판정 = 보고 status OK + `assem.starter`가 `files[]`에 있음. `--out-dir`은 조립 폴더 안이면 안 된다(paicad 검사).
+  6. **`--options`의 `asm_match` 절**: `{max_parts, recommend_min_score, worst_nodes}` ← `settings.asm_match`(기본 5000·0.6·2000, `timeout_s` 600은 플랫폼 전용 시간 상한). paicad `options.validate_asm`과 같은 키.
+  7. **레인·v0.2.9 대기열 분리와의 관계**: ASM_MATCH = `lane PREVIEW`(전역 슬롯 미사용, `claim_preview`는 레인 기준이라 job_type 목록을 따로 두지 않음). 대기열 분리 계약이 레인 이름·동시 수를 바꾸면 `job_types.py`의 `lane` 한 필드만 바꾼다. PREVIEW 허용 명령 목록에 `paicad_asm_parts`·`paicad_asm_check` 추가(`paicad_asm_write`는 DOE·예측 슬롯 작업 안에서만). Study당 활성 ASM_MATCH 1개(`ux_jobs_study_type_active`, 409 `STUDY_JOB_BUSY`). 일반 작업 생성 API로는 만들 수 없고(`PARAM_MODELS`에 없음), 알림 없음(silent)·기본 숨김·재시도 불가. step = `AM_PREP`·`AM_PARTS`·`AM_CHECK`·`AM_REGISTER`(모드에 안 맞는 step은 SKIPPED).
+  8. **검사 GLB**: 새 artifacts.kind(`ASM_MATCH_GLB`)는 DB CHECK 변경(migration)이 필요해 **기존 `GEOM_PREVIEW_FE_GLB`를 재사용**(이 계약 DB 변경 없음 유지). `rel_path`가 `asm_match/<id>/check/<seq>/`로 시작하는 것이 그 검사의 GLB이며 `/artifacts/{id}/media`로 서빙(`check.glb_artifact_id`·`check.glb_url`).
+  9. **API 가산(응답 필드는 가산만, 기존 필드 불변)**: `AsmMatch`에 `last_job{id,mode,state,failure_code,failure_message,progress_pct,progress_label}`·`warnings`·`rows_complete`·`use_bodies`(① 출처에서 use=true 파라미터가 있는 바디 — "매칭 안 함" 불가 바디, 피처의 `body` 필드와 사용 파라미터로 서버가 계산)·`created_at`·`updated_at`, `check`에 `current`·`glb_artifact_id`·`glb_url`·`rows[].worst.points[{node_id, xyz[3], dist_mm}]`(거리 내림차순 상위 `asm_match.worst_nodes`점, paicad `worst_<body>.npz`에서 읽음). **목록 API 1개 추가**: `GET /studies/{id}/asm-matches?source=train|path&latest=true&limit=` → `{items:[AsmMatch…]}` 최신순(MCP 도구 `asm_match_list`) — 화면이 ①의 마지막 매칭을 다시 찾기 위해 필요(계약 5개 + 1).
+  10. **오류 코드 가산**: `ASM_MATCH_BUSY`(진행 중 쓰기)·`ASM_ROW_INVALID`(422, `problems[].code` ∈ UNKNOWN_BODY·BODY_DUPLICATE·UNKNOWN_PID·PID_DUPLICATE·NOT_SOLID·BODY_MISSING·USE_PARAM·ROWS_EMPTY, `problems[].body`)·`ASM_ROWS_INCOMPLETE`(검사 시작 409)·`ASM_MATCH_UNSUPPORTED`(쉘 세트 422 · 다중 baseline 409 · parts 폴더 STEP 422 · 조립 매칭 세트의 FEM 검증 재조립 problems). 소비자 게이트 오류: 확정본 없음 = 409 `PREREQUISITE_MISSING`(missing `["ASM_MATCH"]`, 문구 "조립 매칭을 먼저 하세요 …"), 입력 변경·출처 불일치 = 409 `ASM_MATCH_STALE`. 새 요청에서 매칭이 없고 기준본·RENUM도 없을 때만 위 문구(기존 방식의 "기준 메시·번호 표" 문구는 기존 방식에서만).
+  11. **STALE 판정**: 조립 include 트리 digest·STEP sha256·피처 파일 sha256 중 하나라도 매칭 때와 다르면 `STALE`(목록 작업 중이 아닐 때). 소비자는 확정본 digest와 **소비 시점의 조립 폴더 트리 digest**를 비교한다(`radioss_assem_path`가 다른 폴더여도 내용이 같으면 통과).
+  12. **④ 등록 필드 위치**: `POST /studies/{id}/param-sets` 본문에 `asm_match_id`(native 솔리드 신규 등록만, `source.kind=path` 확정본·STEP sha = 매칭 STEP·STEP 파일 1개), `POST …/param-sets/discover` 본문에 `asm_match: true`(조립 폴더 후보에서 `BASELINE_INC_MISSING`·`RENUM_CSV_MISSING` 제외). 작업 params `asm_match_id`·`asm_match_sha256`(서버가 확정본에서 다시 읽어 기록). ①-3은 `TD_DOE_GEN` params `asm_match_id`(`source.kind=train`). from-train은 D가 매칭 DOE면 트리·`cad/asm_match.json`을 그대로 복사.
+  13. **저장소**: `<study>/asm_match/<id>/{match.json, parts/, check/<seq>/, asm_match.json}`, 파싱 캐시 `<study>/_cache/asm_parse/`. **`_cache/asm_parse`는 자동 정리 대상이 아니다**(housekeeping은 알려진 캐시 테이블만 정리) — 지워도 재생성되므로 관리자가 수동 삭제 가능. SPDM 쓰기 없음(`asm_match`는 `PROTECTED_PREFIXES`에 포함). 매칭 묶음 → Study 조회는 `jobs.params.match_id`(DB 변경 없음).
+  14. **방식 판별**: 세트·DOE 폴더의 `cad/asm_match.json` 유무(`geometry/asm_match.is_matched`). 있으면 `native_inputs`의 `baseline_inc`·`renum_csv`는 빈 값, `body_map` 없음(경고 `BODY_MAP_IGNORED`), `asm_match` 경로가 채워져 `commands_asm.expand`가 §6.2 쌍 치환·`{asm_cache_dir}`를 적용한다. 방식 L(없음)은 argv 불변(시험 `test_legacy_template_unchanged_without_asm_match`).
+  15. **FEM 검증**: 조립 매칭 예측의 입력 재사용(reuse)은 `INPUT`의 include 트리(하위 폴더)를 상대 경로째 복사. 조립 다시 만들기(rebuild)는 1차 미지원 → 미리보기 problems `ASM_MATCH_UNSUPPORTED`(생성 422). equiv 비교는 매칭 run에서 `Run.mesh_tree`(조립 폴더)·`mesh_parts`(매칭 PART id)로 부피를 읽는다.
+
+### `mesh_include_name` 의존 전수 점검 결과(§6.4, 구현)
+
+| 위치 | 매칭 세트(방식 M) 처리 |
+|---|---|
+| `predict_native.py`(MESH·`_cushion_write`·`rad_assemble`) | 출력 = `P/geom/node_patch.npz`(`--out-patch`), 조립 = `geometry_asm.assemble_matched`(`P/INPUT`), 쿠션 = `--patch` |
+| `geometry_sample.py`(`generate_sample`·`write_cushion_rad`) | `m_2/node_patch.npz`, 조립 `m_3`/R 직계 = 트리 사본 + `asm write`, 실패 시 `SKIPPED.json` step `assemble` |
+| `geometry_native.py`(`native_inputs`·`base_values`·`run_paicad`) | `baseline_inc`·`renum_csv` 빈 값, `asm_match`·`assem_dir` 전달, `{asm_cache_dir}` 주입 |
+| `geometry_cushion.py` | `node_patch` 값(없으면 공칭) |
+| `doe_native.py`·`doe_native_set.py`·`stage1_native.py` | 매칭 트리·확정본 복사(digest 확인 `INPUT_CHANGED`), 기준본·RENUM 검사 생략, 없으면 409 `ASM_MATCH` |
+| `np_register.py`·`prep.py`(`input_hashes`·`prep_state`) | `inputs.asm_match{rel,sha256}`·`assem_digest`, STALE 문구에 "조립 매칭" |
+| `param_set_native.py`(core `validate_native_folder`)·`param_discover_native.py` | 번호 표·기준본 요구 생략, `copy_sources_native(matched)` = 트리 복사 |
+| `param_set_native_train.py`(from-train) | 매칭 DOE의 트리·확정본 복사 |
+| `param_set_baselines_api.py`·`stage4_native.py`(4B) | 409 `ASM_MATCH_UNSUPPORTED` |
+| `fem_verify.py`·`fem_verify_plan.py`·`fem_assembly.py` | reuse = 트리 재귀 복사, rebuild = problems |
+| `equiv/sides.py`·`compute.py`·`volume.py` | `mesh_tree`·`mesh_parts`·`read_tree` |
+| `run_chain.py`·`predict_inputs.py`(`assembly_sources`·`assemble_into`) | Altair·방식 L 경로 전용(방식 M은 호출하지 않음) — 변경 없음 |
+| `geom_preview.py`·`np_view` | 값 전달만 `native_inputs` 경유(방식 M이면 `--asm-match` 쌍 치환) — 코드 변경 없음 |
+
+정적 점검: 방식 M 전용 모듈(`asm_tree`·`asm_match`·`commands_asm`·`asm_match_api`·`asm_match_gate`·`geometry_asm`·워커 `asm_match`)은 `mesh_include_name`을 코드에서 쓰지 않는다(`test_matched_path_modules_do_not_depend_on_include_file_names`). 프런트 문구(`ParamSetDiscoverForm.tsx`·`lib/geometry.ts`)는 Impl-Frontend 몫.

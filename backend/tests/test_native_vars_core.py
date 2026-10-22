@@ -211,6 +211,7 @@ ALLOWED = {
     "backend/physicsai_api/services/common.py": 1,                       # param_set_out
     "backend/physicsai_api/services/geom_view_api.py": 3,
     "backend/physicsai_api/services/stage1_train_data.py": 9,            # ① 학습 설정(train_setups.parameters, 세트 아님)
+    "backend/physicsai_api/services/asm_match_api.py": 1,                # ① 학습 설정(train_setups.parameters, 세트 아님): use=true 파라미터 바디 판정(asm-match.md §3.2)
     "backend/physicsai_api/services/stage4_predict.py": 3,               # 단건 PREDICT 확인(세트 정의, 비범위 §6.4)
     "backend/physicsai_api/services/fem_verify_sources.py": 2,
     "backend/physicsai_api/services/fem_verify_plan.py": 1,

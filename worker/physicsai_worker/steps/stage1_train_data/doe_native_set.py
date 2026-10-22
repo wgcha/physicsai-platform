@@ -19,6 +19,7 @@ from physicsai_core.fileutil import copy_file, copy_tree, write_text
 from physicsai_core.geometry import baselines as bl
 from physicsai_core.geometry import native_vars as nv
 from physicsai_core.geometry import shell as sh
+from physicsai_core.geometry.asm_match import is_matched, matched_doc
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.native_files import doe_matrix_csv, doe_matrix_csv_multi, read_doe_matrix
 from physicsai_core.geometry.prep import is_shell_only
@@ -75,10 +76,21 @@ def dg_prep(ctx: Any) -> None:
     os.makedirs(D, exist_ok=True)
     ctx.backup([x for x in (A, os.path.join(D, "cad"), os.path.join(D, "native"), os.path.join(D, "doe_matrix.csv")) if os.path.lexists(x)])
     assem = os.path.join(S, "radioss_assem")
-    for n in sorted(os.listdir(assem)):  # base 조립 폴더 사본(FEM 검증·①→④ 호환, 원본 = 세트 사본)
-        src = os.path.join(assem, n)
-        if os.path.isfile(src) and not is_link_or_reparse(src):
-            copy_file(src, os.path.join(A, n), checkpoint=ctx.checkpoint)
+    if is_matched(S):  # 조립 매칭 세트(asm-match.md §6.4): include 트리를 상대 경로 그대로(파일 이름·직계 규칙에 기대지 않음)
+        from physicsai_core.geometry.asm_tree import AsmTreeError, build, copy_included
+
+        try:
+            tree = build(assem, ctx.checkpoint)
+        except AsmTreeError as exc:
+            raise StepFailure(exc.code, exc.message) from None
+        if tree.digest != ((matched_doc(S) or {}).get("assem") or {}).get("digest"):
+            raise StepFailure("INPUT_CHANGED", "세트의 조립 폴더가 조립 매칭 이후 바뀌었습니다 — 형상 준비를 다시 하세요")
+        copy_included(tree, A, ctx.checkpoint)
+    else:
+        for n in sorted(os.listdir(assem)):  # base 조립 폴더 사본(FEM 검증·①→④ 호환, 원본 = 세트 사본)
+            src = os.path.join(assem, n)
+            if os.path.isfile(src) and not is_link_or_reparse(src):
+                copy_file(src, os.path.join(A, n), checkpoint=ctx.checkpoint)
     for sub in ("cad", "native"):
         if os.path.isdir(os.path.join(S, sub)):
             copy_tree(os.path.join(S, sub), os.path.join(D, sub), checkpoint=ctx.checkpoint)

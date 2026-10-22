@@ -92,19 +92,21 @@ def _series_name(metric: Mapping[str, Any], d: Mapping[str, Any] | None) -> str 
 def _volume(run: Run, src: Mapping[str, Any], settings: Any, out: ComputeOut) -> tuple[float | None, str | None]:
     origin = str(src.get("origin") or "mesh")
     if origin == "mesh":
-        if not run.mesh_inc:
+        cap = settings.fem_verify.include_scan_max_bytes * 16
+        if not run.mesh_inc and not run.mesh_tree:
             return None, "MESH_MISSING"
-        mesh = vol.read_include(run.mesh_inc, max_bytes=settings.fem_verify.include_scan_max_bytes * 16)
+        # 조립 매칭 run(asm-match.md §6.4): 기준본 include 파일 대신 조립 트리 전체에서 읽고, cushion = 매칭된 PART id
+        mesh = vol.read_include(run.mesh_inc, max_bytes=cap) if run.mesh_inc else vol.read_tree(str(run.mesh_tree), max_bytes=cap)
         if mesh is None:
             return None, "MESH_MISSING"
-        parts = vol.resolve_parts(src.get("parts", "cushion"), None)
+        parts = vol.resolve_parts(src.get("parts", "cushion"), None if run.mesh_inc else run.mesh_parts)
         res = vol.part_volume(mesh, parts)
         if res.skipped_kinds:
             out.warn("EQ_VOLUME_ELEM_SKIPPED", f"{run.name}: 지원하지 않는 요소형을 건너뜀 — {', '.join(res.skipped_kinds)}")
         if res.n_elems == 0:
             return None, "VOLUME_ZERO"
         return res.volume, None
-    base = os.path.dirname(run.mesh_inc) if run.mesh_inc else (os.path.dirname(run.result_dir) if run.result_dir else None)
+    base = os.path.dirname(run.mesh_inc) if run.mesh_inc else (run.mesh_tree or (os.path.dirname(run.result_dir) if run.result_dir else None))
     if origin == "paicad":
         for rel in (("_paicad", "update", "update.json"), ("m_1", "update", "update.json"), ("update", "update.json")):
             p = os.path.join(base, *rel) if base else None
