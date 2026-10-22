@@ -11,6 +11,7 @@ import { inspectPath } from "./studies";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { createJobFor } from "./jobs";
+import { asmRegisterGate } from "./asmMatch";
 import { iso } from "./base";
 import { checkFilter, normalizeFilter, typeSelected } from "./extractFilter";
 
@@ -324,7 +325,7 @@ export function geometryStatus(srv: MockServer): StatusGeometry {
 const NATIVE_ASSEM = { rel: "RADIOSS_ASSEM", starter: "cushion_0000.rad", has_eps_mesh: true, has_renum_csv: true, file_count: 7, has_baseline_inc: true };
 
 /** §7.4 native discover: tpl 없음, CAD = STEP(단일) 또는 parts/, 조립 폴더는 기준본 inc 필수 */
-export function discoverNative(path: string): MockResp {
+export function discoverNative(path: string, asmMatch = false): MockResp {
   const chk = inspectPath("PARAM_SET", path);
   if (chk.status !== 200) return chk;
   const out: ParamSetDiscover = {
@@ -333,7 +334,9 @@ export function discoverNative(path: string): MockResp {
   };
   if (/noinc/i.test(path)) {
     out.cad = [{ rel: "01_CAD/cushion_base.step", name: "cushion_base.step", kind: "single" }];
-    out.problems = [{ code: "BASELINE_INC_MISSING", message: "조립 폴더에 기준 메시 104_replace_node_elem.inc가 없습니다", file: "RADIOSS_ASSEM" }];
+    // asm-match.md AM-C2 12: asm_match=true면 BASELINE_INC_MISSING·RENUM_CSV_MISSING 제외(조립 폴더 후보는 그대로)
+    if (asmMatch) out.radioss_assem = [{ ...NATIVE_ASSEM, has_baseline_inc: false, has_renum_csv: false }];
+    else out.problems = [{ code: "BASELINE_INC_MISSING", message: "조립 폴더에 기준 메시 104_replace_node_elem.inc가 없습니다", file: "RADIOSS_ASSEM" }];
     return ok(out);
   }
   out.cad = /multi/i.test(path)
@@ -399,23 +402,29 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     const s = srv.studies.find((x) => x.id === seg[1]);
     if (s && body?.engine !== "native" && body?.extract_filter != null) return checkFilter(body.extract_filter, { native: false }) as MockResp; // altair 요청의 extract_filter = 422(그 밖 altair 동작 불변)
     if (!s || body?.engine !== "native") return null;
-    if (seg[3] === "discover") return discoverNative(String(body?.path ?? ""));
+    if (seg[3] === "discover") return discoverNative(String(body?.path ?? ""), body?.asm_match === true);
     if (!seg[3]) {
       const deny = needPower(srv, s.project_id);
       if (deny) return deny;
-      const d = discoverNative(String(body?.path ?? ""));
+      const asmId = typeof body?.asm_match_id === "string" ? body.asm_match_id : null;
+      const d = discoverNative(String(body?.path ?? ""), !!asmId);
       if (d.status !== 200) return d;
       const found = d.body as ParamSetDiscover;
       if (found.problems.length) return err(422, "PARAM_SET_INVALID", found.problems[0].message);
       const choice = (body?.choice ?? {}) as Record<string, string | null>;
       if (found.cad.length > 1 && !choice.cad) return err(422, "PARAM_SET_INVALID", "후보 중 하나를 고르세요");
+      if (asmId) {
+        // asm-match.md §6.4: source=path 확정본 + 세트 STEP·조립 폴더가 매칭과 같아야 한다(STEP 폴더(parts)는 422)
+        const gate = asmRegisterGate(srv, s.id, asmId, String(body?.path ?? ""), choice, found);
+        if (gate) return gate;
+      }
       if (body?.geom_options) {
         const probs = validateGeomOptions(body.geom_options as GeomOptions, []);
         if (probs.length) return err(422, "GEOM_OPTIONS_INVALID", "검사 기준 값이 허용 범위를 벗어났습니다", { problems: probs });
       }
       const chk = checkFilter(body?.extract_filter, { native: true });
       if ("status" in chk) return chk;
-      return nativeJob(srv, s, { mode: "new", path: body?.path, choice, label: body?.label ?? null, geom_options: body?.geom_options ?? null, ...(chk.norm ? { extract_filter: chk.norm } : {}) });
+      return nativeJob(srv, s, { mode: "new", path: body?.path, choice, ...(asmId ? { asm_match_id: asmId } : {}), label: body?.label ?? null, geom_options: body?.geom_options ?? null, ...(chk.norm ? { extract_filter: chk.norm } : {}) });
     }
     return null;
   }

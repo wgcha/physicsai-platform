@@ -331,3 +331,18 @@ export function faceGroups(body: ManifestBody, h: Highlight): { start: number; c
 // ---------------------------------------------------------------- WebGL(§7.4)
 
 export { detectWebGL } from "./webgl";
+
+/** 화면 좌표(px)로 투영한 점들 중 포인터(mx,my)에 가장 가까운 것의 위치(반경 radius 안, 보이는 점만). 없으면 -1 */
+export function nearestScreenPoint(screen: { x: number; y: number; ok: boolean }[], mx: number, my: number, radius: number): number {
+  let best = -1;
+  let bd = radius * radius;
+  screen.forEach((s, i) => {
+    if (!s.ok) return;
+    const d = (s.x - mx) ** 2 + (s.y - my) ** 2;
+    if (d <= bd) {
+      bd = d;
+      best = i;
+    }
+  });
+  return best;
+}

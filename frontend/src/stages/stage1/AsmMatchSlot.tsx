@@ -5,5 +5,5 @@ import { useTrain } from "./TrainContext";
 export function AsmMatchSlot() {
   const { setup, setAsm } = useTrain();
   if (setup?.engine !== "native" || !setup.parameters.length) return null;
-  return <AsmMatchCard cad={{ kind: "train" }} scope="train" usedParams={setup.parameters.filter((p) => p.use).map((p) => p.name)} onConfirmed={setAsm} />;
+  return <AsmMatchCard cad={{ kind: "train" }} onConfirmed={setAsm} />;
 }

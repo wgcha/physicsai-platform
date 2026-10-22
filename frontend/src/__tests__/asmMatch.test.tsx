@@ -1,11 +1,15 @@
 // v0.2.9 조립 매칭 화면(asm-match.md §3.2·§6.5): 표 편집(1:N)·N:1 차단·추천 채움·검사 결과(일치율·거리·공유 노드)·원점 차이 차단·저장 → ①-3 Native DOE 문구 전환.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { render } from "@testing-library/react";
+import { TestApp } from "../app/App";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
 import { nativeTrainParams } from "../mock/geometry";
-import { ASM_ERROR_TEXT, addPart, asmCodeText, draftProblems, failLines, glbArtifactId, partChoice, recommendDraft, removePart, saveBlock, setExcluded, suggestText, toPut, usedBy } from "../lib/asmMatch";
-import type { AsmCheckRow, AsmMatch, AsmPart } from "../api";
+import { ASM_ERROR_TEXT, ASM_FIRST_TEXT, ASM_PROBLEM_TEXT, addPart, excludeBlock, isAsmMissing, rowNotes, stateLabel, worstPoints, asmCodeText, draftProblems, failLines, partChoice, recommendDraft, removePart, saveBlock, setExcluded, suggestText, toPut, usedBy } from "../lib/asmMatch";
+import { ApiError, errorMessage, type AsmCheckRow, type AsmMatch, type AsmPart } from "../api";
+import { nearestScreenPoint } from "../stages/stage4/geomview/viewerCore";
+import { err } from "../mock/route";
 
 const ASSEM = "E:/shared/AI_WORK/cushion/00_inbox/radioss_assem";
 const nativeSetup = (s: MockServer) => Object.assign(s.p2.setups["s-cushion"], { engine: "native", parameters: nativeTrainParams(), tpl: null });
@@ -39,7 +43,7 @@ async function check(ctx: Awaited<ReturnType<typeof open>>) {
   fireEvent.click(btn(ctx.card, "검사"));
   await waitFor(() => expect(ctx.server.jobs.filter((j) => j.job_type === "ASM_MATCH").length).toBe(2));
   act(() => ctx.server.finishAll());
-  await waitFor(() => expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("검사 완료"));
+  await waitFor(() => expect(within(ctx.card).getByTestId("asm-state").textContent).toMatch(/^(검사 완료|검사 결과 불일치)/));
 }
 
 describe("조립 매칭 카드", () => {
@@ -74,7 +78,7 @@ describe("조립 매칭 카드", () => {
     pick(ctx.card, "CUSH_R", 3000003);
     // CUSH_L은 사용 파라미터가 있어 '매칭 안 함' 불가, CUSH_R은 가능
     expect((within(ctx.card).getByLabelText("CUSH_L 매칭 안 함") as HTMLInputElement).disabled).toBe(true);
-    expect(within(ctx.card).getByTestId("asm-row-CUSH_L").textContent).toContain("선택한 파라미터 3개가 이 바디에 있습니다");
+    expect(within(ctx.card).getByTestId("asm-row-CUSH_L").textContent).toContain("선택한 파라미터가 있는 바디라 '매칭 안 함'으로 둘 수 없습니다");
     await check(ctx);
     const put = ctx.calls.find((c) => c.method === "PUT")!;
     expect(put.path).toMatch(/\/asm-matches\/[^/]+\/rows$/);
@@ -202,6 +206,276 @@ describe("조립 매칭 카드", () => {
   });
 });
 
+
+describe("조립 매칭 — 서버 API 연동(확정 API)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("목록 API로 마지막 매칭을 복원한다(localStorage 없음): 다시 열면 같은 표·검사 결과", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    pick(ctx.card, "CUSH_R", 3000003);
+    await check(ctx);
+    expect(Object.keys(localStorage).filter((k) => k.startsWith("physicsai.asmMatch"))).toEqual([]);
+    ctx.unmount();
+    const calls: string[] = [];
+    const orig = ctx.server.handle.bind(ctx.server);
+    ctx.server.handle = (m, p, q, b, h) => (m === "GET" && p.includes("/asm-matches") && calls.push(`${p}?${q.toString()}`), orig(m, p, q, b, h));
+    render(<TestApp path={`${STUDY}/1`} />);
+    const card = await screen.findByRole("region", { name: "조립 매칭" });
+    await within(card).findByRole("table", { name: "조립 매칭 표" });
+    expect(calls[0]).toMatch(/\/studies\/s-cushion\/asm-matches\?source=train&latest=true&limit=1$/);
+    expect(within(card).getByTestId("asm-state").textContent).toBe("검사 완료");
+    expect(within(card).getByTestId("asm-chips-CUSH_R").textContent).toContain("PART 3000003");
+    expect(within(card).getByTestId("asm-verdict-CUSH_L").textContent).toBe("일치");
+    expect((within(card).getByLabelText("조립 폴더") as HTMLInputElement).value).toBe(ASSEM);
+    expect(Object.keys(localStorage).filter((k) => k.startsWith("physicsai.asmMatch"))).toEqual([]);
+  });
+
+  it("목록 API의 최신 항목이 없으면(매칭 없음) 빈 카드", async () => {
+    const ctx = await open();
+    expect(within(ctx.card).queryByRole("table", { name: "조립 매칭 표" })).toBeNull();
+    const res = await fetch("/physicsai/api/studies/s-cushion/asm-matches?source=path&latest=true&limit=1");
+    expect(((await res.json()) as { items: unknown[] }).items).toEqual([]);
+  });
+
+  it("'매칭 안 함' 차단은 서버 use_bodies를 따른다(바디 이름 접두사 추측 없음)", async () => {
+    const ctx = await open();
+    const orig = ctx.server.handle.bind(ctx.server);
+    ctx.server.handle = (m, p, q, b, h) => {
+      const r = orig(m, p, q, b, h);
+      if (m === "GET" && /\/asm-matches\/[^/]+$/.test(p) && r && r.status === 200) (r.body as AsmMatch).use_bodies = ["CUSH_R"]; // 서버가 CUSH_R만 막는다
+      return r;
+    };
+    await scan(ctx);
+    expect((within(ctx.card).getByLabelText("CUSH_R 매칭 안 함") as HTMLInputElement).disabled).toBe(true);
+    expect((within(ctx.card).getByLabelText("CUSH_L 매칭 안 함") as HTMLInputElement).disabled).toBe(false);
+    expect(within(ctx.card).getByTestId("asm-row-CUSH_R").textContent).toContain("선택한 파라미터가 있는 바디라 '매칭 안 함'으로 둘 수 없습니다");
+    expect(excludeBlock("A", ["A"])).toContain("매칭 안 함");
+    expect(excludeBlock("A_", [])).toBeNull();
+  });
+
+  it("422 ASM_ROW_INVALID problems[]를 행 옆 안내로: 코드별 한국어, 바디 없는 사유(ROWS_EMPTY)는 아래 줄", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    const orig = ctx.server.handle.bind(ctx.server);
+    ctx.server.handle = (m, p, q, b, h) =>
+      m === "PUT" && p.endsWith("/rows")
+        ? err(422, "ASM_ROW_INVALID", "매칭 표가 올바르지 않습니다", { problems: [{ code: "USE_PARAM", body: "CUSH_L" }, { code: "PID_DUPLICATE", body: "CUSH_R", pid: 3000001 }, { code: "ROWS_EMPTY" }] })
+        : orig(m, p, q, b, h);
+    pick(ctx.card, "CUSH_R", 3000003);
+    fireEvent.click(btn(ctx.card, "검사"));
+    expect((await within(ctx.card).findByTestId("asm-note-CUSH_L")).textContent).toBe(ASM_PROBLEM_TEXT.USE_PARAM);
+    expect(within(ctx.card).getByTestId("asm-note-CUSH_R").textContent).toBe("PART 3000001: 다른 행이 이미 쓰는 component입니다");
+    expect(within(ctx.card).getByTestId("asm-notes-general").textContent).toBe(ASM_PROBLEM_TEXT.ROWS_EMPTY);
+    expect(within(ctx.card).getByTestId("asm-error").textContent).toContain("매칭 표가 올바르지 않습니다");
+    // 표를 고치면 안내가 사라진다
+    fireEvent.click(within(ctx.card).getByLabelText("CUSH_R에서 PART 3000003 빼기"));
+    expect(within(ctx.card).queryByTestId("asm-note-CUSH_L")).toBeNull();
+  });
+
+  it("check.current=false면 '검사가 최신이 아님, 다시 검사' 안내 + 판정 '검사 필요' + 저장 불가", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    pick(ctx.card, "CUSH_R", 3000003);
+    await check(ctx);
+    expect(within(ctx.card).queryByTestId("asm-check-stale")).toBeNull();
+    const orig = ctx.server.handle.bind(ctx.server);
+    ctx.server.handle = (m, p, q, b, h) => {
+      const r = orig(m, p, q, b, h);
+      if (m === "GET" && /\/asm-matches(\/[^/]+)?$/.test(p) && r && r.status === 200) {
+        const items = "items" in (r.body as object) ? (r.body as { items: AsmMatch[] }).items : [r.body as AsmMatch];
+        for (const mm of items) {
+          mm.state = "DRAFT";
+          mm.check!.current = false;
+        }
+      }
+      return r;
+    };
+    ctx.unmount();
+    render(<TestApp path={`${STUDY}/1`} />);
+    const card = await screen.findByRole("region", { name: "조립 매칭" });
+    expect((await within(card).findByTestId("asm-check-stale")).textContent).toBe("검사가 최신이 아님 — 다시 검사하세요");
+    expect(within(card).getByTestId("asm-verdict-CUSH_L").textContent).toBe("검사 필요");
+    expect(within(card).getByTestId("asm-state").textContent).toBe("표를 바꿈 — 다시 검사");
+    expect(btn(card, "저장").disabled).toBe(true);
+    expect(btn(card, "검사").disabled).toBe(false);
+  });
+
+  it("서버가 current=false로 돌려주는 PUT 뒤의 상태(검사 결과는 남음) — 확정 409 ASM_CHECK_REQUIRED", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    pick(ctx.card, "CUSH_R", 3000003);
+    await check(ctx);
+    const id = [...ctx.server.jobs].reverse().find((j) => j.job_type === "ASM_MATCH")!.params.match_id as string;
+    const put = await fetch(`/physicsai/api/asm-matches/${id}/rows`, { method: "PUT", headers: { "X-PhysicsAI-Request": "1", "Content-Type": "application/json" }, body: JSON.stringify({ rows: [{ body: "CUSH_L", pids: [3000001] }, { body: "CUSH_R", pids: [3000002] }], excluded_bodies: [] }) });
+    const m = (await put.json()) as AsmMatch;
+    expect(m.state).toBe("DRAFT");
+    expect(m.check?.current).toBe(false);
+    expect(m.rows_complete).toBe(true);
+    const res = await fetch(`/physicsai/api/asm-matches/${id}/confirm`, { method: "POST", headers: { "X-PhysicsAI-Request": "1" } });
+    expect(((await res.json()) as { detail: { code: string } }).detail.code).toBe("ASM_CHECK_REQUIRED");
+  });
+
+  it("목록 읽기 실패는 last_job.failure_code를 한국어로", async () => {
+    const ctx = await open("_nosolid");
+    fireEvent.click(within(ctx.card).getByRole("button", { name: "목록 읽기" }));
+    await waitFor(() => expect(ctx.server.jobs.some((j) => j.job_type === "ASM_MATCH")).toBe(true));
+    act(() => ctx.server.finishAll());
+    expect((await within(ctx.card).findByTestId("asm-failed")).textContent).toBe("조립에 TETRA4 PART가 없습니다");
+    expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("목록 읽기 실패");
+  });
+});
+
+describe("조립 매칭 ④ 등록 연결", () => {
+  const FOLDER = "E:/shared/AI_WORK/cushion/00_inbox/native_project";
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  async function openRegister() {
+    const r = renderApp(`${STUDY}/4`, { user: "power" });
+    const calls: { m: string; p: string; b: Record<string, unknown> | null }[] = [];
+    const orig = r.server.handle.bind(r.server);
+    r.server.handle = (m, p, q, b, h) => (m === "POST" && /\/(param-sets(\/discover)?|asm-matches)$/.test(p) && calls.push({ m, p, b: structuredClone(b) }), orig(m, p, q, b, h));
+    fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
+    const card = await screen.findByRole("region", { name: "템플릿 관리" });
+    fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
+    const form = within(card).getByTestId("ps-discover");
+    fireEvent.click(within(form).getByRole("radio", { name: "Native" }));
+    const find = async (path = FOLDER) => {
+      fireEvent.change(within(form).getByLabelText("프로젝트 폴더 경로"), { target: { value: path } });
+      fireEvent.click(within(form).getByRole("button", { name: "찾기" }));
+      await within(form).findByText("01_CAD/cushion_base.step");
+    };
+    return { ...r, form, find, calls };
+  }
+  const reg = (form: HTMLElement) => within(form).getByRole("button", { name: "등록" }) as HTMLButtonElement;
+
+  it("기본 = 조립 매칭 사용: discover 본문에 asm_match:true, 기준본·번호 표 문구는 숨김, 매칭 저장 전에는 등록 불가", async () => {
+    const { form, find, calls } = await openRegister();
+    expect((within(form).getByRole("checkbox", { name: "조립 매칭 사용" }) as HTMLInputElement).checked).toBe(true);
+    expect(form.textContent).not.toMatch(/104_replace|기준 메시 104|renum|RENUM/);
+    expect(form.textContent).toContain("기준 메시·번호 표 파일 불필요");
+    await find(`${FOLDER}_noinc`); // 기준본 inc 없는 폴더도 문제 없이 후보가 뜬다(서버가 BASELINE_INC_MISSING 제외)
+    expect(calls.find((c) => c.p.endsWith("/discover"))!.b).toMatchObject({ engine: "native", asm_match: true });
+    expect(within(form).queryByText(/104_replace_node_elem\.inc가 없습니다/)).toBeNull();
+    await within(form).findByTestId("asm-embedded");
+    expect(reg(form).disabled).toBe(true);
+  });
+
+  it("매칭 사용을 끄면 기존 RENUM·기준본 방식 그대로(문구·discover에 asm_match 없음)", async () => {
+    const { form, find, calls } = await openRegister();
+    fireEvent.click(within(form).getByRole("checkbox", { name: "조립 매칭 사용" }));
+    expect(form.textContent).toMatch(/104_replace_node_elem\.inc 필요/);
+    await find(`${FOLDER}_noinc`);
+    expect(calls.find((c) => c.p.endsWith("/discover"))!.b).not.toHaveProperty("asm_match");
+    expect(within(form).getByText(/104_replace_node_elem\.inc가 없습니다/)).toBeTruthy();
+    expect(within(form).queryByTestId("asm-embedded")).toBeNull();
+    expect(reg(form).disabled).toBe(true);
+  });
+
+  it("매칭(목록 읽기·검사·저장) 후 등록 → POST /param-sets에 asm_match_id(source=path 확정본), STEP·조립 경로는 이 폴더 기준", async () => {
+    const { server, form, find, calls } = await openRegister();
+    await find();
+    const emb = await within(form).findByTestId("asm-embedded");
+    fireEvent.click(within(emb).getByRole("button", { name: "목록 읽기" }));
+    await waitFor(() => expect(server.jobs.some((j) => j.job_type === "ASM_MATCH")).toBe(true));
+    act(() => server.finishAll());
+    await within(emb).findByRole("table", { name: "조립 매칭 표" });
+    const create = calls.find((c) => c.p.endsWith("/asm-matches"))!.b as { radioss_assem_path: string; cad: { kind: string; path: string } };
+    expect(create.radioss_assem_path).toBe(`${FOLDER}/RADIOSS_ASSEM`);
+    expect(create.cad).toEqual({ kind: "path", path: `${FOLDER}/01_CAD/cushion_base.step` });
+    pick(emb, "CUSH_R", 3000003);
+    await waitFor(() => expect(btn(emb, "검사").disabled).toBe(false));
+    fireEvent.click(btn(emb, "검사"));
+    await waitFor(() => expect(server.jobs.filter((j) => j.job_type === "ASM_MATCH").length).toBe(2));
+    act(() => server.finishAll());
+    await waitFor(() => expect(btn(emb, "저장").disabled).toBe(false));
+    expect(reg(form).disabled).toBe(true); // 확정 전
+    fireEvent.click(btn(emb, "저장"));
+    expect((await within(emb).findByTestId("asm-confirmed")).textContent).toContain("템플릿 등록이 이 매칭을 씁니다");
+    await waitFor(() => expect(reg(form).disabled).toBe(false));
+    const matchId = ((await (await fetch(`/physicsai/api/studies/s-cushion/asm-matches?source=path&latest=true`)).json()) as { items: AsmMatch[] }).items[0].match_id;
+    fireEvent.click(reg(form));
+    await waitFor(() => expect(calls.filter((c) => c.p.endsWith("/param-sets")).length).toBe(1));
+    const body = calls.find((c) => c.p.endsWith("/param-sets"))!.b!;
+    expect(body).toMatchObject({ engine: "native", mode: "discover", asm_match_id: matchId, choice: { cad: "01_CAD/cushion_base.step", radioss_assem: "RADIOSS_ASSEM" } });
+    expect(server.jobs.find((j) => j.job_type === "PARAM_SET_NATIVE")!.params).toMatchObject({ asm_match_id: matchId });
+  });
+
+  it("같은 STEP·조립 폴더로 다시 열면 서버 목록에서 저장된 매칭을 이어 쓴다(다시 매칭 불필요)", async () => {
+    const { server, form, find } = await openRegister();
+    await find();
+    let emb = await within(form).findByTestId("asm-embedded");
+    fireEvent.click(within(emb).getByRole("button", { name: "목록 읽기" }));
+    await waitFor(() => expect(server.jobs.some((j) => j.job_type === "ASM_MATCH")).toBe(true));
+    act(() => server.finishAll());
+    await within(emb).findByRole("table", { name: "조립 매칭 표" });
+    pick(emb, "CUSH_R", 3000003);
+    await waitFor(() => expect(btn(emb, "검사").disabled).toBe(false));
+    fireEvent.click(btn(emb, "검사"));
+    await waitFor(() => expect(server.jobs.filter((j) => j.job_type === "ASM_MATCH").length).toBe(2));
+    act(() => server.finishAll());
+    await waitFor(() => expect(btn(emb, "저장").disabled).toBe(false));
+    fireEvent.click(btn(emb, "저장"));
+    await within(emb).findByTestId("asm-confirmed");
+    // 매칭 사용을 껐다 켜고 다시 찾기 → 카드가 새로 만들어져도 저장된 매칭을 되찾는다
+    fireEvent.click(within(form).getByRole("checkbox", { name: "조립 매칭 사용" }));
+    fireEvent.click(within(form).getByRole("checkbox", { name: "조립 매칭 사용" }));
+    await find();
+    emb = await within(form).findByTestId("asm-embedded");
+    await within(emb).findByTestId("asm-confirmed");
+    await waitFor(() => expect(reg(form).disabled).toBe(false));
+  });
+
+  it("STEP 폴더(parts)를 고르면 조립 매칭 불가 안내 + 등록 불가", async () => {
+    const { form, find } = await openRegister();
+    await find(`${FOLDER}_multi`);
+    fireEvent.change(within(form).getByLabelText("CAD 선택"), { target: { value: "01_CAD/parts" } });
+    expect((await within(form).findByTestId("asm-unsupported")).textContent).toContain("STEP 폴더(parts)는 조립 매칭을 지원하지 않습니다");
+    expect(within(form).queryByTestId("asm-embedded")).toBeNull();
+    expect(reg(form).disabled).toBe(true);
+  });
+
+  it("서버 게이트: 확정본 없이 등록하면 409 PREREQUISITE_MISSING → '조립 매칭을 먼저 하세요'", async () => {
+    const { server } = await openRegister();
+    const res = await fetch(`/physicsai/api/studies/s-cushion/param-sets`, {
+      method: "POST", headers: { "X-PhysicsAI-Request": "1", "Content-Type": "application/json" },
+      body: JSON.stringify({ path: FOLDER, engine: "native", mode: "discover", choice: { cad: "01_CAD/cushion_base.step", radioss_assem: "RADIOSS_ASSEM" }, asm_match_id: "am-none" }),
+    });
+    expect(res.status).toBe(409);
+    const detail = ((await res.json()) as { detail: { code: string; message: string; missing: string[] } }).detail;
+    expect(detail.missing).toEqual(["ASM_MATCH"]);
+    expect(isAsmMissing(detail)).toBe(true);
+    expect(errorMessage(new ApiError(409, detail))).toBe("조립 매칭을 먼저 하세요");
+    expect(server.jobs.some((j) => j.job_type === "PARAM_SET_NATIVE")).toBe(false);
+  });
+});
+
+describe("조립 매칭 ①-3 DOE 파라미터", () => {
+  afterEach(() => localStorage.clear());
+  it("TD_DOE_GEN은 source=train 확정본 asm_match_id를 보내고, 세트 기준 DOE는 보내지 않는다(서버 422)", async () => {
+    const { buildNativeParams, buildReuseParams, initialNative } = await import("../stages/stage1/doeGenParams");
+    const nat = initialNative();
+    const base = { multi: 1, maxRuns: 5000, assemPath: ASSEM };
+    expect(buildNativeParams(nat, { ...base, paramSetId: null, asmMatchId: "am-1" })).toMatchObject({ generator: "platform", radioss_assem_path: ASSEM, asm_match_id: "am-1" });
+    expect(buildNativeParams(nat, { ...base, paramSetId: null })).not.toHaveProperty("asm_match_id");
+    expect(buildNativeParams(nat, { ...base, paramSetId: "ps-1", asmMatchId: "am-1" })).not.toHaveProperty("asm_match_id");
+    expect(buildNativeParams(nat, { ...base, paramSetId: "ps-1", asmMatchId: "am-1" })).toMatchObject({ param_set_id: "ps-1" });
+    expect(buildReuseParams({ doeId: "d1", multi: 1, assemPath: ASSEM, paramSetId: null, asmMatchId: "am-1", continueOnFailure: true })).toMatchObject({ asm_match_id: "am-1" });
+    const res = await (async () => {
+      const r = renderApp(`${STUDY}/1`, { user: "power" }, nativeSetup);
+      await screen.findByRole("region", { name: "조립 매칭" });
+      return fetch("/physicsai/api/studies/s-cushion/jobs", { method: "POST", headers: { "X-PhysicsAI-Request": "1", "Content-Type": "application/json" }, body: JSON.stringify({ job_type: "TD_DOE_GEN", params: { ...buildNativeParams(nat, { ...base, paramSetId: "ps-1", asmMatchId: "am-1" }), asm_match_id: "am-1" } }) }).finally(() => r.unmount());
+    })();
+    expect(res.status).toBe(422);
+  });
+});
+
 describe("조립 매칭 순수 로직", () => {
   const parts: AsmPart[] = [
     { pid: 1, title: "P1", elems: { TETRA4: 10 }, nodes: 5, volume: 1, solid_ok: true },
@@ -236,17 +510,58 @@ describe("조립 매칭 순수 로직", () => {
     expect(asmCodeText("ASM_MATCH_STALE", "서버가 준 한국어 문구")).toBe("서버가 준 한국어 문구");
   });
 
-  it("원점·단위 진단 문구, 저장 조건(검사 PASS + 표 불변), GLB 산출물 id", () => {
+  it("원점·단위 진단 문구, 저장 조건(검사 PASS + 표 불변), ", () => {
     expect(suggestText({ code: "ASM_OFFSET_SUSPECT", translate_mm: [10, -2.5, 0] })).toContain("X 10.0 · Y -2.5 mm 어긋나 있습니다");
     expect(suggestText({ code: "ASM_UNIT_SUSPECT", factor: 0.001 })).toContain("×0.001 배 차이");
     const row: AsmCheckRow = { body: "A", pids: [1], status: "FAIL", code: "ASM_BOUNDARY_MISMATCH", match_ratio: 0.5, tol_mm: 0.05, dist_mm: { mean: 1, p95: 2, p99: 3, max: 4 }, shared: { nodes: 0, parts: [] }, suggest: { code: "ASM_UNIT_SUSPECT", factor: 1000 } };
     expect(failLines(row)).toHaveLength(2);
-    const base = { ...m, state: "CHECKED", rows: [{ body: "A", pids: [1] }], excluded_bodies: ["B"], check: { seq: 1, status: "PASS", rows_sha256: "x", rows: [], glb_url: null } } as unknown as AsmMatch;
+    const base = { ...m, state: "CHECKED", rows: [{ body: "A", pids: [1] }], excluded_bodies: ["B"], check: { seq: 1, status: "PASS", rows_sha256: "x", current: true, rows: [], glb_url: null, glb_artifact_id: null } } as unknown as AsmMatch;
     expect(saveBlock(base, { pids: { A: [1] }, excluded: ["B"] })).toBeNull();
     expect(saveBlock(base, { pids: { A: [1, 2] }, excluded: ["B"] })).toContain("검사를 다시 하세요");
     expect(saveBlock({ ...base, check: { ...base.check!, status: "FAIL" } }, { pids: { A: [1] }, excluded: ["B"] })).toContain("통과");
-    expect(glbArtifactId("/physicsai/api/artifacts/a-12/media")).toBe("a-12");
-    expect(glbArtifactId("a-12")).toBe("a-12");
-    expect(glbArtifactId(null)).toBeNull();
+  });
+
+  it("problems[].code 8종 → 행별 한국어 안내(알 수 없는 코드는 서버 문구)", () => {
+    const codes = ["USE_PARAM", "UNKNOWN_BODY", "BODY_DUPLICATE", "UNKNOWN_PID", "PID_DUPLICATE", "NOT_SOLID", "BODY_MISSING", "ROWS_EMPTY"];
+    for (const c of codes) expect(ASM_PROBLEM_TEXT[c], c).toMatch(/[가-힣]/);
+    const n = rowNotes([
+      { code: "UNKNOWN_PID", body: "A", pid: 7 },
+      { code: "NOT_SOLID", body: "A", pid: 8 },
+      { code: "BODY_MISSING", body: "B" },
+      { code: "ROWS_EMPTY" },
+      { code: "NEW_CODE", body: "B", message: "서버 문구" },
+    ]);
+    expect(n.byBody.A).toEqual(["PART 7: 조립에 없는 PART입니다", "PART 8: TETRA4만 가진 component가 아닙니다"]);
+    expect(n.byBody.B).toEqual([ASM_PROBLEM_TEXT.BODY_MISSING, "서버 문구"]);
+    expect(n.general).toEqual([ASM_PROBLEM_TEXT.ROWS_EMPTY]);
+    expect(rowNotes(null)).toEqual({ byBody: {}, general: [] });
+  });
+
+  it("추가 오류 코드 한국어(BUSY·INCOMPLETE·CHECK_REQUIRED·STALE·UNSUPPORTED)·PREREQUISITE_MISSING 문구", () => {
+    for (const c of ["ASM_MATCH_BUSY", "ASM_ROWS_INCOMPLETE", "ASM_CHECK_REQUIRED", "ASM_MATCH_STALE", "ASM_MATCH_UNSUPPORTED"]) expect(asmCodeText(c, "english"), c).toMatch(/[가-힣]/);
+    expect(ASM_FIRST_TEXT).toBe("조립 매칭을 먼저 하세요");
+    expect(isAsmMissing({ code: "PREREQUISITE_MISSING", missing: ["PARAM_SET"] })).toBe(false);
+    expect(isAsmMissing({ code: "PREREQUISITE_MISSING", missing: ["ASM_MATCH"] })).toBe(true);
+  });
+
+  it("worst 점: 거리 내림차순 그대로, 툴팁에 node_id, 첫 점만 글자 · 화면 가장 가까운 점 고르기", () => {
+    const row = { body: "CUSH_L", worst: { count: 2, points: [{ node_id: 710001, xyz: [1, 2, 3] as [number, number, number], dist_mm: 0.0413 }, { node_id: 710038, xyz: [4, 5, 6] as [number, number, number], dist_mm: 0.02 }] } };
+    const pts = worstPoints(row);
+    expect(pts.map((p) => p.xyz)).toEqual([[1, 2, 3], [4, 5, 6]]);
+    expect(pts[0].label).toBe("CUSH_L 최대 0.04 mm");
+    expect(pts[1].label).toBe("");
+    expect(pts.map((p) => p.title)).toEqual(["node 710001 · 0.041 mm", "node 710038 · 0.020 mm"]);
+    expect(worstPoints(null)).toEqual([]);
+    const screen2 = [{ x: 10, y: 10, ok: true }, { x: 100, y: 100, ok: true }, { x: 102, y: 101, ok: false }];
+    expect(nearestScreenPoint(screen2, 101, 100, 8)).toBe(1); // 보이지 않는 점(ok=false)은 제외
+    expect(nearestScreenPoint(screen2, 50, 50, 8)).toBe(-1);
+  });
+
+  it("상태 알약: DRAFT는 마지막 검사 유무·최신 여부로 구분", () => {
+    const ck = (current: boolean) => ({ state: "DRAFT", check: { current } }) as unknown as AsmMatch;
+    expect(stateLabel({ state: "DRAFT", check: null } as unknown as AsmMatch)).toBe("초안 — 검사 전");
+    expect(stateLabel(ck(true))).toContain("불일치");
+    expect(stateLabel(ck(false))).toContain("다시 검사");
+    expect(stateLabel({ state: "CONFIRMED", check: null } as unknown as AsmMatch)).toBe("저장됨");
   });
 });

@@ -2,7 +2,7 @@
 // 검사 GLB(match_fe.glb)의 `_DIST_MM`(노드 → CAD 경계 거리)으로 색을 칠하고, 선택 행의 worst 위치를 점으로 표시한다.
 import { useEffect, useMemo, useState } from "react";
 import { api, errorMessage, type AsmCheck } from "../../api";
-import { distScale, glbArtifactId } from "../../lib/asmMatch";
+import { distScale, worstPoints } from "../../lib/asmMatch";
 import { GeomViewer, type Overlay } from "../stage4/geomview/GeomViewer";
 import { EMPTY_HIGHLIGHT, type ViewManifest } from "../stage4/geomview/viewerCore";
 import { fmtLegend, legendGradient, legendTicks } from "../stage4/geomview/contour/colormap";
@@ -11,7 +11,7 @@ import { webglInfo } from "../stage4/geomview/webgl";
 const NO_FAIL = new Set<string>();
 
 export function AsmMatchViewer({ check, selected }: { check: AsmCheck; selected: string | null }) {
-  const id = glbArtifactId(check.glb_url);
+  const id = check.glb_artifact_id;
   const [buf, setBuf] = useState<ArrayBuffer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const gl = webglInfo().level === "webgl2";
@@ -39,7 +39,8 @@ export function AsmMatchViewer({ check, selected }: { check: AsmCheck; selected:
   const max = useMemo(() => Math.max(0, ...check.rows.map((r) => distScale(r) ?? 0)) || null, [check]);
   const overlay = useMemo<Overlay | null>(() => (buf ? { buf, kind: "fe", dispMax: max } : null), [buf, max]);
   const row = check.rows.find((r) => r.body === selected) ?? check.rows.find((r) => r.status === "FAIL") ?? check.rows[0];
-  const points = useMemo(() => (row?.worst?.points ?? []).map((p, i) => ({ xyz: p.xyz, label: i === 0 ? `${row.body} 최대 ${p.dist_mm.toFixed(2)} mm` : "" })), [row]);
+  // worst 점(거리 내림차순): 빨간 점, 첫 점(최대)은 글자, 모든 점은 포인터를 올리면 node id 툴팁
+  const points = useMemo(() => worstPoints(row), [row]);
 
   if (!id) return <p className="muted small" data-testid="asm-3d-none">검사 3D 파일이 없습니다.</p>;
   if (!gl) return <p className="muted small" data-testid="asm-3d-none">3D를 쓸 수 없습니다(WebGL2 필요) — 표의 거리 값으로 확인하세요.</p>;

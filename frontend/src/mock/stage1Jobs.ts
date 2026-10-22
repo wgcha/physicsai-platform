@@ -76,6 +76,7 @@ function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unkn
   }
   const n = sp?.kind === "train_doe" ? 2 : sp && sp.kind !== "lhs" ? nativeRuns(sp, nativeCtx(p2, s, params)) : Number(sp ? sp.count : params.num_runs);
   if (!(n >= 2 && n <= 5000)) return err(422, "DOE_OPTIONS_INVALID", "run 수는 2~5000");
+  if (params.param_set_id && params.asm_match_id != null) return err(422, "INVALID_PARAMS", "세트 기준 DOE는 세트의 조립 매칭을 씁니다(asm_match_id 생략)");
   if (params.param_set_id) {
     const ps = p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id);
     if (!ps) return err(409, "PREREQUISITE_MISSING", "파라미터 세트를 찾을 수 없습니다", { missing: ["PARAM_SET"] });
@@ -88,7 +89,7 @@ function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unkn
   // asm-match.md §6.4: asm_match_id는 이 Study의 확정(CONFIRMED) 매칭이어야 한다(아니면 409 ASM_MATCH_STALE)
   if (params.asm_match_id != null) {
     const rec = asmRecs(p2.s).get(String(params.asm_match_id));
-    if (!rec || rec.study_id !== s.id || rec.state !== "CONFIRMED") return err(409, "ASM_MATCH_STALE", "조립 폴더 또는 STEP이 바뀌었습니다 — 목록을 다시 읽고 매칭하세요");
+    if (!rec || rec.study_id !== s.id || rec.source.kind !== "train" || !rec.confirmed_flag) return err(409, "ASM_MATCH_STALE", "조립 폴더 또는 STEP이 바뀌었습니다 — 목록을 다시 읽고 매칭하세요");
   }
   return null;
 }

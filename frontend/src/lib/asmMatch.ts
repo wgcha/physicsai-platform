@@ -1,5 +1,5 @@
 // 조립 매칭 순수 로직(asm-match.md §3.2·§4.3·§6.3): 표 초안 편집·N:1 차단·추천 채움·검사 결과 문구·오류 코드 한국어. 화면 없이 시험한다.
-import type { AsmBody, AsmCheckRow, AsmMatch, AsmMatchState, AsmPart, AsmRowsPut, AsmSuggest } from "../api/typesAsmMatch";
+import type { AsmBody, AsmCheckRow, AsmMatch, AsmMatchState, AsmPart, AsmRowProblem, AsmRowsPut, AsmSuggest } from "../api/typesAsmMatch";
 
 /** 계약 코드표(§6.1·§6.3)의 코드 → 한국어. 서버 문구가 한국어면 그것을 먼저 쓴다(asmCodeText) */
 export const ASM_ERROR_TEXT: Record<string, string> = {
@@ -14,10 +14,11 @@ export const ASM_ERROR_TEXT: Record<string, string> = {
   ASM_MATCH_INVALID: "조립 매칭 파일이 올바르지 않거나 조립 내용과 다릅니다 — 다시 매칭하세요",
   ASM_ROW_INVALID: "매칭 표가 올바르지 않습니다",
   ASM_ROWS_INCOMPLETE: "모든 바디를 component에 연결하거나 '매칭 안 함'으로 두세요",
-  ASM_CHECK_REQUIRED: "경계 일치 검사를 통과해야 저장할 수 있습니다 — 검사를 다시 하세요",
+  ASM_CHECK_REQUIRED: "경계 일치 검사를 통과해야 저장할 수 있습니다 — 검사가 없거나 최신이 아니면 다시 검사하세요",
   ASM_MATCH_CONFIRMED: "이미 저장된 매칭입니다 — 바꾸려면 다시 매칭하세요",
   ASM_MATCH_STALE: "조립 폴더 또는 STEP이 바뀌었습니다 — 목록을 다시 읽고 매칭하세요",
-  ASM_MATCH_UNSUPPORTED: "다중 baseline은 아직 조립 매칭을 지원하지 않습니다",
+  ASM_MATCH_UNSUPPORTED: "이 구성은 조립 매칭을 지원하지 않습니다(쉘 판금·다중 baseline·STEP 폴더·FEM 검증 재조립)",
+  ASM_MATCH_BUSY: "조립 매칭 작업이 진행 중입니다 — 끝난 뒤 다시 시도하세요",
   ASM_FACE_UNCOVERED: "CAD 면 일부에 맞는 노드가 없습니다(판정에는 영향 없음)",
   ASM_DUPLICATE_PART: "다른 행과 같은 위치의 component가 있습니다",
   ASM_FILE_UNUSED: "include되지 않은 파일은 읽지 않았습니다",
@@ -32,6 +33,46 @@ export function asmCodeText(code: string | null | undefined, message?: string | 
   return (code && ASM_ERROR_TEXT[code]) || message || code || "";
 }
 
+/** 409 PREREQUISITE_MISSING(missing에 ASM_MATCH): 확정된 조립 매칭이 없다 */
+export const ASM_FIRST_TEXT = "조립 매칭을 먼저 하세요";
+export const isAsmMissing = (detail: { code?: string; missing?: unknown } | null | undefined): boolean =>
+  detail?.code === "PREREQUISITE_MISSING" && Array.isArray(detail.missing) && (detail.missing as unknown[]).includes("ASM_MATCH");
+
+/** 422 ASM_ROW_INVALID problems[].code → 행 옆 안내(AM-C2 10) */
+export const ASM_PROBLEM_TEXT: Record<string, string> = {
+  USE_PARAM: "선택한 파라미터가 이 바디에 있어 '매칭 안 함'으로 둘 수 없습니다",
+  UNKNOWN_BODY: "이 STEP에 없는 바디입니다",
+  BODY_DUPLICATE: "이 바디가 두 행(또는 제외)에 있습니다",
+  UNKNOWN_PID: "조립에 없는 PART입니다",
+  PID_DUPLICATE: "다른 행이 이미 쓰는 component입니다",
+  NOT_SOLID: "TETRA4만 가진 component가 아닙니다",
+  BODY_MISSING: "component를 고르거나 '매칭 안 함'으로 두세요",
+  ROWS_EMPTY: "매칭한 바디가 1개 이상 필요합니다",
+};
+
+export interface RowNotes {
+  /** 바디 이름 → 그 행 옆 안내 */
+  byBody: Record<string, string[]>;
+  /** 바디가 없는 사유(ROWS_EMPTY 등) */
+  general: string[];
+}
+
+/** 422 ASM_ROW_INVALID의 problems[]를 행별 안내로. 모르는 코드는 서버 문구 */
+export function rowNotes(problems: AsmRowProblem[] | null | undefined): RowNotes {
+  const out: RowNotes = { byBody: {}, general: [] };
+  for (const p of problems ?? []) {
+    const base = ASM_PROBLEM_TEXT[p.code] ?? p.message ?? p.code;
+    const text = p.pid != null && p.code !== "BODY_MISSING" ? `PART ${p.pid}: ${base}` : base;
+    if (p.body) (out.byBody[p.body] ??= []).push(text);
+    else out.general.push(text);
+  }
+  return out;
+}
+
+export function problemsOf(detail: { code?: string; problems?: unknown } | null | undefined): AsmRowProblem[] {
+  return detail?.code === "ASM_ROW_INVALID" && Array.isArray(detail.problems) ? (detail.problems as AsmRowProblem[]) : [];
+}
+
 export const STATE_TEXT: Record<AsmMatchState, string> = {
   SCANNING: "목록 읽는 중",
   DRAFT: "초안 — 검사 전",
@@ -41,6 +82,14 @@ export const STATE_TEXT: Record<AsmMatchState, string> = {
   FAILED: "목록 읽기 실패",
   STALE: "입력이 바뀜 — 다시 읽기 필요",
 };
+
+/** 상태 알약 문구: 서버 상태 그대로 + DRAFT일 때 마지막 검사(불일치·최신 아님)를 구분 */
+export function stateLabel(m: Pick<AsmMatch, "state" | "check">): string {
+  if (m.state === "DRAFT" && m.check) return m.check.current ? "검사 결과 불일치 — 고친 뒤 다시 검사" : "표를 바꿈 — 다시 검사";
+  return STATE_TEXT[m.state];
+}
+
+export const CHECK_STALE_TEXT = "검사가 최신이 아님 — 다시 검사하세요";
 
 export const EXCLUDE_LABEL = "매칭 안 함";
 
@@ -126,10 +175,9 @@ export function setExcluded(d: Draft, body: string, on: boolean): Draft {
   return { pids, excluded: on ? [...new Set([...d.excluded, body])] : d.excluded.filter((b) => b !== body) };
 }
 
-/** "매칭 안 함" 불가 사유: 그 바디에 use=true 파라미터가 있으면(이름이 `<바디>_`로 시작) 선택 불가 */
-export function excludeBlock(body: string, usedParamNames: string[]): string | null {
-  const n = usedParamNames.filter((x) => x.startsWith(`${body}_`)).length;
-  return n > 0 ? `선택한 파라미터 ${n}개가 이 바디에 있습니다` : null;
+/** "매칭 안 함" 불가 사유: 서버가 알려준 `use_bodies`(use=true 파라미터가 있는 바디)이면 선택 불가 */
+export function excludeBlock(body: string, useBodies: string[]): string | null {
+  return useBodies.includes(body) ? "선택한 파라미터가 있는 바디라 '매칭 안 함'으로 둘 수 없습니다" : null;
 }
 
 export interface DraftProblem {
@@ -189,6 +237,7 @@ export function saveBlock(m: AsmMatch, d: Draft): string | null {
   if (m.state === "CONFIRMED") return "이미 저장되었습니다";
   if (!m.check) return "경계 일치 검사를 먼저 하세요";
   if (m.state === "CHECKING" || m.state === "SCANNING") return "작업이 진행 중입니다";
+  if (!m.check.current) return CHECK_STALE_TEXT;
   if (m.check.status !== "PASS") return "검사를 통과해야 저장할 수 있습니다";
   if (putKey(toPut(m, d)) !== putKey({ rows: m.rows, excluded_bodies: m.excluded_bodies })) return "표를 바꿨습니다 — 검사를 다시 하세요";
   if (m.state !== "CHECKED") return "경계 일치 검사를 먼저 하세요";
@@ -261,7 +310,7 @@ export function rowVerdict(m: Pick<AsmMatch, "check">, body: string, pids: numbe
   if (!m.check) return "none";
   const r = m.check.rows.find((x) => x.body === body);
   if (!r) return pids.length ? "need" : "none";
-  if (stale || [...r.pids].sort().join() !== [...pids].sort().join()) return "need";
+  if (stale || !m.check.current || [...r.pids].sort().join() !== [...pids].sort().join()) return "need";
   return r.status === "PASS" ? "pass" : "fail";
 }
 
@@ -271,9 +320,11 @@ export function distScale(r: AsmCheckRow | null): number | null {
   return Math.max(r.dist_mm.max, r.tol_mm ?? 0) || null;
 }
 
-/** 검사 GLB 산출물 id: 미디어 URL(`…/artifacts/{id}/media`)이면 id를 꺼내고, 아니면 값 그대로 */
-export function glbArtifactId(url: string | null | undefined): string | null {
-  if (!url) return null;
-  const m = /\/artifacts\/([^/?#]+)/.exec(url);
-  return m ? decodeURIComponent(m[1]) : url.includes("/") ? null : url;
+/** 3D에 찍을 worst 점: 행의 `worst.points`(거리 내림차순). 첫 점 = 최대(글자), 모든 점에 툴팁(node id·거리) */
+export function worstPoints(row: Pick<AsmCheckRow, "body" | "worst"> | null | undefined): { xyz: [number, number, number]; label: string; title: string }[] {
+  return (row?.worst?.points ?? []).map((p, i) => ({
+    xyz: p.xyz,
+    label: i === 0 ? `${row!.body} 최대 ${p.dist_mm.toFixed(2)} mm` : "",
+    title: `node ${p.node_id} · ${fmtMm(p.dist_mm)} mm`,
+  }));
 }

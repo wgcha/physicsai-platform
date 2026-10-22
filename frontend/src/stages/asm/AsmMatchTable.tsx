@@ -1,6 +1,6 @@
 // 조립 매칭 표(asm-match.md §3.2): 행 = STEP 바디, 옆 열 = 조립 component(다중 선택 1:N, TETRA4만), 판정·거리(검사 후).
 import type { AsmMatch } from "../../api";
-import { EXCLUDE_LABEL, addPart, bodySummary, distText, excludeBlock, partChoice, partLabel, removePart, rowVerdict, setExcluded, type Draft } from "../../lib/asmMatch";
+import { EXCLUDE_LABEL, addPart, bodySummary, distText, excludeBlock, partChoice, partLabel, removePart, rowVerdict, setExcluded, type Draft, type RowNotes } from "../../lib/asmMatch";
 
 const VERDICT: Record<ReturnType<typeof rowVerdict>, { text: string; cls: string }> = {
   none: { text: "—", cls: "muted" },
@@ -10,13 +10,14 @@ const VERDICT: Record<ReturnType<typeof rowVerdict>, { text: string; cls: string
 };
 
 export function AsmMatchTable({
-  match, draft, onChange, readOnly, usedParams, selected, onSelect, dirty,
+  match, draft, onChange, readOnly, notes, selected, onSelect, dirty,
 }: {
   match: AsmMatch;
   draft: Draft;
   onChange: (d: Draft) => void;
   readOnly: boolean;
-  usedParams: string[];
+  /** 저장(PUT rows) 422 problems[]를 행별로 푼 안내 */
+  notes: RowNotes;
   selected: string | null;
   onSelect: (body: string) => void;
   /** 마지막 검사 뒤 표를 바꿨는가 */
@@ -40,7 +41,7 @@ export function AsmMatchTable({
           const excluded = draft.excluded.includes(b.body);
           const v = VERDICT[rowVerdict(match, b.body, pids, dirty)];
           const cr = match.check?.rows.find((r) => r.body === b.body);
-          const block = excludeBlock(b.body, usedParams);
+          const block = excludeBlock(b.body, match.use_bodies);
           return (
             <tr key={b.body} className={selected === b.body ? "on" : undefined} onClick={() => onSelect(b.body)} data-testid={`asm-row-${b.body}`}>
               <td>
@@ -61,6 +62,11 @@ export function AsmMatchTable({
                   ))}
                   {excluded && <span className="muted small">{EXCLUDE_LABEL} — 이 바디는 형상 변경 대상에서 빠집니다</span>}
                 </div>
+                {(notes.byBody[b.body] ?? []).map((n, i) => (
+                  <div key={i} className="error-text small" role="alert" data-testid={`asm-note-${b.body}`}>
+                    {n}
+                  </div>
+                ))}
                 {!readOnly && (
                   <div className="asm-pick">
                     <select

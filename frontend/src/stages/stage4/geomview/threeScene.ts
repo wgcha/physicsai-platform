@@ -33,7 +33,7 @@ import {
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
-import { faceGroups, lightColor, SELECTION_COLORS, type FixedCluster, type Highlight, type ViewManifest, type DimDraw, type Vec3 } from "./viewerCore";
+import { faceGroups, lightColor, nearestScreenPoint, SELECTION_COLORS, type FixedCluster, type Highlight, type ViewManifest, type DimDraw, type Vec3 } from "./viewerCore";
 import { fillColors } from "./contour/colormap";
 
 // PNG 하이라이트와 같은 색(이동 주황·고정 파랑) + 실패 빨강
@@ -236,7 +236,8 @@ export interface GeomSceneApi {
   setHighlight(h: Highlight): void;
   setBodyVisible(body: string, on: boolean): void;
   setFixed(show: boolean, clusters: FixedCluster[], red: Set<string>): void;
-  setPoints(points: { xyz: Vec3; label: string }[]): void;
+  /** label = 항상 보이는 글자, title = 포인터를 올리면 뜨는 툴팁(예: 노드 id) */
+  setPoints(points: { xyz: Vec3; label: string; title?: string }[]): void;
   fit(): void;
   dispose(): void;
 }
@@ -280,6 +281,33 @@ export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { 
     for (const [name, list] of overlayBodies) for (const o of list) o.visible = !hidden.has(name);
     st.request();
   };
+
+  // 점 툴팁: 포인터 가까이(8px)의 점 title을 보인다(점이 많아도 DOM 요소는 1개)
+  let pts: { xyz: Vec3; title: string }[] = [];
+  const tip = document.createElement("div");
+  tip.className = "gv-pt-tip";
+  tip.hidden = true;
+  container.appendChild(tip);
+  const probe = new Vector3();
+  const hover = (e: PointerEvent) => {
+    if (!pts.length) return;
+    const r = st.renderer.domElement.getBoundingClientRect();
+    const mx = e.clientX - r.left;
+    const my = e.clientY - r.top;
+    const screen = pts.map((p) => {
+      probe.set(...p.xyz).project(st.camera);
+      return { x: ((probe.x + 1) / 2) * r.width, y: ((1 - probe.y) / 2) * r.height, ok: probe.z < 1 };
+    });
+    const i = nearestScreenPoint(screen, mx, my, 8);
+    tip.hidden = i < 0;
+    if (i >= 0) {
+      tip.textContent = pts[i].title;
+      tip.style.left = `${mx + 12}px`;
+      tip.style.top = `${my + 12}px`;
+    }
+  };
+  st.renderer.domElement.addEventListener("pointermove", hover);
+  st.renderer.domElement.addEventListener("pointerleave", () => (tip.hidden = true));
 
   st.onClick((ndc, additive) => {
     if (overlayKind === "fe") return;
@@ -417,10 +445,12 @@ export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { 
     setPoints(points) {
       disposeTree(pointRoot);
       pointRoot.clear();
+      pts = points.filter((x) => x.title).map((x) => ({ xyz: x.xyz, title: x.title as string }));
+      tip.hidden = true;
       if (points.length) {
         const g = new BufferGeometry();
         g.setAttribute("position", new BufferAttribute(new Float32Array(points.flatMap((p) => p.xyz)), 3));
-        const p = new Points(g, new PointsMaterial({ color: COLORS.red, size: 9, sizeAttenuation: false, depthTest: false }));
+        const p = new Points(g, new PointsMaterial({ color: COLORS.red, size: points.length > 100 ? 5 : 9, sizeAttenuation: false, depthTest: false }));
         p.renderOrder = 11;
         pointRoot.add(p);
         for (const x of points) {
@@ -436,6 +466,7 @@ export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { 
       st.fitTo([root, overlayRoot]);
     },
     dispose() {
+      tip.remove();
       st.dispose();
     },
   };

@@ -20,5 +20,5 @@ export type BatchSourceMore = BatchSourceHalton | BatchSourceRandom;
 /** ⑥ 탐색 새 DOE 방식(DM-C5): lhs(기본·생략) · lhs_opt · sobol · halton · random. 요인·응답면·표는 ⑥에 없다 */
 export type ExploreMethod = "lhs" | "lhs_opt" | "sobol" | "halton" | "random";
 /** SoExploreNew + method·criterion(DM-C5). criterion은 lhs_opt만(그 밖이면 422) */
-export type SoExploreNewDm = S["SoExploreNew"] & { method?: ExploreMethod; criterion?: "maximin" | "corr" };
+export type SoExploreNewDm = Omit<S["SoExploreNew"], "method" | "criterion"> & { method?: ExploreMethod; criterion?: "maximin" | "corr" };
 export type SurrogateOptCreateDm = Override<S["SurrogateOptCreate"], { explore: SoExploreNewDm | S["SoExploreReuse"] }>;

@@ -1,5 +1,6 @@
 import { useEffect, useState, type ChangeEvent } from "react";
-import { ApiError, api, errorMessage, type Engine, type ExtractFilter, type ExtractProblem, type ParamSetDiscover } from "../../api";
+import { ApiError, api, errorMessage, type AsmMatch, type Engine, type ExtractFilter, type ExtractProblem, type ParamSetDiscover } from "../../api";
+import { AsmMatchCard } from "../asm/AsmMatchCard";
 import { ExtractFilterFields } from "../../components/ExtractFilterFields";
 import { extractProblems, fromFilter, toFilter, validateForm, type FilterForm } from "../../lib/extractFilter";
 import { BrowseButton } from "../../components/BrowseButton";
@@ -16,6 +17,8 @@ export const ASSEM_NONE_LABEL = "없음(쿠션만 — 메시로 바로 예측)";
 export const ASSEM_ZERO_TEXT = "조립 폴더 없음 — 메시 단독 템플릿으로 등록됩니다";
 /** geometry-engine.md §8: native는 조립 폴더(기준 메시) 필수 */
 export const NATIVE_ASSEM_TEXT = "기준 메시 104_replace_node_elem.inc 필요";
+/** asm-match.md: 조립 매칭을 쓰면 기준본·번호 표 파일이 필요 없다 — 조립 폴더(starter)만 */
+export const NATIVE_ASM_TEXT = "starter가 있는 조립 폴더 필요(기준 메시·번호 표 파일 불필요)";
 /** extract-filter.md §6.7·§8: 조건을 보내면 폴더의 준비된 피처 파일을 쓰지 않고 새로 추출, 세트의 조건은 등록 후 바꿀 수 없다 */
 export const EXTRACT_FILTER_NOTE = "폴더의 기존 피처 파일 대신 새로 추출 · 등록 후 조건 변경 불가(새 세트로 등록)";
 
@@ -30,6 +33,10 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
   const { engineDefault } = useGeometryStatus();
   const [engine, setEngine] = useState<Engine>(engineDefault);
   const native = engine === "native";
+  // 조립 매칭(asm-match.md AM-C2 12): Native 솔리드 신규 등록의 기본 — 끄면 기존 RENUM·기준본 파일 방식
+  const [useAsm, setUseAsm] = useState(true);
+  const asmOn = native && useAsm;
+  const [asm, setAsm] = useState<AsmMatch | null>(null);
   // 추출 조건(§8 U1): ①-1 마지막 사용 조건(train_setups.extract_filter)이 있으면 미리 채우고 "①-1 조건 가져오기" 체크 = 복사본(수정 불가), 풀면 직접 고친다. 없으면 모두 체크·빈칸
   const [trainFilter, setTrainFilter] = useState<ExtractFilter | null>(null);
   useEffect(() => {
@@ -61,12 +68,17 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
     setEngine(e);
     setFound(null);
   };
+  const changeAsm = (on: boolean) => {
+    setUseAsm(on);
+    setFound(null);
+    setAsm(null);
+  };
 
   const find = async (tpl?: string | null) => {
     setBusy(true);
     setError(null);
     try {
-      const d = await api.discoverParamSet(studyId, path.trim(), tpl, engine);
+      const d = await api.discoverParamSet(studyId, path.trim(), tpl, engine, asmOn);
       setFound(d);
       // 후보가 1개면 그것, 여러 개면 사용자가 고른다(자동 선택 없음)
       setChoice({ cad: d.cad.length === 1 ? d.cad[0].rel : "", radioss_assem: d.radioss_assem.length === 1 ? d.radioss_assem[0].rel : "" });
@@ -108,6 +120,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
         engine: "native",
         choice: { cad: choice.cad, radioss_assem: choice.radioss_assem },
         label: label.trim() || null,
+        ...(asmOn && asm ? { asm_match_id: asm.match_id } : {}),
         ...(useFilter ? { extract_filter: toFilter(form) } : {}),
       });
       if ("job_id" in r) nativeJob.track(await api.job(r.job_id));
@@ -122,14 +135,28 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
 
   const meshOnly = !native && !!found && (found.radioss_assem.length === 0 || choice.radioss_assem === ASSEM_NONE);
   const nativeBusy = !!nativeJob.job && !isTerminal(nativeJob.job.state);
+  // 조립 매칭은 STEP 파일 1개일 때만(parts 폴더는 ASM_MATCH_UNSUPPORTED)
+  const cadKind = found?.cad.find((c) => c.rel === choice.cad)?.kind;
+  const asmUnsupported = asmOn && cadKind === "parts";
+  const asmReady = !asmOn || (!!asm && !asmUnsupported);
   const ready = native
-    ? !!found && !!choice.cad && !!choice.radioss_assem && found.problems.length === 0 && !nativeBusy && formProblems.length === 0
+    ? !!found && !!choice.cad && !!choice.radioss_assem && found.problems.length === 0 && !nativeBusy && formProblems.length === 0 && asmReady
     : !!found && !!found.selected_tpl && !!choice.cad && (meshOnly || !!choice.radioss_assem) && found.problems.length === 0;
   const pick = (key: keyof Choice) => (e: ChangeEvent<HTMLSelectElement>) => setChoice((c) => ({ ...c, [key]: e.target.value }));
 
+  const asmPaths = asmOn && found && found.problems.length === 0 && choice.cad && choice.radioss_assem && !asmUnsupported ? { cad: `${found.path}/${choice.cad}`, assem: `${found.path}/${choice.radioss_assem}` } : null;
+  // 고른 STEP·조립 폴더가 바뀌면 이전 매칭은 버린다(카드는 key로 다시 만들어지고 같은 조합의 마지막 매칭을 서버 목록에서 찾는다)
+  const asmKey = asmPaths ? `${asmPaths.cad}|${asmPaths.assem}` : "";
+  useEffect(() => setAsm(null), [asmKey]);
   return (
     <div className="ps-register" data-testid="ps-discover">
       <EngineSelect value={engine} onChange={changeEngine} disabled={busy} />
+      {native && (
+        <label className="check" data-testid="ps-use-asm">
+          <input type="checkbox" checked={useAsm} disabled={busy} onChange={(e) => changeAsm(e.target.checked)} />
+          조립 매칭 사용
+        </label>
+      )}
       <div className="pathinput">
         <span className="field-label">프로젝트 폴더</span>
         <PathSourceTabs studyId={studyId} purpose="DISCOVER" engine={engine} canExecute onUploaded={(p) => changePath(p)}>
@@ -151,7 +178,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
           </div>
           <span className="small muted">
             {native
-              ? `하위 폴더에서 STEP·Radioss 조립 폴더(${NATIVE_ASSEM_TEXT})를 찾습니다. 원본은 읽기만 합니다.`
+              ? `하위 폴더에서 STEP·Radioss 조립 폴더(${asmOn ? NATIVE_ASM_TEXT : NATIVE_ASSEM_TEXT})를 찾습니다. 원본은 읽기만 합니다.`
               : "하위 폴더에서 tpl·CAD·Radioss 조립 폴더·파라미터를 찾습니다. 원본은 읽기만 합니다."}
           </span>
         </PathSourceTabs>
@@ -203,7 +230,7 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
                 </select>
               ) : (
                 <span className="muted" data-testid="assem-zero">
-                  {native ? `조립 폴더 없음 — ${NATIVE_ASSEM_TEXT}` : ASSEM_ZERO_TEXT}
+                  {native ? `조립 폴더 없음 — ${asmOn ? NATIVE_ASM_TEXT : NATIVE_ASSEM_TEXT}` : ASSEM_ZERO_TEXT}
                 </span>
               )}
             </dd>
@@ -242,6 +269,12 @@ export function ParamSetDiscoverForm({ studyId, label, onDone }: { studyId: stri
           )}
         </div>
       )}
+      {asmUnsupported && (
+        <p className="error-text small" role="alert" data-testid="asm-unsupported">
+          STEP 폴더(parts)는 조립 매칭을 지원하지 않습니다 — STEP 파일 1개를 고르거나 '조립 매칭 사용'을 끄세요
+        </p>
+      )}
+      {asmPaths && <AsmMatchCard key={`${asmPaths.cad}|${asmPaths.assem}`} embedded cad={{ kind: "path", path: asmPaths.cad }} assemPath={asmPaths.assem} onConfirmed={setAsm} />}
       {native && (
         <label className="check" data-testid="ps-use-filter">
           <input type="checkbox" checked={useFilter} disabled={busy} onChange={(e) => setUseFilter(e.target.checked)} />

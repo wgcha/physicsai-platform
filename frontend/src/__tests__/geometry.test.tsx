@@ -38,6 +38,7 @@ describe("④ 등록: 형상 엔진 선택(§8)", () => {
     const group = within(form).getByRole("radiogroup", { name: "형상 엔진" });
     expect(within(group).getByRole("radio", { name: "Altair" }).getAttribute("aria-checked")).toBe("true"); // 기본 = engine_default
     fireEvent.click(within(group).getByRole("radio", { name: "Native" }));
+    fireEvent.click(within(form).getByRole("checkbox", { name: "조립 매칭 사용" })); // 기본 = 조립 매칭 — 끄면 기존 기준본·RENUM 방식
     expect(within(form).getByText(/104_replace_node_elem\.inc 필요/)).toBeTruthy();
     fireEvent.change(within(form).getByLabelText("프로젝트 폴더 경로"), { target: { value: `${ROOT}/native_project` } });
     fireEvent.click(within(form).getByRole("button", { name: "찾기" }));
@@ -62,6 +63,7 @@ describe("④ 등록: 형상 엔진 선택(§8)", () => {
     fireEvent.click(within(card).getByRole("button", { name: "새로 등록" }));
     const form = within(card).getByTestId("ps-discover");
     fireEvent.click(within(form).getByRole("radio", { name: "Native" }));
+    fireEvent.click(within(form).getByRole("checkbox", { name: "조립 매칭 사용" }));
     fireEvent.change(within(form).getByLabelText("프로젝트 폴더 경로"), { target: { value: `${ROOT}/noinc` } });
     fireEvent.click(within(form).getByRole("button", { name: "찾기" }));
     expect(await within(form).findByText(/104_replace_node_elem\.inc가 없습니다/)).toBeTruthy();

@@ -1,7 +1,8 @@
-// v0.2.9 조립 매칭(docs/contracts/asm-match.md §4.2·§4.3·§6.3): schema.d.ts(재생성 전)에 아직 없는 API의 로컬 타입.
-// BE openapi 반영 후 `npm run gen:api`로 schema.d.ts가 따라오면 이 파일의 타입을 생성 타입으로 바꾸고 지운다. 계약 그대로 옮긴 것이다.
+// v0.2.9 조립 매칭(docs/contracts/asm-match.md §4.2·§4.3·§6.3, AM-C2 9): 생성 스키마(schema.d.ts)의 AsmMatch는 내부 객체가 `Record<string, unknown>`이라
+// 화면이 읽는 모양만 좁혀 둔다. 최상위 필드·요청 본문은 생성 타입 그대로다.
+import type { Override, S } from "./typesBase";
 
-export type AsmMatchState = "SCANNING" | "DRAFT" | "CHECKING" | "CHECKED" | "CONFIRMED" | "FAILED" | "STALE";
+export type AsmMatchState = S["AsmMatch"]["state"];
 
 /** STEP 바디(`asm_parts.json bodies[]`): volume mm³, bbox = [xmin,ymin,zmin,xmax,ymax,zmax] mm */
 export interface AsmBody {
@@ -26,10 +27,7 @@ export interface AsmRecommend {
   score: number;
 }
 
-export interface AsmMatchRow {
-  body: string;
-  pids: number[];
-}
+export type AsmMatchRow = S["AsmRowIn"];
 
 export interface AsmSharedPart {
   pid: number;
@@ -42,9 +40,9 @@ export type AsmSuggest =
   | { code: "ASM_UNIT_SUSPECT"; factor: number }
   | { code: "ASM_OFFSET_SUSPECT"; translate_mm: [number, number, number]; match_ratio_after?: number };
 
-/** worst 위치 점(UI 표시용 — 계약의 worst_<body>.npz 상위 노드. API 필드명은 BE 확정 후 맞춘다) */
+/** worst 점: 거리 내림차순 상위 `asm_match.worst_nodes`점(AM-C2 9) */
 export interface AsmWorstPoint {
-  node_id?: number;
+  node_id: number;
   xyz: [number, number, number];
   dist_mm: number;
 }
@@ -69,37 +67,53 @@ export interface AsmCheck {
   code?: string | null;
   message?: string | null;
   rows_sha256: string;
+  /** 지금 표(행·제외)로 한 검사인가 — false면 "검사가 최신이 아님" */
+  current: boolean;
   rows: AsmCheckRow[];
-  file_checks?: { shared_nodes: number; duplicate_node_defs: number };
-  /** 검사 GLB(`ASM_MATCH_GLB` 산출물): 미디어 URL(`/artifacts/{id}/media`) 또는 산출물 id */
+  file_checks?: { shared_nodes: number; duplicate_node_defs: number } | null;
+  /** 검사 GLB 산출물(`/physicsai/api/artifacts/{id}/media`) */
   glb_url: string | null;
+  glb_artifact_id: string | null;
 }
 
-/** `GET /asm-matches/{id}` */
-export interface AsmMatch {
-  match_id: string;
-  study_id: string;
-  state: AsmMatchState;
-  source: { kind: "train" | "path"; cad_rel?: string | null };
-  assem: { display_path: string; digest: string; starter: string; files: number };
-  bodies: AsmBody[];
-  parts: AsmPart[];
-  recommend: AsmRecommend[];
-  rows: AsmMatchRow[];
-  excluded_bodies: string[];
-  check: AsmCheck | null;
-  confirmed: { sha256: string; confirmed_at: string } | null;
-  stale_reason: string | null;
-  /** FAILED(목록 작업 실패)일 때 코드·문구 */
-  code?: string | null;
+export interface AsmLastJob {
+  id: string;
+  mode: "parts" | "check" | null;
+  state: string;
+  failure_code: string | null;
+  failure_message: string | null;
+  progress_pct: number | null;
+  progress_label?: string | null;
+}
+
+/** `GET /asm-matches/{id}` · `GET /studies/{id}/asm-matches` 항목 */
+export type AsmMatch = Override<
+  S["AsmMatch"],
+  {
+    source: { kind: "train" | "path"; cad_name?: string | null; features_rel?: string | null };
+    assem: { display_path: string; digest: string; starter: string; files: number };
+    bodies: AsmBody[];
+    parts: AsmPart[];
+    recommend: AsmRecommend[];
+    rows: AsmMatchRow[];
+    excluded_bodies: string[];
+    check: AsmCheck | null;
+    confirmed: { sha256: string; confirmed_at: string } | null;
+    stale_reason: string | null;
+    last_job: AsmLastJob | null;
+    warnings: { code?: string; message?: string }[];
+    use_bodies: string[];
+  }
+>;
+
+export type AsmMatchCreate = S["AsmMatchCreate"];
+export type AsmRowsPut = Override<S["AsmRowsPut"], { excluded_bodies: string[] }>;
+
+/** 422 ASM_ROW_INVALID problems[].code(AM-C2 10) */
+export type AsmProblemCode = "USE_PARAM" | "UNKNOWN_BODY" | "BODY_DUPLICATE" | "UNKNOWN_PID" | "PID_DUPLICATE" | "NOT_SOLID" | "BODY_MISSING" | "ROWS_EMPTY";
+export interface AsmRowProblem {
+  code: AsmProblemCode | string;
+  body?: string | null;
   message?: string | null;
-}
-
-export interface AsmMatchCreate {
-  radioss_assem_path: string;
-  cad: { kind: "train" } | { kind: "path"; path: string };
-}
-export interface AsmRowsPut {
-  rows: AsmMatchRow[];
-  excluded_bodies: string[];
+  pid?: number | null;
 }
