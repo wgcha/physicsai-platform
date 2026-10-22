@@ -35,7 +35,7 @@ def _ai(ctx: AppContext) -> str:
 def setup_out(ctx: AppContext, study: dict[str, Any], s: dict[str, Any] | None) -> dict[str, Any]:
     if s is None:
         return {"study_id": study["id"], "cad": None, "extract_job_id": None, "parameters": [], "used_count": 0, "tpl": None,
-                "version": 0, "updated_by_name": None, "updated_at": None, "extract_filter": None, "extract_summary": None}
+                "tpl_summary": None, "version": 0, "updated_by_name": None, "updated_at": None, "extract_filter": None, "extract_summary": None}
     params = [tp.with_validity(p) for p in (s["parameters"] or [])]
     cad = None
     if s.get("cad_file_name"):
@@ -46,8 +46,10 @@ def setup_out(ctx: AppContext, study: dict[str, Any], s: dict[str, Any] | None) 
         tpl = {"generated_at": s["tpl_generated_at"], "sha256": s["tpl_sha256"],
                "display_path": display_path(_ai(ctx), study["folder_name"], s["tpl_rel"]),
                "params": s["tpl_params"] or [], "warnings": s["tpl_warnings"] or [], "stale": tpl_is_stale(s)}
+    summary = train_tpl.summary_of(s["parameters"], s.get("tpl_params"), s.get("tpl_warnings")) if tpl is not None else None
     return {"study_id": study["id"], "cad": cad, "extract_job_id": s["extract_job_id"], "parameters": params,
-            "used_count": sum(1 for p in params if p.get("use")), "tpl": tpl, "version": s["version"], "engine": s.get("engine") or "altair",
+            "used_count": sum(1 for p in params if p.get("use")), "tpl": tpl, "tpl_summary": summary, "version": s["version"],
+            "engine": s.get("engine") or "altair",
             **_extract_info(ctx, s), "updated_by_name": s["updated_by_name"], "updated_at": s["updated_at"]}
 
 
@@ -84,7 +86,8 @@ def put_params(ctx: AppContext, principal: Principal, study_id: str, body: Any, 
         if problems:
             raise DomainError("TRAIN_PARAMS_INVALID", "파라미터 표 검증에 실패했습니다", status=422, problems=problems)
         vals: dict[str, Any] = {"parameters": new, "updated_by": principal.user_id, "updated_by_name": principal.display_name}
-        if tp.definition_key(new) != tp.definition_key(s["parameters"]):
+        full = train_tpl.is_full_snapshot(s.get("tpl_params"))  # 전체 tpl이면 미사용 행 변경도 tpl을 낡게 한다(altair-vars.md AV-1)
+        if tp.definition_key(new, full=full) != tp.definition_key(s["parameters"], full=full):
             vals["tpl_params"] = None  # 표가 바뀌면 tpl stale(TPL_STALE)
         s = train_repo.update_setup(conn, study_id, body.version, **vals)
         root = study_root(ctx, st)
@@ -130,22 +133,40 @@ def generate_tpl(ctx: AppContext, principal: Principal, study_id: str, version: 
         copy_file(src, session_copy)  # 원본 GUI:353-354 세션 사본
         with open(session_copy, encoding="utf-8") as fh:
             text = fh.read()
+        rows, skipped = train_tpl.plan_rows(s["parameters"])  # AV-1: 유효한 모든 행(미사용 = 공칭 고정), AV-2: 무효 미사용 행은 뺀다
         try:
-            gen = train_tpl.generate(text, used, s["cad_file_name"], train_tpl.TplRules.from_settings(cfg.train_data))
+            built = train_tpl.generate_ex(text, rows, s["cad_file_name"], train_tpl.TplRules.from_settings(cfg.train_data), full=True)
         except train_tpl.TplTemplateInvalid as exc:
             raise DomainError("TPL_TEMPLATE_INVALID", "tpl 템플릿 형식이 올바르지 않습니다", status=422, problems=exc.problems) from None
-        probs = train_tpl.validate_generated(gen, used)
+        gen = built.text
+        probs = train_tpl.validate_generated(gen, built.declared)
         if probs:
             raise DomainError("TPL_TEMPLATE_INVALID", "생성된 tpl이 검증을 통과하지 못했습니다", status=422, problems=probs)
         backup_existing(root, [out], "tpl", stamp)
         write_text(out, gen)
+        notes = _tpl_notes(skipped, [p["name"] for p in built.literal])
         s = train_repo.set_tpl_generated(
             conn, study_id, version, tpl_rel=TPL_REL, tpl_sha256=sha256_file(out),
-            tpl_params=train_tpl.tpl_params_snapshot(used), tpl_warnings=tp.integer_format_warnings(s["parameters"]),
+            tpl_params=train_tpl.tpl_params_snapshot(built.declared),
+            tpl_warnings=[*tp.integer_format_warnings(s["parameters"]), *notes],
             updated_by=principal.user_id, updated_by_name=principal.display_name,
         )
-        audit(conn, principal, "TRAIN_TPL_GENERATE", "study", study_id, {"used": len(used)}, rid, ip)
+        audit(conn, principal, "TRAIN_TPL_GENERATE", "study", study_id,
+              {"used": len(used), "total": len(built.declared) + len(built.literal), "skipped": len(skipped)}, rid, ip)
     return setup_out(ctx, st, s)
+
+
+def _tpl_notes(skipped: list[str], format_loss: list[str]) -> list[dict[str, Any]]:
+    """altair-vars.md AV-2·AV-6 note(코드·문구·이름 목록)."""
+    out: list[dict[str, Any]] = []
+    if skipped:
+        out.append({"code": train_tpl.NOTE_SKIPPED, "names": skipped,
+                    "message": f"유효하지 않은 미사용 파라미터는 tpl에서 뺐습니다: {', '.join(skipped)}"})
+    if format_loss:
+        out.append({"code": train_tpl.NOTE_FORMAT_LOSS, "names": format_loss,
+                    "message": "공칭이 형식으로 표현되지 않는 미사용 파라미터는 원래 값 그대로 두고 tpl 변수에서 뺐습니다"
+                               f"(④ 변수 풀에 들어가지 않음): {', '.join(format_loss)}"})
+    return out
 
 
 def doe_types(ctx: AppContext) -> list[dict[str, Any]]:

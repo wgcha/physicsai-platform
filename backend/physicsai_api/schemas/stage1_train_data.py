@@ -12,7 +12,7 @@ from .extract_filter import ExtractFilter
 from .stage4_predict import TplParam
 
 __all__ = [
-    "TrainParamOut", "TrainParamUpdate", "TrainParamsPut", "VersionBody", "TrainCad", "TrainTpl", "TrainSetup",
+    "TrainParamOut", "TrainParamUpdate", "TrainParamsPut", "VersionBody", "TrainCad", "TrainTpl", "TplSummary", "TrainSetup",
     "DoeField", "DoeType", "RunStateCounts", "TrainDoe", "TrainRunHpc", "TrainRunResult", "TrainRun",
     "DoeResultParameter", "DoeResultResponse", "DoeResultMeta", "DoeResultRow", "DoeResultCounts", "DoeResultSampling", "DoeResultTable",
     "TrainSampling", "TrainDoeSampling", "TrainDoeGenCounts",
@@ -62,8 +62,17 @@ class TrainTpl(Resp):
     sha256: str | None = None
     display_path: str | None = None
     params: list[TplParam]
-    warnings: list[dict[str, str]]
+    warnings: list[dict[str, Any]]  # {code, message} (+ names: 전체 tpl note TPL_PARAM_SKIPPED·TPL_NOMINAL_FORMAT_LOSS의 이름 목록)
     stale: bool
+
+
+class TplSummary(Resp):
+    """altair-vars.md §6: ①-2 tpl에 들어간 파라미터 요약(`total` = tpl에 포함한 행 = 선언 + 리터럴, `used` = DOE 범위 행)."""
+    total: int
+    used: int
+    skipped: list[str]  # 유효하지 않은 미사용 행(tpl에서 뺌, TPL_PARAM_SKIPPED)
+    format_loss: list[str]  # 형식으로 공칭이 표현되지 않아 리터럴 Value로 쓴 행(TPL_NOMINAL_FORMAT_LOSS)
+    scope: Literal["full", "partial"]  # full = 표지 줄 있는 전체 tpl, partial = 옛 tpl(사용 파라미터만)
 
 
 class TrainSetup(Resp):
@@ -73,6 +82,7 @@ class TrainSetup(Resp):
     parameters: list[TrainParamOut]
     used_count: int
     tpl: TrainTpl | None = None
+    tpl_summary: TplSummary | None = None  # altair-vars.md §6, tpl이 없으면 null
     version: int
     engine: Literal["altair", "native"] = "altair"  # geometry-engine.md §7.3.1
     # extract-filter.md §6.4: 마지막 추출에 쓴 조건(정규화본, null = 조건 없음·altair) — ①-1 폼 기본값·①-2 "적용 조건"

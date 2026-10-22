@@ -14,6 +14,9 @@ PARAM_DECL_RE = re.compile(r'\{\s*parameter\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"
 PARAM_LINE_RE = re.compile(r"(?m)^[^\n]*\{\s*parameter\(.*?\)\s*\}[^\n]*\n?")
 VAR_REF_RE = re.compile(r"\{\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*(%[-0-9.]*[A-Za-z])\s*\}")
 VALID_FMT_RE = re.compile(r"^%[-0-9.]*[idfeEgG]$")
+# 선언 전체(이름·공칭·하한·상한 인자 포함) — 전체 tpl(altair-vars.md AV-1)의 공칭·고정 판정에 쓴다
+PARAM_DECL_FULL_RE = re.compile(
+    r'\{\s*parameter\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"([^"]+)"\s*,\s*([^,()]+?)\s*,\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)\s*\}')
 
 
 def parse_tpl(text: str) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -32,6 +35,32 @@ def parse_tpl(text: str) -> tuple[dict[str, str], list[dict[str, str]]]:
     return decl, refs
 
 
+def parse_declarations(text: str) -> list[dict[str, Any]]:
+    """선언 순서대로 [{var, name, nominal, min, max}](숫자가 아니면 None). 인자 형식이 다른 선언은 nominal·min·max = None."""
+    text = text.lstrip("﻿")
+    out: list[dict[str, Any]] = []
+    full = {m.group(1): m for m in PARAM_DECL_FULL_RE.finditer(text)}
+    for m in PARAM_DECL_RE.finditer(text):
+        fm = full.get(m.group(1))
+        nums: list[float | None] = [None, None, None]
+        if fm is not None:
+            for i in range(3):
+                try:
+                    f = float(fm.group(3 + i))
+                except ValueError:
+                    continue
+                nums[i] = f if f == f and abs(f) != float("inf") else None
+        out.append({"var": m.group(1), "name": m.group(2), "nominal": nums[0], "min": nums[1], "max": nums[2]})
+    return out
+
+
+def format_value(fmt: str, v: float) -> str:
+    """`{VAR, FMT}` 자리에 들어가는 문자열(`render_tpl`과 같은 규칙 — 정수 형식(i·d)은 int(v))."""
+    if not VALID_FMT_RE.match(fmt):
+        raise StepFailure("INPUT_INVALID", f"tpl 형식 '{fmt}'을 쓸 수 없습니다")
+    return fmt % (int(v) if fmt[-1] in "id" else v)
+
+
 def render_tpl(text: str, values_by_name: dict[str, float], applied_by_name: dict[str, float]) -> str:
     text = text.lstrip("﻿")
     decl = {m.group(1): m.group(2) for m in PARAM_DECL_RE.finditer(text)}
@@ -45,9 +74,7 @@ def render_tpl(text: str, values_by_name: dict[str, float], applied_by_name: dic
         if not VALID_FMT_RE.match(fmt):
             raise StepFailure("INPUT_INVALID", f"tpl 형식 '{fmt}'을 쓸 수 없습니다")
         v: Any = applied_by_name.get(name, values_by_name[name])
-        if fmt[-1] in "id":
-            v = int(v)
-        return fmt % v
+        return format_value(fmt, v)
 
     out = VAR_REF_RE.sub(sub, body)
     leftover = re.search(r"\{\s*var_[A-Za-z0-9_]*\b[^}]*\}", out)

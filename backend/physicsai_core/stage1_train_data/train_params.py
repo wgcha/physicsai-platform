@@ -195,8 +195,12 @@ def integer_format_warnings(params: list[dict[str, Any]]) -> list[dict[str, str]
              "message": f"정수 형식(%3i)이라 HyperStudy 샘플 값이 정수로 반영됩니다: {', '.join(names)}"}]
 
 
-def definition_key(params: list[dict[str, Any]]) -> list[tuple[Any, ...]]:
-    """tpl에 영향을 주는 사용 행 정의(표 변경 감지용)."""
+def definition_key(params: list[dict[str, Any]], *, full: bool = False) -> list[tuple[Any, ...]]:
+    """tpl에 영향을 주는 행 정의(표 변경 감지용). 기본 = 사용 행만(부분 tpl, v0.2.7). `full=True`(전체 tpl, altair-vars.md AV-1) =
+    모든 행의 이름·공칭·범위·형식·단위·사용 여부·유효 여부(미사용 행 변경도 tpl·스냅숏을 바꾼다)."""
+    if full:
+        return [(p["name"], p.get("nominal"), p.get("min"), p.get("max"), p.get("format"), p.get("unit") or "", bool(p.get("use")),
+                 not problems_of(p)) for p in params]
     return [(p["name"], p.get("nominal"), p.get("min"), p.get("max"), p.get("format")) for p in used(params)]
 
 

@@ -22,8 +22,9 @@ from physicsai_core.paths import PathError, allowed_roots, check_user_path, is_l
 from physicsai_core.sampling import registry as sampling_registry
 from physicsai_core.stage1_train_data import doe_platform, doe_samples
 from physicsai_core.stage1_train_data import train_params as tp
+from physicsai_core.stage1_train_data import train_tpl
 from physicsai_core.stage4_predict import prepared_input
-from physicsai_core.tpl_render import render_tpl
+from physicsai_core.tpl_render import parse_declarations, render_tpl
 
 from ...signals import StepSkipped
 from .. import run_chain
@@ -165,6 +166,7 @@ def dg_prep(ctx: Any) -> None:
 def _gen_one(ctx: Any, doe_id: str, cad_name: str, tpl_text: str, D: str, A: str, R: str) -> Any:
     s = ctx.settings
     cad_src = os.path.join(D, cad_name)
+    decl = parse_declarations(tpl_text)  # altair-vars.md AV-5: 표본에 없는 선언(전체 tpl의 미사용 행)은 공칭으로 렌더
 
     def gen(runner: Any, r: dict[str, Any]) -> None:
         ctx.ex.db(lambda c: train_repo.set_point(c, doe_id, r["doe_no"], gen_state="RUNNING", gen_code=None, gen_message=None))
@@ -175,7 +177,8 @@ def _gen_one(ctx: Any, doe_id: str, cad_name: str, tpl_text: str, D: str, A: str
         m1 = os.path.join(run_dir, M1)
         os.makedirs(m1, exist_ok=True)
         copy_file(cad_src, os.path.join(m1, cad_name), checkpoint=runner.check)  # tpl dir_file_prt = ./<CAD>
-        write_text(os.path.join(m1, s.predict.rendered_script_name), render_tpl(tpl_text, r["values"], r["applied_values"]))
+        write_text(os.path.join(m1, s.predict.rendered_script_name), render_tpl(
+            tpl_text, train_tpl.fill_nominal(decl, r["values"]), train_tpl.fill_nominal(decl, r["applied_values"])))
         m3 = run_chain.build_run_inputs(runner, s, run_dir=run_dir, cad_file_name=cad_name, assem_dir=A, assembly=True)
         # TD_SOLVE·SCX가 보는 입력 검사(직계 rad·inc, starter 1개)를 여기서 먼저(실패면 생성 실패로)
         try:

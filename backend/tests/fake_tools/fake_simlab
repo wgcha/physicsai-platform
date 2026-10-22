@@ -11,6 +11,8 @@
 동시 실행(phase3 §14.5 BP_GEN): 실행마다 cwd에만 쓰므로 동시 실행 OK. FAKE_TOOL_TRACE(jsonl)에 시작·끝 시각(time.time)·pid를 남겨
 관측 동시 수를 셀 수 있다. FAKE_SIMLAB_SLEEP_S = 형상 갱신 전 대기(겹침 관측용), FAKE_SIMLAB_FAIL_MATCH = cwd에 이 문자열이
 들어 있으면 그 실행만 종료코드 1(run 실패 격리 시험).
+형상 갱신 입력 확인(altair-vars.md V-AV-3): FAKE_SIMLAB_PARAMITEMS=<jsonl> → 렌더 스크립트의 paramitem(Name → NewValue 문자열)을 cwd와 함께 남기고,
+NewValue에 치환되지 않은 변수 참조 `{`가 있으면 종료코드 5(전체 tpl의 모든 파라미터에 값이 들어갔는지 확인).
 동시 실행 하한(phase3 §23.11 S18): FAKE_SIMLAB_BARRIER=<폴더>:<n> → 형상 갱신 실행마다 <폴더>/<pid>를 만들고 파일이 n개 이상이 될
 때까지 기다린다(순차 실행이면 풀리지 않음). FAKE_SIMLAB_BARRIER_TIMEOUT_S(기본 90)를 넘으면 "barrier timeout" 출력 후 종료코드 9.
 """
@@ -91,6 +93,14 @@ if len(a) == 6:  # 파라미터 추출: -auto L CAD XML -nographics
 # 형상 갱신·메싱·내보내기 1회(원본 tpl:43-169)
 with open(script, encoding="utf-8-sig") as fh:
     body = fh.read()
+_pi = os.environ.get("FAKE_SIMLAB_PARAMITEMS")
+if _pi:
+    items = dict(re.findall(r'<paramitem\s+Name="([^"]*)"\s+NewValue="([^"]*)"', body))
+    with open(_pi, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"cwd": os.getcwd(), "paramitems": items}) + "\n")
+    if any("{" in v for v in items.values()):
+        print("unreplaced paramitem value", flush=True)
+        sys.exit(5)
 mexp = re.search(r'dir_file_export\s*=\s*r?"([^"]*)"', body)
 export = mexp.group(1) if mexp else "EPS_mesh_0000.rad"
 mprt = re.search(r'dir_file_prt\s*=\s*r?"([^"]*)"', body)

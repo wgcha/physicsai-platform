@@ -18,18 +18,19 @@ from physicsai_core.commands import fwd
 from physicsai_core.config import effective_altair
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import StepFailure
-from physicsai_core.fileutil import copy_file, sha256_file, write_json
+from physicsai_core.fileutil import copy_file, sha256_file, write_json, write_text
 from physicsai_core.geometry.native_files import RUN_AUX_DIR
 from physicsai_core.naming import RUN_KEY_RE
 from physicsai_core.paths import allowed_roots, check_user_path, is_link_or_reparse, PathError
 from physicsai_core.stage1_train_data import doe_samples
 from physicsai_core.stage1_train_data import train_params as tp
+from physicsai_core.stage1_train_data import train_tpl
 
 from ..common import hst_run_label, path_failure  # hst_run_label: 재노출(phase3 §14.10, 이전 import 경로 유지)
 from ..geometry_native import is_native
 from ..launcher import stage_launcher
 from . import doe_native
-from ._shared import TPL_NAME, _D, _doe
+from ._shared import TPL_FULL_NAME, TPL_NAME, _D, _doe
 
 
 def _setup(ctx: Any) -> dict[str, Any]:
@@ -87,15 +88,26 @@ def dg_prep(ctx: Any) -> None:
     for key in ("doe_design_type_json", "hypermesh_include_tcl"):
         if not getattr(res, key) or not os.path.isfile(getattr(res, key)):
             raise StepFailure("RESOURCE_MISSING", f"resources.{key} 파일이 없습니다: {getattr(res, key)}")
+    # altair-vars.md AV-7: 전체 tpl(표지 줄)이면 HyperStudy 입력 tpl = 사용 뷰(미사용 선언 제거·참조 = 공칭 문자), 전체 tpl은 .full.tpl로 둔다.
+    # 부분 tpl(옛 것)은 그대로 복사 — HyperStudy 입력의 변수 집합·범위는 v0.2.7과 같다.
+    view_text: str | None = None
+    if train_tpl.scope_of_file(tpl_src) == "full":
+        with open(tpl_src, encoding="utf-8-sig") as fh:
+            full_text = fh.read()
+        view_text = train_tpl.used_view(full_text, [q["name"] for q in tp.used(setup["parameters"])],
+                                        {str(q["name"]): q["nominal"] for q in setup["parameters"] if q.get("nominal") is not None})
     copies += [
-        (tpl_src, os.path.join(D, TPL_NAME)),
+        (tpl_src, os.path.join(D, TPL_NAME if view_text is None else TPL_FULL_NAME)),
         (cad_src, os.path.join(D, setup["cad_file_name"])),
         (res.doe_design_type_json, os.path.join(D, "DATA_doe_design_type.json")),
         (res.hypermesh_include_tcl, os.path.join(D, os.path.basename(res.hypermesh_include_tcl))),
     ]
-    ctx.backup([d for _s, d in copies if os.path.lexists(d)])
+    ctx.backup([d for _s, d in copies if os.path.lexists(d)] + ([os.path.join(D, TPL_NAME)] if view_text is not None
+                                                                  and os.path.lexists(os.path.join(D, TPL_NAME)) else []))
     for src, dst in copies:
         copy_file(src, dst, checkpoint=ctx.checkpoint)
+    if view_text is not None:
+        write_text(os.path.join(D, TPL_NAME), view_text)
     launcher = stage_launcher(ctx, "gen_radioss", D)
     # ③ INPUT_HST_RUN.json — 키는 원본 GUI:410-424 그대로
     alt = effective_altair(s)

@@ -141,6 +141,11 @@ class TplParam(Resp):
     var: str
     name: str
     format: str
+    # altair-vars.md AV-4: 전체 tpl 기록만(옛 부분 tpl 행은 키 없음 = 사용·null) — used = ① DOE에서 움직인 행, table_* = ①-1 표 범위
+    used: bool = True
+    table_min: float | None = None
+    table_max: float | None = None
+    unit: str | None = None
 
 
 class ParamSet(Resp):

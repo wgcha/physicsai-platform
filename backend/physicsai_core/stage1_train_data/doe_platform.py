@@ -86,11 +86,13 @@ def normalize(sampling: Mapping[str, Any]) -> tuple[str, dict[str, Any]]:
 
 def design_inputs(setup: Mapping[str, Any]) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """①-2 표(train_setups) → (parameters = 사용 행 {name, min, max, nominal, format}, tpl_params = {var, name, format}).
-    tpl_params는 tpl 생성 기록(없으면 사용 행으로 다시 만든 같은 모양) — 정수 형식(%Ni/%Nd)이 applied_values 반올림 대상."""
+    tpl_params는 tpl 생성 기록(없으면 사용 행으로 다시 만든 같은 모양) — 정수 형식(%Ni/%Nd)이 applied_values 반올림 대상.
+    전체 tpl(altair-vars.md AV-5)의 미사용 행 기록은 뺀다 — 표본·반올림 입력이 v0.2.7과 같다(① DOE 불변)."""
     used = tp.used(list(setup.get("parameters") or []))
     params = [{"name": str(p["name"]), "min": float(p["min"]), "max": float(p["max"]),
                "nominal": p.get("nominal"), "format": p.get("format")} for p in used]
-    tpl_params = list(setup.get("tpl_params") or tpl_params_snapshot(used))
+    names = {p["name"] for p in params}
+    tpl_params = [t for t in (setup.get("tpl_params") or tpl_params_snapshot(used)) if t.get("name") in names]
     return params, tpl_params
 
 

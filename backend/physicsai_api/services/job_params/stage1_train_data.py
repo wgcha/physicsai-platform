@@ -16,6 +16,7 @@ from physicsai_core.paths import allowed_roots, check_user_path
 from physicsai_core.stage1_train_data import doe_platform
 from physicsai_core.stage1_train_data import doe_types as dt_mod
 from physicsai_core.stage1_train_data import train_params as tp
+from physicsai_core.stage1_train_data import train_tpl
 from physicsai_core.stage1_train_data.train_tpl import tpl_params_snapshot
 from physicsai_core.stage4_predict.batch_matrix import BatchShapeError
 
@@ -94,7 +95,10 @@ def _ready_doe(conn: Any, sid: str, doe_id: str) -> dict[str, Any]:
 def tpl_is_stale(setup: dict[str, Any]) -> bool:
     if not setup.get("tpl_rel"):
         return False
-    return setup.get("tpl_params") != tpl_params_snapshot(tp.used(setup.get("parameters") or []))
+    snap = setup.get("tpl_params")
+    if train_tpl.is_full_snapshot(snap):  # 전체 tpl(altair-vars.md AV-1·AV-4): 모든 유효 행 기록과 비교
+        return snap != train_tpl.expected_snapshot(setup.get("parameters") or [])
+    return snap != tpl_params_snapshot(tp.used(setup.get("parameters") or []))  # 옛 부분 tpl
 
 
 def doe_generator(p: TdDoeGenParams) -> str:
