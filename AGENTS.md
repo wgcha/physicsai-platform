@@ -1,6 +1,6 @@
 # AGENTS.md — 저장소 작업 규칙
 
-구조 지도: [docs/architecture.md](docs/architecture.md) (파일 위치는 이 문서 우선). 계약: 1차 [docs/contracts/platform.md](docs/contracts/platform.md), 2차 [docs/contracts/phase2.md](docs/contracts/phase2.md)(2차가 바꾸는 1차 규칙은 phase2.md §2.3, 2차 문서 우선). 계약과 다르게 구현해야 하면 먼저 Plan에 계약 수정을 요청한다(해당 문서 끝 "변경 메모"에 기록). 릴리스 범위·병합 순서·migration 번호: [docs/roadmap.md](docs/roadmap.md)(v0.2.4 → v0.2.5 순차).
+구조 지도: [docs/architecture.md](docs/architecture.md) (파일 위치는 이 문서 우선). 계약: 1차 [docs/contracts/platform.md](docs/contracts/platform.md), 2차 [docs/contracts/phase2.md](docs/contracts/phase2.md)(2차가 바꾸는 1차 규칙은 phase2.md §2.3, 2차 문서 우선). 계약과 다르게 구현해야 하면 먼저 Plan에 계약 수정을 요청한다(해당 문서 끝 "변경 메모"에 기록). 릴리스 범위·병합 순서·migration 번호: [docs/roadmap.md](docs/roadmap.md)(v0.2.7 → v0.2.8 순차).
 
 ## 역할 분리
 
@@ -30,6 +30,7 @@
 - **빌드본 도구 소유**: `scripts/build-frontend-dist`·`scripts/frontend_source_hash.py` 변경은 Impl-Frontend와 협의한다(규칙이 바뀌면 빌드본 판정이 바뀜). `frontend-dist/` 재생성·커밋은 프런트 변경과 같은 커밋에서(Impl-Frontend 소유).
 - **MCP 토큰·Bearer**(v0.2.4, [docs/contracts/mcp.md](docs/contracts/mcp.md)): 기계 인증은 사용자별 API 토큰 `Bearer pai_…`만 — 대시보드로 introspect하지 않고 토큰 테이블로 검증, 기한 최대 30일(설정 상한도 30, 무기한·연장 없음), 역할 스냅숏 최대 30일, 즉시 차단은 관리자 폐기. 토큰은 `x-mcp.tool` operation만 허용(그 밖 403), 토큰 관리 API는 세션 전용, 토큰 요청은 CSRF 면제·`api_audit` 기록(본문 저장 금지). 비용 큰 작업은 plan → confirm → run. MCP 서버(`backend/physicsai_mcp/**`)는 권한 판단 없이 같은 Bearer로 백엔드 HTTP API만 부르는 얇은 래퍼(`physicsai_api`·`core`·`worker` import 금지), `/physicsai/mcp`는 `pai_` Bearer 필수·`mcp.enabled=false`면 404. 클라이언트 설정 예시·문서에 토큰 평문 금지(환경변수·토큰 파일).
 - **MCP 대응(mcp.md M1 병합 후)**: 새 API는 `x-mcp`(도구 또는 제외 사유), 새 job_type은 `JOB_KINDS` 등록 또는 제외 사유, 새 결과 엔티티는 `SUMMARIES` 등록, 새 피처 약어·엔티티는 용어집 `ko` 한 줄, 도구 입력 스키마는 이식 가능 부분집합(mcp.md §9.2, Claude·Codex·Gemini 공통) — 정적 시험이 검사(mcp.md §15).
+- **예측 입력 종류**(v0.2.7, [docs/contracts/input-kind.md](docs/contracts/input-kind.md)): 공개 API·화면은 `input: assembly|cushion`, 저장은 기존 `input_kind`/`template_kind`(`assembly|mesh_only`) — 변환은 `physicsai_core/stage4_predict/input_kind.py` 한 곳. 쿠션 입력 rad 이름은 두 엔진 모두 `predict.simlab_mesh_name`. ① 데이터 생성·③ 학습은 조립만(쿠션 선택 UI는 ④·⑥에만).
 - **설치 스크립트는 관리자 권한 없이**: 머신 환경변수·관리자 확인을 쓰지 않는다. 비밀값은 런타임 파일(`<런타임>\secrets\`)에만, 작업 실행 인자에는 경로만(phase3 D3-41).
 
 ## 커밋 규칙

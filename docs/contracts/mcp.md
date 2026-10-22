@@ -1,6 +1,6 @@
 # 계약: MCP 기능(LLM 클라이언트 조작 — 플랫폼 준비 + MCP 서버) — mcp
 
-작성: Plan, 2026-10-21(초안 `mcp-ready.md`, 같은 날 MCP 기능 전체로 확장·이름 변경). 초안 기준: 브랜치 `feat/r1-mcpready` 18dc408(migration HEAD `0018_equiv_check`). **구현 기준: v0.2.3(b05d34d, HEAD `0019_extract_filter`)** — 릴리스 v0.2.4([roadmap.md](../roadmap.md)). **구현 반영: v0.2.4 통합본 `feat/r1-v024` 8206870**(변경 메모 MR-C2).
+작성: Plan, 2026-10-21(초안 `mcp-ready.md`, 같은 날 MCP 기능 전체로 확장·이름 변경). 초안 기준: 브랜치 `feat/r1-mcpready` 18dc408(migration HEAD `0018_equiv_check`). **구현 기준: v0.2.3(b05d34d, HEAD `0019_extract_filter`)** — 릴리스 v0.2.4([roadmap.md](../roadmap.md)). **구현 반영: v0.2.4 통합본 `feat/r1-v024` 8206870**(변경 메모 MR-C2). v0.2.7 추가: 웹 "AI 연결(MCP)" 페이지(§23, MR-C3).
 우선순위: **이 문서 > [platform.md](platform.md) §5(인증)·§10.1(API 공통)·§17.6(감사)** — 이 문서가 바꾸는 것은 §2 "기존 규칙 예외" 표에만 있다. 배포 설정은 [phase3.md](phase3.md) 기준(decisions 2026-10-20 "phase3 설정이 배포 설정").
 ID 규칙: 결정 `MR-n`, 시험 `V-MCP-n`, 변경 메모 `MR-Cn`.
 
@@ -126,7 +126,7 @@ else:                                                  # 기존 세션 경로 �
 
 ### 4.5 화면(최소, Impl-Frontend)
 
-- 메뉴는 `/status` `features.mcp`가 true일 때만 보인다(false면 메뉴·화면 없음): 상단 바 "내 API 토큰"(전원), 관리 메뉴 "API 토큰 관리"(전역 관리자).
+- 메뉴는 `/status` `features.mcp`가 true일 때만 보인다(false면 메뉴·화면 없음): 상단 바 "내 API 토큰"(전원), 관리 메뉴 "API 토큰 관리"(전역 관리자). **v0.2.7부터 상단 바 메뉴는 "AI 연결(MCP)" 페이지로 대체되고 아래 "내 API 토큰" 화면은 그 페이지의 토큰 영역이 된다(§23, MR-C3).**
 - "내 API 토큰"(`frontend/src/pages/ApiTokens.tsx`): 표(이름·범위·접두·만료(남은 일수)·마지막 사용·상태) + "발급"(이름·범위 라디오 — 권한 없는 범위는 비활성+사유·만료일 수 최대 30) + "폐기"(확인 대화) + 연결 안내(접힘). 오류 문구 한국어.
 - 발급 직후 평문은 **1회 표시**: 복사 버튼·"이 창을 닫으면 다시 볼 수 없습니다" 경고, 대화를 닫으면 컴포넌트 상태에서 지운다. localStorage·sessionStorage·전역 상태 저장소·로그에 쓰지 않는다(정적 시험: 토큰 문자열을 저장하는 코드 없음).
 - "API 토큰 관리"(전역 관리자, 구현 반영 MR-C2): `GET /admin/api-tokens`의 `user_id`·`active`(전체/유효/무효) 필터 + 행별 폐기(`POST /admin/api-tokens/{id}/revoke`, 확인 대화). 감사 조회 화면은 비범위(API `list_audit`만).
@@ -371,6 +371,7 @@ mcp:
   denied_job_kinds: []           # 기본값 미결 Q3(제안 [solve_pbs])
   token: {default_expiry_days: 30, max_expiry_days: 30, max_per_user: 5, snapshot_max_age_days: 30, last_used_update_s: 60}  # 기한 1~30(MR-13, default ≤ max)
   server: {http_enabled: true, call_timeout_s: 60, max_result_bytes: 65536}  # §20 — http_enabled=false면 /physicsai/mcp 404(stdio는 API만 쓰므로 영향 없음)
+  public_url: null               # v0.2.7 §23.4 — 사용자에게 보일 HTTP MCP 주소(…/mcp), null이면 접속 origin으로 짐작
   rate_limit: {requests_per_min: 60, plans_per_min: 10, max_active_jobs_per_token: 3}
   audit: {retention_days: 180, record_reads: false}
   summary: {max_bytes: 8192, top_n_default: 10, top_n_max: 50}
@@ -413,6 +414,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 | M3 | `x-mcp` 표시·설명 보강(`summary_en`·`summary_ko`), §9.2 이식 가능 스키마 변환·검사기, `scripts/gen_tool_specs.py`·생성 파일·`/mcp/tools`·용어집(`glossary_terms.yaml`, `/mcp/glossary`), test-all 연결, `backend/openapi.json` 갱신 | Impl-Backend |
 | M4 | "내 API 토큰"·"API 토큰 관리" 화면 + `frontend-dist/` | Impl-Frontend: `frontend/src/pages/ApiTokens.tsx`·`shell/TopBar.tsx`·`api/typesTokens.ts`·`mock/apiTokens.ts`(구현 위치, MR-C2) |
 | M5 | MCP 서버(§20): 공통 도구 실행기·HTTP 마운트·stdio 실행기·리소스·`/mcp/ping`, 의존 고정(`pyproject.toml`·`deploy/requirements.lock`·오프라인 수집), Caddy 스니펫 `handle /physicsai/mcp*`, 클라이언트 설정 예시 5파일(§21.1), E2E | Impl-Backend: `backend/physicsai_mcp/**`(신규), `physicsai_api/main.py`(마운트 1곳), `deploy/{requirements.lock, collect-offline.*, caddy/physicsai.caddy}`, `deploy/mcp/examples/*`, `pyproject.toml`(`[project.scripts] physicsai-mcp`), 시험 `backend/tests/test_mcp_server*.py` |
+| M7(v0.2.7) | 웹 "AI 연결(MCP)" 페이지·`GET /mcp/connection`·`mcp.public_url` | §23.5 |
 | M6 | 연결 가이드·관리자 매뉴얼 반영(설정 키·Caddy·폐기 절차) | Plan: `docs/manual/mcp-clients.md`(초안 작성됨)·`admin.md` |
 | (Q2) | `/mcp/similar` | Impl-Backend |
 
@@ -442,6 +444,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 | V-MCP-18 | 얇은 래퍼 정적 | `physicsai_mcp`가 `physicsai_api`·`physicsai_core`·`physicsai_worker`를 import하지 않음(`test_layering` 규칙 8), 권한·범위 판정 코드 없음(도구 목록 필터는 주입된 백엔드 함수만), python-multipart import 0(플랫폼 코드 전체) |
 | V-MCP-19 | 클라이언트 설정 예시 | `deploy/mcp/examples/`의 5파일(§21.1 표 — 목록이 정확히 5개 + `README.txt`)이 json/tomllib 파싱 통과·필수 키(HTTP: url/httpUrl·Authorization 또는 bearer_token_env_var, stdio: command·env)·토큰 평문 없음(`pai_` 문자열 0), 가이드 문서의 같은 블록과 내용 일치 |
 | V-MCP-20 | 오프라인 설치 | `deploy/requirements.lock`에 `mcp`·전이 의존 고정, `collect-offline`이 wheel 수집, 빈 venv에 `--no-index` 설치 후 `physicsai-mcp --version`(CI Linux) + Windows 묶음 수동(e2e-checklist) |
+| V-MCP-21~26 | 웹 "AI 연결(MCP)" 페이지(v0.2.7) | §23.6 |
 
 ## 18. 리스크
 
@@ -550,7 +553,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 
 - "chatgpt" 요구는 **Codex CLI로 충족**. 모델 엔드포인트(사내 on-premise 배포) 설정은 각 사내 배포 안내를 따른다(플랫폼 범위 밖).
 - 예시 파일 = `deploy/mcp/examples/` 5파일 + `README.txt`(파일별 용도). 가이드 [mcp-clients.md](../manual/mcp-clients.md) §4의 json 블록 = json 예시 4파일(파싱 결과 일치), toml 블록들을 합친 것 = `codex.config.toml`(V-MCP-19, `backend/tests/common/test_mcp_examples.py`).
-- 설정 파일에 토큰 평문 금지 권고(가이드·V-MCP-19 예시에 `pai_` 0건). 클라이언트별 키 이름은 구현 시점 각 클라이언트 문서로 다시 확인(키 이름 변경 시 예시 파일·가이드만 고침 — 서버 무변경).
+- 설정 파일에 토큰 평문 금지 권고(가이드·V-MCP-19 예시에 `pai_` 0건). 예외(MR-C3, 사용자 원칙 "사용성 우선"): 웹 "AI 연결(MCP)" 페이지의 기본 복사본은 토큰 포함 완성본이고 평문이 남는다는 경고 + env/토큰 파일 대안을 함께 보인다(§23.2). 저장소 예시 파일·가이드 블록의 `pai_` 0건 규칙은 그대로. 클라이언트별 키 이름은 구현 시점 각 클라이언트 문서로 다시 확인(키 이름 변경 시 예시 파일·가이드만 고침 — 서버 무변경).
 
 ### 21.2 범위 밖: ChatGPT 웹·데스크톱 앱(developer mode 커넥터)
 
@@ -564,7 +567,72 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 [^2]: Codex CLI MCP 설정(`config.toml` `mcp_servers`) — https://www.tembo.io/blog/codex-cli-mcp
 [^3]: Gemini CLI MCP 설정(`settings.json` `mcpServers`·`httpUrl`·`headers`) — https://docs.bland.ai/integrations/mcp/clients/gemini-cli.md
 
+## 23. 웹 "AI 연결(MCP)" 페이지(MR-C3, v0.2.7)
+
+사용자 요구(2026-10-22): "웹에 MCP 사용할 수 있는 창이 나타나던지 메뉴가 있어야지. MatNexus 참고해." 참고 구현(읽기 전용): MatNexus `frontend/src/shared/components/McpSetup.tsx`(설계 이유 주석)·`AccessTokens.tsx`·`modules/auth/ProfilePage.tsx`("액세스 토큰" + "AI 도구에 등록하기"), 백엔드 `/auth/mcp-connection`(`MCP_PUBLIC_URL`). 물려받는 원칙 셋: ① 토큰이 없어도 **완성된 설정 형식**을 보여 주고 발급하면 그 자리에 토큰을 채운다, ② 사람이 문서에서 옮겨 적지 않고 **완성본을 복사**한다, ③ 서버 주소는 **서버가 준다**(모를 때만 짐작하고 짐작이라고 표시). MatNexus와 다른 점: 폐쇄망이라 `npx mcp-remote`(Node) 브리지 대신 우리 stdio 실행기 `physicsai-mcp`(§20, 토큰을 env로 받아 헤더 공백 문제 없음).
+
+### 23.1 메뉴·경로
+
+- 상단 바 메뉴 **"AI 연결(MCP)"**(`/status` `features.mcp`일 때만, 전원) → 한 페이지 `/me/ai-connection`. 기존 상단 바 "내 API 토큰"은 이 메뉴로 대체하고 기존 경로 `/me/api-tokens`(프런트 라우트)는 `/me/ai-connection#tokens`로 리다이렉트. 관리 메뉴 "API 토큰 관리"(전역 관리자)는 그대로.
+- `features.mcp = false`면 메뉴 없음(기존 §4.5). 대신 관리 화면(전역 관리자 — 기존 관리 첫 화면의 기능 상태 영역)에 한 줄: "AI 연결(MCP)이 꺼져 있습니다 — 설정 `mcp.enabled: true`(HTTP는 `mcp.server.http_enabled`) 후 백엔드 재시작(`deploy/restart.ps1`). 안내: 관리자 매뉴얼 MCP 절". (roadmap §6 "MCP 활성 관리자 안내 링크" 항목을 이것으로 종결.)
+
+### 23.2 페이지 구성(위에서 아래, 한 페이지)
+
+| # | 영역 | 내용 |
+|---|---|---|
+| ① | 상태 | MCP 켜짐(`enabled`)·HTTP 켜짐(`http_enabled`)·서버 주소(`url`, `url_source = guess`면 회색 배지 "짐작 — 관리자에게 mcp.public_url 설정 요청")·내 역할(전역 관리자/프로젝트별 최고 역할 요약 — 기존 `GET /me`)·발급 가능한 범위(read/run/admin — §4.4 규칙). 전역 관리자에게는 HTTP 꺼짐일 때 켜는 방법 한 줄 |
+| ② | 토큰(`#tokens`) | 기존 "내 API 토큰" 화면(§4.5 — 표·발급·폐기·1회 표시) 컴포넌트를 그대로 흡수. 발급 직후 평문은 이 페이지 컴포넌트 상태에만 들고 ③에 전달(대화 닫아도 페이지를 떠나기 전까지 ③ 채움 유지, 떠나면 사라짐) |
+| ③ | **AI 도구에 등록하기** | 탭 4개 Claude Code / Claude Desktop / Codex CLI / Gemini CLI. 각 탭 = 완성된 설정(명령·JSON·TOML) + [복사] 버튼(복사 실패 시 "복사됨"을 띄우지 않음 — 클립보드 API 없는 http 접속 대비, 선택 영역 폴백) + 붙여 넣을 위치 한 줄. 토큰 자리 = 발급 전 자리표시자 `‹발급받은_토큰›`, 발급 직후 실제 토큰. **기본은 토큰 포함 완성본**(사용성 우선 — 사용자 원칙) + 접힘 대안 "환경변수/토큰 파일 방식"(§21.1·`deploy/mcp/examples/` 형식, `pai_` 없음) + 경고 한 줄 "이 설정을 저장하면 토큰이 설정 파일에 평문으로 남습니다 — 공유 PC·저장소에 올리지 마세요. 유출 시 즉시 폐기" |
+| ④ | 사용 가능한 도구(접힘) | `GET /mcp/tools?format=mcp&visible=true`의 `visible` 이름 + 각 도구 `summary_ko`(세션 요청이라 전체 — 화면은 **선택한/최근 발급 토큰 범위** 기준으로 거른다: 판정 = `annotations.x-risk` ≤ 범위, 표시 편의일 뿐 권한은 백엔드) |
+| ⑤ | 연결 시험 | 버튼 "연결 시험": (a) 웹 세션으로 `GET /mcp/ping`(`ok`·`server_version`·`tools_count`) + `GET /mcp/connection`(`http_enabled`) → "서버 정상"; (b) 방금 발급한 토큰이 화면 상태에 있고 `url`이 현재 origin과 같으면 그 토큰으로 `POST {url}` JSON-RPC `initialize` 1회(Accept `application/json, text/event-stream`) → "토큰으로 MCP 연결 정상 / 401(토큰 문제) / 404(MCP 꺼짐)". (b) 조건이 안 되면 "AI 도구에서 `ping` 도구를 불러 확인하세요" 안내 |
+
+### 23.3 탭별 완성 설정(서버 이름 `physicsai`, `{url}` = HTTP MCP 주소, `{api}` = stdio 기본 주소, `{tok}` = 토큰 또는 자리표시자)
+
+| 탭 | 기본(토큰 포함) | 접힘 대안(토큰 비포함) |
+|---|---|---|
+| Claude Code | 명령 `claude mcp add --transport http physicsai {url} --header "Authorization: Bearer {tok}"` | `.mcp.json` HTTP + `${PHYSICSAI_MCP_TOKEN}`(예시 `claude.mcp.json`), stdio `claude mcp add physicsai --env PHYSICSAI_MCP_URL={api} --env PHYSICSAI_MCP_TOKEN_FILE=<경로> -- physicsai-mcp` |
+| Claude Desktop | `claude_desktop_config.json`의 `mcpServers` **안에 넣을 항목만**(바깥 중괄호 없음 — 기존 설정 덮어쓰기 방지): `"physicsai": {"command": "physicsai-mcp", "env": {"PHYSICSAI_MCP_URL": "{api}", "PHYSICSAI_MCP_TOKEN": "{tok}"}}` | 같은 항목, `PHYSICSAI_MCP_TOKEN_FILE`(예시 `claude_desktop_config.json`) |
+| Codex CLI | `~/.codex/config.toml`: `[mcp_servers.physicsai]` `command = "physicsai-mcp"` + `[mcp_servers.physicsai.env]` `PHYSICSAI_MCP_URL = "{api}"`·`PHYSICSAI_MCP_TOKEN = "{tok}"`(stdio — 키 이름이 §21.1에서 확인된 것만 사용) | HTTP `url = "{url}"`·`bearer_token_env_var = "PHYSICSAI_MCP_TOKEN"`(예시 `codex.config.toml`) |
+| Gemini CLI | `~/.gemini/settings.json`의 `mcpServers` 안 항목: `"physicsai": {"httpUrl": "{url}", "headers": {"Authorization": "Bearer {tok}"}, "timeout": 60000, "trust": false}` | stdio 항목 `command`·`env.PHYSICSAI_MCP_TOKEN_FILE`(예시 `gemini.settings.stdio.json`) |
+
+- stdio를 쓰는 탭(Claude Desktop·Codex 기본, 대안의 stdio)에는 실행기 설치 한 줄: "서버 PC: 설치된 venv의 `physicsai-mcp`(경로 `{stdio_hint.command_path}`) / 내 PC: 관리자에게 오프라인 묶음 `wheels`를 받아 `pip install --no-index --find-links <wheels> physicsai-platform`(Python 3.12) — Node.js·mcp-remote 불필요". `command`에 전체 경로가 필요하면 그 경로로 바꾸라는 안내.
+- 설정 문자열은 프런트 순수 함수(`frontend/src/lib/mcpSetup.ts`: `buildConfigs({url, api, token}) -> {claudeCode, desktop, codex, gemini, alt…}`) 한 곳에서 만들고, JSON은 `JSON.stringify`, TOML은 문자열 이스케이프 함수로 만든다(따옴표·역슬래시). 클라이언트별 키 이름이 바뀌면 이 함수·§21.1·예시 파일만 고친다(서버 무변경).
+- 평문 토큰 규칙(§4.5) 유지: 컴포넌트 상태에만, localStorage·sessionStorage·전역 저장소·URL·로그·오류 보고에 쓰지 않는다. 복사는 사용자 동작으로만.
+
+### 23.4 API `GET /mcp/connection`(세션 전용)
+
+| 항목 | 내용 |
+|---|---|
+| 권한 | 로그인(세션). 토큰 요청 403 `SESSION_REQUIRED`(§4.4 토큰 API와 같은 처리), `x-mcp: {"exclude": "웹 연결 안내 전용(세션)"}` |
+| 응답 | `{enabled: bool, http_enabled: bool, url: str, url_source: "config"\|"guess", api_base: str, stdio_hint: {command: "physicsai-mcp", command_path: str\|null, install: str}}` |
+| `url` | 설정 `mcp.public_url`(신규, 예 `https://host/physicsai/mcp`)이 있으면 그 값(`url_source: config`), 없으면 요청 origin(`X-Forwarded-Proto/Host` 신뢰는 기존 `client_ip`·프록시 설정 규칙과 같게) + `/physicsai/mcp`(`guess`) |
+| `api_base` | stdio `PHYSICSAI_MCP_URL`용(§20.4) = `url`에서 끝의 `/mcp`를 뗀 값(예 `https://host/physicsai`) |
+| `command_path` | 서버 venv의 실행기 경로(`sys.prefix` 기준 `Scripts\physicsai-mcp.exe`/`bin/physicsai-mcp`, 없으면 null) — 경로만, 비밀 없음 |
+| 꺼짐 | `mcp.enabled=false`면 404 `MCP_DISABLED`(기존 `/mcp/*` 규칙 — 라우트는 항상 등록) |
+
+- 설정 키 `mcp.public_url: null`(문자열, `http(s)://…/mcp`로 끝나야 — 아니면 설정 오류 `mcp.public_url`). `config/platform.example.yaml`·`platform.demo.yaml`에 주석과 함께 **추가만**(기본 null = 기존 동작). `/status` 변경 없음.
+
+### 23.5 구현 분해(M7)
+
+| 담당 | 범위 |
+|---|---|
+| Impl-Backend | `config/schema_mcp.py`(`public_url` + 검증), `physicsai_api/routers/mcp.py`(`GET /mcp/connection`·x-mcp exclude·세션 전용), schemas, `backend/openapi.json`·`operation_ids.txt`, `route_policy` 동결 목록 영향 없음 확인, 시험(설정/짐작·토큰 403·꺼짐 404) |
+| Impl-Frontend | `pages/AiConnection.tsx`(신규, 기존 `ApiTokens.tsx` 흡수), `lib/mcpSetup.ts`, `shell/TopBar.tsx`(메뉴 이름·경로), `app/App.tsx`(리다이렉트), 관리 화면 꺼짐 안내 한 줄, mock·시험, `frontend-dist` |
+| Plan | [mcp-clients.md](../manual/mcp-clients.md) §1 "상단 바 AI 연결(MCP)" 갱신(이 커밋) |
+
+### 23.6 검증(V-MCP-21~26)
+
+| ID | 항목 | 기준 |
+|---|---|---|
+| V-MCP-21 | 자리표시자 → 발급 후 채움 | 발급 전 4탭 설정에 `‹발급받은_토큰›`, 발급 응답 후 같은 자리에 그 토큰, 페이지 이탈 후 재진입 시 다시 자리표시자 |
+| V-MCP-22 | 저장소 미사용 | 정적 시험: 토큰 평문을 localStorage·sessionStorage·전역 저장소·URL에 쓰는 코드 0, 기존 `apiTokens` 정적 시험을 새 페이지로 확장 |
+| V-MCP-23 | 설정 문법 | `buildConfigs` 출력(자리표시자·실제 형식 토큰 각각): Claude Desktop·Gemini 항목은 `{…}`로 감싸 JSON 파싱, Codex는 TOML 파싱(프런트 시험 파서 또는 백엔드 `tomllib` 골든), Claude Code 명령은 셸 분해 시 인자 수·`--header` 값 1개. 대안 블록은 `pai_` 0건·예시 파일(V-MCP-19)과 키 일치 |
+| V-MCP-24 | 주소 출처 | `mcp.public_url` 설정 → `url_source: config`·화면 배지 없음, 미설정 → `guess`·"짐작" 배지, `api_base` = `/mcp` 뗀 값, 잘못된 설정값 → 설정 오류 |
+| V-MCP-25 | 연결 시험 | 세션 ping 성공·실패 표시, 같은 origin + 토큰이면 `initialize` 200 → 정상, 폐기 토큰 401·MCP 꺼짐 404 문구 |
+| V-MCP-26 | 경로·권한 | `features.mcp=false` → 메뉴 없음·관리 화면 안내 한 줄(전역 관리자만), `/me/api-tokens` → `/me/ai-connection#tokens` 리다이렉트, `GET /mcp/connection` 토큰 요청 403·x-mcp exclude(V-MCP-6) |
+
 ## 변경 메모(MR-Cn)
 
 - **MR-C1**(2026-10-21, 사용자 결정 — Plan): 범위를 "MCP 준비"에서 **MCP 기능 전체**로 확장하고 파일 이름을 `mcp-ready.md` → `mcp.md`로 변경(ID 접두 MR·V-MCP 유지). 추가: MR-13(토큰·스냅숏 30일 — 초안 90일·14일 대체), MR-14~18(SDK 서버·두 전송·이식 가능 스키마·ping·오프라인 의존), §9.2·§20·§21, V-MCP-14~20, M5·M6. 지원 클라이언트 Claude·Codex CLI·Gemini CLI(사내 on-premise 모델 전제), ChatGPT 웹 앱 범위 밖. migration `0020_mcp` 확정. Q1 종결, Q2·Q3 기본 진행값 명시, Q4 추가. 릴리스 v0.2.4.
 - **MR-C2**(2026-10-21, Plan — v0.2.4 구현 반영, 기준 `feat/r1-v024` 8206870): 구현과 계약 차이를 계약에 맞춤. ① `GET /mcp/tools?format=mcp&visible=true` — 최상위 `visible`(토큰 범위로 부를 수 있는 도구, 판정 백엔드 `scope_allows`), stdio가 `tools/list` 필터에 사용(§9·§20.1). ② 마운트 401·404·405 본문 `{code, message, detail:{code, message}}`, 비POST 405 `METHOD_NOT_ALLOWED`(§20.1). ③ MCP 계층 로컬 오류 6종(status null)·용어집 `error_hints`(§20.3·§10). ④ V-MCP-14 화이트리스트는 도구 입력 스키마(`tools.*.json`)만, `job_kinds.json`(생성 파일 추가) params_schema는 모양 검사(§9·§9.2). ⑤ 클라이언트 예시 5파일 — Gemini는 HTTP·stdio 분리(§21.1, 가이드 갱신). ⑥ 도구 17개(`find_similar_designs` 제외, `get_native_vars` 포함 — PUT은 exclude), `param_set` 요약 facts `vars_revision`·`vars_count`(§7·§9.1). ⑦ `mcp==2.3.0` 고정·lock 전이 의존 추가, 세션 관리자 요청마다 생성(lifespan 무관), 용어집 `error_codes` 추출에 `_error(...)` 포함(§10·§20.1·§20.5). ⑧ 토큰 화면: 메뉴는 `features.mcp`일 때만, 평문 1회 표시·복사·저장소 미사용, 관리자 "API 토큰 관리"(user_id·active 필터·폐기) 구현 — 초안의 "관리자 화면 비범위"를 대체(§4.5·§16 M4·V-MCP-13).
+- **MR-C3**(2026-10-22, 사용자 요구 — Plan, 릴리스 v0.2.7): 웹 **"AI 연결(MCP)" 페이지**(§23) — 상단 바 메뉴(`features.mcp`일 때만)가 "내 API 토큰"을 대체하고 한 페이지에 상태·토큰·"AI 도구에 등록하기"(Claude Code·Claude Desktop·Codex CLI·Gemini CLI 완성 설정 복사, 발급 전 자리표시자 `‹발급받은_토큰›` → 발급 직후 실제 토큰, 기본 토큰 포함·대안 env/토큰 파일 접힘 + 평문 경고)·도구 목록·연결 시험. 새 API `GET /mcp/connection`(세션 전용·x-mcp exclude), 설정 `mcp.public_url`(없으면 origin 짐작 + "짐작" 표시), stdio는 `physicsai-mcp` 기준(Node·mcp-remote 불필요). `/me/api-tokens` → 새 페이지 리다이렉트, 꺼짐이면 관리 화면에 켜는 방법 한 줄(roadmap §6 후속 항목 종결). M7·V-MCP-21~26. 평문 토큰 저장 금지(§4.5)는 그대로 — 화면 상태에만.

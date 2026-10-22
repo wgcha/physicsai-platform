@@ -246,3 +246,11 @@ while ($true) {
 | E7-6 | Gemini CLI: HTTP(`httpUrl`+`headers`)·stdio(토큰 파일) 각각 `ping`, 도구 목록 로딩 시 스키마 거부 0 | | |
 | E7-7 | run 토큰으로 `plan_job`(predict_batch 작은 run 수) → 사람 확인 → `run_job` → `job_status` → `cancel_job`, 관리자 `list_audit`에 행 | | |
 | E7-8 | 사용자 PC stdio 설치(묶음 wheels, `--no-index`) 후 `physicsai-mcp --check` | | |
+
+## E8. v0.2.7 예측 입력 종류(쿠션)·AI 연결(MCP) 페이지 (input-kind V-IK-10, mcp V-MCP-21~26 현장)
+
+- [ ] ⑥ 내장 최적화를 같은 템플릿·모델로 "쿠션 입력"으로 1회 실행 — 서버 GPU 메모리 초과 없이 탐색·검증 배치 완료, 하위 예측 starter = `run__N/m_1/EPS_mesh_0000.rad`.
+- [ ] Altair 조립 가능 템플릿 ④ 단건 쿠션 예측: MESH 생략·RAD_ASSEMBLE "쿠션 입력 복사", `EPS_mesh_0000_pred.h3d` 생성, 결과 `predict_input` 파일 1개.
+- [ ] Native solid 템플릿 ④ 단건 쿠션 예측: `P/geom/EPS_mesh_0000.rad`(paicad `cushion write`)로 edspy 예측 성공(예측기 읽기 확인 — input-kind R1), `cushion.json` 경고 확인.
+- [ ] 쿠션 결과의 FEM 검증 미리보기: 조립 원본 기본 "템플릿 조립 폴더", reuse 불가 문구.
+- [ ] AI 연결(MCP) 페이지: 발급 전 자리표시자 → 발급 후 토큰 채움, 4개 탭 중 실제 쓰는 도구 1개 이상 복사 설정으로 연결해 `ping`, 연결 시험 버튼 정상, `mcp.public_url` 미설정 시 "짐작" 표시.
