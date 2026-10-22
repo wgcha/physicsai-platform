@@ -1,4 +1,5 @@
 // phase3.md §14 S9 목(R-F 분할): PREDICT_BATCH 작업 생성·진행·부모 종료·하위 PREDICT 결과·컨투어 캡처.
+import { usesVarTable } from "../lib/nativeVars";
 import type { BatchSource, Job, Study, ViewKey } from "../api/types";
 import { PREVIEW_JSON, baseJob, contourSvg, curveJson, responseFn } from "./data";
 import { err, type MockResp } from "./route";
@@ -39,7 +40,7 @@ export function predictBatchCreate(srv: MockServer, s: Study, params: Record<str
   if (cap != null && (typeof cap.enabled !== "boolean" || (cap.views !== undefined && (!Array.isArray(cap.views) || !cap.views.length || new Set(cap.views).size !== cap.views.length)) || (cap.video !== undefined && typeof cap.video !== "boolean")))
     return { error: err(422, "INVALID_PARAMS", "capture를 확인하세요.") };
   const rv = runVars(srv, ps, params.vars as { add?: string[]; exclude?: string[] } | null | undefined, modelId);
-  if (rv.error === "NATIVE_VARS_UNSUPPORTED") return { error: err(422, "NATIVE_VARS_UNSUPPORTED", "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다") };
+  if (rv.error === "TPL_SCOPE_PARTIAL") return { error: err(422, "TPL_SCOPE_PARTIAL", "옛 tpl(사용 파라미터만) — ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록하세요") };
   const m = batchMatrix(srv, rv.out.ps, params.source as BatchSource);
   if (isResp(m)) return { error: m };
   if (m.problems.length || !m.rows.length) return { error: err(422, "BATCH_SOURCE_INVALID", "조합을 만들 수 없습니다", { problems: m.problems }) };
@@ -51,7 +52,7 @@ export function predictBatchCreate(srv: MockServer, s: Study, params: Record<str
     source_kind: src.kind.toUpperCase(), meta: m.meta ?? {}, multi_execution: multi,
     created_by: me.user_id, created_by_name: me.display_name, created_at: new Date().toISOString(), canceled: false, done_notified: false,
     runs: m.rows.map((r) => ({ ...r, gen_state: "PENDING", gen_code: null, gen_message: null, predict_job_id: null })),
-    ...(ps.engine === "native" ? { vars: snapshotOf(ps, rv.out) } : {}), // §4.1 스냅숏(Native만)
+    ...(usesVarTable(ps) ? { vars: snapshotOf(ps, rv.out) } : {}), // §4.1 스냅숏(Native·Altair 전체 tpl)
   };
   return { params: { ...params, model_id: params.model_id ?? null, batch_id: rec.id, batch_no: no }, rec };
 }

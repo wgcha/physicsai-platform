@@ -15,6 +15,8 @@ export interface NativeExtraCol {
 
 export interface NativeVarsTableProps {
   label: string;
+  /** Altair 전체 tpl이면 Native 전용 열(종류·바디·모핑 가능 범위)을 숨긴다 */
+  engine?: "native" | "altair";
   rows: NativeRow[];
   canEdit: boolean;
   /** 열 머리·입력 라벨 — 기본 변수·하한·상한(일괄 예측 = 파라미터·최소·최대) */
@@ -44,6 +46,7 @@ export interface NativeVarsTableProps {
 const range = (r: { min?: number | null; max?: number | null } | null | undefined) => (r ? `${r.min != null ? fmtNum(r.min) : "–"} ~ ${r.max != null ? fmtNum(r.max) : "–"}` : "–");
 
 export function NativeVarsTable(p: NativeVarsTableProps) {
+  const altair = p.engine === "altair";
   const { rows, canEdit, words = { name: "변수", lo: "하한", hi: "상한" }, showTrain = true } = p;
   const own = useRowSelection(useMemo(() => rows.map((r) => r.name), [rows]));
   const sel = p.sel ?? own;
@@ -59,11 +62,11 @@ export function NativeVarsTable(p: NativeVarsTableProps) {
             <tr>
               <th>사용</th>
               <th>{words.name}</th>
-              <th>종류</th>
-              {p.showBody && <th>바디</th>}
+              {!altair && <th>종류</th>}
+              {p.showBody && !altair && <th>바디</th>}
               <th className="num">공칭</th>
               {showTrain && <th className="num">학습 범위</th>}
-              <th className="num">모핑 가능 범위</th>
+              {!altair && <th className="num">모핑 가능 범위</th>}
               <th className="num">{words.lo}</th>
               <th className="num">{words.hi}</th>
               {p.showFixed && <th>고정</th>}
@@ -93,26 +96,27 @@ export function NativeVarsTable(p: NativeVarsTableProps) {
                   </td>
                   <td className="mono">
                     {r.name}
+                    {r.integer && <span className="muted small" title="정수 형식 파라미터 — 하한·상한도 정수">{" "}정수</span>}
                     {r.origin === "added" && <span className="pill run" title="이 실행에만 추가한 변수(세트 정의에는 없음)">추가</span>}
                   </td>
-                  <td className="small">{typeLabel(r.type)}</td>
-                  {p.showBody && <td className="mono small">{r.body}</td>}
+                  {!altair && <td className="small">{typeLabel(r.type)}</td>}
+                  {p.showBody && !altair && <td className="mono small">{r.body}</td>}
                   <td className="num mono">{r.nominal != null ? fmtNum(r.nominal) : "–"}</td>
                   {showTrain && (
                     <td className="num mono small" data-testid={`train-${r.name}`}>
                       {r.train ? range(r.train) : <span className="muted">모름</span>}
                     </td>
                   )}
-                  <td className="num mono small">{range(r.feasible)}</td>
+                  {!altair && <td className="num mono small">{range(r.feasible)}</td>}
                   <td className="num">
-                    <input className={inputCls} inputMode="decimal" aria-label={`${r.name} ${words.lo}`} value={r.lo} disabled={off || lockRange} onChange={(e) => p.onPatch(r.name, { lo: e.target.value })} />
+                    <input className={inputCls} inputMode={r.integer ? "numeric" : "decimal"} placeholder={r.rangeUnset ? "입력" : undefined} aria-label={`${r.name} ${words.lo}`} value={r.lo} disabled={off || lockRange} onChange={(e) => p.onPatch(r.name, { lo: e.target.value })} />
                   </td>
                   <td className="num">
                     {r.fixed && r.use ? (
                       <span className="muted">고정</span>
                     ) : (
                       <>
-                        <input className={inputCls} inputMode="decimal" aria-label={`${r.name} ${words.hi}`} value={r.hi} disabled={off || lockRange} onChange={(e) => p.onPatch(r.name, { hi: e.target.value })} />
+                        <input className={inputCls} inputMode={r.integer ? "numeric" : "decimal"} placeholder={r.rangeUnset ? "입력" : undefined} aria-label={`${r.name} ${words.hi}`} value={r.hi} disabled={off || lockRange} onChange={(e) => p.onPatch(r.name, { hi: e.target.value })} />
                         {delta && (
                           <span className="muted small nv-delta" title="공칭 대비 차이(mm)">
                             Δ {delta}
@@ -138,6 +142,7 @@ export function NativeVarsTable(p: NativeVarsTableProps) {
                       </span>
                     ))}
                     {err && <span className="error-text">{err}</span>}
+                    {!err && r.rangeUnset && !r.use && r.lo.trim() === "" && <span className="muted">범위를 입력하세요</span>}
                     {p.onRemove && r.origin === "added" && (
                       <button type="button" className="btn small ghost" disabled={!canEdit} onClick={() => p.onRemove!(r.name)}>
                         빼기

@@ -32,6 +32,8 @@ import { newUploadState, reportRoutes, uploadRoutes, type UploadMockState } from
 import { apiTokenRoutes } from "./apiTokens";
 import { mcpRoutes } from "./mcp";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
+import { seedAltairVars } from "./altairVars";
+import type { NativeVarPoolRow } from "../api/types";
 import { geomViewRoutes } from "./geomView";
 import { mockReleases, releaseRoutes } from "./releases";
 import type { ReleasesResponse } from "../api/types";
@@ -129,6 +131,8 @@ export class MockServer {
   /** native 세트별 피처·쉘 PROP·매칭표 */
   geom = new Map<string, GeomRec>();
   geometryDefault: "altair" | "native" = "altair";
+  /** altair-vars.md: Altair 세트별 변수 풀(tpl 선언 전체) */
+  altairPools = new Map<string, NativeVarPoolRow[]>();
   /** GET /mcp/connection url_source(기본 config) */
   mcpUrlSource: "config" | "guess" = "config";
   /** upload-report.md 업로드 세션·보고서 목 상태(기본 꺼짐 — 기존 시험의 경로 칸은 탭 없이 그대로) */
@@ -160,6 +164,7 @@ export class MockServer {
     this.mcpUrlSource = opts.mcpUrlSource ?? "config";
     this.up = newUploadState(opts.upload ?? false);
     if (opts.geometry) seedNative(this, opts.geometry === "multi");
+    if (opts.altairVars) seedAltairVars(this);
   }
 
   get me(): Me | null {

@@ -5,6 +5,7 @@ import { useCanExecute } from "../../hooks/useJobRunner";
 import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
+import { tplSummaryNotes, tplSummaryText } from "../../lib/altairVars";
 import { useTrain } from "./TrainContext";
 import { isPositionType, typeLabel } from "../../lib/geometry";
 import { GeomView3DLazy as GeomView3D } from "../stage4/geomview/GeomView3DLazy";
@@ -119,6 +120,8 @@ export function ParamTableCard() {
   };
 
   const tpl = setup?.tpl;
+  const fixedInTpl = useMemo(() => new Set((tpl?.params ?? []).filter((p) => p.used === false).map((p) => p.name)), [tpl]);
+  const summary = setup?.tpl_summary;
   const dirty = useMemo(() => {
     const orig = (setup?.parameters ?? []).map(toRow);
     return JSON.stringify(orig.map((r) => [r.min, r.max, r.use, r.format, r.unit])) !== JSON.stringify(rows.map((r) => [r.min, r.max, r.use, r.format, r.unit]));
@@ -130,7 +133,7 @@ export function ParamTableCard() {
           <p className="muted small">
             {native
               ? `Native · 피처 ${rows.length}개. 사용하지 않는 피처는 공칭값이 유지됩니다(위치형은 mm 범위).`
-              : "단위계 mm-ton-s. 사용하지 않는 파라미터는 tpl에서 빠지고 CAD 공칭값이 유지됩니다."}
+              : "단위계 mm-ton-s. 사용 = 학습 데이터(DOE)에서 움직일 파라미터. 미사용도 tpl에 공칭 고정으로 들어가며, 예측·최적화 변수는 ④ 템플릿에서 따로 정합니다."}
           </p>
           <FeatureGate feature={native ? "geometry_native" : "train_tpl"}>
             {(enabled) => (
@@ -196,7 +199,7 @@ export function ParamTableCard() {
             </thead>
             <tbody>
               {rows.map((r, i) => {
-                const note = serverProblems[r.name] ?? issues[i] ?? (!r.valid ? r.problems.join(" · ") || "사용 불가" : null);
+                const note = serverProblems[r.name] ?? issues[i] ?? (!r.valid ? r.problems.join(" · ") || "사용 불가" : null) ?? (!native && !r.use && fixedInTpl.has(r.name) ? "tpl에 공칭 고정" : null);
                 return (
                   <tr key={r.name} {...(native ? rp(r.name) : { "data-row": r.name })} className={`${r.use ? "" : "unused"}${native ? ` ${rp(r.name).className}` : ""}`}>
                     <td>
@@ -240,10 +243,15 @@ export function ParamTableCard() {
       {tpl && !native && (
         <div className="tpl-state small" data-testid="tpl-state">
           <div>
-            tpl 생성됨 · 사용 <b>{tpl.params.length}</b>개 · {fmtTime(tpl.generated_at)}
+            tpl 생성됨 · {summary ? tplSummaryText(summary) : `사용 ${tpl.params.length}개`} · {fmtTime(tpl.generated_at)}
           </div>
+          {summary && tplSummaryNotes(summary).map((t, i) => (
+            <div key={i} className="warn-text" data-testid="tpl-summary-note">
+              {t}
+            </div>
+          ))}
           {(tpl.stale || dirty) && <div className="warn-text">표가 바뀌었습니다 — tpl을 다시 생성하세요</div>}
-          {tpl.warnings.map((w, i) => (
+          {tpl.warnings.filter((w) => !w.names?.length).map((w, i) => (
             <div key={i} className="muted">
               {w.message}
             </div>

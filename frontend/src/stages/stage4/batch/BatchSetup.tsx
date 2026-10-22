@@ -19,7 +19,7 @@ import { BatchCaptureOptions, captureAssume, captureParam, type CaptureChoice } 
 import { DEFAULT_VIEWS } from "../../../lib/views";
 import { DEFAULT_MAX_RUNS } from "../../../lib/sampling";
 import { SamplingPicker } from "./SamplingPicker";
-import { addRow, editOf, effectiveParamSet, type NativeRow } from "../../../lib/nativeVars";
+import { TPL_PARTIAL_TEXT, addRow, editOf, integerError, effectiveParamSet, type NativeRow } from "../../../lib/nativeVars";
 import { useNativeRunRows } from "../geometry/useNativeRunRows";
 import { buildSource, initialSampling, resetForTemplate, type ContinueCand, type Ranges, type SamplingState } from "./samplingSource";
 
@@ -182,16 +182,19 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     setText(await f.text()); // 브라우저 안에서 읽기만(업로드 없음)
     clear();
   };
+  // 정수 파라미터는 정수 범위만(altair-vars.md §5.1) — 표 안 문구와 함께 조합 만들기를 막는다
+  const intBad = samp.kind !== "table" && samp.kind !== "train_doe" && !!nat.rows?.some((r) => integerError({ ...r, fixed: false, lo: samp.ranges[r.name]?.[0] ?? r.lo, hi: samp.ranges[r.name]?.[1] ?? r.hi }));
   const names = eps?.parameters.map((p) => p.name) ?? [];
   // 사용·추가·제외 → 표 행 + 범위 상태(추가 행은 피처 기본 범위, 빠진 행은 지운다 — lhs는 ranges 전부를 보내므로)
   const editRows = (fn: (rs: NativeRow[]) => NativeRow[]) => {
     if (!nat.rows) return;
     const next = fn(nat.rows);
     nat.setRows(() => next);
-    setSamp((x) => ({ ...x, ranges: Object.fromEntries(next.filter((r) => r.use).map((r) => [r.name, x.ranges[r.name] ?? [String(r.base.min), String(r.base.max)]])) }));
+    setSamp((x) => ({ ...x, ranges: Object.fromEntries(next.filter((r) => r.use).map((r) => [r.name, x.ranges[r.name] ?? [r.lo, r.hi]])) }));
     clear();
   };
   const nativeBatch = nat.rows ? {
+    engine: ps?.engine === "altair" ? ("altair" as const) : ("native" as const),
     rows: nat.rows, nv: nat.nv, canEdit: canExec,
     onBulkUse: (ns: string[], use: boolean) => editRows((rs) => rs.map((r) => (ns.includes(r.name) ? { ...r, use } : r))),
     onRemove: (n: string) => editRows((rs) => rs.filter((r) => r.name !== n)),
@@ -206,6 +209,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
         <InputKindSelect ps={ps} value={ic.value} onChange={(i) => (ic.setPicked(i), clear(), runner.clearError())} error={inputErr ?? inputKindError(runner.errorDetail)} />
         {!ps && <p className="muted small">등록된 템플릿이 없습니다 — "템플릿 값 입력"의 템플릿 관리에서 등록하세요.</p>}
         <SamplingPicker ps={eps} native={nativeBatch} nativePending={nat.pending} state={samp} onChange={changeSamp} maxRuns={DEFAULT_MAX_RUNS} cands={cands} contRanges={contRanges && contRanges.id === samp.contId ? contRanges.ranges : null} />
+        {ps?.engine === "altair" && ps.vars_scope === "partial" && <p className="muted small" data-testid="tpl-partial-note">{TPL_PARTIAL_TEXT}</p>}
         {method === "table" && (
           <>
             <label className="field">
@@ -237,7 +241,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
             </select>
           </label>
         )}
-        <button type="button" className="btn" onClick={make} disabled={!ps || !source || busy}>
+        <button type="button" className="btn" onClick={make} disabled={!ps || !source || busy || intBad} title={intBad ? "정수 파라미터는 정수 범위만 입력하세요" : undefined}>
           {busy ? "만드는 중…" : "조합 만들기"}
         </button>
       </Card>

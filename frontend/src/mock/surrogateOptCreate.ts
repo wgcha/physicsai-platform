@@ -1,4 +1,5 @@
 // phase3.md §22.4.2 S17 목(R-F 분할): 요청 정규화(problems)·새 기록 만들기.
+import { usesVarTable } from "../lib/nativeVars";
 import type { ParamSet } from "../api/types";
 import { err } from "./route";
 import type { MockServer } from "./server";
@@ -16,10 +17,10 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
   // input-kind.md IK-1·IK-11: 입력 종류 선택(능력 밖이면 422 INPUT_KIND_UNSUPPORTED)
   const ri = resolveInput(ps, body.input);
   if ("error" in ri) return { error: ri.error };
-  // native-vars.md §6.2: Native는 vars{add,exclude}로 유효 변수를 정하고 범위 밖은 경고만(BOUNDS_OUT_OF_RANGE 미발행). Altair는 vars → NATIVE_VARS_UNSUPPORTED
-  const native = ps.engine === "native";
+  // native-vars.md §6.2: Native는 vars{add,exclude}로 유효 변수를 정하고 범위 밖은 경고만(BOUNDS_OUT_OF_RANGE 미발행). Altair는 vars → TPL_SCOPE_PARTIAL
+  const native = usesVarTable(ps);
   const rv = runVars(srv, ps, body.vars as { add?: string[]; exclude?: string[] } | null | undefined, body.model_id as string | null | undefined);
-  if (rv.error) problems.push({ code: rv.error === "NATIVE_VARS_UNSUPPORTED" ? "NATIVE_VARS_UNSUPPORTED" : "BOUNDS_INVALID", field: rv.error === "NATIVE_VARS_UNSUPPORTED" ? "vars" : rv.error, message: rv.error === "NATIVE_VARS_UNSUPPORTED" ? "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다" : `vars 이름이 올바르지 않습니다(${rv.error})` });
+  if (rv.error) problems.push({ code: rv.error === "TPL_SCOPE_PARTIAL" ? "TPL_SCOPE_PARTIAL" : "BOUNDS_INVALID", field: rv.error === "TPL_SCOPE_PARTIAL" ? "vars" : rv.error, message: rv.error === "TPL_SCOPE_PARTIAL" ? "옛 tpl(사용 파라미터만) — ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록하세요" : `vars 이름이 올바르지 않습니다(${rv.error})` });
   const params = rv.out.ps.parameters;
   const integer = ps.tpl_params.filter((t) => /[id]$/.test(t.format)).map((t) => t.name);
   const given = (body.bounds ?? {}) as Record<string, [number, number]>;

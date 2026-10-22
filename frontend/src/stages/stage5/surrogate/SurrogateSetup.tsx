@@ -10,7 +10,7 @@ import { useCanExecute } from "../../../hooks/useJobRunner";
 import { useLatestJob } from "../../../hooks/useLatestJob";
 import { Card, Field, NO_PERMISSION_TIP } from "../../../components/ui";
 import { fmtNum, fmtTime, isTerminal } from "../../../lib/format";
-import { addRow, rowError, type NativeRow } from "../../../lib/nativeVars";
+import { TPL_PARTIAL_TEXT, addRow, rowError, type NativeRow } from "../../../lib/nativeVars";
 import { useNativeRunRows } from "../../stage4/geometry/useNativeRunRows";
 import { NativeVarsCard } from "./NativeVarsCard";
 import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/TemplatePicker";
@@ -204,7 +204,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
       </Card>
       {nrows && (
         <NativeVarsCard
-          rows={nrows} nv={nv} canEdit={canExec} notes={preview?.var_notes}
+          engine={ps?.engine === "altair" ? "altair" : "native"} rows={nrows} nv={nv} canEdit={canExec} notes={preview?.var_notes}
           onPatch={patchN} onBulkUse={(names, use) => setN((rs) => rs.map((r) => (names.includes(r.name) ? { ...r, use } : r)))}
           onRemove={(name) => setN((rs) => rs.filter((r) => r.name !== name))} onAdd={(name) => nv && setN((rs) => addRow(nv, name, rs))}
         />
@@ -248,6 +248,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
             </tbody>
           </table>
         </div>
+        {ps?.engine === "altair" && ps.vars_scope === "partial" && <p className="muted small" data-testid="tpl-partial-note">{TPL_PARTIAL_TEXT}</p>}
       </Card>
       )}
       <Card span={9} step="⑤" title="설정" foot={

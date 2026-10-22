@@ -3,6 +3,7 @@
 // ?batch=running 이면 진행 중 일괄 예측 B-003 시드(S9). ?hpc=scx 이면 SCX 게이트웨이(D3-58), &scx=unknown 이면 결과 모름 run 1개.
 // ?geom=native|multi 이면 native 세트 ps-n1 시드(multi = baseline B2·매칭표 초안, geometry-engine.md §8).
 // ?train=native 이면 ① 학습 설정을 native 추출 결과로(①-2 공칭 3D 뷰 시연, geometry-view.md §6.9).
+// ?altair=vars&cur=ps-a1|ps-a2 이면 Altair 변수 표 시연(전체 tpl·옛 tpl).
 // ?upload=0 이면 업로드 꺼짐(경로 칸에 "내 PC에서 올리기" 탭 없음, 기본 켜짐 — upload-report.md).
 // ?c3d=hold|fail|expire 이면 결과 3D 컨투어 생성 시연(대기 안내에서 멈춤·결과 실패·첫 프레임 410, geometry-view.md §13.6).
 import { MockServer, createMockFetch } from "./server";
@@ -22,7 +23,10 @@ export function installMockFetch() {
   } catch {
     /* 저장소 없음 */
   }
-  const server = new MockServer({ upload: params.get("upload") !== "0", user: user ?? "admin", hpcConfigured: params.get("hpc") === "1" || params.get("hpc") === "scx", hpcMode: params.get("hpc") === "scx" ? "scx" : undefined, scxUnknown: params.get("scx") === "unknown", predictRuns: params.get("runs") === "history" ? "history" : undefined, femVerify: params.get("fv") === "demo" ? "demo" : undefined, geometry: params.get("geom") === "native" || params.get("geom") === "multi" ? (params.get("geom") as "native" | "multi") : undefined, demo: params.get("demo") === "1", batchDemo: ["running", "sobol", "bbd"].includes(params.get("batch") ?? "") ? (params.get("batch") as "running" | "sobol" | "bbd") : undefined, configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
+  const server = new MockServer({ upload: params.get("upload") !== "0", user: user ?? "admin", hpcConfigured: params.get("hpc") === "1" || params.get("hpc") === "scx", hpcMode: params.get("hpc") === "scx" ? "scx" : undefined, scxUnknown: params.get("scx") === "unknown", predictRuns: params.get("runs") === "history" ? "history" : undefined, femVerify: params.get("fv") === "demo" ? "demo" : undefined, altairVars: params.get("altair") === "vars", geometry: params.get("geom") === "native" || params.get("geom") === "multi" ? (params.get("geom") as "native" | "multi") : undefined, demo: params.get("demo") === "1", batchDemo: ["running", "sobol", "bbd"].includes(params.get("batch") ?? "") ? (params.get("batch") as "running" | "sobol" | "bbd") : undefined, configWarnings: params.get("warn") === "1" ? ["resources.extract_minmax_tcl 미설정(⑤ 비활성)", "commands.response_extract 미설정(①-6 비활성)"] : [] });
+  // ?altair=vars 이면 Altair 전체 tpl(ps-a1)·옛 부분 tpl(ps-a2) 시드, ?cur=<세트 id>로 현재 템플릿 지정(altair-vars.md)
+  const cur = params.get("cur");
+  if (cur) server.paramSets.forEach((p) => (p.is_current = p.id === cur));
   // S16: ?vt=top:video/x-msvideo,iso:video/mp4 — 방향별 영상 content-type(avi 안내 시연)
   for (const kv of (params.get("vt") ?? "").split(",").filter(Boolean)) {
     const [view, ct] = kv.split(":");

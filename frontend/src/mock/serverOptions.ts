@@ -40,6 +40,8 @@ export interface MockOptions {
   geometryDefault?: "altair" | "native";
   /** "native" = native 세트 ps-n1 시드, "multi" = ps-n1에 baseline B2 추가(4B 매칭표 초안) */
   geometry?: "native" | "multi";
+  /** altair-vars.md: Altair 전체 tpl(ps-a1)·옛 부분 tpl(ps-a2) 템플릿 시드 */
+  altairVars?: boolean;
   /** S18: /status.limits.configured.doe_generator_default(기본 platform — 설정 train_data.doe_generator_default) */
   /** mcp.md §23.4: GET /mcp/connection url_source(기본 config, guess면 화면에 "짐작" 배지) */
   mcpUrlSource?: "config" | "guess";

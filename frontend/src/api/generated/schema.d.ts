@@ -1596,17 +1596,19 @@ export interface paths {
         };
         /**
          * Native Vars Get
-         * @description Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:
-         *     종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부), 리비전 이력을 돌려준다. `model_id`를 주면 그 모델의 학습 형상 범위(`train`)와
-         *     범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. 읽기 전용이며 부작용이 없다. 오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND,
-         *     422 NATIVE_VARS_UNSUPPORTED(Altair 템플릿).
+         * @description 템플릿(④ 파라미터 세트)의 변수 정의를 조회한다 — Native와 Altair(전체 tpl) 모두. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:
+         *     Native = 종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부, Altair = tpl 선언 파라미터의 공칭·기본 범위·정수 형식 여부), 리비전 이력을 돌려준다.
+         *     `model_id`를 주면 그 모델의 학습 범위(`train`)와 범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. `engine`이 altair이고 옛 부분 tpl이면
+         *     `editable=false`, `reason=TPL_SCOPE_PARTIAL`(①-2에서 tpl을 다시 생성해 새 템플릿으로 등록). 읽기 전용이며 부작용이 없다.
+         *     오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND.
          */
         get: operations["native_vars_get_physicsai_api_param_sets__ps_id__variables_get"];
         /**
          * Native Vars Put
          * @description 세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.
          *     422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.
-         *     경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨).
+         *     경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨). Altair는 전체 tpl 세트만 저장할 수 있고(부분 tpl = 422 TPL_SCOPE_PARTIAL),
+         *     정수 형식 파라미터의 범위는 정수여야 한다(VAR_RANGE_INVALID).
          */
         put: operations["native_vars_put_physicsai_api_param_sets__ps_id__variables_put"];
         post?: never;
@@ -6483,11 +6485,16 @@ export interface components {
              * Body
              * @default
              */
-            body: string;
+            body: string | null;
             default_range: components["schemas"]["VarRange"];
             feasible?: components["schemas"]["VarFeasible"] | null;
             /** Group */
             group?: string | null;
+            /**
+             * Integer
+             * @default false
+             */
+            integer: boolean;
             /** Name */
             name: string;
             /** Nominal */
@@ -6498,6 +6505,11 @@ export interface components {
              */
             position: boolean;
             /**
+             * Range Unset
+             * @default false
+             */
+            range_unset: boolean;
+            /**
              * Ref Locked
              * @default false
              */
@@ -6507,7 +6519,7 @@ export interface components {
              * Type
              * @default
              */
-            type: string;
+            type: string | null;
             /**
              * Unit
              * @default mm
@@ -6521,6 +6533,12 @@ export interface components {
         NativeVars: {
             /** Editable */
             editable: boolean;
+            /**
+             * Engine
+             * @default native
+             * @enum {string}
+             */
+            engine: "native" | "altair";
             /** Features Sha256 */
             features_sha256?: string | null;
             /** History */
@@ -6954,6 +6972,12 @@ export interface components {
             train_doe_id?: string | null;
             /** Unit System */
             unit_system: string;
+            /** Vars Count */
+            vars_count?: number | null;
+            /** Vars Revision */
+            vars_revision?: number | null;
+            /** Vars Scope */
+            vars_scope?: ("full" | "partial") | null;
             /**
              * Warnings
              * @default []
@@ -7067,6 +7091,12 @@ export interface components {
              * @enum {string}
              */
             runs: "collected" | "all";
+            /**
+             * Tpl Source
+             * @default doe
+             * @enum {string}
+             */
+            tpl_source: "doe" | "current";
             /** Unit System */
             unit_system?: string | null;
         };
@@ -7342,7 +7372,7 @@ export interface components {
             param_set_id?: string | null;
             /** Source */
             source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceLhsOpt"] | components["schemas"]["BatchSourceSobol"] | components["schemas"]["BatchSourceFullfact"] | components["schemas"]["BatchSourceFracfact"] | components["schemas"]["BatchSourcePb"] | components["schemas"]["BatchSourceBbd"] | components["schemas"]["BatchSourceCcd"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
-            /** @description Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED */
+            /** @description 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL */
             vars?: components["schemas"]["VarsEdit"] | null;
         };
         /** PredictBatchSummary */
@@ -9405,7 +9435,7 @@ export interface components {
             surrogate?: ("gp" | "rbf") | null;
             /** Tol Rel */
             tol_rel?: number | null;
-            /** @description Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED */
+            /** @description 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL */
             vars?: components["schemas"]["VarsEdit"] | null;
             /**
              * Verification
@@ -9587,8 +9617,38 @@ export interface components {
             format: string;
             /** Name */
             name: string;
+            /** Table Max */
+            table_max?: number | null;
+            /** Table Min */
+            table_min?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /**
+             * Used
+             * @default true
+             */
+            used: boolean;
             /** Var */
             var: string;
+        };
+        /**
+         * TplSummary
+         * @description altair-vars.md §6: ①-2 tpl에 들어간 파라미터 요약(`total` = tpl에 포함한 행 = 선언 + 리터럴, `used` = DOE 범위 행).
+         */
+        TplSummary: {
+            /** Format Loss */
+            format_loss: string[];
+            /**
+             * Scope
+             * @enum {string}
+             */
+            scope: "full" | "partial";
+            /** Skipped */
+            skipped: string[];
+            /** Total */
+            total: number;
+            /** Used */
+            used: number;
         };
         /** TrainCad */
         TrainCad: {
@@ -9820,6 +9880,7 @@ export interface components {
             /** Study Id */
             study_id: string;
             tpl?: components["schemas"]["TrainTpl"] | null;
+            tpl_summary?: components["schemas"]["TplSummary"] | null;
             /** Updated At */
             updated_at?: string | null;
             /** Updated By Name */
@@ -9843,7 +9904,7 @@ export interface components {
             stale: boolean;
             /** Warnings */
             warnings: {
-                [key: string]: string;
+                [key: string]: unknown;
             }[];
         };
         /** UnreadCount */
@@ -10110,12 +10171,12 @@ export interface components {
         /**
          * VarsEdit
          * @description ⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).
-         *     유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED.
+         *     유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)과 Altair 전체 tpl 템플릿에서 쓴다 — Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL.
          */
         VarsEdit: {
             /**
              * Add
-             * @description 세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)
+             * @description 세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = Native 피처 기본 범위 | Altair tpl 표·선언 범위)
              */
             add?: string[] | null;
             /**
@@ -15439,7 +15500,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                /** @description Native 파라미터 세트(템플릿) id */
+                /** @description 파라미터 세트(템플릿) id — Native 또는 Altair */
                 ps_id: string;
             };
             cookie?: never;

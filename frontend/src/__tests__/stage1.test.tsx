@@ -25,7 +25,7 @@ describe("V2-FE-2 ① 학습데이터 생성", () => {
     const card = await screen.findByRole("region", { name: "파라미터 표" });
     await within(card).findByRole("table", { name: "파라미터 표" });
     expect((within(card).getByLabelText("bad name 사용") as HTMLInputElement).disabled).toBe(true);
-    expect(within(card).getByTestId("tpl-state").textContent).toContain("tpl 생성됨 · 사용 4개");
+    expect(within(card).getByTestId("tpl-state").textContent).toContain("tpl 생성됨 · 전체 5개 포함(사용 4개 = DOE 범위, 미사용 1개 공칭 고정)");
     fireEvent.click(within(card).getByLabelText("FILLET_R 사용"));
     expect(within(card).getByTestId("tpl-state").textContent).toContain("표가 바뀌었습니다 — tpl을 다시 생성하세요");
     // 고급: 형식·단위 열

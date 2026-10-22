@@ -11,7 +11,9 @@ import { ContourDisplayForm } from "./ContourDisplayForm";
 import { INPUT_KIND_LABEL, inputKindOf } from "./TemplatePicker";
 import { TemplateBadge } from "../../components/InputKindSelect";
 import { EngineBadge } from "../../components/EngineSelect";
+import { TPL_SOURCE_LABEL, tplErrorText, type TplSource } from "../../lib/altairVars";
 import { NativeDetail } from "./geometry/NativeDetail";
+import { AltairDetail } from "./geometry/AltairDetail";
 
 type RegMode = "discover" | "folder" | "train";
 const MODES: [RegMode, string][] = [
@@ -96,6 +98,7 @@ export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
         <p className="muted">등록된 템플릿이 없습니다. 프로젝트 폴더를 지정하면 tpl·CAD·조립 폴더를 찾아 등록합니다.</p>
       )}
       {ps && !open && ps.engine === "native" && <NativeDetail key={`n-${ps.id}`} ps={ps} canEdit={canExec} />}
+      {ps && !open && ps.engine === "altair" && ps.vars_scope && <AltairDetail key={`a-${ps.id}`} ps={ps} canEdit={canExec} />}
       {ps && !open && <ResponseDefs key={ps.id} ps={ps} canEdit={canExec} />}
       {ps && !open && <ContourDisplayForm key={`d-${ps.id}`} ps={ps} canEdit={canExec} />}
       {open && canExec && (
@@ -158,6 +161,7 @@ function FromTrainForm({ label, onDone }: { label: string; onDone: () => Promise
   const [does, setDoes] = useState<TrainDoe[] | null>(null);
   const [doeId, setDoeId] = useState("");
   const [runs, setRuns] = useState<"collected" | "all">("collected");
+  const [tplSource, setTplSource] = useState<TplSource>("doe");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -176,10 +180,10 @@ function FromTrainForm({ label, onDone }: { label: string; onDone: () => Promise
     setBusy(true);
     setError(null);
     try {
-      await api.paramSetFromTrain(study.id, { doe_id: doeId, runs, label: label.trim() || null });
+      await api.paramSetFromTrain(study.id, { doe_id: doeId, runs, tpl_source: tplSource, label: label.trim() || null });
       await onDone();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(tplErrorText(e));
     } finally {
       setBusy(false);
     }
@@ -208,6 +212,16 @@ function FromTrainForm({ label, onDone }: { label: string; onDone: () => Promise
             <button type="button" role="radio" aria-checked={runs === "all"} className={runs === "all" ? "on" : ""} onClick={() => setRuns("all")}>
               전체
             </button>
+          </div>
+        </div>
+        <div className="field">
+          <span className="field-label">tpl 출처</span>
+          <div className="seg" role="radiogroup" aria-label="tpl 출처">
+            {(["doe", "current"] as TplSource[]).map((k) => (
+              <button key={k} type="button" role="radio" aria-checked={tplSource === k} className={tplSource === k ? "on" : ""} onClick={() => setTplSource(k)}>
+                {TPL_SOURCE_LABEL[k]}
+              </button>
+            ))}
           </div>
         </div>
       </div>

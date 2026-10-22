@@ -155,10 +155,10 @@ export function seedParamSet(): ParamSet {
     // S10 컨투어 표시 설정
     display: { field: "Stress", component: "vonMises", avgmode: "simple", comps: ["CUSHION_TOP", "FOAM"], legend: { mode: "auto", min: null, max: null }, views: ["iso", "front", "top", "right"] },
     tpl_params: [
-      { var: "var_1", name: "THK_TOP", format: "%.4f" },
-      { var: "var_2", name: "THK_FOAM", format: "%.4f" },
-      { var: "var_3", name: "E_FOAM", format: "%.3f" },
-      { var: "var_4", name: "RIB_N", format: "%3i" },
+      { var: "var_1", name: "THK_TOP", format: "%.4f", used: true },
+      { var: "var_2", name: "THK_FOAM", format: "%.4f", used: true },
+      { var: "var_3", name: "E_FOAM", format: "%.3f", used: true },
+      { var: "var_4", name: "RIB_N", format: "%3i", used: true },
     ],
     is_current: true, origin: "FOLDER", train_doe_id: null, registered_by_name: "김연구", registered_at: iso(60 * 5),
   };

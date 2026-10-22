@@ -8,7 +8,8 @@ import type { JobState } from "./types";
 type EntityStatus = "BUILDING" | "READY" | "FAILED";
 
 export type TrainParam = S["TrainParamOut"];
-export type TrainSetup = Override<S["TrainSetup"], { parameters: TrainParam[]; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string }[] }>) | null }>;
+export type TrainSetup = Override<S["TrainSetup"], { parameters: TrainParam[]; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string; names?: string[] }[] }>) | null }>;
+export type TplSummary = S["TplSummary"];
 /** extract-filter.md §6.1: native ①-1·④ 추출 조건(찾을 종류 그룹 + 조건 mm·mm²·°). 응답에서는 서버 정규화본 */
 export type ExtractFilter = S["ExtractFilter"];
 export type ExtractGroup = ExtractFilter["groups"][number];

@@ -245,7 +245,7 @@ export const api = {
   doeSamples: (id: string, limit = 1) => request<SamplePage>("GET", `/train-does/${id}/samples`, { query: { limit } }),
   trainRuns: (doeId: string, q: { state?: string; limit?: number; cursor?: string | null } = {}) =>
     requestPage<TrainRun[]>(`/train-does/${doeId}/runs`, { limit: q.limit ?? 200, state: q.state, cursor: q.cursor }),
-  paramSetFromTrain: (studyId: string, body: { doe_id: string; runs?: "collected" | "all"; unit_system?: string; label?: string | null }) =>
+  paramSetFromTrain: (studyId: string, body: { doe_id: string; runs?: "collected" | "all"; unit_system?: string; label?: string | null; tpl_source?: "doe" | "current" }) =>
     request<ParamSet>("POST", `/studies/${studyId}/param-sets/from-train`, { body }),
 
   // §12.6 ② 데이터 정리

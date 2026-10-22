@@ -5,6 +5,7 @@
 // R-F 분할(동작 불변): 기록·상수·타입 predictBatchRec · 조합 계산 predictBatchMatrix · 상태·응답 predictBatchOut · 작업 생성·진행 predictBatchJobs · 시드 predictBatchSeed · 설계공간 지도 predictBatchDesign. 옛 import 경로는 아래에서 재노출한다.
 import type { BatchCurves, BatchSource, Job, PredictBatch, ResponseSpec, TemplateResponse } from "../api/types";
 import { downsampleMinMax } from "../lib/downsample";
+import { usesVarTable } from "../lib/nativeVars";
 import { err, needPower, ok, type Route } from "./route";
 import { mockBrief, mockSampling } from "./sampling";
 import { isSamplingKind, recommendedCount } from "../lib/sampling";
@@ -104,10 +105,10 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
     if (method === "POST" && seg[3] === "preview") {
       const ps = srv.paramSets.find((p) => p.id === body?.param_set_id && p.study_id === s.id);
       if (!ps) return err(409, "PREREQUISITE_MISSING", "템플릿을 먼저 등록하세요.", { missing: ["PARAM_SET"] });
-      // native-vars.md §6.3: Native는 vars{add,exclude}로 유효 변수를 정한다(Altair는 422 NATIVE_VARS_UNSUPPORTED)
+      // native-vars.md §6.3: Native는 vars{add,exclude}로 유효 변수를 정한다(Altair는 422 TPL_SCOPE_PARTIAL)
       const src = body?.source as BatchSource;
       const rv = runVars(srv, ps, body?.vars as { add?: string[]; exclude?: string[] } | null | undefined, body?.model_id as string | null | undefined);
-      if (rv.error === "NATIVE_VARS_UNSUPPORTED") return err(422, "NATIVE_VARS_UNSUPPORTED", "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다");
+      if (rv.error === "TPL_SCOPE_PARTIAL") return err(422, "TPL_SCOPE_PARTIAL", "옛 tpl(사용 파라미터만) — ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록하세요");
       const eps = rv.out.ps;
       const m = batchMatrix(srv, eps, src);
       if (isResp(m)) return m;
@@ -116,7 +117,7 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
       const out: Record<string, unknown> = { input_kind: toInternal(ri.input), input: ri.input, input_capability: capability(ps).cap, input_capability_reason: capability(ps).reason, count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: [...m.problems, ...(rv.error ? [{ code: "RANGE_INVALID", message: `vars 이름이 올바르지 않습니다(${rv.error})` }] : [])] };
       const need = Math.max(5, eps.parameters.length + 2);
       const notes = [...(m.notes ?? [])];
-      if (ps.engine === "native") {
+      if (usesVarTable(ps)) {
         const rg = (src as { ranges?: Record<string, number[]> | null }).ranges ?? null;
         out.var_rows = rv.out.rows;
         out.excluded = rv.out.excluded;

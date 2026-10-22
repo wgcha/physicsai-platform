@@ -9,6 +9,7 @@ import { NativeVarsTable } from "../geometry/NativeVarsTable";
 import type { Ranges } from "./samplingSource";
 
 export interface NativeBatch {
+  engine?: "native" | "altair";
   rows: NativeRow[];
   nv: NativeVars | null;
   canEdit: boolean;
@@ -24,7 +25,7 @@ export function NativeBatchVars({ native, ranges, locked, onRange, extra, note }
   return (
     <>
       <NativeVarsTable
-        label="파라미터 범위" rows={shown} canEdit={native.canEdit} words={{ name: "파라미터", lo: "최소", hi: "최대" }} lockRange={locked}
+        label="파라미터 범위" engine={native.engine} rows={shown} canEdit={native.canEdit} words={{ name: "파라미터", lo: "최소", hi: "최대" }} lockRange={locked}
         onPatch={(name, p) => {
           if (p.lo !== undefined) onRange(name, 0, p.lo);
           if (p.hi !== undefined) onRange(name, 1, p.hi);
@@ -38,7 +39,7 @@ export function NativeBatchVars({ native, ranges, locked, onRange, extra, note }
             <option value="">변수 추가…</option>
             {pool.map((p) => (
               <option key={p.name} value={p.name}>
-                {p.name} · {typeLabel(p.type)} · {p.body}
+                {native.engine === "altair" ? p.name : `${p.name} · ${typeLabel(p.type ?? "")} · ${p.body ?? ""}`}
               </option>
             ))}
           </select>

@@ -7,6 +7,8 @@ import { addable, generalNotes, type NativeRow } from "../../../lib/nativeVars";
 import { NativeVarsTable } from "../../stage4/geometry/NativeVarsTable";
 
 interface Props {
+  /** Altair 전체 tpl이면 Native 전용 열을 숨기고 변수 추가 후보에 종류·바디를 쓰지 않는다 */
+  engine?: "native" | "altair";
   rows: NativeRow[];
   nv: NativeVars | null;
   canEdit: boolean;
@@ -18,24 +20,24 @@ interface Props {
   onAdd: (name: string) => void;
 }
 
-export function NativeVarsCard({ rows, nv, canEdit, notes, onPatch, onBulkUse, onRemove, onAdd }: Props) {
+export function NativeVarsCard({ engine = "native", rows, nv, canEdit, notes, onPatch, onBulkUse, onRemove, onAdd }: Props) {
   const pool = nv ? addable(nv, rows) : [];
   const info = generalNotes([...(nv?.notes ?? []), ...(notes ?? [])]).filter((n, i, a) => a.findIndex((m) => m.code === n.code) === i);
   return (
-    <Card span={9} step="④" title="변수 범위" aside={<span className="muted small">범위 자유 · 학습 범위·모핑 가능 범위 밖은 경고 · 하한 = 상한이면 고정</span>}>
-      <NativeVarsTable label="변수 범위" rows={rows} canEdit={canEdit} showFixed notes={notes} onPatch={onPatch} onBulkUse={onBulkUse} onRemove={onRemove} />
+    <Card span={9} step="④" title="변수 범위" aside={<span className="muted small">{engine === "altair" ? "범위 자유 · 학습 범위 밖은 경고 · 하한 = 상한이면 고정" : "범위 자유 · 학습 범위·모핑 가능 범위 밖은 경고 · 하한 = 상한이면 고정"}</span>}>
+      <NativeVarsTable label="변수 범위" engine={engine} rows={rows} canEdit={canEdit} showFixed notes={notes} onPatch={onPatch} onBulkUse={onBulkUse} onRemove={onRemove} />
       <div className="run-action-row small">
         {canEdit && pool.length > 0 && (
           <select value="" aria-label="변수 추가" onChange={(e) => e.target.value && onAdd(e.target.value)}>
             <option value="">변수 추가…</option>
             {pool.map((p) => (
               <option key={p.name} value={p.name}>
-                {p.name} · {typeLabel(p.type)} · {p.body}
+                {engine === "altair" ? p.name : `${p.name} · ${typeLabel(p.type ?? "")} · ${p.body ?? ""}`}
               </option>
             ))}
           </select>
         )}
-        <span className="muted" data-testid="vars-run-note">이 실행에만 적용(세트 정의는 ④에서). 목록에 없는 변수는 추출 조건을 바꿔 새 템플릿으로 등록하세요.</span>
+        <span className="muted" data-testid="vars-run-note">이 실행에만 적용(세트 정의는 ④에서). {engine === "altair" ? "목록에 없는 변수는 ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록하세요." : "목록에 없는 변수는 추출 조건을 바꿔 새 템플릿으로 등록하세요."}</span>
       </div>
       {info.map((n) => (
         <p key={n.code} className="muted small" data-testid={`var-note-${n.code}`}>

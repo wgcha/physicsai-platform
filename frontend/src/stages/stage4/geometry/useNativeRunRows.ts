@@ -3,11 +3,11 @@
 // 다중 baseline 등 editable=false이면 rows = null(기존 표 그대로).
 import { useEffect, useRef, useState } from "react";
 import { api, type NativeVars, type ParamSet } from "../../../api";
-import { NO_EDIT, propRows, runRows, type NativeRow } from "../../../lib/nativeVars";
+import { NO_EDIT, propRows, runRows, usesVarTable, varsRevisionOf, type NativeRow } from "../../../lib/nativeVars";
 
 export interface NativeRunRows {
   native: boolean;
-  /** Native인데 아직 불러오는 중(기존 표를 잠깐 보이지 않게) */
+  /** 변수 표를 쓰는 세트인데 아직 불러오는 중(기존 표를 잠깐 보이지 않게) */
   pending: boolean;
   nv: NativeVars | null;
   rows: NativeRow[] | null;
@@ -15,13 +15,13 @@ export interface NativeRunRows {
 }
 
 export function useNativeRunRows(ps: ParamSet | null, modelId: string | null): NativeRunRows {
-  const native = ps?.engine === "native";
+  const native = usesVarTable(ps); // Native 또는 Altair 전체 tpl(altair-vars.md §5.2)
   const [nv, setNv] = useState<NativeVars | null>(null);
   const [rows, setRowsState] = useState<NativeRow[] | null>(null);
   const [failed, setFailed] = useState(false);
   const owner = useRef<string | null>(null);
   const key = ps?.id ?? null;
-  const rev = ps?.native?.vars_revision ?? 0;
+  const rev = ps ? varsRevisionOf(ps) : 0;
   useEffect(() => {
     setNv(null);
     setRowsState(null);

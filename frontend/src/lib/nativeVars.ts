@@ -15,6 +15,10 @@ export interface NativeRow {
   position: boolean;
   group: string | null;
   refLocked: boolean;
+  /** Altair: tpl 형식이 정수(%i·%d)인 파라미터 — 하한·상한도 정수만 */
+  integer: boolean;
+  /** Altair: 범위를 알 수 없어(고정 선언·표 값 없음) 빈칸으로 시작한 행 */
+  rangeUnset: boolean;
   /** 기준 범위: 세트 정의(세트 행) 또는 피처 기본 범위(추가·미사용 행) — 요청 bounds는 이것과 다를 때만 보낸다 */
   base: VarRange;
   defaultRange: VarRange;
@@ -38,6 +42,15 @@ export const NOTE_TEXT: Record<string, string> = {
   TRAIN_RANGE_UNMATCHED: "학습 때의 피처와 같은지 확인할 수 없어 일부 변수의 학습 범위를 생략합니다",
   VARS_FROM_DOE: "① DOE의 변수 구성을 그대로 씁니다",
 };
+
+/** Altair 전체 tpl 세트의 머리 안내(altair-vars.md §5.3) — GET 변수 정의 reason 코드를 문구로 */
+export const TPL_PARTIAL_TEXT = "옛 tpl(① 사용 파라미터만 포함) — 변수 추가·제외는 ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록한 뒤 쓰세요";
+export const reasonText = (reason: string | null | undefined): string | null => (!reason ? null : reason === "TPL_SCOPE_PARTIAL" ? TPL_PARTIAL_TEXT : reason);
+
+/** Altair 전체 tpl(변수 정의 편집 가능)인가 — 변수 표·그 자리 편집을 Native와 같이 쓴다 */
+export const usesVarTable = (ps: Pick<ParamSet, "engine" | "vars_scope"> | null | undefined): boolean => ps?.engine === "native" || (ps?.engine === "altair" && ps.vars_scope === "full");
+/** 변수 정의 리비전(Native는 native 요약, Altair는 ParamSet.vars_revision) */
+export const varsRevisionOf = (ps: ParamSet): number => ps.native?.vars_revision ?? ps.vars_revision ?? 0;
 /** 서버 문구가 한국어면 그대로, 아니면 코드 표 */
 export const noteText = (n: { code: string; message?: string | null }) => (n.message && /[가-힣]/.test(n.message) ? n.message : NOTE_TEXT[n.code] ?? n.message ?? n.code);
 
@@ -48,7 +61,8 @@ export const NV_ERROR_TEXT: Record<string, string> = {
   NATIVE_VARS_GEOMETRY_OFF: "쉘 두께 설정에서 형상 파라미터를 켠 뒤 편집하세요",
   VAR_UNKNOWN: "이 템플릿의 형상 변수가 아닙니다",
   VAR_DUPLICATE: "변수가 중복되었습니다",
-  VAR_RANGE_INVALID: "하한·상한은 유한한 숫자이고 하한 ≤ 상한이어야 합니다",
+  VAR_RANGE_INVALID: "하한·상한은 유한한 숫자이고 하한 ≤ 상한이어야 합니다(정수 파라미터는 정수 범위)",
+  TPL_SCOPE_PARTIAL: TPL_PARTIAL_TEXT,
   VARS_EMPTY: "변수를 하나 이상 고르세요",
 };
 
@@ -109,10 +123,12 @@ const rangeOf = (r: { min: number; max: number }): VarRange => ({ min: r.min, ma
 
 function fromPool(p: NativeVarPoolRow, origin: VarOrigin, use: boolean, def?: VarRange): NativeRow {
   const base = def ?? rangeOf(p.default_range);
+  const blank = !def && !!p.range_unset; // 범위를 모르는 풀 행은 빈칸으로 시작(채워야 쓸 수 있다)
   return {
-    name: p.name, type: p.type, body: p.body, nominal: p.nominal ?? null, unit: p.unit, position: p.position, group: p.group ?? null, refLocked: p.ref_locked,
+    name: p.name, type: p.type ?? "", body: p.body ?? "", nominal: p.nominal ?? null, unit: p.unit, position: p.position, group: p.group ?? null, refLocked: !!p.ref_locked,
+    integer: !!p.integer, rangeUnset: !!p.range_unset,
     base, defaultRange: rangeOf(p.default_range), train: p.train ? rangeOf(p.train) : null, feasible: p.feasible ?? null,
-    use, lo: String(base.min), hi: String(base.max), fixed: use && origin === "set" && base.min === base.max, origin,
+    use, lo: blank ? "" : String(base.min), hi: blank ? "" : String(base.max), fixed: use && origin === "set" && base.min === base.max, origin,
   };
 }
 
@@ -146,7 +162,7 @@ export function propRows(ps: ParamSet): NativeRow[] {
   return ps.parameters
     .filter((p) => p.source === "prop")
     .map((p) => ({
-      name: p.name, type: "SHELL_T", body: "", nominal: p.nominal ?? null, unit: p.unit ?? "mm", position: false, group: null, refLocked: false,
+      name: p.name, type: "SHELL_T", body: "", nominal: p.nominal ?? null, unit: p.unit ?? "mm", position: false, group: null, refLocked: false, integer: false, rangeUnset: false,
       base: { min: p.min, max: p.max }, defaultRange: { min: p.min, max: p.max }, train: null, feasible: null,
       use: true, lo: String(p.min), hi: String(p.max), fixed: p.min === p.max, origin: "set" as const,
     }));
@@ -178,12 +194,21 @@ export const putBody = (rows: NativeRow[], baseRevision: number) => ({
 /** 편집 중 값이 저장된 정의와 같은가(저장 버튼 활성 판정) */
 export const signature = (rows: NativeRow[]) => JSON.stringify(rows.filter((r) => r.use).map((r) => [r.name, toNum(r.lo) ?? r.lo, toNum(r.hi) ?? r.hi]));
 
-/** 행 입력 검사(차단): 숫자·하한 ≤ 상한만 — 범위 밖은 경고일 뿐이다(NV-7) */
-export function rowError(r: Pick<NativeRow, "lo" | "hi" | "use" | "fixed">): string | null {
+/** 행 입력 검사(차단): 숫자·하한 ≤ 상한·(정수 파라미터는 정수)만 — 범위 밖은 경고일 뿐이다(NV-7) */
+export function rowError(r: Pick<NativeRow, "lo" | "hi" | "use" | "fixed"> & { integer?: boolean; rangeUnset?: boolean }): string | null {
   if (!r.use) return null;
   const b = rowBounds(r);
-  if (!b) return "숫자를 입력하세요";
+  if (!b) return r.rangeUnset && (r.lo.trim() === "" || r.hi.trim() === "") ? "범위를 입력하세요" : "숫자를 입력하세요";
+  const ie = integerError(r);
+  if (ie) return ie;
   return b[0] > b[1] ? "하한 ≤ 상한" : null;
+}
+
+/** 정수(%i·%d) 파라미터의 하한·상한이 정수가 아니면 문구(숫자가 아닌 칸은 다른 검사 소관) */
+export function integerError(r: Pick<NativeRow, "lo" | "hi" | "use" | "fixed"> & { integer?: boolean }): string | null {
+  if (!r.use || !r.integer) return null;
+  const b = rowBounds(r);
+  return b && !(Number.isInteger(b[0]) && Number.isInteger(b[1])) ? "정수만 입력하세요" : null;
 }
 
 /** 위치형: 공칭 대비 Δ 표기(mm) — "−5 / +5" */

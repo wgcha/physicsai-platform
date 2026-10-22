@@ -24,6 +24,18 @@ export function trainParams(): TrainParam[] {
   ];
 }
 
+/** altair-vars.md §3: ①-2 tpl = 유효한 모든 행(사용 = 표 범위, 미사용 = 공칭 고정). 유효하지 않은 미사용 행은 skipped */
+export function fullTpl(parameters: TrainParam[]) {
+  const rows = parameters.filter((p) => p.valid && p.nominal != null);
+  const skipped = parameters.filter((p) => !(p.valid && p.nominal != null) && !p.use).map((p) => p.name);
+  const params = rows.map((p, i) => ({ var: `var_${i + 1}`, name: p.name, format: p.format, used: p.use, unit: p.unit, table_min: p.min, table_max: p.max }));
+  const summary = { total: rows.length, used: rows.filter((p) => p.use).length, skipped, format_loss: [] as string[], scope: "full" as const };
+  const notes = skipped.length ? [{ code: "TPL_PARAM_SKIPPED", message: `유효하지 않은 미사용 파라미터는 tpl에서 뺐습니다: ${skipped.join(", ")}`, names: skipped }] : [];
+  return { params, summary, notes };
+}
+/** 표가 지금 tpl과 같은 행·형식·사용 여부인가(stale 판정) */
+export const tplKey = (parameters: TrainParam[]) => parameters.filter((p) => p.valid && p.nominal != null).map((p) => `${p.name}:${p.format}:${p.use}`).join(",");
+
 export interface RunRec extends TrainRun {
   _job?: string;
 }
@@ -40,10 +52,11 @@ export function seedTrain(p2: Phase2Mock, J: SeedJob, sid: string): { doeId: str
     used_count: used.length,
     tpl: {
       generated_at: iso(60 * 6), sha256: "41ab…", display_path: p2.s.disp(sid, "01_train/tpl/simlab_parametered_mesh.tpl"),
-      params: used.map((p, i) => ({ var: `var_${i + 1}`, name: p.name, format: p.format })),
-      warnings: [{ code: "TPL_INTEGER_FORMAT", message: "정수 형식(%3i)이라 HyperStudy 샘플 값이 정수로 반영됩니다: RIB_H" }],
+      params: fullTpl(params).params,
+      warnings: [{ code: "TPL_INTEGER_FORMAT", message: "정수 형식(%3i)이라 HyperStudy 샘플 값이 정수로 반영됩니다: RIB_H" }, ...fullTpl(params).notes],
       stale: false,
     },
+    tpl_summary: fullTpl(params).summary,
     version: 4, updated_by_name: "김연구", updated_at: iso(60 * 6),
   };
   J({ id: "j-tx", job_type: "TD_EXTRACT_PARAMS", state: "SUCCEEDED", created_at: iso(60 * 7), params: { cad_path: p2.setups[sid].cad!.source_path }, result: { param_count: 6, valid_count: 5, cad_file_name: "cushion_parametric_modeling.prt" } });
@@ -156,7 +169,9 @@ export const trainRoutes: Route = (srv, { method, path, seg, query, body }) => {
       const warnings = used
         .filter((p) => /^%[-0-9.]*[id]$/.test(p.format) && [p.nominal, p.min, p.max].some((v) => v != null && !Number.isInteger(v)))
         .map((p) => ({ code: "TPL_INTEGER_FORMAT", message: `정수 형식(${p.format})이라 HyperStudy 샘플 값이 정수로 반영됩니다: ${p.name}` }));
-      t.tpl = { generated_at: new Date().toISOString(), sha256: "77de…", display_path: p2.s.disp(s.id, "01_train/tpl/simlab_parametered_mesh.tpl"), params: used.map((p, i) => ({ var: `var_${i + 1}`, name: p.name, format: p.format })), warnings, stale: false };
+      const full = fullTpl(t.parameters);
+      t.tpl = { generated_at: new Date().toISOString(), sha256: "77de…", display_path: p2.s.disp(s.id, "01_train/tpl/simlab_parametered_mesh.tpl"), params: full.params, warnings: [...warnings, ...full.notes], stale: false };
+      t.tpl_summary = full.summary;
       t.version++;
       return ok(t);
     }
@@ -167,7 +182,15 @@ export const trainRoutes: Route = (srv, { method, path, seg, query, body }) => {
       if (d.sample_status !== "PARSED" && d.sample_status !== "PARTIAL") return err(409, "SAMPLES_MISSING", "DOE 샘플 표가 없습니다.");
       const runs = (p2.runs[d.id] ?? []).filter((x) => body?.runs === "all" || x.state === "COLLECTED");
       if (!runs.length) return err(409, "DOE_NOT_READY", "회수된 run이 없습니다.");
+      const cur = body?.tpl_source === "current";
+      if (cur) {
+        const t = p2.setups[s.id];
+        if (!t?.tpl) return err(409, "TPL_REQUIRED", "현재 ①-2 tpl이 없습니다.");
+        if (t.tpl_summary && t.tpl_summary.scope !== "full") return err(422, "TPL_SCOPE_PARTIAL", "현재 tpl이 옛 형식입니다.");
+        if (t.tpl.stale) return err(409, "TPL_DOE_MISMATCH", "현재 tpl의 사용 파라미터가 이 DOE와 다릅니다.");
+      }
       const ps = addParamSetFromTrain(p2.s, s, d.id, runs.length);
+      if (cur) ps.vars_scope = "full";
       ps.label = String(body?.label ?? "").trim() || null;
       return { status: 201, body: ps };
     }
@@ -196,10 +219,10 @@ export function saveParams(p2: Phase2Mock, s: Study, body: Record<string, unknow
   if (!next.some((p) => p.use)) problems.push({ name: "", code: "NO_PARAM_USED", message: "사용 파라미터가 1개 이상 필요합니다" });
   if (problems.length) return err(422, "TRAIN_PARAMS_INVALID", "파라미터 표를 확인하세요.", { problems });
   const usedNow = next.filter((p) => p.use);
-  const tplNames = t.tpl?.params.map((x) => `${x.name}:${x.format}`).join(",");
+  const tplNames = t.tpl?.params.map((x) => `${x.name}:${x.format}:${x.used}`).join(",");
   t.parameters = next;
   t.used_count = usedNow.length;
-  if (t.tpl) t.tpl.stale = tplNames !== usedNow.map((x) => `${x.name}:${x.format}`).join(",") || t.tpl.stale;
+  if (t.tpl) t.tpl.stale = tplNames !== tplKey(next) || t.tpl.stale;
   t.version++;
   t.updated_by_name = p2.s.me!.display_name;
   t.updated_at = new Date().toISOString();

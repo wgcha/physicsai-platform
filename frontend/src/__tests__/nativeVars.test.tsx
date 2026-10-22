@@ -59,7 +59,7 @@ afterEach(() => {
 
 const POOL = (extra: Partial<NativeVars["pool"][number]> = {}) =>
   ({ name: "A", type: "THICKNESS", body: "B", nominal: 10, unit: "mm", position: false, default_range: { min: 9, max: 11 }, feasible: { min: 5, max: 15, source: "envelope" }, ref_locked: false, group: null, train: { min: 9, max: 11 }, ...extra }) as NativeVars["pool"][number];
-const VARS = (): NativeVars => ({ revision: 2, editable: true, variables: [{ name: "A", min: 9.5, max: 10.5 }], pool: [POOL(), POOL({ name: "C", nominal: 3, default_range: { min: 2.8, max: 3.2 }, train: null })], notes: [], warnings: [], history: [] }) as NativeVars;
+const VARS = (): NativeVars => ({ revision: 2, editable: true, engine: "native", variables: [{ name: "A", min: 9.5, max: 10.5 }], pool: [POOL(), POOL({ name: "C", nominal: 3, default_range: { min: 2.8, max: 3.2 }, train: null })], notes: [], warnings: [], history: [] }) as NativeVars;
 
 describe("lib/nativeVars — 경고(막지 않음)·행·본문", () => {
   it("경고: 학습 범위 밖·모핑 가능 범위 밖·양면 접촉·공칭 밖, 허용오차 안은 경고 없음, 사용 해제 행은 경고 없음", () => {
