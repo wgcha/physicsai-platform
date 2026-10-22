@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import random
 from collections.abc import Sequence
 from itertools import product
 from .designs_lhs import (  # noqa: F401 - 기존 경로 재노출
@@ -31,6 +32,12 @@ def code_to_value(c: float, lo: float, hi: float) -> float:
 def unit_to_value(u: float, lo: float, hi: float) -> float:
     """단위 값 u ∈ [0,1] → lo + u·(hi−lo)."""
     return lo + u * (hi - lo)
+
+
+def random_unit(n: int, k: int, seed: int) -> list[list[float]]:
+    """균일 랜덤 단위 점 n×k(doe-methods.md §4.1): `rng = random.Random(seed)`, i = 0..n−1마다 열 순서로 `u = rng.random()`(행 우선)."""
+    rng = random.Random(seed)
+    return [[rng.random() for _ in range(k)] for _ in range(n)]
 
 
 # ---- 전체 요인 / BBD / CCD ----------------------------------------------------------------------------
