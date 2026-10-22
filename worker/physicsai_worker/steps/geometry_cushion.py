@@ -39,7 +39,8 @@ def _report_warnings(x: Any, v: Verdict) -> None:
     """보고 `warnings[]` 중 쿠션 부품 정의 누락을 한국어 경고로(이름 목록은 코드가 아니라 문구로만, 길이 제한)."""
     for w in (v.report or {}).get("warnings") or []:
         if isinstance(w, dict) and w.get("code") == WARN_PART_DEF:
-            detail = w.get("message")
+            names = w.get("names")  # paicad 0.12.0: 못 찾은 정의 이름 목록(없으면 message)
+            detail = ", ".join(str(n) for n in names[:10]) if isinstance(names, list) and names else w.get("message")
             msg = label_of(WARN_PART_DEF) + (f" — {detail}" if isinstance(detail, str) and detail else "")
             x.warn(WARN_PART_DEF, msg[:MAX_WARN])
 

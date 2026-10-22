@@ -427,11 +427,15 @@ def do_cushion_write():
         sys.exit(1)
     code = fails("cushion_write")
     if code:
-        sys.exit(fail_report("cushion write", cj, code))
-    starters = sorted(n for n in os.listdir(assem) if n.lower().endswith("_0000.rad") and not n.lower().startswith("eps_mesh")
-                      and os.path.isfile(os.path.join(assem, n)))
-    if not starters:
-        sys.exit(fail_report("cushion write", cj, "GEOM_INPUT_INVALID", {"message": "no starter with /BEGIN in --assem-dir"}))
+        sys.exit(fail_report("cushion write", cj, code, {"out_rad": None}))
+    def has_begin(n):
+        with open(os.path.join(assem, n), encoding="utf-8", errors="replace") as fh:
+            return any(ln.strip() == "/BEGIN" for ln in fh)
+
+    starters = sorted(n for n in os.listdir(assem) if n.lower().endswith(".rad") and os.path.isfile(os.path.join(assem, n)) and has_begin(n))
+    if len(starters) != 1:  # 조립 폴더 직계 *.rad 중 /BEGIN 있는 것 정확히 1개(아니면 GEOM_INPUT_INVALID)
+        sys.exit(fail_report("cushion write", cj, "GEOM_INPUT_INVALID",
+                             {"message": f"exactly one starter with /BEGIN required in --assem-dir (found {len(starters)})", "out_rad": None}))
     with open(inc, encoding="utf-8") as fh:
         body = [ln.rstrip("\n") for ln in fh if not ln.lstrip().startswith("#include")]
     stem = os.path.splitext(os.path.basename(out_rad))[0]
@@ -441,7 +445,7 @@ def do_cushion_write():
         fh.write(text)
     os.replace(tmp, out_rad)
     nodes = sum(1 for ln in body if ln.strip() and not ln.startswith(("/", "#")))
-    warns = [{"code": "CUSHION_PART_DEF_MISSING", "message": "PART 10"}] if os.environ.get("FAKE_PAICAD_CUSHION_WARN") == "1" else []
+    warns = [{"code": "CUSHION_PART_DEF_MISSING", "names": ["PART 10"]}] if os.environ.get("FAKE_PAICAD_CUSHION_WARN") == "1" else []
     write_json(cj, dict(BASE, status="OK", code=None, category=None, message=None, out_rad=os.path.basename(out_rad), node_count=nodes,
                         elem_count=0, bytes=len(text.encode("utf-8")), parts=[], begin_from=starters[0], def_sources=[],
                         warnings=warns, elapsed_s=0.05))

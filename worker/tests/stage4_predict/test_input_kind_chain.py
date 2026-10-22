@@ -136,7 +136,7 @@ def test_ik_native_cushion_part_def_warning_and_failures(native_env, monkeypatch
     jc, st = _run(env, NAT, cushion=True)
     assert st == "SUCCEEDED", env.job(jc)
     w = [x for x in env.job(jc)["warnings"] if x["code"] == "CUSHION_PART_DEF_MISSING"]
-    assert len(w) == 1 and "쿠션 부품 정의(PART·PROP·MAT) 일부를 조립 폴더에서 찾지 못했습니다" in w[0]["message"]
+    assert len(w) == 1 and "쿠션 부품 정의(PART·PROP·MAT) 일부를 조립 폴더에서 찾지 못했습니다" in w[0]["message"] and "PART 10" in w[0]["message"]
     monkeypatch.delenv("FAKE_PAICAD_CUSHION_WARN")
     monkeypatch.setenv("FAKE_PAICAD_FAIL", "cushion_write:GEOM_UNSUPPORTED_ELEMENT")
     jf, st = _run(env, NAT, cushion=True)
@@ -270,3 +270,22 @@ def test_ik_native_batch_cushion_failure_writes_skipped_and_missing_command(nati
     assert env2.w.run_once_slot() == "FAILED"
     jd = env2.job(pj2)
     assert jd["failure_code"] == "TEMPLATE_NOT_CONFIGURED" and jd["current_step_key"] == "BP_PREP"
+
+
+def test_ik_native_cushion_retry_moves_existing_outputs_to_backup(native_env, fake_record, monkeypatch):
+    """paicad는 출력(cushion.json·rad)이 있으면 종료코드 3으로 거부 — 재시도 때 플랫폼이 먼저 `_backup`으로 옮긴다(삭제 없음)."""
+    env = native_env()
+    native_set(env)
+    monkeypatch.setenv("FAKE_TOOL_MODE_EDSPY", "fail")
+    jc, st = _run(env, NAT, cushion=True)
+    assert st == "FAILED" and env.job(jc)["current_step_key"] == "EDSPY_PREDICT"
+    monkeypatch.delenv("FAKE_TOOL_MODE_EDSPY")
+    r = env.c.post(f"{API}/jobs/{jc}/retry", headers=PW, json={"from_step": 4})
+    assert r.status_code in (200, 201), r.text
+    nid = r.json()["id"]
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(nid)
+    Pd = env.predict_dir(jc)
+    assert (Pd / "geom" / MESH).is_file() and (Pd / "geom" / "cushion" / "cushion.json").is_file()
+    assert sorted(os.listdir(Pd / "INPUT")) == [MESH]
+    backups = [p for p in Path(env.sroot).rglob("*") if "_backup" in p.parts and p.name in (MESH, "cushion")]
+    assert backups, "이전 산출물이 _backup으로 이동되지 않았습니다"

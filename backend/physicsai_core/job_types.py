@@ -315,9 +315,16 @@ STEP_LABELS_NATIVE: dict[str, str] = {
 }
 
 
-def step_label(step_key: str | None, engine: str | None = None) -> str | None:
+# 쿠션 입력 실행의 화면 step 이름(input-kind.md §4.1 — 입력 종류별 덮어쓰기 1곳, 엔진 덮어쓰기보다 우선)
+STEP_LABELS_CUSHION: dict[str, str] = {"RAD_ASSEMBLE": "쿠션 입력 복사"}
+
+
+def step_label(step_key: str | None, engine: str | None = None, input: str | None = None) -> str | None:  # noqa: A002 - 공개 표기 이름
+    """화면 step 이름. input = 공개 입력 종류(`assembly|cushion`, input-kind.md) — 생략·assembly는 기존과 같다."""
     if step_key is None:
         return None
+    if input == "cushion" and step_key in STEP_LABELS_CUSHION:
+        return STEP_LABELS_CUSHION[step_key]
     if engine == "native" and step_key in STEP_LABELS_NATIVE:
         return STEP_LABELS_NATIVE[step_key]
     return STEP_LABELS.get(step_key, step_key)
