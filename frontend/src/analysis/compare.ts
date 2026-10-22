@@ -35,7 +35,7 @@ export function unionRange(...lists: (number | null | undefined)[][]): [number, 
 export function metaChips(m: RtMeta): { key: keyof RtMeta; label: string; value: string }[] {
   return [
     { key: "engine_version", label: "엔진", value: m.engine_version ?? "—" },
-    { key: "baseline_id", label: "기준안", value: m.baseline_id ?? "—" },
+    { key: "baseline_id", label: "기존안", value: m.baseline_id ?? "—" },
     { key: "scene", label: "scene", value: m.scene ?? "—" },
   ];
 }

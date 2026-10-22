@@ -39,7 +39,7 @@ export function ConvergenceChart({ opt }: { opt: SurrogateOpt }) {
         {baseline != null && (
           <>
             <span className="lg line s1" aria-hidden="true" />
-            <span data-testid="baseline-key">기준안 {Number(baseline.toPrecision(4))}</span>
+            <span data-testid="baseline-key">기존안 {Number(baseline.toPrecision(4))}</span>
           </>
         )}
         <span className="muted">수렴 기준: 개선 &lt; {Number((s.tol_rel * 100).toPrecision(3))}%</span>

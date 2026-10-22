@@ -12,6 +12,7 @@
 - 오류 코드 NATIVE_VARS_UNSUPPORTED 폐지 → TPL_SCOPE_PARTIAL
 - ⑥ 최적화 반복-성능 그래프: 반복 0부터·정수 눈금, 성능 지수 표기 소수 3자리 기본, 축 최소/최대·표기 편집
 - AI 연결: Claude Desktop·Codex·Gemini 설정을 mcp-remote 브리지(npx, Node.js 필요)로 변경, 기존 PC 설치 방식은 대안으로 유지(이슈 #10)
+- ⑥ 결과 문구 '기준안' → '기존안'
 
 ## 0.2.7 — 2026-10-22
 

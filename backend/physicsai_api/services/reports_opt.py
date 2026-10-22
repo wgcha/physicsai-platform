@@ -49,7 +49,7 @@ def _final_images(ctx: AppContext, principal: Principal, detail: dict[str, Any])
     """⑥ 마무리 캡처(기준안 doe 1·최적안 doe 2)의 기존 컨투어 PNG 경로. 캡처가 없거나 파일이 없으면 빈 목록."""
     fin = detail.get("final") or {}
     out: list[dict[str, Any]] = []
-    for key, noun in (("baseline", "기준안"), ("best", "최적안")):
+    for key, noun in (("baseline", "기존안"), ("best", "최적안")):
         run = fin.get(key) or {}
         jid = run.get("job_id")
         if not jid:

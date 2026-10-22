@@ -263,7 +263,7 @@ def _notes_for(v: Mapping[str, Any], lo: float, hi: float, ref_locked: bool) -> 
         out.append(_note("VAR_REF_LOCKED", n, f"'{n}' 양면 접촉 피처 — 형상 생성이 실패할 수 있습니다"))
     nom = _num(v.get("nominal"))
     if nom is not None and (nom < lo - TRAIN_TOL * max(1.0, abs(lo)) or nom > hi + TRAIN_TOL * max(1.0, abs(hi))):
-        out.append(_note("VAR_NOMINAL_OUTSIDE", n, f"'{n}' 공칭 {_g(nom)}이 범위 {_g(lo)}~{_g(hi)} 밖입니다(기준안은 범위 밖 점으로 표시)"))
+        out.append(_note("VAR_NOMINAL_OUTSIDE", n, f"'{n}' 공칭 {_g(nom)}이 범위 {_g(lo)}~{_g(hi)} 밖입니다(기존안은 범위 밖 점으로 표시)"))
     return out
 
 

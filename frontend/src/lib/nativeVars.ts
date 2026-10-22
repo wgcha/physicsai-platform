@@ -36,7 +36,7 @@ export const NOTE_TEXT: Record<string, string> = {
   VAR_OUT_OF_TRAIN: "학습 형상 분포 밖 — 외삽 주의",
   VAR_OUT_OF_FEASIBLE: "모핑 실패 가능",
   VAR_REF_LOCKED: "양면 접촉 피처 — 형상 생성이 실패할 수 있습니다",
-  VAR_NOMINAL_OUTSIDE: "공칭이 범위 밖입니다(기준안은 범위 밖 점으로 표시)",
+  VAR_NOMINAL_OUTSIDE: "공칭이 범위 밖입니다(기존안은 범위 밖 점으로 표시)",
   VAR_OUT_OF_BOUNDS: "최적화 범위 밖 점입니다",
   TRAIN_RANGE_UNKNOWN: "모델의 학습 범위를 알 수 없어 외삽 경고를 생략합니다(모델의 데이터셋이 ① DOE 결과가 아님)",
   TRAIN_RANGE_UNMATCHED: "학습 때의 피처와 같은지 확인할 수 없어 일부 변수의 학습 범위를 생략합니다",

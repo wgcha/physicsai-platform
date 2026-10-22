@@ -107,12 +107,12 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     const calls = recordCalls(server);
     expect((await screen.findByTestId("so-status")).textContent).toBe("완료");
     expect(screen.getByTestId("so-progress").textContent).toMatch(/^완료 — /);
-    const best = screen.getByRole("region", { name: "최적안 — 기준안 대비" });
+    const best = screen.getByRole("region", { name: "최적안 — 기존안 대비" });
     expect(within(best).getByTestId("so-best-link").getAttribute("href")).toMatch(/\/stage\/4\/batch\/b-so-so-1-\d$/);
     expect(within(best).getByText(/FEM 검증 버튼으로 조립 상태 해석/)).toBeTruthy();
     // D3-61: 변수마다 학습 범위·기준안(nominal)·최적안·변화
-    const cmp = within(best).getByRole("table", { name: "기준안 대비" });
-    expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "학습 범위", "기준안", "최적안", "변화"]);
+    const cmp = within(best).getByRole("table", { name: "기존안 대비" });
+    expect(within(cmp).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["변수", "학습 범위", "기존안", "최적안", "변화"]);
     const o = server.surrogate[0];
     const top = within(cmp).getByTestId("cmp-THK_TOP");
     expect(top.textContent).toContain("0.6"); // nominal
@@ -120,14 +120,14 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     if (bestTop >= 1.2) expect(within(best).getByTestId("bound-note").textContent).toContain("THK_TOP(상한)");
     // 결과 요약 타일: 목적(기준안 대비 %)·제약·품질·소요
     const kp = screen.getByTestId("so-kpis");
-    expect(kp.textContent).toMatch(/vs 기준안/);
+    expect(kp.textContent).toMatch(/vs 기존안/);
     expect(kp.textContent).toMatch(/제약 ≤ 14/);
     expect(kp.textContent).toMatch(/Q² /);
     expect(kp.textContent).toMatch(/예측/);
     // 컨투어 비교: 기준안·최적안 둘, 같은 범례 문구
-    const cc = screen.getByRole("region", { name: "컨투어 비교 — 기준안 · 최적안" });
+    const cc = screen.getByRole("region", { name: "컨투어 비교 — 기존안 · 최적안" });
     expect(within(cc).getByText(/같은 범례\(0–/)).toBeTruthy();
-    expect(within(cc).getByTestId("contour-기준안")).toBeTruthy();
+    expect(within(cc).getByTestId("contour-기존안")).toBeTruthy();
     expect(within(cc).getByTestId("contour-최적안")).toBeTruthy();
     expect(within(cc).getAllByTestId("contour-media")).toHaveLength(2);
     expect(screen.getByRole("img", { name: "수렴 그래프" })).toBeTruthy();
@@ -148,7 +148,7 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
       s.surrogate[0].final = { status: "SKIPPED", reason: "컨투어 캡처가 구성되지 않았습니다(commands.contour_capture)", baseline_values: { THK_TOP: 0.6 } };
     });
     expect((await screen.findByTestId("contour-none")).textContent).toBe("캡처 없음 — 컨투어 캡처가 구성되지 않았습니다(commands.contour_capture)");
-    expect(screen.getByTestId("so-kpis").textContent).toContain("기준안 값 없음");
+    expect(screen.getByTestId("so-kpis").textContent).toContain("기존안 값 없음");
     r1.unmount();
     const r2 = renderApp(`${STUDY}/5/surrogate/so-1`, { user: "power" }, (s) => {
       s.surrogate[0].final = { ...s.surrogate[0].final!, legend: null, legend_note: "목적 지표가 컨투어 결과 종류(Stress)의 값이 아니라 이미지마다 자동 범례" };
@@ -158,7 +158,7 @@ describe("V3-S13-9 ⑤ 플랫폼 내장 최적화 화면", () => {
     renderApp(`${STUDY}/5/surrogate/so-1`, { user: "power" }, (s) => {
       Object.assign(s.surrogate[0], { status: "FINALIZING", final: { ...s.surrogate[0].final, status: "PENDING", baseline: null, best: null } });
     });
-    expect((await screen.findByTestId("contour-none")).textContent).toMatch(/^기준안·최적안 컨투어를 캡처하는 중입니다/);
+    expect((await screen.findByTestId("contour-none")).textContent).toMatch(/^기존안·최적안 컨투어를 캡처하는 중입니다/);
     expect(screen.getByTestId("so-status").textContent).toBe("마무리(캡처)");
   });
 

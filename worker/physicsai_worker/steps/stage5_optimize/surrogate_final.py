@@ -205,7 +205,7 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         pred = float(fit.sign * fit.objective.raw(fit.normalize(x))[0][0])
         plan["baseline_predicted"] = pred if math.isfinite(pred) else None
     except (OSError, ValueError, KeyError, ImportError):
-        ctx.log("[WARN] 기준안 예측(범례)을 계산하지 못했습니다 — 범례 개별")
+        ctx.log("[WARN] 기존안 예측(범례)을 계산하지 못했습니다 — 범례 개별")
     legend, why = shared_legend(ctx.settings.capture, ps, opt["settings"]["objective"]["metric"],
                                 [plan["baseline_predicted"], best_d.get("objective")])
     plan["legend"] = legend

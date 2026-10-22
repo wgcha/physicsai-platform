@@ -97,7 +97,7 @@ export const MCP_TABS: { key: McpTab; label: string; where: string; bridge: bool
   { key: "claudeCode", label: "Claude Code", where: "터미널에서 한 번 실행합니다(HTTP 연결).", bridge: false },
   { key: "desktop", label: "Claude Desktop", where: "claude_desktop_config.json의 mcpServers 안에 이 항목을 추가합니다(mcp-remote 브리지).", bridge: true },
   { key: "codex", label: "Codex CLI", where: "~/.codex/config.toml 끝에 이어 붙입니다(mcp-remote 브리지).", bridge: true },
-  { key: "gemini", label: "Gemini CLI", where: "~/.gemini/settings.json의 mcpServers 안에 이 항목을 추가합니다(mcp-remote 브리지).", bridge: true },
+  { key: "gemini", label: "Gemini CLI", where: "C:\\Users\\<사용자>\\.gemini\\settings.json(Windows 기준)의 mcpServers 안에 이 항목을 추가합니다. 파일이 없으면 새로 만들고, 아래 항목을 { \"mcpServers\": { … } } 안에 넣어 저장합니다(mcp-remote 브리지).", bridge: true },
 ];
 /** 브리지 탭 안내(npx 사용) */
 export const NODE_NOTE = "Claude Code를 뺀 셋은 Node.js가 필요합니다(npx 사용).";

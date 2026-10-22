@@ -427,13 +427,13 @@ export function kpis(o: SurrogateOpt): Kpi[] {
   const baseObj = fin?.baseline?.objective ?? fin?.baseline_predicted ?? null;
   const out: Kpi[] = [];
   const objLabel = metricLabel(s.objective.metric, s.objective.series);
-  let sub = "기준안 값 없음";
+  let sub = "기존안 값 없음";
   let tone = "";
   if (best?.objective != null && baseObj != null) {
     const d = best.objective - baseObj;
     const pct = baseObj !== 0 ? (d / Math.abs(baseObj)) * 100 : null;
     const good = s.objective.sense === "max" ? d >= 0 : d <= 0;
-    sub = `${d >= 0 ? "+" : ""}${fmtNum(d)}${pct != null ? ` (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%)` : ""} vs 기준안${fin?.baseline?.objective == null ? "(예측)" : ""}`;
+    sub = `${d >= 0 ? "+" : ""}${fmtNum(d)}${pct != null ? ` (${pct >= 0 ? "+" : ""}${pct.toFixed(1)}%)` : ""} vs 기존안${fin?.baseline?.objective == null ? "(예측)" : ""}`;
     tone = good ? "ok" : "bad";
   }
   out.push({ label: `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`, value: fmtNum(best?.objective ?? null), unit: "", sub, tone });
@@ -443,7 +443,7 @@ export function kpis(o: SurrogateOpt): Kpi[] {
     const ok = v != null && (c.op === "<=" ? v <= c.value : v >= c.value);
     const bv = fin?.baseline?.constraints?.[i];
     out.push({ label: `${metricLabel(c.metric, c.series)} (제약 ${c.op === "<=" ? "≤" : "≥"} ${fmtNum(c.value)})`, value: fmtNum(v), unit: "",
-      sub: `${ok ? "만족" : "위반"}${bv != null ? ` · 기준안 ${fmtNum(bv)}` : ""}`, tone: ok ? "ok" : "bad" });
+      sub: `${ok ? "만족" : "위반"}${bv != null ? ` · 기존안 ${fmtNum(bv)}` : ""}`, tone: ok ? "ok" : "bad" });
   });
   const lastFit = [...(o.iterations as SoIteration[])].reverse().find((it) => it.fit)?.fit;
   const g = qualityGrade(lastFit?.q2);

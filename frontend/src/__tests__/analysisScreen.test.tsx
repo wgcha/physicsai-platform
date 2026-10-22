@@ -453,7 +453,7 @@ describe("⑤ 겹쳐 보기 (V3-S14-6)", () => {
     expect((await screen.findByTestId("plot-3d-compare")).textContent).toBe(NO3D_COMPARE_TEXT);
   });
 
-  it("메타: 둘 다 값이 있고 다르면 회색 '메타 다름' 한 줄, 칩에 엔진·기준안·scene 그대로", async () => {
+  it("메타: 둘 다 값이 있고 다르면 회색 '메타 다름' 한 줄, 칩에 엔진·기존안·scene 그대로", async () => {
     renderApp(DOE, { user: "power" }, (s) => {
       sameNames(s);
       const d2 = { ...s.p2.does[0], id: "doe-2", doe_label: "LatinHyperCube2" };
@@ -471,7 +471,7 @@ describe("⑤ 겹쳐 보기 (V3-S14-6)", () => {
     await screen.findByRole("region", { name: "결과 표 — LatinHyperCube" });
     const chips = await screen.findByTestId("meta-chips");
     expect(chips.textContent).toContain("엔진 ai-1.2");
-    expect(chips.textContent).toContain("기준안 BL-7");
+    expect(chips.textContent).toContain("기존안 BL-7");
     expect(chips.textContent).toContain("scene —");
     expect(screen.queryByTestId("meta-diff")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "비교 추가" })); // 기본이 해석이면 비교 기본은 예측 → 비교를 해석으로 바꾼다

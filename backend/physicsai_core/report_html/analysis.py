@@ -150,7 +150,7 @@ def _summary(rt: Mapping[str, Any], other: Mapping[str, Any] | None, msg: str | 
                                   ("표본 방식", f"{sm.get('label') or '알 수 없음'}{' (LHS)' if sm.get('lhs') else ''}"),
                                   ("run 수", f"전체 {c['total']} · 유효 {c['usable']} · 응답 없음 {c['no_response']}")]
     meta = rt.get("meta") or {}
-    chips = [f"{k} {meta.get(key) or '—'}" for k, key in (("엔진", "engine_version"), ("기준안", "baseline_id"), ("scene", "scene"))]
+    chips = [f"{k} {meta.get(key) or '—'}" for k, key in (("엔진", "engine_version"), ("기존안", "baseline_id"), ("scene", "scene"))]
     kv.append(("메타", " · ".join(chips)))
     if other:
         kv.append(("비교 출처", f"{SOURCE_TEXT.get(other['source'])} · {other['origin']['label']} (run {other['counts']['total']}개)"))

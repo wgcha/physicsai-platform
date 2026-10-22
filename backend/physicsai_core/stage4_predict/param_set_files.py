@@ -132,7 +132,7 @@ def _load_parameters(f: ParamSetFolder, folder: str, *, require_nominal_inside: 
             _p(f, "PARAMETER_RANGE_INVALID", f"'{name}': min ≤ max 이어야 합니다", f.param_source)
             continue
         if not require_nominal_inside and not lo <= nom <= hi:
-            f.warnings.append({"code": "VAR_NOMINAL_OUTSIDE", "message": f"'{name}' 공칭 {nom:g}이 범위 {lo:g}~{hi:g} 밖입니다(기준안은 범위 밖 점으로 표시)",
+            f.warnings.append({"code": "VAR_NOMINAL_OUTSIDE", "message": f"'{name}' 공칭 {nom:g}이 범위 {lo:g}~{hi:g} 밖입니다(기존안은 범위 밖 점으로 표시)",
                                "file": f.param_source})
         unit = str(r.get("unit") or "").strip()[:40]
         f.parameters.append({"name": name, "nominal": nom, "min": lo, "max": hi, "unit": unit})

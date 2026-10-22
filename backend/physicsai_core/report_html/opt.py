@@ -134,8 +134,8 @@ def _compare_section(ctx: Ctx, d: Mapping[str, Any], defs: Sequence[Mapping[str,
             end = "상한" if o >= p["max"] - tol else "하한" if o <= p["min"] + tol else ""
         rows.append([n, Raw(f"{fmt(p.get('min'))} ~ {fmt(p.get('max'))}"), Raw(fmt(b)), Raw(fmt(o)),
                      Raw(fmt(o - b) if finite(o) and finite(b) else "—"), end])
-    out.append(f"<h3>{noun} — 기준안 대비 변수</h3>")
-    out.append(table(["변수", "범위", "기준안", noun, "변화", "범위 끝"], rows, num=[2, 3, 4]))
+    out.append(f"<h3>{noun} — 기존안 대비 변수</h3>")
+    out.append(table(["변수", "범위", "기존안", noun, "변화", "범위 끝"], rows, num=[2, 3, 4]))
     hit = [r[0] + f"({r[5]})" for r in rows if r[5]]
     if hit:
         out.append(note(f"{', '.join(hit)}이(가) 범위 끝에 닿았습니다 — 범위를 넓히면 추가 개선 여지가 있습니다"))
@@ -154,8 +154,8 @@ def _compare_section(ctx: Ctx, d: Mapping[str, Any], defs: Sequence[Mapping[str,
         better = None if delta is None else (delta <= 0 if o.get("sense") == "min" else delta >= 0)
         obj_rows.append([_obj_label(o), SENSE_TEXT.get(str(o.get("sense")), ""), Raw(fmt(bv)), Raw(fmt(v)), Raw(fmt(delta)), Raw(pct(rel, 3)),
                          verdict_badge(better, "개선", "악화")])
-    out.append(f"<h3>목적 — {noun} vs 기준안</h3>")
-    out.append(table(["목적", "방향", "기준안", noun, "차이", "상대", "판정"], obj_rows, num=[2, 3, 4, 5]))
+    out.append(f"<h3>목적 — {noun} vs 기존안</h3>")
+    out.append(table(["목적", "방향", "기존안", noun, "차이", "상대", "판정"], obj_rows, num=[2, 3, 4, 5]))
     cons = d.get("constraints_def") or []
     if cons:
         crow = []
@@ -164,14 +164,14 @@ def _compare_section(ctx: Ctx, d: Mapping[str, Any], defs: Sequence[Mapping[str,
             v = (best.get("constraints") or {}).get(con_key(c))
             ok = _satisfies(c, v)
             crow.append([f"{c.get('label')}", con_text(c), Raw(fmt(bc[i]) if i < len(bc) else "—"), Raw(fmt(v)), verdict_badge(ok, "만족", "위반")])
-        out.append("<h3>제약 — 만족 여부</h3>" + table(["제약", "조건", "기준안", noun, "판정"], crow, num=[2, 3]))
+        out.append("<h3>제약 — 만족 여부</h3>" + table(["제약", "조건", "기존안", noun, "판정"], crow, num=[2, 3]))
     out.append(f'<p class="muted small">{esc(noun)}: {esc(best.get("batch_label"))} DOE #{esc(best.get("doe_no"))} · {esc(best.get("run_key"))}'
                f'{" · 만족" if best.get("feasible") else " · 제약 위반"}</p>')
     if fin.get("legend_note") or fin.get("reason"):
         out.append(f'<p class="muted small">{esc(fin.get("legend_note") or fin.get("reason"))}</p>')
     shots = [ctx.image(i.get("path"), str(i.get("label"))) for i in images]
     if shots:
-        out.append("<h3>기준안·최적안 컨투어(정적 이미지)</h3><div class=\"grid2\">" + "".join(shots) + "</div>")
+        out.append("<h3>기존안·최적안 컨투어(정적 이미지)</h3><div class=\"grid2\">" + "".join(shots) + "</div>")
     return "".join(out)
 
 
@@ -354,7 +354,7 @@ def surrogate_doc(inp: Mapping[str, Any], ctx: Ctx) -> Doc:
         ("summary", "요약", _kpi_cards(d, defs)),
         ("input", "입력 요약", _input_section(inp, d)),
         ("setting", "설정(목적·제약·알고리즘)", _setting_section(d, defs)),
-        ("result", "최적안 · 기준안 비교", _compare_section(ctx, d, defs, inp.get("images") or [])),
+        ("result", "최적안 · 기존안 비교", _compare_section(ctx, d, defs, inp.get("images") or [])),
     ]
     if multi:
         secs.append(("pareto", "파레토 결과", _pareto_section(ctx, d, defs)))

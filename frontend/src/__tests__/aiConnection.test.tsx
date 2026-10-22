@@ -67,6 +67,12 @@ describe("③ AI 도구에 등록하기 — 자리표시자 → 발급 후 채�
     expect((parseToml(cfg("codex")) as { mcp_servers: { physicsai: unknown } }).mcp_servers.physicsai).toEqual(bridge);
     openTab("gemini");
     expect(JSON.parse(`{${cfg("gemini")}}`).physicsai).toEqual(bridge);
+    // Gemini 안내: Windows 경로 예시 + 파일이 없을 때 새로 만드는 방법
+    const where = within(screen.getByTestId("mcp-pane-gemini")).getByText(/\.gemini\\settings\.json/).textContent!;
+    expect(where).toContain("C:\\Users\\<사용자>\\.gemini\\settings.json");
+    expect(where).toContain("파일이 없으면 새로 만들고");
+    expect(where).toContain('{ "mcpServers": { … } }');
+    expect(where).not.toContain("~/.gemini");
   });
 
   it("평문 경고 한 줄·Node.js 안내·접힌 stdio 대안(토큰 파일, pai_ 없음, 실행기 안내 stdio_hint)", async () => {

@@ -197,7 +197,7 @@ describe("V3-S16-18 ⑤·⑥ 진입", () => {
 
   it("⑥ 최적화 결과: 최적안·마무리 컨투어·검증 run 행에 FEM 검증 버튼, 안내 문구", async () => {
     renderApp(`${STUDY}/5/surrogate/so-1`, O);
-    const best = await screen.findByRole("region", { name: "최적안 — 기준안 대비" });
+    const best = await screen.findByRole("region", { name: "최적안 — 기존안 대비" });
     expect(within(best).getByText(/FEM 검증 버튼으로 조립 상태 해석과 비교/)).toBeTruthy();
     expect(within(best).getByRole("button", { name: "FEM 검증" })).toBeTruthy();
     const cmp = await screen.findByRole("region", { name: /컨투어 비교/ });

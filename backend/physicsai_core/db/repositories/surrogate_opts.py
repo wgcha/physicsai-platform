@@ -87,7 +87,7 @@ def restore_verifying(conn: Connection, opt: Mapping[str, Any], round_no: int) -
                 finished_at=None)
         if b is not None and b["status"] in ("DONE", "FAILED", "CANCELED"):
             complete_final(conn, opt["id"], "DONE" if b["status"] == "DONE" else "FAILED",
-                           None if b["status"] == "DONE" else "기준안·최적안 캡처 배치가 끝나지 않았습니다")
+                           None if b["status"] == "DONE" else "기존안·최적안 캡처 배치가 끝나지 않았습니다")
         return {"batch_id": it["batch_id"], "round_job_id": None}
     set_opt(conn, opt["id"], status="VERIFYING", iter_no=round_no, stop_reason=None, finished_at=None)
     job = None
@@ -103,7 +103,7 @@ def on_batch_parent_end(conn: Connection, batch: Mapping[str, Any], state: str) 
     it = owned_iter_of_batch(conn, batch["id"])
     if it is not None and it["kind"] == "FINAL":  # 캡처 배치 실패·취소는 최적화 결과를 지우지 않는다 — DONE + 캡처 없음
         _complete_final_safely(conn, it["opt_id"], "CANCELED" if state == CANCELED else "FAILED",
-                       "기준안·최적안 캡처 배치가 " + ("취소되었습니다" if state == CANCELED else "실패했습니다"))
+                       "기존안·최적안 캡처 배치가 " + ("취소되었습니다" if state == CANCELED else "실패했습니다"))
     elif it is not None and it["opt_iter_no"] == it["iter_no"]:
         fail(conn, it["opt_id"], "BATCH_FAILED")
 

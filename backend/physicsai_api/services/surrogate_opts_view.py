@@ -122,7 +122,7 @@ def progress_text(o: dict[str, Any], its: list[dict[str, Any]], batches: dict[st
     if st == "FINALIZING":
         fb = batches.get(((o.get("final") or {}).get("batch_id")) or "")
         cnt = f" {fb['label']} 예측 {fb['predict']['succeeded']}/{fb['gen']['total']}" if fb else ""
-        return f"마무리 — 기준안·최적안 컨투어 캡처{cnt}"
+        return f"마무리 — 기존안·최적안 컨투어 캡처{cnt}"
     if st == "DONE":
         return f"완료 — {_stop_text(o, its)}"
     if st == "FAILED":

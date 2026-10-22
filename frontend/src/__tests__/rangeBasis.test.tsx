@@ -37,8 +37,8 @@ describe("범위 막대 기준 (순수)", () => {
 
 describe("⑥ 결과 카드 화면", () => {
   const header = () => {
-    const best = screen.getByRole("region", { name: "최적안 — 기준안 대비" });
-    return within(within(best).getByRole("table", { name: "기준안 대비" })).getAllByRole("columnheader").map((h) => h.textContent)[1];
+    const best = screen.getByRole("region", { name: "최적안 — 기존안 대비" });
+    return within(within(best).getByRole("table", { name: "기존안 대비" })).getAllByRole("columnheader").map((h) => h.textContent)[1];
   };
 
   it("스냅숏 없음(기본 목) = '학습 범위', train 이 있는 Native 스냅숏 = '학습 범위'+train 값, train 없는 Native = '템플릿 범위'", async () => {

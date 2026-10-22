@@ -8,7 +8,7 @@
 | Claude Code CLI | HTTP 직결 | `claude.mcp.json`(`.mcp.json` 방식) | `claude mcp add` 명령 또는 프로젝트 `.mcp.json` | §4.1 |
 | Claude Desktop | `npx mcp-remote` 브리지 | `claude_desktop_config.json` | `claude_desktop_config.json`의 `mcpServers` 안 | §4.2 |
 | OpenAI Codex CLI | `npx mcp-remote` 브리지 | `codex.config.toml` | `~/.codex/config.toml`(서버 `physicsai`) | §4.3 |
-| Gemini CLI | `npx mcp-remote` 브리지 | `gemini.settings.json` | `~/.gemini/settings.json`의 `mcpServers` 안 | §4.4 |
+| Gemini CLI | `npx mcp-remote` 브리지 | `gemini.settings.json` | `C:\Users\<사용자>\.gemini\settings.json`(Windows 기준)의 `mcpServers` 안 | §4.4 |
 | 대안(Node.js를 쓸 수 없는 PC) | stdio `physicsai-mcp` | `claude_desktop_config.stdio.json`·`codex.config.stdio.toml`·`gemini.settings.stdio.json` | 위 각 파일(브리지와 같은 서버 이름이면 둘 중 하나만) | §4.5 |
 
 **Claude Code를 뺀 셋(Desktop·Codex·Gemini)은 Node.js가 필요하다(`npx` 사용).** Claude Code는 HTTP를 직접 받아 Node.js가 필요 없다.
@@ -107,9 +107,9 @@ AUTH = "Bearer <발급받은 토큰>"
 NODE_OPTIONS = "--use-system-ca"
 ```
 
-### 4.4 Gemini CLI(mcp-remote 브리지) — `gemini.settings.json` → `~/.gemini/settings.json`
+### 4.4 Gemini CLI(mcp-remote 브리지) — `gemini.settings.json` → `C:\Users\<사용자>\.gemini\settings.json`(Windows 기준)
 
-Node.js 필요. 항목은 Claude Desktop(4.2)과 같다:
+Node.js 필요. 항목은 Claude Desktop(4.2)과 같다. 파일이 이미 있으면 기존 `mcpServers` 안에 항목만 추가한다. 파일이 없으면 새로 만들고, 아래 항목을 `{ "mcpServers": { … } }` 안에 넣어 저장한다:
 
 ```json
 {

@@ -444,7 +444,7 @@ def test_final_capture_batch_failure_still_done(so_env, monkeypatch):
     o = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
     _run_until_finalizing(env, o["id"])
     d = env.c.get(f"{API}/surrogate-opts/{o['id']}", headers=P).json()
-    assert d["status"] == "FINALIZING" and d["progress_text"].startswith("마무리 — 기준안·최적안 컨투어 캡처")
+    assert d["status"] == "FINALIZING" and d["progress_text"].startswith("마무리 — 기존안·최적안 컨투어 캡처")
     assert d["final"]["status"] == "PENDING" and _done_notes(env) == 0 and d["can_cancel"] is True
     monkeypatch.setenv("FAKE_TOOL_MODE_SIMLAB", "fail")
     assert env.w.run_once_slot() == "FAILED"  # 마무리 배치 부모

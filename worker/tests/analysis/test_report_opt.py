@@ -36,7 +36,7 @@ def test_v_rp_3_ego_single_report(on_env):
     for s in ('<section id="input">', '<section id="setting">', '<section id="result">', '<section id="convergence">', '<section id="verify">'):
         assert s in doc, s
     assert "EGO(기대 개선)" in doc and "MaxStress_MAX" in doc and "최소화" in doc            # 설정: 목적·방향·알고리즘
-    assert "최적안 — 기준안 대비 변수" in doc or "기준안 대비 변수" in doc
+    assert "최적안 — 기존안 대비 변수" in doc or "기존안 대비 변수" in doc
     assert "수렴 그래프" in doc and doc.count("<svg") >= 2                                # 수렴 SVG
     assert "예측 vs 해석(검증 run)" in doc                                                # 검증 결과
     assert "THK_1" in doc and "N_RIB" in doc and "변수와 범위" in doc
