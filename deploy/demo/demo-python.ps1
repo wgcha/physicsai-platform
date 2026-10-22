@@ -99,9 +99,10 @@ function Initialize-DemoVenv {
         if ($have -eq $want) {
             Write-Host '[PhysicsAI 시연] 시연 venv 의존성: 설치되어 있음(requirements.lock 변경 없음 — 건너뜀)'
         } else {
-            Write-Host '[PhysicsAI 시연] 시연 venv에 의존성 설치: packages\simdash_adapters → deploy\requirements.lock (처음 한 번, 몇 분 걸림)'
-            Invoke-DemoPip -Py $py -PipArgs @('install', (Join-Path $RepoRoot 'packages\simdash_adapters')) -What '공통 어댑터 패키지(simdash-adapters) 설치'
+            Write-Host '[PhysicsAI 시연] 시연 venv에 의존성 설치: deploy\requirements.lock → packages\simdash_adapters (처음 한 번, 몇 분 걸림)'
+            # lock(setuptools 고정 포함)을 먼저: 로컬 어댑터는 --no-build-isolation으로 venv의 setuptools로 빌드(인덱스에서 빌드 도구를 받지 않음, 이슈 #9)
             Invoke-DemoPip -Py $py -PipArgs @('install', '-r', (Join-Path $RepoRoot 'deploy\requirements.lock')) -What '의존성(deploy\requirements.lock) 설치'
+            Invoke-DemoPip -Py $py -PipArgs @('install', '--no-build-isolation', (Join-Path $RepoRoot 'packages\simdash_adapters')) -What '공통 어댑터 패키지(simdash-adapters) 설치'
             [IO.File]::WriteAllText($stampFile, $want)
         }
     }

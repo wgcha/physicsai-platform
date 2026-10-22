@@ -31,6 +31,8 @@ run "$PY -m pip download --no-index --find-links dist/wheels -r deploy/requireme
 run "$PY -m pip download -r deploy/requirements.lock --only-binary=:all: --platform win_amd64 --python-version 3.12 -d dist/wheels"
 # MCP 서버 의존(mcp.md MR-18·V-MCP-20): requirements.lock에 고정된 mcp·전이 의존(+Windows 전용 pywin32)이 묶음에 있는지 확인
 run "ls dist/wheels/mcp-*.whl dist/wheels/mcp_types-*.whl dist/wheels/pywin32-*.whl > /dev/null"
+# 빌드 백엔드(이슈 #9): requirements.lock의 setuptools가 묶음에 있는지 확인(폐쇄망에서 로컬 소스를 --no-index --no-build-isolation으로 빌드할 때 필요)
+run "ls dist/wheels/setuptools-*.whl > /dev/null"
 run "$PY -m pip wheel . --no-deps -w dist/wheels"
 # 프런트: 저장소 빌드본 frontend-dist가 현재 소스와 같으면 그대로(Node·npm 불필요, phase3 D3-40), 아니면 npm으로 빌드
 if "$PY" scripts/frontend_source_hash.py --check "$ROOT"; then

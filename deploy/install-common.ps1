@@ -140,9 +140,11 @@ function Invoke-PhysicsAINative {
 
 function Invoke-PhysicsAIPip {
     <# venv의 pip. 사내 pip 설정(PIP_INDEX_URL·pip.ini)·프록시(HTTPS_PROXY)는 그대로 쓴다. 실패하면 인덱스 접근 문제인지 판단해 한국어로 중단. #>
-    param([Parameter(Mandatory = $true)][string]$Py, [Parameter(Mandatory = $true)][string[]]$PipArgs, [Parameter(Mandatory = $true)][string]$What)
+    param([Parameter(Mandatory = $true)][string]$Py, [Parameter(Mandatory = $true)][string[]]$PipArgs, [Parameter(Mandatory = $true)][string]$What,
+          [string]$ExtraHint = '')   # ExtraHint: 실패 안내 끝에 덧붙일 한 줄(예: 로컬 패키지 빌드 도구 확인)
     $eap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
+    $extra = if ($ExtraHint) { "`n$ExtraHint" } else { '' }
     try {
         $out = @(& $Py -m pip @PipArgs --progress-bar off --disable-pip-version-check 2>&1 | ForEach-Object { $s = "$_"; Write-Host $s; $s })
         $rc = $LASTEXITCODE
@@ -151,9 +153,9 @@ function Invoke-PhysicsAIPip {
     $text = $out -join "`n"
     if ($text -match '(?i)NewConnectionError|ConnectTimeout|ConnectionError|ProxyError|Max retries exceeded|Temporary failure in name resolution|getaddrinfo failed|No matching distribution found|Could not find a version that satisfies|SSLError|CERTIFICATE_VERIFY_FAILED|403 Client Error|407') {
         throw ("$What 실패: 패키지 인덱스(PyPI 또는 PIP_INDEX_URL)에 접근할 수 없습니다.`n" +
-            "다음 행동: 사내 프록시면 pip 설정(pip.ini의 index-url·proxy, 또는 환경변수 PIP_INDEX_URL·HTTPS_PROXY)을 확인하세요. 인터넷이 안 되는 서버면 오프라인 묶음(deploy\collect-offline.ps1 → install.ps1)을 쓰세요.")
+            "다음 행동: 사내 프록시면 pip 설정(pip.ini의 index-url·proxy, 또는 환경변수 PIP_INDEX_URL·HTTPS_PROXY)을 확인하세요. 인터넷이 안 되는 서버면 오프라인 묶음(deploy\collect-offline.ps1 → install.ps1)을 쓰세요." + $extra)
     }
-    throw ("$What 실패(pip 종료코드 $rc).`n다음 행동: 위 pip 출력을 확인하세요.")
+    throw ("$What 실패(pip 종료코드 $rc).`n다음 행동: 위 pip 출력을 확인하세요." + $extra)
 }
 
 function ConvertFrom-PhysicsAIDbUrl([string]$Url) {
@@ -603,13 +605,15 @@ function Test-PhysicsAIUnderPath {
 function Install-PhysicsAIRepoPackages {
     <#
       git 폴더의 소스를 venv에 일반 설치(editable 아님): deploy\requirements.lock(외부 의존성, 고정 버전) →
-      packages\simdash_adapters → 플랫폼 패키지. 로컬 두 패키지는 --no-deps --force-reinstall로 매번 다시 설치(git pull 뒤 같은 버전 번호여도 새 소스 반영).
+      packages\simdash_adapters → packages\paicad → 플랫폼 패키지. 로컬 패키지는 --no-deps --force-reinstall로 매번 다시 설치(git pull 뒤 같은 버전 번호여도 새 소스 반영).
+      로컬 패키지는 --no-build-isolation: 빌드 도구(setuptools)를 인덱스에서 받지 않고 lock이 먼저 설치한 venv의 setuptools로 빌드(폐쇄망·프록시, 이슈 #9).
     #>
     param([Parameter(Mandatory = $true)][string]$VenvPy, [Parameter(Mandatory = $true)][string]$RepoRoot)
+    $buildHint = "빌드 도구(setuptools)가 venv에 있는지: $VenvPy -m pip show setuptools (없으면 deploy\requirements.lock 설치 단계가 끝나지 않은 것입니다)"
     Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '-r', (Join-Path $RepoRoot 'deploy\requirements.lock')) -What '의존성(deploy\requirements.lock) 설치'
-    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\simdash_adapters')) -What '공통 어댑터 패키지(simdash-adapters) 설치'
-    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\paicad')) -What 'native 형상 엔진(paicad) 설치'
-    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-deps', '--force-reinstall', $RepoRoot) -What '플랫폼 패키지(physicsai-platform) 설치'
+    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-build-isolation', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\simdash_adapters')) -What '공통 어댑터 패키지(simdash-adapters) 설치' -ExtraHint $buildHint
+    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-build-isolation', '--no-deps', '--force-reinstall', (Join-Path $RepoRoot 'packages\paicad')) -What 'native 형상 엔진(paicad) 설치' -ExtraHint $buildHint
+    Invoke-PhysicsAIPip -Py $VenvPy -PipArgs @('install', '--no-build-isolation', '--no-deps', '--force-reinstall', $RepoRoot) -What '플랫폼 패키지(physicsai-platform) 설치' -ExtraHint $buildHint
     Invoke-PhysicsAINative '설치 확인(import)' $VenvPy @('-c', 'import physicsai_api, physicsai_worker, physicsai_mcp, simdash_adapters, fastapi, psycopg, alembic, yaml, mcp') '위 오류를 확인하세요(venv 패키지 설치가 끝나지 않음)'
     # MCP stdio 실행기(mcp.md §20.5): 플랫폼 패키지의 console script physicsai-mcp.exe가 venv\Scripts에 설치됐는지 --version으로 확인(별도 설치 단계 없음)
     $mcpExe = Join-Path (Split-Path -Parent $VenvPy) 'physicsai-mcp.exe'

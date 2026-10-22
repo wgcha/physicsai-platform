@@ -97,8 +97,8 @@ try {
             '--only-binary=:all:', '--platform', 'win_amd64', '--python-version', '3.12', '-d', 'dist/wheels') + $pipOpts) $pipHint
     }
     # MCP 서버 의존(mcp.md MR-18·V-MCP-20): requirements.lock에 고정된 mcp·전이 의존(+Windows 전용 pywin32)이 묶음에 있는지 확인
-    Invoke-Step 'MCP 의존 wheel 확인(mcp·mcp_types·pywin32)' {
-        foreach ($pattern in 'mcp-*.whl', 'mcp_types-*.whl', 'pywin32-*.whl') {
+    Invoke-Step 'MCP 의존·빌드 도구 wheel 확인(mcp·mcp_types·pywin32·setuptools; 이슈 #9)' {
+        foreach ($pattern in 'mcp-*.whl', 'mcp_types-*.whl', 'pywin32-*.whl', 'setuptools-*.whl') {
             if (-not (Get-ChildItem -Path 'dist\wheels' -Filter $pattern -ErrorAction SilentlyContinue)) { throw "묶음 wheel에 $pattern 이 없습니다 — deploy/requirements.lock의 MCP 의존(mcp.md MR-18)을 확인하세요" }
         }
     }
