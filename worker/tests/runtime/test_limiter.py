@@ -190,6 +190,33 @@ def test_worker_main_refuses_invalid_config(tmp_path):
     assert main(["--config", str(cfg)]) == 2
 
 
+def test_worker_main_refuses_gpu_demotion_config(tmp_path, settings_dict, capsys):
+    """JQ-2: step_resource로 GPU 단계를 cpu로 내리는 설정이면 워커가 시작하지 않는다(종료코드 2)."""
+    import yaml
+
+    d = dict(settings_dict)
+    d["worker"] = {**d["worker"], "queues": {"step_resource": {"EDSPY_PREDICT": "cpu"}}}
+    cfg = tmp_path / "demote.yaml"
+    cfg.write_text(yaml.safe_dump(d, allow_unicode=True), encoding="utf-8")
+    from physicsai_worker.__main__ import main
+
+    assert main(["--config", str(cfg)]) == 2
+    assert "worker.queues.step_resource.EDSPY_PREDICT" in capsys.readouterr().err
+
+
+def test_worker_refuses_demotion_even_if_validation_bypassed(engine, loaded_config):
+    """설정 검증을 거치지 않고 만든 LoadedConfig(검증 통과로 표시)도 Worker 생성에서 거부한다."""
+    from physicsai_core.config import LoadedConfig
+    from physicsai_worker.runtime import Worker
+
+    s = loaded_config.settings.model_copy(deep=True)
+    s.worker.queues.step_resource = {"EDSPY_SCORE": "cpu"}
+    bad = LoadedConfig(s, [], loaded_config.path, loaded_config.sha256)
+    assert bad.ok
+    with pytest.raises(ValueError, match="EDSPY_SCORE"):
+        Worker(bad, engine)
+
+
 def test_config_change_pauses_claims(engine, settings_dict, tmp_path):
     """V-CFG-2: 설정 파일이 바뀌면 다시 읽고, 검증 실패면 새 claim 중지."""
     import yaml

@@ -99,7 +99,8 @@ def test_v_jq_2_skip_without_slot_prepared_predict_only():
 def test_v_jq_2_step_resource_override_and_segments():
     pred = JOB_TYPES["PREDICT"].step_of("CONTOUR_CAPTURE")
     assert step_res(pred) == "cpu" and step_res(pred, {"CONTOUR_CAPTURE": "gpu"}) == "gpu"
-    assert step_res(JOB_TYPES["PREDICT"].step_of("EDSPY_PREDICT"), {"EDSPY_PREDICT": "cpu"}) == "cpu"
+    # GPU 동시 1 엄수: 계약 GPU 단계는 cpu로 내리는 덮어쓰기를 무시한다(설정 검증이 막지만 실행 쪽에서도 방어)
+    assert step_res(JOB_TYPES["PREDICT"].step_of("EDSPY_PREDICT"), {"EDSPY_PREDICT": "cpu"}) == "gpu"
     assert step_res(JOB_TYPES["PREDICT"].step_of("PR_PREP"), {"PR_PREP": "gpu"}) == "none"  # INTERNAL은 중립 — 덮어쓰기 대상 아님
     hpc = JOB_TYPES["TD_SOLVE"].step_of("HPC_WAIT")
     assert step_res(hpc, {"HPC_WAIT": "gpu"}) == "none"
@@ -109,6 +110,10 @@ def test_v_jq_2_step_resource_override_and_segments():
     assert segments("DATASET_CREATE") == ["cpu"] and segments("MODEL_REGISTER") == ["light"] and segments("GEOM_PREVIEW") == ["preview"]
     assert uses_gpu("PREDICT") and uses_gpu("EVALUATE") and not uses_gpu("TD_SOLVE") and not uses_gpu("MODEL_REGISTER")
     assert uses_gpu("DATASET_CREATE", {"EDSPY_DATASET_TRAIN": "gpu"})
+    demote = {k: "cpu" for k in GPU_STEPS}  # GPU 단계를 cpu로 내려도 구간 흐름·초기 대기열 불변
+    assert segments("PREDICT", demote) == ["cpu", "gpu", "cpu"] and segments("EVALUATE", demote) == ["gpu"] and segments("OPTIMIZE", demote) == ["gpu"]
+    assert initial_lane("EVALUATE", None, None, demote) == "GPU" and initial_lane("PREDICT", None, 6, demote) == "GPU"
+    assert gpu_step_keys(demote) == GPU_STEPS
 
 
 def test_v_jq_2_entry_lane_after_pbs_collect():
@@ -153,11 +158,27 @@ def test_v_jq_13_defaults_and_valid(settings_dict):
     ({"step_resource": {"HPC_WAIT": "cpu"}}, "worker.queues.step_resource.HPC_WAIT"),
     ({"step_resource": {"PR_PREP": "cpu"}}, "worker.queues.step_resource.PR_PREP"),  # INTERNAL
     ({"step_resource": {"CONTOUR_CAPTURE": "tpu"}}, "worker.queues.step_resource.CONTOUR_CAPTURE"),
+    ({"step_resource": {"EDSPY_PREDICT": "cpu"}}, "worker.queues.step_resource.EDSPY_PREDICT"),  # GPU 단계를 cpu로 — GPU 동시 1 우회
+    ({"step_resource": {"EDSPY_SCORE": "cpu"}}, "worker.queues.step_resource.EDSPY_SCORE"),
+    ({"step_resource": {"HST_OPTIMIZE": "cpu", "CONTOUR_CAPTURE": "gpu"}}, "worker.queues.step_resource.HST_OPTIMIZE"),
 ])
 def test_v_jq_13_invalid_settings(settings_dict, queues, key):
     lc = _cfg(settings_dict, **queues)
     assert not lc.ok
     assert key in lc.error_keys(), lc.issues
+
+
+def test_v_jq_13_gpu_demotion_rejected_but_promotion_allowed(settings_dict):
+    from physicsai_core.queues import contract_gpu_step_keys, gpu_demotions
+
+    assert contract_gpu_step_keys() == GPU_STEPS  # 계약 GPU 집합 = StepDef.res(코드에 키 목록을 따로 두지 않는다)
+    assert gpu_demotions({"EDSPY_PREDICT": "cpu", "EDSPY_SCORE": "gpu", "CONTOUR_CAPTURE": "gpu", "HST_OPTIMIZE": "cpu"}) == ["EDSPY_PREDICT", "HST_OPTIMIZE"]
+    lc = _cfg(settings_dict, step_resource={"EDSPY_PREDICT": "cpu"})
+    msg = [i.message for i in lc.issues if i.key == "worker.queues.step_resource.EDSPY_PREDICT"][0]
+    assert "GPU 단계" in msg and "동시에 1개" in msg
+    # 같은 값(gpu 유지)·CPU 단계를 gpu로 올리는 현장 보정(HyperView 캡처 등)은 허용
+    assert _cfg(settings_dict, step_resource={"EDSPY_PREDICT": "gpu", "EDSPY_SCORE": "gpu", "HST_OPTIMIZE": "gpu"}).ok
+    assert _cfg(settings_dict, step_resource={"CONTOUR_CAPTURE": "gpu", "FV_CAPTURE": "gpu"}).ok
 
 
 def test_v_jq_13_gpu_key_message(settings_dict):

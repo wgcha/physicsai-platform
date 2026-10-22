@@ -194,8 +194,12 @@ def cpu_limit(conn: Connection) -> int:
 
 def recompute_my_turn(conn: Connection) -> str | None:
     """GPU·CPU 대기열 각각: 그 대기열이 가득일 때(GPU = 슬롯 보유 중, CPU = 실행 수 ≥ 상한) 1번 작업에 MY_TURN_NEXT(작업당 1회).
-    첫 시작 전(`started_at IS NULL`) 작업만 — T17 재진입·PBS 회수 후 대기는 알림 없음(JQ-14). 알린 작업 id(여럿이면 마지막) 또는 None."""
-    notified: str | None = None
+    첫 시작 전(`started_at IS NULL`) 작업만 — T17 재진입·PBS 회수 후 대기는 알림 없음(JQ-14). 알린 작업 id(여럿이면 마지막) 또는 None.
+
+    교착 방지(job-queues.md §5·JQ-C1): 두 대기열의 후보 행을 먼저 모두 고른 뒤 **id 오름차순 한 문장**으로 `FOR UPDATE SKIP LOCKED` 잠그고
+    그 행만 갱신한다. 다른 트랜잭션이 이미 바꾸는 중인 행(수령·취소·전환 중인 1번 작업)은 기다리지 않고 건너뛴다 — 그 트랜잭션이 끝나기 전
+    자신의 `recompute_my_turn`으로 새 1번 작업을 다시 계산하므로 알림은 빠지지 않고, 행 잠금 순환 대기가 생기지 않는다."""
+    heads: list[Any] = []
     for lane in ("GPU", "CPU"):
         if lane == "GPU":
             full = conn.execute(select(worker_slot.c.holder_job_id).where(worker_slot.c.id == 1)).scalar() is not None
@@ -214,9 +218,23 @@ def recompute_my_turn(conn: Connection) -> str | None:
         ).first()
         if first is None or first.next_notified_at is not None or first.started_at is not None:
             continue
-        conn.execute(update(jobs).where(jobs.c.id == first.id).values(next_notified_at=func.now()))
-        notify_job(conn, first.id, "MY_TURN_NEXT")
-        notified = first.id
+        heads.append(first.id)
+    if not heads:
+        return None
+    # 결정적 순서(id 오름차순)로 잠금 — 잠긴 행이 아직 같은 조건(대기·미알림·첫 시작 전)인지 다시 확인하며 갱신한다
+    locked = conn.execute(
+        select(jobs.c.id).where(jobs.c.id.in_(heads)).order_by(jobs.c.id).with_for_update(skip_locked=True)
+    ).scalars().all()
+    notified: str | None = None
+    for jid in (h for h in heads if h in locked):  # 알림은 종전 순서(GPU → CPU)로
+        done = conn.execute(
+            update(jobs)
+            .where(and_(jobs.c.id == jid, jobs.c.state == "QUEUED", jobs.c.next_notified_at.is_(None), jobs.c.started_at.is_(None)))
+            .values(next_notified_at=func.now())
+        ).rowcount
+        if done:
+            notify_job(conn, jid, "MY_TURN_NEXT")
+            notified = jid
     return notified
 
 

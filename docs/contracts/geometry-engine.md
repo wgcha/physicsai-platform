@@ -472,13 +472,13 @@ component의 요소·노드 집합:
 |---|---|---|
 | 0 | 성공(PASS/OK) | 있음 |
 | 2 | 인자 오류(argparse) | 없음 |
-| 3 | 입력 오류 `GEOM_INPUT_INVALID`·`GEOM_OUTPUT_EXISTS`·`RENUM_CSV_MISSING`·`PARAM_NAME_CONFLICT`(map) | 가능하면 있음 |
+| 3 | 입력 오류 `GEOM_INPUT_INVALID`·`GEOM_OUTPUT_EXISTS`·`RENUM_CSV_MISSING`·`PARAM_NAME_CONFLICT`(map), 조립 매칭 입력 오류 `ASM_INCLUDE_OUTSIDE`·`ASM_INCLUDE_MISSING`·`ASM_NO_SOLID_PART`·`ASM_TOO_MANY_PARTS`·`ASM_MATCH_INVALID`(카테고리 `INPUT`, asm-match.md §6.1) | 가능하면 있음 |
 | 10 | CAD 생성 불가(update FAIL) | `update.json` |
 | 11 | 검사 실패(check FAIL) 또는 모핑 실패(morph FAIL) | `check.json`/`morph.json` |
 | 12 | tag 실패 | `tag.json` |
 | 13 | extract 결과 없음 `GEOM_EXTRACT_EMPTY` | `parameter_features.json`(features 빈 배열) |
 | 14 | 3D 보기 출력 실패 `VIEW_TESSELLATION_FAILED`·`VIEW_TOO_LARGE`(`paicad view`, geometry-view.md §5.4·GV-C1) | `view_manifest.json`/`preview_manifest.json`(FAIL) |
-| 15 | 조립 매칭 검사 실패 `ASM_BOUNDARY_MISMATCH`·`ASM_SHARED_NODES`·`ASM_INCLUDE_OUTSIDE`·`ASM_INCLUDE_MISSING`·`ASM_NO_SOLID_PART`·`ASM_TOO_MANY_PARTS`·`ASM_MATCH_INVALID`(`paicad asm parts|check|write`, 카테고리 `ASM`, [asm-match.md](asm-match.md) §6.1·AM-C2) | `asm_parts.json`/`asm_check.json`(FAIL — `asm check` FAIL 보고는 `rows`가 있다)/`asm_write.json` |
+| 15 | 조립 매칭 검사 실패(`asm check` FAIL 전용) `ASM_BOUNDARY_MISMATCH`·`ASM_SHARED_NODES`(`paicad asm check`, 카테고리 `ASM`, [asm-match.md](asm-match.md) §6.1·AM-C2). `ASM_INCLUDE_*`·`ASM_NO_SOLID_PART`·`ASM_TOO_MANY_PARTS`·`ASM_MATCH_INVALID`는 15가 아니라 3(입력 오류) | `asm_check.json`(FAIL — `asm check` FAIL 보고는 `rows`가 있다) |
 | 20 | 내부 오류 `GEOM_INTERNAL`(예외 traceback은 stderr·로그) | 가능하면 있음 |
 | 130 | 중단 | 없음 |
 
@@ -1171,5 +1171,6 @@ paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 
 | GE-C19 | 쿠션 입력 rad(2026-10-22 사용자 원칙 P2, 계약 [input-kind.md](input-kind.md) §5, paicad **0.12.0**): 새 명령 `paicad cushion write --inc --renum-csv --assem-dir --out-dir --out-rad [--solver --options]` — 모핑 PASS include에서 쿠션 component(RENUM 전체) 노드·`/TETRA4` 블록을 **ID 유지** 바이트 그대로 + 조립 starter `/BEGIN` + 쿠션 `/PART`·참조 `/PROP`·`/MAT`(첫 정의, 없으면 경고 `CUSHION_PART_DEF_MISSING`) + `/END`로 단일 starter rad(`#include` 없음)를 쓴다, 보고 `cushion.json`, 출력 규칙 §5.2·종료코드 §5.4 기존. 플랫폼은 Native 쿠션 실행(④ 단건 MESH 뒤·④ 일괄 `generate_sample(assemble=False)` 뒤)에서 `commands.paicad_cushion_write`(null = 비활성)로 호출, 출력 이름 = `predict.simlab_mesh_name`. 기존 명령 동작 불변 |
 | GE-C20 | ①-3 native DOE 표본 방식 확장(2026-10-22 사용자 요구 "doe생성할때 왜 lhs만 되지", 계약 [doe-methods.md](doe-methods.md) DM-C2·DM-C4): §7.3.3 "native = 플랫폼 LHS, 다른 kind 422"를 대체 — 단일 baseline은 Altair 플랫폼 생성과 같은 `SITE_KINDS`(표본 행 = `doe_platform.build`), 다중 baseline(§7.3.8)은 층화 유지 + 층 안 생성기 `lhs`·`lhs_opt`·`halton`·`random`. `lhs`(요청 생략·`{num_runs,seed}`·`sampling:{kind:"lhs"}`)는 `lhs_values` 직접 경로·`doe_type='NATIVE_LHS'`·상한 `train_data.max_runs` 그대로(골든 불변). 형상 생성·조립·solve 무변경 |
 | GE-C21 | 조립 매칭(2026-10-22 사용자 요청·답변, 계약 [asm-match.md](asm-match.md) AM-C1, 확정, v0.2.9 · paicad **0.13.0**): Native 솔리드의 기준본 = 매칭 PART id 노드·요소 집합(RENUM 구간·고정 이름 `{mesh_include_name}` 등 파일 이름 의존 제거), starter include 트리 전체 수집, 저장 전 경계 일치 검사(§6.1 tag와 같은 허용오차, 원점·단위 차이는 안내 후 차단). 출력은 include 통째 교체 대신 노드 패치 → `paicad asm write`가 조립 사본의 해당 `/NODE` 줄 좌표만 갱신(§6.4 형식). 기존 명령은 방식 L(`--baseline-inc`+`--renum-csv`) 또는 방식 M(`--asm-match`+`--assem-dir`, `--out-patch`), 기존 argv 유효. 새 명령 `asm parts`·`asm check`·`asm write`. §4.1 번호 표 필수·기준본 이름 규칙은 매칭 세트에 적용하지 않음(asm-match.md §2.3) |
+| GE-C22 | §5.4 종료코드 표 정정(2026-10-23, v0.2.9 독립 검증 지적): `ASM_INCLUDE_OUTSIDE`·`ASM_INCLUDE_MISSING`·`ASM_NO_SOLID_PART`·`ASM_TOO_MANY_PARTS`·`ASM_MATCH_INVALID`는 구현·CHANGELOG·test_asm.py대로 종료코드 3(INPUT), 15는 `asm check` FAIL(`ASM_BOUNDARY_MISMATCH`·`ASM_SHARED_NODES`)에만. 문서를 구현에 맞춤(코드 변경 없음) |
 
 추가 사실: 런타임 Python 3.12 전용(OCP 7.8이 vtk 의존, cp313 휠 없음). 고정 `cadquery-ocp==7.8.1.1.post1`, test extra `build123d==0.10.0`·`ocp_gordon==0.1.18`(최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP 교체 — 금지). gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 리스크: vtk로 오프라인 묶음 용량 증가.

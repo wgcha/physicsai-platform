@@ -36,9 +36,12 @@ def step_res(step: StepDef, overrides: Mapping[str, str] | None = None) -> str:
     `overrides`(worker.queues.step_resource)는 LOCAL step에만 적용한다(설정 검증이 HPC_* 키를 거부)."""
     if step.kind in _SLOTLESS_KINDS or step.kind not in _RESOURCE_KINDS:
         return RES_NONE
+    base = step.res if step.res in (RES_CPU, RES_GPU) else RES_CPU
+    if base == RES_GPU:  # GPU 동시 1 엄수(JQ-2): 계약상 GPU 단계는 설정으로 CPU로 내릴 수 없다(검증이 막지만 여기서도 무시)
+        return RES_GPU
     if overrides and step.kind == "LOCAL" and step.key in overrides:
         return RES_GPU if overrides[step.key] == RES_GPU else RES_CPU
-    return step.res if step.res in (RES_CPU, RES_GPU) else RES_CPU
+    return base
 
 
 def skip_without_slot(job_type: str, params: Mapping[str, Any] | None, step_key: str) -> bool:
@@ -93,6 +96,17 @@ def uses_gpu(job_type: str, overrides: Mapping[str, str] | None = None) -> bool:
 def gpu_step_keys(overrides: Mapping[str, str] | None = None) -> frozenset[str]:
     """정의된 모든 job_type의 gpu step 키(시험·migration 대조용)."""
     return frozenset(s.key for d in JOB_TYPES.values() for s in d.steps if step_res(s, overrides) == RES_GPU)
+
+
+def contract_gpu_step_keys() -> frozenset[str]:
+    """계약상 GPU 단계 집합(`StepDef.res = gpu`, 현재 EDSPY_PREDICT·EDSPY_SCORE·HST_OPTIMIZE) — 설정으로 cpu로 내릴 수 없다(§3.3·§9)."""
+    return frozenset(s.key for d in JOB_TYPES.values() for s in d.steps if s.res == RES_GPU)
+
+
+def gpu_demotions(overrides: Mapping[str, str] | None) -> list[str]:
+    """`step_resource`에서 계약 GPU 단계를 cpu로 내리는 키(정렬). 설정 검증·워커 시작 검사가 같은 함수를 쓴다."""
+    gpu = contract_gpu_step_keys()
+    return sorted(k for k, v in (overrides or {}).items() if k in gpu and v != RES_GPU)
 
 
 def known_local_step_keys() -> frozenset[str]:

@@ -45,6 +45,11 @@ def main(argv: list[str] | None = None) -> int:
     if not config.ok:
         return _fail("설정 검증 실패: " + "; ".join(f"{i.key}: {i.message}" for i in config.issues))
     s = config.settings
+    from physicsai_core.queues import gpu_demotions
+
+    bad = gpu_demotions(s.worker.queues.step_resource)  # 검증과 같은 규칙을 시작 시점에 한 번 더(JQ-2, 설정 검증 우회 방어)
+    if bad:
+        return _fail("GPU 단계를 CPU로 내리는 설정은 쓸 수 없습니다(GPU 작업은 동시에 1개만 실행): worker.queues.step_resource." + ", ".join(bad))
     from physicsai_core.logsetup import setup_file_logging
 
     log.info("워커 파일 로그: %s", setup_file_logging(s, "worker"))

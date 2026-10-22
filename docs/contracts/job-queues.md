@@ -86,7 +86,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 
 - **초기 대기열 규칙**(core 한 곳 `physicsai_core/queues.py` `initial_lane(job_type, params, resume_from_step)`): 기본 **CPU**(첫 구간의 INTERNAL·준비 복사는 CPU 슬롯에서 — GPU를 준비 작업에 쓰지 않는다). 예외 = 작업이 "짧은 INTERNAL + GPU step 1개 + 짧은 INTERNAL"로만 된 EVALUATE·OPTIMIZE는 GPU로 시작(전환 2회 절약, `queues.GPU_START_TYPES` 상수). 재개(`resume_from_step`)면 재개 step 기준으로 같은 규칙.
 - prepared PREDICT의 `GEOM_UPDATE`·`MESH` 건너뛰기는 실행 중 판정(`StepSkipped`)이므로 전환 판정은 **res = cpu인 step을 만나도 그 step이 건너뛰기 대상이면 전환하지 않는다** — `queues.skip_without_slot(job, step_key)`(params만 보는 순수 함수, prepared PREDICT의 GEOM_UPDATE·MESH = true)를 executor가 먼저 부른다.
-- **현장 보정 설정** `worker.queues.step_resource: {STEP_KEY: cpu|gpu}`(기본 `{}`): 실측으로 분류가 틀렸을 때(예: 캡처가 GPU 메모리를 크게 씀) 코드 릴리스 없이 바꾼다. 검증: 알려진 LOCAL step 키만, 값은 `cpu|gpu`, HPC_* 키 거부.
+- **현장 보정 설정** `worker.queues.step_resource: {STEP_KEY: cpu|gpu}`(기본 `{}`): 실측으로 CPU 분류가 틀렸을 때(예: 캡처가 GPU 메모리를 크게 씀) 코드 릴리스 없이 gpu로 올린다. 검증: 알려진 LOCAL step 키만, 값은 `cpu|gpu`, HPC_* 키 거부. **방향 제한(JQ-C1)**: CPU 단계를 gpu로 올리는 보정만 허용한다. 계약 GPU 단계 집합 {`EDSPY_PREDICT`·`EDSPY_SCORE`·`HST_OPTIMIZE`}(= `StepDef.res=gpu`, §3.1)를 cpu로 내리는 값은 설정 검증 오류("GPU 동시 1 엄수" — 서버 GPU 메모리 초과 이력)이고, 워커 시작 때(`__main__`·`Worker` 생성)도 같은 규칙(`queues.gpu_demotions`)으로 거부하며, `queues.step_res`도 GPU 단계의 cpu 덮어쓰기를 무시한다(검증 우회 방어).
 
 ## 4. 혼합 작업 처리 — 대안 비교
 
@@ -207,7 +207,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 | `worker.queues.cpu.max_concurrent` | **4**(사용자 결정 Q1) | 정수 1~16 | 코어: 유효 32코어에서 SimLab·HyperView 1세션이 실측상 몇 코어 수준이고 DOE·일괄 생성은 작업 안에서 이미 `run_parallel` M개 → 동시 3 + GPU 작업 1이 32코어 안. 메모리: 메싱 8~16 GB × 3 ≤ 64 GB 상한. **라이선스**: Altair 유닛(SimLab·HyperView·HyperStudy) 동시 사용 수가 미확인 → 보수적 3(Q1) |
 | `worker.queues.cpu.min_free_memory_gb` | 8 | 0 이상(0 = 검사 안 함), `max_memory_gb` 미만 | 메싱 1건 최소치. GPU 수령에는 적용 안 함 |
 | `worker.queues.total_cap` | true | bool | §6.2 부모 Job Object. false면 작업당 몫 |
-| `worker.queues.step_resource` | `{}` | 알려진 LOCAL step 키 → `cpu|gpu` | §3.3 현장 보정 |
+| `worker.queues.step_resource` | `{}` | 알려진 LOCAL step 키 → `cpu|gpu`. **GPU 단계 3개(EDSPY_PREDICT·EDSPY_SCORE·HST_OPTIMIZE)를 cpu로 내리면 검증 오류**("GPU 단계(PhysicsAI 추론)는 CPU로 내릴 수 없습니다"), CPU 단계를 gpu로 올리는 것은 허용 | §3.3 현장 보정, JQ-C1 |
 | (GPU 동시 수) | 1 고정 | **키 없음** — `worker.queues.gpu`가 있으면 검증 오류("GPU 작업은 동시에 1개만 실행합니다") | JQ-2 |
 
 검증은 `config/validate_queues.py`(validate.py가 1줄로 호출 — S19 `validate_gpu.py` 관례), 설정 변경은 재시작 없이 다음 수령부터.
@@ -231,6 +231,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 | V-JQ-13 | 메모리 문: 가짜 `available` < `min_free_memory_gb` → CPU 수령 0·GPU 수령 정상·`/queue cpu.memory_gate = low`. 설정 검증(`max_concurrent` 0·17, `worker.queues.gpu` 존재, 모르는 step 키) 오류 |
 | V-JQ-14 | API·MCP: `/queue` gpu·cpu 분리·자기 대기열 순번·deprecated 필드 값, `backend/openapi.json` 갱신, MCP 생성기 `--check` 통과(새 도구 이름 없음, V-MCP-9 회귀), `system_status` 추가 필드, `/resources.jobs` |
 | V-JQ-15 | 프런트(`__tests__/queue`): 두 구역·칩 문구·관리자 ▲▼가 각 구역 안에서만·`resumed` 표시·빈 상태, mock 엔진이 구간 전환을 흉내 |
+| V-JQ-17 | **교착 없음(운영 경로)**: GPU 수령 스레드와 CPU 수령 스레드를 Worker 2개에서 병렬 반복(GPU 40건 + CPU 40건)해 모두 SUCCEEDED, 서버 `pg_stat_database.deadlocks` 증가 0·수령 예외 0. 직렬화 없는 겹침(CPU advisory lock 우회 — 수정 전 40P01 재현 경로)도 증가 0. `_claim`의 40P01 재시도(최대 3회, 4연속이면 예외, 다른 오류는 재시도 안 함) |
 | V-JQ-16 | **서버 확인(E, Windows 현장 — Linux 시험을 대체하지 않음)**: ④ 일괄 20 run + ① DOE 동시 실행 중 `nvidia-smi --query-compute-apps` 1초 표본에서 edspy 프로세스 항상 ≤ 1, GPU 메모리 초과 0. 부모 Job Object 중첩 성공(`total_cap = nested`). DATASET_CREATE 실행 중 GPU 프로세스 0(CPU 분류 확인 — 있으면 `step_resource`로 gpu) |
 
 ## 11. 리스크·미결
@@ -241,7 +242,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 | R2 | 메모리 합계 초과 시 임의 작업의 할당 실패 | 부모 Job Object로 총량 고정 + 수령 메모리 문. 실패는 기존 `MEMORY_LIMIT` 경로 |
 | R3 | 부모 Job Object 중첩이 현장(작업 스케줄러 세션·정책)에서 거부 | 작업당 몫 폴백 + 환경 점검 WARN, V-JQ-16 |
 | R4 | 레거시 OPTIMIZE(HyperStudy)가 GPU를 수 시간 독점 → 예측 대기 | §4.3 예외 명시·화면 표시. ⑥ 기본은 SURROGATE_OPT |
-| R5 | EDSPY_SCORE를 GPU로 둔 해석이 사용자 의도와 다를 수 있음 | Q2. `step_resource`로 즉시 변경 가능 |
+| R5 | EDSPY_SCORE를 GPU로 둔 해석이 사용자 의도와 다를 수 있음 | Q2. ~~`step_resource`로 즉시 변경 가능~~ → JQ-C1: GPU 동시 1 엄수로 설정으로는 cpu로 못 내림, 바꾸려면 계약·코드 변경 |
 | R6 | HyperView 캡처(OpenGL)·edspy 데이터셋이 GPU 메모리를 일부 사용 | CPU 분류 유지, V-JQ-16 실측, 필요 시 `step_resource` |
 | R7 | 서버 밖 GPU 사용(수동 edspy 등)은 슬롯이 모름 | 범위 밖. 운영 안내 |
 | R8 | 단건 예측 지연: 후처리가 CPU 대기열에서 기다림 | 원래 순번 재진입(JQ-5)으로 새 작업보다 앞. 전환당 ≤ 2초 |
@@ -267,3 +268,4 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 ## 변경 메모
 
 - JQ-C0(2026-10-22): 초안. 사용자 결정 반영 — 구간별 분리(생성 CPU·예측 GPU·FEM 검증 CPU), GPU = PhysicsAI 추론뿐, GPU 대기 중 CPU 슬롯 반납(교착·기아 근거 §5).
+- JQ-C1(2026-10-23, v0.2.9 독립 검증 지적 반영): (1) `step_resource`로 GPU 단계(EDSPY_PREDICT·EDSPY_SCORE·HST_OPTIMIZE)를 cpu로 내리는 설정은 검증 오류 — 그러면 추론이 CPU 대기열에서 최대 `cpu.max_concurrent`개 동시에 돌아 "GPU 동시 1"이 깨진다. 설정 검증·워커 시작·`step_res` 세 곳에서 막고, 반대 방향(CPU 단계를 gpu로 올리는 현장 보정)은 허용(§3.3·§9, V-JQ-1·2·13). (2) `recompute_my_turn`(알림 갱신)이 두 대기열 1번 작업 행을 기다리며 갱신해 GPU 수령·CPU 수령(서로 직렬화 안 됨)의 행 잠금 순서가 엇갈릴 수 있었다(V-JQ-4 대조군에서 40P01 1건 관측). 후보 행을 id 오름차순 한 문장 `FOR UPDATE SKIP LOCKED`로 잠가 갱신(다른 트랜잭션이 바꾸는 중인 행은 기다리지 않고 건너뜀 — 그 트랜잭션이 자신의 재계산으로 새 1번을 알림)하고, 그래도 40P01이면 워커 수령 트랜잭션을 최대 3회 다시 시도한다(수령 결과·GPU 동시 1·CPU 상한·순번 규칙 불변, 스키마 변경 없음). V-JQ-17 추가.

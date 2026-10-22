@@ -28,9 +28,11 @@ from physicsai_core.db.repositories import env_checks as env_repo
 from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories import workers as workers_repo
 from physicsai_core.db.repositories.job_lease import ClaimRace
+from physicsai_core.db.retry import DEADLOCK_RETRIES, retry_deadlock
 from physicsai_core.hpc.gateway import HpcJobGateway, get_hpc_gateway
 from physicsai_core.limits import EffectiveLimits, detect, limits_from_settings, share_limits
 from physicsai_core.paths import register_protected_roots
+from physicsai_core.queues import gpu_demotions
 
 from . import housekeeping, resources
 from .executor import Executor
@@ -54,6 +56,10 @@ class Worker(HpcPollerMixin):
         hpc: HpcJobGateway | None = None,
         detected: tuple[int, float] | None = None,
     ) -> None:
+        bad = gpu_demotions(config.settings.worker.queues.step_resource)
+        if bad and config.ok:  # (설정 오류면 어차피 claims_paused) 설정 검증을 거치지 않은 경로(시험·직접 생성)도 GPU 동시 1을 우회하지 못하게(JQ-2)
+            raise ValueError("GPU 단계를 CPU로 내리는 설정은 쓸 수 없습니다(GPU 작업은 동시에 1개만 실행): "
+                             "worker.queues.step_resource." + ", ".join(bad))
         self.config = config
         self.engine = engine
         self.config_path = config_path or config.path
@@ -172,9 +178,13 @@ class Worker(HpcPollerMixin):
 
     # ---- claim + 실행 ----
     def _claim(self, fn: Any) -> dict[str, Any] | None:
-        try:
+        """수령 트랜잭션 1회. 교착(40P01)이면 트랜잭션 전체가 롤백되므로 짧게 다시 시도한다(최대 3회 — 수령 결과는 같다, JQ-C1)."""
+        def once() -> dict[str, Any] | None:
             with self.engine.begin() as conn:
                 return fn(conn)
+
+        try:
+            return retry_deadlock(once, on_retry=lambda n: log.warning("수령 중 교착 감지 — 다시 시도합니다(%d/%d)", n, DEADLOCK_RETRIES))
         except ClaimRace:
             return None
 
