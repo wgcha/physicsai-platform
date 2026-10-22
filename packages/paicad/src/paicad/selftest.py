@@ -72,6 +72,8 @@ def run(args, rep: Reporter) -> int:
     work = root / WORK
     work.mkdir(parents=True, exist_ok=True)
     common = dict(options=args.options, threads=args.threads, body_map=args.body_map, _nested=True)
+    asm = bool(getattr(args, "asm_match", None))  # assembly match (asm-match.md AM-9): method M stage arguments
+    msrc = dict(baseline_inc=args.baseline_inc, asm_match=getattr(args, "asm_match", None), cache_dir=getattr(args, "cache_dir", None))
     stages: dict[str, dict] = {}
 
     def stage(name: str, ns: argparse.Namespace, lo: int, hi: int, report: str | None, store: dict | None = None) -> dict | None:
@@ -86,22 +88,27 @@ def run(args, rep: Reporter) -> int:
 
     ex, tg = work / "extract", work / "tag"
     feats = ex / "parameter_features.json"
-    stage("extract", argparse.Namespace(cmd="extract", cad=args.cad, out_dir=str(ex), renum_csv=args.renum_csv, no_png=True, **common), 0, 15, None)
+    stage("extract", argparse.Namespace(cmd="extract", cad=args.cad, out_dir=str(ex), renum_csv=args.renum_csv, asm_match=msrc["asm_match"], no_png=True, **common), 0, 15, None)
     fdoc = _read(feats) if stages["extract"]["exit_code"] == 0 else None
     tdoc = None
     if fdoc:
         tdoc = stage(
             "tag",
             argparse.Namespace(
-                cmd="tag", cad=args.cad, features=str(feats), baseline_inc=args.baseline_inc, renum_csv=args.renum_csv, assem_dir=args.assem_dir, out_dir=str(tg), **common
+                cmd="tag", cad=args.cad, features=str(feats), renum_csv=args.renum_csv, assem_dir=args.assem_dir, out_dir=str(tg), **msrc, **common
             ),
             15,
             35,
             "tag.json",
         )
     ok_tag = stages.get("tag", {}).get("exit_code") == 0
-    base_bytes = Path(args.baseline_inc).read_bytes()
-    roundtrip = {"writer_byte_identical": rewrite_nodes(base_bytes, {}) == base_bytes, "nominal_morph_byte_identical": None}
+    if asm:
+        node_files = _asm_node_files(args)
+        base_bytes = b""
+        roundtrip = {"writer_byte_identical": all(rewrite_nodes(d, {}) == d for d in node_files), "nominal_morph_byte_identical": None}
+    else:
+        base_bytes = Path(args.baseline_inc).read_bytes()
+        roundtrip = {"writer_byte_identical": rewrite_nodes(base_bytes, {}) == base_bytes, "nominal_morph_byte_identical": None}
     cdoc = env = None
     if ok_tag:
         vals = work / "values_nominal.json"
@@ -111,18 +118,17 @@ def run(args, rep: Reporter) -> int:
         if stages["update"]["exit_code"] == 0:
             stage(
                 "morph",
-                argparse.Namespace(cmd="morph", baseline_inc=args.baseline_inc, tag_dir=str(tg), features=str(feats), update_dir=str(upd), out_dir=str(mor), solver=None, sweep=False, **common),
+                argparse.Namespace(cmd="morph", assem_dir=args.assem_dir, tag_dir=str(tg), features=str(feats), update_dir=str(upd), out_dir=str(mor), solver=None, sweep=False, **msrc, **common),
                 45,
                 60,
                 "morph.json",
             )
         if stages.get("morph", {}).get("exit_code") == 0:
-            roundtrip["nominal_morph_byte_identical"] = (mor / "morphed.inc").read_bytes() == base_bytes
+            roundtrip["nominal_morph_byte_identical"] = _nominal_identical(args, mor) if asm else (mor / "morphed.inc").read_bytes() == base_bytes
             cdoc = stage(
                 "check",
                 argparse.Namespace(
                     cmd="check",
-                    baseline_inc=args.baseline_inc,
                     morph_dir=str(mor),
                     update_dir=str(upd),
                     tag_dir=str(tg),
@@ -131,7 +137,9 @@ def run(args, rep: Reporter) -> int:
                     assem_dir=args.assem_dir,
                     renum_csv=args.renum_csv,
                     out_dir=str(chk),
-                    out_inc=str(work / "check_nominal_out" / Path(args.baseline_inc).name),
+                    out_inc=None if asm else str(work / "check_nominal_out" / Path(args.baseline_inc).name),
+                    out_patch=str(work / "check_nominal_out" / "node_patch.npz") if asm else None,
+                    **msrc,
                     **common,
                 ),
                 60,
@@ -142,7 +150,7 @@ def run(args, rep: Reporter) -> int:
             envd = work / "envelope"
             ns = argparse.Namespace(
                 cmd="morph",
-                baseline_inc=args.baseline_inc,
+                assem_dir=args.assem_dir,
                 tag_dir=str(tg),
                 features=str(feats),
                 update_dir=str(upd),
@@ -155,6 +163,7 @@ def run(args, rep: Reporter) -> int:
                 stop_after_fail=args.stop_after_fail,
                 check="on",
                 keep_steps=False,
+                **msrc,
                 **common,
             )
             env = stage("envelope", ns, 70, 90, "envelope.json")
@@ -168,9 +177,9 @@ def run(args, rep: Reporter) -> int:
         versions={k: v.get(k) for k in ("paicad", "ocp", "numpy", "scipy", "python")},
         inputs={
             "cad_sha256": _sha_input(Path(args.cad)),
-            "baseline_sha256": sha256_file(args.baseline_inc),
-            "baseline_bytes": len(base_bytes),
-            "renum_sha256": sha256_file(args.renum_csv) if Path(args.renum_csv).is_file() else None,
+            "baseline_sha256": sha256_file(args.asm_match if asm else args.baseline_inc),
+            "baseline_bytes": None if asm else len(base_bytes),
+            "renum_sha256": sha256_file(args.renum_csv) if args.renum_csv and Path(args.renum_csv).is_file() else None,
         },
         stages=stages,
         extract=_extract_summary(fdoc, _read(ex / "extract_stats.json")),
@@ -187,6 +196,25 @@ def run(args, rep: Reporter) -> int:
     rep.progress(100, "selftest report written")
     rep.result("OK", None, REPORT_JSON)
     return EXIT_OK
+
+
+def _asm_node_files(args) -> list[bytes]:
+    """Bytes of the include-tree files that define nodes of the matched PARTs (method M round trip)."""
+    from .meshsrc import open_source
+
+    src = open_source(args)
+    rows = src.index.lookup(src.mesh.node_ids)
+    return [src.index.files[int(k)].path.read_bytes() for k in sorted(set(src.index.node_file[rows].tolist()))]
+
+
+def _nominal_identical(args, mor: Path) -> bool:
+    import numpy as np
+
+    from .meshsrc import NODE_XYZ, load_xyz, open_source
+
+    mesh = open_source(args).mesh
+    ids, xyz = load_xyz(mor / NODE_XYZ, "morph node coordinates")
+    return bool(np.array_equal(ids, mesh.node_ids) and np.array_equal(xyz, mesh.xyz))
 
 
 NX_TESS_DEFLECTION_MM = 0.002  # NX surface tessellation chord error (distance error bound on curved faces)
@@ -228,7 +256,14 @@ def _nx_samples(args, work: Path, feats: Path, tg: Path, common: dict, stage, re
         return {"count": 0, "samples": [], "skipped": "nx samples folder not found"}
     doc = load_features(feats)
     names = [b["body"] for b in doc["bodies"]]
-    _, mesh = read_baseline(args.baseline_inc)
+    asm = bool(getattr(args, "asm_match", None))
+    msrc = dict(baseline_inc=args.baseline_inc, asm_match=getattr(args, "asm_match", None), cache_dir=getattr(args, "cache_dir", None))
+    if asm:
+        from .meshsrc import NODE_XYZ, load_xyz, open_source
+
+        mesh = open_source(args).mesh
+    else:
+        _, mesh = read_baseline(args.baseline_inc)
     tag = load_tag(tg)
     comps = components_from_tag(mesh, tag)
     samples = []
@@ -250,7 +285,7 @@ def _nx_samples(args, work: Path, feats: Path, tg: Path, common: dict, stage, re
             continue
         stage(
             "nx morph",
-            argparse.Namespace(cmd="morph", baseline_inc=args.baseline_inc, tag_dir=str(tg), features=str(feats), update_dir=str(upd), out_dir=str(mor), solver=None, sweep=False, **common),
+            argparse.Namespace(cmd="morph", assem_dir=args.assem_dir, tag_dir=str(tg), features=str(feats), update_dir=str(upd), out_dir=str(mor), solver=None, sweep=False, **msrc, **common),
             lo,
             lo,
             "morph.json",
@@ -261,8 +296,9 @@ def _nx_samples(args, work: Path, feats: Path, tg: Path, common: dict, stage, re
         cdoc = stage(
             "nx check",
             argparse.Namespace(
-                cmd="check", baseline_inc=args.baseline_inc, morph_dir=str(mor), update_dir=str(upd), tag_dir=str(tg), features=str(feats), values=str(vp),
-                assem_dir=args.assem_dir, renum_csv=args.renum_csv, out_dir=str(chk), out_inc=str(sd / "check_out" / Path(args.baseline_inc).name), **common,
+                cmd="check", morph_dir=str(mor), update_dir=str(upd), tag_dir=str(tg), features=str(feats), values=str(vp),
+                assem_dir=args.assem_dir, renum_csv=args.renum_csv, out_dir=str(chk),
+                out_inc=None if asm else str(sd / "check_out" / Path(args.baseline_inc).name), out_patch=str(sd / "check_out" / "node_patch.npz") if asm else None, **msrc, **common,
             ),
             lo,
             lo,
@@ -281,7 +317,7 @@ def _nx_samples(args, work: Path, feats: Path, tg: Path, common: dict, stage, re
             entry["error"] = e.code
             continue
         nx_of = {m_body: b for b in nx.bodies for m_body in [m.get(b.name)] if m_body is not None}
-        Xm = parse_text((mor / MORPHED_INC).read_bytes().decode("latin-1")).xyz
+        Xm = load_xyz(mor / NODE_XYZ, "morph node coordinates")[1] if asm else parse_text((mor / MORPHED_INC).read_bytes().decode("latin-1")).xyz
         sample = load_sample(upd, doc)
         node_d, brep_d, bodies = [], [], []
         for c in comps:

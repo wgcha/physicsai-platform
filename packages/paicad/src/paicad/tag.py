@@ -31,6 +31,7 @@ from .mesh.radioss import (
     skin_triangles,
 )
 from .meshgeom import TriangleSet
+from .meshsrc import mesh_args, open_source
 
 TAG_JSON = "tag.json"
 TAG_NPZ = "tag_nodes.npz"
@@ -202,35 +203,64 @@ def run(args, rep: Reporter) -> int:
     out = OutDir(args.out_dir, [TAG_JSON, TAG_NPZ])
     out.prepare()
     topt = opts["tag"]
-    base = Path(args.baseline_inc)
-    if not base.is_file():
-        raise PaicadError("GEOM_INPUT_INVALID", f"baseline include not found: {base.name}")
-    renum = read_renum_csv(args.renum_csv)
-    doc_head = dict(
-        status="OK",
-        code=None,
-        message=None,
-        baseline_inc={"name": base.name, "sha256": sha256_file(base)},
-        tolerance={"abs_mm": topt["tol_abs_mm"], "rel": topt["tol_rel"]},
-    )
-    rep.progress(5, "reading baseline mesh")
-    mesh = read_mesh(base)
-    warnings: list[dict] = []
-    comps, w = components(mesh, renum)
-    warnings += w
-    rep.progress(15, "loading CAD")
-    cad = cadload.load(args.cad)
-    fb = _read_features_bodies(args.features)
-    body_of_part = {b.get("part"): b.get("body") for b in fb}
-    byname = cad.by_name()
-    missing = [c.part for c in comps if body_of_part.get(c.part) not in byname]
-    if missing:
-        # fall back to the section 4.1 rules (same result as extract when inputs did not change)
-        pairs = cadload.correspond(cad, renum, args.body_map)
-        body_of_part = {p: b.name for b, p, _ in pairs}
-    extra = sorted(set(byname) - set(body_of_part.values()))
-    if extra:
-        raise PaicadError("GEOM_BODY_MAP_FAILED", f"unmatched bodies: [{', '.join(extra[:10])}]; unmatched parts: []")
+    src = None
+    if mesh_args(args, ("baseline_inc", "renum_csv")) == "M":
+        rep.progress(5, "reading the assembly include tree")
+        src = open_source(args)
+        base = None
+        doc_head = dict(
+            status="OK",
+            code=None,
+            message=None,
+            baseline_inc=None,
+            asm_match={"name": src.match.path.name, "sha256": src.match.sha256},
+            excluded_bodies=list(src.match.excluded),
+            tolerance={"abs_mm": topt["tol_abs_mm"], "rel": topt["tol_rel"]},
+        )
+        mesh = src.mesh
+        warnings: list[dict] = []
+        if getattr(args, "body_map", None):
+            warnings.append({"code": "BODY_MAP_IGNORED", "message": "body map ignored: the assembly match is the only body/component correspondence"})
+        comps, w = src.components()
+        warnings += w
+        rep.progress(15, "loading CAD")
+        cad = cadload.load(args.cad)
+        byname = cad.by_name()
+        missing = [c.part for c in comps if c.part not in byname]
+        extra = sorted(set(byname) - {c.part for c in comps} - set(src.match.excluded))
+        if missing or extra:
+            raise PaicadError("GEOM_BODY_MAP_FAILED", f"unmatched bodies: [{', '.join(extra[:10])}]; match rows without a CAD body: [{', '.join(missing[:10])}]")
+        body_of_part = {c.part: c.part for c in comps}
+    else:
+        base = Path(args.baseline_inc)
+        if not base.is_file():
+            raise PaicadError("GEOM_INPUT_INVALID", f"baseline include not found: {base.name}")
+        renum = read_renum_csv(args.renum_csv)
+        doc_head = dict(
+            status="OK",
+            code=None,
+            message=None,
+            baseline_inc={"name": base.name, "sha256": sha256_file(base)},
+            tolerance={"abs_mm": topt["tol_abs_mm"], "rel": topt["tol_rel"]},
+        )
+        rep.progress(5, "reading baseline mesh")
+        mesh = read_mesh(base)
+        warnings = []
+        comps, w = components(mesh, renum)
+        warnings += w
+        rep.progress(15, "loading CAD")
+        cad = cadload.load(args.cad)
+        fb = _read_features_bodies(args.features)
+        body_of_part = {b.get("part"): b.get("body") for b in fb}
+        byname = cad.by_name()
+        missing = [c.part for c in comps if body_of_part.get(c.part) not in byname]
+        if missing:
+            # fall back to the section 4.1 rules (same result as extract when inputs did not change)
+            pairs = cadload.correspond(cad, renum, args.body_map)
+            body_of_part = {p: b.name for b, p, _ in pairs}
+        extra = sorted(set(byname) - set(body_of_part.values()))
+        if extra:
+            raise PaicadError("GEOM_BODY_MAP_FAILED", f"unmatched bodies: [{', '.join(extra[:10])}]; unmatched parts: []")
     node_index = mesh.node_index()
     all_tags: list[NodeTags] = []
     skins: list[np.ndarray] = []
@@ -269,6 +299,8 @@ def run(args, rep: Reporter) -> int:
                 "tol_mm": rnd(tol),
             }
         )
+        if src is not None:  # asm-match.md section 5.6 (additive keys)
+            parts_json[-1].update(pids=list(src.match.rows[k]["pids"]), renum_row=None)
     match_ratio = (bnd_total - unmatched_total) / bnd_total if bnd_total else 0.0
     if match_ratio < float(topt["min_match_ratio"]):
         dd = np.concatenate([t.dist[t.boundary] for t in all_tags])
@@ -287,6 +319,7 @@ def run(args, rep: Reporter) -> int:
             message=(
                 f"nominal STEP and baseline mesh coordinates do not match (match_ratio {match_ratio:.4f}, "
                 f"mean {float(dd.mean()) if dd.size else 0:.3f} mm, max {float(dd.max()) if dd.size else 0:.3f} mm) - check origin, units, shape"
+                + (" - check the assembly match again" if src is not None else "")
             ),
         )
         out.write_text(TAG_JSON, dumps(doc))
@@ -296,7 +329,7 @@ def run(args, rep: Reporter) -> int:
     if unmatched_total:
         warnings.append({"code": "TAG_UNMATCHED", "message": f"{unmatched_total} boundary nodes are unmatched (treated as free boundary)"})
     rep.progress(85, "detecting contact faces")
-    contacts = detect_contacts(args, base, comps, all_tags, skins, mesh, node_index, cad, body_of_part, opts)
+    contacts = detect_contacts(args, base, comps, all_tags, skins, mesh, node_index, cad, body_of_part, opts, src)
     # npz: one row per node (a node shared by two components is kept in the first)
     seen: set[int] = set()
     cols = {"node_id": [], "part": [], "kind": [], "entity": [], "uv": [], "dist": []}
@@ -321,7 +354,7 @@ def run(args, rep: Reporter) -> int:
     return EXIT_OK
 
 
-def detect_contacts(args, base: Path, comps, all_tags, skins, mesh, node_index, cad, body_of_part, opts) -> list[dict]:
+def detect_contacts(args, base: Path | None, comps, all_tags, skins, mesh, node_index, cad, body_of_part, opts, src=None) -> list[dict]:
     """Section 6.1 step 6: face F is a contact face if >= contact_min_ratio of its face nodes lie within contact_mm."""
     topt = opts["tag"]
     cmm = float(topt["contact_mm"])
@@ -329,7 +362,8 @@ def detect_contacts(args, base: Path, comps, all_tags, skins, mesh, node_index, 
     coords_of = [mesh.xyz[[node_index[int(n)] for n in t.node_ids]] for t in all_tags]
     lo = np.min([c.min(axis=0) for c in coords_of], axis=0)
     hi = np.max([c.max(axis=0) for c in coords_of], axis=0)
-    product = TriangleSet(collect_assembly_surface(args.assem_dir, [base], np.concatenate([lo, hi]), margin=10.0))
+    bbox = np.concatenate([lo, hi])
+    product = TriangleSet(src.product_surface(bbox, margin=10.0) if src is not None else collect_assembly_surface(args.assem_dir, [base], bbox, margin=10.0))
     # skin triangles of each component with their majority face id
     comp_tris = []
     for t, tris, coords in zip(all_tags, skins, coords_of):

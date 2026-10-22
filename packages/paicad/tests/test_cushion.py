@@ -174,7 +174,7 @@ def test_structure_ids_coordinates(tmp_path):
     ]
     assert doc["begin_from"] == "MODEL_0000.rad" and doc["def_sources"] == ["MODEL_0000.rad", "material.inc"]
     assert doc["warnings"] == [] and isinstance(doc["elapsed_s"], float)
-    assert paicad.__version__ == "0.12.0"
+    assert paicad.__version__ == "0.13.0"
 
 
 def test_unchanged_include_round_trip(tmp_path):
