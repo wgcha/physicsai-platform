@@ -15,6 +15,7 @@ from physicsai_core.stage4_predict.batch_matrix import BatchShapeError
 SETTINGS = SimpleNamespace(train_data=SimpleNamespace(platform_max_runs=500), predict_batch=SimpleNamespace(table_max_bytes=1 << 20),
                            predict=SimpleNamespace(integer_rounding="half_up"))
 INPUTS = {"lhs": {"count": 20, "seed": 2}, "lhs_opt": {"count": 14, "seed": 3}, "sobol": {"count": 16, "seed": 4},
+          "halton": {"count": 12, "seed": 5}, "random": {"count": 9, "seed": 6},
           "fullfact": {}, "fracfact": {"resolution": 4}, "pb": {}, "bbd": {}, "ccd": {"alpha": "inscribed"}}
 
 
@@ -31,7 +32,8 @@ def _codes(items: list[dict]) -> list[str]:
 
 @pytest.mark.parametrize("kind", registry.PLATFORM_KINDS)  # train_doe(표본표 재사용)는 samples 입력이 필요해 test_doe_reuse에서
 def test_v3_s18_1_check_runs_equal_build_rows(kind):
-    assert doe_platform.KINDS == ("lhs_opt", "sobol", "lhs", "fullfact", "fracfact", "pb", "bbd", "ccd", "train_doe")  # equiv-check.md Q1: 표본표 재사용
+    assert doe_platform.KINDS == ("lhs_opt", "sobol", "halton", "lhs", "random", "fullfact", "fracfact", "pb", "bbd", "ccd", "table",
+                                  "train_doe")  # equiv-check.md Q1: 표본표 재사용 + doe-methods.md DM-C3: halton·random·table
     for k in range(2, 12):
         s = {"kind": kind, **INPUTS[kind]}
         chk = doe_platform.check(s, _setup(k), SETTINGS)
@@ -96,7 +98,7 @@ def test_v3_s18_1_setup_conversion_integer_applied_and_shape_errors():
     for r in plan.rows:
         assert r.applied_values["THK_1"] == 3 and r.applied_values["RIB_H"] == r.values["RIB_H"]
         assert 2.85 <= r.values["THK_1"] <= 3.15
-    for bad in ({"kind": "table", "text": "x"}, {"kind": "train_doe", "doe_id": "d"}, {"kind": "lhs", "count": 4, "ranges": {}},
+    for bad in ({"kind": "table"}, {"kind": "train_doe", "doe_id": "d"}, {"kind": "lhs", "count": 4, "ranges": {}},
                 {"kind": "sobol", "count": 4, "continue_from": "b"}, {"kind": "pb", "levels": {}}, {"kind": "nope"}):
         with pytest.raises(BatchShapeError):
             doe_platform.check(bad, st, SETTINGS)

@@ -59,6 +59,24 @@ class BatchSourceSobol(Req):
     continue_from: str | None = Field(default=None, max_length=64)
 
 
+class BatchSourceHalton(Req):
+    """Halton(스크램블 QMC, doe-methods.md DM-C3): count 2~max_runs, seed 0~4294967295(생략 = 1). 이어서 추가 없음."""
+
+    kind: Literal["halton"]
+    count: int
+    seed: int = Field(default=1, ge=0, le=4294967295)
+    ranges: dict[str, list[float]] | None = None
+
+
+class BatchSourceRandom(Req):
+    """균일 랜덤(doe-methods.md DM-C3): count 2~max_runs, seed 0 이상(기본 1)."""
+
+    kind: Literal["random"]
+    count: int
+    seed: int = Field(default=1, ge=0)
+    ranges: dict[str, list[float]] | None = None
+
+
 class BatchSourceFullfact(Req):
     """전체 요인: levels {변수: 수준 수 1~10}(생략한 활성 변수 = 2; 2~10 검사와 정수 변수 검사는 problems)."""
 
@@ -98,8 +116,8 @@ class BatchSourceCcd(Req):
 
 
 BatchSource = Annotated[
-    Union[BatchSourceLhs, BatchSourceLhsOpt, BatchSourceSobol, BatchSourceFullfact, BatchSourceFracfact, BatchSourcePb,
-          BatchSourceBbd, BatchSourceCcd, BatchSourceTable, BatchSourceTrainDoe],
+    Union[BatchSourceLhs, BatchSourceLhsOpt, BatchSourceSobol, BatchSourceHalton, BatchSourceRandom, BatchSourceFullfact,
+          BatchSourceFracfact, BatchSourcePb, BatchSourceBbd, BatchSourceCcd, BatchSourceTable, BatchSourceTrainDoe],
     Field(discriminator="kind")]
 
 

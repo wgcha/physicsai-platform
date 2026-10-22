@@ -13,6 +13,7 @@ from ..stage4_predict import nearest
 PROBLEM_CODES = (
     "TABLE_HEADER", "TABLE_VALUE", "TEXT_TOO_LARGE", "TOO_MANY_ROWS", "TOO_FEW_ROWS", "RANGE_INVALID", "DOE_PARAM_MISMATCH",
     "COUNT_NOT_POW2", "CONTINUE_INVALID", "SEQUENCE_MISMATCH", "LEVELS_INVALID", "DESIGN_UNSUPPORTED", "GENERATOR_UNAVAILABLE", "VAR_RANGE_INVALID",
+    "TABLE_OUT_OF_RANGE",
 )
 NOTE_CODES = ("FIXED_EXCLUDED", "FULL_FACTORIAL_USED", "BBD_PAIRWISE", "DUPLICATE_ROWS", "SEQUENCE_CONTINUED", "INFLUENCE_TOO_FEW")
 NEW_KINDS = ("lhs_opt", "sobol", "fullfact", "fracfact", "pb", "bbd", "ccd")
@@ -45,7 +46,7 @@ class BatchRow:
 class BatchMatrix:
     """조합 계산 결과. problems가 있으면 작업 생성은 422 BATCH_SOURCE_INVALID."""
 
-    source_kind: str  # LHS | LHS_OPT | SOBOL | FULLFACT | FRACFACT | PB | BBD | CCD | TABLE | TRAIN_DOE
+    source_kind: str  # LHS | LHS_OPT | SOBOL | HALTON | RANDOM | FULLFACT | FRACFACT | PB | BBD | CCD | TABLE | TRAIN_DOE
     rows: list[BatchRow] = field(default_factory=list)
     problems: list[dict[str, Any]] = field(default_factory=list)
     source_meta: dict[str, Any] = field(default_factory=dict)

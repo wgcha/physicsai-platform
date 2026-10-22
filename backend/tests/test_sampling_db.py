@@ -18,6 +18,8 @@ from physicsai_test_support import REPO
 
 NEW_KINDS = ("LHS_OPT", "SOBOL", "FULLFACT", "FRACFACT", "PB", "BBD", "CCD")
 ALL_KINDS = ("LHS", *NEW_KINDS, "TABLE", "TRAIN_DOE")
+DM_KINDS = ("HALTON", "RANDOM")  # doe-methods.md DM-C3, migration 0023_doe_methods
+ALL_KINDS_V2 = (*ALL_KINDS, *DM_KINDS)
 
 
 def _alembic(url: str, rev: str) -> None:
@@ -28,6 +30,16 @@ def _alembic(url: str, rev: str) -> None:
     cfg.set_main_option("script_location", str(REPO / "migrations"))
     cfg.attributes["url"] = url
     command.upgrade(cfg, rev)
+
+
+def _alembic_down(url: str, rev: str) -> None:
+    from alembic import command
+    from alembic.config import Config
+
+    cfg = Config(str(REPO / "migrations" / "alembic.ini"))
+    cfg.set_main_option("script_location", str(REPO / "migrations"))
+    cfg.attributes["url"] = url
+    command.downgrade(cfg, rev)
 
 
 def _batch_fixture(c) -> dict:
@@ -71,7 +83,7 @@ def test_v3_s15_9_check_allows_ten_kinds_rejects_foo(engine):
 def test_v3_s15_9_migration_0012_keeps_existing_rows(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0022_job_queues"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
+    assert MIGRATION_HEAD == "0023_doe_methods"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -113,9 +125,9 @@ def test_v3_s15_9_table_constants_match_migration_and_registry():
     from physicsai_core.db.tables.predict_batch import BATCH_SOURCE_KINDS, predict_batches
     from physicsai_core.sampling import registry
 
-    assert set(BATCH_SOURCE_KINDS) == set(ALL_KINDS) == set(registry.SOURCE_KINDS.values()) and len(BATCH_SOURCE_KINDS) == 10
+    assert set(BATCH_SOURCE_KINDS) == set(ALL_KINDS_V2) == set(registry.SOURCE_KINDS.values()) and len(BATCH_SOURCE_KINDS) == 12
     ck = next(c for c in predict_batches.constraints if getattr(c, "name", "") == "ck_predict_batches_source_kind")
-    assert set(re.findall(r"'([A-Z_]+)'", str(ck.sqltext))) == set(ALL_KINDS)
+    assert set(re.findall(r"'([A-Z_]+)'", str(ck.sqltext))) == set(ALL_KINDS_V2)
     spec = importlib.util.spec_from_file_location("m0012", REPO / "migrations" / "versions" / "0012_sampling_kinds.py")
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)  # type: ignore[union-attr]
@@ -123,3 +135,64 @@ def test_v3_s15_9_table_constants_match_migration_and_registry():
     assert set(re.findall(r"'([A-Z_]+)'", open(REPO / "migrations" / "versions" / "0012_sampling_kinds.py", encoding="utf-8").read().split("def upgrade")[1])) == set(ALL_KINDS)
     with pytest.raises(RuntimeError):
         mod.downgrade()
+
+
+def test_v_dm_12_migration_0023_extends_check_keeps_rows(pg_server):
+    """doe-methods.md §5.5 / V-DM-12: 0023_doe_methods — source_kind CHECK에 HALTON·RANDOM 추가(기존 10개·행 무변경), downgrade(새 kind 행이 있으면 거부),
+    migration 1개. 계약 down_revision은 0022_job_queues(통합 때 메인이 연결) — 이 브랜치에서는 임시로 0021_uploads."""
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    from physicsai_core.db import MIGRATION_HEAD
+
+    cfg = Config(str(REPO / "migrations" / "alembic.ini"))
+    cfg.set_main_option("script_location", str(REPO / "migrations"))
+    sd = ScriptDirectory.from_config(cfg)
+    rev = sd.get_revision("0023_doe_methods")
+    assert sd.get_current_head() == MIGRATION_HEAD == "0023_doe_methods"
+    assert rev.down_revision in ("0021_uploads", "0022_job_queues")  # 통합 시 0022_job_queues
+    src = (REPO / "migrations" / "versions" / "0023_doe_methods.py").read_text(encoding="utf-8")
+    assert "통합 시 down_revision → 0022_job_queues" in src.split("from __future__")[0]
+    assert set(re.findall(r"'([A-Z_]+)'", src.split("def upgrade")[1])) == set(ALL_KINDS_V2)
+    name = f"physicsai_m23_{uuid.uuid4().hex[:8]}"
+    with pg_server["admin"].connect() as c:
+        c.execute(text(f'CREATE DATABASE "{name}"'))
+    base, _, _ = pg_server["admin_url"].rpartition("/")
+    url = f"{base}/{name}"
+    eng = create_engine(url)
+    try:
+        _alembic(url, rev.down_revision)
+        with eng.begin() as c:
+            fx = _batch_fixture(c)
+            for no, kind in enumerate(ALL_KINDS, start=1):
+                _insert_batch(c, fx, f"old-{kind}", no, kind)
+        for bad in DM_KINDS:
+            with pytest.raises(IntegrityError), eng.begin() as c:  # 0023 전에는 새 kind 거부
+                _insert_batch(c, fx, f"before-{bad}", 50, bad)
+        _alembic(url, "head")
+        with eng.begin() as c:
+            assert c.execute(text("select version_num from alembic_version")).scalar() == "0023_doe_methods"
+            got = c.execute(text("select source_kind from predict_batches order by batch_no")).scalars().all()
+            assert got == list(ALL_KINDS)                                              # 기존 행 무변경
+            for no, kind in enumerate(DM_KINDS, start=20):
+                _insert_batch(c, fx, f"new-{kind}", no, kind)
+            assert c.execute(text("select character_maximum_length from information_schema.columns"
+                                  " where table_name='predict_batches' and column_name='source_kind'")).scalar() == 16
+        with pytest.raises(IntegrityError), eng.begin() as c:
+            _insert_batch(c, fx, "foo", 40, "FOO")
+        with pytest.raises(IntegrityError), eng.begin() as c:
+            _insert_batch(c, fx, "lower", 41, "halton")
+        with pytest.raises(RuntimeError, match="Halton"):  # 새 방식 배치가 있으면 downgrade 거부(0017~0021 선례)
+            _alembic_down(url, rev.down_revision)
+        with eng.begin() as c:
+            c.execute(text("delete from predict_batches where source_kind in ('HALTON','RANDOM')"))
+        _alembic_down(url, rev.down_revision)               # 없으면 CHECK를 기존 10개로 되돌림
+        with eng.begin() as c:
+            assert c.execute(text("select version_num from alembic_version")).scalar() == rev.down_revision
+        for bad in DM_KINDS:
+            with pytest.raises(IntegrityError), eng.begin() as c:
+                _insert_batch(c, fx, f"after-{bad}", 60, bad)
+    finally:
+        eng.dispose()
+        with pg_server["admin"].connect() as c:
+            c.execute(text(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)'))

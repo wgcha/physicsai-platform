@@ -45,7 +45,7 @@ def _use_cushion_cmd(monkeypatch, on: bool = True) -> None:
 def test_v_ik_1_default_matches_template_kind(settings_dict, engine, fake_dashboard, worker_factory):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0022_job_queues"  # IK-2: migration 없음
+    assert MIGRATION_HEAD == "0023_doe_methods"  # IK-2: migration 없음
     with _client(settings_dict, engine, fake_dashboard) as (c, lc):
         ai = lc.settings.storage.ai_root
         sid, _mid, ps = _setup(c, worker_factory(), __import__("pathlib").Path(ai), "K1")

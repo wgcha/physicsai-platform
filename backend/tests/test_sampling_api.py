@@ -273,7 +273,7 @@ def test_v3_s15_8_openapi_schema_and_operation_ids():
     assert {"sampling", "influence_class", "influence_note", "influence_ok"} <= set(comps["DoeResultTable"]["properties"])
     union = comps["PredictBatchPreviewRequest"]["properties"]["source"]
     kinds = set(union["discriminator"]["mapping"])
-    assert kinds == {"lhs", "lhs_opt", "sobol", "fullfact", "fracfact", "pb", "bbd", "ccd", "table", "train_doe"}
+    assert kinds == {"lhs", "lhs_opt", "sobol", "halton", "random", "fullfact", "fracfact", "pb", "bbd", "ccd", "table", "train_doe"}
     committed = json.loads((Path(__file__).resolve().parents[1] / "openapi.json").read_text(encoding="utf-8"))
     assert committed == spec
 

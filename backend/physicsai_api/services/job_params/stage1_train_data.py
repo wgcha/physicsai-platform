@@ -270,12 +270,18 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
         platform = params.get("generator") == "platform"
         native = {"engine": "native"} if params.get("engine") == "native" else {}
         if native:  # geometry-engine.md §7.3.3: native = 플랫폼 생성(LHS) + paicad. options = {seed(, param_set_id)}, sampling 없음(표본표 재사용이면 기록)
-            opts = {"seed": params["seed"], **({"param_set_id": params["param_set_id"]} if params.get("param_set_id") else {})}
             sp = params.get("sampling")
-            extra = {"options": opts, "generator": "PLATFORM",
-                     "sampling": {"kind": sp["kind"], "input": {k: v for k, v in sp.items() if k != "kind"}, "meta": None} if sp else None}
+            if sp and sp["kind"] != "train_doe":  # doe-methods.md §5.1: lhs 밖 표본 방식 — options = 정규화 입력(+ param_set_id), sampling = {kind, input, meta: null}
+                inp = doe_platform.stored_input(sp["kind"], {k: v for k, v in sp.items() if k != "kind"}, params["num_runs"])
+                opts = {**inp, **({"param_set_id": params["param_set_id"]} if params.get("param_set_id") else {})}
+                extra = {"options": opts, "generator": "PLATFORM", "sampling": {"kind": sp["kind"], "input": inp, "meta": None}}
+            else:
+                opts = {"seed": params["seed"], **({"param_set_id": params["param_set_id"]} if params.get("param_set_id") else {})}
+                extra = {"options": opts, "generator": "PLATFORM",
+                         "sampling": {"kind": sp["kind"], "input": {k: v for k, v in sp.items() if k != "kind"}, "meta": None} if sp else None}
         elif platform:  # §23.4: options = 정규화 표본 입력(kind 제외), sampling = {kind, input, meta: null}(DG_PREP이 meta)
-            inp = {k: v for k, v in params["sampling"].items() if k != "kind"}
+            inp = doe_platform.stored_input(params["sampling"]["kind"], {k: v for k, v in params["sampling"].items() if k != "kind"},
+                                            params["num_runs"])  # table = 본문 대신 행 수(DM-C3)
             extra = {"options": inp, "generator": "PLATFORM",
                      "sampling": {"kind": params["sampling"]["kind"], "input": inp, "meta": None}}
         else:

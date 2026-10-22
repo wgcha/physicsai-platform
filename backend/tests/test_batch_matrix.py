@@ -206,7 +206,8 @@ S15_META_KEYS = {
 def test_v3_s15_7_kind_to_source_kind_ten():
     from physicsai_core.sampling import registry
 
-    assert bm.SOURCE_KINDS == S15_DB_KINDS == registry.SOURCE_KINDS and len(bm.SOURCE_KINDS) == 10
+    # doe-methods.md DM-C3: S15 10종 + halton·random(새 방식 상세는 test_doe_methods_core)
+    assert bm.SOURCE_KINDS == {**S15_DB_KINDS, "halton": "HALTON", "random": "RANDOM"} == registry.SOURCE_KINDS and len(bm.SOURCE_KINDS) == 12
     for kind, src in S15_SOURCES.items():
         m = bm.build_matrix(src, parameters=P3, tpl_params=T3, max_runs=200, table_max_bytes=64)
         assert m.ok and m.source_kind == S15_DB_KINDS[kind], (kind, m.problems)

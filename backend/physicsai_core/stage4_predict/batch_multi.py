@@ -1,6 +1,7 @@
 """④ 일괄 생성의 다중 baseline 조합(geometry-engine.md §7.3.8): 확정 세트 + source(lhs) → baseline별 층화 LHS 행.
 
-- 지원 source = lhs(count·seed, ranges는 쓰지 않음 — 층 범위는 baseline별 대응 범위). 다른 kind는 문제(BATCH_SOURCE_INVALID).
+- 지원 source = `registry.SITE_KINDS["batch_multi"]`(lhs·lhs_opt·halton·random, doe-methods.md DM-C4: count·seed(+criterion), ranges는 쓰지 않음 —
+  층 범위는 baseline별 대응 범위, 층 seed = seed + 층 번호). 다른 kind는 문제(MULTI_BASELINE_SOURCE → BATCH_SOURCE_INVALID).
 - 행 값(predict_batch_runs.values) = 공통 이름 + 쉘 두께, N/A 변수는 0(학습 입력 규칙과 같음 — run 메타 values.json에서는 null).
 - 배정: topology = 층 baseline, range = 배정 규칙(`assign_baseline`), 없으면 None → 생성 때 BASELINE_NO_COVER로 스킵.
   배정·층은 배치 source_meta `multi_baseline`({usage, stratum:{doe_no: id}, assign:{doe_no: id|null}})에 둔다(DB 열 없음, §7.5).
@@ -13,15 +14,25 @@ from typing import Any
 
 from ..geometry import baselines as bl
 from ..geometry import shell as sh
+from ..sampling.layer_gen import layer_generator
+from ..sampling.qmc import GeneratorUnavailable, generator_label
+from ..sampling.registry import METHODS, MULTI_UNSUPPORTED_MESSAGE, SITE_KINDS
 from . import nearest
-from .batch_matrix import BatchMatrix, BatchRow, BatchShapeError, lhs_values, run_key_for
+from .batch_matrix import BatchMatrix, BatchRow, BatchShapeError, run_key_for
 
 
 def build_multi_matrix(source: Mapping[str, Any], param_set: Mapping[str, Any], pm: Mapping[str, Any], settings: Any) -> BatchMatrix:
     problems: list[dict[str, Any]] = []
-    if source.get("kind") != "lhs":
-        problems.append({"code": "MULTI_BASELINE_SOURCE", "message": "다중 baseline 세트의 일괄 생성은 LHS(lhs)만 지원합니다(baseline별 층화)"})
+    kind = source.get("kind")
+    if kind not in SITE_KINDS["batch_multi"]:  # doe-methods.md DM-C4: 층 안 생성기 lhs·lhs_opt·halton·random만
+        problems.append({"code": "MULTI_BASELINE_SOURCE", "message": MULTI_UNSUPPORTED_MESSAGE})
         return BatchMatrix("LHS", [], problems, {}, [])
+    source_kind = METHODS[kind][0]
+    criterion = source.get("criterion") or "maximin"
+    if criterion not in ("maximin", "corr"):
+        raise BatchShapeError("source.criterion은 maximin | corr 중 하나입니다")
+    if source.get("criterion") is not None and kind != "lhs_opt":
+        raise BatchShapeError("source.criterion은 최적화 LHS(lhs_opt)에서만 쓸 수 있습니다")
     count, seed = source.get("count"), source.get("seed", 1)
     if isinstance(count, bool) or not isinstance(count, int):
         raise BatchShapeError("source.count는 정수여야 합니다")
@@ -36,9 +47,16 @@ def build_multi_matrix(source: Mapping[str, Any], param_set: Mapping[str, Any], 
     params = list(param_set["parameters"])
     meta: dict[str, Any] = {"count": count, "seed": seed}
     if problems:
-        return BatchMatrix("LHS", [], problems, meta, [])
+        return BatchMatrix(source_kind, [], problems, meta, [])
+    if kind == "lhs_opt":
+        meta["criterion"] = criterion
     extra = {str(r["name"]): (float(r["min"]), float(r["max"])) for r in sh.prop_rows(params)}
-    raw = bl.stratified_lhs(pm, params, count, seed, lhs_values, run_key_for, extra)
+    try:
+        raw = bl.stratified_lhs(pm, params, count, seed, layer_generator(kind, criterion), run_key_for, extra)
+    except GeneratorUnavailable as exc:
+        return BatchMatrix(source_kind, [], [{"code": "GENERATOR_UNAVAILABLE", "message": str(exc)}], meta, [])
+    if kind == "halton":
+        meta.update({"scramble": True, "generator": generator_label()})
     rows, stratum, assign = [], {}, {}
     for doe_no, rk, bid, vals in raw:
         target = bid if pm.get("usage") == "topology" else bl.assign_baseline(pm, params, vals)
@@ -52,7 +70,7 @@ def build_multi_matrix(source: Mapping[str, Any], param_set: Mapping[str, Any], 
     n_nc = sum(1 for v in assign.values() if v is None)
     if n_nc:
         notes.append({"code": bl.NO_COVER, "message": f"{n_nc}개 조합은 덮는 baseline이 없어 생성 때 스킵됩니다"})
-    return BatchMatrix("LHS", rows, [], meta, notes)
+    return BatchMatrix(source_kind, rows, [], meta, notes)
 
 
 # ---- opt-native §7: 내장 최적화 소유 배치(탐색 LHS·검증·추가 검증 표) ---------------------------------------------

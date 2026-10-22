@@ -15,6 +15,7 @@ from physicsai_core.errors import DomainError
 from physicsai_core.features import optimize_builtin_missing, predict_responses_missing
 from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict import performance, run_metrics
+from physicsai_core.sampling.registry import MULTI_UNSUPPORTED_MESSAGE
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import criteria
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
@@ -31,7 +32,8 @@ from .surrogate_opt_metrics import (  # noqa: F401 - 기존 경로 재노출
     PERF_PREFIX, _p, run_metric_rows, metric_value, value, new_metrics, snapshot_perfs,
 )
 from .surrogate_opt_space import (  # noqa: F401 - 300줄 분할(R-B): 범위·가중치·다중 baseline·수준·제약 행·성능 미리보기
-    _bounds, _constraint_row, _levels, _multi_settings, _perf_info, _weights, multi_baseline,
+    _bounds, _constraint_row, _explore_method, _is_pow2, _levels, _multi_settings, _perf_info, _sobol_default_count, _weights,
+    multi_baseline,
 )
 
 MAX_CONSTRAINTS = 5
@@ -117,6 +119,13 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         explore_count = body.explore.count if body.explore.count is not None else \
             min(ds.default_explore_count(len([n for n in free if n != "baseline"]), cfg.predict_batch.max_runs) * n_lv,
                 cfg.predict_batch.max_runs)
+        method = body.explore.method
+        if method == "sobol" and body.explore.count is None:  # doe-methods.md §5.4: 기본값 = 그 값 이상 가장 작은 2^m(넘으면 상한 이하 최대 2^m)
+            explore_count = _sobol_default_count(explore_count, cfg.predict_batch.max_runs)
+        if method == "sobol" and multi is not None:  # DM-C4: 다중 baseline 층별 run 수가 2의 거듭제곱이 아님
+            _p(problems, "DESIGN_UNSUPPORTED", MULTI_UNSUPPORTED_MESSAGE, "explore.method")
+        elif method == "sobol" and not _is_pow2(explore_count, cfg.predict_batch.max_runs):
+            _p(problems, "COUNT_NOT_POW2", "Sobol은 run 수가 2의 거듭제곱이어야 합니다(4·8·16·32·64·128)", "explore.count")
         if explore_count < need:
             _p(problems, "EXPLORE_TOO_FEW", f"탐색 run은 최소 {need}개입니다(자유 변수 {len(free)}개)", "explore.count")
         elif explore_count > cfg.predict_batch.max_runs:
@@ -222,7 +231,7 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
             _p(problems, "EXPLORE_TOO_FEW", f"재사용 배치에 목적 값이 있는 성공 run이 {valid_points}개뿐입니다(최소 {need}개)",
                "explore.batch_id")
     explore = ({"kind": "reuse", "batch_id": reuse["id"]} if reuse is not None
-               else {"kind": "new", "count": explore_count, "seed": body.explore.seed})
+               else {"kind": "new", "count": explore_count, "seed": body.explore.seed, **_explore_method(body.explore)})
     obj_rows = [{"metric": o.metric, "series": o.series, "sense": o.sense} for o in objs]
     settings = {
         "names": names, "integer": integer, "bounds": bounds,

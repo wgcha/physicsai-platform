@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from ..sampling.registry import METHODS
 from .common import (OP_TEXT, SENSE_TEXT, STATUS_TEXT, con_key, con_text, engine_text, metric_name, model_text, param_set_text,
                      study_meta, values_text, verdict_badge)
 from .page import (Ctx, Doc, Raw, badge, bars_h, cards, details, empty, esc, finite, fmt, kv_table, line_chart, note, pct,
@@ -85,7 +86,8 @@ def _setting_section(d: Mapping[str, Any], defs: Sequence[Mapping[str, Any]]) ->
                if cons else empty("제약 없음"))
     algo = str(s.get("algorithm") or "ego")
     ex = s.get("explore") or {}
-    explore = (f"새 탐색 LHS {ex.get('count')}개(시드 {ex.get('seed')})" if ex.get("kind") == "new"
+    method = METHODS[ex["method"]][1] if ex.get("method") in METHODS else "LHS"  # doe-methods.md DM-C5: 저장 안 된 method = 기존 LHS
+    explore = (f"새 탐색 {method} {ex.get('count')}개(시드 {ex.get('seed')})" if ex.get("kind") == "new"
                else f"완료 배치 재사용 {str(ex.get('batch_id') or '')[:8]}")
     kv: list[tuple[str, Any]] = [
         ("알고리즘", ALGO_TEXT.get(algo, algo)), ("검증 방식", VERIFY_TEXT.get(str(s.get("verification") or "loop"), s.get("verification"))),

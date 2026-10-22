@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from .common import InputKind, Req
 from .native_vars import VarsEdit
@@ -14,11 +14,20 @@ METRIC_PATTERN = (r"^(curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MI
 
 
 class SoExploreNew(Req):
-    """새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs)."""
+    """새 DOE: method(기본 lhs) — count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs, sobol이면 그 값 이상 가장 작은 2^m).
+    criterion = lhs_opt 전용(maximin 기본 | corr), 그 밖 method면 422. 요인·응답면·표는 ⑥ 탐색에 없다(재사용 배치로 — doe-methods.md DM-C5)."""
 
     kind: Literal["new"]
     count: int | None = None
     seed: int = 1
+    method: Literal["lhs", "lhs_opt", "sobol", "halton", "random"] = "lhs"
+    criterion: Literal["maximin", "corr"] | None = None
+
+    @model_validator(mode="after")
+    def _criterion_only_for_lhs_opt(self) -> "SoExploreNew":
+        if self.criterion is not None and self.method != "lhs_opt":
+            raise ValueError("criterion은 method가 lhs_opt일 때만 쓸 수 있습니다")
+        return self
 
 
 class SoExploreReuse(Req):
