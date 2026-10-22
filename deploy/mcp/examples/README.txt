@@ -10,5 +10,5 @@ claude_desktop_config.json      Claude Desktop(mcp-remote 브리지, 기본) —
 claude_desktop_config.stdio.json Claude Desktop(stdio 대안) — 브리지와 같은 이름 physicsai라 파일을 나눔
 codex.config.toml               OpenAI Codex CLI(mcp-remote 브리지, 기본) — ~/.codex/config.toml 의 [mcp_servers.physicsai]
 codex.config.stdio.toml         OpenAI Codex CLI(stdio 대안) — [mcp_servers.physicsai_stdio] (브리지와 함께 둘 수 있음)
-gemini.settings.json            Gemini CLI(mcp-remote 브리지, 기본) — ~/.gemini/settings.json
-gemini.settings.stdio.json      Gemini CLI(stdio 대안) — ~/.gemini/settings.json (브리지와 같은 이름 physicsai라 파일을 나눔)
+gemini.settings.json            Gemini CLI(mcp-remote 브리지, 기본) — C:\Users\<사용자>\.gemini\settings.json (없으면 새로 만듦)
+gemini.settings.stdio.json      Gemini CLI(stdio 대안) — C:\Users\<사용자>\.gemini\settings.json (없으면 새로 만듦) (브리지와 같은 이름 physicsai라 파일을 나눔)
