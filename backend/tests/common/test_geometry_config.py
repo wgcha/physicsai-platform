@@ -13,7 +13,7 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.features import feature_status, geometry_status
 from physicsai_test_support import REPO
 
-PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version")
+PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version", "paicad_cushion_write")
 
 
 def _example(tmp_path, **over):

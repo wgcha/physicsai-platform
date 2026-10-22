@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """가짜 paicad(geometry-engine.md §5, §7.8): 하위 명령별로 보고 JSON·성공 파일을 쓴다. OCP·numpy 없이 표준 라이브러리만.
 
-- version --json | --version | extract | tag | update | morph | check | run | props scan | props apply | map
+- version --json | --version | extract | tag | update | morph | check | run | cushion write | props scan | props apply | map
   (인자는 `--name value` 두 토큰)
 - 출력 파일이 이미 있으면 덮어쓰지 않고 종료코드 3(GEOM_OUTPUT_EXISTS) — 보고는 건드리지 않는다.
 - stdout: `PAICAD PROGRESS <pct> <msg>` 줄들, 마지막 `PAICAD RESULT <status> <code|-> <보고 파일 이름>`.
 환경변수
   FAKE_PAICAD_VERSION            version 출력(기본 0.5.0)
-  FAKE_PAICAD_FAIL               `<cmd>:<code>[,<cmd>:<code>…]` 해당 명령을 그 코드로 FAIL 보고(cmd = extract|tag|update|morph|check|run:<단계>)
+  FAKE_PAICAD_FAIL               `<cmd>:<code>[,<cmd>:<code>…]` 해당 명령을 그 코드로 FAIL 보고(cmd = extract|tag|update|morph|check|cushion_write|run:<단계>)
   FAKE_PAICAD_FAIL_WHEN          `<cmd>:<code>:<이름><op><값>` values의 그 이름이 조건(> < >= <=)이면 FAIL(run별 결정적 스킵 시험)
   FAKE_PAICAD_NOREPORT           `<cmd>` 보고 파일을 쓰지 않고 종료코드 1
   FAKE_PAICAD_EXIT_AFTER_OK      `<cmd>:<rc>` 정상 출력을 쓰고 그 종료코드로 끝남(EXIT_NONZERO_IGNORED 시험)
@@ -19,6 +19,8 @@
   FAKE_PAICAD_SLEEP_S            명령마다 대기(겹침 관측용)
   FAKE_PAICAD_PROPS              props scan이 낼 PROP 행 배열(기본: 조립 폴더 material.inc에 BRACKET(선택 가능)·PANEL(요소 두께)·LAM(TYPE9))
   FAKE_PAICAD_MAP_GRADE          map 행 등급 덮어쓰기 `<이름>:<grade>[,…]`(check|unmatched 시험)
+  cushion write(input-kind.md §5): --inc 노드 줄만 담은 단일 starter rad(`#RADIOSS STARTER`·`/BEGIN`·실행 이름 줄(--out-rad stem)·--inc의 `/` 카드 줄 그대로·`/END`,
+                                 `#include` 없음) + `cushion.json`. FAKE_PAICAD_CUSHION_WARN=1이면 경고 CUSHION_PART_DEF_MISSING 1건을 보고에 넣는다.
   props apply는 PROP 정의 파일 사본 끝에 `#FAKE_PROP <id> <값>` 줄을 덧붙여 --out-dir에 쓴다(실제는 두께 필드만 교체).
   props_apply 실패: FAKE_PAICAD_FAIL=props_apply:<code>, FAKE_PAICAD_FAIL_WHEN=props_apply:<code>:<이름><op><값>
   FAKE_TOOL_RECORD / FAKE_TOOL_TRACE  호출 기록(jsonl) / 시작·끝 시각 기록
@@ -54,6 +56,10 @@ if cmd == "props":
     if not rest or rest[0] not in ("scan", "apply"):
         sys.exit(2)
     cmd, rest = f"props_{rest[0]}", rest[1:]
+elif cmd == "cushion":
+    if rest[:1] != ["write"]:
+        sys.exit(2)
+    cmd, rest = "cushion_write", rest[1:]
 elif cmd == "shell" and rest[:1] == ["view"]:
     if len(rest) < 2 or rest[1] not in ("export", "preview"):
         sys.exit(2)
@@ -66,7 +72,7 @@ elif cmd == "view":
     if not rest or rest[0] not in ("export", "preview"):
         sys.exit(2)
     cmd, rest = f"view_{rest[0]}", rest[1:]
-if cmd not in ("extract", "tag", "update", "morph", "check", "run", "props_scan", "props_apply", "map") and \
+if cmd not in ("extract", "tag", "update", "morph", "check", "run", "cushion_write", "props_scan", "props_apply", "map") and \
         not cmd.startswith(("shell_", "view_")):
     sys.exit(2)
 args, flags, i = {}, set(), 0
@@ -407,6 +413,46 @@ def step_check(out, update_dir, morph_dir):
     return 0, None
 
 
+def do_cushion_write():
+    """cushion write(input-kind.md §5.2 흉내): --inc 줄을 그대로 옮긴 단일 starter rad. 노드·요소 ID·좌표는 --inc와 같다."""
+    inc, assem = need("inc"), need("assem-dir")
+    need("renum-csv")
+    out = args.get("out-dir") or sys.exit(2)
+    out_rad = args.get("out-rad") or sys.exit(2)
+    os.makedirs(out, exist_ok=True)
+    cj = os.path.join(out, "cushion.json")
+    exists_exit([cj, out_rad])
+    progress(20, "writing cushion rad")
+    if os.environ.get("FAKE_PAICAD_NOREPORT") == "cushion_write":
+        sys.exit(1)
+    code = fails("cushion_write")
+    if code:
+        sys.exit(fail_report("cushion write", cj, code, {"out_rad": None}))
+    def has_begin(n):
+        with open(os.path.join(assem, n), encoding="utf-8", errors="replace") as fh:
+            return any(ln.strip() == "/BEGIN" for ln in fh)
+
+    starters = sorted(n for n in os.listdir(assem) if n.lower().endswith(".rad") and os.path.isfile(os.path.join(assem, n)) and has_begin(n))
+    if len(starters) != 1:  # 조립 폴더 직계 *.rad 중 /BEGIN 있는 것 정확히 1개(아니면 GEOM_INPUT_INVALID)
+        sys.exit(fail_report("cushion write", cj, "GEOM_INPUT_INVALID",
+                             {"message": f"exactly one starter with /BEGIN required in --assem-dir (found {len(starters)})", "out_rad": None}))
+    with open(inc, encoding="utf-8") as fh:
+        body = [ln.rstrip("\n") for ln in fh if not ln.lstrip().startswith("#include")]
+    stem = os.path.splitext(os.path.basename(out_rad))[0]
+    text = "\n".join(["#RADIOSS STARTER", "/BEGIN", stem] + body + ["/END"]) + "\n"
+    tmp = out_rad + ".tmp"
+    with open(tmp, "w", encoding="utf-8", newline="\n") as fh:
+        fh.write(text)
+    os.replace(tmp, out_rad)
+    nodes = sum(1 for ln in body if ln.strip() and not ln.startswith(("/", "#")))
+    warns = [{"code": "CUSHION_PART_DEF_MISSING", "names": ["PART 10"]}] if os.environ.get("FAKE_PAICAD_CUSHION_WARN") == "1" else []
+    write_json(cj, dict(BASE, status="OK", code=None, category=None, message=None, out_rad=os.path.basename(out_rad), node_count=nodes,
+                        elem_count=0, bytes=len(text.encode("utf-8")), parts=[], begin_from=starters[0], def_sources=[],
+                        warnings=warns, elapsed_s=0.05))
+    progress(100, "done")
+    finish("cushion.json", "OK", None, maybe_nonzero("cushion_write"))
+
+
 DEFAULT_PROPS = [
     {"id": 1, "title": "Bracket", "type": "SHELL", "keyword": "/PROP/TYPE1", "supported": True, "parameter": "BRACKET_SHELL_T",
      "thickness": 1.2, "unit": "mm", "range": {"min": 1.14, "max": 1.26, "ratio": 0.05}, "parts": [{"id": 10, "title": "BRACKET"}],
@@ -580,6 +626,8 @@ if cmd.startswith(("shell_", "view_")):
     import fake_paicad_shell_view  # noqa: E402 - 쉘(shell-morph.md §5)·뷰(geometry-view.md §5) 가짜 명령
 
     fake_paicad_shell_view.main(cmd, args, flags, globals())
+elif cmd == "cushion_write":
+    do_cushion_write()
 elif cmd == "props_scan":
     do_props_scan()
 elif cmd == "props_apply":

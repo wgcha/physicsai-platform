@@ -24,6 +24,7 @@ LOG_TAIL_BYTES = 4096  # 각 단계 로그에 덧붙이는 paicad.log 꼬리(§7
 PAICAD_LOG = "paicad.log"
 TIMEOUT_KEY = {"paicad_extract": "extract", "paicad_tag": "tag", "paicad_update": "update", "paicad_morph": "morph",
                "paicad_check": "check", "paicad_run": "run",
+               "paicad_cushion_write": "check",  # 쿠션 rad 쓰기는 check와 같은 시간 상한(input-kind.md §5)
                # 쉘(SM §8.1): `shell_*` 키가 없으면 같은 이름 솔리드 값(fixed-scan은 tag 값)
                "paicad_shell_fixed_scan": "shell_fixed_scan", "paicad_shell_extract": "shell_extract", "paicad_shell_tag": "shell_tag",
                "paicad_shell_update": "shell_update", "paicad_shell_morph": "shell_morph", "paicad_shell_check": "shell_check",

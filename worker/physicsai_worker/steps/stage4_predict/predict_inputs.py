@@ -3,8 +3,10 @@
 parametric = 원본 ⑤ 체인: SimLab(형상 갱신·메싱 → `EPS_mesh_0000.rad`) → HyperMesh m_2(include 변환 → `104_replace_node_elem.inc`)
 → 조립 폴더 사본에 새 include를 넣어 starter가 새 메시를 쓰게 한다. 성공은 종료코드가 아니라 출력 파일로 판정한다(원본 SimLab rc 무시).
 prepared = 원본 ③ 단독 예측: 사용자가 준비한 입력(읽기 전용)을 P/INPUT으로 복사(eps_mesh 포함, D3-44 — 제외는 parametric만).
-mesh_only 템플릿(phase3 §14.4): MESH SKIPPED, RAD_ASSEMBLE은 P/geom 직계 rad·inc 복사만, starter = SimLab 메시(`EPS_mesh_0000.rad`).
-템플릿 종류는 작업 params `template_kind`(없으면 세트 `input_kind`) — prepared params의 `input_kind`(file|dir)와 다르다.
+mesh_only 실행 = 쿠션 입력(phase3 §14.4, input-kind.md §4.1): Altair는 MESH SKIPPED, RAD_ASSEMBLE은 P/geom 직계 rad·inc 복사만, starter = SimLab 메시
+(`EPS_mesh_0000.rad`). Native는 MESH가 morph·check 뒤 `paicad cushion write`로 같은 이름 rad를 쓰고 RAD_ASSEMBLE은 그 한 파일만 복사.
+조립 가능 템플릿도 실행의 `template_kind`가 mesh_only면 같은 경로(IK-4). 실행 종류는 작업 params `template_kind`(없으면 세트 `input_kind`) —
+prepared params의 `input_kind`(file|dir)와 다르다.
 판정·조립 규칙은 일괄 예측 BP_GEN(run 폴더 m_1~m_3)이 같이 쓴다(`judge_output`·`assemble_into`·`mesh_only_into`).
 """
 
@@ -19,17 +21,28 @@ from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_file
 from physicsai_core.paths import PathError, is_link_or_reparse
 from physicsai_core.stage4_predict import prepared_input
+from physicsai_core.stage4_predict.input_kind import to_public as input_of  # 내부 `assembly|mesh_only` → 공개 `assembly|cushion`(변환은 core 한 곳, input-kind.md IK-2)
 from physicsai_core.stage4_predict.prepared_input import CopyPlan, is_mesh_file
 
 from ...signals import StepSkipped
 from .. import run_chain  # 모듈 참조(호출 시점 속성 조회) — run_chain이 이 모듈을 import하므로 순환을 피한다
 
 PREPARED_SKIP = "준비된 입력 — 해당 없음"
-MESH_ONLY_SKIP = "쿠션 단독 템플릿 — 메시 연결 불필요"
+MESH_ONLY_SKIP = "쿠션 입력 — 메시 연결 불필요"
 MESH_ONLY = "mesh_only"
 ASSEMBLY = "assembly"
 LOG_BATCH = "log_batch.txt"  # 원본 include TCL이 cwd에 쓰는 로그(phase3 §11.1)
 MAX_LOG_LINES = 5000
+
+
+def predict_input_doc(inp_dir: str, starter: str, kind: str) -> dict[str, Any]:
+    """`jobs.result.predict_input`(input-kind.md §4.1): 예측 입력 폴더 P/INPUT의 파일 수·크기 합(수치만)."""
+    files = size = 0
+    for root, _dirs, names in os.walk(inp_dir):
+        for n in names:
+            files += 1
+            size += os.path.getsize(os.path.join(root, n))
+    return {"input": input_of(kind), "starter": starter, "bytes": size, "files": files}
 
 
 def predict_dir(ctx: Any) -> str:
@@ -266,6 +279,17 @@ def mesh_only_into(settings: Any, geom: str, dst: str, *, checkpoint: Any = None
     return mesh
 
 
+def cushion_into(settings: Any, geom: str, dst: str, *, checkpoint: Any = None, log: Any = None) -> str:
+    """Native 쿠션 RAD_ASSEMBLE(input-kind.md §4.1): `paicad cushion write` 산출 `geom/{simlab_mesh_name}` **한 파일**만 dst로 복사
+    (모핑 include·조립 파일은 복사하지 않는다). starter = 그 이름."""
+    mesh = settings.predict.simlab_mesh_name
+    src = os.path.join(geom, mesh)
+    if not os.path.isfile(src) or os.path.getsize(src) == 0:
+        raise StepFailure("OUTPUT_MISSING", f"쿠션 입력 rad({mesh})가 없습니다 — 메시 단계(쿠션 rad 쓰기) 결과를 확인하세요")
+    copy_files([src], dst, checkpoint=checkpoint, log=log)
+    return mesh
+
+
 def _reset_input(ctx: Any, inp: str) -> None:
     """P/INPUT 기존 내용을 통째로 `_backup/<stamp>_<job>/…/INPUT`으로 옮긴다(phase3 D3-36).
 
@@ -285,13 +309,17 @@ def rad_assemble(ctx: Any) -> None:
         # 원본 폴더는 읽기만(복사 원천). 직계 *.rad·*.inc 전부 — eps_mesh*도 starter가 include할 수 있어 복사(D3-44)
         plan = check_prepared(ctx)
         _copy_into(ctx, inp, plan.files)
-        ctx.patch_result({"starter": plan.starter})
-        return
-    if template_kind(ctx) == MESH_ONLY:  # phase3 §14.4: 복사만, rad_assemble·csv 무관
-        starter = mesh_only_into(ctx.settings, _geom(ctx), inp, checkpoint=ctx.checkpoint, log=ctx.log)
-        ctx.patch_result({"starter": starter})
+        ctx.patch_result({"starter": plan.starter, "predict_input": predict_input_doc(inp, plan.starter, _kind_of_starter(plan.starter))})
         return
     ps0, S0 = param_set(ctx)
+    kind = template_kind(ctx, ps0)
+    if kind == MESH_ONLY:  # 쿠션 입력(phase3 §14.4·input-kind.md §4.1): 복사만, rad_assemble·csv 무관
+        if (ps0 or {}).get("engine") == "native":
+            starter = cushion_into(ctx.settings, _geom(ctx), inp, checkpoint=ctx.checkpoint, log=ctx.log)
+        else:
+            starter = mesh_only_into(ctx.settings, _geom(ctx), inp, checkpoint=ctx.checkpoint, log=ctx.log)
+        ctx.patch_result({"starter": starter, "predict_input": predict_input_doc(inp, starter, kind)})
+        return
     if (ps0 or {}).get("engine") == "native":  # geometry-engine.md §11.1·§7.3.8: 배정 baseline 조립·쉘 두께 적용(엔진 분기 1곳)
         from . import predict_native
 
@@ -300,4 +328,9 @@ def rad_assemble(ctx: Any) -> None:
         starter = _assemble_parametric(ctx, inp)
     if ctx.settings.commands.rad_assemble is not None:
         ctx.run_local("rad_assemble", {"work_dir": P, "starter": os.path.join(inp, starter), "input_dir": inp}, cwd=inp)
-    ctx.patch_result({"starter": starter})
+    ctx.patch_result({"starter": starter, "predict_input": predict_input_doc(inp, starter, kind)})
+
+
+def _kind_of_starter(starter: str) -> str:
+    """준비된 입력(prepared)의 표시 종류: starter가 eps_mesh면 쿠션(input-kind.md §4.4)."""
+    return MESH_ONLY if is_mesh_file(starter) else ASSEMBLY

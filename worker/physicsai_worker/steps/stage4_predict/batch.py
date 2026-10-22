@@ -34,7 +34,7 @@ from .. import run_chain
 from ..common import hst_run_label, load_model, verify_model_integrity
 from . import batch_native
 from .child_input import check_child_input
-from .predict_inputs import MESH_ONLY
+from .predict_inputs import MESH_ONLY, input_of
 
 M1 = "m_1"  # run 폴더 하위 이름(run_chain.M1과 같음)
 
@@ -116,7 +116,7 @@ def bp_prep(ctx: Any) -> None:
     ctx.backup([bj, sc])
     names = [str(p["name"]) for p in ps["parameters"]]
     write_json(bj, {
-        "batch_id": b["id"], "label": batch_label(b["batch_no"]), "input_kind": b["input_kind"],
+        "batch_id": b["id"], "label": batch_label(b["batch_no"]), "input_kind": b["input_kind"], "input": input_of(b["input_kind"]),
         "param_set": {"id": ps["id"], "label": ps.get("label"), "tpl_sha256": sha256_file(os.path.join(S, TPL_NAME)),
                       "cad_file_name": ps["cad_file_name"], "cad_sha256": sha256_file(cad_src)},
         "model": {"id": m["id"], "name": m.get("name"), "version": m.get("version"), "psmdl_sha256": m.get("psmdl_sha256")},

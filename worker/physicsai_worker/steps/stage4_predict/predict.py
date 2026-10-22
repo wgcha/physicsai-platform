@@ -21,6 +21,7 @@ from ..common import load_model, model_command_values, verify_model_integrity
 from .predict_inputs import (
     MESH_ONLY,
     PREPARED_SKIP,
+    input_of,
     _judge_output,
     check_prepared,
     geom_update,
@@ -77,7 +78,7 @@ def pr_prep(ctx: Any) -> None:
     copy_file(os.path.join(S, "cad", ps["cad_file_name"]), cad_dst, checkpoint=ctx.checkpoint)
     ctx.patch_result({
         "model_id": m["id"], "param_set_id": ps["id"], "values": values, "applied_values": applied,
-        "out_of_range": [o["name"] for o in oor], "template_kind": kind,
+        "out_of_range": [o["name"] for o in oor], "template_kind": kind, "input": input_of(kind),
         "nearest": {"run_key": near["run_key"], "distance": near["distance"]} if near else None,
     })
 

@@ -23,9 +23,11 @@ from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.prep import is_shell_only
 
+from .. import geometry_cushion as cushion
 from ..geometry_native import effective_opts, set_opts, engine_version, ensure_prep_ready, native_inputs, read_json
-from ..geometry_sample import backup_path, generate_sample, write_no_cover, write_sample_inputs
+from ..geometry_sample import backup_path, generate_sample, write_cushion_rad, write_no_cover, write_sample_inputs
 from .child_input import check_child_input
+from .predict_inputs import MESH_ONLY, input_of
 
 M1 = "m_1"
 
@@ -76,6 +78,9 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
     pm, meta = multi_of(ctx, b, S)
     for bid in bl.baseline_ids(pm or {}):
         ensure_prep_ready(s, bl.baseline_root(S, pm, bid), opts, ver)  # type: ignore[arg-type]
+    if b["input_kind"] == MESH_ONLY:  # 쿠션 입력(input-kind.md §4.2): 명령 설정·쿠션 가능 세트 확인(쉘·쉘 두께는 불가)
+        cushion.require_command(s)
+        cushion.require_cushion_capable(native_inputs(s, S, os.path.join(S, "radioss_assem"), need_cad=False), None, is_shell_only(S))
     os.makedirs(B, exist_ok=True)
     ctx.ex.db(lambda c: pb_repo.reset_failed_gen(c, b["id"]))
     with ctx.ex.engine.connect() as conn:
@@ -90,6 +95,8 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
         if os.path.lexists(R):
             ctx.backup([R])  # 재실행: 실패·미완료 run 폴더만 _backup으로
         _bid, geo, _shell, extra, no_cover = run_plan(ps, pm, meta, r)
+        if b["input_kind"] == MESH_ONLY and _shell:  # 쉘 두께 값이 있는 조합은 쿠션 입력 불가(IK-3) — 생성 전에 막는다
+            cushion.require_cushion_capable(native_inputs(s, S, os.path.join(S, "radioss_assem"), need_cad=False), _shell)
         if not no_cover:  # 배정 실패 run은 BP_GEN이 SKIPPED.json(BASELINE_NO_COVER)만 쓴다
             write_sample_inputs(R, geo, {"kind": "batch", "id": b["id"], "doe_no": r["doe_no"]}, opts, nominals, ver, extra,
                                 xml_values={n: float(v) for n, v in r["values"].items()})
@@ -98,7 +105,7 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
     ctx.backup([bj, sc])
     names = [str(p["name"]) for p in ps["parameters"]]
     write_json(bj, {
-        "batch_id": b["id"], "label": batch_label(b["batch_no"]), "input_kind": b["input_kind"], "engine": "native",
+        "batch_id": b["id"], "label": batch_label(b["batch_no"]), "input_kind": b["input_kind"], "input": input_of(b["input_kind"]), "engine": "native",
         "engine_version": ver, "param_set": {"id": ps["id"], "label": ps.get("label"),
                                               "features_sha256": sha256_file(bl.features_path(S))},
         "model": {"id": m["id"], "name": m.get("name"), "version": m.get("version"), "psmdl_sha256": m.get("psmdl_sha256")},
@@ -129,6 +136,7 @@ def gen_one(ctx: Any, b: dict[str, Any], S: str, B: str) -> Callable[[Any, dict[
     inps = {bid: native_inputs(s, root, os.path.join(root, "radioss_assem")) for bid, root in roots.items()}
     inp0 = native_inputs(s, S, os.path.join(S, "radioss_assem"), need_cad=not shell_only)
     props_json = os.path.join(S, *sh.PROPS_JSON.split("/"))
+    is_cushion = b["input_kind"] == MESH_ONLY  # 쿠션 입력: m_3 조립 없음 → m_1/{simlab_mesh_name}이 하위 예측 입력
 
     def gen(runner: Any, r: dict[str, Any]) -> None:
         R = os.path.join(B, r["run_key"])
@@ -140,10 +148,18 @@ def gen_one(ctx: Any, b: dict[str, Any], S: str, B: str) -> Callable[[Any, dict[
                 backup_path(runner, R)
             write_no_cover(R, ver)
             raise StepFailure(bl.NO_COVER, korean_message(bl.NO_COVER, None))
-        generate_sample(runner, s, inps[bid] if bid else inp0, R, engine_version=ver, geometry=bool(geo) and not shell_only,
+        gin = inps[bid] if bid else inp0
+        if is_cushion:
+            cushion.require_cushion_capable(gin, shell, shell_only)
+        generate_sample(runner, s, gin, R, engine_version=ver, geometry=bool(geo) and not shell_only,
                         shell=shell, props_json=props_json, props_work=os.path.join(B, sh.APPLY_DIR + "_apply", r["run_key"]),
-                        baseline_id=bid)
-        check_child_input(s, os.path.join(R, "m_3"))
+                        baseline_id=bid, assemble=not is_cushion)
+        if is_cushion:
+            input_path = write_cushion_rad(runner, s, gin, R, engine_version=ver, geometry=bool(geo) and not shell_only,
+                                           baseline_id=bid)
+        else:
+            input_path = os.path.join(R, "m_3")
+        check_child_input(s, input_path)
         _set(gen_state="DONE", gen_code=None, gen_message=None, engine_version=ver)
 
     return gen

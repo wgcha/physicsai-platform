@@ -74,8 +74,9 @@ class PredictEnv:
 
         self.sql("update param_sets set responses=cast(:r as jsonb) where id=:i", r=json.dumps(responses), i=ps_id)
 
-    def make_batch(self, ps_id: str, text: str, *, multi: int = 2) -> tuple[str, str]:
-        """표 붙여넣기 조합으로 부모 PREDICT_BATCH 작업 + 배치·run 행을 만든다 → (batch_id, 부모 job_id)."""
+    def make_batch(self, ps_id: str, text: str, *, multi: int = 2, input_kind: str | None = None) -> tuple[str, str]:
+        """표 붙여넣기 조합으로 부모 PREDICT_BATCH 작업 + 배치·run 행을 만든다 → (batch_id, 부모 job_id).
+        input_kind = 실행의 입력 종류(assembly|mesh_only, input-kind.md IK-2) — 생략 시 세트 값."""
         from physicsai_core.db.repositories import jobs as jobs_repo
         from physicsai_core.db.repositories import param_sets as ps_repo
         from physicsai_core.db.repositories import predict_batches as pb
@@ -94,7 +95,7 @@ class PredictEnv:
                                        params={"param_set_id": ps_id, "model_id": self.model_id, "multi_execution": multi,
                                                "source": source, "batch_id": bid, "batch_no": no})
             pb.create_batch(conn, batch_id=bid, batch_no=no, study_id=self.sid, job_id=job["id"], param_set_id=ps_id,
-                            model_id=self.model_id, input_kind=ps["input_kind"], matrix=mx, multi_execution=multi,
+                            model_id=self.model_id, input_kind=input_kind or ps["input_kind"], matrix=mx, multi_execution=multi,
                             dir_rel=batch_dir_rel(s.predict_batch.dir_name, no), simlab_mesh_name=s.predict.simlab_mesh_name,
                             user_id="u-power", user_name="파워")
         return bid, job["id"]

@@ -34,7 +34,8 @@ from ..geometry_native import (
     run_paicad,
 )
 from ...signals import StepSkipped
-from .predict_inputs import assemble_into, predict_dir
+from .. import geometry_cushion as cushion
+from .predict_inputs import MESH_ONLY, assemble_into, input_of, predict_dir, template_kind
 
 
 def is_native_set(ps: dict[str, Any] | None) -> bool:
@@ -70,8 +71,13 @@ def pr_prep(ctx: Any, m: dict[str, Any], ps: dict[str, Any], S: str) -> None:
                     "model_id": m["id"], "param_set_id": ps["id"], "unit_system": ps["unit_system"], "engine": "native"})
     write_json(oj, usage_document(opts, ver))
     geometry = bool(geo) and not is_shell_only(root)
+    kind = template_kind(ctx, ps)  # 실행의 입력 종류(input-kind.md IK-2): params template_kind(서버 확정) → 세트 값
+    if kind == MESH_ONLY:  # 쿠션 입력: 명령 설정·쿠션 가능 세트인지 먼저 확인(§4.1 PR_PREP)
+        cushion.require_command(s)
+        cushion.require_cushion_capable(native_inputs(s, root, os.path.join(root, "radioss_assem"), need_cad=False), shell,
+                                        is_shell_only(root))
     ctx.patch_result({"model_id": m["id"], "param_set_id": ps["id"], "values": values, "applied_values": values,
-                      "out_of_range": [o["name"] for o in oor], "template_kind": "assembly", "nearest": None,
+                      "out_of_range": [o["name"] for o in oor], "template_kind": kind, "input": input_of(kind), "nearest": None,
                       "engine": "native", "engine_version": ver, "ocp_version": ocp, "geometry_values": geo,
                       "shell_values": shell, "baseline_id": bid, "baseline_rel": ctx.rel(root) if bid else None,
                       "geometry_skipped": not geometry})
@@ -138,9 +144,14 @@ def geom_update(ctx: Any, S: str) -> None:
 
 
 def mesh(ctx: Any, S: str) -> None:
-    """MESH(native) = `paicad_morph` → `paicad_check`(PASS일 때만 `P/geom/{mesh_include_name}`)."""
-    _skip_if_no_geometry(ctx)
+    """MESH(native) = `paicad_morph` → `paicad_check`(PASS일 때만 `P/geom/{mesh_include_name}`).
+    쿠션 입력(input-kind.md §4.1)이면 그 뒤 `paicad_cushion_write` → `P/geom/{simlab_mesh_name}`(형상 값이 없으면 morph·check 없이 기준 include로)."""
+    is_cushion = ctx.result().get("template_kind") == MESH_ONLY
     s, G = ctx.settings, _G(ctx)
+    if is_cushion and ctx.result().get("geometry_skipped"):
+        inp = _inputs(ctx, S)
+        return _cushion_write(ctx, inp, G, inp.baseline_inc)  # 형상 값 없음: 기준 쿠션 메시 그대로
+    _skip_if_no_geometry(ctx)
     inp = _inputs(ctx, S)
     if inp.kind == "shell":
         return _shell_mesh(ctx, inp, G, S)
@@ -164,6 +175,23 @@ def mesh(ctx: Any, S: str) -> None:
     prev = dict(ctx.result().get("geometry") or {})
     prev.update({"morph_max_disp_mm": mj.get("max_disp_mm"), "min_stretch": q.get("min_stretch"), "max_deviation_mm": d.get("max_mm"),
                  "check_elapsed_s": cj.get("elapsed_s"), "check_status": cj.get("status")})
+    ctx.patch_result({"geometry": prev})
+    if is_cushion:
+        _cushion_write(ctx, inp, G, out_inc)
+
+
+def _cushion_write(ctx: Any, inp: Any, G: str, cushion_inc: str) -> None:
+    """`paicad cushion write`(GE-C19): `cushion_inc`(모핑 PASS include 또는 기준본)에서 쿠션 바디만의 rad → `P/geom/{simlab_mesh_name}`,
+    보고 `P/geom/cushion/cushion.json`. 실패는 그 코드·한국어 문구로 MESH 단계 실패."""
+    s = ctx.settings
+    rad = os.path.join(G, s.predict.simlab_mesh_name)
+    D = os.path.join(G, cushion.CUSHION_DIR)
+    v = cushion.write_cushion(LocalRunner(ctx), s, inp, cushion_inc=cushion_inc, cushion_dir=D, cushion_rad=rad)
+    v.raise_if_failed()
+    ctx.add_output(rad)
+    rep = v.report or {}
+    prev = dict(ctx.result().get("geometry") or {})
+    prev["cushion"] = {k: rep.get(k) for k in ("node_count", "elem_count", "bytes", "elapsed_s")}
     ctx.patch_result({"geometry": prev})
 
 

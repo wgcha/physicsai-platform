@@ -102,6 +102,7 @@ def test_null_optional_templates_ok():
                                    "contour_capture"} | {  # 3차(phase3 §15 S10)
         # native 형상 엔진(geometry-engine §7.1)
         "paicad_version", "paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run",
+        "paicad_cushion_write",  # 쿠션 입력 rad(input-kind §5.1)
         # 단계 3S·4B(geometry-engine §11.1·§7.3.8)
         "paicad_props_scan", "paicad_props_apply", "paicad_map",
         # 단계 4C 쉘 판금(shell-morph §8.1)·3D 가시화(geometry-view §6.1)·결과 3D 컨투어(§13.3)
