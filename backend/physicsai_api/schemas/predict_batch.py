@@ -85,7 +85,7 @@ class PredictBatchPreview(Resp):
     problems: list[BatchProblem]
     notes: list[BatchNote] = []  # S15: 막지 않는 안내 + native-vars.md §6.3 경고(VAR_*)·학습 범위 안내
     sampling: SamplingInfo | None = None
-    var_rows: list[VarRow] = []  # native-vars.md §6.3: Native 변수 표 초기화(유효 변수, Altair는 빈 목록)
+    var_rows: list[VarRow] = []  # native-vars.md §6.3: 변수 표 초기화(유효 변수, Native·Altair 전체 tpl. Altair 부분 tpl은 빈 목록)
     excluded: list[str] = []
 
 

@@ -383,6 +383,10 @@
       "MISSING",
       "FAILED"
     ],
+    "NativeVars.engine": [
+      "native",
+      "altair"
+    ],
     "ParamMap.status": [
       "draft",
       "confirmed"
@@ -417,6 +421,10 @@
     "ParamSet.param_map_status": [
       "draft",
       "confirmed"
+    ],
+    "ParamSet.vars_scope": [
+      "full",
+      "partial"
     ],
     "ParamSetCreate.engine": [
       "altair",
@@ -453,6 +461,10 @@
     "ParamSetFromTrain.runs": [
       "collected",
       "all"
+    ],
+    "ParamSetFromTrain.tpl_source": [
+      "doe",
+      "current"
     ],
     "ParamSetParameter.source": [
       "prop",
@@ -576,6 +588,10 @@
     "SurrogateOptSummary.input": [
       "assembly",
       "cushion"
+    ],
+    "TplSummary.scope": [
+      "full",
+      "partial"
     ],
     "TrainDoe.engine": [
       "altair",
@@ -1478,6 +1494,7 @@
         "backend/physicsai_api/services/predict_runs.py",
         "backend/physicsai_api/services/reports_analysis.py",
         "backend/physicsai_api/services/stage4_predict.py",
+        "backend/physicsai_api/services/stage4_predict_train.py",
         "backend/physicsai_api/services/system.py",
         "backend/physicsai_core/fs_browse.py"
       ],
@@ -1602,7 +1619,6 @@
       "code": "NATIVE_PREP_MISSING",
       "message_ko": "형상 피처 파일이 없습니다 — 형상 준비를 다시 하세요",
       "sources": [
-        "backend/physicsai_api/services/native_vars_api.py",
         "backend/physicsai_api/services/param_set_native_api.py",
         "backend/physicsai_api/services/param_set_native_train.py",
         "worker/physicsai_worker/steps/stage4_predict/baseline_map.py"
@@ -1648,15 +1664,6 @@
         "backend/physicsai_api/services/native_vars_api.py"
       ],
       "status": 404
-    },
-    "NATIVE_VARS_UNSUPPORTED": {
-      "code": "NATIVE_VARS_UNSUPPORTED",
-      "message_ko": "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다",
-      "sources": [
-        "backend/physicsai_api/services/job_params/stage4_batch.py",
-        "backend/physicsai_api/services/native_vars_api.py"
-      ],
-      "status": 422
     },
     "NOT_FOUND": {
       "code": "NOT_FOUND",
@@ -2338,13 +2345,31 @@
       ],
       "status": 429
     },
+    "TPL_DOE_MISMATCH": {
+      "code": "TPL_DOE_MISMATCH",
+      "message_ko": "현재 ①-2 tpl의 사용 파라미터(이름·공칭·범위)가 이 DOE와 다릅니다 — DOE 폴더의 tpl로 만들거나 DOE를 다시 만드세요",
+      "sources": [
+        "backend/physicsai_api/services/stage4_predict_train.py"
+      ],
+      "status": 409
+    },
     "TPL_REQUIRED": {
       "code": "TPL_REQUIRED",
       "message_ko": "tpl을 먼저 생성하세요(①-2)",
       "sources": [
-        "backend/physicsai_api/services/job_params/stage1_train_data.py"
+        "backend/physicsai_api/services/job_params/stage1_train_data.py",
+        "backend/physicsai_api/services/stage4_predict_train.py"
       ],
       "status": 409
+    },
+    "TPL_SCOPE_PARTIAL": {
+      "code": "TPL_SCOPE_PARTIAL",
+      "message_ko": "옛 tpl(사용 파라미터만) — ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage4_batch.py",
+        "backend/physicsai_api/services/stage4_predict_train.py"
+      ],
+      "status": 422
     },
     "TPL_STALE": {
       "code": "TPL_STALE",

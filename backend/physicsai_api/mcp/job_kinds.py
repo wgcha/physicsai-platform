@@ -275,7 +275,7 @@ BatchParams = described(_PB.PredictBatchParams, "PredictBatchKindParams", {
     "model_id": "모델 id(생략 = Final 모델)",
     "multi_execution": "입력 생성 동시 실행 수[개](1~64, 상한 train_data.max_multi_execution)",
     "source": "조합 원천 {kind: lhs|sobol|fullfact|table|train_doe…, count[개], seed, …}",
-    "vars": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜) — get_native_vars로 변수 풀 확인",
+    "vars": "템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜) — Native·Altair(전체 tpl) 모두, get_native_vars로 변수 풀 확인",
     "display": "배치 단위 컨투어 표시(선택)",
     "capture": "하위 예측 컨투어 캡처 옵션(선택)",
 })

@@ -10563,9 +10563,16 @@
       "NativeVarPoolRow": {
         "properties": {
           "body": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": "",
-            "title": "Body",
-            "type": "string"
+            "title": "Body"
           },
           "default_range": {
             "$ref": "#/components/schemas/VarRange"
@@ -10591,6 +10598,11 @@
             ],
             "title": "Group"
           },
+          "integer": {
+            "default": false,
+            "title": "Integer",
+            "type": "boolean"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -10602,6 +10614,11 @@
           "position": {
             "default": false,
             "title": "Position",
+            "type": "boolean"
+          },
+          "range_unset": {
+            "default": false,
+            "title": "Range Unset",
             "type": "boolean"
           },
           "ref_locked": {
@@ -10620,9 +10637,16 @@
             ]
           },
           "type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "default": "",
-            "title": "Type",
-            "type": "string"
+            "title": "Type"
           },
           "unit": {
             "default": "mm",
@@ -10644,6 +10668,15 @@
           "editable": {
             "title": "Editable",
             "type": "boolean"
+          },
+          "engine": {
+            "default": "native",
+            "enum": [
+              "native",
+              "altair"
+            ],
+            "title": "Engine",
+            "type": "string"
           },
           "features_sha256": {
             "anyOf": [
@@ -11897,6 +11930,43 @@
             "title": "Unit System",
             "type": "string"
           },
+          "vars_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vars Count"
+          },
+          "vars_revision": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vars Revision"
+          },
+          "vars_scope": {
+            "anyOf": [
+              {
+                "enum": [
+                  "full",
+                  "partial"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vars Scope"
+          },
           "warnings": {
             "default": [],
             "items": {
@@ -12325,6 +12395,15 @@
               "all"
             ],
             "title": "Runs",
+            "type": "string"
+          },
+          "tpl_source": {
+            "default": "doe",
+            "enum": [
+              "doe",
+              "current"
+            ],
+            "title": "Tpl Source",
             "type": "string"
           },
           "unit_system": {
@@ -13122,7 +13201,7 @@
                 "type": "null"
               }
             ],
-            "description": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED"
+            "description": "템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL"
           }
         },
         "required": [
@@ -19376,7 +19455,7 @@
                 "type": "null"
               }
             ],
-            "description": "Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED"
+            "description": "템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL"
           },
           "verification": {
             "anyOf": [
@@ -19835,6 +19914,44 @@
             "title": "Name",
             "type": "string"
           },
+          "table_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Max"
+          },
+          "table_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table Min"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
+          "used": {
+            "default": true,
+            "title": "Used",
+            "type": "boolean"
+          },
           "var": {
             "title": "Var",
             "type": "string"
@@ -19846,6 +19963,50 @@
           "format"
         ],
         "title": "TplParam",
+        "type": "object"
+      },
+      "TplSummary": {
+        "description": "altair-vars.md §6: ①-2 tpl에 들어간 파라미터 요약(`total` = tpl에 포함한 행 = 선언 + 리터럴, `used` = DOE 범위 행).",
+        "properties": {
+          "format_loss": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Format Loss",
+            "type": "array"
+          },
+          "scope": {
+            "enum": [
+              "full",
+              "partial"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
+          "skipped": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Skipped",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          },
+          "used": {
+            "title": "Used",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "total",
+          "used",
+          "skipped",
+          "format_loss",
+          "scope"
+        ],
+        "title": "TplSummary",
         "type": "object"
       },
       "TrainCad": {
@@ -20517,6 +20678,16 @@
               }
             ]
           },
+          "tpl_summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TplSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "updated_at": {
             "anyOf": [
               {
@@ -20607,9 +20778,7 @@
           },
           "warnings": {
             "items": {
-              "additionalProperties": {
-                "type": "string"
-              },
+              "additionalProperties": true,
               "type": "object"
             },
             "title": "Warnings",
@@ -21374,7 +21543,7 @@
       },
       "VarsEdit": {
         "additionalProperties": false,
-        "description": "⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).\n유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED.",
+        "description": "⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).\n유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)과 Altair 전체 tpl 템플릿에서 쓴다 — Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL.",
         "properties": {
           "add": {
             "anyOf": [
@@ -21389,7 +21558,7 @@
                 "type": "null"
               }
             ],
-            "description": "세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)",
+            "description": "세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = Native 피처 기본 범위 | Altair tpl 표·선언 범위)",
             "title": "Add"
           },
           "exclude": {
@@ -28943,16 +29112,16 @@
     },
     "/physicsai/api/param-sets/{ps_id}/variables": {
       "get": {
-        "description": "Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:\n종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부), 리비전 이력을 돌려준다. `model_id`를 주면 그 모델의 학습 형상 범위(`train`)와\n범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. 읽기 전용이며 부작용이 없다. 오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND,\n422 NATIVE_VARS_UNSUPPORTED(Altair 템플릿).",
+        "description": "템플릿(④ 파라미터 세트)의 변수 정의를 조회한다 — Native와 Altair(전체 tpl) 모두. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:\nNative = 종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부, Altair = tpl 선언 파라미터의 공칭·기본 범위·정수 형식 여부), 리비전 이력을 돌려준다.\n`model_id`를 주면 그 모델의 학습 범위(`train`)와 범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. `engine`이 altair이고 옛 부분 tpl이면\n`editable=false`, `reason=TPL_SCOPE_PARTIAL`(①-2에서 tpl을 다시 생성해 새 템플릿으로 등록). 읽기 전용이며 부작용이 없다.\n오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND.",
         "operationId": "native_vars_get_physicsai_api_param_sets__ps_id__variables_get",
         "parameters": [
           {
-            "description": "Native 파라미터 세트(템플릿) id",
+            "description": "파라미터 세트(템플릿) id — Native 또는 Altair",
             "in": "path",
             "name": "ps_id",
             "required": true,
             "schema": {
-              "description": "Native 파라미터 세트(템플릿) id",
+              "description": "파라미터 세트(템플릿) id — Native 또는 Altair",
               "examples": [
                 "0b9f6f3e-2d3a-4c5e-9a41-5b1c2d3e4f50"
               ],
@@ -29054,14 +29223,14 @@
         "x-mcp": {
           "confirm": "never",
           "risk": "read",
-          "summary_en": "Native template variable definition (used vars, ranges, pool, training range)",
-          "summary_ko": "Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)",
+          "summary_en": "Template variable definition for Native and Altair (full tpl) templates (used vars, ranges, pool, training range)",
+          "summary_ko": "템플릿 변수 정의 조회 — Native·Altair(전체 tpl) 공통(사용 변수·범위·풀·학습 범위)",
           "tool": "get_native_vars",
           "version": 1
         }
       },
       "put": {
-        "description": "세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.\n422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.\n경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨).",
+        "description": "세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.\n422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.\n경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨). Altair는 전체 tpl 세트만 저장할 수 있고(부분 tpl = 422 TPL_SCOPE_PARTIAL),\n정수 형식 파라미터의 범위는 정수여야 한다(VAR_RANGE_INVALID).",
         "operationId": "native_vars_put_physicsai_api_param_sets__ps_id__variables_put",
         "parameters": [
           {

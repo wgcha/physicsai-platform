@@ -84,7 +84,7 @@ class SurrogateOptCreate(Req):
                                   "(null·생략 = 기본). ego면 비워야 한다")
     verification: str | None = Field(default=None, max_length=16, description="loop(기본, 반복 검증) | none(대리모델만)")
     levels: dict[str, list[str]] | None = Field(default=None, description="범주 수준 제한 {\"baseline\": [id…]}(다중 baseline 위상 세트만)")
-    vars: VarsEdit | None = Field(default=None, description="Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED")
+    vars: VarsEdit | None = Field(default=None, description="템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL")
     input: InputKind | None = Field(default=None, description="예측 입력 종류 assembly(조립) | cushion(쿠션 rad만 — GPU 메모리 적음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED")
 
 

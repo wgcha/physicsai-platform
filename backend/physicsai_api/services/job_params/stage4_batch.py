@@ -49,7 +49,7 @@ class PredictBatchParams(_P):
     source: BatchSource
     display: CaptureDisplay | None = None  # phase3 §15 S10: 배치 단위 컨투어 표시(범례 fixed로 run끼리 비교)
     capture: BatchCaptureOptions | None = None  # D3-53: 하위 예측 컨투어 캡처 켜기·방향·동영상(null = 기본)
-    vars: VarsEdit | None = None  # native-vars.md §6.3: Native 변수 그 자리 편집(이 실행에만 적용). train_doe·Altair는 불가
+    vars: VarsEdit | None = None  # native-vars.md §6.3·altair-vars.md §5.2: 변수 그 자리 편집(이 실행에만 적용). Native·Altair 전체 tpl, train_doe·Altair 부분 tpl은 불가
     input: InputKind | None = Field(default=None, description="예측 입력 종류 assembly(조립, m_3) | cushion(쿠션 rad만, m_3 없음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED")
 
 

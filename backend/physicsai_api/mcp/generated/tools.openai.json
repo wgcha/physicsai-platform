@@ -102,7 +102,7 @@
   },
   {
     "function": {
-      "description": "Native template variable definition (used vars, ranges, pool, training range) / Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)",
+      "description": "Template variable definition for Native and Altair (full tpl) templates (used vars, ranges, pool, training range) / 템플릿 변수 정의 조회 — Native·Altair(전체 tpl) 공통(사용 변수·범위·풀·학습 범위)",
       "name": "get_native_vars",
       "parameters": {
         "properties": {
@@ -112,7 +112,7 @@
             "type": "string"
           },
           "ps_id": {
-            "description": "Native 파라미터 세트(템플릿) id",
+            "description": "파라미터 세트(템플릿) id — Native 또는 Altair",
             "type": "string"
           },
           "revision": {

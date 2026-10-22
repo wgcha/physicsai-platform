@@ -1,4 +1,4 @@
-"""API 스키마 — Native 템플릿 변수 정의(선택·범위)(native-vars.md §6): 세트 정의 조회·저장, 실행 그 자리 편집 `vars`, 미리보기 표·경고."""
+"""API 스키마 — 템플릿 변수 정의(선택·범위)(native-vars.md §6, Altair 전체 tpl 확장 altair-vars.md §6): 세트 정의 조회·저장, 실행 그 자리 편집 `vars`, 미리보기 표·경고."""
 
 from __future__ import annotations
 
@@ -16,9 +16,9 @@ MAX_VARS = 300  # 풀 크기 상한(실물 수십~백여 개) — 요청 본문 
 
 class VarsEdit(Req):
     """⑥ 내장 최적화·④ 일괄 예측 요청의 선택 필드 `vars`: 그 실행에만 적용(세트 정의는 안 바뀜).
-    유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)만 — Altair는 422 NATIVE_VARS_UNSUPPORTED."""
+    유효 변수 = (세트 정의 − exclude) + add. Native 템플릿(단일 baseline)과 Altair 전체 tpl 템플릿에서 쓴다 — Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL."""
 
-    add: list[str] | None = Field(default=None, max_length=MAX_VARS, description="세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = 피처 기본 범위)")
+    add: list[str] | None = Field(default=None, max_length=MAX_VARS, description="세트 정의에 없는 풀 변수를 이 실행에 추가(범위 = Native 피처 기본 범위 | Altair tpl 표·선언 범위)")
     exclude: list[str] | None = Field(default=None, max_length=MAX_VARS, description="세트 정의 변수를 이 실행에서 제외(공칭 유지, 결과 표에 없음)")
 
 

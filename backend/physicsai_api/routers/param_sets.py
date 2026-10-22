@@ -162,24 +162,25 @@ def param_map_confirm(ps_id: str, request: Request, principal: Principal = Depen
     return bl_svc.confirm_map(get_ctx(request), principal, ps_id, request_id(request), client_ip(request))
 
 
-# ---- Native 템플릿 변수 정의(native-vars.md §6.1, MCP 표기 §6.6) ----
+# ---- 템플릿 변수 정의(Native·Altair 전체 tpl; native-vars.md §6.1, altair-vars.md §6, MCP 표기 §6.6) ----
 _VARS_GET_MCP = {"tool": "get_native_vars", "risk": "read", "confirm": "never", "version": 1,
-                 "summary_en": "Native template variable definition (used vars, ranges, pool, training range)",
-                 "summary_ko": "Native 템플릿 변수 정의 조회(사용 변수·범위·풀·학습 범위)"}
+                 "summary_en": "Template variable definition for Native and Altair (full tpl) templates (used vars, ranges, pool, training range)",
+                 "summary_ko": "템플릿 변수 정의 조회 — Native·Altair(전체 tpl) 공통(사용 변수·범위·풀·학습 범위)"}
 
 
 @router.get("/param-sets/{ps_id}/variables", response_model=S.NativeVars, responses=ERR, openapi_extra={"x-mcp": _VARS_GET_MCP})
 def native_vars_get(
-        request: Request, ps_id: str = Path(description="Native 파라미터 세트(템플릿) id", examples=["0b9f6f3e-2d3a-4c5e-9a41-5b1c2d3e4f50"]),
+        request: Request, ps_id: str = Path(description="파라미터 세트(템플릿) id — Native 또는 Altair", examples=["0b9f6f3e-2d3a-4c5e-9a41-5b1c2d3e4f50"]),
         model_id: str | None = Query(default=None, description="학습 범위를 보려는 같은 Study의 모델 id(생략 = 학습 범위 없음)",
                                      examples=["7c1e0d52-8a3b-4f6d-b2c9-1e4a5f6b7c80"]),
         revision: int | None = Query(default=None, ge=0, le=100000, description="특정 리비전의 변수 목록만 보려면 리비전 번호[번](0 = 등록 정의, 생략 = 현재)",
                                      examples=[2]),
         _p: Principal = Depends(get_principal)) -> dict:
-    """Native 템플릿(④ 파라미터 세트, engine=native)의 변수 정의를 조회한다. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:
-    종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부), 리비전 이력을 돌려준다. `model_id`를 주면 그 모델의 학습 형상 범위(`train`)와
-    범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. 읽기 전용이며 부작용이 없다. 오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND,
-    422 NATIVE_VARS_UNSUPPORTED(Altair 템플릿)."""
+    """템플릿(④ 파라미터 세트)의 변수 정의를 조회한다 — Native와 Altair(전체 tpl) 모두. 쓰는 변수·하한·상한(`variables`), 고를 수 있는 전체 변수(`pool`:
+    Native = 종류·공칭·기본 범위·모핑 가능 범위·양면 접촉 여부, Altair = tpl 선언 파라미터의 공칭·기본 범위·정수 형식 여부), 리비전 이력을 돌려준다.
+    `model_id`를 주면 그 모델의 학습 범위(`train`)와 범위를 알 수 없을 때의 안내(`notes`)가 함께 온다. `engine`이 altair이고 옛 부분 tpl이면
+    `editable=false`, `reason=TPL_SCOPE_PARTIAL`(①-2에서 tpl을 다시 생성해 새 템플릿으로 등록). 읽기 전용이며 부작용이 없다.
+    오류: 404 NOT_FOUND(세트·모델)·NATIVE_VARS_REVISION_NOT_FOUND."""
     return vars_svc.get_variables(get_ctx(request), ps_id, model_id, revision)
 
 
@@ -188,5 +189,6 @@ def native_vars_get(
 def native_vars_put(ps_id: str, body: S.NativeVarsUpdate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
     """세트 변수 정의 저장(형상 행 전체 교체, 리비전 기록). base_revision이 현재 리비전과 다르면 409 NATIVE_VARS_CONFLICT.
     422 NATIVE_VARS_INVALID(problems: VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY), 409 NATIVE_VARS_MULTI_UNSUPPORTED·NATIVE_VARS_GEOMETRY_OFF.
-    경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨)."""
+    경고(모핑 가능 범위 밖·공칭 밖·양면 접촉)는 응답 `warnings`(저장은 됨). Altair는 전체 tpl 세트만 저장할 수 있고(부분 tpl = 422 TPL_SCOPE_PARTIAL),
+    정수 형식 파라미터의 범위는 정수여야 한다(VAR_RANGE_INVALID)."""
     return vars_svc.put_variables(get_ctx(request), principal, ps_id, body, request_id(request), client_ip(request))

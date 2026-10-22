@@ -108,5 +108,5 @@ class PredictBatchPreviewRequest(Req):
     source: BatchSource
     # native-vars.md §6.3: 학습 범위(경고·out_of_range)는 이 모델 기준(생략 = Final 모델), vars = Native 변수 그 자리 편집
     model_id: str | None = Field(default=None, description="학습 범위를 볼 같은 Study의 모델 id(생략 = Final 모델)")
-    vars: VarsEdit | None = Field(default=None, description="Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED")
+    vars: VarsEdit | None = Field(default=None, description="템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL")
     input: InputKind | None = Field(default=None, description="예측 입력 종류 assembly(조립, m_3) | cushion(쿠션 rad만). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED")

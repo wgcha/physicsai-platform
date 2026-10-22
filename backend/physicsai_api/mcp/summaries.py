@@ -175,8 +175,9 @@ def _param_set(ctx: Any, principal: Any, pid: str, top_n: int) -> dict[str, Any]
                          "registered_by_name", "registered_at"), kind=native.get("kind") if isinstance(native, dict) else None,
                      prep_status=native.get("status") if isinstance(native, dict) else None,
                      baseline_count=len(p.get("baselines") or []), parameter_count=len(params), response_count=len(resp),
-                     vars_revision=native.get("vars_revision") if isinstance(native, dict) else None,  # native-vars.md §6.6: 변수 정의 리비전(0 = 등록 정의)
-                     vars_count=native.get("vars_count") if isinstance(native, dict) else None,
+                     vars_scope=p.get("vars_scope"),  # altair-vars.md §6: Altair 세트 tpl 범위(full | partial), Native는 없음
+                     vars_revision=p.get("vars_revision"),  # native-vars.md §6.6: 변수 정의 리비전(0 = 등록 정의) — Altair·Native 공통 최상위 키
+                     vars_count=p.get("vars_count"),
                      input_capability=",".join(p.get("input_capability") or []) or None,  # input-kind.md §6.3: 이 템플릿이 받는 입력 종류(assembly·cushion)
                      input_capability_reason=p.get("input_capability_reason"))
     tabs = [table("parameters", params, top_n), table("responses", resp, top_n)]
