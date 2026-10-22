@@ -58,7 +58,7 @@ def test_v_rp_3_ga_report_and_not_ready_and_404(on_env):
     assert r.status_code == 200
     doc = r.text
     assert "GA(유전 알고리즘)" in doc and "pop_size=40" in doc and "generations=30" in doc   # 하이퍼파라미터
-    assert "메시 단독" in doc
+    assert "입력: 쿠션" in doc  # input-kind.md §10: 기존 "조립 폴더/메시 단독" 표기를 실행 값 기준 "입력: 조립|쿠션"으로
     # 404: 없는 id·없는 target
     assert _get(env, "surrogate-opt", "00000000-0000-0000-0000-000000000000").status_code == 404
     bad = _get(env, "predict", opt["id"])
