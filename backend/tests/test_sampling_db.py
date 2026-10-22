@@ -139,7 +139,7 @@ def test_v3_s15_9_table_constants_match_migration_and_registry():
 
 def test_v_dm_12_migration_0023_extends_check_keeps_rows(pg_server):
     """doe-methods.md §5.5 / V-DM-12: 0023_doe_methods — source_kind CHECK에 HALTON·RANDOM 추가(기존 10개·행 무변경), downgrade(새 kind 행이 있으면 거부),
-    migration 1개. 계약 down_revision은 0022_job_queues(통합 때 메인이 연결) — 이 브랜치에서는 임시로 0021_uploads."""
+    migration 1개. down_revision은 0022_job_queues(doe-methods.md §5.5)."""
     from alembic.config import Config
     from alembic.script import ScriptDirectory
 
@@ -150,9 +150,9 @@ def test_v_dm_12_migration_0023_extends_check_keeps_rows(pg_server):
     sd = ScriptDirectory.from_config(cfg)
     rev = sd.get_revision("0023_doe_methods")
     assert sd.get_current_head() == MIGRATION_HEAD == "0023_doe_methods"
-    assert rev.down_revision in ("0021_uploads", "0022_job_queues")  # 통합 시 0022_job_queues
+    assert rev.down_revision == "0022_job_queues"
     src = (REPO / "migrations" / "versions" / "0023_doe_methods.py").read_text(encoding="utf-8")
-    assert "통합 시 down_revision → 0022_job_queues" in src.split("from __future__")[0]
+    assert "Revises: 0022_job_queues" in src.split("from __future__")[0]
     assert set(re.findall(r"'([A-Z_]+)'", src.split("def upgrade")[1])) == set(ALL_KINDS_V2)
     name = f"physicsai_m23_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:

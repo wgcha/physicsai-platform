@@ -228,7 +228,7 @@ def test_v_jq_11_migration_0022_up_data_conversion_and_down(fresh_db):
     from physicsai_core.db import MIGRATION_HEAD
 
     url, eng = fresh_db
-    assert MIGRATION_HEAD == "0022_job_queues"
+    assert MIGRATION_HEAD == "0023_doe_methods"  # 0022는 0023의 직전 리비전
     _alembic(url, "0021_uploads")
     sids = {}
     with eng.begin() as c:

@@ -1,15 +1,13 @@
 """0023_doe_methods — ④ 일괄 예측·⑥ 탐색 표본 방식 halton·random 추가(doe-methods.md DM-C3·§5.5). 명시적 DDL(B14).
 
-주의(통합 시 필수): 통합 시 down_revision → 0022_job_queues. 계약은 0022_job_queues(대기열 분리, 같은 v0.2.9) 뒤에 두지만, 0022를 구현하는
-브랜치가 따로 있어 이 브랜치(feat/doe-methods-be)에는 0022가 없다. 그래서 임시로 down_revision을 0021_uploads로 둔다. 메인이 병합할 때
-이 파일의 down_revision을 "0022_job_queues"로 바꾸고 이 브랜치가 고정한 시험의 MIGRATION_HEAD 기대값은 그대로 0023_doe_methods다.
+down_revision은 0022_job_queues(대기열 분리, 같은 v0.2.9) — 두 마이그레이션은 서로 다른 제약(jobs lane·holds_slot / predict_batches source_kind)만 건드린다.
 
 - predict_batches.source_kind CHECK 확장: HALTON·RANDOM 추가(기존 10개 유지, 열 길이 String(16)·기존 행 데이터 무변경)
 - train_does.doe_type은 제약 없는 문자열이라 변경 없음. 방식 인자는 기존 source_meta·train_does.options·sampling JSONB.
 - 다운그레이드: HALTON·RANDOM 행이 하나라도 있으면 거부(배치·입력 원본 보호, 0017~0021 선례), 없으면 CHECK를 기존 10개로 되돌림
 
 Revision ID: 0023_doe_methods
-Revises: 0021_uploads  (계약: 0022_job_queues)
+Revises: 0022_job_queues
 """
 
 from __future__ import annotations
@@ -18,7 +16,7 @@ import sqlalchemy as sa
 from alembic import op
 
 revision = "0023_doe_methods"
-down_revision = "0021_uploads"  # 통합 시 → "0022_job_queues"
+down_revision = "0022_job_queues"
 branch_labels = None
 depends_on = None
 

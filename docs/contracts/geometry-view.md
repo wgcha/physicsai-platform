@@ -520,7 +520,7 @@ params `{param_set_id, preview_id, values, fe: "off"|"check"|"morph"}`. 화면�
 | 미리보기 PASS ≠ DOE 샘플 PASS(fe off는 검사 없음) | 오해 | 화면 문구 "형상만 — 검사 생략", 검사 포함 옵션 |
 | 캐시 디스크 증가 | 용량 | 기간·총량 삭제, 스캔에 표시 |
 | three 버전 갱신·라이선스 | 유지보수 | 정확 고정, MIT 고지(프런트 제3자 고지에 추가 — Impl-Frontend) |
-| 컨투어 3D 추출이 hw 라이선스를 점유하고 배치 실행이 오래 걸림(프레임 수·모델 크기) | 다른 hw 작업 지연 | 요청 시에만 실행(자동 연쇄 없음), `max_frames` 50 샘플링, `timeout_s`, 같은 원본·설정은 캐시, 제한기·LIGHT 레인으로 로컬 슬롯과 분리(§13.5) |
+| 컨투어 3D 추출이 hw 라이선스를 점유하고 배치 실행이 오래 걸림(프레임 수·모델 크기) | 다른 hw 작업 지연 | 요청 시에만 실행(자동 연쇄 없음), `max_frames` 50 샘플링, `timeout_s`, 같은 원본·설정은 캐시, 제한기·CPU 대기열(CPU 한도 안 병렬, GPU 슬롯과 분리, §13.5)로 다른 작업과 분리 |
 | 대형 모델(노드 수 많음)에서 `contour_frames.bin`·GLB·브라우저 메모리 과대 | 표시 느림·artifact 상한 | 외부 면 노드만, `max_nodes`·`max_bin_bytes`, 프레임 축소 → 변위 제외 → 실패, 프레임 단위 Range 로드, 현장 수치 회신으로 기본값 조정 |
 | hw TCL의 외부 면·프레임 읽기 API가 현장 버전에서 기대와 다름 | 경로 A 불가·형상 불일치 | 서버 1회 확인 항목(§13.3), 추출 출력 계약만 고정해 TCL을 교체 가능하게, 필요 시 경로 B(§13.7) |
 | 서버측 임시 캐시 총량(미리보기 + 컨투어)이 2 GiB를 빨리 채움 | 자주 재생성 | 합산 총량·보관 설정 변경 가능, 오래된 것부터 삭제, 스캔에 표시 |
@@ -562,7 +562,7 @@ params `{param_set_id, preview_id, values, fe: "off"|"check"|"morph"}`. 화면�
 ```text
 [화면: 예측/해석 결과 컨투어 목록] [3D로 보기] ── POST /contour3d {source, display?}
    ├ 캐시 적중 → 200 (즉시)
-   └ 미적중 → 202 → CONTOUR_3D (LIGHT):
+   └ 미적중 → 202 → CONTOUR_3D (CPU 대기열):
         C3_PREP ─ C3_EXTRACT: hw -b -tcl contour_extract.tcl (H3D → 외부 면·프레임별 노드 스칼라·변위 CSV)
                 ─ C3_CONVERT: 플랫폼 변환 → contour.glb + contour_frames.bin + contour_manifest.json
                 ─ C3_REGISTER: artifacts 3종 + contour3d_cache 행
@@ -631,7 +631,7 @@ offset(i) = i × record_bytes,   record_bytes = 4·N·(1 + 3·has_disp)
 
 ### 13.5 플랫폼 — job·캐시·API
 
-`JOB_TYPES["CONTOUR_3D"] = JobTypeDef("CONTOUR_3D", 4, "LIGHT", "결과 3D 컨투어", (C3_PREP INTERNAL 5, C3_EXTRACT LOCAL 70, C3_CONVERT LOCAL 20, C3_REGISTER INTERNAL 5), "④⑤", notify_success=False)` — 기존 `CONTOUR_RECAPTURE`(LIGHT, LOCAL step)와 같은 레인·제한기. 사용자 요청 때만 실행하며 PREDICT·DOE에 연쇄하지 않는다.
+`JOB_TYPES["CONTOUR_3D"] = JobTypeDef("CONTOUR_3D", 4, "SLOT", "결과 3D 컨투어", (C3_PREP INTERNAL 5, C3_EXTRACT LOCAL 70, C3_CONVERT LOCAL 20, C3_REGISTER INTERNAL 5), "④⑤", notify_success=False)` — **CPU 대기열**(구간 레인 SLOT, 동시 `worker.queues.cpu.max_concurrent`에 센다, job-queues.md JQ-8·변경 메모 2026-10-22; 기존 `CONTOUR_RECAPTURE`는 LIGHT 유지). 사용자 요청 때만 실행하며 PREDICT·DOE에 연쇄하지 않는다.
 
 | 항목 | 규칙 |
 |---|---|
