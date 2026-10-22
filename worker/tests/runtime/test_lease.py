@@ -8,7 +8,7 @@ import time
 import psutil
 from sqlalchemy import text
 
-from helpers_queue import _dataset_job, _state
+from helpers_queue import _dataset_job, _state, _to_lane
 from physicsai_test_support import wait_for
 
 
@@ -28,6 +28,8 @@ def test_lease_expiry_interrupted(client, engine, settings_dict, loaded_config):
     lc = _short_lease_config(settings_dict)
     _sid, j = _dataset_job(client, loaded_config.settings.storage.ai_root, "LS1")
     _sid2, j2 = _dataset_job(client, loaded_config.settings.storage.ai_root, "LS2")
+    _to_lane(engine, j["id"], "GPU")  # GPU 슬롯(worker_slot) 회수 시험 — CPU 구간은 슬롯 행이 없다
+    _to_lane(engine, j2["id"], "GPU")
     dead = Worker(lc, engine)
     assert dead.claim_only()["id"] == j["id"]
     time.sleep(1.3)
@@ -36,7 +38,7 @@ def test_lease_expiry_interrupted(client, engine, settings_dict, loaded_config):
     with engine.begin() as c:
         from physicsai_core.db.repositories import job_lease as lease_repo
 
-        nxt = lease_repo.claim_slot(c, other.worker_id, 30)
+        nxt = lease_repo.claim_gpu(c, other.worker_id, 30)
     assert nxt["id"] == j2["id"]
     st = _state(engine, j["id"])
     assert st["state"] == "INTERRUPTED" and st["failure_code"] == "WORKER_LOST" and st["lease_token"] is None
@@ -51,6 +53,7 @@ def test_reaper_interrupts_expired(client, engine, settings_dict, loaded_config)
 
     lc = _short_lease_config(settings_dict)
     _sid, j = _dataset_job(client, loaded_config.settings.storage.ai_root, "LS3")
+    _to_lane(engine, j["id"], "GPU")
     Worker(lc, engine).claim_only()
     assert housekeeping.reap(engine) == []
     time.sleep(1.3)
@@ -66,7 +69,7 @@ def test_concurrent_claim_single_winner(client, engine, loaded_config):
 
     ai = loaded_config.settings.storage.ai_root
     for i in range(2):
-        _dataset_job(client, ai, f"CC{i}")
+        _to_lane(engine, _dataset_job(client, ai, f"CC{i}")[1]["id"], "GPU")
     eng2 = make_engine(str(engine.url.render_as_string(hide_password=False)))
     results: list = []
     barrier = threading.Barrier(2)
@@ -75,7 +78,7 @@ def test_concurrent_claim_single_winner(client, engine, loaded_config):
         barrier.wait()
         try:
             with e.begin() as c:
-                results.append(lease_repo.claim_slot(c, wid, 30))
+                results.append(lease_repo.claim_gpu(c, wid, 30))
         except ClaimRace:
             results.append(None)
 
@@ -101,7 +104,6 @@ def test_renew_failure_stops_without_writes(client, engine, loaded_config, worke
     pids = [int(x) for x in pidfile.read_text().split()]
     with engine.begin() as c:  # 다른 주체가 lease를 가져간 상황 모사
         c.execute(text("update jobs set lease_token='stolen' where id=:i"), {"i": j["id"]})
-        c.execute(text("update worker_slot set lease_token='stolen'"))
     t.join(timeout=20)
     assert out["r"] is None
     for p in pids:

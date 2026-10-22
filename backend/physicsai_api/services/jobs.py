@@ -10,6 +10,7 @@ from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import queue as queue_repo
 from physicsai_core.db.repositories import studies as studies_repo
+from physicsai_core.db.repositories import workers as workers_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import resolve_in_study
 from physicsai_core.state_machine import TERMINAL
@@ -74,7 +75,7 @@ def list_jobs(ctx: AppContext, principal: Principal, *, study_id: str | None, st
             created_by=principal.user_id if mine else None, job_type=job_type or None, limit=lim + 1, offset=off,
             exclude_types=hide,
         )
-        pos = {lane: jobs_repo.queue_positions(conn, lane) for lane in ("SLOT", "LIGHT", "PREVIEW")}
+        pos = {lane: jobs_repo.queue_positions(conn, lane) for lane in ("CPU", "GPU", "LIGHT", "PREVIEW")}
         hs = hpc_repo.summary_for_jobs(conn, [r["id"] for r in rows[:lim]])
     out = [job_summary(r, r["study_title"], pos[r["lane"]].get(r["id"]), hs.get(r["id"])) for r in rows[:lim]]
     return out, (encode_cursor(off + lim) if len(rows) > lim else None)
@@ -212,34 +213,45 @@ def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step
 
 
 def queue_view(ctx: AppContext) -> dict[str, Any]:
+    """GET /queue(job-queues.md §8.1): GPU·CPU 대기열을 따로. deprecated 필드(slot·running·queued)는 모양을 유지한다."""
+    qcfg = ctx.settings.worker.queues
     with ctx.engine.connect() as conn:
         slot = queue_repo.slot_row(conn)
         rows = queue_repo.active_jobs(conn)
         hs = hpc_repo.summary_for_jobs(conn, [r["id"] for r in rows])
+        hb = workers_repo.latest(conn)
+    gate = ((hb or {}).get("effective_limits") or {}).get("memory_gate")
+    gpu: dict[str, Any] = {"limit": 1, "running": [], "queued": [], "since": slot["lease_acquired_at"]}
+    cpu: dict[str, Any] = {"limit": qcfg.cpu.max_concurrent, "running": [], "queued": [],
+                           "min_free_memory_gb": qcfg.cpu.min_free_memory_gb, "memory_gate": gate if gate in ("ok", "low") else None}
     out: dict[str, Any] = {
-        "slot": {"holder_job_id": slot["holder_job_id"], "since": slot["lease_acquired_at"]},
+        "gpu": gpu, "cpu": cpu, "slot": {"holder_job_id": slot["holder_job_id"], "since": slot["lease_acquired_at"]},
         "running": None, "queued": [], "light": {"running": None, "queued": []}, "waiting_hpc": [], "collecting": [],
     }
-    slot_pos = light_pos = 0
+    pos = {"GPU": 0, "CPU": 0, "LIGHT": 0}
     for r in rows:
-        if r["lane"] == "PREVIEW":  # geometry-view.md §6.2: 미리보기 레인은 대기열 화면(SLOT·LIGHT)에 넣지 않는다
+        lane = r["lane"]
+        if lane == "PREVIEW":  # geometry-view.md §6.2: 미리보기 레인은 대기열 화면(GPU·CPU·가벼운 작업)에 넣지 않는다
             continue
         if r["state"] == "QUEUED":
-            if r["lane"] == "SLOT":
-                slot_pos += 1
-                out["queued"].append(job_summary(r, r["study_title"], slot_pos))
+            pos[lane] += 1  # 순번 = 자기 대기열 안(1부터)
+            item = job_summary(r, r["study_title"], pos[lane])
+            if lane == "LIGHT":
+                out["light"]["queued"].append(item)
             else:
-                light_pos += 1
-                out["light"]["queued"].append(job_summary(r, r["study_title"], light_pos))
+                (gpu if lane == "GPU" else cpu)["queued"].append(item)
+                out["queued"].append(item)  # deprecated: GPU·CPU 대기를 queue_seq 순으로 합친 목록(rows가 이미 그 순서)
         elif r["state"] == "RUNNING":
-            if r["lane"] == "SLOT":
-                out["running"] = job_summary(r, r["study_title"], None)
+            item = job_summary(r, r["study_title"], None)
+            if lane == "LIGHT":
+                out["light"]["running"] = item
             else:
-                out["light"]["running"] = job_summary(r, r["study_title"], None)
+                (gpu if lane == "GPU" else cpu)["running"].append(item)
         elif r["state"] == "WAITING_HPC":
             out["waiting_hpc"].append(job_summary(r, r["study_title"], None, hs.get(r["id"])))
         elif r["state"] == "COLLECTING":
             out["collecting"].append(job_summary(r, r["study_title"], None, hs.get(r["id"])))
+    out["running"] = (gpu["running"] or cpu["running"] or [None])[0]  # deprecated: gpu.running[0] ?? cpu.running[0] ?? null
     return out
 
 

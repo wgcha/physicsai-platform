@@ -1,4 +1,4 @@
-"""④⑤ CONTOUR_3D(geometry-view.md §13.5): 결과 3D 컨투어 — 열 때 생성(사용자 요청 때만, PREDICT·DOE에 연쇄하지 않음). LIGHT 레인.
+"""④⑤ CONTOUR_3D(geometry-view.md §13.5): 결과 3D 컨투어 — 열 때 생성(사용자 요청 때만, PREDICT·DOE에 연쇄하지 않음). CPU 대기열(LIGHT 아님, job-queues.md JQ-8·2026-10-22 사용자 결정).
 
 C3_PREP(h3d 확인·캐시 폴더·extract_settings.tcl·TCL 복사) → C3_EXTRACT(`commands.contour_extract`, 출력 파일로 판정, 시간 한도
 contour3d.timeout_s) → C3_CONVERT(physicsai_core.contour3d — 형상 → 프레임 변환, 진행률 단계 표시) → C3_REGISTER(artifacts 3종 + 캐시 행).

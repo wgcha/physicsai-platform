@@ -5,11 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
+RES_CPU, RES_GPU, RES_NONE = "cpu", "gpu", "none"
+RES_KINDS = (RES_CPU, RES_GPU, RES_NONE)
+
+
 @dataclass(frozen=True)
 class StepDef:
     key: str
     kind: str  # LOCAL | INTERNAL | HPC_SUBMIT | HPC_WAIT | COLLECT
     weight: int = 1
+    # 자원 종류(job-queues.md JQ-1): LOCAL·HPC_SUBMIT는 cpu|gpu를 반드시 정한다(정적 시험 V-JQ-1). 그 밖(INTERNAL·HPC_WAIT·COLLECT)은
+    # none = 중립(INTERNAL은 지금 쥔 슬롯에서 실행, HPC_WAIT·COLLECT는 슬롯 없음). GPU는 PhysicsAI 추론 step만.
+    res: str = RES_NONE
 
 
 @dataclass(frozen=True)
@@ -31,6 +38,12 @@ class JobTypeDef:
             return False
         return self.lane == "SLOT"
 
+    def step_of(self, step_key: str) -> StepDef:
+        for s in self.steps:
+            if s.key == step_key:
+                return s
+        raise KeyError(step_key)
+
     def weight_of(self, step_key: str) -> int:
         for s in self.steps:
             if s.key == step_key:
@@ -47,8 +60,8 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (
             StepDef("DS_SCAN", "INTERNAL", 5),
             StepDef("DS_YAML", "INTERNAL", 1),
-            StepDef("EDSPY_DATASET_TRAIN", "LOCAL", 60),
-            StepDef("EDSPY_DATASET_EVAL", "LOCAL", 33),
+            StepDef("EDSPY_DATASET_TRAIN", "LOCAL", 60, "cpu"),
+            StepDef("EDSPY_DATASET_EVAL", "LOCAL", 33, "cpu"),
             StepDef("DS_REGISTER", "INTERNAL", 1),
         ),
         "③-1",
@@ -79,7 +92,7 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         3,
         "SLOT",
         "평가",
-        (StepDef("EV_PREP", "INTERNAL", 5), StepDef("EDSPY_SCORE", "LOCAL", 90), StepDef("EV_PARSE", "INTERNAL", 5)),
+        (StepDef("EV_PREP", "INTERNAL", 5), StepDef("EDSPY_SCORE", "LOCAL", 90, "gpu"), StepDef("EV_PARSE", "INTERNAL", 5)),
         "③-5",
     ),
     "PREDICT": JobTypeDef(
@@ -90,15 +103,15 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (
             StepDef("PR_PREP", "INTERNAL", 2),
             StepDef("TPL_RENDER", "INTERNAL", 1),
-            StepDef("GEOM_UPDATE", "LOCAL", 20),
-            StepDef("MESH", "LOCAL", 15),
+            StepDef("GEOM_UPDATE", "LOCAL", 20, "cpu"),
+            StepDef("MESH", "LOCAL", 15, "cpu"),
             StepDef("RAD_ASSEMBLE", "INTERNAL", 2),
-            StepDef("EDSPY_PREDICT", "LOCAL", 40),
-            StepDef("CONTOUR_PREVIEW", "LOCAL", 10),
+            StepDef("EDSPY_PREDICT", "LOCAL", 40, "gpu"),
+            StepDef("CONTOUR_PREVIEW", "LOCAL", 10, "cpu"),
             StepDef("CURVE_PICK", "INTERNAL", 2),
-            StepDef("RESPONSE_EXTRACT", "LOCAL", 6),
+            StepDef("RESPONSE_EXTRACT", "LOCAL", 6, "cpu"),
             StepDef("RESPONSE_TABLE", "INTERNAL", 2),
-            StepDef("CONTOUR_CAPTURE", "LOCAL", 8),  # phase3 §15 S10: 실패는 경고(CAPTURE_FAILED)만 — 예측은 성공 유지
+            StepDef("CONTOUR_CAPTURE", "LOCAL", 8, "cpu"),  # phase3 §15 S10: 실패는 경고(CAPTURE_FAILED)만 — 예측은 성공 유지
         ),
         "④",
     ),
@@ -109,10 +122,10 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         "PBS 검증 해석",
         (
             StepDef("PV_PREP", "INTERNAL", 5),
-            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5),
+            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5, "cpu"),
             StepDef("HPC_WAIT", "HPC_WAIT", 70),
             StepDef("COLLECT", "COLLECT", 10),
-            StepDef("PV_EXTRACT", "LOCAL", 8),
+            StepDef("PV_EXTRACT", "LOCAL", 8, "cpu"),
             StepDef("PV_TABLE", "INTERNAL", 2),
         ),
         "④",
@@ -122,14 +135,14 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         "FEM_VERIFY", 4, "SLOT", "조립 FEM 검증",
         (
             StepDef("FV_PREP", "INTERNAL", 3),
-            StepDef("FV_MESH", "LOCAL", 5),
+            StepDef("FV_MESH", "LOCAL", 5, "cpu"),
             StepDef("FV_ASSEMBLE", "INTERNAL", 2),
-            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5),
+            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5, "cpu"),
             StepDef("HPC_WAIT", "HPC_WAIT", 55),
             StepDef("COLLECT", "COLLECT", 10),
-            StepDef("FV_EXTRACT", "LOCAL", 6),
-            StepDef("FV_CURVE", "LOCAL", 5),
-            StepDef("FV_CAPTURE", "LOCAL", 8),
+            StepDef("FV_EXTRACT", "LOCAL", 6, "cpu"),
+            StepDef("FV_CURVE", "LOCAL", 5, "cpu"),
+            StepDef("FV_CAPTURE", "LOCAL", 8, "cpu"),
             StepDef("FV_COMPARE", "INTERNAL", 1),
         ),
         "④", notify_success=False,
@@ -137,65 +150,65 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     # ---- ⑤ 해석 등가성 판정(equiv-check.md §4.5): 판정 API·종료 훅만 만든다(POST /jobs 불가). 추출 라이선스(HyperView·T01)라 SLOT ----
     "EQ_CHECK": JobTypeDef(
         "EQ_CHECK", 4, "SLOT", "등가성 판정",
-        (StepDef("EQ_PREP", "INTERNAL", 5), StepDef("EQ_EXTRACT", "LOCAL", 60), StepDef("EQ_COMPUTE", "INTERNAL", 30),
+        (StepDef("EQ_PREP", "INTERNAL", 5), StepDef("EQ_EXTRACT", "LOCAL", 60, "cpu"), StepDef("EQ_COMPUTE", "INTERNAL", 30),
          StepDef("EQ_REPORT", "INTERNAL", 5)),
         "⑤", notify_success=False,
     ),
     # ---- 3차 일괄 예측(phase3 §14.5 S9): 입력 생성만 슬롯 점유, run별 하위 PREDICT(prepared)는 BP_ENQUEUE가 대기열에 넣는다 ----
     "PREDICT_BATCH": JobTypeDef(
         "PREDICT_BATCH", 4, "SLOT", "일괄 예측 입력 생성",
-        (StepDef("BP_PREP", "INTERNAL", 3), StepDef("BP_GEN", "LOCAL", 90), StepDef("BP_ENQUEUE", "INTERNAL", 2)),
+        (StepDef("BP_PREP", "INTERNAL", 3), StepDef("BP_GEN", "LOCAL", 90, "cpu"), StepDef("BP_ENQUEUE", "INTERNAL", 2)),
         "④", notify_success=False,
     ),
     # ---- native 형상 엔진 세트 등록(geometry-engine.md §7.3.4): paicad extract·tag 후 세트 등록. 사용자 선택 job_type이 아니라 등록 API가 만든다 ----
     "PARAM_SET_NATIVE": JobTypeDef(
         "PARAM_SET_NATIVE", 4, "SLOT", "형상 준비(Native)",
-        (StepDef("NP_PREP", "INTERNAL", 5), StepDef("NP_EXTRACT", "LOCAL", 30), StepDef("NP_TAG", "LOCAL", 55),
-         StepDef("NP_VIEW", "LOCAL", 5),  # geometry-view.md §6.3: 공칭 3D 뷰(실패는 경고 VIEW_EXPORT_FAILED, 작업 계속)
-         StepDef("BL_MAP", "LOCAL", 5), StepDef("NP_REGISTER", "INTERNAL", 5)),
+        (StepDef("NP_PREP", "INTERNAL", 5), StepDef("NP_EXTRACT", "LOCAL", 30, "cpu"), StepDef("NP_TAG", "LOCAL", 55, "cpu"),
+         StepDef("NP_VIEW", "LOCAL", 5, "cpu"),  # geometry-view.md §6.3: 공칭 3D 뷰(실패는 경고 VIEW_EXPORT_FAILED, 작업 계속)
+         StepDef("BL_MAP", "LOCAL", 5, "cpu"), StepDef("NP_REGISTER", "INTERNAL", 5)),
         "④", notify_success=True,
     ),
     # ---- 형상 미리보기(geometry-view.md §6.4): 전용 레인 PREVIEW(전역 슬롯 미사용, DOE 중에도 실행, 동시 geometry.view.max_concurrent) ----
     "GEOM_PREVIEW": JobTypeDef(
         "GEOM_PREVIEW", 4, "PREVIEW", "형상 미리보기",
-        (StepDef("GV_PREP", "INTERNAL", 5), StepDef("GV_RUN", "LOCAL", 90), StepDef("GV_REGISTER", "INTERNAL", 5)),
+        (StepDef("GV_PREP", "INTERNAL", 5), StepDef("GV_RUN", "LOCAL", 90, "cpu"), StepDef("GV_REGISTER", "INTERNAL", 5)),
         "④", notify_success=False,
     ),
-    # ---- 결과 3D 컨투어(geometry-view.md §13.5): 열 때 생성(사용자 요청 때만), CONTOUR_RECAPTURE와 같은 LIGHT 레인 ----
+    # ---- 결과 3D 컨투어(geometry-view.md §13.5): 열 때 생성(사용자 요청 때만). 2026-10-22 사용자 결정: LIGHT가 아니라 CPU 대기열(구간 레인 SLOT, job-queues.md JQ-8) ----
     "CONTOUR_3D": JobTypeDef(
-        "CONTOUR_3D", 4, "LIGHT", "결과 3D 컨투어",
-        (StepDef("C3_PREP", "INTERNAL", 5), StepDef("C3_EXTRACT", "LOCAL", 70), StepDef("C3_CONVERT", "LOCAL", 20),
+        "CONTOUR_3D", 4, "SLOT", "결과 3D 컨투어",
+        (StepDef("C3_PREP", "INTERNAL", 5), StepDef("C3_EXTRACT", "LOCAL", 70, "cpu"), StepDef("C3_CONVERT", "LOCAL", 20, "cpu"),
          StepDef("C3_REGISTER", "INTERNAL", 5)),
         "④⑤", notify_success=False,
     ),
     # ---- 3차 S17(phase3 §22.3.5): 끝난 배치의 H3D 성능 다시 추출(①-6 TD_RESP_EXTRACT와 같은 HyperView 슬롯) ----
     "PB_RESP_EXTRACT": JobTypeDef(
         "PB_RESP_EXTRACT", 4, "SLOT", "일괄 예측 성능 다시 추출",
-        (StepDef("PX_PREP", "INTERNAL", 5), StepDef("RESPONSE_EXTRACT_RUNS", "LOCAL", 90), StepDef("PX_TABLE", "INTERNAL", 5)),
+        (StepDef("PX_PREP", "INTERNAL", 5), StepDef("RESPONSE_EXTRACT_RUNS", "LOCAL", 90, "cpu"), StepDef("PX_TABLE", "INTERNAL", 5)),
         "④",
     ),
     # ---- 3차 컨투어 재캡처(phase3 §15 S10): 성공한 예측의 h3d로 방향·표시 설정을 바꿔 다시 캡처 ----
     "CONTOUR_RECAPTURE": JobTypeDef(
-        "CONTOUR_RECAPTURE", 4, "LIGHT", "컨투어 다시 캡처", (StepDef("CONTOUR_CAPTURE", "LOCAL", 100),),
+        "CONTOUR_RECAPTURE", 4, "LIGHT", "컨투어 다시 캡처", (StepDef("CONTOUR_CAPTURE", "LOCAL", 100, "cpu"),),
         "④", notify_success=False,
     ),
     # ---- 2차(phase2 §6.1) ----
     "TD_EXTRACT_PARAMS": JobTypeDef(
         "TD_EXTRACT_PARAMS", 1, "SLOT", "파라미터 추출",
-        (StepDef("TX_PREP", "INTERNAL", 5), StepDef("SIMLAB_EXTRACT", "LOCAL", 85), StepDef("TX_PARSE", "INTERNAL", 10),
-         StepDef("TX_VIEW", "LOCAL", 5)),  # geometry-view.md §6.9: native 공칭 3D 뷰(altair는 SKIPPED, 실패는 경고)
+        (StepDef("TX_PREP", "INTERNAL", 5), StepDef("SIMLAB_EXTRACT", "LOCAL", 85, "cpu"), StepDef("TX_PARSE", "INTERNAL", 10),
+         StepDef("TX_VIEW", "LOCAL", 5, "cpu")),  # geometry-view.md §6.9: native 공칭 3D 뷰(altair는 SKIPPED, 실패는 경고)
         "①-1",
     ),
     "TD_DOE_GEN": JobTypeDef(
         "TD_DOE_GEN", 1, "SLOT", "DOE·Radioss 입력 생성",
-        (StepDef("DG_PREP", "INTERNAL", 5), StepDef("HST_GEN_RADIOSS", "LOCAL", 85), StepDef("DG_SCAN", "INTERNAL", 10)),
+        (StepDef("DG_PREP", "INTERNAL", 5), StepDef("HST_GEN_RADIOSS", "LOCAL", 85, "cpu"), StepDef("DG_SCAN", "INTERNAL", 10)),
         "①-3",
     ),
     "TD_SOLVE": JobTypeDef(
         "TD_SOLVE", 1, "SLOT", "PBS 해석",
         (
             StepDef("TS_PREP", "INTERNAL", 5),
-            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5),
+            StepDef("HPC_SUBMIT", "HPC_SUBMIT", 5, "cpu"),
             StepDef("HPC_WAIT", "HPC_WAIT", 70),
             StepDef("COLLECT", "COLLECT", 15),
             StepDef("TS_REGISTER", "INTERNAL", 5),
@@ -209,27 +222,27 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     ),
     "TD_RESP_EXTRACT": JobTypeDef(
         "TD_RESP_EXTRACT", 1, "SLOT", "run 응답 추출",
-        (StepDef("RX_PREP", "INTERNAL", 5), StepDef("RESPONSE_EXTRACT_RUNS", "LOCAL", 90), StepDef("RX_TABLE", "INTERNAL", 5)),
+        (StepDef("RX_PREP", "INTERNAL", 5), StepDef("RESPONSE_EXTRACT_RUNS", "LOCAL", 90, "cpu"), StepDef("RX_TABLE", "INTERNAL", 5)),
         "①-6",
     ),
     "CU_H3D_PREVIEW": JobTypeDef(
         "CU_H3D_PREVIEW", 2, "SLOT", "h3d 미리보기",
-        (StepDef("CP_PREP", "INTERNAL", 5), StepDef("HW_PREVIEW_H3D", "LOCAL", 90), StepDef("CP_PARSE", "INTERNAL", 5)),
+        (StepDef("CP_PREP", "INTERNAL", 5), StepDef("HW_PREVIEW_H3D", "LOCAL", 90, "cpu"), StepDef("CP_PARSE", "INTERNAL", 5)),
         "②-1",
     ),
     "CU_H3D_CURATE": JobTypeDef(
         "CU_H3D_CURATE", 2, "SLOT", "큐레이션",
-        (StepDef("HC_PREP", "INTERNAL", 5), StepDef("HVTRANS_CURATE", "LOCAL", 90), StepDef("HC_REGISTER", "INTERNAL", 5)),
+        (StepDef("HC_PREP", "INTERNAL", 5), StepDef("HVTRANS_CURATE", "LOCAL", 90, "cpu"), StepDef("HC_REGISTER", "INTERNAL", 5)),
         "②-2",
     ),
     "CU_T01_PREVIEW": JobTypeDef(
         "CU_T01_PREVIEW", 2, "SLOT", "T01 미리보기",
-        (StepDef("TP_PREP", "INTERNAL", 5), StepDef("HW_PREVIEW_T01", "LOCAL", 90), StepDef("TP_PARSE", "INTERNAL", 5)),
+        (StepDef("TP_PREP", "INTERNAL", 5), StepDef("HW_PREVIEW_T01", "LOCAL", 90, "cpu"), StepDef("TP_PARSE", "INTERNAL", 5)),
         "②-3",
     ),
     "CU_T01_CURVES": JobTypeDef(
         "CU_T01_CURVES", 2, "SLOT", "곡선 추출",
-        (StepDef("TC_PREP", "INTERNAL", 5), StepDef("HW_CURVE_EXPORT", "LOCAL", 90), StepDef("TC_REGISTER", "INTERNAL", 5)),
+        (StepDef("TC_PREP", "INTERNAL", 5), StepDef("HW_CURVE_EXPORT", "LOCAL", 90, "cpu"), StepDef("TC_REGISTER", "INTERNAL", 5)),
         "②-4",
     ),
     "SPDM_IMPORT": JobTypeDef(
@@ -239,7 +252,7 @@ JOB_TYPES: dict[str, JobTypeDef] = {
     ),
     "OPTIMIZE": JobTypeDef(
         "OPTIMIZE", 5, "SLOT", "최적화",
-        (StepDef("OP_PREP", "INTERNAL", 3), StepDef("HST_OPTIMIZE", "LOCAL", 90), StepDef("OP_SUMMARY", "INTERNAL", 7)),
+        (StepDef("OP_PREP", "INTERNAL", 3), StepDef("HST_OPTIMIZE", "LOCAL", 90, "gpu"), StepDef("OP_SUMMARY", "INTERNAL", 7)),
         "⑤",
     ),
     # ---- 3차 플랫폼 내장 최적화 반복(phase3 §18.4 S13): 검증 배치 DONE 종료 훅이 넣는다(POST /jobs로 만들 수 없음) ----

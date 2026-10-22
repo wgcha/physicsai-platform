@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from physicsai_core.errors import DomainError
 from physicsai_core.job_types import JOB_TYPES
+from physicsai_core.queues import segments, uses_gpu
 
 from ..schemas import equiv_check as _EQ
 from ..schemas import fem_verify_req as _FV
@@ -102,8 +103,10 @@ def problems_of(exc: DomainError) -> list[dict[str, Any]]:
 
 
 def lane_info(job_type: str) -> dict[str, Any]:
+    """lane = 정적 분류 SLOT·LIGHT·PREVIEW(불변, JQ-11), uses_global_slot = 그 종류에 GPU step이 있음(deprecated 의미 변경 — 모양 불변),
+    segments = 구간 흐름(job-queues.md §8.3, 예 PREDICT = cpu·gpu·cpu)."""
     jt = JOB_TYPES[job_type]
-    return {"lane": jt.lane, "uses_global_slot": jt.lane == "SLOT"}
+    return {"lane": jt.lane, "uses_global_slot": uses_gpu(job_type), "segments": segments(job_type)}
 
 
 def dry_prepare(ctx: Any, study_id: str, job_type: str, params: dict[str, Any]

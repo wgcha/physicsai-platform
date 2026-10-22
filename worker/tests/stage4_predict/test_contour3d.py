@@ -1,4 +1,4 @@
-"""결과 3D 컨투어 E2E(geometry-view.md §13, 열 때 생성): POST /contour3d → 202(진행 단계 대기) → CONTOUR_3D(LIGHT: hw TCL 추출 →
+"""결과 3D 컨투어 E2E(geometry-view.md §13, 열 때 생성): POST /contour3d → 202(진행 단계 대기) → CONTOUR_3D(CPU 대기열: hw TCL 추출 →
 변환 → 등록) → DONE·artifacts 3종(GLB·프레임 Range·manifest) → 다시 열면 200 캐시. 결정적 실패 캐시·인프라 실패 비캐시·시간 초과·
 취소·미구성 409, 외부 면 계산 대체(elements.csv), FEM 검증·h3d 경로 원본. 가짜 hw(contour3d 모드)."""
 
@@ -37,7 +37,7 @@ def test_contour3d_open_progress_done_and_cache(predict_env, fake_record, monkey
     assert c["progress"]["phase_label"] == "대기" and c["progress"]["can_cancel"] is True and c["progress"]["estimate_s"] is None
     dup = _open(env, {"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}}, expect=202).json()
     assert dup["id"] == c["id"]  # 같은 키 대기 중 → 그 행
-    assert env.w.run_once_light() == "SUCCEEDED", env.job(c["job_id"])
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(c["job_id"])
     g = env.c.get(f"{API}/contour3d/{c['id']}", headers=P).json()
     assert g["status"] == "DONE" and g["result_status"] == "OK" and g["frames"] == 3 and g["nodes"] == 6
     assert g["progress"]["phase"] == "done" and g["progress"]["can_cancel"] is False and g["timing"]["total_s"] is not None
@@ -60,7 +60,7 @@ def test_contour3d_open_progress_done_and_cache(predict_env, fake_record, monkey
     other = _open(env, {"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}, "display": {"field": "Displacement"}},
                   expect=202).json()
     assert other["id"] != c["id"] and other["display"]["field"] == "Displacement"
-    assert env.w.run_once_light() == "SUCCEEDED"
+    assert env.w.run_once_slot() == "SUCCEEDED"
     est = env.c.get(f"{API}/contour3d/{other['id']}", headers=P).json()
     assert est["progress"]["estimate_s"] is not None  # 같은 원본 종류 최근 소요
 
@@ -70,7 +70,7 @@ def test_contour3d_deterministic_fail_cached_infra_not(predict_env, monkeypatch)
     body = {"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}}
     monkeypatch.setenv("FAKE_TOOL_MODE_CONTOUR3D", "nan")
     c = _open(env, body, expect=202).json()
-    assert env.w.run_once_light() == "SUCCEEDED"
+    assert env.w.run_once_slot() == "SUCCEEDED"
     g = env.c.get(f"{API}/contour3d/{c['id']}", headers=P).json()
     assert g["status"] == "DONE" and g["result_status"] == "FAIL" and g["code"] == "CONTOUR3D_FIELD_EMPTY"
     assert g["message_ko"] == "선택한 결과 값이 없습니다" and g["glb_artifact_id"] is None and g["manifest_artifact_id"]
@@ -78,14 +78,14 @@ def test_contour3d_deterministic_fail_cached_infra_not(predict_env, monkeypatch)
     monkeypatch.setenv("FAKE_TOOL_MODE_CONTOUR3D", "open_error")
     body2 = {**body, "display": {"field": "X"}}
     c2 = _open(env, body2, expect=202).json()
-    assert env.w.run_once_light() == "FAILED"
+    assert env.w.run_once_slot() == "FAILED"
     g = env.c.get(f"{API}/contour3d/{c2['id']}", headers=P).json()
     assert g["status"] == "FAILED" and g["code"] == "CONTOUR3D_OPEN_ERROR" and g["progress"]["phase"] == "failed"
     assert _open(env, body2, expect=202).json()["id"] != c2["id"]  # 인프라 실패는 캐시 안 함
     monkeypatch.setenv("FAKE_TOOL_MODE_CONTOUR3D", "invalid")
     c3 = _open(env, {**body, "display": {"field": "Y"}}, expect=202).json()
-    env.w.run_once_light()  # 앞의 대기 작업
-    assert env.w.run_once_light() == "FAILED"
+    env.w.run_once_slot()  # 앞의 대기 작업
+    assert env.w.run_once_slot() == "FAILED"
     assert env.job(c3["job_id"])["failure_code"] == "CONTOUR3D_EXTRACT_INVALID"
 
 
@@ -94,7 +94,7 @@ def test_contour3d_timeout_cancel_and_not_configured(predict_env, monkeypatch):
     monkeypatch.setenv("FAKE_TOOL_MODE_CONTOUR3D", "hang")
     monkeypatch.setenv("FAKE_CAPTURE_HANG_S", "5")
     c = _open(env, {"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}}, expect=202).json()
-    assert env.w.run_once_light() == "FAILED"
+    assert env.w.run_once_slot() == "FAILED"
     assert env.job(c["job_id"])["failure_code"] == "CONTOUR3D_TIMEOUT"
     q = _open(env, {"source_kind": "PREDICT_H3D", "source_ref": {"job_id": jid}, "display": {"field": "Z"}}, expect=202).json()
     r = env.c.post(f"{API}/contour3d/{q['id']}/cancel", headers=PW)
@@ -111,7 +111,7 @@ def test_contour3d_elements_fallback_and_h3d_rel(predict_env, monkeypatch):
     env, jid = _env(predict_env)
     rel = env.job(jid)["result"]["pred_h3d_rel"]
     c = _open(env, {"source_kind": "SOLVER_H3D", "source_ref": {"study_id": env.sid, "h3d_rel": rel}}, expect=202).json()
-    assert env.w.run_once_light() == "SUCCEEDED", env.job(c["job_id"])
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(c["job_id"])
     g = env.c.get(f"{API}/contour3d/{c['id']}", headers=P).json()
     man = env.c.get(f"{API}/artifacts/{g['manifest_artifact_id']}/content", headers=P).json()
     assert g["source_kind"] == "SOLVER_H3D" and man["mesh"]["nodes"] == 10 and man["mesh"]["triangles"] == 14  # 육면체 외부 면 + 쉘

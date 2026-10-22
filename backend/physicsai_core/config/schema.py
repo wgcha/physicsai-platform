@@ -13,6 +13,7 @@ from .schema_fem_verify import FemVerifyCfg
 from .schema_geometry import Contour3dCfg, GeometryCfg, ShellCfg
 from .schema_hpc import CommandsCfg, HpcCfg
 from .schema_mcp import McpCfg
+from .schema_queues import QueueCpuCfg, WorkerQueuesCfg  # noqa: F401 - QueueCpuCfg 재노출(알림 저장소가 기본값을 읽는다)
 from .schema_ops import (
     DEFAULT_LOG_ERROR_PATTERNS,
     DemoCfg,
@@ -163,6 +164,7 @@ class WorkerCfg(_M):
     gpu_backoff_after: int = 3
     gpu_backoff_max_s: float = 300
     env_passthrough: list[str] = Field(default_factory=list)  # 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch)
+    queues: WorkerQueuesCfg = Field(default_factory=WorkerQueuesCfg)  # GPU 1·CPU N 대기열(job-queues.md)
 
 
 class Settings(_M):

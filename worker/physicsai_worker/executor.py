@@ -26,6 +26,7 @@ from physicsai_core.job_types import JOB_TYPES
 from physicsai_core.limits import EffectiveLimits
 from physicsai_core.masking import Masker
 from physicsai_core.paths import backup_stamp, real, study_dir
+from physicsai_core.queues import entry_lane, step_need
 
 from .limiter.base import LimiterError, ProcessLimiter
 from .signals import Cancelled, EnterWaitingHpc, StepSkipped
@@ -69,8 +70,10 @@ class Executor:
         self.engine: Engine = worker.engine
         self.settings: Settings = worker.settings
         self.limiter: ProcessLimiter = worker.limiter
-        self.limits: EffectiveLimits = worker.limits
+        self.limits: EffectiveLimits = worker.job_limits()  # 작업 1개분 한도: 부모 Job 중첩이면 전체 한도, 아니면 작업당 몫(job-queues.md JQ-7)
         self.job = job
+        self.lane: str = job["lane"]  # 지금 쥔 대기열 CPU|GPU(LIGHT·PREVIEW는 구간 전환 없음, job-queues.md §6.1)
+        self.step_resource: dict[str, str] = dict(worker.settings.worker.queues.step_resource)
         self.job_id: str = job["id"]
         self.token: str = job["lease_token"]
         self.jt = JOB_TYPES[job["job_type"]]
@@ -131,9 +134,9 @@ class Executor:
         slot = bool(self.job.get("holds_slot"))
         ws = self.settings.worker
         self.keeper = LeaseKeeper(self.engine, self.job_id, self.token, ws.lease_ttl_s, ws.heartbeat_interval_s, slot, self._on_lost)
-        track = self.jt.lane != "PREVIEW"  # 미리보기 레인은 슬롯 작업 자원 회계(current_executor)를 건드리지 않는다(§6.2)
+        track = self.jt.lane != "PREVIEW"  # 미리보기 레인은 슬롯 작업 자원 회계(executors)를 건드리지 않는다(§6.2)
         if track:
-            self.w.current_executor = self
+            self.w.register_executor(self)
         self.keeper.start()
         try:
             return self._run_steps()
@@ -143,10 +146,11 @@ class Executor:
         finally:
             self.keeper.stop()
             if track:
-                self.w.current_executor = None
+                self.w.unregister_executor(self)
 
-    def _release(self, state: str, code: str | None = None, msg: str | None = None) -> str:
-        self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg))
+    def _release(self, state: str, code: str | None = None, msg: str | None = None, next_lane: str | None = None) -> str:
+        self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg,
+                                             next_lane=next_lane))
         return state
 
     def _job_log(self, text: str) -> None:
@@ -165,11 +169,20 @@ class Executor:
             if s["state"] != "PENDING":
                 continue
             if collecting and s["kind"] != "COLLECT":
-                return self._release("QUEUED")  # T14: 다음 step이 슬롯 필요
+                # T14: 다음 step이 슬롯 필요 — 그 step의 대기열(INTERNAL뿐이면 CPU)에 맨 뒤로(2026-10-07 결정)
+                lane = entry_lane(self.job["job_type"], steps, self.job["params"], self.step_resource)
+                return self._release("QUEUED", next_lane=lane)
             if not collecting and s["kind"] in ("HPC_WAIT", "COLLECT"):
                 raise StepFailure("INTERNAL_ERROR", "HPC 대기 step을 슬롯 실행기에서 만났습니다")
             if self.cancel_requested():
                 return self._release("CANCELED")
+            if not collecting and self.jt.lane == "SLOT":
+                need = step_need(self.job["job_type"], self.jt.step_of(s["step_key"]), self.job["params"], self.step_resource)
+                if need is not None and need != self.lane:
+                    # T17(job-queues.md §5 규칙 1): 다음 step의 자원 종류가 지금 쥔 슬롯과 다르면 그 step은 시작하지 않고(PENDING 유지)
+                    # 슬롯을 반납해 원래 순번으로 다른 대기열에 다시 선다 — 한 작업은 슬롯을 최대 1개만 쥔다
+                    self._job_log(f"[QUEUE] {self.lane} 구간 끝 — {s['step_key']}는 {need} 대기열에서 이어서 실행합니다")
+                    return self._release("QUEUED", next_lane=need)
             if not collecting:
                 self.db(lambda c: lease_repo.continue_running(c, self.job_id, self.token))
             ctx = StepContext(self, s, done_w, total_w)

@@ -117,4 +117,6 @@ def _load_kernel32() -> Any:
     k.ResumeThread.argtypes = [wintypes.HANDLE]
     k.ResumeThread.restype = wintypes.DWORD
     k.TerminateProcess.argtypes = [wintypes.HANDLE, wintypes.UINT]
+    k.GetCurrentProcess.restype = wintypes.HANDLE
+    k.GetCurrentProcess.argtypes = []
     return k

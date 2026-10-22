@@ -15,6 +15,9 @@ class NullLimiter(ProcGroupMixin):
     name = "null"
     cpu_cap_enforced = False
 
+    def attach_parent(self, limits: EffectiveLimits) -> str:
+        return "off"  # 제한 없음(dev 전용)
+
     def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits,
                group: ProcGroup | None = None) -> LimitedProcess:
         try:

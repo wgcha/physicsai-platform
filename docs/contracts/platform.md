@@ -1386,3 +1386,7 @@ tpl 구조 근거: 원본 `update_parameter_file`(`1_CREATE_TRAINING_DATA/FUNC/1
 ## 변경 메모 (Plan, 2026-10-21 — 업로드 허용)
 
 - §3.3 "`.pscfg`·`.psmdl`·`.psdata` 업로드 비범위"와 §17.5 "업로드 엔드포인트 없음"은 [upload-report.md](upload-report.md)로 대체: 브라우저 분할 업로드 세션(`/uploads*`)만 허용, `.psmdl`은 모델 폴더 업로드로 허용, `.pscfg`·`.psdata`는 계속 거부. V-SEC-1의 "multipart 라우트 0개"는 유지(청크 PUT octet-stream), "업로드 엔드포인트 없음" 부분은 V-UP-*로 대체. §17.3 경로 검사·허용 루트는 그대로(업로드 루트는 AI 루트 하위).
+
+## 변경 메모 (Plan, 2026-10-22 — 작업 대기열 분리, 초안)
+
+- §7.2(상태 전이)·§7.3(순서 변경)·§11(워커 수령·슬롯)·§16.2 ①(실행 대기열 패널)의 "로컬 실행 슬롯 전역 1개·SLOT 레인 FIFO"는 [job-queues.md](job-queues.md)로 대체(구현 병합 시 발효): GPU 슬롯 1개 + CPU 슬롯 N개, step 구간별 전환 T17(`RUNNING → QUEUED`), `jobs.lane` = 현재 대기열(CPU|GPU|LIGHT|PREVIEW), `GET /queue`에 `gpu`·`cpu` 추가(기존 필드 deprecated 유지), 순서 이동은 같은 대기열 안에서만.

@@ -107,7 +107,7 @@ def make_predict_batch(env: Any, ps_id: str, *, runs: int = 3, h3d_seed: int = 0
     names = names or [f"run__{i:05d}" for i in range(1, runs + 1)]
     pj = str(uuid.uuid4())
     env.sql("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params, created_by, created_by_name)"
-            " values (:i,:s,'p-1','PREDICT_BATCH',4,'SLOT','SUCCEEDED',false,null,cast(:p as jsonb),'u-power','파워')",
+            " values (:i,:s,'p-1','PREDICT_BATCH',4,'CPU','SUCCEEDED',false,null,cast(:p as jsonb),'u-power','파워')",
             i=pj, s=env.sid, p=json.dumps({"batch_id": bid, "batch_no": no}))
     env.sql("insert into predict_batches(id, study_id, batch_no, job_id, param_set_id, model_id, input_kind, source_kind, run_count, dir_rel,"
             " status, created_by, created_by_name, finished_at) values (:i,:s,:n,:j,:ps,:m,'assembly','TABLE',:rc,:d,'DONE','u-power','파워',now())",
@@ -122,7 +122,7 @@ def make_predict_batch(env: Any, ps_id: str, *, runs: int = 3, h3d_seed: int = 0
         (P_ / "curve.json").write_text(json.dumps(curve))
         aid = str(uuid.uuid4())
         env.sql("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params, result, created_by,"
-                " created_by_name) values (:i,:s,'p-1','PREDICT',4,'SLOT','SUCCEEDED',false,null,cast(:p as jsonb),cast(:r as jsonb),'u-power','파워')",
+                " created_by_name) values (:i,:s,'p-1','PREDICT',4,'CPU','SUCCEEDED',false,null,cast(:p as jsonb),cast(:r as jsonb),'u-power','파워')",
                 i=jid, s=env.sid, p=json.dumps({"batch_run": {"batch_id": bid, "batch_no": no, "doe_no": i + 1}}),
                 r=json.dumps({"pred_h3d_rel": f"04_predict/{jid}/RESULT/{n}_pred.h3d", "curve_artifact_id": aid, "param_set_id": ps_id}))
         env.sql("insert into artifacts(id, study_id, job_id, kind, rel_path, size, content_type) values (:i,:s,:j,'CURVE_JSON',:r,10,'application/json')",

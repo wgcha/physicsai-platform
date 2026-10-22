@@ -35,6 +35,8 @@ TRANSITIONS: dict[tuple[str | None, str], str] = {
     (COLLECTING, QUEUED): "T14",
     (COLLECTING, SUCCEEDED): "T15",
     (COLLECTING, FAILED): "T16",
+    # job-queues.md JQ-3: step 경계에서 자원 종류가 바뀌면 슬롯·lease를 반납하고 다른 대기열에 원래 순번으로 다시 선다
+    (RUNNING, QUEUED): "T17",
 }
 
 

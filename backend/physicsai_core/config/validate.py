@@ -16,6 +16,7 @@ from .schema import (
     Settings,
 )
 from .validate_gpu import check as check_gpu
+from .validate_queues import check as check_queues
 from .validate_stages import _validate_phase2, _validate_phase3
 from .validate_so import SURROGATE_OPT_RANGES, _validate_surrogate_opt  # noqa: F401 - 기존 경로 재노출
 from .validate_geometry import _validate_geometry
@@ -271,6 +272,7 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
     _validate_phase3(s, issues)
     _validate_surrogate_opt(s, issues)
     check_gpu(s, add)  # phase3 §24.6 S19: GPU 조회
+    check_queues(s, add)  # job-queues.md §9: GPU 1·CPU N 대기열
 
     if s.notifications.retention_days < 1:
         add("notifications.retention_days", "1 이상")

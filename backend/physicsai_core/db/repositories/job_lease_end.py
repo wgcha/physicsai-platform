@@ -103,8 +103,12 @@ def release(
     failure_message: str | None = None,
     result_patch: dict[str, Any] | None = None,
     new_queue: bool = False,
+    next_lane: str | None = None,
 ) -> dict[str, Any]:
-    """lease 해제 + 전이(T5·T6·T7·T8·T14·T15·T16). 알림 포함."""
+    """lease 해제 + 전이(T5·T6·T7·T8·T14·T15·T16·T17). 알림 포함.
+
+    next_state=QUEUED: RUNNING에서 오면 T17(step 경계 구간 전환 — lane = next_lane, 순번 = queue_origin_seq로 원래 자리, 알림 없음),
+    COLLECTING에서 오면 T14(PBS 회수 후 — 2026-10-07 결정대로 맨 뒤: 새 순번을 queue_seq·queue_origin_seq 모두에 부여, lane = next_lane)."""
     job = assert_lease(conn, job_id, token)
     tno = check_transition(job["state"], next_state)
     result = dict(job.get("result") or {})
@@ -130,9 +134,25 @@ def release(
         values["failure_code"] = failure_code
         values["failure_message"] = (failure_message or "")[:500]
     if next_state == QUEUED:
-        values["queue_seq"] = job_queue_seq.next_value()
         values["queued_at"] = func.now()
-        values["next_notified_at"] = None
+        # 대기 중 화면(current_step_label)은 "다음에 실행할 step"을 보인다(재진입 행 '이어서 · 40% · <단계>')
+        nxt = conn.execute(
+            select(func.min(job_steps.c.step_no)).where(and_(job_steps.c.job_id == job_id, job_steps.c.state == "PENDING"))
+        ).scalar()
+        if nxt is not None:
+            values["current_step_no"] = nxt
+        if next_lane is not None:
+            values["lane"] = next_lane
+        if tno == "T17":  # 원래 등록 순번으로 재진입(JQ-5). 옛 진행 중 작업(origin NULL)은 새 순번
+            origin = job.get("queue_origin_seq")
+            if origin is None:
+                origin = conn.execute(select(job_queue_seq.next_value())).scalar_one()
+            values["queue_seq"] = values["queue_origin_seq"] = origin
+        else:  # T14: 맨 뒤 + 이후 재진입에도 그 자리를 유지
+            seq = conn.execute(select(job_queue_seq.next_value())).scalar_one()
+            values["queue_seq"] = seq
+            values["queue_origin_seq"] = seq
+            values["next_notified_at"] = None
     r = conn.execute(
         update(jobs)
         .where(and_(jobs.c.id == job_id, jobs.c.lease_token == token, jobs.c.lease_generation == job["lease_generation"]))

@@ -24,6 +24,7 @@ def test_state_machine_table():
         ("RUNNING", "INTERRUPTED"), ("COLLECTING", "INTERRUPTED"), ("WAITING_HPC", "COLLECTING"),
         ("WAITING_HPC", "WAITING_HPC"), ("WAITING_HPC", "CANCELED"), ("COLLECTING", "CANCELED"),
         ("WAITING_HPC", "FAILED"), ("COLLECTING", "QUEUED"), ("COLLECTING", "SUCCEEDED"), ("COLLECTING", "FAILED"),
+        ("RUNNING", "QUEUED"),  # T17(job-queues.md JQ-3): step 경계 슬롯 반납·재진입
     }
     assert set(TRANSITIONS) == expected
     for src, dst in itertools.product([None, *ALL_STATES], ALL_STATES):

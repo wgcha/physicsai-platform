@@ -11,6 +11,7 @@ from typing import Any
 from sqlalchemy import text
 
 from physicsai_core.job_types import JOB_TYPES
+from physicsai_core.queues import initial_lane
 from physicsai_test_support import API, H
 
 PW, P = H("tok-power", write=True), H("tok-power")
@@ -35,7 +36,7 @@ def mk_job(engine, sid: str, job_type: str, state: str = "SUCCEEDED", *, days_ag
             " failure_code, retry_of_job_id, created_by, created_by_name, created_at, started_at, finished_at)"
             " values (:i,:s,'p-1',:t,:st,:ln,:state,false,:qs,cast(:p as jsonb),cast(:r as jsonb),:fc,:ro,'u-power','파워',"
             " :ts,:ts,:fin)"),
-            {"i": jid, "s": sid, "t": job_type, "st": jt.stage, "ln": jt.lane, "state": state,
+            {"i": jid, "s": sid, "t": job_type, "st": jt.stage, "ln": initial_lane(job_type, params), "state": state,
              "qs": 1 if state == "QUEUED" else None, "p": json.dumps(params or {}), "r": json.dumps(result) if result else None,
              "fc": "EXIT_NONZERO" if state in ("FAILED", "INTERRUPTED") else None, "ro": retry_of, "ts": ts,
              "fin": ts if term else None})

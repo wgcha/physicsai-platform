@@ -12,7 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 
-from helpers_queue import AW, PW, P, _dataset_job, _state
+from helpers_queue import AW, PW, P, _dataset_job, _state, _to_lane
 from physicsai_test_support import API, wait_for
 
 
@@ -21,16 +21,19 @@ def test_fifo_positions_and_claim_order(client, engine, loaded_config, worker_fa
 
     ai = loaded_config.settings.storage.ai_root
     ids = [_dataset_job(client, ai, f"F{i}")[1]["id"] for i in range(3)]
+    for i in ids:
+        _to_lane(engine, i, "GPU")  # 슬롯 1개 직렬화(GPU 대기열) 순서 시험
     q = client.get(f"{API}/queue", headers=P).json()
+    assert [x["id"] for x in q["gpu"]["queued"]] == ids and q["cpu"]["queued"] == []
     assert [x["id"] for x in q["queued"]] == ids and [x["queue_position"] for x in q["queued"]] == [1, 2, 3]
     order = []
     for _ in range(3):
         with engine.begin() as c:
-            j = lease_repo.claim_slot(c, "w-test", 30)
+            j = lease_repo.claim_gpu(c, "w-test", 30)
         order.append(j["id"])
         # 슬롯 보유 중에는 다음 claim 없음
         with engine.begin() as c:
-            assert lease_repo.claim_slot(c, "w-test", 30) is None
+            assert lease_repo.claim_gpu(c, "w-test", 30) is None
         with engine.begin() as c:
             lease_repo.release(c, j["id"], j["lease_token"], "SUCCEEDED")
     assert order == ids
@@ -41,7 +44,7 @@ def test_light_runs_while_slot_busy(client, engine, loaded_config, worker_factor
     sid, j = _dataset_job(client, ai, "L1")
     w = worker_factory()
     held = w.claim_only()
-    assert held["id"] == j["id"] and held["holds_slot"]
+    assert held["id"] == j["id"] and held["lane"] == "CPU" and not held["holds_slot"]  # CPU 구간은 GPU 슬롯을 쥐지 않는다
     # LIGHT 작업(모델 등록)은 슬롯과 무관하게 실행
     from physicsai_test_support import make_model_folder
 
@@ -62,7 +65,7 @@ def test_admin_move_changes_claim_order(client, engine, loaded_config):
     assert r.status_code == 200
     assert [x["id"] for x in r.json()["queued"]] == [ids[2], ids[0], ids[1]]
     with engine.begin() as c:
-        j = lease_repo.claim_slot(c, "w", 30)
+        j = lease_repo.claim_cpu(c, "w", 30, 4)
     assert j["id"] == ids[2]
     r = client.post(f"{API}/queue/{ids[2]}/move", headers=AW, json={"position": 1})
     assert r.status_code == 409 and r.json()["detail"]["code"] == "JOB_NOT_QUEUED"
@@ -75,13 +78,16 @@ def test_my_turn_next_once(client, engine, loaded_config, worker_factory):
     ai = loaded_config.settings.storage.ai_root
     _s1, j1 = _dataset_job(client, ai, "N1")
     _s2, j2 = _dataset_job(client, ai, "N2")
+    for j in (j1, j2):
+        _to_lane(engine, j["id"], "GPU")  # GPU 슬롯이 가득 찼을 때 1번 대기자에게 알림(CPU는 상한이 차야 알림)
     w = worker_factory()
     w.claim_only()
     with engine.connect() as c:
         rows = c.execute(text("select event, job_id from notifications order by seq")).all()
     assert ("JOB_STARTED", j1["id"]) in [tuple(r) for r in rows]
     assert [tuple(r) for r in rows].count(("MY_TURN_NEXT", j2["id"])) == 1
-    _s3, _j3 = _dataset_job(client, ai, "N3")
+    _s3, j3 = _dataset_job(client, ai, "N3")
+    _to_lane(engine, j3["id"], "GPU")
     with engine.connect() as c:
         assert c.execute(text("select count(*) from notifications where event='MY_TURN_NEXT'")).scalar() == 1
 

@@ -42,7 +42,7 @@ def _study(c):
 
 
 def _job(c, sid, **kw):
-    vals = dict(id=str(uuid.uuid4()), study_id=sid, project_id="p-1", job_type="EVALUATE", stage=3, lane="SLOT",
+    vals = dict(id=str(uuid.uuid4()), study_id=sid, project_id="p-1", job_type="EVALUATE", stage=3, lane="CPU",
                 state="QUEUED", holds_slot=False, queue_seq=1, params="{}", created_by="u", created_by_name="u")
     vals.update(kw)
     cols = ",".join(vals)
@@ -53,7 +53,9 @@ def _job(c, sid, **kw):
 @pytest.mark.parametrize(
     "kw",
     [
-        dict(state="RUNNING", holds_slot=False, queue_seq=None),
+        dict(state="RUNNING", holds_slot=False, queue_seq=None, lane="GPU"),  # GPU 슬롯은 RUNNING이면 holds_slot
+        dict(state="RUNNING", holds_slot=True, queue_seq=None, lane="CPU", lease_owner_id="w", lease_token="t",
+             lease_acquired_at="2026-01-01", lease_expires_at="2026-01-02"),  # CPU 구간은 슬롯을 쥐지 않는다
         dict(state="QUEUED", queue_seq=None),
         dict(state="RUNNING", holds_slot=True, queue_seq=None, lease_token="t"),
         dict(state="WAITING_HPC", queue_seq=None, lease_owner_id="w", lease_token="t",
@@ -61,7 +63,7 @@ def _job(c, sid, **kw):
         dict(state="RUNNING", holds_slot=True, queue_seq=None, lease_owner_id="w", lease_token="t",
              lease_acquired_at="2026-01-02", lease_expires_at="2026-01-01"),
     ],
-    ids=["holds_slot", "queue_seq", "lease_identity", "lease_state", "lease_order"],
+    ids=["holds_slot", "cpu_holds_slot", "queue_seq", "lease_identity", "lease_state", "lease_order"],
 )
 def test_jobs_check_constraints(engine, kw):
     with engine.connect() as c:

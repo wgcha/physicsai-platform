@@ -39,11 +39,11 @@ class JobSummary(Resp):
     study_title: str | None = None
     job_type: str
     stage: int
-    lane: str
+    lane: str = Field(description="현재 대기열 CPU|GPU|LIGHT|PREVIEW(SLOT은 deprecated — 더 이상 내보내지 않음, job-queues.md JQ-10)")
     state: str
     created_by: str
     created_by_name: str
-    queue_position: int | None = None
+    queue_position: int | None = Field(default=None, description="QUEUED일 때 자기 대기열(lane) 안 순번(1부터)")
     progress_pct: float | None = None
     progress_label: str | None = None
     cancel_requested: bool
@@ -55,6 +55,7 @@ class JobSummary(Resp):
     hpc_summary: HpcSummary | None = None
     attention_code: str | None = None
     batch: JobBatchRef | None = None
+    resumed: bool = Field(default=False, description="구간 전환(T17)·PBS 회수 뒤 다시 선 대기 작업(QUEUED이고 이미 시작함) — 화면 '이어서'")
 
 
 class JobStep(Resp):

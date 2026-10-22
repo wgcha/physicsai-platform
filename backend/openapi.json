@@ -8422,6 +8422,7 @@
             "type": "string"
           },
           "lane": {
+            "description": "현재 대기열 CPU|GPU|LIGHT|PREVIEW(SLOT은 deprecated — 더 이상 내보내지 않음, job-queues.md JQ-10)",
             "title": "Lane",
             "type": "string"
           },
@@ -8465,6 +8466,7 @@
                 "type": "null"
               }
             ],
+            "description": "QUEUED일 때 자기 대기열(lane) 안 순번(1부터)",
             "title": "Queue Position"
           },
           "result": {
@@ -8478,6 +8480,12 @@
               }
             ],
             "title": "Result"
+          },
+          "resumed": {
+            "default": false,
+            "description": "구간 전환(T17)·PBS 회수 뒤 다시 선 대기 작업(QUEUED이고 이미 시작함) — 화면 '이어서'",
+            "title": "Resumed",
+            "type": "boolean"
           },
           "retry_of_job_id": {
             "anyOf": [
@@ -9035,6 +9043,14 @@
             ],
             "title": "Runs"
           },
+          "segments": {
+            "description": "구간 흐름(소문자) 예 PREDICT = [cpu, gpu, cpu]",
+            "items": {
+              "type": "string"
+            },
+            "title": "Segments",
+            "type": "array"
+          },
           "study_id": {
             "title": "Study Id",
             "type": "string"
@@ -9539,6 +9555,7 @@
             "type": "string"
           },
           "lane": {
+            "description": "현재 대기열 CPU|GPU|LIGHT|PREVIEW(SLOT은 deprecated — 더 이상 내보내지 않음, job-queues.md JQ-10)",
             "title": "Lane",
             "type": "string"
           },
@@ -9577,7 +9594,14 @@
                 "type": "null"
               }
             ],
+            "description": "QUEUED일 때 자기 대기열(lane) 안 순번(1부터)",
             "title": "Queue Position"
+          },
+          "resumed": {
+            "default": false,
+            "description": "구간 전환(T17)·PBS 회수 뒤 다시 선 대기 작업(QUEUED이고 이미 시작함) — 화면 '이어서'",
+            "title": "Resumed",
+            "type": "boolean"
           },
           "stage": {
             "title": "Stage",
@@ -14272,6 +14296,98 @@
         "title": "Project",
         "type": "object"
       },
+      "QueueCpu": {
+        "description": "CPU 대기열(JQ-6): 동시 상한 `limit`(설정 worker.queues.cpu.max_concurrent). memory_gate = 워커 마지막 하트비트의 여유 메모리 판정.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "memory_gate": {
+            "anyOf": [
+              {
+                "enum": [
+                  "ok",
+                  "low"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Gate"
+          },
+          "min_free_memory_gb": {
+            "title": "Min Free Memory Gb",
+            "type": "number"
+          },
+          "queued": {
+            "items": {
+              "$ref": "#/components/schemas/JobSummary"
+            },
+            "title": "Queued",
+            "type": "array"
+          },
+          "running": {
+            "items": {
+              "$ref": "#/components/schemas/JobSummary"
+            },
+            "title": "Running",
+            "type": "array"
+          }
+        },
+        "required": [
+          "limit",
+          "running",
+          "queued",
+          "min_free_memory_gb"
+        ],
+        "title": "QueueCpu",
+        "type": "object"
+      },
+      "QueueGpu": {
+        "description": "GPU 대기열(job-queues.md JQ-2): 동시 1개 고정. 순번(`queue_position`)은 이 대기열 안.",
+        "properties": {
+          "limit": {
+            "title": "Limit",
+            "type": "integer"
+          },
+          "queued": {
+            "items": {
+              "$ref": "#/components/schemas/JobSummary"
+            },
+            "title": "Queued",
+            "type": "array"
+          },
+          "running": {
+            "items": {
+              "$ref": "#/components/schemas/JobSummary"
+            },
+            "title": "Running",
+            "type": "array"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          }
+        },
+        "required": [
+          "limit",
+          "running",
+          "queued"
+        ],
+        "title": "QueueGpu",
+        "type": "object"
+      },
       "QueueLight": {
         "properties": {
           "queued": {
@@ -14307,10 +14423,17 @@
             "title": "Collecting",
             "type": "array"
           },
+          "cpu": {
+            "$ref": "#/components/schemas/QueueCpu"
+          },
+          "gpu": {
+            "$ref": "#/components/schemas/QueueGpu"
+          },
           "light": {
             "$ref": "#/components/schemas/QueueLight"
           },
           "queued": {
+            "description": "deprecated: GPU·CPU 대기를 queue_seq 순으로 합친 목록(순번은 각 대기열 안)",
             "items": {
               "$ref": "#/components/schemas/JobSummary"
             },
@@ -14325,10 +14448,12 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "deprecated: gpu.running[0] ?? cpu.running[0] ?? null"
           },
           "slot": {
-            "$ref": "#/components/schemas/QueueSlot"
+            "$ref": "#/components/schemas/QueueSlot",
+            "description": "deprecated: GPU 슬롯(= gpu). 다음 깨지는 릴리스에서 정리"
           },
           "waiting_hpc": {
             "items": {
@@ -14339,6 +14464,8 @@
           }
         },
         "required": [
+          "gpu",
+          "cpu",
           "slot",
           "queued",
           "light",
@@ -14522,6 +14649,17 @@
             "title": "Job Id",
             "type": "string"
           },
+          "lane": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lane"
+          },
           "peak_memory_gb": {
             "anyOf": [
               {
@@ -14558,6 +14696,17 @@
             "title": "Cpu Cap Enforced",
             "type": "boolean"
           },
+          "cpu_max_concurrent": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Max Concurrent"
+          },
           "cpu_rate": {
             "anyOf": [
               {
@@ -14590,6 +14739,22 @@
               }
             ],
             "title": "Priority"
+          },
+          "total_cap": {
+            "anyOf": [
+              {
+                "enum": [
+                  "nested",
+                  "share",
+                  "off"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cap"
           }
         },
         "title": "ResourceLimits",
@@ -14715,6 +14880,13 @@
                 "type": "null"
               }
             ]
+          },
+          "jobs": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceJob"
+            },
+            "title": "Jobs",
+            "type": "array"
           },
           "limits": {
             "$ref": "#/components/schemas/ResourceLimits"
@@ -19837,10 +20009,37 @@
             "title": "Config Ok",
             "type": "boolean"
           },
+          "cpu_limit": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Limit"
+          },
+          "cpu_running": {
+            "default": 0,
+            "title": "Cpu Running",
+            "type": "integer"
+          },
           "features": {
             "additionalProperties": true,
             "title": "Features",
             "type": "object"
+          },
+          "gpu_holder_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gpu Holder Job Id"
           },
           "hpc_mode": {
             "anyOf": [
@@ -22445,7 +22644,7 @@
     },
     "/physicsai/api/contour3d": {
       "post": {
-        "description": "결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(LIGHT). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.",
+        "description": "결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(CPU 대기열). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.",
         "operationId": "create_contour3d_physicsai_api_contour3d_post",
         "requestBody": {
           "content": {

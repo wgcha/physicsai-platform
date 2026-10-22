@@ -24,6 +24,7 @@ from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import mcp_plans as plans_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.queues import initial_lane
 from physicsai_core.request_context import token_job_context
 from physicsai_core.state_machine import TERMINAL
 
@@ -120,10 +121,9 @@ def plan(ctx: AppContext, principal: Principal, state: Any, body: Any) -> dict[s
     frag = k.plan_fn(ctx, principal, body.study_id, p)
     out = {**base, **frag}
     out["valid"] = not out.get("problems")
-    lane = out.get("lane")
-    if lane:
+    if out.get("lane"):  # job-queues.md §8.3: queue_ahead = 초기 대기열(initial_lane)의 대기 수
         with ctx.engine.connect() as conn:
-            out["queue_ahead"] = len(jobs_repo.queue_positions(conn, lane))
+            out["queue_ahead"] = len(jobs_repo.queue_positions(conn, initial_lane(k.job_types[0])))
     tok = getattr(state, "api_token", None) or {}
     token_id = getattr(state, "api_token_id", None)
     # run 범위 이상 토큰만 confirm_token을 받는다(read 토큰·세션 요청은 계획만 — §5.2 규칙)
@@ -243,7 +243,7 @@ def list_jobs(ctx: AppContext, principal: Principal, *, study_id: str | None, st
     with ctx.engine.connect() as conn:
         rows = jobs_repo.list_with_study_title(conn, study_id=study_id or None, states=state.split(",") if state else None,
                                                created_by=principal.user_id if mine else None, job_type=jt, limit=lim, offset=0)
-        pos = {lane: jobs_repo.queue_positions(conn, lane) for lane in ("SLOT", "LIGHT", "PREVIEW")}
+        pos = {lane: jobs_repo.queue_positions(conn, lane) for lane in ("CPU", "GPU", "LIGHT", "PREVIEW")}
         pre = tokens_repo.prefixes(conn, [r["api_token_id"] for r in rows if r.get("api_token_id")])
     return [_status_of(r, pos[r["lane"]].get(r["id"]), pre.get(r.get("api_token_id") or "")) for r in rows]
 
@@ -302,9 +302,10 @@ def system_status(ctx: AppContext, principal: Principal) -> dict[str, Any]:
 
     st = system.status(ctx)
     q = jobs_svc.queue_view(ctx)
-    head = ([q["running"]] if q["running"] else []) + q["queued"][:5]
+    head = q["gpu"]["running"] + q["cpu"]["running"] + q["queued"][:5]  # GPU·CPU 합친 앞 5개(job-queues.md §8.3)
     keep = ("id", "job_type", "stage_label", "state", "study_title", "queue_position", "progress_pct", "created_by_name")
     return {"queue_head": [{k: x.get(k) for k in keep} for x in head[:5]], "slot_holder_job_id": q["slot"]["holder_job_id"],
+            "gpu_holder_job_id": q["slot"]["holder_job_id"], "cpu_running": len(q["cpu"]["running"]), "cpu_limit": q["cpu"]["limit"],
             "worker_online": bool(st["worker"]["online"]), "config_ok": bool(st["config"]["ok"]), "hpc_mode": st["hpc"]["mode"],
             "features": {k: (v.get("enabled") if isinstance(v, dict) else v) for k, v in st["features"].items()}}
 

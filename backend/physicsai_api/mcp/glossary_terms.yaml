@@ -142,6 +142,15 @@ terms:
   - key: unmapped:cushion
     ko: 쿠션 입력 — 쿠션 메시 rad 하나로 예측(조립 없음, 서버 GPU 메모리 적음)
     synonyms: [쿠션 입력, 쿠션만, 쿠션 rad, mesh_only, 메시 단독]
+  - key: unmapped:GPU 대기열
+    ko: GPU 대기열 — PhysicsAI 추론 step만 쓰고 동시에 1개씩 실행(대기 순번은 이 대기열 안)
+    synonyms: [GPU 큐, gpu queue, 예측 대기열, 추론 대기열]
+  - key: unmapped:CPU 대기열
+    ko: CPU 대기열 — 그 밖 작업이 설정된 동시 상한(기본 4개) 안에서 대기 없이 병렬 실행
+    synonyms: [CPU 큐, cpu queue, 일반 대기열, 병렬 대기열]
+  - key: unmapped:구간 전환
+    ko: 구간 전환 — 한 작업이 step 종류(CPU↔GPU)가 바뀔 때 슬롯을 반납하고 원래 순번으로 다른 대기열에 다시 서는 것
+    synonyms: [슬롯 전환, 대기열 전환, 이어서 대기, segment switch]
 error_hints:
   CONFIRM_REQUIRED: plan_job을 먼저 호출해 confirm_token을 받으세요
   CONFIRM_INVALID: params를 바꿨거나 확인 토큰이 만료·재사용되었습니다 — plan_job을 다시 호출하세요

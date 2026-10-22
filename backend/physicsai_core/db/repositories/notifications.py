@@ -9,7 +9,7 @@ from sqlalchemy.engine import Connection
 
 from ...job_types import JOB_TYPES, job_label
 from ...study_storage.categories import fmt_bytes
-from ..tables import jobs, notifications, studies, worker_slot
+from ..tables import jobs, notifications, studies, worker_heartbeats, worker_slot
 
 EVENTS = (
     "JOB_STARTED",
@@ -178,22 +178,46 @@ def notify_user(conn: Connection, user_id: str, event: str, title: str, body: st
     ).scalar_one()
 
 
+def cpu_limit(conn: Connection) -> int:
+    """CPU 대기열 동시 상한: 워커가 하트비트에 싣는 유효 값(`effective_limits.cpu_max_concurrent`), 아직 없으면 설정 기본값."""
+    from ...config.schema import QueueCpuCfg
+
+    v = conn.execute(
+        select(worker_heartbeats.c.effective_limits["cpu_max_concurrent"].astext)
+        .order_by(worker_heartbeats.c.last_seen_at.desc()).limit(1)
+    ).scalar()
+    try:
+        return max(1, int(v))
+    except (TypeError, ValueError):
+        return int(QueueCpuCfg.model_fields["max_concurrent"].default)
+
+
 def recompute_my_turn(conn: Connection) -> str | None:
-    """SLOT 레인 대기 1번이 된 작업에 MY_TURN_NEXT(슬롯 사용 중일 때, 작업당 1회)."""
-    holder = conn.execute(select(worker_slot.c.holder_job_id).where(worker_slot.c.id == 1)).scalar()
-    if holder is None:
-        return None
-    first = conn.execute(
-        select(jobs.c.id, jobs.c.next_notified_at)
-        .where(and_(jobs.c.state == "QUEUED", jobs.c.lane == "SLOT", jobs.c.cancel_requested_at.is_(None)))
-        .order_by(jobs.c.queue_seq)
-        .limit(1)
-    ).first()
-    if first is None or first.next_notified_at is not None:
-        return None
-    conn.execute(update(jobs).where(jobs.c.id == first.id).values(next_notified_at=func.now()))
-    notify_job(conn, first.id, "MY_TURN_NEXT")
-    return first.id
+    """GPU·CPU 대기열 각각: 그 대기열이 가득일 때(GPU = 슬롯 보유 중, CPU = 실행 수 ≥ 상한) 1번 작업에 MY_TURN_NEXT(작업당 1회).
+    첫 시작 전(`started_at IS NULL`) 작업만 — T17 재진입·PBS 회수 후 대기는 알림 없음(JQ-14). 알린 작업 id(여럿이면 마지막) 또는 None."""
+    notified: str | None = None
+    for lane in ("GPU", "CPU"):
+        if lane == "GPU":
+            full = conn.execute(select(worker_slot.c.holder_job_id).where(worker_slot.c.id == 1)).scalar() is not None
+        else:
+            running = conn.execute(
+                select(func.count()).select_from(jobs).where(and_(jobs.c.state == "RUNNING", jobs.c.lane == "CPU"))
+            ).scalar() or 0
+            full = running >= cpu_limit(conn)
+        if not full:
+            continue
+        first = conn.execute(
+            select(jobs.c.id, jobs.c.next_notified_at, jobs.c.started_at)
+            .where(and_(jobs.c.state == "QUEUED", jobs.c.lane == lane, jobs.c.cancel_requested_at.is_(None)))
+            .order_by(jobs.c.queue_seq)
+            .limit(1)
+        ).first()
+        if first is None or first.next_notified_at is not None or first.started_at is not None:
+            continue
+        conn.execute(update(jobs).where(jobs.c.id == first.id).values(next_notified_at=func.now()))
+        notify_job(conn, first.id, "MY_TURN_NEXT")
+        notified = first.id
+    return notified
 
 
 def _item(r: Any) -> dict[str, Any]:

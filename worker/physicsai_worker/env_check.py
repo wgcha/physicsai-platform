@@ -199,6 +199,25 @@ def _job_object_item(w: Any) -> dict[str, Any]:
     return item("worker.job_object", "WORKER", st, "정상" if st == "OK" else "Job Object 설정이 기대와 다릅니다", "WORKER", info)
 
 
+def _is_windows() -> bool:
+    return os.name == "nt"
+
+
+def _job_nesting_item(w: Any) -> dict[str, Any]:
+    """`worker.job_nesting`(job-queues.md JQ-7·R3): 워커 부모 Job Object 중첩 여부. 못 하면 작업당 몫(코어·메모리 ÷ (CPU N + 1))으로 폴백."""
+    mode = getattr(w, "cap_mode", "share")
+    q = w.settings.worker.queues
+    det = {"total_cap": mode, "cpu_max_concurrent": q.cpu.max_concurrent}
+    if not _is_windows():
+        return item("worker.job_nesting", "WORKER", "SKIP", "Windows 아님(작업당 몫으로 나눔)", "WORKER", det)
+    if not q.total_cap:
+        return item("worker.job_nesting", "WORKER", "SKIP", "worker.queues.total_cap=false — 작업당 몫으로 나눕니다", "WORKER", det)
+    if mode == "nested":
+        return item("worker.job_nesting", "WORKER", "OK", "정상(부모 Job Object 중첩)", "WORKER", det)
+    return item("worker.job_nesting", "WORKER", "WARN",
+                "부모 Job Object를 만들지 못해 작업당 몫으로 나눕니다(CPU 동시 수 + 1로 코어·메모리 분할)", "WORKER", det)
+
+
 def collect_items(w: Any, masker: Any, tails: dict[str, str]) -> list[dict[str, Any]]:
     s = w.settings
     alt = effective_altair(s)
@@ -213,6 +232,7 @@ def collect_items(w: Any, masker: Any, tails: dict[str, str]) -> list[dict[str, 
     items.append(item("worker.limiter", "WORKER", st, msg, "WORKER",
                       {"name": lim, "cpu_cap_enforced": bool(w.limiter.cpu_cap_enforced)}))
     items.append(_job_object_item(w))
+    items.append(_job_nesting_item(w))
     items.append(gpu_item(s, w.child_env()))
     return items
 

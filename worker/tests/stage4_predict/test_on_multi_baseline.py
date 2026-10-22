@@ -54,7 +54,7 @@ def mb_env(native_env, settings_dict, tmp_path, monkeypatch):
 def _drain(env: Any, limit: int = 150) -> list[tuple[str, str | None]]:
     seen = []
     for _ in range(limit):
-        q = env.sql("select id, job_type from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1")
+        q = env.sql("select id, job_type from jobs where state='QUEUED' and lane in ('CPU','GPU') order by queue_seq limit 1")
         if not q:
             return seen
         seen.append((q[0][1], env.w.run_once_slot()))

@@ -10,6 +10,8 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from lane_compat import LANE_SQL
 from sqlalchemy.exc import IntegrityError
 
 from physicsai_test_support import REPO
@@ -51,7 +53,7 @@ def _fixture(c) -> dict:
                    " log_status, registered_by, registered_by_name) values (:i,:s,'m',1,'/x','r','r/a.psmdl',:h,1,'MISSING','u','u')"),
               {"i": mid, "s": sid, "h": "0" * 64})
     c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                   " created_by, created_by_name) values (:i,:s,'p-1','PREDICT_BATCH',4,'SLOT','SUCCEEDED',false,null,"
+                   " created_by, created_by_name) values (:i,:s,'p-1','PREDICT_BATCH',4,"+LANE_SQL+",'SUCCEEDED',false,null,"
                    " cast(:p as jsonb),'u','u')"), {"i": jid, "s": sid, "p": json.dumps({})})
     c.execute(text("insert into predict_batches(id, study_id, batch_no, job_id, param_set_id, model_id, input_kind, source_kind,"
                    " source_meta, run_count, dir_rel, created_by, created_by_name) values (:b,:s,1,:j,:p,:m,'assembly','TABLE',"
@@ -68,7 +70,7 @@ def _fixture(c) -> dict:
 def test_v3_s17_1_migration_0014_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"  # S18 0015 → native 0016
+    assert MIGRATION_HEAD == "0022_job_queues"  # S18 0015 → native 0016
     name = f"physicsai_m14_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

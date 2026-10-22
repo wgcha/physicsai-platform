@@ -59,7 +59,7 @@ def test_migration_0017_upgrade_constraints_and_rows_preserved(fresh_db):
     from physicsai_core.db import MIGRATION_HEAD
 
     url, eng = fresh_db
-    assert MIGRATION_HEAD == "0021_uploads"
+    assert MIGRATION_HEAD == "0022_job_queues"
     _alembic(url, "0016_geometry_engine")
     sid = str(uuid.uuid4())
     with eng.begin() as c:
@@ -83,7 +83,7 @@ def test_migration_0017_upgrade_constraints_and_rows_preserved(fresh_db):
         with pytest.raises(IntegrityError), c.begin_nested():
             _job(c, sid, "PREDICT", "BOGUS")
         with pytest.raises(IntegrityError), c.begin_nested():
-            _job(c, sid, "PREDICT", "SLOT")  # 일반 작업의 활성 unique는 그대로
+            _job(c, sid, "PREDICT", "CPU")  # 일반 작업의 활성 unique는 그대로
         pid = _ps(c, sid)
         q = text("insert into geom_previews(id, study_id, param_set_id, cache_key, created_by, status, fe, values)"
                  " values (:i,:s,:p,:k,'u',:st,'off','{}')")

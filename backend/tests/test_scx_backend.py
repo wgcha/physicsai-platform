@@ -8,6 +8,8 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from lane_compat import LANE_SQL
 from sqlalchemy.exc import IntegrityError
 
 from physicsai_core.config import load_config_dict, redacted_settings
@@ -138,7 +140,7 @@ def test_migration_0009_roundtrip(pg_server):
     """0008 → 0009: 기존 hpc_jobs 행 보존(submission_unknown=false), request_id 부분 유일, 알림 이벤트 추가, downgrade 거부."""
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"
+    assert MIGRATION_HEAD == "0022_job_queues"
     name = f"physicsai_m9_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -153,7 +155,7 @@ def test_migration_0009_roundtrip(pg_server):
                            " values (:i,'p-1','M9','t','/x','u','u')"), {"i": sid})
             jid = str(uuid.uuid4())
             c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                           " created_by, created_by_name) values (:i,:s,'p-1','PREDICT_VERIFY',4,'SLOT','QUEUED',false,1,'{}','u','u')"),
+                           " created_by, created_by_name) values (:i,:s,'p-1','PREDICT_VERIFY',4,"+LANE_SQL+",'QUEUED',false,1,'{}','u','u')"),
                       {"i": jid, "s": sid})
             stid = str(uuid.uuid4())
             c.execute(text("insert into job_steps(id, job_id, step_no, step_key, kind, needs_slot, state, log_rel) values"
