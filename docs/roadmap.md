@@ -13,7 +13,8 @@
 | v0.2.6 | 로컬 패키지 설치 빌드 격리 수정(이슈 #9) | – | – | – | **배포됨**(5b965fe) |
 | **v0.2.7** | ① **예측 입력 종류(조립·쿠션)** 실행마다 선택(④ 단건·일괄, ⑥ 내장) — 쿠션 = 쿠션 rad 하나로 예측(GPU 메모리 초과 해소), Altair는 기존 mesh_only 경로 일원화, Native는 `paicad cushion write`(0.12.0), FEM 검증 쿠션 = 재조립(`assembly.kind: template`), Native 변수 출처 (b) ⑥ "새 Native 템플릿(STEP)" 링크 ② **P3 표시**(① "조립 기준", ③ 데이터셋 출처) ③ **웹 "AI 연결(MCP)" 페이지**(상태·토큰·4개 AI 도구 완성 설정 복사·도구 목록·연결 시험, `GET /mcp/connection`) | [input-kind.md](contracts/input-kind.md), [mcp.md](contracts/mcp.md) §23(MR-C3), [geometry-engine.md](contracts/geometry-engine.md) GE-C19 | **없음**(기존 `input_kind` 열·JSONB 재사용) | `commands.paicad_cushion_write`, `mcp.public_url`(기본 null) | 계약 확정, 착수 대기 |
 | **v0.2.8** | **Altair 변수 공간**: ①-2 tpl 전체 파라미터 포함(사용 = DOE 범위, 미사용 = 공칭 고정, ① DOE 불변), ④ Altair 전체 tpl 템플릿 변수 정의(native-vars와 같은 API·리비전·스냅숏)·⑥·④ 그 자리 편집·학습 범위 경고, 옛 부분 tpl 편집 불가 + 재생성 안내, 기존 DOE는 from-train `tpl_source: current` | [altair-vars.md](contracts/altair-vars.md), native-vars NV-C3 | 없음 | – | 계약 확정, v0.2.7 배포 후 착수 |
-| v0.2.9 이후 | 직접 최적화(opt-direct, 계약만), 보고서 2차(④·①), PC 도구(h3d 축소 업로드), ChatGPT 앱 커넥터용 OAuth, 유사 설계 검색(mcp Q2), 쿠션만으로 Native 템플릿(조립 폴더 없이, input-kind §7) | 각 계약 | HEAD 다음 번호(`0022_*`) | – | 후속 |
+| **v0.2.9(제안)** | **작업 대기열 분리**: GPU 1개씩(추론 구간만) · CPU 한도 안 병렬(기본 3) · step 구간별 슬롯 전환(T17) · 화면·`/queue` GPU/CPU 분리 | [job-queues.md](contracts/job-queues.md) | `0022_job_queues`(down `0021_uploads`) | `worker.queues.*` | 계약 초안 — 릴리스 배정 메인 확정 대기 |
+| v0.2.9 이후 | 직접 최적화(opt-direct, 계약만), 보고서 2차(④·①), PC 도구(h3d 축소 업로드), ChatGPT 앱 커넥터용 OAuth, 유사 설계 검색(mcp Q2), 쿠션만으로 Native 템플릿(조립 폴더 없이, input-kind §7) | 각 계약 | `0022_job_queues` 다음 번호(`0023_*`) | – | 후속 |
 
 ## 2. 병합 순서·migration 체인
 
