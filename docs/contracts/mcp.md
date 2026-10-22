@@ -17,7 +17,7 @@ ID 규칙: 결정 `MR-n`, 시험 `V-MCP-n`, 변경 메모 `MR-Cn`.
 |---|---|
 | 사용자별 API 토큰(발급·폐기·만료 ≤ 30일·범위), Bearer 인증 경로 | ChatGPT 웹·데스크톱 앱 커넥터(OAuth 2.1 인가 서버 + 외부 접근 필요, §21.2) |
 | **MCP 서버**: 백엔드 마운트 Streamable HTTP `/physicsai/mcp` + stdio 실행기 `physicsai-mcp`(같은 도구 정의, §20) | MCP OAuth 인가·동적 클라이언트 등록 |
-| 클라이언트 연결 가이드·설정 예시 5파일(Claude Code·Claude Desktop·Codex CLI·Gemini CLI HTTP·stdio, §21.1) | MCP prompts·sampling·elicitation 기능 |
+| 클라이언트 연결 가이드·설정 예시 7파일(Claude Code·Claude Desktop·Codex CLI·Gemini CLI HTTP·stdio, 브리지 기본 + stdio 대안, §21.1) | MCP prompts·sampling·elicitation 기능 |
 | 공통 작업 계약 `/mcp/jobs*`(plan → confirm → run → status → summary → cancel) | 기존 생성 API(`POST /studies/{id}/jobs` 등)의 dry-run 개조 — 웹 흐름은 손대지 않음 |
 | 토큰 요청 감사 로그·조회·보존 | 임베딩 기반 문서 RAG·run 메타 의미 검색(§12.2, 사내 임베딩 모델 있을 때만) |
 | 요약 API 레지스트리 `/mcp/summary/*` | 대시보드 코드 변경 |
@@ -413,7 +413,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 | M2 | `JOB_KINDS`·`/mcp/jobs*`·doe_generate·solve_pbs plan 신규, `SUMMARIES`·`/mcp/summary`·`/mcp/system`·`/mcp/audit` | Impl-Backend: `physicsai_api/mcp/{job_kinds.py, summaries.py}`, `routers/mcp.py`, `schemas/mcp.py` |
 | M3 | `x-mcp` 표시·설명 보강(`summary_en`·`summary_ko`), §9.2 이식 가능 스키마 변환·검사기, `scripts/gen_tool_specs.py`·생성 파일·`/mcp/tools`·용어집(`glossary_terms.yaml`, `/mcp/glossary`), test-all 연결, `backend/openapi.json` 갱신 | Impl-Backend |
 | M4 | "내 API 토큰"·"API 토큰 관리" 화면 + `frontend-dist/` | Impl-Frontend: `frontend/src/pages/ApiTokens.tsx`·`shell/TopBar.tsx`·`api/typesTokens.ts`·`mock/apiTokens.ts`(구현 위치, MR-C2) |
-| M5 | MCP 서버(§20): 공통 도구 실행기·HTTP 마운트·stdio 실행기·리소스·`/mcp/ping`, 의존 고정(`pyproject.toml`·`deploy/requirements.lock`·오프라인 수집), Caddy 스니펫 `handle /physicsai/mcp*`, 클라이언트 설정 예시 5파일(§21.1), E2E | Impl-Backend: `backend/physicsai_mcp/**`(신규), `physicsai_api/main.py`(마운트 1곳), `deploy/{requirements.lock, collect-offline.*, caddy/physicsai.caddy}`, `deploy/mcp/examples/*`, `pyproject.toml`(`[project.scripts] physicsai-mcp`), 시험 `backend/tests/test_mcp_server*.py` |
+| M5 | MCP 서버(§20): 공통 도구 실행기·HTTP 마운트·stdio 실행기·리소스·`/mcp/ping`, 의존 고정(`pyproject.toml`·`deploy/requirements.lock`·오프라인 수집), Caddy 스니펫 `handle /physicsai/mcp*`, 클라이언트 설정 예시 7파일(§21.1), E2E | Impl-Backend: `backend/physicsai_mcp/**`(신규), `physicsai_api/main.py`(마운트 1곳), `deploy/{requirements.lock, collect-offline.*, caddy/physicsai.caddy}`, `deploy/mcp/examples/*`, `pyproject.toml`(`[project.scripts] physicsai-mcp`), 시험 `backend/tests/test_mcp_server*.py` |
 | M7(v0.2.7) | 웹 "AI 연결(MCP)" 페이지·`GET /mcp/connection`·`mcp.public_url` | §23.5 |
 | M6 | 연결 가이드·관리자 매뉴얼 반영(설정 키·Caddy·폐기 절차) | Plan: `docs/manual/mcp-clients.md`(초안 작성됨)·`admin.md` |
 | (Q2) | `/mcp/similar` | Impl-Backend |
@@ -569,7 +569,7 @@ MCP 서버(§20)는 생성 스펙을 읽어 도구를 동적 노출하므로, �
 
 ## 23. 웹 "AI 연결(MCP)" 페이지(MR-C3, v0.2.7)
 
-사용자 요구(2026-10-22): "웹에 MCP 사용할 수 있는 창이 나타나던지 메뉴가 있어야지. MatNexus 참고해." 참고 구현(읽기 전용): MatNexus `frontend/src/shared/components/McpSetup.tsx`(설계 이유 주석)·`AccessTokens.tsx`·`modules/auth/ProfilePage.tsx`("액세스 토큰" + "AI 도구에 등록하기"), 백엔드 `/auth/mcp-connection`(`MCP_PUBLIC_URL`). 물려받는 원칙 셋: ① 토큰이 없어도 **완성된 설정 형식**을 보여 주고 발급하면 그 자리에 토큰을 채운다, ② 사람이 문서에서 옮겨 적지 않고 **완성본을 복사**한다, ③ 서버 주소는 **서버가 준다**(모를 때만 짐작하고 짐작이라고 표시). MatNexus와 다른 점: 폐쇄망이라 `npx mcp-remote`(Node) 브리지 대신 우리 stdio 실행기 `physicsai-mcp`(§20, 토큰을 env로 받아 헤더 공백 문제 없음).
+사용자 요구(2026-10-22): "웹에 MCP 사용할 수 있는 창이 나타나던지 메뉴가 있어야지. MatNexus 참고해." 참고 구현(읽기 전용): MatNexus `frontend/src/shared/components/McpSetup.tsx`(설계 이유 주석)·`AccessTokens.tsx`·`modules/auth/ProfilePage.tsx`("액세스 토큰" + "AI 도구에 등록하기"), 백엔드 `/auth/mcp-connection`(`MCP_PUBLIC_URL`). 물려받는 원칙 셋: ① 토큰이 없어도 **완성된 설정 형식**을 보여 주고 발급하면 그 자리에 토큰을 채운다, ② 사람이 문서에서 옮겨 적지 않고 **완성본을 복사**한다, ③ 서버 주소는 **서버가 준다**(모를 때만 짐작하고 짐작이라고 표시). MatNexus와 다른 점: 폐쇄망이라 `npx mcp-remote`(Node) 브리지 대신 우리 stdio 실행기 `physicsai-mcp`(§20, 토큰을 env로 받아 헤더 공백 문제 없음). **[MR-C4 이후 주석: 이 문장은 v0.2.7 시점 결정이다. v0.2.8부터 Claude Desktop·Codex·Gemini의 기본은 `npx mcp-remote` 브리지이고 stdio `physicsai-mcp`는 Node.js를 쓸 수 없는 PC용 대안이다.]**
 
 ### 23.1 메뉴·경로
 

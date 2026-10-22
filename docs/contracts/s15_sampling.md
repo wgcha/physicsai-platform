@@ -385,6 +385,7 @@ problems(막음, `BatchProblem.code`) — 기존 `TABLE_HEADER`·`TABLE_VALUE`·
 | `LEVELS_INVALID` | 전체 요인 수준 | "'RIB_N'은 정수 변수라 3~5에서 최대 3수준입니다" / "'X'는 범위가 있는 변수가 아닙니다" / "수준은 2~10입니다" |
 | `DESIGN_UNSUPPORTED` | 변수 수가 방식 지원 범위 밖, k = 0 | 방식별 문구(§20.5) |
 | `GENERATOR_UNAVAILABLE` | scipy import 실패 | §20.5.3 |
+| `VAR_RANGE_INVALID` | 정수 형식 파라미터의 범위·표 값이 정수가 아님(native-vars.md §5 정수 규칙, `nearest.INT_RANGE_CODE`) | "정수 파라미터는 정수 범위여야 합니다" |
 
 notes(막지 않음, 신규 `BatchNote.code`): `FIXED_EXCLUDED`("고정 변수 X·Y는 설계에서 빼고 고정값을 씁니다"), `FULL_FACTORIAL_USED`, `BBD_PAIRWISE`, `DUPLICATE_ROWS`("정수 반올림 뒤 같은 조합이 N개 있습니다 — 같은 예측이 반복됩니다"), `SEQUENCE_CONTINUED`, `INFLUENCE_TOO_FEW`.
 
