@@ -184,6 +184,33 @@ describe("C4 저장(localStorage)", () => {
     expect(readAxisPrefs("history")).toEqual(DEFAULT_AXIS);
   });
 
+  it("설계 이력: y 열을 바꾸면 y 최소/최대·표기는 열별로 따로, x는 종류 단위로 공유", () => {
+    const hist = (col: string) => (
+      <Chart height={200} ariaLabel="h" iterAxis={{ kind: "history", yKey: col, xLast: 10 }} points={[{ x: 1, y: 1 }, { x: 10, y: 9 }]} />
+    );
+    const r = render(hist("mass"));
+    fireEvent.click(screen.getByTestId("axis-btn"));
+    fireEvent.change(screen.getByLabelText("y 최소") as HTMLInputElement, { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("y 최대") as HTMLInputElement, { target: { value: "20" } });
+    fireEvent.change(screen.getByLabelText("x 최대") as HTMLInputElement, { target: { value: "4" } });
+    expect(readAxisPrefs("history", "mass")).toMatchObject({ xMax: 4, yMin: 0, yMax: 20 });
+    // 다른 y 열: y 설정은 기본값, x 설정은 유지
+    fireEvent.mouseDown(document.body); // 열 선택 등 바깥 클릭 → 팝오버 닫힘
+    r.rerender(hist("stress"));
+    fireEvent.click(screen.getByTestId("axis-btn"));
+    expect((screen.getByLabelText("y 최소") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("y 최대") as HTMLInputElement).value).toBe("");
+    expect((screen.getByLabelText("x 최대") as HTMLInputElement).value).toBe("4");
+    expect(xTicks(r.container)).toEqual(["0", "1", "2", "3", "4"]);
+    expect(readAxisPrefs("history", "stress")).toMatchObject({ xMax: 4, yMin: null, yMax: null });
+    expect(localStorage.getItem(axisStorageKey("history", "stress"))).toBeNull();
+    // 원래 열로 돌아오면 y 설정 복원
+    fireEvent.mouseDown(document.body);
+    r.rerender(hist("mass"));
+    fireEvent.click(screen.getByTestId("axis-btn"));
+    expect((screen.getByLabelText("y 최대") as HTMLInputElement).value).toBe("20");
+  });
+
   it("깨진 저장값은 기본값으로", () => {
     localStorage.setItem(axisStorageKey("hv"), "{not json");
     expect(readAxisPrefs("hv")).toEqual(DEFAULT_AXIS);

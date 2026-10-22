@@ -10,6 +10,8 @@
 - ④·⑥에서 Altair 변수 선택·범위를 학습과 독립으로 편집(Native와 동일 방식), 옛 부분 tpl 템플릿은 재생성 안내
 - 학습 결과로 템플릿 만들기에 tpl 출처(DOE 기준|현재 tpl) 선택
 - 오류 코드 NATIVE_VARS_UNSUPPORTED 폐지 → TPL_SCOPE_PARTIAL
+- ⑥ 최적화 반복-성능 그래프: 반복 0부터·정수 눈금, 성능 지수 표기 소수 3자리 기본, 축 최소/최대·표기 편집
+- AI 연결: Claude Desktop·Codex·Gemini 설정을 mcp-remote 브리지(npx, Node.js 필요)로 변경, 기존 PC 설치 방식은 대안으로 유지(이슈 #10)
 
 ## 0.2.7 — 2026-10-22
 

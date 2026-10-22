@@ -3,6 +3,7 @@
 // C2 y(성능): 지수 표기 소수 3자리(1.235e+2). 툴팁도 같은 형식.
 // C3 편집: 최소·최대(비우면 자동)·y 표기(지수/일반)·소수 자리 0~6. 최소 < 최대가 아니거나 숫자가 아니면 적용하지 않는다(로그축 없음).
 // C4 저장: 그래프 종류별 localStorage — 읽기·쓰기 실패는 기본값으로 동작.
+//    yKey(예: 설계 이력의 y 열 이름)를 주면 x 설정은 그래프 종류 단위로 공유하고 y 최소/최대·표기는 종류+yKey 단위로 따로 저장한다.
 
 export type YFormat = "exp" | "plain";
 
@@ -22,7 +23,7 @@ export const DEFAULT_AXIS: AxisPrefs = { xMin: null, xMax: null, yMin: null, yMa
 /** 그래프 종류(저장 키 단위) */
 export type AxisKind = "convergence" | "hv" | "history";
 export const AXIS_KEY_PREFIX = "physicsai.chartAxis.";
-export const axisStorageKey = (kind: AxisKind) => `${AXIS_KEY_PREFIX}${kind}`;
+export const axisStorageKey = (kind: AxisKind, yKey?: string) => (yKey ? `${AXIS_KEY_PREFIX}${kind}.y.${yKey}` : `${AXIS_KEY_PREFIX}${kind}`);
 
 export function clampDigits(n: unknown): number {
   const v = Math.round(Number(n));
@@ -146,26 +147,41 @@ export function sanitizePrefs(raw: unknown): AxisPrefs {
   return { xMin, xMax, yMin, yMax, yFormat: r.yFormat === "plain" ? "plain" : "exp", yDigits: r.yDigits === undefined ? DEFAULT_DIGITS : clampDigits(r.yDigits) };
 }
 
-export function readAxisPrefs(kind: AxisKind): AxisPrefs {
+function readOne(key: string): AxisPrefs {
   try {
-    const raw = globalThis.localStorage?.getItem(axisStorageKey(kind));
+    const raw = globalThis.localStorage?.getItem(key);
     return raw ? sanitizePrefs(JSON.parse(raw)) : { ...DEFAULT_AXIS };
   } catch {
     return { ...DEFAULT_AXIS };
   }
 }
 
-/** 기본값과 같으면 저장 항목을 지운다. 실패하면 false(화면 상태는 그대로 동작). */
-export function writeAxisPrefs(kind: AxisKind, p: AxisPrefs): boolean {
+function writeOne(key: string, p: AxisPrefs): boolean {
   try {
     const ls = globalThis.localStorage;
     if (!ls) return false;
-    if (isDefaultAxis(p)) ls.removeItem(axisStorageKey(kind));
-    else ls.setItem(axisStorageKey(kind), JSON.stringify(p));
+    if (isDefaultAxis(p)) ls.removeItem(key);
+    else ls.setItem(key, JSON.stringify(p));
     return true;
   } catch {
     return false;
   }
+}
+
+/** yKey 없음: 종류 단위 전체. yKey 있음: x = 종류 단위, y(최소·최대·표기·자리) = 종류+yKey 단위 */
+export function readAxisPrefs(kind: AxisKind, yKey?: string): AxisPrefs {
+  const base = readOne(axisStorageKey(kind));
+  if (!yKey) return base;
+  const y = readOne(axisStorageKey(kind, yKey));
+  return { ...base, yMin: y.yMin, yMax: y.yMax, yFormat: y.yFormat, yDigits: y.yDigits };
+}
+
+/** 기본값과 같으면 저장 항목을 지운다. 실패하면 false(화면 상태는 그대로 동작). */
+export function writeAxisPrefs(kind: AxisKind, p: AxisPrefs, yKey?: string): boolean {
+  if (!yKey) return writeOne(axisStorageKey(kind), p);
+  const a = writeOne(axisStorageKey(kind), { ...DEFAULT_AXIS, xMin: p.xMin, xMax: p.xMax });
+  const b = writeOne(axisStorageKey(kind, yKey), { ...DEFAULT_AXIS, yMin: p.yMin, yMax: p.yMax, yFormat: p.yFormat, yDigits: p.yDigits });
+  return a && b;
 }
 
 export function isDefaultAxis(p: AxisPrefs): boolean {

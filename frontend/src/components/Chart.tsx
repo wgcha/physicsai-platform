@@ -71,6 +71,8 @@ export interface PointMark {
 /** 반복-성능 그래프 축 규칙(lib/chartAxis C1~C4): x = 0 시작·정수 눈금, y = 지수 3자리, "축" 편집 버튼·localStorage 저장 */
 export interface IterAxis {
   kind: AxisKind;
+  /** 있으면 y 설정을 종류+yKey(예: y 열 이름)별로 따로 저장(x는 종류 단위 공유) */
+  yKey?: string;
   /** 자동일 때 x 끝 = 마지막 반복 */
   xLast: number;
   xName?: string;
@@ -98,7 +100,7 @@ export interface ChartProps {
 export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [], points = [], xLabel, yLabel, logY, xDomain, yDomain, band, iterAxis, ariaLabel }: ChartProps) {
   const { ref, width } = useWidth<HTMLDivElement>();
   const clipId = useId();
-  const [prefs, setPrefs] = useAxisPrefs(iterAxis?.kind ?? null);
+  const [prefs, setPrefs] = useAxisPrefs(iterAxis?.kind ?? null, iterAxis?.yKey);
   const height = aspect ? Math.round(Math.max(baseHeight, Math.min(width * aspect, maxHeight))) : baseHeight;
   const m = { l: 58, r: 14, t: 10, b: xLabel ? 40 : 26 };
   const ih = Math.max(40, height - m.t - m.b);

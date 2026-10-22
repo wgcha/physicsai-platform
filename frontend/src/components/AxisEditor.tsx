@@ -13,17 +13,23 @@ import {
   type AxisPrefs,
 } from "../lib/chartAxis";
 
-/** 그래프 종류별 축 설정(상태 + localStorage). kind=null이면 저장하지 않는다. */
-export function useAxisPrefs(kind: AxisKind | null) {
-  const [prefs, setPrefs] = useState<AxisPrefs>(() => (kind ? readAxisPrefs(kind) : { ...DEFAULT_AXIS }));
+/** 그래프 종류별 축 설정(상태 + localStorage). kind=null이면 저장하지 않는다. yKey가 바뀌면 y 설정을 다시 읽는다. */
+export function useAxisPrefs(kind: AxisKind | null, yKey?: string) {
+  const id = `${kind ?? ""}|${yKey ?? ""}`;
+  const [st, setSt] = useState<{ id: string; prefs: AxisPrefs }>(() => ({ id, prefs: kind ? readAxisPrefs(kind, yKey) : { ...DEFAULT_AXIS } }));
+  let cur = st;
+  if (st.id !== id) {
+    cur = { id, prefs: kind ? readAxisPrefs(kind, yKey) : { ...DEFAULT_AXIS } };
+    setSt(cur);
+  }
   const update = useCallback(
     (next: AxisPrefs) => {
-      setPrefs(next);
-      if (kind) writeAxisPrefs(kind, next);
+      setSt({ id, prefs: next });
+      if (kind) writeAxisPrefs(kind, next, yKey);
     },
-    [kind],
+    [kind, yKey, id],
   );
-  return [prefs, update] as const;
+  return [cur.prefs, update] as const;
 }
 
 const show = (v: number | null) => (v == null ? "" : String(v));
