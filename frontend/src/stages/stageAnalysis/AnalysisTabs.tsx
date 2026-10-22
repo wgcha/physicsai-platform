@@ -43,7 +43,7 @@ export function AnalysisTabs({ table, other, pickVars, pickResp, selected, onSel
   const succeeded = table.rows.filter((r) => r.state === "SUCCEEDED").length;
   return (
     <Card
-      span={3}
+      span={12}
       title="응답 그래프"
       className="batch-plot analysis-plot"
       aside={

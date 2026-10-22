@@ -109,8 +109,8 @@ export function SurrogateResult({ optId }: { optId: string }) {
           <HvChart opt={o} />
         </Card>
       )}
-      <OptimumCompareCard o={o} base={base} />
       <ResultSummaryCard o={o} />
+      <OptimumCompareCard o={o} base={base} />
       <ContourCompareCard o={o} />
       {!multi && (
         <Card span={9} title="수렴 그래프">

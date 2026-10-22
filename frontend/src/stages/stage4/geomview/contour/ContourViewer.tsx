@@ -1,6 +1,7 @@
 // 결과 3D 컨투어 뷰어(geometry-view.md §13.6): contour.glb 1회 + contour_frames.bin 프레임 단위 Range 로드(현재·다음 선로딩, 최근 8프레임).
 // 정점 색 = 현재 프레임 스칼라(NaN 회색), 범례 [고정 | 프레임별], 타임스텝 슬라이더·재생/일시정지·속도·이전/다음, 변형 배율(변위 있을 때).
 // 410(서버 캐시 정리됨)이면 onExpired → 부모가 다시 요청한다.
+// 제어 모드(`control`, contour3d-default §3.1·§3.3 비교 모드): 프레임·배율·범례 범위를 부모가 정하고 내부 슬라이더·배율·범례 모드 줄은 숨긴다.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, errorMessage, type Contour3d } from "../../../../api";
 import { loadThree } from "../loadThree";
@@ -9,7 +10,15 @@ import { isExpired } from "../expire";
 import { fillColors, fmtLegend, legendGradient, legendTicks } from "./colormap";
 import { applyDeform, decodeFrame, DEFORM_SCALES, FPS_CHOICES, FrameCache, fmtTime, frameRange, legendRange, nextFrame, prevFrame, type ContourManifest, type DecodedFrame, type LegendMode } from "./contourCore";
 
-export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () => void }) {
+/** 비교 모드에서 부모가 쥐는 값. legend = 외부 범례 [min,max](null이면 이 뷰어의 고정 범위), showLegend = 이 뷰어 안에 범례 막대를 보일지 */
+export interface ViewerControl {
+  frame: number;
+  scale: number;
+  legend: [number, number] | null;
+  showLegend: boolean;
+}
+
+export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { c: Contour3d; onExpired: () => void; control?: ViewerControl; onManifest?: (m: ContourManifest | null) => void; onScene?: (s: ContourSceneApi | null) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const scene = useRef<ContourSceneApi | null>(null);
   const base = useRef<Float32Array | null>(null);
@@ -20,14 +29,18 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
   const [m, setM] = useState<ContourManifest | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [idx, setIdx] = useState(0);
+  const [idxOwn, setIdx] = useState(0);
   const [frame, setFrame] = useState<DecodedFrame | null>(null);
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(5);
   const [mode, setMode] = useState<LegendMode>("global");
-  const [scale, setScale] = useState(1);
+  const [scaleOwn, setScale] = useState(1);
   const expired = useRef(onExpired);
   expired.current = onExpired;
+  const report = useRef({ onManifest, onScene });
+  report.current = { onManifest, onScene };
+  const idx = control ? Math.max(0, Math.min(control.frame, (m?.frames.count ?? 1) - 1)) : idxOwn;
+  const scale = control ? control.scale : scaleOwn;
 
   const fail = useCallback((e: unknown) => {
     if (isExpired(e)) expired.current();
@@ -55,10 +68,14 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
       setScale(manifest.frames.has_disp ? 1 : 0);
       setIdx(0);
       setReady(true);
+      report.current.onManifest?.(manifest);
+      report.current.onScene?.(made);
     })().catch((e) => alive && fail(e));
     return () => {
       alive = false;
       scene.current = null;
+      report.current.onScene?.(null);
+      report.current.onManifest?.(null);
       made?.dispose();
     };
   }, [c.manifest_artifact_id, c.glb_artifact_id, c.frames_artifact_id, fail]);
@@ -102,7 +119,7 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
     };
   }, [ready, m, idx, load, fail]);
 
-  const range = m ? legendRange(m, idx, mode) : null;
+  const range = m ? (control ? (control.legend ?? legendRange(m, idx, "global")) : legendRange(m, idx, mode)) : null;
   const lo = range?.[0] ?? null;
   const hi = range?.[1] ?? null;
   useEffect(() => {
@@ -119,7 +136,7 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
   // 재생: 1000/fps마다 다음 프레임(받아 둔 뒤 넘김, 반복). 재생 중에만 연속 렌더
   useEffect(() => {
     scene.current?.setLoop(playing);
-    if (!playing || !m) return;
+    if (!playing || !m || control) return;
     let alive = true;
     let t: ReturnType<typeof setTimeout>;
     const tick = () => {
@@ -138,7 +155,7 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
       alive = false;
       clearTimeout(t);
     };
-  }, [playing, fps, m, load]);
+  }, [playing, fps, m, load, control]);
 
   const info = m?.frames.list[idx];
   const ticks = useMemo(() => (lo != null && hi != null ? legendTicks(lo, hi, 5) : []), [lo, hi]);
@@ -155,7 +172,7 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
             {error}
           </div>
         )}
-        {m && range && (
+        {m && range && (!control || control.showLegend) && (
           <div className="gv-legend" data-testid="contour-legend">
             <div className="small">
               {m.display?.field ?? "값"}
@@ -169,6 +186,7 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
                 ))}
               </div>
             </div>
+            {!control && (
             <div className="seg c3-legend-mode" role="group" aria-label="범례 범위">
               <button type="button" className={mode === "global" ? "on" : ""} aria-pressed={mode === "global"} onClick={() => setMode("global")} title="전체 프레임 min·max">
                 고정
@@ -177,10 +195,11 @@ export function ContourViewer({ c, onExpired }: { c: Contour3d; onExpired: () =>
                 프레임별
               </button>
             </div>
+            )}
           </div>
         )}
       </div>
-      {m && (
+      {m && !control && (
         <div className="c3-controls">
           <button type="button" className="btn small ghost" onClick={() => setIdx((i) => prevFrame(i, count))} disabled={count < 2} aria-label="이전 프레임">
             이전

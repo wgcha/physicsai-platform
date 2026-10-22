@@ -9,7 +9,7 @@ import { Card } from "../../../components/ui";
 import { usePolling } from "../../../hooks/usePolling";
 import { isTerminal } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
-import { PredictResultCard } from "../PredictResult";
+import { PredictContourCard, PredictResultCard } from "../PredictResult";
 import { useFemVerifyButton } from "../verify/useFemVerifyButton";
 
 import { RunInputsCard } from "./RunInputsCard";
@@ -76,6 +76,7 @@ export function PredictRunView({ id, onBackToList }: { id: string; onBackToList:
         </div>
       </Card>
       {run && <RunInputsCard run={run} />}
+      <PredictContourCard job={job} span={run ? "half" : 12} />
       <PredictResultCard job={job} verifyValues={pbs.verifyValues} />
     </>
   );

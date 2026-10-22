@@ -1,13 +1,14 @@
 // ⑤ 내장 최적화 결과 카드(D3-61): 최적안 — 기준안 대비(변수별 학습 범위 막대·표·범위 끝 안내), 결과 요약 타일,
-// 컨투어 비교(기준안·최적안 마무리 캡처 — 같은 범례, 방향 공유, 이미지·영상 받기는 ContourMedia).
+// 컨투어 비교(contour3d-default: 기존안·최적안 3D 두 뷰어 — 시점 연결·공통 범례·공용 시간. 마무리 캡처 PNG는 [그림/영상] 창·폴백, 같은 범례·방향 공유).
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { errorMessage, type ViewKey } from "../../../api";
+import { errorMessage, type Contour3dCreate, type ViewKey } from "../../../api";
 import { surrogateApi, type SoCandidate, type SoIteration, type SurrogateOpt } from "../../../api/surrogateOpt";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { Card } from "../../../components/ui";
 import { fmtNum } from "../../../lib/format";
 import { ContourMedia } from "../../stage4/ContourMedia";
+import { ContourCompare3D } from "../../stage4/geomview/contour/ContourCompare3D";
 import { useFemVerifyButton } from "../../stage4/verify/useFemVerifyButton";
 import { UNVERIFIED_BADGE, boundNote, compareRows, fmtVar, kpis, levelsOf, objectiveDefs, rangeBasis, rangeHeader } from "./soRules";
 
@@ -32,7 +33,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
   const fem = useFemVerifyButton(b ? { kind: "opt_design", opt_id: o.id, pick: "best" } : null, !!b);
   const noun = o.mode === "multi" ? "추천점" : "최적안";
   return (
-    <Card span={8} title={o.mode === "multi" ? "최적안(가중 추천점) — 기존안 대비" : "최적안 — 기존안 대비"} className="so-compare"
+    <Card span="half" title={o.mode === "multi" ? "최적안(가중 추천점) — 기존안 대비" : "최적안 — 기존안 대비"} className="so-compare"
       aside={b?.batch_id ? <Link className="small" to={`${base}/stage/4/batch/${b.batch_id}`} data-testid="so-best-link">{b.batch_label} DOE #{b.doe_no}</Link> : undefined}>
       {!b ? (
         <p className="muted small">아직 검증된 {noun}이 없습니다.</p>
@@ -86,7 +87,7 @@ export function OptimumCompareCard({ o, base }: { o: SurrogateOpt; base: string 
 
 export function ResultSummaryCard({ o }: { o: SurrogateOpt }) {
   return (
-    <Card span={4} title="결과 요약">
+    <Card span={12} title="결과 요약">
       <div className="so-kpis" data-testid="so-kpis">
         {kpis(o).map((k) => (
           <div key={k.label} className="so-kpi">
@@ -108,30 +109,58 @@ export function ContourCompareCard({ o }: { o: SurrogateOpt }) {
   const legend = fin?.legend ? `같은 범례(${fmtNum(fin.legend.min)}–${fmtNum(fin.legend.max)})로 비교` : `범례 개별${fin?.legend_note ? ` — ${fin.legend_note}` : ""}`;
   const ready = fin?.status === "DONE" && fin.baseline?.job_id && fin.best?.job_id;
   const fem = useFemVerifyButton(fin?.best ? { kind: "opt_design", opt_id: o.id, pick: "final_optimum" } : null, !!ready);
-  return (
-    <Card span={9} title={`컨투어 비교 — 기존안 · ${noun}`} className="so-contour-card" aside={<span className="run-action-row"><span className="muted small">{legend}</span>{fem.button}</span>}>
-      {!fin ? (
-        <p className="muted small" data-testid="contour-none">최적화가 끝나면 기존안·{noun}을 같은 범례로 캡처합니다.</p>
-      ) : !ready ? (
-        <p className="muted small" data-testid="contour-none">
-          {FINAL_TEXT[fin.status ?? ""] ?? "캡처 없음"}{fin.reason ? ` — ${fin.reason}` : ""}
-          {fin.status === "PENDING" && fin.batch ? ` (${fin.batch.label} 예측 ${fin.batch.predict.succeeded}/${fin.batch.gen.total})` : ""}
-        </p>
-      ) : (
-        <div className="so-contours">
-          {([["기존안", fin.baseline!], [noun, fin.best!]] as const).map(([lbl, run]) => (
-            <div key={lbl} data-testid={`contour-${lbl}`}>
-              <div className="so-contour-head">
-                <b>{lbl}</b>
-                <span className="small">{objLabel} <span className="mono">{fmtNum(run.objective)}</span></span>
-                <span className="muted small mono">{Object.entries(run.values).map(([k, v]) => `${k} ${fmtNum(v)}`).join(" · ")}</span>
-              </div>
-              <ContourMedia jobId={run.job_id!} view={view} onView={setView} canCapture={false} />
+  const title = `컨투어 비교 — 기존안 · ${noun}`;
+  if (!fin || !ready || !fin.baseline || !fin.best)
+    return (
+      <Card span="half" title={title} className="so-contour-card" aside={<span className="run-action-row">{fem.button}</span>}>
+        {!fin ? (
+          <p className="muted small" data-testid="contour-none">최적화가 끝나면 기존안·{noun}을 같은 범례로 비교합니다.</p>
+        ) : (
+          <p className="muted small" data-testid="contour-none">
+            {FINAL_TEXT[fin.status ?? ""] ?? "캡처 없음"}{fin.reason ? ` — ${fin.reason}` : ""}
+            {fin.status === "PENDING" && fin.batch ? ` (${fin.batch.label} 예측 ${fin.batch.predict.succeeded}/${fin.batch.gen.total})` : ""}
+          </p>
+        )}
+      </Card>
+    );
+  const pairs = [["기존안", fin.baseline], [noun, fin.best]] as const;
+  const head = (run: (typeof pairs)[number][1]) => (
+    <>
+      <span className="small">{objLabel} <span className="mono">{fmtNum(run.objective)}</span></span>
+      <span className="muted small mono">{Object.entries(run.values).map(([k, v]) => `${k} ${fmtNum(v)}`).join(" · ")}</span>
+    </>
+  );
+  // [그림/영상] 창·3D 폴백: 기존 PNG·영상 두 열(D3-61 같은 범례·방향 공유)
+  const media = (
+    <>
+      <p className="muted small" data-testid="so-legend-text">{legend}</p>
+      <div className="so-contours">
+        {pairs.map(([lbl, run]) => (
+          <div key={lbl} data-testid={`contour-${lbl}`}>
+            <div className="so-contour-head">
+              <b>{lbl}</b>
+              {head(run)}
             </div>
-          ))}
-        </div>
+            <ContourMedia jobId={run.job_id!} view={view} onView={setView} canCapture={false} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+  const src = (run: (typeof pairs)[number][1]): Contour3dCreate => ({ source_kind: "PREDICT_H3D", source_ref: { job_id: run.job_id! } });
+  return (
+    <ContourCompare3D
+      left={{ label: pairs[0][0], source: src(pairs[0][1]), head: head(pairs[0][1]) }}
+      right={{ label: pairs[1][0], source: src(pairs[1][1]), head: head(pairs[1][1]) }}
+      media={media}
+      mediaTitle={`그림/영상 — ${title}`}
+    >
+      {({ aside, body }) => (
+        <Card span="half" title={title} className="so-contour-card" aside={<span className="run-action-row">{aside}{fem.button}</span>}>
+          {body}
+        </Card>
       )}
-    </Card>
+    </ContourCompare3D>
   );
 }
 

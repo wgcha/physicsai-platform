@@ -14,7 +14,7 @@ import { POLL } from "../../../lib/poll";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { mdHm } from "../history/runListText";
 import { ContourCompare } from "./ContourCompare";
-import { ContourPanel } from "../geomview/contour/ContourPanel";
+import { ContourCompare3D } from "../geomview/contour/ContourCompare3D";
 import { CurveCompare } from "./CurveCompare";
 import { ResponseCompareTable } from "./ResponseCompareTable";
 import { FV_STATE_TEXT, FV_STATUS_LABEL, fvStages, fvTone, pctText } from "./verifyRules";
@@ -138,10 +138,21 @@ export function VerifyDetail({ fid }: { fid: string }) {
         ) : tab === "curves" ? (
           <CurveCompare fid={fv.id} curve={fv.compare!.curve} />
         ) : (
-          <>
-            <ContourCompare fid={fv.id} label={fv.label} legend={fv.compare!.legend} />
-            <ContourPanel key={fv.id} source={{ source_kind: "SOLVER_H3D", source_ref: { fem_verification_id: fv.id } }} label="3D 컨투어(FEM 해석)" />
-          </>
+          // contour3d-default §3.2: 3D 두 개(예측 | FEM) 비교가 기본, PNG 두 열은 [그림/영상] 창(3D를 못 쓰면 그 자리에). 예측 job이 없으면 FEM 단독
+          <ContourCompare3D
+            key={fv.id}
+            left={{ label: "예측", source: lk.predict_job_id ? { source_kind: "PREDICT_H3D", source_ref: { job_id: lk.predict_job_id } } : null }}
+            right={{ label: "FEM", source: { source_kind: "SOLVER_H3D", source_ref: { fem_verification_id: fv.id } } }}
+            media={<ContourCompare fid={fv.id} label={fv.label} legend={fv.compare!.legend} />}
+            mediaTitle="그림/영상 — 예측 | FEM"
+          >
+            {({ aside, body }) => (
+              <>
+                {aside && <div className="run-action-row">{aside}</div>}
+                {body}
+              </>
+            )}
+          </ContourCompare3D>
         )}
       </Card>
 

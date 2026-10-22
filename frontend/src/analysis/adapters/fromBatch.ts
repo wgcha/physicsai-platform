@@ -40,6 +40,7 @@ export function fromBatch(b: PredictBatch, dm: DesignMap | null, meta: RtMeta = 
     return {
       run_id: r.run_key,
       no: r.doe_no,
+      ...(r.job_id ? { job_id: r.job_id } : {}),
       state: r.state,
       params: Object.fromEntries(b.parameters.map((n) => [n, finOrNull(r.applied_values?.[n] ?? r.values?.[n])])),
       responses: resp,

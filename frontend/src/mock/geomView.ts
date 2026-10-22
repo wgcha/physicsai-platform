@@ -2,14 +2,17 @@
 // GET /param-sets/{id}/view · GET /studies/{id}/train/view · POST /param-sets/{id}/previews(200 적중 | 202) · GET /previews/{id}
 // POST /contour3d(200 | 202) · GET /contour3d/{id}(조회마다 한 단계 진행 — 대기 안내 시연) · POST /contour3d/{id}/cancel
 // GET /artifacts/{id}/media(GEOM_*·CONTOUR3D_*, Range 206, 만료 = 410 ARTIFACT_EXPIRED).
-// 시연 모드(setGvMode): c3d="hold"면 컨투어 생성이 '프레임 변환'에서 멈춤, "fail"이면 결과 실패, "expire"면 첫 프레임 요청에 410 1회.
+// 시연 모드(setGvMode): c3d="hold"면 컨투어 생성이 '프레임 변환'에서 멈춤, "fail"이면 결과 실패, "jobfail"이면 작업 실패(FAILED), "expire"면 첫 프레임 요청에 410 1회.
+// c3dBusy=n이면 새 생성 요청을 n번 429(PREVIEW_BUSY)로 거절. POST /contour3d는 캐시 적중·진행 중이면 읽기 사용자도 허용, 새 생성은 power(contour3d-default C3D-6).
 import type { Artifact, Contour3d, Contour3dPhase, Contour3dProgress, GeomPreview, GeomView } from "../api/types";
 import { contourData, cushionGlb, NOMINAL, previewManifest, previewOutcome, viewManifest } from "./geomViewData";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 
 export interface GvMode {
-  c3d?: "hold" | "fail" | "expire" | null;
+  c3d?: "hold" | "fail" | "jobfail" | "expire" | null;
+  /** 새 컨투어 생성 요청을 n번 429(PREVIEW_BUSY)로 거절(캐시 적중은 영향 없음) */
+  c3dBusy?: number;
   /** 미리보기 완료까지 GET 횟수(기본 1) */
   previewPolls?: number;
   /** 공칭 뷰를 쉘(양면·고정 클러스터 1개)로 */
@@ -229,8 +232,6 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
   if (seg[0] === "contour3d") {
     if (method === "POST" && !seg[1]) {
       const study = srv.studies.find((x) => x.id === "s-cushion")!;
-      const deny = needPower(srv, study.project_id);
-      if (deny) return deny;
       if (!srv.p2.feature("contour3d").enabled) return err(409, "CONTOUR3D_NOT_CONFIGURED", "3D 컨투어를 쓸 수 없습니다 — 설정 확인");
       const kind = body?.source_kind;
       const ref = (body?.source_ref ?? {}) as Record<string, string>;
@@ -238,8 +239,15 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
       if (kind === "PREDICT_H3D" && !srv.jobs.some((j) => j.id === ref.job_id && j.state === "SUCCEEDED")) return err(409, "PREREQUISITE_MISSING", "예측 결과 h3d가 없습니다");
       const key = JSON.stringify([kind, ref, body?.display ?? null]);
       const hit = s.contours.find((c) => c.key === key && ["QUEUED", "RUNNING", "DONE"].includes(c.status));
+      // C3D-6: 캐시 적중·진행 중(공유)은 읽기 사용자도 허용, 새 생성은 power
       if (hit?.status === "DONE") return ok({ ...strip(hit), cache_hit: true });
       if (hit) return ok(strip(hit), 202);
+      const deny = needPower(srv, study.project_id);
+      if (deny) return deny;
+      if ((s.mode.c3dBusy ?? 0) > 0) {
+        s.mode.c3dBusy = (s.mode.c3dBusy ?? 0) - 1;
+        return err(429, "PREVIEW_BUSY", "앞선 3D 생성이 끝나면 다시 요청하세요");
+      }
       const rec: C3Rec = {
         id: srv.nid("c3"), key, polls: 0, job_id: srv.nid("j"), status: "QUEUED", cache_hit: false, source_kind: kind, source_ref: ref, display: (body?.display as Record<string, unknown>) ?? null,
         result_status: null, code: null, message_ko: null, frames: null, nodes: null, bytes: null,
@@ -259,6 +267,13 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
     }
     if (method === "GET" && !seg[2]) {
       if (c.status === "QUEUED" || c.status === "RUNNING") {
+        if (s.mode.c3d === "jobfail") {
+          c.status = "FAILED";
+          c.code = "CONTOUR3D_JOB_FAILED";
+          c.message_ko = "H3D 읽기 도구가 종료되었습니다";
+          c.progress = { ...c3Progress("failed", 12, 95, false), step_key: "reading_h3d" };
+          return ok(strip(c));
+        }
         const hold = s.mode.c3d === "hold";
         const k = hold ? 3 : Math.min(4, ++c.polls);
         const phase = C3_ORDER[k];

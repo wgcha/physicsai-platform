@@ -1,6 +1,6 @@
 // ⑤ 결과분석(phase3.md §19, D3-62; 라우트 …/stage/analysis[?source=batch|doe&id=…], 프런트 전용 — 내부 5 = ⑥ 최적화).
 // 입력 = 결과 표 1종(analysis/resultTable): 출처 (a) 일괄 예측 배치(④) · (b) 해석 DOE(①). 머리: 출처 세그먼트·드롭다운·비교 추가·메타 칩.
-// 본문: 왼쪽 결과 표, 오른쪽 그래프 탭(변수–응답·설계공간 지도·영향도·커브(출처 a만)). 선택 모델 selected = run 번호(표·그래프·지도·커브 공유).
+// 본문: 1줄 = 결과 표 | 결과 컨투어(3D, 선택 행) 1:1, 2줄 = 그래프 탭(변수–응답·설계공간 지도·영향도·커브(출처 a만), 12칸). 선택 모델 selected = run 번호(표·그래프·지도·커브 공유).
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, type PredictBatchSummary, type TrainDoe } from "../../api";
@@ -12,6 +12,7 @@ import { commonResponses, META_DIFF_TEXT, metaChips, metaDiffers, mismatchText, 
 import { isOkState, type ResultTable } from "../../analysis/resultTable";
 import { EquivTab } from "../../analysis/equiv/EquivTab";
 import { AnalysisTable, sortRtRows } from "./AnalysisTable";
+import { AnalysisContourCard } from "./AnalysisContourCard";
 import { AnalysisTabs } from "./AnalysisTabs";
 import { CompareSlot } from "./CompareSlot";
 import { EMPTY_TEXT, readSource, SourcePicker, writeSource, type SourceSel } from "./SourcePicker";
@@ -211,6 +212,7 @@ function AnalysisBody({ table, other, studyBase }: { table: ResultTable; other: 
           />
         }
       />
+      <AnalysisContourCard table={table} selected={selected} />
       <AnalysisTabs table={table} other={other} pickVars={pickVars} pickResp={pickResp} selected={selected} onSelect={setSelected} series={series} onSeries={setSeries} />
     </>
   );

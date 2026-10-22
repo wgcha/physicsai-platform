@@ -15,7 +15,7 @@ import { Card, RunAction } from "../../components/ui";
 import { FeatureGate } from "../../components/FeatureGate";
 import { BrowseButton } from "../../components/BrowseButton";
 import { PathSourceTabs } from "../../components/upload/PathSourceTabs";
-import { PredictChain, PredictResultCard } from "./PredictResult";
+import { PredictChain, PredictContourCard, PredictResultCard } from "./PredictResult";
 import { ModelLine, useModelChoice } from "./predictRun";
 import { useFemVerifyButton } from "./verify/useFemVerifyButton";
 
@@ -127,7 +127,7 @@ export function PreparedPredictCard() {
 
   return (
     <>
-      <Card span={9} title="준비된 입력 파일" className="inputs prepared">
+      <Card span="half" title="준비된 입력 파일" className="inputs prepared">
         <div className="prepared-input">
           <div className="pathinput">
             <span className="field-label">입력 파일(.rad·.hm) 또는 폴더 경로</span>
@@ -210,6 +210,7 @@ export function PreparedPredictCard() {
           <PredictChain job={pjob} mode="prepared" />
         </div>
       </Card>
+      <PredictContourCard job={pjob} />
       <PredictResultCard job={pjob} verifyValues={pbs.verifyValues} />
     </>
   );

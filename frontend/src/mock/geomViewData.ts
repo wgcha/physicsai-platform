@@ -266,7 +266,17 @@ export interface ContourData {
   manifest: ContourManifest;
 }
 
+/** 목: 원본마다 값의 크기를 조금 다르게(비교 모드 공통 범례 시연) — j-pred·해석 DOE는 기준 1 */
+function amplitude(ref: Record<string, unknown>): number {
+  const id = String(ref.job_id ?? ref.fem_verification_id ?? "");
+  if (!id || id === "j-pred") return 1;
+  let h = 2166136261;
+  for (const ch of id) h = Math.imul(h ^ ch.charCodeAt(0), 16777619) >>> 0;
+  return 0.78 + (h % 7) * 0.06;
+}
+
 export function contourData(sourceKind: string, ref: Record<string, unknown>): ContourData {
+  const amp = amplitude(ref);
   const nodes = NX * NY;
   const pos = new Float32Array(nodes * 3);
   const ids = new Uint32Array(nodes);
@@ -321,7 +331,7 @@ export function contourData(sourceKind: string, ref: Record<string, unknown>): C
       const r = Math.hypot(x - 80, y - 40);
       const wave = Math.exp(-(((r - 620 * s) / 90) ** 2));
       const bead = Math.exp(-(((y - PW / 2) / 30) ** 2));
-      const v = 412.3 * s * (0.55 * wave + 0.45 * bead * Math.sin((Math.PI * x) / PL)) + 3 * s;
+      const v = amp * 412.3 * s * (0.55 * wave + 0.45 * bead * Math.sin((Math.PI * x) / PL)) + 3 * s;
       buf[f * rec + k] = v;
       lo = Math.min(lo, v);
       hi = Math.max(hi, v);
