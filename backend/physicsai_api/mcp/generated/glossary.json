@@ -1352,6 +1352,14 @@
       ],
       "status": 422
     },
+    "INPUT_KIND_UNSUPPORTED": {
+      "code": "INPUT_KIND_UNSUPPORTED",
+      "message_ko": "쉘 판금·쉘 두께 값이 있는 템플릿은 쿠션 입력으로 실행할 수 없습니다",
+      "sources": [
+        "worker/physicsai_worker/steps/geometry_cushion.py"
+      ],
+      "status": null
+    },
     "INPUT_MISSING": {
       "code": "INPUT_MISSING",
       "message_ko": "원래 예측 작업에 결과 h3d가 없습니다",
@@ -2251,6 +2259,7 @@
         "backend/physicsai_api/services/job_params/stage4_predict.py",
         "backend/physicsai_core/commands.py",
         "backend/physicsai_core/commands_render.py",
+        "worker/physicsai_worker/steps/geometry_cushion.py",
         "worker/physicsai_worker/steps/geometry_props.py",
         "worker/physicsai_worker/steps/geometry_shell.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",

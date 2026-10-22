@@ -80,8 +80,7 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
         ensure_prep_ready(s, bl.baseline_root(S, pm, bid), opts, ver)  # type: ignore[arg-type]
     if b["input_kind"] == MESH_ONLY:  # 쿠션 입력(input-kind.md §4.2): 명령 설정·쿠션 가능 세트 확인(쉘·쉘 두께는 불가)
         cushion.require_command(s)
-        cushion.require_cushion_capable(native_inputs(s, S, os.path.join(S, "radioss_assem"), need_cad=False),
-                                        {str(r["name"]): 0.0 for r in sh.prop_rows(ps["parameters"])}, is_shell_only(S))
+        cushion.require_cushion_capable(native_inputs(s, S, os.path.join(S, "radioss_assem"), need_cad=False), None, is_shell_only(S))
     os.makedirs(B, exist_ok=True)
     ctx.ex.db(lambda c: pb_repo.reset_failed_gen(c, b["id"]))
     with ctx.ex.engine.connect() as conn:
@@ -96,6 +95,8 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
         if os.path.lexists(R):
             ctx.backup([R])  # 재실행: 실패·미완료 run 폴더만 _backup으로
         _bid, geo, _shell, extra, no_cover = run_plan(ps, pm, meta, r)
+        if b["input_kind"] == MESH_ONLY and _shell:  # 쉘 두께 값이 있는 조합은 쿠션 입력 불가(IK-3) — 생성 전에 막는다
+            cushion.require_cushion_capable(native_inputs(s, S, os.path.join(S, "radioss_assem"), need_cad=False), _shell)
         if not no_cover:  # 배정 실패 run은 BP_GEN이 SKIPPED.json(BASELINE_NO_COVER)만 쓴다
             write_sample_inputs(R, geo, {"kind": "batch", "id": b["id"], "doe_no": r["doe_no"]}, opts, nominals, ver, extra,
                                 xml_values={n: float(v) for n, v in r["values"].items()})
