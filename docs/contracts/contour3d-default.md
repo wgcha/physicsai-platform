@@ -187,3 +187,4 @@
 (구현 중 계약과 다르게 해야 하면 `C3D-Cn`으로 기록하고 Plan 확인을 받는다.)
 
 - **C3D-C1(2026-10-22, job-queues.md 반영 대기 — 통합 단계)**: job-queues.md(feat/job-queues 브랜치)에 다음을 더한다 — JQ-8에 "예외: `CONTOUR_3D`는 CPU 레인(contour3d-default C3D-13), 환경 점검·`CONTOUR_RECAPTURE` 등 나머지 LIGHT는 유지", §3.2 추출·캡처 행에 `C3_EXTRACT`·`C3_CONVERT`, §3.3 "LIGHT·PREVIEW 종류" 행에서 `CONTOUR_3D` 제외(CPU, 전환 없음). 이 브랜치에는 job-queues.md가 없어 본문을 고치지 않는다.
+- **C3D-C2(2026-10-22, v0.2.9 2차 통합 — C3D-C1 반영 완료)**: `job_types.py`의 `CONTOUR_3D` lane SLOT(CPU 대기열)은 job-queues 1차 통합에서 이미 적용돼 있어 이 브랜치의 LIGHT 전제(§2 현황 서술)는 통합본에 해당하지 않는다. job-queues.md JQ-8·§3.2·§3.3과 geometry-view.md §13.5·GV-C4에 반영했고, V-C3D-17은 `backend/tests/test_job_queues_api.py`의 `test_contour3d_runs_in_cpu_queue_not_light`·`test_contour3d_cpu_slot_does_not_block_light_and_has_no_transition`으로 충족한다.

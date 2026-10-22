@@ -182,7 +182,7 @@ export interface paths {
         put?: never;
         /**
          * Create Contour3D
-         * @description 결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(CPU 대기열). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.
+         * @description 결과 3D 컨투어(열 때 생성): 캐시 적중 200·진행 중 202는 로그인 사용자(member), 새 생성(202 CONTOUR_3D, CPU 대기열)은 power(403). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.
          */
         post: operations["create_contour3d_physicsai_api_contour3d_post"];
         delete?: never;

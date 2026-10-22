@@ -121,6 +121,13 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
   ],
   // S10 다시 캡처(phase3.md §15.2, step 1개 LOCAL)
   CONTOUR_RECAPTURE: [{ key: "CONTOUR_CAPTURE", kind: "LOCAL" }],
+  // 결과 3D 컨투어(geometry-view.md §13.5, CPU 대기열 한 구간)
+  CONTOUR_3D: [
+    { key: "C3_PREP", kind: "INTERNAL" },
+    { key: "C3_EXTRACT", kind: "LOCAL" },
+    { key: "C3_CONVERT", kind: "LOCAL" },
+    { key: "C3_REGISTER", kind: "INTERNAL" },
+  ],
   // S13 내장 최적화 반복(phase3.md §18.4, INTERNAL만)
   SURROGATE_OPT: [
     { key: "SO_COLLECT", kind: "INTERNAL" },
@@ -185,6 +192,7 @@ export const STEP_LABEL: Record<string, string> = {
   SS_WALK: "파일 확인", SS_CLASSIFY: "정리 후보 분류", SC_VALIDATE: "정리 대상 확인", SC_MOVE: "백업 폴더로 이동", SC_RECORD: "정리 기록",
   BP_PREP: "입력 준비", BP_GEN: "입력 생성", BP_ENQUEUE: "예측 등록",
   CONTOUR_CAPTURE: "컨투어 캡처",
+  C3_PREP: "준비", C3_EXTRACT: "컨투어 추출", C3_CONVERT: "3D 변환", C3_REGISTER: "등록",
   FV_PREP: "조립 입력 준비", FV_MESH: "메시 교체", FV_ASSEMBLE: "입력 조립", FV_EXTRACT: "응답 추출", FV_CURVE: "커브 추출", FV_CAPTURE: "컨투어 캡처", FV_COMPARE: "비교 정리",
   EQ_PREP: "판정 준비(쌍·레시피 확정)", EQ_EXTRACT: "응답·곡선 추출(없는 값만)", EQ_COMPUTE: "지표 계산", EQ_REPORT: "집계·종합 판정",
   PX_PREP: "준비", PX_TABLE: "배치 표 갱신",

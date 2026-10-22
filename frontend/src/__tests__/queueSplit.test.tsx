@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { openStatusDrawer, renderApp, STUDY } from "../test/render";
 import { moveToLane } from "../mock/queueV2";
+import { baseJob, makeSteps } from "../mock/data";
 
 async function openQueue(opts: Parameters<typeof renderApp>[1] = {}, setup?: Parameters<typeof renderApp>[2]) {
   const r = renderApp(`${STUDY}/3`, { queue: "demo", ...opts }, setup);
@@ -84,6 +85,21 @@ describe("GPU·CPU 대기열 분리 (V-JQ-15)", () => {
     expect(server.jobs.find((j) => j.id === "j-q1")!.queue_position).toBe(2);
     expect(server.jobs.filter((j) => j.lane === "CPU" && j.state === "QUEUED").map((j) => j.queue_position)).toEqual(cpuBefore);
     expect((within(cpu).getAllByRole("button", { name: "위로" })[0] as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("3D 컨투어 생성 작업(CONTOUR_3D)은 CPU 구역에 라벨과 함께 표시되고 GPU·가벼운 작업에는 없다 (contour3d-default C3D-13)", async () => {
+    const { cpu, gpu, panel } = await openQueue({}, (s) => {
+      s.jobs.push(baseJob({
+        id: "c3-q", study_id: "s-cushion", project_id: "p-cushion", study_title: "쿠션 두께·리브 예측", job_type: "CONTOUR_3D", state: "QUEUED", lane: "CPU",
+        steps: makeSteps("CONTOUR_3D", 0, null),
+      }));
+      s.queueOrder.set("c3-q", ++s.queueSeq);
+    });
+    const row = within(cpu).getAllByTestId("queue-row").find((r) => r.textContent?.includes("결과 3D 컨투어"));
+    expect(row).toBeTruthy();
+    expect(within(gpu).queryByText("결과 3D 컨투어")).toBeNull();
+    expect(within(panel).queryByText("가벼운 작업(슬롯 불필요)")).toBeNull();
+    expect(screen.getByTestId("chip-queue").textContent).toBe("GPU 실행 1 · 대기 2 | CPU 실행 3/4 · 대기 4");
   });
 
   it("옛 응답(gpu·cpu 없음)에서도 깨지지 않고 단일 대기열로 보인다", async () => {

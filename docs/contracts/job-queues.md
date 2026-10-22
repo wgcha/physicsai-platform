@@ -39,7 +39,7 @@
 | JQ-5 | 재진입 순번 = **원래 등록 순번**(`jobs.queue_origin_seq`, T1에서 고정). 재진입 작업은 뒤에 등록된 작업보다 앞에 선다. T14(PBS 회수 후)는 2026-10-07 결정대로 맨 뒤 유지 |
 | JQ-6 | CPU 슬롯 = 개수 상한 `worker.queues.cpu.max_concurrent`(기본 **4**, 1~16, 2026-10-22 사용자 결정) + 수령 시 여유 메모리 문 `cpu.min_free_memory_gb`(기본 8). 넘으면 CPU 대기열에서 대기 |
 | JQ-7 | 전체 자원 상한 = 워커 **부모 Job Object**(기존 `max_logical_cores`·`max_memory_gb`), step Job Object는 그 안에 중첩. 중첩 불가 시 작업당 몫(코어·메모리 ÷ (N+1))으로 폴백 + 환경 점검 경고 |
-| JQ-8 | LIGHT·PREVIEW 레인은 **그대로**(CPU 상한에 세지 않음). 화면에서는 CPU 대기열 아래 "가벼운 작업"으로 묶어 표시. **변경 메모(2026-10-22 사용자 결정)**: `CONTOUR_3D`(C3_* step)는 LIGHT가 아니라 **CPU 대기열**(구간 레인 SLOT, 동시 `cpu.max_concurrent`에 센다)에서 실행한다 — 환경 점검·그 밖 LIGHT 종류는 LIGHT 유지. migration 0022가 대기 중인 옛 LIGHT `CONTOUR_3D` 행을 CPU로 옮긴다(downgrade는 되돌림). `geometry-view.md` §13.5의 "LIGHT 레인" 서술은 통합 때 고친다 |
+| JQ-8 | LIGHT·PREVIEW 레인은 **그대로**(CPU 상한에 세지 않음). 화면에서는 CPU 대기열 아래 "가벼운 작업"으로 묶어 표시. **변경 메모(2026-10-22 사용자 결정)**: `CONTOUR_3D`(C3_* step)는 LIGHT가 아니라 **CPU 대기열**(구간 레인 SLOT, 동시 `cpu.max_concurrent`에 센다)에서 실행한다 — 환경 점검·그 밖 LIGHT 종류는 LIGHT 유지. migration 0022가 대기 중인 옛 LIGHT `CONTOUR_3D` 행을 CPU로 옮긴다(downgrade는 되돌림). `geometry-view.md` §13.5의 "LIGHT 레인" 서술은 v0.2.9 2차 통합에서 CPU 대기열로 고쳤다(contour3d-default C3D-13·C3D-C1) |
 | JQ-9 | 워커 프로세스 1개 유지. 스레드: `gpu-slot`(1) + `cpu-slot0..N-1`. GPU 구간은 `gpu-slot` 스레드에서만 실행(프로세스 안 이중 직렬화) |
 | JQ-10 | DB: `jobs.lane` = **현재 대기열**(`CPU|GPU|LIGHT|PREVIEW`), `worker_slot`(id=1)은 **GPU 슬롯**으로 재사용, `holds_slot = (RUNNING AND lane='GPU')`. migration `0022_job_queues` |
 | JQ-11 | `JobTypeDef.lane`(정적 분류 SLOT·LIGHT·PREVIEW)은 바꾸지 않는다 — SLOT = "구간 레인(CPU·GPU 전환)". 용어집·MCP 레지스트리 변경 최소 |
@@ -63,7 +63,7 @@
 |---|---|---|
 | 형상·메시·조립 | `GEOM_UPDATE`·`MESH`(NX·SimLab 또는 paicad), `SIMLAB_EXTRACT`, `NP_EXTRACT`·`NP_TAG`·`NP_VIEW`·`BL_MAP`·`TX_VIEW`, `FV_MESH` | CPU·메모리, Altair 라이선스(SimLab) |
 | DOE·입력 생성 | `HST_GEN_RADIOSS`(①-3, 플랫폼 생성은 `run_parallel` M개), `BP_GEN`(④ 일괄, `run_parallel`) | CPU 다중 프로세스 |
-| 추출·캡처 | `RESPONSE_EXTRACT(_RUNS)`·`CONTOUR_PREVIEW`·`CONTOUR_CAPTURE`·`PV_EXTRACT`·`FV_EXTRACT`·`FV_CURVE`·`FV_CAPTURE`·`EQ_EXTRACT`·`HW_*`·`HVTRANS_CURATE` | HyperView·hvtrans(라이선스), 캡처는 OpenGL — GPU 메모리 소량 가능(리스크 R6) |
+| 추출·캡처 | `RESPONSE_EXTRACT(_RUNS)`·`CONTOUR_PREVIEW`·`CONTOUR_CAPTURE`·`C3_EXTRACT`·`C3_CONVERT`(`CONTOUR_3D`, contour3d-default C3D-13)·`PV_EXTRACT`·`FV_EXTRACT`·`FV_CURVE`·`FV_CAPTURE`·`EQ_EXTRACT`·`HW_*`·`HVTRANS_CURATE` | HyperView·hvtrans(라이선스), 캡처는 OpenGL — GPU 메모리 소량 가능(리스크 R6) |
 | 데이터셋 | `EDSPY_DATASET_TRAIN`·`EDSPY_DATASET_EVAL` | edspy 전처리(h3d → psdata), 모델 추론 없음 → CPU. 서버 실측으로 CUDA 사용 여부 확인(V-JQ-15) |
 | PBS·SCX 제출 | `HPC_SUBMIT`(PREDICT_VERIFY·FEM_VERIFY·TD_SOLVE) | 원격 해석 — 로컬은 제출만. 대기·회수는 슬롯 없음(기존) |
 | 영상 변환 등 기타 LOCAL | `video_transcode` 등 | CPU |
@@ -82,7 +82,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 | OPTIMIZE(레거시) | **GPU[OP_PREP·HST_OPTIMIZE·OP_SUMMARY]** | GPU |
 | FEM_VERIFY·PREDICT_VERIFY·TD_SOLVE | CPU → PBS 대기(슬롯 없음) → 회수 → CPU(T14) | CPU |
 | 그 밖 SLOT 종류 전부 | CPU | CPU |
-| LIGHT·PREVIEW 종류 | 기존 레인 그대로 | LIGHT·PREVIEW |
+| LIGHT·PREVIEW 종류(`CONTOUR_3D` 제외 — CPU, 전환 없음) | 기존 레인 그대로 | LIGHT·PREVIEW |
 
 - **초기 대기열 규칙**(core 한 곳 `physicsai_core/queues.py` `initial_lane(job_type, params, resume_from_step)`): 기본 **CPU**(첫 구간의 INTERNAL·준비 복사는 CPU 슬롯에서 — GPU를 준비 작업에 쓰지 않는다). 예외 = 작업이 "짧은 INTERNAL + GPU step 1개 + 짧은 INTERNAL"로만 된 EVALUATE·OPTIMIZE는 GPU로 시작(전환 2회 절약, `queues.GPU_START_TYPES` 상수). 재개(`resume_from_step`)면 재개 step 기준으로 같은 규칙.
 - prepared PREDICT의 `GEOM_UPDATE`·`MESH` 건너뛰기는 실행 중 판정(`StepSkipped`)이므로 전환 판정은 **res = cpu인 step을 만나도 그 step이 건너뛰기 대상이면 전환하지 않는다** — `queues.skip_without_slot(job, step_key)`(params만 보는 순수 함수, prepared PREDICT의 GEOM_UPDATE·MESH = true)를 executor가 먼저 부른다.

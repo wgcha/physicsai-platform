@@ -161,3 +161,23 @@ def test_contour3d_runs_in_cpu_queue_not_light(client, engine):
         assert lease_repo.claim_cpu(c, "w", 30, 1) is None  # 다른 CPU 작업은 상한 때문에 대기
     assert job_row(engine, other)["state"] == "QUEUED"
     assert job_row(engine, c3)["state"] == "RUNNING"
+
+
+def test_contour3d_cpu_slot_does_not_block_light_and_has_no_transition(client, engine):
+    """contour3d-default V-C3D-17: CONTOUR_3D 실행(CPU 슬롯) 중에도 LIGHT 작업(컨투어 다시 캡처 등)이 수령되고 그 반대도 막지 않으며,
+    구간 전환(T17) 0회 = 구간 흐름이 cpu 하나."""
+    from physicsai_core import queues
+    from physicsai_core.db.repositories import job_lease as lease_repo
+
+    assert queues.segments("CONTOUR_3D") == ["cpu"] and queues.initial_lane("CONTOUR_3D") == "CPU"
+    assert queues.segments("CONTOUR_RECAPTURE") == ["light"]
+    c3 = add_job(engine, "CONTOUR_3D")["id"]
+    light = add_job(engine, "CONTOUR_RECAPTURE")["id"]
+    with engine.begin() as c:
+        assert lease_repo.claim_cpu(c, "w", 30, 4)["id"] == c3
+        assert lease_repo.claim_light(c, "w", 30)["id"] == light  # 3D 실행 중에도 LIGHT 수령
+    assert job_row(engine, c3)["lane"] == "CPU" and job_row(engine, light)["lane"] == "LIGHT"
+    assert job_row(engine, c3)["state"] == "RUNNING" and job_row(engine, light)["state"] == "RUNNING"
+    q = client.get(f"{API}/queue", headers=P).json()
+    assert [x["id"] for x in q["cpu"]["running"]] == [c3]
+    assert q["light"]["running"]["id"] == light

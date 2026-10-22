@@ -23,6 +23,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   STUDY_CLEANUP: "관리",
   PREDICT_BATCH: "④",
   CONTOUR_RECAPTURE: "④",
+  CONTOUR_3D: "④",
   SURROGATE_OPT: "⑤",
   FEM_VERIFY: "④",
   PB_RESP_EXTRACT: "④",

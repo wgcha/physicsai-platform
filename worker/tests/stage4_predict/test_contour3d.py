@@ -144,7 +144,7 @@ def test_contour3d_member_cache_hit_ok_new_generation_needs_power(predict_env):
     r = member(body)  # 진행 중 → member도 같은 행(202), 새 작업 없음
     assert r.status_code == 202 and r.json()["id"] == c["id"] and r.json()["cache_hit"] is False
     assert counts() == (1, 1)
-    assert env.w.run_once_light() == "SUCCEEDED", env.job(c["job_id"])
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(c["job_id"])
     r = member(body)  # 적중 → 200, 작업 추가 0
     assert r.status_code == 200 and r.json()["cache_hit"] is True and r.json()["id"] == c["id"] and r.json()["status"] == "DONE"
     assert counts() == (1, 1)
