@@ -71,8 +71,9 @@ function HistoryChart({ table, responses }: { table: SummaryTable; responses: Op
         ariaLabel="설계 이력"
         xLabel="설계"
         yLabel={col}
+        iterAxis={{ kind: "history", xLast: Math.max(1, pts.length ? pts[pts.length - 1][0] : 1), xName: "설계" }}
         lines={best.length ? [{ name: "best", pts: best, className: "chart-line" }] : []}
-        points={pts.map(([x, y]) => ({ x, y, className: "chart-pt", title: `설계 ${x}: ${y}` }))}
+        points={pts.map(([x, y]) => ({ x, y, className: "chart-pt", title: (fy) => `설계 ${x}: ${fy(y)}` }))}
       />
       {best.length > 0 && (
         <div className="legend small">

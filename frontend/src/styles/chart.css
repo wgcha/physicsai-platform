@@ -4,6 +4,54 @@
   width: 100%;
   min-width: 0;
 }
+/* 반복-성능 그래프 "축" 편집(v0.2.8): 그래프 위 오른쪽 작은 버튼 1개 + 팝오버 */
+.chart-axis-bar {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-1);
+}
+.axis-pop {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: var(--space-2);
+  width: max-content;
+  max-width: 440px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-raised);
+  box-shadow: var(--shadow-pop);
+}
+.axis-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.axis-row .field-label {
+  width: 76px;
+}
+.axis-row input {
+  width: 92px;
+}
+.axis-row input[type="number"] {
+  width: 64px;
+}
+.axis-row select {
+  width: 92px;
+}
+.axis-warns {
+  display: flex;
+  gap: var(--space-3);
+  padding-left: 84px;
+}
+.axis-foot {
+  display: flex;
+  justify-content: flex-end;
+}
 .chart svg {
   display: block;
   overflow: visible;

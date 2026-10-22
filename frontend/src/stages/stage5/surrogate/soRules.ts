@@ -299,8 +299,9 @@ export function qualityGrade(q2: number | null | undefined): { label: string; to
 }
 
 export interface ConvergenceData {
-  verified: { x: number; y: number; title: string }[];
-  predicted: { x: number; y: number; title: string }[];
+  /** title = 툴팁(y 값은 그래프 축 표기 fy를 따른다) */
+  verified: { x: number; y: number; title: (fy: (v: number) => string) => string }[];
+  predicted: { x: number; y: number; title: (fy: (v: number) => string) => string }[];
   best: [number, number][];
   xMax: number;
 }
@@ -309,10 +310,10 @@ export interface ConvergenceData {
 export function convergence(o: Pick<SurrogateOpt, "runs" | "iterations" | "settings">): ConvergenceData {
   const runs = (o.runs ?? []) as SoRun[];
   const verified = runs.filter((r) => r.objective != null && Number.isFinite(r.objective)).map((r) => ({
-    x: r.iter_no, y: r.objective as number, title: `반복 ${r.iter_no} · ${r.batch_label} DOE #${r.doe_no} · ${fmtNum(r.objective)}`,
+    x: r.iter_no, y: r.objective as number, title: (fy: (v: number) => string) => `반복 ${r.iter_no} · ${r.batch_label} DOE #${r.doe_no} · ${fy(r.objective as number)}`,
   }));
   const predicted = (o.iterations as SoIteration[]).flatMap((it) => (it.candidates ?? []).filter((c) => c.predicted != null).map((c) => ({
-    x: it.iter_no, y: c.predicted as number, title: `반복 ${it.iter_no} 후보 DOE #${c.doe_no} 예측 ${fmtNum(c.predicted)}`,
+    x: it.iter_no, y: c.predicted as number, title: (fy: (v: number) => string) => `반복 ${it.iter_no} 후보 DOE #${c.doe_no} 예측 ${fy(c.predicted as number)}`,
   })));
   const best = (o.iterations as SoIteration[]).filter((it) => it.best_value != null).map((it) => [it.iter_no, it.best_value as number] as [number, number]);
   const T = Number((o.settings as { iterations?: number }).iterations ?? 0);

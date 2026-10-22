@@ -1,4 +1,4 @@
-// ⑤ 수렴 그래프(phase3.md §18.10, 자체 SVG — components/Chart): x = 반복 0..T, 회색 점 = 검증 run 값, 속 빈 점 = 대리모델 예측,
+// ⑤ 수렴 그래프(phase3.md §18.10, 자체 SVG — components/Chart): x = 반복 0..T(0 시작·정수 눈금, y 지수 3자리, "축" 버튼으로 편집 — lib/chartAxis), 회색 점 = 검증 run 값, 속 빈 점 = 대리모델 예측,
 // 강조 선 = 지금까지 최선(검증된 설계만).
 import { Chart } from "../../../components/Chart";
 import type { SurrogateOpt } from "../../../api/surrogateOpt";
@@ -18,7 +18,7 @@ export function ConvergenceChart({ opt }: { opt: SurrogateOpt }) {
         ariaLabel="수렴 그래프"
         xLabel="반복"
         yLabel={metricLabel(s.objective.metric, s.objective.series)}
-        xDomain={[-0.3, d.xMax + 0.3]}
+        iterAxis={{ kind: "convergence", xLast: d.xMax }}
         lines={[
           ...(d.best.length ? [{ name: "best", pts: d.best, className: "chart-line" }] : []),
           ...(baseline != null ? [{ name: "baseline", pts: [[0, baseline], [d.xMax, baseline]] as [number, number][], className: "chart-line s1" }] : []),
@@ -26,7 +26,7 @@ export function ConvergenceChart({ opt }: { opt: SurrogateOpt }) {
         points={[
           ...d.verified.map((p) => ({ ...p, r: 3, className: "chart-pt sample" })),
           ...d.predicted.map((p) => ({ ...p, r: 4.5, className: "chart-pt nearest" })),
-          ...d.best.map(([x, y]) => ({ x, y, r: 3.5, className: "chart-pt", title: `반복 ${x} 지금까지 최선` })),
+          ...d.best.map(([x, y]) => ({ x, y, r: 3.5, className: "chart-pt", title: (fy: (v: number) => string) => `반복 ${x} 지금까지 최선 ${fy(y)}` })),
         ]}
       />
       <div className="legend small">

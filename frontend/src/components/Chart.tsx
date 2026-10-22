@@ -1,5 +1,7 @@
 // 경량 SVG 차트(외부 차트 라이브러리 없음, 계약 §4.5).
-import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { fmtAxisY, intTicks, resolveXDomain, resolveYDomain, type AxisKind } from "../lib/chartAxis";
+import { AxisEditor, useAxisPrefs } from "./AxisEditor";
 
 export function useWidth<T extends HTMLElement>(fallback = 600) {
   const ref = useRef<T>(null);
@@ -62,7 +64,16 @@ export interface PointMark {
   y: number;
   className?: string;
   r?: number;
-  title?: string;
+  /** 문자열 또는 y 값 포맷 함수를 받는 함수(반복-성능 그래프에서 툴팁 값도 축 표기를 따른다) */
+  title?: string | ((fy: (v: number) => string) => string);
+}
+
+/** 반복-성능 그래프 축 규칙(lib/chartAxis C1~C4): x = 0 시작·정수 눈금, y = 지수 3자리, "축" 편집 버튼·localStorage 저장 */
+export interface IterAxis {
+  kind: AxisKind;
+  /** 자동일 때 x 끝 = 마지막 반복 */
+  xLast: number;
+  xName?: string;
 }
 
 export interface ChartProps {
@@ -76,6 +87,7 @@ export interface ChartProps {
   yDomain?: [number, number];
   /** 배경 사각형(예: 학습 범위) */
   band?: { x: [number, number]; y: [number, number] };
+  iterAxis?: IterAxis;
   ariaLabel: string;
   /** 폭에 비례한 높이(4K 대응): height = clamp(height, width*aspect, maxHeight) */
   aspect?: number;
@@ -83,11 +95,12 @@ export interface ChartProps {
   children?: ReactNode;
 }
 
-export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [], points = [], xLabel, yLabel, logY, xDomain, yDomain, band, ariaLabel }: ChartProps) {
+export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [], points = [], xLabel, yLabel, logY, xDomain, yDomain, band, iterAxis, ariaLabel }: ChartProps) {
   const { ref, width } = useWidth<HTMLDivElement>();
+  const clipId = useId();
+  const [prefs, setPrefs] = useAxisPrefs(iterAxis?.kind ?? null);
   const height = aspect ? Math.round(Math.max(baseHeight, Math.min(width * aspect, maxHeight))) : baseHeight;
   const m = { l: 58, r: 14, t: 10, b: xLabel ? 40 : 26 };
-  const iw = Math.max(40, width - m.l - m.r);
   const ih = Math.max(40, height - m.t - m.b);
 
   const xs: number[] = [];
@@ -96,40 +109,53 @@ export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [],
   for (const p of points) if (Number.isFinite(p.x) && Number.isFinite(p.y)) (xs.push(p.x), ys.push(p.y));
   if (band) xs.push(...band.x), ys.push(...band.y);
 
-  let [x0, x1] = xDomain ?? [Math.min(...xs), Math.max(...xs)];
-  let [y0, y1] = yDomain ?? [Math.min(...ys), Math.max(...ys)];
+  let [x0, x1] = iterAxis ? resolveXDomain(prefs, iterAxis.xLast) : (xDomain ?? [Math.min(...xs), Math.max(...xs)]);
+  let [y0, y1] = iterAxis ? resolveYDomain(prefs, Math.min(...ys), Math.max(...ys)) : (yDomain ?? [Math.min(...ys), Math.max(...ys)]);
   if (!Number.isFinite(x0) || !Number.isFinite(x1)) [x0, x1] = [0, 1];
   if (!Number.isFinite(y0) || !Number.isFinite(y1)) [y0, y1] = [0, 1];
   if (x0 === x1) [x0, x1] = [x0 - 1, x1 + 1];
-  const useLog = !!logY && y0 > 0;
+  const useLog = !iterAxis && !!logY && y0 > 0;
   if (useLog) {
     y0 = Math.pow(10, Math.floor(Math.log10(y0) * 10) / 10);
     y1 = Math.pow(10, Math.ceil(Math.log10(y1) * 10) / 10);
     if (y0 === y1) y1 = y0 * 10;
   } else {
     if (y0 === y1) [y0, y1] = [y0 - 1, y1 + 1];
-    if (!yDomain) {
+    if (!yDomain && !iterAxis) {
       const pad = (y1 - y0) * 0.06;
       y0 -= pad;
       y1 += pad;
     }
   }
-  if (!xDomain && points.length && !lines.length) {
+  if (!iterAxis && !xDomain && points.length && !lines.length) {
     const pad = (x1 - x0) * 0.04;
     x0 -= pad;
     x1 += pad;
   }
 
+  const fy = (v: number) => fmtAxisY(v, prefs);
+  const yt = useLog ? logTicks(y0, y1) : niceTicks(y0, y1, Math.max(3, Math.floor(ih / 45)));
+  const yLabels = yt.map((v) => (iterAxis ? fy(v) : tickLabel(v)));
+  // 지수 표기는 글자가 길어 왼쪽 여백을 눈금 글자 폭에 맞춘다
+  if (iterAxis) m.l = Math.max(m.l, Math.ceil(Math.max(0, ...yLabels.map((t) => t.length)) * 7) + 34);
+  const iw = Math.max(40, width - m.l - m.r);
   const sx = (x: number) => m.l + ((x - x0) / (x1 - x0)) * iw;
   const sy = useLog
     ? (y: number) => m.t + ih - ((Math.log10(Math.max(y, 1e-300)) - Math.log10(y0)) / (Math.log10(y1) - Math.log10(y0))) * ih
     : (y: number) => m.t + ih - ((y - y0) / (y1 - y0)) * ih;
 
-  const xt = niceTicks(x0, x1, Math.max(3, Math.floor(iw / 90)));
-  const yt = useLog ? logTicks(y0, y1) : niceTicks(y0, y1, Math.max(3, Math.floor(ih / 45)));
+  const xt = iterAxis ? intTicks(x0, x1, Math.max(3, Math.floor(iw / 50))) : niceTicks(x0, x1, Math.max(3, Math.floor(iw / 90)));
 
   return (
     <div ref={ref} className="chart">
+      {iterAxis && (
+        <AxisEditor
+          prefs={prefs}
+          onChange={setPrefs}
+          xName={iterAxis.xName}
+          auto={{ x: resolveXDomain({ xMin: null, xMax: null }, iterAxis.xLast), y: resolveYDomain({ yMin: null, yMax: null }, Math.min(...ys), Math.max(...ys)) }}
+        />
+      )}
       <svg width={width} height={height} role="img" aria-label={ariaLabel}>
         {band && (
           <rect
@@ -140,21 +166,27 @@ export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [],
             height={Math.max(0, sy(band.y[0]) - sy(band.y[1]))}
           />
         )}
-        {yt.map((v) => (
+        {iterAxis && (
+          <clipPath id={clipId}>
+            <rect x={m.l - 1} y={m.t - 1} width={iw + 2} height={ih + 2} />
+          </clipPath>
+        )}
+        {yt.map((v, i) => (
           <g key={`y${v}`}>
             <line className="chart-grid" x1={m.l} x2={m.l + iw} y1={sy(v)} y2={sy(v)} />
             <text className="chart-tick" x={m.l - 6} y={sy(v)} dy="0.32em" textAnchor="end">
-              {tickLabel(v)}
+              {yLabels[i]}
             </text>
           </g>
         ))}
         {xt.map((v) => (
           <text key={`x${v}`} className="chart-tick" x={sx(v)} y={m.t + ih + 16} textAnchor="middle">
-            {tickLabel(v)}
+            {iterAxis ? String(v) : tickLabel(v)}
           </text>
         ))}
         <line className="chart-axis" x1={m.l} x2={m.l + iw} y1={m.t + ih} y2={m.t + ih} />
         <line className="chart-axis" x1={m.l} x2={m.l} y1={m.t} y2={m.t + ih} />
+        <g clipPath={iterAxis ? `url(#${clipId})` : undefined}>
         {lines.map((s) => {
           const d = s.pts
             .filter(([x, y]) => Number.isFinite(x) && Number.isFinite(y) && (!useLog || y > 0))
@@ -164,9 +196,10 @@ export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [],
         })}
         {points.map((p, i) => (
           <circle key={i} className={p.className ?? "chart-pt"} cx={sx(p.x)} cy={sy(p.y)} r={p.r ?? 3}>
-            {p.title && <title>{p.title}</title>}
+            {p.title && <title>{typeof p.title === "function" ? p.title(fy) : p.title}</title>}
           </circle>
         ))}
+        </g>
         {xLabel && (
           <text className="chart-label" x={m.l + iw / 2} y={height - 6} textAnchor="middle">
             {xLabel}
