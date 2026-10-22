@@ -121,11 +121,43 @@ _TOP_ALIASES = {"position_range_mm": ("extract", "position_range_mm")}
 _FREE_SECTIONS = ("thickness_ref_overrides",)
 
 
+# optional ``asm_match`` section (asm-match.md section 6.2, ``paicad asm``): not merged into the options (outputs that copy
+# the options stay byte-identical); read with :func:`asm_options`
+ASM_DEFAULTS = {"max_parts": 5000, "recommend_min_score": 0.6, "worst_nodes": 2000}
+
+
+def validate_asm(sec) -> list[str]:
+    if sec is None:
+        return []
+    if not isinstance(sec, dict):
+        return ["asm_match must be an object"]
+    p = [f"asm_match.{k}: unknown key" for k in sec if k not in ASM_DEFAULTS]
+    for k in ("max_parts", "worst_nodes"):
+        v = sec.get(k, ASM_DEFAULTS[k])
+        if not (isinstance(v, int) and not isinstance(v, bool) and v >= 1):
+            p.append(f"asm_match.{k} must be an integer >= 1")
+    v = sec.get("recommend_min_score", ASM_DEFAULTS["recommend_min_score"])
+    if not (_num(v) and 0 <= v <= 1):
+        p.append("asm_match.recommend_min_score must be in [0, 1]")
+    return p
+
+
+def asm_options(path: str | Path | None) -> dict:
+    """``asm_match`` section of an options file merged over :data:`ASM_DEFAULTS` (validated by :func:`load`)."""
+    out = dict(ASM_DEFAULTS)
+    if path:
+        load(path)
+        with open(path, encoding="utf-8") as f:
+            sec = json.load(f).get("asm_match")
+        out.update(sec or {})
+    return out
+
+
 def unknown_keys(over: dict) -> list[str]:
     """Dotted names of keys that are not options (typos must not be ignored silently)."""
     bad: list[str] = []
     for k, v in over.items():
-        if k in _META_KEYS or k in _TOP_ALIASES:
+        if k in _META_KEYS or k in _TOP_ALIASES or k == "asm_match":
             continue
         if k not in DEFAULTS:
             bad.append(k)
@@ -225,7 +257,10 @@ def load(path: str | Path | None, keep_filter: bool = False) -> dict:
     bad = unknown_keys(over)
     if bad:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: unknown keys: " + ", ".join(bad))
-    over = {k: v for k, v in over.items() if k not in ("engine", "engine_version")}
+    probs = validate_asm(over.get("asm_match"))
+    if probs:
+        raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))
+    over = {k: v for k, v in over.items() if k not in ("engine", "engine_version", "asm_match")}
     for alias, (sec, key) in _TOP_ALIASES.items():
         if alias in over:
             v = over.pop(alias)

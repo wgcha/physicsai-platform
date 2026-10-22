@@ -12,6 +12,7 @@ from .common import (
     EXIT_EXTRACT_EMPTY,
     EXIT_OK,
     OutDir,
+    PaicadError,
     Reporter,
     dumps,
     envelope,
@@ -133,8 +134,23 @@ def run(args, rep: Reporter) -> int:
     out.prepare()
     rep.progress(5, "loading CAD")
     cad = cadload.load(args.cad)
+    match = None
+    if getattr(args, "asm_match", None):  # assembly match (asm-match.md section 6.1): order / correspondence check only
+        from .meshsrc import load_match
+
+        if args.renum_csv:
+            raise PaicadError("GEOM_INPUT_INVALID", "give --renum-csv or --asm-match, not both")
+        match = load_match(args.asm_match)
     renum = read_renum_csv(args.renum_csv) if args.renum_csv else None
-    pairs = cadload.correspond(cad, renum, args.body_map)
+    pairs = cadload.correspond(cad, renum, None if match is not None else args.body_map)
+    if match is not None:
+        names = {b.name for b, _, _ in pairs}
+        listed = {r["body"] for r in match.rows} | set(match.excluded)
+        if names != listed:
+            raise PaicadError(
+                "GEOM_BODY_MAP_FAILED",
+                f"unmatched bodies: [{', '.join(sorted(names - listed)[:10])}]; assembly match bodies without a CAD body: [{', '.join(sorted(listed - names)[:10])}]",
+            )
     timing["load_s"] = time.perf_counter() - t_start
     info(f"CAD loaded: {len(pairs)} bodies {timing['load_s']:.1f}s")
     bodies_json = []
@@ -172,6 +188,8 @@ def run(args, rep: Reporter) -> int:
     t_fin = time.perf_counter()
     fin: dict = {}
     feats, groups, warnings = features.finalize(per_body, opts, tol_of, timing=fin)
+    if match is not None and args.body_map:
+        warnings.append({"code": "BODY_MAP_IGNORED", "message": "body map ignored: the assembly match is the only body/component correspondence"})
     timing["finalize_s"] = time.perf_counter() - t_fin
     timing.update(fin)
     info(f"naming/feasible/symmetry: {len(feats)} features, {len(groups)} groups {timing['finalize_s']:.1f}s")

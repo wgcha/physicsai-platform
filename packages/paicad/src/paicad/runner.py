@@ -16,6 +16,7 @@ from pathlib import Path
 from . import options
 from .check import CHECK_JSON
 from .common import CODE_CATEGORY, EXIT_INTERNAL, EXIT_OK, OutDir, PaicadError, Reporter, StageReporter, dumps, envelope, rnd
+from .meshsrc import NODE_XYZ, mesh_args
 from .morph import MORPH_JSON, MORPHED_INC
 from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON
 
@@ -25,13 +26,13 @@ STAGE_REPORT = {"update": UPDATE_JSON, "morph": MORPH_JSON, "check": CHECK_JSON}
 
 def _stage_args(args) -> list[tuple[str, argparse.Namespace, int, int]]:
     common = dict(options=args.options, threads=args.threads, _nested=True)
+    src = dict(baseline_inc=args.baseline_inc, asm_match=getattr(args, "asm_match", None), cache_dir=getattr(args, "cache_dir", None))
     u = argparse.Namespace(cmd="update", cad=args.cad, features=args.features, values=args.values, out_dir=args.update_dir, tag_dir=args.tag_dir, body_map=args.body_map, **common)
     m = argparse.Namespace(
-        cmd="morph", baseline_inc=args.baseline_inc, tag_dir=args.tag_dir, features=args.features, update_dir=args.update_dir, out_dir=args.morph_dir, solver=args.solver, sweep=False, **common
+        cmd="morph", assem_dir=args.assem_dir, tag_dir=args.tag_dir, features=args.features, update_dir=args.update_dir, out_dir=args.morph_dir, solver=args.solver, sweep=False, **src, **common
     )
     c = argparse.Namespace(
         cmd="check",
-        baseline_inc=args.baseline_inc,
         morph_dir=args.morph_dir,
         update_dir=args.update_dir,
         tag_dir=args.tag_dir,
@@ -41,6 +42,8 @@ def _stage_args(args) -> list[tuple[str, argparse.Namespace, int, int]]:
         renum_csv=args.renum_csv,
         out_dir=args.check_dir,
         out_inc=args.out_inc,
+        out_patch=getattr(args, "out_patch", None),
+        **src,
         **common,
     )
     return [("update", u, 2, 35), ("morph", m, 35, 70), ("check", c, 70, 97)]
@@ -51,11 +54,13 @@ def _precheck(args) -> None:
 
     options.load(args.options)
     get_writer(args.solver)
+    asm = mesh_args(args, ("baseline_inc", "renum_csv", "out_inc"), ("out_patch",)) == "M"
     existing = []
-    for d, names in ((args.update_dir, [UPDATE_JSON, SAMPLE_BREP, FACE_MAP_JSON]), (args.morph_dir, [MORPH_JSON, MORPHED_INC]), (args.check_dir, [CHECK_JSON, RUN_JSON])):
+    for d, names in ((args.update_dir, [UPDATE_JSON, SAMPLE_BREP, FACE_MAP_JSON]), (args.morph_dir, [MORPH_JSON, NODE_XYZ if asm else MORPHED_INC]), (args.check_dir, [CHECK_JSON, RUN_JSON])):
         existing += [n for n in names if (Path(d) / n).exists()]
-    if Path(args.out_inc).exists():
-        existing.append(Path(args.out_inc).name)
+    final = Path(args.out_patch if asm else args.out_inc)
+    if final.exists():
+        existing.append(final.name)
     if existing:
         raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {', '.join(existing[:10])}")
 
@@ -110,7 +115,8 @@ def run(args, rep: Reporter) -> int:
         message=fail["message"] if fail else None,
         stages=stages,
         skip=None if fail is None else {k: fail[k] for k in ("code", "category", "message", "step", "report")},
-        out_inc=Path(args.out_inc).name if not fail else None,
+        out_inc=Path(args.out_inc).name if not fail and args.out_inc else None,
+        **({"out_patch": Path(args.out_patch).name if not fail else None} if getattr(args, "asm_match", None) else {}),
         solver=args.solver or "radioss",
         elapsed_s=rnd(time.monotonic() - t0, 3),
     )

@@ -66,12 +66,16 @@ def components_from_tag(mesh: RadMesh, tag: TagData) -> list[Comp]:
         raise PaicadError("GEOM_INPUT_INVALID", "baseline has no /TETRA4 elements")
     ids = np.concatenate([b.ids for b in tet_blocks])
     conn = np.concatenate([b.conn for b in tet_blocks])
+    pid_of = np.concatenate([np.full(len(b.ids), b.part_id, dtype=np.int64) for b in tet_blocks])
     nidx = mesh.node_index()
     look = tag.lookup()
     out = []
     for k, p in enumerate(tag.doc.get("parts") or []):
         lo, hi = (int(x) for x in p["elem_range"])
-        sel = (ids >= lo) & (ids <= hi)
+        if p.get("pids"):  # assembly match (asm-match.md section 5.2): component = union of the PART blocks
+            sel = np.isin(pid_of, np.asarray(p["pids"], dtype=np.int64))
+        else:
+            sel = (ids >= lo) & (ids <= hi)
         if not sel.any():
             raise PaicadError("GEOM_INPUT_INVALID", f"component {p['part']}: no TETRA4 element in {lo}-{hi} (tag does not match the baseline)")
         e = ids[sel]

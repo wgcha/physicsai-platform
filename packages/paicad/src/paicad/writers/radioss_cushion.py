@@ -20,7 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from ..common import PaicadError
-from ..mesh.radioss import RenumRow, _ints, _node, components, parse_text
+from ..mesh.radioss import RenumRow, _ints, _node, components, is_node_keyword, parse_text, rewrite_node_line
 
 DEF_KINDS = ("PART", "PROP", "MAT")
 MESH_FILE_PREFIX = "eps_mesh"  # SimLab cushion mesh files are never sources (input-kind.md section 5.2)
@@ -151,9 +151,9 @@ def source_files(inc: Path, assem: Path, exclude: set[str]) -> list[Path]:
     return [inc] + rest
 
 
-def find_definitions(files: list[Path], pids: list[int]) -> tuple[dict[tuple[str, int], tuple[str, list[bytes]]], list[tuple[str, int]]]:
-    """First definition of each cushion PART and of the PROP/MAT ids it references.
-    Returns ({(kind, id): (file name, card lines)}, ordered wanted keys)."""
+def find_definitions(files: list, pids: list[int]) -> tuple[dict[tuple[str, int], tuple[str, list[bytes]]], list[tuple[str, int]]]:
+    """First definition of each cushion PART and of the PROP/MAT ids it references. ``files``: paths (label =
+    file name) or ``(label, path)`` pairs. Returns ({(kind, id): (label, card lines)}, ordered wanted keys)."""
     found: dict[tuple[str, int], tuple[str, list[bytes]]] = {}
     want_parts = [("PART", p) for p in pids]
 
@@ -171,15 +171,16 @@ def find_definitions(files: list[Path], pids: list[int]) -> tuple[dict[tuple[str
     def done() -> bool:
         return all(k in found for k in want_parts) and all(k in found for k in refs())
 
-    for f in files:
+    for item in files:
         if done():
             break
+        label, f = item if isinstance(item, tuple) else (item.name, item)
         lines = f.read_bytes().splitlines(keepends=True)
         eol = _eol_of(lines)
         for a, b in _card_ranges(lines):
             key = _def_key(_keyword(lines[a]))
             if key is not None and key not in found:
-                found[key] = (f.name, [_with_eol(ln, eol) for ln in lines[a:b]])
+                found[key] = (label, [_with_eol(ln, eol) for ln in lines[a:b]])
     wanted = want_parts + refs()
     return {k: found[k] for k in wanted if k in found}, wanted
 
@@ -279,3 +280,92 @@ def build(inc: Path, renum: list[RenumRow], assem: Path, out_name: str) -> Cushi
         for pid in pids
     ]
     return CushionRad(b"".join(out), len(node_lines), elem_count, parts, starter.name, def_sources, warnings)
+
+
+def build_asm(src, patch: dict[int, tuple[float, float, float]] | None, out_name: str) -> CushionRad:
+    """Assembly-match variant (asm-match.md section 5.5): same file layout as :func:`build` from the include
+    tree collection - matched pid ``/PART`` + referenced ``/PROP`` / ``/MAT`` (first definition in tree order),
+    the cushion node lines (tree order; with ``patch`` only the coordinate fields change, ids kept) and the
+    ``/TETRA4/<pid>`` blocks of the matched PARTs (tree order, lines kept)."""
+    idx = src.index
+    pids = sorted(src.pids)
+    body_of = {p: r["body"] for r in src.match.rows for p in r["pids"]}
+    for p in pids:
+        other = [b for b in idx.pid_blocks(p) if b.keyword != "TETRA4"]
+        if other:
+            raise PaicadError("GEOM_UNSUPPORTED_ELEMENT", f"component {body_of[p]}: non-TETRA4 elements in PART {p} (/{other[0].keyword})")
+    mesh = src.mesh
+    rows = idx.lookup(mesh.node_ids)
+    node_at: dict[int, set[int]] = {}
+    for fi, ln in zip(idx.node_file[rows].tolist(), idx.node_line[rows].tolist()):
+        node_at.setdefault(int(fi), set()).add(int(ln))
+    tet_at: dict[int, dict[int, int]] = {}
+    want_elems = 0
+    for b in idx.blocks:
+        if b.pid in src.pids and b.keyword == "TETRA4":
+            tet_at.setdefault(b.file, {})[b.line] = b.pid
+            want_elems += len(b.ids)
+    node_head: bytes | None = None
+    out_eol: bytes | None = None
+    node_lines: list[bytes] = []
+    tet_out: list[bytes] = []
+    part_elems: dict[int, int] = {}
+    elem_count = 0
+    for k, tf in enumerate(idx.files):
+        nl = node_at.get(k, set())
+        tl = tet_at.get(k, {})
+        if not nl and not tl:
+            continue
+        eol = None
+        last_node_kw: bytes | None = None
+        cur: int | None = None
+        with open(tf.path, "rb") as f:
+            for ln, raw in enumerate(f):
+                if eol is None and raw.endswith(b"\n"):
+                    eol = b"\r\n" if raw.endswith(b"\r\n") else b"\n"
+                e = eol or b"\n"
+                if raw.startswith(b"/") or _is_include(raw):
+                    cur = tl.get(ln) if raw.startswith(b"/") else None
+                    if raw.startswith(b"/") and is_node_keyword(raw):
+                        last_node_kw = raw
+                    if cur is not None:
+                        tet_out.append(_with_eol(raw, e))
+                    continue
+                if ln in nl:
+                    if node_head is None:
+                        node_head = _with_eol(last_node_kw or b"/NODE", e)
+                        out_eol = e
+                    node_lines.append(_with_eol(rewrite_node_line(raw, patch) if patch else raw, e))
+                elif cur is not None:
+                    tet_out.append(_with_eol(raw, e))
+                    if not (_is_comment(raw.lstrip()) or not raw.strip()):
+                        elem_count += 1
+                        part_elems[cur] = part_elems.get(cur, 0) + 1
+    if len(node_lines) != len(mesh.node_ids) or elem_count != want_elems:
+        raise PaicadError("GEOM_INTERNAL", f"cushion collection mismatch ({len(node_lines)}/{len(mesh.node_ids)} nodes, {elem_count}/{want_elems} elements)")
+    eol = out_eol or b"\n"
+    starter = idx.root / idx.starter
+    begin = begin_card(starter, Path(out_name).stem)
+    defs, wanted = find_definitions([(tf.rel, tf.path) for tf in idx.files], pids)
+    miss = [f"{kk}/{i}" for kk, i in wanted if (kk, i) not in defs]
+    warnings: list[dict] = []
+    if miss:
+        warnings.append({"code": WARN_DEF_MISSING, "message": "cushion part definitions not found in the include tree: " + ", ".join(miss), "names": miss})
+    def_sources: list[str] = []
+    for kk in wanted:
+        if kk in defs and defs[kk][0] not in def_sources:
+            def_sources.append(defs[kk][0])
+    out = [b"#RADIOSS STARTER" + eol, *begin]
+    for kind in DEF_KINDS:
+        for kk in wanted:
+            if kk[0] == kind and kk in defs:
+                out.extend(defs[kk][1])
+    out.append(node_head or b"/NODE" + eol)
+    out.extend(node_lines)
+    out.extend(tet_out)
+    out.append(b"/END" + eol)
+    parts = []
+    for p in pids:
+        conn = np.concatenate([b.conn for b in idx.pid_blocks(p)])
+        parts.append({"part": p, "components": [body_of[p]], "nodes": int(np.unique(conn).size), "elems": part_elems.get(p, 0), "part_def": ("PART", p) in defs})
+    return CushionRad(b"".join(out), len(node_lines), elem_count, parts, idx.starter, def_sources, warnings)
