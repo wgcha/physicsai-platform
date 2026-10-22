@@ -1,4 +1,4 @@
-"""결과 3D 컨투어 API(geometry-view.md §13.5·§13.6): 열 때 생성 — 캐시 적중 200 즉시, 아니면 202 + CONTOUR_3D(LIGHT) 작업.
+"""결과 3D 컨투어 API(geometry-view.md §13.5·§13.6): 열 때 생성 — 캐시 적중 200 즉시, 아니면 202 + CONTOUR_3D(CPU 대기열) 작업.
 
 원본: PREDICT_H3D = 성공한 PREDICT(`source_ref.job_id`, result.pred_h3d_rel), SOLVER_H3D = 조립 FEM 검증 결과(`fem_verification_id`,
 최신 시도 `a<n>/result`의 h3d 1개) 또는 Study 기준 `.h3d` 상대 경로(`h3d_rel`, ① run 결과 등). 표시 값 생략 = 기존 컨투어 표시 설정

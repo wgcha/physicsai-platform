@@ -45,7 +45,7 @@ def test_v_up_15_migration_chain_and_head():
     cfg = Config(str(REPO / "migrations" / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO / "migrations"))
     sd = ScriptDirectory.from_config(cfg)
-    assert sd.get_current_head() == MIGRATION_HEAD == "0021_uploads"
+    assert sd.get_current_head() == MIGRATION_HEAD == "0022_job_queues"
     assert sd.get_revision("0021_uploads").down_revision == "0020_mcp"
 
 
@@ -59,7 +59,7 @@ def test_v_up_15_migration_0021_up_down(pg_server):
     try:
         _alembic(url, "head")
         with eng.begin() as c:
-            assert c.execute(text("select version_num from alembic_version")).scalar() == "0021_uploads"
+            assert c.execute(text("select version_num from alembic_version")).scalar() == "0022_job_queues"
             sid = _study(c)
             ok = _upload(c, sid, total=5, files='[{"rel":"a","size":5,"done":false}]')
             assert c.execute(text("select state, inspect, backup_rel, completed_at from uploads where id=:i"), {"i": ok}).one() == ("OPEN", None, None, None)

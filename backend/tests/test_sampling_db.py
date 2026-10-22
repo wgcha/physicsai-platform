@@ -10,6 +10,8 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from lane_compat import LANE_SQL
 from sqlalchemy.exc import IntegrityError
 
 from physicsai_test_support import REPO
@@ -41,7 +43,7 @@ def _batch_fixture(c) -> dict:
                    " log_status, registered_by, registered_by_name) values (:i,:s,'m',1,'/x','r','r/a.psmdl',:h,1,'MISSING','u','u')"),
               {"i": mid, "s": sid, "h": "0" * 64})
     c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                   " created_by, created_by_name) values (:i,:s,'p-1','PREDICT_BATCH',4,'SLOT','QUEUED',false,1,"
+                   " created_by, created_by_name) values (:i,:s,'p-1','PREDICT_BATCH',4,"+LANE_SQL+",'QUEUED',false,1,"
                    " cast(:p as jsonb),'u','u')"), {"i": jid, "s": sid, "p": json.dumps({})})
     return {"s": sid, "p": ps, "m": mid, "j": jid}
 
@@ -69,7 +71,7 @@ def test_v3_s15_9_check_allows_ten_kinds_rejects_foo(engine):
 def test_v3_s15_9_migration_0012_keeps_existing_rows(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
+    assert MIGRATION_HEAD == "0022_job_queues"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

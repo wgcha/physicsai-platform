@@ -8,6 +8,8 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from lane_compat import LANE_SQL
 from sqlalchemy.exc import IntegrityError
 
 from physicsai_test_support import REPO
@@ -26,7 +28,7 @@ def _alembic(url: str, rev: str, down: bool = False) -> None:
 def _job(c, sid: str, job_type: str, params: dict, seq: int) -> str:
     jid = str(uuid.uuid4())
     c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                   " created_by, created_by_name) values (:i,:s,'p-1',:t,4,'SLOT','QUEUED',false,:q,cast(:p as jsonb),'u','u')"),
+                   " created_by, created_by_name) values (:i,:s,'p-1',:t,4,"+LANE_SQL+",'QUEUED',false,:q,cast(:p as jsonb),'u','u')"),
               {"i": jid, "s": sid, "t": job_type, "q": seq, "p": json.dumps(params)})
     return jid
 
@@ -40,7 +42,7 @@ def _fv(c, sid: str, no: int, **over) -> None:
 def test_v3_s16_4_migration_0013(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
+    assert MIGRATION_HEAD == "0022_job_queues"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
     name = f"physicsai_m13_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

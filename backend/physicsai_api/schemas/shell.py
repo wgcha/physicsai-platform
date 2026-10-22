@@ -12,7 +12,7 @@ from .jobs import JobSummary
 
 __all__ = [
     "StatusConfig", "StatusWorker", "StatusHpc", "KeyOk", "TemplateConfigured", "StatusLimits", "ResourceStatus",
-    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusAlgoDefaults", "StatusSurrogateOpt", "StatusUpload", "StatusResponse", "QueueSlot", "QueueLight",
+    "FeatureState", "StatusFeatures", "StatusEnvCheck", "StatusCapture", "StatusCaptureEstimate", "StatusSurrogateDefaults", "StatusAlgoDefaults", "StatusSurrogateOpt", "StatusUpload", "StatusResponse", "QueueSlot", "QueueLight", "QueueGpu", "QueueCpu",
     "QueueResponse", "MoveRequest", "GpuInfo", "ResourceJob", "ResourceLimits", "ResourcesResponse",
     "Notification", "NotificationList", "UnreadCount", "ReadRequest", "ReadResponse", "AdminConfig",
 ]
@@ -213,10 +213,31 @@ class QueueLight(Resp):
     queued: list[JobSummary]
 
 
-class QueueResponse(Resp):
-    slot: QueueSlot
-    running: JobSummary | None = None
+class QueueGpu(Resp):
+    """GPU 대기열(job-queues.md JQ-2): 동시 1개 고정. 순번(`queue_position`)은 이 대기열 안."""
+
+    limit: int
+    running: list[JobSummary]
     queued: list[JobSummary]
+    since: datetime | None = None
+
+
+class QueueCpu(Resp):
+    """CPU 대기열(JQ-6): 동시 상한 `limit`(설정 worker.queues.cpu.max_concurrent). memory_gate = 워커 마지막 하트비트의 여유 메모리 판정."""
+
+    limit: int
+    running: list[JobSummary]
+    queued: list[JobSummary]
+    min_free_memory_gb: float
+    memory_gate: Literal["ok", "low"] | None = None
+
+
+class QueueResponse(Resp):
+    gpu: QueueGpu
+    cpu: QueueCpu
+    slot: QueueSlot = Field(description="deprecated: GPU 슬롯(= gpu). 다음 깨지는 릴리스에서 정리")
+    running: JobSummary | None = Field(default=None, description="deprecated: gpu.running[0] ?? cpu.running[0] ?? null")
+    queued: list[JobSummary] = Field(description="deprecated: GPU·CPU 대기를 queue_seq 순으로 합친 목록(순번은 각 대기열 안)")
     light: QueueLight
     waiting_hpc: list[JobSummary]
     collecting: list[JobSummary]
@@ -237,6 +258,7 @@ class ResourceJob(Resp):
     job_id: str
     cpu_time_s: float | None = None
     peak_memory_gb: float | None = None
+    lane: str | None = None  # 그 작업이 쥔 대기열 CPU|GPU(job-queues.md §8.1)
 
 
 class ResourceLimits(Resp):
@@ -245,6 +267,8 @@ class ResourceLimits(Resp):
     memory_gb: float | None = None
     priority: str | None = None
     cpu_cap_enforced: bool = False
+    cpu_max_concurrent: int | None = None  # job-queues.md §8.1: CPU 대기열 동시 상한(워커 유효 값)
+    total_cap: Literal["nested", "share", "off"] | None = None  # 전체 자원 상한 방식: 부모 Job 중첩·작업당 몫·없음
 
 
 class ResourcesResponse(Resp):
@@ -260,7 +284,8 @@ class ResourcesResponse(Resp):
     gpu_fail_streak: int | None = None
     gpu_sampled_at: datetime | str | None = None
     gpu_next_query_at: datetime | str | None = None
-    job: ResourceJob | None = None
+    job: ResourceJob | None = None  # 기존: GPU 작업 우선 1건
+    jobs: list[ResourceJob] = Field(default_factory=list)  # 실행 중인 슬롯 작업 전부(옛 표본은 빈 목록)
     limits: ResourceLimits
 
 

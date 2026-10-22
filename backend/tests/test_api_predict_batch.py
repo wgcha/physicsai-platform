@@ -410,7 +410,7 @@ def test_v3_s9_cancel_batch(client, loaded_config, worker_factory, engine):
     bid = job["params"]["batch_id"]
     kids = _gen_done(engine, ai, "S1", bid)
     with engine.begin() as conn:
-        conn.execute(text("update jobs set state='RUNNING', holds_slot=true, queue_seq=null, started_at=now() where id=:i"), {"i": kids[0]["id"]})
+        conn.execute(text("update jobs set state='RUNNING', holds_slot=true, lane='GPU', queue_seq=null, started_at=now() where id=:i"), {"i": kids[0]["id"]})
     r = client.post(f"{API}/predict-batches/{bid}/cancel", headers=AW)                    # 관리자
     assert r.status_code == 202 and r.json()["can_cancel"] is False
     k0 = client.get(f"{API}/jobs/{kids[0]['id']}", headers=P).json()

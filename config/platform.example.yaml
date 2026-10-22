@@ -89,6 +89,14 @@ worker:
   resource_sample_interval_s: 10
   env_passthrough: []             # Altair 자식 프로세스에 추가로 넘길 환경변수 이름 패턴(fnmatch). DB URL·비밀은 항상 제외
   state_dir: "./state"            # 단일 인스턴스 잠금 파일 위치
+  # 작업 대기열(job-queues.md): GPU 작업(PhysicsAI 추론 step)은 동시에 1개(설정 키 없음), CPU 작업은 아래 한도 안에서 대기 없이 병렬.
+  # 기본값이면 쓰지 않아도 된다(재시작 없이 다음 수령부터 적용).
+  # queues:
+  #   cpu:
+  #     max_concurrent: 4           # CPU 작업 동시 실행 상한(1~16)
+  #     min_free_memory_gb: 8       # 수령 시 시스템 여유 메모리 문(0 = 검사 안 함, 명시하면 max_memory_gb 미만)
+  #   total_cap: true               # 워커 부모 Job Object로 전체 자원 상한(false면 작업당 몫으로 나눔)
+  #   step_resource: {}             # 현장 보정(LOCAL step 키: cpu|gpu), 예 {CONTOUR_CAPTURE: gpu}
   # GPU 조회 argv(제한기 밖, gpu_query_timeout_s). 첫 인자를 못 찾으면 resources.gpu_query_candidates로 자동 탐색(D3-45)
   gpu_query: ["nvidia-smi", "--query-gpu=name,utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"]
   gpu_query_timeout_s: 15         # nvidia-smi 조회 제한 시간(1~120초, 워커 GPU 조회·환경 점검 gpu.detect 공통)

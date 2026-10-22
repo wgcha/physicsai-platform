@@ -143,7 +143,8 @@ class JobPlan(Resp):
     runs: int | None = None
     parallel: int | None = None
     lane: str | None = None
-    uses_global_slot: bool = False
+    uses_global_slot: bool = False  # deprecated: 그 종류에 GPU step이 있음(job-queues.md §8.3)
+    segments: list[str] = Field(default_factory=list, description="구간 흐름(소문자) 예 PREDICT = [cpu, gpu, cpu]")
     hpc_jobs: int = 0
     estimate_min: float | None = None
     estimate_basis: Literal["recent_median", "none"] = "none"
@@ -219,6 +220,9 @@ class Summary(Resp):
 class SystemStatus(Resp):
     queue_head: list[dict[str, Any]]
     slot_holder_job_id: str | None = None
+    gpu_holder_job_id: str | None = None  # job-queues.md §8.3: slot_holder_job_id와 같음(GPU 슬롯)
+    cpu_running: int = 0
+    cpu_limit: int | None = None
     worker_online: bool
     config_ok: bool
     hpc_mode: str | None = None

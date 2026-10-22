@@ -178,6 +178,8 @@ def job_summary(j: dict[str, Any], study_title: str | None, position: int | None
         "progress_pct": j["progress_pct"], "progress_label": j["progress_label"],
         "cancel_requested": j["cancel_requested_at"] is not None, "created_at": j["created_at"],
         "started_at": j["started_at"], "batch": job_batch_ref(j),
+        # job-queues.md §8.1: 구간 전환(T17)·PBS 회수 뒤 다시 선 대기 = 이미 시작한 QUEUED 작업
+        "resumed": j["state"] == "QUEUED" and j.get("started_at") is not None,
     }
 
 

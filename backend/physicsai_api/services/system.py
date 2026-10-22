@@ -119,8 +119,10 @@ def resources(ctx: AppContext) -> dict[str, Any]:
     r["limits"] = {
         "cores": eff.get("cores"), "cpu_rate": eff.get("cpu_rate"), "memory_gb": eff.get("memory_gb"),
         "priority": eff.get("priority"), "cpu_cap_enforced": bool(eff.get("cpu_cap_enforced")),
+        "cpu_max_concurrent": eff.get("cpu_max_concurrent"), "total_cap": eff.get("total_cap"),  # job-queues.md §8.1(옛 워커는 null)
     }
     r.setdefault("gpu", [])
+    r.setdefault("jobs", [])
     return r
 
 

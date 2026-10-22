@@ -10,6 +10,8 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from lane_compat import LANE_SQL
 from sqlalchemy.exc import IntegrityError
 
 from physicsai_test_support import REPO
@@ -51,7 +53,7 @@ def _fixture(c) -> dict:
     c.execute(text("insert into studies(id, project_id, folder_name, title, ai_root_snapshot, created_by, created_by_name)"
                    " values (:i,'p-1',:f,'t','/x','u','u')"), {"i": sid, "f": "S18" + sid[:8]})
     c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                   " created_by, created_by_name) values (:i,:s,'p-1','TD_DOE_GEN',1,'SLOT','SUCCEEDED',false,null,"
+                   " created_by, created_by_name) values (:i,:s,'p-1','TD_DOE_GEN',1,"+LANE_SQL+",'SUCCEEDED',false,null,"
                    " cast(:p as jsonb),'u','u')"), {"i": jid, "s": sid, "p": json.dumps({})})
     _doe(c, sid, jid, did)
     return {"s": sid, "j": jid, "d": did}
@@ -60,7 +62,7 @@ def _fixture(c) -> dict:
 def test_v3_s18_3_migration_0015_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"  # native 0016이 0015 다음 — 0015까지만 올려 왕복 확인
+    assert MIGRATION_HEAD == "0022_job_queues"  # native 0016이 0015 다음 — 0015까지만 올려 왕복 확인
     name = f"physicsai_m15_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

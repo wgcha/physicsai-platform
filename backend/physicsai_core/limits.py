@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import os
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from typing import Any
 
 
@@ -50,6 +50,14 @@ def compute_limits(
     eff_cores = max(1, eff_cores)
     cpu_rate = max(100, min(10000, math.floor(eff_cores / max(1, detected_cores) * 10000)))
     return EffectiveLimits(eff_cores, cpu_rate, round(eff_mem, 3), priority, detected_cores, round(detected_mem_gb, 3))
+
+
+def share_limits(limits: EffectiveLimits, parts: int) -> EffectiveLimits:
+    """작업당 몫(job-queues.md JQ-7 폴백): 코어 `max(1, floor(cores/parts))`·메모리 `memory_gb/parts`. parts = 동시 작업 수(CPU N + GPU 1)."""
+    n = max(1, int(parts))
+    cores = max(1, math.floor(limits.cores / n))
+    cpu_rate = max(100, min(10000, math.floor(cores / max(1, limits.detected_cores) * 10000)))
+    return replace(limits, cores=cores, cpu_rate=cpu_rate, memory_gb=round(limits.memory_gb / n, 3))
 
 
 def limits_from_settings(worker_cfg: Any, detected: tuple[int, float] | None = None) -> EffectiveLimits:

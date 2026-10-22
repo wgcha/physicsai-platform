@@ -39,7 +39,7 @@
 | JQ-5 | 재진입 순번 = **원래 등록 순번**(`jobs.queue_origin_seq`, T1에서 고정). 재진입 작업은 뒤에 등록된 작업보다 앞에 선다. T14(PBS 회수 후)는 2026-10-07 결정대로 맨 뒤 유지 |
 | JQ-6 | CPU 슬롯 = 개수 상한 `worker.queues.cpu.max_concurrent`(기본 **4**, 1~16, 2026-10-22 사용자 결정) + 수령 시 여유 메모리 문 `cpu.min_free_memory_gb`(기본 8). 넘으면 CPU 대기열에서 대기 |
 | JQ-7 | 전체 자원 상한 = 워커 **부모 Job Object**(기존 `max_logical_cores`·`max_memory_gb`), step Job Object는 그 안에 중첩. 중첩 불가 시 작업당 몫(코어·메모리 ÷ (N+1))으로 폴백 + 환경 점검 경고 |
-| JQ-8 | LIGHT·PREVIEW 레인은 **그대로**(CPU 상한에 세지 않음). 화면에서는 CPU 대기열 아래 "가벼운 작업"으로 묶어 표시 |
+| JQ-8 | LIGHT·PREVIEW 레인은 **그대로**(CPU 상한에 세지 않음). 화면에서는 CPU 대기열 아래 "가벼운 작업"으로 묶어 표시. **변경 메모(2026-10-22 사용자 결정)**: `CONTOUR_3D`(C3_* step)는 LIGHT가 아니라 **CPU 대기열**(구간 레인 SLOT, 동시 `cpu.max_concurrent`에 센다)에서 실행한다 — 환경 점검·그 밖 LIGHT 종류는 LIGHT 유지. migration 0022가 대기 중인 옛 LIGHT `CONTOUR_3D` 행을 CPU로 옮긴다(downgrade는 되돌림). `geometry-view.md` §13.5의 "LIGHT 레인" 서술은 통합 때 고친다 |
 | JQ-9 | 워커 프로세스 1개 유지. 스레드: `gpu-slot`(1) + `cpu-slot0..N-1`. GPU 구간은 `gpu-slot` 스레드에서만 실행(프로세스 안 이중 직렬화) |
 | JQ-10 | DB: `jobs.lane` = **현재 대기열**(`CPU|GPU|LIGHT|PREVIEW`), `worker_slot`(id=1)은 **GPU 슬롯**으로 재사용, `holds_slot = (RUNNING AND lane='GPU')`. migration `0022_job_queues` |
 | JQ-11 | `JobTypeDef.lane`(정적 분류 SLOT·LIGHT·PREVIEW)은 바꾸지 않는다 — SLOT = "구간 레인(CPU·GPU 전환)". 용어집·MCP 레지스트리 변경 최소 |

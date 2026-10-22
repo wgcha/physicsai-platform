@@ -1,4 +1,7 @@
-"""작업 lease 저장소(§11.2): claim(SLOT·LIGHT·COLLECTING)·renew(CAS lease).
+"""작업 lease 저장소(§11.2): claim(GPU·CPU·LIGHT·PREVIEW·COLLECTING)·renew(CAS lease).
+
+job-queues.md: 전역 SLOT 레인을 GPU 슬롯 1개(`claim_gpu` — 기존 worker_slot 행 잠금 + generation CAS)와 CPU 슬롯 N개
+(`claim_cpu` — advisory lock + 실행 수 상한)로 나눴다. `jobs.lane`은 현재 대기열이고 T17이 경계에서 바꾼다.
 
 SQL·CAS 조건은 repositories/jobs.py에서 그대로 옮겼다(refactor-plan R9). 300줄 분할(R12)로 종료 전이·리퍼는
 `job_lease_end.py`, lease 토큰으로 지키는 기록은 `lease_guard.py`로 나눴고, 기존 이름은 여기서 재노출한다
@@ -59,10 +62,10 @@ def _mark_started(conn: Connection, job_id: str, env_snapshot: dict[str, Any] | 
         )
 
 
-def claim_slot(
+def claim_gpu(
     conn: Connection, worker_id: str, ttl_s: float, env_snapshot: dict[str, Any] | None = None
 ) -> dict[str, Any] | None:
-    """SLOT 레인 claim(T2). 호출자가 트랜잭션을 연다(conn.begin())."""
+    """GPU 대기열 claim(T2). 슬롯 1개(worker_slot id=1 `FOR UPDATE` + generation CAS). 호출자가 트랜잭션을 연다(conn.begin())."""
     slot = conn.execute(select(worker_slot).where(worker_slot.c.id == 1).with_for_update()).one()
     if slot.lease_token is not None:
         alive = conn.execute(select(literal_column("1")).where(slot.lease_expires_at > func.now())).first()
@@ -77,13 +80,7 @@ def claim_slot(
             .where(worker_slot.c.id == 1)
             .values(holder_job_id=None, lease_owner_id=None, lease_token=None, lease_acquired_at=None, lease_expires_at=None)
         )
-    target = conn.execute(
-        select(jobs.c.id, jobs.c.version, jobs.c.started_at)
-        .where(and_(jobs.c.state == QUEUED, jobs.c.lane == "SLOT", jobs.c.cancel_requested_at.is_(None)))
-        .order_by(jobs.c.queue_seq)
-        .limit(1)
-        .with_for_update(skip_locked=True)
-    ).first()
+    target = _pick_target(conn, "GPU")
     if target is None:
         return None
     check_transition(QUEUED, RUNNING)
@@ -95,12 +92,74 @@ def claim_slot(
         .where(and_(worker_slot.c.id == 1, worker_slot.c.lease_generation == slot.lease_generation))
         .values(holder_job_id=target.id, **lv)
     )
-    r2 = conn.execute(
+    r2 = _start(conn, target, holds_slot=True, lv=lv)
+    if r1.rowcount != 1 or r2.rowcount != 1:
+        raise ClaimRace()
+    return _after_claim(conn, target, env_snapshot)
+
+
+CPU_CLAIM_LOCK = 7_317_018  # pg_advisory_xact_lock 키(CPU 대기열 claim 직렬화 — 실행 수 검사와 claim 사이 경합 차단, JQ-6)
+CPU_LOCK_ENABLED = True  # 시험 전용 우회(V-JQ-4 대조군: 잠금 없이는 상한을 넘는 경합이 재현된다). 운영 코드는 바꾸지 않는다
+
+
+def claim_cpu(
+    conn: Connection, worker_id: str, ttl_s: float, max_concurrent: int, env_snapshot: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    """CPU 대기열 claim(T2): 실행 중 CPU 작업 < max_concurrent일 때 최소 queue_seq. 슬롯 행 없음(holds_slot=false) — 개수는 RUNNING 행 수.
+    메모리 문(`cpu.min_free_memory_gb`)은 워커가 호출 전에 검사한다. 호출자가 트랜잭션을 연다."""
+    if CPU_LOCK_ENABLED:
+        conn.execute(select(func.pg_advisory_xact_lock(CPU_CLAIM_LOCK)))
+    running = conn.execute(
+        select(func.count()).select_from(jobs).where(and_(jobs.c.state == RUNNING, jobs.c.lane == "CPU"))
+    ).scalar() or 0
+    if running >= max(1, int(max_concurrent)):
+        return None
+    target = _pick_target(conn, "CPU")
+    if target is None:
+        return None
+    check_transition(QUEUED, RUNNING)
+    lv = _lease_values(worker_id, secrets.token_urlsafe(32), int(target.lease_generation) + 1, ttl_s)
+    r = _start(conn, target, holds_slot=False, lv=lv)
+    if r.rowcount != 1:
+        raise ClaimRace()
+    return _after_claim(conn, target, env_snapshot)
+
+
+def claim_next_slot(
+    conn: Connection, worker_id: str, ttl_s: float, cpu_limit: int, env_snapshot: dict[str, Any] | None = None
+) -> dict[str, Any] | None:
+    """시험·개발용: GPU·CPU 대기열 중 가장 앞선(queue_seq 최소) 작업부터 claim — 앞 대기열이 막혔으면(GPU 슬롯 사용 중·CPU 상한) 다음.
+    운영 워커는 gpu-slot·cpu-slot 스레드가 `claim_gpu`·`claim_cpu`를 따로 부른다."""
+    heads = conn.execute(
+        select(jobs.c.lane, func.min(jobs.c.queue_seq).label("seq"))
+        .where(and_(jobs.c.state == QUEUED, jobs.c.lane.in_(["CPU", "GPU"]), jobs.c.cancel_requested_at.is_(None)))
+        .group_by(jobs.c.lane)
+        .order_by(func.min(jobs.c.queue_seq))
+    ).all()
+    for h in heads:
+        job = claim_gpu(conn, worker_id, ttl_s, env_snapshot) if h.lane == "GPU" else claim_cpu(conn, worker_id, ttl_s, cpu_limit, env_snapshot)
+        if job is not None:
+            return job
+    return None
+
+
+def _pick_target(conn: Connection, lane: str) -> Any:
+    return conn.execute(
+        select(jobs.c.id, jobs.c.version, jobs.c.started_at, jobs.c.lease_generation)
+        .where(and_(jobs.c.state == QUEUED, jobs.c.lane == lane, jobs.c.cancel_requested_at.is_(None)))
+        .order_by(jobs.c.queue_seq)
+        .limit(1)
+        .with_for_update(skip_locked=True)
+    ).first()
+
+
+def _start(conn: Connection, target: Any, *, holds_slot: bool, lv: dict[str, Any]) -> Any:
+    return conn.execute(
         update(jobs)
         .where(and_(jobs.c.id == target.id, jobs.c.state == QUEUED, jobs.c.version == target.version))
         .values(
             state=RUNNING,
-            holds_slot=True,
+            holds_slot=holds_slot,
             queue_seq=None,
             started_at=func.coalesce(jobs.c.started_at, func.now()),
             updated_at=func.now(),
@@ -108,10 +167,11 @@ def claim_slot(
             **lv,
         )
     )
-    if r1.rowcount != 1 or r2.rowcount != 1:
-        raise ClaimRace()
+
+
+def _after_claim(conn: Connection, target: Any, env_snapshot: dict[str, Any] | None) -> dict[str, Any] | None:
     _mark_started(conn, target.id, env_snapshot)
-    if target.started_at is None:
+    if target.started_at is None:  # JQ-14: 첫 시작 전만 — T17 재진입은 알림 없음
         notif_repo.notify_job(conn, target.id, "JOB_STARTED")
     notif_repo.recompute_my_turn(conn)
     return get_job(conn, target.id)

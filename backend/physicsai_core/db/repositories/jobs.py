@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from ...errors import DomainError
 from ...job_types import JOB_TYPES
+from ...queues import initial_lane
 from ...request_context import current_api_token_id, note_created_job
 from ...state_machine import (
     CANCELED,
@@ -54,6 +55,9 @@ def insert_job(
     check_transition(None, QUEUED)
     jt = JOB_TYPES[job_type]
     job_id = job_id or str(uuid.uuid4())
+    # job-queues.md §3.3: 초기 대기열(CPU|GPU|LIGHT|PREVIEW). 현장 보정(step_resource)이 달라도 executor가 경계에서 바로잡는다
+    lane = initial_lane(job_type, params, resume_from_step)
+    seq = conn.execute(select(job_queue_seq.next_value())).scalar_one()
     sp = conn.begin_nested()
     try:
         conn.execute(
@@ -63,10 +67,11 @@ def insert_job(
                 project_id=study["project_id"],
                 job_type=job_type,
                 stage=jt.stage,
-                lane=jt.lane,
+                lane=lane,
                 state=QUEUED,
                 holds_slot=False,
-                queue_seq=job_queue_seq.next_value(),
+                queue_seq=seq,
+                queue_origin_seq=seq,  # JQ-5: T17 재진입 순번(이동 때만 갱신)
                 queued_at=func.now(),
                 params=params,
                 result=result,
@@ -226,26 +231,29 @@ def request_cancel(conn: Connection, job_id: str, user_id: str) -> dict[str, Any
 
 
 def move_in_queue(conn: Connection, job_id: str, position: int) -> None:
-    """§7.3: SLOT 레인 QUEUED 전부를 잠그고 원하는 순서대로 queue_seq 재부여."""
+    """job-queues.md JQ-13·§8.1: 대상 작업이 지금 서 있는 대기열(GPU 또는 CPU) 안에서만 이동. 그 대기열 QUEUED 전부를 잠그고
+    원하는 순서대로 queue_seq와 queue_origin_seq를 함께 다시 부여한다(이후 T17 재진입에도 바뀐 순서 유지)."""
+    job = get_job(conn, job_id)
+    if job is None:
+        raise DomainError("NOT_FOUND", "작업을 찾을 수 없습니다", status=404)
+    lane = job["lane"]
+    if job["state"] != QUEUED or lane not in ("GPU", "CPU"):
+        raise DomainError("JOB_NOT_QUEUED", "대기 중인 GPU·CPU 작업만 순서를 바꿀 수 있습니다", status=409)
     rows = conn.execute(
-        select(jobs.c.id, jobs.c.state, jobs.c.lane)
-        .where(and_(jobs.c.state == QUEUED, jobs.c.lane == "SLOT"))
+        select(jobs.c.id)
+        .where(and_(jobs.c.state == QUEUED, jobs.c.lane == lane))
         .order_by(jobs.c.queue_seq)
         .with_for_update()
     ).all()
     ids = [r.id for r in rows]
-    if job_id not in ids:
-        job = get_job(conn, job_id)
-        if job is None:
-            raise DomainError("NOT_FOUND", "작업을 찾을 수 없습니다", status=404)
-        raise DomainError("JOB_NOT_QUEUED", "대기 중인 SLOT 작업만 순서를 바꿀 수 있습니다", status=409)
+    if job_id not in ids:  # 조회와 잠금 사이에 시작·취소됨
+        raise DomainError("JOB_NOT_QUEUED", "대기 중인 GPU·CPU 작업만 순서를 바꿀 수 있습니다", status=409)
     ids.remove(job_id)
     pos = max(1, min(position, len(ids) + 1))
     ids.insert(pos - 1, job_id)
     for jid in ids:
-        conn.execute(
-            update(jobs).where(jobs.c.id == jid).values(queue_seq=job_queue_seq.next_value(), version=jobs.c.version + 1)
-        )
+        seq = conn.execute(select(job_queue_seq.next_value())).scalar_one()
+        conn.execute(update(jobs).where(jobs.c.id == jid).values(queue_seq=seq, queue_origin_seq=seq, version=jobs.c.version + 1))
     notif_repo.recompute_my_turn(conn)
 
 

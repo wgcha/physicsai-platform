@@ -8,6 +8,8 @@ import uuid
 
 import pytest
 from sqlalchemy import create_engine, text
+
+from lane_compat import LANE_SQL
 from sqlalchemy.exc import IntegrityError
 
 from physicsai_test_support import REPO
@@ -55,7 +57,7 @@ def _model(c, sid) -> str:
 def _job(c, sid, job_type="PREDICT", params="{}", seq=1) -> str:
     jid = str(uuid.uuid4())
     c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                   " created_by, created_by_name) values (:i,:s,'p-1',:t,4,'SLOT','QUEUED',false,:q,cast(:p as jsonb),'u','u')"),
+                   " created_by, created_by_name) values (:i,:s,'p-1',:t,4,"+LANE_SQL+",'QUEUED',false,:q,cast(:p as jsonb),'u','u')"),
               {"i": jid, "s": sid, "t": job_type, "p": params, "q": seq})
     return jid
 
@@ -63,7 +65,7 @@ def _job(c, sid, job_type="PREDICT", params="{}", seq=1) -> str:
 def test_upgrade_keeps_rows_assembly_and_allows_mesh_only(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"
+    assert MIGRATION_HEAD == "0022_job_queues"
     name = f"physicsai_m7_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

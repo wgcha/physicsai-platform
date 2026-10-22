@@ -19,7 +19,7 @@ def test_migration_head_constant_matches_script():
 
     cfg = Config(str(REPO / "migrations" / "alembic.ini"))
     cfg.set_main_option("script_location", str(REPO / "migrations"))
-    assert ScriptDirectory.from_config(cfg).get_current_head() == MIGRATION_HEAD == "0021_uploads"
+    assert ScriptDirectory.from_config(cfg).get_current_head() == MIGRATION_HEAD == "0022_job_queues"
 
 
 def test_upgrade_head_and_metadata_in_sync(engine):
@@ -57,7 +57,7 @@ def _study(c):
 def _job(c, sid):
     jid = str(uuid.uuid4())
     c.execute(text("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, queue_seq, params,"
-                   " created_by, created_by_name) values (:i,:s,'p-1','TD_DOE_GEN',1,'SLOT','QUEUED',false,1,'{}','u','u')"),
+                   " created_by, created_by_name) values (:i,:s,'p-1','TD_DOE_GEN',1,'CPU','QUEUED',false,1,'{}','u','u')"),
               {"i": jid, "s": sid})
     return jid
 

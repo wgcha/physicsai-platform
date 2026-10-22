@@ -55,6 +55,8 @@ jobs = Table(
     Column("attention_code", String, nullable=True),
     Column("holds_slot", Boolean, nullable=False, server_default=text("false")),
     Column("queue_seq", BigInteger, nullable=True),
+    # job-queues.md JQ-5: T1에서 queue_seq와 같은 값으로 고정 — T17 재진입은 이 값으로 원래 순번에 다시 선다(0022_job_queues)
+    Column("queue_origin_seq", BigInteger, nullable=True),
     Column("next_notified_at", TS, nullable=True),
     Column("queued_at", TS, nullable=True),
     Column("started_at", TS, nullable=True),
@@ -83,13 +85,14 @@ jobs = Table(
     Column("updated_at", TS, nullable=False, server_default=func.now()),
     Column("version", BigInteger, nullable=False, server_default="1"),
     Column("api_token_id", ID, nullable=True),  # mcp.md §14: 토큰 요청으로 만든 작업(FK 없음, 0020_mcp)
-    CheckConstraint("lane IN ('SLOT','LIGHT','PREVIEW')", name="ck_jobs_lane"),  # PREVIEW: geometry-view.md §6.2(0017_geom_view)
+    # lane = 현재 대기열(job-queues.md JQ-10, 0022_job_queues): CPU·GPU = 슬롯 구간, LIGHT·PREVIEW = 기존 레인(geometry-view.md §6.2)
+    CheckConstraint("lane IN ('CPU','GPU','LIGHT','PREVIEW')", name="ck_jobs_lane"),
     CheckConstraint("stage BETWEEN 0 AND 5", name="ck_jobs_stage"),
     CheckConstraint(
         "state IN ('QUEUED','RUNNING','WAITING_HPC','COLLECTING','SUCCEEDED','FAILED','CANCELED','INTERRUPTED')",
         name="ck_jobs_state",
     ),
-    CheckConstraint("holds_slot = (state = 'RUNNING' AND lane = 'SLOT')", name="ck_jobs_holds_slot"),
+    CheckConstraint("holds_slot = (state = 'RUNNING' AND lane = 'GPU')", name="ck_jobs_holds_slot"),  # worker_slot = GPU 슬롯
     CheckConstraint("(queue_seq IS NOT NULL) = (state = 'QUEUED')", name="ck_jobs_queue_seq"),
     CheckConstraint(
         "(lease_owner_id IS NULL AND lease_token IS NULL AND lease_acquired_at IS NULL AND lease_expires_at IS NULL)"
