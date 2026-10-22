@@ -201,7 +201,8 @@ def _platform_out(conn: Any, d: dict[str, Any]) -> dict[str, Any]:
     """S18 §23.4: generator·sampling{kind, label, desc_id, meta}·gen(run별 생성 집계) — 플랫폼 DOE만 sampling·gen."""
     if d.get("generator") != "PLATFORM":
         return {"generator": "hyperstudy", "sampling": None, "gen": None}
-    if d.get("engine") == "native":  # native(geometry-engine.md §7.3.3) = 플랫폼 생성의 한 경로. 표본은 NATIVE_LHS, run별 점 표 없음
+    native = d.get("engine") == "native"
+    if native and d["doe_type"] == sampling_registry.DOE_TYPE_NATIVE_LHS:  # native(geometry-engine.md §7.3.3) = 플랫폼 생성의 한 경로. 표본은 NATIVE_LHS, run별 점 표 없음
         return {"generator": "platform", "sampling": None, "gen": None}
     sp = d.get("sampling") or {}
     kind = str(sp.get("kind") or sampling_registry.kind_of_source(d["doe_type"]) or "")
@@ -209,7 +210,7 @@ def _platform_out(conn: Any, d: dict[str, Any]) -> dict[str, Any]:
     return {"generator": "platform",
             "sampling": {"kind": kind, "label": label, "desc_id": sampling_registry.platform_desc_id(kind),
                          "meta": sp.get("meta")},
-            "gen": train_repo.point_counts(conn, d["id"])}
+            "gen": None if native else train_repo.point_counts(conn, d["id"])}  # native는 run별 점 표 없음(doe-methods.md §5.1)
 
 
 def list_does(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:

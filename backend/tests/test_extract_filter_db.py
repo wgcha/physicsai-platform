@@ -25,7 +25,7 @@ def _alembic(url: str, rev: str, down: bool = False) -> None:
 def test_migration_0019_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0021_uploads"
+    assert MIGRATION_HEAD == "0023_doe_methods"
     name = f"physicsai_m19_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

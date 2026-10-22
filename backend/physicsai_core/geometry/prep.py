@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from ..fileutil import sha256_file as _sha256_file
+from .asm_match import ASM_MATCH_REL, is_matched
 from .options import tag_options_sha256
 from .reports import same_major_minor
 from .shell import PROPS_JSON, SHELL_ONLY_KEY
@@ -66,6 +67,8 @@ def input_hashes(S: str, step_exts: list[str], mesh_include_name: str, renum_csv
     """prep.json `inputs`(§4.2): step·baseline_inc·renum_csv·body_map. 파일이 없으면 해당 sha256은 None.
     assem_dir: 조립 폴더가 S/radioss_assem이 아닌 곳에 있을 때(①-3 DOE의 D 기준 준비본)."""
     assem = assem_dir or os.path.join(S, "radioss_assem")
+    if is_matched(S):  # 조립 매칭 세트(asm-match.md §6.4): 기준본·RENUM 파일 대신 확정본 sha256 + include 트리 digest
+        return matched_input_hashes(S, step_exts, assem)
     bm = os.path.join(S, "cad", "body_map.json")
 
     def one(name: str) -> dict[str, Any]:
@@ -74,6 +77,16 @@ def input_hashes(S: str, step_exts: list[str], mesh_include_name: str, renum_csv
 
     return {"step": cad_inputs(S, step_exts), "baseline_inc": one(mesh_include_name), "renum_csv": one(renum_csv_name),
             "body_map": {"rel": "cad/body_map.json", "sha256": sha256_file(bm)} if os.path.isfile(bm) else None}
+
+
+def matched_input_hashes(S: str, step_exts: list[str], assem_dir: str) -> dict[str, Any]:
+    """조립 매칭 세트 prep.json `inputs`(asm-match.md §6.4): step + `asm_match{rel,sha256}` + `assem_digest`(include 트리).
+    baseline_inc·renum_csv = null, body_map = null(BODY_MAP_IGNORED — 확정본이 유일한 대응)."""
+    from .asm_tree import digest_of
+
+    return {"step": cad_inputs(S, step_exts), "baseline_inc": None, "renum_csv": None, "body_map": None,
+            "asm_match": {"rel": ASM_MATCH_REL, "sha256": sha256_file(os.path.join(S, *ASM_MATCH_REL.split("/")))},
+            "assem_digest": digest_of(assem_dir)}
 
 
 def shell_input_hashes(S: str, step_exts: list[str], assem_dir: str | None = None) -> dict[str, Any]:
@@ -140,7 +153,8 @@ def prep_state(S: str, *, step_exts: list[str], mesh_include_name: str, renum_cs
     ver = prep.get("engine_version") if isinstance(prep.get("engine_version"), str) else None
     now = input_hashes(S, step_exts, mesh_include_name, renum_csv_name, assem_dir)
     if prep.get("inputs") != now:
-        return PrepState(STALE, "형상 준비 이후 입력(STEP·기준 메시·번호 표)이 바뀌었습니다 — 형상 준비를 다시 하세요", ver)
+        what = "STEP·조립 매칭·조립 파일" if is_matched(S) else "STEP·기준 메시·번호 표"
+        return PrepState(STALE, f"형상 준비 이후 입력({what})이 바뀌었습니다 — 형상 준비를 다시 하세요", ver)
     if not prep.get(SHELL_ONLY_KEY) and prep.get("tag_options_sha256") != tag_options_sha256(opts):
         return PrepState(STALE, STALE_MESSAGE_TAG, ver)
     if not same_major_minor(ver, current_engine_version):

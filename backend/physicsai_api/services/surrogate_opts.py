@@ -87,7 +87,8 @@ def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid:
 
 
 def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
-    """탐색 배치(새 DOE LHS): 범위(고정 변수는 lo = hi)로 batch_matrix와 같은 층화 LHS 값을 만들어 표 조합으로 검증·반영."""
+    """탐색 배치(새 DOE, method 기본 lhs): 범위(고정 변수는 lo = hi)로 batch_matrix와 같은 층화 LHS 값을 만들어 표 조합으로 검증·반영.
+    method가 lhs 밖이면 `_explore_batch_method`(DM-C5)."""
     st = n["settings"]
     ex = st["explore"]
     if n.get("multi") is not None:  # opt-native §7: 다중 baseline = §7.3.8 층화 LHS(④ 다중 baseline 배치와 같은 경로)
@@ -95,8 +96,10 @@ def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str,
 
         levels = (st.get("levels") or {}).get("baseline")
         pm2, rows2 = restrict(n["multi"]["pm"], list(n["ps"]["parameters"]), levels, st["bounds"])
-        mx = build_multi_matrix({"kind": "lhs", "count": ex["count"], "seed": ex["seed"]}, {**n["ps"], "parameters": rows2}, pm2,
-                                ctx.settings)
+        src: dict[str, Any] = {"kind": ex.get("method", "lhs"), "count": ex["count"], "seed": ex["seed"]}  # DM-C5: method 생략 = lhs(기존)
+        if src["kind"] == "lhs_opt":
+            src["criterion"] = ex.get("criterion", "maximin")
+        mx = build_multi_matrix(src, {**n["ps"], "parameters": rows2}, pm2, ctx.settings)
         if mx.problems or not mx.rows:
             raise _invalid([{"code": "EXPLORE_TOO_FEW", "field": "explore", "message": str(mx.problems[:3])}])
         meta_m = {**mx.source_meta, "ranges": st["bounds"]}
@@ -104,6 +107,9 @@ def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str,
         return so_repo.create_opt_batch(conn, opt=opt, iter_no=0, kind="EXPLORE", matrix=mx, source_meta=meta_m,
                                         batch_dir_name=ctx.settings.predict_batch.dir_name,
                                         simlab_mesh_name=ctx.settings.predict.simlab_mesh_name)
+    method = ex.get("method", "lhs")
+    if method != "lhs":  # doe-methods.md DM-C5: 같은 S15 설계 코드(build_matrix)로 탐색 범위 안 행을 만든다. 고정 변수(lo = hi)는 설계에서 빠진다
+        return _explore_batch_method(ctx, conn, opt, n, method)
     names = [x for x in st["names"] if x in {str(p["name"]) for p in n["ps"]["parameters"]}]
     vals = lhs_values(names, {k: (v[0], v[1]) for k, v in st["bounds"].items()}, ex["count"], ex["seed"])
     text = "\n".join([",".join(names), *[",".join(repr(float(v[k])) for k in names) for v in vals]]) + "\n"
@@ -115,6 +121,29 @@ def _explore_batch(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str,
     meta = {"count": ex["count"], "seed": ex["seed"], "ranges": st["bounds"]}
     matrix.source_meta = meta
     return so_repo.create_opt_batch(conn, opt=opt, iter_no=0, kind="EXPLORE", matrix=matrix, source_meta=meta,
+                                    batch_dir_name=ctx.settings.predict_batch.dir_name,
+                                    simlab_mesh_name=ctx.settings.predict.simlab_mesh_name)
+
+
+def _explore_batch_method(ctx: AppContext, conn: Any, opt: dict[str, Any], n: dict[str, Any], method: str
+                          ) -> tuple[dict[str, Any], dict[str, Any]]:
+    """⑥ 탐색 새 DOE(lhs 밖: lhs_opt·sobol·halton·random): 탐색 범위를 행 범위로 한 파라미터 표에 `build_matrix`를 적용한다.
+    out_of_range 기준은 lhs 경로와 같다(Native 변수 = 학습 범위, 그 밖 = 세트 범위). source_kind·meta는 방식의 S15 값."""
+    st = n["settings"]
+    ex = st["explore"]
+    ps = n["ps"]
+    bounds = st["bounds"]
+    rows = [{**r, "min": float(bounds[str(r["name"])][0]), "max": float(bounds[str(r["name"])][1])} if str(r["name"]) in bounds else dict(r)
+            for r in ps["parameters"]]
+    src: dict[str, Any] = {"kind": method, "count": ex["count"], "seed": ex["seed"]}
+    if method == "lhs_opt":
+        src["criterion"] = ex.get("criterion", "maximin")
+    oor = nv.out_of_range_parameters(st["vars"]) if st.get("vars") else None
+    matrix = build_matrix_for(src, {**ps, "parameters": rows}, ctx.settings,
+                              oor_parameters=oor if oor is not None else list(ps["parameters"]))
+    if matrix.problems or not matrix.rows:
+        raise _invalid([{"code": "EXPLORE_TOO_FEW", "field": "explore", "message": str(matrix.problems[:3])}])
+    return so_repo.create_opt_batch(conn, opt=opt, iter_no=0, kind="EXPLORE", matrix=matrix, source_meta=matrix.source_meta,
                                     batch_dir_name=ctx.settings.predict_batch.dir_name,
                                     simlab_mesh_name=ctx.settings.predict.simlab_mesh_name)
 

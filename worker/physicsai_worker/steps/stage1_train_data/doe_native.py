@@ -22,12 +22,14 @@ from physicsai_core.geometry.prep import prep_document
 from physicsai_core.geometry.shell_native import features_name, kind_of_features_rel
 from physicsai_core.geometry.shell_options import effective_shell_options
 from physicsai_core.paths import PathError, allowed_roots, check_user_path, is_link_or_reparse
+from physicsai_core.stage1_train_data import doe_platform
 from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
 
 from ..common import hst_run_label, path_failure
 from ..geometry_native import LocalRunner, engine_version, read_json, run_paicad, write_native_options
 from ..geometry_sample import FLAT, SKIPPED_JSON, backup_path, generate_sample, native_inputs, write_sample_inputs
+from . import doe_native_methods
 from ._shared import _D, _doe
 from .doe_platform_gen import run_root
 
@@ -59,26 +61,32 @@ def dg_prep(ctx: Any) -> None:
     except PathError as exc:
         raise path_failure(exc) from None
     pr = s.predict
-    names_in = sorted(os.listdir(cp.path))
-    if kind != "shell" and pr.mesh_include_name.lower() not in [n.lower() for n in names_in]:
-        raise StepFailure("INPUT_INVALID", f"조립 폴더에 기준 메시({pr.mesh_include_name})가 없습니다")
-    if kind != "shell" and pr.renum_csv_name.lower() not in [n.lower() for n in names_in]:
-        raise StepFailure("INPUT_INVALID", f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — RENUM_CSV_MISSING")
     D, A = _D(ctx), _A(ctx)
     os.makedirs(D, exist_ok=True)
     copies: list[tuple[str, str]] = []
-    for n in names_in:
-        src = os.path.join(cp.path, n)
-        if (n.lower().endswith((".rad", ".inc")) or n.lower() == pr.renum_csv_name.lower()) and os.path.isfile(src) \
-                and not is_link_or_reparse(src):
-            copies.append((src, os.path.join(A, n)))
+    asm_id = p.get("asm_match_id")
+    if asm_id and kind != "shell":  # 조립 매칭(asm-match.md §6.4): include 트리 전체를 상대 경로 그대로 A로, 기준 메시·RENUM 파일 이름은 보지 않는다
+        copies += matched_copies(ctx, p, cp.path, A, D)
+    else:
+        names_in = sorted(os.listdir(cp.path))
+        if kind != "shell" and pr.mesh_include_name.lower() not in [n.lower() for n in names_in]:
+            raise StepFailure("INPUT_INVALID", f"조립 폴더에 기준 메시({pr.mesh_include_name})가 없습니다")
+        if kind != "shell" and pr.renum_csv_name.lower() not in [n.lower() for n in names_in]:
+            raise StepFailure("INPUT_INVALID", f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — RENUM_CSV_MISSING")
+        for n in names_in:
+            src = os.path.join(cp.path, n)
+            if (n.lower().endswith((".rad", ".inc")) or n.lower() == pr.renum_csv_name.lower()) and os.path.isfile(src) \
+                    and not is_link_or_reparse(src):
+                copies.append((src, os.path.join(A, n)))
     cad_src = ctx.abs(f"01_train/cad/{setup['cad_file_name']}")
     if not os.path.isfile(cad_src):
         raise StepFailure("INPUT_CHANGED", "STEP 사본이 없습니다 — ①-1을 다시 실행하세요")
     copies.append((cad_src, os.path.join(D, "cad", setup["cad_file_name"])))
     bm = ctx.abs("01_train/cad/body_map.json")
-    if os.path.isfile(bm):
+    if os.path.isfile(bm) and not asm_id:  # 조립 매칭이 있으면 body_map.json은 쓰지 않는다(BODY_MAP_IGNORED, AM-C1)
         copies.append((bm, os.path.join(D, "cad", "body_map.json")))
+    elif os.path.isfile(bm):
+        ctx.add_warning("BODY_MAP_IGNORED", "조립 매칭이 있어 body_map.json은 쓰지 않습니다")
     ctx.backup([d for _s, d in copies if os.path.lexists(d)] + [os.path.join(D, "native"), os.path.join(D, "doe_matrix.csv")])
     for src, dst in copies:
         copy_file(src, dst, checkpoint=ctx.checkpoint)
@@ -107,6 +115,10 @@ def dg_prep(ctx: Any) -> None:
     if not names or not set(names) <= known:
         raise StepFailure("INPUT_CHANGED", "파라미터 표 이름이 형상 피처와 다릅니다 — ①-1을 다시 실행하세요")
     matrix = reuse_matrix(ctx, p, names)
+    record = None
+    if matrix is None and (sp := doe_native_methods.method_sampling(p)) is not None:  # DM-C2: lhs 밖 표본 방식 = 공용 생성 경로(doe_platform.build)
+        matrix, record = doe_native_methods.single_matrix(ctx, sp, doe_platform.design_inputs_native(setup))
+        names = list(matrix[0][2])
     if matrix is None:
         rows = lhs_values(names, {q["name"]: (float(q["min"]), float(q["max"])) for q in used}, num_runs, seed)
         matrix = [(i, run_key_for(i), v) for i, v in enumerate(rows, 1)]
@@ -114,9 +126,32 @@ def dg_prep(ctx: Any) -> None:
     write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv(names, matrix))
     snap = [{"name": q["name"], "nominal": q["nominal"], "min": q["min"], "max": q["max"], "format": q.get("format"),
              "unit": q.get("unit", "")} for q in used]
+    more = {"sampling": record} if record is not None else {}  # DM-C2: train_does.sampling.meta(lhs·재사용은 기존대로 기록 없음)
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver,
-                                           geom_options=opts))
+                                           geom_options=opts, **more))
     ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp, "kind": kind})
+
+
+def matched_copies(ctx: Any, p: dict[str, Any], assem_path: str, A: str, D: str) -> list[tuple[str, str]]:
+    """조립 매칭 DOE의 복사 목록(§6.4): 확정본 사본(`D/cad/asm_match.json`, sha256 = params.asm_match_sha256) + include 트리 파일(→ A).
+    확정본·조립 트리가 매칭 때와 다르면 INPUT_CHANGED(조립 폴더가 요청 뒤 바뀜), 트리 오류는 paicad와 같은 코드(ASM_INCLUDE_*)."""
+    from physicsai_core.fileutil import sha256_file
+    from physicsai_core.geometry import asm_match as am
+    from physicsai_core.geometry.asm_tree import AsmTreeError, build
+
+    src = ctx.abs(f"{am.MATCH_ROOT}/{p['asm_match_id']}/{am.CONFIRMED_JSON}")
+    doc = am.read_json(src)
+    if doc is None or sha256_file(src) != p.get("asm_match_sha256"):
+        raise StepFailure("INPUT_CHANGED", "조립 매칭 확정본이 없거나 요청 이후 바뀌었습니다 — 조립 매칭을 다시 하세요")
+    try:
+        tree = build(assem_path, ctx.checkpoint)
+    except AsmTreeError as exc:
+        raise StepFailure(exc.code, exc.message) from None
+    if tree.digest != (doc.get("assem") or {}).get("digest"):
+        raise StepFailure("INPUT_CHANGED", "조립 폴더가 조립 매칭 이후 바뀌었습니다 — 조립 매칭을 다시 하세요")
+    out = [(f.path, os.path.join(A, *f.rel.split("/"))) for f in tree.files]
+    out.append((src, os.path.join(D, *am.ASM_MATCH_REL.split("/"))))
+    return out
 
 
 def reuse_matrix(ctx: Any, p: dict[str, Any], names: list[str]) -> list[tuple[int, str, dict[str, float]]] | None:

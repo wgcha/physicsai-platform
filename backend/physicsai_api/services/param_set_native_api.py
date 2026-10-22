@@ -34,9 +34,9 @@ def wants_native(ctx: AppContext, body: Any, *, discover: bool = False) -> bool:
     return (discover or getattr(body, "mode", None) == "discover") and ctx.settings.geometry.engine == "native"
 
 
-def discover_native_out(ctx: AppContext, path: str, kind: str = "solid") -> dict[str, Any]:
+def discover_native_out(ctx: AppContext, path: str, kind: str = "solid", asm_match: bool = False) -> dict[str, Any]:
     cp = check_user_path(path, allowed_roots(ctx.settings, imports=True))
-    d = dn.discover_native(cp.path, ctx.settings, kind=kind)
+    d = dn.discover_native(cp.path, ctx.settings, kind=kind, asm_match=asm_match and kind != "shell")
     out = d.out()
     out["engine"] = "native"
     out["kind"] = kind
@@ -65,13 +65,16 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
             raise DomainError("INVALID_PARAMS", "쉘 두께 전용(shell_only)과 쉘 판금 형상(kind=shell)은 함께 쓸 수 없습니다", status=422,
                               errors=[{"loc": ["body", "kind"], "msg": "shell_only와 함께 쓸 수 없음"}])
         require_shell_available(ctx.settings)
+    asm_id = getattr(body, "asm_match_id", None)
+    if asm_id and (shell_only or kind == "shell"):  # asm-match.md §8.4: 쉘 세트는 조립 매칭 무관
+        raise DomainError("ASM_MATCH_UNSUPPORTED", "쉘 판금·쉘 두께 전용 세트는 조립 매칭을 쓰지 않습니다", status=422)
     over = validate_geom_options(ctx.settings, body.geom_options, kind)
     cp = check_user_path(body.path, allowed_roots(ctx.settings, imports=True))
     choice = body.choice.model_dump(exclude_unset=True) if body.choice is not None else {}
     if shell_only:
         choice.pop("cad", None)
-    d = dn.discover_native(cp.path, ctx.settings, kind=kind)
-    cad, assem, probs = dn.resolve_choice_native(d, choice, kind=kind)
+    d = dn.discover_native(cp.path, ctx.settings, kind=kind, asm_match=bool(asm_id))
+    cad, assem, probs = dn.resolve_choice_native(d, choice, kind=kind, asm_match=bool(asm_id))
     problems = dn.shell_only_problems(d.problems + probs) if shell_only else d.problems + probs
     if problems or assem is None or (cad is None and not shell_only):
         raise DomainError("PARAM_SET_INVALID", "프로젝트 폴더에서 파라미터 세트를 구성할 수 없습니다", status=422,
@@ -82,6 +85,14 @@ def register_native(ctx: AppContext, principal: Principal, study_id: str, body: 
         params["shell_only"] = True
     if kind == "shell":
         params["kind"] = "shell"
+    if asm_id:
+        from .asm_match_gate import require_for_set
+
+        with ctx.engine.connect() as conn:
+            study = studies_repo.require(conn, study_id)
+        got = require_for_set(ctx, study, asm_id, cad_path=os.path.join(cp.path, *str(cad).split("/")),
+                              assem_path=os.path.join(cp.path, *str(assem["rel"]).split("/")) if assem["rel"] else cp.path)
+        params["asm_match_id"], params["asm_match_sha256"] = asm_id, got["sha256"]
     from .job_params.stage1_native import normalized_filter
 
     norm = normalized_filter(getattr(body, "extract_filter", None))  # extract-filter.md §6.7: 정규화본을 params에 기록(쉘·altair는 앞에서 422)

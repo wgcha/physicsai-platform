@@ -19,17 +19,20 @@ from physicsai_core.fileutil import copy_file, copy_tree, write_text
 from physicsai_core.geometry import baselines as bl
 from physicsai_core.geometry import native_vars as nv
 from physicsai_core.geometry import shell as sh
+from physicsai_core.geometry.asm_match import is_matched, matched_doc
 from physicsai_core.geometry.messages import korean_message
 from physicsai_core.geometry.native_files import doe_matrix_csv, doe_matrix_csv_multi, read_doe_matrix
 from physicsai_core.geometry.prep import is_shell_only
 from physicsai_core.geometry.shell_native import read_kind
 from physicsai_core.paths import is_link_or_reparse
+from physicsai_core.sampling import qmc
+from physicsai_core.stage1_train_data import doe_platform
 from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
 
 from ..common import hst_run_label
 from ..geometry_native import effective_opts, set_opts, engine_version, ensure_prep_ready, native_inputs, read_json, write_native_options
 from ..geometry_sample import FLAT, backup_path, generate_sample, write_no_cover, write_sample_inputs
-from . import doe_native
+from . import doe_native, doe_native_methods
 from ._shared import _D, _doe
 from .doe_platform_gen import run_root
 
@@ -73,10 +76,21 @@ def dg_prep(ctx: Any) -> None:
     os.makedirs(D, exist_ok=True)
     ctx.backup([x for x in (A, os.path.join(D, "cad"), os.path.join(D, "native"), os.path.join(D, "doe_matrix.csv")) if os.path.lexists(x)])
     assem = os.path.join(S, "radioss_assem")
-    for n in sorted(os.listdir(assem)):  # base 조립 폴더 사본(FEM 검증·①→④ 호환, 원본 = 세트 사본)
-        src = os.path.join(assem, n)
-        if os.path.isfile(src) and not is_link_or_reparse(src):
-            copy_file(src, os.path.join(A, n), checkpoint=ctx.checkpoint)
+    if is_matched(S):  # 조립 매칭 세트(asm-match.md §6.4): include 트리를 상대 경로 그대로(파일 이름·직계 규칙에 기대지 않음)
+        from physicsai_core.geometry.asm_tree import AsmTreeError, build, copy_included
+
+        try:
+            tree = build(assem, ctx.checkpoint)
+        except AsmTreeError as exc:
+            raise StepFailure(exc.code, exc.message) from None
+        if tree.digest != ((matched_doc(S) or {}).get("assem") or {}).get("digest"):
+            raise StepFailure("INPUT_CHANGED", "세트의 조립 폴더가 조립 매칭 이후 바뀌었습니다 — 형상 준비를 다시 하세요")
+        copy_included(tree, A, ctx.checkpoint)
+    else:
+        for n in sorted(os.listdir(assem)):  # base 조립 폴더 사본(FEM 검증·①→④ 호환, 원본 = 세트 사본)
+            src = os.path.join(assem, n)
+            if os.path.isfile(src) and not is_link_or_reparse(src):
+                copy_file(src, os.path.join(A, n), checkpoint=ctx.checkpoint)
     for sub in ("cad", "native"):
         if os.path.isdir(os.path.join(S, sub)):
             copy_tree(os.path.join(S, sub), os.path.join(D, sub), checkpoint=ctx.checkpoint)
@@ -91,7 +105,14 @@ def dg_prep(ctx: Any) -> None:
         if doe_reuse.is_reuse(p.get("sampling")):
             raise StepFailure("INPUT_INVALID", "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다")
         extra = {str(r["name"]): (float(r["min"]), float(r["max"])) for r in sh.prop_rows(params)}
-        raw = bl.stratified_lhs(pm, params, num_runs, seed, lhs_values, run_key_for, extra)
+        gen, mkind, minp = lhs_values, None, None
+        if (sp := doe_native_methods.method_sampling(p)) is not None:  # DM-C4: 층화는 그대로, 층 안 생성기만 바꾼다
+            gen, mkind, minp = doe_native_methods.multi_generator(sp)
+            seed = int(minp["seed"])
+        try:
+            raw = bl.stratified_lhs(pm, params, num_runs, seed, gen, run_key_for, extra)
+        except qmc.GeneratorUnavailable as exc:
+            raise StepFailure("INPUT_INVALID", f"표본을 만들 수 없습니다: {exc}") from None
         rows = [(no, rk, (b if pm.get("usage") == "topology" else bl.assign_baseline(pm, params, vals)), vals) for no, rk, b, vals in raw]
         names = [str(r["name"]) for r in params]
         write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv_multi(names, rows))
@@ -101,18 +122,25 @@ def dg_prep(ctx: Any) -> None:
             ctx.add_warning(bl.NO_COVER, f"{nc}개 조합은 덮는 baseline이 없어 스킵됩니다")
         per = {b: sum(1 for r in raw if r[2] == b) for b in bl.baseline_ids(pm)}
         ctx.log("baseline별 샘플 수(층화): " + ", ".join(f"{b} {n}" for b, n in per.items()))
+        record = doe_native_methods.multi_record(mkind, minp, per) if mkind else None
     else:
         from .doe_native import reuse_matrix
 
         names = [str(r["name"]) for r in params]
         matrix = reuse_matrix(ctx, p, names)
+        record = None
+        if matrix is None and (sp := doe_native_methods.method_sampling(p)) is not None:  # DM-C2: lhs 밖 표본 방식 = 공용 생성 경로(doe_platform.build)
+            matrix, record = doe_native_methods.single_matrix(ctx, sp, doe_platform.design_inputs_from_params(params))
+            names = list(matrix[0][2])
         if matrix is None:
             vals = lhs_values(names, {str(r["name"]): (float(r["min"]), float(r["max"])) for r in params}, num_runs, seed)
             matrix = [(i, run_key_for(i), v) for i, v in enumerate(vals, 1)]
         num_runs = len(matrix)
         write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv(names, matrix))
         snap = [_row_meta(r) for r in params]
-    ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver, geom_options=opts))
+    more = {"sampling": record} if record is not None else {}  # DM-C2: train_does.sampling.meta(lhs·재사용은 기존대로 기록 없음)
+    ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver, geom_options=opts,
+                                           **more))
     ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp,
                       "param_set_id": ps["id"], "multi_baseline": pm is not None})
 

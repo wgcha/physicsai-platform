@@ -1,5 +1,26 @@
 {
   "kinds": {
+    "asm_match": {
+      "cost": "light",
+      "params_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "match_id": {
+            "description": "조립 매칭 id(asm_match_create 응답, 행은 asm_match_set_rows로 저장해 둔 것)",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Match Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_id"
+        ],
+        "title": "AsmMatchKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
     "doe_generate": {
       "cost": "heavy",
       "params_schema": {
@@ -92,6 +113,35 @@
             "title": "TrainSamplingFullfact",
             "type": "object"
           },
+          "TrainSamplingHalton": {
+            "additionalProperties": false,
+            "description": "doe-methods.md DM-C3: Halton(스크램블 QMC) — count 2~train_data.platform_max_runs, seed 0~4294967295(기본 1).",
+            "properties": {
+              "count": {
+                "minimum": 2,
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "halton",
+                "title": "Kind",
+                "type": "string"
+              },
+              "seed": {
+                "default": 1,
+                "maximum": 4294967295,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "TrainSamplingHalton",
+            "type": "object"
+          },
           "TrainSamplingLhs": {
             "additionalProperties": false,
             "properties": {
@@ -170,6 +220,34 @@
             "title": "TrainSamplingPb",
             "type": "object"
           },
+          "TrainSamplingRandom": {
+            "additionalProperties": false,
+            "description": "doe-methods.md DM-C3: 균일 랜덤 — count 2~상한, seed 0 이상(기본 1).",
+            "properties": {
+              "count": {
+                "minimum": 2,
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "random",
+                "title": "Kind",
+                "type": "string"
+              },
+              "seed": {
+                "default": 1,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "TrainSamplingRandom",
+            "type": "object"
+          },
           "TrainSamplingSobol": {
             "additionalProperties": false,
             "properties": {
@@ -198,6 +276,28 @@
             "title": "TrainSamplingSobol",
             "type": "object"
           },
+          "TrainSamplingTable": {
+            "additionalProperties": false,
+            "description": "doe-methods.md DM-C3: 사용자 설계표(CSV·붙여넣기 본문 문자열, 파일 업로드 아님). 첫 줄 = ①-2 사용 파라미터 이름 전부(순서 무관),\n행 2~상한, 값은 학습 범위(min~max) 안(밖이면 TABLE_OUT_OF_RANGE).",
+            "properties": {
+              "kind": {
+                "const": "table",
+                "title": "Kind",
+                "type": "string"
+              },
+              "text": {
+                "maxLength": 16777216,
+                "title": "Text",
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind",
+              "text"
+            ],
+            "title": "TrainSamplingTable",
+            "type": "object"
+          },
           "TrainSamplingTrainDoe": {
             "additionalProperties": false,
             "description": "equiv-check.md Q1(2026-10-20): 같은 Study의 다른 DOE(READY, 표본표 PARSED/PARTIAL) samples.csv 행 그대로 — run 이름을 유지해\n등가성 판정의 쌍 매칭 키로 쓴다. 파라미터 이름 집합이 같을 때만(native·altair 모두).",
@@ -224,6 +324,20 @@
         "additionalProperties": false,
         "description": "①-3 DOE 생성(phase2 §6.4 + phase3 §23.4 S18). generator 생략 → sampling이 있으면 platform, 없으면 hyperstudy(G10).\nplatform: sampling 필수, doe_label·num_runs·options 금지. hyperstudy: 기존 키(doe_label 필수), sampling·on_run_failure 금지.",
         "properties": {
+          "asm_match_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "조립 매칭 확정본 id(asm_match_confirm으로 저장한 것) — ①-1 Native 솔리드 기준 DOE에서 기준 메시·RENUM 파일 대신 사용(세트 기준 DOE는 생략)",
+            "title": "Asm Match Id"
+          },
           "doe_label": {
             "anyOf": [
               {
@@ -351,10 +465,13 @@
                     "ccd": "#/$defs/TrainSamplingCcd",
                     "fracfact": "#/$defs/TrainSamplingFracfact",
                     "fullfact": "#/$defs/TrainSamplingFullfact",
+                    "halton": "#/$defs/TrainSamplingHalton",
                     "lhs": "#/$defs/TrainSamplingLhs",
                     "lhs_opt": "#/$defs/TrainSamplingLhsOpt",
                     "pb": "#/$defs/TrainSamplingPb",
+                    "random": "#/$defs/TrainSamplingRandom",
                     "sobol": "#/$defs/TrainSamplingSobol",
+                    "table": "#/$defs/TrainSamplingTable",
                     "train_doe": "#/$defs/TrainSamplingTrainDoe"
                   },
                   "propertyName": "kind"
@@ -368,6 +485,12 @@
                   },
                   {
                     "$ref": "#/$defs/TrainSamplingSobol"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingHalton"
+                  },
+                  {
+                    "$ref": "#/$defs/TrainSamplingRandom"
                   },
                   {
                     "$ref": "#/$defs/TrainSamplingFullfact"
@@ -385,6 +508,9 @@
                     "$ref": "#/$defs/TrainSamplingCcd"
                   },
                   {
+                    "$ref": "#/$defs/TrainSamplingTable"
+                  },
+                  {
                     "$ref": "#/$defs/TrainSamplingTrainDoe"
                   }
                 ]
@@ -394,7 +520,7 @@
               }
             ],
             "default": null,
-            "description": "플랫폼 표본 방식 {kind: lhs|sobol|…, count[개], seed} — platform 필수",
+            "description": "플랫폼 표본 방식 {kind: lhs_opt|sobol|halton|lhs|random|fullfact|fracfact|pb|bbd|ccd|table|train_doe, …} — platform·native 공통",
             "title": "Sampling"
           },
           "seed": {
@@ -408,7 +534,7 @@
               }
             ],
             "default": null,
-            "description": "native LHS 난수 시드[-](0 이상, native 형상 엔진 전용)",
+            "description": "native lhs 전용 옛 입력(sampling.seed 권장)[-](0 이상)",
             "title": "Seed"
           }
         },
@@ -1960,6 +2086,52 @@
             "title": "BatchSourceFullfact",
             "type": "object"
           },
+          "BatchSourceHalton": {
+            "additionalProperties": false,
+            "description": "Halton(스크램블 QMC, doe-methods.md DM-C3): count 2~max_runs, seed 0~4294967295(생략 = 1). 이어서 추가 없음.",
+            "properties": {
+              "count": {
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "halton",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              },
+              "seed": {
+                "default": 1,
+                "maximum": 4294967295,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "BatchSourceHalton",
+            "type": "object"
+          },
           "BatchSourceLhs": {
             "additionalProperties": false,
             "description": "범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).",
@@ -2090,6 +2262,51 @@
               "kind"
             ],
             "title": "BatchSourcePb",
+            "type": "object"
+          },
+          "BatchSourceRandom": {
+            "additionalProperties": false,
+            "description": "균일 랜덤(doe-methods.md DM-C3): count 2~max_runs, seed 0 이상(기본 1).",
+            "properties": {
+              "count": {
+                "title": "Count",
+                "type": "integer"
+              },
+              "kind": {
+                "const": "random",
+                "title": "Kind",
+                "type": "string"
+              },
+              "ranges": {
+                "anyOf": [
+                  {
+                    "additionalProperties": {
+                      "items": {
+                        "type": "number"
+                      },
+                      "type": "array"
+                    },
+                    "type": "object"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ranges"
+              },
+              "seed": {
+                "default": 1,
+                "minimum": 0,
+                "title": "Seed",
+                "type": "integer"
+              }
+            },
+            "required": [
+              "kind",
+              "count"
+            ],
+            "title": "BatchSourceRandom",
             "type": "object"
           },
           "BatchSourceSobol": {
@@ -2469,16 +2686,18 @@
             "title": "Param Set Id"
           },
           "source": {
-            "description": "조합 원천 {kind: lhs|sobol|fullfact|table|train_doe…, count[개], seed, …}",
+            "description": "조합 원천 {kind: lhs_opt|sobol|halton|lhs|random|fullfact|…|table|train_doe, count[개], seed, …}",
             "discriminator": {
               "mapping": {
                 "bbd": "#/$defs/BatchSourceBbd",
                 "ccd": "#/$defs/BatchSourceCcd",
                 "fracfact": "#/$defs/BatchSourceFracfact",
                 "fullfact": "#/$defs/BatchSourceFullfact",
+                "halton": "#/$defs/BatchSourceHalton",
                 "lhs": "#/$defs/BatchSourceLhs",
                 "lhs_opt": "#/$defs/BatchSourceLhsOpt",
                 "pb": "#/$defs/BatchSourcePb",
+                "random": "#/$defs/BatchSourceRandom",
                 "sobol": "#/$defs/BatchSourceSobol",
                 "table": "#/$defs/BatchSourceTable",
                 "train_doe": "#/$defs/BatchSourceTrainDoe"
@@ -2494,6 +2713,12 @@
               },
               {
                 "$ref": "#/$defs/BatchSourceSobol"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceHalton"
+              },
+              {
+                "$ref": "#/$defs/BatchSourceRandom"
               },
               {
                 "$ref": "#/$defs/BatchSourceFullfact"
@@ -2742,7 +2967,7 @@
           },
           "SoExploreNew": {
             "additionalProperties": false,
-            "description": "새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs).",
+            "description": "새 DOE: method(기본 lhs) — count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs, sobol이면 그 값 이상 가장 작은 2^m).\ncriterion = lhs_opt 전용(maximin 기본 | corr), 그 밖 method면 422. 요인·응답면·표는 ⑥ 탐색에 없다(재사용 배치로 — doe-methods.md DM-C5).",
             "properties": {
               "count": {
                 "anyOf": [
@@ -2756,9 +2981,37 @@
                 "default": null,
                 "title": "Count"
               },
+              "criterion": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "maximin",
+                      "corr"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Criterion"
+              },
               "kind": {
                 "const": "new",
                 "title": "Kind",
+                "type": "string"
+              },
+              "method": {
+                "default": "lhs",
+                "enum": [
+                  "lhs",
+                  "lhs_opt",
+                  "sobol",
+                  "halton",
+                  "random"
+                ],
+                "title": "Method",
                 "type": "string"
               },
               "seed": {
@@ -2991,7 +3244,7 @@
             "type": "array"
           },
           "explore": {
-            "description": "탐색 DOE {kind: new, count[개], seed} | {kind: reuse, batch_id}",
+            "description": "탐색 DOE {kind: new, count[개], seed, method: lhs|lhs_opt|sobol|halton|random} | {kind: reuse, batch_id}",
             "discriminator": {
               "mapping": {
                 "new": "#/$defs/SoExploreNew",

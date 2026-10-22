@@ -121,6 +121,7 @@ def test_v3_s18_2_params_inference_forbidden_and_records(tmp_path, fake_tools, e
         conf = st["limits"]["configured"]
         assert (conf["doe_generator_default"], conf["doe_platform_parallel_default"], conf["doe_platform_max_runs"]) == \
             ("platform", 4, 500)
+        assert conf["native_doe_max_runs"] == 2000  # doe-methods.md DM-C6: ① Native lhs 상한(train_data.max_runs)
         assert st["features"]["train_doe_platform"] == {"enabled": True, "missing": []}
         assert st["features"]["train_doe"]["enabled"] is True
     finally:

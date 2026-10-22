@@ -22,6 +22,7 @@ from ..schemas import equiv_check as _EQ
 from ..schemas import fem_verify_req as _FV
 from ..schemas import surrogate_opt_req as _SO
 from ..services import (
+    asm_match_api,
     equiv_check,
     fem_verify,
     geom_view_api,
@@ -38,7 +39,7 @@ from ..services.job_params import stage4_predict as _PR
 from ..services.job_params import study_manage
 
 SERVICES: dict[str, Any] = {
-    "equiv_check": equiv_check, "fem_verify": fem_verify, "geom_view_api": geom_view_api, "job_params": job_params, "jobs": jobs,
+    "asm_match_api": asm_match_api, "equiv_check": equiv_check, "fem_verify": fem_verify, "geom_view_api": geom_view_api, "job_params": job_params, "jobs": jobs,
     "job_params.study_manage": study_manage, "predict_batches": predict_batches, "stage4_predict": stage4_predict,
     "surrogate_opt_pareto": surrogate_opt_pareto, "surrogate_opts": surrogate_opts,
 }
@@ -172,12 +173,13 @@ DoeGenParams = described(_TD.TdDoeGenParams, "DoeGenerateParams", {
     "doe_label": "HyperStudy DOE 유형 이름(hyperstudy만, ①-3 유형 목록)",
     "num_runs": "run 수[개](2~train_data.max_runs, hyperstudy만)",
     "options": "HyperStudy DOE 옵션(유형별, hyperstudy만)",
-    "sampling": "플랫폼 표본 방식 {kind: lhs|sobol|…, count[개], seed} — platform 필수",
-    "seed": "native LHS 난수 시드[-](0 이상, native 형상 엔진 전용)",
+    "sampling": "플랫폼 표본 방식 {kind: lhs_opt|sobol|halton|lhs|random|fullfact|fracfact|pb|bbd|ccd|table|train_doe, …} — platform·native 공통",
+    "seed": "native lhs 전용 옛 입력(sampling.seed 권장)[-](0 이상)",
     "multi_execution": "동시 실행 수[개](1~train_data.max_multi_execution, 생략 = platform_parallel_default)",
     "radioss_assem_path": "Radioss 조립 폴더 경로(허용 루트 안, 세트 기준 native DOE면 생략)",
     "on_run_failure": "run 실패 시 fail(작업 실패) | continue(계속, platform만)",
     "param_set_id": "native 파라미터 세트 기준 DOE면 세트 id",
+    "asm_match_id": "조립 매칭 확정본 id(asm_match_confirm으로 저장한 것) — ①-1 Native 솔리드 기준 DOE에서 기준 메시·RENUM 파일 대신 사용(세트 기준 DOE는 생략)",
 })
 
 
@@ -274,7 +276,7 @@ BatchParams = described(_PB.PredictBatchParams, "PredictBatchKindParams", {
     "param_set_id": "파라미터 세트 id(생략 = 현재 세트)",
     "model_id": "모델 id(생략 = Final 모델)",
     "multi_execution": "입력 생성 동시 실행 수[개](1~64, 상한 train_data.max_multi_execution)",
-    "source": "조합 원천 {kind: lhs|sobol|fullfact|table|train_doe…, count[개], seed, …}",
+    "source": "조합 원천 {kind: lhs_opt|sobol|halton|lhs|random|fullfact|…|table|train_doe, count[개], seed, …}",
     "vars": "템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜) — Native·Altair(전체 tpl) 모두, get_native_vars로 변수 풀 확인",
     "display": "배치 단위 컨투어 표시(선택)",
     "capture": "하위 예측 컨투어 캡처 옵션(선택)",
@@ -304,7 +306,7 @@ def plan_batch(ctx: Any, principal: Any, study_id: str, p: Any) -> dict[str, Any
 OptParams = described(_SO.SurrogateOptCreate, "SurrogateOptKindParams", {
     "param_set_id": "파라미터 세트 id(생략 = 현재 세트)",
     "model_id": "모델 id(생략 = Final 모델)",
-    "explore": "탐색 DOE {kind: new, count[개], seed} | {kind: reuse, batch_id}",
+    "explore": "탐색 DOE {kind: new, count[개], seed, method: lhs|lhs_opt|sobol|halton|random} | {kind: reuse, batch_id}",
     "objective": "단일 목적 {metric, series?, sense: min|max}(objectives와 택1)",
     "objectives": "목적 1~3개 [{metric, series?, sense}]",
     "constraints": "제약 [{metric, op: <=|>=|range, value | lo·hi}]",
@@ -495,6 +497,31 @@ def create_geom(ctx: Any, principal: Any, study_id: str, p: Any, rid: str, ip: s
     return out, out.get("job_id"), out.get("id")
 
 
+# ---- 조립 매칭 검사(asm-match.md §6.3) ----------------------------------------------------------------
+
+
+class AsmMatchKindParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    match_id: str = Field(min_length=1, max_length=64, description="조립 매칭 id(asm_match_create 응답, 행은 asm_match_set_rows로 저장해 둔 것)")
+
+
+def plan_asm(ctx: Any, principal: Any, study_id: str, p: Any) -> dict[str, Any]:
+    try:
+        pv = _svc("asm_match_api").plan_check(ctx, principal, p.match_id)
+    except DomainError as exc:
+        return {**lane_info("ASM_MATCH"), "problems": problems_of(exc), "warnings": []}
+    probs = list(pv.get("problems") or [])
+    if pv.get("study_id") not in (None, study_id):
+        probs.append(problem("NOT_FOUND", "이 Study의 조립 매칭이 아닙니다", "match_id"))
+    return {**lane_info("ASM_MATCH"), "runs": 1, "parallel": 1, "problems": probs, "warnings": [],
+            "targets": {"match": p.match_id}}
+
+
+def create_asm(ctx: Any, principal: Any, study_id: str, p: Any, rid: str, ip: str | None) -> tuple[dict[str, Any], str | None, str | None]:
+    return _svc("asm_match_api").run_check(ctx, principal, study_id, p.match_id, rid, ip)
+
+
 # ---- 레지스트리 --------------------------------------------------------------------------------------
 
 JOB_KINDS: dict[str, JobKind] = {k.kind: k for k in (
@@ -527,6 +554,8 @@ JOB_KINDS: dict[str, JobKind] = {k.kind: k for k in (
             limits=lambda s: {"max_active": s.fem_verify.max_active}),
     JobKind("geom_preview", 1, "형상 미리보기", "④", ("GEOM_PREVIEW",), "light", GeomPreviewParams, plan_geom, create_geom,
             "geom_preview", {"param_set_id": "ps-1", "values": {"THK_1": 3.2}}),
+    JobKind("asm_match", 1, "조립 매칭 검사", "①④", ("ASM_MATCH",), "light", AsmMatchKindParams, plan_asm, create_asm, "asm_match",
+            {"match_id": "00000000-0000-4000-8000-000000000001"}),
 )}
 
 # 등록하지 않는 job_type과 사유(§5.1). 나중에 등록하면 여기서 빼기만 한다(V-MCP-7).
@@ -562,7 +591,7 @@ for _k in JOB_KINDS.values():
 # 작업 행에서 엔티티 id를 찾는 키(params·result) — summary_entity와 짝
 ENTITY_KEYS: dict[str, tuple[str, ...]] = {
     "train_doe": ("doe_id",), "predict_batch": ("batch_id",), "surrogate_opt": ("surrogate_opt_id", "surrogate_opt"),
-    "equiv_check": ("eq_id",), "fem_verify": ("fem_verify_id",), "geom_preview": ("preview_id",),
+    "equiv_check": ("eq_id",), "fem_verify": ("fem_verify_id",), "geom_preview": ("preview_id",), "asm_match": ("match_id",),
 }
 
 

@@ -23,6 +23,7 @@ from physicsai_core.geometry.options import usage_document
 from physicsai_core.geometry.shell_native import SHELL_FILES_DIR, THICKNESS_JSON
 from physicsai_core.stage4_predict import nearest as nearest_mod
 
+from ..geometry_asm import NODE_PATCH, WRITE_DIR, assemble_matched
 from ..geometry_native import (
     LocalRunner,
     effective_opts,
@@ -150,18 +151,19 @@ def mesh(ctx: Any, S: str) -> None:
     s, G = ctx.settings, _G(ctx)
     if is_cushion and ctx.result().get("geometry_skipped"):
         inp = _inputs(ctx, S)
-        return _cushion_write(ctx, inp, G, inp.baseline_inc)  # 형상 값 없음: 기준 쿠션 메시 그대로
+        return _cushion_write(ctx, inp, G, inp.baseline_inc)  # 형상 값 없음: 기준 쿠션 메시 그대로(조립 매칭 세트는 패치 없음 = 공칭)
     _skip_if_no_geometry(ctx)
     inp = _inputs(ctx, S)
     if inp.kind == "shell":
         return _shell_mesh(ctx, inp, G, S)
     U, Mo, C = (os.path.join(G, d) for d in ("update", "morph", "check"))
-    out_inc = os.path.join(G, s.predict.mesh_include_name)
+    # 조립 매칭 세트(asm-match.md §5.4): include 파일(`mesh_include_name`)을 만들지 않고 노드 패치 `P/geom/node_patch.npz`를 낸다
+    out_inc = os.path.join(G, NODE_PATCH if inp.matched else s.predict.mesh_include_name)
     base = {**inp.base_values(s), "values_json": os.path.join(G, "values.json"), "options_json": os.path.join(G, "options.json"),
-            "update_dir": U, "morph_dir": Mo, "check_dir": C, "out_inc": out_inc}
+            "update_dir": U, "morph_dir": Mo, "check_dir": C, "out_patch" if inp.matched else "out_inc": out_inc}
     x = LocalRunner(ctx)
     v = run_paicad(x, s, "paicad_morph", base, cwd=Mo, report=os.path.join(Mo, "morph.json"),
-                   success=[os.path.join(Mo, "morphed.inc")], backup=[Mo], body_map=inp.body_map)
+                   success=[os.path.join(Mo, "node_xyz.npz" if inp.matched else "morphed.inc")], backup=[Mo], body_map=inp.body_map)
     v.raise_if_failed()
     mj = v.report or {}
     v = run_paicad(x, s, "paicad_check", base, cwd=C, report=os.path.join(C, "check.json"), success=[out_inc],
@@ -186,7 +188,11 @@ def _cushion_write(ctx: Any, inp: Any, G: str, cushion_inc: str) -> None:
     s = ctx.settings
     rad = os.path.join(G, s.predict.simlab_mesh_name)
     D = os.path.join(G, cushion.CUSHION_DIR)
-    v = cushion.write_cushion(LocalRunner(ctx), s, inp, cushion_inc=cushion_inc, cushion_dir=D, cushion_rad=rad)
+    if inp.matched:  # 방식 M: cushion_inc 자리는 노드 패치(형상 값 없음 = baseline_inc 빈 값 → 공칭, 패치 없음), asm-match.md §5.5
+        patch = cushion_inc if cushion_inc and cushion_inc.endswith(NODE_PATCH) else None
+        v = cushion.write_cushion(LocalRunner(ctx), s, inp, cushion_inc="", cushion_dir=D, cushion_rad=rad, node_patch=patch)
+    else:
+        v = cushion.write_cushion(LocalRunner(ctx), s, inp, cushion_inc=cushion_inc, cushion_dir=D, cushion_rad=rad)
     v.raise_if_failed()
     ctx.add_output(rad)
     rep = v.report or {}
@@ -205,6 +211,11 @@ def rad_assemble(ctx: Any, S: str, inp_dir: str) -> str:
 
         starter = assemble_copy(s, inp.assem_dir, inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)
         overlay(os.path.join(_G(ctx), SHELL_FILES_DIR), list(r.get("shell_files") or []), inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)
+    elif inp.matched:  # 조립 매칭 세트(§5.4): `paicad asm write`(패치 있으면 좌표 줄만 갱신, 없으면 바이트 동일 사본) → P/INPUT
+        patch = None if r.get("geometry_skipped") else os.path.join(_G(ctx), NODE_PATCH)
+        starter, v = assemble_matched(LocalRunner(ctx), s, inp, patch, inp_dir, os.path.join(_G(ctx), WRITE_DIR))
+        v.raise_if_failed()
+        ctx.add_output(os.path.join(inp_dir, starter))
     else:
         new_inc = inp.baseline_inc if r.get("geometry_skipped") else os.path.join(_G(ctx), s.predict.mesh_include_name)
         starter, warnings = assemble_into(s, inp.assem_dir, new_inc, inp_dir, checkpoint=ctx.checkpoint, log=ctx.log)

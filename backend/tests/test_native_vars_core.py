@@ -188,7 +188,7 @@ def test_batch_matrix_out_of_range_basis_is_pluggable():
 ALLOWED = {
     # --- Native 실행 경로, 스냅숏 적용 뒤(ps' = `native_vars.apply` 결과)의 값을 읽는 곳 ---
     "backend/physicsai_api/services/surrogate_opt_space.py": 2,           # _bounds(ps')·_multi_settings(다중 baseline은 vars 없음)
-    "backend/physicsai_api/services/surrogate_opts.py": 2,               # _explore_batch(n["ps"] = ps')
+    "backend/physicsai_api/services/surrogate_opts.py": 4,               # _explore_batch(n["ps"] = ps') + _explore_batch_method(같은 n["ps"], DM-C5)
     "backend/physicsai_core/sampling/matrix.py": 1,                      # build_matrix_for(호출부가 ps'를 넘김)
     "backend/physicsai_api/services/predict_batches.py": 1,              # _recommended(ps' = res.ps)
     "backend/physicsai_api/services/surrogate_opts_view.py": 1,          # nv.apply(ps, settings.vars)["parameters"]
@@ -206,11 +206,12 @@ ALLOWED = {
     "backend/physicsai_api/services/surrogate_opt_pareto.py": 1,         # 스냅숏 없는 이전 최적화의 추가 검증 경고 입력
     "backend/physicsai_api/services/param_set_native_api.py": 2,         # enrich: vars_count(Native·Altair 세트 정의 행 수 — v0.2.8 Altair 최상위 키)
     "backend/physicsai_api/services/template_vars.py": 1,                # Altair 풀: 세트 정의의 단위로 보충(v0.2.8 altair-vars.md §5.1)
-    "backend/physicsai_api/services/job_params/stage1_native.py": 3,     # ①-1 train_setup 2곳 + 세트 DOE 이름 확인(세트 정의)
+    "backend/physicsai_api/services/job_params/stage1_native.py": 4,     # ①-1 train_setup 2곳 + 세트 DOE 이름 확인(세트 정의) + 세트 DOE 표본 입력 = native_vars_run 해석 결과 res.ps(DM-C2)
     # --- 세트 자체(등록·단건·FEM 검증·3D 보기·props·baseline·①·폴더 파일)와 Altair·다중 baseline: 세트 정의가 정답 ---
     "backend/physicsai_api/services/common.py": 1,                       # param_set_out
     "backend/physicsai_api/services/geom_view_api.py": 3,
     "backend/physicsai_api/services/stage1_train_data.py": 9,            # ① 학습 설정(train_setups.parameters, 세트 아님)
+    "backend/physicsai_api/services/asm_match_api.py": 1,                # ① 학습 설정(train_setups.parameters, 세트 아님): use=true 파라미터 바디 판정(asm-match.md §3.2)
     "backend/physicsai_api/services/stage4_predict.py": 3,               # 단건 PREDICT 확인(세트 정의, 비범위 §6.4)
     "backend/physicsai_api/services/fem_verify_sources.py": 2,
     "backend/physicsai_api/services/fem_verify_plan.py": 1,

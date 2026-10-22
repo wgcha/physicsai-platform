@@ -113,7 +113,9 @@ def test_v_mcp_6_contract_tool_list(spec):
     tools = sorted(o["x-mcp"]["tool"] for _, _, o in _ops(spec) if "tool" in (o.get("x-mcp") or {}))
     assert tools == sorted(["whoami", "system_status", "list_studies", "get_summary", "get_glossary", "check_prediction_input",
                             "list_job_kinds", "describe_job_kind", "plan_job", "run_job", "list_jobs", "job_status", "job_summary",
-                            "cancel_job", "list_audit", "ping", "get_native_vars"])
+                            "cancel_job", "list_audit", "ping", "get_native_vars",
+                            # asm-match.md §6.3(V-AM-12): 조립 매칭 5개 + 목록 1개(AM-C2 가산)
+                            "asm_match_create", "asm_match_get", "asm_match_set_rows", "asm_match_check", "asm_match_confirm", "asm_match_list"])
     by = {o["x-mcp"]["tool"]: o for _, _, o in _ops(spec) if "tool" in (o.get("x-mcp") or {})}
     assert by["run_job"]["x-mcp"]["risk"] == "run" and by["cancel_job"]["x-mcp"]["risk"] == "run"
     assert by["list_audit"]["x-mcp"]["risk"] == "admin" and by["plan_job"]["x-mcp"]["risk"] == "read"
@@ -135,7 +137,7 @@ def test_v_mcp_7_job_types_covered():
     assert covered & set(MCP_JOB_EXCLUDED) == set() and set(MCP_JOB_EXCLUDED) <= set(JOB_TYPES)
     assert all(v.strip() for v in MCP_JOB_EXCLUDED.values())
     assert set(JOB_KINDS) == {"doe_generate", "solve_pbs", "predict", "predict_batch", "surrogate_opt", "surrogate_opt_verify",
-                              "equiv_check", "fem_verify", "geom_preview"}
+                              "equiv_check", "fem_verify", "geom_preview", "asm_match"}
     for k in JOB_KINDS.values():
         assert callable(k.plan_fn) and callable(k.create_fn) and k.summary_entity in SUMMARIES, k.kind
         assert k.cost in ("heavy", "light") and k.version >= 1 and k.label_ko and k.stage
@@ -185,6 +187,8 @@ def test_v_mcp_7_plan_and_create_call_existing_services(monkeypatch):
         "get_opt": {"label": "OPT-1", "status": "DONE", "param_set": {}},
         "get_param_set": {"study_id": "s1", "engine": "native", "label": "ps"},
         "create_preview": ({"id": "pv-1", "job_id": "job-6", "status": "QUEUED"}, 202),
+        "plan_check": {"match_id": "m-1", "study_id": "s1", "problems": []},
+        "run_check": ({"job_id": "job-7", "match_id": "m-1", "seq": 1}, "job-7", "m-1"),
         "predict_check": {"out_of_range": []},
         "_estimate_min": 2.0,
     }
@@ -209,11 +213,11 @@ def test_v_mcp_7_plan_and_create_call_existing_services(monkeypatch):
         frag = k.plan_fn(ctx, SimpleNamespace(), "s1", p)
         assert isinstance(frag, dict) and "problems" in frag and log, k.kind
         assert all(x.split(".")[0] in ("job_params", "job_params.study_manage", "predict_batches", "surrogate_opts", "equiv_check",
-                                       "fem_verify", "stage4_predict") for x in log), (k.kind, log)
+                                       "fem_verify", "stage4_predict", "asm_match_api") for x in log), (k.kind, log)
         log.clear()
         out, job_id, _ent = k.create_fn(ctx, SimpleNamespace(), "s1", p, "rid", None)
         assert job_id and log, (k.kind, log)
-        assert any(x.endswith((".create_job", ".create", ".verify", ".create_preview")) for x in log), (k.kind, log)
+        assert any(x.endswith((".create_job", ".create", ".verify", ".create_preview", ".run_check")) for x in log), (k.kind, log)
 
 
 # ---- V-MCP-8 -----------------------------------------------------------------------------------------
@@ -225,7 +229,7 @@ def test_v_mcp_8_envelope_and_truncation():
 
     assert {k.summary_entity for k in JOB_KINDS.values()} <= set(sm.SUMMARIES)
     assert set(sm.SUMMARIES) == {"study", "param_set", "train_doe", "predict_run", "predict_batch", "surrogate_opt", "equiv_check",
-                                 "fem_verify", "geom_preview", "job"}
+                                 "fem_verify", "geom_preview", "asm_match", "job"}
     rows = [{"run_key": f"run__{i}", "values": {"THK_1": i * 0.1, "RIB_T": 2.0}, "responses": {"MASS": 1.0 + i}, "path": "/abs/x"}
             for i in range(5000)]
     facts = sm.facts_of({"title": "t", "dir": "D:\\AI\\x", "note": "/home/u/a", "n": 3, "nested": {"a": 1}})
@@ -254,7 +258,7 @@ def test_v_mcp_9_generator_deterministic_and_fresh():
     assert {f: disk[f] for f in ts.FILES} == a, "python scripts/gen_tool_specs.py 로 다시 생성하세요"
     oai = json.loads(a["tools.openai.json"])
     names = [f["function"]["name"] for f in oai]
-    assert names == sorted(names) and len(names) == 17
+    assert names == sorted(names) and len(names) == 23
     for f in oai:
         params = f["function"]["parameters"]
         assert not ({"oneOf", "anyOf", "allOf"} & set(params)) and params["type"] == "object" and f["function"]["strict"] is False

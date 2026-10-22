@@ -89,5 +89,8 @@ def test_all_routes_prefixed():
         "/uploads/{upload_id}/files/{index}", "/uploads/{upload_id}/complete", "/admin/uploads/cleanup-stale",
         # upload-report.md §9.4: HTML 결과 요약 보고서(서버가 요청 시 생성, 저장 없음)
         "/reports/analysis", "/reports/{target}/{target_id}",
+        # asm-match.md §6.3(AM-C2): 조립 매칭(생성·목록·조회·행 저장·검사·확정)
+        "/studies/{study_id}/asm-matches", "/asm-matches/{match_id}", "/asm-matches/{match_id}/rows", "/asm-matches/{match_id}/check",
+        "/asm-matches/{match_id}/confirm",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

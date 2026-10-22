@@ -65,6 +65,7 @@ from .matrix_designs import (  # noqa: F401 - 기존 경로 재노출
     _ccd,
 )
 from .matrix_sobol import SOBOL_MAX_SEED, SEQUENCE_TOL, _sobol  # noqa: F401 - 기존 경로 재노출
+from .matrix_more import HALTON_MAX_SEED, _halton, _random  # noqa: F401 - DM-C3 새 방식
 
 
 def _new_kind(kind: str, source: Mapping[str, Any], parameters: Sequence[Mapping[str, Any]],
@@ -81,6 +82,10 @@ def _new_kind(kind: str, source: Mapping[str, Any], parameters: Sequence[Mapping
         return [], dsn.base_meta(), [], dsn
     if kind == "lhs_opt":
         raw, meta, notes = _lhs_opt(source, dsn, max_runs, problems)
+    elif kind == "halton":
+        raw, meta, notes = _halton(source, dsn, max_runs, problems)
+    elif kind == "random":
+        raw, meta, notes = _random(source, dsn, max_runs, problems)
     elif kind == "fullfact":
         raw, meta, notes = _fullfact(source, dsn, tpl_params, integer_rounding, max_runs, problems)
     elif kind == "fracfact":

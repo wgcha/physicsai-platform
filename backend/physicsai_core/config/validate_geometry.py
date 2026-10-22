@@ -47,6 +47,21 @@ def _validate_geometry(s: Settings, issues: list[ConfigIssue]) -> None:
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.\-]{0,63}", s.shell.default_component or ""):
         add("shell.default_component", "/PART 제목(영숫자·_·.·-, 64자 이내)이어야 합니다")
     _validate_view(s, issues)
+    _validate_asm_match(s, issues)
+
+
+def _validate_asm_match(s: Settings, issues: list[ConfigIssue]) -> None:
+    """`asm_match` 절(asm-match.md §6.2) 범위 — paicad `options.asm_match` 검사와 같은 범위."""
+    a = s.asm_match
+    add = lambda k, m: issues.append(ConfigIssue(k, m))  # noqa: E731
+    if a.max_parts < 1:
+        add("asm_match.max_parts", "1 이상")
+    if not 0 <= a.recommend_min_score <= 1:
+        add("asm_match.recommend_min_score", "0~1")
+    if a.worst_nodes < 1:
+        add("asm_match.worst_nodes", "1 이상")
+    if not a.timeout_s > 0:
+        add("asm_match.timeout_s", "양수")
 
 
 def _validate_view(s: Settings, issues: list[ConfigIssue]) -> None:

@@ -200,6 +200,15 @@ def geometry_native_missing(s: Settings) -> tuple[list[str], list[str]]:
     return tmpl, res
 
 
+def asm_match_missing(s: Settings, *, write: bool = False) -> tuple[list[str], list[str]]:
+    """조립 매칭(asm-match.md §6.2)에 빠진 (설정·템플릿, 실행 파일) 키. enabled=false·명령 null → API 409 TEMPLATE_NOT_CONFIGURED.
+    write=True: 확정본으로 만드는 조립 사본(`paicad asm write`)까지(매칭 세트로 입력을 만드는 소비자 — 새 FEATURES 항목은 만들지 않는다)."""
+    keys = ("paicad_asm_parts", "paicad_asm_check") + (("paicad_asm_write",) if write else ())
+    tmpl = [] if s.asm_match.enabled else ["asm_match.enabled"]
+    tmpl += [f"commands.{k}" for k in keys if getattr(s.commands, k) is None]
+    return tmpl, _paicad_missing(s)
+
+
 def _paicad_missing(s: Settings) -> list[str]:
     exe = derived_paicad_path(s)
     return [] if exe and os.path.isfile(exe) else ["geometry.paicad_path"]

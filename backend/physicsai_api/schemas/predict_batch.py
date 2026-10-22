@@ -10,7 +10,7 @@ from .common import InputKind, Resp
 from .native_vars import VarRow
 from .predict_batch_source import (  # noqa: F401 - 기존 경로 재노출
     TABLE_TEXT_MAX_CHARS, BatchSourceLhs, BatchSourceTable, BatchSourceTrainDoe, BatchSourceLhsOpt, BatchSourceSobol,
-    BatchSourceFullfact, BatchSourceFracfact, BatchSourcePb, BatchSourceBbd, BatchSourceCcd, BatchSource,
+    BatchSourceHalton, BatchSourceRandom, BatchSourceFullfact, BatchSourceFracfact, BatchSourcePb, BatchSourceBbd, BatchSourceCcd, BatchSource,
     PredictBatchPreviewRequest,
 )
 from .design_map import (  # noqa: F401 - 기존 경로 재노출
@@ -19,7 +19,7 @@ from .design_map import (  # noqa: F401 - 기존 경로 재노출
 
 __all__ = [
     "BatchSourceLhs", "BatchSourceTable", "BatchSourceTrainDoe", "BatchSourceLhsOpt", "BatchSourceSobol",
-    "BatchSourceFullfact", "BatchSourceFracfact", "BatchSourcePb", "BatchSourceBbd", "BatchSourceCcd", "BatchSource",
+    "BatchSourceHalton", "BatchSourceRandom", "BatchSourceFullfact", "BatchSourceFracfact", "BatchSourcePb", "BatchSourceBbd", "BatchSourceCcd", "BatchSource",
     "PredictBatchPreviewRequest", "BatchProblem", "BatchNote", "SamplingInfo", "SamplingSummary", "BatchPreviewRow", "PredictBatchPreview", "PredictBatchSummary", "BatchRef", "BatchModelRef",
     "BatchGenCounts", "BatchPredictCounts", "BatchResponseName", "BatchRunRow", "PredictBatch", "BatchRetryFailed",
     "BatchCurveSeries", "BatchCurves", "DesignMapParameter", "DesignMapMetric", "DesignMapCurveStats", "DesignMapRun",

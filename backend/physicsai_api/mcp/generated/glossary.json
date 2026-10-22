@@ -1,6 +1,10 @@
 {
   "entities": {
     "items": {
+      "asm_match": {
+        "id_label": "match_id",
+        "label_ko": "조립 매칭"
+      },
       "equiv_check": {
         "id_label": "eq_id",
         "label_ko": "해석 등가성 판정"
@@ -142,6 +146,19 @@
       "read",
       "run",
       "admin"
+    ],
+    "AsmCad.kind": [
+      "train",
+      "path"
+    ],
+    "AsmMatch.state": [
+      "SCANNING",
+      "DRAFT",
+      "CHECKING",
+      "CHECKED",
+      "CONFIRMED",
+      "FAILED",
+      "STALE"
     ],
     "BaselineAddRequest.usage": [
       "topology",
@@ -557,6 +574,17 @@
       ">=",
       "range"
     ],
+    "SoExploreNew.criterion": [
+      "maximin",
+      "corr"
+    ],
+    "SoExploreNew.method": [
+      "lhs",
+      "lhs_opt",
+      "sobol",
+      "halton",
+      "random"
+    ],
     "SoObjective.sense": [
       "min",
       "max"
@@ -729,6 +757,68 @@
         "backend/physicsai_api/services/contour_capture.py"
       ],
       "status": 413
+    },
+    "ASM_CHECK_REQUIRED": {
+      "code": "ASM_CHECK_REQUIRED",
+      "message_ko": "마지막 검사가 없거나 통과하지 않았거나 그 뒤 행이 바뀌었습니다 — 검사를 다시 하세요",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py"
+      ],
+      "status": 409
+    },
+    "ASM_MATCH_BUSY": {
+      "code": "ASM_MATCH_BUSY",
+      "message_ko": "조립 매칭 작업이 진행 중입니다 — 끝난 뒤 다시 하세요",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py"
+      ],
+      "status": 409
+    },
+    "ASM_MATCH_CONFIRMED": {
+      "code": "ASM_MATCH_CONFIRMED",
+      "message_ko": "확정된 매칭은 바꿀 수 없습니다 — 새 조립 매칭을 만드세요",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py"
+      ],
+      "status": 409
+    },
+    "ASM_MATCH_STALE": {
+      "code": "ASM_MATCH_STALE",
+      "message_ko": "이 조립 매칭의 STEP 출처가 이 작업과 다릅니다 — 조립 매칭을 다시 하세요",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
+        "backend/physicsai_api/services/asm_match_gate.py",
+        "backend/physicsai_api/services/param_set_native_train.py"
+      ],
+      "status": 409
+    },
+    "ASM_MATCH_UNSUPPORTED": {
+      "code": "ASM_MATCH_UNSUPPORTED",
+      "message_ko": "쉘 판금 세트는 조립 매칭을 쓰지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
+        "backend/physicsai_api/services/asm_match_gate.py",
+        "backend/physicsai_api/services/job_params/stage1_native.py",
+        "backend/physicsai_api/services/job_params/stage4_native.py",
+        "backend/physicsai_api/services/param_set_native_api.py"
+      ],
+      "status": 422
+    },
+    "ASM_ROWS_INCOMPLETE": {
+      "code": "ASM_ROWS_INCOMPLETE",
+      "message_ko": "모든 바디를 component에 매칭하거나 매칭 안 함으로 두세요(매칭 행 1개 이상)",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py"
+      ],
+      "status": 409
+    },
+    "ASM_ROW_INVALID": {
+      "code": "ASM_ROW_INVALID",
+      "message_ko": "매칭 표가 올바르지 않습니다",
+      "sources": [
+        "backend/physicsai_api/services/asm_match_api.py"
+      ],
+      "status": 422
     },
     "AUTHENTICATION_REQUIRED": {
       "code": "AUTHENTICATION_REQUIRED",
@@ -1348,15 +1438,18 @@
       "sources": [
         "backend/physicsai_core/stage2_curation/spdm.py",
         "worker/physicsai_worker/steps/analysis/equiv_check.py",
+        "worker/physicsai_worker/steps/asm_match.py",
         "worker/physicsai_worker/steps/common.py",
         "worker/physicsai_worker/steps/geometry_native.py",
         "worker/physicsai_worker/steps/geometry_props.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native_set.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
         "worker/physicsai_worker/steps/stage4_predict/batch.py",
         "worker/physicsai_worker/steps/stage4_predict/batch_native.py",
         "worker/physicsai_worker/steps/stage4_predict/fem_verify.py",
+        "worker/physicsai_worker/steps/stage4_predict/param_set_native.py",
         "worker/physicsai_worker/steps/stage4_predict/predict.py",
         "worker/physicsai_worker/steps/stage4_predict/predict_inputs.py",
         "worker/physicsai_worker/steps/stage4_predict/predict_native.py",
@@ -1367,8 +1460,9 @@
     },
     "INPUT_INVALID": {
       "code": "INPUT_INVALID",
-      "message_ko": "source_ref는 fem_verification_id 또는 {study_id, h3d_rel}(.h3d)이어야 합니다",
+      "message_ko": "STEP 파일 경로(cad.path)가 필요합니다",
       "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_api/services/contour3d_api.py",
         "backend/physicsai_api/services/geom_view_api.py",
         "backend/physicsai_api/services/param_set_props_api.py",
@@ -1378,6 +1472,7 @@
         "backend/physicsai_core/tpl_render.py",
         "worker/physicsai_worker/steps/_scx.py",
         "worker/physicsai_worker/steps/analysis/equiv_check.py",
+        "worker/physicsai_worker/steps/asm_match.py",
         "worker/physicsai_worker/steps/common.py",
         "worker/physicsai_worker/steps/geometry_native.py",
         "worker/physicsai_worker/steps/geometry_props.py",
@@ -1387,6 +1482,7 @@
         "worker/physicsai_worker/steps/stage1_train_data/_shared.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native_methods.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_native_set.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
         "worker/physicsai_worker/steps/stage1_train_data/extract.py",
@@ -1458,6 +1554,7 @@
       "message_ko": "서버 내부 오류가 발생했습니다",
       "sources": [
         "backend/physicsai_api/main.py",
+        "backend/physicsai_api/services/job_params/stage1_native.py",
         "backend/physicsai_core/commands.py",
         "backend/physicsai_core/commands_render.py",
         "backend/physicsai_core/paths.py",
@@ -1673,6 +1770,7 @@
         "backend/physicsai_api/main.py",
         "backend/physicsai_api/mcp/job_kinds.py",
         "backend/physicsai_api/services/api_tokens.py",
+        "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_api/services/common.py",
         "backend/physicsai_api/services/contour3d_api.py",
         "backend/physicsai_api/services/contour_capture.py",
@@ -1761,8 +1859,9 @@
     },
     "OUTPUT_MISSING": {
       "code": "OUTPUT_MISSING",
-      "message_ko": "쉘 두께 적용 사본이 없습니다: {…}",
+      "message_ko": "{…}에 파일 목록·starter가 없습니다",
       "sources": [
+        "worker/physicsai_worker/steps/geometry_asm.py",
         "worker/physicsai_worker/steps/geometry_props.py",
         "worker/physicsai_worker/steps/geometry_shell.py",
         "worker/physicsai_worker/steps/response_tcl.py",
@@ -1914,12 +2013,15 @@
     },
     "PREREQUISITE_MISSING": {
       "code": "PREREQUISITE_MISSING",
-      "message_ko": "결과 h3d를 찾을 수 없습니다",
+      "message_ko": "조립 component 목록을 만들지 못했습니다 — 새 조립 매칭을 만드세요",
       "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
+        "backend/physicsai_api/services/asm_match_gate.py",
         "backend/physicsai_api/services/contour3d_api.py",
         "backend/physicsai_api/services/job_params/base.py",
         "backend/physicsai_api/services/job_params/stage1_native.py",
         "backend/physicsai_api/services/job_params/stage1_train_data.py",
+        "backend/physicsai_api/services/job_params/stage4_native.py",
         "worker/physicsai_worker/steps/stage0_manage/cleanup.py"
       ],
       "status": 409
@@ -2223,8 +2325,9 @@
     },
     "STUDY_JOB_BUSY": {
       "code": "STUDY_JOB_BUSY",
-      "message_ko": "이 Study에서 같은 종류의 작업이 이미 대기 중이거나 실행 중입니다",
+      "message_ko": "이 Study에서 조립 매칭 작업이 이미 대기 중이거나 실행 중입니다",
       "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_core/db/repositories/jobs.py"
       ],
       "status": 409
@@ -2317,14 +2420,17 @@
     },
     "TEMPLATE_NOT_CONFIGURED": {
       "code": "TEMPLATE_NOT_CONFIGURED",
-      "message_ko": "메시 변환 명령 템플릿(mesh)이 설정되지 않았습니다",
+      "message_ko": "관리자 설정 필요: {…}",
       "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_api/services/fem_verify_plan.py",
         "backend/physicsai_api/services/input_kind_gate.py",
         "backend/physicsai_api/services/job_params/base.py",
         "backend/physicsai_api/services/job_params/stage4_predict.py",
         "backend/physicsai_core/commands.py",
         "backend/physicsai_core/commands_render.py",
+        "worker/physicsai_worker/steps/asm_match.py",
+        "worker/physicsai_worker/steps/geometry_asm.py",
         "worker/physicsai_worker/steps/geometry_cushion.py",
         "worker/physicsai_worker/steps/geometry_props.py",
         "worker/physicsai_worker/steps/geometry_shell.py",
@@ -2627,6 +2733,16 @@
     }
   },
   "job_kinds": {
+    "asm_match": {
+      "cost": "light",
+      "job_types": [
+        "ASM_MATCH"
+      ],
+      "label_ko": "조립 매칭 검사",
+      "stage": "①④",
+      "summary_entity": "asm_match",
+      "version": 1
+    },
     "doe_generate": {
       "cost": "heavy",
       "job_types": [
@@ -2719,6 +2835,11 @@
     }
   },
   "job_types": {
+    "ASM_MATCH": {
+      "label": "조립 매칭",
+      "lane": "PREVIEW",
+      "stage_label": "①④"
+    },
     "CONTOUR_3D": {
       "label": "결과 3D 컨투어",
       "lane": "LIGHT",
@@ -2862,6 +2983,11 @@
   },
   "schema_version": 1,
   "stages": [
+    {
+      "internal": "①④",
+      "job_type": "ASM_MATCH",
+      "screen": "①④"
+    },
     {
       "internal": "④⑤",
       "job_type": "CONTOUR_3D",

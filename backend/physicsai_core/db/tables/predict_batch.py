@@ -23,7 +23,8 @@ from sqlalchemy.dialects.postgresql import JSONB
 from ._base import ID, TS, metadata
 
 BATCH_STATUSES = ("GENERATING", "PREDICTING", "DONE", "FAILED", "CANCELED")
-BATCH_SOURCE_KINDS = ("LHS", "LHS_OPT", "SOBOL", "FULLFACT", "FRACFACT", "PB", "BBD", "CCD", "TABLE", "TRAIN_DOE")  # 0012(S15)
+BATCH_SOURCE_KINDS = ("LHS", "LHS_OPT", "SOBOL", "FULLFACT", "FRACFACT", "PB", "BBD", "CCD", "TABLE", "TRAIN_DOE",
+                      "HALTON", "RANDOM")  # 0012(S15) + 0023(doe-methods.md DM-C3)
 GEN_STATES = ("PENDING", "RUNNING", "DONE", "FAILED")
 
 predict_batches = Table(
@@ -50,7 +51,7 @@ predict_batches = Table(
     CheckConstraint("batch_no >= 1", name="ck_predict_batches_batch_no"),
     CheckConstraint("input_kind IN ('mesh_only','assembly')", name="ck_predict_batches_input_kind"),
     CheckConstraint(
-        "source_kind IN ('LHS','LHS_OPT','SOBOL','FULLFACT','FRACFACT','PB','BBD','CCD','TABLE','TRAIN_DOE')",
+        "source_kind IN ('LHS','LHS_OPT','SOBOL','FULLFACT','FRACFACT','PB','BBD','CCD','TABLE','TRAIN_DOE','HALTON','RANDOM')",
         name="ck_predict_batches_source_kind"),
     CheckConstraint("status IN ('GENERATING','PREDICTING','DONE','FAILED','CANCELED')", name="ck_predict_batches_status"),
     CheckConstraint("multi_execution >= 1", name="ck_predict_batches_multi_execution"),

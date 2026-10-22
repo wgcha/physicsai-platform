@@ -21,8 +21,10 @@ EXECUTABLE_CONFIG_NAME: dict[str, str] = {"paicad_path": "geometry.paicad_path"}
 PAICAD_SHELL_KEYS = ("paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
                      "paicad_shell_check", "paicad_shell_run")
 PAICAD_VIEW_KEYS = ("paicad_view_export", "paicad_view_preview", "paicad_shell_view_export", "paicad_shell_view_preview")
+PAICAD_ASM_KEYS = ("paicad_asm_parts", "paicad_asm_check", "paicad_asm_write")  # 조립 매칭(asm-match.md §6.2)
 PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version",
-               "paicad_cushion_write", "paicad_props_scan", "paicad_props_apply", "paicad_map") + PAICAD_SHELL_KEYS + PAICAD_VIEW_KEYS
+               "paicad_cushion_write", "paicad_props_scan", "paicad_props_apply", "paicad_map") + PAICAD_ASM_KEYS + PAICAD_SHELL_KEYS \
+              + PAICAD_VIEW_KEYS
 
 
 def executable_config_name(exe_key: str) -> str:
@@ -104,6 +106,10 @@ _NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     # 쿠션 입력 rad(input-kind.md §5.1): {cushion_inc}(모핑 PASS include 또는 기준본)·{cushion_dir}(보고)·{cushion_rad}(출력 rad)
     "paicad_cushion_write": _P({"paicad", "cushion_inc", "renum_csv", "assem_dir", "cushion_dir", "cushion_rad"}),
     "paicad_version": _P({"paicad"}),
+    # 조립 매칭(asm-match.md §6.2). {features_json}(①)과 {cad_input}(④)은 둘 중 하나 — ④는 --features 쌍을 --cad로 바꾼다(commands_asm)
+    "paicad_asm_parts": _P({"paicad", "assem_dir", "features_json", "cad_input", "renum_csv", "asm_cache_dir", "options_json", "out_dir"}),
+    "paicad_asm_check": _P({"paicad", "cad_input", "features_json", "assem_dir", "match_rows_json", "asm_cache_dir", "options_json", "out_dir"}),
+    "paicad_asm_write": _P({"paicad", "assem_dir", "asm_match", "node_patch", "asm_cache_dir", "out_dir"}),
     # 단계 3S 쉘 두께(§11.1)·4B 다중 baseline(§7.3.8). {usage}·{split_param}은 경로가 아닌 값(map --usage·--split-param)
     "paicad_props_scan": _P({"paicad", "assem_dir", "options_json", "out_dir"}),
     "paicad_props_apply": _P({"paicad", "assem_dir", "values_json", "props_json", "out_dir"}),
@@ -164,8 +170,19 @@ for _k, _ph in _NATIVE_PLACEHOLDERS.items():
         if (_k, _n) not in _NON_PATH:
             PATH_STYLE[(_k, _n)] = "os"  # 모든 paicad 경로 인자는 OS 표기(§7.1)
 
+# 조립 매칭 방식 M 쌍 치환(commands_asm)이 만드는 placeholder도 OS 경로 표기
+from .commands_asm import ASM_EXTRA_PLACEHOLDERS, ASM_PAIR_KEYS  # noqa: E402
+
+for _k in ASM_PAIR_KEYS:
+    for _n in ASM_EXTRA_PLACEHOLDERS:
+        PATH_STYLE.setdefault((_k, _n), "os")
+
 # {renum_csv}가 없을 때 인자 쌍째 생략하는 (키, placeholder) → 옵션 이름(§7.3.1, 이 키·이 쌍 한정)
 OPTIONAL_PAIRS: dict[tuple[str, str], str] = {("paicad_extract", "renum_csv"): "--renum-csv",
+                                              # 조립 매칭(AM-10): RENUM 표가 없으면 추천 보조 생략, ④(STEP만)는 --features 쌍 생략, 공칭 쓰기는 --patch 생략
+                                              ("paicad_asm_parts", "renum_csv"): "--renum-csv",
+                                              ("paicad_asm_check", "features_json"): "--features",
+                                              ("paicad_asm_write", "node_patch"): "--patch",
                                               # 4B map: 기존 param_map.json이 없으면 --user-map, range가 아니면 --split-param 생략(§7.3.8)
                                               ("paicad_map", "user_map"): "--user-map", ("paicad_map", "split_param"): "--split-param",
                                               # 쉘(SM §8.1): ①-1 extract는 조립 폴더 없음, 3S 두께가 없으면 --thickness 생략

@@ -55,6 +55,16 @@ class CommandsCfg(_M):
         "--baseline-inc", "{baseline_inc}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}",
         "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}",
         "--out-inc", "{out_inc}"])
+    # 조립 매칭(asm-match.md §6.2, paicad 0.13.0+) — null이면 조립 매칭만 꺼짐(RENUM 세트는 그대로)
+    paicad_asm_parts: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "asm", "parts", "--assem-dir", "{assem_dir}", "--features", "{features_json}", "--renum-csv", "{renum_csv}",
+        "--cache-dir", "{asm_cache_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"])
+    paicad_asm_check: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "asm", "check", "--cad", "{cad_input}", "--features", "{features_json}", "--assem-dir", "{assem_dir}",
+        "--match", "{match_rows_json}", "--cache-dir", "{asm_cache_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"])
+    paicad_asm_write: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "asm", "write", "--assem-dir", "{assem_dir}", "--asm-match", "{asm_match}", "--patch", "{node_patch}",
+        "--cache-dir", "{asm_cache_dir}", "--out-dir", "{out_dir}"])
     paicad_version: list[str] | None = Field(default_factory=lambda: ["{paicad}", "version", "--json"])
     # 단계 3S 쉘 두께(§11.1) — null이면 쉘 두께 파라미터 기능만 꺼짐
     paicad_props_scan: list[str] | None = Field(default_factory=lambda: [

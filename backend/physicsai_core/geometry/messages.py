@@ -52,13 +52,27 @@ CODE_TABLE: dict[str, tuple[str, str]] = {
     "PREVIEW_BUSY": ("INPUT", "미리보기가 많이 대기 중입니다 — 잠시 후 다시 시도하세요"),
     "ARTIFACT_EXPIRED": ("INPUT", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요"),
     "VIEW_PREVIEW_TIMEOUT": ("VIEW", "미리보기 시간 초과"),
+    # ---- 조립 매칭(asm-match.md §6.1): paicad 0.13.0 `asm`·방식 M 코드(경고·진단 포함) ----
+    "ASM_BOUNDARY_MISMATCH": ("ASM", "외곽 노드가 CAD 경계면과 맞지 않습니다"),
+    "ASM_SHARED_NODES": ("ASM", "매칭한 component의 노드를 매칭하지 않은 PART가 함께 씁니다"),
+    "ASM_INCLUDE_OUTSIDE": ("INPUT", "include가 조립 폴더 밖을 가리키거나 링크입니다 — 필요한 파일을 조립 폴더 안에 두세요"),
+    "ASM_INCLUDE_MISSING": ("INPUT", "include한 파일이 조립 폴더에 없습니다"),
+    "ASM_NO_SOLID_PART": ("INPUT", "조립에 TETRA4 component가 없습니다"),
+    "ASM_TOO_MANY_PARTS": ("INPUT", "조립의 PART가 너무 많습니다(asm_match.max_parts)"),
+    "ASM_MATCH_INVALID": ("INPUT", "조립 매칭이 현재 조립 폴더와 맞지 않습니다 — 조립 매칭을 다시 하세요"),
+    "ASM_FACE_UNCOVERED": ("ASM", "CAD 면 일부에 맞는 노드가 없습니다(경고)"),
+    "ASM_DUPLICATE_PART": ("ASM", "서로 다른 행의 component가 같은 위치에 있습니다(경고)"),
+    "ASM_FILE_UNUSED": ("INPUT", "starter의 include에 없는 파일은 읽지 않습니다(경고)"),
+    "BODY_MAP_IGNORED": ("INPUT", "조립 매칭이 있어 body_map.json은 쓰지 않습니다(경고)"),
+    "ASM_UNIT_SUSPECT": ("ASM", "CAD와 조립의 단위가 다른 것 같습니다 — CAD를 조립과 같은 mm로 다시 내보내세요"),
+    "ASM_OFFSET_SUSPECT": ("ASM", "CAD가 조립과 원점이 어긋나 있습니다 — CAD를 조립과 같은 원점으로 다시 내보내세요"),
     # ---- 쿠션 입력 rad(input-kind.md §5.2): 경고 코드 ----
     "CUSHION_PART_DEF_MISSING": ("INPUT", "쿠션 부품 정의(PART·PROP·MAT) 일부를 조립 폴더에서 찾지 못했습니다"),
 }
 CATEGORY_LABELS: dict[str, str] = {
     "CAD_FAILED": "CAD 생성 불가", "INTERFERENCE": "간섭", "QUALITY": "품질 미달", "DEVIATION": "편차 초과", "TIE": "tie 투영 실패",
     "PREP": "형상 준비 실패", "INPUT": "입력 오류", "PROP": "쉘 두께 적용 실패", "BASELINE": "baseline 범위 밖", "INTERNAL": "내부 오류",
-    "FIXED": "고정 영역 침범", "VIEW": "3D 보기 실패",
+    "FIXED": "고정 영역 침범", "VIEW": "3D 보기 실패", "ASM": "조립 매칭 검사 실패",
 }
 MAX_MESSAGE = 500  # job_steps.failure_message / predict_batch_runs.gen_message 한도
 _MM_RE = re.compile(r"boundary deviation\s+([0-9]+(?:\.[0-9]+)?)\s*mm")

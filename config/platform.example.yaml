@@ -234,6 +234,14 @@ geometry:                          # native 형상 엔진(docs/contracts/geometr
     timeout_s: {export: 300, preview: 60, preview_fe: 300}
     cache: {retention_days: 7, max_total_bytes: 2147483648, purge_interval_h: 6}   # 서버측 AI 루트 <study>/_cache/ 임시 캐시(브라우저 캐시 아님). 컨투어 3D와 합산
 
+# 조립 매칭(asm-match.md §6.2): STEP 바디 ↔ 조립 /PART 매칭 표 + 경계 일치 검사. 허용오차는 geometry.defaults.tag(AM-3). paicad --options의 asm_match 절로 전달
+asm_match:
+  enabled: true
+  max_parts: 5000                  # 요소를 가진 PART 수 상한(넘으면 ASM_TOO_MANY_PARTS)
+  recommend_min_score: 0.6         # 추천 최소 점수(미만이면 추천 없음)
+  worst_nodes: 2000                # 바디별 최악 거리 노드 상위 개수(worst_<body>.npz)
+  timeout_s: 600                   # asm parts·check 1회 시간 상한(초)
+
 # 쉘 판금(비드) 모핑(shell-morph.md §12 Q1): 기본 대상 component = Radioss /PART 제목(대소문자 무시). 바디 이름이 다르면 cad/body_map.json
 shell: {default_component: chassis_rear}
 
@@ -272,6 +280,10 @@ commands:
   paicad_check: ["{paicad}", "check", "--baseline-inc", "{baseline_inc}", "--morph-dir", "{morph_dir}", "--update-dir", "{update_dir}", "--tag-dir", "{tag_dir}", "--features", "{features_json}", "--values", "{values_json}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}", "--options", "{options_json}", "--out-dir", "{check_dir}", "--out-inc", "{out_inc}"]
   paicad_cushion_write: ["{paicad}", "cushion", "write", "--inc", "{cushion_inc}", "--renum-csv", "{renum_csv}", "--assem-dir", "{assem_dir}", "--out-dir", "{cushion_dir}", "--out-rad", "{cushion_rad}"]   # 쿠션 입력 rad(input-kind.md §5, paicad 0.12.0+). null = Native 쿠션 입력 비활성
   paicad_run: ["{paicad}", "run", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--baseline-inc", "{baseline_inc}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}", "--options", "{options_json}", "--update-dir", "{update_dir}", "--morph-dir", "{morph_dir}", "--check-dir", "{check_dir}", "--out-inc", "{out_inc}"]
+  # 조립 매칭(asm-match.md §6.2, paicad 0.13.0+). null이면 조립 매칭만 비활성. ④ 경로는 --features 쌍이 --cad {cad_input}으로 바뀌고, 공칭 실행은 --patch 쌍 생략
+  paicad_asm_parts: ["{paicad}", "asm", "parts", "--assem-dir", "{assem_dir}", "--features", "{features_json}", "--renum-csv", "{renum_csv}", "--cache-dir", "{asm_cache_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
+  paicad_asm_check: ["{paicad}", "asm", "check", "--cad", "{cad_input}", "--features", "{features_json}", "--assem-dir", "{assem_dir}", "--match", "{match_rows_json}", "--cache-dir", "{asm_cache_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
+  paicad_asm_write: ["{paicad}", "asm", "write", "--assem-dir", "{assem_dir}", "--asm-match", "{asm_match}", "--patch", "{node_patch}", "--cache-dir", "{asm_cache_dir}", "--out-dir", "{out_dir}"]
   paicad_version: ["{paicad}", "version", "--json"]
   # 단계 3S 쉘 두께(§11.1)·4B 다중 baseline(§7.3.8). --user-map·--split-param은 값이 없으면 인자 쌍째 생략
   paicad_props_scan: ["{paicad}", "props", "scan", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
