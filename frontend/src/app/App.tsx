@@ -10,7 +10,8 @@ import { AdminEnvCheck } from "../pages/AdminEnvCheck";
 import { useThemeSync } from "../design/theme";
 import { ImportLanding } from "../pages/ImportLanding";
 import { ReleaseBoard } from "../pages/ReleaseBoard";
-import { AdminApiTokens, MyApiTokens } from "../pages/ApiTokens";
+import { AdminApiTokens } from "../pages/ApiTokens";
+import { AiConnection } from "../pages/AiConnection";
 
 const FUTURE = { v7_startTransition: true, v7_relativeSplatPath: true };
 
@@ -40,7 +41,9 @@ export function AppRoutes() {
           <Route path="/p/:projectId/s/:studyId/stage/:n/surrogate/:optId" element={<StudyPage />} />
           <Route path="/p/:projectId/s/:studyId/manage" element={<StudyManage />} />
           <Route path="/admin/env-check" element={<AdminEnvCheck />} />
-          <Route path="/me/api-tokens" element={<MyApiTokens />} />
+          {/* mcp.md §23.1: 옛 "내 API 토큰" 경로는 AI 연결 페이지의 토큰 영역으로 */}
+          <Route path="/me/ai-connection" element={<AiConnection />} />
+          <Route path="/me/api-tokens" element={<Navigate to="/me/ai-connection#tokens" replace />} />
           <Route path="/admin/api-tokens" element={<AdminApiTokens />} />
           <Route path="/import" element={<ImportLanding />} />
           {/* 버전 게시판(읽기 전용 — 배포 RELEASES.md로만 기록) */}

@@ -5,6 +5,7 @@ import { errorMessage } from "../../../api";
 import { isSoActive, surrogateApi, type SurrogateOptSummary } from "../../../api/surrogateOpt";
 import { useStudy } from "../../../app/StudyContext";
 import { Card } from "../../../components/ui";
+import { InputBadge } from "../../../components/InputKindSelect";
 import { usePolling } from "../../../hooks/usePolling";
 import { fmtNum, fmtTime } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
@@ -100,6 +101,7 @@ function SoList({ list, error, onNew }: { list: SurrogateOptSummary[]; error: st
               <tr>
                 <th>번호</th>
                 <th>목적</th>
+                <th>입력</th>
                 <th>상태</th>
                 <th className="num">반복</th>
                 <th className="num">최적 값</th>
@@ -113,6 +115,7 @@ function SoList({ list, error, onNew }: { list: SurrogateOptSummary[]; error: st
                   <tr key={o.id} className="clickable" data-testid={`so-${o.label}`} onClick={() => navigate(`${base}/${o.id}`)}>
                     <td><Link to={`${base}/${o.id}`} onClick={(e) => e.stopPropagation()}>{o.label}</Link></td>
                     <td className="small">{metricLabel(obj.metric, obj.series)} <span className="muted">{obj.sense === "max" ? "최대화" : "최소화"}</span></td>
+                    <td className="small"><InputBadge input={o.input} /></td>
                     <td className="small"><span className={`pill ${soTone(o.status)}`}>{SO_STATUS_LABEL[o.status] ?? o.status}</span></td>
                     <td className="num">{o.iter_no}/{o.iterations}</td>
                     <td className="num mono">{fmtNum(o.best_value)}</td>

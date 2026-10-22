@@ -10,11 +10,11 @@ interface Group {
 
 const RESULT_KEYS = ["CONTOUR_PREVIEW", "CURVE_PICK", "RESPONSE_EXTRACT", "RESPONSE_TABLE"];
 
-/** step 묶음. mesh_only의 RAD_ASSEMBLE은 복사만이라 형상 생성에 넣는다(MESH는 SKIPPED라 숨김) */
+/** step 묶음. mesh_only(쿠션 입력)의 RAD_ASSEMBLE은 복사만이라 형상 생성에 넣는다(MESH는 Altair 쿠션이면 SKIPPED, Native 쿠션이면 모핑 — 같은 묶음) */
 export function stepGroups(kind: InputKind): Group[] {
   return kind === "mesh_only"
     ? [
-        { label: "형상 생성", tool: "SimLab", keys: ["PR_PREP", "TPL_RENDER", "GEOM_UPDATE", "RAD_ASSEMBLE"] },
+        { label: "형상 생성", tool: "SimLab", keys: ["PR_PREP", "TPL_RENDER", "GEOM_UPDATE", "MESH", "RAD_ASSEMBLE"] },
         { label: "예측", tool: "PhysicsAI", keys: ["EDSPY_PREDICT"] },
         { label: "결과", keys: RESULT_KEYS },
       ]

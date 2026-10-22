@@ -1,7 +1,7 @@
 // S16 V2(phase3 §21.3.8): 조립 상태 FEM 검증 API. 새 파일 — endpoints.ts·index.ts는 고치지 않는다(§21.7).
 // 타입은 계약 모양으로 고정한다(BE-V2 openapi 반영 뒤 `lint`로 생성 타입과의 차이를 확인).
 import { fetchBlob, request, requestPage } from "./client";
-import type { ContourDisplay, FsRoots, JobSummary, MediaFile, PathInspectResult } from "./types";
+import type { ContourDisplay, FsRoots, JobSummary, MediaFile, PathInspectResult, PredictInput } from "./types";
 
 export type FvStatus = "WAITING_PREDICT" | "RUNNING" | "DONE" | "FAILED" | "CANCELED";
 export const FV_ACTIVE: FvStatus[] = ["WAITING_PREDICT", "RUNNING"];
@@ -10,10 +10,11 @@ export const isFvActive = (s: string) => (FV_ACTIVE as string[]).includes(s);
 export type FemSourceReq =
   | { kind: "predict_job"; job_id: string }
   | { kind: "batch_run"; batch_id: string; doe_no: number }
-  | { kind: "values"; param_set_id: string; model_id?: string | null; values: Record<string, number>; reuse_existing?: boolean; origin?: { kind: "optimize"; job_id: string } | null }
+  | { kind: "values"; param_set_id: string; model_id?: string | null; values: Record<string, number>; reuse_existing?: boolean; origin?: { kind: "optimize"; job_id: string } | null; input?: PredictInput }
   | { kind: "opt_design"; opt_id: string; pick: "best" | "final_optimum" | "surrogate_optimum" | "run"; iter_no?: number; doe_no?: number };
 
-export type FemAssemblyReq = { kind: "predict_input" } | { kind: "train_doe"; doe_id: string } | { kind: "custom"; path: string };
+/** template = 출처 템플릿의 조립 폴더(input-kind.md §8 — 조립 가능 템플릿의 쿠션 실행 기본값) */
+export type FemAssemblyReq = { kind: "predict_input" } | { kind: "train_doe"; doe_id: string } | { kind: "custom"; path: string } | { kind: "template" };
 
 export interface FemVerifyCreate {
   source: FemSourceReq;
@@ -49,6 +50,8 @@ export interface AssemblyPlan {
 
 export interface FemDesign {
   param_set: { id: string; label: string | null; input_kind: string } | null;
+  /** input-kind.md IK-8: 검증 대상 설계의 입력 종류 */
+  input?: PredictInput;
   model: { id: string; name: string; version: number } | null;
   values: Record<string, number>;
   applied_values: Record<string, number>;

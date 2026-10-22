@@ -9,6 +9,7 @@ import type { MockServer } from "./server";
 import { predictResult } from "./stage4";
 import { preparedResult } from "./stage4Prepared";
 import { isBatchChild } from "./predictBatch";
+import { ofPrepared, toPublic } from "./inputKind";
 
 const STATES: JobState[] = ["QUEUED", "RUNNING", "WAITING_HPC", "COLLECTING", "SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"];
 const prm = (j: Job) => j.params as Record<string, unknown>;
@@ -58,6 +59,7 @@ function summaryOf(srv: MockServer, j: Job): PredictRunSummary {
     duration_s: start != null && end != null ? Math.round((end - start) / 1000) : null,
     created_by_name: j.created_by_name,
     input_mode: prepared ? "prepared" : "template",
+    input: prepared ? ofPrepared(p.starter_name as string | undefined) : toPublic((p.template_kind as string | undefined) ?? (r?.template_kind as string | undefined) ?? ps?.input_kind),
     template: ps ? { id: ps.id, label: ps.label ?? (ps.source_path.split(/[\\/]/).filter(Boolean).pop() ?? null), input_kind: ps.input_kind } : null,
     model: model ? { id: model.id, name: model.name, version: model.version } : null,
     values: prepared ? {} : ((p.values as Record<string, number> | undefined) ?? {}),
@@ -94,6 +96,14 @@ function detailOf(srv: MockServer, j: Job): PredictRunDetail {
       geom_dir: s.input_mode === "template" ? d("geom") : null,
     },
     display: ps?.display ?? null,
+    // 예측에 실제로 넣은 입력(수치만) — 입력 조립 단계가 끝난 뒤. 쿠션 = rad 1개
+    predict_input:
+      done || j.steps.some((x) => x.step_key === "RAD_ASSEMBLE" && x.state === "SUCCEEDED")
+        ? s.input === "cushion"
+          ? { input: "cushion", starter: "EPS_mesh_0000.rad", bytes: 3_400_000, files: 1 }
+          : { input: "assembly", starter: s.starter ?? ps?.starter_name ?? "cushion_0000.rad", bytes: 186_000_000, files: 24 }
+        : null,
+    input_warnings: [],
   };
 }
 

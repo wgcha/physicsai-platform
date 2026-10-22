@@ -27,6 +27,30 @@
   width: 100%;
 }
 
+/* 템플릿 능력 배지(input-kind.md §10): 조립·쿠션 가능 / 쿠션만 / 조립만 — 회색 작은 글씨 대신 눈에 띄는 pill */
+.tpl-badge {
+  width: fit-content;
+  padding: 3px var(--space-3);
+  font: var(--font-c-strong);
+}
+.tpl-pick.compact > [data-testid="template-meta"] {
+  width: fit-content;
+}
+/* 입력 종류 세그먼트(조립|쿠션) */
+.input-kind {
+  gap: var(--space-1);
+}
+.input-kind .seg {
+  width: fit-content;
+}
+.input-kind .seg button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.stage-basis .pill {
+  font: var(--font-c-strong);
+}
+
 /* 진행 단계(A) */
 .psteps {
   list-style: none;

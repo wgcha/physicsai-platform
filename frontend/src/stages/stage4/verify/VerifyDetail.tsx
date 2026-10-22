@@ -8,6 +8,7 @@ import { useStudy } from "../../../app/StudyContext";
 import { ScxJobStatus, useScxMode } from "../../../components/HpcScx";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { Card, CopyButton } from "../../../components/ui";
+import { InputBadge } from "../../../components/InputKindSelect";
 import { usePolling } from "../../../hooks/usePolling";
 import { POLL } from "../../../lib/poll";
 import { useCanExecute } from "../../../hooks/useJobRunner";
@@ -79,6 +80,7 @@ export function VerifyDetail({ fid }: { fid: string }) {
         <div className="run-action-row">
           <span className={`pill ${fvTone(fv.status)}`} data-testid="fv-status">{FV_STATUS_LABEL[fv.status]}</span>
           <span className="small" data-testid="fv-source-label">{fv.source.label}</span>
+          {fv.design?.input && <InputBadge input={fv.design.input} />}
           {lk.predict_job_id && <Link className="small" to={`${base}/4?job=${lk.predict_job_id}`}>예측 결과</Link>}
           {lk.batch_id && <Link className="small" to={`${base}/4/batch/${lk.batch_id}`}>배치 행{lk.doe_no != null ? ` #${lk.doe_no}` : ""}</Link>}
           {lk.opt_id && <Link className="small" to={`${base}/5/surrogate/${lk.opt_id}`}>최적화</Link>}

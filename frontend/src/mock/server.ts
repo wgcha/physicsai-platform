@@ -30,6 +30,7 @@ import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { nativeVarsRoutes } from "./nativeVars";
 import { newUploadState, reportRoutes, uploadRoutes, type UploadMockState } from "./uploads";
 import { apiTokenRoutes } from "./apiTokens";
+import { mcpRoutes } from "./mcp";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { geomViewRoutes } from "./geomView";
 import { mockReleases, releaseRoutes } from "./releases";
@@ -55,6 +56,7 @@ const JOB_LABEL = JOB_TYPE_LABEL;
 const ROUTES: Route[] = [
   opsRoutes, // §10.2 me·프로젝트·상태·대기열·자원
   apiTokenRoutes, // mcp.md §4.4 API 토큰 발급·목록·폐기(+관리자)
+  mcpRoutes, // mcp.md §23 연결 안내·ping·도구 목록
   releaseRoutes, // 버전 표시·버전 게시판(GET만)
   (srv, c) => srv.manage.handle(c.method, c.seg, c.body, c.me), // 3차(phase3.md §3): Study 관리·재시도·용량
   envCheckRoutes, // 2차(phase2.md §12): 환경 점검
@@ -127,6 +129,8 @@ export class MockServer {
   /** native 세트별 피처·쉘 PROP·매칭표 */
   geom = new Map<string, GeomRec>();
   geometryDefault: "altair" | "native" = "altair";
+  /** GET /mcp/connection url_source(기본 config) */
+  mcpUrlSource: "config" | "guess" = "config";
   /** upload-report.md 업로드 세션·보고서 목 상태(기본 꺼짐 — 기존 시험의 경로 칸은 탭 없이 그대로) */
   up: UploadMockState;
 
@@ -153,6 +157,7 @@ export class MockServer {
     if (opts.femVerify === "demo") seedFemVerify(this);
     if (opts.equiv === "demo") seedEquiv(this);
     this.geometryDefault = opts.geometryDefault ?? "altair";
+    this.mcpUrlSource = opts.mcpUrlSource ?? "config";
     this.up = newUploadState(opts.upload ?? false);
     if (opts.geometry) seedNative(this, opts.geometry === "multi");
   }

@@ -1,10 +1,12 @@
 // ④ 새 FEM 검증 카드(phase3 §21.3.11): ① 검증 대상 → ② 조립 원본 → ③ 고급(접힘) → ④ preview problems·warnings + "FEM 검증 실행".
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ApiError, errorMessage, type ViewKey } from "../../../api";
+import { ApiError, errorMessage, type PredictInput, type ViewKey } from "../../../api";
 import { femVerifyApi, type FemAssemblyReq, type FemPreview, type FemSourceReq, type FemVerifyCreate } from "../../../api/femVerify";
 import { useStudy } from "../../../app/StudyContext";
 import { RadiossVersionField, useRadiossVersion } from "../../../components/RadiossVersion";
+import { InputBadge, InputKindSelect } from "../../../components/InputKindSelect";
+import { capabilityOf, defaultInput, inputKindError } from "../../../lib/inputKind";
 import { Advanced, Card } from "../../../components/ui";
 import { useCanExecute } from "../../../hooks/useJobRunner";
 import { fmtNum } from "../../../lib/format";
@@ -14,19 +16,22 @@ import { AssemblySourcePicker, type AssemblyChoice } from "./AssemblySourcePicke
 import { checkFemField, parseComps } from "./verifyRules";
 
 const bodyOf = (c: AssemblyChoice): FemAssemblyReq | null =>
-  c.kind === "predict_input" ? { kind: "predict_input" } : c.kind === "train_doe" ? (c.doeId ? { kind: "train_doe", doe_id: c.doeId } : null) : c.confirmedPath ? { kind: "custom", path: c.confirmedPath } : null;
+  c.kind === "predict_input" ? { kind: "predict_input" } : c.kind === "template" ? { kind: "template" } : c.kind === "train_doe" ? (c.doeId ? { kind: "train_doe", doe_id: c.doeId } : null) : c.confirmedPath ? { kind: "custom", path: c.confirmedPath } : null;
 
-export function VerifyNew({ source, base }: { source: FemSourceReq; base: string }) {
-  const { study } = useStudy();
+export function VerifyNew({ source: source0, base }: { source: FemSourceReq; base: string }) {
+  const { study, paramSets } = useStudy();
+  // input-kind.md §10: 값으로 만든 출처(values)만 입력 종류를 고른다. 안 고르면 서버 기본 규칙(입력 생략)
+  const [inputPick, setInputPick] = useState<PredictInput | null>(null);
+  const source: FemSourceReq = source0.kind === "values" && inputPick ? { ...source0, input: inputPick } : source0;
   const canExec = useCanExecute();
   const navigate = useNavigate();
   const [choice, setChoice] = useState<AssemblyChoice>({ kind: "predict_input", doeId: null, path: "", confirmedPath: null });
   const [touched, setTouched] = useState(false);
   const [baseP, setBaseP] = useState<FemPreview | null>(null);
   const [prev, setPrev] = useState<FemPreview | null>(null);
-  const [error, setError] = useState<{ message: string; problems: { code: string; message: string }[] } | null>(null);
+  const [error, setError] = useState<{ message: string; code?: string; problems: { code: string; message: string }[] } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [createError, setCreateError] = useState<{ message: string; problems: { code: string; message: string }[] } | null>(null);
+  const [createError, setCreateError] = useState<{ message: string; code?: string; problems: { code: string; message: string }[] } | null>(null);
   // 고급
   const [field, setField] = useState("");
   const [comps, setComps] = useState("");
@@ -36,7 +41,8 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
   const [ncpus, setNcpus] = useState("");
   const ver = useRadiossVersion();
 
-  const sourceKey = JSON.stringify(source);
+  const sourceKey = JSON.stringify(source0);
+  const effKey = JSON.stringify(source);
   const assembly = touched ? bodyOf(choice) : null;
   const assemblyKey = JSON.stringify(assembly);
   const waitingPath = touched && choice.kind === "custom" && !choice.confirmedPath;
@@ -56,6 +62,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
   optsRef.current = makeBody;
 
   useEffect(() => {
+    setInputPick(null);
     setTouched(false);
     setBaseP(null);
     setChoice({ kind: "predict_input", doeId: null, path: "", confirmedPath: null });
@@ -78,17 +85,20 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
       .catch((e) => {
         if (!alive) return;
         setPrev(null);
-        setError({ message: errorMessage(e), problems: e instanceof ApiError ? ((e.detail.problems as { code: string; message: string }[] | undefined) ?? []) : [] });
+        setError({ message: errorMessage(e), code: e instanceof ApiError ? e.code : undefined, problems: e instanceof ApiError ? ((e.detail.problems as { code: string; message: string }[] | undefined) ?? []) : [] });
       });
     return () => {
       alive = false;
     };
     // 출처·조립 원본이 바뀔 때만 다시 미리보기(고급 값은 요청 때 반영)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [study.id, sourceKey, assemblyKey, waitingPath]);
+  }, [study.id, effKey, assemblyKey, waitingPath]);
 
   const predictInputOk = baseP?.assembly?.kind === "predict_input" && !baseP.problems.some((p) => p.code === "INPUT_MESH_ONLY");
-  const effective: AssemblyChoice = touched ? choice : { ...choice, kind: baseP?.assembly?.kind === "train_doe" ? "train_doe" : "predict_input" };
+  const baseKind = baseP?.assembly?.kind;
+  const effective: AssemblyChoice = touched ? choice : { ...choice, kind: baseKind === "train_doe" || baseKind === "template" ? baseKind : "predict_input" };
+  const valuesPs = source0.kind === "values" ? paramSets.find((p) => p.id === source0.param_set_id) ?? null : null;
+  const inputErr = inputKindError(error) ?? inputKindError(createError);
   const problems = prev?.problems ?? [];
   const localErr = compsP.error ?? fieldErr ?? legendErr ?? cpuErr;
   const ok = !!prev && !problems.length && !waitingPath && !localErr && !ver.error && canExec;
@@ -101,7 +111,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
       const r = await femVerifyApi.create(study.id, makeBody(assembly));
       navigate(`${base}/verify/${r.id}`);
     } catch (e) {
-      setCreateError({ message: errorMessage(e), problems: e instanceof ApiError ? ((e.detail.problems as { code: string; message: string }[] | undefined) ?? []) : [] });
+      setCreateError({ message: errorMessage(e), code: e instanceof ApiError ? e.code : undefined, problems: e instanceof ApiError ? ((e.detail.problems as { code: string; message: string }[] | undefined) ?? []) : [] });
     } finally {
       setBusy(false);
     }
@@ -116,7 +126,10 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
       <div className="fv-new-grid">
         <section className="fv-section" aria-label="검증 대상">
           <span className="field-label">검증 대상</span>
-          {error && (
+          {source0.kind === "values" && (
+            <InputKindSelect ps={valuesPs} value={inputPick ?? design?.input ?? defaultInput(capabilityOf(valuesPs))} onChange={setInputPick} error={inputErr} />
+          )}
+          {error && !inputKindError(error) && (
             <div role="alert">
               <p className="error-text small">{error.message}</p>
               {error.problems.map((p, i) => (
@@ -134,6 +147,11 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
                 {design?.param_set && <span className="muted"> · 템플릿 {design.param_set.label ?? design.param_set.id}</span>}
                 {design?.model && <span className="muted"> · 모델 {design.model.name} v{design.model.version}</span>}
               </p>
+              {source0.kind !== "values" && design?.input && (
+                <p className="small" data-testid="fv-input">
+                  입력 <InputBadge input={design.input} />
+                </p>
+              )}
               {names.length > 0 && (
                 <div className="table-wrap">
                   <table className="table compact" aria-label="설계점">
@@ -165,7 +183,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
           )}
         </section>
 
-        <AssemblySourcePicker value={effective} onChange={(v) => (setTouched(true), setChoice(v))} predictInputOk={predictInputOk} canEdit={canExec} />
+        <AssemblySourcePicker value={effective} onChange={(v) => (setTouched(true), setChoice(v))} predictInputOk={predictInputOk} canEdit={canExec} templateOk={baseKind === "template" || (touched && choice.kind === "template")} />
 
         <Advanced label="고급">
           <div className="fv-adv">
@@ -232,7 +250,7 @@ export function VerifyNew({ source, base }: { source: FemSourceReq; base: string
               ))}
             </ul>
           )}
-          {createError && (
+          {createError && !inputKindError(createError) && (
             <div role="alert">
               <p className="error-text small">{createError.message}</p>
               {createError.problems.map((p, i) => (

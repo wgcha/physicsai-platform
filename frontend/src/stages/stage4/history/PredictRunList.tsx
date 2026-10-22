@@ -5,6 +5,7 @@ import { errorMessage } from "../../../api";
 import { predictRunsApi, type PredictRunMode, type PredictRunSummary } from "../../../api/predictRuns";
 import { useStudy } from "../../../app/StudyContext";
 import { Card, JobStatusBadge } from "../../../components/ui";
+import { InputBadge } from "../../../components/InputKindSelect";
 import { usePolling } from "../../../hooks/usePolling";
 import { POLL } from "../../../lib/poll";
 import { MODE_FILTERS, durationText, firstResponseText, isActiveState, mdHm, sourceLabel, valuesText } from "./runListText";
@@ -101,6 +102,7 @@ export function PredictRunList({ initialMode, onNew }: { initialMode: PredictRun
                 <tr>
                   <th>시작</th>
                   <th>입력 방식</th>
+                  <th>입력</th>
                   <th>템플릿 / 입력 파일</th>
                   <th>값</th>
                   <th>응답</th>
@@ -118,6 +120,7 @@ export function PredictRunList({ initialMode, onNew }: { initialMode: PredictRun
                       {r.origin === "fem_verify" && <span className="muted small"> · FEM 검증</span>}
                     </td>
                     <td className="small">{r.input_mode === "prepared" ? "준비된 입력" : "템플릿"}</td>
+                    <td className="small"><InputBadge input={r.input} /></td>
                     <td className="small ellipsis" title={r.input_path ?? undefined}>
                       {sourceLabel(r)}
                     </td>

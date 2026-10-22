@@ -8,6 +8,8 @@ import type { ContourLegend, ViewKey } from "./types";
 
 /** 템플릿 입력 종류: 조립 폴더 포함(assembly) / 쿠션 단독 메시(mesh_only) */
 export type InputKind = "mesh_only" | "assembly";
+/** input-kind.md IK-1: 실행 단위 예측 입력 종류(공개 값). 저장 값 InputKind(assembly|mesh_only)와 구분 */
+export type PredictInput = "assembly" | "cushion";
 /** ④ 화면 입력 방식(localStorage `physicsai.stage4.inputMode`) */
 export type InputMode = "template" | "batch" | "prepared";
 
@@ -69,6 +71,8 @@ export interface PredictBatchParams {
   capture?: PredictBatchCapture | null;
   /** native-vars.md §6.3: Native 템플릿 변수 그 자리 편집(이 실행에만 적용) */
   vars?: { add?: string[]; exclude?: string[] } | null;
+  /** input-kind.md IK-1: 생략 = 서버 기본(조립 가능 → assembly, 쿠션 전용 → cushion) */
+  input?: PredictInput;
 }
 /** D3-53: enabled false → 하위 CONTOUR_CAPTURE SKIPPED. views·video 생략 = 기본 */
 export interface PredictBatchCapture {

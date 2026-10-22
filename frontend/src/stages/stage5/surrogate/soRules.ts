@@ -204,6 +204,8 @@ export const isSurrogateOnly = (o: Pick<SurrogateOpt, "settings">) => (o.setting
 export interface SoForm {
   paramSetId: string | null;
   modelId: string | null;
+  /** input-kind.md IK-1: 사용자가 고른 입력 종류(안 골랐으면 없음 = 서버 기본 규칙) */
+  input?: "assembly" | "cushion";
   explore: "new" | "reuse";
   count: string;
   exploreSeed: string;
@@ -253,6 +255,7 @@ export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
   return {
     param_set_id: f.paramSetId,
     model_id: f.modelId,
+    ...(f.input ? { input: f.input } : {}),
     explore: f.explore === "new"
       ? { kind: "new", count: f.count.trim() === "" ? null : int(f.count, 10), seed: int(f.exploreSeed, 1) }
       : { kind: "reuse", batch_id: f.batchId },

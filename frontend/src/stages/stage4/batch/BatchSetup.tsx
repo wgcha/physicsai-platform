@@ -10,6 +10,8 @@ import { FeatureGate, FeatureOffNote, useFeature } from "../../../components/Fea
 import { Card, RunAction } from "../../../components/ui";
 import { fmtNum, fmtTime } from "../../../lib/format";
 import { TemplatePicker, inputKindOf, templateName, useTemplateChoice } from "../TemplatePicker";
+import { InputKindSelect, useInputChoice } from "../../../components/InputKindSelect";
+import { inputKindError } from "../../../lib/inputKind";
 import { ModelLine, useModelChoice } from "../predictRun";
 import { BatchPreview } from "./BatchPreview";
 import { BATCH_STATUS_LABEL } from "./batchTable";
@@ -39,7 +41,9 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   const navigate = useNavigate();
   const canExec = useCanExecute();
   const { list, ps, setPicked } = useTemplateChoice();
-  const kind = ps ? inputKindOf(ps) : "assembly";
+  const ic = useInputChoice(ps);
+  // 쿠션 입력(Altair)은 geom_update만 필요 — mesh_only 기능 확인. Native는 서버가 쿠션 명령을 확인한다
+  const kind = !ps ? "assembly" : ps.engine === "native" ? inputKindOf(ps) : ic.value === "cushion" ? "mesh_only" : "assembly";
   const tplFeature = kind === "mesh_only" ? "predict_mesh_only" : "predict_parametric";
   const tplF = useFeature(tplFeature);
   const maxMulti = maxMultiExecution(status);
@@ -54,6 +58,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
   const [previewSource, setPreviewSource] = useState<BatchSource | null>(null);
   const [problems, setProblems] = useState<BatchProblem[]>([]);
   const [previewError, setPreviewError] = useState<string | null>(null);
+  const [inputErr, setInputErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [multi, setMulti] = useState(String(Math.min(4, maxMulti)));
   const [recent, setRecent] = useState<PredictBatchSummary[]>([]);
@@ -89,6 +94,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     setPreviewSource(null);
     setProblems([]);
     setPreviewError(null);
+    setInputErr(null);
   };
   useEffect(() => {
     setSamp((x) => resetForTemplate(x, ps));
@@ -135,13 +141,14 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     setBusy(true);
     clear();
     try {
-      const p = await api.batchPreview(study.id, { param_set_id: ps.id, source, ...(nat.rows ? { model_id: choice.chosenModel?.id ?? null, ...(natVars ? { vars: natVars } : {}) } : {}) });
+      const p = await api.batchPreview(study.id, { param_set_id: ps.id, source, ...(ic.picked ? { input: ic.picked } : {}), ...(nat.rows ? { model_id: choice.chosenModel?.id ?? null, ...(natVars ? { vars: natVars } : {}) } : {}) });
       setPreview(p);
       setProblems(p.problems);
       if (!p.problems.length && p.count > 0) setPreviewSource(source);
     } catch (e) {
       const det = e instanceof ApiError ? (e.detail.problems as BatchProblem[] | undefined) : undefined;
       if (det?.length) setProblems(det);
+      else if (e instanceof ApiError && inputKindError(e.detail)) setInputErr(inputKindError(e.detail));
       else setPreviewError(errorMessage(e));
     } finally {
       setBusy(false);
@@ -159,6 +166,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     if (!ps || !previewSource) return;
     const params: PredictBatchParams = { param_set_id: ps.id, model_id: choice.modelId || null, multi_execution: multiN, source: previewSource };
     if (natVars) params.vars = natVars;
+    if (ic.picked) params.input = ic.picked;
     if (legendFixed) params.display = { legend: { mode: "fixed", min: lgLo ?? null, max: lgHi ?? null } };
     const capture = captureParam(cap, defViews, defVideo);
     if (capture) params.capture = capture;
@@ -195,6 +203,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
     <>
       <Card span={3} title="1 템플릿·조합" className="batch-setup" aside={ps ? <span className="muted small">{templateName(ps)}</span> : undefined}>
         <TemplatePicker list={list} value={ps?.id ?? ""} onChange={setPicked} compact />
+        <InputKindSelect ps={ps} value={ic.value} onChange={(i) => (ic.setPicked(i), clear(), runner.clearError())} error={inputErr ?? inputKindError(runner.errorDetail)} />
         {!ps && <p className="muted small">등록된 템플릿이 없습니다 — "템플릿 값 입력"의 템플릿 관리에서 등록하세요.</p>}
         <SamplingPicker ps={eps} native={nativeBatch} nativePending={nat.pending} state={samp} onChange={changeSamp} maxRuns={DEFAULT_MAX_RUNS} cands={cands} contRanges={contRanges && contRanges.id === samp.contId ? contRanges.ranges : null} />
         {method === "table" && (
@@ -241,7 +250,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
             <li>
               <span className="R">단계 1 · ① 방식</span>
               <span>입력 생성(run 폴더마다 동시 실행)</span>
-              <span className="muted small">{kind === "mesh_only" ? "SimLab m_1 → EPS_mesh (메시 단독 — m_2·m_3 없음)" : "SimLab m_1 → EPS_mesh · HyperMesh m_2 → include · m_3 조립"}</span>
+              <span className="muted small">{kind === "mesh_only" ? "SimLab m_1 → EPS_mesh (쿠션 rad만 — m_2·m_3 없음)" : "SimLab m_1 → EPS_mesh · HyperMesh m_2 → include · m_3 조립"}</span>
             </li>
             <li>
               <span className="R">단계 2 · 준비된 입력 방식</span>
@@ -290,7 +299,7 @@ export function BatchSetup({ onStarted }: { onStarted?: () => void } = {}) {
                   job={runner.job && runner.job.state !== "SUCCEEDED" ? runner.job : null}
                   disabled={!enabled || !ready || runner.submitting}
                   disabledReason={!enabled || !tplF.enabled ? undefined : !previewSource ? "먼저 조합을 만드세요" : !multiOk ? `동시 실행 수는 1~${maxMulti}` : !legendOk ? "범례 최소 < 최대인 숫자(비우면 미지정)" : !capOk ? "캡처 방향을 1개 이상 고르세요" : !choice.chosenModel ? "Final 모델이 필요합니다" : undefined}
-                  error={runner.error}
+                  error={inputKindError(runner.errorDetail) ? null : runner.error}
                 />
               )}
             </FeatureGate>

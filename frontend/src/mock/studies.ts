@@ -5,6 +5,7 @@ import { err, needPower, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { datasetOut, modelOut } from "./stage3";
 import { check } from "./stage4";
+import { withCapability } from "./inputKind";
 import { discover, discoveredParams, registerDiscovered } from "./stage4Discover";
 
 export function studyDetail(srv: MockServer, s: Study): StudyDetail {
@@ -65,7 +66,7 @@ export const studyRoutes: Route = (srv, { method, path, seg, query, body, me }) 
     if (method === "GET" && !sub) return { status: 200, body: studyDetail(srv, s) };
     if (method === "GET" && sub === "datasets") return { status: 200, body: srv.datasets.filter((d) => d.study_id === s.id).map((d) => datasetOut(srv, d)) };
     if (method === "GET" && sub === "models") return { status: 200, body: srv.models.filter((m) => m.study_id === s.id).map((m) => modelOut(srv, m, false)) };
-    if (method === "GET" && sub === "param-sets") return { status: 200, body: srv.paramSets.filter((p) => p.study_id === s.id) };
+    if (method === "GET" && sub === "param-sets") return { status: 200, body: srv.paramSets.filter((p) => p.study_id === s.id).map(withCapability) };
     if (method === "POST" && sub === "predict" && seg[3] === "check") {
       const ps = srv.paramSets.find((p) => p.id === (body?.param_set_id || "") || (p.study_id === s.id && p.is_current && !body?.param_set_id));
       if (!ps) return err(404, "NOT_FOUND", "파라미터 세트가 없습니다.");

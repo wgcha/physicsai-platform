@@ -9,6 +9,7 @@ import { isSoActive, surrogateApi, type SoIteration, type SoRun, type SurrogateO
 import { useStudy } from "../../../app/StudyContext";
 import { usePolling } from "../../../hooks/usePolling";
 import { Card, CopyButton } from "../../../components/ui";
+import { InputBadge } from "../../../components/InputKindSelect";
 import { NOT_READY_TEXT, ReportButton } from "../../../components/ReportButton";
 import { reportApi } from "../../../api/reports";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
@@ -88,7 +89,7 @@ export function SurrogateResult({ optId }: { optId: string }) {
         <div className="run-action-row">
           <span className={`pill ${soTone(o.status)}`} data-testid="so-status">{SO_STATUS_LABEL[o.status] ?? o.status}</span>
           <span data-testid="so-progress">{o.progress_text}</span>
-          <span className="muted small">{multi ? `다목적(${defs.length}개) ${objLabel}` : `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`} · 반복 {o.iter_no}/{s.iterations} · {(o.param_set as { label?: string }).label ?? "템플릿"} · {(o.model as { name?: string }).name}</span>
+          <span className="muted small">{multi ? `다목적(${defs.length}개) ${objLabel}` : `${objLabel} ${s.objective.sense === "max" ? "최대화" : "최소화"}`} · 반복 {o.iter_no}/{s.iterations} · {(o.param_set as { label?: string }).label ?? "템플릿"} · {(o.model as { name?: string }).name} · 입력 <InputBadge input={o.input} /></span>
         </div>
         {algoText && <div className="run-action-row"><span className="small" data-testid="so-algo">{algoText}</span></div>}
         {varsLine && <div className="run-action-row"><span className="small muted" data-testid="so-vars">사용 변수 — {varsLine}</span></div>}
@@ -96,7 +97,9 @@ export function SurrogateResult({ optId }: { optId: string }) {
           {o.can_cancel && <button type="button" className="btn small danger" onClick={() => setConfirm(true)}>일괄 취소</button>}
           {o.can_resume && <button type="button" className="btn small primary" onClick={() => void act(() => surrogateApi.resume(o.id))}>이어서 실행</button>}
         </div>
-        {o.warnings?.map((w, i) => <p key={i} className="muted small">{w.message}</p>)}
+        {o.warnings?.map((w, i) => (
+          <p key={i} className={`${w.code === "INPUT_CUSHION_RESPONSES" ? "warn-text" : "muted"} small`} data-testid={w.code === "INPUT_CUSHION_RESPONSES" ? "input-warning" : undefined}>{w.message}</p>
+        ))}
         {actionError && <p className="error-text small" role="alert">{actionError}</p>}
       </Card>
       {multi && <ParetoSection o={o} base={base} onChanged={() => void load()} downloadCsv={() => void downloadCsv()} />}

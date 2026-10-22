@@ -1,7 +1,7 @@
 // ⑥ 새 내장 최적화(phase3.md §18.10, S17 §22.12): ① 템플릿·모델 ② 탐색(새 DOE / 완료 배치 재사용) ③ 성능 표(정의 편집·역할·가중치) ④ 변수 범위 ⑤ 설정·미리보기·시작.
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, errorMessage, type PredictBatchSummary } from "../../../api";
+import { ApiError, api, errorMessage, type PredictBatchSummary } from "../../../api";
 import { surrogateApi, type SurrogateOptPreview } from "../../../api/surrogateOpt";
 import { designMapApi, type DesignMap } from "../../../api/designMap";
 import { useApp } from "../../../app/AppContext";
@@ -15,6 +15,8 @@ import { useNativeRunRows } from "../../stage4/geometry/useNativeRunRows";
 import { NativeVarsCard } from "./NativeVarsCard";
 import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/TemplatePicker";
 import { ModelLine, useModelChoice } from "../../stage4/predictRun";
+import { InputKindSelect, useInputChoice } from "../../../components/InputKindSelect";
+import { inputKindError } from "../../../lib/inputKind";
 import { maxMultiExecution } from "../../stage4/batch/BatchSetup";
 import {
   ALGO_REVERT_NOTE, EMPTY_ALGO, algoIssues, algoTip, baselineIds, buildBody, previewText, rowIssue, varRows,
@@ -32,6 +34,8 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const canExec = useCanExecute();
   const { list, ps, setPicked } = useTemplateChoice();
   const choice = useModelChoice();
+  const ic = useInputChoice(ps);
+  const [inputErr, setInputErr] = useState<string | null>(null);
   const soStatus = (status as { surrogate_opt?: { defaults?: { iterations: number; candidates: number; tol_rel: number; surrogate: string }; max_objectives?: number; max_observe?: number;
     default_algorithm?: string; algo_defaults?: Record<string, AlgoDefaults>; ga_max_evals?: number } } | null)?.surrogate_opt;
   const defs = soStatus?.defaults;
@@ -85,7 +89,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   }, [f.explore, f.batchId]);
 
   const rowProblems = nrows ? nrows.map(rowError) : f.rows.map((r) => rowIssue(r, native));
-  const body = useMemo(() => buildBody({ ...f, nrows }, perfs), [f, perfs, nrows]);
+  const body = useMemo(() => buildBody({ ...f, input: ic.picked, nrows }, perfs), [f, ic.picked, perfs, nrows]);
   const bodyKey = JSON.stringify(body);
   const roleProblem = rolesIssue(perfs, f.sels, f.weights);
   const ready = !!ps && !roleProblem && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
@@ -96,7 +100,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
     }
     let live = true;
     const t = setTimeout(() => {
-      surrogateApi.preview(study.id, body).then((p) => live && (setPreview(p), setError(null))).catch((e) => live && (setPreview(null), setError(errorMessage(e))));
+      surrogateApi.preview(study.id, body).then((p) => live && (setPreview(p), setError(null), setInputErr(null))).catch((e) => live && (setPreview(null), e instanceof ApiError && inputKindError(e.detail) ? (setInputErr(inputKindError(e.detail)), setError(null)) : setError(errorMessage(e))));
     }, 300);
     return () => {
       live = false;
@@ -144,7 +148,8 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
       onStarted?.();
       navigate(`/p/${study.project_id}/s/${study.id}/stage/5/surrogate/${o.id}`);
     } catch (e) {
-      setError(errorMessage(e));
+      if (e instanceof ApiError && inputKindError(e.detail)) setInputErr(inputKindError(e.detail));
+      else setError(errorMessage(e));
     } finally {
       setBusy(false);
     }
@@ -154,6 +159,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
     <>
       <Card span={3} step="①" title="템플릿·모델">
         <TemplatePicker list={list} value={ps?.id ?? ""} onChange={setPicked} compact />
+        <InputKindSelect ps={ps} value={ic.value} onChange={(i) => (ic.setPicked(i), setInputErr(null))} error={inputErr} />
         <ModelLine choice={choice} />
       </Card>
       <Card span={6} step="②" title="탐색">

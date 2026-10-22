@@ -1,11 +1,10 @@
-// mcp.md §4.5: "내 API 토큰"(사용자 메뉴, /status features.mcp가 true일 때만) + 관리자 "API 토큰 관리". 평문 토큰은 발급 직후 한 번만
-// 화면 상태(useState)에 두고 닫으면 지운다 — localStorage·전역 상태·로그에 남기지 않는다.
+// mcp.md §4.5·§23: 토큰 영역(MyTokensPanel — "AI 연결(MCP)" 페이지가 흡수, 옛 "내 API 토큰" 페이지는 /me/ai-connection#tokens로 리다이렉트) + 관리자 "API 토큰 관리".
+// 평문 토큰은 발급 직후 화면 상태(useState)에만 둔다 — localStorage·sessionStorage·전역 상태·URL·로그에 남기지 않는다.
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, api, errorMessage, type ApiToken, type ApiTokenAdmin, type ApiTokenScope } from "../api";
+import { ApiError, api, errorMessage, type ApiToken, type ApiTokenAdmin, type ApiTokenScope, type Me } from "../api";
 import { useApp } from "../app/AppContext";
 import { ConfirmDialog } from "../components/ConfirmDialog";
 import { Card, Field } from "../components/ui";
-import { Grid } from "../design/Grid";
 import { fmtTime } from "../lib/format";
 import { TopBar } from "../shell/TopBar";
 
@@ -31,6 +30,16 @@ const NAME_RE = /^[0-9A-Za-z가-힣 _.-]{1,64}$/;
 export function useMcpEnabled(): boolean {
   const { status } = useApp();
   return status?.features?.mcp?.enabled === true;
+}
+
+/** 범위별 발급 불가 사유(null = 발급 가능) — mcp.md §4.4: run은 어느 프로젝트든 power+, admin은 전역 관리자 */
+export function scopeReasons(me: Me): Record<ApiTokenScope, string | null> {
+  const power = me.is_global_admin || Object.values(me.roles).some((r) => r === "power" || r === "admin");
+  return {
+    read: null,
+    run: power ? null : "어느 프로젝트든 power 이상 권한이 있어야 합니다",
+    admin: me.is_global_admin ? null : "전역 관리자만 발급할 수 있습니다",
+  };
 }
 
 const dayLeft = (iso: string) => Math.ceil((Date.parse(iso) - Date.now()) / 86400000);
@@ -61,7 +70,7 @@ function TokenOnce({ token, name, onClose }: { token: string; name: string; onCl
   return (
     <div className="token-once" role="alertdialog" aria-label="발급된 토큰" data-testid="token-once">
       <p>
-        <b>{name}</b> 토큰이 발급되었습니다. 지금 복사해 토큰 파일이나 환경변수에 저장하세요.
+        <b>{name}</b> 토큰이 발급되었습니다. 아래 "AI 도구에 등록하기"에 이 토큰이 채워져 있습니다 — 설정을 복사하거나, 이 값을 토큰 파일·환경변수에 저장하세요.
       </p>
       <div className="token-once-row">
         <code className="token-value mono" data-testid="token-plain">{token}</code>
@@ -69,7 +78,7 @@ function TokenOnce({ token, name, onClose }: { token: string; name: string; onCl
           {copied ? "복사됨" : "복사"}
         </button>
       </div>
-      <p className="error-text small" role="alert">이 창을 닫으면 다시 볼 수 없습니다 — 잃어버리면 폐기하고 새로 발급하세요.</p>
+      <p className="error-text small" role="alert">이 창을 닫으면 다시 볼 수 없습니다(페이지를 떠나기 전까지는 아래 설정에 채워져 있습니다) — 잃어버리면 폐기하고 새로 발급하세요.</p>
       <button type="button" className="btn small primary" onClick={onClose}>
         닫기(다시 볼 수 없음)
       </button>
@@ -77,19 +86,20 @@ function TokenOnce({ token, name, onClose }: { token: string; name: string; onCl
   );
 }
 
-function IssueForm({ onIssued }: { onIssued: (r: { token: string; name: string }) => void }) {
+export interface IssuedToken {
+  token: string;
+  name: string;
+  scope: ApiTokenScope;
+}
+
+function IssueForm({ onIssued }: { onIssued: (r: IssuedToken) => void }) {
   const { me } = useApp();
   const [name, setName] = useState("");
   const [scope, setScope] = useState<ApiTokenScope>("read");
   const [days, setDays] = useState(String(MAX_EXPIRY_DAYS));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const power = me.is_global_admin || Object.values(me.roles).some((r) => r === "power" || r === "admin");
-  const reason: Record<ApiTokenScope, string | null> = {
-    read: null,
-    run: power ? null : "어느 프로젝트든 power 이상 권한이 있어야 합니다",
-    admin: me.is_global_admin ? null : "전역 관리자만 발급할 수 있습니다",
-  };
+  const reason = scopeReasons(me);
   const d = Number(days);
   const daysOk = Number.isInteger(d) && d >= 1 && d <= MAX_EXPIRY_DAYS;
   const nameOk = NAME_RE.test(name.trim());
@@ -98,7 +108,7 @@ function IssueForm({ onIssued }: { onIssued: (r: { token: string; name: string }
     setError(null);
     try {
       const r = await api.createApiToken({ name: name.trim(), scope, expires_in_days: d });
-      onIssued({ token: r.token, name: r.api_token.name });
+      onIssued({ token: r.token, name: r.api_token.name, scope: r.api_token.scope });
       setName("");
     } catch (e) {
       setError(tokenError(e));
@@ -132,32 +142,6 @@ function IssueForm({ onIssued }: { onIssued: (r: { token: string; name: string }
         {error && <span className="error-text small" role="alert">{error}</span>}
       </div>
     </div>
-  );
-}
-
-function TokenGuide() {
-  const url = `${window.location.origin}/physicsai/mcp`;
-  return (
-    <details className="advanced" data-testid="token-guide">
-      <summary>연결 안내(Claude Code · Codex · Gemini)</summary>
-      <div className="advanced-body small">
-        <p>
-          서버 URL: <code className="mono" data-testid="mcp-url">{url}</code> — 인증은 <code>Authorization: Bearer 토큰</code>. 토큰은 설정 파일에 쓰지 말고 환경변수 <code>PHYSICSAI_MCP_TOKEN</code>(또는 토큰 파일)에 두세요.
-        </p>
-        <ul className="plain">
-          <li>
-            <b>Claude Code</b>: <code>claude mcp add --transport http physicsai {url} --header 'Authorization: Bearer ${"{PHYSICSAI_MCP_TOKEN}"}'</code>
-          </li>
-          <li>
-            <b>Codex CLI</b>(<code>~/.codex/config.toml</code>): <code>[mcp_servers.physicsai]</code> · <code>url = "{url}"</code> · <code>bearer_token_env_var = "PHYSICSAI_MCP_TOKEN"</code>
-          </li>
-          <li>
-            <b>Gemini CLI</b>(<code>settings.json</code>): <code>"physicsai": {"{"} "httpUrl": "{url}", "headers": {"{"} "Authorization": "Bearer $PHYSICSAI_MCP_TOKEN" {"}"} {"}"}</code>
-          </li>
-        </ul>
-        <p className="muted">자세한 설정·stdio 방식·문제 해결은 가이드 docs/manual/mcp-clients.md를 보세요. 만료 전에 새 토큰을 발급해 교체하고, 유출이 의심되면 바로 폐기하세요.</p>
-      </div>
-    </details>
   );
 }
 
@@ -209,66 +193,52 @@ function TokenTable({ rows, admin, onRevoke }: { rows: Row[]; admin?: boolean; o
   );
 }
 
-function Off() {
+export function Off() {
   return <div className="empty" role="alert" data-testid="mcp-off">MCP 기능이 꺼져 있습니다 — 관리자가 mcp.enabled를 켜면 API 토큰을 쓸 수 있습니다</div>;
 }
 
-/** 사용자 메뉴 "내 API 토큰" */
-export function MyApiTokens() {
-  const enabled = useMcpEnabled();
+/** "AI 연결(MCP)" 페이지 ②: 토큰 표·발급·폐기. 평문은 1회 표시 상자(닫으면 사라짐)와 부모(onIssued → ③ 채움)에만 전달한다 */
+export function MyTokensPanel({ onIssued }: { onIssued: (t: IssuedToken) => void }) {
   const [rows, setRows] = useState<ApiToken[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [issued, setIssued] = useState<{ token: string; name: string } | null>(null);
+  const [issued, setIssued] = useState<IssuedToken | null>(null);
   const [asking, setAsking] = useState<ApiToken | null>(null);
   const [revokeError, setRevokeError] = useState<string | null>(null);
   const load = useCallback(() => api.myApiTokens().then(setRows).catch((e) => setError(tokenError(e))), []);
   useEffect(() => {
-    if (enabled) void load();
-  }, [enabled, load]);
+    void load();
+  }, [load]);
   return (
-    <div className="page">
-      <TopBar crumbs={[{ label: "내 API 토큰" }]} />
-      <main className="page-main token-page" aria-label="내 API 토큰">
-        <h1 className="T">내 API 토큰</h1>
-        {!enabled ? (
-          <Off />
-        ) : (
-          <Grid>
-            <>
-              <Card span={12} title="토큰" aside={<span className="muted small">LLM 클라이언트(MCP)가 내 권한으로 PhysicsAI를 부를 때 쓰는 열쇠 — 최대 {MAX_EXPIRY_DAYS}일</span>}>
-                {issued && <TokenOnce token={issued.token} name={issued.name} onClose={() => setIssued(null)} />}
-                {error && <p className="error-text small" role="alert">{error}</p>}
-                {rows && <TokenTable rows={rows} onRevoke={(t) => (setRevokeError(null), setAsking(t))} />}
-                <TokenGuide />
-              </Card>
-              <Card span={12} title="발급">
-                <IssueForm onIssued={(r) => (setIssued(r), void load())} />
-              </Card>
-            </>
-          </Grid>
-        )}
-        {asking && (
-          <ConfirmDialog
-            title="토큰 폐기"
-            body={`'${asking.name}'(${asking.token_prefix}) 토큰을 폐기합니다.\n이 토큰을 쓰는 클라이언트는 즉시 연결이 끊기고, 되돌릴 수 없습니다.`}
-            confirmLabel="폐기"
-            danger
-            error={revokeError}
-            onCancel={() => setAsking(null)}
-            onConfirm={async () => {
-              try {
-                await api.revokeMyApiToken(asking.id);
-                setAsking(null);
-                await load();
-              } catch (e) {
-                setRevokeError(tokenError(e));
-                throw e;
-              }
-            }}
-          />
-        )}
-      </main>
-    </div>
+    <>
+      <Card span={12} title="② 토큰" aside={<span className="muted small">LLM 클라이언트(MCP)가 내 권한으로 PhysicsAI를 부를 때 쓰는 열쇠 — 최대 {MAX_EXPIRY_DAYS}일</span>}>
+        <div id="tokens" data-testid="tokens-anchor" />
+        {issued && <TokenOnce token={issued.token} name={issued.name} onClose={() => setIssued(null)} />}
+        {error && <p className="error-text small" role="alert">{error}</p>}
+        {rows && <TokenTable rows={rows} onRevoke={(t) => (setRevokeError(null), setAsking(t))} />}
+        <p className="field-label token-issue-title">새 토큰 발급</p>
+        <IssueForm onIssued={(r) => (setIssued(r), onIssued(r), void load())} />
+      </Card>
+      {asking && (
+        <ConfirmDialog
+          title="토큰 폐기"
+          body={`'${asking.name}'(${asking.token_prefix}) 토큰을 폐기합니다.\n이 토큰을 쓰는 클라이언트는 즉시 연결이 끊기고, 되돌릴 수 없습니다.`}
+          confirmLabel="폐기"
+          danger
+          error={revokeError}
+          onCancel={() => setAsking(null)}
+          onConfirm={async () => {
+            try {
+              await api.revokeMyApiToken(asking.id);
+              setAsking(null);
+              await load();
+            } catch (e) {
+              setRevokeError(tokenError(e));
+              throw e;
+            }
+          }}
+        />
+      )}
+    </>
   );
 }
 

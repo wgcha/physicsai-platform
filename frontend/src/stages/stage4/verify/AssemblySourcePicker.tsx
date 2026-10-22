@@ -6,7 +6,7 @@ import { useStudy } from "../../../app/StudyContext";
 import { PathPickerDialog } from "../../../components/PathPickerDialog";
 import { mdHm } from "../history/runListText";
 
-export type AssemblyKind = "predict_input" | "train_doe" | "custom";
+export type AssemblyKind = "predict_input" | "train_doe" | "custom" | "template";
 export interface AssemblyChoice {
   kind: AssemblyKind;
   doeId: string | null;
@@ -35,12 +35,15 @@ export function AssemblySourcePicker({
   onChange,
   predictInputOk,
   canEdit,
+  templateOk = false,
 }: {
   value: AssemblyChoice;
   onChange: (v: AssemblyChoice) => void;
   /** 이 예측 입력이 조립 상태일 때만 true */
   predictInputOk: boolean;
   canEdit: boolean;
+  /** 서버 기본이 템플릿 조립 폴더일 때(쿠션 실행 — input-kind.md §8)만 라디오를 보인다 */
+  templateOk?: boolean;
 }) {
   const { study } = useStudy();
   const [does, setDoes] = useState<TrainDoe[] | null>(null);
@@ -90,6 +93,13 @@ export function AssemblySourcePicker({
           예측 입력 그대로
           {!predictInputOk && <span className="muted small">{PREDICT_INPUT_OFF_TEXT}</span>}
         </label>
+
+        {templateOk && (
+          <label className="fv-radio" data-testid="assem-template">
+            <input type="radio" name="fv-assem" checked={value.kind === "template"} disabled={!canEdit} onChange={() => pick("template")} />
+            템플릿 조립 폴더
+          </label>
+        )}
 
         <label className="fv-radio">
           <input type="radio" name="fv-assem" checked={value.kind === "train_doe"} disabled={!canEdit || !ready.length} onChange={() => pick("train_doe")} />

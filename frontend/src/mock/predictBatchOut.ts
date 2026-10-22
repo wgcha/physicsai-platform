@@ -4,6 +4,7 @@ import { mockSampling } from "./sampling";
 import type { MockServer } from "./server";
 import { TERMINAL, batchLabel } from "./predictBatchRec";
 import type { BatchRec, BatchRunRec } from "./predictBatchRec";
+import { toPublic } from "./inputKind";
 
 // ------------------------------------------------------------------ 배치 상태 계산
 function latestJob(srv: MockServer, id: string | null): Job | null {
@@ -77,7 +78,7 @@ export function batchOut(srv: MockServer, b: BatchRec): PredictBatch {
   const cnt = (s: BatchRowState) => rows.filter((r) => r.state === s).length;
   const gen = { total: b.runs.length, done: b.runs.filter((r) => r.gen_state === "DONE").length, failed: b.runs.filter((r) => r.gen_state === "FAILED").length, running: b.runs.filter((r) => r.gen_state === "RUNNING").length, waiting: b.runs.filter((r) => r.gen_state === "PENDING").length };
   return {
-    id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), dir, input_kind: b.input_kind,
+    id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), dir, input_kind: b.input_kind, input: toPublic(b.input_kind), warnings: [],
     param_set: { id: ps.id, label: ps.label ?? null }, model: { id: b.model_id, name: model ? `${model.name} v${model.version}` : b.model_id },
     job_id: parentJob(srv, b)?.id ?? b.job_id, multi_execution: b.multi_execution, gen,
     predict: { running: cnt("RUNNING"), queued: cnt("QUEUED"), succeeded: cnt("SUCCEEDED"), failed: cnt("FAILED"), canceled: cnt("CANCELED") },

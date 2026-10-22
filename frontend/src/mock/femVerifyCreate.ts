@@ -70,6 +70,7 @@ export function previewOf(srv: MockServer, s: Study, body: Body): { error: MockR
     source_label: res.label,
     design: {
       param_set: res.ps ? { id: res.ps.id, label: res.ps.label ?? (res.ps.source_path.split(/[\\/]/).filter(Boolean).pop() ?? null), input_kind: res.ps.input_kind } : null,
+      input: res.meshOnly ? "cushion" : "assembly",
       model: model ? { id: model.id, name: model.name, version: model.version } : null,
       values: res.values, applied_values: res.applied, out_of_range: res.outOfRange,
     },
@@ -114,11 +115,11 @@ export function createRec(srv: MockServer, s: Study, body: Body, by: { id: strin
     param_set_id: res.ps?.id ?? null, model_id: res.modelId, values: res.values, applied_values: res.applied, out_of_range: res.outOfRange,
     assem_kind: p.assem, assem_label: p.assemLabel, assem_path: p.assemPath, input_mode: p.inputMode, hpc_mode: srv.hpcMode === "scx" ? "scx" : "command",
     status: "RUNNING", job_id: null, attempt_no: 1, compare: null, failure: null, warnings: p.warnings, media: [],
-    created_by: by.id, created_by_name: by.name, created_at: new Date().toISOString(), finished_at: null, notified: false,
+    created_by: by.id, created_by_name: by.name, created_at: new Date().toISOString(), finished_at: null, notified: false, input: res.meshOnly ? "cushion" : "assembly",
   };
   srv.fems.push(rec);
   if (res.needsCompanion) {
-    const pp = { param_set_id: res.ps!.id, model_id: res.modelId, values: res.values, value_source: "manual", source_run_key: null, template_kind: res.ps!.input_kind, fem_verify_id: rec.id };
+    const pp = { param_set_id: res.ps!.id, model_id: res.modelId, values: res.values, value_source: "manual", source_run_key: null, template_kind: res.meshOnly ? "mesh_only" : "assembly", fem_verify_id: rec.id };
     rec.predict_job_id = newJob(srv, s, "PREDICT", pp, by).id;
     rec.status = "WAITING_PREDICT";
   } else {

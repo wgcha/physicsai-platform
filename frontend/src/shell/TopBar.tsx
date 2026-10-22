@@ -45,8 +45,8 @@ export function TopBar({ crumbs, projectId, status: chips }: { crumbs: Crumb[]; 
         {chips && <div className="status-chips">{chips}</div>}
         {me.is_global_admin && <AdminMenu mcpOn={mcpOn} />}
         {mcpOn && (
-          <Link className="topbar-link" to="/me/api-tokens">
-            내 API 토큰
+          <Link className="topbar-link" to="/me/ai-connection">
+            AI 연결(MCP)
           </Link>
         )}
         <a className="topbar-link" href={status?.auth?.login_url || loginUrl()}>대시보드로</a>

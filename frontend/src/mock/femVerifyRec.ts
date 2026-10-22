@@ -39,6 +39,8 @@ export interface FemRec {
   created_at: string;
   finished_at: string | null;
   notified: boolean;
+  /** input-kind.md IK-8: 검증 대상 설계의 입력 종류(없으면 조립) */
+  input?: "assembly" | "cushion";
 }
 
 export const fvLabel = (no: number) => `FV-${String(no).padStart(3, "0")}`;

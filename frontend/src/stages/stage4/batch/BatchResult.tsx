@@ -11,6 +11,7 @@ import { useCanExecute } from "../../../hooks/useJobRunner";
 import { usePolling } from "../../../hooks/usePolling";
 import { useFeature } from "../../../components/FeatureGate";
 import { Card, CopyButton, ProgressBar } from "../../../components/ui";
+import { InputBadge } from "../../../components/InputKindSelect";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { POLL } from "../../../lib/poll";
 import { samplingSummary } from "../../../lib/sampling";
@@ -126,7 +127,7 @@ export function BatchResult({ batchId }: { batchId: string }) {
           <CopyButton text={b.dir} label="경로 복사" />
         </div>
         <p className="muted small">
-          {FILE_NOTE}. 표의 DOE # = 폴더 번호. 템플릿 {b.param_set.label ?? b.param_set.id} · 모델 {b.model.name}
+          {FILE_NOTE}. 표의 DOE # = 폴더 번호. 템플릿 {b.param_set.label ?? b.param_set.id} · 모델 {b.model.name} · 입력 <InputBadge input={b.input} />
         </p>
         {varsLine && (
           <p className="muted small" data-testid="batch-vars">
@@ -181,6 +182,11 @@ export function BatchResult({ batchId }: { batchId: string }) {
           </p>
         )}
         {!showResp && <p className="muted small" data-testid="no-resp">{NO_RESP_TEXT}</p>}
+        {(b.warnings ?? []).map((w, i) => (
+          <p key={i} className="warn-text small" data-testid="input-warning" title={w.code}>
+            {w.message}
+          </p>
+        ))}
         <div className="table-wrap">
           <table className="table compact batch-table" aria-label="일괄 예측 결과">
             <thead>

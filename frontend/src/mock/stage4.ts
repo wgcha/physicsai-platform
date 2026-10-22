@@ -6,6 +6,7 @@ import type { MockServer } from "./server";
 import { isPrepared, preparedResult } from "./stage4Prepared";
 import { batchChildResult, finishBatchParent, isBatchChild } from "./predictBatch";
 import { captureMedia, finishCapture } from "./capture";
+import { withCapability } from "./inputKind";
 
 export function predictResult(srv: MockServer, job: Job, values: Record<string, number>, modelId: string, psId: string) {
   const ps = srv.paramSets.find((p) => p.id === psId)!;
@@ -126,7 +127,7 @@ export const paramSetRoutes: Route = (srv, { method, seg, query, body }) => {
       const next = start + limit < rows.length ? String(start + limit) : null;
       return { status: 200, body: { columns: ["run_key", ...ps.parameters.map((p) => p.name)], rows: rows.slice(start, start + limit), next_cursor: next } };
     }
-    return { status: 200, body: ps };
+    return { status: 200, body: withCapability(ps) };
   }
   return null;
 };

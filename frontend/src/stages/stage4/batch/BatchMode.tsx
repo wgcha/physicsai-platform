@@ -7,6 +7,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api, errorMessage, type PredictBatchSummary } from "../../../api";
 import { useStudy } from "../../../app/StudyContext";
 import { Card } from "../../../components/ui";
+import { InputBadge } from "../../../components/InputKindSelect";
 import { usePolling } from "../../../hooks/usePolling";
 import { fmtNum, fmtTime } from "../../../lib/format";
 import { POLL } from "../../../lib/poll";
@@ -134,6 +135,7 @@ function BatchList({ list, error, onNew }: { list: PredictBatchSummary[]; error:
               <tr>
                 <th>번호</th>
                 <th>템플릿</th>
+                <th>입력</th>
                 <th className="num">조합 수</th>
                 <th>상태</th>
                 <th>응답 요약</th>
@@ -149,6 +151,7 @@ function BatchList({ list, error, onNew }: { list: PredictBatchSummary[]; error:
                     </Link>
                   </td>
                   <td className="small">{b.param_set?.label ?? b.param_set?.id ?? "—"}</td>
+                  <td className="small"><InputBadge input={b.input} /></td>
                   <td className="num">{b.run_count}</td>
                   <td className="small">
                     <span className={`pill ${batchTone(b.status)}`}>{BATCH_STATUS_LABEL[b.status] ?? String(b.status)}</span>

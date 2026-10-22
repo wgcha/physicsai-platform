@@ -138,6 +138,7 @@ export function DatasetCreateCard() {
               <th className="num">h3d</th>
               <th className="num">학습 / 평가</th>
               <th>분할</th>
+              <th>출처</th>
               <th>입력 폴더</th>
               <th>생성</th>
             </tr>
@@ -154,6 +155,9 @@ export function DatasetCreateCard() {
                 </td>
                 <td className="small">
                   {Math.round(d.holdout_ratio * 100)}% · {d.split_group === "file" ? "파일" : "폴더"} · seed {d.seed}
+                </td>
+                <td className="small" data-testid={`ds-source-${d.id}`}>
+                  {d.source_doe ? d.source_doe.label : "외부 폴더"}
                 </td>
                 <td className="mono small ellipsis" title={d.dataset_display_path ? `입력: ${d.source_path}\n데이터셋: ${d.dataset_display_path}` : d.source_path}>
                   {d.source_path}

@@ -1,7 +1,7 @@
 // S16 V1(phase3 §21.2): ④ 단일 예측 실행 목록. GET /studies/{id}/predict-runs · GET /predict-runs/{job_id}.
 // openapi 반영(BE-V1) 뒤에는 생성 타입과 같은 모양인지 `lint`로 확인한다(여기는 계약 모양을 손으로 고정).
 import { request, requestPage } from "./client";
-import type { ContourDisplay, JobState } from "./types";
+import type { ContourDisplay, JobState, PredictInput } from "./types";
 
 export type PredictRunMode = "all" | "template" | "prepared";
 
@@ -19,6 +19,8 @@ export interface PredictRunSummary {
   duration_s: number | null;
   created_by_name: string;
   input_mode: "template" | "prepared";
+  /** input-kind.md IK-10: 이 실행의 입력 종류(조립|쿠션). prepared는 starter로 판정한 값 */
+  input: PredictInput;
   template: { id: string; label: string | null; input_kind: string } | null;
   model: { id: string; name: string; version: number } | null;
   values: Record<string, number>;
@@ -49,6 +51,10 @@ export interface PredictRunDetail extends PredictRunSummary {
     geom_dir: string | null;
   };
   display: ContourDisplay | null;
+  /** 예측에 실제로 넣은 입력(수치만): 종류·starter·크기·파일 수. 실행 전이면 null */
+  predict_input: { input?: PredictInput | null; starter?: string | null; bytes?: number | null; files?: number | null } | null;
+  /** 쿠션 입력에서 값이 없는 응답만(INPUT_CUSHION_RESPONSES, 차단 없음) */
+  input_warnings: { code: string; message: string }[];
 }
 
 export interface PredictRunQuery {

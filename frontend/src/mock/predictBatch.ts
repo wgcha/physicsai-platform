@@ -9,10 +9,11 @@ import { err, needPower, ok, type Route } from "./route";
 import { mockBrief, mockSampling } from "./sampling";
 import { isSamplingKind, recommendedCount } from "../lib/sampling";
 import type { MockServer } from "./server";
-import { BATCH_MAX_RUNS, CURVE_MAX_RUNS, TERMINAL, batchLabel, inputKindOf } from "./predictBatchRec";
+import { BATCH_MAX_RUNS, CURVE_MAX_RUNS, TERMINAL, batchLabel } from "./predictBatchRec";
 import { batchMatrix, isResp } from "./predictBatchMatrix";
 import { runNotes, runVars } from "./nativeVars";
 import { batchOut, batchStatus } from "./predictBatchOut";
+import { capability, resolveInput, toInternal, toPublic } from "./inputKind";
 import { designMapOut } from "./predictBatchDesign";
 export { BATCH_MAX_RUNS, BATCH_TABLE_MAX_BYTES, CURVE_MAX_RUNS, batchLabel, batchRunKey, inputKindOf } from "./predictBatchRec";
 export type { BatchRunRec, BatchRec } from "./predictBatchRec";
@@ -98,7 +99,7 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
         const r0 = o.responses[0];
         const vals = r0 ? o.rows.filter((r) => r.state === "SUCCEEDED").map((r) => r.responses?.[r0.name]).filter((v): v is number => typeof v === "number" && Number.isFinite(v)) : [];
         const response_summary = r0 && vals.length ? { name: r0.name, unit: r0.unit, min: Math.min(...vals), max: Math.max(...vals), count: vals.length } : null;
-        return { id: b.id, label: batchLabel(b.batch_no), status: batchStatus(srv, b), run_count: b.runs.length, created_at: b.created_at, created_by_name: b.created_by_name, param_set: o.param_set, gen: o.gen, predict: o.predict, response_summary, sampling: mockBrief(b) };
+        return { id: b.id, label: batchLabel(b.batch_no), input: toPublic(b.input_kind), status: batchStatus(srv, b), run_count: b.runs.length, created_at: b.created_at, created_by_name: b.created_by_name, param_set: o.param_set, gen: o.gen, predict: o.predict, response_summary, sampling: mockBrief(b) };
       }));
     if (method === "POST" && seg[3] === "preview") {
       const ps = srv.paramSets.find((p) => p.id === body?.param_set_id && p.study_id === s.id);
@@ -110,7 +111,9 @@ export const predictBatchRoutes: Route = (srv, { method, seg, query, body, me })
       const eps = rv.out.ps;
       const m = batchMatrix(srv, eps, src);
       if (isResp(m)) return m;
-      const out: Record<string, unknown> = { input_kind: inputKindOf(ps), count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: [...m.problems, ...(rv.error ? [{ code: "RANGE_INVALID", message: `vars 이름이 올바르지 않습니다(${rv.error})` }] : [])] };
+      const ri = resolveInput(ps, body?.input);
+      if ("error" in ri) return ri.error;
+      const out: Record<string, unknown> = { input_kind: toInternal(ri.input), input: ri.input, input_capability: capability(ps).cap, input_capability_reason: capability(ps).reason, count: m.rows.length, estimate_min: m.rows.length ? Math.round(m.rows.length * 1.75) : null, rows: m.rows, problems: [...m.problems, ...(rv.error ? [{ code: "RANGE_INVALID", message: `vars 이름이 올바르지 않습니다(${rv.error})` }] : [])] };
       const need = Math.max(5, eps.parameters.length + 2);
       const notes = [...(m.notes ?? [])];
       if (ps.engine === "native") {

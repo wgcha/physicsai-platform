@@ -61,6 +61,19 @@ function ConfigWarnings() {
   );
 }
 
+/** mcp.md §23.1: MCP가 꺼져 있으면 켜는 방법 한 줄(전역 관리자 화면) */
+function McpOffNote() {
+  const { status } = useApp();
+  if (!status || status.features?.mcp?.enabled === true) return null;
+  return (
+    <Cell span={12} className="card mcp-off-note" label="AI 연결(MCP) 꺼짐">
+      <p className="small" data-testid="mcp-off-note">
+        <b>AI 연결(MCP)이 꺼져 있습니다</b> — 설정 <code>mcp.enabled: true</code>(HTTP는 <code>mcp.server.http_enabled</code>) 후 백엔드 재시작(<code>deploy/restart.ps1</code>). 안내: 관리자 매뉴얼 MCP 절
+      </p>
+    </Cell>
+  );
+}
+
 function EnvCheckBody() {
   const [history, setHistory] = useState<EnvCheckSummary[]>([]);
   const [current, setCurrent] = useState<EnvCheck | null>(null);
@@ -117,6 +130,7 @@ function EnvCheckBody() {
   return (
     <Grid className="env-grid">
       <ConfigWarnings />
+      <McpOffNote />
       <Cell
         span={9}
         className="card"

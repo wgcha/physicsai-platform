@@ -35,7 +35,13 @@ export function useJobRunner(jobType: JobType, onFinish?: (job: Job) => void) {
     [study.id, jobType, track],
   );
 
-  return { job, loaded, run, error, setError, errorDetail, submitting };
+  /** 오류 문구·본문을 함께 지운다(입력을 바꾼 뒤 이전 오류를 걷어낼 때) */
+  const clearError = useCallback(() => {
+    setError(null);
+    setErrorDetail(null);
+  }, []);
+
+  return { job, loaded, run, error, setError, clearError, errorDetail, submitting };
 }
 
 export function useCanExecute(): boolean {

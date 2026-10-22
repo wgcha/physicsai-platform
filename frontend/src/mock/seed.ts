@@ -83,6 +83,7 @@ export function seedDatasets(): Dataset[] {
       holdout_ratio: 0.1, seed: 20261008, split_group: "file",
       options: { extract_faces: true, extract_mdi: false, extract_time_history_vectors: false },
       package_ready: true, created_by_name: "김연구", created_at: iso(60 * 26),
+      source_doe: { doe_ids: ["doe-1"], label: "① DOE D-001(조립)" }, // input-kind.md §9: 출처 = ① DOE(조립) 또는 외부 폴더(null)
     },
     {
       id: "ds-1", study_id: "s-cushion", job_id: "j-ds1", status: "FAILED",

@@ -1,11 +1,17 @@
 // fetch 가로채기: /physicsai/api/* 요청을 MockServer.handle로 보낸다(R-F 분할, server.ts에서 재노출).
 import { MockServer } from "./server";
+import { mcpHttp } from "./mcp";
 
 /** fetch 대체 함수 생성 */
 export function createMockFetch(server: MockServer, realFetch?: typeof fetch): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, "http://mock.local");
     const prefix = "/physicsai/api";
+    if (url.pathname === "/physicsai/mcp") {
+      // mcp.md §23.2 ⑤(b): 방금 발급한 토큰으로 HTTP MCP initialize 흉내
+      const r = mcpHttp(server, (init?.method ?? "GET").toUpperCase(), new Headers(init?.headers).get("Authorization"));
+      return new Response(JSON.stringify(r.body ?? null), { status: r.status, headers: { "Content-Type": "application/json" } });
+    }
     if (!url.pathname.startsWith(prefix)) {
       if (realFetch) return realFetch(input, init);
       return new Response("not found", { status: 404 });

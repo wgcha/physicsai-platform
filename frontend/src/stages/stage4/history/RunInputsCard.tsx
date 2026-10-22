@@ -1,7 +1,8 @@
 // ④ 실행 결과 "입력·경로" 카드(phase3 §21.2.3): 파라미터 표 · 모델 · starter · 경로(복사).
 import type { PredictRunDetail } from "../../../api/predictRuns";
 import { Card, CopyButton } from "../../../components/ui";
-import { fmtNum } from "../../../lib/format";
+import { InputBadge } from "../../../components/InputKindSelect";
+import { fmtBytes, fmtNum } from "../../../lib/format";
 
 const PATH_ROWS: { key: keyof PredictRunDetail["paths"]; label: string }[] = [
   { key: "dir", label: "예측 폴더" },
@@ -15,6 +16,7 @@ const PATH_ROWS: { key: keyof PredictRunDetail["paths"]; label: string }[] = [
 export function RunInputsCard({ run }: { run: PredictRunDetail }) {
   const names = Object.keys(run.values ?? {});
   const paths = PATH_ROWS.filter((p) => run.paths?.[p.key]);
+  const pi = run.predict_input;
   return (
     <Card span={9} title="입력·경로" className="run-inputs">
       <div className="model-line">
@@ -26,6 +28,8 @@ export function RunInputsCard({ run }: { run: PredictRunDetail }) {
             <span className="mono small">{run.starter}</span>
           </>
         )}
+        <span className="field-label">입력</span>
+        <InputBadge input={run.input} />
         {run.input_mode === "template" && run.template && (
           <>
             <span className="field-label">템플릿</span>
@@ -33,6 +37,18 @@ export function RunInputsCard({ run }: { run: PredictRunDetail }) {
           </>
         )}
       </div>
+      {pi && (
+        <p className="small" data-testid="predict-input">
+          예측 입력 — {pi.starter ? <span className="mono">{pi.starter}</span> : "starter 없음"}
+          {pi.files != null && ` · 파일 ${pi.files}개`}
+          {pi.bytes != null && ` · ${fmtBytes(pi.bytes)}`}
+        </p>
+      )}
+      {(run.input_warnings ?? []).map((w, i) => (
+        <p key={i} className="warn-text small" data-testid="input-warning" title={w.code}>
+          {w.message}
+        </p>
+      ))}
       {run.input_mode === "prepared" && run.input_path && (
         <div className="codeline small" title="준비된 입력 경로">
           <code>{run.input_path}</code>

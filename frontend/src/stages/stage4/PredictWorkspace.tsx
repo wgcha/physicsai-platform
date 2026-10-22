@@ -12,6 +12,8 @@ import { ParamInputTable, ParamScatter, RangeNote, RoundingNote } from "./ParamI
 import { PredictChain, PredictResultCard, jobInputMode } from "./PredictResult";
 import { PredictSteps } from "./PredictSteps";
 import { inputKindOf } from "./TemplatePicker";
+import { InputKindSelect, useInputChoice } from "../../components/InputKindSelect";
+import { inputKindError } from "../../lib/inputKind";
 import { ModelLine, useModelChoice } from "./predictRun";
 import { useFemVerifyButton } from "./verify/useFemVerifyButton";
 
@@ -24,7 +26,9 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
   const { study } = useStudy();
   const canExec = useCanExecute();
   const samples = useSamples(ps);
-  const kind = inputKindOf(ps);
+  const ic = useInputChoice(ps);
+  // 쿠션 입력(Altair)은 geom_update만 필요 — mesh_only 기능 확인. Native는 서버가 쿠션 명령을 확인한다
+  const kind = ps.engine === "native" ? inputKindOf(ps) : ic.value === "cushion" ? "mesh_only" : "assembly";
   const tplFeature = kind === "mesh_only" ? "predict_mesh_only" : "predict_parametric";
   const tplF = useFeature(tplFeature);
   const nominal = useMemo(() => Object.fromEntries(ps.parameters.map((p) => [p.name, p.nominal])), [ps]);
@@ -79,6 +83,7 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
       values,
       value_source: source.kind,
       source_run_key: source.kind === "run" ? source.run ?? null : null,
+      ...(ic.picked ? { input: ic.picked } : {}),
     };
     void predict.run({ ...params });
   };
@@ -88,6 +93,7 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
   const pbs = useFemVerifyButton(pjob ? { kind: "predict_job", job_id: pjob.id } : null, !!result, pjob);
   // 진행 표시: 작업이 기록한 template_kind(서버 확정) → 없으면 지금 템플릿
   const stepKind = (pjob?.params as PredictJobParams | undefined)?.template_kind ?? kind;
+  const inputErr = inputKindError(predict.errorDetail);
 
   return (
     <>
@@ -126,6 +132,7 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
           </label>
         </div>
         <div className="run-block">
+          <InputKindSelect ps={ps} value={ic.value} onChange={(i) => (ic.setPicked(i), predict.clearError())} error={inputErr} />
           <ModelLine choice={choice} />
           <EngineMismatchNote modelEngine={chosenModel?.engine} ps={ps} />
           {ps.engine === "native" && ps.native && ps.native.prep_status !== "READY" && <p className="warn-text small">{GEOM_ERROR_TEXT.GEOM_PREP_STALE}</p>}
@@ -138,7 +145,7 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
                 job={pjob}
                 disabled={!enabled || !tplF.enabled || !chosenModel || !allFinite}
                 disabledReason={!enabled || !tplF.enabled ? undefined : !chosenModel ? "Final 모델이 필요합니다" : "모든 파라미터 값을 입력하세요"}
-                error={predict.error}
+                error={inputErr ? null : predict.error}
                 extra={pbs.button}
               />
             )}

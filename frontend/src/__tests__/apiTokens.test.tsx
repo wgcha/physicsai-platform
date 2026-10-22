@@ -1,10 +1,11 @@
-// v0.2.4 mcp.md §4.5: "내 API 토큰"(features.mcp일 때만) — 표·발급(평문 1회·복사·닫으면 사라짐)·폐기(확인)·범위 비활성, 관리자 "API 토큰 관리".
+// v0.2.4 mcp.md §4.5 + v0.2.7 §23: "AI 연결(MCP)" 페이지의 토큰 영역(features.mcp일 때만) — 표·발급(평문 1회·복사·닫으면 상자 사라짐)·폐기(확인)·범위 비활성, 관리자 "API 토큰 관리".
+// (AI 도구 등록·도구 목록·연결 시험은 aiConnection.test.tsx)
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp } from "../test/render";
 import type { MockServer } from "../mock/server";
 
-const PAGE = "/me/api-tokens";
+const PAGE = "/me/ai-connection";
 type Call = { m: string; p: string; b: Record<string, unknown> | null };
 function record(server: MockServer, re: RegExp, methods = ["POST", "DELETE"]): Call[] {
   const calls: Call[] = [];
@@ -33,7 +34,7 @@ afterEach(() => {
   sessionStorage.clear();
 });
 
-describe("내 API 토큰", () => {
+describe("내 API 토큰(AI 연결 페이지 ②)", () => {
   it("표: 이름·범위·접두·만료·마지막 사용·상태(유효·만료·폐기)를 보인다", async () => {
     renderApp(PAGE, { user: "power" });
     const table = await screen.findByRole("table", { name: "내 API 토큰" });
@@ -65,7 +66,8 @@ describe("내 API 토큰", () => {
     expect(JSON.stringify(localStorage) + JSON.stringify(sessionStorage)).not.toContain(plain);
     fireEvent.click(within(once).getByRole("button", { name: /닫기/ }));
     expect(screen.queryByTestId("token-once")).toBeNull();
-    expect(document.body.textContent).not.toContain(plain);
+    // 1회 표시 상자는 사라지지만 같은 페이지의 ③ 설정에는 남는다(mcp.md §23.2 — 페이지를 떠나면 사라짐, aiConnection.test)
+    expect(screen.queryByTestId("token-plain")).toBeNull();
   });
 
   it("범위 라디오: 일반 사용자는 run·admin이 이유와 함께 비활성, power는 run만 가능·admin 비활성", async () => {
@@ -127,26 +129,19 @@ describe("내 API 토큰", () => {
     await waitFor(() => expect(within(within(table).getByText("codex-내PC").closest("tr")!).getByText("폐기", { selector: "span" })).toBeTruthy());
     expect(screen.queryByRole("dialog")).toBeNull();
   });
-
-  it("연결 안내: 서버 URL(<origin>/physicsai/mcp)·세 클라이언트 예시·환경변수 권장", async () => {
-    renderApp(PAGE, { user: "power" });
-    const guide = await screen.findByTestId("token-guide");
-    expect(within(guide).getByTestId("mcp-url").textContent).toBe(`${window.location.origin}/physicsai/mcp`);
-    for (const c of ["Claude Code", "Codex CLI", "Gemini CLI"]) expect(within(guide).getByText(c)).toBeTruthy();
-    expect(guide.textContent).toContain("PHYSICSAI_MCP_TOKEN");
-    expect(guide.textContent).toContain("docs/manual/mcp-clients.md");
-  });
 });
 
 describe("메뉴 노출(features.mcp)", () => {
-  it("켜져 있으면 상단 바에 '내 API 토큰' 링크", async () => {
+  it("켜져 있으면 상단 바에 'AI 연결(MCP)' 링크(옛 '내 API 토큰' 대체)", async () => {
     renderApp("/", { user: "power" });
-    expect(await screen.findByRole("link", { name: "내 API 토큰" })).toBeTruthy();
+    const link = await screen.findByRole("link", { name: "AI 연결(MCP)" });
+    expect(link.getAttribute("href")).toBe("/me/ai-connection");
+    expect(screen.queryByRole("link", { name: "내 API 토큰" })).toBeNull();
   });
   it("꺼져 있으면 메뉴가 없고 페이지는 꺼짐 안내", async () => {
     const a = renderApp("/", { user: "power", disabledFeatures: ["mcp"] });
     await screen.findByText("대시보드로");
-    await waitFor(() => expect(screen.queryByRole("link", { name: "내 API 토큰" })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole("link", { name: "AI 연결(MCP)" })).toBeNull());
     a.unmount();
     renderApp(PAGE, { user: "power", disabledFeatures: ["mcp"] });
     expect(await screen.findByTestId("mcp-off")).toBeTruthy();

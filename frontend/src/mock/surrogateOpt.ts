@@ -5,12 +5,13 @@ import { err, needPower, ok, type Route } from "./route";
 import type { MockServer } from "./server";
 import { iso, responseFn } from "./data";
 import { perfRows } from "../stages/stage5/surrogate/perfRules";
-import { ACTIVE, soLabel } from "./surrogateOptRec";
+import { ACTIVE, soInput, soLabel } from "./surrogateOptRec";
 import type { SoRec } from "./surrogateOptRec";
 import { addRun, metricValue } from "./surrogateOptMath";
 import { advance, batchRef } from "./surrogateOptAdvance";
 import { detail } from "./surrogateOptDetail";
 import { newRec, normalize } from "./surrogateOptCreate";
+import { capability } from "./inputKind";
 export { soLabel } from "./surrogateOptRec";
 export { advance } from "./surrogateOptAdvance";
 
@@ -93,7 +94,7 @@ export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {
     if (!s) return err(404, "NOT_FOUND", "Study를 찾을 수 없습니다.");
     if (method === "GET" && !seg[3])
       return ok(srv.surrogate.filter((o) => o.study_id === s.id).sort((a, b) => b.opt_no - a.opt_no).map((o) => ({
-        id: o.id, label: soLabel(o.opt_no), status: o.status, objective: o.settings.objective, best_value: detail(srv, o).best?.objective ?? null,
+        id: o.id, label: soLabel(o.opt_no), input: soInput(o, srv.paramSets.find((p) => p.id === o.param_set_id)), status: o.status, objective: o.settings.objective, best_value: detail(srv, o).best?.objective ?? null,
         iter_no: o.iter_no, iterations: o.settings.iterations, created_at: o.created_at, created_by_name: o.created_by_name,
       })));
     if (method === "POST" && seg[3] === "preview") {
@@ -102,7 +103,8 @@ export const surrogateRoutes: Route = (srv, { method, seg, body, me }) => {
       const st = n.settings;
       const none = st.verification === "none";
       const total = n.count + (none ? 0 : st.iterations * st.candidates);
-      return ok({ free_variables: n.free, integer_variables: n.integer, fixed: n.fixed, explore_count: n.count,
+      const cap = capability(n.ps);
+      return ok({ input: n.input, input_capability: cap.cap, input_capability_reason: cap.reason, notes: [], free_variables: n.free, integer_variables: n.integer, fixed: n.fixed, explore_count: n.count,
         max_total_runs: total, estimate_min: Math.round(total * 2.2),
         objective_available: true, problems: n.problems, mode: st.mode, performances: n.info,
         algorithm: st.algorithm, algo_options: st.algo_options, verification: st.verification,

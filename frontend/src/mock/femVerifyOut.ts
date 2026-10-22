@@ -39,6 +39,7 @@ export function detailOf(srv: MockServer, r: FemRec): FemVerification {
     source: { kind: r.source_kind, label: r.source_label },
     design: {
       param_set: ps ? { id: ps.id, label: ps.label ?? (ps.source_path.split(/[\\/]/).filter(Boolean).pop() ?? null), input_kind: ps.input_kind } : null,
+      input: r.input ?? "assembly",
       model: model ? { id: model.id, name: model.name, version: model.version } : null,
       values: r.values, applied_values: r.applied_values, out_of_range: r.out_of_range,
     },

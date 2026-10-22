@@ -2,6 +2,7 @@
 import type { Job, ParamSet, Study } from "../api/types";
 import type { FemProblem } from "../api/femVerify";
 import { err, type MockResp } from "./route";
+import { resolveInput } from "./inputKind";
 import type { MockServer } from "./server";
 import { batchLabel, isBatchChild } from "./predictBatch";
 import { inspectPath } from "./studies";
@@ -50,9 +51,11 @@ function fromJob(srv: MockServer, s: Study, j: Job, kind: SourceKind, label: str
   };
 }
 
-function resolveValues(srv: MockServer, s: Study, a: { param_set_id: string; model_id?: string | null; values: Record<string, number>; reuse_existing?: boolean }, label: string, kind: SourceKind, links: FemRec["links"]): Resolved | MockResp {
+function resolveValues(srv: MockServer, s: Study, a: { param_set_id: string; model_id?: string | null; values: Record<string, number>; reuse_existing?: boolean; input?: string }, label: string, kind: SourceKind, links: FemRec["links"]): Resolved | MockResp {
   const ps = srv.paramSets.find((x) => x.id === a.param_set_id && x.study_id === s.id);
   if (!ps) return err(422, "INVALID_PARAMS", "템플릿을 찾을 수 없습니다.");
+  const ri = resolveInput(ps, a.input);
+  if ("error" in ri) return ri.error;
   const miss = ps.parameters.filter((p) => !Number.isFinite(a.values?.[p.name]));
   if (miss.length) return err(422, "INVALID_PARAMS", `모든 파라미터 값이 필요합니다(${miss.map((m) => m.name).join(", ")}).`);
   const modelId = a.model_id || s.final_model_id;
@@ -62,7 +65,7 @@ function resolveValues(srv: MockServer, s: Study, a: { param_set_id: string; mod
     ? [...srv.jobs].reverse().find((j) => j.study_id === s.id && j.job_type === "PREDICT" && j.state === "SUCCEEDED" && !isBatchChild(j) && (j.params as { input_mode?: string }).input_mode !== "prepared" && (j.params as { param_set_id?: string }).param_set_id === ps.id &&
         ((j.params as { model_id?: string | null }).model_id || s.final_model_id) === modelId && sameValues((j.result as { applied_values?: Record<string, number> } | null)?.applied_values ?? {}, applied))
     : undefined;
-  const meshOnly = ps.input_kind === "mesh_only";
+  const meshOnly = ri.input === "cushion";
   return { kind, label, links, ps, modelId, values: a.values, applied, outOfRange: out, predict: reuse ?? null, needsCompanion: !reuse, inputIsAssembly: !meshOnly, meshAvailable: true, meshOnly };
 }
 

@@ -17,6 +17,8 @@ export interface PredictParamsParametric {
   value_source: "nominal" | "run" | "manual";
   source_run_key: string | null;
   input_path?: null;
+  /** input-kind.md IK-1: 생략 = 서버 기본 */
+  input?: "assembly" | "cushion";
 }
 /** PREDICT 요청 params — prepared */
 export interface PredictParamsPrepared {

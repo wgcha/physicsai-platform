@@ -5,7 +5,7 @@ import { rng } from "./data";
 import { nonDominated, recommend } from "../stages/stage5/surrogate/pareto";
 import { perfLabel } from "../stages/stage5/surrogate/perfRules";
 import { metricLabel } from "../stages/stage5/surrogate/soRules";
-import { ACTIVE, soLabel } from "./surrogateOptRec";
+import { ACTIVE, soInput, soLabel } from "./surrogateOptRec";
 import type { SoRec } from "./surrogateOptRec";
 import { bestRun, frontRuns, metricValue, sample, senseOf } from "./surrogateOptMath";
 import { ensureFinalJobs } from "./surrogateOptAdvance";
@@ -70,7 +70,7 @@ export function detail(srv: MockServer, o: SoRec): SurrogateOpt {
   };
   const extraActive = !!o.extra;
   return {
-    id: o.id, label: soLabel(o.opt_no), status: o.status, dir: srv.disp(o.study_id, `05_opt/surrogate/${soLabel(o.opt_no)}`),
+    id: o.id, label: soLabel(o.opt_no), input: soInput(o, ps), status: o.status, dir: srv.disp(o.study_id, `05_opt/surrogate/${soLabel(o.opt_no)}`),
     param_set: { id: o.param_set_id, label: ps?.label ?? null, input_kind: ps?.input_kind ?? "assembly" }, model: { id: "m-2", name: "cushion_gnn v2" },
     settings: o.settings, iter_no: o.iter_no, progress_text: progressText(o),
     iterations: o.iters.map((it) => ({

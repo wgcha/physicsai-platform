@@ -858,6 +858,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/mcp/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * AI 연결(MCP) 안내
+         * @description 웹 "AI 연결(MCP)" 페이지용: MCP 사용 여부·HTTP 전송 여부·서버 주소(설정 mcp.public_url 또는 요청 origin 짐작)·stdio 실행기 안내.
+         *     세션(로그인) 전용 — API 토큰 요청은 403 SESSION_REQUIRED. 토큰·비밀값은 없다.
+         */
+        get: operations["mcp_connection"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/mcp/glossary": {
         parameters: {
             query?: never;
@@ -3907,6 +3928,7 @@ export interface components {
             package_rel?: string | null;
             /** Seed */
             seed: number;
+            source_doe?: components["schemas"]["SourceDoe"] | null;
             /** Source Path */
             source_path: string;
             /** Split Group */
@@ -5001,7 +5023,10 @@ export interface components {
             /** Roots */
             roots: components["schemas"]["FsRoot"][];
         };
-        /** FvAssembly */
+        /**
+         * FvAssembly
+         * @description 조립 원본. template = 출처 템플릿의 radioss_assem/(input-kind.md §8, 조립 가능 템플릿의 쿠션 실행 기본값).
+         */
         FvAssembly: {
             /** Doe Id */
             doe_id?: string | null;
@@ -5009,7 +5034,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "predict_input" | "train_doe" | "custom";
+            kind: "predict_input" | "train_doe" | "custom" | "template";
             /** Path */
             path?: string | null;
         };
@@ -5154,6 +5179,12 @@ export interface components {
             applied_values: {
                 [key: string]: number;
             };
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
             model?: components["schemas"]["FvModelRef"] | null;
             /**
              * Out Of Range
@@ -5407,6 +5438,11 @@ export interface components {
         };
         /** FvSourceValues */
         FvSourceValues: {
+            /**
+             * Input
+             * @description 동반 예측의 입력 종류 assembly | cushion(생략 = 템플릿 기본). ⑥ 결과를 넘길 때는 그 최적화의 입력 종류
+             */
+            input?: ("assembly" | "cushion") | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -6117,6 +6153,35 @@ export interface components {
             size: number;
             /** Text */
             text: string;
+        };
+        /**
+         * McpConnection
+         * @description 웹 "AI 연결(MCP)" 페이지용 연결 안내(mcp.md §23.4, MR-C3). enabled=false면 404 MCP_DISABLED라 200이면 항상 true.
+         */
+        McpConnection: {
+            /**
+             * Api Base
+             * @description stdio PHYSICSAI_MCP_URL용 = url에서 끝의 /mcp를 뗀 값
+             */
+            api_base: string;
+            /** Enabled */
+            enabled: boolean;
+            /**
+             * Http Enabled
+             * @description false면 /physicsai/mcp(HTTP)가 꺼져 stdio만 쓸 수 있다
+             */
+            http_enabled: boolean;
+            stdio_hint: components["schemas"]["StdioHint"];
+            /**
+             * Url
+             * @description HTTP MCP 주소(설정 mcp.public_url 또는 요청 origin + /physicsai/mcp 짐작)
+             */
+            url: string;
+            /**
+             * Url Source
+             * @enum {string}
+             */
+            url_source: "config" | "guess";
         };
         /** Me */
         Me: {
@@ -6840,6 +6905,10 @@ export interface components {
             } | null;
             /** Id */
             id: string;
+            /** Input Capability */
+            input_capability?: ("assembly" | "cushion")[];
+            /** Input Capability Reason */
+            input_capability_reason?: string | null;
             /**
              * Input Kind
              * @default assembly
@@ -7170,6 +7239,12 @@ export interface components {
             /** Id */
             id: string;
             /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
+            /**
              * Input Kind
              * @enum {string}
              */
@@ -7198,6 +7273,11 @@ export interface components {
             vars?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["BatchNote"][];
         };
         /** PredictBatchPreview */
         PredictBatchPreview: {
@@ -7210,6 +7290,21 @@ export interface components {
              * @default []
              */
             excluded: string[];
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
+            /**
+             * Input Capability
+             * @default [
+             *       "assembly"
+             *     ]
+             */
+            input_capability: ("assembly" | "cushion")[];
+            /** Input Capability Reason */
+            input_capability_reason?: string | null;
             /**
              * Input Kind
              * @enum {string}
@@ -7234,6 +7329,11 @@ export interface components {
         /** PredictBatchPreviewRequest */
         PredictBatchPreviewRequest: {
             /**
+             * Input
+             * @description 예측 입력 종류 assembly(조립, m_3) | cushion(쿠션 rad만). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED
+             */
+            input?: ("assembly" | "cushion") | null;
+            /**
              * Model Id
              * @description 학습 범위를 볼 같은 Study의 모델 id(생략 = Final 모델)
              */
@@ -7257,6 +7357,12 @@ export interface components {
             gen?: components["schemas"]["BatchGenCounts"] | null;
             /** Id */
             id: string;
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
             /** Label */
             label: string;
             param_set?: components["schemas"]["BatchRef"] | null;
@@ -7342,12 +7448,23 @@ export interface components {
              */
             has_curve: boolean;
             /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
+            /**
              * Input Mode
              * @enum {string}
              */
             input_mode: "template" | "prepared";
             /** Input Path */
             input_path?: string | null;
+            /**
+             * Input Warnings
+             * @default []
+             */
+            input_warnings: components["schemas"]["PredictRunNote"][];
             /** Job Id */
             job_id: string;
             model?: components["schemas"]["PredictRunModel"] | null;
@@ -7363,6 +7480,7 @@ export interface components {
              */
             out_of_range: string[];
             paths: components["schemas"]["PredictRunPaths"];
+            predict_input?: components["schemas"]["PredictRunInputInfo"] | null;
             /**
              * Response Table
              * @default []
@@ -7406,6 +7524,20 @@ export interface components {
              */
             message: string;
         };
+        /**
+         * PredictRunInputInfo
+         * @description 예측에 넣은 입력 요약(워커 `result.predict_input`, 수치만): 쿠션 = 파일 1개.
+         */
+        PredictRunInputInfo: {
+            /** Bytes */
+            bytes?: number | null;
+            /** Files */
+            files?: number | null;
+            /** Input */
+            input?: ("assembly" | "cushion") | null;
+            /** Starter */
+            starter?: string | null;
+        };
         /** PredictRunModel */
         PredictRunModel: {
             /** Id */
@@ -7421,6 +7553,13 @@ export interface components {
             distance?: number | null;
             /** Run Key */
             run_key?: string | null;
+        };
+        /** PredictRunNote */
+        PredictRunNote: {
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
         };
         /**
          * PredictRunPaths
@@ -7481,6 +7620,12 @@ export interface components {
              * @default false
              */
             has_curve: boolean;
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
             /**
              * Input Mode
              * @enum {string}
@@ -8485,6 +8630,16 @@ export interface components {
                 [key: string]: number;
             };
         };
+        /**
+         * SourceDoe
+         * @description 데이터셋 출처가 ① DOE일 때(계산값). label 예: "① DOE D-001(조립)" · "① DOE 여러 개(조립)".
+         */
+        SourceDoe: {
+            /** Doe Ids */
+            doe_ids: string[];
+            /** Label */
+            label: string;
+        };
         /** SourceRef */
         SourceRef: {
             /** Doe Id */
@@ -8814,6 +8969,24 @@ export interface components {
             /** Worker Id */
             worker_id?: string | null;
         };
+        /** StdioHint */
+        StdioHint: {
+            /**
+             * Command
+             * @description stdio 실행기 이름(physicsai-mcp)
+             */
+            command: string;
+            /**
+             * Command Path
+             * @description 서버 venv의 실행기 경로(없으면 null) — 경로만, 비밀 없음
+             */
+            command_path?: string | null;
+            /**
+             * Install
+             * @description 내 PC 설치 안내 한 줄(오프라인 wheels)
+             */
+            install: string;
+        };
         /** StorageCategory */
         StorageCategory: {
             /** Impact */
@@ -9111,6 +9284,12 @@ export interface components {
             hv_history?: components["schemas"]["SoHvPoint"][] | null;
             /** Id */
             id: string;
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
             /** Iter No */
             iter_no: number;
             /** Iterations */
@@ -9189,6 +9368,11 @@ export interface components {
             constraints?: components["schemas"]["SoConstraint"][];
             /** Explore */
             explore: components["schemas"]["SoExploreNew"] | components["schemas"]["SoExploreReuse"];
+            /**
+             * Input
+             * @description 예측 입력 종류 assembly(조립) | cushion(쿠션 rad만 — GPU 메모리 적음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED
+             */
+            input?: ("assembly" | "cushion") | null;
             /** Iterations */
             iterations?: number | null;
             /**
@@ -9257,6 +9441,16 @@ export interface components {
             };
             /** Free Variables */
             free_variables: string[];
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
+            /** Input Capability */
+            input_capability?: ("assembly" | "cushion")[];
+            /** Input Capability Reason */
+            input_capability_reason?: string | null;
             /** Integer Variables */
             integer_variables: string[];
             /** Levels */
@@ -9270,6 +9464,10 @@ export interface components {
              * @default single
              */
             mode: string;
+            /** Notes */
+            notes?: {
+                [key: string]: string;
+            }[];
             /** Objective Available */
             objective_available: boolean;
             /** Performances */
@@ -9312,6 +9510,12 @@ export interface components {
             created_by_name: string;
             /** Id */
             id: string;
+            /**
+             * Input
+             * @default assembly
+             * @enum {string}
+             */
+            input: "assembly" | "cushion";
             /** Iter No */
             iter_no: number;
             /** Iterations */
@@ -12811,6 +13015,53 @@ export interface operations {
             };
             /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mcp_connection: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["McpConnection"];
+                };
+            };
+            /** @description Unauthorized */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description SESSION_REQUIRED(토큰 요청) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description MCP_DISABLED(mcp.enabled: false) */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

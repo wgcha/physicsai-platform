@@ -4,7 +4,8 @@ import { PREVIEW_JSON, baseJob, contourSvg, curveJson, responseFn } from "./data
 import { err, type MockResp } from "./route";
 import { captureMedia } from "./capture";
 import type { MockServer } from "./server";
-import { MAX_MULTI, batchLabel, inputKindOf } from "./predictBatchRec";
+import { MAX_MULTI, batchLabel } from "./predictBatchRec";
+import { resolveInput, toInternal } from "./inputKind";
 import type { BatchRec } from "./predictBatchRec";
 import { batchMatrix, isResp } from "./predictBatchMatrix";
 import { runVars, snapshotOf } from "./nativeVars";
@@ -25,7 +26,9 @@ export function predictBatchCreate(srv: MockServer, s: Study, params: Record<str
   }
   const ps = srv.paramSets.find((p) => p.id === params.param_set_id && p.study_id === s.id);
   if (!ps) return { error: err(409, "PREREQUISITE_MISSING", "템플릿을 먼저 등록하세요.", { missing: ["PARAM_SET"] }) };
-  const kind = inputKindOf(ps);
+  const ri = resolveInput(ps, params.input);
+  if ("error" in ri) return { error: ri.error };
+  const kind = toInternal(ri.input);
   const feat = srv.p2.feature(kind === "mesh_only" ? "predict_mesh_only" : "predict_parametric");
   if (!feat.enabled) return { error: err(409, "TEMPLATE_NOT_CONFIGURED", "형상 갱신 설정이 필요합니다(관리자).", { missing: feat.missing }) };
   const modelId = (params.model_id as string | null) || s.final_model_id;

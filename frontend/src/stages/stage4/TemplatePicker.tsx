@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import type { InputKind, ParamSet } from "../../api";
 import { useStudy } from "../../app/StudyContext";
+import { TemplateBadge } from "../../components/InputKindSelect";
 
 export function templateName(ps: ParamSet): string {
   return ps.label || ps.source_path.split(/[\\/]/).filter(Boolean).pop() || ps.id;
@@ -22,7 +23,7 @@ function mmdd(iso: string): string {
   return `${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-/** 옆 회색 한 줄: tpl · CAD · 조립 폴더 포함 · MM-DD 등록 */
+/** 배지 툴팁용 한 줄: tpl · CAD · 조립 폴더 포함 · MM-DD 등록 */
 export function templateMeta(ps: ParamSet): string {
   // geometry-engine.md §7.7: 세트 목록에 엔진 표시(native = STEP·피처, tpl 없음)
   const src = ps.engine === "native" ? ["Native", "STEP"] : ["tpl", "CAD"];
@@ -45,8 +46,8 @@ export function TemplatePicker({ list, value, onChange, compact = false }: { lis
         </select>
       </label>
       {ps && (
-        <span className="muted small" data-testid="template-meta">
-          {templateMeta(ps)}
+        <span title={templateMeta(ps)} data-testid="template-meta">
+          <TemplateBadge ps={ps} />
         </span>
       )}
     </div>

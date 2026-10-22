@@ -30,6 +30,10 @@ function store(srv: MockServer): ApiTokenAdmin[] {
   }
   return t;
 }
+/** 목 HTTP MCP 시험용: 토큰 id(8자)로 현재 상태(없으면 null) */
+export function apiTokenStatus(srv: MockServer, id: string): ApiTokenAdmin["status"] | null {
+  return store(srv).find((t) => t.id === id)?.status ?? null;
+}
 const mcpOff = (srv: MockServer) => !srv.p2.feature("mcp").enabled;
 const pub = ({ user_id: _u, username: _n, ...rest }: ApiTokenAdmin) => rest;
 

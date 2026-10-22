@@ -71,7 +71,7 @@ describe("V3-S16-3 실행 목록", () => {
     localStorage.setItem(SINGLE_TAB_KEY, "list");
     renderApp(`${STUDY}/4`, { user: "power", batchDemo: "running", ...H });
     const t = await table();
-    expect(within(t).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["시작", "입력 방식", "템플릿 / 입력 파일", "값", "응답", "상태", "소요"]);
+    expect(within(t).getAllByRole("columnheader").map((c) => c.textContent)).toEqual(["시작", "입력 방식", "입력", "템플릿 / 입력 파일", "값", "응답", "상태", "소요"]);
     await waitFor(() => expect(within(t).getByTestId("run-j-hf2")).toBeTruthy());
     const retried = within(t).getByTestId("run-j-hf2");
     expect(retried.textContent).toContain("2회차");

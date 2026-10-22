@@ -47,3 +47,9 @@ export const ACTIVE = ["EXPLORING", "FITTING", "VERIFYING", "FINALIZING"];
 export const fin = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
 
 /** 지표 값(목 함수). perf:NAME = 템플릿 응답 이름(없으면 가속도 흉내 — 두께가 클수록 커져 응력과 상충) */
+
+/** input-kind.md IK-10: 실행의 입력 종류(공개 값) — 기록 설정의 input, 없으면(시드) 템플릿이 쿠션만 가능하면 쿠션 */
+export const soInput = (o: SoRec, ps?: { input_kind?: string } | null): "assembly" | "cushion" => {
+  const v = (o.settings as { input?: string }).input;
+  return v === "cushion" || v === "assembly" ? v : ps?.input_kind === "mesh_only" ? "cushion" : "assembly";
+};

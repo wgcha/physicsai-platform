@@ -329,3 +329,44 @@ tr.env-fail td:not(.env-cat) {
   background: var(--color-surface-raised);
   user-select: all;
 }
+
+/* AI 연결(MCP) 페이지(mcp.md §23) */
+.mcp-status {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--space-2) var(--space-4);
+  margin: 0;
+  align-items: center;
+}
+.mcp-status dd {
+  margin: 0;
+}
+.mcp-pane {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.mcp-copy {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+}
+.mcp-code {
+  width: 100%;
+  margin: 0;
+  padding: var(--space-3);
+  overflow-x: auto;
+  white-space: pre;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-app-bg);
+  font: var(--font-r-mono);
+  user-select: all;
+}
+.mcp-tools li,
+.mcp-test li {
+  margin: var(--space-1) 0;
+}
+.token-issue-title {
+  margin: var(--space-4) 0 var(--space-1);
+}

@@ -5,6 +5,7 @@ import type { MockServer } from "./server";
 import { perfId, perfLabel, perfRows } from "../stages/stage5/surrogate/perfRules";
 import { fin } from "./surrogateOptRec";
 import { runNotes, runVars, snapshotOf } from "./nativeVars";
+import { resolveInput } from "./inputKind";
 import type { Cons, Obj, Obs, SoRec } from "./surrogateOptRec";
 
 /** 요청 정규화 + problems(§22.4.2). 목은 서버 규칙의 핵심만 흉내 */
@@ -12,6 +13,9 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
   const ps = (body.param_set_id ? srv.paramSets.find((p) => p.id === body.param_set_id) : srv.paramSets.find((p) => p.study_id === sid && p.is_current)) as ParamSet | undefined;
   const problems: { code: string; field: string | null; message: string; action?: string; batch_id?: string; performance?: string }[] = [];
   if (!ps) return { error: err(409, "PREREQUISITE_MISSING", "사전 조건이 충족되지 않았습니다", { missing: ["PARAM_SET"] }) };
+  // input-kind.md IK-1·IK-11: 입력 종류 선택(능력 밖이면 422 INPUT_KIND_UNSUPPORTED)
+  const ri = resolveInput(ps, body.input);
+  if ("error" in ri) return { error: ri.error };
   // native-vars.md §6.2: Native는 vars{add,exclude}로 유효 변수를 정하고 범위 밖은 경고만(BOUNDS_OUT_OF_RANGE 미발행). Altair는 vars → NATIVE_VARS_UNSUPPORTED
   const native = ps.engine === "native";
   const rv = runVars(srv, ps, body.vars as { add?: string[]; exclude?: string[] } | null | undefined, body.model_id as string | null | undefined);
@@ -99,7 +103,7 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
     objective: (objectives[0] ?? { metric: "", series: null, sense: null }) as Obj, objectives, constraints, observe, weights, mode: objectives.length > 1 ? "multi" : "single", performances,
     surrogate: String(body.surrogate ?? "gp"), iterations: verification === "none" ? 1 : iterations, candidates, tol_rel: Number(body.tol_rel ?? 0.01), seed: Number(body.seed ?? 1),
     algorithm, verification, algo_options: algorithm === "ego" ? {} : { pop_size: null, generations: null, crossover_prob: null, mutation_prob: null, eta_c: null, eta_m: null, ...(ao ?? {}) },
-    multi_execution: Number(body.multi_execution ?? 1), capture: !!body.capture,
+    multi_execution: Number(body.multi_execution ?? 1), capture: !!body.capture, input: ri.input,
     explore: ex.kind === "new" ? { kind: "new", count, seed: ex.seed ?? 1 } : { kind: "reuse", batch_id: ex.batch_id },
   };
   // opt-native §7(목): 다중 baseline 세트 = 위상 변형 범주 baseline(수준 = body.levels 또는 전부)
@@ -110,7 +114,7 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
     settings.levels = { baseline: levels };
   }
   const varNotes = native ? runNotes(srv, rv.out, bounds, body.model_id as string | null | undefined) : [];
-  return { ps, settings, problems, missing, varNotes, varRows: native ? rv.out.rows : [], excluded: rv.out.excluded, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
+  return { ps, input: ri.input, settings, problems, missing, varNotes, varRows: native ? rv.out.rows : [], excluded: rv.out.excluded, free: levels && levels.length > 1 ? [...free, "baseline"] : free, fixed, integer: integer.filter((n) => free.includes(n)), count, info, levels };
 }
 
 /** 서버 criteria.missing과 같은 규칙(목적 없음·방향·제약 임계값·다목적 가중치) */

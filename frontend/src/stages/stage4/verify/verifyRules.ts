@@ -45,6 +45,7 @@ export function sourceToQuery(src: FemSourceReq): string {
     q.set("param_set_id", src.param_set_id);
     q.set("values", JSON.stringify(src.values));
     if (src.model_id) q.set("model_id", src.model_id);
+    if (src.input) q.set("input", src.input);
   }
   return q.toString();
 }
@@ -78,7 +79,10 @@ export function sourceFromQuery(sp: URLSearchParams): FemSourceReq | null {
     const param_set_id = sp.get("param_set_id");
     try {
       const values = JSON.parse(sp.get("values") ?? "") as Record<string, number>;
-      return param_set_id && values && typeof values === "object" ? { kind, param_set_id, values, model_id: sp.get("model_id") } : null;
+      const input = sp.get("input");
+      return param_set_id && values && typeof values === "object"
+        ? { kind, param_set_id, values, model_id: sp.get("model_id"), ...(input === "assembly" || input === "cushion" ? { input } : {}) }
+        : null;
     } catch {
       return null;
     }

@@ -9,6 +9,7 @@ import { ParamSetDiscoverForm } from "./ParamSetDiscoverForm";
 import { ResponseDefs } from "./ResponseDefs";
 import { ContourDisplayForm } from "./ContourDisplayForm";
 import { INPUT_KIND_LABEL, inputKindOf } from "./TemplatePicker";
+import { TemplateBadge } from "../../components/InputKindSelect";
 import { EngineBadge } from "../../components/EngineSelect";
 import { NativeDetail } from "./geometry/NativeDetail";
 
@@ -77,8 +78,8 @@ export function ParamSetCard({ ps }: { ps: ParamSet | null }) {
             학습 샘플 <b>{ps.sample_count}</b>
             {ps.sample_has_measured ? " (실측 포함)" : ""}
           </span>
-          <span data-testid="ps-input-kind">
-            입력 종류 <b>{INPUT_KIND_LABEL[inputKindOf(ps)]}</b>
+          <span data-testid="ps-input-kind" title={INPUT_KIND_LABEL[inputKindOf(ps)]}>
+            입력 <TemplateBadge ps={ps} />
           </span>
           <span>
             응답 <b>{ps.responses.length}</b>

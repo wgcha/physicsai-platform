@@ -81,12 +81,15 @@ describe("④ 입력 방식·템플릿 값 입력 (V3-S9-14)", () => {
     const card = await screen.findByRole("region", { name: "템플릿" });
     const sel = within(card).getByLabelText("형상 템플릿") as HTMLSelectElement;
     expect(Array.from(sel.options).map((o) => o.textContent)).toEqual(["params — 4개 파라미터", "쿠션 단독 v1 — 4개 파라미터"]);
-    expect(within(card).getByTestId("template-meta").textContent).toMatch(/^tpl · CAD · 조립 폴더 포함 · \d\d-\d\d 등록$/);
+    // input-kind.md §10: 회색 메타 줄 대신 능력 배지(툴팁에 tpl·CAD·등록일)
+    expect(within(card).getByTestId("template-badge").textContent).toBe("조립·쿠션 가능");
+    expect(within(card).getByTestId("template-meta").title).toMatch(/^tpl · CAD · 조립 폴더 포함 · \d\d-\d\d 등록$/);
     expect(stepLabels()).toEqual(["1 형상 생성(SimLab)", "2 메시 연결(HyperMesh)", "3 조립(Radioss 입력)", "4 예측(PhysicsAI)", "5 결과"]);
 
     fireEvent.change(sel, { target: { value: "ps-2" } });
     const card2 = await screen.findByRole("region", { name: "템플릿" });
-    await waitFor(() => expect(within(card2).getByTestId("template-meta").textContent).toContain("조립 폴더 없음(메시 단독)"));
+    await waitFor(() => expect(within(card2).getByTestId("template-badge").textContent).toBe("쿠션만"));
+    expect(within(card2).getByTestId("template-meta").title).toContain("조립 폴더 없음(메시 단독)");
     await waitFor(() => expect(stepLabels()).toEqual(["1 형상 생성(SimLab)", "2 예측(PhysicsAI)", "3 결과"]));
     const run = within(card2).getByRole("button", { name: "예측 실행" }) as HTMLButtonElement;
     await waitFor(() => expect(run.disabled).toBe(false));
@@ -152,7 +155,9 @@ describe("④ 템플릿 관리: 조립 폴더 없음·응답 추가 (V3-S9-14·1
     fireEvent.click(within(form).getByRole("button", { name: "등록" }));
     await waitFor(() => expect(bodies).toHaveLength(1));
     expect((bodies[0].choice as Record<string, unknown>).radioss_assem).toBeNull();
-    expect((await within(card).findByTestId("ps-input-kind")).textContent).toContain("조립 폴더 없음(메시 단독)");
+    const kindLine = await within(card).findByTestId("ps-input-kind");
+    expect(kindLine.textContent).toContain("쿠션만");
+    expect(kindLine.title).toContain("조립 폴더 없음(메시 단독)");
   });
 
   it("응답 추가: 후보 목록에서 datatype·component 고르기, stat·단위 → 저장 body(spec H3D)", async () => {
