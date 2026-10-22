@@ -2,7 +2,7 @@
 
 작성: Plan, 2026-10-22. 요구(원문): "doe생성할때 왜 lhs만 되지???? 여러개 추가하자." 기준 커밋 def0517(migration HEAD `0021_uploads`).
 선행 계약: [s15_sampling.md](s15_sampling.md)(phase3 §20, 표본 방식 알고리즘·문구 — 이 문서가 다시 쓰지 않음), phase3 §23(S18 ① 플랫폼 DOE), [geometry-engine.md](geometry-engine.md) §7.3.3·§7.3.8(native DOE·다중 baseline), [s12_s13.md](s12_s13.md) §18·[s17_multiobj.md](s17_multiobj.md)(⑥ 탐색), [native-vars.md](native-vars.md), [altair-vars.md](altair-vars.md), [mcp.md](mcp.md) §9.2·§15.
-릴리스: v0.2.9(v0.2.8 배포 뒤). migration `0022_doe_methods` 1개(CHECK 확장만). 새 라우트·새 job_type·새 런타임 의존성 없음.
+릴리스: v0.2.9(v0.2.8 배포 뒤, 같은 버전에 대기열 분리·조립 매칭과 함께). migration `0023_doe_methods` 1개(CHECK 확장만, down_revision `0022_job_queues`). 새 라우트·새 job_type·새 런타임 의존성 없음.
 
 ## 1. 조사 결과 — 왜 LHS만 되나
 
@@ -43,7 +43,7 @@ S15(D3-63)·S18(D3-66)로 표본 방식 8개(+표·재사용)는 이미 공용 �
 | site id | 지점 | 허용 kind(드롭다운 순서) | 화면 기본 |
 |---|---|---|---|
 | `train_platform` | ①-3 Altair 플랫폼 생성 | `lhs_opt` `sobol` `halton` `lhs` `random` · `fullfact` `fracfact` `pb` · `bbd` `ccd` · `table` `train_doe` | `lhs_opt` |
-| `train_native` | ①-3 Native 단일 baseline | `train_platform`과 같음 | `lhs` |
+| `train_native` | ①-3 Native 단일 baseline | `train_platform`과 같음 | `lhs`(사용자 확정 2026-10-22) |
 | `train_native_multi` | ①-3 Native 다중 baseline | `lhs_opt` `halton` `lhs` `random` | `lhs` |
 | `batch` | ④ 단일 baseline(Altair·Native, 조립·쿠션) | `lhs_opt` `sobol` `halton` `lhs` `random` · `fullfact` `fracfact` `pb` · `bbd` `ccd` · `table` `train_doe` | `lhs_opt` |
 | `batch_multi` | ④ 다중 baseline | `train_native_multi`와 같음 | `lhs` |
@@ -60,7 +60,7 @@ S15(D3-63)·S18(D3-66)로 표본 방식 8개(+표·재사용)는 이미 공용 �
 |---|---|---|---|---|---|
 | `halton` | `HALTON` | Halton(스크램블 QMC) | `count` 2~상한(정수), `seed` 0~4294967295(기본 1). k = 0이면 `DESIGN_UNSUPPORTED` | `sampling/qmc.py`에 `halton_unit(k, count, seed)` 추가: `Halton(d=k, scramble=True, <kw>=numpy.random.default_rng(seed)).random(count)`, `<kw>` 판정·경고 억제·import 실패(`GENERATOR_UNAVAILABLE`)는 Sobol과 같은 함수 공유. 이어서 추가 없음 | `{count, seed, ranges, scramble: true, generator: "scipy <버전>", active, fixed, quality}` |
 | `random` | `RANDOM` | 균일 랜덤 | `count` 2~상한, `seed` 0 이상(기본 1) | `rng = random.Random(seed)`; i = 0..n−1마다 활성 변수 순서로 `u = rng.random()`(행 우선) | `{count, seed, ranges, active, fixed, quality}` |
-| `table`(① 신규 지점) | `TABLE` | 표 붙여넣기 / CSV | `text` ≤ `predict_batch.table_max_bytes`, 머리줄 = ①-2 사용 파라미터(Native는 세트 변수) 이름 전부(순서 무관), 행 2~상한, 값 유한. **①은 값이 ①-2(세트) min~max 밖이면 problem `TABLE_OUT_OF_RANGE`** "'{name}' 값 {v}가 학습 범위 {lo}~{hi} 밖입니다"(④는 기존대로 `out_of_range` 표시·허용) | 기존 `_table` 파서 그대로(브라우저가 파일을 읽어 `text`로 보냄 — 업로드 라우트 아님, 기존 ④와 같음) | 기존 ④ table meta |
+| `table`(① 신규 지점) | `TABLE` | 표 붙여넣기 / CSV | `text` ≤ `predict_batch.table_max_bytes`, 머리줄 = ①-2 사용 파라미터(Native는 세트 변수) 이름 전부(순서 무관), 행 2~상한, 값 유한. **①은 값이 ①-2(세트) min~max 밖이면 problem `TABLE_OUT_OF_RANGE`**(사용자 확정 2026-10-22) "'{name}' 값 {v}가 학습 범위 {lo}~{hi} 밖입니다"(④는 기존대로 `out_of_range` 표시·허용) | 기존 `_table` 파서 그대로(브라우저가 파일을 읽어 `text`로 보냄 — 업로드 라우트 아님, 기존 ④와 같음) | 기존 ④ table meta |
 
 - 설명문(S15 §20.4 형식, 문구 확정):
   - `halton` 1. 저불일치 수열로 공간을 고르게 채웁니다. Sobol과 달리 run 수가 자유롭습니다. 2. 변수가 아주 많으면(수십 개) 뒤쪽 변수끼리 상관이 생길 수 있어 스크램블을 씁니다. 나중에 점을 이어 붙일 수는 없습니다. 3. 영향도: 정식. AI 학습·대리모델에 쓸 수 있습니다. 4. run 수: 자유. 권장 10 × 변수 수.
@@ -120,7 +120,7 @@ S15(D3-63)·S18(D3-66)로 표본 방식 8개(+표·재사용)는 이미 공용 �
 
 ### 5.5 MCP·DB·문서
 - MCP: 도구 입력은 OpenAPI에서 나오므로 스키마 변경으로 자동 반영(이식 가능 부분집합 — enum만 추가). `mcp/job_kinds.py` 설명 갱신: `sampling` "플랫폼 표본 방식 {kind: lhs_opt|sobol|halton|lhs|random|fullfact|fracfact|pb|bbd|ccd|table|train_doe, …} — platform·native 공통", `seed` "native lhs 전용 옛 입력(sampling.seed 권장)". `generated/job_kinds.json` 재생성. 용어집에 새 약어 없음(방식 이름은 엔티티 아님).
-- DB: migration `0022_doe_methods`(Revises `0021_uploads`): `ck_predict_batches_source_kind`에 `'HALTON','RANDOM'` 추가(기존 행 무변경, downgrade RuntimeError 관례). `train_does.doe_type`은 제약 없는 문자열 — 변경 없음. `registry.PLATFORM_DOE_TYPES`에 `HALTON`·`RANDOM`·`TABLE` 포함.
+- DB: migration `0023_doe_methods`(down_revision `0022_job_queues` — 같은 v0.2.9의 대기열 분리): `ck_predict_batches_source_kind`에 `'HALTON','RANDOM'` 추가(기존 행 무변경, downgrade RuntimeError 관례). `train_does.doe_type`은 제약 없는 문자열 — 변경 없음. `registry.PLATFORM_DOE_TYPES`에 `HALTON`·`RANDOM`·`TABLE` 포함.
 - 화면 공용: `lib/samplingKinds.ts`(`SITE_KINDS`, 묶음 순서), `lib/samplingDescs.ts`(§4.1 설명문), `lib/samplingRuns.ts`(권장 run). 빌드본 `frontend-dist/` 함께 커밋.
 
 ## 6. 시험(V-DM-*)
@@ -152,19 +152,21 @@ S15(D3-63)·S18(D3-66)로 표본 방식 8개(+표·재사용)는 이미 공용 �
 | R3 | `sobol`·`halton`은 scipy 버전이 바뀌면 값이 달라짐 | meta `generator` 기록(기존 Sobol과 같음). 오프라인 묶음 scipy 버전 고정(`requirements.lock`) |
 | R4 | `halton`은 변수가 매우 많으면(수십 개 이상) 뒤쪽 차원 상관 | 스크램블 고정, quality(`max_abs_corr`) 표시, 설명문에 명시 |
 | R5 | 표 붙여넣기(`text`)가 업로드 규칙(분할 업로드만)과 충돌한다는 오해 | 파일 업로드가 아니라 기존 ④와 같은 JSON 본문 문자열(≤1 MiB), 서버에 파일로 저장하지 않음 |
-| R6 | migration `0022`를 다른 v0.2.9 항목(opt-direct 등)도 원할 수 있음 | roadmap §2에 번호 예약, 병합 순서는 메인이 정함 |
+| R6 | `0023_doe_methods`는 `0022_job_queues`(대기열 분리) 뒤에만 적용 가능 — 대기열 분리가 늦으면 체인이 막힘 | roadmap §2 체인 고정(0022 → 0023), 대기열 분리 병합 후 BE 착수 또는 같은 브랜치 순차 |
 | R7 | opt-direct(별도 브랜치 계약)의 초기 DOE가 따로 LHS를 정할 수 있음 | opt-direct 병합 시 `SITE_KINDS`에 site 추가로 맞춤(후속 변경 메모) |
 
 ## 8. 파일 소유(겹침 없음)
 
-- Impl-Backend: `physicsai_core/sampling/{registry,qmc,matrix,matrix_basic 또는 새 matrix_more}.py`, `stage1_train_data/doe_platform.py`, `stage4_predict/batch_multi.py`, `geometry/baselines_table.py`(생성기 인자 일반화만), `physicsai_api/schemas/{stage1_train_data,surrogate_opt_req,predict_batch_source}.py`, `services/job_params/{stage1_native,stage1_train_data}.py`, `services/{stage1_train_data,surrogate_opts,surrogate_opt_problem}.py`, `report_html/opt.py`, `mcp/job_kinds.py`·`generated/job_kinds.json`, `db/tables/predict_batch.py`, `migrations/versions/0022_doe_methods.py`, 워커 `steps/stage1_train_data/doe_native{,_set}.py`, `backend/openapi.json`, 시험.
+- Impl-Backend: `physicsai_core/sampling/{registry,qmc,matrix,matrix_basic 또는 새 matrix_more}.py`, `stage1_train_data/doe_platform.py`, `stage4_predict/batch_multi.py`, `geometry/baselines_table.py`(생성기 인자 일반화만), `physicsai_api/schemas/{stage1_train_data,surrogate_opt_req,predict_batch_source}.py`, `services/job_params/{stage1_native,stage1_train_data}.py`, `services/{stage1_train_data,surrogate_opts,surrogate_opt_problem}.py`, `report_html/opt.py`, `mcp/job_kinds.py`·`generated/job_kinds.json`, `db/tables/predict_batch.py`, `migrations/versions/0023_doe_methods.py`, 워커 `steps/stage1_train_data/doe_native{,_set}.py`, `backend/openapi.json`, 시험.
 - Impl-Frontend: `stages/stage1/{DoeGenCard.tsx,DoePlatformFields.tsx,doeGenParams.ts}`, `stages/stage4/batch/{SamplingPicker,samplingSource}`, `stages/stage5/surrogate/SurrogateSetup.tsx`, `lib/sampling*.ts`, mock·시험, `frontend-dist/`.
 - 순서: 계약(이 문서) → BE(registry·새 kind → ① Native → ④ 다중 → ⑥ → openapi·MCP) → FE → Verifier(V-DM-1~13).
 
-## 9. 미결(사용자 확인)
+## 9. 미결 처리(사용자 확정 2026-10-22)
 
-- Q1. ① 표(CSV)의 값이 ①-2 학습 범위 밖이면 막을지(계약 기본: 막음 `TABLE_OUT_OF_RANGE`) — 허용하면 학습 범위 스냅숏과 실제 표본이 어긋난다.
-- Q2. ①-3 Native 화면 기본 방식을 지금처럼 `lhs`로 둘지(계약 기본, DM-C8), Altair 플랫폼과 같은 `lhs_opt`로 맞출지 — 바꾸면 버튼만 누르는 사용자의 표본이 달라진다.
+- Q1 확정: ① 표(CSV) 값이 ①-2(세트) 학습 범위 밖이면 막는다 — problem `TABLE_OUT_OF_RANGE`(§4.1, V-DM-5). ④ table은 기존대로 `out_of_range` 표시·허용.
+- Q2 확정: ①-3 Native 화면 기본 방식은 `lhs` 유지(DM-C8, §3). Altair 플랫폼·④ 기본 `lhs_opt`도 그대로.
+- migration 번호: `0022_job_queues`(대기열 분리, 같은 v0.2.9)가 먼저이므로 이 계약은 `0023_doe_methods`(down_revision `0022_job_queues`).
 
 ## 변경 메모
 - 2026-10-22 작성(Plan). geometry-engine.md §7.3.3 "native = 플랫폼 LHS"를 GE-C20으로 대체, s15_sampling.md §20.1 비범위 "⑥ 탐색 LHS 유지"를 이 문서 DM-C5로 대체.
+- 2026-10-22 사용자 확정 반영: Q1(① 표 범위 밖 막음)·Q2(Native 기본 lhs) 확정, migration `0022_doe_methods` → `0023_doe_methods`(down_revision `0022_job_queues`), v0.2.9 = 대기열 분리·DOE 방식·조립 매칭.
