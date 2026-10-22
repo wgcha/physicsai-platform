@@ -111,7 +111,7 @@ def _finalize(ctx: Any, opt: dict[str, Any], r: int, res: dict[str, Any]) -> Non
         job, batch = so_repo.create_opt_batch(
             c, opt=o, iter_no=r, kind="FINAL", matrix=final_plan["matrix"], source_meta=final_plan["matrix"].source_meta,
             batch_dir_name=ctx.settings.predict_batch.dir_name, simlab_mesh_name=ctx.settings.predict.simlab_mesh_name,
-            round_job_id=ctx.ex.job_id, capture=True, display=final_plan.get("display"))
+            round_job_id=ctx.ex.job_id, capture=bool(final_plan.get("capture", True)), display=final_plan.get("display"))
         final_plan["batch_id"] = batch["id"]
         so_repo.set_opt(c, o["id"], status="FINALIZING", best=best_d, stop_reason=reason, final=_final_json(final_plan))
         return "finalizing"
@@ -174,13 +174,14 @@ def _finalize_surrogate_only(ctx: Any, opt: dict[str, Any], r: int, res: dict[st
 
 
 def _final_json(plan: dict[str, Any]) -> dict[str, Any]:
-    return {k: v for k, v in plan.items() if k not in ("matrix", "display")}
+    return {k: v for k, v in plan.items() if k not in ("matrix", "display", "capture")}
 
 
 def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | None, problem: ds.Problem) -> dict[str, Any]:
     """D3-61 마무리 캡처 계획: 기준안(템플릿 nominal) + 최적안 2행 표 조합, 같은 범례(0 ~ max(기준안 예측, 최적값)).
-    캡처가 구성되지 않았거나 최적안이 없으면 SKIPPED(사유)."""
-    from physicsai_core.features import contour_capture_missing
+    최적안이 없으면 SKIPPED(사유). 캡처가 구성되지 않았으면 SKIPPED — 단 3D 컨투어(features.contour3d)를 쓸 수 있으면
+    캡처 없이(`capture=False`, 범례 없음) 같은 2행 배치를 등록해 3D 원본(PREDICT h3d)을 만든다(contour3d-default C3D-11)."""
+    from physicsai_core.features import contour3d_missing, contour_capture_missing
 
     with ctx.ex.engine.connect() as conn:
         ps = ps_repo.get(conn, opt["param_set_id"])
@@ -211,9 +212,13 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
     plan["legend"] = legend
     plan["legend_note"] = why
     tmpl, res = contour_capture_missing(ctx.settings)
+    plan["capture"] = not (tmpl or res)
     if tmpl or res:
-        plan.update(status="SKIPPED", reason=f"컨투어 캡처가 구성되지 않았습니다({', '.join((tmpl + res)[:3])})")
-        return plan
+        c3t, c3r = contour3d_missing(ctx.settings)
+        if c3t or c3r:
+            plan.update(status="SKIPPED", reason=f"컨투어 캡처가 구성되지 않았습니다({', '.join((tmpl + res)[:3])})")
+            return plan
+        plan.update(legend=None, legend_note=NO_CAPTURE_NOTE)  # C3D-11: 3D 범례는 화면이 실제 필드 범위로 정한다(C3D-8)
     vals = [base, {n: float((best_d.get("values") or {}).get(n, base[n])) for n in names}]
     vd = nv.vars_of(opt["settings"])
     matrix = build_matrix_for({"kind": "table", "text": _table_text(names, [{"values": v} for v in vals])}, ps, ctx.settings,
@@ -222,7 +227,7 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
         plan.update(status="SKIPPED", reason=f"캡처 조합을 만들 수 없습니다: {matrix.problems[:2]}")
         return plan
     plan["matrix"] = matrix
-    if plan["legend"]:
+    if plan["legend"] and plan["capture"]:
         display = {"legend": {"mode": "fixed", **plan["legend"]}}
         if cc.validate_display(display):
             plan.update(legend=None, legend_note="범례 설정이 올바르지 않아 이미지마다 자동 범례")
@@ -232,6 +237,7 @@ def _final_plan(ctx: Any, opt: dict[str, Any], r: int, best_d: dict[str, Any] | 
 
 
 LEGEND_HEADROOM = 1.05
+NO_CAPTURE_NOTE = "컨투어 캡처 미구성 — 3D로만 비교"
 
 
 def shared_legend(capture_cfg: Any, ps: dict[str, Any], metric: str, values: list[Any]) -> tuple[dict[str, float] | None, str]:

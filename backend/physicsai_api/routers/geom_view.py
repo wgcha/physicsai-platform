@@ -47,7 +47,7 @@ def train_view(study_id: str, request: Request, _p: Principal = Depends(get_prin
 @router.post("/contour3d", response_model=S.Contour3d,
              responses={**ERR, 202: {"model": S.Contour3d, "description": "생성 중 — progress(대기 안내)·GET /contour3d/{id} 폴링"}})
 def create_contour3d(body: S.Contour3dCreate, request: Request, principal: Principal = Depends(get_principal)) -> dict:
-    """결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(CPU 대기열). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING."""
+    """결과 3D 컨투어(열 때 생성): 캐시 적중 200·진행 중 202는 로그인 사용자(member), 새 생성(202 CONTOUR_3D, CPU 대기열)은 power(403). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING."""
     out, status = c3_svc.create(get_ctx(request), principal, body, request_id(request), client_ip(request))
     if status == 202:
         return JSONResponse(S.Contour3d.model_validate(out).model_dump(mode="json"), status_code=202)  # type: ignore[return-value]
