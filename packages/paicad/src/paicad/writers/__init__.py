@@ -20,6 +20,9 @@ class SolverWriter(Protocol):
         """Return the new solver file content: the baseline with only node coordinates replaced."""
         ...
 
+    # optional: ``write_cushion(inc, renum, assem_dir, out_name)`` -> cushion-only starter file
+    # (``paicad cushion write``, input-kind.md section 5.2); a writer without it rejects that command
+
 
 _REGISTRY: dict[str, SolverWriter] = {}
 DEFAULT_SOLVER = "radioss"

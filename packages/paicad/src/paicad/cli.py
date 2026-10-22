@@ -131,6 +131,15 @@ def _parser() -> argparse.ArgumentParser:
     st.add_argument("--nx-samples", help="folder of NX change samples: <name>.json (values) + <name>.step per sample")
     st.add_argument("--threads", type=int)
 
+    cu = sub.add_parser("cushion", help="cushion-only solver input for prediction: write", allow_abbrev=False)
+    csub = cu.add_subparsers(dest="cushion_cmd", metavar="action", required=True)
+    cw = csub.add_parser("write", help="morphed cushion include -> single cushion starter rad + cushion.json", allow_abbrev=False)
+    for a in ("--inc", "--renum-csv", "--assem-dir", "--out-dir", "--out-rad"):
+        cw.add_argument(a, required=True)
+    cw.add_argument("--solver", default=None, help="solver writer (default radioss)")
+    cw.add_argument("--options")
+    cw.add_argument("--threads", type=int)
+
     from .shell.cli import add_parser as add_shell_parser
 
     add_shell_parser(sub)
@@ -163,6 +172,7 @@ REPORTS = {
     "props apply": "props_apply.json",
     "view export": "view_manifest.json",
     "view preview": "preview_manifest.json",
+    "cushion write": "cushion.json",
 }
 
 
@@ -191,6 +201,7 @@ def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
         "view preview": dict(kind="solid", mode="preview", glb=None, warnings=[]),
         "shell view export": dict(kind="shell", mode="nominal", glb=None, warnings=[]),
         "shell view preview": dict(kind="shell", mode="preview", glb=None, warnings=[]),
+        "cushion write": dict(out_rad=None, warnings=[]),
     }.get(cmd, {})
     doc = mk(status="FAIL", code=code, category=CODE_CATEGORY.get(code), message=message, **extra)
     Path(out_dir).mkdir(parents=True, exist_ok=True)
@@ -241,6 +252,10 @@ def dispatch(args, rep) -> int:
         from . import selftest
 
         return selftest.run(args, rep)
+    if args.cmd == "cushion":
+        from . import cushion
+
+        return cushion.run(args, rep)
     if args.cmd == "shell":
         from .shell.cli import dispatch as shell_dispatch
 
@@ -262,6 +277,7 @@ def guarded(args, rep) -> tuple[int, str | None, str | None]:
                 "props": f"props {getattr(args, 'props_cmd', '')}",
                 "shell": f"shell {getattr(args, 'shell_cmd', '')}" + (f" {getattr(args, 'view_cmd', '')}" if getattr(args, "shell_cmd", "") == "view" else ""),
                 "view": f"view {getattr(args, 'view_cmd', '')}",
+                "cushion": f"cushion {getattr(args, 'cushion_cmd', '')}",
             }.get(args.cmd, args.cmd)
             report = _fail_report(cmd, args.out_dir, e.code, e.message)
         rep.result("FAIL", e.code, report)

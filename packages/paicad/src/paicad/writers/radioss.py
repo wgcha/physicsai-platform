@@ -6,6 +6,7 @@ import numpy as np
 
 from ..common import PaicadError
 from ..mesh.radioss import parse_text, rewrite_nodes
+from . import radioss_cushion
 
 
 class RadiossWriter:
@@ -24,3 +25,7 @@ class RadiossWriter:
         if not same:
             raise PaicadError("GEOM_INTERNAL", "morphed include changed node ids, element ids, connectivity or counts")
         return data
+
+    def write_cushion(self, inc, renum, assem_dir, out_name: str):
+        """Cushion-only starter rad (input-kind.md section 5.2): returns ``radioss_cushion.CushionRad``."""
+        return radioss_cushion.build(inc, renum, assem_dir, out_name)
