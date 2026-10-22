@@ -68,6 +68,10 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   PARAM_SET_NATIVE: "형상 준비(Native)",
   // equiv-check.md §4.5
   EQ_CHECK: "등가성 판정",
+  // asm-match.md §6.3 조립 매칭(PART 목록 읽기·경계 일치 검사)
+  ASM_MATCH: "조립 매칭",
+  // geometry-view.md §6.4 형상 미리보기(PREVIEW 레인, 작업 목록 "미리보기 포함"일 때만 보임)
+  GEOM_PREVIEW: "형상 미리보기",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -99,6 +103,8 @@ export const JOB_STAGE: Record<JobType, number> = {
   PB_RESP_EXTRACT: 4,
   PARAM_SET_NATIVE: 4,
   EQ_CHECK: 4,
+  ASM_MATCH: 1,
+  GEOM_PREVIEW: 4,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

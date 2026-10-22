@@ -13,8 +13,9 @@ export type Role = "general" | "power" | "admin";
 // S16 V2: FEM_VERIFY는 FEM 검증 API·종료 훅만 만든다(POST /jobs 불가, phase3 §21.3.5)
 // native 세트 등록·다시 준비 PARAM_SET_NATIVE는 param-sets API 전용(geometry-engine.md §7.3.4)
 // 결과 3D 컨투어 CONTOUR_3D는 POST /contour3d 전용(geometry-view.md §13.5, CPU 대기열 — 대기열 화면에 표시, contour3d-default C3D-13)
+// 형상 미리보기 GEOM_PREVIEW·조립 매칭 ASM_MATCH는 PREVIEW 레인(대기열 화면 밖, 작업 목록은 "미리보기 포함" 필터) — 화면 라벨·단계는 lib/format.ts
 // ⑤ 등가성 판정 EQ_CHECK는 /studies/{id}/equiv-checks API 전용(equiv-check.md §4.5)
-export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE" | "EQ_CHECK" | "CONTOUR_3D";
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE" | "EQ_CHECK" | "CONTOUR_3D" | "ASM_MATCH" | "GEOM_PREVIEW";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -161,6 +162,7 @@ export interface PredictResult {
 export * from "./typesPredict";
 export * from "./typesPhase2";
 export * from "./typesBatch";
+export * from "./typesAsmMatch";
 export * from "./typesMedia";
 export * from "./typesGeomView";
 export * from "./typesVars";

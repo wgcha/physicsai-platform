@@ -45,8 +45,13 @@ def _feature_checks(ctx: AppContext) -> str:
     return av.mode
 
 
-def _rebuild_checks(ctx: AppContext, r: Resolved) -> None:
+def _rebuild_checks(ctx: AppContext, r: Resolved, study: dict[str, Any] | None = None) -> None:
     s = ctx.settings
+    ps = r.param_set or {}
+    if study is not None and ps.get("engine") == "native" and ps.get("stored_rel"):  # asm-match.md §6.4: 조립 매칭 세트는 재조립(rebuild) 미지원
+        if _is_matched_set(ctx, study, r):
+            r.problem("ASM_MATCH_UNSUPPORTED", "조립 매칭 세트는 조립 다시 만들기를 아직 지원하지 않습니다 — '예측 입력 그대로'로 검증하세요")
+            return
     if r.mesh_native or (r.companion is not None and (r.param_set or {}).get("engine") == "native"):
         if r.companion is None and not r.mesh_available:  # native: 모핑 include를 그대로 쓰므로 메시 변환 명령 불필요
             r.problem("MESH_MISSING", "예측 폴더에 모핑한 형상 include가 없습니다(정리됨 또는 준비된 입력)")
@@ -63,6 +68,15 @@ def _rebuild_checks(ctx: AppContext, r: Resolved) -> None:
         r.problem("MESH_MISSING", "예측 폴더에 형상 메시가 없습니다(정리됨 또는 준비된 입력)")
 
 
+def _is_matched_set(ctx: AppContext, study: dict[str, Any], r: Resolved) -> bool:
+    ps = r.param_set or {}
+    if ps.get("engine") != "native" or not ps.get("stored_rel"):
+        return False
+    from physicsai_core.geometry.asm_match import is_matched
+
+    return is_matched(resolve_in_study(study_root(ctx, study), ps["stored_rel"]))
+
+
 def _input_summary(ctx: AppContext, study: dict[str, Any], r: Resolved) -> dict[str, Any]:
     """predict_input(reuse) 요약: P/INPUT 직속 파일."""
     out: dict[str, Any] = {"starter": r.starter, "rad": [], "inc_count": 0, "file_count": 0, "total_bytes": 0,
@@ -70,9 +84,11 @@ def _input_summary(ctx: AppContext, study: dict[str, Any], r: Resolved) -> dict[
     if not r.input_rel:
         return out
     d = resolve_in_study(study_root(ctx, study), r.input_rel)
-    names = sorted(n for n in os.listdir(d) if os.path.isfile(os.path.join(d, n)))
+    deep = _is_matched_set(ctx, study, r)  # 조립 매칭 예측은 INPUT에 하위 폴더 트리가 있다
+    names = sorted(os.path.relpath(os.path.join(dp, f), d).replace(os.sep, "/")
+                   for dp, _dn, fs in (os.walk(d) if deep else [(d, [], os.listdir(d))]) for f in fs if os.path.isfile(os.path.join(dp, f)))
     out.update(rad=[n for n in names if n.lower().endswith(".rad")][:50], inc_count=sum(n.lower().endswith(".inc") for n in names),
-               file_count=len(names), total_bytes=sum(os.path.getsize(os.path.join(d, n)) for n in names))
+               file_count=len(names), total_bytes=sum(os.path.getsize(os.path.join(d, *n.split("/"))) for n in names))
     return out
 
 
@@ -178,7 +194,7 @@ def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[s
             assem_path = path
             assem_out = {"kind": "TEMPLATE", "label": "템플릿 조립 폴더", "path": display_path(s.storage.ai_root, study["folder_name"], rel)}
     if input_mode == "rebuild":
-        _rebuild_checks(ctx, r)
+        _rebuild_checks(ctx, r, study)
         if ((r.predict_job or {}).get("result") or {}).get("shell_values"):  # 3S: 재조립은 조립 원본 그대로(두께 미적용)
             r.warn("SHELL_NOT_APPLIED", "이 예측의 쉘 두께 값은 재조립 입력에 적용되지 않습니다 — 예측 입력 그대로(reuse)를 쓰세요")
         if assem_path and assem_out is not None:

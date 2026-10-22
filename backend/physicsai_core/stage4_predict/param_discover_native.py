@@ -37,9 +37,11 @@ def _is_step(name: str, exts: tuple[str, ...]) -> bool:
     return name.casefold().endswith(exts)
 
 
-def discover_native(root: str, settings: Any, kind: str = "solid") -> Discovery:
-    """kind=shell(shell-morph.md §8.2): 조립 폴더 후보에 기준 메시·RENUM csv가 필요 없다. 이미 추출한 쉘 피처 = shell_features.json."""
+def discover_native(root: str, settings: Any, kind: str = "solid", asm_match: bool = False) -> Discovery:
+    """kind=shell(shell-morph.md §8.2): 조립 폴더 후보에 기준 메시·RENUM csv가 필요 없다. 이미 추출한 쉘 피처 = shell_features.json.
+    asm_match=True(asm-match.md §6.4 조립 매칭 세트): 같은 이유로 기준 메시·RENUM csv를 요구하지 않는다(BASELINE_INC_MISSING·RENUM_CSV_MISSING 제외)."""
     shell = kind == "shell"
+    free = shell or asm_match  # 기준 메시·RENUM csv 불필요
     features_name = SHELL_FEATURES_NAME if shell else FEATURES_NAME
     ps, pr, td, geo = settings.param_set, settings.predict, settings.train_data, settings.geometry
     run_re = re.compile(td.result_run_dir_regex) if td.result_run_dir_regex else None
@@ -78,7 +80,7 @@ def discover_native(root: str, settings: Any, kind: str = "solid") -> Discovery:
     assem = []
     for a in assem_all:
         has_inc = any(n.casefold() == inc for n in sc.dirs.get(a["rel"], []))
-        if has_inc or shell:
+        if has_inc or free:
             assem.append({**a, "has_baseline_inc": has_inc})
     if assem_all and not assem:
         problems.append({"code": "BASELINE_INC_MISSING",
@@ -87,7 +89,7 @@ def discover_native(root: str, settings: Any, kind: str = "solid") -> Discovery:
         problems.append({"code": "ASSEM_NOT_FOUND",
                          "message": f"starter({pr.starter_glob})가 1개 있는 조립 폴더를 찾지 못했습니다"
                                     + (f" (여러 개인 폴더: {', '.join(multi[:5])})" if multi else "")})
-    if assem and not shell and not any(a["has_renum_csv"] for a in assem):
+    if assem and not free and not any(a["has_renum_csv"] for a in assem):
         problems.append({"code": "RENUM_CSV_MISSING",
                          "message": f"조립 폴더에 번호 재지정 표({pr.renum_csv_name})가 없습니다 — Native 형상 엔진은 필수입니다"})
     if companions:
@@ -106,7 +108,7 @@ def discover_native(root: str, settings: Any, kind: str = "solid") -> Discovery:
 PARAM_NOTE = "이미 추출한 형상 피처 파일(parameter_features.json·parameter_extracted.xml)이 있어 형상 추출을 건너뜁니다"
 
 
-def resolve_choice_native(d: Discovery, choice: dict[str, str | None], kind: str = "solid"
+def resolve_choice_native(d: Discovery, choice: dict[str, str | None], kind: str = "solid", asm_match: bool = False
                           ) -> tuple[str | None, dict[str, Any] | None, list[dict[str, Any]]]:
     """(CAD 상대경로, 조립 폴더, problems). CAD는 후보 1개면 자동, 아니면 고름. 조립 폴더도 같다."""
     probs: list[dict[str, Any]] = []
@@ -119,7 +121,7 @@ def resolve_choice_native(d: Discovery, choice: dict[str, str | None], kind: str
             probs.append({"code": "CHOICE_INVALID" if given is not None else "CHOICE_REQUIRED", "key": key,
                           "message": f"{key} 후보 {len(cands)}개 중 하나를 고르세요" if given is None
                           else f"고른 {key}({given})가 찾은 목록에 없습니다"})
-    if assem is not None and not assem["has_renum_csv"] and kind != "shell":
+    if assem is not None and not assem["has_renum_csv"] and kind != "shell" and not asm_match:
         probs.append({"code": "RENUM_CSV_MISSING", "message": "고른 조립 폴더에 번호 재지정 표가 없습니다"})
     return cad, assem, probs
 
@@ -166,16 +168,26 @@ def prepared_files(root: str, cad_rel: str, kind: str = "solid") -> list[tuple[s
 
 
 def copy_sources_native(d: Discovery, cad_rel: str, assem: dict[str, Any], dst: str, settings: Any, kind: str = "solid",
-                        prepared: bool = True) -> int:
+                        prepared: bool = True, matched: bool = False) -> int:
     """고른 후보를 세트 폴더 구조(cad/, radioss_assem/, native/extract/)로 dst에 모은다. 원본마다 복사 직전 재검사·핸들 복사.
-    prepared=False(추출 조건 지정, extract-filter.md §6.7)면 준비된 피처 파일·parameters.json은 복사하지 않는다."""
+    prepared=False(추출 조건 지정, extract-filter.md §6.7)면 준비된 피처 파일·parameters.json은 복사하지 않는다.
+    matched=True(조립 매칭 세트, asm-match.md §6.4)면 `radioss_assem/`에 직계 .rad·.inc 대신 **include 트리 파일만**(상대 경로 유지) 복사한다.
+    트리 오류는 `AsmTreeError`(호출자가 실패로 바꾼다). `body_map.json`은 방식 M에서 쓰지 않으므로 복사하지 않는다."""
     root = d.root
     root_real = real(root)
     total = 0
     for src, rel in cad_files(root, cad_rel, settings) + (prepared_files(root, cad_rel, kind) if prepared else []):
+        if matched and rel == "cad/body_map.json":
+            continue
         total += _copy_src(root, root_real, src, os.path.join(dst, *rel.split("/")))
     arel = assem["rel"]
     adir = _recheck(root, root_real, arel)
+    if matched:
+        from ..geometry.asm_tree import build, copy_included
+
+        tree = build(adir)
+        copy_included(tree, os.path.join(dst, "radioss_assem"))
+        return total + sum(os.path.getsize(f.path) for f in tree.files)
     for n in assem_files(adir, settings.predict.renum_csv_name):
         total += _copy_src(root, root_real, _rel(arel, n), os.path.join(dst, "radioss_assem", n))
     return total
@@ -202,11 +214,16 @@ def copy_assem_native(d: Discovery, assem: dict[str, Any], dst: str, settings: A
 
 
 def planned_bytes_native(d: Discovery, cad_rel: str, assem: dict[str, Any], settings: Any, kind: str = "solid",
-                         prepared: bool = True) -> int:
+                         prepared: bool = True, matched: bool = False) -> int:
     root = d.root
     files = [_abs(root, s) for s, _r in cad_files(root, cad_rel, settings) + (prepared_files(root, cad_rel, kind) if prepared else [])]
     adir = _abs(root, assem["rel"])
-    files += [os.path.join(adir, n) for n in assem_files(adir, settings.predict.renum_csv_name)]
+    if matched:
+        from ..geometry.asm_tree import build
+
+        files += [f.path for f in build(adir).files]
+    else:
+        files += [os.path.join(adir, n) for n in assem_files(adir, settings.predict.renum_csv_name)]
     total = 0
     for f in files:
         try:

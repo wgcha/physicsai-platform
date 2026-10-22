@@ -82,7 +82,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 | OPTIMIZE(레거시) | **GPU[OP_PREP·HST_OPTIMIZE·OP_SUMMARY]** | GPU |
 | FEM_VERIFY·PREDICT_VERIFY·TD_SOLVE | CPU → PBS 대기(슬롯 없음) → 회수 → CPU(T14) | CPU |
 | 그 밖 SLOT 종류 전부 | CPU | CPU |
-| LIGHT·PREVIEW 종류(`CONTOUR_3D` 제외 — CPU, 전환 없음) | 기존 레인 그대로 | LIGHT·PREVIEW |
+| LIGHT·PREVIEW 종류(`CONTOUR_3D` 제외 — CPU, 전환 없음. PREVIEW = `GEOM_PREVIEW`·`ASM_MATCH`, 3차 통합 확인) | 기존 레인 그대로 | LIGHT·PREVIEW |
 
 - **초기 대기열 규칙**(core 한 곳 `physicsai_core/queues.py` `initial_lane(job_type, params, resume_from_step)`): 기본 **CPU**(첫 구간의 INTERNAL·준비 복사는 CPU 슬롯에서 — GPU를 준비 작업에 쓰지 않는다). 예외 = 작업이 "짧은 INTERNAL + GPU step 1개 + 짧은 INTERNAL"로만 된 EVALUATE·OPTIMIZE는 GPU로 시작(전환 2회 절약, `queues.GPU_START_TYPES` 상수). 재개(`resume_from_step`)면 재개 step 기준으로 같은 규칙.
 - prepared PREDICT의 `GEOM_UPDATE`·`MESH` 건너뛰기는 실행 중 판정(`StepSkipped`)이므로 전환 판정은 **res = cpu인 step을 만나도 그 step이 건너뛰기 대상이면 전환하지 않는다** — `queues.skip_without_slot(job, step_key)`(params만 보는 순수 함수, prepared PREDICT의 GEOM_UPDATE·MESH = true)를 executor가 먼저 부른다.

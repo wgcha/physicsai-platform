@@ -29,3 +29,7 @@ class RadiossWriter:
     def write_cushion(self, inc, renum, assem_dir, out_name: str):
         """Cushion-only starter rad (input-kind.md section 5.2): returns ``radioss_cushion.CushionRad``."""
         return radioss_cushion.build(inc, renum, assem_dir, out_name)
+
+    def write_cushion_asm(self, src, patch, out_name: str):
+        """Assembly-match cushion rad (asm-match.md section 5.5): returns ``radioss_cushion.CushionRad``."""
+        return radioss_cushion.build_asm(src, patch, out_name)

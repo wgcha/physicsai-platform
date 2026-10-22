@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from physicsai_core.commands import template_uses
+from physicsai_core.commands_spec import PAICAD_ASM_KEYS
 from physicsai_core.errors import StepFailure
 from physicsai_core.geometry.judge import Verdict, judge_paicad, parse_result_line
 from physicsai_core.geometry.reports import ReportError, parse_version_json
@@ -25,6 +26,7 @@ PAICAD_LOG = "paicad.log"
 TIMEOUT_KEY = {"paicad_extract": "extract", "paicad_tag": "tag", "paicad_update": "update", "paicad_morph": "morph",
                "paicad_check": "check", "paicad_run": "run",
                "paicad_cushion_write": "check",  # 쿠션 rad 쓰기는 check와 같은 시간 상한(input-kind.md §5)
+               "paicad_asm_write": "check",  # 조립 사본 쓰기(asm-match.md §5.4) — 시간 상한은 check 값. asm parts·check는 asm_match.timeout_s(호출자가 넘김)
                # 쉘(SM §8.1): `shell_*` 키가 없으면 같은 이름 솔리드 값(fixed-scan은 tag 값)
                "paicad_shell_fixed_scan": "shell_fixed_scan", "paicad_shell_extract": "shell_extract", "paicad_shell_tag": "shell_tag",
                "paicad_shell_update": "shell_update", "paicad_shell_morph": "shell_morph", "paicad_shell_check": "shell_check",
@@ -45,11 +47,19 @@ class NativeInputs:
     body_map: str | None = None
     kind: str = "solid"  # solid | shell(shell-morph.md §8.2 — 준비본 prep.json kind)
     fixed_dir: str = ""  # 쉘: native/fixed(shell_scan.json·fixed_nodes.npz)
+    asm_match: str = ""  # 조립 매칭 세트(방식 M, asm-match.md §6.4)의 `cad/asm_match.json` 사본 경로 — 있으면 baseline_inc·renum_csv는 비어 있다
+
+    @property
+    def matched(self) -> bool:
+        return bool(self.asm_match)
 
     def base_values(self, settings: Any) -> dict[str, str]:
         if self.kind == "shell":
             return {"cad_input": self.cad_input, "features_json": self.features, "tag_dir": self.tag_dir,
                     "assem_dir": self.assem_dir, "fixed_dir": self.fixed_dir}
+        if self.matched:  # 방식 M: commands_asm.expand가 --renum-csv→--asm-match, --baseline-inc→--assem-dir 등으로 바꾼다(AM-10)
+            return {"cad_input": self.cad_input, "features_json": self.features, "tag_dir": self.tag_dir,
+                    "assem_dir": self.assem_dir, "asm_match": self.asm_match}
         return {"cad_input": self.cad_input, "features_json": self.features, "tag_dir": self.tag_dir,
                 "baseline_inc": self.baseline_inc, "assem_dir": self.assem_dir, "renum_csv": self.renum_csv}
 
@@ -73,17 +83,21 @@ def native_inputs(settings: Any, base: str, assem_dir: str, *, need_cad: bool = 
     kind: 생략 = 준비본 prep.json kind(없으면 features 파일로 판단, shell-morph.md §4.2)."""
     from physicsai_core.geometry.shell_native import SHELL, features_name, read_kind
 
+    from physicsai_core.geometry.asm_match import ASM_MATCH_REL, is_matched
+
     pr = settings.predict
     bm = os.path.join(base, "cad", "body_map.json")
     k = kind or read_kind(base)
+    matched = k != SHELL and is_matched(base)  # 조립 매칭 세트: 확정본 사본이 S·D의 cad/asm_match.json(없으면 방식 L, 기존 동작)
     return NativeInputs(
         cad_input=find_cad_input(base, settings.geometry.step_extensions) if need_cad else "",
         features=os.path.join(base, "native", "extract", features_name(k)),
         tag_dir=os.path.join(base, "native", "tag"),
-        baseline_inc=os.path.join(assem_dir, pr.mesh_include_name),
-        assem_dir=assem_dir, renum_csv=os.path.join(assem_dir, pr.renum_csv_name),
-        body_map=bm if os.path.isfile(bm) else None, kind=k,
-        fixed_dir=os.path.join(base, "native", "fixed") if k == SHELL else "")
+        baseline_inc="" if matched else os.path.join(assem_dir, pr.mesh_include_name),
+        assem_dir=assem_dir, renum_csv="" if matched else os.path.join(assem_dir, pr.renum_csv_name),
+        body_map=None if matched else (bm if os.path.isfile(bm) else None), kind=k,
+        fixed_dir=os.path.join(base, "native", "fixed") if k == SHELL else "",
+        asm_match=os.path.join(base, *ASM_MATCH_REL.split("/")) if matched else "")
 
 
 def tail_text(path: str, n: int = LOG_TAIL_BYTES) -> str:
@@ -166,6 +180,12 @@ def run_paicad(x: Any, settings: Any, key: str, values: dict[str, str], *, cwd: 
     """paicad 명령 1회 실행 + 판정. x = LocalRunner | ParallelRunner. 실패해도 예외를 던지지 않고 Verdict를 돌려준다
     (호출자가 step 실패·run 실패·SKIPPED로 처리). 플랫폼 오류(실행 파일 없음·시간 초과 등)만 StepFailure."""
     g = settings.geometry
+    if (values.get("asm_match") or key in PAICAD_ASM_KEYS) and "asm_cache_dir" not in values:  # 방식 M·조립 매칭 명령: 조립 파싱 캐시 `<study>/_cache/asm_parse/`(AM-11, 지워도 재생성)
+        from physicsai_core.geometry.asm_match import CACHE_REL
+
+        cache = x.ctx.abs(CACHE_REL)
+        os.makedirs(cache, exist_ok=True)
+        values = {**values, "asm_cache_dir": cache}
     tk = TIMEOUT_KEY.get(key, "")
     if tk.startswith("shell_") and tk not in g.timeout_s:
         tk = SHELL_TIMEOUT_FALLBACK.get(tk, tk[len("shell_"):])

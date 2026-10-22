@@ -69,6 +69,9 @@ import type {
   Study,
   StudyDetail,
   GeomView,
+  AsmMatch,
+  AsmMatchCreate,
+  AsmRowsPut,
   GeomPreview,
   GeomPreviewCreate,
   Contour3d,
@@ -134,8 +137,9 @@ export const api = {
   /** engine:"native" → 202 {job_id}(PARAM_SET_NATIVE, geometry-engine.md §7.3.4), altair → 201 ParamSet */
   registerParamSet: (studyId: string, path: string, opts: Omit<ParamSetCreate, "path"> = {}) =>
     request<ParamSet | { job_id: string }>("POST", `/studies/${studyId}/param-sets`, { body: { path, ...opts } }),
-  discoverParamSet: (studyId: string, path: string, tpl?: string | null, engine?: Engine) =>
-    request<ParamSetDiscover>("POST", `/studies/${studyId}/param-sets/discover`, { body: { path, ...(tpl ? { tpl } : {}), ...(engine ? { engine } : {}) } }),
+  /** asmMatch = 조립 매칭을 쓸 것(asm-match.md AM-C2 12): 서버가 BASELINE_INC_MISSING·RENUM_CSV_MISSING을 제외한다 */
+  discoverParamSet: (studyId: string, path: string, tpl?: string | null, engine?: Engine, asmMatch?: boolean) =>
+    request<ParamSetDiscover>("POST", `/studies/${studyId}/param-sets/discover`, { body: { path, ...(tpl ? { tpl } : {}), ...(engine ? { engine } : {}), ...(asmMatch ? { asm_match: true } : {}) } }),
   /** label·geom_options(§7.4 부분 객체, 422 GEOM_OPTIONS_INVALID problems) */
   patchParamSet: (id: string, body: { label?: string | null; geom_options?: GeomOptions | null }) => request<ParamSet>("PATCH", `/param-sets/${id}`, { body }),
   /** §7.6 native: 형상 준비 다시(202 job), 피처 요약 */
@@ -160,6 +164,15 @@ export const api = {
   paramSetView: (id: string) => request<GeomView>("GET", `/param-sets/${id}/view`),
   createPreview: (id: string, body: GeomPreviewCreate) => request<GeomPreview>("POST", `/param-sets/${id}/previews`, { body }),
   preview: (id: string) => request<GeomPreview>("GET", `/previews/${id}`),
+  /** asm-match.md §6.3 조립 매칭: 목록 읽기 202 · 조회 · 행 저장(초안) · 검사 202 · 확정 */
+  asmMatchCreate: (studyId: string, body: AsmMatchCreate) => request<{ match_id: string; job_id: string }>("POST", `/studies/${studyId}/asm-matches`, { body }),
+  asmMatch: (id: string) => request<AsmMatch>("GET", `/asm-matches/${id}`),
+  /** Study의 매칭 목록(최신순, 항목 = AsmMatch) — 화면이 마지막 매칭을 다시 찾는다 */
+  asmMatches: (studyId: string, q: { source?: "train" | "path"; latest?: boolean; limit?: number } = {}) =>
+    request<{ items: AsmMatch[] }>("GET", `/studies/${studyId}/asm-matches`, { query: q }),
+  putAsmRows: (id: string, body: AsmRowsPut) => request<AsmMatch>("PUT", `/asm-matches/${id}/rows`, { body }),
+  checkAsmMatch: (id: string) => request<{ job_id: string }>("POST", `/asm-matches/${id}/check`),
+  confirmAsmMatch: (id: string) => request<AsmMatch>("POST", `/asm-matches/${id}/confirm`),
   /** §13.5 결과 3D 컨투어(열 때 생성): 200 적중 | 202 생성 중(progress) · 상태 · 취소 */
   createContour3d: (body: Contour3dCreate) => request<Contour3d>("POST", "/contour3d", { body }),
   contour3d: (id: string) => request<Contour3d>("GET", `/contour3d/${id}`),

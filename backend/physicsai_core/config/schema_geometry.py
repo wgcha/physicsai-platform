@@ -83,3 +83,14 @@ class Contour3dCfg(_M):
     max_bin_bytes: int = 268435456
     include_disp: bool = True
     timeout_s: float = 1800
+
+
+class AsmMatchCfg(_M):
+    """조립 매칭(asm-match.md §6.2). enabled=false·명령 null이면 API 409 TEMPLATE_NOT_CONFIGURED. `max_parts`·`recommend_min_score`·
+    `worst_nodes`는 paicad `--options`의 `asm_match` 절로 넘긴다(허용오차는 `geometry.defaults.tag`, AM-3)."""
+
+    enabled: bool = True
+    max_parts: int = 5000
+    recommend_min_score: float = 0.6
+    worst_nodes: int = 2000
+    timeout_s: float = 600

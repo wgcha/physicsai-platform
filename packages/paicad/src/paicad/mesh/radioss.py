@@ -365,43 +365,59 @@ def rewrite_nodes(data: bytes, new_xyz: dict[int, tuple[float, float, float]]) -
     in_node = False
     for line in data.splitlines(keepends=True):
         if line.startswith(b"/"):
-            in_node = line.rstrip(b"\r\n").strip().upper() == b"/NODE" or line.upper().startswith(b"/NODE/")
+            in_node = is_node_keyword(line)
             out.append(line)
             continue
         if not in_node or line.startswith((b"#", b"$")) or not line.strip():
             out.append(line)
             continue
-        body = line.rstrip(b"\r\n")
-        eol = line[len(body) :]
-        toks = list(_TOKEN.finditer(body))
-        if len(toks) < 4:
-            out.append(line)
-            continue
-        try:
-            nid = int(toks[0].group())
-        except ValueError:
-            out.append(line)
-            continue
-        new = new_xyz.get(nid)
-        if new is None:
-            out.append(line)
-            continue
-        old = [float(t.group()) for t in toks[1:4]]
-        if all(a == b for a, b in zip(old, new)):
-            out.append(line)
-            continue
-        buf = bytearray(body)
-        # standard I10,F20,F20,F20 columns: the value may fill its field (positional); any other layout
-        # (free format) keeps one blank before the value so that tokens never merge
-        fixed = all(toks[k].end() == 10 + 20 * k for k in range(4))
-        for k in range(3):
-            start = toks[k].end()
-            end = toks[k + 1].end()
-            if fixed:
-                buf[start:end] = _fmt(float(new[k]), end - start)
-            elif end - start < 2:
-                raise PaicadError("GEOM_INC_FORMAT", f"value {float(new[k])!r} does not fit a {end - start}-wide free-format field")
-            else:
-                buf[start:end] = b" " + _fmt(float(new[k]), end - start - 1)
-        out.append(bytes(buf) + eol)
+        out.append(rewrite_node_line(line, new_xyz))
     return b"".join(out)
+
+
+def is_node_keyword(line: bytes) -> bool:
+    return line.rstrip(b"\r\n").strip().upper() == b"/NODE" or line.upper().startswith(b"/NODE/")
+
+
+def node_line_id(line: bytes) -> int | None:
+    """Node id of a ``/NODE`` data line (None if the line is not a node line)."""
+    toks = _TOKEN.findall(line.rstrip(b"\r\n"))
+    if len(toks) < 4:
+        return None
+    try:
+        return int(toks[0])
+    except ValueError:
+        return None
+
+
+def rewrite_node_line(line: bytes, new_xyz: dict[int, tuple[float, float, float]]) -> bytes:
+    """One ``/NODE`` data line with its X/Y/Z fields replaced (section 6.4); unchanged values -> same bytes."""
+    body = line.rstrip(b"\r\n")
+    eol = line[len(body) :]
+    toks = list(_TOKEN.finditer(body))
+    if len(toks) < 4:
+        return line
+    try:
+        nid = int(toks[0].group())
+    except ValueError:
+        return line
+    new = new_xyz.get(nid)
+    if new is None:
+        return line
+    old = [float(t.group()) for t in toks[1:4]]
+    if all(a == b for a, b in zip(old, new)):
+        return line
+    buf = bytearray(body)
+    # standard I10,F20,F20,F20 columns: the value may fill its field (positional); any other layout
+    # (free format) keeps one blank before the value so that tokens never merge
+    fixed = all(toks[k].end() == 10 + 20 * k for k in range(4))
+    for k in range(3):
+        start = toks[k].end()
+        end = toks[k + 1].end()
+        if fixed:
+            buf[start:end] = _fmt(float(new[k]), end - start)
+        elif end - start < 2:
+            raise PaicadError("GEOM_INC_FORMAT", f"value {float(new[k])!r} does not fit a {end - start}-wide free-format field")
+        else:
+            buf[start:end] = b" " + _fmt(float(new[k]), end - start - 1)
+    return bytes(buf) + eol

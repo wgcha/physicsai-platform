@@ -45,6 +45,8 @@ class Run:
     result_dir: str | None = None     # RESPONSES.txt·H3D_REQUESTS.txt 위치(= h3d 폴더)
     curve_json: str | None = None     # 예측 curve.json(CURVE_PICK) — 해석은 None(추출)
     mesh_inc: str | None = None       # 입력 메시 include(부피)
+    mesh_tree: str | None = None      # 조립 매칭 run(방식 M): 조립 폴더(starter + include 트리) — mesh_inc 파일이 없다(asm-match.md §6.4)
+    mesh_parts: list[str] | None = None  # 조립 매칭 run: 매칭된 PART id(=쿠션) 목록
     state: str | None = None
 
     def as_dict(self) -> dict[str, Any]:
@@ -126,6 +128,34 @@ def _mesh_in(folder: str | None, mesh_name: str) -> str | None:
     return None
 
 
+def matched_parts(doc: Mapping[str, Any] | None) -> list[str] | None:
+    """확정본(asm_match.json)의 매칭 PART id 목록(없으면 None = 조립 매칭 아님)."""
+    if not isinstance(doc, Mapping):
+        return None
+    pids = [str(int(p)) for r in doc.get("rows") or [] if isinstance(r, Mapping) for p in r.get("pids") or []]
+    return pids or None
+
+
+def _set_tree(run: Run, folder: str | None, parts: list[str] | None) -> None:
+    """mesh_inc가 없고 조립 매칭이면 폴더(starter가 있는 곳)를 run.mesh_tree로 둔다."""
+    if run.mesh_inc or not parts or not folder or not os.path.isdir(folder):
+        return
+    from ..geometry.asm_tree import AsmTreeError, find_starter
+
+    try:
+        find_starter(folder)
+    except (AsmTreeError, OSError):
+        return
+    run.mesh_tree, run.mesh_parts = folder, parts
+
+
+def _set_doc(root: str, rel: str | None) -> Mapping[str, Any] | None:
+    from ..geometry.asm_match import ASM_MATCH_REL, read_json
+
+    p = safe_study_path(root, f"{rel.rstrip('/')}/{ASM_MATCH_REL}") if rel else None
+    return read_json(p) if p and os.path.isfile(p) else None
+
+
 def _finite(v: Any) -> float | None:
     return float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None
 
@@ -158,12 +188,14 @@ def _train_doe(conn: Any, settings: Any, study: Mapping[str, Any], root: str, do
     snap = [p for p in (d.get("parameters_snapshot") or []) if isinstance(p, dict) and "name" in p]
     side.integer_names = list(integer_vars(snap))
     mesh_name = settings.predict.mesh_include_name
+    mparts = matched_parts(_set_doc(root, f"01_train/doe/{doe_id}"))
     for i, r in enumerate(train_repo.runs_for_doe(conn, doe_id)):
         run = Run(r["run_key"], _run_no(r["run_key"], i), r["state"] in OK_TRAIN_STATES, samples.get(r["run_key"]), state=r["state"])
         R = safe_study_path(root, f"01_train/results/{doe_id}/{r['run_key']}")
         _fill_results(run, R, recursive=True)
         inp = safe_study_path(root, r["input_rel"]) if r.get("input_rel") else None
         run.mesh_inc = _mesh_in(inp, mesh_name) or (_mesh_in(os.path.dirname(inp), mesh_name) if inp else None)
+        _set_tree(run, R, mparts)
         side.runs.append(run)
     pss = [p for p in ps_repo.list_for_study(conn, study["id"]) if p.get("train_doe_id") == doe_id]
     ps = pss[0] if pss else ps_repo.current(conn, study["id"])
@@ -201,6 +233,7 @@ def _predict_batch(conn: Any, settings: Any, study: Mapping[str, Any], root: str
     side.integer_names = list(integer_vars(list((ps or {}).get("parameters") or [])))
     mesh_name = settings.predict.mesh_include_name
     B = safe_study_path(root, b["dir_rel"])
+    mparts = matched_parts(_set_doc(root, (ps or {}).get("stored_rel")))
     for r in pb_repo.runs_with_jobs(conn, batch_id):
         job = jobs_repo.get_job(conn, r["predict_job_id"]) if r.get("predict_job_id") else None
         ok = bool(job) and job["state"] == "SUCCEEDED"
@@ -218,6 +251,7 @@ def _predict_batch(conn: Any, settings: Any, study: Mapping[str, Any], root: str
         run.curve_json = cp if cp and os.path.isfile(cp) else None
         run_dir = os.path.join(B, r["run_key"]) if B else None
         run.mesh_inc = _mesh_in(run_dir, mesh_name)
+        _set_tree(run, os.path.join(run_dir, "m_3") if run_dir else None, mparts)
         side.runs.append(run)
     return side
 
@@ -248,6 +282,7 @@ def _fem_verify(conn: Any, settings: Any, study: Mapping[str, Any], root: str, f
         pj = jobs_repo.get_job(conn, r["predict_job_id"]) or {}
         psid = (pj.get("result") or {}).get("param_set_id") or (pj.get("params") or {}).get("param_set_id")
         ps = ps_repo.get(conn, psid) if psid else None
+    _set_tree(run, os.path.join(A, "input") if A else None, matched_parts(_set_doc(root, (ps or {}).get("stored_rel"))))
     side.param_set_id, side.model_id = (ps or {}).get("id"), r.get("model_id")
     side.responses = _responses_of(conn, ps)
     return side

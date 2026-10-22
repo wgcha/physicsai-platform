@@ -100,7 +100,7 @@ function BasisSelect({ sets, value, onChange, disabled }: { sets: ParamSet[]; va
 
 export function DoeGenCard() {
   const { study, paramSets } = useStudy();
-  const { setup, does, reloadDoes } = useTrain();
+  const { setup, does, reloadDoes, asm } = useTrain();
   const canExec = useCanExecute();
   const { job, run, error, errorDetail } = useJobRunner("TD_DOE_GEN", () => void reloadDoes());
   const lim = doeLimits(useApp().status);
@@ -153,6 +153,10 @@ export function DoeGenCard() {
   };
   const native = setup?.engine === "native" || !!nset;
   const tplReady = native || (!!setup?.tpl && !setup.tpl.stale);
+  // 저장된 조립 매칭(asm-match.md §3.2·§6.5)이 있으면 조립 폴더·기준 메시 파일 요구 없이 그 매칭으로 만든다. 세트 기준·RENUM 방식은 기존 그대로
+  const asmOn = native && !nset && !!asm;
+  const asmId = asmOn ? asm!.match_id : null;
+  const assemPath = asmOn ? asm!.assem.display_path : path.trim();
   const latest = does.find((d) => d.job_id === job?.id) ?? does[0];
   const usedParams = (setup?.parameters ?? []).filter((p) => p.use);
   const names = usedParams.map((p) => p.name);
@@ -176,9 +180,9 @@ export function DoeGenCard() {
     panel: <ReuseDoePicker does={does} names={targetNames} doeId={reuseDoe} onChange={setReuseDoe} disabled={!canExec} blocked={reuseBlocked} />,
     blocked: reuseBlocked,
   };
-  const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath: path.trim(), paramSetId: nset?.id ?? null, continueOnFailure: native ? nat.continueOnFailure : continueOnFail });
+  const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath, paramSetId: nset?.id ?? null, asmMatchId: asmId, continueOnFailure: native ? nat.continueOnFailure : continueOnFail });
   // 다중 baseline 세트는 층 안 생성기만(DM-C4) — 그 밖 방식이 남아 있으면 생성을 막는다
-  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.nativeLhsMaxRuns, otherMaxRuns: lim.maxRuns, assemPath: path.trim(), paramSetId: nset?.id ?? null, names: targetNames, table: { ranges: natRanges } }));
+  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.nativeLhsMaxRuns, otherMaxRuns: lim.maxRuns, assemPath, paramSetId: nset?.id ?? null, asmMatchId: asmId, names: targetNames, table: { ranges: natRanges } }));
   const submit = () => {
     if (reuseActive) {
       const params = reuseParams();
@@ -199,9 +203,11 @@ export function DoeGenCard() {
   };
   const inputBad = reuseActive ? !reuseDoe : native ? nativeParams() === null : isPlatform ? platformParams() === null : !t || (t.runs_editable && !(Number(runs) >= 2));
   // 세트 기준 native: 조립 폴더는 세트 것(입력 없음), 준비본 READY·다중 baseline 매칭표 확정이 필요(409 GEOM_PREP_STALE·PARAM_MAP_UNCONFIRMED)
-  const assemOk = nset ? true : ok;
+  const assemOk = nset || asmOn ? true : ok;
   const setGate = !nset ? null : nset.native?.prep_status !== "READY" ? "템플릿 형상 준비를 다시 하세요(④)" : (nset.baselines?.length ?? 0) > 1 && nset.param_map_status !== "confirmed" ? "매칭표 확정 필요(④ 다중 baseline)" : null;
   const skipped = native ? skippedRuns(job?.result, does.find((d) => d.job_id === job?.id)?.id) : [];
+  // 조립 매칭 없이 만들다 서버가 요구한 경우(409 PREREQUISITE_MISSING missing ASM_MATCH) — 매칭 카드 안내를 강조
+  const needAsm = errorDetail?.code === "PREREQUISITE_MISSING" && Array.isArray(errorDetail.missing) && (errorDetail.missing as string[]).includes("ASM_MATCH");
   const problems = errorDetail?.code === "DOE_SAMPLING_INVALID" && Array.isArray(errorDetail.problems) ? (errorDetail.problems as { code?: string; message?: string }[]) : [];
 
   return (
@@ -244,7 +250,7 @@ export function DoeGenCard() {
           onChange={setPickedGen}
         />
       </div>
-      {!nset && <PathInput
+      {!nset && !asmOn && <PathInput
         studyId={study.id}
         purpose="RADIOSS_ASSEM"
         label="Radioss 조립 폴더"
@@ -259,6 +265,15 @@ export function DoeGenCard() {
           </div>
         )}
       />}
+      {native && !nset && (asmOn ? (
+        <p className="summary-line small" data-testid="asm-in-use">
+          조립 매칭 사용 중 — <span className="mono">{asm!.assem.display_path}</span> · STEP 바디 {asm!.rows.length}개
+        </p>
+      ) : (
+        <p className={needAsm ? "warn-text small" : "muted small"} data-testid="asm-guide">
+          위 &apos;조립 매칭&apos; 카드에서 조립 폴더를 매칭하고 저장하면 그 매칭으로 만듭니다.
+        </p>
+      ))}
       {native ? (
         <>
           <NativeFields state={nat} onChange={setNat} set={nset} names={targetNames} ranges={natRanges} maxRuns={nat.kind === "lhs" ? lim.nativeLhsMaxRuns : lim.maxRuns} disabled={!canExec} reuse={reuse} />

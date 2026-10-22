@@ -23,6 +23,7 @@ from . import options
 from .common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd
 from .kernel import BodyGeom, CadInputError, load_brep
 from .mesh.radioss import RadMesh, parse_text
+from .meshsrc import NODE_XYZ, mesh_args, open_source, save_xyz
 from .meshdata import KIND_EDGE, KIND_FACE, KIND_UNMATCHED, KIND_VERTEX, Comp, components_from_tag, load_tag
 from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON, load_features, read_json
 
@@ -390,11 +391,15 @@ def run(args, rep: Reporter) -> int:
     from .writers import get_writer
 
     get_writer(getattr(args, "solver", None))  # unknown solver -> GEOM_INPUT_INVALID before any work
-    out = OutDir(args.out_dir, [MORPH_JSON, MORPHED_INC])
+    asm = mesh_args(args, ("baseline_inc",)) == "M"
+    out = OutDir(args.out_dir, [MORPH_JSON, NODE_XYZ if asm else MORPHED_INC])
     out.prepare()
     doc = load_features(args.features)
     rep.progress(5, "reading baseline and tag")
-    base_bytes, mesh = read_baseline(args.baseline_inc)
+    if asm:  # assembly match: node coordinates file instead of the include (asm-match.md section 6.1)
+        base_bytes, mesh = None, open_source(args).mesh
+    else:
+        base_bytes, mesh = read_baseline(args.baseline_inc)
     tag = load_tag(args.tag_dir)
     comps = components_from_tag(mesh, tag)
     rep.progress(15, "loading sample B-rep")
@@ -408,12 +413,18 @@ def run(args, rep: Reporter) -> int:
         out.commit([MORPH_JSON])
         rep.result("FAIL", e.code, MORPH_JSON)
         return EXIT_CHECK
-    rep.progress(85, "writing morphed include")
-    data = write_morphed(base_bytes, mesh, res.moved, getattr(args, "solver", None))
-    with open(out.tmp_path(MORPHED_INC), "wb") as f:
-        f.write(data)
+    if asm:
+        rep.progress(85, "writing node coordinates")
+        save_xyz(out.tmp_path(NODE_XYZ), mesh.node_ids, res.xyz)
+        written = NODE_XYZ
+    else:
+        rep.progress(85, "writing morphed include")
+        data = write_morphed(base_bytes, mesh, res.moved, getattr(args, "solver", None))
+        with open(out.tmp_path(MORPHED_INC), "wb") as f:
+            f.write(data)
+        written = MORPHED_INC
     out.write_text(MORPH_JSON, dumps(ok_report(res, t0)))
-    out.commit([MORPHED_INC, MORPH_JSON])
+    out.commit([written, MORPH_JSON])
     rep.progress(100, f"morph done: max displacement {res.max_disp:.4f} mm")
     rep.result("OK", None, MORPH_JSON)
     return EXIT_OK

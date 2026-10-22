@@ -437,7 +437,7 @@ async function openNativeForm(setup?: (s: MockServer) => void) {
     fireEvent.click(within(form).getByRole("button", { name: "찾기" }));
     await within(form).findByText("01_CAD/cushion_base.step");
   };
-  return { ...utils, card, form, nativeBox, find, toNative: () => fireEvent.click(within(form).getByRole("radio", { name: "Native" })) };
+  return { ...utils, card, form, nativeBox, find, toNative: () => (fireEvent.click(within(form).getByRole("radio", { name: "Native" })), fireEvent.click(within(form).getByRole("checkbox", { name: "조립 매칭 사용" }))) };
 }
 
 describe("④ native 세트 등록 — 추출 조건", () => {

@@ -106,6 +106,8 @@ def test_null_optional_templates_ok():
         "paicad_cushion_write",  # 쿠션 입력 rad(input-kind §5.1)
         # 단계 3S·4B(geometry-engine §11.1·§7.3.8)
         "paicad_props_scan", "paicad_props_apply", "paicad_map",
+        # 조립 매칭(asm-match.md §6.2)
+        "paicad_asm_parts", "paicad_asm_check", "paicad_asm_write",
         # 단계 4C 쉘 판금(shell-morph §8.1)·3D 가시화(geometry-view §6.1)·결과 3D 컨투어(§13.3)
         "paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
         "paicad_shell_check", "paicad_shell_run", "paicad_view_export", "paicad_view_preview", "paicad_shell_view_export",

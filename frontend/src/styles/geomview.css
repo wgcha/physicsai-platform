@@ -52,6 +52,18 @@
   border-color: var(--color-danger-border);
   color: var(--color-danger);
 }
+.gv-pt-tip {
+  position: absolute;
+  pointer-events: none;
+  font: var(--font-r-strong);
+  color: var(--color-text-strong);
+  background: var(--color-surface-raised);
+  border: 1px solid var(--color-danger-border);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--space-1);
+  white-space: nowrap;
+  z-index: 3;
+}
 .gv-msg {
   position: absolute;
   inset: 0;

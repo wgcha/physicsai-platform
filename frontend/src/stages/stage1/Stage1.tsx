@@ -1,5 +1,6 @@
 import { Cell } from "../../design/Grid";
 import { TrainProvider } from "./TrainContext";
+import { AsmMatchSlot } from "./AsmMatchSlot";
 import { CadExtractCard } from "./CadExtractCard";
 import { DoeGenCard } from "./DoeGenCard";
 import { ParamTableCard } from "./ParamTableCard";
@@ -20,6 +21,7 @@ export function Stage1() {
         </Cell>
         <CadExtractCard />
         <ParamTableCard />
+        <AsmMatchSlot />
         <DoeGenCard />
         <SolveCard />
         <ResultCollectCard />

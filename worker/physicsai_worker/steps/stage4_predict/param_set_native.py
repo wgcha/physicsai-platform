@@ -22,6 +22,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
 from physicsai_core.fileutil import copy_tree, write_json
 from physicsai_core.geometry import baselines as bl
+from physicsai_core.geometry.asm_tree import AsmTreeError
 from physicsai_core.geometry.extract_filter import STATS_JSON, apply_to_options, options_inherit_features_filter
 from physicsai_core.geometry.options import check_against_features
 from physicsai_core.geometry.prep import is_shell_only
@@ -80,15 +81,21 @@ def _kind(ctx: Any) -> str:
     return str(ctx.result().get("kind") or "solid")
 
 
-def _discover(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool, kind: str = "solid"
+def _asm_id(ctx: Any) -> str | None:
+    """조립 매칭 신규 등록(asm-match.md §6.4)의 확정 매칭 id — mode=new일 때만(다른 mode는 세트 prep이 방식을 정한다)."""
+    p = ctx.params
+    return p.get("asm_match_id") if p.get("mode") == "new" and p.get("asm_match_id") else None
+
+
+def _discover(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool, kind: str = "solid", asm: bool = False
               ) -> tuple[Any, str | None, dict[str, Any], str]:
     s = ctx.settings
     try:
         cp = check_user_path(path, allowed_roots(s, imports=True))
     except PathError as exc:
         raise path_failure(exc) from None
-    d = dn.discover_native(cp.path, s, kind=kind)
-    cad, assem, probs = dn.resolve_choice_native(d, choice or {}, kind=kind)
+    d = dn.discover_native(cp.path, s, kind=kind, asm_match=asm)
+    cad, assem, probs = dn.resolve_choice_native(d, choice or {}, kind=kind, asm_match=asm)
     problems = dn.shell_only_problems(d.problems + probs) if shell_only else d.problems + probs
     if problems or assem is None or (cad is None and not shell_only):
         raise StepFailure("INPUT_INVALID", "프로젝트 폴더에서 세트를 구성할 수 없습니다: "
@@ -101,12 +108,17 @@ def _collect(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool = Fal
     """후보를 T(`logs/_paramset_tmp/<job_id>`)에 모은다(new·add_baseline 공통, 원본 재검사·핸들 복사).
     prepared=False(추출 조건 지정·승계, extract-filter.md §6.7)면 폴더의 준비된 피처 파일·parameters.json을 쓰지 않아 NP_EXTRACT가 항상 실행된다."""
     s = ctx.settings
-    d, cad, assem, src = _discover(ctx, path, choice, shell_only, kind)
+    asm = _asm_id(ctx) if not shell_only and kind == "solid" else None
+    d, cad, assem, src = _discover(ctx, path, choice, shell_only, kind, asm=bool(asm))
     if not prepared and not shell_only:
         ctx.log("추출 조건이 지정되어 준비된 피처 파일을 쓰지 않습니다")
         if dn.provided_parameters(d.root, cad):
             ctx.add_warning("PARAMS_JSON_IGNORED", "추출 조건이 지정되어 폴더의 parameters.json 범위를 쓰지 않았습니다")
-    if not shell_only and dn.planned_bytes_native(d, cad, assem, s, kind=kind, prepared=prepared) > s.param_set.max_total_bytes:
+    try:
+        planned = 0 if shell_only else dn.planned_bytes_native(d, cad, assem, s, kind=kind, prepared=prepared, matched=bool(asm))
+    except AsmTreeError as exc:
+        raise StepFailure(exc.code, exc.message) from None
+    if not shell_only and planned > s.param_set.max_total_bytes:
         raise StepFailure("INPUT_INVALID", f"복사할 총량이 상한({s.param_set.max_total_bytes} bytes)을 넘습니다 — PARAM_SET_TOO_LARGE")
     T = ctx.abs(f"logs/_paramset_tmp/{ctx.ex.job_id}")
     ctx.backup([T])
@@ -114,9 +126,33 @@ def _collect(ctx: Any, path: str, choice: dict[str, Any], shell_only: bool = Fal
     if shell_only:
         dn.copy_assem_native(d, assem, T, s)
     else:
-        dn.copy_sources_native(d, cad, assem, T, s, kind=kind, prepared=prepared)
+        try:
+            dn.copy_sources_native(d, cad, assem, T, s, kind=kind, prepared=prepared, matched=bool(asm))
+        except AsmTreeError as exc:
+            raise StepFailure(exc.code, exc.message) from None
+        if asm:
+            _copy_confirmed(ctx, T, str(asm), cad)
     ctx.patch_result({"picked": {"cad": cad, "radioss_assem": assem["rel"], "source_path": src}})
     return T
+
+
+def _copy_confirmed(ctx: Any, T: str, match_id: str, cad_rel: str) -> None:
+    """조립 매칭 확정본을 `T/cad/asm_match.json`으로 복사(§6.4) — 이 파일이 있으면 NP_TAG 이후 전부 방식 M.
+    확정본 sha256(params.asm_match_sha256)·복사한 STEP sha256·복사한 트리 digest가 확정본과 같아야 한다(아니면 INPUT_CHANGED)."""
+    from physicsai_core.fileutil import copy_file, sha256_file
+    from physicsai_core.geometry import asm_match as am
+    from physicsai_core.geometry.asm_tree import digest_of
+
+    src = ctx.abs(f"{am.MATCH_ROOT}/{match_id}/{am.CONFIRMED_JSON}")
+    doc = am.read_json(src)
+    if doc is None or sha256_file(src) != ctx.params.get("asm_match_sha256"):
+        raise StepFailure("INPUT_CHANGED", "조립 매칭 확정본이 없거나 요청 이후 바뀌었습니다 — 조립 매칭을 다시 하세요")
+    cad = os.path.join(T, "cad", cad_rel.split("/")[-1])
+    if sha256_file(cad) != (doc.get("cad") or {}).get("sha256"):
+        raise StepFailure("INPUT_CHANGED", "STEP이 조립 매칭 이후 바뀌었습니다 — 조립 매칭을 다시 하세요")
+    if digest_of(os.path.join(T, "radioss_assem")) != (doc.get("assem") or {}).get("digest"):
+        raise StepFailure("INPUT_CHANGED", "조립 폴더가 조립 매칭 이후 바뀌었습니다 — 조립 매칭을 다시 하세요")
+    copy_file(src, os.path.join(T, *am.ASM_MATCH_REL.split("/")), checkpoint=ctx.checkpoint)
 
 
 def _prep_reprep(ctx: Any) -> str:

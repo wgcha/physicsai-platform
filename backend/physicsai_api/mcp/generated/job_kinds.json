@@ -1,5 +1,26 @@
 {
   "kinds": {
+    "asm_match": {
+      "cost": "light",
+      "params_schema": {
+        "additionalProperties": false,
+        "properties": {
+          "match_id": {
+            "description": "조립 매칭 id(asm_match_create 응답, 행은 asm_match_set_rows로 저장해 둔 것)",
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Match Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_id"
+        ],
+        "title": "AsmMatchKindParams",
+        "type": "object"
+      },
+      "version": 1
+    },
     "doe_generate": {
       "cost": "heavy",
       "params_schema": {
@@ -303,6 +324,20 @@
         "additionalProperties": false,
         "description": "①-3 DOE 생성(phase2 §6.4 + phase3 §23.4 S18). generator 생략 → sampling이 있으면 platform, 없으면 hyperstudy(G10).\nplatform: sampling 필수, doe_label·num_runs·options 금지. hyperstudy: 기존 키(doe_label 필수), sampling·on_run_failure 금지.",
         "properties": {
+          "asm_match_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "조립 매칭 확정본 id(asm_match_confirm으로 저장한 것) — ①-1 Native 솔리드 기준 DOE에서 기준 메시·RENUM 파일 대신 사용(세트 기준 DOE는 생략)",
+            "title": "Asm Match Id"
+          },
           "doe_label": {
             "anyOf": [
               {

@@ -12,6 +12,7 @@ import { syncFem } from "./femVerify";
 import { syncEquiv } from "./equivCheck";
 import { finishGeometry } from "./geometry";
 import { queuedIn } from "./queueV2";
+import { finishAsmMatch } from "./asmMatch";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -100,6 +101,7 @@ function finishJob(srv: MockServer, j: Job) {
   finishStage3(srv, j);
   finishStage4(srv, j);
   finishGeometry(srv, j);
+  finishAsmMatch(srv, j);
   if (srv.manage.storage.onFinish(j)) srv.notifyJob(j, "JOB_SUCCEEDED");
   if (isBatchChild(j)) batchAfterChild(srv, j);
 }

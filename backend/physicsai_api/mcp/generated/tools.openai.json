@@ -1,6 +1,220 @@
 [
   {
     "function": {
+      "description": "Check the saved rows: outer nodes vs CAD faces, shared nodes (job ASM_MATCH) / 저장한 행 검사: component 외곽 노드 ↔ CAD 경계면 거리·공유 노드(작업 ASM_MATCH)",
+      "name": "asm_match_check",
+      "parameters": {
+        "properties": {
+          "match_id": {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_id"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Confirm (save) a passed assembly match; consumers (DOE, template registration) use it / 통과한 조립 매칭 확정(저장) — DOE·템플릿 등록이 사용",
+      "name": "asm_match_confirm",
+      "parameters": {
+        "properties": {
+          "match_id": {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_id"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Start assembly matching: scan the assembly include tree for components (job ASM_MATCH) / 조립 매칭 시작: 조립 폴더 include 트리의 component 목록 수집(작업 ASM_MATCH)",
+      "name": "asm_match_create",
+      "parameters": {
+        "properties": {
+          "cad": {
+            "description": "STEP 출처 {kind: train | path, path?}",
+            "properties": {
+              "kind": {
+                "description": "STEP 출처 — train(①-1 Native 추출 결과, 피처 파일 사용) | path(④ 새 템플릿의 STEP 파일 경로)",
+                "enum": [
+                  "train",
+                  "path"
+                ],
+                "type": "string"
+              },
+              "path": {
+                "description": "kind=path일 때 STEP 파일 경로(허용 루트 안, 확장자는 geometry.step_extensions)",
+                "maxLength": 1024,
+                "nullable": true,
+                "type": "string"
+              }
+            },
+            "required": [
+              "kind"
+            ],
+            "type": "object"
+          },
+          "radioss_assem_path": {
+            "description": "Radioss 조립 폴더 경로(허용 루트 안, starter 정확히 1개)",
+            "maxLength": 1024,
+            "minLength": 1,
+            "type": "string"
+          },
+          "study_id": {
+            "description": "Study id(list_studies)",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "cad",
+          "radioss_assem_path",
+          "study_id"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Get an assembly match: state, bodies, components, recommendations, rows, last check / 조립 매칭 조회: 상태·바디·component 목록·추천·행·마지막 검사",
+      "name": "asm_match_get",
+      "parameters": {
+        "properties": {
+          "match_id": {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "match_id"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "List assembly matches of a study, newest first (filter by source; latest=true for one) / Study의 조립 매칭 목록(최신순, source로 거르고 latest=true면 1개)",
+      "name": "asm_match_list",
+      "parameters": {
+        "properties": {
+          "latest": {
+            "description": "true면 가장 최근 1개만 (기본 False)",
+            "type": "boolean"
+          },
+          "limit": {
+            "description": "최대 개수 [개](1~100, 기본 20) (기본 20)",
+            "maximum": 100,
+            "minimum": 1,
+            "type": "integer"
+          },
+          "source": {
+            "description": "STEP 출처로 거르기 — train(①-1 추출 결과) | path(④ 새 템플릿 STEP 경로)",
+            "enum": [
+              "train",
+              "path"
+            ],
+            "nullable": true,
+            "type": "string"
+          },
+          "study_id": {
+            "description": "Study id(list_studies)",
+            "maxLength": 64,
+            "type": "string"
+          }
+        },
+        "required": [
+          "study_id"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Save the body-to-component rows of an assembly match (draft; invalidates the last check) / 조립 매칭 행 저장(초안, 마지막 검사는 무효가 됨)",
+      "name": "asm_match_set_rows",
+      "parameters": {
+        "properties": {
+          "excluded_bodies": {
+            "description": "매칭 안 함으로 둔 바디 이름(use=true 파라미터가 있는 바디는 제외 불가)",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 2000,
+            "type": "array"
+          },
+          "match_id": {
+            "description": "조립 매칭 id(asm_match_create 응답의 match_id)",
+            "maxLength": 64,
+            "type": "string"
+          },
+          "rows": {
+            "description": "매칭 행 — 바디마다 최대 1행(매칭할 바디만)",
+            "items": {
+              "properties": {
+                "body": {
+                  "description": "STEP 바디 이름(asm_match_get의 bodies[].body)",
+                  "maxLength": 128,
+                  "minLength": 1,
+                  "type": "string"
+                },
+                "pids": {
+                  "description": "이 바디에 대응하는 조립 /PART id 목록(1:N 허용, 1 이상 정수, 다른 행과 겹치지 않음)",
+                  "items": {
+                    "type": "integer"
+                  },
+                  "maxItems": 64,
+                  "minItems": 1,
+                  "type": "array"
+                }
+              },
+              "required": [
+                "body",
+                "pids"
+              ],
+              "type": "object"
+            },
+            "maxItems": 2000,
+            "type": "array"
+          }
+        },
+        "required": [
+          "match_id",
+          "rows"
+        ],
+        "type": "object"
+      },
+      "strict": false
+    },
+    "type": "function"
+  },
+  {
+    "function": {
       "description": "Cancel a job (tokens: only jobs created by the same token; idempotent) / 작업 취소(토큰은 그 토큰이 만든 작업만, 멱등)",
       "name": "cancel_job",
       "parameters": {

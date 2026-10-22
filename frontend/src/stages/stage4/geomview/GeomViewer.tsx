@@ -30,7 +30,7 @@ export function GeomViewer({
   highlight: Highlight;
   overlay: Overlay | null;
   redClusters: Set<string>;
-  points: { xyz: Vec3; label: string }[];
+  points: { xyz: Vec3; label: string; title?: string }[];
   onPick: (hit: { body: string; face: number } | null, additive?: boolean) => void;
   onLost: () => void;
   /** three 적재·GLB 받기·장면 초기화 실패(원인 구분) — 부모가 그림 폴백 + 다시 시도로 바꾼다 */

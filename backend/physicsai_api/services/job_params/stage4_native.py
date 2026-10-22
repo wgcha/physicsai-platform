@@ -15,6 +15,7 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.geometry import baselines as bl
+from physicsai_core.geometry.asm_match import is_matched
 from physicsai_core.geometry.prep import is_shell_only
 from physicsai_core.paths import allowed_roots, check_user_path, resolve_in_study
 
@@ -45,6 +46,8 @@ class NativeSetParams(_P):
     usage: Literal["topology", "range"] | None = None  # 4B: 생략 = 기존 매칭표 usage(없으면 topology)
     split_param: str | None = Field(default=None, max_length=64)  # 4B range 분할 변수(공통 이름 제안)
     extract_filter: ExtractFilter | None = None  # extract-filter.md §6.7: new(solid)만 — 서버가 정규화해 기록
+    asm_match_id: str | None = Field(default=None, max_length=64)  # asm-match.md §6.4: new(solid)만 — 확정된 조립 매칭(source=path)
+    asm_match_sha256: str | None = Field(default=None, max_length=80)  # 서버가 확정본 sha256을 기록(요청 값은 무시)
 
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {"PARAM_SET_NATIVE": NativeSetParams}
@@ -79,6 +82,8 @@ def load_map(S: str, ctx: AppContext) -> dict[str, Any] | None:
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
             ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     require_native_available(ctx.settings)
+    if p.asm_match_id is not None and p.mode != "new":  # 조립 매칭은 신규 등록에서만(세트의 방식은 prep가 정한다)
+        raise invalid_at("asm_match_id", "asm_match_id는 새 세트 등록(mode=new)에서만 쓸 수 있습니다")
     if p.extract_filter is not None and p.mode != "new":  # 등록된 세트의 조건은 바꾸지 않는다(reprep·baseline·remap·props_scan)
         from ..param_set_native_api import raise_filter_fixed
 
@@ -95,6 +100,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             from ..geometry_gate import require_shell_available
 
             require_shell_available(ctx.settings)
+        if p.asm_match_id is not None and (kind == "shell" or p.shell_only):
+            raise DomainError("ASM_MATCH_UNSUPPORTED", "쉘 판금·쉘 두께 전용 세트는 조립 매칭을 쓰지 않습니다", status=422)
         if p.extract_filter is not None and (kind == "shell" or p.shell_only):
             from .stage1_native import raise_filter_unsupported
 
@@ -110,9 +117,18 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         norm = normalized_filter(p.extract_filter)
         if norm is not None:
             out["extract_filter"] = norm
+        if p.asm_match_id is not None:  # 서버가 확정본 sha256을 다시 읽어 기록한다(요청 값 불신). 입력 일치 검사는 register_native가 이미 했다
+            from ..asm_match_gate import confirmed_of
+
+            got = confirmed_of(ctx, study, p.asm_match_id)
+            if got is None:
+                raise DomainError("PREREQUISITE_MISSING", "조립 매칭을 먼저 하세요 — 확정된 조립 매칭이 없습니다", status=409, missing=["ASM_MATCH"])
+            out["asm_match_id"], out["asm_match_sha256"] = p.asm_match_id, got[1]
         return out, None, []
     ps = _native_set(conn, study, p.param_set_id)
     S = set_dir(ctx, conn, ps)
+    if p.mode in ("add_baseline", "remap") and is_matched(S):  # asm-match.md §8.3: 다중 baseline(4B)은 1차에서 RENUM 방식만
+        raise DomainError("ASM_MATCH_UNSUPPORTED", "다중 baseline은 아직 조립 매칭을 지원하지 않습니다", status=409)
     if p.mode == "reprep":
         if is_shell_only(S):
             raise DomainError("SHELL_ONLY_SET", "쉘 두께 전용 세트는 형상 준비가 없습니다 — PROP 스캔을 다시 하세요", status=409)

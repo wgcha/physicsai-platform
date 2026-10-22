@@ -171,6 +171,90 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/asm-matches/{match_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 조립 매칭 조회
+         * @description 상태(SCANNING·DRAFT·CHECKING·CHECKED·CONFIRMED·FAILED·STALE)와 바디·component(PART) 목록·추천·저장된 행·마지막 검사 결과
+         *     (행별 판정·거리·공유 노드·원점/단위 진단)를 돌려준다. 진행 중이면 수 초 간격으로 다시 조회. 부작용 없음.
+         */
+        get: operations["get_asm_match_physicsai_api_asm_matches__match_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/asm-matches/{match_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 조립 매칭 검사
+         * @description 저장된 행으로 검사 작업(ASM_MATCH, mode check)을 시작한다. 끝나면 asm_match_get의 check에서 행별 판정을 본다.
+         *     원점·단위가 다르면 FAIL(suggest)이며 자동 보정은 없다. 부작용: 대기열 작업 1개·check/<seq> 폴더.
+         */
+        post: operations["check_asm_match_physicsai_api_asm_matches__match_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/asm-matches/{match_id}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 조립 매칭 확정(저장)
+         * @description 마지막 검사가 PASS이고 그 뒤 행·입력이 바뀌지 않았을 때만 확정본(asm_match.json)을 만든다. 확정본은 바꿀 수 없고 DOE·세트가
+         *     자기 폴더로 복사해 쓴다. 이미 확정이면 그대로 돌려준다(멱등). 부작용: asm_match.json 작성.
+         */
+        post: operations["confirm_asm_match_physicsai_api_asm_matches__match_id__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/asm-matches/{match_id}/rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * 조립 매칭 행 저장
+         * @description 바디마다 component(PART id) 1개 이상을 정하거나 매칭 안 함(excluded_bodies)으로 둔다(모든 바디가 둘 중 하나, 매칭 행 1개 이상).
+         *     pid는 한 행에만, TETRA4만 가진 component만. 확정된 매칭은 바꿀 수 없다(새로 만들기). 부작용: match.json 갱신.
+         */
+        put: operations["put_asm_match_rows_physicsai_api_asm_matches__match_id__rows_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/contour3d": {
         parameters: {
             query?: never;
@@ -2016,6 +2100,33 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/studies/{study_id}/asm-matches": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 조립 매칭 목록
+         * @description Study 안 조립 매칭(match.json) 목록을 최신순으로 돌려준다. 항목은 asm_match_get과 같은 모양. 화면이 ①의 마지막 매칭을 다시 찾을 때
+         *     source=train&latest=true. 부작용 없음.
+         */
+        get: operations["list_asm_matches_physicsai_api_studies__study_id__asm_matches_get"];
+        put?: never;
+        /**
+         * 조립 매칭 시작
+         * @description Native 솔리드의 STEP 바디와 조립(Radioss) component를 매칭하기 위한 묶음을 만들고 component 목록 수집 작업(ASM_MATCH, mode parts)을
+         *     대기열에 올린다. renum.csv·기준본 파일은 필요 없다. 응답의 job_id는 job_status로, 끝나면 asm_match_get으로 목록·추천을 본다.
+         *     부작용: 대기열 작업 1개·Study 안 asm_match 폴더 생성.
+         */
+        post: operations["create_asm_match_physicsai_api_studies__study_id__asm_matches_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/studies/{study_id}/curation-sources": {
         parameters: {
             query?: never;
@@ -3147,6 +3258,181 @@ export interface components {
             size: number;
             /** Study Id */
             study_id: string;
+        };
+        /** AsmCad */
+        AsmCad: {
+            /**
+             * Kind
+             * @description STEP 출처 — train(①-1 Native 추출 결과, 피처 파일 사용) | path(④ 새 템플릿의 STEP 파일 경로)
+             * @enum {string}
+             */
+            kind: "train" | "path";
+            /**
+             * Path
+             * @description kind=path일 때 STEP 파일 경로(허용 루트 안, 확장자는 geometry.step_extensions)
+             */
+            path?: string | null;
+        };
+        /** AsmCheckStarted */
+        AsmCheckStarted: {
+            /** Job Id */
+            job_id: string;
+            /** Match Id */
+            match_id?: string | null;
+            /** Seq */
+            seq?: number | null;
+        };
+        /**
+         * AsmMatch
+         * @description 조립 매칭 묶음 상태. state = SCANNING|DRAFT|CHECKING|CHECKED|CONFIRMED|FAILED|STALE.
+         *     bodies·parts·recommend는 `paicad asm parts` 보고(asm_parts.json) 그대로(§4.2), check는 최신 검사 요약(§4.3).
+         */
+        AsmMatch: {
+            /** Assem */
+            assem?: {
+                [key: string]: unknown;
+            };
+            /** Bodies */
+            bodies?: {
+                [key: string]: unknown;
+            }[];
+            /** Check */
+            check?: {
+                [key: string]: unknown;
+            } | null;
+            /** Confirmed */
+            confirmed?: {
+                [key: string]: unknown;
+            } | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Excluded Bodies */
+            excluded_bodies?: string[];
+            /** Last Job */
+            last_job?: {
+                [key: string]: unknown;
+            } | null;
+            /** Match Id */
+            match_id: string;
+            /** Parts */
+            parts?: {
+                [key: string]: unknown;
+            }[];
+            /** Recommend */
+            recommend?: {
+                [key: string]: unknown;
+            }[];
+            /** Rows */
+            rows?: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Rows Complete
+             * @default false
+             */
+            rows_complete: boolean;
+            /** Source */
+            source?: {
+                [key: string]: unknown;
+            };
+            /** Stale Reason */
+            stale_reason?: string | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "SCANNING" | "DRAFT" | "CHECKING" | "CHECKED" | "CONFIRMED" | "FAILED" | "STALE";
+            /** Study Id */
+            study_id: string;
+            /** Updated At */
+            updated_at?: string | null;
+            /** Use Bodies */
+            use_bodies?: string[];
+            /** Warnings */
+            warnings?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /**
+         * AsmMatchCreate
+         * @description `POST /studies/{id}/asm-matches` — 조립 폴더와 STEP 출처를 정하고 component 목록 작업(mode parts)을 시작.
+         * @example {
+         *       "cad": {
+         *         "kind": "train"
+         *       },
+         *       "radioss_assem_path": "D:/AI/assem"
+         *     }
+         */
+        AsmMatchCreate: {
+            /** @description STEP 출처 {kind: train | path, path?} */
+            cad: components["schemas"]["AsmCad"];
+            /**
+             * Radioss Assem Path
+             * @description Radioss 조립 폴더 경로(허용 루트 안, starter 정확히 1개)
+             */
+            radioss_assem_path: string;
+        };
+        /** AsmMatchCreated */
+        AsmMatchCreated: {
+            /** Job Id */
+            job_id: string;
+            /** Match Id */
+            match_id: string;
+        };
+        /**
+         * AsmMatchList
+         * @description `GET /studies/{id}/asm-matches` — 최신순, 항목은 단건 조회(AsmMatch)와 같은 모양.
+         */
+        AsmMatchList: {
+            /** Items */
+            items?: components["schemas"]["AsmMatch"][];
+        };
+        /** AsmRowIn */
+        AsmRowIn: {
+            /**
+             * Body
+             * @description STEP 바디 이름(asm_match_get의 bodies[].body)
+             */
+            body: string;
+            /**
+             * Pids
+             * @description 이 바디에 대응하는 조립 /PART id 목록(1:N 허용, 1 이상 정수, 다른 행과 겹치지 않음)
+             */
+            pids: number[];
+        };
+        /**
+         * AsmRowsPut
+         * @description `PUT /asm-matches/{id}/rows` — 초안 저장(검사 결과는 무효가 됨).
+         * @example {
+         *       "excluded_bodies": [],
+         *       "rows": [
+         *         {
+         *           "body": "CUSH_L",
+         *           "pids": [
+         *             3000001
+         *           ]
+         *         },
+         *         {
+         *           "body": "CUSH_R",
+         *           "pids": [
+         *             3000002,
+         *             3000003
+         *           ]
+         *         }
+         *       ]
+         *     }
+         */
+        AsmRowsPut: {
+            /**
+             * Excluded Bodies
+             * @description 매칭 안 함으로 둔 바디 이름(use=true 파라미터가 있는 바디는 제외 불가)
+             */
+            excluded_bodies?: string[];
+            /**
+             * Rows
+             * @description 매칭 행 — 바디마다 최대 1행(매칭할 바디만)
+             */
+            rows: components["schemas"]["AsmRowIn"][];
         };
         /**
          * BaselineAddRequest
@@ -7059,6 +7345,8 @@ export interface components {
         };
         /** ParamSetCreate */
         ParamSetCreate: {
+            /** Asm Match Id */
+            asm_match_id?: string | null;
             choice?: components["schemas"]["ParamSetDiscoverChoice"] | null;
             /** Engine */
             engine?: ("altair" | "native") | null;
@@ -7096,6 +7384,11 @@ export interface components {
         };
         /** ParamSetDiscoverRequest */
         ParamSetDiscoverRequest: {
+            /**
+             * Asm Match
+             * @default false
+             */
+            asm_match: boolean;
             /** Engine */
             engine?: ("altair" | "native") | null;
             /** Kind */
@@ -10945,6 +11238,309 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_asm_match_physicsai_api_asm_matches__match_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 조립 매칭 id(asm_match_create 응답의 match_id) */
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmMatch"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    check_asm_match_physicsai_api_asm_matches__match_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 조립 매칭 id(asm_match_create 응답의 match_id) */
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmCheckStarted"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description ASM_ROWS_INCOMPLETE · ASM_MATCH_CONFIRMED · ASM_MATCH_BUSY · ASM_MATCH_STALE · STUDY_JOB_BUSY · TEMPLATE_NOT_CONFIGURED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    confirm_asm_match_physicsai_api_asm_matches__match_id__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 조립 매칭 id(asm_match_create 응답의 match_id) */
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmMatch"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description ASM_CHECK_REQUIRED(마지막 검사 없음·FAIL·행이 달라짐) · ASM_MATCH_STALE(조립 트리·STEP·피처 변경) · ASM_MATCH_BUSY */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    put_asm_match_rows_physicsai_api_asm_matches__match_id__rows_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 조립 매칭 id(asm_match_create 응답의 match_id) */
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AsmRowsPut"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmMatch"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description ASM_MATCH_CONFIRMED · ASM_MATCH_BUSY · ASM_MATCH_STALE · PREREQUISITE_MISSING(component 목록 없음) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description ASM_ROW_INVALID(problems[].code: UNKNOWN_BODY·BODY_DUPLICATE·UNKNOWN_PID·PID_DUPLICATE·NOT_SOLID·BODY_MISSING·USE_PARAM·ROWS_EMPTY) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -16898,6 +17494,162 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_asm_matches_physicsai_api_studies__study_id__asm_matches_get: {
+        parameters: {
+            query?: {
+                /** @description STEP 출처로 거르기 — train(①-1 추출 결과) | path(④ 새 템플릿 STEP 경로) */
+                source?: ("train" | "path") | null;
+                /** @description true면 가장 최근 1개만 */
+                latest?: boolean;
+                /** @description 최대 개수 [개](1~100, 기본 20) */
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                /** @description Study id(list_studies) */
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmMatchList"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    create_asm_match_physicsai_api_studies__study_id__asm_matches_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Study id(list_studies) */
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AsmMatchCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmMatchCreated"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description PREREQUISITE_MISSING(① Native 추출 없음, missing GEOM_FEATURES) · TEMPLATE_NOT_CONFIGURED · STUDY_JOB_BUSY · STUDY_ARCHIVED */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description PATH_OUTSIDE_ROOT · PATH_UNSAFE · PATH_NOT_FOUND · INPUT_INVALID · ASM_MATCH_UNSUPPORTED(쉘 판금 세트) */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -78,7 +78,7 @@ def _title(event: str, label: str, study_title: str, failure_code: str | None,
 SUCCESS_EVENTS = frozenset({"JOB_STARTED", "JOB_SUCCEEDED", "MY_TURN_NEXT"})
 
 
-SILENT_JOB_TYPES = frozenset({"GEOM_PREVIEW"})
+SILENT_JOB_TYPES = frozenset({"GEOM_PREVIEW", "ASM_MATCH"})  # asm-match.md §6.3: 화면이 폴링
 
 
 def notify_job(conn: Connection, job_id: str, event: str, *, body: str | None = None) -> int | None:

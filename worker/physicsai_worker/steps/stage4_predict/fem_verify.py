@@ -77,6 +77,19 @@ def _is_native(ctx: Any, pj: dict[str, Any]) -> bool:
     return (ps or {}).get("engine") == "native"
 
 
+def _matched(ctx: Any, pj: dict[str, Any]) -> bool:
+    """예측이 조립 매칭 세트(방식 M)로 만든 것인가 — 세트 `cad/asm_match.json`(asm-match.md §6.4). INPUT이 include 트리(하위 폴더)다."""
+    psid = (pj.get("params") or {}).get("param_set_id")
+    if not psid:
+        return False
+    from physicsai_core.db.repositories import param_sets as ps_repo
+    from physicsai_core.geometry.asm_match import is_matched
+
+    with ctx.ex.engine.connect() as conn:
+        ps = ps_repo.get(conn, psid)
+    return bool(ps and ps.get("engine") == "native" and ps.get("stored_rel") and is_matched(ctx.abs(ps["stored_rel"])))
+
+
 def _mesh_source(ctx: Any, pj: dict[str, Any], root: str, native: bool = False) -> str | None:
     batch_dir = run_key = None
     ref = pb_repo.batch_run_ref(pj)
@@ -154,15 +167,21 @@ def fv_prep(ctx: Any) -> None:
         if not os.path.isdir(src):
             raise StepFailure("INPUT_MISSING", "예측 INPUT 폴더가 없습니다(정리됨)")
         names = []
-        for x in sorted(os.listdir(src)):
-            p = os.path.join(src, x)
-            if not os.path.isfile(p):
-                continue
-            why = fem_assembly.assembly_name_problem(p, src)
-            if why:
-                raise StepFailure("INPUT_INVALID", f"{x}: {why}")
-            copy_file(p, os.path.join(A, "input", x), checkpoint=ctx.checkpoint)
-            names.append(x)
+        # 조립 매칭 예측(asm-match.md §6.4)의 INPUT은 include 트리라 하위 폴더가 있다 → 상대 경로 그대로 복사(링크·폴더 이름 검사는 파일마다)
+        deep = _matched(ctx, pj)
+        for dp, dns, fns in os.walk(src, followlinks=False):
+            dns[:] = sorted(d for d in dns if deep and not os.path.islink(os.path.join(dp, d)))
+            for fn in sorted(fns):
+                p = os.path.join(dp, fn)
+                if not os.path.isfile(p):
+                    continue
+                x = os.path.relpath(p, src).replace(os.sep, "/")
+                why = fem_assembly.assembly_name_problem(p, src)
+                if why:
+                    raise StepFailure("INPUT_INVALID", f"{x}: {why}")
+                copy_file(p, os.path.join(A, "input", *x.split("/")), checkpoint=ctx.checkpoint)
+                names.append(x)
+        names.sort()
         starter = (pj.get("result") or {}).get("starter")
         if not starter or is_mesh_file(starter) or starter not in names:
             raise StepFailure("INPUT_INVALID", "예측 입력의 starter가 조립 상태가 아닙니다(쿠션 메시뿐)")

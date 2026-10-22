@@ -29,6 +29,8 @@ export const STAGE_LABEL: Record<JobType, string> = {
   PB_RESP_EXTRACT: "④",
   PARAM_SET_NATIVE: "④",
   EQ_CHECK: "⑤",
+  ASM_MATCH: "①",
+  GEOM_PREVIEW: "④",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */

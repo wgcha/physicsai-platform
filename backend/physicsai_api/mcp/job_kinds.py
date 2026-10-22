@@ -23,6 +23,7 @@ from ..schemas import equiv_check as _EQ
 from ..schemas import fem_verify_req as _FV
 from ..schemas import surrogate_opt_req as _SO
 from ..services import (
+    asm_match_api,
     equiv_check,
     fem_verify,
     geom_view_api,
@@ -39,7 +40,7 @@ from ..services.job_params import stage4_predict as _PR
 from ..services.job_params import study_manage
 
 SERVICES: dict[str, Any] = {
-    "equiv_check": equiv_check, "fem_verify": fem_verify, "geom_view_api": geom_view_api, "job_params": job_params, "jobs": jobs,
+    "asm_match_api": asm_match_api, "equiv_check": equiv_check, "fem_verify": fem_verify, "geom_view_api": geom_view_api, "job_params": job_params, "jobs": jobs,
     "job_params.study_manage": study_manage, "predict_batches": predict_batches, "stage4_predict": stage4_predict,
     "surrogate_opt_pareto": surrogate_opt_pareto, "surrogate_opts": surrogate_opts,
 }
@@ -181,6 +182,7 @@ DoeGenParams = described(_TD.TdDoeGenParams, "DoeGenerateParams", {
     "radioss_assem_path": "Radioss 조립 폴더 경로(허용 루트 안, 세트 기준 native DOE면 생략)",
     "on_run_failure": "run 실패 시 fail(작업 실패) | continue(계속, platform만)",
     "param_set_id": "native 파라미터 세트 기준 DOE면 세트 id",
+    "asm_match_id": "조립 매칭 확정본 id(asm_match_confirm으로 저장한 것) — ①-1 Native 솔리드 기준 DOE에서 기준 메시·RENUM 파일 대신 사용(세트 기준 DOE는 생략)",
 })
 
 
@@ -498,6 +500,31 @@ def create_geom(ctx: Any, principal: Any, study_id: str, p: Any, rid: str, ip: s
     return out, out.get("job_id"), out.get("id")
 
 
+# ---- 조립 매칭 검사(asm-match.md §6.3) ----------------------------------------------------------------
+
+
+class AsmMatchKindParams(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    match_id: str = Field(min_length=1, max_length=64, description="조립 매칭 id(asm_match_create 응답, 행은 asm_match_set_rows로 저장해 둔 것)")
+
+
+def plan_asm(ctx: Any, principal: Any, study_id: str, p: Any) -> dict[str, Any]:
+    try:
+        pv = _svc("asm_match_api").plan_check(ctx, principal, p.match_id)
+    except DomainError as exc:
+        return {**lane_info("ASM_MATCH"), "problems": problems_of(exc), "warnings": []}
+    probs = list(pv.get("problems") or [])
+    if pv.get("study_id") not in (None, study_id):
+        probs.append(problem("NOT_FOUND", "이 Study의 조립 매칭이 아닙니다", "match_id"))
+    return {**lane_info("ASM_MATCH"), "runs": 1, "parallel": 1, "problems": probs, "warnings": [],
+            "targets": {"match": p.match_id}}
+
+
+def create_asm(ctx: Any, principal: Any, study_id: str, p: Any, rid: str, ip: str | None) -> tuple[dict[str, Any], str | None, str | None]:
+    return _svc("asm_match_api").run_check(ctx, principal, study_id, p.match_id, rid, ip)
+
+
 # ---- 레지스트리 --------------------------------------------------------------------------------------
 
 JOB_KINDS: dict[str, JobKind] = {k.kind: k for k in (
@@ -530,6 +557,8 @@ JOB_KINDS: dict[str, JobKind] = {k.kind: k for k in (
             limits=lambda s: {"max_active": s.fem_verify.max_active}),
     JobKind("geom_preview", 1, "형상 미리보기", "④", ("GEOM_PREVIEW",), "light", GeomPreviewParams, plan_geom, create_geom,
             "geom_preview", {"param_set_id": "ps-1", "values": {"THK_1": 3.2}}),
+    JobKind("asm_match", 1, "조립 매칭 검사", "①④", ("ASM_MATCH",), "light", AsmMatchKindParams, plan_asm, create_asm, "asm_match",
+            {"match_id": "00000000-0000-4000-8000-000000000001"}),
 )}
 
 # 등록하지 않는 job_type과 사유(§5.1). 나중에 등록하면 여기서 빼기만 한다(V-MCP-7).
@@ -565,7 +594,7 @@ for _k in JOB_KINDS.values():
 # 작업 행에서 엔티티 id를 찾는 키(params·result) — summary_entity와 짝
 ENTITY_KEYS: dict[str, tuple[str, ...]] = {
     "train_doe": ("doe_id",), "predict_batch": ("batch_id",), "surrogate_opt": ("surrogate_opt_id", "surrogate_opt"),
-    "equiv_check": ("eq_id",), "fem_verify": ("fem_verify_id",), "geom_preview": ("preview_id",),
+    "equiv_check": ("eq_id",), "fem_verify": ("fem_verify_id",), "geom_preview": ("preview_id",), "asm_match": ("match_id",),
 }
 
 

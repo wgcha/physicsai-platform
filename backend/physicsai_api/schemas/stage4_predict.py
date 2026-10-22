@@ -58,6 +58,9 @@ class ParamSetCreate(Req):
     # extract-filter.md §6.7: native 솔리드 신규 등록의 찾을 종류·조건(생략 = 현행). altair·shell 요청에 오면 422 EXTRACT_FILTER_UNSUPPORTED.
     # 등록 후 변경 불가(조건은 세트의 native/extract/parameter_features.json `filter`에 기록)
     extract_filter: ExtractFilter | None = None
+    # asm-match.md §6.4: native 솔리드 신규 등록의 확정된 조립 매칭(source=path). 있으면 기준 메시·RENUM csv 없이 등록한다.
+    # 쉘(kind=shell)·shell_only는 422 ASM_MATCH_UNSUPPORTED, 입력이 바뀌었으면 409 ASM_MATCH_STALE
+    asm_match_id: str | None = Field(default=None, max_length=64)
 
 
 class ParamSetPatch(Req):
@@ -70,6 +73,7 @@ class ParamSetDiscoverRequest(Req):
     tpl: str | None = Field(default=None, max_length=400)
     engine: Literal["altair", "native"] | None = None  # 생략 = geometry.engine 기본값
     kind: Literal["solid", "shell"] | None = None  # shell-morph.md §8.2: native 쉘 판금(기준 메시·RENUM csv 불필요). 생략 = solid
+    asm_match: bool = False  # asm-match.md §6.4: true면 조립 폴더 후보에서 기준 메시·RENUM csv 없음 문제(BASELINE_INC_MISSING·RENUM_CSV_MISSING)를 빼고 찾는다
 
 
 class DiscoverTpl(Resp):

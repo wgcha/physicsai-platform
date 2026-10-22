@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 
 from simdash_adapters.pathstr import fwd
 
+from .commands_asm import ASM_EXTRA_PLACEHOLDERS, expand as asm_expand
 from .commands_spec import (
     _CONTROL_RE,
     _WS_RE,
@@ -96,6 +97,8 @@ def render_argv(
     if problems:
         raise StepFailure("CONFIG_INVALID", "; ".join(problems))
     spec = TEMPLATE_SPECS[key]
+    template = asm_expand(key, template, values)  # 조립 매칭(방식 M) 쌍 치환·asm_parts ④ 치환(없으면 그대로) — 검증은 원본 템플릿으로 끝냈다
+    allowed = spec.placeholders | ASM_EXTRA_PLACEHOLDERS if (key.startswith("paicad_")) else spec.placeholders
     via_cmd = "@cmd_c" in template
     for el in template:
         if el.startswith("@"):
@@ -140,7 +143,7 @@ def render_argv(
                 # phase2 §2.3: Windows에서 argv[0]은 '\\' 구분자(hvtrans는 '/' 경로면 리더를 못 찾음)
                 mapping[n] = os_path(exe, True) if (is_windows if is_windows is not None else os.name == "nt") else exe
             else:
-                if n not in spec.placeholders:
+                if n not in allowed:
                     raise StepFailure("CONFIG_INVALID", f"placeholder '{{{n}}}' 미허용")
                 if n not in values:
                     raise StepFailure("INTERNAL_ERROR", f"placeholder '{{{n}}}' 값이 준비되지 않았습니다")

@@ -1,6 +1,7 @@
 // 계약 §5.4·§10.1: 상대경로 /physicsai/api, 비GET에 X-PhysicsAI-Request: 1, 오류 {detail:{code,message}}.
 import type { ApiErrorDetail } from "./types";
 import { geomErrorText } from "../lib/geometry";
+import { ASM_FIRST_TEXT, isAsmMissing } from "../lib/asmMatch";
 
 export const API_PREFIX = "/physicsai/api";
 
@@ -207,6 +208,7 @@ export async function fetchBuffer(path: string, range?: [number, number]): Promi
 
 export function errorMessage(e: unknown): string {
   if (e instanceof ApiError) {
+    if (isAsmMissing(e.detail)) return ASM_FIRST_TEXT; // 확정된 조립 매칭 없음(asm-match.md AM-C2 10)
     const missing = (e.detail as { missing?: unknown }).missing;
     if (Array.isArray(missing) && missing.length) return `${e.message} (${missing.join(", ")})`;
     // 형상 엔진 오류 코드(geometry-engine.md §7.6): 서버 문구가 한국어가 아니면 코드 표의 한국어

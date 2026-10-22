@@ -162,6 +162,10 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
     { key: "RESPONSE_EXTRACT_RUNS", kind: "LOCAL" },
     { key: "PX_TABLE", kind: "INTERNAL" },
   ],
+  // asm-match.md §6.3 조립 매칭(params.mode = parts → AM_PARTS, check → AM_CHECK)
+  ASM_MATCH: [{ key: "AM_PREP", kind: "INTERNAL" }, { key: "AM_PARTS", kind: "LOCAL" }, { key: "AM_REGISTER", kind: "INTERNAL" }],
+  // geometry-view.md §6.4 형상 미리보기
+  GEOM_PREVIEW: [{ key: "GV_PREP", kind: "INTERNAL" }, { key: "GV_RUN", kind: "LOCAL" }, { key: "GV_REGISTER", kind: "INTERNAL" }],
   // equiv-check.md §4.5 ⑤ 해석 등가성 판정
   EQ_CHECK: [
     { key: "EQ_PREP", kind: "INTERNAL" },
@@ -196,6 +200,8 @@ export const STEP_LABEL: Record<string, string> = {
   FV_PREP: "조립 입력 준비", FV_MESH: "메시 교체", FV_ASSEMBLE: "입력 조립", FV_EXTRACT: "응답 추출", FV_CURVE: "커브 추출", FV_CAPTURE: "컨투어 캡처", FV_COMPARE: "비교 정리",
   EQ_PREP: "판정 준비(쌍·레시피 확정)", EQ_EXTRACT: "응답·곡선 추출(없는 값만)", EQ_COMPUTE: "지표 계산", EQ_REPORT: "집계·종합 판정",
   PX_PREP: "준비", PX_TABLE: "배치 표 갱신",
+  AM_PREP: "조립 매칭 준비", AM_PARTS: "조립 component 목록", AM_CHECK: "외곽 노드·CAD 경계 검사", AM_REGISTER: "매칭 결과 등록",
+  GV_PREP: "미리보기 준비", GV_RUN: "형상 미리보기 실행", GV_REGISTER: "미리보기 결과 등록",
   NP_PREP: "준비 파일 모으기", NP_EXTRACT: "형상 피처 추출", NP_TAG: "경계 노드 분류", BL_MAP: "baseline 변수 매칭", NP_REGISTER: "템플릿 등록",
   SO_COLLECT: "검증 결과 수집", SO_FIT: "대리모델 학습", SO_PROPOSE: "후보 탐색", SO_NEXT: "검증 배치 등록·마무리",
 };
@@ -221,7 +227,7 @@ export function makeSteps(type: JobType, doneCount: number, runningIdx: number |
 }
 
 export function baseJob(p: Partial<Job> & Pick<Job, "id" | "study_id" | "project_id" | "study_title" | "job_type" | "state">): Job {
-  const lane = ["PACKAGE_EXPORT", "MODEL_REGISTER", "TD_RESULT_IMPORT", "SPDM_IMPORT", "STUDY_STORAGE_SCAN", "STUDY_CLEANUP"].includes(p.job_type) ? "LIGHT" : "SLOT";
+  const lane = ["PACKAGE_EXPORT", "MODEL_REGISTER", "TD_RESULT_IMPORT", "SPDM_IMPORT", "STUDY_STORAGE_SCAN", "STUDY_CLEANUP", "ASM_MATCH"].includes(p.job_type) ? "LIGHT" : "SLOT";
   return {
     stage: JOB_STAGE[p.job_type],
     lane,

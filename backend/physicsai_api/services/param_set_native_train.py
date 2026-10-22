@@ -45,11 +45,21 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
     os.makedirs(T)
     copy_tree(os.path.join(D, "cad"), os.path.join(T, "cad"))
     copy_tree(os.path.join(D, "native"), os.path.join(T, "native"))
-    for n in sorted(os.listdir(A)):
-        if os.path.isfile(os.path.join(A, n)) and not n.lower().startswith("eps_mesh"):
-            copy_tree_file = os.path.join(T, "radioss_assem", n)
-            os.makedirs(os.path.dirname(copy_tree_file), exist_ok=True)
-            shutil.copyfile(os.path.join(A, n), copy_tree_file)
+    from physicsai_core.geometry import asm_match as am
+
+    if am.is_matched(D):  # 조립 매칭 DOE(§6.4 from-train): A = include 트리 파일만(하위 폴더 포함) → radioss_assem/ 그대로, 확정본은 cad/에 있음
+        from physicsai_core.geometry.asm_tree import digest_of
+
+        copy_tree(A, os.path.join(T, "radioss_assem"))
+        want = ((am.matched_doc(D) or {}).get("assem") or {}).get("digest")
+        if digest_of(os.path.join(T, "radioss_assem")) != want:
+            raise DomainError("ASM_MATCH_STALE", "DOE의 조립 사본이 조립 매칭과 다릅니다 — 조립 매칭부터 다시 하세요", status=409)
+    else:
+        for n in sorted(os.listdir(A)):
+            if os.path.isfile(os.path.join(A, n)) and not n.lower().startswith("eps_mesh"):
+                copy_tree_file = os.path.join(T, "radioss_assem", n)
+                os.makedirs(os.path.dirname(copy_tree_file), exist_ok=True)
+                shutil.copyfile(os.path.join(A, n), copy_tree_file)
     old = {}
     try:
         with open(os.path.join(D, "native", "prep.json"), encoding="utf-8") as fh:

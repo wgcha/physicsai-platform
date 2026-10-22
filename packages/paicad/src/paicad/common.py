@@ -28,6 +28,7 @@ EXIT_CHECK = 11
 EXIT_TAG = 12
 EXIT_EXTRACT_EMPTY = 13
 EXIT_VIEW = 14  # geometry-view.md section 5.4
+EXIT_ASM = 15  # asm-match.md section 6.1: ``paicad asm check`` FAIL (boundary mismatch / shared nodes / unsupported element)
 EXIT_INTERNAL = 20
 EXIT_INTERRUPTED = 130
 
@@ -66,6 +67,14 @@ CODE_EXIT = {
     # 3D view output (geometry-view.md section 5.5)
     "VIEW_TESSELLATION_FAILED": EXIT_VIEW,
     "VIEW_TOO_LARGE": EXIT_VIEW,
+    # assembly match (asm-match.md section 6.1)
+    "ASM_BOUNDARY_MISMATCH": EXIT_ASM,
+    "ASM_SHARED_NODES": EXIT_ASM,
+    "ASM_INCLUDE_OUTSIDE": EXIT_INPUT,
+    "ASM_INCLUDE_MISSING": EXIT_INPUT,
+    "ASM_NO_SOLID_PART": EXIT_INPUT,
+    "ASM_TOO_MANY_PARTS": EXIT_INPUT,
+    "ASM_MATCH_INVALID": EXIT_INPUT,
 }
 
 CODE_CATEGORY = {
@@ -100,6 +109,13 @@ CODE_CATEGORY = {
     "SHELL_PART_NOT_FOUND": "INPUT",
     "VIEW_TESSELLATION_FAILED": "VIEW",
     "VIEW_TOO_LARGE": "VIEW",
+    "ASM_BOUNDARY_MISMATCH": "ASM",
+    "ASM_SHARED_NODES": "ASM",
+    "ASM_INCLUDE_OUTSIDE": "INPUT",
+    "ASM_INCLUDE_MISSING": "INPUT",
+    "ASM_NO_SOLID_PART": "INPUT",
+    "ASM_TOO_MANY_PARTS": "INPUT",
+    "ASM_MATCH_INVALID": "INPUT",
 }
 
 

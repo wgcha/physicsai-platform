@@ -274,9 +274,11 @@ def test_preview_lane_static_rules_and_status(native_env):
     from physicsai_worker.step_process import PREVIEW_LANE_COMMANDS
     from physicsai_worker.steps.stage4_predict.geom_preview import PREVIEW_COMMANDS
 
-    assert {k for k, d in JOB_TYPES.items() if d.lane == "PREVIEW"} == {"GEOM_PREVIEW"}
-    assert not any(JOB_TYPES["GEOM_PREVIEW"].needs_slot(s) for s in JOB_TYPES["GEOM_PREVIEW"].steps)  # 전역 슬롯 미사용
-    assert PREVIEW_COMMANDS == PREVIEW_LANE_COMMANDS == {preview_key("solid"), preview_key("shell")}
+    assert {k for k, d in JOB_TYPES.items() if d.lane == "PREVIEW"} == {"GEOM_PREVIEW", "ASM_MATCH"}  # ASM_MATCH: asm-match.md AM-C2 7
+    for jt in ("GEOM_PREVIEW", "ASM_MATCH"):
+        assert not any(JOB_TYPES[jt].needs_slot(s) for s in JOB_TYPES[jt].steps)  # 전역 슬롯 미사용
+    assert PREVIEW_COMMANDS == {preview_key("solid"), preview_key("shell")}
+    assert PREVIEW_LANE_COMMANDS == PREVIEW_COMMANDS | {"paicad_asm_parts", "paicad_asm_check"}  # 조립 매칭 목록·검사(asm write는 슬롯 작업 안)
     assert JOB_TYPES["CONTOUR_3D"].lane == "SLOT" and [s.key for s in JOB_TYPES["PARAM_SET_NATIVE"].steps].index("NP_VIEW") == 3
     env = native_env()
     f = env.c.get(f"{API}/status", headers=P).json()["features"]

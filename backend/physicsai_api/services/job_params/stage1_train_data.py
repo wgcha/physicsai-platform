@@ -51,6 +51,8 @@ class TdDoeGenParams(_P):
     on_run_failure: Literal["fail", "continue"] | None = None
     # native 파라미터 세트 기준 DOE(쉘 두께·다중 baseline 포함). 지정하면 ①-1 setup 대신 세트 준비본·파라미터 표를 쓴다
     param_set_id: str | None = Field(default=None, max_length=64)
+    # 조립 매칭 확정본(asm-match.md §6.4, ①-1 Native 솔리드 기준 DOE만): 있으면 기준 메시·RENUM 파일 없이 매칭 PART id가 기준본. 세트 기준·쉘은 쓸 수 없다
+    asm_match_id: str | None = Field(default=None, max_length=64)
 
 
 class TdSolveParams(_P):
@@ -171,14 +173,18 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         if os.path.splitext(cp.path)[1].lower() not in [e.lower() for e in cfg.train_data.cad_extensions]:
             raise invalid_at("cad_path", f"CAD 확장자는 {', '.join(cfg.train_data.cad_extensions)} 중 하나여야 합니다")
         return {"cad_path": cp.path}, None, []
+    if job_type == "TD_DOE_GEN" and p.asm_match_id is not None and p.param_set_id is not None:
+        raise invalid_at("asm_match_id", "세트 기준 DOE는 세트의 조립 매칭을 씁니다(asm_match_id 생략)")
     if job_type == "TD_DOE_GEN" and p.param_set_id is not None:
         return native_doe_from_set(ctx, conn, study, p, reuse_samples(ctx, conn, study, p.sampling))
     if job_type == "TD_DOE_GEN" and p.radioss_assem_path is None:
         raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     if job_type == "TD_DOE_GEN":
         setup = train_repo.get_setup(conn, sid)
+        if p.asm_match_id is not None and not (setup is not None and setup.get("engine") == "native"):
+            raise invalid_at("asm_match_id", "조립 매칭은 Native 형상 엔진 DOE에서만 쓸 수 있습니다")
         if setup is not None and setup.get("engine") == "native":  # native = 플랫폼 생성의 한 경로(자체 게이트, §7.3.3)
-            return native_doe_gen(ctx, setup, p, reuse_samples(ctx, conn, study, p.sampling))
+            return native_doe_gen(ctx, setup, p, reuse_samples(ctx, conn, study, p.sampling), study=study)
         gen = doe_generator(p)
         if gen == "hyperstudy":
             raise_feature_missing(*missing_for(cfg, FEATURES["train_doe"], None))

@@ -174,6 +174,14 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         (StepDef("GV_PREP", "INTERNAL", 5), StepDef("GV_RUN", "LOCAL", 90, "cpu"), StepDef("GV_REGISTER", "INTERNAL", 5)),
         "④", notify_success=False,
     ),
+    # ---- 조립 매칭(asm-match.md §6.3): 레인 PREVIEW(전역 슬롯 미사용). params.mode가 parts면 AM_PARTS, check면 AM_CHECK만 실행(다른 쪽은 건너뜀).
+    # v0.2.9 대기열 분리 계약이 PREVIEW 레인을 바꾸면 그 계약을 따른다(job_types의 lane 한 곳만 바꾸면 됨) ----
+    "ASM_MATCH": JobTypeDef(
+        "ASM_MATCH", 1, "PREVIEW", "조립 매칭",
+        (StepDef("AM_PREP", "INTERNAL", 5), StepDef("AM_PARTS", "LOCAL", 45, "cpu"), StepDef("AM_CHECK", "LOCAL", 45, "cpu"),
+         StepDef("AM_REGISTER", "INTERNAL", 5)),
+        "①④", notify_success=False,
+    ),
     # ---- 결과 3D 컨투어(geometry-view.md §13.5): 열 때 생성(사용자 요청 때만). 2026-10-22 사용자 결정: LIGHT가 아니라 CPU 대기열(구간 레인 SLOT, job-queues.md JQ-8) ----
     "CONTOUR_3D": JobTypeDef(
         "CONTOUR_3D", 4, "SLOT", "결과 3D 컨투어",
@@ -278,7 +286,7 @@ JOB_TYPES: dict[str, JobTypeDef] = {
 # Study 관리 작업(phase3 R3-2·R3-4): 재시도 불가, 보관 Study에서도 생성 가능
 MANAGE_JOB_TYPES = frozenset({"STUDY_STORAGE_SCAN", "STUDY_CLEANUP"})
 # 캐시 행이 딸린 작업(geometry-view.md §6.4·§13.5): 재시도 대신 새로 요청(can_retry=false)
-NO_RETRY_JOB_TYPES = frozenset({"GEOM_PREVIEW", "CONTOUR_3D"})
+NO_RETRY_JOB_TYPES = frozenset({"GEOM_PREVIEW", "CONTOUR_3D", "ASM_MATCH"})
 
 # step 표시명(phase2 §12.9 current_step_label, 한국어)
 STEP_LABELS: dict[str, str] = {
@@ -315,11 +323,12 @@ STEP_LABELS: dict[str, str] = {
     "NP_VIEW": "3D 보기 만들기", "TX_VIEW": "3D 보기 만들기",
     "GV_PREP": "미리보기 준비", "GV_RUN": "형상 미리보기 실행", "GV_REGISTER": "미리보기 결과 등록",
     "EQ_PREP": "판정 준비(쌍·레시피 확정)", "EQ_EXTRACT": "응답·곡선 추출(없는 값만)", "EQ_COMPUTE": "지표 계산", "EQ_REPORT": "집계·종합 판정",
+    "AM_PREP": "조립 매칭 준비", "AM_PARTS": "조립 component 목록", "AM_CHECK": "외곽 노드·CAD 경계 검사", "AM_REGISTER": "매칭 결과 등록",
     "C3_PREP": "대기·H3D 확인", "C3_EXTRACT": "H3D 읽기(결과 추출)", "C3_CONVERT": "형상·프레임 변환", "C3_REGISTER": "결과 등록",
 }
 
 # 미리보기·3D 컨투어는 작업 목록 화면에서 기본 숨김(geometry-view.md §6.4 — 필터 "미리보기 포함")
-HIDDEN_BY_DEFAULT = frozenset({"GEOM_PREVIEW"})
+HIDDEN_BY_DEFAULT = frozenset({"GEOM_PREVIEW", "ASM_MATCH"})
 
 # native 엔진 작업의 화면 step 이름(geometry-engine.md §7.3 — 작업 params의 engine이 native일 때 덮어쓴다)
 STEP_LABELS_NATIVE: dict[str, str] = {

@@ -46,11 +46,13 @@ def _report_warnings(x: Any, v: Verdict) -> None:
 
 
 def write_cushion(x: Any, settings: Any, inp: NativeInputs, *, cushion_inc: str, cushion_dir: str, cushion_rad: str,
-                  log_dir: str | None = None) -> Verdict:
+                  log_dir: str | None = None, node_patch: str | None = None) -> Verdict:
     """`paicad cushion write` 1회 + 판정(실패해도 던지지 않고 Verdict). x = LocalRunner | ParallelRunner.
     같은 이름 출력(cushion_dir·cushion_rad)이 있으면 먼저 `_backup`으로 옮긴다(paicad가 종료코드 3으로 거부하므로, 삭제 없음)."""
     require_command(settings)
     values = {**inp.base_values(settings), "cushion_inc": cushion_inc, "cushion_dir": cushion_dir, "cushion_rad": cushion_rad}
+    if inp.matched:  # 조립 매칭 세트(asm-match.md §5.5): `--inc {cushion_inc}` → `--patch {node_patch}`(없으면 공칭이라 쌍 생략)
+        values["node_patch"] = node_patch or ""
     v = run_paicad(x, settings, KEY, values, cwd=cushion_dir, report=os.path.join(cushion_dir, CUSHION_JSON), success=[cushion_rad],
                    backup=[cushion_dir, cushion_rad], body_map=None, log_dir=log_dir or cushion_dir)
     if v.ok:

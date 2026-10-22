@@ -30,6 +30,7 @@ from .check import check_core
 from .common import CODE_CATEGORY, EXIT_CAD, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd, sha256_file
 from .kernel import CadInputError, load_brep, save_brep
 from .meshdata import components_from_tag, load_tag
+from .meshsrc import NODE_XYZ, mesh_args, open_source, save_xyz
 from .morph import MORPH_JSON, MORPHED_INC, MorphFailed, SampleSet, morph_core, read_baseline, write_morphed
 from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON, _nominal, contacts_from_tag, load_features, param_keys, read_json, update_core
 
@@ -101,7 +102,13 @@ def run(args, rep: Reporter) -> int:
     type_of = {f["name"]: f["type"] for f in doc["features"]}
     unit_of = {k: "mm" if type_of.get(k) in POSITION_TYPES else "%" for k in params}
     rep.progress(2, "reading baseline, tag and nominal B-rep")
-    base_bytes, mesh = read_baseline(args.baseline_inc)
+    skip: set[str] = set()
+    if mesh_args(args, ("baseline_inc",)) == "M":  # assembly match: steps keep node_xyz.npz instead of morphed.inc
+        msrc = open_source(args)
+        base_bytes, mesh = None, msrc.mesh
+        skip = set(msrc.match.excluded)
+    else:
+        base_bytes, mesh = read_baseline(args.baseline_inc)
     tag = load_tag(args.tag_dir)
     comps = components_from_tag(mesh, tag)
     contacts = contacts_from_tag(args.tag_dir, doc)
@@ -135,7 +142,7 @@ def run(args, rep: Reporter) -> int:
                 vals = dict(nominal_vals)
                 vals[p] = value
                 sub = f"sweep/{p}/{dlabel}{_pct_label(st)}{'mm' if unit == 'mm' else ''}" if args.keep_steps else None
-                row = _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, base_bytes, comps, Path(args.baseline_inc), check_on, out, sub, keep)
+                row = _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, base_bytes, comps, _ident(args) if base_bytes is not None else None, check_on, out, sub, keep, skip)
                 rows.append(row)
                 if row["status"] == "FAIL":
                     consecutive += 1
@@ -151,7 +158,7 @@ def run(args, rep: Reporter) -> int:
         sweep_id=sweep_id,
         inputs={
             "features_sha256": sha256_file(args.features),
-            "baseline_sha256": sha256_file(args.baseline_inc),
+            "baseline_sha256": sha256_file(_ident(args)),
             "nominal_brep_sha256": sha256_file(ud / SAMPLE_BREP),
         },
         steps_pct=steps,
@@ -175,15 +182,20 @@ def run(args, rep: Reporter) -> int:
     return EXIT_OK
 
 
+def _ident(args) -> Path:
+    """File identifying the baseline mesh: the baseline include (method L) or the assembly match (method M)."""
+    return Path(args.asm_match) if getattr(args, "asm_match", None) else Path(args.baseline_inc)
+
+
 def _sweep_id(args, opts: dict, steps: list[float], params: list[str], pos_steps: list[float]) -> str:
     h = hashlib.sha256()
-    for path in (args.features, args.baseline_inc, Path(args.update_dir) / SAMPLE_BREP, Path(args.tag_dir) / "tag.json"):
+    for path in (args.features, _ident(args), Path(args.update_dir) / SAMPLE_BREP, Path(args.tag_dir) / "tag.json"):
         h.update(sha256_file(path).encode())
     h.update(json.dumps({"opts": opts, "steps": steps, "pos_steps_mm": pos_steps, "params": params, "stop": args.stop_after_fail, "check": args.check}, sort_keys=True).encode())
     return "S-" + h.hexdigest()[:12]
 
 
-def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, base_bytes, comps, baseline_path, check_on, out: OutDir, sub, keep) -> dict:
+def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, base_bytes, comps, baseline_path, check_on, out: OutDir, sub, keep, skip: set[str] | None = None) -> dict:
     row = {
         "param": p,
         "direction": dlabel,
@@ -225,15 +237,19 @@ def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, 
         if sub:
             _keep(out, keep, f"{sub}/{MORPH_JSON}", dumps(envelope(status="FAIL", code=e.code, category=CODE_CATEGORY.get(e.code), message=e.message)))
         return row
-    if sub:
+    if sub and base_bytes is None:
+        save_xyz(out.tmp_path(f"{sub}/{NODE_XYZ}"), mesh.node_ids, m.xyz)
+        keep.append(f"{sub}/{NODE_XYZ}")
+    elif sub:
         with open(out.tmp_path(f"{sub}/{MORPHED_INC}"), "wb") as f:
             f.write(write_morphed(base_bytes, mesh, m.moved))
         keep.append(f"{sub}/{MORPHED_INC}")
+    if sub:
         _keep(out, keep, f"{sub}/{MORPH_JSON}", dumps(envelope(status="OK", code=None, category=None, message=None, max_disp_mm=rnd(m.max_disp), parts=m.parts)))
     if not check_on:
         return row
     expected = {e["name"]: float(e["expected_measured"]) for e in res.positions}
-    c = check_core(mesh, m.xyz, comps, sample, doc, vals, opts, None, baseline_path, full=False, expected=expected)
+    c = check_core(mesh, m.xyz, comps, sample, doc, vals, opts, None, baseline_path, full=False, expected=expected, skip_bodies=skip)
     s = c.summary
     row.update(
         status="OK" if c.status == "PASS" else "FAIL",

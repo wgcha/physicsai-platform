@@ -1,4 +1,5 @@
 // native 형상 엔진 화면 공용(geometry-engine.md §4.3·§4.9·§6.2·§8·§11.4) — 순수 함수만(시험 대상).
+import { ASM_ERROR_TEXT } from "./asmMatch";
 import type { Engine, GeomOptions, MapGrade, MapRow, NativeFeature, NativeInfo, ParamMap } from "../api/types";
 
 export const ENGINE_LABEL: Record<Engine, string> = { altair: "Altair", native: "Native" };
@@ -53,6 +54,8 @@ export const PREP_TONE: Record<NativeInfo["prep_status"], string> = { READY: "ok
 
 /** 형상 엔진 오류 코드 한국어(§6 표·§7.6·§7.7·§11.4). 서버 문구가 한국어면 그대로 쓴다 */
 export const GEOM_ERROR_TEXT: Record<string, string> = {
+  // 조립 매칭(asm-match.md §6.1·§6.3) ASM_* 코드 — 서버 문구가 한국어가 아닐 때의 대체
+  ...Object.fromEntries(Object.entries(ASM_ERROR_TEXT).filter(([k]) => k.startsWith("ASM_"))),
   GEOM_NATIVE_UNAVAILABLE: "Native 형상 엔진을 쓸 수 없습니다(관리자 설정 확인)",
   GEOM_PREP_STALE: "형상 준비본이 오래되었습니다 — '형상 준비 다시'를 실행하세요",
   GEOM_OPTIONS_INVALID: "검사 기준 값이 허용 범위를 벗어났습니다",

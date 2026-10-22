@@ -24,6 +24,7 @@ from physicsai_core.geometry.judge import Verdict
 from physicsai_core.geometry.native_files import RUN_AUX_DIR, native_params_xml, skipped_document, values_document
 from physicsai_core.geometry.options import usage_document
 
+from .geometry_asm import NODE_PATCH
 from .geometry_native import NativeInputs, native_inputs, run_paicad  # noqa: F401 (재노출)
 
 M1, M2, M3 = "m_1", "m_2", "m_3"
@@ -104,20 +105,25 @@ def generate_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_
         return _shell_bead_sample(x, settings, inp, R, thickness_doc=thickness_doc, **kw)  # type: ignore[arg-type]
     m1, m2 = layout.at(R, "m1"), layout.at(R, "m2")
     upd, mor, chk = os.path.join(m1, "update"), os.path.join(m2, "morph"), os.path.join(m2, "check")
+    matched = inp.matched  # 조립 매칭 세트(방식 M, asm-match.md §5.4): include 파일 대신 node_patch.npz를 내고 asm write로 조립한다
     inc = settings.predict.mesh_include_name
-    out_inc = os.path.join(m2, inc)
+    out_inc = os.path.join(m2, inc)  # 방식 L만 쓴다(매칭 세트는 이 이름의 파일을 만들지도 찾지도 않는다)
+    patch = os.path.join(m2, NODE_PATCH)
     v = {**inp.base_values(settings), "options_json": os.path.join(layout.at(R, "meta"), "options.json"),
-         "values_json": os.path.join(m1, "values.json"), "update_dir": upd, "morph_dir": mor, "check_dir": chk, "out_inc": out_inc}
+         "values_json": os.path.join(m1, "values.json"), "update_dir": upd, "morph_dir": mor, "check_dir": chk}
+    v.update({"out_patch": patch} if matched else {"out_inc": out_inc})
     _require_no_skipped(R)
     uj, mj, cj = (os.path.join(d, n) for d, n in ((upd, "update.json"), (mor, "morph.json"), (chk, "check.json")))
+    morphed = os.path.join(mor, "node_xyz.npz" if matched else "morphed.inc")
+    result = patch if matched else out_inc
     if settings.commands.paicad_run is not None:
         steps: list[tuple[str, str, str, list[str], list[str], str | None]] = [
             ("paicad_run", "run", os.path.join(chk, "run.json"),
-             [os.path.join(upd, "sample.brep"), os.path.join(mor, "morphed.inc"), cj, out_inc], [upd, mor, chk, out_inc], None)]
+             [os.path.join(upd, "sample.brep"), morphed, cj, result], [upd, mor, chk, result], None)]
     else:
         steps = [("paicad_update", "update", uj, [os.path.join(upd, "sample.brep")], [upd], upd),
-                 ("paicad_morph", "morph", mj, [os.path.join(mor, "morphed.inc")], [mor], mor),
-                 ("paicad_check", "check", cj, [out_inc], [chk, out_inc], chk)]
+                 ("paicad_morph", "morph", mj, [morphed], [mor], mor),
+                 ("paicad_check", "check", cj, [result], [chk, result], chk)]
     for key, step, report, success, backup, cwd in steps:
         verdict = run_paicad(x, settings, key, v, cwd=cwd or layout.at(R, "meta"), report=report, success=success, backup=backup,
                              body_map=inp.body_map, log_dir=os.path.dirname(report))
@@ -126,15 +132,39 @@ def generate_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_
             raise StepFailure(verdict.code or "GEOM_INTERNAL", verdict.message or "형상 생성 실패")
     if not assemble:
         return {"starter": None}
-    from .stage4_predict.predict_inputs import assemble_into  # 지연 import: stage4_predict가 이 모듈을 쓴다
-
     dst = _assembly_dir(x, R, layout)
-    starter, warns = assemble_into(settings, inp.assem_dir, out_inc, dst, checkpoint=x.check)
+    if matched:
+        starter = _assemble_matched(x, settings, inp, R, patch, dst, m2, engine_version, baseline_id, layout)
+        warns: list[tuple[str, str]] = []
+    else:
+        from .stage4_predict.predict_inputs import assemble_into  # 지연 import: stage4_predict가 이 모듈을 쓴다
+
+        starter, warns = assemble_into(settings, inp.assem_dir, out_inc, dst, checkpoint=x.check)
     for w in warns:
         x.warn(*w)
     _apply_shell(x, settings, R, dst, shell, props_json, props_work, engine_version, baseline_id, layout)
     _promote(x, R, dst, layout)
     return {"starter": starter}
+
+
+def _assemble_matched(x: Any, settings: Any, inp: NativeInputs, R: str, patch: str | None, dst: str, work: str,
+                      engine_version: str | None, baseline_id: str | None, layout: RunLayout) -> str:
+    """매칭 세트 조립(§5.4): `paicad asm write`(패치 있으면 좌표 줄 갱신, 없으면 바이트 동일 사본) → dst에 include 트리 배치.
+    실패는 SKIPPED.json(step "assemble") + StepFailure."""
+    from .geometry_asm import WRITE_DIR, assemble_matched
+
+    try:
+        starter, verdict = assemble_matched(x, settings, inp, patch, dst, os.path.join(work, WRITE_DIR))
+    except StepFailure as exc:
+        doc = skipped_document(exc.code, exc.message, "assemble", None, engine_version)
+        if baseline_id is not None:
+            doc["baseline_id"] = baseline_id
+        write_json(os.path.join(R, SKIPPED_JSON), doc)
+        raise
+    if not verdict.ok:
+        _skipped(R, verdict, "assemble", engine_version, baseline_id, layout)
+        raise StepFailure(verdict.code or "GEOM_INTERNAL", verdict.message or "조립 사본 쓰기 실패")
+    return starter
 
 
 def write_cushion_rad(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_version: str | None, geometry: bool = True,
@@ -146,8 +176,11 @@ def write_cushion_rad(x: Any, settings: Any, inp: NativeInputs, R: str, *, engin
 
     m1, m2 = (os.path.join(R, d) for d in (M1, M2))
     rad = os.path.join(m1, settings.predict.simlab_mesh_name)
-    inc = os.path.join(m2, settings.predict.mesh_include_name) if geometry else inp.baseline_inc
-    v = cu.write_cushion(x, settings, inp, cushion_inc=inc, cushion_dir=os.path.join(m2, cu.CUSHION_DIR), cushion_rad=rad)
+    if inp.matched:  # 방식 M: include 파일 대신 모핑 PASS 노드 패치(형상 값이 없으면 공칭 — 패치 없음), asm-match.md §5.5
+        inc, patch = "", (os.path.join(m2, NODE_PATCH) if geometry else None)
+    else:
+        inc, patch = (os.path.join(m2, settings.predict.mesh_include_name) if geometry else inp.baseline_inc), None
+    v = cu.write_cushion(x, settings, inp, cushion_inc=inc, cushion_dir=os.path.join(m2, cu.CUSHION_DIR), cushion_rad=rad, node_patch=patch)
     if not v.ok:
         doc = skipped_document(v.code or "GEOM_INTERNAL", v.english, "cushion", f"{M2}/{cu.CUSHION_DIR}/{cu.CUSHION_JSON}",
                                engine_version, v.category)

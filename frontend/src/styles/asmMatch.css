@@ -1,0 +1,64 @@
+/* 조립 매칭 카드(asm-match.md §3.2): 표 · 3D = 1:1(grid 6/6), 필수 요소만 */
+.asm-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  align-items: start;
+}
+.asm-left {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.asm-right {
+  min-width: 0;
+}
+.asm-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.asm-table th,
+.asm-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: var(--space-1) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.asm-table tbody tr {
+  cursor: pointer;
+}
+.asm-table tbody tr.on {
+  background: var(--color-surface-2);
+}
+.asm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+.asm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-raised);
+}
+.asm-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-1);
+}
+.asm-pick select {
+  max-width: 100%;
+}
+.ok-text {
+  color: var(--color-success);
+}
+.asm-table th:nth-child(3),
+.asm-table td:nth-child(3) {
+  white-space: nowrap;
+}
