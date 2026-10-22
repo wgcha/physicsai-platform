@@ -12,7 +12,18 @@ import claudeMcp from "../../../deploy/mcp/examples/claude.mcp.json?raw";
 import desktopCfg from "../../../deploy/mcp/examples/claude_desktop_config.json?raw";
 import geminiStdio from "../../../deploy/mcp/examples/gemini.settings.stdio.json?raw";
 import codexToml from "../../../deploy/mcp/examples/codex.config.toml?raw";
-const EXAMPLES: Record<string, string> = { "claude.mcp.json": claudeMcp, "claude_desktop_config.json": desktopCfg, "gemini.settings.stdio.json": geminiStdio, "codex.config.toml": codexToml };
+import desktopStdio from "../../../deploy/mcp/examples/claude_desktop_config.stdio.json?raw";
+import geminiBridge from "../../../deploy/mcp/examples/gemini.settings.json?raw";
+import codexStdio from "../../../deploy/mcp/examples/codex.config.stdio.toml?raw";
+const EXAMPLES: Record<string, string> = {
+  "claude.mcp.json": claudeMcp,
+  "claude_desktop_config.json": desktopCfg,
+  "claude_desktop_config.stdio.json": desktopStdio,
+  "gemini.settings.json": geminiBridge,
+  "gemini.settings.stdio.json": geminiStdio,
+  "codex.config.toml": codexToml,
+  "codex.config.stdio.toml": codexStdio,
+};
 const example = (name: string) => EXAMPLES[name];
 
 const shape = (v: unknown): unknown => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, shape(x)])) : Array.isArray(v) ? [] : "");
@@ -23,35 +34,42 @@ describe.each([
 ])("buildConfigs — %s", (_n, token, shown) => {
   const c = buildConfigs({ url: URL_, api: API, token });
 
-  it("Claude Code: 셸 분해하면 인자 9개, --header 값 1개(공백 포함)", () => {
+  it("Claude Code: HTTP 직결 유지 — 셸 분해하면 인자 9개, --header 값 1개(공백 포함)", () => {
     const a = shellSplit(c.claudeCode);
     expect(a).toEqual(["claude", "mcp", "add", "--transport", "http", "physicsai", URL_, "--header", `Authorization: Bearer ${shown}`]);
   });
-  it("Claude Desktop: 항목만 — {…}로 감싸면 JSON, command·env 키", () => {
+  const BRIDGE = { command: "npx", args: ["-y", "mcp-remote", URL_, "--allow-http", "--header", "Authorization:${AUTH}"], env: { AUTH: `Bearer ${shown}`, NODE_OPTIONS: "--use-system-ca" } };
+  it("Claude Desktop: 항목만 — {…}로 감싸면 JSON, npx mcp-remote 브리지(토큰은 env AUTH, args는 ${AUTH} 참조)", () => {
     const o = JSON.parse(`{${c.desktop}}`);
-    expect(o.physicsai).toEqual({ command: "physicsai-mcp", env: { PHYSICSAI_MCP_URL: API, PHYSICSAI_MCP_TOKEN: shown } });
+    expect(o.physicsai).toEqual(BRIDGE);
     expect(c.desktop.trim().startsWith('"physicsai":')).toBe(true); // 바깥 중괄호 없음(기존 설정 덮어쓰기 방지)
+    expect(o.physicsai.args.join(" ")).not.toContain("Bearer"); // 헤더 값 공백 때문에 토큰은 args에 넣지 않는다
   });
-  it("Gemini CLI: 항목만 — httpUrl·headers.Authorization·timeout 60000·trust false", () => {
-    const o = JSON.parse(`{${c.gemini}}`);
-    expect(o.physicsai).toEqual({ httpUrl: URL_, headers: { Authorization: `Bearer ${shown}` }, timeout: 60000, trust: false });
+  it("Gemini CLI: 항목 = Claude Desktop 항목과 같다(브리지)", () => {
+    expect(c.gemini).toBe(c.desktop);
+    expect(JSON.parse(`{${c.gemini}}`).physicsai).toEqual(BRIDGE);
   });
-  it("Codex CLI: TOML — [mcp_servers.physicsai] command·args + env", () => {
+  it("Codex CLI: TOML — [mcp_servers.physicsai] npx mcp-remote 브리지 + env AUTH", () => {
     const t = parseToml(c.codex) as { mcp_servers: { physicsai: { command: string; args: unknown[]; env: Record<string, string> } } };
-    expect(t.mcp_servers.physicsai.command).toBe("physicsai-mcp");
-    expect(t.mcp_servers.physicsai.args).toEqual([]);
-    expect(t.mcp_servers.physicsai.env).toEqual({ PHYSICSAI_MCP_URL: API, PHYSICSAI_MCP_TOKEN: shown });
+    expect(t.mcp_servers.physicsai).toEqual({ command: BRIDGE.command, args: BRIDGE.args, env: BRIDGE.env });
+    expect(c.codex).toContain("Authorization:${AUTH}"); // 문자 그대로(mcp-remote가 치환)
   });
-  it("대안 블록: `pai_` 0건·토큰 파일 키, 예시 파일과 키 모양 일치(V-MCP-19)", () => {
+  it("대안 블록(stdio): `pai_` 0건·토큰 파일 키, 예시 파일과 키 모양 일치(V-MCP-19)", () => {
     const all = Object.values(c.alt).join("\n");
     expect(all).not.toContain("pai_");
     expect(all).not.toContain(TOKEN_PLACEHOLDER);
     expect(shape(JSON.parse(c.alt.claudeCodeJson))).toEqual(shape(JSON.parse(example("claude.mcp.json"))));
-    expect(shape(JSON.parse(`{"mcpServers":{${c.alt.desktop}}}`))).toEqual(shape(JSON.parse(example("claude_desktop_config.json"))));
+    expect(shape(JSON.parse(`{"mcpServers":{${c.alt.desktop}}}`))).toEqual(shape(JSON.parse(example("claude_desktop_config.stdio.json"))));
     expect(shape(JSON.parse(`{"mcpServers":{${c.alt.gemini}}}`))).toEqual(shape(JSON.parse(example("gemini.settings.stdio.json"))));
-    expect(shape(parseToml(c.alt.codex))).toEqual(shape(parseToml(example("codex.config.toml"))));
+    expect(shape(parseToml(c.alt.codex))).toEqual(shape(parseToml(example("codex.config.stdio.toml"))));
     expect(c.alt.claudeCodeStdio).toContain("--env PHYSICSAI_MCP_TOKEN_FILE=");
     expect(shellSplit(c.alt.claudeCodeStdio).slice(-2)).toEqual(["--", "physicsai-mcp"]);
+  });
+  it("브리지 기본 블록은 예시 파일(deploy/mcp/examples)과 키 모양 일치, 예시 AUTH는 자리표시자", () => {
+    expect(shape(JSON.parse(`{"mcpServers":{${c.desktop}}}`))).toEqual(shape(JSON.parse(example("claude_desktop_config.json"))));
+    expect(shape(JSON.parse(`{"mcpServers":{${c.gemini}}}`))).toEqual(shape(JSON.parse(example("gemini.settings.json"))));
+    expect(shape(parseToml(c.codex))).toEqual(shape(parseToml(example("codex.config.toml"))));
+    expect(JSON.parse(example("claude_desktop_config.json")).mcpServers.physicsai.args[5]).toBe("Authorization:${AUTH}");
   });
 });
 
@@ -69,6 +87,7 @@ describe("이스케이프", () => {
     expect(() => JSON.parse(`{${c.desktop}}`)).not.toThrow();
     expect(() => JSON.parse(`{${c.gemini}}`)).not.toThrow();
     expect(() => parseToml(c.codex)).not.toThrow();
+    expect(JSON.parse(`{${c.desktop}}`).physicsai.env.AUTH).toBe('Bearer ab"c\\d');
   });
 });
 

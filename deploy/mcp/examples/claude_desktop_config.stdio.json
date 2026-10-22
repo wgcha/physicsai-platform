@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "physicsai": {
+      "command": "physicsai-mcp",
+      "env": {
+        "PHYSICSAI_MCP_URL": "http://<대시보드 주소>/physicsai",
+        "PHYSICSAI_MCP_TOKEN_FILE": "<토큰 파일 경로>"
+      }
+    }
+  }
+}

@@ -43,7 +43,7 @@ def test_connection_guess_from_request_origin(client):
     sh = j["stdio_hint"]
     assert sh["command"] == "physicsai-mcp"
     assert sh["command_path"] is None or sh["command_path"].endswith(("physicsai-mcp", "physicsai-mcp.exe"))
-    assert "wheels" in sh["install"] and "Node.js" in sh["install"]
+    assert "wheels" in sh["install"] and "Node.js" in sh["install"] and "mcp-remote" in sh["install"]
     assert "pai_" not in r.text  # 토큰 값은 응답에 없다
 
 

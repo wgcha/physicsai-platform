@@ -57,31 +57,36 @@ describe("③ AI 도구에 등록하기 — 자리표시자 → 발급 후 채�
     renderApp(PAGE, { user: "power" });
     const url = (await screen.findByTestId("mcp-url")).textContent!;
     expect(url).toBe(`${window.location.origin}/physicsai/mcp`);
-    const api = url.replace(/\/mcp$/, "");
     const plain = await issue();
     openTab("claudeCode");
     expect(shellSplit(cfg("claudeCode"))).toEqual(["claude", "mcp", "add", "--transport", "http", "physicsai", url, "--header", `Authorization: Bearer ${plain}`]);
     openTab("desktop");
-    expect(JSON.parse(`{${cfg("desktop")}}`).physicsai).toEqual({ command: "physicsai-mcp", env: { PHYSICSAI_MCP_URL: api, PHYSICSAI_MCP_TOKEN: plain } });
+    const bridge = { command: "npx", args: ["-y", "mcp-remote", url, "--allow-http", "--header", "Authorization:${AUTH}"], env: { AUTH: `Bearer ${plain}`, NODE_OPTIONS: "--use-system-ca" } };
+    expect(JSON.parse(`{${cfg("desktop")}}`).physicsai).toEqual(bridge);
     openTab("codex");
-    expect((parseToml(cfg("codex")) as { mcp_servers: { physicsai: { env: Record<string, string> } } }).mcp_servers.physicsai.env).toEqual({ PHYSICSAI_MCP_URL: api, PHYSICSAI_MCP_TOKEN: plain });
+    expect((parseToml(cfg("codex")) as { mcp_servers: { physicsai: unknown } }).mcp_servers.physicsai).toEqual(bridge);
     openTab("gemini");
-    expect(JSON.parse(`{${cfg("gemini")}}`).physicsai).toEqual({ httpUrl: url, headers: { Authorization: `Bearer ${plain}` }, timeout: 60000, trust: false });
+    expect(JSON.parse(`{${cfg("gemini")}}`).physicsai).toEqual(bridge);
   });
 
-  it("평문 경고 한 줄·접힘 대안(환경변수/토큰 파일, pai_ 없음)·stdio 탭에 실행기 안내(stdio_hint)", async () => {
+  it("평문 경고 한 줄·Node.js 안내·접힌 stdio 대안(토큰 파일, pai_ 없음, 실행기 안내 stdio_hint)", async () => {
     renderApp(PAGE, { user: "admin" });
     await screen.findByTestId("mcp-url");
     expect(screen.getByTestId("plain-warning").textContent).toContain("설정 파일에 평문으로 남습니다");
     const alt = screen.getByTestId("alt-details") as HTMLDetailsElement;
     expect(alt.open).toBe(false);
-    expect(alt.textContent).toContain("환경변수/토큰 파일 방식");
-    expect(screen.queryByTestId("stdio-hint")).toBeNull(); // Claude Code(HTTP) 탭
+    expect(alt.textContent).toContain("Node.js를 쓸 수 없는 PC");
+    expect(screen.getByTestId("node-note").textContent).toBe("Claude Code를 뺀 셋은 Node.js가 필요합니다(npx 사용).");
     openTab("desktop");
+    expect(screen.getByTestId("cfg-desktop").textContent).toContain("mcp-remote"); // 기본 화면은 브리지
+    expect(screen.getByTestId("cfg-desktop").textContent).not.toContain("physicsai-mcp");
     const hint = screen.getByTestId("stdio-hint").textContent!;
     expect(hint).toContain("physicsai-mcp");
     expect(hint).toContain("physicsai-mcp.exe"); // 전역 관리자에게는 서버 venv 경로(command_path)
+    expect(hint).toContain("Node.js");
     expect(screen.getByTestId("alt-desktop").textContent).toContain("PHYSICSAI_MCP_TOKEN_FILE");
+    openTab("codex");
+    expect(screen.getByTestId("alt-codex").textContent).toContain("physicsai_stdio");
     expect(alt.textContent).not.toContain("pai_");
     openTab("claudeCode");
     expect(screen.getByTestId("alt-claudeCode-json").textContent).toContain("${PHYSICSAI_MCP_TOKEN}");

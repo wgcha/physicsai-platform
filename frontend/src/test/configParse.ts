@@ -1,5 +1,5 @@
 // 시험용 설정 문법 검사기(V-MCP-23): TOML 간이 파서·셸 분해. 앱 코드에서는 쓰지 않는다.
-/** TOML 간이 파서 — [a.b.c] 표, key = "문자열" | [] 만(이 설정이 쓰는 문법) */
+/** TOML 간이 파서 — [a.b.c] 표, key = "문자열" | 한 줄 문자열 배열 만(이 설정이 쓰는 문법) */
 export function parseToml(text: string): Record<string, unknown> {
   const root: Record<string, unknown> = {};
   let cur = root;
@@ -16,6 +16,7 @@ export function parseToml(text: string): Record<string, unknown> {
     if (!kv) throw new Error(`TOML 문법 오류: ${line}`);
     const v = kv[2];
     if (v === "[]") cur[kv[1]] = [];
+    else if (/^\[".*"\]$/.test(v)) cur[kv[1]] = JSON.parse(v); // 한 줄 문자열 배열(기본 문자열 이스케이프는 JSON과 같은 부분집합)
     else if (/^"(?:[^"\\]|\\.)*"$/.test(v)) cur[kv[1]] = JSON.parse(v); // TOML 기본 문자열 이스케이프는 JSON과 같은 부분집합
     else throw new Error(`TOML 값 오류: ${line}`);
   }

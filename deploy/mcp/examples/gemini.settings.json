@@ -1,12 +1,19 @@
 {
   "mcpServers": {
     "physicsai": {
-      "httpUrl": "http://<대시보드 주소>/physicsai/mcp",
-      "headers": {
-        "Authorization": "Bearer $PHYSICSAI_MCP_TOKEN"
-      },
-      "timeout": 60000,
-      "trust": false
+      "command": "npx",
+      "args": [
+        "-y",
+        "mcp-remote",
+        "http://<대시보드 주소>/physicsai/mcp",
+        "--allow-http",
+        "--header",
+        "Authorization:${AUTH}"
+      ],
+      "env": {
+        "AUTH": "Bearer <발급받은 토큰>",
+        "NODE_OPTIONS": "--use-system-ca"
+      }
     }
   }
 }

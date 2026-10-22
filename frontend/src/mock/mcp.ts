@@ -28,7 +28,7 @@ export const mcpRoutes: Route = (srv, { method, seg, me }) => {
       stdio_hint: {
         command: "physicsai-mcp",
         command_path: me.is_global_admin ? "E:\\physicsai\\venv\\Scripts\\physicsai-mcp.exe" : null,
-        install: "내 PC: 관리자에게 오프라인 묶음 wheels를 받아 pip install --no-index --find-links <wheels> physicsai-platform",
+        install: "Node.js를 쓸 수 없는 PC(대안): 관리자에게 오프라인 묶음 wheels를 받아 pip install --no-index --find-links <wheels> physicsai-platform(Python 3.12) — 이 실행기는 Node.js 불필요, 기본 방식(npx mcp-remote 브리지)은 Node.js 필요",
       },
     });
   }

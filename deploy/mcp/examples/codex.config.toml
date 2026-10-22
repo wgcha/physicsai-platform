@@ -1,11 +1,7 @@
 [mcp_servers.physicsai]
-url = "http://<대시보드 주소>/physicsai/mcp"
-bearer_token_env_var = "PHYSICSAI_MCP_TOKEN"
+command = "npx"
+args = ["-y", "mcp-remote", "http://<대시보드 주소>/physicsai/mcp", "--allow-http", "--header", "Authorization:${AUTH}"]
 
-[mcp_servers.physicsai_stdio]
-command = "physicsai-mcp"
-args = []
-
-[mcp_servers.physicsai_stdio.env]
-PHYSICSAI_MCP_URL = "http://<대시보드 주소>/physicsai"
-PHYSICSAI_MCP_TOKEN_FILE = "<토큰 파일 경로>"
+[mcp_servers.physicsai.env]
+AUTH = "Bearer <발급받은 토큰>"
+NODE_OPTIONS = "--use-system-ca"

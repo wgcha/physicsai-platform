@@ -6,7 +6,7 @@ import { useApp } from "../app/AppContext";
 import { Card } from "../components/ui";
 import { Grid } from "../design/Grid";
 import { ROLE_LABEL } from "../lib/format";
-import { MCP_TABS, TOKEN_PLACEHOLDER, buildConfigs, sameOrigin, scopeAllows, toolSummaryKo, type McpTab } from "../lib/mcpSetup";
+import { MCP_TABS, NODE_NOTE, TOKEN_PLACEHOLDER, buildConfigs, sameOrigin, scopeAllows, toolSummaryKo, type McpTab } from "../lib/mcpSetup";
 import { TopBar } from "../shell/TopBar";
 import { MyTokensPanel, Off, SCOPE_LABEL, scopeReasons, tokenError, useMcpEnabled, type IssuedToken } from "./ApiTokens";
 
@@ -129,16 +129,15 @@ function RegisterCard({ conn, token }: { conn: McpConnection | null; token: stri
         <p className="warn-text small" data-testid="plain-warning">
           이 설정을 저장하면 토큰이 설정 파일에 평문으로 남습니다 — 공유 PC·저장소에 올리지 마세요. 유출되면 바로 폐기하세요.
         </p>
-        {meta.stdio && (
-          <p className="muted small" data-testid="stdio-hint">
-            <code>physicsai-mcp</code> 실행기가 필요합니다(Node.js 불필요).
-            {conn?.stdio_hint?.command_path ? <> 서버 PC: <code className="mono">{conn.stdio_hint.command_path}</code>.</> : null}{" "}
-            {conn?.stdio_hint?.install ?? "내 PC: 관리자에게 오프라인 묶음 wheels를 받아 설치하세요."} 설정의 <code>command</code>에는 전체 경로를 써도 됩니다.
-          </p>
-        )}
+        <p className="muted small" data-testid="node-note">{NODE_NOTE}</p>
         <details className="advanced" data-testid="alt-details">
-          <summary>환경변수/토큰 파일 방식(설정 파일에 토큰을 남기지 않음)</summary>
+          <summary>대안 — Node.js를 쓸 수 없는 PC(physicsai-mcp 실행기·토큰 파일 방식, 설정 파일에 토큰을 남기지 않음)</summary>
           <div className="advanced-body">
+            <p className="small" data-testid="stdio-hint">
+              <code>physicsai-mcp</code> 실행기가 필요합니다.
+              {conn?.stdio_hint?.command_path ? <> 서버 PC: <code className="mono">{conn.stdio_hint.command_path}</code>.</> : null}{" "}
+              {conn?.stdio_hint?.install ?? "Node.js를 쓸 수 없는 PC: 관리자에게 오프라인 묶음 wheels를 받아 설치하세요."} 설정의 <code>command</code>에는 전체 경로를 써도 됩니다.
+            </p>
             <p className="small">토큰을 한 줄 파일(<code>{"<토큰 파일 경로>"}</code>)에 저장하고 설정에는 경로만 둡니다.</p>
             {tab === "claudeCode" && (
               <>
@@ -148,11 +147,16 @@ function RegisterCard({ conn, token }: { conn: McpConnection | null; token: stri
                 <CopyBlock text={cfg.alt.claudeCodeStdio} label="stdio 명령" testId="alt-claudeCode-stdio" />
               </>
             )}
-            {tab === "desktop" && <CopyBlock text={cfg.alt.desktop} label="항목" testId="alt-desktop" />}
+            {tab === "desktop" && (
+              <>
+                <p className="muted small">stdio(브리지 항목과 서버 이름이 같으므로 둘 중 하나만 둡니다)</p>
+                <CopyBlock text={cfg.alt.desktop} label="항목" testId="alt-desktop" />
+              </>
+            )}
             {tab === "codex" && <CopyBlock text={cfg.alt.codex} label="TOML" testId="alt-codex" />}
             {tab === "gemini" && (
               <>
-                <p className="muted small">stdio(HTTP 항목과 서버 이름이 같으므로 둘 중 하나만 둡니다)</p>
+                <p className="muted small">stdio(브리지 항목과 서버 이름이 같으므로 둘 중 하나만 둡니다)</p>
                 <CopyBlock text={cfg.alt.gemini} label="항목" testId="alt-gemini" />
               </>
             )}

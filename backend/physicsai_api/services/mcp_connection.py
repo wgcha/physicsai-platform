@@ -20,8 +20,8 @@ from .api_tokens import require_enabled
 STDIO_COMMAND = "physicsai-mcp"
 LOOPBACK = ("127.0.0.1", "::1")
 HOST_CHARS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_:[]")
-INSTALL_HINT = ("내 PC: 관리자에게 오프라인 묶음 wheels를 받아 `pip install --no-index --find-links <wheels> physicsai-platform`(Python 3.12) — "
-                "Node.js·mcp-remote 불필요")
+INSTALL_HINT = ("Node.js를 쓸 수 없는 PC(대안): 관리자에게 오프라인 묶음 wheels를 받아 `pip install --no-index --find-links <wheels> physicsai-platform`(Python 3.12) — "
+                "이 실행기는 Node.js 불필요, 기본 방식(npx mcp-remote 브리지)은 Node.js 필요")
 
 
 def _first(value: str | None) -> str:

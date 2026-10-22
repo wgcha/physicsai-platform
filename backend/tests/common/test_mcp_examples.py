@@ -14,8 +14,9 @@ from physicsai_test_support import REPO
 
 EX = REPO / "deploy" / "mcp" / "examples"
 GUIDE = REPO / "docs" / "manual" / "mcp-clients.md"
-FILES = {"claude.mcp.json": "json", "claude_desktop_config.json": "json", "codex.config.toml": "toml", "gemini.settings.json": "json",
-         "gemini.settings.stdio.json": "json"}
+FILES = {"claude.mcp.json": "json", "claude_desktop_config.json": "json", "claude_desktop_config.stdio.json": "json",
+         "codex.config.toml": "toml", "codex.config.stdio.toml": "toml", "gemini.settings.json": "json", "gemini.settings.stdio.json": "json"}
+BRIDGE_ARGS = ["-y", "mcp-remote", "http://<대시보드 주소>/physicsai/mcp", "--allow-http", "--header", "Authorization:${AUTH}"]  # 가이드·화면(mcpSetup.ts)과 같은 모양
 ENV_REF = re.compile(r"\$\{?PHYSICSAI_MCP_TOKEN\}?")
 
 
@@ -53,7 +54,11 @@ def test_examples_have_required_keys_and_no_token_plaintext():
         text = (EX / name).read_text(encoding="utf-8")
         assert "pai_" not in text and "pcf_" not in text, name  # 토큰 평문 금지(예시에 pai_ 0건)
         for sname, s in servers(parse(EX / name)).items():
-            if "command" in s:  # stdio: 실행기 + 환경변수(서버 주소 + 토큰 파일 또는 환경변수)
+            if s.get("command") == "npx":  # 기본: mcp-remote 브리지 — 토큰은 args가 아니라 env AUTH(${AUTH} 참조), 값은 자리표시자
+                assert s["args"] == BRIDGE_ARGS, (name, sname)
+                assert s["env"]["AUTH"].startswith("Bearer <") and s["env"]["NODE_OPTIONS"] == "--use-system-ca", (name, sname)
+                assert not any(a.startswith("Bearer") for a in s["args"]), (name, sname)
+            elif "command" in s:  # stdio 대안: 실행기 + 환경변수(서버 주소 + 토큰 파일 또는 환경변수)
                 assert s["command"] == "physicsai-mcp", (name, sname)
                 env = s.get("env") or {}
                 assert stdio.ENV_URL in env and (stdio.ENV_TOKEN_FILE in env or stdio.ENV_TOKEN in env), (name, sname)
@@ -96,8 +101,8 @@ def test_examples_equal_guide_code_blocks():
     ex_json = [parse(EX / n) for n, k in FILES.items() if k == "json"]
     for doc in guide_json:
         assert doc in ex_json, "가이드의 json 블록에 대응하는 예시 파일이 없습니다"
-    # TOML 예시 = 가이드 toml 블록들을 합친 것
-    assert _merge([tomllib.loads(body) for _, body in by_lang["toml"]]) == parse(EX / "codex.config.toml")
+    # TOML 예시 = 가이드 toml 블록들을 합친 것(브리지 `physicsai` + stdio `physicsai_stdio`)
+    assert _merge([tomllib.loads(body) for _, body in by_lang["toml"]]) == _merge([parse(EX / n) for n, k in FILES.items() if k == "toml"])
 
 
 def test_guide_has_no_token_plaintext_and_cli_commands_match():
