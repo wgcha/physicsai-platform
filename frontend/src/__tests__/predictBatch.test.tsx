@@ -346,19 +346,19 @@ describe("④ B 표본 방식 (V3-S15-12)", () => {
     await screen.findByTestId("preview-sampling");
   };
 
-  it("드롭다운: 4묶음·10방식 순서, 기본 최적화 LHS + 추천 배지 + 설명 4줄(계약 문구)·권장 run 계산값, 저장하지 않음, 고를 때마다 설명이 바뀐다", async () => {
+  it("드롭다운: 4묶음·12방식 순서, 기본 최적화 LHS + 추천 배지 + 설명 4줄(계약 문구)·권장 run 계산값, 저장하지 않음, 고를 때마다 설명이 바뀐다", async () => {
     const { setup } = await open();
     const sel = within(setup).getByLabelText("표본 방식") as HTMLSelectElement;
     expect(sel.value).toBe("lhs_opt");
     const groups = [...sel.querySelectorAll("optgroup")];
     expect(groups.map((g) => [g.label, [...g.querySelectorAll("option")].map((o) => o.value)])).toEqual([
-      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "lhs"]],
+      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "halton", "lhs", "random"]],
       ["요인 설계(경향·선별)", ["fullfact", "fracfact", "pb"]],
       ["2차 응답면", ["bbd", "ccd"]],
       ["직접 지정", ["table", "train_doe"]],
     ]);
     expect([...sel.options].map((o) => o.textContent)).toEqual([
-      "최적화 LHS · 추천", "Sobol(스크램블 QMC)", "LHS(무작위 층화)", "전체 요인", "부분 요인(2수준)", "Plackett–Burman", "Box–Behnken", "중심 합성(CCD)", "표 붙여넣기 / CSV", "① 학습 DOE 그대로 재사용",
+      "최적화 LHS · 추천", "Sobol(스크램블 QMC)", "Halton(스크램블 QMC)", "LHS(무작위 층화)", "균일 랜덤", "전체 요인", "부분 요인(2수준)", "Plackett–Burman", "Box–Behnken", "중심 합성(CCD)", "표 붙여넣기 / CSV", "① 학습 DOE 그대로 재사용",
     ]);
     const desc = () => within(setup).getByTestId("samp-desc");
     expect(desc().getAttribute("data-desc-id")).toBe("lhs_opt");

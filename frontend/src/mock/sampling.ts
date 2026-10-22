@@ -7,7 +7,7 @@ import { rng } from "./base";
 import { LETTERS, batchLabel, bbdCode, ccdCode, fractional, isPaley, lhsUnit, pbCode, quality, round6, score, sobolUnit } from "./samplingCodes";
 export { REF_NOTES, doeInfluence, mockSampling, mockBrief } from "./samplingInfo";
 
-export const NEW_KINDS = ["lhs_opt", "sobol", "fullfact", "fracfact", "pb", "bbd", "ccd"] as const;
+export const NEW_KINDS = ["lhs_opt", "sobol", "halton", "random", "fullfact", "fracfact", "pb", "bbd", "ccd"] as const;
 export type NewKind = (typeof NEW_KINDS)[number];
 export const isNewKind = (k: string): k is NewKind => (NEW_KINDS as readonly string[]).includes(k);
 
@@ -122,6 +122,15 @@ export function mockDesign(ps: ParamSet, source: BatchSource, maxRuns: number, p
         count: n, m: Math.log2(n), seed: seedIn, scramble: true, offset, continue_from: cont ? { batch_id: cont.id, label: batchLabel(cont.batch_no) } : null,
         generator: "scipy 1.17.1", ...base, quality: quality(U),
       });
+    }
+    case "halton":
+    case "random": {
+      // doe-methods.md §4.1(목): halton = 스크램블 QMC(목은 Halton+이동), random = 균일 랜덤. 입력 키는 lhs와 같다(count·seed)
+      const n = Number(source.count);
+      if (!checkCount(n)) return none(base);
+      const r = rng(seedIn * 6151 + (source.kind === "random" ? 29 : 31));
+      const U = source.kind === "halton" ? sobolUnit(n, k, seedIn, 0) : Array.from({ length: n }, () => Array.from({ length: k }, () => r()));
+      return done(unitValues(U), { count: n, seed: seedIn, ...(source.kind === "halton" ? { scramble: true, generator: "scipy 1.17.1" } : {}), ...base, quality: quality(U) });
     }
     case "fullfact": {
       const lv = (source.levels ?? {}) as Record<string, number>;

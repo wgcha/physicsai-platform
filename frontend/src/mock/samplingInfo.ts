@@ -23,7 +23,7 @@ export function doeInfluence(type: string, options: Record<string, unknown> = {}
     const m = mockSampling(type, { resolution: options.resolution ?? 5 });
     return { cls: m.influence_class as "formal" | "reference", note: m.influence_note ?? null };
   }
-  if (["TYPE_LATINHYPERCUBE", "TYPE_SOBOL", "TYPE_FULLFACT"].includes(type)) return { cls: "formal", note: null };
+  if (["TYPE_LATINHYPERCUBE", "TYPE_SOBOL", "TYPE_FULLFACT", "NATIVE_LHS"].includes(type)) return { cls: "formal", note: null };
   if (type === "TYPE_FRACFACT") {
     const r = String(options.RESOLUTION ?? "3");
     return { cls: "reference", note: r === "4" ? REF_TEXT.fracIV : r === "5" ? REF_TEXT.fracV : REF_TEXT.fracIII };

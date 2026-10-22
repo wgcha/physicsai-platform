@@ -125,6 +125,12 @@ export function buildSource(s: SamplingState, ps: ParamSet | null, cand?: Contin
       const seed = parse(s.seed);
       return count === null || seed === null ? null : { kind: "lhs_opt", count, seed, ranges, criterion: s.criterion };
     }
+    case "halton":
+    case "random": {
+      const count = parse(countText(s, k, null, maxRuns));
+      const seed = parse(s.seed);
+      return count === null || seed === null ? null : { kind: s.kind, count, seed, ranges }; // BatchSourceMore(api/typesDoeMethods.ts)
+    }
     case "sobol": {
       const count = parse(countText(s, k, null, maxRuns));
       const seed = parse(s.seed);

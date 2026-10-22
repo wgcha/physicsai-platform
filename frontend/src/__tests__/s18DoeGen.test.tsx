@@ -8,6 +8,7 @@ import text from "./fixtures/samplingText.json";
 import { HS_COMPAT_NOTE, HS_NOTE, PLATFORM_KINDS, SAMPLING_LABEL, type PlatformKind } from "../lib/sampling";
 import { buildHyperstudyParams, buildPlatformParams, buildSampling, doeLimits, initialPlatform, platformRuns, type PlatformState } from "../stages/stage1/doeGenParams";
 import type { MockOptions } from "../mock/server";
+import { err } from "../mock/route";
 
 const ASSEM = "E:/shared/AI_WORK/cushion/00_inbox/radioss_assem";
 const fx = text.descriptions as Record<string, { name: string; lines: string[] }>;
@@ -82,13 +83,13 @@ describe("V3-S18-10 ①-3 생성 방식 세그먼트·FeatureGate", () => {
 });
 
 describe("V3-S18-10 표본 방식 드롭다운·설명 상자", () => {
-  it("8개(묶음 3) + 다른 DOE 표본표 재사용 항목(묶음 1), 기본 lhs_opt + 추천 배지, 고를 때마다 td_* 설명문 4줄이 픽스처와 같다", async () => {
+  it("11개 + 다른 DOE 표본표 재사용 항목(직접 지정 묶음), 기본 lhs_opt + 추천 배지, 고를 때마다 td_* 설명문 4줄이 픽스처와 같다", async () => {
     const { card } = await openCard();
     const sel = within(card).getByLabelText("표본 방식") as HTMLSelectElement;
     expect(sel.value).toBe("lhs_opt");
     expect([...sel.options].map((o) => o.value)).toEqual([...PLATFORM_KINDS, "train_doe"]);
     expect([...sel.options].map((o) => o.textContent)).toEqual([...PLATFORM_KINDS.map((k) => SAMPLING_LABEL[k] + (k === "lhs_opt" ? " · 추천" : "")), "다른 DOE 표본표 재사용"]);
-    expect([...sel.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(["공간 채움(AI 학습·대리모델)", "요인 설계(경향·선별)", "2차 응답면", "기존 DOE"]);
+    expect([...sel.querySelectorAll("optgroup")].map((g) => g.label)).toEqual(["공간 채움(AI 학습·대리모델)", "요인 설계(경향·선별)", "2차 응답면", "직접 지정"]);
     expect(within(card).getByTestId("samp-desc").getAttribute("data-desc-id")).toBe("td_lhs_opt");
     expect(within(card).getByTestId("samp-badge").textContent).toBe("추천");
     expect(within(card).getByTestId("samp-calc").textContent!.trim()).toBe("현재 변수 4개 → 권장 40");
@@ -228,19 +229,23 @@ describe("V3-S18-10 요청 body", () => {
 });
 
 describe("V3-S18-10 422 problems·결과 줄", () => {
-  it("422 DOE_SAMPLING_INVALID: problems 문구를 목록으로 보여 준다", async () => {
-    const { card } = await openCard();
+  it("422 DOE_SAMPLING_INVALID: problems 문구를 목록으로 보여 준다(상한 초과는 화면이 먼저 막으므로 서버 문제는 가짜 422로 흉내)", async () => {
+    const { card, server } = await openCard();
+    const problems = [{ code: "TOO_MANY_ROWS", message: "전체 요인 run 수 10000개가 상한 500개를 넘습니다 — 수준 수를 줄이세요" }];
+    const orig = server.handle.bind(server);
+    server.handle = (m, p, q, b, h) => (m === "POST" && /\/studies\/[^/]+\/jobs$/.test(p) && (b as { job_type?: string } | null)?.job_type === "TD_DOE_GEN" ? err(422, "DOE_SAMPLING_INVALID", "표본 설정을 확인하세요.", { problems }) : orig(m, p, q, b, h));
     await confirmPath(card);
     pick(card, "fullfact");
-    for (const n of NAMES) fireEvent.change(within(card).getByLabelText(`${n} 수준`), { target: { value: "10" } });
     fireEvent.click(runBtn(card));
     const list = await within(card).findByTestId("doe-problems");
     expect([...list.querySelectorAll("li")].map((li) => li.textContent)).toEqual(["전체 요인 run 수 10000개가 상한 500개를 넘습니다 — 수준 수를 줄이세요"]);
-    // 다른 오류(run 수 상한)도 같은 목록
+    // 화면은 상한 초과(수준 10 × 4 = 10000 run)를 서버에 보내기 전에 막는다
+    for (const n of NAMES) fireEvent.change(within(card).getByLabelText(`${n} 수준`), { target: { value: "10" } });
+    expect(runBtn(card).disabled).toBe(true);
     pick(card, "lhs");
     fireEvent.change(within(card).getByLabelText("run 수"), { target: { value: "501" } });
-    fireEvent.click(runBtn(card));
-    await waitFor(() => expect([...within(card).getByTestId("doe-problems").querySelectorAll("li")].map((li) => li.textContent)).toEqual(["run 수는 500개까지입니다"]));
+    expect(runBtn(card).disabled).toBe(true);
+    expect(runsText(card)).toBe("실제 run 501개 (상한 500개 초과)");
   });
 
   it("결과 줄: <이름> · <방식> · run N개 · 상태 — platform이면 생성 완료·실패 / 전체, hyperstudy는 gen 없음", async () => {

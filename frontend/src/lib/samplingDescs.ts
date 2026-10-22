@@ -29,6 +29,24 @@ const BASE_DESCRIPTIONS: Record<SamplingKind | "hs_lhs" | "hs_sobol" | "hs_fullf
       "run 수: 자유(2~200). 권장 10 × 변수 수.",
     ],
   },
+  halton: {
+    name: "Halton(스크램블 QMC)",
+    lines: [
+      "저불일치 수열로 공간을 고르게 채웁니다. Sobol과 달리 run 수가 자유롭습니다.",
+      "변수가 아주 많으면(수십 개) 뒤쪽 변수끼리 상관이 생길 수 있어 스크램블을 씁니다. 나중에 점을 이어 붙일 수는 없습니다.",
+      "영향도: 정식. AI 학습·대리모델에 쓸 수 있습니다.",
+      "run 수: 자유. 권장 10 × 변수 수.",
+    ],
+  },
+  random: {
+    name: "균일 랜덤",
+    lines: [
+      "범위 안에서 균일하게 무작위로 뽑습니다.",
+      "가장 단순하지만 점이 몰리거나 빈 곳이 생길 수 있습니다(LHS 계열이 보완). 비교·검증용으로 씁니다.",
+      "영향도: 정식.",
+      "run 수: 자유. 권장 10 × 변수 수.",
+    ],
+  },
   fullfact: {
     name: "전체 요인",
     lines: [
@@ -151,6 +169,17 @@ export const DESCRIPTIONS: Record<DescId, SamplingDesc> = {
     2: "영향도: 정식. AI 학습에 적합합니다.",
     3: "run 수: 2^m(4·8·16·32·64·128·256). 권장 = 10 × 변수 수 이상인 가장 작은 2^m.",
   }),
+  td_halton: tdFrom("halton", {}),
+  td_random: tdFrom("random", {}),
+  td_table: {
+    name: "표 붙여넣기 / CSV",
+    lines: [
+      "직접 만든 설계표(CSV)를 그대로 run으로 씁니다.",
+      "첫 줄은 사용 파라미터 이름 전부, 값은 학습 범위 안이어야 합니다.",
+      "영향도: 참고용(표본 분포를 알 수 없음).",
+      "run 수: 표의 행 수.",
+    ],
+  },
   td_fullfact: tdFrom("fullfact", { 3: "run 수 = 수준 수의 곱(상한 이내). 수준 2~10, 정수 변수는 범위 안 정수 개수까지." }),
   td_fracfact: tdFrom("fracfact", {}),
   td_pb: tdFrom("pb", {}),

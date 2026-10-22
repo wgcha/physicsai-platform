@@ -13,9 +13,9 @@ import { activeNames, buildSource, fullfactRuns, initialSampling, resetForTempla
 const fx = text.descriptions as Record<string, { name: string; lines: string[] }>;
 
 describe("표본 방식 설명문 (V3-S15-11)", () => {
-  it("계약 §20.4·§23.10 설명 id 전부(④ 10 + ① 4 + 일반 1 + ① 플랫폼 td_ 8) — 이름·4줄이 글자 단위로 같고 빈 줄이 없다", () => {
+  it("계약 §20.4·§23.10 설명 id 전부(④ 12 + ① 4 + 일반 1 + ① 플랫폼 td_ 11) — 이름·4줄이 글자 단위로 같고 빈 줄이 없다", () => {
     expect(Object.keys(DESCRIPTIONS).sort()).toEqual(Object.keys(fx).sort());
-    expect(Object.keys(fx)).toHaveLength(23);
+    expect(Object.keys(fx)).toHaveLength(28);
     for (const [id, d] of Object.entries(DESCRIPTIONS)) {
       expect(d.name, id).toBe(fx[id].name);
       expect(d.lines, id).toEqual(fx[id].lines);
@@ -26,9 +26,9 @@ describe("표본 방식 설명문 (V3-S15-11)", () => {
     expect(HS_COMPAT_NOTE).toBe(text.hsCompatNote);
   });
 
-  it("묶음·순서·추천: 4묶음 10방식, 기본 추천 = 최적화 LHS, 기존 라벨 LHS(무작위 층화)", () => {
+  it("묶음·순서·추천: 4묶음 12방식(halton은 sobol 뒤·random은 lhs 뒤), 기본 추천 = 최적화 LHS, 기존 라벨 LHS(무작위 층화)", () => {
     expect(SAMPLING_GROUPS.map((g) => [g.label, g.kinds])).toEqual([
-      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "lhs"]],
+      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "halton", "lhs", "random"]],
       ["요인 설계(경향·선별)", ["fullfact", "fracfact", "pb"]],
       ["2차 응답면", ["bbd", "ccd"]],
       ["직접 지정", ["table", "train_doe"]],
@@ -165,13 +165,14 @@ describe("화면 상태 → source (samplingSource.ts, V3-S15-12)", () => {
 });
 
 describe("S18 ① 플랫폼 방식(§23.9·§23.10)", () => {
-  it("드롭다운 = ④ 묶음·순서에서 table·train_doe를 뺀 8개, 첫 항목이 추천", () => {
+  it("드롭다운 = SITE_KINDS.train_platform(④ 묶음·순서, 직접 지정 table·train_doe 포함), 재사용을 뺀 11개, 첫 항목이 추천", () => {
     expect(PLATFORM_GROUPS.map((g) => [g.label, g.kinds])).toEqual([
-      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "lhs"]],
+      ["공간 채움(AI 학습·대리모델)", ["lhs_opt", "sobol", "halton", "lhs", "random"]],
       ["요인 설계(경향·선별)", ["fullfact", "fracfact", "pb"]],
       ["2차 응답면", ["bbd", "ccd"]],
+      ["직접 지정", ["table", "train_doe"]],
     ]);
-    expect(PLATFORM_KINDS).toHaveLength(8);
+    expect(PLATFORM_KINDS).toHaveLength(11);
     expect(PLATFORM_KINDS[0]).toBe(RECOMMENDED_KIND);
   });
 

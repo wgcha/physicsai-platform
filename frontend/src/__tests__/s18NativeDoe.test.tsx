@@ -37,15 +37,16 @@ describe("①-3 native DOE 생성(§8)", () => {
   it("native 학습 설정: tpl 없이 활성, PLATFORM·LHS(Native) 고정 — HyperStudy·다른 표본 방식 비활성+사유", async () => {
     const { card } = await openCard({}, nativeSetup);
     await waitNative(card);
-    expect(seg(card, "플랫폼 생성 · LHS(Native)").getAttribute("aria-pressed")).toBe("true");
+    expect(seg(card, "플랫폼 생성").getAttribute("aria-pressed")).toBe("true");
     const hs = seg(card, "HyperStudy(레거시)");
     expect(hs.disabled).toBe(true);
-    expect(hs.title).toBe("Native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다");
+    expect(hs.title).toContain("플랫폼 생성만");
+    // doe-methods.md DM-C2: 표본 방식은 Altair 플랫폼 생성과 같은 목록으로 열려 있다(기본 lhs) — "LHS만" 문구·회색 항목 없음
     const kind = within(card).getByLabelText("표본 방식") as HTMLSelectElement;
     expect(kind.value).toBe("lhs");
-    expect([...kind.options].filter((o) => !o.disabled).map((o) => o.textContent)).toEqual(["LHS(Native)", "다른 DOE 표본표 재사용"]);
-    expect([...kind.options].filter((o) => o.disabled).length).toBeGreaterThan(3);
-    expect(within(card).getByTestId("native-only-note").textContent).toContain("HyperStudy·다른 표본 방식");
+    expect([...kind.options].filter((o) => o.disabled)).toHaveLength(0);
+    expect(within(card).queryByTestId("native-only-note")).toBeNull();
+    expect(card.textContent).not.toContain("LHS만");
     expect(within(card).queryByText(/tpl을 먼저 생성/)).toBeNull();
     expect(within(card).getByText("조립 폴더를 입력하고 확인하세요")).toBeTruthy();
   });

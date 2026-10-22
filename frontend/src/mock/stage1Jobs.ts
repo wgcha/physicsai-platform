@@ -7,8 +7,8 @@ import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
 import { mapGate, nativeTrainParams, seedFeatures } from "./geometry";
 import { checkFilter, mockSummary, normalizeFilter, typeSelected } from "./extractFilter";
-import { checkSampling, generatorOf, platformLabel } from "./doePlatform";
-import { isPlatformKind } from "../lib/sampling";
+import { checkNativeSampling, checkSampling, generatorOf, nativeRuns, platformLabel } from "./doePlatform";
+import { SAMPLING_LABEL, isPlatformKind, type NameRanges } from "../lib/sampling";
 
 export function hpcSummary(p2: Phase2Mock, j: Job): HpcSummary | null {
   if (j.job_type !== "TD_SOLVE" && j.job_type !== "PREDICT_VERIFY") return null;
@@ -46,6 +46,17 @@ function reuseCheck(p2: Phase2Mock, s: Study, sp: { doe_id?: string }, names: st
   return null;
 }
 
+/** native DOE 표본 검사 문맥: 사용 변수 이름·학습 범위(세트 기준이면 세트 변수, 아니면 ①-2 사용 행)·다중 baseline 여부 */
+function nativeCtx(p2: Phase2Mock, s: Study, params: Record<string, unknown>): { names: string[]; ranges: NameRanges; multi: boolean } {
+  const ps0 = params.param_set_id ? p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id) : null;
+  const rows = ps0 ? (ps0.parameters ?? []) : (p2.setups[s.id]?.parameters ?? []).filter((x) => x.use);
+  return {
+    names: rows.map((x) => x.name),
+    ranges: Object.fromEntries(rows.filter((x) => x.min != null && x.max != null).map((x) => [x.name, [x.min as number, x.max as number] as [number, number]])),
+    multi: (ps0?.baselines?.length ?? 0) > 1,
+  };
+}
+
 /** native DOE(geometry-engine.md §7.3.3·§7.3.8 + S18 통합): LHS만, options 금지, 세트 기준이면 매칭표 확정 게이트 */
 function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unknown>): MockResp | null {
   if (params.generator === "hyperstudy") return err(422, "INVALID_PARAMS", "Native 형상 엔진 DOE는 플랫폼 생성(LHS)만 됩니다");
@@ -56,9 +67,13 @@ function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unkn
     const names = ps0 ? (ps0.parameters ?? []).map((x) => x.name) : (p2.setups[s.id]?.parameters ?? []).filter((x) => x.use).map((x) => x.name);
     const e = reuseCheck(p2, s, sp, names);
     if (e) return e;
-  } else if (sp && sp.kind !== "lhs")
-    return err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems: [{ code: "DESIGN_UNSUPPORTED", message: "Native 형상 엔진 DOE는 표본 방식 LHS만 지원합니다" }] });
-  const n = sp?.kind === "train_doe" ? 2 : Number(sp ? sp.count : params.num_runs);
+  } else if (sp && sp.kind !== "lhs") {
+    // doe-methods.md §5.1: Altair 플랫폼 생성과 같은 목록(다중 baseline 세트는 층 안 생성기만) — lhs 밖은 플랫폼과 같은 검사
+    const c = nativeCtx(p2, s, params);
+    const problems = checkNativeSampling(sp, c);
+    if (problems) return err(422, "DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", { problems });
+  }
+  const n = sp?.kind === "train_doe" ? 2 : sp && sp.kind !== "lhs" ? nativeRuns(sp, nativeCtx(p2, s, params)) : Number(sp ? sp.count : params.num_runs);
   if (!(n >= 2 && n <= 5000)) return err(422, "DOE_OPTIONS_INVALID", "run 수는 2~5000");
   if (params.param_set_id) {
     const ps = p2.s.paramSets.find((x) => x.id === params.param_set_id && x.study_id === s.id);
@@ -119,12 +134,16 @@ export function onCreateTrain(p2: Phase2Mock, j: Job, me: { display_name: string
       const sp = p.sampling as { kind?: string; doe_id?: string; count?: number; seed?: number } | undefined;
       const reuseSrc = sp?.kind === "train_doe" ? p2.does.find((x) => x.id === sp.doe_id) : undefined;
       if (reuseSrc) p.reuse_doe_id = reuseSrc.id;
-      const n = reuseSrc ? Number(reuseSrc.run_count ?? 0) : Number(sp?.count ?? p.num_runs);
-      Object.assign(p, { engine: "native", generator: "platform", doe_label: reuseSrc ? "표본표 재사용(Native)" : "LHS(Native)", doe_type: "NATIVE_LHS", num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
+      // doe-methods.md §5.1: lhs(생략 포함)·재사용은 지금 그대로, 그 밖 방식은 doe_type = 방식 이름·표시 "<이름>(Native)"·sampling {kind,label,desc_id,meta}
+      const nk = !sp?.kind || sp.kind === "lhs" || sp.kind === "train_doe" ? null : String(sp.kind);
+      const n = reuseSrc ? Number(reuseSrc.run_count ?? 0) : nk ? nativeRuns(sp!, nativeCtx(p2, p2.s.studies.find((x) => x.id === sid)!, p)) : Number(sp?.count ?? p.num_runs);
+      const nLabel = reuseSrc ? "표본표 재사용(Native)" : nk && isPlatformKind(nk) ? `${SAMPLING_LABEL[nk]}(Native)` : "LHS(Native)";
+      const nType = nk ? nk.toUpperCase() : "NATIVE_LHS";
+      Object.assign(p, { engine: "native", generator: "platform", doe_label: nLabel, doe_type: nType, num_runs: n, default_runs: n, options: {}, seed: Number(sp?.seed ?? p.seed ?? 1), multi_execution: Number(p.multi_execution ?? 4), on_run_failure: p.on_run_failure ?? "continue" });
       delete p.sampling;
       p2.does.unshift({
-        ...common, engine: "native", doe_label: reuseSrc ? "표본표 재사용(Native)" : "LHS(Native)", doe_type: "NATIVE_LHS", num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
-        multi_execution: Number(p.multi_execution), generator: "platform", sampling: null, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
+        ...common, engine: "native", doe_label: nLabel, doe_type: nType, num_runs_requested: n, options: { seed: p.seed, ...(p.param_set_id ? { param_set_id: p.param_set_id } : {}) },
+        multi_execution: Number(p.multi_execution), generator: "platform", sampling: nk ? { kind: nk, label: nLabel, desc_id: `td_${nk}`, meta: null } : null, gen: { total: n, pending: n, running: 0, done: 0, failed: 0 },
       });
       return;
     }

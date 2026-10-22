@@ -1,6 +1,8 @@
 // phase3.md §22.4.2 S17 목(R-F 분할): 요청 정규화(problems)·새 기록 만들기.
 import { usesVarTable } from "../lib/nativeVars";
 import type { ParamSet } from "../api/types";
+import type { ExploreMethod } from "../api/typesDoeMethods";
+import { MULTI_BASELINE_REASON, SITE_KINDS } from "../lib/sampling";
 import { err } from "./route";
 import type { MockServer } from "./server";
 import { perfId, perfLabel, perfRows } from "../stages/stage5/surrogate/perfRules";
@@ -35,8 +37,18 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
   const fixed = Object.fromEntries(params.filter((p) => bounds[p.name][0] === bounds[p.name][1]).map((p) => [p.name, bounds[p.name][0]]));
   if (!free.length) problems.push({ code: "NO_FREE_VARIABLE", field: "bounds", message: "범위가 있는 자유 변수가 1개 이상 필요합니다" });
   const need = Math.max(5, free.length + 2);
-  const ex = body.explore as { kind: "new"; count?: number | null; seed?: number } | { kind: "reuse"; batch_id: string };
-  const count = ex.kind === "new" ? ex.count ?? Math.min(200, Math.max(10, 4 * free.length)) : 0;
+  const ex = body.explore as { kind: "new"; count?: number | null; seed?: number; method?: ExploreMethod; criterion?: "maximin" | "corr" } | { kind: "reuse"; batch_id: string };
+  const method: ExploreMethod = ex.kind === "new" ? ex.method ?? "lhs" : "lhs";
+  const pow2Up = (n: number) => { let m = 4; while (m < n) m *= 2; return m; };
+  const baseCount = Math.min(200, Math.max(10, 4 * free.length));
+  // doe-methods.md DM-C5: sobol 기본 count = 기본값 이상인 가장 작은 2^m(상한 이하)
+  const count = ex.kind === "new" ? ex.count ?? (method === "sobol" ? Math.min(pow2Up(baseCount), 128) : baseCount) : 0;
+  if (ex.kind === "new") {
+    if (!(SITE_KINDS.opt_explore as string[]).includes(method)) problems.push({ code: "EXPLORE_METHOD_INVALID", field: "explore.method", message: "탐색 방식은 lhs · lhs_opt · sobol · halton · random 중 하나입니다" });
+    if (ex.criterion != null && method !== "lhs_opt") problems.push({ code: "EXPLORE_METHOD_INVALID", field: "explore.criterion", message: "criterion은 lhs_opt에서만 씁니다" });
+    if (method === "sobol" && ex.count != null && !(ex.count >= 4 && (ex.count & (ex.count - 1)) === 0)) problems.push({ code: "COUNT_NOT_POW2", field: "explore.count", message: "Sobol은 run 수가 2의 거듭제곱이어야 합니다" });
+    if (method === "sobol" && (ps.baselines?.length ?? 0) > 1) problems.push({ code: "DESIGN_UNSUPPORTED", field: "explore.method", message: MULTI_BASELINE_REASON });
+  }
   if (ex.kind === "new" && count < need) problems.push({ code: "EXPLORE_TOO_FEW", field: "explore.count", message: `탐색 run은 최소 ${need}개입니다(자유 변수 ${free.length}개)` });
 
   // 목적: objectives 또는 단수 objective(S17 §22.4.1)
@@ -105,7 +117,7 @@ export function normalize(srv: MockServer, sid: string, body: Record<string, unk
     surrogate: String(body.surrogate ?? "gp"), iterations: verification === "none" ? 1 : iterations, candidates, tol_rel: Number(body.tol_rel ?? 0.01), seed: Number(body.seed ?? 1),
     algorithm, verification, algo_options: algorithm === "ego" ? {} : { pop_size: null, generations: null, crossover_prob: null, mutation_prob: null, eta_c: null, eta_m: null, ...(ao ?? {}) },
     multi_execution: Number(body.multi_execution ?? 1), capture: !!body.capture, input: ri.input,
-    explore: ex.kind === "new" ? { kind: "new", count, seed: ex.seed ?? 1 } : { kind: "reuse", batch_id: ex.batch_id },
+    explore: ex.kind === "new" ? { kind: "new", count, seed: ex.seed ?? 1, ...(method !== "lhs" ? { method } : {}), ...(method === "lhs_opt" ? { criterion: ex.criterion ?? "maximin" } : {}) } : { kind: "reuse", batch_id: ex.batch_id },
   };
   // opt-native §7(목): 다중 baseline 세트 = 위상 변형 범주 baseline(수준 = body.levels 또는 전부)
   const bids = (ps.baselines ?? []).map((b) => b.id);
