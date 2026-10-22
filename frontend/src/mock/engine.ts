@@ -11,6 +11,7 @@ import { tickSurrogate } from "./surrogateOpt";
 import { syncFem } from "./femVerify";
 import { syncEquiv } from "./equivCheck";
 import { finishGeometry } from "./geometry";
+import { queuedIn } from "./queueV2";
 
 export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
   return srv.jobs
@@ -19,7 +20,8 @@ export function queued(srv: MockServer, lane: "SLOT" | "LIGHT") {
 }
 
 export function refreshPositions(srv: MockServer) {
-  for (const lane of ["SLOT", "LIGHT"] as const) queued(srv, lane).forEach((j, i) => (j.queue_position = i + 1));
+  // 대기 순번은 자기 대기열(GPU·CPU·가벼운 작업) 안 순번(job-queues.md §8.1)
+  for (const key of ["GPU", "CPU", "LIGHT"] as const) queuedIn(srv, key).forEach((j, i) => (j.queue_position = i + 1));
   for (const j of srv.jobs) if (j.state !== "QUEUED") j.queue_position = null;
 }
 

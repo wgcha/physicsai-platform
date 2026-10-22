@@ -112,14 +112,17 @@ export type StatusInfo = Override<
 export type HpcSummary = S["HpcSummary"];
 /** `JobSummary.batch`(phase3.md §14.5, params에서 계산). doe_no = 하위 PREDICT의 DOE 번호(부모 PREDICT_BATCH는 null) */
 export type JobBatchRef = S["JobBatchRef"];
-export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: "SLOT" | "LIGHT" }>;
+/** job-queues.md §8.1: lane = CPU|GPU|LIGHT|PREVIEW. SLOT은 옛 응답(deprecated). schema.d.ts 재생성 전까지 로컬 정의 */
+export type JobLane = "SLOT" | "CPU" | "GPU" | "LIGHT" | "PREVIEW";
+/** `resumed` = T17로 재진입한 대기(진행률 > 0, job-queues.md §8.1). 옛 응답에는 없음 */
+export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: JobLane }> & { resumed?: boolean };
 export type JobStep = Override<S["JobStep"], { state: StepState; kind: "LOCAL" | "INTERNAL" | "HPC_SUBMIT" | "HPC_WAIT" | "COLLECT" }>;
 export type Job = Override<
   S["Job"],
   {
     job_type: JobType;
     state: JobState;
-    lane: "SLOT" | "LIGHT";
+    lane: JobLane;
     steps: JobStep[];
     warnings: { code?: string; message?: string }[];
   }

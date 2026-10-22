@@ -52,12 +52,26 @@ export function RunStatusProvider({ children }: { children: ReactNode }) {
   return <RunStatusCtx.Provider value={{ queue, queueError, reloadQueue, resources, resourcesNone }}>{children}</RunStatusCtx.Provider>;
 }
 
-/** 칩 문구: 실행 = 로컬 슬롯 + 가벼운 작업 실행 중, 대기 = 로컬 대기 + 가벼운 대기 */
-export function queueCounts(q: QueueInfo): { running: number; waiting: number } {
-  return {
-    running: (q.running ? 1 : 0) + (q.light.running ? 1 : 0),
-    waiting: q.queued.length + q.light.queued.length,
-  };
+/** 칩 문구(job-queues.md §8.2): gpu·cpu가 있으면 `GPU 실행 a · 대기 b | CPU 실행 c/N · 대기 d`.
+ * 옛 응답(gpu·cpu 없음)은 로컬 슬롯 + 가벼운 작업 합계로 `대기열 실행 · 대기` */
+export function queueChipText(q: QueueInfo): string {
+  if (q.gpu && q.cpu) {
+    return `GPU 실행 ${q.gpu.running.length} · 대기 ${q.gpu.queued.length} | CPU 실행 ${q.cpu.running.length}/${q.cpu.limit} · 대기 ${q.cpu.queued.length}`;
+  }
+  const running = (q.running ? 1 : 0) + (q.light.running ? 1 : 0);
+  return `대기열 실행 ${running} · 대기 ${q.queued.length + q.light.queued.length}`;
+}
+
+/** 칩 강조용: 실행 중인 작업이 하나라도 있나 */
+export function queueBusy(q: QueueInfo): boolean {
+  const split = q.gpu && q.cpu ? q.gpu.running.length + q.cpu.running.length : q.running ? 1 : 0;
+  return split + (q.light.running ? 1 : 0) > 0;
+}
+
+/** 내 작업이 실행 중인가(GPU·CPU·가벼운 작업·옛 running) */
+export function queueMineRunning(q: QueueInfo, userId: string): boolean {
+  const all = [q.running, q.light.running, ...(q.gpu?.running ?? []), ...(q.cpu?.running ?? [])];
+  return all.some((j) => j && j.created_by === userId);
 }
 
 export function resourceChipText(r: Resources): string {
@@ -80,8 +94,7 @@ export function StatusChips() {
   const resBtn = useRef<HTMLButtonElement>(null);
   const opener = useRef<HTMLButtonElement | null>(null);
 
-  const counts = queue ? queueCounts(queue) : null;
-  const mineRunning = !!queue && [queue.running, queue.light.running].some((j) => j && j.created_by === me.user_id);
+  const mineRunning = !!queue && queueMineRunning(queue, me.user_id);
   const offline = !!status && !status.worker.online;
   const resText = offline ? "워커 오프라인" : resources ? resourceChipText(resources) : resourcesNone ? "자원 정보 없음" : "자원 불러오는 중…";
 
@@ -100,7 +113,7 @@ export function StatusChips() {
       <button
         ref={queueBtn}
         type="button"
-        className={`chip${counts && counts.running > 0 ? " running" : ""}${mineRunning ? " mine" : ""}${open ? " open" : ""}`}
+        className={`chip${queue && queueBusy(queue) ? " running" : ""}${mineRunning ? " mine" : ""}${open ? " open" : ""}`}
         aria-haspopup="dialog"
         aria-expanded={open !== null}
         aria-controls="run-status-drawer"
@@ -109,7 +122,7 @@ export function StatusChips() {
         onClick={() => show("queue", queueBtn.current)}
       >
         <span className="chip-dot" aria-hidden="true" />
-        {counts ? `대기열 실행 ${counts.running} · 대기 ${counts.waiting}` : "대기열 불러오는 중…"}
+        {queue ? queueChipText(queue) : "대기열 불러오는 중…"}
       </button>
       <button
         ref={resBtn}

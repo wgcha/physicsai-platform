@@ -3,7 +3,8 @@ import type { EnvCheck, EnvCheckItem } from "../api/types";
 import { PROJECTS, iso } from "./data";
 import { err, needAdmin, ok, type Route } from "./route";
 import type { Phase2Mock } from "./phase2";
-import { queued, refreshPositions } from "./engine";
+import { refreshPositions } from "./engine";
+import { queueBody, queuedIn, qkey } from "./queueV2";
 import { summary } from "./jobs";
 import { geometryStatus } from "./geometry";
 
@@ -117,26 +118,17 @@ export const opsRoutes: Route = (srv, { method, path, seg, query, body, headers,
     };
   if (method === "GET" && path === "/queue") {
     refreshPositions(srv);
-    const running = srv.jobs.find((j) => j.state === "RUNNING" && j.lane === "SLOT") ?? null;
-    const lightRun = srv.jobs.find((j) => j.state === "RUNNING" && j.lane === "LIGHT") ?? null;
-    return {
-      status: 200,
-      body: {
-        slot: { holder_job_id: running?.id ?? null, since: running?.started_at ?? null },
-        running: running ? summary(srv, running) : null,
-        queued: queued(srv, "SLOT").map((j) => summary(srv, j)),
-        light: { running: lightRun ? summary(srv, lightRun) : null, queued: queued(srv, "LIGHT").map((j) => summary(srv, j)) },
-        waiting_hpc: srv.jobs.filter((j) => j.state === "WAITING_HPC").map((j) => summary(srv, j)),
-        collecting: srv.jobs.filter((j) => j.state === "COLLECTING").map((j) => summary(srv, j)),
-      },
-    };
+    return { status: 200, body: queueBody(srv, summary) };
   }
   if (method === "POST" && seg[0] === "queue" && seg[2] === "move") {
     const d = needAdmin(me);
     if (d) return d;
-    const list = queued(srv, "SLOT");
+    // 이동은 그 작업이 있는 대기열(GPU 또는 CPU) 안에서만
+    const target = srv.jobs.find((j) => j.id === seg[1] && j.state === "QUEUED");
+    const key = target ? qkey(target) : null;
+    if (!target || key === "LIGHT") return err(409, "JOB_NOT_QUEUED", "대기 중인 GPU·CPU 작업만 순서를 바꿀 수 있습니다.");
+    const list = queuedIn(srv, key!);
     const idx = list.findIndex((j) => j.id === seg[1]);
-    if (idx < 0) return err(409, "JOB_NOT_QUEUED", "대기 중인 작업이 아닙니다.");
     const pos = Number(body?.position);
     if (!Number.isInteger(pos) || pos < 1) return err(422, "INVALID_PARAMS", "position은 1 이상입니다.");
     const [j] = list.splice(idx, 1);

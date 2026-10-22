@@ -58,7 +58,7 @@ describe("레이아웃 A: 상태 칩 → 서랍", () => {
   it("칩 문구(대기열 실행·대기, CPU·RAM·GPU), 클릭하면 서랍(aria-modal), Esc로 닫고 칩으로 포커스 복귀", async () => {
     renderApp(`${STUDY}/3`, { user: "power" });
     const chip = await screen.findByTestId("chip-queue");
-    await waitFor(() => expect(chip.textContent).toMatch(/^대기열 실행 \d+ · 대기 \d+$/));
+    await waitFor(() => expect(chip.textContent).toMatch(/^GPU 실행 \d+ · 대기 \d+ \| CPU 실행 \d+\/\d+ · 대기 \d+$/));
     await waitFor(() => expect(screen.getByTestId("chip-resources").textContent).toMatch(/^CPU \d+% · RAM \d+\/\d+ · GPU (\d+%|—)$/));
     expect(chip.getAttribute("aria-expanded")).toBe("false");
     chip.focus();

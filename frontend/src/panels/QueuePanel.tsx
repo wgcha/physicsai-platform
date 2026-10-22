@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { api, errorMessage, type JobSummary } from "../api";
+import { useState, type ReactNode } from "react";
+import { api, errorMessage, type CpuQueue, type GpuQueue, type JobSummary } from "../api";
 import { useApp } from "../app/AppContext";
 import { JOB_TYPE_LABEL, stageDisplayNo, stageMark, attentionText, fmtElapsed, hpcSummaryText } from "../lib/format";
 import { ProgressBar, StateDot } from "../components/ui";
@@ -44,6 +44,12 @@ export function QueuePanel() {
           <span className="qmeta ellipsis">
             {j.study_title} · {j.created_by_name}
             {mine && <span className="mine-tag">내 작업</span>}
+            {!opts.running && j.resumed && (
+              <span data-testid="queue-resumed">
+                {" · "}이어서{j.progress_pct != null ? ` · ${Math.round(j.progress_pct)}%` : ""}
+                {currentStepText(j) ? ` · ${currentStepText(j)}` : ""}
+              </span>
+            )}
           </span>
           {admin && (
             <span className="qctl">
@@ -99,27 +105,64 @@ export function QueuePanel() {
     );
   };
 
+  /** GPU·CPU 구역 하나: 머리말 + 실행 중 행 + 대기 행(대기 순번은 그 대기열 안 순번) */
+  const zone = (key: "gpu" | "cpu", title: string, d: GpuQueue | CpuQueue, head: ReactNode) => (
+    <div role="group" aria-label={title} data-testid={`queue-${key}`}>
+      <div className="qsec-label">
+        {title} <span className="muted small">{head}</span>
+      </div>
+      <ul className="qlist">
+        {d.running.length + d.queued.length === 0 && <li className="empty small">없음</li>}
+        {d.running.map((j) => row(j, { running: true }))}
+        {d.queued.map((j, i) => row(j, { pos: j.queue_position ?? i + 1, total: d.queued.length }))}
+      </ul>
+    </div>
+  );
+
   const queued = q?.queued ?? [];
   const lightJobs = q ? [...(q.light.running ? [q.light.running] : []), ...q.light.queued] : [];
   const hpc = q ? [...q.waiting_hpc, ...q.collecting] : [];
+  // 옛 응답(gpu·cpu 없음)은 단일 대기열로 그대로 보인다(job-queues.md §8.1 deprecated 필드)
+  const split = q?.gpu && q?.cpu ? { gpu: q.gpu, cpu: q.cpu } : null;
 
   return (
-    <DrawerSection label="실행 대기열" refText={`로컬 슬롯 1개 · 대기 ${queued.length}건`}>
+    <DrawerSection label="실행 대기열" refText={split ? undefined : `로컬 슬롯 1개 · 대기 ${queued.length}건`}>
       {error && <div className="error-text small">{error}</div>}
       {!q ? (
         <div className="empty small">불러오는 중…</div>
       ) : (
         <>
-          <div className="qsec-label">실행 중</div>
-          <ul className="qlist">{q.running ? row(q.running, { running: true }) : <li className="empty small">없음</li>}</ul>
-          <div className="qsec-label">대기</div>
-          <ul className="qlist">
-            {queued.length === 0 ? (
-              <li className="empty small">없음</li>
-            ) : (
-              queued.map((j, i) => row(j, { pos: j.queue_position ?? i + 1, total: queued.length }))
-            )}
-          </ul>
+          {split ? (
+            <>
+              {zone("gpu", "GPU 대기열", split.gpu, `${split.gpu.limit}개씩 · 대기 ${split.gpu.queued.length}건`)}
+              {zone(
+                "cpu",
+                "CPU 대기열",
+                split.cpu,
+                <>
+                  동시 {split.cpu.limit}개 · 실행 {split.cpu.running.length} · 대기 {split.cpu.queued.length}건
+                  {split.cpu.memory_gate === "low" && (
+                    <span className="warn-text" data-testid="queue-memory-gate">
+                      {" · "}여유 메모리 부족으로 대기
+                    </span>
+                  )}
+                </>,
+              )}
+            </>
+          ) : (
+            <>
+              <div className="qsec-label">실행 중</div>
+              <ul className="qlist">{q.running ? row(q.running, { running: true }) : <li className="empty small">없음</li>}</ul>
+              <div className="qsec-label">대기</div>
+              <ul className="qlist">
+                {queued.length === 0 ? (
+                  <li className="empty small">없음</li>
+                ) : (
+                  queued.map((j, i) => row(j, { pos: j.queue_position ?? i + 1, total: queued.length }))
+                )}
+              </ul>
+            </>
+          )}
           {lightJobs.length > 0 && (
             <>
               <div className="qsec-label">가벼운 작업(슬롯 불필요)</div>
