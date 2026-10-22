@@ -4,6 +4,12 @@
 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
 (`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
 
+## 0.2.8 — 2026-10-22
+
+- Altair 변수 공간 분리: ①-2 tpl이 CAD 전체 파라미터를 포함(미사용은 공칭 고정, ① DOE 결과 불변)
+- ④·⑥에서 Altair 변수 선택·범위를 학습과 독립으로 편집(Native와 동일 방식), 옛 부분 tpl 템플릿은 재생성 안내
+- 학습 결과로 템플릿 만들기에 tpl 출처(DOE 기준|현재 tpl) 선택
+
 ## 0.2.7 — 2026-10-22
 
 - 입력 구분(조립 | 쿠션): ⑥ 내장 최적화·④ 일괄·단건 예측·FEM 검증에서 실행마다 선택 — 쿠션은 Altair m1 쿠션 rad(EPS_mesh_0000.rad)만으로 예측(m2·m3 생략, GPU 메모리 절감), Native는 모핑 후 쿠션 rad만 생성해 예측. 조립 데이터로 학습한 모델 그대로 사용
