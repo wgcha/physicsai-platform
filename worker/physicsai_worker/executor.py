@@ -42,11 +42,11 @@ class LeaseKeeper(threading.Thread):
         self.engine, self.job_id, self.token, self.ttl, self.interval, self.slot = engine, job_id, token, ttl, interval, slot
         self.on_lost = on_lost
         self.lost = threading.Event()
-        self._stop = threading.Event()
+        self._stop_evt = threading.Event()  # 주의: `_stop`은 threading.Thread 내부 메서드 이름 — 가리면 join·is_alive가 TypeError
         self.paused = threading.Event()  # 시험: 워커 사망 모사
 
     def run(self) -> None:
-        while not self._stop.wait(self.interval):
+        while not self._stop_evt.wait(self.interval):
             if self.paused.is_set():
                 continue
             try:
@@ -56,12 +56,14 @@ class LeaseKeeper(threading.Thread):
                 log.exception("lease renew 오류")
                 continue
             if not ok:
+                if self._stop_evt.is_set():  # 정상 종료·구간 전환(release)과 겹친 마지막 renew — 상실이 아니다
+                    return
                 self.lost.set()
                 self.on_lost()
                 return
 
     def stop(self) -> None:
-        self._stop.set()
+        self._stop_evt.set()
 
 
 class Executor:
@@ -149,8 +151,20 @@ class Executor:
                 self.w.unregister_executor(self)
 
     def _release(self, state: str, code: str | None = None, msg: str | None = None, next_lane: str | None = None) -> str:
-        self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg,
-                                             next_lane=next_lane))
+        """lease 해제 + 전이. keeper를 먼저 멈추고(새 renew 시작 안 함) release 뒤 keeper 스레드가 끝나기를 기다린다.
+
+        release와 겹친 keeper의 옛 토큰 renew는 0행으로 끝나도 자기 트랜잭션이 끝날 때까지 갱신된 jobs 행에 잠금을 남긴다 —
+        T17 직후 같은 작업을 `FOR UPDATE SKIP LOCKED`로 다시 고르는 claim이 그 행을 건너뛰어 한 박자(운영) 또는 영영(run_once_slot) 놓친다.
+        이 함수가 돌아온 시점에는 keeper의 열린 트랜잭션이 없다."""
+        keeper = self.keeper
+        if keeper is not None:
+            keeper.stop()
+        try:
+            self.db(lambda c: lease_repo.release(c, self.job_id, self.token, state, failure_code=code, failure_message=msg,
+                                                 next_lane=next_lane))
+        finally:
+            if keeper is not None and keeper.is_alive() and keeper is not threading.current_thread():
+                keeper.join(timeout=float(self.settings.worker.lease_ttl_s))
         return state
 
     def _job_log(self, text: str) -> None:
