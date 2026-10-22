@@ -1,6 +1,7 @@
 // phase3.md §14 S9 목(R-F 분할): 조합 계산(batch_matrix 흉내) — lhs·표 붙여넣기·① DOE·S15 새 방식(mockDesign).
 import type { BatchPreviewRow, BatchNote, BatchProblem, BatchSource, ParamSet } from "../api/types";
 import { isIntegerFormat } from "../lib/format";
+import { MULTI_BASELINE_REASON, SITE_KINDS, type SamplingKind } from "../lib/sampling";
 import { rng } from "./data";
 import { err, type MockResp } from "./route";
 import { isNewKind, mockDesign } from "./sampling";
@@ -81,13 +82,16 @@ function shapeError(source: BatchSource): MockResp | null {
   if (s.kind === "fracfact" && s.resolution !== 4 && s.resolution !== 5) return err(422, "INVALID_PARAMS", "resolution은 4·5입니다.");
   if (s.kind === "ccd" && s.alpha !== "face" && s.alpha !== "inscribed") return err(422, "INVALID_PARAMS", "alpha는 face·inscribed입니다.");
   if (s.kind === "lhs_opt" && s.criterion !== "maximin" && s.criterion !== "corr") return err(422, "INVALID_PARAMS", "criterion은 maximin·corr입니다.");
-  if ((s.kind === "sobol" || s.kind === "lhs_opt") && s.seed != null && (!Number.isInteger(s.seed) || (s.seed as number) < 0 || (s.seed as number) > 4294967295)) return err(422, "INVALID_PARAMS", "seed는 0~4294967295 정수입니다.");
+  if ((s.kind === "sobol" || s.kind === "lhs_opt" || s.kind === "halton" || s.kind === "random") && s.seed != null && (!Number.isInteger(s.seed) || (s.seed as number) < 0 || (s.seed as number) > 4294967295)) return err(422, "INVALID_PARAMS", "seed는 0~4294967295 정수입니다.");
   return null;
 }
 
 /** batch_matrix 흉내. 409 오류는 MockResp, 그 밖은 rows·problems(+notes·meta) */
 export function batchMatrix(srv: MockServer, ps: ParamSet, source: BatchSource | undefined): MockResp | BatchMatrixOut {
   if (!source || typeof source !== "object") return err(422, "INVALID_PARAMS", "source가 필요합니다.");
+  // doe-methods.md DM-C4: 다중 baseline 세트는 층 안 생성기(lhs·lhs_opt·halton·random)만
+  if ((ps.baselines?.length ?? 0) > 1 && !SITE_KINDS.batch_multi.includes(source.kind as SamplingKind))
+    return { rows: [], problems: [{ code: "DESIGN_UNSUPPORTED", message: MULTI_BASELINE_REASON }] };
   if (isNewKind(source.kind)) {
     const bad = shapeError(source);
     if (bad) return bad;

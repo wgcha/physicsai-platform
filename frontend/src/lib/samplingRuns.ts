@@ -53,7 +53,7 @@ export function sobolCounts(maxRuns = DEFAULT_MAX_RUNS): number[] {
 /** 권장 run 수(§20.4): 서버 `sampling.recommended_count`와 같은 값. 설계로 정해지는 방식은 null */
 export function recommendedCount(kind: SamplingKind, k: number, maxRuns = DEFAULT_MAX_RUNS): number | null {
   if (k < 1) return null;
-  if (kind === "lhs" || kind === "lhs_opt") return Math.min(maxRuns, Math.max(10, 10 * k));
+  if (kind === "lhs" || kind === "lhs_opt" || kind === "halton" || kind === "random") return Math.min(maxRuns, Math.max(10, 10 * k));
   if (kind === "sobol") {
     const opts = sobolCounts(maxRuns);
     if (!opts.length) return null;
@@ -98,7 +98,7 @@ export const defaultLevel = (k: number, maxRuns = DEFAULT_MAX_RUNS) => (3 ** k <
 export function calcNote(kind: SamplingKind, k: number, o: RunOptions = {}): string | null {
   if (k < 1) return null;
   const R = o.maxRuns ?? DEFAULT_MAX_RUNS;
-  if (kind === "lhs" || kind === "lhs_opt" || kind === "sobol") {
+  if (kind === "lhs" || kind === "lhs_opt" || kind === "halton" || kind === "random" || kind === "sobol") {
     const n = recommendedCount(kind, k, R);
     return n === null ? null : `현재 변수 ${k}개 → 권장 ${n}`;
   }
@@ -112,4 +112,11 @@ export function calcNote(kind: SamplingKind, k: number, o: RunOptions = {}): str
 /** ① 설명 상자의 계산값: hs_lhs·hs_sobol만 "권장 10 × 변수 수"(그 밖 null) */
 export function hsCalcNote(descId: DescId, k: number): string | null {
   return k >= 1 && (descId === "hs_lhs" || descId === "hs_sobol") ? `현재 변수 ${k}개 → 권장 ${10 * k}` : null;
+}
+
+/** DM-C10: 지금 변수 수 k에서 만들 수 없는 방식이면 드롭다운 회색 문구 "— 변수 k개에서 불가", 아니면 null(변수가 없거나 자유 run 수·표·① DOE 방식은 항상 null) */
+export function unavailableNote(kind: SamplingKind, k: number, maxRuns = DEFAULT_MAX_RUNS): string | null {
+  if (k < 1) return null;
+  if (kind !== "fullfact" && kind !== "fracfact" && kind !== "pb" && kind !== "bbd" && kind !== "ccd") return null;
+  return expectedRuns(kind, k, { maxRuns, resolution: 5 }) === null ? `— 변수 ${k}개에서 불가` : null;
 }

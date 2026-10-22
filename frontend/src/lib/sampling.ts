@@ -4,3 +4,4 @@ export * from "./samplingKinds";
 export * from "./samplingDescs";
 export * from "./samplingRuns";
 export * from "./samplingSummary";
+export * from "./samplingTable";

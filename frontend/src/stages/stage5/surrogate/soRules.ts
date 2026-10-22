@@ -1,6 +1,6 @@
 // ⑤ 내장 최적화 화면 규칙(phase3.md §18.10, 순수 함수): 상태 문구·톤, 지표 목록, 변수 범위 행, 요청 본문, 품질 등급, 수렴 그래프 자료.
 import type { ParamSet } from "../../../api";
-import type { SoIteration, SoParameter, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
+import type { ExploreMethod, SoIteration, SoParameter, SoRun, SurrogateOpt, SurrogateOptCreate } from "../../../api/surrogateOpt";
 import { fmtNum } from "../../../lib/format";
 import { editOf, rowBounds, type NativeRow } from "../../../lib/nativeVars";
 import { rolesToBody, type PerfRow, type RoleSel } from "./perfRules";
@@ -209,6 +209,10 @@ export interface SoForm {
   explore: "new" | "reuse";
   count: string;
   exploreSeed: string;
+  /** DM-C5: 새 DOE 방식(없음 = lhs 기본). lhs는 body에 보내지 않는다(def0517과 같은 body) */
+  exploreMethod?: ExploreMethod;
+  /** lhs_opt 최적화 기준(그 밖 방식이면 보내지 않는다) */
+  exploreCriterion?: "maximin" | "corr";
   batchId: string;
   /** 성능 이름 → 역할(S17 §22.12). 저장된 성능만 */
   sels: Record<string, RoleSel>;
@@ -230,6 +234,13 @@ export interface SoForm {
   algo?: AlgoForm;
   /** opt-native §7: 위상 변형 세트의 baseline 수준(null = 전부) */
   levels?: string[] | null;
+}
+
+/** 새 DOE 칸 문제(DM-C5): Sobol은 run 수가 2의 거듭제곱(≥ 4)이어야 한다(빈 값 = 서버 기본 2^m). 문제 없으면 null */
+export function exploreIssue(f: Pick<SoForm, "explore" | "exploreMethod" | "count">): string | null {
+  if (f.explore !== "new" || f.exploreMethod !== "sobol" || f.count.trim() === "") return null;
+  const n = Number(f.count);
+  return Number.isInteger(n) && n >= 4 && (n & (n - 1)) === 0 ? null : "Sobol은 run 수가 2의 거듭제곱(4·8·16·32…)이어야 합니다";
 }
 
 const int = (s: string, d: number) => (s.trim() === "" || !Number.isFinite(Number(s)) ? d : Math.trunc(Number(s)));
@@ -257,7 +268,11 @@ export function buildBody(f: SoForm, perfs: PerfRow[]): SurrogateOptCreate {
     model_id: f.modelId,
     ...(f.input ? { input: f.input } : {}),
     explore: f.explore === "new"
-      ? { kind: "new", count: f.count.trim() === "" ? null : int(f.count, 10), seed: int(f.exploreSeed, 1) }
+      ? {
+        kind: "new", count: f.count.trim() === "" ? null : int(f.count, 10), seed: int(f.exploreSeed, 1),
+        ...(f.exploreMethod && f.exploreMethod !== "lhs" ? { method: f.exploreMethod } : {}),
+        ...(f.exploreMethod === "lhs_opt" ? { criterion: f.exploreCriterion ?? "maximin" } : {}),
+      }
       : { kind: "reuse", batch_id: f.batchId },
     objectives: roles.objectives,
     constraints: roles.constraints,

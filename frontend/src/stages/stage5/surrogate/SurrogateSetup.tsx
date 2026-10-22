@@ -17,9 +17,11 @@ import { TemplatePicker, templateName, useTemplateChoice } from "../../stage4/Te
 import { ModelLine, useModelChoice } from "../../stage4/predictRun";
 import { InputKindSelect, useInputChoice } from "../../../components/InputKindSelect";
 import { inputKindError } from "../../../lib/inputKind";
+import { MULTI_BASELINE_REASON, SAMPLING_LABEL, SITE_DEFAULT, SITE_KINDS } from "../../../lib/sampling";
+import type { ExploreMethod } from "../../../api/surrogateOpt";
 import { maxMultiExecution } from "../../stage4/batch/BatchSetup";
 import {
-  ALGO_REVERT_NOTE, EMPTY_ALGO, algoIssues, algoTip, baselineIds, buildBody, previewText, rowIssue, varRows,
+  ALGO_REVERT_NOTE, EMPTY_ALGO, algoIssues, algoTip, baselineIds, buildBody, exploreIssue, previewText, rowIssue, varRows,
   type AlgoDefaults, type Algorithm, type SoForm, type VarRow,
 } from "./soRules";
 import { AlgoOptions, AlgorithmField, NoneNote, VerificationField } from "./AlgoOptions";
@@ -42,7 +44,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const limits = { maxObjectives: soStatus?.max_objectives ?? DEFAULT_MAX_OBJECTIVES, maxObserve: soStatus?.max_observe ?? DEFAULT_MAX_OBSERVE };
   const maxMulti = maxMultiExecution(status);
   const [f, setF] = useState<SoForm>(() => ({
-    paramSetId: ps?.id ?? null, modelId: null, explore: "new", count: "", exploreSeed: "1", batchId: "",
+    paramSetId: ps?.id ?? null, modelId: null, explore: "new", count: "", exploreSeed: "1", exploreMethod: SITE_DEFAULT.opt_explore as ExploreMethod, exploreCriterion: "maximin", batchId: "",
     sels: {}, weights: {}, rows: varRows(ps),
     surrogate: defs?.surrogate === "rbf" ? "rbf" : "gp", iterations: String(defs?.iterations ?? 3), candidates: String(defs?.candidates ?? 4),
     tolPct: String((defs?.tol_rel ?? 0.01) * 100), seed: "1", multi: String(Math.min(4, maxMulti)), capture: false,
@@ -65,6 +67,7 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   // native-vars.md §7.2: Native 템플릿은 세트 정의로 표를 초기화하고 풀에서 추가·제외한다(단일 baseline만 — 아니면 기존 표). 학습 범위는 고른 모델 기준
   const { native, pending, nv, rows: nrows, setRows: setN } = useNativeRunRows(ps, choice.chosenModel?.id ?? null);
   const bids = baselineIds(ps);
+  const multiBaseline = bids.length > 1;
   const topo = !!preview?.levels?.baseline; // 위상 변형 세트만 범주 baseline(서버 미리보기 levels)
   const chosenLv = f.levels ?? bids;
   const toggleLevel = (b: string) => {
@@ -92,7 +95,8 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
   const body = useMemo(() => buildBody({ ...f, input: ic.picked, nrows }, perfs), [f, ic.picked, perfs, nrows]);
   const bodyKey = JSON.stringify(body);
   const roleProblem = rolesIssue(perfs, f.sels, f.weights);
-  const ready = !!ps && !roleProblem && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
+  const exploreErr = exploreIssue(f);
+  const ready = !!ps && !roleProblem && !exploreErr && rowProblems.every((x) => !x) && (f.explore === "new" || !!f.batchId);
   useEffect(() => {
     if (!ready) {
       setPreview(null);
@@ -172,12 +176,35 @@ export function SurrogateSetup({ active, onStarted }: { active: boolean; onStart
         </div>
         {f.explore === "new" ? (
           <div className="form-grid">
-            <Field label="탐색 run 수" hint="빈 값 = max(10, 4 × 자유 변수)">
+            <Field label="표본 방식">
+              <select value={f.exploreMethod ?? "lhs"} aria-label="탐색 방식" onChange={(e) => set({ exploreMethod: e.target.value as ExploreMethod })}>
+                {SITE_KINDS.opt_explore.map((m) => {
+                  const blocked = multiBaseline && m === "sobol"; // DM-C5: 다중 baseline은 sobol 제외(층별 run 수가 2의 거듭제곱이 아님)
+                  return (
+                    <option key={m} value={m} disabled={blocked && m !== f.exploreMethod} title={blocked ? MULTI_BASELINE_REASON : undefined}>
+                      {SAMPLING_LABEL[m]}
+                      {blocked ? " — 사용 불가" : ""}
+                    </option>
+                  );
+                })}
+              </select>
+            </Field>
+            <Field label="탐색 run 수" hint={f.exploreMethod === "sobol" ? "2의 거듭제곱 · 빈 값 = 기본값 이상인 가장 작은 2^m" : "빈 값 = max(10, 4 × 자유 변수)"}>
               <input className="num" inputMode="numeric" value={f.count} placeholder={preview ? String(preview.explore_count) : "자동"} onChange={(e) => set({ count: e.target.value.replace(/[^0-9]/g, "") })} aria-label="탐색 run 수" />
             </Field>
             <Field label="시드">
               <input className="num" inputMode="numeric" value={f.exploreSeed} onChange={(e) => set({ exploreSeed: e.target.value.replace(/[^0-9]/g, "") })} aria-label="탐색 시드" />
             </Field>
+            {f.exploreMethod === "lhs_opt" && (
+              <div className="seg" role="group" aria-label="최적화 기준">
+                {([["maximin", "최소 거리"], ["corr", "상관 최소"]] as const).map(([k, label]) => (
+                  <button key={k} type="button" className={f.exploreCriterion === k ? "on" : ""} aria-pressed={f.exploreCriterion === k} onClick={() => set({ exploreCriterion: k })}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+            {exploreErr && <p className="error-text small" role="alert" data-testid="explore-issue">{exploreErr}</p>}
           </div>
         ) : reusable.length ? (
           <Field label="완료된 배치(같은 템플릿)">

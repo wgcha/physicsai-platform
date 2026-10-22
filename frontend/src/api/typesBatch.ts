@@ -1,6 +1,7 @@
 // API 타입(R-F 분할) — S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14). `api/types`가 재노출.
 import type { S, Override } from "./typesBase";
 import type { ContourLegend, ViewKey } from "./types";
+import type { BatchSourceMore } from "./typesDoeMethods";
 
 // ---------------------------------------------------------------------------
 // S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14) — 생성 타입 기반, 열거형·dict 필드만 계약 값으로 좁힘
@@ -38,7 +39,7 @@ export interface ParamSetResponsesPut {
 }
 
 /** S15(§20.6): 10개 kind(기존 lhs·table·train_doe + 7개) — 생성 타입의 discriminated union */
-export type BatchSource = S["PredictBatchPreviewRequest"]["source"];
+export type BatchSource = S["PredictBatchPreviewRequest"]["source"] | BatchSourceMore;
 export type BatchSourceKind = BatchSource["kind"];
 
 /** 영향도 등급(§20.7): formal 정식 · reference 참고용(회색 안내) · off 비활성(사유) */

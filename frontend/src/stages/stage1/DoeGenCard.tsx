@@ -7,13 +7,13 @@ import { useApp } from "../../app/AppContext";
 import { PathInput } from "../../components/PathInput";
 import { FeatureGate, useFeature } from "../../components/FeatureGate";
 import { SamplingDescription } from "../../components/SamplingDescription";
-import { HS_COMPAT_NOTE, HS_NOTE, PLATFORM_GROUPS, SAMPLING_LABEL, descIdOf, hsCalcNote } from "../../lib/sampling";
+import { HS_COMPAT_NOTE, HS_NOTE, MULTI_BASELINE_REASON, SITE_KINDS, descIdOf, hsCalcNote, type NameRanges } from "../../lib/sampling";
 import { genCategoryText } from "../../lib/geometry";
 import { useTrain } from "./TrainContext";
 import { DoePlatformFields, Seg } from "./DoePlatformFields";
-import { REUSE_LABEL, ReuseDoePicker } from "./ReuseDoePicker";
+import { ReuseDoePicker } from "./ReuseDoePicker";
 import {
-  NATIVE_DOE_LABEL, buildHyperstudyParams, buildReuseParams, buildNativeParams, buildPlatformParams, doeLimits, genText, initialNative, initialPlatform, skippedRuns, stratumCounts,
+  buildHyperstudyParams, buildReuseParams, buildNativeParams, buildPlatformParams, doeLimits, genText, initialNative, initialPlatform, skippedRuns, stratumCounts,
   type NativeDoeState, type PlatformState,
 } from "./doeGenParams";
 
@@ -55,55 +55,27 @@ const SAMPLE_TEXT: Record<string, string> = {
 
 const GEN_LABEL: Record<DoeGenerator, string> = { platform: "플랫폼", hyperstudy: "HyperStudy" };
 
-/** native에서 쓸 수 없는 것의 사유(§7.3.3: 플랫폼 LHS만) */
+/** native에서 쓸 수 없는 것의 사유 */
 const REUSE_MULTI_BASELINE = "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다";
-const NATIVE_ONLY_LHS = "Native 형상 엔진 DOE는 플랫폼 생성 LHS만 됩니다";
+const NATIVE_NO_HYPERSTUDY = "Native 형상 엔진 DOE는 플랫폼 생성만 됩니다(HyperStudy는 Altair 추출에서)";
 
-/** ①-3 native 입력(geometry-engine.md §8 ①-3): 생성 방식 PLATFORM·표본 LHS(Native) 고정, run 수·시드·동시 수·실패 처리, 세트 기준이면 층화 안내 */
-function NativeFields({ state, onChange, set, disabled, reuse }: { state: NativeDoeState; onChange: (s: NativeDoeState) => void; set: ParamSet | null; disabled: boolean; reuse: { on: boolean; setOn: (on: boolean) => void; panel: ReactNode } }) {
+/** ①-3 native 입력(doe-methods.md §5.1): 표본 방식 드롭다운(Altair 플랫폼 생성과 같은 목록, 기본 lhs) + 방식별 칸. 다중 baseline 세트면 층 안 생성기(lhs·lhs_opt·halton·random)만 고르고 층화 안내 줄을 둔다 */
+function NativeFields({ state, onChange, set, names, ranges, maxRuns, disabled, reuse }: { state: NativeDoeState; onChange: (s: NativeDoeState) => void; set: ParamSet | null; names: string[]; ranges: NameRanges | null; maxRuns: number; disabled: boolean; reuse: { on: boolean; setOn: (on: boolean) => void; panel: ReactNode; blocked: string | null } }) {
   const nb = set?.baselines?.length ?? 0;
   const n = Number(state.count);
-  const strata = nb > 1 && Number.isInteger(n) && n >= 2 ? stratumCounts(n, nb) : [];
+  const strata = nb > 1 && state.kind === "lhs" && Number.isInteger(n) && n >= 2 ? stratumCounts(n, nb) : [];
   return (
-    <div className="samp-pick" data-testid="doe-native">
-      <label className="field">
-        <span className="field-label">표본 방식</span>
-        <select aria-label="표본 방식" value={reuse.on ? "train_doe" : "lhs"} disabled={disabled} onChange={(e) => reuse.setOn(e.target.value === "train_doe")}>
-          <option value="lhs">{NATIVE_DOE_LABEL}</option>
-          <option value="train_doe" disabled={nb > 1} title={nb > 1 ? REUSE_MULTI_BASELINE : undefined}>
-            {REUSE_LABEL}
-            {nb > 1 ? " — 사용 불가" : ""}
-          </option>
-          {PLATFORM_GROUPS.flatMap((g) => g.kinds)
-            .filter((k) => k !== "lhs")
-            .map((k) => (
-              <option key={k} value={k} disabled>
-                {SAMPLING_LABEL[k]} — 사용 불가
-              </option>
-            ))}
-        </select>
-      </label>
-      <p className="muted small" data-testid="native-only-note">
-        {NATIVE_ONLY_LHS} — HyperStudy·다른 표본 방식은 Altair(①-1 Altair 추출)에서 씁니다.
-      </p>
-      {reuse.on ? reuse.panel : <>
-      <div className="fill-row">
-        <label className="inline-field">
-          run 수
-          <input className="num-input" inputMode="numeric" aria-label="run 수" value={state.count} disabled={disabled} onChange={(e) => onChange({ ...state, count: e.target.value.replace(/[^0-9]/g, "") })} />
-        </label>
-        <label className="inline-field">
-          시드
-          <input className="num-input" inputMode="numeric" aria-label="시드" value={state.seed} disabled={disabled} onChange={(e) => onChange({ ...state, seed: e.target.value.replace(/[^0-9]/g, "") })} />
-        </label>
-      </div>
+    <div data-testid="doe-native">
+      <DoePlatformFields
+        state={state} onChange={(p) => onChange({ ...state, ...p })} names={names} maxRuns={maxRuns} disabled={disabled} reuse={reuse} ranges={ranges}
+        site="train_native" allowed={nb > 1 ? SITE_KINDS.train_native_multi : undefined} blockedReason={MULTI_BASELINE_REASON}
+      />
       {nb > 1 && (
         <p className="small samp-note" data-testid="native-strata">
-          다중 baseline {nb}개 — 층화 LHS로 baseline마다 나눠 뽑습니다{strata.length ? ` (${set!.baselines!.map((b, i) => `${b.id} ${strata[i]}개`).join(" · ")})` : ""}.
-          {set?.param_map_status !== "confirmed" && <span className="warn-text"> 매칭표 확정 필요 — ④ 템플릿 상세의 '다중 baseline(고급)'에서 확정하세요.</span>}
+          다중 baseline {nb}개 — {state.kind === "lhs" ? "층화 LHS" : "층화"}로 baseline마다 나눠 뽑습니다{strata.length ? ` (${set!.baselines!.map((b, i) => `${b.id} ${strata[i]}개`).join(" · ")})` : ""}.
+          {set?.param_map_status !== "confirmed" && <span className="warn-text"> 매칭표 확정 필요 — ④ 템플릿 상세의 &apos;다중 baseline(고급)&apos;에서 확정하세요.</span>}
         </p>
       )}
-      </>}
     </div>
   );
 }
@@ -182,22 +154,31 @@ export function DoeGenCard() {
   const native = setup?.engine === "native" || !!nset;
   const tplReady = native || (!!setup?.tpl && !setup.tpl.stale);
   const latest = does.find((d) => d.job_id === job?.id) ?? does[0];
-  const names = (setup?.parameters ?? []).filter((p) => p.use).map((p) => p.name);
+  const usedParams = (setup?.parameters ?? []).filter((p) => p.use);
+  const names = usedParams.map((p) => p.name);
+  // ① 표 붙여넣기의 학습 범위: ①-2 사용 행(Altair·Native 추출) 또는 세트 변수(세트 기준 Native) — 범위 밖이면 막는다(TABLE_OUT_OF_RANGE)
+  const rangesOf = (rows: { name: string; min?: number | null; max?: number | null }[]): NameRanges =>
+    Object.fromEntries(rows.filter((p) => typeof p.min === "number" && typeof p.max === "number").map((p) => [p.name, [p.min as number, p.max as number] as [number, number]]));
+  const platRanges = rangesOf(usedParams);
   const isPlatform = generator === "platform";
   const platMultiShown = platMulti ?? lim.parallelDefault;
 
-  const platformParams = () => buildPlatformParams(plat, names, { multi: platMultiShown, assemPath: path.trim(), maxRuns: lim.maxRuns, continueOnFailure: continueOnFail });
+  const platformParams = () => buildPlatformParams(plat, names, { multi: platMultiShown, assemPath: path.trim(), maxRuns: lim.maxRuns, continueOnFailure: continueOnFail, table: { ranges: platRanges } });
   // 재사용 대상의 파라미터 이름: 세트 기준 native는 세트 표, 아니면 ①-2 사용 행
   const targetNames = nset ? (nset.parameters ?? []).map((p) => p.name) : names;
+  const natRanges = nset ? rangesOf(nset.parameters ?? []) : platRanges;
+  const natMulti = (nset?.baselines?.length ?? 0) > 1;
   const reuseBlocked = nset && (nset.baselines?.length ?? 0) > 1 ? REUSE_MULTI_BASELINE : null;
   const reuseActive = reuseOn && !reuseBlocked && (native || isPlatform);
   const reuse = {
     on: reuseActive,
     setOn: setReuseOn,
     panel: <ReuseDoePicker does={does} names={targetNames} doeId={reuseDoe} onChange={setReuseDoe} disabled={!canExec} blocked={reuseBlocked} />,
+    blocked: reuseBlocked,
   };
   const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath: path.trim(), paramSetId: nset?.id ?? null, continueOnFailure: native ? nat.continueOnFailure : continueOnFail });
-  const nativeParams = () => buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.maxRuns, assemPath: path.trim(), paramSetId: nset?.id ?? null });
+  // 다중 baseline 세트는 층 안 생성기만(DM-C4) — 그 밖 방식이 남아 있으면 생성을 막는다
+  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.maxRuns, assemPath: path.trim(), paramSetId: nset?.id ?? null, names: targetNames, table: { ranges: natRanges } }));
   const submit = () => {
     if (reuseActive) {
       const params = reuseParams();
@@ -235,7 +216,7 @@ export function DoeGenCard() {
                 job={job}
                 disabled={!enabled || !assemOk || !tplReady || inputBad || !!setGate}
                 disabledReason={
-                  !enabled ? undefined : !tplReady ? (setup?.tpl ? "tpl을 다시 생성하세요(①-2)" : "①-2에서 tpl을 먼저 생성하세요") : setGate ?? (!assemOk ? "조립 폴더를 입력하고 확인하세요" : native ? reuseActive ? "재사용할 DOE를 고르세요" : `run 수(2~${lim.maxRuns})·시드를 확인하세요` : isPlatform ? (reuseActive ? "재사용할 DOE를 고르세요" : "run 수·시드를 확인하세요") : "run 수는 2 이상")
+                  !enabled ? undefined : !tplReady ? (setup?.tpl ? "tpl을 다시 생성하세요(①-2)" : "①-2에서 tpl을 먼저 생성하세요") : setGate ?? (!assemOk ? "조립 폴더를 입력하고 확인하세요" : native ? reuseActive ? "재사용할 DOE를 고르세요" : natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? "다중 baseline 세트는 층 안 생성기(LHS·최적화 LHS·Halton·균일 랜덤)만 됩니다" : nat.kind === "table" ? "표의 머리줄·값 범위를 확인하세요" : `run 수(2~${lim.maxRuns})·시드를 확인하세요` : isPlatform ? (reuseActive ? "재사용할 DOE를 고르세요" : plat.kind === "table" ? "표의 머리줄·값 범위를 확인하세요" : "run 수·시드를 확인하세요") : "run 수는 2 이상")
                 }
                 error={error}
               />
@@ -256,9 +237,9 @@ export function DoeGenCard() {
           value={native ? "platform" : generator}
           disabled={!canExec}
           options={[
-            { key: "platform", label: native ? `플랫폼 생성 · ${NATIVE_DOE_LABEL}` : "플랫폼 생성(동시 실행)" },
+            { key: "platform", label: native ? "플랫폼 생성" : "플랫폼 생성(동시 실행)" },
             // opt-native §4.4: HyperStudy(레거시)는 features.train_doe가 켜져 있을 때만, native면 선택 불가(§7.3.3)
-            ...(hstOn ? [{ key: "hyperstudy" as const, label: "HyperStudy(레거시)", disabled: native, title: native ? NATIVE_ONLY_LHS : undefined }] : []),
+            ...(hstOn ? [{ key: "hyperstudy" as const, label: "HyperStudy(레거시)", disabled: native, title: native ? NATIVE_NO_HYPERSTUDY : undefined }] : []),
           ]}
           onChange={setPickedGen}
         />
@@ -280,7 +261,7 @@ export function DoeGenCard() {
       />}
       {native ? (
         <>
-          <NativeFields state={nat} onChange={setNat} set={nset} disabled={!canExec} reuse={reuse} />
+          <NativeFields state={nat} onChange={setNat} set={nset} names={targetNames} ranges={natRanges} maxRuns={lim.maxRuns} disabled={!canExec} reuse={reuse} />
           <div className="form-grid">
             <Field label="동시 실행 수" hint={`1~${lim.maxMulti} · run마다 형상 모핑·검사를 동시에 실행합니다`}>
               <input className="num" inputMode="numeric" value={platMultiShown} disabled={!canExec} onChange={(e) => setPlatMulti(Math.max(1, Math.min(lim.maxMulti, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />
@@ -299,7 +280,7 @@ export function DoeGenCard() {
         </>
       ) : isPlatform ? (
         <>
-          <DoePlatformFields state={plat} onChange={setPlat} names={names} maxRuns={lim.maxRuns} disabled={!canExec} reuse={reuse} />
+          <DoePlatformFields state={plat} onChange={setPlat} names={names} maxRuns={lim.maxRuns} disabled={!canExec} reuse={reuse} ranges={platRanges} />
           <div className="form-grid">
             <Field label="동시 실행 수" hint={`1~${lim.maxMulti} · run마다 SimLab·HyperMesh를 동시에 실행합니다 — Altair 라이선스와 메모리 한도 안에서 정하세요`}>
               <input className="num" inputMode="numeric" value={platMultiShown} disabled={!canExec} onChange={(e) => setPlatMulti(Math.max(1, Math.min(lim.maxMulti, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />

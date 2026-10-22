@@ -18,6 +18,10 @@ export function samplingSummary(s: BatchSampling | null | undefined, runCount: n
       const from = m.continue_from as { label?: unknown } | null | undefined;
       return `Sobol ${n}개${seed !== null ? ` · 시드 ${seed}` : ""}${from && typeof from.label === "string" ? ` · ${from.label}에 이어서` : ""}`;
     }
+    case "halton":
+      return `Halton ${n}개${seed !== null ? ` · 시드 ${seed}` : ""}`;
+    case "random":
+      return `균일 랜덤 ${n}개${seed !== null ? ` · 시드 ${seed}` : ""}`;
     case "lhs":
       return `LHS ${n}개${seed !== null ? ` · 시드 ${seed}` : ""}`;
     case "fullfact": {
@@ -45,6 +49,6 @@ export function samplingSummary(s: BatchSampling | null | undefined, runCount: n
 export function methodShortLabel(b: Pick<BatchSamplingBrief, "kind" | "label"> | null | undefined): string | null {
   if (!b) return null;
   const k = b.kind.toLowerCase();
-  const short: Record<string, string> = { lhs_opt: "최적화 LHS", sobol: "Sobol", lhs: "LHS", fullfact: "전체 요인", fracfact: "부분 요인", pb: "Plackett–Burman", bbd: "Box–Behnken", ccd: "CCD", table: "표", train_doe: "① DOE" };
+  const short: Record<string, string> = { lhs_opt: "최적화 LHS", sobol: "Sobol", halton: "Halton", random: "균일 랜덤", lhs: "LHS", fullfact: "전체 요인", fracfact: "부분 요인", pb: "Plackett–Burman", bbd: "Box–Behnken", ccd: "CCD", table: "표", train_doe: "① DOE" };
   return short[k] ?? b.label;
 }

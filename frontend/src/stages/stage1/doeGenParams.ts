@@ -2,7 +2,7 @@
 // 플랫폼 = {generator:"platform", sampling, multi_execution, radioss_assem_path, on_run_failure}. HyperStudy(호환) = 기존 body 그대로(generator 키를 보내지 않는다).
 import type { DoeGenerator } from "../../api";
 import {
-  DEFAULT_PLATFORM_MAX_RUNS, DEFAULT_PLATFORM_PARALLEL, defaultLevel, expectedRuns, recommendedCount, type PlatformKind,
+  DEFAULT_PLATFORM_MAX_RUNS, DEFAULT_PLATFORM_PARALLEL, DEFAULT_TABLE_MAX_BYTES, checkTable, defaultLevel, expectedRuns, recommendedCount, type NameRanges, type PlatformKind,
 } from "../../lib/sampling";
 
 
@@ -16,9 +16,11 @@ export interface PlatformState {
   levels: Record<string, string>;
   resolution: 4 | 5;
   alpha: "face" | "inscribed";
+  /** 표 붙여넣기(kind = table): 머리줄 + 행(탭·쉼표 구분) */
+  text: string;
 }
 
-export const initialPlatform = (): PlatformState => ({ kind: "lhs_opt", count: null, seed: "1", criterion: "maximin", levels: {}, resolution: 5, alpha: "face" });
+export const initialPlatform = (): PlatformState => ({ kind: "lhs_opt", count: null, seed: "1", criterion: "maximin", levels: {}, resolution: 5, alpha: "face", text: "" });
 
 /** /status.limits.configured 에서 읽는 ①-3 값(없으면 설정 기본값) */
 export interface DoeLimits {
@@ -47,9 +49,19 @@ const parseInt0 = (s: string): number | null => {
   return v !== null && Number.isInteger(v) ? v : null;
 };
 
-/** 자유 run 수 방식의 최소 run 수(lhs·lhs_opt 2, sobol 4) */
+/** 자유 run 수 방식의 최소 run 수(lhs·lhs_opt·halton·random 2, sobol 4) */
 export const minCount = (kind: PlatformKind): number => (kind === "sobol" ? 4 : 2);
-export const isFreeCount = (kind: PlatformKind): boolean => kind === "lhs" || kind === "lhs_opt" || kind === "sobol";
+export const isFreeCount = (kind: PlatformKind): boolean => kind === "lhs" || kind === "lhs_opt" || kind === "sobol" || kind === "halton" || kind === "random";
+/** 시드 칸이 있는 방식(자유 run 수 방식과 같다) */
+export const hasSeed = isFreeCount;
+
+/** 표 미리 검사에 쓰는 학습 범위(변수 이름 → [최소, 최대]) — ①-2 사용 행(Altair·Native 추출) 또는 세트 변수 */
+export interface TableOpts {
+  ranges: NameRanges | null;
+  maxBytes?: number;
+}
+/** 표 미리 검사(TABLE_OUT_OF_RANGE 포함) — table이 아닌 방식에서는 쓰지 않는다 */
+export const tableCheck = (s: PlatformState, names: string[], maxRuns: number, t?: TableOpts) => checkTable(s.text, names, t?.ranges ?? null, maxRuns, t?.maxBytes ?? DEFAULT_TABLE_MAX_BYTES);
 
 /** 입력란에 보일 run 수 문자열: 직접 고친 값 또는 권장값 */
 export function countText(s: PlatformState, k: number, maxRuns: number): string {
@@ -71,9 +83,13 @@ export interface RunsInfo {
   over: boolean;
 }
 /** "실제 run N개"(§23.9). 설계가 정하는 방식은 lib/sampling.ts `expectedRuns`(R = 플랫폼 상한), 자유 run 수 방식은 입력값 */
-export function platformRuns(s: PlatformState, names: string[], maxRuns: number): RunsInfo {
+export function platformRuns(s: PlatformState, names: string[], maxRuns: number, t?: TableOpts): RunsInfo {
   const k = names.length;
   if (k < 1) return { n: null, over: false };
+  if (s.kind === "table") {
+    const c = tableCheck(s, names, maxRuns, t);
+    return { n: c.problems.length ? null : c.rows, over: false };
+  }
   if (isFreeCount(s.kind)) {
     const n = parseInt0(countText(s, k, maxRuns));
     return n === null || n < minCount(s.kind) ? { n: null, over: false } : { n, over: n > maxRuns };
@@ -86,18 +102,23 @@ export function platformRuns(s: PlatformState, names: string[], maxRuns: number)
 }
 
 /** 요청 `sampling`(§23.4). 시드·run 수가 숫자가 아니면 null(실행 버튼 비활성) */
-export function buildSampling(s: PlatformState, names: string[], maxRuns: number): Record<string, unknown> | null {
+export function buildSampling(s: PlatformState, names: string[], maxRuns: number, t?: TableOpts): Record<string, unknown> | null {
   const k = names.length;
   switch (s.kind) {
+    case "table":
+      return tableCheck(s, names, maxRuns, t).problems.length ? null : { kind: "table", text: s.text };
     case "lhs":
     case "lhs_opt":
+    case "halton":
+    case "random":
     case "sobol": {
       const count = parseInt0(countText(s, k, maxRuns));
       const seed = parseInt0(s.seed);
-      if (count === null || count < minCount(s.kind) || seed === null || seed < 0) return null;
+      if (count === null || count < minCount(s.kind) || count > maxRuns || seed === null || seed < 0) return null; // 상한 초과는 막는다(DM-C6)
       return s.kind === "lhs_opt" ? { kind: s.kind, count, seed, criterion: s.criterion } : { kind: s.kind, count, seed };
     }
     case "fullfact":
+      if (fullfactLevels(s, names, maxRuns).reduce((a, b) => a * b, 1) > maxRuns) return null; // 상한 초과는 막는다(DM-C6)
       return { kind: "fullfact", levels: Object.fromEntries(names.map((n) => [n, levelOf(s, n, k, maxRuns)])) };
     case "fracfact":
       return { kind: "fracfact", resolution: s.resolution };
@@ -110,8 +131,8 @@ export function buildSampling(s: PlatformState, names: string[], maxRuns: number
 }
 
 /** 플랫폼 모드 작업 params. 입력이 올바르지 않으면 null */
-export function buildPlatformParams(s: PlatformState, names: string[], o: { multi: number; assemPath: string; maxRuns: number; continueOnFailure: boolean }): Record<string, unknown> | null {
-  const sampling = buildSampling(s, names, o.maxRuns);
+export function buildPlatformParams(s: PlatformState, names: string[], o: { multi: number; assemPath: string; maxRuns: number; continueOnFailure: boolean; table?: TableOpts }): Record<string, unknown> | null {
+  const sampling = buildSampling(s, names, o.maxRuns, o.table);
   if (!sampling) return null;
   return {
     generator: "platform",
@@ -136,22 +157,30 @@ export function genText(gen: { total: number; done: number; failed: number } | n
 
 // ---------------------------------------------------------------- native(geometry-engine.md §7.3.3·§7.3.8, S18 플랫폼 생성의 한 경로)
 
-/** native 입력 상태 — 표본 방식은 LHS 고정(doe_type NATIVE_LHS, 표시 "LHS(Native)") */
-export interface NativeDoeState {
-  count: string;
-  seed: string;
+/** native 입력 상태 — 표본 방식은 플랫폼 생성과 같은 목록(DM-C2, 기본 lhs = doe_type NATIVE_LHS, 표시 "LHS(Native)"). lhs의 count는 직접 입력값(기본 "20"), 다른 방식은 null이면 권장값 */
+export interface NativeDoeState extends PlatformState {
   /** 실패한 run(형상 생성 스킵)이 있어도 계속(서버 기본 continue) */
   continueOnFailure: boolean;
 }
 export const NATIVE_DOE_LABEL = "LHS(Native)";
-export const initialNative = (): NativeDoeState => ({ count: "20", seed: "1", continueOnFailure: true });
+export const initialNative = (): NativeDoeState => ({ ...initialPlatform(), kind: "lhs", count: "20", continueOnFailure: true });
 
-/** native params: generator platform + sampling {kind:"lhs", count, seed}. 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path */
-export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null }): Record<string, unknown> | null {
-  const count = parseInt0(s.count);
-  const seed = parseInt0(s.seed);
-  if (count === null || count < 2 || count > o.maxRuns || seed === null || seed < 0) return null;
-  const base = { generator: "platform", sampling: { kind: "lhs", count, seed }, multi_execution: o.multi, on_run_failure: s.continueOnFailure ? "continue" : "fail" };
+/** native params: generator platform + sampling. lhs는 지금 body 그대로 {kind:"lhs", count, seed}(DM-C8), 그 밖은 buildSampling 결과. 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path.
+ * maxRuns = lhs 상한, otherMaxRuns = 그 밖 방식 상한(생략하면 maxRuns). names = 사용 변수 이름, table = 표 학습 범위 */
+export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null; otherMaxRuns?: number; names?: string[]; table?: TableOpts }): Record<string, unknown> | null {
+  let sampling: Record<string, unknown> | null;
+  if (s.kind === "lhs") {
+    const count = parseInt0(countText(s, o.names?.length ?? 0, o.maxRuns));
+    const seed = parseInt0(s.seed);
+    sampling = count === null || count < 2 || count > o.maxRuns || seed === null || seed < 0 ? null : { kind: "lhs", count, seed };
+  } else {
+    const names = o.names ?? [];
+    const max = o.otherMaxRuns ?? o.maxRuns;
+    sampling = buildSampling(s, names, max, o.table);
+    if (platformRuns(s, names, max, o.table).n === null) sampling = null;
+  }
+  if (!sampling) return null;
+  const base = { generator: "platform", sampling, multi_execution: o.multi, on_run_failure: s.continueOnFailure ? "continue" : "fail" };
   return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath };
 }
 

@@ -1,5 +1,5 @@
 // phase3.md §18 S13·§22 S17 목(R-F 분할): 최적화 기록(SoRec)·설정 타입·라벨·공용 헬퍼.
-import type { SoIteration, SoRun, SurrogateOpt } from "../api/surrogateOpt";
+import type { ExploreMethod, SoIteration, SoRun, SurrogateOpt } from "../api/surrogateOpt";
 
 export interface Obj { metric: string; series: string | null; sense: "min" | "max" }
 export interface Cons { metric: string; series: string | null; op: "<=" | ">=" | "range"; value?: number | null; lo?: number | null; hi?: number | null }
@@ -21,7 +21,7 @@ export interface SoRec {
     mode: "single" | "multi";
     performances: Record<string, { unit: string; spec: unknown }>;
     surrogate: string; iterations: number; candidates: number; tol_rel: number; seed: number; multi_execution: number; capture: boolean;
-    explore: { kind: "new"; count: number; seed: number } | { kind: "reuse"; batch_id: string };
+    explore: { kind: "new"; count: number; seed: number; method?: ExploreMethod; criterion?: "maximin" | "corr" } | { kind: "reuse"; batch_id: string };
     algorithm?: string; verification?: string; algo_options?: Record<string, number | null>;
   };
   status: string;

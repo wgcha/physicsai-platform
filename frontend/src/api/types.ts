@@ -160,6 +160,7 @@ export interface PredictResult {
 export * from "./typesPredict";
 export * from "./typesPhase2";
 export * from "./typesBatch";
+export * from "./typesDoeMethods";
 export * from "./typesMedia";
 export * from "./typesGeomView";
 export * from "./typesVars";

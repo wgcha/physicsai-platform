@@ -1,7 +1,7 @@
 // S18 목(phase3.md §23.4): ① TD_DOE_GEN 플랫폼 모드 — params 검증(G10 추론·금지 조합 422 INVALID_PARAMS)·표본 조합 검증(422 DOE_SAMPLING_INVALID) 흉내.
 // backend `doe_platform.check`와 같은 run 수·problems 코드(S15 §20.9) — lhs_opt는 같은 count·seed의 lhs로 대신 검증한다(G5). 값 계산은 하지 않는다(워커 DG_PREP 몫).
 import type { BatchNote, BatchProblem, ParamSet, TrainSetup } from "../api/types";
-import { SAMPLING_LABEL, isPlatformKind, type PlatformKind } from "../lib/sampling";
+import { MULTI_BASELINE_REASON, SAMPLING_LABEL, SITE_KINDS, checkTable, isPlatformKind, type NameRanges, type PlatformKind, type SamplingKind } from "../lib/sampling";
 import { mockDesign } from "./sampling";
 import { err, type MockResp } from "./route";
 
@@ -42,7 +42,13 @@ export interface PlatformCheck {
 export function checkSampling(setup: TrainSetup, sampling: Record<string, unknown>, maxRuns = PLATFORM_MAX_RUNS): PlatformCheck {
   const kind = String(sampling.kind ?? "");
   if (!isPlatformKind(kind)) return { kind: "lhs_opt", runs: null, problems: [{ code: "DESIGN_UNSUPPORTED", message: `지원하지 않는 표본 방식입니다: ${kind}` }], notes: [] };
-  if (kind === "lhs" || kind === "lhs_opt") {
+  if (kind === "table") {
+    // ①은 값이 학습 범위(①-2 사용 행) 밖이면 TABLE_OUT_OF_RANGE로 막는다(doe-methods.md §4.1, ④와 다름)
+    const used = setup.parameters.filter((p) => p.use);
+    const c = checkTable(String(sampling.text ?? ""), used.map((p) => p.name), Object.fromEntries(used.filter((p) => p.min != null && p.max != null).map((p) => [p.name, [p.min as number, p.max as number] as [number, number]])), maxRuns);
+    return { kind, runs: c.problems.length ? null : c.rows, problems: c.problems, notes: [] };
+  }
+  if (kind === "lhs" || kind === "lhs_opt" || kind === "halton" || kind === "random") {
     const n = Number(sampling.count);
     const problems: BatchProblem[] = [];
     if (!Number.isInteger(n) || n < 2) problems.push({ code: "TOO_FEW_ROWS", message: "run 수는 2개 이상입니다" });
@@ -57,3 +63,35 @@ export function checkSampling(setup: TrainSetup, sampling: Record<string, unknow
 
 /** 플랫폼 DOE의 표시 이름(§23.4 train_does.doe_label) */
 export const platformLabel = (kind: PlatformKind): string => SAMPLING_LABEL[kind];
+
+/** ①-3 Native 표본 검사(doe-methods.md §5.1): 방식 목록 = SITE_KINDS(다중 baseline 세트면 층 안 생성기만), lhs 밖은 플랫폼과 같은 run 수·problems. 문제 없으면 null */
+export function checkNativeSampling(sampling: { kind?: string; [k: string]: unknown }, o: { names: string[]; ranges: NameRanges; multi: boolean; maxRuns?: number }): BatchProblem[] | null {
+  const kind = String(sampling.kind ?? "lhs");
+  const ok = (o.multi ? SITE_KINDS.train_native_multi : SITE_KINDS.train_native) as string[];
+  if (!ok.includes(kind)) return [{ code: "DESIGN_UNSUPPORTED", message: o.multi ? MULTI_BASELINE_REASON : `지원하지 않는 표본 방식입니다: ${kind}` }];
+  if (kind === "lhs" || kind === "train_doe") return null;
+  const max = o.maxRuns ?? PLATFORM_MAX_RUNS;
+  if (kind === "table") {
+    const c = checkTable(String(sampling.text ?? ""), o.names, o.ranges, max);
+    return c.problems.length ? c.problems : null;
+  }
+  const n = Number(sampling.count);
+  if (kind === "lhs_opt" || kind === "halton" || kind === "random" || kind === "sobol") {
+    if (!Number.isInteger(n) || n < 2) return [{ code: "TOO_FEW_ROWS", message: "run 수는 2개 이상입니다" }];
+    if (n > max) return [{ code: "TOO_MANY_ROWS", message: `run 수는 ${max}개까지입니다` }];
+    return null;
+  }
+  // 요인·응답면: 플랫폼과 같은 코드값 계산(목)
+  const ps = { id: "native-set", parameters: o.names.map((name) => ({ name, min: o.ranges[name]?.[0] ?? 0, max: o.ranges[name]?.[1] ?? 1, nominal: 0, unit: "" })) } as unknown as ParamSet;
+  const d = mockDesign(ps, { ...sampling, ranges: null } as never, max, []);
+  return d.problems.length ? d.problems : null;
+}
+
+/** Native 새 방식 run 수(목): 요청 sampling → 개수. 설계 방식은 같은 mockDesign 행 수 */
+export function nativeRuns(sampling: { kind?: string; [k: string]: unknown }, o: { names: string[]; ranges: NameRanges }): number {
+  const kind = String(sampling.kind ?? "lhs") as SamplingKind;
+  if (kind === "table") return checkTable(String(sampling.text ?? ""), o.names, null, 1e9).rows;
+  if (kind === "lhs" || kind === "lhs_opt" || kind === "halton" || kind === "random" || kind === "sobol") return Number(sampling.count);
+  const ps = { id: "native-set", parameters: o.names.map((name) => ({ name, min: o.ranges[name]?.[0] ?? 0, max: o.ranges[name]?.[1] ?? 1, nominal: 0, unit: "" })) } as unknown as ParamSet;
+  return mockDesign(ps, { ...sampling, ranges: null } as never, 1e9, []).rows.length;
+}

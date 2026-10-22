@@ -3,10 +3,12 @@
 import { fetchBlob, request } from "./client";
 export type { DesignMap, DesignMapMetric } from "./designMap";
 import type { components } from "./generated/schema";
+import type { SurrogateOptCreateDm } from "./typesDoeMethods";
+export type { ExploreMethod, SoExploreNewDm, SurrogateOptCreateDm } from "./typesDoeMethods";
 
 type S = components["schemas"];
 
-export type SurrogateOptCreate = S["SurrogateOptCreate"];
+export type SurrogateOptCreate = SurrogateOptCreateDm;
 export type SurrogateOptPreview = S["SurrogateOptPreview"];
 export type SurrogateOptSummary = S["SurrogateOptSummary"];
 export type SurrogateOpt = S["SurrogateOpt"];

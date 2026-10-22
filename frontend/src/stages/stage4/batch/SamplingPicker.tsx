@@ -2,7 +2,7 @@
 // 표·① DOE 입력은 BatchSetup이 그린다(기존 그대로). 상태는 BatchSetup이 들고(SamplingState), 값이 바뀌면 onChange로 알린다.
 import type { ParamSet } from "../../../api";
 import { SamplingDescription } from "../../../components/SamplingDescription";
-import { DEFAULT_MAX_RUNS, RECOMMENDED_KIND, SAMPLING_GROUPS, SAMPLING_LABEL, calcNote, isSamplingKind, sobolCounts } from "../../../lib/sampling";
+import { DEFAULT_MAX_RUNS, MULTI_BASELINE_REASON, RECOMMENDED_KIND, SAMPLING_LABEL, SITE_KINDS, calcNote, isSamplingKind, siteGroups, sobolCounts } from "../../../lib/sampling";
 import { NativeBatchVars, type NativeBatch } from "./NativeBatchVars";
 import { activeNames, contTotal, countText, fullfactRuns, levelOf, sobolDefaultCont, type ContinueCand, type Ranges, type SamplingState } from "./samplingSource";
 
@@ -36,6 +36,7 @@ export interface SamplingPickerProps {
 export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS, cands, contRanges, native, nativePending }: SamplingPickerProps) {
   const set = (patch: Partial<SamplingState>) => onChange({ ...state, ...patch });
   const kind = state.kind;
+  const multiBaseline = (ps?.baselines?.length ?? 0) > 1;
   const names = activeNames(ps, state.ranges);
   const k = names.length;
   const cand = state.cont ? (cands.find((c) => c.id === state.contId) ?? null) : null;
@@ -63,14 +64,18 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
       <label className="field">
         <span className="field-label">표본 방식</span>
         <select value={kind} aria-label="표본 방식" onChange={(e) => pick(e.target.value)}>
-          {SAMPLING_GROUPS.map((g) => (
+          {siteGroups("batch").map((g) => (
             <optgroup key={g.label} label={g.label}>
-              {g.kinds.map((m) => (
-                <option key={m} value={m}>
-                  {SAMPLING_LABEL[m]}
-                  {m === RECOMMENDED_KIND ? " · 추천" : ""}
-                </option>
-              ))}
+              {g.kinds.map((m) => {
+                const blocked = multiBaseline && !SITE_KINDS.batch_multi.includes(m); // DM-C4: 다중 baseline 세트는 층 안 생성기만
+                return (
+                  <option key={m} value={m} disabled={blocked && m !== kind} title={blocked ? MULTI_BASELINE_REASON : undefined}>
+                    {SAMPLING_LABEL[m]}
+                    {m === RECOMMENDED_KIND ? " · 추천" : ""}
+                    {blocked ? " — 사용 불가" : ""}
+                  </option>
+                );
+              })}
             </optgroup>
           ))}
         </select>
@@ -149,7 +154,7 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
           )}
 
           <div className="fill-row">
-            {(kind === "lhs" || kind === "lhs_opt") && (
+            {(kind === "lhs" || kind === "lhs_opt" || kind === "halton" || kind === "random") && (
               <label className="inline-field">
                 조합 수
                 <input className="num-input" inputMode="numeric" value={countText(state, k, null, maxRuns)} onChange={(e) => set({ count: e.target.value })} />
@@ -168,7 +173,7 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
                 </select>
               </label>
             )}
-            {(kind === "lhs" || kind === "lhs_opt" || kind === "sobol") && (
+            {(kind === "lhs" || kind === "lhs_opt" || kind === "halton" || kind === "random" || kind === "sobol") && (
               <label className="inline-field">
                 시드
                 <input className="num-input" inputMode="numeric" value={locked ? (cand?.seed != null ? String(cand.seed) : "") : state.seed} disabled={locked} onChange={(e) => set({ seed: e.target.value })} />
