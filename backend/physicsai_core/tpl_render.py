@@ -18,6 +18,26 @@ VALID_FMT_RE = re.compile(r"^%[-0-9.]*[idfeEgG]$")
 PARAM_DECL_FULL_RE = re.compile(
     r'\{\s*parameter\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*,\s*"([^"]+)"\s*,\s*([^,()]+?)\s*,\s*([^,()]+?)\s*,\s*([^,()]+?)\s*\)\s*\}')
 
+# 전체 tpl 범위 표지(altair-vars.md AV-3): 이 줄이 있는 tpl = 전체 tpl, 없으면 부분 tpl(옛 것·사용자 수작업)
+SCOPE_LINE = "# physicsai-tpl scope=full v=1"
+SCOPE_RE = re.compile(r"(?m)^[ \t]*#[ \t]*physicsai-tpl[ \t]+scope=full[ \t]+v=\d+[ \t]*\r?$")
+SCOPE_HEAD_BYTES = 65536  # 표지 줄은 parameter 블록 바로 뒤(파일 앞부분) — 파일 앞쪽만 읽어 판정
+
+
+def scope_of(text: str) -> str:
+    """"full"(표지 줄 있음) | "partial"."""
+    return "full" if SCOPE_RE.search(text.lstrip("\ufeff")) else "partial"
+
+
+def scope_of_file(path: str) -> str | None:
+    """tpl 파일 앞부분만 읽어 범위 판정. 파일이 없거나 읽을 수 없으면 None."""
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(SCOPE_HEAD_BYTES)
+    except OSError:
+        return None
+    return scope_of(head.decode("utf-8", errors="ignore"))
+
 
 def parse_tpl(text: str) -> tuple[dict[str, str], list[dict[str, str]]]:
     """(var → 파라미터 이름, [{var, name, format}])."""

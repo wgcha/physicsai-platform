@@ -11,9 +11,8 @@ from typing import Any
 
 from ..fileutil import copy_file, sha256_file, write_json, write_text
 from ..naming import NAME_RE, RUN_KEY_RE, TPL_NAME  # noqa: F401 - 모듈 속성 유지(architecture §1.1 naming)
-from ..stage1_train_data import train_tpl
 from ..paths import file_name_problem_message, is_link_or_reparse, name_unsafe_chars
-from ..tpl_render import VALID_FMT_RE, parse_tpl
+from ..tpl_render import VALID_FMT_RE, parse_tpl, scope_of_file
 from .param_set_files import ParamSetFolder, _load_parameters, _load_responses, _load_samples, _p, _read_text
 from .prepared_input import is_mesh_file
 
@@ -50,7 +49,7 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
         _p(f, "PARAM_SET_TOO_LARGE", f"폴더 총량이 상한({max_total_bytes} bytes)을 넘습니다")
     # altair-vars.md AV-10·§5.1: 전체 tpl(표지 줄)은 CAD 전체 파라미터를 선언하므로 세트 정의(parameters)는 그 부분집합이어도 되고,
     # 공칭이 범위 밖인 정의도 허용(D5와 같게 — 변수 정의 편집 결과). 부분 tpl은 현행(이름 집합 같음, min ≤ nominal ≤ max).
-    full_tpl = train_tpl.scope_of_file(os.path.join(folder, TPL_NAME)) == "full"
+    full_tpl = scope_of_file(os.path.join(folder, TPL_NAME)) == "full"
     _load_parameters(f, folder, require_nominal_inside=not full_tpl)
     _load_responses(f, folder)
     if f.parameters:

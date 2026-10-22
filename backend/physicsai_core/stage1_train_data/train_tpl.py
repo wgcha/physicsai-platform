@@ -15,13 +15,21 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from . import train_params as tp
-from ..tpl_render import PARAM_LINE_RE, PARAM_DECL_RE, VALID_FMT_RE, VAR_REF_RE, format_value, parse_declarations, parse_tpl
+from ..tpl_render import (  # noqa: F401 - scope_of·scope_of_file·SCOPE_LINE는 이 모듈 속성으로도 쓴다
+    PARAM_DECL_RE,
+    PARAM_LINE_RE,
+    SCOPE_LINE,
+    VALID_FMT_RE,
+    VAR_REF_RE,
+    format_value,
+    parse_declarations,
+    parse_tpl,
+    scope_of,
+    scope_of_file,
+)
 
 ANCHOR = '<Parameters Value="">'
-SCOPE_LINE = "# physicsai-tpl scope=full v=1"  # AV-3: 이 줄이 있는 tpl = 전체 tpl, 없으면 부분 tpl(옛 것·사용자 수작업)
-SCOPE_RE = re.compile(r"(?m)^[ \t]*#[ \t]*physicsai-tpl[ \t]+scope=full[ \t]+v=\d+[ \t]*\r?$")
 SCOPE_LINE_RE = re.compile(r"(?m)^[ \t]*#[ \t]*physicsai-tpl[^\n]*\n?")
-SCOPE_HEAD_BYTES = 65536  # 표지 줄은 parameter 블록 바로 뒤(파일 앞부분) — 파일 앞쪽만 읽어 판정
 NOMINAL_LOSS_TOL = 1e-9  # AV-6: fmt % 공칭을 다시 읽은 값이 공칭과 다른 정도(상대, × max(1, |공칭|))
 
 NOTE_SKIPPED = "TPL_PARAM_SKIPPED"
@@ -57,19 +65,7 @@ class TplRules:
 # ---- 범위 표지 ------------------------------------------------------------------------------------
 
 
-def scope_of(text: str) -> str:
-    """"full"(표지 줄 있음) | "partial"."""
-    return "full" if SCOPE_RE.search(text.lstrip("﻿")) else "partial"
-
-
-def scope_of_file(path: str) -> str | None:
-    """tpl 파일 앞부분만 읽어 범위 판정. 파일이 없거나 읽을 수 없으면 None."""
-    try:
-        with open(path, "rb") as fh:
-            head = fh.read(SCOPE_HEAD_BYTES)
-    except OSError:
-        return None
-    return scope_of(head.decode("utf-8", errors="ignore"))
+# scope_of·scope_of_file·SCOPE_LINE은 공용 `physicsai_core.tpl_render`(④ 세트 검증기도 쓴다 — 단계 패키지 간 import 금지)
 
 
 # ---- 생성 -----------------------------------------------------------------------------------------
