@@ -228,3 +228,52 @@ def test_v_ik_8_fem_values_source_companion_inherits_input(predict_env, fake_too
     env.to_mesh_only(ps["id"])
     resp = env.c.post(f"{API}/studies/{env.sid}/fem-verifications/preview", headers=PW, json={"source": {**src, "input": "assembly"}})
     assert resp.status_code == 422 and resp.json()["detail"]["code"] == "INPUT_KIND_UNSUPPORTED"
+
+
+# ---- V-IK-3·2 Native 쿠션 E2E(가짜 paicad: commands.paicad_cushion_write 설정 있음) ------------------------------------------
+
+
+NAT = {"values": {"A_THK_1": 10.2, "B_RIB_H_1": 20.0, "C_HOLE_R_1": 4.0}, "value_source": "manual"}
+
+
+@pytest.fixture()
+def native_env(predict_env, fake_tools, fake_record):
+    def make(**kw: Any) -> Any:
+        geo = {"engine": "native", "paicad_path": fake_tools["fake_paicad"], **(kw.pop("geometry", None) or {})}
+        return predict_env(geometry=geo, **kw)
+
+    return make
+
+
+def test_v_ik_3_native_cushion_end_to_end(native_env, fake_record):
+    from helpers_native import native_set
+    from physicsai_test_support import read_record
+
+    env = native_env()
+    ps = native_set(env)
+    assert ps["engine"] == "native" and ps["input_capability"] == ["assembly", "cushion"] and ps["input_capability_reason"] is None
+    j = env.submit("PREDICT", {**NAT, "param_set_id": ps["id"], "input": "cushion"})
+    assert j["params"]["template_kind"] == "mesh_only" and j["params"]["engine"] == "native"
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(j["id"])
+    assert [x["argv"][1:3] for x in read_record(fake_record) if x["tool"] == "paicad"][-1] == ["cushion", "write"]
+    jd = env.job(j["id"])
+    assert os.listdir(env.predict_dir(j["id"]) / "INPUT") == [MESH]
+    assert jd["result"]["predict_input"]["files"] == 1 and jd["result"]["input"] == "cushion"
+    runs = {x["job_id"]: x for x in env.c.get(f"{API}/studies/{env.sid}/predict-runs", headers=P).json()}
+    assert runs[j["id"]]["input"] == "cushion"
+    d = env.c.get(f"{API}/predict-runs/{j['id']}", headers=P).json()
+    assert d["predict_input"]["input"] == "cushion" and d["predict_input"]["files"] == 1
+    # 같은 세트의 조립 실행은 변경 전과 같다(input 생략)
+    ja = env.submit("PREDICT", {**NAT, "param_set_id": ps["id"]})
+    assert ja["params"]["template_kind"] == "assembly"
+
+
+def test_v_ik_3_native_cushion_capability_follows_command_setting(native_env):
+    from helpers_native import native_set
+
+    env = native_env(commands={"paicad_cushion_write": None})
+    ps = native_set(env)
+    assert ps["input_capability"] == ["assembly"] and "commands.paicad_cushion_write" in ps["input_capability_reason"]
+    r = env.c.post(f"{API}/studies/{env.sid}/jobs", headers=PW,
+                   json={"job_type": "PREDICT", "params": {**NAT, "param_set_id": ps["id"], "input": "cushion"}})
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "TEMPLATE_NOT_CONFIGURED"
