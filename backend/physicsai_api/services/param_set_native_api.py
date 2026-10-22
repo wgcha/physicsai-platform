@@ -169,12 +169,32 @@ def prep_state_of(ctx: AppContext, p: dict[str, Any]) -> Any:
     return _state(ctx, p)[0] if (p.get("engine") or "altair") == "native" else None
 
 
+def _altair_vars_info(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> None:
+    """Altair 세트 응답: `vars_scope`(full | partial — 세트 폴더 tpl의 범위 표지, 파일이 없으면 null)·`vars_revision`·`vars_count`(= 세트 정의 행 수)."""
+    from . import template_vars as tv
+    from .native_vars_api import read_revision
+
+    try:
+        S = _S_of(ctx, p)
+    except DomainError:
+        return
+    out["vars_scope"] = tv.tpl_scope(S)
+    out["vars_revision"] = read_revision(S)
+    out["vars_count"] = len(p.get("parameters") or [])
+
+
+def _S_of(ctx: AppContext, p: dict[str, Any]) -> str:
+    with ctx.engine.connect() as conn:
+        return _S(ctx, conn, p)
+
+
 def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
     """세트 응답에 입력 능력(input_capability, 모든 엔진)을 더하고, native 세트는 geom_options_effective·native{prep_status…}도 추가."""
     from .input_kind_gate import with_capability
 
     with_capability(ctx, p, out)  # input-kind.md IK-3: 조회 계산값(저장 안 함)
     if (p.get("engine") or "altair") != "native":
+        _altair_vars_info(ctx, p, out)  # altair-vars.md §6: vars_scope·vars_revision·vars_count
         return out
     st, opts, S = _state(ctx, p)
     from physicsai_core.geometry.shell_native import read_kind
@@ -190,6 +210,7 @@ def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str,
 
     out["native"]["vars_revision"] = read_revision(S)  # native-vars.md §6.1: 변수 정의 리비전(0 = 등록 정의)·형상 행 수
     out["native"]["vars_count"] = sum(1 for r in p.get("parameters") or [] if r.get("source") != "prop")
+    out["vars_revision"], out["vars_count"] = out["native"]["vars_revision"], out["native"]["vars_count"]  # Altair와 같은 최상위 키
     from .param_set_baselines_api import baselines_info  # 4B(§7.3.8): 다중 baseline 세트만
 
     info = baselines_info(ctx, p, S, opts)

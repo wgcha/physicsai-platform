@@ -16,7 +16,7 @@ from physicsai_core.paths import is_link_or_reparse
 
 TPL_REL = "01_train/tpl/simlab_parametered_mesh.tpl"
 TPL_NAME = "simlab_parametered_mesh.tpl"
-TPL_FULL_NAME = "simlab_parametered_mesh.full.tpl"  # altair-vars.md AV-7: 레거시 hstbatch DOE 폴더에 전체 tpl 원본을 함께 둔다
+TPL_FULL_NAME = "simlab_parametered_mesh.full.tpl"  # altair-vars.md AV-7: 레거시 hstbatch DOE 폴더에 전체 tpl 원본을 함께 둔다(core.naming과 같음)
 
 
 def _doe(ctx: Any, doe_id: str | None = None) -> dict[str, Any]:

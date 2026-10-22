@@ -204,18 +204,19 @@ ALLOWED = {
     "backend/physicsai_api/services/native_vars_run.py": 2,              # 세트 정의 → 스냅숏 입력
     "backend/physicsai_api/services/native_vars_api.py": 6,              # 세트 정의 조회·편집
     "backend/physicsai_api/services/surrogate_opt_pareto.py": 1,         # 스냅숏 없는 이전 최적화의 추가 검증 경고 입력
-    "backend/physicsai_api/services/param_set_native_api.py": 1,         # enrich: vars_count
+    "backend/physicsai_api/services/param_set_native_api.py": 2,         # enrich: vars_count(Native·Altair 세트 정의 행 수 — v0.2.8 Altair 최상위 키)
+    "backend/physicsai_api/services/template_vars.py": 1,                # Altair 풀: 세트 정의의 단위로 보충(v0.2.8 altair-vars.md §5.1)
     "backend/physicsai_api/services/job_params/stage1_native.py": 3,     # ①-1 train_setup 2곳 + 세트 DOE 이름 확인(세트 정의)
     # --- 세트 자체(등록·단건·FEM 검증·3D 보기·props·baseline·①·폴더 파일)와 Altair·다중 baseline: 세트 정의가 정답 ---
     "backend/physicsai_api/services/common.py": 1,                       # param_set_out
     "backend/physicsai_api/services/geom_view_api.py": 3,
-    "backend/physicsai_api/services/stage1_train_data.py": 7,            # ① 학습 설정(train_setups.parameters, 세트 아님)
+    "backend/physicsai_api/services/stage1_train_data.py": 9,            # ① 학습 설정(train_setups.parameters, 세트 아님)
     "backend/physicsai_api/services/stage4_predict.py": 3,               # 단건 PREDICT 확인(세트 정의, 비범위 §6.4)
     "backend/physicsai_api/services/fem_verify_sources.py": 2,
     "backend/physicsai_api/services/fem_verify_plan.py": 1,
     "backend/physicsai_api/services/param_set_baselines_api.py": 5,
     "backend/physicsai_api/services/param_set_props_api.py": 4,
-    "backend/physicsai_api/services/job_params/stage1_train_data.py": 1,
+    "backend/physicsai_api/services/job_params/stage1_train_data.py": 2,   # tpl stale 판정(train_setups.parameters, 세트 아님)
     "backend/physicsai_api/services/job_params/stage4_predict.py": 1,    # 단건 PREDICT(세트 정의)
     "backend/physicsai_core/stage1_train_data/doe_platform.py": 1,
     "backend/physicsai_core/geometry/baselines.py": 1,
@@ -225,10 +226,11 @@ ALLOWED = {
     "backend/physicsai_core/equiv/sides.py": 1,
     "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py": 1,
     "worker/physicsai_worker/steps/stage1_train_data/doe_native.py": 1,
-    "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py": 1,
+    "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py": 3,     # 레거시 hstbatch DOE의 ①-1 표(train_setups.parameters, 세트 아님)
     "worker/physicsai_worker/steps/stage4_predict/np_register.py": 5,    # 등록·reprep·props 스캔(세트 정의)
     "worker/physicsai_worker/steps/stage4_predict/predict_native.py": 4,  # 단건 PREDICT(세트 정의)
     "worker/physicsai_worker/steps/stage4_predict/predict.py": 2,
+    "worker/physicsai_worker/steps/stage5_optimize/optimize.py": 2,       # 원본 HyperStudy 최적화(변수 정의·스냅숏 없음): 세트 정의 변수만 선언한 tpl 사용 뷰(altair-vars.md §5.3)
     # --- MCP(mcp.md): 읽기 전용 요약·스펙 생성기 ---
     "backend/physicsai_api/mcp/summaries.py": 1,                         # param_set 요약 = 세트 정의 표(실행 경로 아님, vars_revision은 facts에 함께)
     "backend/physicsai_api/mcp/toolspec.py": 1,                          # openapi operation의 `parameters`(경로·쿼리 인자) — 세트 정의와 무관

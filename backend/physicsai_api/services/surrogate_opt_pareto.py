@@ -170,8 +170,8 @@ def verify(ctx: AppContext, principal: Principal, opt_id: str, body: Any, rid: s
         ps = ps_repo.get(conn, o["param_set_id"])
         if ps is None:
             raise DomainError("PARAM_SET_NOT_FOUND", "템플릿(파라미터 세트)을 찾을 수 없습니다", status=409)
-        native = engine_of(ps) == "native"  # native-vars.md §6.2: Native는 범위 밖 점을 막지 않고 경고
         vdoc = nv.vars_of(st)
+        native = engine_of(ps) == "native" or vdoc is not None  # native-vars.md §6.2·altair-vars.md AV-9: Native·Altair 변수 스냅숏 실행은 범위 밖 점을 막지 않고 경고
         names = list(st["names"])
         bounds = {k: (float(v[0]), float(v[1])) for k, v in st["bounds"].items()}
         rows: list[dict[str, float]] = []

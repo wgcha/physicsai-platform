@@ -27,7 +27,8 @@ from physicsai_core.stage4_predict.batch_matrix import (
     batch_label,
     samples_csv_text,
 )
-from physicsai_core.tpl_render import render_tpl
+from physicsai_core.stage1_train_data.train_tpl import fill_nominal
+from physicsai_core.tpl_render import parse_declarations, render_tpl
 
 from ...signals import StepSkipped
 from .. import run_chain
@@ -93,6 +94,7 @@ def bp_prep(ctx: Any) -> None:
             raise StepFailure("INPUT_CHANGED", f"템플릿 파일이 없습니다: {need}")
     with open(os.path.join(S, TPL_NAME), encoding="utf-8-sig") as fh:
         tpl_text = fh.read()
+    decl = parse_declarations(tpl_text)  # altair-vars.md §5.2: 전체 tpl의 실행 변수 밖 파라미터 = 공칭으로 렌더(fill_nominal)
     B = _B(ctx, b)
     os.makedirs(B, exist_ok=True)
     ctx.ex.db(lambda c: pb_repo.reset_failed_gen(c, b["id"]))  # 실패·중단 run → PENDING(사유 지움)
@@ -109,7 +111,8 @@ def bp_prep(ctx: Any) -> None:
         m1 = os.path.join(run_dir, M1)
         os.makedirs(m1, exist_ok=True)
         copy_file(cad_src, os.path.join(m1, ps["cad_file_name"]), checkpoint=ctx.checkpoint)  # tpl dir_file_prt = ./<CAD>
-        write_text(os.path.join(m1, script_name), render_tpl(tpl_text, r["values"], r["applied_values"]))
+        write_text(os.path.join(m1, script_name), render_tpl(
+            tpl_text, fill_nominal(decl, r["values"]), fill_nominal(decl, r["applied_values"])))
         ctx.progress(k / len(todo) * 100.0, f"run 폴더 준비 {k}/{len(todo)}")
     bj = os.path.join(B, "batch.json")
     sc = os.path.join(B, "samples.csv")

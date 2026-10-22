@@ -10,8 +10,9 @@ from physicsai_core.config import effective_altair
 from physicsai_core.db.repositories import optimizations as opt_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import StepFailure
-from physicsai_core.fileutil import copy_file, write_json
+from physicsai_core.fileutil import copy_file, write_json, write_text
 from physicsai_core.naming import TPL_NAME
+from physicsai_core.stage1_train_data import train_tpl
 from physicsai_core.stage5_optimize import optimize as opt
 
 from ..common import load_model, verify_model_integrity
@@ -57,9 +58,17 @@ def op_prep(ctx: Any) -> None:
         if not os.path.isfile(os.path.join(S, need)):
             raise StepFailure("INPUT_CHANGED", f"파라미터 세트 파일이 없습니다: {need}")
     alt = effective_altair(s)
+    tpl_file = os.path.join(S, TPL_NAME)
+    if train_tpl.scope_of_file(tpl_file) == "full":  # altair-vars.md §5.3(원본 HyperStudy 최적화 입력 불변): 세트 정의 변수만 선언한 사용 뷰
+        with open(tpl_file, encoding="utf-8-sig") as fh:
+            view = train_tpl.used_view(fh.read(), [str(q["name"]) for q in ps["parameters"]],
+                                       {str(q["name"]): q["nominal"] for q in ps["parameters"] if q.get("nominal") is not None})
+        tpl_file = os.path.join(O, TPL_NAME)
+        ctx.backup([tpl_file])
+        write_text(tpl_file, view)
     cfg = opt.build_run_config(
         altair_home=alt["altair_home"], dir_work=O, study_folder=p["study_folder"],
-        cad_param=os.path.join(S, "cad", ps["cad_file_name"]), tpl_file=os.path.join(S, TPL_NAME), hypermesh_tcl=hm,
+        cad_param=os.path.join(S, "cad", ps["cad_file_name"]), tpl_file=tpl_file, hypermesh_tcl=hm,
         radioss_assem_dir=os.path.join(S, "radioss_assem"), starter=os.path.join(S, "radioss_assem", ps["starter_name"]),
         model=psmdl, hyperview_tcl=tcl, simlab_path=alt.get("simlab_path", ""), params=p,
     )

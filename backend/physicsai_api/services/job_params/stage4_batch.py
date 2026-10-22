@@ -89,8 +89,11 @@ def _samples(ctx: AppContext, conn: Any, study: dict[str, Any], source: dict[str
 def build_matrix_vars(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dict[str, Any], source: dict[str, Any],
                       vars_req: Any, model: dict[str, Any] | None) -> tuple[BatchMatrix, Any]:
     """조합 + 변수 확정(native-vars.md §6.3). 유효 변수(세트 − exclude + add)로 조합을 만들고, 오류·경고는 `matrix.problems`·`notes`에 합친다.
-    Altair: `vars`가 오면 problem NATIVE_VARS_UNSUPPORTED(그 밖 무변경). train_doe: `vars` 거부, 유효 변수 = DOE 헤더."""
+    Altair 전체 tpl(altair-vars.md §5.2)은 Native와 같다. 부분 tpl: `vars`가 오면 problem TPL_SCOPE_PARTIAL(그 밖 무변경).
+    train_doe: `vars` 거부, 유효 변수 = DOE 헤더."""
     from .. import native_vars_run  # 지연 import(순환: native_vars_api → param_set_native_api → jobs → job_params)
+    from .. import template_vars as tv
+    from ..param_set_native_api import set_path
 
     pm = multi_map(ctx, ps)
     cont = _continue_batch(conn, study, source)
@@ -98,7 +101,8 @@ def build_matrix_vars(ctx: AppContext, conn: Any, study: dict[str, Any], ps: dic
     train_doe = source.get("kind") == "train_doe"
     if train_doe and pm is None:
         header, rows = _samples(ctx, conn, study, source)
-    doe_names = [h for h in (header or [])[1:] if not h.startswith("resp:")] if train_doe and engine_of(ps) == "native" and pm is None else None
+    vars_space = engine_of(ps) == "native" or tv.tpl_scope(set_path(ctx, ps)) == tv.SCOPE_FULL  # Native 또는 Altair 전체 tpl
+    doe_names = [h for h in (header or [])[1:] if not h.startswith("resp:")] if train_doe and vars_space and pm is None else None
     res = native_vars_run.resolve(ctx, conn, study, ps, model, vars_req, doe_names=doe_names)
     extra: list[dict[str, Any]] = []
     for x in res.problems:
@@ -204,8 +208,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
     source = p.source.model_dump()
     matrix, res = build_matrix_vars(ctx, conn, study, ps, source, p.vars, m)
-    if any(x["code"] == "NATIVE_VARS_UNSUPPORTED" for x in matrix.problems):  # native-vars.md §6.3: Altair에 vars → 422
-        raise DomainError("NATIVE_VARS_UNSUPPORTED", "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다", status=422)
+    if any(x["code"] == "TPL_SCOPE_PARTIAL" for x in matrix.problems):  # altair-vars.md AV-10: 부분 tpl Altair에 vars → 422(NATIVE_VARS_UNSUPPORTED 폐지)
+        raise DomainError("TPL_SCOPE_PARTIAL", "옛 tpl(사용 파라미터만) — ①-2에서 tpl을 다시 생성해 새 템플릿으로 등록하세요", status=422)
     if matrix.problems or not matrix.rows:
         raise source_invalid(matrix.problems or [{"code": "TOO_FEW_ROWS", "message": "조합이 없습니다"}])
     batch_no = pb_repo.next_batch_no(conn, study["id"])  # create_job이 Study 행을 잠근 트랜잭션(D3-25)

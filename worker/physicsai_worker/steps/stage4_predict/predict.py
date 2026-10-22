@@ -14,7 +14,8 @@ from physicsai_core.naming import TPL_NAME
 from physicsai_core.stage4_predict import nearest as nearest_mod
 from physicsai_core.stage4_predict.param_sets import read_samples
 from physicsai_core.stage4_predict.xydata import parse_xydata
-from physicsai_core.tpl_render import render_tpl
+from physicsai_core.stage1_train_data.train_tpl import fill_nominal
+from physicsai_core.tpl_render import parse_declarations, render_tpl
 
 from ...signals import StepSkipped
 from ..common import load_model, model_command_values, verify_model_integrity
@@ -92,7 +93,8 @@ def tpl_render(ctx: Any) -> None:
     r = ctx.result()
     with open(os.path.join(S, TPL_NAME), encoding="utf-8-sig") as fh:
         text = fh.read()
-    out = render_tpl(text, r["values"], r["applied_values"])
+    decl = parse_declarations(text)  # altair-vars.md §5.2: 전체 tpl의 세트 정의 밖 파라미터 = 공칭으로 렌더
+    out = render_tpl(text, fill_nominal(decl, r["values"]), fill_nominal(decl, r["applied_values"]))
     dst = os.path.join(_P(ctx), "geom", ctx.settings.predict.rendered_script_name)
     ctx.backup([dst])
     write_text(dst, out)

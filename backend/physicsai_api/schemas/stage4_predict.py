@@ -177,6 +177,11 @@ class ParamSet(Resp):
     geom_options_effective: dict[str, Any] | None = None
     engine_version: str | None = None
     native: NativeInfo | None = None
+    # altair-vars.md §6: 변수 정의 요약(Altair·Native 공통 키). vars_scope = Altair 세트 폴더 tpl의 범위(full = 전체 tpl·변수 정의 편집 가능,
+    # partial = 옛 tpl·편집 불가 + ①-2 재생성 안내), Native는 null. vars_revision = 변수 정의 리비전(0 = 등록 정의), vars_count = 정의 행 수
+    vars_scope: Literal["full", "partial"] | None = None
+    vars_revision: int | None = None
+    vars_count: int | None = None
     # geometry-engine.md §7.3.8(4B): 다중 baseline 세트만(단일은 null). 첫 항목 = base(세트 자신)
     baselines: list[BaselineInfo] | None = None
     param_map_status: Literal["draft", "confirmed"] | None = None
@@ -235,6 +240,9 @@ class ParamSetFromTrain(Req):
     runs: Literal["collected", "all"] = "collected"
     unit_system: str | None = Field(default=None, max_length=40)
     label: Label = Field(default=None, max_length=120)
+    # altair-vars.md AV-11(Altair DOE만): doe = 그 DOE 폴더의 tpl(기본, 현행) | current = 현재 ①-2 전체 tpl(DOE 선언·범위가 같을 때만,
+    # 아니면 409 TPL_DOE_MISMATCH) — DOE를 다시 돌리지 않고 전체 tpl 템플릿을 얻는다
+    tpl_source: Literal["doe", "current"] = "doe"
 
 
 class ParamSetDiscoverResponse(Resp):

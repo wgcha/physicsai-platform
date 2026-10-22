@@ -8,6 +8,7 @@ import unicodedata
 NAME_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]{0,63}$")
 RUN_KEY_RE = re.compile(r"^[A-Za-z0-9_\-]{1,64}$")
 TPL_NAME = "simlab_parametered_mesh.tpl"
+TPL_FULL_NAME = "simlab_parametered_mesh.full.tpl"  # 레거시 hstbatch ① DOE 폴더의 전체 tpl 원본(altair-vars.md AV-7)
 LABEL_MAX = 120
 # 표시 이름에 쓸 수 없는 문자 범주(D3-50): 제어(Cc: NUL·줄바꿈·탭)·서식(Cf: U+202E 등 양방향 제어·영폭 문자)·
 # 대리(Cs)·줄/문단 구분자(Zl·Zp). 화면·감사 로그·파일 이름 표시에서 글자 순서를 속이거나 줄을 끊지 못하게 한다.

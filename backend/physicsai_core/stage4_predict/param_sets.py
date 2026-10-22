@@ -11,6 +11,7 @@ from typing import Any
 
 from ..fileutil import copy_file, sha256_file, write_json, write_text
 from ..naming import NAME_RE, RUN_KEY_RE, TPL_NAME  # noqa: F401 - 모듈 속성 유지(architecture §1.1 naming)
+from ..stage1_train_data import train_tpl
 from ..paths import file_name_problem_message, is_link_or_reparse, name_unsafe_chars
 from ..tpl_render import VALID_FMT_RE, parse_tpl
 from .param_set_files import ParamSetFolder, _load_parameters, _load_responses, _load_samples, _p, _read_text
@@ -47,7 +48,10 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
     f.total_bytes = total
     if total > max_total_bytes:
         _p(f, "PARAM_SET_TOO_LARGE", f"폴더 총량이 상한({max_total_bytes} bytes)을 넘습니다")
-    _load_parameters(f, folder)
+    # altair-vars.md AV-10·§5.1: 전체 tpl(표지 줄)은 CAD 전체 파라미터를 선언하므로 세트 정의(parameters)는 그 부분집합이어도 되고,
+    # 공칭이 범위 밖인 정의도 허용(D5와 같게 — 변수 정의 편집 결과). 부분 tpl은 현행(이름 집합 같음, min ≤ nominal ≤ max).
+    full_tpl = train_tpl.scope_of_file(os.path.join(folder, TPL_NAME)) == "full"
+    _load_parameters(f, folder, require_nominal_inside=not full_tpl)
     _load_responses(f, folder)
     if f.parameters:
         _load_samples(f, folder, max_samples)
@@ -74,8 +78,10 @@ def validate_folder(folder: str, *, max_samples: int, max_total_bytes: int, star
         except UnicodeDecodeError:
             _p(f, "TPL_INVALID", "tpl은 UTF-8이어야 합니다", TPL_NAME)
             decl, refs = {}, []
-        if f.parameters and set(decl.values()) != {p["name"] for p in f.parameters}:
-            _p(f, "PARAM_TPL_MISMATCH", "tpl의 parameter 이름 집합이 파라미터 이름 집합과 다릅니다", TPL_NAME)
+        pnames = {p["name"] for p in f.parameters}
+        if f.parameters and (not pnames <= set(decl.values()) if full_tpl else set(decl.values()) != pnames):
+            _p(f, "PARAM_TPL_MISMATCH", "tpl의 parameter 이름이 파라미터 이름과 맞지 않습니다" if full_tpl
+               else "tpl의 parameter 이름 집합이 파라미터 이름 집합과 다릅니다", TPL_NAME)
         for r in refs:
             if not VALID_FMT_RE.match(r["format"]):
                 _p(f, "TPL_FORMAT_INVALID", f"tpl 형식 '{r['format']}'을 쓸 수 없습니다", TPL_NAME)

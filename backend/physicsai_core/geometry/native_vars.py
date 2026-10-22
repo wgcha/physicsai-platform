@@ -6,6 +6,8 @@
 - `apply`: 스냅숏을 세트 사본 `ps'`에 반영(`parameters`만 바뀜). 워커·API는 `apply` 결과를 기존 함수에 넘긴다(시그니처 불변).
 - `warn_rows`·`warn_points`: 범위 경고(차단 없음, NV-7). 학습 범위·모핑 가능 범위 밖 = `VAR_OUT_OF_TRAIN`·`VAR_OUT_OF_FEASIBLE`.
 - `train_ranges`: 학습 범위 합집합(NV-8, §5.2) 순수부 — DOE 조회·파일 읽기는 호출부(API 서비스)가 한다.
+- `altair_pool`(v0.2.8, altair-vars.md §5.1): 전체 tpl Altair 템플릿의 변수 풀 — tpl 선언 행. 그 밖의 함수는 엔진 무관(Altair 풀 항목은
+  `type`·`body`·`feasible`·`group`이 비고 `integer`·`range_unset`이 있다). `train_ranges`의 Altair DOE는 `altair: true` 항목으로 넘긴다.
 """
 
 from __future__ import annotations
@@ -93,6 +95,42 @@ def pool(doc: Mapping[str, Any] | None, *, kind: str = "solid", component: str |
     return out
 
 
+def altair_pool(decls: Sequence[Mapping[str, Any]], tpl_rows: Sequence[Mapping[str, Any]],
+                param_rows: Sequence[Mapping[str, Any]] = ()) -> list[dict[str, Any]]:
+    """전체 tpl Altair 변수 풀(altair-vars.md §5.1): tpl 선언 순서의 행 {name, nominal, unit, integer, default_range, range_unset, …}.
+
+    - `decls` = `tpl_render.parse_declarations(tpl 본문)`, `tpl_rows` = 세트 `tpl_params`(참조 형식 `format` + 전체 tpl이면 `table_min/max`·`unit`),
+      `param_rows` = 세트 정의 행(단위 보충). 참조(형식)가 없거나 공칭이 숫자가 아닌 선언은 값이 쓰이지 않으므로 풀에서 뺀다.
+    - `default_range` = 표 범위(`table_min/max`, from-train) → 없으면 선언 범위(사용 행) → 선언이 고정(min = max)이고 표 값도 없으면 [공칭, 공칭] +
+      `range_unset = true`(화면 "범위를 입력하세요"). `integer` = 형식이 i·d."""
+    meta = {str(r["name"]): r for r in tpl_rows if isinstance(r, Mapping) and r.get("name") is not None}
+    units = {str(p["name"]): p.get("unit") for p in param_rows}
+    out: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for d in decls:
+        n = str(d["name"])
+        nom = _num(d.get("nominal"))
+        m = meta.get(n)
+        if n in seen or m is None or nom is None:
+            continue
+        seen.add(n)
+        fmt = str(m.get("format") or "")
+        tlo, thi = _num(m.get("table_min")), _num(m.get("table_max"))
+        lo, hi = _num(d.get("min")), _num(d.get("max"))
+        unset = False
+        if tlo is not None and thi is not None and tlo <= thi:
+            rng = (tlo, thi)
+        elif lo is not None and hi is not None and lo < hi:
+            rng = (lo, hi)
+        else:
+            rng, unset = (nom, nom), True
+        unit = m.get("unit") if m.get("unit") is not None else units.get(n)
+        out.append({"name": n, "type": None, "body": None, "nominal": nom, "unit": unit or "", "position": False,
+                    "default_range": {"min": rng[0], "max": rng[1]}, "feasible": None, "ref_locked": False, "group": None,
+                    "integer": fmt[-1:] in ("i", "d"), "range_unset": unset})
+    return out
+
+
 def pool_names(entries: Iterable[Mapping[str, Any]]) -> list[str]:
     return [str(e["name"]) for e in entries]
 
@@ -166,7 +204,8 @@ def effective(set_rows: Sequence[Mapping[str, Any]], entries: Sequence[Mapping[s
         n = str(e["name"])
         if n in plus and n not in set_names and n in by_pool:
             d = e["default_range"]
-            row: dict[str, Any] = {"name": n, "nominal": e["nominal"], "min": d["min"], "max": d["max"], "unit": e.get("unit") or "mm"}
+            u = e.get("unit")
+            row: dict[str, Any] = {"name": n, "nominal": e["nominal"], "min": d["min"], "max": d["max"], "unit": "mm" if u is None else u}
             if e.get("source"):
                 row["source"] = e["source"]
             rows.append({**row, "origin": "added", "train": _rng(tr.get(n)), "feasible": _feas(e.get("feasible")),
@@ -317,21 +356,38 @@ def train_ranges(identities: Sequence[Mapping[str, Any]], does: Sequence[Mapping
     """이름 → 학습 범위 합집합(모르면 None) + 안내 notes(TRAIN_RANGE_UNMATCHED).
 
     identities: [{name, type, body, nominal}] — 세트 풀 항목(쉘 두께 PROP 행은 type·body 없이 `prop: true`, 학습 snapshot 행과 이름·공칭으로만 대조).
-    does: [{id, snapshot: [{name, nominal, min, max, unit}], features: 그 DOE 피처 파일 doc}] — READY·native DOE만 넘긴다.
+    does: [{id, snapshot: [{name, nominal, min, max, unit}], features: 그 DOE 피처 파일 doc}] — READY DOE만 넘긴다. Altair DOE는
+    `{id, snapshot, altair: true, decl: {이름: 그 DOE tpl 선언 공칭}}`(피처 파일 없음, 전체 tpl DOE만 decl이 있다).
     규칙(§5.2): DOE별 구간 = snapshot `[min, max]`, snapshot에 없고 DOE 대표 피처에 있으면 `[공칭, 공칭]`, 둘 다 없으면 그 이름은 None.
     같은 피처 확인(type·body·공칭)이 틀리면 None + UNMATCHED. snapshot의 `__na`·`baseline__*` 등 풀 밖 이름은 보지 않는다."""
     out: dict[str, dict[str, float] | None] = {}
     unmatched: list[str] = []
-    feats = [rep_features(d.get("features")) for d in does]
+    feats = [rep_features(d.get("features")) if not d.get("altair") else {} for d in does]
     snaps = [{str(r.get("name")): r for r in d.get("snapshot") or [] if isinstance(r, Mapping)} for d in does]
     for ident in identities:
         n = str(ident["name"])
         lo: float | None = None
         hi: float | None = None
         ok = bool(does)
-        for f, s in zip(feats, snaps):
+        for d, f, s in zip(does, feats, snaps):
             row = s.get(n)
             span: tuple[float, float] | None = None
+            if d.get("altair"):  # Altair DOE(altair-vars.md §5.2): 같은 파라미터 확인 = 이름 + 공칭, 움직이지 않은 변수 = [DOE tpl 공칭, 공칭]
+                a = _num(ident.get("nominal"))
+                decl = d.get("decl") if isinstance(d.get("decl"), Mapping) else {}
+                b = _num((row or {}).get("nominal")) if row is not None else _num(decl.get(n))
+                if a is None or b is None:
+                    ok = False  # DOE에 이 파라미터 기록이 없음(옛 부분 tpl DOE의 미사용 행 등) — 판단 불가
+                    break
+                if abs(a - b) > SAME_FEATURE_TOL * max(1.0, abs(a)):
+                    ok = False
+                    unmatched.append(n)
+                    break
+                span = (float(row["min"]), float(row["max"])) if row is not None and _num(row.get("min")) is not None \
+                    and _num(row.get("max")) is not None else (b, b)
+                lo = span[0] if lo is None else min(lo, span[0])
+                hi = span[1] if hi is None else max(hi, span[1])
+                continue
             if ident.get("prop"):
                 a, b = _num((ident or {}).get("nominal")), _num((row or {}).get("nominal"))
                 if row is None or a is None or b is None or abs(a - b) > SAME_FEATURE_TOL * max(1.0, abs(a)):

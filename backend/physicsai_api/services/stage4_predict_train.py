@@ -8,9 +8,12 @@ from typing import Any
 
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
-from physicsai_core.fileutil import write_json
+from physicsai_core.fileutil import sha256_file, write_json
+from physicsai_core.naming import TPL_FULL_NAME
 from physicsai_core.paths import resolve_in_study
+from physicsai_core.stage1_train_data import train_tpl
 from physicsai_core.stage4_predict import param_sets as ps_mod
+from physicsai_core.tpl_render import parse_declarations
 
 from ..auth import Principal
 from ..context import AppContext
@@ -20,6 +23,60 @@ from .common import (
     study_root,
 )
 from .stage4_predict_common import _insert_folder_set, _label
+
+
+MISMATCH_TOL = 1e-9
+
+
+def _decl_map(text: str) -> dict[str, tuple[float | None, float | None, float | None]]:
+    return {d["name"]: (d["nominal"], d["min"], d["max"]) for d in parse_declarations(text)}
+
+
+def _same_decl(a: dict[str, Any], b: dict[str, Any]) -> bool:
+    if a.keys() != b.keys():
+        return False
+    for n, va in a.items():
+        for x, y in zip(va, b[n]):
+            if (x is None) != (y is None) or (x is not None and abs(x - y) > MISMATCH_TOL * max(1.0, abs(x))):  # type: ignore[operator]
+                return False
+    return True
+
+
+def _current_tpl(ctx: AppContext, root: str, setup: dict[str, Any] | None, snap: list[dict[str, Any]]) -> str:
+    """altair-vars.md AV-11 `tpl_source: current`: 현재 ①-2 전체 tpl 경로. `used_view(current)`의 선언(이름·공칭·범위)이 그 DOE 스냅숏과 같을 때만(아니면 409 TPL_DOE_MISMATCH)."""
+    if setup is None or not setup.get("tpl_rel"):
+        raise DomainError("TPL_REQUIRED", "tpl을 먼저 생성하세요(①-2)", status=409)
+    path = resolve_in_study(root, setup["tpl_rel"])
+    if not os.path.isfile(path) or (setup.get("tpl_sha256") and sha256_file(path) != setup["tpl_sha256"]):
+        raise DomainError("TPL_REQUIRED", "생성된 tpl 파일이 없거나 바뀌었습니다 — ①-2에서 tpl을 다시 생성하세요", status=409)
+    if train_tpl.scope_of_file(path) != "full":
+        raise DomainError("TPL_SCOPE_PARTIAL", "옛 tpl(사용 파라미터만) — ①-2에서 tpl을 다시 생성한 뒤 다시 시도하세요", status=422)
+    with open(path, encoding="utf-8-sig") as fh:
+        text = fh.read()
+    used = [str(r["name"]) for r in setup.get("tpl_params") or [] if r.get("used", True)]
+    want = {str(p["name"]): (float(p["nominal"]), float(p["min"]), float(p["max"])) for p in snap}
+    try:
+        got = _decl_map(train_tpl.used_view(text, used))
+    except train_tpl.TplTemplateInvalid:
+        got = {}
+    if not _same_decl(got, want):
+        raise DomainError("TPL_DOE_MISMATCH", "현재 ①-2 tpl의 사용 파라미터(이름·공칭·범위)가 이 DOE와 다릅니다 — DOE 폴더의 tpl로 만들거나 DOE를 다시 만드세요",
+                          status=409)
+    return path
+
+
+def _enrich_tpl_params(f: Any, setup: dict[str, Any] | None, tpl_path: str, snap_names: set[str]) -> None:
+    """전체 tpl 세트의 `tpl_params` 행에 used(= DOE 사용)·table_min/max·unit(①-2 기록이 이 tpl과 같을 때만)을 채운다(AV-4)."""
+    meta: dict[str, dict[str, Any]] = {}
+    if setup and setup.get("tpl_sha256") and setup.get("tpl_params") and sha256_file(tpl_path) == setup["tpl_sha256"]:
+        meta = {str(r["name"]): r for r in setup["tpl_params"]}
+    for r in f.tpl_params:
+        m = meta.get(r["name"], {})
+        r["used"] = r["name"] in snap_names
+        if m.get("table_min") is not None and m.get("table_max") is not None:
+            r["table_min"], r["table_max"] = m["table_min"], m["table_max"]
+        if m.get("unit") is not None:
+            r["unit"] = m["unit"]
 
 
 def register_param_set_from_train(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str,
@@ -57,11 +114,19 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
     if d.get("engine") == "native":  # geometry-engine.md §7.3.4: tpl·샘플 없이 준비본 복사
         from . import param_set_native_api as native_api
 
+        if body.tpl_source != "doe":
+            raise DomainError("INVALID_PARAMS", "tpl_source는 Altair DOE에서만 쓸 수 있습니다", status=422,
+                              errors=[{"loc": ["body", "tpl_source"], "msg": "Native DOE에는 쓸 수 없음"}])
         return native_api.from_train(ctx, principal, s, d, D, label, body, rid, ip)
+    snap = d["parameters_snapshot"] or []
+    if body.tpl_source == "current":  # altair-vars.md AV-11: DOE를 다시 돌리지 않고 현재 전체 tpl로 승격
+        tpl_path = _current_tpl(ctx, root, setup, snap)
+    else:  # doe: 그 DOE 폴더의 tpl(레거시 hstbatch + 전체 tpl이면 .full.tpl이 전체 원본)
+        full_copy = os.path.join(D, TPL_FULL_NAME)
+        tpl_path = full_copy if os.path.isfile(full_copy) else os.path.join(D, ps_mod.TPL_NAME)
     tmp_id = str(uuid.uuid4())
     A = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}")
     os.makedirs(A)
-    snap = d["parameters_snapshot"] or []
     write_json(os.path.join(A, "parameters.json"), {
         "schema_version": 1, "unit_system": body.unit_system or "mm-ton-s",
         "parameters": [{"name": p["name"], "nominal": p["nominal"], "min": p["min"], "max": p["max"],
@@ -99,7 +164,7 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
         raise DomainError("PARAM_SET_INVALID", "CAD 사본이 없습니다", status=422,
                           problems=[{"code": "CAD_MISSING", "message": "01_train/cad 사본이 없습니다"}])
     copy_file(resolve_in_study(root, f"01_train/cad/{cad}"), os.path.join(A, "cad", cad))
-    copy_file(os.path.join(D, ps_mod.TPL_NAME), os.path.join(A, ps_mod.TPL_NAME))
+    copy_file(tpl_path, os.path.join(A, ps_mod.TPL_NAME))
     assem = resolve_in_study(root, f"01_train/radioss_assem/{d['id']}")
     for n in sorted(os.listdir(assem)) if os.path.isdir(assem) else []:
         # eps_mesh*로 시작하는 파일은 SimLab 메시 산출(원본 1_physicsai_opti.py:300) — 무시(변경 메모 C3, phase3 §11.4).
@@ -113,6 +178,8 @@ def register_param_set_from_train(ctx: AppContext, principal: Principal, study_i
                                renum_csv_name=cfg.predict.renum_csv_name, allow_mesh_only=False)  # ①→④는 항상 assembly
     if not f.ok:
         raise DomainError("PARAM_SET_INVALID", "파라미터 세트 검증에 실패했습니다", status=422, problems=f.problems)
+    if train_tpl.scope_of_file(tpl_path) == "full":
+        _enrich_tpl_params(f, setup, tpl_path, set(names))
     psid = str(uuid.uuid4())
     src_label = f"① DOE {d['id'][:8]}"
     out_tmp = resolve_in_study(root, f"logs/_paramset_tmp/{tmp_id}.out")

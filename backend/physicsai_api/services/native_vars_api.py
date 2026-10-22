@@ -1,4 +1,5 @@
-"""④ Native 세트 변수 정의 API 서비스(native-vars.md §3·§6.1): 조회(`GET …/variables`)·저장(`PUT …/variables`, 리비전 파일).
+"""④ 세트 변수 정의 API 서비스(native-vars.md §3·§6.1, v0.2.8 Altair 확장 altair-vars.md §5.1): 조회(`GET …/variables`)·저장(`PUT …/variables`, 리비전 파일).
+Altair는 전체 tpl 세트만 편집(풀 = tpl 선언 행, 쉘·다중 baseline 규칙 없음), 부분 tpl은 조회만(422 TPL_SCOPE_PARTIAL).
 
 - 세트 정의(현재값) = 기존 `S/parameters.json` + DB `param_sets.parameters`(형식 불변). 리비전 = `S/vars/vars.json` + `history/rev_<NNNN>.json`
   (`S/native/` 밖 — `native-prepare`가 `S/native/`를 `_backup`으로 옮기므로). 파일 없음 = 리비전 0(등록 정의).
@@ -30,6 +31,7 @@ from physicsai_core.paths import resolve_in_study
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, study_root
+from . import template_vars as tv
 from .native_vars_train import identities_of, train_for
 from .param_set_baselines_api import require_writable
 from .param_set_native_api import _features_doc
@@ -42,7 +44,6 @@ REV_RE = re.compile(r"rev_(\d{4,})\.json")
 MULTI_MESSAGE = "다중 baseline 템플릿은 변수 추가·제외를 아직 지원하지 않습니다"
 OFF_MESSAGE = "쉘 두께 설정에서 형상 파라미터를 켠 뒤 편집하세요"
 SHELL_ONLY_MESSAGE = "쉘 두께 전용 템플릿에는 형상 변수가 없습니다"
-UNSUPPORTED_MESSAGE = "변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다"
 CONFLICT_MESSAGE = "다른 사용자가 먼저 저장했습니다 — 새로 불러온 뒤 다시 저장하세요"
 INVALID_MESSAGE = "변수 정의가 올바르지 않습니다"
 
@@ -118,12 +119,11 @@ def set_pool(ctx: AppContext, S: str) -> tuple[list[dict[str, Any]], str | None]
     return nv.pool(doc, kind=kind, component=component_of(ctx, S) if kind == "shell" else None), sha
 
 
-def native_set(conn: Any, ps_id: str, *, for_update: bool = False) -> dict[str, Any]:
+def vars_set(conn: Any, ps_id: str, *, for_update: bool = False) -> dict[str, Any]:
+    """변수 정의 대상 세트(엔진 무관 — v0.2.8부터 Altair도 허용, NATIVE_VARS_UNSUPPORTED 폐지 AV-10)."""
     p = ps_repo.get(conn, ps_id, for_update=for_update)
     if p is None:
         raise DomainError("NOT_FOUND", "파라미터 세트를 찾을 수 없습니다", status=404)
-    if (p.get("engine") or "altair") != "native":
-        raise DomainError("NATIVE_VARS_UNSUPPORTED", UNSUPPORTED_MESSAGE, status=422)
     return p
 
 
@@ -132,6 +132,8 @@ def _S(ctx: AppContext, conn: Any, p: dict[str, Any]) -> str:
 
 
 def editable_state(p: dict[str, Any], S: str) -> tuple[bool, str | None]:
+    if tv.is_altair(p):  # altair-vars.md AV-10: 전체 tpl만 편집, 부분 tpl은 reason = TPL_SCOPE_PARTIAL
+        return (True, None) if tv.tpl_scope(S) == tv.SCOPE_FULL else (False, tv.PARTIAL_REASON)
     if bl.is_multi(S):
         return False, MULTI_MESSAGE
     if is_shell_only(S):
@@ -151,7 +153,8 @@ def pool_out(entries: list[dict[str, Any]], train: dict[str, Any] | None) -> lis
         tr = (train or {}).get(e["name"])
         out.append({"name": e["name"], "type": e["type"], "body": e["body"], "nominal": e["nominal"], "unit": e["unit"],
                     "position": e["position"], "default_range": e["default_range"], "feasible": e["feasible"],
-                    "ref_locked": e["ref_locked"], "group": e["group"], "train": tr})
+                    "ref_locked": e["ref_locked"], "group": e["group"], "train": tr,
+                    "integer": bool(e.get("integer")), "range_unset": bool(e.get("range_unset"))})
     return out
 
 
@@ -160,7 +163,7 @@ def pool_out(entries: list[dict[str, Any]], train: dict[str, Any] | None) -> lis
 
 def get_variables(ctx: AppContext, ps_id: str, model_id: str | None = None, revision: int | None = None) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
-        p = native_set(conn, ps_id)
+        p = vars_set(conn, ps_id)
         S = _S(ctx, conn, p)
         study = studies_repo.require(conn, p["study_id"])
         model = None
@@ -168,9 +171,10 @@ def get_variables(ctx: AppContext, ps_id: str, model_id: str | None = None, revi
             model = models_repo.get(conn, model_id)
             if model is None or model["study_id"] != p["study_id"]:
                 raise DomainError("NOT_FOUND", "모델을 찾을 수 없습니다", status=404)
-        entries, sha = set_pool(ctx, S)
-        train, src, notes = train_for(ctx, conn, study, model, identities_of(entries, list(p["parameters"]))) \
-            if not bl.is_multi(S) else (None, None, [])
+        entries, sha = tv.pool_for(ctx, p, S)
+        alt = tv.is_altair(p)
+        train, src, notes = train_for(ctx, conn, study, model, identities_of(entries, list(p["parameters"])), "altair" if alt else "native") \
+            if alt or not bl.is_multi(S) else (None, None, [])
     return _out(p, S, entries, sha, train, src, notes, revision)
 
 
@@ -178,7 +182,7 @@ def _out(p: dict[str, Any], S: str, entries: list[dict[str, Any]], sha: str | No
          src: dict[str, Any] | None, notes: list[dict[str, str]], revision: int | None, warnings: list[dict[str, str]] | None = None
          ) -> dict[str, Any]:
     cur = read_revision(S)
-    geo = sh.geometry_rows(p["parameters"])
+    geo = sh.geometry_rows(p["parameters"])  # Altair 행에는 source가 없어 전부 형상 행(= 변수 행)이다
     if revision is not None and revision != cur:
         doc = _read_json(_rev_path(S, revision))
         if doc is None:
@@ -189,7 +193,7 @@ def _out(p: dict[str, Any], S: str, entries: list[dict[str, Any]], sha: str | No
         items = _items(geo)
     editable, reason = editable_state(p, S)
     names = {e["name"] for e in entries}
-    return {"revision": cur, "features_sha256": sha, "editable": editable, "reason": reason, "variables": items,
+    return {"engine": tv.engine_label(p), "revision": cur, "features_sha256": sha, "editable": editable, "reason": reason, "variables": items,
             "pool": pool_out(entries, train), "stale_names": [r["name"] for r in geo if r["name"] not in names] if entries else [],
             "train_source": src, "notes": notes, "warnings": warnings or [], "history": _history(S)}
 
@@ -207,6 +211,7 @@ def _problem(code: str, message: str, name: str | None = None) -> dict[str, Any]
 def validate_items(items: list[Any], entries: list[dict[str, Any]], prop_count: int) -> list[dict[str, Any]]:
     """§3.4 검증 → problems(VAR_UNKNOWN·VAR_DUPLICATE·VAR_RANGE_INVALID·VARS_EMPTY)."""
     names = {e["name"] for e in entries}
+    by_name = {e["name"]: e for e in entries}
     seen: set[str] = set()
     probs: list[dict[str, Any]] = []
     for it in items:
@@ -220,6 +225,8 @@ def validate_items(items: list[Any], entries: list[dict[str, Any]], prop_count: 
             continue
         if not (math.isfinite(it.min) and math.isfinite(it.max)) or it.min > it.max:
             probs.append(_problem("VAR_RANGE_INVALID", "하한·상한은 유한한 숫자이고 하한 ≤ 상한이어야 합니다", n))
+        elif by_name[n].get("integer") and (it.min != math.floor(it.min) or it.max != math.floor(it.max)):  # altair-vars.md §5.1
+            probs.append(_problem("VAR_RANGE_INVALID", "정수 파라미터는 정수 범위여야 합니다", n))
     if not seen and prop_count == 0:
         probs.append(_problem("VARS_EMPTY", "변수를 하나 이상 고르세요"))
     return probs
@@ -244,18 +251,23 @@ def build_rows(items: list[Any], entries: list[dict[str, Any]], current: list[di
 
 def put_variables(ctx: AppContext, principal: Principal, ps_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:
     with ctx.engine.begin() as conn:
-        p = native_set(conn, ps_id, for_update=True)
+        p = vars_set(conn, ps_id, for_update=True)
         require_writable(conn, principal, p)
         S = _S(ctx, conn, p)
-        if bl.is_multi(S):
+        alt = tv.is_altair(p)
+        if alt:
+            if tv.tpl_scope(S) != tv.SCOPE_FULL:  # altair-vars.md AV-10: 옛 부분 tpl은 편집 불가 + 재생성 안내
+                raise DomainError(tv.PARTIAL_REASON, tv.PARTIAL_MESSAGE, status=422)
+        elif bl.is_multi(S):
             raise DomainError("NATIVE_VARS_MULTI_UNSUPPORTED", MULTI_MESSAGE, status=409)
-        if is_shell_only(S):
+        elif is_shell_only(S):
             raise DomainError("NATIVE_VARS_GEOMETRY_OFF", SHELL_ONLY_MESSAGE, status=409)
-        if not sh.has_geometry(p["parameters"]):
+        elif not sh.has_geometry(p["parameters"]):
             raise DomainError("NATIVE_VARS_GEOMETRY_OFF", OFF_MESSAGE, status=409)
-        entries, sha = set_pool(ctx, S)
+        entries, sha = tv.pool_for(ctx, p, S)
         if not entries:
-            raise DomainError("NATIVE_PREP_MISSING", "형상 피처 파일이 없습니다 — 형상 준비를 다시 하세요", status=409)
+            raise DomainError("TPL_MISSING" if alt else "NATIVE_PREP_MISSING",
+                              "tpl에서 변수를 찾을 수 없습니다" if alt else "형상 피처 파일이 없습니다 — 형상 준비를 다시 하세요", status=409)
         cur = read_revision(S)
         if body.base_revision != cur:
             raise DomainError("NATIVE_VARS_CONFLICT", CONFLICT_MESSAGE, status=409, revision=cur)

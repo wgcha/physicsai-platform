@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 from pathlib import Path
 
@@ -177,3 +178,69 @@ def test_av_7_legacy_hstbatch_gets_used_view_and_full_copy(p2_env, engine):
     jd2 = doe_gen(c, w, sid2, ai, "av7b", num_runs=3)
     D2 = ai / "av7b" / "01_train" / "doe" / jd2["result"]["doe_id"]
     assert not (D2 / "simlab_parametered_mesh.full.tpl").exists() and tt.scope_of((D2 / "simlab_parametered_mesh.tpl").read_text()) == "partial"
+
+
+def _from_train(c, sid: str, doe_id: str, source: str | None, expect: int = 201) -> dict:
+    body = {"doe_id": doe_id, "runs": "all", **({"tpl_source": source} if source else {})}
+    r = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json=body)
+    assert r.status_code == expect, r.text
+    return r.json()
+
+
+def _vars(c, ps_id: str) -> dict:
+    r = c.get(f"{API}/param-sets/{ps_id}/variables", headers=P)
+    assert r.status_code == 200, r.text
+    return r.json()
+
+
+def test_v_av_7_from_train_tpl_source_doe_and_current(p2_env, engine):
+    """① DOE → 템플릿: doe(기본) = DOE 폴더 tpl, current = 현재 ①-2 전체 tpl. 둘 다 전체 tpl 세트(풀 = 모든 파라미터, 표 범위·used 기록)."""
+    c, mk, ai, _lc, _d = p2_env
+    w = mk()
+    sid, ts = _extract(c, w, ai, "av7c")
+    _put_tpl(c, sid, ts, rib_format="%8.4f", rib_use=False)
+    j = _gen(c, sid, ai, "av7c", {"kind": "lhs", "count": 4, "seed": 5})
+    assert w.run_once_slot() == "SUCCEEDED", job(c, j["id"])
+    doe_id = job(c, j["id"])["result"]["doe_id"]
+    table = {p["name"]: p for p in ts["parameters"]}
+    sets = {}
+    for source in (None, "doe", "current"):
+        ps = _from_train(c, sid, doe_id, source)
+        sets[source or "default"] = ps
+        g = _vars(c, ps["id"])
+        assert g["engine"] == "altair" and g["editable"] is True and g["revision"] == 0
+        assert [p["name"] for p in g["pool"]] == ["THK_1", "RIB_H"] and [v["name"] for v in g["variables"]] == ["THK_1"]  # 정의 = DOE 사용 행
+        pool = {p["name"]: p for p in g["pool"]}
+        for n in ("THK_1", "RIB_H"):                                              # 기본 범위 = ①-1 표 범위(미사용 행 포함)
+            assert pool[n]["default_range"] == {"min": table[n]["min"], "max": table[n]["max"]} and pool[n]["range_unset"] is False
+        info = c.get(f"{API}/param-sets/{ps['id']}", headers=P).json()
+        assert info["vars_scope"] == "full" and info["vars_count"] == 1
+        rows = {r["name"]: r for r in info["tpl_params"]}
+        assert rows["THK_1"]["used"] is True and rows["RIB_H"]["used"] is False and rows["RIB_H"]["table_min"] == table["RIB_H"]["min"]
+    # 같은 DOE에서 만든 세트는 tpl 본문까지 같다
+    S = {k: ai / "av7c" / "04_params" / v["id"] / "simlab_parametered_mesh.tpl" for k, v in sets.items()}
+    assert S["doe"].read_text() == S["default"].read_text() == S["current"].read_text()
+    # 미사용 RIB_H를 변수로 추가 + 그 범위로 ④ 미리보기(변수 정의 편집 → ④)
+    cur = sets["current"]
+    put = c.put(f"{API}/param-sets/{cur['id']}/variables", headers=PW, json={"base_revision": 0, "variables": [
+        {"name": "THK_1", "min": math.ceil(table["THK_1"]["min"]), "max": math.floor(table["THK_1"]["max"])},  # THK_1 = 정수 형식(%3i)
+        {"name": "RIB_H", "min": table["RIB_H"]["min"], "max": table["RIB_H"]["max"]}]})
+    assert put.status_code == 200, put.text
+    pv = c.post(f"{API}/studies/{sid}/predict-batches/preview", headers=PW, json={"param_set_id": cur["id"], "source": {"kind": "lhs", "count": 3, "seed": 1}})
+    assert pv.status_code == 200 and pv.json()["problems"] == [] and set(pv.json()["rows"][0]["values"]) == {"THK_1", "RIB_H"}, pv.text
+    # ①-2 표를 바꿔 tpl을 다시 만들면(사용 THK_1 범위 변경) current는 DOE와 달라 409, doe는 그대로 성공
+    ts2 = c.get(f"{API}/studies/{sid}/train", headers=P).json()
+    rows = [{"name": p["name"], "min": p["min"], "max": p["max"] + 1.0 if p["name"] == "THK_1" else p["max"], "use": p["use"], "format": p["format"]}
+            for p in ts2["parameters"]]
+    r = c.put(f"{API}/studies/{sid}/train/params", headers=PW, json={"version": ts2["version"], "parameters": rows})
+    assert r.status_code == 200, r.text
+    r = c.post(f"{API}/studies/{sid}/train/tpl", headers=PW, json={"version": r.json()["version"]})
+    assert r.status_code == 200, r.text
+    err = _from_train(c, sid, doe_id, "current", expect=409)
+    assert err["detail"]["code"] == "TPL_DOE_MISMATCH"
+    _from_train(c, sid, doe_id, "doe")
+    # 옛 부분 tpl(①-2 현재 tpl): current는 422 TPL_SCOPE_PARTIAL
+    _make_v027(c, engine, ai, "av7c", sid)
+    err = _from_train(c, sid, doe_id, "current", expect=422)
+    assert err["detail"]["code"] == "TPL_SCOPE_PARTIAL"
+    assert _from_train(c, sid, doe_id, "bogus", expect=422)["detail"]

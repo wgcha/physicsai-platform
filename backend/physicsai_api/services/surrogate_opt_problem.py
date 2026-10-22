@@ -72,7 +72,7 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     vr = native_vars_run.resolve(ctx, conn, study, ps, m, body.vars)  # native-vars.md §6.2: 유효 변수 = (세트 − exclude) + add
     problems += [_vars_problem(x, "BOUNDS_INVALID") for x in vr.problems]
     ps0, ps = ps, vr.ps  # ps = 이 실행의 유효 변수 행을 가진 사본(Native 단일 baseline), 그 밖은 ps0 그대로
-    names, integer, bounds, fixed = _bounds(ps, body, so, problems, native=native)
+    names, integer, bounds, fixed = _bounds(ps, body, so, problems, native=native or vr.free_range)  # altair-vars.md AV-9: 전체 tpl Altair도 경고만
     cat_levels = _levels(multi, body, so, problems)
     mb_settings = _multi_settings(multi, ps0, cat_levels) if multi is not None else None
     if cat_levels is not None:  # 위상 변형: 범주 변수 baseline = 수준 인덱스 0..L−1(정수 표현, 인코딩은 원-핫)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -56,8 +56,8 @@ class VarNote(Resp):
 
 class NativeVarPoolRow(Resp):
     name: str
-    type: str = ""
-    body: str = ""
+    type: str | None = ""  # Altair 풀은 null
+    body: str | None = ""  # Altair 풀은 null
     nominal: float
     unit: str = "mm"
     position: bool = False
@@ -66,6 +66,8 @@ class NativeVarPoolRow(Resp):
     ref_locked: bool = False
     group: str | None = None
     train: VarRange | None = None  # model_id를 줬고 학습 범위를 알 때만
+    integer: bool = False  # Altair: tpl 형식이 정수(i·d) — 하한·상한은 정수여야 함(저장 검증 VAR_RANGE_INVALID). Native는 항상 false
+    range_unset: bool = False  # Altair: 표·선언 어디에도 범위가 없어 default_range = [공칭, 공칭] — 화면 "범위를 입력하세요"
 
 
 class NativeVarHistory(Resp):
@@ -78,10 +80,11 @@ class NativeVarHistory(Resp):
 class NativeVars(Resp):
     """세트 변수 정의(현재 리비전). `variables` = 선택한 형상 행(풀 순서), `pool` = 고를 수 있는 전체 변수. PUT 응답은 `warnings`가 채워진다."""
 
+    engine: Literal["native", "altair"] = "native"  # altair-vars.md §6
     revision: int
-    features_sha256: str | None = None
+    features_sha256: str | None = None  # 풀 출처 해시(Native = 피처 파일, Altair = 세트 tpl)
     editable: bool
-    reason: str | None = None
+    reason: str | None = None  # editable=false 사유(Native = 문장, Altair 부분 tpl = 코드 "TPL_SCOPE_PARTIAL")
     variables: list[NativeVarItem]
     pool: list[NativeVarPoolRow]
     stale_names: list[str] = Field(default_factory=list)

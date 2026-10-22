@@ -169,3 +169,49 @@ def test_summary_and_definition_key_and_stale():
     t3 = [dict(p) for p in table]
     t3[0]["use"] = False
     assert tp.definition_key(t3) != tp.definition_key(table)
+
+
+# ---- V-AV-4~6 순수부: 변수 풀·학습 범위 ---------------------------------------------------------------------
+
+
+def _decls() -> list[dict]:
+    return [{"var": "var_1", "name": "A", "nominal": 3.0, "min": 2.0, "max": 5.0},
+            {"var": "var_2", "name": "B", "nominal": 4.0, "min": 2.0, "max": 8.0},
+            {"var": "var_3", "name": "C", "nominal": 20.0, "min": 20.0, "max": 20.0},
+            {"var": "var_4", "name": "D", "nominal": 1.0, "min": 1.0, "max": 1.0},
+            {"var": "var_5", "name": "E", "nominal": 7.0, "min": 6.0, "max": 8.0}]  # E: 형식(참조) 없음 → 풀 밖
+
+
+def test_altair_pool_ranges_integer_and_units():
+    from physicsai_core.geometry import native_vars as nv
+
+    rows = [{"var": "var_1", "name": "A", "format": "%8.4f"}, {"var": "var_2", "name": "B", "format": "%3i", "unit": "ea"},
+            {"var": "var_3", "name": "C", "format": "%8.4f", "table_min": 18.0, "table_max": 22.0},
+            {"var": "var_4", "name": "D", "format": "%8.4f"}]
+    pool = {e["name"]: e for e in nv.altair_pool(_decls(), rows, [{"name": "A", "unit": "mm"}])}
+    assert list(pool) == ["A", "B", "C", "D"]                                       # 선언 순서, 참조 없는 E는 제외
+    assert pool["A"]["default_range"] == {"min": 2.0, "max": 5.0} and pool["A"]["unit"] == "mm" and pool["A"]["range_unset"] is False
+    assert pool["B"]["integer"] is True and pool["B"]["unit"] == "ea" and pool["A"]["integer"] is False
+    assert pool["C"]["default_range"] == {"min": 18.0, "max": 22.0} and pool["C"]["range_unset"] is False   # 표 범위가 우선(고정 선언이어도)
+    assert pool["D"]["default_range"] == {"min": 1.0, "max": 1.0} and pool["D"]["range_unset"] is True
+    assert all(e["type"] is None and e["body"] is None and e["feasible"] is None and e["ref_locked"] is False for e in pool.values())
+
+
+def test_train_ranges_altair_union_nominal_check_and_old_tpl():
+    from physicsai_core.geometry import native_vars as nv
+
+    ident = [{"name": "A", "nominal": 3.0}, {"name": "C", "nominal": 20.0}, {"name": "D", "nominal": 1.0}]
+    doe1 = {"id": "d1", "altair": True, "snapshot": [{"name": "A", "nominal": 3.0, "min": 2.5, "max": 4.0}], "decl": {"C": 20.0, "D": 1.0, "A": 3.0}}
+    doe2 = {"id": "d2", "altair": True, "snapshot": [{"name": "A", "nominal": 3.0, "min": 3.5, "max": 4.5},
+                                                     {"name": "C", "nominal": 20.0, "min": 19.0, "max": 21.0}], "decl": {"D": 1.0}}
+    out, notes = nv.train_ranges(ident, [doe1, doe2])
+    assert out["A"] == {"min": 2.5, "max": 4.5} and out["C"] == {"min": 19.0, "max": 21.0} and out["D"] == {"min": 1.0, "max": 1.0} and notes == []
+    # 공칭이 다르면 같은 파라미터로 보지 않는다(None + UNMATCHED)
+    out, notes = nv.train_ranges([{"name": "A", "nominal": 3.2}], [doe1])
+    assert out["A"] is None and [n["code"] for n in notes] == [nv.NOTE_UNMATCHED]
+    # 옛 부분 tpl DOE: 미사용 행(스냅숏·선언 모두 없음)은 판단 불가 = None(안내 없음)
+    old = {"id": "d3", "altair": True, "snapshot": doe1["snapshot"], "decl": {}}
+    out, notes = nv.train_ranges(ident, [old])
+    assert out == {"A": {"min": 2.5, "max": 4.0}, "C": None, "D": None} and notes == []
+    # DOE가 없으면 전부 None
+    assert nv.train_ranges(ident, [])[0] == {"A": None, "C": None, "D": None}

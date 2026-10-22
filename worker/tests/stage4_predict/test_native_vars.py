@@ -217,6 +217,7 @@ def test_v_nv_3_batch_snapshot_survives_set_edit_and_retry(nenv):
 
 
 def test_v_nv_8_altair_vars_rejected_and_unchanged(nenv):
+    """Altair 부분 tpl(옛 것): v0.2.8부터 NATIVE_VARS_UNSUPPORTED는 폐지 — 같은 자리에서 TPL_SCOPE_PARTIAL(altair-vars.md AV-10)."""
     env = nenv
     alt = env.param_set()
     assert alt["engine"] == "altair"
@@ -225,14 +226,14 @@ def test_v_nv_8_altair_vars_rejected_and_unchanged(nenv):
     base = _prev(env, alt, src)
     assert base["problems"] == [] and base["var_rows"] == [] and base["excluded"] == [] and "TRAIN_RANGE_UNKNOWN" not in _codes(base["notes"])
     p = _prev(env, alt, src, {"exclude": [names[0]]})
-    assert "NATIVE_VARS_UNSUPPORTED" in _codes(p["problems"])
+    assert "TPL_SCOPE_PARTIAL" in _codes(p["problems"])
     r = env.c.post(f"{API}/studies/{env.sid}/jobs", headers=PW, json={"job_type": "PREDICT_BATCH", "params": {
         "param_set_id": alt["id"], "multi_execution": 1, "source": src, "vars": {"exclude": [names[0]]}}})
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "NATIVE_VARS_UNSUPPORTED", r.text
-    for f in (lambda: env.c.get(f"{API}/param-sets/{alt['id']}/variables", headers=P),
-              lambda: env.c.put(f"{API}/param-sets/{alt['id']}/variables", headers=PW, json={"base_revision": 0, "variables": []})):
-        x = f()
-        assert x.status_code == 422 and x.json()["detail"]["code"] == "NATIVE_VARS_UNSUPPORTED"
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "TPL_SCOPE_PARTIAL", r.text
+    g = env.c.get(f"{API}/param-sets/{alt['id']}/variables", headers=P)             # 조회는 허용(편집 불가 + 사유)
+    assert g.status_code == 200 and g.json()["editable"] is False and g.json()["reason"] == "TPL_SCOPE_PARTIAL" and g.json()["engine"] == "altair"
+    x = env.c.put(f"{API}/param-sets/{alt['id']}/variables", headers=PW, json={"base_revision": 0, "variables": []})
+    assert x.status_code == 422 and x.json()["detail"]["code"] == "TPL_SCOPE_PARTIAL"
 
 
 # ---- ⑥ 내장 최적화(V-NV-4) ---------------------------------------------------------------------------------
@@ -336,9 +337,9 @@ def test_v_nv_8_altair_opt_unchanged_and_vars_rejected(nenv):
     out = _opt_prev(env, {**body, "bounds": {names[0]: [lo - 1.0, hi + 1.0]}})                    # Altair: 기존 BOUNDS_OUT_OF_RANGE 그대로
     assert "BOUNDS_OUT_OF_RANGE" in _codes(out["problems"]) and out["var_notes"] == []
     v = _opt_prev(env, {**body, "vars": {"exclude": [names[0]]}})
-    assert "NATIVE_VARS_UNSUPPORTED" in _codes(v["problems"]) and v["var_rows"] == []
+    assert "TPL_SCOPE_PARTIAL" in _codes(v["problems"]) and v["var_rows"] == []
     r = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json={**body, "vars": {"exclude": [names[0]]}})
-    assert r.status_code == 422 and "NATIVE_VARS_UNSUPPORTED" in _codes(r.json()["detail"]["problems"]), r.text
+    assert r.status_code == 422 and "TPL_SCOPE_PARTIAL" in _codes(r.json()["detail"]["problems"]), r.text
 
 
 # ---- ①-3 세트 DOE(V-NV-7) -----------------------------------------------------------------------------------
