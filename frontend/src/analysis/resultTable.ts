@@ -32,6 +32,8 @@ export interface RtRow {
   responses: Record<string, number | null>;
   /** predict 출처만(design-map 요약), solver는 null */
   curve: Record<string, DesignMapCurveStats> | null;
+  /** predict 출처(일괄 배치 행)만: 하위 PREDICT 작업 id — ⑤ 결과 컨투어(contour3d-default C3D-10)의 `PREDICT_H3D {job_id}` 원본. solver는 없음 */
+  job_id?: string | null;
   /** S19 §24.5: 값이 null인 성능 열의 사유 코드(서버 design-map `perf_reason`, 예: SPEC_CHANGED). 없으면 키 자체가 없다 */
   why?: Record<string, string>;
 }

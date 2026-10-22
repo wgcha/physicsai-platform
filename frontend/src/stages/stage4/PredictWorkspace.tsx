@@ -9,7 +9,7 @@ import { FeatureGate, FeatureOffNote, useFeature } from "../../components/Featur
 import { POLL } from "../../lib/poll";
 import { isIntegerFormat } from "../../lib/format";
 import { ParamInputTable, ParamScatter, RangeNote, RoundingNote } from "./ParamInputs";
-import { PredictChain, PredictResultCard, jobInputMode } from "./PredictResult";
+import { PredictChain, PredictContourCard, PredictResultCard, jobInputMode } from "./PredictResult";
 import { PredictSteps } from "./PredictSteps";
 import { inputKindOf } from "./TemplatePicker";
 import { InputKindSelect, useInputChoice } from "../../components/InputKindSelect";
@@ -97,7 +97,7 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
 
   return (
     <>
-      <Card span={6} title="템플릿" className="inputs template-card" aside={aside}>
+      <Card span="half" title="템플릿" className="inputs template-card" aside={aside}>
         {picker}
         <div className="input-table">
           <ParamInputTable params={ps.parameters} values={values} samples={samples} integerNames={integerNames} onChange={setOne} readOnly={false} />
@@ -168,10 +168,14 @@ export function PredictWorkspace({ ps, picker, aside }: { ps: ParamSet; picker: 
         )}
       </Card>
 
-      <Card span={3} title="진행" className="progress-card">
-        {jobInputMode(pjob) === "prepared" ? <PredictChain job={pjob} mode="prepared" /> : <PredictSteps job={pjob} kind={stepKind} />}
-        <p className="muted small">끝나면 아래에 컨투어·커브·응답 표가 나옵니다. 알림으로도 알려 줍니다.</p>
-      </Card>
+      <PredictContourCard
+        job={pjob}
+        progress={
+          <>
+            {jobInputMode(pjob) === "prepared" ? <PredictChain job={pjob} mode="prepared" /> : <PredictSteps job={pjob} kind={stepKind} />}
+          </>
+        }
+      />
 
       <PredictResultCard job={pjob} verifyValues={pbs.verifyValues} />
     </>

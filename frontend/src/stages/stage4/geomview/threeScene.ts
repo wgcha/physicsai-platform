@@ -35,6 +35,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { faceGroups, lightColor, SELECTION_COLORS, type FixedCluster, type Highlight, type ViewManifest, type DimDraw, type Vec3 } from "./viewerCore";
 import { fillColors } from "./contour/colormap";
+import type { BoxState, CameraState } from "./contour/contourCore";
 
 // PNG 하이라이트와 같은 색(이동 주황·고정 파랑) + 실패 빨강
 const COLORS = { base: 0xb9c0c8, moving: 0xf08c28, fixed: 0x3c6edc, red: 0xe5484d, ghost: 0x9aa4ae, edge: 0x2b3440, dim: 0x7dff5a };
@@ -110,6 +111,10 @@ class Stage {
   fitTo(objects: Object3D[]) {
     const box = new Box3();
     for (const o of objects) if (o.visible) box.expandByObject(o);
+    this.fitBox(box);
+  }
+
+  fitBox(box: Box3) {
     if (box.isEmpty()) return;
     const center = box.getCenter(new Vector3());
     const dir = new Vector3(1, -1.4, 0.9).normalize();
@@ -448,6 +453,13 @@ export interface ContourSceneApi {
   setPositions(pos: Float32Array): void;
   setLoop(on: boolean): void;
   fit(): void;
+  /** 비교 모드(contour3d-default §3.1): 시점 연결·두 메시 bbox 합집합 맞춤 */
+  getCamera(): CameraState;
+  setCamera(s: CameraState): void;
+  /** 사용자가 돌리거나 확대할 때만 호출(setCamera로 바뀐 것은 부르지 않는다). 해제 함수를 돌려준다 */
+  onCameraChange(cb: (s: CameraState) => void): () => void;
+  getBox(): BoxState | null;
+  fitBox(box: BoxState): void;
   dispose(): void;
 }
 
@@ -456,6 +468,19 @@ export function createContourScene(container: HTMLElement, opts: { onLost: () =>
   const root = new Group();
   st.scene.add(root);
   let mesh: Mesh | null = null;
+  const listeners = new Set<(s: CameraState) => void>();
+  let applying = false;
+  const cam = (): CameraState => ({
+    position: st.camera.position.toArray() as [number, number, number],
+    target: st.controls.target.toArray() as [number, number, number],
+    up: st.camera.up.toArray() as [number, number, number],
+    zoom: st.camera.zoom,
+  });
+  st.controls.addEventListener("change", () => {
+    if (applying || !listeners.size) return;
+    const s = cam();
+    listeners.forEach((f) => f(s));
+  });
   return {
     async setMesh(buf) {
       disposeTree(root);
@@ -502,7 +527,34 @@ export function createContourScene(container: HTMLElement, opts: { onLost: () =>
     fit() {
       st.fitTo([root]);
     },
+    getCamera: cam,
+    setCamera(s) {
+      applying = true;
+      try {
+        st.camera.position.fromArray(s.position);
+        st.camera.up.fromArray(s.up);
+        st.camera.zoom = s.zoom;
+        st.camera.updateProjectionMatrix();
+        st.controls.target.fromArray(s.target);
+        st.controls.update();
+      } finally {
+        applying = false;
+      }
+      st.request();
+    },
+    onCameraChange(cb) {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    getBox() {
+      const b = new Box3().expandByObject(root);
+      return b.isEmpty() ? null : { min: b.min.toArray() as Vec3, max: b.max.toArray() as Vec3 };
+    },
+    fitBox(b) {
+      st.fitBox(new Box3(new Vector3(...b.min), new Vector3(...b.max)));
+    },
     dispose() {
+      listeners.clear();
       st.dispose();
     },
   };

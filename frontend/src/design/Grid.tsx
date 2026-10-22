@@ -2,7 +2,8 @@
 // 높이는 내용대로(행 높이 고정 없음). 우측 고정 열(Rail)은 레이아웃 A에서 없앴다 — 대기열·자원은 상단 칩 → 서랍.
 import type { ElementType, ReactNode } from "react";
 
-export type Span = 2 | 3 | 4 | 6 | 8 | 9 | 12;
+/** "half" = 같은 줄 1:1(≥1280 12열 중 6칸, 그 미만은 전체 폭 — contour3d-default C3D-9) */
+export type Span = 2 | 3 | 4 | 6 | 8 | 9 | 12 | "half";
 
 export function Grid({
   as: Tag = "div",
@@ -38,7 +39,7 @@ export interface CellProps {
 }
 
 export function Cell({ span = 3, title, refText, aside, foot, as: Tag = "section", label, className, testId, children }: CellProps) {
-  const cls = `cell c${span}${className ? ` ${className}` : ""}`;
+  const cls = `cell ${span === "half" ? "c-half" : `c${span}`}${className ? ` ${className}` : ""}`;
   const head = title !== undefined || refText !== undefined || aside !== undefined;
   return (
     <Tag className={cls} aria-label={label} data-testid={testId}>

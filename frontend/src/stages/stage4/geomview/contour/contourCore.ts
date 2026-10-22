@@ -209,3 +209,91 @@ export function fmtTime(t: number | null | undefined): string {
   if (t == null || !Number.isFinite(t)) return "–";
   return t === 0 ? "0" : Math.abs(t) < 1e-3 ? t.toExponential(2) : String(Number(t.toPrecision(4)));
 }
+
+// ---------------------------------------------------------------- 비교 모드(contour3d-default §3.3, C3D-7·8)
+
+export type Vec3 = [number, number, number];
+/** 시점(OrbitControls) 상태 — 비교 모드 시점 연결용 */
+export interface CameraState {
+  position: Vec3;
+  target: Vec3;
+  up: Vec3;
+  zoom: number;
+}
+export interface BoxState {
+  min: Vec3;
+  max: Vec3;
+}
+
+/** 두 상자의 합집합(둘 중 없으면 있는 쪽) */
+export function unionBox(a: BoxState | null, b: BoxState | null): BoxState | null {
+  if (!a || !b) return a ?? b;
+  return { min: a.min.map((v, k) => Math.min(v, b.min[k])) as Vec3, max: a.max.map((v, k) => Math.max(v, b.max[k])) as Vec3 };
+}
+
+export const LEGEND_SEPARATE_NOTE = "결과 종류가 달라 범례를 따로 씁니다";
+
+export interface CommonLegend {
+  /** 두 manifest가 모두 있고 display(field·comp·avgmode)·unit이 같아 공통 범례를 쓸 수 있는가 */
+  shareable: boolean;
+  /** 공통 범례 범위 = 두 range의 합집합(shareable일 때만, 아니면 null) */
+  range: [number, number] | null;
+  /** 개별 범례를 쓰는 이유(두 manifest가 모두 있는데 종류가 다를 때만) */
+  note: string | null;
+}
+
+const sameText = (a: string | null | undefined, b: string | null | undefined) => (a ?? "") === (b ?? "");
+
+/** C3D-8: 공통 범례 = 두 manifest `range`의 합집합. display·unit이 다르면 개별 + 문구. D3-61 final.legend(PNG용)는 쓰지 않는다 */
+export function commonLegend(a: ContourManifest | null, b: ContourManifest | null): CommonLegend {
+  if (!a || !b) return { shareable: false, range: null, note: null };
+  const same = sameText(a.display?.field, b.display?.field) && sameText(a.display?.comp, b.display?.comp) && sameText(a.display?.avgmode, b.display?.avgmode) && sameText(a.unit, b.unit);
+  if (!same) return { shareable: false, range: null, note: LEGEND_SEPARATE_NOTE };
+  const los = [a.range.min, b.range.min].filter((v): v is number => v != null && Number.isFinite(v));
+  const his = [a.range.max, b.range.max].filter((v): v is number => v != null && Number.isFinite(v));
+  if (!los.length || !his.length) return { shareable: false, range: null, note: null };
+  return { shareable: true, range: [Math.min(...los), Math.max(...his)], note: null };
+}
+
+/** 두 프레임 시간표가 같은가: 개수가 같고 각 time 차 ≤ 1e-9·max(|t|) (time null이 있으면 같다고 보지 않음) */
+export function sameTimes(a: ContourManifest, b: ContourManifest): boolean {
+  if (a.frames.count !== b.frames.count) return false;
+  const ts = [...a.frames.list, ...b.frames.list].map((f) => f.time);
+  if (ts.some((t) => t == null || !Number.isFinite(t))) return false;
+  const tol = 1e-9 * Math.max(0, ...(ts as number[]).map((t) => Math.abs(t)));
+  return a.frames.list.every((f, k) => Math.abs((f.time as number) - (b.frames.list[k].time as number)) <= tol);
+}
+
+/** 공용 슬라이더(왼쪽 프레임 i)에 대응하는 오른쪽 프레임: 같은 시간표면 같은 인덱스, 아니면 왼쪽 프레임 시간에 가장 가까운 오른쪽 프레임 */
+export function pairFrame(left: ContourManifest, right: ContourManifest, i: number): number {
+  const n = right.frames.count;
+  if (n <= 0) return 0;
+  const at = Math.max(0, Math.min(i, left.frames.count - 1));
+  if (sameTimes(left, right)) return Math.min(at, n - 1);
+  const t = left.frames.list[at]?.time;
+  if (t == null || !Number.isFinite(t)) return Math.min(at, n - 1);
+  let best = 0;
+  let bd = Infinity;
+  right.frames.list.forEach((f, k) => {
+    if (f.time == null || !Number.isFinite(f.time)) return;
+    const d = Math.abs(f.time - t);
+    if (d < bd) {
+      bd = d;
+      best = k;
+    }
+  });
+  return best;
+}
+
+// ---------------------------------------------------------------- 칸 상태(contour3d-default C3D-2·5·6)
+
+export const DENIED_TEXT = "3D는 실행 권한이 있는 사용자가 한 번 열면 볼 수 있습니다";
+export const BUSY_TEXT = "앞선 3D 생성이 끝나면 이어서 요청합니다";
+
+/** 3D 대신 PNG·영상을 그 자리에 보여야 하는 상태: 결과 없음·작업 실패·요청 실패·읽기 사용자 미적중(C3D-2·6) */
+export function showsMedia(s: { c: Contour3d | null; error: string | null; denied: boolean }): boolean {
+  const view = contourView(s.c);
+  if (s.denied) return true;
+  if (s.error && (!s.c || view !== "waiting")) return true;
+  return view === "result_fail" || view === "failed";
+}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { api, errorMessage, type CurveJson, type Job, type JobStep, type PredictInputMode, type PredictJobParams, type PredictResult as PR, type ResponseRow } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { Card, CopyButton } from "../../components/ui";
@@ -7,7 +7,8 @@ import { JsonTree } from "../../components/JsonTree";
 import { useArtifactJson } from "../../hooks/useArtifact";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { ContourMedia } from "./ContourMedia";
-import { ContourPanel } from "./geomview/contour/ContourPanel";
+import { ContourSlot } from "./geomview/contour/ContourSlot";
+import type { Span } from "../../design/Grid";
 import { fmtNum, fmtPct } from "../../lib/format";
 
 /** 실행 체인 4단계: 형상 → 메싱 → 입력파일 → 예측 */
@@ -168,14 +169,57 @@ function ResultHead({ job, result }: { job: Job; result: PR }) {
   );
 }
 
-/** "결과" 칸(B16·B17 입력파일 받기 포함). 두 입력 방식이 같이 쓴다 */
-export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null; verifyValues: Record<string, number> | null }) {
-  const { study, paramSets } = useStudy();
+/** 다시 캡처 기본 방향(파라미터 세트의 컨투어 표시 설정) */
+function useCaptureViews(job: Job | null) {
+  const { paramSets } = useStudy();
+  const result = job?.state === "SUCCEEDED" ? (job.result as unknown as PR | null) : null;
+  return paramSets.find((p) => p.id === result?.param_set_id)?.display?.views ?? null;
+}
+
+/**
+ * "결과 컨투어" 칸(contour3d-default C3D-1·9): 변수표(입력 카드) 옆 `c-half`. 예측 성공 전에는 그 자리에 진행 단계(progress),
+ * 성공하면 3D 뷰어(기본) — 진행 단계는 카드 아래 접힌 "진행" 한 줄. PNG·영상은 [그림/영상] 창(3D를 못 쓰면 그 자리에 인라인).
+ * span = 입력 카드와 한 줄이면 "half", 혼자면 12.
+ */
+export function PredictContourCard({ job: pjob, progress, span = "half" }: { job: Job | null; progress?: ReactNode; span?: Span }) {
   const canCapture = useCanExecute();
+  const captureViews = useCaptureViews(pjob);
+  const done = pjob?.state === "SUCCEEDED";
+  if (!pjob || !done)
+    return (
+      <Card span={span} title="결과 컨투어" className="contour-card">
+        {progress}
+        <p className="muted small">{pjob && pjob.state !== "SUCCEEDED" ? "예측이 끝나면 컨투어가 여기에 표시됩니다. 알림으로도 알려 줍니다." : "예측을 실행하면 컨투어가 여기에 표시됩니다."}</p>
+      </Card>
+    );
+  return (
+    <ContourSlot
+      key={pjob.id}
+      source={{ source_kind: "PREDICT_H3D", source_ref: { job_id: pjob.id } }}
+      media={<ContourMedia jobId={pjob.id} canCapture={canCapture} captureViews={captureViews} />}
+      mediaTitle="그림/영상 — 예측 컨투어"
+    >
+      {({ aside, body }) => (
+        <Card span={span} title="결과 컨투어" className="contour-card" aside={aside}>
+          {body}
+          {progress && (
+            <details className="advanced" data-testid="predict-progress">
+              <summary>진행</summary>
+              {progress}
+            </details>
+          )}
+        </Card>
+      )}
+    </ContourSlot>
+  );
+}
+
+/** "결과" 칸(B16·B17 입력파일 받기 포함). 두 입력 방식이 같이 쓴다. 컨투어는 PredictContourCard가 따로 맡는다 */
+export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null; verifyValues: Record<string, number> | null }) {
+  const { study } = useStudy();
   const result = pjob?.state === "SUCCEEDED" ? (pjob.result as unknown as PR | null) : null;
   // B16·B17: 입력파일은 RAD_ASSEMBLE 이후 준비(input_display_path가 채워짐) → input.zip
   const inputReady = !!pjob?.input_display_path;
-  const captureViews = paramSets.find((p) => p.id === result?.param_set_id)?.display?.views ?? null;
   const [inputError, setInputError] = useState<string | null>(null);
   const downloadInput = async () => {
     if (!pjob) return;
@@ -220,19 +264,19 @@ export function PredictResultCard({ job: pjob, verifyValues }: { job: Job | null
             </div>
           )}
           <div className="result-grid">
-            <div className="result-contour">
-              <ContourMedia jobId={pjob.id} canCapture={canCapture} captureViews={captureViews} />
-              <ContourPanel key={pjob.id} source={{ source_kind: "PREDICT_H3D", source_ref: { job_id: pjob.id } }} />
-              <ResultListTree artifactId={result.preview_json_artifact_id} />
-            </div>
+            {result.curve_artifact_id && (
+              <div className="result-side">
+                <CurveChart artifactId={result.curve_artifact_id} />
+              </div>
+            )}
             <div className="result-side">
-              {result.curve_artifact_id && <CurveChart artifactId={result.curve_artifact_id} />}
               <div>
                 <div className="field-label">응답값</div>
                 <ResponseTable rows={result.response_table ?? []} verify={verifyValues} nearestRun={result.nearest?.run_key ?? null} />
               </div>
             </div>
           </div>
+          <ResultListTree artifactId={result.preview_json_artifact_id} />
         </>
       )}
     </Card>

@@ -6,6 +6,8 @@ import { useStudy } from "../../../app/StudyContext";
 import { Card, CopyButton } from "../../../components/ui";
 import { useFemVerifyButton } from "../verify/useFemVerifyButton";
 import { ContourMedia } from "../ContourMedia";
+import { ContourSlot } from "../geomview/contour/ContourSlot";
+import { POLL } from "../../../lib/poll";
 import { ResultListTree } from "../PredictResult";
 import { ROW_STATE_LABEL } from "./batchTable";
 
@@ -25,31 +27,41 @@ export function RunPanel({ row, base, canCapture, view, onView, psId, batchId }:
   }, [row?.job_id, row?.state]);
   const result = job?.state === "SUCCEEDED" ? (job.result as unknown as PR | null) : null;
   const pbs = useFemVerifyButton(row ? { kind: "batch_run", batch_id: batchId, doe_no: row.doe_no } : null, !!result, job);
-  if (!row)
-    return (
-      <Card span={3} title="DOE" className="batch-run-panel">
-        <p className="muted small">표나 그래프에서 run을 고르세요.</p>
-      </Card>
-    );
-  const done = row.state === "SUCCEEDED" && !!row.job_id;
+  const done = !!row && row.state === "SUCCEEDED" && !!row.job_id;
+  // C3D-4: 행을 훑어 바꿀 때는 머무른 뒤에만 3D를 요청한다(ContourSlot의 delayMs). 같은 칸 하나를 행마다 재사용한다
   return (
-    <Card span={3} title={`DOE #${row.doe_no}`} step={row.run_key} className="batch-run-panel">
-      {!done ? (
-        <p className="muted small">{ROW_STATE_LABEL[row.state]} — 예측이 끝나면 컨투어와 결과 목록이 나옵니다.</p>
-      ) : (
-        <>
-          <ContourMedia key={row.job_id} jobId={row.job_id!} view={view} onView={onView} canCapture={canCapture} captureViews={paramSets.find((p) => p.id === psId)?.display?.views ?? null} />
-          {result ? <ResultListTree artifactId={result.preview_json_artifact_id} /> : <p className="muted small">불러오는 중…</p>}
-        </>
-      )}
-      <div className="run-action-row">
-        <CopyButton text={row.folder} label="경로 복사" />
-        <button type="button" className="btn small" disabled={!row.job_id || row.state !== "SUCCEEDED"} onClick={() => navigate(`${base}?job=${row.job_id}`)}>
-          단일 예측으로 열기
-        </button>
-        {pbs.button}
-      </div>
-      {pbs.notes}
-    </Card>
+    <ContourSlot
+      source={done ? { source_kind: "PREDICT_H3D", source_ref: { job_id: row!.job_id! } } : null}
+      media={done ? <ContourMedia key={row!.job_id} jobId={row!.job_id!} view={view} onView={onView} canCapture={canCapture} captureViews={paramSets.find((p) => p.id === psId)?.display?.views ?? null} /> : null}
+      mediaTitle={row ? `그림/영상 — DOE #${row.doe_no}` : undefined}
+      delayMs={POLL.contourDwell}
+    >
+      {({ aside, body }) =>
+        !row ? (
+          <Card span="half" title="DOE" className="batch-run-panel">
+            <p className="muted small">표나 그래프에서 run을 고르세요.</p>
+          </Card>
+        ) : (
+          <Card span="half" title={`DOE #${row.doe_no}`} step={row.run_key} className="batch-run-panel" aside={aside}>
+            {!done ? (
+              <p className="muted small">{ROW_STATE_LABEL[row.state]} — 예측이 끝나면 컨투어와 결과 목록이 나옵니다.</p>
+            ) : (
+              <>
+                {body}
+                {result ? <ResultListTree artifactId={result.preview_json_artifact_id} /> : <p className="muted small">불러오는 중…</p>}
+              </>
+            )}
+            <div className="run-action-row">
+              <CopyButton text={row.folder} label="경로 복사" />
+              <button type="button" className="btn small" disabled={!row.job_id || row.state !== "SUCCEEDED"} onClick={() => navigate(`${base}?job=${row.job_id}`)}>
+                단일 예측으로 열기
+              </button>
+              {pbs.button}
+            </div>
+            {pbs.notes}
+          </Card>
+        )
+      }
+    </ContourSlot>
   );
 }

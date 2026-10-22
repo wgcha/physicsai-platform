@@ -18,7 +18,7 @@ export function RunInputsCard({ run }: { run: PredictRunDetail }) {
   const paths = PATH_ROWS.filter((p) => run.paths?.[p.key]);
   const pi = run.predict_input;
   return (
-    <Card span={9} title="입력·경로" className="run-inputs">
+    <Card span="half" title="입력·경로" className="run-inputs">
       <div className="model-line">
         <span className="field-label">모델</span>
         <span>{run.model ? `${run.model.name} v${run.model.version}` : <span className="muted">—</span>}</span>

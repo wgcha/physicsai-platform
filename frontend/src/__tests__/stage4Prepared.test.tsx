@@ -94,7 +94,8 @@ describe("④ 준비된 입력 예측 (V3-S6-13)", () => {
     const result = await screen.findByRole("region", { name: "결과" });
     await waitFor(() => expect(within(result).getByText("Face_Drop_0000.rad")).toBeTruthy(), { timeout: 3000 });
     expect(within(result).getByText(/준비된 입력/)).toBeTruthy();
-    expect(await within(result).findByAltText(/^예측 컨투어 — /)).toBeTruthy();
+    // contour3d-default: 컨투어는 별도 "결과 컨투어" 칸(3D 불가 환경 = PNG 인라인)
+    expect(await within(screen.getByRole("region", { name: "결과 컨투어" })).findByAltText(/^예측 컨투어 — /)).toBeTruthy();
     expect(chainLabels()).toEqual(["입력파일", "예측"]);
     expect(screen.queryByText("생략")).toBeNull();
     // FEM 검증: 해석 연결 미구성 → 비활성 + 안내

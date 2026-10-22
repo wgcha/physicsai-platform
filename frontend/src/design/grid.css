@@ -65,6 +65,8 @@
 .c8 { grid-column: span 8; }
 .c9 { grid-column: span 9; }
 .c12 { grid-column: span 12; }
+/* 같은 줄 1:1(contour3d-default C3D-9): 변수표 | 결과 컨투어. 12열 중 6칸, 1280 미만(6열)은 전체 폭으로 쌓는다 */
+.c-half { grid-column: span 6; }
 /* 격자 안에서 의미 요소(main)를 유지하면서 칸을 같은 격자에 올린다 */
 .grid-contents {
   display: contents;
@@ -74,6 +76,7 @@
   .workgrid .c9 { grid-column: span 12; }
   .workgrid .c6 { grid-column: span 8; }
   .workgrid .c3 { grid-column: span 4; }
+  .workgrid .c-half { grid-column: span 6; }
 }
 @media (max-width: 1279px) {
   .grid {
@@ -81,7 +84,8 @@
   }
   .c8,
   .c9,
-  .c12 {
+  .c12,
+  .c-half {
     grid-column: span 6;
   }
   .c4 {
@@ -98,7 +102,8 @@
   .c6,
   .c8,
   .c9,
-  .c12 {
+  .c12,
+  .c-half {
     grid-column: span 2;
   }
 }

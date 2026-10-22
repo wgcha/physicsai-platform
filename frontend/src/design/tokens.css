@@ -155,6 +155,8 @@
   /* 레이아웃 */
   --cols: 12;
   --gap: 16px;
+  /* 결과 3D 컨투어 보기 높이(contour3d-default C3D-9) */
+  --c3d-h: clamp(420px, calc(100vh - 320px), 960px);
   --drawer-w: 420px;
 }
 

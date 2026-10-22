@@ -584,10 +584,10 @@ describe("④ B 결과 표·그래프·커브 (V3-S9-14·18)", () => {
     expect(await screen.findByAltText(/^예측 컨투어 — /)).toBeTruthy();
   });
 
-  it("S14: 그래프 카드 대신 '⑤ 결과분석에서 열기' 링크 카드(/stage/analysis?source=batch&id=…), ④에는 분석 그래프·커브 카드 없음", async () => {
+  it("S14: 그래프 카드 대신 결과 표 카드 머리의 '⑤ 결과분석에서 열기' 링크(/stage/analysis?source=batch&id=…), ④에는 분석 그래프·커브 카드·결과분석 카드 없음(C3D-9)", async () => {
     renderApp(BATCH, { user: "power" });
-    await screen.findByRole("region", { name: "결과 표 — B-002" });
-    const card = screen.getByRole("region", { name: "결과분석" });
+    const card = await screen.findByRole("region", { name: "결과 표 — B-002" });
+    expect(screen.queryByRole("region", { name: "결과분석" })).toBeNull();
     expect(within(card).getByTestId("analysis-link").getAttribute("href")).toBe(`${STUDY}/analysis?source=batch&id=pb-2`);
     expect(screen.queryByRole("region", { name: "응답 그래프" })).toBeNull();
     expect(screen.queryByRole("region", { name: "커브 겹쳐보기" })).toBeNull();

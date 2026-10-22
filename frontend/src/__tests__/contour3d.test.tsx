@@ -1,5 +1,6 @@
-// 결과 3D 컨투어 화면(geometry-view.md §13.6): ④ 예측 결과 [3D 컨투어] → POST(열 때 생성) → 대기 안내(단계 스테퍼·진행률·경과/예상·취소)
-// → 뷰어(정점 색·프레임 Range 로드·이전/다음·재생·범례 고정/프레임별·변형 배율), 410이면 자동 재요청, 결과 실패 사유, 기능 꺼짐·WebGL 불가 = 숨김.
+// 결과 3D 컨투어 화면(geometry-view.md §13.6, contour3d-default): ④ 예측 결과 컨투어 칸 = 3D 기본(칸이 보이면 자동 POST) → 대기 안내(단계 스테퍼·진행률·경과/예상·취소)
+// → 뷰어(정점 색·프레임 Range 로드·이전/다음·재생·범례 고정/프레임별·변형 배율), 410이면 자동 재요청, 결과 실패 사유 + PNG, 기능 꺼짐·WebGL 불가 = PNG 인라인.
+// 자동 요청·머무름·429·비교·배치(V-C3D-*)는 contour3dDefault.test.tsx.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { renderApp, STUDY } from "../test/render";
@@ -44,10 +45,9 @@ function spy(server: MockServer) {
   return calls;
 }
 
+/** ④ 결과 컨투어 칸(자동 요청 — 열기 버튼 없음) */
 async function open() {
-  const panel = await screen.findByTestId("contour3d-panel");
-  fireEvent.click(within(panel).getByRole("button", { name: "3D 컨투어" }));
-  return panel;
+  return screen.findByTestId("contour-slot");
 }
 
 beforeEach(() => {
@@ -63,7 +63,7 @@ afterEach(() => {
 });
 
 describe("④ 예측 결과 — 결과 3D 컨투어", () => {
-  it("열 때 생성 → 뷰어: contour.glb 1회 + 프레임 Range, 정점 색, 이전/다음·슬라이더, 범례 고정/프레임별, 변형 배율, 재생", async () => {
+  it("칸이 보이면 생성 → 뷰어: contour.glb 1회 + 프레임 Range, 정점 색, 이전/다음·슬라이더, 범례 고정/프레임별, 변형 배율, 재생", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power" });
     const calls = spy(server);
     const panel = await open();
@@ -146,16 +146,18 @@ describe("④ 예측 결과 — 결과 3D 컨투어", () => {
     renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3d: "fail" }));
     const panel = await open();
     expect((await within(panel).findByTestId("contour3d-fail")).textContent).toContain("선택한 결과 값이 없습니다");
+    expect(within(panel).getByTestId("contour-media")).toBeTruthy(); // V-C3D-14: 사유 + PNG 인라인([다시] 없음)
+    expect(within(panel).queryByRole("button", { name: "다시" })).toBeNull();
   });
 
-  it("FEM 검증 결과 컨투어 탭: SOLVER_H3D {fem_verification_id}로 생성", async () => {
+  it("FEM 검증 결과 컨투어 탭: 예측·FEM 두 원본(PREDICT_H3D·SOLVER_H3D {fem_verification_id})으로 생성, 예측 job 없으면 FEM 단독", async () => {
     const { server } = renderApp(`${STUDY}/4/verify/fv-1`, { user: "power", hpcConfigured: true, femVerify: "demo" });
     await screen.findByRole("table", { name: "FEM 응답 비교" });
     fireEvent.click(screen.getByRole("tab", { name: "컨투어" }));
-    const panel = await screen.findByTestId("contour3d-panel");
-    fireEvent.click(within(panel).getByRole("button", { name: "3D 컨투어(FEM 해석)" }));
-    await within(panel).findByTestId("contour-viewer");
-    expect(gvRecords(server).contours[0]).toMatchObject({ source_kind: "SOLVER_H3D", source_ref: { fem_verification_id: "fv-1" } });
+    await screen.findByTestId("contour-compare3d");
+    await waitFor(() => expect(gvRecords(server).contours).toHaveLength(2));
+    expect(gvRecords(server).contours.map((c) => c.source_kind).sort()).toEqual(["PREDICT_H3D", "SOLVER_H3D"]);
+    expect(gvRecords(server).contours.find((c) => c.source_kind === "SOLVER_H3D")).toMatchObject({ source_ref: { fem_verification_id: "fv-1" } });
   });
 
   it("GV-C3 ① 해석 run 결과: h3d_rel 있는 run만 [3D 컨투어] → SOLVER_H3D {study_id, h3d_rel}로 생성", async () => {
@@ -182,17 +184,23 @@ describe("④ 예측 결과 — 결과 3D 컨투어", () => {
     expect(within(table).queryByRole("columnheader", { name: "결과" })).toBeNull();
   });
 
-  it("features.contour3d=false → 숨김", async () => {
-    renderApp(`${STUDY}/4`, { user: "power", disabledFeatures: ["contour3d"] });
+  it("features.contour3d=false → PNG 인라인(그림/영상 버튼·요청 없음)", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power", disabledFeatures: ["contour3d"] });
+    const calls = spy(server);
     await screen.findByTestId("contour-media");
-    expect(screen.queryByTestId("contour3d-panel")).toBeNull();
+    expect(screen.queryByTestId("contour-slot")).toBeNull();
+    expect(screen.queryByRole("button", { name: "그림/영상" })).toBeNull();
+    expect(calls.filter((c) => c.p === "/contour3d")).toHaveLength(0);
   });
 
-  it("WebGL 불가 → 숨김(기존 PNG·영상 유지)", async () => {
+  it("WebGL 불가 → PNG 인라인(기존 PNG·영상 유지, 요청 없음)", async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
     resetWebGLCache();
-    renderApp(`${STUDY}/4`, { user: "power" });
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" });
+    const calls = spy(server);
     await screen.findByTestId("contour-media");
-    expect(screen.queryByTestId("contour3d-panel")).toBeNull();
+    expect(screen.queryByTestId("contour-slot")).toBeNull();
+    expect(screen.queryByRole("button", { name: "그림/영상" })).toBeNull();
+    expect(calls.filter((c) => c.p === "/contour3d")).toHaveLength(0);
   });
 });

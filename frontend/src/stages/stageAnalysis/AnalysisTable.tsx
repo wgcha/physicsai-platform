@@ -54,7 +54,7 @@ export function AnalysisTable({ table, sort, onSort, pickVars, onToggleVar, pick
   const rows = useMemo(() => sortRtRows(table.rows, sort), [table, sort]);
   return (
     <Card
-      span={6}
+      span="half"
       title={`결과 표 — ${table.origin.label}`}
       className="batch-table-card analysis-table"
       aside={

@@ -1,6 +1,6 @@
 // ④ B 일괄 예측 진행·결과(phase3.md §14.8, 시안 04, 라우트 …/stage/4/batch/:batchId):
 // 위 3칸(입력 생성 x/N · 예측 실행 중·대기·완료 · 파일 위치) + 결과 표(정렬·CSV·행 선택·실패만 다시·일괄 취소)
-// + 오른쪽: 고른 DOE(컨투어 방향별 스크린샷·영상(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증) · "⑤ 결과분석에서 열기" 링크 카드.
+// + 오른쪽(1:1, contour3d-default C3D-9): 고른 DOE(3D 컨투어 기본 — 그림/영상은 창(S10)·결과 목록·경로 복사·단일 예측으로 열기·PBS 검증). "⑤ 결과분석에서 열기"는 결과 표 카드 머리 링크.
 // S14(D3-62, §19.7): 변수–응답 그래프·설계공간 지도·커브 겹쳐보기(분석)는 ⑤ 결과분석(/stage/analysis?source=batch&id=<batchId>)으로 이동했다.
 import { snapshotText } from "../../../lib/nativeVars";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -137,13 +137,16 @@ export function BatchResult({ batchId }: { batchId: string }) {
       </Card>
 
       <Card
-        span={6}
+        span="half"
         title={`결과 표 — ${b.label}`}
         className="batch-table-card"
         aside={
           <span className="run-action-row">
             <Link to={base} className="small" onClick={() => (writeInputMode("batch"), writeBatchTab("list"))}>
               ← 실행 목록
+            </Link>
+            <Link className="small" to={`/p/${study.project_id}/s/${study.id}/stage/analysis?source=batch&id=${b.id}`} data-testid="analysis-link" title="변수–응답 그래프, 설계공간 지도, 영향도, 커브 겹쳐보기">
+              ⑤ 결과분석에서 열기
             </Link>
             <label className="inline-field small">
               정렬
@@ -231,15 +234,6 @@ export function BatchResult({ batchId }: { batchId: string }) {
       </Card>
 
       <RunPanel row={selRow} base={base} canCapture={canExec} view={mediaView} onView={setMediaView} psId={b.param_set.id} batchId={batchId} />
-      <Card span={3} title="결과분석" className="batch-analysis-link">
-        <div className="link-card">
-          <p className="muted small">변수–응답 그래프, 설계공간 지도, 영향도, 커브 겹쳐보기는 ⑤ 결과분석에서 봅니다.</p>
-          <Link className="btn small" to={`/p/${study.project_id}/s/${study.id}/stage/analysis?source=batch&id=${b.id}`} data-testid="analysis-link">
-            ⑤ 결과분석에서 열기
-          </Link>
-        </div>
-      </Card>
-
       {confirmCancel && (
         <ConfirmDialog
           title={`일괄 예측 ${b.label} 취소`}

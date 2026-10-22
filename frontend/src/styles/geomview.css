@@ -413,3 +413,89 @@
 .gv-diag {
   overflow-wrap: anywhere;
 }
+
+/* 결과 컨투어 기본 3D·1:1 배치(contour3d-default C3D-9). 보기 높이는 --c3d-h(design/tokens.css) */
+.contour-slot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.contour-slot .c3-stage {
+  height: var(--c3d-h);
+}
+.contour-slot.c3-compare {
+  container-type: inline-size;
+}
+/* 두 열의 머리 높이가 달라도(변수 요약 줄바꿈) 뷰어 윗선을 맞춘다(subgrid) */
+.c3-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: auto auto;
+  column-gap: var(--space-4);
+  row-gap: var(--space-2);
+}
+.c3-col {
+  display: grid;
+  grid-row: span 2;
+  grid-template-rows: subgrid;
+  min-width: 0;
+}
+@container (max-width: 899px) {
+  .c3-cols {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+  }
+  .c3-col {
+    grid-row: auto;
+    grid-template-rows: none;
+    gap: var(--space-2);
+  }
+}
+.c3-compare .c3-stage {
+  height: auto;
+  aspect-ratio: 1 / 1;
+  max-height: var(--c3d-h);
+}
+.c3-common-legend {
+  display: grid;
+  gap: var(--space-1);
+}
+.c3-common-legend .gv-legend-bar {
+  width: 100%;
+  height: 12px;
+}
+.c3-common-ticks {
+  display: flex;
+  justify-content: space-between;
+}
+/* 같은 줄 변수표는 보기 높이를 넘으면 내부 스크롤(머리글 고정) */
+.c-half .table-wrap {
+  max-height: var(--c3d-h);
+  overflow: auto;
+}
+.c-half .table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--color-surface-raised);
+}
+.dialog.media-dialog {
+  width: min(1400px, 92vw);
+  max-height: 92vh;
+  overflow: auto;
+  display: grid;
+  gap: var(--space-3);
+}
+.media-dialog-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.media-dialog-head .dialog-title {
+  margin: 0;
+}
+.media-dialog-body {
+  min-width: 0;
+}
