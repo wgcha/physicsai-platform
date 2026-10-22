@@ -220,6 +220,7 @@ ALLOWED = {
     "backend/physicsai_core/stage1_train_data/doe_platform.py": 1,
     "backend/physicsai_core/geometry/baselines.py": 1,
     "backend/physicsai_core/stage4_predict/param_set_files.py": 2,       # 폴더 파일 읽기
+    "backend/physicsai_core/stage4_predict/input_kind.py": 1,            # 입력 종류 능력: 세트 정의의 쉘 두께(source prop) 행 유무(input-kind.md IK-3)
     "backend/physicsai_core/stage4_predict/batch_multi.py": 2,           # 다중 baseline(vars 없음, NV-9)
     "backend/physicsai_core/equiv/sides.py": 1,
     "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py": 1,

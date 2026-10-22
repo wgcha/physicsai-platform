@@ -14,7 +14,7 @@ def test_v_mcp_1_default_off(client, fake_dashboard):
     r = client.get(f"{API}/me", headers=T(fake))
     assert r.status_code == 401 and r.json()["detail"]["code"] == "AUTHENTICATION_REQUIRED"
     assert fake_dashboard.me_calls() == 0  # 대시보드로 보내지 않는다
-    for path in ("/mcp/job-kinds", "/mcp/system", "/me/api-tokens", "/mcp/glossary", "/mcp/tools", "/mcp/ping"):
+    for path in ("/mcp/job-kinds", "/mcp/system", "/me/api-tokens", "/mcp/glossary", "/mcp/tools", "/mcp/ping", "/mcp/connection"):
         r = client.get(f"{API}{path}", headers=H("tok-power"))
         assert r.status_code == 404 and r.json()["detail"]["code"] == "MCP_DISABLED", path
     r = client.post(f"{API}/mcp/jobs/plan", headers=H("tok-power", write=True), json={"kind": "predict", "study_id": "x"})
