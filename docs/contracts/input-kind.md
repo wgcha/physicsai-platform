@@ -221,3 +221,5 @@
 ## 변경 메모
 
 (구현 중 계약과 달라지면 `IK-C1~`로 기록하고 Plan 확인.)
+
+- **IK-C1**(2026-10-22, v0.2.7 구현 반영): ① paicad cushion write starter 판별 = 조립 폴더 직계 `*.rad` 중 `/BEGIN` 있는 것 정확히 1개(eps_mesh*·inc·out-rad 이름 제외, 0·2개 이상은 GEOM_INPUT_INVALID), 실행 이름 = out-rad stem(`EPS_mesh_0000`, 현장 R1 확인), `/MAT`이 참조하는 `/FUNCT`·`/TABLE`은 복사 안 함(현장 확인). ② cushion.json `parts[].part` = Radioss part id + 선택 키 `components`(RENUM 이름), 경고 CUSHION_PART_DEF_MISSING에 `names`. ③ FEM TEMPLATE 조립 출처는 migration 없이 assem_kind CUSTOM + assem_ref{path,template_id} 저장, 응답에서만 TEMPLATE. ④ /mcp/connection의 X-Forwarded-Proto/Host는 loopback 상대만 신뢰. ⑤ 보고서 문구 "입력: 조립|쿠션". ⑥ report_html/common.py의 표시용 변환 표는 후속에 input_kind.py로 일원화(R4). ⑦ ⑥ 쿠션 응답 경고는 재사용 배치가 있을 때 계산(Q2와 일치).
