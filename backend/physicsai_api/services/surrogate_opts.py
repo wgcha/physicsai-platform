@@ -49,7 +49,8 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
             "objective_available": n["valid_points"] is None or n["valid_points"] > 0, "problems": n["problems"],
             "mode": st["mode"], "performances": n["performances"], "algorithm": st["algorithm"],
             "algo_options": st["algo_options"], "verification": st["verification"], "variables_kind": n["variables_kind"],
-            "levels": st.get("levels"), "var_notes": n["var_notes"], "var_rows": n["var_rows"], "excluded": n["excluded"]}
+            "levels": st.get("levels"), "input": n["input"], "input_capability": n["input_capability"],
+            "input_capability_reason": n["input_capability_reason"], "notes": n["notes"], "var_notes": n["var_notes"], "var_rows": n["var_rows"], "excluded": n["excluded"]}
 
 
 def create(ctx: AppContext, principal: Principal, study_id: str, body: Any, rid: str, ip: str | None) -> dict[str, Any]:

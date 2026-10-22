@@ -176,7 +176,9 @@ def _param_set(ctx: Any, principal: Any, pid: str, top_n: int) -> dict[str, Any]
                      prep_status=native.get("status") if isinstance(native, dict) else None,
                      baseline_count=len(p.get("baselines") or []), parameter_count=len(params), response_count=len(resp),
                      vars_revision=native.get("vars_revision") if isinstance(native, dict) else None,  # native-vars.md §6.6: 변수 정의 리비전(0 = 등록 정의)
-                     vars_count=native.get("vars_count") if isinstance(native, dict) else None)
+                     vars_count=native.get("vars_count") if isinstance(native, dict) else None,
+                     input_capability=",".join(p.get("input_capability") or []) or None,  # input-kind.md §6.3: 이 템플릿이 받는 입력 종류(assembly·cushion)
+                     input_capability_reason=p.get("input_capability_reason"))
     tabs = [table("parameters", params, top_n), table("responses", resp, top_n)]
     links = [{"entity": "study", "id": p["study_id"], "rel": "study"}]
     return envelope("param_set", pid, p.get("label") or pid, None, facts, tabs, links)
@@ -202,7 +204,7 @@ def _predict_run(ctx: Any, principal: Any, jid: str, top_n: int) -> dict[str, An
     r = _svc("predict_runs").get_run(ctx, principal, jid)
     tpl = r.get("template") or {}
     mdl = r.get("model") or {}
-    facts = facts_of(r, ("state", "origin", "input_mode", "attempts", "duration_s", "created_by_name", "created_at", "finished_at"),
+    facts = facts_of(r, ("state", "origin", "input_mode", "input", "attempts", "duration_s", "created_by_name", "created_at", "finished_at"),
                      template=tpl.get("label") if isinstance(tpl, dict) else None, model=mdl.get("name") if isinstance(mdl, dict) else None)
     vals = [{"name": k, "value": v} for k, v in (r.get("values") or {}).items()] if isinstance(r.get("values"), dict) else []
     rows = r.get("response_table") or []
@@ -216,7 +218,7 @@ def _predict_run(ctx: Any, principal: Any, jid: str, top_n: int) -> dict[str, An
 def _predict_batch(ctx: Any, principal: Any, bid: str, top_n: int) -> dict[str, Any]:
     b = _svc("predict_batches").get_batch(ctx, principal, bid)
     gen, pred = b.get("gen") or {}, b.get("predict") or {}
-    facts = facts_of(b, ("label", "status", "input_kind", "source_kind", "multi_execution", "created_by_name", "created_at", "finished_at"),
+    facts = facts_of(b, ("label", "status", "input", "input_kind", "source_kind", "multi_execution", "created_by_name", "created_at", "finished_at"),
                      **{f"gen_{k}": v for k, v in gen.items()}, **{f"predict_{k}": v for k, v in pred.items()},
                      out_of_range_runs=sum(1 for r in b.get("rows") or [] if r.get("out_of_range")))
     rows = [{"run_key": r.get("run_key"), "state": r.get("state"), "values": r.get("values"), "responses": r.get("responses") or {}}
@@ -229,7 +231,7 @@ def _predict_batch(ctx: Any, principal: Any, bid: str, top_n: int) -> dict[str, 
 def _surrogate_opt(ctx: Any, principal: Any, oid: str, top_n: int) -> dict[str, Any]:
     o = _svc("surrogate_opts").get_opt(ctx, principal, oid)
     best = o.get("best") or {}
-    facts = facts_of(o, ("label", "status", "mode", "iter_no", "progress_text", "stop_reason", "created_by_name", "created_at",
+    facts = facts_of(o, ("label", "status", "input", "mode", "iter_no", "progress_text", "stop_reason", "created_by_name", "created_at",
                          "finished_at"), algorithm=(o.get("settings") or {}).get("algorithm"),
                      verification=(o.get("settings") or {}).get("verification"), evaluated=len(o.get("runs") or []),
                      best_objective=best.get("objective"), best_feasible=best.get("feasible"),

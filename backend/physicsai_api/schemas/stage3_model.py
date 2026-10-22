@@ -10,7 +10,14 @@ from pydantic import Field
 from .common import Req, Resp
 from .studies import Study
 
-__all__ = ["Dataset", "Model", "StudyDetail", "ModelPatch", "FinalModelRequest"]
+__all__ = ["SourceDoe", "Dataset", "Model", "StudyDetail", "ModelPatch", "FinalModelRequest"]
+
+
+class SourceDoe(Resp):
+    """데이터셋 출처가 ① DOE일 때(계산값). label 예: "① DOE D-001(조립)" · "① DOE 여러 개(조립)"."""
+
+    doe_ids: list[str]
+    label: str
 
 
 class Dataset(Resp):
@@ -33,6 +40,7 @@ class Dataset(Resp):
     curation_id: str | None = None
     engine: Literal["altair", "native"] | None = None  # geometry-engine.md §7.7: 학습데이터 형상 엔진(null = 모름)
     engine_version: str | None = None
+    source_doe: SourceDoe | None = None  # input-kind.md §9(P3): 입력 폴더가 ① DOE 결과면 출처, 외부 폴더면 null
     created_by_name: str
     created_at: datetime
 

@@ -159,8 +159,8 @@ def load_table(ctx: AppContext, principal: Principal, source: str, sid: str) -> 
             curves = pb_svc.curves(ctx, sid, None, CURVE_POINTS)
         except DomainError:
             curves = None
-        return rt, {"study": rc.study_info(study), "param_set": rc.param_set_info(ps), "engine": rc.engine_info(ctx, ps), "model": model or None,
-                    "origins": origins, "curves": curves}
+        return rt, {"study": rc.study_info(study), "param_set": rc.param_set_info(ps, b0["input_kind"]), "engine": rc.engine_info(ctx, ps),
+                    "model": model or None, "origins": origins, "curves": curves}
     if source == "doe":
         with ctx.engine.connect() as conn:
             d = train_repo.get_doe(conn, sid)

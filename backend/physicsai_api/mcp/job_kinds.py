@@ -285,7 +285,7 @@ def plan_batch(ctx: Any, principal: Any, study_id: str, p: Any) -> dict[str, Any
     from ..schemas.predict_batch_source import PredictBatchPreviewRequest
 
     try:
-        pv = _svc("predict_batches").preview(ctx, study_id, PredictBatchPreviewRequest(param_set_id=p.param_set_id, source=p.source, model_id=p.model_id, vars=p.vars))
+        pv = _svc("predict_batches").preview(ctx, study_id, PredictBatchPreviewRequest(param_set_id=p.param_set_id, source=p.source, model_id=p.model_id, vars=p.vars, input=p.input))
     except DomainError as exc:
         return {**lane_info("PREDICT_BATCH"), "problems": problems_of(exc), "warnings": []}
     cap = ctx.settings.train_data.max_multi_execution
@@ -296,7 +296,7 @@ def plan_batch(ctx: Any, principal: Any, study_id: str, p: Any) -> dict[str, Any
             "estimate_min": pv.get("estimate_min"), "estimate_basis": "recent_median" if pv.get("estimate_min") is not None else "none",
             "warnings": [problem(str(x.get("code")), str(x.get("message"))) for x in pv.get("notes") or []], "problems": probs,
             "targets": {"param_set": str(p.param_set_id or "현재 세트"), "model": str(p.model_id or "Final"),
-                        "input_kind": str(pv.get("input_kind"))}}
+                        "input_kind": str(pv.get("input_kind")), "input": str(pv.get("input"))}}
 
 
 # ---- ⑥ 내장 최적화 ----------------------------------------------------------------------------------

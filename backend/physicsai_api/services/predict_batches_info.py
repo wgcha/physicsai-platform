@@ -19,6 +19,7 @@ from physicsai_core.geometry.messages import MAX_MESSAGE, category_of
 from physicsai_core.paths import display_path
 from physicsai_core.sampling import designs as sampling_designs
 from physicsai_core.sampling import registry as sampling_registry
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.state_machine import TERMINAL
 
@@ -138,6 +139,7 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
     return {
         "id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"],
         "dir": display_path(root, s["folder_name"], b["dir_rel"]), "input_kind": b["input_kind"],
+        "input": ik.to_public(b["input_kind"]), "warnings": _cushion_warnings(b, ps, rows),
         "source_kind": b["source_kind"],
         "sampling": _sampling_info(conn, b["source_kind"], b.get("source_meta"), owned_it["kind"] if owned_it else None,
                                    rows, None),
@@ -151,6 +153,23 @@ def _detail(ctx: AppContext, conn: Any, b: dict[str, Any], principal: Principal)
         "finished_at": b["finished_at"], "can_cancel": not owned and _can_cancel(b, principal, s["project_id"]),
         "can_retry_failed": not owned and principal.can_execute(s["project_id"]) and not parent_active and (regen or bool(kids)),
     }
+
+
+def _cushion_warnings(b: dict[str, Any], ps: dict[str, Any], rows: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """쿠션 입력 배치에서 성공한 run이 있는데 값이 하나도 없는 응답만 경고(INPUT_CUSHION_RESPONSES, 차단 없음 — 사용자 확정 Q2)."""
+    if ik.to_public(b["input_kind"]) != ik.CUSHION:
+        return []
+    done = [r for r in rows if r["job_state"] == "SUCCEEDED"]
+    if not done:
+        return []
+    names = [str(x["name"]) for x in ps.get("responses") or [] if isinstance(x, dict) and x.get("name")
+             and not any(_num((r["responses"] or {}).get(x["name"])) for r in done)]
+    w = ik.cushion_missing_warning(names)
+    return [w] if w else []
+
+
+def _num(v: Any) -> bool:
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
 
 
 def _response_summary(conn: Any, batch_id: str, ps: dict[str, Any]) -> dict[str, Any] | None:

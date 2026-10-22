@@ -17,6 +17,7 @@ from physicsai_core.stage4_predict.response_defs import validate_response_defs
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, param_set_out, require_power, study_root
+from .input_kind_gate import with_capability
 
 
 def put_responses(ctx: AppContext, principal: Principal, ps_id: str, rows: list[dict[str, Any]], rid: str,
@@ -45,7 +46,7 @@ def put_responses(ctx: AppContext, principal: Principal, ps_id: str, rows: list[
         write_json_atomic(os.path.join(stored, "responses.json"), {"responses": out})
         audit(conn, principal, "PARAM_SET_UPDATE", "param_set", ps_id, {"responses": [r["name"] for r in out]}, rid, ip)
         p = ps_repo.get(conn, ps_id)
-    return param_set_out(p)  # type: ignore[arg-type]
+    return with_capability(ctx, p, param_set_out(p))  # type: ignore[arg-type]
 
 
 def _require_perf_unchanged(conn: Any, ps: dict[str, Any], rows: list[dict[str, Any]]) -> None:

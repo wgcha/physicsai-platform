@@ -81,7 +81,7 @@ def test_all_routes_prefixed():
         "/me/api-tokens", "/me/api-tokens/{token_id}", "/admin/api-tokens", "/admin/api-tokens/{token_id}/revoke",
         "/mcp/ping", "/mcp/job-kinds", "/mcp/job-kinds/{kind}", "/mcp/jobs/plan", "/mcp/jobs", "/mcp/jobs/{job_id}",
         "/mcp/jobs/{job_id}/summary", "/mcp/jobs/{job_id}/cancel", "/mcp/summary/{entity}/{id}", "/mcp/system", "/mcp/audit",
-        "/mcp/glossary", "/mcp/tools",
+        "/mcp/glossary", "/mcp/tools", "/mcp/connection",
         # native-vars.md §6.1: Native 템플릿 변수 정의(선택·범위)
         "/param-sets/{ps_id}/variables",
         # upload-report.md §4: 브라우저 분할 업로드(청크 PUT octet-stream, x-mcp exclude)

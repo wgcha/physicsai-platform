@@ -20,12 +20,14 @@ from physicsai_core.db.repositories import train as train_repo  # noqa: F401 - �
 from physicsai_core.errors import DomainError
 from physicsai_core.geometry import native_vars as nv
 from physicsai_core.sampling import registry as sampling_registry
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.state_machine import TERMINAL
 
 from ..auth import Principal
 from ..context import AppContext
 from .common import audit, require_config_ok, require_power
+from .input_kind_gate import capability_of, resolve_internal
 from .job_params.stage4_batch import build_matrix_vars, resolve_param_set
 from .job_params.stage4_predict import model_for
 from .job_params.study_manage import study_gate
@@ -57,6 +59,8 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
     with ctx.engine.connect() as conn:
         s = studies_repo.require(conn, study_id)
         ps = resolve_param_set(conn, s, body.param_set_id)
+        kind = resolve_internal(ctx, ps, body.input)  # input-kind.md IK-1: 생성과 같은 능력 검사(422·409)
+        cap, cap_reason = capability_of(ctx, ps)
         try:  # native-vars.md §6.3: 학습 범위·out_of_range는 고른 모델 기준(Final·지정 모델이 없으면 학습 범위 없이 미리보기)
             model = model_for(conn, s, body.model_id)
         except DomainError:
@@ -66,7 +70,8 @@ def preview(ctx: AppContext, study_id: str, body: Any) -> dict[str, Any]:
         rows = [{"values": r.values} for r in matrix.rows]
         sampling = _sampling_info(conn, matrix.source_kind, matrix.source_meta, None, rows,
                                   _recommended(ctx, body.source.kind, matrix.source_meta, res.ps))
-    return {"input_kind": ps.get("input_kind") or "assembly", "count": len(matrix.rows), "estimate_min": est,
+    return {"input_kind": kind, "input": ik.to_public(kind), "input_capability": cap, "input_capability_reason": cap_reason,
+            "count": len(matrix.rows), "estimate_min": est,
             "rows": [r.as_dict() for r in matrix.rows], "problems": matrix.problems, "notes": matrix.notes,
             "sampling": sampling, "var_rows": nv.var_rows(res.vars, res.pool) if res.vars is not None else [],
             "excluded": list((res.vars or {}).get("excluded") or [])}
@@ -94,6 +99,7 @@ def list_batches(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
         rows = pb_repo.list_for_study(conn, study_id)
         sets = {pid: ps_repo.get(conn, pid) or {} for pid in {b["param_set_id"] for b in rows}}
         return [{"id": b["id"], "label": batch_label(b["batch_no"]), "status": b["status"], "run_count": b["run_count"],
+                 "input": ik.to_public(b["input_kind"]),
                  "created_at": b["created_at"], "created_by_name": b["created_by_name"],
                  "param_set": {"id": b["param_set_id"], "label": sets[b["param_set_id"]].get("label")},
                  **pb_repo.counts(conn, b["id"]), "response_summary": _response_summary(conn, b["id"], sets[b["param_set_id"]]),

@@ -8,7 +8,7 @@ from typing import Any
 
 from pydantic import Field
 
-from .common import Resp
+from .common import InputKind, Resp
 from .native_vars import VarNote
 from .surrogate_opt_req import (  # noqa: F401 - 기존 경로 재노출
     METRIC_PATTERN, SoExploreNew, SoExploreReuse, SoExplore, SoObjective, SoConstraint, SoObserve, SurrogateOptCreate,
@@ -108,6 +108,7 @@ class SurrogateOpt(Resp):
     label: str
     status: str
     dir: str
+    input: InputKind = "assembly"  # input-kind.md IK-10: 실행의 입력 종류(저장값 param_set.input_kind = mesh_only ↔ cushion)
     param_set: dict[str, Any]
     model: dict[str, Any]
     settings: dict[str, Any]

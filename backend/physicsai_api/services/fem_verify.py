@@ -14,6 +14,7 @@ from physicsai_core.db.repositories import fem_verifications as fv_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.errors import DomainError
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.state_machine import TERMINAL
 
 from ..auth import Principal
@@ -93,6 +94,8 @@ def _insert_companion(ctx: AppContext, conn: Any, principal: Principal, study: d
     c = r.companion or {}
     raw = {"input_mode": "parametric", "param_set_id": c["param_set_id"], "model_id": c["model_id"], "values": c["values"],
            "value_source": "manual"}
+    if c.get("template_kind"):  # input-kind.md §4.3: 쿠션 실행의 FEM 검증은 같은 입력 종류로 동반 예측
+        raw["input"] = ik.to_public(c["template_kind"])
     p = job_params.parse_params("PREDICT", raw)
     params, result, warnings = job_params.prepare(ctx, conn, study, "PREDICT", p)
     params["fem_verify_id"] = fid

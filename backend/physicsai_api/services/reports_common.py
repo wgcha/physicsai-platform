@@ -10,6 +10,7 @@ from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.db.repositories import report_sources
 from physicsai_core.db.repositories import studies as studies_repo
+from physicsai_core.stage4_predict import input_kind as ik
 
 from ..context import AppContext
 
@@ -38,9 +39,11 @@ def engine_info(ctx: AppContext, ps: dict[str, Any] | None) -> dict[str, Any]:
     return out
 
 
-def param_set_info(ps: dict[str, Any] | None) -> dict[str, Any]:
+def param_set_info(ps: dict[str, Any] | None, run_input_kind: str | None = None) -> dict[str, Any]:
+    """보고서 템플릿 표시. `run_input_kind` = 실행(배치·⑥)의 저장값(`assembly|mesh_only`) — 있으면 `input`은 그 실행 값, 없으면 템플릿 값."""
     p = ps or {}
-    return {"id": p.get("id"), "label": p.get("label"), "input_kind": p.get("input_kind") or "assembly", "source_path": p.get("source_path")}
+    return {"id": p.get("id"), "label": p.get("label"), "input_kind": p.get("input_kind") or "assembly", "source_path": p.get("source_path"),
+            "input": ik.to_public(run_input_kind or p.get("input_kind"))}
 
 
 def model_info(conn: Any, study: dict[str, Any], model_id: str | None) -> dict[str, Any]:

@@ -29,13 +29,15 @@ from physicsai_core.stage4_predict.batch_matrix import (
 from physicsai_core.stage4_predict.batch_multi import build_multi_matrix
 
 from ...context import AppContext
+from ...schemas.common import InputKind
 from ...schemas.contour_capture import BatchCaptureOptions, CaptureDisplay
 from ...schemas.native_vars import VarsEdit
 from ...schemas.predict_batch import BatchSource
 from ..common import study_root
+from ..input_kind_gate import resolve_internal
 from .base import _P, invalid_at, prerequisite_missing, require_model_pscfg
 from ..geometry_gate import check_engine_match, engine_of, native_set_gate, require_map_confirmed
-from .stage4_predict import model_for, require_template_features, template_kind
+from .stage4_predict import model_for, require_template_features
 
 
 class PredictBatchParams(_P):
@@ -48,6 +50,7 @@ class PredictBatchParams(_P):
     display: CaptureDisplay | None = None  # phase3 §15 S10: 배치 단위 컨투어 표시(범례 fixed로 run끼리 비교)
     capture: BatchCaptureOptions | None = None  # D3-53: 하위 예측 컨투어 캡처 켜기·방향·동영상(null = 기본)
     vars: VarsEdit | None = None  # native-vars.md §6.3: Native 변수 그 자리 편집(이 실행에만 적용). train_doe·Altair는 불가
+    input: InputKind | None = Field(default=None, description="예측 입력 종류 assembly(조립, m_3) | cushion(쿠션 rad만, m_3 없음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED")
 
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {
@@ -187,7 +190,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         raise invalid_at("job_type", "unknown")
     ps = resolve_param_set(conn, study, p.param_set_id)
     native = engine_of(ps) == "native"
-    kind = template_kind(ps)
+    kind = resolve_internal(ctx, ps, p.input)  # input-kind.md IK-1·IK-3(능력 밖 422, Native 쿠션 명령 없으면 409)
     m = model_for(conn, study, p.model_id)
     require_model_pscfg(cfg, "edspy_predict", m)
     warnings = check_engine_match(ps, m)

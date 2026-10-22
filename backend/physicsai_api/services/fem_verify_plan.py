@@ -15,6 +15,7 @@ from physicsai_core.features import mesh_uses_include_tcl
 from physicsai_core.paths import display_path, resolve_in_study
 from physicsai_core.stage4_predict import contour_capture as cc
 from physicsai_core.stage4_predict import fem_assembly
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict import nearest as nearest_mod
 
 from ..context import AppContext
@@ -22,7 +23,9 @@ from .common import study_root
 from .fem_verify_sources import APPLIED_TOL, Resolved, input_is_assembly, resolve
 
 STATUS_TEXT = {"WAITING_PREDICT": "예측 실행 중", "DONE": "완료", "FAILED": "실패", "CANCELED": "취소됨"}
-ASSEM_KIND = {"predict_input": "PREDICT_INPUT", "train_doe": "TRAIN_DOE", "custom": "CUSTOM"}
+# input-kind.md §8: template는 DB CHECK(assem_kind)를 바꾸지 않고(migration 없음) CUSTOM + assem_ref.template_id로 저장하고
+# 응답에서만 TEMPLATE으로 보인다(워커는 CUSTOM의 assem_ref.path를 그대로 쓴다)
+ASSEM_KIND = {"predict_input": "PREDICT_INPUT", "train_doe": "TRAIN_DOE", "custom": "CUSTOM", "template": "CUSTOM"}
 CSV_HEADER = ["name", "unit", "stat", "pred_min", "pred_max", "fem_min", "fem_max", "pred_value", "fem_value", "diff",
               "diff_pct"]
 MAX_CURVE_POINTS = 5000
@@ -104,6 +107,12 @@ def _comps_auto(ctx: AppContext, study: dict[str, Any], r: Resolved) -> list[str
     return fem_assembly.mesh_part_ids(p)
 
 
+def _template_assem(r: Resolved) -> str | None:
+    """출처 템플릿의 조립 폴더(Study 기준 상대, `ps.assem_rel`). mesh_only 템플릿·세트 없음 = None."""
+    ps = r.param_set or {}
+    return ps.get("assem_rel") if ps.get("input_kind") != "mesh_only" and ps.get("assem_rel") else None
+
+
 def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[str, Any]:
     """미리보기·생성 공통 계획. problems(422 후보)·warnings는 결과에 담고, 설정 오류는 409로 올린다."""
     hpc_mode = _feature_checks(ctx)
@@ -116,6 +125,8 @@ def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[s
     elif kind is None:
         if input_is_assembly(r):
             kind = "predict_input"
+        elif r.template_kind == "mesh_only" and _template_assem(r):  # 조립 가능 템플릿의 쿠션 실행 = 그 템플릿 조립 폴더가 기본(input-kind.md IK-8)
+            kind = "template"
         else:
             doe = _latest_ready_doe(conn, study["id"])
             kind = "train_doe" if doe else None
@@ -156,6 +167,16 @@ def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[s
         assem_ref = {"path": path}
         assem_path = path
         assem_out = {"kind": "CUSTOM", "label": "직접 지정", "path": path}
+    elif kind == "template":
+        rel = _template_assem(r)
+        full = resolve_in_study(study_root(ctx, study), rel) if rel else None
+        if not rel or not full or not os.path.isdir(full):
+            r.problem("TEMPLATE_ASSEMBLY_MISSING", "이 템플릿에는 조립 폴더가 없습니다(쿠션만 가능한 템플릿이거나 정리됨) — 다른 조립 원본을 고르세요")
+        else:
+            path, _where = fem_assembly.check_custom_path(full, s)  # 워커가 CUSTOM 경로로 다시 검사하는 규칙과 같게
+            assem_ref = {"path": path, "template_id": r.param_set["id"]}  # type: ignore[index]
+            assem_path = path
+            assem_out = {"kind": "TEMPLATE", "label": "템플릿 조립 폴더", "path": display_path(s.storage.ai_root, study["folder_name"], rel)}
     if input_mode == "rebuild":
         _rebuild_checks(ctx, r)
         if ((r.predict_job or {}).get("result") or {}).get("shell_values"):  # 3S: 재조립은 조립 원본 그대로(두께 미적용)
@@ -193,6 +214,7 @@ def plan(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> dict[s
 def _design(r: Resolved) -> dict[str, Any]:
     ps, m = r.param_set, r.model
     return {"param_set": {"id": ps["id"], "label": ps.get("label"), "input_kind": ps["input_kind"]} if ps else None,
+            "input": ik.to_public(r.template_kind or (ps or {}).get("input_kind")),
             "model": {"id": m["id"], "name": m["name"], "version": m["version"]} if m else None,
             "values": r.values, "applied_values": r.applied_values, "out_of_range": r.out_of_range}
 

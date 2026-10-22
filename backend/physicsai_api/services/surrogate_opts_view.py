@@ -12,6 +12,7 @@ from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.geometry import native_vars as nv
 from physicsai_core.paths import display_path
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict.batch_matrix import batch_label
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import dataset as ds
@@ -48,7 +49,7 @@ def list_opts(ctx: AppContext, study_id: str) -> list[dict[str, Any]]:
     with ctx.engine.connect() as conn:
         studies_repo.require(conn, study_id)
         rows = so_repo.list_for_study(conn, study_id)
-    return [{"id": o["id"], "label": so_repo.opt_label(o["opt_no"]), "status": o["status"],
+    return [{"id": o["id"], "label": so_repo.opt_label(o["opt_no"]), "status": o["status"], "input": ik.to_public(o["input_kind"]),
              "objective": o["settings"]["objective"], "best_value": (o["best"] or {}).get("objective"),
              "iter_no": o["iter_no"], "iterations": o["settings"]["iterations"], "created_at": o["created_at"],
              "created_by_name": o["created_by_name"]} for o in rows]
@@ -167,7 +168,7 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
         "final": _final_out(ctx, conn, s, o, final_it, batches),
         "parameters": [{"name": p["name"], "nominal": p.get("nominal"), "min": p["min"], "max": p["max"], "unit": p.get("unit") or ""}
                        for p in nv.apply(ps, nv.vars_of(o["settings"]))["parameters"] or []],  # native-vars.md §4.2: 스냅숏 우선
-        "id": o["id"], "label": so_repo.opt_label(o["opt_no"]), "status": o["status"],
+        "id": o["id"], "label": so_repo.opt_label(o["opt_no"]), "status": o["status"], "input": ik.to_public(o["input_kind"]),
         "dir": display_path(ctx.settings.storage.ai_root, s["folder_name"], o["dir_rel"]),
         "param_set": {"id": o["param_set_id"], "label": ps.get("label"), "input_kind": o["input_kind"]},
         "model": {"id": o["model_id"], "name": f"{m['name']} v{m['version']}" if m else o["model_id"]},
@@ -176,9 +177,27 @@ def _detail(ctx: AppContext, conn: Any, o: dict[str, Any], principal: Principal)
         "iterations": iterations, "runs": runs, "best": o["best"], "stop_reason": o["stop_reason"],
         "can_cancel": o["status"] in so_repo.ACTIVE and can_exec and (principal.is_global_admin or o["created_by"] == principal.user_id),
         "can_resume": o["status"] == "FAILED" and can_exec,
-        "warnings": [*list((job or {}).get("warnings") or []), *_var_warnings(o["settings"])], "current_job_id": o["current_job_id"],
+        "warnings": [*list((job or {}).get("warnings") or []), *_var_warnings(o["settings"]), *_cushion_warnings(o, runs)],
+        "current_job_id": o["current_job_id"],
         "created_at": o["created_at"], "created_by_name": o["created_by_name"], "finished_at": o["finished_at"],
     }
+
+
+def _cushion_warnings(o: dict[str, Any], runs: list[dict[str, Any]]) -> list[dict[str, str]]:
+    """쿠션 입력 최적화에서 성공 run이 있는데 값이 하나도 없는 목적·제약 응답만 경고(INPUT_CUSHION_RESPONSES, 차단 없음)."""
+    if ik.to_public(o["input_kind"]) != ik.CUSHION:
+        return []
+    done = [r for r in runs if r.get("state") == "SUCCEEDED"]
+    if not done:
+        return []
+    st = o["settings"]
+    objs = st.get("objectives") or ([st["objective"]] if st.get("objective") else [])
+    names = [f"{x['metric']}@{x['series']}" if x.get("series") else str(x["metric"])
+             for key, group in (("objectives", objs), ("constraints", st.get("constraints") or []))
+             for i, x in enumerate(group)
+             if all(((r.get(key) or [])[i:i + 1] or [None])[0] is None for r in done)]
+    w = ik.cushion_missing_warning(names)
+    return [w] if w else []
 
 
 def _var_warnings(settings: dict[str, Any]) -> list[dict[str, str]]:

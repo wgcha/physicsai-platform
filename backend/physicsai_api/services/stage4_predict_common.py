@@ -21,6 +21,7 @@ from .common import (
     require_config_ok,
     require_power,
 )
+from .input_kind_gate import with_capability
 
 
 def _label(raw: str | None) -> str | None:
@@ -78,4 +79,4 @@ def _insert_folder_set(ctx: AppContext, principal: Principal, study_id: str, f: 
             with contextlib.suppress(OSError):
                 os.replace(dst, out_tmp)  # 미등록 사본을 되돌림(04_params 고아 방지)
         raise
-    return {**param_set_out(p), "warnings": warnings}  # type: ignore[arg-type]
+    return {**with_capability(ctx, p, param_set_out(p)), "warnings": warnings}  # type: ignore[arg-type]

@@ -9,7 +9,7 @@ from pydantic import AfterValidator, ConfigDict, Field, model_serializer
 
 from physicsai_core.naming import label_problem
 
-from .common import Req, Resp
+from .common import InputKind, Req, Resp
 from .extract_filter import ExtractFilter
 from .geometry import BaselineInfo, NativeInfo
 
@@ -175,6 +175,9 @@ class ParamSet(Resp):
     # geometry-engine.md §7.3.8(4B): 다중 baseline 세트만(단일은 null). 첫 항목 = base(세트 자신)
     baselines: list[BaselineInfo] | None = None
     param_map_status: Literal["draft", "confirmed"] | None = None
+    # input-kind.md IK-3: 이 템플릿이 받을 수 있는 예측 입력 종류(조회 계산값). 쿠션 불가 사유는 reason
+    input_capability: list[InputKind] = Field(default_factory=lambda: ["assembly"])
+    input_capability_reason: str | None = None
 
 
 class SampleRow(Resp):

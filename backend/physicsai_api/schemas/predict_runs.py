@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from .common import Resp
+from .common import InputKind, Resp
 
 __all__ = ["PredictRunTemplate", "PredictRunModel", "PredictRunResponse", "PredictRunCapture", "PredictRunFailure",
            "PredictRunVerify", "PredictRunSummary", "PredictRunNearest", "PredictRunTableRow", "PredictRunPaths",
-           "PredictRunDetail"]
+           "PredictRunDetail", "PredictRunInputInfo", "PredictRunNote"]
 
 
 class PredictRunTemplate(Resp):
@@ -59,6 +59,7 @@ class PredictRunSummary(Resp):
     duration_s: int | None = None
     created_by_name: str
     input_mode: Literal["template", "prepared"]
+    input: InputKind = "assembly"  # input-kind.md IK-10: 이 실행의 입력 종류(prepared = starter가 eps_mesh면 cushion)
     template: PredictRunTemplate | None = None  # prepared + 세트 없음 = null
     model: PredictRunModel | None = None
     values: dict[str, float] = {}
@@ -98,8 +99,24 @@ class PredictRunPaths(Resp):
     geom_dir: str | None = None
 
 
+class PredictRunInputInfo(Resp):
+    """예측에 넣은 입력 요약(워커 `result.predict_input`, 수치만): 쿠션 = 파일 1개."""
+
+    input: InputKind | None = None
+    starter: str | None = None
+    bytes: int | None = None
+    files: int | None = None
+
+
+class PredictRunNote(Resp):
+    code: str
+    message: str
+
+
 class PredictRunDetail(PredictRunSummary):
     nearest: PredictRunNearest | None = None
     response_table: list[PredictRunTableRow] = []
     paths: PredictRunPaths
     display: dict | None = None  # result.capture.display(결정된 표시 설정)
+    predict_input: PredictRunInputInfo | None = None  # input-kind.md §4.1: P/INPUT 요약(워커가 기록한 때만)
+    input_warnings: list[PredictRunNote] = []  # 쿠션 입력에서 값이 없는 응답만(INPUT_CUSHION_RESPONSES, 차단 없음)

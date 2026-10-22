@@ -2914,6 +2914,16 @@
             "title": "Seed",
             "type": "integer"
           },
+          "source_doe": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourceDoe"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "source_path": {
             "title": "Source Path",
             "type": "string"
@@ -6169,6 +6179,7 @@
       },
       "FvAssembly": {
         "additionalProperties": false,
+        "description": "조립 원본. template = 출처 템플릿의 radioss_assem/(input-kind.md §8, 조립 가능 템플릿의 쿠션 실행 기본값).",
         "properties": {
           "doe_id": {
             "anyOf": [
@@ -6185,7 +6196,8 @@
             "enum": [
               "predict_input",
               "train_doe",
-              "custom"
+              "custom",
+              "template"
             ],
             "title": "Kind",
             "type": "string"
@@ -6711,6 +6723,15 @@
             "default": {},
             "title": "Applied Values",
             "type": "object"
+          },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
           },
           "model": {
             "anyOf": [
@@ -7504,6 +7525,22 @@
       "FvSourceValues": {
         "additionalProperties": false,
         "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "동반 예측의 입력 종류 assembly | cushion(생략 = 템플릿 기본). ⑥ 결과를 넘길 때는 그 최적화의 입력 종류",
+            "title": "Input"
+          },
           "kind": {
             "const": "values",
             "title": "Kind",
@@ -9651,6 +9688,51 @@
         "title": "LogChunk",
         "type": "object"
       },
+      "McpConnection": {
+        "description": "웹 \"AI 연결(MCP)\" 페이지용 연결 안내(mcp.md §23.4, MR-C3). enabled=false면 404 MCP_DISABLED라 200이면 항상 true.",
+        "properties": {
+          "api_base": {
+            "description": "stdio PHYSICSAI_MCP_URL용 = url에서 끝의 /mcp를 뗀 값",
+            "title": "Api Base",
+            "type": "string"
+          },
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "http_enabled": {
+            "description": "false면 /physicsai/mcp(HTTP)가 꺼져 stdio만 쓸 수 있다",
+            "title": "Http Enabled",
+            "type": "boolean"
+          },
+          "stdio_hint": {
+            "$ref": "#/components/schemas/StdioHint"
+          },
+          "url": {
+            "description": "HTTP MCP 주소(설정 mcp.public_url 또는 요청 origin + /physicsai/mcp 짐작)",
+            "title": "Url",
+            "type": "string"
+          },
+          "url_source": {
+            "enum": [
+              "config",
+              "guess"
+            ],
+            "title": "Url Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "enabled",
+          "http_enabled",
+          "url",
+          "url_source",
+          "api_base",
+          "stdio_hint"
+        ],
+        "title": "McpConnection",
+        "type": "object"
+      },
       "Me": {
         "properties": {
           "display_name": {
@@ -11667,6 +11749,28 @@
             "title": "Id",
             "type": "string"
           },
+          "input_capability": {
+            "items": {
+              "enum": [
+                "assembly",
+                "cushion"
+              ],
+              "type": "string"
+            },
+            "title": "Input Capability",
+            "type": "array"
+          },
+          "input_capability_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Capability Reason"
+          },
           "input_kind": {
             "default": "assembly",
             "enum": [
@@ -12680,6 +12784,15 @@
             "title": "Id",
             "type": "string"
           },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
+          },
           "input_kind": {
             "enum": [
               "assembly",
@@ -12759,6 +12872,14 @@
               }
             ],
             "title": "Vars"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/BatchNote"
+            },
+            "title": "Warnings",
+            "type": "array"
           }
         },
         "required": [
@@ -12807,6 +12928,40 @@
             },
             "title": "Excluded",
             "type": "array"
+          },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
+          },
+          "input_capability": {
+            "default": [
+              "assembly"
+            ],
+            "items": {
+              "enum": [
+                "assembly",
+                "cushion"
+              ],
+              "type": "string"
+            },
+            "title": "Input Capability",
+            "type": "array"
+          },
+          "input_capability_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Capability Reason"
           },
           "input_kind": {
             "enum": [
@@ -12869,6 +13024,22 @@
       "PredictBatchPreviewRequest": {
         "additionalProperties": false,
         "properties": {
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "예측 입력 종류 assembly(조립, m_3) | cushion(쿠션 rad만). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED",
+            "title": "Input"
+          },
           "model_id": {
             "anyOf": [
               {
@@ -12983,6 +13154,15 @@
           },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
             "type": "string"
           },
           "label": {
@@ -13228,6 +13408,15 @@
             "title": "Has Curve",
             "type": "boolean"
           },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
+          },
           "input_mode": {
             "enum": [
               "template",
@@ -13246,6 +13435,14 @@
               }
             ],
             "title": "Input Path"
+          },
+          "input_warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/PredictRunNote"
+            },
+            "title": "Input Warnings",
+            "type": "array"
           },
           "job_id": {
             "title": "Job Id",
@@ -13289,6 +13486,16 @@
           },
           "paths": {
             "$ref": "#/components/schemas/PredictRunPaths"
+          },
+          "predict_input": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PredictRunInputInfo"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "response_table": {
             "default": [],
@@ -13403,6 +13610,61 @@
         "title": "PredictRunFailure",
         "type": "object"
       },
+      "PredictRunInputInfo": {
+        "description": "예측에 넣은 입력 요약(워커 `result.predict_input`, 수치만): 쿠션 = 파일 1개.",
+        "properties": {
+          "bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes"
+          },
+          "files": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Files"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input"
+          },
+          "starter": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Starter"
+          }
+        },
+        "title": "PredictRunInputInfo",
+        "type": "object"
+      },
       "PredictRunModel": {
         "properties": {
           "id": {
@@ -13452,6 +13714,24 @@
           }
         },
         "title": "PredictRunNearest",
+        "type": "object"
+      },
+      "PredictRunNote": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "PredictRunNote",
         "type": "object"
       },
       "PredictRunPaths": {
@@ -13630,6 +13910,15 @@
             "default": false,
             "title": "Has Curve",
             "type": "boolean"
+          },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
           },
           "input_mode": {
             "enum": [
@@ -16799,6 +17088,28 @@
         "title": "SoVerifyPoint",
         "type": "object"
       },
+      "SourceDoe": {
+        "description": "데이터셋 출처가 ① DOE일 때(계산값). label 예: \"① DOE D-001(조립)\" · \"① DOE 여러 개(조립)\".",
+        "properties": {
+          "doe_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Doe Ids",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "doe_ids",
+          "label"
+        ],
+        "title": "SourceDoe",
+        "type": "object"
+      },
       "SourceRef": {
         "properties": {
           "doe_id": {
@@ -17844,6 +18155,38 @@
         "title": "StatusWorker",
         "type": "object"
       },
+      "StdioHint": {
+        "properties": {
+          "command": {
+            "description": "stdio 실행기 이름(physicsai-mcp)",
+            "title": "Command",
+            "type": "string"
+          },
+          "command_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "서버 venv의 실행기 경로(없으면 null) — 경로만, 비밀 없음",
+            "title": "Command Path"
+          },
+          "install": {
+            "description": "내 PC 설치 안내 한 줄(오프라인 wheels)",
+            "title": "Install",
+            "type": "string"
+          }
+        },
+        "required": [
+          "command",
+          "install"
+        ],
+        "title": "StdioHint",
+        "type": "object"
+      },
       "StorageCategory": {
         "properties": {
           "impact": {
@@ -18659,6 +19002,15 @@
             "title": "Id",
             "type": "string"
           },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
+          },
           "iter_no": {
             "title": "Iter No",
             "type": "integer"
@@ -18877,6 +19229,22 @@
             ],
             "title": "Explore"
           },
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "예측 입력 종류 assembly(조립) | cushion(쿠션 rad만 — GPU 메모리 적음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED",
+            "title": "Input"
+          },
           "iterations": {
             "anyOf": [
               {
@@ -19094,6 +19462,37 @@
             "title": "Free Variables",
             "type": "array"
           },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
+            "type": "string"
+          },
+          "input_capability": {
+            "items": {
+              "enum": [
+                "assembly",
+                "cushion"
+              ],
+              "type": "string"
+            },
+            "title": "Input Capability",
+            "type": "array"
+          },
+          "input_capability_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Capability Reason"
+          },
           "integer_variables": {
             "items": {
               "type": "string"
@@ -19126,6 +19525,16 @@
             "default": "single",
             "title": "Mode",
             "type": "string"
+          },
+          "notes": {
+            "items": {
+              "additionalProperties": {
+                "type": "string"
+              },
+              "type": "object"
+            },
+            "title": "Notes",
+            "type": "array"
           },
           "objective_available": {
             "title": "Objective Available",
@@ -19237,6 +19646,15 @@
           },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "input": {
+            "default": "assembly",
+            "enum": [
+              "assembly",
+              "cushion"
+            ],
+            "title": "Input",
             "type": "string"
           },
           "iter_no": {
@@ -25139,6 +25557,62 @@
           "summary_ko": "API 토큰 요청 감사 기록(관리자 전용)",
           "tool": "list_audit",
           "version": 1
+        }
+      }
+    },
+    "/physicsai/api/mcp/connection": {
+      "get": {
+        "description": "웹 \"AI 연결(MCP)\" 페이지용: MCP 사용 여부·HTTP 전송 여부·서버 주소(설정 mcp.public_url 또는 요청 origin 짐작)·stdio 실행기 안내.\n세션(로그인) 전용 — API 토큰 요청은 403 SESSION_REQUIRED. 토큰·비밀값은 없다.",
+        "operationId": "mcp_connection",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/McpConnection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unauthorized"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "SESSION_REQUIRED(토큰 요청)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "MCP_DISABLED(mcp.enabled: false)"
+          }
+        },
+        "summary": "AI 연결(MCP) 안내",
+        "tags": [
+          "mcp"
+        ],
+        "x-mcp": {
+          "exclude": "웹 연결 안내 전용(세션)",
+          "session_only": true
         }
       }
     },

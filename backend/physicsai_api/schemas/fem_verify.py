@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from .common import Resp
+from .common import InputKind, Resp
 from .contour_capture import MediaFile
 from .jobs import JobSummary
 from .fem_verify_req import (  # noqa: F401 - 기존 경로 재노출
@@ -37,6 +37,7 @@ class FvModelRef(Resp):
 
 
 class FvDesign(Resp):
+    input: InputKind = "assembly"  # input-kind.md IK-10: 출처 예측의 입력 종류(쿠션 = 저장값 mesh_only)
     param_set: FvParamSetRef | None = None
     model: FvModelRef | None = None
     values: dict[str, float] = {}

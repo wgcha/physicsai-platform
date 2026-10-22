@@ -10,6 +10,7 @@ from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
 from physicsai_core.db.repositories import studies as studies_repo
+from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 
 from ..auth import Principal
@@ -24,7 +25,24 @@ from .common import (
     model_out,
     require_power,
     study_out,
+    study_root,
 )
+
+
+def source_doe(ctx: AppContext, conn: Any, study: dict[str, Any], source_path: str) -> dict[str, Any] | None:
+    """데이터셋 출처 표시(input-kind.md §9 P3, 계산값 — DB 무변경): 입력 폴더가 ① DOE 결과 폴더면 {doe_ids, label}, 판별 불가(외부 폴더)면 None.
+    판정은 DATASET_CREATE의 형상 엔진 판별과 같은 `dataset_engine._doe_ids`. 데이터 생성·학습은 조립만이라 라벨에 "(조립)"."""
+    from .job_params.dataset_engine import _doe_ids
+
+    ids = _doe_ids(study_root(ctx, study), source_path)
+    if ids is None:
+        return None
+    does = {d["id"]: d for d in train_repo.list_does(conn, study["id"])}
+    if not ids:  # `01_train/results`(또는 doe) 자체 = ① DOE 전체
+        ids = sorted(i for i, d in does.items() if d["status"] == "READY")
+    names = [(does.get(i) or {}).get("doe_label") or i[:8] for i in ids]
+    label = f"① DOE {names[0]}(조립)" if len(ids) == 1 else "① DOE 여러 개(조립)"
+    return {"doe_ids": ids, "label": label}
 
 
 def list_datasets(ctx: AppContext, study_id: str, limit: int | None, cursor: str | None) -> tuple[list[dict[str, Any]], str | None]:
@@ -32,7 +50,8 @@ def list_datasets(ctx: AppContext, study_id: str, limit: int | None, cursor: str
     with ctx.engine.connect() as conn:
         st = studies_repo.require(conn, study_id)
         rows = datasets_repo.list_for_study(conn, study_id, lim + 1, off)
-        rows = [{**d, "curation_id": cur_repo.curation_id_for_dataset(conn, d["job_id"])} for d in rows[:lim + 1]]
+        rows = [{**d, "curation_id": cur_repo.curation_id_for_dataset(conn, d["job_id"]),
+                 "source_doe": source_doe(ctx, conn, st, d["source_path"])} for d in rows[:lim + 1]]
     return [dataset_out(d, st, ctx.settings.storage.ai_root) for d in rows[:lim]], (encode_cursor(off + lim) if len(rows) > lim else None)
 
 
@@ -41,7 +60,8 @@ def get_dataset(ctx: AppContext, dataset_id: str) -> dict[str, Any]:
         d = datasets_repo.get(conn, dataset_id)
         st = studies_repo.get(conn, d["study_id"]) if d else None
         if d is not None:
-            d = {**d, "curation_id": cur_repo.curation_id_for_dataset(conn, d["job_id"])}
+            d = {**d, "curation_id": cur_repo.curation_id_for_dataset(conn, d["job_id"]),
+                 "source_doe": source_doe(ctx, conn, st, d["source_path"]) if st else None}
     if d is None:
         raise DomainError("NOT_FOUND", "데이터셋을 찾을 수 없습니다", status=404)
     return dataset_out(d, st, ctx.settings.storage.ai_root)

@@ -7,7 +7,7 @@ from typing import Any
 
 from pydantic import Field
 
-from .common import Resp
+from .common import InputKind, Resp
 from .native_vars import VarNote, VarRow
 
 
@@ -55,11 +55,17 @@ class SurrogateOptPreview(Resp):
     var_notes: list[VarNote] = Field(default_factory=list)
     var_rows: list[VarRow] = Field(default_factory=list)
     excluded: list[str] = Field(default_factory=list)
+    # input-kind.md IK-10: 이 실행의 입력 종류·템플릿 능력, 쿠션 입력에서 값이 없는 응답만 notes(INPUT_CUSHION_RESPONSES, 차단 없음)
+    input: InputKind = "assembly"
+    input_capability: list[InputKind] = Field(default_factory=lambda: ["assembly"])
+    input_capability_reason: str | None = None
+    notes: list[dict[str, str]] = Field(default_factory=list)
 
 
 class SurrogateOptSummary(Resp):
     id: str
     label: str
+    input: InputKind = "assembly"  # input-kind.md IK-10: 실행의 입력 종류(조립|쿠션)
     status: str
     objective: dict[str, Any]
     best_value: float | None = None

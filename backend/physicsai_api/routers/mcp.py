@@ -13,7 +13,9 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from ..auth import Principal
 from ..deps import client_ip, get_ctx, get_principal, request_id
 from ..schemas import mcp as M
+from ..schemas.common import ErrorResponse
 from ..services import mcp as svc
+from ..services.mcp_connection import connection
 
 router = APIRouter(tags=["mcp"])
 DISABLED = "MCP_DISABLED(mcp.enabled: false)"
@@ -170,6 +172,16 @@ def get_glossary(request: Request,
     """도메인 용어집: 피처 약어(THK=두께 등)·엔티티 관계·작업 종류·화면 단계 번호·오류 코드와 사람이 쓴 한국어 이름·동의어.
     사용자 말을 파라미터·엔티티 이름으로 바꿀 때 쓴다. 부작용 없음."""
     return svc.glossary(get_ctx(request), section)
+
+
+@router.get("/mcp/connection", operation_id="mcp_connection", response_model=M.McpConnection, summary="AI 연결(MCP) 안내",
+            responses={401: {"model": ErrorResponse}, 403: {"model": ErrorResponse, "description": "SESSION_REQUIRED(토큰 요청)"},
+                       404: {"model": ErrorResponse, "description": DISABLED}},
+            openapi_extra=M.xmcp_exclude("웹 연결 안내 전용(세션)", session_only=True))
+def mcp_connection(request: Request, _p: Principal = Depends(get_principal)) -> dict:
+    """웹 "AI 연결(MCP)" 페이지용: MCP 사용 여부·HTTP 전송 여부·서버 주소(설정 mcp.public_url 또는 요청 origin 짐작)·stdio 실행기 안내.
+    세션(로그인) 전용 — API 토큰 요청은 403 SESSION_REQUIRED. 토큰·비밀값은 없다."""
+    return connection(get_ctx(request), request)
 
 
 @router.get("/mcp/tools", operation_id="mcp_tool_specs", response_model=dict | list, summary="도구 스펙(MCP 서버 부팅용)",

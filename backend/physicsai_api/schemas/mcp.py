@@ -242,6 +242,23 @@ class Ping(Resp):
     warnings: list[str] = Field(default_factory=list)
 
 
+class StdioHint(Resp):
+    command: str = Field(description="stdio 실행기 이름(physicsai-mcp)")
+    command_path: str | None = Field(default=None, description="서버 venv의 실행기 경로(없으면 null) — 경로만, 비밀 없음")
+    install: str = Field(description="내 PC 설치 안내 한 줄(오프라인 wheels)")
+
+
+class McpConnection(Resp):
+    """웹 "AI 연결(MCP)" 페이지용 연결 안내(mcp.md §23.4, MR-C3). enabled=false면 404 MCP_DISABLED라 200이면 항상 true."""
+
+    enabled: bool
+    http_enabled: bool = Field(description="false면 /physicsai/mcp(HTTP)가 꺼져 stdio만 쓸 수 있다")
+    url: str = Field(description="HTTP MCP 주소(설정 mcp.public_url 또는 요청 origin + /physicsai/mcp 짐작)")
+    url_source: Literal["config", "guess"]
+    api_base: str = Field(description="stdio PHYSICSAI_MCP_URL용 = url에서 끝의 /mcp를 뗀 값")
+    stdio_hint: StdioHint
+
+
 # ---- 감사(§6.2) --------------------------------------------------------------------------------------
 
 

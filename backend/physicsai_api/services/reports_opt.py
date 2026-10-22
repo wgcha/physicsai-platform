@@ -41,7 +41,7 @@ def surrogate_input(ctx: AppContext, principal: Principal, opt_id: str) -> dict[
         origins = rc.origins(ctx, conn, study["id"], [("파라미터 세트 입력 경로", (ps or {}).get("source_path")), ("모델 경로", model.get("source_path"))])
     detail = so_svc.get_opt(ctx, principal, opt_id)
     return {"study": rc.study_info(study), "generated_by": principal.display_name, "detail": detail,
-            "engine": rc.engine_info(ctx, ps), "param_set": {**rc.param_set_info(ps), **(detail.get("param_set") or {})},
+            "engine": rc.engine_info(ctx, ps), "param_set": {**rc.param_set_info(ps, o["input_kind"]), **(detail.get("param_set") or {})},
             "model": model or detail.get("model"), "origins": origins, "images": _final_images(ctx, principal, detail)}
 
 

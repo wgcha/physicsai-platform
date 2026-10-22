@@ -13,6 +13,7 @@ from typing import Any
 from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.features import optimize_builtin_missing, predict_responses_missing
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict import performance, run_metrics
 from physicsai_core.stage5_optimize.surrogate import algo as so_algo
 from physicsai_core.stage5_optimize.surrogate import criteria
@@ -24,7 +25,8 @@ from ..context import AppContext
 from . import native_vars_run
 from .geometry_gate import check_engine_match, engine_of, native_set_gate
 from .job_params.stage4_batch import resolve_param_set
-from .job_params.stage4_predict import model_for, require_template_features, template_kind
+from .input_kind_gate import capability_of, resolve_internal
+from .job_params.stage4_predict import model_for, require_template_features
 from .surrogate_opt_metrics import (  # noqa: F401 - 기존 경로 재노출
     PERF_PREFIX, _p, run_metric_rows, metric_value, value, new_metrics, snapshot_perfs,
 )
@@ -55,7 +57,8 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     so = cfg.surrogate_opt
     require_feature(ctx)
     ps = resolve_param_set(conn, study, body.param_set_id)
-    kind = template_kind(ps)
+    kind = resolve_internal(ctx, ps, body.input)  # input-kind.md IK-1·IK-3: 능력 밖 422, Native 쿠션 명령 없으면 409
+    cap, cap_reason = capability_of(ctx, ps)
     m = model_for(conn, study, body.model_id)
     check_engine_match(ps, m)  # geometry-engine.md §7.7: 세트·모델 엔진 일치(409 ENGINE_MISMATCH)
     multi = None
@@ -197,6 +200,7 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
             _p(problems, "PERF_EXTRACT_UNAVAILABLE", f"H3D 성능 추출을 쓸 수 없습니다(관리자 설정 필요): {', '.join((tmpl + res)[:3])}",
                "objectives")
     valid_points = None
+    cushion_notes: list[dict[str, str]] = []
     if reuse is not None:
         info = {x["id"]: x for x in perf_info}
         for x in [k for k in used_perf if k in {o.metric for o in objs} | {c.metric for c in body.constraints}]:
@@ -208,6 +212,12 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
         need_metrics = [(o.metric, o.series) for o in objs] + [(c.metric, c.series) for c in body.constraints]
         valid_points = sum(1 for r, mm in rows if mm is not None and all(
             value(mm, mt, se, r["responses"], perfs) is not None for mt, se in need_metrics))
+        if ik.to_public(kind) == ik.CUSHION:  # 사용자 확정 Q2: 쿠션 입력에서 값이 없는 목적·제약 응답만 경고(차단 없음)
+            w = ik.cushion_missing_warning(
+                f"{mt}@{se}" if se else mt for mt, se in need_metrics
+                if not any(mm is not None and value(mm, mt, se, r["responses"], perfs) is not None for r, mm in rows))
+            if w:
+                cushion_notes.append(w)
         if valid_points < need:
             _p(problems, "EXPLORE_TOO_FEW", f"재사용 배치에 목적 값이 있는 성공 run이 {valid_points}개뿐입니다(최소 {need}개)",
                "explore.batch_id")
@@ -238,5 +248,6 @@ def normalize(ctx: AppContext, conn: Any, study: dict[str, Any], body: Any) -> d
     return {"ps": ps, "model": m, "kind": kind, "settings": settings, "problems": problems, "free": free,
             "integer": integer, "fixed": fixed, "explore_count": explore_count, "reuse": reuse, "valid_points": valid_points,
             "performances": perf_info, "variables_kind": kinds, "multi": multi, "criteria_missing": crit,
-            "var_notes": var_notes, "var_rows": nv.var_rows(vr.vars, vr.pool) if vr.vars is not None else [],
+            "var_notes": var_notes, "input": ik.to_public(kind), "input_capability": cap, "input_capability_reason": cap_reason,
+            "notes": cushion_notes, "var_rows": nv.var_rows(vr.vars, vr.pool) if vr.vars is not None else [],
             "excluded": list((vr.vars or {}).get("excluded") or [])}

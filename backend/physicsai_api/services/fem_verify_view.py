@@ -16,6 +16,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
+from physicsai_core.stage4_predict import input_kind as ik
 
 from ..auth import Principal
 from ..context import AppContext
@@ -90,12 +91,14 @@ def _detail(ctx: AppContext, conn: Any, row: dict[str, Any], principal: Principa
     pres = (pj or {}).get("result") or {}
     ak = row["assem_kind"]
     aref = row.get("assem_ref") or {}
-    alabel, apath = {"PREDICT_INPUT": "예측 입력 그대로", "TRAIN_DOE": None, "CUSTOM": "직접 지정"}.get(ak), None
+    if ak == "CUSTOM" and aref.get("template_id"):  # input-kind.md §8: template는 CUSTOM + assem_ref.template_id로 저장(migration 없음)
+        ak = "TEMPLATE"
+    alabel, apath = {"PREDICT_INPUT": "예측 입력 그대로", "TRAIN_DOE": None, "CUSTOM": "직접 지정", "TEMPLATE": "템플릿 조립 폴더"}.get(ak), None
     if ak == "TRAIN_DOE" and aref.get("doe_id"):
         doe = train_repo.get_doe(conn, aref["doe_id"])
         if doe:
             alabel, apath = doe["doe_label"], display_path(ai, fn, doe["assem_rel"])
-    elif ak == "CUSTOM":
+    elif ak in ("CUSTOM", "TEMPLATE"):
         apath = aref.get("path")
     elif ak == "PREDICT_INPUT" and pj is not None:
         apath = display_path(ai, fn, f"04_predict/{jobs_repo.root_job_id(conn, pj)}/INPUT")
@@ -111,6 +114,7 @@ def _detail(ctx: AppContext, conn: Any, row: dict[str, Any], principal: Principa
         "status_text": _status_text(row, job, hpc_mode),
         "source": {"kind": row["source_kind"], "label": ref.get("label") or ""}, "links": _links(row),
         "design": {"param_set": {"id": ps["id"], "label": ps.get("label"), "input_kind": ps["input_kind"]} if ps else None,
+                   "input": ik.to_public(row.get("template_kind") or (ps or {}).get("input_kind")),
                    "model": {"id": m["id"], "name": m["name"], "version": m["version"]} if m else None,
                    "values": ref.get("values") or pres.get("values") or {}, "applied_values": pres.get("applied_values") or {},
                    "out_of_range": list(pres.get("out_of_range") or [])},

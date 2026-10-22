@@ -6,7 +6,7 @@ from typing import Annotated, Any, Literal, Union
 
 from pydantic import Field
 
-from .common import Req
+from .common import InputKind, Req
 from .native_vars import VarsEdit
 
 METRIC_PATTERN = (r"^(curve:(max|min|absmax)|resp:[A-Za-z][A-Za-z0-9_]{0,63}_(MIN|MAX)|tbl:[A-Za-z][A-Za-z0-9_]{0,63}"
@@ -85,6 +85,7 @@ class SurrogateOptCreate(Req):
     verification: str | None = Field(default=None, max_length=16, description="loop(기본, 반복 검증) | none(대리모델만)")
     levels: dict[str, list[str]] | None = Field(default=None, description="범주 수준 제한 {\"baseline\": [id…]}(다중 baseline 위상 세트만)")
     vars: VarsEdit | None = Field(default=None, description="Native 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Altair는 422 NATIVE_VARS_UNSUPPORTED")
+    input: InputKind | None = Field(default=None, description="예측 입력 종류 assembly(조립) | cushion(쿠션 rad만 — GPU 메모리 적음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED")
 
 
 class SoVerifyPoint(Req):

@@ -14,7 +14,11 @@ from physicsai_core.db.repositories import param_sets as ps_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.stage5_optimize import optimize as opt
 
+from physicsai_core.stage4_predict import input_kind as ik
+
 from ...context import AppContext
+from ...schemas.common import InputKind
+from ..input_kind_gate import reject_input
 from .base import _P, invalid_at, prerequisite_missing
 
 
@@ -35,6 +39,8 @@ class OptimizeParams(_P):
     opt_settings: OptSettings = Field(default_factory=OptSettings)
     on_failed: Literal["IGNORE", "TERMINATE"] = "IGNORE"
     responses: list[dict[str, Any]]
+    # input-kind.md IK-13: HyperStudy 최적화는 입력 종류를 받지 않는다 — 값이 오면 422 INPUT_KIND_UNSUPPORTED(받아서 거부하려고 필드만 둠)
+    input: InputKind | None = Field(default=None, description="사용 불가 — 오면 422 INPUT_KIND_UNSUPPORTED")
 
     @field_validator("responses")
     @classmethod
@@ -102,6 +108,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     cfg = ctx.settings
     sid = study["id"]
     if job_type == "OPTIMIZE":
+        reject_input(p.input, ik.REASON_LEGACY)
         ps = ps_repo.get(conn, p.param_set_id) if p.param_set_id else ps_repo.current(conn, sid)
         if ps is None or ps["study_id"] != sid:
             raise prerequisite_missing("PARAM_SET")

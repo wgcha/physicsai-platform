@@ -508,6 +508,7 @@ demo:                             # 시연 모드(fake tools 배포판, deploy/d
 
 mcp:                              # MCP 기능(docs/contracts/mcp.md §13). 절이 없으면 아래 기본값 — 키 추가만, 기본 꺼짐
   enabled: false                  # false면 API 토큰 인증·/mcp/*·/physicsai/mcp·"내 API 토큰" 화면 모두 꺼짐(404 MCP_DISABLED, 기존 동작 불변)
+  public_url: null                # 웹 "AI 연결(MCP)" 페이지가 보여 줄 MCP 주소(예 "https://host/physicsai/mcp", /mcp로 끝나야 함). null = 접속한 주소로 짐작(화면에 "짐작" 표시)
   require_confirm_for_token: true # 토큰 요청의 비용 큰 작업(cost heavy)은 plan_job → confirm_token → run_job
   confirm_ttl_s: 600              # confirm_token 유효 시간(60~3600초, 1회용)
   allowed_job_kinds: null         # null = 작업 종류 레지스트리 전체

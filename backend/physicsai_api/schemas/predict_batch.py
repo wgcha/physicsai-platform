@@ -6,7 +6,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
-from .common import Resp
+from .common import InputKind, Resp
 from .native_vars import VarRow
 from .predict_batch_source import (  # noqa: F401 - 기존 경로 재노출
     TABLE_TEXT_MAX_CHARS, BatchSourceLhs, BatchSourceTable, BatchSourceTrainDoe, BatchSourceLhsOpt, BatchSourceSobol,
@@ -75,7 +75,10 @@ class BatchPreviewRow(Resp):
 
 
 class PredictBatchPreview(Resp):
-    input_kind: Literal["assembly", "mesh_only"]
+    input_kind: Literal["assembly", "mesh_only"]  # 저장값(생성하면 이 값) — 공개 값은 input
+    input: InputKind = "assembly"  # input-kind.md IK-10: 이 실행의 입력 종류(요청 input 또는 기본)
+    input_capability: list[InputKind] = ["assembly"]  # 템플릿이 받을 수 있는 입력 종류
+    input_capability_reason: str | None = None
     count: int
     estimate_min: float | None = None  # 최근 성공 PREDICT 5개 소요 중앙값 × N(분), 없으면 null
     rows: list[BatchPreviewRow]
@@ -115,6 +118,7 @@ class BatchPredictCounts(Resp):
 class PredictBatchSummary(Resp):
     id: str
     label: str  # B-003
+    input: InputKind = "assembly"  # input-kind.md IK-10: 실행의 입력 종류(조립|쿠션)
     status: str  # GENERATING | PREDICTING | DONE | FAILED | CANCELED
     run_count: int
     created_at: datetime
@@ -163,6 +167,8 @@ class PredictBatch(Resp):
     status: str
     dir: str
     input_kind: Literal["assembly", "mesh_only"]
+    input: InputKind = "assembly"  # input-kind.md IK-10: 공개 입력 종류(쿠션 = 저장값 mesh_only)
+    warnings: list[BatchNote] = []  # 쿠션 입력에서 값이 없는 응답만(INPUT_CUSHION_RESPONSES, 차단 없음)
     source_kind: str  # LHS | LHS_OPT | SOBOL | FULLFACT | FRACFACT | PB | BBD | CCD | TABLE | TRAIN_DOE
     sampling: SamplingInfo | None = None  # S15: 방식·등급(§20.7)·meta
     param_set: BatchRef

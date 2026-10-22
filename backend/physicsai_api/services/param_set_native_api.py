@@ -170,7 +170,10 @@ def prep_state_of(ctx: AppContext, p: dict[str, Any]) -> Any:
 
 
 def enrich(ctx: AppContext, p: dict[str, Any], out: dict[str, Any]) -> dict[str, Any]:
-    """native 세트 응답에 geom_options_effective·native{prep_status…} 추가(altair는 그대로)."""
+    """세트 응답에 입력 능력(input_capability, 모든 엔진)을 더하고, native 세트는 geom_options_effective·native{prep_status…}도 추가."""
+    from .input_kind_gate import with_capability
+
+    with_capability(ctx, p, out)  # input-kind.md IK-3: 조회 계산값(저장 안 함)
     if (p.get("engine") or "altair") != "native":
         return out
     st, opts, S = _state(ctx, p)

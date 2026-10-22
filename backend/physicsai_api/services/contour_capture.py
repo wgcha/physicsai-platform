@@ -22,6 +22,7 @@ from ..auth import Principal
 from ..context import AppContext
 from . import jobs as jobs_svc
 from .common import MOVED_HINT, audit, param_set_out, require_job, require_power, study_root
+from .input_kind_gate import with_capability
 
 API_PREFIX = "/physicsai/api"  # main.API_PREFIX와 같은 값(브라우저 <video src>가 쓰는 절대 경로)
 CHUNK = 1024 * 1024
@@ -200,4 +201,4 @@ def put_display(ctx: AppContext, principal: Principal, ps_id: str, body: Any, ri
         media_repo.set_param_set_display(conn, ps_id, disp)
         audit(conn, principal, "PARAM_SET_UPDATE", "param_set", ps_id, {"display": disp}, rid, ip)
         p = ps_repo.get(conn, ps_id)
-    return param_set_out(p)
+    return with_capability(ctx, p, param_set_out(p))

@@ -970,6 +970,7 @@
           },
           "FvAssembly": {
             "additionalProperties": false,
+            "description": "조립 원본. template = 출처 템플릿의 radioss_assem/(input-kind.md §8, 조립 가능 템플릿의 쿠션 실행 기본값).",
             "properties": {
               "doe_id": {
                 "anyOf": [
@@ -987,7 +988,8 @@
                 "enum": [
                   "predict_input",
                   "train_doe",
-                  "custom"
+                  "custom",
+                  "template"
                 ],
                 "title": "Kind",
                 "type": "string"
@@ -1252,6 +1254,23 @@
           "FvSourceValues": {
             "additionalProperties": false,
             "properties": {
+              "input": {
+                "anyOf": [
+                  {
+                    "enum": [
+                      "assembly",
+                      "cushion"
+                    ],
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "description": "동반 예측의 입력 종류 assembly | cushion(생략 = 템플릿 기본). ⑥ 결과를 넘길 때는 그 최적화의 입력 종류",
+                "title": "Input"
+              },
               "kind": {
                 "const": "values",
                 "title": "Kind",
@@ -1593,6 +1612,23 @@
             ],
             "default": null,
             "description": "컨투어 표시 설정(선택)"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "예측 입력 종류 assembly(조립) | cushion(쿠션 rad만). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. parametric 전용 — prepared는 422 INPUT_KIND_UNSUPPORTED",
+            "title": "Input"
           },
           "input_mode": {
             "default": "parametric",
@@ -2382,6 +2418,23 @@
             "default": null,
             "description": "배치 단위 컨투어 표시(선택)"
           },
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "예측 입력 종류 assembly(조립, m_3) | cushion(쿠션 rad만, m_3 없음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED",
+            "title": "Input"
+          },
           "model_id": {
             "anyOf": [
               {
@@ -2955,6 +3008,23 @@
               }
             ],
             "title": "Explore"
+          },
+          "input": {
+            "anyOf": [
+              {
+                "enum": [
+                  "assembly",
+                  "cushion"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "예측 입력 종류 assembly(조립) | cushion(쿠션 rad만 — GPU 메모리 적음). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. 능력 밖이면 422 INPUT_KIND_UNSUPPORTED",
+            "title": "Input"
           },
           "iterations": {
             "anyOf": [

@@ -15,11 +15,14 @@ from physicsai_core.db.repositories import predict_batches as pb_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.features import predict_mesh_only_missing, predict_parametric_missing
 from physicsai_core.naming import RUN_KEY_RE
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict import prepared_input
 
 from ...context import AppContext
+from ...schemas.common import InputKind
 from ...schemas.contour_capture import CaptureDisplay
 from ..common import study_root
+from ..input_kind_gate import reject_input, resolve_internal
 from ..geometry_gate import check_engine_match, engine_of, native_set_gate
 from .base import HpcOverrides, _P, invalid_errors, prerequisite_missing, require_model_pscfg
 
@@ -35,6 +38,7 @@ class PredictParams(_P):
     source_run_key: str | None = Field(default=None, pattern=RUN_KEY_RE)
     input_path: str | None = Field(default=None, max_length=400)
     display: CaptureDisplay | None = None  # phase3 §15 S10 컨투어 표시 설정(선택, 템플릿 설정보다 우선)
+    input: InputKind | None = Field(default=None, description="예측 입력 종류 assembly(조립) | cushion(쿠션 rad만). 생략 = 템플릿이 조립 가능하면 assembly, 쿠션만 가능하면 cushion. parametric 전용 — prepared는 422 INPUT_KIND_UNSUPPORTED")
 
     @field_validator("values")
     @classmethod
@@ -73,7 +77,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         require_model_pscfg(cfg, "edspy_predict", m)
         warnings += check_engine_match(ps, m)
         native = engine_of(ps) == "native"
-        kind = template_kind(ps)
+        kind = resolve_internal(ctx, ps, p.input)  # input-kind.md IK-1·IK-3: 요청 input → 저장값(능력 밖 422)
         if native:  # geometry-engine.md §7.7: paicad 사용 가능·준비본 READY
             native_set_gate(ctx, ps)
         else:
@@ -90,7 +94,7 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         params = {
             "input_mode": "parametric", "param_set_id": ps["id"], "model_id": m["id"], "values": dict(values),
             "value_source": p.value_source, "source_run_key": p.source_run_key,
-            "template_kind": kind,  # phase3 §14.4(B8): 서버가 확정 기록 — mesh_only면 MESH SKIPPED·RAD_ASSEMBLE 복사만
+            "template_kind": kind,  # phase3 §14.4(B8)·IK-2: 서버가 확정 기록 — mesh_only(= 쿠션 입력)면 MESH SKIPPED·RAD_ASSEMBLE 복사만
         }
         if native:
             params["engine"] = "native"  # 워커가 엔진으로 분기(§16)
@@ -176,6 +180,7 @@ def _prepare_prepared(ctx: AppContext, conn: Any, study: dict[str, Any], p: Pred
                       ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     """phase3 §11.5 준비된 입력 예측: 경로·복사 계획 검사(422) → 모델·파라미터 세트(409). 세트는 응답 목록용(선택)."""
     _check_mode_fields(p)
+    reject_input(p.input, ik.REASON_PREPARED)  # IK-13: prepared는 starter가 입력 종류를 정한다
     cp = prepared_input.check_path(p.input_path, ctx.settings)
     plan = prepared_input.plan_copy(cp.path, ctx.settings)
     if plan.problems:

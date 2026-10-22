@@ -57,6 +57,7 @@ class McpCfg(_M):
     enabled: bool = False
     require_confirm_for_token: bool = True
     confirm_ttl_s: int = 600
+    public_url: str | None = None  # MR-C3: 사용자가 AI 도구에 넣을 MCP 주소(예 https://host/physicsai/mcp). null = 요청 origin으로 짐작
     allowed_job_kinds: list[str] | None = None  # null = 레지스트리 전체
     denied_job_kinds: list[str] = Field(default_factory=lambda: ["solve_pbs"])  # 미결 Q3 기본(PBS 자원은 웹에서만)
     token: McpTokenCfg = Field(default_factory=McpTokenCfg)
@@ -94,6 +95,27 @@ def _get(cfg: McpCfg, dotted: str) -> int:
     return int(v)  # type: ignore[call-overload]
 
 
+def public_url_problem(value: str) -> str | None:
+    """`mcp.public_url` 검사(MR-C3): http(s)://호스트[:포트]/…/mcp로 끝나는 주소 — 공백·제어문자·사용자 정보(@)·쿼리·조각 금지."""
+    from urllib.parse import urlsplit
+
+    v = value.strip()
+    if v != value or not v or any(ch.isspace() or ord(ch) < 32 for ch in v):
+        return "공백 없는 http(s)://…/mcp 주소"
+    try:
+        u = urlsplit(v)
+        port = u.port  # 잘못된 포트는 ValueError
+    except ValueError:
+        return "http(s)://호스트[:포트]/…/mcp 형식"
+    if u.scheme not in ("http", "https") or not u.hostname or u.username is not None or u.password is not None:
+        return "http(s)://호스트[:포트]/…/mcp 형식(사용자 정보 없음)"
+    if u.query or u.fragment or (port is not None and not 1 <= port <= 65535):
+        return "쿼리·조각 없는 http(s)://…/mcp 형식"
+    if not u.path.rstrip("/").endswith("/mcp"):
+        return "주소가 /mcp로 끝나야 합니다"
+    return None
+
+
 def validate_mcp(s: Settings, issues: list[ConfigIssue]) -> None:
     from .schema import ConfigIssue as issue
 
@@ -105,6 +127,8 @@ def validate_mcp(s: Settings, issues: list[ConfigIssue]) -> None:
         issues.append(issue("mcp.token.default_expiry_days", "max_expiry_days 이하"))
     if m.summary.top_n_default > m.summary.top_n_max:
         issues.append(issue("mcp.summary.top_n_default", "top_n_max 이하"))
+    if m.public_url is not None and public_url_problem(m.public_url):
+        issues.append(issue("mcp.public_url", public_url_problem(m.public_url) or ""))
     for key in ("allowed_job_kinds", "denied_job_kinds"):
         vals = getattr(m, key) or []
         if any(not isinstance(v, str) or not v.strip() for v in vals):

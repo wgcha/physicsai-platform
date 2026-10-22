@@ -1,11 +1,14 @@
 """API 스키마 — 공통 기반·오류·헬스·사용자·프로젝트(§10)."""
 
 from __future__ import annotations
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, StringConstraints
 
-__all__ = ["Req", "Resp", "ErrorBody", "ErrorResponse", "Health", "Me", "Project", "HpcVersion", "HPC_VERSION_PATTERN"]
+__all__ = ["Req", "Resp", "ErrorBody", "ErrorResponse", "Health", "Me", "Project", "HpcVersion", "HPC_VERSION_PATTERN", "InputKind"]
+
+# input-kind.md §6.1: 예측 입력 종류(공개 값). 저장값(assembly|mesh_only)과의 변환은 core `stage4_predict/input_kind.py` 한 곳
+InputKind = Literal["assembly", "cushion"]
 
 # D3-68(S20): 작업별 SCX Radioss 버전. 앞뒤 공백은 잘라 저장, 빈 문자열은 null(= 설정 hpc.scx.version)
 HPC_VERSION_PATTERN = r"^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,63}$"

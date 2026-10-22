@@ -271,7 +271,12 @@
     "FvAssembly.kind": [
       "predict_input",
       "train_doe",
-      "custom"
+      "custom",
+      "template"
+    ],
+    "FvDesign.input": [
+      "assembly",
+      "cushion"
     ],
     "FvPreview.input_mode": [
       "reuse",
@@ -282,6 +287,10 @@
       "final_optimum",
       "surrogate_optimum",
       "run"
+    ],
+    "FvSourceValues.input": [
+      "assembly",
+      "cushion"
     ],
     "GeomPreview.result_status": [
       "OK",
@@ -347,6 +356,10 @@
     "JobPlan.estimate_basis": [
       "recent_median",
       "none"
+    ],
+    "McpConnection.url_source": [
+      "config",
+      "guess"
     ],
     "Model.engine": [
       "altair",
@@ -466,13 +479,33 @@
       "run",
       "admin"
     ],
+    "PredictBatch.input": [
+      "assembly",
+      "cushion"
+    ],
     "PredictBatch.input_kind": [
       "assembly",
       "mesh_only"
     ],
+    "PredictBatchPreview.input": [
+      "assembly",
+      "cushion"
+    ],
     "PredictBatchPreview.input_kind": [
       "assembly",
       "mesh_only"
+    ],
+    "PredictBatchPreviewRequest.input": [
+      "assembly",
+      "cushion"
+    ],
+    "PredictBatchSummary.input": [
+      "assembly",
+      "cushion"
+    ],
+    "PredictRunDetail.input": [
+      "assembly",
+      "cushion"
     ],
     "PredictRunDetail.input_mode": [
       "template",
@@ -481,6 +514,14 @@
     "PredictRunDetail.origin": [
       "manual",
       "fem_verify"
+    ],
+    "PredictRunInputInfo.input": [
+      "assembly",
+      "cushion"
+    ],
+    "PredictRunSummary.input": [
+      "assembly",
+      "cushion"
     ],
     "PredictRunSummary.input_mode": [
       "template",
@@ -516,9 +557,25 @@
       "PREVIEW_OUTPUT",
       "JOB_LOGS"
     ],
+    "SurrogateOpt.input": [
+      "assembly",
+      "cushion"
+    ],
+    "SurrogateOptCreate.input": [
+      "assembly",
+      "cushion"
+    ],
     "SurrogateOptCreate.surrogate": [
       "gp",
       "rbf"
+    ],
+    "SurrogateOptPreview.input": [
+      "assembly",
+      "cushion"
+    ],
+    "SurrogateOptSummary.input": [
+      "assembly",
+      "cushion"
     ],
     "TrainDoe.engine": [
       "altair",
@@ -1349,6 +1406,14 @@
         "worker/physicsai_worker/steps/stage5_optimize/optimize.py",
         "worker/physicsai_worker/steps/stage5_optimize/surrogate.py",
         "worker/physicsai_worker/steps/stage5_optimize/surrogate_common.py"
+      ],
+      "status": 422
+    },
+    "INPUT_KIND_UNSUPPORTED": {
+      "code": "INPUT_KIND_UNSUPPORTED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/input_kind_gate.py"
       ],
       "status": 422
     },
@@ -2247,6 +2312,7 @@
       "message_ko": "메시 변환 명령 템플릿(mesh)이 설정되지 않았습니다",
       "sources": [
         "backend/physicsai_api/services/fem_verify_plan.py",
+        "backend/physicsai_api/services/input_kind_gate.py",
         "backend/physicsai_api/services/job_params/base.py",
         "backend/physicsai_api/services/job_params/stage4_predict.py",
         "backend/physicsai_core/commands.py",

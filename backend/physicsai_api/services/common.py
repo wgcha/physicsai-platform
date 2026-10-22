@@ -106,6 +106,7 @@ def dataset_out(d: dict[str, Any], study: dict[str, Any] | None = None, ai_root:
         "split_group": d["split_group"], "options": d["options_json"] or {}, "package_ready": d["package_rel"] is not None,
         "package_rel": d["package_rel"], "created_by_name": d["created_by_name"], "created_at": d["created_at"],
         "curation_id": d.get("curation_id"), "engine": d.get("engine"), "engine_version": d.get("engine_version"),
+        "source_doe": d.get("source_doe"),
     }
 
 

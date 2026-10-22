@@ -18,12 +18,14 @@ from physicsai_core.db.repositories import surrogate_opts as so_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import resolve_in_study
 from physicsai_core.stage4_predict import fem_assembly
+from physicsai_core.stage4_predict import input_kind as ik
 from physicsai_core.stage4_predict import nearest as nearest_mod
 from physicsai_core.stage4_predict.prepared_input import is_mesh_file
 
 from ..context import AppContext
 from .common import study_root
 from .job_params.base import invalid_errors
+from .input_kind_gate import resolve_internal
 from .job_params.stage4_predict import model_for, template_kind
 
 APPLIED_TOL = 1e-9
@@ -147,10 +149,13 @@ def _from_values(ctx: AppContext, conn: Any, study: dict[str, Any], r: Resolved,
     if oor:
         r.warn("OUT_OF_RANGE", f"학습 범위 밖 값: {', '.join(oor[:5])}")
     r.param_set, r.model, r.values, r.applied_values, r.out_of_range = ps, m, values, applied, oor
-    r.template_kind = template_kind(ps)
+    r.template_kind = resolve_internal(ctx, ps, getattr(src, "input", None))  # input-kind.md §4.3: ⑥ 입력 종류 승계(능력 밖 422)
     sroot = study_root(ctx, study)
     if src.reuse_existing:
         for j in fv_repo.reusable_predicts(conn, study["id"], ps["id"], m["id"]):
+            jk = (j["result"] or {}).get("template_kind") or (j["params"] or {}).get("template_kind") or template_kind(ps)
+            if jk != r.template_kind:  # 입력 종류가 다른 예측은 같은 설계점이라도 재사용하지 않는다
+                continue
             av = (j["result"] or {}).get("applied_values") or {}
             if set(av) != set(applied) or any(abs(float(av[k]) - float(applied[k])) > APPLIED_TOL for k in applied):
                 continue
@@ -162,7 +167,7 @@ def _from_values(ctx: AppContext, conn: Any, study: dict[str, Any], r: Resolved,
             r.values, r.applied_values, r.out_of_range = values, applied, oor
             r.links["predict_job_id"] = j["id"]
             return
-    r.companion = {"param_set_id": ps["id"], "model_id": m["id"], "values": values}
+    r.companion = {"param_set_id": ps["id"], "model_id": m["id"], "values": values, "template_kind": r.template_kind}
     r.mesh_available = True  # 동반 예측이 형상 메시를 만든다
 
 
@@ -185,8 +190,10 @@ def _opt_values_source(conn: Any, opt: dict[str, Any], study_root_dir: str) -> d
 
 
 class _ValuesSrc:
-    def __init__(self, param_set_id: str, model_id: str | None, values: dict[str, float], reuse_existing: bool = True):
+    def __init__(self, param_set_id: str, model_id: str | None, values: dict[str, float], reuse_existing: bool = True,
+                 input: str | None = None):  # noqa: A002 - 요청 필드 이름 그대로
         self.param_set_id, self.model_id, self.values, self.reuse_existing = param_set_id, model_id, values, reuse_existing
+        self.input = input
 
 
 def _from_opt(ctx: AppContext, conn: Any, study: dict[str, Any], r: Resolved, src: Any) -> None:
@@ -223,7 +230,8 @@ def _from_opt(ctx: AppContext, conn: Any, study: dict[str, Any], r: Resolved, sr
             r.problem("OPT_DESIGN_UNAVAILABLE", "대리모델 예측 최적안이 없습니다")
             return
         r.label = f"⑥ {olabel} 대리모델 예측 최적안(미검증)"
-        _from_values(ctx, conn, study, r, _ValuesSrc(opt["param_set_id"], opt["model_id"], vals))
+        _from_values(ctx, conn, study, r, _ValuesSrc(opt["param_set_id"], opt["model_id"], vals,
+                                                     input=ik.to_public(opt["input_kind"])))  # ⑥ 입력 종류 승계
 
 
 def resolve(ctx: AppContext, conn: Any, study: dict[str, Any], src: Any) -> Resolved:

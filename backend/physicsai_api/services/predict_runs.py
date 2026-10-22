@@ -17,6 +17,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories.predict_batches import batch_run_ref
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, study_dir
+from physicsai_core.stage4_predict import input_kind as ik
 
 from ..auth import Principal
 from ..context import AppContext
@@ -90,6 +91,7 @@ def _summary(conn: Any, j: dict[str, Any], *, sets: dict[str, Any], mods: dict[s
         "origin": "fem_verify" if p.get("fem_verify_id") else "manual",
         "created_at": j["created_at"], "started_at": j.get("started_at"), "finished_at": j.get("finished_at"),
         "duration_s": dur, "created_by_name": j["created_by_name"], "input_mode": _input_mode(p),
+        "input": ik.of_run(p, r, ps["input_kind"] if ps else None),
         "template": {"id": ps["id"], "label": ps.get("label"), "input_kind": ps["input_kind"]} if ps else None,
         "model": {"id": m["id"], "name": m["name"], "version": m["version"]} if m else None,
         "values": r.get("values") if r.get("values") is not None else (p.get("values") or {}),
@@ -155,7 +157,14 @@ def get_run(ctx: AppContext, principal: Principal, job_id: str) -> dict[str, Any
     r = j["result"] or {}
     cap = r.get("capture") if isinstance(r.get("capture"), dict) else {}
     near = r.get("nearest") if isinstance(r.get("nearest"), dict) else None
+    pi = r.get("predict_input") if isinstance(r.get("predict_input"), dict) else None
+    table = [x for x in (r.get("response_table") or []) if isinstance(x, dict)]
+    warn = ik.cushion_missing_warning(
+        str(x.get("name")) for x in table if x.get("predicted") is None) if out["input"] == ik.CUSHION and table else None
     out.update({
+        "predict_input": {"input": pi.get("input"), "starter": pi.get("starter"), "bytes": pi.get("bytes"),
+                          "files": pi.get("files")} if pi else None,
+        "input_warnings": [warn] if warn else [],
         "nearest": {"run_key": near.get("run_key"), "distance": near.get("distance")} if near else None,
         "response_table": [x for x in (r.get("response_table") or []) if isinstance(x, dict)],
         "paths": _paths(ctx, study, out["root_job_id"], r),

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Sequence
 
+from ..stage4_predict.input_kind import text_of
 from .page import Raw, badge, esc, finite, fmt
 
 SENSE_TEXT = {"min": "최소화", "max": "최대화"}
@@ -35,8 +36,9 @@ def engine_text(eng: Mapping[str, Any] | None) -> str:
 def param_set_text(ps: Mapping[str, Any] | None) -> str:
     p = ps or {}
     bits = [str(p.get("label") or p.get("id") or "—")]
-    if p.get("input_kind"):
-        bits.append({"assembly": "조립 폴더", "mesh_only": "메시 단독"}.get(str(p["input_kind"]), str(p["input_kind"])))
+    kind = p.get("input") or {"assembly": "assembly", "mesh_only": "cushion"}.get(str(p.get("input_kind") or ""))  # 실행 값 우선(input-kind.md §10)
+    if kind in ("assembly", "cushion"):
+        bits.append(f"입력: {text_of(kind)}")
     return " · ".join(bits)
 
 

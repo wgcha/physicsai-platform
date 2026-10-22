@@ -9,7 +9,7 @@ from pydantic import Field, field_validator, model_validator
 
 from physicsai_core.stage4_predict.contour_capture import MAX_COMPS, text_problem
 
-from .common import HpcVersion, Req
+from .common import HpcVersion, InputKind, Req
 from .contour_capture import CaptureDisplay
 
 
@@ -36,6 +36,7 @@ class FvSourceValues(Req):
     values: dict[str, float]
     reuse_existing: bool = True
     origin: FvOrigin | None = None
+    input: InputKind | None = Field(default=None, description="동반 예측의 입력 종류 assembly | cushion(생략 = 템플릿 기본). ⑥ 결과를 넘길 때는 그 최적화의 입력 종류")
 
     @field_validator("values")
     @classmethod
@@ -65,7 +66,9 @@ FvSource = Annotated[Union[FvSourcePredictJob, FvSourceBatchRun, FvSourceValues,
 
 
 class FvAssembly(Req):
-    kind: Literal["predict_input", "train_doe", "custom"]
+    """조립 원본. template = 출처 템플릿의 radioss_assem/(input-kind.md §8, 조립 가능 템플릿의 쿠션 실행 기본값)."""
+
+    kind: Literal["predict_input", "train_doe", "custom", "template"]
     doe_id: str | None = None
     path: str | None = Field(default=None, max_length=400)
 

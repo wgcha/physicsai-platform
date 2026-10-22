@@ -136,6 +136,12 @@ terms:
   # ---- 코드 엔티티 없음(설명만) ----
   - key: unmapped:낙하씬
     ko: 낙하 해석 조건(방향·높이)
+  - key: unmapped:input
+    ko: 예측 입력 종류(assembly = 조립, cushion = 쿠션)
+    synonyms: [입력 종류, 조립 입력, 쿠션 입력, assembly, cushion]
+  - key: unmapped:cushion
+    ko: 쿠션 입력 — 쿠션 메시 rad 하나로 예측(조립 없음, 서버 GPU 메모리 적음)
+    synonyms: [쿠션 입력, 쿠션만, 쿠션 rad, mesh_only, 메시 단독]
 error_hints:
   CONFIRM_REQUIRED: plan_job을 먼저 호출해 confirm_token을 받으세요
   CONFIRM_INVALID: params를 바꿨거나 확인 토큰이 만료·재사용되었습니다 — plan_job을 다시 호출하세요
