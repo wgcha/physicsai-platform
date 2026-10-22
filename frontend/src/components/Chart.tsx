@@ -1,6 +1,6 @@
 // 경량 SVG 차트(외부 차트 라이브러리 없음, 계약 §4.5).
 import { useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { fmtAxisY, intTicks, resolveXDomain, resolveYDomain, type AxisKind } from "../lib/chartAxis";
+import { clipRectProps, fmtAxisY, intTicks, resolveXDomain, resolveYDomain, type AxisKind } from "../lib/chartAxis";
 import { AxisEditor, useAxisPrefs } from "./AxisEditor";
 
 export function useWidth<T extends HTMLElement>(fallback = 600) {
@@ -170,7 +170,7 @@ export function Chart({ height: baseHeight, aspect, maxHeight = 640, lines = [],
         )}
         {iterAxis && (
           <clipPath id={clipId}>
-            <rect x={m.l - 1} y={m.t - 1} width={iw + 2} height={ih + 2} />
+            <rect data-testid="chart-clip" {...clipRectProps(m.l, m.t, iw, ih)} />
           </clipPath>
         )}
         {yt.map((v, i) => (

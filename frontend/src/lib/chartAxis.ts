@@ -62,6 +62,12 @@ export function intTicks(min: number, max: number, maxCount = 10): number[] {
   return out;
 }
 
+/** 점이 그려지는 영역의 clip 여유(px): 축 경계의 점(반복 0, y 최대·최소)이 반쯤 잘리지 않게 점 반경(기본 3~3.5) + 테두리만큼. 눈금·축 시작 0 규칙은 그대로 */
+export const POINT_CLIP_PAD = 6;
+export function clipRectProps(left: number, top: number, w: number, h: number, pad = POINT_CLIP_PAD) {
+  return { x: left - pad, y: top - pad, width: w + 2 * pad, height: h + 2 * pad };
+}
+
 /** x 범위: 자동 = 0 ~ 마지막 반복. 최대가 최소 이하로 남으면 최소 + 1 */
 export function resolveXDomain(p: Pick<AxisPrefs, "xMin" | "xMax">, lastIter: number): [number, number] {
   const last = Number.isFinite(lastIter) ? lastIter : 0;

@@ -112,10 +112,10 @@ export type StatusInfo = Override<
 export type HpcSummary = S["HpcSummary"];
 /** `JobSummary.batch`(phase3.md §14.5, params에서 계산). doe_no = 하위 PREDICT의 DOE 번호(부모 PREDICT_BATCH는 null) */
 export type JobBatchRef = S["JobBatchRef"];
-/** job-queues.md §8.1: lane = CPU|GPU|LIGHT|PREVIEW. SLOT은 옛 응답(deprecated). schema.d.ts 재생성 전까지 로컬 정의 */
+/** job-queues.md §8.1·JQ-10: 현재 대기열 CPU|GPU|LIGHT|PREVIEW(schema는 string — 좁힘). SLOT은 서버가 더 이상 내보내지 않는다(deprecated) — 목 엔진 내부 레인·옛 응답 호환용으로만 남긴다 */
 export type JobLane = "SLOT" | "CPU" | "GPU" | "LIGHT" | "PREVIEW";
-/** `resumed` = T17로 재진입한 대기(진행률 > 0, job-queues.md §8.1). 옛 응답에는 없음 */
-export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: JobLane }> & { resumed?: boolean };
+/** `resumed`·`segments`는 schema JobSummary 필드(T17 재진입 대기 표시, job-queues.md §8.1) */
+export type JobSummary = Override<S["JobSummary"], { job_type: JobType; state: JobState; lane: JobLane }>;
 export type JobStep = Override<S["JobStep"], { state: StepState; kind: "LOCAL" | "INTERNAL" | "HPC_SUBMIT" | "HPC_WAIT" | "COLLECT" }>;
 export type Job = Override<
   S["Job"],
@@ -160,7 +160,6 @@ export interface PredictResult {
 export * from "./typesPredict";
 export * from "./typesPhase2";
 export * from "./typesBatch";
-export * from "./typesDoeMethods";
 export * from "./typesMedia";
 export * from "./typesGeomView";
 export * from "./typesVars";

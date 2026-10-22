@@ -223,8 +223,8 @@ describe("V3-S18-10 요청 body", () => {
   });
 
   it("status 값: 상한·동시 수 기본을 /status.limits.configured에서 읽고, 없으면 설정 기본값", () => {
-    expect(doeLimits(null)).toEqual({ generatorDefault: "platform", parallelDefault: 4, maxRuns: 500, maxMulti: 8 });
-    expect(doeLimits({ limits: { configured: { max_multi_execution: 2, doe_generator_default: "hyperstudy", doe_platform_parallel_default: 4, doe_platform_max_runs: 120 } } })).toEqual({ generatorDefault: "hyperstudy", parallelDefault: 2, maxRuns: 120, maxMulti: 2 });
+    expect(doeLimits(null)).toEqual({ generatorDefault: "platform", parallelDefault: 4, maxRuns: 500, nativeLhsMaxRuns: 500, maxMulti: 8 });
+    expect(doeLimits({ limits: { configured: { max_multi_execution: 2, doe_generator_default: "hyperstudy", doe_platform_parallel_default: 4, doe_platform_max_runs: 120 } } })).toEqual({ generatorDefault: "hyperstudy", parallelDefault: 2, maxRuns: 120, nativeLhsMaxRuns: 120, maxMulti: 2 });
   });
 });
 

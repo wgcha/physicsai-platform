@@ -3,12 +3,15 @@
 import { fetchBlob, request } from "./client";
 export type { DesignMap, DesignMapMetric } from "./designMap";
 import type { components } from "./generated/schema";
-import type { SurrogateOptCreateDm } from "./typesDoeMethods";
-export type { ExploreMethod, SoExploreNewDm, SurrogateOptCreateDm } from "./typesDoeMethods";
+import type { Override } from "./typesBase";
 
 type S = components["schemas"];
 
-export type SurrogateOptCreate = SurrogateOptCreateDm;
+/** ⑥ 탐색 DOE 방식(doe-methods.md DM-C5): lhs(기본) · lhs_opt · sobol · halton · random — schema `SoExploreNew.method` */
+export type ExploreMethod = S["SoExploreNew"]["method"];
+/** schema SoExploreNew에서 method는 생략 가능(lhs는 옛 body 그대로 — DM-C8) */
+export type SoExploreNewDm = Override<S["SoExploreNew"], { method?: ExploreMethod }>;
+export type SurrogateOptCreate = Override<S["SurrogateOptCreate"], { explore: SoExploreNewDm | S["SoExploreReuse"] }>;
 export type SurrogateOptPreview = S["SurrogateOptPreview"];
 export type SurrogateOptSummary = S["SurrogateOptSummary"];
 export type SurrogateOpt = S["SurrogateOpt"];

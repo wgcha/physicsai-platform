@@ -26,7 +26,10 @@ export const initialPlatform = (): PlatformState => ({ kind: "lhs_opt", count: n
 export interface DoeLimits {
   generatorDefault: DoeGenerator;
   parallelDefault: number;
+  /** 플랫폼·Native 비lhs·표 run 상한(`doe_platform_max_runs` = train_data.platform_max_runs) */
   maxRuns: number;
+  /** Native lhs run 상한(`native_doe_max_runs` = train_data.max_runs, doe-methods.md DM-C6). 없으면 maxRuns */
+  nativeLhsMaxRuns: number;
   maxMulti: number;
 }
 type StatusLike = { limits?: { configured?: Record<string, unknown> } } | null | undefined;
@@ -35,10 +38,12 @@ const posInt = (v: unknown): number | null => (typeof v === "number" && Number.i
 export function doeLimits(status: StatusLike): DoeLimits {
   const c = status?.limits?.configured ?? {};
   const maxMulti = posInt(c.max_multi_execution) ?? 8;
+  const maxRuns = posInt(c.doe_platform_max_runs) ?? DEFAULT_PLATFORM_MAX_RUNS;
   return {
     generatorDefault: c.doe_generator_default === "hyperstudy" ? "hyperstudy" : "platform",
     parallelDefault: Math.min(posInt(c.doe_platform_parallel_default) ?? DEFAULT_PLATFORM_PARALLEL, maxMulti),
-    maxRuns: posInt(c.doe_platform_max_runs) ?? DEFAULT_PLATFORM_MAX_RUNS,
+    maxRuns,
+    nativeLhsMaxRuns: posInt(c.native_doe_max_runs) ?? maxRuns,
     maxMulti,
   };
 }

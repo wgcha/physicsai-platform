@@ -182,7 +182,7 @@ export interface paths {
         put?: never;
         /**
          * Create Contour3D
-         * @description 결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(LIGHT). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.
+         * @description 결과 3D 컨투어(power, 열 때 생성): 캐시 적중 200 | 202 CONTOUR_3D(CPU 대기열). 409 CONTOUR3D_NOT_CONFIGURED·PREREQUISITE_MISSING.
          */
         post: operations["create_contour3d_physicsai_api_contour3d_post"];
         delete?: never;
@@ -3442,6 +3442,28 @@ export interface components {
             } | null;
         };
         /**
+         * BatchSourceHalton
+         * @description Halton(스크램블 QMC, doe-methods.md DM-C3): count 2~max_runs, seed 0~4294967295(생략 = 1). 이어서 추가 없음.
+         */
+        BatchSourceHalton: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "halton";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /**
          * BatchSourceLhs
          * @description 범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).
          */
@@ -3505,6 +3527,28 @@ export interface components {
             ranges?: {
                 [key: string]: number[];
             } | null;
+        };
+        /**
+         * BatchSourceRandom
+         * @description 균일 랜덤(doe-methods.md DM-C3): count 2~max_runs, seed 0 이상(기본 1).
+         */
+        BatchSourceRandom: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "random";
+            /** Ranges */
+            ranges?: {
+                [key: string]: number[];
+            } | null;
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
         };
         /**
          * BatchSourceSobol
@@ -5737,7 +5781,10 @@ export interface components {
             input_display_path?: string | null;
             /** Job Type */
             job_type: string;
-            /** Lane */
+            /**
+             * Lane
+             * @description 현재 대기열 CPU|GPU|LIGHT|PREVIEW(SLOT은 deprecated — 더 이상 내보내지 않음, job-queues.md JQ-10)
+             */
             lane: string;
             /** Params */
             params: {
@@ -5749,12 +5796,21 @@ export interface components {
             progress_pct?: number | null;
             /** Project Id */
             project_id: string;
-            /** Queue Position */
+            /**
+             * Queue Position
+             * @description QUEUED일 때 자기 대기열(lane) 안 순번(1부터)
+             */
             queue_position?: number | null;
             /** Result */
             result?: {
                 [key: string]: unknown;
             } | null;
+            /**
+             * Resumed
+             * @description 구간 전환(T17)·PBS 회수 뒤 다시 선 대기 작업(QUEUED이고 이미 시작함) — 화면 '이어서'
+             * @default false
+             */
+            resumed: boolean;
             /** Retry Of Job Id */
             retry_of_job_id?: string | null;
             /** Stage */
@@ -5940,6 +5996,11 @@ export interface components {
             queue_ahead: number;
             /** Runs */
             runs?: number | null;
+            /**
+             * Segments
+             * @description 구간 흐름(소문자) 예 PREDICT = [cpu, gpu, cpu]
+             */
+            segments?: string[];
             /** Study Id */
             study_id: string;
             /** Targets */
@@ -6115,7 +6176,10 @@ export interface components {
             id: string;
             /** Job Type */
             job_type: string;
-            /** Lane */
+            /**
+             * Lane
+             * @description 현재 대기열 CPU|GPU|LIGHT|PREVIEW(SLOT은 deprecated — 더 이상 내보내지 않음, job-queues.md JQ-10)
+             */
             lane: string;
             /** Progress Label */
             progress_label?: string | null;
@@ -6123,8 +6187,17 @@ export interface components {
             progress_pct?: number | null;
             /** Project Id */
             project_id: string;
-            /** Queue Position */
+            /**
+             * Queue Position
+             * @description QUEUED일 때 자기 대기열(lane) 안 순번(1부터)
+             */
             queue_position?: number | null;
+            /**
+             * Resumed
+             * @description 구간 전환(T17)·PBS 회수 뒤 다시 선 대기 작업(QUEUED이고 이미 시작함) — 화면 '이어서'
+             * @default false
+             */
+            resumed: boolean;
             /** Stage */
             stage: number;
             /** Stage Label */
@@ -7371,7 +7444,7 @@ export interface components {
             /** Param Set Id */
             param_set_id?: string | null;
             /** Source */
-            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceLhsOpt"] | components["schemas"]["BatchSourceSobol"] | components["schemas"]["BatchSourceFullfact"] | components["schemas"]["BatchSourceFracfact"] | components["schemas"]["BatchSourcePb"] | components["schemas"]["BatchSourceBbd"] | components["schemas"]["BatchSourceCcd"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
+            source: components["schemas"]["BatchSourceLhs"] | components["schemas"]["BatchSourceLhsOpt"] | components["schemas"]["BatchSourceSobol"] | components["schemas"]["BatchSourceHalton"] | components["schemas"]["BatchSourceRandom"] | components["schemas"]["BatchSourceFullfact"] | components["schemas"]["BatchSourceFracfact"] | components["schemas"]["BatchSourcePb"] | components["schemas"]["BatchSourceBbd"] | components["schemas"]["BatchSourceCcd"] | components["schemas"]["BatchSourceTable"] | components["schemas"]["BatchSourceTrainDoe"];
             /** @description 템플릿 변수 그 자리 편집 {add, exclude}(이 실행에만 적용, 세트 정의는 안 바뀜). Native와 Altair 전체 tpl 템플릿, Altair 부분 tpl은 422 TPL_SCOPE_PARTIAL */
             vars?: components["schemas"]["VarsEdit"] | null;
         };
@@ -7745,6 +7818,36 @@ export interface components {
             /** Product Name */
             product_name?: string | null;
         };
+        /**
+         * QueueCpu
+         * @description CPU 대기열(JQ-6): 동시 상한 `limit`(설정 worker.queues.cpu.max_concurrent). memory_gate = 워커 마지막 하트비트의 여유 메모리 판정.
+         */
+        QueueCpu: {
+            /** Limit */
+            limit: number;
+            /** Memory Gate */
+            memory_gate?: ("ok" | "low") | null;
+            /** Min Free Memory Gb */
+            min_free_memory_gb: number;
+            /** Queued */
+            queued: components["schemas"]["JobSummary"][];
+            /** Running */
+            running: components["schemas"]["JobSummary"][];
+        };
+        /**
+         * QueueGpu
+         * @description GPU 대기열(job-queues.md JQ-2): 동시 1개 고정. 순번(`queue_position`)은 이 대기열 안.
+         */
+        QueueGpu: {
+            /** Limit */
+            limit: number;
+            /** Queued */
+            queued: components["schemas"]["JobSummary"][];
+            /** Running */
+            running: components["schemas"]["JobSummary"][];
+            /** Since */
+            since?: string | null;
+        };
         /** QueueLight */
         QueueLight: {
             /** Queued */
@@ -7755,10 +7858,17 @@ export interface components {
         QueueResponse: {
             /** Collecting */
             collecting: components["schemas"]["JobSummary"][];
+            cpu: components["schemas"]["QueueCpu"];
+            gpu: components["schemas"]["QueueGpu"];
             light: components["schemas"]["QueueLight"];
-            /** Queued */
+            /**
+             * Queued
+             * @description deprecated: GPU·CPU 대기를 queue_seq 순으로 합친 목록(순번은 각 대기열 안)
+             */
             queued: components["schemas"]["JobSummary"][];
+            /** @description deprecated: gpu.running[0] ?? cpu.running[0] ?? null */
             running?: components["schemas"]["JobSummary"] | null;
+            /** @description deprecated: GPU 슬롯(= gpu). 다음 깨지는 릴리스에서 정리 */
             slot: components["schemas"]["QueueSlot"];
             /** Waiting Hpc */
             waiting_hpc: components["schemas"]["JobSummary"][];
@@ -7813,6 +7923,8 @@ export interface components {
             cpu_time_s?: number | null;
             /** Job Id */
             job_id: string;
+            /** Lane */
+            lane?: string | null;
             /** Peak Memory Gb */
             peak_memory_gb?: number | null;
         };
@@ -7825,12 +7937,16 @@ export interface components {
              * @default false
              */
             cpu_cap_enforced: boolean;
+            /** Cpu Max Concurrent */
+            cpu_max_concurrent?: number | null;
             /** Cpu Rate */
             cpu_rate?: number | null;
             /** Memory Gb */
             memory_gb?: number | null;
             /** Priority */
             priority?: string | null;
+            /** Total Cap */
+            total_cap?: ("nested" | "share" | "off") | null;
         };
         /** ResourceStatus */
         ResourceStatus: {
@@ -7858,6 +7974,8 @@ export interface components {
             /** Gpu Status */
             gpu_status?: ("OK" | "NOT_FOUND" | "ERROR") | null;
             job?: components["schemas"]["ResourceJob"] | null;
+            /** Jobs */
+            jobs?: components["schemas"]["ResourceJob"][];
             limits: components["schemas"]["ResourceLimits"];
             /** Ram Total Gb */
             ram_total_gb?: number | null;
@@ -8286,16 +8404,25 @@ export interface components {
         };
         /**
          * SoExploreNew
-         * @description 새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs).
+         * @description 새 DOE: method(기본 lhs) — count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs, sobol이면 그 값 이상 가장 작은 2^m).
+         *     criterion = lhs_opt 전용(maximin 기본 | corr), 그 밖 method면 422. 요인·응답면·표는 ⑥ 탐색에 없다(재사용 배치로 — doe-methods.md DM-C5).
          */
         SoExploreNew: {
             /** Count */
             count?: number | null;
+            /** Criterion */
+            criterion?: ("maximin" | "corr") | null;
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
             kind: "new";
+            /**
+             * Method
+             * @default lhs
+             * @enum {string}
+             */
+            method: "lhs" | "lhs_opt" | "sobol" | "halton" | "random";
             /**
              * Seed
              * @default 1
@@ -9589,10 +9716,19 @@ export interface components {
         SystemStatus: {
             /** Config Ok */
             config_ok: boolean;
+            /** Cpu Limit */
+            cpu_limit?: number | null;
+            /**
+             * Cpu Running
+             * @default 0
+             */
+            cpu_running: number;
             /** Features */
             features: {
                 [key: string]: unknown;
             };
+            /** Gpu Holder Job Id */
+            gpu_holder_job_id?: string | null;
             /** Hpc Mode */
             hpc_mode?: string | null;
             /** Queue Head */

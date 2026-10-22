@@ -28,7 +28,7 @@ function batchRef(srv: MockServer, j: Job) {
 
 export function summary(srv: MockServer, j: Job): JobSummary {
   const { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at } = j;
-  return { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at, ...srv.p2.summaryExtra(j), batch: batchRef(srv, j) };
+  return { id, study_id, project_id, study_title, job_type, stage, lane, state, created_by, created_by_name, queue_position, progress_pct, progress_label, cancel_requested, created_at, started_at, ...srv.p2.summaryExtra(j), resumed: false, batch: batchRef(srv, j) };
 }
 
 export function inputReady(j: Job): boolean {

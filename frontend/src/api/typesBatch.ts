@@ -1,7 +1,6 @@
 // API 타입(R-F 분할) — S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14). `api/types`가 재노출.
 import type { S, Override } from "./typesBase";
 import type { ContourLegend, ViewKey } from "./types";
-import type { BatchSourceMore } from "./typesDoeMethods";
 
 // ---------------------------------------------------------------------------
 // S9 템플릿 예측·DOE 일괄 예측·응답 추출(phase3.md §14) — 생성 타입 기반, 열거형·dict 필드만 계약 값으로 좁힘
@@ -38,8 +37,8 @@ export interface ParamSetResponsesPut {
   responses: { name: string; unit: string; spec: ResponseSpec | null }[];
 }
 
-/** S15(§20.6): 10개 kind(기존 lhs·table·train_doe + 7개) — 생성 타입의 discriminated union */
-export type BatchSource = S["PredictBatchPreviewRequest"]["source"] | BatchSourceMore;
+/** S15(§20.6)·doe-methods.md: 12개 kind(+ halton·random) — 생성 타입의 discriminated union */
+export type BatchSource = S["PredictBatchPreviewRequest"]["source"];
 export type BatchSourceKind = BatchSource["kind"];
 
 /** 영향도 등급(§20.7): formal 정식 · reference 참고용(회색 안내) · off 비활성(사유) */
@@ -56,7 +55,8 @@ export type BatchPreviewRequest = Override<S["PredictBatchPreviewRequest"], { pa
 export type BatchPreviewRow = S["BatchPreviewRow"];
 export type BatchProblemCode =
   | "TABLE_HEADER" | "TABLE_VALUE" | "TEXT_TOO_LARGE" | "TOO_MANY_ROWS" | "TOO_FEW_ROWS" | "RANGE_INVALID" | "DOE_PARAM_MISMATCH"
-  | "COUNT_NOT_POW2" | "CONTINUE_INVALID" | "SEQUENCE_MISMATCH" | "LEVELS_INVALID" | "DESIGN_UNSUPPORTED" | "GENERATOR_UNAVAILABLE";
+  | "COUNT_NOT_POW2" | "CONTINUE_INVALID" | "SEQUENCE_MISMATCH" | "LEVELS_INVALID" | "DESIGN_UNSUPPORTED" | "GENERATOR_UNAVAILABLE"
+  | "VAR_RANGE_INVALID" | "TABLE_OUT_OF_RANGE";
 export type BatchProblem = S["BatchProblem"];
 /** estimate_min = 최근 성공 PREDICT 5개 중앙값×N(분), 없으면 null */
 export type BatchPreview = S["PredictBatchPreview"];

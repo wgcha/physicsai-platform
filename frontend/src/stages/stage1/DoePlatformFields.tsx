@@ -196,7 +196,7 @@ export function DoePlatformFields({ state, onChange, names, maxRuns, disabled, r
             <ul className="problems small error-text" data-testid="td-table-problems" role="alert">
               {tcheck.problems.slice(0, 3).map((p, i) => (
                 <li key={i} data-code={p.code}>
-                  {p.message}
+                  {p.code === "TABLE_OUT_OF_RANGE" && p.row ? `${p.row}행 · ` : ""}{p.message}
                 </li>
               ))}
             </ul>

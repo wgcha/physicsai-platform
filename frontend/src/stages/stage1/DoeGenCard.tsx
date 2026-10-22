@@ -178,7 +178,7 @@ export function DoeGenCard() {
   };
   const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath: path.trim(), paramSetId: nset?.id ?? null, continueOnFailure: native ? nat.continueOnFailure : continueOnFail });
   // 다중 baseline 세트는 층 안 생성기만(DM-C4) — 그 밖 방식이 남아 있으면 생성을 막는다
-  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.maxRuns, assemPath: path.trim(), paramSetId: nset?.id ?? null, names: targetNames, table: { ranges: natRanges } }));
+  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.nativeLhsMaxRuns, otherMaxRuns: lim.maxRuns, assemPath: path.trim(), paramSetId: nset?.id ?? null, names: targetNames, table: { ranges: natRanges } }));
   const submit = () => {
     if (reuseActive) {
       const params = reuseParams();
@@ -261,7 +261,7 @@ export function DoeGenCard() {
       />}
       {native ? (
         <>
-          <NativeFields state={nat} onChange={setNat} set={nset} names={targetNames} ranges={natRanges} maxRuns={lim.maxRuns} disabled={!canExec} reuse={reuse} />
+          <NativeFields state={nat} onChange={setNat} set={nset} names={targetNames} ranges={natRanges} maxRuns={nat.kind === "lhs" ? lim.nativeLhsMaxRuns : lim.maxRuns} disabled={!canExec} reuse={reuse} />
           <div className="form-grid">
             <Field label="동시 실행 수" hint={`1~${lim.maxMulti} · run마다 형상 모핑·검사를 동시에 실행합니다`}>
               <input className="num" inputMode="numeric" value={platMultiShown} disabled={!canExec} onChange={(e) => setPlatMulti(Math.max(1, Math.min(lim.maxMulti, Number(e.target.value.replace(/[^0-9]/g, "")) || 1)))} aria-label="동시 실행 수" />

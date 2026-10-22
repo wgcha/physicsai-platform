@@ -1,7 +1,7 @@
 // S15 ④ 방식 화면 상태 → BatchSource(phase3.md §20.6·§20.10). 순수 함수 — 입력이 숫자가 아니면 null(조합 만들기 비활성), 조합 문제는 서버 problems가 말한다.
 // 새 7개 kind의 `ranges`는 템플릿(세트) 범위와 다르게 고친 변수만 보낸다(생략 = 세트 min·max — 고정 변수가 RANGE_INVALID가 되지 않게). 기존 `lhs`는 지금처럼 전부 보낸다(V3-S9-14 body 불변).
 import type { BatchSource, ParamSet } from "../../../api";
-import { DEFAULT_MAX_RUNS, RECOMMENDED_KIND, defaultLevel, expectedRuns, recommendedCount, sobolCounts, type SamplingKind } from "../../../lib/sampling";
+import { DEFAULT_MAX_RUNS, RECOMMENDED_KIND, SITE_DEFAULT, SITE_KINDS, defaultLevel, expectedRuns, recommendedCount, sobolCounts, type SamplingKind } from "../../../lib/sampling";
 
 export type Ranges = Record<string, [string, string]>;
 
@@ -25,14 +25,22 @@ export interface SamplingState {
 
 /** 템플릿이 바뀌었을 때만 새 템플릿 기준으로 초기화(같은 템플릿이면 같은 객체를 돌려 사용자의 입력을 지우지 않는다) */
 export function resetForTemplate(s: SamplingState, ps: ParamSet | null): SamplingState {
-  return s.psId === (ps?.id ?? null) ? s : { ...s, psId: ps?.id ?? null, ranges: defaultRanges(ps), count: null, cont: false, contId: "", levels: {} };
+  if (s.psId === (ps?.id ?? null)) return s;
+  return { ...s, psId: ps?.id ?? null, kind: kindForTemplate(s.kind, ps), ranges: defaultRanges(ps), count: null, cont: false, contId: "", levels: {} };
 }
+
+/** 다중 baseline 세트는 층 안 생성기만 되고 화면 기본은 lhs(DM-C4·registry.SITE_DEFAULT batch_multi): 단일 baseline 기본(최적화 LHS)이거나 허용 밖이면 lhs로 */
+export function kindForTemplate(kind: SamplingKind, ps: ParamSet | null): SamplingKind {
+  if (!isMultiBaseline(ps)) return kind;
+  return kind === RECOMMENDED_KIND || !SITE_KINDS.batch_multi.includes(kind) ? SITE_DEFAULT.batch_multi : kind;
+}
+export const isMultiBaseline = (ps: ParamSet | null): boolean => (ps?.baselines?.length ?? 0) > 1;
 
 export const defaultRanges = (ps: ParamSet | null): Ranges => Object.fromEntries((ps?.parameters ?? []).map((p) => [p.name, [String(p.min), String(p.max)]]));
 
 export const initialSampling = (ps: ParamSet | null): SamplingState => ({
   psId: ps?.id ?? null,
-  kind: RECOMMENDED_KIND,
+  kind: kindForTemplate(RECOMMENDED_KIND, ps),
   ranges: defaultRanges(ps),
   count: null,
   seed: "1",
@@ -129,7 +137,7 @@ export function buildSource(s: SamplingState, ps: ParamSet | null, cand?: Contin
     case "random": {
       const count = parse(countText(s, k, null, maxRuns));
       const seed = parse(s.seed);
-      return count === null || seed === null ? null : { kind: s.kind, count, seed, ranges }; // BatchSourceMore(api/typesDoeMethods.ts)
+      return count === null || seed === null ? null : { kind: s.kind, count, seed, ranges }; // schema BatchSourceHalton·BatchSourceRandom
     }
     case "sobol": {
       const count = parse(countText(s, k, null, maxRuns));

@@ -155,7 +155,7 @@ describe("①-3 표(CSV) 붙여넣기: 미리 검사와 학습 범위 밖 차단
     expect(checkTable("A,B\n1,x\n2,2", names, ranges, 500).problems[0]).toMatchObject({ code: "TABLE_VALUE" });
     expect(checkTable("A,B\n1,1\n2,2", names, ranges, 500, 3).problems[0]).toMatchObject({ code: "TEXT_TOO_LARGE" });
     const oor = checkTable("A,B\n1,1\n11,2", names, ranges, 500);
-    expect(oor.problems).toEqual([{ code: "TABLE_OUT_OF_RANGE", message: "'A' 값 11가 학습 범위 0~10 밖입니다" }]);
+    expect(oor.problems).toEqual([{ code: "TABLE_OUT_OF_RANGE", message: "'A' 값 11가 학습 범위 0~10 밖입니다", row: 2 }]);
     expect(checkTable("A,B\n1,1\n2,2.5", names, ranges, 500).problems[0].message).toBe("'B' 값 2.5가 학습 범위 1~2 밖입니다");
     expect(checkTable("A,B\n1,1\n99,9", names, null, 500).problems).toEqual([]); // 범위를 모르면(④ 같은 허용) 범위 검사 없음
   });

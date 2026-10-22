@@ -74,28 +74,16 @@ export interface PredictInputInvalidDetail extends ApiErrorDetail {
   problems: PredictInputProblem[];
 }
 
-/** job-queues.md §8.1 `GET /queue`의 `gpu`·`cpu`. schema.d.ts 재생성 전까지 로컬 정의 — 재생성 때 이 두 타입을 schema 것으로 바꾼다 */
-export interface GpuQueue {
-  limit: number;
-  running: JobSummary[];
-  queued: JobSummary[];
-  since?: string | null;
-}
-export interface CpuQueue {
-  limit: number;
-  running: JobSummary[];
-  queued: JobSummary[];
-  min_free_memory_gb?: number | null;
-  /** low = 여유 메모리 부족으로 대기, null = 워커 표본 없음 */
-  memory_gate?: "ok" | "low" | null;
-}
+/** job-queues.md §8.1 `GET /queue`의 `gpu`·`cpu`(schema QueueGpu·QueueCpu, 항목은 좁힌 JobSummary). cpu.memory_gate: low = 여유 메모리 부족으로 대기, null = 워커 표본 없음 */
+export type GpuQueue = Override<S["QueueGpu"], { running: JobSummary[]; queued: JobSummary[] }>;
+export type CpuQueue = Override<S["QueueCpu"], { running: JobSummary[]; queued: JobSummary[] }>;
 
+/** 아래 running·queued·slot은 서버가 deprecated로 계속 내는 필드(gpu·cpu가 정본) */
 export type QueueInfo = Override<
   S["QueueResponse"],
   {
-    /** v0.2.9 추가(옛 서버 응답에는 없음 — 화면은 없으면 옛 단일 대기열 표시). 아래 running·queued·slot은 deprecated */
-    gpu?: GpuQueue;
-    cpu?: CpuQueue;
+    gpu: GpuQueue;
+    cpu: CpuQueue;
     running?: JobSummary | null;
     queued: JobSummary[];
     light: { running?: JobSummary | null; queued: JobSummary[] };

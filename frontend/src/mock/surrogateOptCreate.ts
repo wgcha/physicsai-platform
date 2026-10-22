@@ -1,7 +1,7 @@
 // phase3.md §22.4.2 S17 목(R-F 분할): 요청 정규화(problems)·새 기록 만들기.
 import { usesVarTable } from "../lib/nativeVars";
 import type { ParamSet } from "../api/types";
-import type { ExploreMethod } from "../api/typesDoeMethods";
+import type { ExploreMethod } from "../api/surrogateOpt";
 import { MULTI_BASELINE_REASON, SITE_KINDS } from "../lib/sampling";
 import { err } from "./route";
 import type { MockServer } from "./server";

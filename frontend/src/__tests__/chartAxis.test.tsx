@@ -6,7 +6,9 @@ import { HvChart } from "../stages/stage5/surrogate/HvChart";
 import {
   DEFAULT_AXIS,
   axisStorageKey,
+  POINT_CLIP_PAD,
   checkAxisInput,
+  clipRectProps,
   fmtAxisY,
   fmtExp,
   intTicks,
@@ -253,5 +255,31 @@ describe("HV 그래프도 같은 규칙", () => {
     for (const t of ticks.filter((t) => t.getAttribute("text-anchor") === "end")) expect(t.textContent).toMatch(/^-?\d\.\d{3}e[+-]\d+$/);
     expect(screen.getByTestId("hv-pt-1").querySelector("title")!.textContent).toContain("HV 1.235e-2");
     expect(screen.getAllByTestId("axis-btn")).toHaveLength(1);
+  });
+});
+
+describe("축 경계 점이 잘리지 않는다(v0.2.8 검증 비고)", () => {
+  const within = (c: HTMLElement) => {
+    const clip = c.querySelector('[data-testid="chart-clip"]')!;
+    const [x, y, w, h] = ["x", "y", "width", "height"].map((k) => Number(clip.getAttribute(k)));
+    return [...c.querySelectorAll("circle.chart-pt")].map((p) => {
+      const cx = Number(p.getAttribute("cx")), cy = Number(p.getAttribute("cy")), r = Number(p.getAttribute("r"));
+      return cx - r >= x && cx + r <= x + w && cy - r >= y && cy + r <= y + h;
+    });
+  };
+  it("clipRectProps: 점 반경(3~3.5) + 테두리 이상의 여유", () => {
+    const r = clipRectProps(58, 10, 100, 50);
+    expect(r).toEqual({ x: 58 - POINT_CLIP_PAD, y: 10 - POINT_CLIP_PAD, width: 100 + 2 * POINT_CLIP_PAD, height: 50 + 2 * POINT_CLIP_PAD });
+    expect(POINT_CLIP_PAD).toBeGreaterThanOrEqual(3.5 + 1);
+  });
+  it("Chart: 반복 0·y 최대·최소 점이 clip 안에 온전히 들어가고, 눈금·x 시작 0은 그대로", () => {
+    const { container } = render(<Chart height={200} ariaLabel="t" iterAxis={{ kind: "convergence", xLast: 3 }} points={[{ x: 0, y: 9 }, { x: 1, y: 1 }, { x: 3, y: 5 }]} />);
+    expect(within(container)).toEqual([true, true, true]);
+    expect(xTicks(container)[0]).toBe("0");
+  });
+  it("HvChart: 반복 첫 점·최대 점도 clip 안", () => {
+    const opt = { settings: { iterations: 3, tol_rel: 0.01 }, hv_history: [{ iter_no: 0, hv: 1 }, { iter_no: 1, hv: 4 }, { iter_no: 3, hv: 2 }] } as never;
+    const { container } = render(<HvChart opt={opt} />);
+    expect(within(container)).toEqual([true, true, true]);
   });
 });

@@ -3,7 +3,7 @@ import { useId } from "react";
 import { niceTicks, useWidth } from "../../../components/Chart";
 import { AxisEditor, useAxisPrefs } from "../../../components/AxisEditor";
 import type { SurrogateOpt } from "../../../api/surrogateOpt";
-import { fmtAxisY, intTicks, resolveXDomain, resolveYDomain } from "../../../lib/chartAxis";
+import { clipRectProps, fmtAxisY, intTicks, resolveXDomain, resolveYDomain } from "../../../lib/chartAxis";
 
 export function HvChart({ opt }: { opt: SurrogateOpt }) {
   const { ref, width } = useWidth<HTMLDivElement>(560);
@@ -39,7 +39,7 @@ export function HvChart({ opt }: { opt: SurrogateOpt }) {
         />
         <svg width={width} height={height} role="img" aria-label="HV 그래프">
           <clipPath id={clipId}>
-            <rect x={M.l - 1} y={M.t - 1} width={iw + 2} height={ih + 2} />
+            <rect data-testid="chart-clip" {...clipRectProps(M.l, M.t, iw, ih)} />
           </clipPath>
           {yt.map((v, i) => (
             <g key={`y${v}`}>

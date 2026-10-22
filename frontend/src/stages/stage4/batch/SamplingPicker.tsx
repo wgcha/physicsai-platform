@@ -2,7 +2,7 @@
 // 표·① DOE 입력은 BatchSetup이 그린다(기존 그대로). 상태는 BatchSetup이 들고(SamplingState), 값이 바뀌면 onChange로 알린다.
 import type { ParamSet } from "../../../api";
 import { SamplingDescription } from "../../../components/SamplingDescription";
-import { DEFAULT_MAX_RUNS, MULTI_BASELINE_REASON, RECOMMENDED_KIND, SAMPLING_LABEL, SITE_KINDS, calcNote, isSamplingKind, siteGroups, sobolCounts } from "../../../lib/sampling";
+import { DEFAULT_MAX_RUNS, MULTI_BASELINE_REASON, RECOMMENDED_KIND, SAMPLING_LABEL, SITE_DEFAULT, SITE_KINDS, calcNote, isSamplingKind, siteGroups, sobolCounts } from "../../../lib/sampling";
 import { NativeBatchVars, type NativeBatch } from "./NativeBatchVars";
 import { activeNames, contTotal, countText, fullfactRuns, levelOf, sobolDefaultCont, type ContinueCand, type Ranges, type SamplingState } from "./samplingSource";
 
@@ -37,6 +37,7 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
   const set = (patch: Partial<SamplingState>) => onChange({ ...state, ...patch });
   const kind = state.kind;
   const multiBaseline = (ps?.baselines?.length ?? 0) > 1;
+  const recommended = multiBaseline ? SITE_DEFAULT.batch_multi : RECOMMENDED_KIND; // 다중 baseline 기본 = lhs(DM-C4)
   const names = activeNames(ps, state.ranges);
   const k = names.length;
   const cand = state.cont ? (cands.find((c) => c.id === state.contId) ?? null) : null;
@@ -71,7 +72,7 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
                 return (
                   <option key={m} value={m} disabled={blocked && m !== kind} title={blocked ? MULTI_BASELINE_REASON : undefined}>
                     {SAMPLING_LABEL[m]}
-                    {m === RECOMMENDED_KIND ? " · 추천" : ""}
+                    {m === recommended ? " · 추천" : ""}
                     {blocked ? " — 사용 불가" : ""}
                   </option>
                 );
@@ -80,7 +81,7 @@ export function SamplingPicker({ ps, state, onChange, maxRuns = DEFAULT_MAX_RUNS
           ))}
         </select>
       </label>
-      <SamplingDescription id={kind} recommended={kind === RECOMMENDED_KIND} calc={calc} />
+      <SamplingDescription id={kind} recommended={kind === recommended} calc={calc} />
 
       {native && ps && kind === "table" && (
         <div className="samp-sub">
