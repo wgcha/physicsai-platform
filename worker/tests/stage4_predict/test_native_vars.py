@@ -294,7 +294,7 @@ def test_v_nv_4_opt_create_snapshot_run_and_verify_warnings(nenv):
     assert opt["settings"]["bounds"]["A_THK_1"] == [5.0, 15.0] and "VAR_OUT_OF_FEASIBLE" in _codes(opt["warnings"])
     _put(env, ps, 0, [("A_THK_1", 9.0, 11.0)])                     # 실행 중 세트 정의가 바뀌어도 스냅숏 기준
     for _ in range(60):
-        if not env.sql("select id from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1"):
+        if not env.sql("select id from jobs where state='QUEUED' and lane in ('CPU','GPU') order by queue_seq limit 1"):
             break
         env.w.run_once_slot()
     d = env.c.get(f"{API}/surrogate-opts/{opt['id']}", headers=P).json()

@@ -67,6 +67,12 @@ def test_demo_mode_end_to_end(tmp_path, db_url):
                        capture_output=True, text=True, encoding="utf-8", timeout=120)
     assert r.returncode == 0, r.stdout + r.stderr
     cfg = Path(json.loads(r.stdout.strip().splitlines()[-1])["config"])
+    # CPU 수령 문(job-queues.md JQ-6, 기본 여유 메모리 8GB)은 시험 기계의 메모리에 좌우되므로 끈다 — 이 시험은 ①~⑤ 흐름을 본다
+    import yaml
+
+    conf = yaml.safe_load(cfg.read_text(encoding="utf-8"))
+    conf.setdefault("worker", {}).setdefault("queues", {}).setdefault("cpu", {})["min_free_memory_gb"] = 0
+    cfg.write_text(yaml.safe_dump(conf, allow_unicode=True, sort_keys=False), encoding="utf-8")
     pidfile = tmp_path / "hang.pid"
     env = _env(db_url, cfg, {"FAKE_TOOL_MODE_HSTPY": "hang", "FAKE_TOOL_PIDFILE": str(pidfile), "FAKE_SIMLAB_STEP_S": "0.05",
                              "FAKE_DEMO_DELAY_S": "0"})

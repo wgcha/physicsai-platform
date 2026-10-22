@@ -226,7 +226,7 @@ def test_v_av_5_opt_vars_bounds_warnings_only_and_snapshot(aenv):
     assert {x["name"] for x in opt["settings"]["vars"]["variables"]} == {"THK_1", "RIB_H"} and opt["settings"]["bounds"]["RIB_H"] == [18.0, 22.0]
     _put(env, ps, 0, [("N_RIB", 2, 8)])                                            # 실행 중 세트 정의가 바뀌어도 스냅숏 기준
     for _ in range(60):
-        if not env.sql("select id from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1"):
+        if not env.sql("select id from jobs where state='QUEUED' and lane in ('CPU','GPU') order by queue_seq limit 1"):
             break
         env.w.run_once_slot()
     d = env.c.get(f"{API}/surrogate-opts/{opt['id']}", headers=P).json()

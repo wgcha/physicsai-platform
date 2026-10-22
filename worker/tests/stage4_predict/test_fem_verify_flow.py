@@ -136,7 +136,7 @@ def test_v3_s16_8_reuse_predict_input_and_curves(predict_env, fake_tools, fake_r
     curve_json(env, pj, ["Node 100 / X", "energy total", "Only Pred"])
     cu = env.sql("select id from jobs where study_id=:s limit 1", s=env.sid)[0][0]
     env.sql("insert into jobs(id, study_id, project_id, job_type, stage, lane, state, holds_slot, params, created_by,"
-            " created_by_name) values (gen_random_uuid()::text, :s, 'p-1', 'CU_T01_CURVES', 2, 'SLOT', 'SUCCEEDED', false,"
+            " created_by_name) values (gen_random_uuid()::text, :s, 'p-1', 'CU_T01_CURVES', 2, 'CPU', 'SUCCEEDED', false,"
             " cast(:p as jsonb), 'u', 'u')", s=env.sid,
             p=json.dumps({"curves": [{"type": "Node", "request": "N100", "component": "Node 100 / X"},
                                      {"type": "Energy", "request": "E", "component": "Energy Total"},

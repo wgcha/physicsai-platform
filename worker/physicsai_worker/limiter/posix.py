@@ -60,6 +60,10 @@ class PosixLimiter(ProcGroupMixin):
     def __init__(self, rlimit_as: bool = False) -> None:
         self.rlimit_as = rlimit_as
 
+    def attach_parent(self, limits: EffectiveLimits) -> str:
+        """부모 Job Object 없음(개발 환경) — 작업당 몫으로 나눈다(job-queues.md JQ-7)."""
+        return "share"
+
     def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits,
                group: ProcGroup | None = None) -> LimitedProcess:
         if group is not None:

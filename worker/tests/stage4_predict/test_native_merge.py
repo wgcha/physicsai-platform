@@ -101,7 +101,7 @@ def test_multiobjective_surrogate_on_native_set_and_multi_baseline_blocked(nativ
     assert r.status_code == 201, r.text
     opt = r.json()
     for _ in range(60):
-        q = env.sql("select id from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1")
+        q = env.sql("select id from jobs where state='QUEUED' and lane in ('CPU','GPU') order by queue_seq limit 1")
         if not q:
             break
         env.w.run_once_slot()

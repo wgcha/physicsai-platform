@@ -129,6 +129,10 @@ class ProcessLimiter(Protocol):
     name: str
     cpu_cap_enforced: bool
 
+    def attach_parent(self, limits: EffectiveLimits) -> str:
+        """전체 자원 상한(job-queues.md JQ-7): 워커 부모 Job Object에 넣고 "nested", 못 하면 "share"(작업당 몫), 제한 없음은 "off"."""
+        ...
+
     def launch(self, argv: list[str], cwd: str, env: dict[str, str], limits: EffectiveLimits,
                group: ProcGroup | None = None) -> LimitedProcess: ...
 

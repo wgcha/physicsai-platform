@@ -77,7 +77,7 @@ def _drain(env: Any, limit: int = 80) -> list[tuple[str, str | None]]:
     """대기열이 빌 때까지 SLOT 작업 실행 → [(job_type, 상태)]."""
     seen = []
     for _ in range(limit):
-        q = env.sql("select id, job_type from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1")
+        q = env.sql("select id, job_type from jobs where state='QUEUED' and lane in ('CPU','GPU') order by queue_seq limit 1")
         if not q:
             return seen
         st = env.w.run_once_slot()
@@ -335,9 +335,12 @@ def test_batch_done_hook_never_enqueues_twice(so_env, monkeypatch):
     r = env.c.post(f"{API}/jobs/{failed}/retry", headers=PW)
     assert r.status_code == 201, r.text
     child = r.json()["id"]
+    # 재시도 하위는 GPU 구간부터(대기열이 반복 작업과 다르다) — GPU 구간을 먼저 돌리고, 다시 선 CPU 대기열에서 반복 작업보다 앞으로 옮긴다
+    env.w.available_memory_gb = lambda: 64.0
+    assert env.w.run_once_gpu() == "QUEUED" and env.job(child)["state"] == "QUEUED"
     with env.engine.begin() as conn:
         jobs_repo.move_in_queue(conn, child, 1)  # 반복 작업보다 먼저
-    assert env.w.run_once_slot() == "SUCCEEDED"
+    assert env.w.run_once_cpu() == "SUCCEEDED"
     assert env.job(child)["state"] == "SUCCEEDED" and rounds() == 1
     # 훅을 직접 다시 불러도(EXPLORING·현재 반복 작업 진행 중 / 넣기 실패) 예외 없이 건너뛴다
     env.sql("update surrogate_opts set status='EXPLORING' where id=:i", i=o["id"])
@@ -389,7 +392,7 @@ def test_resume_after_verify_batch_registered_does_not_rerun_round(so_env, monke
     _fail_after_so_next(monkeypatch)
     n = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json=_body(iterations=1, candidates=1)).json()
     for _ in range(10):  # 탐색 부모 + 하위 6 + 반복 1(SO_NEXT 커밋 뒤 실패)
-        q = env.sql("select job_type from jobs where state='QUEUED' and lane='SLOT' order by queue_seq limit 1")
+        q = env.sql("select job_type from jobs where state='QUEUED' and lane in ('CPU','GPU') order by queue_seq limit 1")
         st = env.w.run_once_slot()
         if q[0][0] == "SURROGATE_OPT":
             assert st == "FAILED"

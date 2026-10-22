@@ -38,6 +38,28 @@ class WindowsJobLimiter:
     def __init__(self, kernel32: Any = None, popen: Callable[..., subprocess.Popen] | None = None) -> None:
         self.k = kernel32 if kernel32 is not None else _load_kernel32()
         self.popen = popen or subprocess.Popen
+        self.parent_job: Any = None  # 워커 부모 Job Object(job-queues.md JQ-7) — 프로세스 수명 동안 핸들을 쥔다
+
+    def attach_parent(self, limits: EffectiveLimits) -> str:
+        """워커 프로세스를 부모 Job Object(전체 CPU·메모리 상한)에 넣는다. step Job은 그 안에 중첩된다(Windows 8/Server 2012+).
+        성공 = "nested". Job 생성·할당이 거부되면(작업 스케줄러 세션·정책) 부모 없이 "share"(작업당 몫 폴백, 환경 점검 WARN)."""
+        if self.parent_job:
+            return "nested"
+        job = None
+        try:
+            job = self._create_job(limits)
+            if not self.k.AssignProcessToJobObject(job, self.k.GetCurrentProcess()):
+                self.k.CloseHandle(job)
+                return "share"
+        except Exception:  # noqa: BLE001 - 어떤 실패든 폴백(작업은 계속 돌아야 한다)
+            if job:
+                try:
+                    self.k.CloseHandle(job)
+                except Exception:  # noqa: BLE001
+                    pass
+            return "share"
+        self.parent_job = job
+        return "nested"
 
     # --- Job 생성·설정 ---
     def _create_job(self, limits: EffectiveLimits) -> Any:
