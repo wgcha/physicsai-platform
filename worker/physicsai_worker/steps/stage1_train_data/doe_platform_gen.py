@@ -56,9 +56,11 @@ def _points(ctx: Any, doe_id: str, states: list[str] | None = None) -> list[dict
         return train_repo.points(conn, doe_id, states)
 
 
-def _sampling_source(doe: dict[str, Any]) -> dict[str, Any]:
+def _sampling_source(doe: dict[str, Any], params: dict[str, Any] | None = None) -> dict[str, Any]:
     sp = doe.get("sampling") or {}
     kind = sp.get("kind") or sampling_registry.kind_of_source(doe["doe_type"])
+    if kind == doe_platform.TABLE_KIND and isinstance((params or {}).get("sampling"), dict):  # DM-C3: 표 본문은 작업 params에만(DB에는 행 수)
+        return {"kind": kind, **{k: v for k, v in params["sampling"].items() if k != "kind"}}  # type: ignore[index]
     return {"kind": kind, **(sp.get("input") or doe.get("options") or {})}
 
 
@@ -113,7 +115,7 @@ def dg_prep(ctx: Any) -> None:
     tpl_sha = sha256_file(os.path.join(D, TPL_NAME))
     # ③ 표본(train_doe_points): 없으면 계산, tpl이 바뀌었으면 전부 다시 생성, 그 밖은 유지(재시도)
     doe = _doe(ctx)
-    source = _sampling_source(doe)
+    source = _sampling_source(doe, p)
     pts = _points(ctx, doe_id)
     if not pts:
         ctx.progress(None, "표본 계산", force=True)

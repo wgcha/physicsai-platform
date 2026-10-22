@@ -207,9 +207,9 @@ def test_native_doe_as_s18_platform_path(p2_native, engine, monkeypatch):
 
     r = post({"generator": "hyperstudy", "doe_label": "LHS", "num_runs": 4, "radioss_assem_path": assem})
     assert r.status_code == 422, r.text
-    r = post({"generator": "platform", "sampling": {"kind": "lhs_opt", "count": 4, "seed": 1}, "radioss_assem_path": assem})
-    assert r.status_code == 422 and r.json()["detail"]["code"] == "DOE_SAMPLING_INVALID", r.text
-    assert r.json()["detail"]["problems"][0]["code"] == "DESIGN_UNSUPPORTED"
+    r = post({"generator": "platform", "sampling": {"kind": "bbd"}, "radioss_assem_path": assem})   # doe-methods.md DM-C2: lhs 밖 방식도 열림
+    assert r.status_code == 422 and r.json()["detail"]["code"] == "DOE_SAMPLING_INVALID", r.text      # 단, 변수 2개라 BBD는 설계 불가
+    assert r.json()["detail"]["problems"][0]["code"] == "DESIGN_UNSUPPORTED" and "3개 이상" in r.json()["detail"]["problems"][0]["message"]
     r = post({"sampling": {"kind": "lhs", "count": 4, "seed": 7}, "num_runs": 4, "radioss_assem_path": assem})
     assert r.status_code == 422, r.text                                              # sampling과 num_runs 동시 금지
     r = post({"generator": "platform", "sampling": {"kind": "lhs", "count": 4, "seed": 7}, "radioss_assem_path": assem})

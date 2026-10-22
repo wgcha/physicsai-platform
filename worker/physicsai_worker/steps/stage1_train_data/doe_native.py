@@ -22,12 +22,14 @@ from physicsai_core.geometry.prep import prep_document
 from physicsai_core.geometry.shell_native import features_name, kind_of_features_rel
 from physicsai_core.geometry.shell_options import effective_shell_options
 from physicsai_core.paths import PathError, allowed_roots, check_user_path, is_link_or_reparse
+from physicsai_core.stage1_train_data import doe_platform
 from physicsai_core.stage1_train_data import train_params as tp
 from physicsai_core.stage4_predict.batch_matrix import lhs_values, run_key_for
 
 from ..common import hst_run_label, path_failure
 from ..geometry_native import LocalRunner, engine_version, read_json, run_paicad, write_native_options
 from ..geometry_sample import FLAT, SKIPPED_JSON, backup_path, generate_sample, native_inputs, write_sample_inputs
+from . import doe_native_methods
 from ._shared import _D, _doe
 from .doe_platform_gen import run_root
 
@@ -107,6 +109,10 @@ def dg_prep(ctx: Any) -> None:
     if not names or not set(names) <= known:
         raise StepFailure("INPUT_CHANGED", "파라미터 표 이름이 형상 피처와 다릅니다 — ①-1을 다시 실행하세요")
     matrix = reuse_matrix(ctx, p, names)
+    record = None
+    if matrix is None and (sp := doe_native_methods.method_sampling(p)) is not None:  # DM-C2: lhs 밖 표본 방식 = 공용 생성 경로(doe_platform.build)
+        matrix, record = doe_native_methods.single_matrix(ctx, sp, doe_platform.design_inputs_native(setup))
+        names = list(matrix[0][2])
     if matrix is None:
         rows = lhs_values(names, {q["name"]: (float(q["min"]), float(q["max"])) for q in used}, num_runs, seed)
         matrix = [(i, run_key_for(i), v) for i, v in enumerate(rows, 1)]
@@ -114,8 +120,9 @@ def dg_prep(ctx: Any) -> None:
     write_text(os.path.join(D, "doe_matrix.csv"), doe_matrix_csv(names, matrix))
     snap = [{"name": q["name"], "nominal": q["nominal"], "min": q["min"], "max": q["max"], "format": q.get("format"),
              "unit": q.get("unit", "")} for q in used]
+    more = {"sampling": record} if record is not None else {}  # DM-C2: train_does.sampling.meta(lhs·재사용은 기존대로 기록 없음)
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver,
-                                           geom_options=opts))
+                                           geom_options=opts, **more))
     ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp, "kind": kind})
 
 
