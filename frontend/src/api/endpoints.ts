@@ -69,6 +69,9 @@ import type {
   Study,
   StudyDetail,
   GeomView,
+  AsmMatch,
+  AsmMatchCreate,
+  AsmRowsPut,
   GeomPreview,
   GeomPreviewCreate,
   Contour3d,
@@ -160,6 +163,12 @@ export const api = {
   paramSetView: (id: string) => request<GeomView>("GET", `/param-sets/${id}/view`),
   createPreview: (id: string, body: GeomPreviewCreate) => request<GeomPreview>("POST", `/param-sets/${id}/previews`, { body }),
   preview: (id: string) => request<GeomPreview>("GET", `/previews/${id}`),
+  /** asm-match.md §6.3 조립 매칭: 목록 읽기 202 · 조회 · 행 저장(초안) · 검사 202 · 확정 */
+  asmMatchCreate: (studyId: string, body: AsmMatchCreate) => request<{ match_id: string; job_id: string }>("POST", `/studies/${studyId}/asm-matches`, { body }),
+  asmMatch: (id: string) => request<AsmMatch>("GET", `/asm-matches/${id}`),
+  putAsmRows: (id: string, body: AsmRowsPut) => request<AsmMatch>("PUT", `/asm-matches/${id}/rows`, { body }),
+  checkAsmMatch: (id: string) => request<{ job_id: string }>("POST", `/asm-matches/${id}/check`),
+  confirmAsmMatch: (id: string) => request<AsmMatch>("POST", `/asm-matches/${id}/confirm`),
   /** §13.5 결과 3D 컨투어(열 때 생성): 200 적중 | 202 생성 중(progress) · 상태 · 취소 */
   createContour3d: (body: Contour3dCreate) => request<Contour3d>("POST", "/contour3d", { body }),
   contour3d: (id: string) => request<Contour3d>("GET", `/contour3d/${id}`),

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
-import { api, errorMessage, type TrainDoe, type TrainRun, type TrainSetup } from "../../api";
+import { api, errorMessage, type AsmMatch, type TrainDoe, type TrainRun, type TrainSetup } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 
 /** ① 화면 공용 데이터: 학습 설정(파라미터 표·tpl), DOE 목록, 선택한 DOE의 run 목록 */
@@ -16,6 +16,9 @@ export interface TrainData {
   reloadDoes: () => Promise<void>;
   reloadRuns: () => Promise<void>;
   setSetup: (s: TrainSetup) => void;
+  /** 저장(확정)된 조립 매칭(asm-match.md) — ①-3 Native DOE가 asm_match_id로 쓴다. 없으면 null */
+  asm: AsmMatch | null;
+  setAsm: (m: AsmMatch | null) => void;
 }
 
 const Ctx = createContext<TrainData | null>(null);
@@ -34,6 +37,7 @@ export function TrainProvider({ children }: { children: ReactNode }) {
   const [doeId, setDoeId] = useState<string | null>(null);
   const [runs, setRuns] = useState<TrainRun[]>([]);
   const [runsError, setRunsError] = useState<string | null>(null);
+  const [asm, setAsm] = useState<AsmMatch | null>(null);
 
   const reloadSetup = useCallback(async () => {
     try {
@@ -88,7 +92,7 @@ export function TrainProvider({ children }: { children: ReactNode }) {
   }, [reloadRuns]);
 
   return (
-    <Ctx.Provider value={{ setup, setupError, does, doe, selectDoe: setDoeId, runs, runsError, reloadSetup, reloadDoes, reloadRuns, setSetup }}>
+    <Ctx.Provider value={{ setup, setupError, does, doe, selectDoe: setDoeId, runs, runsError, reloadSetup, reloadDoes, reloadRuns, setSetup, asm, setAsm }}>
       {children}
     </Ctx.Provider>
   );

@@ -9,6 +9,8 @@ export const STEP_LABELS: Record<string, string> = {
   NP_TAG: "경계 노드 분류",
   BL_MAP: "baseline 변수 매칭",
   NP_REGISTER: "템플릿 등록",
+  AM_PARTS: "조립 PART 목록 읽기",
+  AM_CHECK: "경계 일치 검사",
   TX_PREP: "CAD 준비",
   SIMLAB_EXTRACT: "Altair 파라미터 추출",
   TX_PARSE: "파라미터 해석",

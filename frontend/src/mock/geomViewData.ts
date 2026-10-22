@@ -178,6 +178,40 @@ export function cushionGlb(p: CushionParams, preview: boolean): { glb: Uint8Arra
   return { glb: writeGlb("paicad_view", nodes), bodies, maxDisp: Number(maxDisp.toFixed(4)) };
 }
 
+/** 조립 매칭 검사 GLB(asm-match.md §4.3 10: 노드 = 행 바디 이름, `_DIST_MM`) — 목은 쿠션 바디 표면에 거리 값을 칠한다. hot = 바디별 거리 최대 위치·크기 */
+export function asmMatchGlb(rows: { body: string; max: number; hot: Vec3 }[]): { glb: Uint8Array; worst: Record<string, { xyz: Vec3; dist_mm: number }[]> } {
+  const nodes: GlbNode[] = [];
+  const worst: Record<string, { xyz: Vec3; dist_mm: number }[]> = {};
+  for (const { body, ox } of BODIES) {
+    const row = rows.find((r) => r.body === body);
+    if (!row) continue;
+    const b = new Builder();
+    addBody(b, ox, NOMINAL, NOMINAL);
+    const count = b.pos.length / 3;
+    const dist = new Float32Array(count);
+    const sigma = Math.max(8, row.max * 3);
+    for (let i = 0; i < count; i++) {
+      const d2 = (b.pos[i * 3] - row.hot[0]) ** 2 + (b.pos[i * 3 + 1] - row.hot[1]) ** 2 + (b.pos[i * 3 + 2] - row.hot[2]) ** 2;
+      dist[i] = Number((row.max * (0.08 + 0.92 * Math.exp(-d2 / (2 * sigma * sigma)))).toFixed(4));
+    }
+    nodes.push({
+      name: body, mode: 4,
+      attributes: { POSITION: { data: new Float32Array(b.pos), size: 3 }, NORMAL: { data: new Float32Array(b.nrm), size: 3 }, _DIST_MM: { data: dist, size: 1 } },
+      indices: Uint32Array.from({ length: count }, (_, i) => i),
+    });
+    nodes.push({ name: `${body}.edges`, mode: 1, attributes: { POSITION: { data: new Float32Array(b.lines), size: 3 } } });
+    const order = Array.from({ length: count }, (_, i) => i).sort((x, y) => dist[y] - dist[x]);
+    const pts: { xyz: Vec3; dist_mm: number }[] = [];
+    for (const i of order) {
+      const xyz: Vec3 = [b.pos[i * 3], b.pos[i * 3 + 1], b.pos[i * 3 + 2]];
+      if (pts.every((q) => Math.hypot(q.xyz[0] - xyz[0], q.xyz[1] - xyz[1], q.xyz[2] - xyz[2]) > 6)) pts.push({ xyz, dist_mm: dist[i] });
+      if (pts.length >= 3) break;
+    }
+    worst[body] = pts;
+  }
+  return { glb: writeGlb("paicad_asm_match", nodes), worst };
+}
+
 function feature(name: string, parameter: string, type: string, body: string, value: number, nominal: number, range: [number, number], feasible: [number, number] | null, source: string, moving: string[], fixed: string[], dim: ManifestFeature["dimension"]): ManifestFeature {
   return {
     name, parameter, type, body, nominal, value, unit: "mm",

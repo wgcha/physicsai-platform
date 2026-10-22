@@ -167,7 +167,7 @@ export const initialNative = (): NativeDoeState => ({ ...initialPlatform(), kind
 
 /** native params: generator platform + sampling. lhs는 지금 body 그대로 {kind:"lhs", count, seed}(DM-C8), 그 밖은 buildSampling 결과. 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path.
  * maxRuns = lhs 상한, otherMaxRuns = 그 밖 방식 상한(생략하면 maxRuns). names = 사용 변수 이름, table = 표 학습 범위 */
-export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null; otherMaxRuns?: number; names?: string[]; table?: TableOpts }): Record<string, unknown> | null {
+export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null; asmMatchId?: string | null; otherMaxRuns?: number; names?: string[]; table?: TableOpts }): Record<string, unknown> | null {
   let sampling: Record<string, unknown> | null;
   if (s.kind === "lhs") {
     const count = parseInt0(countText(s, o.names?.length ?? 0, o.maxRuns));
@@ -181,7 +181,8 @@ export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns
   }
   if (!sampling) return null;
   const base = { generator: "platform", sampling, multi_execution: o.multi, on_run_failure: s.continueOnFailure ? "continue" : "fail" };
-  return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath };
+  // 저장된 조립 매칭(asm-match.md §6.4)이 있으면 asm_match_id를 함께 보낸다(조립 폴더 경로는 그대로)
+  return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath, ...(o.asmMatchId ? { asm_match_id: o.asmMatchId } : {}) };
 }
 
 /** 층화 LHS baseline별 run 수(백엔드 baselines.stratum_counts: ⌊N/B⌋ + 앞쪽부터 나머지 1씩, 차 ≤ 1) */
@@ -228,8 +229,8 @@ export function reuseState(d: { status: string; sample_status: string }, cols: s
 
 /** 재사용 params: sampling {kind:"train_doe", doe_id}. run 수·시드는 보내지 않는다(원본 표본표 그대로, run 이름 유지).
  * 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path */
-export function buildReuseParams(o: { doeId: string; multi: number; assemPath: string; paramSetId: string | null; continueOnFailure: boolean }): Record<string, unknown> | null {
+export function buildReuseParams(o: { doeId: string; multi: number; assemPath: string; paramSetId: string | null; asmMatchId?: string | null; continueOnFailure: boolean }): Record<string, unknown> | null {
   if (!o.doeId) return null;
   const base = { generator: "platform", sampling: { kind: "train_doe", doe_id: o.doeId }, multi_execution: o.multi, on_run_failure: o.continueOnFailure ? "continue" : "fail" };
-  return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath };
+  return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath, ...(o.asmMatchId ? { asm_match_id: o.asmMatchId } : {}) };
 }

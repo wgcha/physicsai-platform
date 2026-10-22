@@ -217,7 +217,8 @@ function ringTexture(color: string): CanvasTexture {
 
 function colorizeDisp(mesh: Mesh, max: number | null) {
   const g = mesh.geometry as BufferGeometry;
-  const d = g.getAttribute("_disp_mm");
+  // 형상 미리보기 FE = `_DISP_MM`(노드 이동), 조립 매칭 검사 = `_DIST_MM`(노드 → CAD 경계 거리, asm-match.md §4.3 10)
+  const d = g.getAttribute("_disp_mm") ?? g.getAttribute("_dist_mm");
   if (!d) return false;
   const vals = new Float32Array(d.count);
   for (let i = 0; i < d.count; i++) vals[i] = d.getX(i);

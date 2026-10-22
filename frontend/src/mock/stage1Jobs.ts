@@ -5,6 +5,7 @@ import { DOE_TYPES } from "./catalog";
 import { err, type MockResp } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
+import { asmRecs } from "./asmMatch";
 import { mapGate, nativeTrainParams, seedFeatures } from "./geometry";
 import { checkFilter, mockSummary, normalizeFilter, typeSelected } from "./extractFilter";
 import { checkNativeSampling, checkSampling, generatorOf, nativeRuns, platformLabel } from "./doePlatform";
@@ -84,6 +85,11 @@ function precheckNativeDoe(p2: Phase2Mock, s: Study, params: Record<string, unkn
     return mapGate(p2.s, ps.id);
   }
   if (!params.radioss_assem_path) return err(422, "INVALID_PARAMS", "조립 폴더 경로가 필요합니다");
+  // asm-match.md §6.4: asm_match_id는 이 Study의 확정(CONFIRMED) 매칭이어야 한다(아니면 409 ASM_MATCH_STALE)
+  if (params.asm_match_id != null) {
+    const rec = asmRecs(p2.s).get(String(params.asm_match_id));
+    if (!rec || rec.study_id !== s.id || rec.state !== "CONFIRMED") return err(409, "ASM_MATCH_STALE", "조립 폴더 또는 STEP이 바뀌었습니다 — 목록을 다시 읽고 매칭하세요");
+  }
   return null;
 }
 
