@@ -221,3 +221,4 @@
 - 2026-10-22 혼합 작업은 step 구간별 분리 — 생성(형상·메시·rad·DOE)·FEM 검증·추출 = CPU, 예측 = GPU, ⑥ 내장은 반복마다 하위 PREDICT의 추론 구간만 GPU, ④ 일괄은 생성 CPU → 예측 GPU → FEM 검증 CPU(작업 전체를 GPU로 묶지 않음) — 근거: 사용자 결정 · job-queues.md JQ-3·§4
 - 2026-10-22 GPU 자원 = PhysicsAI 추론 step뿐(`EDSPY_PREDICT`, 추론으로 해석한 `EDSPY_SCORE`, 레거시 `HST_OPTIMIZE`는 HyperStudy 내부 반복이라 step 전체 예외), 그 밖 전부 CPU, 서버 GPU 학습 코드 경로 없음(③은 HPC 안내문만) — 근거: 사용자 결정·코드 확인 · job-queues.md §3·§4.3
 - 2026-10-22 GPU 대기 중 CPU 슬롯은 반납(한 작업 슬롯 ≤ 1, 경계 전환 T17 RUNNING→QUEUED, 재진입은 원래 등록 순번 `queue_origin_seq`) — 근거: 점유·대기 제거로 교착 불가, GPU 대기자가 CPU 슬롯을 막는 기아 방지(사용자 요구 "CPU는 GPU 때문에 대기 없이"), 추론 직후 GPU 즉시 반납 · job-queues.md JQ-4·JQ-5·§5
+- 2026-10-22: 대기열 분리(v0.2.9) — CPU 동시 기본 4, ③-5 EDSPY_SCORE GPU, HST_OPTIMIZE step 전체 GPU 점유. 근거: 사용자 결정

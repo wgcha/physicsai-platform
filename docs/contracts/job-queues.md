@@ -37,7 +37,7 @@
 | JQ-3 | 혼합 작업 = **구간별 슬롯 전환**(사용자 결정, §4 비교). 경계에서 새 전이 **T17 `RUNNING → QUEUED`**(lane = 다음 구간)로 슬롯·lease를 반납하고 다시 선다 |
 | JQ-4 | **한 작업은 슬롯을 최대 1개**만 쥔다. GPU를 기다리는 동안 CPU 슬롯을 **반납**한다(§5 — 교착·기아 근거) |
 | JQ-5 | 재진입 순번 = **원래 등록 순번**(`jobs.queue_origin_seq`, T1에서 고정). 재진입 작업은 뒤에 등록된 작업보다 앞에 선다. T14(PBS 회수 후)는 2026-10-07 결정대로 맨 뒤 유지 |
-| JQ-6 | CPU 슬롯 = 개수 상한 `worker.queues.cpu.max_concurrent`(기본 **3**, 1~16) + 수령 시 여유 메모리 문 `cpu.min_free_memory_gb`(기본 8). 넘으면 CPU 대기열에서 대기 |
+| JQ-6 | CPU 슬롯 = 개수 상한 `worker.queues.cpu.max_concurrent`(기본 **4**, 1~16, 2026-10-22 사용자 결정) + 수령 시 여유 메모리 문 `cpu.min_free_memory_gb`(기본 8). 넘으면 CPU 대기열에서 대기 |
 | JQ-7 | 전체 자원 상한 = 워커 **부모 Job Object**(기존 `max_logical_cores`·`max_memory_gb`), step Job Object는 그 안에 중첩. 중첩 불가 시 작업당 몫(코어·메모리 ÷ (N+1))으로 폴백 + 환경 점검 경고 |
 | JQ-8 | LIGHT·PREVIEW 레인은 **그대로**(CPU 상한에 세지 않음). 화면에서는 CPU 대기열 아래 "가벼운 작업"으로 묶어 표시 |
 | JQ-9 | 워커 프로세스 1개 유지. 스레드: `gpu-slot`(1) + `cpu-slot0..N-1`. GPU 구간은 `gpu-slot` 스레드에서만 실행(프로세스 안 이중 직렬화) |
@@ -204,7 +204,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 
 | 키 | 기본 | 범위·검증 | 근거 |
 |---|---|---|---|
-| `worker.queues.cpu.max_concurrent` | **3** | 정수 1~16 | 코어: 유효 32코어에서 SimLab·HyperView 1세션이 실측상 몇 코어 수준이고 DOE·일괄 생성은 작업 안에서 이미 `run_parallel` M개 → 동시 3 + GPU 작업 1이 32코어 안. 메모리: 메싱 8~16 GB × 3 ≤ 64 GB 상한. **라이선스**: Altair 유닛(SimLab·HyperView·HyperStudy) 동시 사용 수가 미확인 → 보수적 3(Q1) |
+| `worker.queues.cpu.max_concurrent` | **4**(사용자 결정 Q1) | 정수 1~16 | 코어: 유효 32코어에서 SimLab·HyperView 1세션이 실측상 몇 코어 수준이고 DOE·일괄 생성은 작업 안에서 이미 `run_parallel` M개 → 동시 3 + GPU 작업 1이 32코어 안. 메모리: 메싱 8~16 GB × 3 ≤ 64 GB 상한. **라이선스**: Altair 유닛(SimLab·HyperView·HyperStudy) 동시 사용 수가 미확인 → 보수적 3(Q1) |
 | `worker.queues.cpu.min_free_memory_gb` | 8 | 0 이상(0 = 검사 안 함), `max_memory_gb` 미만 | 메싱 1건 최소치. GPU 수령에는 적용 안 함 |
 | `worker.queues.total_cap` | true | bool | §6.2 부모 Job Object. false면 작업당 몫 |
 | `worker.queues.step_resource` | `{}` | 알려진 LOCAL step 키 → `cpu|gpu` | §3.3 현장 보정 |
@@ -249,7 +249,7 @@ INTERNAL(none): `*_PREP`·`*_REGISTER`·`*_TABLE`, `SO_FIT`·`SO_PROPOSE`(numpy�
 | R10 | AI 루트 디스크 I/O 경합(동시 복사·메싱) | 관찰 후 조정(설정 상한 낮추기) |
 | R11 | deprecated `running`·`queued` 의미 확장을 읽는 외부 스크립트 | 모양 불변, 문서·openapi description에 명시 |
 
-질문 후보(결과를 바꾸는 것만): Q1 CPU 동시 기본값(3) — 서버 Altair 라이선스 여유에 맞춰 2·4로? · Q2 ③-5 평가(EDSPY_SCORE)를 추론으로 보아 GPU 대기열로 보낼지 · Q3 HyperStudy 레거시 최적화는 step 전체 GPU 점유(예외)로 둘지, 아니면 GPU 대기열 대신 실행 자체를 막을지. (서버 GPU 학습 경로는 없음 — §1, 질문 불필요)
+**결정(2026-10-22 사용자)**: Q1 CPU 동시 기본 4 · Q2 EDSPY_SCORE는 GPU · Q3 HST_OPTIMIZE는 step 전체 GPU 점유 예외. (원 질문 후보:) Q1 CPU 동시 기본값(3) — 서버 Altair 라이선스 여유에 맞춰 2·4로? · Q2 ③-5 평가(EDSPY_SCORE)를 추론으로 보아 GPU 대기열로 보낼지 · Q3 HyperStudy 레거시 최적화는 step 전체 GPU 점유(예외)로 둘지, 아니면 GPU 대기열 대신 실행 자체를 막을지. (서버 GPU 학습 경로는 없음 — §1, 질문 불필요)
 
 ## 12. 변경 범위·소유
 
