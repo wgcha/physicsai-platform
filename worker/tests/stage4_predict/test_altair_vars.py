@@ -240,6 +240,46 @@ def test_v_av_5_opt_vars_bounds_warnings_only_and_snapshot(aenv):
         assert _items(t)["N_RIB"] == "4" and _items(t)["HOLE_R"] == "4.0000" and "{var_" not in t   # 제외·열 밖 파라미터 = 공칭
 
 
+def test_v_av_4_integer_range_shared_check_on_put_batch_and_opt(aenv):
+    """정수(%i) 파라미터의 비정수 범위 = 공용 검사(`nearest.is_integer_range`) — PUT variables·④ 일괄(미리보기·생성)·⑥(미리보기·생성) 모두 VAR_RANGE_INVALID."""
+    from physicsai_core.stage4_predict import nearest
+
+    assert nearest.is_integer_range(2.0, 8) and not nearest.is_integer_range(2.5, 7.5) and not nearest.is_integer_range(3, 3.2)
+    tp = [{"name": "N_RIB", "format": "%3i"}, {"name": "THK_1", "format": "%8.4f"}]
+    assert nearest.integer_range_violations({"N_RIB": [2.5, 7.5], "THK_1": [0.5, 1.5], "X": [0.1, 0.2]}, tp) == ["N_RIB"]
+    assert nearest.integer_range_violations({"N_RIB": [2, 7], "THK_1": [0.5, 1.5]}, tp) == []
+    assert nearest.integer_range_violations({"N_RIB": "bad"}, tp) == [] and nearest.integer_range_violations({"N_RIB": [float("nan"), 3]}, tp) == []
+
+    env, ps = aenv, aenv.ps
+    assert "VAR_RANGE_INVALID" in _codes(_put_raw(env, ps, 0, [("N_RIB", 2.5, 7.5)]).json()["detail"]["problems"])
+    bad = {"kind": "lhs", "count": 4, "seed": 3, "ranges": {"N_RIB": [2.5, 7.5]}}
+    ok = {"kind": "lhs", "count": 4, "seed": 3, "ranges": {"N_RIB": [3, 7], "THK_1": [2.25, 4.75]}}   # 정수 범위 + 연속 변수의 소수 범위는 통과
+    rng = {"N_RIB": [2.5, 7.5]}
+    for src in (bad, {"kind": "lhs_opt", "count": 4, "ranges": rng}, {"kind": "sobol", "count": 4, "ranges": rng},
+                {"kind": "fullfact", "ranges": rng}):
+        pv = _prev(env, ps, src)                                                       # 미리보기 = 200 + problems
+        assert "VAR_RANGE_INVALID" in _codes(pv["problems"]), (src["kind"], pv["problems"])
+    assert _prev(env, ps, ok)["problems"] == []
+    r = env.c.post(f"{API}/studies/{env.sid}/jobs", headers=PW, json={"job_type": "PREDICT_BATCH", "params": {
+        "param_set_id": ps["id"], "multi_execution": 2, "source": bad}})
+    assert r.status_code == 422 and "VAR_RANGE_INVALID" in _codes(r.json()["detail"]["problems"]), r.text   # 생성 = 422
+    assert not env.sql("select id from predict_batches where study_id=:s", s=env.sid)
+    r = env.c.post(f"{API}/studies/{env.sid}/jobs", headers=PW, json={"job_type": "PREDICT_BATCH", "params": {
+        "param_set_id": ps["id"], "multi_execution": 2, "source": bad, "vars": {"exclude": ["THK_1"]}}})
+    assert r.status_code == 422 and "VAR_RANGE_INVALID" in _codes(r.json()["detail"]["problems"]), r.text
+    _job(env, ps, ok)
+    body = {"param_set_id": ps["id"], "explore": {"kind": "new", "count": 5, "seed": 1}, "objective": {"metric": "perf:MaxStress", "sense": "min"},
+            "iterations": 1, "candidates": 1, "seed": 1}
+    for path in ("surrogate-opts/preview", "surrogate-opts"):
+        r = env.c.post(f"{API}/studies/{env.sid}/{path}", headers=PW, json={**body, "bounds": {"N_RIB": [2.5, 7.5]}})
+        probs = r.json()["problems"] if path.endswith("preview") else r.json()["detail"]["problems"]
+        assert r.status_code == (200 if path.endswith("preview") else 422), r.text
+        assert "VAR_RANGE_INVALID" in _codes(probs), (path, probs)
+        assert [x["field"] for x in probs if x["code"] == "VAR_RANGE_INVALID"] == ["bounds.N_RIB"]
+    r = env.c.post(f"{API}/studies/{env.sid}/surrogate-opts", headers=PW, json={**body, "bounds": {"N_RIB": [3, 7]}})
+    assert r.status_code == 201, r.text
+
+
 # ---- V-AV-6: 학습 범위(① DOE parameters_snapshot) -------------------------------------------------------------
 
 

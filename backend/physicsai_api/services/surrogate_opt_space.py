@@ -40,8 +40,11 @@ def _bounds(ps: dict[str, Any], body: Any, so: Any, problems: list[dict[str, Any
         if not native and (lo < tlo - 1e-12 * max(1.0, abs(tlo)) or hi > thi + 1e-12 * max(1.0, abs(thi))):
             _p(problems, "BOUNDS_OUT_OF_RANGE", f"'{n}' 범위는 학습 범위 {tlo:g}~{thi:g} 안이어야 합니다", f"bounds.{n}")
             continue
-        if n in integer and lo < hi and math.ceil(lo - 1e-9) > math.floor(hi + 1e-9):
+        if n in integer and lo < hi and math.ceil(lo - 1e-9) > math.floor(hi + 1e-9):  # s12_s13.md 기존 규칙: 범위 안에 정수가 아예 없음
             _p(problems, "BOUNDS_INVALID", f"'{n}'(정수) 범위 안에 정수가 없습니다", f"bounds.{n}")
+            continue
+        if n in integer and not nearest.is_integer_range(lo, hi):  # altair-vars.md §5.1: PUT variables·④ 일괄과 공용 검사
+            _p(problems, nearest.INT_RANGE_CODE, f"'{n}' {nearest.INT_RANGE_MESSAGE}", f"bounds.{n}")
             continue
         bounds[n] = [lo, hi]
     fixed = {n: b[0] for n, b in bounds.items() if b[0] == b[1]}

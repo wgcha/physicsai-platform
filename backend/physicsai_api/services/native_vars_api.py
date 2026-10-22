@@ -27,6 +27,7 @@ from physicsai_core.geometry import shell as sh
 from physicsai_core.geometry.prep import is_shell_only
 from physicsai_core.geometry.shell_native import features_name, read_kind
 from physicsai_core.paths import resolve_in_study
+from physicsai_core.stage4_predict import nearest
 
 from ..auth import Principal
 from ..context import AppContext
@@ -225,8 +226,8 @@ def validate_items(items: list[Any], entries: list[dict[str, Any]], prop_count: 
             continue
         if not (math.isfinite(it.min) and math.isfinite(it.max)) or it.min > it.max:
             probs.append(_problem("VAR_RANGE_INVALID", "하한·상한은 유한한 숫자이고 하한 ≤ 상한이어야 합니다", n))
-        elif by_name[n].get("integer") and (it.min != math.floor(it.min) or it.max != math.floor(it.max)):  # altair-vars.md §5.1
-            probs.append(_problem("VAR_RANGE_INVALID", "정수 파라미터는 정수 범위여야 합니다", n))
+        elif by_name[n].get("integer") and not nearest.is_integer_range(it.min, it.max):  # altair-vars.md §5.1(④ 일괄·⑥과 공용 검사)
+            probs.append(_problem(nearest.INT_RANGE_CODE, nearest.INT_RANGE_MESSAGE, n))
     if not seen and prop_count == 0:
         probs.append(_problem("VARS_EMPTY", "변수를 하나 이상 고르세요"))
     return probs

@@ -218,7 +218,7 @@ Native 템플릿(④ 파라미터 세트, `engine='native'`)의 **변수 구성(
 
 | 코드 | 종류 | 문구(한국어) |
 |---|---|---|
-| `NATIVE_VARS_UNSUPPORTED` | 422 / problem | 변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다 |
+| `NATIVE_VARS_UNSUPPORTED` | 422 / problem | **v0.2.8 폐지 — `TPL_SCOPE_PARTIAL`로 대체**(altair-vars.md AV-10, 이 릴리스부터 발행하지 않음). 옛 문구: 변수 추가·제외는 Native 템플릿에서만 쓸 수 있습니다 |
 | `NATIVE_VARS_INVALID` | 422(+problems `VAR_UNKNOWN`·`VAR_DUPLICATE`·`VAR_RANGE_INVALID`·`VARS_EMPTY`) | 변수 정의가 올바르지 않습니다 |
 | `NATIVE_VARS_CONFLICT` | 409 | 다른 사용자가 먼저 저장했습니다 — 새로 불러온 뒤 다시 저장하세요 |
 | `NATIVE_VARS_MULTI_UNSUPPORTED` | 409 / problem | 다중 baseline 템플릿은 변수 추가·제외를 아직 지원하지 않습니다 |

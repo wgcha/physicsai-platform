@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Mapping
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
@@ -31,6 +32,29 @@ def integer_vars(tpl_params: list[dict[str, Any]]) -> dict[str, str]:
         fmt = t.get("format") or ""
         if fmt[-1:] in ("i", "d"):
             out[t["name"]] = fmt
+    return out
+
+
+INT_RANGE_CODE = "VAR_RANGE_INVALID"
+INT_RANGE_MESSAGE = "정수 파라미터는 정수 범위여야 합니다"
+
+
+def is_integer_range(lo: float, hi: float) -> bool:
+    """정수(%i·%d) 파라미터의 하한·상한이 모두 정수값인가(altair-vars.md §5.1 — PUT variables·④ 일괄·⑥ 공용 검사). 유한 수만 넘길 것."""
+    return lo == math.floor(lo) and hi == math.floor(hi)
+
+
+def integer_range_violations(ranges: Mapping[str, Any], tpl_params: list[dict[str, Any]]) -> list[str]:
+    """`{이름: [하한, 상한]}` 중 정수 형식 파라미터인데 비정수 범위인 이름(입력 순서). 모양이 틀렸거나 유한하지 않은 항목은 건너뛴다(다른 검사 몫)."""
+    ints = integer_vars(tpl_params)
+    out: list[str] = []
+    for name, r in ranges.items():
+        if name not in ints or not isinstance(r, (list, tuple)) or len(r) != 2:
+            continue
+        if any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v) for v in r):
+            continue
+        if not is_integer_range(float(r[0]), float(r[1])):
+            out.append(str(name))
     return out
 
 

@@ -244,3 +244,31 @@ def test_v_av_7_from_train_tpl_source_doe_and_current(p2_env, engine):
     err = _from_train(c, sid, doe_id, "current", expect=422)
     assert err["detail"]["code"] == "TPL_SCOPE_PARTIAL"
     assert _from_train(c, sid, doe_id, "bogus", expect=422)["detail"]
+
+
+def test_v_av_7_from_train_current_requires_tpl_record_and_file(p2_env, engine):
+    """tpl_source=current: ①-2 tpl 기록(tpl_rel)이 없거나 파일 sha가 기록과 다르면 409 TPL_REQUIRED(DOE는 그대로 doe 출처로 성공)."""
+    c, mk, ai, _lc, _d = p2_env
+    w = mk()
+    sid, ts = _extract(c, w, ai, "av7d")
+    _put_tpl(c, sid, ts, rib_format="%8.4f", rib_use=False)
+    j = _gen(c, sid, ai, "av7d", {"kind": "lhs", "count": 4, "seed": 5})
+    assert w.run_once_slot() == "SUCCEEDED", job(c, j["id"])
+    doe_id = job(c, j["id"])["result"]["doe_id"]
+    tpl = ai / "av7d" / "01_train" / "tpl" / "simlab_parametered_mesh.tpl"
+    original = tpl.read_bytes()
+    # sha 불일치: 파일이 기록(tpl_sha256)과 다르게 바뀜
+    tpl.write_bytes(original + b"\n# edited by hand\n")
+    err = _from_train(c, sid, doe_id, "current", expect=409)
+    assert err["detail"]["code"] == "TPL_REQUIRED" and "바뀌었습니다" in err["detail"]["message"]
+    tpl.write_bytes(original)
+    # tpl 파일 없음
+    tpl.unlink()
+    assert _from_train(c, sid, doe_id, "current", expect=409)["detail"]["code"] == "TPL_REQUIRED"
+    tpl.write_bytes(original)
+    # tpl_rel 기록 없음(①-2에서 tpl을 만든 적 없는 상태)
+    with engine.begin() as conn:
+        conn.execute(text("update train_setups set tpl_rel=null where study_id=:s"), {"s": sid})
+    err = _from_train(c, sid, doe_id, "current", expect=409)
+    assert err["detail"]["code"] == "TPL_REQUIRED" and "먼저 생성" in err["detail"]["message"]
+    _from_train(c, sid, doe_id, "doe")                                   # doe 출처는 ①-2 기록과 무관하게 성공

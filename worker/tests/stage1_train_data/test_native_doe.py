@@ -106,6 +106,20 @@ def test_native_doe_skips_failed_runs_with_reason(p2_native, monkeypatch):
     assert not list(R.glob("*.rad")) and not (R / "m_3").exists() and (R / "_paicad" / "values.json").is_file()
 
 
+def test_native_from_train_rejects_tpl_source(p2_native):
+    """altair-vars.md AV-11: tpl_source는 Altair DOE 전용 — Native DOE에 current를 주면 422(세트는 만들어지지 않는다)."""
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    sid = study(c, "nd6")
+    proj, _ = _extract(c, w, sid, ai, "nd6")
+    doe_id = _doe(c, w, sid, proj)["result"]["doe_id"]
+    before = c.get(f"{API}/studies/{sid}/param-sets", headers=P).json()
+    r = c.post(f"{API}/studies/{sid}/param-sets/from-train", headers=PW, json={"doe_id": doe_id, "runs": "all", "tpl_source": "current"})
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"]["code"] == "INVALID_PARAMS" and "tpl_source" in json.dumps(r.json()["detail"], ensure_ascii=False)
+    assert c.get(f"{API}/studies/{sid}/param-sets", headers=P).json() == before
+
+
 def test_native_doe_all_fail_and_option_rules(p2_native, monkeypatch):
     c, mk, ai, lc, _d = p2_native
     w = mk()

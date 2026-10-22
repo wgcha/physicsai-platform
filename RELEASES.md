@@ -9,6 +9,7 @@
 - Altair 변수 공간 분리: ①-2 tpl이 CAD 전체 파라미터를 포함(미사용은 공칭 고정, ① DOE 결과 불변)
 - ④·⑥에서 Altair 변수 선택·범위를 학습과 독립으로 편집(Native와 동일 방식), 옛 부분 tpl 템플릿은 재생성 안내
 - 학습 결과로 템플릿 만들기에 tpl 출처(DOE 기준|현재 tpl) 선택
+- 오류 코드 NATIVE_VARS_UNSUPPORTED 폐지 → TPL_SCOPE_PARTIAL
 
 ## 0.2.7 — 2026-10-22
 

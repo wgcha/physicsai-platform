@@ -22,7 +22,7 @@
 | AV-2 | 유효하지 않은 미사용 행은 tpl에서 빼고 note `TPL_PARAM_SKIPPED`(이름 목록). 유효하지 않은 **사용** 행은 지금처럼 422 |
 | AV-3 | **범위 표지**: 생성 tpl의 parameter 블록 바로 뒤에 Python 주석 한 줄 `# physicsai-tpl scope=full v=1`(SimLab 스크립트·HyperStudy 모두 주석으로 무시). 이 줄이 있는 tpl = 전체 tpl, 없으면 부분 tpl(옛 것·사용자 수작업) |
 | AV-4 | 스냅숏 `train_setups.tpl_params`(JSONB, 형식 확장) 행에 `used: bool`·`table_min`·`table_max`(①-1 표 값 — 미사용 행의 ④ 기본 범위 출처) 추가. 기존 행(키 없음) = 사용 |
-| AV-5 | **① DOE 불변**: 표본은 사용 행만(`parameters_snapshot` = 사용 행 그대로), 렌더 값 = 표본 ∪ {미사용: 공칭}. 점 표·스냅숏·run 수가 v0.2.7과 같고, 렌더 스크립트 차이는 미사용 paramitem 줄(값 = `fmt % 공칭`)뿐 |
+| AV-5 | **① DOE 불변**: 표본은 사용 행만(`parameters_snapshot` = 사용 행 그대로), 렌더 값 = 표본 ∪ {미사용: 공칭}. 점 표·스냅숏·run 수가 v0.2.7과 같고, 렌더 스크립트 차이는 미사용 paramitem 줄(값 = `fmt % 공칭`) 및 표지 주석 줄뿐 |
 | AV-6 | 공칭 표기 손실 방지: 미사용 행에서 `fmt % 공칭`을 다시 읽은 값이 공칭과 다르면(상대 1e-9 초과) 그 행은 paramitem `NewValue`를 **원래 `Value` 문자열 그대로**(변수 참조 없음)로 쓰고 선언에서 뺀다 + note `TPL_NOMINAL_FORMAT_LOSS`. 이 행은 ④ 풀에 들어가지 않는다 |
 | AV-7 | HyperStudy 레거시 ① DOE(`train_doe` hstbatch, 설정 시에만)는 `D/simlab_parametered_mesh.tpl` = **사용 뷰**(미사용 선언 제거·참조를 `fmt % 공칭` 문자로 치환 — `train_tpl.used_view`)를 받고 전체 tpl은 `D/simlab_parametered_mesh.full.tpl`로 둔다. 플랫폼 DOE는 `D/<TPL_NAME>` = 전체 tpl |
 | AV-8 | ④ Altair 템플릿 **풀** = tpl 선언(전체 tpl이면 CAD 전체 파라미터). 세트 정의·리비전·실행 스냅숏·API는 native-vars §3·§4·§6과 같음(`S/vars/`, `param_sets.parameters`, `predict_batches.source_meta.vars`, `surrogate_opts.settings.vars`). 제외·풀 밖 행 = 렌더 시 공칭 |

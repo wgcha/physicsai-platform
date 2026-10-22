@@ -29,6 +29,7 @@ import io
 from collections.abc import Mapping, Sequence
 from typing import Any
 
+from ..stage4_predict import nearest
 from .registry import SOURCE_KINDS  # API kind → DB source_kind (10개)
 from .matrix_rows import (  # noqa: F401 - 기존 경로 재노출
     PROBLEM_CODES,
@@ -46,6 +47,7 @@ from .matrix_rows import (  # noqa: F401 - 기존 경로 재노출
     batch_dir_rel,
     input_rel_for,
     _make_row,
+    _problem,
 )
 from .matrix_basic import lhs_values, _lhs, _table, _train_doe  # noqa: F401 - 기존 경로 재노출
 from .matrix_designs import (  # noqa: F401 - 기존 경로 재노출
@@ -149,6 +151,10 @@ def build_matrix(
     else:
         raw, meta, notes, dsn = _new_kind(kind, source, parameters, tpl_params, max_runs, integer_rounding, problems,
                                           continue_batch, param_set_id)
+    ranges = source.get("ranges")
+    if isinstance(ranges, Mapping):  # altair-vars.md §5.1: 정수(%i) 파라미터의 비정수 범위 — PUT variables·⑥과 같은 공용 검사
+        for n in nearest.integer_range_violations(ranges, list(tpl_params)):
+            _problem(problems, nearest.INT_RANGE_CODE, f"'{n}' {nearest.INT_RANGE_MESSAGE}")
     rows = [_make_row(no, rk, v, parameters, tpl_params, integer_rounding, oor_parameters) for no, rk, v in raw]
     if dsn is not None:
         notes = _all_notes(dsn, notes, rows, names)
