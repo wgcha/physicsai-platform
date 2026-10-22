@@ -12,6 +12,35 @@ from physicsai_core.stage4_predict import nearest, performance
 from ..context import AppContext
 from .surrogate_opt_metrics import PERF_PREFIX, _p
 
+# ---- ⑥ 탐색 새 DOE 방식(doe-methods.md DM-C5) -------------------------------------------------------------
+
+
+def _is_pow2(n: int, max_runs: int) -> bool:
+    return n >= 4 and n & (n - 1) == 0 and n <= max_runs
+
+
+def _sobol_default_count(count: int, max_runs: int) -> int:
+    """sobol 기본 run 수: count 이상 가장 작은 2^m(≥ 4, ≤ max_runs). 넘으면 max_runs 이하 최대 2^m."""
+    p = 4
+    while p < count:
+        p *= 2
+    if p <= max_runs:
+        return p
+    while p > max_runs and p > 4:
+        p //= 2
+    return p
+
+
+def _explore_method(ex: Any) -> dict[str, Any]:
+    """settings.explore에 더할 방식 키. `lhs`(기본)는 저장하지 않아 기존 행 모양이 그대로다. criterion은 lhs_opt만(maximin 기본)."""
+    if ex.method == "lhs":
+        return {}
+    out: dict[str, Any] = {"method": ex.method}
+    if ex.method == "lhs_opt":
+        out["criterion"] = ex.criterion or "maximin"
+    return out
+
+
 # ---- 정규화(미리보기·생성 공용) --------------------------------------------------------------------------
 
 

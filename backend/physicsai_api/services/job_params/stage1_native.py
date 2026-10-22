@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import os
 import uuid
+from dataclasses import dataclass, field
 from typing import Any
 
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import allowed_roots, check_user_path
+from physicsai_core.sampling import registry as sampling_registry
+from physicsai_core.sampling.matrix_rows import BatchShapeError
+from physicsai_core.stage1_train_data import doe_platform
 from physicsai_core.stage1_train_data import train_params as tp
 
 from ...context import AppContext
@@ -19,7 +23,75 @@ DOE_TYPE_NATIVE = "NATIVE_LHS"
 DOE_LABEL_NATIVE = "LHS(Native)"
 
 
-def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] | None = None) -> tuple[str, int, int, int, str]:
+@dataclass
+class NativePlan:
+    """lhs 밖 표본 방식의 검증 결과(doe-methods.md DM-C2): API check의 run 수·정규화 입력. 단일 baseline = `doe_platform.check`,
+    다중 baseline = 입력 검사만(층 안 생성은 워커)."""
+
+    kind: str
+    doe_type: str
+    label: str
+    input: dict[str, Any]
+    run_count: int
+    notes: list[dict[str, str]] = field(default_factory=list)
+
+    @property
+    def seed(self) -> int | None:
+        return self.input.get("seed")
+
+
+def _sampling_kind(p: Any) -> str | None:
+    return p.sampling.model_dump().get("kind") if p.sampling is not None else None
+
+
+def needs_plan(p: Any) -> bool:
+    """lhs·생략·train_doe·옛 입력은 기존 분기(DM-C8), 그 밖의 표본 방식만 새 경로(DM-C2)."""
+    return _sampling_kind(p) not in (None, "lhs", "train_doe")
+
+
+def native_plan(cfg: Any, p: Any, *, multi: bool, inputs: Any = None) -> NativePlan | None:
+    """lhs 밖 표본 방식 검증. 지점 허용 목록 = `SITE_KINDS[train_native | train_native_multi]`(밖이면 422 DESIGN_UNSUPPORTED).
+    입력 표(단일 baseline) = `inputs`(①-1 Native 추출: `design_inputs_native`, 세트 기준: `design_inputs_from_params`). 상한 = DM-C6."""
+    if not needs_plan(p):
+        return None
+    sp = p.sampling.model_dump()
+    kind = sp["kind"]
+    if kind not in sampling_registry.SITE_KINDS["train_native_multi" if multi else "train_native"]:
+        raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                          problems=[{"code": "DESIGN_UNSUPPORTED", "message": sampling_registry.MULTI_UNSUPPORTED_MESSAGE}])
+    doe_type, label, _d = sampling_registry.method_info(kind)
+    if multi:  # 층 안 생성은 워커(DG_PREP) — API는 run 수·seed 입력만 검사
+        _kind, inp = doe_platform.normalize(sp)
+        cap = int(cfg.train_data.platform_max_runs)
+        count = inp["count"]
+        if not 2 <= count <= cap:
+            raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                              problems=[{"code": "TOO_FEW_ROWS" if count < 2 else "TOO_MANY_ROWS",
+                                         "message": "조합 수는 2개 이상이어야 합니다" if count < 2 else f"조합 수는 최대 {cap}개입니다"}])
+        return NativePlan(kind, doe_type, label, inp, int(count))
+    try:
+        plan = doe_platform.check(sp, {}, cfg, inputs=inputs)
+    except BatchShapeError as exc:
+        raise invalid_at("sampling", str(exc)) from None
+    if plan.problems or not plan.rows:
+        raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
+                          problems=[{"code": x["code"], "message": x["message"]} for x in plan.problems]
+                          or [{"code": "TOO_FEW_ROWS", "message": "표본이 없습니다"}])
+    return NativePlan(kind, plan.doe_type, plan.label, dict(plan.input), plan.run_count, list(plan.notes))
+
+
+def _native_params(base: dict[str, Any], p: Any, plan: NativePlan | None) -> dict[str, Any]:
+    """native DOE 작업 params 마무리: train_doe 재사용 기록(기존) 또는 lhs 밖 표본 방식(doe_type·sampling, seed는 방식에 있을 때만)."""
+    if plan is None:
+        return {**base, **_sampling_param(p)}
+    out = {**base, "doe_type": plan.doe_type, "sampling": {"kind": plan.kind, **plan.input}}
+    if plan.seed is None:
+        out.pop("seed", None)
+    return out
+
+
+def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] | None = None, plan: NativePlan | None = None
+                       ) -> tuple[str, int, int, int, str]:
     """native DOE 공통 입력(geometry-engine.md §7.3.3 + phase3 §23.4 S18 통합) → (doe_label, num_runs, seed, 동시 수, 실패 처리).
 
     native는 S18 생성 방식 `platform`의 한 경로(LHS + paicad)다. `generator`는 생략 또는 platform만.
@@ -50,6 +122,16 @@ def _native_doe_common(cfg: Any, p: Any, samples: Any = None, names: list[str] |
         if multi > cap:
             raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
         return p.doe_label or "표본표 재사용(Native)", len(rows), 1, multi, p.on_run_failure or "continue"
+    if plan is not None:  # DM-C2: lhs 밖 표본 방식 — run 수·입력은 plan(검증 끝남)
+        for k in ("num_runs", "seed"):
+            if k in given:
+                raise invalid_at(k, f"표본 방식(sampling)을 쓰면 {k}를 함께 쓸 수 없습니다")
+        cap = cfg.train_data.max_multi_execution
+        multi = min(cfg.train_data.platform_parallel_default, cap) if p.multi_execution is None else p.multi_execution
+        if multi > cap:
+            raise invalid_at("multi_execution", f"동시 실행 수는 1~{cap}")
+        return p.doe_label or f"{plan.label}(Native)", plan.run_count, int(plan.seed if plan.seed is not None else 1), multi, \
+            p.on_run_failure or "continue"
     if p.sampling is not None:
         sp = p.sampling.model_dump()
         if sp.get("kind") != "lhs":
@@ -128,7 +210,10 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any 
     if not setup.get("features_rel") or not setup.get("cad_file_name") or not tp.used(setup.get("parameters") or []):
         raise DomainError("PREREQUISITE_MISSING", "형상 피처와 사용 파라미터가 필요합니다(①-1을 Native로 먼저)", status=409,
                           missing=["GEOM_FEATURES"])
-    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [q["name"] for q in tp.used(setup.get("parameters") or [])])
+    # DM-C2: lhs 밖 표본 방식(①-2 사용 행 기준), 그 밖은 None = 기존 분기
+    plan = native_plan(cfg, p, multi=False, inputs=doe_platform.design_inputs_native(setup) if needs_plan(p) else None)
+    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [q["name"] for q in tp.used(setup.get("parameters") or [])],
+                                                               plan)
     if p.radioss_assem_path is None:
         raise invalid_at("radioss_assem_path", "조립 폴더 경로가 필요합니다")
     cp = check_user_path(p.radioss_assem_path, allowed_roots(cfg, imports=True))
@@ -152,10 +237,10 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any 
         raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개·기준 메시·번호 재지정 표가 모두 있어야 합니다", status=409,
                           missing=missing)
     doe_id = str(uuid.uuid4())
-    params = {"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
-              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
-              "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id, **_sampling_param(p)}
-    return params, {"doe_id": doe_id}, []
+    params = _native_params({"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
+                             "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
+                             "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id}, p, plan)
+    return params, {"doe_id": doe_id}, [{"code": n["code"], "message": n["message"]} for n in plan.notes] if plan else []
 
 
 def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: Any, samples: Any = None
@@ -180,15 +265,21 @@ def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: An
     if samples is not None and os.path.isfile(os.path.join(set_path(ctx, ps), "param_map.json")):
         raise DomainError("DOE_SAMPLING_INVALID", "표본을 만들 수 없습니다", status=422,
                           problems=[{"code": "DESIGN_UNSUPPORTED", "message": "다중 baseline 세트에서는 표본표 재사용을 지원하지 않습니다"}])
-    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [str(r["name"]) for r in ps["parameters"]])
-    doe_id = str(uuid.uuid4())
-    params = {"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
-              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
-              "on_run_failure": on_fail, "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"),
-              "doe_id": doe_id, "param_set_id": ps["id"], **_sampling_param(p)}
     from .. import native_vars_run  # 지연 import(순환: native_vars_api → param_set_native_api → jobs → job_params)
 
-    res = native_vars_run.resolve(ctx, conn, study, ps, None, None)  # native-vars.md §4.2: 세트 정의를 스냅숏으로 기록(그 자리 편집 없음)
+    res = plan = None
+    if needs_plan(p):  # DM-C2: lhs 밖 표본 방식. 입력 표 = 세트(+ 변수 스냅숏) 파라미터 — 워커 DG_PREP과 같은 `design_inputs_from_params`
+        res = native_vars_run.resolve(ctx, conn, study, ps, None, None)
+        plan = native_plan(cfg, p, multi=os.path.isfile(os.path.join(set_path(ctx, ps), "param_map.json")),
+                           inputs=doe_platform.design_inputs_from_params(list(res.ps["parameters"])))
+    label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [str(r["name"]) for r in ps["parameters"]], plan)
+    doe_id = str(uuid.uuid4())
+    params = _native_params({"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
+                             "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
+                             "on_run_failure": on_fail, "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"),
+                             "doe_id": doe_id, "param_set_id": ps["id"]}, p, plan)
+    if res is None:
+        res = native_vars_run.resolve(ctx, conn, study, ps, None, None)  # native-vars.md §4.2: 세트 정의를 스냅숏으로 기록(그 자리 편집 없음)
     if res.vars is not None:
         params["vars"] = res.vars
-    return params, {"doe_id": doe_id, "param_set_id": ps["id"]}, []
+    return params, {"doe_id": doe_id, "param_set_id": ps["id"]}, [{"code": n["code"], "message": n["message"]} for n in plan.notes] if plan else []

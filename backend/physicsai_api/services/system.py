@@ -65,7 +65,9 @@ def status(ctx: AppContext, principal: Principal | None = None) -> dict[str, Any
                            "doe_generator_default": s.train_data.doe_generator_default,
                            "doe_platform_parallel_default": min(s.train_data.platform_parallel_default,
                                                                 s.train_data.max_multi_execution),
-                           "doe_platform_max_runs": s.train_data.platform_max_runs},
+                           "doe_platform_max_runs": s.train_data.platform_max_runs,
+                           # doe-methods.md DM-C6: ① Native lhs 상한(= train_data.max_runs, 그 밖 방식은 doe_platform_max_runs)
+                           "native_doe_max_runs": s.train_data.max_runs},
             "detected": {"cores": eff.get("detected_cores"), "memory_gb": eff.get("detected_memory_gb")} if eff else None,
             "effective": {k: eff.get(k) for k in ("cores", "cpu_rate", "memory_gb", "priority", "cpu_cap_enforced")} if eff else None,
         },

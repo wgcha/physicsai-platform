@@ -9,6 +9,7 @@ from pydantic import Field
 
 from .common import Req, Resp
 from .extract_filter import ExtractFilter
+from .predict_batch_source import TABLE_TEXT_MAX_CHARS
 from .stage4_predict import TplParam
 
 __all__ = [
@@ -145,6 +146,30 @@ class TrainSamplingSobol(Req):
     seed: int = Field(default=1, ge=0, le=4294967295)
 
 
+class TrainSamplingHalton(Req):
+    """doe-methods.md DM-C3: Halton(스크램블 QMC) — count 2~train_data.platform_max_runs, seed 0~4294967295(기본 1)."""
+
+    kind: Literal["halton"]
+    count: int = Field(ge=2)
+    seed: int = Field(default=1, ge=0, le=4294967295)
+
+
+class TrainSamplingRandom(Req):
+    """doe-methods.md DM-C3: 균일 랜덤 — count 2~상한, seed 0 이상(기본 1)."""
+
+    kind: Literal["random"]
+    count: int = Field(ge=2)
+    seed: int = Field(default=1, ge=0)
+
+
+class TrainSamplingTable(Req):
+    """doe-methods.md DM-C3: 사용자 설계표(CSV·붙여넣기 본문 문자열, 파일 업로드 아님). 첫 줄 = ①-2 사용 파라미터 이름 전부(순서 무관),
+    행 2~상한, 값은 학습 범위(min~max) 안(밖이면 TABLE_OUT_OF_RANGE)."""
+
+    kind: Literal["table"]
+    text: str = Field(max_length=TABLE_TEXT_MAX_CHARS)
+
+
 class TrainSamplingFullfact(Req):
     """levels {변수: 수준 수 1~10}(생략한 변수 = 2)."""
 
@@ -179,8 +204,9 @@ class TrainSamplingTrainDoe(Req):
 
 
 TrainSampling = Annotated[
-    Union[TrainSamplingLhs, TrainSamplingLhsOpt, TrainSamplingSobol, TrainSamplingFullfact, TrainSamplingFracfact,
-          TrainSamplingPb, TrainSamplingBbd, TrainSamplingCcd, TrainSamplingTrainDoe],
+    Union[TrainSamplingLhs, TrainSamplingLhsOpt, TrainSamplingSobol, TrainSamplingHalton, TrainSamplingRandom,
+          TrainSamplingFullfact, TrainSamplingFracfact, TrainSamplingPb, TrainSamplingBbd, TrainSamplingCcd, TrainSamplingTable,
+          TrainSamplingTrainDoe],
     Field(discriminator="kind")]
 
 

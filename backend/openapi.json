@@ -1439,6 +1439,51 @@
         "title": "BatchSourceFullfact",
         "type": "object"
       },
+      "BatchSourceHalton": {
+        "additionalProperties": false,
+        "description": "Halton(스크램블 QMC, doe-methods.md DM-C3): count 2~max_runs, seed 0~4294967295(생략 = 1). 이어서 추가 없음.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "halton",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "default": 1,
+            "maximum": 4294967295.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceHalton",
+        "type": "object"
+      },
       "BatchSourceLhs": {
         "additionalProperties": false,
         "description": "범위·개수 LHS: count 2~predict_batch.max_runs, seed 정수(기본 1), ranges {이름: [최소, 최대]}(생략 = 세트 min·max).",
@@ -1566,6 +1611,50 @@
           "kind"
         ],
         "title": "BatchSourcePb",
+        "type": "object"
+      },
+      "BatchSourceRandom": {
+        "additionalProperties": false,
+        "description": "균일 랜덤(doe-methods.md DM-C3): count 2~max_runs, seed 0 이상(기본 1).",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "random",
+            "title": "Kind",
+            "type": "string"
+          },
+          "ranges": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ranges"
+          },
+          "seed": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "BatchSourceRandom",
         "type": "object"
       },
       "BatchSourceSobol": {
@@ -13149,9 +13238,11 @@
                 "ccd": "#/components/schemas/BatchSourceCcd",
                 "fracfact": "#/components/schemas/BatchSourceFracfact",
                 "fullfact": "#/components/schemas/BatchSourceFullfact",
+                "halton": "#/components/schemas/BatchSourceHalton",
                 "lhs": "#/components/schemas/BatchSourceLhs",
                 "lhs_opt": "#/components/schemas/BatchSourceLhsOpt",
                 "pb": "#/components/schemas/BatchSourcePb",
+                "random": "#/components/schemas/BatchSourceRandom",
                 "sobol": "#/components/schemas/BatchSourceSobol",
                 "table": "#/components/schemas/BatchSourceTable",
                 "train_doe": "#/components/schemas/BatchSourceTrainDoe"
@@ -13167,6 +13258,12 @@
               },
               {
                 "$ref": "#/components/schemas/BatchSourceSobol"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceHalton"
+              },
+              {
+                "$ref": "#/components/schemas/BatchSourceRandom"
               },
               {
                 "$ref": "#/components/schemas/BatchSourceFullfact"
@@ -15934,7 +16031,7 @@
       },
       "SoExploreNew": {
         "additionalProperties": false,
-        "description": "새 DOE(LHS): count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs).",
+        "description": "새 DOE: method(기본 lhs) — count 생략 = max(10, 4·자유 변수 수)(상한 predict_batch.max_runs, sobol이면 그 값 이상 가장 작은 2^m).\ncriterion = lhs_opt 전용(maximin 기본 | corr), 그 밖 method면 422. 요인·응답면·표는 ⑥ 탐색에 없다(재사용 배치로 — doe-methods.md DM-C5).",
         "properties": {
           "count": {
             "anyOf": [
@@ -15947,9 +16044,36 @@
             ],
             "title": "Count"
           },
+          "criterion": {
+            "anyOf": [
+              {
+                "enum": [
+                  "maximin",
+                  "corr"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Criterion"
+          },
           "kind": {
             "const": "new",
             "title": "Kind",
+            "type": "string"
+          },
+          "method": {
+            "default": "lhs",
+            "enum": [
+              "lhs",
+              "lhs_opt",
+              "sobol",
+              "halton",
+              "random"
+            ],
+            "title": "Method",
             "type": "string"
           },
           "seed": {

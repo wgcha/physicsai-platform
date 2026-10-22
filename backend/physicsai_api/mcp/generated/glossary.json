@@ -557,6 +557,17 @@
       ">=",
       "range"
     ],
+    "SoExploreNew.criterion": [
+      "maximin",
+      "corr"
+    ],
+    "SoExploreNew.method": [
+      "lhs",
+      "lhs_opt",
+      "sobol",
+      "halton",
+      "random"
+    ],
     "SoObjective.sense": [
       "min",
       "max"
@@ -1387,6 +1398,7 @@
         "worker/physicsai_worker/steps/stage1_train_data/_shared.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_native.py",
+        "worker/physicsai_worker/steps/stage1_train_data/doe_native_methods.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_native_set.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_platform_gen.py",
         "worker/physicsai_worker/steps/stage1_train_data/extract.py",

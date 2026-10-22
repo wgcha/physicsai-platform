@@ -78,7 +78,7 @@ def _type_label(ctx: AppContext, value: str) -> str:
 
 def _sampling(ctx: AppContext, d: dict[str, Any], options: dict[str, Any]) -> dict[str, Any]:
     """S15 §20.6 표본 방식. 플랫폼 DOE(§23.4)는 {method: doe_type, label: §20.4 이름, desc_id: td_<kind>, options}."""
-    if d.get("generator") == "PLATFORM" and d.get("engine") != "native":  # native는 NATIVE_LHS 그대로(아래)
+    if d.get("generator") == "PLATFORM" and d["doe_type"] != sampling_registry.DOE_TYPE_NATIVE_LHS:  # native LHS는 NATIVE_LHS 그대로(아래)
         kind = str((d.get("sampling") or {}).get("kind") or sampling_registry.kind_of_source(d["doe_type"]) or "")
         label = sampling_registry.METHODS[kind][1] if kind in sampling_registry.METHODS else d["doe_label"]
         return {"method": d["doe_type"], "label": label, "desc_id": sampling_registry.platform_desc_id(kind),
