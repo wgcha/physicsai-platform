@@ -137,6 +137,27 @@ def generate_sample(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_
     return {"starter": starter}
 
 
+def write_cushion_rad(x: Any, settings: Any, inp: NativeInputs, R: str, *, engine_version: str | None, geometry: bool = True,
+                      baseline_id: str | None = None) -> str:
+    """④ 일괄 쿠션 입력(input-kind.md §4.2): `generate_sample(assemble=False)` 뒤 `paicad cushion write` →
+    `R/m_1/{simlab_mesh_name}`(`--out-dir R/m_2/cushion`). include = 모핑 PASS(`R/m_2/<mesh_include_name>`), 형상 값 없으면 기준본.
+    실패는 SKIPPED.json(step "cushion") + StepFailure(그 run만 생성 실패). 반환 = 하위 예측 입력 파일 경로."""
+    from . import geometry_cushion as cu
+
+    m1, m2 = (os.path.join(R, d) for d in (M1, M2))
+    rad = os.path.join(m1, settings.predict.simlab_mesh_name)
+    inc = os.path.join(m2, settings.predict.mesh_include_name) if geometry else inp.baseline_inc
+    v = cu.write_cushion(x, settings, inp, cushion_inc=inc, cushion_dir=os.path.join(m2, cu.CUSHION_DIR), cushion_rad=rad)
+    if not v.ok:
+        doc = skipped_document(v.code or "GEOM_INTERNAL", v.english, "cushion", f"{M2}/{cu.CUSHION_DIR}/{cu.CUSHION_JSON}",
+                               engine_version, v.category)
+        if baseline_id is not None:
+            doc["baseline_id"] = baseline_id
+        write_json(os.path.join(R, SKIPPED_JSON), doc)
+        raise StepFailure(v.code or "GEOM_INTERNAL", v.message or "쿠션 입력 rad 쓰기 실패")
+    return rad
+
+
 def _require_no_skipped(R: str) -> None:
     if os.path.lexists(os.path.join(R, SKIPPED_JSON)):
         raise StepFailure("INTERNAL_ERROR", "이전 시도의 SKIPPED.json이 남아 있습니다")  # 호출자가 R을 _backup으로 비운 뒤에만 호출

@@ -52,6 +52,8 @@ CODE_TABLE: dict[str, tuple[str, str]] = {
     "PREVIEW_BUSY": ("INPUT", "미리보기가 많이 대기 중입니다 — 잠시 후 다시 시도하세요"),
     "ARTIFACT_EXPIRED": ("INPUT", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요"),
     "VIEW_PREVIEW_TIMEOUT": ("VIEW", "미리보기 시간 초과"),
+    # ---- 쿠션 입력 rad(input-kind.md §5.2): 경고 코드 ----
+    "CUSHION_PART_DEF_MISSING": ("INPUT", "쿠션 부품 정의(PART·PROP·MAT) 일부를 조립 폴더에서 찾지 못했습니다"),
 }
 CATEGORY_LABELS: dict[str, str] = {
     "CAD_FAILED": "CAD 생성 불가", "INTERFERENCE": "간섭", "QUALITY": "품질 미달", "DEVIATION": "편차 초과", "TIE": "tie 투영 실패",

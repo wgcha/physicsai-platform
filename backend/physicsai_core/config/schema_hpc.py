@@ -46,6 +46,10 @@ class CommandsCfg(_M):
         "{paicad}", "check", "--baseline-inc", "{baseline_inc}", "--morph-dir", "{morph_dir}", "--update-dir", "{update_dir}",
         "--tag-dir", "{tag_dir}", "--features", "{features_json}", "--values", "{values_json}", "--assem-dir", "{assem_dir}",
         "--renum-csv", "{renum_csv}", "--options", "{options_json}", "--out-dir", "{check_dir}", "--out-inc", "{out_inc}"])
+    # 쿠션 입력 rad(input-kind.md §5.1, paicad 0.12.0+) — null이면 Native 쿠션 입력만 꺼짐
+    paicad_cushion_write: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "cushion", "write", "--inc", "{cushion_inc}", "--renum-csv", "{renum_csv}", "--assem-dir", "{assem_dir}",
+        "--out-dir", "{cushion_dir}", "--out-rad", "{cushion_rad}"])
     paicad_run: list[str] | None = Field(default_factory=lambda: [
         "{paicad}", "run", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}",
         "--baseline-inc", "{baseline_inc}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--renum-csv", "{renum_csv}",

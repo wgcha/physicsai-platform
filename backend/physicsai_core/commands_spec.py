@@ -22,7 +22,7 @@ PAICAD_SHELL_KEYS = ("paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_
                      "paicad_shell_check", "paicad_shell_run")
 PAICAD_VIEW_KEYS = ("paicad_view_export", "paicad_view_preview", "paicad_shell_view_export", "paicad_shell_view_preview")
 PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version",
-               "paicad_props_scan", "paicad_props_apply", "paicad_map") + PAICAD_SHELL_KEYS + PAICAD_VIEW_KEYS
+               "paicad_cushion_write", "paicad_props_scan", "paicad_props_apply", "paicad_map") + PAICAD_SHELL_KEYS + PAICAD_VIEW_KEYS
 
 
 def executable_config_name(exe_key: str) -> str:
@@ -101,6 +101,8 @@ _NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "paicad_morph": _P({"paicad"} | _MORPH),
     "paicad_check": _P({"paicad"} | _CHECK),
     "paicad_run": _P({"paicad"} | _UPD | _MORPH | _CHECK),
+    # 쿠션 입력 rad(input-kind.md §5.1): {cushion_inc}(모핑 PASS include 또는 기준본)·{cushion_dir}(보고)·{cushion_rad}(출력 rad)
+    "paicad_cushion_write": _P({"paicad", "cushion_inc", "renum_csv", "assem_dir", "cushion_dir", "cushion_rad"}),
     "paicad_version": _P({"paicad"}),
     # 단계 3S 쉘 두께(§11.1)·4B 다중 baseline(§7.3.8). {usage}·{split_param}은 경로가 아닌 값(map --usage·--split-param)
     "paicad_props_scan": _P({"paicad", "assem_dir", "options_json", "out_dir"}),

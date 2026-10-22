@@ -33,7 +33,7 @@ def test_v3_s9_3_mesh_only_golden(predict_env, fake_record):
     assert sim["cwd"] == str(Pd / "geom")
     assert not [r for r in rec if r["tool"] == "hw" and "hwfepre.dat" in r["argv"]]     # HyperMesh 미실행
     steps = env.steps(jid)
-    assert steps["MESH"]["state"] == "SKIPPED" and steps["MESH"]["progress_label"] == "쿠션 단독 템플릿 — 메시 연결 불필요"
+    assert steps["MESH"]["state"] == "SKIPPED" and steps["MESH"]["progress_label"] == "쿠션 입력 — 메시 연결 불필요"
     assert steps["RAD_ASSEMBLE"]["state"] == "SUCCEEDED"
     assert sorted(os.listdir(Pd / "INPUT")) == [MESH]
     assert (Pd / "INPUT" / MESH).read_bytes() == (Pd / "geom" / MESH).read_bytes()
