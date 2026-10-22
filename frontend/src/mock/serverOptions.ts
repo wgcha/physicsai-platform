@@ -28,6 +28,8 @@ export interface MockOptions {
   loginUrl?: string;
   /** S9: "running"이면 진행 중 일괄 예측 B-003 시드(하위 PREDICT 12개가 대기열에 들어간다) */
   batchDemo?: "running" | "sobol" | "bbd";
+  /** job-queues.md: "demo"면 GPU·CPU 대기열 시드(GPU 1·CPU 3/4·재진입·메모리 문 low), "legacy"면 옛 응답(gpu·cpu 없음) */
+  queue?: "demo" | "legacy";
   /** S10: 예측 끝 컨투어 캡처 결과(기본 OK) */
   capture?: CaptureMode;
   /** S16 V1: "history"면 단일 예측 이력 시드(템플릿·준비된 입력·재시도·실패·진행 중) */

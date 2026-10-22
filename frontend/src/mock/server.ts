@@ -30,6 +30,7 @@ import { seedSurrogate, surrogateRoutes, type SoRec } from "./surrogateOpt";
 import { nativeVarsRoutes } from "./nativeVars";
 import { newUploadState, reportRoutes, uploadRoutes, type UploadMockState } from "./uploads";
 import { apiTokenRoutes } from "./apiTokens";
+import { newQueueV2State, seedQueueDemo, type QueueV2State } from "./queueV2";
 import { mcpRoutes } from "./mcp";
 import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { seedAltairVars } from "./altairVars";
@@ -114,6 +115,8 @@ export class MockServer {
   seq = 0;
   queueSeq = 100;
   queueOrder = new Map<string, number>();
+  /** job-queues.md GPU·CPU 대기열 목 상태 */
+  qv2: QueueV2State = newQueueV2State();
   idn = 1000;
   p2: Phase2Mock;
   manage: ManageMock;
@@ -165,6 +168,8 @@ export class MockServer {
     this.up = newUploadState(opts.upload ?? false);
     if (opts.geometry) seedNative(this, opts.geometry === "multi");
     if (opts.altairVars) seedAltairVars(this);
+    if (opts.queue === "legacy") this.qv2.legacy = true;
+    if (opts.queue === "demo") seedQueueDemo(this);
   }
 
   get me(): Me | null {
