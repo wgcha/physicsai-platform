@@ -4,6 +4,16 @@
 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
 (`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
 
+## 0.2.9 — 2026-10-23
+
+- 작업 대기열 분리: GPU(PhysicsAI 예측·평가) 동시 1개, CPU(생성·FEM 검증·3D 컨투어 등) 동시 4개(설정 변경 가능), 혼합 작업은 단계별 대기열 전환, 대기열 화면 GPU·CPU 분리
+- DOE 표본 방식 확대: ①-3 Native 다양한 방식(최적화 LHS·Sobol·Halton·랜덤·요인·CCD·Box-Behnken·CSV 표), ④ 다중 baseline·⑥ 탐색 방식 선택, 기존 LHS 결과 불변
+- Native 조립 매칭: renum.csv·baseline.inc 없이 STEP 바디 ↔ 조립 component 매칭, 외곽 노드·CAD 경계 일치 검사(3D 거리 색), 노드 좌표 줄만 갱신(paicad 0.13.0), ④ 템플릿 등록 "조립 매칭 사용"
+- 결과 컨투어 3D 기본 표시(④⑤⑥), 그림·영상은 [그림/영상] 창, ⑥ 기존안·최적안 3D 비교(공통 범례·시점 연결), 변수표·컨투어 1:1 배치
+- 반복-성능 그래프 축 경계 점 잘림 수정
+- 작업 구간 전환 직후 재수령이 늦어지던 경합 수정
+- DB 마이그레이션 0022·0023(업데이트 시 자동 적용)
+
 ## 0.2.8 — 2026-10-22
 
 - Altair 변수 공간 분리: ①-2 tpl이 CAD 전체 파라미터를 포함(미사용은 공칭 고정, ① DOE 결과 불변)

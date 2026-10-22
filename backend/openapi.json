@@ -22390,7 +22390,7 @@
   },
   "info": {
     "title": "PhysicsAI Platform API",
-    "version": "0.2.8"
+    "version": "0.2.9"
   },
   "openapi": "3.1.0",
   "paths": {

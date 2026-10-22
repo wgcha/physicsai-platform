@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "physicsai-platform"
-version = "0.2.8"
+version = "0.2.9"
 description = "PhysicsAI 플랫폼 1차 (백엔드·워커)"
 requires-python = ">=3.12"
 dependencies = [
