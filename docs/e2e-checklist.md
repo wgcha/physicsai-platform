@@ -254,3 +254,13 @@ while ($true) {
 - [ ] Native solid 템플릿 ④ 단건 쿠션 예측: `P/geom/EPS_mesh_0000.rad`(paicad `cushion write`)로 edspy 예측 성공(예측기 읽기 확인 — input-kind R1), `cushion.json` 경고 확인.
 - [ ] 쿠션 결과의 FEM 검증 미리보기: 조립 원본 기본 "템플릿 조립 폴더", reuse 불가 문구.
 - [ ] AI 연결(MCP) 페이지: 발급 전 자리표시자 → 발급 후 토큰 채움, 4개 탭 중 실제 쓰는 도구 1개 이상 복사 설정으로 연결해 `ping`, 연결 시험 버튼 정상, `mcp.public_url` 미설정 시 "짐작" 표시.
+
+## E9. v0.2.10 결과 3D 컨투어 현장 보정 (contour3d-field V-C3F-17)
+
+- [ ] 쿠션 입력 예측 h3d(약 97만 노드, 22프레임) 3D 생성: 결과 OK, manifest `limits.nodes`(외부 면 노드 실측)·`mesh.bytes`·`frames.record_bytes`·`disp` 유무 기록, 변위가 없으면 경고 `CONTOUR3D_DISP_UNAVAILABLE`와 배율 컨트롤 숨김 확인.
+- [ ] FEM 결과 h3d(50프레임, `max_frames: 55`): 50프레임 전부(재샘플 없음), 변위 파일 생성, 배율 켬 시 변위 Range 시작·지연 기록.
+- [ ] 추출·변환 소요 시간과 변환 피크 메모리(작업 로그·작업 관리자) 기록 — 목표 변환 ≤ 10분·≤ 1.5 GB.
+- [ ] 사무용 PC 브라우저: 첫 표시(LOD) ≤ 2 s·전체 해상도 전환 ≤ 5 s·프레임 전환 ≤ 0.3 s(100 Mbps 기준) 실측, 회전 fps(LOD·전체), 극값 마커 값 = 범례 최대값.
+- [ ] 조립 결과 h3d + 표시 부품 이름: `SCOPE=COMPS`(26.1 `hvSel Add "displayed"` 동작) 또는 `SCOPE=ALL` + 경고 확인. `hvResult GetDataTypeList` 출력 기록.
+- [ ] 상한 초과 재현(`max_nodes`를 일시적으로 낮춤): 칸 사유 "외부 면 노드 N개 > 상한 M" 표시, 상한 복구 후 같은 결과가 자동 재생성(캐시 FAIL 미반환).
+- [ ] `contour_extract.tcl` 단독 실행: 안내 문구 출력 후 종료. 결과 FAIL 캐시 폴더의 `extract/`에서 재실행 가능.
