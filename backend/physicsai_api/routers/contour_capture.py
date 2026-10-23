@@ -37,7 +37,7 @@ def media_content(artifact_id: str, request: Request, download: bool = Query(def
     f = svc.media_file(get_ctx(request), artifact_id)
     size = f["size"]
     disp = "attachment" if download else "inline"
-    headers = {"Accept-Ranges": "bytes", "ETag": f["etag"], "Cache-Control": "private, no-cache",
+    headers = {"Accept-Ranges": "bytes", "ETag": f["etag"], "Cache-Control": "private, no-cache, no-transform",  # C3F-7: 프록시가 Range 응답을 변환·압축하지 않게
                "Content-Disposition": f'{disp}; filename="{f["filename"]}"', "X-Content-Type-Options": "nosniff"}
     rng = svc.parse_range(request.headers.get("range"), size)
     if rng == "unsatisfiable":

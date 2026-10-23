@@ -62,13 +62,14 @@ def _interrupt(conn: Connection, job: dict[str, Any]) -> None:
         .where(and_(job_steps.c.job_id == job["id"], job_steps.c.state == "PENDING"))
         .values(state="SKIPPED")
     )
+    _side_effects_on_end(conn, job, INTERRUPTED)
+    notif_repo.notify_job(conn, job["id"], "JOB_INTERRUPTED")
+    # 슬롯 회수는 jobs 행을 만지는 일을 모두 마친 뒤(C3F-18: worker_slot을 쥔 채 jobs 행을 기다리지 않는다)
     conn.execute(
         update(worker_slot)
         .where(and_(worker_slot.c.id == 1, worker_slot.c.holder_job_id == job["id"]))
         .values(holder_job_id=None, lease_owner_id=None, lease_token=None, lease_acquired_at=None, lease_expires_at=None)
     )
-    _side_effects_on_end(conn, job, INTERRUPTED)
-    notif_repo.notify_job(conn, job["id"], "JOB_INTERRUPTED")
 
 
 def reap_expired(conn: Connection) -> list[str]:
@@ -160,11 +161,6 @@ def release(
     )
     if r.rowcount != 1:
         raise LeaseLost(job_id)
-    conn.execute(
-        update(worker_slot)
-        .where(and_(worker_slot.c.id == 1, worker_slot.c.lease_token == token))
-        .values(holder_job_id=None, lease_owner_id=None, lease_token=None, lease_acquired_at=None, lease_expires_at=None)
-    )
     if next_state in (FAILED, CANCELED):
         conn.execute(
             update(job_steps)
@@ -184,7 +180,14 @@ def release(
     event = {SUCCEEDED: "JOB_SUCCEEDED", FAILED: "JOB_FAILED", CANCELED: "JOB_CANCELED"}.get(next_state)
     if event:
         notif_repo.notify_job(conn, job_id, event)
-    notif_repo.recompute_my_turn(conn)
+    # 잠금 순서(C3F-18, job-queues.md §6.1): jobs(이 작업 행) → 다른 jobs 행을 만지는 부수 효과 → **마지막에** worker_slot.
+    # claim_gpu(슬롯 → holder 행은 SKIP LOCKED)와 서로 기다리지 않고, 슬롯을 쥔 채 다른 jobs 행을 기다리는 구간이 없다.
+    conn.execute(
+        update(worker_slot)
+        .where(and_(worker_slot.c.id == 1, worker_slot.c.lease_token == token))
+        .values(holder_job_id=None, lease_owner_id=None, lease_token=None, lease_acquired_at=None, lease_expires_at=None)
+    )
+    notif_repo.recompute_my_turn(conn)  # 슬롯 비움 뒤에 계산(GPU 대기열 "가득" 판정이 슬롯을 읽는다)
     return get_job(conn, job_id)
 
 

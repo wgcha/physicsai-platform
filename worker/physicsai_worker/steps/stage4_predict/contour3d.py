@@ -9,6 +9,8 @@ contour3d.timeout_s) → C3_CONVERT(physicsai_core.contour3d — 형상 → 프�
 
 from __future__ import annotations
 
+import glob
+import inspect
 import os
 import time
 from typing import Any
@@ -18,8 +20,10 @@ from physicsai_core.config.schema_capture import effective_extract_tcl
 from physicsai_core.contour3d.convert import ConvertError, convert
 from physicsai_core.contour3d.settings import (
     DETERMINISTIC_FAILS,
+    OUT_DISP,
     OUT_FRAMES,
     OUT_GLB,
+    OUT_LOD,
     OUT_MANIFEST,
     RESULT_NAME,
     SCRIPT_NAME,
@@ -42,6 +46,14 @@ from physicsai_core.geometry.view import (
     dir_bytes,
 )
 from physicsai_core.path_links import is_link_or_reparse
+
+def _convert_kwargs(fn: Any, **kw: Any) -> dict[str, Any]:
+    """`convert`가 받는 키워드만 넘긴다(변환기 재작성 전후 호환 어댑터 — 계약 contour3d-field.md §5.4·§9.6의 새 인자를 점진 적용)."""
+    params = inspect.signature(fn).parameters
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
+        return kw
+    return {k: v for k, v in kw.items() if k in params}
+
 
 def _C(ctx: Any) -> str:
     return ctx.abs(cache_rel(CONTOUR_CACHE, ctx.params["cache_key"]))
@@ -69,7 +81,8 @@ def c3_prep(ctx: Any) -> None:
     os.makedirs(X)
     copy_file(tcl, os.path.join(X, SCRIPT_NAME), checkpoint=ctx.checkpoint)
     write_text(os.path.join(X, SETTINGS_NAME), settings_text(h3d_path=h3d, out_dir=X, display=p.get("display") or {},
-                                                            max_frames=int(p["max_frames"]), include_disp=bool(p["include_disp"])))
+                                                            max_frames=int(p["max_frames"]), include_disp=bool(p["include_disp"]),
+                                                            disp_max_nodes=int(s.contour3d.disp_max_nodes)))
     _row(ctx, status="RUNNING")
     ctx.patch_result({"contour_id": p["contour_id"], "cache_rel": ctx.rel(C), "started_ts": time.time()})
 
@@ -109,7 +122,10 @@ def c3_extract(ctx: Any) -> None:
         raise StepFailure(code, f"{message_ko(code)} — {res['message'] or res['status']}")
     if not os.path.isfile(os.path.join(X, "nodes.csv")) or not any(os.path.isfile(os.path.join(X, n)) for n in ("faces.csv", "elements.csv")):
         raise StepFailure("CONTOUR3D_EXTRACT_INVALID", f"{message_ko('CONTOUR3D_EXTRACT_INVALID')} — nodes.csv·faces.csv 없음")
-    ctx.patch_result({"extract": {"nodes": res["nodes"], "frames_total": res["frames_total"], "unit": res["unit"]}})
+    ctx.patch_result({"extract": {"nodes": res["nodes"], "frames_total": res["frames_total"], "unit": res["unit"], "disp": res["disp"],
+                                  "scope": res["scope"]}})
+    if res["disp"] == "NONE":  # §9.4: 변위가 없어도 계속(스칼라만) — 경고는 변환기가 manifest에 남긴다
+        ctx.log(f"[DISP=NONE] 결과에 변위가 없어 스칼라만 추출했습니다: {res['disp_reason'] or '-'}")
 
 
 def c3_convert(ctx: Any) -> None:
@@ -121,16 +137,25 @@ def c3_convert(ctx: Any) -> None:
     def prog(pct: float, label: str) -> None:
         ctx.progress(pct, label)
 
+    c3 = s.contour3d
+    disp = p.get("display") or {}
     src = {"kind": p["source_kind"], "ref": p.get("source_ref") or {}, "h3d_name": os.path.basename(p["h3d_rel"])}
+    kw = _convert_kwargs(convert, source=src, max_nodes=int(c3.max_nodes), max_glb_bytes=int(c3.max_glb_bytes),
+                         max_bin_bytes=int(c3.max_bin_bytes), max_disp_bytes=int(c3.max_disp_bytes), max_frames=int(p["max_frames"]),
+                         meshopt=bool(c3.meshopt), lod_min_nodes=int(c3.lod_min_nodes), lod_target_vertices=int(c3.lod_target_vertices),
+                         comps=list(disp.get("comps") or []), unit=str(disp.get("unit") or ""), progress=prog, checkpoint=ctx.checkpoint,
+                         discard=lambda f: remove_cache_file(ctx.root, f, CONTOUR_CACHE))
     try:
-        man = convert(X, out, source=src, max_nodes=int(s.contour3d.max_nodes), max_bin_bytes=int(s.contour3d.max_bin_bytes),
-                      max_frames=int(p["max_frames"]), progress=prog, checkpoint=ctx.checkpoint,
-                      discard=lambda f: remove_cache_file(ctx.root, f, CONTOUR_CACHE))
+        man = convert(X, out, **kw)
     except ConvertError as exc:
         raise StepFailure(exc.code, f"{message_ko(exc.code) or exc.code} — {exc.message}") from None
-    remove_cache_dir(ctx.root, X, CONTOUR_CACHE)  # 변환 후 추출 CSV 삭제(공간 절약, 캐시 폴더 안)
+    if man["status"] == "OK":
+        remove_cache_dir(ctx.root, X, CONTOUR_CACHE)  # 변환 후 추출 CSV 삭제(공간 절약, 캐시 폴더 안)
+    else:  # C3F-15: 결과 FAIL이면 CSV만 지우고 설정·결과·TCL은 남겨 현장에서 재현할 수 있게 한다
+        for f in glob.glob(os.path.join(X, "*.csv")):
+            remove_cache_file(ctx.root, f, CONTOUR_CACHE)
     for w in man.get("warnings") or []:
-        ctx.add_warning(str(w.get("code")), str(w.get("message") or "")[:300])
+        ctx.add_warning(str(w.get("code")), str(w.get("message") or message_ko(str(w.get("code"))) or "")[:300])
     if man["status"] != "OK" and man["code"] not in DETERMINISTIC_FAILS:
         raise StepFailure(man["code"] or "CONTOUR3D_EXTRACT_INVALID", man.get("message") or "")
     ctx.patch_result({"convert": {"status": man["status"], "code": man.get("code"), "convert_s": round(time.monotonic() - t0, 1)}})
@@ -146,24 +171,29 @@ def c3_register(ctx: Any) -> None:
 
     man = read_json(man_path) or {}
     ids: dict[str, str | None] = {"glb_artifact_id": None, "frames_artifact_id": None, "manifest_artifact_id": None}
+    extra: dict[str, str | None] = {}  # 캐시 행에 열이 없는 산출물(변위·LOD) — 작업 result에만 기록
     ok = man.get("status") == "OK"
     if ok:
         ids["glb_artifact_id"] = _register(ctx, "CONTOUR3D_GLB", os.path.join(out, OUT_GLB), GLB_CONTENT_TYPE)
         ids["frames_artifact_id"] = _register(ctx, "CONTOUR3D_FRAMES", os.path.join(out, OUT_FRAMES), OCTET_CONTENT_TYPE)
+        # schema 2(C3F-6·C3F-8): 변위·LOD는 있을 때만. 캐시 행에는 열이 없고 API가 같은 작업의 kind로 찾는다(§5.6)
+        for kind, name, ctype in (("CONTOUR3D_DISP", OUT_DISP, OCTET_CONTENT_TYPE), ("CONTOUR3D_LOD", OUT_LOD, GLB_CONTENT_TYPE)):
+            if os.path.isfile(os.path.join(out, name)):
+                extra[kind.lower().replace("contour3d_", "") + "_artifact_id"] = _register(ctx, kind, os.path.join(out, name), ctype)
     if os.path.isfile(man_path):
         ids["manifest_artifact_id"] = ctx.register_artifact("CONTOUR3D_MANIFEST", man_path, JSON_CONTENT_TYPE)
     started = r.get("started_ts")
     total = round(time.time() - float(started), 1) if started else None
     timing = {"total_s": total, "convert_s": (r.get("convert") or {}).get("convert_s")}
     vals = {"status": "DONE", "result_status": "OK" if ok else "FAIL", "code": man.get("code"),
-            "frames": (man.get("frames") or {}).get("count"), "nodes": (man.get("mesh") or {}).get("nodes"),
+            "frames": (man.get("frames") or {}).get("count"), "nodes": (man.get("mesh") or {}).get("nodes") or (man.get("limits") or {}).get("nodes"),
             "bytes": dir_bytes(_C(ctx)), "timing": timing, "finished_at": func.now(), "last_access_at": func.now(), **ids}
     _row(ctx, **vals)
-    ctx.patch_result({"artifacts": ids, "result_status": vals["result_status"]})
+    ctx.patch_result({"artifacts": {**ids, **extra}, "result_status": vals["result_status"]})
 
 
 def _register(ctx: Any, kind: str, path: str, ctype: str) -> str | None:
-    """프레임 파일은 ui.max_artifact_bytes가 아니라 contour3d.max_bin_bytes 상한(Range로 나눠 받는다)."""
+    """GLB·프레임·변위 파일은 ui.max_artifact_bytes가 아니라 contour3d.max_glb_bytes·max_bin_bytes·max_disp_bytes 상한(Range로 나눠 받는다)."""
     from physicsai_core.db.repositories import artifacts as artifacts_repo
     from physicsai_core.fileutil import sha256_file
 

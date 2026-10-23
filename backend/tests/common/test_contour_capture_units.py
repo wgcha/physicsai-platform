@@ -144,7 +144,7 @@ def test_resolve_display_order():
 
     cfg = Settings().capture
     d, src = resolve_display(cfg, None)
-    assert src == "config" and d == {"field": "CornerStress", "component": "vonMises", "avgmode": "", "comps": [],
+    assert src == "config" and d == {"field": "CornerStress", "component": "vonMises", "avgmode": "", "comps": [], "unit": "",
                                      "legend": {"mode": "auto", "min": None, "max": None}, "views": ["iso", "front", "top", "right"]}
     ps = {"responses": [{"name": "M", "spec": None}, {"name": "S", "spec": {"datatype": "Stress", "component": "vonMises"}}]}
     d, src = resolve_display(cfg, ps)

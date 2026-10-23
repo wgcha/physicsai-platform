@@ -284,9 +284,11 @@ def test_setup_config_without_original_app_and_altair(tmp_path):
     inp["deploy_defaults"]["original_app_root"] = ""
     res = _run(tmp_path, t, inp)
     c = _cfg(t)
-    # 원본 반입 자원은 전부 빈 값. 컨투어 캡처 TCL(phase3 §15)만 git 폴더의 저장소 리소스로 채운다
-    assert all(v == "" for k, v in c["resources"].items() if isinstance(v, str) and k != "contour_capture_tcl")
+    # 원본 반입 자원은 전부 빈 값. 컨투어 캡처·3D 추출 TCL(phase3 §15, contour3d-field.md C3F-17)만 git 폴더의 저장소 리소스로 채운다
+    repo_tcl = ("contour_capture_tcl", "contour_extract_tcl")
+    assert all(v == "" for k, v in c["resources"].items() if isinstance(v, str) and k not in repo_tcl)
     assert c["resources"]["contour_capture_tcl"] == str(REPO / "resources" / "hyperview" / "contour_capture.tcl").replace("\\", "/")
+    assert c["resources"]["contour_extract_tcl"] == str(REPO / "resources" / "hyperview" / "contour_extract.tcl").replace("\\", "/")
     assert all(c["altair"][k] == "" for k in ALTAIR_REL)
     w = " ".join(res["warnings"])
     assert "Altair 실행 파일을 찾지 못했습니다" in w and "preview_pred_h3d_tcl" in w and "-AltairRoot" in w
@@ -995,3 +997,61 @@ def test_restart_script_static():
     assert not bat.startswith(b"\xef\xbb\xbf") and b"\r\n" in bat and b"\n" not in bat.replace(b"\r\n", b"")
     assert b'powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0restart.ps1" %*' in bat and b"pause" in bat
     assert "*.bat text eol=crlf" in (REPO / ".gitattributes").read_text(encoding="utf-8")
+
+
+def test_v_c3f_14_setup_fills_contour_extract_tcl_and_enables_3d_only_on_new_install(tmp_path):
+    """contour3d-field.md C3F-17·Q2(V-C3F-14): resources.contour_extract_tcl은 비었거나 키가 없을 때만 git 경로로 채운다.
+    contour3d.enabled는 새 설정 파일에서 hw가 감지될 때만 true — 기존 설정은 바꾸지 않고 권고 줄만."""
+    fwd = lambda p: str(p).replace("\\", "/")  # noqa: E731
+    want_tcl = fwd(REPO / "resources" / "hyperview" / "contour_extract.tcl")
+    t = _fake_tree(tmp_path)
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    assert c["resources"]["contour_extract_tcl"] == want_tcl and c["contour3d"]["enabled"] is True
+    assert res["write"]["validation"] == {"ok": True, "issues": [], "warnings": []}, res["write"]["validation"]
+    assert not [n for n in res["notes"] if "contour3d.enabled" in n]  # 새 설치는 자동으로 켜서 권고가 필요 없다
+    cfg_path = t["rt"] / "config" / "platform.yaml"
+    text = cfg_path.read_text(encoding="utf-8")
+    assert text.startswith("# PhysicsAI 설정") and "max_glb_bytes: 67108864" in text  # 예시 주석·새 키 유지
+    # 다시 실행: 바뀌는 것 없음
+    res2 = _run(tmp_path, t, _inputs(t))
+    assert not res2["config_changed"] and res2["write"]["written"] == []
+
+    # 기존 설정: 사용자가 끈 값(false)은 그대로, 빈 contour_extract_tcl만 채운다 + 권고 줄
+    edited = re.sub(r"(?m)^(  contour3d_enabled_placeholder.*\n)", "", text)
+    edited = re.sub(r"(?m)^(contour3d:.*\n  enabled: )true", r"\1false", edited)
+    edited = re.sub(r'(?m)^(  contour_extract_tcl: )".*?"', r'\1""', edited)
+    assert edited != text
+    cfg_path.write_text(edited, encoding="utf-8")
+    res3 = _run(tmp_path, t, _inputs(t))
+    c3 = _cfg(t)
+    assert c3["contour3d"]["enabled"] is False  # 기존 값은 덮어쓰지 않는다
+    assert c3["resources"]["contour_extract_tcl"] == want_tcl
+    row = next(r for r in res3["config_rows"] if r["key"] == "resources.contour_extract_tcl")
+    assert row["action"] == "빈 값 채움"
+    assert "contour3d.enabled" not in res3["config_changed_keys"]
+    note = [n for n in res3["notes"] if "contour3d.enabled=true" in n]
+    assert len(note) == 1 and "권고" in note[0] and "hw 감지됨" in note[0]
+    # 사용자가 지정한 TCL 경로는 유지, enabled가 이미 true면 권고 없음
+    mine = tmp_path / "mine" / "x.tcl"
+    mine.parent.mkdir()
+    mine.write_text("#", encoding="utf-8")
+    edited = re.sub(r'(?m)^(  contour_extract_tcl: )".*?"', r'\1"' + fwd(mine) + '"', cfg_path.read_text(encoding="utf-8"))
+    edited = re.sub(r"(?m)^(contour3d:.*\n  enabled: )false", r"\1true", edited)
+    cfg_path.write_text(edited, encoding="utf-8")
+    res4 = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["resources"]["contour_extract_tcl"] == fwd(mine) and not [n for n in res4["notes"] if "contour3d.enabled" in n]
+    # 키 자체가 없는 예전 설정: 보충
+    edited = re.sub(r"(?m)^  contour_extract_tcl:.*\n", "", cfg_path.read_text(encoding="utf-8"))
+    cfg_path.write_text(edited, encoding="utf-8")
+    res5 = _run(tmp_path, t, _inputs(t))
+    assert _cfg(t)["resources"]["contour_extract_tcl"] == want_tcl
+    assert next(r for r in res5["config_rows"] if r["key"] == "resources.contour_extract_tcl")["action"] == "보충"
+
+
+def test_v_c3f_14_setup_without_hw_keeps_3d_off(tmp_path):
+    t = _fake_tree(tmp_path, altair=False)
+    res = _run(tmp_path, t, _inputs(t))
+    c = _cfg(t)
+    assert c["contour3d"]["enabled"] is False and c["resources"]["contour_extract_tcl"]  # TCL 경로는 채우되 hw가 없으면 켜지 않는다
+    assert not [n for n in res["notes"] if "contour3d.enabled" in n]

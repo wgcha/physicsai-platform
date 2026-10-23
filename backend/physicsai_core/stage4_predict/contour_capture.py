@@ -30,10 +30,11 @@ RESULT_NAME = "capture_result.txt"
 MEDIA_DIR_REL = "RESULT/media"  # 예측 작업 폴더(04_predict/<id>) 기준
 RECAPTURE_DIR_REL = "RESULT/media_recapture"  # + /<재캡처 작업 id>
 
-DISPLAY_KEYS = frozenset({"field", "component", "avgmode", "comps", "legend", "views"})
+DISPLAY_KEYS = frozenset({"field", "component", "avgmode", "comps", "legend", "views", "unit"})  # unit = 3D 범례 단위(선택, C3F-14 — PNG 무관)
 LEGEND_KEYS = frozenset({"mode", "min", "max"})
 MAX_TEXT = 64
 MAX_COMPS = 50
+MAX_UNIT = 16
 # TCL이 명령 문자열을 다시 만드는 값(필드·성분·부품 이름)에서 막는 문자: 따옴표·괄호·치환 문자·명령 구분자
 # (Tcl `;`, hwc 명령 구분자 `|` — D3-53)
 _TEXT_FORBIDDEN = re.compile(r'["{}\[\]$\\;|]|[\x00-\x1f\x7f]')
@@ -87,6 +88,14 @@ def validate_display(d: Any, loc: Iterable[Any] = ("display",)) -> list[dict[str
     _text(errs, [*base, "component"], d.get("component"), allow_empty=True)
     if d.get("avgmode") is not None and d.get("avgmode") not in AVG_MODES:
         errs.append({"loc": [*base, "avgmode"], "msg": "'' | simple | maximum | minimum | difference"})
+    u = d.get("unit")
+    if u is not None:
+        if not isinstance(u, str):
+            errs.append({"loc": [*base, "unit"], "msg": "문자열이어야 합니다"})
+        elif len(u) > MAX_UNIT:
+            errs.append({"loc": [*base, "unit"], "msg": f"{MAX_UNIT}자 이내"})
+        elif text_problem(u):
+            errs.append({"loc": [*base, "unit"], "msg": TEXT_FORBIDDEN_MSG})
     comps = d.get("comps")
     if comps is not None:
         if not isinstance(comps, list) or len(comps) > MAX_COMPS:
@@ -126,7 +135,7 @@ def clean_display(d: Mapping[str, Any] | None) -> dict[str, Any] | None:
     if not d:
         return None
     out: dict[str, Any] = {}
-    for k in ("field", "component", "avgmode", "comps", "views"):
+    for k in ("field", "component", "avgmode", "comps", "views", "unit"):
         if d.get(k) is not None:
             out[k] = list(d[k]) if isinstance(d[k], list) else d[k]
     lg = d.get("legend")
@@ -154,7 +163,7 @@ def resolve_display(cfg: Any, param_set: Mapping[str, Any] | None, *overrides: M
 
     cfg = Settings.capture. 층마다 null이 아닌 키만 덮어쓴다. 어떤 층이 field를 정하면 component는 그 층 값(없으면 '').
     마지막에 성분이 비었고 field가 `capture.default_field`이면 `capture.default_component`(D3-54)."""
-    out: dict[str, Any] = {"field": cfg.default_field, "component": "", "avgmode": "", "comps": [],
+    out: dict[str, Any] = {"field": cfg.default_field, "component": "", "avgmode": "", "comps": [], "unit": "",
                            "legend": {"mode": "auto", "min": None, "max": None}, "views": list(cfg.views)}
     source = "config"
     spec = _first_response_spec(param_set)
@@ -170,7 +179,7 @@ def resolve_display(cfg: Any, param_set: Mapping[str, Any] | None, *overrides: M
             source = name
         elif layer.get("component") is not None:
             out["component"] = layer["component"]
-        for k in ("avgmode", "comps", "views"):
+        for k in ("avgmode", "comps", "views", "unit"):
             if layer.get(k) is not None:
                 out[k] = list(layer[k]) if isinstance(layer[k], list) else layer[k]
         if layer.get("legend") is not None:

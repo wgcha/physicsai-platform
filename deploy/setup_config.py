@@ -649,6 +649,14 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     cap_tcl = repo.joinpath("resources", "hyperview", "contour_capture.tcl")
     if cap_tcl.is_file() and not unsafe(fwd(str(cap_tcl))):
         desired[("resources", "contour_capture_tcl")] = fwd(str(cap_tcl))
+    # contour3d-field.md C3F-17: 결과 3D 컨투어 추출 TCL도 같은 규칙(비었거나 키가 없을 때만 — F9: 예전에는 비어 있어 화면이 사유를 못 보였다)
+    ext_tcl = repo.joinpath("resources", "hyperview", "contour_extract.tcl")
+    if ext_tcl.is_file() and not unsafe(fwd(str(ext_tcl))):
+        desired[("resources", "contour_extract_tcl")] = fwd(str(ext_tcl))
+    # Q2(확정 2026-10-23): contour3d.enabled는 새 설정 파일에서만, hw 실행 파일을 찾았을 때 true. 기존·이어받은 설정은 바꾸지 않고 안내 줄만
+    hw_found = bool(alt["paths"].get("hw_exe_path"))
+    if source == "example" and hw_found:
+        desired[("contour3d", "enabled")] = True
     desired[("hpc", "gateway")] = "none"
     for k in WORKER_KEYS:
         desired[("worker", k)] = (example.get("worker") or {}).get(k)
@@ -793,6 +801,11 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     config_changed = source != "existing" or bool(changed)
 
     notes: list[str] = []
+    final_cfg = yaml.safe_load(text) or {}
+    c3_enabled = _get(final_cfg, ("contour3d", "enabled"))[1]
+    hw_conf = alt["paths"].get("hw_exe_path") or _get(final_cfg, ("altair", "hw_exe_path"))[1]
+    if source != "example" and hw_conf and c3_enabled is not True:
+        notes.append("권고: contour3d.enabled=true(hw 감지됨) — 결과 3D 컨투어를 쓰려면 설정 파일의 contour3d.enabled를 true로 직접 바꾸세요(기존 값은 덮어쓰지 않습니다)")
     if not alt["found"]:
         warnings.append("Altair 실행 파일을 찾지 못했습니다(altair.* 빈 값 — Altair 기능 비활성). 설치 위치가 다르면 -AltairRoot로 지정하거나 설정 파일에서 직접 고치세요")
     elif alt["found"] < len(ALTAIR_TOOL_KEYS):

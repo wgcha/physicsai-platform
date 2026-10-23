@@ -2334,6 +2334,18 @@
               }
             ]
           },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
+          },
           "views": {
             "anyOf": [
               {
@@ -2390,6 +2402,11 @@
           },
           "legend": {
             "$ref": "#/components/schemas/CaptureLegendOut"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
           },
           "views": {
             "items": {
@@ -2625,6 +2642,17 @@
           "created_at": {
             "title": "Created At"
           },
+          "disp_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disp Artifact Id"
+          },
           "display": {
             "anyOf": [
               {
@@ -2688,6 +2716,17 @@
             ],
             "title": "Job Id"
           },
+          "lod_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lod Artifact Id"
+          },
           "manifest_artifact_id": {
             "anyOf": [
               {
@@ -2731,6 +2770,16 @@
               }
             ]
           },
+          "reason": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Contour3dReason"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "result_status": {
             "anyOf": [
               {
@@ -2745,6 +2794,11 @@
               }
             ],
             "title": "Result Status"
+          },
+          "retryable": {
+            "default": false,
+            "title": "Retryable",
+            "type": "boolean"
           },
           "source_kind": {
             "title": "Source Kind",
@@ -2865,6 +2919,18 @@
               }
             ],
             "title": "Field"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "maxLength": 16,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
           }
         },
         "title": "Contour3dDisplay",
@@ -2957,6 +3023,142 @@
           "phase_label"
         ],
         "title": "Contour3dProgress",
+        "type": "object"
+      },
+      "Contour3dReason": {
+        "description": "결과 FAIL(DONE + result_status FAIL) 대체 사유(contour3d-field.md §12). kind = nodes | glb | frames | field | other.\n수치는 FAIL manifest의 `limits`(못 읽으면 null → code·message_ko만 보임). `comps_applicable` = false(쿠션 입력 예측)면\n\"부품 이름으로 범위를 줄이거나\" 문구를 뺀다.",
+        "properties": {
+          "bin_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bin Bytes"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "comps_applicable": {
+            "default": true,
+            "title": "Comps Applicable",
+            "type": "boolean"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "glb_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glb Bytes"
+          },
+          "kind": {
+            "enum": [
+              "nodes",
+              "glb",
+              "frames",
+              "field",
+              "other"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "max_bin_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Bin Bytes"
+          },
+          "max_glb_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Glb Bytes"
+          },
+          "max_nodes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Nodes"
+          },
+          "message_ko": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Ko"
+          },
+          "nodes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Nodes"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "Contour3dReason",
         "type": "object"
       },
       "Curation": {

@@ -32,7 +32,7 @@ class ViewCacheCfg(_M):
     """서버측 AI 루트 `<study>/_cache/` 임시 캐시(브라우저 캐시 아님). 컨투어 3D 캐시와 합산·공유(geometry-view.md §6.6)."""
 
     retention_days: float = 7
-    max_total_bytes: int = 2147483648
+    max_total_bytes: int = 4294967296
     purge_interval_h: float = 6
 
 
@@ -78,9 +78,15 @@ class Contour3dCfg(_M):
     """결과 3D 컨투어(geometry-view.md §13). enabled=false면 기능 숨김(hw·contour_extract 명령이 설정된 현장만 true)."""
 
     enabled: bool = False
-    max_frames: int = 50
-    max_nodes: int = 300000
-    max_bin_bytes: int = 268435456
+    max_frames: int = 55
+    max_nodes: int = 2000000
+    max_glb_bytes: int = 67108864  # 형상 GLB(LOD 포함) 상한 — C3F-1. artifact 내려받기 상한도 이 값(ui.max_artifact_bytes 아님)
+    max_bin_bytes: int = 268435456  # 양자화 스칼라 프레임 파일(contour_frames.bin) 상한 — 뜻이 바뀌었다(C3F-1)
+    max_disp_bytes: int = 1073741824  # 변위 프레임 파일(contour_disp.bin) 상한(초과하면 변위만 뺀다 — C3F-10)
+    disp_max_nodes: int = 1500000  # 이 노드 수를 넘으면 TCL이 변위 추출을 건너뜀(0 = 늘 뺌, DISP=SKIPPED_NODES)
+    lod_min_nodes: int = 500000  # N_ext가 이 값을 넘으면 LOD GLB를 만든다(0 = 늘 LOD)
+    lod_target_vertices: int = 100000
+    meshopt: bool = True  # false면 양자화만 쓴다(디코더 불필요 — 인코더 결함 시 즉시 전환, C3F-4)
     include_disp: bool = True
     timeout_s: float = 1800
 

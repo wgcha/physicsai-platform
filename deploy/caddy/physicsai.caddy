@@ -8,6 +8,10 @@ redir /physicsai /physicsai/ 308
 # 확인: 대시보드 Caddyfile의 사이트 블록에 `request_body { max_size … }`가 있으면 chunk_mb + 1 MB 이상이어야 한다.
 #       필요하면 아래 handle 안에 `request_body { max_size 80MB }`를 넣는다(값은 upload.chunk_mb와 함께 관리).
 #       서버 전역 `timeouts { read_body … }`가 짧으면 느린 망에서 청크가 끊긴다(16 MB를 10 Mbps로 약 13초) — 끊기면 클라이언트가 같은 offset으로 다시 보낸다.
+#
+# v0.2.10(contour3d-field.md C3F-7): 결과 3D 컨투어 프레임·변위 파일은 고정 크기 레코드 Range(206)로 받는다. 이 handle에는 응답 압축 지시어를 두지 않는다.
+# 대시보드 사이트 전역 `encode`(gzip·zstd)가 있으면 `/physicsai/api/artifacts/*` 경로는 제외하세요 — 206 응답의 Content-Range가 압축 전·후 어느 쪽을
+# 가리키는지 모호해져 프레임이 깨진다. 백엔드는 이 경로 응답에 `Cache-Control: no-transform`을 붙인다.
 handle /physicsai/api/* {
 	reverse_proxy 127.0.0.1:{$PHYSICSAI_PORT:8100}
 }

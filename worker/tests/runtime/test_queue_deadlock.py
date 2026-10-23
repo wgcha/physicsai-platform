@@ -168,3 +168,125 @@ def test_claim_retries_deadlock_up_to_three_times(big_engine, settings_dict, mon
         w._claim(other)
     assert len(calls) == 1  # 다른 오류는 재시도 안 함
     w.stop()
+
+
+# ---- v0.2.10 C3F-18 / V-C3F-16: 잠금 순서 통일(worker_slot을 쥔 채 jobs 행을 기다리지 않는다) ---------------------------------------
+
+def _gpu_holder_expired(engine: Any) -> tuple[dict[str, Any], str]:
+    """GPU 슬롯을 쥔 RUNNING 작업 J(lease 방금 만료) + 대기 중 GPU 작업 K. 반환 = (J 행, K id)."""
+    from physicsai_core.db.repositories import job_lease as lease_repo
+
+    j = add_job(engine, "PREDICT", resume_from_step=STEP_EDSPY)
+    k = add_job(engine, "PREDICT", resume_from_step=STEP_EDSPY)
+    with engine.begin() as c:
+        row = lease_repo.claim_gpu(c, "w-hold", 30)
+    assert row is not None and row["id"] == j["id"] and row["holds_slot"] is True
+    with engine.begin() as c:
+        c.execute(text("update worker_slot set lease_acquired_at = now() - interval '10 second', lease_expires_at = now() - interval '1 second'"
+                       " where id = 1"))
+        c.execute(text("update jobs set lease_acquired_at = now() - interval '10 second', lease_expires_at = now() - interval '1 second'"
+                       " where id = :i"), {"i": j["id"]})
+    return row, k["id"]
+
+
+def test_v_c3f_16_claim_gpu_skips_when_holder_row_locked_by_release(big_engine):
+    """release가 holder 작업 행을 잠근 동안 만료 슬롯의 claim_gpu는 기다리지 않고 None(슬롯은 그대로) — 40P01·대기 0.
+    release가 커밋된 뒤에는 수령에 성공한다."""
+    import threading
+
+    from physicsai_core.db.repositories import job_lease as lease_repo
+
+    before = _deadlocks(big_engine)
+    jrow, kid = _gpu_holder_expired(big_engine)
+    token = jrow["lease_token"]
+    locked, go, done = threading.Event(), threading.Event(), threading.Event()
+    errs: list[BaseException] = []
+
+    def releaser() -> None:
+        try:
+            with big_engine.begin() as c:
+                lease_repo.assert_lease(c, jrow["id"], token)  # release의 첫 단계 — jobs 행 FOR UPDATE
+                locked.set()
+                assert go.wait(20)
+                lease_repo.release(c, jrow["id"], token, "SUCCEEDED")  # 같은 트랜잭션에서 이어서 해제(슬롯 UPDATE는 마지막)
+        except BaseException as exc:  # noqa: BLE001
+            errs.append(exc)
+        finally:
+            done.set()
+
+    t = threading.Thread(target=releaser)
+    t.start()
+    assert locked.wait(20)
+    t0 = time.monotonic()
+    with big_engine.begin() as c:
+        c.execute(text("set local lock_timeout = '5s'"))  # 기다리면 이 시간 뒤 오류(수정 전 동작) — 수정 후에는 즉시 None
+        got = lease_repo.claim_gpu(c, "w-new", 30)
+    assert got is None and time.monotonic() - t0 < 2.0
+    with big_engine.connect() as c:  # 슬롯은 그대로(holder가 곧 release·리퍼로 비운다)
+        assert c.execute(text("select holder_job_id from worker_slot where id=1")).scalar() == jrow["id"]
+    go.set()
+    assert done.wait(20) and not errs, errs
+    t.join()
+    with big_engine.begin() as c:
+        got = lease_repo.claim_gpu(c, "w-new", 30)
+    assert got is not None and got["id"] == kid and got["holds_slot"] is True  # 커밋 뒤 수령 성공(GPU 동시 1 유지)
+    time.sleep(1.5)
+    assert _deadlocks(big_engine) - before == 0
+
+
+def test_v_c3f_16_claim_gpu_interrupts_unlocked_expired_holder_as_before(big_engine):
+    """holder 행이 잠겨 있지 않으면 지금까지처럼 INTERRUPTED(WORKER_LOST) 처리 후 다음 작업을 수령한다(수령 결과·순번 불변)."""
+    from physicsai_core.db.repositories import job_lease as lease_repo
+
+    jrow, kid = _gpu_holder_expired(big_engine)
+    with big_engine.begin() as c:
+        got = lease_repo.claim_gpu(c, "w-new", 30)
+    assert got is not None and got["id"] == kid
+    with big_engine.connect() as c:
+        st = c.execute(text("select state, failure_code from jobs where id=:i"), {"i": jrow["id"]}).one()
+        assert tuple(st) == ("INTERRUPTED", "WORKER_LOST")
+        assert c.execute(text("select holder_job_id from worker_slot where id=1")).scalar() == kid
+
+
+def test_v_c3f_16_static_lock_order_rules():
+    """정적: claim_gpu의 holder 잠금은 skip_locked, release·_interrupt에서 worker_slot UPDATE는 jobs를 만지는 부수 효과 뒤에 온다."""
+    import inspect
+
+    from physicsai_core.db.repositories import job_lease as lease_repo
+    from physicsai_core.db.repositories import job_lease_end as end_repo
+
+    src = inspect.getsource(lease_repo.claim_gpu)
+    assert "with_for_update(skip_locked=True)" in src.split("_interrupt(conn, holder)")[0]
+    assert "get_job(conn, slot.holder_job_id, for_update=True)" not in src  # 기다리는 holder 잠금 제거
+    rel = inspect.getsource(end_repo.release)
+    assert rel.index("_side_effects_on_end") < rel.index("update(worker_slot)") < rel.index("recompute_my_turn")
+    intr = inspect.getsource(end_repo._interrupt)
+    assert intr.index("_side_effects_on_end") < intr.index("update(worker_slot)")
+
+
+def test_v_c3f_16_release_touches_worker_slot_last_among_jobs_statements(big_engine):
+    """동적: release가 실행한 SQL 중 worker_slot UPDATE 뒤에는 jobs·job_steps 쓰기나 기다리는 행 잠금이 없다(알림 계산의 SKIP LOCKED만)."""
+    from sqlalchemy import event
+
+    from physicsai_core.db.repositories import job_lease as lease_repo
+
+    jrow, _kid = _gpu_holder_expired(big_engine)
+    with big_engine.begin() as c:
+        c.execute(text("update jobs set lease_expires_at = now() + interval '60 second' where id=:i"), {"i": jrow["id"]})
+        c.execute(text("update worker_slot set lease_expires_at = now() + interval '60 second' where id=1"))
+    stmts: list[str] = []
+
+    def rec(_conn, _cur, statement, *_a):
+        stmts.append(" ".join(statement.split()))
+
+    event.listen(big_engine, "before_cursor_execute", rec)
+    try:
+        with big_engine.begin() as c:
+            lease_repo.release(c, jrow["id"], jrow["lease_token"], "SUCCEEDED")
+    finally:
+        event.remove(big_engine, "before_cursor_execute", rec)
+    idx = [n for n, s in enumerate(stmts) if s.startswith("UPDATE worker_slot")]
+    assert len(idx) == 1, stmts
+    for s in stmts[idx[0] + 1:]:
+        assert not s.startswith(("UPDATE jobs", "UPDATE job_steps", "INSERT INTO job_steps"))
+        assert "FOR UPDATE" not in s or "SKIP LOCKED" in s, s

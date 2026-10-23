@@ -132,7 +132,11 @@ def main_extract(argv: list[str]) -> int:
     TCL 옆 extract_settings.tcl(H3D_PATH OUTDIR FIELD DCOMP AVGMODE MAX_FRAMES INCLUDE_DISP)을 읽어 합성 nodes·faces·frame_*.csv와
     extract_result.txt를 쓴다. 모드 FAKE_TOOL_MODE_CONTOUR3D: ok(쿼드 쉘 2개, faces.csv) | elements(육면체 1 + 쿼드 쉘 1 → elements.csv,
     플랫폼이 외부 면 계산) | open_error | field_error | invalid(프레임 행 수 불일치) | nan(값 전부 빈 칸 → FIELD_EMPTY) |
-    hang(FAKE_CAPTURE_HANG_S초 대기) | fail(종료코드 1, 출력 없음). FAKE_CONTOUR3D_FRAMES = h3d 전체 프레임 수(기본 5)."""
+    hang(FAKE_CAPTURE_HANG_S초 대기) | fail(종료코드 1, 출력 없음) |
+    no_disp(C3F-19: INCLUDE_DISP=1인데 변위 없음 → `DISP=NONE`·`DISP_REASON`, frame 헤더 `value`만) |
+    disp_partial(C3F-19: `DISP=ON`·`DISP_MISSING_FRAMES=2`, 끝 2프레임의 dx·dy·dz 빈 칸) | skipped_nodes(`DISP=SKIPPED_NODES`, 헤더 `value`) |
+    scope_all(COMPS가 있어도 적용 못 함 → `SCOPE=ALL`). 그 밖의 모드는 COMPS가 있으면 `SCOPE=COMPS`, 없으면 `SCOPE=ALL`.
+    FAKE_CONTOUR3D_FRAMES = h3d 전체 프레임 수(기본 5). FAKE_CONTOUR3D_UNIT = UNIT 값(기본 MPa — 예전 TCL의 오류 문구 시험용)."""
     mode = os.environ.get("FAKE_TOOL_MODE_CONTOUR3D") or "ok"
     tcl = argv[argv.index("-tcl") + 1]
     sp = os.path.join(os.path.dirname(os.path.abspath(tcl)), "extract_settings.tcl")
@@ -152,14 +156,31 @@ def main_extract(argv: list[str]) -> int:
         return 0
     out = st["OUTDIR"]
 
+    comps = st.get("COMPS") or []
+    disp_in = st["INCLUDE_DISP"] == "1"
+    disp_state = "ON" if disp_in else "OFF"
+    disp_reason, missing = "", 0
+    if disp_in and mode == "no_disp":
+        disp_state, disp_reason = "NONE", "no displacement result type"
+    elif disp_in and mode == "skipped_nodes":
+        disp_state = "SKIPPED_NODES"
+    elif disp_in and mode == "disp_partial":
+        missing = 2
+
     def result(status, msg="", nodes=0, faces=0, total=0, frames=()):
         with open(os.path.join(out, "extract_result.txt"), "w", encoding="utf-8", newline="\n") as fh:
             fh.write("# contour_extract 1\n")
             fh.write(f"STATUS={status}\n")
             if msg:
                 fh.write(f"MESSAGE={msg}\n")
-            fh.write(f"UNIT=MPa\nFIELD={st['FIELD']}\nDCOMP={st['DCOMP']}\nAVGMODE={st['AVGMODE']}\n")
+            fh.write(f"UNIT={os.environ.get('FAKE_CONTOUR3D_UNIT', 'MPa')}\nFIELD={st['FIELD']}\nDCOMP={st['DCOMP']}\nAVGMODE={st['AVGMODE']}\n")
             fh.write(f"NODES={nodes}\nFACES={faces}\nFRAMES_TOTAL={total}\n")
+            fh.write(f"DISP={disp_state}\n")
+            if disp_state == "NONE":
+                fh.write(f"DISP_REASON={disp_reason}\n")
+            if disp_state == "ON":
+                fh.write(f"DISP_MISSING_FRAMES={missing}\n")
+            fh.write(f"SCOPE={'COMPS' if comps and mode != 'scope_all' else 'ALL'}\n")
             for f in frames:
                 fh.write("FRAME=" + "|".join(str(x) for x in f) + "\n")
 
@@ -187,7 +208,7 @@ def main_extract(argv: list[str]) -> int:
     total = int(os.environ.get("FAKE_CONTOUR3D_FRAMES") or "5")
     mf = int(st["MAX_FRAMES"])
     picks = list(range(total)) if total <= mf else sorted({int(round(k * (total - 1) / (mf - 1))) for k in range(mf)})
-    disp = st["INCLUDE_DISP"] == "1"
+    disp = disp_in and disp_state == "ON"
     frames = []
     for oi, src in enumerate(picks):
         with open(os.path.join(out, f"frame_{oi:05d}.csv"), "w", encoding="utf-8", newline="\n") as fh:
@@ -195,7 +216,10 @@ def main_extract(argv: list[str]) -> int:
             n = len(ids) - (1 if mode == "invalid" else 0)
             for j in range(n):
                 v = "" if mode == "nan" else repr(float(j * src))
-                fh.write(f"{v},0.0,0.0,{0.01 * src}\n" if disp else f"{v}\n")
+                if disp and oi >= len(picks) - missing:  # disp_partial: 끝 프레임은 변위 빈 칸
+                    fh.write(f"{v},,,\n")
+                else:
+                    fh.write(f"{v},0.0,0.0,{0.01 * src}\n" if disp else f"{v}\n")
         frames.append((oi, src, f"Time = {0.001 * src:g}"))
     result("OK", nodes=len(ids), faces=2, total=total, frames=frames)
     print(f"hw (fake) contour3d OK frames={len(frames)}", flush=True)

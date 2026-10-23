@@ -97,12 +97,19 @@ def _validate_view(s: Settings, issues: list[ConfigIssue]) -> None:
         add("geometry.view.cache.max_total_bytes", "1 MiB 이상")
     if not v.cache.purge_interval_h > 0:
         add("geometry.view.cache.purge_interval_h", "양수")
-    if not 2 <= c.max_frames <= 1000:
-        add("contour3d.max_frames", "2~1000")
+    if not 2 <= c.max_frames <= 500:
+        add("contour3d.max_frames", "2~500")
     if c.max_nodes < 3:
         add("contour3d.max_nodes", "3 이상")
-    if c.max_bin_bytes < 1024:
-        add("contour3d.max_bin_bytes", "1024 이상")
+    for k in ("max_glb_bytes", "max_bin_bytes", "max_disp_bytes"):
+        if getattr(c, k) < 1024:
+            add(f"contour3d.{k}", "1024 이상")
+    if c.disp_max_nodes < 0:
+        add("contour3d.disp_max_nodes", "0 이상(0 = 변위 늘 뺌)")
+    if c.lod_min_nodes < 0:
+        add("contour3d.lod_min_nodes", "0 이상(0 = 늘 LOD)")
+    if not 1000 <= c.lod_target_vertices <= 1000000:
+        add("contour3d.lod_target_vertices", "1000~1000000")
     if not c.timeout_s > 0:
         add("contour3d.timeout_s", "양수")
     t = s.resources.contour_extract_tcl

@@ -222,6 +222,13 @@
       "canceled",
       "expired"
     ],
+    "Contour3dReason.kind": [
+      "nodes",
+      "glb",
+      "frames",
+      "field",
+      "other"
+    ],
     "Dataset.engine": [
       "altair",
       "native"

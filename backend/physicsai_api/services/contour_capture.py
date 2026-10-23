@@ -123,9 +123,19 @@ def parse_range(header: str | None, size: int) -> tuple[int, int] | None | str:
     return start, size - 1 if end is None else min(end, size - 1)
 
 
+def media_cap(ctx: AppContext, kind: str) -> int:
+    """내려받기 상한(넘으면 413): 동영상 capture.max_video_bytes, 3D 컨투어 GLB·LOD = contour3d.max_glb_bytes, 프레임 = max_bin_bytes,
+    변위 = max_disp_bytes(C3F-1·§5.6 — `ui.max_artifact_bytes`(20 MiB)가 아니어야 큰 GLB가 413이 나지 않는다). 그 밖은 ui.max_artifact_bytes."""
+    s = ctx.settings
+    if kind == "CONTOUR_VIDEO":
+        return int(s.capture.max_video_bytes)
+    c3 = {"CONTOUR3D_GLB": s.contour3d.max_glb_bytes, "CONTOUR3D_LOD": s.contour3d.max_glb_bytes,
+          "CONTOUR3D_FRAMES": s.contour3d.max_bin_bytes, "CONTOUR3D_DISP": s.contour3d.max_disp_bytes}
+    return int(c3[kind]) if kind in c3 else int(s.ui.max_artifact_bytes)
+
+
 def media_file(ctx: AppContext, artifact_id: str) -> dict[str, Any]:
-    """컨투어 이미지·동영상 산출물 → {path, content_type, size, filename, etag}. 크기 상한: 이미지 ui.max_artifact_bytes,
-    동영상 capture.max_video_bytes(넘으면 413)."""
+    """컨투어 이미지·동영상 산출물 → {path, content_type, size, filename, etag}. 크기 상한은 `media_cap`(넘으면 413)."""
     from physicsai_core.geometry.view import MEDIA_KINDS as VIEW_MEDIA_KINDS
 
     with ctx.engine.connect() as conn:
@@ -145,8 +155,7 @@ def media_file(ctx: AppContext, artifact_id: str) -> dict[str, Any]:
             raise DomainError("ARTIFACT_EXPIRED", "미리보기 파일이 정리되었습니다 — 다시 미리보기 하세요", status=410)
         raise DomainError("NOT_FOUND", f"컨투어 파일이 없습니다. {MOVED_HINT}", status=404)
     size = os.path.getsize(path)
-    cap = ctx.settings.capture.max_video_bytes if a["kind"] == "CONTOUR_VIDEO" else \
-        ctx.settings.contour3d.max_bin_bytes if a["kind"] == "CONTOUR3D_FRAMES" else ctx.settings.ui.max_artifact_bytes
+    cap = media_cap(ctx, a["kind"])
     if size > cap:
         raise DomainError("ARTIFACT_TOO_LARGE", "파일이 제공 크기 상한을 넘습니다", status=413, size=size, limit=cap)
     view = (a.get("meta") or {}).get("view") or "media"

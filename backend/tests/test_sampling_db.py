@@ -83,7 +83,7 @@ def test_v3_s15_9_check_allows_ten_kinds_rejects_foo(engine):
 def test_v3_s15_9_migration_0012_keeps_existing_rows(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0023_doe_methods"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
+    assert MIGRATION_HEAD == "0024_contour3d_field"  # geometry-engine.md §7.5: native 0016이 S18 0015 다음
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))
@@ -149,7 +149,7 @@ def test_v_dm_12_migration_0023_extends_check_keeps_rows(pg_server):
     cfg.set_main_option("script_location", str(REPO / "migrations"))
     sd = ScriptDirectory.from_config(cfg)
     rev = sd.get_revision("0023_doe_methods")
-    assert sd.get_current_head() == MIGRATION_HEAD == "0023_doe_methods"
+    assert sd.get_current_head() == MIGRATION_HEAD == "0024_contour3d_field"
     assert rev.down_revision == "0022_job_queues"
     src = (REPO / "migrations" / "versions" / "0023_doe_methods.py").read_text(encoding="utf-8")
     assert "Revises: 0022_job_queues" in src.split("from __future__")[0]
@@ -171,7 +171,7 @@ def test_v_dm_12_migration_0023_extends_check_keeps_rows(pg_server):
                 _insert_batch(c, fx, f"before-{bad}", 50, bad)
         _alembic(url, "head")
         with eng.begin() as c:
-            assert c.execute(text("select version_num from alembic_version")).scalar() == "0023_doe_methods"
+            assert c.execute(text("select version_num from alembic_version")).scalar() == "0024_contour3d_field"
             got = c.execute(text("select source_kind from predict_batches order by batch_no")).scalars().all()
             assert got == list(ALL_KINDS)                                              # 기존 행 무변경
             for no, kind in enumerate(DM_KINDS, start=20):

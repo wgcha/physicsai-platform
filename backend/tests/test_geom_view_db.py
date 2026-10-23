@@ -59,7 +59,7 @@ def test_migration_0017_upgrade_constraints_and_rows_preserved(fresh_db):
     from physicsai_core.db import MIGRATION_HEAD
 
     url, eng = fresh_db
-    assert MIGRATION_HEAD == "0023_doe_methods"
+    assert MIGRATION_HEAD == "0024_contour3d_field"
     _alembic(url, "0016_geometry_engine")
     sid = str(uuid.uuid4())
     with eng.begin() as c:
@@ -121,9 +121,46 @@ def test_metadata_matches_migration_constants():
     from physicsai_core.db.tables import artifacts, contour3d_cache, geom_previews, jobs
     from physicsai_core.geometry.view import NEW_ARTIFACT_KINDS
 
-    src = (REPO / "migrations" / "versions" / "0017_geom_view.py").read_text(encoding="utf-8")
+    src = ((REPO / "migrations" / "versions" / "0017_geom_view.py").read_text(encoding="utf-8")
+           + (REPO / "migrations" / "versions" / "0024_contour3d_field.py").read_text(encoding="utf-8"))  # DISP·LOD는 0024(C3F §5.6)
     for k in NEW_ARTIFACT_KINDS:
         assert f"'{k}'" in src and k in str([c.sqltext for c in artifacts.constraints if getattr(c, "name", "") == "ck_artifacts_kind"][0])
     assert "PREVIEW" in str([c.sqltext for c in jobs.constraints if getattr(c, "name", "") == "ck_jobs_lane"][0])
     assert {c.name for c in geom_previews.c} >= {"cache_key", "values", "last_access_at", "glb_artifact_id", "fe_glb_artifact_id"}
     assert {c.name for c in contour3d_cache.c} >= {"cache_key", "source_kind", "frames_artifact_id", "last_access_at"}
+
+
+def test_v_c3f_migration_0024_adds_disp_lod_kinds_keeps_rows_and_protects_downgrade(fresh_db):
+    """contour3d-field.md §5.6: 운영 DB의 ck_artifacts_kind가 kind를 열거하므로 0024가 CONTOUR3D_DISP·CONTOUR3D_LOD를 추가한다.
+    기존 행 무변경, 0023에서는 새 kind 거부, 되돌리기는 새 kind 산출물이 있으면 거부(데이터 보호)·없으면 허용."""
+    url, eng = fresh_db
+    _alembic(url, "0023_doe_methods")
+    sid = str(uuid.uuid4())
+    ins = text("insert into artifacts(id, study_id, kind, rel_path, size, content_type) values (:u,:s,:k,'x',1,'application/octet-stream')")
+    with eng.begin() as c:
+        c.execute(text("insert into studies(id, project_id, folder_name, title, ai_root_snapshot, created_by, created_by_name)"
+                       " values (:i,'p-1','C3F','t','/x','u','u')"), {"i": sid})
+        old = str(uuid.uuid4())
+        c.execute(ins, {"u": old, "s": sid, "k": "CONTOUR3D_FRAMES"})
+        for bad in ("CONTOUR3D_DISP", "CONTOUR3D_LOD"):
+            with pytest.raises(IntegrityError), c.begin_nested():
+                c.execute(ins, {"u": str(uuid.uuid4()), "s": sid, "k": bad})
+    _alembic(url, "head")
+    with eng.begin() as c:
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0024_contour3d_field"
+        assert c.execute(text("select kind from artifacts where id=:i"), {"i": old}).scalar() == "CONTOUR3D_FRAMES"
+        for k in ("CONTOUR3D_DISP", "CONTOUR3D_LOD"):
+            c.execute(ins, {"u": str(uuid.uuid4()), "s": sid, "k": k})
+        with pytest.raises(IntegrityError), c.begin_nested():
+            c.execute(ins, {"u": str(uuid.uuid4()), "s": sid, "k": "CONTOUR3D_BOGUS"})
+    with pytest.raises(RuntimeError, match="데이터 보호"):
+        _alembic(url, "0023_doe_methods", down=True)
+    with eng.begin() as c:
+        c.execute(text("delete from artifacts where kind in ('CONTOUR3D_DISP','CONTOUR3D_LOD')"))
+    _alembic(url, "0023_doe_methods", down=True)
+    with eng.begin() as c:
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0023_doe_methods"
+        with pytest.raises(IntegrityError), c.begin_nested():
+            c.execute(ins, {"u": str(uuid.uuid4()), "s": sid, "k": "CONTOUR3D_DISP"})
+        assert c.execute(text("select count(*) from artifacts where kind='CONTOUR3D_FRAMES'")).scalar() == 1
+    _alembic(url, "head")  # 다시 올릴 수 있다

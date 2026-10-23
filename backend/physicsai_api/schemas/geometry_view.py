@@ -9,7 +9,7 @@ from pydantic import Field
 from .common import Req, Resp
 
 __all__ = ["ViewTess", "GeomView", "GeomPreviewCreate", "GeomPreviewTiming", "GeomPreview", "Contour3dDisplay", "Contour3dCreate",
-           "Contour3dProgress", "Contour3d"]
+           "Contour3dProgress", "Contour3dReason", "Contour3d"]
 
 
 # ---- 형상 3D 보기·미리보기(geometry-view.md §6.5·§6.9) ---------------------------------------------------------------
@@ -85,6 +85,7 @@ class Contour3dDisplay(Req):
     field: str | None = Field(default=None, max_length=120)
     component: str | None = Field(default=None, max_length=120)
     avgmode: str | None = Field(default=None, max_length=40)
+    unit: str | None = Field(default=None, max_length=16)  # 범례 단위(선택 — TCL이 단위를 읽지 않으므로 표시 설정 값을 쓴다, C3F-14)
 
 
 class Contour3dCreate(Req):
@@ -111,6 +112,25 @@ class Contour3dProgress(Resp):
     can_cancel: bool = False
 
 
+class Contour3dReason(Resp):
+    """결과 FAIL(DONE + result_status FAIL) 대체 사유(contour3d-field.md §12). kind = nodes | glb | frames | field | other.
+    수치는 FAIL manifest의 `limits`(못 읽으면 null → code·message_ko만 보임). `comps_applicable` = false(쿠션 입력 예측)면
+    "부품 이름으로 범위를 줄이거나" 문구를 뺀다."""
+
+    kind: Literal["nodes", "glb", "frames", "field", "other"]
+    code: str | None = None
+    message_ko: str | None = None
+    detail: str | None = None
+    nodes: int | None = None
+    max_nodes: int | None = None
+    glb_bytes: int | None = None
+    max_glb_bytes: int | None = None
+    bin_bytes: int | None = None
+    max_bin_bytes: int | None = None
+    field: str | None = None
+    comps_applicable: bool = True
+
+
 class Contour3d(Resp):
     id: str
     job_id: str | None = None
@@ -128,7 +148,11 @@ class Contour3d(Resp):
     glb_artifact_id: str | None = None
     frames_artifact_id: str | None = None
     manifest_artifact_id: str | None = None
+    disp_artifact_id: str | None = None  # 변위 프레임 파일(`CONTOUR3D_DISP`, Range) — 변위가 없으면 null(변형 배율 컨트롤 숨김)
+    lod_artifact_id: str | None = None  # LOD GLB(`CONTOUR3D_LOD`) — 노드 수가 lod_min_nodes 이하면 null
     timing: dict[str, Any] | None = None
     progress: Contour3dProgress | None = None
+    retryable: bool = False  # true = 작업 FAILED·CANCELED([다시] 보임). 결과 FAIL(DONE)은 false — 사유만 보인다
+    reason: Contour3dReason | None = None
     created_at: Any = None
     finished_at: Any = None

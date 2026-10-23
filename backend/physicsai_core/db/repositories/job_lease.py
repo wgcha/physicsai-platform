@@ -28,7 +28,7 @@ from ..tables import (
     worker_slot,
 )
 from . import notifications as notif_repo
-from .jobs import get_job
+from .jobs import get_job, row_dict
 from .job_lease_end import _interrupt, continue_running, reap_expired, release  # noqa: F401 - 기존 경로 재노출
 from .lease_guard import (  # noqa: F401 - 기존 경로 재노출(lease_repo.step_update 등)
     LeaseLost,
@@ -72,7 +72,13 @@ def claim_gpu(
         if alive:
             return None
         if slot.holder_job_id:
-            holder = get_job(conn, slot.holder_job_id, for_update=True)
+            # 잠금 순서 규칙(C3F-18, job-queues.md §6.1): worker_slot을 쥔 채 jobs 행을 기다리지 않는다 — holder 행은 SKIP LOCKED.
+            # 다른 트랜잭션(release·renew·취소)이 holder 행을 잠그고 있으면 이번 수령은 건너뛴다(슬롯은 그대로, 다음 폴링에 다시 시도;
+            # 그 트랜잭션의 release나 리퍼가 곧 슬롯을 비운다). 지금까지는 여기서 기다려 release와 서로 기다리는 교착(40P01)이 날 수 있었다.
+            hrow = conn.execute(select(jobs).where(jobs.c.id == slot.holder_job_id).with_for_update(skip_locked=True)).first()
+            if hrow is None and conn.execute(select(jobs.c.id).where(jobs.c.id == slot.holder_job_id)).first() is not None:
+                return None  # 행이 있는데 못 잠갔다 = 다른 트랜잭션이 잠금 중
+            holder = row_dict(hrow) if hrow is not None else None
             if holder and holder["state"] in (RUNNING, COLLECTING) and holder["lease_token"] == slot.lease_token:
                 _interrupt(conn, holder)
         conn.execute(

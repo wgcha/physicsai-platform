@@ -1024,6 +1024,19 @@
                 ],
                 "default": null
               },
+              "unit": {
+                "anyOf": [
+                  {
+                    "maxLength": 16,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Unit"
+              },
               "views": {
                 "anyOf": [
                   {
@@ -1652,6 +1665,19 @@
                   }
                 ],
                 "default": null
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "maxLength": 16,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Unit"
               },
               "views": {
                 "anyOf": [
@@ -2494,6 +2520,19 @@
                   }
                 ],
                 "default": null
+              },
+              "unit": {
+                "anyOf": [
+                  {
+                    "maxLength": 16,
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Unit"
               },
               "views": {
                 "anyOf": [

@@ -103,6 +103,9 @@ def purge_view_cache(engine: Engine, settings: Any) -> dict[str, int]:
         with engine.begin() as conn:
             if ids:
                 conn.execute(delete(artifacts).where(artifacts.c.id.in_(ids)))
+            if t.name == "contour3d_cache" and row.get("job_id"):  # 변위·LOD 산출물은 캐시 행에 열이 없어 작업·kind로 지운다(C3F §5.6)
+                conn.execute(delete(artifacts).where(artifacts.c.job_id == row["job_id"],
+                                                     artifacts.c.kind.in_(("CONTOUR3D_DISP", "CONTOUR3D_LOD"))))
             gv_repo.set_values(conn, t, row["id"], status="EXPIRED")
         out[why] += 1
         return size

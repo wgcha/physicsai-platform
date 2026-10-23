@@ -16,7 +16,7 @@ __all__ = ["NativeAccepted", "NativeInfo", "NativeFeature", "NativeGroup", "Nati
            "BaselineAddRequest", "NativePrepareRequest", "ParamMapRemapRequest", "BaselineInfo", "ParamMapDecisionPart", "ParamMapDecision", "ParamMapRowDecision",
            "ParamMapUpdate", "ParamMapProposed", "ParamMapRow", "ParamMapBaseline", "ParamMapWarning", "ParamMap",
            "ViewTess", "GeomView", "GeomPreviewCreate", "GeomPreviewTiming", "GeomPreview", "Contour3dDisplay", "Contour3dCreate",
-           "Contour3dProgress", "Contour3d"]
+           "Contour3dProgress", "Contour3dReason", "Contour3d"]
 
 
 class NativeAccepted(Resp):
@@ -257,6 +257,6 @@ class ParamMap(Resp):
 
 
 from .geometry_view import (  # noqa: E402,F401 - 300줄 분할(R-B), 기존 경로 재노출
-    Contour3d, Contour3dCreate, Contour3dDisplay, Contour3dProgress, GeomPreview, GeomPreviewCreate, GeomPreviewTiming, GeomView,
+    Contour3d, Contour3dCreate, Contour3dDisplay, Contour3dProgress, Contour3dReason, GeomPreview, GeomPreviewCreate, GeomPreviewTiming, GeomView,
     ViewTess,
 )

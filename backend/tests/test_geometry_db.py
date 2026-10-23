@@ -36,7 +36,7 @@ def _ps(c, sid: str, *, tpl: bool = True, engine: str | None = None, input_kind:
 def test_migration_0016_roundtrip(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0023_doe_methods"  # geometry-view.md §6.7: 0017이 0016 다음 — 0016까지만 올려 확인
+    assert MIGRATION_HEAD == "0024_contour3d_field"  # geometry-view.md §6.7: 0017이 0016 다음 — 0016까지만 올려 확인
     name = f"physicsai_m12_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

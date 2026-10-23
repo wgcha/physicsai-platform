@@ -65,7 +65,7 @@ resources:                        # 원본 반입본 위치(deploy/RESOURCES.txt
   curate_hg_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_curate_hg.tcl"
   extract_minmax_tcl: "D:/physicsai/resources/BATCHRUN/H3D_StaticMinMax_to_CSV_FAST.tcl"   # 업로드본에 없음(U8·U19)
   contour_capture_tcl: ""          # ④ 컨투어 캡처 TCL(phase3 §15, 사용자 제공 이슈 #2). 빈 값 = 저장소 resources/hyperview/contour_capture.tcl(setup.ps1이 채움)
-  contour_extract_tcl: ""          # 결과 3D 컨투어 추출 TCL(geometry-view.md §13.3). 빈 값 = 저장소 resources/hyperview/contour_extract.tcl
+  contour_extract_tcl: ""          # 결과 3D 컨투어 추출 TCL(geometry-view.md §13.3). 빈 값 = 저장소 resources/hyperview/contour_extract.tcl(setup.ps1이 채움)
   launchers:                      # 런처 파일 이름(경로 구분자 없이)·pyd 코어 이름
     extract_params: {script: BATCHRUN_get_parameter_from_cad.py, core: get_parameter_from_cad_core}
     gen_radioss:    {script: BATCHRUN_hst_gen_radioss_input.py,   core: hst_gen_radioss_core}
@@ -240,7 +240,7 @@ geometry:                          # native 형상 엔진(docs/contracts/geometr
     max_queued_per_user: 2         # 사용자별 대기+실행 미리보기 상한(넘으면 429 PREVIEW_BUSY)
     threads: 2                     # 미리보기 paicad --threads
     timeout_s: {export: 300, preview: 60, preview_fe: 300}
-    cache: {retention_days: 7, max_total_bytes: 2147483648, purge_interval_h: 6}   # 서버측 AI 루트 <study>/_cache/ 임시 캐시(브라우저 캐시 아님). 컨투어 3D와 합산
+    cache: {retention_days: 7, max_total_bytes: 4294967296, purge_interval_h: 6}   # 서버측 AI 루트 <study>/_cache/ 임시 캐시(브라우저 캐시 아님). 컨투어 3D와 합산
 
 # 조립 매칭(asm-match.md §6.2): STEP 바디 ↔ 조립 /PART 매칭 표 + 경계 일치 검사. 허용오차는 geometry.defaults.tag(AM-3). paicad --options의 asm_match 절로 전달
 asm_match:
@@ -255,9 +255,15 @@ shell: {default_component: chassis_rear}
 
 contour3d:                         # 결과 3D 컨투어 뷰어(geometry-view.md §13). enabled=false면 기능 숨김
   enabled: false                   # hw·contour_extract 명령이 설정된 현장만 true
-  max_frames: 50
-  max_nodes: 300000
-  max_bin_bytes: 268435456
+  max_frames: 55
+  max_nodes: 2000000               # 예전 값(300000)이 남아 있으면 그 값이 적용됩니다 — 줄을 지우거나 2000000으로 바꾸세요
+  max_glb_bytes: 67108864          # 형상 GLB(LOD 포함) 상한 64 MiB. GLB 내려받기 상한도 이 값입니다
+  max_bin_bytes: 268435456         # 양자화 스칼라 프레임 파일 상한(256 MiB)
+  max_disp_bytes: 1073741824       # 변위 프레임 파일 상한(1 GiB) — 넘으면 변위만 뺍니다
+  disp_max_nodes: 1500000          # 이 노드 수를 넘으면 변위 추출을 건너뜁니다(0 = 늘 뺌)
+  lod_min_nodes: 500000            # 외부 면 노드가 이 값을 넘으면 저해상도(LOD) 메시를 함께 만듭니다(0 = 늘)
+  lod_target_vertices: 100000
+  meshopt: true                    # false = 양자화만(형상 압축 끔 — 문제 시 즉시 전환)
   include_disp: true
   timeout_s: 1800
 

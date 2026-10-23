@@ -33,6 +33,7 @@ class CaptureDisplay(Req):
     comps: list[str] | None = Field(default=None, max_length=50)  # 표시할 부품 이름(없으면 전체)
     legend: CaptureLegend | None = None  # fixed = 범례 최소·최대 고정(B 일괄 예측 비교용)
     views: list[CaptureView] | None = Field(default=None, min_length=1, max_length=7)
+    unit: str | None = Field(default=None, max_length=16)  # 3D 컨투어 범례 단위(선택 — h3d에서 못 읽을 때만 쓴다, PNG 무관)
 
     @model_validator(mode="after")
     def _semantic(self) -> CaptureDisplay:
@@ -57,6 +58,7 @@ class CaptureDisplayOut(Resp):
     component: str = ""
     avgmode: str = ""
     comps: list[str] = []
+    unit: str = ""
     legend: CaptureLegendOut
     views: list[str]
 
