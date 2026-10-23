@@ -3,11 +3,6 @@
 // schema 2(contour3d-field C3F-5·6): contour_frames.bin = uint16[N](65535 = NaN, 복원 = min + q·scale), contour_disp.bin = uint16[N][3](선택, 복원 = min[c] + q·scale[c]).
 import type { Contour3d, Contour3dPhase } from "../../../../api";
 
-/**
- * v0.2.10 응답 필드(contour3d-field §5.6): schema.d.ts는 재생성하지 않아 로컬 타입으로 둔다. 백엔드가 `disp_artifact_id`·`lod_artifact_id`(nullable)를 내려준다.
- */
-export type Contour3dEx = Contour3d & { disp_artifact_id?: string | null; lod_artifact_id?: string | null };
-
 export interface ContourFrameInfo {
   i: number;
   src: number;
@@ -63,7 +58,7 @@ export interface ContourManifest {
   unit?: string | null;
   length_unit?: string;
   up_axis?: string;
-  mesh: { file?: string; nodes: number; triangles?: number; bytes?: number; compression?: string; order?: string; normals?: string };
+  mesh: { file?: string; nodes: number; triangles?: number; bytes?: number; compression?: "meshopt" | "none"; order?: string; normals?: string };
   frames: { file?: string; count: number; record_bytes: number; has_disp: boolean; dtype?: string; nan_code?: number; nan_count?: number; bytes?: number; list: ContourFrameInfo[] };
   /** schema 2: 저해상도 메시(없으면 null·생략) */
   lod?: ContourLodInfo | null;
@@ -71,7 +66,7 @@ export interface ContourManifest {
   disp?: ContourDispInfo | null;
   range: { min: number | null; max: number | null };
   limits?: ContourLimits | null;
-  scope?: { comps?: string[]; applied?: boolean } | null;
+  scope?: { comps?: string[]; comps_applicable?: boolean; applied?: boolean } | null;
   sampling?: { total_frames?: number; max_frames?: number; rule?: string } | null;
   warnings?: ContourWarning[] | string[];
 }
@@ -651,14 +646,16 @@ export function jobFailText(c: Pick<Contour3d, "message_ko" | "code">): string {
 }
 
 /** 결과 FAIL(결정적): 상한 비교는 FAIL manifest의 `limits`로 판별, 읽지 못하면 message_ko만 */
-export function resultFailText(c: Pick<Contour3d, "message_ko" | "code" | "nodes" | "display">, m: ContourManifest | null): string {
+export function resultFailText(c: Pick<Contour3d, "message_ko" | "code" | "nodes" | "display"> & { reason?: Contour3d["reason"] }, m: ContourManifest | null): string {
   const code = c.code ?? m?.code ?? "";
   const lim = m?.limits ?? null;
   const fallback = `3D 생략 — ${c.message_ko ?? m?.message ?? code ?? "결과 없음"}`;
   if (code.includes("TOO_LARGE")) {
     const n = lim?.nodes ?? c.nodes ?? null;
     if (n != null && lim?.max_nodes != null && n > lim.max_nodes) {
-      const comps = (m?.scope?.comps?.length ?? 0) > 0 ? "부품 이름으로 범위를 줄이거나 " : "";
+      // API reason.comps_applicable(= 쿠션 입력이 아님)이 있으면 그것, 없으면 manifest scope(부품 이름이 있었는가)로 판단
+      const applicable = c.reason?.comps_applicable ?? (m?.scope?.comps_applicable ?? (m?.scope?.comps?.length ?? 0) > 0);
+      const comps = applicable ? "부품 이름으로 범위를 줄이거나 " : "";
       return `3D 생략 — 외부 면 노드 ${fmtInt(n)}개 > 상한 ${fmtInt(lim.max_nodes)}. ${comps}관리자에게 상한(contour3d.max_nodes) 조정을 요청하세요`;
     }
     if (lim?.glb_bytes != null && lim.max_glb_bytes != null && lim.glb_bytes > lim.max_glb_bytes)

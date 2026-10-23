@@ -1,9 +1,9 @@
 // 결과 3D 컨투어 본문(geometry-view.md §13.6): 열 때 생성 → 대기 안내(단계 스테퍼·진행률·경과/예상·취소) → 뷰어, 실패·취소·만료 처리.
 import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
-import { api, type Contour3dCreate } from "../../../../api";
+import { api, type Contour3d, type Contour3dCreate } from "../../../../api";
 import { ContourViewer } from "./ContourViewer";
 import { ReasonLine } from "./ContourReason";
-import { BUSY_TEXT, contourView, etaText, fmtSeconds, jobFailText, progressPercent, requestReason, resultFailText, STEPPER, stepMarks, type Contour3dEx as Contour3d, type ContourManifest } from "./contourCore";
+import { BUSY_TEXT, contourView, etaText, fmtSeconds, jobFailText, progressPercent, requestReason, resultFailText, STEPPER, stepMarks, type ContourManifest } from "./contourCore";
 import { useContour3d, type ContourCtl } from "./useContour3d";
 
 /** [3D 컨투어] 버튼으로 연 패널(① run 표·접힘 패널): 열 때 생성 */

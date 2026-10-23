@@ -519,3 +519,24 @@ def test_frontend_fixture_generator_deterministic(tmp_path):
     assert ea == eb and ea["contour.glb"]["count"] == 768 and "_SRC" in ea["contour_lod.glb"]
     man = json.loads((tmp_path / "a" / "meshopt" / "contour_manifest.json").read_text())
     assert man["frames"]["nan_count"] == 3 and man["disp"] is not None and man["lod"]["vertices"] == ea["contour_lod.glb"]["count"]
+
+
+def test_committed_frontend_fixture_is_current(tmp_path):
+    """V-C3F-8: 프런트가 커밋한 서버 인코더 픽스처(frontend/src/__tests__/fixtures/c3f_server, `--b64`)가 현재 인코더 출력과 같다.
+    인코더·변환기를 바꾸면 `python -m physicsai_core.contour3d.fixture frontend/src/__tests__/fixtures/c3f_server --b64`로 다시 만든다."""
+    from pathlib import Path
+
+    from physicsai_core.contour3d.fixture import generate
+
+    committed = Path(__file__).resolve().parents[2] / "frontend" / "src" / "__tests__" / "fixtures" / "c3f_server"
+    if not committed.is_dir():
+        pytest.skip("frontend 픽스처 폴더 없음(백엔드만 배포한 묶음)")
+    generate(str(tmp_path), b64=True)
+    names = sorted(str(p.relative_to(tmp_path)) for p in tmp_path.rglob("*") if p.is_file())
+    assert names == sorted(str(p.relative_to(committed)) for p in committed.rglob("*") if p.is_file())
+    for n in names:
+        if n.endswith(("contour_frames.bin.b64", "contour_disp.bin.b64", "contour_manifest.json")):
+            continue  # sin·cos로 만든 값은 플랫폼 libm 차이로 마지막 비트가 다를 수 있다 — 형상(정수·좌표 격자)만 바이트 비교
+        assert (tmp_path / n).read_bytes() == (committed / n).read_bytes(), f"{n} 픽스처가 낡았습니다 — 다시 생성하세요"
+    sizes = {n: len((tmp_path / n).read_bytes()) for n in names if n.endswith(("frames.bin.b64", "disp.bin.b64"))}
+    assert sizes == {n: len((committed / n).read_bytes()) for n in sizes}  # 프레임·변위는 크기만 같으면 된다

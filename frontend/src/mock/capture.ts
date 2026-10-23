@@ -15,6 +15,7 @@ export const DEFAULT_DISPLAY: ContourDisplay = {
   component: "vonMises",
   avgmode: "simple",
   comps: [],
+  unit: "",
   legend: { mode: "auto", min: null, max: null },
   views: [...DEFAULT_VIEWS],
 };
@@ -114,6 +115,7 @@ function validDisplay(body: Record<string, unknown> | null): { display: ContourD
       component: String(b.component ?? ""),
       avgmode: String(b.avgmode),
       comps: (Array.isArray(b.comps) ? b.comps : []).map(String).filter(Boolean),
+      unit: String(b.unit ?? "").trim().slice(0, 16),
       legend: { mode: lg!.mode, min: lg!.min ?? null, max: lg!.max ?? null },
       views,
     },

@@ -20,6 +20,7 @@ import {
   frameRange,
   gatherValues,
   isQuantized,
+  legendRange,
   jobFailText,
   LodGate,
   LOD_SETTLE_MS,
@@ -142,6 +143,30 @@ describe("schema 1·2 호환", () => {
     expect(defaultDeformScale(big)).toBe(0);
     const edge = { ...v2.manifest, disp: { ...v2.manifest.disp!, record_bytes: 2 * 1024 * 1024 } };
     expect(defaultDeformScale(edge)).toBe(1);
+  });
+});
+
+describe("전부 NaN 프레임(서버: min·max·min_v·max_v null, scale 0.0)", () => {
+  const m = {
+    schema_version: 2, kind: "contour3d", status: "OK", mesh: { nodes: 3, compression: "none" },
+    frames: { count: 2, record_bytes: 6, has_disp: false, dtype: "uint16q", nan_code: 65535, list: [
+      { i: 0, src: 0, time: 0, min: null, max: null, scale: 0.0, min_v: null, max_v: null },
+      { i: 1, src: 1, time: 1, min: 1, max: 3, scale: 2 / 65534, min_v: 0, max_v: 2 },
+    ] },
+    range: { min: 1, max: 3 },
+  } as unknown as ContourManifest;
+
+  it("복원은 모두 NaN, 극값 마커 없음, 프레임별 범례는 고정 범위로 대체", () => {
+    const out = decodeScalarFor(m, 0, u16([65535, 65535, 65535]), 0);
+    expect(Array.from(out).every(Number.isNaN)).toBe(true);
+    expect(frameExtremes(m, 0)).toEqual([]);
+    expect(legendRange(m, 0, "frame")).toEqual([1, 3]);
+    expect(legendRange(m, 1, "frame")).toEqual([1, 3]);
+    expect(tooltipText(5, out[0], m.frames.list[0].scale, "MPa")).toBe("노드 5 · 값 없음");
+  });
+
+  it("전체 범위도 null이면 범례 없음", () => {
+    expect(legendRange({ ...m, range: { min: null, max: null } }, 0, "global")).toBeNull();
   });
 });
 
@@ -331,6 +356,15 @@ describe("대체 사유 문구(§12)", () => {
     expect(resultFailText(c({ code: "CONTOUR3D_TOO_LARGE" }), m)).toBe("3D 생략 — 외부 면 노드 973,060개 > 상한 300,000. 관리자에게 상한(contour3d.max_nodes) 조정을 요청하세요");
     const withComps = man({ code: "CONTOUR3D_TOO_LARGE", limits: { nodes: 973060, max_nodes: 300000 }, scope: { comps: ["CUSHION"], applied: false } });
     expect(resultFailText(c({ code: "CONTOUR3D_TOO_LARGE" }), withComps)).toBe("3D 생략 — 외부 면 노드 973,060개 > 상한 300,000. 부품 이름으로 범위를 줄이거나 관리자에게 상한(contour3d.max_nodes) 조정을 요청하세요");
+  });
+
+  it("TOO_LARGE·노드: API reason.comps_applicable(쿠션 입력이 아님)이 있으면 manifest scope보다 우선", () => {
+    const m = man({ code: "CONTOUR3D_TOO_LARGE", limits: { nodes: 973060, max_nodes: 300000 }, scope: { comps: [], comps_applicable: false, applied: false } });
+    const reason = (comps_applicable: boolean) => ({ kind: "nodes", comps_applicable }) as never;
+    expect(resultFailText(c({ code: "CONTOUR3D_TOO_LARGE", reason: reason(true) }), m)).toContain("부품 이름으로 범위를 줄이거나");
+    expect(resultFailText(c({ code: "CONTOUR3D_TOO_LARGE", reason: reason(false) }), m)).not.toContain("부품 이름으로");
+    // reason이 없으면 manifest scope.comps_applicable
+    expect(resultFailText(c({ code: "CONTOUR3D_TOO_LARGE" }), man({ ...m, scope: { comps: ["A"], comps_applicable: true } }))).toContain("부품 이름으로");
   });
 
   it("TOO_LARGE·형상·프레임·manifest 없음", () => {

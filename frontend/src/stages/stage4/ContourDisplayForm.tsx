@@ -6,7 +6,7 @@ import { useStudy } from "../../app/StudyContext";
 import { AVG_MODES, DEFAULT_VIEWS, VIEW_KEYS, viewLabel } from "../../lib/views";
 import { ComboInput, DEFAULT_RESULT_COMPONENT, DEFAULT_RESULT_FIELD, componentOptions } from "./ComboInput";
 
-const EMPTY: ContourDisplay = { field: "", component: "", avgmode: "simple", comps: [], legend: { mode: "auto", min: null, max: null }, views: DEFAULT_VIEWS };
+const EMPTY: ContourDisplay = { field: "", component: "", avgmode: "simple", comps: [], unit: "", legend: { mode: "auto", min: null, max: null }, views: DEFAULT_VIEWS };
 
 /** 숫자 입력 문자열 → number | null */
 const num = (s: string): number | null => (s.trim() === "" || !Number.isFinite(Number(s)) ? null : Number(s));
@@ -18,6 +18,7 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
   const [component, setComponent] = useState(init.component);
   const [avgmode, setAvgmode] = useState(init.avgmode);
   const [comps, setComps] = useState(init.comps.join(", "));
+  const [unit, setUnit] = useState(init.unit ?? "");
   const [fixed, setFixed] = useState(init.legend.mode === "fixed");
   const [lo, setLo] = useState(init.legend.min == null ? "" : String(init.legend.min));
   const [hi, setHi] = useState(init.legend.max == null ? "" : String(init.legend.max));
@@ -57,6 +58,7 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
     component: compVal.trim(),
     avgmode,
     comps: comps.split(/[,\n]/).map((x) => x.trim()).filter(Boolean),
+    unit: unit.trim(),
     legend: fixed ? { mode: "fixed", min: num(lo), max: num(hi) } : { mode: "auto", min: null, max: null },
     views: VIEW_KEYS.filter((k) => views.includes(k)),
   });
@@ -107,6 +109,10 @@ export function ContourDisplayForm({ ps, canEdit }: { ps: ParamSet; canEdit: boo
         <label className="field">
           <span className="field-label">부품 이름(쉼표 구분, 비우면 전체)</span>
           <input aria-label="부품 이름 목록" className="mono" value={comps} placeholder="CUSHION_TOP, FOAM" onChange={(e) => setComps(e.target.value)} />
+        </label>
+        <label className="field">
+          <span className="field-label">단위(선택, 예: MPa)</span>
+          <input aria-label="단위" className="mono" maxLength={16} value={unit} placeholder="MPa" onChange={(e) => setUnit(e.target.value)} />
         </label>
       </div>
       <div className="fill-row">

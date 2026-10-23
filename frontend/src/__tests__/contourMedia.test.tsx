@@ -218,6 +218,8 @@ describe("S10 템플릿 컨투어 표시 설정·B 범례 고정", () => {
     fireEvent.change(within(sec).getByLabelText("평균 방식"), { target: { value: "maximum" } });
     expect((within(sec).getByLabelText("부품 이름 목록") as HTMLInputElement).value).toBe("CUSHION_TOP, FOAM");
     fireEvent.change(within(sec).getByLabelText("부품 이름 목록"), { target: { value: "CUSHION_TOP, RIB_1 ,, FOAM" } });
+    expect((within(sec).getByLabelText("단위") as HTMLInputElement).value).toBe(""); // contour3d-field C3F-14: 단위(선택)
+    fireEvent.change(within(sec).getByLabelText("단위"), { target: { value: " MPa " } });
     expect((within(sec).getByLabelText("범례 최소") as HTMLInputElement).disabled).toBe(true);
     fireEvent.click(within(sec).getByRole("radio", { name: "고정" }));
     fireEvent.change(within(sec).getByLabelText("범례 최소"), { target: { value: "5" } });
@@ -238,6 +240,7 @@ describe("S10 템플릿 컨투어 표시 설정·B 범례 고정", () => {
         component: "Mag",
         avgmode: "maximum",
         comps: ["CUSHION_TOP", "RIB_1", "FOAM"],
+        unit: "MPa",
         legend: { mode: "fixed", min: 5, max: 250 },
         views: ["iso", "front", "top", "left"],
       },

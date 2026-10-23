@@ -3937,6 +3937,8 @@ export interface components {
             /** Field */
             field?: string | null;
             legend?: components["schemas"]["CaptureLegend"] | null;
+            /** Unit */
+            unit?: string | null;
             /** Views */
             views?: ("iso" | "front" | "back" | "top" | "bottom" | "left" | "right")[] | null;
         };
@@ -3963,6 +3965,11 @@ export interface components {
             /** Field */
             field: string;
             legend: components["schemas"]["CaptureLegendOut"];
+            /**
+             * Unit
+             * @default
+             */
+            unit: string;
             /** Views */
             views: string[];
         };
@@ -4034,6 +4041,8 @@ export interface components {
             code?: string | null;
             /** Created At */
             created_at?: unknown;
+            /** Disp Artifact Id */
+            disp_artifact_id?: string | null;
             /** Display */
             display?: {
                 [key: string]: unknown;
@@ -4050,6 +4059,8 @@ export interface components {
             id: string;
             /** Job Id */
             job_id?: string | null;
+            /** Lod Artifact Id */
+            lod_artifact_id?: string | null;
             /** Manifest Artifact Id */
             manifest_artifact_id?: string | null;
             /** Message Ko */
@@ -4057,8 +4068,14 @@ export interface components {
             /** Nodes */
             nodes?: number | null;
             progress?: components["schemas"]["Contour3dProgress"] | null;
+            reason?: components["schemas"]["Contour3dReason"] | null;
             /** Result Status */
             result_status?: ("OK" | "FAIL") | null;
+            /**
+             * Retryable
+             * @default false
+             */
+            retryable: boolean;
             /** Source Kind */
             source_kind: string;
             /** Source Ref */
@@ -4104,6 +4121,8 @@ export interface components {
             component?: string | null;
             /** Field */
             field?: string | null;
+            /** Unit */
+            unit?: string | null;
         };
         /**
          * Contour3dProgress
@@ -4133,6 +4152,44 @@ export interface components {
             phase_label: string;
             /** Step Key */
             step_key?: string | null;
+        };
+        /**
+         * Contour3dReason
+         * @description 결과 FAIL(DONE + result_status FAIL) 대체 사유(contour3d-field.md §12). kind = nodes | glb | frames | field | other.
+         *     수치는 FAIL manifest의 `limits`(못 읽으면 null → code·message_ko만 보임). `comps_applicable` = false(쿠션 입력 예측)면
+         *     "부품 이름으로 범위를 줄이거나" 문구를 뺀다.
+         */
+        Contour3dReason: {
+            /** Bin Bytes */
+            bin_bytes?: number | null;
+            /** Code */
+            code?: string | null;
+            /**
+             * Comps Applicable
+             * @default true
+             */
+            comps_applicable: boolean;
+            /** Detail */
+            detail?: string | null;
+            /** Field */
+            field?: string | null;
+            /** Glb Bytes */
+            glb_bytes?: number | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "nodes" | "glb" | "frames" | "field" | "other";
+            /** Max Bin Bytes */
+            max_bin_bytes?: number | null;
+            /** Max Glb Bytes */
+            max_glb_bytes?: number | null;
+            /** Max Nodes */
+            max_nodes?: number | null;
+            /** Message Ko */
+            message_ko?: string | null;
+            /** Nodes */
+            nodes?: number | null;
         };
         /** Curation */
         Curation: {

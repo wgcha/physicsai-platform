@@ -1,32 +1,20 @@
 """v0.2.10 결과 3D 컨투어 현장 보정(contour3d-field.md C3F) — 워커·API 흐름(가짜 hw): 추출 설정(COMPS·DISP_MAX_NODES), 쿠션 입력 comps 비움,
 캐시 키(상한·추출 TCL 해시 — v0.2.9 키 비적중), 결과 FAIL 시 extract 보존, 대체 사유(`reason`·`retryable`), 새 artifact kind·내려받기 상한·
-`no-transform`. 변환기(numpy 재작성) 쪽 판정(DISP·COMPS 경고, schema 2)은 `NEW_CONVERTER`일 때만 켜지는 시험이 본다."""
+`no-transform`. 변환기(numpy 재작성, schema 2)의 DISP·COMPS 경고는 가짜 hw 모드 시험이 본다."""
 
 from __future__ import annotations
 
 import hashlib
-import inspect
 import json
 import uuid
 from pathlib import Path
 
-import pytest
 
 from physicsai_test_support import API, H, read_record
 
 PW = H("tok-power", write=True)
 P = H("tok-power")
 VALUES = {"values": {"THK_1": 3.0, "N_RIB": 4}, "value_source": "manual"}
-
-
-def _new_converter() -> bool:
-    from physicsai_core.contour3d.convert import convert
-
-    return "max_glb_bytes" in inspect.signature(convert).parameters
-
-
-NEW_CONVERTER = _new_converter()
-needs_new_converter = pytest.mark.skipif(not NEW_CONVERTER, reason="변환기(numpy 재작성, schema 2) 통합 전 — 통합하면 자동으로 켜진다")
 
 
 def _env(predict_env, *, cushion: bool = False, display: dict | None = None, folder: str = "pred", **c3):
@@ -246,7 +234,6 @@ def test_v_c3f_12_media_cap_per_kind_and_static_caddy():
     assert "`encode`" in caddy and "/physicsai/api/artifacts/*" in caddy and "no-transform" in caddy
 
 
-@needs_new_converter
 def test_v_c3f_13_no_disp_and_partial_disp_warnings(predict_env, monkeypatch):
     """변환기 통합 후: 변위 없음(`DISP=NONE`) → disp null·경고 DISP_UNAVAILABLE·OK, 일부 프레임 누락 → 변위 전체 제외 + 같은 경고,
     `SCOPE=ALL`인데 COMPS가 있으면 COMPS_IGNORED, `SKIPPED_NODES`는 DISP_DROPPED."""
@@ -285,8 +272,11 @@ def test_v_c3f_housekeeping_purge_removes_disp_and_lod_artifact_rows(predict_env
     env, jid = _env(predict_env)
     c = _post(env, jid, expect=202)
     assert env.w.run_once_slot() == "SUCCEEDED"
-    with env.engine.begin() as conn:  # 변환기가 만든 것처럼 두 kind를 같은 작업에 붙인다(캐시 폴더 안 파일)
+    have = {r[0] for r in env.sql("select kind from artifacts where job_id=:j", j=c["job_id"])}
+    with env.engine.begin() as conn:  # 변환기가 이미 등록한 kind는 두고(가짜 hw는 변위를 만든다), 없는 kind(LOD)만 같은 작업에 붙인다(캐시 폴더 안 파일)
         for kind, name in (("CONTOUR3D_DISP", "contour_disp.bin"), ("CONTOUR3D_LOD", "contour_lod.glb")):
+            if kind in have:
+                continue
             d = next((env.sroot / "_cache" / "contour3d").glob("*/*"))
             (d / "out").mkdir(exist_ok=True)
             (d / "out" / name).write_bytes(b"x" * 16)

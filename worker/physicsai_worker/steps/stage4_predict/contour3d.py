@@ -10,7 +10,6 @@ contour3d.timeout_s) → C3_CONVERT(physicsai_core.contour3d — 형상 → 프�
 from __future__ import annotations
 
 import glob
-import inspect
 import os
 import time
 from typing import Any
@@ -46,13 +45,6 @@ from physicsai_core.geometry.view import (
     dir_bytes,
 )
 from physicsai_core.path_links import is_link_or_reparse
-
-def _convert_kwargs(fn: Any, **kw: Any) -> dict[str, Any]:
-    """`convert`가 받는 키워드만 넘긴다(변환기 재작성 전후 호환 어댑터 — 계약 contour3d-field.md §5.4·§9.6의 새 인자를 점진 적용)."""
-    params = inspect.signature(fn).parameters
-    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()):
-        return kw
-    return {k: v for k, v in kw.items() if k in params}
 
 
 def _C(ctx: Any) -> str:
@@ -140,13 +132,15 @@ def c3_convert(ctx: Any) -> None:
     c3 = s.contour3d
     disp = p.get("display") or {}
     src = {"kind": p["source_kind"], "ref": p.get("source_ref") or {}, "h3d_name": os.path.basename(p["h3d_rel"])}
-    kw = _convert_kwargs(convert, source=src, max_nodes=int(c3.max_nodes), max_glb_bytes=int(c3.max_glb_bytes),
-                         max_bin_bytes=int(c3.max_bin_bytes), max_disp_bytes=int(c3.max_disp_bytes), max_frames=int(p["max_frames"]),
-                         meshopt=bool(c3.meshopt), lod_min_nodes=int(c3.lod_min_nodes), lod_target_vertices=int(c3.lod_target_vertices),
-                         comps=list(disp.get("comps") or []), unit=str(disp.get("unit") or ""), progress=prog, checkpoint=ctx.checkpoint,
-                         discard=lambda f: remove_cache_file(ctx.root, f, CONTOUR_CACHE))
+    def discard(f: str) -> None:
+        remove_cache_file(ctx.root, f, CONTOUR_CACHE)
+
     try:
-        man = convert(X, out, **kw)
+        man = convert(
+            X, out, source=src, max_nodes=int(c3.max_nodes), max_bin_bytes=int(c3.max_bin_bytes), max_frames=int(p["max_frames"]),
+            max_glb_bytes=int(c3.max_glb_bytes), max_disp_bytes=int(c3.max_disp_bytes), lod_min_nodes=int(c3.lod_min_nodes),
+            lod_target_vertices=int(c3.lod_target_vertices), meshopt=bool(c3.meshopt), comps=list(disp.get("comps") or []),
+            unit=str(disp.get("unit") or ""), progress=prog, checkpoint=ctx.checkpoint, discard=discard)
     except ConvertError as exc:
         raise StepFailure(exc.code, f"{message_ko(exc.code) or exc.code} — {exc.message}") from None
     if man["status"] == "OK":

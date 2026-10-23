@@ -1,6 +1,6 @@
 # 계약: 결과 3D 컨투어 현장 보정 — 대형 모델(압축·LOD·상한)·캐시 키·부품 범위·대체 사유 (v0.2.10)
 
-> 상태: **초안**(2026-10-23, Plan). 릴리스 **v0.2.10**. 기준: 60adb26(v0.2.9 배포본), migration HEAD `0023_doe_methods`. **migration 없음**(§5.6 artifact kind 제약은 확인 항목).
+> 상태: **초안**(2026-10-23, Plan). 릴리스 **v0.2.10**. 기준: 60adb26(v0.2.9 배포본), migration HEAD `0023_doe_methods`. **migration `0024_contour3d_field`**(§5.6 artifact kind 제약 확장, 변경 메모 C3F-C1).
 > 상위: [geometry-view.md](geometry-view.md) §7.1(프런트 의존)·§13(결과 3D 컨투어), [contour3d-default.md](contour3d-default.md)(④⑤⑥ 기본 3D 표시), [job-queues.md](job-queues.md) §6.1(수령·잠금). 충돌하면 이 문서가 우선한다. 범위는 아래에 적은 항목뿐이다.
 > 근거: GitHub 이슈 #11(사용자 현장 실행, HyperView 26.1), 사용자 요구 "HOOPS처럼 브라우저 수준으로 압축", 코드 확인(60adb26), PyPI 조회(2026-10-23).
 > ID 규칙: 결정은 `C3F-n`, 시험은 `V-C3F-n`, 변경 메모는 `C3F-Cn`으로 쓴다.
@@ -495,3 +495,15 @@ PNG(또는 빈 칸)가 3D 자리에 나오면 칸 맨 위에 `contour-slot-reaso
 ## 변경 메모
 
 (구현 중 계약과 다르게 해야 하면 여기에 `C3F-Cn`으로 기록하고 Plan 확인을 받는다. 압축 후 실측 크기·청크 크기도 여기에 기록한다.)
+
+- **C3F-C1 (2026-10-23, 구현 차이 — Plan 확인 대상)**: v0.2.10 통합 구현이 계약과 다르게 정한 점이다.
+  - migration: `0024_contour3d_field`(down_revision `0023_doe_methods`)가 `ck_artifacts_kind`에 `CONTOUR3D_DISP`·`CONTOUR3D_LOD`를 추가한다(§5.6 확인 항목의 결과 — 제약이 kind를 열거하므로 필요). 테이블·열은 늘지 않는다.
+  - meshopt 끔(`contour3d.meshopt: false`): manifest `mesh.compression = "none"`(켬 = `"meshopt"`). GLB는 `EXT_meshopt_compression` 없이 양자화 위치만 쓰며 뷰어는 두 경우를 같은 로더로 읽는다.
+  - 전부 NaN 프레임: `frames.list[i]`의 `min`·`max`·`min_v`·`max_v`는 `null`, `scale`은 `0.0`이다. 전 프레임이 그렇다면 `range`도 `null`. 뷰어는 값 없음(NaN)으로 복원하고 극값 마커를 그리지 않으며 프레임별 범례는 전체 범위로 대체한다.
+  - `scope.comps_applicable = bool(comps)`(manifest). API `reason.comps_applicable`은 표시 설정의 `comps_applicable`(= 쿠션 입력이 아님)이고, 뷰어는 `reason`이 있으면 그 값, 없으면 manifest `scope`로 "부품 이름으로 범위를 줄이거나" 문구를 정한다.
+  - 예전 TCL(`SCOPE=` 줄 없음)에서 comps가 있으면 `COMPS_IGNORED` 경고를 남긴다(`SCOPE=COMPS`가 아니면 적용되지 않은 것으로 본다).
+  - GLB 노드: 위치 복원용 `translation`·`scale`은 루트가 아니라 **surface 노드**(노드 1)에 있다. 뷰어는 로드할 때 `matrixWorld`로 한 번 float32 mm로 복원한다.
+  - three `GLTFLoader`는 사용자 속성 이름을 소문자로 바꾼다. 파일의 `_NODE_ID`·`_SRC`는 뷰어에서 `_node_id`·`_src`로 읽는다.
+  - LOD: 뒤집힌 삼각형(원 메시 법선과 반대 방향)은 5% 미만(시험: 얇은 두 겹 판에서 윗면 법선 +z ≥ 95%, 아랫면 −z ≥ 95%).
+  - 표시 설정 `unit`(선택, ≤ 16자)은 캡처 `DISPLAY_KEYS`·응답 `CaptureDisplayOut.unit`에 있고, 템플릿 관리 "컨투어 표시"에 "단위(선택, 예: MPa)" 칸이 있다.
+  - V-C3F-8 왕복: `python -m physicsai_core.contour3d.fixture <폴더> [--b64]`가 서버 인코더 출력(meshopt·plain 각 GLB·LOD·프레임·변위·manifest·expected)을 만든다. `frontend/src/__tests__/fixtures/c3f_server`가 `--b64`로 커밋한 픽스처이고(백엔드 시험이 형상 바이트 최신 여부 검사), `contourServerFixture.test.ts`가 위치·노드 ID·값·변위를 합성 입력의 정답과 대조한다. 기존 JS 인코더 픽스처(`c3f_meshopt_plate.glb.b64`)도 유지한다.

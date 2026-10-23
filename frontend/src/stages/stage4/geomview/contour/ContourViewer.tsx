@@ -3,7 +3,7 @@
 // 410(서버 캐시 정리됨)이면 onExpired → 부모가 다시 요청한다.
 // 제어 모드(`control`, contour3d-default §3.1·§3.3 비교 모드): 프레임·배율·범례 범위를 부모가 정하고 내부 슬라이더·배율·범례 모드 줄은 숨긴다.
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, errorMessage } from "../../../../api";
+import { api, errorMessage, type Contour3d } from "../../../../api";
 import { loadThree } from "../loadThree";
 import type { ContourMeshInfo, ContourSceneApi } from "../threeScene";
 import { isExpired } from "../expire";
@@ -36,7 +36,6 @@ import {
   SCALAR_BUDGET,
   tooltipText,
   warningLines,
-  type Contour3dEx,
   type ContourManifest,
   type LegendMode,
   type LodLevel,
@@ -61,7 +60,7 @@ interface Frame {
   disp: Float32Array | null;
 }
 
-export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { c: Contour3dEx; onExpired: () => void; control?: ViewerControl; onManifest?: (m: ContourManifest | null) => void; onScene?: (s: ContourSceneApi | null) => void }) {
+export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { c: Contour3d; onExpired: () => void; control?: ViewerControl; onManifest?: (m: ContourManifest | null) => void; onScene?: (s: ContourSceneApi | null) => void }) {
   const box = useRef<HTMLDivElement>(null);
   const scene = useRef<ContourSceneApi | null>(null);
   const geo = useRef<{ full: Geo | null; lod: Geo | null }>({ full: null, lod: null });

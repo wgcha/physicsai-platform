@@ -24,14 +24,24 @@ from ..fileutil import write_json
 from . import glb as glbmod
 from . import lod as lodmod
 from . import meshopt as mo
-from . import settings as _st
-from .settings import MESSAGES, OUT_FRAMES, OUT_GLB, OUT_MANIFEST, RESULT_NAME, TCL_STATUS_CODE, message_ko, parse_result
+from .settings import (
+    CONVERTER_VERSION,
+    MESSAGES,
+    OUT_DISP,
+    OUT_FRAMES,
+    OUT_GLB,
+    OUT_LOD,
+    OUT_MANIFEST,
+    RESULT_NAME,
+    TCL_STATUS_CODE,
+    clean_unit,
+    message_ko,
+    normalize_comps,
+    parse_result,
+)
 
 INVALID = "CONTOUR3D_EXTRACT_INVALID"
 SCHEMA_VERSION = 2
-CONVERTER_VERSION = 2  # manifest converter_version(C3F-6). 캐시 키의 settings.CONVERTER_VERSION과 같아야 한다
-OUT_DISP: str = getattr(_st, "OUT_DISP", "contour_disp.bin")
-OUT_LOD: str = getattr(_st, "OUT_LOD", "contour_lod.glb")
 NAN_CODE = 65535
 SCALAR_STEPS = 65534  # 스칼라 q ∈ [0, 65534], 65535 예약
 DISP_STEPS = 65535
@@ -41,11 +51,6 @@ DEFAULT_MAX_DISP_BYTES = 1 << 30
 DEFAULT_LOD_MIN_NODES = 500_000
 DEFAULT_LOD_TARGET_VERTICES = 100_000
 CHUNK_BYTES = 8 << 20  # CSV 스트리밍 단위(완결된 행만)
-NEW_MESSAGES = {  # settings.MESSAGES에 아직 없을 때의 문구(§9.4·§9.5)
-    "CONTOUR3D_DISP_UNAVAILABLE": "결과에 변위가 없어 변형 표시 없이 보입니다",
-    "CONTOUR3D_COMPS_IGNORED": "표시 부품 이름을 적용하지 못해 전체를 표시합니다",
-    "CONTOUR3D_DISP_DROPPED": "크기 상한으로 변위(변형 배율)를 뺐습니다(표시 유지)",
-}
 # 솔리드 요소 면(HyperView config → 노드 인덱스, 바깥쪽 법선 순서)
 SOLID_FACES: dict[int, tuple[tuple[int, ...], ...]] = {
     204: ((0, 2, 1), (0, 1, 3), (1, 2, 3), (0, 3, 2)),
@@ -63,7 +68,7 @@ class ConvertError(Exception):
 
 
 def _msg(code: str) -> str:
-    return MESSAGES.get(code) or NEW_MESSAGES.get(code) or message_ko(code) or code
+    return MESSAGES.get(code) or message_ko(code) or code
 
 
 def _warn(code: str, detail: str | None = None, **extra: Any) -> dict[str, Any]:
@@ -372,50 +377,6 @@ def resample(total: int, k: int) -> list[int]:
     return out
 
 
-# ---- extract_result.txt 추가 줄(§9.4·§9.5) ------------------------------------------------------------------------
-
-
-def result_extras(text: str) -> dict[str, Any]:
-    """DISP·DISP_REASON·DISP_MISSING_FRAMES·SCOPE(없으면 None — 예전 TCL)."""
-    out: dict[str, Any] = {"disp": None, "disp_reason": None, "disp_missing_frames": 0, "scope": None}
-    for raw in text.splitlines():
-        key, sep, val = raw.strip().lstrip("﻿").partition("=")
-        if not sep:
-            continue
-        val = val.strip()
-        if key == "DISP":
-            out["disp"] = val.upper() or None
-        elif key == "DISP_REASON":
-            out["disp_reason"] = val[:120] or None
-        elif key == "DISP_MISSING_FRAMES":
-            out["disp_missing_frames"] = int(val) if val.isdigit() else 0
-        elif key == "SCOPE":
-            out["scope"] = val.upper() or None
-    return out
-
-
-def clean_unit(u: Any) -> str:
-    """오류 문구처럼 보이는 단위는 버린다(§9.2: 16자 초과·공백·`"`·`:`·invalid·error)."""
-    s = str(u or "").strip()
-    low = s.lower()
-    if len(s) > 16 or any(ch in s for ch in ' "\t:') or "invalid" in low or "error" in low:
-        return ""
-    return s
-
-
-def _normalize_comps(comps: Sequence[str] | None) -> list[str]:
-    """정렬·중복 제거·공백 제거(settings.normalize_comps가 있으면 그것 — 캐시 키와 같은 규칙)."""
-    fn = getattr(_st, "normalize_comps", None)
-    if fn is not None:
-        return list(fn(comps))
-    return sorted({str(c).strip() for c in (comps or ()) if str(c).strip()})
-
-
-def _clean_unit(u: Any) -> str:
-    fn = getattr(_st, "clean_unit", None)
-    return fn(u) if fn is not None else clean_unit(u)
-
-
 # ---- 변환 --------------------------------------------------------------------------------------------------------
 
 
@@ -447,10 +408,9 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     if res["status"] != "OK":
         code = TCL_STATUS_CODE.get(str(res["status"]), INVALID)
         raise ConvertError(code, f"추출 상태 {res['status']}: {res['message'] or ''}".strip())
-    ext = result_extras(text)
-    unit_h3d, unit_disp = _clean_unit(res.get("unit")), _clean_unit(unit)
+    unit_h3d, unit_disp = clean_unit(res.get("unit")), clean_unit(unit)
     unit_out, unit_source = (unit_h3d, "h3d") if unit_h3d else (unit_disp, "display") if unit_disp else ("", None)
-    comps_l = _normalize_comps(comps)
+    comps_l = normalize_comps(comps)
     limits: dict[str, Any] = {"nodes": None, "max_nodes": int(max_nodes), "glb_bytes": None, "max_glb_bytes": int(max_glb_bytes),
                               "bin_bytes": None, "max_bin_bytes": int(max_bin_bytes), "disp_bytes": None,
                               "max_disp_bytes": int(max_disp_bytes)}
@@ -459,8 +419,8 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
                             "source": dict(source), "display": {"field": res["field"], "comp": res["dcomp"], "avgmode": res["avgmode"]},
                             "unit": unit_out, "unit_source": unit_source, "length_unit": "mm", "up_axis": "Z", "warnings": warnings,
                             "converter_version": CONVERTER_VERSION, "limits": limits,
-                            "scope": {"comps": comps_l, "comps_applicable": bool(comps_l), "applied": ext["scope"] == "COMPS"}}
-    if comps_l and ext["scope"] != "COMPS":
+                            "scope": {"comps": comps_l, "comps_applicable": bool(comps_l), "applied": res["scope"] == "COMPS"}}
+    if comps_l and res["scope"] != "COMPS":
         warnings.append(_warn("CONTOUR3D_COMPS_IGNORED"))
     # ---- 형상 ----
     prog(2, "형상 읽기")
@@ -531,10 +491,10 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     with _open(p0) as fh:
         head0 = _header(fh, p0, "value")
     has_disp = head0[:4] == ["value", "dx", "dy", "dz"]
-    dstate, missing = ext["disp"], int(ext["disp_missing_frames"] or 0)
+    dstate, missing = res["disp"], int(res["disp_missing_frames"] or 0)
     if dstate == "NONE":
         has_disp = False
-        warnings.append(_warn("CONTOUR3D_DISP_UNAVAILABLE", ext["disp_reason"]))
+        warnings.append(_warn("CONTOUR3D_DISP_UNAVAILABLE", res["disp_reason"] or None))
     elif dstate == "SKIPPED_NODES":
         has_disp = False
         warnings.append(_warn("CONTOUR3D_DISP_DROPPED", "노드 수"))

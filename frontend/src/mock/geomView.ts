@@ -5,13 +5,10 @@
 // 시연 모드(setGvMode): c3d="hold"면 컨투어 생성이 '프레임 변환'에서 멈춤, "fail"이면 결과 실패(FIELD_EMPTY), "toolarge"·"toolarge_comps"·"toolarge_glb"·"toolarge_frames"는 크기 상한 결과 실패(manifest limits, contour3d-field §12),
 // "jobfail"이면 작업 실패(FAILED), "expire"면 첫 프레임 요청에 410 1회. c3data = 컨투어 데이터 시나리오(기본 schema 2 = uint16 양자화·양자화 GLB, schema 1 = float32 섞임, disp=false 변위 없음, lod, nx·ny·frames 대형 합성).
 // c3dBusy=n이면 새 생성 요청을 n번 429(PREVIEW_BUSY)로 거절. POST /contour3d는 캐시 적중·진행 중이면 읽기 사용자도 허용, 새 생성은 power(contour3d-default C3D-6).
-import type { Artifact, Contour3d as Contour3dBase, Contour3dPhase, Contour3dProgress, GeomPreview, GeomView } from "../api/types";
+import type { Artifact, Contour3d, Contour3dPhase, Contour3dProgress, GeomPreview, GeomView } from "../api/types";
 import { contourData, cushionGlb, type ContourOpt, NOMINAL, previewManifest, previewOutcome, viewManifest } from "./geomViewData";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
-
-/** v0.2.10 응답 필드(disp_artifact_id·lod_artifact_id) — schema.d.ts 미재생성이라 로컬 타입(contourCore.Contour3dEx와 같음) */
-type Contour3d = Contour3dBase & { disp_artifact_id?: string | null; lod_artifact_id?: string | null };
 
 export interface GvMode {
   c3d?: "hold" | "fail" | "jobfail" | "expire" | "toolarge" | "toolarge_comps" | "toolarge_glb" | "toolarge_frames" | null;
@@ -272,7 +269,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
       const rec: C3Rec = {
         id: srv.nid("c3"), key, polls: 0, job_id: srv.nid("j"), status: "QUEUED", cache_hit: false, source_kind: kind, source_ref: ref, display: (body?.display as Record<string, unknown>) ?? null,
         result_status: null, code: null, message_ko: null, frames: null, nodes: null, bytes: null,
-        glb_artifact_id: null, frames_artifact_id: null, manifest_artifact_id: null, timing: null, created_at: new Date().toISOString(), finished_at: null,
+        glb_artifact_id: null, frames_artifact_id: null, manifest_artifact_id: null, disp_artifact_id: null, lod_artifact_id: null, retryable: false, reason: null, timing: null, created_at: new Date().toISOString(), finished_at: null,
         progress: c3Progress("waiting", 0, 95, true),
       };
       s.contours.push(rec);
@@ -283,6 +280,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
     if (method === "POST" && seg[2] === "cancel") {
       if (c.status !== "QUEUED" && c.status !== "RUNNING") return err(409, "JOB_TERMINAL", "이미 끝난 생성입니다");
       c.status = "CANCELED";
+      c.retryable = true;
       c.progress = { ...c3Progress("canceled", c.progress?.elapsed_s ?? 0, 95, false), step_key: c.progress?.phase ?? null };
       return ok(strip(c));
     }
@@ -290,6 +288,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
       if (c.status === "QUEUED" || c.status === "RUNNING") {
         if (s.mode.c3d === "jobfail") {
           c.status = "FAILED";
+          c.retryable = true;
           c.code = "CONTOUR3D_JOB_FAILED";
           c.message_ko = "H3D 읽기 도구가 종료되었습니다";
           c.progress = { ...c3Progress("failed", 12, 95, false), step_key: "reading_h3d" };

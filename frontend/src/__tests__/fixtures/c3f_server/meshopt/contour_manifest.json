@@ -1,0 +1,162 @@
+{
+  "schema_version": 2,
+  "kind": "contour3d",
+  "status": "OK",
+  "code": null,
+  "message": null,
+  "source": {
+    "kind": "PREDICT_H3D",
+    "ref": {
+      "job_id": "fixture"
+    },
+    "h3d_name": "fixture.h3d"
+  },
+  "display": {
+    "field": "Stress",
+    "comp": "vonMises",
+    "avgmode": "simple"
+  },
+  "unit": "MPa",
+  "unit_source": "h3d",
+  "length_unit": "mm",
+  "up_axis": "Z",
+  "warnings": [],
+  "converter_version": 2,
+  "limits": {
+    "nodes": 768,
+    "max_nodes": 2000000,
+    "glb_bytes": 15540,
+    "max_glb_bytes": 67108864,
+    "bin_bytes": 4608,
+    "max_bin_bytes": 268435456,
+    "disp_bytes": 13824,
+    "max_disp_bytes": 1073741824
+  },
+  "scope": {
+    "comps": [],
+    "comps_applicable": false,
+    "applied": false
+  },
+  "mesh": {
+    "file": "contour.glb",
+    "sha256": "e4b012b2b79801def8e89ece9d3fdbb4a6c15583aff5b22e6c1ea2ea01a7da01",
+    "bytes": 10408,
+    "nodes": 768,
+    "triangles": 1532,
+    "compression": "meshopt",
+    "quantization": {
+      "position": "int16n"
+    },
+    "order": "morton",
+    "normals": "viewer"
+  },
+  "lod": {
+    "file": "contour_lod.glb",
+    "sha256": "42596eb30a30bfd319f2eaa7fd64c3346b099c68c0dd3f861007d961dd6dd302",
+    "bytes": 5132,
+    "vertices": 240,
+    "triangles": 476,
+    "method": "cluster_peak",
+    "cell_mm": 3.0666846113905715
+  },
+  "frames": {
+    "file": "contour_frames.bin",
+    "sha256": "5909773116025525d76ca15dd1b076cac62bde006a0d589fa54558993ee460a7",
+    "bytes": 4608,
+    "dtype": "uint16q",
+    "nan_code": 65535,
+    "record_bytes": 1536,
+    "count": 3,
+    "has_disp": true,
+    "nan_count": 3,
+    "list": [
+      {
+        "i": 0,
+        "src": 0,
+        "time": 0.0,
+        "min": -49.99981643998106,
+        "max": 49.999919773424494,
+        "scale": 0.0015259214486130184,
+        "min_v": 682,
+        "max_v": 190
+      },
+      {
+        "i": 1,
+        "src": 1,
+        "time": 0.001,
+        "min": -99.99963287996212,
+        "max": 99.99983954684899,
+        "scale": 0.003051842897226037,
+        "min_v": 682,
+        "max_v": 190
+      },
+      {
+        "i": 2,
+        "src": 2,
+        "time": 0.002,
+        "min": -149.99944931994318,
+        "max": 149.99975932027348,
+        "scale": 0.004577764345839056,
+        "min_v": 682,
+        "max_v": 190
+      }
+    ]
+  },
+  "disp": {
+    "file": "contour_disp.bin",
+    "dtype": "uint16q",
+    "record_bytes": 4608,
+    "sha256": "0c83f789d0efb252b865154933699101f835a902a9fe64ab75e952167f31b125",
+    "bytes": 13824,
+    "list": [
+      {
+        "i": 0,
+        "min": [
+          0.0,
+          0.0,
+          -0.0
+        ],
+        "scale": [
+          0.0,
+          0.0,
+          0.0
+        ]
+      },
+      {
+        "i": 1,
+        "min": [
+          -0.09999983683548325,
+          0.0,
+          -0.05
+        ],
+        "scale": [
+          3.051792584336986e-06,
+          0.0,
+          7.629510948348212e-07
+        ]
+      },
+      {
+        "i": 2,
+        "min": [
+          -0.1999996736709665,
+          0.0,
+          -0.1
+        ],
+        "scale": [
+          6.103585168673972e-06,
+          0.0,
+          1.5259021896696423e-06
+        ]
+      }
+    ]
+  },
+  "range": {
+    "min": -149.99944931994318,
+    "max": 149.99975932027348
+  },
+  "sampling": {
+    "total_frames": 3,
+    "max_frames": 55,
+    "rule": "uniform_inclusive"
+  }
+}
