@@ -46,6 +46,8 @@
 
 ## 2. 결정 요약(C3F-1~C3F-18)
 
+**확정(2026-10-23 사용자)**: §17 Q1 = 새 네이티브 Python 패키지 없이 numpy 직접 구현(격자 군집 LOD·자체 meshopt 인코더). Q2 = 새 설치에서만 HyperView 감지 시 `contour3d.enabled: true`, 기존 설정은 바꾸지 않고 권고 줄만 출력. 계약 상태: 확정.
+
 | ID | 결정 |
 |---|---|
 | C3F-1 | 상한 기본값(§8): `max_nodes` 2,000,000 · `max_frames` 55 · 새 키 `max_glb_bytes` 64 MiB · `max_bin_bytes` 256 MiB(값은 지금과 같고 뜻이 "양자화 스칼라 파일"로 바뀜) · 새 키 `max_disp_bytes` 1 GiB · 새 키 `disp_max_nodes` 1,500,000 · 새 키 `lod_min_nodes` 500,000·`lod_target_vertices` 100,000 · 캐시 총량 4 GiB |

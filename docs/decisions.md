@@ -241,3 +241,4 @@
 - 2026-10-23 (초안, v0.2.10) `contour3d` 기본 상한 max_nodes 2,000,000·max_frames 55·max_glb_bytes 64 MiB·max_bin_bytes 256 MiB(양자화 스칼라)·max_disp_bytes 1 GiB, 크기 초과 시 변위 먼저 제외 후 재샘플, 캐시 키에 상한·comps·unit·추출 TCL 해시·converter_version 2(v0.2.9 FAIL 캐시 무효) — 근거: 현장 FEM 50프레임(max_frames 55 설정)·97만 노드, 캐시된 TOO_LARGE가 설정 변경 후에도 반환됨 · contour3d-field.md C3F-1·10·11
 - 2026-10-23 (초안, v0.2.10) h3d에 변위가 없거나 조회가 실패하면 3D 컨투어는 스칼라만으로 계속(첫 프레임 판정, `DISP=NONE`, 경고 `CONTOUR3D_DISP_UNAVAILABLE`, 뷰어 배율 컨트롤 숨김) — 근거: PhysicsAI 예측 h3d 변위 부재 시 EXTRACT_ERROR(현장) · contour3d-field.md C3F-19
 - 2026-10-23 잠금 순서 규칙: `worker_slot`을 쥔 채 jobs 행을 기다리지 않음(`claim_gpu` 만료 경로 holder `SKIP LOCKED`, 잠겨 있으면 수령 건너뜀) — 근거: v0.2.9 검증에서 release(jobs→slot)와 claim_gpu(slot→jobs) 역순 교착 위험 · contour3d-field.md C3F-18, job-queues.md JQ-C2
+- 2026-10-23: v0.2.10 contour3d-field 확정 — LOD·압축은 numpy 직접 구현(새 패키지 없음), contour3d.enabled는 새 설치에서만 자동 켬. 근거: 사용자 결정
