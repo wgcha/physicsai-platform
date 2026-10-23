@@ -1,7 +1,10 @@
-"""`contour.glb` 작성(geometry-view.md §13.4) — glTF 2.0 바이너리, 확장 없음, 표준 라이브러리만(형상 엔진 writer와 코드 공유 없음).
+"""`contour.glb`·`contour_lod.glb` 작성(schema 2 — contour3d-field.md §4.3, geometry-view.md GV-C5). glTF 2.0 바이너리.
 
-루트 노드 `paicad_contour`(extras unit·up_axis) 아래 `surface` 메시 1개(TRIANGLES). 정점 = FE 노드(공유), 속성 POSITION(min·max)·
-NORMAL·`_NODE_ID`(UNSIGNED_INT, 노드 ID 보존). indices = 정점 < 65536이면 UNSIGNED_SHORT, 아니면 UNSIGNED_INT.
+루트 노드 `paicad_contour`(extras unit·up_axis) 아래 `surface` 노드(translation·scale = 위치 역양자화) + 메시 1개(TRIANGLES).
+- POSITION: `KHR_mesh_quantization` SHORT normalized ×3(+2 B 0 패딩, byteStride 8), min·max = 저장된 정수값(glTF 규칙).
+- NORMAL 없음(뷰어가 1회 계산). 사용자 속성 `_NODE_ID`·`_SRC`(선택) = UNSIGNED_INT 무손실. indices = UNSIGNED_INT.
+- meshopt=True: 버퍼 뷰마다 `EXT_meshopt_compression`(ATTRIBUTES / INDICES), 압축 데이터는 GLB BIN(버퍼 0), 부모 뷰는 데이터 없는
+  대체 버퍼 1(`fallback: true`, 뷰어 전용 — 대체 데이터는 두지 않음). meshopt=False: 같은 배치를 압축 없이 버퍼 0에.
 결정성: JSON 키 순서 고정·공백 없음, 4바이트 정렬(JSON 공백·BIN 0 채움), 시각·경로 없음 → 같은 입력이면 바이트 동일.
 """
 
@@ -9,76 +12,122 @@ from __future__ import annotations
 
 import json
 import struct
-import sys
-from array import array
 from collections.abc import Sequence
 
-FLOAT, UINT, USHORT = 5126, 5125, 5123
+import numpy as np
+
+from . import meshopt as mo
+
+SHORT, UINT = 5122, 5125
 ARRAY_BUFFER, ELEMENT_ARRAY_BUFFER = 34962, 34963
-GENERATOR = "physicsai contour3d 1"
-
-
-def _le(a: array) -> bytes:
-    if sys.byteorder == "big":
-        a = array(a.typecode, a)
-        a.byteswap()
-    return a.tobytes()
+GENERATOR = "physicsai contour3d 2"
+EXT_QUANT, EXT_MESHOPT = "KHR_mesh_quantization", "EXT_meshopt_compression"
 
 
 def _pad(b: bytes, fill: bytes) -> bytes:
     return b + fill * ((4 - len(b) % 4) % 4)
 
 
-def write_glb(positions: Sequence[float], normals: Sequence[float], node_ids: Sequence[int], indices: Sequence[int]) -> bytes:
-    """positions·normals = 평탄 [x0,y0,z0,…](float), node_ids = 정점별 ID, indices = 삼각형 정점 번호(3개씩)."""
-    n = len(node_ids)
-    m = len(indices)
-    pos = array("f", positions)
-    nor = array("f", normals)
-    ids = array("I", node_ids) if array("I").itemsize == 4 else array("L", node_ids)
-    small = n < 65536
-    idx = array("H" if small else "I", indices)
-    blobs: list[bytes] = []
+def write_glb(q_pos: np.ndarray, translation: Sequence[float], scale: Sequence[float], attrs: Sequence[tuple[str, np.ndarray]],
+              indices: np.ndarray, *, meshopt: bool) -> bytes:
+    """q_pos int16 [N,3](meshopt.quantize_positions), attrs = [(이름, uint32[N])], indices = uint32[3T]."""
+    q = np.ascontiguousarray(q_pos, dtype=np.int16)
+    n = int(q.shape[0])
+    pos = np.zeros((n, 4), dtype="<i2")
+    pos[:, :3] = q
+    views_raw: list[tuple[bytes, int, int, str, int]] = [(pos.tobytes(), 8, ARRAY_BUFFER, "ATTRIBUTES", n)]  # (데이터, stride, target, mode, count)
+    for _name, a in attrs:
+        views_raw.append((np.ascontiguousarray(a, dtype="<u4").tobytes(), 4, ARRAY_BUFFER, "ATTRIBUTES", n))
+    idx = np.ascontiguousarray(indices, dtype="<u4").ravel()
+    views_raw.append((idx.tobytes(), 4, ELEMENT_ARRAY_BUFFER, "INDICES", int(idx.size)))
     views: list[dict] = []
-    off = 0
-    for data, target in ((_le(pos), ARRAY_BUFFER), (_le(nor), ARRAY_BUFFER), (_le(ids), ARRAY_BUFFER), (_le(idx), ELEMENT_ARRAY_BUFFER)):
-        padded = _pad(data, b"\x00")
-        views.append({"buffer": 0, "byteOffset": off, "byteLength": len(data), "target": target})
+    blobs: list[bytes] = []
+    off = 0  # 버퍼 0(GLB BIN)
+    foff = 0  # 대체 버퍼 1(meshopt)
+    for data, stride, target, mode, count in views_raw:
+        view: dict = {"buffer": 0, "byteOffset": 0, "byteLength": len(data)}
+        if target == ARRAY_BUFFER:
+            view["byteStride"] = stride
+        view["target"] = target
+        if meshopt:
+            if mode == "ATTRIBUTES":
+                enc = mo.encode_vertex_buffer(np.frombuffer(data, dtype=np.uint8).reshape(count, stride))
+            else:
+                enc = mo.encode_index_sequence(idx)
+            view["buffer"], view["byteOffset"] = 1, foff
+            foff += len(_pad(data, b"\x00"))
+            view["extensions"] = {EXT_MESHOPT: {"buffer": 0, "byteOffset": off, "byteLength": len(enc), "byteStride": stride,
+                                                "count": count, "mode": mode}}
+            payload = enc
+        else:
+            view["byteOffset"] = off
+            payload = data
+        padded = _pad(payload, b"\x00")
         blobs.append(padded)
         off += len(padded)
+        views.append(view)
     bin_chunk = b"".join(blobs)
-    mn = [min(pos[i::3]) for i in range(3)] if n else [0.0, 0.0, 0.0]
-    mx = [max(pos[i::3]) for i in range(3)] if n else [0.0, 0.0, 0.0]
+    mn = [int(x) for x in q.min(axis=0)] if n else [0, 0, 0]
+    mx = [int(x) for x in q.max(axis=0)] if n else [0, 0, 0]
+    attributes = {"POSITION": 0}
+    accessors: list[dict] = [{"bufferView": 0, "componentType": SHORT, "normalized": True, "count": n, "type": "VEC3", "min": mn, "max": mx}]
+    for i, (name, _a) in enumerate(attrs, start=1):
+        attributes[name] = i
+        accessors.append({"bufferView": i, "componentType": UINT, "count": n, "type": "SCALAR"})
+    accessors.append({"bufferView": len(attrs) + 1, "componentType": UINT, "count": int(idx.size), "type": "SCALAR"})
+    ext = [EXT_QUANT, EXT_MESHOPT] if meshopt else [EXT_QUANT]
+    buffers: list[dict] = [{"byteLength": len(bin_chunk)}]
+    if meshopt:
+        buffers.append({"byteLength": foff, "extensions": {EXT_MESHOPT: {"fallback": True}}})
     doc = {
         "asset": {"version": "2.0", "generator": GENERATOR},
+        "extensionsUsed": ext,
+        "extensionsRequired": ext,
         "scene": 0,
         "scenes": [{"nodes": [0]}],
         "nodes": [{"name": "paicad_contour", "children": [1], "extras": {"unit": "mm", "up_axis": "Z"}},
-                  {"name": "surface", "mesh": 0}],
-        "meshes": [{"name": "surface", "primitives": [{"attributes": {"POSITION": 0, "NORMAL": 1, "_NODE_ID": 2}, "indices": 3,
-                                                       "mode": 4}]}],
-        "accessors": [
-            {"bufferView": 0, "componentType": FLOAT, "count": n, "type": "VEC3", "min": [float(x) for x in mn],
-             "max": [float(x) for x in mx]},
-            {"bufferView": 1, "componentType": FLOAT, "count": n, "type": "VEC3"},
-            {"bufferView": 2, "componentType": UINT, "count": n, "type": "SCALAR"},
-            {"bufferView": 3, "componentType": USHORT if small else UINT, "count": m, "type": "SCALAR"},
-        ],
+                  {"name": "surface", "mesh": 0, "translation": [float(x) for x in translation], "scale": [float(x) for x in scale]}],
+        "meshes": [{"name": "surface", "primitives": [{"attributes": attributes, "indices": len(attrs) + 1, "mode": 4}]}],
+        "accessors": accessors,
         "bufferViews": views,
-        "buffers": [{"byteLength": len(bin_chunk)}],
+        "buffers": buffers,
     }
-    js = _pad(json.dumps(doc, separators=(",", ":"), ensure_ascii=True).encode("ascii"), b" ")
+    js = _pad(json.dumps(doc, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii"), b" ")
     total = 12 + 8 + len(js) + 8 + len(bin_chunk)
     return (struct.pack("<III", 0x46546C67, 2, total) + struct.pack("<II", len(js), 0x4E4F534A) + js
             + struct.pack("<II", len(bin_chunk), 0x004E4942) + bin_chunk)
 
 
-def read_glb_json(data: bytes) -> dict:
-    """시험·검증용: GLB 헤더 확인 후 JSON 청크."""
+def read_glb(data: bytes) -> tuple[dict, bytes]:
+    """시험·검증용: GLB 헤더 확인 → (JSON, BIN)."""
     magic, ver, total = struct.unpack_from("<III", data, 0)
     if magic != 0x46546C67 or ver != 2 or total != len(data):
         raise ValueError("GLB 헤더 오류")
     ln, typ = struct.unpack_from("<II", data, 12)
     if typ != 0x4E4F534A:
         raise ValueError("JSON 청크 없음")
-    return json.loads(data[20:20 + ln].decode("ascii"))
+    doc = json.loads(data[20:20 + ln].decode("ascii"))
+    p = 20 + ln
+    if p + 8 > len(data):
+        return doc, b""
+    bl, bt = struct.unpack_from("<II", data, p)
+    if bt != 0x004E4942:
+        raise ValueError("BIN 청크 없음")
+    return doc, data[p + 8:p + 8 + bl]
+
+
+def read_glb_json(data: bytes) -> dict:
+    return read_glb(data)[0]
+
+
+def decode_view(doc: dict, bin_chunk: bytes, view_index: int) -> bytes:
+    """시험·검증용: 버퍼 뷰 원본 바이트(meshopt면 참조 디코더로 푼다)."""
+    v = doc["bufferViews"][view_index]
+    e = (v.get("extensions") or {}).get(EXT_MESHOPT)
+    if e is None:
+        return bin_chunk[v.get("byteOffset", 0):v.get("byteOffset", 0) + v["byteLength"]]
+    src = bin_chunk[e.get("byteOffset", 0):e.get("byteOffset", 0) + e["byteLength"]]
+    if e["mode"] == "ATTRIBUTES":
+        return mo.decode_vertex_buffer(src, e["count"], e["byteStride"])
+    vals = mo.decode_index_sequence(src, e["count"])
+    return np.asarray(vals, dtype="<u4" if e["byteStride"] == 4 else "<u2").tobytes()

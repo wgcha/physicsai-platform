@@ -241,27 +241,34 @@ def _conv(tmp_path, **kw):
 
 
 def test_contour_convert_ok_glb_and_frame_major_bin(tmp_path):
-    from physicsai_core.contour3d.glb import read_glb_json
+    """schema 2(contour3d-field.md §4.3·§5): 양자화 GLB(NORMAL 없음) + uint16 스칼라 레코드 + 분리된 변위 레코드."""
+    from physicsai_core.contour3d.glb import decode_view, read_glb
 
     man = _conv(tmp_path)
-    assert man["status"] == "OK" and man["unit"] == "MPa" and man["display"]["comp"] == "vonMises"
+    assert man["status"] == "OK" and man["unit"] == "MPa" and man["display"]["comp"] == "vonMises" and man["schema_version"] == 2
     assert man["mesh"]["nodes"] == 6 and man["mesh"]["triangles"] == 4  # 쿼드 2개 → 4, 퇴화 면 1개 건너뜀
     assert [w["code"] for w in man["warnings"]] == ["CONTOUR3D_FACE_SKIPPED"]
     data = (tmp_path / "out" / "contour.glb").read_bytes()
-    doc = read_glb_json(data)
+    doc, bin_chunk = read_glb(data)
     acc = doc["accessors"]
-    assert doc["meshes"][0]["primitives"][0]["attributes"] == {"POSITION": 0, "NORMAL": 1, "_NODE_ID": 2}
-    assert acc[0]["min"] == [0.0, 0.0, 0.0] and acc[0]["max"] == [2.0, 1.0, 0.0] and acc[3]["count"] == 12 and acc[3]["componentType"] == 5123
-    assert "extensionsUsed" not in doc and len(data) % 4 == 0
+    assert doc["meshes"][0]["primitives"][0]["attributes"] == {"POSITION": 0, "_NODE_ID": 1}
+    assert acc[0]["componentType"] == 5122 and acc[0]["normalized"] and acc[2]["count"] == 12 and acc[2]["componentType"] == 5125
+    assert "EXT_meshopt_compression" in doc["extensionsUsed"] and len(data) % 4 == 0
+    nid = struct.unpack("<6I", decode_view(doc, bin_chunk, 1))
     fr = man["frames"]
-    assert fr["count"] == 5 and fr["has_disp"] and fr["record_bytes"] == 4 * 6 * 4
+    assert fr["count"] == 5 and fr["has_disp"] and fr["record_bytes"] == 2 * 6 and fr["dtype"] == "uint16q"
     raw = (tmp_path / "out" / "contour_frames.bin").read_bytes()
     assert len(raw) == fr["bytes"] == 5 * fr["record_bytes"]
-    rec3 = struct.unpack_from("<6f", raw, 3 * fr["record_bytes"])  # 프레임 3 스칼라(노드 j → j·3)
-    assert list(rec3) == [0.0, 3.0, 6.0, 9.0, 12.0, 15.0]
-    dz = struct.unpack_from("<18f", raw, 3 * fr["record_bytes"] + 4 * 6)[2]
+    e3 = fr["list"][3]
+    rec3 = [e3["min"] + q * e3["scale"] for q in struct.unpack_from("<6H", raw, 3 * fr["record_bytes"])]  # 프레임 3: 노드 j → j·3
+    assert rec3 == pytest.approx([(n - 101) * 3.0 for n in nid], abs=15 / 131068)
+    d = man["disp"]
+    draw = (tmp_path / "out" / "contour_disp.bin").read_bytes()
+    assert d["record_bytes"] == 6 * 6 and len(draw) == d["bytes"] == 5 * 36
+    dz = d["list"][3]["min"][2] + struct.unpack_from("<18H", draw, 3 * 36)[2] * d["list"][3]["scale"][2]
     assert math.isclose(dz, 0.3, rel_tol=1e-6)
-    assert fr["list"][2] == {"i": 2, "src": 4, "time": 0.002, "min": 0.0, "max": 10.0} and man["range"] == {"min": 0.0, "max": 20.0}
+    assert {k: fr["list"][2][k] for k in ("i", "src", "time", "min", "max")} == {"i": 2, "src": 4, "time": 0.002, "min": 0.0, "max": 10.0}
+    assert man["range"] == {"min": 0.0, "max": 20.0} and nid[fr["list"][2]["max_v"]] == 106
     man2 = _conv(tmp_path / "again")
     assert (tmp_path / "again" / "out" / "contour.glb").read_bytes() == data and man2["frames"]["sha256"] == fr["sha256"]  # 결정적
 
@@ -288,10 +295,10 @@ def test_contour_convert_limits_and_failures(tmp_path):
 
     assert resample(200, 50)[:3] == [0, 4, 8] and resample(200, 50)[-1] == 199 and resample(3, 50) == [0, 1, 2]
     assert _conv(tmp_path / "a", max_nodes=5)["code"] == "CONTOUR3D_TOO_LARGE"
-    m = _conv(tmp_path / "b", frames=10, max_bin_bytes=4 * 6 * 4 * 4)  # 프레임 4개만 들어감 → 균등 재샘플링
-    assert m["status"] == "OK" and m["frames"]["count"] == 4 and m["sampling"]["total_frames"] == 10
-    m = _conv(tmp_path / "c", frames=10, max_bin_bytes=4 * 6 * 3)  # 변위 포함 1프레임도 못 넣음 → 변위 제외 → 3프레임
-    assert m["frames"]["has_disp"] is False and m["frames"]["count"] == 3 and "CONTOUR3D_DISP_DROPPED" in [w["code"] for w in m["warnings"]]
+    m = _conv(tmp_path / "b", frames=10, max_bin_bytes=2 * 6 * 4)  # 스칼라 프레임 4개만 들어감 → 균등 재샘플링(변위도 같은 목록)
+    assert m["status"] == "OK" and m["frames"]["count"] == 4 and m["sampling"]["total_frames"] == 10 and len(m["disp"]["list"]) == 4
+    m = _conv(tmp_path / "c", frames=10, max_bin_bytes=2 * 6 * 3)  # 변위는 따로 상한(contour3d.max_disp_bytes) — 스칼라만 재샘플
+    assert m["frames"]["has_disp"] is True and m["frames"]["count"] == 3
     assert _conv(tmp_path / "d", frames=4, max_bin_bytes=10)["code"] == "CONTOUR3D_TOO_LARGE"
     m = _conv(tmp_path / "e", nan=True)
     assert m["status"] == "FAIL" and m["code"] == "CONTOUR3D_FIELD_EMPTY" and not (tmp_path / "e" / "out" / "contour_frames.bin").exists()

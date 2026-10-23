@@ -7,6 +7,8 @@ from __future__ import annotations
 import json
 import struct
 
+import pytest
+
 from physicsai_test_support import API, H, read_record
 
 PW = H("tok-power", write=True)
@@ -51,7 +53,9 @@ def test_contour3d_open_progress_done_and_cache(predict_env, fake_record, monkey
     rb = man["frames"]["record_bytes"]
     r1 = env.c.get(f"{API}/artifacts/{g['frames_artifact_id']}/media", headers={**P, "Range": f"bytes={rb}-{2 * rb - 1}"})
     assert r1.status_code == 206 and r1.headers["content-type"] == "application/octet-stream" and len(r1.content) == rb
-    assert list(struct.unpack_from("<6f", r1.content, 0)) == [0.0, 3.0, 6.0, 9.0, 12.0, 15.0]  # 프레임 1(src 3)
+    e1 = man["frames"]["list"][1]  # 프레임 1(src 3): uint16 양자화(schema 2, 정점 = Morton 순서) → 복원값 집합
+    got = sorted(e1["min"] + q * e1["scale"] for q in struct.unpack_from("<6H", r1.content, 0))
+    assert got == pytest.approx([0.0, 3.0, 6.0, 9.0, 12.0, 15.0], abs=15 / 131068)
     glb = env.c.get(f"{API}/artifacts/{g['glb_artifact_id']}/media", headers=P)
     assert glb.status_code == 200 and glb.content[:4] == b"glTF"
     C = env.sroot / "_cache" / "contour3d"
