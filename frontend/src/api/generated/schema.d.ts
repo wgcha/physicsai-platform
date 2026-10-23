@@ -192,6 +192,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/asm-matches/{match_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 조립 매칭 작업 취소
+         * @description 진행 중(대기·실행)인 목록 읽기·검사 작업을 취소한다(power). 검사에는 시간 제한이 없으므로(AM-C3) 사용자가 직접 멈추는 경로다.
+         *     실행 중이면 워커가 프로세스를 종료하며 작업이 CANCELED가 되고, 매칭 표(행)는 그대로 남는다. 진행 중 작업이 없으면 409 JOB_TERMINAL.
+         *     부작용: 작업 취소 요청 1건.
+         */
+        post: operations["cancel_asm_match_physicsai_api_asm_matches__match_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/asm-matches/{match_id}/check": {
         parameters: {
             query?: never;
@@ -203,7 +225,8 @@ export interface paths {
         put?: never;
         /**
          * 조립 매칭 검사
-         * @description 저장된 행으로 검사 작업(ASM_MATCH, mode check)을 시작한다. 끝나면 asm_match_get의 check에서 행별 판정을 본다.
+         * @description 저장된 행으로 검사 작업(ASM_MATCH, mode check)을 시작한다. 검사는 선택(고급)이며 확정(confirm)의 조건이 아니다.
+         *     대형 모델은 수십 분 걸릴 수 있어 시간 제한이 없고(`asm_match.check_timeout_s` null) 작업 취소로 중단한다. 끝나면 asm_match_get의 check에서 행별 판정을 본다.
          *     원점·단위가 다르면 FAIL(suggest)이며 자동 보정은 없다. 부작용: 대기열 작업 1개·check/<seq> 폴더.
          */
         post: operations["check_asm_match_physicsai_api_asm_matches__match_id__check_post"];
@@ -224,8 +247,10 @@ export interface paths {
         put?: never;
         /**
          * 조립 매칭 확정(저장)
-         * @description 마지막 검사가 PASS이고 그 뒤 행·입력이 바뀌지 않았을 때만 확정본(asm_match.json)을 만든다. 확정본은 바꿀 수 없고 DOE·세트가
-         *     자기 폴더로 복사해 쓴다. 이미 확정이면 그대로 돌려준다(멱등). 부작용: asm_match.json 작성.
+         * @description 행이 완전하고(모든 바디가 component 또는 매칭 안 함, 매칭 행 1개 이상) 조립·STEP·피처가 그대로면 확정본(asm_match.json)을 만든다.
+         *     경계 검사는 필수가 아니다 — 검사를 실행했는데 불합격이거나 현재 행과 다르면 확정은 되고 응답 warnings에 ASM_CHECK_FAILED_WARN·
+         *     ASM_CHECK_STALE_WARN이 남는다. 확정본은 바꿀 수 없고 DOE·세트가 자기 폴더로 복사해 쓴다. 이미 확정이면 그대로 돌려준다(멱등).
+         *     부작용: asm_match.json 작성.
          */
         post: operations["confirm_asm_match_physicsai_api_asm_matches__match_id__confirm_post"];
         delete?: never;
@@ -3348,7 +3373,10 @@ export interface components {
             updated_at?: string | null;
             /** Use Bodies */
             use_bodies?: string[];
-            /** Warnings */
+            /**
+             * Warnings
+             * @description 경고 [{code, message}]. 확정된 매칭에는 검사 불합격(ASM_CHECK_FAILED_WARN)·검사가 현재 행과 다름(ASM_CHECK_STALE_WARN)이 올 수 있다
+             */
             warnings?: {
                 [key: string]: unknown;
             }[];
@@ -11315,6 +11343,83 @@ export interface operations {
             };
         };
     };
+    cancel_asm_match_physicsai_api_asm_matches__match_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description 조립 매칭 id(asm_match_create 응답의 match_id) */
+                match_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AsmMatch"];
+                };
+            };
+            /** @description AUTHENTICATION_REQUIRED · API_TOKEN_INVALID · API_TOKEN_REVOKED · API_TOKEN_EXPIRED · API_TOKEN_STALE */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description API_TOKEN_SCOPE · API_TOKEN_OPERATION_NOT_ALLOWED · SESSION_REQUIRED · PERMISSION_DENIED · CSRF_HEADER_REQUIRED · PERMISSION_DENIED */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description NOT_FOUND */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description JOB_TERMINAL(진행 중인 작업 없음) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     check_asm_match_physicsai_api_asm_matches__match_id__check_post: {
         parameters: {
             query?: never;
@@ -11440,7 +11545,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description ASM_CHECK_REQUIRED(마지막 검사 없음·FAIL·행이 달라짐) · ASM_MATCH_STALE(조립 트리·STEP·피처 변경) · ASM_MATCH_BUSY */
+            /** @description ASM_ROWS_INCOMPLETE · ASM_MATCH_STALE(조립 트리·STEP·피처 변경) · ASM_MATCH_BUSY */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -11449,13 +11554,13 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
-            /** @description Validation Error */
+            /** @description ASM_ROW_INVALID */
             422: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
             /** @description RATE_LIMITED(Retry-After 헤더) · TOKEN_ACTIVE_JOB_LIMIT */

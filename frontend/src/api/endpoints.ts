@@ -173,6 +173,8 @@ export const api = {
   putAsmRows: (id: string, body: AsmRowsPut) => request<AsmMatch>("PUT", `/asm-matches/${id}/rows`, { body }),
   checkAsmMatch: (id: string) => request<{ job_id: string }>("POST", `/asm-matches/${id}/check`),
   confirmAsmMatch: (id: string) => request<AsmMatch>("POST", `/asm-matches/${id}/confirm`),
+  /** 진행 중인 목록 읽기·검사 작업 취소(power) — 검사는 시간 제한이 없어 사용자가 직접 멈춘다(AM-C3) */
+  cancelAsmMatch: (id: string) => request<AsmMatch>("POST", `/asm-matches/${id}/cancel`),
   /** §13.5 결과 3D 컨투어(열 때 생성): 200 적중 | 202 생성 중(progress) · 상태 · 취소 */
   createContour3d: (body: Contour3dCreate) => request<Contour3d>("POST", "/contour3d", { body }),
   contour3d: (id: string) => request<Contour3d>("GET", `/contour3d/${id}`),

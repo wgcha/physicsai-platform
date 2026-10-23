@@ -192,6 +192,45 @@ def test_confirmed_document_shape_and_summaries():
     assert am.check_summary(check) == {"status": "PASS", "rows": 2, "match_ratio_min": 0.99, "dist_max_mm": 0.04, "shared_nodes": 2}
 
 
+def test_confirmed_document_without_check_is_null_check():
+    """AM-C3: 검사를 실행한 적이 없으면 확정본 check = null(검사는 선택). 검사가 낡았으면 status·current로 구분한다."""
+    match = {"match_id": "m1", "source": {"cad_name": "x.step", "cad_sha256": "c" * 64, "features_sha256": None},
+             "assem": {"digest": "sha256:abc", "starter": "MODEL_0000.rad"}, "rows": [{"body": "A", "pids": [1]}], "excluded_bodies": []}
+    doc = am.confirmed_document(match, PARTS, None, None, None, engine_version=None, user="u", now_iso="t")
+    assert doc["check"] is None and doc["rows"] == [{"body": "A", "pids": [1], "titles": ["P1"]}] and doc["assem"]["node_files"] == []
+    old = {"rows": [{"match_ratio": 0.5, "dist_mm": {"max": 3.0}}], "rows_sha256": "r", "status": "FAIL"}
+    doc = am.confirmed_document(match, PARTS, old, 2, "s" * 64, engine_version="0.13.0", user="u", now_iso="t", check_status="FAIL", check_current=False)
+    assert doc["check"]["status"] == "FAIL" and doc["check"]["current"] is False and doc["check"]["seq"] == 2
+
+
+def test_asm_match_check_timeout_defaults_unlimited_and_is_validated():
+    """AM-C3: asm check 시간 제한 기본 null(상한 없음), parts는 600초 유지. 0 이하는 설정 오류."""
+    from physicsai_core.config.validate_geometry import _validate_asm_match
+
+    s = Settings()
+    assert s.asm_match.check_timeout_s is None and s.asm_match.timeout_s == 600
+    issues: list = []
+    _validate_asm_match(s, issues)
+    assert issues == []
+    for bad in (0, -5):
+        s.asm_match.check_timeout_s = bad
+        issues = []
+        _validate_asm_match(s, issues)
+        assert [i.key for i in issues] == ["asm_match.check_timeout_s"]
+    s.asm_match.check_timeout_s = 3600.0
+    issues = []
+    _validate_asm_match(s, issues)
+    assert issues == []
+
+
+def test_example_config_asm_check_timeout_is_null():
+    import yaml
+
+    root = Path(__file__).resolve().parents[3]
+    doc = yaml.safe_load((root / "config" / "platform.example.yaml").read_text(encoding="utf-8"))
+    assert doc["asm_match"]["check_timeout_s"] is None and doc["asm_match"]["timeout_s"] == 600
+
+
 def test_is_matched_detects_confirmed_copy(tmp_path):
     assert not am.is_matched(str(tmp_path))
     (tmp_path / "cad").mkdir()

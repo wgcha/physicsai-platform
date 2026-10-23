@@ -91,6 +91,6 @@ def test_all_routes_prefixed():
         "/reports/analysis", "/reports/{target}/{target_id}",
         # asm-match.md §6.3(AM-C2): 조립 매칭(생성·목록·조회·행 저장·검사·확정)
         "/studies/{study_id}/asm-matches", "/asm-matches/{match_id}", "/asm-matches/{match_id}/rows", "/asm-matches/{match_id}/check",
-        "/asm-matches/{match_id}/confirm",
+        "/asm-matches/{match_id}/confirm", "/asm-matches/{match_id}/cancel",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

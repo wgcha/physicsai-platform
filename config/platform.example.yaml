@@ -248,7 +248,8 @@ asm_match:
   max_parts: 5000                  # 요소를 가진 PART 수 상한(넘으면 ASM_TOO_MANY_PARTS)
   recommend_min_score: 0.6         # 추천 최소 점수(미만이면 추천 없음)
   worst_nodes: 2000                # 바디별 최악 거리 노드 상위 개수(worst_<body>.npz)
-  timeout_s: 600                   # asm parts·check 1회 시간 상한(초)
+  timeout_s: 600                   # asm parts(목록 읽기) 1회 시간 상한(초)
+  check_timeout_s: null            # asm check(경계 검사, 고급 옵션) 1회 상한(초). null = 상한 없음(대형 모델 수십 분). 취소는 항상 가능
 
 # 쉘 판금(비드) 모핑(shell-morph.md §12 Q1): 기본 대상 component = Radioss /PART 제목(대소문자 무시). 바디 이름이 다르면 cad/body_map.json
 shell: {default_component: chassis_rear}

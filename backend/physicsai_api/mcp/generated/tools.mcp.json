@@ -11,7 +11,7 @@
         "x-risk": "run",
         "x-version": 1
       },
-      "description": "Check the saved rows: outer nodes vs CAD faces, shared nodes (job ASM_MATCH) / 저장한 행 검사: component 외곽 노드 ↔ CAD 경계면 거리·공유 노드(작업 ASM_MATCH)",
+      "description": "Optional advanced check of the saved rows: outer nodes vs CAD faces, shared nodes (job ASM_MATCH, no time limit, cancellable) / 저장한 행 선택 검사(고급): component 외곽 노드 ↔ CAD 경계면 거리·공유 노드(작업 ASM_MATCH, 시간 제한 없음, 취소 가능)",
       "inputSchema": {
         "properties": {
           "match_id": {
@@ -44,7 +44,7 @@
         "x-risk": "run",
         "x-version": 1
       },
-      "description": "Confirm (save) a passed assembly match; consumers (DOE, template registration) use it / 통과한 조립 매칭 확정(저장) — DOE·템플릿 등록이 사용",
+      "description": "Confirm (save) the assembly match rows; the boundary check is optional (failed or outdated check only adds warnings) / 조립 매칭 확정(저장) — 경계 검사는 선택(불합격·낡음은 warnings에만 남음), DOE·템플릿 등록이 사용",
       "inputSchema": {
         "properties": {
           "match_id": {

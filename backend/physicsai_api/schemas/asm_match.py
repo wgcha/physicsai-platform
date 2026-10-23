@@ -70,8 +70,9 @@ class AsmMatch(Resp):
     stale_reason: str | None = None
     # 가산(additive) 필드 — 화면이 진행·실패 사유를 보이는 데 쓴다
     last_job: dict[str, Any] | None = None  # {id, mode, state, failure_code, failure_message, progress_pct}
-    warnings: list[dict[str, Any]] = Field(default_factory=list)
-    rows_complete: bool = False  # 모든 바디가 선택 또는 매칭 안 함 + 매칭 행 ≥1(검사 단추 상태)
+    warnings: list[dict[str, Any]] = Field(  # [{code, message}] — 목록 읽기 경고 + 확정 뒤 ASM_CHECK_FAILED_WARN·ASM_CHECK_STALE_WARN(AM-C3)
+        default_factory=list, description="경고 [{code, message}]. 확정된 매칭에는 검사 불합격(ASM_CHECK_FAILED_WARN)·검사가 현재 행과 다름(ASM_CHECK_STALE_WARN)이 올 수 있다")
+    rows_complete: bool = False  # 모든 바디가 선택 또는 매칭 안 함 + 매칭 행 ≥1(검사·저장 가능 조건)
     use_bodies: list[str] = Field(default_factory=list)  # use=true 파라미터가 있는 바디(① 출처만, "매칭 안 함" 불가 표시용)
     created_at: str | None = None
     updated_at: str | None = None

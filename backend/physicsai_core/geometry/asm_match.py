@@ -184,24 +184,28 @@ def rows_complete(rows: list[dict[str, Any]], excluded: list[str], bodies: list[
 # ---- 확정본 --------------------------------------------------------------------------------------------------
 
 
-def confirmed_document(match: dict[str, Any], parts: list[dict[str, Any]], check_doc: dict[str, Any], check_seq: int, check_sha: str,
-                       *, engine_version: str | None, user: str, now_iso: str) -> dict[str, Any]:
-    """§4.4 확정본. 행 순서 = bodies 순서, titles = 조립 PART 제목, check = 검사 요약(match_ratio_min·dist_max_mm)."""
+def confirmed_document(match: dict[str, Any], parts: list[dict[str, Any]], check_doc: dict[str, Any] | None, check_seq: int | None,
+                       check_sha: str | None, *, engine_version: str | None, user: str, now_iso: str,
+                       check_status: str | None = None, check_current: bool = False) -> dict[str, Any]:
+    """§4.4 확정본. 행 순서 = bodies 순서, titles = 조립 PART 제목. `check` = 검사 요약(match_ratio_min·dist_max_mm·status·current),
+    검사를 실행한 적이 없으면 null(검사는 선택, AM-C3)."""
     rows = [{"body": r["body"], "pids": [int(p) for p in r["pids"]], "titles": titles_of(r["pids"], parts)} for r in match["rows"]]
-    ratios = [float(r["match_ratio"]) for r in check_doc.get("rows") or [] if isinstance(r.get("match_ratio"), (int, float))]
-    dmax = [float(((r.get("dist_mm") or {}).get("max"))) for r in check_doc.get("rows") or []
+    cd = check_doc or {}
+    ratios = [float(r["match_ratio"]) for r in cd.get("rows") or [] if isinstance(r.get("match_ratio"), (int, float))]
+    dmax = [float(((r.get("dist_mm") or {}).get("max"))) for r in cd.get("rows") or []
             if isinstance((r.get("dist_mm") or {}).get("max"), (int, float))]
     assem = match.get("assem") or {}
     src = match.get("source") or {}
-    nodes = [str(n.get("rel")) for n in ((check_doc.get("assem") or {}).get("node_files") or []) if isinstance(n, dict) and n.get("rel")]
+    nodes = [str(n.get("rel")) for n in ((cd.get("assem") or {}).get("node_files") or []) if isinstance(n, dict) and n.get("rel")]
+    check = None if check_doc is None or check_seq is None else {
+        "seq": int(check_seq), "sha256": check_sha, "rows_sha256": cd.get("rows_sha256"), "status": check_status, "current": bool(check_current),
+        "match_ratio_min": min(ratios) if ratios else None, "dist_max_mm": max(dmax) if dmax else None}
     return {"schema_version": SCHEMA_VERSION, "engine": "native", "engine_version": engine_version, "match_id": match["match_id"],
             "cad": {"rel": src.get("cad_name"), "sha256": src.get("cad_sha256")},
             "features_sha256": src.get("features_sha256"), "unit_system": UNIT_SYSTEM,
             "assem": {"digest": assem.get("digest"), "starter": assem.get("starter"), "node_files": nodes},
             "rows": rows, "excluded_bodies": list(match.get("excluded_bodies") or []),
-            "check": {"seq": int(check_seq), "sha256": check_sha, "rows_sha256": check_doc.get("rows_sha256"),
-                      "match_ratio_min": min(ratios) if ratios else None, "dist_max_mm": max(dmax) if dmax else None},
-            "confirmed_by": user, "confirmed_at": now_iso}
+            "check": check, "confirmed_by": user, "confirmed_at": now_iso}
 
 
 def check_summary(check_doc: dict[str, Any]) -> dict[str, Any]:
