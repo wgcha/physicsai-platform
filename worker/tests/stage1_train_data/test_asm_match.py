@@ -65,11 +65,10 @@ def test_scan_rows_check_confirm_flow(p2_native, fake_record):
         r = c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=bad)
         assert r.status_code == 422 and r.json()["detail"]["code"] == "ASM_ROW_INVALID", r.text
         assert code in {p["code"] for p in r.json()["detail"]["problems"]}, (code, r.text)
-    # check 없이 confirm → 409, 행 미완성 check → 409
+    # 행 미완성이면 check·confirm 모두 409 ASM_ROWS_INCOMPLETE(검사 자체는 확정의 조건이 아니다, AM-C3)
     assert c.post(f"{API}/asm-matches/{mid}/check", headers=PW).json()["detail"]["code"] == "ASM_ROWS_INCOMPLETE"
+    assert c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW).json()["detail"]["code"] == "ASM_ROWS_INCOMPLETE"
     assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).json()["state"] == "DRAFT"
-    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "ASM_CHECK_REQUIRED"
     started = _check(c, w, mid)
     assert started["seq"] == 1
     m = _get(c, mid)
@@ -78,7 +77,7 @@ def test_scan_rows_check_confirm_flow(p2_native, fake_record):
     assert len(pts) == 3 and pts[0]["xyz"] == [0.0, 0.0, 0.0] and pts[0]["dist_mm"] == pytest.approx(0.04)
     glb = c.get(m["check"]["glb_url"], headers=P)
     assert glb.status_code == 200 and glb.content[:4] == b"glTF"
-    # 행을 바꾸면 검사는 무효(current=false) → confirm 거부
+    # 행을 바꾸면 검사는 무효(current=false)
     assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json={"rows": ROWS["rows"][::-1], "excluded_bodies": []}).status_code == 200
     m = _get(c, mid)
     assert m["state"] == "CHECKED" and m["check"]["current"] is True  # 서버가 정규화(바디 순서) → 같은 내용이면 검사는 유효
@@ -87,24 +86,47 @@ def test_scan_rows_check_confirm_flow(p2_native, fake_record):
     assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json={"rows": [{"body": "A", "pids": [3000002]}, {"body": "B", "pids": [3000001]}],
                                                                      "excluded_bodies": []}).json()["state"] == "DRAFT"  # 내용이 바뀌면 검사 무효
     assert _get(c, mid)["check"]["current"] is False
-    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "ASM_CHECK_REQUIRED"
     assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).status_code == 200
     _check(c, w, mid)
     r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
     assert r.status_code == 200 and r.json()["state"] == "CONFIRMED" and r.json()["confirmed"]["sha256"]
+    assert not [w for w in r.json()["warnings"] if w["code"].startswith("ASM_CHECK_")]  # 통과한 검사 = 경고 없음
     assert c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW).json()["state"] == "CONFIRMED"  # 멱등
     assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).json()["detail"]["code"] == "ASM_MATCH_CONFIRMED"
     doc = json.loads((ai / "am1" / "asm_match" / mid / "asm_match.json").read_text())
     assert doc["cad"]["rel"] == "bracket.step" or doc["cad"]["rel"].endswith(".step")
-    assert [r["body"] for r in doc["rows"]] and doc["check"]["rows_sha256"]
+    assert [r["body"] for r in doc["rows"]] and doc["check"]["rows_sha256"] and doc["check"]["status"] == "PASS" and doc["check"]["current"] is True
     # 목록(가산 API): 최신순·source 필터·latest
     lst = c.get(f"{API}/studies/{sid}/asm-matches", headers=P, params={"source": "train", "latest": "true"}).json()
     assert [x["match_id"] for x in lst["items"]] == [mid]
     assert c.get(f"{API}/studies/{sid}/asm-matches", headers=P, params={"source": "path"}).json()["items"] == []
 
 
-def test_failed_check_is_data_and_blocks_confirm(p2_native, monkeypatch):
+def _codes(m: dict) -> set[str]:
+    return {w["code"] for w in m["warnings"]}
+
+
+def test_confirm_without_check_is_allowed(p2_native):
+    """AM-C3: 경계 검사는 선택 — 검사 없이 확정되고(경고 없음), 확정본 check = null, 하류 DOE도 그대로 동작한다."""
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    sid = study(c, "am2a")
+    proj, asm = _project(ai, "am2a")
+    _extract(c, w, sid, proj)
+    mid = _scan(c, w, sid, asm)
+    assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).status_code == 200
+    assert _get(c, mid)["check"] is None
+    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
+    assert r.status_code == 200 and r.json()["state"] == "CONFIRMED" and r.json()["check"] is None, r.text
+    assert not [x for x in r.json()["warnings"] if x["code"].startswith("ASM_CHECK_")]
+    doc = json.loads((ai / "am2a" / "asm_match" / mid / "asm_match.json").read_text())
+    assert doc["check"] is None and [x["body"] for x in doc["rows"]] == ["A", "B"] and doc["assem"]["digest"].startswith("sha256:")
+    assert _doe(c, w, sid, asm, asm_match_id=mid)["result"]["run_count"] == 3  # ①-3 DOE는 검사 통과를 요구하지 않는다
+    # 확정 뒤에는 검사도 행 저장도 막힌다(확정본 불변)
+    assert c.post(f"{API}/asm-matches/{mid}/check", headers=PW).json()["detail"]["code"] == "ASM_MATCH_CONFIRMED"
+
+
+def test_failed_check_is_data_and_only_warns_on_confirm(p2_native, monkeypatch):
     c, mk, ai, lc, _d = p2_native
     w = mk()
     sid = study(c, "am2")
@@ -116,12 +138,103 @@ def test_failed_check_is_data_and_blocks_confirm(p2_native, monkeypatch):
     _check(c, w, mid)  # rows가 있는 FAIL = 작업 SUCCEEDED(결과 데이터)
     m = _get(c, mid)
     assert m["check"]["status"] == "FAIL" and m["check"]["code"] == "ASM_BOUNDARY_MISMATCH" and m["state"] == "DRAFT"
-    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "ASM_CHECK_REQUIRED"
-    monkeypatch.setenv("FAKE_PAICAD_FAIL", "asm_check_norows:ASM_INCLUDE_MISSING")  # rows 없는 FAIL = 작업 FAILED
-    r = c.post(f"{API}/asm-matches/{mid}/check", headers=PW)
+    assert not _codes(m) & {"ASM_CHECK_FAILED_WARN", "ASM_CHECK_STALE_WARN"}  # 확정 전에는 화면이 검사 결과를 직접 보인다
+    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)  # FAIL이어도 확정은 허용 + 경고
+    assert r.status_code == 200 and r.json()["state"] == "CONFIRMED", r.text
+    assert "ASM_CHECK_FAILED_WARN" in _codes(r.json()) and "ASM_CHECK_STALE_WARN" not in _codes(r.json())
+    assert "ASM_CHECK_FAILED_WARN" in _codes(_get(c, mid))  # 조회에도 유지
+    doc = json.loads((ai / "am2" / "asm_match" / mid / "asm_match.json").read_text())
+    assert doc["check"]["status"] == "FAIL" and doc["check"]["current"] is False
+    # rows 없는 FAIL = 작업 FAILED(별도 묶음)
+    mid2 = _scan(c, w, sid, asm)
+    assert c.put(f"{API}/asm-matches/{mid2}/rows", headers=PW, json=ROWS).status_code == 200
+    monkeypatch.setenv("FAKE_PAICAD_FAIL", "asm_check_norows:ASM_INCLUDE_MISSING")
+    r = c.post(f"{API}/asm-matches/{mid2}/check", headers=PW)
     assert w.run_once_preview() == "FAILED"
     assert job(c, r.json()["job_id"])["failure_code"] == "ASM_INCLUDE_MISSING"
+
+
+def test_confirm_after_rows_changed_warns_stale_check(p2_native):
+    """검사 PASS 뒤 행을 바꾸고 확정 → 허용 + ASM_CHECK_STALE_WARN(검사가 현재 행과 다름)."""
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    sid = study(c, "am2b")
+    proj, asm = _project(ai, "am2b")
+    _extract(c, w, sid, proj)
+    mid = _scan(c, w, sid, asm)
+    assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).status_code == 200
+    _check(c, w, mid)
+    swapped = {"rows": [{"body": "A", "pids": [3000002]}, {"body": "B", "pids": [3000001]}], "excluded_bodies": []}
+    assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=swapped).json()["check"]["current"] is False
+    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
+    assert r.status_code == 200 and r.json()["state"] == "CONFIRMED", r.text
+    assert "ASM_CHECK_STALE_WARN" in _codes(r.json()) and "ASM_CHECK_FAILED_WARN" not in _codes(r.json())
+    assert [x["pids"] for x in r.json()["rows"]] == [[3000002], [3000001]]
+
+
+def test_confirm_keeps_stale_gate(p2_native):
+    """검사가 없어도 조립 트리가 바뀌면 확정은 409 ASM_MATCH_STALE(AM-C3은 STALE 규칙을 바꾸지 않는다)."""
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    sid = study(c, "am2c")
+    proj, asm = _project(ai, "am2c")
+    _extract(c, w, sid, proj)
+    mid = _scan(c, w, sid, asm)
+    assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).status_code == 200
+    (asm / "101_parts.inc").write_text("/PART/3000001\nCUSH_A\n/PART/3000002\nCUSH_B\n/PART/3000009\nPLATE_CHANGED\n")
+    r = c.post(f"{API}/asm-matches/{mid}/confirm", headers=PW)
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "ASM_MATCH_STALE"
+
+
+def test_check_job_can_be_cancelled_by_power_user(p2_native):
+    """AM-C3: 시간 제한이 없는 검사는 power 사용자가 [취소](POST /asm-matches/{id}/cancel)로 멈춘다(작업 취소 API는 관리자 전용). 행은 그대로."""
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    sid = study(c, "am2e")
+    proj, asm = _project(ai, "am2e")
+    _extract(c, w, sid, proj)
+    mid = _scan(c, w, sid, asm)
+    assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).status_code == 200
+    assert c.post(f"{API}/asm-matches/{mid}/cancel", headers=PW).json()["detail"]["code"] == "JOB_TERMINAL"  # 진행 중 작업 없음
+    started = c.post(f"{API}/asm-matches/{mid}/check", headers=PW).json()
+    assert _get(c, mid)["state"] == "CHECKING"
+    assert c.post(f"{API}/asm-matches/{mid}/cancel", headers=H("tok-general", write=True)).status_code == 403
+    r = c.post(f"{API}/asm-matches/{mid}/cancel", headers=PW)
+    assert r.status_code == 202, r.text
+    assert job(c, started["job_id"])["state"] == "CANCELED"
+    m = _get(c, mid)
+    assert m["state"] == "DRAFT" and m["check"] is None and m["last_job"]["state"] == "CANCELED"
+    assert [x["body"] for x in m["rows"]] == ["A", "B"]  # 표는 그대로
+    assert c.post(f"{API}/asm-matches/{mid}/cancel", headers=PW).json()["detail"]["code"] == "JOB_TERMINAL"
+    _check(c, w, mid)  # 취소 뒤 다시 검사할 수 있다(seq 증가)
+    assert _get(c, mid)["check"]["seq"] == 2 and _get(c, mid)["state"] == "CHECKED"
+
+
+def test_check_timeout_unlimited_and_parts_keeps_limit(p2_native, monkeypatch):
+    """AM-C3: asm check 시간 제한 기본 null(상한 없음), asm parts는 asm_match.timeout_s 유지. 설정으로 check에 상한을 줄 수도 있다."""
+    from physicsai_worker.steps import asm_match as step
+
+    c, mk, ai, lc, _d = p2_native
+    w = mk()
+    assert w.settings.asm_match.check_timeout_s is None and w.settings.asm_match.timeout_s == 600
+    seen: list[tuple[str, float | None]] = []
+    real = step.run_paicad
+
+    def spy(x, settings, key, values, **kw):
+        seen.append((key, kw.get("timeout_s", "unset")))
+        return real(x, settings, key, values, **kw)
+
+    monkeypatch.setattr(step, "run_paicad", spy)
+    sid = study(c, "am2d")
+    proj, asm = _project(ai, "am2d")
+    _extract(c, w, sid, proj)
+    mid = _scan(c, w, sid, asm)
+    assert c.put(f"{API}/asm-matches/{mid}/rows", headers=PW, json=ROWS).status_code == 200
+    _check(c, w, mid)
+    assert seen == [("paicad_asm_parts", 600.0), ("paicad_asm_check", None)]
+    w.settings.asm_match.check_timeout_s = 90.0
+    _check(c, w, mid)
+    assert seen[-1] == ("paicad_asm_check", 90.0)
 
 
 def test_scan_failure_and_unsupported_sources(p2_native, monkeypatch):

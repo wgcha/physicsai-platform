@@ -1,4 +1,4 @@
-// 조립 매칭 표(asm-match.md §3.2): 행 = STEP 바디, 옆 열 = 조립 component(다중 선택 1:N, TETRA4만), 판정·거리(검사 후).
+// 조립 매칭 표(asm-match.md §3.2): 행 = STEP 바디, 옆 열 = 조립 component(다중 선택 1:N, TETRA4만). 판정·거리 열은 고급(경계 검사)을 펼쳤을 때만(AM-C3).
 import type { AsmMatch } from "../../api";
 import { EXCLUDE_LABEL, addPart, bodySummary, distText, excludeBlock, partChoice, partLabel, removePart, rowVerdict, setExcluded, type Draft, type RowNotes } from "../../lib/asmMatch";
 
@@ -10,7 +10,7 @@ const VERDICT: Record<ReturnType<typeof rowVerdict>, { text: string; cls: string
 };
 
 export function AsmMatchTable({
-  match, draft, onChange, readOnly, notes, selected, onSelect, dirty,
+  match, draft, onChange, readOnly, notes, selected, onSelect, dirty, showCheck = false,
 }: {
   match: AsmMatch;
   draft: Draft;
@@ -22,17 +22,19 @@ export function AsmMatchTable({
   onSelect: (body: string) => void;
   /** 마지막 검사 뒤 표를 바꿨는가 */
   dirty: boolean;
+  /** 판정·거리 열 표시(고급 영역이 펼쳐진 때) */
+  showCheck?: boolean;
 }) {
   const rec = new Set(match.recommend.flatMap((r) => r.pids));
   const parts = new Map(match.parts.map((p) => [p.pid, p]));
   return (
-    <table className="asm-table" aria-label="조립 매칭 표">
+    <table className={showCheck ? "asm-table with-check" : "asm-table"} aria-label="조립 매칭 표">
       <thead>
         <tr>
           <th>STEP 바디</th>
           <th>조립 component</th>
-          <th>판정</th>
-          <th>거리</th>
+          {showCheck && <th>판정</th>}
+          {showCheck && <th>거리</th>}
         </tr>
       </thead>
       <tbody>
@@ -96,12 +98,16 @@ export function AsmMatchTable({
                   </div>
                 )}
               </td>
-              <td className={v.cls} data-testid={`asm-verdict-${b.body}`}>
-                {v.text}
-              </td>
-              <td className="small mono" data-testid={`asm-dist-${b.body}`}>
-                {cr && rowVerdict(match, b.body, pids, dirty) !== "need" ? distText(cr) : "–"}
-              </td>
+              {showCheck && (
+                <td className={v.cls} data-testid={`asm-verdict-${b.body}`}>
+                  {v.text}
+                </td>
+              )}
+              {showCheck && (
+                <td className="small mono" data-testid={`asm-dist-${b.body}`}>
+                  {cr && rowVerdict(match, b.body, pids, dirty) !== "need" ? distText(cr) : "–"}
+                </td>
+              )}
             </tr>
           );
         })}

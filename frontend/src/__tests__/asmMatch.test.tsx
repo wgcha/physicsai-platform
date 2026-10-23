@@ -1,4 +1,5 @@
-// v0.2.9 조립 매칭 화면(asm-match.md §3.2·§6.5): 표 편집(1:N)·N:1 차단·추천 채움·검사 결과(일치율·거리·공유 노드)·원점 차이 차단·저장 → ①-3 Native DOE 문구 전환.
+// v0.2.9 조립 매칭 화면(asm-match.md §3.2·§6.5) + v0.2.10 AM-C3: 표 편집(1:N)·N:1 차단·추천 자동 채움·검사 없이 저장·
+// 고급(접힘) 경계 검사(일치율·거리·공유 노드·원점 차이)와 불합격 경고(저장은 막지 않음)·검사 취소 → ①-3 Native DOE 문구 전환.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { render } from "@testing-library/react";
@@ -6,7 +7,7 @@ import { TestApp } from "../app/App";
 import { renderApp, STUDY } from "../test/render";
 import type { MockServer } from "../mock/server";
 import { nativeTrainParams } from "../mock/geometry";
-import { ASM_ERROR_TEXT, ASM_FIRST_TEXT, ASM_PROBLEM_TEXT, addPart, excludeBlock, isAsmMissing, rowNotes, stateLabel, worstPoints, asmCodeText, draftProblems, failLines, partChoice, recommendDraft, removePart, saveBlock, setExcluded, suggestText, toPut, usedBy } from "../lib/asmMatch";
+import { ASM_ERROR_TEXT, ASM_FIRST_TEXT, ASM_PROBLEM_TEXT, addPart, checkNotice, excludeBlock, isAsmMissing, rowNotes, stateLabel, worstPoints, asmCodeText, draftProblems, failLines, partChoice, recommendDraft, removePart, saveBlock, setExcluded, suggestText, toPut, usedBy } from "../lib/asmMatch";
 import { ApiError, errorMessage, type AsmCheckRow, type AsmMatch, type AsmPart } from "../api";
 import { nearestScreenPoint } from "../stages/stage4/geomview/viewerCore";
 import { err } from "../mock/route";
@@ -43,8 +44,11 @@ async function check(ctx: Awaited<ReturnType<typeof open>>) {
   fireEvent.click(btn(ctx.card, "검사"));
   await waitFor(() => expect(ctx.server.jobs.filter((j) => j.job_type === "ASM_MATCH").length).toBe(2));
   act(() => ctx.server.finishAll());
-  await waitFor(() => expect(within(ctx.card).getByTestId("asm-state").textContent).toMatch(/^(검사 완료|검사 결과 불일치)/));
+  await waitFor(() => expect(within(ctx.card).getByTestId("asm-state").textContent).toMatch(/^(검사 통과|초안)/));
+  await waitFor(() => expect(within(ctx.card).getByTestId("asm-verdict-CUSH_L")).toBeTruthy()); // 검사하면 고급이 펼쳐져 판정 열이 보인다
 }
+const advanced = (card: HTMLElement) => within(card).getByTestId("asm-advanced") as HTMLDetailsElement;
+const matchCount = (ctx: Awaited<ReturnType<typeof open>>) => ctx.server.jobs.filter((j) => j.job_type === "ASM_MATCH").length;
 
 describe("조립 매칭 카드", () => {
   afterEach(() => {
@@ -63,8 +67,30 @@ describe("조립 매칭 카드", () => {
     expect(within(ctx.card).getByTestId("asm-recommended")).toBeTruthy();
     expect(within(ctx.card).getByTestId("asm-summary").textContent).toContain("component 6개(TETRA4 4개)");
     expect(ctx.card.textContent).toContain("매칭하지 않은 component 4개는 바꾸지 않습니다");
-    // 저장 전에는 검사 필요 안내만 — 저장은 막혀 있다
-    expect(btn(ctx.card, "저장").disabled).toBe(true);
+    // AM-C3: 추천으로 모든 바디가 채워지면 검사 없이 바로 저장할 수 있다. 검사는 고급(기본 접힘) 안에만 있다
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
+    expect(advanced(ctx.card).open).toBe(false);
+    expect(advanced(ctx.card).textContent).toContain("고급 — 경계 검사(선택)");
+    expect(within(advanced(ctx.card)).getByRole("button", { name: "검사" })).toBeTruthy();
+    expect(advanced(ctx.card).contains(btn(ctx.card, "저장"))).toBe(false);
+    expect(advanced(ctx.card).textContent).toContain("오래 걸릴 수 있음(대형 모델은 수십 분)");
+    expect(within(ctx.card).queryByTestId("asm-verdict-CUSH_L")).toBeNull(); // 판정·거리 열은 고급을 펼칠 때만
+    expect(within(ctx.card).queryByTestId("asm-check-warning")).toBeNull();
+  });
+
+  it("기본 흐름 = 목록 읽기 → 추천 자동 채움 → [저장]만: 검사 작업 없이 PUT rows → confirm, 상태 '저장됨'", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    expect(ctx.calls.some((c) => c.method === "PUT")).toBe(false); // 추천은 화면 초안 — 저장 전에는 서버에 쓰지 않는다
+    fireEvent.click(btn(ctx.card, "저장"));
+    await within(ctx.card).findByTestId("asm-confirmed");
+    const put = ctx.calls.find((c) => c.method === "PUT")!;
+    expect(put.body).toEqual({ rows: [{ body: "CUSH_L", pids: [3000001] }, { body: "CUSH_R", pids: [3000002] }], excluded_bodies: [] });
+    expect(ctx.calls.findIndex((c) => c.method === "PUT")).toBeLessThan(ctx.calls.findIndex((c) => c.path.endsWith("/confirm")));
+    expect(ctx.calls.some((c) => c.path.endsWith("/check"))).toBe(false);
+    expect(matchCount(ctx)).toBe(1); // 목록 읽기 작업뿐 — 검사 작업 없음
+    expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("저장됨");
+    expect(within(ctx.card).queryByTestId("asm-warnings")).toBeNull(); // 검사를 안 했으니 경고 없음
   });
 
   it("표 편집: 1:N 추가·빼기·'매칭 안 함'(사용 파라미터가 있으면 불가) → 검사 전 PUT rows", async () => {
@@ -100,40 +126,47 @@ describe("조립 매칭 카드", () => {
     expect(within(ctx.card).getByTestId("asm-chips-CUSH_L").textContent).toContain("PART 3000001");
   });
 
-  it("추천 채움: 모두 비워도 [추천 적용]이 추천(1:1 초안)을 다시 채운다 · 미결정 바디가 있으면 검사 불가+사유", async () => {
+  it("추천 채움: 모두 비워도 [추천 적용]이 추천(1:1 초안)을 다시 채운다 · 미결정 바디가 있으면 검사·저장 불가+사유", async () => {
     const ctx = await open();
     await scan(ctx);
     fireEvent.click(within(ctx.card).getByLabelText("CUSH_L에서 PART 3000001 빼기"));
     expect(btn(ctx.card, "검사").disabled).toBe(true);
+    expect(btn(ctx.card, "저장").disabled).toBe(true);
     expect(within(ctx.card).getByTestId("asm-block").textContent).toContain("component를 고르지 않은 바디: CUSH_L");
+    expect(within(ctx.card).getByTestId("asm-check-block").textContent).toContain("component를 고르지 않은 바디: CUSH_L");
     fireEvent.click(btn(ctx.card, "추천 적용"));
     expect(within(ctx.card).getByTestId("asm-chips-CUSH_L").textContent).toContain("PART 3000001");
     expect(btn(ctx.card, "검사").disabled).toBe(false);
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
   });
 
-  it("검사 PASS: 판정·일치율·최대/p95 거리·허용오차, 3D 범례 없이도 표시, 저장 → 저장됨", async () => {
+  it("고급 검사 PASS: 판정·일치율·최대/p95 거리·허용오차(고급이 펼쳐짐), 표를 바꾸면 '검사 필요' + 낡음 안내지만 저장은 가능", async () => {
     const ctx = await open();
     await scan(ctx);
     pick(ctx.card, "CUSH_R", 3000003);
     await check(ctx);
+    expect(advanced(ctx.card).open).toBe(true);
     for (const b of ["CUSH_L", "CUSH_R"]) {
       expect(within(ctx.card).getByTestId(`asm-verdict-${b}`).textContent).toBe("일치");
       expect(within(ctx.card).getByTestId(`asm-dist-${b}`).textContent).toContain("최대 0.041 · p95 0.011 mm · 일치율 99.9%");
     }
     expect(within(ctx.card).getByTestId("asm-dist-CUSH_L").textContent).toContain("허용 0.05 mm");
-    // 표를 바꾸면 검사 필요 + 저장 불가
+    expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("검사 통과 — 저장 전");
+    expect(within(ctx.card).queryByTestId("asm-check-warning")).toBeNull();
+    // 표를 바꾸면 검사 필요 + 낡음 안내 — 저장은 막지 않는다
     fireEvent.click(within(ctx.card).getByLabelText("CUSH_R에서 PART 3000003 빼기"));
     expect(within(ctx.card).getByTestId("asm-verdict-CUSH_R").textContent).toBe("검사 필요");
-    expect(btn(ctx.card, "저장").disabled).toBe(true);
+    expect(within(ctx.card).getByTestId("asm-check-warning").getAttribute("data-code")).toBe("ASM_CHECK_STALE_WARN");
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
     pick(ctx.card, "CUSH_R", 3000003);
-    await waitFor(() => expect(btn(ctx.card, "저장").disabled).toBe(false));
+    expect(within(ctx.card).queryByTestId("asm-check-warning")).toBeNull();
     fireEvent.click(btn(ctx.card, "저장"));
     await within(ctx.card).findByTestId("asm-confirmed");
     expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("저장됨");
     expect(btn(ctx.card, "목록 읽기").disabled).toBe(false);
   });
 
-  it("검사 FAIL(바디 바꿔 매칭): 불일치·일치율·최대 거리 문구, 저장 불가", async () => {
+  it("검사 FAIL(바디 바꿔 매칭): 불일치·일치율·최대 거리 문구 + 경고, 저장은 막지 않고 저장하면 경고(ASM_CHECK_FAILED_WARN)가 남는다", async () => {
     const ctx = await open();
     await scan(ctx);
     fireEvent.click(within(ctx.card).getByLabelText("CUSH_L에서 PART 3000001 빼기"));
@@ -143,10 +176,18 @@ describe("조립 매칭 카드", () => {
     await check(ctx);
     expect(within(ctx.card).getByTestId("asm-verdict-CUSH_L").textContent).toBe("불일치");
     expect(within(ctx.card).getByTestId("asm-fail-lines").textContent).toContain("외곽 노드가 CAD 경계면과 맞지 않습니다 — 일치율 31.2%, 최대 41.20 mm");
-    expect(btn(ctx.card, "저장").disabled).toBe(true);
+    expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("초안 — 경계 검사 불합격(저장은 가능)");
+    expect(within(ctx.card).getByTestId("asm-check-warning").getAttribute("data-code")).toBe("ASM_CHECK_FAILED_WARN");
+    expect(within(ctx.card).getByTestId("asm-check-warning").textContent).toContain("저장은 막지 않지만");
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
+    fireEvent.click(btn(ctx.card, "저장"));
+    await within(ctx.card).findByTestId("asm-confirmed");
+    const warn = within(ctx.card).getByTestId("asm-warnings");
+    expect(warn.textContent).toContain("불합격한 행이 있는 채로 저장했습니다");
+    expect(within(ctx.card).queryByTestId("asm-check-warning")).toBeNull(); // 확정 뒤에는 서버 warnings 한 곳에서만 보인다
   });
 
-  it("원점 차이: CUSH_L 불일치 + 'X 10.0 mm 어긋남' 안내, 저장 불가(서버도 409 ASM_CHECK_REQUIRED)", async () => {
+  it("원점 차이: CUSH_L 불일치 + 'X 10.0 mm 어긋남' 안내를 보이되 저장은 막지 않는다(경고만, 서버 confirm 200)", async () => {
     const ctx = await open("_offset");
     await scan(ctx);
     pick(ctx.card, "CUSH_R", 3000003);
@@ -154,21 +195,44 @@ describe("조립 매칭 카드", () => {
     expect(within(ctx.card).getByTestId("asm-verdict-CUSH_L").textContent).toBe("불일치");
     expect(within(ctx.card).getByTestId("asm-verdict-CUSH_R").textContent).toBe("일치");
     expect(within(ctx.card).getByTestId("asm-fail-lines").textContent).toContain("CAD가 조립보다 X 10.0 mm 어긋나 있습니다 — CAD를 조립과 같은 원점·mm로 다시 내보내세요(저장 불가)");
-    expect(btn(ctx.card, "저장").disabled).toBe(true);
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
     const id = [...ctx.server.jobs].reverse().find((j) => j.job_type === "ASM_MATCH")!.params.match_id as string;
     const res = await fetch(`/physicsai/api/asm-matches/${id}/confirm`, { method: "POST", headers: { "X-PhysicsAI-Request": "1" } });
-    expect(res.status).toBe(409);
-    expect(((await res.json()) as { detail: { code: string } }).detail.code).toBe("ASM_CHECK_REQUIRED");
+    expect(res.status).toBe(200);
+    const m = (await res.json()) as AsmMatch;
+    expect(m.state).toBe("CONFIRMED");
+    expect(m.warnings.map((w) => w.code)).toEqual(["ASM_CHECK_FAILED_WARN"]);
   });
 
-  it("노드 공유: 상대 PART(id·제목)와 노드 수 안내, 저장 불가", async () => {
+  it("노드 공유: 상대 PART(id·제목)와 노드 수 안내(고급), 저장은 가능", async () => {
     const ctx = await open("_shared");
     await scan(ctx);
     pick(ctx.card, "CUSH_R", 3000003);
     await check(ctx);
     expect(within(ctx.card).getByTestId("asm-verdict-CUSH_R").textContent).toBe("불일치");
     expect(within(ctx.card).getByTestId("asm-fail-lines").textContent).toContain("PART 2001(PRODUCT_TIE)과 노드 37개 공유");
-    expect(btn(ctx.card, "저장").disabled).toBe(true);
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
+  });
+
+  it("고급 검사 진행: '오래 걸릴 수 있음' 안내·진행 표시·[취소] → 작업이 멈추고 표는 그대로, 저장은 계속 가능", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    expect(within(ctx.card).queryByRole("button", { name: "취소" })).toBeNull();
+    fireEvent.click(btn(ctx.card, "검사"));
+    await waitFor(() => expect(matchCount(ctx)).toBe(2));
+    expect(advanced(ctx.card).open).toBe(true); // 검사하면 진행률·취소가 보이게 펼쳐진다
+    expect(within(ctx.card).getByTestId("asm-check-note").textContent).toContain("오래 걸릴 수 있음(대형 모델은 수십 분)");
+    expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("경계 검사 중");
+    expect(btn(ctx.card, "취소")).toBeTruthy();
+    expect(btn(ctx.card, "저장").disabled).toBe(true); // 진행 중에는 표를 바꿀 수 없다
+    fireEvent.click(btn(ctx.card, "취소"));
+    await waitFor(() => expect(ctx.calls.some((c) => c.method === "POST" && c.path.endsWith("/cancel"))).toBe(true));
+    await waitFor(() => expect(within(ctx.card).getByTestId("asm-state").textContent).toBe("초안 — 저장 전"));
+    expect(ctx.server.jobs.filter((j) => j.job_type === "ASM_MATCH").map((j) => j.state)).toEqual(["SUCCEEDED", "CANCELED"]);
+    expect(within(ctx.card).queryByRole("button", { name: "취소" })).toBeNull();
+    expect(within(ctx.card).getByTestId("asm-chips-CUSH_L").textContent).toContain("PART 3000001");
+    expect(btn(ctx.card, "저장").disabled).toBe(false);
+    expect(btn(ctx.card, "검사").disabled).toBe(false); // 취소 뒤 다시 검사할 수 있다
   });
 
   it("목록 읽기 실패(TETRA4 PART 없음): 코드를 한국어로 안내", async () => {
@@ -186,8 +250,7 @@ describe("조립 매칭 카드", () => {
     expect(within(ctx.doe).queryByTestId("asm-in-use")).toBeNull();
     await scan(ctx);
     pick(ctx.card, "CUSH_R", 3000003);
-    await check(ctx);
-    await waitFor(() => expect(btn(ctx.card, "저장").disabled).toBe(false));
+    expect(btn(ctx.card, "저장").disabled).toBe(false); // 검사 없이 저장(AM-C3)
     fireEvent.click(btn(ctx.card, "저장"));
     const line = await within(ctx.doe).findByTestId("asm-in-use");
     expect(line.textContent).toBe(`조립 매칭 사용 중 — ${ASSEM} · STEP 바디 2개`);
@@ -203,6 +266,7 @@ describe("조립 매칭 카드", () => {
     const body = (ctx.calls.find((c) => (c.body as { job_type?: string } | null)?.job_type === "TD_DOE_GEN")!.body as { params: Record<string, unknown> }).params;
     expect(body.radioss_assem_path).toBe(ASSEM);
     expect(body.asm_match_id).toMatch(/^am-/);
+    expect(matchCount(ctx)).toBe(1); // 검사 작업 없이도 ①-3 DOE가 쓸 수 있다
   });
 });
 
@@ -227,9 +291,10 @@ describe("조립 매칭 — 서버 API 연동(확정 API)", () => {
     const card = await screen.findByRole("region", { name: "조립 매칭" });
     await within(card).findByRole("table", { name: "조립 매칭 표" });
     expect(calls[0]).toMatch(/\/studies\/s-cushion\/asm-matches\?source=train&latest=true&limit=1$/);
-    expect(within(card).getByTestId("asm-state").textContent).toBe("검사 완료");
+    expect(within(card).getByTestId("asm-state").textContent).toBe("검사 통과 — 저장 전");
     expect(within(card).getByTestId("asm-chips-CUSH_R").textContent).toContain("PART 3000003");
-    expect(within(card).getByTestId("asm-verdict-CUSH_L").textContent).toBe("일치");
+    expect((within(card).getByTestId("asm-advanced") as HTMLDetailsElement).open).toBe(false); // 복원해도 고급은 접힘
+    expect(within(card).queryByTestId("asm-verdict-CUSH_L")).toBeNull();
     expect((within(card).getByLabelText("조립 폴더") as HTMLInputElement).value).toBe(ASSEM);
     expect(Object.keys(localStorage).filter((k) => k.startsWith("physicsai.asmMatch"))).toEqual([]);
   });
@@ -266,7 +331,7 @@ describe("조립 매칭 — 서버 API 연동(확정 API)", () => {
         ? err(422, "ASM_ROW_INVALID", "매칭 표가 올바르지 않습니다", { problems: [{ code: "USE_PARAM", body: "CUSH_L" }, { code: "PID_DUPLICATE", body: "CUSH_R", pid: 3000001 }, { code: "ROWS_EMPTY" }] })
         : orig(m, p, q, b, h);
     pick(ctx.card, "CUSH_R", 3000003);
-    fireEvent.click(btn(ctx.card, "검사"));
+    fireEvent.click(btn(ctx.card, "저장"));
     expect((await within(ctx.card).findByTestId("asm-note-CUSH_L")).textContent).toBe(ASM_PROBLEM_TEXT.USE_PARAM);
     expect(within(ctx.card).getByTestId("asm-note-CUSH_R").textContent).toBe("PART 3000001: 다른 행이 이미 쓰는 component입니다");
     expect(within(ctx.card).getByTestId("asm-notes-general").textContent).toBe(ASM_PROBLEM_TEXT.ROWS_EMPTY);
@@ -276,12 +341,12 @@ describe("조립 매칭 — 서버 API 연동(확정 API)", () => {
     expect(within(ctx.card).queryByTestId("asm-note-CUSH_L")).toBeNull();
   });
 
-  it("check.current=false면 '검사가 최신이 아님, 다시 검사' 안내 + 판정 '검사 필요' + 저장 불가", async () => {
+  it("check.current=false면 '검사가 최신이 아님' 경고(저장은 가능) + 고급을 펼치면 판정 '검사 필요'", async () => {
     const ctx = await open();
     await scan(ctx);
     pick(ctx.card, "CUSH_R", 3000003);
     await check(ctx);
-    expect(within(ctx.card).queryByTestId("asm-check-stale")).toBeNull();
+    expect(within(ctx.card).queryByTestId("asm-check-warning")).toBeNull();
     const orig = ctx.server.handle.bind(ctx.server);
     ctx.server.handle = (m, p, q, b, h) => {
       const r = orig(m, p, q, b, h);
@@ -297,14 +362,20 @@ describe("조립 매칭 — 서버 API 연동(확정 API)", () => {
     ctx.unmount();
     render(<TestApp path={`${STUDY}/1`} />);
     const card = await screen.findByRole("region", { name: "조립 매칭" });
-    expect((await within(card).findByTestId("asm-check-stale")).textContent).toBe("검사가 최신이 아님 — 다시 검사하세요");
-    expect(within(card).getByTestId("asm-verdict-CUSH_L").textContent).toBe("검사 필요");
-    expect(within(card).getByTestId("asm-state").textContent).toBe("표를 바꿈 — 다시 검사");
-    expect(btn(card, "저장").disabled).toBe(true);
+    const warn = await within(card).findByTestId("asm-check-warning");
+    expect(warn.textContent).toBe("경계 검사가 최신이 아님 — 고급 영역에서 다시 검사할 수 있습니다");
+    expect(warn.getAttribute("data-code")).toBe("ASM_CHECK_STALE_WARN");
+    expect(within(card).getByTestId("asm-state").textContent).toBe("초안 — 저장 전");
+    expect(btn(card, "저장").disabled).toBe(false);
     expect(btn(card, "검사").disabled).toBe(false);
+    const adv = within(card).getByTestId("asm-advanced") as HTMLDetailsElement;
+    expect(adv.open).toBe(false);
+    adv.open = true;
+    fireEvent(adv, new Event("toggle"));
+    expect((await within(card).findByTestId("asm-verdict-CUSH_L")).textContent).toBe("검사 필요");
   });
 
-  it("서버가 current=false로 돌려주는 PUT 뒤의 상태(검사 결과는 남음) — 확정 409 ASM_CHECK_REQUIRED", async () => {
+  it("검사 PASS 뒤 행을 바꾼 상태(current=false)로 확정해도 200 + ASM_CHECK_STALE_WARN(서버가 허용)", async () => {
     const ctx = await open();
     await scan(ctx);
     pick(ctx.card, "CUSH_R", 3000003);
@@ -316,7 +387,19 @@ describe("조립 매칭 — 서버 API 연동(확정 API)", () => {
     expect(m.check?.current).toBe(false);
     expect(m.rows_complete).toBe(true);
     const res = await fetch(`/physicsai/api/asm-matches/${id}/confirm`, { method: "POST", headers: { "X-PhysicsAI-Request": "1" } });
-    expect(((await res.json()) as { detail: { code: string } }).detail.code).toBe("ASM_CHECK_REQUIRED");
+    expect(res.status).toBe(200);
+    const c = (await res.json()) as AsmMatch;
+    expect(c.state).toBe("CONFIRMED");
+    expect(c.warnings.map((w) => w.code)).toEqual(["ASM_CHECK_STALE_WARN"]);
+  });
+
+  it("행이 완전하지 않으면 확정은 409 ASM_ROWS_INCOMPLETE(검사와 무관한 확정 조건)", async () => {
+    const ctx = await open();
+    await scan(ctx);
+    const id = [...ctx.server.jobs].reverse().find((j) => j.job_type === "ASM_MATCH")!.params.match_id as string;
+    const res = await fetch(`/physicsai/api/asm-matches/${id}/confirm`, { method: "POST", headers: { "X-PhysicsAI-Request": "1" } });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { detail: { code: string } }).detail.code).toBe("ASM_ROWS_INCOMPLETE");
   });
 
   it("목록 읽기 실패는 last_job.failure_code를 한국어로", async () => {
@@ -378,7 +461,7 @@ describe("조립 매칭 ④ 등록 연결", () => {
     expect(reg(form).disabled).toBe(true);
   });
 
-  it("매칭(목록 읽기·검사·저장) 후 등록 → POST /param-sets에 asm_match_id(source=path 확정본), STEP·조립 경로는 이 폴더 기준", async () => {
+  it("매칭(목록 읽기·저장, 검사 없이) 후 등록 → POST /param-sets에 asm_match_id(source=path 확정본), STEP·조립 경로는 이 폴더 기준", async () => {
     const { server, form, find, calls } = await openRegister();
     await find();
     const emb = await within(form).findByTestId("asm-embedded");
@@ -390,11 +473,7 @@ describe("조립 매칭 ④ 등록 연결", () => {
     expect(create.radioss_assem_path).toBe(`${FOLDER}/RADIOSS_ASSEM`);
     expect(create.cad).toEqual({ kind: "path", path: `${FOLDER}/01_CAD/cushion_base.step` });
     pick(emb, "CUSH_R", 3000003);
-    await waitFor(() => expect(btn(emb, "검사").disabled).toBe(false));
-    fireEvent.click(btn(emb, "검사"));
-    await waitFor(() => expect(server.jobs.filter((j) => j.job_type === "ASM_MATCH").length).toBe(2));
-    act(() => server.finishAll());
-    await waitFor(() => expect(btn(emb, "저장").disabled).toBe(false));
+    await waitFor(() => expect(btn(emb, "저장").disabled).toBe(false)); // 검사 없이 저장(AM-C3)
     expect(reg(form).disabled).toBe(true); // 확정 전
     fireEvent.click(btn(emb, "저장"));
     expect((await within(emb).findByTestId("asm-confirmed")).textContent).toContain("템플릿 등록이 이 매칭을 씁니다");
@@ -416,11 +495,7 @@ describe("조립 매칭 ④ 등록 연결", () => {
     act(() => server.finishAll());
     await within(emb).findByRole("table", { name: "조립 매칭 표" });
     pick(emb, "CUSH_R", 3000003);
-    await waitFor(() => expect(btn(emb, "검사").disabled).toBe(false));
-    fireEvent.click(btn(emb, "검사"));
-    await waitFor(() => expect(server.jobs.filter((j) => j.job_type === "ASM_MATCH").length).toBe(2));
-    act(() => server.finishAll());
-    await waitFor(() => expect(btn(emb, "저장").disabled).toBe(false));
+    await waitFor(() => expect(btn(emb, "저장").disabled).toBe(false)); // 검사 없이 저장(AM-C3)
     fireEvent.click(btn(emb, "저장"));
     await within(emb).findByTestId("asm-confirmed");
     // 매칭 사용을 껐다 켜고 다시 찾기 → 카드가 새로 만들어져도 저장된 매칭을 되찾는다
@@ -504,21 +579,34 @@ describe("조립 매칭 순수 로직", () => {
   });
 
   it("오류 코드 한국어(계약 코드표): 서버 문구가 한국어면 그것 우선, 아니면 표", () => {
-    for (const c of ["ASM_BOUNDARY_MISMATCH", "ASM_SHARED_NODES", "ASM_OFFSET_SUSPECT", "ASM_UNIT_SUSPECT", "ASM_INCLUDE_OUTSIDE", "ASM_INCLUDE_MISSING", "ASM_NO_SOLID_PART", "ASM_TOO_MANY_PARTS", "ASM_MATCH_INVALID", "ASM_ROW_INVALID", "ASM_ROWS_INCOMPLETE", "ASM_CHECK_REQUIRED", "ASM_MATCH_CONFIRMED", "ASM_MATCH_STALE", "ASM_MATCH_UNSUPPORTED"])
+    for (const c of ["ASM_BOUNDARY_MISMATCH", "ASM_SHARED_NODES", "ASM_OFFSET_SUSPECT", "ASM_UNIT_SUSPECT", "ASM_INCLUDE_OUTSIDE", "ASM_INCLUDE_MISSING", "ASM_NO_SOLID_PART", "ASM_TOO_MANY_PARTS", "ASM_MATCH_INVALID", "ASM_ROW_INVALID", "ASM_ROWS_INCOMPLETE", "ASM_CHECK_FAILED_WARN", "ASM_CHECK_STALE_WARN", "ASM_MATCH_CONFIRMED", "ASM_MATCH_STALE", "ASM_MATCH_UNSUPPORTED"])
       expect(ASM_ERROR_TEXT[c], c).toMatch(/[가-힣]/);
     expect(asmCodeText("ASM_MATCH_STALE", "stale")).toContain("조립 폴더 또는 STEP이 바뀌었습니다");
     expect(asmCodeText("ASM_MATCH_STALE", "서버가 준 한국어 문구")).toBe("서버가 준 한국어 문구");
   });
 
-  it("원점·단위 진단 문구, 저장 조건(검사 PASS + 표 불변), ", () => {
+  it("원점·단위 진단 문구, 저장 조건(검사 불필요 — 행이 완전하면 저장 가능, AM-C3), 검사 경고", () => {
     expect(suggestText({ code: "ASM_OFFSET_SUSPECT", translate_mm: [10, -2.5, 0] })).toContain("X 10.0 · Y -2.5 mm 어긋나 있습니다");
     expect(suggestText({ code: "ASM_UNIT_SUSPECT", factor: 0.001 })).toContain("×0.001 배 차이");
     const row: AsmCheckRow = { body: "A", pids: [1], status: "FAIL", code: "ASM_BOUNDARY_MISMATCH", match_ratio: 0.5, tol_mm: 0.05, dist_mm: { mean: 1, p95: 2, p99: 3, max: 4 }, shared: { nodes: 0, parts: [] }, suggest: { code: "ASM_UNIT_SUSPECT", factor: 1000 } };
     expect(failLines(row)).toHaveLength(2);
-    const base = { ...m, state: "CHECKED", rows: [{ body: "A", pids: [1] }], excluded_bodies: ["B"], check: { seq: 1, status: "PASS", rows_sha256: "x", current: true, rows: [], glb_url: null, glb_artifact_id: null } } as unknown as AsmMatch;
-    expect(saveBlock(base, { pids: { A: [1] }, excluded: ["B"] })).toBeNull();
-    expect(saveBlock(base, { pids: { A: [1, 2] }, excluded: ["B"] })).toContain("검사를 다시 하세요");
-    expect(saveBlock({ ...base, check: { ...base.check!, status: "FAIL" } }, { pids: { A: [1] }, excluded: ["B"] })).toContain("통과");
+    const base = { ...m, state: "DRAFT", rows: [], excluded_bodies: [], check: null } as unknown as AsmMatch;
+    expect(saveBlock(base, { pids: { A: [1], B: [2] }, excluded: [] })).toBeNull(); // 검사 없이 저장 가능
+    expect(saveBlock(base, { pids: { A: [1] }, excluded: [] })).toContain("component를 고르지 않은 바디: B");
+    expect(saveBlock(base, { pids: {}, excluded: ["A", "B"] })).toContain("1개 이상");
+    expect(saveBlock({ ...base, state: "CONFIRMED" } as AsmMatch, { pids: { A: [1], B: [2] }, excluded: [] })).toBe("이미 저장되었습니다");
+    expect(saveBlock({ ...base, state: "CHECKING" } as AsmMatch, { pids: { A: [1], B: [2] }, excluded: [] })).toContain("진행 중");
+    // 검사 경고: 불합격·낡음 모두 경고일 뿐 저장은 막지 않는다
+    const withCheck = (status: "PASS" | "FAIL", current: boolean, rows = [{ body: "A", pids: [1] }, { body: "B", pids: [2] }]) =>
+      ({ ...base, state: "DRAFT", rows, check: { seq: 1, status, rows_sha256: "x", current, rows: [], glb_url: null, glb_artifact_id: null } }) as unknown as AsmMatch;
+    const d = { pids: { A: [1], B: [2] }, excluded: [] };
+    expect(checkNotice(base, d)).toBeNull();
+    expect(checkNotice(withCheck("PASS", true), d)).toBeNull();
+    expect(checkNotice(withCheck("FAIL", true), d)?.code).toBe("ASM_CHECK_FAILED_WARN");
+    expect(checkNotice(withCheck("PASS", false), d)?.code).toBe("ASM_CHECK_STALE_WARN");
+    expect(checkNotice(withCheck("FAIL", true), { pids: { A: [1, 2] }, excluded: [] })?.code).toBe("ASM_CHECK_STALE_WARN"); // 표를 바꿈 = 낡음
+    expect(checkNotice({ ...withCheck("FAIL", true), state: "CONFIRMED" } as AsmMatch, d)).toBeNull(); // 확정 뒤는 서버 warnings
+    expect(saveBlock(withCheck("FAIL", true), d)).toBeNull();
   });
 
   it("problems[].code 8종 → 행별 한국어 안내(알 수 없는 코드는 서버 문구)", () => {
@@ -537,8 +625,9 @@ describe("조립 매칭 순수 로직", () => {
     expect(rowNotes(null)).toEqual({ byBody: {}, general: [] });
   });
 
-  it("추가 오류 코드 한국어(BUSY·INCOMPLETE·CHECK_REQUIRED·STALE·UNSUPPORTED)·PREREQUISITE_MISSING 문구", () => {
-    for (const c of ["ASM_MATCH_BUSY", "ASM_ROWS_INCOMPLETE", "ASM_CHECK_REQUIRED", "ASM_MATCH_STALE", "ASM_MATCH_UNSUPPORTED"]) expect(asmCodeText(c, "english"), c).toMatch(/[가-힣]/);
+  it("추가 오류 코드 한국어(BUSY·INCOMPLETE·STALE·UNSUPPORTED)·PREREQUISITE_MISSING 문구, 폐지된 ASM_CHECK_REQUIRED는 표에 없다", () => {
+    expect(ASM_ERROR_TEXT.ASM_CHECK_REQUIRED).toBeUndefined();
+    for (const c of ["ASM_MATCH_BUSY", "ASM_ROWS_INCOMPLETE", "ASM_MATCH_STALE", "ASM_MATCH_UNSUPPORTED"]) expect(asmCodeText(c, "english"), c).toMatch(/[가-힣]/);
     expect(ASM_FIRST_TEXT).toBe("조립 매칭을 먼저 하세요");
     expect(isAsmMissing({ code: "PREREQUISITE_MISSING", missing: ["PARAM_SET"] })).toBe(false);
     expect(isAsmMissing({ code: "PREREQUISITE_MISSING", missing: ["ASM_MATCH"] })).toBe(true);
@@ -557,11 +646,11 @@ describe("조립 매칭 순수 로직", () => {
     expect(nearestScreenPoint(screen2, 50, 50, 8)).toBe(-1);
   });
 
-  it("상태 알약: DRAFT는 마지막 검사 유무·최신 여부로 구분", () => {
-    const ck = (current: boolean) => ({ state: "DRAFT", check: { current } }) as unknown as AsmMatch;
-    expect(stateLabel({ state: "DRAFT", check: null } as unknown as AsmMatch)).toBe("초안 — 검사 전");
-    expect(stateLabel(ck(true))).toContain("불일치");
-    expect(stateLabel(ck(false))).toContain("다시 검사");
+  it("상태 알약: DRAFT는 최신 검사가 불합격일 때만 구분(저장은 막지 않는다)", () => {
+    const ck = (current: boolean, status = "FAIL") => ({ state: "DRAFT", check: { current, status } }) as unknown as AsmMatch;
+    expect(stateLabel({ state: "DRAFT", check: null } as unknown as AsmMatch)).toBe("초안 — 저장 전");
+    expect(stateLabel(ck(true))).toContain("불합격(저장은 가능)");
+    expect(stateLabel(ck(false))).toBe("초안 — 저장 전");
     expect(stateLabel({ state: "CONFIRMED", check: null } as unknown as AsmMatch)).toBe("저장됨");
   });
 });

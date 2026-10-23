@@ -1,5 +1,6 @@
 // 조립 매칭 카드(asm-match.md §3·§6.5, ①-2와 ①-3 사이·④ 등록 폼 공용):
-// 조립 폴더 지정 → [목록 읽기](ASM_MATCH 작업) → 매칭 표(추천은 초안, 확정은 사용자) → [검사](경계 일치) → 3D(거리 색·worst) → [저장].
+// 조립 폴더 지정 → [목록 읽기](ASM_MATCH 작업) → 추천으로 채운 매칭 표(확인·수정) → [저장].
+// 경계 검사(AM-C3)는 "고급"(기본 접힘) 안의 선택 기능: [검사]·진행률·[취소]·판정·거리·3D(거리 색·worst). 불합격이어도 저장은 막지 않는다.
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, api, errorMessage, type AsmMatch, type AsmMatchCreate, type Job } from "../../api";
 import { useStudy } from "../../app/StudyContext";
@@ -10,8 +11,8 @@ import { PathInput } from "../../components/PathInput";
 import { isTerminal } from "../../lib/format";
 import { POLL } from "../../lib/poll";
 import {
-  ASM_FIRST_TEXT, CHECK_STALE_TEXT, asmCodeText, checkBlock, draftProblems, emptyDraft, failLines, initialDraft, isAsmMissing, problemsOf, putKey, recommendDraft, rowNotes,
-  saveBlock, stateLabel, toPut, type Draft, type RowNotes,
+  ASM_FIRST_TEXT, CHECK_SLOW_TEXT, asmCodeText, checkBlock, checkNotice, draftProblems, emptyDraft, failLines, initialDraft, isAsmMissing, problemsOf, putKey, recommendDraft,
+  rowNotes, saveBlock, stateLabel, toPut, type Draft, type RowNotes,
 } from "../../lib/asmMatch";
 import { AsmMatchTable } from "./AsmMatchTable";
 import { AsmMatchViewer } from "./AsmMatchViewer";
@@ -43,6 +44,7 @@ export function AsmMatchCard({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [advOpen, setAdvOpen] = useState(false); // 고급(경계 검사) 접힘 — 기본 접힘
   const [notes, setNotes] = useState<RowNotes>(NO_NOTES);
   const confirmedCb = useRef(onConfirmed);
   confirmedCb.current = onConfirmed;
@@ -86,6 +88,7 @@ export function AsmMatchCard({
         }
         confirmedCb.current?.(m.state === "CONFIRMED" ? m : null);
         const lj = m.last_job;
+        if (m.state === "CHECKING") setAdvOpen(true); // 진행 중인 검사가 있으면 진행률·[취소]가 보이게 펼친다
         if (lj && (m.state === "SCANNING" || m.state === "CHECKING")) void follow(lj.id, m.match_id, lj.mode === "parts");
       })
       .catch(() => undefined);
@@ -135,21 +138,33 @@ export function AsmMatchCard({
       await follow(r.job_id, r.match_id, true);
     });
 
+  /** 고급: 경계 검사(선택). 표를 초안으로 저장한 뒤 검사한다 — 검사는 서버에 저장된 표 기준 */
   const check = () =>
     guard(async () => {
       if (!match) return;
       const put = toPut(match, draft);
       setNotes(NO_NOTES);
-      // 표를 저장(초안)한 뒤 검사한다 — 검사는 서버에 저장된 표 기준
+      setAdvOpen(true);
       if (putKey(put) !== putKey({ rows: match.rows, excluded_bodies: match.excluded_bodies }) || match.state !== "DRAFT") setMatch(await api.putAsmRows(match.match_id, put));
       const r = await api.checkAsmMatch(match.match_id);
       await load(match.match_id, false);
       await follow(r.job_id, match.match_id, false);
     });
 
+  /** 고급: 진행 중인 검사 취소(power — 작업 취소 API는 관리자 전용이라 전용 경로). 작업이 CANCELED로 끝나면 표는 그대로 다시 읽는다 */
+  const cancelCheck = () =>
+    guard(async () => {
+      if (!match) return;
+      setMatch(await api.cancelAsmMatch(match.match_id));
+    });
+
+  /** 저장 = 확정. 검사는 필요 없다(AM-C3) — 바뀐 표는 먼저 저장(PUT)하고 확정한다. 검사 불합격·낡음은 응답 warnings로만 알린다 */
   const save = () =>
     guard(async () => {
       if (!match) return;
+      const put = toPut(match, draft);
+      setNotes(NO_NOTES);
+      if (putKey(put) !== putKey({ rows: match.rows, excluded_bodies: match.excluded_bodies })) await api.putAsmRows(match.match_id, put);
       const m = await api.confirmAsmMatch(match.match_id);
       setMatch(m);
       confirmedCb.current?.(m);
@@ -164,14 +179,14 @@ export function AsmMatchCard({
   const cBlock = !match ? null : checkBlock(match, draft);
   const sBlock = !match ? null : saveBlock(match, draft);
   const unmatched = match ? match.parts.length - Object.values(draft.pids).reduce((n, l) => n + l.length, 0) : 0;
+  const notice = match ? checkNotice(match, draft) : null;
   const failRows = match?.check?.rows.filter((r) => r.status === "FAIL") ?? [];
   const lines = failRows.flatMap((r) => failLines(r).map((t) => ({ body: r.body, text: t })));
   const tetra = match?.parts.filter((p) => p.solid_ok).length ?? 0;
 
   const lj = match?.last_job;
   const jobFailed = !!lj && lj.state === "FAILED" && !running;
-  const checkStale = !!match?.check && !match.check.current && state !== "SCANNING" && state !== "CHECKING";
-  const blockText = state === "CHECKED" || match?.check ? sBlock : cBlock;
+  const checking = state === "CHECKING";
 
   const content = (
     <>
@@ -226,49 +241,63 @@ export function AsmMatchCard({
           <div className="summary-line small" data-testid="asm-summary">
             starter <b className="mono">{match.assem.starter}</b> · 파일 {match.assem.files}개 · component {match.parts.length}개(TETRA4 {tetra}개) · STEP 바디 {match.bodies.length}개
           </div>
-          <div className="asm-split">
-            <div className="asm-left">
-              <AsmMatchTable match={match} draft={draft} onChange={(d) => (setDraft(d), setFromRec(false), setNotes(NO_NOTES))} readOnly={readOnly} notes={notes} selected={selected} onSelect={setSelected} dirty={dirty} />
-              <p className="muted small">매칭하지 않은 component {Math.max(0, unmatched)}개는 바꾸지 않습니다(간섭 검사 대상).</p>
-              {fromRec && state === "DRAFT" && <p className="muted small" data-testid="asm-recommended">추천으로 미리 채웠습니다 — 확인하고 고치세요(저장 전에는 확정되지 않습니다).</p>}
-              {notes.general.length > 0 && (
-                <ul className="problems small error-text" data-testid="asm-notes-general" role="alert">
-                  {notes.general.map((n, i) => (
-                    <li key={i}>{n}</li>
-                  ))}
-                </ul>
-              )}
-              {checkStale && (
-                <p className="warn-text small" data-testid="asm-check-stale">
-                  {CHECK_STALE_TEXT}
-                </p>
-              )}
-              {problems.length > 0 && (
-                <ul className="problems small error-text" data-testid="asm-problems" role="alert">
-                  {problems.map((p, i) => (
-                    <li key={i}>{p.message}</li>
-                  ))}
-                </ul>
-              )}
-              {canExec && state !== "CONFIRMED" && (
-                <div className="run-action-row">
-                  <button type="button" className="btn" disabled={readOnly || match.recommend.length === 0} onClick={() => (setDraft(recommendDraft(match)), setFromRec(true))}>
-                    추천 적용
-                  </button>
-                  <button type="button" className="btn primary" disabled={readOnly || busy || !!cBlock} title={cBlock ?? undefined} onClick={() => void check()}>
+          <AsmMatchTable match={match} draft={draft} onChange={(d) => (setDraft(d), setFromRec(false), setNotes(NO_NOTES))} readOnly={readOnly} notes={notes} selected={selected} onSelect={setSelected} dirty={dirty} showCheck={advOpen} />
+          <p className="muted small">매칭하지 않은 component {Math.max(0, unmatched)}개는 바꾸지 않습니다(간섭 검사 대상).</p>
+          {fromRec && state === "DRAFT" && <p className="muted small" data-testid="asm-recommended">추천으로 미리 채웠습니다 — 확인하고 고친 뒤 [저장]을 누르세요(저장 전에는 확정되지 않습니다).</p>}
+          {notes.general.length > 0 && (
+            <ul className="problems small error-text" data-testid="asm-notes-general" role="alert">
+              {notes.general.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </ul>
+          )}
+          {notice && (
+            <p className="warn-text small" data-testid="asm-check-warning" data-code={notice.code}>
+              {notice.text}
+            </p>
+          )}
+          {problems.length > 0 && (
+            <ul className="problems small error-text" data-testid="asm-problems" role="alert">
+              {problems.map((p, i) => (
+                <li key={i}>{p.message}</li>
+              ))}
+            </ul>
+          )}
+          {canExec && state !== "CONFIRMED" && (
+            <div className="run-action-row">
+              <button type="button" className="btn" disabled={readOnly || match.recommend.length === 0} onClick={() => (setDraft(recommendDraft(match)), setFromRec(true))}>
+                추천 적용
+              </button>
+              <button type="button" className="btn primary" disabled={readOnly || busy || !!sBlock} title={sBlock ?? undefined} onClick={() => void save()}>
+                저장
+              </button>
+              {sBlock && !running && <span className="muted small" data-testid="asm-block">{sBlock}</span>}
+            </div>
+          )}
+          {state === "CONFIRMED" && (
+            <p className="ok-text small" data-testid="asm-confirmed">
+              저장됨 — {cad.kind === "train" ? "①-3 DOE가" : "템플릿 등록이"} 이 매칭을 씁니다. 바꾸려면 [목록 읽기]로 다시 매칭하세요.
+            </p>
+          )}
+          <details className="advanced asm-advanced" data-testid="asm-advanced" open={advOpen} onToggle={(e) => setAdvOpen((e.currentTarget as HTMLDetailsElement).open)}>
+            <summary>고급 — 경계 검사(선택)</summary>
+            <div className="advanced-body">
+              <p className="muted small" data-testid="asm-check-note">
+                매칭한 component의 외곽 노드가 CAD 경계면과 맞는지 미리 확인합니다. 추천·표 확인만으로 저장할 수 있으며, 검사가 불합격이어도 저장은 막지 않습니다. {CHECK_SLOW_TEXT}
+              </p>
+              <div className="run-action-row">
+                {canExec && state !== "CONFIRMED" && (
+                  <button type="button" className="btn" disabled={readOnly || busy || !!cBlock} title={cBlock ?? undefined} onClick={() => void check()}>
                     검사
                   </button>
-                  <button type="button" className="btn primary" disabled={readOnly || busy || !!sBlock} title={sBlock ?? undefined} onClick={() => void save()}>
-                    저장
+                )}
+                {canExec && checking && running && (
+                  <button type="button" className="btn" disabled={busy || !!job?.cancel_requested} onClick={() => void cancelCheck()}>
+                    취소
                   </button>
-                  {(cBlock ?? sBlock) && !running && blockText && blockText !== CHECK_STALE_TEXT && <span className="muted small" data-testid="asm-block">{blockText}</span>}
-                </div>
-              )}
-              {state === "CONFIRMED" && (
-                <p className="ok-text small" data-testid="asm-confirmed">
-                  저장됨 — {cad.kind === "train" ? "①-3 DOE가" : "템플릿 등록이"} 이 매칭을 씁니다. 바꾸려면 [목록 읽기]로 다시 매칭하세요.
-                </p>
-              )}
+                )}
+                {cBlock && !running && state !== "CONFIRMED" && <span className="muted small" data-testid="asm-check-block">{cBlock}</span>}
+              </div>
               {match.check && lines.length > 0 && (
                 <ul className="problems small" data-testid="asm-fail-lines">
                   {lines.map((l, i) => (
@@ -278,9 +307,9 @@ export function AsmMatchCard({
                   ))}
                 </ul>
               )}
+              {match.check ? <AsmMatchViewer check={match.check} selected={selected} /> : <p className="muted small">[검사] 뒤에 CAD 경계와의 거리를 3D로 보여줍니다.</p>}
             </div>
-            <div className="asm-right">{match.check ? <AsmMatchViewer check={match.check} selected={selected} /> : <p className="muted small">[검사] 뒤에 CAD 경계와의 거리를 3D로 보여줍니다.</p>}</div>
-          </div>
+          </details>
         </>
       )}
     </>

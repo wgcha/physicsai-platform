@@ -233,13 +233,16 @@ def view(ctx: AppContext, study: dict[str, Any], match_id: str) -> dict[str, Any
     else:
         state = "DRAFT"
     bodies = [b["body"] for b in (parts_doc or {}).get("bodies") or []]
+    warnings = list((parts_doc or {}).get("warnings") or [])
+    if state == "CONFIRMED":  # 확정 뒤에도 "검사 불합격·낡음으로 저장" 경고를 응답에 유지(AM-C3)
+        warnings += check_warnings(check, digest)
     return {"match_id": match_id, "study_id": study["id"], "state": state,
             "source": {k: v for k, v in (match.get("source") or {}).items() if k in ("kind", "cad_name", "features_rel", "cad_sha256")},
             "assem": {"display_path": assem.get("path"), "digest": digest, "starter": starter, "files": len(p_assem.get("tree") or [])},
             "bodies": (parts_doc or {}).get("bodies") or [], "parts": (parts_doc or {}).get("parts") or [],
             "recommend": (parts_doc or {}).get("recommend") or [], "rows": match.get("rows") or [],
             "excluded_bodies": match.get("excluded_bodies") or [], "check": check, "confirmed": confirmed, "stale_reason": stale,
-            "last_job": _last_job(jobs), "warnings": (parts_doc or {}).get("warnings") or [],
+            "last_job": _last_job(jobs), "warnings": warnings,
             "rows_complete": am.rows_complete(match.get("rows") or [], match.get("excluded_bodies") or [], bodies),
             "use_bodies": _use_bodies(ctx, study, match), "created_at": match.get("created_at"), "updated_at": match.get("updated_at")}
 
@@ -354,6 +357,23 @@ def check(ctx: AppContext, principal: Principal, match_id: str, rid: str, ip: st
     return {"job_id": job["id"], "match_id": match_id, "seq": seq}
 
 
+def cancel(ctx: AppContext, principal: Principal, match_id: str, rid: str, ip: str | None) -> dict[str, Any]:
+    """`POST /asm-matches/{id}/cancel` → AsmMatch. 진행 중(대기·실행) ASM_MATCH 작업(목록 읽기 또는 검사)을 취소한다(power, 멱등 아님 —
+    끝난 뒤는 409 JOB_TERMINAL). 오래 걸리는 검사(시간 제한 없음, AM-C3)를 사용자가 직접 멈출 수 있게 하는 경로 — 작업 취소 API는 관리자 전용이라
+    따로 둔다. 실행 중이면 워커가 프로세스 트리를 종료하고(취소 확인 주기) 작업이 CANCELED가 된다."""
+    study0 = _study_of(ctx, match_id)
+    require_power(principal, study0["project_id"])
+    with ctx.engine.begin() as conn:
+        study = studies_repo.require(conn, study0["id"], for_update=True)
+        jobs = am_repo.jobs_of(conn, match_id, 1)
+        if not jobs or jobs[0]["state"] not in ACTIVE:
+            raise DomainError("JOB_TERMINAL", "진행 중인 조립 매칭 작업이 없습니다", status=409)
+        jobs_repo.request_cancel(conn, jobs[0]["id"], principal.user_id)
+        audit(conn, principal, "ASM_MATCH_CANCEL", "asm_match", match_id,
+              {"job_id": jobs[0]["id"], "mode": (jobs[0].get("params") or {}).get("mode")}, rid, ip)
+    return view(ctx, study, match_id)
+
+
 def run_check(ctx: AppContext, principal: Principal, study_id: str, match_id: str, rid: str, ip: str | None
               ) -> tuple[dict[str, Any], str | None, str | None]:
     """MCP 작업 종류 `asm_match`(검사 시작)용: (결과, 작업 id, match id). 다른 Study의 묶음이면 404."""
@@ -365,9 +385,25 @@ def run_check(ctx: AppContext, principal: Principal, study_id: str, match_id: st
 
 # ---- 확정 ---------------------------------------------------------------------------------------------------
 
+WARN_CHECK_FAILED = "ASM_CHECK_FAILED_WARN"
+WARN_CHECK_STALE = "ASM_CHECK_STALE_WARN"
+
+
+def check_warnings(check: dict[str, Any] | None, digest: str | None) -> list[dict[str, str]]:
+    """검사는 선택(AM-C3): 검사를 실행한 적이 있을 때만 경고. 마지막 검사가 현재 행·조립과 다르면 STALE, 같은데 FAIL이면 FAILED."""
+    if check is None:
+        return []
+    if not check.get("current") or (check.get("assem_digest") not in (None, digest)):
+        return [{"code": WARN_CHECK_STALE, "message": "마지막 경계 검사가 현재 매칭 표와 다릅니다(검사 뒤 행이 바뀜) — 검사 결과는 참고만 하세요"}]
+    if check.get("status") != "PASS":
+        return [{"code": WARN_CHECK_FAILED, "message": "경계 검사에서 불합격한 행이 있는 채로 저장했습니다 — 고급 영역의 검사 결과(일치율·거리)를 확인하세요"}]
+    return []
+
 
 def confirm(ctx: AppContext, principal: Principal, match_id: str, rid: str, ip: str | None) -> dict[str, Any]:
-    """`POST /asm-matches/{id}/confirm` → AsmMatch(CONFIRMED). 409 ASM_CHECK_REQUIRED(마지막 검사 없음·FAIL·rows 다름)·ASM_MATCH_STALE."""
+    """`POST /asm-matches/{id}/confirm` → AsmMatch(CONFIRMED). 검사는 필수가 아니다(AM-C3): 행이 완전하고 입력이 그대로면 확정한다.
+    검사를 실행했는데 FAIL이거나 현재 행과 다르면 확정은 허용하고 응답 `warnings`에 ASM_CHECK_FAILED_WARN·ASM_CHECK_STALE_WARN을 남긴다.
+    409 ASM_ROWS_INCOMPLETE·ASM_MATCH_STALE·ASM_MATCH_BUSY, 422 ASM_ROW_INVALID."""
     study0 = _study_of(ctx, match_id)
     require_power(principal, study0["project_id"])
     with ctx.engine.begin() as conn:
@@ -377,19 +413,29 @@ def confirm(ctx: AppContext, principal: Principal, match_id: str, rid: str, ip: 
         if v["state"] == "CONFIRMED":
             return v
         _writable(v)
-        c = v["check"]
+        if not v["rows_complete"]:
+            raise DomainError("ASM_ROWS_INCOMPLETE", "모든 바디를 component에 매칭하거나 매칭 안 함으로 두세요(매칭 행 1개 이상)", status=409)
         mdir, match = _load(ctx, study, match_id)
-        if c is None or c["status"] != "PASS" or not c["current"]:
-            raise DomainError("ASM_CHECK_REQUIRED", "마지막 검사가 없거나 통과하지 않았거나 그 뒤 행이 바뀌었습니다 — 검사를 다시 하세요", status=409)
-        cpath = os.path.join(am.check_dir(mdir, c["seq"]), am.CHECK_JSON)
-        cdoc = am.read_json(cpath, ctx.settings.geometry.max_report_bytes) or {}
-        if c.get("assem_digest") != v["assem"]["digest"]:  # 목록과 검사 사이에 조립이 바뀜
-            raise DomainError("ASM_MATCH_STALE", gate.STALE_ASSEM, status=409)
+        _rows, _excl, probs = am.validate_rows(match.get("rows") or [], list(match.get("excluded_bodies") or []),
+                                               [b["body"] for b in v["bodies"]], v["parts"], set(v["use_bodies"]))
+        if probs:  # 저장된 행이 지금 규칙과 다르면(use 파라미터 변경 등) 확정하지 않는다
+            raise DomainError("ASM_ROW_INVALID", "매칭 표가 올바르지 않습니다", status=422, problems=probs, body=probs[0].get("body"))
+        c = v["check"]
+        cdoc: dict[str, Any] | None = None
+        cpath: str | None = None
+        if c is not None:
+            cpath = os.path.join(am.check_dir(mdir, c["seq"]), am.CHECK_JSON)
+            cdoc = am.read_json(cpath, ctx.settings.geometry.max_report_bytes) or {}
+        warns = check_warnings(c, v["assem"]["digest"])
         parts_doc = _parts(mdir, ctx.settings.geometry.max_report_bytes) or {}
         doc = am.confirmed_document({**match, "assem": {**(match.get("assem") or {}), "digest": v["assem"]["digest"],
-                                                        "starter": v["assem"]["starter"]}}, parts_doc.get("parts") or [], cdoc, c["seq"],
-                                    sha256_file(cpath), engine_version=cdoc.get("engine_version"), user=principal.user_id, now_iso=_now())
+                                                        "starter": v["assem"]["starter"]}}, parts_doc.get("parts") or [], cdoc,
+                                    c["seq"] if c else None, sha256_file(cpath) if cpath else None,
+                                    engine_version=(cdoc or {}).get("engine_version") or parts_doc.get("engine_version"),
+                                    user=principal.user_id, now_iso=_now(),
+                                    check_status=(c or {}).get("status"), check_current=bool(c and c.get("current") and not warns))
         write_json_atomic(os.path.join(mdir, am.CONFIRMED_JSON), doc)
         am.write_match(mdir, {**match, "state": "CONFIRMED", "updated_at": doc["confirmed_at"]})
-        audit(conn, principal, "ASM_MATCH_CONFIRM", "asm_match", match_id, {"seq": c["seq"]}, rid, ip)
+        audit(conn, principal, "ASM_MATCH_CONFIRM", "asm_match", match_id,
+              {"seq": c["seq"] if c else None, "check": (c or {}).get("status"), "warnings": [w["code"] for w in warns]}, rid, ip)
     return view(ctx, study, match_id)

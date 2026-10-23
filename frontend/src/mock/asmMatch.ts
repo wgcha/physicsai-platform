@@ -111,6 +111,12 @@ function runCheck(srv: MockServer, rec: AsmRec) {
   rec.updated_at = new Date().toISOString();
 }
 
+/** 취소·실패로 끝난 작업의 진행 표시를 푼다(성공은 finishAsmMatch가 처리). 표·이전 검사 결과는 그대로 둔다 */
+function settle(srv: MockServer, rec: AsmRec) {
+  const j = rec.pending ? srv.jobs.find((x) => x.id === rec.pending!.job_id) : undefined;
+  if (rec.pending && j && (j.state === "CANCELED" || j.state === "FAILED" || j.state === "INTERRUPTED")) rec.pending = null;
+}
+
 /** 작업 종료 훅(engine.finishJob) */
 export function finishAsmMatch(srv: MockServer, j: Job) {
   if (j.job_type !== "ASM_MATCH") return;
@@ -129,8 +135,14 @@ const useBodiesOf = (srv: MockServer, rec: AsmRec): string[] => {
 
 const rowsComplete = (rec: AsmRec) => rec.rows.length > 0 && rec.bodies.every((b) => rec.rows.some((r) => r.body === b.body) || rec.excluded_bodies.includes(b.body));
 
+/** 확정 뒤 응답 warnings(AM-C3, 서버 asm_match_api.check_warnings와 같은 규칙) */
+const checkWarnings = (check: AsmCheck | null): AsmMatch["warnings"] =>
+  !check ? [] : !check.current ? [{ code: "ASM_CHECK_STALE_WARN", message: "마지막 경계 검사가 현재 매칭 표와 다릅니다(검사 뒤 행이 바뀜) — 검사 결과는 참고만 하세요" }]
+  : check.status !== "PASS" ? [{ code: "ASM_CHECK_FAILED_WARN", message: "경계 검사에서 불합격한 행이 있는 채로 저장했습니다 — 고급 영역의 검사 결과(일치율·거리)를 확인하세요" }] : [];
+
 /** 서버의 view(): 상태는 파일 + 최신 작업 + 입력 변경 판정에서 계산한다 */
 export function asmOut(srv: MockServer, rec: AsmRec): AsmMatch {
+  settle(srv, rec);
   const sha = putKey({ rows: rec.rows, excluded_bodies: rec.excluded_bodies });
   const check = rec.check ? { ...structuredClone(rec.check), current: rec.check.rows_sha256 === sha } : null;
   const job = rec.last_job_id ? srv.jobs.find((j) => j.id === rec.last_job_id) : undefined;
@@ -147,7 +159,7 @@ export function asmOut(srv: MockServer, rec: AsmRec): AsmMatch {
     last_job: job
       ? { id: job.id, mode: rec.pending?.mode ?? (rec.check ? "check" : "parts"), state: job.state, failure_code: rec.failed?.code ?? null, failure_message: rec.failed?.message ?? null, progress_pct: job.progress_pct ?? null }
       : null,
-    warnings: [], rows_complete: rowsComplete(rec), use_bodies: useBodiesOf(srv, rec), created_at: rec.created_at, updated_at: rec.updated_at,
+    warnings: state === "CONFIRMED" ? checkWarnings(check) : [], rows_complete: rowsComplete(rec), use_bodies: useBodiesOf(srv, rec), created_at: rec.created_at, updated_at: rec.updated_at,
   };
 }
 
@@ -240,6 +252,7 @@ export const asmMatchRoutes: Route = (srv, { method, seg, body, query }) => {
   const rec = asmRecs(srv).get(seg[1]);
   if (!rec) return err(404, "NOT_FOUND", "조립 매칭을 찾을 수 없습니다.");
   const s = srv.studies.find((x) => x.id === rec.study_id)!;
+  settle(srv, rec);
   if (method === "GET" && seg.length === 2) return ok(asmOut(srv, rec));
   const deny = needPower(srv, s.project_id);
   if (deny) return deny;
@@ -254,10 +267,24 @@ export const asmMatchRoutes: Route = (srv, { method, seg, body, query }) => {
     rec.last_job_id = (r.body as Job).id;
     return { status: 202, body: { job_id: (r.body as Job).id } };
   }
+  if (method === "POST" && seg[2] === "cancel") {
+    // 진행 중 작업 취소(power). 목은 작업을 CANCELED로 만들고 대기 중 검사를 버린다(표·이전 검사 결과는 그대로)
+    const j = rec.pending ? srv.jobs.find((x) => x.id === rec.pending!.job_id) : undefined;
+    if (!rec.pending || !j) return err(409, "JOB_TERMINAL", "진행 중인 조립 매칭 작업이 없습니다");
+    if (j.state === "QUEUED") {
+      j.state = "CANCELED";
+      j.finished_at = new Date().toISOString();
+      srv.queueOrder.delete(j.id);
+      srv.notifyJob(j, "JOB_CANCELED");
+      rec.pending = null;
+    } else j.cancel_requested = true;
+    srv.bump(j);
+    return { status: 202, body: asmOut(srv, rec) };
+  }
   if (method === "POST" && seg[2] === "confirm") {
+    // 검사는 필수가 아니다(AM-C3): 행이 완전하면 확정, 검사 불합격·낡음은 warnings로만
     if (rec.pending) return err(409, "ASM_MATCH_BUSY", "조립 매칭 작업이 진행 중입니다.");
-    const cur = asmOut(srv, rec).check;
-    if (!cur || cur.status !== "PASS" || !cur.current) return err(409, "ASM_CHECK_REQUIRED", "경계 일치 검사를 통과해야 저장할 수 있습니다");
+    if (!rowsComplete(rec)) return err(409, "ASM_ROWS_INCOMPLETE", "모든 바디를 component에 연결하거나 '매칭 안 함'으로 두세요");
     rec.confirmed_flag = true;
     rec.confirmed = { sha256: "sha256:cd34", confirmed_at: new Date().toISOString() };
     return ok(asmOut(srv, rec));

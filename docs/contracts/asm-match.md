@@ -6,7 +6,7 @@
 
 ## 0. 한 줄 요약
 
-Native 솔리드 흐름(①-3 DOE, ④ 세트 등록)에서 조립 폴더에 `RENUM_INIT.csv`와 기준본 파일(`104_replace_node_elem.inc` 등 **어떤 파일 이름도**)을 요구하지 않는다. starter에서 **include 트리 전체**를 읽어 `/PART`·요소·노드를 어느 파일에 있든 모으고, 사용자가 **STEP 바디(행) ↔ 조립 component(옆 열 드롭다운)** 매칭 표를 확정하며, 저장 전에 **component 외곽 노드 좌표 ↔ CAD B-rep 경계면 거리 검사**를 통과해야 한다. 기준본 = **매칭된 PART id의 노드·요소 집합**이고, 모핑 결과는 조립 사본에서 그 노드 ID가 있는 **모든 파일의 해당 `/NODE` 줄 좌표 필드만** 바꿔 쓴다(R1: 노드 ID 불변, 열 폭 유지, 다른 줄 바이트 동일). 쿠션 단독 rad도 같은 수집 결과로 만든다.
+Native 솔리드 흐름(①-3 DOE, ④ 세트 등록)에서 조립 폴더에 `RENUM_INIT.csv`와 기준본 파일(`104_replace_node_elem.inc` 등 **어떤 파일 이름도**)을 요구하지 않는다. starter에서 **include 트리 전체**를 읽어 `/PART`·요소·노드를 어느 파일에 있든 모으고, 사용자가 **STEP 바디(행) ↔ 조립 component(옆 열 드롭다운)** 매칭 표(추천으로 미리 채움)를 확인·수정해 저장(확정)한다. **component 외곽 노드 좌표 ↔ CAD B-rep 경계면 거리 검사**는 고급 옵션이며 저장의 조건이 아니다(AM-C3). 기준본 = **매칭된 PART id의 노드·요소 집합**이고, 모핑 결과는 조립 사본에서 그 노드 ID가 있는 **모든 파일의 해당 `/NODE` 줄 좌표 필드만** 바꿔 쓴다(R1: 노드 ID 불변, 열 폭 유지, 다른 줄 바이트 동일). 쿠션 단독 rad도 같은 수집 결과로 만든다.
 
 ---
 
@@ -58,7 +58,7 @@ Native 솔리드 흐름(①-3 DOE, ④ 세트 등록)에서 조립 폴더에 `RE
 | # | 결정 | 근거 |
 |---|---|---|
 | AM-1 | 기준본 = **매칭 PART id의 노드·요소 집합**. component 정의 = `/PART` id 집합(매칭 표). `RENUM_INIT.csv` 요구와 **파일 이름 의존 전부** 제거 | 사용자 원문·답변 Q1 |
-| AM-2 | 매칭은 **추천은 초안, 확정은 사용자**(GE-13과 같은 원칙). 저장 = 확정이며 저장 전 경계 검사 PASS 필수 | 오매칭 시 학습데이터 전체 오염 |
+| AM-2 | 매칭은 **추천은 초안, 확정은 사용자**(GE-13과 같은 원칙). 저장 = 확정. ~~저장 전 경계 검사 PASS 필수~~ → **경계 검사는 선택(고급)**, 불합격·낡음은 경고만(AM-C3, 2026-10-23) | 오매칭 시 학습데이터 전체 오염 → 추천 알고리즘으로 충분(사용자 결정) |
 | AM-3 | 경계 검사 허용오차 = tag와 **같은 값·같은 식**(`geometry.defaults.tag`: `tol = max(tol_abs_mm 0.05, tol_rel 1e-4 · L_body)`, `match_ratio ≥ min_match_ratio 0.98`). 새 허용오차 키 없음 | 검사 PASS면 tag의 `GEOM_BASELINE_MISMATCH`가 나지 않음을 보장(단일 출처) |
 | AM-4 | 바디 1 ↔ component N(1:N) 허용(요소 합집합 = 한 component), component 1 ↔ 바디 N 금지, component는 한 행에만 | CAD 1바디가 메시에서 여러 PART로 나뉘는 경우 수용 |
 | AM-5 | 좌표계·단위 차이는 **감지·안내하고 진행을 막는다**(`ASM_OFFSET_SUSPECT`·`ASM_UNIT_SUSPECT`는 FAIL 행의 진단, 저장 불가). 자동 보정·사용자 보정 적용 없음 | **사용자 확정 Q2**, GE Q1 유지 |
@@ -96,8 +96,8 @@ Native 솔리드 흐름(①-3 DOE, ④ 세트 등록)에서 조립 폴더에 `RE
 ①-1 STEP 업로드·추출(기존) → ①-2 파라미터 선택(기존)
   → [조립 매칭 카드] 조립 폴더 지정(경로 또는 업로드 RADIOSS_ASSEM)
       → 작업 ASM_MATCH(mode=parts): paicad asm parts(include 트리 수집·캐시) → component 목록 + 추천
-      → 매칭 표 편집(PUT rows) → "검사" → 작업 ASM_MATCH(mode=check): paicad asm check
-      → PASS → "저장"(confirm) → asm_match.json 확정
+      → 매칭 표(추천 자동 채움) 확인·편집 → "저장"(PUT rows + confirm) → asm_match.json 확정
+      (고급·선택: "검사" → 작업 ASM_MATCH(mode=check): paicad asm check — 시간 제한 없음·취소 가능, 불합격은 경고만, AM-C3)
   → ①-3 DOE(asm_match_id) → dg_prep: include 트리 사본 + D/cad/asm_match.json → tag(--asm-match)
       → run마다 update → morph → check(PASS = node_patch.npz) → paicad asm write(조립 사본 노드 줄 갱신)
 ④ "새 Native 템플릿(STEP)": 등록 폼에서 STEP·조립 폴더 지정 → 같은 매칭 카드(바디 목록은 STEP에서 직접) → PARAM_SET_NATIVE(asm_match_id)
@@ -122,7 +122,7 @@ renum.csv와 어떤 기준본 파일 이름도 어느 단계에서 묻지 않는
 - "매칭 안 함": 그 바디에 `use=true` 파라미터가 있으면 선택 불가(사유 "선택한 파라미터 N개가 이 바디에 있습니다"). 매칭 안 한 바디는 tag·morph 대상에서 빠진다.
 - 행 클릭 → 3D 창: CAD 바디 반투명 + 외곽 노드 표면을 거리 색 맵(`_DIST_MM`, 0 ~ tol 녹색, tol 초과 빨강), 불일치 노드 상위 N개 점 표시. 실패 행은 실패 코드 문구를 표 아래에 한 줄씩(공유 노드는 "PART 2001(PRODUCT_TIE) 등과 노드 37개 공유").
 - 원점·단위 진단이 있으면 그 행 아래에 "CAD가 조립보다 X 10.0 mm 어긋나 있습니다 — CAD를 조립과 같은 원점·mm로 다시 내보내세요"(저장 불가, AM-5).
-- 단추 상태: `검사` = 모든 행이 선택 또는 "매칭 안 함" + 매칭 행 ≥1. `저장` = 마지막 검사 PASS + 그 뒤 행·입력 변경 없음. DOE `생성` 단추 사유 문구에 "조립 매칭을 저장하세요" 추가.
+- 단추 상태: `저장` = 모든 행이 선택 또는 "매칭 안 함" + 매칭 행 ≥1(검사 불필요, AM-C3). `검사`(고급 접힘 안) = 같은 조건. DOE `생성` 단추 사유 문구에 "조립 매칭을 저장하세요" 추가. (v0.2.9 원안 "저장 = 마지막 검사 PASS"는 AM-C3으로 폐지)
 
 ---
 
@@ -275,7 +275,8 @@ asm_match:
   max_parts: 5000
   recommend_min_score: 0.6
   worst_nodes: 2000
-  timeout_s: 600
+  timeout_s: 600            # asm parts(목록 읽기) 1회 상한(초)
+  check_timeout_s: null     # asm check(경계 검사) 1회 상한(초), null = 상한 없음(AM-C3)
 commands:
   paicad_asm_parts: ["{paicad}", "asm", "parts", "--assem-dir", "{assem_dir}", "--features", "{features_json}", "--renum-csv", "{renum_csv}", "--cache-dir", "{asm_cache_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
   paicad_asm_check: ["{paicad}", "asm", "check", "--cad", "{cad_input}", "--features", "{features_json}", "--assem-dir", "{assem_dir}", "--match", "{match_rows_json}", "--cache-dir", "{asm_cache_dir}", "--options", "{options_json}", "--out-dir", "{out_dir}"]
@@ -294,10 +295,11 @@ commands:
 | `GET /asm-matches/{id}` | – | `AsmMatch = {match_id, study_id, state, source, assem:{display_path, digest, starter, files}, bodies[], parts[], recommend[], rows[], excluded_bodies[], check:{seq, status, rows_sha256, rows:[요약·shared·suggest], file_checks, glb_url}\|null, confirmed:{sha256, confirmed_at}\|null, stale_reason\|null}` |
 | `PUT /asm-matches/{id}/rows` | `{rows:[{body, pids:[int]}], excluded_bodies:[str]}` | 200 `AsmMatch`(state DRAFT, check 무효). 422 `ASM_ROW_INVALID`(+`body`, 사유: 모르는 바디·pid, pid 중복, `solid_ok=false`, 바디 누락, use 파라미터가 있는 바디 제외), 409 `ASM_MATCH_CONFIRMED` |
 | `POST /asm-matches/{id}/check` | – | 202 `{job_id}`(mode check). 409 `ASM_ROWS_INCOMPLETE` |
-| `POST /asm-matches/{id}/confirm` | – | 200 `AsmMatch`(CONFIRMED). 409 `ASM_CHECK_REQUIRED`(마지막 검사 없음·FAIL·rows 다름)·`ASM_MATCH_STALE`(조립 트리·STEP·피처 sha 변경) |
+| `POST /asm-matches/{id}/confirm` | – | 200 `AsmMatch`(CONFIRMED, 검사 불필요 — AM-C3). 409 `ASM_ROWS_INCOMPLETE`·`ASM_MATCH_STALE`(조립 트리·STEP·피처 sha 변경)·`ASM_MATCH_BUSY`, 422 `ASM_ROW_INVALID`. ~~409 `ASM_CHECK_REQUIRED`~~ 폐지. 검사를 실행했는데 FAIL·낡음이면 응답 `warnings`에 `ASM_CHECK_FAILED_WARN`·`ASM_CHECK_STALE_WARN` |
+| `POST /asm-matches/{id}/cancel` | – | 202 `AsmMatch`. 진행 중(대기·실행) ASM_MATCH 작업 취소(power). 없으면 409 `JOB_TERMINAL`. AM-C3 가산 |
 
 - 쓰기: Study 프로젝트 power 이상 + CSRF(쿠키) 또는 `pai_` Bearer(x-mcp 도구). `x-mcp`: 5개 모두 도구(`asm_match_create`·`asm_match_get`·`asm_match_set_rows`·`asm_match_check`·`asm_match_confirm`), 검사 GLB 미디어는 기존 artifacts media 경로(새 kind `ASM_MATCH_GLB`, `x-mcp.exclude` 이진). 용어집 `ko`: "조립 매칭", `ASM_*` 코드.
-- 작업: 새 job_type **`ASM_MATCH`**(`JOB_KINDS` 등록, `SUMMARIES`에 `asm_match` 엔티티), 레인 `PREVIEW`(전역 슬롯 미사용 — v0.2.9 대기열 분리 계약이 레인을 바꾸면 그 계약을 따름), step `AM_PARTS` 또는 `AM_CHECK`(params.mode), 타임아웃 `asm_match.timeout_s`. 결과 요약(DB `jobs.result`)은 상태·개수·`match_ratio_min`·`dist_max_mm`·`shared_nodes`만.
+- 작업: 새 job_type **`ASM_MATCH`**(`JOB_KINDS` 등록, `SUMMARIES`에 `asm_match` 엔티티), 레인 `PREVIEW`(전역 슬롯 미사용 — v0.2.9 대기열 분리 계약이 레인을 바꾸면 그 계약을 따름), step `AM_PARTS` 또는 `AM_CHECK`(params.mode), 타임아웃 = AM_PARTS `asm_match.timeout_s`(600), AM_CHECK `asm_match.check_timeout_s`(기본 null = 없음, AM-C3). 결과 요약(DB `jobs.result`)은 상태·개수·`match_ratio_min`·`dist_max_mm`·`shared_nodes`만.
 - **이 계약의 DB 변경 없음**(AM-12): 매칭 상태는 `match.json`, 소비자는 `jobs.params`에 `asm_match_id`·`asm_match_sha256`, 세트·DOE 폴더 `prep.json`에 기록.
 
 ### 6.4 소비자 변경(Backend·Worker)
@@ -337,12 +339,12 @@ commands:
 | V-AM-1 | 합성 조립(사용자 구성 재현: starter → `101_parts.inc`(`/PART`·`/INTER/TYPE2`·세트) + `102_parts_node_element.inc`(쿠션 2개 + 제품 노드·요소 섞임), 하위 폴더 include 1개): `asm parts --features`가 트리·PART·`def_file`·`elem_files`·`node_files`·TETRA4 수·부피를 맞게 내고 OCP를 import하지 않음. 트리 밖 파일 → `ASM_FILE_UNUSED` | Geom |
 | V-AM-2 | 추천: 이름이 달라도 bbox·부피로 정답, 좌우 대칭 쌍 뒤바뀌지 않음, RENUM 있으면 `basis.renum` | Geom |
 | V-AM-3 | 공칭 일치 → PASS(`dist_mm.max ≤ tol`), 좌우 바꿔 매칭 → FAIL `ASM_BOUNDARY_MISMATCH` | Geom |
-| V-AM-4 | 쿠션 +10 mm 이동 → FAIL + `ASM_OFFSET_SUSPECT [10,0,0]`, m 단위(×0.001) → `ASM_UNIT_SUSPECT 0.001`, 두 경우 모두 confirm 409 | Geom·Backend |
+| V-AM-4 | 쿠션 +10 mm 이동 → FAIL + `ASM_OFFSET_SUSPECT [10,0,0]`, m 단위(×0.001) → `ASM_UNIT_SUSPECT 0.001`. 두 경우 검사 결과는 FAIL이며, confirm은 허용되고 `ASM_CHECK_FAILED_WARN`(AM-C3, 원안의 confirm 409 폐지) | Geom·Backend |
 | V-AM-5 | 쿠션 노드·요소가 두 파일에 나뉨 → PASS(FAIL 아님). 제품 요소와 노드 공유 → FAIL `ASM_SHARED_NODES` + `shared.nodes`·상대 PART 목록. 노드 중복 정의·include 밖·없음·순환 각 코드. 비TETRA4 PART, 1:N 등각 합집합 PASS·비등각 FAIL | Geom |
 | V-AM-6 | 동등성: 단일 파일·pid = RENUM 구간인 합성 케이스에서 방식 M(`asm write` 결과 파일)과 방식 L(morphed include 교체 결과)의 해석 입력이 바이트 동일, tag_nodes·check 수치 동일, cushion rad 바이트 동일 | Geom |
 | V-AM-7 | 다중 파일 쓰기: 쿠션 노드가 두 파일에 나뉘고 제품 노드와 같은 파일에 섞인 경우 `asm write` 후 바뀐 바이트 = 패치 노드 줄의 좌표 필드뿐(열 폭·줄 끝 유지), 다른 줄·다른 파일 바이트 동일, 노드 ID 불변, 공칭(패치 없음) 사본은 전체 바이트 동일 | Geom |
 | V-AM-8 | 캐시: 두 번째 `asm parts`·`check`는 캐시 적중(`cache.hits`), 파일 1개 내용 변경 시 그 파일만 미스, 다른 이름으로 같은 내용 복사 시 적중, 캐시 삭제 후 같은 결과 | Geom |
-| V-AM-9 | API: rows 검증 422 각 사유, check 없이 confirm 409 `ASM_CHECK_REQUIRED`, 트리 파일 수정 후 confirm·DOE 409 `ASM_MATCH_STALE`, DOE(asm_match_id, RENUM·기준본 없음) 202, 둘 다 없으면 409 missing `ASM_MATCH`, 4B 409 | Backend |
+| V-AM-9 | API: rows 검증 422 각 사유, check 없이 confirm 200(AM-C3)·FAIL 검사 뒤 confirm 200 + `ASM_CHECK_FAILED_WARN`·낡은 검사 + `ASM_CHECK_STALE_WARN`·행 미완성 409 `ASM_ROWS_INCOMPLETE`, 트리 파일 수정 후 confirm·DOE 409 `ASM_MATCH_STALE`, DOE(asm_match_id, RENUM·기준본 없음) 202, 둘 다 없으면 409 missing `ASM_MATCH`, 4B 409 | Backend |
 | V-AM-10 | 워커 가짜 도구(`fake_paicad asm parts/check/write`, 방식 M 인자): ASM_MATCH 작업·쌍 치환 argv·트리 복사·`node_patch.npz` 판정·`prep.json inputs.asm_match`·`GEOM_PREP_STALE`. 매칭 세트 경로에서 `mesh_include_name` 파일을 찾지 않음(정적 점검 + 시험) | Backend |
 | V-AM-11 | 기존 RENUM 세트 PREDICT·BATCH·DOE·FEM 검증 회귀(argv·산출 불변) | Backend |
 | V-AM-12 | MCP 정적 시험: 새 API x-mcp, `ASM_MATCH` JOB_KINDS·SUMMARIES, 용어집 ko | Backend |
@@ -393,6 +395,15 @@ commands:
   13. **저장소**: `<study>/asm_match/<id>/{match.json, parts/, check/<seq>/, asm_match.json}`, 파싱 캐시 `<study>/_cache/asm_parse/`. **`_cache/asm_parse`는 자동 정리 대상이 아니다**(housekeeping은 알려진 캐시 테이블만 정리) — 지워도 재생성되므로 관리자가 수동 삭제 가능. SPDM 쓰기 없음(`asm_match`는 `PROTECTED_PREFIXES`에 포함). 매칭 묶음 → Study 조회는 `jobs.params.match_id`(DB 변경 없음).
   14. **방식 판별**: 세트·DOE 폴더의 `cad/asm_match.json` 유무(`geometry/asm_match.is_matched`). 있으면 `native_inputs`의 `baseline_inc`·`renum_csv`는 빈 값, `body_map` 없음(경고 `BODY_MAP_IGNORED`), `asm_match` 경로가 채워져 `commands_asm.expand`가 §6.2 쌍 치환·`{asm_cache_dir}`를 적용한다. 방식 L(없음)은 argv 불변(시험 `test_legacy_template_unchanged_without_asm_match`).
   15. **FEM 검증**: 조립 매칭 예측의 입력 재사용(reuse)은 `INPUT`의 include 트리(하위 폴더)를 상대 경로째 복사. 조립 다시 만들기(rebuild)는 1차 미지원 → 미리보기 problems `ASM_MATCH_UNSUPPORTED`(생성 422). equiv 비교는 매칭 run에서 `Run.mesh_tree`(조립 폴더)·`mesh_parts`(매칭 PART id)로 부피를 읽는다.
+- **AM-C3**(2026-10-23, 사용자 결정 — v0.2.10): "step바디랑 조립 component랑 추천 적용하고 사용자가 저장하게 하자. 검사는 고급으로 옵션으로 하게하자. 추천 알고리즘으로도 충분한듯해. … 작업시간 600초 초과로 실패하는데 이거 제한 풀어. 600초씩이나 걸릴 거면 고급옵션으로 하자는 거야"(현장: GitHub 이슈 #9, AM_CHECK `paicad asm check`가 COMPOUND_2에서 `GEOM_TIMEOUT 600초`로 실패). AM-2·§3.2·§6.3·V-AM-4·V-AM-9의 "검사 PASS 필수"를 폐지한다.
+  1. **확정(confirm)에 검사가 필요 없다**: `ASM_CHECK_REQUIRED` 409 폐지. 확정 조건 = 행 완전성(`rows_complete`, 저장된 행의 `ASM_ROW_INVALID` 재검증: use_bodies·N:1 금지·TETRA4) + `ASM_MATCH_STALE`(조립 트리·STEP·피처 변경) + 작업 중 아님(`ASM_MATCH_BUSY`). 행이 미완성이면 409 `ASM_ROWS_INCOMPLETE`. 검사를 실행했다면 마지막 검사가 FAIL → `ASM_CHECK_FAILED_WARN`, 현재 행·조립과 다름 → `ASM_CHECK_STALE_WARN`을 응답 `warnings`(`[{code, message}]`)에 남기고 확정은 허용한다. 확정 뒤 GET에도 같은 경고가 유지된다(확정 전에는 화면이 `check`를 직접 보인다). 확정본 `asm_match.json`의 `check`는 검사를 실행한 적이 없으면 `null`, 있으면 `{seq, sha256, rows_sha256, status, current, match_ratio_min, dist_max_mm}`(`status`·`current` 가산).
+  2. **하류는 검사를 요구하지 않는다**: ①-3 DOE·④ 등록의 게이트(`asm_match_gate.require_confirmed/require_for_set`)는 원래 "확정본 + 입력 불변"만 본다(변경 없음). 하류 형상 생성(tag·morph·check, 방식 M)은 확정 행(pid 집합)으로 동작하며 검사는 사전 진단일 뿐이다.
+  3. **추천 자동 적용(프런트)**: 목록 읽기 작업이 끝나 서버 행이 비어 있으면 `recommend`를 화면 행 초안으로 바로 채운다(서버가 `match.json`에 쓰지 않음 — AM-C2 1 쓰기 주체 유지). 추천이 없는 바디는 사용자가 고른다. 사용자는 확인·수정 후 [저장]만 누르면 되고, [저장]은 바뀐 표를 PUT rows로 저장한 뒤 confirm한다. [추천 적용]은 초안을 추천으로 다시 채우는 용도로 유지.
+  4. **검사 시간 제한 없음**: 설정 `asm_match.check_timeout_s: float | null`(기본 **null = 상한 없음**) 추가, AM_CHECK만 이 값을 쓴다. `asm_match.timeout_s`(600)는 AM_PARTS(목록 읽기)만 유지한다 — 근거: 목록 읽기는 스트리밍 1차 색인 + sha 캐시(AM-11)로 정상이면 짧고(검사처럼 B-rep 최근접 거리 계산이 없음) 600초 초과는 멈춤·입력 오류 신호이며, 현장 실패는 검사에서만 났다. 상한을 주고 싶은 현장은 `check_timeout_s`에 양수를 쓴다(0 이하는 설정 오류). `geometry.timeout_s.check`(paicad_check·cushion write·asm write)는 asm check에 적용되지 않으며 바꾸지 않는다.
+  5. **취소는 항상 가능**: 워커 공통 취소 확인(`worker.cancel_check_interval_s`)이 프로세스 트리를 종료한다. 작업 취소 API(`POST /jobs/{id}/cancel`)는 관리자 전용이라 power 사용자가 쓸 수 있게 **`POST /asm-matches/{id}/cancel`**(202 `AsmMatch`, 진행 중 ASM_MATCH 작업 대기·실행 모두 취소, 없으면 409 `JOB_TERMINAL`, 감사 `ASM_MATCH_CANCEL`)을 가산한다. MCP는 도구를 늘리지 않고(`x-mcp.exclude`) `cancel_job`(같은 토큰이 만든 작업)을 쓴다. 취소된 검사는 `check/<seq>`에 `asm_check.json`이 없어 결과로 읽히지 않고 표(행)는 그대로다.
+  6. **화면**: `AsmMatchCard` 기본 흐름 = 조립 폴더 → [목록 읽기] → 추천 자동 채움 → [저장]. [검사]·검사 결과(판정·거리 열, 실패 줄, 3D 거리 색)는 "고급 — 경계 검사(선택)" 접힘(기본 접힘, 검사를 시작하거나 진행 중 검사를 복원하면 펼침) 안으로 옮겼다. 고급에는 "오래 걸릴 수 있음(대형 모델은 수십 분)" 안내, 진행률(`JobInline`)과 [취소]. 검사 FAIL·낡음은 카드에 경고 한 줄(`asm-check-warning`)을 보이되 [저장]은 막지 않는다. ①-3 "조립 매칭 사용 중" 한 줄은 유지.
+  7. **호환**: 응답 필드는 가산만(`warnings` 코드 2종, 확정본 `check` null 허용·키 가산). 기존 확정본(검사 PASS 포함)은 그대로 유효. 소비자(DOE·세트 복사)는 확정본의 `check`를 읽지 않는다.
+
 
 ### `mesh_include_name` 의존 전수 점검 결과(§6.4, 구현)
 

@@ -62,6 +62,8 @@ def _validate_asm_match(s: Settings, issues: list[ConfigIssue]) -> None:
         add("asm_match.worst_nodes", "1 이상")
     if not a.timeout_s > 0:
         add("asm_match.timeout_s", "양수")
+    if a.check_timeout_s is not None and not a.check_timeout_s > 0:
+        add("asm_match.check_timeout_s", "양수 또는 null(상한 없음)")
 
 
 def _validate_view(s: Settings, issues: list[ConfigIssue]) -> None:

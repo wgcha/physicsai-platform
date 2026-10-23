@@ -117,7 +117,8 @@ def am_check(ctx: Any) -> None:
     rep = os.path.join(out, am.CHECK_JSON)
     values = {"cad_input": cad, "features_json": feat, "assem_dir": str((match.get("assem") or {}).get("path")),
               "match_rows_json": os.path.join(out, am.ROWS_JSON), "options_json": _options(ctx), "out_dir": out}
-    v = run_paicad(LocalRunner(ctx), s, CHECK_KEY, values, cwd=mdir, report=rep, success=[], timeout_s=float(s.asm_match.timeout_s),
+    limit = s.asm_match.check_timeout_s  # null = 상한 없음(AM-C3). 취소는 run_local의 취소 확인이 처리
+    v = run_paicad(LocalRunner(ctx), s, CHECK_KEY, values, cwd=mdir, report=rep, success=[], timeout_s=None if limit is None else float(limit),
                    backup=[rep, os.path.join(out, am.CHECK_GLB)], log_dir=out)
     doc = read_json(rep, s.geometry.max_report_bytes) if os.path.isfile(rep) else {}
     if not v.ok and not doc.get("rows"):  # 행 없는 실패 = 작업 실패(조립 트리·입력 오류) — 검사 보고에는 매칭 행이 1개 이상 있다

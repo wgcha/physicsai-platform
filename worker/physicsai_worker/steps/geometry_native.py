@@ -26,7 +26,7 @@ PAICAD_LOG = "paicad.log"
 TIMEOUT_KEY = {"paicad_extract": "extract", "paicad_tag": "tag", "paicad_update": "update", "paicad_morph": "morph",
                "paicad_check": "check", "paicad_run": "run",
                "paicad_cushion_write": "check",  # 쿠션 rad 쓰기는 check와 같은 시간 상한(input-kind.md §5)
-               "paicad_asm_write": "check",  # 조립 사본 쓰기(asm-match.md §5.4) — 시간 상한은 check 값. asm parts·check는 asm_match.timeout_s(호출자가 넘김)
+               "paicad_asm_write": "check",  # 조립 사본 쓰기(asm-match.md §5.4) — 시간 상한은 check 값. asm parts = asm_match.timeout_s, asm check = asm_match.check_timeout_s(null=없음)(호출자가 넘김)
                # 쉘(SM §8.1): `shell_*` 키가 없으면 같은 이름 솔리드 값(fixed-scan은 tag 값)
                "paicad_shell_fixed_scan": "shell_fixed_scan", "paicad_shell_extract": "shell_extract", "paicad_shell_tag": "shell_tag",
                "paicad_shell_update": "shell_update", "paicad_shell_morph": "shell_morph", "paicad_shell_check": "shell_check",

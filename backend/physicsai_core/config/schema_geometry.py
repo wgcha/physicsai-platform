@@ -99,4 +99,5 @@ class AsmMatchCfg(_M):
     max_parts: int = 5000
     recommend_min_score: float = 0.6
     worst_nodes: int = 2000
-    timeout_s: float = 600
+    timeout_s: float = 600  # 목록 읽기(asm parts) 1회 상한(초) — 스트리밍 파싱·캐시라 정상이면 짧고, 멈춤 감지용
+    check_timeout_s: float | None = None  # 행 검사(asm check) 1회 상한(초). null = 상한 없음(대형 모델 수십 분, AM-C3). 취소는 항상 가능

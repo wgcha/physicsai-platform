@@ -242,3 +242,4 @@
 - 2026-10-23 (초안, v0.2.10) h3d에 변위가 없거나 조회가 실패하면 3D 컨투어는 스칼라만으로 계속(첫 프레임 판정, `DISP=NONE`, 경고 `CONTOUR3D_DISP_UNAVAILABLE`, 뷰어 배율 컨트롤 숨김) — 근거: PhysicsAI 예측 h3d 변위 부재 시 EXTRACT_ERROR(현장) · contour3d-field.md C3F-19
 - 2026-10-23 잠금 순서 규칙: `worker_slot`을 쥔 채 jobs 행을 기다리지 않음(`claim_gpu` 만료 경로 holder `SKIP LOCKED`, 잠겨 있으면 수령 건너뜀) — 근거: v0.2.9 검증에서 release(jobs→slot)와 claim_gpu(slot→jobs) 역순 교착 위험 · contour3d-field.md C3F-18, job-queues.md JQ-C2
 - 2026-10-23: v0.2.10 contour3d-field 확정 — LOD·압축은 numpy 직접 구현(새 패키지 없음), contour3d.enabled는 새 설치에서만 자동 켬. 근거: 사용자 결정
+- 2026-10-23 조립 매칭 경계 검사는 필수가 아닌 고급 옵션(확정에 검사 PASS 불필요 — FAIL·낡음은 `ASM_CHECK_*_WARN` 경고만, 추천은 목록 읽기 뒤 화면 초안으로 자동 적용), AM_CHECK 시간 제한 없음(`asm_match.check_timeout_s` null, AM_PARTS `timeout_s` 600 유지, 사용자 [취소]는 `POST /asm-matches/{id}/cancel`) — 근거: 사용자 결정(현장 이슈 #9 COMPOUND_2 `GEOM_TIMEOUT` 600초) · asm-match.md AM-C3

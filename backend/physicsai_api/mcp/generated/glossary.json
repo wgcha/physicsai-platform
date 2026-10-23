@@ -774,14 +774,6 @@
       ],
       "status": 413
     },
-    "ASM_CHECK_REQUIRED": {
-      "code": "ASM_CHECK_REQUIRED",
-      "message_ko": "마지막 검사가 없거나 통과하지 않았거나 그 뒤 행이 바뀌었습니다 — 검사를 다시 하세요",
-      "sources": [
-        "backend/physicsai_api/services/asm_match_api.py"
-      ],
-      "status": 409
-    },
     "ASM_MATCH_BUSY": {
       "code": "ASM_MATCH_BUSY",
       "message_ko": "조립 매칭 작업이 진행 중입니다 — 끝난 뒤 다시 하세요",
@@ -1657,8 +1649,9 @@
     },
     "JOB_TERMINAL": {
       "code": "JOB_TERMINAL",
-      "message_ko": "이미 끝난 3D 컨투어 생성입니다",
+      "message_ko": "진행 중인 조립 매칭 작업이 없습니다",
       "sources": [
+        "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_api/services/contour3d_api.py",
         "backend/physicsai_core/db/repositories/jobs.py"
       ],

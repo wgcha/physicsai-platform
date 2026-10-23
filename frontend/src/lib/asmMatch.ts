@@ -14,7 +14,8 @@ export const ASM_ERROR_TEXT: Record<string, string> = {
   ASM_MATCH_INVALID: "조립 매칭 파일이 올바르지 않거나 조립 내용과 다릅니다 — 다시 매칭하세요",
   ASM_ROW_INVALID: "매칭 표가 올바르지 않습니다",
   ASM_ROWS_INCOMPLETE: "모든 바디를 component에 연결하거나 '매칭 안 함'으로 두세요",
-  ASM_CHECK_REQUIRED: "경계 일치 검사를 통과해야 저장할 수 있습니다 — 검사가 없거나 최신이 아니면 다시 검사하세요",
+  ASM_CHECK_FAILED_WARN: "경계 검사에서 불합격한 행이 있는 채로 저장했습니다 — 고급 영역의 검사 결과를 확인하세요",
+  ASM_CHECK_STALE_WARN: "마지막 경계 검사가 현재 매칭 표와 다릅니다 — 검사 결과는 참고만 하세요",
   ASM_MATCH_CONFIRMED: "이미 저장된 매칭입니다 — 바꾸려면 다시 매칭하세요",
   ASM_MATCH_STALE: "조립 폴더 또는 STEP이 바뀌었습니다 — 목록을 다시 읽고 매칭하세요",
   ASM_MATCH_UNSUPPORTED: "이 구성은 조립 매칭을 지원하지 않습니다(쉘 판금·다중 baseline·STEP 폴더·FEM 검증 재조립)",
@@ -75,21 +76,24 @@ export function problemsOf(detail: { code?: string; problems?: unknown } | null 
 
 export const STATE_TEXT: Record<AsmMatchState, string> = {
   SCANNING: "목록 읽는 중",
-  DRAFT: "초안 — 검사 전",
-  CHECKING: "검사 중",
-  CHECKED: "검사 완료",
+  DRAFT: "초안 — 저장 전",
+  CHECKING: "경계 검사 중",
+  CHECKED: "검사 통과 — 저장 전",
   CONFIRMED: "저장됨",
   FAILED: "목록 읽기 실패",
   STALE: "입력이 바뀜 — 다시 읽기 필요",
 };
 
-/** 상태 알약 문구: 서버 상태 그대로 + DRAFT일 때 마지막 검사(불일치·최신 아님)를 구분 */
+/** 상태 알약 문구: 서버 상태 그대로 + DRAFT일 때 최신 검사가 불합격이면 구분(저장은 막지 않는다, AM-C3) */
 export function stateLabel(m: Pick<AsmMatch, "state" | "check">): string {
-  if (m.state === "DRAFT" && m.check) return m.check.current ? "검사 결과 불일치 — 고친 뒤 다시 검사" : "표를 바꿈 — 다시 검사";
+  if (m.state === "DRAFT" && m.check?.current && m.check.status !== "PASS") return "초안 — 경계 검사 불합격(저장은 가능)";
   return STATE_TEXT[m.state];
 }
 
-export const CHECK_STALE_TEXT = "검사가 최신이 아님 — 다시 검사하세요";
+export const CHECK_STALE_TEXT = "경계 검사가 최신이 아님 — 고급 영역에서 다시 검사할 수 있습니다";
+export const CHECK_FAIL_TEXT = "경계 검사에서 불합격한 행이 있습니다 — 저장은 막지 않지만 CAD와 조립이 맞는지 고급 영역의 결과를 확인하세요";
+/** 고급 [검사] 안내(AM-C3: 시간 제한 없음, 취소 가능) */
+export const CHECK_SLOW_TEXT = "오래 걸릴 수 있음(대형 모델은 수십 분) — 진행 중에도 [취소]할 수 있고, 검사는 저장에 필요하지 않습니다.";
 
 export const EXCLUDE_LABEL = "매칭 안 함";
 
@@ -232,16 +236,23 @@ export function checkBlock(m: AsmMatch, d: Draft): string | null {
   return bad ? bad.message : null;
 }
 
-/** [저장] 사유(가능하면 null): 마지막 검사 PASS + 그 뒤 행 변경 없음 */
+/** [저장] 사유(가능하면 null): 검사는 필요 없다(AM-C3) — 모든 바디가 선택 또는 매칭 안 함 + 매칭 행 ≥ 1 + 화면 검증 통과 + 작업 중 아님 */
 export function saveBlock(m: AsmMatch, d: Draft): string | null {
   if (m.state === "CONFIRMED") return "이미 저장되었습니다";
-  if (!m.check) return "경계 일치 검사를 먼저 하세요";
-  if (m.state === "CHECKING" || m.state === "SCANNING") return "작업이 진행 중입니다";
-  if (!m.check.current) return CHECK_STALE_TEXT;
-  if (m.check.status !== "PASS") return "검사를 통과해야 저장할 수 있습니다";
-  if (putKey(toPut(m, d)) !== putKey({ rows: m.rows, excluded_bodies: m.excluded_bodies })) return "표를 바꿨습니다 — 검사를 다시 하세요";
-  if (m.state !== "CHECKED") return "경계 일치 검사를 먼저 하세요";
-  return null;
+  return checkBlock(m, d);
+}
+
+export interface CheckNotice {
+  code: "ASM_CHECK_FAILED_WARN" | "ASM_CHECK_STALE_WARN";
+  text: string;
+}
+
+/** 저장 전 화면 경고(검사를 실행한 적이 있을 때만): 표가 검사 뒤 바뀌었으면 낡음, 같은데 불합격이면 불합격. 저장은 막지 않는다 */
+export function checkNotice(m: Pick<AsmMatch, "check" | "bodies" | "rows" | "excluded_bodies" | "state">, d: Draft): CheckNotice | null {
+  if (!m.check || m.state === "SCANNING" || m.state === "CHECKING" || m.state === "CONFIRMED") return null;
+  const changed = putKey(toPut(m, d)) !== putKey({ rows: m.rows, excluded_bodies: m.excluded_bodies });
+  if (!m.check.current || changed) return { code: "ASM_CHECK_STALE_WARN", text: CHECK_STALE_TEXT };
+  return m.check.status !== "PASS" ? { code: "ASM_CHECK_FAILED_WARN", text: CHECK_FAIL_TEXT } : null;
 }
 
 // ---------------------------------------------------------------- 표시 문구

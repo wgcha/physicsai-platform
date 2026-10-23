@@ -74,23 +74,39 @@ def put_asm_match_rows(body: S.AsmRowsPut, request: Request, match_id: str = Pat
 @router.post("/asm-matches/{match_id}/check", response_model=S.AsmCheckStarted, status_code=202, summary="조립 매칭 검사",
              responses=M.errors(e403="PERMISSION_DENIED", e404="NOT_FOUND",
                                 e409="ASM_ROWS_INCOMPLETE · ASM_MATCH_CONFIRMED · ASM_MATCH_BUSY · ASM_MATCH_STALE · STUDY_JOB_BUSY · TEMPLATE_NOT_CONFIGURED"),
-             openapi_extra=M.xmcp_tool("asm_match_check", "run", "Check the saved rows: outer nodes vs CAD faces, shared nodes (job ASM_MATCH)",
-                                       "저장한 행 검사: component 외곽 노드 ↔ CAD 경계면 거리·공유 노드(작업 ASM_MATCH)"))
+             openapi_extra=M.xmcp_tool("asm_match_check", "run", "Optional advanced check of the saved rows: outer nodes vs CAD faces, shared nodes (job ASM_MATCH, no time limit, cancellable)",
+                                       "저장한 행 선택 검사(고급): component 외곽 노드 ↔ CAD 경계면 거리·공유 노드(작업 ASM_MATCH, 시간 제한 없음, 취소 가능)"))
 def check_asm_match(request: Request, match_id: str = Path(max_length=64, description=MATCH_ID),
                     principal: Principal = Depends(get_principal)) -> JSONResponse:
-    """저장된 행으로 검사 작업(ASM_MATCH, mode check)을 시작한다. 끝나면 asm_match_get의 check에서 행별 판정을 본다.
+    """저장된 행으로 검사 작업(ASM_MATCH, mode check)을 시작한다. 검사는 선택(고급)이며 확정(confirm)의 조건이 아니다.
+    대형 모델은 수십 분 걸릴 수 있어 시간 제한이 없고(`asm_match.check_timeout_s` null) 작업 취소로 중단한다. 끝나면 asm_match_get의 check에서 행별 판정을 본다.
     원점·단위가 다르면 FAIL(suggest)이며 자동 보정은 없다. 부작용: 대기열 작업 1개·check/<seq> 폴더."""
     out = svc.check(get_ctx(request), principal, match_id, request_id(request), client_ip(request))
     return JSONResponse(S.AsmCheckStarted.model_validate(out).model_dump(mode="json"), status_code=202)
 
 
+@router.post("/asm-matches/{match_id}/cancel", response_model=S.AsmMatch, status_code=202, summary="조립 매칭 작업 취소",
+             responses=M.errors(e403="PERMISSION_DENIED", e404="NOT_FOUND", e409="JOB_TERMINAL(진행 중인 작업 없음)"),
+             openapi_extra=M.xmcp_exclude("작업 취소는 cancel_job(같은 토큰이 만든 작업)을 쓴다 — 이 경로는 화면 [취소]용(power)"))
+def cancel_asm_match(request: Request, match_id: str = Path(max_length=64, description=MATCH_ID),
+                     principal: Principal = Depends(get_principal)) -> JSONResponse:
+    """진행 중(대기·실행)인 목록 읽기·검사 작업을 취소한다(power). 검사에는 시간 제한이 없으므로(AM-C3) 사용자가 직접 멈추는 경로다.
+    실행 중이면 워커가 프로세스를 종료하며 작업이 CANCELED가 되고, 매칭 표(행)는 그대로 남는다. 진행 중 작업이 없으면 409 JOB_TERMINAL.
+    부작용: 작업 취소 요청 1건."""
+    out = svc.cancel(get_ctx(request), principal, match_id, request_id(request), client_ip(request))
+    return JSONResponse(S.AsmMatch.model_validate(out).model_dump(mode="json"), status_code=202)
+
+
 @router.post("/asm-matches/{match_id}/confirm", response_model=S.AsmMatch, summary="조립 매칭 확정(저장)",
              responses=M.errors(e403="PERMISSION_DENIED", e404="NOT_FOUND",
-                                e409="ASM_CHECK_REQUIRED(마지막 검사 없음·FAIL·행이 달라짐) · ASM_MATCH_STALE(조립 트리·STEP·피처 변경) · ASM_MATCH_BUSY"),
-             openapi_extra=M.xmcp_tool("asm_match_confirm", "run", "Confirm (save) a passed assembly match; consumers (DOE, template registration) use it",
-                                       "통과한 조립 매칭 확정(저장) — DOE·템플릿 등록이 사용"))
+                                e409="ASM_ROWS_INCOMPLETE · ASM_MATCH_STALE(조립 트리·STEP·피처 변경) · ASM_MATCH_BUSY",
+                                e422="ASM_ROW_INVALID"),
+             openapi_extra=M.xmcp_tool("asm_match_confirm", "run", "Confirm (save) the assembly match rows; the boundary check is optional (failed or outdated check only adds warnings)",
+                                       "조립 매칭 확정(저장) — 경계 검사는 선택(불합격·낡음은 warnings에만 남음), DOE·템플릿 등록이 사용"))
 def confirm_asm_match(request: Request, match_id: str = Path(max_length=64, description=MATCH_ID),
                       principal: Principal = Depends(get_principal)) -> dict:
-    """마지막 검사가 PASS이고 그 뒤 행·입력이 바뀌지 않았을 때만 확정본(asm_match.json)을 만든다. 확정본은 바꿀 수 없고 DOE·세트가
-    자기 폴더로 복사해 쓴다. 이미 확정이면 그대로 돌려준다(멱등). 부작용: asm_match.json 작성."""
+    """행이 완전하고(모든 바디가 component 또는 매칭 안 함, 매칭 행 1개 이상) 조립·STEP·피처가 그대로면 확정본(asm_match.json)을 만든다.
+    경계 검사는 필수가 아니다 — 검사를 실행했는데 불합격이거나 현재 행과 다르면 확정은 되고 응답 warnings에 ASM_CHECK_FAILED_WARN·
+    ASM_CHECK_STALE_WARN이 남는다. 확정본은 바꿀 수 없고 DOE·세트가 자기 폴더로 복사해 쓴다. 이미 확정이면 그대로 돌려준다(멱등).
+    부작용: asm_match.json 작성."""
     return svc.confirm(get_ctx(request), principal, match_id, request_id(request), client_ip(request))
