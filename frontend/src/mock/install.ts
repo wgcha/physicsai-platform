@@ -7,8 +7,10 @@
 // ?queue=demo 이면 GPU·CPU 대기열 시드(job-queues.md), ?queue=legacy 이면 옛 응답(gpu·cpu 없음).
 // ?upload=0 이면 업로드 꺼짐(경로 칸에 "내 PC에서 올리기" 탭 없음, 기본 켜짐 — upload-report.md).
 // ?c3d=hold|fail|expire 이면 결과 3D 컨투어 생성 시연(대기 안내에서 멈춤·결과 실패·첫 프레임 410, geometry-view.md §13.6).
+// ?c3d=jobfail|toolarge|toolarge_comps|toolarge_glb|toolarge_frames = 작업 실패·크기 상한 결과 실패(대체 사유 한 줄, contour3d-field §12).
+// ?c3=lod|nodisp|v1|large 이면 컨투어 데이터 시나리오(저해상도 메시·변위 없음·schema 1·대형 합성 약 81만 노드 + LOD, contour3d-field).
 import { MockServer, createMockFetch } from "./server";
-import { setGvMode } from "./geomView";
+import { setGvMode, type GvMode } from "./geomView";
 import { nativeTrainParams } from "./geometry";
 import { mockSummary, normalizeFilter } from "./extractFilter";
 import type { MockUserKey } from "./data";
@@ -43,7 +45,12 @@ export function installMockFetch() {
     Object.assign(server.p2.setups["s-cushion"], { engine: "native", parameters, tpl: null, extract_filter: filter, extract_summary: filter ? mockSummary([{ type: "THICKNESS" }, { type: "HOLE_POS_U" }, { type: "FILLET_RADIUS" }], filter) : null });
   }
   const c3d = params.get("c3d");
-  if (c3d === "hold" || c3d === "fail" || c3d === "expire") setGvMode(server, { c3d });
+  if (c3d && ["hold", "fail", "expire", "jobfail", "toolarge", "toolarge_comps", "toolarge_glb", "toolarge_frames"].includes(c3d)) setGvMode(server, { c3d: c3d as NonNullable<GvMode["c3d"]> });
+  const c3 = params.get("c3");
+  if (c3 === "lod") setGvMode(server, { c3data: { lod: true } });
+  else if (c3 === "nodisp") setGvMode(server, { c3data: { disp: false } });
+  else if (c3 === "v1") setGvMode(server, { c3data: { schema: 1 } });
+  else if (c3 === "large") setGvMode(server, { c3data: { nx: 900, ny: 900, frames: 8, lod: true } });
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

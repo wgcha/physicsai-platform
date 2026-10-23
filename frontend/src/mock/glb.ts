@@ -1,17 +1,21 @@
 // 목 전용 작은 GLB(glTF 2.0 바이너리) 작성기(geometry-view.md §4.1·§13.4 모양): 헤더 + JSON 청크 + BIN 청크, 4바이트 정렬, 확장 없음.
 // 루트 노드 아래 노드마다 primitive 1개. 사용자 정의 속성은 `_` 접두(UNSIGNED_SHORT는 byteStride 4 — GV-C1).
 
-export type GlbAttr = Float32Array | Uint16Array | Uint32Array;
+/** Int16Array = KHR_mesh_quantization 위치(SHORT normalized VEC3, byteStride 8 — 2바이트 채움). 노드 `transform`으로 복원한다 */
+export type GlbAttr = Float32Array | Uint16Array | Uint32Array | Int16Array;
 export interface GlbNode {
   name: string;
   mode: 0 | 1 | 4; // POINTS · LINES · TRIANGLES
   attributes: Record<string, { data: GlbAttr; size: 1 | 3 }>;
   indices?: Uint32Array;
+  /** 노드 translation·scale(양자화 위치 복원용) */
+  transform?: { translation: [number, number, number]; scale: [number, number, number] };
 }
 
 const FLOAT = 5126;
 const USHORT = 5123;
 const UINT = 5125;
+const SHORT = 5122;
 
 export function writeGlb(rootName: string, nodes: GlbNode[]): Uint8Array {
   const chunks: Uint8Array[] = [];
@@ -33,7 +37,27 @@ export function writeGlb(rootName: string, nodes: GlbNode[]): Uint8Array {
     let bytes: Uint8Array;
     let stride: number | undefined;
     let componentType = FLOAT;
-    if (data instanceof Uint16Array) {
+    let normalized = false;
+    let minMax: { min: number[]; max: number[] } | null = null;
+    if (data instanceof Int16Array) {
+      // VEC3 SHORT normalized: 정점마다 6바이트 + 2바이트 채움(stride 8)
+      componentType = SHORT;
+      normalized = true;
+      const n = data.length / 3;
+      const wide = new Int16Array(n * 4);
+      const min = [Infinity, Infinity, Infinity];
+      const max = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < n; i++)
+        for (let k = 0; k < 3; k++) {
+          const v = data[i * 3 + k];
+          wide[i * 4 + k] = v;
+          if (v < min[k]) min[k] = v;
+          if (v > max[k]) max[k] = v;
+        }
+      bytes = new Uint8Array(wide.buffer);
+      stride = 8;
+      minMax = { min, max };
+    } else if (data instanceof Uint16Array) {
       componentType = USHORT;
       // 4바이트 정렬: 값 하나마다 4바이트(2바이트 값 + 2바이트 채움)
       const wide = new Uint16Array(data.length * 2);
@@ -46,7 +70,8 @@ export function writeGlb(rootName: string, nodes: GlbNode[]): Uint8Array {
     }
     const view = push(bytes, isIndex ? undefined : stride, isIndex ? 34963 : 34962);
     const count = data.length / size;
-    const acc: Record<string, unknown> = { bufferView: view, componentType, count, type: size === 3 ? "VEC3" : "SCALAR" };
+    const acc: Record<string, unknown> = { bufferView: view, componentType, count, type: size === 3 ? "VEC3" : "SCALAR", ...(normalized ? { normalized: true } : {}) };
+    if (minMax) Object.assign(acc, minMax);
     if (size === 3 && data instanceof Float32Array) {
       const min = [Infinity, Infinity, Infinity];
       const max = [-Infinity, -Infinity, -Infinity];
@@ -68,11 +93,13 @@ export function writeGlb(rootName: string, nodes: GlbNode[]): Uint8Array {
     if (n.indices) prim.indices = accessor(n.indices, 1, true);
     return { name: n.name, primitives: [prim] };
   });
+  const quantized = nodes.some((n) => Object.values(n.attributes).some((a) => a.data instanceof Int16Array));
   const json = {
     asset: { version: "2.0", generator: "physicsai mock" },
     scene: 0,
     scenes: [{ nodes: [0] }],
-    nodes: [{ name: rootName, children: nodes.map((_, i) => i + 1), extras: { unit: "mm", up_axis: "Z" } }, ...nodes.map((n, i) => ({ name: n.name, mesh: i }))],
+    ...(quantized ? { extensionsUsed: ["KHR_mesh_quantization"], extensionsRequired: ["KHR_mesh_quantization"] } : {}),
+    nodes: [{ name: rootName, children: nodes.map((_, i) => i + 1), extras: { unit: "mm", up_axis: "Z" } }, ...nodes.map((n, i) => ({ name: n.name, mesh: i, ...(n.transform ?? {}) }))],
     meshes,
     materials: [{ name: "default", doubleSided: true, pbrMetallicRoughness: { baseColorFactor: [0.7, 0.7, 0.7, 1], metallicFactor: 0, roughnessFactor: 1 } }],
     accessors,

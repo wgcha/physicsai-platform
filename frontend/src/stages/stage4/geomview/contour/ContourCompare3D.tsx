@@ -7,8 +7,9 @@ import { ChunkErrorBoundary } from "../../../../lib/lazyWithReload";
 import { useInView } from "../../../../hooks/useInView";
 import type { ContourSceneApi } from "../threeScene";
 import { fmtLegend, legendGradient, legendTicks } from "./colormap";
-import { commonLegend, DEFORM_SCALES, FPS_CHOICES, fmtTime, nextFrame, pairFrame, prevFrame, showsMedia, unionBox, type ContourManifest } from "./contourCore";
-import { ContourStateView, useContour3dEnabled, type SlotRender } from "./ContourSlot";
+import { commonLegend, defaultDeformScale, DEFORM_SCALES, FPS_CHOICES, fmtTime, manifestHasDisp, nextFrame, pairFrame, prevFrame, showsMedia, unionBox, type ContourManifest } from "./contourCore";
+import { ContourStateView, useContour3dEnabled, useContour3dOff, type SlotRender } from "./ContourSlot";
+import { ReasonLine } from "./ContourReason";
 import { MediaButton } from "./MediaDialog";
 import { useContour3d } from "./useContour3d";
 
@@ -21,6 +22,7 @@ export interface CompareSide {
 
 export function ContourCompare3D({ left, right, media = null, mediaTitle, children }: { left: CompareSide; right: CompareSide; media?: ReactNode; mediaTitle?: string; children: (r: SlotRender) => ReactNode }) {
   const enabled = useContour3dEnabled();
+  const off = useContour3dOff(!!left.source || !!right.source);
   const [inView, ref] = useInView();
   const L = useContour3d(enabled ? left.source : null, { visible: inView });
   const R = useContour3d(enabled ? right.source : null, { visible: inView });
@@ -31,7 +33,7 @@ export function ContourCompare3D({ left, right, media = null, mediaTitle, childr
   const [frame, setFrame] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [fps, setFps] = useState(5);
-  const [scale, setScale] = useState(1);
+  const [scaleOwn, setScale] = useState<number | null>(null);
   const [link, setLink] = useState(true);
   const [common, setCommon] = useState(true);
   const live = enabled && (!!left.source || !!right.source);
@@ -62,7 +64,10 @@ export function ContourCompare3D({ left, right, media = null, mediaTitle, childr
   const count = mL?.frames.count ?? mR?.frames.count ?? 0;
   const at = Math.max(0, Math.min(frame, count - 1));
   const rightFrame = mL && mR ? pairFrame(mL, mR, at) : at;
-  const hasDisp = !!(mL?.frames.has_disp || mR?.frames.has_disp);
+  // 변형 배율 컨트롤은 불러온 양쪽 모두 변위가 있을 때만(한쪽만 없어도 숨김). 기본 배율은 큰 쪽 기준(변위 레코드가 크면 0)
+  const loaded = [mL, mR].filter((x): x is ContourManifest => !!x);
+  const hasDisp = loaded.length > 0 && loaded.every(manifestHasDisp);
+  const scale = scaleOwn ?? (loaded.length ? Math.min(...loaded.map(defaultDeformScale)) : 0);
   const leg = commonLegend(mL, mR);
   const useCommon = common && leg.shareable;
   const customScale = !(DEFORM_SCALES as readonly number[]).includes(scale);
@@ -74,9 +79,23 @@ export function ContourCompare3D({ left, right, media = null, mediaTitle, childr
     return () => clearInterval(t);
   }, [playing, fps, count]);
 
-  if (!live) return <>{children({ aside: null, mode: "media", body: <div className="contour-slot media">{media}</div> })}</>;
+  if (!live)
+    return (
+      <>
+        {children({
+          aside: null,
+          mode: "media",
+          body: (
+            <div className="contour-slot media">
+              {off && <ReasonLine text={off} />}
+              {media}
+            </div>
+          ),
+        })}
+      </>
+    );
 
-  const ctl = (m: ContourManifest | null, idx: number) => ({ frame: idx, scale: m?.frames.has_disp ? scale : 0, legend: useCommon ? leg.range : null, showLegend: !useCommon });
+  const ctl = (m: ContourManifest | null, idx: number) => ({ frame: idx, scale: hasDisp && m && manifestHasDisp(m) ? scale : 0, legend: useCommon ? leg.range : null, showLegend: !useCommon, playing });
   const inline = both ? showsMedia(L) || showsMedia(R) : showsMedia(left.source ? L : R);
   const aside = (
     <span className="run-action-row">
@@ -172,17 +191,19 @@ export function ContourCompare3D({ left, right, media = null, mediaTitle, childr
               ))}
             </select>
           </label>
-          <label className="small" title={hasDisp ? "변형 후 위치 = 원위치 + 배율 × 변위" : "변위가 없는 결과입니다"}>
-            변형 배율{" "}
-            <select value={customScale ? "custom" : String(scale)} disabled={!hasDisp} onChange={(e) => setScale(e.target.value === "custom" ? 2 : Number(e.target.value))} aria-label="변형 배율">
-              {DEFORM_SCALES.map((s) => (
-                <option key={s} value={s}>
-                  ×{s}
-                </option>
-              ))}
-              <option value="custom">직접</option>
-            </select>
-          </label>
+          {hasDisp && (
+            <label className="small" title="변형 후 위치 = 원위치 + 배율 × 변위">
+              변형 배율{" "}
+              <select value={customScale ? "custom" : String(scale)} onChange={(e) => setScale(e.target.value === "custom" ? 2 : Number(e.target.value))} aria-label="변형 배율">
+                {DEFORM_SCALES.map((s) => (
+                  <option key={s} value={s}>
+                    ×{s}
+                  </option>
+                ))}
+                <option value="custom">직접</option>
+              </select>
+            </label>
+          )}
           <label className="check small">
             <input type="checkbox" checked={link} onChange={(e) => setLink(e.target.checked)} />
             시점 연결

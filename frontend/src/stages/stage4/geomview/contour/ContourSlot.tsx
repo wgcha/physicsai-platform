@@ -8,7 +8,8 @@ import { useFeature } from "../../../../components/FeatureGate";
 import { useInView } from "../../../../hooks/useInView";
 import { ChunkErrorBoundary, lazyWithReload } from "../../../../lib/lazyWithReload";
 import { webglAvailable } from "../webgl";
-import { showsMedia } from "./contourCore";
+import { featureOffText, NO_SOURCE_TEXT, showsMedia, WEBGL_TEXT } from "./contourCore";
+import { ReasonLine } from "./ContourReason";
 import { MediaButton } from "./MediaDialog";
 import { useContour3d } from "./useContour3d";
 
@@ -22,6 +23,15 @@ export function useContour3dEnabled(): boolean {
   return f.enabled && gl;
 }
 
+/** 3D를 쓸 수 없을 때 PNG 위에 보일 사유(§12): 기능 꺼짐(missing 첫 키) → WebGL 불가 → 원본 없음. 쓸 수 있으면 null */
+export function useContour3dOff(hasSource: boolean): string | null {
+  const f = useFeature("contour3d");
+  const [gl] = useState(webglAvailable);
+  if (!f.enabled) return featureOffText(f.missing);
+  if (!gl) return WEBGL_TEXT;
+  return hasSource ? null : NO_SOURCE_TEXT;
+}
+
 export interface SlotRender {
   /** 카드 머리 aside([그림/영상] 버튼) — 3D가 아니거나 media가 없으면 null */
   aside: ReactNode;
@@ -31,10 +41,25 @@ export interface SlotRender {
 
 export function ContourSlot({ source, media = null, mediaTitle, delayMs, children }: { source: Contour3dCreate | null; media?: ReactNode; mediaTitle?: string; delayMs?: number; children: (r: SlotRender) => ReactNode }) {
   const enabled = useContour3dEnabled();
+  const off = useContour3dOff(!!source);
   const [inView, ref] = useInView();
   const live = enabled && !!source;
   const ctl = useContour3d(live ? source : null, { visible: inView, delayMs });
-  if (!live) return <>{children({ aside: null, mode: "media", body: <div className="contour-slot media">{media}</div> })}</>;
+  if (!live)
+    return (
+      <>
+        {children({
+          aside: null,
+          mode: "media",
+          body: (
+            <div className="contour-slot media">
+              {off && <ReasonLine text={off} />}
+              {media}
+            </div>
+          ),
+        })}
+      </>
+    );
   const aside = media != null && !showsMedia(ctl) ? <MediaButton title={mediaTitle}>{media}</MediaButton> : null;
   const body = (
     <div className="contour-slot" ref={ref} data-testid="contour-slot">

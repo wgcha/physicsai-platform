@@ -3,7 +3,8 @@
 // 자동 요청(contour3d-default C3D-3~6, `auto`): 칸이 보일 때 한 번(행 선택은 머무른 뒤), 429 PREVIEW_BUSY면 칸이 보이는 동안 일정 간격으로 다시,
 // 403 PERMISSION_DENIED(읽기 사용자의 미적중)는 denied로 알린다. source가 null이면 아무것도 하지 않는다.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ApiError, api, errorMessage, type Contour3d, type Contour3dCreate } from "../../../../api";
+import { ApiError, api, errorMessage, type Contour3dCreate } from "../../../../api";
+import type { Contour3dEx as Contour3d } from "./contourCore";
 import { POLL } from "../../../../lib/poll";
 import { sleep } from "../expire";
 
@@ -21,6 +22,8 @@ export interface ContourAuto {
 export function useContour3d(source: Contour3dCreate | null, auto?: ContourAuto) {
   const [c, setC] = useState<Contour3d | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** 요청 오류의 상태·코드·`missing`(409 CONTOUR3D_NOT_CONFIGURED 응답) — 대체 사유 문구용(contour3d-field §12) */
+  const [errInfo, setErrInfo] = useState<{ status: number; code: string; missing: string[] } | null>(null);
   const [busy, setBusy] = useState(false);
   /** 429: 앞선 생성이 끝나면 이어서 요청하는 중 */
   const [queued, setQueued] = useState(false);
@@ -45,6 +48,7 @@ export function useContour3d(source: Contour3dCreate | null, auto?: ContourAuto)
     gen.current++;
     setC(null);
     setError(null);
+    setErrInfo(null);
     setBusy(false);
     setQueued(false);
     setDenied(false);
@@ -66,6 +70,7 @@ export function useContour3d(source: Contour3dCreate | null, auto?: ContourAuto)
     if (!src.current) return;
     const my = ++gen.current;
     setError(null);
+    setErrInfo(null);
     setDenied(false);
     setBusy(true);
     try {
@@ -84,6 +89,10 @@ export function useContour3d(source: Contour3dCreate | null, auto?: ContourAuto)
       } else {
         setQueued(false);
         setError(errorMessage(e));
+        if (e instanceof ApiError) {
+          const missing = (e.detail as { missing?: unknown }).missing;
+          setErrInfo({ status: e.status, code: e.code, missing: Array.isArray(missing) ? missing.map(String) : [] });
+        }
       }
     } finally {
       if (my === gen.current) setBusy(false);
@@ -122,7 +131,7 @@ export function useContour3d(source: Contour3dCreate | null, auto?: ContourAuto)
     return () => clearTimeout(t);
   }, [on, visible, c, error, denied, busy, queued, delay, retry, key, start]);
 
-  return { c, error, busy, queued, denied, start, cancel };
+  return { c, error, errInfo, busy, queued, denied, start, cancel };
 }
 
 export type ContourCtl = ReturnType<typeof useContour3d>;

@@ -72,7 +72,10 @@ export type ArtifactKind =
   | "GEOM_PREVIEW_MANIFEST"
   | "CONTOUR3D_GLB"
   | "CONTOUR3D_FRAMES"
-  | "CONTOUR3D_MANIFEST";
+  | "CONTOUR3D_MANIFEST"
+  // contour3d-field §5.6(v0.2.10): 변위 파일·저해상도 메시
+  | "CONTOUR3D_DISP"
+  | "CONTOUR3D_LOD";
 
 export const TERMINAL_STATES: JobState[] = ["SUCCEEDED", "FAILED", "CANCELED", "INTERRUPTED"];
 

@@ -1,5 +1,5 @@
 // three.js 장면(geometry-view.md §7·§13.6) — 3D 패널을 열 때만 동적 import("./threeScene")로 적재한다(별도 청크, CDN·디코더 로더 없음).
-// 허용 모듈: three 코어 + examples/jsm GLTFLoader·OrbitControls·CSS2DRenderer(§7.1). 렌더는 요청 시(onDemand), 픽셀 비 ≤ 2.
+// 허용 모듈: three 코어 + examples/jsm GLTFLoader·OrbitControls·CSS2DRenderer + libs/meshopt_decoder.module.js(contour3d-field C3F-2, 컨투어 GLB 읽기 — contour/contourGlb.ts). 렌더는 요청 시(onDemand), 픽셀 비 ≤ 2.
 // 좌표 mm·Z-up(카메라 up = Z). 하이라이트 = faces[].tri 구간 → geometry 그룹 + 재질 배열(정점 탐색 없음).
 import {
   AmbientLight,
@@ -31,6 +31,7 @@ import {
   WebGLRenderer,
 } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { loadContourGlb } from "./contour/contourGlb";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { CSS2DObject, CSS2DRenderer } from "three/examples/jsm/renderers/CSS2DRenderer.js";
 import { faceGroups, lightColor, nearestScreenPoint, SELECTION_COLORS, type FixedCluster, type Highlight, type ViewManifest, type DimDraw, type Vec3 } from "./viewerCore";
@@ -479,10 +480,38 @@ export function createGeomScene(container: HTMLElement, opts: { onPick: (hit: { 
 
 // ---------------------------------------------------------------- 결과 컨투어
 
+export type ContourLevel = "lod" | "full";
+export interface ContourMeshInfo {
+  nodes: number;
+  /** 변형 전 위치(float32 mm) */
+  base: Float32Array;
+  nodeIds: Uint32Array | null;
+  /** LOD 메시의 원 정점 번호(`_SRC`) — 전체 메시는 null */
+  src: Uint32Array | null;
+}
+/** 극값 마커: 변형 반영 위치(mm) */
+export interface ContourMarker {
+  kind: "max" | "min";
+  pos: Vec3;
+}
+export interface ContourPick {
+  level: ContourLevel;
+  /** 그 메시의 정점 번호(LOD면 `_SRC`로 전체 번호) */
+  vertex: number;
+  /** 컨테이너 안 클릭 위치(px) */
+  x: number;
+  y: number;
+}
+
 export interface ContourSceneApi {
-  setMesh(buf: ArrayBuffer): Promise<{ nodes: number; base: Float32Array }>;
-  setColors(colors: Float32Array): void;
-  setPositions(pos: Float32Array): void;
+  /** level = 전체(기본) 또는 LOD. 처음 올린 메시가 보이고, 카메라는 처음 한 번만 맞춘다(전환해도 유지) */
+  setMesh(buf: ArrayBuffer, level?: ContourLevel): Promise<ContourMeshInfo>;
+  /** 보일 메시(올라와 있지 않으면 있는 쪽) */
+  setLevel(level: ContourLevel): void;
+  setColors(colors: Float32Array, level?: ContourLevel): void;
+  setPositions(pos: Float32Array, level?: ContourLevel): void;
+  /** 화면 크기가 고정된 극값 마커(빈 목록 = 숨김) */
+  setMarkers(markers: ContourMarker[]): void;
   setLoop(on: boolean): void;
   fit(): void;
   /** 비교 모드(contour3d-default §3.1): 시점 연결·두 메시 bbox 합집합 맞춤 */
@@ -490,6 +519,10 @@ export interface ContourSceneApi {
   setCamera(s: CameraState): void;
   /** 사용자가 돌리거나 확대할 때만 호출(setCamera로 바뀐 것은 부르지 않는다). 해제 함수를 돌려준다 */
   onCameraChange(cb: (s: CameraState) => void): () => void;
+  /** 조작 시작·끝(휠 포함) = start·end, 다른 쪽이 시점을 연결해 움직였을 때 = pulse(LOD 전환용) */
+  onInteract(cb: (e: "start" | "end" | "pulse") => void): () => void;
+  /** 클릭(이동 4px 미만)한 곳에서 가장 가까운 정점(없으면 null) */
+  onPick(cb: (hit: ContourPick | null) => void): () => void;
   getBox(): BoxState | null;
   fitBox(box: BoxState): void;
   dispose(): void;
@@ -498,9 +531,14 @@ export interface ContourSceneApi {
 export function createContourScene(container: HTMLElement, opts: { onLost: () => void }): ContourSceneApi {
   const st = new Stage(container, opts.onLost);
   const root = new Group();
-  st.scene.add(root);
-  let mesh: Mesh | null = null;
+  const markerRoot = new Group();
+  st.scene.add(root, markerRoot);
+  const meshes: Partial<Record<ContourLevel, Mesh>> = {};
+  const infos: Partial<Record<ContourLevel, ContourMeshInfo>> = {};
+  let want: ContourLevel | null = null;
   const listeners = new Set<(s: CameraState) => void>();
+  const interact = new Set<(e: "start" | "end" | "pulse") => void>();
+  const picks = new Set<(h: ContourPick | null) => void>();
   let applying = false;
   const cam = (): CameraState => ({
     position: st.camera.position.toArray() as [number, number, number],
@@ -513,44 +551,102 @@ export function createContourScene(container: HTMLElement, opts: { onLost: () =>
     const s = cam();
     listeners.forEach((f) => f(s));
   });
-  return {
-    async setMesh(buf) {
-      disposeTree(root);
-      root.clear();
-      const obj = await parseGlb(buf);
-      root.add(obj);
-      obj.traverse((o) => {
-        if (!mesh && o instanceof Mesh) mesh = o;
-      });
-      if (!mesh) throw new Error("contour.glb에 면 메시가 없습니다");
-      const g = (mesh as Mesh).geometry as BufferGeometry;
-      const p = g.getAttribute("position");
-      const base = new Float32Array(p.count * 3);
-      for (let i = 0; i < p.count; i++) {
-        base[i * 3] = p.getX(i);
-        base[i * 3 + 1] = p.getY(i);
-        base[i * 3 + 2] = p.getZ(i);
+  st.controls.addEventListener("start", () => interact.forEach((f) => f("start")));
+  st.controls.addEventListener("end", () => interact.forEach((f) => f("end")));
+  const shown = (): ContourLevel | null => (want && meshes[want] ? want : meshes.full ? "full" : meshes.lod ? "lod" : null);
+  const applyLevel = () => {
+    const l = shown();
+    for (const k of ["lod", "full"] as const) {
+      const m = meshes[k];
+      if (m) m.visible = k === l;
+    }
+    st.request();
+  };
+  const attr = (level: ContourLevel, name: "color" | "position") => meshes[level]?.geometry.getAttribute(name) as BufferAttribute | undefined;
+
+  // 극값 마커: 화면 크기 고정(sizeAttenuation=false) 링 — 깊이 검사 없이 늘 보인다
+  const tex = { max: ringTexture("#e5484d"), min: ringTexture("#3c6edc") };
+  const sprites = (["max", "min"] as const).map((k) => {
+    const sp = new Sprite(new SpriteMaterial({ map: tex[k], depthTest: false, transparent: true, sizeAttenuation: false }));
+    sp.scale.set(0.045, 0.045, 1);
+    sp.renderOrder = 10;
+    sp.visible = false;
+    sp.userData.kind = k;
+    markerRoot.add(sp);
+    return sp;
+  });
+
+  const ray = new Raycaster();
+  st.onClick((ndc) => {
+    const l = shown();
+    const m = l ? meshes[l] : null;
+    if (!l || !m) return;
+    ray.setFromCamera(ndc, st.camera);
+    const hit = ray.intersectObject(m, false)[0];
+    const x = ((ndc.x + 1) / 2) * st.container.clientWidth;
+    const y = ((1 - ndc.y) / 2) * st.container.clientHeight;
+    if (!hit || !hit.face) return picks.forEach((f) => f(null));
+    const pos = (m.geometry as BufferGeometry).getAttribute("position");
+    let best = hit.face.a;
+    let bd = Infinity;
+    for (const v of [hit.face.a, hit.face.b, hit.face.c]) {
+      const d = hit.point.distanceToSquared(new Vector3(pos.getX(v), pos.getY(v), pos.getZ(v)));
+      if (d < bd) {
+        bd = d;
+        best = v;
       }
-      g.setAttribute("position", new BufferAttribute(base.slice(), 3));
-      g.setAttribute("color", new BufferAttribute(new Float32Array(p.count * 3).fill(0.6), 3));
-      (mesh as Mesh).material = new MeshLambertMaterial({ vertexColors: true, side: DoubleSide });
-      st.fitTo([root]);
-      return { nodes: p.count, base };
+    }
+    picks.forEach((f) => f({ level: l, vertex: best, x, y }));
+  });
+
+  return {
+    async setMesh(buf, level = "full") {
+      const r = await loadContourGlb(buf);
+      const first = !meshes.full && !meshes.lod;
+      const old = meshes[level];
+      if (old) {
+        root.remove(old);
+        old.geometry.dispose();
+        (old.material as Material).dispose();
+      }
+      r.geometry.setAttribute("color", new BufferAttribute(new Float32Array(r.nodes * 3).fill(0.6), 3));
+      const mesh = new Mesh(r.geometry, new MeshLambertMaterial({ vertexColors: true, side: DoubleSide }));
+      mesh.frustumCulled = false; // 변형으로 위치가 바뀐다
+      meshes[level] = mesh;
+      infos[level] = { nodes: r.nodes, base: r.base, nodeIds: r.nodeIds, src: r.src };
+      root.add(mesh);
+      if (first) want = level;
+      applyLevel();
+      if (first) st.fitTo([root]);
+      return infos[level]!;
     },
-    setColors(colors) {
-      const a = (mesh?.geometry as BufferGeometry | undefined)?.getAttribute("color") as BufferAttribute | undefined;
+    setLevel(level) {
+      want = level;
+      applyLevel();
+    },
+    setColors(colors, level = "full") {
+      const a = attr(level, "color");
       if (!a) return;
       (a.array as Float32Array).set(colors.subarray(0, a.array.length));
       a.needsUpdate = true;
-      st.request();
+      if (shown() === level) st.request();
     },
-    setPositions(pos) {
-      const g = mesh?.geometry as BufferGeometry | undefined;
-      const a = g?.getAttribute("position") as BufferAttribute | undefined;
+    setPositions(pos, level = "full") {
+      const a = attr(level, "position");
+      const g = meshes[level]?.geometry;
       if (!g || !a) return;
       (a.array as Float32Array).set(pos.subarray(0, a.array.length));
       a.needsUpdate = true;
+      g.boundingBox = null;
       g.computeBoundingSphere();
+      if (shown() === level) st.request();
+    },
+    setMarkers(markers) {
+      for (const sp of sprites) {
+        const mk = markers.find((x) => x.kind === sp.userData.kind);
+        sp.visible = !!mk;
+        if (mk) sp.position.set(...mk.pos);
+      }
       st.request();
     },
     setLoop(on) {
@@ -572,14 +668,26 @@ export function createContourScene(container: HTMLElement, opts: { onLost: () =>
       } finally {
         applying = false;
       }
+      interact.forEach((f) => f("pulse"));
       st.request();
     },
     onCameraChange(cb) {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
+    onInteract(cb) {
+      interact.add(cb);
+      return () => interact.delete(cb);
+    },
+    onPick(cb) {
+      picks.add(cb);
+      return () => picks.delete(cb);
+    },
     getBox() {
-      const b = new Box3().expandByObject(root);
+      const b = new Box3();
+      const l = shown();
+      const m = l ? meshes[l] : null;
+      if (m) b.expandByObject(m);
       return b.isEmpty() ? null : { min: b.min.toArray() as Vec3, max: b.max.toArray() as Vec3 };
     },
     fitBox(b) {
@@ -587,6 +695,8 @@ export function createContourScene(container: HTMLElement, opts: { onLost: () =>
     },
     dispose() {
       listeners.clear();
+      interact.clear();
+      picks.clear();
       st.dispose();
     },
   };
