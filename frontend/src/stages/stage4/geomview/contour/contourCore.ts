@@ -14,6 +14,11 @@ export interface ContourFrameInfo {
   /** schema 2: 프레임 최소·최대 값의 정점 번호(GLB 정점 순서) */
   min_v?: number | null;
   max_v?: number | null;
+  /** 극값 노드 ID와 첫 프레임 기준 원 좌표(mm) — LOD에 그 정점이 없어도 마커를 그린다. 없으면(예전 v2 manifest) 메시에서 찾는다 */
+  max_node?: number | null;
+  max_xyz?: [number, number, number] | null;
+  min_node?: number | null;
+  min_xyz?: [number, number, number] | null;
 }
 
 export interface ContourLodInfo {
@@ -209,6 +214,9 @@ export interface Extreme {
   vertex: number;
   /** manifest의 정확값 */
   value: number;
+  /** manifest의 노드 ID·원 좌표(mm, 변위 전) — 없으면 null(메시에서 찾는다) */
+  node: number | null;
+  xyz: [number, number, number] | null;
 }
 
 /** 현재 프레임의 극값 노드(최대·최소). schema 1(정점 번호 없음)은 빈 목록 */
@@ -216,8 +224,9 @@ export function frameExtremes(m: ContourManifest, i: number): Extreme[] {
   const f = m.frames.list[i];
   if (!f) return [];
   const out: Extreme[] = [];
-  if (f.max_v != null && f.max != null) out.push({ kind: "max", vertex: f.max_v, value: f.max });
-  if (f.min_v != null && f.min != null) out.push({ kind: "min", vertex: f.min_v, value: f.min });
+  const xyz = (a: unknown): [number, number, number] | null => (Array.isArray(a) && a.length === 3 && a.every((x) => typeof x === "number" && Number.isFinite(x)) ? (a as [number, number, number]) : null);
+  if (f.max_v != null && f.max != null) out.push({ kind: "max", vertex: f.max_v, value: f.max, node: f.max_node ?? null, xyz: xyz(f.max_xyz) });
+  if (f.min_v != null && f.min != null) out.push({ kind: "min", vertex: f.min_v, value: f.min, node: f.min_node ?? null, xyz: xyz(f.min_xyz) });
   return out;
 }
 
@@ -249,6 +258,27 @@ export function warningLines(m: ContourManifest | null): { code: string; text: s
 // ---------------------------------------------------------------- LOD ↔ 전체 해상도(§7.3) · 바이트 예산 캐시
 
 export const LOD_SETTLE_MS = 250;
+/** 뷰어 설정 [항상 전체 해상도](§7.3) 저장 키 — localStorage, 실패해도 동작(기본 끔) */
+export const ALWAYS_FULL_KEY = "paiContourAlwaysFull";
+export function loadAlwaysFull(): boolean {
+  try {
+    return window.localStorage.getItem(ALWAYS_FULL_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+export function saveAlwaysFull(on: boolean): void {
+  try {
+    if (on) window.localStorage.setItem(ALWAYS_FULL_KEY, "1");
+    else window.localStorage.removeItem(ALWAYS_FULL_KEY);
+  } catch {
+    /* 저장 실패는 무시 */
+  }
+}
+/** 전체 해상도 받는 중 안내 문구(§7.3). p = 0~100, 총량을 모르면 null */
+export function fullLoadingText(p: number | null): string {
+  return p == null ? "전체 해상도 받는 중…" : `전체 해상도 받는 중 ${Math.max(0, Math.min(100, Math.floor(p)))}%`;
+}
 export type LodLevel = "lod" | "full";
 
 /**
@@ -259,6 +289,7 @@ export class LodGate {
   private fullReady = false;
   private interacting = false;
   private playing = false;
+  private always = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private last: LodLevel;
   constructor(
@@ -270,6 +301,7 @@ export class LodGate {
   }
   get level(): LodLevel {
     if (!this.hasLod) return "full";
+    if (this.always) return this.fullReady ? "full" : "lod"; // [항상 전체 해상도]: 조작·재생 중에도 전체(받기 전에는 LOD)
     return this.fullReady && !this.interacting && !this.playing && this.timer == null ? "full" : "lod";
   }
   private emit() {
@@ -305,6 +337,10 @@ export class LodGate {
     if (this.playing === on) return;
     this.playing = on;
     if (!on) this.settle();
+    this.emit();
+  }
+  setAlwaysFull(on: boolean) {
+    this.always = on;
     this.emit();
   }
   setFullReady(on: boolean) {

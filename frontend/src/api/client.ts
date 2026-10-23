@@ -191,7 +191,7 @@ export function dispositionName(h: string | null): string | null {
 
 /** 산출물 바이너리(ArrayBuffer). range = [시작, 끝](포함) → `Range: bytes=a-b`. partial = 206(서버가 범위를 지원)
  * 410 ARTIFACT_EXPIRED(서버측 캐시 정리됨)는 ApiError(410)로 던진다 — 호출부가 다시 요청한다(geometry-view.md §6.6) */
-export async function fetchBuffer(path: string, range?: [number, number]): Promise<{ buffer: ArrayBuffer; partial: boolean }> {
+export async function fetchBuffer(path: string, range?: [number, number], onProgress?: (loaded: number) => void): Promise<{ buffer: ArrayBuffer; partial: boolean }> {
   const url = buildUrl(path);
   let res: Response;
   try {
@@ -203,7 +203,26 @@ export async function fetchBuffer(path: string, range?: [number, number]): Promi
     signal401(res.status);
     throw await toError(res);
   }
-  return { buffer: await res.arrayBuffer(), partial: res.status === 206 };
+  const partial = res.status === 206;
+  // 진행률 콜백(읽은 바이트)이 있으면 스트림으로 읽는다 — 압축 전송이면 총량은 호출부가 안다(manifest bytes)
+  const reader = onProgress ? res.body?.getReader?.() : undefined;
+  if (!reader) return { buffer: await res.arrayBuffer(), partial };
+  const parts: Uint8Array[] = [];
+  let loaded = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    parts.push(value);
+    loaded += value.byteLength;
+    onProgress!(loaded);
+  }
+  const out = new Uint8Array(loaded);
+  let at = 0;
+  for (const q of parts) {
+    out.set(q, at);
+    at += q.byteLength;
+  }
+  return { buffer: out.buffer, partial };
 }
 
 export function errorMessage(e: unknown): string {

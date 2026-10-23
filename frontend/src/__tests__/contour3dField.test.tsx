@@ -211,7 +211,7 @@ describe("LOD(C3F-8·9)", () => {
     expect(fake.all[0].setMesh.mock.calls.map((c) => c[1])).toEqual(["lod", "full"]);
     expect(media(calls, rec.lod_artifact_id)).toHaveLength(1);
     expect(media(calls, rec.glb_artifact_id)).toHaveLength(1);
-    expect(within(viewer).getByTestId("contour-full-loading").textContent).toBe("전체 해상도 받는 중…");
+    expect(within(viewer).getByTestId("contour-full-loading").textContent).toMatch(/^전체 해상도 받는 중 \d{1,3}%$/);
     await waitFor(() => expect(fake.all[0].setColors).toHaveBeenCalled());
     expect(lvl(fake.all[0])).toBe("lod");
     // LOD 색 = 정점 수(LOD) × 3, 전체 색은 아직 없음
@@ -260,8 +260,55 @@ describe("LOD(C3F-8·9)", () => {
       const mk = last(fake.all[0].setMarkers)[0] as { kind: string; pos: number[] }[];
       expect(mk.map((x) => x.kind)).toEqual(["max", "min"]);
       const v = f.max_v as number;
-      expect(mk[0].pos[0]).toBeCloseTo(info.base[v * 3], 3);
-      expect(mk[0].pos[1]).toBeCloseTo(info.base[v * 3 + 1], 3);
+      expect(mk[0].pos).toEqual(f.max_xyz); // manifest의 원 좌표(양자화 전)
+      for (let c = 0; c < 3; c++) expect(mk[0].pos[c]).toBeCloseTo(info.base[v * 3 + c], 1); // GLB 복원 좌표와는 양자화 오차 안
+    });
+  });
+
+  it("극값 마커(LOD): 극값 노드가 LOD에 없어도 전체를 받기 전부터 manifest 좌표·노드 ID로 마커·라벨을 그린다", async () => {
+    const h = hold(); // 전체 메시는 끝까지 받지 못한 상태
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3data: { lod: true, disp: false } }));
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    const rec = gvRecords(server).contours[0];
+    const m = manifestOf(server);
+    const lodGlb = await loadContourGlb((() => {
+      const b = server.artifacts.find((a) => a.id === rec.lod_artifact_id)!.render!();
+      return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength) as ArrayBuffer;
+    })());
+    const inLod = new Set(Array.from(lodGlb.src!));
+    const k = m.frames.list.findIndex((f) => !inLod.has(f.max_v as number) && !inLod.has(f.min_v as number));
+    expect(k).toBeGreaterThanOrEqual(0); // 두 극값 모두 LOD에 없는 프레임이 있다
+    await waitFor(() => expect(fake.all[0].setMarkers).toHaveBeenCalled());
+    fireEvent.change(within(viewer).getByLabelText("타임스텝"), { target: { value: String(k) } });
+    await waitFor(() => expect(within(viewer).getByTestId("contour-frame").textContent).toMatch(new RegExp(`^${k + 1}/`)));
+    const f = m.frames.list[k];
+    expect(lvl(fake.all[0])).toBe("lod");
+    expect(fake.all[0].setMesh).toHaveBeenCalledTimes(2); // 전체는 아직(hold)
+    await waitFor(() => expect(within(viewer).getByTestId("contour-extreme-max").textContent).toBe(`최대 ${fmtExact(f.max as number)} MPa · 노드 ${f.max_node}`));
+    expect(within(viewer).getByTestId("contour-extreme-min").textContent).toBe(`최소 ${fmtExact(f.min as number)} MPa · 노드 ${f.min_node}`);
+    await waitFor(() => {
+      const mk = last(fake.all[0].setMarkers)[0] as { kind: string; pos: number[] }[];
+      expect(mk.map((x) => x.kind)).toEqual(["max", "min"]);
+      expect(mk[0].pos).toEqual(f.max_xyz);
+      expect(mk[1].pos).toEqual(f.min_xyz);
+    });
+    await act(async () => h.resolve());
+  });
+
+  it("극값 마커 폴백: 극값 좌표 필드가 없는 예전 v2 manifest도 동작(전체 해상도에서 메시 좌표, LOD에서 없으면 라벨만)", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3data: { lod: true, disp: false, legacyExtremes: true } }));
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    const m = manifestOf(server);
+    expect(m.frames.list[0].max_xyz).toBeUndefined();
+    await waitFor(() => expect(lvl(fake.all[0])).toBe("full"));
+    const info = await (fake.all[0].setMesh.mock.results[1].value as Promise<{ base: Float32Array }>);
+    const f = m.frames.list[0];
+    await waitFor(() => expect(within(viewer).getByTestId("contour-extreme-max").textContent).toBe(`최대 ${fmtExact(f.max as number)} MPa · 노드 ${100001 + (f.max_v as number)}`));
+    await waitFor(() => {
+      const mk = last(fake.all[0].setMarkers)[0] as { kind: string; pos: number[] }[];
+      const v = f.max_v as number;
       expect(mk[0].pos[2]).toBeCloseTo(info.base[v * 3 + 2], 3);
     });
   });
@@ -422,4 +469,112 @@ describe("대체 사유 한 줄(§12)·[다시] 규칙", () => {
     expect(DENIED_TEXT).toBe("3D 미생성 — 처음 생성은 power 권한이 필요합니다");
   });
 
+});
+
+describe("[항상 전체 해상도] 설정과 받는 중 진행률(§7.3)", () => {
+  const checkbox = (viewer: HTMLElement) => within(viewer).getByTestId("contour-always-full") as HTMLInputElement;
+
+  it("기본 끔 → 체크하면 localStorage에 저장, 전체를 받은 뒤에는 조작·재생 중에도 전체", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3data: { lod: true } }));
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    await within(viewer).findByTestId("contour-always-full");
+    expect(checkbox(viewer).checked).toBe(false);
+    expect(localStorage.getItem("paiContourAlwaysFull")).toBeNull();
+    await waitFor(() => expect(lvl(fake.all[0])).toBe("full"));
+    act(() => fake.all[0].interact("start"));
+    expect(lvl(fake.all[0])).toBe("lod"); // 끔: 조작 중 LOD
+    act(() => fake.all[0].interact("end"));
+    fireEvent.click(checkbox(viewer));
+    expect(localStorage.getItem("paiContourAlwaysFull")).toBe("1");
+    await waitFor(() => expect(lvl(fake.all[0])).toBe("full")); // 켬: 곧바로 전체
+    act(() => fake.all[0].interact("start"));
+    expect(lvl(fake.all[0])).toBe("full");
+    fireEvent.click(within(viewer).getByRole("button", { name: "재생" }));
+    await sleep(60);
+    expect(lvl(fake.all[0])).toBe("full");
+    fireEvent.click(within(viewer).getByRole("button", { name: "일시정지" }));
+    fireEvent.click(checkbox(viewer));
+    expect(localStorage.getItem("paiContourAlwaysFull")).toBeNull();
+    expect(server).toBeTruthy();
+  });
+
+  it("저장된 설정이 켜져 있으면 LOD를 받지 않고 전체만 받는다(LOD 요청 0건), 체크를 끄면 LOD로 다시 불러온다", async () => {
+    localStorage.setItem("paiContourAlwaysFull", "1");
+    const { server } = renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3data: { lod: true } }));
+    const calls = spy(server);
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    const rec = gvRecords(server).contours[0];
+    await waitFor(() => expect(fake.all[0].setMesh).toHaveBeenCalledTimes(1));
+    expect(fake.all[0].setMesh.mock.calls.map((c) => c[1])).toEqual(["full"]);
+    expect(media(calls, rec.lod_artifact_id)).toHaveLength(0);
+    expect(media(calls, rec.glb_artifact_id)).toHaveLength(1);
+    await waitFor(() => expect(lvl(fake.all[0])).toBe("full"));
+    expect(checkbox(viewer).checked).toBe(true);
+    act(() => fake.all[0].interact("start"));
+    expect(lvl(fake.all[0])).toBe("full");
+    fireEvent.click(checkbox(viewer));
+    expect(localStorage.getItem("paiContourAlwaysFull")).toBeNull();
+    await waitFor(() => expect(media(calls, rec.lod_artifact_id)).toHaveLength(1)); // LOD 없이 시작했으므로 다시 불러온다
+  });
+
+  it("저장소 접근이 막혀도(try/catch) 뷰어는 켜진다(기본 끔)", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3data: { lod: true } }));
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    await waitFor(() => expect(lvl(fake.all[0])).toBe("full"));
+    expect(() => fireEvent.click(checkbox(viewer))).not.toThrow();
+    expect(checkbox(viewer).checked).toBe(true);
+  });
+
+  it("LOD가 없으면(lod = null) 설정 체크를 보이지 않는다", async () => {
+    renderApp(`${STUDY}/4`, { user: "power" });
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    await waitFor(() => expect(fake.all[0].setMesh).toHaveBeenCalled());
+    expect(within(viewer).queryByTestId("contour-always-full")).toBeNull();
+  });
+
+  it("전체 해상도 받는 중 {p}% — 받은 바이트/manifest 형상 크기, 다 받으면 안내가 사라진다", async () => {
+    const r = renderApp(`${STUDY}/4`, { user: "power" }, (s) => setGvMode(s, { c3data: { lod: true } }));
+    const server = r.server;
+    const orig = globalThis.fetch; // renderApp이 fetch를 목으로 바꾼 뒤에 감싼다
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      const url = String(input);
+      const glbId = gvRecords(server).contours[0]?.glb_artifact_id;
+      if (!glbId || !url.endsWith(`/artifacts/${glbId}/media`)) return orig(input, init);
+      const res = await orig(input, init);
+      const all = new Uint8Array(await res.arrayBuffer());
+      const cut = Math.floor(all.byteLength / 2);
+      return new Response(
+        new ReadableStream<Uint8Array>({
+          async start(ctl) {
+            ctl.enqueue(all.slice(0, cut));
+            await gate;
+            ctl.enqueue(all.slice(cut));
+            ctl.close();
+          },
+        }),
+        { status: 200, headers: res.headers },
+      );
+    });
+    const panel = await open();
+    const viewer = await within(panel).findByTestId("contour-viewer");
+    const total = manifestOf(server).mesh.bytes as number;
+    const want = Math.floor((100 * Math.floor(total / 2)) / total);
+    await waitFor(() => expect(within(viewer).getByTestId("contour-full-loading").textContent).toBe(`전체 해상도 받는 중 ${want}%`));
+    expect(lvl(fake.all[0])).toBe("lod");
+    await act(async () => release());
+    await waitFor(() => expect(within(viewer).queryByTestId("contour-full-loading")).toBeNull());
+    await waitFor(() => expect(lvl(fake.all[0])).toBe("full"));
+  });
 });

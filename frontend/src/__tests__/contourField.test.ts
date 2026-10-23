@@ -14,7 +14,11 @@ import {
   dispRange,
   dispRecordBytes,
   extremeLabel,
+  ALWAYS_FULL_KEY,
   featureOffText,
+  fullLoadingText,
+  loadAlwaysFull,
+  saveAlwaysFull,
   fmtQuantized,
   frameExtremes,
   frameRange,
@@ -199,8 +203,27 @@ describe("툴팁·극값 표시(§5.5)", () => {
     expect(e.map((x) => x.kind)).toEqual(["max", "min"]);
     expect(e[0].value).toBe(m.frames.list[10].max);
     expect(extremeLabel(e[0], 100003, "MPa")).toBe(`최대 ${Number((m.frames.list[10].max as number).toPrecision(6))} MPa · 노드 100003`);
-    expect(extremeLabel({ kind: "min", vertex: 1, value: 0.5 }, null, "")).toBe("최소 0.5");
+    expect(extremeLabel({ kind: "min", vertex: 1, value: 0.5, node: null, xyz: null }, null, "")).toBe("최소 0.5");
     expect(frameExtremes(contourData("PREDICT_H3D", { job_id: "j" }, { schema: 1 }).manifest, 3)).toEqual([]);
+  });
+
+  it("극값 좌표: manifest의 노드 ID·원 좌표(max_xyz 등)를 그대로, 필드가 없으면(예전 v2) null로 폴백", () => {
+    const m = contourData("PREDICT_H3D", { job_id: "j" }, { schema: 2 }).manifest;
+    const f = m.frames.list[4];
+    const e = frameExtremes(m, 4);
+    expect(e[0].node).toBe(f.max_node);
+    expect(e[0].xyz).toEqual(f.max_xyz);
+    expect(e[1].node).toBe(f.min_node);
+    expect(e[1].xyz).toEqual(f.min_xyz);
+    expect(e[0].xyz).toHaveLength(3);
+    const old = contourData("PREDICT_H3D", { job_id: "j" }, { schema: 2, legacyExtremes: true }).manifest;
+    expect(old.frames.list[4].max_xyz).toBeUndefined();
+    expect(frameExtremes(old, 4).map((x) => [x.node, x.xyz])).toEqual([
+      [null, null],
+      [null, null],
+    ]);
+    const bad = { frames: { list: [{ i: 0, max: 1, max_v: 2, max_xyz: [1, 2] as unknown as [number, number, number] }] } } as unknown as ContourManifest;
+    expect(frameExtremes(bad, 0)[0].xyz).toBeNull(); // 길이·값이 잘못되면 쓰지 않는다
   });
 
   it("경고 문구: DISP_DROPPED·COMPS_IGNORED, 접두 유무·문자열 배열 모두", () => {
@@ -235,6 +258,19 @@ describe("LOD ↔ 전체 해상도 상태기(§7.3, C3F-9)", () => {
     g.setFullReady(true);
     expect(g.level).toBe("full");
     expect(seen).toEqual(["full"]);
+  });
+
+  it("[항상 전체 해상도]: 전체를 받기 전엔 LOD, 받은 뒤엔 조작·재생 중에도 전체, 끄면 다시 조작 중 LOD", () => {
+    const { g, seen } = make(true);
+    g.setAlwaysFull(true);
+    expect(g.level).toBe("lod");
+    g.setFullReady(true);
+    g.start();
+    g.setPlaying(true);
+    expect(g.level).toBe("full");
+    expect(seen).toEqual(["full"]);
+    g.setAlwaysFull(false);
+    expect(g.level).toBe("lod");
   });
 
   it("조작 시작 → LOD, 조작 끝 + 250 ms 뒤 전체(그 안에 다시 시작하면 LOD 유지)", () => {
@@ -389,5 +425,39 @@ describe("대체 사유 문구(§12)", () => {
     expect(requestReason({ ...base, error: "x", errInfo: { status: 409, code: "PREREQUISITE_MISSING", missing: [] } })).toBe(NO_SOURCE_TEXT);
     expect(requestReason({ ...base, error: "서버에 연결할 수 없습니다.", errInfo: null })).toBe("3D 컨투어를 요청하지 못했습니다 — 서버에 연결할 수 없습니다.");
     expect(requestReason(base)).toBeNull();
+  });
+});
+
+describe("[항상 전체 해상도] 설정 저장·진행 문구(§7.3)", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    localStorage.clear();
+  });
+
+  it("localStorage에 저장·복원, 끄면 키 삭제", () => {
+    expect(loadAlwaysFull()).toBe(false);
+    saveAlwaysFull(true);
+    expect(localStorage.getItem(ALWAYS_FULL_KEY)).toBe("1");
+    expect(loadAlwaysFull()).toBe(true);
+    saveAlwaysFull(false);
+    expect(localStorage.getItem(ALWAYS_FULL_KEY)).toBeNull();
+  });
+
+  it("저장소가 막혀도(throw) 예외 없이 끔으로 동작", () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("denied");
+    });
+    expect(loadAlwaysFull()).toBe(false);
+    expect(() => saveAlwaysFull(true)).not.toThrow();
+  });
+
+  it("받는 중 문구에 {p}%(0~100 고정), 총량을 모르면 …", () => {
+    expect(fullLoadingText(0)).toBe("전체 해상도 받는 중 0%");
+    expect(fullLoadingText(42.9)).toBe("전체 해상도 받는 중 42%");
+    expect(fullLoadingText(250)).toBe("전체 해상도 받는 중 100%");
+    expect(fullLoadingText(null)).toBe("전체 해상도 받는 중…");
   });
 });

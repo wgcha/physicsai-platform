@@ -346,6 +346,16 @@ def quantize_scalar(v: np.ndarray) -> tuple[np.ndarray, dict[str, Any], int]:
     return q, {"min": lo, "max": hi, "scale": s, "min_v": lo_v, "max_v": hi_v}, nbad
 
 
+def _extreme_nodes(info: Mapping[str, Any], vid: np.ndarray, xyz: np.ndarray) -> dict[str, Any]:
+    """프레임 극값 정점의 노드 ID·원 좌표(mm, 첫 프레임 기준) — LOD에 그 정점이 없어도 뷰어가 마커를 그린다(C3F-C1). 값이 없으면 null."""
+    out: dict[str, Any] = {}
+    for kind in ("max", "min"):
+        v = info.get(f"{kind}_v")
+        out[f"{kind}_node"] = None if v is None else int(vid[v])
+        out[f"{kind}_xyz"] = None if v is None else [float(x) for x in xyz[v]]
+    return out
+
+
 def quantize_disp(d: np.ndarray) -> tuple[np.ndarray, list[float], list[float]]:
     """d float64 [N,3] → (q uint16 [N,3], min[3], scale[3]). 비유한 = 0 mm, t = (max − min)/65535."""
     d = np.where(np.isfinite(d), d, 0.0)
@@ -540,7 +550,7 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
                 av = np.abs(v)
                 av[~np.isfinite(av)] = np.nan
                 np.fmax(peak, av, out=peak)
-                listing.append({"i": i, "src": src, "time": t, **info})
+                listing.append({"i": i, "src": src, "time": t, **info, **_extreme_nodes(info, vid, xyz)})
                 if info["min"] is not None:
                     gmin, gmax = min(gmin, info["min"]), max(gmax, info["max"])
                 if out_d is not None:

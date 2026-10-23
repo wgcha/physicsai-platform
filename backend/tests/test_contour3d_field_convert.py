@@ -483,6 +483,42 @@ def test_lod_peak_representative_normal_buckets_and_null(tmp_path):
     assert m2["lod"] is None and not (tmp_path / "o2" / "contour_lod.glb").exists()
 
 
+def test_frame_extreme_nodes_and_coordinates_even_when_not_in_lod(tmp_path):
+    """C3F-C1: 프레임별 max·min 노드 ID와 원 좌표(mm)가 manifest에 있다. LOD에 그 정점이 없어도(피크 우선 대표가 다른 정점) 좌표가 원 노드와 같다."""
+    ids, xyz, topo = _grid(60, 40, layers=1, seed=4)
+    a, b = int(ids[0]), int(ids[1])  # 인접한 두 노드(같은 LOD 군): 0번 프레임 최대 = a, 이후 프레임 피크 = b
+
+    def values(nid, i):
+        v = np.sin(nid * 0.37) * 0.5 + 1.0
+        v[nid == a] = 5.0 if i == 0 else 0.0
+        v[nid == b] = 4.0 if i == 0 else 50.0
+        return v
+
+    _write(tmp_path / "x", ids, xyz, topo, frames=3, disp=False, values=values)
+    out = tmp_path / "o"
+    m = _conv(tmp_path / "x", out, lod_min_nodes=1000, lod_target_vertices=1000)
+    lg, g = _glb_arrays(out / "contour_lod.glb"), _glb_arrays(out / "contour.glb")
+    in_lod = set(lg["_NODE_ID"].tolist())
+    f0 = m["frames"]["list"][0]
+    row = {int(i): k for k, i in enumerate(ids)}
+    assert f0["max_node"] == int(ids[row[a]]) and f0["max_node"] not in in_lod
+    assert np.allclose(f0["max_xyz"], xyz[row[a]], atol=1e-6)
+    assert f0["min_node"] in set(ids.tolist()) and np.allclose(f0["min_xyz"], xyz[row[f0["min_node"]]], atol=1e-6)
+    for f in m["frames"]["list"]:  # 모든 프레임: 정점 번호(min_v·max_v)가 가리키는 GLB 노드와 같고 좌표는 GLB 복원값과 양자화 오차 안
+        for kind in ("max", "min"):
+            assert f[f"{kind}_node"] == int(g["_NODE_ID"][f[f"{kind}_v"]])
+            assert np.allclose(f[f"{kind}_xyz"], g["xyz"][f[f"{kind}_v"]], atol=2e-3)
+    assert len(f0["max_xyz"]) == 3 and all(isinstance(x, float) for x in f0["max_xyz"])
+    # 결정적 출력 + 전부 NaN 프레임 = null
+    m2 = _conv(tmp_path / "x", tmp_path / "o2", lod_min_nodes=1000, lod_target_vertices=1000)
+    assert m2["frames"]["list"] == m["frames"]["list"]
+    _write(tmp_path / "n", ids, xyz, topo, frames=2, disp=False, values=lambda nid, i: np.full(nid.size, np.nan) if i == 0 else np.arange(nid.size, dtype=float))
+    mn = _conv(tmp_path / "n", tmp_path / "o3")
+    e0 = mn["frames"]["list"][0]
+    assert e0["max_node"] is None and e0["max_xyz"] is None and e0["min_node"] is None and e0["min_xyz"] is None
+    assert mn["frames"]["list"][1]["max_node"] is not None
+
+
 # ---- V-C3F-11 메모리·시간 ----------------------------------------------------------------------------------------
 
 

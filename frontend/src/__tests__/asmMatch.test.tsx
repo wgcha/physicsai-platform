@@ -231,8 +231,8 @@ describe("조립 매칭 카드", () => {
     expect(ctx.server.jobs.filter((j) => j.job_type === "ASM_MATCH").map((j) => j.state)).toEqual(["SUCCEEDED", "CANCELED"]);
     expect(within(ctx.card).queryByRole("button", { name: "취소" })).toBeNull();
     expect(within(ctx.card).getByTestId("asm-chips-CUSH_L").textContent).toContain("PART 3000001");
-    expect(btn(ctx.card, "저장").disabled).toBe(false);
-    expect(btn(ctx.card, "검사").disabled).toBe(false); // 취소 뒤 다시 검사할 수 있다
+    await waitFor(() => expect(btn(ctx.card, "저장").disabled).toBe(false)); // 상태 문구보다 늦게 풀릴 수 있다(비동기 폴링)
+    await waitFor(() => expect(btn(ctx.card, "검사").disabled).toBe(false)); // 취소 뒤 다시 검사할 수 있다
   });
 
   it("목록 읽기 실패(TETRA4 PART 없음): 코드를 한국어로 안내", async () => {

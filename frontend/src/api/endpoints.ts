@@ -180,7 +180,7 @@ export const api = {
   contour3d: (id: string) => request<Contour3d>("GET", `/contour3d/${id}`),
   cancelContour3d: (id: string) => request<Contour3d>("POST", `/contour3d/${id}/cancel`),
   /** GLB·프레임 바이너리(`/artifacts/{id}/media`, Range 지원 — 410 = 캐시 정리됨) · manifest JSON(`/content`) */
-  artifactBuffer: (id: string, range?: [number, number]) => fetchBuffer(`/artifacts/${id}/media`, range),
+  artifactBuffer: (id: string, range?: [number, number], onProgress?: (loaded: number) => void) => fetchBuffer(`/artifacts/${id}/media`, range, onProgress),
   artifactJson: <T,>(id: string) => request<T>("GET", `/artifacts/${id}/content`),
   paramSets: (studyId: string) => request<ParamSet[]>("GET", `/studies/${studyId}/param-sets`),
   paramSet: (id: string) => request<ParamSet>("GET", `/param-sets/${id}`),

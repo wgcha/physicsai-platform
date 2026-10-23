@@ -23,16 +23,19 @@ import {
   dispRecordBytes,
   extremeLabel,
   fmtTime,
+  fullLoadingText,
   FPS_CHOICES,
   frameExtremes,
   frameRange,
   gatherValues,
   isQuantized,
   legendRange,
+  loadAlwaysFull,
   LodGate,
   manifestHasDisp,
   nextFrame,
   prevFrame,
+  saveAlwaysFull,
   SCALAR_BUDGET,
   tooltipText,
   warningLines,
@@ -75,9 +78,14 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
   const [ready, setReady] = useState(false);
   const [geoVer, setGeoVer] = useState(0);
   const [level, setLevel] = useState<LodLevel>("full");
-  const [useLod, setUseLod] = useState(false);
   const [fullReady, setFullReady] = useState(false);
   const [fullErr, setFullErr] = useState<string | null>(null);
+  const [fullBusy, setFullBusy] = useState(false);
+  const [fullPct, setFullPct] = useState<number | null>(null);
+  const [alwaysFull, setAlwaysFullState] = useState(loadAlwaysFull);
+  const [reloadKey, setReloadKey] = useState(0);
+  const alwaysRef = useRef(alwaysFull);
+  alwaysRef.current = alwaysFull;
   const [error, setError] = useState<string | null>(null);
   const [idxOwn, setIdx] = useState(0);
   const [frame, setFrame] = useState<Frame | null>(null);
@@ -117,6 +125,8 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
     man.current = null;
     setDispFail(false);
     setFullErr(null);
+    setFullBusy(false);
+    setFullPct(null);
     setFullReady(false);
     setFrame(null);
     setTip(null);
@@ -126,13 +136,21 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
       man.current = manifest;
       void loadScalar(0).catch(() => undefined); // 첫 프레임은 메시와 함께 받는다(LOD 첫 표시)
       made = mod.createContourScene(el, { onLost: () => setError("3D 표시가 중단되었습니다(그래픽 컨텍스트 손실)") });
-      const lod = !!manifest.lod && !!c.lod_artifact_id;
-      const first = await api.artifactBuffer(lod ? c.lod_artifact_id! : c.glb_artifact_id!);
+      // [항상 전체 해상도]가 켜져 있으면 LOD를 받지 않고 전체를 바로 받는다(§7.3)
+      const lod = !!manifest.lod && !!c.lod_artifact_id && !alwaysRef.current;
+      const total = manifest.mesh.bytes ?? 0;
+      const fetchFull = () => {
+        setFullBusy(true);
+        setFullPct(total > 0 ? 0 : null);
+        return api.artifactBuffer(c.glb_artifact_id!, undefined, total > 0 ? (n) => alive && setFullPct(Math.min(99, (100 * n) / total)) : undefined);
+      };
+      const first = await (lod ? api.artifactBuffer(c.lod_artifact_id!) : fetchFull());
       if (!alive) return;
       const info = await made.setMesh(first.buffer, lod ? "lod" : "full");
       if (!alive) return;
       geo.current[lod ? "lod" : "full"] = info;
       const g = new LodGate(lod, (l) => alive && setLevel(l));
+      g.setAlwaysFull(alwaysRef.current);
       gate.current = g;
       offs.push(made.onInteract((e) => (e === "start" ? g.start() : e === "end" ? g.end() : g.pulse())));
       offs.push(
@@ -146,7 +164,6 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
         }),
       );
       scene.current = made;
-      setUseLod(lod);
       setLevel(g.level);
       setScale(defaultDeformScale(manifest));
       setIdx(0);
@@ -158,19 +175,25 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
       if (lod) {
         // 전체 해상도는 백그라운드로 — 받으면 조작이 멈춘 뒤 바꾼다
         try {
-          const full = await api.artifactBuffer(c.glb_artifact_id!);
+          const full = await fetchFull();
           if (!alive) return;
+          setFullPct(100);
           geo.current.full = await made.setMesh(full.buffer, "full");
           if (!alive) return;
           setGeoVer((v) => v + 1);
           setFullReady(true);
+          setFullBusy(false);
           g.setFullReady(true);
         } catch (e) {
           if (!alive) return;
+          setFullBusy(false);
           if (isExpired(e)) expired.current();
           else setFullErr(errorMessage(e));
         }
-      } else setFullReady(true);
+      } else {
+        setFullBusy(false);
+        setFullReady(true);
+      }
     })().catch((e) => alive && fail(e));
     return () => {
       alive = false;
@@ -183,7 +206,19 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
       made?.dispose();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [c.manifest_artifact_id, c.glb_artifact_id, c.frames_artifact_id, c.lod_artifact_id, fail]);
+  }, [c.manifest_artifact_id, c.glb_artifact_id, c.frames_artifact_id, c.lod_artifact_id, fail, reloadKey]);
+
+  /** [항상 전체 해상도] 설정(§7.3): 저장하고, 켜면 전체를 받은 뒤 조작·재생 중에도 LOD로 내리지 않는다. 끄는데 LOD를 받지 않았다면 다시 불러온다 */
+  const toggleAlways = useCallback(
+    (on: boolean) => {
+      setAlwaysFullState(on);
+      alwaysRef.current = on;
+      saveAlwaysFull(on);
+      gate.current?.setAlwaysFull(on);
+      if (!on && !geo.current.lod && man.current?.lod && c.lod_artifact_id) setReloadKey((k) => k + 1);
+    },
+    [c.lod_artifact_id],
+  );
 
   /** 같은 레코드를 동시에 두 번 받지 않는다 */
   const once = useCallback(<T,>(key: string, run: () => Promise<T>): Promise<T> => {
@@ -322,7 +357,8 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
     scene.current?.setLevel(level);
   }, [level, geoVer]);
 
-  // 극값 마커(§5.5): 현재 프레임 최대·최소 정점의 원 위치(변형 반영) — LOD·전체 모두. 전체를 아직 못 받았고 LOD에 없는 정점은 위치를 알 수 없어 라벨만 보인다
+  // 극값 마커(§5.5): 현재 프레임 최대·최소 정점의 원 위치(변형 반영) — LOD·전체 모두. manifest의 노드 ID·좌표(max_xyz 등)가 있으면 그것을 쓰고(LOD에 없는 정점도 표시),
+  // 예전 v2 manifest(필드 없음)는 메시에서 찾는다(전체를 아직 못 받았고 LOD에 없는 정점은 라벨만 보인다)
   const extremes = useMemo(() => {
     if (!m) return [];
     return frameExtremes(m, idx).map((e) => {
@@ -336,8 +372,9 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
         at = j;
       }
       const g = f ?? l;
-      const nodeId = at >= 0 ? (g?.nodeIds?.[at] ?? null) : null;
-      return { e, label: extremeLabel(e, nodeId, m.unit), base: at >= 0 && g ? ([g.base[at * 3], g.base[at * 3 + 1], g.base[at * 3 + 2]] as [number, number, number]) : null };
+      const nodeId = e.node ?? (at >= 0 ? (g?.nodeIds?.[at] ?? null) : null);
+      const base = e.xyz ?? (at >= 0 && g ? ([g.base[at * 3], g.base[at * 3 + 1], g.base[at * 3 + 2]] as [number, number, number]) : null);
+      return { e, label: extremeLabel(e, nodeId, m.unit), base };
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [m, idx, geoVer]);
@@ -491,9 +528,14 @@ export function ContourViewer({ c, onExpired, control, onManifest, onScene }: { 
           </button>
         </div>
       )}
-      {useLod && !fullReady && !fullErr && (
+      {!!m?.lod && !!c.lod_artifact_id && !control && (
+        <label className="small c3-note c3-always-full" title="저해상도(LOD)를 쓰지 않고 늘 전체 해상도로 표시합니다. 큰 모델에서는 조작이 느려질 수 있습니다">
+          <input type="checkbox" checked={alwaysFull} onChange={(e) => toggleAlways(e.target.checked)} data-testid="contour-always-full" /> 항상 전체 해상도
+        </label>
+      )}
+      {fullBusy && !fullReady && !fullErr && (
         <p className="muted small c3-note" data-testid="contour-full-loading">
-          전체 해상도 받는 중…
+          {fullLoadingText(fullPct)}
         </p>
       )}
       {fullErr && (

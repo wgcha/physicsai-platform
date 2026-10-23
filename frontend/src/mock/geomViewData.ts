@@ -308,6 +308,8 @@ export interface ContourOpt {
   schema?: 1 | 2;
   disp?: boolean;
   lod?: boolean;
+  /** true = 극값 노드·좌표 필드(max_node·max_xyz 등) 없는 예전 v2 manifest */
+  legacyExtremes?: boolean;
   nx?: number;
   ny?: number;
   frames?: number;
@@ -496,7 +498,8 @@ export function contourData(sourceKind: string, ref: Record<string, unknown>, op
     for (let k = 0; k < nodes; k++) fv[f * nodes + k] = scale > 0 ? Math.round((vals[k] - lo) / scale) : 0;
     gmin = Math.min(gmin, lo);
     gmax = Math.max(gmax, hi);
-    list.push({ i: f, src, time, min: lo, max: hi, scale, min_v: lov, max_v: hiv });
+    const at = (k: number) => [pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]] as [number, number, number];
+    list.push({ i: f, src, time, min: lo, max: hi, scale, min_v: lov, max_v: hiv, ...(opt.legacyExtremes ? {} : { max_node: ids[hiv], max_xyz: at(hiv), min_node: ids[lov], min_xyz: at(lov) }) });
     if (dv) {
       const dz = new Float64Array(nodes);
       let dlo = Infinity;
