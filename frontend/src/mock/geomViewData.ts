@@ -298,6 +298,19 @@ export interface ContourData {
   glb: Uint8Array;
   frames: Uint8Array;
   manifest: ContourManifest;
+  /** schema 2: 변위 파일(없으면 null) · LOD GLB(없으면 null) */
+  disp: Uint8Array | null;
+  lod: Uint8Array | null;
+}
+
+/** 시나리오(contour3d-field): schema 1 = float32 섞임 레코드, 2 = uint16 양자화 + 양자화 GLB(meshopt 없음 — 목은 인코더가 없다). disp=false = 변위 없음, lod = 저해상도 메시, nx·ny·frames = 대형 합성 */
+export interface ContourOpt {
+  schema?: 1 | 2;
+  disp?: boolean;
+  lod?: boolean;
+  nx?: number;
+  ny?: number;
+  frames?: number;
 }
 
 /** 목: 원본마다 값의 크기를 조금 다르게(비교 모드 공통 범례 시연) — j-pred·해석 DOE는 기준 1 */
@@ -309,87 +322,214 @@ function amplitude(ref: Record<string, unknown>): number {
   return 0.78 + (h % 7) * 0.06;
 }
 
-export function contourData(sourceKind: string, ref: Record<string, unknown>): ContourData {
+export function contourData(sourceKind: string, ref: Record<string, unknown>, opt: ContourOpt = {}): ContourData {
+  const schema = opt.schema ?? 1;
+  const nx = opt.nx ?? NX;
+  const ny = opt.ny ?? NY;
   const amp = amplitude(ref);
-  const nodes = NX * NY;
+  const nodes = nx * ny;
   const pos = new Float32Array(nodes * 3);
   const ids = new Uint32Array(nodes);
-  for (let j = 0; j < NY; j++)
-    for (let i = 0; i < NX; i++) {
-      const k = j * NX + i;
-      const x = (PL * i) / (NX - 1);
-      const y = (PW * j) / (NY - 1);
+  for (let j = 0; j < ny; j++)
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      const x = (PL * i) / (nx - 1);
+      const y = (PW * j) / (ny - 1);
       pos.set([x, y, plateZ(x, y)], k * 3);
       ids[k] = 100001 + k;
     }
-  const idx: number[] = [];
-  for (let j = 0; j < NY - 1; j++)
-    for (let i = 0; i < NX - 1; i++) {
-      const n1 = j * NX + i;
-      const n2 = n1 + 1;
-      const n3 = n1 + NX + 1;
-      const n4 = n1 + NX;
-      idx.push(n1, n2, n3, n1, n3, n4);
-    }
-  const nrm = new Float32Array(nodes * 3);
-  for (let t = 0; t < idx.length; t += 3) {
-    const [a, b, c] = [idx[t], idx[t + 1], idx[t + 2]];
-    const u = [pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]];
-    const v = [pos[c * 3] - pos[a * 3], pos[c * 3 + 1] - pos[a * 3 + 1], pos[c * 3 + 2] - pos[a * 3 + 2]];
-    const nn = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    for (const q of [a, b, c]) for (let k = 0; k < 3; k++) nrm[q * 3 + k] += nn[k];
-  }
-  for (let k = 0; k < nodes; k++) {
-    const l = Math.hypot(nrm[k * 3], nrm[k * 3 + 1], nrm[k * 3 + 2]) || 1;
-    for (let q = 0; q < 3; q++) nrm[k * 3 + q] /= l;
-  }
-  const glb = writeGlb("paicad_contour", [
-    { name: "surface", mode: 4, attributes: { POSITION: { data: pos, size: 3 }, NORMAL: { data: nrm, size: 3 }, _NODE_ID: { data: ids, size: 1 } }, indices: Uint32Array.from(idx) },
-  ]);
-  const count = 24;
+  const grid = (xs: number[], ys: number[]) => {
+    const idx: number[] = [];
+    for (let j = 0; j < ys.length - 1; j++)
+      for (let i = 0; i < xs.length - 1; i++) {
+        const n1 = ys[j] * nx + xs[i];
+        const n2 = ys[j] * nx + xs[i + 1];
+        const n3 = ys[j + 1] * nx + xs[i + 1];
+        const n4 = ys[j + 1] * nx + xs[i];
+        idx.push(n1, n2, n3, n1, n3, n4);
+      }
+    return Uint32Array.from(idx);
+  };
+  const all = (n: number) => Array.from({ length: n }, (_, k) => k);
+  const idx = grid(all(nx), all(ny));
+  const count = opt.frames ?? 24;
   const total = 120;
-  const rec = nodes * 4;
-  const buf = new Float32Array(count * rec);
+  // 프레임 값(공통): 위치별 상수를 미리 계산
+  const rr = new Float32Array(nodes);
+  const bd = new Float32Array(nodes);
+  for (let k = 0; k < nodes; k++) {
+    rr[k] = Math.hypot(pos[k * 3] - 80, pos[k * 3 + 1] - 40);
+    bd[k] = Math.exp(-(((pos[k * 3 + 1] - PW / 2) / 30) ** 2)) * Math.sin((Math.PI * pos[k * 3]) / PL);
+  }
+  const dzOf = (k: number, s: number) => -6 * s * Math.sin((Math.PI * pos[k * 3]) / PL) * Math.sin((Math.PI * pos[k * 3 + 1]) / PW);
+  const valueAt = (k: number, s: number) => amp * 412.3 * s * (0.55 * Math.exp(-(((rr[k] - 620 * s) / 90) ** 2)) + 0.45 * bd[k]) + 3 * s;
+  const frameMeta = (f: number) => {
+    const src = Math.round((f * (total - 1)) / Math.max(1, count - 1));
+    return { src, time: Number((src * 1e-4).toFixed(6)), s: f / Math.max(1, count - 1) };
+  };
+
+  if (schema === 1) {
+    const nrm = new Float32Array(nodes * 3);
+    for (let t = 0; t < idx.length; t += 3) {
+      const [a, b, c] = [idx[t], idx[t + 1], idx[t + 2]];
+      const u = [pos[b * 3] - pos[a * 3], pos[b * 3 + 1] - pos[a * 3 + 1], pos[b * 3 + 2] - pos[a * 3 + 2]];
+      const v = [pos[c * 3] - pos[a * 3], pos[c * 3 + 1] - pos[a * 3 + 1], pos[c * 3 + 2] - pos[a * 3 + 2]];
+      const nn = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      for (const q of [a, b, c]) for (let k = 0; k < 3; k++) nrm[q * 3 + k] += nn[k];
+    }
+    for (let k = 0; k < nodes; k++) {
+      const l = Math.hypot(nrm[k * 3], nrm[k * 3 + 1], nrm[k * 3 + 2]) || 1;
+      for (let q = 0; q < 3; q++) nrm[k * 3 + q] /= l;
+    }
+    const glb = writeGlb("paicad_contour", [
+      { name: "surface", mode: 4, attributes: { POSITION: { data: pos, size: 3 }, NORMAL: { data: nrm, size: 3 }, _NODE_ID: { data: ids, size: 1 } }, indices: idx },
+    ]);
+    const rec = nodes * 4;
+    const buf = new Float32Array(count * rec);
+    const list: ContourManifest["frames"]["list"] = [];
+    let gmin = Infinity;
+    let gmax = -Infinity;
+    for (let f = 0; f < count; f++) {
+      const { src, time, s: sf } = frameMeta(f);
+      let lo = Infinity;
+      let hi = -Infinity;
+      for (let k = 0; k < nodes; k++) {
+        const v = valueAt(k, sf);
+        buf[f * rec + k] = v;
+        lo = Math.min(lo, v);
+        hi = Math.max(hi, v);
+        buf.set([0, 0, dzOf(k, sf)], f * rec + nodes + k * 3);
+      }
+      gmin = Math.min(gmin, lo);
+      gmax = Math.max(gmax, hi);
+      list.push({ i: f, src, time, min: Number(lo.toFixed(4)), max: Number(hi.toFixed(4)) });
+    }
+    const frames = new Uint8Array(buf.buffer);
+    return {
+      glb,
+      frames,
+      disp: null,
+      lod: null,
+      manifest: {
+        schema_version: 1, kind: "contour3d", status: "OK", code: null, message: null,
+        ...({ source: { kind: sourceKind, ref, h3d_name: sourceKind === "PREDICT_H3D" ? "pred.h3d" : "solver_0001.h3d" } } as object),
+        display: { field: "Stress", comp: "vonMises", avgmode: "simple" },
+        unit: "MPa", length_unit: "mm", up_axis: "Z",
+        mesh: { file: "contour.glb", nodes, triangles: idx.length / 3, bytes: glb.byteLength },
+        frames: { file: "contour_frames.bin", bytes: frames.byteLength, count, record_bytes: rec * 4, has_disp: true, dtype: "float32", nan_count: 0, list },
+        range: { min: Number(gmin.toFixed(4)), max: Number(gmax.toFixed(4)) },
+        sampling: { total_frames: total, max_frames: 50, rule: "uniform_inclusive" },
+        warnings: [],
+      } as ContourManifest,
+    };
+  }
+
+  // ---- schema 2: 양자화 위치 GLB(SHORT normalized + 노드 translation·scale), 법선 없음(뷰어가 계산), uint16 프레임
+  const mn = [Infinity, Infinity, Infinity];
+  const mx = [-Infinity, -Infinity, -Infinity];
+  for (let k = 0; k < nodes; k++)
+    for (let c = 0; c < 3; c++) {
+      mn[c] = Math.min(mn[c], pos[k * 3 + c]);
+      mx[c] = Math.max(mx[c], pos[k * 3 + c]);
+    }
+  const center = mn.map((v, c) => (v + mx[c]) / 2) as [number, number, number];
+  const half = mn.map((v, c) => Math.max((mx[c] - v) / 2, 1e-6)) as [number, number, number];
+  const quant = (sel: number[] | null) => {
+    const n = sel ? sel.length : nodes;
+    const out = new Int16Array(n * 3);
+    for (let a = 0; a < n; a++) {
+      const k = sel ? sel[a] : a;
+      for (let c = 0; c < 3; c++) out[a * 3 + c] = Math.max(-32767, Math.min(32767, Math.round(((pos[k * 3 + c] - center[c]) / half[c]) * 32767)));
+    }
+    return out;
+  };
+  const transform = { translation: center, scale: half };
+  const glb = writeGlb("paicad_contour", [{ name: "surface", mode: 4, attributes: { POSITION: { data: quant(null), size: 3 }, _NODE_ID: { data: ids, size: 1 } }, indices: idx, transform }]);
+  let lod: Uint8Array | null = null;
+  let lodInfo: ContourManifest["lod"] = null;
+  if (opt.lod) {
+    const step = Math.max(2, Math.ceil(Math.max(nx, ny) / 120));
+    const pick = (n: number) => Array.from(new Set([...all(n).filter((v) => v % step === 0), n - 1]));
+    const xs = pick(nx);
+    const ys = pick(ny);
+    const sel: number[] = [];
+    const at = new Map<number, number>();
+    for (const j of ys)
+      for (const i of xs) {
+        at.set(j * nx + i, sel.length);
+        sel.push(j * nx + i);
+      }
+    const tri = grid(xs, ys);
+    const remap = Uint32Array.from(tri, (v) => at.get(v)!);
+    lod = writeGlb("paicad_contour", [{ name: "surface", mode: 4, attributes: { POSITION: { data: quant(sel), size: 3 }, _NODE_ID: { data: Uint32Array.from(sel, (k) => ids[k]), size: 1 }, _SRC: { data: Uint32Array.from(sel), size: 1 } }, indices: remap, transform }]);
+    lodInfo = { file: "contour_lod.glb", bytes: lod.byteLength, vertices: sel.length, triangles: remap.length / 3, method: "cluster_peak" };
+  }
+  const frames = new Uint8Array(count * nodes * 2);
+  const fv = new Uint16Array(frames.buffer);
+  const hasDisp = opt.disp !== false;
+  const dispBytes = hasDisp ? new Uint8Array(count * nodes * 6) : null;
+  const dv = dispBytes ? new Uint16Array(dispBytes.buffer) : null;
   const list: ContourManifest["frames"]["list"] = [];
+  const dlist: NonNullable<ContourManifest["disp"]>["list"] = [];
+  const vals = new Float64Array(nodes);
   let gmin = Infinity;
   let gmax = -Infinity;
   for (let f = 0; f < count; f++) {
-    const src = Math.round((f * (total - 1)) / (count - 1));
-    const t = src * 1e-4;
-    const s = f / (count - 1);
+    const { src, time, s: sf } = frameMeta(f);
     let lo = Infinity;
     let hi = -Infinity;
+    let lov = 0;
+    let hiv = 0;
     for (let k = 0; k < nodes; k++) {
-      const x = pos[k * 3];
-      const y = pos[k * 3 + 1];
-      const r = Math.hypot(x - 80, y - 40);
-      const wave = Math.exp(-(((r - 620 * s) / 90) ** 2));
-      const bead = Math.exp(-(((y - PW / 2) / 30) ** 2));
-      const v = amp * 412.3 * s * (0.55 * wave + 0.45 * bead * Math.sin((Math.PI * x) / PL)) + 3 * s;
-      buf[f * rec + k] = v;
-      lo = Math.min(lo, v);
-      hi = Math.max(hi, v);
-      const dz = -6 * s * Math.sin((Math.PI * x) / PL) * Math.sin((Math.PI * y) / PW);
-      buf.set([0, 0, dz], f * rec + nodes + k * 3);
+      const v = valueAt(k, sf);
+      vals[k] = v;
+      if (v < lo) {
+        lo = v;
+        lov = k;
+      }
+      if (v > hi) {
+        hi = v;
+        hiv = k;
+      }
     }
+    const scale = (hi - lo) / 65534;
+    for (let k = 0; k < nodes; k++) fv[f * nodes + k] = scale > 0 ? Math.round((vals[k] - lo) / scale) : 0;
     gmin = Math.min(gmin, lo);
     gmax = Math.max(gmax, hi);
-    list.push({ i: f, src, time: Number(t.toFixed(6)), min: Number(lo.toFixed(4)), max: Number(hi.toFixed(4)) });
+    list.push({ i: f, src, time, min: lo, max: hi, scale, min_v: lov, max_v: hiv });
+    if (dv) {
+      const dz = new Float64Array(nodes);
+      let dlo = Infinity;
+      let dhi = -Infinity;
+      for (let k = 0; k < nodes; k++) {
+        dz[k] = dzOf(k, sf);
+        dlo = Math.min(dlo, dz[k]);
+        dhi = Math.max(dhi, dz[k]);
+      }
+      const t = (dhi - dlo) / 65535;
+      for (let k = 0; k < nodes; k++) {
+        const o = f * nodes * 3 + k * 3;
+        dv[o] = 0;
+        dv[o + 1] = 0;
+        dv[o + 2] = t > 0 ? Math.round((dz[k] - dlo) / t) : 0;
+      }
+      dlist.push({ i: f, min: [0, 0, dlo], scale: [0, 0, t] });
+    }
   }
-  const frames = new Uint8Array(buf.buffer);
-  return {
-    glb,
-    frames,
-    manifest: {
-      schema_version: 1, kind: "contour3d", status: "OK", code: null, message: null,
-      ...({ source: { kind: sourceKind, ref, h3d_name: sourceKind === "PREDICT_H3D" ? "pred.h3d" : "solver_0001.h3d" } } as object),
-      display: { field: "Stress", comp: "vonMises", avgmode: "simple" },
-      unit: "MPa", length_unit: "mm", up_axis: "Z",
-      mesh: { file: "contour.glb", nodes, triangles: idx.length / 3, bytes: glb.byteLength },
-      frames: { file: "contour_frames.bin", bytes: frames.byteLength, count, record_bytes: rec * 4, has_disp: true, dtype: "float32", nan_count: 0, list },
-      range: { min: Number(gmin.toFixed(4)), max: Number(gmax.toFixed(4)) },
-      sampling: { total_frames: total, max_frames: 50, rule: "uniform_inclusive" },
-      warnings: [],
-    } as ContourManifest,
+  const manifest: ContourManifest = {
+    schema_version: 2, kind: "contour3d", status: "OK", code: null, message: null,
+    ...({ converter_version: 2, source: { kind: sourceKind, ref, h3d_name: sourceKind === "PREDICT_H3D" ? "pred.h3d" : "solver_0001.h3d" } } as object),
+    display: { field: "Stress", comp: "vonMises", avgmode: "simple" },
+    unit: "MPa", length_unit: "mm", up_axis: "Z",
+    mesh: { file: "contour.glb", nodes, triangles: idx.length / 3, bytes: glb.byteLength, compression: "none", order: "grid", normals: "viewer" },
+    lod: lodInfo,
+    frames: { file: "contour_frames.bin", bytes: frames.byteLength, count, record_bytes: nodes * 2, has_disp: hasDisp, dtype: "uint16q", nan_code: 65535, nan_count: 0, list },
+    disp: dispBytes ? { file: "contour_disp.bin", bytes: dispBytes.byteLength, record_bytes: nodes * 6, list: dlist } : null,
+    range: { min: Number(gmin.toFixed(4)), max: Number(gmax.toFixed(4)) },
+    limits: { nodes, max_nodes: 2_000_000, glb_bytes: glb.byteLength, max_glb_bytes: 67_108_864, bin_bytes: frames.byteLength, max_bin_bytes: 268_435_456, disp_bytes: dispBytes?.byteLength ?? 0, max_disp_bytes: 1_073_741_824 },
+    scope: { comps: [], applied: false },
+    sampling: { total_frames: total, max_frames: 55, rule: "uniform_inclusive" },
+    warnings: hasDisp ? [] : [{ code: "CONTOUR3D_DISP_UNAVAILABLE", message: "결과에 변위가 없어 변형 표시 없이 보입니다" }],
   };
+  return { glb, frames, disp: dispBytes, lod, manifest };
 }

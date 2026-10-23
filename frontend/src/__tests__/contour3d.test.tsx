@@ -16,6 +16,10 @@ interface FakeContour {
   setColors: Fn;
   setPositions: Fn;
   setLoop: Fn;
+  setLevel: Fn;
+  setMarkers: Fn;
+  onInteract: Fn;
+  onPick: Fn;
   fit: Fn;
   dispose: Fn;
 }
@@ -28,6 +32,10 @@ vi.mock("../stages/stage4/geomview/threeScene", () => ({
       setColors: vi.fn(),
       setPositions: vi.fn(),
       setLoop: vi.fn(),
+      setLevel: vi.fn(),
+      setMarkers: vi.fn(),
+      onInteract: vi.fn(() => () => undefined),
+      onPick: vi.fn(() => () => undefined),
       fit: vi.fn(),
       dispose: vi.fn(),
     };
@@ -74,7 +82,7 @@ describe("④ 예측 결과 — 결과 3D 컨투어", () => {
     expect(within(viewer).getByTestId("contour-frame").textContent).toBe("1/24 · t = 0");
     const rec = gvRecords(server).contours[0];
     expect(rec.source_ref).toEqual({ job_id: "j-pred" });
-    const rb = fake.nodes * 16;
+    const rb = fake.nodes * 2; // schema 2: uint16 스칼라 레코드(2N B), 변위는 별도 파일
     await waitFor(() => expect(calls.filter((c) => c.p === `/artifacts/${rec.frames_artifact_id}/media`).map((c) => c.range)).toEqual(expect.arrayContaining([`bytes=0-${rb - 1}`, `bytes=${rb}-${2 * rb - 1}`])));
     expect(calls.filter((c) => c.p === `/artifacts/${rec.glb_artifact_id}/media`)).toHaveLength(1);
 

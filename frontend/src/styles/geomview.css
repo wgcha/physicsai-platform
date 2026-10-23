@@ -436,6 +436,15 @@
 .contour-slot .c3-stage {
   height: var(--c3d-h);
 }
+/* 3D 대신 PNG가 나오는 사유 한 줄(contour3d-field §12) */
+.contour-slot-reason {
+  margin: 0;
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .contour-slot.c3-compare {
   container-type: inline-size;
 }

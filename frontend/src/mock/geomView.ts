@@ -2,15 +2,21 @@
 // GET /param-sets/{id}/view · GET /studies/{id}/train/view · POST /param-sets/{id}/previews(200 적중 | 202) · GET /previews/{id}
 // POST /contour3d(200 | 202) · GET /contour3d/{id}(조회마다 한 단계 진행 — 대기 안내 시연) · POST /contour3d/{id}/cancel
 // GET /artifacts/{id}/media(GEOM_*·CONTOUR3D_*, Range 206, 만료 = 410 ARTIFACT_EXPIRED).
-// 시연 모드(setGvMode): c3d="hold"면 컨투어 생성이 '프레임 변환'에서 멈춤, "fail"이면 결과 실패, "jobfail"이면 작업 실패(FAILED), "expire"면 첫 프레임 요청에 410 1회.
+// 시연 모드(setGvMode): c3d="hold"면 컨투어 생성이 '프레임 변환'에서 멈춤, "fail"이면 결과 실패(FIELD_EMPTY), "toolarge"·"toolarge_comps"·"toolarge_glb"·"toolarge_frames"는 크기 상한 결과 실패(manifest limits, contour3d-field §12),
+// "jobfail"이면 작업 실패(FAILED), "expire"면 첫 프레임 요청에 410 1회. c3data = 컨투어 데이터 시나리오(기본 schema 2 = uint16 양자화·양자화 GLB, schema 1 = float32 섞임, disp=false 변위 없음, lod, nx·ny·frames 대형 합성).
 // c3dBusy=n이면 새 생성 요청을 n번 429(PREVIEW_BUSY)로 거절. POST /contour3d는 캐시 적중·진행 중이면 읽기 사용자도 허용, 새 생성은 power(contour3d-default C3D-6).
-import type { Artifact, Contour3d, Contour3dPhase, Contour3dProgress, GeomPreview, GeomView } from "../api/types";
-import { contourData, cushionGlb, NOMINAL, previewManifest, previewOutcome, viewManifest } from "./geomViewData";
+import type { Artifact, Contour3d as Contour3dBase, Contour3dPhase, Contour3dProgress, GeomPreview, GeomView } from "../api/types";
+import { contourData, cushionGlb, type ContourOpt, NOMINAL, previewManifest, previewOutcome, viewManifest } from "./geomViewData";
 import { err, needPower, ok, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 
+/** v0.2.10 응답 필드(disp_artifact_id·lod_artifact_id) — schema.d.ts 미재생성이라 로컬 타입(contourCore.Contour3dEx와 같음) */
+type Contour3d = Contour3dBase & { disp_artifact_id?: string | null; lod_artifact_id?: string | null };
+
 export interface GvMode {
-  c3d?: "hold" | "fail" | "jobfail" | "expire" | null;
+  c3d?: "hold" | "fail" | "jobfail" | "expire" | "toolarge" | "toolarge_comps" | "toolarge_glb" | "toolarge_frames" | null;
+  /** 컨투어 데이터 시나리오(기본 schema 2) */
+  c3data?: ContourOpt;
   /** 새 컨투어 생성 요청을 n번 429(PREVIEW_BUSY)로 거절(캐시 적중은 영향 없음) */
   c3dBusy?: number;
   /** 미리보기 완료까지 GET 횟수(기본 1) */
@@ -122,21 +128,36 @@ function c3Progress(phase: Contour3dPhase, elapsed: number, estimate: number | n
   return { phase, phase_label: C3_LABEL[phase], percent: k < 0 ? null : phase === "frames" ? 62 : Math.round((k / 4) * 100), elapsed_s: elapsed, estimate_s: estimate, can_cancel: canCancel, step_key: null, label: null };
 }
 
-function finishContour(srv: MockServer, c: C3Rec, fail: boolean) {
+const FAILS: Record<string, { code: string; message: string; nodes: number; limits: Record<string, number> }> = {
+  fail: { code: "CONTOUR3D_FIELD_EMPTY", message: "선택한 결과 값이 없습니다", nodes: 0, limits: {} },
+  toolarge: { code: "CONTOUR3D_TOO_LARGE", message: "외부 면 노드가 상한을 넘습니다", nodes: 2_350_000, limits: { nodes: 2_350_000, max_nodes: 2_000_000 } },
+  toolarge_comps: { code: "CONTOUR3D_TOO_LARGE", message: "외부 면 노드가 상한을 넘습니다", nodes: 2_350_000, limits: { nodes: 2_350_000, max_nodes: 2_000_000 } },
+  toolarge_glb: { code: "CONTOUR3D_TOO_LARGE", message: "형상 파일이 상한을 넘습니다", nodes: 1_900_000, limits: { nodes: 1_900_000, max_nodes: 2_000_000, glb_bytes: 73_400_320, max_glb_bytes: 67_108_864 } },
+  toolarge_frames: { code: "CONTOUR3D_TOO_LARGE", message: "프레임이 크기 상한을 넘습니다", nodes: 1_900_000, limits: { nodes: 1_900_000, max_nodes: 2_000_000, glb_bytes: 30_000_000, max_glb_bytes: 67_108_864, bin_bytes: 4_000_000_000, max_bin_bytes: 268_435_456 } },
+};
+
+function finishContour(srv: MockServer, c: C3Rec, failMode: string | null | undefined) {
   c.status = "DONE";
   c.finished_at = new Date().toISOString();
   c.progress = c3Progress("done", 74, 95, false);
-  if (fail) {
+  const rel = `_cache/contour3d/${c.id}`;
+  const f = failMode ? FAILS[failMode] : null;
+  if (f) {
     c.result_status = "FAIL";
-    c.code = "CONTOUR3D_FIELD_EMPTY";
-    c.message_ko = "선택한 결과 값이 없습니다";
+    c.code = f.code;
+    c.message_ko = f.message;
+    c.nodes = f.nodes || null;
+    const comps = failMode === "toolarge_comps" ? ["CUSHION"] : [];
+    const man = { schema_version: 2, kind: "contour3d", status: "FAIL", code: f.code, message: f.message, display: { field: "Stress", comp: "vonMises", avgmode: "simple" }, limits: f.limits, scope: { comps, applied: false } };
+    c.manifest_artifact_id = srv.addArtifact("", "s-cushion", "CONTOUR3D_MANIFEST", `${rel}/contour_manifest.json`, "application/json", JSON.stringify(man));
     return;
   }
-  const d = contourData(c.source_kind, c.source_ref);
-  const rel = `_cache/contour3d/${c.id}`;
+  const d = contourData(c.source_kind, c.source_ref, { schema: 2, ...st(srv).mode.c3data });
   c.result_status = "OK";
   c.glb_artifact_id = addBin(srv, "s-cushion", "CONTOUR3D_GLB", `${rel}/contour.glb`, "model/gltf-binary", () => d.glb);
   c.frames_artifact_id = addBin(srv, "s-cushion", "CONTOUR3D_FRAMES", `${rel}/contour_frames.bin`, "application/octet-stream", () => d.frames);
+  c.disp_artifact_id = d.disp ? addBin(srv, "s-cushion", "CONTOUR3D_DISP", `${rel}/contour_disp.bin`, "application/octet-stream", () => d.disp!) : null;
+  c.lod_artifact_id = d.lod ? addBin(srv, "s-cushion", "CONTOUR3D_LOD", `${rel}/contour_lod.glb`, "model/gltf-binary", () => d.lod!) : null;
   c.manifest_artifact_id = srv.addArtifact("", "s-cushion", "CONTOUR3D_MANIFEST", `${rel}/contour_manifest.json`, "application/json", JSON.stringify(d.manifest));
   c.frames = d.manifest.frames.count;
   c.nodes = d.manifest.mesh.nodes;
@@ -158,7 +179,7 @@ function media(srv: MockServer, id: string, range: string | null): MockResp | nu
     const c = s.contours.find((x) => x.frames_artifact_id === id);
     if (c) {
       c.status = "EXPIRED";
-      [c.glb_artifact_id, c.frames_artifact_id, c.manifest_artifact_id].forEach((x) => x && s.expired.add(x));
+      [c.glb_artifact_id, c.frames_artifact_id, c.disp_artifact_id, c.lod_artifact_id, c.manifest_artifact_id].forEach((x) => x && s.expired.add(x));
     }
     return err(410, "ARTIFACT_EXPIRED", "파일이 정리되었습니다 — 다시 요청하세요");
   }
@@ -277,7 +298,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
         const hold = s.mode.c3d === "hold";
         const k = hold ? 3 : Math.min(4, ++c.polls);
         const phase = C3_ORDER[k];
-        if (phase === "done") finishContour(srv, c, s.mode.c3d === "fail");
+        if (phase === "done") finishContour(srv, c, s.mode.c3d);
         else {
           c.status = k === 0 ? "QUEUED" : "RUNNING";
           c.progress = c3Progress(phase, hold ? 46 : k * 12, 95, true);

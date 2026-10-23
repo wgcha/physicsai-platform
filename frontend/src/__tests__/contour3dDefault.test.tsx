@@ -18,6 +18,10 @@ interface FakeScene {
   setColors: Fn;
   setPositions: Fn;
   setLoop: Fn;
+  setLevel: Fn;
+  setMarkers: Fn;
+  onInteract: Fn;
+  onPick: Fn;
   fit: Fn;
   getCamera: Fn;
   setCamera: Fn;
@@ -37,6 +41,10 @@ vi.mock("../stages/stage4/geomview/threeScene", () => ({
       setColors: vi.fn(),
       setPositions: vi.fn(),
       setLoop: vi.fn(),
+      setLevel: vi.fn(),
+      setMarkers: vi.fn(),
+      onInteract: vi.fn(() => () => undefined),
+      onPick: vi.fn(() => () => undefined),
       fit: vi.fn(),
       getCamera: vi.fn(() => ({ position: [1, 2, 3], target: [0, 0, 0], up: [0, 0, 1], zoom: 1 })),
       setCamera: vi.fn(),

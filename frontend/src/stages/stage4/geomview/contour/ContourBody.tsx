@@ -1,8 +1,9 @@
 // 결과 3D 컨투어 본문(geometry-view.md §13.6): 열 때 생성 → 대기 안내(단계 스테퍼·진행률·경과/예상·취소) → 뷰어, 실패·취소·만료 처리.
-import { useEffect, type ComponentProps, type ReactNode } from "react";
-import type { Contour3d, Contour3dCreate } from "../../../../api";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
+import { api, type Contour3dCreate } from "../../../../api";
 import { ContourViewer } from "./ContourViewer";
-import { BUSY_TEXT, contourView, DENIED_TEXT, etaText, fmtSeconds, progressPercent, STEPPER, stepMarks } from "./contourCore";
+import { ReasonLine } from "./ContourReason";
+import { BUSY_TEXT, contourView, etaText, fmtSeconds, jobFailText, progressPercent, requestReason, resultFailText, STEPPER, stepMarks, type Contour3dEx as Contour3d, type ContourManifest } from "./contourCore";
 import { useContour3d, type ContourCtl } from "./useContour3d";
 
 /** [3D 컨투어] 버튼으로 연 패널(① run 표·접힘 패널): 열 때 생성 */
@@ -20,7 +21,7 @@ export function ContourBody({ source }: { source: Contour3dCreate }) {
  * media = 3D를 못 보일 때 그 자리에 함께 나오는 PNG·영상(contour3d-default C3D-2). viewer = 비교 모드 제어 props.
  */
 export function ContourStateView({ ctl, media, viewer }: { ctl: ContourCtl; media?: ReactNode; viewer?: Omit<ComponentProps<typeof ContourViewer>, "c" | "onExpired"> }) {
-  const { c, error, busy, queued, denied, start, cancel } = ctl;
+  const { c, error, errInfo, busy, queued, denied, start, cancel } = ctl;
   const view = contourView(c);
   // 서버 캐시가 정리된 결과(EXPIRED)는 자동으로 다시 만든다
   useEffect(() => {
@@ -30,24 +31,27 @@ export function ContourStateView({ ctl, media, viewer }: { ctl: ContourCtl; medi
   if (denied)
     return (
       <>
-        <p className="muted small c3-box" data-testid="contour3d-denied">
-          {DENIED_TEXT}
-        </p>
+        <ReasonLine text={requestReason({ c, error, denied, errInfo }) ?? ""} testid="contour3d-denied" />
         {media}
       </>
     );
-  if (error && (!c || view !== "waiting"))
+  if (error && (!c || view !== "waiting")) {
+    // 결정적 사유(기능 꺼짐·원본 없음)는 다시 요청해도 같으므로 [다시]를 두지 않는다
+    const fixed = errInfo?.status === 409 && (errInfo.code === "CONTOUR3D_NOT_CONFIGURED" || errInfo.code === "PREREQUISITE_MISSING");
     return (
       <>
         <div className="c3-box" role="alert">
-          <p className="error-text small">3D 컨투어를 요청하지 못했습니다 — {error}</p>
-          <button type="button" className="btn small" onClick={() => void start()}>
-            다시
-          </button>
+          <ReasonLine text={requestReason({ c, error, denied, errInfo }) ?? error} tone={fixed ? undefined : "error"} />
+          {!fixed && (
+            <button type="button" className="btn small" onClick={() => void start()}>
+              다시
+            </button>
+          )}
         </div>
         {media}
       </>
     );
+  }
   if (queued && !c)
     return (
       <div className="c3-box muted small" data-testid="contour3d-busy" aria-live="polite">
@@ -60,18 +64,14 @@ export function ContourStateView({ ctl, media, viewer }: { ctl: ContourCtl; medi
   if (view === "result_fail")
     return (
       <>
-        <div className="c3-box" data-testid="contour3d-fail">
-          <span className="pill bad">결과 없음</span> <span className="small">{c.message_ko ?? c.code}</span> <span className="mono muted small">{c.code}</span>
-        </div>
+        <ResultFail c={c} />
         {media}
       </>
     );
   return (
     <>
       <div className="c3-box" data-testid="contour3d-stopped">
-        <p className={view === "failed" ? "error-text small" : "muted small"}>
-          {view === "canceled" ? "3D 컨투어 생성을 취소했습니다." : `3D 컨투어를 만들지 못했습니다 — ${c.message_ko ?? c.code ?? "작업 실패"}`}
-        </p>
+        {view === "canceled" ? <ReasonLine text="3D 컨투어 생성을 취소했습니다." /> : <ReasonLine text={jobFailText(c)} tone="error" />}
         <button type="button" className="btn small" onClick={() => void start()}>
           {view === "canceled" ? "다시 만들기" : "다시"}
         </button>
@@ -79,6 +79,24 @@ export function ContourStateView({ ctl, media, viewer }: { ctl: ContourCtl; medi
       {view === "failed" && media}
     </>
   );
+}
+
+/** 결과 FAIL(결정적, 같은 키에서 다시 만들지 않음 — [다시] 없음): 상한 비교는 FAIL manifest의 `limits`로, 읽지 못하면 message_ko만 */
+function ResultFail({ c }: { c: Contour3d }) {
+  const [m, setM] = useState<ContourManifest | null>(null);
+  const id = c.manifest_artifact_id;
+  useEffect(() => {
+    if (!id) return;
+    let alive = true;
+    api
+      .artifactJson<ContourManifest>(id)
+      .then((x) => alive && setM(x))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [id]);
+  return <ReasonLine text={resultFailText(c, m)} testid="contour3d-fail" />;
 }
 
 /** 대기 안내: 단계 스테퍼 · 진행률 바 · 경과/예상 시간 · 취소 */
