@@ -126,7 +126,8 @@ def test_scx_verify_unknown_mark_not_submitted(scx_env, engine):
 
 @pytest.mark.parametrize("seq, final, code", [
     (["Running", "Failed"], "FAILED", "HPC_RUN_FAILED"),
-    (["Running", "Aborted"], "FAILED", "HPC_RUN_FAILED"),
+    (["Running", "Aborted"], "CANCELED", "HPC_RUN_FAILED"),
+    (["Running", "Cancelled"], "CANCELED", "HPC_RUN_FAILED"),
     (["Weird", "__SCX_NOT_FOUND__"], "LOST", "HPC_RUN_FAILED"),
 ])
 def test_scx_verify_state_mapping(scx_env, seq, final, code):
@@ -144,8 +145,28 @@ def test_scx_verify_state_mapping(scx_env, seq, final, code):
     assert j["state"] == "FAILED" and j["failure_code"] == code
     if seq[-1] == "Failed":
         assert "abc.def.ghi" not in h["error_message"] and "Bearer ***" in h["error_message"]
-    if seq[-1] == "Aborted":
-        assert h["error_message"] == "SCX에서 중단됨"
+    if seq[-1] in ("Aborted", "Cancelled"):
+        assert h["error_message"] == f"SCX에서 취소됨({seq[-1]})"
+        assert "SCX에서 취소됨" in j["failure_message"]  # 사용자 취소 없이도 작업이 계속 대기하지 않고 끝남
+
+
+def test_scx_verify_cancelling_stays_running_and_unknown_warns_once(scx_env):
+    """Cancelling은 RUNNING 유지(끝나지 않음). 알 수 없는 원문은 UNKNOWN 계수 + 작업 경고 1회(같은 원문 반복 없음)."""
+    c, w, ai, fake = scx_env
+    sid, pj = _setup_predict(c, w, ai, "SV3b")
+    fake.status_seq = ["Cancelling", "Weird", "Running", "Weird"]
+    vid = _verify(c, sid, pj)
+    assert w.run_once_slot() == "WAITING_HPC"
+    w.poll_hpc_once()
+    assert _hpc(c, vid)[0]["state"] == "RUNNING"
+    for _ in range(3):  # Weird → Running(계수 초기화) → Weird: 같은 원문이라 경고는 1회
+        w.poll_hpc_once()
+    h = _hpc(c, vid)[0]
+    assert h["state"] == "RUNNING" and h["external_state_raw"] == "Weird"
+    j = _job(c, vid)
+    assert j["state"] == "WAITING_HPC"
+    assert [x["code"] for x in j["warnings"]].count("SCX_UNKNOWN_STATUS") == 1
+    assert "Weird" in next(x["message"] for x in j["warnings"] if x["code"] == "SCX_UNKNOWN_STATUS")
 
 
 def test_scx_verify_unreachable_keeps_state(scx_env):

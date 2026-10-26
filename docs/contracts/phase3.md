@@ -980,11 +980,14 @@ step 정의·작업 유형·재시도 시작 지점은 그대로다(`TS_PREP →
 | 〃 | `Running` | `RUNNING` | |
 | 〃 | `Completed` | `SUCCEEDED` | `HpcStatus(state="FINISHED", outcome="SUCCEEDED")` |
 | 〃 | `Failed` | `FAILED` | `outcome="FAILED"`, `error_message` = JobInfo.error_message(마스킹·500자) |
-| 〃 | `Aborted` | 행이 `CANCEL_REQUESTED`면 `CANCELED`, 아니면 `FAILED` | 문구 "SCX에서 중단됨" |
-| 〃 | 그 밖 문자열 | 상태 유지, `unknown_count`+1 → `lost_after_polls`면 `LOST` | `external_state_raw`에 원문 |
+| 〃 | `Aborted`·`Cancelled`·`Canceled`·`Cancel`·`Terminated`·`Killed`·`Deleted`·`Stopped` | `CANCELED` | `HpcStatus(state="FINISHED", outcome="CANCELED")`. 행이 `CANCEL_REQUESTED`가 아니어도(SCX에서 직접 취소) `CANCELED`, 그때 error_message "SCX에서 취소됨(원문 상태)"(마스킹) |
+| 〃 | `Cancelling`·`Canceling`·`Terminating` | `RUNNING` 유지 | 아직 끝나지 않음 |
+| 〃 | 그 밖 문자열 | 상태 유지, `unknown_count`+1 → `lost_after_polls`면 `LOST` | `external_state_raw`에 원문. 작업 경고 `SCX_UNKNOWN_STATUS`로 같은 원문은 1회만 남김. 화면 SCX 상태 칸에 원문 표시 |
 | relay | 404 `SCX_JOB_NOT_FOUND` | 위와 같음(UNKNOWN 계수) | PBS의 "not_found → 끝남" 규칙은 scx에 쓰지 않음(`not_found=false`) |
 | relay | 연결 실패·5xx·`DRIVE_AUTH_REQUIRED`·`DRIVE_BUSY` 등 | 상태 유지 | `HpcGatewayError(UNAVAILABLE)` → 기존 `hpc_unreachable_since`·`max_unreachable_minutes`(문구에 "대시보드 SCX 연결 확인") |
 | relay | 404 `JOB_NOT_FOUND`(relay 기록에 없음) | 상태 유지, error_message | 설정·DB 불일치 — UNAVAILABLE과 같이 처리 |
+
+> 변경 메모(2026-10-26 현장, v0.2.12): SCX에서 취소된 잡이 PhysicsAI에서 계속 "실행 중"으로 남던 문제. 실제 SCX 취소 상태 문자열을 확인하지 못해 취소 계열 문자열을 넓게 `CANCELED`로 매핑(대소문자·앞뒤 공백 무시). 이전 `Aborted` → `FAILED "SCX에서 중단됨"` 규칙은 폐기. `hpc_terminal_transition`은 `CANCELED` 행을 `FAILED`·`LOST`와 같이 실패로 센다(전부 취소 → T13 "SCX에서 취소됨", 일부 성공 + `collect_partial` → T10b). 사용자 취소 경로(`cancel_requested_at`)는 영향 없음.
 
 `collect_state`(`NONE→PENDING→COLLECTING→COLLECTED|FAILED`)와 `hpc_terminal_transition`(T10·T10b·T13)은 그대로. `UNKNOWN`은 종료 상태가 아니므로 작업이 기다린다.
 

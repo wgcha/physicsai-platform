@@ -227,6 +227,7 @@ export function ScxJobStatus({ job, canAct }: { job: Job; canAct: boolean }) {
           </p>
           <CodeLine text={row.remote_dir} />
           {row.output_path && row.output_path !== row.remote_dir && <p className="muted small">결과 위치 {row.output_path}</p>}
+          {row.external_state_raw && <p className="muted small" data-testid="scx-raw">SCX 상태 원문: {row.external_state_raw}</p>}
           {row.error_message && <p className="warn-text small">{row.error_message}</p>}
         </>
       )}

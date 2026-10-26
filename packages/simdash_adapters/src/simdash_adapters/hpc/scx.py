@@ -40,7 +40,19 @@ SCX_STATUS_MAP: dict[str, tuple[str, str | None]] = {
     "running": ("RUNNING", None),
     "completed": ("FINISHED", "SUCCEEDED"),
     "failed": ("FINISHED", "FAILED"),
-    "aborted": ("FINISHED", "FAILED"),
+    # 2026-10-26 현장: SCX에서 취소·종료된 잡이 계속 실행 중으로 남던 문제 → 취소 계열은 CANCELED로 끝냄
+    "aborted": ("FINISHED", "CANCELED"),
+    "cancelled": ("FINISHED", "CANCELED"),
+    "canceled": ("FINISHED", "CANCELED"),
+    "cancel": ("FINISHED", "CANCELED"),
+    "terminated": ("FINISHED", "CANCELED"),
+    "killed": ("FINISHED", "CANCELED"),
+    "deleted": ("FINISHED", "CANCELED"),
+    "stopped": ("FINISHED", "CANCELED"),
+    # 취소 진행 중: 아직 끝나지 않음
+    "cancelling": ("RUNNING", None),
+    "canceling": ("RUNNING", None),
+    "terminating": ("RUNNING", None),
 }
 HEALTH_TIMEOUT_S = 3.0
 

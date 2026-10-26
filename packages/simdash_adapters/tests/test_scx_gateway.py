@@ -249,7 +249,7 @@ def test_status_mapping_table(fake_relay, tmp_path):
         st = gw.status(jid)
         got.append((st.state, st.outcome, st.raw_state))
     assert got == [("QUEUED", None, "Queued"), ("RUNNING", None, "Running"), ("FINISHED", "SUCCEEDED", "Completed"),
-                   ("FINISHED", "FAILED", "Failed"), ("FINISHED", "FAILED", "Aborted"), ("UNKNOWN", None, "Weird"),
+                   ("FINISHED", "FAILED", "Failed"), ("FINISHED", "CANCELED", "Aborted"), ("UNKNOWN", None, "Weird"),
                    ("UNKNOWN", None, "SCX_JOB_NOT_FOUND"), ("FINISHED", "SUCCEEDED", "completed")]
     st = gw.status(jid)
     assert st.output_rel == "cushion/01_a" and st.output_path.endswith("cushion/01_a") and st.not_found is False
@@ -316,3 +316,19 @@ def test_static_no_delete_move_overwrite_names():
         assert hits == [], (f, hits)
         src = (SRC / f).read_text(encoding="utf-8")
         assert '"DELETE"' not in src and '"PUT"' not in src and '"PATCH"' not in src
+
+
+@pytest.mark.parametrize("raw, want", [
+    ("Cancelled", ("FINISHED", "CANCELED")), ("canceled", ("FINISHED", "CANCELED")), (" CANCEL ", ("FINISHED", "CANCELED")),
+    ("Terminated", ("FINISHED", "CANCELED")), ("KILLED", ("FINISHED", "CANCELED")), ("Deleted", ("FINISHED", "CANCELED")),
+    ("Stopped", ("FINISHED", "CANCELED")), ("Aborted", ("FINISHED", "CANCELED")),
+    ("Cancelling", ("RUNNING", None)), ("Canceling", ("RUNNING", None)), ("Terminating", ("RUNNING", None)),
+    ("Weird", ("UNKNOWN", None)),
+])
+def test_status_map_cancel_family(fake_relay, tmp_path, raw, want):
+    gw = _gw(fake_relay, tmp_path)
+    _put(fake_relay, "cushion/01_a/m_0000.rad")
+    fake_relay.status_seq = [raw]
+    jid = gw.submit_radioss(_req("pai-c", "cushion/01_a")).job_id
+    st = gw.status(jid)
+    assert (st.state, st.outcome) == want and st.raw_state == raw

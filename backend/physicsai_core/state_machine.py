@@ -52,7 +52,7 @@ def hpc_terminal_transition(job_type: str, on_run_failure: str | None, hpc_state
     terminal = {"SUCCEEDED", "FAILED", "CANCELED", "LOST"}
     if not hpc_states or any(s not in terminal for s in hpc_states):
         return None
-    failed = sum(1 for s in hpc_states if s in ("FAILED", "LOST"))
+    failed = sum(1 for s in hpc_states if s in ("FAILED", "LOST", "CANCELED"))  # CANCELED: SCX 쪽 취소(사용자 취소는 이 경로를 거치지 않음)
     ok = sum(1 for s in hpc_states if s == "SUCCEEDED")
     if failed == 0:
         return "T10"

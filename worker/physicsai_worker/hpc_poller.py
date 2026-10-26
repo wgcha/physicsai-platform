@@ -1,6 +1,6 @@
 """워커 HPC 폴러(§12.4): WAITING_HPC 작업의 PBS 상태 조회·취소·종료 판정(T10·T10b·T13). Worker가 상속한다.
 
-scx(phase3 §16.5·§16.6): 상태 문자열 매핑(HpcStatus.outcome), Aborted(취소 요청 행 → CANCELED, 아니면 FAILED "SCX에서 중단됨"),
+scx(phase3 §16.5·§16.6): 상태 문자열 매핑(HpcStatus.outcome), 취소 계열(Aborted·Cancelled 등 → outcome CANCELED, 취소 요청 없이도 CANCELED "SCX에서 취소됨"),
 `external_job_id IS NULL`인 결과 모름(UNKNOWN) 행은 상태 조회·LOST 계수를 하지 않고, 취소 시 원격 호출 없이 CANCELED.
 사용자 조치(`hpc_jobs.resolve_request` — recheck·attach·mark_not_submitted)는 API가 적고 여기서 처리한다(API는 게이트웨이를 부르지 않음).
 """
@@ -119,8 +119,11 @@ class HpcPollerMixin:
             vals.update(finished_at=_now(), unknown_count=0)
             if outcome == "SUCCEEDED":
                 vals["state"] = "SUCCEEDED"
-            elif (st.raw_state or "").strip().casefold() == "aborted":
-                vals.update(state="CANCELED" if h["state"] == "CANCEL_REQUESTED" else "FAILED", error_message="SCX에서 중단됨")
+            elif outcome == "CANCELED":
+                vals["state"] = "CANCELED"
+                if h["state"] != "CANCEL_REQUESTED":  # 사용자 취소 없이 SCX에서 직접 취소
+                    raw = self._mask((st.raw_state or "").strip())
+                    vals["error_message"] = f"SCX에서 취소됨({raw})" if raw else "SCX에서 취소됨"
             else:
                 vals.update(state="FAILED", error_message=self._mask(st.error_message) if st.error_message else "SCX 해석 실패")
         elif st.state == "FINISHED":
@@ -129,9 +132,30 @@ class HpcPollerMixin:
         else:
             cnt = int(h["unknown_count"]) + 1
             vals.update(unknown_count=cnt)
+            self._warn_unknown_status(h, st.raw_state)
             if cnt >= lost_after_polls:
                 vals.update(state="LOST", finished_at=_now())
         return vals
+
+    def _warn_unknown_status(self, h: dict[str, Any], raw: str | None) -> None:
+        """알 수 없는 SCX 상태 원문을 작업 로그 경고로 1회 남긴다(같은 원문은 반복하지 않음)."""
+        raw_s = (raw or "").strip()
+        if not raw_s or not h.get("external_job_id") or h.get("gateway_mode") != "scx":
+            return
+        seen = self.__dict__.setdefault("_unknown_status_seen", set())
+        key = (h["id"], raw_s.casefold())
+        if key in seen:
+            return
+        seen.add(key)
+        log.warning("SCX 알 수 없는 상태 원문: %s (잡 %s)", self._mask(raw_s), h["external_job_id"])
+        try:
+            with self.engine.begin() as conn:
+                job_now = jobs_repo.get_job(conn, h["job_id"])
+                if job_now is not None and job_now["state"] == "WAITING_HPC":
+                    hpc_repo.add_waiting_warning(conn, job_now, "SCX_UNKNOWN_STATUS",
+                                                 self._mask(f"SCX 상태 원문을 알 수 없습니다: {raw_s}"))
+        except Exception:  # noqa: BLE001 - 경고 기록 실패가 폴링을 멈추지 않게
+            log.exception("SCX 알 수 없는 상태 경고 기록 실패")
 
     def _terminal_transition(self, conn: Any, job_now: dict[str, Any]) -> None:
         hjobs = hpc_repo.for_job(conn, job_now["id"])
@@ -141,9 +165,12 @@ class HpcPollerMixin:
         tno = hpc_terminal_transition(job_now["job_type"], (job_now["params"] or {}).get("on_run_failure"),
                                       [h["state"] for h in hjobs])
         if tno == "T13":
-            hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "PBS 해석이 실패했거나 상태를 잃었습니다")
+            if any(h["state"] == "CANCELED" for h in hjobs):
+                hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "SCX에서 취소됨 — 해석 작업이 SCX에서 취소되어 끝났습니다")
+            else:
+                hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "PBS 해석이 실패했거나 상태를 잃었습니다")
         elif tno == "T10b":
-            failed = sum(1 for h in hjobs if h["state"] in ("FAILED", "LOST"))
+            failed = sum(1 for h in hjobs if h["state"] in ("FAILED", "LOST", "CANCELED"))
             total = sum(1 for h in hjobs if (h.get("staged") or {}).get("phase") != "not_submitted")  # scx 미제출 행 제외
             hpc_repo.to_collecting_partial(conn, job_now, failed, total)
         elif tno == "T10":

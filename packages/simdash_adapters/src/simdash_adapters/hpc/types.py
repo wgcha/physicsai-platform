@@ -50,7 +50,7 @@ class HpcStatus:
     exit_code: int | None
     not_found: bool
     # scx(platform.md §12.5): FINISHED에서 outcome이 있으면 폴러가 그것으로 성공·실패를 판정(없으면 exit_code 규칙)
-    outcome: Literal["SUCCEEDED", "FAILED"] | None = None
+    outcome: Literal["SUCCEEDED", "FAILED", "CANCELED"] | None = None
     output_path: str | None = None
     output_rel: str | None = None
     error_message: str | None = None

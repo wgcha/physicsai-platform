@@ -128,6 +128,10 @@ def test_t10b_rules():
     assert f("PREDICT_VERIFY", None, ["SUCCEEDED", "FAILED"]) == "T13"
     assert f("TD_SOLVE", None, ["SUCCEEDED", "SUCCEEDED"]) == "T10"
     assert f("TD_SOLVE", None, ["SUCCEEDED", "RUNNING"]) is None
+    # SCX 쪽 취소(CANCELED)는 실패와 같이 취급: 전부 취소 → T13, 일부 성공 → T10b
+    assert f("TD_SOLVE", None, ["CANCELED", "CANCELED"]) == "T13"
+    assert f("PREDICT_VERIFY", None, ["CANCELED"]) == "T13"
+    assert f("TD_SOLVE", "collect_partial", ["SUCCEEDED", "CANCELED"]) == "T10b"
 
 
 def test_notification_titles():
