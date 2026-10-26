@@ -3,8 +3,8 @@
 For every parameter (values.json key; others nominal) and each direction, the steps run
 update -> morph -> check (a)(b)(c) in memory, stopping a direction after ``--stop-after-fail``
 consecutive failures. Dimension parameters step in % of the nominal value (``--steps``, default
-5,10,20,30,40,50); position parameters (HOLE_POS_U/V, RIB_POS_U/V) step in absolute mm (``--pos-steps``, default
-1,2,3,5,8,10). Every row / summary carries its ``unit`` ("%" or "mm"). The nominal geometry is the
+5,10,20,30,40,50); position parameters (HOLE_POS_U/V, RIB_POS_U/V) and rib pitches (RIB_PITCH_U/V) step in absolute
+mm (``--pos-steps``, default 1,2,3,5,8,10); a RIB_PITCH row also carries the rib row region quality (``rib_rows``). Every row / summary carries its ``unit`` ("%" or "mm"). The nominal geometry is the
 ``sample.brep`` of ``--update-dir``, which must be an update run with all values nominal.
 
 Outputs (``--out-dir``): ``envelope.json``, ``envelope.csv``, ``report_envelope.md``/``.csv`` (per-parameter
@@ -25,7 +25,7 @@ import math
 from pathlib import Path
 
 from . import envreport, options
-from .features import POSITION_TYPES
+from .features import ABS_RANGE_TYPES, RIB_PITCH_TYPES
 from .check import check_core
 from .common import CODE_CATEGORY, EXIT_CAD, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd, sha256_file
 from .kernel import CadInputError, load_brep, save_brep
@@ -100,7 +100,7 @@ def run(args, rep: Reporter) -> int:
         raise PaicadError("GEOM_INPUT_INVALID", f"--params: unknown parameter names: {', '.join(unknown[:10])}")
     nominal_vals = {k: _nominal(doc, k) for k in keys}
     type_of = {f["name"]: f["type"] for f in doc["features"]}
-    unit_of = {k: "mm" if type_of.get(k) in POSITION_TYPES else "%" for k in params}
+    unit_of = {k: "mm" if type_of.get(k) in ABS_RANGE_TYPES else "%" for k in params}
     rep.progress(2, "reading baseline, tag and nominal B-rep")
     skip: set[str] = set()
     if mesh_args(args, ("baseline_inc",)) == "M":  # assembly match: steps keep node_xyz.npz instead of morphed.inc
@@ -229,7 +229,7 @@ def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, 
         save_brep(res.bodies, out.tmp_path(f"{sub}/{SAMPLE_BREP}"))
         keep.append(f"{sub}/{SAMPLE_BREP}")
         _keep(out, keep, f"{sub}/{FACE_MAP_JSON}", dumps(res.face_map))
-        _keep(out, keep, f"{sub}/{UPDATE_JSON}", dumps(envelope(status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, topology=res.topology, positions=res.positions, warnings=res.warnings)))
+        _keep(out, keep, f"{sub}/{UPDATE_JSON}", dumps(envelope(status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, topology=res.topology, positions=res.positions, **({"rib_rows": res.rib_rows} if res.rib_rows else {}), warnings=res.warnings)))
     try:
         m = morph_core(mesh, comps, sample, opts)
     except MorphFailed as e:
@@ -249,7 +249,7 @@ def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, 
     if not check_on:
         return row
     expected = {e["name"]: float(e["expected_measured"]) for e in res.positions}
-    c = check_core(mesh, m.xyz, comps, sample, doc, vals, opts, None, baseline_path, full=False, expected=expected, skip_bodies=skip)
+    c = check_core(mesh, m.xyz, comps, sample, doc, vals, opts, None, baseline_path, full=False, expected=expected, skip_bodies=skip, rib_rows=res.rib_rows)
     s = c.summary
     row.update(
         status="OK" if c.status == "PASS" else "FAIL",
@@ -263,6 +263,10 @@ def _step(p, dlabel, st, unit, value, vals, nominal, doc, contacts, opts, mesh, 
         param_margin=s["param_margin"],
         inverted_elems=s["inverted_elems"],
     )
+    grp = {g["parameter"]: set(g["members"]) for g in doc.get("groups") or []}
+    mine = {f"{f['body']}:{f['row']['id']}" for f in doc["features"] if f["type"] in RIB_PITCH_TYPES and (f["name"] == p or f["name"] in grp.get(p, ()))}
+    if mine:  # rib-gap.md section 5: region quality of the rows this pitch parameter shifts (gaps and end rooms)
+        row["rib_rows"] = [x for x in c.checks["quality"].get("rib_rows") or [] if x["row"] in mine]
     if sub:
         _keep(out, keep, f"{sub}/check.json", dumps(envelope(status=c.status, code=c.code, category=CODE_CATEGORY.get(c.code) if c.code else None, message=c.message, checks=c.checks, warnings=c.warnings)))
     return row

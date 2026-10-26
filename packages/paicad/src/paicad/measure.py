@@ -111,6 +111,12 @@ def _circle_fit(pts: np.ndarray, axis: np.ndarray) -> tuple[np.ndarray, float] |
     return o + a * x + b * y + float(np.dot(q.mean(axis=0), d)) * d, math.sqrt(r2)
 
 
+def lateral_centroid(fi: "FaceIndex", f: int, P: np.ndarray, ax: int) -> float | None:
+    """Area-weighted centroid coordinate along ``ax`` of sample face ``f`` on the mesh (None = no triangle)."""
+    pl = fi.plane(f, P)
+    return None if pl is None else float(pl[0][ax])
+
+
 def measure_feature(feat: dict, fi: FaceIndex, fmapF: dict, P: np.ndarray) -> float | None:
     """Value of one feature on local coordinates P of its component (None = cannot measure)."""
     faces = [int(fmapF[str(int(x[1:]))]) for x in feat["measure"]["faces"]]
@@ -138,6 +144,19 @@ def measure_feature(feat: dict, fi: FaceIndex, fmapF: dict, P: np.ndarray) -> fl
         if pm is None or pp is None:
             return None
         return 0.5 * (float(pm[0][ax]) + float(pp[0][ax])) - float(P[:, ax].min())
+    if meth == "rib_pitch":
+        # rib pitch (rib-gap.md section 6): centers of the two ribs (mean of their -a / +a lateral face centroids
+        # fitted on the mesh) - difference along a
+        if len(faces) != 4:
+            return None
+        ax = "xyz".index(feat["measure"].get("axis", "x"))
+        c = []
+        for f in faces:
+            pl = fi.plane(f, P)
+            if pl is None:
+                return None
+            c.append(float(pl[0][ax]))
+        return 0.5 * (c[2] + c[3]) - 0.5 * (c[0] + c[1])
     if meth in ("hole_radius", "fillet_radius", "hole_center"):
         f = faces[0]
         fd = fi.topo.face(f)

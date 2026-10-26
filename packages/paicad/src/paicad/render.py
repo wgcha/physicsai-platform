@@ -309,6 +309,16 @@ def dimension_points(feature: dict, bbox=None) -> tuple[np.ndarray, np.ndarray] 
     RIB_POS_U/V (``bbox`` = body bbox): center plane of the two lateral faces -> body bbox minimum along the axis
     (the ``rib_center`` measure reference, extract-filter.md section 3.2)."""
     sig = feature.get("face_signatures") or {}
+    if feature.get("type") in ("RIB_PITCH_U", "RIB_PITCH_V"):  # rib-gap.md section 7: rib k center plane -> rib k+1
+        from types import SimpleNamespace
+
+        from .view.manifest import pitch_points
+
+        ns = lambda d: SimpleNamespace(centroid=d["centroid"], bbox=d["bbox"], normal=d.get("normal"))  # noqa: E731
+        meas = [sig[x] for x in (feature.get("measure") or {}).get("faces", []) if x in sig]
+        base = [sig[x] for x in (feature.get("faces") or {}).get("fixed", []) if x in sig]
+        pts = pitch_points((feature.get("measure") or {}).get("axis"), [ns(d) for d in meas], [ns(d) for d in base])
+        return None if pts is None else (pts[1], pts[2])
     if feature.get("type") in ("RIB_POS_U", "RIB_POS_V"):
         ax = (feature.get("measure") or {}).get("axis")
         if bbox is None or ax not in ("x", "y", "z"):

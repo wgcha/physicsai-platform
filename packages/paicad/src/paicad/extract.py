@@ -187,7 +187,8 @@ def run(args, rep: Reporter) -> int:
     rep.progress(85, "naming features and symmetry groups")
     t_fin = time.perf_counter()
     fin: dict = {}
-    feats, groups, warnings = features.finalize(per_body, opts, tol_of, timing=fin)
+    rows: list = []
+    feats, groups, warnings = features.finalize(per_body, opts, tol_of, timing=fin, rows_out=rows)
     if match is not None and args.body_map:
         warnings.append({"code": "BODY_MAP_IGNORED", "message": "body map ignored: the assembly match is the only body/component correspondence"})
     timing["finalize_s"] = time.perf_counter() - t_fin
@@ -214,11 +215,12 @@ def run(args, rep: Reporter) -> int:
                 "adjacent_surfaces": features.adjacent_surfaces(topo, sig_faces),
                 "draft_deg": ft.draft_deg,
                 "ref": ft.ref,
-                "measure": {"method": features.MEASURE[ft.type], "faces": [f"F{i}" for i in ft.faces]}
+                "measure": {"method": features.MEASURE[ft.type], "faces": [f"F{i}" for i in (ft.faces if ft.measure_faces is None else ft.measure_faces)]}
                 | ({"axis": "xyz"[ft.axis]} if ft.axis is not None else {}),
                 "group": ft.group,
                 "png": None,
             }
+            | ({"row": {"id": ft.row.id, "k": ft.row_k, "n": len(ft.row.ribs)}} if ft.type in features.RIB_PITCH_TYPES else {})
         )
     pngs: list[str] = []
     if feats and not args.no_png:
@@ -237,6 +239,8 @@ def run(args, rep: Reporter) -> int:
         bodies=bodies_json,
         features=feat_json,
         groups=groups,
+        # rib-gap.md section 3.4: only when RIB_PITCH is selected (otherwise byte-identical to 0.13.0)
+        **({"rib_rows": features.rib_rows_json(rows, topo_of)} if flt is not None and set(flt.get("types") or ()) & set(features.RIB_PITCH_TYPES) else {}),
         warnings=warnings,
     )
     stats_doc = _stats_doc(flt is not None, stats_bodies, pngs, timing, t_start)

@@ -121,6 +121,36 @@ _TOP_ALIASES = {"position_range_mm": ("extract", "position_range_mm")}
 _FREE_SECTIONS = ("thickness_ref_overrides",)
 
 
+# optional ``rib_gap`` section (rib-gap.md section 2.2, RIB_PITCH rows): not merged into the options when absent (outputs
+# that copy or hash the options stay byte-identical); read with :func:`rib_gap_options`
+RIB_GAP_DEFAULTS = {"anchor": "center", "min_gap_mm": 1.0, "slender_min": 1.5, "overlap_min": 0.5}
+RIB_GAP_ANCHORS = ("center", "first", "last")
+
+
+def validate_rib_gap(sec) -> list[str]:
+    if sec is None:
+        return []
+    if not isinstance(sec, dict):
+        return ["rib_gap must be an object"]
+    p = [f"rib_gap.{k}: unknown key" for k in sec if k not in RIB_GAP_DEFAULTS]
+    if sec.get("anchor", "center") not in RIB_GAP_ANCHORS:
+        p.append("rib_gap.anchor must be center, first or last")
+    if not _pos(sec.get("min_gap_mm", 1.0)):
+        p.append("rib_gap.min_gap_mm must be a finite number > 0")
+    v = sec.get("slender_min", 1.5)
+    if not (_num(v) and v >= 1):
+        p.append("rib_gap.slender_min must be a finite number >= 1")
+    v = sec.get("overlap_min", 0.5)
+    if not (_pos(v) and v <= 1):
+        p.append("rib_gap.overlap_min must be in (0, 1]")
+    return p
+
+
+def rib_gap_options(opts: dict) -> dict:
+    """``rib_gap`` section of loaded options merged over :data:`RIB_GAP_DEFAULTS`."""
+    return {**RIB_GAP_DEFAULTS, **(opts.get("rib_gap") or {})}
+
+
 # optional ``asm_match`` section (asm-match.md section 6.2, ``paicad asm``): not merged into the options (outputs that copy
 # the options stay byte-identical); read with :func:`asm_options`
 ASM_DEFAULTS = {"max_parts": 5000, "recommend_min_score": 0.6, "worst_nodes": 2000}
@@ -157,7 +187,7 @@ def unknown_keys(over: dict) -> list[str]:
     """Dotted names of keys that are not options (typos must not be ignored silently)."""
     bad: list[str] = []
     for k, v in over.items():
-        if k in _META_KEYS or k in _TOP_ALIASES or k == "asm_match":
+        if k in _META_KEYS or k in _TOP_ALIASES or k in ("asm_match", "rib_gap"):
             continue
         if k not in DEFAULTS:
             bad.append(k)
@@ -184,6 +214,8 @@ FILTER_TYPES = (
     "FILLET_RADIUS",
     "RIB_POS_U",
     "RIB_POS_V",
+    "RIB_PITCH_U",  # rib-gap.md RG-1 (EF-C3: 13 types)
+    "RIB_PITCH_V",
 )
 FILTER_RANGE_KEYS = ("thickness_mm", "height_mm")
 FILTER_MIN_KEYS = ("face_area_min_mm2", "position_min_size_mm", "hole_radius_min_mm", "fillet_radius_min_mm")
@@ -257,10 +289,11 @@ def load(path: str | Path | None, keep_filter: bool = False) -> dict:
     bad = unknown_keys(over)
     if bad:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: unknown keys: " + ", ".join(bad))
-    probs = validate_asm(over.get("asm_match"))
+    probs = validate_asm(over.get("asm_match")) + validate_rib_gap(over.get("rib_gap"))
     if probs:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))
-    over = {k: v for k, v in over.items() if k not in ("engine", "engine_version", "asm_match")}
+    rib_gap = copy.deepcopy(over.get("rib_gap"))
+    over = {k: v for k, v in over.items() if k not in ("engine", "engine_version", "asm_match", "rib_gap")}
     for alias, (sec, key) in _TOP_ALIASES.items():
         if alias in over:
             v = over.pop(alias)
@@ -281,6 +314,8 @@ def load(path: str | Path | None, keep_filter: bool = False) -> dict:
         raise PaicadError("GEOM_INPUT_INVALID", "invalid options: " + "; ".join(probs))
     if keep_filter and flt is not None:
         opts["extract"]["filter"] = flt
+    if rib_gap is not None:  # kept only when given (absent = defaults, options copies unchanged)
+        opts["rib_gap"] = rib_gap
     return opts
 
 

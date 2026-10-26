@@ -189,6 +189,29 @@ def evaluate(base_xyz: np.ndarray, new_xyz: np.ndarray, tets: np.ndarray, skin: 
     return QualityResult(status, report, "quality: " + "; ".join(problems) if problems else None, baseline_ok)
 
 
+def region(base_xyz: np.ndarray, new_xyz: np.ndarray, tets: np.ndarray, skin: np.ndarray, q: dict) -> dict:
+    """Quality of a sub-region (rib-gap.md section 6 (c), attribution only): the section 6.5 (c) metrics of the given
+    tetra / boundary triangles and PASS/FAIL against the same criteria (baseline-relative rules included)."""
+    out = {"elems": int(len(tets)), "min_edge_ratio": None, "max_aspect": None, "min_stretch": None, "dt_ratio": None, "status": "PASS"}
+    if len(tets) == 0:
+        return out
+    b, m = tet_metrics(base_xyz, tets), tet_metrics(new_xyz, tets)
+    ab, am = tri_aspect(base_xyz, skin), tri_aspect(new_xyz, skin)
+    smin, amax = float(q["min_stretch"]), float(q["max_aspect"])
+    rel = bool(q.get("relative_to_baseline", True))
+    ok_s = (m.stretch >= smin) | ~np.isfinite(m.stretch)
+    ok_a = (am <= amax) | ~np.isfinite(am)
+    if rel:
+        ok_s |= (b.stretch < smin) & (m.stretch >= 0.9 * b.stretch)
+        ok_a |= (ab > amax) & (am <= 1.1 * ab)
+    er = _min_ratio(m.min_edge, b.min_edge, None)
+    dt = _min_ratio(np.maximum(m.char_len, 0.0), b.char_len, None)
+    ok = bool((m.vol > 0).all() and ok_s.all() and ok_a.all())
+    ok = ok and (not np.isfinite(er) or er >= float(q["min_edge_ratio"])) and (not np.isfinite(dt) or dt >= float(q["dt_ratio_min"]))
+    out.update(min_edge_ratio=_r(er), max_aspect=_r(_fmax(am)) if len(skin) else None, min_stretch=_r(_fmin(m.stretch)), dt_ratio=_r(dt), status="PASS" if ok else "FAIL")
+    return out
+
+
 METRIC_KEYS = (
     "min_stretch",
     "baseline_min_stretch",

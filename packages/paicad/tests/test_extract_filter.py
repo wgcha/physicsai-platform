@@ -176,7 +176,8 @@ def test_filter_type_vocabulary_single_source():
     from paicad.view import manifest
 
     assert options.FILTER_TYPES == features.TYPE_ORDER
-    assert features.TYPE_ORDER[-2:] == ("RIB_POS_U", "RIB_POS_V") and features.TYPE_ORDER[:9] == features.LEGACY_TYPES
+    # rib-gap.md RG-1: RIB_PITCH_U/V appended after RIB_POS_U/V
+    assert features.TYPE_ORDER[9:11] == ("RIB_POS_U", "RIB_POS_V") and features.TYPE_ORDER[11:] == features.RIB_PITCH_TYPES and features.TYPE_ORDER[:9] == features.LEGACY_TYPES
     assert manifest.POSITION_TYPES is features.POSITION_TYPES
     assert set(features.POSITION_TYPES) == {"HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V"}
     assert all(paramap.TYPE_KIND[t] == "position" for t in features.POSITION_TYPES)
