@@ -17,7 +17,9 @@ model never fails):
   (e.g. a pocket opening narrower than zero);
 * ``WALL_PENETRATION`` - two opposite parallel planar faces whose projections overlap pass through
   each other (material thickness or air gap <= tolerance after the move, e.g. pocket floor through
-  the bottom face, rib side into the next rib).
+  the bottom face, rib side into the next rib);
+* ``RIB_PITCH_MIN`` (rib-gap.md section 4.3, built by the update plan with :func:`rib_pitch_min`) - the gap between
+  two neighbouring ribs of a rib row (pitch - half the sample thickness sum) below ``rib_gap.min_gap_mm``.
 """
 
 from __future__ import annotations
@@ -35,7 +37,7 @@ PARALLEL_COS = 0.999
 
 @dataclass
 class Collision:
-    kind: str  # BOUNDARY_OVERLAP | SELF_INTERSECTION | WALL_PENETRATION
+    kind: str  # BOUNDARY_OVERLAP | SELF_INTERSECTION | WALL_PENETRATION | RIB_PITCH_MIN
     face: int  # face on which it was found (WALL_PENETRATION: first face of the pair)
     other: int | None  # second face (WALL_PENETRATION) or None
     features: list[str]
@@ -311,6 +313,12 @@ def find_collisions(body: BodyGeom, moves: dict[int, FaceMove], owner: dict[int,
     return out
 
 
+def rib_pitch_min(name: str, face: int, other: int, pitch: float, gap: float, min_gap: float) -> Collision:
+    """RIB_PITCH_MIN of pitch ``name``: ``face`` / ``other`` = the facing lateral faces (-a of the outer rib, +a of
+    the inner one)."""
+    return Collision("RIB_PITCH_MIN", face, other, [name], f"{name}: pitch {pitch:.6g} mm, gap {gap:.6g} mm < min gap {min_gap:g} mm")
+
+
 def _tr(m: FaceMove | None) -> np.ndarray:
     return np.zeros(3) if m is None or m.translate is None else np.asarray(m.translate, dtype=float)
 
@@ -331,4 +339,4 @@ def _overlap(A, B, n: np.ndarray, tol: float) -> bool:
     return du > tol and dv > tol and math.isfinite(du) and math.isfinite(dv)
 
 
-__all__ = ["Collision", "find_collisions"]
+__all__ = ["Collision", "find_collisions", "rib_pitch_min"]

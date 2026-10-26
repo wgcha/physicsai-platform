@@ -362,6 +362,8 @@ def _extract_summary(d: dict | None, stats: dict | None = None) -> dict | None:
     reps = {g["parameter"] for g in d.get("groups") or []}
     params = sum(1 for f in d.get("features") or [] if f["name"] in reps or f["name"] not in grouped)
     out = {"bodies": len(d.get("bodies") or []), "features": len(d.get("features") or []), "parameters": params, "groups": len(d.get("groups") or []), "by_type": dict(sorted(by_type.items()))}
+    if isinstance(d.get("rib_rows"), list):  # rib-gap.md section 9 R1: rib rows found (RIB_PITCH selected)
+        out["rib_rows"] = len(d["rib_rows"])
     if stats and isinstance(stats.get("bodies"), list):
         out["rib_rejects"] = {str(b.get("body")): dict(b.get("rib_rejects") or {}) for b in stats["bodies"]}
     return out

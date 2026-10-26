@@ -15,6 +15,11 @@ Every sample starts from the nominal geometry. Feature values are turned into fa
   value change moving the hole along +axis; ``proportional`` keeps the position as a fraction of the
   body length along the axis. The resulting value measured from the bbox minimum is reported in
   ``update.json`` ``positions[].expected_measured`` (check (a) compares against it);
+* RIB_PITCH_U/V (rib-gap.md section 4, step 3.5 between the group features and the positions): the ribs of a
+  rib row (``rib_rows`` of the features file) are shifted rigidly along the row axis so that the anchor (center
+  rib, or the mid point of the two center ribs) stays and every pitch takes its value; rib thickness moves of the
+  same sample become symmetric about the rib center. Gap pre-check RIB_PITCH_MIN, post-check of pitches and
+  thicknesses on the rebuilt body (GEOM_CAD_FAILED "rib row drift");
 * FILLET_RADIUS and every plane/plane blend next to a moved face: blend re-fitted tangent to its
   two (moved) planes with the requested radius.
 
@@ -35,7 +40,7 @@ from pathlib import Path
 import numpy as np
 
 from . import cadload, options
-from .collision import find_collisions
+from .collision import Collision, find_collisions, rib_pitch_min
 from .common import (
     CODE_CATEGORY,
     EXIT_CAD,
@@ -48,7 +53,7 @@ from .common import (
     rnd,
     vec,
 )
-from .features import RIB_POS_TYPES, choose_ref, rib_sides
+from .features import RIB_PITCH_TYPES, RIB_POS_TYPES, choose_ref, outer_ribs, rib_sides
 from .kernel import BodyGeom, CadInputError, FaceMove, move_faces, save_brep
 from .kernel.base import FaceData, Topology
 
@@ -68,6 +73,8 @@ OP = {
     "FILLET_RADIUS": "REBLEND",
     "RIB_POS_U": "AXIS_SHIFT",
     "RIB_POS_V": "AXIS_SHIFT",
+    "RIB_PITCH_U": "RIB_ROW_SHIFT",
+    "RIB_PITCH_V": "RIB_ROW_SHIFT",
 }
 SIG_ANGLE_DEG = 1.0
 HOLE_POS_ITER = 3
@@ -260,11 +267,34 @@ class HolePos:
 
 
 @dataclass
+class RowPlan:
+    """Planned rigid shift of one rib row (rib-gap.md section 4.2) and what the rebuild must give (section 4.3)."""
+
+    id: str
+    body: str
+    axis: int
+    anchor: str
+    minus: list[int]  # resolved -a lateral face per rib
+    plus: list[int]
+    shift: list[float]  # s_i
+    center: list[float]  # expected center c'_i
+    thickness: list[float]  # expected thickness t'_i
+    pitch_names: list[str]  # feature name per pitch k (index k-1)
+    pitch_values: list[float]  # input value per pitch
+    pitch_expected: list[float]  # geometric target p_k
+    end_room: dict
+    pos: dict = field(default_factory=dict)  # rib position feature name -> rib index (expected = c'_i - bbox minimum)
+    moving_all: set = field(default_factory=set)  # every moving face of the row's ribs
+
+
+@dataclass
 class BodyPlan:
     moves: dict[int, FaceMove]
     applied: list[dict]
     hole_pos: list[HolePos]
     warnings: list[dict]
+    rows: list[RowPlan] = field(default_factory=list)
+    collisions: list[Collision] = field(default_factory=list)  # pre-check findings of the plan itself (RIB_PITCH_MIN)
 
 
 def _neighbors(topo: Topology, fid: int) -> list[int]:
@@ -345,7 +375,9 @@ def plan_body(
     opts: dict,
     members_of: dict[str, list[str]],
     keys: set[str],
+    rows: list[dict] | None = None,
 ) -> BodyPlan:
+    """``rows``: this body's ``rib_rows`` of the features file (RIB_PITCH, rib-gap.md section 4)."""
     topo = body.topology()
     s = body.summary()
     tol = options.body_tol(opts, s.bbox)
@@ -437,12 +469,32 @@ def plan_body(
             if d:
                 add(cap, (d if t == "RIB_HEIGHT" else -d) * normal(cap))
             record(f, [cap], [host], "feature_default")
+    # 3.5 rib rows (rib-gap.md section 4.2): anchor fixed, outer ribs shifted rigidly
+    row_plans: list[RowPlan] = []
+    collisions: list[Collision] = []
+    row_moving: list[set[int]] = [set(), set(), set()]
+    row_pos: set[str] = set()
+    if any(f["type"] in RIB_PITCH_TYPES for f, _ in others):
+        min_gap = float(options.rib_gap_options(opts)["min_gap_mm"])
+        for row in rows or []:
+            rp = _plan_row(row, topo, tol, others, fvalues, T, add, record, min_gap, collisions)
+            if rp is None:
+                continue
+            row_plans.append(rp)
+            row_pos.update(rp.pos)
+            row_moving[rp.axis].update(rp.moving_all)
+        planned = {rp.id for rp in row_plans}
+        lost = sorted(f["name"] for f, _ in others if f["type"] in RIB_PITCH_TYPES and (f.get("row") or {}).get("id") not in planned)
+        if lost:
+            raise PaicadError("GEOM_INPUT_INVALID", f"rib pitch without its rib row in the features file: {', '.join(lost[:10])} (re-run extract)")
+        others = [(f, mf) for f, mf in others if f["type"] not in RIB_PITCH_TYPES and f["name"] not in row_pos]
     # 4. holes and fillets (hole position reference: nearest fixed face or proportional, see module doc)
     lo_shift, hi_shift = _bbox_shift(topo, s.bbox, T)
     pos_mode = opts.get("position_ref", "nearest_fixed")
     hole_pos: list[HolePos] = []
     # faces a rib position move of this sample shifts along each axis: never a position reference on that axis
-    rib_shifted: list[set[int]] = [set(), set(), set()]
+    # (rib row faces included: they move with the row, section 4.2-4)
+    rib_shifted: list[set[int]] = [set(x) for x in row_moving]
     for f, mf in others:
         if f["type"] in RIB_POS_TYPES and fvalues[f["name"]] - float(f["nominal"]) != 0:
             rib_shifted["xyz".index(f["measure"].get("axis", "x"))].update(_rib_moving(f, mf))
@@ -536,7 +588,119 @@ def plan_body(
         mvv = FaceMove(translate=t, radius=R.get(fid))
         if mvv.is_effective():
             moves[fid] = mvv
-    return BodyPlan(moves, applied, hole_pos, warnings)
+    return BodyPlan(moves, applied, hole_pos, warnings, row_plans, collisions)
+
+
+def _plan_row(row: dict, topo: Topology, tol: float, others: list, fvalues: dict[str, float], T: dict, add, record, min_gap: float, collisions: list) -> RowPlan | None:
+    """Step 3.5 for one row (rib-gap.md section 4.2): cumulative center changes D_i from the anchor (pitch deltas,
+    anchor rib position delta), rigid shift s_i = D_i - (tau-_i + tau+_i) / 2 of every moving face of rib i (the
+    thickness moves of steps 1-3 become symmetric about the center), RIB_PITCH_MIN pre-check with the sample
+    thickness (section 4.3). Returns None when no RIB_PITCH feature of this body refers to the row."""
+    rid = row["id"]
+    pitches = {int(f["row"]["k"]): f for f, _ in others if f["type"] in RIB_PITCH_TYPES and (f.get("row") or {}).get("id") == rid}
+    if not pitches:
+        return None
+    sigs = row.get("face_signatures") or {}
+    res = lambda x: resolve_face(topo, _fid(x), sigs.get(x), tol)  # noqa: E731
+    a = "xyz".index(row["axis"])
+    ribs = row["ribs"]
+    n = len(ribs)
+    if n < 2 or sorted(pitches) != list(range(1, n)):
+        raise PaicadError("GEOM_INPUT_INVALID", f"rib row {row['body']}:{rid}: pitch features do not match the row (re-run extract)")
+    minus = [res(r["minus"]) for r in ribs]
+    plus = [res(r["plus"]) for r in ribs]
+    moving = [[res(x) for x in r["moving"]] for r in ribs]
+    base = res(row["base"])
+    caps = {res(r["cap"]): i for i, r in enumerate(ribs, 1)}
+    c = [0.5 * (float(topo.face(m).centroid[a]) + float(topo.face(p).centroid[a])) for m, p in zip(minus, plus)]
+    t0 = [float(topo.face(p).centroid[a]) - float(topo.face(m).centroid[a]) for m, p in zip(minus, plus)]
+    tau_m = [float(T[m][a]) if m in T else 0.0 for m in minus]
+    tau_p = [float(T[p][a]) if p in T else 0.0 for p in plus]
+    tp = [t + b - m for t, m, b in zip(t0, tau_m, tau_p)]
+    names = [pitches[k]["name"] for k in range(1, n)]
+    dp = [fvalues[nm] - float(pitches[k]["nominal"]) for k, nm in zip(range(1, n), names)]
+    # rib position features on row ribs (same axis): the anchor rib's moves the row, any other must stay nominal
+    pos: dict[str, int] = {}
+    dpos = 0.0
+    kind, m = row["anchor"].split(":")
+    m = int(m)
+    for f, mf in others:
+        if f["type"] in RIB_POS_TYPES and "xyz".index(f["measure"].get("axis", "x")) == a and mf and mf[0] in caps:
+            i = caps[mf[0]]
+            d = fvalues[f["name"]] - float(f["nominal"])
+            if kind == "rib" and i == m:
+                dpos = d
+            elif d != 0:
+                raise PaicadError("GEOM_INPUT_INVALID", f"RIB_PITCH_POS_CONFLICT: rib position and rib pitch on the same row ({f['name']}, row {row['body']}:{rid})")
+            pos[f["name"]] = i
+            record(f, list(moving[i - 1]), [base], "row_anchor")
+    D = [0.0] * n
+    if kind == "rib":
+        lo_i = hi_i = m - 1
+        D[m - 1] = dpos
+    else:
+        lo_i, hi_i = m - 1, m
+        D[m - 1], D[m] = -0.5 * dp[m - 1], 0.5 * dp[m - 1]
+    for i in range(hi_i + 1, n):
+        D[i] = D[i - 1] + dp[i - 1]
+    for i in range(lo_i - 1, -1, -1):
+        D[i] = D[i + 1] - dp[i]
+    shift = [D[i] - 0.5 * (tau_m[i] + tau_p[i]) for i in range(n)]
+    e = np.zeros(3)
+    e[a] = 1.0
+    for i in range(n):
+        if shift[i] != 0:
+            for g in moving[i]:
+                add(g, shift[i] * e)
+    p_exp = [c[j + 1] - c[j] + dp[j] for j in range(n - 1)]
+    for j in range(n - 1):
+        g0 = c[j + 1] - c[j] - 0.5 * (t0[j] + t0[j + 1])
+        g1 = p_exp[j] - 0.5 * (tp[j] + tp[j + 1])
+        if g1 < min(min_gap, g0) - 1e-9:  # a nominal gap already below min_gap only must not shrink further
+            collisions.append(rib_pitch_min(names[j], minus[j + 1], plus[j], p_exp[j], g1, min_gap))
+    for k in range(1, n):
+        f = pitches[k]
+        moved = [g for i in outer_ribs(row["anchor"], k, n) for g in moving[i - 1]]
+        record(f, moved, [base], "row_anchor")
+    return RowPlan(
+        rid, row["body"], a, row["anchor"], minus, plus, shift, [c[i] + D[i] for i in range(n)], tp, names, [fvalues[nm] for nm in names], p_exp,
+        dict(row.get("end_room_mm") or {}), pos, {g for mv in moving for g in mv},
+    )
+
+
+def row_report(plan: RowPlan, topo: Topology, bbox: np.ndarray, tol: float) -> tuple[dict, list[dict]]:
+    """Section 4.3 post check on the rebuilt body: pitches and rib thicknesses re-measured from the lateral face
+    centroids (|error| > body tol -> GEOM_CAD_FAILED). Returns (``update.json`` ``rib_rows[]`` entry, ``positions``
+    entries of the row's rib position features)."""
+    a = plan.axis
+    cen = [0.5 * (float(topo.face(m).centroid[a]) + float(topo.face(p).centroid[a])) for m, p in zip(plan.minus, plan.plus)]
+    thk = [float(topo.face(p).centroid[a]) - float(topo.face(m).centroid[a]) for m, p in zip(plan.minus, plan.plus)]
+    for i, (want, got) in enumerate(zip(plan.thickness, thk), 1):
+        if abs(got - want) > tol:
+            raise PaicadError("GEOM_CAD_FAILED", f"rib row drift: {plan.body}:{plan.id}:{i} thickness expected {want:.6g} measured {got:.6g}")
+    pitches = []
+    for j, (nm, want) in enumerate(zip(plan.pitch_names, plan.pitch_expected)):
+        got = cen[j + 1] - cen[j]
+        if abs(got - want) > tol:
+            raise PaicadError("GEOM_CAD_FAILED", f"rib row drift: {nm} expected {want:.6g} measured {got:.6g}")
+        pitches.append({"name": nm, "value": rnd(plan.pitch_values[j], 9), "measured": rnd(got), "gap": rnd(got - 0.5 * (thk[j] + thk[j + 1]))})
+    entry = {
+        "id": plan.id,
+        "body": plan.body,
+        "axis": "xyz"[a],
+        "anchor": plan.anchor,
+        "ribs": [
+            {"index": i, "shift_mm": rnd(plan.shift[i - 1], 9), "center_expected": rnd(plan.center[i - 1], 9), "thickness_expected": rnd(plan.thickness[i - 1], 9), "thickness_measured": rnd(thk[i - 1])}
+            for i in range(1, len(cen) + 1)
+        ],
+        "pitches": pitches,
+        "end_room_mm": plan.end_room,
+    }
+    positions = [
+        {"name": nm, "body": plan.body, "axis": "xyz"[a], "mode": "row_anchor", "ref_face": None, "expected_measured": rnd(plan.center[i - 1] - float(bbox[a]), 9)}
+        for nm, i in sorted(plan.pos.items(), key=lambda x: x[1])
+    ]
+    return entry, positions
 
 
 # ------------------------------------------------------------------ core (also used by the sweep)
@@ -548,6 +712,7 @@ class UpdateResult:
     face_map: dict
     warnings: list[dict]
     positions: list[dict] = field(default_factory=list)
+    rib_rows: list[dict] = field(default_factory=list)  # rib-gap.md section 4.3 (update.json ``rib_rows``, only when non-empty)
 
 
 def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], contacts: dict[str, set[int]] | None, opts: dict) -> UpdateResult:
@@ -559,16 +724,17 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
     for g in doc.get("groups") or []:
         if g["id"] not in split:
             members_of[g["parameter"]] = [m for m in g["members"] if m != g["parameter"]]
-    out_bodies, applied, warnings, positions = [], [], [], []
+    out_bodies, applied, warnings, positions, rib_rows = [], [], [], [], []
     topo_counts, face_map = {}, {}
     for bdoc, body in zip(doc["bodies"], nominal):
         name = bdoc["body"]
         feats = [f for f in doc["features"] if f["body"] == name]
-        plan = plan_body(body, feats, fvalues, None if contacts is None else contacts.get(name, set()), opts, members_of, keys)
+        rows = [r for r in doc.get("rib_rows") or [] if r.get("body") == name]
+        plan = plan_body(body, feats, fvalues, None if contacts is None else contacts.get(name, set()), opts, members_of, keys, rows)
         applied += plan.applied
         warnings += plan.warnings
         moves = dict(plan.moves)
-        _precheck(body, feats, moves, opts)
+        _precheck(body, feats, moves, opts, plan.collisions)
         new = _move(body, moves)
         for _ in range(HOLE_POS_ITER):
             if not plan.hole_pos:
@@ -602,6 +768,13 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
                         "expected_measured": rnd(hp.target(topo, bb) - float(bb[hp.axis]), 9),
                     }
                 )
+        if plan.rows:
+            bb, topo = new.summary().bbox, new.topology()
+            tol_b = options.body_tol(opts, body.summary().bbox)
+            for rp in plan.rows:
+                entry, pos = row_report(rp, topo, bb, tol_b)
+                rib_rows.append(entry)
+                positions += pos
         tn, ts = body.topology(), new.topology()
         cn = [len(tn.faces), len(tn.edges), len(tn.vertices)]
         cs = [len(ts.faces), len(ts.edges), len(ts.vertices)]
@@ -618,18 +791,19 @@ def update_core(nominal: list[BodyGeom], doc: dict, values: dict[str, float], co
         if uvf:
             face_map[name]["uv_fallback"] = uvf  # faces where the normalized (u,v) mapping is not valid (section 6.4 fallback)
         out_bodies.append(new)
-    return UpdateResult(out_bodies, applied, {"same_as_nominal": True, "counts": topo_counts}, face_map, warnings, positions)
+    return UpdateResult(out_bodies, applied, {"same_as_nominal": True, "counts": topo_counts}, face_map, warnings, positions, rib_rows)
 
 
-def _precheck(body: BodyGeom, feats: list[dict], moves: dict[int, FaceMove], opts: dict) -> None:
-    """Feature collision pre-check on the planned moves (raises GEOM_FEATURE_COLLISION)."""
+def _precheck(body: BodyGeom, feats: list[dict], moves: dict[int, FaceMove], opts: dict, extra: list[Collision] | None = None) -> None:
+    """Feature collision pre-check on the planned moves (raises GEOM_FEATURE_COLLISION). ``extra``: findings of the
+    plan itself (RIB_PITCH_MIN), reported first."""
     owner: dict[int, list[str]] = {}
     for f in feats:
         for x in list(f["measure"]["faces"]) + list((f.get("faces") or {}).get("moving") or []):
             owner.setdefault(_fid(x), [])
             if f["name"] not in owner[_fid(x)]:
                 owner[_fid(x)].append(f["name"])
-    hits = find_collisions(body, moves, owner, options.body_tol(opts, body.summary().bbox))
+    hits = list(extra or []) + find_collisions(body, moves, owner, options.body_tol(opts, body.summary().bbox))
     if hits:
         first = hits[0]
         more = f" (+{len(hits) - 1} more)" if len(hits) > 1 else ""
@@ -702,6 +876,7 @@ def ok_report(res: UpdateResult, doc: dict, values: dict[str, float], t0: float)
         topology=res.topology,
         bodies=[{"body": b["body"], "volume": rnd(x.summary().volume), "bbox": vec(x.summary().bbox)} for b, x in zip(doc["bodies"], res.bodies)],
         positions=res.positions,
+        **({"rib_rows": res.rib_rows} if res.rib_rows else {}),
         warnings=res.warnings,
         elapsed_s=rnd(time.monotonic() - t0, 3),
     )

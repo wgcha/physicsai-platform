@@ -19,7 +19,8 @@ from scipy.spatial import cKDTree
 
 from . import options, quality
 from .common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd
-from .measure import FaceIndex, measure_feature
+from .features import WALL_MIN_MM
+from .measure import FaceIndex, lateral_centroid, measure_feature
 from .mesh.radioss import RadMesh, collect_assembly_surface, parse_text, read_mesh, read_renum_csv
 from .meshdata import KIND_EDGE, KIND_FACE, KIND_VERTEX, Comp, components_from_tag, load_tag
 from .meshgeom import TriangleSet
@@ -43,10 +44,13 @@ class CheckResult:
 
 # ------------------------------------------------------------------ (a) parameters
 def check_params(
-    doc: dict, fvalues: dict[str, float], comps: list[Comp], fis: dict[str, FaceIndex], sample: SampleSet, X: np.ndarray, dev: dict, expected: dict[str, float] | None = None
+    doc: dict, fvalues: dict[str, float], comps: list[Comp], fis: dict[str, FaceIndex], sample: SampleSet, X: np.ndarray, dev: dict, expected: dict[str, float] | None = None,
+    rib_rows: list[dict] | None = None,
 ) -> tuple[dict, str | None, dict]:
     """``expected``: measured value the update intended when it differs from the input (hole positions
-    kept relative to the nearest fixed face are measured from the bbox minimum, update.json ``positions``)."""
+    kept relative to the nearest fixed face are measured from the bbox minimum, update.json ``positions``).
+    ``rib_rows``: update.json ``rib_rows`` - derived items ``kind: rib_row_thickness`` for every shifted rib
+    (rib-gap.md section 6)."""
     items = []
     expected = expected or {}
     margin = np.inf  # min over items of tol / err (envelope limiting metric)
@@ -82,9 +86,95 @@ def check_params(
         items.append(it)
         if not ok:
             bad.append(f"{f['name']} measured {meas:.4f} vs {'expected' if want != inp else 'input'} {want:.4f}")
+    for name, want, meas in _row_thickness(doc, rib_rows, comp_of, fis, sample, X):
+        tol = max(float(dev["param_abs_mm"]), float(dev["param_rel"]) * abs(want))
+        if meas is None:
+            items.append({"name": name, "kind": "rib_row_thickness", "input": rnd(want, 9), "measured": None, "err": None, "tol": rnd(tol), "status": "FAIL"})
+            bad.append(f"{name} cannot be measured")
+            worst_abs = worst_rel = float("inf")
+            margin = 0.0
+            continue
+        err = abs(meas - want)
+        worst_abs = max(worst_abs, err)
+        worst_rel = max(worst_rel, err / abs(want) if want else err)
+        if err > 0:
+            margin = min(margin, tol / err)
+        items.append({"name": name, "kind": "rib_row_thickness", "input": rnd(want, 9), "measured": rnd(meas), "err": rnd(err), "tol": rnd(tol), "status": "PASS" if err <= tol else "FAIL"})
+        if err > tol:
+            bad.append(f"{name} rib thickness measured {meas:.4f} vs expected {want:.4f}")
     rep = {"status": "FAIL" if bad else "PASS", "items": items}
     msg = "parameter re-measurement: " + "; ".join(bad[:3]) + (f" (+{len(bad) - 3} more)" if len(bad) > 3 else "") if bad else None
     return rep, msg, {"abs": _fin(worst_abs), "rel": _fin(worst_rel), "margin": _fin(margin)}
+
+
+def _row_thickness(doc: dict, rib_rows: list[dict] | None, comp_of: dict, fis: dict, sample: SampleSet, X: np.ndarray):
+    """(item name ``<body>:<row id>:<index>``, expected thickness, thickness on the mesh or None) of every rib a
+    row shift moved (update.json ``rib_rows[].ribs[].shift_mm`` != 0)."""
+    rows = {(r["body"], r["id"]): r for r in doc.get("rib_rows") or []}
+    for u in rib_rows or []:
+        r = rows.get((u.get("body"), u.get("id")))
+        c = comp_of.get(u.get("body"))
+        if r is None or c is None:
+            continue
+        ax = "xyz".index(r["axis"])
+        fm = sample.face_map[c.body]["F"]
+        for ur, rr in zip(u["ribs"], r["ribs"]):
+            if not float(ur.get("shift_mm") or 0.0):
+                continue
+            P = X[c.gidx]
+            cm = lateral_centroid(fis[c.body], int(fm[rr["minus"][1:]]), P, ax)
+            cp = lateral_centroid(fis[c.body], int(fm[rr["plus"][1:]]), P, ax)
+            yield f"{u['body']}:{u['id']}:{ur['index']}", float(ur["thickness_expected"]), (None if cm is None or cp is None else cp - cm)
+
+
+def row_quality(doc: dict, rib_rows: list[dict] | None, comps: list[Comp], fis: dict, sample: SampleSet, Xb: np.ndarray, Xm: np.ndarray, q: dict) -> list[dict]:
+    """``checks.quality.rib_rows[]`` (rib-gap.md section 6 (c)): per gap of a shifted row and per end room, the
+    quality of the elements whose (morphed) centroid lies between the two facing lateral faces (morphed), inside the
+    overlapped extent along the rib length and below the cap. Attribution only (the judgement is unchanged)."""
+    rows = {(r["body"], r["id"]): r for r in doc.get("rib_rows") or []}
+    comp_of = {c.body: c for c in comps}
+    out: list[dict] = []
+    for u in rib_rows or []:
+        r = rows.get((u.get("body"), u.get("id")))
+        c = comp_of.get(u.get("body"))
+        if r is None or c is None:
+            continue
+        sig = r.get("face_signatures") or {}
+        a = "xyz".index(r["axis"])
+        kx = int(np.argmax(np.abs(np.asarray(sig[r["base"]]["normal"], dtype=float))))
+        bx = 3 - a - kx
+        up = 1.0 if float(sig[r["base"]]["normal"][kx]) > 0 else -1.0
+        fm = sample.face_map[c.body]["F"]
+        P = Xm[c.gidx]
+        fi = fis[c.body]
+
+        def mc(fid: str) -> float:
+            v = lateral_centroid(fi, int(fm[fid[1:]]), P, a)
+            return float(sig[fid]["centroid"][a]) if v is None else v
+
+        ribs = r["ribs"]
+        m1 = [mc(rb["minus"]) for rb in ribs]
+        p1 = [mc(rb["plus"]) for rb in ribs]
+        m0 = [float(sig[rb["minus"]]["centroid"][a]) for rb in ribs]
+        p0 = [float(sig[rb["plus"]]["centroid"][a]) for rb in ribs]
+        bint = [(min(sig[rb["minus"]]["bbox"][bx], sig[rb["plus"]]["bbox"][bx]), max(sig[rb["minus"]]["bbox"][3 + bx], sig[rb["plus"]]["bbox"][3 + bx])) for rb in ribs]
+        cap = max(up * float(sig[rb["cap"]]["centroid"][kx]) for rb in ribs)
+        tcen = Xm[c.gidx[c.tets]].mean(axis=1)
+        scen = Xm[c.gidx[c.skin]].mean(axis=1)
+        ends = u.get("end_room_mm") or r.get("end_room_mm") or {}
+        obst = {"minus": m0[0] - float(ends.get("minus", 0.0)) - WALL_MIN_MM, "plus": p0[-1] + float(ends.get("plus", 0.0)) + WALL_MIN_MM}
+        regions = [(pt["name"], p1[j], m1[j + 1], (max(bint[j][0], bint[j + 1][0]), min(bint[j][1], bint[j + 1][1])), (m1[j + 1] - p1[j]) / (m0[j + 1] - p0[j])) for j, pt in enumerate(u["pitches"])]
+        regions.append(("end_minus", obst["minus"], m1[0], bint[0], (m1[0] - obst["minus"]) / (m0[0] - obst["minus"])))
+        regions.append(("end_plus", p1[-1], obst["plus"], bint[-1], (obst["plus"] - p1[-1]) / (obst["plus"] - p0[-1])))
+        for name, lo, hi, (b0, b1), ratio in regions:
+
+            def inside(C: np.ndarray) -> np.ndarray:
+                return (C[:, a] > lo) & (C[:, a] < hi) & (C[:, bx] > b0) & (C[:, bx] < b1) & (up * C[:, kx] < cap)
+
+            sel_t, sel_s = inside(tcen), inside(scen)
+            rq = quality.region(Xb, Xm, c.gidx[c.tets[sel_t]], c.gidx[c.skin[sel_s]], q)
+            out.append({"row": f"{u['body']}:{u['id']}", "name": name, "elems": rq.pop("elems"), "ratio": rnd(ratio) if np.isfinite(ratio) else None, **rq})
+    return out
 
 
 def _fin(x: float):
@@ -288,6 +378,7 @@ def check_core(
     expected: dict[str, float] | None = None,
     src=None,
     skip_bodies: set[str] | None = None,
+    rib_rows: list[dict] | None = None,
 ) -> CheckResult:
     """``full=False`` (sweep): (a)(b)(c) only, (d)(e) NOT_EVALUATED. ``expected``: see check_params.
     ``src``: assembly-match mesh source (asm-match.md section 5.2): product = include tree minus the matched
@@ -299,7 +390,8 @@ def check_core(
     warnings: list[dict] = []
     skip = set(skip_bodies or ()) | (set(src.match.excluded) if src is not None else set())
     pdoc = dict(doc, features=[f for f in doc["features"] if f["body"] not in skip]) if skip else doc
-    p_rep, p_msg, p_err = check_params(pdoc, fvalues, comps, fis, sample, Xm, opts["deviation"], expected)
+    rows_u = [r for r in rib_rows or [] if r.get("body") not in skip]
+    p_rep, p_msg, p_err = check_params(pdoc, fvalues, comps, fis, sample, Xm, opts["deviation"], expected, rows_u)
     if p_msg:
         fails["GEOM_PARAM_MISMATCH"] = p_msg
     d_rep, d_msg = check_deviation(comps, sample, Xm, mesh, float(opts["deviation"]["boundary_max_mm"]))
@@ -309,6 +401,8 @@ def check_core(
     skin = np.concatenate([c.gidx[c.skin] for c in comps])
     tet_part = np.concatenate([np.full(len(c.tets), k) for k, c in enumerate(comps)])
     q = quality.evaluate(Xb, Xm, tets, skin, opts["quality"], tet_part)
+    if rows_u:  # rib-gap.md section 6 (c): which gap breaks the quality (report only)
+        q.report["rib_rows"] = row_quality(doc, rows_u, comps, fis, sample, Xb, Xm, opts["quality"])
     if q.message:
         fails["GEOM_QUALITY"] = q.message
     if not q.baseline_ok:
@@ -378,6 +472,17 @@ def expected_measures(update_dir: str | Path) -> dict[str, float]:
     return out
 
 
+def update_rib_rows(update_dir: str | Path) -> list[dict]:
+    """update.json ``rib_rows`` (rib-gap.md section 4.3; absent without RIB_PITCH -> [])."""
+    p = Path(update_dir) / UPDATE_JSON
+    if not p.is_file():
+        return []
+    rows = read_json(p, "update.json").get("rib_rows") or []
+    if not isinstance(rows, list):
+        raise PaicadError("GEOM_INPUT_INVALID", "update.json: malformed rib_rows")
+    return rows
+
+
 def report(res: CheckResult, opts: dict, out_inc_name: str | None, t0: float, out_patch: str | None | bool = False) -> dict:
     """``check.json`` (also written by ``paicad view preview``, where ``out_inc`` is always null).
     ``out_patch``: assembly-match runs add the ``out_patch`` key (node patch file name on PASS, else null)."""
@@ -426,7 +531,7 @@ def run(args, rep: Reporter) -> int:
     sample = load_sample(args.update_dir, doc)
     expected = expected_measures(args.update_dir)
     rep.progress(20, "checking")
-    res = check_core(mesh, mm.xyz, comps, sample, doc, values, opts, args.assem_dir, Path(args.baseline_inc), expected=expected)
+    res = check_core(mesh, mm.xyz, comps, sample, doc, values, opts, args.assem_dir, Path(args.baseline_inc), expected=expected, rib_rows=update_rib_rows(args.update_dir))
     out.write_text(CHECK_JSON, dumps(report(res, opts, out_inc.name if res.status == "PASS" else None, t0)))
     if res.status == "PASS":
         out_inc.parent.mkdir(parents=True, exist_ok=True)
@@ -463,7 +568,7 @@ def _run_asm(args, rep: Reporter, opts: dict, t0: float) -> int:
     sample = load_sample(args.update_dir, doc)
     expected = expected_measures(args.update_dir)
     rep.progress(20, "checking")
-    res = check_core(mesh, Xm, comps, sample, doc, values, opts, args.assem_dir, None, expected=expected, src=src)
+    res = check_core(mesh, Xm, comps, sample, doc, values, opts, args.assem_dir, None, expected=expected, src=src, rib_rows=update_rib_rows(args.update_dir))
     out.write_text(CHECK_JSON, dumps(report(res, opts, None, t0, out_patch.name if res.status == "PASS" else None)))
     if res.status == "PASS":
         out_patch.parent.mkdir(parents=True, exist_ok=True)

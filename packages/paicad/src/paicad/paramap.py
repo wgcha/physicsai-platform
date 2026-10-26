@@ -54,6 +54,8 @@ TYPE_KIND = {
     "FILLET_RADIUS": "radius",
     "RIB_POS_U": "position",
     "RIB_POS_V": "position",
+    "RIB_PITCH_U": "rib_pitch",  # rib-gap.md section 11
+    "RIB_PITCH_V": "rib_pitch",
 }
 
 

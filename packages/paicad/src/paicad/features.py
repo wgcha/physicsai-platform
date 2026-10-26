@@ -15,6 +15,7 @@ import numpy as np
 from .bodymap import normalize
 from .common import rnd, vec
 from .kernel.base import BodyGeom, FaceData, Topology
+from .options import rib_gap_options
 
 TYPE_ORDER = (
     "THICKNESS",
@@ -28,6 +29,8 @@ TYPE_ORDER = (
     "FILLET_RADIUS",
     "RIB_POS_U",  # extract-filter.md EF-5: appended so the other types keep order, names and group ids
     "RIB_POS_V",
+    "RIB_PITCH_U",  # rib-gap.md RG-1: appended after RIB_POS (filter only)
+    "RIB_PITCH_V",
 )
 TYPE_ABBR = {
     "THICKNESS": "THK",
@@ -41,6 +44,8 @@ TYPE_ABBR = {
     "FILLET_RADIUS": "FILLET_R",
     "RIB_POS_U": "RIB_U",
     "RIB_POS_V": "RIB_V",
+    "RIB_PITCH_U": "RIB_PITCH_U",
+    "RIB_PITCH_V": "RIB_PITCH_V",
 }
 MEASURE = {
     "THICKNESS": "face_distance",
@@ -54,12 +59,16 @@ MEASURE = {
     "FILLET_RADIUS": "fillet_radius",
     "RIB_POS_U": "rib_center",
     "RIB_POS_V": "rib_center",
+    "RIB_PITCH_U": "rib_pitch",
+    "RIB_PITCH_V": "rib_pitch",
 }
 PAIR_TYPES = ("THICKNESS", "POCKET_WIDTH", "RIB_THICKNESS")  # reference-face rule applies
 # position parameters: absolute mm range / sweep steps (single definition - update, sweep, view, paramap import it)
 POSITION_TYPES = ("HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V")
 HOLE_POS_TYPES = ("HOLE_POS_U", "HOLE_POS_V")
 RIB_POS_TYPES = ("RIB_POS_U", "RIB_POS_V")
+RIB_PITCH_TYPES = ("RIB_PITCH_U", "RIB_PITCH_V")  # rib-gap.md: rib center pitch of a rib row (not a position type)
+ABS_RANGE_TYPES = POSITION_TYPES + RIB_PITCH_TYPES  # absolute mm range / mm sweep steps
 LEGACY_TYPES = TYPE_ORDER[:9]  # types recognized without extract.filter (RIB_POS only with a filter, EF-5)
 FILTER_TOL = 1.0e-9  # extract.filter boundary tolerance (mm / mm^2), values compared before rounding
 TIE_TOL = 1.0e-9  # thickness nearest-partner tie window (same as the mutual-nearest rule)
@@ -85,6 +94,28 @@ class Feature:
     name: str = ""
     group: str | None = None
     order_key: tuple = ()
+    measure_faces: list[int] | None = None  # RIB_PITCH: the four lateral faces (``measure.faces``); None = ``faces``
+    row: "RibRow | None" = None  # RIB_PITCH: its rib row (rib-gap.md section 3.4)
+    row_k: int = 0  # RIB_PITCH: pitch index k in the row (1..n-1)
+
+
+@dataclass(eq=False)
+class RibRow:
+    """Row of parallel free-standing ribs (rib-gap.md sections 2.1, 3.2). ``ribs`` in ascending center order:
+    {cap, lats, minus, plus, thickness, center} (face ids, mm)."""
+
+    body: str
+    letter: str  # U | V (the RIB_PITCH type suffix)
+    axis: int  # thickness / pitch axis a
+    kaxis: int  # base normal axis
+    base: int
+    ribs: list[dict]
+    anchor: str = ""
+    id: str = ""
+    pos_feats: dict = field(default_factory=dict)  # rib index -> RIB_POS feature of the same axis on that rib
+    stats_types: dict | None = None  # the body's extract_stats types (row_member counts are set in finalize)
+    end_room: dict = field(default_factory=dict)  # minus/plus -> (room mm, limiting face id)
+    limited_by: dict = field(default_factory=dict)  # minus/plus -> owner feature name of the limiting face (or None)
 
 
 # ---------------------------------------------------------------- extract.filter (extract-filter.md sections 4-5)
@@ -145,6 +176,8 @@ class _Stats:
     def __init__(self, flt: Filter):
         self.types: dict[str, dict] = {}
         for t in TYPE_ORDER:
+            if t in RIB_PITCH_TYPES and not flt.sel(t):
+                continue  # rib-gap.md V-RG-1: not selected = extract_stats unchanged
             self.types[t] = {"selected": True, "candidates": 0, "kept": 0, "excluded": {}} if flt.sel(t) else {"selected": False}
         if flt.sel("THICKNESS"):
             self.types["THICKNESS"] ={"selected": True, "initiators": 0, "pair_tests": 0, "kept": 0, "excluded": {}}
@@ -162,7 +195,7 @@ class _Stats:
 
     def elapsed(self, types, sec: float) -> None:
         for t in types:
-            if self.types[t]["selected"]:
+            if t in self.types and self.types[t]["selected"]:
                 self.types[t]["elapsed_s"] = sec
 
     def as_dict(self) -> dict:
@@ -610,6 +643,193 @@ def rib_sides(topo: Topology, faces: list[int], axis: int) -> tuple[int, int] | 
     return best_m[1], best_p[1]
 
 
+# ---------------------------------------------------------------- rib rows / RIB_PITCH (rib-gap.md sections 3-5)
+ROW_EPS = 1.0e-6  # mm: neighbour order / tie window (section 3.2)
+
+
+def anchor_of(mode: str, n: int) -> str:
+    """Row anchor (section 3.3): ``rib:<m>`` (that rib's center fixed) or ``mid:<h>`` (mid point of ribs h, h+1)."""
+    if mode == "first":
+        return "rib:1"
+    if mode == "last":
+        return f"rib:{n}"
+    return f"rib:{(n + 1) // 2}" if n % 2 else f"mid:{n // 2}"
+
+
+def mirror_anchor(anchor: str, n: int) -> str:
+    kind, m = anchor.split(":")
+    return f"rib:{n + 1 - int(m)}" if kind == "rib" else f"mid:{n - int(m)}"
+
+
+def pitch_side(anchor: str, k: int) -> str:
+    """Side of pitch k from the anchor (section 5): minus (its outer ribs lie at -a), plus or center (even rows)."""
+    kind, m = anchor.split(":")
+    m = int(m)
+    if kind == "mid" and k == m:
+        return "center"
+    return "minus" if k < m else "plus"
+
+
+def outer_ribs(anchor: str, k: int, n: int) -> list[int]:
+    """1-based indices of the ribs a change of pitch k moves (the center pitch of an even row moves all ribs)."""
+    side = pitch_side(anchor, k)
+    if side == "center":
+        return list(range(1, n + 1))
+    return list(range(1, k + 1)) if side == "minus" else list(range(k + 1, n + 1))
+
+
+def row_rib_moving(rib: dict) -> list[int]:
+    return [rib["cap"], *rib["lats"]]
+
+
+def row_pitch_moving(row: RibRow, k: int) -> list[int]:
+    out: list[int] = []
+    for i in outer_ribs(row.anchor, k, len(row.ribs)):
+        out += row_rib_moving(row.ribs[i - 1])
+    return out
+
+
+def _pitch_ribs(ctx: _Ctx, ribs: list, flt: Filter, st: _Stats, rg: dict) -> list[dict]:
+    """Rib candidates of RIB_PITCH (section 3.1): base normal within 1 deg of a global axis k, thickness axis a =
+    shorter cap extent of the other two (slender: longer / shorter >= ``slender_min``), exactly one lateral face
+    looking +a and one looking -a."""
+    want = [t for t in RIB_PITCH_TYPES if flt.sel(t)]
+    out: list[dict] = []
+    cos1 = math.cos(math.radians(1.0))
+    for cap, lats, base, _h in ribs:
+        k = _dominant_axis(np.asarray(ctx.face(base).normal, dtype=float), cos1)
+        if k is None:
+            for t in want:
+                st.add(t, "candidates")
+                st.excl(t, "base_axis")
+            continue
+        others = [x for x in range(3) if x != k]
+        C = ctx.face(cap)
+        ext = C.bbox[3:] - C.bbox[:3]
+        a, b = (others[0], others[1]) if ext[others[0]] <= ext[others[1]] else (others[1], others[0])
+        t = RIB_PITCH_TYPES[others.index(a)]
+        if t not in want:
+            continue
+        st.add(t, "candidates")
+        if not float(ext[a]) > 0 or float(ext[b]) / float(ext[a]) < float(rg["slender_min"]) - FILTER_TOL:
+            st.excl(t, "not_slender")
+            continue
+        L = [ctx.face(g) for g in lats]
+        plus = [f for f in L if float(f.normal[a]) >= ctx.cos_par]
+        minus = [f for f in L if -float(f.normal[a]) >= ctx.cos_par]
+        if len(plus) != 1 or len(minus) != 1:
+            st.excl(t, "shape")
+            continue
+        P, M = plus[0], minus[0]
+        box = np.concatenate([np.minimum(P.bbox[:3], M.bbox[:3]), np.maximum(P.bbox[3:], M.bbox[3:])])
+        out.append(
+            {
+                "type": t, "cap": cap, "lats": list(lats), "base": base, "k": k, "a": a, "b": b,
+                "minus": M.id, "plus": P.id, "cm": float(M.centroid[a]), "cp": float(P.centroid[a]),
+                "center": 0.5 * (float(M.centroid[a]) + float(P.centroid[a])), "thickness": float(P.centroid[a]) - float(M.centroid[a]),
+                "b0": float(box[b]), "b1": float(box[3 + b]), "bc": float(C.centroid[b]),
+            }
+        )
+    return out
+
+
+def _band_blocked(ctx: _Ctx, ri: dict, rj: dict, b0: float, b1: float) -> bool:
+    """A plane normal to a lies in the band between the facing lateral faces of ri (+a) and rj (-a) and the
+    overlapped b interval (section 3.2 (iv)) - at any height: a pocket wall below the floor between two ribs also
+    separates them (the floor between is not plain)."""
+    a, b = ri["a"], ri["b"]
+    own = {ri["cap"], *ri["lats"], rj["cap"], *rj["lats"]}
+    for q in ctx.planes:
+        if q.id in own or abs(float(q.normal[a])) < ctx.cos_par:
+            continue
+        c = float(q.centroid[a])
+        if not (ri["cp"] + ROW_EPS < c < rj["cm"] - ROW_EPS):
+            continue
+        if min(b1, float(q.bbox[3 + b])) - max(b0, float(q.bbox[b])) <= ROW_EPS:
+            continue
+        return True
+    return False
+
+
+def _rib_rows(ctx: _Ctx, name: str, cands: list[dict], st: _Stats, rg: dict) -> list[RibRow]:
+    """Neighbour links (+a, nearest, ties / shared targets cut = ``row_branch``) chained into rows of >= 2 ribs."""
+    n = len(cands)
+    nxt: dict[int, int] = {}
+    branch: set[int] = set()
+    for i, ri in enumerate(cands):
+        best: list[tuple[float, int]] = []
+        for j, rj in enumerate(cands):
+            if j == i or rj["base"] != ri["base"] or rj["a"] != ri["a"] or not rj["cm"] > ri["cp"] + ROW_EPS:
+                continue
+            b0, b1 = max(ri["b0"], rj["b0"]), min(ri["b1"], rj["b1"])
+            if b1 - b0 < float(rg["overlap_min"]) * min(ri["b1"] - ri["b0"], rj["b1"] - rj["b0"]) - FILTER_TOL:
+                continue
+            if _band_blocked(ctx, ri, rj, b0, b1):
+                continue
+            best.append((rj["cm"] - ri["cp"], j))
+        if not best:
+            continue
+        best.sort()
+        ties = [j for d, j in best if d <= best[0][0] + ROW_EPS]
+        if len(ties) > 1:
+            branch.update([i, *ties])
+            continue
+        nxt[i] = ties[0]
+    into: dict[int, list[int]] = {}
+    for i, j in nxt.items():
+        into.setdefault(j, []).append(i)
+    for j, src in into.items():
+        if len(src) > 1:
+            branch.update([j, *src])
+            for i in src:
+                del nxt[i]
+    prev = {j: i for i, j in nxt.items()}
+    rows: list[RibRow] = []
+    in_row: set[int] = set()
+    for i in range(n):
+        if i in prev or i not in nxt:
+            continue
+        chain = [i]
+        while chain[-1] in nxt:
+            chain.append(nxt[chain[-1]])
+        in_row.update(chain)
+        r0 = cands[i]
+        rows.append(RibRow(name, r0["type"][-1], r0["a"], r0["k"], r0["base"], [cands[c] for c in chain]))
+    for i, r in enumerate(cands):
+        if i not in in_row:
+            st.excl(r["type"], "row_branch" if i in branch else "row_single")
+    rows.sort(key=lambda r: (r.axis, r.ribs[0]["center"], r.ribs[0]["bc"]))
+    num: dict[str, int] = {}
+    for r in rows:
+        num[r.letter] = num.get(r.letter, 0) + 1
+        r.id = f"{r.letter}{num[r.letter]}"
+        r.anchor = anchor_of(str(rg["anchor"]), len(r.ribs))
+    return rows
+
+
+def _pitch_features(rows: list[RibRow], feats: list[Feature], st: _Stats) -> None:
+    """RIB_PITCH features of the rows (``moving`` is set in finalize, after the anchors are final) and the RIB_POS of the
+    same axis on row ribs (dropped in finalize except on the anchor rib, RG-6)."""
+    for r in rows:
+        t = f"RIB_PITCH_{r.letter}"
+        pos_t = RIB_POS_TYPES[RIB_PITCH_TYPES.index(t)]
+        caps = {rb["cap"]: i for i, rb in enumerate(r.ribs, 1)}
+        for ft in feats:
+            if ft.type == pos_t and ft.faces and ft.faces[0] in caps and ft.axis == r.axis:
+                r.pos_feats[caps[ft.faces[0]]] = ft
+        r.stats_types = st.types
+        for k in range(1, len(r.ribs)):
+            ra, rb = r.ribs[k - 1], r.ribs[k]
+            faces = [ra["cap"], *ra["lats"], rb["cap"], *rb["lats"], r.base]
+            feats.append(
+                Feature(
+                    t, r.body, rb["center"] - ra["center"], faces, [], [r.base], axis=r.axis,
+                    measure_faces=[ra["minus"], ra["plus"], rb["minus"], rb["plus"]], row=r, row_k=k,
+                )
+            )
+            st.add(t, "kept")
+
+
 def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = None, stats: dict | None = None, progress=None) -> list[Feature]:
     """``log(msg)``: optional progress lines (stderr in extract); ``timing``: filled with stage seconds/counts;
     ``stats``: filled with the ``extract_stats.json`` body entry (section 7.1); ``progress(msg)``: one line per
@@ -701,8 +921,9 @@ def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = N
 
     # ribs (always recognized when a type depends on them: rib faces are not thickness candidates, EF-INV)
     n_ribs = n_pockets = 0
-    if flt.sel("THICKNESS", "RIB_THICKNESS", "RIB_HEIGHT", *RIB_POS_TYPES):
-        for cap, lats, base, h in _find_protrusions(ctx, +1, st.rib_rejects):
+    if flt.sel("THICKNESS", "RIB_THICKNESS", "RIB_HEIGHT", *RIB_POS_TYPES, *RIB_PITCH_TYPES):
+        found_ribs = _find_protrusions(ctx, +1, st.rib_rejects)
+        for cap, lats, base, h in found_ribs:
             n_ribs += 1
             claimed.update([cap, *lats])
             if flt.sel("RIB_HEIGHT"):
@@ -733,10 +954,15 @@ def recognize_body(body: BodyGeom, opts: dict, log=None, timing: dict | None = N
                 _rib_pos(ctx, name, cap, lats, base, flt, st, feats)
                 for ft in feats[n0:]:
                     st.add(ft.type, "kept")
+        if flt.sel(*RIB_PITCH_TYPES):  # rib rows (rib-gap.md section 3): free-standing ribs only, no face claims
+            rg = rib_gap_options(opts)
+            rows = _rib_rows(ctx, name, _pitch_ribs(ctx, found_ribs, flt, st, rg), st, rg)
+            _pitch_features(rows, feats, st)
+            progress(f"rib rows: {len(rows)} rows, {sum(len(r.ribs) - 1 for r in rows)} pitches")
         rt = st.types["RIB_THICKNESS"]
         progress(f"ribs: {n_ribs} ribs" + (f", rib thickness: {rt['pair_tests']} tests, {rt['kept']} kept" if rt["selected"] else ""))
     t2b = time.perf_counter()
-    st.elapsed(("RIB_HEIGHT", "RIB_THICKNESS", "RIB_POS_U", "RIB_POS_V"), t2b - t2)
+    st.elapsed(("RIB_HEIGHT", "RIB_THICKNESS", "RIB_POS_U", "RIB_POS_V", *RIB_PITCH_TYPES), t2b - t2)
 
     # pockets
     if flt.sel("THICKNESS", "POCKET_DEPTH", "POCKET_WIDTH"):
@@ -981,13 +1207,20 @@ def _rib_pos_feasible(planes: list[FaceData], topo: Topology, ft: Feature, bbox:
     """RIB_POS feasible (section 3.2): from the rib foot print (lateral faces' bbox interval along the axis) towards
     -a / +a, the smaller of (i) the nearest plane normal to a whose region overlaps the rib (wall, other rib side)
     minus WALL_MIN_MM and (ii) the base face bbox boundary minus WALL_MIN_MM. Returns (lo, hi, limiting face)."""
-    a = int(ft.axis)
     nom = ft.nominal
-    own = set(ft.faces)
-    lats = [topo.face(g) for g in ft.faces[1:-1]]
+    room = _rib_room(planes, topo, set(ft.faces), ft.faces[1:-1], ft.fixed[0], int(ft.axis), cos_par)
+    lo = nom - max(0.0, room["minus"][0])
+    hi = nom + max(0.0, room["plus"][0])
+    lim = room["minus"][1] if room["minus"][0] <= room["plus"][0] else room["plus"][1]
+    return lo, hi, lim
+
+
+def _rib_room(planes: list[FaceData], topo: Topology, own: set, lat_ids: list[int], base_id: int, a: int, cos_par: float) -> dict:
+    """Room of a rib foot print towards -a / +a (RIB_POS feasible, rib row end room R-/R+): {side: (mm, face id)}."""
+    lats = [topo.face(g) for g in lat_ids]
     box = np.concatenate([np.min([f.bbox[:3] for f in lats], axis=0), np.max([f.bbox[3:] for f in lats], axis=0)])
     lo_a, hi_a = float(box[a]), float(box[3 + a])
-    base = topo.face(ft.fixed[0])
+    base = topo.face(base_id)
     room = {"minus": (lo_a - float(base.bbox[a]) - WALL_MIN_MM, base.id), "plus": (float(base.bbox[3 + a]) - hi_a - WALL_MIN_MM, base.id)}
     for q in planes:
         if q.id in own or q.normal is None or abs(float(q.normal[a])) < cos_par:
@@ -1003,10 +1236,112 @@ def _rib_pos_feasible(planes: list[FaceData], topo: Topology, ft: Feature, bbox:
             continue
         if s < room[side][0]:
             room[side] = (s, q.id)
-    lo = nom - max(0.0, room["minus"][0])
-    hi = nom + max(0.0, room["plus"][0])
-    lim = room["minus"][1] if room["minus"][0] <= room["plus"][0] else room["plus"][1]
-    return lo, hi, lim
+    return room
+
+
+def _pitch_feasible(ft: Feature, owner: dict[int, str], min_gap: float) -> dict:
+    """RIB_PITCH feasible (rib-gap.md section 5): min = half thickness sum + min gap, max = nominal + end room of
+    its side (center pitch of an even row: 2 x the smaller end room)."""
+    r, k = ft.row, ft.row_k
+    ra, rb = r.ribs[k - 1], r.ribs[k]
+    lo = 0.5 * (ra["thickness"] + rb["thickness"]) + min_gap
+    R = {sd: max(0.0, r.end_room[sd][0]) for sd in ("minus", "plus")}
+    side = pitch_side(r.anchor, k)
+    if side == "center":
+        sd = "minus" if R["minus"] <= R["plus"] else "plus"
+        hi, lim = ft.nominal + 2.0 * R[sd], r.end_room[sd][1]
+    else:
+        hi, lim = ft.nominal + R[side], r.end_room[side][1]
+    hi = max(hi, lo)
+    return {"min": rnd(lo), "max": rnd(hi), "limited_by": owner.get(lim) if lim is not None else None}
+
+
+def _pitch_range(ft: Feature, mm: float) -> dict:
+    """Joint-safe range (section 5): per side u = end room / weight sum (outer pitches 1, center pitch 1/2); any
+    combination inside the ranges keeps both end ribs off their obstacles. Lower bound = feasible min."""
+    r, k = ft.row, ft.row_k
+    n = len(r.ribs)
+    W = {"minus": 0.0, "plus": 0.0}
+    for j in range(1, n):
+        sd = pitch_side(r.anchor, j)
+        if sd == "center":
+            W["minus"] += 0.5
+            W["plus"] += 0.5
+        else:
+            W[sd] += 1.0
+    u = {sd: (max(0.0, r.end_room[sd][0]) / W[sd] if W[sd] > 0 else math.inf) for sd in W}
+    side = pitch_side(r.anchor, k)
+    up = min(mm, u["minus"], u["plus"]) if side == "center" else min(mm, u[side])
+    nom, feas = ft.nominal, ft.feasible
+    lo = max(nom - mm, feas["min"])
+    hi = nom + up
+    if hi < lo:
+        lo = hi = min(max(nom, feas["min"]), feas["max"])
+    return {"min": rnd(lo), "max": rnd(hi), "mm": mm}
+
+
+def _rows_of(feats: list[Feature]) -> list[RibRow]:
+    out: list[RibRow] = []
+    for ft in feats:
+        if ft.type in RIB_PITCH_TYPES and ft.row is not None and all(ft.row is not r for r in out):
+            out.append(ft.row)
+    return out
+
+
+def _mirror_rows(rows: list[RibRow], bbox_of: dict, tol_of: dict) -> None:
+    """``first`` / ``last`` anchors: the mirror partner row (other body, same axis and rib count, rib centers
+    mirrored about the inter-body plane normal to a) takes the mirrored anchor (section 3.3)."""
+    done: set[int] = set()
+    for i, r1 in enumerate(rows):
+        for r2 in rows[i + 1 :]:
+            if id(r2) in done or r2.body == r1.body or r2.axis != r1.axis or len(r2.ribs) != len(r1.ribs):
+                continue
+            tol = max(tol_of[r1.body], tol_of[r2.body])
+            b1, b2 = bbox_of[r1.body], bbox_of[r2.body]
+            c1, c2 = 0.5 * (b1[:3] + b1[3:]), 0.5 * (b2[:3] + b2[3:])
+            a = r1.axis
+            if not (abs(c2[a] - c1[a]) > tol and all(abs(c2[x] - c1[x]) <= tol for x in range(3) if x != a)):
+                continue
+            q = 0.5 * (c1[a] + c2[a])
+            n = len(r1.ribs)
+            if all(abs((2.0 * q - r1.ribs[j]["center"]) - r2.ribs[n - 1 - j]["center"]) <= tol and abs(r1.ribs[j]["bc"] - r2.ribs[n - 1 - j]["bc"]) <= tol for j in range(n)):
+                r2.anchor = mirror_anchor(r1.anchor, n)
+                done.add(id(r2))
+                break
+
+
+def _prepare_rows(per_body, topo_of: dict, bbox_of: dict, tol_of: dict, opts: dict, cos_par: float) -> list[RibRow]:
+    """Final anchors, pitch moving faces, end rooms; RIB_POS of row ribs dropped except on the anchor rib (RG-6,
+    ``row_member``)."""
+    rows = [r for _, _, _, feats in per_body for r in _rows_of(feats)]
+    if not rows:
+        return rows
+    if rib_gap_options(opts)["anchor"] in ("first", "last"):
+        _mirror_rows(rows, bbox_of, tol_of)
+    feats_of = {bname: feats for bname, _, _, feats in per_body}
+    for r in rows:
+        feats = feats_of[r.body]
+        for i, ft in sorted(r.pos_feats.items()):
+            if r.anchor == f"rib:{i}":
+                ft.row = r  # row anchor rib position: moves the whole row (feasible from the row end rooms)
+                continue
+            feats[:] = [x for x in feats if x is not ft]
+            if r.stats_types is not None:
+                e = r.stats_types[ft.type]
+                e["kept"] -= 1
+                e["excluded"]["row_member"] = e["excluded"].get("row_member", 0) + 1
+        topo = topo_of[r.body]
+        planes = [f for f in topo.faces if f.surface == "PLANE"]
+        first, last = r.ribs[0], r.ribs[-1]
+        r.end_room = {
+            "minus": _rib_room(planes, topo, {first["cap"], *first["lats"], r.base}, first["lats"], r.base, r.axis, cos_par)["minus"],
+            "plus": _rib_room(planes, topo, {last["cap"], *last["lats"], r.base}, last["lats"], r.base, r.axis, cos_par)["plus"],
+        }
+    for _, _, _, feats in per_body:
+        for ft in feats:
+            if ft.type in RIB_PITCH_TYPES:
+                ft.moving = row_pitch_moving(ft.row, ft.row_k)
+    return rows
 
 
 # ---------------------------------------------------------------- naming / ordering / groups
@@ -1105,6 +1440,8 @@ def symmetry_groups(feats: list[Feature], topo_of: dict[str, Topology], bbox_of:
         a, b = feats[i], feats[j]
         if a.type != b.type:
             continue
+        if a.type in RIB_PITCH_TYPES and a.row is b.row:
+            continue  # rib-gap.md RG-3: no symmetry group inside one row
         tol = max(tol_of[a.body], tol_of[b.body])
         planes = []
         if a.body == b.body:
@@ -1164,10 +1501,12 @@ def finalize(
     opts: dict,
     tol_of: dict[str, float],
     timing: dict | None = None,
+    rows_out: list | None = None,
 ) -> tuple[list[Feature], list[dict], list[dict]]:
     """Order, name, reference rule (provisional), feasible/range, groups.
 
-    ``per_body`` = [(body name, part name, body, features)] in component order.
+    ``per_body`` = [(body name, part name, body, features)] in component order. ``rows_out``: filled with the rib
+    rows of the RIB_PITCH features (rib-gap.md section 3.4).
     Returns (features in output order, groups, warnings).
     """
     warnings: list[dict] = []
@@ -1179,11 +1518,18 @@ def finalize(
     pos_mm = float(opts["extract"]["position_range_mm"])
     cos_par = math.cos(math.radians(float(opts["extract"]["draft_max_deg"])))
     for bname, part, body, feats in per_body:
-        topo = body.topology()
-        topo_of[bname] = topo
+        topo_of[bname] = body.topology()
         bbox_of[bname] = body.summary().bbox
+    rows = _prepare_rows(per_body, topo_of, bbox_of, tol_of, opts, cos_par)
+    if rows_out is not None:
+        rows_out.extend(rows)
+    for bname, part, body, feats in per_body:
+        topo = topo_of[bname]
         comp = component_name(part)
         for ft in feats:
+            if ft.type in RIB_PITCH_TYPES:  # name k: (row number, order in the row) within body and type
+                ft.order_key = (TYPE_ORDER.index(ft.type), (int(ft.row.id[1:]), ft.row_k))
+                continue
             ft.order_key = (TYPE_ORDER.index(ft.type), _sig_centroid(topo, ft))
         feats.sort(key=lambda f: f.order_key)
         counters: dict[str, int] = {}
@@ -1213,20 +1559,37 @@ def finalize(
     # feasible ranges
     owner: dict[str, dict[int, str]] = {}
     for ft in ordered:
+        if ft.type in RIB_PITCH_TYPES:
+            continue  # rib-gap.md section 2.3: RIB_PITCH never owns faces
         d = owner.setdefault(ft.body, {})
         for f in ft.moving + [g for g in ft.faces if g not in ft.fixed]:
             d.setdefault(f, ft.name)
     timing = {} if timing is None else timing
     t0 = time.perf_counter()
+    min_gap = float(rib_gap_options(opts)["min_gap_mm"])
+    for r in rows:
+        own = owner.get(r.body, {})
+        r.limited_by = {sd: own.get(fid) if fid is not None else None for sd, (_, fid) in r.end_room.items()}
     for ft in ordered:
         topo = topo_of[ft.body]
-        ft.feasible = _feasible(list(topo.faces), topo, ft, owner.get(ft.body, {}), bbox_of[ft.body], cos_par)
+        if ft.type in RIB_PITCH_TYPES:
+            ft.feasible = _pitch_feasible(ft, owner.get(ft.body, {}), min_gap)
+        elif ft.type in RIB_POS_TYPES and ft.row is not None:  # row anchor rib position moves the whole row
+            r, own = ft.row, owner.get(ft.body, {})
+            lo, hi = ft.nominal - max(0.0, r.end_room["minus"][0]), ft.nominal + max(0.0, r.end_room["plus"][0])
+            lim = r.end_room["minus"][1] if r.end_room["minus"][0] <= r.end_room["plus"][0] else r.end_room["plus"][1]
+            ft.feasible = {"min": rnd(lo), "max": rnd(max(hi, lo)), "limited_by": own.get(lim) if lim is not None else None}
+        else:
+            ft.feasible = _feasible(list(topo.faces), topo, ft, owner.get(ft.body, {}), bbox_of[ft.body], cos_par)
     t1 = time.perf_counter()
     groups = symmetry_groups(ordered, topo_of, bbox_of, tol_of)
     timing["feasible_s"] = t1 - t0
     timing["symmetry_s"] = time.perf_counter() - t1
     for ft in ordered:
-        ft.range = _range_mm(ft.nominal, pos_mm, ft.feasible) if ft.type in POSITION_TYPES else _range(ft.nominal, ratio, ft.feasible)
+        if ft.type in RIB_PITCH_TYPES:
+            ft.range = _pitch_range(ft, pos_mm)
+        else:
+            ft.range = _range_mm(ft.nominal, pos_mm, ft.feasible) if ft.type in POSITION_TYPES else _range(ft.nominal, ratio, ft.feasible)
     return ordered, groups, warnings
 
 
@@ -1273,3 +1636,29 @@ def adjacent_surfaces(topo: Topology, faces) -> list[str]:
         for e in topo.face(f).edges:
             adj.update(g for g in topo.edge(e).faces if g not in own)
     return sorted(topo.face(g).surface for g in adj)
+
+
+def rib_rows_json(rows: list[RibRow], topo_of: dict[str, Topology]) -> list[dict]:
+    """``parameter_features.json`` ``rib_rows`` (rib-gap.md section 3.4), body order then row id."""
+    out = []
+    for r in rows:
+        topo = topo_of[r.body]
+        ribs, faces = [], {r.base}
+        for i, rb in enumerate(r.ribs, 1):
+            mv = row_rib_moving(rb)
+            faces.update(mv)
+            ribs.append(
+                {
+                    "index": i, "cap": f"F{rb['cap']}", "minus": f"F{rb['minus']}", "plus": f"F{rb['plus']}",
+                    "moving": [f"F{g}" for g in mv], "thickness": rnd(rb["thickness"]), "center": rnd(rb["center"]),
+                }
+            )
+        out.append(
+            {
+                "id": r.id, "body": r.body, "axis": "xyz"[r.axis], "base": f"F{r.base}", "anchor": r.anchor, "ribs": ribs,
+                "end_room_mm": {sd: rnd(max(0.0, r.end_room[sd][0])) for sd in ("minus", "plus")},
+                "end_limited_by": {sd: r.limited_by.get(sd) for sd in ("minus", "plus")},
+                "face_signatures": {f"F{g}": face_signature(topo.face(g)) for g in sorted(faces)},
+            }
+        )
+    return out

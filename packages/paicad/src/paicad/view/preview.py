@@ -18,7 +18,7 @@ from pathlib import Path
 import numpy as np
 
 from .. import options
-from ..check import CHECK_JSON, check_core, expected_measures
+from ..check import CHECK_JSON, check_core, expected_measures, update_rib_rows
 from ..check import report as check_report
 from ..common import CODE_CATEGORY, EXIT_ARGS, EXIT_CAD, EXIT_CHECK, EXIT_OK, EXIT_VIEW, OutDir, PaicadError, Reporter, dumps, rnd
 from ..kernel import CadInputError, distance_to_face, save_brep
@@ -313,7 +313,8 @@ def run(args, rep: Reporter) -> int:
         rep.progress(80, "checking the morphed mesh")
         t0 = time.monotonic()
         cres = check_core(
-            mesh, mres.xyz, comps, sample, doc, values, gopts, args.assem_dir, None if src is not None else Path(args.baseline_inc), expected=expected_measures(out.tmp / "update"), src=src
+            mesh, mres.xyz, comps, sample, doc, values, gopts, args.assem_dir, None if src is not None else Path(args.baseline_inc), expected=expected_measures(out.tmp / "update"), src=src,
+            rib_rows=update_rib_rows(out.tmp / "update"),
         )
         out.write_text(f"check/{CHECK_JSON}", dumps(check_report(cres, gopts, None, t0)))
         rels.append(f"check/{CHECK_JSON}")

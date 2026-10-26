@@ -10,7 +10,7 @@ import math
 import numpy as np
 
 from ..common import rnd, vec
-from ..features import POSITION_TYPES, RIB_POS_TYPES, rib_sides
+from ..features import POSITION_TYPES, RIB_PITCH_TYPES, RIB_POS_TYPES, rib_sides
 from ..kernel.base import FaceData, Topology
 
 DISP_ZERO_MM = 1.0e-6  # |displacement| at or below this is 0 (GE-C7)
@@ -103,6 +103,8 @@ def dimension_points(ftype: str, topo: Topology, bbox: np.ndarray, moving: list[
         if d is None:  # full cylinder: centroid on the axis -> fixed perpendicular direction
             d = _unit(np.cross(ax, [0.0, 0.0, 1.0] if abs(ax[2]) < 0.9 else [1.0, 0.0, 0.0]))
         return "radius", p0, p0 + float(f.radius) * d
+    if ftype in RIB_PITCH_TYPES:
+        return pitch_points(axis, [topo.face(g) for g in measure], [topo.face(g) for g in fixed])
     if ftype in RIB_POS_TYPES:
         # rib position: center plane of the -a / +a lateral faces -> bbox-minimum plane (``rib_center`` reference)
         if axis not in ("x", "y", "z"):
@@ -128,6 +130,34 @@ def dimension_points(ftype: str, topo: Topology, bbox: np.ndarray, moving: list[
         p0[a] = float(bbox[a])
         return "position", p0, p1
     return None
+
+
+def pitch_points(axis: str | None, lat: list, base: list) -> tuple[str, np.ndarray, np.ndarray] | None:
+    """RIB_PITCH (rib-gap.md section 7): p0 on the center plane of rib k (middle of the overlapped rib length, middle of
+    the rib height), p1 = p0 moved along a onto the center plane of rib k+1. ``lat`` = the four measure faces (rib k -a,
+    +a, rib k+1 -a, +a: objects with ``centroid`` / ``bbox``), ``base`` = [base face] (its normal gives the height axis)."""
+    if axis not in ("x", "y", "z") or len(lat) != 4:
+        return None
+    a = "xyz".index(axis)
+    nb = getattr(base[0], "normal", None) if base else None
+    if nb is not None:
+        k = int(np.argmax(np.abs(np.asarray(nb, dtype=float))))
+    else:  # no base face: height axis = the larger lateral extent of the two other axes is the rib length
+        ext = np.asarray(lat[0].bbox[3:], dtype=float) - np.asarray(lat[0].bbox[:3], dtype=float)
+        o = [x for x in range(3) if x != a]
+        k = o[0] if ext[o[0]] <= ext[o[1]] else o[1]
+    b = 3 - a - k
+    bb = [np.asarray(f.bbox, dtype=float) for f in lat]
+    b0 = max(min(bb[0][b], bb[1][b]), min(bb[2][b], bb[3][b]))
+    b1 = min(max(bb[0][3 + b], bb[1][3 + b]), max(bb[2][3 + b], bb[3][3 + b]))
+    c = [float(np.asarray(f.centroid, dtype=float)[a]) for f in lat]
+    p0 = np.zeros(3)
+    p0[a] = 0.5 * (c[0] + c[1])
+    p0[b] = 0.5 * (b0 + b1)
+    p0[k] = 0.5 * (min(bb[0][k], bb[1][k]) + max(bb[0][3 + k], bb[1][3 + k]))
+    p1 = p0.copy()
+    p1[a] = 0.5 * (c[2] + c[3])
+    return "linear", p0, p1
 
 
 def dimension(ftype: str, topo: Topology, bbox: np.ndarray, moving: list[int], fixed: list[int], measure: list[int], axis: str | None, value: float, tol: float) -> tuple[dict | None, dict | None]:
@@ -178,6 +208,8 @@ def feature_entry(f: dict, parameter: str, value: float, moving: list[str], fixe
         "faces": {"moving": list(moving), "fixed": list(fixed), "other": other},
         "dimension": None,
     }
+    if f.get("row") is not None:  # RIB_PITCH (rib-gap.md section 7)
+        row["row"] = dict(f["row"])
     warnings = []
     if topo is not None and bbox is not None:
         try:
