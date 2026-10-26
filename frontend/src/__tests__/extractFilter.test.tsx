@@ -27,11 +27,11 @@ const SAVED: ExtractFilter = {
 };
 
 describe("lib/extractFilter — 그룹·검증·문구", () => {
-  it("U1: 저장된 조건이 없으면 다섯 그룹 모두 체크·빈칸, 있으면 그 값", () => {
-    expect(EXTRACT_GROUPS.map((g) => g.label)).toEqual(["두께", "높이·깊이", "위치(구멍·리브)", "구멍 반경", "필렛"]);
+  it("U1: 저장된 조건이 없으면 여섯 그룹 모두 체크·빈칸, 있으면 그 값", () => {
+    expect(EXTRACT_GROUPS.map((g) => g.label)).toEqual(["두께", "높이·깊이", "위치(구멍·리브)", "리브 간격(피치)", "구멍 반경", "필렛"]);
     expect(fromFilter(null)).toEqual(presetForm());
-    expect(presetForm().groups).toEqual(["thickness", "height", "position", "hole_radius", "fillet"]);
-    expect(toFilter(presetForm())).toEqual({ groups: ["thickness", "height", "position", "hole_radius", "fillet"], conditions: {}, draft_max_deg: null });
+    expect(presetForm().groups).toEqual(["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"]);
+    expect(toFilter(presetForm())).toEqual({ groups: ["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"], conditions: {}, draft_max_deg: null });
     const f = fromFilter(SAVED);
     expect(f.groups).toEqual(["thickness", "position", "fillet"]);
     expect(f.v).toMatchObject({ "thickness_mm.min": "2", "thickness_mm.max": "30", face_area_min_mm2: "50", position_min_size_mm: "3", fillet_radius_min_mm: "1" });
@@ -75,9 +75,9 @@ describe("lib/extractFilter — 그룹·검증·문구", () => {
   it("적용 조건 문구(§6.4): 조건·제외 그룹·구배, 없음 = 전체 종류(조건 없음)", () => {
     expect(filterText(null)).toBe("전체 종류(조건 없음)");
     expect(filterText(toFilter(presetForm()))).toBe("전체 종류(조건 없음)");
-    expect(filterText({ ...SAVED, draft_max_deg: 3 })).toBe("두께 2~30 mm · 면적 ≥ 50 mm² · 위치 최소 3 mm · 필렛 r ≥ 1 mm · 구배 3° · 제외: 높이·깊이, 구멍 반경");
-    expect(filterText({ groups: ["height", "hole_radius"], conditions: { height_mm: { min: null, max: 20 }, hole_radius_min_mm: 0.5 }, draft_max_deg: null })).toBe("높이·깊이 ≤ 20 mm · 구멍 반경 r ≥ 0.5 mm · 제외: 두께, 위치(구멍·리브), 필렛");
-    expect(filterText({ groups: ["thickness"], conditions: {}, draft_max_deg: null })).toBe("조건 없음 · 제외: 높이·깊이, 위치(구멍·리브), 구멍 반경, 필렛");
+    expect(filterText({ ...SAVED, draft_max_deg: 3 })).toBe("두께 2~30 mm · 면적 ≥ 50 mm² · 위치 최소 3 mm · 필렛 r ≥ 1 mm · 구배 3° · 제외: 높이·깊이, 리브 간격(피치), 구멍 반경");
+    expect(filterText({ groups: ["height", "hole_radius"], conditions: { height_mm: { min: null, max: 20 }, hole_radius_min_mm: 0.5 }, draft_max_deg: null })).toBe("높이·깊이 ≤ 20 mm · 구멍 반경 r ≥ 0.5 mm · 제외: 두께, 위치(구멍·리브), 리브 간격(피치), 필렛");
+    expect(filterText({ groups: ["thickness"], conditions: {}, draft_max_deg: null })).toBe("조건 없음 · 제외: 높이·깊이, 위치(구멍·리브), 리브 간격(피치), 구멍 반경, 필렛");
   });
 
   it("추출 요약(§7.2): 선택한 종류의 채택·제외(사유 표기), 리브 탈락 사유는 §7.2 표기·모르는 키는 원래 이름", () => {
@@ -167,10 +167,10 @@ function jobBodies(server: MockServer) {
 describe("①-1 찾을 종류·조건 블록", () => {
   afterEach(() => vi.restoreAllMocks());
 
-  it("native: 체크 5개(모두 체크) + 조건 접힘(기본 닫힘) · 칸은 체크한 그룹만 · 빈칸 placeholder", async () => {
+  it("native: 체크 6개(모두 체크) + 조건 접힘(기본 닫힘) · 칸은 체크한 그룹만 · 빈칸 placeholder", async () => {
     const { card, box, openCond } = await openCard();
     const block = within(card).getByTestId("extract-filter");
-    for (const g of ["두께", "높이·깊이", "위치(구멍·리브)", "구멍 반경", "필렛"]) expect(box(g).checked).toBe(true);
+    for (const g of ["두께", "높이·깊이", "위치(구멍·리브)", "리브 간격(피치)", "구멍 반경", "필렛"]) expect(box(g).checked).toBe(true);
     expect(within(block).queryByTestId("extract-filter-cond")).toBeNull();
     openCond();
     const cond = within(block).getByTestId("extract-filter-cond");
@@ -228,7 +228,7 @@ describe("①-1 찾을 종류·조건 블록", () => {
     fireEvent.click(run());
     await waitFor(() => expect(bodies.length).toBe(1));
     expect(screen.queryByRole("dialog")).toBeNull();
-    expect(bodies[0].params).toEqual({ cad_path: STEP, engine: "native", extract_filter: { groups: ["thickness", "height", "position", "hole_radius", "fillet"], conditions: {}, draft_max_deg: null } });
+    expect(bodies[0].params).toEqual({ cad_path: STEP, engine: "native", extract_filter: { groups: ["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"], conditions: {}, draft_max_deg: null } });
   });
 
   it("0개 선택 → 실행 비활성 + 문구 · 값 오류 → 칸 아래 문구·비활성(min>max)", async () => {
@@ -236,7 +236,7 @@ describe("①-1 찾을 종류·조건 블록", () => {
     type(STEP);
     await check();
     await waitFor(() => expect(run().disabled).toBe(false));
-    for (const g of ["두께", "높이·깊이", "위치(구멍·리브)", "구멍 반경", "필렛"]) fireEvent.click(box(g));
+    for (const g of ["두께", "높이·깊이", "위치(구멍·리브)", "리브 간격(피치)", "구멍 반경", "필렛"]) fireEvent.click(box(g));
     expect(run().disabled).toBe(true);
     expect(within(card).getAllByText("찾을 종류를 하나 이상 고르세요").length).toBeGreaterThan(0);
     fireEvent.click(box("두께"));
@@ -316,7 +316,7 @@ describe("①-2 적용 조건 줄·추출 요약", () => {
   it("적용 조건 한 줄(마지막 사용 조건)", async () => {
     renderApp(`${STUDY}/1`, { user: "power" }, nativeTrain({ extract_filter: { ...SAVED, draft_max_deg: 3 } }));
     await paramTable();
-    expect((await screen.findByTestId("applied-filter-text")).textContent).toBe("두께 2~30 mm · 면적 ≥ 50 mm² · 위치 최소 3 mm · 필렛 r ≥ 1 mm · 구배 3° · 제외: 높이·깊이, 구멍 반경");
+    expect((await screen.findByTestId("applied-filter-text")).textContent).toBe("두께 2~30 mm · 면적 ≥ 50 mm² · 위치 최소 3 mm · 필렛 r ≥ 1 mm · 구배 3° · 제외: 높이·깊이, 리브 간격(피치), 구멍 반경");
     expect(screen.getByTestId("applied-filter").textContent).toContain("적용 조건:");
   });
 
@@ -480,7 +480,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
     await find(`${ROOT}/native_project`);
     fireEvent.click(within(form).getByRole("button", { name: "등록" }));
     await waitFor(() => expect(bodies.length).toBe(1));
-    expect(bodies[0].extract_filter).toEqual({ groups: ["thickness", "height", "position", "hole_radius", "fillet"], conditions: {}, draft_max_deg: null });
+    expect(bodies[0].extract_filter).toEqual({ groups: ["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"], conditions: {}, draft_max_deg: null });
     const job = server.jobs.filter((j) => j.job_type === "PARAM_SET_NATIVE").slice(-1)[0];
     expect(job.params.extract_filter).toEqual(bodies[0].extract_filter);
   });
@@ -516,7 +516,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
     act(() => server.finishAll());
     await waitFor(() => expect(server.paramSets[0].engine).toBe("native"));
     expect(server.paramSets[0].native!.extract_filter).toMatchObject({ groups: ["thickness", "height", "position", "fillet"] });
-    expect((await screen.findAllByTestId("applied-filter-text")).slice(-1)[0].textContent).toBe("두께 2~30 mm · 면적 ≥ 50 mm² · 위치 최소 3 mm · 필렛 r ≥ 2.5 mm · 제외: 구멍 반경");
+    expect((await screen.findAllByTestId("applied-filter-text")).slice(-1)[0].textContent).toBe("두께 2~30 mm · 면적 ≥ 50 mm² · 위치 최소 3 mm · 필렛 r ≥ 2.5 mm · 제외: 리브 간격(피치), 구멍 반경");
     expect(screen.getByText("조건을 바꾸려면 새 세트로 등록하세요")).toBeTruthy();
   });
 
@@ -533,7 +533,7 @@ describe("④ native 세트 등록 — 추출 조건", () => {
     fireEvent.click(within(form).getByRole("button", { name: "등록" }));
     const cond = await within(nativeBox()).findByTestId("ps-extract-fields-cond");
     expect(within((within(cond).getByLabelText("구멍 반경 하한 r ≥ (mm)").closest(".field")) as HTMLElement).getByText("0보다 큰 값을 넣으세요")).toBeTruthy();
-    for (const g of ["두께", "높이·깊이", "위치(구멍·리브)", "구멍 반경", "필렛"]) fireEvent.click(within(nativeBox()).getByRole("checkbox", { name: g }));
+    for (const g of ["두께", "높이·깊이", "위치(구멍·리브)", "리브 간격(피치)", "구멍 반경", "필렛"]) fireEvent.click(within(nativeBox()).getByRole("checkbox", { name: g }));
     expect((within(form).getByRole("button", { name: "등록" }) as HTMLButtonElement).disabled).toBe(true);
   });
 

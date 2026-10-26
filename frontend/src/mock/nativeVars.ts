@@ -112,6 +112,9 @@ function put(srv: MockServer, ps: ParamSet, body: Record<string, unknown>): Mock
     if (exceedsFeasibleRange(i.min, i.max, p.feasible)) warnings.push({ code: "VAR_OUT_OF_FEASIBLE", name: i.name, message: `'${i.name}' ${NOTE_TEXT.VAR_OUT_OF_FEASIBLE}` });
     if (p.ref_locked) warnings.push({ code: "VAR_REF_LOCKED", name: i.name, message: `'${i.name}' ${NOTE_TEXT.VAR_REF_LOCKED}` });
   }
+  // rib-gap.md §5: 같은 열 피치 상한 합이 끝 여유를 넘으면 경고(목: 공칭 대비 상한 증가 합 > 12 mm)
+  const pitchUp = ordered.filter((i) => pool.find((x) => x.name === i.name)?.type === "RIB_PITCH_U").reduce((a, i) => a + (i.max - (pool.find((x) => x.name === i.name)?.nominal ?? i.max)), 0);
+  if (pitchUp > 12) warnings.push({ code: "RIB_PITCH_JOINT_RANGE", message: "같은 리브 열(U1)의 +쪽 피치 상한 합이 끝 여유 12.0 mm를 넘습니다 — 일부 샘플이 형상 생성에 실패할 수 있습니다" });
   return ok({ ...v, warnings });
 }
 

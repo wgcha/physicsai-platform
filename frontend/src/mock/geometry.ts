@@ -3,7 +3,7 @@
 // 3S(POST props/scan 202·GET props·PUT props → ParamSet), 4B(baselines 추가 202·삭제·disable, remap 202, param-map GET·PUT·confirm),
 // ① GET /studies/{id}/train/features. 응답 모양은 backend physicsai_api(services/param_set_props_api·param_set_baselines_api)를 따른다.
 import type {
-  ExtractFilter, GeomOptions, Job, MapDecision, MapRow, NativeFeature, NativeFeatures, ParamMap, ParamSet, ParamSetDiscover, ParamSetParameter, ShellProp, ShellProps, StatusGeometry, Study, TrainParam,
+  ExtractFilter, GeomOptions, Job, MapDecision, MapRow, NativeFeature, NativeFeatures, ParamMap, ParamSet, ParamSetDiscover, ParamSetParameter, RibRow, ShellProp, ShellProps, StatusGeometry, Study, TrainParam,
 } from "../api/types";
 import { getOpt } from "../lib/geometry";
 import { encodePng } from "./png";
@@ -83,7 +83,20 @@ export function seedFeatures(): NativeFeature[] {
   ];
 }
 
-export function nativeTrainParams(): TrainParam[] {
+/** rib-gap.md §3.4: 리브 열 U1(리브 3개 = 피치 2개, 가운데 리브 2 고정) — 추출 조건에 rib_pitch가 있을 때만 피처 표에 더해진다(기존 시연 불변) */
+export const RIB_ROWS: RibRow[] = [
+  { id: "U1", body: "CUSH_L", axis: "x", anchor: "rib:2", ribs: [{ index: 1, thickness: 3, center: 30 }, { index: 2, thickness: 3, center: 50 }, { index: 3, thickness: 3, center: 70 }], end_room_mm: { minus: 12.4, plus: 18 } },
+];
+export function ribFeatures(): NativeFeature[] {
+  return [
+    F("CUSH_L_RIB_PITCH_U_1", "RIB_PITCH_U", 20, 15, 25, [7, 31], { row: { id: "U1", k: 1, n: 3 }, ref_provisional: false }),
+    F("CUSH_L_RIB_PITCH_U_2", "RIB_PITCH_U", 20, 15, 25, [7, 31], { row: { id: "U1", k: 2, n: 3 }, ref_provisional: false }),
+  ];
+}
+/** 필터를 거친 시드 피처(rib_pitch 그룹을 고른 필터면 피치 행 포함) */
+export const seedFor = (filter: ExtractFilter | null | undefined): NativeFeature[] => [...seedFeatures(), ...(filter?.groups.includes("rib_pitch") ? ribFeatures() : [])].filter((f) => typeSelected(f.type, filter));
+
+export function nativeTrainParams(rib = false): TrainParam[] {
   const p = (name: string, nominal: number, min: number, max: number, use = true): TrainParam => ({
     name, raw_nominal: `${nominal} mm`, nominal, min, max, use, format: "%.4f", unit: "mm", valid: true, problems: [],
   });
@@ -94,6 +107,7 @@ export function nativeTrainParams(): TrainParam[] {
     p("CUSH_L_HOLE_U_1", 30, 25, 35),
     p("CUSH_L_RIB_U_1", 51.5, 46.5, 56.5, false),
     p("BOX_SHELL_T", 1.2, 1.14, 1.26, false),
+    ...(rib ? [p("CUSH_L_RIB_PITCH_U_1", 20, 15, 25), p("CUSH_L_RIB_PITCH_U_2", 20, 15, 25)] : []),
   ];
 }
 
@@ -146,6 +160,8 @@ export interface GeomRec {
   features: NativeFeature[];
   groups: NativeFeatures["groups"];
   warnings: NativeFeatures["warnings"];
+  /** 리브 열(피치 그룹을 고른 추출일 때만) */
+  ribRows?: RibRow[];
   props: { props: RawProp[]; warnings: ShellProps["warnings"] };
   propsScanned: boolean;
   /** param_map.json(서버 저장 모양 — 응답은 mapOut이 requires_decision·unresolved_rows 등을 붙인다) */
@@ -168,7 +184,7 @@ function featurePng(name: string): () => Uint8Array {
 }
 
 function newRec(srv: MockServer, studyId: string, jobId: string, filter: ExtractFilter | null = null): GeomRec {
-  const features = seedFeatures().filter((f) => typeSelected(f.type, filter)).map((f) => ({
+  const features = seedFor(filter).map((f) => ({
     ...f,
     png_artifact_id: f.name === "CUSH_L_FILLET_R_1" ? null : srv.addPngArtifact(jobId, studyId, "FEATURE_PNG", `04_params/features/${f.name}.png`, featurePng(f.name)),
   }));
@@ -179,6 +195,7 @@ function newRec(srv: MockServer, studyId: string, jobId: string, filter: Extract
       { code: "REF_BOTH_CONTACT", feature: "CUSH_L_RIB_T_2", message: "both faces are in contact; thickness cannot change (excluded from candidates by default)" },
       { code: "PNG_RENDER_FAILED", feature: "CUSH_L_FILLET_R_1", message: "offscreen render failed" },
     ],
+    ...(filter?.groups.includes("rib_pitch") ? { ribRows: RIB_ROWS } : {}),
     props: seedProps(),
     propsScanned: false,
     map: null,
@@ -186,7 +203,7 @@ function newRec(srv: MockServer, studyId: string, jobId: string, filter: Extract
 }
 
 function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, label: string | null, geom: GeomOptions | null, filter: ExtractFilter | null = null): ParamSet {
-  const feats = seedFeatures().filter((f) => typeSelected(f.type, filter));
+  const feats = seedFor(filter);
   return {
     id, study_id: s.id, source_path: path, engine: "native", engine_version: "0.6.0", unit_system: "mm-ton-s",
     parameters: feats.map((f) => ({ name: f.name, nominal: f.nominal!, min: f.min!, max: f.max!, unit: "mm" })),
@@ -437,7 +454,7 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     const key = `train:${s.id}:${setup.extract_job_id ?? ""}`;
     if (!srv.geom.has(key)) srv.geom.set(key, newRec(srv, s.id, setup.extract_job_id ?? "j-train-native", setup.extract_filter ?? null));
     const r = srv.geom.get(key)!;
-    return ok({ engine_version: "0.6.0", features: r.features, groups: r.groups, warnings: r.warnings, filter: setup.extract_filter ?? null });
+    return ok({ engine_version: "0.6.0", features: r.features, groups: r.groups, warnings: r.warnings, filter: setup.extract_filter ?? null, ...(r.ribRows ? { rib_rows: r.ribRows } : {}) });
   }
   if (seg[0] !== "param-sets" || !seg[1]) return null;
   const ps = findPs(srv, seg[1]);
@@ -466,7 +483,7 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
     if (body?.extract_filter != null) return err(422, "EXTRACT_FILTER_INVALID", "등록된 세트의 추출 조건은 바꿀 수 없습니다 — 새 세트로 등록하세요", { problems: [{ key: "extract_filter", message: "등록된 세트의 추출 조건은 바꿀 수 없습니다 — 새 세트로 등록하세요" }] });
   }
   if (method === "POST" && sub === "native-prepare") return nativeJob(srv, studyOf(srv, ps), { mode: "reprep", param_set_id: ps.id });
-  if (method === "GET" && sub === "features" && rec) return ok({ engine_version: ps.engine_version, features: rec.features, groups: rec.groups, warnings: rec.warnings, filter: ps.native?.extract_filter ?? null });
+  if (method === "GET" && sub === "features" && rec) return ok({ engine_version: ps.engine_version, features: rec.features, groups: rec.groups, warnings: rec.warnings, filter: ps.native?.extract_filter ?? null, ...(rec.ribRows ? { rib_rows: rec.ribRows } : {}) });
   // 3S 쉘 두께(§11.1)
   if (sub === "props" && rec) {
     if (method === "POST" && seg[3] === "scan") return nativeJob(srv, studyOf(srv, ps), { mode: "props_scan", param_set_id: ps.id });

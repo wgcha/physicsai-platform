@@ -166,6 +166,8 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
   ASM_MATCH: [{ key: "AM_PREP", kind: "INTERNAL" }, { key: "AM_PARTS", kind: "LOCAL" }, { key: "AM_REGISTER", kind: "INTERNAL" }],
   // geometry-view.md §6.4 형상 미리보기
   GEOM_PREVIEW: [{ key: "GV_PREP", kind: "INTERNAL" }, { key: "GV_RUN", kind: "LOCAL" }, { key: "GV_REGISTER", kind: "INTERNAL" }],
+  // doe-preview.md §6.1 DOE 형상 그리드(CPU 대기열)
+  DOE_PREVIEW: [{ key: "DP_PREP", kind: "INTERNAL" }, { key: "DP_MATRIX", kind: "INTERNAL" }, { key: "DP_RENDER", kind: "LOCAL" }, { key: "DP_REGISTER", kind: "INTERNAL" }],
   // equiv-check.md §4.5 ⑤ 해석 등가성 판정
   EQ_CHECK: [
     { key: "EQ_PREP", kind: "INTERNAL" },
@@ -202,6 +204,7 @@ export const STEP_LABEL: Record<string, string> = {
   PX_PREP: "준비", PX_TABLE: "배치 표 갱신",
   AM_PREP: "조립 매칭 준비", AM_PARTS: "조립 component 목록", AM_CHECK: "외곽 노드·CAD 경계 검사", AM_REGISTER: "매칭 결과 등록",
   GV_PREP: "미리보기 준비", GV_RUN: "형상 미리보기 실행", GV_REGISTER: "미리보기 결과 등록",
+  DP_PREP: "DOE 미리보기 준비", DP_MATRIX: "표본 표 계산", DP_RENDER: "표본 형상 그림 만들기", DP_REGISTER: "미리보기 결과 등록",
   NP_PREP: "준비 파일 모으기", NP_EXTRACT: "형상 피처 추출", NP_TAG: "경계 노드 분류", BL_MAP: "baseline 변수 매칭", NP_REGISTER: "템플릿 등록",
   SO_COLLECT: "검증 결과 수집", SO_FIT: "대리모델 학습", SO_PROPOSE: "후보 탐색", SO_NEXT: "검증 배치 등록·마무리",
 };

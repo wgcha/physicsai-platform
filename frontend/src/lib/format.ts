@@ -72,6 +72,8 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   ASM_MATCH: "조립 매칭",
   // geometry-view.md §6.4 형상 미리보기(PREVIEW 레인, 작업 목록 "미리보기 포함"일 때만 보임)
   GEOM_PREVIEW: "형상 미리보기",
+  // doe-preview.md §6.1 DOE 표본 형상 그리드(CPU 대기열, 작업 목록 "미리보기 포함"일 때만 보임)
+  DOE_PREVIEW: "형상 미리보기(DOE)",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -105,6 +107,7 @@ export const JOB_STAGE: Record<JobType, number> = {
   EQ_CHECK: 4,
   ASM_MATCH: 1,
   GEOM_PREVIEW: 4,
+  DOE_PREVIEW: 1,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

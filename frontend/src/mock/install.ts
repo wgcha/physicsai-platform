@@ -8,9 +8,11 @@
 // ?upload=0 이면 업로드 꺼짐(경로 칸에 "내 PC에서 올리기" 탭 없음, 기본 켜짐 — upload-report.md).
 // ?c3d=hold|fail|expire 이면 결과 3D 컨투어 생성 시연(대기 안내에서 멈춤·결과 실패·첫 프레임 410, geometry-view.md §13.6).
 // ?c3d=jobfail|toolarge|toolarge_comps|toolarge_glb|toolarge_frames = 작업 실패·크기 상한 결과 실패(대체 사유 한 줄, contour3d-field §12).
+// ?dp=hold|error|clean 이면 ①-3 DOE 형상 그리드 미리보기 시연(?train=native 와 함께, 진행 중 멈춤·오류 셀·실패 없음, doe-preview.md).
 // ?c3=lod|nodisp|v1|large 이면 컨투어 데이터 시나리오(저해상도 메시·변위 없음·schema 1·대형 합성 약 81만 노드 + LOD, contour3d-field).
 import { MockServer, createMockFetch } from "./server";
 import { setGvMode, type GvMode } from "./geomView";
+import { setDpMode } from "./doePreview";
 import { nativeTrainParams } from "./geometry";
 import { mockSummary, normalizeFilter } from "./extractFilter";
 import type { MockUserKey } from "./data";
@@ -51,6 +53,11 @@ export function installMockFetch() {
   else if (c3 === "nodisp") setGvMode(server, { c3data: { disp: false } });
   else if (c3 === "v1") setGvMode(server, { c3data: { schema: 1 } });
   else if (c3 === "large") setGvMode(server, { c3data: { nx: 900, ny: 900, frames: 8, lod: true } });
+  // ?dp=hold|error|clean 이면 DOE 형상 그리드 미리보기 시연(진행 중에서 멈춤·오류 셀 1개·실패 셀 없음, doe-preview.md §7). 기본 = 실패 셀 2·잘림 1 포함 24셀
+  const dp = params.get("dp");
+  if (dp === "hold") setDpMode(server, { hold: true });
+  else if (dp === "error") setDpMode(server, { error: true });
+  else if (dp === "clean") setDpMode(server, { clean: true });
   const real = window.fetch.bind(window);
   window.fetch = createMockFetch(server, real);
   const freeze = params.get("freeze") === "1";

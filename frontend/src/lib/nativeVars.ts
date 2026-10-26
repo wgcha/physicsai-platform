@@ -2,6 +2,7 @@
 // 경고는 막지 않는다(D2): 학습 범위 밖 · 모핑 가능 범위(feasible) 밖 · 양면 접촉 · 공칭 밖. 허용오차는 서버와 같다(학습 1e-9·max(1,|x|), feasible 1e-9).
 import type { NativeVarPoolRow, NativeVars, ParamSet, VarFeasible, VarNote, VarRange, VarRow, VarsEdit, VarsSnapshot } from "../api/types";
 import { fmtNum } from "./format";
+import { RIB_PITCH_NOTE, isPitchType } from "./geometry";
 
 export type VarOrigin = "set" | "added" | "pool";
 
@@ -36,6 +37,7 @@ export const NOTE_TEXT: Record<string, string> = {
   VAR_OUT_OF_TRAIN: "학습 형상 분포 밖 — 외삽 주의",
   VAR_OUT_OF_FEASIBLE: "모핑 실패 가능",
   VAR_REF_LOCKED: "양면 접촉 피처 — 형상 생성이 실패할 수 있습니다",
+  ...RIB_PITCH_NOTE,
   VAR_NOMINAL_OUTSIDE: "공칭이 범위 밖입니다(기존안은 범위 밖 점으로 표시)",
   VAR_OUT_OF_BOUNDS: "최적화 범위 밖 점입니다",
   TRAIN_RANGE_UNKNOWN: "모델의 학습 범위를 알 수 없어 외삽 경고를 생략합니다(모델의 데이터셋이 ① DOE 결과가 아님)",
@@ -211,10 +213,10 @@ export function integerError(r: Pick<NativeRow, "lo" | "hi" | "use" | "fixed"> &
   return b && !(Number.isInteger(b[0]) && Number.isInteger(b[1])) ? "정수만 입력하세요" : null;
 }
 
-/** 위치형: 공칭 대비 Δ 표기(mm) — "−5 / +5" */
-export function deltaText(r: Pick<NativeRow, "nominal" | "lo" | "hi" | "position" | "fixed">): string | null {
+/** 위치형·리브 피치(길이 mm, 좌표 아님): 공칭 대비 Δ 표기(mm) — "−5 / +5" */
+export function deltaText(r: Pick<NativeRow, "nominal" | "lo" | "hi" | "position" | "fixed"> & { type?: string }): string | null {
   const b = rowBounds(r);
-  if (!r.position || r.nominal == null || !b) return null;
+  if (!(r.position || isPitchType(r.type)) || r.nominal == null || !b) return null;
   const f = (v: number) => (v > 0 ? "+" : v < 0 ? "−" : "") + fmtNum(Math.abs(Number(v.toFixed(4))));
   return `${f(b[0] - r.nominal)} / ${f(b[1] - r.nominal)}`;
 }

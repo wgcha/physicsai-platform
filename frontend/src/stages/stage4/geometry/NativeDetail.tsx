@@ -7,8 +7,8 @@ import { useStudy } from "../../../app/StudyContext";
 import { JobInline } from "../../../components/ui";
 import { useLatestJob } from "../../../hooks/useLatestJob";
 import { fmtTime, isTerminal } from "../../../lib/format";
-import { PREP_LABEL, PREP_TONE, geomErrorText, isPositionType, isSplit, toggleSplit } from "../../../lib/geometry";
-import { NV_ERROR_TEXT, detailRows, putBody, rowBounds, rowError, signature, type NativeRow } from "../../../lib/nativeVars";
+import { PREP_LABEL, PREP_TONE, geomErrorText, isPitchType, isPositionType, isSplit, pitchTip, toggleSplit } from "../../../lib/geometry";
+import { NV_ERROR_TEXT, detailRows, generalNotes, noteText, putBody, rowBounds, rowError, signature, type NativeRow } from "../../../lib/nativeVars";
 import { NativeVarsTable } from "./NativeVarsTable";
 import { GeomOptionsForm } from "./GeomOptionsForm";
 import { ShellProps } from "./ShellProps";
@@ -244,8 +244,15 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
             canPreview={canEdit}
           />
         }
-        table={<NativeVarsTable label="형상 피처 표" rows={rows} canEdit={editable} words={{ name: "이름", lo: "하한", hi: "상한" }} showBody showTrain={false} sel={sel} onPatch={patch} onBulkUse={bulkUse} notes={vars.warnings} extra={cols} testIdPrefix="nv" />}
+        table={<NativeVarsTable label="형상 피처 표" rows={rows} canEdit={editable} words={{ name: "이름", lo: "하한", hi: "상한" }} showBody showTrain={false} sel={sel} typeTip={(r) => (isPitchType(r.type) ? pitchTip(data.features.find((f) => f.name === r.name), data.rib_rows) : undefined)} onPatch={patch} onBulkUse={bulkUse} notes={vars.warnings} extra={cols} testIdPrefix="nv" />}
       />
+      {generalNotes(vars.warnings).length > 0 && (
+        <ul className="problems small warn-text" aria-label="변수 경고" data-testid="vars-general-notes">
+          {generalNotes(vars.warnings).map((n, i) => (
+            <li key={i}>{noteText(n)}</li>
+          ))}
+        </ul>
+      )}
       {error && (
         <div className="error-text small" role="alert">
           {error}

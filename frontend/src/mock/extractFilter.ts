@@ -3,14 +3,14 @@
 import type { ExtractFilter } from "../api/types";
 import { err, type MockResp } from "./route";
 
-const GROUP_ORDER = ["thickness", "height", "position", "hole_radius", "fillet"] as const;
-const GROUP_COND: Record<string, string[]> = { thickness: ["thickness_mm", "face_area_min_mm2"], height: ["height_mm"], position: ["position_min_size_mm"], hole_radius: ["hole_radius_min_mm"], fillet: ["fillet_radius_min_mm"] };
+const GROUP_ORDER = ["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"] as const;
+const GROUP_COND: Record<string, string[]> = { thickness: ["thickness_mm", "face_area_min_mm2"], height: ["height_mm"], position: ["position_min_size_mm"], rib_pitch: [], hole_radius: ["hole_radius_min_mm"], fillet: ["fillet_radius_min_mm"] };
 const RANGE = ["thickness_mm", "height_mm"];
 const SCALAR = ["face_area_min_mm2", "position_min_size_mm", "hole_radius_min_mm", "fillet_radius_min_mm"];
 /** 피처 종류 → 그룹(§3.1) */
 export const TYPE_GROUP: Record<string, string> = {
   THICKNESS: "thickness", RIB_THICKNESS: "thickness", POCKET_WIDTH: "thickness", RIB_HEIGHT: "height", POCKET_DEPTH: "height",
-  HOLE_POS_U: "position", HOLE_POS_V: "position", RIB_POS_U: "position", RIB_POS_V: "position", HOLE_RADIUS: "hole_radius", FILLET_RADIUS: "fillet",
+  HOLE_POS_U: "position", HOLE_POS_V: "position", RIB_POS_U: "position", RIB_POS_V: "position", RIB_PITCH_U: "rib_pitch", RIB_PITCH_V: "rib_pitch", HOLE_RADIUS: "hole_radius", FILLET_RADIUS: "fillet",
 };
 const isNum = (x: unknown): x is number => typeof x === "number" && Number.isFinite(x);
 
@@ -69,7 +69,7 @@ export function mockSummary(kinds: { type: string }[], f: ExtractFilter | null):
   for (const t of Object.keys(TYPE_GROUP)) {
     const sel = typeSelected(t, f);
     const kept = kinds.filter((k) => k.type === t).length;
-    types[t] = sel ? { selected: true, kept, excluded: t === "THICKNESS" ? { face_area: 180, thickness_range: 9, not_mutual: 21 } : t === "FILLET_RADIUS" ? { fillet_radius_min: 26 } : t === "RIB_POS_U" ? { shape: 2 } : {} } : { selected: false, kept: 0, excluded: {} };
+    types[t] = sel ? { selected: true, kept, excluded: t === "THICKNESS" ? { face_area: 180, thickness_range: 9, not_mutual: 21 } : t === "FILLET_RADIUS" ? { fillet_radius_min: 26 } : t === "RIB_POS_U" ? { shape: 2 } : t === "RIB_PITCH_U" ? { not_slender: 2, row_single: 1 } : {} } : { selected: false, kept: 0, excluded: {} };
   }
   return { filter_applied: !!f, types, png_rendered: kinds.length, png_elapsed_s: 8.2, elapsed_s: 72.5, rib_rejects: { cap_not_convex: 14, lateral_draft: 3, base_mismatch: 2, new_reason_x: 1 } };
 }
