@@ -92,5 +92,7 @@ def test_all_routes_prefixed():
         # asm-match.md §6.3(AM-C2): 조립 매칭(생성·목록·조회·행 저장·검사·확정)
         "/studies/{study_id}/asm-matches", "/asm-matches/{match_id}", "/asm-matches/{match_id}/rows", "/asm-matches/{match_id}/check",
         "/asm-matches/{match_id}/confirm", "/asm-matches/{match_id}/cancel",
+        # doe-preview.md §6.6: DOE 표본 형상 그리드 미리보기(생성·조회·취소, x-mcp exclude)
+        "/studies/{study_id}/doe-previews", "/doe-previews/{preview_id}", "/doe-previews/{preview_id}/cancel",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

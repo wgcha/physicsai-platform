@@ -31,6 +31,14 @@ terms:
     ko: 리브 위치(V)
     synonyms: [리브 세로 위치, rib position v]
     unit: mm
+  - key: feature:RIB_PITCH_U
+    ko: 리브 간격(피치) U
+    synonyms: [리브 간격, 리브 사이 거리, 리브 피치, rib pitch, rib gap]
+    unit: mm
+  - key: feature:RIB_PITCH_V
+    ko: 리브 간격(피치) V
+    synonyms: [리브 간격, 리브 사이 거리, 리브 피치, rib pitch, rib gap]
+    unit: mm
   - key: feature:HOLE_R
     ko: 구멍 반지름
     synonyms: [구멍 크기, 홀 반경, hole radius]

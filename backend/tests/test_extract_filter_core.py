@@ -21,11 +21,12 @@ def _norm(**over):
 
 
 def test_group_types_single_definition():
-    assert list(ef.GROUP_TYPES) == ["thickness", "height", "position", "hole_radius", "fillet"]
+    assert list(ef.GROUP_TYPES) == ["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"]  # rib-gap.md §8: position 바로 뒤
+    assert ef.GROUP_TYPES["rib_pitch"] == ("RIB_PITCH_U", "RIB_PITCH_V") and ef.GROUP_LABELS["rib_pitch"] == "리브 간격(피치)"
     assert ef.GROUP_TYPES["position"] == ("HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V")
     assert ef.GROUP_TYPES["thickness"] == ("THICKNESS", "RIB_THICKNESS", "POCKET_WIDTH")
     all_types = [t for g in ef.GROUP_TYPES.values() for t in g]
-    assert len(all_types) == len(set(all_types)) == 11
+    assert len(all_types) == len(set(all_types)) == 13  # EF §3.1: 그룹 6개·종류 13개
     # 모든 조건 키는 정확히 한 그룹에 속한다
     owned = [k for ks in ef.GROUP_CONDITIONS.values() for k in ks]
     assert sorted(owned) == sorted(ef.CONDITION_KEYS)

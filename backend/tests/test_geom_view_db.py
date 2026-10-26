@@ -59,7 +59,7 @@ def test_migration_0017_upgrade_constraints_and_rows_preserved(fresh_db):
     from physicsai_core.db import MIGRATION_HEAD
 
     url, eng = fresh_db
-    assert MIGRATION_HEAD == "0024_contour3d_field"
+    assert MIGRATION_HEAD == "0025_doe_preview"
     _alembic(url, "0016_geometry_engine")
     sid = str(uuid.uuid4())
     with eng.begin() as c:
@@ -147,7 +147,7 @@ def test_v_c3f_migration_0024_adds_disp_lod_kinds_keeps_rows_and_protects_downgr
                 c.execute(ins, {"u": str(uuid.uuid4()), "s": sid, "k": bad})
     _alembic(url, "head")
     with eng.begin() as c:
-        assert c.execute(text("select version_num from alembic_version")).scalar() == "0024_contour3d_field"
+        assert c.execute(text("select version_num from alembic_version")).scalar() == "0025_doe_preview"
         assert c.execute(text("select kind from artifacts where id=:i"), {"i": old}).scalar() == "CONTOUR3D_FRAMES"
         for k in ("CONTOUR3D_DISP", "CONTOUR3D_LOD"):
             c.execute(ins, {"u": str(uuid.uuid4()), "s": sid, "k": k})

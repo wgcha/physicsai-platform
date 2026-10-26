@@ -11,7 +11,7 @@ from pydantic import Field
 from .common import Req, Resp
 from .extract_filter import ExtractFilter
 
-__all__ = ["NativeAccepted", "NativeInfo", "NativeFeature", "NativeGroup", "NativeWarning", "NativeFeatures",
+__all__ = ["NativeAccepted", "NativeInfo", "NativeFeature", "NativeFeatureRow", "NativeRib", "NativeRibRow", "NativeGroup", "NativeWarning", "NativeFeatures",
            "ShellPropPart", "ShellProp", "ShellPropWarning", "ShellProps", "ShellPropSelect", "ShellPropsUpdate",
            "BaselineAddRequest", "NativePrepareRequest", "ParamMapRemapRequest", "BaselineInfo", "ParamMapDecisionPart", "ParamMapDecision", "ParamMapRowDecision",
            "ParamMapUpdate", "ParamMapProposed", "ParamMapRow", "ParamMapBaseline", "ParamMapWarning", "ParamMap",
@@ -41,6 +41,14 @@ class NativeInfo(Resp):
     vars_count: int = 0
 
 
+class NativeFeatureRow(Resp):
+    """RIB_PITCH 피처의 리브 열 소속(rib-gap.md §3.4): 열 id(U1·V1…)·열 안 피치 순번 k(1부터)·열의 리브 수 n."""
+
+    id: str
+    k: int
+    n: int
+
+
 class NativeFeature(Resp):
     name: str
     type: str = ""
@@ -54,6 +62,25 @@ class NativeFeature(Resp):
     ref_locked: bool = False
     feasible: dict[str, Any] | None = None
     png_artifact_id: str | None = None
+    row: NativeFeatureRow | None = None  # RIB_PITCH만
+
+
+class NativeRib(Resp):
+    index: int
+    thickness: float | None = None
+    center: float | None = None
+
+
+class NativeRibRow(Resp):
+    """리브 열(rib-gap.md §3.4) — 화면 툴팁용(기준 리브·끝 여유·리브 두께·중심). 면 id·서명은 싣지 않는다."""
+
+    id: str
+    body: str = ""
+    axis: str = ""
+    anchor: str = ""  # rib:<m>(그 리브 중심 고정) | mid:<h>(리브 h·h+1 중심의 중점 고정)
+    ribs: list[NativeRib] = []
+    end_room_mm: dict[str, float | None] = {}  # minus·plus
+    end_limited_by: dict[str, str | None] = {}
 
 
 class NativeGroup(Resp):
@@ -75,6 +102,7 @@ class NativeFeatures(Resp):
     features: list[NativeFeature]
     groups: list[NativeGroup]
     warnings: list[NativeWarning]
+    rib_rows: list[NativeRibRow] | None = None  # rib-gap.md: RIB_PITCH를 골라 추출했을 때만(아니면 null)
 
 
 # ---- 단계 3S 쉘 두께(geometry-engine.md §11.1) -------------------------------------------------------------

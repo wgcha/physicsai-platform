@@ -93,6 +93,7 @@ class StatusFeatures(Resp):
     geometry_native_shell: FeatureState | None = None  # shell-morph.md §8.1 쉘 판금 비드 모핑(paicad shell)
     geometry_view: FeatureState | None = None  # geometry-view.md §6.1 형상 3D 보기·미리보기(솔리드)
     geometry_view_shell: FeatureState | None = None  # geometry-view.md §6.1 형상 3D 보기·미리보기(쉘)
+    doe_preview: FeatureState | None = None  # doe-preview.md §6.5 ①-3 DOE 표본 형상 그리드 미리보기(솔리드 기준, 쉘은 요청 때 확인)
     contour3d: FeatureState | None = None  # geometry-view.md §13 결과 3D 컨투어
     fem_verify: FeatureState | None = None  # phase3 §21.3.8 S16 조립 FEM 검증(fem_verify.enabled + HPC)
     fem_verify_rebuild: FeatureState | None = None  # + 메시 교체(commands.mesh·include TCL)

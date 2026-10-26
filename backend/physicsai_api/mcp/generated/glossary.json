@@ -238,6 +238,38 @@
       "int",
       "bool"
     ],
+    "DoePreview.status": [
+      "QUEUED",
+      "RUNNING",
+      "DONE",
+      "FAILED",
+      "CANCELED"
+    ],
+    "DoePreview.tag_state": [
+      "none",
+      "tagged"
+    ],
+    "DoePreviewCell.status": [
+      "PENDING",
+      "OK",
+      "FAIL",
+      "ERROR"
+    ],
+    "DoePreviewGen.status": [
+      "OK",
+      "SKIPPED",
+      "PENDING"
+    ],
+    "DoePreviewSelect.order": [
+      "change",
+      "doe",
+      "var"
+    ],
+    "DoePreviewSource.kind": [
+      "train",
+      "param_set",
+      "train_doe"
+    ],
     "DoeResultTable.influence_class": [
       "formal",
       "reference",
@@ -644,6 +676,18 @@
     "TrainDoe.generator": [
       "platform",
       "hyperstudy"
+    ],
+    "TrainSamplingCcd.alpha": [
+      "face",
+      "inscribed"
+    ],
+    "TrainSamplingFracfact.resolution": [
+      4,
+      5
+    ],
+    "TrainSamplingLhsOpt.criterion": [
+      "maximin",
+      "corr"
     ],
     "TrainSetup.engine": [
       "altair",
@@ -1067,8 +1111,9 @@
     },
     "DOE_NOT_READY": {
       "code": "DOE_NOT_READY",
-      "message_ko": "아직 샘플 표가 준비되지 않았습니다",
+      "message_ko": "READY 상태의 DOE가 필요합니다",
       "sources": [
+        "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_api/services/doe_result_table.py",
         "backend/physicsai_api/services/job_params/stage1_train_data.py",
         "backend/physicsai_api/services/job_params/stage2_curation.py",
@@ -1084,6 +1129,23 @@
         "backend/physicsai_api/services/job_params/stage1_train_data.py"
       ],
       "status": 422
+    },
+    "DOE_PREVIEW_UNAVAILABLE": {
+      "code": "DOE_PREVIEW_UNAVAILABLE",
+      "message_ko": "형상 미리보기를 쓸 수 없습니다 — 관리자 설정이 필요합니다",
+      "sources": [
+        "backend/physicsai_api/services/doe_preview_api.py",
+        "worker/physicsai_worker/steps/doe_preview.py"
+      ],
+      "status": 409
+    },
+    "DOE_PREVIEW_UNSUPPORTED": {
+      "code": "DOE_PREVIEW_UNSUPPORTED",
+      "message_ko": null,
+      "sources": [
+        "backend/physicsai_api/services/doe_preview_api.py"
+      ],
+      "status": 409
     },
     "DOE_SAMPLING_INVALID": {
       "code": "DOE_SAMPLING_INVALID",
@@ -1382,7 +1444,8 @@
       "message_ko": "baseline {…}: {…}",
       "sources": [
         "backend/physicsai_api/services/geom_view_api.py",
-        "backend/physicsai_api/services/geometry_gate.py"
+        "backend/physicsai_api/services/geometry_gate.py",
+        "worker/physicsai_worker/steps/doe_preview.py"
       ],
       "status": 409
     },
@@ -1448,6 +1511,7 @@
         "worker/physicsai_worker/steps/analysis/equiv_check.py",
         "worker/physicsai_worker/steps/asm_match.py",
         "worker/physicsai_worker/steps/common.py",
+        "worker/physicsai_worker/steps/doe_preview.py",
         "worker/physicsai_worker/steps/geometry_native.py",
         "worker/physicsai_worker/steps/geometry_props.py",
         "worker/physicsai_worker/steps/stage1_train_data/doe_gen.py",
@@ -1482,6 +1546,7 @@
         "worker/physicsai_worker/steps/analysis/equiv_check.py",
         "worker/physicsai_worker/steps/asm_match.py",
         "worker/physicsai_worker/steps/common.py",
+        "worker/physicsai_worker/steps/doe_preview.py",
         "worker/physicsai_worker/steps/geometry_native.py",
         "worker/physicsai_worker/steps/geometry_props.py",
         "worker/physicsai_worker/steps/geometry_shell.py",
@@ -1568,6 +1633,7 @@
         "backend/physicsai_core/paths.py",
         "worker/physicsai_worker/executor.py",
         "worker/physicsai_worker/step_process.py",
+        "worker/physicsai_worker/steps/doe_preview.py",
         "worker/physicsai_worker/steps/geometry_sample.py",
         "worker/physicsai_worker/steps/stage2_curation/source.py",
         "worker/physicsai_worker/steps/stage3_model/dataset.py",
@@ -1653,6 +1719,7 @@
       "sources": [
         "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_core/db/repositories/jobs.py"
       ],
       "status": 409
@@ -1783,6 +1850,7 @@
         "backend/physicsai_api/services/common.py",
         "backend/physicsai_api/services/contour3d_api.py",
         "backend/physicsai_api/services/contour_capture.py",
+        "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_api/services/env_checks.py",
         "backend/physicsai_api/services/error_bundle.py",
         "backend/physicsai_api/services/geom_view_api.py",
@@ -1982,6 +2050,7 @@
       "sources": [
         "backend/physicsai_core/fileutil.py",
         "backend/physicsai_core/paths.py",
+        "worker/physicsai_worker/steps/doe_preview.py",
         "worker/physicsai_worker/steps/stage4_predict/contour3d.py",
         "worker/physicsai_worker/steps/stage4_predict/geom_preview.py"
       ],
@@ -2000,6 +2069,7 @@
       "message_ko": "실행 권한(power 이상)이 필요합니다",
       "sources": [
         "backend/physicsai_api/services/common.py",
+        "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_api/services/equiv_check.py",
         "backend/physicsai_api/services/equiv_recipes.py",
         "backend/physicsai_api/services/error_bundle.py",
@@ -2027,6 +2097,7 @@
         "backend/physicsai_api/services/asm_match_api.py",
         "backend/physicsai_api/services/asm_match_gate.py",
         "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_api/services/job_params/base.py",
         "backend/physicsai_api/services/job_params/stage1_native.py",
         "backend/physicsai_api/services/job_params/stage1_train_data.py",
@@ -2040,6 +2111,7 @@
       "message_ko": "3D 컨투어 생성이 많이 대기 중입니다 — 잠시 후 다시 시도하세요",
       "sources": [
         "backend/physicsai_api/services/contour3d_api.py",
+        "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_api/services/geom_view_api.py"
       ],
       "status": 429
@@ -2724,6 +2796,14 @@
       "source": "packages/paicad/src/paicad/features.py",
       "type": "RIB_HEIGHT"
     },
+    "RIB_PITCH_U": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "RIB_PITCH_U"
+    },
+    "RIB_PITCH_V": {
+      "source": "packages/paicad/src/paicad/features.py",
+      "type": "RIB_PITCH_V"
+    },
     "RIB_T": {
       "source": "packages/paicad/src/paicad/features.py",
       "type": "RIB_THICKNESS"
@@ -2884,6 +2964,11 @@
       "lane": "SLOT",
       "stage_label": "③-1"
     },
+    "DOE_PREVIEW": {
+      "label": "형상 미리보기(DOE)",
+      "lane": "SLOT",
+      "stage_label": "①"
+    },
     "EQ_CHECK": {
       "label": "등가성 판정",
       "lane": "SLOT",
@@ -3031,6 +3116,11 @@
       "internal": "③-1",
       "job_type": "DATASET_CREATE",
       "screen": "③-1"
+    },
+    {
+      "internal": "①",
+      "job_type": "DOE_PREVIEW",
+      "screen": "①"
     },
     {
       "internal": "⑤",

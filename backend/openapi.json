@@ -4142,6 +4142,658 @@
         "title": "DoeField",
         "type": "object"
       },
+      "DoePreview": {
+        "description": "미리보기 1건(페이지 1개). 200 = 전부 캐시(cache_hit, 작업 없음), 202 = QUEUED·RUNNING(job_id) — 화면은 `GET /doe-previews/{id}`를 1초 간격으로.\n`cells`는 렌더가 끝난 만큼 채워지고(청크마다 갱신) 나머지는 PENDING. `order` = 정렬된 전체 doe_no(행렬 계산 후, 최대 2000개).",
+        "properties": {
+          "cache_hit": {
+            "default": false,
+            "title": "Cache Hit",
+            "type": "boolean"
+          },
+          "cells": {
+            "items": {
+              "$ref": "#/components/schemas/DoePreviewCell"
+            },
+            "title": "Cells",
+            "type": "array"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "colormap": {
+            "default": "turbo16",
+            "title": "Colormap",
+            "type": "string"
+          },
+          "created_at": {
+            "title": "Created At"
+          },
+          "disp_range_mm": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disp Range Mm"
+          },
+          "finished_at": {
+            "title": "Finished At"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Job Id"
+          },
+          "message_ko": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Ko"
+          },
+          "n_error": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Error"
+          },
+          "n_fail": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Fail"
+          },
+          "n_ok": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Ok"
+          },
+          "n_total": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Total"
+          },
+          "order": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Order",
+            "type": "array"
+          },
+          "queue": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoePreviewQueue"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "select": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoePreviewSelect"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoePreviewSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "enum": [
+              "QUEUED",
+              "RUNNING",
+              "DONE",
+              "FAILED",
+              "CANCELED"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "tag_state": {
+            "default": "none",
+            "enum": [
+              "none",
+              "tagged"
+            ],
+            "title": "Tag State",
+            "type": "string"
+          },
+          "timing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoePreviewTiming"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "warnings": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "title": "DoePreview",
+        "type": "object"
+      },
+      "DoePreviewCell": {
+        "properties": {
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "clipped": {
+            "default": false,
+            "title": "Clipped",
+            "type": "boolean"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "doe_no": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe No"
+          },
+          "gen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DoePreviewGen"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "glb_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Glb Artifact Id"
+          },
+          "manifest_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Manifest Artifact Id"
+          },
+          "max_disp_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Disp Mm"
+          },
+          "message_ko": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message Ko"
+          },
+          "nominal": {
+            "default": false,
+            "title": "Nominal",
+            "type": "boolean"
+          },
+          "png_artifact_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Png Artifact Id"
+          },
+          "status": {
+            "enum": [
+              "PENDING",
+              "OK",
+              "FAIL",
+              "ERROR"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "top_changes": {
+            "items": {
+              "$ref": "#/components/schemas/DoePreviewTopChange"
+            },
+            "title": "Top Changes",
+            "type": "array"
+          },
+          "values": {
+            "additionalProperties": {
+              "type": "number"
+            },
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DoePreviewCell",
+        "type": "object"
+      },
+      "DoePreviewGen": {
+        "description": "생성 후 갤러리(train_doe)의 실제 생성 결과 — run 폴더 SKIPPED.json·starter 유무로 판정.",
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "status": {
+            "enum": [
+              "OK",
+              "SKIPPED",
+              "PENDING"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DoePreviewGen",
+        "type": "object"
+      },
+      "DoePreviewQueue": {
+        "properties": {
+          "lane": {
+            "title": "Lane",
+            "type": "string"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Position"
+          }
+        },
+        "required": [
+          "lane"
+        ],
+        "title": "DoePreviewQueue",
+        "type": "object"
+      },
+      "DoePreviewReq": {
+        "additionalProperties": false,
+        "description": "`TD_DOE_GEN` native params의 표본 부분과 같은 모양(sampling). train_doe 출처는 sampling을 생략(쓰지 않는다).",
+        "properties": {
+          "sampling": {
+            "anyOf": [
+              {
+                "discriminator": {
+                  "mapping": {
+                    "bbd": "#/components/schemas/TrainSamplingBbd",
+                    "ccd": "#/components/schemas/TrainSamplingCcd",
+                    "fracfact": "#/components/schemas/TrainSamplingFracfact",
+                    "fullfact": "#/components/schemas/TrainSamplingFullfact",
+                    "halton": "#/components/schemas/TrainSamplingHalton",
+                    "lhs": "#/components/schemas/TrainSamplingLhs",
+                    "lhs_opt": "#/components/schemas/TrainSamplingLhsOpt",
+                    "pb": "#/components/schemas/TrainSamplingPb",
+                    "random": "#/components/schemas/TrainSamplingRandom",
+                    "sobol": "#/components/schemas/TrainSamplingSobol",
+                    "table": "#/components/schemas/TrainSamplingTable",
+                    "train_doe": "#/components/schemas/TrainSamplingTrainDoe"
+                  },
+                  "propertyName": "kind"
+                },
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingLhs"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingLhsOpt"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingSobol"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingHalton"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingRandom"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingFullfact"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingFracfact"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingPb"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingBbd"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingCcd"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingTable"
+                  },
+                  {
+                    "$ref": "#/components/schemas/TrainSamplingTrainDoe"
+                  }
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sampling"
+          },
+          "select": {
+            "$ref": "#/components/schemas/DoePreviewSelect"
+          },
+          "source": {
+            "$ref": "#/components/schemas/DoePreviewSource"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "DoePreviewReq",
+        "type": "object"
+      },
+      "DoePreviewSelect": {
+        "additionalProperties": false,
+        "description": "페이지 선택(§5.2). order: change(변화 큰 순, 기본) | doe(doe_no 순) | var(`var` 값 순, desc로 내림). offset은 page_size 배수, limit 생략 = page_size.",
+        "properties": {
+          "desc": {
+            "default": false,
+            "title": "Desc",
+            "type": "boolean"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "offset": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Offset",
+            "type": "integer"
+          },
+          "order": {
+            "default": "change",
+            "enum": [
+              "change",
+              "doe",
+              "var"
+            ],
+            "title": "Order",
+            "type": "string"
+          },
+          "var": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Var"
+          }
+        },
+        "title": "DoePreviewSelect",
+        "type": "object"
+      },
+      "DoePreviewSource": {
+        "additionalProperties": false,
+        "description": "표본 행 출처(§5.1). train = ①-3 Native(학습 설정 기준), param_set = 세트 기준(단일 baseline), train_doe = 생성 후 갤러리(doe_id 필수).",
+        "properties": {
+          "doe_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe Id"
+          },
+          "kind": {
+            "enum": [
+              "train",
+              "param_set",
+              "train_doe"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "param_set_id": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Param Set Id"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "DoePreviewSource",
+        "type": "object"
+      },
+      "DoePreviewTiming": {
+        "properties": {
+          "matrix_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matrix S"
+          },
+          "render_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Render S"
+          },
+          "total_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total S"
+          }
+        },
+        "title": "DoePreviewTiming",
+        "type": "object"
+      },
+      "DoePreviewTopChange": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "rel": {
+            "title": "Rel",
+            "type": "number"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "rel"
+        ],
+        "title": "DoePreviewTopChange",
+        "type": "object"
+      },
       "DoeResultCounts": {
         "properties": {
           "no_response": {
@@ -6295,7 +6947,7 @@
       },
       "ExtractFilter": {
         "additionalProperties": false,
-        "description": "찾을 종류(그룹)와 조건. `groups`: thickness·height·position·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).\n`draft_max_deg`: null 또는 0 초과 45 미만(null = 설정·paicad 기본). 응답에 나올 때는 서버 정규화본(선택 안 한 그룹의 조건 제거).",
+        "description": "찾을 종류(그룹)와 조건. `groups`: thickness·height·position·rib_pitch·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).\n`draft_max_deg`: null 또는 0 초과 45 미만(null = 설정·paicad 기본). 응답에 나올 때는 서버 정규화본(선택 안 한 그룹의 조건 제거).",
         "properties": {
           "conditions": {
             "$ref": "#/components/schemas/ExtractConditions",
@@ -6318,6 +6970,7 @@
                 "thickness",
                 "height",
                 "position",
+                "rib_pitch",
                 "hole_radius",
                 "fillet"
               ],
@@ -10969,6 +11622,16 @@
             "title": "Ref Provisional",
             "type": "boolean"
           },
+          "row": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/NativeFeatureRow"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "type": {
             "default": "",
             "title": "Type",
@@ -10984,6 +11647,30 @@
           "name"
         ],
         "title": "NativeFeature",
+        "type": "object"
+      },
+      "NativeFeatureRow": {
+        "description": "RIB_PITCH 피처의 리브 열 소속(rib-gap.md §3.4): 열 id(U1·V1…)·열 안 피치 순번 k(1부터)·열의 리브 수 n.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "k": {
+            "title": "K",
+            "type": "integer"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "k",
+          "n"
+        ],
+        "title": "NativeFeatureRow",
         "type": "object"
       },
       "NativeFeatures": {
@@ -11022,6 +11709,20 @@
             },
             "title": "Groups",
             "type": "array"
+          },
+          "rib_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/NativeRibRow"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rib Rows"
           },
           "warnings": {
             "items": {
@@ -11189,6 +11890,108 @@
         "title": "NativePrepareRequest",
         "type": "object"
       },
+      "NativeRib": {
+        "properties": {
+          "center": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Center"
+          },
+          "index": {
+            "title": "Index",
+            "type": "integer"
+          },
+          "thickness": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thickness"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "title": "NativeRib",
+        "type": "object"
+      },
+      "NativeRibRow": {
+        "description": "리브 열(rib-gap.md §3.4) — 화면 툴팁용(기준 리브·끝 여유·리브 두께·중심). 면 id·서명은 싣지 않는다.",
+        "properties": {
+          "anchor": {
+            "default": "",
+            "title": "Anchor",
+            "type": "string"
+          },
+          "axis": {
+            "default": "",
+            "title": "Axis",
+            "type": "string"
+          },
+          "body": {
+            "default": "",
+            "title": "Body",
+            "type": "string"
+          },
+          "end_limited_by": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "End Limited By",
+            "type": "object"
+          },
+          "end_room_mm": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "End Room Mm",
+            "type": "object"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "ribs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/NativeRib"
+            },
+            "title": "Ribs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "NativeRibRow",
+        "type": "object"
+      },
       "NativeVarHistory": {
         "properties": {
           "count": {
@@ -11319,6 +12122,16 @@
             "default": false,
             "title": "Ref Locked",
             "type": "boolean"
+          },
+          "rib": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarRib"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "train": {
             "anyOf": [
@@ -18500,6 +19313,16 @@
               }
             ]
           },
+          "doe_preview": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FeatureState"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "equiv_check": {
             "anyOf": [
               {
@@ -21524,6 +22347,301 @@
         "title": "TrainRunResult",
         "type": "object"
       },
+      "TrainSamplingBbd": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "bbd",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TrainSamplingBbd",
+        "type": "object"
+      },
+      "TrainSamplingCcd": {
+        "additionalProperties": false,
+        "properties": {
+          "alpha": {
+            "default": "face",
+            "enum": [
+              "face",
+              "inscribed"
+            ],
+            "title": "Alpha",
+            "type": "string"
+          },
+          "kind": {
+            "const": "ccd",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TrainSamplingCcd",
+        "type": "object"
+      },
+      "TrainSamplingFracfact": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "fracfact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "resolution": {
+            "default": 5,
+            "enum": [
+              4,
+              5
+            ],
+            "title": "Resolution",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TrainSamplingFracfact",
+        "type": "object"
+      },
+      "TrainSamplingFullfact": {
+        "additionalProperties": false,
+        "description": "levels {변수: 수준 수 1~10}(생략한 변수 = 2).",
+        "properties": {
+          "kind": {
+            "const": "fullfact",
+            "title": "Kind",
+            "type": "string"
+          },
+          "levels": {
+            "additionalProperties": {
+              "maximum": 10.0,
+              "minimum": 1.0,
+              "type": "integer"
+            },
+            "title": "Levels",
+            "type": "object"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TrainSamplingFullfact",
+        "type": "object"
+      },
+      "TrainSamplingHalton": {
+        "additionalProperties": false,
+        "description": "doe-methods.md DM-C3: Halton(스크램블 QMC) — count 2~train_data.platform_max_runs, seed 0~4294967295(기본 1).",
+        "properties": {
+          "count": {
+            "minimum": 2.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "halton",
+            "title": "Kind",
+            "type": "string"
+          },
+          "seed": {
+            "default": 1,
+            "maximum": 4294967295.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "TrainSamplingHalton",
+        "type": "object"
+      },
+      "TrainSamplingLhs": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 2.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "lhs",
+            "title": "Kind",
+            "type": "string"
+          },
+          "seed": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "TrainSamplingLhs",
+        "type": "object"
+      },
+      "TrainSamplingLhsOpt": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 2.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "criterion": {
+            "default": "maximin",
+            "enum": [
+              "maximin",
+              "corr"
+            ],
+            "title": "Criterion",
+            "type": "string"
+          },
+          "kind": {
+            "const": "lhs_opt",
+            "title": "Kind",
+            "type": "string"
+          },
+          "seed": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "TrainSamplingLhsOpt",
+        "type": "object"
+      },
+      "TrainSamplingPb": {
+        "additionalProperties": false,
+        "properties": {
+          "kind": {
+            "const": "pb",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind"
+        ],
+        "title": "TrainSamplingPb",
+        "type": "object"
+      },
+      "TrainSamplingRandom": {
+        "additionalProperties": false,
+        "description": "doe-methods.md DM-C3: 균일 랜덤 — count 2~상한, seed 0 이상(기본 1).",
+        "properties": {
+          "count": {
+            "minimum": 2.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "random",
+            "title": "Kind",
+            "type": "string"
+          },
+          "seed": {
+            "default": 1,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "TrainSamplingRandom",
+        "type": "object"
+      },
+      "TrainSamplingSobol": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 4.0,
+            "title": "Count",
+            "type": "integer"
+          },
+          "kind": {
+            "const": "sobol",
+            "title": "Kind",
+            "type": "string"
+          },
+          "seed": {
+            "default": 1,
+            "maximum": 4294967295.0,
+            "minimum": 0.0,
+            "title": "Seed",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "kind",
+          "count"
+        ],
+        "title": "TrainSamplingSobol",
+        "type": "object"
+      },
+      "TrainSamplingTable": {
+        "additionalProperties": false,
+        "description": "doe-methods.md DM-C3: 사용자 설계표(CSV·붙여넣기 본문 문자열, 파일 업로드 아님). 첫 줄 = ①-2 사용 파라미터 이름 전부(순서 무관),\n행 2~상한, 값은 학습 범위(min~max) 안(밖이면 TABLE_OUT_OF_RANGE).",
+        "properties": {
+          "kind": {
+            "const": "table",
+            "title": "Kind",
+            "type": "string"
+          },
+          "text": {
+            "maxLength": 16777216,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "text"
+        ],
+        "title": "TrainSamplingTable",
+        "type": "object"
+      },
+      "TrainSamplingTrainDoe": {
+        "additionalProperties": false,
+        "description": "equiv-check.md Q1(2026-10-20): 같은 Study의 다른 DOE(READY, 표본표 PARSED/PARTIAL) samples.csv 행 그대로 — run 이름을 유지해\n등가성 판정의 쌍 매칭 키로 쓴다. 파라미터 이름 집합이 같을 때만(native·altair 모두).",
+        "properties": {
+          "doe_id": {
+            "maxLength": 64,
+            "title": "Doe Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "train_doe",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "doe_id"
+        ],
+        "title": "TrainSamplingTrainDoe",
+        "type": "object"
+      },
       "TrainSetup": {
         "properties": {
           "cad": {
@@ -22398,6 +23516,60 @@
         "title": "VarRange",
         "type": "object"
       },
+      "VarRib": {
+        "description": "RIB_PITCH 변수의 리브 열 요약(rib-gap.md §8 행 툴팁 \"열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm\"): 열 id·열 안 순번 k·리브 수 n·\n기준(rib:<m> | mid:<h>)·공칭 빈 간격(피치 − 두께 반합)·끝 여유(minus·plus).",
+        "properties": {
+          "anchor": {
+            "default": "",
+            "title": "Anchor",
+            "type": "string"
+          },
+          "end_room_mm": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "End Room Mm",
+            "type": "object"
+          },
+          "gap_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gap Mm"
+          },
+          "k": {
+            "title": "K",
+            "type": "integer"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "row": {
+            "title": "Row",
+            "type": "string"
+          }
+        },
+        "required": [
+          "row",
+          "k",
+          "n"
+        ],
+        "title": "VarRib",
+        "type": "object"
+      },
       "VarRow": {
         "description": "미리보기 표 초기화 행(⑥ `var_rows`·④ 일괄 `var_rows`): 유효 변수 1개의 기준 범위·학습 범위·모핑 가능 범위.",
         "properties": {
@@ -22437,6 +23609,16 @@
             "default": false,
             "title": "Position",
             "type": "boolean"
+          },
+          "rib": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VarRib"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "train": {
             "anyOf": [
@@ -24345,6 +25527,178 @@
         "tags": [
           "datasets"
         ]
+      }
+    },
+    "/physicsai/api/doe-previews/{preview_id}": {
+      "get": {
+        "description": "미리보기 상태·셀(렌더가 끝난 만큼 채워짐, 화면은 실행 중 1초 간격 폴링·종료 시 멈춤). train_doe는 셀마다 생성 결과(gen).",
+        "operationId": "get_doe_preview_physicsai_api_doe_previews__preview_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "preview_id",
+            "required": true,
+            "schema": {
+              "title": "Preview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Get Doe Preview",
+        "tags": [
+          "doe-preview"
+        ],
+        "x-mcp": {
+          "exclude": "화면 전용 형상 그림 생성"
+        }
+      }
+    },
+    "/physicsai/api/doe-previews/{preview_id}/cancel": {
+      "post": {
+        "description": "[취소](요청자·관리자): 작업 취소 플래그 — 완료 청크 셀은 캐시에 남는다. 끝난 미리보기는 409 JOB_TERMINAL.",
+        "operationId": "cancel_doe_preview_physicsai_api_doe_previews__preview_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "preview_id",
+            "required": true,
+            "schema": {
+              "title": "Preview Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Cancel Doe Preview",
+        "tags": [
+          "doe-preview"
+        ],
+        "x-mcp": {
+          "exclude": "화면 전용 형상 그림 생성"
+        }
       }
     },
     "/physicsai/api/equiv-checks/{eq_id}": {
@@ -32863,6 +34217,112 @@
         "tags": [
           "datasets"
         ]
+      }
+    },
+    "/physicsai/api/studies/{study_id}/doe-previews": {
+      "post": {
+        "description": "DOE 표본 형상 그리드 미리보기(power): 셀이 전부 캐시에 있으면 200(cache_hit, 작업 없음) | 202 DOE_PREVIEW(CPU 대기열).\n409 DOE_PREVIEW_UNSUPPORTED·GEOM_PREP_STALE·DOE_PREVIEW_UNAVAILABLE·STUDY_CLEANUP_RUNNING, 422 DOE_SAMPLING_INVALID, 429 PREVIEW_BUSY.",
+        "operationId": "create_doe_preview_physicsai_api_studies__study_id__doe_previews_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "study_id",
+            "required": true,
+            "schema": {
+              "title": "Study Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DoePreviewReq"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoePreview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DoePreview"
+                }
+              }
+            },
+            "description": "QUEUED·RUNNING — GET /doe-previews/{id}로 1초 간격 폴링"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unprocessable Entity"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Too Many Requests"
+          }
+        },
+        "summary": "Create Doe Preview",
+        "tags": [
+          "doe-preview"
+        ],
+        "x-mcp": {
+          "exclude": "화면 전용 형상 그림 생성"
+        }
       }
     },
     "/physicsai/api/studies/{study_id}/equiv-checks": {

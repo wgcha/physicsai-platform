@@ -13,7 +13,7 @@ from typing import Any
 from sqlalchemy import Table, and_, func, or_, select, update
 from sqlalchemy.engine import Connection
 
-from ..tables import contour3d_cache, geom_previews
+from ..tables import contour3d_cache, doe_preview_cells, geom_previews
 from .jobs import row_dict
 
 LIVE = ("QUEUED", "RUNNING", "DONE")
@@ -28,6 +28,7 @@ def _t(t: Table | str) -> Table:
 ART_COLS: dict[str, tuple[str, ...]] = {
     "geom_previews": ("glb_artifact_id", "fe_glb_artifact_id", "manifest_artifact_id"),
     "contour3d_cache": ("glb_artifact_id", "frames_artifact_id", "manifest_artifact_id"),
+    "doe_preview_cells": ("png_artifact_id", "glb_artifact_id", "manifest_artifact_id"),  # doe-preview.md §6.7
 }
 
 
@@ -81,7 +82,7 @@ def queued_previews(conn: Connection, user_id: str, param_set_id: str) -> list[d
 
 def by_artifact(conn: Connection, artifact_id: str) -> tuple[str, dict[str, Any]] | None:
     """산출물 id를 가진 캐시 행(테이블 이름, 행) — 410 ARTIFACT_EXPIRED 판정용(산출물 행이 지워져도 id는 남는다)."""
-    for t in (geom_previews, contour3d_cache):
+    for t in (geom_previews, contour3d_cache, doe_preview_cells):
         cols = [t.c[c] for c in ART_COLS[t.name]]
         r = conn.execute(select(t).where(or_(*[c == artifact_id for c in cols])).limit(1)).first()
         if r is not None:

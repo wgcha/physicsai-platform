@@ -21,7 +21,9 @@ from .features_view import feature_rows
 
 SCHEMA_VERSION = 1
 POSITION_TYPES = frozenset(GROUP_TYPES["position"])
-DISPLAY_KEYS = ("origin", "train", "feasible", "ref_locked")  # 스냅숏 행 중 표시·경고 재현용 키(`apply`가 뺀다, ref_locked는 true일 때만 기록)
+RIB_PITCH_TYPES = frozenset(GROUP_TYPES["rib_pitch"])  # 길이 mm(좌표 아님) — `position` 표시는 false(rib-gap.md §8)
+RIB_PITCH_CODE = "RIB_PITCH_JOINT_RANGE"
+DISPLAY_KEYS = ("origin", "train", "feasible", "ref_locked", "rib")  # 스냅숏 행 중 표시·경고 재현용 키(`apply`가 뺀다, ref_locked는 true일 때만 기록)
 PROP_SOURCE = "prop"
 SHELL_SOURCE = "shell"
 
@@ -75,6 +77,7 @@ def pool(doc: Mapping[str, Any] | None, *, kind: str = "solid", component: str |
 
         shell_names = {r["name"] for r in shell_rows(doc, component or "")[0]}
     reps, members = _rep_names(doc)
+    raw = {str(f["name"]): f for f in doc.get("features") or [] if isinstance(f, Mapping) and isinstance(f.get("name"), str)}
     out: list[dict[str, Any]] = []
     for r in feature_rows(dict(doc)):
         n = r["name"]
@@ -91,8 +94,55 @@ def pool(doc: Mapping[str, Any] | None, *, kind: str = "solid", component: str |
             "feasible": r["feasible"], "ref_locked": bool(r["ref_locked"]), "group": r["group"]}
         if shell_names is not None:
             e["source"] = SHELL_SOURCE
+        if r["type"] in RIB_PITCH_TYPES and (rib := _rib_info(doc, raw, n, r)) is not None:
+            e["rib"] = rib
         out.append(e)
     return out
+
+
+def rib_public(rib: Any) -> dict[str, Any] | None:
+    """변수 풀·표 행에 싣는 리브 열 요약(rib-gap.md §8 행 툴팁): {row, k, n, anchor, gap_mm, end_room_mm}. 없으면 None."""
+    if not isinstance(rib, Mapping) or not isinstance(rib.get("row"), str):
+        return None
+    room = rib.get("end_room_mm") if isinstance(rib.get("end_room_mm"), Mapping) else {}
+    return {"row": rib["row"], "k": int(rib["k"]), "n": int(rib["n"]), "anchor": str(rib.get("anchor") or ""), "gap_mm": _num(rib.get("gap_mm")),
+            "end_room_mm": {"minus": _num(room.get("minus")), "plus": _num(room.get("plus"))}}
+
+
+def _link(raw: Mapping[str, Mapping[str, Any]], body: Any, types: Iterable[str], faces: set[str]) -> str | None:
+    """측면 id가 겹치는 같은 바디의 피처 이름(RIB_THICKNESS·RIB_POS가 어느 리브 것인지)."""
+    for n, f in raw.items():
+        if f.get("type") in types and f.get("body") == body and faces & {x for x in (f.get("measure") or {}).get("faces") or [] if isinstance(x, str)}:
+            return n
+    return None
+
+
+def _rib_info(doc: Mapping[str, Any], raw: Mapping[str, Mapping[str, Any]], name: str, row_feat: Mapping[str, Any]) -> dict[str, Any] | None:
+    """RIB_PITCH 풀 항목의 열 정보(rib-gap.md §3.4·§5): 열 id·순번·기준·끝 여유·리브(두께·연결된 RIB_THICKNESS·RIB_POS 변수 이름).
+    `rib_rows`가 없거나 모양이 아니면 None(경고만 생략, 변수는 그대로)."""
+    f = raw.get(name) or {}
+    r = f.get("row")
+    if not (isinstance(r, Mapping) and isinstance(r.get("id"), str) and isinstance(r.get("k"), int) and isinstance(r.get("n"), int)):
+        return None
+    rr = next((x for x in doc.get("rib_rows") or [] if isinstance(x, Mapping) and x.get("id") == r["id"] and x.get("body") == f.get("body")), None)
+    if rr is None or not isinstance(rr.get("anchor"), str):
+        return None
+    room = rr.get("end_room_mm") if isinstance(rr.get("end_room_mm"), Mapping) else {}
+    ribs: list[dict[str, Any]] = []
+    for b in rr.get("ribs") or []:
+        if not (isinstance(b, Mapping) and isinstance(b.get("index"), int)):
+            continue
+        faces = {str(b[k]) for k in ("minus", "plus") if isinstance(b.get(k), str)}
+        ribs.append({"index": int(b["index"]), "thickness": _num(b.get("thickness")),
+                     "thk": _link(raw, f.get("body"), ("RIB_THICKNESS",), faces), "pos": _link(raw, f.get("body"), ("RIB_POS_U", "RIB_POS_V"), faces)})
+    t = {x["index"]: x["thickness"] for x in ribs}
+    k = int(r["k"])
+    gap = None
+    nom = _num(row_feat.get("nominal"))
+    if nom is not None and t.get(k) is not None and t.get(k + 1) is not None:
+        gap = round(nom - (t[k] + t[k + 1]) / 2, 6)  # 공칭 빈 간격 = 피치 − 두께 반합
+    return {"row": r["id"], "k": k, "n": int(r["n"]), "anchor": rr["anchor"], "gap_mm": gap, "axis": rr.get("axis") if isinstance(rr.get("axis"), str) else "",
+            "end_room_mm": {"minus": _num(room.get("minus")), "plus": _num(room.get("plus"))}, "ribs": ribs}
 
 
 def altair_pool(decls: Sequence[Mapping[str, Any]], tpl_rows: Sequence[Mapping[str, Any]],
@@ -199,7 +249,7 @@ def effective(set_rows: Sequence[Mapping[str, Any]], entries: Sequence[Mapping[s
             continue
         e = by_pool.get(n)
         rows.append({**r, "origin": "set", "train": _rng(tr.get(n)), "feasible": _feas(e.get("feasible")) if e else None,
-                     **({"ref_locked": True} if e and e.get("ref_locked") else {})})
+                     **({"ref_locked": True} if e and e.get("ref_locked") else {}), **({"rib": e["rib"]} if e and e.get("rib") else {})})
     for e in entries:  # 풀 순서
         n = str(e["name"])
         if n in plus and n not in set_names and n in by_pool:
@@ -209,7 +259,7 @@ def effective(set_rows: Sequence[Mapping[str, Any]], entries: Sequence[Mapping[s
             if e.get("source"):
                 row["source"] = e["source"]
             rows.append({**row, "origin": "added", "train": _rng(tr.get(n)), "feasible": _feas(e.get("feasible")),
-                         **({"ref_locked": True} if e.get("ref_locked") else {})})
+                         **({"ref_locked": True} if e.get("ref_locked") else {}), **({"rib": e["rib"]} if e.get("rib") else {})})
     doc = {"schema_version": SCHEMA_VERSION, "set_revision": int(set_revision), "edited": bool(add or exclude), "variables": rows,
            "excluded": [n for n in set_names if n in drop], "train_source": dict(train_source) if train_source else None}
     return doc, problems
@@ -280,6 +330,98 @@ def warn_rows(vars_doc: Mapping[str, Any], bounds: Mapping[str, Sequence[float]]
         if lo is None or hi is None:
             continue
         out += _notes_for(v, lo, hi, bool(v.get("ref_locked")))
+    return out + rib_pitch_notes(vars_doc, bounds)
+
+
+def _bounds_of(v: Mapping[str, Any], bounds: Mapping[str, Sequence[float]] | None) -> tuple[float, float] | None:
+    b = (bounds or {}).get(str(v["name"]))
+    lo = _num(b[0]) if b is not None and len(b) == 2 else None
+    hi = _num(b[1]) if b is not None and len(b) == 2 else None
+    if lo is None or hi is None:
+        lo, hi = _num(v.get("min")), _num(v.get("max"))
+    return (lo, hi) if lo is not None and hi is not None else None
+
+
+def _side_weights(anchor: str, k: int) -> tuple[float, float]:
+    """피치 k가 기준에서 −a·+a 쪽에 쓰는 가중치(rib-gap.md §5): rib:<m>은 k<m이 −, k≥m이 +, mid:<h>의 가운데 피치(k=h)는 양쪽 ½."""
+    kind, _, num = anchor.partition(":")
+    m = int(num) if num.isdigit() else 0
+    if kind == "rib":
+        return (1.0, 0.0) if k < m else (0.0, 1.0)
+    if kind == "mid":
+        return (1.0, 0.0) if k < m else ((0.0, 1.0) if k > m else (0.5, 0.5))
+    return (0.0, 0.0)
+
+
+def rib_pitch_notes(vars_doc: Mapping[str, Any], bounds: Mapping[str, Sequence[float]] | None = None) -> list[dict[str, str]]:
+    """RIB_PITCH 공동 범위 경고(rib-gap.md §5, 차단 없음) `RIB_PITCH_JOINT_RANGE`. 변수 행의 `rib`(풀 항목에서 복사한 열 정보)만 쓴다.
+
+    ① 열 한쪽의 (가중치 × (상한 − 공칭)) 합 + 그쪽 끝 리브의 두께 증가 ½ > 그쪽 끝 여유
+    ② 가운데 RIB_POS(홀수 열)를 함께 쓰면 ① 합에 그 방향 이동 범위를 더해 같은 판정(같은 경고)
+    ③ 이웃 두 리브의 RIB_THICKNESS 상한 반합 + 최소 간격 > 피치 하한 — 최소 간격은 피치의 모핑 가능 하한(`feasible.min` = 공칭 두께 반합 +
+       `min_gap_mm`)에서 거꾸로 얻는다(옵션 값을 플랫폼이 따로 알 필요 없음). 변수로 고르지 않은 두께는 증가 0으로 본다."""
+    rows = {str(v["name"]): v for v in vars_doc.get("variables") or [] if isinstance(v, Mapping) and "name" in v}
+    out: list[dict[str, str]] = []
+    by_row: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    for v in rows.values():
+        rib = v.get("rib")
+        if isinstance(rib, Mapping) and isinstance(rib.get("row"), str):
+            by_row.setdefault((str(rib.get("row")), str(rib.get("axis") or "")), []).append(v)
+    for (rid, _axis), vs in by_row.items():
+        first = vs[0]["rib"]
+        anchor, room, ribs = str(first.get("anchor") or ""), first.get("end_room_mm") or {}, first.get("ribs") or []
+        grow = {"minus": 0.0, "plus": 0.0}
+        used: dict[str, list[str]] = {"minus": [], "plus": []}
+        for v in vs:
+            rng = _bounds_of(v, bounds)
+            nom = _num(v.get("nominal"))
+            if rng is None or nom is None:
+                continue
+            wm, wp = _side_weights(anchor, int(v["rib"]["k"]))
+            up = max(0.0, rng[1] - nom)
+            for side, w in (("minus", wm), ("plus", wp)):
+                if w:
+                    grow[side] += w * up
+                    used[side].append(str(v["name"]))
+        end_idx = {"minus": 1, "plus": int(first.get("n") or 0)}
+        for side in ("minus", "plus"):  # 끝 리브 두께 증가의 ½도 끝 여유를 쓴다
+            rib = next((b for b in ribs if b.get("index") == end_idx[side]), None)
+            tv = rows.get(str((rib or {}).get("thk"))) if rib else None
+            rng = _bounds_of(tv, bounds) if tv is not None else None
+            if rib is not None and rng is not None and _num(rib.get("thickness")) is not None:
+                grow[side] += max(0.0, rng[1] - float(rib["thickness"])) / 2
+        pos_up = {"minus": 0.0, "plus": 0.0}
+        kind, _, num = anchor.partition(":")
+        mid = next((b for b in ribs if kind == "rib" and num.isdigit() and b.get("index") == int(num)), None)
+        pv = rows.get(str((mid or {}).get("pos"))) if mid else None
+        prng = _bounds_of(pv, bounds) if pv is not None else None
+        pnom = _num(pv.get("nominal")) if pv is not None else None
+        if prng is not None and pnom is not None:
+            pos_up = {"minus": max(0.0, pnom - prng[0]), "plus": max(0.0, prng[1] - pnom)}
+        for side, label in (("minus", "−"), ("plus", "+")):
+            r = _num(room.get(side))
+            if r is None or not used[side] and not pos_up[side]:
+                continue
+            total = grow[side] + pos_up[side]
+            if total > r + FEASIBLE_TOL * max(1.0, abs(r)):
+                with_pos = "가운데 리브 위치 범위와 " if pos_up[side] else ""
+                out.append(_note(RIB_PITCH_CODE, (used[side] or [str(vs[0]["name"])])[0],
+                                 f"같은 리브 열({rid})의 {label}쪽 {with_pos}피치 상한 합이 끝 여유 {_g(r)} mm를 넘습니다 — 일부 샘플이 형상 생성에 실패할 수 있습니다"))
+        for v in vs:  # 두께 상한에서 빈 간격 부족(피치마다)
+            k = int(v["rib"]["k"])
+            pair = [next((b for b in ribs if b.get("index") == i), None) for i in (k, k + 1)]
+            feas, rng = _feas(v.get("feasible")), _bounds_of(v, bounds)
+            if None in pair or feas is None or feas["min"] is None or rng is None or any(_num(b.get("thickness")) is None for b in pair):
+                continue
+            margin = rng[0] - feas["min"]  # 피치 하한이 모핑 가능 하한(= 두께 반합 + 최소 간격)보다 얼마나 위에 있는가
+            inc = 0.0
+            for b in pair:
+                tv = rows.get(str(b.get("thk")))
+                trng = _bounds_of(tv, bounds) if tv is not None else None
+                if trng is not None:
+                    inc += max(0.0, trng[1] - float(b["thickness"])) / 2
+            if inc > margin + FEASIBLE_TOL * max(1.0, abs(rng[0])):
+                out.append(_note(RIB_PITCH_CODE, str(v["name"]), f"'{v['name']}' 리브 두께 상한에서 빈 간격이 최소 간격보다 작아질 수 있습니다"))
     return out
 
 
@@ -319,7 +461,8 @@ def var_rows(vars_doc: Mapping[str, Any], entries: Iterable[Mapping[str, Any]]) 
         out.append({"name": n, "origin": v.get("origin") or "set", "nominal": _num(v.get("nominal")),
                     "base": {"min": _num(v.get("min")), "max": _num(v.get("max"))}, "train": _rng(v.get("train")),
                     "feasible": _feas(v.get("feasible")), "unit": v.get("unit") or "",
-                    "position": bool((typ.get(n) or {}).get("position"))})
+                    "position": bool((typ.get(n) or {}).get("position")),
+                    **({"rib": rb} if (rb := rib_public(v.get("rib") or (typ.get(n) or {}).get("rib"))) is not None else {})})
     return out
 
 

@@ -111,7 +111,9 @@ def test_null_optional_templates_ok():
         # 단계 4C 쉘 판금(shell-morph §8.1)·3D 가시화(geometry-view §6.1)·결과 3D 컨투어(§13.3)
         "paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
         "paicad_shell_check", "paicad_shell_run", "paicad_view_export", "paicad_view_preview", "paicad_shell_view_export",
-        "paicad_shell_view_preview", "contour_extract"}
+        "paicad_shell_view_preview", "contour_extract",
+        # DOE 표본 형상 그리드 미리보기(doe-preview.md §6.5)
+        "paicad_view_grid", "paicad_shell_view_grid"}
 
 
 def test_null_template_render_is_not_configured():

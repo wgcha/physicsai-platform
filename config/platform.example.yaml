@@ -251,6 +251,17 @@ asm_match:
   timeout_s: 600                   # asm parts(목록 읽기) 1회 시간 상한(초)
   check_timeout_s: null            # asm check(경계 검사, 고급 옵션) 1회 상한(초). null = 상한 없음(대형 모델 수십 분). 취소는 항상 가능
 
+# DOE 표본 형상 그리드 미리보기(doe-preview.md §6.5): ①-3 Native 단일 baseline의 표본을 서버 썸네일 PNG 격자로(생성 전 미리보기 + 생성 후 갤러리). CPU 대기열
+doe_preview:
+  enabled: true                    # features.doe_preview = enabled + commands.paicad_view_grid 비null + paicad 실행 파일 존재
+  page_size: 24                    # 한 페이지 셀 수(6~48, 6열×4행) — 첫 셀은 공칭
+  max_page_size: 48
+  chunk_cells: 4                   # paicad 프로세스 1개가 처리하는 셀 수(1~16)
+  parallel: 2                      # CPU 슬롯 1개 안의 동시 프로세스 수(1~4)
+  timeout_s_per_cell: 60           # 청크 시간 한도 = 청크 셀 수 × 이 값
+  max_active_per_user: 2           # 사용자별 대기+실행 상한(넘으면 429 PREVIEW_BUSY)
+  thumb: {w: 320, h: 240, view_dir: [1, -1, 1], margin: 1.15, colormap: turbo16, nominal_ghost: true}   # w·h 160~800, margin 1.0~2.0
+
 # 쉘 판금(비드) 모핑(shell-morph.md §12 Q1): 기본 대상 component = Radioss /PART 제목(대소문자 무시). 바디 이름이 다르면 cad/body_map.json
 shell: {default_component: chassis_rear}
 
@@ -318,6 +329,9 @@ commands:
   # 쉘 뷰(paicad 0.10.0+ `paicad shell view`). ①-1 TX_VIEW는 --fixed-dir, 3S 두께가 없으면 --thickness 생략
   paicad_shell_view_export: ["{paicad}", "shell", "view", "export", "--cad", "{cad_input}", "--features", "{features_json}", "--fixed-dir", "{fixed_dir}", "--view-options", "{view_options_json}", "--out-dir", "{out_dir}"]
   paicad_shell_view_preview: ["{paicad}", "shell", "view", "preview", "--cad", "{cad_input}", "--features", "{features_json}", "--values", "{values_json}", "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}", "--thickness", "{thickness_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
+  # DOE 표본 형상 그리드(doe-preview.md §3.1, paicad 0.14.0+). --tag-dir(①-1 기반 train 출처는 tag 없음)·--fixed-dir(①-1 쉘)은 값이 없으면 인자 쌍째 생략
+  paicad_view_grid: ["{paicad}", "view", "grid", "--cad", "{cad_input}", "--features", "{features_json}", "--cells", "{cells_json}", "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--thumb-options", "{thumb_options_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
+  paicad_shell_view_grid: ["{paicad}", "shell", "view", "grid", "--cad", "{cad_input}", "--features", "{features_json}", "--cells", "{cells_json}", "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--thumb-options", "{thumb_options_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
   contour_extract: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"]   # 결과 3D 컨투어(geometry-view.md §13.3): {contour_extract_tcl} = 캐시 폴더에 복사한 TCL(옆에 extract_settings.tcl)
 
 commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원본 2_run_hst_gen_rad_input.py:65-67)

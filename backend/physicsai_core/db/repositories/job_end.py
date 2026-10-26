@@ -31,6 +31,10 @@ def _side_effects_on_end(conn: Connection, job: dict[str, Any], state: str) -> N
         from . import geom_view as gv_repo
 
         gv_repo.on_job_end(conn, job, state)
+    if job["job_type"] == "DOE_PREVIEW":  # doe-preview.md §6.1: 미리보기 행 FAILED·CANCELED(완료 청크 셀 캐시는 유지)
+        from . import doe_preview as dp_repo
+
+        dp_repo.on_job_end(conn, job, state)
     if state == SUCCEEDED:
         return
     res = job.get("result") or {}

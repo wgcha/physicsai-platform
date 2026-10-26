@@ -101,3 +101,28 @@ class AsmMatchCfg(_M):
     worst_nodes: int = 2000
     timeout_s: float = 600  # 목록 읽기(asm parts) 1회 상한(초) — 스트리밍 파싱·캐시라 정상이면 짧고, 멈춤 감지용
     check_timeout_s: float | None = None  # 행 검사(asm check) 1회 상한(초). null = 상한 없음(대형 모델 수십 분, AM-C3). 취소는 항상 가능
+
+
+class DoePreviewThumbCfg(_M):
+    """썸네일 옵션(doe-preview.md §3.3). 계산값(`disp_range_mm`)은 플랫폼이 표본 범위에서 정해 `thumb_options.json`에 더한다."""
+
+    w: int = 320
+    h: int = 240
+    view_dir: list[float] = Field(default_factory=lambda: [1.0, -1.0, 1.0])
+    margin: float = 1.15
+    colormap: str = "turbo16"
+    nominal_ghost: bool = True
+
+
+class DoePreviewCfg(_M):
+    """DOE 표본 형상 그리드 미리보기(doe-preview.md §6.5). 절이 없으면 이 기본값. `features.doe_preview` = enabled + paicad_view_grid 비null + 실행 파일 존재.
+    캐시 보관 기간·총량은 `geometry.view.cache`와 합산해 쓴다(GV §6.6)."""
+
+    enabled: bool = True
+    page_size: int = 24  # 6~48
+    max_page_size: int = 48
+    chunk_cells: int = 4  # 1~16 — paicad 프로세스 1개가 처리하는 셀 수
+    parallel: int = 2  # 1~4 — CPU 슬롯 1개 안의 동시 프로세스 수
+    timeout_s_per_cell: float = 60  # 청크 시간 한도 = 청크 셀 수 × 이 값
+    max_active_per_user: int = 2  # 사용자별 대기+실행 미리보기 상한(넘으면 429 PREVIEW_BUSY)
+    thumb: DoePreviewThumbCfg = Field(default_factory=DoePreviewThumbCfg)

@@ -8,7 +8,7 @@ from pydantic import Field
 
 from .common import Req, Resp
 
-__all__ = ["VarsEdit", "NativeVarItem", "NativeVarsUpdate", "VarRange", "VarFeasible", "VarNote", "NativeVarPoolRow",
+__all__ = ["VarsEdit", "NativeVarItem", "NativeVarsUpdate", "VarRange", "VarFeasible", "VarNote", "VarRib", "NativeVarPoolRow",
            "NativeVarHistory", "NativeVars", "VarRow"]
 
 MAX_VARS = 300  # 풀 크기 상한(실물 수십~백여 개) — 요청 본문 크기 방어
@@ -54,6 +54,18 @@ class VarNote(Resp):
     message: str
 
 
+class VarRib(Resp):
+    """RIB_PITCH 변수의 리브 열 요약(rib-gap.md §8 행 툴팁 "열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm"): 열 id·열 안 순번 k·리브 수 n·
+    기준(rib:<m> | mid:<h>)·공칭 빈 간격(피치 − 두께 반합)·끝 여유(minus·plus)."""
+
+    row: str
+    k: int
+    n: int
+    anchor: str = ""
+    gap_mm: float | None = None
+    end_room_mm: dict[str, float | None] = Field(default_factory=dict)
+
+
 class NativeVarPoolRow(Resp):
     name: str
     type: str | None = ""  # Altair 풀은 null
@@ -68,6 +80,7 @@ class NativeVarPoolRow(Resp):
     train: VarRange | None = None  # model_id를 줬고 학습 범위를 알 때만
     integer: bool = False  # Altair: tpl 형식이 정수(i·d) — 하한·상한은 정수여야 함(저장 검증 VAR_RANGE_INVALID). Native는 항상 false
     range_unset: bool = False  # Altair: 표·선언 어디에도 범위가 없어 default_range = [공칭, 공칭] — 화면 "범위를 입력하세요"
+    rib: VarRib | None = None  # RIB_PITCH만(rib_rows가 있을 때)
 
 
 class NativeVarHistory(Resp):
@@ -105,3 +118,4 @@ class VarRow(Resp):
     feasible: VarFeasible | None = None
     unit: str = ""
     position: bool = False
+    rib: VarRib | None = None  # RIB_PITCH만
