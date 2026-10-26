@@ -15,17 +15,20 @@ GROUP_TYPES: dict[str, tuple[str, ...]] = {
     "thickness": ("THICKNESS", "RIB_THICKNESS", "POCKET_WIDTH"),
     "height": ("RIB_HEIGHT", "POCKET_DEPTH"),
     "position": ("HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V"),
+    "rib_pitch": ("RIB_PITCH_U", "RIB_PITCH_V"),  # rib-gap.md §8: 독립 돌출 리브 열의 이웃 중심 간 거리(조건 없음)
     "hole_radius": ("HOLE_RADIUS",),
     "fillet": ("FILLET_RADIUS",),
 }
 GROUP_ORDER: tuple[str, ...] = tuple(GROUP_TYPES)
-GROUP_LABELS = {"thickness": "두께", "height": "높이·깊이", "position": "위치(구멍·리브)", "hole_radius": "구멍 반경", "fillet": "필렛"}
+GROUP_LABELS = {"thickness": "두께", "height": "높이·깊이", "position": "위치(구멍·리브)",
+                "rib_pitch": "리브 간격(피치)", "hole_radius": "구멍 반경", "fillet": "필렛"}
 
 # 그룹 → 그 그룹에 속한 조건 키(§4.2). 범위형은 {min, max}, 나머지는 양수 하나.
 GROUP_CONDITIONS: dict[str, tuple[str, ...]] = {
     "thickness": ("thickness_mm", "face_area_min_mm2"),
     "height": ("height_mm",),
     "position": ("position_min_size_mm",),
+    "rib_pitch": (),  # 조건 없음
     "hole_radius": ("hole_radius_min_mm",),
     "fillet": ("fillet_radius_min_mm",),
 }
@@ -44,13 +47,14 @@ STATS_JSON = "extract_stats.json"
 TYPE_LABELS = {
     "THICKNESS": "두께", "RIB_THICKNESS": "리브 두께", "POCKET_WIDTH": "포켓 폭", "RIB_HEIGHT": "리브 높이", "POCKET_DEPTH": "포켓 깊이",
     "HOLE_RADIUS": "구멍 반경", "HOLE_POS_U": "구멍 위치 U", "HOLE_POS_V": "구멍 위치 V", "FILLET_RADIUS": "필렛 반경",
-    "RIB_POS_U": "리브 위치 U", "RIB_POS_V": "리브 위치 V",
+    "RIB_POS_U": "리브 위치 U", "RIB_POS_V": "리브 위치 V", "RIB_PITCH_U": "리브 피치 U", "RIB_PITCH_V": "리브 피치 V",
 }
 # 제외 사유(EF-C1 §5 `excluded` 키) — 모르는 키는 원문 키로 표시
 EXCLUDED_LABELS = {
     "face_area": "면적", "thickness_range": "범위", "not_mutual": "비상호", "no_overlap": "겹침 없음",
     "not_thinner_than_height": "높이보다 두꺼움", "height_range": "범위", "hole_radius_min": "반경", "fillet_radius_min": "반경",
     "position_min_size": "최소 크기", "shape": "측면 형상", "base_axis": "축 비정렬",
+    "not_slender": "기둥형", "row_branch": "열 분기", "row_single": "이웃 없음", "row_member": "간격 열 소속",  # rib-gap.md §8
 }
 # 리브 후보 탈락 사유(EF-C1 `rib_rejects` 7키)
 RIB_REJECT_LABELS = {

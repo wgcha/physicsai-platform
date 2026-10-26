@@ -17,6 +17,7 @@ from .predict_batch import predict_batch_runs, predict_batches
 from .surrogate_opt import surrogate_opt_iters, surrogate_opts
 from .fem_verify import fem_verifications
 from .geom_view import contour3d_cache, geom_previews
+from .doe_preview import doe_preview_cells, doe_previews
 from .equiv_check import eq_checks, eq_recipes
 from .mcp import api_audit, api_tokens, mcp_plans
 from .uploads import uploads
@@ -51,6 +52,8 @@ __all__ = [
     "fem_verifications",
     "geom_previews",
     "contour3d_cache",
+    "doe_previews",
+    "doe_preview_cells",
     "eq_recipes",
     "eq_checks",
     "api_tokens",

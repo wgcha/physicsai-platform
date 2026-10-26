@@ -579,6 +579,7 @@ MCP_JOB_EXCLUDED: dict[str, str] = {
     "PARAM_SET_NATIVE": "내부·후속 단계",
     "PB_RESP_EXTRACT": "내부·후속 단계",
     "CONTOUR_3D": "내부·후속 단계",
+    "DOE_PREVIEW": "화면 전용 형상 그림 생성",  # doe-preview.md §6.1: DOE 표본 형상 그리드(결과 엔티티 SUMMARIES 등록 없음)
     "CONTOUR_RECAPTURE": "내부·후속 단계",
     "PREDICT_VERIFY": "내부·후속 단계",
     "STUDY_STORAGE_SCAN": "관리",

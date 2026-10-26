@@ -119,6 +119,15 @@ class CommandsCfg(_M):
         "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--assem-dir", "{assem_dir}", "--options", "{options_json}",
         "--view-options", "{view_options_json}", "--nominal-manifest", "{nominal_manifest}", "--fe", "{fe_mode}",
         "--thickness", "{thickness_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"])
+    # DOE 표본 형상 그리드(doe-preview.md §3.1·§6.5, paicad 0.14.0+) — null이면 DOE 형상 미리보기만 꺼짐. --tag-dir·--fixed-dir은 값이 없으면 인자 쌍째 생략
+    paicad_view_grid: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "view", "grid", "--cad", "{cad_input}", "--features", "{features_json}", "--cells", "{cells_json}",
+        "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}",
+        "--thumb-options", "{thumb_options_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"])
+    paicad_shell_view_grid: list[str] | None = Field(default_factory=lambda: [
+        "{paicad}", "shell", "view", "grid", "--cad", "{cad_input}", "--features", "{features_json}", "--cells", "{cells_json}",
+        "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}",
+        "--thumb-options", "{thumb_options_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"])
     # 결과 3D 컨투어 추출(geometry-view.md §13.3) — contour3d.enabled=true일 때만 쓴다
     contour_extract: list[str] | None = Field(
         default_factory=lambda: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"])

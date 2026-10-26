@@ -14,6 +14,7 @@ from .stage3_model import *  # noqa: F401,F403
 from .stage4_predict import *  # noqa: F401,F403
 from .geometry import *  # noqa: F401,F403
 from .asm_match import *  # noqa: F401,F403
+from .doe_preview import *  # noqa: F401,F403
 from .native_vars import *  # noqa: F401,F403
 from .predict_batch import *  # noqa: F401,F403
 from .contour_capture import *  # noqa: F401,F403

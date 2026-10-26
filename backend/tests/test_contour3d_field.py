@@ -285,4 +285,4 @@ def test_c3f_artifact_kinds_in_metadata_and_media_lists():
     assert re.search(r'^revision = "0024_contour3d_field"', mig, re.M) and re.search(r'^down_revision = "0023_doe_methods"', mig, re.M)
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0024_contour3d_field"
+    assert MIGRATION_HEAD == "0025_doe_preview"

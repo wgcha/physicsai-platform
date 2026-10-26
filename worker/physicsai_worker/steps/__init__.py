@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from . import analysis, asm_match, stage0_manage, stage1_train_data, stage2_curation, stage3_model, stage4_predict, stage5_optimize
+from . import analysis, asm_match, doe_preview, stage0_manage, stage1_train_data, stage2_curation, stage3_model, stage4_predict, stage5_optimize
 
 HANDLERS: dict[tuple[str, str], Callable[[Any], None]] = {}
-for _mod in (stage3_model, stage4_predict, stage1_train_data, stage2_curation, stage5_optimize, stage0_manage, analysis, asm_match):
+for _mod in (stage3_model, stage4_predict, stage1_train_data, stage2_curation, stage5_optimize, stage0_manage, analysis, asm_match, doe_preview):
     HANDLERS.update(_mod.HANDLERS)

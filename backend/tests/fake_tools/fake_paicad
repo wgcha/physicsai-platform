@@ -17,6 +17,8 @@
                                  RIB_POS_U/V를 types에 넣으면 기본 피처에 B_RIB_U_1·B_RIB_V_1을 더한다. features JSON 최상위 `filter`(+draft_max_deg),
                                  `extract_stats.json`(항상 작성)
   FAKE_PAICAD_RIB_REJECTS        extract_stats.json 첫 바디 rib_rejects(JSON 객체, 기본 {})
+  FAKE_PAICAD_RIB_ROWS           features 최상위 rib_rows(JSON 배열) 덮어쓰기(rib-gap.md §3.4). 기본: 필터 types에 RIB_PITCH_U/V가 있고 FAKE_PAICAD_FEATURES가 없으면
+                                 합성 열 U1(리브 4, anchor mid:2, 피치 3)·V1(리브 3, rib:2, 피치 2) + 열 양 끝 RIB_THICKNESS 2개(`RIB_ROW_SPEC`)
   FAKE_PAICAD_SLEEP_S            명령마다 대기(겹침 관측용)
   FAKE_PAICAD_PROPS              props scan이 낼 PROP 행 배열(기본: 조립 폴더 material.inc에 BRACKET(선택 가능)·PANEL(요소 두께)·LAM(TYPE9))
   FAKE_PAICAD_MAP_GRADE          map 행 등급 덮어쓰기 `<이름>:<grade>[,…]`(check|unmatched 시험)
@@ -25,7 +27,7 @@
   props apply는 PROP 정의 파일 사본 끝에 `#FAKE_PROP <id> <값>` 줄을 덧붙여 --out-dir에 쓴다(실제는 두께 필드만 교체).
   props_apply 실패: FAKE_PAICAD_FAIL=props_apply:<code>, FAKE_PAICAD_FAIL_WHEN=props_apply:<code>:<이름><op><값>
   FAKE_TOOL_RECORD / FAKE_TOOL_TRACE  호출 기록(jsonl) / 시작·끝 시각 기록
-  shell <verb> · view export|preview · shell view export|preview → fake_paicad_shell_view.py(환경변수는 그 파일 머리말)
+  shell <verb> · view export|preview|grid · shell view export|preview|grid → fake_paicad_shell_view.py(환경변수는 그 파일 머리말)
 """
 import atexit, contextlib, hashlib, json, os, shutil, sys, time
 
@@ -62,7 +64,7 @@ elif cmd == "cushion":
         sys.exit(2)
     cmd, rest = "cushion_write", rest[1:]
 elif cmd == "shell" and rest[:1] == ["view"]:
-    if len(rest) < 2 or rest[1] not in ("export", "preview"):
+    if len(rest) < 2 or rest[1] not in ("export", "preview", "grid"):
         sys.exit(2)
     cmd, rest = f"shell_view_{rest[1]}", rest[2:]
 elif cmd == "shell":
@@ -70,7 +72,7 @@ elif cmd == "shell":
         sys.exit(2)
     cmd, rest = "shell_" + rest[0].replace("-", "_"), rest[1:]
 elif cmd == "view":
-    if not rest or rest[0] not in ("export", "preview"):
+    if not rest or rest[0] not in ("export", "preview", "grid"):
         sys.exit(2)
     cmd, rest = f"view_{rest[0]}", rest[1:]
 elif cmd == "asm":
@@ -209,8 +211,51 @@ RIB_POS_FEATURES = [
     {"name": "B_RIB_V_1", "type": "RIB_POS_V", "body": "B", "nominal": 12.0, "unit": "mm", "range": {"min": 7.0, "max": 17.0, "ratio": None},
      "group": None, "ref": {"rule": "nearest_fixed", "provisional": True, "locked": False}},
 ]
+# 리브 열(rib-gap.md §3.4) 합성: 바디 B에 U1(리브 4개·짝수 → 기준 mid:2, 피치 3개)과 V1(리브 3개·홀수 → 기준 rib:2, 피치 2개). 리브 i의 측면 id는
+# F<열·10 + i>1(−a)·F…2(+a). 피치 k = 리브 k·k+1 중심 거리(20), 두께 6 → 공칭 빈 간격 14. 범위 = 공칭 ∓ 5, feasible.min = 두께 반합 + min_gap(1.0) = 7.
+RIB_ROW_SPEC = (("U", 1, 4, "mid:2", {"minus": 12.4, "plus": 18.0}), ("V", 2, 3, "rib:2", {"minus": 9.0, "plus": 9.0}))
+RIB_ROW_PITCH, RIB_ROW_THICK, RIB_ROW_MIN_GAP = 20.0, 6.0, 1.0
+
+
+def _rib_faces(rowno, i):
+    return [f"F{rowno * 10 + i}1", f"F{rowno * 10 + i}2"]
+
+
+def rib_row_features():
+    """RIB_PITCH_U/V(열마다 피치 n−1개) + 열의 양 끝 리브 RIB_THICKNESS 2개(열 U1만). rib_rows와 같은 면 id를 쓴다."""
+    out = []
+    for ax, rowno, n, _anchor, _room in RIB_ROW_SPEC:
+        for k in range(1, n):
+            out.append({"name": f"B_RIB_PITCH_{ax}_{k}", "type": f"RIB_PITCH_{ax}", "body": "B", "nominal": RIB_ROW_PITCH, "unit": "mm",
+                        "range": {"min": RIB_ROW_PITCH - 5.0, "max": RIB_ROW_PITCH + 5.0, "ratio": None},
+                        "feasible": {"min": RIB_ROW_THICK + RIB_ROW_MIN_GAP, "max": RIB_ROW_PITCH + 7.0, "limited_by": None},
+                        "group": None, "ref": {"rule": "row_anchor", "provisional": True, "locked": False},
+                        "measure": {"method": "rib_pitch", "faces": _rib_faces(rowno, k) + _rib_faces(rowno, k + 1), "axis": "x"},
+                        "row": {"id": f"{ax}1", "k": k, "n": n}})
+    for i, nm in ((1, "B_RIB_T_1"), (4, "B_RIB_T_2")):
+        out.append({"name": nm, "type": "RIB_THICKNESS", "body": "B", "nominal": RIB_ROW_THICK, "unit": "mm",
+                    "range": {"min": RIB_ROW_THICK - 0.3, "max": RIB_ROW_THICK + 0.3, "ratio": 0.05}, "group": None,
+                    "ref": {"rule": "contact_fixed", "provisional": True, "locked": False},
+                    "measure": {"method": "face_distance", "faces": _rib_faces(1, i)}})
+    return out
+
+
+def rib_rows_doc(feats=None):
+    """features 최상위 `rib_rows`: 합성 열(기본) — 열 id U1·V1, 중심 20·40·60·80(열 V1은 3개)."""
+    rows = []
+    for ax, rowno, n, anchor, room in RIB_ROW_SPEC:
+        rows.append({"id": f"{ax}1", "body": "B", "axis": "x", "base": "F1", "anchor": anchor,
+                     "ribs": [{"index": i, "cap": f"F{rowno * 10 + i}0", "minus": _rib_faces(rowno, i)[0], "plus": _rib_faces(rowno, i)[1],
+                               "moving": [f"F{rowno * 10 + i}{j}" for j in range(5)], "thickness": RIB_ROW_THICK,
+                               "center": 20.0 * i} for i in range(1, n + 1)],
+                     "end_room_mm": dict(room), "end_limited_by": {"minus": "B_RIB_T_1", "plus": None},
+                     "face_signatures": {}})
+    return rows
+
+
 TYPE_ORDER = ["THICKNESS", "POCKET_DEPTH", "POCKET_WIDTH", "RIB_THICKNESS", "RIB_HEIGHT", "HOLE_RADIUS", "HOLE_POS_U", "HOLE_POS_V",
-              "FILLET_RADIUS", "RIB_POS_U", "RIB_POS_V"]
+              "FILLET_RADIUS", "RIB_POS_U", "RIB_POS_V", "RIB_PITCH_U", "RIB_PITCH_V"]
+RIB_PITCH_TYPES = ("RIB_PITCH_U", "RIB_PITCH_V")
 THK_TYPES, HEIGHT_TYPES = ("THICKNESS", "RIB_THICKNESS", "POCKET_WIDTH"), ("RIB_HEIGHT", "POCKET_DEPTH")
 
 
@@ -233,7 +278,7 @@ def stats_doc(all_feats, kept, flt, why_of, pngs):
     for body in sorted({f["body"] for f in all_feats}):
         types = {}
         for t in TYPE_ORDER:
-            sel = (t in flt["types"]) if flt else not t.startswith("RIB_POS")
+            sel = (t in flt["types"]) if flt else not t.startswith(("RIB_POS", "RIB_PITCH"))
             if not sel:
                 types[t] = {"selected": False}
                 continue
@@ -272,6 +317,8 @@ def do_extract():
     all_feats = [dict(f) for f in feats]
     if flt and not os.environ.get("FAKE_PAICAD_FEATURES"):
         all_feats += [dict(f) for f in RIB_POS_FEATURES]
+        if set(flt["types"]) & set(RIB_PITCH_TYPES):  # 리브 열 합성 피처는 RIB_PITCH를 고를 때만(그 밖의 추출 결과는 그대로)
+            all_feats += rib_row_features()
     why_of = {}
     if flt:  # extract-filter.md §5: 조기 제외 — types 밖·조건 미달 피처는 만들지 않는다(PNG 포함)
         feats = []
@@ -303,6 +350,10 @@ def do_extract():
                    (f.get("ref") or {}).get("locked") for f in feats) else [])
     if flt:
         doc["filter"] = dict(flt, draft_max_deg=draft)
+        if set(flt["types"]) & set(RIB_PITCH_TYPES):  # rib-gap.md §3.4: RIB_PITCH를 골랐을 때만 rib_rows(미선택 = 키 없음)
+            rows = json.loads(os.environ["FAKE_PAICAD_RIB_ROWS"]) if os.environ.get("FAKE_PAICAD_RIB_ROWS") else rib_rows_doc()
+            used = {f["row"]["id"] for f in feats if f["type"] in RIB_PITCH_TYPES and isinstance(f.get("row"), dict)}
+            doc["rib_rows"] = [r for r in rows if r["id"] in used]
     if not feats:
         write_json(fj, doc)
         write_json(sj, stats_doc(all_feats, kept, flt, why_of, []))

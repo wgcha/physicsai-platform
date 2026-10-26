@@ -200,6 +200,8 @@ ALLOWED = {
     "worker/physicsai_worker/steps/stage4_predict/batch.py": 1,          # Altair 일괄(스냅숏 없음, _param_set이 apply)
     "worker/physicsai_worker/steps/stage5_optimize/surrogate.py": 1,     # ps = apply 결과
     "worker/physicsai_worker/steps/stage5_optimize/surrogate_final.py": 2,    # ps = apply 결과
+    "backend/physicsai_api/services/doe_preview_api.py": 3,              # ①-1 train_setup(학습 설정) + 세트 이름 확인(세트 정의, 실제 DOE와 같음) + res.ps(스냅숏 적용 결과)
+    "backend/physicsai_core/geometry/doe_preview_src.py": 2,             # ①-1 train_setup(학습 설정) + from_param_set(호출부가 ps'를 넘김)
     # --- 세트 정의가 입력인 곳(스냅숏을 만드는 쪽·세트 상세·편집) ---
     "backend/physicsai_api/services/native_vars_run.py": 2,              # 세트 정의 → 스냅숏 입력
     "backend/physicsai_api/services/native_vars_api.py": 6,              # 세트 정의 조회·편집
@@ -267,6 +269,7 @@ def test_r3_native_run_paths_use_snapshot_first():
         "worker/physicsai_worker/steps/stage5_optimize/surrogate.py": "nv.apply(ps, nv.vars_of(opt[\"settings\"]))",
         "worker/physicsai_worker/steps/stage5_optimize/surrogate_final.py": "nv.apply(ps, nv.vars_of(opt[\"settings\"]))",
         "worker/physicsai_worker/steps/stage1_train_data/doe_native_set.py": "nv.apply(ps, nv.vars_of(ctx.params))",
+        "worker/physicsai_worker/steps/doe_preview.py": "nv.apply(ps, nv.vars_of(p))",
         "backend/physicsai_api/services/surrogate_opts_view.py": "nv.apply(ps, nv.vars_of(o[\"settings\"]))",
         "backend/physicsai_api/services/predict_batches_info.py": "nv.apply(ps, nv.vars_of(b.get(\"source_meta\")))",
         "backend/physicsai_api/services/design_map.py": "nv.apply(ps, nv.vars_of(b.get(\"source_meta\")))",

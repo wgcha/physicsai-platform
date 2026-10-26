@@ -10,7 +10,7 @@ from ._model import _M
 from .schema_capture import CaptureCfg
 from .schema_equiv import EquivCheckCfg
 from .schema_fem_verify import FemVerifyCfg
-from .schema_geometry import AsmMatchCfg, Contour3dCfg, GeometryCfg, ShellCfg
+from .schema_geometry import AsmMatchCfg, Contour3dCfg, DoePreviewCfg, GeometryCfg, ShellCfg
 from .schema_hpc import CommandsCfg, HpcCfg
 from .schema_mcp import McpCfg
 from .schema_queues import QueueCpuCfg, WorkerQueuesCfg  # noqa: F401 - QueueCpuCfg 재노출(알림 저장소가 기본값을 읽는다)
@@ -189,6 +189,7 @@ class Settings(_M):
     shell: ShellCfg = Field(default_factory=ShellCfg)  # 쉘 판금 모핑 기본 대상(shell-morph.md §12 Q1)
     contour3d: Contour3dCfg = Field(default_factory=Contour3dCfg)  # 결과 3D 컨투어(geometry-view.md §13)
     asm_match: AsmMatchCfg = Field(default_factory=AsmMatchCfg)  # 조립 매칭(asm-match.md §6.2)
+    doe_preview: DoePreviewCfg = Field(default_factory=DoePreviewCfg)  # DOE 표본 형상 그리드 미리보기(doe-preview.md §6.5)
     commands: CommandsCfg = Field(default_factory=CommandsCfg)
     train_data: TrainDataCfg = Field(default_factory=TrainDataCfg)
     curation: CurationCfg = Field(default_factory=CurationCfg)

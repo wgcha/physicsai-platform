@@ -32,7 +32,7 @@ def _token(c, name: str, scope: str = "read", revoked: bool = False) -> None:
 def test_migration_0020(pg_server):
     from physicsai_core.db import MIGRATION_HEAD
 
-    assert MIGRATION_HEAD == "0024_contour3d_field"
+    assert MIGRATION_HEAD == "0025_doe_preview"
     name = f"physicsai_m20_{uuid.uuid4().hex[:8]}"
     with pg_server["admin"].connect() as c:
         c.execute(text(f'CREATE DATABASE "{name}"'))

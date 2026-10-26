@@ -20,7 +20,7 @@ def test_status_extensions(p2_env):
                                    "optimize_builtin", "fem_verify", "fem_verify_rebuild", "train_doe_platform",  # S16 §21.3.8, S18 §23.8
                                    "geometry_native",  # geometry-engine.md §7.1
                                    # shell-morph.md §8.1, geometry-view.md §6.1·§13
-                                   "geometry_native_shell", "geometry_view", "geometry_view_shell", "contour3d",
+                                   "geometry_native_shell", "geometry_view", "geometry_view_shell", "contour3d", "doe_preview",  # doe-preview.md §6.5
                                    "equiv_check", "equiv_check_extract",  # equiv-check.md §5.3
                                    "mcp", "mcp_http"}  # mcp.md §13·§20.5
     assert st["features"]["train_doe"]["enabled"] and st["features"]["train_resp"] == {"enabled": False, "missing": ["commands.response_extract"]}

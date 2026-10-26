@@ -155,7 +155,7 @@ def pool_out(entries: list[dict[str, Any]], train: dict[str, Any] | None) -> lis
         out.append({"name": e["name"], "type": e["type"], "body": e["body"], "nominal": e["nominal"], "unit": e["unit"],
                     "position": e["position"], "default_range": e["default_range"], "feasible": e["feasible"],
                     "ref_locked": e["ref_locked"], "group": e["group"], "train": tr,
-                    "integer": bool(e.get("integer")), "range_unset": bool(e.get("range_unset"))})
+                    "integer": bool(e.get("integer")), "range_unset": bool(e.get("range_unset")), "rib": nv.rib_public(e.get("rib"))})
     return out
 
 

@@ -30,7 +30,36 @@ def feature_rows(doc: dict[str, Any], png_ids: dict[str, str] | None = None) -> 
             "ref_provisional": bool(ref.get("provisional")), "ref_locked": bool(ref.get("locked")),
             "feasible": {"min": _num(feas.get("min")), "max": _num(feas.get("max")), "source": feas.get("source")} if feas else None,
             "png_artifact_id": (png_ids or {}).get(f["name"]),
-        })
+        } | ({"row": row} if (row := _row_of(f)) is not None else {}))  # rib-gap.md §3.4: RIB_PITCH 피처의 열 소속(없으면 키 없음)
+    return out
+
+
+def _row_of(f: dict[str, Any]) -> dict[str, Any] | None:
+    r = f.get("row")
+    if isinstance(r, dict) and isinstance(r.get("id"), str) and isinstance(r.get("k"), int) and isinstance(r.get("n"), int):
+        return {"id": r["id"], "k": r["k"], "n": r["n"]}
+    return None
+
+
+def rib_rows(doc: dict[str, Any]) -> list[dict[str, Any]] | None:
+    """features 최상위 `rib_rows`(rib-gap.md §3.4, RIB_PITCH를 골랐을 때만) 사본 — 화면용 필드만(`face_signatures` 제외). 없으면 None."""
+    rows = doc.get("rib_rows")
+    if not isinstance(rows, list):
+        return None
+    out: list[dict[str, Any]] = []
+    for r in rows:
+        if not isinstance(r, dict) or not isinstance(r.get("id"), str):
+            continue
+        room = r.get("end_room_mm") if isinstance(r.get("end_room_mm"), dict) else {}
+        lim = r.get("end_limited_by") if isinstance(r.get("end_limited_by"), dict) else {}
+        out.append({
+            "id": r["id"], "body": r.get("body") or "", "axis": r.get("axis") if isinstance(r.get("axis"), str) else "",
+            "anchor": r.get("anchor") if isinstance(r.get("anchor"), str) else "",
+            "ribs": [{"index": int(b["index"]), "thickness": _num(b.get("thickness")), "center": _num(b.get("center"))}
+                     for b in r.get("ribs") or [] if isinstance(b, dict) and isinstance(b.get("index"), int)],
+            "end_room_mm": {"minus": _num(room.get("minus")), "plus": _num(room.get("plus"))},
+            "end_limited_by": {"minus": lim.get("minus") if isinstance(lim.get("minus"), str) else None,
+                               "plus": lim.get("plus") if isinstance(lim.get("plus"), str) else None}})
     return out
 
 
@@ -56,4 +85,4 @@ def summary(doc: dict[str, Any], png_ids: dict[str, str] | None = None) -> dict[
              for w in doc.get("warnings", []) if isinstance(w, dict) and w.get("code")]
     return {"engine_version": doc.get("engine_version") if isinstance(doc.get("engine_version"), str) else None,
             "filter": from_paicad(doc.get("filter")),
-            "features": feature_rows(doc, png_ids), "groups": groups, "warnings": warns}
+            "features": feature_rows(doc, png_ids), "groups": groups, "warnings": warns, "rib_rows": rib_rows(doc)}

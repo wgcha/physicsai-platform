@@ -33,9 +33,9 @@ class ExtractConditions(_Strict):
 
 
 class ExtractFilter(_Strict):
-    """찾을 종류(그룹)와 조건. `groups`: thickness·height·position·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).
+    """찾을 종류(그룹)와 조건. `groups`: thickness·height·position·rib_pitch·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).
     `draft_max_deg`: null 또는 0 초과 45 미만(null = 설정·paicad 기본). 응답에 나올 때는 서버 정규화본(선택 안 한 그룹의 조건 제거)."""
 
-    groups: list[Literal["thickness", "height", "position", "hole_radius", "fillet"]]
+    groups: list[Literal["thickness", "height", "position", "rib_pitch", "hole_radius", "fillet"]]
     conditions: ExtractConditions = ExtractConditions()
     draft_max_deg: float | None = None

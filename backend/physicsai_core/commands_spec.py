@@ -20,7 +20,8 @@ EXECUTABLE_PLACEHOLDERS: dict[str, str] = {
 EXECUTABLE_CONFIG_NAME: dict[str, str] = {"paicad_path": "geometry.paicad_path"}
 PAICAD_SHELL_KEYS = ("paicad_shell_fixed_scan", "paicad_shell_extract", "paicad_shell_tag", "paicad_shell_update", "paicad_shell_morph",
                      "paicad_shell_check", "paicad_shell_run")
-PAICAD_VIEW_KEYS = ("paicad_view_export", "paicad_view_preview", "paicad_shell_view_export", "paicad_shell_view_preview")
+PAICAD_VIEW_KEYS = ("paicad_view_export", "paicad_view_preview", "paicad_shell_view_export", "paicad_shell_view_preview",
+                    "paicad_view_grid", "paicad_shell_view_grid")  # grid = DOE 표본 형상 그리드(doe-preview.md §3.1, paicad 0.14.0+)
 PAICAD_ASM_KEYS = ("paicad_asm_parts", "paicad_asm_check", "paicad_asm_write")  # 조립 매칭(asm-match.md §6.2)
 PAICAD_KEYS = ("paicad_extract", "paicad_tag", "paicad_update", "paicad_morph", "paicad_check", "paicad_run", "paicad_version",
                "paicad_cushion_write", "paicad_props_scan", "paicad_props_apply", "paicad_map") + PAICAD_ASM_KEYS + PAICAD_SHELL_KEYS \
@@ -130,9 +131,15 @@ _NATIVE_PLACEHOLDERS: dict[str, frozenset[str]] = {
     "paicad_shell_view_preview": _P({"paicad", "cad_input", "features_json", "values_json", "fixed_dir", "tag_dir", "assem_dir",
                                      "options_json", "view_options_json", "nominal_manifest", "fe_mode", "threads", "thickness_json",
                                      "out_dir"}),
+    # DOE 표본 형상 그리드(doe-preview.md §3.1·§6.5). {cells_json}·{thumb_options_json}은 새 placeholder, {tag_dir}(train 출처는 없음)은 선택 쌍
+    "paicad_view_grid": _P({"paicad", "cad_input", "features_json", "cells_json", "tag_dir", "options_json", "view_options_json",
+                            "thumb_options_json", "threads", "out_dir"}),
+    "paicad_shell_view_grid": _P({"paicad", "cad_input", "features_json", "cells_json", "fixed_dir", "tag_dir", "options_json",
+                                  "view_options_json", "thumb_options_json", "threads", "out_dir"}),
 }
 _NON_PATH = {("paicad_map", "usage"), ("paicad_map", "split_param"), ("paicad_view_preview", "fe_mode"), ("paicad_view_preview", "threads"),
-             ("paicad_shell_view_preview", "fe_mode"), ("paicad_shell_view_preview", "threads")}
+             ("paicad_shell_view_preview", "fe_mode"), ("paicad_shell_view_preview", "threads"),
+             ("paicad_view_grid", "threads"), ("paicad_shell_view_grid", "threads")}
 for _k, _ph in _NATIVE_PLACEHOLDERS.items():
     TEMPLATE_SPECS[_k] = TemplateSpec(_ph, frozenset(), False)
 
@@ -193,7 +200,10 @@ OPTIONAL_PAIRS: dict[tuple[str, str], str] = {("paicad_extract", "renum_csv"): "
                                               ("paicad_view_preview", "nominal_manifest"): "--nominal-manifest",
                                               ("paicad_shell_view_preview", "nominal_manifest"): "--nominal-manifest",
                                               ("paicad_shell_view_preview", "thickness_json"): "--thickness",
-                                              ("paicad_shell_view_export", "fixed_dir"): "--fixed-dir"}
+                                              ("paicad_shell_view_export", "fixed_dir"): "--fixed-dir",
+                                              # DOE 그리드(DP): train 출처는 tag가 없고(①-1 쉘은 fixed도 없음) 인자 쌍째 생략
+                                              ("paicad_view_grid", "tag_dir"): "--tag-dir", ("paicad_shell_view_grid", "tag_dir"): "--tag-dir",
+                                              ("paicad_shell_view_grid", "fixed_dir"): "--fixed-dir"}
 
 # phase3 §14.6: commands.response_extract가 이 placeholder를 쓰면 원본 ⑤ m_4 방식(H3D_REQUESTS.txt → RESPONSES.txt)
 RESPONSE_EXTRACT_TCL_PLACEHOLDER = "extract_tcl"

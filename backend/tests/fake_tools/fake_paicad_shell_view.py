@@ -7,6 +7,9 @@
   FAKE_PAICAD_SHELL_FEATURES  shell extract가 낼 features 배열(기본: CHASSIS_REAR 비드 B1 깊이·위치 U, B2 깊이(체결 영역과 겹침 → use_default false))
   FAKE_PAICAD_SHELL_PARTS     shell extract `parts`(기본 [{body: CHASSIS_REAR, part_id: 2001, title: CHASSIS_REAR}])
   FAKE_PAICAD_SHELL_FILE      morph가 사본으로 낼 조립 폴더 파일 상대 경로(기본: chassis.inc가 있으면 그것, 없으면 첫 *.inc)
+  view grid(doe-preview.md §3, paicad 0.14.0): `view_grid:<code>`(명령 전체 FAIL — manifest 없음, VIEW_*면 종료코드 14) ·
+                          `view_grid_cell:<idx>:<code>`(그 번호 셀만 FAIL, 쉼표로 여러 개 · `VIEW_*`면 셀 ERROR) · FAIL_WHEN `view_grid:<code>:<이름><op><값>`(값 조건 셀 FAIL) ·
+                          NOREPORT=view_grid(종료코드 1, manifest 없음) · FAKE_PAICAD_GRID_ERROR_RAISE=<idx>(그 셀이 내부 예외 → 셀 폴더 없음 ERROR)
 쉘 morph 사본 = 원본 바이트 + `#FAKE_SHELL_NODE <값 json>` 줄(실제는 /NODE 좌표 필드만 바뀜). 뷰 GLB = 삼각형 2개·바디 2개 합성 GLB.
 """
 
@@ -18,6 +21,7 @@ import os
 import shutil
 import struct
 import sys
+import zlib
 
 SHELL_BASE = {"schema_version": 1, "kind": "shell", "engine": "native"}
 DEFAULT_PARTS = [{"body": "CHASSIS_REAR", "part_id": 2001, "title": "CHASSIS_REAR", "faces": 64, "edges": 210, "vertices": 150}]
@@ -173,7 +177,107 @@ def main(cmd, args, flags, g):
         finish("view_manifest.json", "OK", None, 0)
     if cmd in ("view_preview", "shell_view_preview"):
         return _preview(cmd, args, g, base, fail_doc)
+    if cmd in ("view_grid", "shell_view_grid"):
+        return _grid(cmd, args, g, base, fail_doc)
     sys.exit(2)
+
+
+def _png(w, h, rgb):
+    """w×h 단색 PNG(8비트 RGB, 결정적)."""
+    def chunk(t, d):
+        c = struct.pack(">I", len(d)) + t + d
+        return c + struct.pack(">I", zlib.crc32(t + d) & 0xFFFFFFFF)
+    row = b"\x00" + bytes(rgb) * w
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)) + \
+        chunk(b"IDAT", zlib.compress(row * h, 6)) + chunk(b"IEND", b"")
+
+
+def _grid_cell_fail(idx):
+    out = {}
+    for item in (os.environ.get("FAKE_PAICAD_FAIL") or "").split(","):
+        parts = item.strip().split(":")
+        if len(parts) == 3 and parts[0] == "view_grid_cell" and parts[1].isdigit():
+            out[int(parts[1])] = parts[2]
+    return out.get(idx)
+
+
+def _grid(cmd, args, g, base, fail_doc):
+    """`paicad view grid` · `paicad shell view grid`(doe-preview.md §3): cells.json의 셀마다 update(가짜) → cells/<id>/{preview_manifest.json,
+    preview.glb(OK만), thumb.png}. grid_manifest.json 존재 = 성공(종료코드 0, 셀 상태 무관)."""
+    write_json, read_json, finish, need, exists_exit, progress = (g["write_json"], g["read_json"], g["finish"], g["need"], g["exists_exit"],
+                                                                  g["progress"])
+    fail_when, CATEGORY, EXIT, VERSION = g["fail_when"], g["CATEGORY"], g["EXIT"], g["VERSION"]
+    kind = "shell" if cmd.startswith("shell") else "solid"
+    need("cad")
+    names = {f["name"] for f in read_json(need("features")).get("features", [])}
+    if kind == "shell":
+        need("fixed-dir")
+    topts = read_json(need("thumb-options"))
+    doc = read_json(need("cells"))
+    cells = doc.get("cells") if isinstance(doc, dict) else None
+    ids = [c.get("id") for c in cells or [] if isinstance(c, dict)]
+    import re
+
+    if not cells or len(set(ids)) != len(ids) or not all(isinstance(i, str) and re.fullmatch(r"[0-9a-z_]{1,64}", i) for i in ids):
+        print("PAICAD RESULT FAIL GEOM_INPUT_INVALID -", flush=True)
+        sys.exit(3)
+    for c in cells:
+        bad = [n for n in (c.get("values") or {}) if n not in names]
+        if bad:
+            print("unknown name(s): " + ", ".join(bad), file=sys.stderr, flush=True)
+            print("PAICAD RESULT FAIL GEOM_INPUT_INVALID -", flush=True)
+            sys.exit(3)
+    o = args.get("out-dir") or sys.exit(2)
+    os.makedirs(o, exist_ok=True)
+    gm_path, cdir = os.path.join(o, "grid_manifest.json"), os.path.join(o, "cells")
+    exists_exit([gm_path, cdir])
+    if os.environ.get("FAKE_PAICAD_NOREPORT") == "view_grid":
+        sys.exit(1)
+    whole = g["fails"]("view_grid")
+    if whole:
+        finish("grid_manifest.json", "FAIL", whole, EXIT.get(CATEGORY.get(whole, "INTERNAL"), 20))
+    w, h = int(topts.get("w", 320)), int(topts.get("h", 240))
+    os.makedirs(cdir)
+    rows = []
+    for idx, c in enumerate(cells):
+        progress(15 + int(80 * idx / len(cells)), f"cell {idx + 1}/{len(cells)} {c['id']}")
+        vals = {k: float(v) for k, v in (c.get("values") or {}).items()}
+        if os.environ.get("FAKE_PAICAD_GRID_ERROR_RAISE") == str(idx):  # 셀 처리 중 내부 예외: 셀 폴더 없이 ERROR
+            rows.append({"id": c["id"], "status": "ERROR", "code": "GEOM_INTERNAL", "category": "INTERNAL", "max_disp_mm": None, "total_s": 0.0})
+            continue
+        code = _grid_cell_fail(idx) or fail_when("view_grid", vals)
+        part = os.path.join(cdir, ".part_" + c["id"])
+        os.makedirs(part)
+        digest = hashlib.sha256((c["id"] + json.dumps(vals, sort_keys=True)).encode()).digest()
+        png = _png(w, h, (digest[0], digest[1], digest[2]) if not code else (200, 60, 60))
+        max_mm = None if code else round(sum(abs(v) for v in vals.values()) % 3.0, 3)
+        man = dict(base, kind=kind, mode="preview", values=vals, status="FAIL" if code else "OK", code=code,
+                   category=CATEGORY.get(code, "INTERNAL") if code else None, message=f"fake grid cell failure {code}" if code else None,
+                   fe={"mode": "off"}, reports={"update": "update/update.json", "morph": None, "check": None},
+                   failure={"features": list(vals)[:2], "clusters": [], "points": []} if code else None,
+                   timing={"update_s": 0.1, "tess_s": 0.1, "total_s": 0.2},
+                   thumb={"file": "thumb.png", "sha256": hashlib.sha256(png).hexdigest(), "w": w, "h": h, "clipped": False})
+        if code:
+            man.update(glb=None, disp=None)
+        else:
+            data = tiny_glb(extra_attr="_DISP_MM")
+            with open(os.path.join(part, "preview.glb"), "wb") as fh:
+                fh.write(data)
+            man.update(glb={"file": "preview.glb", "sha256": hashlib.sha256(data).hexdigest(), "bytes": len(data), "triangles": 2},
+                       disp={"attribute": "_DISP_MM", "max_mm": max_mm, "by_face": {}})
+        with open(os.path.join(part, "thumb.png"), "wb") as fh:
+            fh.write(png)
+        write_json(os.path.join(part, "preview_manifest.json"), man)
+        os.replace(part, os.path.join(cdir, c["id"]))
+        st = "OK" if not code else ("ERROR" if code.startswith("VIEW_") else "FAIL")
+        rows.append({"id": c["id"], "status": st, "code": code, "category": CATEGORY.get(code, "INTERNAL") if code else None,
+                     "max_disp_mm": max_mm, "total_s": 0.1})
+    write_json(gm_path, dict(base, kind=kind, camera={"view_dir": topts.get("view_dir"), "center": [0.0, 0.0, 0.0], "scale": 1.0,
+                                                      "digest": hashlib.sha256(json.dumps(topts, sort_keys=True).encode()).hexdigest()},
+                             disp_range_mm=topts.get("disp_range_mm"), nominal={"bbox": [0, 0, 0, 1, 1, 1], "view_sha256": "0" * 64},
+                             cells=rows, timing={"load_s": 0.1, "total_s": 0.2}))
+    progress(100, "grid done")
+    finish("grid_manifest.json", "OK", None, 0)
 
 
 def _preview(cmd, args, g, base, fail_doc):

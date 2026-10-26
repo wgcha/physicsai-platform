@@ -55,6 +55,8 @@ FEATURES: dict[str, FeatureReq] = {
     # geometry-view.md §6.1: 3D 보기·미리보기 — geometry.view.enabled + 뷰 명령 2개 비null + 실행 파일(geometry_view_missing)
     "geometry_view": FeatureReq(),
     "geometry_view_shell": FeatureReq(),
+    # doe-preview.md §6.5: DOE 표본 형상 그리드 미리보기 — doe_preview.enabled + paicad_view_grid 비null + paicad 실행 파일(doe_preview_missing). 쉘은 요청 때 paicad_shell_view_grid 확인
+    "doe_preview": FeatureReq(),
     # geometry-view.md §13: 결과 3D 컨투어 — contour3d.enabled + contour_extract 비null + hw 실행 파일·TCL 존재(contour3d_missing)
     "contour3d": FeatureReq(("contour_extract",), ("hw_exe_path",)),
     # phase3 §21.3.8 S16: 조립 FEM 검증 = fem_verify.enabled + HPC 연결. rebuild는 + mesh 템플릿·include TCL(fem_verify_missing)
@@ -236,6 +238,14 @@ def geometry_view_shell_missing(s: Settings) -> tuple[list[str], list[str]]:
     return _view_missing(s, ("paicad_shell_view_export", "paicad_shell_view_preview"))
 
 
+def doe_preview_missing(s: Settings, kind: str = "solid") -> tuple[list[str], list[str]]:
+    """DOE 표본 형상 미리보기(doe-preview.md §6.5)에 빠진 (설정·템플릿, 실행 파일) 키. kind=shell이면 `paicad_shell_view_grid`를 본다."""
+    key = "paicad_shell_view_grid" if kind == "shell" else "paicad_view_grid"
+    tmpl = [] if s.doe_preview.enabled else ["doe_preview.enabled"]
+    tmpl += [f"commands.{key}"] if getattr(s.commands, key) is None else []
+    return tmpl, _paicad_missing(s)
+
+
 def contour3d_missing(s: Settings) -> tuple[list[str], list[str]]:
     from .config.schema_capture import effective_extract_tcl
 
@@ -280,6 +290,7 @@ _SPECIAL_MISSING = {
     "geometry_view": geometry_view_missing,
     "geometry_view_shell": geometry_view_shell_missing,
     "contour3d": contour3d_missing,
+    "doe_preview": doe_preview_missing,
     "optimize_builtin": optimize_builtin_missing,
     "contour_capture": contour_capture_missing,
     "predict_parametric": predict_parametric_missing,

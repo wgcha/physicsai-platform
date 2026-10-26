@@ -48,6 +48,36 @@ def _validate_geometry(s: Settings, issues: list[ConfigIssue]) -> None:
         add("shell.default_component", "/PART 제목(영숫자·_·.·-, 64자 이내)이어야 합니다")
     _validate_view(s, issues)
     _validate_asm_match(s, issues)
+    _validate_doe_preview(s, issues)
+
+
+def _validate_doe_preview(s: Settings, issues: list[ConfigIssue]) -> None:
+    """`doe_preview` 절(doe-preview.md §6.5·§3.3) 범위."""
+    import math
+
+    d = s.doe_preview
+    add = lambda k, m: issues.append(ConfigIssue(k, m))  # noqa: E731
+    if not 6 <= d.page_size <= 48:
+        add("doe_preview.page_size", "6~48")
+    if not 6 <= d.max_page_size <= 200 or d.max_page_size < d.page_size:
+        add("doe_preview.max_page_size", "page_size 이상 200 이하")
+    if not 1 <= d.chunk_cells <= 16:
+        add("doe_preview.chunk_cells", "1~16")
+    if not 1 <= d.parallel <= 4:
+        add("doe_preview.parallel", "1~4")
+    if not d.timeout_s_per_cell > 0:
+        add("doe_preview.timeout_s_per_cell", "양수")
+    if d.max_active_per_user < 1:
+        add("doe_preview.max_active_per_user", "1 이상")
+    t = d.thumb
+    if not (160 <= t.w <= 800 and 160 <= t.h <= 800):
+        add("doe_preview.thumb.w", "w·h는 160~800")
+    if not 1.0 <= t.margin <= 2.0:
+        add("doe_preview.thumb.margin", "1.0~2.0")
+    if len(t.view_dir) != 3 or not all(math.isfinite(x) for x in t.view_dir) or not any(x != 0 for x in t.view_dir):
+        add("doe_preview.thumb.view_dir", "0이 아닌 유한한 수 3개(예: [1, -1, 1])")
+    if t.colormap != "turbo16":
+        add("doe_preview.thumb.colormap", "turbo16(고정 표)")
 
 
 def _validate_asm_match(s: Settings, issues: list[ConfigIssue]) -> None:
