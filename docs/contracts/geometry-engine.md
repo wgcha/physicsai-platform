@@ -194,7 +194,7 @@ component의 요소·노드 집합:
 
 - 파라미터 = 대칭 그룹 대표만(구성원은 같은 값을 따름). 순서 = component(RENUM 행 순) → 피처 종류(§6.2 표 순) → 면 서명 centroid(x,y,z 사전순).
 - 이름 = `<COMP>_<TYPE>_<k>`(정규화 component 이름, k는 같은 component·종류 안 1부터). 64자 넘으면 component 부분을 줄이고 `_<4자 해시>`(NAME_RE 준수, `~` 아님, GE-C1). 규칙 `^[A-Za-z_][A-Za-z0-9_]{0,63}$`(`NAME_RE`) 위반이 없게 만든다.
-- 피처 종류 약어(GE-C4): THK(두께)·POCKET_D·POCKET_W·RIB_T·RIB_H·HOLE_R·HOLE_U·HOLE_V·FILLET_R. 이름 예 `CUSH_L_POCKET_W_1`. 추출 조건(`extract.filter`)이 있을 때만 리브 위치 RIB_U·RIB_V 추가(GE-C16, [extract-filter.md](extract-filter.md) §3.2).
+- 피처 종류 약어(GE-C4): THK(두께)·POCKET_D·POCKET_W·RIB_T·RIB_H·HOLE_R·HOLE_U·HOLE_V·FILLET_R. 이름 예 `CUSH_L_POCKET_W_1`. 추출 조건(`extract.filter`)이 있을 때만 리브 위치 RIB_U·RIB_V 추가(GE-C16, [extract-filter.md](extract-filter.md) §3.2). 리브 간격 RIB_GAP_U·RIB_GAP_V(초안, GE-C23, [rib-gap.md](rib-gap.md)).
 - 값은 `repr(float)` 최단 표기 + `" mm"`(각도 피처는 없음 — 필렛은 반경 mm).
 - DOCTYPE·ENTITY 없음.
 
@@ -526,6 +526,7 @@ component의 요소·노드 집합:
 - `feasible`: 이동 면이 다른 면과 만나기 전 최대 Δ(인접 면 거리, 벽 두께 > 0.5 mm)를 보수적으로 추정.
 - 인식 실패한 면은 무시(피처 없음). 피처가 0개면 `GEOM_EXTRACT_EMPTY`.
 - **추출 조건·리브 위치(GE-C16)**: `extract.filter`가 있으면 선택 종류·조건을 탐색 단계에서 먼저 적용(결과 = 전 종류 결과의 부분집합)하고, 위치형에 `RIB_POS_U`/`RIB_POS_V`(인식된 리브의 측면+윗면 평행 이동, HOLE_POS와 같은 기준·범위·sweep)를 더한다 — [extract-filter.md](extract-filter.md) §3·§5.
+- **리브 간격(GE-C23, 초안)**: 필터 `types`에 `RIB_GAP_U/V`가 있으면 평행 리브 열을 인식해 이웃 간 clear gap을 간격마다 독립 변수로 만들고, update 단계 3.5에서 기준 리브 고정 + 하류 리브 강체 평행 이동(두께 불변 검사) — [rib-gap.md](rib-gap.md) §3~§6.
 
 ### 6.3 update
 
@@ -1172,5 +1173,6 @@ paicad 0.1.0(커밋 e4af66e) 구현 중 변경, 2026-10-19 승인(본문 반영 
 | GE-C20 | ①-3 native DOE 표본 방식 확장(2026-10-22 사용자 요구 "doe생성할때 왜 lhs만 되지", 계약 [doe-methods.md](doe-methods.md) DM-C2·DM-C4): §7.3.3 "native = 플랫폼 LHS, 다른 kind 422"를 대체 — 단일 baseline은 Altair 플랫폼 생성과 같은 `SITE_KINDS`(표본 행 = `doe_platform.build`), 다중 baseline(§7.3.8)은 층화 유지 + 층 안 생성기 `lhs`·`lhs_opt`·`halton`·`random`. `lhs`(요청 생략·`{num_runs,seed}`·`sampling:{kind:"lhs"}`)는 `lhs_values` 직접 경로·`doe_type='NATIVE_LHS'`·상한 `train_data.max_runs` 그대로(골든 불변). 형상 생성·조립·solve 무변경 |
 | GE-C21 | 조립 매칭(2026-10-22 사용자 요청·답변, 계약 [asm-match.md](asm-match.md) AM-C1, 확정, v0.2.9 · paicad **0.13.0**): Native 솔리드의 기준본 = 매칭 PART id 노드·요소 집합(RENUM 구간·고정 이름 `{mesh_include_name}` 등 파일 이름 의존 제거), starter include 트리 전체 수집, 저장 전 경계 일치 검사(§6.1 tag와 같은 허용오차, 원점·단위 차이는 안내 후 차단). 출력은 include 통째 교체 대신 노드 패치 → `paicad asm write`가 조립 사본의 해당 `/NODE` 줄 좌표만 갱신(§6.4 형식). 기존 명령은 방식 L(`--baseline-inc`+`--renum-csv`) 또는 방식 M(`--asm-match`+`--assem-dir`, `--out-patch`), 기존 argv 유효. 새 명령 `asm parts`·`asm check`·`asm write`. §4.1 번호 표 필수·기준본 이름 규칙은 매칭 세트에 적용하지 않음(asm-match.md §2.3) |
 | GE-C22 | §5.4 종료코드 표 정정(2026-10-23, v0.2.9 독립 검증 지적): `ASM_INCLUDE_OUTSIDE`·`ASM_INCLUDE_MISSING`·`ASM_NO_SOLID_PART`·`ASM_TOO_MANY_PARTS`·`ASM_MATCH_INVALID`는 구현·CHANGELOG·test_asm.py대로 종료코드 3(INPUT), 15는 `asm check` FAIL(`ASM_BOUNDARY_MISMATCH`·`ASM_SHARED_NODES`)에만. 문서를 구현에 맞춤(코드 변경 없음) |
+| GE-C23 | 리브 간격(2026-10-26 사용자 요청 "리브가 일정두께를 유지한채 각 거리를 조절", 계약 [rib-gap.md](rib-gap.md), **초안 — Q1~Q3 대기**, paicad 0.14.0 예정): 새 종류 `RIB_GAP_U/V`(`TYPE_ORDER` 맨 뒤, 필터 있을 때만), `measure.method` `rib_gap`, features 선택 키 `rib_rows`·피처 `row`, `update.json` `rib_rows[]`·op `RIB_ROW_SHIFT`, §6.3 단계 3.5 열 이동·충돌 kind `RIB_GAP_MIN`·사후 두께 drift `GEOM_CAD_FAILED`, check (a) `rib_gap`·`rib_row_thickness`, (c) 보고 `quality.rib_rows[]`, MIRROR 같은 열 제외, RIB_GAP 선택 시 비기준 RIB_POS 미생성. RIB_GAP 미선택 = 0.13.0 결과 바이트 동일 |
 
 추가 사실: 런타임 Python 3.12 전용(OCP 7.8이 vtk 의존, cp313 휠 없음). 고정 `cadquery-ocp==7.8.1.1.post1`, test extra `build123d==0.10.0`·`ocp_gordon==0.1.18`(최신 build123d는 `cadquery-ocp-novtk`를 끌어와 본체 OCP 교체 — 금지). gmsh는 시스템 라이브러리 libGLU 필요(테스트 환경). 리스크: vtk로 오프라인 묶음 용량 증가.

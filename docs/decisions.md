@@ -243,3 +243,7 @@
 - 2026-10-23 잠금 순서 규칙: `worker_slot`을 쥔 채 jobs 행을 기다리지 않음(`claim_gpu` 만료 경로 holder `SKIP LOCKED`, 잠겨 있으면 수령 건너뜀) — 근거: v0.2.9 검증에서 release(jobs→slot)와 claim_gpu(slot→jobs) 역순 교착 위험 · contour3d-field.md C3F-18, job-queues.md JQ-C2
 - 2026-10-23: v0.2.10 contour3d-field 확정 — LOD·압축은 numpy 직접 구현(새 패키지 없음), contour3d.enabled는 새 설치에서만 자동 켬. 근거: 사용자 결정
 - 2026-10-23 조립 매칭 경계 검사는 필수가 아닌 고급 옵션(확정에 검사 PASS 불필요 — FAIL·낡음은 `ASM_CHECK_*_WARN` 경고만, 추천은 목록 읽기 뒤 화면 초안으로 자동 적용), AM_CHECK 시간 제한 없음(`asm_match.check_timeout_s` null, AM_PARTS `timeout_s` 600 유지, 사용자 [취소]는 `POST /asm-matches/{id}/cancel`) — 근거: 사용자 결정(현장 이슈 #9 COMPOUND_2 `GEOM_TIMEOUT` 600초) · asm-match.md AM-C3
+
+## 2026-10-26
+
+- 2026-10-26 (초안) 리브 간격 계약 신설: 평행 리브 열 인식 → 이웃 clear gap을 간격마다 독립 변수 `RIB_GAP_U/V`(필터 그룹 `rib_gap`), 기준 리브 고정(기본 첫 리브) + 하류 리브 강체 평행 이동(윗면+측면 전부, 두께 불변 사후 검사), RIB_GAP 선택 시 열 비기준 RIB_POS 미생성(배타·기준 RIB_POS는 열 전체 이동), 범위 = ±position_range_mm·하한 min_gap 1.0 mm·상한 끝 여유 균등 배분(공동 안전), 같은 열 대칭 그룹 금지, 모핑 새 규칙 없음 + check 간격·두께 재측정·열 영역 품질 보고, paicad 0.14.0·migration 없음 — 근거: 사용자 요청("리브가 일정두께를 유지한채 각 거리를 조절"), 코드상 원인(간격 변수 없음·RIB_POS 단독 여유로 DOE 충돌·두께 계열 변수는 한쪽 면만 이동·칸막이/격자 리브 미인식) · rib-gap.md RG-1~11 · GE-C23 · EF-C3, Q1(clear gap/피치)·Q2(고정 리브)·Q3(칸막이 리브 포함) 사용자 결정 대기
