@@ -4,7 +4,7 @@ import { Fragment, useMemo, type ReactNode } from "react";
 import type { VarNote } from "../../../api/types";
 import { BulkUseBar } from "../../../components/BulkUseBar";
 import { fmtNum } from "../../../lib/format";
-import { typeLabel } from "../../../lib/geometry";
+import { PITCH_TIP, isPitchType, typeLabel } from "../../../lib/geometry";
 import { deltaText, mergedWarnings, notesByName, rowError, type NativeRow } from "../../../lib/nativeVars";
 import { bulkTargets, useRowSelection, type RowSelection } from "../geomview/selection";
 
@@ -36,6 +36,8 @@ export interface NativeVarsTableProps {
   sel?: RowSelection;
   /** 값 입력 잠금(Sobol 이어서 추가 등) — 사용 체크는 그대로 */
   lockRange?: boolean;
+  /** 종류 칸 툴팁(리브 피치: 열·빈 간격 안내, rib-gap.md §8) */
+  typeTip?: (r: NativeRow) => string | undefined;
   /** 행 오른쪽 안내(회색) */
   rowNote?: (r: NativeRow) => ReactNode;
   testIdPrefix?: string;
@@ -99,7 +101,12 @@ export function NativeVarsTable(p: NativeVarsTableProps) {
                     {r.integer && <span className="muted small" title="정수 형식 파라미터 — 하한·상한도 정수">{" "}정수</span>}
                     {r.origin === "added" && <span className="pill run" title="이 실행에만 추가한 변수(세트 정의에는 없음)">추가</span>}
                   </td>
-                  {!altair && <td className="small">{typeLabel(r.type)}</td>}
+                  {!altair && (
+                    <td className="small" title={p.typeTip?.(r) ?? (isPitchType(r.type) ? PITCH_TIP : undefined)}>
+                      {typeLabel(r.type)}
+                      {isPitchType(r.type) && <span className="muted"> · mm 범위</span>}
+                    </td>
+                  )}
                   {p.showBody && !altair && <td className="mono small">{r.body}</td>}
                   <td className="num mono">{r.nominal != null ? fmtNum(r.nominal) : "–"}</td>
                   {showTrain && (

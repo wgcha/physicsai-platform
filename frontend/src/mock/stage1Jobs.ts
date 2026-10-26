@@ -6,7 +6,7 @@ import { err, type MockResp } from "./route";
 import type { Phase2Mock } from "./phase2";
 import { runKey, trainParams, type RunRec } from "./stage1";
 import { asmRecs } from "./asmMatch";
-import { mapGate, nativeTrainParams, seedFeatures } from "./geometry";
+import { mapGate, nativeTrainParams, ribFeatures, seedFeatures } from "./geometry";
 import { checkFilter, mockSummary, normalizeFilter, typeSelected } from "./extractFilter";
 import { checkNativeSampling, checkSampling, generatorOf, nativeRuns, platformLabel } from "./doePlatform";
 import { SAMPLING_LABEL, isPlatformKind, type NameRanges } from "../lib/sampling";
@@ -202,8 +202,8 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
       const native = p.engine === "native";
       // native: 선택한 그룹의 종류만(extract-filter.md §5) — 정규화본을 train_setups.extract_filter로 기록하고 요약을 붙인다
       const norm = native && p.extract_filter != null ? normalizeFilter(p.extract_filter).norm : null;
-      const kinds = new Map(seedFeatures().map((f) => [f.name, f.type]));
-      const params = native ? nativeTrainParams().filter((x) => typeSelected(kinds.get(x.name), norm)) : trainParams().map((x) => ({ ...x }));
+      const kinds = new Map([...seedFeatures(), ...ribFeatures()].map((f) => [f.name, f.type]));
+      const params = native ? nativeTrainParams(!!norm?.groups.includes("rib_pitch")).filter((x) => typeSelected(kinds.get(x.name), norm)) : trainParams().map((x) => ({ ...x }));
       const old = p2.setups[sid];
       const file = String(p.cad_path ?? "").split(/[\\/]/).pop() ?? "model.prt";
       p2.setups[sid] = {

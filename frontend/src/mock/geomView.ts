@@ -76,12 +76,12 @@ function addBin(srv: MockServer, studyId: string, kind: Artifact["kind"], rel: s
   return id;
 }
 
-function nominalView(srv: MockServer, key: string, studyId: string, rel: string) {
+function nominalView(srv: MockServer, key: string, studyId: string, rel: string, rib = false) {
   const s = st(srv);
   let v = s.views.get(key);
   if (!v) {
     const g = cushionGlb(NOMINAL, false);
-    const m = viewManifest(g.bodies, g.glb.byteLength);
+    const m = viewManifest(g.bodies, g.glb.byteLength, rib);
     if (s.mode.shell) Object.assign(m, { kind: "shell", fixed_clusters: [{ id: 1, center: [60, 8, 0], radius_mm: 5, kinds: ["BOLT"], body: "CUSH_L", node: "CUSH_L.fixed", faces: ["F1"] }] });
     v = {
       glb: addBin(srv, studyId, "GEOM_VIEW_GLB", `${rel}/view.glb`, "model/gltf-binary", () => g.glb),
@@ -204,7 +204,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
     const setup = srv.p2.setups[seg[1]];
     if (!setup) return err(404, "NOT_FOUND", "학습 설정이 없습니다");
     if (setup.engine !== "native") return ok({ status: "MISSING", kind: "solid", reason: "Native 추출이 아닙니다", available: false, preview_available: false, param_set_id: null, train_setup_id: seg[1] } satisfies GeomView);
-    const v = nominalView(srv, `train:${seg[1]}:${setup.extract_job_id ?? ""}`, seg[1], `01_train/extract/${setup.extract_job_id ?? "x"}/view`);
+    const v = nominalView(srv, `train:${seg[1]}:${setup.extract_job_id ?? ""}`, seg[1], `01_train/extract/${setup.extract_job_id ?? "x"}/view`, !!setup.extract_filter?.groups.includes("rib_pitch"));
     return ok(viewOut(srv, v, { train_setup_id: seg[1], preview_available: false }));
   }
 
@@ -212,7 +212,7 @@ export const geomViewRoutes: Route = (srv, { method, seg, body, headers }) => {
     const ps = srv.paramSets.find((p) => p.id === seg[1]);
     if (!ps) return err(404, "NOT_FOUND", "파라미터 세트를 찾을 수 없습니다.");
     if (ps.engine !== "native") return err(409, "VIEW_NATIVE_ONLY", "3D 미리보기는 Native 템플릿에서만 쓸 수 있습니다");
-    if (method === "GET" && seg[2] === "view") return ok(viewOut(srv, nominalView(srv, ps.id, ps.study_id, `04_params/${ps.id}/native/view`), { param_set_id: ps.id }));
+    if (method === "GET" && seg[2] === "view") return ok(viewOut(srv, nominalView(srv, ps.id, ps.study_id, `04_params/${ps.id}/native/view`, (ps.native?.extract_filter?.groups as readonly string[] | undefined)?.includes("rib_pitch") === true), { param_set_id: ps.id }));
     if (method === "POST" && seg[2] === "previews") {
       const study = srv.studies.find((x) => x.id === ps.study_id)!;
       const deny = needPower(srv, study.project_id);

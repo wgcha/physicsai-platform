@@ -12,6 +12,7 @@ export const POLL = {
   batch: 5000, // ④ 일괄 예측 결과(진행 중 5초, phase3.md §14.8)
   surrogate: 5000, // ⑤ 내장 최적화 결과(진행 중 5초, phase3.md §18.10)
   preview: 500, // 형상 미리보기·결과 3D 컨투어 생성(0.5초, geometry-view.md §6.5·§13.6)
+  doePreview: 1000, // DOE 형상 그리드 미리보기(1초, doe-preview.md §6.6)
   contourDwell: 800, // 결과 3D 컨투어 행 선택 후 머무름(contour3d-default C3D-4)
   contourRetry: 3000, // 429 PREVIEW_BUSY 재요청 간격(C3D-5)
 };

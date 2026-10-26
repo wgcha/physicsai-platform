@@ -15,7 +15,7 @@ export type Role = "general" | "power" | "admin";
 // 결과 3D 컨투어 CONTOUR_3D는 POST /contour3d 전용(geometry-view.md §13.5, CPU 대기열 — 대기열 화면에 표시, contour3d-default C3D-13)
 // 형상 미리보기 GEOM_PREVIEW·조립 매칭 ASM_MATCH는 PREVIEW 레인(대기열 화면 밖, 작업 목록은 "미리보기 포함" 필터) — 화면 라벨·단계는 lib/format.ts
 // ⑤ 등가성 판정 EQ_CHECK는 /studies/{id}/equiv-checks API 전용(equiv-check.md §4.5)
-export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE" | "EQ_CHECK" | "CONTOUR_3D" | "ASM_MATCH" | "GEOM_PREVIEW";
+export type JobType = S["JobCreate"]["job_type"] | "CONTOUR_RECAPTURE" | "SURROGATE_OPT" | "FEM_VERIFY" | "PARAM_SET_NATIVE" | "EQ_CHECK" | "CONTOUR_3D" | "ASM_MATCH" | "GEOM_PREVIEW" | "DOE_PREVIEW";
 export type JobState =
   | "QUEUED"
   | "RUNNING"
@@ -97,7 +97,8 @@ export interface UiPoll {
 }
 /** phase2.md §12.1 `/status.features` 키 */
 // S16 V2(phase3 §21.3.8): /status.features.fem_verify·fem_verify_rebuild — BE-V2 openapi 반영 전에도 같은 키로 읽는다
-export type FeatureKey = keyof S["StatusFeatures"] | "fem_verify" | "fem_verify_rebuild";
+// doe-preview.md §6.6: /status.features.doe_preview(openapi 반영 전 로컬 키)
+export type FeatureKey = keyof S["StatusFeatures"] | "fem_verify" | "fem_verify_rebuild" | "doe_preview";
 // opt-native §4.2: legacy는 true일 때만 온다(HyperStudy 레거시 기능 train_doe·optimize)
 export type FeatureState = Override<S["FeatureState"], { legacy?: boolean }>;
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */
@@ -168,6 +169,7 @@ export * from "./typesBatch";
 export * from "./typesAsmMatch";
 export * from "./typesMedia";
 export * from "./typesGeomView";
+export * from "./typesDoePreview";
 export * from "./typesVars";
 export * from "./typesTokens";
 

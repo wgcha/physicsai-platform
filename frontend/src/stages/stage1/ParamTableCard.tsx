@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { api, ApiError, errorMessage, type NativeFeature, type TrainParam } from "../../api";
+import { api, ApiError, errorMessage, type NativeFeature, type RibRow, type TrainParam } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute } from "../../hooks/useJobRunner";
 import { Card, RunAction } from "../../components/ui";
@@ -7,7 +7,7 @@ import { FeatureGate } from "../../components/FeatureGate";
 import { fmtTime } from "../../lib/format";
 import { tplSummaryNotes, tplSummaryText } from "../../lib/altairVars";
 import { useTrain } from "./TrainContext";
-import { isPositionType, typeLabel } from "../../lib/geometry";
+import { isAbsRangeType, isPitchType, pitchTip, typeLabel } from "../../lib/geometry";
 import { GeomView3DLazy as GeomView3D } from "../stage4/geomview/GeomView3DLazy";
 import { ViewSplit } from "../stage4/geomview/ViewSplit";
 import { useRowSelection, bulkTargets } from "../stage4/geomview/selection";
@@ -58,6 +58,7 @@ export function ParamTableCard() {
   // geometry-engine.md §8 ①-2: native는 tpl 없음 — 표 저장만, 피처 종류·하이라이트 PNG = GET /studies/{id}/train/features(§7.3.1)
   const native = setup?.engine === "native";
   const [features, setFeatures] = useState<Map<string, NativeFeature>>(new Map());
+  const [ribRows, setRibRows] = useState<RibRow[] | null>(null); // rib-gap.md §3.4 피치 행 툴팁용 열 정보
   const sel = useRowSelection(useMemo(() => rows.map((r) => r.name), [rows]));
   const rp = sel.rowProps;
   useEffect(() => {
@@ -65,7 +66,11 @@ export function ParamTableCard() {
     let alive = true;
     api
       .trainFeatures(study.id)
-      .then((d) => alive && setFeatures(new Map(d.features.map((f) => [f.name, f]))))
+      .then((d) => {
+        if (!alive) return;
+        setFeatures(new Map(d.features.map((f) => [f.name, f])));
+        setRibRows(d.rib_rows ?? null);
+      })
       .catch(() => alive && setFeatures(new Map()));
     return () => {
       alive = false;
@@ -207,9 +212,9 @@ export function ParamTableCard() {
                     </td>
                     <td className="mono">{r.name}</td>
                     {native && (
-                      <td className="small">
+                      <td className="small" title={isPitchType(features.get(r.name)?.type) ? pitchTip(features.get(r.name), ribRows) : undefined}>
                         {typeLabel(features.get(r.name)?.type)}
-                        {isPositionType(features.get(r.name)?.type) && <span className="muted"> · mm 범위</span>}
+                        {isAbsRangeType(features.get(r.name)?.type) && <span className="muted"> · mm 범위</span>}
                       </td>
                     )}
                     <td className="num mono">{r.raw}</td>

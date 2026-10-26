@@ -31,6 +31,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   EQ_CHECK: "⑤",
   ASM_MATCH: "①",
   GEOM_PREVIEW: "④",
+  DOE_PREVIEW: "①",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -66,6 +67,8 @@ export const FEATURE_MISSING: Record<FeatureKey, string[]> = {
   geometry_native_shell: ["commands.paicad_shell_extract", "geometry.paicad_path"],
   geometry_view: ["geometry.view.enabled", "commands.paicad_view_export"],
   geometry_view_shell: ["geometry.view.enabled", "commands.paicad_shell_view_export"],
+  // doe-preview.md §6.6: DOE 표본 형상 그리드(paicad view grid)
+  doe_preview: ["geometry.doe_preview.enabled", "commands.paicad_view_grid"],
   contour3d: ["contour3d.enabled", "commands.contour_extract", "resources.contour_extract_tcl"],
   // S18(phase3.md §23.8): ① 플랫폼 생성 — geom_update 템플릿 + SimLab 경로(HyperStudy 자원은 필요 없음)
   train_doe_platform: ["commands.geom_update", "altair.simlab_path"],

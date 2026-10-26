@@ -3,11 +3,15 @@
 import type { ApiErrorDetail, ExtractFilter, ExtractGroup, ExtractProblem } from "../api/types";
 import { typeLabel } from "./geometry";
 
+/** rib-gap.md §8 체크박스 도움말(ⓘ 툴팁) */
+export const RIB_PITCH_HELP = "같은 방향으로 나란한 독립 리브의 중심 간 거리(리브 두께 유지, 가운데 리브 고정). 고르면 열의 가운데 리브만 위치 변수로 남습니다. 벽에 붙은 리브·격자는 대상이 아닙니다.";
+
 /** §3.1 표 순서(= 서버 GROUP_ORDER) · 화면 문구 */
-export const EXTRACT_GROUPS: { key: ExtractGroup; label: string }[] = [
+export const EXTRACT_GROUPS: { key: ExtractGroup; label: string; help?: string }[] = [
   { key: "thickness", label: "두께" },
   { key: "height", label: "높이·깊이" },
   { key: "position", label: "위치(구멍·리브)" },
+  { key: "rib_pitch", label: "리브 간격(피치)", help: RIB_PITCH_HELP },
   { key: "hole_radius", label: "구멍 반경" },
   { key: "fillet", label: "필렛" },
 ];
@@ -44,7 +48,7 @@ export interface FilterForm {
   v: Record<string, string>;
 }
 
-/** U1 프리셋: 다섯 그룹 모두 체크·조건 빈칸 */
+/** U1 프리셋: 모든 그룹(6개) 체크·조건 빈칸 */
 export const presetForm = (): FilterForm => ({ groups: EXTRACT_GROUPS.map((g) => g.key), v: {} });
 
 const txt = (n: number | null | undefined) => (n == null ? "" : String(n));
@@ -191,6 +195,8 @@ export function filterText(f: ExtractFilter | null | undefined): string {
 export const EXCLUDED_LABEL: Record<string, string> = {
   face_area: "면적", thickness_range: "범위", not_mutual: "비상호", no_overlap: "겹침 없음", not_thinner_than_height: "높이보다 두꺼움",
   height_range: "범위", hole_radius_min: "반경", fillet_radius_min: "반경", position_min_size: "최소 크기", shape: "측면 형상", base_axis: "축 비정렬",
+  // rib-gap.md §8(리브 간격 열 인식)
+  not_slender: "기둥형", row_branch: "열 분기", row_single: "이웃 없음", row_member: "간격 열 소속",
 };
 /** 리브 후보 탈락 사유 7키(EF-C1) */
 export const RIB_REJECT_LABEL: Record<string, string> = {
@@ -198,7 +204,7 @@ export const RIB_REJECT_LABEL: Record<string, string> = {
   lateral_count: "측면 3개 미만", base_mismatch: "밑면 불일치", height_not_positive: "높이 0 이하",
 };
 /** 종류 표시 순서(서버 TYPE_ORDER) */
-const TYPE_ORDER = ["THICKNESS", "RIB_THICKNESS", "POCKET_WIDTH", "RIB_HEIGHT", "POCKET_DEPTH", "HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V", "HOLE_RADIUS", "FILLET_RADIUS"];
+const TYPE_ORDER = ["THICKNESS", "RIB_THICKNESS", "POCKET_WIDTH", "RIB_HEIGHT", "POCKET_DEPTH", "HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V", "RIB_PITCH_U", "RIB_PITCH_V", "HOLE_RADIUS", "FILLET_RADIUS"];
 
 export interface SummaryReason {
   key: string;

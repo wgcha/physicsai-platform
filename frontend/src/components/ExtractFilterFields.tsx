@@ -1,6 +1,6 @@
 // native ①-1·④ 등록 폼 공용 "찾을 종류 + 조건(선택)" 블록(extract-filter.md §8). 문구·칸이 두 곳에서 같다.
-// 체크 5개(그룹) → 조건 접힘(체크한 그룹의 칸만, 빈칸 = 제한 없음) → 고급(구배 허용각). 검사는 클라이언트(§6.1 문구)와 서버 422 problems 모두 칸 아래에 보인다.
-import { useEffect, useState } from "react";
+// 체크 6개(그룹) → 조건 접힘(체크한 그룹의 칸만, 빈칸 = 제한 없음) → 고급(구배 허용각). 검사는 클라이언트(§6.1 문구)와 서버 422 problems 모두 칸 아래에 보인다.
+import { Fragment, useEffect, useState } from "react";
 import type { ExtractGroup, ExtractProblem } from "../api/types";
 import { COND_FIELDS, DRAFT_LABEL, DRAFT_NOTE, EXTRACT_GROUPS, conditionCount, problemsFor, validateForm, type FilterForm } from "../lib/extractFilter";
 
@@ -58,10 +58,17 @@ export function ExtractFilterFields({
         <span className="field-label">찾을 종류</span>
         <div className="checks extract-groups" role="group" aria-label="찾을 종류">
           {EXTRACT_GROUPS.map((g) => (
-            <label key={g.key} className="check">
-              <input type="checkbox" checked={value.groups.includes(g.key)} disabled={locked} onChange={(e) => toggle(g.key, e.target.checked)} />
-              {g.label}
-            </label>
+            <Fragment key={g.key}>
+              <label className="check">
+                <input type="checkbox" checked={value.groups.includes(g.key)} disabled={locked} onChange={(e) => toggle(g.key, e.target.checked)} />
+                {g.label}
+              </label>
+              {g.help && (
+                <span className="extract-help" title={g.help} aria-label={g.help} data-testid={`help-${g.key}`}>
+                  ⓘ
+                </span>
+              )}
+            </Fragment>
           ))}
         </div>
         {err("groups")}

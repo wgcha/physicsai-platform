@@ -223,12 +223,20 @@ function feature(name: string, parameter: string, type: string, body: string, va
 }
 
 /** manifest features(seedFeatures와 같은 이름·범위) — 값은 p */
-export function cushionFeatures(p: CushionParams): ManifestFeature[] {
+export function cushionFeatures(p: CushionParams, rib = false): ManifestFeature[] {
   const thk = (body: string, ox: number, name: string) =>
     feature(name, "CUSH_L_THK_1", "THICKNESS", body, p.thk, NOMINAL.thk, [11.875, 13.125], [6.2, 18], "envelope", ["F2"], ["F1"], {
       kind: "linear", p0: [ox + L, 20, 0], p1: [ox + L, 20, p.thk], label: [ox + L + 10, 20, p.thk / 2], value: p.thk, unit: "mm", geom_len: p.thk,
     });
   const rx = RIB_X + p.ribT / 2;
+  // rib-gap.md §7: RIB_PITCH 치수선 = 이웃 리브 중심 평면 사이 linear(p0 = k번 리브 중심, p1 = a 방향 투영), moving = 바깥쪽 리브 면
+  const pitch = (k: number, name: string) => {
+    const x0 = RIB_X + 1.5 + (k - 1) * 20;
+    const f = feature(name, name, "RIB_PITCH_U", "CUSH_L", 20, 20, [15, 25], [7, 31], "estimate", k === 1 ? ["F7", "F8"] : ["F9"], ["F1"], {
+      kind: "linear", p0: [x0, 40, p.thk + p.ribH], p1: [x0 + 20, 40, p.thk + p.ribH], label: [x0 + 10, 40, p.thk + p.ribH + 10], value: 20, unit: "mm", geom_len: 20,
+    });
+    return { ...f, row: { id: "U1", k, n: 3 } } as ManifestFeature;
+  };
   return [
     thk("CUSH_L", 0, "CUSH_L_THK_1"),
     thk("CUSH_R", 150, "CUSH_R_THK_1"),
@@ -242,14 +250,15 @@ export function cushionFeatures(p: CushionParams): ManifestFeature[] {
       kind: "position", p0: [0, CY, p.thk], p1: [p.holeU, CY, p.thk], label: [p.holeU / 2, CY, p.thk + 12], value: p.holeU, unit: "mm", geom_len: p.holeU,
     }),
     feature("CUSH_L_FILLET_R_1", "CUSH_L_FILLET_R_1", "FILLET_RADIUS", "CUSH_L", 2, 2, [1.9, 2.1], null, "estimate", ["F10"], [], null),
+    ...(rib ? [pitch(1, "CUSH_L_RIB_PITCH_U_1"), pitch(2, "CUSH_L_RIB_PITCH_U_2")] : []),
   ];
 }
 
-export function viewManifest(bodies: ViewManifest["bodies"], glbBytes: number): ViewManifest {
+export function viewManifest(bodies: ViewManifest["bodies"], glbBytes: number, rib = false): ViewManifest {
   return {
     schema_version: 1, kind: "solid", mode: "nominal", status: "OK", code: null, category: null, message: null, unit: "mm", up_axis: "Z",
     bbox: [0, 0, 0, 270, W, NOMINAL.thk + NOMINAL.ribH],
-    bodies, features: cushionFeatures(NOMINAL), fixed_clusters: [], warnings: [],
+    bodies, features: cushionFeatures(NOMINAL, rib), fixed_clusters: [], warnings: [],
     ...({ engine: "native", engine_version: "0.10.0", glb: { file: "view.glb", bytes: glbBytes }, tess: { linear_mm: 0.1, angular_deg: 20 } } as object),
   } as ViewManifest;
 }

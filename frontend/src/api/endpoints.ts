@@ -41,6 +41,8 @@ import type {
   ParamSetDiscover,
   Engine,
   GeomOptions,
+  DoePreview,
+  DoePreviewReq,
   NativeFeatures,
   NativeVars,
   ApiToken,
@@ -164,6 +166,10 @@ export const api = {
   paramSetView: (id: string) => request<GeomView>("GET", `/param-sets/${id}/view`),
   createPreview: (id: string, body: GeomPreviewCreate) => request<GeomPreview>("POST", `/param-sets/${id}/previews`, { body }),
   preview: (id: string) => request<GeomPreview>("GET", `/previews/${id}`),
+  /** doe-preview.md §6.6 DOE 표본 형상 그리드: 200 전부 캐시 | 202(job) · 상태(1초 폴링) · 취소 */
+  createDoePreview: (studyId: string, body: DoePreviewReq) => request<DoePreview>("POST", `/studies/${studyId}/doe-previews`, { body }),
+  doePreview: (id: string) => request<DoePreview>("GET", `/doe-previews/${id}`),
+  cancelDoePreview: (id: string) => request<DoePreview>("POST", `/doe-previews/${id}/cancel`),
   /** asm-match.md §6.3 조립 매칭: 목록 읽기 202 · 조회 · 행 저장(초안) · 검사 202 · 확정 */
   asmMatchCreate: (studyId: string, body: AsmMatchCreate) => request<{ match_id: string; job_id: string }>("POST", `/studies/${studyId}/asm-matches`, { body }),
   asmMatch: (id: string) => request<AsmMatch>("GET", `/asm-matches/${id}`),

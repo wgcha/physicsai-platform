@@ -5,13 +5,16 @@ import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Card, CodeLine, Field, RunAction } from "../../components/ui";
 import { useApp } from "../../app/AppContext";
 import { PathInput } from "../../components/PathInput";
-import { FeatureGate, useFeature } from "../../components/FeatureGate";
+import { FeatureGate, featureText, useFeature } from "../../components/FeatureGate";
 import { SamplingDescription } from "../../components/SamplingDescription";
 import { HS_COMPAT_NOTE, HS_NOTE, MULTI_BASELINE_REASON, SITE_KINDS, descIdOf, hsCalcNote, type NameRanges } from "../../lib/sampling";
 import { genCategoryText } from "../../lib/geometry";
 import { useTrain } from "./TrainContext";
 import { DoePlatformFields, Seg } from "./DoePlatformFields";
 import { ReuseDoePicker } from "./ReuseDoePicker";
+import { DoePreviewCard } from "./doepreview/DoePreviewCard";
+import { MSG as DP_MSG } from "./doepreview/gridModel";
+import type { GridInput } from "./doepreview/useDoePreviewGrid";
 import {
   buildHyperstudyParams, buildReuseParams, buildNativeParams, buildPlatformParams, doeLimits, genText, initialNative, initialPlatform, skippedRuns, stratumCounts,
   type NativeDoeState, type PlatformState,
@@ -125,6 +128,9 @@ export function DoeGenCard() {
   const [setId, setSetId] = useState("");
   const [reuseOn, setReuseOn] = useState(false);
   const [reuseDoe, setReuseDoe] = useState("");
+  // doe-preview.md §8: 형상 미리보기(생성 전) · 형상 갤러리(생성 후) 카드 — 카드 바로 아래 전폭 카드 1개
+  const [gridMode, setGridMode] = useState<"pre" | "gallery" | null>(null);
+  const dpFeature = useFeature("doe_preview");
   const nativeSets = paramSets.filter((p) => p.engine === "native");
   const nset = nativeSets.find((p) => p.id === setId) ?? null;
 
@@ -202,6 +208,11 @@ export function DoeGenCard() {
     void run(buildHyperstudyParams({ label, options: opts, multi, assemPath: path.trim(), runsEditable: !!t?.runs_editable, runs }));
   };
   const inputBad = reuseActive ? !reuseDoe : native ? nativeParams() === null : isPlatform ? platformParams() === null : !t || (t.runs_editable && !(Number(runs) >= 2));
+  // 형상 미리보기 활성 조건 = 실행 버튼과 같은 표본 입력 검증 통과(+ Native 단일 baseline·기능 켜짐). 사유는 툴팁
+  const dpSampling = native && !natMulti && !reuseActive ? (nativeParams()?.sampling as Record<string, unknown> | undefined) ?? null : null;
+  const dpReason = !native ? DP_MSG.unsupportedEngine : natMulti ? DP_MSG.unsupportedMulti : reuseActive ? DP_MSG.reuse : !dpFeature.enabled ? featureText(dpFeature) : !canExec ? "실행 권한(power 이상)이 필요합니다" : !dpSampling ? (nat.kind === "table" ? "표의 머리줄·값 범위를 확인하세요" : `run 수(2~${lim.nativeLhsMaxRuns})·시드를 확인하세요`) : null;
+  const dpInput: GridInput | null = dpSampling ? { source: nset ? { kind: "param_set", param_set_id: nset.id } : { kind: "train" }, sampling: dpSampling } : null;
+  const galleryDoe = native && latest && latest.status === "READY" && latest.generator === "platform" ? latest : null;
   // 세트 기준 native: 조립 폴더는 세트 것(입력 없음), 준비본 READY·다중 baseline 매칭표 확정이 필요(409 GEOM_PREP_STALE·PARAM_MAP_UNCONFIRMED)
   const assemOk = nset || asmOn ? true : ok;
   const setGate = !nset ? null : nset.native?.prep_status !== "READY" ? "템플릿 형상 준비를 다시 하세요(④)" : (nset.baselines?.length ?? 0) > 1 && nset.param_map_status !== "confirmed" ? "매칭표 확정 필요(④ 다중 baseline)" : null;
@@ -211,8 +222,12 @@ export function DoeGenCard() {
   const problems = errorDetail?.code === "DOE_SAMPLING_INVALID" && Array.isArray(errorDetail.problems) ? (errorDetail.problems as { code?: string; message?: string }[]) : [];
 
   return (
+    <>
     <Card span={9} foot={
         <>
+          <button type="button" className="btn" data-testid="dp-open" disabled={!!dpReason} title={dpReason ?? "표본 형상을 격자 그림으로 미리 봅니다(생성 전)"} onClick={() => setGridMode("pre")}>
+            형상 미리보기
+          </button>
           <FeatureGate feature={native ? "geometry_native" : isPlatform ? "train_doe_platform" : "train_doe"}>
             {(enabled) => (
               <RunAction
@@ -361,6 +376,11 @@ export function DoeGenCard() {
             {latest.generator === "platform" && genText(latest.gen) && ` · ${genText(latest.gen)}`}
           </div>
           <CodeLine text={latest.dir_display_path} />
+          {galleryDoe && (
+            <button type="button" className="btn small" data-testid="dp-open-gallery" disabled={!dpFeature.enabled} title={dpFeature.enabled ? "생성된 DOE run의 형상을 격자로 봅니다" : featureText(dpFeature)} onClick={() => setGridMode("gallery")}>
+              형상 갤러리
+            </button>
+          )}
           {skipped.length > 0 && (
             <ul className="problems small" aria-label="건너뛴 run" data-testid="doe-skipped">
               {skipped.map((k) => (
@@ -373,5 +393,17 @@ export function DoeGenCard() {
         </div>
       )}
     </Card>
+    {gridMode && (
+      <DoePreviewCard
+        key={gridMode === "gallery" ? `g-${galleryDoe?.id ?? ""}` : "pre"}
+        studyId={study.id}
+        gallery={gridMode === "gallery"}
+        input={gridMode === "gallery" ? (galleryDoe ? { source: { kind: "train_doe", doe_id: galleryDoe.id }, sampling: null } : null) : dpInput}
+        names={targetNames}
+        canRun={canExec}
+        onClose={() => setGridMode(null)}
+      />
+    )}
+    </>
   );
 }

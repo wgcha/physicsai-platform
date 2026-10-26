@@ -1,6 +1,6 @@
 // API 타입(R-F 분할) — S6 준비된 입력 예측·모델·스터디·파라미터 세트·표본. 화면 코드는 `api/types`만 import한다(거기서 재노출).
 import type { S, Override } from "./typesBase";
-import type { ArtifactKind, ContourDisplay, InputKind, JobState, JobSummary, JobType, NotificationEvent, TemplateResponse } from "./types";
+import type { ArtifactKind, ContourDisplay, ExtractFilter, InputKind, JobState, JobSummary, JobType, NotificationEvent, TemplateResponse } from "./types";
 
 // ---------------------------------------------------------------------------
 // S6 ④ 준비된 입력 예측(phase3.md §11.5)
@@ -163,7 +163,7 @@ export type ParamSet = Override<
     display?: ContourDisplay | null;
   }
 >;
-export type ParamSetCreate = Omit<S["ParamSetCreate"], "shell_only"> & { shell_only?: boolean }; // 서버 기본 false(geometry-engine.md §11.1)
+export type ParamSetCreate = Omit<S["ParamSetCreate"], "shell_only" | "extract_filter"> & { shell_only?: boolean; extract_filter?: ExtractFilter | null }; // 서버 기본 false(geometry-engine.md §11.1)
 /** discover CAD 후보 — openapi는 dict라 계약(geometry-engine.md §7.4) 키로 좁힌다. native = STEP 파일 또는 parts/ 폴더 */
 export interface DiscoverCad {
   rel: string;
@@ -182,8 +182,23 @@ export type NativeInfo = S["NativeInfo"];
 export type NativeGroup = S["NativeGroup"];
 export type NativeWarning = S["NativeWarning"];
 /** feasible = {min, max, limited_by?, source?}(§4.3·§11.2) — openapi는 dict라 좁힌다 */
-export type NativeFeature = Override<S["NativeFeature"], { feasible?: { min?: number | null; max?: number | null; limited_by?: string | null; source?: string | null } | null }>;
-export type NativeFeatures = Override<S["NativeFeatures"], { features: NativeFeature[] }>;
+/** rib-gap.md §3.4: RIB_PITCH 피처의 열 소속 `row`(선택 키 — openapi 반영 전 로컬 필드) */
+export interface RibRowRef {
+  id: string;
+  k: number;
+  n: number;
+}
+/** rib-gap.md §3.4 `rib_rows[]` — 표 툴팁("열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm")에 쓰는 부분만 */
+export interface RibRow {
+  id: string;
+  body?: string;
+  axis?: string;
+  anchor: string;
+  ribs: { index: number; thickness: number; center: number }[];
+  end_room_mm?: { minus?: number | null; plus?: number | null };
+}
+export type NativeFeature = Override<S["NativeFeature"], { feasible?: { min?: number | null; max?: number | null; limited_by?: string | null; source?: string | null } | null; row?: RibRowRef | null }>;
+export type NativeFeatures = Override<S["NativeFeatures"], { features: NativeFeature[]; rib_rows?: RibRow[] | null }>;
 /** geom_options(§4.9) 부분 객체 — 절 이름 → 키 → 값(최상위 문자열 키도 있음) */
 export type GeomOptions = Record<string, unknown>;
 

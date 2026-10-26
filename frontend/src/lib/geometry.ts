@@ -1,6 +1,6 @@
 // native 형상 엔진 화면 공용(geometry-engine.md §4.3·§4.9·§6.2·§8·§11.4) — 순수 함수만(시험 대상).
 import { ASM_ERROR_TEXT } from "./asmMatch";
-import type { Engine, GeomOptions, MapGrade, MapRow, NativeFeature, NativeInfo, ParamMap } from "../api/types";
+import type { Engine, GeomOptions, MapGrade, MapRow, NativeFeature, NativeInfo, ParamMap, RibRow } from "../api/types";
 
 export const ENGINE_LABEL: Record<Engine, string> = { altair: "Altair", native: "Native" };
 
@@ -16,6 +16,8 @@ export const FEATURE_TYPE_LABEL: Record<string, string> = {
   HOLE_POS_V: "구멍 위치 V",
   RIB_POS_U: "리브 위치 U",
   RIB_POS_V: "리브 위치 V",
+  RIB_PITCH_U: "리브 피치 U",
+  RIB_PITCH_V: "리브 피치 V",
   FILLET_RADIUS: "필렛 반경",
   SHELL_T: "쉘 두께",
 };
@@ -24,19 +26,57 @@ export const FEATURE_TYPE_LABEL: Record<string, string> = {
 const POSITION_TYPES = new Set(["HOLE_POS_U", "HOLE_POS_V", "RIB_POS_U", "RIB_POS_V"]);
 export const isPositionType = (type: string | null | undefined) => !!type && POSITION_TYPES.has(type);
 
+/** 리브 간격(피치, rib-gap.md RG-1) — 길이 mm이지만 좌표가 아니라 위치형(POSITION_TYPES)에는 넣지 않는다 */
+const PITCH_TYPES = new Set(["RIB_PITCH_U", "RIB_PITCH_V"]);
+export const isPitchType = (type: string | null | undefined) => !!type && PITCH_TYPES.has(type);
+/** 범위가 절대 mm(공칭 ∓ mm)인 종류 = 위치형 + 피치(서버 ABS_RANGE_TYPES) */
+export const isAbsRangeType = (type: string | null | undefined) => isPositionType(type) || isPitchType(type);
+
+/** rib-gap.md §5·§4.3: 피치 범위 경고(RIB_PITCH_JOINT_RANGE, 차단 없음)·샘플 실패(RIB_PITCH_MIN, 빈 간격 하한) 안내 문구 */
+export const RIB_PITCH_NOTE: Record<string, string> = {
+  RIB_PITCH_JOINT_RANGE: "리브 열의 피치·두께 범위를 함께 쓰면 일부 샘플이 형상 생성에 실패할 수 있습니다(끝 여유 또는 최소 빈 간격 초과)",
+  RIB_PITCH_MIN: "리브 사이 빈 간격이 최소 간격보다 작습니다 — 피치를 늘리거나 리브 두께를 줄이세요",
+};
+
+/** 피치 툴팁 고정 문구(rib-gap.md §4.4) */
+export const PITCH_TIP = "리브 간격 = 이웃 리브 중심 사이 거리(피치). 두께를 함께 바꾸면 빈 간격이 줄어듭니다.";
+
+const anchorText = (anchor: string, n: number): string | null => {
+  const m = /^(rib|mid):(\d+)$/.exec(anchor);
+  if (!m) return null;
+  const k = Number(m[2]);
+  if (m[1] === "mid") return `가운데 리브 ${k}·${k + 1} 중점 고정`;
+  return n % 2 === 1 && k === (n + 1) / 2 ? `가운데 리브 ${k} 고정` : k === 1 ? "첫 리브 고정" : k === n ? "마지막 리브 고정" : `리브 ${k} 고정`;
+};
+
+/** 피치 행 툴팁: "열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm" + 고정 문구. 열 정보가 없으면 고정 문구만 */
+export function pitchTip(f: Pick<NativeFeature, "type" | "nominal" | "row"> | null | undefined, ribRows: RibRow[] | null | undefined): string {
+  if (!f || !isPitchType(f.type) || !f.row) return PITCH_TIP;
+  const { id, k, n } = f.row;
+  const parts = [`열 ${id}`, `피치 ${k}/${n - 1}`];
+  const row = ribRows?.find((r) => r.id === id);
+  const a = row ? anchorText(row.anchor, n) : null;
+  if (a) parts.push(a);
+  const t1 = row?.ribs.find((r) => r.index === k)?.thickness;
+  const t2 = row?.ribs.find((r) => r.index === k + 1)?.thickness;
+  if (f.nominal != null && t1 != null && t2 != null) parts.push(`빈 간격 ${(f.nominal - (t1 + t2) / 2).toFixed(1)} mm`);
+  return `${parts.join(" · ")}\n${PITCH_TIP}`;
+}
+
 export function typeLabel(type: string | null | undefined): string {
   return type ? FEATURE_TYPE_LABEL[type] ?? type : "–";
 }
 
 const r3 = (v: number) => String(Number(v.toFixed(3)));
 
-/** 범위 표기: 위치형은 공칭 ∓ mm(절대), 치수형은 ±%(§4.3 range) */
+/** 범위 표기: 위치형은 공칭 ∓ mm(절대), 피치는 공칭 대비 −a / +b mm(하한이 빈 간격으로 비대칭), 치수형은 ±%(§4.3 range) */
 export function rangeText(nominal: number | null | undefined, min: number | null | undefined, max: number | null | undefined, type: string | null | undefined): string {
   if (min == null || max == null) return "–";
   const base = `${r3(min)} ~ ${r3(max)}`;
   if (nominal == null || !Number.isFinite(nominal)) return base;
   const d = Math.max(nominal - min, max - nominal);
   if (isPositionType(type)) return `${base} (∓${r3(d)} mm)`;
+  if (isPitchType(type)) return `${base} (−${r3(nominal - min)} / +${r3(max - nominal)} mm)`;
   if (nominal === 0) return base;
   return `${base} (±${r3((d / Math.abs(nominal)) * 100)}%)`;
 }
@@ -56,6 +96,7 @@ export const PREP_TONE: Record<NativeInfo["prep_status"], string> = { READY: "ok
 export const GEOM_ERROR_TEXT: Record<string, string> = {
   // 조립 매칭(asm-match.md §6.1·§6.3) ASM_* 코드 — 서버 문구가 한국어가 아닐 때의 대체
   ...Object.fromEntries(Object.entries(ASM_ERROR_TEXT).filter(([k]) => k.startsWith("ASM_"))),
+  ...RIB_PITCH_NOTE,
   GEOM_NATIVE_UNAVAILABLE: "Native 형상 엔진을 쓸 수 없습니다(관리자 설정 확인)",
   GEOM_PREP_STALE: "형상 준비본이 오래되었습니다 — '형상 준비 다시'를 실행하세요",
   GEOM_OPTIONS_INVALID: "검사 기준 값이 허용 범위를 벗어났습니다",

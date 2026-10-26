@@ -36,6 +36,7 @@ import { geometryRoutes, seedNative, type GeomRec } from "./geometry";
 import { seedAltairVars } from "./altairVars";
 import type { NativeVarPoolRow } from "../api/types";
 import { geomViewRoutes } from "./geomView";
+import { doePreviewRoutes } from "./doePreview";
 import { asmMatchRoutes } from "./asmMatch";
 import { mockReleases, releaseRoutes } from "./releases";
 import type { ReleasesResponse } from "../api/types";
@@ -71,6 +72,7 @@ const ROUTES: Route[] = [
   surrogateRoutes, // S13 ⑤ 내장 최적화(phase3.md §18.6)
   predictBatchRoutes, // S9 ④ 일괄 예측·템플릿 응답(phase3.md §14.7)
   geomViewRoutes, // geometry-view.md §6.5·§13.5 형상 3D 뷰·미리보기·결과 3D 컨투어(GEOM_*·CONTOUR3D_* media Range·410)
+  doePreviewRoutes, // doe-preview.md §6.6 DOE 표본 형상 그리드(셀 PNG는 위 geomViewRoutes media가 서빙)
   asmMatchRoutes, // asm-match.md §6.3 조립 매칭(목록·행·검사·확정, 검사 GLB media)
   captureRoutes, // S10 컨투어 media·다시 캡처·템플릿 표시 설정
   predictRunsRoutes, // S16 V1 ④ 단일 예측 실행 목록(phase3.md §21.2)

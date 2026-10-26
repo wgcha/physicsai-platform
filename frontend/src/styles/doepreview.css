@@ -1,0 +1,130 @@
+/* DOE 표본 형상 그리드 미리보기(doe-preview.md §7·§8) — 카드 바로 아래 전폭 카드: 툴바 1줄 + 범례 + 격자(2560 기준 6열 × 4행, 1280~2399 4열, 그 미만 2열). */
+.dp-toolbar {
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+.dp-spacer {
+  flex: 1;
+}
+.dp-legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.dp-legend-bar {
+  width: 240px;
+  height: 10px;
+  border: 1px solid var(--color-border);
+  border-radius: 2px;
+}
+.dp-legend-ticks {
+  display: flex;
+  gap: var(--space-3);
+}
+.dp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+@media (min-width: 1280px) {
+  .dp-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (min-width: 2400px) {
+  .dp-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+.dp-grid.stale {
+  opacity: 0.45;
+}
+.dp-cell {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-1);
+}
+.dp-cell[role="button"] {
+  cursor: pointer;
+}
+.dp-cell[role="button"]:hover {
+  border-color: var(--color-border-strong);
+}
+.dp-cell.nominal {
+  border-style: dashed;
+  background: var(--color-surface-2);
+}
+.dp-cell.fail {
+  border: 2px solid var(--color-danger);
+}
+.dp-cell.error {
+  border-style: dashed;
+  background: var(--color-surface-2);
+}
+.dp-img {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 4 / 3;
+  overflow: hidden;
+}
+.dp-img img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 320px;
+}
+.dp-gen,
+.dp-clip,
+.dp-over {
+  position: absolute;
+}
+.dp-gen {
+  top: var(--space-1);
+  right: var(--space-1);
+}
+.dp-clip {
+  left: var(--space-1);
+  top: var(--space-1);
+}
+.dp-over {
+  left: var(--space-1);
+  bottom: var(--space-1);
+}
+.dp-cap {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-1) var(--space-2) var(--space-2);
+  min-height: 3.2em;
+}
+.dp-cap2,
+.dp-fail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dp-fail {
+  color: var(--color-danger);
+}
+.dp-dialog {
+  display: grid;
+  gap: var(--space-3);
+}
+.dp-dialog .gv-stage {
+  height: 520px;
+}
+.dp-big img {
+  display: block;
+  width: 640px;
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--color-border);
+}
+.dp-values {
+  width: auto;
+}
