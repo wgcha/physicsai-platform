@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -154,7 +155,7 @@ def run(args, rep: Reporter) -> int:
     doc = load_features(args.features)
     values = load_values(args.values, doc, gopts)
     contacts = contacts_from_tag(args.tag_dir, doc)
-    src = None
+    src = mesh = comps = None
     if fe != "off":  # every FE input is read before any work (input errors -> exit 3)
         if mesh_args(args, ("baseline_inc", "renum_csv")) == "M":
             src = open_source(args)
@@ -170,8 +171,39 @@ def run(args, rep: Reporter) -> int:
                 raise PaicadError("GEOM_INPUT_INVALID", "renumber table parts do not match the tag parts")
     rep.progress(10, "loading nominal CAD")
     cad, nominal = nominal_cad(args.cad, doc, args.body_map)
-    names = [b["body"] for b in doc["bodies"]]
-    source = source_of(cad, args.features)
+    ctx = PreviewInputs(fe, vopts, gopts, nominal_ref, tess, doc, contacts, nominal, [b["body"] for b in doc["bodies"]], source_of(cad, args.features),
+                        args, src, mesh, comps)
+    return preview_core(ctx, values, out, rep, t_start)
+
+
+@dataclass
+class PreviewInputs:
+    """Everything of ``view preview`` that does not depend on the values (loaded once by ``view grid``)."""
+
+    fe: str
+    vopts: dict
+    gopts: dict
+    nominal_ref: dict
+    tess: dict
+    doc: dict
+    contacts: dict | None
+    nominal: list
+    names: list[str]
+    source: dict
+    args: object = None  # FE paths (assem_dir, baseline_inc) - only with fe != "off"
+    src: object = None
+    mesh: object = None
+    comps: object = None
+
+
+def preview_core(ctx: PreviewInputs, values: dict[str, float], out: OutDir, rep: Reporter, t_start: float, sink: dict | None = None) -> int:
+    """update (+ FE) of one value set into the prepared ``out`` (same files and bytes as ``view preview``).
+    ``sink`` (``view grid``) receives the manifest document and, when the update succeeded, the changed
+    B-rep tessellation with its ``_DISP_MM`` values."""
+    fe, vopts, gopts, nominal_ref, tess, doc, contacts, nominal, names, source = (
+        ctx.fe, ctx.vopts, ctx.gopts, ctx.nominal_ref, ctx.tess, ctx.doc, ctx.contacts, ctx.nominal, ctx.names, ctx.source)
+    args, src, mesh, comps = ctx.args, ctx.src, ctx.mesh, ctx.comps
+    sink = {} if sink is None else sink
     fvalues = feature_values(doc, gopts, values)
     param = mf.parameter_of(doc, split_groups(doc, gopts))
     timing = {"update_s": None, "tess_s": None, "morph_s": None, "check_s": None, "total_s": None}
@@ -195,6 +227,7 @@ def run(args, rep: Reporter) -> int:
         d.update(values=dict(values), nominal_ref=nominal_ref, disp=disp, fe=fe_doc, reports=reports, failure=failure, timing=timing)
         out.write_text(PREVIEW_MANIFEST, dumps(d))
         out.commit(rels + [PREVIEW_MANIFEST])
+        sink["manifest"] = d
         rep.progress(100, f"preview {status}")
         rep.result(status, code, PREVIEW_MANIFEST)
         return exit_code
@@ -276,6 +309,7 @@ def run(args, rep: Reporter) -> int:
     for tb, d in zip(tbs, state["disp"]):
         vface = mf.vertex_faces(len(tb.positions), tb.triangles, tb.face_ids)
         by_face[tb.name] = mf.face_disp_stats(topo_of[tb.name], vface, d, moved.get(tb.name, set()), mf.boundary_changed(nom_of[tb.name].topology(), topo_of[tb.name]))
+    sink.update(tess=tbs, disp=state["disp"])
     max_mm = max((float(d.max()) for d in state["disp"] if d.size), default=0.0)
     disp = {"attribute": "_DISP_MM", "max_mm": rnd(max_mm), "by_face": by_face}
     feats, fw = features_rows(topo_of, bbox_of, applied)

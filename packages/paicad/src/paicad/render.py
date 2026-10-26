@@ -64,11 +64,12 @@ def _view(d: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     return right, up, d
 
 
-def _project(p: np.ndarray, basis, scale: float, center: np.ndarray) -> np.ndarray:
+def _project(p: np.ndarray, basis, scale: float, center: np.ndarray, size: tuple[int, int] = (W, H)) -> np.ndarray:
+    """Screen (x, y, depth) of points ``p`` for an image ``size`` = (width, height)."""
     r, u, d = basis
     q = p - center
-    x = W / 2 + scale * (q @ r)
-    y = H / 2 - scale * (q @ u)
+    x = size[0] / 2 + scale * (q @ r)
+    y = size[1] / 2 - scale * (q @ u)
     return np.stack([x, y, q @ d], axis=-1)  # depth: larger = nearer the viewer
 
 
@@ -78,6 +79,7 @@ _FRAG_CHUNK = 1 << 21  # fragments (triangle x bbox pixel) per vectorized batch
 
 def _raster_loop(P: np.ndarray, tris: np.ndarray, shade: np.ndarray, zbuf: np.ndarray, cbuf: np.ndarray) -> None:
     """Reference rasterizer (one triangle at a time); ``_raster`` gives the same buffers, batched."""
+    H, W = zbuf.shape
     for k, t in enumerate(tris):
         a, b, c = P[t[0]], P[t[1]], P[t[2]]
         x0, x1 = int(max(0, np.floor(min(a[0], b[0], c[0])))), int(min(W - 1, np.ceil(max(a[0], b[0], c[0]))))
@@ -107,9 +109,11 @@ def _raster(P: np.ndarray, tris: np.ndarray, shade: np.ndarray, zbuf: np.ndarray
 
     Batched form of ``_raster_loop`` with identical buffers: the same element-wise float expressions per
     (triangle, pixel) fragment; per pixel the first triangle (in order) with the largest depth wins, and it
-    replaces the buffer only if strictly nearer - exactly what the sequential ``z > zbuf`` updates leave."""
+    replaces the buffer only if strictly nearer - exactly what the sequential ``z > zbuf`` updates leave.
+    The image size is the buffer shape (height, width)."""
     if len(tris) == 0:
         return
+    H, W = zbuf.shape
     A, B, C = P[tris[:, 0]], P[tris[:, 1]], P[tris[:, 2]]
     xmin = np.minimum(np.minimum(A[:, 0], B[:, 0]), C[:, 0])
     xmax = np.maximum(np.maximum(A[:, 0], B[:, 0]), C[:, 0])
@@ -193,12 +197,13 @@ def _shade(normal: np.ndarray, d: np.ndarray) -> np.ndarray:
     return 0.45 + 0.55 * np.abs(normal @ d)
 
 
-def _line(img: np.ndarray, p: np.ndarray, q: np.ndarray, width: int = 2) -> None:
+def _line(img: np.ndarray, p: np.ndarray, q: np.ndarray, width: int = 2, color: np.ndarray = LINE) -> None:
+    H, W = img.shape[:2]
     n = int(max(abs(q[0] - p[0]), abs(q[1] - p[1]))) + 1
     for s in np.linspace(0.0, 1.0, max(2, n)):
         x, y = p[:2] + s * (q[:2] - p[:2])
         xi, yi = int(round(x)), int(round(y))
-        img[max(0, yi - width // 2) : min(H, yi + width - width // 2), max(0, xi - width // 2) : min(W, xi + width - width // 2)] = LINE
+        img[max(0, yi - width // 2) : min(H, yi + width - width // 2), max(0, xi - width // 2) : min(W, xi + width - width // 2)] = color
 
 
 def _arrow(img: np.ndarray, p: np.ndarray, q: np.ndarray) -> None:
@@ -348,3 +353,145 @@ def dimension_points(feature: dict, bbox=None) -> tuple[np.ndarray, np.ndarray] 
 
 def write_png(path: str | Path, img: np.ndarray) -> None:
     Path(path).write_bytes(png_bytes(img))
+
+
+# ------------------------------------------------------------------ DOE preview thumbnails (doe-preview.md section 3.3)
+# ``turbo16``: 16 fixed colors (turbo colormap at the bin centers); the platform viewer legend uses the same table.
+TURBO16 = (
+    (62, 42, 114), (74, 84, 215), (60, 128, 248), (42, 170, 239), (37, 206, 207), (50, 233, 166), (81, 250, 127), (126, 253, 93),
+    (175, 244, 68), (220, 223, 51), (251, 190, 40), (255, 150, 33), (252, 106, 25), (221, 63, 17), (180, 29, 7), (148, 12, 0),
+)
+COLORMAPS = {"turbo16": np.array(TURBO16, dtype=float)}
+GHOST = np.array([205, 205, 205], dtype=float)  # nominal outline (1 px)
+FAIL_RED = np.array([230, 30, 30], dtype=float)
+EDGE = np.array([70, 70, 70], dtype=float)
+
+
+class Camera:
+    """Orthographic camera shared by every grid cell: ``view_dir`` (scene -> viewer, up = Z), center and scale fixed
+    by the nominal B-rep bbox only; key light from the upper right of the viewer."""
+
+    def __init__(self, view_dir, center, scale: float, w: int, h: int):
+        d = np.asarray(view_dir, dtype=float)
+        self.view_dir = [float(x) for x in view_dir]
+        self.d = d / np.linalg.norm(d)
+        self.basis = _view(self.d)
+        self.center = np.asarray(center, dtype=float)
+        self.scale = float(scale)
+        self.w, self.h = int(w), int(h)
+        r, u, _ = self.basis
+        light = self.d + 0.5 * u + 0.3 * r
+        self.light = light / np.linalg.norm(light)
+
+    @classmethod
+    def fit(cls, bbox, view_dir, margin: float, w: int, h: int) -> "Camera":
+        """Projected bbox (8 corners) x ``margin`` fits the image."""
+        lo, hi = np.asarray(bbox[:3], dtype=float), np.asarray(bbox[3:], dtype=float)
+        center = 0.5 * (lo + hi)
+        d = np.asarray(view_dir, dtype=float)
+        r, u, _ = _view(d / np.linalg.norm(d))
+        corners = np.array([[x, y, z] for x in (lo[0], hi[0]) for y in (lo[1], hi[1]) for z in (lo[2], hi[2])]) - center
+        ext_x = float(np.ptp(corners @ r)) * float(margin) or 1.0
+        ext_y = float(np.ptp(corners @ u)) * float(margin) or 1.0
+        return cls(view_dir, center, min(w / ext_x, h / ext_y), w, h)
+
+    def project(self, p: np.ndarray) -> np.ndarray:
+        return _project(np.asarray(p, dtype=float).reshape(-1, 3), self.basis, self.scale, self.center, (self.w, self.h))
+
+    def doc(self) -> dict:
+        return {"view_dir": self.view_dir, "center": [float(x) for x in self.center], "scale": self.scale}
+
+
+class ThumbMesh:
+    """Triangles of one body for a thumbnail: vertex values ``disp`` (colormap) or one RGB per triangle ``rgb``."""
+
+    def __init__(self, pts: np.ndarray, tris: np.ndarray, disp: np.ndarray | None = None, rgb: np.ndarray | None = None):
+        self.pts = np.asarray(pts, dtype=float).reshape(-1, 3)
+        self.tris = np.asarray(tris, dtype=np.int64).reshape(-1, 3)
+        self.disp = None if disp is None else np.asarray(disp, dtype=float).reshape(-1)
+        self.rgb = None if rgb is None else np.asarray(rgb, dtype=float).reshape(-1, 3)
+
+
+def _segment_pixels(P0: np.ndarray, P1: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Pixels (x, y, depth) along screen segments P0[k] -> P1[k] (one sample per pixel step, rounded)."""
+    if len(P0) == 0:
+        return np.zeros(0, dtype=np.int64), np.zeros(0, dtype=np.int64), np.zeros(0)
+    n = (np.maximum(np.abs(P1[:, 0] - P0[:, 0]), np.abs(P1[:, 1] - P0[:, 1])).astype(np.int64) + 1).clip(2, None)
+    rep = np.repeat(np.arange(len(P0)), n)
+    s = (np.arange(int(n.sum())) - np.repeat(np.cumsum(n) - n, n)) / np.repeat(n - 1, n)
+    q = P0[rep] + s[:, None] * (P1[rep] - P0[rep])
+    return np.rint(q[:, 0]).astype(np.int64), np.rint(q[:, 1]).astype(np.int64), q[:, 2]
+
+
+def _lines_to_pixels(cam: Camera, lines: list[np.ndarray]) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    segs = [(p[:-1], p[1:]) for p in lines if len(p) >= 2]
+    if not segs:
+        return _segment_pixels(np.zeros((0, 3)), np.zeros((0, 3)))
+    P0 = cam.project(np.concatenate([a for a, _ in segs]))
+    P1 = cam.project(np.concatenate([b for _, b in segs]))
+    return _segment_pixels(P0, P1)
+
+
+def render_thumb(cam: Camera, meshes: list[ThumbMesh], disp_range, colormap: str = "turbo16", ghost: list[np.ndarray] | None = None,
+                 edges: list[np.ndarray] | None = None) -> tuple[np.ndarray, bool]:
+    """(RGB float image[h, w, 3], clipped) of one grid cell: white background, nominal outline ``ghost`` (light gray 1 px,
+    drawn first), the cell triangles shaded (``_shade`` with the camera key light) and colored per pixel by the
+    barycentric interpolation of the vertex ``disp`` quantized into the colormap over ``disp_range`` (saturated at the
+    ends) or by the triangle ``rgb``; optional visible ``edges`` (dark 1 px, depth tested). ``clipped`` = a cell
+    vertex projects outside the image."""
+    w, h = cam.w, cam.h
+    img = np.tile(BG, (h, w, 1))
+    if ghost:
+        x, y, _ = _lines_to_pixels(cam, ghost)
+        ok = (x >= 0) & (x < w) & (y >= 0) & (y < h)
+        img[y[ok], x[ok]] = GHOST
+    pts, tris, disp, rgb, has_disp = [], [], [], [], []
+    off = 0
+    for m in meshes:
+        if not len(m.tris):
+            continue
+        pts.append(m.pts)
+        tris.append(m.tris + off)
+        disp.append(m.disp if m.disp is not None else np.zeros(len(m.pts)))
+        rgb.append(m.rgb if m.rgb is not None else np.zeros((len(m.tris), 3)))
+        has_disp.append(np.full(len(m.tris), m.disp is not None))
+        off += len(m.pts)
+    if not pts:
+        return img, False
+    pts, tris, disp, rgb, has_disp = np.concatenate(pts), np.concatenate(tris), np.concatenate(disp), np.concatenate(rgb), np.concatenate(has_disp)
+    P = cam.project(pts)
+    used = np.unique(tris)
+    clipped = bool(np.any((P[used, 0] < 0) | (P[used, 0] > w) | (P[used, 1] < 0) | (P[used, 1] > h)))
+    a, b, c = pts[tris[:, 0]], pts[tris[:, 1]], pts[tris[:, 2]]
+    n = np.cross(b - a, c - a)
+    nn = np.linalg.norm(n, axis=1)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        normal = np.where(nn[:, None] > 0, n / nn[:, None], 0.0)
+    zbuf = np.full((h, w), -np.inf)
+    kbuf = np.full((h, w), -1.0)
+    _raster(P, tris, np.arange(len(tris), dtype=float), zbuf, kbuf)
+    py, px = np.nonzero(np.isfinite(zbuf))
+    k = kbuf[py, px].astype(np.int64)
+    shade = _shade(normal[k], cam.light)
+    col = rgb[k].copy()
+    dk = has_disp[k]
+    if dk.any():
+        t = tris[k[dk]]
+        A, B, C = P[t[:, 0]], P[t[:, 1]], P[t[:, 2]]
+        xs, ys = px[dk] + 0.5, py[dk] + 0.5
+        den = (B[:, 1] - C[:, 1]) * (A[:, 0] - C[:, 0]) + (C[:, 0] - B[:, 0]) * (A[:, 1] - C[:, 1])
+        w0 = np.clip(((B[:, 1] - C[:, 1]) * (xs - C[:, 0]) + (C[:, 0] - B[:, 0]) * (ys - C[:, 1])) / den, 0.0, 1.0)
+        w1 = np.clip(((C[:, 1] - A[:, 1]) * (xs - C[:, 0]) + (A[:, 0] - C[:, 0]) * (ys - C[:, 1])) / den, 0.0, 1.0 - w0)
+        v = w0 * disp[t[:, 0]] + w1 * disp[t[:, 1]] + (1.0 - w0 - w1) * disp[t[:, 2]]
+        lo, hi = float(disp_range[0]), float(disp_range[1])
+        cmap = COLORMAPS[colormap]
+        idx = np.clip(np.floor((v - lo) / (hi - lo) * len(cmap)), 0, len(cmap) - 1).astype(np.int64)
+        col[dk] = cmap[idx]
+    img[py, px] = col * shade[:, None]
+    if edges:
+        x, y, z = _lines_to_pixels(cam, edges)
+        ok = (x >= 0) & (x < w) & (y >= 0) & (y < h)
+        x, y, z = x[ok], y[ok], z[ok]
+        vis = z >= zbuf[y, x] - 2.0 / cam.scale
+        img[y[vis], x[vis]] = EDGE
+    return img, clipped

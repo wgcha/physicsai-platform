@@ -3,6 +3,8 @@
 * ``view export``  -> ``view.glb`` + ``view_manifest.json`` (nominal B-rep, solid bodies)
 * ``view preview`` -> ``preview.glb`` (+ ``preview_fe.glb``) + ``preview_manifest.json`` (update only by
   default; ``--fe morph|check`` adds the morphed FE skin; no solver include is ever written)
+* ``view grid``    -> per cell (value set) the ``view preview --fe off`` outputs + ``thumb.png`` (common camera and
+  color range), ``grid_manifest.json`` (doe-preview.md section 3)
 
 View options are a separate file ``view_options.json`` (``--view-options``, GV-4); the geometry
 ``options.json`` schema is unchanged. Tessellation, edge discretization and face distances go through
@@ -168,6 +170,10 @@ def run(args, rep) -> int:
         from .export import run as export_run
 
         return export_run(args, rep)
+    if args.view_cmd == "grid":
+        from .grid import run as grid_run
+
+        return grid_run(args, rep)
     from .preview import run as preview_run
 
     return preview_run(args, rep)

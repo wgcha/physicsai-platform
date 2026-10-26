@@ -135,8 +135,12 @@ def _nominal(doc: dict, name: str) -> float:
 
 
 def load_values(path: str | Path, doc: dict, opts: dict) -> dict[str, float]:
-    v = read_json(path, "values file")
-    if v.get("schema_version", 1) != 1 or not isinstance(v.get("values"), dict):
+    return values_from(read_json(path, "values file"), doc, opts)
+
+
+def values_from(v: dict, doc: dict, opts: dict) -> dict[str, float]:
+    """Validated values of a parsed values document (``load_values``; ``view grid`` cells use the same rules)."""
+    if not isinstance(v, dict) or v.get("schema_version", 1) != 1 or not isinstance(v.get("values"), dict):
         raise PaicadError("GEOM_INPUT_INVALID", "values file must be {schema_version: 1, values: {name: number}}")
     keys = param_keys(doc, opts)
     unknown = sorted(set(v["values"]) - set(keys))

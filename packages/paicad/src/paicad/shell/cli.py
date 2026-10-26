@@ -97,7 +97,7 @@ def add_parser(sub) -> None:
 
 
 def add_view_parser(ss) -> None:
-    """``paicad shell view export|preview`` (geometry-view.md section 5.1)."""
+    """``paicad shell view export|preview|grid`` (geometry-view.md section 5.1, doe-preview.md section 3.1)."""
     vw = ss.add_parser("view", help="3D view (GLB) of the mid-surface sheet | bead preview", allow_abbrev=False)
     vs = vw.add_subparsers(dest="view_cmd", metavar="action", required=True)
     ve = vs.add_parser("export", help="nominal sheet -> view.glb + view_manifest.json (kind shell)", allow_abbrev=False)
@@ -118,6 +118,9 @@ def add_view_parser(ss) -> None:
     vp.add_argument("--tag-dir", help="shell tag output (required with --fe morph|check)")
     vp.add_argument("--thickness")
     vp.add_argument("--threads", type=int)
+    from ..cli import add_grid_parser
+
+    add_grid_parser(vs, shell=True)
 
 
 def dispatch(args, rep) -> int:
