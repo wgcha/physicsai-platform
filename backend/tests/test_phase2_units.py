@@ -132,6 +132,9 @@ def test_t10b_rules():
     assert f("TD_SOLVE", None, ["CANCELED", "CANCELED"]) == "T13"
     assert f("PREDICT_VERIFY", None, ["CANCELED"]) == "T13"
     assert f("TD_SOLVE", "collect_partial", ["SUCCEEDED", "CANCELED"]) == "T10b"
+    # 미제출 행(NOT_SUBMITTED)은 실패로 세지 않음(D3-57 ①) — base와 같이 T10
+    assert f("TD_SOLVE", "collect_partial", ["SUCCEEDED", "SUCCEEDED", "NOT_SUBMITTED"]) == "T10"
+    assert f("TD_SOLVE", "fail_job", ["SUCCEEDED", "NOT_SUBMITTED"]) == "T10"
 
 
 def test_notification_titles():

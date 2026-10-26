@@ -987,7 +987,7 @@ step 정의·작업 유형·재시도 시작 지점은 그대로다(`TS_PREP →
 | relay | 연결 실패·5xx·`DRIVE_AUTH_REQUIRED`·`DRIVE_BUSY` 등 | 상태 유지 | `HpcGatewayError(UNAVAILABLE)` → 기존 `hpc_unreachable_since`·`max_unreachable_minutes`(문구에 "대시보드 SCX 연결 확인") |
 | relay | 404 `JOB_NOT_FOUND`(relay 기록에 없음) | 상태 유지, error_message | 설정·DB 불일치 — UNAVAILABLE과 같이 처리 |
 
-> 변경 메모(2026-10-26 현장, v0.2.12): SCX에서 취소된 잡이 PhysicsAI에서 계속 "실행 중"으로 남던 문제. 실제 SCX 취소 상태 문자열을 확인하지 못해 취소 계열 문자열을 넓게 `CANCELED`로 매핑(대소문자·앞뒤 공백 무시). 이전 `Aborted` → `FAILED "SCX에서 중단됨"` 규칙은 폐기. `hpc_terminal_transition`은 `CANCELED` 행을 `FAILED`·`LOST`와 같이 실패로 센다(전부 취소 → T13 "SCX에서 취소됨", 일부 성공 + `collect_partial` → T10b). 사용자 취소 경로(`cancel_requested_at`)는 영향 없음.
+> 변경 메모(2026-10-26 현장, v0.2.12): SCX에서 취소된 잡이 PhysicsAI에서 계속 "실행 중"으로 남던 문제. 실제 SCX 취소 상태 문자열을 확인하지 못해 취소 계열 문자열을 넓게 `CANCELED`로 매핑(대소문자·앞뒤 공백 무시). 이전 `Aborted` → `FAILED "SCX에서 중단됨"` 규칙은 폐기. `hpc_terminal_transition`은 `CANCELED` 행을 `FAILED`·`LOST`와 같이 실패로 센다(전부 취소 → T13 "SCX에서 취소됨", 일부 성공 + `collect_partial` → T10b). 단 미제출 행(`CANCELED`·`staged.phase=not_submitted`, D3-57 ①)은 종료 판정(T10·T10b·T13)과 T10b 실패·총수 집계에서 계속 뺀다(폴러가 상태를 `NOT_SUBMITTED`로 넘김). "SCX에서 취소됨" 문구는 제출된 행이 취소된 경우에만. `external_state_raw`는 마스킹 후 128자로 저장. `SCX_UNKNOWN_STATUS` 경고는 (작업, 원문)당 1건(작업 경고 목록에 같은 code·문구가 있으면 추가 안 함), 합성 표식 `SCX_JOB_NOT_FOUND`는 제외. 사용자 취소 경로(`cancel_requested_at`)는 영향 없음.
 
 `collect_state`(`NONE→PENDING→COLLECTING→COLLECTED|FAILED`)와 `hpc_terminal_transition`(T10·T10b·T13)은 그대로. `UNKNOWN`은 종료 상태가 아니므로 작업이 기다린다.
 

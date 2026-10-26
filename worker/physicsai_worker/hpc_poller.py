@@ -106,7 +106,7 @@ class HpcPollerMixin:
                 self._terminal_transition(conn, job_now)
 
     def _status_values(self, h: dict[str, Any], st: Any, lost_after_polls: int) -> dict[str, Any]:
-        vals: dict[str, Any] = {"external_state_raw": st.raw_state}
+        vals: dict[str, Any] = {"external_state_raw": self._mask(st.raw_state)[:128] if st.raw_state is not None else None}
         if getattr(st, "output_rel", None) or getattr(st, "output_path", None):
             vals.update(output_rel=st.output_rel, output_path=st.output_path)
         seen_running = h["state"] in ("QUEUED", "RUNNING")
@@ -140,10 +140,11 @@ class HpcPollerMixin:
     def _warn_unknown_status(self, h: dict[str, Any], raw: str | None) -> None:
         """알 수 없는 SCX 상태 원문을 작업 로그 경고로 1회 남긴다(같은 원문은 반복하지 않음)."""
         raw_s = (raw or "").strip()
-        if not raw_s or not h.get("external_job_id") or h.get("gateway_mode") != "scx":
-            return
+        if not raw_s or raw_s == "SCX_JOB_NOT_FOUND" or not h.get("external_job_id") or h.get("gateway_mode") != "scx":
+            return  # SCX_JOB_NOT_FOUND는 게이트웨이가 붙인 합성 표식(원문 아님)
+        raw_s = self._mask(raw_s)[:128]
         seen = self.__dict__.setdefault("_unknown_status_seen", set())
-        key = (h["id"], raw_s.casefold())
+        key = (h["job_id"], raw_s.casefold())
         if key in seen:
             return
         seen.add(key)
@@ -151,9 +152,11 @@ class HpcPollerMixin:
         try:
             with self.engine.begin() as conn:
                 job_now = jobs_repo.get_job(conn, h["job_id"])
-                if job_now is not None and job_now["state"] == "WAITING_HPC":
-                    hpc_repo.add_waiting_warning(conn, job_now, "SCX_UNKNOWN_STATUS",
-                                                 self._mask(f"SCX 상태 원문을 알 수 없습니다: {raw_s}"))
+                msg = f"SCX 상태 원문을 알 수 없습니다: {raw_s}"
+                dup = any(w.get("code") == "SCX_UNKNOWN_STATUS" and w.get("message") == msg[:500]
+                          for w in ((job_now or {}).get("warnings") or []))  # 재시작·여러 워커에서도 중복 방지(DB 기준)
+                if job_now is not None and job_now["state"] == "WAITING_HPC" and not dup:
+                    hpc_repo.add_waiting_warning(conn, job_now, "SCX_UNKNOWN_STATUS", msg)
         except Exception:  # noqa: BLE001 - 경고 기록 실패가 폴링을 멈추지 않게
             log.exception("SCX 알 수 없는 상태 경고 기록 실패")
 
@@ -162,15 +165,18 @@ class HpcPollerMixin:
         if job_now["job_type"] == "TD_SOLVE":  # 최신 attempt만(재시도는 새 작업이지만 방어적으로)
             last = max((h["attempt_no"] for h in hjobs), default=0)
             hjobs = [h for h in hjobs if h["attempt_no"] == last]
+        def _unsub(h: dict[str, Any]) -> bool:  # scx 미제출 행(D3-57 ①): 실패로 세지 않음
+            return h["state"] == "CANCELED" and (h.get("staged") or {}).get("phase") == "not_submitted"
+
         tno = hpc_terminal_transition(job_now["job_type"], (job_now["params"] or {}).get("on_run_failure"),
-                                      [h["state"] for h in hjobs])
+                                      ["NOT_SUBMITTED" if _unsub(h) else h["state"] for h in hjobs])
         if tno == "T13":
-            if any(h["state"] == "CANCELED" for h in hjobs):
+            if any(h["state"] == "CANCELED" and not _unsub(h) for h in hjobs):
                 hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "SCX에서 취소됨 — 해석 작업이 SCX에서 취소되어 끝났습니다")
             else:
                 hpc_repo.fail_waiting(conn, job_now, "HPC_RUN_FAILED", "PBS 해석이 실패했거나 상태를 잃었습니다")
         elif tno == "T10b":
-            failed = sum(1 for h in hjobs if h["state"] in ("FAILED", "LOST", "CANCELED"))
+            failed = sum(1 for h in hjobs if h["state"] in ("FAILED", "LOST", "CANCELED") and not _unsub(h))
             total = sum(1 for h in hjobs if (h.get("staged") or {}).get("phase") != "not_submitted")  # scx 미제출 행 제외
             hpc_repo.to_collecting_partial(conn, job_now, failed, total)
         elif tno == "T10":

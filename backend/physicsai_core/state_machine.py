@@ -49,7 +49,8 @@ CONDITIONAL_TRANSITIONS: dict[str, tuple[str, str]] = {
 
 def hpc_terminal_transition(job_type: str, on_run_failure: str | None, hpc_states: list[str]) -> str | None:
     """모든 hpc_job이 끝났을 때 WAITING_HPC에서 갈 전이 번호(T10·T10b·T13). 아직 진행 중이면 None."""
-    terminal = {"SUCCEEDED", "FAILED", "CANCELED", "LOST"}
+    # NOT_SUBMITTED: scx 미제출 행(CANCELED·staged.phase=not_submitted) — 끝난 것으로 보되 성공·실패로 세지 않음(D3-57 ①)
+    terminal = {"SUCCEEDED", "FAILED", "CANCELED", "LOST", "NOT_SUBMITTED"}
     if not hpc_states or any(s not in terminal for s in hpc_states):
         return None
     failed = sum(1 for s in hpc_states if s in ("FAILED", "LOST", "CANCELED"))  # CANCELED: SCX 쪽 취소(사용자 취소는 이 경로를 거치지 않음)

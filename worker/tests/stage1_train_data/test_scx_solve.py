@@ -169,6 +169,10 @@ def test_scx_unknown_then_attach(p2_scx, engine):
     runs = _runs(c, doe_id)
     assert runs["run__00001"]["state"] == runs["run__00002"]["state"] == "COLLECTED"
     assert job(c, j["id"])["result"]["submitted"] == 2  # 미제출(not_submitted) 행 제외
+    # D3-57 ①: 미제출 CANCELED 행은 실패로 세지 않음 → T10b(일부 실패)가 아니라 T10
+    with engine.connect() as conn:
+        ev = [e for (e,) in conn.execute(text("select event from notifications where job_id=:j"), {"j": j["id"]})]
+    assert "HPC_PARTIAL_FAILED" not in ev
 
 
 def fake_relay_add(fake, job_dir: str) -> str:
