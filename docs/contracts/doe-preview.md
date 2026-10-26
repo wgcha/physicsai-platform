@@ -243,7 +243,7 @@ commands:
 |---|---|---|
 | V-DP-1 | paicad 동결: 기존 `view export/preview`·`extract` PNG·`shell *` 출력·인자·시험 무수정 통과(`render.py` 일반화 후 피처 PNG 바이트 동일) | 통과 |
 | V-DP-2 | 셀 = 단건: 가상 쿠션·SM1에서 `view grid` 셀의 `preview.glb`·`preview_manifest.json`(`thumb`·`timing` 제외) = 같은 값 `view preview --fe off` 출력 바이트 동일 | 바이트 동일 |
-| V-DP-3 | 표본 일치: `train`·`param_set` 출처, `SITE_KINDS[train_native]` 각 kind(`lhs` 3모양 포함)의 미리보기 행렬 = 같은 본문의 `TD_DOE_GEN` DG_PREP `doe_matrix.csv` | 바이트 동일 |
+| V-DP-3 | 표본 일치: `train`·`param_set` 출처, `SITE_KINDS[train_native]` 각 kind(`lhs`는 `sampling.kind=lhs` 형태 — 미리보기 API는 `sampling` 필수, 생략형·`{num_runs,seed}`형은 받지 않음(422))의 미리보기 행렬 = 같은 본문의 `TD_DOE_GEN` DG_PREP `doe_matrix.csv` | 바이트 동일 |
 | V-DP-4 | 공통 카메라: 서로 다른 표본 셀 2개의 `grid_manifest.camera.digest` 동일, 공칭 셀 PNG의 형상 외곽 픽셀 bbox = 계산 투영 bbox(±1 px), `disp_range_mm` 계산식·길이 단위만 | 통과 |
 | V-DP-5 | 실패 셀: 충돌 값 → 셀 `FAIL`·`GEOM_FEATURE_COLLISION`·GLB 없음·PNG 있음(원인 면 빨강 픽셀 존재), 다음 셀 계속 처리, 셀 하나 `VIEW_TOO_LARGE` → 그 셀만 `ERROR` | 통과 |
 | V-DP-6 | 결정성: `view grid` 2회 셀 산출물·`thumb.png` 바이트 동일 | 통과 |
