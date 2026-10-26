@@ -18,6 +18,7 @@ Exit: 0 OK, 10 update FAIL, 11 morph/check FAIL, 14 view output failure, 2 missi
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass, field
 
 import numpy as np
 
@@ -316,16 +317,9 @@ def _clusters_of(fixed, node_ids) -> list[int]:
 
 
 def preview_run(args, rep: Reporter) -> int:
-    from ..kernel import save_sheet_brep
-    from .check import check_core, morphed_coords, tag_distances, thickness_map
-    from .check import report as check_report
+    from .check import tag_distances, thickness_map
     from .fixed import part_mesh
-    from .morph import MorphFailed, load_mesh_inputs, morph_core, write_files
-    from .morph import fail_report as morph_fail_report
-    from .morph import ok_report as morph_ok_report
-    from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON, face_map, update_core
-    from .update import fail_report as update_fail_report
-    from .update import ok_report as update_ok_report
+    from .morph import load_mesh_inputs
 
     t_start = time.monotonic()
     fe = args.fe
@@ -342,6 +336,7 @@ def preview_run(args, rep: Reporter) -> int:
     doc = load_shell_features(args.features)
     values = load_values(args.values, doc, o)
     fixed = _fixed(args.fixed_dir)
+    fe_in: dict = {}
     if fe != "off":  # every FE input is read before any work (input errors -> exit 3)
         _, tag, fixed, asm, meshes = load_mesh_inputs(args.tag_dir, args.fixed_dir, args.assem_dir)
         thick = thickness_map(asm, args.thickness)
@@ -354,9 +349,50 @@ def preview_run(args, rep: Reporter) -> int:
                 raise PaicadError("GEOM_INPUT_INVALID", f"shell part {m.part_id}: element table differs from the tag mesh")
             elem_ids[m.index] = np.asarray(pm.elem_ids, dtype=np.int64)
             titles[m.index] = title_of.get(m.part_id) or pm.title or f"PART:{m.part_id}"
+        fe_in = dict(asm=asm, meshes=meshes, thick=thick, tag_dist=tag_dist, titles=titles, elem_ids=elem_ids)
     rep.progress(10, "loading mid-surface CAD")
     cad, names, nominal = _bodies(args.cad, doc)
-    source = _source(cad, args.features, fixed)
+    ctx = ShellPreviewInputs(fe, vopts, o, nominal_ref, tess, doc, fixed, cad, names, nominal, _source(cad, args.features, fixed), fe_in)
+    return shell_preview_core(ctx, values, out, rep, t_start)
+
+
+@dataclass
+class ShellPreviewInputs:
+    """Everything of ``shell view preview`` that does not depend on the values (loaded once by ``shell view grid``)."""
+
+    fe: str
+    vopts: dict
+    o: dict
+    nominal_ref: dict
+    tess: dict
+    doc: dict
+    fixed: object
+    cad: object
+    names: list[str]
+    nominal: list
+    source: dict
+    fe_in: dict = field(default_factory=dict)  # FE inputs (asm, meshes, thick, tag_dist, titles, elem_ids) - fe != "off"
+    memo: dict = field(default_factory=dict)  # value-independent results shared by the cells of one grid
+
+
+def shell_preview_core(ctx: ShellPreviewInputs, values: dict[str, float], out: OutDir, rep: Reporter, t_start: float, sink: dict | None = None) -> int:
+    """shell update (+ FE) of one value set into the prepared ``out`` (same files and bytes as ``shell view preview``);
+    ``sink`` as in ``view.preview.preview_core``."""
+    from ..kernel import save_sheet_brep
+    from .check import check_core, morphed_coords
+    from .check import report as check_report
+    from .morph import MorphFailed, morph_core, write_files
+    from .morph import fail_report as morph_fail_report
+    from .morph import ok_report as morph_ok_report
+    from .update import FACE_MAP_JSON, SAMPLE_BREP, UPDATE_JSON, face_map, update_core
+    from .update import fail_report as update_fail_report
+    from .update import ok_report as update_ok_report
+
+    fe, vopts, o, nominal_ref, tess, doc, fixed, cad, names, nominal, source = (
+        ctx.fe, ctx.vopts, ctx.o, ctx.nominal_ref, ctx.tess, ctx.doc, ctx.fixed, ctx.cad, ctx.names, ctx.nominal, ctx.source)
+    fi = ctx.fe_in
+    asm, meshes, thick, tag_dist, titles, elem_ids = (fi.get(k) for k in ("asm", "meshes", "thick", "tag_dist", "titles", "elem_ids"))
+    sink = {} if sink is None else sink
     fvalues = feature_values(doc, o, values)
     timing = {"update_s": None, "tess_s": None, "morph_s": None, "check_s": None, "total_s": None}
     reports = {"update": f"update/{UPDATE_JSON}", "morph": None, "check": None}
@@ -369,6 +405,7 @@ def preview_run(args, rep: Reporter) -> int:
         d.update(values=dict(values), nominal_ref=nominal_ref, disp=disp, fe=fe_doc, reports=reports, failure=failure, timing=timing)
         out.write_text(PREVIEW_MANIFEST, dumps(d))
         out.commit(rels + [PREVIEW_MANIFEST])
+        sink["manifest"] = d
         rep.progress(100, f"shell preview {status}")
         rep.result(status, code, PREVIEW_MANIFEST)
         return exit_code
@@ -431,7 +468,9 @@ def preview_run(args, rep: Reporter) -> int:
 
     markers, clusters = [], []
     if fixed is not None:  # fixed nodes do not move: markers / cluster faces on the nominal sheet (same as export)
-        markers, clusters = fixed_markers(doc, fixed, tess_bodies(nominal, names, tess["linear_mm"], tess["angular_deg"], False))
+        if "markers" not in ctx.memo:
+            ctx.memo["markers"] = fixed_markers(doc, fixed, tess_bodies(nominal, names, tess["linear_mm"], tess["angular_deg"], False))
+        markers, clusters = ctx.memo["markers"]
 
     def build(tbs: list[BodyTess]) -> bytes:
         disps = [disp_of(tb) for tb in tbs]
@@ -457,6 +496,7 @@ def preview_run(args, rep: Reporter) -> int:
         ch = res.changed.get(tb.name) or {}
         vface = mf.vertex_faces(len(tb.positions), tb.triangles, tb.face_ids)
         by_face[tb.name] = mf.face_disp_stats(topo_of[tb.name], vface, d, {mf.fid(x) for x in ch.get("geometry") or []}, {mf.fid(x) for x in ch.get("boundary_only") or []})
+    sink.update(tess=tbs, disp=state["disp"])
     max_mm = max((float(d.max()) for d in state["disp"] if d.size), default=0.0)
     disp = {"attribute": "_DISP_MM", "max_mm": rnd(max_mm), "by_face": by_face}
     feats, fw = feature_rows(doc, o, fvalues, geo, sample_of, bbox_of)
@@ -542,4 +582,8 @@ def preview_run(args, rep: Reporter) -> int:
 def run(args, rep: Reporter) -> int:
     if args.view_cmd == "export":
         return export_run(args, rep)
+    if args.view_cmd == "grid":
+        from .grid import run as grid_run
+
+        return grid_run(args, rep)
     return preview_run(args, rep)

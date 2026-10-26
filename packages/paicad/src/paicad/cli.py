@@ -141,6 +141,7 @@ def _parser() -> argparse.ArgumentParser:
     vp.add_argument("--assem-dir")
     _asm_source_args(vp)
     vp.add_argument("--threads", type=int)
+    add_grid_parser(vsub, shell=False)
 
     st = sub.add_parser("selftest", help="site acceptance kit: numeric summary report only (no CAD/mesh content)", allow_abbrev=False, epilog=MESH_HELP)
     for a in ("--cad", "--assem-dir", "--out-dir"):
@@ -202,6 +203,19 @@ def _parser() -> argparse.ArgumentParser:
 
     add_shell_parser(sub)
     return p
+
+
+def add_grid_parser(vsub, shell: bool) -> None:
+    """``paicad [shell] view grid`` (doe-preview.md section 3.1)."""
+    what = "sheet" if shell else "B-rep"
+    g = vsub.add_parser("grid", help=f"cells.json value sets -> per cell changed {what} preview (update only) + thumb.png, grid_manifest.json", allow_abbrev=False)
+    for a in ("--cad", "--features", "--cells", "--out-dir", *(("--fixed-dir",) if shell else ()), "--thumb-options"):
+        g.add_argument(a, required=True)
+    g.add_argument("--tag-dir", help="tag output" + (" (accepted, not used by the shell update)" if shell else " (contact faces of the update)"))
+    g.add_argument("--body-map")
+    g.add_argument("--options", help="geometry options (update behaviour)")
+    g.add_argument("--view-options", help="view_options.json (tessellation tolerances, size limits)")
+    g.add_argument("--threads", type=int)
 
 
 def versions() -> dict:
