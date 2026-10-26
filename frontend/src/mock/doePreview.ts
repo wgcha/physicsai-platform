@@ -214,7 +214,7 @@ export const doePreviewRoutes: Route = (srv, { method, seg, body }) => {
         const hi = Math.max(...xs);
         return { name: n, nominal: (lo + hi) / 2, min: lo, max: hi };
       });
-      rows = samples.map((r, i) => ({ doe_no: i + 1, values: r.values, gen: i === 11 ? { status: "SKIPPED", code: "GEOM_QUALITY", step: "CHECK" } : i === 2 ? { status: "SKIPPED", code: "GEOM_FEATURE_COLLISION", step: "UPDATE" } : i >= 27 ? { status: "PENDING" } : { status: "OK" } }));
+      rows = samples.map((r, i) => ({ doe_no: i + 1, values: r.values, gen: i === 11 ? { status: "SKIPPED", code: "GEOM_QUALITY", step: "check" } : i === 2 ? { status: "SKIPPED", code: "GEOM_FEATURE_COLLISION", step: "update" } : i >= 27 ? { status: "PENDING" } : { status: "OK" } }));
     } else {
       vars = varsOf(srv, study.id, ps);
       if (!vars.length) return err(422, "DOE_SAMPLING_INVALID", "사용할 변수가 없습니다", { problems: [{ code: "NO_NAMES", message: "사용할 변수가 없습니다" }] });

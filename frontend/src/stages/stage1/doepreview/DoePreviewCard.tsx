@@ -45,7 +45,7 @@ export function DoePreviewCard({ studyId, gallery, input, names, canRun, onClose
   const prog = progressOf(cells);
   const running = g.pages.some((p) => isActive(p.pv));
   const stale = requested != null && (!input || inputKey(input.source, input.sampling) !== requested);
-  const range = first?.disp_range_mm;
+  const range = first?.disp_range_mm ?? undefined;
   const canceled = g.pages.some((p) => p.pv.status === "CANCELED");
   const failedJob = g.pages.find((p) => p.pv.status === "FAILED");
   const queued = g.pages.map((p) => p.pv.queue).find((q) => !!q) ?? null;

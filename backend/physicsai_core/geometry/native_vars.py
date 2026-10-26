@@ -141,7 +141,7 @@ def _rib_info(doc: Mapping[str, Any], raw: Mapping[str, Mapping[str, Any]], name
     nom = _num(row_feat.get("nominal"))
     if nom is not None and t.get(k) is not None and t.get(k + 1) is not None:
         gap = round(nom - (t[k] + t[k + 1]) / 2, 6)  # 공칭 빈 간격 = 피치 − 두께 반합
-    return {"row": r["id"], "k": k, "n": int(r["n"]), "anchor": rr["anchor"], "gap_mm": gap, "axis": rr.get("axis") if isinstance(rr.get("axis"), str) else "",
+    return {"row": r["id"], "body": str(f.get("body") or ""), "k": k, "n": int(r["n"]), "anchor": rr["anchor"], "gap_mm": gap, "axis": rr.get("axis") if isinstance(rr.get("axis"), str) else "",
             "end_room_mm": {"minus": _num(room.get("minus")), "plus": _num(room.get("plus"))}, "ribs": ribs}
 
 
@@ -362,12 +362,12 @@ def rib_pitch_notes(vars_doc: Mapping[str, Any], bounds: Mapping[str, Sequence[f
        `min_gap_mm`)에서 거꾸로 얻는다(옵션 값을 플랫폼이 따로 알 필요 없음). 변수로 고르지 않은 두께는 증가 0으로 본다."""
     rows = {str(v["name"]): v for v in vars_doc.get("variables") or [] if isinstance(v, Mapping) and "name" in v}
     out: list[dict[str, str]] = []
-    by_row: dict[tuple[str, str], list[Mapping[str, Any]]] = {}
+    by_row: dict[tuple[str, str, str], list[Mapping[str, Any]]] = {}
     for v in rows.values():
         rib = v.get("rib")
         if isinstance(rib, Mapping) and isinstance(rib.get("row"), str):
-            by_row.setdefault((str(rib.get("row")), str(rib.get("axis") or "")), []).append(v)
-    for (rid, _axis), vs in by_row.items():
+            by_row.setdefault((str(rib.get("body") or ""), str(rib.get("row")), str(rib.get("axis") or "")), []).append(v)  # 열 id(U1…)는 바디마다 다시 매겨진다
+    for (_body, rid, _axis), vs in by_row.items():
         first = vs[0]["rib"]
         anchor, room, ribs = str(first.get("anchor") or ""), first.get("end_room_mm") or {}, first.get("ribs") or []
         grow = {"minus": 0.0, "plus": 0.0}

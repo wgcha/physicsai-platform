@@ -97,8 +97,8 @@ export interface UiPoll {
 }
 /** phase2.md §12.1 `/status.features` 키 */
 // S16 V2(phase3 §21.3.8): /status.features.fem_verify·fem_verify_rebuild — BE-V2 openapi 반영 전에도 같은 키로 읽는다
-// doe-preview.md §6.6: /status.features.doe_preview(openapi 반영 전 로컬 키)
-export type FeatureKey = keyof S["StatusFeatures"] | "fem_verify" | "fem_verify_rebuild" | "doe_preview";
+// doe-preview.md §6.6: /status.features.doe_preview는 생성 스키마에 있다
+export type FeatureKey = keyof S["StatusFeatures"] | "fem_verify" | "fem_verify_rebuild";
 // opt-native §4.2: legacy는 true일 때만 온다(HyperStudy 레거시 기능 train_doe·optimize)
 export type FeatureState = Override<S["FeatureState"], { legacy?: boolean }>;
 /** C10: 비관리자 null, 이력 없으면 값이 모두 null */

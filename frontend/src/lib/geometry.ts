@@ -50,11 +50,12 @@ const anchorText = (anchor: string, n: number): string | null => {
 };
 
 /** 피치 행 툴팁: "열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm" + 고정 문구. 열 정보가 없으면 고정 문구만 */
-export function pitchTip(f: Pick<NativeFeature, "type" | "nominal" | "row"> | null | undefined, ribRows: RibRow[] | null | undefined): string {
+export function pitchTip(f: (Pick<NativeFeature, "type" | "nominal" | "row"> & { body?: string }) | null | undefined, ribRows: RibRow[] | null | undefined): string {
   if (!f || !isPitchType(f.type) || !f.row) return PITCH_TIP;
   const { id, k, n } = f.row;
   const parts = [`열 ${id}`, `피치 ${k}/${n - 1}`];
-  const row = ribRows?.find((r) => r.id === id);
+  // 열 id(U1…)는 바디마다 다시 매겨진다 — 같은 id의 열이 여러 바디에 있으면 피처의 바디까지 맞는 열을 쓴다
+  const row = ribRows?.find((r) => r.id === id && (!f.body || !r.body || r.body === f.body));
   const a = row ? anchorText(row.anchor, n) : null;
   if (a) parts.push(a);
   const t1 = row?.ribs.find((r) => r.index === k)?.thickness;

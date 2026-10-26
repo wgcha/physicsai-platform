@@ -63,6 +63,11 @@ describe("lib — 그룹·표시명·판정", () => {
     const r5 = [{ id: "U2", anchor: "rib:3", ribs: [1, 2, 3, 4, 5].map((i) => ({ index: i, thickness: i === 2 ? 4 : 6, center: i * 20 })) }];
     expect(pitchTip(five, r5)).toBe(`열 U2 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 15.0 mm\n${PITCH_TIP}`); // 20 − (4+6)/2
     expect(pitchTip({ type: "RIB_PITCH_U", nominal: 20, row: { id: "U3", k: 2, n: 4 } }, [{ id: "U3", anchor: "mid:2", ribs: [] }])).toBe(`열 U3 · 피치 2/3 · 가운데 리브 2·3 중점 고정\n${PITCH_TIP}`);
+    // 실제 paicad는 열 id(U1…)를 바디마다 다시 매긴다 — 같은 id가 두 바디에 있으면 피처의 바디 열을 쓴다
+    const two = [{ id: "U1", body: "A", anchor: "rib:2", ribs: [{ index: 1, thickness: 6, center: 0 }, { index: 2, thickness: 6, center: 20 }] },
+      { id: "U1", body: "B", anchor: "rib:1", ribs: [{ index: 1, thickness: 4, center: 0 }, { index: 2, thickness: 4, center: 20 }] }];
+    expect(pitchTip({ type: "RIB_PITCH_U", nominal: 20, body: "B", row: { id: "U1", k: 1, n: 3 } }, two)).toBe(`열 U1 · 피치 1/2 · 첫 리브 고정 · 빈 간격 16.0 mm\n${PITCH_TIP}`);
+    expect(pitchTip({ type: "RIB_PITCH_U", nominal: 20, body: "A", row: { id: "U1", k: 1, n: 3 } }, two)).toBe(`열 U1 · 피치 1/2 · 가운데 리브 2 고정 · 빈 간격 14.0 mm\n${PITCH_TIP}`);
     expect(pitchTip({ type: "RIB_PITCH_U", nominal: 20 }, null)).toBe(PITCH_TIP);
     expect(pitchTip({ type: "THICKNESS", nominal: 3, row: { id: "U1", k: 1, n: 3 } }, RIB_ROWS)).toBe(PITCH_TIP);
   });

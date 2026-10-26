@@ -69,7 +69,7 @@ describe("lib gridModel — 순수 함수", () => {
     expect(overRange(cell({ max_disp_mm: 3 }), undefined)).toBe(false);
     expect(genBadge({ status: "OK" })).toBeNull();
     expect(genBadge({ status: "PENDING" })).toEqual({ tone: "muted", text: "대기" });
-    expect(genBadge({ status: "SKIPPED", code: "GEOM_QUALITY", step: "CHECK" })).toEqual({ tone: "bad", text: "스킵 GEOM_QUALITY · 검사" });
+    expect(genBadge({ status: "SKIPPED", code: "GEOM_QUALITY", step: "check" })).toEqual({ tone: "bad", text: "스킵 GEOM_QUALITY · 검사" });
   });
   it("범례 팔레트 = paicad TURBO16(16색 이산)", () => {
     expect(TURBO16).toHaveLength(16);

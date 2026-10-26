@@ -143,6 +143,19 @@ def test_joint_range_side_weights_anchor_first_last_and_bounds():
     assert _joint(vd2) == []
 
 
+def test_joint_range_rows_are_per_body_even_with_same_row_id():
+    """실제 paicad는 열 id(U1…)를 바디마다 다시 매긴다 — 바디 A·B의 같은 id 열이 서로의 끝 여유·기준을 섞으면 안 된다."""
+    a, b = _doc("rib:1", n=3, room=(1.0, 9.0)), _doc("rib:1", n=3, room=(1.0, 99.0))
+    for f in b["features"]:
+        f["name"] = f["name"].replace("B_", "C_")
+        f["body"] = "C"
+    b["rib_rows"][0]["body"] = "C"
+    doc = {"features": a["features"] + b["features"], "groups": [], "rib_rows": a["rib_rows"] + b["rib_rows"]}
+    vd, _ = _vars(doc, {})
+    ws = _joint(vd)
+    assert [w["name"] for w in ws] == ["B_RIB_PITCH_U_1"]  # A(끝 여유 9)만 넘고 C(끝 여유 99)는 넘지 않는다
+
+
 def test_features_view_row_and_rib_rows_sanitized():
     doc = _doc("mid:2", n=4)
     doc["rib_rows"][0]["face_signatures"] = {"F11": "sig"}

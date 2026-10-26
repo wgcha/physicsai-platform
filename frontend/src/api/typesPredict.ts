@@ -182,23 +182,13 @@ export type NativeInfo = S["NativeInfo"];
 export type NativeGroup = S["NativeGroup"];
 export type NativeWarning = S["NativeWarning"];
 /** feasible = {min, max, limited_by?, source?}(§4.3·§11.2) — openapi는 dict라 좁힌다 */
-/** rib-gap.md §3.4: RIB_PITCH 피처의 열 소속 `row`(선택 키 — openapi 반영 전 로컬 필드) */
-export interface RibRowRef {
-  id: string;
-  k: number;
-  n: number;
-}
-/** rib-gap.md §3.4 `rib_rows[]` — 표 툴팁("열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm")에 쓰는 부분만 */
-export interface RibRow {
-  id: string;
-  body?: string;
-  axis?: string;
-  anchor: string;
-  ribs: { index: number; thickness: number; center: number }[];
-  end_room_mm?: { minus?: number | null; plus?: number | null };
-}
-export type NativeFeature = Override<S["NativeFeature"], { feasible?: { min?: number | null; max?: number | null; limited_by?: string | null; source?: string | null } | null; row?: RibRowRef | null }>;
-export type NativeFeatures = Override<S["NativeFeatures"], { features: NativeFeature[]; rib_rows?: RibRow[] | null }>;
+/** rib-gap.md §3.4: RIB_PITCH 피처의 열 소속 `row`(생성 스키마 NativeFeatureRow) */
+export type RibRowRef = S["NativeFeatureRow"];
+/** rib-gap.md §3.4 `rib_rows[]` — 표 툴팁("열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm")에 쓰는 부분(생성 스키마 NativeRibRow) */
+/** 응답은 기본값 필드(body·axis·end_room_mm·end_limited_by)를 항상 싣는다 — mock·시험은 생략해도 되게 선택으로 둔다 */
+export type RibRow = Override<S["NativeRibRow"], { body?: string; axis?: string; end_room_mm?: S["NativeRibRow"]["end_room_mm"]; end_limited_by?: S["NativeRibRow"]["end_limited_by"] }>;
+export type NativeFeature = Override<S["NativeFeature"], { feasible?: { min?: number | null; max?: number | null; limited_by?: string | null; source?: string | null } | null }>;
+export type NativeFeatures = Override<S["NativeFeatures"], { features: NativeFeature[] }>;
 /** geom_options(§4.9) 부분 객체 — 절 이름 → 키 → 값(최상위 문자열 키도 있음) */
 export type GeomOptions = Record<string, unknown>;
 

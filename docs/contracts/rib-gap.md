@@ -245,3 +245,10 @@ paicad `extract`가 같은 방향으로 나란히 선 **독립 돌출 리브**�
 ## 변경 메모
 
 (구현 중 계약과 달라지면 `RG-C1~`로 기록하고 Plan 확인.)
+
+- 2026-10-26 구현 통합 반영(RG-C, paicad 0.14.0 CHANGELOG의 "구현 해석"을 계약에 올림 — 실제 paicad 출력과 백엔드 파서를 `backend/tests/test_rib_pitch_real.py`로 대조):
+  - **RG-C1 first·last 기준의 RIB_POS 대상**: 열 소속 RIB_POS는 **기준 리브**만 남긴다(`excluded.row_member`로 나머지 제외). 기준 리브는 center에서 RG-6 그대로(홀수 열 가운데 리브 `rib:m`, 짝수 열은 없음), `first`·`last`에서는 §4.2의 Δpos가 맞도록 1번·n번 리브(`rib:1`·`rib:n`)다. 그래서 `first`·`last`에서는 짝수 열도 RIB_POS 1개가 남아 열 전체를 옮긴다. features `rib_rows[].anchor`는 항상 `rib:<m>` 또는 `mid:<h>` 형태다(`first`·`last`도 `rib:1`·`rib:n`으로 기록, 실제 출력 확인).
+  - **RG-C2 열 이웃 띠 검사는 높이를 보지 않는다**: 이웃 판정의 "띠 안에 a에 수직인 다른 평면 없음" 검사는 리브 높이와 무관하게 평면을 찾는다. 리브 사이 바닥 포켓 벽처럼 낮은 벽도 열을 끊는다(§2.1 열 정의·T5 "벽으로 열 분리"의 구현 범위 = 높이 불문). 열 id(`U1`·`V1`…)는 **바디마다 다시 매겨지므로** 바디가 다른 두 열이 같은 id를 가질 수 있다 — 소비자(플랫폼 `rib_rows` 조회·`RIB_PITCH_JOINT_RANGE` 묶음, 화면 툴팁)는 `(body, id)`로 열을 구분한다.
+  - **RG-C3 `RIB_PITCH_MIN` 공칭 예외**: 사전 검사 collision kind `RIB_PITCH_MIN`(샘플 두께로 빈 간격 < `min_gap_mm`)은, 공칭 빈 간격이 이미 `min_gap_mm` 미만이면 **공칭보다 줄어드는 경우에만** 낸다(공칭 그대로는 통과). paicad 보고 코드는 `GEOM_FEATURE_COLLISION`이고 kind만 `RIB_PITCH_MIN`이다. 플랫폼 변수 표 저장 경고 코드는 별개로 `RIB_PITCH_JOINT_RANGE`(차단 없음)이며 화면은 두 코드 문구를 모두 가진다.
+  - **RG-C4 V-RG-1 어휘 단언**: 기존 `tests/test_extract_filter.py`의 `TYPE_ORDER` 어휘 단언 1줄은 새 종류가 끝에 붙으므로(`… RIB_POS_U, RIB_POS_V, RIB_PITCH_U, RIB_PITCH_V`) 갱신했다. 그 밖의 기존 시험은 무수정 통과, RIB_PITCH 미선택 출력은 0.13.0과 바이트 동일(V-RG-1 판정은 이 어휘 단언 1줄을 제외한 기존 시험·출력 동일로 읽는다).
+  - 부가(변경 없음): `quality.rib_rows[]`에 `row` 키, 통계 RIB_PITCH `kept` = 피치 수(제외 사유는 리브 수). 피처 `range.mm`은 `±` 폭(숫자), 피치 변수 풀 노출은 대칭 그룹 대표만이다.

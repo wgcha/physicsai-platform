@@ -391,6 +391,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/physicsai/api/doe-previews/{preview_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Doe Preview
+         * @description 미리보기 상태·셀(렌더가 끝난 만큼 채워짐, 화면은 실행 중 1초 간격 폴링·종료 시 멈춤). train_doe는 셀마다 생성 결과(gen).
+         */
+        get: operations["get_doe_preview_physicsai_api_doe_previews__preview_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/doe-previews/{preview_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Doe Preview
+         * @description [취소](요청자·관리자): 작업 취소 플래그 — 완료 청크 셀은 캐시에 남는다. 끝난 미리보기는 409 JOB_TERMINAL.
+         */
+        post: operations["cancel_doe_preview_physicsai_api_doe_previews__preview_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/physicsai/api/equiv-checks/{eq_id}": {
         parameters: {
             query?: never;
@@ -2197,6 +2237,27 @@ export interface paths {
         get: operations["list_datasets_physicsai_api_studies__study_id__datasets_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/physicsai/api/studies/{study_id}/doe-previews": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Doe Preview
+         * @description DOE 표본 형상 그리드 미리보기(power): 셀이 전부 캐시에 있으면 200(cache_hit, 작업 없음) | 202 DOE_PREVIEW(CPU 대기열).
+         *     409 DOE_PREVIEW_UNSUPPORTED·GEOM_PREP_STALE·DOE_PREVIEW_UNAVAILABLE·STUDY_CLEANUP_RUNNING, 422 DOE_SAMPLING_INVALID, 429 PREVIEW_BUSY.
+         */
+        post: operations["create_doe_preview_physicsai_api_studies__study_id__doe_previews_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4528,6 +4589,200 @@ export interface components {
              */
             type: "combo" | "int" | "bool";
         };
+        /**
+         * DoePreview
+         * @description 미리보기 1건(페이지 1개). 200 = 전부 캐시(cache_hit, 작업 없음), 202 = QUEUED·RUNNING(job_id) — 화면은 `GET /doe-previews/{id}`를 1초 간격으로.
+         *     `cells`는 렌더가 끝난 만큼 채워지고(청크마다 갱신) 나머지는 PENDING. `order` = 정렬된 전체 doe_no(행렬 계산 후, 최대 2000개).
+         */
+        DoePreview: {
+            /**
+             * Cache Hit
+             * @default false
+             */
+            cache_hit: boolean;
+            /** Cells */
+            cells?: components["schemas"]["DoePreviewCell"][];
+            /** Code */
+            code?: string | null;
+            /**
+             * Colormap
+             * @default turbo16
+             */
+            colormap: string;
+            /** Created At */
+            created_at?: unknown;
+            /** Disp Range Mm */
+            disp_range_mm?: number[] | null;
+            /** Finished At */
+            finished_at?: unknown;
+            /** Id */
+            id: string;
+            /** Job Id */
+            job_id?: string | null;
+            /** Message Ko */
+            message_ko?: string | null;
+            /** N Error */
+            n_error?: number | null;
+            /** N Fail */
+            n_fail?: number | null;
+            /** N Ok */
+            n_ok?: number | null;
+            /** N Total */
+            n_total?: number | null;
+            /** Order */
+            order?: number[];
+            queue?: components["schemas"]["DoePreviewQueue"] | null;
+            select?: components["schemas"]["DoePreviewSelect"] | null;
+            source?: components["schemas"]["DoePreviewSource"] | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "QUEUED" | "RUNNING" | "DONE" | "FAILED" | "CANCELED";
+            /**
+             * Tag State
+             * @default none
+             * @enum {string}
+             */
+            tag_state: "none" | "tagged";
+            timing?: components["schemas"]["DoePreviewTiming"] | null;
+            /** Warnings */
+            warnings?: {
+                [key: string]: unknown;
+            }[];
+        };
+        /** DoePreviewCell */
+        DoePreviewCell: {
+            /** Category */
+            category?: string | null;
+            /**
+             * Clipped
+             * @default false
+             */
+            clipped: boolean;
+            /** Code */
+            code?: string | null;
+            /** Doe No */
+            doe_no?: number | null;
+            gen?: components["schemas"]["DoePreviewGen"] | null;
+            /** Glb Artifact Id */
+            glb_artifact_id?: string | null;
+            /** Manifest Artifact Id */
+            manifest_artifact_id?: string | null;
+            /** Max Disp Mm */
+            max_disp_mm?: number | null;
+            /** Message Ko */
+            message_ko?: string | null;
+            /**
+             * Nominal
+             * @default false
+             */
+            nominal: boolean;
+            /** Png Artifact Id */
+            png_artifact_id?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "PENDING" | "OK" | "FAIL" | "ERROR";
+            /** Top Changes */
+            top_changes?: components["schemas"]["DoePreviewTopChange"][];
+            /** Values */
+            values?: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * DoePreviewGen
+         * @description 생성 후 갤러리(train_doe)의 실제 생성 결과 — run 폴더 SKIPPED.json·starter 유무로 판정.
+         */
+        DoePreviewGen: {
+            /** Code */
+            code?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "OK" | "SKIPPED" | "PENDING";
+            /** Step */
+            step?: string | null;
+        };
+        /** DoePreviewQueue */
+        DoePreviewQueue: {
+            /** Lane */
+            lane: string;
+            /** Position */
+            position?: number | null;
+        };
+        /**
+         * DoePreviewReq
+         * @description `TD_DOE_GEN` native params의 표본 부분과 같은 모양(sampling). train_doe 출처는 sampling을 생략(쓰지 않는다).
+         */
+        DoePreviewReq: {
+            /** Sampling */
+            sampling?: (components["schemas"]["TrainSamplingLhs"] | components["schemas"]["TrainSamplingLhsOpt"] | components["schemas"]["TrainSamplingSobol"] | components["schemas"]["TrainSamplingHalton"] | components["schemas"]["TrainSamplingRandom"] | components["schemas"]["TrainSamplingFullfact"] | components["schemas"]["TrainSamplingFracfact"] | components["schemas"]["TrainSamplingPb"] | components["schemas"]["TrainSamplingBbd"] | components["schemas"]["TrainSamplingCcd"] | components["schemas"]["TrainSamplingTable"] | components["schemas"]["TrainSamplingTrainDoe"]) | null;
+            select?: components["schemas"]["DoePreviewSelect"];
+            source: components["schemas"]["DoePreviewSource"];
+        };
+        /**
+         * DoePreviewSelect
+         * @description 페이지 선택(§5.2). order: change(변화 큰 순, 기본) | doe(doe_no 순) | var(`var` 값 순, desc로 내림). offset은 page_size 배수, limit 생략 = page_size.
+         */
+        DoePreviewSelect: {
+            /**
+             * Desc
+             * @default false
+             */
+            desc: boolean;
+            /** Limit */
+            limit?: number | null;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Order
+             * @default change
+             * @enum {string}
+             */
+            order: "change" | "doe" | "var";
+            /** Var */
+            var?: string | null;
+        };
+        /**
+         * DoePreviewSource
+         * @description 표본 행 출처(§5.1). train = ①-3 Native(학습 설정 기준), param_set = 세트 기준(단일 baseline), train_doe = 생성 후 갤러리(doe_id 필수).
+         */
+        DoePreviewSource: {
+            /** Doe Id */
+            doe_id?: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "train" | "param_set" | "train_doe";
+            /** Param Set Id */
+            param_set_id?: string | null;
+        };
+        /** DoePreviewTiming */
+        DoePreviewTiming: {
+            /** Matrix S */
+            matrix_s?: number | null;
+            /** Render S */
+            render_s?: number | null;
+            /** Total S */
+            total_s?: number | null;
+        };
+        /** DoePreviewTopChange */
+        DoePreviewTopChange: {
+            /** Name */
+            name: string;
+            /** Rel */
+            rel: number;
+            /** Value */
+            value: number;
+        };
         /** DoeResultCounts */
         DoeResultCounts: {
             /** No Response */
@@ -5273,7 +5528,7 @@ export interface components {
         };
         /**
          * ExtractFilter
-         * @description 찾을 종류(그룹)와 조건. `groups`: thickness·height·position·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).
+         * @description 찾을 종류(그룹)와 조건. `groups`: thickness·height·position·rib_pitch·hole_radius·fillet 중 1개 이상·중복 없음(서버 검사).
          *     `draft_max_deg`: null 또는 0 초과 45 미만(null = 설정·paicad 기본). 응답에 나올 때는 서버 정규화본(선택 안 한 그룹의 조건 제거).
          */
         ExtractFilter: {
@@ -5282,7 +5537,7 @@ export interface components {
             /** Draft Max Deg */
             draft_max_deg?: number | null;
             /** Groups */
-            groups: ("thickness" | "height" | "position" | "hole_radius" | "fillet")[];
+            groups: ("thickness" | "height" | "position" | "rib_pitch" | "hole_radius" | "fillet")[];
         };
         /** ExtractRange */
         ExtractRange: {
@@ -6804,6 +7059,7 @@ export interface components {
              * @default false
              */
             ref_provisional: boolean;
+            row?: components["schemas"]["NativeFeatureRow"] | null;
             /**
              * Type
              * @default
@@ -6815,6 +7071,18 @@ export interface components {
              */
             unit: string;
         };
+        /**
+         * NativeFeatureRow
+         * @description RIB_PITCH 피처의 리브 열 소속(rib-gap.md §3.4): 열 id(U1·V1…)·열 안 피치 순번 k(1부터)·열의 리브 수 n.
+         */
+        NativeFeatureRow: {
+            /** Id */
+            id: string;
+            /** K */
+            k: number;
+            /** N */
+            n: number;
+        };
         /** NativeFeatures */
         NativeFeatures: {
             /** Engine Version */
@@ -6824,6 +7092,8 @@ export interface components {
             filter?: components["schemas"]["ExtractFilter"] | null;
             /** Groups */
             groups: components["schemas"]["NativeGroup"][];
+            /** Rib Rows */
+            rib_rows?: components["schemas"]["NativeRibRow"][] | null;
             /** Warnings */
             warnings: components["schemas"]["NativeWarning"][];
         };
@@ -6900,6 +7170,57 @@ export interface components {
                 [key: string]: unknown;
             } | null;
         };
+        /** NativeRib */
+        NativeRib: {
+            /** Center */
+            center?: number | null;
+            /** Index */
+            index: number;
+            /** Thickness */
+            thickness?: number | null;
+        };
+        /**
+         * NativeRibRow
+         * @description 리브 열(rib-gap.md §3.4) — 화면 툴팁용(기준 리브·끝 여유·리브 두께·중심). 면 id·서명은 싣지 않는다.
+         */
+        NativeRibRow: {
+            /**
+             * Anchor
+             * @default
+             */
+            anchor: string;
+            /**
+             * Axis
+             * @default
+             */
+            axis: string;
+            /**
+             * Body
+             * @default
+             */
+            body: string;
+            /**
+             * End Limited By
+             * @default {}
+             */
+            end_limited_by: {
+                [key: string]: string | null;
+            };
+            /**
+             * End Room Mm
+             * @default {}
+             */
+            end_room_mm: {
+                [key: string]: number | null;
+            };
+            /** Id */
+            id: string;
+            /**
+             * Ribs
+             * @default []
+             */
+            ribs: components["schemas"]["NativeRib"][];
+        };
         /** NativeVarHistory */
         NativeVarHistory: {
             /**
@@ -6958,6 +7279,7 @@ export interface components {
              * @default false
              */
             ref_locked: boolean;
+            rib?: components["schemas"]["VarRib"] | null;
             train?: components["schemas"]["VarRange"] | null;
             /**
              * Type
@@ -9310,6 +9632,7 @@ export interface components {
             curation_h3d: components["schemas"]["FeatureState"];
             curation_t01: components["schemas"]["FeatureState"];
             dataset_create?: components["schemas"]["FeatureState"] | null;
+            doe_preview?: components["schemas"]["FeatureState"] | null;
             equiv_check?: components["schemas"]["FeatureState"] | null;
             equiv_check_extract?: components["schemas"]["FeatureState"] | null;
             evaluate?: components["schemas"]["FeatureState"] | null;
@@ -10373,6 +10696,180 @@ export interface components {
              */
             total_bytes: number;
         };
+        /** TrainSamplingBbd */
+        TrainSamplingBbd: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "bbd";
+        };
+        /** TrainSamplingCcd */
+        TrainSamplingCcd: {
+            /**
+             * Alpha
+             * @default face
+             * @enum {string}
+             */
+            alpha: "face" | "inscribed";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "ccd";
+        };
+        /** TrainSamplingFracfact */
+        TrainSamplingFracfact: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fracfact";
+            /**
+             * Resolution
+             * @default 5
+             * @enum {integer}
+             */
+            resolution: 4 | 5;
+        };
+        /**
+         * TrainSamplingFullfact
+         * @description levels {변수: 수준 수 1~10}(생략한 변수 = 2).
+         */
+        TrainSamplingFullfact: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "fullfact";
+            /** Levels */
+            levels?: {
+                [key: string]: number;
+            };
+        };
+        /**
+         * TrainSamplingHalton
+         * @description doe-methods.md DM-C3: Halton(스크램블 QMC) — count 2~train_data.platform_max_runs, seed 0~4294967295(기본 1).
+         */
+        TrainSamplingHalton: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "halton";
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /** TrainSamplingLhs */
+        TrainSamplingLhs: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lhs";
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /** TrainSamplingLhsOpt */
+        TrainSamplingLhsOpt: {
+            /** Count */
+            count: number;
+            /**
+             * Criterion
+             * @default maximin
+             * @enum {string}
+             */
+            criterion: "maximin" | "corr";
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "lhs_opt";
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /** TrainSamplingPb */
+        TrainSamplingPb: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "pb";
+        };
+        /**
+         * TrainSamplingRandom
+         * @description doe-methods.md DM-C3: 균일 랜덤 — count 2~상한, seed 0 이상(기본 1).
+         */
+        TrainSamplingRandom: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "random";
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /** TrainSamplingSobol */
+        TrainSamplingSobol: {
+            /** Count */
+            count: number;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "sobol";
+            /**
+             * Seed
+             * @default 1
+             */
+            seed: number;
+        };
+        /**
+         * TrainSamplingTable
+         * @description doe-methods.md DM-C3: 사용자 설계표(CSV·붙여넣기 본문 문자열, 파일 업로드 아님). 첫 줄 = ①-2 사용 파라미터 이름 전부(순서 무관),
+         *     행 2~상한, 값은 학습 범위(min~max) 안(밖이면 TABLE_OUT_OF_RANGE).
+         */
+        TrainSamplingTable: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "table";
+            /** Text */
+            text: string;
+        };
+        /**
+         * TrainSamplingTrainDoe
+         * @description equiv-check.md Q1(2026-10-20): 같은 Study의 다른 DOE(READY, 표본표 PARSED/PARTIAL) samples.csv 행 그대로 — run 이름을 유지해
+         *     등가성 판정의 쌍 매칭 키로 쓴다. 파라미터 이름 집합이 같을 때만(native·altair 모두).
+         */
+        TrainSamplingTrainDoe: {
+            /** Doe Id */
+            doe_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "train_doe";
+        };
         /** TrainSetup */
         TrainSetup: {
             cad?: components["schemas"]["TrainCad"] | null;
@@ -10658,6 +11155,30 @@ export interface components {
             min: number;
         };
         /**
+         * VarRib
+         * @description RIB_PITCH 변수의 리브 열 요약(rib-gap.md §8 행 툴팁 "열 U1 · 피치 2/4 · 가운데 리브 3 고정 · 빈 간격 14.0 mm"): 열 id·열 안 순번 k·리브 수 n·
+         *     기준(rib:<m> | mid:<h>)·공칭 빈 간격(피치 − 두께 반합)·끝 여유(minus·plus).
+         */
+        VarRib: {
+            /**
+             * Anchor
+             * @default
+             */
+            anchor: string;
+            /** End Room Mm */
+            end_room_mm?: {
+                [key: string]: number | null;
+            };
+            /** Gap Mm */
+            gap_mm?: number | null;
+            /** K */
+            k: number;
+            /** N */
+            n: number;
+            /** Row */
+            row: string;
+        };
+        /**
          * VarRow
          * @description 미리보기 표 초기화 행(⑥ `var_rows`·④ 일괄 `var_rows`): 유효 변수 1개의 기준 범위·학습 범위·모핑 가능 범위.
          */
@@ -10675,6 +11196,7 @@ export interface components {
              * @default false
              */
             position: boolean;
+            rib?: components["schemas"]["VarRib"] | null;
             train?: components["schemas"]["VarRange"] | null;
             /**
              * Unit
@@ -12044,6 +12566,140 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_doe_preview_physicsai_api_doe_previews__preview_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoePreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    cancel_doe_preview_physicsai_api_doe_previews__preview_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                preview_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoePreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };
@@ -17942,6 +18598,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_doe_preview_physicsai_api_studies__study_id__doe_previews_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                study_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DoePreviewReq"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoePreview"];
+                };
+            };
+            /** @description QUEUED·RUNNING — GET /doe-previews/{id}로 1초 간격 폴링 */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DoePreview"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Too Many Requests */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
                 };
             };
         };

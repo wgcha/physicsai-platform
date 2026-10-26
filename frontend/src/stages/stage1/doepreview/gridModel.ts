@@ -88,8 +88,9 @@ export function failInfo(c: DoePreviewCell): { badge: string; text: string } | n
 /** 색 범위를 넘은 셀(▲범위 초과) */
 export const overRange = (c: DoePreviewCell, range: [number, number] | undefined): boolean => !!range && c.max_disp_mm != null && c.max_disp_mm > range[1] + 1e-9;
 
+/** 실제 워커의 `R/SKIPPED.json` `step` 키(geometry_sample.py: update·morph·check = paicad 단계, assemble·props·cushion = 입력 작성, assign = baseline 배정) */
 export const GEN_STEP_LABEL: Record<string, string> = {
-  GEN_PREP: "준비", UPDATE: "형상 갱신", MORPH: "morph", CHECK: "검사", TIE: "tie", WRITE: "입력 작성", EXTRACT: "추출",
+  update: "형상 갱신", morph: "morph", check: "검사", assemble: "입력 조립", props: "쉘 두께", cushion: "쿠션 입력", assign: "baseline 배정",
 };
 /** 생성 후 겹침 배지(train_doe): 스킵 = 코드·단계, 대기 = "대기", OK = 없음 */
 export function genBadge(g: DoePreviewGen | null | undefined): { tone: "bad" | "muted"; text: string } | null {
@@ -120,7 +121,7 @@ export const filterFailed = (cells: DoePreviewCell[], on: boolean): DoePreviewCe
 export function hasMore(pages: Pick<DoePreview, "n_total" | "cells">[]): boolean {
   if (!pages.length) return false;
   const loaded = mergeCells(pages).filter((c) => !c.nominal).length;
-  return loaded < pages[0].n_total;
+  return loaded < (pages[0].n_total ?? 0);
 }
 
 /** 요청 전 안내/상태 문구(서버 409 코드 → 한국어) */

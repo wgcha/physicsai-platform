@@ -11,9 +11,9 @@ export type TrainParam = S["TrainParamOut"];
 export type TrainSetup = Override<S["TrainSetup"], { parameters: TrainParam[]; extract_filter?: ExtractFilter | null; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string; names?: string[] }[] }>) | null }>;
 export type TplSummary = S["TplSummary"];
 /** extract-filter.md §6.1: native ①-1·④ 추출 조건(찾을 종류 그룹 + 조건 mm·mm²·°). 응답에서는 서버 정규화본 */
-// rib-gap.md RG-10: 그룹 `rib_pitch`(리브 간격) — openapi 반영 전이라 열거값을 로컬에서 넓힌다(반영 뒤 이 두 줄을 `S["ExtractFilter"]`로 되돌린다)
-export type ExtractGroup = S["ExtractFilter"]["groups"][number] | "rib_pitch";
-export type ExtractFilter = Override<S["ExtractFilter"], { groups: ExtractGroup[] }>;
+// rib-gap.md RG-10: 그룹 `rib_pitch`(리브 간격)는 생성 스키마 열거값에 있다
+export type ExtractGroup = S["ExtractFilter"]["groups"][number];
+export type ExtractFilter = S["ExtractFilter"];
 /** 422 EXTRACT_FILTER_INVALID problems[] — key = groups | conditions.<키>[.min|.max] | draft_max_deg */
 export interface ExtractProblem {
   key: string;
