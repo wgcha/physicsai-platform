@@ -1,9 +1,9 @@
 # 계약: DOE 표본 형상 그리드 미리보기 (doe-preview, DP-C*)
 
-작성: Plan, 2026-10-26(초안). 요구(원문): "형상 파라미터 변수를 샘플링으로 doe만들면 그리드 구조로 변화된 형상 미리보기가 보여줬으면해."
+작성: Plan, 2026-10-26(초안) → **확정 2026-10-26**(Q1 사용자, Q2·Q3 메인 기본 = 권고안). 요구(원문): "형상 파라미터 변수를 샘플링으로 doe만들면 그리드 구조로 변화된 형상 미리보기가 보여줬으면해."
 기준: v0.2.10 배포본 fb644a1(migration HEAD `0024_contour3d_field`, paicad 0.13.0). 결정 번호 `DP-C*`, 검사 `V-DP-*`.
 상위 계약(이 문서가 다시 쓰지 않는 규칙은 그대로): [geometry-view.md](geometry-view.md)(이하 **GV** — `paicad view preview`·GLB·`_DISP_MM`·서버측 캐시·housekeeping·뷰어), [geometry-engine.md](geometry-engine.md)(**GE** — §7.3.3 ①-3 Native DOE, §7.3.6 run 레이아웃, `render.py` 피처 PNG), [shell-morph.md](shell-morph.md)(**SM**), [doe-methods.md](doe-methods.md)(**DM** — `SITE_KINDS`·표본 행 생성), [job-queues.md](job-queues.md)(**JQ** — CPU 대기열), [mcp.md](mcp.md)(x-mcp·JOB_KINDS).
-릴리스(제안): v0.2.11. migration `0025_doe_preview` 1개. paicad 0.14.0(새 하위 명령 2개, 기존 명령 불변).
+릴리스(확정): **v0.2.11**. migration `0025_doe_preview` 1개(down_revision `0024_contour3d_field`). paicad **0.14.0**(새 하위 명령 `view grid`·`shell view grid`, 기존 명령 불변) — 같은 버전의 리브 간격(rib-gap.md, migration 없음)의 `RIB_GAP`과 **같은 paicad 0.14.0**에 함께 들어간다(roadmap v0.2.11).
 
 ## 0. 한 줄 요약
 
@@ -29,14 +29,14 @@
 |---|---|---|
 | DP-C1 | **시점 = 생성 전 미리보기(1순위) + 생성 후 갤러리(2순위), 한 메커니즘**. 둘 다 "표본 행 목록 → 셀 렌더"이며 생성 후는 `doe_matrix.csv`를 행 출처로 쓰고 실제 생성 결과를 겹친다 | 사용자 요구의 가치는 몇 시간짜리 생성 전에 이상 표본(충돌·과대 변형)을 보는 데 있음. 생성 후는 같은 코드·캐시로 거의 공짜 |
 | DP-C2 | **렌더 = (c) 혼합**: 격자는 서버 썸네일 PNG, 셀 클릭 시 그 표본 하나만 기존 3D 뷰어로. (a) 단독·(b) 기각(§4) | WebGL 컨텍스트 상한(브라우저당 보통 8~16)·GLB 24개 동시 적재 메모리·원격 데스크톱 소프트웨어 GL(GV R2)을 모두 피함. 서버 PNG는 기존 래스터라이저 재사용 |
-| DP-C3 | **표본 수 규칙**: 한 페이지 = `page_size`(기본 24, 6×4) 셀, 첫 셀은 항상 **공칭**(기준). 기본 정렬 "변화 큰 순"(정규화 거리 내림차순) + [DOE 순서]·[변수 값↑↓] 전환, [다음 24개]로 페이지 추가. 전체 일괄 버튼 없음 | 수백 표본 전부는 수 분~수십 분(§6.4). 변화 큰 순이 충돌·과대 변형을 먼저 보여 줌 |
+| DP-C3 | **표본 수 규칙**: 한 페이지 = `page_size`(기본 24, 6×4) 셀, 첫 셀은 항상 **공칭**(기준). 기본 정렬 "변화 큰 순"(정규화 거리 내림차순) + [DOE 순서]·[변수 값↑↓] 전환, [다음 24개]로 페이지 추가. 전체 일괄 버튼 없음. **확정(Q2, 메인 기본 = 권고안)** | 수백 표본 전부는 수 분~수십 분(§6.4). 변화 큰 순이 충돌·과대 변형을 먼저 보여 줌 |
 | DP-C4 | **공통 카메라·축척·색 범위**: 카메라 = 공칭 B-rep bbox 기준 정사영(방향·여백 설정값), 색 범위 = `[0, disp_ref_mm]`(세트 범위에서 미리 계산, §3.3). 모든 셀·모든 페이지가 같다 | 셀끼리 비교 가능 + 셀 단위 캐시 가능(다른 셀 결과를 기다리지 않음) |
 | DP-C5 | **paicad 새 명령 `paicad view grid`·`paicad shell view grid`**: 한 프로세스에서 표본 여러 개를 update → 테셀레이션 → GLB·manifest·썸네일. 셀 산출물은 `view preview --fe off`와 같은 GLB·manifest + `thumb.png`. 기존 명령 불변 | OCP 적재(1~2 s)를 표본마다 반복하지 않음. 단건 미리보기와 결과 동일성 검사 가능(V-DP-2) |
-| DP-C6 | **새 job_type `DOE_PREVIEW`, CPU 대기열**(JobTypeDef 레인 SLOT, LOCAL step `res=cpu`). PREVIEW 레인은 쓰지 않는다 | 24셀 ≈ 1분 — 동시 1인 PREVIEW 레인을 막으면 ④ 단건 미리보기가 밀림. JQ 규칙(새 LOCAL step `res` 필수) 준수 |
+| DP-C6 | **새 job_type `DOE_PREVIEW`, CPU 대기열**(JobTypeDef 레인 SLOT, LOCAL step `res=cpu`). PREVIEW 레인은 쓰지 않는다. **확정(Q3, 메인 기본 = 권고안)** | 24셀 ≈ 1분 — 동시 1인 PREVIEW 레인을 막으면 ④ 단건 미리보기가 밀림. JQ 규칙(새 LOCAL step `res` 필수) 준수 |
 | DP-C7 | **캐시 = 셀 단위**, 키 = 행 출처와 무관한 형상 입력(CAD·features·tag·options·값·테셀레이션·썸네일 옵션·paicad 버전). 위치 `<study>/_cache/doe_preview/`, GV §6.6 housekeeping·보관 7일·총량 합산 그대로 | 정렬·페이지·생성 전/후가 바뀌어도 같은 표본은 재계산 없음 |
 | DP-C8 | **표본 행 = 실제 DOE와 같은 함수·같은 입력**(DM: `lhs` → `lhs_values`, 그 밖 → `doe_platform.build`, `table`·`train_doe` 그대로). 요청 본문은 `TD_DOE_GEN` native params의 표본 부분과 같은 모양 | 미리보기와 실제 생성 표본이 어긋나면 기능이 무의미. V-DP-3이 바이트 동일 검사 |
 | DP-C9 | **update만**(morph·check 없음). 셀 상태 = update 결과(OK/FAIL 코드). 생성 후 갤러리는 실제 morph·check 결과를 별도 배지로 겹침 | morph+check는 표본당 수십 초(GV GV-4) — 격자 규모에 부적합. 품질 실패(`GEOM_QUALITY`)는 생성 후에만 보임을 화면에 명시 |
-| DP-C10 | **범위**: 1차 = ①-3 Native **단일 baseline**(①-1 기반·세트 기반) 생성 전 + ①-3 Native DOE 생성 후 갤러리. 다중 baseline·④ 일괄·⑥ 탐색·Altair는 1차 제외(④ Native 단일 baseline은 같은 API에 `site:"batch"`만 더하면 되는 후속 1순위) | 사용자 요구 지점(DOE 만들 때)에 집중. 다중 baseline은 baseline마다 CAD·카메라가 달라 공통 축척 규칙이 따로 필요. Altair는 DP-C2 근거 없음(비용) |
+| DP-C10 | **범위**: 1차 = ①-3 Native **단일 baseline**(①-1 기반·세트 기반) 생성 전 + ①-3 Native DOE 생성 후 갤러리. 다중 baseline·④ 일괄·⑥ 탐색·Altair는 1차 제외(④ Native 단일 baseline은 같은 API에 `site:"batch"`만 더하면 되는 후속 1순위). **확정(Q1, 사용자)** | 사용자 요구 지점(DOE 만들 때)에 집중. 다중 baseline은 baseline마다 CAD·카메라가 달라 공통 축척 규칙이 따로 필요. Altair는 DP-C2 근거 없음(비용) |
 | DP-C11 | **UI 원칙**: DOE 카드에 버튼 1개, 격자 패널은 카드 바로 아래 전폭 카드 1개(툴바 1줄 + 범례 + 격자). 라이트 테마, 2560×1440 기준 6열 | 사용자 원칙(필수 UI만) |
 
 ## 3. 셀(표본 1개) 산출물 계약 — `paicad view grid`
@@ -113,7 +113,7 @@
 
 - `order`: `change`(기본) = 사용 파라미터마다 `(v − nominal)/(max−min)`의 L2 노름 내림차순(같으면 doe_no 오름차순) · `doe` = doe_no 오름차순 · `var` = `var` 값 오름(`desc:true`면 내림, 같으면 doe_no).
 - `offset`(0, `page_size` 배수)·`limit`(= `page_size`, 최대 `doe_preview.max_page_size`). 첫 페이지(offset 0)는 공칭 셀 + 표본 `limit−1`개, 이후 페이지는 표본 `limit`개.
-- 정렬은 **전체 표본 표 기준**(값은 렌더 없이 알 수 있음)으로 다음에 렌더할 표본을 정한다. "실패만" 필터는 **이미 렌더된 셀**에만 적용(전체 실패 검사는 비범위 — Q 후보).
+- 정렬은 **전체 표본 표 기준**(값은 렌더 없이 알 수 있음)으로 다음에 렌더할 표본을 정한다. "실패만" 필터는 **이미 렌더된 셀**에만 적용(전체 실패 검사는 비범위 — 후속 후보).
 
 ## 6. 플랫폼
 
@@ -262,7 +262,7 @@ commands:
 | # | 리스크 | 대응 |
 |---|---|---|
 | R1 | 실물 형상(삼각형 수십만)에서 셀당 시간·GLB 크기 과대 → 24셀 수 분 | 청크·병렬, GV LOD(`max_triangles`) 그대로, V-DP-11 현장 수치로 `page_size`·`parallel` 기본값 조정. 썸네일만 필요할 때 GLB 생략 옵션은 후속 |
-| R2 | 미리보기가 CPU 슬롯을 써서 실행 중 DOE 생성과 경쟁(또는 CPU 4개가 차 있으면 대기) | `parallel` 2·`--threads 1`, 화면에 대기 순번 표시. 대기가 실사용 문제면 PREVIEW 레인 동시 수 확대 대안(Q2와 함께 판단) |
+| R2 | 미리보기가 CPU 슬롯을 써서 실행 중 DOE 생성과 경쟁(또는 CPU 4개가 차 있으면 대기) | `parallel` 2·`--threads 1`, 화면에 대기 순번 표시. 대기가 실사용 문제면 현장 회신 후 PREVIEW 레인 동시 수 확대를 후속 검토(Q3 확정은 CPU 대기열) |
 | R3 | `train` 출처는 tag 전이라 기준면이 실제 생성과 다를 수 있음 | `tag_state:none` 안내, 생성 후 갤러리는 tag 사용(정답). 세트 기준 DOE는 차이 없음 |
 | R4 | update만 보므로 morph·check 실패(`GEOM_QUALITY` 등)는 생성 전에 안 보임 | DP-C9를 범례·툴팁에 명시, 생성 후 갤러리 `gen` 배지로 보완. 격자 FE 검사는 비범위 |
 | R5 | 공통 축척 때문에 변화가 작은 표본은 차이가 안 보이고, 큰 표본은 잘림 | 색(변위)이 주 신호, `clipped` 표시, 클릭 3D로 확대 |
@@ -278,11 +278,13 @@ commands:
 | Impl-Frontend | `stages/stage1/DoeGenCard.tsx`(버튼), 신규 `stages/stage1/doepreview/{DoePreviewCard,GridCell,gridModel}.tsx/ts`, 3D 뷰어 대화상자(기존 geomview 컴포넌트 재사용), mock·jsdom 시험, `frontend-dist/` |
 | 순서 | 계약 확정 → GEOM(paicad 0.14.0, fake 병행) → BE → FE → Verifier(V-DP-1~13) |
 
-## 12. 미결(사용자 결정)
+## 12. 미결 처리(확정 2026-10-26)
 
-- Q1 범위: 1차 = ①-3 Native 단일 baseline 생성 전 + 생성 후 갤러리, Altair·다중 baseline·⑥ 제외, ④ 일괄은 후속 — 이대로 확정할지(④를 1차에 넣을지).
-- Q2 기본 표본 선택: 공칭 + "변화 큰 순" 23개(권고) vs DOE 순서 처음 24개.
-- Q3 작업 대기열: CPU 대기열(권고, 동시 4에 셈 — DOE 생성이 4개 돌면 대기) vs PREVIEW 레인 확장(대기 없음, 단건 미리보기와 경쟁).
+- Q1 확정(사용자): 1차 범위 = ①-3 Native 단일 baseline의 생성 전 미리보기 + 생성 후 갤러리. ④ 일괄은 후속(1순위), Altair·다중 baseline·⑥ 제외(DP-C10).
+- Q2 확정(메인 기본, 권고안 채택): 기본 표본 = 공칭 + 변화 큰 순 23개, 정렬은 [DOE 순서]·[변수 값↑↓]로 바꿀 수 있음(DP-C3·§5.2).
+- Q3 확정(메인 기본, 권고안 채택): `DOE_PREVIEW`는 CPU 대기열(`cpu.max_concurrent`에 셈, DP_RENDER `res=cpu`)(DP-C6).
+- 버전: v0.2.11, migration `0025_doe_preview`, paicad 0.14.0(`view grid` + rib-gap `RIB_GAP` 동시 포함).
 
 ## 변경 메모
 - 2026-10-26 작성(Plan, 초안). GV §1.3 비범위 "DOE run별 형상 3D 보기"를 이 문서가 ①-3 Native 범위에서 대체(GV 변경 메모에 기록).
+- 2026-10-26 확정 반영: Q1(사용자)·Q2·Q3(메인 기본 = 권고안), v0.2.11·`0025_doe_preview`·paicad 0.14.0(rib-gap `RIB_GAP`과 같은 버전) 배정.
