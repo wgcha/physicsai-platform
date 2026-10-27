@@ -104,16 +104,17 @@ def c3_extract(ctx: Any) -> None:
         raise StepFailure("CONTOUR3D_TIMEOUT", f"{message_ko('CONTOUR3D_TIMEOUT')}(contour3d.timeout_s = {limit:g}초)")
     rp = os.path.join(X, RESULT_NAME)
     if not os.path.isfile(rp):
-        raise StepFailure("CONTOUR3D_EXTRACT_INVALID", f"{message_ko('CONTOUR3D_EXTRACT_INVALID')} — {RESULT_NAME} 없음")
+        raise StepFailure("CONTOUR3D_EXTRACT_INVALID", f"{message_ko('CONTOUR3D_EXTRACT_INVALID')} — {RESULT_NAME} 없음(추출 TCL이 결과 파일을 쓰지 못함, 폴더 {ctx.rel(X)})")
     with open(rp, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
     ctx.log("[extract_result.txt]\n" + text[:4000].rstrip())
     res = parse_result(text)
     if res["status"] != "OK":
         code = TCL_STATUS_CODE.get(str(res["status"]), "CONTOUR3D_EXTRACT_INVALID")
-        raise StepFailure(code, f"{message_ko(code)} — {res['message'] or res['status']}")
+        raise StepFailure(code, f"{message_ko(code)} — {RESULT_NAME} STATUS={res['status']} {res['message'] or ''}".rstrip())
     if not os.path.isfile(os.path.join(X, "nodes.csv")) or not any(os.path.isfile(os.path.join(X, n)) for n in ("faces.csv", "elements.csv")):
-        raise StepFailure("CONTOUR3D_EXTRACT_INVALID", f"{message_ko('CONTOUR3D_EXTRACT_INVALID')} — nodes.csv·faces.csv 없음")
+        raise StepFailure("CONTOUR3D_EXTRACT_INVALID", f"{message_ko('CONTOUR3D_EXTRACT_INVALID')} — nodes.csv·faces.csv(또는 elements.csv) 없음, 있는 파일: "
+                           f"{', '.join(sorted(n for n in os.listdir(X) if not n.startswith('frame_'))[:12])}")
     ctx.patch_result({"extract": {"nodes": res["nodes"], "frames_total": res["frames_total"], "unit": res["unit"], "disp": res["disp"],
                                   "scope": res["scope"]}})
     if res["disp"] == "NONE":  # §9.4: 변위가 없어도 계속(스칼라만) — 경고는 변환기가 manifest에 남긴다

@@ -1045,7 +1045,7 @@
     },
     "CONTOUR3D_EXTRACT_INVALID": {
       "code": "CONTOUR3D_EXTRACT_INVALID",
-      "message_ko": "{…} — {…} 없음",
+      "message_ko": "{…} — {…} 없음(추출 TCL이 결과 파일을 쓰지 못함, 폴더 {…})",
       "sources": [
         "worker/physicsai_worker/steps/stage4_predict/contour3d.py"
       ],

@@ -153,7 +153,7 @@ class HpcPollerMixin:
             with self.engine.begin() as conn:
                 job_now = jobs_repo.get_job(conn, h["job_id"])
                 msg = f"SCX 상태 원문을 알 수 없습니다: {raw_s}"
-                dup = any(w.get("code") == "SCX_UNKNOWN_STATUS" and w.get("message") == msg[:500]
+                dup = any(w.get("code") == "SCX_UNKNOWN_STATUS" and str(w.get("message") or "").casefold() == msg[:500].casefold()
                           for w in ((job_now or {}).get("warnings") or []))  # 재시작·여러 워커에서도 중복 방지(DB 기준)
                 if job_now is not None and job_now["state"] == "WAITING_HPC" and not dup:
                     hpc_repo.add_waiting_warning(conn, job_now, "SCX_UNKNOWN_STATUS", msg)

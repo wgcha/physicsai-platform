@@ -10,6 +10,9 @@ BASE_NAMES = frozenset({
     "SYSTEMROOT", "WINDIR", "COMSPEC", "PATH", "PATHEXT", "TEMP", "TMP", "TMPDIR", "USERPROFILE", "HOME",
     "USERNAME", "USER", "LOGNAME", "COMPUTERNAME", "HOSTNAME", "LANG", "LC_ALL", "NUMBER_OF_PROCESSORS",
     "PROCESSOR_ARCHITECTURE", "PROGRAMDATA", "APPDATA", "LOCALAPPDATA",
+    # nvidia-smi의 NVML 초기화가 ProgramFiles 계열을 읽는다(없으면 "Failed to initialize NVML: Unknown Error", RC 255 — 이슈 #13).
+    # 경로 문자열일 뿐 비밀이 아니다. 이름 비교는 대문자 변환 후라 `ProgramFiles(x86)` 같은 대소문자 표기도 통과한다.
+    "PROGRAMFILES", "PROGRAMFILES(X86)", "COMMONPROGRAMFILES", "COMMONPROGRAMFILES(X86)",
 })
 BASE_PATTERNS = ("ALTAIR_*", "*_LICENSE_*", "*_LICENSE", "EDS_*", "CUDA_VISIBLE_DEVICES")
 DENY_PATTERNS = ("PHYSICSAI_*", "*PASSWORD*", "*SECRET*", "*TOKEN*", "DATABASE_URL", "PG*")

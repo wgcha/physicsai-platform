@@ -5,6 +5,7 @@
 #   STUB_DISP = ok(기본) | error(오류 문구) | empty(빈 값 행) | none0(0행)
 #   STUB_DISP_FAIL_AT=<sim>  그 시뮬레이션에서만 변위 조회 오류(첫 프레임 이후 누락 시험)
 #   STUB_DISPLAYED = ok(기본: e1만) | error | empty(0건)
+#   STUB_VALUE_EMPTY=1       contour.value가 모든 노드에서 빈 값(코너 결과 averaging 실패 사례)
 #   STUB_FIELD_FAIL=1        result scalar load 실패 / STUB_OPEN_FAIL=1  h3d 열기 실패 / STUB_SCALAR_FAIL=1  contour.value 조회 오류
 # 노드 1~6(+미사용 99), 요소 e1(노드 1,2,5,4)·e2(노드 2,3,6,5) 쿼드 쉘. e1 = 부품 "A", e2 = 부품 "B".
 set ::CUR 0
@@ -111,6 +112,7 @@ proc stub_rows {} {
         }
         "node.id contour.value" {
             if {[env_or STUB_SCALAR_FAIL 0]} { error "contour query failed" }
+            if {[env_or STUB_VALUE_EMPTY 0]} { foreach n $nodes { lappend rows [list $n ""] } ; return $rows }
             foreach n $nodes { lappend rows [list $n [expr {$n * ($::CUR + 1)}]] }
         }
         "node.id node.displacement" {

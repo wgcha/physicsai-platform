@@ -23775,7 +23775,7 @@
   },
   "info": {
     "title": "PhysicsAI Platform API",
-    "version": "0.2.12"
+    "version": "0.2.13"
   },
   "openapi": "3.1.0",
   "paths": {

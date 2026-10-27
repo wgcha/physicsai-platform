@@ -131,7 +131,7 @@ def test_scx_verify_unknown_mark_not_submitted(scx_env, engine):
     (["Weird", "__SCX_NOT_FOUND__"], "LOST", "HPC_RUN_FAILED"),
 ])
 def test_scx_verify_state_mapping(scx_env, seq, final, code):
-    """§16.6 표: Failed(오류 문구 마스킹)·Aborted("SCX에서 중단됨")·그 밖 문자열/SCX_JOB_NOT_FOUND → UNKNOWN 계수 → LOST."""
+    """§16.6 표: Failed(오류 문구 마스킹)·Aborted("SCX에서 취소됨")·그 밖 문자열/SCX_JOB_NOT_FOUND → UNKNOWN 계수 → LOST."""
     c, w, ai, fake = scx_env
     sid, pj = _setup_predict(c, w, ai, "SV3")
     fake.status_seq = list(seq)
@@ -278,3 +278,16 @@ def test_scx_resolve_on_finished_job_only_mark_not_submitted(scx_env, engine):
     w.poll_hpc_once()
     h = _hpc(c, vid)[0]
     assert h["state"] == "FAILED" and h["resolve_pending"] is False and _job(c, vid)["state"] == "FAILED"
+
+
+def test_scx_external_state_raw_masked_and_capped_128(scx_env):
+    """external_state_raw는 비밀(Bearer 토큰)을 마스킹하고 128자로 자른다."""
+    c, w, ai, fake = scx_env
+    sid, pj = _setup_predict(c, w, ai, "SV3c")
+    fake.status_seq = ["Running", "Bearer abc.def.ghi " + "x" * 300]
+    vid = _verify(c, sid, pj)
+    assert w.run_once_slot() == "WAITING_HPC"
+    w.poll_hpc_once()
+    w.poll_hpc_once()
+    raw = _hpc(c, vid)[0]["external_state_raw"]
+    assert raw and len(raw) <= 128 and "abc.def.ghi" not in raw and raw.startswith("Bearer ***")

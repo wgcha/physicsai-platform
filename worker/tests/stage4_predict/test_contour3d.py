@@ -92,6 +92,8 @@ def test_contour3d_deterministic_fail_cached_infra_not(predict_env, monkeypatch)
     env.w.run_once_slot()  # 앞의 대기 작업
     assert env.w.run_once_slot() == "FAILED"
     assert env.job(c3["job_id"])["failure_code"] == "CONTOUR3D_EXTRACT_INVALID"
+    g3 = env.c.get(f"{API}/contour3d/{c3['id']}", headers=P).json()  # 화면 문구에 "— 상세"(어느 파일·검사)가 붙는다
+    assert g3["status"] == "FAILED" and g3["message_ko"].startswith("결과 추출 파일이 올바르지 않습니다 — ") and len(g3["message_ko"]) > 30
 
 
 def test_contour3d_timeout_cancel_and_not_configured(predict_env, monkeypatch):

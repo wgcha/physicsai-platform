@@ -156,9 +156,10 @@ def test_child_env_allowlist():
     src = {"PATH": "/bin", "SystemRoot": "C:\\Windows", "TEMP": "/t", "USERPROFILE": "u", "ALTAIR_HOME": "a",
            "LM_LICENSE_FILE": "6200@lic", "ALTAIR_LICENSE_PATH": "x", "EDS_TNS_ACTVN_CHCKPT": "1",
            "PHYSICSAI_DATABASE_URL": "postgresql://u:pw@h/db", "MY_DB_URL": "secret", "AWS_SECRET_ACCESS_KEY": "s",
-           "RANDOM_VAR": "r", "SITE_EXTRA": "e"}
+           "RANDOM_VAR": "r", "SITE_EXTRA": "e", "ProgramFiles": "C:\\Program Files", "PROGRAMFILES(X86)": "x86",
+           "CommonProgramFiles": "c"}  # ProgramFiles 계열은 nvidia-smi(NVML) 의존(이슈 #13)
     env = child_env(["SITE_*"], source=src, deny_names=["MY_DB_URL"])
-    assert set(env) == {"PATH", "SystemRoot", "TEMP", "USERPROFILE", "ALTAIR_HOME", "LM_LICENSE_FILE",
+    assert set(env) == {"ProgramFiles", "PROGRAMFILES(X86)", "CommonProgramFiles", "PATH", "SystemRoot", "TEMP", "USERPROFILE", "ALTAIR_HOME", "LM_LICENSE_FILE",
                         "ALTAIR_LICENSE_PATH", "EDS_TNS_ACTVN_CHCKPT", "SITE_EXTRA"}
     assert child_env(["PHYSICSAI_*"], source=src) .get("PHYSICSAI_DATABASE_URL") is None  # 설정으로도 비밀 전달 불가
     assert child_env([], add={"EDS_X": "1"}, source={})["EDS_X"] == "1"

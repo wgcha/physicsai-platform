@@ -286,3 +286,16 @@ def test_c3f_artifact_kinds_in_metadata_and_media_lists():
     from physicsai_core.db import MIGRATION_HEAD
 
     assert MIGRATION_HEAD == "0025_doe_preview"
+
+
+@needs_tclsh
+def test_v0213_tcl_runtime_all_empty_values_is_field_error(tmp_path):
+    r, res, _h = _run_tcl(tmp_path, env={"STUB_VALUE_EMPTY": "1"})
+    assert res["STATUS"] == "FIELD_ERROR" and "empty for all nodes" in res["MESSAGE"]
+
+
+def test_v0213_tcl_static_default_avgmode_and_vertex_only_nodes():
+    text = TCL.read_text(encoding="utf-8")
+    assert "set AVGMODE_DEFAULT simple" in text and "avgmode= simple" in text
+    assert "proc ex_vcount" in text and "210" in text and "220" in text
+    assert text.count("{") == text.count("}")  # 중괄호 균형(정적 문법 점검, tclsh 없이)

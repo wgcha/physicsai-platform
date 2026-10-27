@@ -176,9 +176,15 @@ def out(conn: Any, row: dict[str, Any], cache_hit: bool = False, ctx: AppContext
     if row["status"] == "DONE" and row.get("result_status") == "OK" and row.get("job_id"):
         kinds = {a["kind"]: a["id"] for a in artifacts_repo.list_for_job(conn, row["job_id"])}
         extra = {"disp_artifact_id": kinds.get("CONTOUR3D_DISP"), "lod_artifact_id": kinds.get("CONTOUR3D_LOD")}
+    message = message_ko(row.get("code"))
+    if row["status"] == "FAILED" and row.get("job_id"):  # 작업 실패 상세(어느 파일·검사인지)를 "— 상세"로 붙인다
+        job = jobs_repo.get_job(conn, row["job_id"])
+        fm = str((job or {}).get("failure_message") or "").strip()
+        if fm:
+            message = fm if not message else fm if fm.startswith(message) else f"{message} — {fm}"
     return {"id": row["id"], "job_id": row.get("job_id"), "status": row["status"], "cache_hit": cache_hit,
             "source_kind": row["source_kind"], "source_ref": row.get("source_ref") or {}, "display": row.get("display"),
-            "result_status": row.get("result_status"), "code": row.get("code"), "message_ko": message_ko(row.get("code")),
+            "result_status": row.get("result_status"), "code": row.get("code"), "message_ko": message,
             "frames": row.get("frames"), "nodes": row.get("nodes"), "bytes": row.get("bytes"),
             "glb_artifact_id": row.get("glb_artifact_id"), "frames_artifact_id": row.get("frames_artifact_id"),
             "manifest_artifact_id": row.get("manifest_artifact_id"), **extra, "timing": row.get("timing"),

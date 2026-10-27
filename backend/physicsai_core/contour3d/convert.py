@@ -15,6 +15,7 @@ from __future__ import annotations
 import hashlib
 import math
 import os
+import re
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from typing import Any, BinaryIO
 
@@ -59,12 +60,18 @@ SOLID_FACES: dict[int, tuple[tuple[int, ...], ...]] = {
     208: ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)),
 }
 SHELL_CONFIGS = (103, 104)
+# 2차 요소 → 같은 모양의 1차 요소(꼭짓점 노드만 쓴다 — HyperMesh 노드 순서는 꼭짓점이 먼저). 중간 노드는 면 계산에 쓰지 않는다
+CONFIG_ALIAS: dict[int, int] = {106: 103, 108: 104, 210: 204, 213: 206, 220: 208}
 
 
 class ConvertError(Exception):
     def __init__(self, code: str, message: str) -> None:
         super().__init__(message)
         self.code, self.message = code, message
+
+
+def _cfg_text(d: Mapping[int, int]) -> str:
+    return "{" + ", ".join(f"{k}: {v}" for k, v in sorted(d.items())) + "}"
 
 
 def _msg(code: str) -> str:
@@ -115,7 +122,7 @@ def _blocks(fh: BinaryIO, tick: Callable[[], None]) -> Iterator[bytes]:
         yield buf[:cut + 1]
 
 
-def _parse_block(block: bytes, ncol: int, blank_nan: bool, name: str) -> np.ndarray:
+def _parse_block(block: bytes, ncol: int, blank_nan: bool, name: str, base_row: int = 0) -> np.ndarray:
     """행 묶음 → float64 [m, ncol]. 빈 칸·모자란 열 = NaN, 넘치는 열은 버림. blank_nan=False면 빈 행을 건너뛴다."""
     b = block.replace(b"\r", b"")
     if not blank_nan:
@@ -142,10 +149,14 @@ def _parse_block(block: bytes, ncol: int, blank_nan: bool, name: str) -> np.ndar
             return arr[:, :ncol]
     except ValueError:
         pass
-    return _parse_slow(b, ncol, name)
+    return _parse_slow(b, ncol, name, blank_nan, base_row)
 
 
-def _parse_slow(b: bytes, ncol: int, name: str) -> np.ndarray:
+# 프레임 값 칸의 비정상 부동소수 표기(Windows `1.#QNAN`·`-1.#IND`·`Infinity` 등) — 값 없음(NaN)으로 본다
+_NAN_LIKE = re.compile(rb"nan|#ind|#inf|inf", re.IGNORECASE)
+
+
+def _parse_slow(b: bytes, ncol: int, name: str, lenient: bool = False, base_row: int = 0) -> np.ndarray:
     rows = b.split(b"\n")
     if rows and rows[-1] == b"":
         rows.pop()
@@ -157,7 +168,10 @@ def _parse_slow(b: bytes, ncol: int, name: str) -> np.ndarray:
                 try:
                     out[i, k] = float(s)
                 except ValueError:
-                    raise ConvertError(INVALID, f"{name}: 숫자가 아닙니다: {s[:20].decode('utf-8', 'replace')}") from None
+                    if lenient and _NAN_LIKE.search(s):
+                        continue  # 값 없음(NaN)
+                    raise ConvertError(
+                        INVALID, f"{name} {base_row + i + 2}번째 줄 {k + 1}번째 칸: 숫자가 아닙니다: {s[:20].decode('utf-8', 'replace')}") from None
     return out
 
 
@@ -194,13 +208,13 @@ def _read_frame(path: str, nrows: int, tick: Callable[[], None]) -> tuple[list[s
                 extra = True
                 cnt = nrows - row
             if cnt:
-                a = _parse_block(blk, ncol, True, name)
+                a = _parse_block(blk, ncol, True, name, row)
                 if a.shape[0] != cnt:
-                    raise ConvertError(INVALID, f"{name} 행을 읽지 못했습니다")
+                    raise ConvertError(INVALID, f"{name} {row + 2}번째 줄 부근: 행을 읽지 못했습니다(읽은 행 {a.shape[0]} != 기대 {cnt})")
                 out[row:row + cnt] = a
                 row += cnt
     if row != nrows:
-        raise ConvertError(INVALID, f"{name} 행 수가 nodes.csv({nrows})와 다릅니다")
+        raise ConvertError(INVALID, f"{name} 데이터 행 수가 nodes.csv({nrows})와 다릅니다(읽은 행 {row if row >= 0 else '초과'}, 검사: 프레임 행 수 == 노드 수)")
     return head, out
 
 
@@ -212,16 +226,15 @@ def read_nodes(path: str, tick: Callable[[], None] = lambda: None) -> tuple[np.n
     t = _read_table(path, "node_id", 4, tick)
     raw = t[:, 0]
     if not np.isfinite(raw).all():
-        raise ConvertError(INVALID, "nodes.csv에 빈 node_id가 있습니다")
+        raise ConvertError(INVALID, f"nodes.csv {int(np.argmax(~np.isfinite(raw))) + 2}번째 줄: 빈 node_id가 있습니다")
     if (raw != np.floor(raw)).any() or (raw < 0).any() or (raw > 0xFFFFFFFF).any():
-        raise ConvertError(INVALID, "nodes.csv node_id는 0 이상 4294967295 이하 정수여야 합니다")
+        raise ConvertError(INVALID, f"nodes.csv {int(np.argmax((raw != np.floor(raw)) | (raw < 0) | (raw > 0xFFFFFFFF))) + 2}번째 줄: node_id는 0 이상 4294967295 이하 정수여야 합니다")
     ids = raw.astype(np.int64)
     xyz = t[:, 1:4]
     bad = ~np.isfinite(xyz).all(axis=1)
     if bad.any():
-        raise ConvertError(INVALID, f"노드 {int(ids[np.argmax(bad)])} 좌표가 유한하지 않습니다")
-    if np.unique(ids).size != ids.size:
-        raise ConvertError(INVALID, "nodes.csv에 같은 node_id가 두 번 있습니다")
+        raise ConvertError(INVALID, f"nodes.csv {int(np.argmax(bad)) + 2}번째 줄: 노드 {int(ids[np.argmax(bad)])} 좌표가 유한하지 않습니다")
+    # 같은 node_id가 여러 행이어도 허용(면 참조는 첫 행, 프레임 값은 행 단위) — HyperView 다중 모델 결과 대비
     return ids, np.ascontiguousarray(xyz)
 
 
@@ -230,19 +243,25 @@ def _ints(a: np.ndarray) -> np.ndarray:
     out = np.full(a.shape, -1, dtype=np.int64)
     m = np.isfinite(a)
     if (a[m] != np.floor(a[m])).any() or (a[m] < 0).any():
-        raise ConvertError(INVALID, "노드·요소 번호는 0 이상 정수여야 합니다")
+        raise ConvertError(INVALID, "노드·요소 번호는 0 이상 정수여야 합니다(csv의 n1.. 열 검사)")
     out[m] = a[m].astype(np.int64)
     return out
 
 
-def external_faces(path: str, tick: Callable[[], None] = lambda: None) -> np.ndarray:
+def external_faces(path: str, tick: Callable[[], None] = lambda: None, unknown: dict[int, int] | None = None) -> np.ndarray:
     """elements.csv(elem_id,config,n1..n8) → 외부 면 노드 ID int64 [K,4](삼각형은 4번째 −1).
     쉘(103·104) = 요소 그대로, 솔리드 = 한 번만 나온 면(정렬 키 lexsort → 같은 면 묶음 크기 1)."""
     t = _read_table(path, "elem_id", 10, tick)
     if t.shape[0] and not np.isfinite(t[:, :2]).all():
-        raise ConvertError(INVALID, "elements.csv 행에 elem_id·config가 없습니다")
+        raise ConvertError(INVALID, f"elements.csv {int(np.argmax(~np.isfinite(t[:, :2]).all(axis=1))) + 2}번째 줄: elem_id·config가 없습니다")
     eid = t[:, 0]
     cfg = t[:, 1].astype(np.int64) if t.shape[0] else np.zeros(0, dtype=np.int64)
+    for k, v in CONFIG_ALIAS.items():
+        cfg[cfg == k] = v
+    if unknown is not None and cfg.size:  # 인식하지 못한 config는 건너뛰되 개수를 알린다
+        known = np.isin(cfg, list(SHELL_CONFIGS) + list(SOLID_FACES))
+        for c, cnt in zip(*np.unique(cfg[~known], return_counts=True)):
+            unknown[int(c)] = int(cnt)
     conn = _ints(t[:, 2:10])
     shells: list[np.ndarray] = []
     for c in SHELL_CONFIGS:
@@ -254,7 +273,7 @@ def external_faces(path: str, tick: Callable[[], None] = lambda: None) -> np.nda
         if c == 104:
             f[:, 3] = rows[:, 3]
         if (f[:, :3] < 0).any():
-            raise ConvertError(INVALID, "elements.csv 쉘 요소의 노드가 모자랍니다")
+            raise ConvertError(INVALID, f"elements.csv 쉘 요소(config {c})의 노드가 모자랍니다")
         shells.append(f)
     cand: list[np.ndarray] = []
     for c, tmpl in SOLID_FACES.items():
@@ -293,7 +312,7 @@ def read_faces(path: str, tick: Callable[[], None] = lambda: None) -> np.ndarray
     t = _read_table(path, "elem_id", 5, tick)
     f = _ints(t[:, 1:5])
     if t.shape[0] and (not np.isfinite(t[:, 0]).all() or (f[:, :3] < 0).any()):
-        raise ConvertError(INVALID, "faces.csv 행의 노드가 3개 미만입니다")
+        raise ConvertError(INVALID, f"faces.csv {int(np.argmax(~np.isfinite(t[:, 0]) | (f[:, :3] < 0).any(axis=1))) + 2}번째 줄: 노드가 3개 미만이거나 elem_id가 없습니다")
     return f
 
 
@@ -411,13 +430,14 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     tick = checkpoint or (lambda: None)
     rp = os.path.join(extract_dir, RESULT_NAME)
     if not os.path.isfile(rp):
-        raise ConvertError(INVALID, "extract_result.txt가 없습니다")
+        raise ConvertError(INVALID, f"{RESULT_NAME}이(가) 없습니다(추출 폴더 {os.path.basename(extract_dir)})")
     with open(rp, encoding="utf-8", errors="replace") as fh:
         text = fh.read()
     res = parse_result(text)
     if res["status"] != "OK":
         code = TCL_STATUS_CODE.get(str(res["status"]), INVALID)
-        raise ConvertError(code, f"추출 상태 {res['status']}: {res['message'] or ''}".strip())
+        raise ConvertError(code, f"{RESULT_NAME} STATUS={res['status']}(OK 아님) {res['message'] or ''}".strip()
+                           + ("" if res["header_ok"] else " — 파일 첫 줄 `# contour_extract` 없음(잘렸거나 다른 파일)"))
     unit_h3d, unit_disp = clean_unit(res.get("unit")), clean_unit(unit)
     unit_out, unit_source = (unit_h3d, "h3d") if unit_h3d else (unit_disp, "display") if unit_disp else ("", None)
     comps_l = normalize_comps(comps)
@@ -436,12 +456,15 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     prog(2, "형상 읽기")
     ids, xyz_all = read_nodes(os.path.join(extract_dir, "nodes.csv"), tick)
     fp, ep = os.path.join(extract_dir, "faces.csv"), os.path.join(extract_dir, "elements.csv")
+    unknown_cfg: dict[int, int] = {}
     if os.path.isfile(fp):
         face_ids = read_faces(fp, tick)
     elif os.path.isfile(ep):
-        face_ids = external_faces(ep, tick)
+        face_ids = external_faces(ep, tick, unknown_cfg)
+        if unknown_cfg:
+            warnings.append(_warn("CONTOUR3D_FACE_SKIPPED", f"미지원 요소 config {_cfg_text(unknown_cfg)}를 건너뜀", count=sum(unknown_cfg.values())))
     else:
-        raise ConvertError(INVALID, "faces.csv·elements.csv가 모두 없습니다")
+        raise ConvertError(INVALID, "faces.csv·elements.csv가 모두 없습니다(추출 폴더에 외부 면 파일 없음)")
     tick()
     order = np.argsort(ids, kind="stable")
     sids = ids[order]
@@ -449,11 +472,22 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     m = flat >= 0
     pos = np.searchsorted(sids, flat[m])
     pos_c = np.minimum(pos, max(sids.size - 1, 0))
-    if not sids.size or (sids[pos_c] != flat[m]).any():
-        raise ConvertError(INVALID, "면이 nodes.csv에 없는 노드를 참조합니다")
+    if not sids.size:
+        raise ConvertError(INVALID, "nodes.csv에 노드가 없습니다(데이터 행 0)")
+    miss = sids[pos_c] != flat[m]
     rows_flat = np.full(flat.shape, -1, dtype=np.int64)
     rows_flat[m] = order[pos_c]
     face_rows = rows_flat.reshape(face_ids.shape)
+    if miss.any():  # nodes.csv에 없는 노드를 쓰는 면은 건너뛴다(전부 그렇다면 오류)
+        first_missing = int(flat[m][np.argmax(miss)])
+        mi = np.flatnonzero(m)[miss] // face_ids.shape[1]
+        badf = np.zeros(face_ids.shape[0], dtype=bool)
+        badf[mi] = True
+        if badf.all():
+            raise ConvertError(INVALID, f"모든 면이 nodes.csv에 없는 노드를 참조합니다(예: 노드 {first_missing}, 면 {face_ids.shape[0]}개 검사)")
+        face_rows[badf] = -1
+        warnings.append(_warn("CONTOUR3D_FACE_SKIPPED", f"nodes.csv에 없는 노드를 쓰는 면 {int(badf.sum())}개(예: 노드 {first_missing})",
+                              count=int(badf.sum())))
     del face_ids, flat, rows_flat, pos, pos_c, m
     keep = np.unique(face_rows[face_rows >= 0])  # 외부 면 노드(nodes.csv 행 번호 오름차순)
     n = int(keep.size)
@@ -461,7 +495,8 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     if n > max_nodes:
         return _fail(base, "CONTOUR3D_TOO_LARGE", out_dir, f"외부 면 노드 {n:,}개 > 상한 {max_nodes:,}")
     if n == 0:
-        raise ConvertError(INVALID, "삼각형이 하나도 없습니다(면 없음)")
+        raise ConvertError(INVALID, "삼각형이 하나도 없습니다(면 없음)"
+                           + (f" — 미지원 요소 config {_cfg_text(unknown_cfg)}(elements.csv)" if unknown_cfg else ""))
     q_keep, translation, scale = mo.quantize_positions(xyz_all[keep])
     perm = morton_order(q_keep, ids[keep])
     src_rows = keep[perm]  # 정점 i의 nodes.csv(=프레임) 행 번호
@@ -490,13 +525,19 @@ def convert(extract_dir: str, out_dir: str, *, source: Mapping[str, Any], max_no
     # ---- 프레임 목록·크기 판정(§5.4) ----
     frames = sorted(res["frames"])
     if not frames:
-        raise ConvertError(INVALID, "추출 결과에 프레임이 없습니다")
+        raise ConvertError(INVALID, f"{RESULT_NAME}에 해석 가능한 `FRAME=번호|원본번호|시간` 줄이 없습니다(FRAMES_TOTAL={res['frames_total']})")
+    uniq: dict[int, tuple[int, int, Any]] = {}
+    for f in frames:  # 같은 번호의 FRAME 줄이 겹치면 첫 줄만(시간이 같은 프레임은 별개 프레임으로 허용)
+        uniq.setdefault(f[0], f)
+    frames = [uniq[k] for k in sorted(uniq)]
     if [f[0] for f in frames] != list(range(len(frames))):
-        raise ConvertError(INVALID, "프레임 번호가 0부터 연속이 아닙니다")
+        bad = next(i for i, f in enumerate(frames) if f[0] != i)
+        raise ConvertError(INVALID, f"{RESULT_NAME} FRAME 번호가 0부터 연속이 아닙니다(기대 {bad}, 실제 {frames[bad][0]}, 총 {len(frames)}줄)")
     if len(frames) > max_frames:
         frames = [frames[i] for i in resample(len(frames), max_frames)]
-    if not all(os.path.isfile(os.path.join(extract_dir, f"frame_{f[0]:05d}.csv")) for f in frames):
-        raise ConvertError(INVALID, "frame_*.csv 파일 수가 FRAME 줄 수와 다릅니다")
+    absent = [f"frame_{f[0]:05d}.csv" for f in frames if not os.path.isfile(os.path.join(extract_dir, f"frame_{f[0]:05d}.csv"))]
+    if absent:
+        raise ConvertError(INVALID, f"{RESULT_NAME}의 FRAME 줄에 대응하는 파일이 없습니다: {absent[0]} 외 {len(absent) - 1}개(검사: 파일 존재)")
     p0 = os.path.join(extract_dir, f"frame_{frames[0][0]:05d}.csv")
     with _open(p0) as fh:
         head0 = _header(fh, p0, "value")
