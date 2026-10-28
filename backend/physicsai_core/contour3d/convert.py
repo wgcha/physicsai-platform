@@ -153,7 +153,7 @@ def _parse_block(block: bytes, ncol: int, blank_nan: bool, name: str, base_row: 
 
 
 # 프레임 값 칸의 비정상 부동소수 표기(Windows `1.#QNAN`·`-1.#IND`·`Infinity` 등) — 값 없음(NaN)으로 본다
-_NAN_LIKE = re.compile(rb"-?nan|[+-]?inf|-?1\.#ind|-?1\.#qnan|#qnan|-?1\.#inf", re.IGNORECASE)
+_NAN_LIKE = re.compile(rb"-?nan|[+-]?inf|-?1\.#(?:ind|qnan|inf)\d*|#qnan", re.IGNORECASE)  # MSVC printf: -1.#IND00
 
 
 def _parse_slow(b: bytes, ncol: int, name: str, lenient: bool = False, base_row: int = 0) -> np.ndarray:

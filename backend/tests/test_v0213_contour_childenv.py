@@ -87,7 +87,7 @@ def test_nan_like_frame_tokens_and_details(tmp_path):
         _conv(d, tmp_path / "o4")
 
 
-@pytest.mark.parametrize("tok", ["Error: info missing", "banana", "(inf)", "nanx", "1.#IND5"])
+@pytest.mark.parametrize("tok", ["Error: info missing", "banana", "(inf)", "nanx", "1.#IND5x"])
 def test_nan_like_requires_full_match(tmp_path, tok):
     d = tmp_path / "x"
     _mk(d)
@@ -99,7 +99,7 @@ def test_nan_like_requires_full_match(tmp_path, tok):
 def test_nan_like_accepted_forms(tmp_path):
     d = tmp_path / "x"
     _mk(d)
-    (d / "frame_00001.csv").write_text("value\n NaN \n-nan\n-INF\n1.#QNAN\n#QNAN\n1.#INF\n-1.#IND\n\n")
+    (d / "frame_00001.csv").write_text("value\n NaN \n-1.#IND00\n-INF\n1.#QNAN\n1.#QNAN0\n1.#INF00\n-1.#IND\n\n")
     assert _conv(d, tmp_path / "o")["frames"]["nan_count"] > 0
 
 
