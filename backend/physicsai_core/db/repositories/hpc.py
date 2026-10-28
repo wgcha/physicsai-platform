@@ -266,6 +266,8 @@ def cancel_waiting(conn: Connection, job: dict[str, Any]) -> bool:
             .where(and_(job_steps.c.job_id == job["id"], job_steps.c.state.in_(["PENDING", "RUNNING"])))
             .values(state="CANCELED")
         )
+        # v0.2.14 이슈 #14: 종료 부수효과 누락이 원인 — 작업만 CANCELED가 되고 FEM 검증 행(RUNNING)·최적화 행 등이 그대로 남았다
+        _side_effects_on_end(conn, job, CANCELED)
         notif_repo.notify_job(conn, job["id"], "JOB_CANCELED")
     return ok
 

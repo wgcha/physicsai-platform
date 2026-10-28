@@ -103,6 +103,7 @@ class FemVerifyListItem(Resp):
     id: str
     label: str  # FV-003
     status: str  # WAITING_PREDICT | RUNNING | DONE | FAILED | CANCELED
+    cancel_requested: bool = False  # v0.2.14: 취소 요청 뒤 확정 전 — 화면은 "취소 중"
     source_label: str
     source_kind: str
     links: FvLinks
@@ -172,6 +173,7 @@ class FemVerification(Resp):
     label: str
     status: str
     status_text: str
+    cancel_requested: bool = False  # v0.2.14: 취소 요청 뒤 확정 전(status_text "취소 중", can_cancel false)
     source: FvSourceOut
     links: FvLinks
     design: FvDesign

@@ -16,6 +16,7 @@ from physicsai_core.db.repositories import studies as studies_repo
 from physicsai_core.db.repositories import train as train_repo
 from physicsai_core.errors import DomainError
 from physicsai_core.paths import display_path, resolve_in_study
+from physicsai_core.state_machine import TERMINAL
 from physicsai_core.stage4_predict import input_kind as ik
 
 from ..auth import Principal
@@ -48,7 +49,18 @@ def _attempt_dir(row: dict[str, Any], job: dict[str, Any] | None) -> str | None:
     return None
 
 
-def _status_text(row: dict[str, Any], job: dict[str, Any] | None, hpc_mode: str) -> str:
+CANCELLING_TEXT = "취소 중"  # v0.2.14 이슈 #14: 취소 요청 뒤 워커·폴러가 확정하기 전
+
+
+def _cancelling(row: dict[str, Any], job: dict[str, Any] | None, pj: dict[str, Any] | None) -> bool:
+    """지금 기다리는 작업(WAITING_PREDICT = 동반 예측, RUNNING = FEM_VERIFY)에 취소가 요청됐고 아직 끝나지 않았다."""
+    t = pj if row["status"] == "WAITING_PREDICT" else job if row["status"] == "RUNNING" else None
+    return bool(t and t.get("cancel_requested_at") is not None and t["state"] not in TERMINAL)
+
+
+def _status_text(row: dict[str, Any], job: dict[str, Any] | None, hpc_mode: str, cancelling: bool = False) -> str:
+    if cancelling:
+        return CANCELLING_TEXT
     if row["status"] != "RUNNING":
         return STATUS_TEXT.get(row["status"], row["status"])
     st = (job or {}).get("state")
@@ -107,11 +119,12 @@ def _detail(ctx: AppContext, conn: Any, row: dict[str, Any], principal: Principa
         if isinstance(w, dict) and w.get("code"):
             warnings.append({"code": w["code"], "message": w.get("message") or ""})
     active = row["status"] in fv_repo.FV_ACTIVE
+    cancelling = _cancelling(row, job, pj)
     mine = principal.is_global_admin or (row["created_by"] == principal.user_id and principal.can_execute(study["project_id"]))
     hpc_mode = ctx.hpc.availability().mode
     return {
         "id": row["id"], "label": fv_repo.label(row["fv_no"]), "status": row["status"],
-        "status_text": _status_text(row, job, hpc_mode),
+        "status_text": _status_text(row, job, hpc_mode, cancelling), "cancel_requested": cancelling,
         "source": {"kind": row["source_kind"], "label": ref.get("label") or ""}, "links": _links(row),
         "design": {"param_set": {"id": ps["id"], "label": ps.get("label"), "input_kind": ps["input_kind"]} if ps else None,
                    "input": ik.to_public(row.get("template_kind") or (ps or {}).get("input_kind")),
@@ -128,7 +141,7 @@ def _detail(ctx: AppContext, conn: Any, row: dict[str, Any], principal: Principa
         "compare": res.get("compare") if row["status"] == "DONE" or res.get("compare") else None,
         "warnings": warnings,
         "failure": {"code": row["failure_code"], "message": row.get("failure_message") or ""} if row.get("failure_code") else None,
-        "can_cancel": active and mine, "can_rerun": row["status"] in ("FAILED", "CANCELED") and mine,
+        "can_cancel": active and mine and not cancelling, "can_rerun": row["status"] in ("FAILED", "CANCELED") and mine,
         "created_at": row["created_at"], "created_by_name": row["created_by_name"], "finished_at": row.get("finished_at"),
     }
 
@@ -174,12 +187,13 @@ def list_(ctx: AppContext, principal: Principal, study_id: str, *, predict_job_i
                 pids = list({predict_job_id, root})
         rows = fv_repo.list_for_study(conn, study_id, predict_job_ids=pids, batch_id=batch_id, opt_id=opt_id,
                                       statuses=statuses, limit=lim + 1, after=after)
+        cancelling = fv_repo.cancel_requested_ids(conn, rows[:lim])
     out = []
     for row in rows[:lim]:
         sm = row.get("summary") or {}
         ref = row.get("source_ref") or {}
         out.append({"id": row["id"], "label": fv_repo.label(row["fv_no"]), "status": row["status"],
-                    "source_label": ref.get("label") or "", "source_kind": row["source_kind"], "links": _links(row),
+                    "cancel_requested": row["id"] in cancelling, "source_label": ref.get("label") or "", "source_kind": row["source_kind"], "links": _links(row),
                     "values": ref.get("values") or {}, "max_abs_diff_pct": sm.get("max_abs_diff_pct"), "worst": sm.get("worst"),
                     "created_at": row["created_at"], "created_by_name": row["created_by_name"], "finished_at": row.get("finished_at")})
     return out, (_encode_cursor(rows[lim - 1]) if len(rows) > lim else None)

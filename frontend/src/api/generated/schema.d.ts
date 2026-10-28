@@ -5568,6 +5568,11 @@ export interface components {
             can_cancel: boolean;
             /** Can Rerun */
             can_rerun: boolean;
+            /**
+             * Cancel Requested
+             * @default false
+             */
+            cancel_requested: boolean;
             compare?: components["schemas"]["FvCompare"] | null;
             /**
              * Created At
@@ -5614,6 +5619,11 @@ export interface components {
         };
         /** FemVerifyListItem */
         FemVerifyListItem: {
+            /**
+             * Cancel Requested
+             * @default false
+             */
+            cancel_requested: boolean;
             /**
              * Created At
              * Format: date-time

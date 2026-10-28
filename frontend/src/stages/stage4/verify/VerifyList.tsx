@@ -10,7 +10,7 @@ import { usePolling } from "../../../hooks/usePolling";
 import { POLL } from "../../../lib/poll";
 import { mdHm, valuesText } from "../history/runListText";
 import { VerifyNew } from "./VerifyNew";
-import { FV_STATUS_LABEL, fvTone, pctText, sourceFromQuery } from "./verifyRules";
+import { fvStatusText, fvTone, pctText, sourceFromQuery } from "./verifyRules";
 import "../../../styles/femVerify.css";
 
 const PAGE = 50;
@@ -114,7 +114,7 @@ export function VerifyList() {
                       <td className="small">{r.source_label}</td>
                       <td className="small mono">{valuesText(r.values ?? {}) || <span className="muted">—</span>}</td>
                       <td className="small">
-                        <span className={`pill ${fvTone(r.status)}`}>{FV_STATUS_LABEL[r.status]}</span>
+                        <span className={`pill ${fvTone(r.status)}`}>{fvStatusText(r)}</span>
                       </td>
                       <td className="num small">{r.status === "DONE" && r.max_abs_diff_pct != null ? <>{pctText(r.max_abs_diff_pct)}{r.worst ? <span className="muted"> ({r.worst})</span> : null}</> : <span className="muted">—</span>}</td>
                       <td className="small">{mdHm(r.created_at)}</td>

@@ -43,7 +43,7 @@ export const femVerifyRoutes: Route = (srv, { method, seg, query, body, me }) =>
       }
       const page = list.slice(0, lim);
       const last = page[page.length - 1];
-      return { status: 200, body: page.map(summaryOf), headers: list.length > lim && last ? { "X-Next-Cursor": `${last.created_at}|${last.id}` } : undefined };
+      return { status: 200, body: page.map((r) => summaryOf(r, srv)), headers: list.length > lim && last ? { "X-Next-Cursor": `${last.created_at}|${last.id}` } : undefined };
     }
     if (method === "POST" && (seg[3] === "preview" || !seg[3])) {
       const d = needPower(srv, s.project_id);

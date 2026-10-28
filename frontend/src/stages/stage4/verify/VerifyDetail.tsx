@@ -17,7 +17,7 @@ import { ContourCompare } from "./ContourCompare";
 import { ContourCompare3D } from "../geomview/contour/ContourCompare3D";
 import { CurveCompare } from "./CurveCompare";
 import { ResponseCompareTable } from "./ResponseCompareTable";
-import { FV_STATE_TEXT, FV_STATUS_LABEL, fvStages, fvTone, pctText } from "./verifyRules";
+import { FV_CANCELLING_LABEL, FV_STATE_TEXT, fvStages, fvStatusText, fvTone, pctText } from "./verifyRules";
 import "../../../styles/femVerify.css";
 
 type Tab = "responses" | "curves" | "contours" | "paths";
@@ -39,6 +39,7 @@ export function VerifyDetail({ fid }: { fid: string }) {
   const [actionError, setActionError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("responses");
   const [confirm, setConfirm] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false); // 취소 요청을 보낸 직후부터 응답이 올 때까지 버튼 비활성(이슈 #14)
 
   const load = useCallback(async () => {
     try {
@@ -78,7 +79,7 @@ export function VerifyDetail({ fid }: { fid: string }) {
     <>
       <Card span={9} title={`${fv.label} · ${fv.status_text}`} className="fv-head" aside={<Link className="small" to={`${base}/4/verify`}>← FEM 검증 목록</Link>}>
         <div className="run-action-row">
-          <span className={`pill ${fvTone(fv.status)}`} data-testid="fv-status">{FV_STATUS_LABEL[fv.status]}</span>
+          <span className={`pill ${fvTone(fv.status)}`} data-testid="fv-status">{fvStatusText(fv)}</span>
           <span className="small" data-testid="fv-source-label">{fv.source.label}</span>
           {fv.design?.input && <InputBadge input={fv.design.input} />}
           {lk.predict_job_id && <Link className="small" to={`${base}/4?job=${lk.predict_job_id}`}>예측 결과</Link>}
@@ -106,8 +107,13 @@ export function VerifyDetail({ fid }: { fid: string }) {
         )}
         <div className="run-action-row">
           {fv.can_cancel && (
-            <button type="button" className="btn small danger" onClick={() => setConfirm(true)}>
+            <button type="button" className="btn small danger" disabled={cancelBusy} onClick={() => setConfirm(true)}>
               취소
+            </button>
+          )}
+          {fv.cancel_requested && isFvActive(fv.status) && (
+            <button type="button" className="btn small danger" disabled data-testid="fv-cancelling">
+              {FV_CANCELLING_LABEL}
             </button>
           )}
           {fv.can_rerun && (
@@ -165,7 +171,15 @@ export function VerifyDetail({ fid }: { fid: string }) {
           onCancel={() => setConfirm(false)}
           onConfirm={() => {
             setConfirm(false);
-            void act(() => femVerifyApi.cancel(fv.id));
+            setCancelBusy(true);
+            void act(async () => {
+              try {
+                const f = await femVerifyApi.cancel(fv.id);
+                setFv(f);
+              } finally {
+                setCancelBusy(false);
+              }
+            });
           }}
         />
       )}

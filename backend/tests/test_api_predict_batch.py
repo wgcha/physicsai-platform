@@ -89,7 +89,8 @@ def _end(engine, job_id: str, state: str, result: dict | None = None, failure_co
         j = jobs_repo.get_job(conn, job_id)
         res = {**(j["result"] or {}), **(result or {})}
         conn.execute(text("update jobs set state=:s, holds_slot=false, queue_seq=null, finished_at=now(), started_at=now() - interval '2 minutes',"
-                          " result=cast(:r as jsonb), failure_code=:fc where id=:i"),
+                          " result=cast(:r as jsonb), failure_code=:fc, lease_owner_id=null, lease_token=null, lease_acquired_at=null,"
+                          " lease_expires_at=null where id=:i"),
                      {"s": state, "r": json.dumps(res), "fc": failure_code, "i": job_id})
         _side_effects_on_end(conn, {**j, "result": res}, state)
         notif_repo.notify_job(conn, job_id, {"SUCCEEDED": "JOB_SUCCEEDED", "FAILED": "JOB_FAILED",
@@ -410,7 +411,10 @@ def test_v3_s9_cancel_batch(client, loaded_config, worker_factory, engine):
     bid = job["params"]["batch_id"]
     kids = _gen_done(engine, ai, "S1", bid)
     with engine.begin() as conn:
-        conn.execute(text("update jobs set state='RUNNING', holds_slot=true, lane='GPU', queue_seq=null, started_at=now() where id=:i"), {"i": kids[0]["id"]})
+        # 워커가 lease를 쥔 실행 중(v0.2.14: lease 없는 RUNNING은 서버가 바로 취소 확정)
+        conn.execute(text("update jobs set state='RUNNING', holds_slot=true, lane='GPU', queue_seq=null, started_at=now(),"
+                          " lease_owner_id='w-x', lease_token='t-x', lease_acquired_at=now(), lease_expires_at=now() + interval '1 hour'"
+                          " where id=:i"), {"i": kids[0]["id"]})
     r = client.post(f"{API}/predict-batches/{bid}/cancel", headers=AW)                    # 관리자
     assert r.status_code == 202 and r.json()["can_cancel"] is False
     k0 = client.get(f"{API}/jobs/{kids[0]['id']}", headers=P).json()

@@ -227,6 +227,9 @@ def request_cancel(conn: Connection, job_id: str, user_id: str) -> dict[str, Any
             .where(jobs.c.id == job_id)
             .values(cancel_requested_at=func.now(), cancel_requested_by=user_id, updated_at=func.now(), version=jobs.c.version + 1)
         )
+    from .job_lease_end import finalize_cancel_if_orphan  # 지연 import(job_lease_end → jobs)
+
+    finalize_cancel_if_orphan(conn, job_id)
     return get_job(conn, job_id)
 
 

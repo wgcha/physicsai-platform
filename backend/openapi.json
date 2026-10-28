@@ -7059,6 +7059,11 @@
             "title": "Can Rerun",
             "type": "boolean"
           },
+          "cancel_requested": {
+            "default": false,
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
           "compare": {
             "anyOf": [
               {
@@ -7264,6 +7269,11 @@
       },
       "FemVerifyListItem": {
         "properties": {
+          "cancel_requested": {
+            "default": false,
+            "title": "Cancel Requested",
+            "type": "boolean"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -23775,7 +23785,7 @@
   },
   "info": {
     "title": "PhysicsAI Platform API",
-    "version": "0.2.13"
+    "version": "0.2.14"
   },
   "openapi": "3.1.0",
   "paths": {

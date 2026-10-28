@@ -77,6 +77,8 @@ export interface FemVerifySummary {
   /** FV-003 */
   label: string;
   status: FvStatus;
+  /** 취소 요청 뒤 워커·폴러가 확정하기 전(v0.2.14 이슈 #14) — 화면은 "취소 중" */
+  cancel_requested: boolean;
   source_label: string;
   source_kind: "PREDICT_JOB" | "BATCH_RUN" | "VALUES" | "OPT_DESIGN";
   links: { predict_job_id: string | null; batch_id: string | null; doe_no: number | null; opt_id: string | null };

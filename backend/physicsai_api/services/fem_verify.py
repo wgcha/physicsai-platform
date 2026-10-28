@@ -120,9 +120,11 @@ def cancel(ctx: AppContext, principal: Principal, fid: str, rid: str, ip: str | 
             raise DomainError("FEM_VERIFY_NOT_FOUND", "FEM 검증을 찾을 수 없습니다", status=404)
         study = studies_repo.require(conn, row["study_id"])
         _require_owner(principal, row, study)
-        target = row["predict_job_id"] if row["status"] == "WAITING_PREDICT" else (row["job_id"] if row["status"] == "RUNNING" else None)
+        target = fv_repo.target_job_id(row)
         j = jobs_repo.get_job(conn, target) if target else None
-        if j is not None and j["state"] not in TERMINAL and j["cancel_requested_at"] is None:
+        if j is not None and j["state"] in TERMINAL and row["status"] in fv_repo.FV_ACTIVE:
+            fv_repo.on_job_end(conn, j, j["state"])  # 작업은 끝났는데 검증이 진행 중으로 남은 옛 행(v0.2.14 이슈 #14) — 바로잡는다
+        elif j is not None and j["state"] not in TERMINAL and j["cancel_requested_at"] is None:
             jobs_repo.request_cancel(conn, j["id"], principal.user_id)
             audit(conn, principal, "FEM_VERIFY_CANCEL", "fem_verification", fid, {"job_id": j["id"], "state": j["state"]}, rid, ip)
         return _detail(ctx, conn, fv_repo.get(conn, fid), principal, study)  # type: ignore[arg-type]

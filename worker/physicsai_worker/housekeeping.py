@@ -8,6 +8,7 @@ from typing import Any
 from sqlalchemy.engine import Engine
 
 from physicsai_core.db.repositories import env_checks as env_repo
+from physicsai_core.db.repositories import fem_verifications as fv_repo
 from physicsai_core.db.repositories import hpc as hpc_repo
 from physicsai_core.db.repositories import job_lease as lease_repo
 from physicsai_core.db.repositories import notifications as notif_repo
@@ -18,9 +19,23 @@ log = logging.getLogger("physicsai_worker")
 def reap(engine: Engine) -> list[str]:
     with engine.begin() as conn:
         out = lease_repo.reap_expired(conn)
+    reconcile_fem_verify(engine)
     expire_env_checks(engine)
     scx_submitting_orphans(engine)
     return out
+
+
+def reconcile_fem_verify(engine: Engine) -> int:
+    """작업은 끝났는데 진행 중으로 남은 FEM 검증 행 정리(v0.2.14 이슈 #14 — 옛 HPC 대기 취소 경로가 남긴 행·종료 훅 실패 안전망). 실패는 로그만."""
+    try:
+        with engine.begin() as conn:
+            n = fv_repo.reconcile_stuck(conn)
+    except Exception:  # noqa: BLE001 - 정리 실패가 리퍼·하우스키핑을 막지 않게
+        log.exception("FEM 검증 행 정리 실패")
+        return 0
+    if n:
+        log.warning("끝난 작업에 매달린 FEM 검증 %d건을 바로잡았습니다", n)
+    return n
 
 
 def scx_submitting_orphans(engine: Engine) -> dict[str, list[str]]:

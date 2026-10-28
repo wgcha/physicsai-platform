@@ -198,6 +198,14 @@ class HpcPollerMixin:
             try:
                 self.hpc.cancel(h["external_job_id"])
             except HpcGatewayError as exc:
+                ended = self._remote_already_ended(h)
+                if ended is not None:  # 취소 명령은 실패했지만 원격 잡이 이미 끝났다 — 취소할 대상이 없으니 그 상태로 확정(v0.2.14 이슈 #14)
+                    with self.engine.begin() as conn:
+                        hpc_repo.update_hpc(conn, h["id"], h["version"], **ended)
+                        if job["job_type"] == "TD_SOLVE" and ended["state"] in RUN_STATE_BY_HPC:
+                            train_repo.set_run_state_by_hpc(conn, h["id"], RUN_STATE_BY_HPC[ended["state"]])
+                    log.info("취소 명령은 실패했으나 원격 잡이 이미 끝남(%s): %s", ended["state"], self._mask(str(exc)))
+                    continue
                 # 취소 명령 실패: CANCELED로 적지 않는다 — CANCEL_REQUESTED 유지, 다음 폴링에서 다시 시도(변경 메모 C18)
                 log.warning("PBS 취소 실패: %s", self._mask(str(exc)))
                 cancel_failed.append(h["external_job_id"])
@@ -222,6 +230,21 @@ class HpcPollerMixin:
                     notif_repo.notify_job(conn, job["id"], "HPC_CANCEL_FAILED")
             else:
                 hpc_repo.cancel_waiting(conn, jobs_repo.get_job(conn, job["id"]) or job)
+
+    def _remote_already_ended(self, h: dict[str, Any]) -> dict[str, Any] | None:
+        """취소 명령 실패 뒤 원격 상태를 한 번 조회해 이미 끝났으면 hpc_jobs 갱신 값, 아니면(살아 있음·조회 실패) None.
+        살아 있거나 모르면 C18대로 CANCEL_REQUESTED를 유지하고 다음 주기에 다시 취소한다."""
+        try:
+            st = self.hpc.status(h["external_job_id"])
+        except HpcGatewayError:
+            return None
+        if st.state == "FINISHED":
+            vals = self._status_values(h, st, int(self.settings.hpc.lost_after_polls))
+            return vals if vals.get("state") in hpc_repo.HPC_TERMINAL else None
+        if st.not_found:
+            return {"state": "CANCELED", "finished_at": _now(), "unknown_count": 0,
+                    "error_message": "원격 잡을 찾을 수 없어 취소로 처리했습니다"}
+        return None
 
     # ---- 결과 모름 조치(phase3 §16.5) ----
     def process_hpc_resolves(self) -> int:

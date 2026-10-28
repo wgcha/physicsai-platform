@@ -14,6 +14,10 @@ export const FV_STATUS_LABEL: Record<FvStatus, string> = {
   FAILED: "실패",
   CANCELED: "취소됨",
 };
+export const FV_CANCELLING_LABEL = "취소 중";
+/** 상태 알약 문구: 취소 요청 뒤 확정 전이면 "취소 중"(이슈 #14 — 취소를 눌렀는데 '실행 중'으로 보이던 문제) */
+export const fvStatusText = (f: { status: FvStatus; cancel_requested?: boolean }): string =>
+  f.cancel_requested && (f.status === "RUNNING" || f.status === "WAITING_PREDICT") ? FV_CANCELLING_LABEL : FV_STATUS_LABEL[f.status];
 export const fvTone = (s: FvStatus): string => (s === "DONE" ? "ok" : s === "FAILED" ? "bad" : s === "RUNNING" || s === "WAITING_PREDICT" ? "run" : "");
 
 /** 오차 문구 "7.2%"(부호 없음 — 절댓값) */

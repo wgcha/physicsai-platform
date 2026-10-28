@@ -148,6 +148,25 @@ describe("V3-S16-18 상세", () => {
     await waitFor(() => expect(within(head).getByTestId("fv-status").textContent).toBe("취소됨"), { timeout: 3000 });
   });
 
+  it("이슈 #14: 실행 중 취소 → 즉시 '취소 중'(버튼 비활성, 목록 알약도) → 워커가 확정하면 취소됨", async () => {
+    const { server } = renderApp(`${STUDY}/4/verify/fv-2`, O);
+    const head = await screen.findByRole("region", { name: /^FV-002/ });
+    fireEvent.click(await within(head).findByRole("button", { name: "다시 실행" })); // 진행 중(작업 대기)
+    await waitFor(() => expect(within(head).getByRole("button", { name: "취소" })).toBeTruthy());
+    const fem = server.fems.find((r) => r.id === "fv-2")!;
+    server.jobs.find((j) => j.id === fem.job_id)!.state = "RUNNING"; // 워커가 잡은 상태
+    fireEvent.click(within(head).getByRole("button", { name: "취소" }));
+    fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "검증 취소" }));
+    const btn = (await within(head).findByTestId("fv-cancelling")) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    expect(btn.textContent).toBe("취소 중");
+    expect(within(head).getByTestId("fv-status").textContent).toBe("취소 중");
+    expect(within(head).queryByRole("button", { name: "취소" })).toBeNull();
+    act(() => server.tick()); // 워커가 다음 확인 지점에서 CANCELED
+    await waitFor(() => expect(within(head).getByTestId("fv-status").textContent).toBe("취소됨"), { timeout: 3000 });
+    expect(within(head).queryByTestId("fv-cancelling")).toBeNull();
+  });
+
   it("실패(FV-002): 실패 문구 + 다시 실행 → 진행 중", async () => {
     renderApp(`${STUDY}/4/verify/fv-2`, O);
     const head = await screen.findByRole("region", { name: /^FV-002/ });

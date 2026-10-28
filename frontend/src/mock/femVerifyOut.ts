@@ -14,9 +14,15 @@ import { activeOf } from "./femVerifyCreate";
 // ------------------------------------------------------------------ 출력
 const STATUS_TEXT: Record<FvStatus, string> = { WAITING_PREDICT: "예측 실행 중", RUNNING: "실행 중", DONE: "완료", FAILED: "실패", CANCELED: "취소됨" };
 
-export function summaryOf(r: FemRec): FemVerifySummary {
+/** 지금 기다리는 작업(WAITING_PREDICT = 동반 예측, RUNNING = FEM_VERIFY)에 취소가 요청됐고 아직 끝나지 않았다(서버 cancel_requested) */
+export function cancellingOf(srv: MockServer, r: FemRec): boolean {
+  const t = latest(srv, r.status === "WAITING_PREDICT" ? r.predict_job_id : r.status === "RUNNING" ? r.job_id : null);
+  return !!t && t.cancel_requested && !TERMINAL.includes(t.state);
+}
+
+export function summaryOf(r: FemRec, srv?: MockServer): FemVerifySummary {
   return {
-    id: r.id, label: fvLabel(r.fv_no), status: r.status, source_label: r.source_label, source_kind: r.source_kind, links: r.links,
+    id: r.id, label: fvLabel(r.fv_no), status: r.status, cancel_requested: srv ? cancellingOf(srv, r) : false, source_label: r.source_label, source_kind: r.source_kind, links: r.links,
     max_abs_diff_pct: r.compare?.max_abs_diff_pct ?? null, worst: r.compare?.worst ?? null, created_at: r.created_at, created_by_name: r.created_by_name, finished_at: r.finished_at, values: r.values,
   };
 }
@@ -32,9 +38,10 @@ export function detailOf(srv: MockServer, r: FemRec): FemVerification {
   const a = `${dir}\\a${r.attempt_no}`;
   const owner = !!me && (me.is_global_admin || me.user_id === r.created_by);
   const power = !!me && ["power", "admin"].includes(srv.role(s.project_id) ?? "");
-  const text = r.status === "RUNNING" && job ? (job.state === "WAITING_HPC" || job.state === "COLLECTING" ? (r.hpc_mode === "scx" ? "해석 대기(SCX)" : "해석 대기(PBS)") : `${JOB_STATE_LABEL[job.state]}`) : STATUS_TEXT[r.status];
+  const cancelling = cancellingOf(srv, r);
+  const text = cancelling ? "취소 중" : r.status === "RUNNING" && job ? (job.state === "WAITING_HPC" || job.state === "COLLECTING" ? (r.hpc_mode === "scx" ? "해석 대기(SCX)" : "해석 대기(PBS)") : `${JOB_STATE_LABEL[job.state]}`) : STATUS_TEXT[r.status];
   return {
-    ...summaryOf(r),
+    ...summaryOf(r, srv),
     status_text: text,
     source: { kind: r.source_kind, label: r.source_label },
     design: {
@@ -56,7 +63,7 @@ export function detailOf(srv: MockServer, r: FemRec): FemVerification {
     compare: r.compare,
     warnings: r.warnings,
     failure: r.failure,
-    can_cancel: activeOf(r) && owner && power,
+    can_cancel: activeOf(r) && owner && power && !cancelling,
     can_rerun: (r.status === "FAILED" || r.status === "CANCELED") && power,
     hpc_mode: r.hpc_mode,
   };

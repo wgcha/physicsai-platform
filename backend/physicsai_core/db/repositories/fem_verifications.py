@@ -206,13 +206,40 @@ def on_retry(conn: Connection, old: Mapping[str, Any], new_id: str) -> None:
         set_row(conn, fid, job_id=new_id, status="RUNNING", **common)
 
 
+def target_job_id(row: Mapping[str, Any]) -> str | None:
+    """진행 중 검증이 지금 기다리는 작업: WAITING_PREDICT = 동반 예측, RUNNING = FEM_VERIFY."""
+    return row.get("predict_job_id") if row["status"] == "WAITING_PREDICT" else (row.get("job_id") if row["status"] == "RUNNING" else None)
+
+
+def cancel_requested_ids(conn: Connection, rows: Sequence[Mapping[str, Any]]) -> set[str]:
+    """진행 중 검증 중 지금 기다리는 작업에 취소가 요청된(아직 끝나지 않은) 행 id — 화면 '취소 중'(v0.2.14 이슈 #14)."""
+    by_job = {target_job_id(r): r["id"] for r in rows if r["status"] in FV_ACTIVE and target_job_id(r)}
+    if not by_job:
+        return set()
+    q = select(jobs.c.id).where(and_(jobs.c.id.in_(list(by_job)), jobs.c.cancel_requested_at.is_not(None),
+                                     jobs.c.state.not_in(list(TERMINAL))))
+    return {by_job[r.id] for r in conn.execute(q)}
+
+
+def reconcile_stuck(conn: Connection) -> int:
+    """진행 중(WAITING_PREDICT·RUNNING)인데 기다리는 작업이 이미 끝난 검증 행을 종료 훅과 같은 규칙으로 바로잡는다 — 종료 부수효과가
+    빠졌던 옛 경로(v0.2.13까지 HPC 대기 취소)가 남긴 행의 복구이자 훅 실패의 안전망(멱등). 바로잡은 행 수."""
+    ends: list[dict[str, Any]] = []
+    for status, col in (("RUNNING", fv.c.job_id), ("WAITING_PREDICT", fv.c.predict_job_id)):
+        q = select(jobs).select_from(fv.join(jobs, jobs.c.id == col)).where(and_(fv.c.status == status, jobs.c.state.in_(list(TERMINAL))))
+        ends.extend(row_dict(r) for r in conn.execute(q))
+    for j in ends:
+        on_job_end(conn, j, j["state"])  # 검증이 이미 끝났으면 아무것도 하지 않는다(멱등), savepoint
+    return len(ends)
+
+
 def job_terminal(conn: Connection, job_id: str | None) -> bool:
     j = get_job(conn, job_id) if job_id else None
     return j is None or j["state"] in TERMINAL
 
 
 __all__ = ["FV_ACTIVE", "FV_STATUSES", "label", "next_fv_no", "insert", "get", "set_row", "count_active", "active_duplicate", "active_companions", "list_for_study",
-           "by_predict_job", "by_job", "enqueue_fem_verify", "done_notice", "on_job_end", "on_retry", "job_terminal", "jobs"]
+           "by_predict_job", "by_job", "target_job_id", "cancel_requested_ids", "reconcile_stuck", "enqueue_fem_verify", "done_notice", "on_job_end", "on_retry", "job_terminal", "jobs"]
 
 
 def reusable_predicts(conn: Connection, study_id: str, param_set_id: str, model_id: str, limit: int = 50) -> list[dict[str, Any]]:

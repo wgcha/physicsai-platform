@@ -418,7 +418,7 @@ def test_v3_s16_16_list_detail_404(predict_env, fake_tools, tmp_path):
     g = lambda q="": env.c.get(f"{API}/studies/{env.sid}/fem-verifications{q}", headers=P)  # noqa: E731
     rows = g().json()
     assert [x["id"] for x in rows] == ids[::-1] and rows[-1]["label"] == "FV-001" and rows[0]["status"] == "WAITING_PREDICT"
-    assert set(rows[0]) == {"id", "label", "status", "source_label", "source_kind", "links", "values", "max_abs_diff_pct", "worst",
+    assert set(rows[0]) == {"id", "label", "status", "cancel_requested", "source_label", "source_kind", "links", "values", "max_abs_diff_pct", "worst",
                             "created_at", "created_by_name", "finished_at"}
     assert [x["id"] for x in g(f"?predict_job_id={pj}").json()] == ids[1::-1]
     assert [x["id"] for x in g("?status=WAITING_PREDICT").json()] == [ids[2]]
