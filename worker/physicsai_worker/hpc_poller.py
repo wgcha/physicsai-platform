@@ -278,7 +278,7 @@ class HpcPollerMixin:
                 job = d.get("job") or {}
                 raw = str(job.get("status") or "")
                 vals.update(state="RUNNING" if raw.strip().casefold() == "running" else "QUEUED", external_job_id=ext,
-                            submission_unknown=False, error_message=None, external_state_raw=raw or None, unknown_count=0,
+                            submission_unknown=False, error_message=None, external_state_raw=self._mask(raw)[:128] if raw else None, unknown_count=0,
                             output_path=job.get("output_path"), output_rel=job.get("output_rel"))
             except HpcGatewayError as exc:
                 vals["error_message"] = self._mask(f"잡 ID 연결 실패: {exc}")

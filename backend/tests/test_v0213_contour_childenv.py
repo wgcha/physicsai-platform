@@ -39,10 +39,10 @@ def test_tetra10_config_210_uses_corner_nodes_and_duplicate_times_ok(tmp_path):
     assert m["frames"]["count"] == 2
 
 
-@pytest.mark.parametrize("config", [106, 108, 213, 220])
+@pytest.mark.parametrize("config", [106, 108, 213, 215, 220])
 def test_second_order_aliases_recognized(tmp_path, config):
     from physicsai_core.contour3d.convert import CONFIG_ALIAS
-    assert config in CONFIG_ALIAS and CONFIG_ALIAS[config] in (103, 104, 206, 208)
+    assert CONFIG_ALIAS[config] == {106: 103, 108: 104, 213: 205, 215: 206, 220: 208}[config]
 
 
 def test_all_unknown_config_detail_lists_counts(tmp_path):
@@ -85,6 +85,31 @@ def test_nan_like_frame_tokens_and_details(tmp_path):
     (d / "frame_00001.csv").unlink()
     with pytest.raises(ConvertError, match="frame_00001.csv"):
         _conv(d, tmp_path / "o4")
+
+
+@pytest.mark.parametrize("tok", ["Error: info missing", "banana", "(inf)", "nanx", "1.#IND5"])
+def test_nan_like_requires_full_match(tmp_path, tok):
+    d = tmp_path / "x"
+    _mk(d)
+    (d / "frame_00001.csv").write_text(f"value\n1\n{tok}\n3\n4\n5\n6\n7\n8\n")
+    with pytest.raises(ConvertError, match="숫자가 아닙니다"):
+        _conv(d, tmp_path / "o")
+
+
+def test_nan_like_accepted_forms(tmp_path):
+    d = tmp_path / "x"
+    _mk(d)
+    (d / "frame_00001.csv").write_text("value\n NaN \n-nan\n-INF\n1.#QNAN\n#QNAN\n1.#INF\n-1.#IND\n\n")
+    assert _conv(d, tmp_path / "o")["frames"]["nan_count"] > 0
+
+
+@pytest.mark.parametrize("config, conn", [(213, (1, 2, 3, 4, 5, 6, 7, 8)), (215, (1, 2, 3, 4, 5, 6, 7, 8))])
+def test_pyramid13_penta15_synthetic(tmp_path, config, conn):
+    nodes = [(1, 0, 0, 0), (2, 1, 0, 0), (3, 1, 1, 0), (4, 0, 1, 0), (5, .5, .5, 1), (6, 0, 0, 1), (7, 1, 0, 1), (8, 0, 0, .5)]
+    d = tmp_path / "x"
+    _mk(d, config=config, nodes=nodes, conn=conn)
+    m = _conv(d, tmp_path / "o")
+    assert m["status"] == "OK" and m["mesh"]["nodes"] == (5 if config == 213 else 6)
 
 
 def test_duplicate_node_ids_allowed(tmp_path):

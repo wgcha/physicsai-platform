@@ -60,8 +60,8 @@ SOLID_FACES: dict[int, tuple[tuple[int, ...], ...]] = {
     208: ((0, 3, 2, 1), (4, 5, 6, 7), (0, 1, 5, 4), (1, 2, 6, 5), (2, 3, 7, 6), (3, 0, 4, 7)),
 }
 SHELL_CONFIGS = (103, 104)
-# 2차 요소 → 같은 모양의 1차 요소(꼭짓점 노드만 쓴다 — HyperMesh 노드 순서는 꼭짓점이 먼저). 중간 노드는 면 계산에 쓰지 않는다
-CONFIG_ALIAS: dict[int, int] = {106: 103, 108: 104, 210: 204, 213: 206, 220: 208}
+# HyperMesh config = 100(2D)/200(3D) + 노드 수. 2차 요소 → 같은 모양의 1차 요소(꼭짓점 노드만 쓴다 — HyperMesh 노드 순서는 꼭짓점이 먼저). 중간 노드는 면 계산에 쓰지 않는다
+CONFIG_ALIAS: dict[int, int] = {106: 103, 108: 104, 210: 204, 213: 205, 215: 206, 220: 208}
 
 
 class ConvertError(Exception):
@@ -153,7 +153,7 @@ def _parse_block(block: bytes, ncol: int, blank_nan: bool, name: str, base_row: 
 
 
 # 프레임 값 칸의 비정상 부동소수 표기(Windows `1.#QNAN`·`-1.#IND`·`Infinity` 등) — 값 없음(NaN)으로 본다
-_NAN_LIKE = re.compile(rb"nan|#ind|#inf|inf", re.IGNORECASE)
+_NAN_LIKE = re.compile(rb"-?nan|[+-]?inf|-?1\.#ind|-?1\.#qnan|#qnan|-?1\.#inf", re.IGNORECASE)
 
 
 def _parse_slow(b: bytes, ncol: int, name: str, lenient: bool = False, base_row: int = 0) -> np.ndarray:
@@ -168,7 +168,7 @@ def _parse_slow(b: bytes, ncol: int, name: str, lenient: bool = False, base_row:
                 try:
                     out[i, k] = float(s)
                 except ValueError:
-                    if lenient and _NAN_LIKE.search(s):
+                    if lenient and _NAN_LIKE.fullmatch(s):
                         continue  # 값 없음(NaN)
                     raise ConvertError(
                         INVALID, f"{name} {base_row + i + 2}번째 줄 {k + 1}번째 칸: 숫자가 아닙니다: {s[:20].decode('utf-8', 'replace')}") from None

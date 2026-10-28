@@ -16,7 +16,7 @@
 #   faces.csv           elem_id,n1,n2,n3,n4   (외부 면: 쉘은 요소 그대로, 솔리드는 자유 면. 삼각형은 n4 비움)
 #   elements.csv        elem_id,config,n1..n8   (대체: 외부 면 조회가 안 되면 요소 연결 전체 — 플랫폼 C3_CONVERT가 외부 면을 계산.
 #                       config = HyperView 요소 구성 103 tria3·104 quad4·204 tetra4·205 pyramid5·206 penta6·208 hexa8,
-#                       2차 요소 106 tria6·108 quad8·210 tetra10·213 penta15·220 hexa20은 n1..n8 중 꼭짓점만 쓴다)
+#                       2차 요소 106 tria6·108 quad8·210 tetra10·213 pyramid13·215 penta15·220 hexa20은 n1..n8 중 꼭짓점만 쓴다)
 #   frame_<out_idx 5자리>.csv   value[,dx,dy,dz]   (nodes.csv 행 순서, 값 없음 = 빈 칸)
 #   frame 파일 헤더는 첫 프레임에서 변위 유무를 판정한 뒤 정해서 모든 프레임이 같다(`value` 또는 `value,dx,dy,dz`).
 # 프레임 샘플링(결정적): 전체 T ≤ MAX_FRAMES면 전부, 초과면 src_k = round(k·(T−1)/(MAX_FRAMES−1)) (첫·끝 포함, 중복 제거)
@@ -226,7 +226,7 @@ if {$EX_SCOPE ne "COMPS"} {
         return
     }
 }
-# 요소 연결 전체를 쓴다(대체 경로 — 외부 면 계산은 플랫폼). n1..n8만 쓴다: 2차 요소(106·108·210·213·220)는 꼭짓점이 먼저 오므로
+# 요소 연결 전체를 쓴다(대체 경로 — 외부 면 계산은 플랫폼). n1..n8만 쓴다: 2차 요소(106·108·210·213·215·220)는 꼭짓점이 먼저 오므로
 # 플랫폼이 1차 요소로 취급한다(중간 노드는 쓰지 않는다).
 set fh [ex_open elements.csv]
 puts $fh "elem_id,config,n1,n2,n3,n4,n5,n6,n7,n8"
@@ -242,8 +242,8 @@ proc ex_vcount {config} {
     switch -- $config {
         103 - 106 { return 3 }
         104 - 108 - 204 - 210 { return 4 }
-        205 { return 5 }
-        206 - 213 { return 6 }
+        205 - 213 { return 5 }
+        206 - 215 { return 6 }
         208 - 220 { return 8 }
     }
     return 8
