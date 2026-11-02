@@ -55,6 +55,9 @@ def _frame(n: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return e1, np.cross(n, e1)
 
 
+_ROW_BLOCK = 512  # rows of P per block: pairwise matrices stay <= _ROW_BLOCK x len(Q)
+
+
 def _seg_intersections(P: np.ndarray, Q: np.ndarray, skip_adjacent: bool = False) -> bool:
     """Proper crossing between segments of polyline P (closed) and Q (closed)."""
     a, b = P, np.roll(P, -1, axis=0)
@@ -63,19 +66,24 @@ def _seg_intersections(P: np.ndarray, Q: np.ndarray, skip_adjacent: bool = False
     def orient(p, q, r):
         return (q[..., 0] - p[..., 0]) * (r[..., 1] - p[..., 1]) - (q[..., 1] - p[..., 1]) * (r[..., 0] - p[..., 0])
 
-    A, B = a[:, None, :], b[:, None, :]
     C, D = c[None, :, :], d[None, :, :]
-    o1, o2 = orient(A, B, C), orient(A, B, D)
-    o3, o4 = orient(C, D, A), orient(C, D, B)
     scale = max(1.0, float(np.abs(P).max()), float(np.abs(Q).max()))
     eps = 1e-12 * scale * scale
-    hit = (o1 * o2 < -eps) & (o3 * o4 < -eps)
-    if skip_adjacent:
-        n = len(P)
-        i, j = np.indices(hit.shape)
-        near = (np.abs(i - j) <= 1) | (np.abs(i - j) == n - 1)
-        hit &= ~near
-    return bool(hit.any())
+    n = len(P)
+    jj = np.arange(len(Q))[None, :]
+    for r0 in range(0, n, _ROW_BLOCK):
+        r1 = min(n, r0 + _ROW_BLOCK)
+        A, B = a[r0:r1, None, :], b[r0:r1, None, :]
+        o1, o2 = orient(A, B, C), orient(A, B, D)
+        o3, o4 = orient(C, D, A), orient(C, D, B)
+        hit = (o1 * o2 < -eps) & (o3 * o4 < -eps)
+        if skip_adjacent:
+            ii = np.arange(r0, r1)[:, None]
+            near = (np.abs(ii - jj) <= 1) | (np.abs(ii - jj) == n - 1)
+            hit &= ~near
+        if hit.any():
+            return True
+    return False
 
 
 def _point_seg_dist(p: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
@@ -87,11 +95,16 @@ def _point_seg_dist(p: np.ndarray, a: np.ndarray, b: np.ndarray) -> np.ndarray:
     return np.linalg.norm(p[:, None, :] - foot, axis=-1)
 
 
+def _point_seg_min(p: np.ndarray, a: np.ndarray, b: np.ndarray) -> float:
+    """``_point_seg_dist(p, a, b).min()`` in row blocks of p (same value, bounded memory)."""
+    return float(np.min([_point_seg_dist(p[r0 : r0 + _ROW_BLOCK], a, b).min() for r0 in range(0, len(p), _ROW_BLOCK)]))
+
+
 def _min_dist(P: np.ndarray, Q: np.ndarray) -> float:
     if _seg_intersections(P, Q):
         return 0.0
-    d1 = _point_seg_dist(P, Q, np.roll(Q, -1, axis=0)).min()
-    d2 = _point_seg_dist(Q, P, np.roll(P, -1, axis=0)).min()
+    d1 = _point_seg_min(P, Q, np.roll(Q, -1, axis=0))
+    d2 = _point_seg_min(Q, P, np.roll(P, -1, axis=0))
     return float(min(d1, d2))
 
 

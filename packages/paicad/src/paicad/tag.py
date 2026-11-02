@@ -49,10 +49,76 @@ class NodeTags:
     boundary: np.ndarray  # bool[n]
 
 
+CHUNK = 50_000  # points per block: peak memory of classify_points is O(n + V), never O(n * V)
+
+
+def nearest_vertex(pts: np.ndarray, V: np.ndarray, tol: float) -> tuple[np.ndarray, np.ndarray]:
+    """Nearest B-rep vertex within ``tol`` of each point: (index[n] or -1, distance[n] or inf).
+
+    Same result as ``argmin(norm(pts[:, None] - V[None], axis=2))`` restricted to ``<= tol`` (ties ->
+    lowest vertex index), with a k-d tree and chunked candidate pairs instead of the dense n x V matrix.
+    The tree only proposes candidates (radius slightly above tol); hit test and distance are recomputed
+    with the dense formula so the values stay bit-identical.
+    """
+    n = len(pts)
+    iv = np.full(n, -1, dtype=np.int64)
+    mv = np.full(n, np.inf)
+    if n == 0 or len(V) == 0 or not tol >= 0.0:
+        return iv, mv
+    from scipy.spatial import cKDTree
+
+    tree = cKDTree(V)
+    r = tol * (1.0 + 1e-9) + 1e-12
+    for s in range(0, n, CHUNK):
+        q = pts[s : s + CHUNK]
+        fin = np.flatnonzero(np.all(np.isfinite(q), axis=1))
+        if fin.size == 0:
+            continue
+        lists = tree.query_ball_point(q[fin], r)
+        cnt = np.fromiter((len(c) for c in lists), dtype=np.int64, count=len(lists))
+        tot = int(cnt.sum())
+        if tot == 0:
+            continue
+        ii = np.repeat(fin, cnt)
+        jj = np.fromiter((j for c in lists for j in c), dtype=np.int64, count=tot)
+        d = np.linalg.norm(q[ii] - V[jj], axis=1)
+        ok = d <= tol
+        ii, jj, d = ii[ok], jj[ok], d[ok]
+        if ii.size == 0:
+            continue
+        o = np.lexsort((jj, d, ii))
+        ii, jj, d = ii[o], jj[o], d[o]
+        first = np.ones(ii.size, dtype=bool)
+        first[1:] = ii[1:] != ii[:-1]
+        iv[s + ii[first]] = jj[first]
+        mv[s + ii[first]] = d[first]
+    return iv, mv
+
+
+class _BoxFilter:
+    """Indices of a point subset inside an axis-aligned box (x-sorted, then exact 3-axis test)."""
+
+    def __init__(self, pts: np.ndarray, idx: np.ndarray):
+        self.idx = idx
+        self.p = pts[idx]
+        self.order = np.argsort(self.p[:, 0], kind="stable")
+        self.xs = self.p[self.order, 0]
+
+    def inside(self, lo: np.ndarray, hi: np.ndarray) -> np.ndarray:
+        a = int(np.searchsorted(self.xs, lo[0], side="left"))
+        b = int(np.searchsorted(self.xs, hi[0], side="right"))
+        if b <= a:
+            return self.idx[:0]
+        c = np.sort(self.order[a:b])
+        q = self.p[c]
+        return self.idx[c[np.all((q >= lo) & (q <= hi), axis=1)]]
+
+
 def classify_points(body: BodyGeom, pts: np.ndarray, tol: float) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     """Vertex -> edge -> face classification of boundary points (section 6.1 step 2).
 
-    Returns kind[n], entity[n], uv[n,2], dist[n].
+    Returns kind[n], entity[n], uv[n,2], dist[n]. Peak memory O(n + V): k-d tree for vertices, bbox
+    prefilter + ``CHUNK``-point blocks for edge / face projections.
     """
     topo = body.topology()
     n = len(pts)
@@ -62,27 +128,26 @@ def classify_points(body: BodyGeom, pts: np.ndarray, tol: float) -> tuple[np.nda
     dist = np.full(n, np.inf)
     V = topo.vertices
     if len(V):
-        dv = np.linalg.norm(pts[:, None, :] - V[None, :, :], axis=2)
-        iv = np.argmin(dv, axis=1)
-        mv = dv[np.arange(n), iv]
-        hit = mv <= tol
+        iv, mv = nearest_vertex(pts, V, tol)
+        hit = iv >= 0
         kind[hit] = KIND_VERTEX
         ent[hit] = iv[hit] + 1
         dist[hit] = mv[hit]
     # edges
     rest = np.flatnonzero(kind == KIND_UNMATCHED)
+    box = _BoxFilter(pts, rest)
     best_d = np.full(n, np.inf)
     best_e = np.full(n, -1)
     best_t = np.zeros(n)
     for e in topo.edges:
         lo, hi = e.bbox[:3] - tol, e.bbox[3:] + tol
-        sub = rest[np.all((pts[rest] >= lo) & (pts[rest] <= hi), axis=1)]
-        if sub.size == 0:
-            continue
-        d, t, _ = body.project_to_edge(e.id, pts[sub])
-        better = d < best_d[sub]
-        idx = sub[better]
-        best_d[idx], best_e[idx], best_t[idx] = d[better], e.id, t[better]
+        sub_all = box.inside(lo, hi)
+        for s in range(0, sub_all.size, CHUNK):
+            sub = sub_all[s : s + CHUNK]
+            d, t, _ = body.project_to_edge(e.id, pts[sub])
+            better = d < best_d[sub]
+            idx = sub[better]
+            best_d[idx], best_e[idx], best_t[idx] = d[better], e.id, t[better]
     hit = (best_e > 0) & (best_d <= tol)
     kind[hit] = KIND_EDGE
     ent[hit] = best_e[hit]
@@ -90,20 +155,21 @@ def classify_points(body: BodyGeom, pts: np.ndarray, tol: float) -> tuple[np.nda
     dist[hit] = best_d[hit]
     # faces
     rest = np.flatnonzero(kind == KIND_UNMATCHED)
+    box = _BoxFilter(pts, rest)
     best_d = np.full(n, np.inf)
     best_f = np.full(n, -1)
     best_uv = np.zeros((n, 2))
     any_d = np.full(n, np.inf)
     for f in topo.faces:
         lo, hi = f.bbox[:3] - tol, f.bbox[3:] + tol
-        sub = rest[np.all((pts[rest] >= lo) & (pts[rest] <= hi), axis=1)]
-        if sub.size == 0:
-            continue
-        d, fuv, inside, _ = body.project_to_face(f.id, pts[sub])
-        any_d[sub] = np.minimum(any_d[sub], d)
-        better = inside & (d < best_d[sub])
-        idx = sub[better]
-        best_d[idx], best_f[idx], best_uv[idx] = d[better], f.id, fuv[better]
+        sub_all = box.inside(lo, hi)
+        for s in range(0, sub_all.size, CHUNK):
+            sub = sub_all[s : s + CHUNK]
+            d, fuv, inside, _ = body.project_to_face(f.id, pts[sub])
+            any_d[sub] = np.minimum(any_d[sub], d)
+            better = inside & (d < best_d[sub])
+            idx = sub[better]
+            best_d[idx], best_f[idx], best_uv[idx] = d[better], f.id, fuv[better]
     hit = (best_f > 0) & (best_d <= tol)
     kind[hit] = KIND_FACE
     ent[hit] = best_f[hit]
@@ -118,7 +184,14 @@ def _consistency(body: BodyGeom, pts: np.ndarray, kind, ent, uv, dist, tris_loca
     """Section 6.1 step 3: triangle on three faces -> try common edges; one kind=3 node per vertex."""
     topo = body.topology()
     face_edges = {f.id: set(f.edges) for f in topo.faces}
-    for tri in tris_local:
+    tris_local = np.asarray(tris_local, dtype=np.int64).reshape(-1, 3)
+    # candidates: all three nodes on faces now (kind only goes FACE -> EDGE below, so this is a superset;
+    # the per-triangle test is kept, in the same order)
+    cand = np.all(kind[tris_local] == KIND_FACE, axis=1)
+    if cand.any():
+        fe = ent[tris_local[cand]]
+        cand[np.flatnonzero(cand)[(fe[:, 0] == fe[:, 1]) | (fe[:, 1] == fe[:, 2]) | (fe[:, 0] == fe[:, 2])]] = False
+    for tri in tris_local[cand]:
         k = kind[tri]
         if not np.all(k == KIND_FACE):
             continue
@@ -143,8 +216,15 @@ def _consistency(body: BodyGeom, pts: np.ndarray, kind, ent, uv, dist, tris_loca
         for v in e.vertices:
             vert_edges.setdefault(v, []).append(e.id)
     missing = 0
+    # nodes per vertex id, ascending (one pass instead of an n-sized mask per vertex; the loop below only
+    # turns kind=3 nodes of the current vertex into edge / unmatched, so the groups stay valid)
+    vi = np.flatnonzero(kind == KIND_VERTEX)
+    vi = vi[np.argsort(ent[vi], kind="stable")]
+    vkeys, vstart = np.unique(ent[vi], return_index=True)
+    groups = dict(zip(vkeys.tolist(), np.split(vi, vstart[1:]) if vi.size else []))
+    empty = np.zeros(0, dtype=np.int64)
     for v in range(1, len(topo.vertices) + 1):
-        idx = np.flatnonzero((kind == KIND_VERTEX) & (ent == v))
+        idx = groups.get(v, empty)
         if idx.size == 0:
             missing += 1
             continue
