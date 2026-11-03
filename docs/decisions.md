@@ -255,3 +255,4 @@
 ## 2026-11-03
 
 - 2026-11-03 · ③ 데이터 점검(data-health) 확정, v0.2.16·migration `0026_data_health`: ③-1에서만 CPU 대기열 job `DATA_HEALTH`(INTERNAL만, h3d 추출·Altair 실행 없음)로 ① 해석 건전성(engine out 꼬리·starter 총질량 상한 스캔, 절대 임계) ② 응답·쿠션 메시 속성(bbox·CoG·부피)+총질량의 일반 3σ·견고 z(중앙값·MAD) 모두 표시 ③ 파라미터 공간 kNN 국소 중앙값 잔차 — 판정은 견고 z 3.5·kNN 3.5(설정 `data_health` 한 곳), n<8 Z 생략·n<12 kNN 생략, 추천만(기본 선택 없음) 후 사용자가 고른 run을 새 `DATASET_CREATE.exclude_files`(② 같은 의미)로 제외, 필드 PCA는 다음 단계 · 근거: 사용자 결정(범위·견고 판정·③만·추천만) + 기본값 채택(kNN은 비선형 낙하 응답에서 전역 회귀 잔차 오인·소표본 회피) · contracts/data-health.md DH-1~16
+- 2026-11-03 · data-health 보강: h3d 프레임 수 불일치(정확 일치, 중복 프레임 보정 없음)·종료 시각 미달(t_last < T_end×(1−t_end_tol))을 통계가 아닌 일관성 위반 = 제외 필수(기본 선택, 해제 시 경고·`kept_required` 기록)로, 기준 = 설정 기대값 우선·없으면 DOE 최빈, 원천 = 3D 컨투어 캐시 manifest → engine out 기록 → 없을 때만 `DH_FRAMES`(HyperView 경량 조회, CPU 대기열, 템플릿 null이면 끔) · 근거: 사용자 추가 요구 + ② `hvtrans_cfg`가 표본 1개 프레임 수를 전 run에 적용·③ 검사 없음 · contracts/data-health.md DH-17~20

@@ -6,7 +6,7 @@
 
 ## 0. 한 줄 요약
 
-③-1 데이터셋 생성 카드에서 **[데이터 점검]**을 누르면 CPU 대기열 작업 `DATA_HEALTH`가 입력 h3d 폴더의 run마다 ① 해석 건전성(정상 종료·에너지 오차·추가 질량·선택적으로 hourglass/접촉 에너지 비) ② 응답·모델 속성(쿠션 bbox 치수·CoG·부피, 모델 총질량)의 일반 Z(3σ)와 견고 z(중앙값·MAD) ③ 파라미터 공간 kNN 이웃 대비 튐을 계산한다. **판정은 견고 기준**(①은 절대 임계)이며 결과는 추천 표(사유·점수)로만 보여 준다. 사용자가 표에서 고른 run만 `DATASET_CREATE.exclude_files`로 빠진다(자동 제외 없음). h3d 추출·Altair 라이선스는 쓰지 않는다.
+③-1 데이터셋 생성 카드에서 **[데이터 점검]**을 누르면 CPU 대기열 작업 `DATA_HEALTH`가 입력 h3d 폴더의 run마다 ① 해석 건전성(정상 종료·에너지 오차·추가 질량·선택적으로 hourglass/접촉 에너지 비) ② 응답·모델 속성(쿠션 bbox 치수·CoG·부피, 모델 총질량)의 일반 Z(3σ)와 견고 z(중앙값·MAD) ③ 파라미터 공간 kNN 이웃 대비 튐을 계산한다. 여기에 더해 **데이터셋 일관성 위반**(h3d 프레임 수 불일치·해석 종료 시각 미달)은 통계와 따로 **제외 필수(기본 선택됨)**로 표시한다(DH-17~20). **판정은 견고 기준**(①은 절대 임계)이며 결과는 추천 표(사유·점수)로만 보여 준다. 사용자가 표에서 고른 run만 `DATASET_CREATE.exclude_files`로 빠진다(자동 제외 없음). h3d 추출·Altair 라이선스는 쓰지 않는다.
 
 ---
 
@@ -24,6 +24,10 @@
 | 응답 | ①-6 `R(run)/responses_run.csv`(이름,값) + `D/responses.json`(spec), 재사용 조건 = 같은 이름 spec 일치(equiv-check §4.2) | 재사용만, 추출 안 함(DH-3) |
 | 해석 출력 | TD_SOLVE 회수 패턴 `["*.h3d","*T01","*_0000.out","*_0001.out"]`(`hpc.collect_patterns`) → `R(run)` | 정상 종료·에너지·추가 질량(§3.1) |
 | 정상 종료 판정 | **기존 코드 없음**(TD_RESULT_IMPORT는 파일 존재만 봄) | 새 공용 파서(꼬리만) |
+| 프레임 수 원천 | `train_runs`에 프레임 정보 **없음**(`result_summary` = `{h3d,t01,files,total_bytes}`). ② 미리보기 `PREVIEW_H3D.json.num_time_step`은 **표본 파일 1개**만. 3D 컨투어 캐시 `manifest.json.sampling.total_frames`·`frames.list[].time`(키에 h3d 크기·mtime_ns 포함, 본 run만 있음 — 성공 시 `extract/extract_result.txt`는 지움). engine out의 H3D 쓰기 기록 문구는 미확인 | §3.6 우선순위(추출 없는 원천 먼저, 없을 때만 경량 조회) |
+| 종료 시각 원천 | engine 입력 `*_0001.rad`의 `/RUN` 다음 줄 Tstop(입력 폴더 `input_rel`, 작은 파일), engine out 꼬리 마지막 사이클 줄 TIME 열 | §3.6 `t_last`·`t_end` |
+| 프레임 불일치 영향 | ② `hvtrans_cfg`(`curation.py:191`)가 **표본 1개의 `num_time_step`으로 `BeginSimulation:1..N`을 모든 run에 같이 적용** — 짧은 run은 없는 프레임 요청(HVTRANS 실패·`failed_targets`), 긴 run은 말없이 잘림. ③ `DS_SCAN`·`dataset_yaml`은 프레임 검사 없이 h3d 목록만 edspy에 넘김 → 길이 다른 시계열이 psdata에 섞임. 학습(edspy·PhysicsAI 코어)이 이를 실패로 처리하는지는 저장소 밖 코드라 **미확인**(U-DH-6) | DH-17 근거 |
+| 중복 프레임 관례 | 저장소에 "마지막 중복 프레임 제외" 규칙 **없음**. ② `time_steps`는 1..N 전부, 3D 컨투어는 같은 시간 프레임 허용·`total_frames` = h3d 원래 수 | 원래 프레임 수를 그대로 정확 비교(보정 없음) |
 | 꼬리 읽기 | `error_bundle.read_tail(path, limit)` | 그대로 사용 |
 | T01 에너지 곡선 | T01 바이너리 직접 파서 **없음**. ②-4 `CU_T01_CURVES`가 HyperGraph로 `CURVES/<run_folder>/<base>_curves.json` 생성(형식 U27, `series` 있으면 사용) | 있으면 재사용, 없으면 NA(DH-8) |
 | 형상 엔진 | `dataset_engine.detect`(altair/native 혼합 422) | 그대로(점검도 혼합 금지) |
@@ -33,9 +37,9 @@
 
 | ID | 결정 | 근거 |
 |---|---|---|
-| DH-1 | 적용 위치 = **③-1 데이터셋 생성만**. 결과는 **추천만** — 데이터셋·파일을 바꾸지 않고, 사용자가 표에서 고른 run만 다음 DATASET_CREATE에서 빠진다. 기본 선택 없음(추천 행은 강조만), [추천 항목 선택] 버튼은 사용자가 누를 때만 | 사용자 결정 3·4 |
-| DH-2 | 실행 = **비동기 job `DATA_HEALTH`**(stage 3, lane SLOT → CPU 대기열, step 전부 INTERNAL). 동기 API 아님 | run N개마다 include 메시(수~수십 MB)·출력 꼬리를 공유 드라이브에서 읽어 N=300이면 수 분 — HTTP 제한 시간·취소·진행률·로그가 필요. INTERNAL만이라 GPU 무관, JQ-1(INTERNAL = 중립, 시작 구간 CPU) 그대로 |
-| DH-3 | **h3d 추출 없음**(HyperView/HyperGraph 실행 0회). 응답은 ①-6 `responses_run.csv` 재사용만, 없으면 그 지표 NA + 안내 경고 `DH_RESP_NOT_EXTRACTED`("①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다") | Altair 라이선스·시간 소비 없음. 무거운 추출이 필요한 지표는 DH-12 확장 지점에서 기존 추출 재사용 조건으로만 |
+| DH-1 | 적용 위치 = **③-1 데이터셋 생성만**. 결과는 **추천만** — 데이터셋·파일을 바꾸지 않고, 사용자가 표에서 고른 run만 다음 DATASET_CREATE에서 빠진다. 통계 추천은 기본 선택 없음(추천 행은 강조만), [추천 항목 선택] 버튼은 사용자가 누를 때만. **예외 = 일관성 위반(DH-19)은 기본 선택됨** | 사용자 결정 3·4, 추가 요구(2026-11-03) |
+| DH-2 | 실행 = **비동기 job `DATA_HEALTH`**(stage 3, lane SLOT → CPU 대기열). step은 INTERNAL + 선택 LOCAL `DH_FRAMES`(res=cpu, DH-18) 1개. 동기 API 아님 | run N개마다 include 메시(수~수십 MB)·출력 꼬리를 공유 드라이브에서 읽어 N=300이면 수 분 — HTTP 제한 시간·취소·진행률·로그가 필요. GPU 무관, INTERNAL·cpu만이라 JQ-1상 CPU 구간에서 전환 없음 |
+| DH-3 | **h3d 추출 없음**(HyperView/HyperGraph 실행 0회 — 유일한 예외는 DH-18 프레임 경량 조회, 설정으로 켰고 원천이 없는 run만). 응답은 ①-6 `responses_run.csv` 재사용만, 없으면 그 지표 NA + 안내 경고 `DH_RESP_NOT_EXTRACTED`("①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다") | Altair 라이선스·시간 소비 없음. 무거운 추출이 필요한 지표는 DH-12 확장 지점에서 기존 추출 재사용 조건으로만 |
 | DH-4 | 지표 = §3 표(① 건전성 6, ② Z 대상 = 스칼라 응답 R개 + 모델 속성 8개, ③ kNN = ② 대상 전부) | 사용자 결정 1 |
 | DH-5 | ② 지표마다 **일반 z와 견고 z를 둘 다 계산·표시**, **추천 판정은 견고 z와 kNN 점수**(일반 3σ는 표시·"3σ만" 태그). 임계값은 설정 `data_health` **한 곳** | 사용자 결정 2. 일반 3σ는 이상치 자신이 평균·σ를 끌어 가려지는(masking) 문제 — 견고 기준이 안정 |
 | DH-6 | 파라미터 공간 튐 = **kNN 국소 중앙값 잔차**(LOO 회귀 잔차 아님) | §3.4 근거: 낙하 응답의 바닥 닿음 같은 비선형·국소 급변을 전역 회귀가 잔차로 오인, 2차 회귀는 n ≥ p(p+3)/2(+1) 필요(p=10 → 66), kNN은 모델 가정 없음·numpy만·O(n²p) |
@@ -49,6 +53,10 @@
 | DH-14 | 모델 속성 원천 = **입력 메시 include**(altair·native 공통). paicad `update.json`은 쓰지 않음 | 두 엔진이 같은 정의(메시 기준)여야 한 분포에서 비교 가능. CAD bbox ≠ 메시 bbox, CoG 없음, altair run에는 없음 |
 | DH-15 | 대상 엔진 혼합 금지(`dataset_engine.detect` 그대로 422 `ENGINE_MIXED`). DOE 연결이 없는 입력(외부 FOLDER·SPDM_IMPORT)은 **제한 모드**: ①만(출력 파일이 h3d 옆에 있을 때), 경고 `DH_NO_DOE_LINK` | 파라미터·응답·메시 위치를 알 수 없음 |
 | DH-16 | Study당 활성 `DATA_HEALTH` 1개(초과 409 `DATA_HEALTH_ACTIVE`). 재시도 허용(같은 params, 폴더 `_backup` 후 다시) | 같은 입력 중복 점검 방지 |
+| DH-17 | ① 해석 건전성에 **일관성 지표 2개** 추가: `frames`(h3d 프레임 수 ≠ 기준 → 위반, **정확 일치**, 중복 프레임 보정 없음), `t_last`(마지막 시각 < `T_end × (1 − t_end_tol)` → 위반). 통계가 아닌 **데이터셋 일관성 위반**(`CONSISTENCY_*`)으로 분류 | 추가 요구. 근거: §1 "프레임 불일치 영향" — ② 큐레이션이 표본 1개의 프레임 수를 전 run에 적용, ③은 검사 없음 |
+| DH-18 | 프레임·시각 원천 우선순위(추출 없는 것 먼저): ① 3D 컨투어 캐시 manifest(h3d 크기·mtime 일치) ② engine out H3D 쓰기 기록(설정 `frame_write_regex`, 기본 null) ③ **없을 때만** LOCAL step `DH_FRAMES` — HyperView 배치 경량 조회(프레임 수·시각 목록만, 결과장 내보내기 없음), 명령 템플릿 `h3d_frame_probe`(기본 null = 끔 → 그 run `frames` NA). 라이선스 = HyperWorks 유닛(HyperView, ①-6 `TD_RESP_EXTRACT`와 같음), hw 1회 호출로 대상 전부 처리, CPU 대기열(res=cpu) | 추가 요구 3. 라이선스·시간 최소화 |
+| DH-19 | 일관성 위반 run = **제외 필수(기본 선택됨)**. 사용자는 해제할 수 있고 해제하면 경고(화면 확인 + DATASET_CREATE 경고 `DS_INCONSISTENT_KEPT`, `excluded.json.kept_required` 기록) | 추가 요구 4 |
+| DH-20 | 기준값: 설정 기대값(`expected_frames`·`expected_t_end`)이 있으면 그것, 없으면 **같은 DOE 안 최빈값**(T_end는 run별 `/RUN` Tstop의 최빈값). 최빈 동률이면 기준 없음 → 그 지표 NA + 경고 `DH_REF_TIE`. 허용오차는 설정 `t_end_tol` 한 곳(프레임은 허용오차 없음) | 추가 요구 2 |
 
 ## 3. 지표 정의
 
@@ -65,8 +73,11 @@
 | `contact_ratio` | 같음, `.contact` | `max_t CE(t) / max_t IE(t)` | `> contact_ratio_max`(0.10) | NA |
 | `mass_total` | `R(run)`→입력 폴더 순서로 `starter_out_glob`(`*_0000.out`, `*_0000.sty`) | `TOTAL MASS` 첫 일치(기존 `_MASS_RE`) | ①에서는 판정 없음 → ② Z 대상 | NA `MASS_SOURCE_MISSING`·`OUT_TOO_LARGE` |
 
+| `frames` | §3.6 원천 우선순위 | h3d 전체 프레임 수(원래 값, 보정 없음) | ≠ `F_ref`면 **위반**(DH-17·20) | 원천 없음 NA `FRAMES_SOURCE_NONE` |
+| `t_last` | h3d 마지막 프레임 시각(§3.6 ①③), 없으면 engine out 꼬리 마지막 사이클 줄 그룹 `time` | 마지막 해석 시각 | `< T_ref × (1 − t_end_tol)`면 **위반**. run 자신의 `/RUN` Tstop이 `T_ref`와 tol 넘게 다르면 같은 위반(코드 `CONSISTENCY_TEND_DIFF`) | NA `TIME_SOURCE_NONE` |
+
 - `IE` 최대값 ≤ `zero_tol`이면 비 NA(`IE_ZERO`). 판정 FAIL 1개 이상 → run 추천, 사유 코드 `SOUND_<ID>`.
-- 정규식 기본값(설정 예시에 둠, Backend가 실제 출력 픽스처로 확인): `normal_regex: "NORMAL TERMINATION"`, `error_regex: "ERROR TERMINATION"`, `cycle_regex`는 ERROR 열(`%` 접미 허용)과 MAS.ERR 열을 이름 그룹으로 잡는 한 줄 패턴. 대소문자 무시.
+- 정규식 기본값(설정 예시에 둠, Backend가 실제 출력 픽스처로 확인): `normal_regex: "NORMAL TERMINATION"`, `error_regex: "ERROR TERMINATION"`, `cycle_regex`는 TIME 열(그룹 `time`)·ERROR 열(`err`, `%` 접미 허용)·MAS.ERR 열(`mas`)을 이름 그룹으로 잡는 한 줄 패턴. 대소문자 무시.
 
 ### 3.2 ② Z 대상 지표와 일반·견고 z
 
@@ -98,10 +109,25 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 
 ### 3.5 run 판정·점수
 
-- `recommended = (① FAIL 1개 이상) or (어느 지표든 ROBUST_Z) or (어느 지표든 KNN_JUMP)`.
-- `score = max(① FAIL 있으면 1 + FAIL 개수, max_m |zr_m|/robust_z, max_m |s_m|/knn_z)` — 1 초과면 추천. 표 기본 정렬 = score 내림차순.
+- `required = frames 위반 or t_last 위반`(사유 코드 `CONSISTENCY_FRAMES`·`CONSISTENCY_TEND`·`CONSISTENCY_TEND_DIFF`) — **제외 필수, 기본 선택**(DH-19). 표 맨 위.
+- `recommended = required or (① FAIL 1개 이상) or (어느 지표든 ROBUST_Z) or (어느 지표든 KNN_JUMP)`.
+- `score = max(required면 100, ① FAIL 있으면 1 + FAIL 개수, max_m |zr_m|/robust_z, max_m |s_m|/knn_z)` — 1 초과면 추천. 표 기본 정렬 = score 내림차순.
 - 사유 = `[{code, metric, value, z, zr, s, message}]`, `message` 한국어 예: "응답 MAX_ACC 견고 z 4.2(값 51.3, 중앙값 35.1, MAD 2.6)", "정상 종료 아님 — 오류 종료", "이웃 대비 튐 VOLUME 점수 −5.1".
 - `sigma_only` = 3σ 태그는 있으나 추천 아님 → 표시만(태그 "3σ만").
+
+### 3.6 프레임 수·종료 시각 원천과 기준(DH-17·18·20)
+
+| 순위 | 원천 | 조건 | 얻는 값 |
+|---|---|---|---|
+| ① | 3D 컨투어 캐시 `contour3d_cache`(READY, `source_ref`의 h3d = 이 run h3d) → `manifest.json` | 캐시 키의 `h3d_size`·`h3d_mtime_ns`가 지금 파일과 같음 | `sampling.total_frames`, `frames.list` 마지막 원본 프레임(`src` = 마지막일 때)의 `time` |
+| ② | engine out(`engine_out_glob`) 줄 단위 스캔, `frame_write_regex` 일치 수 | 설정 regex 있음, 파일 ≤ `engine_scan_max_bytes`(64 MiB) | 프레임 수(시각은 이 원천에서 안 씀) |
+| ③ | `DH_FRAMES`(LOCAL, res=cpu): 템플릿 `h3d_frame_probe` `{config_json}`(대상 h3d 목록·출력 경로) 1회 호출, 출력 run마다 `extract_result.txt` 형식(`STATUS`·`FRAMES_TOTAL`·`FRAME=번호|원본번호|시간`) → 기존 `contour3d.settings` 파서로 읽음 | ①②로 못 얻은 run만 + 템플릿 설정됨 | 프레임 수·시각 목록 |
+
+- ② 미리보기 `num_time_step`은 run별 값이 아니라 **참고 표시**만(머리 줄 "② 큐레이션 기준 프레임 N"), 기준에 쓰지 않는다. `F_ref`와 다르면 경고 `DH_PREVIEW_FRAMES_DIFF`(② 큐레이션 결과가 이미 어긋났을 수 있음).
+- `T_end`(run별) = 입력 폴더 `*_0001.rad`(설정 `engine_rad_glob`)의 `/RUN/...` 다음 첫 데이터 줄 첫 수(Tstop). 읽기 상한 `engine_rad_max_bytes`(4 MiB), 없거나 못 읽으면 NA.
+- 기준: `F_ref = expected_frames ?? mode_DOE(frames)`, `T_ref = expected_t_end ?? mode_DOE(T_end)`(T_end 최빈은 상대 차 ≤ `t_end_tol`을 같은 값으로 묶어 셈). 제한 모드(DOE 없음)는 입력 전체 최빈. DOE가 여러 개이고 DOE별 기준이 다르면 경고 `DH_REF_DOE_DIFF`(한 데이터셋 안 불일치 — 사용자가 판단).
+- `frames` 유효 run이 `min_n` 미만이어도 설정 기대값이 있으면 판정, 없으면 최빈값 판정은 유효 run ≥ 3에서만(그 밖 NA `SKIP_SMALL_N`).
+- 큐레이션 입력이면 프레임 수는 **큐레이션 출력 h3d**(입력 h3d 자체) 기준 — 캐시·조회 대상도 그 파일. `t_last`는 큐레이션 h3d 마지막 프레임 시각이 있으면 그것, 없으면 원본 run engine out.
 
 ## 4. 원천·run 해석
 
@@ -119,6 +145,7 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 | 응답 | `R(run)/responses_run.csv` 있음 + `D/responses.json`의 같은 이름 spec(equiv-check 재사용 규칙) | NA `RESP_NOT_EXTRACTED`(추출 안 함) |
 | hg/접촉 비 | 같은 Study 최신 READY `T01` 큐레이션의 run 곡선 JSON + `t01_series` 설정 | NA |
 | 모델 속성 | §3.3 캐시 서명 일치 | include 파싱 |
+| 프레임·시각 | §3.6 ①② | ③ `DH_FRAMES`(설정 시), 아니면 NA |
 | 이전 점검 | 재사용 안 함(매번 계산, 속성 캐시만 공유) | – |
 
 ## 5. 작업 `DATA_HEALTH`
@@ -128,11 +155,12 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 | step | kind(무게) | 처리 |
 |---|---|---|
 | DH_PREP | INTERNAL 5 | 입력 해석·h3d 수집(§4.1), DOE 해석, 지표 목록·임계값 스냅숏 → `inputs.json` |
-| DH_SCAN | INTERNAL 70 | run마다 ①(꼬리)·총질량·모델 속성·응답 읽기 → `runs_raw.csv`. 진행률 = run 수, 취소 확인 = run마다. run 하나의 읽기 실패는 그 값 NA + 경고(작업은 계속) |
+| DH_SCAN | INTERNAL 60 | run마다 ①(꼬리·`/RUN` Tstop·프레임 원천 ①②)·총질량·모델 속성·응답 읽기 → `runs_raw.csv`, 프레임 원천 없는 run 목록 `frames_todo.json`. 진행률 = run 수, 취소 확인 = run마다. run 하나의 읽기 실패는 그 값 NA + 경고(작업은 계속) |
+| DH_FRAMES | LOCAL 10, res=cpu | `frames_todo` 비었거나 템플릿 `h3d_frame_probe` null → SKIPPED(null이면 경고 `DH_FRAMES_PROBE_OFF`). 아니면 hw 1회(HyperView 라이선스, 시간 상한 `frame_probe_timeout_s`), 출력 `frames/<n>.txt` → `runs_raw.csv` 보강. 실패 run은 NA |
 | DH_SCORE | INTERNAL 20 | §3.2~§3.5 → `runs.csv`·`report.json` |
 | DH_REPORT | INTERNAL 5 | `jobs.result` 요약(§6.1), artifact 등록 `DATA_HEALTH_REPORT`(report.json)·`DATA_HEALTH_CSV`(runs.csv) |
 
-- 전부 INTERNAL → JQ-1상 자원 중립, 첫 구간 CPU 대기열(`cpu.max_concurrent`에 셈). `res`를 정할 LOCAL step 없음(정적 시험 통과).
+- INTERNAL + `DH_FRAMES`(res=cpu) → 처음부터 끝까지 CPU 대기열(`cpu.max_concurrent`에 셈), 슬롯 전환 없음. 가짜 도구(`backend/tests/fake_tools/`)에 `h3d_frame_probe` 추가.
 - 확장 지점(DH-12): `DH_FIELD`(LOCAL, res=cpu)를 DH_SCAN 뒤에 넣을 수 있게 지표 레지스트리 `METRICS: dict[id, MetricDef(kind, source, judge)]`로 구현.
 - 실패: run 0개·입력 경로 오류 = 기존 DATASET_CREATE와 같은 코드(`INPUT_INVALID`). 지표 전부 NA여도 작업은 SUCCEEDED(경고로 알림).
 
@@ -140,7 +168,7 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 
 ### 6.1 DB
 
-- `jobs.result`(요약만): `{input_path, curation_id?, doe_ids[], engine?, n_runs, n_recommended, n_sigma_only, n_sound_fail, n_na_by_metric{}, metrics_used[], thresholds{}, limited:bool, report_rel, csv_rel, warnings[]}` — run별 값 금지.
+- `jobs.result`(요약만): `{input_path, curation_id?, doe_ids[], engine?, n_runs, n_required, frames_ref?, t_end_ref?, n_recommended, n_sigma_only, n_sound_fail, n_na_by_metric{}, metrics_used[], thresholds{}, limited:bool, report_rel, csv_rel, warnings[]}` — run별 값 금지.
 - migration `0026_data_health`: `datasets`에 `excluded_count INT NOT NULL DEFAULT 0`, `health_job_id UUID NULL REFERENCES jobs(id) ON DELETE SET NULL`. downgrade = 두 열 삭제.
 
 ### 6.2 파일 — `<study>/03_dataset/_health/<job_id>/`
@@ -157,10 +185,11 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 
 ## 7. DATASET_CREATE 변경(DH-10)
 
-- params 추가: `exclude_files: list[str] = []`(입력 루트 기준, `\`→`/` 정규화, 최대 `dataset.max_exclude`(5000)), `health_job_id: str | None`.
+- params 추가: `kept_required: list[str] = []`(점검이 제외 필수로 표시했지만 사용자가 해제한 파일 — 화면이 채움), `exclude_files: list[str] = []`(입력 루트 기준, `\`→`/` 정규화, 최대 `dataset.max_exclude`(5000)), `health_job_id: str | None`.
 - 사전조건: `health_job_id`가 있으면 같은 Study·`DATA_HEALTH`·SUCCEEDED·`result.input_path`가 이번 입력 경로와 같음, 아니면 422 `DH_INPUT_MISMATCH`("데이터 점검 대상과 데이터셋 입력 폴더가 다릅니다"). `exclude_files`는 점검 없이도 허용(사용자 판단).
 - DS_SCAN: 수집 후 `exclude_files` 정확 일치 제거 → 남은 수로 `min_h3d_files`·분할 검사(기존 문구). 목록에 있으나 수집되지 않은 항목 → 경고 `DS_EXCLUDE_NOT_FOUND`(개수·앞 10개). 전부 제외 → `INPUT_INVALID` "제외 후 대상 h3d가 없습니다"(② 문구와 같음).
-- 산출: `03_dataset/<id>/excluded.json` = `{health_job_id, files:[{file_rel, recommended, score, reason_codes}]}`(점검 결과에 없는 파일은 `recommended:null`), `split.json`에 `excluded`(목록) 추가, `datasets.excluded_count`·`health_job_id` 기록. `DS_REGISTER` result에 `excluded_count`.
+- `kept_required`가 비어 있지 않으면 DS_SCAN 경고 `DS_INCONSISTENT_KEPT`("프레임 수·종료 시각이 다른 run n개를 포함했습니다 — 학습이 실패하거나 결과가 왜곡될 수 있습니다"). 작업은 계속.
+- 산출: `03_dataset/<id>/excluded.json` = `{health_job_id, files:[{file_rel, recommended, required, score, reason_codes}], kept_required:[file_rel]}`(점검 결과에 없는 파일은 `recommended:null`), `split.json`에 `excluded`(목록) 추가, `datasets.excluded_count`·`health_job_id` 기록. `DS_REGISTER` result에 `excluded_count`.
 - 점검 작업은 데이터셋·입력 파일을 바꾸지 않는다(자동 제외 없음).
 
 ## 8. API(`backend/openapi.json` — Backend)
@@ -182,8 +211,9 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 - `DatasetCreateCard`(③-1) 아래 줄: **[데이터 점검]** 버튼(현재 입력 기준으로 DATA_HEALTH 실행, 기능 게이트·권한 같음) + 상태 한 줄("최근 점검 11-03 14:20 · 추천 3 / 120"). 입력을 바꾸면 이전 점검은 "다른 입력" 표시, 제외 선택 초기화.
 - 결과 카드 `DataHealthCard`(span 12, ③-1 아래):
   - 머리 한 줄: run 수 · 추천 수 · 3σ만 수 · 건전성 FAIL 수 · NA 많은 지표 · 임계값(견고 z 3.5 / kNN 3.5 / 3σ 3.0, 읽기 전용) · 경고 배지(`DH_RESP_NOT_EXTRACTED`·`DH_NO_DOE_LINK`·`DH_PARAMS_MIXED`).
-  - 표(최대 높이 고정·내부 스크롤, 기본 필터 [추천만] 켬): `선택 | run(file_rel, run_key) | 추천 | 점수 | 사유(첫 2개 + "외 n") | 종료 | 에너지 오차% | 추가 질량 | 최대 견고 z(지표) | 3σ` . 행 펼치면 지표 전부(값·z·견고 z·kNN 점수·NA 사유).
-  - 동작: [추천 항목 선택], [선택 해제], [CSV 내려받기]. **기본 선택 없음**. 하단 "제외 n개 — 데이터셋 생성에 반영" 문구.
+  - 표(최대 높이 고정·내부 스크롤, 기본 필터 [추천만] 켬): `선택 | run(file_rel, run_key) | 추천 | 점수 | 사유(첫 2개 + "외 n") | 종료 | 프레임 | 마지막 시각 | 에너지 오차% | 추가 질량 | 최대 견고 z(지표) | 3σ` . 행 펼치면 지표 전부(값·z·견고 z·kNN 점수·NA 사유).
+  - **제외 필수** 행(일관성 위반): 맨 위, 배지 "제외 필수", **기본 선택됨**. 해제하면 확인 대화상자("프레임 수 또는 종료 시각이 다른 run입니다. 포함하면 데이터셋 일관성이 깨집니다. 그래도 포함할까요?") → 포함 시 행에 경고 아이콘, 제출 params `kept_required`에 넣음. 머리 줄에 기준("프레임 22 · 종료 0.012 s · 출처: 설정/최빈").
+  - 동작: [추천 항목 선택], [선택 해제](제외 필수는 남김), [CSV 내려받기]. 통계 추천은 **기본 선택 없음**. 하단 "제외 n개 — 데이터셋 생성에 반영" 문구.
 - 데이터셋 생성 제출 시 선택된 `exclude_files`와 `health_job_id`를 params에 넣는다. 데이터셋 목록 행에 "제외 n" 표시.
 - 문구는 한국어, 코드값은 툴팁으로만.
 
@@ -211,11 +241,23 @@ data_health:
   cycle_regex: "…"            # 이름 그룹 err, mas (Backend가 픽스처로 확정)
   t01_series: null            # {internal, hourglass, contact} — 현장 확인 전 null(= NA)
   report_max_rows: 2000
+  expected_frames: null       # 설정 기대 프레임 수(있으면 최빈값보다 우선)
+  expected_t_end: null        # 설정 목표 종료 시각(있으면 /RUN 최빈값보다 우선)
+  t_end_tol: 0.01             # 마지막 시각 < T_end × (1 − tol) → 위반(한 곳)
+  engine_rad_glob: "*_0001.rad"
+  engine_rad_max_bytes: 4194304
+  frame_write_regex: null     # engine out H3D 쓰기 기록 문구(현장 확인 전 null)
+  engine_scan_max_bytes: 67108864
+  frame_probe_timeout_s: 1800
+commands:
+  h3d_frame_probe: null       # HyperView 배치 경량 조회(프레임 수·시각만). null = DH_FRAMES SKIPPED
+resources:
+  h3d_frame_probe_tcl: null
 dataset:
   max_exclude: 5000
 ```
 
-검증(validate): 임계값 > 0, `min_n ≥ 3`, `knn_min_n > knn_k ≥ 1`, 정규식 컴파일.
+검증(validate): `0 ≤ t_end_tol < 0.5`, `expected_frames ≥ 1`(있으면), 임계값 > 0, `min_n ≥ 3`, `knn_min_n > knn_k ≥ 1`, 정규식 컴파일.
 
 ## 11. 시험(V-DH-*)
 
@@ -235,20 +277,26 @@ dataset:
 | V-DH-12 | 저장: `jobs.result`에 run별 값 없음(키 집합 검사), 파일 위치 `03_dataset/_health/<job_id>/`, DS_SCAN이 `_health`를 수집하지 않음 | 워커 |
 | V-DH-13 | migration 0026 up/down(기존 datasets 행 excluded_count=0) | migration |
 | V-DH-14 | 화면(jsdom): 버튼·표·[추천만] 필터·**기본 선택 없음**·[추천 항목 선택]·제출 params에 `exclude_files`·`health_job_id`, 입력 변경 시 선택 초기화, 한국어 문구, 표 최대 높이(1440 한 화면) | 프런트 |
+| V-DH-16 | 프레임 기준: 설정 기대값 우선, 없으면 DOE 최빈, 동률 `DH_REF_TIE` NA, DOE별 기준 다름 경고, 정확 일치(±1도 위반·중복 프레임 보정 없음), 유효 run < 3이고 기대값 없으면 NA | 단위 |
+| V-DH-17 | 종료 시각: `/RUN` Tstop 파싱(주석·빈 줄·상한), `t_last < T_ref×(1−tol)` 경계(같음·미만), 설정 우선, 자신의 Tstop 다름 `CONSISTENCY_TEND_DIFF`, 원천 h3d 시각 → out 꼬리 순서 | 단위 |
+| V-DH-18 | 프레임 원천 우선순위: 컨투어 캐시(크기·mtime 일치만, 불일치 무시) → `frame_write_regex`(null이면 건너뜀, 스캔 상한) → `DH_FRAMES`는 남은 run만·hw 1회, 템플릿 null이면 SKIPPED + `DH_FRAMES_PROBE_OFF`, 가짜 도구 출력(`extract_result.txt` 형식) 파싱, res=cpu 정적 시험 | 워커 |
+| V-DH-19 | 제외 필수: `required` 행 맨 위·`recommended` 포함, 화면 기본 선택·해제 시 확인 대화상자·`kept_required` 제출, DATASET_CREATE `DS_INCONSISTENT_KEPT`·`excluded.json.kept_required`, [선택 해제]가 필수 행을 남김 | 워커·프런트 |
 | V-DH-15 | 성능 기록(비차단): 합성 run 300개 × include 5 MB에서 DH_SCAN 시간·캐시 재실행 시간 RELEASES에 기록 | 측정 |
 
 ## 12. 파일 소유(겹침 없음)
 
 | 역할 | 범위 |
 |---|---|
-| Impl-Backend | 신규 `backend/physicsai_core/data_health/{__init__,metrics,stats,knn,attrs,sources,report}.py`, 신규 `backend/physicsai_core/parsers/radioss_out.py`(꼬리·사이클 줄·starter 총질량), `equiv/compute.py`(총질량을 공용 함수 호출로 — 동작 불변), `job_types.py`, `features.py`, `config/schema*.py`·`validate_stages.py`, `config/platform.example.yaml`, 워커 신규 `worker/physicsai_worker/steps/stage3_model/data_health.py` + 등록, `steps/stage3_model/dataset.py`(DS_SCAN 제외·excluded.json), `services/job_params/stage3_model.py`, 라우터·서비스·스키마(`Dataset`·`DataHealthReport`), `datasets` repository, `backend/openapi.json`, MCP 제외 목록·용어집, `migrations/versions/0026_data_health.py`, 시험 V-DH-1~13·15, `RELEASES.md`·`pyproject.toml` 0.2.16 |
-| Impl-Frontend | `frontend/src/stages/stage3/DatasetCards.tsx`(버튼·제외 반영·목록 "제외 n"), 신규 `frontend/src/stages/stage3/health/{DataHealthCard.tsx,healthModel.ts}`, `api` 클라이언트·타입, mock(`mock/stage3.ts`·`server.ts`·`catalog.ts`), 시험 V-DH-14, `frontend-dist/` |
+| Impl-Backend | 신규 `backend/physicsai_core/data_health/{__init__,metrics,stats,knn,attrs,sources,report}.py`, 신규 `backend/physicsai_core/parsers/radioss_out.py`(꼬리·사이클 줄·starter 총질량), `equiv/compute.py`(총질량을 공용 함수 호출로 — 동작 불변), `job_types.py`, `features.py`, `config/schema*.py`·`validate_stages.py`, `config/platform.example.yaml`, 워커 신규 `worker/physicsai_worker/steps/stage3_model/data_health.py` + 등록, `steps/stage3_model/dataset.py`(DS_SCAN 제외·excluded.json), `services/job_params/stage3_model.py`, 라우터·서비스·스키마(`Dataset`·`DataHealthReport`), `datasets` repository, `backend/openapi.json`, MCP 제외 목록·용어집, `migrations/versions/0026_data_health.py`, `commands.py` spec `h3d_frame_probe`·가짜 도구, 프레임 조회 TCL 자원(`resources`, 설정 경로), 시험 V-DH-1~13·15~19(19는 워커 부분), `RELEASES.md`·`pyproject.toml` 0.2.16 |
+| Impl-Frontend | `frontend/src/stages/stage3/DatasetCards.tsx`(버튼·제외 반영·목록 "제외 n"), 신규 `frontend/src/stages/stage3/health/{DataHealthCard.tsx,healthModel.ts}`(제외 필수 기본 선택·해제 확인), `api` 클라이언트·타입, mock(`mock/stage3.ts`·`server.ts`·`catalog.ts`), 시험 V-DH-14·V-DH-19(화면 부분), `frontend-dist/` |
 | 순서 | 계약 확정 → BE(openapi 포함) → FE → Verifier(V-DH-1~15) |
 
 ## 13. 리스크
 
 | 리스크 | 영향 | 대응 |
 |---|---|---|
+| 프레임 원천이 대부분 없음(컨투어 캐시는 본 run만, regex 미확인) | `frames` NA 다수 → 일관성 검사 무력 | `h3d_frame_probe` 켜기(HyperView 라이선스 1회), 머리 줄에 NA 수 표시 |
+| 설정 기대값 오입력 | 전 run 제외 필수 | 기준·출처를 머리 줄에 표시, 해제 가능 |
 | Radioss 출력 형식 차이(버전·MPI 분할 `_0001.out` 여러 개) | 판정 UNKNOWN 남발 | 정규식 설정, 2개 이상은 NA(FAIL 아님), 현장 픽스처로 Backend 확정 |
 | 응답 미추출이 흔함(①-6 기본 비활성) | ②③이 속성만으로 축소 | 경고·안내 문구, 속성·건전성만으로도 동작 |
 | 다중 비교 거짓 양성(지표 ~15개 × run) | 정상 run 추천 | 견고 z 3.5·kNN 3.5, 추천만(사람 확인), 사유 표시 |
@@ -265,7 +313,10 @@ dataset:
 - U-DH-3: `t01_series` 실제 series 이름(②-4 곡선 JSON 형식 U27 미확인) — 확인 전 null(hg/접촉 비 NA).
 - U-DH-4: 일반 z의 σ를 Altair GUI가 모집단(ddof=0)으로 쓰는지 — 기본 ddof=1, 확인되면 맞춤(n ≥ 8에서 차이 ≤ 7%).
 - U-DH-5: 필드 PCA(DH-12) 착수 시점·입력(② 큐레이션 h3d 필드 선택).
+- U-DH-6: 프레임 수가 다른 h3d가 edspy 데이터셋 생성·PhysicsAI 학습에서 실패를 일으키는지(저장소 밖 코어) — 현장 재현으로 확인. 확인 전에도 ② 큐레이션 영향(§1) 때문에 제외 필수 유지.
+- U-DH-7: engine out의 H3D 쓰기 기록 문구(`frame_write_regex`)와 Radioss의 마지막 시각 프레임 기록 관례(종료 시각 프레임 추가 여부) — 현장 out으로 확인 전 null.
+- U-DH-8: `h3d_frame_probe` TCL(프레임 수·시각만 출력, 결과장 로드 최소화) 작성·검증 — Backend가 가짜 도구로 계약 형식만 시험, 실제 TCL은 현장 확인.
 
 ## 변경 메모
 
-- (없음)
+- DH-C1(2026-11-03, 사용자 추가 요구 "프레임수랑 해석 시간 안 맞는 건 걸러야 함"): 일관성 지표 `frames`·`t_last`, 원천 우선순위·`DH_FRAMES`, 제외 필수(기본 선택) 추가 — DH-17~20, §3.6, V-DH-16~19, U-DH-6~8. DH-1·DH-2·DH-3 문구 보정.
