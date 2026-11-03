@@ -76,6 +76,13 @@ export function createJobFor(srv: MockServer, s: Study, type: JobType, params: R
   const pre = srv.p2.precheck(s, type, params);
   if (pre) return pre;
   if (type === "DATASET_CREATE" && params.curation_id && params.input_path) return err(422, "INVALID_PARAMS", "curation_id와 input_path는 함께 쓸 수 없습니다.");
+  if (type === "DATASET_CREATE" && params.health_job_id) {
+    // data-health.md §7: 점검 대상 입력과 같아야 한다(422 DH_INPUT_MISMATCH)
+    const hj = srv.jobs.find((x) => x.id === params.health_job_id && x.study_id === s.id && x.job_type === "DATA_HEALTH" && x.state === "SUCCEEDED");
+    const hp = (hj?.params ?? {}) as Record<string, unknown>;
+    const same = hj && ((params.curation_id && hp.curation_id === params.curation_id) || (params.input_path && hp.input_path === params.input_path));
+    if (!same) return err(422, "DH_INPUT_MISMATCH", "데이터 점검 대상과 데이터셋 입력 폴더가 다릅니다");
+  }
   if (type === "PACKAGE_EXPORT" && !srv.datasets.some((d) => d.id === params.dataset_id && d.status === "READY"))
     return err(409, "PREREQUISITE_MISSING", "준비된 데이터셋이 필요합니다.", { missing: ["dataset"] });
   const me = srv.me!;

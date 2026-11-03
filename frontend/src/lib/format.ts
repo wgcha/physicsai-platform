@@ -74,6 +74,8 @@ export const JOB_TYPE_LABEL: Record<JobType, string> = {
   GEOM_PREVIEW: "형상 미리보기",
   // doe-preview.md §6.1 DOE 표본 형상 그리드(CPU 대기열, 작업 목록 "미리보기 포함"일 때만 보임)
   DOE_PREVIEW: "형상 미리보기(DOE)",
+  // data-health.md §5 ③-1 데이터 점검
+  DATA_HEALTH: "데이터 점검",
 };
 
 /** 작업 유형 → 단계 번호(phase2.md §6.1, 0 = Study 관리 phase3.md R3-1) */
@@ -108,6 +110,7 @@ export const JOB_STAGE: Record<JobType, number> = {
   ASM_MATCH: 1,
   GEOM_PREVIEW: 4,
   DOE_PREVIEW: 1,
+  DATA_HEALTH: 3,
 };
 
 export const JOB_STATE_LABEL: Record<JobState, string> = {

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
-import { api, type Curation, type Dataset } from "../../api";
+import { api, type Curation, type DataHealthReport, type Dataset } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, CopyButton, Field, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
-import { FeatureGate } from "../../components/FeatureGate";
+import { FeatureGate, useFeature } from "../../components/FeatureGate";
 import { EngineBadge } from "../../components/EngineSelect";
 import { fmtTime } from "../../lib/format";
+import { DataHealthCard } from "./health/DataHealthCard";
+import { initialSelection, inputKey, jobInputKey, statusText, submitExtras } from "./health/healthModel";
 
 const DS_STATUS: Record<Dataset["status"], string> = { BUILDING: "생성 중", READY: "준비됨", FAILED: "실패" };
 
@@ -36,15 +38,43 @@ export function DatasetCreateCard() {
     };
   }, [study.id]);
   const fromCuration = !!curation && !useFolder;
+  const inputReady = fromCuration || (!!path.trim() && inspected);
+  const inputParams = (): Record<string, unknown> => (fromCuration ? { curation_id: curation!.id } : { input_path: path.trim() });
+
+  // data-health.md §9: 최근 점검이 지금 입력의 것일 때만 결과·제외 선택을 쓴다(입력이 바뀌면 선택 초기화)
+  const health = useJobRunner("DATA_HEALTH");
+  const dsFeature = useFeature("dataset_create"); // 안내 문구는 ③-1 실행 영역 한 곳에만
+  const key = inputKey(fromCuration ? curation!.id : null, path);
+  const hjob = health.job;
+  const sameInput = !!hjob && jobInputKey(hjob) === key;
+  const [report, setReport] = useState<DataHealthReport | null>(null);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const reportJobId = sameInput && hjob?.state === "SUCCEEDED" ? hjob.id : null;
+  useEffect(() => {
+    let alive = true;
+    setReport(null);
+    if (!reportJobId) return;
+    api
+      .dataHealth(reportJobId)
+      .then((r) => alive && setReport(r))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [reportJobId]);
+  useEffect(() => {
+    setSelected(report ? initialSelection(report.runs) : new Set());
+  }, [report, key]);
 
   const submit = () => {
-    const input: Record<string, unknown> = fromCuration ? { curation_id: curation!.id } : { input_path: path.trim() };
-    const params: Record<string, unknown> = { ...input, split_group: splitGroup, options: opts };
+    const params: Record<string, unknown> = { ...inputParams(), split_group: splitGroup, options: opts };
     if (seed.trim()) params.seed = Number(seed);
+    if (report && reportJobId) Object.assign(params, submitExtras(report, selected, reportJobId));
     void run(params).then(() => void reloadDatasets());
   };
 
   return (
+    <>
     <Card span={6} foot={
         <>
           <FeatureGate feature="dataset_create">
@@ -54,7 +84,7 @@ export function DatasetCreateCard() {
                 label="데이터셋 생성"
                 onRun={submit}
                 job={job}
-                disabled={!enabled || (!fromCuration && (!path.trim() || !inspected))}
+                disabled={!enabled || !inputReady}
                 disabledReason={enabled ? "경로를 입력하고 확인하세요" : undefined}
                 error={error}
               />
@@ -103,6 +133,22 @@ export function DatasetCreateCard() {
       <p className="note">
         평가용 홀드아웃 <b>10% 고정</b>(고정 seed). 평가용 데이터는 학습 패키지에 넣지 않고 점수 계산에만 씁니다.
       </p>
+      <div className="dh-bar" data-testid="dh-bar">
+        <RunAction
+          canExecute={canExec}
+          label="데이터 점검"
+          onRun={() => void health.run(inputParams())}
+          job={hjob && sameInput ? hjob : null}
+          disabled={!dsFeature.enabled || !inputReady}
+          disabledReason={dsFeature.enabled ? "경로를 입력하고 확인하세요" : undefined}
+          error={health.error}
+        />
+        {hjob && (
+          <span className="muted small" data-testid="dh-status">
+            {sameInput ? statusText(fmtTime(hjob.created_at), report?.summary ?? null) : "최근 점검은 다른 입력입니다"}
+          </span>
+        )}
+      </div>
       <Advanced>
         <div className="form-grid">
           <Field label="seed" hint="비우면 설정 기본값">
@@ -149,7 +195,10 @@ export function DatasetCreateCard() {
                 <td>
                   <span className={`ds-status ${d.status.toLowerCase()}`}>{DS_STATUS[d.status]}</span> <EngineBadge engine={d.engine} />
                 </td>
-                <td className="num">{d.h3d_count ?? "–"}</td>
+                <td className="num">
+                  {d.h3d_count ?? "–"}
+                  {!!d.excluded_count && <div className="muted small">제외 {d.excluded_count}</div>}
+                </td>
                 <td className="num">
                   {d.train_count ?? "–"} / {d.eval_count ?? "–"}
                 </td>
@@ -172,6 +221,8 @@ export function DatasetCreateCard() {
         </div>
       )}
     </Card>
+    {report && reportJobId && <DataHealthCard report={report} jobId={reportJobId} selected={selected} onSelect={setSelected} />}
+    </>
   );
 }
 
