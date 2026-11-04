@@ -89,6 +89,7 @@ JOB_FEATURE: dict[str, FeatureReq] = {
     "SPDM_IMPORT": FeatureReq(),
     "OPTIMIZE": FEATURES["optimize"],
     "DATASET_CREATE": FEATURES["dataset_create"],
+    "DATA_HEALTH": FEATURES["dataset_create"],  # data-health.md §5: 기능 게이트 = dataset_create와 같은 기능
     "EVALUATE": FEATURES["evaluate"],
     "PREDICT": FEATURES["predict"],
     "PREDICT_VERIFY": FEATURES["predict"],

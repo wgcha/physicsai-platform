@@ -564,6 +564,7 @@ JOB_KINDS: dict[str, JobKind] = {k.kind: k for k in (
 # 등록하지 않는 job_type과 사유(§5.1). 나중에 등록하면 여기서 빼기만 한다(V-MCP-7).
 MCP_JOB_EXCLUDED: dict[str, str] = {
     "DATASET_CREATE": "③ 모델 관리 — 사람 판단 단계",
+    "DATA_HEALTH": "③ 데이터셋 사람 판단 단계 — DATASET_CREATE와 같음",  # data-health.md DH-13: 이상치 제외 추천(사람이 표에서 고름)
     "PACKAGE_EXPORT": "③ 모델 관리 — 사람 판단 단계",
     "MODEL_REGISTER": "③ 모델 관리 — 사람 판단 단계",
     "EVALUATE": "③ 모델 관리 — 사람 판단 단계",

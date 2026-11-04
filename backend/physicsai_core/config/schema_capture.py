@@ -163,6 +163,14 @@ def effective_extract_tcl(s: Settings) -> str:
     return s.resources.contour_extract_tcl or repo_resource_file(*EXTRACT_TCL_REPO_REL)
 
 
+FRAME_PROBE_TCL_REPO_REL = ("resources", "hyperview", "h3d_frame_probe.tcl")
+
+
+def effective_frame_probe_tcl(s: Settings) -> str:
+    """③-1 데이터 점검 프레임 조회 TCL(data-health.md DH-18): resources.h3d_frame_probe_tcl, 비었으면 저장소 리소스."""
+    return s.resources.h3d_frame_probe_tcl or repo_resource_file(*FRAME_PROBE_TCL_REPO_REL)
+
+
 def effective_capture_tcl(s: Settings) -> str:
     """캡처 TCL 원본 경로: resources.contour_capture_tcl, 비었으면 저장소 리소스."""
     return s.resources.contour_capture_tcl or repo_capture_tcl()

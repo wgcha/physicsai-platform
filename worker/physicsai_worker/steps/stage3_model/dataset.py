@@ -31,11 +31,14 @@ def ds_scan(ctx: Any) -> None:
     except PathError as exc:
         raise path_failure(exc) from None
     files = collect_h3d(cp.path, exclude)
+    files, excluded, not_found = _apply_exclude(ctx, cp.path, files)
     bad = [(f, why) for f in files if (why := file_safety_problem(f, cp.path))]
     if bad:
         listing = ", ".join(f"{os.path.relpath(f, cp.path)}({w})" for f, w in bad[:10])
         raise StepFailure("INPUT_INVALID", f"경로 규칙 위반 파일 {len(bad)}개: {listing}")
     if len(files) < s.dataset.min_h3d_files:
+        if not files and excluded:
+            raise StepFailure("INPUT_INVALID", "제외 후 대상 h3d가 없습니다")
         raise StepFailure("INPUT_INVALID", f"h3d 파일이 {len(files)}개입니다(최소 {s.dataset.min_h3d_files}개)")
     sp = split_files(files, float(p["holdout_ratio"]), int(p["seed"]), p["split_group"])
     if sp.n_groups < 2 or not sp.train or not sp.eval:
@@ -44,11 +47,64 @@ def ds_scan(ctx: Any) -> None:
     split_path = os.path.join(D, "split.json")
     ctx.backup([split_path])
     write_json(split_path, {"seed": int(p["seed"]), "holdout_ratio": float(p["holdout_ratio"]),
-                            "split_group": p["split_group"], "train": sp.train, "eval": sp.eval})
+                            "split_group": p["split_group"], "train": sp.train, "eval": sp.eval,
+                            "excluded": [os.path.relpath(f, cp.path).replace("\\", "/") for f in excluded]})
+    _write_excluded(ctx, D, cp.path, excluded)
     ctx.log(f"h3d {len(files)}개 → 학습 {len(sp.train)} / 평가 {len(sp.eval)} (seed {p['seed']})")
     ctx.ex.db(lambda c: datasets_repo.set_values(c, ds_id, h3d_count=len(files), train_count=len(sp.train),
-                                                 eval_count=len(sp.eval)))
-    ctx.patch_result({"h3d_count": len(files), "train_count": len(sp.train), "eval_count": len(sp.eval)})
+                                                 eval_count=len(sp.eval), excluded_count=len(excluded)))
+    ctx.patch_result({"h3d_count": len(files), "train_count": len(sp.train), "eval_count": len(sp.eval), "excluded_count": len(excluded)})
+
+
+def _apply_exclude(ctx: Any, root: str, files: list[str]) -> tuple[list[str], list[str], list[str]]:
+    """`exclude_files`(입력 루트 기준 상대경로, 정확 일치만 — 글롭·접두 없음)를 대상에서 뺀다. (남은 파일, 제외된 파일, 못 찾은 항목)."""
+    want = [str(x) for x in ctx.params.get("exclude_files") or []]
+    if not want:
+        return files, [], []
+    rel = {f: os.path.relpath(f, root).replace("\\", "/") for f in files}
+    ws = set(want)
+    excluded = [f for f in files if rel[f] in ws]
+    found = {rel[f] for f in excluded}
+    not_found = [w for w in want if w not in found]
+    if not_found:
+        ctx.add_warning("DS_EXCLUDE_NOT_FOUND", f"제외 목록 {len(not_found)}개가 입력에 없어 무시했습니다: " + ", ".join(not_found[:10]))
+    return [f for f in files if rel[f] not in ws], excluded, not_found
+
+
+def _health_rows(ctx: Any) -> dict[str, dict[str, Any]] | None:
+    """근거 DATA_HEALTH 보고서의 `{file_rel: run 행}`(파일이 없거나 읽을 수 없으면 None)."""
+    jid = ctx.params.get("health_job_id")
+    if not jid:
+        return None
+    try:
+        with open(ctx.abs(f"03_dataset/_health/{jid}/report.json"), encoding="utf-8") as fh:
+            runs = json.load(fh).get("runs") or []
+    except (OSError, ValueError):
+        return None
+    return {r["file_rel"]: r for r in runs if isinstance(r, dict) and "file_rel" in r}
+
+
+def _write_excluded(ctx: Any, D: str, root: str, excluded: list[str]) -> None:
+    """`excluded.json` = {health_job_id, files:[{file_rel, recommended, required, score, reason_codes}], kept_required}(data-health.md §7).
+    점검 결과에 없는 파일은 recommended·required·score가 null."""
+    if not (excluded or ctx.params.get("kept_required") or ctx.params.get("health_job_id")):
+        return
+    rows = _health_rows(ctx)
+    items = []
+    for f in excluded:
+        rel = os.path.relpath(f, root).replace("\\", "/")
+        r = None if rows is None else rows.get(rel)
+        items.append({"file_rel": rel, "recommended": None if r is None else bool(r.get("recommended")),
+                      "required": None if r is None else bool(r.get("required")), "score": None if r is None else r.get("score"),
+                      "reason_codes": [] if r is None else [x.get("code") for x in r.get("reasons") or [] if isinstance(x, dict)]})
+    kept = [str(x) for x in ctx.params.get("kept_required") or []]
+    path = os.path.join(D, "excluded.json")
+    ctx.backup([path])
+    write_json(path, {"health_job_id": ctx.params.get("health_job_id"), "files": items, "kept_required": kept})
+    if kept:
+        ctx.add_warning("DS_INCONSISTENT_KEPT", f"프레임 수·종료 시각이 다른 run {len(kept)}개를 포함했습니다 — 학습이 실패하거나 결과가 왜곡될 수 있습니다")
+    if excluded:
+        ctx.add_output(path)
 
 
 def ds_yaml(ctx: Any) -> None:
@@ -95,7 +151,7 @@ def ds_register(ctx: Any) -> None:
     ctx.register_artifact("SPLIT_JSON", os.path.join(D, "split.json"))
     r = ctx.result()
     ctx.patch_result({"dataset_id": ds_id, "h3d_count": r.get("h3d_count"), "train_count": r.get("train_count"),
-                      "eval_count": r.get("eval_count")})
+                      "eval_count": r.get("eval_count"), "excluded_count": r.get("excluded_count") or 0})
 
 
 HANDLERS = {

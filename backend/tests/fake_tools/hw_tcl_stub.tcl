@@ -1,6 +1,6 @@
 # HyperView Tcl API 가짜(시험 전용) — `tclsh hw_tcl_stub.tcl <contour_extract.tcl>`로 추출 TCL의 제어 흐름을 실제 Tcl 인터프리터로 검증한다.
 # 실제 hw 명령(hwc·hwi·hv*)의 최소 부분집합만 흉내 낸다. 시나리오는 환경변수:
-#   STUB_NSIM(기본 5)        시뮬레이션(프레임) 수
+#   STUB_NSIM(기본 5)        시뮬레이션(프레임) 수 / STUB_NSIM_FAIL=1  GetNumberOfSimulations 명령 오류(프레임 조회 TCL 시험)
 #   STUB_DTL = list(기본, displacement 포함) | nodisp(포함 안 함) | error(명령 오류) | empty(빈 목록)
 #   STUB_DISP = ok(기본) | error(오류 문구) | empty(빈 값 행) | none0(0행)
 #   STUB_DISP_FAIL_AT=<sim>  그 시뮬레이션에서만 변위 조회 오류(첫 프레임 이후 누락 시험)
@@ -63,7 +63,7 @@ proc handle {kind argv} {
             switch $m {
                 GetCurrentSubcase { return 1 }
                 GetSubcaseList { return {1} }
-                GetNumberOfSimulations { return [env_or STUB_NSIM 5] }
+                GetNumberOfSimulations { if {[env_or STUB_NSIM_FAIL 0]} { error "no simulations" } ; return [env_or STUB_NSIM 5] }
                 SetCurrentSimulation { set ::CUR [lindex $argv 1] }
                 GetSimulationLabel { return "Time = [expr {[lindex $argv 2] * 0.1}]" }
                 GetDataTypeList {

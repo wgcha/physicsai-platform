@@ -13,6 +13,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
+from ..parsers import radioss_out
 from ..stage4_predict import performance
 from . import metrics as mx
 from . import volume as vol
@@ -20,7 +21,6 @@ from .plan import RunRead, read_run
 from .sides import Run, Side
 
 CSV_HEADER = ("pair_no", "a_run", "b_run", "metric_id", "a", "b", "diff", "rel_pct", "corr", "status", "reason")
-_MASS_RE = re.compile(r"TOTAL\s+MASS\s*[:=]?\s*([-+0-9.eE]+)", re.I)
 
 
 @dataclass
@@ -125,14 +125,12 @@ def _volume(run: Run, src: Mapping[str, Any], settings: Any, out: ComputeOut) ->
         for f in folders:
             for n in sorted(os.listdir(f)) if os.path.isdir(f) else []:
                 if n.lower().endswith("_0000.out") or n.lower().endswith("_0000.sty"):
-                    try:
-                        with open(os.path.join(f, n), encoding="utf-8", errors="replace") as fh:
-                            for line in fh:
-                                m = _MASS_RE.search(line)
-                                if m:
-                                    return float(m.group(1)), None
+                    try:  # 공용 파서(DH-9) — 상한 없음(기존 동작 불변)
+                        mass = radioss_out.starter_total_mass(os.path.join(f, n))
                     except (OSError, ValueError):
                         continue
+                    if mass is not None:
+                        return mass, None
         return None, "VOLUME_SOURCE_MISSING"
     return None, "SPEC_INVALID"
 

@@ -653,6 +653,10 @@ def plan(inputs: dict[str, Any]) -> dict[str, Any]:
     ext_tcl = repo.joinpath("resources", "hyperview", "contour_extract.tcl")
     if ext_tcl.is_file() and not unsafe(fwd(str(ext_tcl))):
         desired[("resources", "contour_extract_tcl")] = fwd(str(ext_tcl))
+    # data-health.md DH-18: ③-1 데이터 점검 프레임 조회 TCL도 같은 규칙(저장소 리소스, 비었거나 키가 없을 때만)
+    probe_tcl = repo.joinpath("resources", "hyperview", "h3d_frame_probe.tcl")
+    if probe_tcl.is_file() and not unsafe(fwd(str(probe_tcl))):
+        desired[("resources", "h3d_frame_probe_tcl")] = fwd(str(probe_tcl))
     # Q2(확정 2026-10-23): contour3d.enabled는 새 설정 파일에서만, hw 실행 파일을 찾았을 때 true. 기존·이어받은 설정은 바꾸지 않고 안내 줄만
     hw_found = bool(alt["paths"].get("hw_exe_path"))
     if source == "example" and hw_found:

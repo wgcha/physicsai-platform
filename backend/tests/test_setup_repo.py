@@ -285,10 +285,11 @@ def test_setup_config_without_original_app_and_altair(tmp_path):
     res = _run(tmp_path, t, inp)
     c = _cfg(t)
     # 원본 반입 자원은 전부 빈 값. 컨투어 캡처·3D 추출 TCL(phase3 §15, contour3d-field.md C3F-17)만 git 폴더의 저장소 리소스로 채운다
-    repo_tcl = ("contour_capture_tcl", "contour_extract_tcl")
+    repo_tcl = ("contour_capture_tcl", "contour_extract_tcl", "h3d_frame_probe_tcl")
     assert all(v == "" for k, v in c["resources"].items() if isinstance(v, str) and k not in repo_tcl)
     assert c["resources"]["contour_capture_tcl"] == str(REPO / "resources" / "hyperview" / "contour_capture.tcl").replace("\\", "/")
     assert c["resources"]["contour_extract_tcl"] == str(REPO / "resources" / "hyperview" / "contour_extract.tcl").replace("\\", "/")
+    assert c["resources"]["h3d_frame_probe_tcl"] == str(REPO / "resources" / "hyperview" / "h3d_frame_probe.tcl").replace("\\", "/")
     assert all(c["altair"][k] == "" for k in ALTAIR_REL)
     w = " ".join(res["warnings"])
     assert "Altair 실행 파일을 찾지 못했습니다" in w and "preview_pred_h3d_tcl" in w and "-AltairRoot" in w

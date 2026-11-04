@@ -195,6 +195,8 @@ def retry_locked(conn: Any, principal: Principal, old: dict[str, Any], from_step
         from_step = 1  # HPC 제출 이력은 재사용하지 않는다(phase2 §7.1: TD_SOLVE는 항상 TS_PREP부터)
     if old["job_type"] == "FEM_VERIFY" and from_step <= FEM_VERIFY_REUSE_FROM - 1:
         from_step = 1  # phase3 §21.3.5 F10: 해석 전(≤ COLLECT) 실패는 새 시도·새 원격 폴더, 후처리(≥ FV_EXTRACT)는 그 step부터
+    if old["job_type"] == "DATA_HEALTH":
+        from_step = 1  # 산출 폴더가 작업 id별(_health/<job_id>)이라 새 작업은 DH_PREP부터 다시 만든다
     if old["job_type"] == "EQ_CHECK":  # equiv-check.md §4.5: 같은 스냅숏으로 처음부터(폴더는 _backup 후 다시), 활성 수 재검사
         from .equiv_check import check_retry_reactivate as eq_retry_check
 

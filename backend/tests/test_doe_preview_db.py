@@ -58,7 +58,7 @@ def test_v_dp_13_migration_0025_up_constraints_and_rows_preserved(fresh_db):
     from physicsai_core.db import MIGRATION_HEAD
 
     url, eng = fresh_db
-    assert MIGRATION_HEAD == "0025_doe_preview"
+    assert MIGRATION_HEAD == "0026_data_health"
     _alembic(url, "0024_contour3d_field")
     ins = text("insert into artifacts(id, study_id, kind, rel_path, size, content_type) values (:u,:s,:k,'x',1,'image/png')")
     with eng.begin() as c:
@@ -148,4 +148,4 @@ def test_v_dp_13_metadata_matches_migration_and_single_migration():
     ux = [i for i in jobs.indexes if i.name == "ux_jobs_study_type_active"][0]
     assert "DOE_PREVIEW" in str(ux.dialect_options["postgresql"]["where"])
     versions = sorted(p.name for p in (REPO / "migrations" / "versions").glob("00*.py"))
-    assert versions[-1] == "0025_doe_preview.py" and sum(1 for v in versions if v.startswith("0025")) == 1  # 새 migration은 1개
+    assert versions[-1] == "0026_data_health.py" and sum(1 for v in versions if v.startswith("0025")) == 1  # 새 migration은 1개

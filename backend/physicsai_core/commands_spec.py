@@ -85,6 +85,8 @@ TEMPLATE_SPECS: dict[str, TemplateSpec] = {
     "hst_optimization": TemplateSpec(frozenset({"hstpy", "launcher"}), frozenset({"@cmd_c"}), False),
     # geometry-view.md §13.3: 결과 3D 컨투어 추출. {contour_extract_tcl} = 캐시 작업 폴더에 복사한 contour_extract.tcl
     "contour_extract": TemplateSpec(frozenset({"hw", "contour_extract_tcl"}), frozenset(), False),
+    # data-health.md DH-18: 프레임 수·시각 경량 조회. {frame_probe_tcl} = 점검 작업 폴더에 복사한 h3d_frame_probe.tcl(옆에 frame_probe_settings.tcl)
+    "h3d_frame_probe": TemplateSpec(frozenset({"hw", "frame_probe_tcl"}), frozenset(), False),
 }
 
 # ---- native 형상 엔진(geometry-engine.md §7.1). 모두 required=False, 토큰 없음, 경로 표기 os ----
@@ -169,6 +171,7 @@ PATH_STYLE: dict[tuple[str, str], str] = {
     ("hst_optimization", "launcher"): "os",
     ("response_extract", "extract_tcl"): "fwd",
     ("contour_capture", "capture_tcl"): "fwd",
+    ("h3d_frame_probe", "frame_probe_tcl"): "fwd",  # data-health.md DH-18: 다른 hw -tcl 인자와 같은 '/' 표기
     ("contour_extract", "contour_extract_tcl"): "fwd",  # geometry-view.md §6.1: {capture_tcl}과 같은 '/' 표기  # phase3 §15: HyperView -tcl 인자('/' 표기)  # phase3 §14.6: HyperWorks -tcl 인자(다른 hw TCL과 같은 '/' 표기)
 }
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import uuid
@@ -9,8 +10,12 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from physicsai_core.data_health.input_key import folder_key
 from physicsai_core.db.repositories import datasets as datasets_repo
+from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
+from physicsai_core.db.repositories import study_manage as sm_repo
+from physicsai_core.errors import DomainError
 from physicsai_core.paths import allowed_roots, check_dataset_input, check_user_path
 
 from ...context import AppContext
@@ -35,6 +40,19 @@ class DatasetCreateParams(_P):
     seed: int | None = None
     split_group: Literal["file", "parent_dir"] | None = None
     options: DatasetOptions | None = None
+    # data-health.md §7(DH-10): 입력 루트 기준 h3d 상대경로(`/`, 정확 일치) 제외. 최대 개수는 설정 dataset.max_exclude(prepare가 확인)
+    exclude_files: list[str] = Field(default_factory=list)
+    kept_required: list[str] = Field(default_factory=list)  # 점검이 제외 필수로 표시했지만 사용자가 해제한 파일(DS_INCONSISTENT_KEPT)
+    health_job_id: str | None = Field(default=None, max_length=64)  # 근거 DATA_HEALTH 작업(기록용)
+
+
+class DataHealthParams(_P):
+    """③-1 데이터 점검(data-health.md §8): input 규칙은 DATASET_CREATE와 같다(둘 중 하나). responses = 점검할 스칼라 응답 이름(생략 = 전부)."""
+
+    input_path: str | None = Field(default=None, max_length=400)
+    curation_id: str | None = None
+    responses: list[str] | None = Field(default=None, max_length=200)
+    attrs: bool = True  # 모델 속성(메시 bbox·부피·CoG·총질량) 포함 여부
 
 
 class PackageExportParams(_P):
@@ -55,10 +73,68 @@ class EvaluateParams(_P):
 
 PARAM_MODELS: dict[str, type[BaseModel]] = {
     "DATASET_CREATE": DatasetCreateParams,
+    "DATA_HEALTH": DataHealthParams,
     "PACKAGE_EXPORT": PackageExportParams,
     "MODEL_REGISTER": ModelRegisterParams,
     "EVALUATE": EvaluateParams,
 }
+
+
+def resolve_input(ctx: AppContext, conn: Any, study: dict[str, Any], p: Any) -> tuple[str, str | None]:
+    """DATASET_CREATE·DATA_HEALTH 공용 입력 해석(data-health.md §4.1): input_path 또는 curation_id(둘 중 하나) → 검사를 마친 경로.
+    반환 (경로, curation_id|None). 큐레이션은 READY H3D만(없으면 409 PREREQUISITE_MISSING)."""
+    cfg = ctx.settings
+    if (p.input_path is None) == (p.curation_id is None):
+        raise invalid_errors([{"loc": ["params", "input_path"], "msg": "input_path와 curation_id 중 하나만 지정하세요"}])
+    if p.curation_id is not None:
+        from physicsai_core.db.repositories import curations as cur_repo
+
+        cur = cur_repo.get_curation(conn, p.curation_id)
+        if cur is None or cur["study_id"] != study["id"] or cur["status"] != "READY" or cur["kind"] != "H3D":
+            raise prerequisite_missing("READY_H3D_CURATION")
+        input_path = os.path.join(study_root(ctx, study), *cur["output_rel"].rstrip("/").split("/"))
+    else:
+        input_path = p.input_path
+    cp = check_user_path(input_path, [cfg.storage.ai_root])
+    check_dataset_input(cp.path, cfg.storage.ai_root)
+    return cp.path, p.curation_id
+
+
+def normalize_rel_list(items: list[str], key: str, limit: int) -> list[str]:
+    """입력 루트 기준 상대경로 목록: `\\` → `/`, 앞뒤 공백·앞 `./` 제거, 중복 제거(순서 유지). 개수 > limit·빈 값·너무 긴 항목은 422."""
+    out: list[str] = []
+    for raw in items:
+        s = str(raw).replace("\\", "/").strip()
+        while s.startswith("./"):
+            s = s[2:]
+        if not s or len(s) > 1024 or "\x00" in s:
+            raise invalid_errors([{"loc": ["params", key], "msg": "빈 값이거나 올바르지 않은 경로입니다"}])
+        out.append(s)
+    out = list(dict.fromkeys(out))
+    if len(out) > limit:
+        raise invalid_errors([{"loc": ["params", key], "msg": f"최대 {limit}개까지 지정할 수 있습니다(dataset.max_exclude)"}])
+    return out
+
+
+def check_health_job(conn: Any, study_id: str, job_id: str, input_path: str) -> None:
+    """health_job_id 사전조건(§7): 같은 Study·DATA_HEALTH·SUCCEEDED·result.input_path == 이번 입력 경로. 아니면 422 DH_INPUT_MISMATCH."""
+    j = jobs_repo.get_job(conn, job_id)
+    if j is None or j["study_id"] != study_id or j["job_type"] != "DATA_HEALTH" or j["state"] != "SUCCEEDED":
+        raise DomainError("DH_INPUT_MISMATCH", "데이터 점검 작업을 찾을 수 없거나 정상 완료된 점검이 아닙니다", status=422)
+    prev = (j.get("result") or {}).get("input_path")
+    if not prev or folder_key(prev) != folder_key(input_path):  # 보고서 summary.input_key와 같은 정규화 함수 한 곳
+        raise DomainError("DH_INPUT_MISMATCH", "데이터 점검 대상과 데이터셋 입력 폴더가 다릅니다", status=422)
+
+
+def health_required(ctx: AppContext, study: dict[str, Any], job_id: str) -> set[str] | None:
+    """근거 점검 보고서(report.json)의 제외 필수(required) 파일 집합(입력 루트 기준 상대경로). 파일을 읽을 수 없으면 None."""
+    path = os.path.join(study_root(ctx, study), "03_dataset", "_health", job_id, "report.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            runs = json.load(fh).get("runs") or []
+    except (OSError, ValueError):
+        return None
+    return {str(r["file_rel"]) for r in runs if isinstance(r, dict) and r.get("required") and "file_rel" in r}
 
 
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
@@ -67,34 +143,59 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
     cfg = ctx.settings
     sid = study["id"]
     warnings: list[dict[str, str]] = []
+    if job_type == "DATA_HEALTH":
+        cp_path, curation_id = resolve_input(ctx, conn, study, p)
+        active = sm_repo.active_of_type(conn, sid, "DATA_HEALTH")
+        if active is not None:
+            raise DomainError("DATA_HEALTH_ACTIVE", "이 Study에 진행 중인 데이터 점검이 있습니다 — 끝나거나 취소한 뒤 다시 시작하세요", status=409,
+                              job_id=active)
+        names = list(dict.fromkeys(str(x).strip() for x in (p.responses or []) if str(x).strip())) if p.responses is not None else None
+        params = {"input_path": cp_path, **({"curation_id": curation_id} if curation_id else {}), "responses": names, "attrs": bool(p.attrs)}
+        engine, engine_version, ew = detect_engine(ctx, conn, study, cp_path)  # DH-15: 엔진 혼합 422 ENGINE_MIXED 그대로
+        result: dict[str, Any] = {}
+        if engine is not None:
+            result.update({"engine": engine})
+        return params, result or None, warnings + ew
     if job_type == "DATASET_CREATE":
-        if (p.input_path is None) == (p.curation_id is None):
-            raise invalid_errors([{"loc": ["params", "input_path"], "msg": "input_path와 curation_id 중 하나만 지정하세요"}])
-        if p.curation_id is not None:
-            from physicsai_core.db.repositories import curations as cur_repo
-
-            cur = cur_repo.get_curation(conn, p.curation_id)
-            if cur is None or cur["study_id"] != sid or cur["status"] != "READY" or cur["kind"] != "H3D":
-                raise prerequisite_missing("READY_H3D_CURATION")
-            input_path = os.path.join(study_root(ctx, study), *cur["output_rel"].rstrip("/").split("/"))
-        else:
-            input_path = p.input_path
-        cp = check_user_path(input_path, [cfg.storage.ai_root])
-        check_dataset_input(cp.path, cfg.storage.ai_root)
+        cp_path, curation_id = resolve_input(ctx, conn, study, p)
+        excluded = normalize_rel_list(p.exclude_files, "exclude_files", cfg.dataset.max_exclude)
+        kept = normalize_rel_list(p.kept_required, "kept_required", cfg.dataset.max_exclude)
+        if p.health_job_id is not None:
+            check_health_job(conn, sid, p.health_job_id, cp_path)
+        if kept and p.health_job_id is None:
+            raise invalid_errors([{"loc": ["params", "kept_required"], "msg": "kept_required는 health_job_id(근거 점검)와 함께만 지정할 수 있습니다"}])
+        if p.health_job_id is not None:
+            req = health_required(ctx, study, p.health_job_id)
+            if req is None:
+                raise DomainError("REPORT_MISSING", "근거 데이터 점검 보고서를 읽을 수 없습니다", status=422)
+            bad = [k for k in kept if k not in req]
+            if bad:  # 점검이 제외 필수로 표시하지 않은 파일은 kept_required가 될 수 없다
+                raise invalid_errors([{"loc": ["params", "kept_required"], "msg": f"제외 필수가 아닌 파일이 있습니다: {', '.join(bad[:5])}"}],
+                                     "kept_required에 제외 필수가 아닌 파일이 있습니다")
+            auto = sorted(req - set(excluded) - set(kept))  # 제외 필수는 기본 제외 — 제외도 해제도 아니면 서버가 제외로 넣는다
+            if auto:
+                excluded = (excluded + auto)
+                if len(excluded) > cfg.dataset.max_exclude:
+                    raise invalid_errors([{"loc": ["params", "exclude_files"], "msg": f"최대 {cfg.dataset.max_exclude}개까지 지정할 수 있습니다(dataset.max_exclude)"}])
+                warnings = warnings + [{"code": "DS_REQUIRED_AUTO_EXCLUDED",
+                                        "message": f"제외 필수(프레임 수·종료 시각 불일치) {len(auto)}개가 제외 목록에 없어 기본대로 제외했습니다"}]
         opts = (p.options or DatasetOptions(**cfg.dataset.options_default.model_dump())).model_dump()
         params = {
-            "input_path": cp.path,
-            **({"curation_id": p.curation_id} if p.curation_id else {}),
+            "input_path": cp_path,
+            **({"curation_id": curation_id} if curation_id else {}),
             "holdout_ratio": p.holdout_ratio if p.holdout_ratio is not None else cfg.dataset.holdout_ratio,
             "seed": p.seed if p.seed is not None else cfg.dataset.seed,
             "split_group": p.split_group or cfg.dataset.split_group,
             "options": opts,
+            **({"exclude_files": excluded} if excluded else {}),
+            **({"kept_required": kept} if kept else {}),
+            **({"health_job_id": p.health_job_id} if p.health_job_id else {}),
         }
-        engine, engine_version, ew = detect_engine(ctx, conn, study, cp.path)  # geometry-engine.md §7.7
-        result = {"dataset_id": str(uuid.uuid4())}
+        engine, engine_version, ew = detect_engine(ctx, conn, study, cp_path)  # geometry-engine.md §7.7
+        ds_result: dict[str, Any] = {"dataset_id": str(uuid.uuid4())}
         if engine is not None:
-            result.update({"engine": engine, "engine_version": engine_version})
-        return params, result, warnings + ew
+            ds_result.update({"engine": engine, "engine_version": engine_version})
+        return params, ds_result, warnings + ew
     if job_type == "PACKAGE_EXPORT":
         d = datasets_repo.get(conn, p.dataset_id)
         if d is None or d["study_id"] != sid or d["status"] != "READY":
@@ -144,6 +245,7 @@ def after_insert(conn: Any, principal: Any, study: dict[str, Any], job_type: str
             "split_rel": f"03_dataset/{ds_id}/split.json",
             "train_psdata_rel": f"03_dataset/{ds_id}/train/dataset.psdata",
             "eval_psdata_rel": f"03_dataset/{ds_id}/eval/dataset.psdata",
+            "health_job_id": params.get("health_job_id"),
         })
 
 

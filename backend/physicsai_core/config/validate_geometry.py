@@ -144,9 +144,10 @@ def _validate_view(s: Settings, issues: list[ConfigIssue]) -> None:
         add("contour3d.lod_target_vertices", "1000~1000000")
     if not c.timeout_s > 0:
         add("contour3d.timeout_s", "양수")
-    t = s.resources.contour_extract_tcl
-    if t:
-        if not is_abs_path_str(t):
-            add("resources.contour_extract_tcl", "절대경로여야 합니다")
-        elif has_unsafe_chars(t):
-            add("resources.contour_extract_tcl", "공백·제어문자·cmd 메타문자를 쓸 수 없습니다")
+    for key in ("contour_extract_tcl", "h3d_frame_probe_tcl"):  # 후자는 data-health.md DH-18(같은 규칙)
+        t = getattr(s.resources, key)
+        if t:
+            if not is_abs_path_str(t):
+                add(f"resources.{key}", "절대경로여야 합니다")
+            elif has_unsafe_chars(t):
+                add(f"resources.{key}", "공백·제어문자·cmd 메타문자를 쓸 수 없습니다")
