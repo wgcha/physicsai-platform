@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from . import dataset, evaluate, model_register, package
+from . import data_health, dataset, evaluate, model_register, package
 
 HANDLERS: dict[tuple[str, str], Callable[[Any], None]] = {}
-for _mod in (dataset, package, model_register, evaluate,):
+for _mod in (dataset, data_health, package, model_register, evaluate,):
     HANDLERS.update(_mod.HANDLERS)

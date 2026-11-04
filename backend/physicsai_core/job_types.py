@@ -66,6 +66,23 @@ JOB_TYPES: dict[str, JobTypeDef] = {
         ),
         "③-1",
     ),
+    # ---- ③-1 데이터 점검(data-health.md §5, DH-2): 입력 h3d run의 이상치 제외 추천. INTERNAL + 선택 LOCAL DH_FRAMES(res=cpu) → 처음부터 끝까지 CPU 대기열.
+    # 데이터셋·입력 파일을 바꾸지 않는다(추천만). 재시도 허용(같은 params, 폴더 _backup 후 다시) ----
+    "DATA_HEALTH": JobTypeDef(
+        "DATA_HEALTH",
+        3,
+        "SLOT",
+        "데이터 점검",
+        (
+            StepDef("DH_PREP", "INTERNAL", 5),
+            StepDef("DH_SCAN", "INTERNAL", 60),
+            StepDef("DH_FRAMES", "LOCAL", 10, "cpu"),
+            StepDef("DH_SCORE", "INTERNAL", 20),
+            StepDef("DH_REPORT", "INTERNAL", 5),
+        ),
+        "③-1",
+        notify_success=False,
+    ),
     "PACKAGE_EXPORT": JobTypeDef(
         "PACKAGE_EXPORT",
         3,
@@ -333,6 +350,7 @@ STEP_LABELS: dict[str, str] = {
     "EQ_PREP": "판정 준비(쌍·레시피 확정)", "EQ_EXTRACT": "응답·곡선 추출(없는 값만)", "EQ_COMPUTE": "지표 계산", "EQ_REPORT": "집계·종합 판정",
     "AM_PREP": "조립 매칭 준비", "AM_PARTS": "조립 component 목록", "AM_CHECK": "외곽 노드·CAD 경계 검사", "AM_REGISTER": "매칭 결과 등록",
     "DP_PREP": "미리보기 입력 확인", "DP_MATRIX": "표본 표 계산·셀 선택", "DP_RENDER": "표본 형상 그리기(셀 묶음)", "DP_REGISTER": "미리보기 결과 등록",
+    "DH_PREP": "점검 입력 확인·run 해석", "DH_SCAN": "run 출력·메시 읽기", "DH_FRAMES": "h3d 프레임 수 조회", "DH_SCORE": "이상치 판정", "DH_REPORT": "점검 결과 등록",
     "C3_PREP": "대기·H3D 확인", "C3_EXTRACT": "H3D 읽기(결과 추출)", "C3_CONVERT": "형상·프레임 변환", "C3_REGISTER": "결과 등록",
 }
 

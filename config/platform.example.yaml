@@ -65,6 +65,7 @@ resources:                        # 원본 반입본 위치(deploy/RESOURCES.txt
   curate_hg_tcl: "D:/physicsai/resources/BATCHRUN/BATCHRUN_curate_hg.tcl"
   extract_minmax_tcl: "D:/physicsai/resources/BATCHRUN/H3D_StaticMinMax_to_CSV_FAST.tcl"   # 업로드본에 없음(U8·U19)
   contour_capture_tcl: ""          # ④ 컨투어 캡처 TCL(phase3 §15, 사용자 제공 이슈 #2). 빈 값 = 저장소 resources/hyperview/contour_capture.tcl(setup.ps1이 채움)
+  h3d_frame_probe_tcl: ""          # ③-1 데이터 점검 프레임 조회 TCL(data-health.md DH-18). 빈 값 = 저장소 resources/hyperview/h3d_frame_probe.tcl(setup.ps1이 채움)
   contour_extract_tcl: ""          # 결과 3D 컨투어 추출 TCL(geometry-view.md §13.3). 빈 값 = 저장소 resources/hyperview/contour_extract.tcl(setup.ps1이 채움)
   launchers:                      # 런처 파일 이름(경로 구분자 없이)·pyd 코어 이름
     extract_params: {script: BATCHRUN_get_parameter_from_cad.py, core: get_parameter_from_cad_core}
@@ -110,10 +111,42 @@ dataset:
   split_group: file               # file | parent_dir
   min_h3d_files: 2
   min_psdata_bytes: 1048576       # 원본 검사(1 MiB)
+  max_exclude: 5000               # DATASET_CREATE exclude_files 최대 개수(data-health.md §7)
   options_default:
     extract_faces: true
     extract_mdi: false
     extract_time_history_vectors: false
+
+data_health:                      # ③-1 데이터 점검(docs/contracts/data-health.md §10). 판정 기준 숫자는 이 절 한 곳. 절이 없으면 아래 기본값
+  min_n: 8                        # Z·견고 z 최소 유효 표본(미만 SKIP_SMALL_N)
+  knn_min_n: 12                   # kNN 최소 유효 표본
+  knn_k: 5
+  sigma_z: 3.0                    # 일반 3σ(표시만)
+  robust_z: 3.5                   # 판정(Iglewicz–Hoaglin 수정 z 권장값)
+  knn_z: 3.5                      # 판정
+  energy_error_pct_max: 10.0
+  added_mass_ratio_max: 0.05
+  hourglass_ratio_max: 0.10
+  contact_ratio_max: 0.10
+  zero_tol: 1.0e-12
+  engine_out_glob: "*_0001.out"
+  starter_out_glob: ["*_0000.out", "*_0000.sty"]
+  out_tail_bytes: 262144          # engine out은 끝 256 KiB만 읽음
+  starter_scan_max_bytes: 67108864  # starter out은 TOTAL MASS 첫 일치까지, 이 크기 넘으면 NA(OUT_TOO_LARGE)
+  normal_regex: "NORMAL TERMINATION"
+  error_regex: "ERROR TERMINATION"
+  # cycle_regex: …                # 이름 그룹 time·err·mas(생략 = 코드 기본 패턴: CYCLE TIME TIME-STEP [ELEMENT] ERROR% … MAS.ERR). 현장 출력과 다르면 여기서 맞춘다
+  # total_mass_regex: …           # 그룹 1 = 질량(생략 = "TOTAL MASS = 값")
+  t01_series: null                # {internal: IE, hourglass: HE, contact: CE} — ②-4 곡선 JSON series 이름. 현장 확인 전 null(= hg/접촉 비 NA)
+  report_max_rows: 2000
+  expected_frames: null           # 설정 기대 프레임 수(있으면 DOE 최빈값보다 우선)
+  expected_t_end: null            # 설정 목표 종료 시각(있으면 /RUN Tstop 최빈값보다 우선)
+  t_end_tol: 0.01                 # 마지막 시각 < T_end × (1 − tol) → 일관성 위반
+  engine_rad_glob: "*_0001.rad"
+  engine_rad_max_bytes: 4194304
+  frame_write_regex: null         # engine out의 H3D 쓰기 기록 문구(현장 확인 전 null)
+  engine_scan_max_bytes: 67108864
+  frame_probe_timeout_s: 1800     # DH_FRAMES hw 1회 호출 시간 상한
 
 package:
   link_mode: hardlink_or_copy     # hardlink_or_copy | copy
@@ -332,6 +365,7 @@ commands:
   # DOE 표본 형상 그리드(doe-preview.md §3.1, paicad 0.14.0+). --tag-dir(①-1 기반 train 출처는 tag 없음)·--fixed-dir(①-1 쉘)은 값이 없으면 인자 쌍째 생략
   paicad_view_grid: ["{paicad}", "view", "grid", "--cad", "{cad_input}", "--features", "{features_json}", "--cells", "{cells_json}", "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--thumb-options", "{thumb_options_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
   paicad_shell_view_grid: ["{paicad}", "shell", "view", "grid", "--cad", "{cad_input}", "--features", "{features_json}", "--cells", "{cells_json}", "--fixed-dir", "{fixed_dir}", "--tag-dir", "{tag_dir}", "--options", "{options_json}", "--view-options", "{view_options_json}", "--thumb-options", "{thumb_options_json}", "--threads", "{threads}", "--out-dir", "{out_dir}"]
+  h3d_frame_probe: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{frame_probe_tcl}"]   # ③-1 데이터 점검 프레임 조회(data-health.md DH-18, 기본 켬). null = 끔(DH_FRAMES SKIPPED + 경고). {frame_probe_tcl} = 점검 폴더에 복사한 TCL(옆에 frame_probe_settings.tcl)
   contour_extract: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"]   # 결과 3D 컨투어(geometry-view.md §13.3): {contour_extract_tcl} = 캐시 폴더에 복사한 TCL(옆에 extract_settings.tcl)
 
 commands_log_error_patterns:      # edspy 계열 step 로그 오류 감지 (원본 2_run_hst_gen_rad_input.py:65-67)

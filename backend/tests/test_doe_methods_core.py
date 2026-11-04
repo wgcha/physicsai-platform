@@ -485,6 +485,6 @@ def test_v_dm_12_single_migration_and_head():
 
     root = Path(__file__).resolve().parents[2]
     mig = sorted(p.name for p in (root / "migrations" / "versions").glob("*_doe_methods.py"))
-    assert mig == ["0023_doe_methods.py"] and MIGRATION_HEAD == "0025_doe_preview"
+    assert mig == ["0023_doe_methods.py"] and MIGRATION_HEAD == "0026_data_health"
     text = (root / "migrations" / "versions" / mig[0]).read_text(encoding="utf-8")
     assert re.search(r'^revision\s*=\s*"0023_doe_methods"', text, re.M)

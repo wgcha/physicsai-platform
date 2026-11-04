@@ -93,6 +93,7 @@ def test_all_routes_prefixed():
         "/studies/{study_id}/asm-matches", "/asm-matches/{match_id}", "/asm-matches/{match_id}/rows", "/asm-matches/{match_id}/check",
         "/asm-matches/{match_id}/confirm", "/asm-matches/{match_id}/cancel",
         # doe-preview.md §6.6: DOE 표본 형상 그리드 미리보기(생성·조회·취소, x-mcp exclude)
+        "/jobs/{job_id}/data-health",  # 데이터 점검 보고서(data-health.md §6.2)
         "/studies/{study_id}/doe-previews", "/doe-previews/{preview_id}", "/doe-previews/{preview_id}/cancel",
     }
     assert {p.removeprefix("/physicsai/api") for p in paths} == expected

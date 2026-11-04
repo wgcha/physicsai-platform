@@ -4,6 +4,12 @@
 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
 (`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
 
+## 0.2.16 — 2026-11-04
+
+- ③ 데이터셋 생성 "데이터 점검(이상치 제외 추천)": 입력 h3d run의 해석 건전성(종료·에너지 오차·추가 질량·hg·접촉)과 일관성(프레임 수·마지막 시각)을 보고, 모델 속성·응답은 견고 z와 파라미터 공간 이웃 비교로 이상치 제외를 추천한다(DATA_HEALTH 작업·`GET /jobs/{id}/data-health`). 판정 기준은 설정 `data_health` 한 곳, 추천은 사람이 확정하며 입력 파일은 바뀌지 않는다
+- 데이터셋 생성: `exclude_files`(제외 목록, 정확 일치)·`excluded.json`·`excluded_count`·`health_job_id`, 일관성 위반 파일을 남기면 경고 DS_INCONSISTENT_KEPT. DB migration 0026
+- 성능 메모: 점검은 run마다 out 꼬리만 읽고(상한 `data_health.out_tail_bytes`) 프레임 수는 컨투어 캐시·out 기록을 먼저 쓰며, 원천이 없는 run만 hw를 작업당 1회 실행한다(결과장 로드 없음)
+
 ## 0.2.15 — 2026-11-02
 
 - 형상 엔진 paicad 0.14.1: 큰 쉘·솔리드 메시(예: 22만 노드 + STEP 꼭짓점 7천여 개)에서 노드 태깅(tag·shell tag)이 메모리 부족(GEOM_INTERNAL, 35.7 GiB 할당 실패)으로 멈추던 문제 해결 — 결과는 이전과 동일, 메모리 사용량은 노드 수에 비례(위 조건 약 36 MiB)

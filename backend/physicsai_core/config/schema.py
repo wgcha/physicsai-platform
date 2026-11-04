@@ -8,6 +8,7 @@ from pydantic import Field
 
 from ._model import _M
 from .schema_capture import CaptureCfg
+from .schema_data_health import DataHealthCfg
 from .schema_equiv import EquivCheckCfg
 from .schema_fem_verify import FemVerifyCfg
 from .schema_geometry import AsmMatchCfg, Contour3dCfg, DoePreviewCfg, GeometryCfg, ShellCfg
@@ -139,6 +140,7 @@ class ResourcesCfg(_M):
     extract_minmax_tcl: str = ""
     contour_capture_tcl: str = ""  # phase3 §15 S10: 비면 저장소 resources/hyperview/contour_capture.tcl
     contour_extract_tcl: str = ""  # geometry-view.md §13.3: 비면 저장소 resources/hyperview/contour_extract.tcl
+    h3d_frame_probe_tcl: str = ""  # data-health.md DH-18: 비면 저장소 resources/hyperview/h3d_frame_probe.tcl
     launchers: dict[str, LauncherCfg] = Field(default_factory=_default_launchers)
     # GPU 조회 실행 파일 자동 탐색 후보(phase3 D3-45): worker.gpu_query 첫 인자가 없거나 못 찾으면 순서대로. 이름만 = PATH, %VAR% 확장
     gpu_query_candidates: list[str] = Field(default_factory=lambda: list(GPU_QUERY_CANDIDATES))
@@ -178,6 +180,7 @@ class Settings(_M):
     resources: ResourcesCfg = Field(default_factory=ResourcesCfg)
     worker: WorkerCfg = Field(default_factory=WorkerCfg)
     dataset: DatasetCfg = Field(default_factory=DatasetCfg)
+    data_health: DataHealthCfg = Field(default_factory=DataHealthCfg)  # ③-1 데이터 점검(data-health.md §10)
     package: PackageCfg = Field(default_factory=PackageCfg)
     training_log: TrainingLogCfg = Field(default_factory=TrainingLogCfg)
     score: ScoreCfg = Field(default_factory=ScoreCfg)

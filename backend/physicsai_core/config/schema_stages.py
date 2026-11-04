@@ -22,6 +22,7 @@ class DatasetCfg(_M):
     split_group: str = "file"
     min_h3d_files: int = 2
     min_psdata_bytes: int = 1048576
+    max_exclude: int = 5000  # data-health.md §7: DATASET_CREATE.exclude_files 최대 개수
     options_default: DatasetOptionsCfg = Field(default_factory=DatasetOptionsCfg)
 
 

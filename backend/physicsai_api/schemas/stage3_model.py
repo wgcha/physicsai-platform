@@ -41,6 +41,8 @@ class Dataset(Resp):
     engine: Literal["altair", "native"] | None = None  # geometry-engine.md §7.7: 학습데이터 형상 엔진(null = 모름)
     engine_version: str | None = None
     source_doe: SourceDoe | None = None  # input-kind.md §9(P3): 입력 폴더가 ① DOE 결과면 출처, 외부 폴더면 null
+    excluded_count: int = 0  # data-health.md §8: 데이터 점검 제외 run 수(목록 행 "제외 n")
+    health_job_id: str | None = None  # 근거 DATA_HEALTH 작업(기록용)
     created_by_name: str
     created_at: datetime
 
