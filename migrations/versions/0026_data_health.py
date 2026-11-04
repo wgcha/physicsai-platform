@@ -4,7 +4,7 @@
   (이 저장소의 id는 문자열 36자 — 계약의 UUID 표기는 jobs.id 열 형식과 같은 String(36))
 - artifacts.kind CHECK에 DATA_HEALTH_REPORT·DATA_HEALTH_CSV 추가(계약 §5 DH_REPORT가 등록하는 산출물)
 - 새 결과 테이블 없음(run별 상세는 파일 03_dataset/_health/<job_id>/). ux_jobs_study_type_active는 그대로(Study당 활성 1개 = DATA_HEALTH_ACTIVE)
-- 다운그레이드: 두 열 삭제 + CHECK 되돌림(DATA_HEALTH 산출물 행은 파생 메타데이터라 먼저 지운다 — 파일은 그대로)
+- 다운그레이드: DATA_HEALTH 산출물 행이나 datasets.health_job_id·excluded_count 값이 있으면 실패(데이터 보존, 0014와 같은 방식), 없을 때만 열·CHECK를 되돌린다
 
 Revision ID: 0026_data_health
 Revises: 0025_doe_preview
@@ -37,7 +37,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(f"DELETE FROM artifacts WHERE kind IN ({NEW_KINDS})")
+    conn = op.get_bind()
+    n_art = conn.execute(sa.text(f"SELECT count(*) FROM artifacts WHERE kind IN ({NEW_KINDS})")).scalar()
+    n_ds = conn.execute(sa.text("SELECT count(*) FROM datasets WHERE health_job_id IS NOT NULL OR excluded_count <> 0")).scalar()
+    if n_art or n_ds:
+        raise RuntimeError(f"데이터 점검 산출물 행 {n_art}개·점검 기록이 있는 데이터셋 {n_ds}개가 있어 0026을 되돌릴 수 없습니다(데이터 보호)")
     op.drop_constraint("ck_artifacts_kind", "artifacts", type_="check")
     op.create_check_constraint("ck_artifacts_kind", "artifacts", f"kind IN ({OLD_KINDS})")
     op.drop_column("datasets", "health_job_id")
