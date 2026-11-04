@@ -163,3 +163,48 @@
   flex: 1;
   min-width: 288px;
 }
+
+/* ③-1 데이터 점검 카드(data-health.md §9): 표는 최대 높이 안에서만 스크롤(2560×1440 한 화면) */
+.dh-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-1) var(--space-4);
+}
+.dh-filter {
+  margin-left: auto;
+}
+.dh-scroll {
+  max-height: 416px;
+  overflow: auto;
+}
+.dh-required td {
+  background: var(--color-danger-surface);
+}
+.dh-rec td {
+  background: var(--color-warning-surface);
+}
+.dh-detail td {
+  background: var(--color-app-bg);
+}
+.dh-exp {
+  padding: 0 var(--space-1);
+}
+.dh-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.dh-count {
+  margin-left: auto;
+}
+.dh-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+.dh-fail td {
+  color: var(--color-danger);
+}

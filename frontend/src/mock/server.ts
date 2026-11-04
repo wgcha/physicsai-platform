@@ -16,6 +16,7 @@ import { fsRoutes } from "./fs";
 import { trainRoutes } from "./stage1";
 import { curationRoutes } from "./stage2";
 import { datasetModelRoutes } from "./stage3";
+import { dataHealthRoutes } from "./dataHealth";
 import { paramSetRoutes, predictResult } from "./stage4";
 import { preparedRoutes } from "./stage4Prepared";
 import { optimizeRoutes } from "./stage5";
@@ -84,6 +85,7 @@ const ROUTES: Route[] = [
   geometryRoutes, // geometry-engine.md §7.6 native 세트(discover·등록 202·준비·피처·geom_options) + 3S·4B·① train/features(openapi 모양)
   studyRoutes, // §10.3 Study(③·④ 하위 경로 포함)
   datasetModelRoutes, // §10.4 ③
+  dataHealthRoutes, // data-health.md §8 GET /jobs/{id}/data-health
   paramSetRoutes, // §10.4 ④
   scxRoutes, // phase3 §16 S11 SCX hpc-jobs·resolve
   jobRoutes, // §10.5

@@ -7,6 +7,7 @@ import type {
   BatchPreviewRequest,
   BatchRetryFailed,
   CaptureRequest,
+  DataHealthReport,
   ContourDisplay,
   JobMedia,
   ParamSetResponsesPut,
@@ -130,6 +131,8 @@ export const api = {
   datasets: (studyId: string) => request<Dataset[]>("GET", `/studies/${studyId}/datasets`),
   /** phase3.md §4.1: 모델 비교 메타(데이터셋별 1회) */
   dataset: (id: string) => request<Dataset>("GET", `/datasets/${id}`),
+  /** data-health.md §8: DATA_HEALTH 작업의 report.json(미완료 409 REPORT_NOT_READY) */
+  dataHealth: (jobId: string) => request<DataHealthReport>("GET", `/jobs/${jobId}/data-health`),
   models: (studyId: string, status?: string) =>
     request<Model[]>("GET", `/studies/${studyId}/models`, { query: { status } }),
   model: (id: string) => request<Model>("GET", `/models/${id}`),

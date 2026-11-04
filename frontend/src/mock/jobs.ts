@@ -1,6 +1,7 @@
 // §10.5 작업 목: 요약·상세 변환, 작업 생성(사전 검사·데이터셋 행), 로그, 작업·산출물 라우트.
 import type { Dataset, Job, JobSummary, JobType, Study } from "../api/types";
 import { SKIPPED_BY_DEFAULT, STEP_CHAINS, baseJob } from "./data";
+import { normcase, serverNormpath } from "./dataHealth";
 import { err, needAdmin, type MockResp, type Route } from "./route";
 import type { MockServer } from "./server";
 import { refreshPositions } from "./engine";
@@ -75,7 +76,16 @@ export function createJobFor(srv: MockServer, s: Study, type: JobType, params: R
   }
   const pre = srv.p2.precheck(s, type, params);
   if (pre) return pre;
+  // 서버처럼 폴더 경로는 normpath로 저장(data-health.md §7 비교 기준)
+  if ((type === "DATASET_CREATE" || type === "DATA_HEALTH") && typeof params.input_path === "string") params = { ...params, input_path: serverNormpath(params.input_path) };
   if (type === "DATASET_CREATE" && params.curation_id && params.input_path) return err(422, "INVALID_PARAMS", "curation_id와 input_path는 함께 쓸 수 없습니다.");
+  if (type === "DATASET_CREATE" && params.health_job_id) {
+    // data-health.md §7: 점검 대상 입력과 같아야 한다(422 DH_INPUT_MISMATCH)
+    const hj = srv.jobs.find((x) => x.id === params.health_job_id && x.study_id === s.id && x.job_type === "DATA_HEALTH" && x.state === "SUCCEEDED");
+    const hp = (hj?.params ?? {}) as Record<string, unknown>;
+    const same = hj && ((params.curation_id && hp.curation_id === params.curation_id) || (params.input_path && normcase(String(hp.input_path)) === normcase(serverNormpath(String(params.input_path)))));
+    if (!same) return err(422, "DH_INPUT_MISMATCH", "데이터 점검 대상과 데이터셋 입력 폴더가 다릅니다");
+  }
   if (type === "PACKAGE_EXPORT" && !srv.datasets.some((d) => d.id === params.dataset_id && d.status === "READY"))
     return err(409, "PREREQUISITE_MISSING", "준비된 데이터셋이 필요합니다.", { missing: ["dataset"] });
   const me = srv.me!;

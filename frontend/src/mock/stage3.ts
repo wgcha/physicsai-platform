@@ -2,6 +2,7 @@
 import type { Dataset, Job, Model } from "../api/types";
 import { COMMANDS_TXT, curveStats, lossCurve } from "./data";
 import { err, type Route } from "./route";
+import { finishDataHealth } from "./dataHealth";
 import type { MockServer } from "./server";
 
 export function datasetOut(srv: MockServer, d: Dataset): Dataset {
@@ -28,9 +29,15 @@ export function finishStage3(srv: MockServer, j: Job) {
     case "DATASET_CREATE": {
       const ds = srv.datasets.find((d) => d.job_id === j.id);
       if (ds) Object.assign(ds, { status: "READY", h3d_count: 180, train_count: 162, eval_count: 18 });
+      if (ds) ds.excluded_count = Array.isArray(p.exclude_files) ? p.exclude_files.length : 0;
+      if (ds) ds.health_job_id = (p.health_job_id as string) ?? null;
       const cur = srv.p2.curations.find((c) => c.id === p.curation_id);
       if (cur && ds) cur.used_by_dataset_ids.push(ds.id);
       j.result = { dataset_id: ds?.id, h3d_count: 180, train_count: 162, eval_count: 18 };
+      break;
+    }
+    case "DATA_HEALTH": {
+      finishDataHealth(srv, j);
       break;
     }
     case "PACKAGE_EXPORT": {

@@ -1,0 +1,171 @@
+// data-health.md §9 화면 모델: 선택(제외 필수 기본 선택·추천은 기본 선택 없음)·필터·정렬·제출 params. 순수 함수만.
+import type { DataHealthReport, DhConsistency, DhReason, DhRun, DhSound, DhValue, Job } from "../../../api";
+
+export const CONFIRM_KEEP = "프레임 수 또는 종료 시각이 다른 run입니다. 포함하면 데이터셋 일관성이 깨집니다. 그래도 포함할까요?";
+
+/**
+ * 경로 정규화(서버 os.path.normcase(normpath)와 같은 결과를 목표): 앞뒤 공백 제거, `\`→`/`, 연속·끝 구분자 제거,
+ * `.` 세그먼트 제거, `..` 접기, Windows 드라이브 경로는 대소문자 무시(소문자). 달라도 서버 DH_INPUT_MISMATCH 422가 최종 판정.
+ */
+export function normPath(raw: string): string {
+  const p = raw.trim().replace(/\\/g, "/");
+  const drive = /^[A-Za-z]:/.test(p);
+  const unc = p.startsWith("//");
+  const abs = p.startsWith("/") && !unc;
+  const head = drive ? p.slice(0, 2) : "";
+  const parts: string[] = [];
+  for (const seg of p.slice(head.length).split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") {
+      if (parts.length && parts[parts.length - 1] !== "..") parts.pop();
+      else if (!abs && !drive && !unc) parts.push(seg);
+      continue;
+    }
+    parts.push(seg);
+  }
+  const rooted = drive ? p.slice(2).startsWith("/") : abs;
+  const out = `${unc ? "//" : ""}${head}${rooted ? "/" : ""}${parts.join("/")}`;
+  return drive || unc ? out.toLowerCase() : out;
+}
+
+/** 입력 식별 키: ② 큐레이션 기본 입력이면 curation:<id>, 아니면 정규화한 폴더 경로 */
+export const inputKey = (curationId: string | null, path: string): string => (curationId ? `curation:${curationId}` : `path:${normPath(path)}`);
+
+/** 서버 input_key("curation:<id>" 또는 서버 normpath 폴더)를 화면 키 형식으로 */
+const fromServerKey = (k: string): string => (k.startsWith("curation:") ? k : `path:${normPath(k)}`);
+
+/** 점검 작업 params 기준 키(예전 응답용) */
+export function jobInputKey(job: Pick<Job, "params"> | null | undefined): string | null {
+  const p = (job?.params ?? {}) as { curation_id?: string; input_path?: string };
+  if (p.curation_id) return `curation:${p.curation_id}`;
+  if (p.input_path) return `path:${normPath(String(p.input_path))}`;
+  return null;
+}
+
+/** 보고서가 가리키는 입력 키: summary.input_key 우선, 없으면(예전 응답) job params */
+export function reportInputKey(report: DataHealthReport, job: Pick<Job, "params"> | null | undefined): string | null {
+  const k = report.summary.input_key;
+  return k ? fromServerKey(k) : jobInputKey(job);
+}
+
+/** 제외 필수 run이 기본 선택. 통계 추천은 선택하지 않는다(DH-1) */
+export const initialSelection = (runs: DhRun[]): Set<string> => new Set(runs.filter((r) => r.required).map((r) => r.file_rel));
+
+/** [추천 항목 선택]: 지금 선택에 추천 run을 더한다 */
+export const selectRecommended = (sel: Set<string>, runs: DhRun[]): Set<string> => new Set([...sel, ...runs.filter((r) => r.recommended).map((r) => r.file_rel)]);
+
+/** [선택 해제]: 제외 필수는 남긴다 */
+export const clearSelection = (_sel: Set<string>, runs: DhRun[]): Set<string> => initialSelection(runs);
+
+export function toggle(sel: Set<string>, file: string, on: boolean): Set<string> {
+  const n = new Set(sel);
+  if (on) n.add(file);
+  else n.delete(file);
+  return n;
+}
+
+/** 표 정렬: 제외 필수 맨 위, 이어서 점수 내림차순(동점은 경로순) */
+export const sortRuns = (runs: DhRun[]): DhRun[] =>
+  [...runs].sort((a, b) => Number(b.required) - Number(a.required) || b.score - a.score || a.file_rel.localeCompare(b.file_rel));
+
+/** 기본 필터 [추천만]: 추천(제외 필수 포함)과 "3σ만"이 아닌 선택된 행. 선택된 행은 필터와 무관하게 보인다 */
+export const visibleRuns = (runs: DhRun[], onlyRecommended: boolean, sel: Set<string>): DhRun[] =>
+  sortRuns(onlyRecommended ? runs.filter((r) => r.recommended || sel.has(r.file_rel)) : runs);
+
+/** 제외 필수인데 선택이 풀린 행(경고 아이콘·kept_required) */
+export const keptRequired = (runs: DhRun[], sel: Set<string>): string[] => runs.filter((r) => r.required && !sel.has(r.file_rel)).map((r) => r.file_rel);
+
+/** 데이터셋 생성 params 추가분(§7·§9). 점검이 현재 입력의 것이 아니면 호출하지 않는다 */
+export function submitExtras(report: DataHealthReport, sel: Set<string>, healthJobId: string): Record<string, unknown> {
+  const known = new Set(report.runs.map((r) => r.file_rel));
+  const out: Record<string, unknown> = { health_job_id: healthJobId, exclude_files: [...sel].filter((f) => known.has(f)).sort() };
+  const kept = keptRequired(report.runs, sel);
+  if (kept.length) out.kept_required = kept.sort();
+  return out;
+}
+
+/** 사유 칸: 첫 2개 + "외 n"(전체는 툴팁) */
+export function reasonCell(reasons: DhReason[]): { text: string; tip: string } {
+  const head = reasons.slice(0, 2).map((r) => r.message).join(" · ");
+  const rest = reasons.length - 2;
+  return { text: rest > 0 ? `${head} 외 ${rest}` : head, tip: reasons.map((r) => `${r.code}: ${r.message}`).join("\n") };
+}
+
+/** 최대 견고 z(지표): |zr| 최대 */
+export function maxRobust(run: DhRun): { id: string; zr: number } | null {
+  let best: { id: string; zr: number } | null = null;
+  for (const [id, v] of Object.entries(run.values)) {
+    if (typeof v.zr !== "number") continue;
+    if (!best || Math.abs(v.zr) > Math.abs(best.zr)) best = { id, zr: v.zr };
+  }
+  return best;
+}
+
+/** 3σ 태그 대상(일반 |z| > sigma_z) — 추천이 아니면 "3σ만" */
+export const hasSigma = (run: DhRun, sigma: number): boolean => Object.values(run.values).some((v) => typeof v.z === "number" && Math.abs(v.z) > sigma);
+
+export const sigmaOnly = (run: DhRun): boolean => run.sigma_only && !run.recommended;
+
+/** 프레임 확인 불가: frames 일관성 칸이 NA이고 값이 없음(원천 없음·조회 실패) */
+export const framesUnknown = (run: DhRun): boolean => run.consistency.frames?.status === "NA" && run.consistency.frames.value == null;
+
+const num = (x: number): string => {
+  const a = Math.abs(x);
+  return a !== 0 && (a >= 1e5 || a < 1e-3) ? x.toExponential(2) : String(Number(x.toFixed(3)));
+};
+
+export function fmtVal(v: DhValue | undefined): string {
+  return v?.v == null || !Number.isFinite(v.v) ? "–" : num(v.v);
+}
+
+/** ① 건전성 칸: "값 / 기준"(기준 없으면 값만), NA는 "–" */
+export function fmtSound(s: DhSound | undefined): string {
+  if (!s || s.value == null) return "–";
+  const v = typeof s.value === "number" ? num(s.value) : String(s.value);
+  return s.limit != null ? `${v} / ${num(s.limit)}` : v;
+}
+
+/** 일관성 칸: "값 / 기준"(예 21/22). 확인 불가는 "확인 불가", 값만 있으면 값 */
+export function fmtCons(c: DhConsistency | undefined): string {
+  if (!c || c.value == null) return c?.status === "NA" ? "확인 불가" : "–";
+  return c.ref != null ? `${num(c.value)} / ${num(c.ref)}` : num(c.value);
+}
+
+export const fmtZ = (z: number | null | undefined): string => (typeof z === "number" ? z.toFixed(1) : "–");
+
+const TERM_LABEL: Record<string, string> = { NORMAL: "정상", ERROR: "오류 종료", UNKNOWN: "중단·잘림" };
+export const termText = (s: DhSound | undefined): string => (s?.value == null ? "–" : (TERM_LABEL[String(s.value)] ?? String(s.value)));
+
+/** 머리 줄 기준 문구: "프레임 22 · 종료 0.012 s · 출처: 설정/최빈" */
+export function refText(s: DataHealthReport["summary"]): string | null {
+  if (s.frames_ref == null && s.t_end_ref == null) return null;
+  const fs = s.frames_ref_source ?? "–";
+  const ts = s.t_end_ref_source ?? "–";
+  const pv = s.preview_frames != null ? ` · ② 큐레이션 프레임 ${s.preview_frames}` : "";
+  return `기준 프레임 ${s.frames_ref ?? "DOE별"}(${fs}) · 종료 ${s.t_end_ref ?? "DOE별"} s(${ts})${pv}`;
+}
+
+/** NA가 많은 지표(run 수의 절반 이상) 이름들 */
+export function naHeavy(report: DataHealthReport): string[] {
+  const n = report.summary.n_runs;
+  const label = new Map(report.metrics.map((m) => [m.id, m.label]));
+  return Object.entries(report.summary.n_na_by_metric ?? {})
+    .filter(([, c]) => n > 0 && c * 2 >= n)
+    .map(([id]) => label.get(id) ?? id);
+}
+
+/** 상태 한 줄: "최근 점검 11/3 14:20 · 추천 3 / 120" */
+export const statusText = (when: string, s: DataHealthReport["summary"] | null): string =>
+  `최근 점검 ${when}${s ? ` · 추천 ${s.n_recommended} / ${s.n_runs}` : ""}`;
+
+/** 임계값 읽기 전용 문구와 툴팁 */
+export function thresholdText(t: Record<string, number | null>): { text: string; tip: string } {
+  const g = (k: string) => (t[k] == null ? "–" : String(t[k]));
+  return { text: `견고 z ${g("robust_z")} / kNN ${g("knn_z")} / 3σ ${g("sigma_z")}`, tip: Object.entries(t).map(([k, v]) => `${k}: ${v ?? "–"}`).join("\n") };
+}
+
+export const WARN_TIP: Record<string, string> = {
+  DH_RESP_NOT_EXTRACTED: "①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다",
+  DH_NO_DOE_LINK: "DOE 연결이 없는 입력 — 건전성만 점검했습니다",
+  DH_PARAMS_MIXED: "DOE마다 파라미터 이름이 달라 이웃 대비 튐(kNN)을 생략했습니다",
+};

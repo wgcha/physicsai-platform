@@ -144,6 +144,9 @@ export type Dataset = Override<
     status: "BUILDING" | "READY" | "FAILED";
     split_group: "file" | "parent_dir";
     options: { extract_faces: boolean; extract_mdi: boolean; extract_time_history_vectors: boolean };
+    /** data-health.md §8: 데이터 점검 제외 수(DS_SCAN 제외 반영), 점검 작업 id — openapi 반영 전에도 같은 모양 */
+    excluded_count?: number;
+    health_job_id?: string | null;
   }
 >;
 

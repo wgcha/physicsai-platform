@@ -32,6 +32,7 @@ export const STAGE_LABEL: Record<JobType, string> = {
   ASM_MATCH: "①",
   GEOM_PREVIEW: "④",
   DOE_PREVIEW: "①",
+  DATA_HEALTH: "③-1",
 };
 
 /** 기능 → 비활성일 때 missing 키(phase2.md §12.1) */
@@ -83,6 +84,7 @@ export const ALL_FEATURES = Object.keys(FEATURE_MISSING) as FeatureKey[];
 
 export const FEATURE_OF: Partial<Record<JobType, FeatureKey>> = {
   DATASET_CREATE: "dataset_create",
+  DATA_HEALTH: "dataset_create",
   EVALUATE: "evaluate",
   PREDICT: "predict",
   TD_EXTRACT_PARAMS: "train_extract",

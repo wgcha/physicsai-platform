@@ -168,6 +168,8 @@ export const STEP_CHAINS: Record<JobType, { key: string; kind: JobStep["kind"] }
   GEOM_PREVIEW: [{ key: "GV_PREP", kind: "INTERNAL" }, { key: "GV_RUN", kind: "LOCAL" }, { key: "GV_REGISTER", kind: "INTERNAL" }],
   // doe-preview.md §6.1 DOE 형상 그리드(CPU 대기열)
   DOE_PREVIEW: [{ key: "DP_PREP", kind: "INTERNAL" }, { key: "DP_MATRIX", kind: "INTERNAL" }, { key: "DP_RENDER", kind: "LOCAL" }, { key: "DP_REGISTER", kind: "INTERNAL" }],
+  // data-health.md §5 ③-1 데이터 점검(CPU 대기열)
+  DATA_HEALTH: [{ key: "DH_PREP", kind: "INTERNAL" }, { key: "DH_SCAN", kind: "INTERNAL" }, { key: "DH_FRAMES", kind: "LOCAL" }, { key: "DH_SCORE", kind: "INTERNAL" }, { key: "DH_REPORT", kind: "INTERNAL" }],
   // equiv-check.md §4.5 ⑤ 해석 등가성 판정
   EQ_CHECK: [
     { key: "EQ_PREP", kind: "INTERNAL" },
