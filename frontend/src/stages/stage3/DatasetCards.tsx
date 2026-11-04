@@ -4,18 +4,19 @@ import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
 import { Advanced, Card, CodeLine, CopyButton, Field, RunAction } from "../../components/ui";
 import { PathInput } from "../../components/PathInput";
+import { ConfirmDialog } from "../../components/ConfirmDialog";
 import { FeatureGate, useFeature } from "../../components/FeatureGate";
 import { EngineBadge } from "../../components/EngineSelect";
 import { fmtTime } from "../../lib/format";
 import { DataHealthCard } from "./health/DataHealthCard";
-import { initialSelection, inputKey, jobInputKey, statusText, submitExtras } from "./health/healthModel";
+import { initialSelection, inputKey, reportInputKey, statusText, submitExtras } from "./health/healthModel";
 
 const DS_STATUS: Record<Dataset["status"], string> = { BUILDING: "생성 중", READY: "준비됨", FAILED: "실패" };
 
 export function DatasetCreateCard() {
   const { study, datasets, reloadDatasets } = useStudy();
   const canExec = useCanExecute();
-  const { job, run, error } = useJobRunner("DATASET_CREATE", () => void reloadDatasets());
+  const { job, run, error, errorDetail } = useJobRunner("DATASET_CREATE", () => void reloadDatasets());
   const [path, setPath] = useState("");
   const [inspected, setInspected] = useState<boolean>(false);
   const [seed, setSeed] = useState("");
@@ -46,32 +47,39 @@ export function DatasetCreateCard() {
   const dsFeature = useFeature("dataset_create"); // 안내 문구는 ③-1 실행 영역 한 곳에만
   const key = inputKey(fromCuration ? curation!.id : null, path);
   const hjob = health.job;
-  const sameInput = !!hjob && jobInputKey(hjob) === key;
   const [report, setReport] = useState<DataHealthReport | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const reportJobId = sameInput && hjob?.state === "SUCCEEDED" ? hjob.id : null;
+  const [askSubmit, setAskSubmit] = useState(false);
+  // 최근 성공 점검의 보고서는 입력과 무관하게 읽고, 지금 입력과 같은지는 보고서의 input_key(없으면 job params)로 판정한다
+  const doneId = hjob?.state === "SUCCEEDED" ? hjob.id : null;
   useEffect(() => {
     let alive = true;
     setReport(null);
-    if (!reportJobId) return;
+    if (!doneId) return;
     api
-      .dataHealth(reportJobId)
+      .dataHealth(doneId)
       .then((r) => alive && setReport(r))
       .catch(() => undefined);
     return () => {
       alive = false;
     };
-  }, [reportJobId]);
+  }, [doneId]);
+  const sameInput = !!hjob && (report ? reportInputKey(report, hjob) === key : reportInputKey({ summary: {} } as DataHealthReport, hjob) === key);
+  const active = report && doneId && sameInput ? report : null;
+  const reportJobId = active ? doneId : null;
   useEffect(() => {
-    setSelected(report ? initialSelection(report.runs) : new Set());
-  }, [report, key]);
+    setSelected(active ? initialSelection(active.runs) : new Set());
+  }, [active, key]);
+  // 제외 필수가 있었던 최근 점검이 지금 입력에 적용되지 않는 상황
+  const staleRequired = !!report && !active && report.summary.n_required > 0;
 
   const submit = () => {
     const params: Record<string, unknown> = { ...inputParams(), split_group: splitGroup, options: opts };
     if (seed.trim()) params.seed = Number(seed);
-    if (report && reportJobId) Object.assign(params, submitExtras(report, selected, reportJobId));
+    if (active && reportJobId) Object.assign(params, submitExtras(active, selected, reportJobId));
     void run(params).then(() => void reloadDatasets());
   };
+  const onSubmit = () => (staleRequired ? setAskSubmit(true) : submit());
 
   return (
     <>
@@ -82,11 +90,23 @@ export function DatasetCreateCard() {
               <RunAction
                 canExecute={canExec}
                 label="데이터셋 생성"
-                onRun={submit}
+                onRun={onSubmit}
                 job={job}
                 disabled={!enabled || !inputReady}
                 disabledReason={enabled ? "경로를 입력하고 확인하세요" : undefined}
                 error={error}
+                extra={
+                  <>
+                    {staleRequired && (
+                      <span className="warn-text small" data-testid="dh-stale-warn">
+                        최근 점검(제외 필수 {report!.summary.n_required}개)은 다른 입력이라 적용되지 않습니다 — 다시 점검하세요
+                      </span>
+                    )}
+                    {errorDetail?.code === "DH_INPUT_MISMATCH" && (
+                      <span className="warn-text small" data-testid="dh-mismatch">데이터 점검을 다시 실행한 뒤 생성하세요</span>
+                    )}
+                  </>
+                }
               />
             )}
           </FeatureGate>
@@ -221,7 +241,20 @@ export function DatasetCreateCard() {
         </div>
       )}
     </Card>
-    {report && reportJobId && <DataHealthCard report={report} jobId={reportJobId} selected={selected} onSelect={setSelected} />}
+    {askSubmit && (
+      <ConfirmDialog
+        title="점검 결과 미적용"
+        body={"최근 데이터 점검은 다른 입력의 결과라 제외 필수 run이 빠지지 않습니다.\n그래도 데이터셋을 생성할까요?"}
+        confirmLabel="생성"
+        danger
+        onConfirm={() => {
+          setAskSubmit(false);
+          submit();
+        }}
+        onCancel={() => setAskSubmit(false)}
+      />
+    )}
+    {active && reportJobId && <DataHealthCard report={active} jobId={reportJobId} selected={selected} onSelect={setSelected} />}
     </>
   );
 }

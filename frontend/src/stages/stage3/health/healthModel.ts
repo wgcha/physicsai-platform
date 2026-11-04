@@ -3,15 +3,49 @@ import type { DataHealthReport, DhConsistency, DhReason, DhRun, DhSound, DhValue
 
 export const CONFIRM_KEEP = "프레임 수 또는 종료 시각이 다른 run입니다. 포함하면 데이터셋 일관성이 깨집니다. 그래도 포함할까요?";
 
-/** 입력 식별 키: ② 큐레이션 기본 입력이면 curation_id, 아니면 정리한 폴더 경로 */
-export const inputKey = (curationId: string | null, path: string): string => (curationId ? `cur:${curationId}` : `path:${path.trim()}`);
+/**
+ * 경로 정규화(서버 os.path.normcase(normpath)와 같은 결과를 목표): 앞뒤 공백 제거, `\`→`/`, 연속·끝 구분자 제거,
+ * `.` 세그먼트 제거, `..` 접기, Windows 드라이브 경로는 대소문자 무시(소문자). 달라도 서버 DH_INPUT_MISMATCH 422가 최종 판정.
+ */
+export function normPath(raw: string): string {
+  const p = raw.trim().replace(/\\/g, "/");
+  const drive = /^[A-Za-z]:/.test(p);
+  const unc = p.startsWith("//");
+  const abs = p.startsWith("/") && !unc;
+  const head = drive ? p.slice(0, 2) : "";
+  const parts: string[] = [];
+  for (const seg of p.slice(head.length).split("/")) {
+    if (!seg || seg === ".") continue;
+    if (seg === "..") {
+      if (parts.length && parts[parts.length - 1] !== "..") parts.pop();
+      else if (!abs && !drive && !unc) parts.push(seg);
+      continue;
+    }
+    parts.push(seg);
+  }
+  const rooted = drive ? p.slice(2).startsWith("/") : abs;
+  const out = `${unc ? "//" : ""}${head}${rooted ? "/" : ""}${parts.join("/")}`;
+  return drive || unc ? out.toLowerCase() : out;
+}
 
-/** 점검 작업이 지금 입력에 대한 것인지(params 비교). 다르면 "다른 입력" */
+/** 입력 식별 키: ② 큐레이션 기본 입력이면 curation:<id>, 아니면 정규화한 폴더 경로 */
+export const inputKey = (curationId: string | null, path: string): string => (curationId ? `curation:${curationId}` : `path:${normPath(path)}`);
+
+/** 서버 input_key("curation:<id>" 또는 서버 normpath 폴더)를 화면 키 형식으로 */
+const fromServerKey = (k: string): string => (k.startsWith("curation:") ? k : `path:${normPath(k)}`);
+
+/** 점검 작업 params 기준 키(예전 응답용) */
 export function jobInputKey(job: Pick<Job, "params"> | null | undefined): string | null {
   const p = (job?.params ?? {}) as { curation_id?: string; input_path?: string };
-  if (p.curation_id) return `cur:${p.curation_id}`;
-  if (p.input_path) return `path:${String(p.input_path).trim()}`;
+  if (p.curation_id) return `curation:${p.curation_id}`;
+  if (p.input_path) return `path:${normPath(String(p.input_path))}`;
   return null;
+}
+
+/** 보고서가 가리키는 입력 키: summary.input_key 우선, 없으면(예전 응답) job params */
+export function reportInputKey(report: DataHealthReport, job: Pick<Job, "params"> | null | undefined): string | null {
+  const k = report.summary.input_key;
+  return k ? fromServerKey(k) : jobInputKey(job);
 }
 
 /** 제외 필수 run이 기본 선택. 통계 추천은 선택하지 않는다(DH-1) */

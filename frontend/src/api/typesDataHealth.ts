@@ -2,6 +2,7 @@
 export interface DhWarning {
   code: string;
   message: string;
+  count?: number | null;
 }
 
 /** 사유(§3.5): 코드는 툴팁, message는 한국어 */
@@ -92,6 +93,8 @@ export interface DhSummary {
   refs_by_doe?: Record<string, Record<string, number | null>>;
   preview_frames?: number | null;
   metrics_used?: string[];
+  /** 점검 입력 식별: 폴더는 서버 normpath, 큐레이션은 `curation:<id>` */
+  input_key?: string | null;
   n_na_by_metric?: Record<string, number>;
   thresholds: Record<string, number | null>;
   limited?: boolean;

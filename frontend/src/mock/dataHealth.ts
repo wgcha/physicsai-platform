@@ -22,7 +22,25 @@ function run(i: number, o: Partial<DhRun> & { cons?: Partial<DhRun["consistency"
   };
 }
 
-export function dataHealthReport(): DataHealthReport {
+/** 서버 os.path.normpath 흉내(화면 정규화와 독립 구현): Windows 드라이브 경로는 `\` 구분·대소문자 유지, 끝 구분자·`.` 제거 */
+export function serverNormpath(raw: string): string {
+  const p = raw.trim().replace(/\\/g, "/");
+  const drive = /^[A-Za-z]:/.test(p) ? p.slice(0, 2) : "";
+  const body = p.slice(drive.length);
+  const out: string[] = [];
+  for (const s of body.split("/")) {
+    if (!s || s === ".") continue;
+    if (s === ".." && out.length) out.pop();
+    else out.push(s);
+  }
+  const joined = (body.startsWith("/") ? "/" : "") + out.join("/");
+  return drive ? (drive + joined).replace(/\//g, "\\") : joined;
+}
+
+/** 서버 os.path.normcase: Windows 드라이브 경로만 소문자 */
+export const normcase = (p: string): string => (/^[A-Za-z]:/.test(p) ? p.toLowerCase() : p);
+
+export function dataHealthReport(inputKey: string | null = null): DataHealthReport {
   const runs: DhRun[] = [
     run(1, { required: true, recommended: true, score: 100, cons: { frames: cons(18, 22, true) }, reasons: [{ code: "CONSISTENCY_FRAMES", message: "프레임 수 18 — 기준 22와 다름" }] }),
     run(2, { required: true, recommended: true, score: 100, cons: { t_last: cons(0.006, 0.012, true) }, reasons: [{ code: "CONSISTENCY_TEND", message: "마지막 시각 0.006 s — 기준 0.012 s 미달" }] }),
@@ -42,7 +60,7 @@ export function dataHealthReport(): DataHealthReport {
   ];
   return {
     summary: {
-      n_runs: 12, n_required: 2, n_frames_unknown: 2, n_recommended: 5, n_sigma_only: 1, n_sound_fail: 1, frames_ref: 22, t_end_ref: 0.012, ref_source: "mode", frames_ref_source: "최빈", t_end_ref_source: "최빈", refs_by_doe: {}, preview_frames: 22, metrics_used: ["volume", "mass_total"],
+      n_runs: 12, n_required: 2, n_frames_unknown: 2, n_recommended: 5, n_sigma_only: 1, n_sound_fail: 1, frames_ref: 22, t_end_ref: 0.012, ref_source: "mode", frames_ref_source: "최빈", t_end_ref_source: "최빈", refs_by_doe: {}, preview_frames: 22, metrics_used: ["volume", "mass_total"], input_key: inputKey,
       n_na_by_metric: { "resp:MAX_ACC": 12 }, thresholds: { robust_z: 3.5, knn_z: 3.5, sigma_z: 3 }, limited: false,
       warnings: [{ code: "DH_RESP_NOT_EXTRACTED", message: "①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다" }],
     },
@@ -57,7 +75,8 @@ export function dataHealthReport(): DataHealthReport {
 }
 
 export function finishDataHealth(srv: MockServer, j: Job) {
-  const rep = dataHealthReport();
+  const p = j.params as { input_path?: string; curation_id?: string };
+  const rep = dataHealthReport(p.curation_id ? `curation:${p.curation_id}` : p.input_path ?? null);
   const s = rep.summary;
   j.result = { ...(j.params as object), n_runs: s.n_runs, n_required: s.n_required, n_frames_unknown: s.n_frames_unknown, n_recommended: s.n_recommended, warnings: s.warnings };
   const dir = `03_dataset/_health/${j.id}`;

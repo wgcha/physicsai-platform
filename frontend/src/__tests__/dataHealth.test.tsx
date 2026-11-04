@@ -6,7 +6,7 @@ import { render } from "@testing-library/react";
 import { DataHealthCard } from "../stages/stage3/health/DataHealthCard";
 import { renderApp, STUDY } from "../test/render";
 import { dataHealthReport } from "../mock/dataHealth";
-import { CONFIRM_KEEP, clearSelection, initialSelection, keptRequired, reasonCell, selectRecommended, sortRuns, submitExtras, toggle, visibleRuns } from "../stages/stage3/health/healthModel";
+import { CONFIRM_KEEP, normPath, clearSelection, initialSelection, keptRequired, reasonCell, selectRecommended, sortRuns, submitExtras, toggle, visibleRuns } from "../stages/stage3/health/healthModel";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -55,6 +55,17 @@ describe("healthModel — 순수 함수", () => {
   it("사유 칸: 첫 2개 + 외 n, 코드는 툴팁", () => {
     const rs = [1, 2, 3].map((i) => ({ code: `C${i}`, message: `사유${i}` }));
     expect(reasonCell(rs)).toEqual({ text: "사유1 · 사유2 외 1", tip: "C1: 사유1\nC2: 사유2\nC3: 사유3" });
+  });
+});
+
+describe("경로 정규화 (B1)", () => {
+  it("끝·연속·혼합 구분자, . 세그먼트, 드라이브 대소문자를 같은 키로", () => {
+    const base = "e:/shared/ai_work/h3d";
+    expect(normPath("  E:\\shared\\AI_WORK\\h3d\\ ")).toBe(base);
+    expect(normPath("E:/shared//AI_WORK/./h3d/")).toBe(base);
+    expect(normPath("E:/shared/x/../AI_WORK/h3d")).toBe(base);
+    expect(normPath("/data/a//b/")).toBe("/data/a/b");
+    expect(normPath("/data/A")).not.toBe(normPath("/data/a")); // POSIX는 대소문자 구분
   });
 });
 
@@ -163,6 +174,63 @@ describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
     fireEvent.click(within(card).getByRole("button", { name: "② 큐레이션 결과 사용" }));
     const t2 = await screen.findByRole("table", { name: "데이터 점검 표" });
     expect(checked(t2).sort()).toEqual([R1, R2]);
+  });
+
+  const BASE = "E:/shared/AI_WORK/cushion_v1/00_inbox/h3d";
+  async function setPath(card: HTMLElement, v: string) {
+    fireEvent.change(within(card).getByLabelText(/h3d 폴더 경로/), { target: { value: v } });
+    fireEvent.click(within(card).getByRole("button", { name: "확인" }));
+    await within(card).findAllByText(/예상/);
+  }
+
+  it.each([[BASE + "/"], ["e:\\shared\\AI_WORK\\cushion_v1\\00_inbox\\h3d"], ["E:/shared//AI_WORK/./cushion_v1\\00_inbox/h3d\\"]])(
+    "폴더 입력 표기 차이(%s)에도 카드가 유지되고 exclude_files·kept_required가 제출된다",
+    async (variant) => {
+      const { server } = renderApp(`${STUDY}/3`, { user: "power" });
+      const card = await screen.findByRole("region", { name: "데이터셋 생성" });
+      fireEvent.click(await within(card).findByRole("button", { name: "다른 폴더 지정" }));
+      await setPath(card, BASE);
+      const btn = within(card).getByRole("button", { name: "데이터 점검" }) as HTMLButtonElement;
+      await waitFor(() => expect(btn.disabled).toBe(false));
+      fireEvent.click(btn);
+      await waitFor(() => expect(server.jobs.some((j) => j.job_type === "DATA_HEALTH")).toBe(true));
+      server.finishAll();
+      await screen.findByRole("table", { name: "데이터 점검 표" }, { timeout: 4000 });
+      await setPath(card, variant);
+      const table = await screen.findByRole("table", { name: "데이터 점검 표" });
+      expect(screen.queryByTestId("dh-stale-warn")).toBeNull();
+      fireEvent.click(within(table).getByRole("checkbox", { name: `제외 ${R2}` }));
+      fireEvent.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "포함" }));
+      const create = within(card).getByRole("button", { name: "데이터셋 생성" }) as HTMLButtonElement;
+      await waitFor(() => expect(create.disabled).toBe(false));
+      fireEvent.click(create);
+      await waitFor(() => expect(server.jobs.some((j) => j.job_type === "DATASET_CREATE" && j.state === "QUEUED")).toBe(true));
+      const j = server.jobs.find((x) => x.job_type === "DATASET_CREATE" && x.state === "QUEUED")!;
+      expect(j.params).toMatchObject({ exclude_files: [R1], kept_required: [R2] });
+    },
+  );
+
+  it("다른 폴더면 카드가 숨고 경고가 뜨며, 제출 전 확인 대화상자를 거친다", async () => {
+    const { server } = renderApp(`${STUDY}/3`, { user: "power" });
+    const card = await screen.findByRole("region", { name: "데이터셋 생성" });
+    fireEvent.click(await within(card).findByRole("button", { name: "다른 폴더 지정" }));
+    await setPath(card, BASE);
+    const btn = within(card).getByRole("button", { name: "데이터 점검" }) as HTMLButtonElement;
+    await waitFor(() => expect(btn.disabled).toBe(false));
+    fireEvent.click(btn);
+    await waitFor(() => expect(server.jobs.some((j) => j.job_type === "DATA_HEALTH")).toBe(true));
+    server.finishAll();
+    await screen.findByRole("table", { name: "데이터 점검 표" }, { timeout: 4000 });
+    await setPath(card, BASE + "_r2");
+    await waitFor(() => expect(screen.queryByRole("table", { name: "데이터 점검 표" })).toBeNull());
+    expect((await screen.findByTestId("dh-stale-warn")).textContent).toContain("제외 필수 2개");
+    const create = within(card).getByRole("button", { name: "데이터셋 생성" }) as HTMLButtonElement;
+    await waitFor(() => expect(create.disabled).toBe(false));
+    fireEvent.click(create);
+    const dlg = await screen.findByRole("dialog");
+    expect(server.jobs.some((x) => x.job_type === "DATASET_CREATE" && x.state === "QUEUED")).toBe(false);
+    fireEvent.click(within(dlg).getByRole("button", { name: "생성" }));
+    await waitFor(() => expect(server.jobs.some((x) => x.job_type === "DATASET_CREATE" && x.state === "QUEUED")).toBe(true));
   });
 
   it("표는 최대 높이 안에서만 스크롤(1440 한 화면)", async () => {
