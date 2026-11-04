@@ -22,19 +22,26 @@ function run(i: number, o: Partial<DhRun> & { cons?: Partial<DhRun["consistency"
   };
 }
 
-/** 서버 os.path.normpath 흉내(화면 정규화와 독립 구현): Windows 드라이브 경로는 `\` 구분·대소문자 유지, 끝 구분자·`.` 제거 */
+/** 서버 `folder_key` 흉내(화면 normPath와 별도 구현): Windows 형태(드라이브·UNC)는 `/` 구분·소문자, 그 밖은 posix normpath. */
 export function serverNormpath(raw: string): string {
-  const p = raw.trim().replace(/\\/g, "/");
-  const drive = /^[A-Za-z]:/.test(p) ? p.slice(0, 2) : "";
-  const body = p.slice(drive.length);
-  const out: string[] = [];
-  for (const s of body.split("/")) {
-    if (!s || s === ".") continue;
-    if (s === ".." && out.length) out.pop();
-    else out.push(s);
-  }
-  const joined = (body.startsWith("/") ? "/" : "") + out.join("/");
-  return drive ? (drive + joined).replace(/\//g, "\\") : joined;
+  const t = raw.trim();
+  const isWin = /^([A-Za-z]:|[\\/]{2})/.test(t);
+  const p = t.replace(/\\/g, "/");
+  // 루트 길이(위로 올라갈 수 없는 접두): UNC `//server/share`, 드라이브 `X:`, 그 밖 0
+  const rootLen = (/^\/\/[^/]+\/[^/]+/.exec(p)?.[0] ?? (/^[A-Za-z]:/.test(p) ? p.slice(0, 2) : "")).length;
+  const head = p.slice(0, rootLen);
+  const tail = p.slice(rootLen);
+  const abs = tail.startsWith("/");
+  const st: string[] = [];
+  tail.split("/").forEach((x) => {
+    if (x === "" || x === ".") return;
+    if (x !== "..") st.push(x);
+    else if (st.length && st[st.length - 1] !== "..") st.pop();
+    else if (!abs && rootLen === 0) st.push(x);
+  });
+  const res = head + (abs ? "/" : "") + st.join("/");
+  const out = res === "" ? "." : res;
+  return isWin ? out.toLowerCase() : out;
 }
 
 /** 서버 os.path.normcase: Windows 드라이브 경로만 소문자 */

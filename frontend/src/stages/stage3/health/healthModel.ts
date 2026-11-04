@@ -4,28 +4,38 @@ import type { DataHealthReport, DhConsistency, DhReason, DhRun, DhSound, DhValue
 export const CONFIRM_KEEP = "프레임 수 또는 종료 시각이 다른 run입니다. 포함하면 데이터셋 일관성이 깨집니다. 그래도 포함할까요?";
 
 /**
- * 경로 정규화(서버 os.path.normcase(normpath)와 같은 결과를 목표): 앞뒤 공백 제거, `\`→`/`, 연속·끝 구분자 제거,
- * `.` 세그먼트 제거, `..` 접기, Windows 드라이브 경로는 대소문자 무시(소문자). 달라도 서버 DH_INPUT_MISMATCH 422가 최종 판정.
+ * 경로 정규화 — 서버 `data_health/input_key.folder_key`(ntpath/posixpath normpath + Windows 형태 소문자)와 같은 결과.
+ * 공백 제거, `\`→`/`, 중복·끝 구분자·`.` 제거, `..` 접기(드라이브·UNC share·`/` 루트 위로는 못 올라감).
+ * UNC는 `//server/share`까지가 루트. 달라도 서버 DH_INPUT_MISMATCH 422가 최종 판정.
  */
 export function normPath(raw: string): string {
-  const p = raw.trim().replace(/\\/g, "/");
-  const drive = /^[A-Za-z]:/.test(p);
-  const unc = p.startsWith("//");
-  const abs = p.startsWith("/") && !unc;
-  const head = drive ? p.slice(0, 2) : "";
+  const s = raw.trim().replace(/\\/g, "/");
+  const win = /^(?:[A-Za-z]:|\/\/)/.test(s);
+  const unc = /^\/\/([^/]+)\/([^/]+)(.*)$/.exec(s);
+  let prefix = "";
+  let rest = s;
+  let fixedRoot = false; // 루트 위로 못 올라가는 접두(드라이브·UNC)
+  if (unc) {
+    prefix = `//${unc[1]}/${unc[2]}`;
+    rest = unc[3];
+    fixedRoot = true;
+  } else if (/^[A-Za-z]:/.test(s)) {
+    prefix = s.slice(0, 2);
+    rest = s.slice(2);
+  }
+  const rooted = rest.startsWith("/");
   const parts: string[] = [];
-  for (const seg of p.slice(head.length).split("/")) {
+  for (const seg of rest.split("/")) {
     if (!seg || seg === ".") continue;
     if (seg === "..") {
       if (parts.length && parts[parts.length - 1] !== "..") parts.pop();
-      else if (!abs && !drive && !unc) parts.push(seg);
+      else if (!rooted && !fixedRoot) parts.push("..");
       continue;
     }
     parts.push(seg);
   }
-  const rooted = drive ? p.slice(2).startsWith("/") : abs;
-  const out = `${unc ? "//" : ""}${head}${rooted ? "/" : ""}${parts.join("/")}`;
-  return drive || unc ? out.toLowerCase() : out;
+  const out = `${prefix}${rooted ? "/" : ""}${parts.join("/")}` || ".";
+  return win ? out.toLowerCase() : out;
 }
 
 /** 입력 식별 키: ② 큐레이션 기본 입력이면 curation:<id>, 아니면 정규화한 폴더 경로 */

@@ -1,0 +1,95 @@
+// 서버 data_health.input_key.folder_key 결과(백엔드 venv로 직접 계산) — [입력, 기대 키]. normPath·mock serverNormpath가 모두 일치해야 한다.
+export const FOLDER_KEY_GOLDEN: [string, string][] = [
+  [
+    "E:/data/run/",
+    "e:/data/run"
+  ],
+  [
+    "e:\\data\\run",
+    "e:/data/run"
+  ],
+  [
+    "E:\\Data/Run\\",
+    "e:/data/run"
+  ],
+  [
+    "E:/a/./b/../c",
+    "e:/a/c"
+  ],
+  [
+    "e:\\a\\..\\..\\b",
+    "e:/b"
+  ],
+  [
+    "E:/",
+    "e:/"
+  ],
+  [
+    "E:",
+    "e:"
+  ],
+  [
+    "e:\\",
+    "e:/"
+  ],
+  [
+    "\\\\server\\share",
+    "//server/share"
+  ],
+  [
+    "\\\\server\\share\\",
+    "//server/share/"
+  ],
+  [
+    "\\\\Server\\Share\\x\\..\\y",
+    "//server/share/y"
+  ],
+  [
+    "\\\\server\\share\\..\\x",
+    "//server/share/x"
+  ],
+  [
+    "//server/share/dir/",
+    "//server/share/dir"
+  ],
+  [
+    "/home/u/data/",
+    "/home/u/data"
+  ],
+  [
+    "/home/u/./a/../b",
+    "/home/u/b"
+  ],
+  [
+    "/home/u/my data/ ",
+    "/home/u/my data"
+  ],
+  [
+    "  /home/u/x  ",
+    "/home/u/x"
+  ],
+  [
+    "a/b/../../..",
+    ".."
+  ],
+  [
+    "rel\\x\\",
+    "rel/x"
+  ],
+  [
+    "/../a",
+    "/a"
+  ],
+  [
+    "C:a\\b",
+    "c:a/b"
+  ],
+  [
+    "/home//u///x",
+    "/home/u/x"
+  ],
+  [
+    "E:/my data/run 1/",
+    "e:/my data/run 1"
+  ]
+];

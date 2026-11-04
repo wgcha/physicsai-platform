@@ -72,6 +72,11 @@ export function DataHealthCard({ report, jobId, selected, onSelect }: {
             프레임 확인 불가 {s.n_frames_unknown}건
           </span>
         )}
+        {(s.n_consistency_undecided ?? 0) > 0 && (
+          <span className="pill warn" data-testid="dh-undecided" title="기준값(프레임·종료 시각)이 정해지지 않아 일관성을 판정하지 못한 run">
+            일관성 판정 불가 {s.n_consistency_undecided}건
+          </span>
+        )}
         {s.warnings.map((w) => (
           <span key={w.code} className="pill warn" title={`${w.code}\n${WARN_TIP[w.code] ?? w.message}`}>{WARN_TIP[w.code] ?? w.message}</span>
         ))}

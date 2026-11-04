@@ -81,6 +81,8 @@ export interface DhSummary {
   n_runs: number;
   n_required: number;
   n_frames_unknown: number;
+  /** 기준값이 없어 일관성을 판정하지 못한 run 수(n_frames_unknown과 별개) */
+  n_consistency_undecided?: number;
   n_recommended: number;
   n_sigma_only: number;
   n_sound_fail: number;

@@ -6,6 +6,8 @@ import { render } from "@testing-library/react";
 import { DataHealthCard } from "../stages/stage3/health/DataHealthCard";
 import { renderApp, STUDY } from "../test/render";
 import { dataHealthReport } from "../mock/dataHealth";
+import { FOLDER_KEY_GOLDEN } from "./fixtures/folderKeyGolden";
+import { serverNormpath } from "../mock/dataHealth";
 import { CONFIRM_KEEP, normPath, clearSelection, initialSelection, keptRequired, reasonCell, selectRecommended, sortRuns, submitExtras, toggle, visibleRuns } from "../stages/stage3/health/healthModel";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -65,8 +67,14 @@ describe("경로 정규화 (B1)", () => {
     expect(normPath("E:/shared//AI_WORK/./h3d/")).toBe(base);
     expect(normPath("E:/shared/x/../AI_WORK/h3d")).toBe(base);
     expect(normPath("/data/a//b/")).toBe("/data/a/b");
+    expect(normPath("\\\\server\\share\\..\\x")).toBe("//server/share/x"); // UNC share 위로 못 올라감
     expect(normPath("/data/A")).not.toBe(normPath("/data/a")); // POSIX는 대소문자 구분
   });
+});
+
+describe("서버 folder_key 골든 표 (23개)", () => {
+  it.each(FOLDER_KEY_GOLDEN)("normPath(%j) = %j", (input, want) => expect(normPath(input)).toBe(want));
+  it.each(FOLDER_KEY_GOLDEN)("mock serverNormpath(%j) = %j", (input, want) => expect(serverNormpath(input)).toBe(want));
 });
 
 describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
@@ -237,6 +245,23 @@ describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
     await runHealth();
     expect(document.querySelector(".dh-scroll")).toBeTruthy();
     expect(css).toMatch(/\.dh-scroll\s*\{[^}]*max-height:\s*\d+px;[^}]*overflow:\s*auto/);
+  });
+
+  it("DH_INPUT_MISMATCH 422: 서버 문구와 다시 점검 안내", async () => {
+    const { server } = await runHealth();
+    const hj = server.jobs.find((j) => j.job_type === "DATA_HEALTH")!;
+    (hj.params as Record<string, unknown>).curation_id = "cur-other"; // 서버 쪽 점검 대상이 달라진 상황
+    const create = within(screen.getByRole("region", { name: "데이터셋 생성" })).getByRole("button", { name: "데이터셋 생성" });
+    await waitFor(() => expect((create as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(create);
+    expect((await screen.findByText("데이터 점검 대상과 데이터셋 입력 폴더가 다릅니다")).textContent).toBeTruthy();
+    expect(screen.getByTestId("dh-mismatch").textContent).toContain("다시 실행");
+  });
+
+  it("일관성 판정 불가 n건 배지", () => {
+    const r = dataHealthReport();
+    render(<DataHealthCard report={{ ...r, summary: { ...r.summary, n_consistency_undecided: 3 } }} jobId="j-x" selected={new Set()} onSelect={() => undefined} />);
+    expect(screen.getByTestId("dh-undecided").textContent).toBe("일관성 판정 불가 3건");
   });
 
   it("truncated 보고서: '표시 상한 초과' 안내", () => {
