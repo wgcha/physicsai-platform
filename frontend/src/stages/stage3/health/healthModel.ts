@@ -1,5 +1,5 @@
 // data-health.md §9 화면 모델: 선택(제외 필수 기본 선택·추천은 기본 선택 없음)·필터·정렬·제출 params. 순수 함수만.
-import type { DataHealthReport, DhReason, DhRun, DhValue, Job } from "../../../api";
+import type { DataHealthReport, DhConsistency, DhReason, DhRun, DhSound, DhValue, Job } from "../../../api";
 
 export const CONFIRM_KEEP = "프레임 수 또는 종료 시각이 다른 run입니다. 포함하면 데이터셋 일관성이 깨집니다. 그래도 포함할까요?";
 
@@ -72,27 +72,43 @@ export const hasSigma = (run: DhRun, sigma: number): boolean => Object.values(ru
 
 export const sigmaOnly = (run: DhRun): boolean => run.sigma_only && !run.recommended;
 
-/** 프레임 확인 불가: frames 칸이 NA(원천 없음·조회 실패) */
-export const framesUnknown = (run: DhRun): boolean => run.sound.frames?.v == null && !!run.sound.frames?.na;
+/** 프레임 확인 불가: frames 일관성 칸이 NA이고 값이 없음(원천 없음·조회 실패) */
+export const framesUnknown = (run: DhRun): boolean => run.consistency.frames?.status === "NA" && run.consistency.frames.value == null;
 
-export function fmtVal(v: DhValue | undefined, digits = 3): string {
-  if (!v || v.v == null) return "–";
-  if (typeof v.v === "string") return v.v;
-  if (!Number.isFinite(v.v)) return "–";
-  const a = Math.abs(v.v);
-  return a !== 0 && (a >= 1e5 || a < 1e-3) ? v.v.toExponential(2) : String(Number(v.v.toFixed(digits)));
+const num = (x: number): string => {
+  const a = Math.abs(x);
+  return a !== 0 && (a >= 1e5 || a < 1e-3) ? x.toExponential(2) : String(Number(x.toFixed(3)));
+};
+
+export function fmtVal(v: DhValue | undefined): string {
+  return v?.v == null || !Number.isFinite(v.v) ? "–" : num(v.v);
+}
+
+/** ① 건전성 칸: "값 / 기준"(기준 없으면 값만), NA는 "–" */
+export function fmtSound(s: DhSound | undefined): string {
+  if (!s || s.value == null) return "–";
+  const v = typeof s.value === "number" ? num(s.value) : String(s.value);
+  return s.limit != null ? `${v} / ${num(s.limit)}` : v;
+}
+
+/** 일관성 칸: "값 / 기준"(예 21/22). 확인 불가는 "확인 불가", 값만 있으면 값 */
+export function fmtCons(c: DhConsistency | undefined): string {
+  if (!c || c.value == null) return c?.status === "NA" ? "확인 불가" : "–";
+  return c.ref != null ? `${num(c.value)} / ${num(c.ref)}` : num(c.value);
 }
 
 export const fmtZ = (z: number | null | undefined): string => (typeof z === "number" ? z.toFixed(1) : "–");
 
 const TERM_LABEL: Record<string, string> = { NORMAL: "정상", ERROR: "오류 종료", UNKNOWN: "중단·잘림" };
-export const termText = (v: DhValue | undefined): string => (v?.v == null ? "–" : (TERM_LABEL[String(v.v)] ?? String(v.v)));
+export const termText = (s: DhSound | undefined): string => (s?.value == null ? "–" : (TERM_LABEL[String(s.value)] ?? String(s.value)));
 
 /** 머리 줄 기준 문구: "프레임 22 · 종료 0.012 s · 출처: 설정/최빈" */
 export function refText(s: DataHealthReport["summary"]): string | null {
   if (s.frames_ref == null && s.t_end_ref == null) return null;
-  const src = s.ref_source === "config" ? "설정" : s.ref_source === "mode" ? "최빈" : "–";
-  return `기준 프레임 ${s.frames_ref ?? "–"} · 종료 ${s.t_end_ref ?? "–"} s · 출처: ${src}`;
+  const fs = s.frames_ref_source ?? "–";
+  const ts = s.t_end_ref_source ?? "–";
+  const pv = s.preview_frames != null ? ` · ② 큐레이션 프레임 ${s.preview_frames}` : "";
+  return `기준 프레임 ${s.frames_ref ?? "DOE별"}(${fs}) · 종료 ${s.t_end_ref ?? "DOE별"} s(${ts})${pv}`;
 }
 
 /** NA가 많은 지표(run 수의 절반 이상) 이름들 */
@@ -107,6 +123,12 @@ export function naHeavy(report: DataHealthReport): string[] {
 /** 상태 한 줄: "최근 점검 11/3 14:20 · 추천 3 / 120" */
 export const statusText = (when: string, s: DataHealthReport["summary"] | null): string =>
   `최근 점검 ${when}${s ? ` · 추천 ${s.n_recommended} / ${s.n_runs}` : ""}`;
+
+/** 임계값 읽기 전용 문구와 툴팁 */
+export function thresholdText(t: Record<string, number | null>): { text: string; tip: string } {
+  const g = (k: string) => (t[k] == null ? "–" : String(t[k]));
+  return { text: `견고 z ${g("robust_z")} / kNN ${g("knn_z")} / 3σ ${g("sigma_z")}`, tip: Object.entries(t).map(([k, v]) => `${k}: ${v ?? "–"}`).join("\n") };
+}
 
 export const WARN_TIP: Record<string, string> = {
   DH_RESP_NOT_EXTRACTED: "①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다",

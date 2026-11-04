@@ -15,27 +15,48 @@ export interface DhReason {
   message: string;
 }
 
-/** 지표 한 칸: v 원값(문자열 가능: term), na = 결측 사유 코드, fail = ① 판정 위반 */
+/** ② 지표 한 칸: fail = 견고 z 또는 이웃 점수가 기준 초과, na = 결측 사유 코드 */
 export interface DhValue {
-  v?: number | string | null;
+  v?: number | null;
   z?: number | null;
   zr?: number | null;
   s?: number | null;
   na?: string | null;
   fail?: boolean;
+  knn_dist?: number | null;
+}
+
+/** ① 건전성 칸(절대 기준): 표시는 "값 / 기준" */
+export interface DhSound {
+  status: "OK" | "FAIL" | "NA";
+  value?: number | string | null;
+  limit?: number | null;
+  code?: string | null;
+  v?: number | null;
+  na?: string | null;
+  fail?: boolean;
+}
+
+/** 일관성(프레임·종료 시각): 값 / 기준(ref) */
+export interface DhConsistency {
+  status: "OK" | "FAIL" | "NA";
+  value?: number | null;
+  ref?: number | null;
+  code?: string | null;
 }
 
 export interface DhMetric {
   id: string;
   label: string;
-  unit?: string | null;
+  unit?: string;
   group: string;
   n: number;
   mean?: number | null;
   std?: number | null;
   median?: number | null;
   mad?: number | null;
-  skipped?: string | null;
+  skipped?: boolean;
+  knn_skipped?: boolean;
 }
 
 export interface DhRun {
@@ -46,8 +67,11 @@ export interface DhRun {
   recommended: boolean;
   score: number;
   sigma_only: boolean;
-  /** ① 건전성: term·energy_err_pct·added_mass·hg_ratio·contact_ratio·frames·t_last */
-  sound: Record<string, DhValue>;
+  doe_id?: string | null;
+  t_end?: number | null;
+  /** ① 건전성: term·energy_err_pct·added_mass·hg_ratio·contact_ratio */
+  sound: Record<string, DhSound>;
+  consistency: Record<string, DhConsistency>;
   values: Record<string, DhValue>;
   reasons: DhReason[];
 }
@@ -61,10 +85,15 @@ export interface DhSummary {
   n_sound_fail: number;
   frames_ref?: number | null;
   t_end_ref?: number | null;
-  /** 기준 출처: 설정 기대값 | 같은 DOE 최빈 */
-  ref_source?: "config" | "mode" | null;
+  ref_source?: string | null;
+  /** 기준값 출처 표시: "설정" | "최빈" */
+  frames_ref_source?: string | null;
+  t_end_ref_source?: string | null;
+  refs_by_doe?: Record<string, Record<string, number | null>>;
+  preview_frames?: number | null;
+  metrics_used?: string[];
   n_na_by_metric?: Record<string, number>;
-  thresholds: { robust_z: number; knn_z: number; sigma_z: number };
+  thresholds: Record<string, number | null>;
   limited?: boolean;
   warnings: DhWarning[];
 }

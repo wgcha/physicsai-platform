@@ -2,6 +2,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import css from "../styles/stages.css?raw";
+import { render } from "@testing-library/react";
+import { DataHealthCard } from "../stages/stage3/health/DataHealthCard";
 import { renderApp, STUDY } from "../test/render";
 import { dataHealthReport } from "../mock/dataHealth";
 import { CONFIRM_KEEP, clearSelection, initialSelection, keptRequired, reasonCell, selectRecommended, sortRuns, submitExtras, toggle, visibleRuns } from "../stages/stage3/health/healthModel";
@@ -60,11 +62,11 @@ describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
   it("점검 전에는 결과 카드가 없고, 점검 후 표·머리 줄·경고가 한국어로 보인다", async () => {
     const { table } = await runHealth();
     const heads = within(table).getAllByRole("columnheader").map((h) => h.textContent);
-    expect(heads).toEqual(["선택", "run", "추천", "점수", "사유", "종료", "프레임", "마지막 시각", "에너지 오차%", "추가 질량", "최대 견고 z (지표)", "3σ"]);
+    expect(heads).toEqual(["선택", "run", "추천", "점수", "사유", "종료", "프레임 (값 / 기준)", "마지막 시각 (값 / 기준)", "에너지 오차% (값 / 기준)", "추가 질량 (값 / 기준)", "최대 견고 z (지표)", "3σ"]);
     const head = screen.getByTestId("dh-head").textContent!;
     expect(head).toContain("추천 5");
     expect(head).toContain("견고 z 3.5 / kNN 3.5 / 3σ 3");
-    expect(screen.getByTestId("dh-ref").textContent).toBe("기준 프레임 22 · 종료 0.012 s · 출처: 최빈");
+    expect(screen.getByTestId("dh-ref").textContent).toBe("기준 프레임 22(최빈) · 종료 0.012 s(최빈) · ② 큐레이션 프레임 22");
     expect(screen.getByTestId("dh-frames-unknown").textContent).toBe("프레임 확인 불가 2건");
     expect(screen.getByText("①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다")).toBeTruthy();
     expect(screen.getByTestId("dh-status").textContent).toContain("추천 5 / 12");
@@ -78,6 +80,9 @@ describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
     expect(body[0].textContent).toContain(R1);
     expect(body[0].textContent).toContain("프레임 수 18 — 기준 22와 다름");
     expect(body[0].textContent).toContain("100.0");
+    expect(body[0].textContent).toContain("18 / 22");
+    expect(body[1].textContent).toContain("0.006 / 0.012");
+    expect(body[2].textContent).toContain("-1.2 / 10");
     expect(body[2].textContent).toContain("정상 종료 아님 — 오류 종료");
     fireEvent.click(screen.getByRole("checkbox", { name: "추천만" }));
     expect(within(table).getAllByRole("row").length - 1).toBe(12);
@@ -126,6 +131,8 @@ describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
     const d = await screen.findByRole("table", { name: "지표 run_004/cushion_004.h3d" });
     expect(d.textContent).toContain("쿠션 부피");
     expect(d.textContent).toContain("5.2");
+    expect(d.textContent).toContain("이웃 거리");
+    expect(d.textContent).toContain("0.200");
   });
 
   it("데이터셋 생성 제출 params에 exclude_files·health_job_id·kept_required, 목록 '제외 n'", async () => {
@@ -162,6 +169,11 @@ describe("③-1 데이터 점검 화면 (V-DH-14·19)", () => {
     await runHealth();
     expect(document.querySelector(".dh-scroll")).toBeTruthy();
     expect(css).toMatch(/\.dh-scroll\s*\{[^}]*max-height:\s*\d+px;[^}]*overflow:\s*auto/);
+  });
+
+  it("truncated 보고서: '표시 상한 초과' 안내", () => {
+    render(<DataHealthCard report={{ ...dataHealthReport(), truncated: true }} jobId="j-x" selected={new Set()} onSelect={() => undefined} />);
+    expect(screen.getByTestId("dh-truncated").textContent).toContain("표시 상한 초과");
   });
 
   it("조회 전용 사용자는 점검 버튼 없음", async () => {

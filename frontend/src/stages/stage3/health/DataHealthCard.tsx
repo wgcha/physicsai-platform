@@ -4,7 +4,7 @@ import { Card } from "../../../components/ui";
 import { ConfirmDialog } from "../../../components/ConfirmDialog";
 import { saveBlob } from "../../../lib/download";
 import {
-  CONFIRM_KEEP, WARN_TIP, clearSelection, fmtVal, fmtZ, framesUnknown, hasSigma, keptRequired, maxRobust, naHeavy, reasonCell, refText,
+  CONFIRM_KEEP, WARN_TIP, clearSelection, fmtVal, fmtZ, fmtCons, fmtSound, framesUnknown, hasSigma, keptRequired, maxRobust, naHeavy, reasonCell, refText, thresholdText,
   selectRecommended, sigmaOnly, termText, toggle, visibleRuns,
 } from "./healthModel";
 
@@ -26,6 +26,7 @@ export function DataHealthCard({ report, jobId, selected, onSelect }: {
   const kept = new Set(keptRequired(report.runs, selected));
   const ref = refText(s);
   const heavy = naHeavy(report);
+  const th = thresholdText(s.thresholds);
 
   const onCheck = (r: DhRun, on: boolean) => {
     if (!on && r.required) setAsk(r.file_rel);
@@ -64,7 +65,7 @@ export function DataHealthCard({ report, jobId, selected, onSelect }: {
         <span>3σ만 <b>{s.n_sigma_only}</b></span>
         <span>건전성 FAIL <b>{s.n_sound_fail}</b></span>
         {heavy.length > 0 && <span className="muted">NA 많음: {heavy.join(", ")}</span>}
-        <span className="muted" title="읽기 전용 임계값">견고 z {s.thresholds.robust_z} / kNN {s.thresholds.knn_z} / 3σ {s.thresholds.sigma_z}</span>
+        <span className="muted" title={th.tip}>{th.text}</span>
         {ref && <span data-testid="dh-ref">{ref}</span>}
         {s.n_frames_unknown > 0 && (
           <span className="pill warn" data-testid="dh-frames-unknown" title="hw 불가 또는 조회 실패 — 이 run들은 프레임 일관성을 검사하지 못함">
@@ -74,7 +75,7 @@ export function DataHealthCard({ report, jobId, selected, onSelect }: {
         {s.warnings.map((w) => (
           <span key={w.code} className="pill warn" title={`${w.code}\n${WARN_TIP[w.code] ?? w.message}`}>{WARN_TIP[w.code] ?? w.message}</span>
         ))}
-        {report.truncated && <span className="pill warn" title="점수 상위 행만 표시">상위 {report.runs.length}개만 표시</span>}
+        {report.truncated && <span className="pill warn" data-testid="dh-truncated" title="크기 상한으로 점수 상위 행만 남김">표시 상한 초과 — 상위 {report.runs.length}개만 표시</span>}
         <label className="check dh-filter">
           <input type="checkbox" checked={onlyRec} onChange={(e) => setOnlyRec(e.target.checked)} /> 추천만
         </label>
@@ -89,10 +90,10 @@ export function DataHealthCard({ report, jobId, selected, onSelect }: {
               <th className="num">점수</th>
               <th>사유</th>
               <th>종료</th>
-              <th className="num">프레임</th>
-              <th className="num">마지막 시각</th>
-              <th className="num">에너지 오차%</th>
-              <th className="num">추가 질량</th>
+              <th className="num">프레임 (값 / 기준)</th>
+              <th className="num">마지막 시각 (값 / 기준)</th>
+              <th className="num">에너지 오차% (값 / 기준)</th>
+              <th className="num">추가 질량 (값 / 기준)</th>
               <th>최대 견고 z (지표)</th>
               <th>3σ</th>
             </tr>
@@ -130,28 +131,29 @@ export function DataHealthCard({ report, jobId, selected, onSelect }: {
                     <td className="num">{r.score.toFixed(1)}</td>
                     <td className="small" title={rc.tip}>{rc.text || "–"}</td>
                     <td className="small">{termText(r.sound.term)}</td>
-                    <td className="num">{framesUnknown(r) ? <span className="muted" title={r.sound.frames?.na ?? undefined}>확인 불가</span> : fmtVal(r.sound.frames)}</td>
-                    <td className="num">{fmtVal(r.sound.t_last)}</td>
-                    <td className="num">{fmtVal(r.sound.energy_err_pct, 2)}</td>
-                    <td className="num">{fmtVal(r.sound.added_mass, 3)}</td>
+                    <td className="num" title={r.consistency.frames?.code ?? undefined}>{framesUnknown(r) ? <span className="muted">확인 불가</span> : fmtCons(r.consistency.frames)}</td>
+                    <td className="num" title={r.consistency.t_last?.code ?? undefined}>{fmtCons(r.consistency.t_last)}</td>
+                    <td className="num">{fmtSound(r.sound.energy_err_pct)}</td>
+                    <td className="num">{fmtSound(r.sound.added_mass)}</td>
                     <td className="small">{mr ? `${fmtZ(mr.zr)} (${label(mr.id)})` : "–"}</td>
-                    <td>{sigmaOnly(r) ? <span className="pill" title="일반 3σ만 넘음 — 견고 기준으로는 추천 아님">3σ만</span> : hasSigma(r, s.thresholds.sigma_z) ? <span className="pill">3σ</span> : ""}</td>
+                    <td>{sigmaOnly(r) ? <span className="pill" title="일반 3σ만 넘음 — 견고 기준으로는 추천 아님">3σ만</span> : hasSigma(r, s.thresholds.sigma_z ?? 3) ? <span className="pill">3σ</span> : ""}</td>
                   </tr>
                   {isOpen && (
                     <tr className="dh-detail">
                       <td colSpan={12}>
                         <table className="table compact" aria-label={`지표 ${r.file_rel}`}>
                           <thead>
-                            <tr><th>지표</th><th className="num">값</th><th className="num">z</th><th className="num">견고 z</th><th className="num">kNN 점수</th><th>비고</th></tr>
+                            <tr><th>지표</th><th className="num">값</th><th className="num">z</th><th className="num">견고 z</th><th className="num">kNN 점수</th><th className="num">이웃 거리</th><th>비고</th></tr>
                           </thead>
                           <tbody>
                             {Object.entries(r.values).map(([id, v]) => (
-                              <tr key={id}>
+                              <tr key={id} className={v.fail ? "dh-fail" : undefined}>
                                 <td>{label(id)}</td>
                                 <td className="num">{fmtVal(v)}</td>
                                 <td className="num">{fmtZ(v.z)}</td>
                                 <td className="num">{fmtZ(v.zr)}</td>
                                 <td className="num">{fmtZ(v.s)}</td>
+                                <td className="num">{v.knn_dist != null ? v.knn_dist.toFixed(3) : "–"}</td>
                                 <td className="small muted" title={v.na ?? undefined}>{v.na ? `NA(${v.na})` : ""}</td>
                               </tr>
                             ))}

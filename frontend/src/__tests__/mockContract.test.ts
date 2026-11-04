@@ -99,6 +99,19 @@ describe("목 서버 ↔ openapi.json", () => {
     });
   }
 
+  it("③ 데이터 점검: GET /jobs/{id}/data-health 응답이 openapi(DataHealthReport)와 맞고 미완료는 409", () => {
+    const srv = new MockServer({ user: "power" });
+    const h = new Headers({ "X-PhysicsAI-Request": "1" });
+    const c = srv.handle("POST", "/studies/s-cushion/jobs", new URLSearchParams(), { job_type: "DATA_HEALTH", params: { input_path: "E:/shared/AI_WORK/cushion_v1/00_inbox/h3d" } }, h);
+    expect(c.status).toBe(201);
+    const id = (c.body as { id: string }).id;
+    expect(srv.handle("GET", `/jobs/${id}/data-health`, new URLSearchParams(), null, h).status).toBe(409);
+    srv.finishAll();
+    const r = srv.handle("GET", `/jobs/${id}/data-health`, new URLSearchParams(), null, h);
+    expect(r.status).toBe(200);
+    expect(problems(r.body, responseSchema("/jobs/{job_id}/data-health", "get"), "data-health")).toEqual([]);
+  });
+
   it("2차 쓰기 응답: PUT train/params, POST train/tpl, POST env-checks, POST from-train", () => {
     const power = new MockServer({ user: "power" });
     const h = new Headers({ "X-PhysicsAI-Request": "1" });
