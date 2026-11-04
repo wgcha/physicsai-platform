@@ -3884,6 +3884,17 @@
             ],
             "title": "Frames Ref Source"
           },
+          "input_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Key"
+          },
           "limited": {
             "default": false,
             "title": "Limited",
@@ -3896,6 +3907,11 @@
             },
             "title": "Metrics Used",
             "type": "array"
+          },
+          "n_consistency_undecided": {
+            "default": 0,
+            "title": "N Consistency Undecided",
+            "type": "integer"
           },
           "n_frames_unknown": {
             "title": "N Frames Unknown",
@@ -4111,6 +4127,17 @@
           "code": {
             "title": "Code",
             "type": "string"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
           },
           "message": {
             "title": "Message",

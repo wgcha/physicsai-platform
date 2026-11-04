@@ -118,3 +118,139 @@ def test_tcl_runtime_with_stub_and_parse(tmp_path, env, expect):
     for o in outs:  # OPEN_ERROR여도 다음 파일로 계속 — 파일마다 결과가 있다
         res = fp.read_result(str(o))
         assert res.ok == (expect[0] == "OK") and (res.frames == expect[1] or not res.ok)
+
+
+# ---- V-DH-2 kNN ------------------------------------------------------------------------------------------
+
+
+def _pts(n=36, seed=1, jitter=0.02):
+    """6x6 격자 + 작은 잡음(DOE 표본 흉내) — 완전 격자는 거리 동률이 많아 이웃 선택이 치우친다."""
+    import numpy as np
+
+    rng = np.random.default_rng(seed)
+    g = np.array([(i / 5, j / 5) for i in range(6) for j in range(6)])[:n]
+    u = g + rng.normal(0, jitter, g.shape)
+    return {f"r{i}": {"a": float(u[i, 0]), "b": float(u[i, 1])} for i in range(len(u))}, u
+
+
+def test_knn_spike_flagged_only_for_that_run_and_deterministic():
+    from physicsai_core.data_health.knn import build_space, knn_scores
+
+    params, u = _pts()
+    sp = build_space(params, None)
+    vals = {f"r{i}": u[i, 0] ** 2 + u[i, 1] for i in range(36)}
+    vals["r14"] += 5.0  # 매끈한 함수 + 스파이크 1개
+    res = knn_scores(sp, vals, knn_k=5, knn_min_n=12)
+    flagged = [k for k, s in res.s.items() if abs(s) > D.knn_z]
+    assert flagged == ["r14"] and res.k == 5 and res.mean_dist["r14"] is not None
+    again = knn_scores(sp, dict(vals), knn_k=5, knn_min_n=12)
+    assert again.s == res.s  # 같은 입력 → 같은 결과
+
+
+def test_knn_local_step_only_boundary_run_can_be_flagged():
+    """국소 계단(바닥 닿음형)은 스파이크가 아니다 — 계단 경계 한 점 밖의 run은 오판하지 않는다(경계 run은 §3.4 정의상 이웃이 갈려 점수가 크다)."""
+    from physicsai_core.data_health.knn import build_space, knn_scores
+
+    params, u = _pts()
+    sp = build_space(params, None)
+    vals = {f"r{i}": (10.0 if u[i, 0] > 0.7 else 0.0) + u[i, 1] for i in range(36)}
+    res = knn_scores(sp, vals, knn_k=5, knn_min_n=12)
+    flagged = [k for k, s in res.s.items() if abs(s) > D.knn_z]
+    near_edge = {k for k in vals if abs(params[k]["a"] - 0.7) < 0.15}
+    assert set(flagged) <= near_edge
+
+
+def test_knn_k_n_minus_1_snapshot_mixed_and_small_n():
+    from physicsai_core.data_health.knn import build_space, knn_scores
+
+    sp = build_space({f"r{i}": {"x": float(i)} for i in range(4)}, None)
+    assert knn_scores(sp, {f"r{i}": float(i * i) for i in range(4)}, knn_k=5, knn_min_n=3).k == 3  # k = min(knn_k, n-1)
+    assert knn_scores(sp, {f"r{i}": float(i) for i in range(4)}, knn_k=5, knn_min_n=12).skipped  # n < knn_min_n 생략
+    snap = build_space({"r0": {"x": 5.0}, "r1": {"x": 10.0}}, [{"name": "x", "min": 0.0, "max": 10.0}])
+    assert list(snap.u["r0"]) == [0.5] and list(snap.u["r1"]) == [1.0]  # snapshot 범위로 정규화
+    assert build_space({"r0": {"x": 1.0}, "r1": {"y": 2.0}}, None).mixed  # 파라미터 이름 집합이 다르면 혼합
+    assert knn_scores(build_space({"r0": {"x": 1.0}, "r1": {"y": 2.0}}, None), {"r0": 1.0, "r1": 2.0}, knn_k=1, knn_min_n=2).skipped
+    const = build_space({"r0": {"x": 1.0}, "r1": {"x": 1.0}}, None)
+    assert const.names == []  # max = min인 파라미터는 뺀다
+
+
+def test_knn_distance_tie_uses_run_order_index():
+    from physicsai_core.data_health.knn import build_space, knn_scores
+
+    p = {"a": {"x": 0.0}, "b": {"x": 0.5}, "c": {"x": 1.0}}
+    sp = build_space(p, None)
+    first = knn_scores(sp, {"a": 10.0, "b": 15.0, "c": 20.0}, knn_k=1, knn_min_n=3)
+    flipped = knn_scores(sp, {"c": 20.0, "a": 10.0, "b": 15.0}, knn_k=1, knn_min_n=3)  # b의 이웃 a·c는 같은 거리 — 먼저 나온 run이 이웃
+    assert first.s["b"] > 0 > flipped.s["b"]
+
+
+# ---- V-DH-5 모델 속성 -------------------------------------------------------------------------------------
+
+MESH = ("/NODE\n1 0 0 0\n2 1 0 0\n3 0 1 0\n4 0 0 1\n5 1 1 0\n6 1 0 1\n7 0 1 1\n8 1 1 1\n"
+        "/TETRA4/10\n1 1 2 3 4\n/BRICK/20\n2 1 2 5 3 4 6 8 7\n")
+
+
+def test_attrs_known_mesh_parts_and_cache_reparse_zero(tmp_path, monkeypatch):
+    from physicsai_core.data_health import attrs
+    from physicsai_core.equiv import volume as vol
+
+    inc = tmp_path / "104_replace_node_elem.inc"
+    inc.write_text(MESH, encoding="utf-8")
+    cache = str(tmp_path / "_attrs")
+    r = attrs.model_attrs(mesh_inc=str(inc), mesh_tree=None, mesh_parts=None, max_bytes=1 << 20, cache_dir=cache)
+    v = r.values
+    assert abs(v["volume"] - (1 + 1 / 6)) < 1e-9 and (v["bbox_dx"], v["bbox_dy"], v["bbox_dz"]) == (1.0, 1.0, 1.0)
+    assert abs(v["cog_x"] - (0.25 / 6 + 0.5) / (7 / 6)) < 1e-9  # 부피 가중 중심
+    only = attrs.solid_attrs(vol.parse_include(MESH.splitlines()), ["10"])  # 조립 매칭 run은 PART 선택으로 계산한다
+    assert abs(only.values["volume"] - 1 / 6) < 1e-9 and only.values["bbox_dz"] == 1.0
+    calls = []
+    monkeypatch.setattr(vol, "read_include", lambda *a, **k: calls.append(1))
+    again = attrs.model_attrs(mesh_inc=str(inc), mesh_tree=None, mesh_parts=None, max_bytes=1 << 20, cache_dir=cache)
+    assert not calls and again.values == v  # 서명 일치 → 재파싱 0회
+    inc.write_text(MESH + "\n", encoding="utf-8")  # 서명(크기)이 달라지면 다시 계산
+    monkeypatch.undo()
+    assert attrs.model_attrs(mesh_inc=str(inc), mesh_tree=None, mesh_parts=None, max_bytes=1 << 20, cache_dir=cache).values == v
+
+
+def test_attrs_missing_include_and_shell_only(tmp_path):
+    from physicsai_core.data_health import attrs
+
+    assert attrs.model_attrs(mesh_inc=None, mesh_tree=None, mesh_parts=None, max_bytes=1 << 20, cache_dir=None).na == "MESH_MISSING"
+    assert attrs.model_attrs(mesh_inc=str(tmp_path / "none.inc"), mesh_tree=None, mesh_parts=None, max_bytes=1 << 20, cache_dir=None).na == "MESH_MISSING"
+    shell = tmp_path / "shell.inc"
+    shell.write_text("/NODE\n1 0 0 0\n2 1 0 0\n3 1 1 0\n4 0 1 0\n/SHELL/1\n1 1 2 3 4\n", encoding="utf-8")
+    assert attrs.model_attrs(mesh_inc=str(shell), mesh_tree=None, mesh_parts=None, max_bytes=1 << 20, cache_dir=None).na == "NO_SOLID"
+
+
+# ---- input_key(DH-C3) ------------------------------------------------------------------------------------
+
+
+def test_input_key_windows_drive_case_separators_and_trailing():
+    from physicsai_core.data_health.input_key import folder_key, input_key
+
+    base = folder_key("E:/AI/Study1/01_train/results")
+    assert base == folder_key("e:\\AI\\Study1\\01_train\\results") == folder_key("E:\\AI\\Study1\\01_train\\results\\")
+    assert base == folder_key("E:/AI/Study1/./01_train//results/") and base == "e:/ai/study1/01_train/results"
+    assert folder_key("/data/ai/s/") == folder_key("/data/ai/s") == "/data/ai/s"
+    assert input_key("/x/y", "c-1") == "curation:c-1" and input_key("/x/y/", None) == "/x/y"
+
+
+def test_dataset_check_uses_same_key_function():
+    import inspect
+
+    from physicsai_api.services.job_params import stage3_model as st
+
+    assert "folder_key" in inspect.getsource(st.check_health_job)
+
+
+@pytest.mark.skipif(_tclsh() is None, reason="tclsh 없음")
+def test_tcl_nsim_failure_is_probe_error_not_one_frame(tmp_path):
+    shutil.copy(TCL, tmp_path / fp.SCRIPT_NAME)
+    (tmp_path / "frames").mkdir()
+    o = tmp_path / "frames" / "0.txt"
+    (tmp_path / fp.SETTINGS_NAME).write_text(fp.settings_text([{"idx": 0, "h3d": "/x.h3d", "out": o.as_posix()}]), encoding="utf-8")
+    r = subprocess.run([_tclsh(), str(STUB), str(tmp_path / fp.SCRIPT_NAME)], capture_output=True, text=True, timeout=60, cwd=tmp_path,
+                       env={**os.environ, "STUB_NSIM_FAIL": "1"})
+    assert r.returncode == 0, r.stderr
+    res = fp.read_result(str(o))
+    assert not res.ok and res.code == "FRAMES_PROBE_FAILED" and "PROBE_ERROR" in (res.message or "")

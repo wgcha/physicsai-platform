@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import uuid
@@ -9,6 +10,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from physicsai_core.data_health.input_key import folder_key
 from physicsai_core.db.repositories import datasets as datasets_repo
 from physicsai_core.db.repositories import jobs as jobs_repo
 from physicsai_core.db.repositories import models as models_repo
@@ -120,9 +122,19 @@ def check_health_job(conn: Any, study_id: str, job_id: str, input_path: str) -> 
     if j is None or j["study_id"] != study_id or j["job_type"] != "DATA_HEALTH" or j["state"] != "SUCCEEDED":
         raise DomainError("DH_INPUT_MISMATCH", "데이터 점검 작업을 찾을 수 없거나 정상 완료된 점검이 아닙니다", status=422)
     prev = (j.get("result") or {}).get("input_path")
-    norm = lambda s: os.path.normcase(os.path.normpath(str(s)))  # noqa: E731
-    if not prev or norm(prev) != norm(input_path):
+    if not prev or folder_key(prev) != folder_key(input_path):  # 보고서 summary.input_key와 같은 정규화 함수 한 곳
         raise DomainError("DH_INPUT_MISMATCH", "데이터 점검 대상과 데이터셋 입력 폴더가 다릅니다", status=422)
+
+
+def health_required(ctx: AppContext, study: dict[str, Any], job_id: str) -> set[str] | None:
+    """근거 점검 보고서(report.json)의 제외 필수(required) 파일 집합(입력 루트 기준 상대경로). 파일을 읽을 수 없으면 None."""
+    path = os.path.join(study_root(ctx, study), "03_dataset", "_health", job_id, "report.json")
+    try:
+        with open(path, encoding="utf-8") as fh:
+            runs = json.load(fh).get("runs") or []
+    except (OSError, ValueError):
+        return None
+    return {str(r["file_rel"]) for r in runs if isinstance(r, dict) and r.get("required") and "file_rel" in r}
 
 
 def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p: Any
@@ -150,6 +162,23 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
         kept = normalize_rel_list(p.kept_required, "kept_required", cfg.dataset.max_exclude)
         if p.health_job_id is not None:
             check_health_job(conn, sid, p.health_job_id, cp_path)
+        if kept and p.health_job_id is None:
+            raise invalid_errors([{"loc": ["params", "kept_required"], "msg": "kept_required는 health_job_id(근거 점검)와 함께만 지정할 수 있습니다"}])
+        if p.health_job_id is not None:
+            req = health_required(ctx, study, p.health_job_id)
+            if req is None:
+                raise DomainError("REPORT_MISSING", "근거 데이터 점검 보고서를 읽을 수 없습니다", status=422)
+            bad = [k for k in kept if k not in req]
+            if bad:  # 점검이 제외 필수로 표시하지 않은 파일은 kept_required가 될 수 없다
+                raise invalid_errors([{"loc": ["params", "kept_required"], "msg": f"제외 필수가 아닌 파일이 있습니다: {', '.join(bad[:5])}"}],
+                                     "kept_required에 제외 필수가 아닌 파일이 있습니다")
+            auto = sorted(req - set(excluded) - set(kept))  # 제외 필수는 기본 제외 — 제외도 해제도 아니면 서버가 제외로 넣는다
+            if auto:
+                excluded = (excluded + auto)
+                if len(excluded) > cfg.dataset.max_exclude:
+                    raise invalid_errors([{"loc": ["params", "exclude_files"], "msg": f"최대 {cfg.dataset.max_exclude}개까지 지정할 수 있습니다(dataset.max_exclude)"}])
+                warnings = warnings + [{"code": "DS_REQUIRED_AUTO_EXCLUDED",
+                                        "message": f"제외 필수(프레임 수·종료 시각 불일치) {len(auto)}개가 제외 목록에 없어 기본대로 제외했습니다"}]
         opts = (p.options or DatasetOptions(**cfg.dataset.options_default.model_dump())).model_dump()
         params = {
             "input_path": cp_path,

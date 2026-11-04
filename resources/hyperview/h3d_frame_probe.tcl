@@ -81,9 +81,12 @@ proc fp_probe {h3d out} {
         catch { hvResult GetSubcaseList } sl
         set sub [lindex $sl 0]
     }
-    set nsim 0
-    catch { hvResult GetNumberOfSimulations $sub } nsim
-    if {![string is integer -strict $nsim] || $nsim < 1} { set nsim 1 }
+    # 조회 실패·정수 아님은 1로 숨기지 않고 오류로 기록한다(플랫폼이 그 run을 NA + 확인 불가로 집계). 정수 1 미만만 1로 본다.
+    if {[catch { hvResult GetNumberOfSimulations $sub } nsim] || ![string is integer -strict $nsim]} {
+        fp_write $out PROBE_ERROR 0 {} "GetNumberOfSimulations failed: $nsim"
+        return
+    }
+    if {$nsim < 1} { set nsim 1 }
     set frames [list]
     for {set k 0} {$k < $nsim} {incr k} {
         set t ""

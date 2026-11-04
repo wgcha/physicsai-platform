@@ -17,6 +17,7 @@ from typing import Any
 
 from physicsai_core.config.schema_capture import effective_frame_probe_tcl
 from physicsai_core.data_health import attrs as attrs_mod
+from physicsai_core.data_health.input_key import input_key
 from physicsai_core.data_health import frame_probe as fp
 from physicsai_core.data_health import metrics as mx
 from physicsai_core.data_health import report as rp
@@ -36,6 +37,25 @@ INPUTS, SCAN, RAW_CSV, RUNS_CSV, REPORT, TODO = "inputs.json", "scan.json", "run
 
 def _H(ctx: Any) -> str:
     return ctx.abs(f"03_dataset/_health/{ctx.ex.job_id}")
+
+
+WARN_FILE = "warnings.json"
+
+
+def _warn(ctx: Any, code: str, message: str, count: int | None = None) -> None:
+    """작업 warnings와 보고서 `summary.warnings`에 같은 코드·문구를 남긴다(보고서용 목록은 작업 폴더 warnings.json에 모았다가 DH_SCORE가 합친다)."""
+    ctx.add_warning(code, message)
+    path = os.path.join(_H(ctx), WARN_FILE)
+    try:
+        cur = _load(path) if os.path.isfile(path) else []
+    except (OSError, ValueError):
+        cur = []
+    item: dict[str, Any] = {"code": code, "message": message}
+    if count is not None:
+        item["count"] = count
+    if item not in cur:
+        cur.append(item)
+    write_json(path, cur)
 
 
 def _load(path: str) -> Any:
@@ -82,13 +102,14 @@ def dh_prep(ctx: Any) -> None:
     with ctx.ex.engine.connect() as conn:
         rs = rsv.resolve_runs(conn, s, ctx.study, ctx.root, cp.path, files, p.get("curation_id"))
     for w in rs.warnings:
-        ctx.add_warning(w["code"], w["message"])
+        _warn(ctx, w["code"], w["message"])
     defs = _resp_defs(rs, p.get("responses"))
     names: dict[str, str] = {}
     for dl in defs.values():
         for d in dl:
             names.setdefault(d["name"], d["unit"])
-    inputs = {"params": {k: p.get(k) for k in ("input_path", "curation_id", "responses", "attrs")},
+    ikey = input_key(cp.path, p.get("curation_id"))
+    inputs = {"input_key": ikey, "params": {k: p.get(k) for k in ("input_path", "curation_id", "responses", "attrs")},
               "thresholds": mx.thresholds_snapshot(s.data_health), "limited": rs.limited, "doe_ids": rs.doe_ids,
               "preview_frames": rs.preview_frames, "responses": [{"name": n, "unit": u} for n, u in sorted(names.items())],
               "snapshots": {k: [{"name": q.get("name"), "min": q.get("min"), "max": q.get("max"), "format": q.get("format")} for q in v]
@@ -98,7 +119,7 @@ def dh_prep(ctx: Any) -> None:
     ip = os.path.join(H, INPUTS)
     write_json(ip, inputs)
     ctx.add_output(ip)
-    res: dict[str, Any] = {"input_path": cp.path, "doe_ids": rs.doe_ids, "n_runs": len(files), "limited": rs.limited,
+    res: dict[str, Any] = {"input_path": cp.path, "input_key": ikey, "doe_ids": rs.doe_ids, "n_runs": len(files), "limited": rs.limited,
                            "thresholds": inputs["thresholds"]}
     if p.get("curation_id"):
         res["curation_id"] = p["curation_id"]
@@ -205,25 +226,29 @@ def dh_scan(ctx: Any) -> None:
     notes: dict[str, Any] = {"skipped_kinds": set(), "no_solid": [], "resp_missing": 0}
     rows: list[dict[str, Any]] = []
     todo: list[dict[str, Any]] = []
+    failed: list[str] = []
     n = len(rs.targets)
     for i, t in enumerate(rs.targets):
         ctx.checkpoint_cancel()
         try:
             row = _scan_one(ctx, t, i, rs, defs, inputs, t01, manifests, cache_dir, notes)
         except (OSError, ValueError) as exc:  # run 하나의 읽기 실패는 그 값 NA + 경고(작업은 계속)
-            ctx.add_warning("DH_RUN_READ_FAILED", f"{t.file_rel}: 읽기 실패({type(exc).__name__}) — 그 run의 값을 비웠습니다")
+            failed.append(t.file_rel)
+            ctx.log(f"[READ FAILED] {t.file_rel}: {type(exc).__name__}")
             row = {"idx": i, "file_rel": t.file_rel, "run_key": t.run_key, "doe_id": t.doe_id, "params": None, "values": {},
                    "na": {"term": "READ_FAILED"}, "aux": {}, "t_end": None}
         rows.append(row)
         if "frames" not in row["values"]:
             todo.append({"idx": i, "file_rel": t.file_rel, "h3d": t.h3d})
         ctx.progress((i + 1) / max(1, n) * 100.0, f"{i + 1}/{n} {t.file_rel}")
+    if failed:
+        _warn(ctx, "DH_RUN_READ_FAILED", f"읽기에 실패한 run {len(failed)}개(예: {', '.join(failed[:3])}) — 그 run의 값을 비웠습니다", len(failed))
     if notes["skipped_kinds"]:
-        ctx.add_warning("EQ_VOLUME_ELEM_SKIPPED", f"지원하지 않는 요소형을 건너뜀 — {', '.join(sorted(notes['skipped_kinds']))}")
+        _warn(ctx, "EQ_VOLUME_ELEM_SKIPPED", f"지원하지 않는 요소형을 건너뜀 — {', '.join(sorted(notes['skipped_kinds']))}")
     if notes["no_solid"]:
-        ctx.add_warning("DH_NO_SOLID", f"솔리드 요소가 없어 모델 속성(bbox·부피·무게중심)을 비운 run {len(notes['no_solid'])}개(쉘 쿠션 등)")
+        _warn(ctx, "DH_NO_SOLID", f"솔리드 요소가 없어 모델 속성(bbox·부피·무게중심)을 비운 run {len(notes['no_solid'])}개(쉘 쿠션 등)", len(notes["no_solid"]))
     if inputs["params"].get("responses") != [] and (not inputs.get("responses") or notes["resp_missing"]):
-        ctx.add_warning("DH_RESP_NOT_EXTRACTED", "①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다")
+        _warn(ctx, "DH_RESP_NOT_EXTRACTED", "①-6 run 응답 추출을 먼저 실행하면 응답 지표를 함께 봅니다", notes["resp_missing"] or None)
     sc = os.path.join(H, SCAN)
     write_json(sc, {"rows": rows, "preview_frames": inputs.get("preview_frames")})
     write_json(os.path.join(H, TODO), todo)
@@ -255,7 +280,7 @@ def dh_frames(ctx: Any) -> None:
     def unavailable(why: str) -> None:
         _frames_na(rows, idxs, "FRAMES_PROBE_UNAVAILABLE")
         write_json(os.path.join(H, SCAN), state)
-        ctx.add_warning("DH_FRAMES_UNAVAILABLE", f"h3d 프레임 수를 확인하지 못했습니다({why}) — {len(idxs)}개 run은 프레임 일관성을 검사하지 못합니다")
+        _warn(ctx, "DH_FRAMES_UNAVAILABLE", f"h3d 프레임 수를 확인하지 못했습니다({why}) — {len(idxs)}개 run은 프레임 일관성을 검사하지 못합니다", len(idxs))
         ctx.log(f"[FRAMES UNAVAILABLE] {why}")
 
     if s.commands.h3d_frame_probe is None:
@@ -314,7 +339,7 @@ def dh_frames(ctx: Any) -> None:
             ctx.log(f"[PROBE FAIL] {r['file_rel']}: {res.message}")
     write_json(os.path.join(H, SCAN), state)
     if n_ok < len(targets):
-        ctx.add_warning("DH_FRAMES_PARTIAL", f"프레임 수를 조회하지 못한 run {len(targets) - n_ok}개 — 프레임 일관성을 검사하지 못합니다")
+        _warn(ctx, "DH_FRAMES_PARTIAL", f"프레임 수를 조회하지 못한 run {len(targets) - n_ok}개 — 프레임 일관성을 검사하지 못합니다", len(targets) - n_ok)
     ctx.log(f"프레임 조회 {n_ok}/{len(targets)}")
 
 
@@ -337,7 +362,8 @@ def dh_score(ctx: Any) -> None:
         if "frames" not in r["values"] and not r["na"].get("frames"):
             r["na"]["frames"] = "FRAMES_SOURCE_NONE"
     zm = _zmetrics(inputs)
-    extra: list[dict[str, str]] = []
+    wp = os.path.join(H, WARN_FILE)
+    extra: list[dict[str, Any]] = _load(wp) if os.path.isfile(wp) else []  # 앞 단계에서 작업 warnings에 남긴 것 — 보고서 summary.warnings에도 같은 코드·문구
     pf = inputs.get("preview_frames")
     scored = rp.score(rows, zm, d, snapshots=inputs.get("snapshots") or {}, extra_warnings=extra, limited=bool(inputs.get("limited")))
     fr = scored.summary.get("frames_ref")
@@ -345,13 +371,14 @@ def dh_score(ctx: Any) -> None:
         scored.summary["warnings"].append({"code": "DH_PREVIEW_FRAMES_DIFF", "message":
                                            f"② 큐레이션 기준 프레임 {pf}이 데이터셋 기준 {fr}과 다릅니다 — ② 큐레이션 결과가 이미 어긋났을 수 있습니다"})
     scored.summary["preview_frames"] = pf
+    scored.summary["input_key"] = inputs.get("input_key")
     scored.summary["thresholds"] = inputs["thresholds"]
     rep = rp.fit_report(scored.report, s.ui.max_artifact_bytes, d.report_max_rows)
     write_text(os.path.join(H, RAW_CSV), rp.raw_csv_text(rows, scored.zmetric_ids))
     write_text(os.path.join(H, RUNS_CSV), rp.runs_csv_text(rows, scored))
     write_json(os.path.join(H, REPORT), rep)
     for w in scored.summary["warnings"]:
-        if w["code"] in ("DH_REF_TIE", "DH_REF_DOE_DIFF", "DH_PARAMS_MIXED", "DH_PREVIEW_FRAMES_DIFF"):
+        if w["code"] in ("DH_REF_TIE", "DH_REF_DOE_DIFF", "DH_PARAMS_MIXED", "DH_PREVIEW_FRAMES_DIFF", "DH_CONSISTENCY_UNDECIDED"):
             ctx.add_warning(w["code"], w["message"])
     for f in (RAW_CSV, RUNS_CSV, REPORT):
         ctx.add_output(os.path.join(H, f))
@@ -362,7 +389,7 @@ def dh_score(ctx: Any) -> None:
 def dh_report(ctx: Any) -> None:
     H = _H(ctx)
     summ = _load(os.path.join(H, "summary.json"))
-    keep = ("n_runs", "n_required", "n_frames_unknown", "frames_ref", "t_end_ref", "n_recommended", "n_sigma_only", "n_sound_fail",
+    keep = ("input_key", "n_runs", "n_required", "n_frames_unknown", "n_consistency_undecided", "frames_ref", "t_end_ref", "n_recommended", "n_sigma_only", "n_sound_fail",
             "n_na_by_metric", "metrics_used", "thresholds", "limited")
     res = {k: summ.get(k) for k in keep}
     res["warnings"] = summ.get("warnings") or []

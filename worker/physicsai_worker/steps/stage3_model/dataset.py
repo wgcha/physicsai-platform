@@ -37,8 +37,8 @@ def ds_scan(ctx: Any) -> None:
         listing = ", ".join(f"{os.path.relpath(f, cp.path)}({w})" for f, w in bad[:10])
         raise StepFailure("INPUT_INVALID", f"경로 규칙 위반 파일 {len(bad)}개: {listing}")
     if len(files) < s.dataset.min_h3d_files:
-        if excluded:
-            raise StepFailure("INPUT_INVALID", f"제외 후 대상 h3d가 {len(files)}개입니다(최소 {s.dataset.min_h3d_files}개) — 제외 {len(excluded)}개")
+        if not files and excluded:
+            raise StepFailure("INPUT_INVALID", "제외 후 대상 h3d가 없습니다")
         raise StepFailure("INPUT_INVALID", f"h3d 파일이 {len(files)}개입니다(최소 {s.dataset.min_h3d_files}개)")
     sp = split_files(files, float(p["holdout_ratio"]), int(p["seed"]), p["split_group"])
     if sp.n_groups < 2 or not sp.train or not sp.eval:
@@ -71,8 +71,8 @@ def _apply_exclude(ctx: Any, root: str, files: list[str]) -> tuple[list[str], li
     return [f for f in files if rel[f] not in ws], excluded, not_found
 
 
-def _health_recommended(ctx: Any) -> dict[str, bool] | None:
-    """근거 DATA_HEALTH 보고서의 `{file_rel: 추천 여부}`(파일이 없거나 읽을 수 없으면 None)."""
+def _health_rows(ctx: Any) -> dict[str, dict[str, Any]] | None:
+    """근거 DATA_HEALTH 보고서의 `{file_rel: run 행}`(파일이 없거나 읽을 수 없으면 None)."""
     jid = ctx.params.get("health_job_id")
     if not jid:
         return None
@@ -81,22 +81,28 @@ def _health_recommended(ctx: Any) -> dict[str, bool] | None:
             runs = json.load(fh).get("runs") or []
     except (OSError, ValueError):
         return None
-    return {r["file_rel"]: bool(r.get("recommended")) for r in runs if isinstance(r, dict) and "file_rel" in r}
+    return {r["file_rel"]: r for r in runs if isinstance(r, dict) and "file_rel" in r}
 
 
 def _write_excluded(ctx: Any, D: str, root: str, excluded: list[str]) -> None:
-    rec = _health_recommended(ctx)
+    """`excluded.json` = {health_job_id, files:[{file_rel, recommended, required, score, reason_codes}], kept_required}(data-health.md §7).
+    점검 결과에 없는 파일은 recommended·required·score가 null."""
+    if not (excluded or ctx.params.get("kept_required") or ctx.params.get("health_job_id")):
+        return
+    rows = _health_rows(ctx)
     items = []
     for f in excluded:
         rel = os.path.relpath(f, root).replace("\\", "/")
-        items.append({"file_rel": rel, "recommended": None if rec is None else rec.get(rel)})
+        r = None if rows is None else rows.get(rel)
+        items.append({"file_rel": rel, "recommended": None if r is None else bool(r.get("recommended")),
+                      "required": None if r is None else bool(r.get("required")), "score": None if r is None else r.get("score"),
+                      "reason_codes": [] if r is None else [x.get("code") for x in r.get("reasons") or [] if isinstance(x, dict)]})
     kept = [str(x) for x in ctx.params.get("kept_required") or []]
     path = os.path.join(D, "excluded.json")
     ctx.backup([path])
-    write_json(path, {"health_job_id": ctx.params.get("health_job_id"), "excluded": items, "kept_required": kept})
+    write_json(path, {"health_job_id": ctx.params.get("health_job_id"), "files": items, "kept_required": kept})
     if kept:
-        ctx.add_warning("DS_INCONSISTENT_KEPT", f"일관성 위반(제외 필수)으로 표시된 파일 {len(kept)}개를 사용자가 포함하도록 남겼습니다: "
-                        + ", ".join(kept[:10]))
+        ctx.add_warning("DS_INCONSISTENT_KEPT", f"프레임 수·종료 시각이 다른 run {len(kept)}개를 포함했습니다 — 학습이 실패하거나 결과가 왜곡될 수 있습니다")
     if excluded:
         ctx.add_output(path)
 

@@ -12,9 +12,12 @@ __all__ = ["DataHealthWarning", "DataHealthSummary", "DataHealthMetric", "DataHe
 class DataHealthWarning(Resp):
     code: str
     message: str
+    count: int | None = None  # 해당되는 run 수(있을 때)
 
 
 class DataHealthSummary(Resp):
+    input_key: str | None = None  # 점검 대상 식별: 폴더 정규화 경로(core/data_health/input_key.py) 또는 `curation:<id>`
+    n_consistency_undecided: int = 0  # 기준값이 없어 일관성을 판정하지 못한 run 수(n_frames_unknown과 별개)
     n_runs: int
     n_required: int  # 제외 필수(일관성 위반) run 수
     n_recommended: int

@@ -106,7 +106,9 @@ def test_v_dh_exclude_files_and_health_link(client, loaded_config, worker_factor
     assert job["result"]["h3d_count"] == 7 and job["result"]["excluded_count"] == 1
     assert "DS_EXCLUDE_NOT_FOUND" in {w["code"] for w in job["warnings"]}
     D = ai / "DH4" / "03_dataset" / job["result"]["dataset_id"]
-    assert json.loads((D / "excluded.json").read_text(encoding="utf-8"))["excluded"][0]["file_rel"] == ex[0]
+    exj = json.loads((D / "excluded.json").read_text(encoding="utf-8"))
+    assert exj["health_job_id"] == hj and exj["files"][0]["file_rel"] == ex[0] and exj["kept_required"] == []
+    assert set(exj["files"][0]) == {"file_rel", "recommended", "required", "score", "reason_codes"}
     assert json.loads((D / "split.json").read_text(encoding="utf-8"))["excluded"] == [ex[0]]
     ds = client.get(f"{API}/datasets/{job['result']['dataset_id']}", headers=P).json()
     assert ds["excluded_count"] == 1 and ds["health_job_id"] == hj

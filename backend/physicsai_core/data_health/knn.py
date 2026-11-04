@@ -1,7 +1,7 @@
 """③ 파라미터 공간 kNN 국소 중앙값 잔차(data-health.md §3.4, DH-6). numpy만, O(n²p).
 
 정규화 u = (p − min)/(max − min)(min·max = DOE `parameters_snapshot`, 없으면 표본 범위, max = min인 파라미터는 뺌).
-지표마다 유효 run끼리 유클리드 거리, 이웃 = 자기 제외 가까운 k = min(knn_k, n−1)개(동률 = run 이름순).
+지표마다 유효 run끼리 유클리드 거리, 이웃 = 자기 제외 가까운 k = min(knn_k, n−1)개(거리 동률 = run 순서 인덱스, 즉 입력 목록 순서 — 부동소수 잡음은 DIST_DECIMALS 자리로 반올림해 같은 거리로 본다).
 잔차 r_i = x_i − med(x_N(i)), 점수 s_i = r_i / (1.4826·MAD(r))(MAD 0 대체 규칙은 stats와 같음).
 """
 
@@ -14,6 +14,8 @@ from typing import Any
 import numpy as np
 
 from .stats import finite, robust_scale
+
+DIST_DECIMALS = 12  # 이 자리까지 같으면 동률(결정적 정렬)
 
 
 @dataclass
@@ -59,7 +61,7 @@ def knn_scores(space: ParamSpace, values: Mapping[str, object], *, knn_k: int, k
     """values = {run 이름: 지표 값}. 유효 = 값이 유한하고 파라미터 벡터가 있는 run. n < knn_min_n·파라미터 없음·혼합 → 생략."""
     if space.mixed or not space.names:
         return KnnResult(skipped=True)
-    names = sorted(k for k, v in values.items() if finite(v) is not None and k in space.u)  # 이름순 = 동률 정렬 기준
+    names = [k for k, v in values.items() if finite(v) is not None and k in space.u]  # 입력 순서 = run 순서 인덱스(동률 정렬 기준)
     n = len(names)
     if n < knn_min_n or n < 2:
         return KnnResult(skipped=True)
@@ -68,7 +70,8 @@ def knn_scores(space: ParamSpace, values: Mapping[str, object], *, knn_k: int, k
     pts = np.stack([space.u[nm] for nm in names])
     d = np.sqrt(((pts[:, None, :] - pts[None, :, :]) ** 2).sum(axis=2))
     np.fill_diagonal(d, np.inf)
-    order = np.argsort(d, axis=1, kind="stable")[:, :k]  # 안정 정렬 → 동률은 이름순(낮은 인덱스 먼저)
+    dr = np.round(d, DIST_DECIMALS)
+    order = np.argsort(dr, axis=1, kind="stable")[:, :k]  # 안정 정렬 → 거리 동률은 run 순서 인덱스(낮은 쪽 먼저)
     resid = np.array([x[i] - float(np.median(x[order[i]])) for i in range(n)])
     _mad, scale, _kind = robust_scale(resid, float(np.median(resid)))
     res = KnnResult(skipped=False, k=k)

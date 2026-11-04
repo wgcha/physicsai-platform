@@ -107,7 +107,7 @@ class Scored:
 def score(rows: Sequence[Mapping[str, Any]], zmetrics: Sequence[mx.MetricDef], d: Any, *,
           snapshots: Mapping[str, Sequence[Mapping[str, Any]]] | None = None, extra_warnings: Sequence[Mapping[str, str]] = (),
           limited: bool = False) -> Scored:
-    warnings: list[dict[str, str]] = [dict(w) for w in extra_warnings]
+    warnings: list[dict[str, Any]] = [dict(w) for w in extra_warnings]
     fref, tref, w2 = references(rows, d)
     warnings += w2
     # ---- z 통계 ----
@@ -130,11 +130,13 @@ def score(rows: Sequence[Mapping[str, Any]], zmetrics: Sequence[mx.MetricDef], d
     # ---- run별 ----
     out_runs: list[dict[str, Any]] = []
     n_frames_unknown = 0
+    n_undecided = 0
     for i, r in enumerate(rows):
         g = r.get("doe_id") or ""
         vals, na = r["values"], r.get("na") or {}
         reasons: list[dict[str, Any]] = []
         required = False
+        undecided = False  # 값은 있지만 기준(F_ref·T_ref)이 없어 판정하지 못함(동률·유효 run 3 미만·기대값 없음)
         # 일관성
         cons: dict[str, Any] = {}
         fv = finite(vals.get("frames"))
@@ -142,6 +144,7 @@ def score(rows: Sequence[Mapping[str, Any]], zmetrics: Sequence[mx.MetricDef], d
             n_frames_unknown += 1
             cons["frames"] = {"status": "NA", "value": None, "ref": fref[g].value, "code": na.get("frames") or "FRAMES_SOURCE_NONE"}
         elif fref[g].value is None:
+            undecided = True
             cons["frames"] = {"status": "NA", "value": int(fv), "ref": None, "code": fref[g].code}
         else:
             bad = int(fv) != int(fref[g].value)
@@ -153,6 +156,7 @@ def score(rows: Sequence[Mapping[str, Any]], zmetrics: Sequence[mx.MetricDef], d
         if tv is None:
             cons["t_last"] = {"status": "NA", "value": None, "ref": tref_v, "code": na.get("t_last") or "TIME_SOURCE_NONE"}
         elif tref_v is None:
+            undecided = True
             cons["t_last"] = {"status": "NA", "value": tv, "ref": None, "code": tref[g].code}
         else:
             bad = tv < tref_v * (1 - d.t_end_tol)
@@ -164,6 +168,7 @@ def score(rows: Sequence[Mapping[str, Any]], zmetrics: Sequence[mx.MetricDef], d
         if te is not None and tref_v is not None and abs(te - tref_v) > d.t_end_tol * abs(tref_v):
             required = True
             reasons.append(_reason("CONSISTENCY_TEND_DIFF", "t_last", f"입력 종료 시각(Tstop) {te:.6g}이 기준 {tref_v:.6g}와 다름", value=te))
+        n_undecided += undecided
         # ① 건전성
         sound = mx.judge_sound(vals, na, d)
         fails = [s for s in sound.values() if s.status == "FAIL"]
@@ -219,13 +224,17 @@ def score(rows: Sequence[Mapping[str, Any]], zmetrics: Sequence[mx.MetricDef], d
         c = sum(1 for r in rows if (finite(r.get("t_end")) if mid == "t_end" else r["values"].get(mid)) is None)
         if c:
             n_na[mid] = c
+    if n_undecided:
+        warnings.append({"code": "DH_CONSISTENCY_UNDECIDED", "count": n_undecided, "message":
+                         f"기준값(프레임 수·종료 시각 최빈값)을 정하지 못해 일관성을 판정하지 못한 run {n_undecided}개 — 기준 동률이거나 유효 run이 {MIN_REF_RUNS}개 미만입니다"
+                         "(설정 data_health.expected_frames·expected_t_end로 기준을 지정할 수 있습니다)"})
     fr_vals = {x.value for x in fref.values() if x.value is not None}
     tr_vals = {x.value for x in tref.values() if x.value is not None}
     summary = {
         "n_runs": len(rows), "n_required": sum(1 for x in out_runs if x["required"]), "n_recommended": sum(1 for x in out_runs if x["recommended"]),
         "n_sigma_only": sum(1 for x in out_runs if x["sigma_only"]),
         "n_sound_fail": sum(1 for x in out_runs if any(s["status"] == "FAIL" for s in x["sound"].values())),
-        "n_frames_unknown": n_frames_unknown,
+        "n_frames_unknown": n_frames_unknown, "n_consistency_undecided": n_undecided,
         "frames_ref": next(iter(fr_vals)) if len(fr_vals) == 1 else None, "t_end_ref": next(iter(tr_vals)) if len(tr_vals) == 1 else None,
         "ref_source": "config" if any(x.source == "설정" for x in (*fref.values(), *tref.values())) else
         ("mode" if any(x.value is not None for x in (*fref.values(), *tref.values())) else None),

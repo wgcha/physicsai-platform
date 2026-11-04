@@ -2195,7 +2195,8 @@
       "code": "REPORT_MISSING",
       "message_ko": "점검 결과 파일(report.json)이 없습니다 — 점검을 다시 실행하세요",
       "sources": [
-        "backend/physicsai_api/services/data_health_api.py"
+        "backend/physicsai_api/services/data_health_api.py",
+        "backend/physicsai_api/services/job_params/stage3_model.py"
       ],
       "status": 404
     },
