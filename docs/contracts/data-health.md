@@ -52,7 +52,7 @@
 | DH-13 | MCP: `DATA_HEALTH`는 `MCP_JOB_EXCLUDED`(사유 "③ 데이터셋 사람 판단 단계 — DATASET_CREATE와 같음"), 새 GET API는 `x-mcp.exclude` 같은 사유. 용어집 `ko` 등록 | mcp.md §5.1 기존 분류와 일관 |
 | DH-14 | 모델 속성 원천 = **입력 메시 include**(altair·native 공통). paicad `update.json`은 쓰지 않음 | 두 엔진이 같은 정의(메시 기준)여야 한 분포에서 비교 가능. CAD bbox ≠ 메시 bbox, CoG 없음, altair run에는 없음 |
 | DH-15 | 대상 엔진 혼합 금지(`dataset_engine.detect` 그대로 422 `ENGINE_MIXED`). DOE 연결이 없는 입력(외부 FOLDER·SPDM_IMPORT)은 **제한 모드**: ①만(출력 파일이 h3d 옆에 있을 때), 경고 `DH_NO_DOE_LINK` | 파라미터·응답·메시 위치를 알 수 없음 |
-| DH-16 | Study당 활성 `DATA_HEALTH` 1개(초과 409 `DATA_HEALTH_ACTIVE`). 재시도 허용(같은 params, 폴더 `_backup` 후 다시) | 같은 입력 중복 점검 방지 |
+| DH-16 | Study당 활성 `DATA_HEALTH` 1개(초과 409 `DATA_HEALTH_ACTIVE`). 재시도 허용(같은 params, 새 작업 id·새 폴더로 DH_PREP부터 — 이전 시도 폴더 보존, DH-C3) | 같은 입력 중복 점검 방지 |
 | DH-17 | ① 해석 건전성에 **일관성 지표 2개** 추가: `frames`(h3d 프레임 수 ≠ 기준 → 위반, **정확 일치**, 중복 프레임 보정 없음), `t_last`(마지막 시각 < `T_end × (1 − t_end_tol)` → 위반). 통계가 아닌 **데이터셋 일관성 위반**(`CONSISTENCY_*`)으로 분류 | 추가 요구. 근거: §1 "프레임 불일치 영향" — ② 큐레이션이 표본 1개의 프레임 수를 전 run에 적용, ③은 검사 없음 |
 | DH-18 | 프레임·시각 원천 우선순위(추출 없는 것 먼저): ① 3D 컨투어 캐시 manifest(h3d 크기·mtime 일치) ② engine out H3D 쓰기 기록(설정 `frame_write_regex`, 기본 null) ③ **없을 때만** LOCAL step `DH_FRAMES` — HyperView 배치 경량 조회(프레임 수·시각 목록만, 결과장 로드·내보내기 없음). **TCL `resources/hyperview/h3d_frame_probe.tcl`을 저장소에 동봉하고 기본으로 켠다**(3D 컨투어 `contour_extract.tcl`의 2절 모델·결과 열기 + `GetNumberOfSimulations`·`GetSimulationLabel` 부분 재사용). hw를 못 쓰면 그 run `frames` NA + 화면 경고 "프레임 확인 불가 n건". 라이선스 = HyperWorks 유닛(HyperView, ①-6 `TD_RESP_EXTRACT`와 같음), hw 1회 호출로 대상 전부 처리, CPU 대기열(res=cpu) | 추가 요구 3 + 코디네이터 변경(기본 null이면 대부분 NA라 "걸러야 함"을 못 지킴). 라이선스·시간 최소화 |
 | DH-19 | 일관성 위반 run = **제외 필수(기본 선택됨)**. 사용자는 해제할 수 있고 해제하면 경고(화면 확인 + DATASET_CREATE 경고 `DS_INCONSISTENT_KEPT`, `excluded.json.kept_required` 기록) | 추가 요구 4 |
@@ -184,7 +184,7 @@ Z 대상: 스칼라 응답 `resp:<name>`(R개, `D/responses.json`의 CURVE 종�
 | `report.json` | 화면용: `{summary, metrics:[{id,label,unit,group,n,mean,std,median,mad,skipped}], runs:[{file_rel,run_key,recommended,score,sigma_only,sound{},values{id:{v,z,zr,s,na}},reasons[]}]}`. 크기 > `ui.max_artifact_bytes`면 `runs`를 score 상위 `data_health.report_max_rows`(2000)로 자르고 `truncated:true` |
 | `_attrs/`(상위 `_health/_attrs/`) | §3.3 캐시 |
 
-- `_health`는 DS_SCAN 수집 대상이 아니다(입력은 `01_train`·`02_curated`, `check_dataset_input`이 Study 산출 폴더 제외). 재시도 시 기존 폴더는 `_backup` 이동.
+- `_health`는 DS_SCAN 수집 대상이 아니다(입력은 `01_train`·`02_curated`, `check_dataset_input`이 Study 산출 폴더 제외). 재시도는 새 작업 id 폴더에 쓰고 이전 시도 폴더는 그대로 둔다(DH-C3).
 
 ## 7. DATASET_CREATE 변경(DH-10)
 
@@ -274,7 +274,7 @@ dataset:
 | V-DH-6 | run 해석: 큐레이션 file_list run_key, `results/<doe>` 직접, `results/` 전체(DOE 2개), 외부 폴더 제한 모드 + `DH_NO_DOE_LINK`, 엔진 혼합 422 | 워커 |
 | V-DH-7 | 응답: spec 일치 시 재사용, 불일치·없음 NA + `DH_RESP_NOT_EXTRACTED`, CURVE 제외, **외부 도구 실행 0회**(가짜 도구 호출 기록) | 워커 |
 | V-DH-8 | 판정: 견고 기준만 추천, "3σ만"은 비추천, ① FAIL 추천, score 정렬, 사유 한국어·코드, hg/접촉 비는 곡선 JSON + `t01_series` 있을 때만 | 워커 |
-| V-DH-9 | 작업: step 4개 INTERNAL, CPU 대기열 시작, 진행률·취소(run 경계), 재시도 `_backup`, Study 활성 1개 409 `DATA_HEALTH_ACTIVE`, 기능 게이트 | 워커·API |
+| V-DH-9 | 작업: step 4개 INTERNAL, CPU 대기열 시작, 진행률·취소(run 경계), 재시도(DH_PREP부터·이전 폴더 보존), Study 활성 1개 409 `DATA_HEALTH_ACTIVE`, 기능 게이트 | 워커·API |
 | V-DH-10 | DATASET_CREATE: `exclude_files` 제거 후 분할, 없는 항목 경고, 전부 제외 실패, 제외 후 `min_h3d_files`, `health_job_id` 입력 불일치 422, `excluded.json`·`split.json.excluded`·`excluded_count`, 점검 작업이 데이터셋을 바꾸지 않음 | 워커·API |
 | V-DH-11 | API: `/jobs/{id}/data-health` 권한·404·409, 크기 상한 시 `truncated`, OpenAPI `x-mcp.exclude`, `MCP_JOB_EXCLUDED`·용어집 정적 시험 통과 | API·정적 |
 | V-DH-12 | 저장: `jobs.result`에 run별 값 없음(키 집합 검사), 파일 위치 `03_dataset/_health/<job_id>/`, DS_SCAN이 `_health`를 수집하지 않음 | 워커 |
