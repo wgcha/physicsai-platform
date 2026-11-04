@@ -131,6 +131,9 @@ class CommandsCfg(_M):
     # 결과 3D 컨투어 추출(geometry-view.md §13.3) — contour3d.enabled=true일 때만 쓴다
     contour_extract: list[str] | None = Field(
         default_factory=lambda: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{contour_extract_tcl}"])
+    # ③-1 데이터 점검 프레임 조회(data-health.md DH-18, 기본 켬) — null이면 DH_FRAMES SKIPPED + 경고
+    h3d_frame_probe: list[str] | None = Field(
+        default_factory=lambda: ["{hw}", "-clientconfig", "hwpost.dat", "-b", "-tcl", "{frame_probe_tcl}"])
 
 
 class HpcDefaultsCfg(_M):

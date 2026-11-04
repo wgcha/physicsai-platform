@@ -20,6 +20,7 @@ from .validate_queues import check as check_queues
 from .validate_stages import _validate_phase2, _validate_phase3
 from .validate_so import SURROGATE_OPT_RANGES, _validate_surrogate_opt  # noqa: F401 - 기존 경로 재노출
 from .validate_geometry import _validate_geometry
+from .schema_data_health import validate_data_health
 
 
 def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list[ConfigIssue]:  # noqa: C901 - 표 기반 규칙 나열
@@ -173,6 +174,9 @@ def validate_settings(s: Settings, absent: frozenset[str] = frozenset()) -> list
         add("dataset.min_psdata_bytes", "0 이상")
     if d.split_group not in ("file", "parent_dir"):
         add("dataset.split_group", "file | parent_dir")
+    if d.max_exclude < 1:
+        add("dataset.max_exclude", "1 이상")
+    validate_data_health(s, issues)  # data-health.md §10
     if s.package.link_mode not in ("hardlink_or_copy", "copy"):
         add("package.link_mode", "hardlink_or_copy | copy")
 

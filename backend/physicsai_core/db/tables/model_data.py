@@ -48,6 +48,8 @@ datasets = Table(
     Column("created_at", TS, nullable=False, server_default=func.now()),
     Column("engine", String(16), nullable=True),  # geometry-engine.md §7.5: 학습데이터 형상 엔진(NULL = 모름, 0016)
     Column("engine_version", String(32), nullable=True),  # paicad 버전(altair·모름 = NULL, §17.3)
+    Column("excluded_count", Integer, nullable=False, server_default="0"),  # data-health.md DH-11: 데이터 점검 제외 run 수(0026)
+    Column("health_job_id", ID, ForeignKey("jobs.id", ondelete="SET NULL"), nullable=True),  # 근거 DATA_HEALTH 작업(기록용)
     CheckConstraint("engine IS NULL OR engine IN ('altair','native')", name="ck_datasets_engine"),
     CheckConstraint("status IN ('BUILDING','READY','FAILED')", name="ck_datasets_status"),
     CheckConstraint("split_group IN ('file','parent_dir')", name="ck_datasets_split_group"),

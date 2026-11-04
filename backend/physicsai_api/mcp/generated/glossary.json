@@ -399,7 +399,8 @@
       "STUDY_STORAGE_SCAN",
       "STUDY_CLEANUP",
       "PREDICT_BATCH",
-      "PB_RESP_EXTRACT"
+      "PB_RESP_EXTRACT",
+      "DATA_HEALTH"
     ],
     "JobKindDetail.cost": [
       "heavy",
@@ -1100,6 +1101,22 @@
       ],
       "status": 503
     },
+    "DATA_HEALTH_ACTIVE": {
+      "code": "DATA_HEALTH_ACTIVE",
+      "message_ko": "이 Study에 진행 중인 데이터 점검이 있습니다 — 끝나거나 취소한 뒤 다시 시작하세요",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage3_model.py"
+      ],
+      "status": 409
+    },
+    "DH_INPUT_MISMATCH": {
+      "code": "DH_INPUT_MISMATCH",
+      "message_ko": "데이터 점검 작업을 찾을 수 없거나 정상 완료된 점검이 아닙니다",
+      "sources": [
+        "backend/physicsai_api/services/job_params/stage3_model.py"
+      ],
+      "status": 422
+    },
     "DOE_NOT_FOUND": {
       "code": "DOE_NOT_FOUND",
       "message_ko": "DOE를 찾을 수 없습니다",
@@ -1568,6 +1585,7 @@
         "worker/physicsai_worker/steps/stage2_curation/source.py",
         "worker/physicsai_worker/steps/stage2_curation/spdm_import.py",
         "worker/physicsai_worker/steps/stage2_curation/t01_curves.py",
+        "worker/physicsai_worker/steps/stage3_model/data_health.py",
         "worker/physicsai_worker/steps/stage3_model/dataset.py",
         "worker/physicsai_worker/steps/stage3_model/evaluate.py",
         "worker/physicsai_worker/steps/stage3_model/model_register.py",
@@ -1850,6 +1868,7 @@
         "backend/physicsai_api/services/common.py",
         "backend/physicsai_api/services/contour3d_api.py",
         "backend/physicsai_api/services/contour_capture.py",
+        "backend/physicsai_api/services/data_health_api.py",
         "backend/physicsai_api/services/doe_preview_api.py",
         "backend/physicsai_api/services/env_checks.py",
         "backend/physicsai_api/services/error_bundle.py",
@@ -2172,10 +2191,19 @@
       ],
       "status": 409
     },
+    "REPORT_MISSING": {
+      "code": "REPORT_MISSING",
+      "message_ko": "점검 결과 파일(report.json)이 없습니다 — 점검을 다시 실행하세요",
+      "sources": [
+        "backend/physicsai_api/services/data_health_api.py"
+      ],
+      "status": 404
+    },
     "REPORT_NOT_READY": {
       "code": "REPORT_NOT_READY",
-      "message_ko": "{…}이(가) 아직 끝나지 않았습니다 — 끝난 뒤 받으세요",
+      "message_ko": "데이터 점검이 아직 끝나지 않았습니다 — 끝난 뒤 받으세요",
       "sources": [
+        "backend/physicsai_api/services/data_health_api.py",
         "backend/physicsai_api/services/reports.py",
         "backend/physicsai_api/services/reports_analysis.py",
         "backend/physicsai_api/services/reports_equiv.py",
@@ -2964,6 +2992,11 @@
       "lane": "SLOT",
       "stage_label": "③-1"
     },
+    "DATA_HEALTH": {
+      "label": "데이터 점검",
+      "lane": "SLOT",
+      "stage_label": "③-1"
+    },
     "DOE_PREVIEW": {
       "label": "형상 미리보기(DOE)",
       "lane": "SLOT",
@@ -3115,6 +3148,11 @@
     {
       "internal": "③-1",
       "job_type": "DATASET_CREATE",
+      "screen": "③-1"
+    },
+    {
+      "internal": "③-1",
+      "job_type": "DATA_HEALTH",
       "screen": "③-1"
     },
     {

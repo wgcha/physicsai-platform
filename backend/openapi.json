@@ -3447,6 +3447,683 @@
         "title": "CurationSource",
         "type": "object"
       },
+      "DataHealthConsistency": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "ref": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DataHealthConsistency",
+        "type": "object"
+      },
+      "DataHealthMetric": {
+        "properties": {
+          "group": {
+            "title": "Group",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "knn_skipped": {
+            "default": false,
+            "title": "Knn Skipped",
+            "type": "boolean"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "mad": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mad"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "median": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Median"
+          },
+          "n": {
+            "title": "N",
+            "type": "integer"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          },
+          "std": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Std"
+          },
+          "unit": {
+            "default": "",
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "group",
+          "n"
+        ],
+        "title": "DataHealthMetric",
+        "type": "object"
+      },
+      "DataHealthReason": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "metric": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metric"
+          },
+          "s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z"
+          },
+          "zr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zr"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "DataHealthReason",
+        "type": "object"
+      },
+      "DataHealthReport": {
+        "properties": {
+          "metrics": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DataHealthMetric"
+            },
+            "title": "Metrics",
+            "type": "array"
+          },
+          "runs": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DataHealthRun"
+            },
+            "title": "Runs",
+            "type": "array"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/DataHealthSummary"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "summary"
+        ],
+        "title": "DataHealthReport",
+        "type": "object"
+      },
+      "DataHealthRun": {
+        "properties": {
+          "consistency": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DataHealthConsistency"
+            },
+            "default": {},
+            "title": "Consistency",
+            "type": "object"
+          },
+          "doe_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doe Id"
+          },
+          "file_rel": {
+            "title": "File Rel",
+            "type": "string"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DataHealthReason"
+            },
+            "title": "Reasons",
+            "type": "array"
+          },
+          "recommended": {
+            "title": "Recommended",
+            "type": "boolean"
+          },
+          "required": {
+            "title": "Required",
+            "type": "boolean"
+          },
+          "run_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Key"
+          },
+          "score": {
+            "title": "Score",
+            "type": "number"
+          },
+          "sigma_only": {
+            "title": "Sigma Only",
+            "type": "boolean"
+          },
+          "sound": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DataHealthSound"
+            },
+            "default": {},
+            "title": "Sound",
+            "type": "object"
+          },
+          "t_end": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T End"
+          },
+          "values": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/DataHealthValue"
+            },
+            "default": {},
+            "title": "Values",
+            "type": "object"
+          }
+        },
+        "required": [
+          "file_rel",
+          "recommended",
+          "required",
+          "score",
+          "sigma_only"
+        ],
+        "title": "DataHealthRun",
+        "type": "object"
+      },
+      "DataHealthSound": {
+        "properties": {
+          "code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code"
+          },
+          "fail": {
+            "default": false,
+            "title": "Fail",
+            "type": "boolean"
+          },
+          "limit": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Limit"
+          },
+          "na": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Na"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "v": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "V"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "DataHealthSound",
+        "type": "object"
+      },
+      "DataHealthSummary": {
+        "properties": {
+          "frames_ref": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frames Ref"
+          },
+          "frames_ref_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Frames Ref Source"
+          },
+          "limited": {
+            "default": false,
+            "title": "Limited",
+            "type": "boolean"
+          },
+          "metrics_used": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Metrics Used",
+            "type": "array"
+          },
+          "n_frames_unknown": {
+            "title": "N Frames Unknown",
+            "type": "integer"
+          },
+          "n_na_by_metric": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "default": {},
+            "title": "N Na By Metric",
+            "type": "object"
+          },
+          "n_recommended": {
+            "title": "N Recommended",
+            "type": "integer"
+          },
+          "n_required": {
+            "title": "N Required",
+            "type": "integer"
+          },
+          "n_runs": {
+            "title": "N Runs",
+            "type": "integer"
+          },
+          "n_sigma_only": {
+            "title": "N Sigma Only",
+            "type": "integer"
+          },
+          "n_sound_fail": {
+            "title": "N Sound Fail",
+            "type": "integer"
+          },
+          "preview_frames": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Frames"
+          },
+          "ref_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ref Source"
+          },
+          "refs_by_doe": {
+            "additionalProperties": {
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "object"
+            },
+            "default": {},
+            "title": "Refs By Doe",
+            "type": "object"
+          },
+          "t_end_ref": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T End Ref"
+          },
+          "t_end_ref_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "T End Ref Source"
+          },
+          "thresholds": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "default": {},
+            "title": "Thresholds",
+            "type": "object"
+          },
+          "warnings": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/DataHealthWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "n_runs",
+          "n_required",
+          "n_recommended",
+          "n_sigma_only",
+          "n_sound_fail",
+          "n_frames_unknown"
+        ],
+        "title": "DataHealthSummary",
+        "type": "object"
+      },
+      "DataHealthValue": {
+        "properties": {
+          "fail": {
+            "default": false,
+            "title": "Fail",
+            "type": "boolean"
+          },
+          "knn_dist": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knn Dist"
+          },
+          "na": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Na"
+          },
+          "s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "S"
+          },
+          "v": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "V"
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z"
+          },
+          "zr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Zr"
+          }
+        },
+        "title": "DataHealthValue",
+        "type": "object"
+      },
+      "DataHealthWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "DataHealthWarning",
+        "type": "object"
+      },
       "Dataset": {
         "properties": {
           "created_at": {
@@ -3517,6 +4194,11 @@
             ],
             "title": "Eval Count"
           },
+          "excluded_count": {
+            "default": 0,
+            "title": "Excluded Count",
+            "type": "integer"
+          },
           "h3d_count": {
             "anyOf": [
               {
@@ -3527,6 +4209,17 @@
               }
             ],
             "title": "H3D Count"
+          },
+          "health_job_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Health Job Id"
           },
           "holdout_ratio": {
             "title": "Holdout Ratio",
@@ -9981,7 +10674,8 @@
               "STUDY_STORAGE_SCAN",
               "STUDY_CLEANUP",
               "PREDICT_BATCH",
-              "PB_RESP_EXTRACT"
+              "PB_RESP_EXTRACT",
+              "DATA_HEALTH"
             ],
             "title": "Job Type",
             "type": "string"
@@ -23785,7 +24479,7 @@
   },
   "info": {
     "title": "PhysicsAI Platform API",
-    "version": "0.2.15"
+    "version": "0.2.16"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -27686,6 +28380,72 @@
         "tags": [
           "contour-capture"
         ]
+      }
+    },
+    "/physicsai/api/jobs/{job_id}/data-health": {
+      "get": {
+        "description": "데이터 점검 결과(`report.json`): 요약·지표별 분포·run별 판정(제외 필수·추천·사유). 작업이 DATA_HEALTH가 아니면 404,\n미완료 409 REPORT_NOT_READY, 파일 없음 404 REPORT_MISSING. 크기가 상한을 넘으면 `truncated=true`(score 상위만).",
+        "operationId": "get_data_health_physicsai_api_jobs__job_id__data_health_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "title": "Job Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DataHealthReport"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Data Health",
+        "tags": [
+          "data-health"
+        ],
+        "x-mcp": {
+          "exclude": "③ 데이터셋 사람 판단 단계 — DATASET_CREATE와 같음"
+        }
       }
     },
     "/physicsai/api/jobs/{job_id}/error-bundle.zip": {
