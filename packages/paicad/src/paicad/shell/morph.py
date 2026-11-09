@@ -63,6 +63,7 @@ class ShellMesh:
     fixed: np.ndarray
     geo: np.ndarray
     rel: np.ndarray  # file index of each node definition
+    cluster: np.ndarray | None = None  # fixed cluster id per node (-1 = not fixed), SM-C6 reports
 
 
 def load_meshes(asm: Assembly, tag_doc: dict, tag: dict) -> list[ShellMesh]:
@@ -242,12 +243,35 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
     for f in sorted(set(int(e) for e in ent[ifc])):
         face_nodes[f] = ifc[ent[ifc] == f]
     fallback: list[int] = []
+    # SM-C3 islands: every island node (faces, edges, vertices) moves rigidly with the bottom plane; bottom pieces
+    # holding islands are solved in-surface below (generic planar rule) instead of the cross-section map
+    island_nodes = np.zeros(n, dtype=bool)
+    in_surface_bottoms: set[int] = set()
+    for sec in sections or []:
+        if not sec.get("islands") or "island_shift" not in sec:
+            continue
+        t = np.asarray(sec["island_shift"], dtype=float)
+        in_surface_bottoms |= {int(x[1:]) for x in sec.get("bottom") or []}
+        for isl in sec["islands"]:
+            fs = np.asarray([int(x[1:]) for x in isl["faces"]], dtype=np.int64)
+            es = np.asarray([int(x[1:]) for x in isl["edges"]], dtype=np.int64)
+            vs = np.asarray([int(x[1:]) for x in isl["vertices"]], dtype=np.int64)
+            sel = ((kind == KIND_FACE) & np.isin(ent, fs)) | ((kind == KIND_EDGE) & np.isin(ent, es)) | ((kind == KIND_VERTEX) & np.isin(ent, vs))
+            d[sel] = t
+            done[sel] = True
+            island_nodes |= sel
+            for f in fs:
+                if int(f) in face_nodes:
+                    face_nodes.pop(int(f))
+                    faces_stat["uv_map"] += 1
     # bead faces: normalized position on the bead cross-section and path (= face (u,v) of the swept
     # fillet / flank surfaces, bead-aligned for the planar flanks and bottom)
     for sec in sections or []:
         bead, new, shift = bead_from_section(sec)
         bf = sorted(int(x[1:]) for x in sec["faces"])
         for f in bf:
+            if f in in_surface_bottoms:
+                continue
             idx = face_nodes.get(f)
             if idx is None or f not in G:
                 continue
@@ -358,6 +382,21 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
             if best is not None:
                 d[i] = best[1] - x[i]
         del free
+    # SM-C7 hold: displacement of the bead region times phi(geodesic distance to the bottom / island anchors)
+    held = np.zeros(n, dtype=bool)
+    hold_secs = [sec for sec in sections or [] if sec.get("hold")]
+    if hold_secs:
+        from .judge import Tables, element_faces, hold_weights
+
+        ef = element_faces(m.conn, m.tri, kind, ent, Tables.from_topology(topo))
+        hb = o["bead"]["hold"]
+        for sec in hold_secs:
+            isl_f = {int(x[1:]) for i in sec.get("islands") or [] for x in i["faces"]}
+            region_f = {int(x[1:]) for x in sec["faces"]} | isl_f
+            anchor_f = {int(x[1:]) for x in sec["bottom"]} | isl_f
+            phi, _, hreg = hold_weights(x, m.conn, m.tri, ef, region_f, anchor_f, m.fixed, float(hb["ring_mm"]), float(hb["blend_mm"]))
+            d[hreg] *= phi[hreg][:, None]
+            held |= hreg & (phi < 1.0)
     # transition zone
     trans = float(o["fixed"]["transition_mm"])
     if trans > 0:
@@ -367,7 +406,7 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
     # tangential relaxation of changed-surface nodes
     iters = int(mo["relax_iters"])
     if iters and G:
-        relax = np.flatnonzero((kind == KIND_FACE) & np.isin(ent, sorted(G)) & ~m.fixed & ~((m.geo > 0) & (m.geo < trans)))
+        relax = np.flatnonzero((kind == KIND_FACE) & np.isin(ent, sorted(G)) & ~m.fixed & ~((m.geo > 0) & (m.geo < trans)) & ~island_nodes & ~held)
         if len(relax):
             edges = mesh_edges(m.conn, m.tri)
             deg = np.bincount(edges.ravel(), minlength=n).astype(float)
@@ -384,18 +423,27 @@ def morph_part(m: ShellMesh, body, changed: dict, o: dict, sections: list[dict] 
                     q[sel] = foot
                 d[relax] = q - x[relax]
     fixed_max = float(np.linalg.norm(d[m.fixed], axis=1).max()) if m.fixed.any() else 0.0
+    released = np.zeros(n, dtype=bool)
     if fixed_max > float(o["fixed"]["tol_mm"]):
         bad = np.flatnonzero(m.fixed & (np.linalg.norm(d, axis=1) > float(o["fixed"]["tol_mm"])))
-        raise MorphFailed("SHELL_FIXED_REGION_VIOLATION", f"part {m.part_id}: {len(bad)} fixed nodes would move (max {fixed_max:.4f} mm, e.g. node {int(m.node_ids[bad[0]])})",
-                          [int(x) for x in m.node_ids[bad]])
-    d[m.fixed] = 0.0
+        if o["fixed"]["policy"] != "warn":
+            raise MorphFailed("SHELL_FIXED_REGION_VIOLATION", f"part {m.part_id}: {len(bad)} fixed nodes would move (max {fixed_max:.4f} mm, e.g. node {int(m.node_ids[bad[0]])})",
+                              [int(x) for x in m.node_ids[bad]])
+        released[bad] = True  # SM-C6 warn: these fixed nodes follow the shape, the others keep Dirichlet 0
+    d[m.fixed & ~released] = 0.0
     d[np.linalg.norm(d, axis=1) <= ZERO_MM] = 0.0
     dn = np.linalg.norm(d, axis=1)
+    extra = {}
+    if released.any():
+        mv = released & (dn > 0)
+        cl = sorted({int(c) for c in m.cluster[mv]}) if m.cluster is not None else []
+        extra["fixed_moved"] = {"nodes": int(mv.sum()), "max_mm": rnd(float(dn[mv].max()) if mv.any() else 0.0), "clusters": cl}
     return d, {
         "part_id": m.part_id,
         "moved_nodes": int((dn > 0).sum()),
         "max_disp_mm": rnd(float(dn.max()) if n else 0.0),
-        "fixed_max_disp_mm": 0.0,
+        "fixed_max_disp_mm": rnd(float(dn[m.fixed].max())) if released.any() else 0.0,
+        **extra,
         "faces": faces_stat,
         "solver": {"method": solver["method"], "iterations": int(solver["iterations"]), "rel_residual": rnd(solver["rel_residual"], 12)},
         "region": {"mode": region["mode"], "faces": region["faces"], "nodes": region["nodes"], "band_mm": rnd(region["band_mm"])},
@@ -450,7 +498,22 @@ def load_mesh_inputs(tag_dir, fixed_dir, assem_dir):
     asm = read_assembly(assem_dir)
     if tag_doc.get("assem_digest") and tag_doc["assem_digest"] != asm.digest():
         raise PaicadError("GEOM_INPUT_INVALID", "the assembly folder differs from the one used by shell tag (assem_digest)")
-    return tag_doc, tag, fixed, asm, load_meshes(asm, tag_doc, tag)
+    meshes = load_meshes(asm, tag_doc, tag)
+    attach_clusters(meshes, fixed)
+    return tag_doc, tag, fixed, asm, meshes
+
+
+def attach_clusters(meshes: list[ShellMesh], fixed) -> None:
+    """Fixed cluster id of every shell node (-1 = not fixed) from the fixed-scan arrays."""
+    fid = np.asarray(fixed.node_id)
+    order = np.argsort(fid)
+    for m in meshes:
+        cl = np.full(len(m.node_ids), -1, dtype=np.int64)
+        if len(fid):
+            pos = np.clip(np.searchsorted(fid[order], m.node_ids), 0, len(fid) - 1)
+            hit = fid[order][pos] == m.node_ids
+            cl[hit] = np.asarray(fixed.cluster)[order][pos][hit]
+        m.cluster = cl
 
 
 def load_inputs(args, o: dict):

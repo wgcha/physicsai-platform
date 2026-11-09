@@ -154,7 +154,9 @@ def _extract_summary(d):
         return None
     return {"parts": len(d.get("parts") or []), "beads": len(d.get("beads") or []), "features": len(d.get("features") or []),
             "shapes": dict(Counter(b["shape"] for b in d.get("beads") or [])), "senses": dict(Counter(b["sense"] for b in d.get("beads") or [])),
-            "fixed_overlap": dict(Counter(b["fixed_overlap"] for b in d.get("beads") or [])), "warnings": dict(Counter(w.get("code") for w in d.get("warnings") or []))}
+            "fixed_overlap": dict(Counter(b["fixed_overlap"] for b in d.get("beads") or [])), "warnings": dict(Counter(w.get("code") for w in d.get("warnings") or [])),
+            "islands": dict(Counter(i["kind"] for b in d.get("beads") or [] for i in b.get("islands") or [])),
+            "hold_eligible": sum(1 for b in d.get("beads") or [] if b.get("hold_eligible"))}
 
 
 def _fixed_summary(d):
