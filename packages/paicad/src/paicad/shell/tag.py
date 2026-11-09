@@ -77,6 +77,26 @@ def edge_respect(body, kind, ent, conn_local, tri) -> list[int]:
     return bad
 
 
+def island_consistency(body, doc: dict, pid: int, xyz, conn_local, tri, kind, ent, o: dict) -> list[dict]:
+    """SM-C8 diagnostic: bottom islands of the B-rep (features) against the islands found on the mesh labels
+    (``judge.mesh_islands``); a difference is the information warning TAG_ISLAND_MISMATCH (never a failure)."""
+    from .judge import Tables, mesh_islands, strict_labels
+
+    beads = [b for b in doc.get("beads") or [] if b.get("body") == body.name]
+    if not beads:
+        return []
+    labels = strict_labels(xyz, conn_local, tri, kind, ent, Tables.from_topology(body.topology()), float(o["tag"]["label_angle_deg"]))
+    found = mesh_islands(conn_local, tri, labels, {b["id"]: [int(x[1:]) for x in b["bottom"]] for b in beads})
+    out = []
+    for b in beads:
+        n_brep = len(b.get("islands") or [])
+        n_mesh = found[b["id"]]["features"] + found[b["id"]]["holes"]
+        if n_brep != n_mesh:
+            out.append({"code": "TAG_ISLAND_MISMATCH", "part_id": pid, "bead": b["id"], "brep": n_brep, "mesh": n_mesh,
+                        "message": f"{b['id']}: {n_brep} bottom islands on the B-rep, {n_mesh} on the mesh (information only)"})
+    return out
+
+
 def run(args, rep: Reporter) -> int:
     t0 = time.monotonic()
     o = shopts.load(args.options)
@@ -134,6 +154,7 @@ def run(args, rep: Reporter) -> int:
         if bad_edges:
             warnings.append({"code": "TAG_EDGE_NOT_RESPECTED", "part_id": pid, "edges": [f"E{e}" for e in bad_edges[:50]],
                              "message": f"the mesh crosses {len(bad_edges)} B-rep edges (nodes are mapped per face)"})
+        warnings += island_consistency(body, doc, pid, xyz, conn_local, pm.tri, kind, ent, o)
         is_fixed = np.isin(pm.node_ids, fset)
         g = geodesic_to(xyz, mesh_edges(conn_local, pm.tri), np.flatnonzero(is_fixed))
         g[is_fixed] = 0.0

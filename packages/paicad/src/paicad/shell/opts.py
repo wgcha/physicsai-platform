@@ -15,8 +15,8 @@ REQUIRED_KINDS = ("INTER_TYPE2", "RBE2")
 DEFAULTS: dict = {
     "schema_version": 1,
     "kind": "shell",
-    "tag": {"tol_abs_mm": 0.05, "tol_rel": 1.0e-4, "min_match_ratio": 0.98},
-    "fixed": {"kinds": list(FIXED_KINDS), "required": True, "transition_mm": 6.0, "tol_mm": 0.001},
+    "tag": {"tol_abs_mm": 0.05, "tol_rel": 1.0e-4, "min_match_ratio": 0.98, "label_angle_deg": 15.0},
+    "fixed": {"kinds": list(FIXED_KINDS), "required": True, "transition_mm": 6.0, "tol_mm": 0.001, "policy": "skip"},
     "morph": {"smoother": "elastic", "poisson": 0.3, "relax_iters": 3, "solver_rtol": 1.0e-8, "solver_maxiter": 5000,
               "region": "local", "region_band_mm": 40.0, "region_band_factor": 5.0},
     "quality": {
@@ -28,6 +28,9 @@ DEFAULTS: dict = {
         "dt_ratio_min": 0.8,
         "min_edge_mm": None,
         "relative_to_baseline": True,
+        "fail_policy": "skip",
+        "distort_min_mm": 0.1,
+        "distort_rel": 0.25,
     },
     "deviation": {"boundary_max_mm": 0.05, "param_abs_mm": 0.05, "param_rel": 0.01},
     "interference": {"product_mm": 0.05},
@@ -40,12 +43,20 @@ DEFAULTS: dict = {
         "min_depth_mm": 0.5,
         "land_min_mm": 2.0,
         "linear_aspect": 1.2,
+        "islands": True,
+        "island_max_mm": 40.0,
+        "island_ring_frac": 0.9,
     },
-    "bead": {"depth_mode": "keep_angle", "position_ref": "nearest_fixed_edge"},
+    "bead": {"depth_mode": "keep_angle", "position_ref": "nearest_fixed_edge", "hold": {"beads": [], "ring_mm": 3.0, "blend_mm": 8.0}},
     "symmetry_split": [],
 }
 
 _META_KEYS = ("schema_version", "engine", "engine_version", "kind")
+# keys added in 0.15.0 (shell-morph SM-C3~C8): left out of reports / ids while equal to the default, so that a run
+# with default options keeps the 0.14.1 report bytes and option hashes (section 14.4: default keys are not written)
+NEW_KEYS = (("tag", "label_angle_deg"), ("fixed", "policy"), ("quality", "fail_policy"), ("quality", "distort_min_mm"), ("quality", "distort_rel"),
+            ("extract", "islands"), ("extract", "island_max_mm"), ("extract", "island_ring_frac"), ("bead", "hold"))
+POLICIES = ("skip", "warn")
 
 
 def _num(x) -> bool:
@@ -75,6 +86,9 @@ def unknown_keys(over: dict) -> list[str]:
             bad.append(k)
         elif isinstance(DEFAULTS[k], dict) and isinstance(v, dict):
             bad += [f"{k}.{s}" for s in v if s not in DEFAULTS[k]]
+            h = v.get("hold") if k == "bead" else None
+            if isinstance(h, dict):
+                bad += [f"bead.hold.{s}" for s in h if s not in DEFAULTS["bead"]["hold"]]
     return bad
 
 
@@ -86,6 +100,8 @@ def validate(o: dict) -> list[str]:
             p.append(f"tag.{k} must be a finite number > 0")
     if not (_pos(t.get("min_match_ratio")) and t["min_match_ratio"] <= 1):
         p.append("tag.min_match_ratio must be in (0, 1]")
+    if not (_num(t.get("label_angle_deg")) and 0 < t["label_angle_deg"] <= 90):
+        p.append("tag.label_angle_deg must be in (0, 90]")
     f = o["fixed"]
     kinds = f.get("kinds")
     if not isinstance(kinds, list) or any(k not in FIXED_KINDS for k in kinds) or len(set(kinds)) != len(kinds):
@@ -98,6 +114,8 @@ def validate(o: dict) -> list[str]:
         p.append("fixed.transition_mm must be a finite number >= 0")
     if not _pos(f.get("tol_mm")):
         p.append("fixed.tol_mm must be a finite number > 0")
+    if f.get("policy") not in POLICIES:
+        p.append("fixed.policy must be skip or warn")
     m = o["morph"]
     if m.get("smoother") not in ("elastic", "laplacian"):
         p.append("morph.smoother must be elastic or laplacian")
@@ -135,6 +153,12 @@ def validate(o: dict) -> list[str]:
         p.append("quality.min_edge_mm must be null or a finite number > 0")
     if not isinstance(q.get("relative_to_baseline"), bool):
         p.append("quality.relative_to_baseline must be true or false")
+    if q.get("fail_policy") not in POLICIES:
+        p.append("quality.fail_policy must be skip or warn")
+    if not _pos(q.get("distort_min_mm")):
+        p.append("quality.distort_min_mm must be a finite number > 0")
+    if not (_num(q.get("distort_rel")) and q["distort_rel"] >= 0):
+        p.append("quality.distort_rel must be a finite number >= 0")
     d = o["deviation"]
     for k in ("boundary_max_mm", "param_abs_mm"):
         if not _pos(d.get(k)):
@@ -160,11 +184,28 @@ def validate(o: dict) -> list[str]:
         p.append("extract.min_flank_deg must be in (0, 90]")
     if not (_num(e.get("linear_aspect")) and e["linear_aspect"] >= 1):
         p.append("extract.linear_aspect must be >= 1")
+    if not isinstance(e.get("islands"), bool):
+        p.append("extract.islands must be true or false")
+    if not _pos(e.get("island_max_mm")):
+        p.append("extract.island_max_mm must be a finite number > 0")
+    if not (_pos(e.get("island_ring_frac")) and e["island_ring_frac"] <= 1):
+        p.append("extract.island_ring_frac must be in (0, 1]")
     b = o["bead"]
     if b.get("depth_mode") not in ("keep_angle", "keep_bottom"):
         p.append("bead.depth_mode must be keep_angle or keep_bottom")
     if b.get("position_ref") not in ("nearest_fixed_edge", "proportional"):
         p.append("bead.position_ref must be nearest_fixed_edge or proportional")
+    h = b.get("hold")
+    if not isinstance(h, dict):
+        p.append("bead.hold must be an object")
+    else:
+        hb = h.get("beads")
+        if not isinstance(hb, list) or any(not isinstance(x, str) or not x for x in hb) or len(set(hb or [])) != len(hb or []):
+            p.append("bead.hold.beads must be a list of distinct bead ids")
+        if not _pos(h.get("ring_mm")):
+            p.append("bead.hold.ring_mm must be a finite number > 0")
+        if not _pos(h.get("blend_mm")):
+            p.append("bead.hold.blend_mm must be a finite number > 0")
     if not isinstance(o.get("symmetry_split"), list):
         p.append("symmetry_split must be a list")
     return p
@@ -198,9 +239,22 @@ def load(path: str | Path | None) -> dict:
     return o
 
 
+def compat(o: dict) -> dict:
+    """Copy of merged options without the 0.15.0 keys that still hold their default value (NEW_KEYS)."""
+    out = copy.deepcopy(o)
+    for sec, key in NEW_KEYS:
+        if isinstance(out.get(sec), dict) and key in out[sec] and out[sec][key] == DEFAULTS[sec][key]:
+            del out[sec][key]
+    return out
+
+
 def used(o: dict) -> dict:
-    """Options as recorded in reports (section 4.10: used values)."""
-    return {k: copy.deepcopy(v) for k, v in o.items() if k != "schema_version"}
+    """Options as recorded in reports (section 4.10: used values; default-valued 0.15.0 keys left out)."""
+    return {k: v for k, v in compat(o).items() if k != "schema_version"}
+
+
+def hold_ids(o: dict) -> list[str]:
+    return list(o["bead"]["hold"]["beads"])
 
 
 def body_tol(o: dict, bbox) -> float:

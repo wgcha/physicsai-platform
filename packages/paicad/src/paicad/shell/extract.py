@@ -19,7 +19,7 @@ from ..extract import render_xml
 from ..features import component_name, make_name
 from . import opts as shopts
 from .assem import read_assembly
-from .beads import Bead, bead_axes, core_coords, nearest_fixed_edge, recognize, region_distance
+from .beads import Bead, bead_axes, core_coords, island_points, island_rho_max, nearest_fixed_edge, on_faces, recognize, region_distance
 from .cad import correspond, load
 from .clearance import Obstacles, fixed_clearance, loop_clearance, sample_edges, search_limit
 from .common import POSITION_TYPES, TYPE_ABBR, TYPE_ORDER, shell_envelope
@@ -88,7 +88,36 @@ def _inside_elements(ctx: _Ctx, bead: Bead) -> set[int]:
                 out.add(-1)  # on the entry loop itself
             else:
                 out.add(bead.prof.locate(float(r_), float(h_))[0])
+    if bead.islands and on_faces(ctx.body, [f for i in bead.islands for f in i.faces], ctx.fx, ctx.tol).any():
+        out.add(3)  # fixed nodes on an island move with the bottom
     return out
+
+
+def island_fixed(ctx: _Ctx, bead: Bead) -> np.ndarray:
+    """bool[fixed]: fixed node on an island face of the bead."""
+    if ctx.fx is None or len(ctx.fx) == 0 or not bead.islands:
+        return np.zeros(0 if ctx.fx is None else len(ctx.fx), dtype=bool)
+    return on_faces(ctx.body, [f for i in bead.islands for f in i.faces], ctx.fx, ctx.tol)
+
+
+def hold_eligible(ctx: _Ctx, bead: Bead) -> bool:
+    """Section 14.5: every fixed node of the bead region lies on the bottom / an island, >= ring_mm inside the bottom outline."""
+    if ctx.fx is None or len(ctx.fx) == 0:
+        return False
+    ring = float(ctx.o["bead"]["hold"]["ring_mm"])
+    tol = ctx.tol
+    d = region_distance(bead, bead.prof, np.zeros(3), ctx.fx, tol)
+    on_isl = island_fixed(ctx, bead)
+    sel = np.flatnonzero((d <= tol) | (on_isl if len(on_isl) else False))
+    if len(sel) == 0:
+        return False
+    rho, h, _, _ = core_coords(ctx.fx[sel], bead.core, bead.n, bead.p0, bead.ed)
+    for i, r_, h_ in zip(sel, rho, h):
+        if r_ > bead.prof.rhob - ring + 1e-9:
+            return False
+        if not (len(on_isl) and on_isl[i]) and abs(h_ - bead.prof.depth) > tol:
+            return False
+    return True
 
 
 def feasible_all(ctx: _Ctx, bead: Bead, refs: dict, wname: dict[str, str]) -> dict[str, dict]:
@@ -107,6 +136,15 @@ def feasible_all(ctx: _Ctx, bead: Bead, refs: dict, wname: dict[str, str]) -> di
     fthr = min(trans, fc0)
     inside = _inside_elements(ctx, bead)
     prof = bead.prof
+    isl = [(i.id, island_rho_max(bead, island_points(ctx.body, i))) for i in bead.islands]
+    isl_thr = [(iid, rm, min(land, prof.rhob - rm)) for iid, rm in isl]
+
+    def island_bad(p) -> str | None:
+        """SM-C3: island outline + land_min must stay inside the new bottom outline."""
+        for iid, rm, thr in isl_thr:
+            if p.rhob - rm < thr - 1e-9:
+                return f"island:{iid}"
+        return None
 
     def slack(p, sh) -> tuple[float, str | None]:
         """min clearance margin (>= 0 ok) and the limiting obstacle label."""
@@ -133,7 +171,7 @@ def feasible_all(ctx: _Ctx, bead: Bead, refs: dict, wname: dict[str, str]) -> di
 
     def ok_d(x, sign):
         p = prof.with_depth(D + sign * x, mode)
-        return p.valid(eo["min_flank_deg"]) is None and D + sign * x >= eo["min_depth_mm"]
+        return p.valid(eo["min_flank_deg"]) is None and D + sign * x >= eo["min_depth_mm"] and island_bad(p) is None
 
     if locked_d:
         cl = ctx.cluster_near(bead, prof, z, ctx.tol)
@@ -142,7 +180,10 @@ def feasible_all(ctx: _Ctx, bead: Bead, refs: dict, wname: dict[str, str]) -> di
         up = search_limit(lambda x: ok_d(x, 1), 3.0 * D, 0.05)
         dn = search_limit(lambda x: ok_d(x, -1), D, 0.05)
         p = prof.with_depth(D + up + 1e-3, mode)
-        out["BEAD_DEPTH"] = {"min": rnd(D - dn), "max": rnd(D + up), "limited_by": p.valid(eo["min_flank_deg"]) or "bottom_width", "source": "estimate"}
+        lim = p.valid(eo["min_flank_deg"]) or "bottom_width"
+        if isl_thr:
+            lim = island_bad(p) or island_bad(prof.with_depth(D - dn - 1e-3, mode)) or lim
+        out["BEAD_DEPTH"] = {"min": rnd(D - dn), "max": rnd(D + up), "limited_by": lim, "source": "estimate"}
     # width
     W = prof.width()
     locked = bool(inside)
@@ -152,12 +193,14 @@ def feasible_all(ctx: _Ctx, bead: Bead, refs: dict, wname: dict[str, str]) -> di
     else:
         def ok_w(x, sign):
             p = prof.with_width_delta(sign * x)
-            return p.valid(eo["min_flank_deg"]) is None and loop_ok(p, z) is None
+            return p.valid(eo["min_flank_deg"]) is None and loop_ok(p, z) is None and island_bad(p) is None
 
         up = search_limit(lambda x: ok_w(x, 1), 2.0 * W, 0.02, lambda x: slack(prof.with_width_delta(x), z)[0], 0.5)
         dn = search_limit(lambda x: ok_w(x, -1), W, 0.05)
         p = prof.with_width_delta(up + 1e-3)
         lim = p.valid(eo["min_flank_deg"]) or loop_ok(p, z) or "base_boundary"
+        if isl_thr:
+            lim = island_bad(p) or island_bad(prof.with_width_delta(-(dn + 1e-3))) or lim
         out["BEAD_WIDTH"] = {"min": rnd(W - dn), "max": rnd(W + up), "limited_by": lim, "source": "estimate"}
     # positions
     for t in POSITION_TYPES:
@@ -269,6 +312,8 @@ def run(args, rep: Reporter) -> int:
         for k, b in enumerate(beads, 1):
             b.k = k
             b.id = f"{comp}_B{k}"
+            for j, isl in enumerate(b.islands, 1):
+                isl.id = f"{b.id}_I{j}"
         wname = {b.id: make_name(comp, TYPE_ABBR["BEAD_WIDTH"], b.k) for b in beads}
         topo = ctx.topo
         cand_edges = sorted({e for b in beads for e in topo.face(b.base_face).outer_edges} | {e for w in rec.holes for e in w})
@@ -294,13 +339,20 @@ def run(args, rep: Reporter) -> int:
                 overlap, clearance = "unknown", None
             else:
                 d = region_distance(b, b.prof, np.zeros(3), fxyz, tol) if len(fxyz) else np.array([math.inf])
+                if b.islands and len(fxyz):
+                    d = np.where(island_fixed(ctx, b), 0.0, d)
                 clearance = float(np.min(d)) if len(d) else math.inf
                 overlap = "inside" if clearance <= tol else ("transition" if clearance <= float(o["fixed"]["transition_mm"]) else "none")
             names_b = {t: make_name(comp, TYPE_ABBR[t], b.k) for t in TYPE_ORDER}
+            holdable = overlap == "inside" and hold_eligible(ctx, b)
             if overlap == "inside":
                 cl = ctx.cluster_near(b, b.prof, np.zeros(3), tol)
+                if cl is None and b.islands:
+                    on = island_fixed(ctx, b)
+                    cl = int(fcl[np.flatnonzero(on)[0]]) if on.any() else None
                 warnings.append({"code": "BEAD_FIXED_OVERLAP", "bead": b.id, "feature": names_b["BEAD_DEPTH"], "cluster": cl,
-                                 "message": f"bead region of {b.id} holds fixed nodes of cluster {cl}: its parameters are not used by default"})
+                                 "message": f"bead region of {b.id} holds fixed nodes of cluster {cl}: its parameters are not used by default"
+                                 + (" (hold eligible: bead.hold keeps the fixed nodes)" if holdable else "")})
             elif overlap == "transition":
                 cl = ctx.cluster_near(b, b.prof, np.zeros(3), float(o["fixed"]["transition_mm"]))
                 warnings.append({"code": "BEAD_NEAR_FIXED", "bead": b.id, "feature": names_b["BEAD_WIDTH"], "cluster": cl,
@@ -320,6 +372,11 @@ def run(args, rep: Reporter) -> int:
                     "fixed_clearance_mm": None if clearance is None or not math.isfinite(clearance) else rnd(clearance),
                 }
             )
+            if b.islands:  # SM-C3 optional key
+                beads_json[-1]["islands"] = [{"id": i.id, "kind": i.kind, "faces": _fids(i.faces), "loop": [f"E{e}" for e in i.loop], "free_loops": i.free_loops,
+                                              "size_mm": rnd(i.size), "center": vec(i.center)} for i in b.islands]
+            if holdable:  # SM-C7 optional key
+                beads_json[-1]["hold_eligible"] = True
             nominal = {"BEAD_DEPTH": b.prof.depth, "BEAD_WIDTH": b.prof.width()}
             for t in POSITION_TYPES:
                 if t in refs:
@@ -374,7 +431,7 @@ def run(args, rep: Reporter) -> int:
         features=all_feats,
         groups=groups_json,
         fixed={"available": fx is not None, "digest": fx.digest if fx is not None else None, "transition_mm": o["fixed"]["transition_mm"]},
-        options={"extract": o["extract"], "bead": o["bead"]},
+        options={k: v for k, v in shopts.used(o).items() if k in ("extract", "bead")},
         warnings=warnings,
     )
     if not all_feats:

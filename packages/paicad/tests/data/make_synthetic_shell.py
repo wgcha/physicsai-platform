@@ -54,6 +54,21 @@ class BeadSpec:
     r_top: float = 2.0
     r_bot: float = 2.0
     halves: bool = False  # circular: two half revolutions (no seam edges) instead of one full revolution
+    z0: float = 0.0  # height of the base plane (islands: the host bottom plane)
+    islands: tuple = ()  # SM-C3 bottom islands: BeadSpec (dimple / boss / step / louver), HoleSpec, or style "burr"
+    style: str = "bead"  # bead | burr (top fillet + straight collar to a free edge, depth = collar length, width = hole d) | poly
+    outline: tuple = ()  # style poly: orthogonal outline (x, y) at z0, sharp planar walls inset by ``inset`` (no fillets)
+    inset: float = 2.0
+
+
+@dataclass
+class HoleSpec:
+    """Hole in a bead bottom: circle (``length`` 0) or slot (stadium of overall ``length`` along ``axis_deg``)."""
+
+    center: tuple[float, float]
+    d: float
+    length: float = 0.0
+    axis_deg: float = 0.0
 
 
 @dataclass
@@ -78,6 +93,8 @@ class SheetSpec:
     pad_box: tuple = (195.3, 140.2, 210.3, 155.2)  # pad part (tie 2 secondary) over the plate
     clip_x: tuple = (150.0, 190.0)  # clip part shares the y=0 flange free-edge nodes in this x range
     rbe3_at: tuple = (300.0, 60.0)
+    extra_rbe2: tuple = ()  # (x, y, r): RBE2 spiders on bead-bottom features (in-plane distance, any height)
+    cuts: tuple = ()  # (x0, y0, x1, y1): rectangular slots cut through the sheet (open bead walls)
 
 
 # ------------------------------------------------------------------ profile
@@ -105,7 +122,7 @@ def _frame(b: BeadSpec):
     a = math.radians(b.axis_deg)
     u = np.array([math.cos(a), math.sin(a), 0.0])
     w = np.cross(n, u)
-    c = np.array([b.center[0], b.center[1], 0.0])
+    c = np.array([b.center[0], b.center[1], b.z0])
     half = 0.5 * (b.length - b.width) if b.kind == "linear" else 0.0
     return n, ed, u, w, c, half
 
@@ -180,6 +197,12 @@ def _loop_wire(b: BeadSpec, rho: float, h: float):
     from OCP.gp import gp_Ax2, gp_Circ, gp_Dir
 
     n, ed, u, w, c, half = _frame(b)
+    if b.style == "poly":
+        pts = _poly_pts(b, h)
+        mk = BRepBuilderAPI_MakeWire()
+        for i in range(len(pts)):
+            mk.Add(_line(pts[i], pts[(i + 1) % len(pts)]))
+        return mk.Wire()
     o = c + h * ed
     mk = BRepBuilderAPI_MakeWire()
     if b.kind == "circular":
@@ -207,9 +230,119 @@ def _semi(center, r0, rmid):
     return BRepBuilderAPI_MakeEdge(GC_MakeArcOfCircle(_p(center + r0), _p(center + rmid), _p(center - r0)).Value()).Edge()
 
 
+def entry_radius(b) -> float:
+    if isinstance(b, HoleSpec):
+        return 0.5 * b.d
+    if b.style == "burr":
+        return 0.5 * b.width + b.r_top
+    return profile(b)["rho0"]
+
+
+def _poly_pts(b: BeadSpec, h: float) -> list:
+    """Outline points of a poly pocket at depth h (0 = entry outline, depth = bottom outline inset by ``inset``)."""
+    P = np.array(b.outline, dtype=float)
+    k = len(P)
+    off = b.inset * (h / b.depth) if b.depth else 0.0
+    area = 0.5 * sum(P[i, 0] * P[(i + 1) % k, 1] - P[(i + 1) % k, 0] * P[i, 1] for i in range(k))
+    sg = 1.0 if area > 0 else -1.0
+    out = []
+    for i in range(k):
+        a, b0, c0 = P[i - 1], P[i], P[(i + 1) % k]
+        d1, d2 = (b0 - a) / np.linalg.norm(b0 - a), (c0 - b0) / np.linalg.norm(c0 - b0)
+        n1, n2 = sg * np.array([-d1[1], d1[0]]), sg * np.array([-d2[1], d2[0]])  # inward normals
+        A = np.array([n1, n2])
+        rhs = np.array([n1 @ b0 + off, n2 @ c0 + off])
+        q = np.linalg.solve(A, rhs)
+        zz = b.z0 + (h if b.sense == "emboss" else -h)
+        out.append(np.array([q[0], q[1], zz]))
+    return out
+
+
+def _hole_wire(hs: HoleSpec, z: float):
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeWire
+    from OCP.gp import gp_Ax2, gp_Circ, gp_Dir
+
+    if hs.length <= hs.d:
+        circ = gp_Circ(gp_Ax2(_p((hs.center[0], hs.center[1], z)), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0)), 0.5 * hs.d)
+        return BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circ).Edge()).Wire()
+    spec = BeadSpec("slot", "linear", hs.center, width=hs.d, depth=1.0, length=hs.length, axis_deg=hs.axis_deg, z0=z)
+    return _loop_wire(spec, 0.5 * hs.d, 0.0)
+
+
+def _island_wire(isl):
+    if isinstance(isl, HoleSpec):
+        raise TypeError
+    return _loop_wire(isl, entry_radius(isl), 0.0)
+
+
+def _planar_face(outer, inners: list):
+    """Planar face from an outer wire and inner wires (orientations fixed by ShapeFix)."""
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeFace
+    from OCP.ShapeFix import ShapeFix_Face
+    from OCP.TopoDS import TopoDS
+
+    mk = BRepBuilderAPI_MakeFace(outer, True)
+    for w in inners:
+        mk.Add(TopoDS.Wire_s(w.Reversed()))
+    fx = ShapeFix_Face(mk.Face())
+    fx.FixOrientation()
+    fx.Perform()
+    return TopoDS.Face_s(fx.Face())
+
+
+def _bottom_z(b: BeadSpec) -> float:
+    return b.z0 + (b.depth if b.sense == "emboss" else -b.depth)
+
+
+def _bottom_with_islands(b: BeadSpec, outer) -> list:
+    inners, faces = [], []
+    zb = _bottom_z(b)
+    for isl in b.islands:
+        if isinstance(isl, HoleSpec):
+            inners.append(_hole_wire(isl, zb))
+        else:
+            inners.append(_island_wire(isl))
+            faces += _bead_faces(isl)
+    return [_planar_face(outer, inners)] + faces
+
+
 def _bead_faces(b: BeadSpec) -> list:
     n, ed, u, w, c, half = _frame(b)
+    if b.style == "burr":
+        rh, rt = 0.5 * b.width, b.r_top
+        P0 = c + (rh + rt) * np.array([1.0, 0.0, 0.0])
+        C1 = P0 + rt * ed
+        P1 = c + rh * np.array([1.0, 0.0, 0.0]) + rt * ed
+        P2 = c + rh * np.array([1.0, 0.0, 0.0]) + b.depth * ed
+        faces = _revol(_arc(C1, P0, P1), c, n, 2.0 * math.pi)
+        faces += _revol(_line(P1, P2), c, n, 2.0 * math.pi)
+        return faces
+    if b.style == "poly":
+        top, bot = _poly_pts(b, 0.0), _poly_pts(b, b.depth)
+        from OCP.BRepBuilderAPI import BRepBuilderAPI_MakePolygon
+
+        faces = []
+        for i in range(len(top)):
+            j = (i + 1) % len(top)
+            pg = BRepBuilderAPI_MakePolygon(_p(top[i]), _p(top[j]), _p(bot[j]), _p(bot[i]), True)
+            faces.append(_planar_face(pg.Wire(), []))
+        return faces + _bottom_with_islands(b, _loop_wire(b, 0.0, b.depth))
     pr = profile(b)
+    if b.islands:
+        faces = []
+        if b.kind == "circular":
+            for e in _profile_edges(b, c, np.array([1.0, 0.0, 0.0]), ed, False):
+                faces += _revol(e, c, n, 2.0 * math.pi)
+        else:
+            A, B = c - half * u, c + half * u
+            for side in (w, -w):
+                for e in _profile_edges(b, A, side, ed, False):
+                    faces += _prism(e, 2.0 * half * u)
+            for e in _profile_edges(b, B, w, ed, False):
+                faces += _revol(e, B, n, -math.pi)
+            for e in _profile_edges(b, A, -w, ed, False):
+                faces += _revol(e, A, n, -math.pi)
+        return faces + _bottom_with_islands(b, _loop_wire(b, pr["rho_b"], b.depth))
     if b.kind == "circular":
         faces = []
         for start in ((np.array([1.0, 0.0, 0.0]), np.array([-1.0, 0.0, 0.0])) if b.halves else (np.array([1.0, 0.0, 0.0]),)):
@@ -252,7 +385,7 @@ def build_sheet(spec: SheetSpec):
         outer.Add(_line(corners[i], corners[(i + 1) % 4]))
     mkf = BRepBuilderAPI_MakeFace(gp_Pln(), outer.Wire(), True)
     for b in s.beads:
-        wire = _loop_wire(b, profile(b)["rho0"], 0.0)
+        wire = _loop_wire(b, entry_radius(b), 0.0)
         mkf.Add(TopoDS.Wire_s(wire.Reversed()))
     for (x, y) in s.holes:
         circ = gp_Circ(gp_Ax2(_p((x, y, 0.0)), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0)), 0.5 * s.hole_d)
@@ -280,6 +413,8 @@ def build_sheet(spec: SheetSpec):
     if len(shells) != 1:
         raise RuntimeError(f"sewing produced {len(shells)} shells")
     sh = shells[0]
+    if s.cuts:
+        sh = _cut_slots(sh, s.cuts)
     # plate normal must be +z (sense = sign of (bottom - plate) . plate normal)
     from OCP.BRepAdaptor import BRepAdaptor_Surface
 
@@ -302,6 +437,42 @@ def build_sheet(spec: SheetSpec):
                     sh = TopoDS.Shell_s(sh.Reversed())
                 break
     del bb
+    return sh
+
+
+def _cut_slots(sh, cuts):
+    """Rectangular through-slots (open bead walls, SMH4): the sheet is split by vertical boxes (boolean), the face
+    pieces inside a box are dropped and the rest is sewn again."""
+    from OCP.BRepAlgoAPI import BRepAlgoAPI_Cut
+    from OCP.BRepBuilderAPI import BRepBuilderAPI_Sewing
+    from OCP.BRepGProp import BRepGProp
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeBox
+    from OCP.GProp import GProp_GProps
+    from OCP.TopAbs import TopAbs_SHELL
+    from OCP.TopExp import TopExp_Explorer
+    from OCP.TopoDS import TopoDS
+
+    for x0, y0, x1, y1 in cuts:
+        box = BRepPrimAPI_MakeBox(_p((x0, y0, -50.0)), _p((x1, y1, 50.0))).Shape()
+        op = BRepAlgoAPI_Cut(sh, box)
+        op.Build()
+        sew = BRepBuilderAPI_Sewing(1.0e-6)
+        for f in _faces_of(op.Shape()):
+            g = GProp_GProps()
+            BRepGProp.SurfaceProperties_s(f, g)
+            c = g.CentreOfMass()
+            if x0 < c.X() < x1 and y0 < c.Y() < y1:
+                continue
+            sew.Add(f)
+        sew.Perform()
+        exp = TopExp_Explorer(sew.SewedShape(), TopAbs_SHELL)
+        shells = []
+        while exp.More():
+            shells.append(TopoDS.Shell_s(exp.Current()))
+            exp.Next()
+        if len(shells) != 1:
+            raise RuntimeError(f"slot cut produced {len(shells)} shells")
+        sh = shells[0]
     return sh
 
 
@@ -584,6 +755,15 @@ def write_assembly(folder: Path, spec: SheetSpec, xyz: np.ndarray, elems: list[l
         fix += [f"/RBE2/{500 + k}", f"SCREW_{k}", "#  node_ID    Trarot   Skew_ID  grnod_ID     Iflag", f"{mid:10d}{'   111111':>10s}{0:10d}{510 + k:10d}{0:10d}"]
         fix += [f"/GRNOD/NODE/{510 + k}", f"SCREW_{k}_SPIDER"] + _ids_lines(int(nid[i]) for i in dep)
         truth["RBE2"].update(int(nid[i]) for i in dep)
+    for k, (hx, hy, rs) in enumerate(s.extra_rbe2, len(s.holes) + 1):  # spiders on bead-bottom features
+        d = np.hypot(xyz[:, 0] - hx, xyz[:, 1] - hy)
+        dep = np.flatnonzero(d <= rs)
+        mid = 900000 + k
+        zc = float(np.mean(xyz[dep, 2])) if len(dep) else 0.0
+        ind_nodes.append((mid, (hx, hy, zc)))
+        fix += [f"/RBE2/{500 + k}", f"SCREW_{k}", "#  node_ID    Trarot   Skew_ID  grnod_ID     Iflag", f"{mid:10d}{'   111111':>10s}{0:10d}{510 + k:10d}{0:10d}"]
+        fix += [f"/GRNOD/NODE/{510 + k}", f"SCREW_{k}_SPIDER"] + _ids_lines(int(nid[i]) for i in dep)
+        truth["RBE2"].update(int(nid[i]) for i in dep)
     # tie 1: chassis band nodes (secondary) on the bracket (main /SURF/SEG)
     band = np.flatnonzero(on_plate & (xyz[:, 0] >= x0) & (xyz[:, 0] <= x1) & (xyz[:, 1] >= y0) & (xyz[:, 1] <= y1))
     fix += ["/INTER/TYPE2/12", "TIE_BRKT", "#grnd_IDs  surf_IDm    Ignore  Spotflag     Level   Isearch    Idel_2             Dsearch",
@@ -651,10 +831,77 @@ def write_assembly(folder: Path, spec: SheetSpec, xyz: np.ndarray, elems: list[l
     }
 
 
+# ------------------------------------------------------------------ SM-C3~C8 variants (islands, esl hard cases H1-H4)
+_FEW_HOLES = dict(holes=((25.0, 40.0), (375.0, 40.0), (25.0, 270.0)), spider_r=(5.0, 5.0, 5.0))
+
+
+def _dimple(c, z0, d=10.0, h=1.0, sense="deboss", r=0.5):
+    return BeadSpec("dimple", "circular", c, width=d, depth=h, sense=sense, r_top=r, r_bot=r, z0=z0)
+
+
+def _boss(c, z0, d=16.0, h=1.5, hole=4.0, r=1.0):
+    return BeadSpec("boss", "circular", c, width=d, depth=h, sense="emboss", r_top=r, r_bot=r, z0=z0, islands=(HoleSpec(c, hole),) if hole else ())
+
+
+def smi_spec() -> SheetSpec:
+    """SMI: bead bottoms with islands (V-SM-16 / 17 / 18 / 20). I1 linear deboss with a hole D6, a dimple D10 h1, a
+    burring D8 and a fastening boss D16 h1.5 (hole D4); I2 circular deboss with a fastening boss whose RBE2 spider
+    is on the boss top (hold); I3 circular deboss with a 44 mm island (too large); I4 circular deboss whose inner
+    mound rises back to the plate (annular)."""
+    zb = -4.0
+    i1 = BeadSpec("I1", "linear", (130.0, 100.0), width=44.0, depth=4.0, length=160.0, islands=(
+        HoleSpec((80.0, 100.0), 6.0), _dimple((105.0, 100.0), zb),
+        BeadSpec("burr", "circular", (130.0, 100.0), width=8.0, depth=2.0, r_top=1.0, z0=zb, style="burr"),
+        _boss((160.0, 100.0), zb)))
+    i2 = BeadSpec("I2", "circular", (300.0, 100.0), width=60.0, depth=4.0, islands=(_boss((300.0, 100.0), zb),))
+    i3 = BeadSpec("I3", "circular", (300.0, 220.0), width=90.0, depth=3.0, islands=(_boss((300.0, 220.0), -3.0, d=30.0, h=1.0, hole=0.0, r=0.5),))
+    i4 = BeadSpec("I4", "circular", (130.0, 220.0), width=90.0, depth=3.0, islands=(_boss((130.0, 220.0), -3.0, d=40.0, h=3.0, hole=0.0),))
+    return SheetSpec(beads=[i1, i2, i3, i4], rbe3_at=(250.0, 40.0), extra_rbe2=((300.0, 100.0, 5.0),), **_FEW_HOLES)
+
+
+def smh_spec(case: int) -> SheetSpec:
+    """esl hard cases H1-H4 as mid-surface B-rep variants (V-SM-22). Crossing / merged pockets are sharp planar
+    pockets (style poly, no fillets): the recognizer has to refuse them (BEAD_IRREGULAR) like real filleted ones."""
+    if case == 1:  # X crossing pair + straight bead with two bottom dimples
+        a, L = 9.0, 50.0
+        cx, cy = 110.0, 150.0
+        plus = ((cx - L, cy - a), (cx - a, cy - a), (cx - a, cy - L), (cx + a, cy - L), (cx + a, cy - a), (cx + L, cy - a),
+                (cx + L, cy + a), (cx + a, cy + a), (cx + a, cy + L), (cx - a, cy + L), (cx - a, cy + a), (cx - L, cy + a))
+        x = BeadSpec("X", "linear", (cx, cy), width=18.0, depth=3.0, style="poly", outline=plus, inset=2.0)
+        d = BeadSpec("D", "linear", (280.0, 150.0), width=30.0, depth=4.0, length=150.0, axis_deg=90.0,
+                     islands=(_dimple((280.0, 120.0), -4.0), _dimple((280.0, 180.0), -4.0)))
+        return SheetSpec(beads=[x, d], **_FEW_HOLES)
+    if case == 2:  # stairs: A (inner step > island_max_mm) and B (small inner step absorbed as an island)
+        a_i = BeadSpec("AI", "circular", (100.0, 150.0), width=50.0, depth=3.0, z0=-6.0, islands=(HoleSpec((100.0, 150.0), 6.0),))
+        a_m = BeadSpec("AM", "circular", (100.0, 150.0), width=96.0, depth=3.0, z0=-3.0, islands=(a_i, _dimple((100.0, 115.0), -6.0, d=8.0)))
+        a_o = BeadSpec("AO", "circular", (100.0, 150.0), width=150.0, depth=3.0, islands=(a_m, _dimple((100.0, 87.0), -3.0, d=8.0)))
+        b_i = BeadSpec("BI", "circular", (290.0, 150.0), width=24.0, depth=2.0, z0=-6.0, r_top=1.0, r_bot=1.0)
+        b_m = BeadSpec("BM", "circular", (290.0, 150.0), width=66.0, depth=3.0, z0=-3.0, islands=(b_i, _dimple((290.0, 128.0), -6.0, d=8.0)))
+        b_o = BeadSpec("BO", "circular", (290.0, 150.0), width=104.0, depth=3.0, islands=(b_m,))
+        return SheetSpec(beads=[a_o, b_o], tie_band=(361.0, 220.0, 392.0, 280.0), pad_box=(195.3, 240.2, 210.3, 255.2), rbe3_at=(200.0, 60.0), **_FEW_HOLES)
+    if case == 3:  # near pair (loop gap 4 mm) + merged pocket (L-shaped, shared flank)
+        n1 = BeadSpec("N1", "linear", (120.0, 120.0), width=12.0, depth=4.0, length=100.0)
+        n2 = BeadSpec("N2", "linear", (120.0, 120.0 + 2 * profile(n1)["rho0"] + 4.0), width=12.0, depth=4.0, length=100.0)
+        Lsh = ((240.0, 100.0), (340.0, 100.0), (340.0, 118.0), (258.0, 118.0), (258.0, 200.0), (240.0, 200.0))
+        m = BeadSpec("M", "linear", (290.0, 150.0), width=18.0, depth=3.0, style="poly", outline=Lsh, inset=2.0)
+        return SheetSpec(beads=[n1, n2, m], **_FEW_HOLES)
+    # case 4: twin beads; T: louvers x2 (slotted linear emboss), boss with RBE2 (hold), two bosses 1 mm apart;
+    # S: same bead with a slot through its wall (open); P: boss across the bottom outline (poly host, refused)
+    zb = -4.0
+    louver = [BeadSpec("LV", "linear", (x, 70.0), width=8.0, depth=1.0, length=30.0, axis_deg=90.0, sense="emboss", r_top=0.5, r_bot=0.5, z0=zb,
+                       islands=(HoleSpec((x, 70.0), 2.0, length=18.0, axis_deg=90.0),)) for x in (60.0, 80.0)]
+    t = BeadSpec("T", "linear", (120.0, 70.0), width=50.0, depth=4.0, length=170.0, islands=tuple(louver) + (
+        _boss((110.0, 70.0), zb), _boss((140.0, 70.0), zb, d=10.0, h=1.0, hole=0.0, r=0.5), _boss((152.0, 70.0), zb, d=10.0, h=1.0, hole=0.0, r=0.5)))
+    sl = BeadSpec("S", "linear", (120.0, 200.0), width=50.0, depth=4.0, length=170.0, islands=(_boss((110.0, 200.0), zb, hole=0.0),))
+    return SheetSpec(beads=[t, sl], extra_rbe2=((110.0, 70.0, 5.0),), cuts=((150.0, 174.0, 154.0, 179.0),), rbe3_at=(300.0, 150.0), **_FEW_HOLES)
+
+
 # ------------------------------------------------------------------ truth / top level
 def bead_truth(spec: SheetSpec) -> list[dict]:
     out = []
     for b in spec.beads:
+        if b.style != "bead":
+            continue
         n, ed, u, w, c, half = _frame(b)
         pr = profile(b)
         out.append(

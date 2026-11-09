@@ -16,13 +16,14 @@ from pathlib import Path
 import numpy as np
 
 from ..common import CODE_CATEGORY, EXIT_CAD, EXIT_OK, OutDir, PaicadError, Reporter, dumps, rnd
+from ..kernel.base import SurfaceEdit
 from ..kernel import CadInputError, rebuild_sheet, save_sheet_brep
 from . import opts as shopts
-from .beads import Bead, Profile, core_coords, recognize, region_distance, section_doc
+from .beads import Bead, Profile, core_coords, island_points, island_rho_max, island_shift, on_faces, recognize, region_distance, section_doc
 from .cad import load
 from .clearance import Obstacles, loop_clearance, loop_points
 from .common import OP, POSITION_TYPES, feature_values, load_shell_features, load_values, param_keys, shell_envelope
-from .edit import EditPlan, plan_bead
+from .edit import EPS, EditPlan, _edge_t, plan_bead
 
 UPDATE_JSON = "shell_update.json"
 SAMPLE_BREP = "sample.brep"
@@ -77,13 +78,51 @@ def match_beads(doc: dict, cad_bodies: list, o: dict) -> dict[str, tuple[object,
             if ck not in cache:
                 cache[ck] = recognize(body, o["extract"], tol, body.name).beads
             rec_of[bj["body"]] = cache[ck]
-        bottom = int(bj["bottom"][0][1:])
-        hits = [b for b in rec_of[bj["body"]] if b.faces["bottom"] == [bottom]]
+        bottom = [int(x[1:]) for x in bj["bottom"]]
+        hits = [b for b in rec_of[bj["body"]] if b.faces["bottom"] == bottom]
+        if not hits and o["extract"].get("islands") and not bj.get("islands"):
+            # features prepared without islands (0.14.1 or islands false): beads now absorbed as islands stay usable
+            tol = shopts.body_tol(o, body.summary().bbox)
+            ck = (tol, tuple(sorted(dict(o["extract"], islands=False).items())))
+            cache = body.__dict__.setdefault("_bead_cache", {})
+            if ck not in cache:
+                cache[ck] = recognize(body, dict(o["extract"], islands=False), tol, body.name).beads
+            hits = [b for b in cache[ck] if b.faces["bottom"] == bottom]
         if len(hits) != 1:
-            raise PaicadError("GEOM_INPUT_INVALID", f"bead {bj['id']} (bottom F{bottom}) is not recognized in the CAD (features do not match the CAD)")
+            raise PaicadError("GEOM_INPUT_INVALID", f"bead {bj['id']} (bottom F{bottom[0]}) is not recognized in the CAD (features do not match the CAD)")
         b = hits[0]
         b.id, b.k = bj["id"], int(bj["k"])
+        if [i.faces for i in b.islands] != [[int(x[1:]) for x in i["faces"]] for i in bj.get("islands") or []]:
+            raise PaicadError("GEOM_INPUT_INVALID", f"bead {bj['id']}: bottom islands differ from the features (re-run shell extract with the same extract options)")
+        for i, ij in zip(b.islands, bj.get("islands") or []):
+            i.id = ij["id"]
         out[bj["id"]] = (body, b)
+    return out
+
+
+def hold_beads(doc: dict, o: dict) -> set[str]:
+    """Bead ids of ``bead.hold.beads`` (section 14.5); every one must be ``hold_eligible`` in the features."""
+    ids = shopts.hold_ids(o)
+    elig = {b["id"] for b in doc["beads"] if b.get("hold_eligible")}
+    bad = [x for x in ids if x not in elig]
+    if bad:
+        raise PaicadError("GEOM_INPUT_INVALID", f"bead.hold.beads: not hold eligible: {', '.join(bad[:10])}")
+    return set(ids)
+
+
+def held_mask(body, b: Bead, X: np.ndarray, tol: float) -> np.ndarray:
+    """bool[n]: fixed node on the bottom pieces or the islands of bead ``b`` (hold anchors, section 14.5)."""
+    X = np.asarray(X, dtype=float).reshape(-1, 3)
+    out = np.zeros(len(X), dtype=bool)
+    if not len(X):
+        return out
+    d0 = region_distance(b, b.prof, np.zeros(3), X, tol)
+    near = np.flatnonzero(d0 <= tol)
+    if len(near):
+        rho, h, _, _ = core_coords(X[near], b.core, b.n, b.p0, b.ed)
+        out[near[(rho <= b.prof.rhob + tol) & (np.abs(h - b.prof.depth) <= tol)]] = True
+    if b.islands:
+        out |= on_faces(body, [f for i in b.islands for f in i.faces], X, tol)
     return out
 
 
@@ -116,7 +155,7 @@ def bead_changes(doc: dict, o: dict, vals: dict[str, float], beads: dict[str, tu
     return out
 
 
-def _collisions(changes: list[BeadChange], body_of: dict, o: dict) -> list[dict]:
+def _collisions(changes: list[BeadChange], body_of: dict, o: dict, fixed=None, held: set[str] | None = None) -> list[dict]:
     eo = o["extract"]
     land = float(eo["land_min_mm"])
     out = []
@@ -127,6 +166,30 @@ def _collisions(changes: list[BeadChange], body_of: dict, o: dict) -> list[dict]
         if why is not None:
             out.append({"kind": "SECTION_" + why.upper(), "bead": c.bead.id, "features": sorted(f["name"] for f in c.feat.values()), "detail": f"cross-section {why}"})
             continue
+    if out:
+        return out
+    for c in changes:  # SM-C3 island outline + land_min inside the new bottom outline; SM-C7 hold anchors + ring + land_min
+        if not c.changed:
+            continue
+        feats = sorted(f["name"] for f in c.feat.values())
+        for isl in c.bead.islands:
+            rm = island_rho_max(c.bead, island_points(body_of[c.bead.body], isl))
+            c1, c0 = c.new.rhob - rm, c.bead.prof.rhob - rm
+            if c1 < min(land, c0) - 1e-9:
+                out.append({"kind": "island", "bead": c.bead.id, "other": isl.id, "features": feats, "detail": f"island clearance {c1:.3f} mm < land_min {land} mm"})
+                break
+        if held and c.bead.id in held and fixed is not None:
+            b = c.bead
+            body = body_of[b.body]
+            tol = shopts.body_tol(o, body.summary().bbox)
+            A = fixed.xyz[held_mask(body, b, fixed.xyz, tol)]
+            if len(A):
+                ring = float(o["bead"]["hold"]["ring_mm"])
+                r0, _, _, _ = core_coords(A, b.core, b.n, b.p0, b.ed)
+                r1, _, _, _ = core_coords(A, [x + c.shift for x in b.core], b.n, b.p0 + c.shift, b.ed)
+                c1, c0 = float((c.new.rhob - ring - r1).min()), float((b.prof.rhob - ring - r0).min())
+                if c1 < min(land, c0) - 1e-9:
+                    out.append({"kind": "hold", "bead": b.id, "features": feats, "detail": f"hold anchor clearance {c1:.3f} mm < land_min {land} mm"})
     if out:
         return out
     # loop clearances (changed beads against everything, nominal-near pairs only when they get closer)
@@ -163,11 +226,13 @@ def _items(obst: Obstacles, c: BeadChange, cs: list[BeadChange]):
         yield o_.bead.id, o_.bead, [(now, nom)]
 
 
-def fixed_precheck(changes: list[BeadChange], plan_geometry: dict[str, set[int]], fixed, o: dict, tol_of: dict[str, float]) -> tuple[dict, str | None]:
-    """Section 6.4-3. Returns (report, failure message)."""
+def fixed_precheck(changes: list[BeadChange], plan_geometry: dict[str, set[int]], fixed, o: dict, tol_of: dict[str, float], body_of: dict | None = None,
+                   held: set[str] | None = None) -> tuple[dict, str | None]:
+    """Section 6.4-3 (+ SM-C3 island faces, SM-C7 held anchors, SM-C6 ``fixed.policy``). Returns (report, failure message)."""
     if fixed is None:
         return {"status": "NOT_EVALUATED", "violations": 0}, None
     viol = []
+    nheld = 0
     for c in changes:
         if not c.changed:
             continue
@@ -187,28 +252,67 @@ def fixed_precheck(changes: list[BeadChange], plan_geometry: dict[str, set[int]]
                 k = b.prof.locate(float(r_), float(h_))[0]
                 if any(f in geo for f in role_faces[k]):
                     bad.add(int(i))
+        if b.islands and body_of is not None:
+            isl_faces = [f for i in b.islands for f in i.faces if f in geo]
+            if isl_faces:
+                bad |= set(int(i) for i in np.flatnonzero(on_faces(body_of[b.body], isl_faces, X, tol)))
         if c.moves:
             d1 = region_distance(b, c.new, c.shift, X, tol)
             bad |= set(int(i) for i in np.flatnonzero(d1 <= tol))
+        if held and b.id in held and body_of is not None:
+            hm = held_mask(body_of[b.body], b, X, tol)
+            nh = len(bad & set(int(i) for i in np.flatnonzero(hm)))
+            nheld += nh
+            bad -= set(int(i) for i in np.flatnonzero(hm))
         if bad:
             idx = np.array(sorted(bad))
             clusters = sorted(set(int(x) for x in fixed.cluster[idx]))
             names = sorted(f["name"] for t, f in c.feat.items() if abs(c.values[t] - float(f["nominal"])) > 1e-6)
             viol.append((b.id, names, clusters, len(idx)))
+    extra = {"held": nheld} if held else {}
     if not viol:
-        return {"status": "PASS", "violations": 0}, None
+        return {"status": "PASS", "violations": 0, **extra}, None
     n = sum(v[3] for v in viol)
     msg = "; ".join(f"{', '.join(v[1]) or v[0]} moves {v[3]} fixed nodes of cluster {','.join(map(str, v[2]))}" for v in viol[:5])
-    rep = {"status": "FAIL", "violations": n, "items": [{"bead": v[0], "features": v[1], "clusters": v[2], "nodes": v[3]} for v in viol]}
-    return rep, "fixed region violation: " + msg
+    warn = o["fixed"]["policy"] == "warn"
+    rep = {"status": "WARN" if warn else "FAIL", "violations": n, **extra, "items": [{"bead": v[0], "features": v[1], "clusters": v[2], "nodes": v[3]} for v in viol]}
+    return rep, None if warn else "fixed region violation: " + msg
+
+
+def plan_islands(body, b: Bead, new: Profile, shift: np.ndarray, plan: EditPlan) -> None:
+    """SM-C3: island faces, edges and vertices follow the bottom plane rigidly (overrides the bead point map)."""
+    if not b.islands:
+        return
+    topo = body.topology()
+    t = island_shift(b, new, shift)
+    moving = bool(np.any(np.abs(t) > EPS))
+    for isl in b.islands:
+        for e in isl.edges:
+            if moving:
+                plan.edge_points[e] = body.eval_edge(e, _edge_t(topo, e)) + t
+            else:
+                plan.edge_points.pop(e, None)
+        for v in isl.vertices:
+            if moving:
+                plan.vertex_pos[v] = topo.vertices[v - 1] + t
+            else:
+                plan.vertex_pos.pop(v, None)
+        for f in isl.faces:
+            if moving:
+                plan.face_edits[f] = SurfaceEdit(translate=t)
+                plan.geometry.add(f)
+            else:
+                plan.face_edits.pop(f, None)
+                plan.geometry.discard(f)
 
 
 def update_core(cad_bodies: list, doc: dict, vals: dict[str, float], o: dict, fixed=None) -> UpdateResult:
+    held = hold_beads(doc, o)
     beads = match_beads(doc, cad_bodies, o)
     changes = bead_changes(doc, o, vals, beads)
     body_of = {b.name: b for b in cad_bodies}
     names = [b.name for b in cad_bodies]
-    cols = _collisions(changes, body_of, o)
+    cols = _collisions(changes, body_of, o, fixed, held)
     if cols:
         raise PaicadError("GEOM_FEATURE_COLLISION", "bead collision: " + "; ".join(f"{c['bead']} {c['kind']} {c.get('other', '')}".strip() for c in cols[:5]), EXIT_CAD, {"collisions": cols})
     plans: dict[str, EditPlan] = {n: EditPlan() for n in names}
@@ -216,10 +320,11 @@ def update_core(cad_bodies: list, doc: dict, vals: dict[str, float], o: dict, fi
         if c.changed:
             try:
                 plan_bead(body_of[c.bead.body], c.bead, c.new, c.shift, plans[c.bead.body])
+                plan_islands(body_of[c.bead.body], c.bead, c.new, c.shift, plans[c.bead.body])
             except ValueError as ex:
                 raise PaicadError("GEOM_CAD_FAILED", f"{c.bead.id}: {ex}", EXIT_CAD) from None
     tol_of = {n: shopts.body_tol(o, body_of[n].summary().bbox) for n in names}
-    pre, msg = fixed_precheck(changes, {n: plans[n].geometry for n in names}, fixed, o, tol_of)
+    pre, msg = fixed_precheck(changes, {n: plans[n].geometry for n in names}, fixed, o, tol_of, body_of, held)
     if msg:
         raise PaicadError("SHELL_FIXED_REGION_VIOLATION", msg, EXIT_CAD, {"fixed_precheck": pre})
     out_bodies = []
@@ -269,6 +374,13 @@ def update_core(cad_bodies: list, doc: dict, vals: dict[str, float], o: dict, fi
     if not same:
         raise PaicadError("GEOM_TOPOLOGY_CHANGED", "sample topology differs from the nominal", EXIT_CAD)
     sections = [section_doc(c.bead, c.new, c.shift) for c in changes if c.changed]
+    for sec in sections:  # SM-C7: held beads carry their bottom / islands for the morph anchors
+        if sec["id"] in held:
+            c = next(x for x in changes if x.bead.id == sec["id"])
+            sec["hold"] = True
+            sec["bottom"] = [f"F{f}" for f in c.bead.faces["bottom"]]
+            sec.setdefault("islands", [{"id": i.id, "faces": [f"F{f}" for f in i.faces], "edges": [f"E{e}" for e in i.edges], "vertices": [f"V{v}" for v in i.vertices]}
+                                       for i in c.bead.islands])
     return UpdateResult(out_bodies, names, applied, positions, expected, changed, {"same_as_nominal": True, "counts": counts}, pre, beads=sections)
 
 
@@ -295,7 +407,7 @@ def ok_report(res: UpdateResult, vals: dict, o: dict, t0: float) -> dict:
     return shell_envelope(
         status="OK", code=None, category=None, message=None, values=vals, applied=res.applied, positions=res.positions,
         expected_measured=res.expected, changed=res.changed, beads=res.beads, fixed_precheck=res.fixed_precheck, collisions=res.collisions,
-        topology=res.topology, options={"bead": o["bead"], "extract": o["extract"]}, warnings=res.warnings, elapsed_s=rnd(time.monotonic() - t0, 3),
+        topology=res.topology, options={k: shopts.used(o)[k] for k in ("bead", "extract")}, warnings=res.warnings, elapsed_s=rnd(time.monotonic() - t0, 3),
     )
 
 

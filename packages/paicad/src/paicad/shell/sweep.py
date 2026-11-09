@@ -142,7 +142,7 @@ def run(args, rep: Reporter) -> int:
         steps_pct=steps, pos_steps_mm=pos_steps, stop_after_fail=args.stop_after_fail, check=args.check == "on", options=shopts.used(o), rows=rows, summary=summary,
     )
     out.write_text(ENVELOPE_JSON, dumps(env))
-    out.write_text(ENVELOPE_CSV, _csv(rows))
+    out.write_text(ENVELOPE_CSV, _csv(rows, o["fixed"]["policy"] == "warn"))
     out.write_text(FEATURES_JSON, dumps(_features_with_envelope(doc, summary, sweep_id, o)))
     md, rcsv = render(env)
     out.write_text(REPORT_MD, md)
@@ -181,6 +181,8 @@ def _step(row, vals, bodies, doc, o, fixed, meshes, samples, asm, tag_dist, chec
     row.update(status="OK" if c.status == "PASS" else "FAIL", fail_code=c.code, max_warpage_deg=s["max_warpage_deg"], max_skew_deg=s["max_skew_deg"], max_aspect=s["max_aspect"],
                min_jacobian=s["min_jacobian"], edge_ratio=s["edge_ratio"], dt_ratio=s["dt_ratio"], boundary_dev_max_mm=s["boundary_dev_max_mm"],
                param_remeasure_err=s["param_remeasure_err"], param_margin=s["param_margin"], quality_margins=s["quality_margins"], inverted_elems=s["inverted_elems"])
+    if o["fixed"]["policy"] == "warn":  # SM-C6: fixed nodes that moved under the warn policy (optional column)
+        row["fixed_moved_nodes"] = s.get("fixed_moved_nodes") or 0
     if sub:
         out.write_text(f"{sub}/shell_check.json", dumps(shell_envelope(status=c.status, code=c.code, category=CODE_CATEGORY.get(c.code) if c.code else None, message=c.message, checks=c.checks)))
         keep.append(f"{sub}/shell_check.json")
@@ -190,7 +192,7 @@ def _sweep_id(args, o, steps, pos_steps, params) -> str:
     h = hashlib.sha256()
     for path in (args.features, Path(args.update_dir) / SAMPLE_BREP, Path(args.tag_dir) / "shell_tag.json", Path(args.fixed_dir) / "shell_scan.json"):
         h.update(sha256_file(path).encode())
-    h.update(json.dumps({"opts": o, "steps": steps, "pos_steps_mm": pos_steps, "params": params, "stop": args.stop_after_fail, "check": args.check}, sort_keys=True).encode())
+    h.update(json.dumps({"opts": shopts.compat(o), "steps": steps, "pos_steps_mm": pos_steps, "params": params, "stop": args.stop_after_fail, "check": args.check}, sort_keys=True).encode())
     return "S-" + h.hexdigest()[:12]
 
 
@@ -209,7 +211,7 @@ def _summary(params, rows, nominal, unit_of) -> list[dict]:
                 last = r["step"]
             s["last_ok"][d], s["first_fail"][d], s["first_fail_code"][d] = last, ff, fc
             s["last_ok_label"][d], s["first_fail_label"][d] = step_label(last, unit), step_label(ff, unit)
-            s["limited_by"][d] = "fixed" if fc == "SHELL_FIXED_REGION_VIOLATION" else None
+            s["limited_by"][d] = "fixed" if fc == "SHELL_FIXED_REGION_VIOLATION" else None  # only possible with fixed.policy skip
         pct = unit == "%"
         s["last_ok_pct"] = dict(s["last_ok"]) if pct else {"+": None, "-": None}
         s["first_fail_pct"] = dict(s["first_fail"]) if pct else {"+": None, "-": None}
@@ -252,15 +254,16 @@ def _c(x) -> str:
     return "" if x is None else repr(x)
 
 
-def _csv(rows) -> str:
+def _csv(rows, fixed_moved: bool = False) -> str:
     buf = io.StringIO()
     w = csv.writer(buf, lineterminator="\n")
-    w.writerow(CSV_COLUMNS)
+    w.writerow(CSV_COLUMNS + (("fixed_moved_nodes",) if fixed_moved else ()))
     for r in rows:
         e = r["param_remeasure_err"] or {}
         w.writerow([r["param"], r["direction"], _pct(r["step"]), r["unit"], "" if r["pct"] is None else _pct(r["pct"]), repr(r["value"]), _c(r["delta_mm"]), r["status"], r["fail_code"] or "",
                     _c(r["max_warpage_deg"]), _c(r["max_skew_deg"]), _c(r["max_aspect"]), _c(r["min_jacobian"]), _c(r["edge_ratio"]), _c(r["dt_ratio"]),
-                    _c(r["boundary_dev_max_mm"]), _c(e.get("abs")), _c(e.get("rel")), "" if r["inverted_elems"] is None else r["inverted_elems"]])
+                    _c(r["boundary_dev_max_mm"]), _c(e.get("abs")), _c(e.get("rel")), "" if r["inverted_elems"] is None else r["inverted_elems"]]
+                   + ([_c(r.get("fixed_moved_nodes"))] if fixed_moved else []))
     return buf.getvalue()
 
 

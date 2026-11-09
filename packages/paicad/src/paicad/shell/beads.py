@@ -163,6 +163,22 @@ class Profile:
 
 # ------------------------------------------------------------------ bead
 @dataclass
+class Island:
+    """Island of a bead bottom (shell-morph SM-C3): a hole (inner wire of free edges, no faces) or a face
+    component (dimple, burring, boss, louver ...) bounded only by the bottom pieces. Moves rigidly with the bottom."""
+
+    kind: str  # hole | feature
+    faces: list[int]
+    loop: list[int]  # bottom inner-wire edges bounding the island
+    edges: list[int]  # every edge of the island (loop included)
+    vertices: list[int]
+    free_loops: int
+    size: float  # bbox diagonal of the island projected on the base plane (mm)
+    center: np.ndarray
+    id: str = ""
+
+
+@dataclass
 class Bead:
     body: str
     base_face: int
@@ -178,6 +194,7 @@ class Bead:
     face_frame: dict[int, dict] = field(default_factory=dict)  # face id -> {"elem": k, "kind": ..., ...}
     id: str = ""
     k: int = 0
+    islands: list[Island] = field(default_factory=list)
 
     @property
     def center(self) -> np.ndarray:
@@ -199,11 +216,21 @@ def section_doc(bead: Bead, new: Profile, shift: np.ndarray) -> dict:
     def prof(p: Profile) -> dict:
         return {"rho0": p.rho0, "rt": p.rt, "rhob": p.rhob, "rb": p.rb, "depth": p.depth}
 
-    return {
+    out = {
         "id": bead.id, "body": bead.body, "faces": [f"F{f}" for f in bead.all_faces()], "base_face": f"F{bead.base_face}",
         "core": [[float(x) for x in c] for c in bead.core], "normal": [float(x) for x in bead.n], "base_point": [float(x) for x in bead.p0],
         "depth_dir": [float(x) for x in bead.ed], "profile": prof(bead.prof), "new_profile": prof(new), "shift": [float(x) for x in shift],
     }
+    if bead.islands:  # SM-C3: bottom pieces with islands are solved in-surface, island entities move by island_shift
+        out["bottom"] = [f"F{f}" for f in bead.faces["bottom"]]
+        out["islands"] = [{"id": i.id, "faces": [f"F{f}" for f in i.faces], "edges": [f"E{e}" for e in i.edges], "vertices": [f"V{v}" for v in i.vertices]} for i in bead.islands]
+        out["island_shift"] = [float(x) for x in island_shift(bead, new, shift)]
+    return out
+
+
+def island_shift(bead: Bead, new: Profile, shift: np.ndarray) -> np.ndarray:
+    """Rigid translation of the islands = translation of the bottom plane (depth change along ed + bead shift)."""
+    return (new.depth - bead.prof.depth) * bead.ed + np.asarray(shift, dtype=float)
 
 
 def bead_from_section(d: dict) -> tuple[Bead, Profile, np.ndarray]:
@@ -299,6 +326,8 @@ def recognize(body, eo: dict, tol: float, name: str) -> Recognized:
     holes: list[list[int]] = []
     bases: list[int] = []
     cos_draft = math.cos(math.radians(eo["draft_max_deg"]))
+    islands_on = bool(eo.get("islands", False))
+    results: list[tuple[int, tuple[int, ...], object]] = []  # (base face, loop wire, Bead | warning)
     for base in topo.faces:
         if base.surface != "PLANE" or not base.inner_wires or base.normal is None:
             continue
@@ -311,24 +340,32 @@ def recognize(body, eo: dict, tol: float, name: str) -> Recognized:
                 continue
             loc = f"{name}: loop of F{base.id} (edges {','.join('E%d' % e for e in wire[:4])})"
             if nfree:
-                warnings.append({"code": "BEAD_IRREGULAR", "body": name, "message": f"{loc}: loop mixes free and shared edges"})
+                results.append((base.id, tuple(wire), {"code": "BEAD_IRREGULAR", "body": name, "message": f"{loc}: loop mixes free and shared edges"}))
                 continue
             if base.id not in bases:
                 bases.append(base.id)
-            res = _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, loc)
-            if isinstance(res, dict):
-                warnings.append(res)
-            else:
-                beads.append(res)
+            results.append((base.id, tuple(wire), _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, loc, islands_on)))
+    if islands_on:
+        # loops of absorbed islands (their own bead / warning) belong to the bead that owns the island
+        absorbed = {(f, e) for r in results if isinstance(r[2], Bead) for i in r[2].islands for f in r[2].faces["bottom"] for e in i.loop}
+        results = [r for r in results if not (r[1] and all((r[0], e) in absorbed for e in r[1]))]
+        bases = [b for b in bases if any(r[0] == b for r in results)]
+    for _, _, res in results:
+        if isinstance(res, dict):
+            warnings.append(res)
+        else:
+            beads.append(res)
     return Recognized(beads, warnings, holes, bases)
 
 
-def _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, loc):
+def _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, loc, islands_on: bool = False):
     def irregular(msg, code="BEAD_IRREGULAR"):
         return {"code": code, "body": name, "message": f"{loc}: {msg}"}
 
     if any(topo.edge(e).convexity != "SMOOTH" for e in wire):
         return irregular("entry loop is not tangent (no top fillet)")
+    if islands_on:
+        return _recognize_loop_islands(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, irregular)
     visited = {base.id}
     layer = sorted(_faces_of_edges(topo, wire) - visited)
     layers = []
@@ -358,10 +395,15 @@ def _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name,
         return irregular("flank ring must be planes / cones")
     if len(layers[3]) != 1 or kinds[3][0] != "PLANE":
         return irregular("bottom must be exactly one planar face")
+    return _bead_from_layers(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, irregular, layers, [])
+
+
+def _bead_from_layers(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, irregular, layers, island_parts):
     bottom = topo.face(layers[3][0])
     if abs(float(np.dot(_unit(bottom.normal), n))) < cos_draft:
         return irregular("bottom is not parallel to the base face")
     sgn = float(np.dot(np.asarray(bottom.centroid) - p0, n))
+    region = [f for L in layers for f in L]
     depth = abs(sgn)
     if depth < eo["min_depth_mm"]:
         return irregular(f"depth {depth:.3f} mm below min_depth_mm")
@@ -451,7 +493,9 @@ def _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name,
             return irregular(f"E{e}: entry loop is not at the fillet start")
     if prof.valid() is not None:
         return irregular(f"cross-section is degenerate ({prof.valid()})")
-    pts = body.sample_face(bottom.id, 24)
+    pts = body.sample_face(bottom.id, 24) if len(layers[3]) == 1 else np.concatenate([body.sample_face(f, 24) for f in layers[3]])
+    if island_parts:  # bottom with islands: PCA of the filled bottom region (rho <= rhob around the core)
+        pts = _filled_bottom(core, n, prof.rhob)
     shape = "circular"
     if len(pts) >= 3:
         q = pts - pts.mean(axis=0)
@@ -464,7 +508,203 @@ def _recognize_loop(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name,
         for f in L:
             frames[f] = {"elem": k}
     faces = {ROLES[k]: list(L) for k, L in enumerate(layers)}
-    return Bead(name, base.id, list(wire), faces, shape, sense, n, p0, ed, core, prof, frames)
+    bead = Bead(name, base.id, list(wire), faces, shape, sense, n, p0, ed, core, prof, frames)
+    if island_parts:
+        isl = _islands(body, topo, bead, island_parts, eo, irregular)
+        if isinstance(isl, dict):
+            return isl
+        bead.islands = isl
+    return bead
+
+
+
+
+def _filled_bottom(core: list[np.ndarray], n: np.ndarray, rhob: float, step: float = 0.5) -> np.ndarray:
+    """Grid points of the flat bottom region {rho <= rhob} around the core (base-plane projection)."""
+    a = np.cross(n, [1.0, 0.0, 0.0] if abs(n[0]) < 0.9 else [0.0, 1.0, 0.0])
+    a /= np.linalg.norm(a)
+    b = np.cross(n, a)
+    c = np.mean(core, axis=0)
+    ext = rhob + (0.5 * float(np.linalg.norm(core[1] - core[0])) if len(core) == 2 else 0.0)
+    k = max(8, int(math.ceil(2 * ext / step)))
+    t = np.linspace(-ext, ext, k + 1)
+    P = c + t[:, None, None] * a + t[None, :, None] * b
+    P = P.reshape(-1, 3)
+    rho, _, _, _ = core_coords(P, core, n, c, n)
+    return P[rho <= rhob]
+
+
+def _recognize_loop_islands(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, irregular):
+    """SM-C3 recognition: rings 1..3 as before, ring 4 = coplanar bottom pieces parallel to the base face (>= 1),
+    everything beyond the bottom pieces = island components (judged in :func:`_islands`)."""
+    visited = {base.id}
+    layer = sorted(_faces_of_edges(topo, wire) - visited)
+    layers = []
+    while layer and len(layers) < 4:
+        layers.append(layer)
+        visited.update(layer)
+        nxt: set[int] = set()
+        for f in layer:
+            nxt |= _neighbors(topo, f)
+        layer = sorted(nxt - visited)
+    rest: set[int] = set()  # faces beyond the bottom ring (island candidates), closure without crossing base / rings
+    front = set(layer)
+    while front:
+        rest |= front
+        nxt = set()
+        for f in front:
+            nxt |= _neighbors(topo, f)
+        front = nxt - visited - rest
+    for k, L in enumerate(layers):
+        for f in L:
+            for e in topo.face(f).edges:
+                ed_ = topo.edge(e)
+                if len(ed_.faces) == 1 and ed_.convexity != "SEAM":
+                    fd = topo.face(f)
+                    if k < 3 or e in fd.outer_edges or not any(e in w and all(len(topo.edge(x).faces) == 1 for x in w) for w in fd.inner_wires):
+                        return irregular("bead region reaches a free edge (open bead)", "BEAD_OPEN_UNSUPPORTED")
+                if base.id in ed_.faces and e not in wire:
+                    return irregular("bead region touches its base face outside the entry loop")
+    for f in rest:
+        if base.id in _neighbors(topo, f):
+            return irregular("bead region touches its base face outside the entry loop")
+    if len(layers) != 4:
+        return irregular(f"expected 4 face rings (fillet, flank, fillet, bottom), found {len(layers)}")
+    kinds = [[topo.face(f).surface for f in L] for L in layers]
+    if not all(k in BLEND for k in kinds[0]) or not all(k in BLEND for k in kinds[2]):
+        return irregular("fillet rings must be cylinders / tori")
+    if not all(k in FLANK for k in kinds[1]):
+        return irregular("flank ring must be planes / cones")
+    if not all(k == "PLANE" for k in kinds[3]):
+        return irregular("bottom must be planar faces")
+    b0 = topo.face(layers[3][0])
+    for f in layers[3]:
+        fd = topo.face(f)
+        if abs(float(np.dot(_unit(fd.normal), n))) < cos_draft:
+            return irregular("bottom is not parallel to the base face")
+        if abs(float(np.dot(np.asarray(fd.centroid) - np.asarray(b0.centroid), _unit(b0.normal)))) > tol:
+            return irregular("bottom pieces are not coplanar")
+    parts = _island_parts(topo, layers[3], rest)
+    return _bead_from_layers(body, topo, sp, base, wire, n, p0, eo, tol, cos_draft, name, irregular, layers, parts)
+
+
+def _island_parts(topo, bottoms: list[int], rest: set[int]) -> list[tuple[str, list[int], list[int]]]:
+    """[(kind, faces, loop edges)]: face components of ``rest`` and hole wires (free inner wires) of the bottoms."""
+    out = []
+    bset = set(bottoms)
+    for f in sorted(bottoms):
+        for w in topo.face(f).inner_wires:
+            if all(len(topo.edge(e).faces) == 1 for e in w):
+                out.append(("hole", [], sorted(w)))
+    seen: set[int] = set()
+    for f0 in sorted(rest):
+        if f0 in seen:
+            continue
+        comp, front = set(), {f0}
+        while front:
+            comp |= front
+            nxt = set()
+            for f in front:
+                nxt |= _neighbors(topo, f)
+            front = (nxt & rest) - comp
+        seen |= comp
+        loop = sorted(e for f in bset for e in topo.face(f).edges if set(topo.edge(e).faces) & comp)
+        out.append(("feature", sorted(comp), loop))
+    return out
+
+
+def _islands(body, topo, bead: Bead, parts, eo: dict, irregular):
+    """Section 14.1 conditions (a)-(d) per island component; [Island] or a warning (no feature for this bead)."""
+    bset = set(bead.faces["bottom"])
+    depth = bead.prof.depth
+    out: list[Island] = []
+    for kind, faces, loop in parts:
+        fs = set(faces)
+        if faces:
+            nb = set()
+            for f in faces:
+                nb |= _neighbors(topo, f)
+            if not (nb - fs) <= bset:  # (a)
+                return irregular("bottom island touches faces other than the bottom")
+            for f in faces:  # (d) a bead loop (inner wire with shared edges) inside the island = nested bead
+                fd = topo.face(f)
+                if fd.surface == "PLANE" and any(any(len(topo.edge(e).faces) > 1 for e in w) for w in fd.inner_wires):
+                    return irregular(f"nested bead inside the bottom island (F{f})")
+        edges = sorted(set(loop) | {e for f in faces for e in topo.face(f).edges})
+        verts = sorted({v for e in edges for v in topo.edge(e).vertices})
+        P = [topo.vertices[np.array(verts) - 1]] if verts else []
+        for e in edges:
+            P.append(body.eval_edge(e, np.linspace(0.0, 1.0, 9)))
+        P = np.concatenate(P) if P else np.zeros((0, 3))
+        h = (P - bead.p0) @ bead.ed
+        rise = float(depth - h.min()) if len(P) else 0.0
+        if faces and rise >= float(eo["island_ring_frac"]) * depth:  # (c)
+            return irregular(f"annular inner mound (bottom island rises {rise:.3f} mm of depth {depth:.3f} mm)")
+        q = P - np.outer((P - bead.p0) @ bead.n, bead.n)
+        e1 = np.cross(bead.n, [1.0, 0.0, 0.0] if abs(bead.n[0]) < 0.9 else [0.0, 1.0, 0.0])
+        e1 /= np.linalg.norm(e1)
+        e2 = np.cross(bead.n, e1)
+        uv = np.stack([q @ e1, q @ e2], axis=1)
+        size = float(np.linalg.norm(uv.max(axis=0) - uv.min(axis=0))) if len(uv) else 0.0
+        if size > float(eo["island_max_mm"]):  # (b)
+            w = irregular(f"bottom island of {size:.3f} mm exceeds island_max_mm {eo['island_max_mm']}", "BEAD_ISLAND_TOO_LARGE")
+            w["bead_loop"] = [f"E{e}" for e in bead.loop_edges]
+            w["size_mm"] = round(size, 6)
+            return w
+        free = [e for e in edges if len(topo.edge(e).faces) == 1 and topo.edge(e).convexity != "SEAM"]
+        out.append(Island(kind, faces, loop, edges, verts, _chains(topo, free), size, 0.5 * (P.min(axis=0) + P.max(axis=0))))
+    out.sort(key=lambda i: (tuple(np.round(i.center, 4)), min(i.loop) if i.loop else 0))
+    return out
+
+
+def _chains(topo, edges: list[int]) -> int:
+    """Number of vertex-connected chains of the given edges."""
+    parent = {e: e for e in edges}
+
+    def find(x):
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    by_v: dict[int, int] = {}
+    for e in edges:
+        for v in topo.edge(e).vertices:
+            if v in by_v:
+                parent[find(e)] = find(by_v[v])
+            else:
+                by_v[v] = e
+    return len({find(e) for e in edges})
+
+
+def island_points(body, isl: Island, n: int = 9) -> np.ndarray:
+    """Sample points of every edge of an island (its projected outline lies within them)."""
+    pts = [body.eval_edge(e, np.linspace(0.0, 1.0, n)) for e in isl.edges]
+    return np.concatenate(pts) if pts else np.zeros((0, 3))
+
+
+def island_rho_max(bead: Bead, pts: np.ndarray) -> float:
+    """Largest in-plane distance of island points to the bead core (unchanged by the bead shift)."""
+    if len(pts) == 0:
+        return -math.inf
+    rho, _, _, _ = core_coords(pts, bead.core, bead.n, bead.p0, bead.ed)
+    return float(rho.max())
+
+
+def on_faces(body, faces: list[int], X: np.ndarray, tol: float) -> np.ndarray:
+    """bool[n]: point within ``tol`` of one of the faces (bbox-filtered candidates only, no dense N x M)."""
+    X = np.asarray(X, dtype=float).reshape(-1, 3)
+    out = np.zeros(len(X), dtype=bool)
+    if not len(X) or not faces:
+        return out
+    topo = body.topology()
+    for f in faces:
+        bb = np.asarray(topo.face(f).bbox, dtype=float)
+        cand = np.flatnonzero(np.all((X >= bb[:3] - tol) & (X <= bb[3:] + tol), axis=1) & ~out)
+        if len(cand):
+            d, _, _, _ = body.project_to_face(f, X[cand])
+            out[cand[d <= tol]] = True
+    return out
 
 
 # ------------------------------------------------------------------ axes / references

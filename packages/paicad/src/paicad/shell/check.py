@@ -26,11 +26,12 @@ from . import opts as shopts
 from .assem import SHELL_KW, Assembly, SetError, resolve_grnod, resolve_surf, seg_triangles
 from .beads import Bead, core_coords, recognize
 from .common import load_shell_features, load_values, shell_envelope
+from .judge import RANK, JudgeInput, Tables, judge_mesh
 from .morph import FILES_DIR, MORPH_JSON, ShellMesh, _element_faces, load_inputs
-from .quality import evaluate as quality_eval
 
 CHECK_JSON = "shell_check.json"
-PRIORITY = ("SHELL_FIXED_REGION_VIOLATION", "GEOM_INTERFERENCE", "GEOM_QUALITY", "GEOM_DEVIATION", "GEOM_PARAM_MISMATCH", "GEOM_TIE_PROJECTION")
+# final code order (section 14.4): feature distortion -> inversion / dt_ratio -> fixed -> interference -> quality -> deviation -> param -> tie
+PRIORITY = tuple(sorted(RANK, key=RANK.get))
 
 
 @dataclass
@@ -41,6 +42,7 @@ class CheckResult:
     checks: dict
     warnings: list[dict] = field(default_factory=list)
     summary: dict = field(default_factory=dict)
+    waived: list[str] = field(default_factory=list)  # SM-C6: failure codes passed under the warn policies
 
 
 def node_lines(data: bytes) -> dict[int, bytes]:
@@ -67,12 +69,17 @@ def _plane_fit(P: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return c, vt[2]
 
 
-def measure_bead(m: ShellMesh, xyz: np.ndarray, elem_face: np.ndarray, bead: Bead, feats: dict, body, o: dict) -> dict[str, float]:
-    """Section 6.3 table measurements on the morphed nodes (``bead`` = recognized sample bead)."""
+def measure_bead(m: ShellMesh, xyz: np.ndarray, elem_face: np.ndarray, bead: Bead, feats: dict, body, o: dict, exclude: np.ndarray | None = None) -> dict[str, float]:
+    """Section 6.3 table measurements on the morphed nodes (``bead`` = recognized sample bead). ``exclude``: nodes left
+    out of the depth (hold region, SM-C7). Beads with bottom islands (SM-C3) measure the position as the nominal value
+    plus the displacement of the bottom-element centroid (the islands bias the absolute centroid)."""
     out: dict[str, float] = {}
     kind, ent = m.kind, m.ent
-    bottom = bead.faces["bottom"][0]
-    bn = np.flatnonzero((kind == KIND_FACE) & (ent == bottom))
+    bottoms = bead.faces["bottom"]
+    bottom = bottoms[0]
+    bn = np.flatnonzero((kind == KIND_FACE) & (np.isin(ent, bottoms) if len(bottoms) > 1 else (ent == bottom)))
+    if exclude is not None:
+        bn = bn[~exclude[bn]]
     base = np.flatnonzero((kind == KIND_FACE) & (ent == bead.base_face))
     if len(base) == 0:
         return out
@@ -95,22 +102,29 @@ def measure_bead(m: ShellMesh, xyz: np.ndarray, elem_face: np.ndarray, bead: Bea
         depth = float(np.mean((xyz[bn] - c) @ nr))
         out["BEAD_DEPTH"] = depth
     # position: area-weighted centroid of the bottom elements, onto the base plane
-    be = np.flatnonzero(elem_face == bottom)
-    if len(be):
-        P = xyz[m.conn[be]]
+    be = np.flatnonzero(elem_face == bottom) if len(bottoms) == 1 else np.flatnonzero(np.isin(elem_face, bottoms))
+
+    def centroid(X):
+        P = X[m.conn[be]]
         t1 = P[:, [0, 1, 2]]
         t2 = P[:, [0, 2, 3]]
         A1 = 0.5 * np.linalg.norm(np.cross(t1[:, 1] - t1[:, 0], t1[:, 2] - t1[:, 0]), axis=1)
         A2 = np.where(m.tri[be], 0.0, 0.5 * np.linalg.norm(np.cross(t2[:, 1] - t2[:, 0], t2[:, 2] - t2[:, 0]), axis=1))
         cen = (A1[:, None] * t1.mean(1) + A2[:, None] * t2.mean(1)).sum(0) / max(float((A1 + A2).sum()), 1e-300)
-        cen = cen - float(np.dot(cen - c, nr)) * nr
+        return cen - float(np.dot(cen - c, nr)) * nr
+
+    if len(be):
+        cen = centroid(xyz)
+        cen0 = centroid(m.xyz) if bead.islands else None
         for t in ("BEAD_POS_U", "BEAD_POS_V"):
             f = feats.get(t)
             if f is None:
                 continue
             r = f["ref"]
             ax = np.asarray(r["axis"], dtype=float)
-            if r["rule"] == "proportional":
+            if cen0 is not None:
+                out[t] = float(f["nominal"]) + float(r.get("sign", 1.0) if r["rule"] != "proportional" else 1.0) * float(np.dot(cen - cen0, ax))
+            elif r["rule"] == "proportional":
                 out[t] = float(cen @ ax - float(r["origin"]))
             else:
                 q = body.eval_edge(int(r["edge"][1:]), np.array([0.5]))[0]
@@ -153,7 +167,7 @@ def measure_bead(m: ShellMesh, xyz: np.ndarray, elem_face: np.ndarray, bead: Bea
     return out
 
 
-def deviation(m: ShellMesh, xyz: np.ndarray, body, changed: dict, moved: np.ndarray, tag_dist: np.ndarray) -> tuple[float, int]:
+def deviation(m: ShellMesh, xyz: np.ndarray, body, changed: dict, moved: np.ndarray, tag_dist: np.ndarray, exclude: np.ndarray | None = None) -> tuple[float, int]:
     topo = body.topology()
     G = {int(x[1:]) for x in changed.get("geometry", []) + changed.get("boundary_only", [])}
     Ec = {int(x[1:]) for x in changed.get("edges", [])}
@@ -177,6 +191,8 @@ def deviation(m: ShellMesh, xyz: np.ndarray, body, changed: dict, moved: np.ndar
     sel_v = (kind == KIND_VERTEX) & (np.isin(ent, sorted(Vc)) | moved)
     for i in np.flatnonzero(sel_v):
         dev[i] = float(np.linalg.norm(xyz[i] - topo.vertices[int(ent[i]) - 1]))
+    if exclude is not None and exclude.any():  # SM-C7 hold region: intentionally off the sample B-rep
+        dev[exclude] = 0.0
     i = int(np.argmax(dev)) if len(dev) else 0
     return (float(dev[i]) if len(dev) else 0.0), i
 
@@ -256,28 +272,57 @@ def tie_check(asm: Assembly, meshes: list[ShellMesh], new_xyz: dict[int, np.ndar
     return check_ties(sets, shell_nodes, new, base, o)
 
 
+def judge_inputs(m: ShellMesh, x: np.ndarray, body, doc: dict, expected: dict, changed: dict, o: dict, held: set[str], line_changes: int = 0) -> JudgeInput:
+    """Mesh-only inputs of the judgement core for one part (labels from the tag, B-rep topology as integer tables)."""
+    topo = body.topology()
+    by_bead: dict[str, list[str]] = {}
+    for f in doc["features"]:
+        by_bead.setdefault(f["bead"], []).append(f["name"])
+    G = {int(x_[1:]) for x_ in changed.get("geometry", []) + changed.get("boundary_only", [])}
+    feats, hold = [], []
+    for bj in doc["beads"]:
+        if bj["body"] != m.body or not any(nm in expected for nm in by_bead.get(bj["id"], [])):
+            continue  # SM-C4: islands of the beads that moved in this sample
+        isl_faces = [[int(x_[1:]) for x_ in i["faces"]] for i in bj.get("islands") or []]
+        for i, fs in zip(bj.get("islands") or [], isl_faces):
+            if fs:
+                feats.append({"bead": bj["id"], "island": i["id"], "faces": fs, "rim_zero": False})
+        roles = [int(x_[1:]) for k in ("fillets_top", "flanks", "fillets_bottom", "bottom") for x_ in bj[k]]
+        region = set(roles) | {f for fs in isl_faces for f in fs}
+        nb = set()
+        for f in region:
+            for e in topo.face(f).edges:
+                nb.update(topo.edge(e).faces)
+        other = sorted(nb - region - {int(bj["base_face"][1:])} - G)
+        for f in other:  # faces next to the bead region that the update left unchanged: must not move (rim t = 0)
+            feats.append({"bead": bj["id"], "island": f"F{f}", "faces": [f], "rim_zero": True})
+        if bj["id"] in held:
+            hold.append({"bead": bj["id"], "region_faces": sorted(region), "anchor_faces": sorted({int(x_[1:]) for x_ in bj["bottom"]} | {f for fs in isl_faces for f in fs})})
+    return JudgeInput(m.node_ids, m.xyz, x, m.conn, m.tri, m.kind, m.ent, m.fixed, m.cluster, Tables.from_topology(topo), feats, hold, line_changes)
+
+
 def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict, vals: dict, expected: dict, changed_all: dict, o: dict, asm: Assembly | None,
                thick: dict[int, float], tag: dict, files: list[tuple[str, bytes]] | None, full: bool = True) -> CheckResult:
     checks: dict = {}
     warnings: list[dict] = []
     fails: dict[str, str] = {}
-    # (f) fixed
-    moved_fixed, fmax = 0, 0.0
-    for m in meshes:
-        dd = np.linalg.norm(morphed[m.index][m.fixed] - m.xyz[m.fixed], axis=1)
-        moved_fixed += int((dd > 0).sum())
-        fmax = max(fmax, float(dd.max()) if dd.size else 0.0)
+    waived: list[str] = []
+    held = set(shopts.hold_ids(o))
+    # (f) fixed: byte comparison of the fixed node lines (file copies), coordinates in the judgement core
+    line_changes = {m.index: 0 for m in meshes}
     if files is not None and asm is not None:
-        fixed_ids = set()
         for m in meshes:
-            fixed_ids.update(int(x) for x in m.node_ids[m.fixed])
-        for rel, data in files:
-            a = node_lines((asm.root / rel).read_bytes())
-            b = node_lines(data)
-            moved_fixed += sum(1 for k in fixed_ids if k in a and a[k] != b.get(k))
-    checks["fixed"] = {"status": "FAIL" if moved_fixed else "PASS", "moved_fixed_nodes": moved_fixed, "max_mm": rnd(fmax)}
-    if moved_fixed:
-        fails["SHELL_FIXED_REGION_VIOLATION"] = f"fixed: {moved_fixed} fixed nodes changed"
+            fixed_ids = set(int(x) for x in m.node_ids[m.fixed])
+            for rel, data in files:
+                a = node_lines((asm.root / rel).read_bytes())
+                b = node_lines(data)
+                line_changes[m.index] += sum(1 for k in fixed_ids if k in a and a[k] != b.get(k))
+    J = {}
+    for m in meshes:
+        J[m.index] = judge_mesh(judge_inputs(m, morphed[m.index], samples[m.body], doc, expected, changed_all.get(m.body, {}), o, held, line_changes[m.index]), o)
+    fx = [J[m.index]["checks"]["fixed"] for m in meshes]
+    st = "FAIL" if any(f["status"] == "FAIL" for f in fx) else ("WARN" if any(f["status"] == "WARN" for f in fx) else "PASS")
+    checks["fixed"] = {"status": st, "moved_fixed_nodes": sum(f["moved_fixed_nodes"] for f in fx), "max_mm": rnd(max(f["max_mm"] for f in fx))}
     # (a) parameters
     by_bead: dict[str, dict] = {}
     for f in doc["features"]:
@@ -293,6 +338,7 @@ def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict,
             ef = m._elem_face = _element_faces(m, topo)
         tol = shopts.body_tol(o, body.summary().bbox)
         rec = {tuple(b.faces["bottom"]): b for b in recognize(body, o["extract"], tol, body.name).beads}
+        excl = J[m.index]["hold_nodes"]
         for bj in doc["beads"]:
             if bj["body"] != m.body:
                 continue
@@ -301,7 +347,10 @@ def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict,
             if not want:
                 continue
             bead = rec.get(tuple(int(x[1:]) for x in bj["bottom"]))
-            meas = measure_bead(m, morphed[m.index], ef, bead, feats, body, o) if bead is not None else {}
+            if bead is None and o["extract"].get("islands") and not bj.get("islands"):  # features prepared without islands
+                legacy = {tuple(b.faces["bottom"]): b for b in recognize(body, dict(o["extract"], islands=False), tol, body.name).beads}
+                bead = legacy.get(tuple(int(x[1:]) for x in bj["bottom"]))
+            meas = measure_bead(m, morphed[m.index], ef, bead, feats, body, o, excl if excl.any() else None) if bead is not None else {}
             for t, f in sorted(want.items(), key=lambda kv: kv[1]["name"]):
                 inp = float(vals.get(f["name"], f["nominal"]))
                 exp = float(expected.get(f["name"], inp))
@@ -324,31 +373,46 @@ def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict,
     worst, worst_node = 0.0, None
     for m in meshes:
         moved = np.any(morphed[m.index] != m.xyz, axis=1)
-        dmax, i = deviation(m, morphed[m.index], samples[m.body], changed_all.get(m.body, {}), moved, tag["dist_of"][m.index])
+        excl = J[m.index]["hold_nodes"]
+        dmax, i = deviation(m, morphed[m.index], samples[m.body], changed_all.get(m.body, {}), moved, tag["dist_of"][m.index], excl if excl.any() else None)
         if dmax >= worst:
             worst, worst_node = dmax, int(m.node_ids[i]) if len(m.node_ids) else None
     tolb = float(dv["boundary_max_mm"])
     checks["deviation"] = {"status": "FAIL" if worst > tolb else "PASS", "max_mm": rnd(worst), "tol_mm": tolb, "worst_node": worst_node}
     if worst > tolb:
         fails["GEOM_DEVIATION"] = f"deviation: {worst:.4f} mm > {tolb} mm at node {worst_node}"
-    # (c) quality
-    qreps = []
-    qmsg = None
+    # (c) quality, (g) feature rigidity, hold: judgement core
+    qreps = [J[m.index]["checks"]["quality"] for m in meshes]
     for m in meshes:
-        rep, msg, w = quality_eval(m.xyz, morphed[m.index], m.conn, m.tri, o["quality"])
-        qreps.append(rep)
-        warnings += w
-        qmsg = qmsg or msg
+        warnings += J[m.index]["warnings"]
+        waived += [w for w in J[m.index]["waived"] if w not in waived]
+        for code, msg in J[m.index]["fails"].items():
+            fails.setdefault(code, msg)
     q = qreps[0] if len(qreps) == 1 else _merge_quality(qreps)
     checks["quality"] = q
-    if qmsg:
-        fails["GEOM_QUALITY"] = qmsg
+    gch = [J[m.index]["checks"]["feature"] for m in meshes]
+    tested = [g_ for g_ in gch if g_["status"] != "SKIPPED"]
+    worst_f = max((g_["worst"] for g_ in tested if g_["worst"]), key=lambda w: w["dev_mm"] - w["floor_mm"], default=None)
+    checks["feature"] = {"status": "FAIL" if any(g_["status"] == "FAIL" for g_ in gch) else ("PASS" if tested else "SKIPPED"), "features": sum(g_["features"] for g_ in gch),
+                         "worst": None if worst_f is None else {k: (rnd(v) if isinstance(v, float) else v) for k, v in worst_f.items()},
+                         "mixed_elems": sum(g_["mixed_elems"] for g_ in gch)}
+    hl = [J[m.index]["checks"]["hold"] for m in meshes if J[m.index]["checks"].get("hold")]
+    if hl:
+        mxdev = 0.0
+        for m in meshes:
+            ex = J[m.index]["hold_nodes"]
+            if ex.any():
+                dv_, _ = deviation(m, morphed[m.index], samples[m.body], changed_all.get(m.body, {}), ex, tag["dist_of"][m.index])
+                mxdev = max(mxdev, dv_)
+        checks["hold"] = {"beads": sorted({b for h in hl for b in h["beads"]}), "nodes": sum(h["nodes"] for h in hl), "ring_mm": hl[0]["ring_mm"], "blend_mm": hl[0]["blend_mm"],
+                          "max_dev_mm": rnd(mxdev)}
     summary = {
         "max_warpage_deg": q["max_warpage_deg"], "max_skew_deg": q["max_skew_deg"], "max_aspect": q["max_aspect"], "min_jacobian": q["min_jacobian"],
         "edge_ratio": q["edge_ratio"], "dt_ratio": q["dt_ratio"], "inverted_elems": q["inverted"], "boundary_dev_max_mm": rnd(worst),
         "param_remeasure_err": {"abs": rnd(max(errs_abs)) if errs_abs else None, "rel": rnd(max(errs_rel)) if errs_rel else None},
         "param_margin": rnd(min(margin)) if margin and math.isfinite(min(margin)) else None,
         "quality_margins": q.get("margins"),
+        "fixed_moved_nodes": checks["fixed"]["moved_fixed_nodes"] if checks["fixed"]["status"] == "WARN" else None,
     }
     if full and asm is not None:
         rep, msg = interference(asm, meshes, morphed, thick, o)
@@ -364,7 +428,12 @@ def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict,
         checks["interference"] = {"status": "NOT_EVALUATED"}
         checks["tie"] = {"status": "NOT_EVALUATED"}
     code = next((c for c in PRIORITY if c in fails), None)
-    return CheckResult("FAIL" if code else "PASS", code, fails.get(code) if code else None, checks, warnings, summary)
+    message = fails.get(code) if code else None
+    if code == "GEOM_QUALITY_HARD":
+        code = "GEOM_QUALITY"
+    res = CheckResult("FAIL" if code else "PASS", code, message, checks, warnings, summary)
+    res.waived = waived
+    return res
 
 
 def _merge_quality(reps: list[dict]) -> dict:
@@ -378,7 +447,7 @@ def _merge_quality(reps: list[dict]) -> dict:
         out["inverted"] += r["inverted"]
         out["margins"] = {k: min((x for x in (out["margins"][k], r["margins"][k]) if x is not None), default=None) for k in out["margins"]}
         out["baseline_status"] = "FAIL" if "FAIL" in (out["baseline_status"], r["baseline_status"]) else "PASS"
-        out["status"] = "FAIL" if "FAIL" in (out["status"], r["status"]) else "PASS"
+        out["status"] = "FAIL" if "FAIL" in (out["status"], r["status"]) else ("WARN" if "WARN" in (out["status"], r["status"]) else "PASS")
     return out
 
 
@@ -429,9 +498,10 @@ def tag_distances(meshes: list[ShellMesh], tag: dict) -> dict[int, np.ndarray]:
 
 def report(res: CheckResult, o: dict, out_files: list[str], t0: float) -> dict:
     """``shell_check.json`` (also written by ``shell view preview`` with ``out_files: []``)."""
+    extra = {"waived": res.waived} if res.waived and res.status == "PASS" else {}
     return shell_envelope(
         status=res.status, code=res.code, category=CODE_CATEGORY.get(res.code) if res.code else None, message=res.message,
-        checks=res.checks, warnings=res.warnings, options=shopts.used(o), out_files=out_files, elapsed_s=rnd(time.monotonic() - t0, 3),
+        checks=res.checks, warnings=res.warnings, options=shopts.used(o), out_files=out_files, **extra, elapsed_s=rnd(time.monotonic() - t0, 3),
     )
 
 
