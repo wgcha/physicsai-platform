@@ -52,7 +52,7 @@ def pr_prep(ctx: Any, m: dict[str, Any], ps: dict[str, Any], S: str) -> None:
     s = ctx.settings
     if not ps.get("starter_name") or not os.path.isfile(os.path.join(S, "radioss_assem", ps["starter_name"])):
         raise StepFailure("INPUT_CHANGED", "파라미터 세트 파일이 없습니다: radioss_assem/" + str(ps.get("starter_name")))
-    opts = set_opts(s, S, ps.get("geom_options"))
+    opts = set_opts(s, S, ps.get("geom_options"), force_skip=True)  # SM-10: 정책 skip 고정
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     values = {k: float(v) for k, v in ctx.params["values"].items()}

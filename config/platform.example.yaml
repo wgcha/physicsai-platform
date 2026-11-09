@@ -263,6 +263,9 @@ geometry:                          # native 형상 엔진(docs/contracts/geometr
     PAICAD_THREADS: "4"
   defaults: {}                     # options.json 기본값 덮어쓰기(§4.9, 예: {quality: {max_aspect: 8.0}}). 비우면 코드 기본값
   shell_defaults: {}               # 쉘 판금 options.json 기본값 덮어쓰기(shell-morph.md §4.10, 예: {fixed: {transition_mm: 8.0}})
+  # SM-C3~C8(§14) 새 키(기본값과 같으면 options.json에 쓰지 않는다): fixed.policy·quality.fail_policy = skip(기본) | warn(경고 후 사용, ①-3 DOE에서만 적용 — PREDICT·최적화는 skip 고정),
+  #   quality.distort_min_mm 0.1·distort_rel 0.25, extract.islands true·island_max_mm 40·island_ring_frac 0.9, tag.label_angle_deg 15,
+  #   bead.hold{beads, ring_mm 3, blend_mm 8}(beads는 세트별 값 — 여기에는 비워 둔다). 예: shell_defaults: {fixed: {policy: warn}}
   # timeout_s에 shell_fixed_scan·shell_extract·shell_tag·shell_update·shell_morph·shell_check·shell_run 키를 둘 수 있다(없으면 같은 이름 솔리드 값)
   view:                            # 형상 3D 보기·파라미터 미리보기(geometry-view.md §6.1). 절이 없으면 아래 기본값
     enabled: true

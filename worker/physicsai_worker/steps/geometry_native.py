@@ -257,11 +257,18 @@ def effective_opts(settings: Any, geom_options: dict[str, Any] | None, kind: str
     return opts
 
 
-def set_opts(settings: Any, base: str, geom_options: dict[str, Any] | None) -> dict[str, Any]:
-    """준비본 폴더 kind(prep.json)에 맞는 유효 옵션(솔리드 §4.9 | 쉘 SM §4.10)."""
+def set_opts(settings: Any, base: str, geom_options: dict[str, Any] | None, *, force_skip: bool = False) -> dict[str, Any]:
+    """준비본 폴더 kind(prep.json)에 맞는 유효 옵션(솔리드 §4.9 | 쉘 SM §4.10).
+    force_skip: PREDICT(A)·⑤ 최적화·미리보기는 쉘 고정 침범·품질 미달 정책을 `skip`으로 고정한다(SM-10, shell-morph.md §14.4)."""
     from physicsai_core.geometry.shell_native import read_kind
 
-    return effective_opts(settings, geom_options, read_kind(base))
+    kind = read_kind(base)
+    opts = effective_opts(settings, geom_options, kind)
+    if force_skip and kind == "shell":
+        from physicsai_core.geometry.shell_options import force_skip as _skip
+
+        opts = _skip(opts)
+    return opts
 
 
 def ensure_prep_ready(settings: Any, S: str, opts: dict[str, Any], current_version: str | None) -> None:

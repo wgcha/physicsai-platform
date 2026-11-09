@@ -50,7 +50,33 @@ def setup_out(ctx: AppContext, study: dict[str, Any], s: dict[str, Any] | None) 
     return {"study_id": study["id"], "cad": cad, "extract_job_id": s["extract_job_id"], "parameters": params,
             "used_count": sum(1 for p in params if p.get("use")), "tpl": tpl, "tpl_summary": summary, "version": s["version"],
             "engine": s.get("engine") or "altair",
+            **_shell_info(ctx, study, s),
             **_extract_info(ctx, s), "updated_by_name": s["updated_by_name"], "updated_at": s["updated_at"]}
+
+
+HOLD_KEY = "hold_beads"
+
+
+def read_hold_beads(ctx: AppContext, study: dict[str, Any]) -> list[str]:
+    """①-2 체결 보스 고정 비드(`01_train/params.json`의 hold_beads, shell-morph.md §14.5). 없거나 읽을 수 없으면 []."""
+    import json
+
+    try:
+        with open(resolve_in_study(study_root(ctx, study), "01_train/params.json"), encoding="utf-8") as fh:
+            v = json.load(fh).get(HOLD_KEY)
+    except (OSError, ValueError, AttributeError):
+        return []
+    return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
+
+
+def _shell_info(ctx: AppContext, study: dict[str, Any], s: dict[str, Any]) -> dict[str, Any]:
+    """`kind`(native 설정만 — 쉘이면 "shell", 솔리드 "solid", altair null)·`hold_beads`(쉘만). 정책·hold UI 노출 판정 필드."""
+    from physicsai_core.geometry.shell_native import kind_of_features_rel
+
+    if (s.get("engine") or "altair") != "native" or not s.get("features_rel"):
+        return {"kind": None, "hold_beads": None}
+    kind = kind_of_features_rel(s["features_rel"])
+    return {"kind": kind, "hold_beads": read_hold_beads(ctx, study) if kind == "shell" else None}
 
 
 def _extract_info(ctx: AppContext, s: dict[str, Any]) -> dict[str, Any]:
@@ -89,13 +115,40 @@ def put_params(ctx: AppContext, principal: Principal, study_id: str, body: Any, 
         full = train_tpl.is_full_snapshot(s.get("tpl_params"))  # 전체 tpl이면 미사용 행 변경도 tpl을 낡게 한다(altair-vars.md AV-1)
         if tp.definition_key(new, full=full) != tp.definition_key(s["parameters"], full=full):
             vals["tpl_params"] = None  # 표가 바뀌면 tpl stale(TPL_STALE)
+        hold = body.hold_beads
+        if hold is not None:
+            _check_hold(ctx, st, s, hold)
+        elif (s.get("engine") or "altair") == "native" and (s.get("features_rel") or "").endswith("shell_features.json"):
+            hold = read_hold_beads(ctx, st)  # 생략 = 기존 값 유지
         s = train_repo.update_setup(conn, study_id, body.version, **vals)
         root = study_root(ctx, st)
         pj = resolve_in_study(root, "01_train/params.json")
         backup_existing(root, [pj], "params", backup_stamp())
-        write_json(pj, {"schema_version": 1, "parameters": new})
+        write_json(pj, {"schema_version": 1, "parameters": new, **({HOLD_KEY: sorted(set(hold))} if hold else {})})
         audit(conn, principal, "TRAIN_PARAMS_UPDATE", "study", study_id, {"used": sum(1 for p in new if p["use"])}, rid, ip)
     return setup_out(ctx, st, s)
+
+
+def _check_hold(ctx: AppContext, study: dict[str, Any], s: dict[str, Any], hold: list[str]) -> None:
+    """hold_beads ⊆ 추출 결과의 hold_eligible 비드(쉘 설정만). 아니면 422 TRAIN_PARAMS_INVALID."""
+    if not hold:
+        return
+    from physicsai_core.geometry.reports import ReportError, read_report
+    from physicsai_core.geometry.shell_native import kind_of_features_rel
+    from physicsai_core.geometry.shell_options import hold_problems
+
+    rel = s.get("features_rel")
+    if (s.get("engine") or "altair") != "native" or kind_of_features_rel(rel) != "shell":
+        raise DomainError("TRAIN_PARAMS_INVALID", "체결 보스 고정(hold_beads)은 Native 쉘 판금 설정에서만 쓸 수 있습니다", status=422,
+                          problems=[{"name": "hold_beads", "code": "HOLD_NOT_SHELL", "message": "쉘 판금 설정이 아닙니다"}])
+    try:
+        doc = read_report(resolve_in_study(study_root(ctx, study), rel), ctx.settings.geometry.max_report_bytes)
+    except ReportError:
+        doc = None
+    probs = hold_problems({"bead": {"hold": {"beads": list(hold)}}}, doc)
+    if probs:
+        raise DomainError("TRAIN_PARAMS_INVALID", "파라미터 표 검증에 실패했습니다", status=422,
+                          problems=[{"name": "hold_beads", "code": "HOLD_NOT_ELIGIBLE", "message": probs[0]["message"]}])
 
 
 def generate_tpl(ctx: AppContext, principal: Principal, study_id: str, version: int, rid: str, ip: str | None) -> dict[str, Any]:

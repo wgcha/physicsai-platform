@@ -694,6 +694,10 @@
       "altair",
       "native"
     ],
+    "TrainSetup.kind": [
+      "solid",
+      "shell"
+    ],
     "UploadCompleteOut.state": [
       "OPEN",
       "COMPLETED",
@@ -1452,7 +1456,10 @@
       "code": "GEOM_OPTIONS_INVALID",
       "message_ko": "형상 옵션 값이 올바르지 않습니다",
       "sources": [
-        "backend/physicsai_api/services/geometry_gate.py"
+        "backend/physicsai_api/services/geometry_gate.py",
+        "backend/physicsai_api/services/job_params/stage1_native.py",
+        "backend/physicsai_api/services/job_params/stage4_native.py",
+        "backend/physicsai_api/services/param_set_native_api.py"
       ],
       "status": 422
     },
@@ -2605,7 +2612,7 @@
     },
     "TRAIN_PARAMS_INVALID": {
       "code": "TRAIN_PARAMS_INVALID",
-      "message_ko": "파라미터 표 검증에 실패했습니다",
+      "message_ko": "체결 보스 고정(hold_beads)은 Native 쉘 판금 설정에서만 쓸 수 있습니다",
       "sources": [
         "backend/physicsai_api/services/stage1_train_data.py"
       ],

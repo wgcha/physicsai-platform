@@ -75,9 +75,16 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
     if kind == "shell":
         from physicsai_core.geometry.shell_options import effective_shell_options
 
-        opts, _ = effective_shell_options(s.geometry.shell_defaults, d.get("geom_options"))
+        from physicsai_core.geometry.shell_options import force_skip
+
+        opts = force_skip(effective_shell_options(s.geometry.shell_defaults, d.get("geom_options"))[0])  # SM-10: 정책(warn)은 DOE 한정
     else:
         opts, _ = effective_options(s.geometry.defaults, d.get("geom_options"))
+    opts_store = d.get("geom_options")
+    if kind == "shell" and opts_store:
+        from physicsai_core.geometry.shell_options import force_skip
+
+        opts_store = force_skip(opts_store)  # SM-10: DOE에서 고른 warn 정책은 세트(예측·최적화)로 승계하지 않는다
     pdoc = prep_document(
         T, step_exts=s.geometry.step_extensions, mesh_include_name=s.predict.mesh_include_name,
         renum_csv_name=s.predict.renum_csv_name, opts=opts, engine_version=d.get("engine_version") or old.get("engine_version"),
@@ -112,7 +119,7 @@ def from_train(ctx: AppContext, principal: Principal, study: dict[str, Any], d: 
                 "assem_rel": f"{stored_rel}/radioss_assem/", "starter_name": f.starter_name, "input_kind": "assembly",
                 "tpl_params": [], "registered_by": principal.user_id, "registered_by_name": principal.display_name,
                 "label": label, "origin": "TRAIN_DOE", "train_doe_id": d["id"], "engine": "native",
-                "geom_options": d.get("geom_options"), "engine_version": d.get("engine_version")})
+                "geom_options": opts_store, "engine_version": d.get("engine_version")})
             audit(conn, principal, "PARAM_SET_FROM_TRAIN", "param_set", psid,
                   {"doe_id": d["id"], "runs": body.runs, "engine": "native", "kind": kind}, rid, ip)
             os.replace(T, dst)

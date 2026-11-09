@@ -10,6 +10,11 @@
   view grid(doe-preview.md §3, paicad 0.14.0): `view_grid:<code>`(명령 전체 FAIL — manifest 없음, VIEW_*면 종료코드 14) ·
                           `view_grid_cell:<idx>:<code>`(그 번호 셀만 FAIL, 쉼표로 여러 개 · `VIEW_*`면 셀 ERROR) · FAIL_WHEN `view_grid:<code>:<이름><op><값>`(값 조건 셀 FAIL) ·
                           NOREPORT=view_grid(종료코드 1, manifest 없음) · FAKE_PAICAD_GRID_ERROR_RAISE=<idx>(그 셀이 내부 예외 → 셀 폴더 없음 ERROR)
+  SM-C3~C8(paicad 0.15.0 모양, shell-morph.md §14):
+  FAKE_PAICAD_SHELL_BEADS  shell extract `beads` 배열(기본 []; hold 시험용 `{"id": "CHASSIS_REAR_B2", "hold_eligible": true}`)
+  정책(`--options`의 fixed.policy·quality.fail_policy = warn): `shell_update|shell_check:SHELL_FIXED_REGION_VIOLATION`·`shell_check:GEOM_QUALITY`는 FAIL 대신 PASS +
+                          경고 SHELL_FIXED_MOVED·SHELL_QUALITY_WARN + 최상위 `waived`. `GEOM_QUALITY_INVERTED`(= GEOM_QUALITY "inverted")·`SHELL_FEATURE_DISTORTED`·
+                          dt_ratio는 정책과 무관하게 항상 FAIL. `bead.hold.beads`가 hold_eligible이 아니면 update `GEOM_INPUT_INVALID`.
 쉘 morph 사본 = 원본 바이트 + `#FAKE_SHELL_NODE <값 json>` 줄(실제는 /NODE 좌표 필드만 바뀜). 뷰 GLB = 삼각형 2개·바디 2개 합성 GLB.
 """
 
@@ -84,7 +89,8 @@ def main(cmd, args, flags, g):
 
     def fail_doc(path, code, extra=None):
         cat = CATEGORY.get(code, "INTERNAL")
-        doc = dict(base, status="FAIL", code=code, category=cat, message=ENGLISH.get(code, f"fake {cmd} failure {code}"), **(extra or {}))
+        doc = dict(base, status="FAIL", code=code, category=cat, message=ENGLISH.get(code, f"fake {cmd} failure {code}"))
+        doc.update(extra or {})
         write_json(path, doc)
         return EXIT.get(cat, 20)
 
@@ -118,7 +124,7 @@ def main(cmd, args, flags, g):
                 fh.write("    <Parameter><Name>%s</Name><Value>%r mm</Value></Parameter>\n" % (f["name"], float(f["nominal"])))
             fh.write("  </Model>\n</Root>\n")
         write_json(fj, dict(base, unit_system="mm-ton-s", cad={"mode": "single", "files": [{"rel": os.path.basename(cad), "sha256": "0" * 64}]},
-                            parts=parts, beads=[], features=feats, groups=[],
+                            parts=parts, beads=_env_json("FAKE_PAICAD_SHELL_BEADS", []), features=feats, groups=[],
                             fixed={"available": bool(args.get("assem-dir")), "digest": "sha256:fake", "transition_mm": 6.0},
                             warnings=warns))
         finish("shell_features.json", "OK", None, 0)
@@ -338,6 +344,27 @@ def _shell_sample(cmd, args, g, base, fail_doc):
     def values():
         return read_json(need("values")).get("values") or {}
 
+    def options():
+        p = args.get("options")
+        return read_json(p) if p and os.path.isfile(p) else {}
+
+    def waivable(code):
+        """§14.4: warn 정책이면 이 코드는 실패하지 않고 통과(waived). 반전·dt_ratio·tie·간섭·피처 왜곡은 항상 실패."""
+        o = options()
+        if code == "SHELL_FIXED_REGION_VIOLATION":
+            return (o.get("fixed") or {}).get("policy") == "warn"
+        if code == "GEOM_QUALITY":
+            return (o.get("quality") or {}).get("fail_policy") == "warn"
+        return False
+
+    def hold_bad():
+        hold = ((options().get("bead") or {}).get("hold") or {}).get("beads") or []
+        if not hold:
+            return []
+        feats = args.get("features") and read_json(args["features"]) or {}
+        ok = {b.get("id") for b in feats.get("beads") or [] if b.get("hold_eligible") is True}
+        return [b for b in hold if b not in ok]
+
     def update(d):
         need("cad")
         names = {f["name"] for f in read_json(need("features"))["features"]}
@@ -348,14 +375,21 @@ def _shell_sample(cmd, args, g, base, fail_doc):
         unknown = [n for n in vals if n not in names]
         if unknown:
             return fail_doc(uj, "GEOM_INPUT_INVALID", {"message": "unknown name(s): " + ", ".join(unknown)}), "GEOM_INPUT_INVALID"
+        bad = hold_bad()
+        if bad:
+            return fail_doc(uj, "GEOM_INPUT_INVALID", {"message": "hold bead(s) not hold_eligible: " + ", ".join(bad)}), "GEOM_INPUT_INVALID"
         code = fails("shell_update") or fail_when("shell_update", vals)
+        warned = False
+        if code and waivable(code) and code == "SHELL_FIXED_REGION_VIOLATION":
+            code, warned = None, True  # fixed.policy: warn — 사전 검사 WARN, 진행
         if code:
             return fail_doc(uj, code, {"fixed_precheck": {"status": "FAIL" if code == "SHELL_FIXED_REGION_VIOLATION" else "PASS"}}), code
         with open(os.path.join(d, "sample.brep"), "wb") as fh:
             fh.write(b"fake-sheet:" + json.dumps(vals, sort_keys=True).encode())
         write_json(os.path.join(d, "face_map.json"), {})
         write_json(uj, dict(base, status="OK", code=None, category=None, message=None, values=vals, applied=[], changed={},
-                            fixed_precheck={"status": "PASS" if args.get("fixed-dir") else "NOT_EVALUATED", "violations": 0},
+                            fixed_precheck={"status": "WARN" if warned else ("PASS" if args.get("fixed-dir") else "NOT_EVALUATED"),
+                                            "violations": 3 if warned else 0},
                             elapsed_s=0.1))
         return 0, None
 
@@ -393,17 +427,35 @@ def _shell_sample(cmd, args, g, base, fail_doc):
         vals = values()
         code = fails("shell_check") or fail_when("shell_check", vals)
         thickness = read_json(args["thickness"]) if args.get("thickness") else None
+        extra = {}
+        if code == "GEOM_QUALITY_INVERTED":  # 반전은 정책과 무관하게 항상 GEOM_QUALITY 실패
+            code, extra = "GEOM_QUALITY", {"message": "inverted elements: 2"}
+        elif code == "GEOM_QUALITY" and waivable(code):
+            extra = {"_ok": True}
+        upd_doc = read_json(os.path.join(upd, "shell_update.json")) if os.path.isfile(os.path.join(upd, "shell_update.json")) else {}
+        warns, waived, fx, ql = [], [], {"status": "PASS", "moved_fixed_nodes": 0, "max_mm": 0.0}, {"status": "PASS", "max_warpage_deg": 6.1,
+                                                                                                   "min_jacobian": 0.71}
+        if (upd_doc.get("fixed_precheck") or {}).get("status") == "WARN" or (code == "SHELL_FIXED_REGION_VIOLATION" and waivable(code)):
+            code = None if code == "SHELL_FIXED_REGION_VIOLATION" else code
+            warns.append({"code": "SHELL_FIXED_MOVED", "n": 3, "max_mm": 0.8, "clusters": [1]})
+            waived.append("SHELL_FIXED_REGION_VIOLATION")
+            fx = {"status": "WARN", "moved_fixed_nodes": 3, "max_mm": 0.8}
+        if extra.get("_ok"):
+            code = None
+            warns.append({"code": "SHELL_QUALITY_WARN", "failed_elements": 4, "edge_ratio": 0.7, "dt_ratio": 0.9})
+            waived.append("GEOM_QUALITY")
+            ql = {"status": "WARN", "max_warpage_deg": 21.0, "min_jacobian": 0.5}
+            extra = {}
         if code:
-            return fail_doc(cj, code, {"checks": {}, "warnings": [], "out_files": [], "thickness": thickness}), code, []
+            return fail_doc(cj, code, {"checks": {}, "warnings": [], "out_files": [], "thickness": thickness, **extra}), code, []
         rels = [f["rel"] for f in (read_json(os.path.join(mor, "shell_morph.json")).get("files") or [])]
         for rel in rels:
             dst = os.path.join(files_dir, rel)
             os.makedirs(os.path.dirname(dst), exist_ok=True)
             shutil.copyfile(os.path.join(mor, "files", rel), dst)
         write_json(cj, dict(base, status="PASS", code=None, category=None, message=None,
-                            checks={"fixed": {"status": "PASS", "moved_fixed_nodes": 0, "max_mm": 0.0},
-                                    "quality": {"status": "PASS", "max_warpage_deg": 6.1, "min_jacobian": 0.71}},
-                            warnings=[], options={}, out_files=rels, thickness=thickness, elapsed_s=0.3))
+                            checks={"fixed": fx, "quality": ql, "feature": {"status": "SKIPPED", "features": 0}}, **({"waived": waived} if waived else {}),
+                            warnings=warns, options={}, out_files=rels, thickness=thickness, elapsed_s=0.3))
         return 0, None, rels
 
     if cmd == "shell_update":

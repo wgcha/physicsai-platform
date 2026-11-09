@@ -4,6 +4,12 @@
 루트 `pyproject.toml`의 `version`과 `backend/physicsai_core/__init__.py`의 `__version__`을 같은 값으로 올린다
 (`scripts/test-all`이 세 값이 같은지 검사한다). 항목 형식: `## <버전> — YYYY-MM-DD` + `- 주요 기능` 목록(최신이 위).
 
+## 0.2.17 — 2026-11-09
+
+- 쉘 판금 모핑 개선(SM-C3~C8, paicad 0.15.0 대응, 플랫폼 백엔드): 쉘 옵션에 새 키를 통과·검증한다 — `fixed.policy`·`quality.fail_policy`(skip | warn, 기본 skip), `quality.distort_min_mm`·`distort_rel`, `extract.islands`·`island_max_mm`·`island_ring_frac`(비드 바닥 섬 흡수), `tag.label_angle_deg`, `bead.hold{beads, ring_mm, blend_mm}`(체결 보스 고정). 기본값과 같은 새 키는 options.json에 쓰지 않아 기존 결과·옵션 해시가 바뀌지 않는다
+- ①-3 쉘 DOE 요청 `geom_options`: `warn`을 고르면 고정 침범·품질 미달 run이 스킵 대신 경고 후 사용으로 통과하고, 작업 결과에 `gen_warned`·`gen_summary`(스킵·경고 통과의 고정 a·품질 b, `waived` 코드별 수)·`warned_runs`(run별 경고 코드 목록)를 기록한다. PREDICT(A)·내장 최적화·미리보기·DOE→세트 승계는 정책을 `skip`으로 고정한다. 반전·dt_ratio·tie·간섭·피처 왜곡은 정책과 무관하게 실패
+- `bead.hold.beads`는 준비본 `hold_eligible` 비드만 허용(아니면 422 GEOM_OPTIONS_INVALID). 한국어 코드 문구 추가: SHELL_FEATURE_DISTORTED·SHELL_FIXED_MOVED·SHELL_QUALITY_WARN·BEAD_ISLAND_TOO_LARGE·TAG_ISLAND_MISMATCH. DB migration 없음
+
 ## 0.2.16 — 2026-11-04
 
 - ③ 데이터셋 생성 "데이터 점검(이상치 제외 추천)": 입력 h3d run의 해석 건전성(종료·에너지 오차·추가 질량·hg·접촉)과 일관성(프레임 수·마지막 시각)을 보고, 모델 속성·응답은 견고 z와 파라미터 공간 이웃 비교로 이상치 제외를 추천한다(DATA_HEALTH 작업·`GET /jobs/{id}/data-health`). 판정 기준은 설정 `data_health` 한 곳, 추천은 사람이 확정하며 입력 파일은 바뀌지 않는다

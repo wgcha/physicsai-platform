@@ -42,6 +42,12 @@ CODE_TABLE: dict[str, tuple[str, str]] = {
     "SHELL_UNSUPPORTED_ELEMENT": ("PREP", "쉘(/SHELL·/SH3N)이 아닌 요소"),
     "SHELL_BODY_NOT_SHEET": ("PREP", "중립면(시트) STEP이 아님 — 판재 솔리드는 후속 지원"),
     "SHELL_PART_NOT_FOUND": ("INPUT", "지정한 쉘 PART를 찾지 못함"),
+    # SM-C3~C8(§14, paicad 0.15.0): 실패 1 + 경고(통과·추출) 코드
+    "SHELL_FEATURE_DISTORTED": ("DEVIATION", "비드 안 피처가 바닥을 따라가지 않음(편차 초과)"),
+    "SHELL_FIXED_MOVED": ("FIXED", "고정 영역(tie·RBE2) 노드가 이동했습니다(경고 후 사용)"),
+    "SHELL_QUALITY_WARN": ("QUALITY", "요소 품질 기준 미달을 경고로 통과했습니다"),
+    "BEAD_ISLAND_TOO_LARGE": ("PREP", "비드 바닥 위 피처가 너무 커서 섬으로 인정하지 않았습니다(경고)"),
+    "TAG_ISLAND_MISMATCH": ("PREP", "CAD 섬과 메시 섬이 일치하지 않습니다(정보)"),
     "GEOM_KIND_MIXED": ("INPUT", "솔리드(쿠션)와 쉘(판금) 형상 파라미터는 한 세트에 함께 쓸 수 없습니다"),
     # ---- 3D 가시화(geometry-view.md §5.5) ----
     "VIEW_TESSELLATION_FAILED": ("VIEW", "3D 형상 변환 실패"),

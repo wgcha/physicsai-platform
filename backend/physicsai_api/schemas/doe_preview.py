@@ -56,6 +56,8 @@ class DoePreviewGen(Resp):
     status: Literal["OK", "SKIPPED", "PENDING"]
     code: str | None = None
     step: str | None = None
+    waived: list[str] = Field(default_factory=list)  # SM-C6: warn 정책 통과 — 면제된 실패 코드(SHELL_FIXED_REGION_VIOLATION·GEOM_QUALITY)
+    warnings: list[str] = Field(default_factory=list)  # 그때의 경고 코드(SHELL_FIXED_MOVED·SHELL_QUALITY_WARN)
 
 
 class DoePreviewCell(Resp):

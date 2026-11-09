@@ -98,7 +98,7 @@ def dg_prep(ctx: Any) -> None:
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     if kind == "shell":
-        opts, probs = effective_shell_options(s.geometry.shell_defaults, None)
+        opts, probs = effective_shell_options(s.geometry.shell_defaults, p.get("geom_options"))  # SM-10: DOE 요청 geom_options(정책)
     else:
         opts, probs = effective_options(s.geometry.defaults, None)
     if probs:
@@ -248,6 +248,13 @@ def finish_outcomes(ctx: Any, outcomes: list[Any]) -> None:
     일부 실패: on_run_failure `continue`(native 기본) → 경고 PARTIAL_OUTPUT, `fail` → GEN_PARTIAL_FAILED(재시도 = 전체 다시 생성)."""
     failed = [o for o in outcomes if not o.ok]
     ctx.patch_result({"gen_ok": len(outcomes) - len(failed), "gen_skipped": len(failed)})
+    if kind_of_params(ctx) == "shell":
+        summary = shell_gen_summary(ctx, outcomes)
+        ctx.patch_result(summary)
+        if summary["gen_warned"]:
+            ctx.add_warning("SHELL_WARN_PASSED", f"run {len(outcomes)}개 중 {summary['gen_warned']}개를 경고 후 사용으로 통과했습니다"
+                            f"(고정 {summary['gen_summary']['warned']['fixed']}·품질 {summary['gen_summary']['warned']['quality']}) — "
+                            "③ 데이터 점검에서 제외를 검토하세요")
     if outcomes and len(failed) == len(outcomes):
         f0 = failed[0]
         raise StepFailure(f0.code or "GEOM_INTERNAL", f"run {len(outcomes)}개 모두 생성 실패: {f0.item_id} — {f0.message}")
@@ -257,6 +264,56 @@ def finish_outcomes(ctx: Any, outcomes: list[Any]) -> None:
                           f"{f0.message}) — 사유는 run 폴더의 {SKIPPED_JSON}")
     if failed:
         ctx.add_warning("PARTIAL_OUTPUT", f"run {len(outcomes)}개 중 {len(failed)}개를 스킵했습니다(사유는 run 폴더의 {SKIPPED_JSON})")
+
+
+def kind_of_params(ctx: Any) -> str:
+    """이 DOE 생성이 쉘 판금인지(DG_PREP이 result.kind에 기록)."""
+    return "shell" if (ctx.result() or {}).get("kind") == "shell" else "solid"
+
+
+SHELL_POLICY_KEYS = {"SHELL_FIXED_REGION_VIOLATION": "fixed", "SHELL_FIXED_MOVED": "fixed", "GEOM_QUALITY": "quality",
+                     "SHELL_QUALITY_WARN": "quality"}
+MAX_WARNED_RUNS = 500
+
+
+def _warn_codes(doc: dict[str, Any]) -> tuple[list[str], list[str]]:
+    """shell_check.json → (경고 코드, waived 코드). 코드만(본문 저장 금지)."""
+    codes = sorted({(w.get("code") if isinstance(w, dict) else w) for w in doc.get("warnings") or []
+                    if (w.get("code") if isinstance(w, dict) else w) in SHELL_POLICY_KEYS})
+    waived = sorted({c for c in doc.get("waived") or [] if isinstance(c, str)})
+    return codes, waived
+
+
+def shell_gen_summary(ctx: Any, outcomes: list[Any]) -> dict[str, Any]:
+    """쉘 DOE 스킵·경고 통과 집계(shell-morph.md §14.4, SM-10): 스킵 = 실패 코드의 고정 a·품질 b, 경고 통과 = PASS run의
+    shell_check.json 경고(SHELL_FIXED_MOVED·SHELL_QUALITY_WARN)·`waived`. result에만 기록(DB 열·migration 없음, 코드 목록만)."""
+    from ..geometry_shell import CHECK_JSON
+
+    R = run_root(ctx)
+    skipped = {"fixed": 0, "quality": 0, "other": 0}
+    warned = {"fixed": 0, "quality": 0, "other": 0}
+    waived_n: dict[str, int] = {}
+    runs: list[dict[str, Any]] = []
+    for o in outcomes:
+        if not o.ok:
+            skipped[SHELL_POLICY_KEYS.get(o.code or "", "other") if o.code in ("SHELL_FIXED_REGION_VIOLATION", "GEOM_QUALITY") else "other"] += 1
+            continue
+        cj = os.path.join(FLAT.at(os.path.join(R, o.item_id), "m2"), "check", CHECK_JSON)
+        try:
+            codes, waived = _warn_codes(read_json(cj, ctx.settings.geometry.max_report_bytes)) if os.path.isfile(cj) else ([], [])
+        except StepFailure:
+            continue
+        if not codes and not waived:
+            continue
+        kinds = {SHELL_POLICY_KEYS.get(c, "other") for c in codes + waived}
+        for k in kinds:
+            warned[k] += 1
+        for c in waived:
+            waived_n[c] = waived_n.get(c, 0) + 1
+        runs.append({"run_key": o.item_id, "codes": codes, "waived": waived})
+    n = len(runs)
+    return {"gen_warned": n, "gen_summary": {"skipped": skipped, "warned": warned, "waived": waived_n},
+            "warned_runs": runs[:MAX_WARNED_RUNS]}
 
 
 def skipped_entry(run_dir: str, max_bytes: int) -> dict[str, str] | None:

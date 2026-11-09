@@ -315,8 +315,18 @@ def _gen_of(ctx: AppContext, doe_dir: str, run_key: str | None) -> dict[str, Any
     from .path_inspect import starters_in
 
     if os.path.isdir(R) and starters_in(R, ctx.settings.predict.starter_glob):
-        return {"status": "OK", "code": None, "step": None}
+        return {"status": "OK", "code": None, "step": None, **_warn_of(R)}
     return {"status": "PENDING", "code": None, "step": None}
+
+
+def _warn_of(R: str) -> dict[str, Any]:
+    """SM-C6: 쉘 run이 `warn` 정책으로 통과했으면 `shell_check.json`의 면제 코드(`waived`)·경고 코드(`warnings`) — 코드만. 아니면 키 없음."""
+    from physicsai_core.geometry.view import read_json
+
+    d = read_json(os.path.join(R, "_paicad", "check", "shell_check.json")) or {}
+    waived = [c for c in d.get("waived") or [] if isinstance(c, str)]
+    codes = sorted({w.get("code") if isinstance(w, dict) else w for w in d.get("warnings") or []} & {"SHELL_FIXED_MOVED", "SHELL_QUALITY_WARN"})
+    return {"waived": waived, "warnings": codes} if waived or codes else {}
 
 
 def _cell_out(entry: dict[str, Any], row: dict[str, Any] | None, err: str | None, params: list[dict[str, Any]], gen: dict[str, Any] | None

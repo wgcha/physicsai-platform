@@ -45,6 +45,8 @@ class TrainParamUpdate(Req):
 class TrainParamsPut(Req):
     version: int
     parameters: list[TrainParamUpdate]
+    # 쉘 판금(kind=shell) 전용 체결 보스 고정(shell-morph.md §14.5): hold_eligible 비드 id 목록. 생략 = 기존 값 유지, [] = 끔
+    hold_beads: list[str] | None = None
 
 
 class VersionBody(Req):
@@ -86,6 +88,8 @@ class TrainSetup(Resp):
     tpl_summary: TplSummary | None = None  # altair-vars.md §6, tpl이 없으면 null
     version: int
     engine: Literal["altair", "native"] = "altair"  # geometry-engine.md §7.3.1
+    kind: Literal["solid", "shell"] | None = None  # native 형상 종류(쉘 판금이면 "shell", altair·설정 없음 null) — 정책·hold UI 노출 판정
+    hold_beads: list[str] | None = None  # 쉘만: ①-2에서 고른 체결 보스 고정 비드(shell-morph.md §14.5)
     # extract-filter.md §6.4: 마지막 추출에 쓴 조건(정규화본, null = 조건 없음·altair) — ①-1 폼 기본값·①-2 "적용 조건"
     extract_filter: ExtractFilter | None = None
     # §7.2: 마지막 추출 작업의 종류별 채택·제외 요약(수치만, 없으면 null). 모양 = {types:{<type>:{selected,kept,excluded,…}},png_rendered,elapsed_s,rib_rejects,…}

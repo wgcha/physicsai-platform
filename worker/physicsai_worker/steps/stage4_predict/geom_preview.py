@@ -57,7 +57,7 @@ def _C(ctx: Any) -> str:
 def gv_prep(ctx: Any) -> None:
     s, p = ctx.settings, ctx.params
     ps, S = _ps(ctx)
-    opts = set_opts(s, S, ps.get("geom_options"))
+    opts = set_opts(s, S, ps.get("geom_options"), force_skip=True)  # SM-10: 정책 skip 고정
     ensure_prep_ready(s, S, opts, p.get("engine_version"))  # INPUT_CHANGED(준비본이 바뀜)
     C = _C(ctx)
     if not remove_cache_dir(ctx.root, C, PREVIEW_CACHE):  # 캐시(플랫폼 임시 산출물)라 _backup 이동 대신 지운다(§6.6)

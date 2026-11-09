@@ -107,6 +107,11 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
 
             raise_filter_unsupported()
         over = validate_geom_options(ctx.settings, p.geom_options, kind)
+        if kind == "shell":  # SM-C7: 등록 때는 hold 가능 비드를 아직 모른다 — 준비 뒤 PATCH geom_options로 지정
+            from physicsai_core.geometry.shell_options import hold_beads, hold_problems
+
+            if hold_beads(over):
+                raise DomainError("GEOM_OPTIONS_INVALID", "형상 옵션 값이 올바르지 않습니다", status=422, problems=hold_problems(over, None))
         out = {"engine": "native", "mode": "new", "path": p.path, "choice": p.choice or {}, "label": p.label, "geom_options": over or None}
         if p.shell_only:
             out["shell_only"] = True

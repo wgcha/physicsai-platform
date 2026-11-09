@@ -44,6 +44,8 @@ def _validate_geometry(s: Settings, issues: list[ConfigIssue]) -> None:
     _sopts, sproblems = effective_shell_options(g.shell_defaults, None)
     for p in sproblems:
         add("geometry.shell_defaults", f"{p['key']}: {p['message']}")
+    if _sopts.get("bead", {}).get("hold", {}).get("beads"):
+        add("geometry.shell_defaults", "bead.hold.beads: 비드 id는 세트별 값입니다 — 설정 기본값에는 비워 두세요")
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.\-]{0,63}", s.shell.default_component or ""):
         add("shell.default_component", "/PART 제목(영숫자·_·.·-, 64자 이내)이어야 합니다")
     _validate_view(s, issues)

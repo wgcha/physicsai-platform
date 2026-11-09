@@ -53,6 +53,8 @@ class TdDoeGenParams(_P):
     param_set_id: str | None = Field(default=None, max_length=64)
     # 조립 매칭 확정본(asm-match.md §6.4, ①-1 Native 솔리드 기준 DOE만): 있으면 기준 메시·RENUM 파일 없이 매칭 PART id가 기준본. 세트 기준·쉘은 쓸 수 없다
     asm_match_id: str | None = Field(default=None, max_length=64)
+    # 쉘 판금 DOE 전용 옵션 덮어쓰기(shell-morph.md §14.4 SM-10: 고정 침범·품질 미달 정책 `fixed.policy`·`quality.fail_policy`는 여기서만 warn 선택). 세트 geom_options 위에 덮는다
+    geom_options: dict[str, Any] | None = Field(default=None, description="쉘 판금 DOE 전용 형상 옵션 덮어쓰기 — fixed.policy·quality.fail_policy(skip|warn, 기본 skip), bead.hold 등")
 
 
 class TdSolveParams(_P):
@@ -185,6 +187,8 @@ def prepare(ctx: AppContext, conn: Any, study: dict[str, Any], job_type: str, p:
             raise invalid_at("asm_match_id", "조립 매칭은 Native 형상 엔진 DOE에서만 쓸 수 있습니다")
         if setup is not None and setup.get("engine") == "native":  # native = 플랫폼 생성의 한 경로(자체 게이트, §7.3.3)
             return native_doe_gen(ctx, setup, p, reuse_samples(ctx, conn, study, p.sampling), study=study)
+        if p.geom_options is not None:
+            raise invalid_at("geom_options", "geom_options는 Native 쉘 판금 DOE에서만 쓸 수 있습니다")
         gen = doe_generator(p)
         if gen == "hyperstudy":
             raise_feature_missing(*missing_for(cfg, FEATURES["train_doe"], None))
