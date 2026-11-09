@@ -13,7 +13,8 @@ import { ViewSplit } from "../stage4/geomview/ViewSplit";
 import { useRowSelection, bulkTargets } from "../stage4/geomview/selection";
 import { AppliedFilter } from "../../components/AppliedFilter";
 import { BulkUseBar } from "../../components/BulkUseBar";
-import { HOLD_HEAD, HOLD_TIP, toggleHold } from "../../lib/shellPolicy";
+import { HOLD_HEAD, HOLD_TIP, parseHoldNum, toggleHold, type HoldKey } from "../../lib/shellPolicy";
+import { HOLD_KEYS, HoldParams, holdParamError } from "./HoldParams";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -62,6 +63,7 @@ export function ParamTableCard() {
   const [ribRows, setRibRows] = useState<RibRow[] | null>(null); // rib-gap.md §3.4 피치 행 툴팁용 열 정보
   // SM-C7: 비드별 보스 고정(기본 off, hold_eligible 비드만 활성) — 저장은 PUT train/params의 hold_beads
   const [hold, setHold] = useState<string[]>([]);
+  const [holdP, setHoldP] = useState<Record<HoldKey, string>>({ ring_mm: "", blend_mm: "" });
   const sel = useRowSelection(useMemo(() => rows.map((r) => r.name), [rows]));
   const rp = sel.rowProps;
   useEffect(() => {
@@ -86,7 +88,8 @@ export function ParamTableCard() {
     setRows((setup?.parameters ?? []).map(toRow));
     setServerProblems({});
     setHold(setup?.hold_beads ?? []);
-  }, [setup?.version, setup?.parameters, setup?.hold_beads]);
+    setHoldP({ ring_mm: setup?.hold_options?.ring_mm != null ? String(setup.hold_options.ring_mm) : "", blend_mm: setup?.hold_options?.blend_mm != null ? String(setup.hold_options.blend_mm) : "" });
+  }, [setup?.version, setup?.parameters, setup?.hold_beads, setup?.hold_options]);
 
   const set = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   /** 보스 고정을 켠 비드의 행은 고정 겹침 때문에 무효였더라도 사용할 수 있다(SM-C7) */
@@ -107,7 +110,17 @@ export function ParamTableCard() {
   };
   const used = rows.filter((r) => r.use);
   const issues = rows.map(rowIssue);
-  const hasIssue = issues.some(Boolean) || used.length === 0;
+  const holdBad = showHold && HOLD_KEYS.some((k) => holdParamError(k, holdP[k]));
+  const hasIssue = issues.some(Boolean) || used.length === 0 || holdBad;
+  /** 기본값이 아닌 ρ·b만 보낸다(둘 다 기본이면 hold_options 키 없음) */
+  const holdOptions = (() => {
+    const o: Partial<Record<HoldKey, number>> = {};
+    for (const k of HOLD_KEYS) {
+      const r = parseHoldNum(holdP[k], k);
+      if ("value" in r && r.value !== undefined) o[k] = r.value;
+    }
+    return Object.keys(o).length ? o : null;
+  })();
 
   /** §14.2: PUT 저장 → POST 생성. 저장 실패 시 생성하지 않는다 */
   const generate = async () => {
@@ -119,7 +132,7 @@ export function ParamTableCard() {
       const saved = await api.saveTrainParams(study.id, {
         version: setup.version,
         parameters: rows.map((r) => ({ name: r.name, min: num(r.min), max: num(r.max), use: r.use, format: r.format, unit: r.unit })),
-        ...(showHold ? { hold_beads: hold } : {}),
+        ...(showHold ? { hold_beads: hold, ...(holdOptions ? { hold_options: holdOptions } : {}) } : {}),
       });
       setSetup(saved);
       if (native) return;
@@ -188,6 +201,7 @@ export function ParamTableCard() {
         <>
         {native && <AppliedFilter filter={setup?.extract_filter} summary={setup?.extract_summary} />}
         {native && <BulkUseBar count={sel.rows.length} disabled={!canExec} onCheck={() => setUse(sel.rows, true)} onUncheck={() => setUse(sel.rows, false)} onClear={sel.clear} />}
+        {showHold && <HoldParams values={holdP} onChange={(k, v) => setHoldP((h) => ({ ...h, [k]: v }))} disabled={!canExec} />}
         <ViewSplit
           view={
             native ? (

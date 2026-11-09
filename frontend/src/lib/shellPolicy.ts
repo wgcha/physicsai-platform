@@ -57,3 +57,46 @@ export function withHold(o: GeomOptions | null | undefined, beads: string[]): Ge
 }
 /** 비드 하나 켜기·끄기(정렬·중복 없음) */
 export const toggleHold = (beads: string[], bead: string, on: boolean): string[] => (on ? [...new Set([...beads, bead])].sort() : beads.filter((b) => b !== bead));
+
+// ---- hold ρ(ring_mm)·b(blend_mm) 고급 입력(§14.5): 기본 3·8, 0보다 큰 유한 수(백엔드 shell_options `_pos`와 같은 규칙), 기본값이면 키를 보내지 않는다
+export const HOLD_DEFAULTS = { ring_mm: 3, blend_mm: 8 } as const;
+export type HoldKey = keyof typeof HOLD_DEFAULTS;
+export const HOLD_PARAM_LABEL: Record<HoldKey, string> = { ring_mm: "보스 둘레 고정 ρ (mm)", blend_mm: "전이 폭 b (mm)" };
+/** 빈칸·기본값 = undefined(키 생략), 0 이하·숫자 아님 = error */
+export function parseHoldNum(raw: string, key: HoldKey): { value: number | undefined } | { error: string } {
+  if (raw.trim() === "") return { value: undefined };
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return { error: "0보다 큰 숫자를 입력하세요" };
+  return { value: n === HOLD_DEFAULTS[key] ? undefined : n };
+}
+/** 저장 객체 → 입력 문자열(기본값이면 빈칸) */
+export const holdParamText = (o: GeomOptions | null | undefined, key: HoldKey): string => {
+  const v = ((o?.bead as Record<string, unknown> | undefined)?.hold as Record<string, unknown> | undefined)?.[key];
+  return typeof v === "number" ? String(v) : "";
+};
+/** geom_options의 hold ρ·b만 바꾼다(undefined = 키 제거, 빈 절 제거) */
+export function withHoldParam(o: GeomOptions | null | undefined, key: HoldKey, value: number | undefined): GeomOptions {
+  const out: GeomOptions = JSON.parse(JSON.stringify(o ?? {}));
+  const bead = { ...((out.bead as Record<string, unknown>) ?? {}) };
+  const hold = { ...((bead.hold as Record<string, unknown>) ?? {}) };
+  if (value === undefined) delete hold[key];
+  else hold[key] = value;
+  if (Object.keys(hold).length) bead.hold = hold;
+  else delete bead.hold;
+  if (Object.keys(bead).length) out.bead = bead;
+  else delete out.bead;
+  return out;
+}
+
+/** result.gen_summary(백엔드 doe_native.shell_gen_summary) 우선, 없으면 warned_runs로 센다 */
+export function warnTotals(result: unknown, doeId: string | null | undefined): { n: number; fixed: number; quality: number } | null {
+  const r = result as { doe_id?: string; gen_warned?: number; gen_summary?: { warned?: { fixed?: number; quality?: number } } } | null | undefined;
+  if (!r || !doeId || r.doe_id !== doeId) return null;
+  const w = r.gen_summary?.warned;
+  if (w && typeof r.gen_warned === "number") return r.gen_warned > 0 ? { n: r.gen_warned, fixed: w.fixed ?? 0, quality: w.quality ?? 0 } : null;
+  const runs = warnedRuns(result, doeId);
+  if (!runs.length) return null;
+  const has = (x: WarnedRun, c: string) => (x.waived ?? []).includes(c);
+  return { n: runs.length, fixed: runs.filter((x) => has(x, FIXED)).length, quality: runs.filter((x) => has(x, QUALITY)).length };
+}
+export const warnTotalsText = (t: { n: number; fixed: number; quality: number }): string => `경고 통과 ${t.n}(고정 ${t.fixed}·품질 ${t.quality})`;

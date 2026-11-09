@@ -9,7 +9,7 @@ import { FeatureGate, featureText, useFeature } from "../../components/FeatureGa
 import { SamplingDescription } from "../../components/SamplingDescription";
 import { HS_COMPAT_NOTE, HS_NOTE, MULTI_BASELINE_REASON, SITE_KINDS, descIdOf, hsCalcNote, type NameRanges } from "../../lib/sampling";
 import { genCategoryText } from "../../lib/geometry";
-import { POLICY_LABEL, POLICY_WARN_NOTE, waivedText, warnSummary, warnedRuns, type GeomPolicy } from "../../lib/shellPolicy";
+import { POLICY_LABEL, POLICY_WARN_NOTE, waivedText, warnTotals, warnTotalsText, warnedRuns, type GeomPolicy } from "../../lib/shellPolicy";
 import { useTrain } from "./TrainContext";
 import { DoePlatformFields, Seg } from "./DoePlatformFields";
 import { ReuseDoePicker } from "./ReuseDoePicker";
@@ -222,7 +222,9 @@ export function DoeGenCard() {
   const assemOk = nset || asmOn ? true : ok;
   const setGate = !nset ? null : nset.native?.prep_status !== "READY" ? "템플릿 형상 준비를 다시 하세요(④)" : (nset.baselines?.length ?? 0) > 1 && nset.param_map_status !== "confirmed" ? "매칭표 확정 필요(④ 다중 baseline)" : null;
   const skipped = native ? skippedRuns(job?.result, does.find((d) => d.job_id === job?.id)?.id) : [];
-  const warned = native ? warnedRuns(job?.result, does.find((d) => d.job_id === job?.id)?.id) : [];
+  const resDoeId = does.find((d) => d.job_id === job?.id)?.id;
+  const warned = native ? warnedRuns(job?.result, resDoeId) : [];
+  const warnTotal = native ? warnTotals(job?.result, resDoeId) : null;
   // 조립 매칭 없이 만들다 서버가 요구한 경우(409 PREREQUISITE_MISSING missing ASM_MATCH) — 매칭 카드 안내를 강조
   const needAsm = errorDetail?.code === "PREREQUISITE_MISSING" && Array.isArray(errorDetail.missing) && (errorDetail.missing as string[]).includes("ASM_MATCH");
   const problems = errorDetail?.code === "DOE_SAMPLING_INVALID" && Array.isArray(errorDetail.problems) ? (errorDetail.problems as { code?: string; message?: string }[]) : [];
@@ -405,9 +407,9 @@ export function DoeGenCard() {
               형상 갤러리
             </button>
           )}
-          {warned.length > 0 && (
+          {warnTotal && (
             <div className="small" data-testid="doe-warned">
-              <span className="pill warn">{warnSummary(warned)}</span>
+              <span className="pill warn">{warnTotalsText(warnTotal)}</span>
               <ul className="problems small" aria-label="경고 통과 run">
                 {warned.map((k) => (
                   <li key={k.run_key}>
