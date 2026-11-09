@@ -700,7 +700,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 **변경**: check에 (g) 피처 강체성 추가, **정책 무관 실패**.
 - 피처 목록 = 그 샘플에서 움직인 비드의 섬(SM-C3). rim = 섬 경계 노드(SM-C5 라벨에서 섬 요소와 바닥 요소가 공유하는 노드), interior = 그 밖 섬 노드. (b) 확장으로 비드 영역 R과 엣지를 공유하지만 `changed`에 없는 면 성분(인식 밖 피처)이 있으면 rim t = 0으로 같은 시험.
 - u = x − x0, t = mean u(rim), dev = max‖u(interior) − t‖ > max(`quality.distort_min_mm` 0.1, `quality.distort_rel` 0.25 × ‖t‖) → **`SHELL_FEATURE_DISTORTED`**(category `DEVIATION`, 종료 11, message `<bead> island <id>: dev <mm> mm, floor <mm> mm`). hold 앵커를 품은 섬(SM-C7)은 제외.
-- 보고: `shell_check.json.checks.feature` `{status, features, worst:{bead, island, dev_mm, floor_mm}}`(선택 키 — 피처 0이면 `SKIPPED`). 최상위 `code` 우선순위 맨 앞(반전과 같은 급): `SHELL_FEATURE_DISTORTED` → FIXED → INTERFERENCE → QUALITY → DEVIATION → TIE.
+- 보고: `shell_check.json.checks.feature` `{status, features, worst:{bead, island, dev_mm, floor_mm}}`(선택 키, `status` ∈ PASS·FAIL·SKIPPED — 피처 0이면 `SKIPPED`). 최상위 `code` 우선순위는 §14.4 판정 순서를 따른다(SM-C9).
 - 기준값: esl 0.1 mm·0.25 그대로(정밀 판정은 0.05 mm (b)가 하고 이것은 큰 결함 감지용).
 
 **호환**: 섬 없는 모델은 `checks.feature` = `SKIPPED`, 판정 불변. **플랫폼**: `messages.py`에 코드 1줄(`DEVIATION`, "비드 안 피처가 바닥을 따라가지 않음"), `fake_paicad` 코드 표. UI 없음. **시험**: 섬 변위를 0으로 바꾸는 결함 주입에서 FAIL, 정상 섬에서 PASS.
@@ -721,7 +721,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 - `skip` = 0.14.1 동작 그대로.
 - `fixed.policy: warn`: update 사전 검사는 실패하지 않고 `fixed_precheck.status: "WARN"`(+items). morph는 목표 변위가 `fixed.tol_mm`를 넘는 고정 노드만 디리클레 0을 풀어 목표(형상)를 따르게 한다(나머지 고정 노드·전이 감쇠는 그대로). `shell_morph.json.parts[].fixed_max_disp_mm` > 0 허용(§4.8 "항상 0" 규칙은 `skip`에서만), 선택 키 `fixed_moved{nodes, max_mm, clusters}`. check (f) `status: "WARN"` + 경고 **`SHELL_FIXED_MOVED`**{n, max_mm, clusters}.
 - `quality.fail_policy: warn`: warpage·skew·aspect·Jacobian(> 0)·`edge_ratio`·`min_edge_mm` 미달은 `checks.quality.status: "WARN"` + 경고 **`SHELL_QUALITY_WARN`**{failed_elements, edge_ratio, dt_ratio}. **항상 실패**(정책 무관, SM-11): 반전(det J ≤ 0·법선 반전) → `GEOM_QUALITY`(message "inverted"), `dt_ratio < dt_ratio_min` → `GEOM_QUALITY`(Δt 저하는 해석 비용 직접 증가), tie (e)·간섭 (d)·`SHELL_FEATURE_DISTORTED`.
-- 판정 순서: 피처 왜곡·반전 → 고정(skip) → 간섭 → 품질(skip) → 편차 → tie. `warn`으로 통과한 run은 최상위 `status: "PASS"`, `warnings[]`에 코드, 새 선택 키 `waived: ["SHELL_FIXED_REGION_VIOLATION"|"GEOM_QUALITY"]`.
+- 판정 순서(SM-C9 최종): `skip`(정책 둘 다 skip) = 기존 §6.6 순서 유지 — `SHELL_FIXED_REGION_VIOLATION` → `GEOM_INTERFERENCE` → `GEOM_QUALITY` → `GEOM_DEVIATION`(`SHELL_FEATURE_DISTORTED` 포함) → `GEOM_PARAM_MISMATCH` → `GEOM_TIE_PROJECTION`. `warn`에서만 항상 실패 항목(반전·`dt_ratio`)이 앞선다 — 반전·dt → 고정(skip일 때) → 간섭 → 품질(skip일 때) → 편차·피처 왜곡 → tie. `warn`으로 통과한 run은 최상위 `status: "PASS"`, `warnings[]`에 코드, 새 선택 키 `waived: ["SHELL_FIXED_REGION_VIOLATION"|"GEOM_QUALITY"]`.
 - envelope(§7.1): `limited_by: "fixed"`는 `skip`에서만. `warn`이면 행에 `fixed_moved_nodes` 열(선택).
 
 **호환·통계 영향**: 기본 `skip`이면 기존 결과·DOE 스킵 통계·envelope 바이트 불변. 기본을 `warn`으로 바꾸면 (1) 같은 DOE에서 `FIXED`·`QUALITY` 스킵이 "경고 통과"로 바뀌어 run 수·학습 표본이 늘고 스킵 표 수치가 이전 DOE와 비교 불가, (2) tie·RBE2 노드가 움직인 run이 학습 데이터에 섞임(조립 해석에서 상대 부품과 어긋남 — esl 단품 해석보다 위험 큼), (3) DOE 미리보기(doe-preview.md, update만)의 `FIXED` 빨간 셀이 경고 셀로 바뀜. 옵션 sha가 바뀌므로 기존 run 재사용 판정도 달라진다 — 플랫폼은 **기본값과 같은 새 키는 options.json에 쓰지 않는다**(옛 paicad의 모르는 키 거부도 피함, esl SR-D-13b와 같은 방식).
@@ -817,3 +817,13 @@ physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 �
   - SM-C6 `fixed.policy`·`quality.fail_policy` ∈ {skip, warn}(기본 skip — SM-10), 반전·`dt_ratio`·tie·간섭·피처 왜곡은 항상 실패, `SHELL_FIXED_MOVED`·`SHELL_QUALITY_WARN`·`waived` — §14.4
   - SM-C7 비드 단위 보스 고정 `bead.hold{beads, ring_mm 3, blend_mm 8}`, 측지 거리 × s(r), `hold_eligible` — §14.5
   - SM-C8 메시 전용 판정 코어 `shell/judge.py`(메모리 ↔ .rad/.inc 왕복 판정 동일) — §14.6. 우선순위 B 현황 §14.7, 시험 V-SM-16~22 §14.8
+- **SM-C9(2026-11-09, paicad 0.15.0·플랫폼 0.2.17 구현 해석 — §14 대신 이 해석이 기준)**:
+  - 합성 대체(§14.8 V-SM-22): SMH1 X 교차·SMH3 합류는 필렛 없는 poly 포켓으로 대체 — 교차 논리와 무관하게 `BEAD_IRREGULAR`(필렛 링 없음)가 나온다. SMH4의 "바닥 경계에 걸친 보스"·"겹친 보스"는 합성하지 않음(후속).
+  - SMH2: 가운데 단 = `BEAD_ISLAND_TOO_LARGE`, 바깥 단 = 섬 규칙 (d) 중첩으로 `BEAD_IRREGULAR`.
+  - V-SM-21 기준: 사전 반올림 없음. 실제 include 작성기로 `.rad`·`.inc`를 쓰고 다시 읽은 뒤 코드·경고 동일 + 수치 margin 상대오차 ≤ 1e-6이면 통과(§14.6·§14.8의 "1e-9 반올림" 대체).
+  - 최종 코드 우선순위: `skip`은 base 순서 유지(`SHELL_FIXED_REGION_VIOLATION` 우선), `warn`에서만 반전·dt가 앞선다(§14.2·§14.4 문구 통일).
+  - 키 이름: 섬 옵션 = `extract.islands`·`extract.island_max_mm`·`extract.island_ring_frac`, 섬 정보 필드 = `beads[].islands[].loop`(작업 지시의 `bead.island` 아님).
+  - DOE 요청: `geom_options: {fixed: {policy}, quality: {fail_policy}}` — `warn`일 때만 보냄(기본 skip이면 생략). 결과 = `result.gen_summary{skipped, warned, waived}`, `warned_runs[{run_key, codes, waived}]`, DOE 미리보기 셀 `gen.waived`·`gen.warnings`. 세트(param_set) 수준 `warn` = 422, DOE는 세트 정책을 승계하지 않는다.
+  - ①-2 hold 저장: `hold_beads`는 `01_train/params.json`에 저장(DB 없음), ①-1 기반 DOE가 자동 승계. PREDICT·미리보기·DOE→세트 승계는 정책 `skip` 고정.
+  - SM-C4 보강: tag와 독립 판정 추가 — 섬 노드의 샘플 B-rep **전체 면** 최근접 거리 > 0.1 mm → `SHELL_FEATURE_DISTORTED`(tag 오분류 방지).
+  - `checks.feature.status` ∈ `PASS`·`FAIL`·`SKIPPED`.
