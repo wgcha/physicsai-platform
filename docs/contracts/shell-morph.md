@@ -2,7 +2,7 @@
 
 > Plan 2026-10-19. 기준선 `feat/r1-shell-docs` 13e68b8(paicad 0.7.0). 상위 계약은 [geometry-engine.md](geometry-engine.md)(이하 **GE**)이며, 이 문서가 정하지 않은 규칙(경로 약어 `S`·`P`·`R`·`D`, JSON 공통 규약, 쓰기·임시 파일·stdout 규약, 버전·독립성·커널 격리)은 GE 그대로다. 이 문서가 GE를 바꾸거나 더하는 규칙은 §2.3에 모았다(쉘 범위에서는 이 문서 우선). 결정 번호는 `SM-n`. GE §9 단계 표 "5 (선택) 쉘 형상"·GE §11.3은 이 문서(단계 4C)로 구체화된다.
 
-> 변경안 2026-11-09(**제안 — 사용자 결정 대기, 구현 보류**): esl-platform v0.16.2 개선점(섬·피처 왜곡 안전망·바닥 가장자리 라벨·고정/품질 정책·보스 고정·공통 판정 코어)을 대조한 SM-C3~SM-C8을 §14에 둔다. 확정 전에는 본문·구현(paicad 0.14.1) 기준 그대로다. 결정이 필요한 항목은 §12 Q6~Q10.
+> 확정 2026-11-09(사용자 "권장안대로"): esl-platform v0.16.2 개선점(섬·피처 왜곡 안전망·바닥 가장자리 라벨·고정/품질 정책·보스 고정·공통 판정 코어)을 반영한 **SM-C3~SM-C8(§14)이 본문(§1.3·§4·§6·§7·§8·§10)보다 우선하는 기준**이다. 결정 SM-10~14(§2.2), 구현 파일 소유 분할 §14.10. 목표 버전 paicad 0.15.0·플랫폼 0.2.17.
 
 ## 0. 한 줄 요약
 
@@ -80,6 +80,11 @@ GE §1.4 전부(외부 명령은 워커만·`shell=False`, 설정에서만 경�
 | SM-7 | 비드 개수 = 다중 baseline(GE §11.4) 위상 변형 용도, **비드 단위 매칭**(한 비드의 D·U·V·W 행은 한 묶음) | 사용자 확정(개수는 위상 변화) |
 | SM-8 | 개발 골든 = build123d 가상 판금(비드 여러 개·플랜지·체결 영역) + gmsh 쉘 메시(3 mm, quad 위주 + tri), 현장 = `paicad shell selftest` 수치 요약 | 실물 반출 불가(GE §9 단계 0과 같음) |
 | SM-9 | 플랫폼 연동 최소: 엔진 `native` 그대로, 세트 형상 종류 `kind=shell`은 `native/prep.json`에 기록(DB migration 없음), 명령 키 `paicad_shell_*` 추가, job_type·step 키 불변 | GE-3·GE-11 원칙 |
+| SM-10 | (SM-C6) 고정 침범·품질 미달 정책 `fixed.policy`·`quality.fail_policy` 기본 **`skip`**(paicad·플랫폼), `warn`은 ①-3 DOE 고급 옵션에서만 선택, PREDICT(A)·최적화는 `skip` 고정 | 사용자 확정 2026-11-09(조립 해석에서 tie·RBE2 노드 이동 위험) |
+| SM-11 | (SM-C6) `warn`이어도 반전·`dt_ratio` 미달·tie (e)·간섭 (d)·`SHELL_FEATURE_DISTORTED`는 항상 실패 | 사용자 확정 2026-11-09 |
+| SM-12 | (SM-C3) 비드 바닥 섬 흡수 기본 켬(`extract.islands: true`), `island_max_mm` 40·`island_ring_frac` 0.9 | 사용자 확정 2026-11-09(esl 값), 섬 없는 모델 바이트 불변 |
+| SM-13 | (SM-C7) 보스 고정 `bead.hold` 비드 단위·기본 off, ρ 3 mm·b 8 mm, 메시 측지 거리 × s(r) | 사용자 확정 2026-11-09 |
+| SM-14 | (SM-C8) 메시 판정을 `shell/judge.py`로 분리, 메시 기반 섬 탐지는 정보 경고(`TAG_ISLAND_MISMATCH`)로만 | 사용자 확정 2026-11-09 |
 
 ### 2.3 GE에서 바뀌거나 더해지는 규칙(쉘 범위, 이 문서 우선)
 
@@ -633,11 +638,6 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
 | Q3 | ~~쿠션 솔리드와 쉘 비드를 한 param_set에서 함께 바꾸나?~~ | **해결(2026-10-19 사용자 확정)**: 함께 바꾸지 않음 — 한 param_set은 솔리드 또는 쉘(+3S 두께) 중 하나(혼합 비범위 확정) |
 | Q4 | (비차단) 고정 종류 기본 포함 RBE3·RBODY·BCS·공유 노드가 적절한가? | 보수적으로 포함, 옵션으로 제외 가능 |
 | Q5 | (비차단) 깊이 변경 기본 방식 `keep_angle`(입구 고정·플랭크 각 유지·바닥 크기 변화) vs `keep_bottom` | `keep_angle`(솔리드 FACE_OFFSET과 같은 거동), 고급 옵션 |
-| Q6 | (SM-C6) 고정 침범·품질 미달 정책의 **기본값**: esl처럼 `warn`인가, 지금처럼 `skip`인가 | **권장: paicad·플랫폼 모두 기본 `skip`**(기존 결과·통계 불변), 플랫폼 ①-3 DOE 카드 고급 옵션에서만 `warn` 선택. 이유: physicsai는 조립 해석이라 tie·RBE2 노드가 움직이면 상대 부품과 어긋남(esl은 단품 등가하중) |
-| Q7 | (SM-C6) `warn` 정책에서도 항상 실패로 둘 항목 | **권장: 반전 + `dt_ratio` 미달 + tie 투영(e) + 간섭(d) + 피처 왜곡(SM-C4)**. warpage·skew·aspect·Jacobian(>0)·엣지 비만 경고로 완화 |
-| Q8 | (SM-C3) 섬 흡수 기본 켬 여부와 크기 상한 | **권장: 켬(`extract.islands: true`), `island_max_mm` 40·`island_ring_frac` 0.9(esl 값 그대로)**. 섬 없는 모델(SM1 포함)은 결과 바이트 동일, 다시 준비한 세트에서만 새 비드가 생김 |
-| Q9 | (SM-C7) 보스 고정 단위·기본값 | **권장: 비드 단위 on/off(기본 off), ρ 3 mm·블렌드 8 mm(esl 값), 거리 = 메시 측지 거리, 감쇠 = 기존 s(r)**. 대상은 고정 노드가 바닥·섬에만 있는 비드(`hold_eligible`) |
-| Q10 | (SM-C8) 판정 코어를 메시 전용 공통 모듈로 분리하고 메시 기반 섬 탐지를 이식할지 | **권장: 분리(`shell/judge.py`, 메시 배열만 입력)하되 파라미터 정의·update는 B-rep 유지**. 메시 기반 섬 탐지는 tag 일관성 진단(정보 경고)으로만 사용 |
 
 로드맵(비범위): 판재 솔리드 STEP → 중립면 추출(대향 면 쌍 평균면·두께 맵, 쉘 두께 일관성 검사), 비드 길이·플랭크 각·필렛 반경 파라미터, 플랜지 높이·각, 곡면 기준면 위치 이동.
 
@@ -651,9 +651,9 @@ GE §11.2를 그대로 따른다(1D 스윕, 각 단계 update→morph→check, `
 
 ---
 
-## 14. 변경안 SM-C3~SM-C8 — esl 개선점 대조(2026-11-09, 제안·미확정)
+## 14. SM-C3~SM-C8 — esl 개선점 반영(2026-11-09 확정, 본문보다 우선)
 
-> 상태: **제안**. 사용자 결정(§12 Q6~Q10) 뒤 확정하고, 확정 전에는 구현하지 않는다(사용자 지시 "구현은 계약 확정 뒤"). 기준: physicsai v0.2.16(5af61da)·paicad 0.14.1, 참고 esl-platform v0.16.2(1f7dcdd) `esl_select_relax.md` SR-D-1~44·`esl_bead_auto.md` AD-X-1·코드 `esl/mesh/features.py`·`esl/morph/core.py`·`esl/doe/bead_auto.py`.
+> 상태: **확정**(2026-11-09 사용자 "권장안대로" — 결정 SM-10~14). 이 절이 본문 해당 조항보다 우선한다. 기준: physicsai v0.2.16(5af61da)·paicad 0.14.1, 참고 esl-platform v0.16.2(1f7dcdd) `esl_select_relax.md` SR-D-1~44·`esl_bead_auto.md` AD-X-1·코드 `esl/mesh/features.py`·`esl/morph/core.py`·`esl/doe/bead_auto.py`.
 
 ### 14.0 대조 요약
 
@@ -664,7 +664,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 | A1 | 바닥 위 홀·딤플·버링·체결 구멍 = 섬 | 비드 바닥에 딤플이 있으면 `BEAD_IRREGULAR`(면 링 수 ≠ 4), 바닥 구멍이 있으면 `BEAD_OPEN_UNSUPPORTED`(자유 엣지 도달) — 피처 없음 | **수정 채택**(판정은 B-rep 면 인접으로, 크기·고리 기준값은 esl 그대로) | SM-C3 |
 | A2 | 안전망 `FEATURE_DISTORTED` | 없음. 다만 B-rep 경로라 인식 안 된 피처가 든 비드는 아예 안 움직이고, 변경 면 노드는 check (b) 경계 편차가 잡음 | **수정 채택**(섬 강체성 + tag 오분류 대비, 정책 무관 실패) | SM-C4 |
 | A3 | 바닥 가장자리 노드(EDGE/VERTEX) 요소 규칙 | 요소→면 배정 `_element_faces`(다수결 + 엣지·꼭짓점 공통 면)라 가장자리 줄은 이미 포함. 법선 조건·타 면 FACE 노드 배제 없음 | **수정 채택**(새 판정용 엄격 라벨만 추가, 기존 배정 불변) | SM-C5 |
-| A4 | 고정 침범·품질 FAIL 정책 | 항상 스킵 | **수정 채택**(키 추가, 기본값은 Q6 — 권장 `skip`) | SM-C6 |
+| A4 | 고정 침범·품질 FAIL 정책 | 항상 스킵 | **수정 채택**(키 추가, 기본 `skip` — SM-10) | SM-C6 |
 | A5 | 보스 고정 `hold_fixed` | 바닥 위 고정 노드 → `BEAD_FIXED_OVERLAP`·`use_default:false`, 바꾸면 항상 침범 | **채택**(기존 고정 + s(r) 전이에 비드 단위 on/off) | SM-C7 |
 | 원칙 | SR-D-44 메시 출처 무관 판정 코어 | check가 B-rep·메시 판정을 한 함수에서 섞음 | **수정 채택**(판정만 메시 전용 모듈로) | SM-C8 |
 
@@ -685,7 +685,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 
 **check**: (a) 깊이 재측정은 바닥 FACE 노드만 쓰므로 섬 경계(EDGE)는 자동 제외 — 섬 면 FACE 노드도 제외하도록 명시. (b) 경계 편차는 섬 노드 포함. 섬 강체성은 SM-C4.
 
-**설정 키**(쉘 options `extract`): `islands`(bool, 기본 Q8), `island_max_mm`(> 0, 기본 40), `island_ring_frac`((0,1], 기본 0.9). 단위 mm·비율로 esl 값 그대로 쓴다(physicsai도 mm, 의미 같음).
+**설정 키**(쉘 options `extract`): `islands`(bool, 기본 true — SM-12), `island_max_mm`(> 0, 기본 40), `island_ring_frac`((0,1], 기본 0.9). 단위 mm·비율로 esl 값 그대로 쓴다(physicsai도 mm, 의미 같음).
 
 **호환**: 섬 없는 모델은 extract·update·morph 결과 바이트 동일(SM1 골든 불변 — H6 구멍은 B5 바깥 판 위). 섬이 있던 모델은 **다시 준비할 때만** 전에 없던 비드 피처가 생긴다(기존 `native/` 준비본·DOE는 그대로, `extract` 절은 STALE 대상 아님). `islands:false`면 0.14.1 동작. paicad MINOR.
 
@@ -717,10 +717,10 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 
 **현재**: `SHELL_FIXED_REGION_VIOLATION`은 update 사전 검사(`shell/update.py:166-204`, 실패 `:222-224`)·morph(`shell/morph.py:385-391`)·check (f)(`check.py:262-280`) 어디서 나도 실패·스킵, `GEOM_QUALITY`(`quality.py:149-161`, `check.py:340-345`)도 실패·스킵. 반전은 품질 실패 안에 섞여 있다.
 
-**변경**: options 키 **`fixed.policy`**·**`quality.fail_policy`** ∈ {`skip`, `warn`}(기본 Q6).
+**변경**: options 키 **`fixed.policy`**·**`quality.fail_policy`** ∈ {`skip`, `warn`}(기본 `skip` — SM-10).
 - `skip` = 0.14.1 동작 그대로.
 - `fixed.policy: warn`: update 사전 검사는 실패하지 않고 `fixed_precheck.status: "WARN"`(+items). morph는 목표 변위가 `fixed.tol_mm`를 넘는 고정 노드만 디리클레 0을 풀어 목표(형상)를 따르게 한다(나머지 고정 노드·전이 감쇠는 그대로). `shell_morph.json.parts[].fixed_max_disp_mm` > 0 허용(§4.8 "항상 0" 규칙은 `skip`에서만), 선택 키 `fixed_moved{nodes, max_mm, clusters}`. check (f) `status: "WARN"` + 경고 **`SHELL_FIXED_MOVED`**{n, max_mm, clusters}.
-- `quality.fail_policy: warn`: warpage·skew·aspect·Jacobian(> 0)·`edge_ratio`·`min_edge_mm` 미달은 `checks.quality.status: "WARN"` + 경고 **`SHELL_QUALITY_WARN`**{failed_elements, edge_ratio, dt_ratio}. **항상 실패**(정책 무관, Q7 권장): 반전(det J ≤ 0·법선 반전) → `GEOM_QUALITY`(message "inverted"), `dt_ratio < dt_ratio_min` → `GEOM_QUALITY`(Δt 저하는 해석 비용 직접 증가), tie (e)·간섭 (d)·`SHELL_FEATURE_DISTORTED`.
+- `quality.fail_policy: warn`: warpage·skew·aspect·Jacobian(> 0)·`edge_ratio`·`min_edge_mm` 미달은 `checks.quality.status: "WARN"` + 경고 **`SHELL_QUALITY_WARN`**{failed_elements, edge_ratio, dt_ratio}. **항상 실패**(정책 무관, SM-11): 반전(det J ≤ 0·법선 반전) → `GEOM_QUALITY`(message "inverted"), `dt_ratio < dt_ratio_min` → `GEOM_QUALITY`(Δt 저하는 해석 비용 직접 증가), tie (e)·간섭 (d)·`SHELL_FEATURE_DISTORTED`.
 - 판정 순서: 피처 왜곡·반전 → 고정(skip) → 간섭 → 품질(skip) → 편차 → tie. `warn`으로 통과한 run은 최상위 `status: "PASS"`, `warnings[]`에 코드, 새 선택 키 `waived: ["SHELL_FIXED_REGION_VIOLATION"|"GEOM_QUALITY"]`.
 - envelope(§7.1): `limited_by: "fixed"`는 `skip`에서만. `warn`이면 행에 `fixed_moved_nodes` 열(선택).
 
@@ -746,7 +746,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 
 physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 무관한 모핑 코어"를 그대로 옮길 수 없다(비드 인식·샘플 면 사상에 CAD가 반드시 필요). 그러나 **판정**(고정 침범 노드 수, 품질·반전, 피처 강체성, hold 영역, 정책 적용, 극단 요소)은 원리상 메시 노드·요소·라벨만으로 정해진다. 지금 `check.py`는 B-rep 투영 판정((a)·(b))과 메시 판정((c)·(f))을 한 함수에서 섞고 있어, 같은 메시를 메모리로 넘길 때와 include로 쓴 뒤 다시 읽을 때 판정이 같다는 보장이 시험되지 않는다.
 
-**결정(제안)**: 메시 판정을 `paicad/shell/judge.py`(numpy·scipy만, `kernel/`·B-rep import 금지)로 분리한다. 입력 = `x0, x`(노드 좌표), `conn`·`tri`, 노드 라벨(tag `kind`·`entity`), 면-엣지-꼭짓점 인접표(정수 배열), 고정 마스크, 피처 라벨(섬·hold 앵커 요소 마스크), options → 출력 = 코드·경고·수치 dict. check는 B-rep 판정 (a)(b)(d)(e)만 직접 하고 나머지를 judge에 맡긴다. 메시 기반 섬 탐지(esl `enclosed_components`·`outer_polygons`·`_between_pieces` 이식)는 judge에 두되 **tag 단계 일관성 진단**으로만 쓴다: B-rep 섬 ≠ 메시 섬이면 정보 경고 `TAG_ISLAND_MISMATCH`(실패 아님). 장래 CAD 없는 메시 전용 입력이 생기면 같은 judge를 쓴다. **검증**: judge(메모리 배열) = judge(`.rad` + `#include .inc`로 쓰고 `assem` 리더로 다시 읽은 배열) — 코드·경고·수치(1e-9 반올림) 동일(V-SM-21).
+**결정(SM-14)**: 메시 판정을 `paicad/shell/judge.py`(numpy·scipy만, `kernel/`·B-rep import 금지)로 분리한다. 입력 = `x0, x`(노드 좌표), `conn`·`tri`, 노드 라벨(tag `kind`·`entity`), 면-엣지-꼭짓점 인접표(정수 배열), 고정 마스크, 피처 라벨(섬·hold 앵커 요소 마스크), options → 출력 = 코드·경고·수치 dict. check는 B-rep 판정 (a)(b)(d)(e)만 직접 하고 나머지를 judge에 맡긴다. 메시 기반 섬 탐지(esl `enclosed_components`·`outer_polygons`·`_between_pieces` 이식)는 judge에 두되 **tag 단계 일관성 진단**으로만 쓴다: B-rep 섬 ≠ 메시 섬이면 정보 경고 `TAG_ISLAND_MISMATCH`(실패 아님). 장래 CAD 없는 메시 전용 입력이 생기면 같은 judge를 쓴다. **검증**: judge(메모리 배열) = judge(`.rad` + `#include .inc`로 쓰고 `assem` 리더로 다시 읽은 배열) — 코드·경고·수치(1e-9 반올림) 동일(V-SM-21).
 
 ### 14.7 우선순위 B(이번에는 변경안 없음 — 현황만)
 
@@ -758,7 +758,7 @@ physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 �
 | B9 | `CROSS_BEAD_MOVE` | 다른 비드 입구 루프는 불변 엣지라 디리클레 0(SM-C2 국부 해 포함) → 이웃 비드가 움직이는 경로가 구조적으로 없음. 간격 부족은 `land_min_mm` 충돌 검사 | 하 | 하(필요하면 이웃 비드 노드 이동 0 확인만) |
 | B10 | 극단 요소 `QUALITY_WARN`(넓이 비 < 0.2·법선 회전 > 45°) | 요소별 절대·상대 한계(§6.6), 넓이 비·법선 회전 지표 없음(90° 넘으면 반전) | 중 — SM-C6 `warn`을 쓰면 품질 실패가 더는 막지 않으므로 함께 넣는 것이 좋음 | 하(judge에 지표 2개, 경고만) |
 
-### 14.8 시험(V-SM-16~22, 확정 시 §10에 편입)
+### 14.8 시험(V-SM-16~22 — §10 체크리스트에 추가)
 
 - **V-SM-16 섬**: 합성 바닥에 구멍 Ø6·딤플 Ø10 h1·버링 Ø8·체결 구멍(RBE2) → `islands` 4종 인식, `BEAD_D` ±20 %에서 섬 강체 이동(섬 노드 변위 편차 ≤ 1e-6 mm), 바닥 크기 축소로 섬 충돌 → `GEOM_FEATURE_COLLISION` kind `island`·`feasible.limited_by: island:*`, 45 mm 피처 → `BEAD_ISLAND_TOO_LARGE`, 고리형 둔덕 → `BEAD_IRREGULAR`, `islands:false` → 0.14.1과 바이트 동일, SM1 골든 바이트 동일.
 - **V-SM-17 왜곡**: 섬 변위 0 결함 주입 → `SHELL_FEATURE_DISTORTED`(정책 `warn`이어도), 정상 → `checks.feature PASS`, 섬 없음 → `SKIPPED`.
@@ -776,11 +776,21 @@ physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 �
 
 | 리스크 | 대응 |
 |---|---|
-| `warn` 정책 run이 학습 데이터에 섞여 조립 접합부 응답 왜곡 | 기본 `skip`(Q6), 경고 코드 run 요약 기록·data-health 제외 추천 연결 |
+| `warn` 정책 run이 학습 데이터에 섞여 조립 접합부 응답 왜곡 | 기본 `skip`(SM-10), 경고 코드 run 요약 기록·data-health 제외 추천 연결 |
 | 섬 인식이 실물 B-rep 변종(엠보 문자·B-spline 딤플)에서 과흡수 | 크기 상한 40 mm·고리형 둔덕 기준·`islands:false` 되돌림, SM-C4 안전망, 현장 selftest에 섬 건수 추가 |
 | hold로 CAD와 메시가 국부적으로 다름 → 파라미터 의미 변화 | 비드 단위 opt-in, 표에 표시, (b) 편차 제외 영역을 보고 |
 | judge 분리 리팩터가 기존 check 판정을 바꿈 | `skip`·섬 없음·hold 없음에서 SM1 골든 바이트 동일을 병합 조건으로 |
 | 옵션 키 증가로 옛 paicad가 새 options 거부 | 플랫폼은 기본값과 같은 새 키를 쓰지 않음, `engine_version` 확인 후 노출 |
+
+### 14.10 구현 위임 — 파일 소유 분할(겹침 없음)
+
+순서: paicad 0.15.0(impl-geom) 병합 → 백엔드(impl-backend, `fake_paicad` 갱신 포함) → 프런트(impl-frontend). 플랫폼 0.2.17 = 백엔드·프런트 합본. 남의 소유 파일은 고치지 않고 요청한다(AGENTS.md).
+
+| 역할 | 소유 파일(이 작업 범위) | 내용 | 통과해야 할 V-SM |
+|---|---|---|---|
+| impl-geom | `packages/paicad/src/paicad/shell/{beads,extract,update,morph,check,quality,opts,tag,sweep,selftest}.py`, 새 `shell/judge.py`, `packages/paicad/tests/**`(새 시험·`tests/data/make_synthetic_shell.py` SMH1~4), `packages/paicad/src/paicad/__init__.py`(0.15.0), `packages/paicad/CHANGELOG.md` | SM-C3 섬 인식·강체 이동·충돌 `island`, SM-C4 (g) 피처 강체성, SM-C5 엄격 라벨(judge 안 계산, `_element_faces` 불변), SM-C6 정책 키·`SHELL_FIXED_MOVED`·`SHELL_QUALITY_WARN`·`waived`·envelope 열, SM-C7 `bead.hold`·`hold_eligible`, SM-C8 judge 분리·`TAG_ISLAND_MISMATCH`·왕복 시험, options 기본값·범위 검사 | V-SM-1~12·14·15 회귀(SM1 골든 바이트 동일), **V-SM-16·17·18·19·20·21·22** |
+| impl-backend | `backend/physicsai_core/geometry/{shell_options,messages}.py`, `backend/physicsai_core/config/{schema_geometry,validate_geometry}.py`, `config/platform.example.yaml`(`geometry.shell_defaults` 새 키), `backend/physicsai_api/services/{param_set_native_api,param_set_native_train,geometry_gate}.py`·관련 `schemas/`, `worker/physicsai_worker/steps/stage1_train_data/{doe_native,doe_platform_gen}.py`, `backend/tests/**`(`fake_tools/fake_paicad` 새 코드·`waived`), `backend/openapi.json`, `RELEASES.md`·루트 `pyproject.toml`(0.2.17)·`physicsai_core.__version__`, migration(필요할 때만, roadmap 번호) | param_set geom_options 새 키(`extract.islands`·`island_*`, `fixed.policy`, `quality.fail_policy`·`distort_*`, `bead.hold`, `tag.label_angle_deg`) 통과·범위 검증(`hold.beads` ⊆ `hold_eligible`, PREDICT·최적화는 `skip` 강제), 기본값과 같은 새 키는 options.json에 쓰지 않음, `messages.py` 코드 4개(`SHELL_FEATURE_DISTORTED` DEVIATION·`SHELL_FIXED_MOVED`·`SHELL_QUALITY_WARN`·`BEAD_ISLAND_TOO_LARGE`), DOE run 요약에 경고 코드 목록·`waived` 기록, 스킵/경고 통과 집계 API(고정 a·품질 b), MCP `x-mcp`·용어집 갱신 | **V-SM-13**(확장: 새 키 통과·검증·생략 규칙·`skip` 강제), **V-SM-19**(플랫폼 측: `warn` run 집계·`waived` 표시 데이터, `skip` 기존 통계 불변), **V-SM-20**(플랫폼 측: `hold_eligible` 아닌 비드 422) |
+| impl-frontend | `frontend/src/stages/stage1/{DoeGenCard,doeGenParams,ParamTableCard}.tsx·.ts`, ④ 세트 상세 피처 표 컴포넌트, `frontend/src/stages/stage1/doepreview/gridModel.ts`(경고 셀), `frontend/src/__tests__/**`, `frontend/src/mock/**`, `frontend-dist/**`(빌드본 함께 커밋) | DOE 고급 옵션 "고정 침범·품질 미달 처리 [스킵 \| 경고 후 사용]"(기본 스킵, kind=shell만), DOE 결과 표 경고 배지·"경고 통과 n(고정 a·품질 b)", 파라미터 표 "체결 보스 고정" 체크 열(`hold_eligible` 비드만, 켜면 사용 체크 활성)·고급 ρ·b, 피처 PNG 범례(섬 초록)·툴팁 "섬 n개" | **V-SM-13**(UI 항목), **V-SM-19**(화면: 정책 선택·배지·집계), **V-SM-20**(화면: hold 열 표시 조건) |
 
 ---
 
@@ -800,10 +810,10 @@ physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 �
   - 옵션(쉘 options `morph`): **`region`** = `local`(기본) | `face`(0.9.0과 같은 면 전체 해), **`region_band_mm`**(기본 40, > 0), **`region_band_factor`**(기본 5, ≥ 0). 범위 밖이면 옵션 검사 실패.
   - 보고: `shell_morph.json` **`parts[].region`** `{mode, faces, nodes, band_mm}` 선택 키 추가.
   - 근거(SM1 위치·폭 127단계): 이동 노드 약 24,000 → 1,500~4,400, 품질 FAIL 29 → 23, 경계 편차 ≤ 0.05 mm·재측정 오차 기준 유지. 기본 띠를 전이 폭 6 mm로 두면 FAIL 47 이상이라 40 mm·5×변위로 정함.
-- **SM-C3~SM-C8(2026-11-09, 제안 — 사용자 결정 §12 Q6~Q10 대기, 구현 보류)**: esl-platform v0.16.2 개선점 대조. 상세·근거·시험은 §14. 확정 전에는 본문·paicad 0.14.1 기준 그대로.
+- **SM-C3~SM-C8(2026-11-09, 확정 — 사용자 "권장안대로", 결정 SM-10~14, 본문 대신 이 기준)**: esl-platform v0.16.2 개선점 반영. 상세·근거·시험·파일 소유는 §14. 목표 paicad 0.15.0·플랫폼 0.2.17.
   - SM-C3 비드 바닥 섬 흡수(B-rep 면 인접 판정, `extract.islands`·`island_max_mm` 40·`island_ring_frac` 0.9, 섬 강체 이동·`BEAD_ISLAND_TOO_LARGE`·충돌 kind `island`) — §14.1
   - SM-C4 안전망 `SHELL_FEATURE_DISTORTED`(category `DEVIATION`, 정책 무관, `quality.distort_min_mm` 0.1·`distort_rel` 0.25) — §14.2
   - SM-C5 새 판정용 엄격 면 요소 라벨(바닥 가장자리 EDGE/VERTEX 포함·타 면 FACE 배제·법선 `tag.label_angle_deg` 15), 기존 `_element_faces` 불변 — §14.3
-  - SM-C6 `fixed.policy`·`quality.fail_policy` ∈ {skip, warn}(기본 Q6 권장 skip), 반전·`dt_ratio`·tie·간섭·피처 왜곡은 항상 실패, `SHELL_FIXED_MOVED`·`SHELL_QUALITY_WARN`·`waived` — §14.4
+  - SM-C6 `fixed.policy`·`quality.fail_policy` ∈ {skip, warn}(기본 skip — SM-10), 반전·`dt_ratio`·tie·간섭·피처 왜곡은 항상 실패, `SHELL_FIXED_MOVED`·`SHELL_QUALITY_WARN`·`waived` — §14.4
   - SM-C7 비드 단위 보스 고정 `bead.hold{beads, ring_mm 3, blend_mm 8}`, 측지 거리 × s(r), `hold_eligible` — §14.5
   - SM-C8 메시 전용 판정 코어 `shell/judge.py`(메모리 ↔ .rad/.inc 왕복 판정 동일) — §14.6. 우선순위 B 현황 §14.7, 시험 V-SM-16~22 §14.8
