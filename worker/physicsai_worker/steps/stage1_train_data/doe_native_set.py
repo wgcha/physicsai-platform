@@ -65,7 +65,10 @@ def dg_prep(ctx: Any) -> None:
     s, p = ctx.settings, ctx.params
     doe_id = p["doe_id"]
     ps, S = _set(ctx)
-    opts = set_opts(s, S, ps.get("geom_options"))
+    from physicsai_core.geometry.options import deep_merge
+
+    gopts = deep_merge(ps.get("geom_options") or {}, p["geom_options"]) if p.get("geom_options") else ps.get("geom_options")
+    opts = set_opts(s, S, gopts)  # SM-10: DOE 요청 geom_options(정책 등)가 세트 옵션 위에 덮인다. train_does.geom_options에 유효값이 기록된다
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     ensure_prep_ready(s, S, opts, ver)
@@ -142,7 +145,8 @@ def dg_prep(ctx: Any) -> None:
     ctx.ex.db(lambda c: train_repo.set_doe(c, doe_id, parameters_snapshot=snap, tpl_sha256=None, engine_version=ver, geom_options=opts,
                                            **more))
     ctx.patch_result({"doe_id": doe_id, "num_runs": num_runs, "seed": seed, "engine_version": ver, "ocp_version": ocp,
-                      "param_set_id": ps["id"], "multi_baseline": pm is not None})
+                      "param_set_id": ps["id"], "multi_baseline": pm is not None,
+                      **({"kind": "shell"} if read_kind(S) == "shell" else {})})
 
 
 def hst_gen(ctx: Any) -> None:

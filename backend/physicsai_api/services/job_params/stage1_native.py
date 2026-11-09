@@ -203,6 +203,28 @@ def _sampling_param(p: Any) -> dict[str, Any]:
     return {"sampling": sp} if sp and sp.get("kind") == "train_doe" else {}
 
 
+def doe_geom_options(ctx: AppContext, p: Any, *, shell: bool, ps: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    """DOE 요청 `geom_options`(쉘 전용, SM-10): 쉘 스키마 검증 + hold는 세트의 `hold_eligible` 비드만(422). 없거나 비면 None."""
+    raw = getattr(p, "geom_options", None)
+    if raw is None:
+        return None
+    if not shell:
+        raise invalid_at("geom_options", "geom_options는 Native 쉘 판금 DOE에서만 쓸 수 있습니다")
+    from physicsai_core.geometry.options import deep_merge
+    from physicsai_core.geometry.shell_options import hold_beads, hold_problems
+
+    from ..geometry_gate import validate_geom_options
+
+    over = validate_geom_options(ctx.settings, raw, "shell")
+    if ps is not None:
+        from ..param_set_native_api import check_hold_eligible
+
+        check_hold_eligible(ctx, ps, deep_merge(ps.get("geom_options") or {}, over))
+    elif hold_beads(over):
+        raise DomainError("GEOM_OPTIONS_INVALID", "형상 옵션 값이 올바르지 않습니다", status=422, problems=hold_problems(over, None))
+    return over or None
+
+
 def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any = None, study: dict[str, Any] | None = None
                    ) -> tuple[dict[str, Any], dict[str, Any] | None, list[dict[str, str]]]:
     cfg = ctx.settings
@@ -248,10 +270,19 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any 
                           status=409, missing=[*missing, "ASM_MATCH"])
     elif missing:
         raise DomainError("PREREQUISITE_MISSING", "조립 폴더에 starter 1개가 있어야 합니다", status=409, missing=missing)
+    gover = doe_geom_options(ctx, p, shell=shell)
+    if shell and study is not None:  # ①-2에서 고른 체결 보스 고정 비드(hold_beads)를 이 DOE의 옵션으로(요청이 hold를 직접 주면 요청 우선)
+        from ..stage1_train_data import read_hold_beads
+
+        hb = read_hold_beads(ctx, study)
+        if hb and not (((gover or {}).get("bead") or {}).get("hold")):
+            gover = {**(gover or {}), "bead": {**((gover or {}).get("bead") or {}), "hold": {"beads": hb}}}
     doe_id = str(uuid.uuid4())
     params = _native_params({"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
                              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
                              "on_run_failure": on_fail, "radioss_assem_path": cp.path, "doe_id": doe_id}, p, plan)
+    if gover:
+        params["geom_options"] = gover
     if asm is not None:  # jobs.params: 소비자 기록(§6.3 — 확정본 sha256으로 DG_PREP이 복사본을 확인)
         params.update(asm_match_id=p.asm_match_id, asm_match_sha256=asm["sha256"])
     return params, {"doe_id": doe_id}, [{"code": n["code"], "message": n["message"]} for n in plan.notes] if plan else []
@@ -287,11 +318,16 @@ def native_doe_from_set(ctx: AppContext, conn: Any, study: dict[str, Any], p: An
         plan = native_plan(cfg, p, multi=os.path.isfile(os.path.join(set_path(ctx, ps), "param_map.json")),
                            inputs=doe_platform.design_inputs_from_params(list(res.ps["parameters"])))
     label, num_runs, seed, multi, on_fail = _native_doe_common(cfg, p, samples, [str(r["name"]) for r in ps["parameters"]], plan)
+    from ..param_set_native_api import set_kind
+
+    gover = doe_geom_options(ctx, p, shell=set_kind(ctx, ps) == "shell", ps=ps)
     doe_id = str(uuid.uuid4())
     params = _native_params({"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
                              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,
                              "on_run_failure": on_fail, "radioss_assem_path": os.path.join(set_path(ctx, ps), "radioss_assem"),
                              "doe_id": doe_id, "param_set_id": ps["id"]}, p, plan)
+    if gover:
+        params["geom_options"] = gover
     if res is None:
         res = native_vars_run.resolve(ctx, conn, study, ps, None, None)  # native-vars.md §4.2: 세트 정의를 스냅숏으로 기록(그 자리 편집 없음)
     if res.vars is not None:

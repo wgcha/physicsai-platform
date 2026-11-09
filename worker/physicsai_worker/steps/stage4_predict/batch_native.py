@@ -71,7 +71,7 @@ def bp_prep(ctx: Any, b: dict[str, Any], m: dict[str, Any], ps: dict[str, Any], 
     s = ctx.settings
     if not ps.get("starter_name") or not os.path.isfile(os.path.join(S, "radioss_assem", ps["starter_name"])):
         raise StepFailure("INPUT_CHANGED", f"템플릿 파일이 없습니다: radioss_assem/{ps.get('starter_name')}")
-    opts = set_opts(s, S, ps.get("geom_options"))
+    opts = set_opts(s, S, ps.get("geom_options"), force_skip=True)  # SM-10: 정책 skip 고정
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     ensure_prep_ready(s, S, opts, ver)

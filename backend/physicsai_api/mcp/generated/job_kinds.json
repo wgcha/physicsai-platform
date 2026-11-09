@@ -369,6 +369,20 @@
             "description": "생성 방식 platform(표본 sampling) | hyperstudy(원본 doe_label) — 생략 = sampling 있으면 platform",
             "title": "Generator"
           },
+          "geom_options": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "쉘 판금 DOE 전용 형상 옵션 덮어쓰기 — fixed.policy·quality.fail_policy(skip|warn, 기본 skip), bead.hold 등",
+            "title": "Geom Options"
+          },
           "multi_execution": {
             "anyOf": [
               {

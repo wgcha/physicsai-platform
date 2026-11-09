@@ -248,12 +248,27 @@ def features(ctx: AppContext, ps_id: str) -> dict[str, Any]:
     return features_view.summary(doc, ids)
 
 
+def check_hold_eligible(ctx: AppContext, p: dict[str, Any], over: dict[str, Any] | None) -> None:
+    """SM-C7(§14.5): `bead.hold.beads` ⊆ 준비본 `shell_features.json`의 `hold_eligible` 비드. 아니면 422 GEOM_OPTIONS_INVALID(problems)."""
+    from physicsai_core.geometry.shell_options import effective_shell_options, hold_beads, hold_problems
+
+    opts, _probs = effective_shell_options(ctx.settings.geometry.shell_defaults, over)
+    if not hold_beads(opts):
+        return
+    probs = hold_problems(opts, _features_doc(ctx, _S_of(ctx, p)))
+    if probs:
+        raise DomainError("GEOM_OPTIONS_INVALID", "형상 옵션 값이 올바르지 않습니다", status=422, problems=probs)
+
+
 def patch_geom_options(ctx: AppContext, conn: Any, principal: Principal, p: dict[str, Any], raw: dict[str, Any] | None,
                        rid: str, ip: str | None) -> None:
     """PATCH geom_options(전체 덮어쓰기). altair 세트는 422. tag 절이 바뀌면 prep_status가 STALE로 보인다(준비본 해시 비교)."""
     if (p.get("engine") or "altair") != "native":
         raise DomainError("ENGINE_MISMATCH", "geom_options는 Native 형상 엔진 세트에서만 바꿀 수 있습니다", status=422)
-    over = validate_geom_options(ctx.settings, raw, set_kind(ctx, p))
+    kind = set_kind(ctx, p)
+    over = validate_geom_options(ctx.settings, raw, kind)
+    if kind == "shell":
+        check_hold_eligible(ctx, p, over)
     ps_repo.set_values(conn, p["id"], geom_options=over or None)
     audit(conn, principal, "PARAM_SET_UPDATE", "param_set", p["id"],
           {"geom_options": over, "tag_changed": tag_section_changed(p.get("geom_options"), over)}, rid, ip)

@@ -3,6 +3,9 @@
 유효 옵션 = 코드 기본값(§4.10 예시) ← 설정 `geometry.shell_defaults` ← `param_sets.geom_options`(쉘 세트 덮어쓰기) 깊은 병합.
 솔리드 options(`options.py`)와 스키마가 다르다 — 솔리드 명령에 쉘 절을 주지 않는다(GE-C10). 범위 위반은 422 GEOM_OPTIONS_INVALID.
 준비본 유효성(§4.2)은 `tag` 절 + `fixed` 절(transition_mm 제외)의 sha256로 본다(전이 폭은 고급 옵션 — 준비본 재생성 불필요).
+
+SM-C3~C8(§14, paicad 0.15.0) 새 키는 `NEW_KEY_DEFAULTS`에 둔다. **기본값과 같은 새 키는 유효 옵션에서 뺀다**(options.json에 쓰지 않음 — 기존
+결과 바이트·옵션 sha 유지, 옛 paicad의 모르는 키 거부 회피, §14.4). 기본값에서 벗어난 키만 사용값 문서에 실린다.
 """
 
 from __future__ import annotations
@@ -31,9 +34,27 @@ DEFAULT_SHELL_OPTIONS: dict[str, Any] = {
     "bead": {"depth_mode": "keep_angle", "position_ref": "nearest_fixed_edge"},
     "symmetry_split": [],
 }
+# SM-C3~C8 새 키 기본값(§14.1·14.2·14.3·14.4·14.5). 기본값과 같으면 유효 옵션에서 생략한다.
+HOLD_DEFAULT: dict[str, Any] = {"beads": [], "ring_mm": 3.0, "blend_mm": 8.0}
+NEW_KEY_DEFAULTS: dict[str, dict[str, Any]] = {
+    "tag": {"label_angle_deg": 15.0},
+    "fixed": {"policy": "skip"},
+    "quality": {"fail_policy": "skip", "distort_min_mm": 0.1, "distort_rel": 0.25},
+    "extract": {"islands": True, "island_max_mm": 40.0, "island_ring_frac": 0.9},
+    "bead": {"hold": HOLD_DEFAULT},
+}
+POLICIES = ("skip", "warn")
+# 정책 키(PREDICT(A)·⑤ 최적화는 skip 고정, SM-10). (절, 키)
+POLICY_KEYS = (("fixed", "policy"), ("quality", "fail_policy"))
+# 준비본(STALE 판정)에 쓰이지 않는 새 키(§14.3: label_angle_deg, 정책은 실행 시점 옵션)
+PREP_EXEMPT = {"tag": ("label_angle_deg",), "fixed": ("transition_mm", "policy")}
 SECTIONS = ("tag", "fixed", "morph", "quality", "deviation", "interference", "tie", "extract", "bead")
 SCALARS = ("symmetry_split",)
 META_KEYS = ("schema_version", "engine", "engine_version", "kind")
+
+
+def _allowed(section: str) -> set[str]:
+    return set(DEFAULT_SHELL_OPTIONS[section]) | set(NEW_KEY_DEFAULTS.get(section, {}))
 
 
 def _problem(key: str, message: str) -> dict[str, str]:
@@ -67,8 +88,8 @@ def normalize_override(over: Any) -> tuple[dict[str, Any], list[dict[str, str]]]
             if not isinstance(v, dict):
                 probs.append(_problem(k, f"'{k}'는 객체여야 합니다"))
                 continue
-            probs += [_problem(f"{k}.{s}", "알 수 없는 옵션 키입니다") for s in v if s not in DEFAULT_SHELL_OPTIONS[k]]
-            out[k] = {**out.get(k, {}), **{s: x for s, x in v.items() if s in DEFAULT_SHELL_OPTIONS[k]}}
+            probs += [_problem(f"{k}.{s}", "알 수 없는 옵션 키입니다") for s in v if s not in _allowed(k)]
+            out[k] = {**out.get(k, {}), **{s: x for s, x in v.items() if s in _allowed(k)}}
         elif k in SCALARS:
             out[k] = v
         else:
@@ -80,6 +101,19 @@ def _ratio(x: Any) -> bool:
     return _pos(x) and x <= 1
 
 
+def _hold_problems(h: Any) -> list[dict[str, str]]:
+    if not isinstance(h, dict):
+        return [_problem("bead.hold", "객체여야 합니다")]
+    p = [_problem(f"bead.hold.{k}", "알 수 없는 옵션 키입니다") for k in h if k not in HOLD_DEFAULT]
+    beads = h.get("beads", [])
+    if not (isinstance(beads, list) and all(isinstance(x, str) and x for x in beads)) or len(set(beads)) != len(beads):
+        p.append(_problem("bead.hold.beads", "비드 id 문자열 목록(중복 없음)이어야 합니다"))
+    for k in ("ring_mm", "blend_mm"):
+        if not _pos(h.get(k, HOLD_DEFAULT[k])):
+            p.append(_problem(f"bead.hold.{k}", "0보다 큰 유한한 숫자여야 합니다"))
+    return p
+
+
 def validate_options(o: dict[str, Any]) -> list[dict[str, str]]:  # noqa: C901 - 표 기반 범위 나열(§4.10)
     p: list[dict[str, str]] = []
     add = lambda k, m: p.append(_problem(k, m))  # noqa: E731
@@ -89,7 +123,12 @@ def validate_options(o: dict[str, Any]) -> list[dict[str, str]]:  # noqa: C901 -
             add(f"tag.{k}", "0보다 큰 유한한 숫자여야 합니다")
     if not _ratio(t.get("min_match_ratio")):
         add("tag.min_match_ratio", "0 초과 1 이하여야 합니다")
+    la = t.get("label_angle_deg", NEW_KEY_DEFAULTS["tag"]["label_angle_deg"])
+    if not (_pos(la) and la <= 90):
+        add("tag.label_angle_deg", "0 초과 90 이하여야 합니다")
     f = o.get("fixed") or {}
+    if f.get("policy", "skip") not in POLICIES:
+        add("fixed.policy", "skip | warn")
     kinds = f.get("kinds")
     if not isinstance(kinds, list) or not all(isinstance(x, str) and x in FIXED_KINDS for x in kinds):
         add("fixed.kinds", "INTER_TYPE2·RBE2·RBE3·RBODY·BCS·SHARED 중에서 고르세요")
@@ -129,6 +168,11 @@ def validate_options(o: dict[str, Any]) -> list[dict[str, str]]:  # noqa: C901 -
         add("quality.min_edge_mm", "null(미사용) 또는 0보다 큰 숫자여야 합니다")
     if not isinstance(q.get("relative_to_baseline"), bool):
         add("quality.relative_to_baseline", "true 또는 false여야 합니다")
+    if q.get("fail_policy", "skip") not in POLICIES:
+        add("quality.fail_policy", "skip | warn")
+    for k in ("distort_min_mm", "distort_rel"):
+        if not _pos(q.get(k, NEW_KEY_DEFAULTS["quality"][k])):
+            add(f"quality.{k}", "0보다 큰 유한한 숫자여야 합니다")
     d = o.get("deviation") or {}
     for k in ("boundary_max_mm", "param_abs_mm", "param_rel"):
         if not _pos(d.get(k)):
@@ -151,7 +195,15 @@ def validate_options(o: dict[str, Any]) -> list[dict[str, str]]:  # noqa: C901 -
             add(f"extract.{k}", "0 초과 90 이하여야 합니다")
     if not (_num(e.get("linear_aspect")) and e["linear_aspect"] >= 1):
         add("extract.linear_aspect", "1 이상이어야 합니다")
+    if not isinstance(e.get("islands", True), bool):
+        add("extract.islands", "true 또는 false여야 합니다")
+    if not _pos(e.get("island_max_mm", 40.0)):
+        add("extract.island_max_mm", "0보다 큰 유한한 숫자여야 합니다")
+    if not _ratio(e.get("island_ring_frac", 0.9)):
+        add("extract.island_ring_frac", "0 초과 1 이하여야 합니다")
     b = o.get("bead") or {}
+    if "hold" in b:
+        p += _hold_problems(b["hold"])
     if b.get("depth_mode") not in ("keep_angle", "keep_bottom"):
         add("bead.depth_mode", "keep_angle | keep_bottom")
     if b.get("position_ref") not in ("nearest_fixed_edge", "proportional"):
@@ -168,7 +220,53 @@ def effective_shell_options(defaults: dict[str, Any] | None, geom_options: dict[
     base, probs = normalize_override(defaults)
     over, p2 = normalize_override(geom_options)
     opts = deep_merge(deep_merge(DEFAULT_SHELL_OPTIONS, base), over)
-    return opts, probs + p2 + validate_options(opts)
+    hold = (opts.get("bead") or {}).get("hold")
+    if isinstance(hold, dict):  # 부분 hold(beads만 등)는 기본 ρ·b로 채운다
+        opts["bead"]["hold"] = {**HOLD_DEFAULT, **hold}
+    problems = probs + p2 + validate_options(opts)
+    return strip_default_new_keys(opts), problems
+
+
+def strip_default_new_keys(opts: dict[str, Any]) -> dict[str, Any]:
+    """기본값과 같은 새 키(SM-C3~C8)를 뺀다(§14.4: 옵션 sha·기존 결과 불변, 옛 paicad 호환)."""
+    out = copy.deepcopy(opts)
+    for sec, keys in NEW_KEY_DEFAULTS.items():
+        d = out.get(sec)
+        if not isinstance(d, dict):
+            continue
+        for k, dv in keys.items():
+            if k in d and d[k] == dv and isinstance(d[k], bool) == isinstance(dv, bool):
+                del d[k]
+    return out
+
+
+def force_skip(opts: dict[str, Any]) -> dict[str, Any]:
+    """PREDICT(A)·⑤ 최적화용: 고정 침범·품질 미달 정책을 `skip`으로 고정(SM-10). 정책 키는 기본값이라 생략된다."""
+    out = copy.deepcopy(opts)
+    for sec, k in POLICY_KEYS:
+        if isinstance(out.get(sec), dict):
+            out[sec].pop(k, None)
+    return out
+
+
+def policy_of(opts: dict[str, Any]) -> dict[str, str]:
+    return {"fixed": (opts.get("fixed") or {}).get("policy", "skip"), "quality": (opts.get("quality") or {}).get("fail_policy", "skip")}
+
+
+def hold_beads(opts: dict[str, Any]) -> list[str]:
+    return list(((opts.get("bead") or {}).get("hold") or {}).get("beads") or [])
+
+
+def hold_problems(opts: dict[str, Any], features: dict[str, Any] | None) -> list[dict[str, str]]:
+    """`bead.hold.beads` ⊆ `shell_features.json`의 `hold_eligible` 비드(§14.5). features가 없으면 확인할 수 없어 목록이 비어 있어야 한다."""
+    want = hold_beads(opts)
+    if not want:
+        return []
+    beads = {b.get("id"): b for b in (features or {}).get("beads", []) if isinstance(b, dict)}
+    bad = [b for b in want if not (b in beads and beads[b].get("hold_eligible") is True)]
+    if not bad:
+        return []
+    return [_problem("bead.hold.beads", "체결 보스 고정(hold)은 hold 가능으로 표시된 비드에만 쓸 수 있습니다: " + ", ".join(bad[:5]))]
 
 
 def paicad_document(opts: dict[str, Any]) -> dict[str, Any]:
@@ -178,8 +276,10 @@ def paicad_document(opts: dict[str, Any]) -> dict[str, Any]:
 
 def prep_sections(opts: dict[str, Any]) -> dict[str, Any]:
     """준비본에 영향을 주는 절: tag 전체 + fixed(transition_mm 제외)."""
-    fixed = {k: v for k, v in (opts.get("fixed") or {}).items() if k != "transition_mm"}
-    return {"tag": opts.get("tag") or {}, "fixed": fixed}
+    def keep(sec: str) -> dict[str, Any]:
+        return {k: v for k, v in (opts.get(sec) or {}).items() if k not in PREP_EXEMPT.get(sec, ())}
+
+    return {"tag": keep("tag"), "fixed": keep("fixed")}
 
 
 def prep_options_sha256(opts: dict[str, Any]) -> str:

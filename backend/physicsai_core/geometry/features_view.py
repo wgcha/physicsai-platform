@@ -16,6 +16,7 @@ def _num(v: Any) -> float | None:
 def feature_rows(doc: dict[str, Any], png_ids: dict[str, str] | None = None) -> list[dict[str, Any]]:
     """응답 `features[]`: name·type·body·nominal·min·max·group·ref_provisional·ref_locked·png_artifact_id(+unit·feasible)."""
     out: list[dict[str, Any]] = []
+    held = {b.get("id"): b.get("hold_eligible") is True for b in doc.get("beads") or [] if isinstance(b, dict)}  # SM-C7: 비드 단위 자격
     for f in doc.get("features", []):
         if not isinstance(f, dict) or not isinstance(f.get("name"), str):
             continue
@@ -30,7 +31,18 @@ def feature_rows(doc: dict[str, Any], png_ids: dict[str, str] | None = None) -> 
             "ref_provisional": bool(ref.get("provisional")), "ref_locked": bool(ref.get("locked")),
             "feasible": {"min": _num(feas.get("min")), "max": _num(feas.get("max")), "source": feas.get("source")} if feas else None,
             "png_artifact_id": (png_ids or {}).get(f["name"]),
-        } | ({"row": row} if (row := _row_of(f)) is not None else {}))  # rib-gap.md §3.4: RIB_PITCH 피처의 열 소속(없으면 키 없음)
+        } | ({"row": row} if (row := _row_of(f)) is not None else {})
+          | _shell_keys(f, held))  # rib-gap.md §3.4: RIB_PITCH 피처의 열 소속(없으면 키 없음)
+    return out
+
+
+def _shell_keys(f: dict[str, Any], held: dict[Any, bool]) -> dict[str, Any]:
+    """쉘 피처(shell-morph.md §4.4·§14.5): 소속 비드 `bead`·`hold_eligible`(비드 단위)·`use_default`. 쉘이 아니면 키 없음(기존 응답 불변)."""
+    if not isinstance(f.get("bead"), str):
+        return {}
+    out: dict[str, Any] = {"bead": f["bead"], "hold_eligible": held.get(f["bead"], False)}
+    if isinstance(f.get("use_default"), bool):
+        out["use_default"] = f["use_default"]
     return out
 
 

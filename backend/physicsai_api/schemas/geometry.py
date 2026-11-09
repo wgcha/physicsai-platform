@@ -63,6 +63,9 @@ class NativeFeature(Resp):
     feasible: dict[str, Any] | None = None
     png_artifact_id: str | None = None
     row: NativeFeatureRow | None = None  # RIB_PITCH만
+    bead: str | None = None  # 쉘만: 소속 비드 id(SM-C7)
+    hold_eligible: bool | None = None  # 쉘만: 그 비드가 체결 보스 고정(bead.hold) 가능한지
+    use_default: bool | None = None  # 쉘만: 파라미터 표 기본 use 값
 
 
 class NativeRib(Resp):
