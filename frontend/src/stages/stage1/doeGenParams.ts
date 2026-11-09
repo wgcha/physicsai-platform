@@ -1,6 +1,7 @@
 // S18 ①-3 DOE 생성 카드: 화면 상태 → 작업 params(phase3 §23.4). 순수 함수만(React 없음).
 // 플랫폼 = {generator:"platform", sampling, multi_execution, radioss_assem_path, on_run_failure}. HyperStudy(호환) = 기존 body 그대로(generator 키를 보내지 않는다).
 import type { DoeGenerator } from "../../api";
+import { policyOptions, type GeomPolicy } from "../../lib/shellPolicy";
 import {
   DEFAULT_PLATFORM_MAX_RUNS, DEFAULT_PLATFORM_PARALLEL, DEFAULT_TABLE_MAX_BYTES, checkTable, defaultLevel, expectedRuns, recommendedCount, type NameRanges, type PlatformKind,
 } from "../../lib/sampling";
@@ -172,7 +173,7 @@ export const initialNative = (): NativeDoeState => ({ ...initialPlatform(), kind
 
 /** native params: generator platform + sampling. lhs는 지금 body 그대로 {kind:"lhs", count, seed}(DM-C8), 그 밖은 buildSampling 결과. 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path.
  * maxRuns = lhs 상한, otherMaxRuns = 그 밖 방식 상한(생략하면 maxRuns). names = 사용 변수 이름, table = 표 학습 범위 */
-export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null; asmMatchId?: string | null; otherMaxRuns?: number; names?: string[]; table?: TableOpts }): Record<string, unknown> | null {
+export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns: number; assemPath: string; paramSetId: string | null; asmMatchId?: string | null; otherMaxRuns?: number; names?: string[]; table?: TableOpts; policy?: GeomPolicy }): Record<string, unknown> | null {
   let sampling: Record<string, unknown> | null;
   if (s.kind === "lhs") {
     const count = parseInt0(countText(s, o.names?.length ?? 0, o.maxRuns));
@@ -185,7 +186,9 @@ export function buildNativeParams(s: NativeDoeState, o: { multi: number; maxRuns
     if (platformRuns(s, names, max, o.table).n === null) sampling = null;
   }
   if (!sampling) return null;
-  const base = { generator: "platform", sampling, multi_execution: o.multi, on_run_failure: s.continueOnFailure ? "continue" : "fail" };
+  // SM-C6: 고정 침범·품질 미달 정책 — warn일 때만 geom_options 덮어쓰기를 보낸다(기본 skip은 키 없음)
+  const pol = policyOptions(o.policy ?? "skip");
+  const base = { generator: "platform", sampling, multi_execution: o.multi, on_run_failure: s.continueOnFailure ? "continue" : "fail", ...(pol ? { geom_options: pol } : {}) };
   // 저장된 조립 매칭(asm-match.md §6.4)이 있으면 asm_match_id를 함께 보낸다(조립 폴더 경로는 그대로)
   return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath, ...(o.asmMatchId ? { asm_match_id: o.asmMatchId } : {}) };
 }
@@ -234,8 +237,9 @@ export function reuseState(d: { status: string; sample_status: string }, cols: s
 
 /** 재사용 params: sampling {kind:"train_doe", doe_id}. run 수·시드는 보내지 않는다(원본 표본표 그대로, run 이름 유지).
  * 세트 기준이면 param_set_id(조립 폴더 생략), 아니면 radioss_assem_path */
-export function buildReuseParams(o: { doeId: string; multi: number; assemPath: string; paramSetId: string | null; asmMatchId?: string | null; continueOnFailure: boolean }): Record<string, unknown> | null {
+export function buildReuseParams(o: { doeId: string; multi: number; assemPath: string; paramSetId: string | null; asmMatchId?: string | null; continueOnFailure: boolean; policy?: GeomPolicy }): Record<string, unknown> | null {
   if (!o.doeId) return null;
-  const base = { generator: "platform", sampling: { kind: "train_doe", doe_id: o.doeId }, multi_execution: o.multi, on_run_failure: o.continueOnFailure ? "continue" : "fail" };
+  const pol = policyOptions(o.policy ?? "skip");
+  const base = { generator: "platform", sampling: { kind: "train_doe", doe_id: o.doeId }, multi_execution: o.multi, on_run_failure: o.continueOnFailure ? "continue" : "fail", ...(pol ? { geom_options: pol } : {}) };
   return o.paramSetId ? { ...base, param_set_id: o.paramSetId } : { ...base, radioss_assem_path: o.assemPath, ...(o.asmMatchId ? { asm_match_id: o.asmMatchId } : {}) };
 }

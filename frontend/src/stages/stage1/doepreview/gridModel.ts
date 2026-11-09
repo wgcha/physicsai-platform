@@ -1,5 +1,6 @@
 // DOE 형상 그리드 미리보기 모델(doe-preview.md §5.2·§7) — 순수 함수만(시험 대상).
 import type { DoePreview, DoePreviewCell, DoePreviewGen, DoePreviewReq, DoePreviewSelect, DoePreviewSource } from "../../../api/types";
+import { waivedText } from "../../../lib/shellPolicy";
 import { failureBadge } from "../../stage4/geomview/viewerCore";
 
 /** 한 페이지 = 6열 × 4행(DP-C3) */
@@ -93,8 +94,9 @@ export const GEN_STEP_LABEL: Record<string, string> = {
   update: "형상 갱신", morph: "morph", check: "검사", assemble: "입력 조립", props: "쉘 두께", cushion: "쿠션 입력", assign: "baseline 배정",
 };
 /** 생성 후 겹침 배지(train_doe): 스킵 = 코드·단계, 대기 = "대기", OK = 없음 */
-export function genBadge(g: DoePreviewGen | null | undefined): { tone: "bad" | "muted"; text: string } | null {
-  if (!g || g.status === "OK") return null;
+export function genBadge(g: DoePreviewGen | null | undefined): { tone: "bad" | "muted" | "warn"; text: string } | null {
+  if (g?.status === "OK") return g.waived?.length ? { tone: "warn", text: `경고 통과 · ${waivedText(g.waived)}` } : null; // SM-C6 warn 정책: 실패 대신 경고로 통과
+  if (!g) return null;
   if (g.status === "PENDING") return { tone: "muted", text: "대기" };
   const step = g.step ? GEN_STEP_LABEL[g.step] ?? g.step : null;
   return { tone: "bad", text: `스킵 ${g.code ?? ""}${step ? ` · ${step}` : ""}`.trim() };

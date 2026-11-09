@@ -8,7 +8,7 @@ import type { JobState } from "./types";
 type EntityStatus = "BUILDING" | "READY" | "FAILED";
 
 export type TrainParam = S["TrainParamOut"];
-export type TrainSetup = Override<S["TrainSetup"], { parameters: TrainParam[]; extract_filter?: ExtractFilter | null; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string; names?: string[] }[] }>) | null }>;
+export type TrainSetup = Override<S["TrainSetup"], { kind?: "solid" | "shell" | null; hold_beads?: string[]; parameters: TrainParam[]; extract_filter?: ExtractFilter | null; tpl?: (Override<S["TrainTpl"], { warnings: { code: string; message: string; names?: string[] }[] }>) | null }>;
 export type TplSummary = S["TplSummary"];
 /** extract-filter.md §6.1: native ①-1·④ 추출 조건(찾을 종류 그룹 + 조건 mm·mm²·°). 응답에서는 서버 정규화본 */
 // rib-gap.md RG-10: 그룹 `rib_pitch`(리브 간격)는 생성 스키마 열거값에 있다

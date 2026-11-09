@@ -13,6 +13,7 @@ import { ViewSplit } from "../stage4/geomview/ViewSplit";
 import { useRowSelection, bulkTargets } from "../stage4/geomview/selection";
 import { AppliedFilter } from "../../components/AppliedFilter";
 import { BulkUseBar } from "../../components/BulkUseBar";
+import { HOLD_HEAD, HOLD_TIP, toggleHold } from "../../lib/shellPolicy";
 
 // ---------------------------------------------------------------- ①-2
 interface Row {
@@ -59,6 +60,8 @@ export function ParamTableCard() {
   const native = setup?.engine === "native";
   const [features, setFeatures] = useState<Map<string, NativeFeature>>(new Map());
   const [ribRows, setRibRows] = useState<RibRow[] | null>(null); // rib-gap.md §3.4 피치 행 툴팁용 열 정보
+  // SM-C7: 비드별 보스 고정(기본 off, hold_eligible 비드만 활성) — 저장은 PUT train/params의 hold_beads
+  const [hold, setHold] = useState<string[]>([]);
   const sel = useRowSelection(useMemo(() => rows.map((r) => r.name), [rows]));
   const rp = sel.rowProps;
   useEffect(() => {
@@ -82,14 +85,26 @@ export function ParamTableCard() {
   useEffect(() => {
     setRows((setup?.parameters ?? []).map(toRow));
     setServerProblems({});
-  }, [setup?.version, setup?.parameters]);
+    setHold(setup?.hold_beads ?? []);
+  }, [setup?.version, setup?.parameters, setup?.hold_beads]);
 
   const set = (i: number, patch: Partial<Row>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-  const canUse = (r: Row) => r.valid && r.nominal !== null;
+  /** 보스 고정을 켠 비드의 행은 고정 겹침 때문에 무효였더라도 사용할 수 있다(SM-C7) */
+  const held = (r: Row) => { const b = features.get(r.name)?.bead; return !!b && hold.includes(b); };
+  const canUse = (r: Row) => (r.valid || held(r)) && r.nominal !== null;
   /** 대상 행(이름)의 '사용'을 한꺼번에 — 체크는 사용할 수 없는 행(무효·공칭 없음)을 건너뛴다 */
   const setUse = (names: string[], use: boolean) => setRows((rs) => rs.map((r) => (names.includes(r.name) && (!use || canUse(r)) ? { ...r, use } : r)));
   /** 엑셀식: 선택된 행의 체크박스를 누르면 선택 행 전체가 같은 상태로, 선택 밖 행은 그 행만 */
   const toggleUse = (name: string, use: boolean) => setUse(bulkTargets(sel.rows, name), use);
+  const beadOf = (name: string) => features.get(name)?.bead ?? null;
+  const showHold = native && [...features.values()].some((f) => f.hold_eligible);
+  /** 켜면 그 비드 행을 사용으로(고정 겹침 때문에 꺼져 있던 행), 끄면 기본 미사용이던 행만 되돌린다 */
+  const setHoldBead = (bead: string, on: boolean) => {
+    setHold((h) => toggleHold(h, bead, on));
+    const canUse = (r: Row) => r.nominal !== null;
+    const names = [...features.values()].filter((f) => f.bead === bead).map((f) => f.name);
+    setRows((rs) => rs.map((r) => (!names.includes(r.name) ? r : on ? (canUse(r) ? { ...r, use: true } : r) : features.get(r.name)?.use_default === false ? { ...r, use: false } : r)));
+  };
   const used = rows.filter((r) => r.use);
   const issues = rows.map(rowIssue);
   const hasIssue = issues.some(Boolean) || used.length === 0;
@@ -104,6 +119,7 @@ export function ParamTableCard() {
       const saved = await api.saveTrainParams(study.id, {
         version: setup.version,
         parameters: rows.map((r) => ({ name: r.name, min: num(r.min), max: num(r.max), use: r.use, format: r.format, unit: r.unit })),
+        ...(showHold ? { hold_beads: hold } : {}),
       });
       setSetup(saved);
       if (native) return;
@@ -194,6 +210,7 @@ export function ParamTableCard() {
                 <th>사용</th>
                 <th>이름</th>
                 {native && <th>종류</th>}
+                {showHold && <th title={HOLD_TIP}>{HOLD_HEAD}</th>}
                 <th className="num">공칭</th>
                 <th className="num">하한</th>
                 <th className="num">상한</th>
@@ -208,13 +225,22 @@ export function ParamTableCard() {
                 return (
                   <tr key={r.name} {...(native ? rp(r.name) : { "data-row": r.name })} className={`${r.use ? "" : "unused"}${native ? ` ${rp(r.name).className}` : ""}`}>
                     <td>
-                      <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !r.valid || r.nominal === null} onChange={(e) => (native ? toggleUse(r.name, e.target.checked) : set(i, { use: e.target.checked }))} />
+                      <input type="checkbox" aria-label={`${r.name} 사용`} checked={r.use} disabled={!canExec || !canUse(r)} onChange={(e) => (native ? toggleUse(r.name, e.target.checked) : set(i, { use: e.target.checked }))} />
                     </td>
                     <td className="mono">{r.name}</td>
                     {native && (
                       <td className="small" title={isPitchType(features.get(r.name)?.type) ? pitchTip(features.get(r.name), ribRows) : undefined}>
                         {typeLabel(features.get(r.name)?.type)}
                         {isAbsRangeType(features.get(r.name)?.type) && <span className="muted"> · mm 범위</span>}
+                      </td>
+                    )}
+                    {showHold && (
+                      <td>
+                        {beadOf(r.name) && features.get(r.name)?.hold_eligible ? (
+                          <input type="checkbox" aria-label={`${r.name} ${HOLD_HEAD}`} checked={hold.includes(beadOf(r.name)!)} disabled={!canExec} onChange={(e) => setHoldBead(beadOf(r.name)!, e.target.checked)} />
+                        ) : (
+                          <span className="muted">–</span>
+                        )}
                       </td>
                     )}
                     <td className="num mono">{r.raw}</td>

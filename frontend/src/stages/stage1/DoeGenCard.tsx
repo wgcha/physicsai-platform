@@ -2,13 +2,14 @@ import { useEffect, useState, type ReactNode } from "react";
 import { api, errorMessage, type DoeField, type DoeGenerator, type DoeType, type ParamSet } from "../../api";
 import { useStudy } from "../../app/StudyContext";
 import { useCanExecute, useJobRunner } from "../../hooks/useJobRunner";
-import { Card, CodeLine, Field, RunAction } from "../../components/ui";
+import { Advanced, Card, CodeLine, Field, RunAction } from "../../components/ui";
 import { useApp } from "../../app/AppContext";
 import { PathInput } from "../../components/PathInput";
 import { FeatureGate, featureText, useFeature } from "../../components/FeatureGate";
 import { SamplingDescription } from "../../components/SamplingDescription";
 import { HS_COMPAT_NOTE, HS_NOTE, MULTI_BASELINE_REASON, SITE_KINDS, descIdOf, hsCalcNote, type NameRanges } from "../../lib/sampling";
 import { genCategoryText } from "../../lib/geometry";
+import { POLICY_LABEL, POLICY_WARN_NOTE, waivedText, warnSummary, warnedRuns, type GeomPolicy } from "../../lib/shellPolicy";
 import { useTrain } from "./TrainContext";
 import { DoePlatformFields, Seg } from "./DoePlatformFields";
 import { ReuseDoePicker } from "./ReuseDoePicker";
@@ -128,6 +129,8 @@ export function DoeGenCard() {
   const [setId, setSetId] = useState("");
   const [reuseOn, setReuseOn] = useState(false);
   const [reuseDoe, setReuseDoe] = useState("");
+  // SM-C6: 고정 침범·품질 미달 처리(쉘 형상만, 고급 옵션, 기본 스킵)
+  const [policy, setPolicy] = useState<GeomPolicy>("skip");
   // doe-preview.md §8: 형상 미리보기(생성 전) · 형상 갤러리(생성 후) 카드 — 카드 바로 아래 전폭 카드 1개
   const [gridMode, setGridMode] = useState<"pre" | "gallery" | null>(null);
   const dpFeature = useFeature("doe_preview");
@@ -158,6 +161,8 @@ export function DoeGenCard() {
     setOpts(defaultOptions(nt));
   };
   const native = setup?.engine === "native" || !!nset;
+  const shell = native && (nset ? nset.native?.kind === "shell" : setup?.kind === "shell");
+  const pol: GeomPolicy = shell ? policy : "skip";
   const tplReady = native || (!!setup?.tpl && !setup.tpl.stale);
   // 저장된 조립 매칭(asm-match.md §3.2·§6.5)이 있으면 조립 폴더·기준 메시 파일 요구 없이 그 매칭으로 만든다. 세트 기준·RENUM 방식은 기존 그대로
   const asmOn = native && !nset && !!asm;
@@ -186,9 +191,9 @@ export function DoeGenCard() {
     panel: <ReuseDoePicker does={does} names={targetNames} doeId={reuseDoe} onChange={setReuseDoe} disabled={!canExec} blocked={reuseBlocked} />,
     blocked: reuseBlocked,
   };
-  const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath, paramSetId: nset?.id ?? null, asmMatchId: asmId, continueOnFailure: native ? nat.continueOnFailure : continueOnFail });
+  const reuseParams = () => buildReuseParams({ doeId: reuseDoe, multi: platMultiShown, assemPath, paramSetId: nset?.id ?? null, asmMatchId: asmId, continueOnFailure: native ? nat.continueOnFailure : continueOnFail, policy: pol });
   // 다중 baseline 세트는 층 안 생성기만(DM-C4) — 그 밖 방식이 남아 있으면 생성을 막는다
-  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.nativeLhsMaxRuns, otherMaxRuns: lim.maxRuns, assemPath, paramSetId: nset?.id ?? null, asmMatchId: asmId, names: targetNames, table: { ranges: natRanges } }));
+  const nativeParams = () => (natMulti && !SITE_KINDS.train_native_multi.includes(nat.kind) ? null : buildNativeParams(nat, { multi: platMultiShown, maxRuns: lim.nativeLhsMaxRuns, otherMaxRuns: lim.maxRuns, assemPath, paramSetId: nset?.id ?? null, asmMatchId: asmId, names: targetNames, table: { ranges: natRanges }, policy: pol }));
   const submit = () => {
     if (reuseActive) {
       const params = reuseParams();
@@ -217,6 +222,7 @@ export function DoeGenCard() {
   const assemOk = nset || asmOn ? true : ok;
   const setGate = !nset ? null : nset.native?.prep_status !== "READY" ? "템플릿 형상 준비를 다시 하세요(④)" : (nset.baselines?.length ?? 0) > 1 && nset.param_map_status !== "confirmed" ? "매칭표 확정 필요(④ 다중 baseline)" : null;
   const skipped = native ? skippedRuns(job?.result, does.find((d) => d.job_id === job?.id)?.id) : [];
+  const warned = native ? warnedRuns(job?.result, does.find((d) => d.job_id === job?.id)?.id) : [];
   // 조립 매칭 없이 만들다 서버가 요구한 경우(409 PREREQUISITE_MISSING missing ASM_MATCH) — 매칭 카드 안내를 강조
   const needAsm = errorDetail?.code === "PREREQUISITE_MISSING" && Array.isArray(errorDetail.missing) && (errorDetail.missing as string[]).includes("ASM_MATCH");
   const problems = errorDetail?.code === "DOE_SAMPLING_INVALID" && Array.isArray(errorDetail.problems) ? (errorDetail.problems as { code?: string; message?: string }[]) : [];
@@ -300,6 +306,24 @@ export function DoeGenCard() {
           <label className="check">
             <input type="checkbox" checked={nat.continueOnFailure} disabled={!canExec} onChange={(e) => setNat({ ...nat, continueOnFailure: e.target.checked })} /> 형상 생성에 실패한 run은 건너뛰고 나머지로 DOE 완료
           </label>
+          {shell && (
+            <Advanced>
+              <Field label="고정 침범·품질 미달 처리">
+                <select aria-label="고정 침범·품질 미달 처리" value={policy} disabled={!canExec} onChange={(e) => setPolicy(e.target.value as GeomPolicy)}>
+                  {(Object.keys(POLICY_LABEL) as GeomPolicy[]).map((k) => (
+                    <option key={k} value={k}>
+                      {POLICY_LABEL[k]}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              {policy === "warn" && (
+                <p className="warn-text small" data-testid="policy-warn-note">
+                  {POLICY_WARN_NOTE}
+                </p>
+              )}
+            </Advanced>
+          )}
           {problems.length > 0 && (
             <ul className="problems small error-text" data-testid="doe-problems" role="alert">
               {problems.map((p, i) => (
@@ -380,6 +404,18 @@ export function DoeGenCard() {
             <button type="button" className="btn small" data-testid="dp-open-gallery" disabled={!dpFeature.enabled} title={dpFeature.enabled ? "생성된 DOE run의 형상을 격자로 봅니다" : featureText(dpFeature)} onClick={() => setGridMode("gallery")}>
               형상 갤러리
             </button>
+          )}
+          {warned.length > 0 && (
+            <div className="small" data-testid="doe-warned">
+              <span className="pill warn">{warnSummary(warned)}</span>
+              <ul className="problems small" aria-label="경고 통과 run">
+                {warned.map((k) => (
+                  <li key={k.run_key}>
+                    <span className="mono">{k.run_key}</span> <span className="pill warn">{waivedText(k.waived)}</span> <span className="muted">{(k.codes ?? []).join(" · ")}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
           {skipped.length > 0 && (
             <ul className="problems small" aria-label="건너뛴 run" data-testid="doe-skipped">
