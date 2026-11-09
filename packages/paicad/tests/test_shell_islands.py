@@ -228,6 +228,66 @@ def test_vsm17_feature_distorted_injection(smi):
         assert r.checks["feature"]["worst"]["island"] == boss["id"] and r.checks["feature"]["worst"]["dev_mm"] > 0.7
 
 
+@pytest.mark.parametrize("label,target,island,half", [("dimple->bottom", "bottom", 1, False), ("boss->bottom", "bottom", 3, False), ("dimple->base", "base", 1, False),
+                                                       ("boss->base", "base", 3, False), ("dimple half->bottom", "bottom", 1, True)])
+def test_vsm17_mistagged_island_nodes_fail(smi, label, target, island, half):
+    """Tag errors (island nodes classified on the bottom / the base face) are caught without the tag: island nodes found
+    geometrically must move by the island shift and the sample island surfaces must be followed by the mesh."""
+    c = smi
+    i1 = _bead(c, (130.0, 100.0))
+    name = _fname(c, i1, "BEAD_DEPTH")
+    mesh0 = c["meshes"][0]
+    isl = i1["islands"][island]
+    sel = _island_nodes(mesh0, isl)
+    if half:
+        sel = sel[mesh0.xyz[sel, 0] < isl["center"][0]]
+    mm = copy.copy(mesh0)
+    mm.kind, mm.ent = mesh0.kind.copy(), mesh0.ent.copy()
+    mm.ent[sel] = int((i1["bottom"][0] if target == "bottom" else i1["base_face"])[1:])
+    for k in [k for k in vars(mm) if k.startswith("_")]:
+        delattr(mm, k)
+    for over in (None, {"fixed": {"policy": "warn"}, "quality": {"fail_policy": "warn"}}):
+        _, _, chk = _cores(dict(c, meshes=[mm]), {name: c["nom"][name] * 1.2}, _opts(over))
+        assert chk.status == "FAIL" and chk.code == "SHELL_FEATURE_DISTORTED", (label, chk.code, chk.message)
+        assert chk.checks["feature"]["coverage"]["max_mm"] >= 0.79
+    _, _, ok = _cores(c, {name: c["nom"][name] * 1.2})
+    assert ok.status == "PASS" and ok.checks["feature"]["coverage"]["max_mm"] <= 1e-6
+
+
+def test_final_code_order_by_policy():
+    from paicad.shell.judge import final_code
+
+    fails = {"SHELL_FIXED_REGION_VIOLATION": "f", "GEOM_QUALITY_HARD": "inv", "GEOM_INTERFERENCE": "i"}
+    assert final_code(fails, _opts()) == "SHELL_FIXED_REGION_VIOLATION"  # skip: 0.14.1 order
+    assert final_code({"GEOM_QUALITY_HARD": "inv", "GEOM_INTERFERENCE": "i"}, _opts()) == "GEOM_INTERFERENCE"
+    assert final_code(fails, _opts({"quality": {"fail_policy": "warn"}})) == "GEOM_QUALITY_HARD"
+    assert final_code(dict(fails, SHELL_FEATURE_DISTORTED="d"), _opts()) == "SHELL_FEATURE_DISTORTED"
+    assert final_code({}, _opts()) is None
+
+
+def test_skip_keeps_fixed_before_inversion(shell_golden):
+    import argparse
+
+    from paicad.shell.check import check_core
+    from paicad.shell.morph import load_inputs
+
+    g = shell_golden
+    ns = argparse.Namespace(features=g["features_path"], tag_dir=g["tag_dir"], fixed_dir=g["fixed_dir"], assem_dir=g["assem"], update_dir=g["update0"])
+    o = shopts.load(None)
+    doc, _, _, _, _, samples, meshes = load_inputs(ns, o)
+    m = meshes[0]
+    x = m.xyz.copy()
+    x[np.flatnonzero(m.fixed)[0], 2] += 0.01
+    q = next(int(i) for i in np.flatnonzero(~m.tri) if not m.fixed[m.conn[i]].any())
+    a, _, c_, _ = m.conn[q]
+    x[c_] = x[a] - (x[c_] - x[a]) * 0.5  # folded quad
+    zero = {m.index: np.zeros(len(m.node_ids))}
+    r = check_core(meshes, {m.index: x}, samples, doc, {}, {}, {}, o, None, {}, {"dist_of": zero}, None, full=False)
+    assert r.code == "SHELL_FIXED_REGION_VIOLATION" and r.checks["quality"]["inverted"] > 0
+    r = check_core(meshes, {m.index: x}, samples, doc, {}, {}, {}, _opts({"quality": {"fail_policy": "warn"}}), None, {}, {"dist_of": zero}, None, full=False)
+    assert r.code == "GEOM_QUALITY" and "inverted" in r.message
+
+
 def test_vsm17_no_islands_skipped(shell_golden):
     import argparse
 
@@ -276,7 +336,18 @@ def test_vsm18_strict_labels(smi):
     x[j] = x[j] + np.array([0.0, 0.0, 3.0])
     assert strict_labels(x, mesh.conn, mesh.tri, mesh.kind, mesh.ent, T, 15.0)[k] == -1
     # the morph element -> face assignment is unchanged (and equal to the table based one)
-    assert np.array_equal(_element_faces(mesh, topo), element_faces(mesh.conn, mesh.tri, mesh.kind, mesh.ent, T))
+    from paicad.shell.judge import element_faces_loop
+    from paicad.shell.morph import _element_faces_loop
+
+    ref = _element_faces_loop(mesh, topo)
+    assert np.array_equal(_element_faces(mesh, topo), ref) and np.array_equal(element_faces_loop(mesh.conn, mesh.tri, mesh.kind, mesh.ent, T), ref)
+    rng = np.random.default_rng(7)  # vectorized assignment = 0.15.0 loop, also for scrambled tags
+    for _ in range(3):
+        kk, ee = mesh.kind.copy(), mesh.ent.copy()
+        idx = rng.choice(len(kk), len(kk) // 5, replace=False)
+        kk[idx] = rng.choice([-1, 1, 2, 3], len(idx))
+        ee[idx] = rng.integers(1, len(topo.edges), len(idx))
+        assert np.array_equal(element_faces(mesh.conn, mesh.tri, kk, ee, T), element_faces_loop(mesh.conn, mesh.tri, kk, ee, T))
 
 
 # ------------------------------------------------------------------ V-SM-19 policies
@@ -443,54 +514,62 @@ def test_vsm20_hold(smi):
 
 
 # ------------------------------------------------------------------ V-SM-21 judgement core
-def _write_mesh(folder: Path, node_ids, xyz, elem_ids, conn_ids, tri) -> None:
-    folder.mkdir(parents=True)
-    lines = ["/NODE"] + [f"{int(n):10d}" + "".join(f"{v:20.13e}" for v in p) for n, p in zip(node_ids, xyz)]
-    lines.append("/SHELL/2001")
-    lines += [f"{int(e):10d}" + "".join(f"{int(x):10d}" for x in c) for e, c, t in zip(elem_ids, conn_ids, tri) if not t]
-    lines.append("/SH3N/2001")
-    lines += [f"{int(e):10d}" + "".join(f"{int(x):10d}" for x in c[:3]) for e, c, t in zip(elem_ids, conn_ids, tri) if t]
-    (folder / "mesh.inc").write_text("\n".join(lines) + "\n", encoding="ascii")
-    rad = ["#RADIOSS STARTER", "/BEGIN", "JUDGE", "      2024         0", "/PART/2001", "SHEET", "        31         1", "#include mesh.inc", "/END"]
-    (folder / "model.rad").write_text("\n".join(rad) + "\n", encoding="ascii")
-
-
-def _read_mesh(folder: Path):
-    from paicad.shell.assem import read_assembly
-    from paicad.shell.fixed import part_mesh
-
-    asm = read_assembly(folder)
-    pm = part_mesh(asm, 2001)
-    rows = asm.index(pm.node_ids)
-    return pm.node_ids, asm.xyz[rows], np.searchsorted(pm.node_ids, pm.conn), pm.tri, pm.elem_ids
+def _close(a, b, path="") -> list[str]:
+    """Differences beyond the V-SM-21 tolerance: codes / strings / ints equal, floats rel 1e-6 or abs 1e-9, warning
+    messages are text renderings of the compared fields and are not compared."""
+    if isinstance(a, dict) and isinstance(b, dict):
+        if set(a) != set(b):
+            return [f"{path}: keys {sorted(set(a) ^ set(b))}"]
+        return [d for k in a if not (k == "message" and "code" in a) for d in _close(a[k], b[k], f"{path}.{k}")]
+    if isinstance(a, (list, tuple)) and isinstance(b, (list, tuple)):
+        if len(a) != len(b):
+            return [f"{path}: length {len(a)} != {len(b)}"]
+        return [d for i, (u, v) in enumerate(zip(a, b)) for d in _close(u, v, f"{path}[{i}]")]
+    if isinstance(a, (float, np.floating)) and isinstance(b, (float, np.floating, int)):
+        if a == b or abs(a - b) <= max(1e-9, 1e-6 * abs(a)):
+            return []
+        return [f"{path}: {a!r} != {b!r}"]
+    if isinstance(a, np.ndarray):
+        return [] if np.array_equal(a, b) else [f"{path}: arrays differ"]
+    return [] if a == b else [f"{path}: {a!r} != {b!r}"]
 
 
 def _judge_roundtrip(c, vals: dict, tmp: Path, o=None) -> dict:
+    """judge(memory) vs judge(arrays of the include copies written by the morph writer and read back by the assembly reader)."""
+    import shutil
+
+    from paicad.shell.assem import read_assembly
     from paicad.shell.check import judge_inputs
-    from paicad.shell.judge import judge_mesh, rounded
+    from paicad.shell.fixed import part_mesh
+    from paicad.shell.judge import judge_mesh
+    from paicad.shell.morph import morph_core, write_files
     from paicad.shell.update import update_core
-    from paicad.shell.morph import morph_core
 
     o = o or _opts()
     res = update_core(c["nominal"], c["doc"], vals, o, c["fixed"])
     sample = {b.name: b for b in res.bodies}
     mr = morph_core(c["meshes"], sample, {"changed": res.changed, "beads": res.beads}, o)
     m = c["meshes"][0]
-    # coordinates as the include fields carry them (20-character fields): near-zero warpage margins react to 1e-12 noise
-    x = np.vectorize(lambda v: float(f"{v:20.13e}"))(mr.xyz[m.index])
+    x = mr.xyz[m.index]  # memory coordinates, not rounded
     J = judge_inputs(m, x, sample[m.body], c["doc"], res.expected, res.changed.get(m.body, {}), o, set(shopts.hold_ids(o)))
     mem = judge_mesh(J, o)
-    eids = np.arange(1, len(m.conn) + 1)
-    _write_mesh(tmp / "base", m.node_ids, m.xyz, eids, m.node_ids[m.conn], m.tri)
-    _write_mesh(tmp / "morph", m.node_ids, x, eids, m.node_ids[m.conn], m.tri)
-    n0, x0, conn0, tri0, _ = _read_mesh(tmp / "base")
-    n1, x1, conn1, tri1, _ = _read_mesh(tmp / "morph")
-    assert np.array_equal(n0, m.node_ids) and np.array_equal(n1, m.node_ids) and np.array_equal(conn0, m.conn) and np.array_equal(tri0, m.tri)
+    A = tmp / "assem"
+    shutil.copytree(c["g"]["assem"], A)
+    files = write_files(c["asm"], mr.moved, None)
+    assert files
+    for rel, data, *_ in files:
+        (A / rel).write_bytes(data)
+    asm = read_assembly(A)
+    pm = part_mesh(asm, 2001)
+    assert np.array_equal(pm.node_ids, m.node_ids)
     J2 = copy.copy(J)
-    J2.x0, J2.x, J2.conn, J2.tri = x0, x1, conn1, tri1
+    J2.x = asm.xyz[asm.index(pm.node_ids)]
+    J2.conn, J2.tri = np.searchsorted(pm.node_ids, pm.conn), pm.tri
+    assert np.array_equal(J2.conn, m.conn) and np.array_equal(J2.tri, m.tri)
     disk = judge_mesh(J2, o)
-    assert rounded(mem) == rounded(disk)
-    assert np.array_equal(mem["labels"], disk["labels"]) and np.array_equal(mem["hold_nodes"], disk["hold_nodes"])
+    assert set(mem["fails"]) == set(disk["fails"]) and [w["code"] for w in mem["warnings"]] == [w["code"] for w in disk["warnings"]]
+    diffs = _close({k: v for k, v in mem.items() if k != "fails"}, {k: v for k, v in disk.items() if k != "fails"})
+    assert not diffs, diffs[:5]
     return mem
 
 

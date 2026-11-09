@@ -36,6 +36,17 @@ KIND_FACE, KIND_EDGE, KIND_VERTEX = 1, 2, 3
 # interference -> quality (skip) -> deviation -> param -> tie)
 RANK = {"SHELL_FEATURE_DISTORTED": 0, "GEOM_QUALITY_HARD": 1, "SHELL_FIXED_REGION_VIOLATION": 2, "GEOM_INTERFERENCE": 3, "GEOM_QUALITY": 4,
         "GEOM_DEVIATION": 5, "GEOM_PARAM_MISMATCH": 6, "GEOM_TIE_PROJECTION": 7}
+# both policies skip: the 0.14.1 order (inversion / dt_ratio are plain GEOM_QUALITY, after fixed and interference)
+RANK_SKIP = {"SHELL_FEATURE_DISTORTED": 0, "SHELL_FIXED_REGION_VIOLATION": 1, "GEOM_INTERFERENCE": 2, "GEOM_QUALITY_HARD": 3, "GEOM_QUALITY": 3,
+             "GEOM_DEVIATION": 4, "GEOM_PARAM_MISMATCH": 5, "GEOM_TIE_PROJECTION": 6}
+
+
+def final_code(fails: dict, o: dict) -> str | None:
+    """Code of the decision: base order with both policies ``skip``, else inversion / dt_ratio before fixed."""
+    skip = o["fixed"]["policy"] == "skip" and o["quality"].get("fail_policy", "skip") == "skip"
+    rank = RANK_SKIP if skip else RANK
+    codes = [c for c in fails if c in rank]
+    return min(codes, key=lambda c: (rank[c], RANK[c])) if codes else None
 
 
 # ------------------------------------------------------------------ topology tables
@@ -133,7 +144,68 @@ def strict_labels(x0: np.ndarray, conn: np.ndarray, tri: np.ndarray, kind: np.nd
 
 def element_faces(conn: np.ndarray, tri: np.ndarray, kind: np.ndarray, ent: np.ndarray, tables: Tables) -> np.ndarray:
     """The morph's element -> face assignment (FACE majority, ties = smallest face, else the common face of the
-    edge / vertex nodes), from the incidence tables only."""
+    edge / vertex nodes), from the incidence tables only. Vectorized; bit-identical to :func:`element_faces_loop`."""
+    en = _elem_nodes(conn, tri)
+    m = len(en)
+    out = np.full(m, -1, dtype=np.int64)
+    if m == 0:
+        return out
+    valid = en >= 0
+    safe = np.where(valid, en, 0)
+    k = np.where(valid, np.asarray(kind)[safe], 0)
+    e = np.where(valid, np.asarray(ent, dtype=np.int64)[safe], -1)
+    F = np.where(k == KIND_FACE, e, -1)
+    hasf = (F >= 0).any(axis=1)
+    cnt = ((F[:, :, None] == F[:, None, :]) & (F[:, None, :] >= 0)).sum(axis=2)
+    cnt[F < 0] = 0
+    best = cnt.max(axis=1)
+    big = np.iinfo(np.int64).max
+    pick = np.where((cnt == best[:, None]) & (F >= 0), F, big).min(axis=1)
+    out[hasf] = pick[hasf]
+    # no FACE node: smallest face common to every EDGE / VERTEX node (node order = intersection order, empty -> -1)
+    cons = ((k == KIND_EDGE) | (k == KIND_VERTEX)) & ~hasf[:, None]
+    rows = np.flatnonzero(cons.any(axis=1))
+    if not len(rows):
+        return out
+    nf = tables.n_faces + 1
+    fe = tables.face_edge[:, ::-1]  # (edge, face)
+    fv = tables.face_vertex()[:, ::-1]  # (vertex, face)
+    first = np.argmax(cons[rows], axis=1)
+    k0, e0 = k[rows, first], e[rows, first]
+    pr, pf = [], []
+    for kk, tab in ((KIND_EDGE, fe), (KIND_VERTEX, fv)):
+        sel = np.flatnonzero(k0 == kk)
+        if not len(sel) or not len(tab):
+            continue
+        order = np.argsort(tab[:, 0], kind="stable")
+        t = tab[order]
+        lo = np.searchsorted(t[:, 0], e0[sel], "left")
+        hi = np.searchsorted(t[:, 0], e0[sel], "right")
+        n_ = hi - lo
+        pr.append(np.repeat(rows[sel], n_))
+        pf.append(t[np.concatenate([np.arange(a, b) for a, b in zip(lo, hi)]) if n_.sum() else np.zeros(0, dtype=np.int64), 1])
+    if not pr:
+        return out
+    pr, pf = np.concatenate(pr), np.concatenate(pf)
+    keep = np.ones(len(pr), dtype=bool)
+    for j in range(4):
+        kj, ej = k[pr, j], e[pr, j]
+        isc = cons[pr, j]
+        for kk, tab in ((KIND_EDGE, fe), (KIND_VERTEX, fv)):
+            sel = isc & (kj == kk)
+            if sel.any():
+                keep[sel] &= _pair_member(ej[sel], pf[sel], tab, nf)
+    pr, pf = pr[keep], pf[keep]
+    if len(pr):
+        mn = np.full(m, big)
+        np.minimum.at(mn, pr, pf)
+        hit = mn < big
+        out[hit] = mn[hit]
+    return out
+
+
+def element_faces_loop(conn: np.ndarray, tri: np.ndarray, kind: np.ndarray, ent: np.ndarray, tables: Tables) -> np.ndarray:
+    """Reference (per-element loop, 0.15.0) of :func:`element_faces` - kept for the bit-identity tests."""
     edge_faces: dict[int, set[int]] = {}
     for f, ed in tables.face_edge:
         edge_faces.setdefault(int(ed), set()).add(int(f))

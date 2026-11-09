@@ -26,12 +26,14 @@ from . import opts as shopts
 from .assem import SHELL_KW, Assembly, SetError, resolve_grnod, resolve_surf, seg_triangles
 from .beads import Bead, core_coords, recognize
 from .common import load_shell_features, load_values, shell_envelope
-from .judge import RANK, JudgeInput, Tables, judge_mesh
+from .judge import RANK, JudgeInput, Tables, final_code, judge_mesh
 from .morph import FILES_DIR, MORPH_JSON, ShellMesh, _element_faces, load_inputs
 
 CHECK_JSON = "shell_check.json"
-# final code order (section 14.4): feature distortion -> inversion / dt_ratio -> fixed -> interference -> quality -> deviation -> param -> tie
+# final code order (section 14.4, warn policies): feature distortion -> inversion / dt_ratio -> fixed -> interference -> quality -> deviation
+# -> param -> tie; both policies skip keep the 0.14.1 order (judge.final_code)
 PRIORITY = tuple(sorted(RANK, key=RANK.get))
+COVER_CUTOFF_MM = 2.0
 
 
 @dataclass
@@ -272,6 +274,79 @@ def tie_check(asm: Assembly, meshes: list[ShellMesh], new_xyz: dict[int, np.ndar
     return check_ties(sets, shell_nodes, new, base, o)
 
 
+def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, expected: dict, o: dict, held: set[str]) -> list[dict]:
+    """SM-C4, independent of the tag: (1) nodes on the nominal island surfaces (found geometrically) move rigidly by the
+    island shift, (2) the sample B-rep surfaces of the islands and bottom pieces of every changed bead with islands are
+    followed by the morphed mesh. Points of each sample face (UV grid inside the trimmed face) -> distance
+    to the morphed triangles (KD-tree candidates, ``TriangleSet``) minus the same distance of the nominal surface point
+    (island = sample point - island shift, rigid) to the nominal triangles (discretization error; planar bottoms 0).
+    Returns [{bead, island, faces, dev_mm}] (one item per island / bottom piece)."""
+    from .common import feature_values
+
+    fv = feature_values(doc, o, vals)
+    by_bead: dict[str, dict] = {}
+    for f in doc["features"]:
+        by_bead.setdefault(f["bead"], {})[f["type"]] = f
+    en = np.where(m.tri[:, None], m.conn[:, [0, 1, 2, 2]], m.conn)
+    out = []
+    for bj in doc["beads"]:
+        if bj["body"] != m.body or not bj.get("islands") or bj["id"] in held:
+            continue
+        feats = by_bead.get(bj["id"], {})
+        if not any(f["name"] in expected for f in feats.values()):
+            continue
+        t = np.zeros(3)
+        if "BEAD_DEPTH" in feats:
+            f = feats["BEAD_DEPTH"]
+            t = t + (fv[f["name"]] - float(f["nominal"])) * np.asarray(bj["depth_dir"], dtype=float)
+        for typ in ("BEAD_POS_U", "BEAD_POS_V"):
+            if typ in feats:
+                f = feats[typ]
+                t = t + (fv[f["name"]] - float(f["nominal"])) * float(f["ref"].get("sign", 1.0)) * np.asarray(f["ref"]["axis"], dtype=float)
+        groups = [(i["id"], [int(z[1:]) for z in i["faces"]], True) for i in bj["islands"] if i["faces"]]
+        groups += [(f"F{int(z[1:])}", [int(z[1:])], False) for z in bj["bottom"]]
+        for gid, faces, rigid in groups:
+            P1 = np.concatenate([body.sample_face(f, 12 if rigid else 30) for f in faces])
+            if not len(P1):
+                continue
+            P0 = P1 - t if rigid else None
+            box = np.concatenate([P1] + ([P0] if P0 is not None else []))
+            lo, hi = box.min(axis=0) - 3.0, box.max(axis=0) + 3.0
+            near = np.all((x >= lo) & (x <= hi), axis=1) | np.all((m.xyz >= lo) & (m.xyz <= hi), axis=1)
+            els = np.flatnonzero(near[m.conn].any(axis=1))
+
+            def tris(X):
+                q = X[en[els]]
+                t1 = q[:, [0, 1, 2]]
+                t2 = q[~m.tri[els]][:, [0, 2, 3]]
+                return np.concatenate([t1, t2])
+
+            d1, _ = TriangleSet(tris(x)).distance(P1, COVER_CUTOFF_MM)
+            d1 = np.where(np.isfinite(d1), d1, COVER_CUTOFF_MM)
+            if P0 is not None:
+                d0, _ = TriangleSet(tris(m.xyz)).distance(P0, COVER_CUTOFF_MM)
+                d0 = np.where(np.isfinite(d0), d0, COVER_CUTOFF_MM)
+            else:
+                d0 = np.zeros(len(P1))
+            dev = float(np.max(d1 - d0))
+            nodes = 0
+            if rigid:  # nodes lying on the nominal island surface (geometric membership, not the tag) move by the island shift
+                tol = float(o["tag"]["tol_abs_mm"])
+                lo0, hi0 = P0.min(axis=0) - 0.5, P0.max(axis=0) + 0.5
+                cand = np.flatnonzero(np.all((m.xyz >= lo0) & (m.xyz <= hi0), axis=1))
+                if len(cand):
+                    d_on = np.full(len(cand), np.inf)
+                    for f in faces:
+                        dd, _, ins, _ = body.project_to_face(f, m.xyz[cand] + t)
+                        d_on = np.minimum(d_on, np.where(ins, dd, np.inf))
+                    on = cand[d_on <= tol]
+                    nodes = int(len(on))
+                    if nodes:
+                        dev = max(dev, float(np.linalg.norm(x[on] - (m.xyz[on] + t), axis=1).max()))
+            out.append({"bead": bj["id"], "island": gid, "faces": len(faces), "nodes": nodes, "dev_mm": dev})
+    return out
+
+
 def judge_inputs(m: ShellMesh, x: np.ndarray, body, doc: dict, expected: dict, changed: dict, o: dict, held: set[str], line_changes: int = 0) -> JudgeInput:
     """Mesh-only inputs of the judgement core for one part (labels from the tag, B-rep topology as integer tables)."""
     topo = body.topology()
@@ -396,6 +471,16 @@ def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict,
     checks["feature"] = {"status": "FAIL" if any(g_["status"] == "FAIL" for g_ in gch) else ("PASS" if tested else "SKIPPED"), "features": sum(g_["features"] for g_ in gch),
                          "worst": None if worst_f is None else {k: (rnd(v) if isinstance(v, float) else v) for k, v in worst_f.items()},
                          "mixed_elems": sum(g_["mixed_elems"] for g_ in gch)}
+    cover = []
+    for m in meshes:
+        cover += island_coverage(m, morphed[m.index], samples[m.body], doc, vals, expected, o, held)
+    if cover:  # tag-independent part of (g): sample island / bottom surfaces followed by the mesh
+        floor = float(o["quality"]["distort_min_mm"])
+        w = max(cover, key=lambda c_: c_["dev_mm"])
+        checks["feature"]["coverage"] = {"surfaces": len(cover), "max_mm": rnd(w["dev_mm"]), "worst": {"bead": w["bead"], "island": w["island"]}, "tol_mm": floor}
+        if w["dev_mm"] > floor:
+            checks["feature"]["status"] = "FAIL"
+            fails.setdefault("SHELL_FEATURE_DISTORTED", f"{w['bead']} island {w['island']}: mesh off the sample island / surface by {w['dev_mm']:.4f} mm (floor {floor:.4f} mm)")
     hl = [J[m.index]["checks"]["hold"] for m in meshes if J[m.index]["checks"].get("hold")]
     if hl:
         mxdev = 0.0
@@ -427,7 +512,7 @@ def check_core(meshes, morphed: dict[int, np.ndarray], samples: dict, doc: dict,
     else:
         checks["interference"] = {"status": "NOT_EVALUATED"}
         checks["tie"] = {"status": "NOT_EVALUATED"}
-    code = next((c for c in PRIORITY if c in fails), None)
+    code = final_code(fails, o)
     message = fails.get(code) if code else None
     if code == "GEOM_QUALITY_HARD":
         code = "GEOM_QUALITY"

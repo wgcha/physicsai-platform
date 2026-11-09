@@ -100,6 +100,15 @@ class MorphResult:
 
 
 def _element_faces(m: ShellMesh, topo) -> np.ndarray:
+    """Element -> face (FACE majority, ties = smallest face, else the common face of the edge / vertex nodes);
+    vectorized in ``judge.element_faces`` (bit-identical to :func:`_element_faces_loop`)."""
+    from .judge import Tables, element_faces
+
+    return element_faces(m.conn, m.tri, m.kind, m.ent, Tables.from_topology(topo))
+
+
+def _element_faces_loop(m: ShellMesh, topo) -> np.ndarray:
+    """0.15.0 reference loop of :func:`_element_faces` (bit-identity tests)."""
     edge_faces = {e.id: set(e.faces) for e in topo.edges}
     vert_faces: dict[int, set[int]] = {}
     for e in topo.edges:
