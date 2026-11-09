@@ -227,11 +227,15 @@ export function finishTrain(p2: Phase2Mock, j: Job): "done" | "waiting" | undefi
       p2.doeSamples[d.id] = reuseRows ? reuseRows.map((x) => ({ ...x, values: { ...x.values }, measured: {} })) : p2.runs[d.id].map((x) => ({ run_key: x.run_key, values: { THK_TOP: Number((0.3 + r() * 0.9).toFixed(4)), THK_FOAM: Number((1 + r() * 2).toFixed(4)), RIB_H: 12, RIB_N: 2 + Math.floor(r() * 7) }, measured: {} }));
       if (d.engine === "native") {
         // native: 형상 생성 실패 run은 SKIPPED.json → skipped_runs[{run_key, reason, category, message}], run 목록에서 빠진다
-        const skipped = !p.reuse_doe_id && n >= 6 ? [{ run_key: runKey(n), reason: "GEOM_QUALITY", category: "QUALITY", message: "min stretch 0.06 < 기준 0.1" }] : [];
+        const failing = !p.reuse_doe_id && n >= 6 ? [{ run_key: runKey(n), reason: "GEOM_QUALITY", category: "QUALITY", message: "min stretch 0.06 < 기준 0.1" }] : [];
+        // SM-C6: quality.fail_policy = warn이면 품질 미달 run은 스킵 대신 경고로 통과(warned_runs[{run_key, codes, waived}], run 목록에 남는다)
+        const qWarn = (p.geom_options as { quality?: { fail_policy?: string } } | undefined)?.quality?.fail_policy === "warn";
+        const skipped = qWarn ? [] : failing;
+        const warned = qWarn ? failing.map((k) => ({ run_key: k.run_key, codes: ["SHELL_QUALITY_WARN"], waived: ["GEOM_QUALITY"] })) : [];
         p2.runs[d.id] = p2.runs[d.id].filter((x) => !skipped.some((k) => k.run_key === x.run_key));
         d.run_count = p2.runs[d.id].length;
         d.gen = { total: n, pending: 0, running: 0, done: n - skipped.length, failed: skipped.length };
-        j.result = { doe_id: d.id, run_count: d.run_count, sample_status: "PARSED", skipped_runs: skipped, gen_ok: n - skipped.length, gen_skipped: skipped.length };
+        j.result = { doe_id: d.id, run_count: d.run_count, sample_status: "PARSED", skipped_runs: skipped, ...(warned.length ? { warned_runs: warned } : {}), gen_ok: n - skipped.length, gen_skipped: skipped.length };
         return "done";
       }
       if (d.generator === "platform") {

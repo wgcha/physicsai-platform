@@ -14,8 +14,9 @@ export type DoePreviewSelect = Override<S["DoePreviewSelect"], { limit: number; 
 export type DoePreviewReq = Override<S["DoePreviewReq"], { select: DoePreviewSelect; sampling?: Record<string, unknown> | null }>;
 export type DoePreviewTopChange = S["DoePreviewTopChange"];
 /** train_doe만: 생성 후 결과(SKIPPED 코드·단계) */
-export type DoePreviewGen = S["DoePreviewGen"];
+/** SM-C6: `status: "OK"`이어도 경고 통과면 `waived`(예: ["SHELL_FIXED_REGION_VIOLATION"]·["GEOM_QUALITY"]) + `warnings`(코드)를 싣는다(선택 키) */
+export type DoePreviewGen = Override<S["DoePreviewGen"], { waived?: string[]; warnings?: string[] }>;
 /** 응답은 기본값 필드(nominal·clipped)를 항상 싣는다 — 화면 mock은 생략해도 되게 선택으로 둔다 */
-export type DoePreviewCell = Override<S["DoePreviewCell"], { nominal?: boolean; clipped?: boolean }>;
+export type DoePreviewCell = Override<S["DoePreviewCell"], { nominal?: boolean; clipped?: boolean; gen?: DoePreviewGen | null }>;
 /** `cells`는 항상 배열(기본 []), `disp_range_mm`은 [하한, 상한] 2개(생성 스키마는 number[]) */
 export type DoePreview = Override<S["DoePreview"], { cells: DoePreviewCell[]; disp_range_mm?: [number, number] | null }>;

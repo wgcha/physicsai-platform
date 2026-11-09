@@ -43,7 +43,7 @@ export const effectiveOptions = (o: GeomOptions | null | undefined) => merge(GEO
 /** §4.9 범위 검사(API 422 GEOM_OPTIONS_INVALID problems) */
 export function validateGeomOptions(o: GeomOptions, groups: string[]): { path: string; message: string }[] {
   const p: { path: string; message: string }[] = [];
-  const allowedTop = new Set(Object.keys(GEOM_DEFAULTS).concat(["morph", "tag", "map"]));
+  const allowedTop = new Set(Object.keys(GEOM_DEFAULTS).concat(["morph", "tag", "map", "fixed", "bead"]));
   for (const k of Object.keys(o)) if (!allowedTop.has(k) || k === "engine" || k === "engine_version") p.push({ path: k, message: `알 수 없는 키: ${k}` });
   const num = (path: string[], ok: (v: number) => boolean, msg: string, nullable = false) => {
     const v = getOpt(o, path);
@@ -213,6 +213,37 @@ function nativeParamSet(srv: MockServer, s: Study, id: string, path: string, lab
     geom_options: geom, geom_options_effective: effectiveOptions(geom), native: { prep_status: "READY", prep_reason: null, feature_count: feats.length, props_scanned: false, shell_only: false, kind: "solid", view_status: "MISSING", extract_filter: filter, vars_revision: 0, vars_count: feats.length },
     param_map_status: null,
   } as ParamSet;
+}
+
+/** SM-C7: 쉘 비드 fixture — 피처를 비드 두 개(B1·B5)로 묶고 B5만 hold_eligible. 세트면 native.kind = shell, 학습 설정(studyId)이면 setup.kind = shell */
+export const SHELL_BEADS = { eligible: "CHASSIS_REAR_B5", plain: "CHASSIS_REAR_B1" } as const;
+export function markShell(srv: MockServer, target: { paramSetId: string } | { trainStudyId: string; extractJobId?: string }) {
+  const tag = (rec: GeomRec) => {
+    rec.features = rec.features.map((f, i) => ({ ...f, bead: i % 2 ? SHELL_BEADS.eligible : SHELL_BEADS.plain, hold_eligible: i % 2 === 1, use_default: i % 2 ? false : true }));
+  };
+  if ("paramSetId" in target) {
+    const ps = srv.paramSets.find((x) => x.id === target.paramSetId)!;
+    ps.native = { ...ps.native!, kind: "shell" };
+    tag(srv.geom.get(ps.id)!);
+    return;
+  }
+  const setup = srv.p2.setups[target.trainStudyId];
+  const key = `train:${target.trainStudyId}:${setup.extract_job_id ?? ""}`;
+  if (!srv.geom.has(key)) srv.geom.set(key, newRec(srv, target.trainStudyId, setup.extract_job_id ?? "j-train-native", setup.extract_filter ?? null));
+  Object.assign(setup, { kind: "shell" });
+  tag(srv.geom.get(key)!);
+}
+
+/** shell-morph.md §14.4·§14.5 옵션 검사(mock): 정책 skip|warn, bead.hold.beads ⊆ hold_eligible(기본 허용 목록 = 지정하지 않으면 검사 생략) */
+export function validateShellOptions(o: GeomOptions, eligible: string[] | null): { path: string; message: string }[] {
+  const p: { path: string; message: string }[] = [];
+  for (const [path, key] of [[["fixed", "policy"], "fixed.policy"], [["quality", "fail_policy"], "quality.fail_policy"]] as [string[], string][]) {
+    const v = getOpt(o, path);
+    if (v !== undefined && v !== "skip" && v !== "warn") p.push({ path: key, message: "skip | warn" });
+  }
+  const beads = getOpt(o, ["bead", "hold", "beads"]);
+  if (Array.isArray(beads) && eligible) for (const b of beads) if (!eligible.includes(String(b))) p.push({ path: "bead.hold.beads", message: `${b}: 고정할 수 있는 비드가 아닙니다(hold_eligible)` });
+  return p;
 }
 
 /** MockOptions.geometry="native": ps-n1(native 세트, 현재 아님) 시드 */
@@ -464,7 +495,7 @@ export const geometryRoutes: Route = (srv, { method, seg, body }) => {
   if (method === "PATCH" && !sub && body && "geom_options" in body) {
     if (ps.engine !== "native") return err(422, "GEOM_OPTIONS_INVALID", "SimLab 템플릿에는 형상 검사 기준이 없습니다");
     const g = (body.geom_options ?? null) as GeomOptions | null;
-    const probs = g ? validateGeomOptions(g, rec?.groups.map((x) => String(x.id)) ?? []) : [];
+    const probs = g ? [...validateGeomOptions(g, rec?.groups.map((x) => String(x.id)) ?? []), ...validateShellOptions(g, ps.native?.kind === "shell" ? (rec?.features ?? []).filter((f) => f.hold_eligible).map((f) => String(f.bead)) : [])] : [];
     if (probs.length) return err(422, "GEOM_OPTIONS_INVALID", "검사 기준 값이 허용 범위를 벗어났습니다", { problems: probs });
     const tagChanged = JSON.stringify(getOpt(ps.geom_options, ["tag"])) !== JSON.stringify(getOpt(g, ["tag"]));
     ps.geom_options = g && Object.keys(g).length ? g : null;

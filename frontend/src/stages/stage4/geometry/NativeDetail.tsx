@@ -17,6 +17,7 @@ import { GeomView3DLazy as GeomView3D } from "../geomview/GeomView3DLazy";
 import { ViewSplit } from "../geomview/ViewSplit";
 import { useRowSelection } from "../geomview/selection";
 import { AppliedFilter } from "../../../components/AppliedFilter";
+import { HOLD_HEAD, HOLD_TIP, holdBeads, toggleHold, withHold } from "../../../lib/shellPolicy";
 
 export function NativeDetail({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { study, reloadParamSets } = useStudy();
@@ -133,6 +134,20 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       setError(errorMessage(e));
     }
   };
+  // SM-C7: 비드별 체결 보스 고정 — geom_options bead.hold.beads(hold_eligible 비드만, 즉시 저장 — 대칭 그룹 분리와 같은 방식)
+  const heldBeads = holdBeads(ps.geom_options);
+  const featOf = (name: string) => data.features.find((f) => f.name === name);
+  const showHold = data.features.some((f) => f.hold_eligible);
+  const setHold = async (bead: string, on: boolean) => {
+    setError(null);
+    try {
+      const next = withHold(ps.geom_options, toggleHold(heldBeads, bead, on));
+      await api.patchParamSet(ps.id, { geom_options: Object.keys(next).length ? next : null });
+      await reloadParamSets();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
   const patch = (name: string, p: Partial<Pick<NativeRow, "use" | "lo" | "hi">>) => setRows((rs) => rs.map((r) => (r.name === name ? { ...r, ...p } : r)));
   const bulkUse = (names: string[], use: boolean) => setRows((rs) => rs.map((r) => (names.includes(r.name) ? { ...r, use } : r)));
   const save = async () => {
@@ -192,6 +207,19 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       },
     },
     { head: "기준면", cell: (r: NativeRow) => (r.refLocked ? "변경 불가(양면 접촉)" : "자동") },
+    ...(showHold
+      ? [{
+          head: HOLD_HEAD,
+          cell: (r: NativeRow) => {
+            const f = featOf(r.name);
+            return f?.bead && f.hold_eligible ? (
+              <input type="checkbox" aria-label={`${r.name} ${HOLD_HEAD}`} title={HOLD_TIP} checked={heldBeads.includes(f.bead)} disabled={!canEdit} onChange={(e) => void setHold(f.bead!, e.target.checked)} />
+            ) : (
+              "–"
+            );
+          },
+        }]
+      : []),
   ];
   return (
     <div className="feature-block">

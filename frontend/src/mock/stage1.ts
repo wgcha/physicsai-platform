@@ -217,7 +217,15 @@ export function saveParams(p2: Phase2Mock, s: Study, body: Record<string, unknow
     return q;
   });
   if (!next.some((p) => p.use)) problems.push({ name: "", code: "NO_PARAM_USED", message: "사용 파라미터가 1개 이상 필요합니다" });
+  // SM-C7: hold_beads ⊆ hold_eligible 비드(그 밖은 422 TRAIN_PARAMS_INVALID)
+  const holdReq = Array.isArray(body.hold_beads) ? (body.hold_beads as string[]) : null;
+  if (holdReq) {
+    const rec = p2.s.geom.get(`train:${s.id}:${t.extract_job_id ?? ""}`);
+    const ok = new Set((rec?.features ?? []).filter((f) => f.hold_eligible).map((f) => String(f.bead)));
+    for (const b of holdReq) if (!ok.has(b)) problems.push({ name: "", code: "HOLD_NOT_ELIGIBLE", message: `${b}: 고정할 수 있는 비드가 아닙니다` });
+  }
   if (problems.length) return err(422, "TRAIN_PARAMS_INVALID", "파라미터 표를 확인하세요.", { problems });
+  if (holdReq) (t as { hold_beads?: string[] }).hold_beads = [...holdReq];
   const usedNow = next.filter((p) => p.use);
   const tplNames = t.tpl?.params.map((x) => `${x.name}:${x.format}:${x.used}`).join(",");
   t.parameters = next;
