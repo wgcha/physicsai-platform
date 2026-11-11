@@ -215,7 +215,7 @@ def doe_geom_options(ctx: AppContext, p: Any, *, shell: bool, ps: dict[str, Any]
 
     from ..geometry_gate import validate_geom_options
 
-    over = validate_geom_options(ctx.settings, raw, "shell")
+    over = validate_geom_options(ctx.settings, raw, "shell", allow_policy=True)
     if ps is not None:
         from ..param_set_native_api import check_hold_eligible
 
@@ -274,9 +274,12 @@ def native_doe_gen(ctx: AppContext, setup: dict[str, Any], p: Any, samples: Any 
     if shell and study is not None:  # ①-2에서 고른 체결 보스 고정 비드(hold_beads)를 이 DOE의 옵션으로(요청이 hold를 직접 주면 요청 우선)
         from ..stage1_train_data import read_hold_beads
 
+        from ..stage1_train_data import read_hold_options
+
         hb = read_hold_beads(ctx, study)
         if hb and not (((gover or {}).get("bead") or {}).get("hold")):
-            gover = {**(gover or {}), "bead": {**((gover or {}).get("bead") or {}), "hold": {"beads": hb}}}
+            hold = {"beads": hb, **read_hold_options(ctx, study)}  # ρ·b: ①-2 고급 입력(기본값과 다른 것만 저장돼 있다)
+            gover = {**(gover or {}), "bead": {**((gover or {}).get("bead") or {}), "hold": hold}}
     doe_id = str(uuid.uuid4())
     params = _native_params({"engine": "native", "generator": "platform", "doe_label": label, "doe_type": DOE_TYPE_NATIVE,
                              "num_runs": num_runs, "default_runs": num_runs, "options": {}, "seed": seed, "multi_execution": multi,

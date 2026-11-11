@@ -69,14 +69,27 @@ def read_hold_beads(ctx: AppContext, study: dict[str, Any]) -> list[str]:
     return [x for x in v if isinstance(x, str)] if isinstance(v, list) else []
 
 
+def read_hold_options(ctx: AppContext, study: dict[str, Any]) -> dict[str, float]:
+    """①-2 hold ρ·b(`01_train/params.json`의 hold_options, 기본값과 다른 키만). 없으면 {}."""
+    import json
+
+    try:
+        with open(resolve_in_study(study_root(ctx, study), "01_train/params.json"), encoding="utf-8") as fh:
+            v = json.load(fh).get("hold_options")
+    except (OSError, ValueError, AttributeError):
+        return {}
+    return {k: float(x) for k, x in v.items() if k in ("ring_mm", "blend_mm") and isinstance(x, (int, float))} if isinstance(v, dict) else {}
+
+
 def _shell_info(ctx: AppContext, study: dict[str, Any], s: dict[str, Any]) -> dict[str, Any]:
     """`kind`(native 설정만 — 쉘이면 "shell", 솔리드 "solid", altair null)·`hold_beads`(쉘만). 정책·hold UI 노출 판정 필드."""
     from physicsai_core.geometry.shell_native import kind_of_features_rel
 
     if (s.get("engine") or "altair") != "native" or not s.get("features_rel"):
-        return {"kind": None, "hold_beads": None}
+        return {"kind": None, "hold_beads": None, "hold_options": None}
     kind = kind_of_features_rel(s["features_rel"])
-    return {"kind": kind, "hold_beads": read_hold_beads(ctx, study) if kind == "shell" else None}
+    return {"kind": kind, "hold_beads": read_hold_beads(ctx, study) if kind == "shell" else None,
+            "hold_options": read_hold_options(ctx, study) if kind == "shell" else None}
 
 
 def _extract_info(ctx: AppContext, s: dict[str, Any]) -> dict[str, Any]:
@@ -115,6 +128,7 @@ def put_params(ctx: AppContext, principal: Principal, study_id: str, body: Any, 
         full = train_tpl.is_full_snapshot(s.get("tpl_params"))  # 전체 tpl이면 미사용 행 변경도 tpl을 낡게 한다(altair-vars.md AV-1)
         if tp.definition_key(new, full=full) != tp.definition_key(s["parameters"], full=full):
             vals["tpl_params"] = None  # 표가 바뀌면 tpl stale(TPL_STALE)
+        hopt = _hold_options(ctx, st, s, body.hold_options)
         hold = body.hold_beads
         if hold is not None:
             _check_hold(ctx, st, s, hold)
@@ -124,9 +138,26 @@ def put_params(ctx: AppContext, principal: Principal, study_id: str, body: Any, 
         root = study_root(ctx, st)
         pj = resolve_in_study(root, "01_train/params.json")
         backup_existing(root, [pj], "params", backup_stamp())
-        write_json(pj, {"schema_version": 1, "parameters": new, **({HOLD_KEY: sorted(set(hold))} if hold else {})})
+        write_json(pj, {"schema_version": 1, "parameters": new, **({HOLD_KEY: sorted(set(hold))} if hold else {}),
+                        **({"hold_options": hopt} if hopt else {})})
         audit(conn, principal, "TRAIN_PARAMS_UPDATE", "study", study_id, {"used": sum(1 for p in new if p["use"])}, rid, ip)
     return setup_out(ctx, st, s)
+
+
+def _hold_options(ctx: AppContext, study: dict[str, Any], s: dict[str, Any], given: Any) -> dict[str, float]:
+    """PUT hold_options: 생략 = 기존 유지, 값 = 양수 검사(shell_options 규칙, 422 TRAIN_PARAMS_INVALID) 후 기본값과 같은 키는 뺀다."""
+    from physicsai_core.geometry.shell_options import HOLD_DEFAULT, hold_option_problems
+
+    if given is None:
+        return read_hold_options(ctx, study)
+    vals = {k: v for k, v in given.model_dump().items() if v is not None}
+    probs = hold_option_problems(vals)
+    shell = (s.get("engine") or "altair") == "native" and (s.get("features_rel") or "").endswith("shell_features.json")
+    if probs or (vals and not shell):
+        raise DomainError("TRAIN_PARAMS_INVALID", "파라미터 표 검증에 실패했습니다", status=422,
+                          problems=[{"name": p["key"], "code": "HOLD_OPTIONS_INVALID", "message": p["message"]} for p in probs]
+                          or [{"name": "hold_options", "code": "HOLD_NOT_SHELL", "message": "쉘 판금 설정이 아닙니다"}])
+    return {k: float(v) for k, v in vals.items() if float(v) != HOLD_DEFAULT[k]}
 
 
 def _check_hold(ctx: AppContext, study: dict[str, Any], s: dict[str, Any], hold: list[str]) -> None:

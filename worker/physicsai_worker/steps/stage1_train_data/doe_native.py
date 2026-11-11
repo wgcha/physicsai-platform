@@ -98,7 +98,10 @@ def dg_prep(ctx: Any) -> None:
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     if kind == "shell":
-        opts, probs = effective_shell_options(s.geometry.shell_defaults, p.get("geom_options"))  # SM-10: DOE 요청 geom_options(정책)
+        opts, probs = effective_shell_options(s.geometry.shell_defaults, p.get("geom_options"))
+        from physicsai_core.geometry.shell_options import doe_policy_opts
+
+        opts = doe_policy_opts(opts, p.get("geom_options"))  # SM-10: 정책 원천 = DOE 요청만
     else:
         opts, probs = effective_options(s.geometry.defaults, None)
     if probs:
