@@ -2,6 +2,13 @@
 
 버전 정책: geometry-engine.md §17. `src/paicad/__init__.py`의 `__version__`이 단일 출처이고, `packages/paicad/**` 를 바꾸는 커밋마다 버전을 올리고 이 파일 최상단에 항목을 추가한다.
 
+## 0.15.4 — 2026-11-11
+- 수정(SM-C4·C7, 재검증 H1 잔여): 0.15.3의 hold 블렌드 처리(앵커에서 3D 거리 ring + blend + |섬 이동량| 안 제외)는 반경이 커서(U+5에서 16 mm) 앵커 9~16 mm 섬의 오분류를 놓쳤고, tag 기반 judge feature는 블렌드를 몰라 정상 hold 샘플을 거짓 FAIL로 판정했다. 이제 두 판정 모두 **제외 대신 morph와 같은 s(r) 기대 변위**를 쓴다.
+  - `island_coverage`(tag 무관): φ = s((g − ρ)/b)(g ≤ ρ면 0), g = 기하로 찾은 앵커에서 공칭 메시 전체 엣지를 따라 잰 측지 거리. 섬 소속 노드의 기대 위치 = x0 + φ·t. 표본점의 기대 위치 = P1 − (1 − φp)·t이고, φp는 공칭 삼각형 무게중심 보간으로 구한다. 앵커를 품은 섬만 제외한다.
+  - judge feature: hold 비드면 기대 u = φ·t(t = 테두리 최소제곱, φ = morph와 같은 `hold_weights`).
+- 시험: SMH4 + 앵커 9~17 mm·6~14 mm 딤플(near1·near2) — hold + U+5(warn)·D×1.2(skip)에서 정상은 `SHELL_FEATURE_DISTORTED` 없음, 기준면 오분류는 `SHELL_FEATURE_DISTORTED`(`test_vsm17_hold_blend_islands`).
+- 계약: shell-morph.md §14.2·§14.5
+
 ## 0.15.3 — 2026-11-11
 - 수정(SM-C4·C7, 재검증 H1): `shell check` `island_coverage`가 hold 비드를 통째로 빼서, 앵커가 없는 섬(SMH4 T 비드의 루버·보스)이 기준면으로 오분류돼도 PASS가 나던 문제. 이제 **hold 앵커를 품은 섬만** 제외한다(§14.2). 앵커 = 공칭 노드 + 섬 이동량을 바닥 조각·섬 면에 투영했을 때 트림 안·≤ tag.tol_abs_mm인 고정 노드(tag 미사용, bbox 후보). 앵커의 ring + blend(+|섬 이동량|) 안에 드는 표본점·섬 소속 노드는 검사에서 뺀다(KD-tree 거리 질의, s(r) 기대 변위 계산 대신 제외). 나머지 섬과 바닥은 hold 비드에서도 검사한다.
 - 시험: hold on + 앵커 없는 섬 4개(루버 2·보스 2) 기준면 오분류 → `SHELL_FEATURE_DISTORTED`(skip·warn), 정상 hold 샘플 PASS(`test_vsm17_mistag_on_held_bead_unanchored_island`).

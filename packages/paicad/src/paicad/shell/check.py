@@ -274,9 +274,23 @@ def tie_check(asm: Assembly, meshes: list[ShellMesh], new_xyz: dict[int, np.ndar
     return check_ties(sets, shell_nodes, new, base, o)
 
 
+def _bary(P: np.ndarray, T: np.ndarray) -> np.ndarray:
+    """Barycentric coordinates (clipped to the triangle) of points P[n,3] projected on triangles T[n,3,3]."""
+    a, b, c = T[:, 0], T[:, 1], T[:, 2]
+    v0, v1, v2 = b - a, c - a, P - a
+    d00, d01, d11 = (v0 * v0).sum(1), (v0 * v1).sum(1), (v1 * v1).sum(1)
+    d20, d21 = (v2 * v0).sum(1), (v2 * v1).sum(1)
+    den = np.where(np.abs(d00 * d11 - d01 * d01) > 1e-300, d00 * d11 - d01 * d01, 1e-300)
+    l1 = (d11 * d20 - d01 * d21) / den
+    l2 = (d00 * d21 - d01 * d20) / den
+    lam = np.clip(np.stack([1.0 - l1 - l2, l1, l2], axis=1), 0.0, None)
+    return lam / np.maximum(lam.sum(1, keepdims=True), 1e-300)
+
+
 def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, expected: dict, o: dict, held: set[str]) -> list[dict]:
     """SM-C4, independent of the tag: (1) nodes on the nominal island surfaces (found geometrically) move rigidly by the
-    island shift, (2) the sample B-rep surfaces of the islands and bottom pieces of every changed bead with islands are
+    island shift (hold beads: phi * shift, phi = s(r) of the mesh geodesic distance to the anchors, same as the morph;
+    the island holding the anchors is left out), (2) the sample B-rep surfaces of the islands and bottom pieces of every changed bead with islands are
     followed by the morphed mesh. Points of each sample face (UV grid inside the trimmed face) -> distance
     to the morphed triangles (KD-tree candidates, ``TriangleSet``) minus the same distance of the nominal surface point
     (island = sample point - island shift, rigid) to the nominal triangles (discretization error; planar bottoms 0).
@@ -307,10 +321,8 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
         groups += [(f"F{int(z[1:])}", [int(z[1:])], False) for z in bj["bottom"]]
         tol = float(o["tag"]["tol_abs_mm"])
         anchors = np.zeros(0, dtype=np.int64)
-        keep_out = None
-        if bj["id"] in held:  # SM-C7: anchors = fixed nodes on the bottom pieces / islands (geometric, not the tag)
-            hb = o["bead"]["hold"]
-            reach = float(hb["ring_mm"]) + float(hb["blend_mm"])
+        phi = None  # SM-C7 hold factor per node (None = no hold: rigid expectation)
+        if bj["id"] in held:  # anchors = fixed nodes on the bottom pieces / islands (geometric, not the tag)
             fx = np.flatnonzero(m.fixed)
             d_on = np.full(len(fx), np.inf)
             for f in sorted({f for _, fs, _ in groups for f in fs}):
@@ -321,41 +333,47 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
                     d_on[c_] = np.minimum(d_on[c_], np.where(ins, dd, np.inf))
             anchors = fx[d_on <= tol]
             if len(anchors):
-                from scipy.spatial import cKDTree
+                from .judge import smoothstep
+                from .tag import geodesic_to, mesh_edges
 
-                tree = cKDTree(m.xyz[anchors])
-                r_out = reach + float(np.linalg.norm(t))
-
-                def keep_out(P):  # points within the hold ring + blend of an anchor: intentionally off the sample B-rep
-                    return np.isfinite(tree.query(P, k=1, distance_upper_bound=r_out)[0])
+                hb = o["bead"]["hold"]
+                ring, blend = float(hb["ring_mm"]), float(hb["blend_mm"])
+                g = geodesic_to(m.xyz, mesh_edges(m.conn, m.tri), anchors)  # nominal mesh, all elements (no tag)
+                phi = np.ones(len(g))
+                fin = np.isfinite(g)
+                phi[fin] = smoothstep((g[fin] - ring) / blend)
+                phi[fin & (g <= ring)] = 0.0
         for gid, faces, rigid in groups:
             P1 = np.concatenate([body.sample_face(f, 12 if rigid else 30) for f in faces])
             if not len(P1):
                 continue
-            if keep_out is not None:
-                if rigid and len(anchors):
-                    d_a = np.full(len(anchors), np.inf)
-                    for f in faces:
-                        dd, _, ins, _ = body.project_to_face(f, m.xyz[anchors] + t)
-                        d_a = np.minimum(d_a, np.where(ins, dd, np.inf))
-                    if (d_a <= tol).any():
-                        continue  # island holding hold anchors: deformed on purpose (section 14.2)
-                P1 = P1[~keep_out(P1 - t)]
-                if not len(P1):
-                    continue
+            if phi is not None and rigid and len(anchors):
+                d_a = np.full(len(anchors), np.inf)
+                for f in faces:
+                    dd, _, ins, _ = body.project_to_face(f, m.xyz[anchors] + t)
+                    d_a = np.minimum(d_a, np.where(ins, dd, np.inf))
+                if (d_a <= tol).any():
+                    continue  # island holding hold anchors: deformed on purpose (section 14.2)
             P0 = P1 - t if rigid else None
-            box = np.concatenate([P1] + ([P0] if P0 is not None else []))
+            box = np.concatenate([P1, P1 - t])
             lo, hi = box.min(axis=0) - 3.0, box.max(axis=0) + 3.0
             near = np.all((x >= lo) & (x <= hi), axis=1) | np.all((m.xyz >= lo) & (m.xyz <= hi), axis=1)
             els = np.flatnonzero(near[m.conn].any(axis=1))
+            tn = np.concatenate([en[els][:, [0, 1, 2]], en[els][~m.tri[els]][:, [0, 2, 3]]])
 
             def tris(X):
-                q = X[en[els]]
-                t1 = q[:, [0, 1, 2]]
-                t2 = q[~m.tri[els]][:, [0, 2, 3]]
-                return np.concatenate([t1, t2])
+                return X[tn]
 
-            d1, _ = TriangleSet(tris(x)).distance(P1, COVER_CUTOFF_MM)
+            Pe = P1
+            if phi is not None:  # expected mesh = nominal + phi * shift, phi interpolated on the nominal triangle of the point
+                Q = P1 - t
+                _, ti = TriangleSet(tris(m.xyz)).distance(Q, COVER_CUTOFF_MM)
+                w = np.ones(len(Q))
+                ok = ti >= 0
+                if ok.any():
+                    w[ok] = np.einsum("ij,ij->i", _bary(Q[ok], m.xyz[tn[ti[ok]]]), phi[tn[ti[ok]]])
+                Pe = P1 - (1.0 - w)[:, None] * t
+            d1, _ = TriangleSet(tris(x)).distance(Pe, COVER_CUTOFF_MM)
             d1 = np.where(np.isfinite(d1), d1, COVER_CUTOFF_MM)
             if P0 is not None:
                 d0, _ = TriangleSet(tris(m.xyz)).distance(P0, COVER_CUTOFF_MM)
@@ -373,11 +391,10 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
                         dd, _, ins, _ = body.project_to_face(f, m.xyz[cand] + t)
                         d_on = np.minimum(d_on, np.where(ins, dd, np.inf))
                     on = cand[d_on <= tol]
-                    if keep_out is not None and len(on):
-                        on = on[~keep_out(m.xyz[on])]
                     nodes = int(len(on))
                     if nodes:
-                        dev = max(dev, float(np.linalg.norm(x[on] - (m.xyz[on] + t), axis=1).max()))
+                        f_on = phi[on][:, None] if phi is not None else 1.0
+                        dev = max(dev, float(np.linalg.norm(x[on] - (m.xyz[on] + f_on * t), axis=1).max()))
             out.append({"bead": bj["id"], "island": gid, "faces": len(faces), "nodes": nodes, "dev_mm": dev})
     return out
 

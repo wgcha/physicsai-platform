@@ -285,10 +285,13 @@ def quality_judge(x0: np.ndarray, x: np.ndarray, conn: np.ndarray, tri: np.ndarr
 
 
 # ------------------------------------------------------------------ (g) feature rigidity
-def feature_judge(x0: np.ndarray, x: np.ndarray, conn: np.ndarray, tri: np.ndarray, labels: np.ndarray, features: list[dict], q: dict) -> dict:
+def feature_judge(x0: np.ndarray, x: np.ndarray, conn: np.ndarray, tri: np.ndarray, labels: np.ndarray, features: list[dict], q: dict,
+                  phi: np.ndarray | None = None) -> dict:
     """SM-C4. ``features``: [{"bead", "island", "faces": [face ids], "rim_zero": bool}]. rim = feature-element nodes
     shared with other elements, interior = the other feature-element nodes; t = mean rim displacement (0 if
-    ``rim_zero``); dev = max |u(interior) - t| > max(distort_min_mm, distort_rel * |t|) -> SHELL_FEATURE_DISTORTED."""
+    ``rim_zero``); dev = max |u(interior) - t| > max(distort_min_mm, distort_rel * |t|) -> SHELL_FEATURE_DISTORTED.
+    ``phi`` (SM-C7 hold factor per node): expected u = phi * t with t = least squares of the rim (u = phi t), so a
+    blended island next to hold anchors is judged against the same s(r) attenuation the morph applied."""
     en = _elem_nodes(conn, tri)
     mixed = int((labels < 0).sum())
     u = np.asarray(x, dtype=float) - np.asarray(x0, dtype=float)
@@ -306,8 +309,14 @@ def feature_judge(x0: np.ndarray, x: np.ndarray, conn: np.ndarray, tri: np.ndarr
         if not len(interior):
             continue
         tested += 1
-        t = np.zeros(3) if ft.get("rim_zero") or not len(rim) else u[rim].mean(axis=0)
-        dev = float(np.linalg.norm(u[interior] - t, axis=1).max())
+        if phi is not None and not ft.get("rim_zero") and np.any(phi[fn] < 1.0):
+            w = phi[rim]
+            ww = float(w @ w)
+            t = (w @ u[rim]) / ww if ww > 1e-12 else np.zeros(3)
+            dev = float(np.linalg.norm(u[interior] - phi[interior][:, None] * t, axis=1).max())
+        else:
+            t = np.zeros(3) if ft.get("rim_zero") or not len(rim) else u[rim].mean(axis=0)
+            dev = float(np.linalg.norm(u[interior] - t, axis=1).max())
         floor = max(float(q["distort_min_mm"]), float(q["distort_rel"]) * float(np.linalg.norm(t)))
         item = {"bead": ft["bead"], "island": ft["island"], "dev_mm": dev, "floor_mm": floor}
         if worst is None or dev - floor > worst["dev_mm"] - worst["floor_mm"]:
@@ -469,6 +478,7 @@ def judge_mesh(J: JudgeInput, o: dict) -> dict:
     fj = fixed_judge(J.x0, J.x, J.fixed, J.cluster, o["fixed"]["policy"], J.line_changes)
     qj = quality_judge(J.x0, J.x, J.conn, J.tri, o["quality"])
     hold_nodes = np.zeros(len(J.x0), dtype=bool)
+    phi_all = np.ones(len(J.x0))
     hold_items = []
     hold_faces: set[int] = set()
     if J.hold:
@@ -476,7 +486,8 @@ def judge_mesh(J: JudgeInput, o: dict) -> dict:
         hb = o["bead"]["hold"]
         ring, blend = float(hb["ring_mm"]), float(hb["blend_mm"])
         for h in J.hold:
-            _, g, region = hold_weights(J.x0, J.conn, J.tri, ef, h["region_faces"], h["anchor_faces"], J.fixed, ring, blend)
+            phi, g, region = hold_weights(J.x0, J.conn, J.tri, ef, h["region_faces"], h["anchor_faces"], J.fixed, ring, blend)
+            phi_all[region] = np.minimum(phi_all[region], phi[region])
             sel = region & (g < ring + blend)
             hold_nodes |= sel
             hold_faces |= set(h["anchor_faces"])
@@ -491,7 +502,7 @@ def judge_mesh(J: JudgeInput, o: dict) -> dict:
             if fixed[fn[fn >= 0]].any():
                 continue
         feats.append(f)
-    gj = feature_judge(J.x0, J.x, J.conn, J.tri, labels, feats, o["quality"])
+    gj = feature_judge(J.x0, J.x, J.conn, J.tri, labels, feats, o["quality"], phi_all if J.hold else None)
     for name, r in (("fixed", fj), ("quality", qj), ("feature", gj)):
         out["checks"][name] = r["check"]
         out["warnings"] += r["warnings"]
