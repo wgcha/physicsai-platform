@@ -95,3 +95,14 @@ def test_new_message_codes_korean():
     assert t["SHELL_FIXED_MOVED"][0] == "FIXED" and t["SHELL_QUALITY_WARN"][0] == "QUALITY" and t["BEAD_ISLAND_TOO_LARGE"][0] == "PREP"
     assert messages.korean_message("SHELL_FEATURE_DISTORTED", "B1 island B1_I1: dev 0.4 mm").startswith("비드 안 피처가 바닥을 따라가지 않음")
     assert messages.category_of("SHELL_FEATURE_DISTORTED") == "DEVIATION"
+
+
+def test_config_warns_shell_defaults_warn_policy():
+    from physicsai_core.config.loader import config_warnings
+    from physicsai_core.config.schema import Settings
+
+    s = Settings.model_validate({"geometry": {"shell_defaults": {"fixed": {"policy": "warn"}, "quality": {"fail_policy": "skip"}}}}) \
+        if hasattr(Settings, "model_validate") else None
+    assert s is not None
+    keys = [w.key for w in config_warnings({}, s, frozenset())]
+    assert "geometry.shell_defaults.fixed.policy" in keys and "geometry.shell_defaults.quality.fail_policy" not in keys

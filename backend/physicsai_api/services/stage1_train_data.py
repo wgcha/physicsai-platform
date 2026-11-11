@@ -128,7 +128,7 @@ def put_params(ctx: AppContext, principal: Principal, study_id: str, body: Any, 
         full = train_tpl.is_full_snapshot(s.get("tpl_params"))  # 전체 tpl이면 미사용 행 변경도 tpl을 낡게 한다(altair-vars.md AV-1)
         if tp.definition_key(new, full=full) != tp.definition_key(s["parameters"], full=full):
             vals["tpl_params"] = None  # 표가 바뀌면 tpl stale(TPL_STALE)
-        hopt = _hold_options(ctx, st, s, body.hold_options)
+        hopt = _hold_options(ctx, st, s, body.hold_options, "hold_options" in body.model_fields_set)
         hold = body.hold_beads
         if hold is not None:
             _check_hold(ctx, st, s, hold)
@@ -144,20 +144,32 @@ def put_params(ctx: AppContext, principal: Principal, study_id: str, body: Any, 
     return setup_out(ctx, st, s)
 
 
-def _hold_options(ctx: AppContext, study: dict[str, Any], s: dict[str, Any], given: Any) -> dict[str, float]:
-    """PUT hold_options: 생략 = 기존 유지, 값 = 양수 검사(shell_options 규칙, 422 TRAIN_PARAMS_INVALID) 후 기본값과 같은 키는 뺀다."""
+def _hold_options(ctx: AppContext, study: dict[str, Any], s: dict[str, Any], given: Any, present: bool) -> dict[str, float]:
+    """PUT hold_options 의미: 키 생략 = 유지 · null/{} = 기본값으로 초기화(저장값 삭제) · 일부 키만 = 그 키만 갱신(null 값 = 그 키 초기화) ·
+    기본값과 같은 값 = 그 키 저장값 삭제(파일에 기본값을 쓰지 않는다). 값은 양수(shell_options 규칙, 422 TRAIN_PARAMS_INVALID)."""
     from physicsai_core.geometry.shell_options import HOLD_DEFAULT, hold_option_problems
 
+    cur = read_hold_options(ctx, study)
+    if not present:
+        return cur
     if given is None:
-        return read_hold_options(ctx, study)
-    vals = {k: v for k, v in given.model_dump().items() if v is not None}
-    probs = hold_option_problems(vals)
+        return {}
+    vals = {k: v for k, v in given.model_dump().items() if k in given.model_fields_set}
+    if not vals:  # {} = 기본값으로 초기화
+        return {}
+    probs = hold_option_problems({k: v for k, v in vals.items() if v is not None})
     shell = (s.get("engine") or "altair") == "native" and (s.get("features_rel") or "").endswith("shell_features.json")
     if probs or (vals and not shell):
         raise DomainError("TRAIN_PARAMS_INVALID", "파라미터 표 검증에 실패했습니다", status=422,
                           problems=[{"name": p["key"], "code": "HOLD_OPTIONS_INVALID", "message": p["message"]} for p in probs]
                           or [{"name": "hold_options", "code": "HOLD_NOT_SHELL", "message": "쉘 판금 설정이 아닙니다"}])
-    return {k: float(v) for k, v in vals.items() if float(v) != HOLD_DEFAULT[k]}
+    out = dict(cur)
+    for k, v in vals.items():
+        if v is None or float(v) == HOLD_DEFAULT[k]:
+            out.pop(k, None)
+        else:
+            out[k] = float(v)
+    return out
 
 
 def _check_hold(ctx: AppContext, study: dict[str, Any], s: dict[str, Any], hold: list[str]) -> None:

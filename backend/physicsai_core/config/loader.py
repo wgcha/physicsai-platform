@@ -117,6 +117,11 @@ def config_warnings(data: dict[str, Any], s: Settings, absent: frozenset[str]) -
 
     if has_defaults_filter(s.geometry.defaults):  # extract-filter.md §6.3: 추출 조건은 설정이 아니라 사용자가 정한다
         w.append(ConfigIssue("geometry.defaults.extract.filter", DEFAULTS_IGNORED_MESSAGE))
+    from ..geometry.shell_options import POLICY_KEYS
+
+    for sec, k in POLICY_KEYS:  # shell-morph.md §14.4(SM-10): warn은 ①-3 DOE 요청에서만 — 설정 기본값의 warn은 DOE가 버린다
+        if ((s.geometry.shell_defaults or {}).get(sec) or {}).get(k) == "warn":
+            w.append(ConfigIssue(f"geometry.shell_defaults.{sec}.{k}", "경고 정책(warn)은 DOE 고급 옵션에서만 선택할 수 있어 설정 값은 무시됩니다"))
     if s.geometry.view.max_glb_bytes > s.ui.max_artifact_bytes:  # geometry-view.md §6.1: 넘으면 ui 상한으로 자른다
         w.append(ConfigIssue("geometry.view.max_glb_bytes",
                              f"ui.max_artifact_bytes({s.ui.max_artifact_bytes})보다 커서 그 값으로 줄여 씁니다"))

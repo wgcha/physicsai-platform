@@ -59,7 +59,7 @@ class TrainParamsPut(Req):
     parameters: list[TrainParamUpdate]
     # 쉘 판금(kind=shell) 전용 체결 보스 고정(shell-morph.md §14.5): hold_eligible 비드 id 목록. 생략 = 기존 값 유지, [] = 끔
     hold_beads: list[str] | None = None
-    hold_options: HoldOptions | None = None  # 생략 = 기존 값 유지, {} = 기본값으로
+    hold_options: HoldOptions | None = Field(default=None, description="쉘 판금 전용 hold ρ·b(mm). 키 생략 = 저장값 유지, null 또는 {} = 기본값으로 초기화(저장값 삭제), 일부 키만 = 그 키만 갱신(키 값이 null이면 그 키 초기화), 기본값(3·8)과 같은 값 = 그 키 저장값 삭제")
 
 
 class VersionBody(Req):

@@ -195,6 +195,22 @@ def test_train_setup_kind_hold_beads_put_and_doe_inherits(native_env, monkeypatc
     assert r.status_code == 200 and r.json()["hold_options"] == {"ring_mm": 4.5, "blend_mm": None}, r.text  # 기본값(b 8)은 저장 안 함
     r = env.c.put(put, headers=PW, json={"version": r.json()["version"], "parameters": rows})  # 생략 = 유지
     assert r.json()["hold_options"]["ring_mm"] == 4.5 and r.json()["hold_beads"] == ["CHASSIS_REAR_B1"]
+    # 의미: 일부 키만 = 그 키만 갱신 · 기본값과 같은 값 = 그 키 삭제 · null/{} = 초기화
+    def hput(**body):
+        v = env.c.get(f"{API}/studies/{env.sid}/train", headers=P).json()["version"]
+        return env.c.put(put, headers=PW, json={"version": v, "parameters": rows, **body})
+
+    r = hput(hold_options={"blend_mm": 10.0})
+    assert r.json()["hold_options"] == {"ring_mm": 4.5, "blend_mm": 10.0}
+    r = hput(hold_options={"ring_mm": 3.0})  # 기본값으로 되돌림 → ring 삭제, blend 유지
+    assert r.json()["hold_options"] == {"ring_mm": None, "blend_mm": 10.0}
+    assert "ring_mm" not in json.loads((env.sroot / "01_train" / "params.json").read_text())["hold_options"]
+    assert hput(hold_options={}).json()["hold_options"] == {"ring_mm": None, "blend_mm": None}  # {} = 초기화
+    assert "hold_options" not in json.loads((env.sroot / "01_train" / "params.json").read_text())
+    hput(hold_options={"ring_mm": 4.5})
+    assert hput(hold_options=None).json()["hold_options"] == {"ring_mm": None, "blend_mm": None}  # null = 초기화
+    assert hput().json()["hold_options"] == {"ring_mm": None, "blend_mm": None}
+    hput(hold_options={"ring_mm": 4.5})
     j2 = env.submit("TD_DOE_GEN", {"radioss_assem_path": str(proj / "assem"), "num_runs": 2, "seed": 1, "multi_execution": 1})
     assert env.w.run_once_slot() == "SUCCEEDED", env.job(j2["id"])
     assert env.job(j2["id"])["params"]["geom_options"]["bead"]["hold"] == {"beads": ["CHASSIS_REAR_B1"], "ring_mm": 4.5}
