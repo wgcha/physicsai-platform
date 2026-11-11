@@ -241,6 +241,10 @@ export function validateShellOptions(o: GeomOptions, eligible: string[] | null):
     const v = getOpt(o, path);
     if (v !== undefined && v !== "skip" && v !== "warn") p.push({ path: key, message: "skip | warn" });
   }
+  for (const k of ["ring_mm", "blend_mm"]) {
+    const v = getOpt(o, ["bead", "hold", k]);
+    if (v !== undefined && !(typeof v === "number" && Number.isFinite(v) && v > 0)) p.push({ path: `bead.hold.${k}`, message: "0보다 큰 유한한 숫자여야 합니다" });
+  }
   const beads = getOpt(o, ["bead", "hold", "beads"]);
   if (Array.isArray(beads) && eligible) for (const b of beads) if (!eligible.includes(String(b))) p.push({ path: "bead.hold.beads", message: `${b}: 고정할 수 있는 비드가 아닙니다(hold_eligible)` });
   return p;

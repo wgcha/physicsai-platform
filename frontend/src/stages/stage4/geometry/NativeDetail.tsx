@@ -17,7 +17,8 @@ import { GeomView3DLazy as GeomView3D } from "../geomview/GeomView3DLazy";
 import { ViewSplit } from "../geomview/ViewSplit";
 import { useRowSelection } from "../geomview/selection";
 import { AppliedFilter } from "../../../components/AppliedFilter";
-import { HOLD_HEAD, HOLD_TIP, holdBeads, toggleHold, withHold } from "../../../lib/shellPolicy";
+import { HOLD_HEAD, HOLD_TIP, holdBeads, holdParamText, parseHoldNum, toggleHold, withHold, withHoldParam, type HoldKey } from "../../../lib/shellPolicy";
+import { HOLD_KEYS, HoldParams, holdParamError } from "../../stage1/HoldParams";
 
 export function NativeDetail({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { study, reloadParamSets } = useStudy();
@@ -77,6 +78,7 @@ function fallbackVars(ps: ParamSet, data: NativeFeatures, reason: string): Nativ
 function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const { reloadParamSets } = useStudy();
   const [data, setData] = useState<NativeFeatures | null>(null);
+  const [holdP, setHoldP] = useState<Record<HoldKey, string>>({ ring_mm: holdParamText(ps.geom_options, "ring_mm"), blend_mm: holdParamText(ps.geom_options, "blend_mm") });
   const [vars, setVars] = useState<NativeVars | null>(null);
   const [rows, setRows] = useState<NativeRow[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -138,6 +140,22 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
   const heldBeads = holdBeads(ps.geom_options);
   const featOf = (name: string) => data.features.find((f) => f.name === name);
   const showHold = data.features.some((f) => f.hold_eligible);
+  const holdPDirty = HOLD_KEYS.some((k) => holdP[k] !== holdParamText(ps.geom_options, k));
+  const holdPBad = HOLD_KEYS.some((k) => holdParamError(k, holdP[k]));
+  const saveHoldP = async () => {
+    setError(null);
+    try {
+      let next = ps.geom_options ?? {};
+      for (const k of HOLD_KEYS) {
+        const r = parseHoldNum(holdP[k], k);
+        if ("value" in r) next = withHoldParam(next, k, r.value);
+      }
+      await api.patchParamSet(ps.id, { geom_options: Object.keys(next).length ? next : null });
+      await reloadParamSets();
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+  };
   const setHold = async (bead: string, on: boolean) => {
     setError(null);
     try {
@@ -257,6 +275,16 @@ function FeatureTable({ ps, canEdit }: { ps: ParamSet; canEdit: boolean }) {
       <div className="small muted">
         자동 후보 피처 <b>{data.features.length}</b>개{data.engine_version ? ` · paicad ${data.engine_version}` : ""} — 행을 누르면 3D에 표시(Ctrl/⌘ = 추가, Shift = 범위){editable ? " · 선택 후 사용 체크·해제를 한꺼번에" : ""}. 목록에 없는 변수는 추출 조건을 바꿔 새 템플릿으로 등록하세요
       </div>
+      {showHold && (
+        <>
+          <HoldParams values={holdP} onChange={(k, v) => setHoldP((h) => ({ ...h, [k]: v }))} disabled={!canEdit} />
+          {canEdit && holdPDirty && (
+            <button type="button" className="btn small primary" data-testid="hold-params-save" disabled={holdPBad} onClick={() => void saveHoldP()}>
+              보스 고정 옵션 저장
+            </button>
+          )}
+        </>
+      )}
       <ViewSplit
         view={
           <GeomView3D

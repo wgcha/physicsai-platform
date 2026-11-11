@@ -6,7 +6,7 @@ import type { MockServer } from "../mock/server";
 import { SHELL_BEADS, markShell, nativeTrainParams } from "../mock/geometry";
 import { buildNativeParams, buildReuseParams, initialNative } from "../stages/stage1/doeGenParams";
 import { genBadge, cellTone } from "../stages/stage1/doepreview/gridModel";
-import { holdBeads, policyOptions, toggleHold, warnSummary, warnedRuns, withHold } from "../lib/shellPolicy";
+import { holdBeads, parseHoldNum, policyOptions, toggleHold, warnSummary, warnTotals, warnTotalsText, warnedRuns, withHold, withHoldParam } from "../lib/shellPolicy";
 
 type Call = { m: string; p: string; b: Record<string, unknown> | null };
 function record(server: MockServer, re: RegExp): Call[] {
@@ -69,6 +69,11 @@ describe("SM-C6 정책(고급 옵션) — V-SM-13 UI·V-SM-19 화면", () => {
     act(() => server.finishAll());
     const warned = await within(card).findByTestId("doe-warned");
     expect(warned.textContent).toContain("경고 통과 1(고정 0·품질 1)");
+    // 서버 result.gen_summary와 화면 집계가 같다
+    const res = server.jobs[server.jobs.length - 1].result as { gen_warned: number; gen_summary: { warned: { fixed: number; quality: number }; skipped: object; waived: object } };
+    expect(res.gen_warned).toBe(1);
+    expect(res.gen_summary.warned).toEqual({ fixed: 0, quality: 1, other: 0 });
+    expect(warnTotalsText(warnTotals({ ...res, doe_id: "x" }, "x")!)).toBe(warned.querySelector(".pill.warn")!.textContent);
     expect(within(warned).getAllByText("품질").length).toBeGreaterThan(0);
     expect(within(card).queryByTestId("doe-skipped")).toBeNull();
   });
@@ -182,5 +187,57 @@ describe("SM-C7 hold — V-SM-20 화면", () => {
     const card = await screen.findByRole("region", { name: "템플릿 관리" });
     const table = await within(card).findByRole("table", { name: "형상 피처 표" });
     expect(within(table).queryByText("체결 보스 고정")).toBeNull();
+  });
+});
+
+describe("hold ρ·b 고급 입력", () => {
+  it("parseHoldNum: 빈칸·기본값 = 키 생략, 0 이하·문자 = 오류", () => {
+    expect(parseHoldNum("", "ring_mm")).toEqual({ value: undefined });
+    expect(parseHoldNum("3", "ring_mm")).toEqual({ value: undefined });
+    expect(parseHoldNum("8", "blend_mm")).toEqual({ value: undefined });
+    expect(parseHoldNum("4.5", "ring_mm")).toEqual({ value: 4.5 });
+    expect("error" in parseHoldNum("0", "ring_mm")).toBe(true);
+    expect("error" in parseHoldNum("-1", "blend_mm")).toBe(true);
+    expect("error" in parseHoldNum("abc", "blend_mm")).toBe(true);
+    expect(withHoldParam({ bead: { hold: { beads: ["B5"], ring_mm: 4 } } }, "ring_mm", undefined)).toEqual({ bead: { hold: { beads: ["B5"] } } });
+    expect(warnTotals({ doe_id: "d", gen_warned: 0, gen_summary: { warned: { fixed: 0, quality: 0 } } }, "d")).toBeNull();
+  });
+
+  it("①-2: ρ·b 접힘 입력 — 기본이면 hold_options 없음, 값 입력 시 기본 아닌 키만 전송, 잘못된 값은 저장 막힘", async () => {
+    const { server } = renderApp(`${STUDY}/1`, { user: "power" }, shellTrain);
+    const calls = record(server, /\/train\/params$/);
+    const table = await screen.findByRole("table", { name: "파라미터 표" });
+    await within(table).findByText("체결 보스 고정");
+    const ring = screen.getByLabelText("보스 둘레 고정 ρ (mm)") as HTMLInputElement;
+    expect(ring.closest("details.advanced")).toBeTruthy();
+    expect(ring.placeholder).toBe("기본 3");
+    fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
+    await waitFor(() => expect(calls.length).toBe(1));
+    expect(calls[0].b).not.toHaveProperty("hold_options");
+    fireEvent.change(ring, { target: { value: "0" } });
+    expect((screen.getByRole("button", { name: "표 저장" }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.change(ring, { target: { value: "4.5" } });
+    fireEvent.change(screen.getByLabelText("전이 폭 b (mm)"), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(calls[1].b!.hold_options).toEqual({ ring_mm: 4.5 });
+  });
+
+  it("④: ρ·b 입력 → 저장 시 PATCH bead.hold.ring_mm/blend_mm, 기본으로 되돌리면 키 제거", async () => {
+    const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, (s) => {
+      s.paramSets.forEach((p) => (p.is_current = p.id === "ps-n1"));
+      shellSet(s);
+    });
+    const calls = record(server, /\/param-sets\/ps-n1$/);
+    fireEvent.click(await screen.findByRole("button", { name: "템플릿 관리" }));
+    const card = await screen.findByRole("region", { name: "템플릿 관리" });
+    await within(card).findByRole("table", { name: "형상 피처 표" });
+    fireEvent.change(within(card).getByLabelText("전이 폭 b (mm)"), { target: { value: "10" } });
+    fireEvent.click(within(card).getByTestId("hold-params-save"));
+    await waitFor(() => expect(calls[0]?.b).toEqual({ geom_options: { bead: { hold: { blend_mm: 10 } } } }));
+    await waitFor(() => expect((within(card).getByLabelText("전이 폭 b (mm)") as HTMLInputElement).value).toBe("10"));
+    fireEvent.change(within(card).getByLabelText("전이 폭 b (mm)"), { target: { value: "" } });
+    fireEvent.click(within(card).getByTestId("hold-params-save"));
+    await waitFor(() => expect(calls[1]?.b).toEqual({ geom_options: null }));
   });
 });
