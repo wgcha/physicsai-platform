@@ -95,6 +95,7 @@ class SheetSpec:
     rbe3_at: tuple = (300.0, 60.0)
     extra_rbe2: tuple = ()  # (x, y, r): RBE2 spiders on bead-bottom features (in-plane distance, any height)
     cuts: tuple = ()  # (x0, y0, x1, y1): rectangular slots cut through the sheet (open bead walls)
+    dimples: tuple = ()  # (x, y, sphere radius, depth): spherical deboss cap (pole = degenerated edge), paicad 0.14.2 regression
 
 
 # ------------------------------------------------------------------ profile
@@ -368,6 +369,18 @@ def _bead_faces(b: BeadSpec) -> list:
     return faces
 
 
+def _sphere_cap(center, rs: float) -> list:
+    """Spherical zone from the south pole (degenerated edge, no 3D curve after STEP) up to z = 0."""
+    from OCP.BRepPrimAPI import BRepPrimAPI_MakeSphere
+    from OCP.gp import gp_Ax2, gp_Dir
+    from OCP.GeomAbs import GeomAbs_Sphere
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+
+    top = math.asin(-float(center[2]) / rs)
+    solid = BRepPrimAPI_MakeSphere(gp_Ax2(_p(center), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0)), rs, -0.5 * math.pi, top).Shape()
+    return [f for f in _faces_of(solid) if BRepAdaptor_Surface(f).GetType() == GeomAbs_Sphere]
+
+
 def build_sheet(spec: SheetSpec):
     """Sewn sheet (OCP TopoDS_Shell) of the spec; plate normal = +z."""
     from OCP.BRepBuilderAPI import BRepBuilderAPI_MakeEdge, BRepBuilderAPI_MakeFace, BRepBuilderAPI_MakeWire, BRepBuilderAPI_Sewing
@@ -391,7 +404,14 @@ def build_sheet(spec: SheetSpec):
         circ = gp_Circ(gp_Ax2(_p((x, y, 0.0)), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0)), 0.5 * s.hole_d)
         hw = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circ).Edge()).Wire()
         mkf.Add(TopoDS.Wire_s(hw.Reversed()))
+    for (x, y, rs, d) in s.dimples:
+        a = math.sqrt(rs * rs - (rs - d) ** 2)
+        circ = gp_Circ(gp_Ax2(_p((x, y, 0.0)), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0)), a)
+        hw = BRepBuilderAPI_MakeWire(BRepBuilderAPI_MakeEdge(circ).Edge()).Wire()
+        mkf.Add(TopoDS.Wire_s(hw.Reversed()))
     faces = [mkf.Face()]
+    for (x, y, rs, d) in s.dimples:
+        faces += _sphere_cap(np.array([x, y, rs - d]), rs)
     for y0, sg in ((0.0, -1.0), (W, 1.0)):
         c = np.array([0.0, y0, -R])
         p0 = np.array([0.0, y0, 0.0])

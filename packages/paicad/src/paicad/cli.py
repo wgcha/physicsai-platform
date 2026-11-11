@@ -280,7 +280,7 @@ def _mesh_source_missing(args) -> list[str]:
 def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
     """Best-effort FAIL report for input/internal errors (section 5.4: report when possible); never overwrites.
     Success-by-existence outputs (props.json, param_map.json, extract files) never get a FAIL report."""
-    from .common import CODE_CATEGORY, dumps, envelope
+    from .common import CODE_CATEGORY, PaicadError, dumps, envelope, replace_retry
 
     if cmd.startswith("shell "):
         from .shell.cli import REPORTS as SHELL_REPORTS
@@ -311,7 +311,10 @@ def _fail_report(cmd: str, out_dir: str, code: str, message: str) -> str | None:
     Path(out_dir).mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(f".{name}.{os.getpid()}")
     tmp.write_text(dumps(doc), encoding="utf-8")
-    os.replace(tmp, p)
+    try:
+        replace_retry(tmp, p)
+    except PaicadError:  # best effort: the failure is still reported on stdout/stderr
+        return None
     return p.name
 
 

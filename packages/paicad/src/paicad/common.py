@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -161,6 +162,67 @@ def vec(a, nd: int = 6) -> list[float]:
     return [rnd(x, nd) for x in a]
 
 
+# Windows: antivirus / search indexer briefly holding a file -> PermissionError WinError 5 (access denied) or 32 (sharing
+# violation) on rename. Retried with this backoff (seconds); PAICAD_REPLACE_BACKOFF_S="0.2,0.5,1,2,4" overrides (0.14.2,
+# empty value = default and caps 10 delays / 60 s since 0.15.2).
+REPLACE_BACKOFF_S = (0.2, 0.5, 1.0, 2.0, 4.0)
+REPLACE_RETRY_WINERRORS = (5, 32)
+
+
+REPLACE_BACKOFF_MAX_N = 10  # at most this many retries
+REPLACE_BACKOFF_MAX_TOTAL_S = 60.0  # total wait cap: delays past the cumulative 60 s are dropped
+
+
+def _cap_backoff(vals: tuple[float, ...]) -> tuple[float, ...]:
+    out, total = [], 0.0
+    for v in vals[:REPLACE_BACKOFF_MAX_N]:
+        if total + v > REPLACE_BACKOFF_MAX_TOTAL_S:
+            break
+        out.append(v)
+        total += v
+    return tuple(out)
+
+
+def replace_backoff() -> tuple[float, ...]:
+    """Backoff of :func:`replace_retry`: ``PAICAD_REPLACE_BACKOFF_S`` (comma / semicolon list, each 0..60 s) or the
+    default; unset, empty (``""``, ``",,"``) or malformed -> default. Capped to 10 delays and 60 s in total."""
+    raw = os.environ.get("PAICAD_REPLACE_BACKOFF_S")
+    if raw is None:
+        return REPLACE_BACKOFF_S
+    try:
+        vals = tuple(float(x) for x in raw.replace(";", ",").split(",") if x.strip())
+    except ValueError:
+        return REPLACE_BACKOFF_S
+    if not vals or not all(0.0 <= v <= 60.0 for v in vals):
+        return REPLACE_BACKOFF_S
+    return _cap_backoff(vals)
+
+
+def _locked(e: OSError) -> bool:
+    return getattr(e, "winerror", None) in REPLACE_RETRY_WINERRORS
+
+
+def replace_retry(src: str | Path, dst: str | Path, backoff: tuple[float, ...] | None = None, sleep=time.sleep) -> None:
+    """``os.replace`` that waits out a transient Windows lock (WinError 5/32) with ``backoff`` (default
+    :func:`replace_backoff`). Other errors propagate unchanged. If the lock persists: ``GEOM_INTERNAL`` whose
+    message names the files only (no absolute paths)."""
+    delays = replace_backoff() if backoff is None else _cap_backoff(tuple(backoff))
+    for i in range(len(delays) + 1):
+        try:
+            os.replace(src, dst)
+            return
+        except OSError as e:
+            if not _locked(e):
+                raise
+            if i == len(delays):
+                raise PaicadError(
+                    "GEOM_INTERNAL",
+                    f"cannot rename {Path(src).name} to {Path(dst).name}: file locked by another process "
+                    f"(WinError {e.winerror}) after {len(delays) + 1} attempts",
+                ) from None
+            sleep(delays[i])
+
+
 class OutDir:
     """Output folder guard: never overwrite (GEOM_OUTPUT_EXISTS), stage in .tmp_<pid>, then os.replace."""
 
@@ -194,7 +256,7 @@ class OutDir:
             if dst.exists():
                 raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {rel}")
             dst.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(self.tmp / rel, dst)
+            replace_retry(self.tmp / rel, dst)
         self.cleanup()
 
     def cleanup(self) -> None:

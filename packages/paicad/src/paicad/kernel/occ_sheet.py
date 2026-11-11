@@ -329,6 +329,7 @@ class _SheetRebuild:
         self.face_edits = {int(k): v for k, v in face_edits.items()}
         self.edge_points = {int(k): np.asarray(v, dtype=float) for k, v in edge_points.items()}
         self.vertex_pos = {int(k): np.asarray(v, dtype=float) for k, v in vertex_pos.items()}
+        self.built3d: set[int] = set()  # unchanged edges whose 3D curve was built from a pcurve (0.14.2)
 
     # ---- geometry
     def surfaces(self):
@@ -397,8 +398,55 @@ class _SheetRebuild:
         c = BRep_Tool.Curve_s(E, 0.0, 0.0)  # with the edge location applied
         u1, u2 = BRep_Tool.Range_s(E)
         if c is None:
-            raise KernelError("GEOM_CAD_FAILED", f"edge E{eid} has no 3D curve")
+            # a regular edge stored with pcurves only (some STEP writers): build its 3D curve from its pcurve on an
+            # empty copy (same representations, no vertices), so the nominal body is never modified (0.14.2)
+            Ec = TopoDS.Edge_s(E.EmptyCopied())
+            if not BRepLib.BuildCurve3d_s(Ec, 1.0e-5):
+                raise KernelError("GEOM_CAD_FAILED", f"edge E{eid} has no 3D curve and none can be built from its pcurves")
+            c = BRep_Tool.Curve_s(Ec, 0.0, 0.0)
+            if c is None:
+                raise KernelError("GEOM_CAD_FAILED", f"edge E{eid} has no 3D curve and none can be built from its pcurves")
+            u1, u2 = BRep_Tool.Range_s(Ec)
+            self.built3d.add(eid)
         return c, u1, u2
+
+    def degenerated_edge(self, e, E_old, nv: list, nf: list, surfs: list):
+        """A degenerated edge (sphere/cone pole, 0.14.2): no 3D curve. Same vertex, same parameter range and the old
+        pcurves - valid on the new surface because surface edits move the (u, v) frame rigidly; radius or
+        semi-angle edits of its face are refused. A moved pole vertex must stay on the new surface pole."""
+        b = self.b
+        B = BRep_Builder()
+        E = TopoDS_Edge()
+        B.MakeEdge(E)
+        it = TopoDS_Iterator(E_old, False, True)
+        while it.More():
+            c = it.Value()
+            k = b._vmap.FindIndex(c)
+            B.Add(E, nv[k - 1].Oriented(c.Orientation()))
+            it.Next()
+        u1, u2 = BRep_Tool.Range_s(E_old)
+        vf, _ = self.edge_vertices(E_old)
+        for fid in e.faces:
+            ed = self.face_edits.get(fid)
+            if ed is not None and (ed.radius is not None or ed.semi_angle is not None):
+                raise KernelError("GEOM_CAD_FAILED", f"degenerated edge E{e.id}: radius or semi-angle change of F{fid} is not supported")
+            F_old = b._faces[fid - 1]
+            F_fwd = TopoDS.Face_s(F_old.Oriented(TopAbs_FORWARD))
+            c2 = BRep_Tool.CurveOnSurface_s(E_old, F_fwd, 0.0, 0.0)
+            if c2 is None:
+                raise KernelError("GEOM_CAD_FAILED", f"degenerated edge E{e.id} has no pcurve on F{fid}")
+            if vf in self.vertex_pos or ed is not None:
+                p2 = c2.Value(0.5 * (u1 + u2))
+                q = _xyz(surfs[fid - 1].Value(p2.X(), p2.Y()))
+                want = self.vertex_pos.get(vf, b.topology().vertices[vf - 1])
+                if float(np.linalg.norm(q - want)) > ON_TOL:
+                    raise KernelError("GEOM_CAD_FAILED", f"degenerated edge E{e.id}: vertex V{vf} is not on the edited surface of F{fid}")
+            B.UpdateEdge(E, c2, nf[fid - 1], TOL)
+        B.Range(E, u1, u2)
+        B.SameRange(E, True)
+        B.SameParameter(E, True)
+        B.Degenerated(E, True)
+        return E
 
     @staticmethod
     def _old_mid_uv(E, F) -> np.ndarray:
@@ -470,6 +518,9 @@ class _SheetRebuild:
         ne = []
         for e in topo.edges:
             E_old = b._edges[e.id - 1]
+            if BRep_Tool.Degenerated_s(E_old) and BRep_Tool.Curve_s(E_old, 0.0, 0.0) is None:  # e.g. sphere pole from STEP (0.14.2)
+                ne.append(self.degenerated_edge(e, E_old, nv, nf, surfs))
+                continue
             changed = e.id in self.edge_points
             if changed:
                 curve, u1, u2 = self.new_edge_curve(e.id)
@@ -508,7 +559,8 @@ class _SheetRebuild:
                     B.UpdateEdge(E, pcs[0], nf[fid - 1], TOL)
             B.Range(E, u1, u2)
             B.SameRange(E, True)
-            B.SameParameter(E, True)
+            # a built (approximated) 3D curve: let BRepLib.SameParameter below check it and widen the edge tolerance
+            B.SameParameter(E, e.id not in self.built3d)
             if BRep_Tool.Degenerated_s(E_old):
                 B.Degenerated(E, True)
             ne.append(E)
