@@ -18,7 +18,7 @@ import numpy as np
 from scipy.spatial import cKDTree
 
 from . import options, quality
-from .common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd
+from .common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, replace_retry, rnd
 from .features import WALL_MIN_MM
 from .measure import FaceIndex, lateral_centroid, measure_feature
 from .mesh.radioss import RadMesh, collect_assembly_surface, parse_text, read_mesh, read_renum_csv
@@ -538,7 +538,7 @@ def run(args, rep: Reporter) -> int:
         tmp = out_inc.with_name(f".{out_inc.name}.tmp{os.getpid()}")
         with open(tmp, "wb") as f:
             f.write(mdata)
-        os.replace(tmp, out_inc)
+        replace_retry(tmp, out_inc)
     out.commit([CHECK_JSON])
     rep.progress(100, f"check {res.status}")
     rep.result(res.status, res.code, CHECK_JSON)
@@ -574,7 +574,7 @@ def _run_asm(args, rep: Reporter, opts: dict, t0: float) -> int:
         out_patch.parent.mkdir(parents=True, exist_ok=True)
         tmp = out_patch.with_name(f".{out_patch.name}.tmp{os.getpid()}")
         save_xyz(tmp, mesh.node_ids, Xm)
-        os.replace(tmp, out_patch)
+        replace_retry(tmp, out_patch)
     out.commit([CHECK_JSON])
     rep.progress(100, f"check {res.status}")
     rep.result(res.status, res.code, CHECK_JSON)
