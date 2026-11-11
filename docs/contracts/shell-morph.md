@@ -721,7 +721,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 - `skip` = 0.14.1 동작 그대로.
 - `fixed.policy: warn`: update 사전 검사는 실패하지 않고 `fixed_precheck.status: "WARN"`(+items). morph는 목표 변위가 `fixed.tol_mm`를 넘는 고정 노드만 디리클레 0을 풀어 목표(형상)를 따르게 한다(나머지 고정 노드·전이 감쇠는 그대로). `shell_morph.json.parts[].fixed_max_disp_mm` > 0 허용(§4.8 "항상 0" 규칙은 `skip`에서만), 선택 키 `fixed_moved{nodes, max_mm, clusters}`. check (f) `status: "WARN"` + 경고 **`SHELL_FIXED_MOVED`**{n, max_mm, clusters}.
 - `quality.fail_policy: warn`: warpage·skew·aspect·Jacobian(> 0)·`edge_ratio`·`min_edge_mm` 미달은 `checks.quality.status: "WARN"` + 경고 **`SHELL_QUALITY_WARN`**{failed_elements, edge_ratio, dt_ratio}. **항상 실패**(정책 무관, SM-11): 반전(det J ≤ 0·법선 반전) → `GEOM_QUALITY`(message "inverted"), `dt_ratio < dt_ratio_min` → `GEOM_QUALITY`(Δt 저하는 해석 비용 직접 증가), tie (e)·간섭 (d)·`SHELL_FEATURE_DISTORTED`.
-- 판정 순서(SM-C9 최종): `skip`(정책 둘 다 skip) = 기존 §6.6 순서 유지 — `SHELL_FIXED_REGION_VIOLATION` → `GEOM_INTERFERENCE` → `GEOM_QUALITY` → `GEOM_DEVIATION`(`SHELL_FEATURE_DISTORTED` 포함) → `GEOM_PARAM_MISMATCH` → `GEOM_TIE_PROJECTION`. `warn`에서만 항상 실패 항목(반전·`dt_ratio`)이 앞선다 — 반전·dt → 고정(skip일 때) → 간섭 → 품질(skip일 때) → 편차·피처 왜곡 → tie. `warn`으로 통과한 run은 최상위 `status: "PASS"`, `warnings[]`에 코드, 새 선택 키 `waived: ["SHELL_FIXED_REGION_VIOLATION"|"GEOM_QUALITY"]`.
+- 판정 순서(SM-C9 최종): `skip`(정책 둘 다 skip) = 기존 §6.6 순서 유지 — `SHELL_FIXED_REGION_VIOLATION` → `GEOM_INTERFERENCE` → `GEOM_QUALITY` → `GEOM_DEVIATION` → `GEOM_PARAM_MISMATCH` → `GEOM_TIE_PROJECTION`. `warn`에서만 항상 실패 항목(반전·`dt_ratio`)이 앞선다 — 반전·dt → 고정(skip일 때) → 간섭 → 품질(skip일 때) → 편차 → tie. **`SHELL_FEATURE_DISTORTED`는 두 정책 모두 0순위(정책 무관 최우선)**로 위 순서보다 앞선다. `warn`으로 통과한 run은 최상위 `status: "PASS"`, `warnings[]`에 코드, 새 선택 키 `waived: ["SHELL_FIXED_REGION_VIOLATION"|"GEOM_QUALITY"]`.
 - envelope(§7.1): `limited_by: "fixed"`는 `skip`에서만. `warn`이면 행에 `fixed_moved_nodes` 열(선택).
 
 **호환·통계 영향**: 기본 `skip`이면 기존 결과·DOE 스킵 통계·envelope 바이트 불변. 기본을 `warn`으로 바꾸면 (1) 같은 DOE에서 `FIXED`·`QUALITY` 스킵이 "경고 통과"로 바뀌어 run 수·학습 표본이 늘고 스킵 표 수치가 이전 DOE와 비교 불가, (2) tie·RBE2 노드가 움직인 run이 학습 데이터에 섞임(조립 해석에서 상대 부품과 어긋남 — esl 단품 해석보다 위험 큼), (3) DOE 미리보기(doe-preview.md, update만)의 `FIXED` 빨간 셀이 경고 셀로 바뀜. 옵션 sha가 바뀌므로 기존 run 재사용 판정도 달라진다 — 플랫폼은 **기본값과 같은 새 키는 options.json에 쓰지 않는다**(옛 paicad의 모르는 키 거부도 피함, esl SR-D-13b와 같은 방식).
@@ -746,7 +746,7 @@ physicsai 쉘 모핑은 **B-rep 주도**다(extract가 면 위상으로 비드�
 
 physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 무관한 모핑 코어"를 그대로 옮길 수 없다(비드 인식·샘플 면 사상에 CAD가 반드시 필요). 그러나 **판정**(고정 침범 노드 수, 품질·반전, 피처 강체성, hold 영역, 정책 적용, 극단 요소)은 원리상 메시 노드·요소·라벨만으로 정해진다. 지금 `check.py`는 B-rep 투영 판정((a)·(b))과 메시 판정((c)·(f))을 한 함수에서 섞고 있어, 같은 메시를 메모리로 넘길 때와 include로 쓴 뒤 다시 읽을 때 판정이 같다는 보장이 시험되지 않는다.
 
-**결정(SM-14)**: 메시 판정을 `paicad/shell/judge.py`(numpy·scipy만, `kernel/`·B-rep import 금지)로 분리한다. 입력 = `x0, x`(노드 좌표), `conn`·`tri`, 노드 라벨(tag `kind`·`entity`), 면-엣지-꼭짓점 인접표(정수 배열), 고정 마스크, 피처 라벨(섬·hold 앵커 요소 마스크), options → 출력 = 코드·경고·수치 dict. check는 B-rep 판정 (a)(b)(d)(e)만 직접 하고 나머지를 judge에 맡긴다. 메시 기반 섬 탐지(esl `enclosed_components`·`outer_polygons`·`_between_pieces` 이식)는 judge에 두되 **tag 단계 일관성 진단**으로만 쓴다: B-rep 섬 ≠ 메시 섬이면 정보 경고 `TAG_ISLAND_MISMATCH`(실패 아님). 장래 CAD 없는 메시 전용 입력이 생기면 같은 judge를 쓴다. **검증**: judge(메모리 배열) = judge(`.rad` + `#include .inc`로 쓰고 `assem` 리더로 다시 읽은 배열) — 코드·경고·수치(1e-9 반올림) 동일(V-SM-21).
+**결정(SM-14)**: 메시 판정을 `paicad/shell/judge.py`(numpy·scipy만, `kernel/`·B-rep import 금지)로 분리한다. 입력 = `x0, x`(노드 좌표), `conn`·`tri`, 노드 라벨(tag `kind`·`entity`), 면-엣지-꼭짓점 인접표(정수 배열), 고정 마스크, 피처 라벨(섬·hold 앵커 요소 마스크), options → 출력 = 코드·경고·수치 dict. check는 B-rep 판정 (a)(b)(d)(e)만 직접 하고 나머지를 judge에 맡긴다. 메시 기반 섬 탐지(esl `enclosed_components`·`outer_polygons`·`_between_pieces` 이식)는 judge에 두되 **tag 단계 일관성 진단**으로만 쓴다: B-rep 섬 ≠ 메시 섬이면 정보 경고 `TAG_ISLAND_MISMATCH`(실패 아님). 장래 CAD 없는 메시 전용 입력이 생기면 같은 judge를 쓴다. **검증**: judge(메모리 배열) = judge(`.rad` + `#include .inc`로 쓰고 `assem` 리더로 다시 읽은 배열) — 사전 반올림 없이 실제 include 작성기 왕복 뒤 코드·경고 동일 + 수치 margin 상대오차 ≤ 1e-6(V-SM-21, SM-C9).
 
 ### 14.7 우선순위 B(이번에는 변경안 없음 — 현황만)
 
@@ -765,7 +765,7 @@ physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 �
 - **V-SM-18 라벨**: 바닥 가장자리 EDGE 줄 요소 = 바닥 라벨, 플랭크 FACE 노드 섞인 요소 = −1, 기울어진 요소(> 15°) = −1, `_element_faces` 결과 불변.
 - **V-SM-19 정책**: `skip` = 0.14.1 바이트 동일(update·morph·check·envelope), `warn` = 같은 입력에서 PASS + `SHELL_FIXED_MOVED`/`SHELL_QUALITY_WARN` + `waived`, 반전·`dt_ratio`·tie·간섭은 `warn`에서도 FAIL, 기본값 키 생략 시 옵션 sha 불변.
 - **V-SM-20 hold**: 바닥 RBE2 보스 비드에 hold → 고정 노드 줄 바이트 동일, ρ 안 변위 0, ρ + b 밖 = 비드 변위, 보스 높이 = Δ ± 0.05 mm, `hold_eligible` 아닌 비드 지정 → `GEOM_INPUT_INVALID`, `beads: []` 결과 불변.
-- **V-SM-21 판정 코어 왕복**: SMH1~4 각각 judge(메모리) = judge(`.rad` + `.inc` 쓰기·읽기) 코드·경고·수치 동일, judge 모듈의 `kernel/`·OCP import 0(정적 시험), B-rep 섬 ↔ 메시 섬 일치(불일치 시 `TAG_ISLAND_MISMATCH`).
+- **V-SM-21 판정 코어 왕복**: SMH1~4 각각 judge(메모리) = judge(실제 include 작성기로 `.rad` + `.inc` 쓰기·읽기) 코드·경고 동일 + 수치 margin 상대오차 ≤ 1e-6(사전 반올림 없음, SM-C9), judge 모듈의 `kernel/`·OCP import 0(정적 시험), B-rep 섬 ↔ 메시 섬 일치(불일치 시 `TAG_ISLAND_MISMATCH`).
 - **V-SM-22 esl 어려운 사례 이식**: `make_synthetic_shell.py`에 B-rep 변형 `SMH1`~`SMH4` 추가(esl `tests/doe/synth_hard.py` H1~H4를 build123d 중립면으로 — 결정적, 저장소에 STEP·메시 없음):
   - SMH1 X 교차 비드 + 별도 직선 비드 바닥 딤플 2 → 교차 쌍 `BEAD_IRREGULAR`(거짓 READY 0), 딤플 비드 섬 2·D 변경 PASS.
   - SMH2 3단 계단 + 단마다 섬 → 바깥 단 `BEAD_IRREGULAR`(중첩, 섬 규칙 (d)), 가장 안쪽 단 비드 인식 + 그 섬 강체 이동. 작은 안쪽 단(≤ 40 mm) 변형은 바깥 비드의 섬으로 흡수.
@@ -817,13 +817,14 @@ physicsai의 extract·update·morph는 B-rep이 원본이라 "메시 출처와 �
   - SM-C6 `fixed.policy`·`quality.fail_policy` ∈ {skip, warn}(기본 skip — SM-10), 반전·`dt_ratio`·tie·간섭·피처 왜곡은 항상 실패, `SHELL_FIXED_MOVED`·`SHELL_QUALITY_WARN`·`waived` — §14.4
   - SM-C7 비드 단위 보스 고정 `bead.hold{beads, ring_mm 3, blend_mm 8}`, 측지 거리 × s(r), `hold_eligible` — §14.5
   - SM-C8 메시 전용 판정 코어 `shell/judge.py`(메모리 ↔ .rad/.inc 왕복 판정 동일) — §14.6. 우선순위 B 현황 §14.7, 시험 V-SM-16~22 §14.8
-- **SM-C9(2026-11-09, paicad 0.15.0·플랫폼 0.2.17 구현 해석 — §14 대신 이 해석이 기준)**:
+- **SM-C9(2026-11-09 작성·2026-11-11 갱신, paicad 0.15.3(0.14.2 수정 포함)·플랫폼 0.2.17 구현 해석 — §14 대신 이 해석이 기준)**:
   - 합성 대체(§14.8 V-SM-22): SMH1 X 교차·SMH3 합류는 필렛 없는 poly 포켓으로 대체 — 교차 논리와 무관하게 `BEAD_IRREGULAR`(필렛 링 없음)가 나온다. SMH4의 "바닥 경계에 걸친 보스"·"겹친 보스"는 합성하지 않음(후속).
   - SMH2: 가운데 단 = `BEAD_ISLAND_TOO_LARGE`, 바깥 단 = 섬 규칙 (d) 중첩으로 `BEAD_IRREGULAR`.
-  - V-SM-21 기준: 사전 반올림 없음. 실제 include 작성기로 `.rad`·`.inc`를 쓰고 다시 읽은 뒤 코드·경고 동일 + 수치 margin 상대오차 ≤ 1e-6이면 통과(§14.6·§14.8의 "1e-9 반올림" 대체).
-  - 최종 코드 우선순위: `skip`은 base 순서 유지(`SHELL_FIXED_REGION_VIOLATION` 우선), `warn`에서만 반전·dt가 앞선다(§14.2·§14.4 문구 통일).
+  - V-SM-21 기준: 사전 반올림 없음. 실제 include 작성기로 `.rad`·`.inc`를 쓰고 다시 읽은 뒤 코드·경고 동일 + 수치 margin 상대오차 ≤ 1e-6이면 통과(§14.6·§14.8 본문도 이 기준으로 고침).
+  - 최종 코드 우선순위: `SHELL_FEATURE_DISTORTED` = **0순위(정책 무관 최우선)**. 그다음 `skip`은 base 순서 유지(`SHELL_FIXED_REGION_VIOLATION` 우선), `warn`에서만 반전·dt가 앞선다(§14.2·§14.4 문구 통일).
   - 키 이름: 섬 옵션 = `extract.islands`·`extract.island_max_mm`·`extract.island_ring_frac`, 섬 정보 필드 = `beads[].islands[].loop`(작업 지시의 `bead.island` 아님).
-  - DOE 요청: `geom_options: {fixed: {policy}, quality: {fail_policy}}` — `warn`일 때만 보냄(기본 skip이면 생략). 결과 = `result.gen_summary{skipped, warned, waived}`, `warned_runs[{run_key, codes, waived}]`, DOE 미리보기 셀 `gen.waived`·`gen.warnings`. 세트(param_set) 수준 `warn` = 422, DOE는 세트 정책을 승계하지 않는다.
-  - ①-2 hold 저장: `hold_beads`는 `01_train/params.json`에 저장(DB 없음), ①-1 기반 DOE가 자동 승계. PREDICT·미리보기·DOE→세트 승계는 정책 `skip` 고정.
-  - SM-C4 보강: tag와 독립 판정 추가 — 섬 노드의 샘플 B-rep **전체 면** 최근접 거리 > 0.1 mm → `SHELL_FEATURE_DISTORTED`(tag 오분류 방지).
+  - 정책 입력: 정책은 **DOE 요청 `geom_options: {fixed: {policy}, quality: {fail_policy}}`에서만** 받고 `warn`일 때만 보냄(기본 skip이면 생략). 설정(`geometry.shell_defaults`)·세트(param_set) 수준 `warn`은 무시 — 세트는 경고 `SET_POLICY_IGNORED`, 설정 `warn`은 시작 로그 경고. DOE는 세트 정책을 승계하지 않는다. 결과 = `result.gen_summary{skipped, warned, waived}`, `warned_runs[{run_key, codes, waived}]`, DOE 미리보기 셀 `gen.waived`·`gen.warnings`.
+  - ①-2 hold 저장: `hold_beads`는 `01_train/params.json`에 저장(DB 없음), ①-1 기반 DOE가 자동 승계. PREDICT·미리보기·DOE→세트 승계는 정책 `skip` 고정. 요청 `hold_options` 의미: 생략 = 유지, `null` 또는 `{}` = 초기화, 일부 키 = 그 키만 갱신, 기본값과 같은 값 = 그 키 삭제.
+  - SM-C4 보강 `island_coverage`(tag 독립, tag 오분류 방지): 대상 = 섬이 있는 비드 중 이번 샘플에서 바뀐 비드. (1) 샘플 B-rep 섬·바닥 면 표본점 ↔ 모핑 메시 거리에서 공칭 이산화 오차(공칭 B-rep ↔ 공칭 메시 같은 표본 거리)를 뺀 값 > 0.1 mm, (2) 공칭 섬 면 노드를 기하(공칭 섬 면 거리)로 찾아 강체 이동(섬 이동량 t) 불일치 — 어느 하나면 `SHELL_FEATURE_DISTORTED`. hold 비드는 앵커를 품은 섬만 제외(블렌드 영역 표본점 처리는 구현 결과에 따라 갱신).
+  - 0.14.2 병합분: degenerated edge(퇴화 엣지) 재구성, 출력 교체 `replace_retry`(Windows WinError 5/32에 백오프 재시도 — 최대 10회·총 60 s, 관련 환경변수가 비어 있으면 기본값).
   - `checks.feature.status` ∈ `PASS`·`FAIL`·`SKIPPED`.
