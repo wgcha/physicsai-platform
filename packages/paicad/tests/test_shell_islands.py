@@ -277,6 +277,45 @@ def test_vsm17_mistag_on_held_bead_unanchored_island(smh, island):
     assert ok.status == "PASS" and ok.checks["feature"]["coverage"]["max_mm"] <= 0.1
 
 
+@pytest.fixture(scope="module")
+def smh4_near(tmp_path_factory):
+    """SMH4 with two more dimples on T at 9~17 mm (near1) and 6~14 mm (near2) from the hold anchors (boss at 110, 70)."""
+    import dataclasses
+
+    from data.make_synthetic_shell import _dimple, smh_spec
+
+    spec = smh_spec(4)
+    t0 = spec.beads[0]
+    spec.beads[0] = dataclasses.replace(t0, islands=tuple(t0.islands) + (_dimple((124.0, 80.0), -4.0, d=8.0), _dimple((110.0, 84.0), -4.0, d=8.0)))
+    return _prep(tmp_path_factory.mktemp("smh4near"), spec)
+
+
+@pytest.mark.parametrize("center", [(124.0, 80.0), (110.0, 84.0)], ids=["near1", "near2"])
+def test_vsm17_hold_blend_islands(smh4_near, center):
+    """Islands inside the hold blend zone: expected displacement = s(r) * shift (no exclusion radius) in both the tag-free
+    coverage and the tag-based rigidity; a mistagged blended island fails, the normal sample does not."""
+    c = smh4_near
+    t = _bead(c, (120.0, 70.0))
+    isl = min(t["islands"], key=lambda i: (i["center"][0] - center[0]) ** 2 + (i["center"][1] - center[1]) ** 2)
+    nm = {f["type"]: f["name"] for f in c["doc"]["features"] if f["bead"] == t["id"]}
+    mesh0 = c["meshes"][0]
+    sel = _island_nodes(mesh0, isl)
+    mm = copy.copy(mesh0)
+    mm.kind, mm.ent = mesh0.kind.copy(), mesh0.ent.copy()
+    mm.ent[sel] = int(t["base_face"][1:])
+    for k in [k for k in vars(mm) if k.startswith("_")]:
+        delattr(mm, k)
+    hold = {"bead": {"hold": {"beads": [t["id"]]}}}
+    for vals, over in (({nm["BEAD_POS_U"]: c["nom"][nm["BEAD_POS_U"]] + 5.0}, {"fixed": {"policy": "warn"}, "quality": {"fail_policy": "warn"}}),
+                       ({nm["BEAD_DEPTH"]: c["nom"][nm["BEAD_DEPTH"]] * 1.2}, {})):
+        o = _opts(dict(over, **hold))
+        _, _, ok = _cores(c, vals, o)
+        assert ok.code != "SHELL_FEATURE_DISTORTED" and ok.checks["feature"]["status"] != "FAIL", (ok.code, ok.message)
+        assert ok.checks["feature"]["coverage"]["max_mm"] <= 0.1
+        _, _, bad = _cores(dict(c, meshes=[mm]), vals, o)
+        assert bad.code == "SHELL_FEATURE_DISTORTED" and isl["id"] in bad.message, (bad.code, bad.message)
+
+
 def test_final_code_order_by_policy():
     from paicad.shell.judge import final_code
 
