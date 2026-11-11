@@ -68,7 +68,13 @@ def dg_prep(ctx: Any) -> None:
     from physicsai_core.geometry.options import deep_merge
 
     gopts = deep_merge(ps.get("geom_options") or {}, p["geom_options"]) if p.get("geom_options") else ps.get("geom_options")
-    opts = set_opts(s, S, gopts)  # SM-10: DOE 요청 geom_options(정책 등)가 세트 옵션 위에 덮인다. train_does.geom_options에 유효값이 기록된다
+    opts = set_opts(s, S, gopts)  # DOE 요청 geom_options가 세트 옵션 위에 덮인다. train_does.geom_options에 유효값이 기록된다
+    if read_kind(S) == "shell":  # SM-10: 정책은 DOE 요청만 원천 — 세트에 남은 warn은 무시
+        from physicsai_core.geometry.shell_options import doe_policy_opts, stored_policy_warn
+
+        if stored_policy_warn(ps.get("geom_options")):
+            ctx.add_warning("SET_POLICY_IGNORED", "세트에 저장된 경고 정책(warn)은 무시했습니다 — DOE 고급 옵션에서 다시 선택하세요")
+        opts = doe_policy_opts(opts, p.get("geom_options"))
     ver, ocp, shown = engine_version(ctx)
     ctx.log(f"형상 엔진: {shown}")
     ensure_prep_ready(s, S, opts, ver)

@@ -114,6 +114,11 @@ def _hold_problems(h: Any) -> list[dict[str, str]]:
     return p
 
 
+def hold_option_problems(h: dict[str, Any]) -> list[dict[str, str]]:
+    """①-2 hold_options(ring_mm·blend_mm) 양수 검사 — `bead.hold`와 같은 `_pos` 규칙."""
+    return [_problem(f"hold_options.{k}", "0보다 큰 유한한 숫자여야 합니다") for k in ("ring_mm", "blend_mm") if k in h and not _pos(h[k])]
+
+
 def validate_options(o: dict[str, Any]) -> list[dict[str, str]]:  # noqa: C901 - 표 기반 범위 나열(§4.10)
     p: list[dict[str, str]] = []
     add = lambda k, m: p.append(_problem(k, m))  # noqa: E731
@@ -247,6 +252,21 @@ def force_skip(opts: dict[str, Any]) -> dict[str, Any]:
         if isinstance(out.get(sec), dict):
             out[sec].pop(k, None)
     return out
+
+
+def doe_policy_opts(opts: dict[str, Any], request: dict[str, Any] | None) -> dict[str, Any]:
+    """DOE 정책 원천 = DOE 요청 geom_options만(SM-10). 세트·설정 기본값에서 온 정책은 버리고 요청의 정책 키만 되살린다."""
+    out = force_skip(opts)
+    for sec, k in POLICY_KEYS:
+        v = ((request or {}).get(sec) or {}).get(k)
+        if v in POLICIES and v != NEW_KEY_DEFAULTS[sec][k]:
+            out.setdefault(sec, {})[k] = v
+    return out
+
+
+def stored_policy_warn(geom_options: dict[str, Any] | None) -> bool:
+    """세트에 저장된 geom_options에 warn 정책이 남아 있는지(이전 버전·직접 저장)."""
+    return any(((geom_options or {}).get(sec) or {}).get(k) == "warn" for sec, k in POLICY_KEYS)
 
 
 def policy_of(opts: dict[str, Any]) -> dict[str, str]:

@@ -10115,6 +10115,64 @@
         "title": "Health",
         "type": "object"
       },
+      "HoldOptions": {
+        "additionalProperties": false,
+        "description": "①-2 체결 보스 고정 고급 입력(shell-morph.md §14.5 ρ·b, mm). 생략한 값은 기본값(3·8).",
+        "properties": {
+          "blend_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blend Mm"
+          },
+          "ring_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ring Mm"
+          }
+        },
+        "title": "HoldOptions",
+        "type": "object"
+      },
+      "HoldOptionsOut": {
+        "properties": {
+          "blend_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blend Mm"
+          },
+          "ring_mm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ring Mm"
+          }
+        },
+        "title": "HoldOptionsOut",
+        "type": "object"
+      },
       "HpcJob": {
         "properties": {
           "attempt_no": {
@@ -22994,6 +23052,16 @@
             ],
             "title": "Hold Beads"
           },
+          "hold_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HoldOptions"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "parameters": {
             "items": {
               "$ref": "#/components/schemas/TrainParamUpdate"
@@ -23501,6 +23569,16 @@
               }
             ],
             "title": "Hold Beads"
+          },
+          "hold_options": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HoldOptionsOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "kind": {
             "anyOf": [

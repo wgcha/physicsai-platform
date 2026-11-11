@@ -108,11 +108,22 @@ def test_hold_requires_eligible_bead_and_policy_forced_skip_in_predict(native_en
     assert r.json()["detail"]["problems"][0]["key"] == "bead.hold.beads" and "CHASSIS_REAR_B1" in r.json()["detail"]["problems"][0]["message"]
     r = env.c.patch(url, headers=PW, json={"geom_options": {"bead": {"hold": {"beads": ["nope"]}}}})
     assert r.status_code == 422
+    r = env.c.patch(url, headers=PW, json={"geom_options": {"bead": {"hold": {"beads": ["CHASSIS_REAR_B2"]}}, **WARN_BOTH}})
+    assert r.status_code == 422 and {p["key"] for p in r.json()["detail"]["problems"]} == {"fixed.policy", "quality.fail_policy"}  # warn은 DOE에서만
+    assert "DOE 고급 옵션" in r.json()["detail"]["problems"][0]["message"]
     r = env.c.patch(url, headers=PW, json={"geom_options": {"bead": {"hold": {"beads": ["CHASSIS_REAR_B2"], "ring_mm": 4.0}},
-                                                            **WARN_BOTH}})
-    assert r.status_code == 200 and r.json()["native"]["prep_status"] == "READY", r.text  # hold·정책은 준비본 STALE 아님
+                                                            "fixed": {"policy": "skip"}}})
+    assert r.status_code == 200 and r.json()["native"]["prep_status"] == "READY", r.text  # skip·hold는 허용, 준비본 STALE 아님
     eff = r.json()["geom_options_effective"]
-    assert eff["bead"]["hold"] == {"beads": ["CHASSIS_REAR_B2"], "ring_mm": 4.0, "blend_mm": 8.0} and eff["fixed"]["policy"] == "warn"
+    assert eff["bead"]["hold"] == {"beads": ["CHASSIS_REAR_B2"], "ring_mm": 4.0, "blend_mm": 8.0} and "policy" not in eff["fixed"]
+    # 이미 warn이 저장된 세트(직전 버전 등): DB에 직접 넣어 DOE가 승계하지 않고 경고를 남기는지
+    env.sql("update param_sets set geom_options = jsonb_set(geom_options, '{fixed}', '{\"policy\": \"warn\"}') where id=:i", i=psid)
+    j0 = env.submit("TD_DOE_GEN", {"param_set_id": psid, "num_runs": 2, "seed": 1, "multi_execution": 1})
+    assert env.w.run_once_slot() == "SUCCEEDED", env.job(j0["id"])
+    assert "SET_POLICY_IGNORED" in [w["code"] for w in env.job(j0["id"])["warnings"]]
+    for R in _runs(env):
+        assert "policy" not in json.loads((R / "_paicad" / "options.json").read_text())["fixed"]
+    env.sql("update param_sets set geom_options = jsonb_set(geom_options, '{fixed}', '{}') where id=:i", i=psid)
     # PREDICT(A): 세트에 warn이 있어도 정책 skip 고정 — 같은 FIXED 침범이 실패, options에 정책 키 없음, hold는 유지
     monkeypatch.setenv("FAKE_PAICAD_FAIL", "shell_check:SHELL_FIXED_REGION_VIOLATION")
     j = env.submit("PREDICT", {"values": BEAD, "value_source": "manual", "param_set_id": psid})
@@ -176,12 +187,22 @@ def test_train_setup_kind_hold_beads_put_and_doe_inherits(native_env, monkeypatc
     assert again["hold_beads"] == ["CHASSIS_REAR_B1"]
     r = env.c.put(put, headers=PW, json={"version": again["version"], "parameters": rows})  # 생략 = 기존 유지
     assert r.json()["hold_beads"] == ["CHASSIS_REAR_B1"]
+    ver = env.c.get(f"{API}/studies/{env.sid}/train", headers=P).json()["version"]
+    r = env.c.put(put, headers=PW, json={"version": ver, "parameters": rows, "hold_options": {"ring_mm": 0}})
+    assert r.status_code == 422 and r.json()["detail"]["problems"][0]["name"] == "hold_options.ring_mm", r.text
+    ver = env.c.get(f"{API}/studies/{env.sid}/train", headers=P).json()["version"]
+    r = env.c.put(put, headers=PW, json={"version": ver, "parameters": rows, "hold_options": {"ring_mm": 4.5, "blend_mm": 8.0}})
+    assert r.status_code == 200 and r.json()["hold_options"] == {"ring_mm": 4.5, "blend_mm": None}, r.text  # 기본값(b 8)은 저장 안 함
+    r = env.c.put(put, headers=PW, json={"version": r.json()["version"], "parameters": rows})  # 생략 = 유지
+    assert r.json()["hold_options"]["ring_mm"] == 4.5 and r.json()["hold_beads"] == ["CHASSIS_REAR_B1"]
     j2 = env.submit("TD_DOE_GEN", {"radioss_assem_path": str(proj / "assem"), "num_runs": 2, "seed": 1, "multi_execution": 1})
     assert env.w.run_once_slot() == "SUCCEEDED", env.job(j2["id"])
-    assert env.job(j2["id"])["params"]["geom_options"]["bead"]["hold"]["beads"] == ["CHASSIS_REAR_B1"]
+    assert env.job(j2["id"])["params"]["geom_options"]["bead"]["hold"] == {"beads": ["CHASSIS_REAR_B1"], "ring_mm": 4.5}
     for R in _runs(env):
-        assert json.loads((R / "_paicad" / "options.json").read_text())["bead"]["hold"]["beads"] == ["CHASSIS_REAR_B1"]
-    r = env.c.put(put, headers=PW, json={"version": r.json()["version"], "parameters": rows, "hold_beads": []})
+        assert json.loads((R / "_paicad" / "options.json").read_text())["bead"]["hold"] == {"beads": ["CHASSIS_REAR_B1"], "ring_mm": 4.5,
+                                                                                            "blend_mm": 8.0}
+    ver = env.c.get(f"{API}/studies/{env.sid}/train", headers=P).json()["version"]
+    r = env.c.put(put, headers=PW, json={"version": ver, "parameters": rows, "hold_beads": []})
     assert r.status_code == 200 and r.json()["hold_beads"] == []
 
 

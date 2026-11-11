@@ -6,8 +6,9 @@
 
 ## 0.2.17 — 2026-11-09
 
-- 쉘 판금 모핑 개선(SM-C3~C8, paicad 0.15.0 대응, 플랫폼 백엔드): 쉘 옵션에 새 키를 통과·검증한다 — `fixed.policy`·`quality.fail_policy`(skip | warn, 기본 skip), `quality.distort_min_mm`·`distort_rel`, `extract.islands`·`island_max_mm`·`island_ring_frac`(비드 바닥 섬 흡수), `tag.label_angle_deg`, `bead.hold{beads, ring_mm, blend_mm}`(체결 보스 고정). 기본값과 같은 새 키는 options.json에 쓰지 않아 기존 결과·옵션 해시가 바뀌지 않는다
+- 쉘 판금 모핑 개선(SM-C3~C8, paicad 0.15.1 대응, 플랫폼 백엔드): 쉘 옵션에 새 키를 통과·검증한다 — `fixed.policy`·`quality.fail_policy`(skip | warn, 기본 skip), `quality.distort_min_mm`·`distort_rel`, `extract.islands`·`island_max_mm`·`island_ring_frac`(비드 바닥 섬 흡수), `tag.label_angle_deg`, `bead.hold{beads, ring_mm, blend_mm}`(체결 보스 고정). 기본값과 같은 새 키는 options.json에 쓰지 않아 기존 결과·옵션 해시가 바뀌지 않는다
 - ①-3 쉘 DOE 요청 `geom_options`: `warn`을 고르면 고정 침범·품질 미달 run이 스킵 대신 경고 후 사용으로 통과하고, 작업 결과에 `gen_warned`·`gen_summary`(스킵·경고 통과의 고정 a·품질 b, `waived` 코드별 수)·`warned_runs`(run별 경고 코드 목록)를 기록한다. PREDICT(A)·내장 최적화·미리보기·DOE→세트 승계는 정책을 `skip`으로 고정한다. 반전·dt_ratio·tie·간섭·피처 왜곡은 정책과 무관하게 실패
+- 경고 정책(warn)은 ①-3 DOE 요청 `geom_options`에서만 선택한다: 세트·등록 옵션에서 warn은 422, DOE는 세트·설정의 정책을 승계하지 않고(세트에 남은 warn은 무시 + 경고 SET_POLICY_IGNORED) 요청 값만 쓴다. ①-2 `PUT train/params`가 `hold_beads`·`hold_options{ring_mm, blend_mm}`를 받아 ①-1 기반 DOE로 승계한다
 - `bead.hold.beads`는 준비본 `hold_eligible` 비드만 허용(아니면 422 GEOM_OPTIONS_INVALID). 한국어 코드 문구 추가: SHELL_FEATURE_DISTORTED·SHELL_FIXED_MOVED·SHELL_QUALITY_WARN·BEAD_ISLAND_TOO_LARGE·TAG_ISLAND_MISMATCH. DB migration 없음
 
 ## 0.2.16 — 2026-11-04

@@ -27,14 +27,20 @@ def require_shell_available(settings: Any) -> None:
                           missing=tmpl + res)
 
 
-def validate_geom_options(settings: Any, raw: dict[str, Any] | None, kind: str = "solid") -> dict[str, Any]:
+def validate_geom_options(settings: Any, raw: dict[str, Any] | None, kind: str = "solid", *, allow_policy: bool = False) -> dict[str, Any]:
     """세트별 덮어쓰기 검증 → 정규화된 덮어쓰기. 범위·형식 위반은 422 GEOM_OPTIONS_INVALID(problems).
-    kind=shell: 쉘 options 스키마(shell-morph.md §4.10) — 솔리드 키는 모르는 키로 거부."""
+    kind=shell: 쉘 options 스키마(shell-morph.md §4.10) — 솔리드 키는 모르는 키로 거부. 정책 키 warn(`fixed.policy`·`quality.fail_policy`)은
+    ①-3 DOE 고급 옵션에서만(allow_policy=True) — 세트·등록 옵션에서는 422(SM-10)."""
     if kind == "shell":
         from physicsai_core.geometry.shell_options import effective_shell_options
         from physicsai_core.geometry.shell_options import normalize_override as shell_normalize
 
         over, probs = shell_normalize(raw)
+        if not allow_policy:
+            from physicsai_core.geometry.shell_options import POLICY_KEYS
+
+            probs = probs + [{"code": "GEOM_OPTIONS_INVALID", "key": f"{sec}.{k}", "message": "경고 정책은 DOE 고급 옵션에서만 선택할 수 있습니다"}
+                             for sec, k in POLICY_KEYS if (over.get(sec) or {}).get(k) == "warn"]
         _opts, p2 = effective_shell_options(settings.geometry.shell_defaults, over)
         probs = probs + [p for p in p2 if p not in probs]
         if probs:
