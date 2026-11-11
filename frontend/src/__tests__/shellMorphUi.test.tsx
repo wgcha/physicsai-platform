@@ -223,6 +223,28 @@ describe("hold ρ·b 고급 입력", () => {
     expect(calls[1].b!.hold_options).toEqual({ ring_mm: 4.5 });
   });
 
+  it("①-2: 저장된 ρ·b를 기본값으로 되돌리면 hold_options {}를 보내고, 다시 열어도 기본값(빈칸)", async () => {
+    const { server } = renderApp(`${STUDY}/1`, { user: "power" }, shellTrain);
+    const calls = record(server, /\/train\/params$/);
+    await within(await screen.findByRole("table", { name: "파라미터 표" })).findByText("체결 보스 고정");
+    fireEvent.change(screen.getByLabelText("보스 둘레 고정 ρ (mm)"), { target: { value: "4.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
+    await waitFor(() => expect(calls.length).toBe(1));
+    await waitFor(() => expect((screen.getByLabelText("보스 둘레 고정 ρ (mm)") as HTMLInputElement).value).toBe("4.5"));
+    // 건드리지 않고 다시 저장 → 생략(서버 유지)
+    fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
+    await waitFor(() => expect(calls.length).toBe(2));
+    expect(calls[1].b).not.toHaveProperty("hold_options");
+    expect((server.p2.setups["s-cushion"] as { hold_options?: object }).hold_options).toEqual({ ring_mm: 4.5 });
+    // 기본값으로 복귀(빈칸) → {} 전송 → 서버 초기화
+    fireEvent.change(screen.getByLabelText("보스 둘레 고정 ρ (mm)"), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "표 저장" }));
+    await waitFor(() => expect(calls.length).toBe(3));
+    expect(calls[2].b!.hold_options).toEqual({});
+    expect((server.p2.setups["s-cushion"] as { hold_options?: object | null }).hold_options).toBeNull();
+    await waitFor(() => expect((screen.getByLabelText("보스 둘레 고정 ρ (mm)") as HTMLInputElement).value).toBe(""));
+  });
+
   it("④: ρ·b 입력 → 저장 시 PATCH bead.hold.ring_mm/blend_mm, 기본으로 되돌리면 키 제거", async () => {
     const { server } = renderApp(`${STUDY}/4`, { user: "power", geometry: "native" }, (s) => {
       s.paramSets.forEach((p) => (p.is_current = p.id === "ps-n1"));
