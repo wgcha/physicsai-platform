@@ -2,6 +2,14 @@
 
 버전 정책: geometry-engine.md §17. `src/paicad/__init__.py`의 `__version__`이 단일 출처이고, `packages/paicad/**` 를 바꾸는 커밋마다 버전을 올리고 이 파일 최상단에 항목을 추가한다.
 
+## 0.15.1 — 2026-11-09
+- 수정(SM-C4, 검증 지적): (g) 피처 강체성이 tag에서 만든 라벨만 써서 섬 노드 오분류(바닥·기준면으로 tag)를 못 잡던 문제. check에 **tag와 무관한 판정** `island_coverage` 추가 — 움직인 섬 비드(hold 제외)마다 (1) 공칭 섬 면 위 노드를 기하로 찾고(공칭 노드 + 섬 이동량을 샘플 섬 면에 투영, 트림 안·≤ tag.tol_abs_mm, bbox 후보만) 그 노드가 섬 이동량만큼 강체 이동했는지, (2) 샘플 섬 면·바닥 조각의 UV 격자 점에서 모핑 삼각형까지 거리(KD-tree `TriangleSet`) − 공칭 같은 거리(이산화 오차, 평면 바닥 0)를 보고 `quality.distort_min_mm`(0.1)을 넘으면 `SHELL_FEATURE_DISTORTED`(정책 무관). 보고 `checks.feature.coverage{surfaces, max_mm, worst, tol_mm}`(섬 비드가 바뀐 샘플에만). 오분류 주입 5건(딤플·보스 → 바닥/기준면, 딤플 절반 → 바닥) 모두 SHELL_FEATURE_DISTORTED(0.8 mm 2건 포함, skip·warn 둘 다).
+- 수정(우선순위): `fixed.policy`·`quality.fail_policy`가 모두 skip이면 0.14.1 순서(고정 → 간섭 → 품질(반전·dt 포함) → 편차 → 재측정 → tie, 피처 왜곡은 맨 앞)를 유지, warn일 때만 반전·dt가 고정 앞(`judge.final_code`).
+- 성능: 요소 → 면 배정(`morph._element_faces`·`judge.element_faces`) numpy 벡터화 — 0.15.0 루프(`*_loop`, 시험 기준 구현)와 비트 동일(합성 5세트 + 태그 무작위 교란), 3만 요소 0.11 s → 0.03 s.
+- 시험: V-SM-21 왕복을 실제 include 작성기(`morph.write_files`) → 조립 리더로 바꾸고 반올림 없는 메모리 결과와 비교(코드·경고 동일, 수치 상대 1e-6 또는 절대 1e-9). 오분류 주입 회귀·skip/warn 우선순위 시험 추가.
+- 영향: 섬 없는 모델·SM1 결과 불변(새 판정은 섬 비드가 바뀐 샘플에서만).
+- 계약: shell-morph.md §14.2·§14.4·§14.6
+
 ## 0.15.0 — 2026-11-09
 - 변경(SM-C3 섬): `extract.islands`(기본 true)·`island_max_mm`(40)·`island_ring_frac`(0.9). 비드 인식이 4번째 링 = 기준면과 평행한 동일 평면 바닥 조각(≥1)을 받고, 바닥 조각 너머 면 성분(딤플·버링·보스·루버)과 바닥 내부 자유 와이어(구멍)를 B-rep 면 인접으로 섬 판정 — (a) 이웃이 바닥 조각뿐 (d) 섬 안 평면에 공유 엣지 내부 와이어(중첩 비드) 없음 → 아니면 `BEAD_IRREGULAR`("nested bead") (c) 기준면 쪽 상승 ≥ frac × 깊이 → `BEAD_IRREGULAR`("annular inner mound") (b) 기준면 투영 bbox 대각 > max → `BEAD_ISLAND_TOO_LARGE{bead_loop, size_mm}`. 흡수된 섬의 자기 루프(딤플 비드·버링 경고)는 결과에서 뺌. 섬이 있는 비드의 shape PCA는 채운 바닥(rho ≤ rhob) 기준. `shell_features.json` `beads[].islands[{id, kind hole|feature, faces, loop, free_loops, size_mm, center}]`(선택 키). update: 섬 면·엣지·꼭짓점은 바닥 평면과 같은 강체 평행 이동(깊이 Δ·ed + 비드 이동, 폭 0), 충돌 kind `island`(섬 외곽 + land_min이 새 바닥 외곽 안), extract `feasible.limited_by: island:<id>`, 섬 면 위 고정 노드도 사전 검사. `shell_update.json` `beads[]` 선택 키 `bottom`·`islands`·`island_shift`. morph: 섬 노드 d = island_shift(정확), 섬 있는 바닥 조각은 단면 사상 대신 면내 해(기존 평면 규칙), 섬·hold 노드는 이완 제외. check (a): 바닥 조각 전부의 FACE 노드로 깊이, 섬 비드의 위치 = 공칭 + 바닥 요소 중심 변위.
 - 변경(SM-C4): check (g) 피처 강체성 `SHELL_FEATURE_DISTORTED`(category DEVIATION, 종료 11, 정책 무관) — 움직인 비드의 섬(면 있는 섬)·비드 영역과 엣지를 공유하는 미변경 면(rim t = 0), dev > max(`quality.distort_min_mm` 0.1, `distort_rel` 0.25 × |t|). `checks.feature{status, features, worst, mixed_elems}`(섬 없음 = SKIPPED).
