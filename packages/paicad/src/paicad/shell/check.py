@@ -16,7 +16,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, rnd
+from ..common import CODE_CATEGORY, EXIT_CHECK, EXIT_OK, OutDir, PaicadError, Reporter, dumps, replace_retry, rnd
 from ..mesh.radioss import parse_text
 from ..meshgeom import TriangleSet
 from ..tag import KIND_EDGE, KIND_FACE, KIND_VERTEX
@@ -472,7 +472,7 @@ def run(args, rep: Reporter) -> int:
             dst.parent.mkdir(parents=True, exist_ok=True)
             tmp = dst.with_name(f".{dst.name}.{os.getpid()}.tmp")
             tmp.write_bytes(data)
-            os.replace(tmp, dst)
+            replace_retry(tmp, dst)
             out_files.append(rel)
     out.write_text(CHECK_JSON, dumps(report(res, o, out_files, t0)))
     out.commit([CHECK_JSON])

@@ -11,6 +11,7 @@ import json
 import os
 import shutil
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -159,6 +160,48 @@ def vec(a, nd: int = 6) -> list[float]:
     return [rnd(x, nd) for x in a]
 
 
+# Windows: antivirus / search indexer briefly holding a file -> PermissionError WinError 5 (access denied) or 32 (sharing
+# violation) on rename. Retried with this backoff (seconds); PAICAD_REPLACE_BACKOFF_S="0.2,0.5,1,2,4" overrides (0.14.2).
+REPLACE_BACKOFF_S = (0.2, 0.5, 1.0, 2.0, 4.0)
+REPLACE_RETRY_WINERRORS = (5, 32)
+
+
+def replace_backoff() -> tuple[float, ...]:
+    raw = os.environ.get("PAICAD_REPLACE_BACKOFF_S")
+    if raw is None:
+        return REPLACE_BACKOFF_S
+    try:
+        vals = tuple(float(x) for x in raw.replace(";", ",").split(",") if x.strip())
+    except ValueError:
+        return REPLACE_BACKOFF_S
+    return vals if all(0.0 <= v <= 60.0 for v in vals) else REPLACE_BACKOFF_S
+
+
+def _locked(e: OSError) -> bool:
+    return getattr(e, "winerror", None) in REPLACE_RETRY_WINERRORS
+
+
+def replace_retry(src: str | Path, dst: str | Path, backoff: tuple[float, ...] | None = None, sleep=time.sleep) -> None:
+    """``os.replace`` that waits out a transient Windows lock (WinError 5/32) with ``backoff`` (default
+    :func:`replace_backoff`). Other errors propagate unchanged. If the lock persists: ``GEOM_INTERNAL`` whose
+    message names the files only (no absolute paths)."""
+    delays = replace_backoff() if backoff is None else tuple(backoff)
+    for i in range(len(delays) + 1):
+        try:
+            os.replace(src, dst)
+            return
+        except OSError as e:
+            if not _locked(e):
+                raise
+            if i == len(delays):
+                raise PaicadError(
+                    "GEOM_INTERNAL",
+                    f"cannot rename {Path(src).name} to {Path(dst).name}: file locked by another process "
+                    f"(WinError {e.winerror}) after {len(delays) + 1} attempts",
+                ) from None
+            sleep(delays[i])
+
+
 class OutDir:
     """Output folder guard: never overwrite (GEOM_OUTPUT_EXISTS), stage in .tmp_<pid>, then os.replace."""
 
@@ -192,7 +235,7 @@ class OutDir:
             if dst.exists():
                 raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {rel}")
             dst.parent.mkdir(parents=True, exist_ok=True)
-            os.replace(self.tmp / rel, dst)
+            replace_retry(self.tmp / rel, dst)
         self.cleanup()
 
     def cleanup(self) -> None:

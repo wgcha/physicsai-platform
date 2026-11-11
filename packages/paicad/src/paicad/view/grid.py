@@ -21,7 +21,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import os
 import re
 import shutil
 import time
@@ -32,7 +31,7 @@ from typing import Callable
 import numpy as np
 
 from .. import render
-from ..common import CODE_CATEGORY, EXIT_OK, EXIT_VIEW, OutDir, PaicadError, Reporter, dumps, envelope
+from ..common import CODE_CATEGORY, EXIT_OK, EXIT_VIEW, OutDir, PaicadError, Reporter, dumps, envelope, replace_retry
 from . import PREVIEW_MANIFEST, BodyTess, glb_with_lod, tess_bodies
 from .export import bbox_union
 
@@ -231,7 +230,7 @@ def run_grid(spec: GridSpec, cells: list[tuple[str, dict]], topts: dict, out: Ou
             (part / THUMB_PNG).write_bytes(png)
             doc = dict(m, thumb={"file": THUMB_PNG, "sha256": hashlib.sha256(png).hexdigest(), "w": cam.w, "h": cam.h, "clipped": clipped})
             (part / PREVIEW_MANIFEST).write_text(dumps(doc), encoding="utf-8", newline="\n")
-            os.replace(part, cells_dir / cid)
+            replace_retry(part, cells_dir / cid)
             max_disp = (m.get("disp") or {}).get("max_mm") if status == "OK" else None
         except KeyboardInterrupt:
             raise

@@ -13,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from . import options
-from .common import EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, rnd
+from .common import EXIT_OK, OutDir, PaicadError, Reporter, dumps, envelope, replace_retry, rnd
 from .mesh.radioss import read_renum_csv
 from .meshsrc import load_xyz, mesh_args, open_source
 from .writers import get_writer
@@ -85,7 +85,7 @@ def run(args, rep: Reporter) -> int:
         f.write(res.data)
     if out_rad.exists():
         raise PaicadError("GEOM_OUTPUT_EXISTS", f"output already exists: {out_rad.name}")
-    os.replace(tmp, out_rad)
+    replace_retry(tmp, out_rad)
     out.commit([CUSHION_JSON])
     rep.progress(100, "cushion write OK")
     rep.result("OK", None, CUSHION_JSON)
