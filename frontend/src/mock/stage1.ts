@@ -225,8 +225,8 @@ export function saveParams(p2: Phase2Mock, s: Study, body: Record<string, unknow
     for (const b of holdReq) if (!ok.has(b)) problems.push({ name: "", code: "HOLD_NOT_ELIGIBLE", message: `${b}: 고정할 수 있는 비드가 아닙니다` });
   }
   if (problems.length) return err(422, "TRAIN_PARAMS_INVALID", "파라미터 표를 확인하세요.", { problems });
-  const ho = body.hold_options as { ring_mm?: number; blend_mm?: number } | undefined;
-  if (ho) for (const k of ["ring_mm", "blend_mm"] as const) if (ho[k] !== undefined && !(typeof ho[k] === "number" && Number.isFinite(ho[k]) && ho[k]! > 0)) problems.push({ name: "", code: "HOLD_OPTION_INVALID", message: `${k}: 0보다 큰 유한한 숫자여야 합니다` });
+  const ho = body.hold_options as { ring_mm?: number | null; blend_mm?: number | null } | undefined;
+  if (ho) for (const k of ["ring_mm", "blend_mm"] as const) if (ho[k] !== undefined && ho[k] !== null && !(typeof ho[k] === "number" && Number.isFinite(ho[k]) && ho[k]! > 0)) problems.push({ name: "", code: "HOLD_OPTION_INVALID", message: `${k}: 0보다 큰 유한한 숫자여야 합니다` });
   if (problems.length) return err(422, "TRAIN_PARAMS_INVALID", "파라미터 표를 확인하세요.", { problems });
   if (holdReq) (t as { hold_beads?: string[] }).hold_beads = [...holdReq];
   // 백엔드 의미: 생략 = 유지, null·{} = 기본값 초기화, 일부 키 = 그 키만 갱신, 기본값(3·8)과 같은 값 = 키 삭제
@@ -237,7 +237,7 @@ export function saveParams(p2: Phase2Mock, s: Study, body: Record<string, unknow
     for (const k of ["ring_mm", "blend_mm"] as const) {
       const v = ho?.[k];
       if (v === undefined) continue;
-      if (v === def[k]) delete next[k];
+      if (v === null || v === def[k]) delete next[k]; // 키별 null = 그 키 초기화
       else next[k] = v;
     }
     (t as { hold_options?: object | null }).hold_options = Object.keys(next).length ? next : null;

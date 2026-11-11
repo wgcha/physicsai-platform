@@ -112,16 +112,21 @@ export function ParamTableCard() {
   const issues = rows.map(rowIssue);
   const holdBad = showHold && HOLD_KEYS.some((k) => holdParamError(k, holdP[k]));
   const hasIssue = issues.some(Boolean) || used.length === 0 || holdBad;
-  /** 기본값이 아닌 ρ·b만 보낸다(둘 다 기본이면 hold_options 키 없음) */
-  /** 서버 의미: 생략 = 유지, {} = 기본값으로 초기화. 건드린 경우에만 보낸다(저장값과 입력이 다를 때) */
-  const holdChanged = HOLD_KEYS.some((k) => holdP[k] !== (setup?.hold_options?.[k] != null ? String(setup.hold_options[k]) : ""));
-  const holdOptions = (() => {
-    const o: Partial<Record<HoldKey, number>> = {};
+  /** 서버 의미: 생략 = 유지, 키별 값 = 그 키 갱신, 키별 null = 그 키 기본값 복귀, {} = 전부 초기화.
+   * 저장값과 달라진 키만 보낸다(기본값으로 되돌린 키는 null, 둘 다 되돌리면 {}). 안 건드렸으면 undefined(생략) */
+  const holdOptions = ((): Record<string, number | null> | undefined => {
+    const o: Record<string, number | null> = {};
+    let remaining = 0; // 저장 뒤 남는 비기본 키 수
     for (const k of HOLD_KEYS) {
+      const saved = setup?.hold_options?.[k] ?? undefined;
       const r = parseHoldNum(holdP[k], k);
-      if ("value" in r && r.value !== undefined) o[k] = r.value;
+      const now = "value" in r ? r.value : saved; // 입력 오류는 저장을 막으므로 여기서는 저장값 취급
+      if (now !== undefined) remaining++;
+      if (now === saved) continue;
+      o[k] = now ?? null;
     }
-    return Object.keys(o).length ? o : null;
+    if (!Object.keys(o).length) return undefined;
+    return remaining === 0 ? {} : o;
   })();
 
   /** §14.2: PUT 저장 → POST 생성. 저장 실패 시 생성하지 않는다 */
@@ -134,7 +139,7 @@ export function ParamTableCard() {
       const saved = await api.saveTrainParams(study.id, {
         version: setup.version,
         parameters: rows.map((r) => ({ name: r.name, min: num(r.min), max: num(r.max), use: r.use, format: r.format, unit: r.unit })),
-        ...(showHold ? { hold_beads: hold, ...(holdChanged ? { hold_options: holdOptions ?? {} } : {}) } : {}),
+        ...(showHold ? { hold_beads: hold, ...(holdOptions ? { hold_options: holdOptions } : {}) } : {}),
       });
       setSetup(saved);
       if (native) return;

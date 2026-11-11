@@ -255,7 +255,7 @@ export const api = {
   train: (studyId: string) => request<TrainSetup>("GET", `/studies/${studyId}/train`),
   saveTrainParams: (
     studyId: string,
-    body: { version: number; parameters: { name: string; min: number | null; max: number | null; use: boolean; format?: string; unit?: string }[]; hold_beads?: string[]; hold_options?: { ring_mm?: number; blend_mm?: number } },
+    body: { version: number; parameters: { name: string; min: number | null; max: number | null; use: boolean; format?: string; unit?: string }[]; hold_beads?: string[]; hold_options?: { ring_mm?: number | null; blend_mm?: number | null } },
   ) => request<TrainSetup>("PUT", `/studies/${studyId}/train/params`, { body }),
   generateTpl: (studyId: string, version: number) => request<TrainSetup>("POST", `/studies/${studyId}/train/tpl`, { body: { version } }),
   doeTypes: () => request<DoeType[]>("GET", "/train/doe-types"),
