@@ -229,7 +229,19 @@ export function saveParams(p2: Phase2Mock, s: Study, body: Record<string, unknow
   if (ho) for (const k of ["ring_mm", "blend_mm"] as const) if (ho[k] !== undefined && !(typeof ho[k] === "number" && Number.isFinite(ho[k]) && ho[k]! > 0)) problems.push({ name: "", code: "HOLD_OPTION_INVALID", message: `${k}: 0보다 큰 유한한 숫자여야 합니다` });
   if (problems.length) return err(422, "TRAIN_PARAMS_INVALID", "파라미터 표를 확인하세요.", { problems });
   if (holdReq) (t as { hold_beads?: string[] }).hold_beads = [...holdReq];
-  (t as { hold_options?: object | null }).hold_options = ho ?? null;
+  // 백엔드 의미: 생략 = 유지, null·{} = 기본값 초기화, 일부 키 = 그 키만 갱신, 기본값(3·8)과 같은 값 = 키 삭제
+  if (body.hold_options !== undefined) {
+    const cur = { ...((t as { hold_options?: Record<string, number> | null }).hold_options ?? {}) };
+    const def = { ring_mm: 3, blend_mm: 8 };
+    const next: Record<string, number> = body.hold_options === null || (ho && !Object.keys(ho).length) ? {} : cur;
+    for (const k of ["ring_mm", "blend_mm"] as const) {
+      const v = ho?.[k];
+      if (v === undefined) continue;
+      if (v === def[k]) delete next[k];
+      else next[k] = v;
+    }
+    (t as { hold_options?: object | null }).hold_options = Object.keys(next).length ? next : null;
+  }
   const usedNow = next.filter((p) => p.use);
   const tplNames = t.tpl?.params.map((x) => `${x.name}:${x.format}:${x.used}`).join(",");
   t.parameters = next;

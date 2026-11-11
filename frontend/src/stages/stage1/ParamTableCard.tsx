@@ -113,6 +113,8 @@ export function ParamTableCard() {
   const holdBad = showHold && HOLD_KEYS.some((k) => holdParamError(k, holdP[k]));
   const hasIssue = issues.some(Boolean) || used.length === 0 || holdBad;
   /** 기본값이 아닌 ρ·b만 보낸다(둘 다 기본이면 hold_options 키 없음) */
+  /** 서버 의미: 생략 = 유지, {} = 기본값으로 초기화. 건드린 경우에만 보낸다(저장값과 입력이 다를 때) */
+  const holdChanged = HOLD_KEYS.some((k) => holdP[k] !== (setup?.hold_options?.[k] != null ? String(setup.hold_options[k]) : ""));
   const holdOptions = (() => {
     const o: Partial<Record<HoldKey, number>> = {};
     for (const k of HOLD_KEYS) {
@@ -132,7 +134,7 @@ export function ParamTableCard() {
       const saved = await api.saveTrainParams(study.id, {
         version: setup.version,
         parameters: rows.map((r) => ({ name: r.name, min: num(r.min), max: num(r.max), use: r.use, format: r.format, unit: r.unit })),
-        ...(showHold ? { hold_beads: hold, ...(holdOptions ? { hold_options: holdOptions } : {}) } : {}),
+        ...(showHold ? { hold_beads: hold, ...(holdChanged ? { hold_options: holdOptions ?? {} } : {}) } : {}),
       });
       setSetup(saved);
       if (native) return;
