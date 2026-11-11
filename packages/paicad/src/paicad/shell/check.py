@@ -290,7 +290,7 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
     en = np.where(m.tri[:, None], m.conn[:, [0, 1, 2, 2]], m.conn)
     out = []
     for bj in doc["beads"]:
-        if bj["body"] != m.body or not bj.get("islands") or bj["id"] in held:
+        if bj["body"] != m.body or not bj.get("islands"):
             continue
         feats = by_bead.get(bj["id"], {})
         if not any(f["name"] in expected for f in feats.values()):
@@ -305,10 +305,44 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
                 t = t + (fv[f["name"]] - float(f["nominal"])) * float(f["ref"].get("sign", 1.0)) * np.asarray(f["ref"]["axis"], dtype=float)
         groups = [(i["id"], [int(z[1:]) for z in i["faces"]], True) for i in bj["islands"] if i["faces"]]
         groups += [(f"F{int(z[1:])}", [int(z[1:])], False) for z in bj["bottom"]]
+        tol = float(o["tag"]["tol_abs_mm"])
+        anchors = np.zeros(0, dtype=np.int64)
+        keep_out = None
+        if bj["id"] in held:  # SM-C7: anchors = fixed nodes on the bottom pieces / islands (geometric, not the tag)
+            hb = o["bead"]["hold"]
+            reach = float(hb["ring_mm"]) + float(hb["blend_mm"])
+            fx = np.flatnonzero(m.fixed)
+            d_on = np.full(len(fx), np.inf)
+            for f in sorted({f for _, fs, _ in groups for f in fs}):
+                bb = np.asarray(body.topology().face(f).bbox, dtype=float)
+                c_ = np.flatnonzero(np.all((m.xyz[fx] + t >= bb[:3] - tol) & (m.xyz[fx] + t <= bb[3:] + tol), axis=1))
+                if len(c_):
+                    dd, _, ins, _ = body.project_to_face(f, m.xyz[fx[c_]] + t)
+                    d_on[c_] = np.minimum(d_on[c_], np.where(ins, dd, np.inf))
+            anchors = fx[d_on <= tol]
+            if len(anchors):
+                from scipy.spatial import cKDTree
+
+                tree = cKDTree(m.xyz[anchors])
+                r_out = reach + float(np.linalg.norm(t))
+
+                def keep_out(P):  # points within the hold ring + blend of an anchor: intentionally off the sample B-rep
+                    return np.isfinite(tree.query(P, k=1, distance_upper_bound=r_out)[0])
         for gid, faces, rigid in groups:
             P1 = np.concatenate([body.sample_face(f, 12 if rigid else 30) for f in faces])
             if not len(P1):
                 continue
+            if keep_out is not None:
+                if rigid and len(anchors):
+                    d_a = np.full(len(anchors), np.inf)
+                    for f in faces:
+                        dd, _, ins, _ = body.project_to_face(f, m.xyz[anchors] + t)
+                        d_a = np.minimum(d_a, np.where(ins, dd, np.inf))
+                    if (d_a <= tol).any():
+                        continue  # island holding hold anchors: deformed on purpose (section 14.2)
+                P1 = P1[~keep_out(P1 - t)]
+                if not len(P1):
+                    continue
             P0 = P1 - t if rigid else None
             box = np.concatenate([P1] + ([P0] if P0 is not None else []))
             lo, hi = box.min(axis=0) - 3.0, box.max(axis=0) + 3.0
@@ -331,7 +365,6 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
             dev = float(np.max(d1 - d0))
             nodes = 0
             if rigid:  # nodes lying on the nominal island surface (geometric membership, not the tag) move by the island shift
-                tol = float(o["tag"]["tol_abs_mm"])
                 lo0, hi0 = P0.min(axis=0) - 0.5, P0.max(axis=0) + 0.5
                 cand = np.flatnonzero(np.all((m.xyz >= lo0) & (m.xyz <= hi0), axis=1))
                 if len(cand):
@@ -340,6 +373,8 @@ def island_coverage(m: ShellMesh, x: np.ndarray, body, doc: dict, vals: dict, ex
                         dd, _, ins, _ = body.project_to_face(f, m.xyz[cand] + t)
                         d_on = np.minimum(d_on, np.where(ins, dd, np.inf))
                     on = cand[d_on <= tol]
+                    if keep_out is not None and len(on):
+                        on = on[~keep_out(m.xyz[on])]
                     nodes = int(len(on))
                     if nodes:
                         dev = max(dev, float(np.linalg.norm(x[on] - (m.xyz[on] + t), axis=1).max()))

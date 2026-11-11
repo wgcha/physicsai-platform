@@ -254,6 +254,29 @@ def test_vsm17_mistagged_island_nodes_fail(smi, label, target, island, half):
     assert ok.status == "PASS" and ok.checks["feature"]["coverage"]["max_mm"] <= 1e-6
 
 
+@pytest.mark.parametrize("island", [0, 1, 3, 4])
+def test_vsm17_mistag_on_held_bead_unanchored_island(smh, island):
+    """hold on: only the island holding the anchors is left out; the other islands of the held bead are still checked."""
+    c = smh[4]
+    t = _bead(c, (120.0, 70.0))
+    name = _fname(c, t, "BEAD_DEPTH")
+    mesh0 = c["meshes"][0]
+    isl = t["islands"][island]
+    sel = _island_nodes(mesh0, isl)
+    assert len(sel) and not mesh0.fixed[sel].any()
+    mm = copy.copy(mesh0)
+    mm.kind, mm.ent = mesh0.kind.copy(), mesh0.ent.copy()
+    mm.ent[sel] = int(t["base_face"][1:])
+    for k in [k for k in vars(mm) if k.startswith("_")]:
+        delattr(mm, k)
+    for over in ({}, {"fixed": {"policy": "warn"}, "quality": {"fail_policy": "warn"}}):
+        o = _opts(dict(over, bead={"hold": {"beads": [t["id"]]}}))
+        _, _, chk = _cores(dict(c, meshes=[mm]), {name: c["nom"][name] * 1.2}, o)
+        assert chk.status == "FAIL" and chk.code == "SHELL_FEATURE_DISTORTED" and isl["id"] in chk.message, (chk.code, chk.message)
+    _, _, ok = _cores(c, {name: c["nom"][name] * 1.2}, _opts({"bead": {"hold": {"beads": [t["id"]]}}}))
+    assert ok.status == "PASS" and ok.checks["feature"]["coverage"]["max_mm"] <= 0.1
+
+
 def test_final_code_order_by_policy():
     from paicad.shell.judge import final_code
 
