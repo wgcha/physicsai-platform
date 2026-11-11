@@ -2,6 +2,11 @@
 
 버전 정책: geometry-engine.md §17. `src/paicad/__init__.py`의 `__version__`이 단일 출처이고, `packages/paicad/**` 를 바꾸는 커밋마다 버전을 올리고 이 파일 최상단에 항목을 추가한다.
 
+## 0.15.3 — 2026-11-11
+- 수정(SM-C4·C7, 재검증 H1): `shell check` `island_coverage`가 hold 비드를 통째로 빼서, 앵커가 없는 섬(SMH4 T 비드의 루버·보스)이 기준면으로 오분류돼도 PASS가 나던 문제. 이제 **hold 앵커를 품은 섬만** 제외한다(§14.2). 앵커 = 공칭 노드 + 섬 이동량을 바닥 조각·섬 면에 투영했을 때 트림 안·≤ tag.tol_abs_mm인 고정 노드(tag 미사용, bbox 후보). 앵커의 ring + blend(+|섬 이동량|) 안에 드는 표본점·섬 소속 노드는 검사에서 뺀다(KD-tree 거리 질의, s(r) 기대 변위 계산 대신 제외). 나머지 섬과 바닥은 hold 비드에서도 검사한다.
+- 시험: hold on + 앵커 없는 섬 4개(루버 2·보스 2) 기준면 오분류 → `SHELL_FEATURE_DISTORTED`(skip·warn), 정상 hold 샘플 PASS(`test_vsm17_mistag_on_held_bead_unanchored_island`).
+- 계약: shell-morph.md §14.2·§14.5
+
 ## 0.15.2 — 2026-11-11
 - 0.14.2 수정 포함(fix/paicad-0142 병합): degenerated edge 쉘 재구성(`kernel/occ_sheet.py`), `common.replace_retry`(WinError 5/32 백오프 재시도)와 적용처(grid 셀 rename·`OutDir.commit`·check·shell check·cushion·FAIL 보고). 0.15.x에서 새로 생긴 rename 지점은 없음(judge·섬 판정은 파일을 쓰지 않음, shell check 사본 쓰기는 0.14.2 적용처). `mesh/asmtree.py` 색인 캐시 쓰기는 실패를 무시하는 최선 노력 캐시라 그대로 둠.
 - 수정(검증 사소): `PAICAD_REPLACE_BACKOFF_S`가 빈 값(`""`·`",,"`)이면 재시도가 꺼지던 것 → 기본 백오프 사용. 백오프는 최대 10개, 누적 60 s를 넘는 항목은 버림(환경변수·명시 인자 모두). 재시도를 끄려면 `replace_retry(..., backoff=())`.
